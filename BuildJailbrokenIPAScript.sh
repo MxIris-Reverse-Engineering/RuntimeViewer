@@ -6,10 +6,15 @@
 # com.apple.private.security.no-sandbox or the two runningboard entitlements, so
 # Xcode cannot produce this bundle signed at all. The target builds with
 # CODE_SIGNING_ALLOWED = NO — set in the project, not here — and comes out
-# unsigned; every Mach-O in it is signed below with `vphone-cli sign`, which
-# writes byte for byte what `ldid -S -M -K -I` writes, and that is the shape the
+# unsigned; every Mach-O in it is pseudo-signed below, and that is the shape the
 # device's AMFI is known to accept. `codesign --verify` rejects it by design: it
 # rejects ldid's own output too. Do not "fix" that by re-signing with codesign.
+#
+# Either of two tools does that signing, picked by whichever is installed —
+# `--signer` overrides. They are interchangeable here: `vphone-cli sign` is a
+# wrapper that writes byte for byte what `ldid -S -M -K -I` writes, and `ldid`
+# is that underlying tool. Which one a given machine has differs, so neither is
+# assumed.
 #
 # Only the main executable carries entitlements. The frameworks get a plain
 # signature — they need one to be loadable, none of the privileges.
@@ -25,6 +30,7 @@
 #   ./BuildJailbrokenIPAScript.sh --configuration Release
 #   ./BuildJailbrokenIPAScript.sh --no-build                # package the last build
 #   ./BuildJailbrokenIPAScript.sh --output /tmp/rv.ipa
+#   ./BuildJailbrokenIPAScript.sh --signer ldid             # vphone-cli | ldid | auto
 #   ./BuildJailbrokenIPAScript.sh --dry-run                 # print the commands
 
 set -euo pipefail
@@ -55,6 +61,10 @@ REVEAL=true
 OUTPUT_IPA=""
 DERIVED_DATA=""
 
+# `auto` resolves to whichever signer is installed, preferring vphone-cli
+# because a machine that has it is a machine set up to install with vphoned.
+SIGNER=auto
+
 fail() { echo "error: $*" >&2; exit 1; }
 log()  { echo "[BuildJailbrokenIPA] $*"; }
 
@@ -83,10 +93,14 @@ while [[ $# -gt 0 ]]; do
         --configuration) CONFIGURATION="$2"; shift 2;;
         --derived-data) DERIVED_DATA="$2"; shift 2;;
         --output) OUTPUT_IPA="$2"; shift 2;;
+        --signer) SIGNER="$2"; shift 2;;
         --no-build) BUILD=false; shift;;
         --no-reveal) REVEAL=false; shift;;
         --dry-run) DRY_RUN=true; shift;;
-        -h|--help) sed -n '2,28p' "$0"; exit 0;;
+        # The header comment is the help text. Bounded by the shebang and
+        # `set -euo`, found rather than hardcoded — a line count goes stale the
+        # first time the header is edited, and silently truncates the usage.
+        -h|--help) sed -n "2,$(($(grep -n '^set -euo' "$0" | cut -d: -f1) - 1))p" "$0"; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -118,15 +132,61 @@ if ! grep -q iOSPackagesShouldBuildARM64e "$WORKSPACE/xcshareddata/WorkspaceSett
     fail "$(basename "$WORKSPACE") does not set iOSPackagesShouldBuildARM64e, so its SwiftPM packages build arm64-only and this arm64e variant cannot link against them. Use RuntimeViewer-Debug.xcworkspace or RuntimeViewer-Distribution.xcworkspace."
 fi
 
-# The signer is required rather than optional. Without it the .ipa would still
-# build and install, and would then fail at runtime in a way that looks like a
-# code bug: no entitlements means proc_listallpids returns EPERM and the process
-# list comes back empty.
-command -v vphone-cli >/dev/null 2>&1 \
-    || fail "vphone-cli not found; it is what signs the entitlements in. The equivalent by hand is: ldid -S'$ENTITLEMENTS' -I<bundle id> <mach-o>"
+# A signer is required rather than optional, even though *which* one is not.
+# Without any, the .ipa would still build and install, and would then fail at
+# runtime in a way that looks like a code bug: no entitlements means
+# proc_listallpids returns EPERM and the process list comes back empty.
+case "$SIGNER" in
+    auto)
+        for candidate in vphone-cli ldid; do
+            if command -v "$candidate" >/dev/null 2>&1; then SIGNER=$candidate; break; fi
+        done
+        [[ "$SIGNER" != auto ]] \
+            || fail "no signer found. Install either: 'brew install ldid', or vphone-cli if this machine installs with vphoned. Pick one explicitly with --signer."
+        ;;
+    vphone-cli|ldid)
+        command -v "$SIGNER" >/dev/null 2>&1 \
+            || fail "--signer $SIGNER was asked for, but $SIGNER is not on PATH."
+        ;;
+    *)
+        fail "unknown signer: $SIGNER (expected vphone-cli, ldid, or auto)"
+        ;;
+esac
+
+# A plain pseudo-signature, carrying no entitlements. The embedded frameworks
+# need one to be loadable and none of the privileges.
+sign_without_entitlements() {
+    local mach_o=$1
+    case "$SIGNER" in
+        vphone-cli) vphone-cli sign "$mach_o";;
+        ldid)       ldid -S "$mach_o";;
+    esac
+}
+
+# The main executable: the only Mach-O that carries the five entitlements, and
+# the only one whose signing identifier has to be the bundle's.
+sign_with_entitlements() {
+    local mach_o=$1
+    local identifier=$2
+    case "$SIGNER" in
+        vphone-cli)
+            vphone-cli sign "$mach_o" --entitlements "$ENTITLEMENTS" --identifier "$identifier"
+            ;;
+        ldid)
+            # ldid attaches a flag's argument to the flag — `-Sfile`, not
+            # `-S file`. Written apart, the path and the identifier are read as
+            # two further input files to sign, and the executable comes out
+            # pseudo-signed with no entitlements at all: a build that installs
+            # and then lists no processes, which is the failure this script
+            # exists to prevent.
+            ldid -S"$ENTITLEMENTS" -I"$identifier" "$mach_o"
+            ;;
+    esac
+}
 
 log "workspace=$WORKSPACE scheme=$SCHEME configuration=$CONFIGURATION"
 log "derived_data=$DERIVED_DATA"
+log "signer=$SIGNER"
 
 # -----------------------------------------------------------------------------
 # Build
@@ -210,13 +270,11 @@ while IFS= read -r mach_o; do
     [[ "$mach_o" != "$MAIN_EXECUTABLE" ]] || continue
     file -b "$mach_o" | grep -q 'Mach-O' || continue
     log "signing ${mach_o#$STAGED_APP/}"
-    vphone-cli sign "$mach_o"
+    sign_without_entitlements "$mach_o"
 done < <(find "$STAGED_APP" -type f)
 
 log "signing $BUNDLE_EXECUTABLE with the jailbroken entitlements"
-vphone-cli sign "$MAIN_EXECUTABLE" \
-    --entitlements "$ENTITLEMENTS" \
-    --identifier "$BUNDLE_IDENTIFIER"
+sign_with_entitlements "$MAIN_EXECUTABLE" "$BUNDLE_IDENTIFIER"
 
 # -----------------------------------------------------------------------------
 # Package

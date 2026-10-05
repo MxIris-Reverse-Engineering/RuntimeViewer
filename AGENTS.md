@@ -81,9 +81,12 @@ specific to it:
 - **Signing and packaging are not Xcode's job here.** No provisioning profile
   grants the variant's five entitlements, so the target sets
   `CODE_SIGNING_ALLOWED = NO` and the product comes out unsigned;
-  `BuildJailbrokenIPAScript.sh` signs every Mach-O in it with `vphone-cli sign`
-  and packages the `.ipa`. A build installed by Xcode carries none of the five
-  and can neither list processes nor inject into one.
+  `BuildJailbrokenIPAScript.sh` pseudo-signs every Mach-O in it and packages the
+  `.ipa`. A build installed by Xcode carries none of the five and can neither
+  list processes nor inject into one. The signing is done by `vphone-cli sign`
+  or by `ldid`, whichever is installed (`--signer` overrides): the first is a
+  wrapper that writes byte for byte what `ldid -S -M -K -I` writes, so they are
+  interchangeable here, and which one a machine has differs.
 
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace
@@ -122,6 +125,7 @@ specific to it:
 # five. Defaults to Debug, the configuration verified on a device.
 ./BuildJailbrokenIPAScript.sh
 ./BuildJailbrokenIPAScript.sh --configuration Release
+./BuildJailbrokenIPAScript.sh --signer ldid  # vphone-cli | ldid | auto (default)
 ./BuildJailbrokenIPAScript.sh --no-build   # re-package the last build
 ./BuildJailbrokenIPAScript.sh --dry-run    # print commands without running
 
