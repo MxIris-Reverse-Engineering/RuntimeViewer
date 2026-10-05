@@ -313,7 +313,7 @@ public final class FindSession {
             finish(with: summary, nodes: memberMatchGroups.nodes(), typeCount: memberMatchGroups.typeCount, isWidening: isWidening)
         case .ancestorTypes, .descendantTypes, .conformingTypes:
             let relationship = query.mode.relationship ?? .ancestors
-            let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: query.trimmedText, relationship: relationship, isCaseSensitive: query.isCaseSensitive, imagePaths: imagePaths))
+            let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: query.trimmedText, matchMode: query.textMatchStyle.matchMode, relationship: relationship, isCaseSensitive: query.isCaseSensitive, imagePaths: imagePaths))
             try Task.checkCancellation()
             var nodes: [FindResultNode] = []
             var relatedTypeCount = 0

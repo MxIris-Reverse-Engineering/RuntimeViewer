@@ -1,13 +1,13 @@
 import Foundation
 import Semantic
 
-/// Text matching over one frozen interface, and over member names.
+/// Text matching over one frozen interface, and over member and type names.
 ///
 /// Pure functions over `FrozenSemanticString`: no actor, no state, so the
 /// matching rules — the four match styles, case folding, word boundaries,
 /// the scope → semantic-kind mapping, line numbering and the windowed line
-/// text — can be tested on hand-built strings without an engine. Member
-/// searches run the same rules over names.
+/// text — can be tested on hand-built strings without an engine. Member and
+/// relationship searches run the same rules over names.
 ///
 /// Offsets are UTF-8 bytes throughout the scan, because that is how the
 /// frozen text is stored and how its spans are measured; only the range
@@ -355,5 +355,63 @@ enum RuntimeInterfaceTextMatcher {
             location: name.utf16.distance(from: name.startIndex, to: startIndex),
             length: name.utf16.distance(from: startIndex, to: endIndex)
         )
+    }
+
+    // MARK: - Type names
+
+    /// Whether `pattern` matches the type named `qualifiedName`.
+    ///
+    /// The rules are the text search's, as for member names, run over the
+    /// type's own name: the last component of its qualified name, without
+    /// generic arguments — `View` for `SwiftUI.View`, `Array` for
+    /// `Swift.Array<Swift.Int>`. That anchors the match styles where Xcode's
+    /// type hierarchy queries anchor them, at the ends of the symbol's own
+    /// name (`-[IDEBatchFindQuerySpecification
+    /// termSymbolsForWorkspace:useQualifiedNameParser:cancelWhen:]`):
+    /// `Starting With View` finds `ViewBuilder` and not `NSView`, and a module
+    /// or an enclosing type matches nothing by itself. A query with a dot in
+    /// it names what the type is in, so it runs over the whole qualified name
+    /// instead; so does a regular expression, which anchors itself where it
+    /// means to.
+    static func typeNameMatches(_ qualifiedName: String, pattern: Pattern) -> Bool {
+        let matchesQualifiedName = pattern.regex != nil || pattern.needle.contains(UInt8(ascii: "."))
+        let name = matchesQualifiedName ? qualifiedName : String(ownTypeName(of: qualifiedName))
+        return !hits(in: name, pattern: pattern).isEmpty
+    }
+
+    /// The last component of a qualified type name, without its generic
+    /// arguments: `Storage` for `SwiftUI.Text.Storage`, `Array` for
+    /// `Swift.Array<Swift.Int>`. A dot inside angle brackets or parentheses —
+    /// a generic argument's module, a private type's discriminator — splits
+    /// nothing, and the arrow of a function type closes no bracket.
+    static func ownTypeName(of qualifiedName: String) -> Substring {
+        let utf8 = qualifiedName.utf8
+        var depth = 0
+        var componentStart = utf8.startIndex
+        var genericArgumentsStart: String.Index?
+        var previousByte: UInt8 = 0
+        for index in utf8.indices {
+            let byte = utf8[index]
+            switch byte {
+            case UInt8(ascii: "<"):
+                if depth == 0, genericArgumentsStart == nil {
+                    genericArgumentsStart = index
+                }
+                depth += 1
+            case UInt8(ascii: "("), UInt8(ascii: "["):
+                depth += 1
+            case UInt8(ascii: ">") where previousByte == UInt8(ascii: "-"):
+                break
+            case UInt8(ascii: ">"), UInt8(ascii: ")"), UInt8(ascii: "]"):
+                depth = max(0, depth - 1)
+            case UInt8(ascii: ".") where depth == 0:
+                componentStart = utf8.index(after: index)
+                genericArgumentsStart = nil
+            default:
+                break
+            }
+            previousByte = byte
+        }
+        return qualifiedName[componentStart ..< (genericArgumentsStart ?? utf8.endIndex)]
     }
 }

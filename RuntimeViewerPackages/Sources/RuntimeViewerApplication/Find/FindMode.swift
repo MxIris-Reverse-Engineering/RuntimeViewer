@@ -16,7 +16,8 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable {
         case .text: "Text"
         case .regularExpression: "Regular Expression"
         case .ancestorTypes: "Ancestor Types"
-        case .descendantTypes: "Descendant Types"
+        // Xcode's spelling, the `displayName` IDEFoundation declares.
+        case .descendantTypes: "Descendent Types"
         case .conformingTypes: "Conforming Types"
         case .members: "Members"
         }
@@ -32,8 +33,11 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable {
         }
     }
 
-    /// Whether the third path component offers the text match styles.
-    public var hasTextMatchStyles: Bool { self == .text }
+    /// Whether the third path component offers the text match styles: Text
+    /// and the relationship modes, the queries Xcode declares
+    /// `supportsAnchoring` for. Regular Expression is a pattern of its own and
+    /// offers none, in Xcode too.
+    public var hasTextMatchStyles: Bool { self == .text || relationship != nil }
 
     /// Whether the third path component offers the member match styles, and
     /// the scope row the member kinds.
@@ -59,7 +63,10 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable {
     }
 }
 
-/// The third path component in text mode: Xcode's four match styles.
+/// The third path component in text and relationship modes: Xcode's four
+/// match styles. One choice serves all of those modes, as Xcode keeps one
+/// anchoring for every query: Matching Word picked in Text mode is still
+/// picked in Ancestor Types.
 public enum FindTextMatchStyle: String, CaseIterable, Hashable, Sendable {
     case containing
     case matchingWord
@@ -191,6 +198,7 @@ public enum FindScope: Hashable, Sendable {
 public struct FindQuery: Hashable, Sendable {
     public var mode: FindMode = .text
     public var text: String = ""
+    /// The match style of Text and the relationship modes, one for all of them.
     public var textMatchStyle: FindTextMatchStyle = .containing
     /// Kept apart from `textMatchStyle`: it can be a regular expression,
     /// which text mode reaches through a mode of its own.

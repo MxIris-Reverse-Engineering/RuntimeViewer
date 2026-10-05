@@ -15,8 +15,8 @@
 
 1. **文本**——在已索引镜像的全部 interface 正文里做文本匹配（含注释），Containing / Matching Word /
    Starting With / Ending With / Regular Expression，可选大小写与搜索域（全部 / 排除注释 / 仅注释 / 仅符号）。
-2. **关系**——输入一个类型名，列出它的 Ancestor Types / Descendant Types / Conforming Types，语义与 Xcode 一致
-   （传递闭包，结果成树）。
+2. **关系**——输入一个类型名，列出它的 Ancestor Types / Descendent Types / Conforming Types，语义与 Xcode 一致
+   （传递闭包，结果成树）；类型名的匹配方式与文本相同的四种，作用在类型自己的名字上（§8）。
 3. **成员**——按名字查找 ObjC property / method / ivar，Swift field / function / variable / subscript /
    initializer，匹配方式与文本相同（另加正则），可按种类过滤；数据直接来自 section 里的结构（`ObjCClassInfo` 一族、
    `TypeDefinition` 一族），不从文本反推。
@@ -185,7 +185,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 | `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `CorpusBuildSummary { objectCount, skippedCount, byteCount }` |
 | `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
 | `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
-| `TypeRelationshipsRequest { query, isCaseSensitive, relationship: ancestors / descendants / conformers }` | 普通 | — | `[RuntimeRelationshipTree]` |
+| `TypeRelationshipsRequest { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | 普通 | — | `[RuntimeRelationshipTree]` |
 | `InterfaceCorpusCoverageRequest` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
 
 `Progress` 必须是具名 `Codable` struct，不能是 tuple（审查意见 2）。请求与结果模型放在 `RuntimeViewerCore/Common/`，
@@ -238,14 +238,15 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   见 §7；2026-10-03 之前只有子串），大小写可选，`kinds` 过滤；`RuntimeMemberMatch { object, member, matchRangeInName }`。
   `resultLimit` / truncated 语义与文本相同。
 
-#### 3.3 关系（Ancestor / Descendant / Conforming Types）
+#### 3.3 关系（Ancestor / Descendent / Conforming Types）
 
-- 输入是类型名：先按名字在全部已索引镜像里解析候选类型（精确匹配优先，其次子串，大小写可选，上限 50 个），每个候选
+- 输入是类型名：先按名字在全部已索引镜像里解析候选类型（按所选匹配方式匹配类型自己的名字，名字就是查询本身的排前面，
+  大小写可选，上限 50 个；2026-10-03 之前是「精确匹配优先，其次子串」，见 §8），每个候选
   各出一棵树 `RuntimeRelationshipTree { root: RuntimeObject; children: [Node]; Node { object, isResolved, children } }`。
   `isResolved == false` 表示该类型不在任何已索引镜像里（例如父类在未索引的框架），只能给名字，不能点击跳转。
 - **Ancestor Types**：类 → 整条父类链（逐级嵌套）+ 每一级采纳的协议；协议 → 它 refine 的协议（递归）；
   struct / enum / actor → 采纳的协议（递归到协议的 refine）。
-- **Descendant Types**：类 → 全部传递子类（逐级嵌套）；协议 → refine 它的协议（递归）。
+- **Descendent Types**：类 → 全部传递子类（逐级嵌套）；协议 → refine 它的协议（递归）。
 - **Conforming Types**：协议 → 直接 conformer（与 Inspector Relationships 一致，不含经 refining 协议间接 conform 的）。
 - 数据来源与要新增的两张表：
 
@@ -330,9 +331,9 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 **第一行（y 0–24）**：模式路径控件，容器 frame `(3, 3, W−39, 17)`，`controlSize = .small`、字号 11，三个组件
 Find ▸ Text ▸ Containing。Xcode 用的不是 `NSPathControl`，而是 DVTKit 的 `DVTPathControl`，我们复刻为 `RuntimeViewerUI`
 的 `PopUpPathControl`，规格见 §4.2。我们的三个组件：`Find`（无菜单）▸ 模式 `Text / Regular Expression / Ancestor Types /
-Descendant Types / Conforming Types / Members` ▸ 第三组件按模式：Text 是 `Containing / Matching Word / Starting With /
-Ending With`，Members 是同样四种匹配方式加 `Regular Expression`（2026-10-03 之前是成员种类，种类挪到了第三行，见 §7），
-其余模式没有第三组件。右侧「Aa」大小写切换：`NSButton`
+Descendent Types / Conforming Types / Members` ▸ 第三组件按模式：Text 与三个关系模式是 `Containing / Matching Word /
+Starting With / Ending With`，四个模式共用一个选择（§8），Members 是同样四种匹配方式加 `Regular Expression`
+（2026-10-03 之前是成员种类，种类挪到了第三行，见 §7），Regular Expression 没有第三组件。右侧「Aa」大小写切换：`NSButton`
 frame `(W−29, 3, 21, 16)`，title `Aa`、toolTip `Case Sensitive`、`.pushOnPushOff`、`bezelStyle = .smallSquare`、
 **`isBordered = false`**、字号 11、居中；on 时字体加粗、`contentTintColor = .controlAccentColor`，off 时常规字体、不着色
 （`-[IDEFindNavigatorQueryParametersController refreshUserInterface:]`，IDEKit `0x198474`）。
@@ -572,6 +573,44 @@ MVVM-C 的落点：`FindScopeChooserViewModel<Route>` 与镜像行的 `FindScope
   范围交集、去掉改范围时的插队，各自失败；补搜那条第一次没有失败——会话经 `emitOnNextMainActor` 晚一个主线程回合才
   知道语料建好，测试在补搜开始前就检查了结果，加一次 `settleMainQueue()` 后才能抓到。
 
+### 8. 关系模式的匹配方式（2026-10-03）
+
+用户指出 Xcode 的搜索模式都有 Containing / Matching Word / Starting With / Ending With，要求补上；正则照 Xcode 没有。
+Xcode 27.0 里查到的事实：
+
+| 事实 | 依据 |
+|------|------|
+| Text、Ancestor Types、Descendent Types、Conforming Types（以及我们没有的 Symbols、Call Hierarchy）有匹配方式；Regular Expression、Multiple Words 没有 | `IDEFoundation.xcplugindata` 里每个 `Xcode.IDEFoundation.IDEBatchFindConcreteQueryClass` 扩展各自声明 `supportsAnchoring`；IDEKit `-[IDEFindNavigatorQuerySelectorClassComponent childItems]`（`0x19d4e8`）只在它为真时给出第三段 |
+| 菜单顺序 Containing、Matching Word、Starting With、Ending With；枚举值 0 Containing、1 Starting With、2 Ending With、3 Matching Word | IDEFoundation `_IDEBatchFindTextAnchoringDisplayOrderedValues`（`0xebe910`）、`IDEBatchFindTextAnchoringToDisplayString`（`0x23d28`） |
+| 所有模式共用一个匹配方式，换模式不重置 | IDEKit `-[IDEFindNavigatorQueryParametersController selectQueryAnchoring:]`（`0x19bce8`）只写 `_selectedAnchoring`，`selectQueryExtension:`（`0x19bacc`）不碰它 |
+| 类型层级查询把匹配方式锚在符号自己的名字上：Starting With 锚开头、Ending With 锚结尾、Matching Word 两头都锚（即整个名字），Containing 不锚；大小写按 Match Case | IDEFoundation `-[IDEBatchFindQuerySpecification termSymbolsForWorkspace:useQualifiedNameParser:cancelWhen:]`（`0x145e8`）调用 `symbolsContaining:anchorStart:anchorEnd:…`，`anchorStart` 取值 1 或 3、`anchorEnd` 取值 2 或 3 |
+| 带容器的查询（`Container.name`）另走一条：容器名精确相等，名字按子串、不分大小写，匹配方式不起作用 | 同一方法里 `IDEIndexQualifiedNameParser` 解析成功的分支；`-[IDEIndexQualifiedNameParser parse:]`（`0x1561a0`）只在标识符后跟 `.` 或 `::` 时成功 |
+
+做法：
+
+- 三个关系模式的路径加第三段，与 Text 共用 `FindQuery.textMatchStyle`，因为 Xcode 也只存一份。Members 仍单独存
+  `memberMatchStyle`，因为它多一个正则，共用会把正则带进别的模式（§7 的决定不变）。Regular Expression 照 Xcode 不加。
+- `RuntimeTypeRelationshipsQuery` 加 `matchMode`（默认 `.containing`）。规则在
+  `RuntimeInterfaceTextMatcher.typeNameMatches(_:pattern:)`：文本搜索的规则（标识符字符 `[A-Za-z0-9_$]` 判边界、ASCII 大小写
+  折叠），作用在类型自己的名字上，即限定名的最后一段、去掉泛型实参（`SwiftUI.View` 取 `View`，`Swift.Array<Swift.Int>`
+  取 `Array`；尖括号与圆括号里的点不切分，函数类型的 `->` 不算闭括号）。对纯标识符的名字，这与 Xcode 的锚定等价：标识符内部
+  没有词边界，Starting With 就是前缀、Ending With 就是后缀、Matching Word 就是整个名字相等；名字带私有判别符时
+  （`(Foo in _ABC123)`）也照样能命中 `Foo`。
+- 查询里有 `.` 时改为匹配完整限定名，规则相同（Matching Word `Text.Storage` 命中 `SwiftUI.Text.Storage`）。这一处与 Xcode
+  不同：Xcode 把查询拆成容器与名字，名字只按子串匹配；我们没有它的符号索引，直接对限定名套匹配方式更简单，匹配方式也照样
+  起作用。
+- 正则：界面不提供，引擎接口因为共用枚举而接受，对完整限定名匹配（正则自己决定锚在哪）；正则编译失败时 `typeRelationships`
+  抛错，与成员搜索一致。
+- 排序不变：名字就是查询本身的（类型自己的名字或完整限定名，大小写按开关）排前面，其余按名字排；有范围时范围内的先排（§7）。
+- 行为变化：Containing 不再因模块名或外层类型名命中。以前 `UI` 会列出 SwiftUI 的全部类型，现在只列名字里含 `UI` 的。
+
+**测试**：Core 的 `RuntimeInterfaceTextMatcherTests` 加 19 个类型名参数化用例（四种方式、大小写、模块与外层类型不算名字、
+带点号的查询、泛型实参与函数类型的箭头、正则）；`RuntimeInterfaceSearchTests` 加 Foundation 上的引擎测试（Matching Word、
+Starting With、Ending With、模块名不是类型名、带模块的查询），改动前 Matching Word 与模块名两处断言确认是红的。Application 的
+`FindViewModelTests` 加两条：关系模式的路径有第三段并沿用 Text 的选择；关系搜索按匹配方式找起点类型（Matching Word
+`NSString` 只出 `NSString` 一棵树）。两条改动前都是红的。结果：Core 的 matcher、search、范围剪枝三个套件 20 个测试通过，
+`RuntimeViewerApplicationTests` 312 个测试通过，Debug App 构建通过；没有在运行中的 App 里看过。
+
 ### 不做
 
 - 语料落盘（注释里的地址是 per-run 的，落盘要先剔除地址列或按 slide 归一化）。
@@ -646,3 +685,7 @@ MVVM-C 的落点：`FindScopeChooserViewModel<Route>` 与镜像行的 `FindScope
 | 2026-10-03 | 三处菜单的选择合成 `FindViewModel.Input.modePathChoiceSelected`，路径组成挪进 `FindViewModel.Output.modePath` | 新控件自己发 action，用 RxAppKit 的 `rx.click(with: \.lastSelection)` 接即可，原先的三个 relay 和手写的 `@objc` 菜单代码没有存在的理由；路径组成（含哪一项该强调）放在 ViewModel 里才测得到。测试替换菜单弹出入口 `menuPresenter`（internal）经用户同意。 |
 | 2026-10-03 | 「Aa」按钮照 Xcode：开启时加粗 + 强调色，关闭时常规字体、不着色 | 用户：「一起改」。依据 IDEKit `-[IDEFindNavigatorQueryParametersController refreshUserInterface:]`（`0x198474`）；§4.1 原先写的「off 时 `secondaryLabelColor`」是猜的。 |
 | 2026-10-03 | 控件改名 `PopUpPathControl`（文件、测试套件同步改名） | 用户：「不要直接叫 PathControl，这种名字一般属于基类」。每个组件都是一个弹出按钮：菜单打开时当前项压在组件上，与 `NSPopUpButton` 一致，辅助功能里也是 AXPopUpButton；DVTKit 自己的方法也叫 `popUpMenuForComponentCell:`。 |
+| 2026-10-03 | 三个关系模式加匹配方式（Containing / Matching Word / Starting With / Ending With），与 Text 共用一个选择；Regular Expression 不加，Members 仍单独存 | 用户：「Xcode所有搜索模式都支持这几个, contains, matchWord, start with, end with，加一下这个feature」，随后：「正则没这个，可以忽略」。Xcode 27.0 的每个查询类别各自声明 `supportsAnchoring`，Regular Expression 为 false；匹配方式只存一份，换模式不重置（证据见 §8）。Members 多一个正则，共用会把它带进别的模式。 |
+| 2026-10-03 | 类型名的匹配作用在类型自己的名字上（限定名最后一段、去掉泛型实参），查询带点号时改为整个限定名；Containing 因此不再命中模块名与外层类型名 | Xcode 的类型层级查询把锚点放在符号自己名字的两端（§8），用文本搜索的词边界规则实现，对纯标识符与之等价，对带私有判别符的名字也能命中。带点号查询与 Xcode 不同（它拆成容器与名字、名字只按子串），我们没有它的符号索引，对限定名直接套匹配方式更简单。以前「显示名包含即可」会让 `UI` 列出 SwiftUI 的全部类型。 |
+| 2026-10-03 | 关系查询的引擎接口接受正则（与文本、成员共用 `RuntimeInterfaceSearchMatchMode`），对完整限定名匹配，编译失败时抛错 | 界面不提供，但枚举共用，接口收到正则时不能静默返回空；`typeRelationships` 原本就是 `throws`，与成员搜索的处理一致。 |
+| 2026-10-03 | 模式名照 Xcode 拼作 `Descendent Types`；标识符 `FindMode.descendantTypes`、`RuntimeTypeRelationship.descendants` 不变 | 问用户要不要照 Xcode 的拼法，用户：「改一下」。Xcode 27.0 的 `IDEFoundation.xcplugindata` 里这个查询类别的 `displayName` 是 `Descendent Types`、`persistentIdentifier` 是 `descendent-types`。标识符用的是标准拼法，用户看不到，不跟着改。 |

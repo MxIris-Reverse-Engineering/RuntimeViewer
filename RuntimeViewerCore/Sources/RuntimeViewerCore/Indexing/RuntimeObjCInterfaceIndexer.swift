@@ -185,7 +185,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// Protocol name → the protocols of this image that adopt it. Built by
     /// `prepare()` from each protocol's own adoption list, because the
     /// library's event stream reports class adoptions only. The Find
-    /// navigator's Descendant Types walks it; Ancestor Types reads the
+    /// navigator's Descendent Types walks it; Ancestor Types reads the
     /// forward direction straight off `protocolGroup(forName:)`.
     @Mutex
     private var refiningProtocolsByProtocolName: [String: OrderedSet<RuntimeObjCProtocolReference>] = [:]

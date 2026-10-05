@@ -162,7 +162,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
 
     /// The reverse of `refinedProtocolsByQualifiedName`: a protocol name —
     /// Swift qualified or Objective-C — → the protocols of this image refining
-    /// it. Descendant Types walks it.
+    /// it. Descendent Types walks it.
     @Mutex
     private var refiningProtocolsByQualifiedName: [String: OrderedSet<RuntimeSwiftProtocolReference>] = [:]
 

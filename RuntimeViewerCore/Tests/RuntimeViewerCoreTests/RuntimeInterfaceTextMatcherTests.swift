@@ -181,4 +181,49 @@ struct RuntimeInterfaceTextMatcherTests {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: testCase.query, matchMode: testCase.matchMode, isCaseSensitive: testCase.isCaseSensitive)
         #expect(RuntimeInterfaceTextMatcher.memberNameMatchRange(in: testCase.name, pattern: pattern) == testCase.expectedRange)
     }
+
+    /// One qualified type name, one query, and whether the query finds the
+    /// type.
+    struct TypeNameCase: Sendable, CustomTestStringConvertible {
+        let name: String
+        let query: String
+        let matchMode: RuntimeInterfaceSearchMatchMode
+        var isCaseSensitive = false
+        let matches: Bool
+
+        var testDescription: String {
+            "\(matchMode) \"\(query)\" \(matches ? "finds" : "misses") \(name)"
+        }
+    }
+
+    @Test("type names follow the text match styles on the type's own name, or on the qualified name for a query with a dot", arguments: [
+        TypeNameCase(name: "NSMutableString", query: "NSMutable", matchMode: .startingWith, matches: true),
+        TypeNameCase(name: "NSMutableString", query: "Mutable", matchMode: .startingWith, matches: false),
+        TypeNameCase(name: "NSMutableString", query: "String", matchMode: .endingWith, matches: true),
+        TypeNameCase(name: "NSMutableString", query: "Mutable", matchMode: .endingWith, matches: false),
+        TypeNameCase(name: "NSMutableString", query: "NSString", matchMode: .matchingWord, matches: false),
+        TypeNameCase(name: "NSString", query: "nsstring", matchMode: .matchingWord, matches: true),
+        TypeNameCase(name: "NSString", query: "nsstring", matchMode: .matchingWord, isCaseSensitive: true, matches: false),
+        TypeNameCase(name: "SwiftUI.View", query: "View", matchMode: .matchingWord, matches: true),
+        TypeNameCase(name: "SwiftUI.ViewBuilder", query: "View", matchMode: .startingWith, matches: true),
+        // The module and enclosing types are not the type's name.
+        TypeNameCase(name: "SwiftUI.View", query: "Swift", matchMode: .startingWith, matches: false),
+        TypeNameCase(name: "SwiftUI.View", query: "UI", matchMode: .containing, matches: false),
+        TypeNameCase(name: "SwiftUI.Text.Storage", query: "Text", matchMode: .matchingWord, matches: false),
+        // A dot names the container, so the qualified name is matched.
+        TypeNameCase(name: "SwiftUI.Text.Storage", query: "Text.Storage", matchMode: .matchingWord, matches: true),
+        TypeNameCase(name: "SwiftUI.Text.Storage", query: "SwiftUI.Te", matchMode: .startingWith, matches: true),
+        // Generic arguments are not the type's name either, and a function
+        // type's arrow closes none of their brackets.
+        TypeNameCase(name: "Swift.Array<Swift.Int>", query: "Array", matchMode: .matchingWord, matches: true),
+        TypeNameCase(name: "Swift.Array<Swift.Int>", query: "Int", matchMode: .containing, matches: false),
+        TypeNameCase(name: "Swift.Dictionary<Swift.String, (Swift.Int) -> Swift.Void>", query: "Dictionary", matchMode: .matchingWord, matches: true),
+        TypeNameCase(name: "Swift.Dictionary<Swift.String, (Swift.Int) -> Swift.Void>", query: "Void", matchMode: .containing, matches: false),
+        // A regular expression anchors itself, so it reads the qualified name.
+        TypeNameCase(name: "SwiftUI.View", query: "^SwiftUI\\.V", matchMode: .regularExpression, matches: true),
+    ])
+    func typeNameMatchStyles(_ testCase: TypeNameCase) throws {
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: testCase.query, matchMode: testCase.matchMode, isCaseSensitive: testCase.isCaseSensitive)
+        #expect(RuntimeInterfaceTextMatcher.typeNameMatches(testCase.name, pattern: pattern) == testCase.matches)
+    }
 }

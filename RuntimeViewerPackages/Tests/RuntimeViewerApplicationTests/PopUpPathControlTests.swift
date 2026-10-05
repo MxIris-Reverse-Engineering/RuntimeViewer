@@ -14,7 +14,7 @@ import Testing
 @Suite("PopUpPathControl", .serialized)
 @MainActor
 struct PopUpPathControlTests {
-    private static let modes = ["Text", "Regular Expression", "Ancestor Types", "Descendant Types", "Conforming Types", "Members"]
+    private static let modes = ["Text", "Regular Expression", "Ancestor Types", "Descendent Types", "Conforming Types", "Members"]
 
     private static let matchStyles = ["Containing", "Matching Word", "Starting With", "Ending With"]
 

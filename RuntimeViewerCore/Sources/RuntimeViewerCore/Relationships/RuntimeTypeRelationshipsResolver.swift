@@ -51,8 +51,9 @@ actor RuntimeTypeRelationshipsResolver {
 
     // MARK: - Query
 
-    func trees(for query: RuntimeTypeRelationshipsQuery) async -> [RuntimeRelationshipTree] {
-        let candidates = await candidateTypes(matching: query)
+    /// Throws when the query is a regular expression that does not compile.
+    func trees(for query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
+        let candidates = try await candidateTypes(matching: query)
         var trees: [RuntimeRelationshipTree] = []
         trees.reserveCapacity(candidates.count)
         for candidate in candidates {
@@ -89,25 +90,31 @@ actor RuntimeTypeRelationshipsResolver {
         }
     }
 
-    /// The types whose name matches the query, exact matches first, then by
-    /// name. A Swift type matches on its qualified display name and on its
-    /// last component, so `View` finds `SwiftUI.View`. A query limited to
-    /// some images puts their types first among the exact matches and among
-    /// the rest, so the candidate limit is spent on them before the types
-    /// whose trees may have nothing left in those images.
-    private func candidateTypes(matching query: RuntimeTypeRelationshipsQuery) async -> [RuntimeObject] {
+    /// The types whose name matches the query under its match style, those
+    /// named by the query itself first, then by name. The match style runs
+    /// over a type's own name, so `View` finds `SwiftUI.View` and the module
+    /// or an enclosing type matches nothing by itself; a query with a dot in
+    /// it runs over the qualified name (`RuntimeInterfaceTextMatcher
+    /// .typeNameMatches(_:pattern:)`). A query limited to some images puts
+    /// their types first among the exact matches and among the rest, so the
+    /// candidate limit is spent on them before the types whose trees may
+    /// have nothing left in those images.
+    private func candidateTypes(matching query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeObject] {
         let text = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return [] }
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: text, matchMode: query.matchMode, isCaseSensitive: query.isCaseSensitive)
         let options: String.CompareOptions = query.isCaseSensitive ? [] : [.caseInsensitive]
 
         var exactMatches: OrderedSet<RuntimeObject> = []
         var partialMatches: OrderedSet<RuntimeObject> = []
         func consider(_ object: RuntimeObject) {
-            guard Self.isRelationshipCandidate(object) else { return }
-            let names = [object.displayName, object.displayName.components(separatedBy: ".").last ?? object.displayName]
-            if names.contains(where: { $0.compare(text, options: options) == .orderedSame }) {
+            guard Self.isRelationshipCandidate(object),
+                  RuntimeInterfaceTextMatcher.typeNameMatches(object.displayName, pattern: pattern)
+            else { return }
+            let ownName = RuntimeInterfaceTextMatcher.ownTypeName(of: object.displayName)
+            if object.displayName.compare(text, options: options) == .orderedSame || ownName.compare(text, options: options) == .orderedSame {
                 exactMatches.append(object)
-            } else if names.contains(where: { $0.range(of: text, options: options) != nil }) {
+            } else {
                 partialMatches.append(object)
             }
         }

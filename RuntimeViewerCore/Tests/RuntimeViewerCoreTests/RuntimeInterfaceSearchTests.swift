@@ -142,6 +142,36 @@ struct RuntimeInterfaceSearchTests {
         #expect(nodes.allSatisfy(leadsIntoFoundation), "\(nodes.filter { !leadsIntoFoundation($0) }.prefix(5).map(\.name)) lead nowhere into Foundation")
     }
 
+    @Test("the types a relationship search starts from match on their own name, under the query's match style")
+    func relationshipCandidatesFollowTheMatchStyle() async throws {
+        let engine = try await Self.makeEngine("relationship-match-styles")
+        func rootNames(_ text: String, _ matchMode: RuntimeInterfaceSearchMatchMode) async throws -> [String] {
+            let query = RuntimeTypeRelationshipsQuery(text: text, matchMode: matchMode, relationship: .ancestors, candidateLimit: .max)
+            return try await engine.typeRelationships(query).map(\.root.displayName)
+        }
+        func ownName(_ displayName: String) -> String {
+            displayName.components(separatedBy: ".").last ?? displayName
+        }
+
+        // Matching Word is the whole name: NSString, never NSMutableString.
+        let matchingWord = try await rootNames("nsstring", .matchingWord)
+        #expect(matchingWord.contains("NSString"))
+        #expect(matchingWord.allSatisfy { ownName($0).caseInsensitiveCompare("NSString") == .orderedSame }, "\(matchingWord)")
+
+        // Starting With and Ending With anchor at the ends of the name.
+        let startingWith = try await rootNames("NSMutableStr", .startingWith)
+        #expect(startingWith.contains("NSMutableString"))
+        #expect(startingWith.allSatisfy { ownName($0).lowercased().hasPrefix("nsmutablestr") }, "\(startingWith)")
+        let endingWith = try await rootNames("SecureCoding", .endingWith)
+        #expect(endingWith.contains("NSSecureCoding"))
+        #expect(endingWith.allSatisfy { ownName($0).lowercased().hasSuffix("securecoding") }, "\(endingWith)")
+
+        // A module is no type's name; a query that names one reaches a type
+        // through its qualified name.
+        #expect(try await rootNames("Foundation", .matchingWord).isEmpty)
+        #expect(try await rootNames("Foundation.LocalizedError", .matchingWord) == ["Foundation.LocalizedError"])
+    }
+
     @Test("conformers of an Objective-C protocol, and the protocols refining it")
     func objcProtocolRelationships() async throws {
         let engine = try await Self.makeEngine("objc-protocol")

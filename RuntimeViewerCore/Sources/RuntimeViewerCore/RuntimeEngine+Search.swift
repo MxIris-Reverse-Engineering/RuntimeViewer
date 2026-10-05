@@ -121,10 +121,10 @@ extension RuntimeEngine {
         return try await interfaceCorpusStore.searchMembers(query, indexedImagePaths: await indexedImagePaths(), onProgress: reportProgress)
     }
 
-    func _typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async -> [RuntimeRelationshipTree] {
+    func _typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
         var query = query
         query.imagePaths = query.imagePaths.map { Set($0.map(DyldUtilities.patchImagePathForDyld)) }
-        return await typeRelationshipsResolver.trees(for: query)
+        return try await typeRelationshipsResolver.trees(for: query)
     }
 
     func _interfaceCorpusCoverage() async -> RuntimeInterfaceCorpusCoverage {
@@ -243,7 +243,7 @@ extension RuntimeEngine {
         let query: RuntimeTypeRelationshipsQuery
         static var commandName: String { CommandNames.typeRelationships.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeRelationshipTree] {
-            await engine._typeRelationships(query)
+            try await engine._typeRelationships(query)
         }
     }
 

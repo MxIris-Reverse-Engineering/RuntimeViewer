@@ -86,7 +86,7 @@ struct FindViewModelTests {
         #expect(path.map(\.isAccented) == [false, false, false])
         #expect(path[0].menuChoices.isEmpty)
         #expect(path[1].choice == .mode(.text))
-        #expect(path[1].menuChoices.map(\.title) == ["Text", "Regular Expression", "Ancestor Types", "Descendant Types", "Conforming Types", "Members"])
+        #expect(path[1].menuChoices.map(\.title) == ["Text", "Regular Expression", "Ancestor Types", "Descendent Types", "Conforming Types", "Members"])
         #expect(path[2].choice == .textMatchStyle(.containing))
         #expect(path[2].menuChoices.map(\.title) == ["Containing", "Matching Word", "Starting With", "Ending With"])
     }
@@ -122,6 +122,27 @@ struct FindViewModelTests {
         #expect(path.map(\.isAccented) == [false, true, false])
         #expect(path[2].menuChoices.map(\.title) == ["Containing", "Matching Word", "Starting With", "Ending With", "Regular Expression"])
         #expect(path[2].menuChoices.map(\.isPrecededBySeparator) == [false, false, false, false, true])
+    }
+
+    @Test("the relationship modes offer Text's match styles and keep the one chosen there")
+    func modePathForRelationshipModes() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        modePathChoiceSelectedRelay.accept(.textMatchStyle(.matchingWord))
+        modePathChoiceSelectedRelay.accept(.mode(.ancestorTypes))
+        let path = try await nextValue(from: output.modePath) { $0.count == 3 && $0[1].choice == .mode(.ancestorTypes) }
+
+        #expect(path.map(\.title) == ["Find", "Ancestor Types", "Matching Word"])
+        #expect(path.map(\.isAccented) == [false, true, true])
+        #expect(path[2].menuChoices.map(\.title) == ["Containing", "Matching Word", "Starting With", "Ending With"])
+
+        for mode in [FindMode.descendantTypes, .conformingTypes] {
+            modePathChoiceSelectedRelay.accept(.mode(mode))
+            let modePath = try await nextValue(from: output.modePath) { $0.count == 3 && $0[1].choice == .mode(mode) }
+            #expect(modePath[2].choice == .textMatchStyle(.matchingWord))
+        }
     }
 
     // MARK: - Text search
@@ -280,6 +301,28 @@ struct FindViewModelTests {
         #expect(!superclass.children.isEmpty)
         let summary = try await nextValue(from: output.summary, timeout: 60) { $0 != nil }
         #expect(summary?.contains("types for") == true)
+    }
+
+    @Test("a relationship search starts from the types its match style finds")
+    func relationshipSearchMatchStyle() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, _) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let session = environment.documentState.findSession
+
+        modePathChoiceSelectedRelay.accept(.mode(.descendantTypes))
+        modePathChoiceSelectedRelay.accept(.textMatchStyle(.matchingWord))
+        searchCommittedRelay.accept("NSString")
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+        // The whole name only: NSString's tree, and not NSMutableString's.
+        let rootNames = session.results.nodes.compactMap { node -> String? in
+            if case .object(let object, _) = node.content { return object.displayName }
+            return nil
+        }
+        #expect(rootNames.contains("NSString"))
+        #expect(rootNames.allSatisfy { $0 == "NSString" }, "\(rootNames)")
     }
 
     @Test("an unresolved relationship node goes nowhere when clicked")
