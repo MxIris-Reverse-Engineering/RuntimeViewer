@@ -11,21 +11,25 @@ import RuntimeViewerUI
 public final class ReportCellViewModel: NSObject, @unchecked Sendable {
     public let identifier: ReportNodeIdentifier
 
-    @RxObserved
-    public private(set) var icon: NSUIImage?
+    /// Everything the row shows, in one stream. The navigator keeps a row per indexed image and
+    /// per corpus build — hundreds of them in a large batch — and every `@RxObserved` a cell binds
+    /// costs a relay with a lock of its own for as long as the row exists (proposal
+    /// 0005-cellvm-appearance-single-observed).
+    public struct Appearance: Equatable {
+        public var icon: NSUIImage?
+
+        public var title: String = ""
+
+        /// Right after the title, in the secondary color: progress, a count or a time.
+        public var detail: String = ""
+
+        public var status: ReportRowStatus = .none
+
+        public var toolTip: String?
+    }
 
     @RxObserved
-    public private(set) var title: String = ""
-
-    /// Right after the title, in the secondary color: progress, a count or a time.
-    @RxObserved
-    public private(set) var detail: String = ""
-
-    @RxObserved
-    public private(set) var status: ReportRowStatus = .none
-
-    @RxObserved
-    public private(set) var toolTip: String?
+    public private(set) var appearance: Appearance = Appearance()
 
     /// Whether the row stands for work that can be withdrawn now.
     public private(set) var isCancellable = false
@@ -39,23 +43,12 @@ public final class ReportCellViewModel: NSObject, @unchecked Sendable {
         super.init()
     }
 
-    /// Sets what the row shows, touching only the values that changed so the cell's bindings fire
-    /// for real changes only.
+    /// Sets what the row shows. The appearance is published in one assignment and only when it
+    /// changed, so the cell's binding fires once per real change.
     func update(icon: NSUIImage?, title: String, detail: String = "", status: ReportRowStatus = .none, toolTip: String? = nil, isCancellable: Bool = false, isInProgress: Bool = false) {
-        if self.icon !== icon {
-            self.icon = icon
-        }
-        if self.title != title {
-            self.title = title
-        }
-        if self.detail != detail {
-            self.detail = detail
-        }
-        if self.status != status {
-            self.status = status
-        }
-        if self.toolTip != toolTip {
-            self.toolTip = toolTip
+        let newAppearance = Appearance(icon: icon, title: title, detail: detail, status: status, toolTip: toolTip)
+        if appearance != newAppearance {
+            appearance = newAppearance
         }
         self.isCancellable = isCancellable
         self.isInProgress = isInProgress

@@ -1070,16 +1070,25 @@ Pass a custom builder when the cell needs non-default initialization: `outlineVi
 ```swift
 extension MyViewController {
     fileprivate final class CandidateCellView: TableCellView {
+        private let iconImageView = ImageView()
+
         private let nameLabel = Label()
 
         override func setup() {
             super.setup()
 
             hierarchy {
+                iconImageView
                 nameLabel
             }
+            iconImageView.snp.makeConstraints { make in
+                make.leading.equalToSuperview().inset(4)
+                make.centerY.equalToSuperview()
+                make.size.equalTo(16)
+            }
             nameLabel.snp.makeConstraints { make in
-                make.leading.trailing.equalToSuperview().inset(4)
+                make.leading.equalTo(iconImageView.snp.trailing).offset(4)
+                make.trailing.equalToSuperview().inset(4)
                 make.centerY.equalToSuperview()
             }
             nameLabel.maximumNumberOfLines = 1
@@ -1088,35 +1097,57 @@ extension MyViewController {
         func bind(to viewModel: CandidateCellViewModel) {
             rx.disposeBag = DisposeBag()
 
-            viewModel.$name.asDriver().drive(nameLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
-            viewModel.$icon.asDriver().drive(iconImageView.rx.image).disposed(by: rx.disposeBag)
+            viewModel.$appearance.asDriver().driveOnNext { [weak self] appearance in
+                guard let self else { return }
+                iconImageView.image = appearance.icon
+                nameLabel.attributedStringValue = appearance.name
+            }
+            .disposed(by: rx.disposeBag)
         }
     }
 }
 ```
 
-**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, hold the underlying model as a stored `let`, and expose every piece of display state (icons, attributed names, filter results) as `@RxObserved public private(set) var` so the cell view can drive its UI off the projected `$property` driver in `bind(to:)`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
+**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, and hold the underlying model as a stored `let`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
+
+**Everything a row shows goes into one `Appearance` struct behind a single `@RxObserved` — never one `@RxObserved` per icon, label or status.** A cell ViewModel exists once per row, and these lists run to thousands of rows. An `@RxObserved` costs only its value and an empty reference until its `$property` is touched, but `bind(to:)` touches every one it binds: each becomes a `BehaviorRelay` — a `BehaviorSubject` with an `NSRecursiveLock` of its own — that lives as long as the cell ViewModel, and each `asDriver()` adds a share-replay operator with another lock for as long as the row is on screen. Five properties per row means five of each; folding the sidebar's five into one took the process from about 125,000 locks to 42,000 after scrolling through every object in SwiftUI (`Documentations/Evolutions/0005-cellvm-appearance-single-observed.md`). `SidebarRootCellViewModel` and `ReportCellViewModel` are the references.
+
+- **Publish once per change.** Build the new struct and assign it once, and only when it differs (`Equatable`). The macro generates a plain getter and setter, so `appearance.title = …` field by field sends one event per statement.
+- **The cell binds `$appearance` once** and applies it in one place. When the appearance changes many times a second (a row showing progress), set each part only when it differs, as `ReportCellView` does.
+- **State nothing displays stays a plain property.** A flag only the filter reads (`ReportCellViewModel.isInProgress`) has no observer to serve.
+- **A cell ViewModel subscribes to nothing in `init`.** A row that observes shared state itself — a selection set, a progress stream — builds its relay and its subscription for every row, on screen or not. The parent ViewModel keeps its rows and pushes the change into them through an `update(…)`, the way `BatchExportingImageSelectionViewModel` pushes the selection.
 
 ```swift
 public final class CandidateCellViewModel: NSObject, @unchecked Sendable {
+    public struct Appearance: Equatable {
+        public var icon: NSUIImage?
+        public var name: NSAttributedString
+    }
+
     public let candidate: Candidate
 
     @RxObserved
-    public private(set) var name: NSAttributedString
-
-    @RxObserved
-    public private(set) var icon: NSUIImage?
+    public private(set) var appearance: Appearance
 
     public init(candidate: Candidate) {
         self.candidate = candidate
-        self.name = NSAttributedString {
-            AText(candidate.displayName)
-                .foregroundColor(.labelColor)
-                .font(.systemFont(ofSize: 13))
-                .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
-        }
-        self.icon = candidate.icon
+        self.appearance = Appearance(
+            icon: candidate.icon,
+            name: NSAttributedString {
+                AText(candidate.displayName)
+                    .foregroundColor(.labelColor)
+                    .font(.systemFont(ofSize: 13))
+                    .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
+            }
+        )
         super.init()
+    }
+
+    func update(icon: NSUIImage?, name: NSAttributedString) {
+        let newAppearance = Appearance(icon: icon, name: name)
+        if appearance != newAppearance {
+            appearance = newAppearance
+        }
     }
 }
 ```

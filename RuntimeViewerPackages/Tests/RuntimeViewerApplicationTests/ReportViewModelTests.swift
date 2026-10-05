@@ -59,9 +59,9 @@ struct ReportViewModelTests {
 
         #expect(nodes.map(\.identifier) == [.category(.backgroundIndexing), .category(.searchableInterfaces)])
         let batchRow = try #require(nodes.first?.children.first { $0.identifier == .indexingBatch(batchID) })
-        #expect(batchRow.cellViewModel.title == "Manual Indexing")
-        #expect(batchRow.cellViewModel.detail == "1 image")
-        #expect(batchRow.children.map(\.cellViewModel.title) == ["libSystem.B.dylib"])
+        #expect(batchRow.cellViewModel.appearance.title == "Manual Indexing")
+        #expect(batchRow.cellViewModel.appearance.detail == "1 image")
+        #expect(batchRow.children.map(\.cellViewModel.appearance.title) == ["libSystem.B.dylib"])
         let corpusRow = try #require(Self.finishedCorpusRow(titled: "libobjc.A.dylib", in: nodes))
         #expect(nodes.last?.children.contains { $0.identifier == corpusRow.identifier } == true)
         await engine.stop()
@@ -97,10 +97,10 @@ struct ReportViewModelTests {
 
         // The store builds one image at a time, so while Foundation prints — for tens of seconds —
         // libobjc's row stays as it is, waiting or done, and only Foundation's progress moves.
-        let nodes = try await nextValue(from: page.output.nodes, timeout: 60) { Self.node(buildIdentifier, in: $0)?.cellViewModel.status == .running }
+        let nodes = try await nextValue(from: page.output.nodes, timeout: 60) { Self.node(buildIdentifier, in: $0)?.cellViewModel.appearance.status == .running }
         let row = try #require(Self.node(buildIdentifier, in: nodes))
-        let detail = row.cellViewModel.detail
-        _ = try await nextValue(from: row.cellViewModel.$detail.asDriver(), timeout: 60) { $0 != detail }
+        let detail = row.cellViewModel.appearance.detail
+        _ = try await nextValue(from: row.cellViewModel.$appearance.asDriver(), timeout: 60) { $0.detail != detail }
 
         let laterNodes = try await nextValue(from: page.output.nodes)
         #expect(Self.node(buildIdentifier, in: laterNodes)?.cellViewModel === row.cellViewModel)
@@ -126,7 +126,7 @@ struct ReportViewModelTests {
             Self.node(buildIdentifier, in: nodes) == nil && Self.finishedCorpusRow(titled: "Foundation", in: nodes) != nil
         }
         let cancelledRow = try #require(Self.finishedCorpusRow(titled: "Foundation", in: afterCancel))
-        #expect(cancelledRow.cellViewModel.detail.hasPrefix("Cancelled"))
+        #expect(cancelledRow.cellViewModel.appearance.detail.hasPrefix("Cancelled"))
         #expect(!cancelledRow.cellViewModel.isInProgress)
         await engine.stop()
     }
@@ -154,7 +154,7 @@ struct ReportViewModelTests {
         try await settleMainQueue()
 
         let remaining = try await nextValue(from: page.output.nodes)
-        #expect(remaining.isEmpty, "left after Clear History: \(Self.everyNode(in: remaining).map { "\($0.identifier) \($0.cellViewModel.title) \($0.cellViewModel.detail)" })")
+        #expect(remaining.isEmpty, "left after Clear History: \(Self.everyNode(in: remaining).map { "\($0.identifier) \($0.cellViewModel.appearance.title) \($0.cellViewModel.appearance.detail)" })")
         await engine.stop()
     }
 
@@ -257,7 +257,7 @@ struct ReportViewModelTests {
     private static func finishedCorpusRow(titled title: String, in nodes: [ReportNode]) -> ReportNode? {
         everyNode(in: nodes).first { node in
             guard case .finishedCorpusBuild = node.identifier else { return false }
-            return node.cellViewModel.title == title
+            return node.cellViewModel.appearance.title == title
         }
     }
 }

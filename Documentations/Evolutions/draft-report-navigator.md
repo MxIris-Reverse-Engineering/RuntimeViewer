@@ -2,7 +2,7 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-09-30
-- **最后更新**: 2026-10-01
+- **最后更新**: 2026-10-05
 - **关联提案**: [draft-find-navigator](draft-find-navigator.md)（语料构建的状态来源）、[0002-background-indexing](0002-background-indexing.md)（被替换的 toolbar 按钮与弹窗）
 
 ## 摘要
@@ -35,7 +35,9 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
   结束的行说明里是结束时间（"Today, 10:23"），取消 / 失败的写 "Cancelled · …" / "Failed · …"；行的 tooltip 是镜像路径，
   建好的语料再加对象数与大小。
 - **列表的数据**：每行一个 `ReportCellViewModel`（`RuntimeViewerApplication/Reports/`），按 `ReportNodeIdentifier` 缓存、跨重建
-  复用，图标、标题、说明、状态都是 `@RxObserved`，cell 在 `bind(to:)` 里绑定——进度直接落到屏幕上的行，不需要大纲重载。
+  复用。图标、标题、说明、状态与 tooltip 合成一个 `Appearance`，只挂一个 `@RxObserved`（规矩见
+  [0005](0005-cellvm-appearance-single-observed.md)）；cell 在 `bind(to:)` 里绑这一条流，只重设变了的部分——进度直接落到
+  屏幕上的行，不需要大纲重载。
   树本身是值类型 `ReportNode`，相等性比较整棵子树（大纲适配器只在树变了时 `reloadData`），哈希只取标识（大纲每次查找都要哈希
   一个 item，而一类下面可以有上百个批次）。原计划的三种 CellViewModel 合成了一种：Xcode 每一行的构成都一样。
   大纲用 `StatefulOutlineView`：带分组行的 source list，正是 2026-09-27 那份已解决问题描述的行高估算风险形状。
@@ -91,3 +93,4 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
 | 2026-10-01 | 修：Clear History 之后，下一次 coverage 刷新把清掉的语料当作「别的文档建的」重新列回 history | `ReportViewModelTests` 测出：`mergeCoverage` 只看 `finishedBuilds` 里有没有这个镜像，清空后每个还在引擎里的语料都会被「学」回来；而 Reports 页每次出现、每次构建结束都会刷新。`FindCorpusCoordinator` 记住列过的镜像（Clear History 不清这份记录，语料从引擎消失时才移出），回归测试 `clearedHistoryStaysCleared` 修前红、修后绿。 |
 | 2026-10-01 | 修：语料 store 对引擎的引用从 `unowned` 改为 `weak`，找不到引擎的构建按取消结束 | 测试并行跑时进程崩在 `RuntimeInterfaceCorpusStore.run` 的 `swift_abortRetainUnowned`：引擎带着排队的构建被释放，`stop()` 安排的驱逐还没到，正在跑的构建一结束 `pump()` 就拉起下一个，读到已释放的引擎。回归测试 `queuedBuildOutlivesBuilder` 修前崩、修后绿。同一写法的 `RuntimeBackgroundIndexingManager.engine` 没改：换引擎时协调器会持有旧引擎先取消它的全部批次，App 里的路径有保护，改它要动 `main` 上的代码，另议。 |
 | 2026-10-01 | 修：过滤栏没碰过之前，Report 页的大纲一直是空的；过滤文字与时钟状态改存在 ViewModel 自己的状态里 | 用户把 App 跑起来：分页上的活动圆点亮着，大纲却空着，"No Reports" 也没出现。`ReportViewModel` 用 `Driver.combineLatest` 把节点与 `input.filterString`、`input.showsOnlyInProgress` 合在一起，要等每一路都来过值才输出；页面的过滤文字来自 `FilterSearchField.rx.stringValue`，RxCocoa 没有这个成员，落到 RxAppKit 的 key-path 控件属性上——只在控件发出 action（用户输入）时发值，订阅时不发当前值。"No Reports" 绑的是未过滤的节点，所以它照样被藏起来。ViewModel 测试给的是 `.just("")`，订阅即有值，没测出来。改法照 `FindViewModel`：输入写进带初值的 `@RxObserved` 状态，大纲从状态算。回归测试 `outlineShowsBeforeFilterBarIsTouched` 用页面自己的 `FilterSearchField` 作过滤输入、时钟输入不发值：修前 10 秒等不到任何行，修后 0.58 秒；另跑了一个只把时钟换成 `.just(false)`（页面用 `startWith(false)` 给了初值）的临时对照，修前同样等不到，确认卡住大纲的就是过滤框。横向排查：Find 页的 ViewModel 本来就把过滤文字存成状态；没有别的 ViewModel 直接合并过滤框的输入。 |
+| 2026-10-05 | 行的显示内容合成一个 `Appearance`，`ReportCellViewModel` 只留一个 `@RxObserved`；`update(...)` 不等才整体赋值一次，cell 只重设变了的部分 | 用户指出：行是一行一个实例、成百上千，原来的五个 `@RxObserved` 一经 cell 绑定就是五个 relay，各带一把锁、跟着行一直活着，每个 `asDriver()` 在行显示期间再加一把。[0005](0005-cellvm-appearance-single-observed.md) 早定过这条规矩，但没写进 AGENTS.md，「Cell ViewModel wrapper」一节反而教每个显示属性一个 `@RxObserved`，这里就是照着写的；同批把那一节改掉。cell 逐部分比较是为了保住原来「只有变了的那部分才重设」：运行中的行每秒更新多次，标题、图标、tooltip 与状态位不动。新测试 `ReportCellViewModelTests`（多处改动只发一个事件、重复内容不发事件），临时改成逐字段赋值时两条都红。批量导出的两种行按同一规矩一起改了，记在 0005 的补记里。 |

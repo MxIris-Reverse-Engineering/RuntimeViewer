@@ -18,6 +18,10 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
 
     let exportingState: BatchExportingState
 
+    /// Every row built so far, reused by each search: typing into the search field filters these
+    /// instead of building a row per image again.
+    private var cellViewModelsByImage: [BatchExportingImage: BatchExportingImageSelectionCellViewModel] = [:]
+
     init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
@@ -61,6 +65,15 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        // The rows subscribe to nothing themselves; the selection is pushed into them from here.
+        exportingState.$selectedImagePaths.asDriver().driveOnNext { [weak self] selectedImagePaths in
+            guard let self else { return }
+            for cellViewModel in cellViewModelsByImage.values {
+                cellViewModel.update(isSelected: selectedImagePaths.contains(cellViewModel.image.path))
+            }
+        }
+        .disposed(by: rx.disposeBag)
+
         let cellViewModels = Driver
             .combineLatest(
                 exportingState.$availableImages.asDriver(),
@@ -68,13 +81,7 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
             )
             .map { [weak self] availableImages, searchString -> [BatchExportingImageSelectionCellViewModel] in
                 guard let self else { return [] }
-                return self.filteredImages(availableImages: availableImages, searchString: searchString).map { image in
-                    let isSelected = self.exportingState.$selectedImagePaths
-                        .asObservable()
-                        .map { [path = image.path] in $0.contains(path) }
-                        .distinctUntilChanged()
-                    return BatchExportingImageSelectionCellViewModel(image: image, isSelected: isSelected)
-                }
+                return self.filteredImages(availableImages: availableImages, searchString: searchString).map(self.cellViewModel(for:))
             }
 
         let selectionSummary = Driver
@@ -93,6 +100,18 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
         let trimmed = searchString.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return availableImages }
         return availableImages.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    private func cellViewModel(for image: BatchExportingImage) -> BatchExportingImageSelectionCellViewModel {
+        if let cellViewModel = cellViewModelsByImage[image] {
+            return cellViewModel
+        }
+        let cellViewModel = BatchExportingImageSelectionCellViewModel(
+            image: image,
+            isSelected: exportingState.selectedImagePaths.contains(image.path)
+        )
+        cellViewModelsByImage[image] = cellViewModel
+        return cellViewModel
     }
 }
 

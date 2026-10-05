@@ -11,27 +11,32 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
         case failed(errorDescription: String)
     }
 
+    /// Everything the row shows, in one stream. A batch holds a row per selected image — every
+    /// image the engine lists, after Select All — and every `@RxObserved` a cell binds costs a
+    /// relay with a lock of its own for as long as the row exists (proposal
+    /// 0005-cellvm-appearance-single-observed).
+    struct State {
+        var status: Status = .queued
+
+        /// Fraction of the current phase that is done. Each phase — every indexing
+        /// pass the engine reports, then the interface export — runs its own
+        /// 0…1 sweep, so the bar restarts at a phase boundary.
+        var progress: Double = 0
+
+        /// What the row is doing right now, shown beside the progress bar while
+        /// `status` is `.running`: the indexing phase and its counts, the object
+        /// being exported, or the export phase name.
+        var progressText: String = ""
+
+        /// Objects whose interface failed during this image's export. Surfaced in the
+        /// row tooltip so a partially-failed (but still "succeeded") image isn't silent.
+        var objectFailures: [BatchExportingObjectFailure] = []
+    }
+
     let image: BatchExportingImage
 
     @RxObserved
-    private(set) var status: Status = .queued
-
-    /// Fraction of the current phase that is done. Each phase — every indexing
-    /// pass the engine reports, then the interface export — runs its own
-    /// 0…1 sweep, so the bar restarts at a phase boundary.
-    @RxObserved
-    private(set) var progress: Double = 0
-
-    /// What the row is doing right now, shown beside the progress bar while
-    /// `status` is `.running`: the indexing phase and its counts, the object
-    /// being exported, or the export phase name.
-    @RxObserved
-    private(set) var progressText: String = ""
-
-    /// Objects whose interface failed during this image's export. Surfaced in the
-    /// row tooltip so a partially-failed (but still "succeeded") image isn't silent.
-    @RxObserved
-    private(set) var objectFailures: [BatchExportingObjectFailure] = []
+    private(set) var state: State = State()
 
     init(image: BatchExportingImage) {
         self.image = image
@@ -41,42 +46,63 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
     /// time spent loading and indexing it counts as work in progress rather
     /// than as waiting.
     func markRunning() {
-        status = .running
-        progress = 0
-        progressText = "Loading image…"
+        updateState { newState in
+            newState.status = .running
+            newState.progress = 0
+            newState.progressText = "Loading image…"
+        }
     }
 
     /// One indexing report from the engine while the image's sections are
     /// built. Phases without a total (a preparation step) only update the
     /// text; the bar keeps its last value rather than snapping to zero.
     func updateIndexingProgress(_ indexingProgress: RuntimeObjectsLoadingProgress) {
-        if indexingProgress.totalCount > 0 {
-            progress = Double(indexingProgress.currentCount) / Double(indexingProgress.totalCount)
-            progressText = "\(indexingProgress.phase.displayDescription) \(indexingProgress.currentCount)/\(indexingProgress.totalCount)"
-        } else {
-            progressText = indexingProgress.phase.displayDescription
+        updateState { newState in
+            if indexingProgress.totalCount > 0 {
+                newState.progress = Double(indexingProgress.currentCount) / Double(indexingProgress.totalCount)
+                newState.progressText = "\(indexingProgress.phase.displayDescription) \(indexingProgress.currentCount)/\(indexingProgress.totalCount)"
+            } else {
+                newState.progressText = indexingProgress.phase.displayDescription
+            }
         }
     }
 
     func updatePhase(_ phaseText: String) {
-        progressText = phaseText
+        updateState { newState in
+            newState.progressText = phaseText
+        }
     }
 
     func updateProgress(_ value: Double, text: String) {
-        progress = value
-        progressText = text
+        updateState { newState in
+            newState.progress = value
+            newState.progressText = text
+        }
     }
 
     func markSucceeded(_ result: RuntimeInterfaceExportResult, objectFailures: [BatchExportingObjectFailure] = []) {
-        self.objectFailures = objectFailures
-        status = .succeeded(result)
-        progress = 1
-        progressText = ""
+        updateState { newState in
+            newState.objectFailures = objectFailures
+            newState.status = .succeeded(result)
+            newState.progress = 1
+            newState.progressText = ""
+        }
     }
 
     func markFailed(_ description: String) {
-        status = .failed(errorDescription: description)
-        progressText = ""
+        updateState { newState in
+            newState.status = .failed(errorDescription: description)
+            newState.progressText = ""
+        }
+    }
+
+    /// Applies a transition to a copy and publishes it in one assignment. `@RxObserved` sends an
+    /// event for every assignment, so setting the fields one by one would redraw the cell once
+    /// per field.
+    private func updateState(_ transition: (inout State) -> Void) {
+        var newState = state
+        transition(&newState)
+        state = newState
     }
 }
 

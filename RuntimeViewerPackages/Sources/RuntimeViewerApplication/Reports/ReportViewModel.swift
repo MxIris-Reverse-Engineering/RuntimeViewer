@@ -356,7 +356,7 @@ enum ReportOutline {
         guard !needle.isEmpty || showsOnlyInProgress else { return nodes }
         func keep(_ node: ReportNode) -> ReportNode? {
             let children = node.children.compactMap(keep)
-            let matchesText = needle.isEmpty || node.cellViewModel.title.range(of: needle, options: .caseInsensitive) != nil
+            let matchesText = needle.isEmpty || node.cellViewModel.appearance.title.range(of: needle, options: .caseInsensitive) != nil
             let matchesProgress = !showsOnlyInProgress || node.cellViewModel.isInProgress
             if !children.isEmpty || (matchesText && matchesProgress && !isCategory(node)) {
                 return ReportNode(identifier: node.identifier, cellViewModel: node.cellViewModel, children: children)

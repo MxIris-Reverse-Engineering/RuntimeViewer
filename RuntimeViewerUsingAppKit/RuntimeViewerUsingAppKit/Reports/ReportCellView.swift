@@ -22,6 +22,12 @@ final class ReportCellView: TableCellView {
 
     private static let issueImage = SFSymbols(systemName: .xmarkOctagonFill).nsuiImgae
 
+    /// What the cell shows now; `nil` until the first appearance after a bind. A running row's
+    /// detail changes many times a second while its icon, title, tooltip and status stay as they
+    /// are, so each part is set only when it differs — as it was when each part had a stream of
+    /// its own.
+    private var shownAppearance: ReportCellViewModel.Appearance?
+
     override func setup() {
         super.setup()
 
@@ -101,22 +107,39 @@ final class ReportCellView: TableCellView {
 
     func bind(to cellViewModel: ReportCellViewModel) {
         rx.disposeBag = DisposeBag()
+        shownAppearance = nil
 
-        cellViewModel.$icon.asDriver().drive(iconImageView.rx.image).disposed(by: rx.disposeBag)
-        cellViewModel.$title.asDriver().drive(titleLabel.rx.stringValue).disposed(by: rx.disposeBag)
-        cellViewModel.$detail.asDriver().drive(detailLabel.rx.stringValue).disposed(by: rx.disposeBag)
-
-        cellViewModel.$toolTip.asDriver().driveOnNext { [weak self] toolTip in
+        cellViewModel.$appearance.asDriver().driveOnNext { [weak self] appearance in
             guard let self else { return }
-            self.toolTip = toolTip
+            apply(appearance)
         }
         .disposed(by: rx.disposeBag)
+    }
 
-        cellViewModel.$status.asDriver().driveOnNext { [weak self] status in
-            guard let self else { return }
-            show(status)
+    private func apply(_ appearance: ReportCellViewModel.Appearance) {
+        let previousAppearance = shownAppearance
+        shownAppearance = appearance
+
+        func differs<Value: Equatable>(_ part: KeyPath<ReportCellViewModel.Appearance, Value>) -> Bool {
+            guard let previousAppearance else { return true }
+            return previousAppearance[keyPath: part] != appearance[keyPath: part]
         }
-        .disposed(by: rx.disposeBag)
+
+        if differs(\.icon) {
+            iconImageView.image = appearance.icon
+        }
+        if differs(\.title) {
+            titleLabel.stringValue = appearance.title
+        }
+        if differs(\.detail) {
+            detailLabel.stringValue = appearance.detail
+        }
+        if differs(\.toolTip) {
+            toolTip = appearance.toolTip
+        }
+        if differs(\.status) {
+            show(appearance.status)
+        }
     }
 
     private func show(_ status: ReportRowStatus) {
