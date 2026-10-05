@@ -1,0 +1,13 @@
+{
+  "name": "runtime-viewer",
+  "version": "1.0.0",
+  "description": "Teaches coding agents to drive runtime-viewer-cli: Objective-C and Swift interfaces, class hierarchies and member addresses read from a live runtime — this Mac, Mac Catalyst, attached processes and Bonjour peers.",
+  "author": {
+    "name": "MxIris-Reverse-Engineering",
+    "url": "https://github.com/MxIris-Reverse-Engineering"
+  },
+  "homepage": "https://github.com/MxIris-Reverse-Engineering/RuntimeViewer#agent-plugin",
+  "repository": "https://github.com/MxIris-Reverse-Engineering/RuntimeViewer",
+  "license": "MIT",
+  "keywords": ["objective-c", "swift", "runtime", "reverse-engineering", "macos", "cli"]
+}
