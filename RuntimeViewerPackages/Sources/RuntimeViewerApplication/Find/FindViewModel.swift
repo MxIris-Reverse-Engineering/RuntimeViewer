@@ -3,7 +3,6 @@ import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
-import UIFoundation
 
 /// One Find navigator page. Generic over the sidebar level's route because
 /// the page is a tab of both sidebar levels; the state lives in the
@@ -16,8 +15,8 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let modePathChoiceSelected: Signal<FindModePathChoice>
         public let memberKindFilterSelected: Signal<FindMemberKindFilter>
         public let caseSensitiveToggled: Signal<Bool>
-        /// The scope button, which the scope chooser is anchored at.
-        public let scopeButtonClicked: Signal<NSUIView>
+        /// A choice made in the scope button's menu.
+        public let scopeMenuChoiceSelected: Signal<FindScopeMenuChoice>
         /// Return in the search field: the text to search for.
         public let searchCommitted: Signal<String>
         /// The bottom filter bar, as typed.
@@ -32,9 +31,14 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let modePath: Driver<[FindModePathComponent]>
         /// `In Indexed Images`, `In Current Image`, `In Foundation`, `In 3 Images`.
         public let scopeTitle: Driver<String>
+        /// Whether the scope button draws its title in the accent colour.
+        public let isScopeAccented: Driver<Bool>
         /// The images a scope names, or what the sidebar lists for the current
         /// image; `nil` for every indexed image.
         public let scopeToolTip: Driver<String?>
+        /// The scope button's menu, as it is now. The page builds the menu
+        /// from the latest value each time it opens, as Xcode rebuilds its own.
+        public let scopeMenuItems: Driver<[FindScopeMenuItem]>
         public let searchFieldPlaceholder: Driver<String>
         public let nodes: Driver<[FindResultNode]>
         /// `nil` hides the summary bar.
@@ -72,9 +76,9 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         }
         .disposed(by: rx.disposeBag)
 
-        input.scopeButtonClicked.emitOnNext { [weak self] sender in
+        input.scopeMenuChoiceSelected.emitOnNext { [weak self] choice in
             guard let self else { return }
-            router.trigger(.findScopeChooser(sender: sender))
+            choose(choice)
         }
         .disposed(by: rx.disposeBag)
 
@@ -112,15 +116,22 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             .asSignal(onErrorSignalWith: .empty())
 
         let scope = session.$query.asDriver().map(\.scope).distinctUntilChanged()
-        let scopeToolTip = Driver.combineLatest(scope, documentState.$currentImageNode.asDriver()) { scope, currentImageNode in
-            Self.toolTip(for: scope, currentImagePath: currentImageNode?.path)
+        let currentImagePath = documentState.$currentImageNode.asDriver().map { $0?.path }
+        let scopeToolTip = Driver.combineLatest(scope, currentImagePath) { scope, currentImagePath in
+            Self.toolTip(for: scope, currentImagePath: currentImagePath)
         }
+        let scopeMenuItems = Driver.combineLatest(scope, currentImagePath, nodes.map { !$0.isEmpty }.distinctUntilChanged()) { scope, currentImagePath, hasVisibleResults in
+            FindScopeMenuItem.menu(for: scope, currentImagePath: currentImagePath, hasVisibleResults: hasVisibleResults)
+        }
+        .distinctUntilChanged()
 
         return Output(
             query: session.$query.asDriver(),
             modePath: session.$query.asDriver().map(FindModePathComponent.path(for:)).distinctUntilChanged(),
             scopeTitle: scope.map(\.title),
+            isScopeAccented: scope.map(\.isAccented),
             scopeToolTip: scopeToolTip,
+            scopeMenuItems: scopeMenuItems,
             searchFieldPlaceholder: session.$query.asDriver().map(\.mode.searchFieldPlaceholder),
             nodes: nodes,
             summary: session.$summary.asDriver(),
@@ -131,6 +142,43 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     }
 
     // MARK: - Scope
+
+    /// A choice from the scope menu: a scope, which is an edit of the query
+    /// like the mode path's choices — Return searches — or the chooser.
+    private func choose(_ choice: FindScopeMenuChoice) {
+        switch choice {
+        case .allIndexedImages:
+            session.update { $0.scope = .allIndexedImages }
+        case .currentImage:
+            guard documentState.currentImageNode != nil else { return }
+            session.update { $0.scope = .currentImage }
+        case .currentFindResults:
+            // The rows on screen, after the filter bar, as Xcode's
+            // `-[IDEFindNavigatorQueryParametersController documentURLsForSubsearch]`
+            // reads `allVisibleResults`.
+            let imagePaths = Self.imagePaths(in: Self.filtered(session.results.nodes, by: filterString))
+            guard !imagePaths.isEmpty else { return }
+            session.update { $0.scope = .images(imagePaths) }
+        case .customScopes:
+            router.trigger(.findScopeChooser)
+        }
+    }
+
+    /// The images the rows come from, at every level: a type's, a hit's or a
+    /// member's object, and every resolved node of a relationship tree.
+    static func imagePaths(in nodes: [FindResultNode]) -> Set<String> {
+        var imagePaths: Set<String> = []
+        func collect(_ nodes: [FindResultNode]) {
+            for node in nodes {
+                if let imagePath = node.navigationTarget?.object.imagePath {
+                    imagePaths.insert(imagePath)
+                }
+                collect(node.children)
+            }
+        }
+        collect(nodes)
+        return imagePaths
+    }
 
     /// The scope button's tool tip: the names of the images a scope picks,
     /// one per line, or the image the sidebar lists; nothing for every

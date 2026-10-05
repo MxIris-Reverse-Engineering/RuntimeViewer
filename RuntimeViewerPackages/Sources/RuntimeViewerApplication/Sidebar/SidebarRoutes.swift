@@ -37,8 +37,10 @@ public enum SidebarRootRoute: Routable {
     case bookmarks
     /// The Find navigator tab, with the focus moved into its search field.
     case find
-    /// The Find navigator's scope chooser, as a popover anchored at `sender`.
-    case findScopeChooser(sender: NSView)
+    /// The Find navigator's scope chooser, as a sheet on the document window.
+    case findScopeChooser
+    /// Closes the Find navigator's scope chooser.
+    case dismissFindScopeChooser
     /// The Report navigator tab.
     case reports
 }
@@ -50,8 +52,10 @@ public enum SidebarRuntimeObjectRoute: Routable {
     case bookmarks
     /// The Find navigator tab, with the focus moved into its search field.
     case find
-    /// The Find navigator's scope chooser, as a popover anchored at `sender`.
-    case findScopeChooser(sender: NSView)
+    /// The Find navigator's scope chooser, as a sheet on the document window.
+    case findScopeChooser
+    /// Closes the Find navigator's scope chooser.
+    case dismissFindScopeChooser
     /// The Report navigator tab.
     case reports
     /// Switch to the object list and have it reveal the document's object on

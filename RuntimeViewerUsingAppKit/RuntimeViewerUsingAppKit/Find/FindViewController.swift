@@ -216,8 +216,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             $0.font = .systemFont(ofSize: 11)
             $0.bezelStyle = .regularSquare
             $0.isBordered = false
-            $0.pullsDown = false
-            $0.addItem(withTitle: FindScope.allIndexedImages.title)
+            $0.menu?.font = .systemFont(ofSize: 11)
+            $0.setScopeTitle(FindScope.allIndexedImages.title, isAccented: false)
             // A long scope title gives way to the member kinds.
             $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
@@ -309,11 +309,16 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             .asSignal()
             .compactMap { $0?.value as? FindModePathChoice }
 
+        let scopeMenuChoiceSelected: Signal<FindScopeMenuChoice> = scopeButton.rx
+            .click(with: \.selectedItem)
+            .asSignal()
+            .compactMap { $0?.representedObject as? FindScopeMenuChoice }
+
         let input = FindViewModel<Route>.Input(
             modePathChoiceSelected: modePathChoiceSelected,
             memberKindFilterSelected: memberKindFilterSelected,
             caseSensitiveToggled: caseSensitiveButton.rx.state.asSignal().map { $0 == .on },
-            scopeButtonClicked: scopeButton.rx.click.asSignal().map { [scopeButton] in scopeButton },
+            scopeMenuChoiceSelected: scopeMenuChoiceSelected,
             searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in searchField.stringValue },
             filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
             resultClicked: resultClicked,
@@ -350,13 +355,19 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         }
         .disposed(by: rx.disposeBag)
 
-        output.scopeTitle.driveOnNext { [weak self] title in
+        Driver.combineLatest(output.scopeTitle, output.isScopeAccented).driveOnNext { [weak self] title, isAccented in
             guard let self else { return }
-            scopeButton.setScopeTitle(title)
+            scopeButton.setScopeTitle(title, isAccented: isAccented)
         }
         .disposed(by: rx.disposeBag)
 
         output.scopeToolTip.drive(scopeButton.rx.toolTip).disposed(by: rx.disposeBag)
+
+        output.scopeMenuItems.driveOnNext { [weak self] menuItems in
+            guard let self else { return }
+            scopeButton.menuItems = menuItems
+        }
+        .disposed(by: rx.disposeBag)
 
         output.nodes.drive(outlineView.rx.nodes(options: []))({ (outlineView: NSOutlineView, _: NSTableColumn?, node: FindResultNode) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: FindResultCellView.self)
@@ -419,29 +430,76 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
 // MARK: - Scope Button
 
-/// The scope row's button. It is drawn as Xcode's borderless pop-up, to the measurements of
-/// §4.1, but what it opens is the scope chooser, a popover, so a click sends its action instead of
-/// opening a menu — the menu holds only the title.
+/// The scope row's button: Xcode's borderless pop-up, to the measurements of §4.1, set up as
+/// `-[IDEFindNavigatorQueryParametersController viewDidLoad]` sets up its own. The cell shows an
+/// item of its own instead of the checked one (`usesItemFromMenu` off), so the title is always the
+/// scope, `In Foundation`, whichever item the menu checks. The menu is rebuilt from `menuItems`
+/// each time it opens, as `scopePopUpWillPopUp` rebuilds Xcode's — a menu rebuilt while open would
+/// change under the pointer as results arrive. A choice sends the button's action, with the chosen
+/// item selected.
 ///
 /// Declared outside the generic view controller: a view nested in a generic class is generic
 /// itself.
 private final class FindScopeButton: NSPopUpButton {
-    /// Shows `title`, the one item of the menu.
-    func setScopeTitle(_ title: String) {
-        guard titleOfSelectedItem != title else { return }
+    /// The menu to show the next time it opens.
+    var menuItems: [FindScopeMenuItem] = []
+
+    private let titleItem = NSMenuItem()
+
+    convenience init() {
+        self.init(frame: .zero, pullsDown: false)
+    }
+
+    override init(frame buttonFrame: NSRect, pullsDown flag: Bool) {
+        super.init(frame: buttonFrame, pullsDown: flag)
+        commonInit()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        commonInit()
+    }
+
+    private func commonInit() {
+        (cell as? NSPopUpButtonCell)?.do {
+            $0.usesItemFromMenu = false
+            $0.menuItem = titleItem
+        }
+        // The enabled state is the item's own: Current Find Results needs results, the current
+        // image an image in the sidebar.
+        menu?.autoenablesItems = false
+        NotificationCenter.default.addObserver(self, selector: #selector(willPopUp(_:)), name: NSPopUpButton.willPopUpNotification, object: self)
+    }
+
+    /// `In Foundation`, in the button's font, and in the accent colour for a scope other than the
+    /// default — `-[IDEFindNavigatorQueryParametersController attributedStringForTitle:control:accented:]`.
+    func setScopeTitle(_ title: String, isAccented: Bool) {
+        titleItem.attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: font ?? .systemFont(ofSize: 11),
+            .foregroundColor: isAccented ? NSColor.controlAccentColor : NSColor.controlTextColor,
+        ])
+        invalidateIntrinsicContentSize()
+        needsDisplay = true
+    }
+
+    @objc private func willPopUp(_ notification: Notification) {
         removeAllItems()
-        addItem(withTitle: title)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard isEnabled else { return }
-        sendAction(action, to: target)
-    }
-
-    /// Keyboard and accessibility presses open the chooser as a click does.
-    override func performClick(_ sender: Any?) {
-        guard isEnabled else { return }
-        sendAction(action, to: target)
+        var checkedItem: NSMenuItem?
+        for menuItem in menuItems {
+            if menuItem.isPrecededBySeparator {
+                menu?.addItem(.separator())
+            }
+            // Added through the button, so a choice sends its action.
+            addItem(withTitle: menuItem.title)
+            guard let item = lastItem else { continue }
+            item.representedObject = menuItem.choice
+            item.isEnabled = menuItem.isEnabled
+            if menuItem.isChecked {
+                checkedItem = item
+            }
+        }
+        // A scope picked in the chooser has no item: nothing is checked then.
+        select(checkedItem)
     }
 }
 

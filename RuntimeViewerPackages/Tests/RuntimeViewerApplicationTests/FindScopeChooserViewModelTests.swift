@@ -4,10 +4,12 @@ import RuntimeViewerCore
 import Testing
 @testable import RuntimeViewerApplication
 
-/// The scope chooser's contract: it lists the engine's indexed images and the
-/// images already picked, by name; a checkbox picks or drops an image; the two
-/// scopes that pick no image are a click away; the filter field narrows the
-/// list by name; each row says where its image's corpus stands.
+/// The scope chooser's contract — the sheet the scope menu's Custom Scopes…
+/// opens: it lists the engine's indexed images and the images the scope
+/// holds, by name, with the scope's images selected; OK makes the selection
+/// the scope and closes the sheet, and so does a double-clicked row; Cancel
+/// only closes it; nothing selected, nothing to apply; the filter field
+/// narrows the list by name; each row says where its image's corpus stands.
 ///
 /// Every case runs on a private engine: the chooser reads the document's
 /// corpus coordinator, which asks its engine for corpora as soon as it exists.
@@ -16,15 +18,16 @@ import Testing
 struct FindScopeChooserViewModelTests {
     private let router = MockRouter<SidebarRootRoute>()
     private let filterStringRelay = PublishRelay<String>()
-    private let allIndexedImagesClickedRelay = PublishRelay<Void>()
-    private let currentImageClickedRelay = PublishRelay<Void>()
-    private let imageToggledRelay = PublishRelay<String>()
+    private let selectionChangedRelay = PublishRelay<Set<String>>()
+    private let okClickedRelay = PublishRelay<Void>()
+    private let cancelClickedRelay = PublishRelay<Void>()
+    private let rowDoubleClickedRelay = PublishRelay<Void>()
 
     private static let alphaImagePath = "/fixture/Alpha.framework/Alpha"
     private static let zetaImagePath = "/fixture/zeta.dylib"
 
-    @Test("the engine's indexed images and the picked ones are listed by name")
-    func listsIndexedAndPickedImages() async throws {
+    @Test("the engine's indexed images and the scope's are listed by name, the scope's selected")
+    func listsIndexedAndScopeImages() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.list", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.make { environment.documentState.findSession }.update { $0.scope = .images([Self.zetaImagePath, Self.alphaImagePath]) }
@@ -36,7 +39,8 @@ struct FindScopeChooserViewModelTests {
         }
 
         #expect(rows.map(\.name) == ["Alpha", "libobjc.A.dylib", "zeta.dylib"])
-        #expect(rows.map(\.isPicked) == [true, false, true])
+        #expect(try await nextValue(from: output.selectedImagePaths) == [Self.alphaImagePath, Self.zetaImagePath])
+        #expect(try await nextValue(from: output.isOKEnabled) == true)
         await engine.stop()
     }
 
@@ -57,52 +61,101 @@ struct FindScopeChooserViewModelTests {
         await engine.stop()
     }
 
-    @Test("a checkbox picks an image, a second click drops it, and dropping the last goes back to every image")
-    func checkboxesPickAndDrop() async throws {
-        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.toggle")
+    @Test("OK makes the selection the scope and closes the sheet, without searching")
+    func okMakesSelectionTheScope() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.ok")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(in: environment)
+        let session = environment.documentState.findSession
+        defer { withExtendedLifetime(viewModel) {} }
+
+        selectionChangedRelay.accept([Self.alphaImagePath, Self.zetaImagePath])
+        #expect(try await nextValue(from: output.isOKEnabled) { $0 } == true)
+        // Selecting is not applying.
+        #expect(session.query.scope == .allIndexedImages)
+        #expect(dismissalCount == 0)
+
+        okClickedRelay.accept(())
+        #expect(session.query.scope == .images([Self.alphaImagePath, Self.zetaImagePath]))
+        #expect(dismissalCount == 1)
+        #expect(session.isSearching == false)
+        await engine.stop()
+    }
+
+    @Test("Cancel closes the sheet and leaves the scope as it was")
+    func cancelLeavesScope() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.cancel")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.make { environment.documentState.findSession }.update { $0.scope = .images([Self.alphaImagePath]) }
+        let (viewModel, _) = makeViewModel(in: environment)
+        let session = environment.documentState.findSession
+        defer { withExtendedLifetime(viewModel) {} }
+
+        selectionChangedRelay.accept([Self.zetaImagePath])
+        cancelClickedRelay.accept(())
+
+        #expect(session.query.scope == .images([Self.alphaImagePath]))
+        #expect(dismissalCount == 1)
+        await engine.stop()
+    }
+
+    @Test("with nothing selected OK is disabled and applies nothing")
+    func emptySelectionAppliesNothing() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.empty")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.make { environment.documentState.findSession }.update { $0.scope = .images([Self.alphaImagePath]) }
+        let (viewModel, output) = makeViewModel(in: environment)
+        let session = environment.documentState.findSession
+        defer { withExtendedLifetime(viewModel) {} }
+        #expect(try await nextValue(from: output.isOKEnabled) { $0 } == true)
+
+        selectionChangedRelay.accept([])
+        #expect(try await nextValue(from: output.isOKEnabled) { !$0 } == false)
+        okClickedRelay.accept(())
+        rowDoubleClickedRelay.accept(())
+
+        #expect(session.query.scope == .images([Self.alphaImagePath]))
+        #expect(dismissalCount == 0)
+        await engine.stop()
+    }
+
+    @Test("a double-clicked row is applied as OK applies the selection")
+    func doubleClickAppliesSelection() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.doubleClick")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let (viewModel, _) = makeViewModel(in: environment)
         let session = environment.documentState.findSession
         defer { withExtendedLifetime(viewModel) {} }
 
-        imageToggledRelay.accept(Self.alphaImagePath)
-        #expect(session.query.scope == .images([Self.alphaImagePath]))
-        imageToggledRelay.accept(Self.zetaImagePath)
-        #expect(session.query.scope == .images([Self.alphaImagePath, Self.zetaImagePath]))
-        imageToggledRelay.accept(Self.alphaImagePath)
+        // The first click of the two selects the row.
+        selectionChangedRelay.accept([Self.zetaImagePath])
+        rowDoubleClickedRelay.accept(())
+
         #expect(session.query.scope == .images([Self.zetaImagePath]))
-        imageToggledRelay.accept(Self.zetaImagePath)
-        #expect(session.query.scope == .allIndexedImages)
-        // Picking an image is an edit of the query, not a search.
-        #expect(session.isSearching == false)
+        #expect(dismissalCount == 1)
         await engine.stop()
     }
 
-    @Test("the current image can be the scope only while the sidebar lists one, and every image is a click away")
+    @Test("every indexed image selects nothing; the current image selects the image the sidebar lists")
     func scopesThatPickNoImage() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.current")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let documentState = environment.documentState
-        let (viewModel, output) = makeViewModel(in: environment)
-        let session = documentState.findSession
-        defer { withExtendedLifetime(viewModel) {} }
 
-        #expect(try await nextValue(from: output.isCurrentImageAvailable) == false)
-        #expect(try await nextValue(from: output.currentImageTitle) == "Current Image")
-        currentImageClickedRelay.accept(())
-        #expect(session.query.scope == .allIndexedImages)
+        let (allImagesViewModel, allImagesOutput) = makeViewModel(in: environment)
+        #expect(try await nextValue(from: allImagesOutput.selectedImagePaths) == [])
+        #expect(try await nextValue(from: allImagesOutput.isOKEnabled) == false)
+        withExtendedLifetime(allImagesViewModel) {}
 
         // The tree has to outlive the assertions: a node reaches its path
         // through its parent, which it holds weakly.
         let imageTree = Fixtures.imageTree(rootName: "Images", imagePaths: [TestImages.libobjc])
         documentState.selectionRouter.trigger(.switchImage(try #require(imageTree.leaf(forImagePath: TestImages.libobjc))))
-        #expect(try await nextValue(from: output.isCurrentImageAvailable) { $0 } == true)
-        #expect(try await nextValue(from: output.currentImageTitle) { $0 != "Current Image" } == "Current Image (libobjc.A.dylib)")
-        currentImageClickedRelay.accept(())
-        #expect(session.query.scope == .currentImage)
+        documentState.findSession.update { $0.scope = .currentImage }
+        let (currentImageViewModel, currentImageOutput) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(currentImageViewModel) {} }
 
-        allIndexedImagesClickedRelay.accept(())
-        #expect(session.query.scope == .allIndexedImages)
+        #expect(try await nextValue(from: currentImageOutput.selectedImagePaths) == [TestImages.libobjc])
         withExtendedLifetime(imageTree) {}
         await engine.stop()
     }
@@ -138,6 +191,15 @@ struct FindScopeChooserViewModelTests {
 
     // MARK: - Helpers
 
+    /// How many times the chooser asked to be closed.
+    private var dismissalCount: Int {
+        router.triggeredRoutes.filter { route in
+            if case .dismissFindScopeChooser = route { return true }
+            return false
+        }
+        .count
+    }
+
     /// Binds inside the environment's dependencies: `transform` reads the
     /// document's corpus coordinator, which comes into being on first use.
     private func makeViewModel(in environment: ViewModelTestEnvironment) -> (FindScopeChooserViewModel<SidebarRootRoute>, FindScopeChooserViewModel<SidebarRootRoute>.Output) {
@@ -145,9 +207,10 @@ struct FindScopeChooserViewModelTests {
             let viewModel = FindScopeChooserViewModel<SidebarRootRoute>(documentState: environment.documentState, router: router)
             let output = viewModel.transform(.init(
                 filterString: filterStringRelay.asDriver(onErrorJustReturn: ""),
-                allIndexedImagesClicked: allIndexedImagesClickedRelay.asSignal(),
-                currentImageClicked: currentImageClickedRelay.asSignal(),
-                imageToggled: imageToggledRelay.asSignal()
+                selectionChanged: selectionChangedRelay.asSignal(),
+                okClicked: okClickedRelay.asSignal(),
+                cancelClicked: cancelClickedRelay.asSignal(),
+                rowDoubleClicked: rowDoubleClickedRelay.asSignal()
             ))
             return (viewModel, output)
         }

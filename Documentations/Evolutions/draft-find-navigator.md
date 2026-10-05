@@ -2,7 +2,7 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-09-29
-- **最后更新**: 2026-10-03
+- **最后更新**: 2026-10-04
 - **所属愿景**: 无（内容区的行定位部分与《自建代码视图引擎》相邻，但本提案不改视图引擎的方向）
 - **前置设计**: `feature/interface-corpus-probe` 分支上的
   `Documentations/Plans/2026-07-26-global-search-design.md`（2026-07-27 按
@@ -21,7 +21,8 @@
    initializer，匹配方式与文本相同（另加正则），可按种类过滤；数据直接来自 section 里的结构（`ObjCClassInfo` 一族、
    `TypeDefinition` 一族），不从文本反推。
 
-三种模式的范围默认是全部已索引镜像，可以限定到侧栏当前的镜像或勾选的几个镜像（§7）。
+三种模式的范围默认是全部已索引镜像，可以限定到侧栏当前的镜像、当前结果所在的镜像，或在表单里选出的几个镜像。范围按钮
+照 Xcode 先弹菜单，菜单最后一项 Custom Scopes… 才打开选镜像的表单（§7、§9）。
 
 点击结果跳到对应类型，内容区滚到命中行并高亮（NSTextView 与 SourceEditor 两条路径都做）。面板的具体 UI 照
 Xcode Find navigator 的 view hierarchy 实现，由用户提供，本提案不设计 UI。
@@ -345,8 +346,8 @@ placeholder 随模式变：`Text` / `Regular Expression` / `Type Name`（三种�
 
 **第三行（y 48–72）**：范围容器 `(2, 0, W−4, 24)`，里面一个 **无边框** `NSPopUpButton` frame `(0, 5, 98, 15)`，
 `controlSize = .small`、字号 11、`bezelStyle = .regularSquare`、`isBordered = false`、`arrowPosition = .arrowAtBottom`、
-`pullsDown = false`，title `In Workspace`。我们的范围按钮外观照此，点开的是范围选择器而不是菜单；Members 模式在这一行
-右侧另有成员种类的弹出按钮。两者见 §7。
+`pullsDown = false`，title `In Workspace`。我们的范围按钮外观照此，点开的也是菜单（§9）；Members 模式在这一行
+右侧另有成员种类的弹出按钮（§7）。
 
 **结果摘要条（y 72–94）**：`Label` frame `(10, 4, W−20, 14)`，系统字体 11 regular，颜色用 `secondaryLabelColor`
 （Xcode 是 DVTUserInterfaceKit 的 `parameterTextColor`，灰度 0.57），截尾；文案 `N results in M files` → 我们
@@ -502,18 +503,15 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 换引擎时范围保留，引擎没有的已选镜像在选择器里标成 `not indexed`（原写「回到全部」，实施时改，见决策日志）。
 
 **范围选择器**。第三行左侧的范围按钮，标题随范围变：`In Indexed Images` / `In Current Image` / `In Foundation` /
-`In 3 Images`（多个时 tooltip 列出镜像名）。点开的是 popover 而不是菜单，思路同 Xcode 的
-`IDEFindNavigatorScopeChooserController`（IDEKit 里那个可组合多个范围的大纲列表）：顶部过滤框；`All Indexed Images` 与
-`Current Image (AppKit)` 两个单选行，没有当前镜像时第二行置灰；分隔线下是镜像列表，每行一个勾选框（标题是镜像名，
-tooltip 是完整路径），右侧是语料状态（`waiting` / `building 37%` / `failed`，已建好的不写）。勾选即改范围，取消最后一个回到
-全部；改动当场写进 `FindSession`，点面板外即关。列表 = 引擎的 `indexedImagePathList()`（打开时取一次）∪ 语料协调器知道的
-镜像 ∪ 已选的镜像，按镜像名排序；状态跟着 `FindCorpusCoordinator.buildStatesByImagePath` 实时变。行数是百级，cell
-ViewModel 照常 eager 建。布局按提问轮的示意实现；用户提供 Xcode 范围选择器的 view hierarchy 后再按它量化。
+`In 3 Images`（多个时 tooltip 列出镜像名）。2026-10-04 起照 Xcode 改为先弹菜单、Custom Scopes… 才打开表单，见 §9；
+本节原先的 popover（两个单选行加一列勾选框，改动当场生效）随之撤下，理由见决策日志。两种呈现共有的部分不变：镜像列表 =
+引擎的 `indexedImagePathList()`（打开时取一次）∪ 语料协调器知道的镜像 ∪ 范围里已有的镜像，按镜像名排序，可按名字过滤；
+每行右侧是语料状态（`waiting` / `building 37%` / `failed`，已建好的不写），跟着
+`FindCorpusCoordinator.buildStatesByImagePath` 实时变。行数是百级，cell ViewModel 照常 eager 建。
 
 MVVM-C 的落点：`FindScopeChooserViewModel<Route>` 与镜像行的 `FindScopeImageCellViewModel` 在
-`RuntimeViewerApplication/Find/`，`FindScopeChooserViewController<Route>` 在 App。两层侧栏的路由各加
-`findScopeChooser(sender:)`，coordinator 以 popover 呈现，写法同侧栏 Filter Scope 的 `.scope`；`FindViewModel` 的 `Route`
-约束为新协议 `FindNavigatorRoutable`，它的静态要求由两个路由枚举的 case 直接满足（SE-0280）。
+`RuntimeViewerApplication/Find/`，`FindScopeChooserViewController<Route>` 在 App。`FindViewModel` 的 `Route` 约束为新协议
+`FindNavigatorRoutable`，它的静态要求由两个路由枚举的 case 直接满足（SE-0280）；要求的内容与呈现方式见 §9。
 
 **范围在三类搜索里的含义统一为「结果只来自这些镜像」**：
 
@@ -611,6 +609,68 @@ Starting With、Ending With、模块名不是类型名、带模块的查询）�
 `NSString` 只出 `NSString` 一棵树）。两条改动前都是红的。结果：Core 的 matcher、search、范围剪枝三个套件 20 个测试通过，
 `RuntimeViewerApplicationTests` 312 个测试通过，Debug App 构建通过；没有在运行中的 App 里看过。
 
+### 9. 范围选择改为弹出菜单与表单（2026-10-04）
+
+用户：「Xcode的Scope选择是先PopUpMenu，自定义才sheet弹出编辑框，所以我不要popover效果，viewModel input也不要传View进来」，
+附 Xcode 的范围菜单与「Choose a search scope:」表单的截图；方案列给用户后用户回「可以」。Xcode 27.0 IDEKit 里查到的事实：
+
+| 事实 | 依据 |
+|------|------|
+| 范围按钮是 `NSPopUpButton`，cell 关掉 `usesItemFromMenu`、另设一个标题项，所以按钮上总是「In …」，不随打勾的项变 | `-[IDEFindNavigatorQueryParametersController viewDidLoad]`（`0x199130`）：`setUsesItemFromMenu:NO`、`setMenuItem:` |
+| 标题是 `In %@`；范围不是默认的 Workspace 时用 `controlAccentColor`，否则 `controlTextColor` | `refreshUserInterface:`（`0x198474`）、`attributedStringForTitle:control:accented:`（`0x198328`） |
+| 菜单每次弹出前重建，再选中（打勾）代表当前范围的那一项；当前范围没有对应项（表单里选出的）时一项都不勾 | `NSPopUpButtonWillPopUpNotification` → `scopePopUpWillPopUp`（`0x19b1ac`）：`rebuildScopeChooserMenu`、`dvt_itemWithRepresentedObject:`、`selectItem:` |
+| 菜单顺序：Workspace / Package Dependencies / Workspace and Package Dependencies，分隔线，Current Find Results，（分隔线、「Containing Group(s)」标题、编辑器里那个文件的上级组），（分隔线、「Saved Scopes」标题、已存的范围），分隔线，Custom Scopes… | `rebuildScopeChooserMenu`（`0x19a58c`）、`editorHierarchyScopeItems`（`0x199b4c`） |
+| Current Find Results 只在结果区有可见结果时可选，取的是筛选栏筛过之后可见结果所在的文件 | `validateUserInterfaceItem:`（`0x19a520`）、`documentURLsForSubsearch`（`0x19b2a4`，读 `allVisibleResults`）、`createScopeFromCurrentResults:`（`0x19b690`） |
+| Custom Scopes… 以表单打开 `IDEFindNavigatorScopeChooserController`，窗口最小 360×480；OK（返回码 1）才把选择交回、成为范围，Cancel 什么都不改 | `manageScopes:`（`0x19b710`）与它的 block（`0x19b7b4`）、`+beginSheetForWorkspaceTabController:initialScope:completionHandler:`（`0x1ab5b4`）与它的 block（`0x1ab780`） |
+| 表单的大纲可多选，选中的几项合成一个组合范围；分组行不可选；双击 = 取选中项再 OK；打开时选中并展开当前范围的项 | `exportedPredicateFromOutlineItems:`（`0x1ac028`，`IDEBatchFindScopeChooserCompoundScope`）、`outlineView:shouldSelectItem:`（`0x1ae944`）、`doubleClickedOutline:`（`0x1ac56c`）、`viewDidInstall`（`0x1ab44c`） |
+
+做法：
+
+- **菜单**：`Indexed Images`（默认）、`Current Image (AppKit)`（侧栏没停在镜像上时置灰），分隔线，`Current Find Results`
+  （结果区没有可见行时置灰；选它 = 范围改为筛选栏筛过之后可见行所在的镜像，即 `.images(…)`），分隔线，`Custom Scopes…`。
+  当前范围那项打勾，表单里选出的范围没有对应项，一项都不勾。菜单模型 `FindScopeMenuItem` / `FindScopeMenuChoice` 由
+  `FindViewModel.Output.scopeMenuItems` 给出，页面在每次弹出前（`NSPopUpButton.willPopUpNotification`）按最新的一份重建，
+  免得菜单开着时随搜索结果的刷新变动。
+- **按钮**：`FindScopeButton` 去掉拦截点击的 `mouseDown(with:)` / `performClick(_:)`，变回真正的弹出按钮；照 Xcode 关掉
+  `usesItemFromMenu`、另设标题项，非默认范围时标题用强调色（`FindScope.isAccented`，与模式路径的强调规则一致）。菜单与标题的名字
+  同出一处：`FindScope.name`（`Indexed Images` / `Current Image` / `Foundation` / `3 Images`），标题是 `In ` 加它。按钮宽度只跟
+  标题项走，菜单里的项再长也不会把它撑宽：AppKit 27.0 的 `-[NSPopUpButtonCell _effectiveSizingBehavior]`（`0x185659880`）在
+  `usesItemFromMenu` 关掉时返回 1，自动布局的尺寸（`-[NSPopUpButtonAppearanceBasedVisualProvider
+  autolayoutCellSizeWithinSize:coordinateSpace:]`）这时只量 cell 自己的那一项；旧的 `cellSizeForBounds:` 路径同样只在
+  `usesItemFromMenu` 开着时才逐项量。
+- **表单**：「Choose a search scope:」、过滤框、镜像列表（行选中，⌘ / ⇧ 多选，不再用勾选框；右侧语料状态）、Cancel / OK
+  （Esc / Return），最小 360×480。打开时选中范围里已有的镜像（`currentImage` 取侧栏当前的镜像，全部镜像时什么都不选）并滚到第一个；
+  OK 或双击一行把选中的镜像写成 `.images(…)` 并关闭，Cancel 只关闭。选择只认用户自己的改动（RxAppKit 的
+  `proposedSelection()`，背后是 `tableView(_:selectionIndexesForProposedSelection:)`）；列表因语料进度刷新行时，按 ViewModel
+  里的选择重新选行，因为 `rx.items` 的重载按行号保留选中，上方插进一行就会错位。过滤不改选择；用户在过滤后的列表里改选择时，
+  以看得见的选中为准，被过滤掉的旧选中随之放下。
+- **ViewModel 不收视图**：`FindViewModel.Input.scopeButtonClicked: Signal<NSUIView>` 换成
+  `scopeMenuChoiceSelected: Signal<FindScopeMenuChoice>`；`FindNavigatorRoutable` 的要求从 `findScopeChooser(sender:)` 改为无参的
+  `findScopeChooser` 与 `dismissFindScopeChooser`，两层侧栏的 coordinator 以 `.presentOnRoot(_, mode: .asSheet)` 呈现、以
+  `.dismiss()` 关闭。表单的 ViewModel 收「选中的镜像、OK、Cancel、双击」四个信号。
+
+与 Xcode 的差异：
+
+- 一个都没选时 OK 置灰（Xcode 的 OK 此时能点，但不改范围）。
+- 表单的列表覆写 `mouseDown(with:)`，保留 AppKit 的跟踪循环，点一行即成为第一响应者。不覆写时 macOS 27 的手势识别器不给焦点，
+  焦点留在过滤框，选中的行一直是非激活的灰色——与 `StatefulOutlineView` 同样的取舍，AppKit 也同样记一条预期内的错误日志。
+- 菜单项不带图标；没有 Containing Groups 与 Saved Scopes（见下）。
+
+**不做**：Saved Scopes（命名并保存范围，Xcode 还配了规则编辑器与 New Scope）；Containing Groups（按目录划范围，比如整个
+`PrivateFrameworks`）。两者都要给 `FindScope` 加新类型，要的话另起。主窗口工具栏的两个 popover（生成选项、MCP 状态）与侧栏的
+Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
+
+**测试**（先写，对着桩实现跑：12 条新写或改写的测试失败、其余全过；补上实现后全绿）：
+
+- `FindViewModelTests`：默认范围下的菜单（顺序、标题、打勾、可用、分隔线）；选当前镜像（侧栏没有镜像时不生效，有了之后标题带
+  镜像名、选中后打勾）；表单选出的范围一项不勾；Current Find Results 取可见行的镜像，筛选栏收窄后只取剩下的；Custom Scopes…
+  触发 `findScopeChooser` 且不改范围；按钮标题的强调色。原先「按钮把自己当锚点传给路由」的那条删除。
+- `FindScopeChooserViewModelTests`（改写）：列表与初始选中；OK 写范围并关闭、不搜索；Cancel 只关闭；空选择时 OK 置灰、OK 与双击
+  都不生效；双击 = OK；全部镜像不选、当前镜像选侧栏的那个；过滤；语料状态文字。原先「勾选框」「单选行」两条随 popover 删除。
+
+结果：上面两个套件 36 个测试通过；`RuntimeViewerApplicationTests` 319 个测试通过（51 个套件）；Debug App 构建通过，改动的
+文件没有新警告。没有在运行中的 App 里看过：菜单的样子、表单的布局与点选、焦点，都还要用户实测。
+
 ### 不做
 
 - 语料落盘（注释里的地址是 per-run 的，落盘要先剔除地址列或按 slide 归一化）。
@@ -689,3 +749,8 @@ Starting With、Ending With、模块名不是类型名、带模块的查询）�
 | 2026-10-03 | 类型名的匹配作用在类型自己的名字上（限定名最后一段、去掉泛型实参），查询带点号时改为整个限定名；Containing 因此不再命中模块名与外层类型名 | Xcode 的类型层级查询把锚点放在符号自己名字的两端（§8），用文本搜索的词边界规则实现，对纯标识符与之等价，对带私有判别符的名字也能命中。带点号查询与 Xcode 不同（它拆成容器与名字、名字只按子串），我们没有它的符号索引，对限定名直接套匹配方式更简单。以前「显示名包含即可」会让 `UI` 列出 SwiftUI 的全部类型。 |
 | 2026-10-03 | 关系查询的引擎接口接受正则（与文本、成员共用 `RuntimeInterfaceSearchMatchMode`），对完整限定名匹配，编译失败时抛错 | 界面不提供，但枚举共用，接口收到正则时不能静默返回空；`typeRelationships` 原本就是 `throws`，与成员搜索的处理一致。 |
 | 2026-10-03 | 模式名照 Xcode 拼作 `Descendent Types`；标识符 `FindMode.descendantTypes`、`RuntimeTypeRelationship.descendants` 不变 | 问用户要不要照 Xcode 的拼法，用户：「改一下」。Xcode 27.0 的 `IDEFoundation.xcplugindata` 里这个查询类别的 `displayName` 是 `Descendent Types`、`persistentIdentifier` 是 `descendent-types`。标识符用的是标准拼法，用户看不到，不跟着改。 |
+| 2026-10-04 | 范围按钮改为照 Xcode 先弹菜单、Custom Scopes… 才打开表单，撤下 popover；推翻 2026-10-03「用 popover，不用弹出菜单」的选择（§9） | 用户：「Xcode的Scope选择是先PopUpMenu，自定义才sheet弹出编辑框，所以我不要popover效果，viewModel input也不要传View进来」。IDEKit 的依据见 §9。当初选 popover 的两条理由（镜像上百个，菜单只能靠键入首字母找；菜单不能多选）由表单承接：表单有过滤框、可多选，菜单只放几个固定的范围。 |
+| 2026-10-04 | ViewModel 的 Input 不收视图，路由去掉 `sender` 参数：菜单由 ViewController 按 `Output.scopeMenuItems` 构建，表单由 coordinator 挂在窗口上 | 同上，用户原话。表单不需要锚点；按钮把自己经 ViewModel 传给路由只是为了给 popover 定位。主窗口的两个 popover 与侧栏 Filter Scope 还是这种写法，本次不动。 |
+| 2026-10-04 | 菜单加 Current Find Results，取筛选栏筛过之后可见行所在的镜像；没有可见行时置灰 | Xcode 的菜单有这一项，取的也是可见结果（§9）；在方案里列给用户，用户确认。实现只是把可见行的镜像收成 `.images(…)`。 |
+| 2026-10-04 | 表单用行选中（⌘ / ⇧ 多选）代替勾选框；只认用户自己的选择改动；过滤不改选择，用户在过滤后的列表里改选择时以看得见的选中为准 | 行选中照 Xcode 的大纲，在方案里列给用户；过滤与选择的规则是实施时定的，未问用户。过滤后改选择以看得见的为准：常见的用法是过滤出一个框架再点它，若保留被过滤掉的旧选中，OK 会把看不见的镜像也带上。代价是跨两次过滤累加选择时要清空过滤框再多选。 |
+| 2026-10-04 | 一个都没选时 OK 置灰；表单列表覆写 `mouseDown(with:)`；菜单项不带图标 | Xcode 的 OK 此时能点却不改范围，置灰更直观。不覆写时 macOS 27 的列表点击不给焦点，选中的行一直是灰色，与 `StatefulOutlineView` 同一取舍。我们没有与 Xcode 那几个范围对应的图标。 |

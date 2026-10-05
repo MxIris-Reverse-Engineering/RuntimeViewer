@@ -1,19 +1,17 @@
 import Foundation
 import RuntimeViewerArchitectures
 
-/// One image row of the Find navigator's scope chooser: the image's name,
-/// whether the scope picks it, and where its corpus stands.
+/// One image row of the Find navigator's scope chooser: the image's name and
+/// where its corpus stands. Whether the row is selected is the list's
+/// selection, not the row's.
 ///
 /// Kept per image while the chooser is open and updated in place, so a row's
-/// checkbox and status change without the list reloading.
+/// status changes without the list reloading.
 public final class FindScopeImageCellViewModel: NSObject, @unchecked Sendable {
     public let imagePath: String
 
     /// The image's file name, `Foundation` or `libobjc.A.dylib`.
     public let name: String
-
-    @RxObserved
-    public private(set) var isPicked: Bool = false
 
     /// `waiting`, `building 37%`, `failed` or `not indexed`; empty once the
     /// image is searchable, and while there is nothing to say.
@@ -26,12 +24,9 @@ public final class FindScopeImageCellViewModel: NSObject, @unchecked Sendable {
         super.init()
     }
 
-    /// Touches only what changed, so the cell's bindings fire for real
-    /// changes only.
-    func update(isPicked: Bool, status: String) {
-        if self.isPicked != isPicked {
-            self.isPicked = isPicked
-        }
+    /// Touches the status only when it changes, so the cell's binding fires
+    /// for real changes only.
+    func update(status: String) {
         if self.status != status {
             self.status = status
         }

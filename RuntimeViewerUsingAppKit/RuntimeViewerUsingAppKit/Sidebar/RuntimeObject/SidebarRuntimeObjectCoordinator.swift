@@ -59,11 +59,13 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
                     completion?()
                 }
             )
-        case .findScopeChooser(let sender):
+        case .findScopeChooser:
             let viewController = FindScopeChooserViewController<SidebarRuntimeObjectRoute>()
             let viewModel = FindScopeChooserViewModel<SidebarRuntimeObjectRoute>(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
-            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: sender.bottomEdge, behavior: .transient))
+            return .presentOnRoot(viewController, mode: .asSheet)
+        case .dismissFindScopeChooser:
+            return .dismiss()
         case .reports:
             return .select(index: 3)
         case .revealSelectedRuntimeObject:

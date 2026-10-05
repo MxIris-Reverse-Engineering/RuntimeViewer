@@ -20,7 +20,7 @@ struct FindViewModelTests {
     private let modePathChoiceSelectedRelay = PublishRelay<FindModePathChoice>()
     private let memberKindFilterSelectedRelay = PublishRelay<FindMemberKindFilter>()
     private let caseSensitiveToggledRelay = PublishRelay<Bool>()
-    private let scopeButtonClickedRelay = PublishRelay<NSView>()
+    private let scopeMenuChoiceSelectedRelay = PublishRelay<FindScopeMenuChoice>()
     private let searchCommittedRelay = PublishRelay<String>()
     private let filterStringRelay = BehaviorRelay<String>(value: "")
     private let resultClickedRelay = PublishRelay<FindResultNode>()
@@ -401,23 +401,110 @@ struct FindViewModelTests {
 
     // MARK: - Scope
 
-    @Test("the scope button asks the sidebar level for the scope chooser, anchored at the button")
-    func scopeButtonOpensChooser() async throws {
+    @Test("the scope menu lists the scopes, Current Find Results and Custom Scopes…, the scope in use checked")
+    func scopeMenuForDefaultScope() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        let menu = try await nextValue(from: output.scopeMenuItems) { !$0.isEmpty }
+        #expect(menu.map(\.choice) == [.allIndexedImages, .currentImage, .currentFindResults, .customScopes])
+        #expect(menu.map(\.title) == ["Indexed Images", "Current Image", "Current Find Results", "Custom Scopes…"])
+        #expect(menu.map(\.isChecked) == [true, false, false, false])
+        // No image in the sidebar and no results: neither can make a scope.
+        #expect(menu.map(\.isEnabled) == [true, false, false, true])
+        #expect(menu.map(\.isPrecededBySeparator) == [false, false, true, true])
+    }
+
+    @Test("choosing the current image makes it the scope once the sidebar lists one, and the menu checks it")
+    func scopeMenuChoosesCurrentImage() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let documentState = environment.documentState
+        let session = documentState.findSession
+
+        scopeMenuChoiceSelectedRelay.accept(.currentImage)
+        try await settleMainQueue()
+        #expect(session.query.scope == .allIndexedImages)
+
+        // The tree has to outlive the assertions: a node reaches its path
+        // through its parent, which it holds weakly.
+        let imageTree = Fixtures.imageTree(rootName: "Images", imagePaths: [TestImages.libobjc])
+        documentState.selectionRouter.trigger(.switchImage(try #require(imageTree.leaf(forImagePath: TestImages.libobjc))))
+        let menu = try await nextValue(from: output.scopeMenuItems) { $0.first { $0.choice == .currentImage }?.isEnabled == true }
+        #expect(menu.first { $0.choice == .currentImage }?.title == "Current Image (libobjc.A.dylib)")
+
+        scopeMenuChoiceSelectedRelay.accept(.currentImage)
+        #expect(session.query.scope == .currentImage)
+        let checkedMenu = try await nextValue(from: output.scopeMenuItems) { $0.first { $0.choice == .currentImage }?.isChecked == true }
+        #expect(checkedMenu.filter(\.isChecked).map(\.choice) == [.currentImage])
+        // Choosing a scope is an edit of the query, not a search.
+        #expect(session.isSearching == false)
+
+        scopeMenuChoiceSelectedRelay.accept(.allIndexedImages)
+        #expect(session.query.scope == .allIndexedImages)
+        withExtendedLifetime(imageTree) {}
+    }
+
+    @Test("a scope picked in the chooser has no item, so the menu checks none")
+    func scopeMenuForPickedImages() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        environment.documentState.findSession.update { $0.scope = .images([TestImages.foundation]) }
+        let menu = try await nextValue(from: output.scopeMenuItems) { !$0.isEmpty && !$0.contains(where: \.isChecked) }
+        #expect(menu.map(\.choice) == [.allIndexedImages, .currentImage, .currentFindResults, .customScopes])
+    }
+
+    @Test("Current Find Results takes the images of the rows on screen, after the filter bar")
+    func scopeMenuCurrentFindResults() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        _ = try await environment.documentState.runtimeEngine.buildInterfaceCorpus(for: TestImages.libobjc, transformer: .default)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let session = environment.documentState.findSession
+
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept("NSObject")
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+        let nodes = try await nextValue(from: output.nodes)
+        let resultImagePaths = Set(nodes.compactMap(Self.imagePath(of:)))
+        try #require(resultImagePaths == [TestImages.libobjc, TestImages.foundation])
+        let menu = try await nextValue(from: output.scopeMenuItems) { $0.first { $0.choice == .currentFindResults }?.isEnabled == true }
+        #expect(menu.first { $0.choice == .currentFindResults }?.isChecked == false)
+
+        scopeMenuChoiceSelectedRelay.accept(.currentFindResults)
+        #expect(session.query.scope == .images(resultImagePaths))
+
+        // What the filter bar hides is not on screen, so it is not taken.
+        filterStringRelay.accept("NSString")
+        let filteredNodes = try await nextValue(from: output.nodes) { $0.count < nodes.count }
+        try #require(Set(filteredNodes.compactMap(Self.imagePath(of:))) == [TestImages.foundation])
+        scopeMenuChoiceSelectedRelay.accept(.currentFindResults)
+        #expect(session.query.scope == .images([TestImages.foundation]))
+        // Taking a scope from the results is an edit of the query, not a search.
+        #expect(session.isSearching == false)
+    }
+
+    @Test("Custom Scopes… asks the sidebar level for the scope chooser")
+    func customScopesOpensChooser() async throws {
         let environment = ViewModelTestEnvironment()
         let (viewModel, _) = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
-        let scopeButton = NSView()
 
-        scopeButtonClickedRelay.accept(scopeButton)
+        scopeMenuChoiceSelectedRelay.accept(.customScopes)
         try await settleMainQueue()
 
         #expect(router.triggeredRoutes.contains { route in
-            if case .findScopeChooser(let sender) = route { return sender === scopeButton }
+            if case .findScopeChooser = route { return true }
             return false
         })
+        #expect(environment.documentState.findSession.query.scope == .allIndexedImages)
     }
 
-    @Test("the scope button names the scope, and its tool tip the images in it")
+    @Test("the scope button names the scope, accented unless it is every indexed image, and its tool tip the images in it")
     func scopeButtonNamesTheScope() async throws {
         let environment = ViewModelTestEnvironment()
         let (viewModel, output) = makeViewModel(in: environment)
@@ -425,10 +512,12 @@ struct FindViewModelTests {
         let session = environment.documentState.findSession
 
         #expect(try await nextValue(from: output.scopeTitle) == "In Indexed Images")
+        #expect(try await nextValue(from: output.isScopeAccented) == false)
         #expect(try await nextValue(from: output.scopeToolTip) == nil)
 
         session.update { $0.scope = .images([TestImages.foundation]) }
         #expect(try await nextValue(from: output.scopeTitle) { $0 != "In Indexed Images" } == "In Foundation")
+        #expect(try await nextValue(from: output.isScopeAccented) { $0 } == true)
 
         session.update { $0.scope = .images([TestImages.libobjc, TestImages.foundation]) }
         #expect(try await nextValue(from: output.scopeTitle) { $0 == "In 2 Images" } == "In 2 Images")
@@ -533,7 +622,7 @@ struct FindViewModelTests {
             modePathChoiceSelected: modePathChoiceSelectedRelay.asSignal(),
             memberKindFilterSelected: memberKindFilterSelectedRelay.asSignal(),
             caseSensitiveToggled: caseSensitiveToggledRelay.asSignal(),
-            scopeButtonClicked: scopeButtonClickedRelay.asSignal(),
+            scopeMenuChoiceSelected: scopeMenuChoiceSelectedRelay.asSignal(),
             searchCommitted: searchCommittedRelay.asSignal(),
             filterString: filterStringRelay.asDriver(),
             resultClicked: resultClickedRelay.asSignal(),

@@ -153,40 +153,37 @@ public enum FindScope: Hashable, Sendable {
     /// The image the sidebar lists, `DocumentState.currentImageNode`, as it
     /// is when the search runs.
     case currentImage
-    /// The images picked in the scope chooser; never empty.
+    /// The images picked in the scope chooser, or the ones the results on
+    /// screen came from; never empty.
     case images(Set<String>)
 
-    /// `In Indexed Images`, `In Current Image`, `In Foundation`, `In 3 Images`.
-    public var title: String {
+    /// `Indexed Images`, `Current Image`, `Foundation`, `3 Images`: the scope
+    /// as the scope menu names it and as the scope button's title says it
+    /// after `In`. Xcode takes both from one
+    /// `+[IDEBatchFindNamedScope titleForNamedScope:inWorkspace:]`.
+    public var name: String {
         switch self {
         case .allIndexedImages:
-            "In Indexed Images"
+            "Indexed Images"
         case .currentImage:
-            "In Current Image"
+            "Current Image"
         case .images(let imagePaths):
             if imagePaths.count == 1, let imagePath = imagePaths.first {
-                "In \(Self.imageName(of: imagePath))"
+                Self.imageName(of: imagePath)
             } else {
-                "In \(imagePaths.count) Images"
+                "\(imagePaths.count) Images"
             }
         }
     }
 
-    /// The scope with `imagePath` picked, or no longer picked. Picking an
-    /// image leaves every other kind of scope behind; dropping the last one
-    /// goes back to every indexed image.
-    public func toggling(_ imagePath: String) -> FindScope {
-        var imagePaths: Set<String> = []
-        if case .images(let pickedImagePaths) = self {
-            imagePaths = pickedImagePaths
-        }
-        if imagePaths.contains(imagePath) {
-            imagePaths.remove(imagePath)
-        } else {
-            imagePaths.insert(imagePath)
-        }
-        return imagePaths.isEmpty ? .allIndexedImages : .images(imagePaths)
-    }
+    /// `In Indexed Images`, `In Current Image`, `In Foundation`, `In 3 Images`.
+    public var title: String { "In \(name)" }
+
+    /// Whether the scope button draws its title in the accent colour: every
+    /// scope but the default one, as
+    /// `-[IDEFindNavigatorQueryParametersController refreshUserInterface:]`
+    /// accents every scope but the workspace.
+    public var isAccented: Bool { self != .allIndexedImages }
 
     /// An image's name as the navigator shows it: its file name.
     public static func imageName(of imagePath: String) -> String {

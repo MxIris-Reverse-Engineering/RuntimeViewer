@@ -3,42 +3,51 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
-/// The Find navigator's scope chooser: the indexed images a search can be
-/// limited to, picked one or several at a time, and the two scopes that pick
-/// no image — every indexed image, and the image the sidebar lists. Each
-/// choice goes straight into the document's `FindSession`; there is nothing
-/// to apply when the popover closes.
+/// The Find navigator's scope chooser: the sheet the scope menu's Custom
+/// Scopes… opens, as Xcode's opens `IDEFindNavigatorScopeChooserController`.
+/// It lists the indexed images, any number of which can be selected; OK makes
+/// the selection the scope, Cancel leaves the scope as it was. The images the
+/// scope holds when the sheet opens start out selected.
 ///
 /// The list is the engine's indexed images, asked for when the chooser
 /// opens, together with every image the corpus coordinator follows and every
-/// image already picked: it is there at once, an image indexed while it is
+/// image the scope holds: it is there at once, an image indexed while it is
 /// open turns up, and a picked image the engine does not have stays listed so
 /// it can be dropped.
 ///
 /// Generic over the sidebar level's route, like the Find page that opens it.
-public final class FindScopeChooserViewModel<Route: Routable>: ViewModel<Route> {
+public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: ViewModel<Route> {
     @MemberwiseInit(.public)
     public struct Input {
         /// The filter field, as typed: the rows whose image name contains it.
         /// Need not start with a value — until it reports one, every row shows.
         public let filterString: Driver<String>
-        public let allIndexedImagesClicked: Signal<Void>
-        public let currentImageClicked: Signal<Void>
-        /// A row's checkbox: the image to pick, or to drop.
-        public let imageToggled: Signal<String>
+        /// The images selected in the list, reported when the user changes
+        /// the selection — not when the list puts it back after its rows
+        /// change. A row the filter hides is not selected by then.
+        public let selectionChanged: Signal<Set<String>>
+        public let okClicked: Signal<Void>
+        public let cancelClicked: Signal<Void>
+        /// A double-clicked row, which the list has selected by then: OK, as
+        /// `-[IDEFindNavigatorScopeChooserController doubleClickedOutline:]`
+        /// completes the sheet.
+        public let rowDoubleClicked: Signal<Void>
     }
 
     public struct Output {
         public let rows: Driver<[FindScopeImageCellViewModel]>
-        public let scope: Driver<FindScope>
-        /// `Current Image (AppKit)`, or plain `Current Image` while the
-        /// sidebar lists none.
-        public let currentImageTitle: Driver<String>
-        /// Whether the sidebar lists an image, so it can be the scope.
-        public let isCurrentImageAvailable: Driver<Bool>
+        /// The images to show selected: the scope's when the sheet opens, then
+        /// the user's.
+        public let selectedImagePaths: Driver<Set<String>>
+        /// OK cannot be clicked while nothing is selected.
+        public let isOKEnabled: Driver<Bool>
     }
 
     private let session: FindSession
+
+    /// The images the scope held when the sheet opened, listed whether or not
+    /// the engine has them.
+    private let scopeImagePaths: Set<String>
 
     /// The rows' cell ViewModels by image, kept so a row on screen keeps its
     /// cell and updates in place. Images that leave the list are dropped.
@@ -57,26 +66,30 @@ public final class FindScopeChooserViewModel<Route: Routable>: ViewModel<Route> 
     @RxObserved
     private var filterString: String = ""
 
+    /// The images selected in the list: the scope's when the sheet opens,
+    /// then whatever the user selects.
+    @RxObserved
+    private var selectedImagePaths: Set<String>
+
     public override init(documentState: DocumentState, router: any Router<Route>) {
         self.session = documentState.findSession
+        let scopeImagePaths = Self.imagePaths(of: documentState.findSession.query.scope, currentImagePath: documentState.currentImageNode?.path)
+        self.scopeImagePaths = scopeImagePaths
+        self.selectedImagePaths = scopeImagePaths
         super.init(documentState: documentState, router: router)
         loadIndexedImagePaths()
     }
 
     public func transform(_ input: Input) -> Output {
-        let session = session
-        let scope = session.$query.asDriver().map(\.scope).distinctUntilChanged()
-
         Observable.combineLatest(
             $indexedImagePaths.asObservable(),
-            documentState.findCorpusCoordinator.$buildStatesByImagePath.asObservable(),
-            scope.asObservable()
+            documentState.findCorpusCoordinator.$buildStatesByImagePath.asObservable()
         )
         .observe(on: MainScheduler.instance)
-        .subscribeOnNext { [weak self] indexedImagePaths, buildStates, scope in
+        .subscribeOnNext { [weak self] indexedImagePaths, buildStates in
             guard let self else { return }
             MainActor.assumeIsolated {
-                self.allRows = self.makeRows(indexedImagePaths: indexedImagePaths, buildStates: buildStates, scope: scope)
+                self.allRows = self.makeRows(indexedImagePaths: indexedImagePaths, buildStates: buildStates)
             }
         }
         .disposed(by: rx.disposeBag)
@@ -87,19 +100,21 @@ public final class FindScopeChooserViewModel<Route: Routable>: ViewModel<Route> 
         }
         .disposed(by: rx.disposeBag)
 
-        input.allIndexedImagesClicked.emitOnNext {
-            session.update { $0.scope = .allIndexedImages }
+        input.selectionChanged.emitOnNext { [weak self] imagePaths in
+            guard let self else { return }
+            selectedImagePaths = imagePaths
         }
         .disposed(by: rx.disposeBag)
 
-        input.currentImageClicked.emitOnNext { [weak self] in
-            guard let self, documentState.currentImageNode != nil else { return }
-            session.update { $0.scope = .currentImage }
+        Signal.merge(input.okClicked, input.rowDoubleClicked).emitOnNext { [weak self] in
+            guard let self else { return }
+            applySelection()
         }
         .disposed(by: rx.disposeBag)
 
-        input.imageToggled.emitOnNext { imagePath in
-            session.update { $0.scope = $0.scope.toggling(imagePath) }
+        input.cancelClicked.emitOnNext { [weak self] in
+            guard let self else { return }
+            router.trigger(.dismissFindScopeChooser)
         }
         .disposed(by: rx.disposeBag)
 
@@ -109,16 +124,35 @@ public final class FindScopeChooserViewModel<Route: Routable>: ViewModel<Route> 
             return rows.filter { $0.name.range(of: needle, options: [.caseInsensitive]) != nil }
         }
 
-        let currentImagePath = documentState.$currentImageNode.asDriver().map { $0?.path }
-
         return Output(
             rows: rows,
-            scope: scope,
-            currentImageTitle: currentImagePath.map { imagePath in
-                imagePath.map { "Current Image (\(FindScope.imageName(of: $0)))" } ?? "Current Image"
-            },
-            isCurrentImageAvailable: currentImagePath.map { $0 != nil }
+            selectedImagePaths: $selectedImagePaths.asDriver(),
+            isOKEnabled: $selectedImagePaths.asDriver().map { !$0.isEmpty }.distinctUntilChanged()
         )
+    }
+
+    /// OK: the selection becomes the scope — an edit of the query, which
+    /// Return then searches — and the sheet closes. With nothing selected
+    /// there is nothing to apply: Xcode's OK then closes the sheet and changes
+    /// nothing, here OK is disabled instead.
+    private func applySelection() {
+        guard !selectedImagePaths.isEmpty else { return }
+        let imagePaths = selectedImagePaths
+        session.update { $0.scope = .images(imagePaths) }
+        router.trigger(.dismissFindScopeChooser)
+    }
+
+    /// The images a scope holds as the sheet opens: the picked ones, the image
+    /// the sidebar lists, or none for every indexed image.
+    static func imagePaths(of scope: FindScope, currentImagePath: String?) -> Set<String> {
+        switch scope {
+        case .allIndexedImages:
+            []
+        case .currentImage:
+            currentImagePath.map { [$0] } ?? []
+        case .images(let imagePaths):
+            imagePaths
+        }
     }
 
     // MARK: - Rows
@@ -131,13 +165,9 @@ public final class FindScopeChooserViewModel<Route: Routable>: ViewModel<Route> 
         }
     }
 
-    private func makeRows(indexedImagePaths: [String]?, buildStates: [String: RuntimeInterfaceCorpusBuildState], scope: FindScope) -> [FindScopeImageCellViewModel] {
-        var pickedImagePaths: Set<String> = []
-        if case .images(let imagePaths) = scope {
-            pickedImagePaths = imagePaths
-        }
+    private func makeRows(indexedImagePaths: [String]?, buildStates: [String: RuntimeInterfaceCorpusBuildState]) -> [FindScopeImageCellViewModel] {
         let knownImagePaths = Set(indexedImagePaths ?? []).union(buildStates.keys)
-        let listedImagePaths = knownImagePaths.union(pickedImagePaths)
+        let listedImagePaths = knownImagePaths.union(scopeImagePaths)
         let sortedImagePaths = listedImagePaths.sorted { leftImagePath, rightImagePath in
             let order = FindScope.imageName(of: leftImagePath).localizedCaseInsensitiveCompare(FindScope.imageName(of: rightImagePath))
             return order == .orderedSame ? leftImagePath < rightImagePath : order == .orderedAscending
@@ -148,7 +178,7 @@ public final class FindScopeChooserViewModel<Route: Routable>: ViewModel<Route> 
             // Only once the engine has answered can an image be said to be
             // missing from it.
             let isIndexed = indexedImagePaths == nil || knownImagePaths.contains(imagePath)
-            cellViewModel.update(isPicked: pickedImagePaths.contains(imagePath), status: Self.status(of: buildStates[imagePath], isIndexed: isIndexed))
+            cellViewModel.update(status: Self.status(of: buildStates[imagePath], isIndexed: isIndexed))
             return cellViewModel
         }
         cellViewModelsByImagePath = cellViewModelsByImagePath.filter { listedImagePaths.contains($0.key) }
