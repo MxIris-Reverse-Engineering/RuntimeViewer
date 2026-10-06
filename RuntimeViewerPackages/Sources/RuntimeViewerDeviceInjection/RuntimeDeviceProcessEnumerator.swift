@@ -19,10 +19,15 @@ public enum RuntimeDeviceProcessEnumerator {
         /// entitlement changes that — the sandbox escape is the prerequisite
         /// for *listing*, separately from `task_for_pid-allow` being the
         /// prerequisite for injecting.
+        ///
+        /// Told apart from ``processListEmpty`` by `errno` alone, because the
+        /// call reports a refusal as `0` rather than as `-1`. This case was
+        /// unreachable while it was read off a negative return value, and a
+        /// refusal arrived as an empty process list.
         case processListRefused(errorNumber: Int32)
 
-        /// The kernel reported a capacity of zero or less, so there is nothing
-        /// to size a buffer from.
+        /// The call reported no processes at all, with nothing in `errno` to
+        /// say it had been refused, so there is nothing to size a buffer from.
         case processListEmpty
     }
 
@@ -65,19 +70,31 @@ public enum RuntimeDeviceProcessEnumerator {
     /// buffer is filled, so the process table can grow or shrink in between, and
     /// the second call's answer is the one that says how much of the buffer
     /// holds pids.
+    ///
+    /// **A refusal has to be read off `errno`, not off the return value.**
+    /// `proc_listallpids` maps the underlying failure to `0`, so it never
+    /// returns a negative number, and `errno` is cleared before each call to
+    /// tell that `0` from an answer that is honestly empty. Reading it off a
+    /// negative return value instead made ``EnumerationError/processListRefused``
+    /// unreachable and reported a containerized caller's refusal as an empty
+    /// process list.
     static func processIdentifiers() throws -> [pid_t] {
+        errno = 0
         let capacityHint = proc_listallpids(nil, 0)
+        let capacityErrorNumber = errno
         guard capacityHint > 0 else {
-            if capacityHint < 0 { throw EnumerationError.processListRefused(errorNumber: errno) }
+            if capacityErrorNumber != 0 { throw EnumerationError.processListRefused(errorNumber: capacityErrorNumber) }
             throw EnumerationError.processListEmpty
         }
 
         var identifiers = [pid_t](repeating: 0, count: Int(capacityHint))
+        errno = 0
         let writtenCount = identifiers.withUnsafeMutableBytes { buffer in
             proc_listallpids(buffer.baseAddress, Int32(buffer.count))
         }
+        let writeErrorNumber = errno
         guard writtenCount > 0 else {
-            if writtenCount < 0 { throw EnumerationError.processListRefused(errorNumber: errno) }
+            if writeErrorNumber != 0 { throw EnumerationError.processListRefused(errorNumber: writeErrorNumber) }
             throw EnumerationError.processListEmpty
         }
 
@@ -148,13 +165,13 @@ public enum RuntimeDeviceProcessEnumerator {
     /// device is not measured. See ``RuntimeProcess/userIdentifier``.
     static func userIdentifier(ofProcessWithIdentifier processIdentifier: pid_t) -> uid_t? {
         var selector: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, processIdentifier]
-        var info = kinfo_proc()
+        var processInformation = kinfo_proc()
         var length = MemoryLayout<kinfo_proc>.size
-        let result = sysctl(&selector, UInt32(selector.count), &info, &length, nil, 0)
+        let result = sysctl(&selector, UInt32(selector.count), &processInformation, &length, nil, 0)
         // A zero length means the call succeeded but filled nothing, which
         // happens for a pid that exited between the listing and this call.
         guard result == 0, length > 0 else { return nil }
-        return info.kp_eproc.e_ucred.cr_uid
+        return processInformation.kp_eproc.e_ucred.cr_uid
     }
 
     // MARK: - Injectability

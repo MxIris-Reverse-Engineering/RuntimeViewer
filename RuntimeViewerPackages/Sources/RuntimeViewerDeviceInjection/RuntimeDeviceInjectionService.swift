@@ -128,7 +128,10 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
 
         let stagedURL: URL
         do {
-            stagedURL = try staging.stage(rendezvous: rendezvous)
+            // Per target, not one directory for all of them: `stage` rewrites
+            // the rendezvous, and an injection that is still waiting for its
+            // verdict has a payload that may not have read its own yet.
+            stagedURL = try staging.isolated(forProcessWithIdentifier: processIdentifier).stage(rendezvous: rendezvous)
         } catch {
             return .failed(code: 0, reason: "Could not stage the payload: \(error.localizedDescription)")
         }

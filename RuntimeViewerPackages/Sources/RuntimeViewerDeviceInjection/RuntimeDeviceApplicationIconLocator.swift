@@ -133,6 +133,13 @@ public enum RuntimeDeviceApplicationIconLocator {
     ///   the caller was never offered.
     /// - **Must end in a real `.app` component**, which is what confines
     ///   reading to application bundles rather than to the file system.
+    /// - **And that component must be a directory, not a symbolic link to
+    ///   one.** The three tests above are all properties of a *string* from a
+    ///   peer, and the reads that follow are not: the kernel resolves every
+    ///   directory component of a path, so a `.app` that is a link would read
+    ///   an `Info.plist` outside any bundle and then whatever that plist
+    ///   declares. The no-follow attribute read in
+    ///   ``readIconFile(named:inApplicationBundleAt:)`` covers the leaf only.
     ///
     /// Together with ``readIconFile(named:inApplicationBundleAt:)``, which only
     /// ever opens a name the bundle's own `Info.plist` declared, this is what
@@ -144,6 +151,11 @@ public enum RuntimeDeviceApplicationIconLocator {
         // trailing slash arrives as a final "/" component of its own — measured
         // — and would fail the extension check for a path that is valid.
         guard isApplicationBundleName((applicationBundlePath as NSString).lastPathComponent) else { return nil }
+        // `attributesOfItem` does not follow a link, so a linked `.app` reports
+        // as `.typeSymbolicLink` here rather than as the directory it points at.
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: applicationBundlePath),
+              attributes[.type] as? FileAttributeType == .typeDirectory
+        else { return nil }
         return URL(fileURLWithPath: applicationBundlePath, isDirectory: true)
     }
 

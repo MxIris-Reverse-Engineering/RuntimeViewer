@@ -376,6 +376,39 @@ struct RuntimeDeviceApplicationIconLocatorTests {
         }
     }
 
+    /// The link above is the *leaf*; this one is the `.app` itself, and the
+    /// no-follow attribute read does not cover it — the kernel follows every
+    /// directory component of a path before reaching the leaf, so a `.app` that
+    /// is a link reads an `Info.plist` outside any real bundle and then
+    /// whatever that plist declares.
+    ///
+    /// The path comes from the host over a connection with no authentication,
+    /// so "ends in `.app`" is a string property of a caller-supplied value and
+    /// not evidence about the directory it names. Reading what a bundle
+    /// declares is confined to bundles only if the component really is one.
+    @Test("A .app that is itself a symbolic link is refused rather than followed")
+    func symbolicLinkApplicationBundleIsRefused() throws {
+        let rootURL = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        // Deliberately not named `.app`: somewhere the caller was never
+        // offered, which is the point of planting the link.
+        let elsewhereURL = rootURL.appendingPathComponent("Elsewhere", isDirectory: true)
+        try FileManager.default.createDirectory(at: elsewhereURL, withIntermediateDirectories: true)
+        let informationPropertyListData = try PropertyListSerialization.data(
+            fromPropertyList: iconDeclaration(baseNames: ["AppIcon60x60"]),
+            format: .xml,
+            options: 0,
+        )
+        try informationPropertyListData.write(to: elsewhereURL.appendingPathComponent("Info.plist"))
+        try pngBytes().write(to: elsewhereURL.appendingPathComponent("AppIcon60x60@3x.png"))
+
+        let linkURL = rootURL.appendingPathComponent("Link.app", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: linkURL, withDestinationURL: elsewhereURL)
+
+        #expect(RuntimeDeviceApplicationIconLocator.iconData(forApplicationBundleAtPath: linkURL.path) == nil)
+    }
+
     // MARK: - Several bundles at once
 
     /// Keyed by the path the caller asked for, because that is what the caller

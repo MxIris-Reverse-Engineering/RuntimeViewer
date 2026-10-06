@@ -97,20 +97,16 @@ extension RuntimePayloadRendezvous {
     public static func reachingThisProcess(
         from engine: RuntimeEngine
     ) async throws -> RuntimePayloadRendezvous {
-        let reachability = await engine.localAddressSeenByPeer
-        guard case .reachableAt(let hostAddress) = reachability else {
-            guard case .unknown(let reason) = reachability else {
-                // Unreachable: the enum has two cases and the first was ruled
-                // out above. Stated rather than force-unwrapped away.
-                throw Unavailable.peerCannotReachThisProcess(engineName: engine.source.description, reason: "no address was reported")
-            }
+        switch await engine.localAddressSeenByPeer {
+        case .reachableAt(let hostAddress):
+            return RuntimePayloadRendezvous(
+                hostAddress: hostAddress,
+                hostPort: try RuntimeUnusedPort.find(),
+                claimToken: makeClaimToken(),
+            )
+        case .unknown(let reason):
             throw Unavailable.peerCannotReachThisProcess(engineName: engine.source.description, reason: reason)
         }
-        return RuntimePayloadRendezvous(
-            hostAddress: hostAddress,
-            hostPort: try RuntimeUnusedPort.find(),
-            claimToken: makeClaimToken(),
-        )
     }
 
     public enum Unavailable: Error, LocalizedError, CustomStringConvertible {

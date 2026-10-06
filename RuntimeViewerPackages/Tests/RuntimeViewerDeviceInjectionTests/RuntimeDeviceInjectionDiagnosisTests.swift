@@ -53,4 +53,25 @@ struct RuntimeDeviceInjectionDiagnosisTests {
         #expect(reason.contains("log"))
         #expect(reason.contains("memory"))
     }
+
+    /// Ruling suspension out and *claiming to have confirmed* the target was
+    /// running are different statements, and only the first one is earned.
+    ///
+    /// The check before the injection rejects `.suspended` and lets
+    /// `.unknown` through — deliberately, because asking RunningBoard about
+    /// another process needs `com.apple.runningboard.process-state` and a build
+    /// without it reads as `.unknown` for every target, so refusing on
+    /// `.unknown` would make such a build unable to inject anything while the
+    /// injection itself does not need that answer. The consequence is that the
+    /// state may never have been read at all, and a message asserting the
+    /// target "was confirmed to be running" then sends the user looking at the
+    /// payload and the target for a cause that may well be suspension.
+    @Test("The timeout does not claim a running state it may never have read")
+    func timedOutReasonDoesNotOverstateWhatWasChecked() {
+        let reason = RuntimeDeviceInjectionDiagnosis.timedOutReason.lowercased()
+        #expect(!reason.contains("confirmed"))
+        #expect(!reason.contains("is not the explanation"))
+        // What *is* earned: the assertion is held for the whole injection.
+        #expect(reason.contains("held"))
+    }
 }

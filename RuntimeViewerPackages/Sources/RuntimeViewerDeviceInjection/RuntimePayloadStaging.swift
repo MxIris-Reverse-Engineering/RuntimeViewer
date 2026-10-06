@@ -54,6 +54,34 @@ public struct RuntimePayloadStaging {
         self.fileManager = fileManager
     }
 
+    /// The same staging, confined to a directory of one target's own.
+    ///
+    /// **Two injections sharing a directory corrupt each other.** `stage`
+    /// removes and rewrites the payload, its dependencies and the rendezvous,
+    /// while an injection waits up to twenty seconds for the injector's verdict
+    /// — so a second injection starting inside that window replaces the
+    /// rendezvous the first payload has yet to read. That payload then dials
+    /// the second injection's port and is claimed as the wrong process, or
+    /// lands in the gap between the remove and the write, finds nothing, and
+    /// falls back to advertising itself, which on a target that cannot bind
+    /// means it never reports in at all.
+    ///
+    /// Keyed by the target's pid rather than by the claim token so that
+    /// re-injecting one target reuses its directory instead of leaving one
+    /// behind per attempt: two injections into one pid are one injection, while
+    /// two pids are what actually race.
+    public func isolated(forProcessWithIdentifier processIdentifier: pid_t) -> RuntimePayloadStaging {
+        RuntimePayloadStaging(
+            payloadURL: payloadURL,
+            dependencyDirectoryURL: dependencyDirectoryURL,
+            stagingDirectoryURL: stagingDirectoryURL.appendingPathComponent(
+                "pid-\(processIdentifier)",
+                isDirectory: true,
+            ),
+            fileManager: fileManager,
+        )
+    }
+
     /// Copies the payload and everything it loads through `@rpath`, and returns
     /// the path to hand the injector.
     ///

@@ -34,13 +34,23 @@
 
 __BEGIN_DECLS
 
-/// Fills `buffer` with every pid the caller is allowed to see, and returns the
-/// number of **bytes** written. Called with a `NULL` buffer and size `0` it
-/// instead returns a capacity hint, which is an upper bound and not the exact
-/// count — allocate from the hint, then size the result from the return value.
+/// Fills `buffer` with every pid the caller is allowed to see, and returns a
+/// count **of pids**, not of bytes: the implementation divides the kernel's
+/// byte count by `sizeof(int)` before returning. `buffersize` going in is
+/// still bytes. Dividing the answer by the entry size as well keeps a quarter
+/// of the processes — measured, and the reason this sentence is here.
 ///
-/// Returns `-1` with `errno == EPERM` for a containerized caller, whatever
-/// task-port entitlements it holds. A sandbox escape is the prerequisite.
+/// Called with a `NULL` buffer and size `0` it instead returns a capacity hint,
+/// which is an upper bound and not the exact count — allocate from the hint,
+/// then size the result from the return value.
+///
+/// **A failure is `0`, never `-1`.** `proc_listallpids` forwards to
+/// `proc_listpids`, which maps the underlying `__proc_info` failure to `0` and
+/// leaves `errno` set; only that mapped `0` ever reaches a caller. So a
+/// containerized caller — refused whatever task-port entitlements it holds,
+/// since a sandbox escape is the prerequisite — is `0` with `errno == EPERM`,
+/// which is distinguishable from an honestly empty answer only by clearing
+/// `errno` before the call. Source: `libsyscall/wrappers/libproc/libproc.c`.
 extern int proc_listallpids(void *buffer, int buffersize);
 
 /// The process's short name (its `p_comm`), truncated by the kernel.

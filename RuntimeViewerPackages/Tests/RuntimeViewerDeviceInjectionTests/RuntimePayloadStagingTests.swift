@@ -329,6 +329,69 @@ struct RuntimePayloadStagingTests {
         #expect(RuntimePayloadRendezvous.stagedBesideImage(#dsohandle) == nil)
     }
 
+    // MARK: - Two injections at once
+
+    /// **Two injections running at once must not share a staging directory.**
+    ///
+    /// `stage` removes and rewrites the payload, its dependencies and the
+    /// rendezvous. An injection waits up to twenty seconds for the injector's
+    /// verdict, so a second one starting inside that window rewrites the
+    /// rendezvous the first payload has not read yet: it then dials the second
+    /// injection's port and is claimed as the wrong target, or catches the gap
+    /// between the remove and the write, finds no file, and falls back to
+    /// advertising itself — which on a device whose target cannot bind is a
+    /// payload that never reports at all.
+    ///
+    /// One picker serialises its own attaches, so this needs two requesters:
+    /// a second document window, the MCP bridge, or the command-line tool,
+    /// none of which can see each other's state.
+    @Test("Two targets staged at once keep their own rendezvous")
+    func concurrentInjectionsDoNotShareADirectory() throws {
+        try withPayloadFixture { fixture in
+            let shared = fixture.makeStaging()
+            let firstRendezvous = RuntimePayloadRendezvous(
+                hostAddress: "192.168.64.1",
+                hostPort: 51234,
+                claimToken: "FIRST-TOKEN",
+            )
+            let secondRendezvous = RuntimePayloadRendezvous(
+                hostAddress: "192.168.64.1",
+                hostPort: 51235,
+                claimToken: "SECOND-TOKEN",
+            )
+
+            // Interleaved the way two requesters interleave: the first is still
+            // waiting for its verdict when the second starts.
+            let firstPayloadURL = try shared.isolated(forProcessWithIdentifier: 100).stage(rendezvous: firstRendezvous)
+            let secondPayloadURL = try shared.isolated(forProcessWithIdentifier: 200).stage(rendezvous: secondRendezvous)
+
+            #expect(firstPayloadURL != secondPayloadURL)
+            // Each payload reads the rendezvous meant for it, through the same
+            // reader the payload itself uses.
+            #expect(
+                RuntimePayloadRendezvous.stagedInDirectory(at: firstPayloadURL.deletingLastPathComponent())
+                    == firstRendezvous
+            )
+            #expect(
+                RuntimePayloadRendezvous.stagedInDirectory(at: secondPayloadURL.deletingLastPathComponent())
+                    == secondRendezvous
+            )
+        }
+    }
+
+    /// Re-injecting one target reuses that target's directory rather than
+    /// accumulating one per attempt — the behaviour the single shared directory
+    /// already had, which is worth keeping for the common case.
+    @Test("Staging the same target twice stays in one directory")
+    func restagingOneTargetReusesItsDirectory() throws {
+        try withPayloadFixture { fixture in
+            let shared = fixture.makeStaging()
+            let first = try shared.isolated(forProcessWithIdentifier: 100).stage(rendezvous: nil)
+            let second = try shared.isolated(forProcessWithIdentifier: 100).stage(rendezvous: nil)
+            #expect(first == second)
+        }
+    }
+
     // MARK: - Failure
 
     @Test("Reports a missing payload rather than staging an empty directory")

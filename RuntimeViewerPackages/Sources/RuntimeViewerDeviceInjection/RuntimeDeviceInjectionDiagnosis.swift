@@ -19,14 +19,27 @@ public enum RuntimeDeviceInjectionDiagnosis {
     /// was by far the most common cause — iOS suspends every app that is not in
     /// the foreground — so the wording told the user to bring the target
     /// forward. The injection now takes a RunningBoard assertion on the target
-    /// first and verifies it left the suspended state, and the two ways *that*
-    /// can fail say so in their own words. So by the time this message is
-    /// reached, suspension has been ruled out, and repeating the old advice
-    /// would send the user to do something that has already been done for them.
+    /// first, and the two ways *that* can fail say so in their own words, so
+    /// repeating the old advice would send the user to do something that has
+    /// already been done for them.
+    ///
+    /// **It does not say the target was confirmed to be running, because that
+    /// is not always established.** The check before the injection refuses a
+    /// target RunningBoard reports as suspended and lets
+    /// ``RuntimeDeviceRunningState/unknown(reason:)`` through — asking about
+    /// another process needs `com.apple.runningboard.process-state`, so a build
+    /// without that entitlement reads as `.unknown` for every target, and
+    /// refusing on it would leave such a build unable to inject anything even
+    /// though the injection does not need the answer. So the assertion being
+    /// held is the earned claim; the state having been read is not, and
+    /// asserting it would send the user hunting in the payload and the target
+    /// for a cause that may be suspension after all.
     public static let timedOutReason = """
         The thread that loads the payload never reported what happened, so whether the payload loaded at all is unknown.
 
-        The target was confirmed to be running before this started, and it is held that way for as long as the injection lasts, so being suspended is not the explanation — which leaves two.
+        An assertion asking the system to keep the target running is held for as long as the injection lasts, and the target was not reported suspended when it started — though on a build that cannot read another process's run state, that is unknown rather than ruled out. Three things could explain the silence.
+
+        The target may have been suspended anyway, which is what this looks like when the run state could not be read: a suspended process schedules no thread, so the report never comes however long the wait.
 
         The payload may have failed to start: look in the device's log for its startup lines around the moment of the injection.
 
