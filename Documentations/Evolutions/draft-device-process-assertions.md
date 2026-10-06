@@ -243,11 +243,18 @@ assertion 类都没有（`BackBoardServices/ObjCHeaders/BackBoardServices.h`，�
   （注释原文「anything unknown resolves to `.injectable` so the attempt is what reports it」）。
   本提案是让那个尝试真的能成功，不是改判定。
 - `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift:640`
-  —— `terminateRuntimeEngine(for:)`。**这是释放 assertion 的唯一挂点**，因为所有拆引擎的路径都汇到它：
+  —— `terminateRuntimeEngine(for:because:)`。**这是释放 assertion 的唯一挂点**，因为所有拆引擎的路径都汇到它：
   `terminateInjectedDeviceEngine(name:rendezvous:)`（attach 失败回滚）走它，CLI 的
   `runtime-viewer-cli detach` 经 `SourceCatalog.swift:173` 也走它。它本来就有按 source 种类分的清理分支
   （`.bonjour` 重连记账、`.localSocket` 的 `removeInjectedSocketEndpointRecord(pid:)`），加一条
   `.injectedTCP` 的正好同构。
+
+  **更正（2026-10-06，PR #119 review）：汇到它的路径不止用户主动发起的那些，所以单凭「汇到它」不足以
+  决定释放。** 被动断线（`handleStateChange` 收到 `.disconnected`）也走这里，而那时目标往往还活着、
+  还在被检查。因此这个挂点加了 `TerminationReason`：只有 `.requested`（用户 detach / attach 回滚）
+  与 `.connectionLost(.peerClosed)`（载荷进程已消失）才释放；`.connectionLost(` 其它传输错误 `)` 与
+  `.supersededByAdvertisement` 都保留 assertion。详见
+  `Documentations/KnownIssues/2026-10-06-pr119-review-findings.md` 的 `PR119.2` / `PR119.3`。
 - **AppKit 侧没有 Detach 入口**，`RuntimeProcessAttacher.detach(_:)` 也只有 Mac 与模拟器两条分支、
   没有设备分支。Detach 今天是 CLI 独有的动作 —— 这不是本提案造成的，也不在本提案范围内。
 - **设备侧没有「释放」这条命令**，注入相关的命令只有三条（`InjectionCapabilityRequest` /
@@ -600,3 +607,5 @@ RV 退出。补这个口子要先设计 Detach 的 UI，是另一件事。
 | 2026-10-03 | 不顺手收紧另外两条连接的 keepalive 参数 | 它们只设了 `keepaliveIdle = 2`，间隔与次数用系统默认（75 秒 × 8），判死要约 10 分钟 —— 比修复前的「永不」好得多，但仍然慢。收紧它会影响 Bonjour 与镜像引擎的整体行为，超出一个 bug 修复的范围，单独记下 |
 | 2026-10-03 | 注入引擎的断开检测比 Bonjour 慢约 25 秒，接受这个差距 | 两者的信号源本质不同：Bonjour 浏览器会收到一条明确的「服务已移除」事件，所以是立刻的；裸 TCP 没有任何事件，只能从 keepalive 探测的沉默推断。想更快只能收紧探测参数，而那会让链路抖动时误判为断开——引擎被移除会连带丢掉用户已加载的镜像与选中状态，代价比多等十几秒大。记下两条更快的备选：收紧到约 9 秒，或在设备的 Bonjour 引擎消失时对该设备的注入引擎发一次短超时探活（不能直接连坐，因为越狱版被杀时载荷仍活着——已实测） |
 | 2026-10-03 | 新增术语 `受限 entitlement` | 这次弯路的可复用教训：判断一条私有 entitlement 可不可用，必须跟到消费方构造权限集合那一步 |
+| 2026-10-06 | **PR #119 review 推翻「挂在 `terminateRuntimeEngine` 上一处覆盖全部路径」** —— 改为带 `TerminationReason`，被动断线与广播胜出都不释放 | 上面那条决策只盘点了用户主动发起的拆引擎路径（CLI detach、attach 回滚），漏了 `handleStateChange` 收到 `.disconnected` 也走同一处。后果有两个，都与本提案自己写的「assertion 跨连接存活、只在用户 detach 或目标退出时结束」矛盾：Wi-Fi 抖动约 25 秒即释放 assertion，目标随后可被挂起；`awaitInjectedDeviceEngine` 里广播一方胜出时拆掉监听源，等于在 attach 当下就把刚连上的那个进程的 assertion 还掉（Copilot 的 `r4192141759` 也独立报了这一条）。修法是给拆除加原因：`.requested` 与 `.connectionLost(.peerClosed)` 释放，传输错误与 `.supersededByAdvertisement` 保留，后者把记账改挂到胜出的引擎上 |
+| 2026-10-06 | 配对记录改存设备 `hostID`，不再存引擎对象的 weak 引用；且改到 `connect()` 成功之后才记 | 两处都是上面「记早不记晚」那条决策的副作用。weak 引用指向的是**当时那个** `RuntimeEngine` 对象，而设备的 Bonjour 连接每次重连都新建对象、旧对象随即释放 —— 之后 detach 时引用已是 nil，释放命令根本发不出去，目标会在后台一直跑到越狱版退出。改为存 `hostID`、释放时再在 `bonjourRuntimeEngines` 里找当前引擎。记账时机则是：调用方在 `do/catch` 之外调 `launchInjectedDeviceEngine`，所以 `connect()` 抛错（端口被抢、接口地址消失）时记录永远回收不掉；挪到 `connect()` 之后、注入之前，既不漏失败路径也不泄漏 |
