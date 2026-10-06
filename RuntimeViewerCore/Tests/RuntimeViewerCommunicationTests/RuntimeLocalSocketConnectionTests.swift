@@ -806,3 +806,165 @@ struct RuntimeLocalSocketClientConcurrentTests {
         #expect(client.state.isDisconnected)
     }
 }
+
+// MARK: - RuntimeLocalSocket Broken Pipe Tests
+
+/// A write to a peer that has gone away must fail with `EPIPE`, not raise `SIGPIPE`.
+///
+/// `SIGPIPE`'s default action terminates the process, and neither the app nor the
+/// injected payload ignores it. Before both ends of a connection set `SO_NOSIGPIPE`,
+/// a peer that reset the connection while the other side was writing killed the
+/// writer: the app when an injected target died mid-request, the injected *target*
+/// when the user detached or quit while a large reply was still being sent.
+@Suite("RuntimeLocalSocket Broken Pipe Tests", .serialized)
+struct RuntimeLocalSocketBrokenPipeTests {
+
+    @Test("Both ends of a connection are set not to raise SIGPIPE")
+    func testBothEndsSuppressBrokenPipeSignal() async throws {
+        let server = RuntimeLocalSocketServerConnection(identifier: "test-broken-pipe-\(UUID().uuidString)")
+        try await server.start()
+        defer { server.stop() }
+
+        let client = try RuntimeLocalSocketClientConnection(port: server.port)
+        defer { client.stop() }
+
+        let acceptDeadline = Date().addingTimeInterval(5)
+        while server.underlyingConnection == nil, Date() < acceptDeadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        let connectingFileDescriptor = try #require(client.underlyingConnection?.socketFD)
+        let acceptedFileDescriptor = try #require(server.underlyingConnection?.socketFD)
+
+        #expect(try suppressesBrokenPipeSignal(connectingFileDescriptor), "the connecting end raises SIGPIPE when it writes to a vanished peer")
+        #expect(try suppressesBrokenPipeSignal(acceptedFileDescriptor), "the accepting end raises SIGPIPE when it writes to a vanished peer")
+    }
+
+    @Test("A send to a peer that reset the connection throws EPIPE and raises no SIGPIPE")
+    func testSendToResetPeerRaisesNoBrokenPipeSignal() async throws {
+        let signalObserver = try BrokenPipeSignalObserver()
+        let listener = try LoopbackListener()
+
+        let connection = try RuntimeLocalSocketConnection(port: listener.port)
+        // Not started on purpose: a running receive loop would notice the reset and
+        // close the descriptor, and the send below would never reach the kernel.
+        // `stop()` only tears down a started connection, hence the start.
+        defer {
+            try? connection.start()
+            connection.stop()
+        }
+
+        try listener.acceptAndReset()
+
+        // The reset arrives asynchronously; sends succeed until it has been processed.
+        var sendError: RuntimeLocalSocketError?
+        let resetDeadline = Date().addingTimeInterval(5)
+        while sendError == nil, Date() < resetDeadline {
+            do {
+                try await connection.send(requestData: RuntimeRequestData(request: EchoRequest(message: "ping")))
+                try await Task.sleep(nanoseconds: 10_000_000)
+            } catch let error as RuntimeLocalSocketError {
+                sendError = error
+            }
+        }
+
+        #expect(signalObserver.deliveredSignalCount() == 0, "SIGPIPE was raised; its default action terminates the process")
+        guard case .sendFailed(errno: EPIPE) = sendError else {
+            Issue.record("Expected the send to fail with EPIPE, got \(String(describing: sendError))")
+            return
+        }
+    }
+
+    /// Reads `SO_NOSIGPIPE` back off a connected socket.
+    private func suppressesBrokenPipeSignal(_ fileDescriptor: Int32) throws -> Bool {
+        var value: Int32 = 0
+        var length = socklen_t(MemoryLayout<Int32>.size)
+        try #require(getsockopt(fileDescriptor, SOL_SOCKET, SO_NOSIGPIPE, &value, &length) == 0)
+        return value != 0
+    }
+}
+
+// MARK: - Broken Pipe Test Support
+
+/// Counts the attempts to deliver `SIGPIPE` to this process, with the signal ignored
+/// for as long as the observer lives.
+///
+/// Ignoring it is what keeps the attempt the suite exists to catch from ending the test
+/// run, and it hides nothing: a kqueue `EVFILT_SIGNAL` filter records every delivery
+/// attempt, ignored ones included.
+private struct BrokenPipeSignalObserver: ~Copyable {
+    private let kqueueFileDescriptor: Int32
+    private let previousSignalHandler: sig_t?
+
+    init() throws {
+        let queue = kqueue()
+        try #require(queue >= 0)
+        var filter = kevent(ident: UInt(SIGPIPE), filter: Int16(EVFILT_SIGNAL), flags: UInt16(EV_ADD), fflags: 0, data: 0, udata: nil)
+        try #require(kevent(queue, &filter, 1, nil, 0, nil) == 0)
+        kqueueFileDescriptor = queue
+        previousSignalHandler = signal(SIGPIPE, SIG_IGN)
+    }
+
+    /// How many times `SIGPIPE` was raised since the observer was created.
+    func deliveredSignalCount() -> Int {
+        var event = kevent()
+        var noWait = timespec(tv_sec: 0, tv_nsec: 0)
+        guard kevent(kqueueFileDescriptor, nil, 0, &event, 1, &noWait) == 1 else { return 0 }
+        return event.data
+    }
+
+    deinit {
+        signal(SIGPIPE, previousSignalHandler)
+        close(kqueueFileDescriptor)
+    }
+}
+
+/// A listening TCP socket on the loopback interface whose accepted connection the test
+/// resets.
+private struct LoopbackListener: ~Copyable {
+    let port: UInt16
+    private let listeningFileDescriptor: Int32
+
+    init() throws {
+        let listening = socket(AF_INET, SOCK_STREAM, 0)
+        try #require(listening >= 0)
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0 // any free port
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(listening, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        try #require(bound == 0)
+        try #require(listen(listening, 1) == 0)
+
+        var boundAddress = sockaddr_in()
+        var boundLength = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let named = withUnsafeMutablePointer(to: &boundAddress) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(listening, $0, &boundLength)
+            }
+        }
+        try #require(named == 0)
+
+        listeningFileDescriptor = listening
+        port = UInt16(bigEndian: boundAddress.sin_port)
+    }
+
+    /// Accepts the pending connection and closes it with a zero linger, which makes the
+    /// kernel answer with a reset instead of an orderly close.
+    func acceptAndReset() throws {
+        let accepted = accept(listeningFileDescriptor, nil, nil)
+        try #require(accepted >= 0)
+        var immediateReset = linger(l_onoff: 1, l_linger: 0)
+        try #require(setsockopt(accepted, SOL_SOCKET, SO_LINGER, &immediateReset, socklen_t(MemoryLayout<linger>.size)) == 0)
+        close(accepted)
+    }
+
+    deinit {
+        close(listeningFileDescriptor)
+    }
+}
