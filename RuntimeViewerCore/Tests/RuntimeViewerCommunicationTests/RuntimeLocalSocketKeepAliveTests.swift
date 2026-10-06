@@ -126,4 +126,24 @@ struct RuntimeLocalSocketKeepAliveTests {
         RuntimeLocalSocketConnection.configureSocketOptions(pair.acceptedSocket)
         #expect(Self.integerOption(TCP_NODELAY, level: IPPROTO_TCP, on: pair.acceptedSocket) != 0)
     }
+
+    /// A send to a peer that has reset the connection must come back as
+    /// `EPIPE`, not as `SIGPIPE`, whose default action ends the process — the
+    /// host app on one end, and on the other whatever process the payload was
+    /// injected into. A peer resetting is routine here: a detach while a large
+    /// reply is still being read, a device process killed, a keepalive giving
+    /// up. Nothing ignores the signal process-wide, and an injected payload has
+    /// no business changing its host's signal dispositions, so it has to be the
+    /// socket's own option, on the dialling end and the accepting end alike.
+    @Test("A configured socket fails a send to a reset peer instead of raising SIGPIPE")
+    func sendToResetPeerDoesNotRaiseSignal() throws {
+        let pair = try ConnectedPair()
+        RuntimeLocalSocketConnection.configureSocketOptions(pair.clientSocket)
+        RuntimeLocalSocketConnection.configureSocketOptions(pair.acceptedSocket)
+
+        let dialledEndOption = try #require(Self.integerOption(SO_NOSIGPIPE, level: SOL_SOCKET, on: pair.clientSocket))
+        let acceptedEndOption = try #require(Self.integerOption(SO_NOSIGPIPE, level: SOL_SOCKET, on: pair.acceptedSocket))
+        #expect(dialledEndOption != 0)
+        #expect(acceptedEndOption != 0)
+    }
 }

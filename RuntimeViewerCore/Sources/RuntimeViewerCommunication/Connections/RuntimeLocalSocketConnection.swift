@@ -197,7 +197,20 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     /// the probes are the kernel's on both ends, so a payload built before this
     /// existed answers them without knowing anything about it. A heartbeat
     /// would have needed both sides rebuilt.
+    ///
+    /// **`SO_NOSIGPIPE` is not an optimisation either.** Once the peer has
+    /// reset the connection — the user detaching while a large reply is still
+    /// being read, a device process killed, keepalive giving up — the next
+    /// `send` fails with `EPIPE`, and without this option the kernel raises
+    /// `SIGPIPE` first, whose default action ends the process. That is the
+    /// host app on one end and, on the other, whatever process the payload was
+    /// injected into. Nothing here ignores the signal process-wide, and a
+    /// payload must not change its host process's signal dispositions, so it
+    /// is set on the socket.
     static func configureSocketOptions(_ socketFD: Int32) {
+        var noSignalOnBrokenPipe: Int32 = 1
+        setsockopt(socketFD, SOL_SOCKET, SO_NOSIGPIPE, &noSignalOnBrokenPipe, socklen_t(MemoryLayout<Int32>.size))
+
         // Disable Nagle algorithm for lower latency
         var noDelay: Int32 = 1
         setsockopt(socketFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
