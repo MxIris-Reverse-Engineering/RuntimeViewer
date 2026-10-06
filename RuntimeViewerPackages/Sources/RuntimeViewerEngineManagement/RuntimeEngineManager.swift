@@ -638,8 +638,80 @@ public final class RuntimeEngineManager {
         return runtimeEngine
     }
 
-    public func terminateRuntimeEngine(for source: RuntimeSource) {
-        #log(.info,"Terminating runtime engine: \(source.description, privacy: .public)")
+    /// Why an engine is being torn down.
+    ///
+    /// Carried because one teardown is not like another for an injected device
+    /// engine: the device has been holding its target awake since the
+    /// injection, and whether that hold is given back depends entirely on
+    /// which of these it is. Everything else here treats them alike.
+    public enum TerminationReason: Sendable, Equatable {
+        /// The user detached, or an attach failed and is rolling back.
+        case requested
+
+        /// The connection to it went away, carrying whatever the transport
+        /// said about how.
+        case connectionLost(RuntimeConnectionError?)
+
+        /// Its payload advertised itself over Bonjour instead of dialling the
+        /// rendezvous, so the listener that nobody dialled is being dropped
+        /// while the advertised engine takes over.
+        case supersededByAdvertisement
+    }
+
+    /// Whether a teardown should tell the device it may suspend the target
+    /// again.
+    ///
+    /// Only two of the three give the hold back. A dropped link does not,
+    /// because the target is still being inspected and the payload is dialling
+    /// back in; and an advertisement superseding the listener does not, because
+    /// the engine that won the race is inspecting the very process whose hold
+    /// this is — the record moves to it rather than being released.
+    static func releasesKeepAwakeHold(onTerminationBecause reason: TerminationReason) -> Bool {
+        switch reason {
+        case .requested:
+            return true
+        case .connectionLost(let error):
+            return injectedDeviceEngineIsFinished(afterDisconnectWith: error)
+        case .supersededByAdvertisement:
+            return false
+        }
+    }
+
+    /// Whether a `.disconnected` is the end of an injected device engine, or
+    /// only its payload having to dial back in.
+    ///
+    /// **The payload dials one address and port and can never be told
+    /// another.** They come from the rendezvous staged beside it, and
+    /// re-injecting the same path returns the already-loaded image without
+    /// running its constructor, so a listener closed here is closed for the
+    /// life of the target: every later attach reports injection success and
+    /// then times out. Keeping it open costs a row in the list that a detach
+    /// clears.
+    ///
+    /// The transport already draws the line this needs. A socket error is the
+    /// *link* — the 25-second keepalive budget expiring over a device's Wi-Fi,
+    /// or a reset — and the payload survives it. A peer close is the
+    /// *process*, and a killed process closes its sockets through the kernel,
+    /// so `kill -9` lands here too; no timer is needed to notice a target that
+    /// really died. No error at all is this side's own `stop()`.
+    ///
+    /// This policy came from loopback, where every disconnect did mean the
+    /// target was gone, which is why it was safe to tear down on all of them.
+    static func injectedDeviceEngineIsFinished(afterDisconnectWith error: RuntimeConnectionError?) -> Bool {
+        guard let error else { return true }
+        switch error {
+        case .peerClosed:
+            return true
+        case .socketError, .networkError, .xpcError, .timeout, .listenerWaiting, .notConnected, .unknown:
+            return false
+        }
+    }
+
+    public func terminateRuntimeEngine(for source: RuntimeSource, because reason: TerminationReason = .requested) {
+        #log(
+            .info,
+            "Terminating runtime engine: \(source.description, privacy: .public) because \(String(describing: reason), privacy: .public)"
+        )
         var pendingBonjourReconnect: RuntimeNetworkEndpoint?
         if case .bonjour(_, let identifier, let role) = source, role.isClient {
             // The identifier, not the name — the name is the peer's process
@@ -654,11 +726,25 @@ public final class RuntimeEngineManager {
         if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
             removeInjectedSocketEndpointRecord(pid: pid)
         }
-        if case .injectedTCP = source {
-            // The device has been holding the target awake since the injection;
-            // nothing needs it now. Covers both the user detaching and every
-            // failure path out of an attach, which all come through here.
-            stopKeepingDeviceTargetAwake(forInjectedSource: source)
+        // The device has been holding the target awake since the injection.
+        // Whether that is given back now depends on *why* this teardown is
+        // happening: a detach or the target exiting, yes; a dropped link or an
+        // advertisement superseding the listener, no — the target is still
+        // being inspected in both of those.
+        //
+        // Not restricted to `.injectedTCP`: a payload that advertised itself
+        // has its hold filed under the `.bonjour` source that won the race, so
+        // that is the source whose teardown has to give it back. The dictionary
+        // lookup is the real guard — a source that holds nothing is a no-op.
+        if awakeTargetsByInjectedSource[source] != nil {
+            if Self.releasesKeepAwakeHold(onTerminationBecause: reason) {
+                stopKeepingDeviceTargetAwake(forInjectedSource: source)
+            } else {
+                #log(
+                    .info,
+                    "Keeping \(source.description, privacy: .public)'s target awake across this teardown: \(String(describing: reason), privacy: .public)"
+                )
+            }
         }
         let removedEngines = runtimeEngines.filter { $0.source == source }
         if let macCatalystRuntimeEngine, removedEngines.contains(where: { $0 === macCatalystRuntimeEngine }) {
@@ -751,16 +837,6 @@ public final class RuntimeEngineManager {
         processIdentifier: pid_t,
     ) async throws -> RuntimeEngine {
         let runtimeSource = Self.injectedDeviceSource(name: name, rendezvous: rendezvous)
-        // Recorded before the injection, not after it succeeds: every path out
-        // of an attach goes through `terminateRuntimeEngine(for:)`, including
-        // the failures, and that is the one place the release can be hung off.
-        // Releasing a target the device never kept awake is a no-op there, so
-        // recording early costs nothing and recording late would miss the
-        // failures.
-        awakeTargetsByInjectedSource[runtimeSource] = AwakeDeviceTarget(
-            deviceEngine: deviceEngine,
-            processIdentifier: processIdentifier,
-        )
         #log(
             .info,
             "Listening for an injected device payload for \(name, privacy: .public) on \(rendezvous.hostAddress, privacy: .public):\(rendezvous.hostPort, privacy: .public)"
@@ -772,6 +848,17 @@ public final class RuntimeEngineManager {
             deviceIdentifier: deviceIdentifier,
         )
         try await runtimeEngine.connect()
+        // Recorded here rather than before `connect()`: the release is hung off
+        // `terminateRuntimeEngine(for:because:)`, and the caller only reaches
+        // the path that calls it once this function has returned — so a
+        // `connect()` that throws (a port taken from under the advisory check,
+        // an address that stopped being local) would leave a record nothing
+        // ever reclaims. Still before the injection, which is what the hold is
+        // taken for, so nothing is missed by waiting this long.
+        awakeTargetsByInjectedSource[runtimeSource] = AwakeDeviceTarget(
+            deviceHostID: deviceEngine.hostInfo.hostID,
+            processIdentifier: processIdentifier,
+        )
         attachedRuntimeEngines.append(runtimeEngine)
         observeRuntimeEngineState(runtimeEngine)
         rebuildSections()
@@ -816,23 +903,56 @@ public final class RuntimeEngineManager {
     /// life of the engine, and `.injectedTCP` carries the rendezvous rather
     /// than the pid, so the pairing has to be remembered here.
     private struct AwakeDeviceTarget {
-        /// Weak: the device's own engine may be torn down first — the user can
-        /// detach the jailbroken variant while an injected engine is still up —
-        /// and in that case there is nobody left to tell, which is fine.
-        weak var deviceEngine: RuntimeEngine?
+        /// The device's identity, **not a reference to the engine serving it**.
+        ///
+        /// A Bonjour link that drops and is rediscovered is a *new*
+        /// `RuntimeEngine` object: the old one is torn down and released. A
+        /// reference held here — even a weak one — is therefore nil by the time
+        /// most releases happen, and the device is never told it may suspend the
+        /// target, which keeps an app running in the background until the
+        /// jailbroken variant itself exits. Resolving the current engine at
+        /// release time is what survives a reconnect.
+        let deviceHostID: String
         let processIdentifier: pid_t
     }
 
     private var awakeTargetsByInjectedSource: [RuntimeSource: AwakeDeviceTarget] = [:]
 
     /// Tells the device it can let an injected target be suspended again.
+    ///
+    /// A device with no engine left is not a failure: the user can detach the
+    /// jailbroken variant while an injected engine is still up, and then there
+    /// is nobody to tell — the hold dies with the variant that took it.
     private func stopKeepingDeviceTargetAwake(forInjectedSource source: RuntimeSource) {
         guard let target = awakeTargetsByInjectedSource.removeValue(forKey: source) else { return }
-        guard let deviceEngine = target.deviceEngine else { return }
+        guard let deviceEngine = bonjourRuntimeEngines.first(where: { $0.hostInfo.hostID == target.deviceHostID })
+        else {
+            #log(
+                .info,
+                "No engine left for device \(target.deviceHostID, privacy: .public); its hold on pid \(target.processIdentifier, privacy: .public) ends with it"
+            )
+            return
+        }
         let processIdentifier = target.processIdentifier
         Task {
             await deviceEngine.stopKeepingProcessAwake(withIdentifier: processIdentifier)
         }
+    }
+
+    /// Moves a hold from the listener that was dropped to the engine that
+    /// actually attached.
+    ///
+    /// The advertised engine is inspecting the very process the hold was taken
+    /// for, so the hold has to outlive the listener and be released when *that*
+    /// engine goes. Without this the record stays filed under a source nothing
+    /// will ever tear down again, and the target is never let go.
+    private func transferKeepAwakeHold(fromInjectedSource source: RuntimeSource, toEngineWith advertisedSource: RuntimeSource) {
+        guard let target = awakeTargetsByInjectedSource.removeValue(forKey: source) else { return }
+        awakeTargetsByInjectedSource[advertisedSource] = target
+        #log(
+            .info,
+            "Moved the hold on pid \(target.processIdentifier, privacy: .public) from \(source.description, privacy: .public) to \(advertisedSource.description, privacy: .public)"
+        )
     }
 
     /// Waits for a just-injected device payload to report in — **whichever way
@@ -875,7 +995,11 @@ public final class RuntimeEngineManager {
         repeat {
             if let advertisedEngine = injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) {
                 #log(.info, "\(name, privacy: .public) advertised itself instead of dialling; dropping the listener")
-                terminateRuntimeEngine(for: listeningSource)
+                // The hold belongs to the process that just attached, not to
+                // the listener being dropped. Moved first, so the teardown has
+                // nothing left to release under the listening source.
+                transferKeepAwakeHold(fromInjectedSource: listeningSource, toEngineWith: advertisedEngine.source)
+                terminateRuntimeEngine(for: listeningSource, because: .supersededByAdvertisement)
                 return advertisedEngine
             }
             // The probe is the authority, not the engine's state: `connect()`
@@ -895,7 +1019,8 @@ public final class RuntimeEngineManager {
         // One last look at both, for the same reason the Bonjour wait takes one:
         // an arrival during the final sleep must not be reported as a timeout.
         if let advertisedEngine = injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) {
-            terminateRuntimeEngine(for: listeningSource)
+            transferKeepAwakeHold(fromInjectedSource: listeningSource, toEngineWith: advertisedEngine.source)
+            terminateRuntimeEngine(for: listeningSource, because: .supersededByAdvertisement)
             return advertisedEngine
         }
         if (try? await listeningEngine.requestEngineList(timeout: 2)) != nil {
@@ -1258,9 +1383,23 @@ public final class RuntimeEngineManager {
             let disconnectedHostID = runtimeEngine.hostInfo.hostID
             let disconnectedSource = runtimeEngine.source
 
+            // An injected device payload dials one address and port forever and
+            // cannot be handed another, so a dropped link must leave its
+            // listener open — the socket server is already back in `accept()`
+            // waiting for it. Tearing down here closed the only port it will
+            // ever dial and stranded the target until it restarted.
+            if case .injectedTCP = disconnectedSource,
+               !Self.injectedDeviceEngineIsFinished(afterDisconnectWith: error) {
+                #log(
+                    .info,
+                    "Keeping \(disconnectedSource.description, privacy: .public) listening for its payload to dial back in"
+                )
+                return
+            }
+
             cleanupMirroredEnginesOnDisconnect(of: runtimeEngine)
 
-            terminateRuntimeEngine(for: runtimeEngine.source)
+            terminateRuntimeEngine(for: runtimeEngine.source, because: .connectionLost(error))
 
             // Only report the host as gone if it has fully vanished from the
             // sidebar. A direct Bonjour engine can drop while a forwarded
@@ -1392,6 +1531,15 @@ public final class RuntimeEngineManager {
             let hasProxy = proxyServers[localID] != nil
             #log(.debug,"[EngineMirroring] engine: \(localID, privacy: .public), isBonjourServer: \(isBonjourServer, privacy: .public), hasProxy: \(hasProxy, privacy: .public)")
             guard !isBonjourServer else { continue }
+            // A source kind that peers predating it cannot decode never goes on
+            // the wire: `engineList` is one array, so one unreadable descriptor
+            // costs the peer every engine in it — and then its heartbeat reads
+            // the failure as a dead link and drops this Mac altogether. See
+            // `RuntimeSource.isMirrorableToPeers`.
+            guard engine.source.isMirrorableToPeers else {
+                #log(.debug,"[EngineMirroring] not advertising \(localID, privacy: .public): its source kind is not mirrorable")
+                continue
+            }
             guard let proxy = proxyServers[localID] else { continue }
             let globalID = "\(engine.hostInfo.hostID)/\(localID)"
             // Append our own instanceID to the origin chain so downstream peers
