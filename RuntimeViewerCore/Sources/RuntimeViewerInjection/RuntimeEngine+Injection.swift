@@ -47,11 +47,20 @@ extension RuntimeEngine {
     /// - `local` is this process.
     /// - `remote` is XPC, which only reaches a service inside this app's own
     ///   bundle — today the Mac Catalyst helper.
-    /// - `localSocket` is a process on this machine that Runtime Viewer has
-    ///   already injected, the iOS Simulator included.
+    /// - `localSocket` is a process on this Mac that Runtime Viewer has already
+    ///   injected and whose sandbox kept it off XPC.
     /// - `bonjour` and `directTCP` cross a network interface. Even when that
     ///   interface is loopback, the peer decides what its process table is, so
     ///   the host must ask rather than assume.
+    /// - **Except a simulator, which says so itself.** A payload injected into
+    ///   a simulator process, and Runtime Viewer running in a simulator,
+    ///   advertise over Bonjour exactly like a device — but every process in a
+    ///   simulator is a process of the Mac running it, already listed by the
+    ///   local picker. Asking it instead would get the iOS answer, "only the
+    ///   jailbroken build can attach". The advertisement carries nothing that
+    ///   tells this Mac's simulators from another Mac's, so a simulator on
+    ///   another Mac reads as local too — the answer every simulator got before
+    ///   this property existed, when Attach always opened the local picker.
     /// - `injectedTCP` is a payload already running inside a process on a
     ///   device. It looks like `localSocket` — same transport, same role
     ///   inversion — and answers the opposite way, which is the whole reason
@@ -64,7 +73,9 @@ extension RuntimeEngine {
         switch source {
         case .local, .remote, .localSocket:
             return true
-        case .bonjour, .directTCP, .injectedTCP:
+        case .bonjour:
+            return hostInfo.metadata.isSimulator
+        case .directTCP, .injectedTCP:
             return false
         }
     }

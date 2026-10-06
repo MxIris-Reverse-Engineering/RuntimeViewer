@@ -36,12 +36,28 @@ struct InjectionTargetLocationTests {
         #expect(engine(for: source).injectionTargetsRunOnThisMachine)
     }
 
-    /// A local socket engine is a process Runtime Viewer already injected here — including
-    /// one inside the iOS Simulator, which is a host process however iOS it looks.
+    /// A local socket engine is a process Runtime Viewer already injected here, one whose
+    /// sandbox kept it off XPC.
     @Test("An injected local process's targets are on this machine", arguments: [RuntimeSource.Role.client, .server])
     func localSocketIsThisMachine(role: RuntimeSource.Role) {
         let source = RuntimeSource.localSocket(name: "Injected", identifier: Self.identifier, role: role)
         #expect(engine(for: source).injectionTargetsRunOnThisMachine)
+    }
+
+    /// A simulator advertises over Bonjour exactly like a device — the payload injected into a
+    /// simulator process, and Runtime Viewer itself running in a simulator — but every process
+    /// in it is a process of the Mac running it, already listed by the local picker. Treating
+    /// it as another machine asks the simulator, which answers that only the jailbroken build
+    /// can attach: Attach greyed out, pointing at a build the user cannot install there.
+    @Test("A simulator advertising over Bonjour has its targets on this machine")
+    func bonjourSimulatorIsThisMachine() {
+        let source = RuntimeSource.bonjour(name: "iPhone 17 Pro", identifier: Self.identifier, role: .client)
+        let simulatorHostInfo = RuntimeHostInfo(
+            hostID: "4A3E1D0C-7B52-4F1E-9C0A-2D6B8E5F1A93",
+            hostName: "iPhone 17 Pro",
+            metadata: RuntimeDeviceMetadata(modelIdentifier: "iPhone18,1", osVersion: "27.0", isSimulator: true),
+        )
+        #expect(RuntimeEngine(source: source, hostInfo: simulatorHostInfo).injectionTargetsRunOnThisMachine)
     }
 
     // MARK: - Another machine
