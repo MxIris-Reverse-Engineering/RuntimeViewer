@@ -1,6 +1,7 @@
 import AppKit
 import UniformTypeIdentifiers
 import RuntimeViewerCore
+import RuntimeViewerInjection
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication

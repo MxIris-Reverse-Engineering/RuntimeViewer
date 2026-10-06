@@ -1,6 +1,7 @@
-// `public import` because `URL` crosses the public API below, and this module
-// builds with `InternalImportsByDefault`.
+// `public import` because `URL` and `RuntimeEngine` cross the public API below,
+// and this module builds with `InternalImportsByDefault`.
 public import Foundation
+public import RuntimeViewerCore
 import RuntimeViewerCommunication
 
 /// Everything the injector hands the payload: where to report in, and what to

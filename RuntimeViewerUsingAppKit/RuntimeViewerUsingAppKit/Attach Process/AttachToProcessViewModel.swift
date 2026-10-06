@@ -1,6 +1,7 @@
 import AppKit
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerInjection
 import RuntimeViewerCommunication
 import RuntimeViewerUI
 import RuntimeViewerApplication

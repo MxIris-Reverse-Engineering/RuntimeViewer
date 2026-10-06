@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerInjection
 @testable import RuntimeViewerDeviceInjection
 
 /// The staged layout is the one part of device injection whose mistakes surface

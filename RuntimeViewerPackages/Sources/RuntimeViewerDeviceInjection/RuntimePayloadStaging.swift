@@ -1,5 +1,6 @@
 public import Foundation
 public import RuntimeViewerCore
+public import RuntimeViewerInjection
 
 /// Lays out a copy of the injection payload somewhere a target process can load
 /// it from.

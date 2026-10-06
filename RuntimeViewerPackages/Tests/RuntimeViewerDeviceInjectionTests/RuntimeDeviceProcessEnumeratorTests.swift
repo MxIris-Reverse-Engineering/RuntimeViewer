@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerInjection
 @testable import RuntimeViewerDeviceInjection
 
 /// The enumerator ships only in the iOS variant, but it is built and tested

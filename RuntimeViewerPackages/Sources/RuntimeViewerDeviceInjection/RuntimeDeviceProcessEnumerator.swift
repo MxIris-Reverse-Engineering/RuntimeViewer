@@ -1,5 +1,6 @@
 public import Foundation
 public import RuntimeViewerCore
+public import RuntimeViewerInjection
 import RuntimeViewerProcessEnumerationSupport
 
 /// Lists the processes on the machine it runs on, each annotated with whether

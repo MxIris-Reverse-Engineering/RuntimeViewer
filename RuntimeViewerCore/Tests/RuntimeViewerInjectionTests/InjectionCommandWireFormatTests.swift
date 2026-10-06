@@ -1,6 +1,7 @@
 import Testing
 import Foundation
-@testable import RuntimeViewerCore
+import RuntimeViewerCore
+@testable import RuntimeViewerInjection
 
 /// The three injection commands and their payloads are a cross-process contract:
 /// the peer that encodes them is a different build — on iOS, a different *app* —
@@ -10,34 +11,33 @@ import Foundation
 struct InjectionCommandWireFormatTests {
     // MARK: - Command names
 
-    /// The command name is what the peer matches on. Renaming a `CommandNames`
-    /// case silently renames the wire name with it, and a peer built before the
-    /// rename then has no handler — a failure that only shows up between two
+    /// The command name is what the peer matches on. Renaming a `CommandName`
+    /// constant silently renames the wire name with it, and a peer built before
+    /// the rename then has no handler — a failure that only shows up between two
     /// different builds, which no single-process test would catch.
+    ///
+    /// Uniqueness across all command names is no longer checkable here: a
+    /// `RawRepresentable` struct has no `allCases`. It moved to
+    /// `RuntimeEngineCommandRegistryTests`, which asserts on what a registrar
+    /// actually installed.
     @Test("Command names are the documented strings")
     func commandNames() {
         let prefix = "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine."
-        #expect(RuntimeEngine.CommandNames.injectionCapability.commandName == prefix + "injectionCapability")
-        #expect(RuntimeEngine.CommandNames.processList.commandName == prefix + "processList")
-        #expect(RuntimeEngine.CommandNames.applicationIcons.commandName == prefix + "applicationIcons")
-        #expect(RuntimeEngine.CommandNames.injectIntoProcess.commandName == prefix + "injectIntoProcess")
-    }
-
-    @Test("Every command name is unique")
-    func commandNamesAreUnique() {
-        let names = RuntimeEngine.CommandNames.allCases.map(\.commandName)
-        #expect(Set(names).count == names.count)
+        #expect(RuntimeEngine.CommandName.injectionCapability.commandName == prefix + "injectionCapability")
+        #expect(RuntimeEngine.CommandName.processList.commandName == prefix + "processList")
+        #expect(RuntimeEngine.CommandName.applicationIcons.commandName == prefix + "applicationIcons")
+        #expect(RuntimeEngine.CommandName.injectIntoProcess.commandName == prefix + "injectIntoProcess")
     }
 
     /// The request types' `commandName` must be the matching case, or a request
     /// would be dispatched under a name nobody registered a handler for.
     @Test("Request types name their own command")
     func requestTypesNameTheirCommand() {
-        #expect(RuntimeEngine.InjectionCapabilityRequest.commandName == RuntimeEngine.CommandNames.injectionCapability.commandName)
-        #expect(RuntimeEngine.ProcessListRequest.commandName == RuntimeEngine.CommandNames.processList.commandName)
-        #expect(RuntimeEngine.ApplicationIconsRequest.commandName == RuntimeEngine.CommandNames.applicationIcons.commandName)
-        #expect(RuntimeEngine.InjectIntoProcessRequest.commandName == RuntimeEngine.CommandNames.injectIntoProcess.commandName)
-        #expect(RuntimeEngine.StopKeepingProcessAwakeRequest.commandName == RuntimeEngine.CommandNames.stopKeepingProcessAwake.commandName)
+        #expect(RuntimeInjection.InjectionCapabilityCommand.commandName == RuntimeEngine.CommandName.injectionCapability.commandName)
+        #expect(RuntimeInjection.ProcessListCommand.commandName == RuntimeEngine.CommandName.processList.commandName)
+        #expect(RuntimeInjection.ApplicationIconsCommand.commandName == RuntimeEngine.CommandName.applicationIcons.commandName)
+        #expect(RuntimeInjection.InjectIntoProcessCommand.commandName == RuntimeEngine.CommandName.injectIntoProcess.commandName)
+        #expect(RuntimeInjection.StopKeepingProcessAwakeCommand.commandName == RuntimeEngine.CommandName.stopKeepingProcessAwake.commandName)
     }
 
     // MARK: - Round trips
@@ -175,13 +175,13 @@ struct InjectionCommandWireFormatTests {
     /// Not routed through `roundTrip(_:)`: the request type is not `Equatable`,
     /// and giving it a conformance only tests could use would be the test
     /// shaping the API.
-    @Test("ApplicationIconsRequest carries its bundle paths across the wire")
+    @Test("ApplicationIconsCommand carries its bundle paths across the wire")
     func applicationIconsRequestRoundTrip() throws {
         let paths = ["/Applications/MobileSafari.app", "/Applications/Preferences.app"]
         let encoded = try JSONEncoder().encode(
-            RuntimeEngine.ApplicationIconsRequest(applicationBundlePaths: paths)
+            RuntimeInjection.ApplicationIconsCommand(applicationBundlePaths: paths)
         )
-        let decoded = try JSONDecoder().decode(RuntimeEngine.ApplicationIconsRequest.self, from: encoded)
+        let decoded = try JSONDecoder().decode(RuntimeInjection.ApplicationIconsCommand.self, from: encoded)
         #expect(decoded.applicationBundlePaths == paths)
     }
 
@@ -215,7 +215,7 @@ struct InjectionCommandWireFormatTests {
     /// Not routed through `roundTrip(_:)`: the request type is not `Equatable`,
     /// and giving it a conformance only tests could use would be the test
     /// shaping the API.
-    @Test("InjectIntoProcessRequest carries its pid and rendezvous across the wire")
+    @Test("InjectIntoProcessCommand carries its pid and rendezvous across the wire")
     func injectRequestRoundTrip() throws {
         let rendezvous = RuntimePayloadRendezvous(
             hostAddress: "192.168.64.1",
@@ -223,9 +223,9 @@ struct InjectionCommandWireFormatTests {
             claimToken: "06A9F1C2-1C1B-4A9E-9C2E-7E6A2F0D3B41",
         )
         let encoded = try JSONEncoder().encode(
-            RuntimeEngine.InjectIntoProcessRequest(processIdentifier: 31337, rendezvous: rendezvous)
+            RuntimeInjection.InjectIntoProcessCommand(processIdentifier: 31337, rendezvous: rendezvous)
         )
-        let decoded = try JSONDecoder().decode(RuntimeEngine.InjectIntoProcessRequest.self, from: encoded)
+        let decoded = try JSONDecoder().decode(RuntimeInjection.InjectIntoProcessCommand.self, from: encoded)
         #expect(decoded.processIdentifier == 31337)
         #expect(decoded.rendezvous == rendezvous)
     }
@@ -234,13 +234,13 @@ struct InjectionCommandWireFormatTests {
     /// the device side it is what the suspension controller counts references
     /// against, so a request that lost it would release nothing while reporting
     /// that it had.
-    @Test("StopKeepingProcessAwakeRequest carries its pid across the wire")
+    @Test("StopKeepingProcessAwakeCommand carries its pid across the wire")
     func stopKeepingProcessAwakeRequestRoundTrip() throws {
         let encoded = try JSONEncoder().encode(
-            RuntimeEngine.StopKeepingProcessAwakeRequest(processIdentifier: 31337)
+            RuntimeInjection.StopKeepingProcessAwakeCommand(processIdentifier: 31337)
         )
         let decoded = try JSONDecoder().decode(
-            RuntimeEngine.StopKeepingProcessAwakeRequest.self,
+            RuntimeInjection.StopKeepingProcessAwakeCommand.self,
             from: encoded,
         )
         #expect(decoded.processIdentifier == 31337)
@@ -283,7 +283,7 @@ struct InjectionCommandWireFormatTests {
     @Test("A request without the rendezvous key decodes as having none")
     func injectRequestFromAnOlderPeer() throws {
         let legacyEncoding = Data(#"{"processIdentifier":4321}"#.utf8)
-        let decoded = try JSONDecoder().decode(RuntimeEngine.InjectIntoProcessRequest.self, from: legacyEncoding)
+        let decoded = try JSONDecoder().decode(RuntimeInjection.InjectIntoProcessCommand.self, from: legacyEncoding)
         #expect(decoded.processIdentifier == 4321)
         #expect(decoded.rendezvous == nil)
     }
@@ -295,7 +295,7 @@ struct InjectionCommandWireFormatTests {
     @Test("A nil rendezvous is omitted from the encoding, not encoded as null")
     func nilRendezvousIsOmitted() throws {
         let encoded = try JSONEncoder().encode(
-            RuntimeEngine.InjectIntoProcessRequest(processIdentifier: 4321, rendezvous: nil)
+            RuntimeInjection.InjectIntoProcessCommand(processIdentifier: 4321, rendezvous: nil)
         )
         let fields = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         #expect(fields["rendezvous"] == nil)

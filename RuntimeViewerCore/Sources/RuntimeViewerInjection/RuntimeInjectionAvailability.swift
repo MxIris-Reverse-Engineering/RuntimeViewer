@@ -56,12 +56,16 @@ extension RuntimeInjectionAvailability {
     /// - On iOS it is the expected state of the variant that ships without the
     ///   injection entitlements. That variant registers no service precisely
     ///   because it has no path, so the answer carries the remedy.
-    /// - On macOS and Mac Catalyst the app always registers a service, and that
-    ///   service reports ``helperDaemonNotInstalled`` itself when the daemon is
-    ///   missing. Reaching this value there means nobody wired the service up —
-    ///   a programming error, reported as such rather than mislabelled as a
-    ///   missing daemon, which would send the user to reinstall something that
-    ///   would not help.
+    /// - On macOS and Mac Catalyst **nothing registers a service, by design**,
+    ///   so this is the normal answer rather than a sign of a missing wire-up.
+    ///   A Mac injects through the privileged helper daemon, which the host app
+    ///   drives directly — and the processes a Mac engine could attach to are
+    ///   the host's own, which it enumerates without asking anyone (see
+    ///   ``RuntimeEngine/injectionTargetsRunOnThisMachine``). What this value
+    ///   answers there is a *remote* host asking a Mac engine to inject on its
+    ///   behalf, which is a thing Runtime Viewer does not do. Deliberately not
+    ///   ``helperDaemonNotInstalled``: that would send the user to reinstall
+    ///   something that would not help.
     /// - Everywhere else there is genuinely no implementation.
     public static var withoutInjectionService: RuntimeInjectionAvailability {
         #if os(macOS) || targetEnvironment(macCatalyst)

@@ -18,19 +18,15 @@
 		E9A9CCDA2F5D82AE00A10DD3 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCD92F5D82AE00A10DD3 /* RuntimeViewerUtilities */; };
 		E9AB8517306F733800D32891 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8514306F733800D32891 /* RuntimeViewerUtilities */; };
 		E9AB8518306F733800D32891 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8513306F733800D32891 /* RuntimeViewerApplication */; };
+		E9AB851A306F733800D32891 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E94450700084A7B /* AppIcon.icon */; };
 		E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */; };
 		E9AB8550306F733800D32891 /* RuntimeViewerServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E97BF5C62F82C386006943C2 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		E9AB851A306F733800D32891 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E94450700084A7B /* AppIcon.icon */; };
+		E9B10F050000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E050000000000000000 /* RuntimeViewerInjection */; };
+		E9B10F060000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E060000000000000000 /* RuntimeViewerInjection */; };
+		E9B10F070000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E070000000000000000 /* RuntimeViewerInjection */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		E9AB8551306F733800D32891 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = E994E2892F323A51009DD28A;
-			remoteInfo = RuntimeViewerMobileServer;
-		};
 		E97BF5C32F82C386006943C2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
@@ -43,6 +39,13 @@
 			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = E994E2962F323A51009DD28A;
+			remoteInfo = RuntimeViewerMobileServer;
+		};
+		E9AB8551306F733800D32891 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = E994E2892F323A51009DD28A;
 			remoteInfo = RuntimeViewerMobileServer;
 		};
 /* End PBXContainerItemProxy section */
@@ -129,6 +132,7 @@
 				E9038FBD2C31A8810051B6AC /* RuntimeViewerApplication in Frameworks */,
 				E9A9CCDA2F5D82AE00A10DD3 /* RuntimeViewerUtilities in Frameworks */,
 				E9038FC32C31A8810051B6AC /* RuntimeViewerUI in Frameworks */,
+				E9B10F050000000000000000 /* RuntimeViewerInjection in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -138,6 +142,7 @@
 			files = (
 				E9A9CCD82F5D82A700A10DD3 /* RuntimeViewerUtilities in Frameworks */,
 				E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */,
+				E9B10F060000000000000000 /* RuntimeViewerInjection in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,6 +153,7 @@
 				E9AB8517306F733800D32891 /* RuntimeViewerUtilities in Frameworks */,
 				E9AB8518306F733800D32891 /* RuntimeViewerApplication in Frameworks */,
 				E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */,
+				E9B10F070000000000000000 /* RuntimeViewerInjection in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -219,6 +225,7 @@
 				E9038FC22C31A8810051B6AC /* RuntimeViewerUI */,
 				E985A9D52D9AF52E005A573C /* RuntimeViewerCore */,
 				E9A9CCD92F5D82AE00A10DD3 /* RuntimeViewerUtilities */,
+				E9B10E050000000000000000 /* RuntimeViewerInjection */,
 			);
 			productName = RuntimeViewerUsingVision;
 			productReference = E9038F982C31A81F0051B6AC /* RuntimeViewer.app */;
@@ -243,6 +250,7 @@
 			packageProductDependencies = (
 				E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */,
 				E9A9CCD72F5D82A700A10DD3 /* RuntimeViewerUtilities */,
+				E9B10E060000000000000000 /* RuntimeViewerInjection */,
 			);
 			productName = RuntimeViewerUsingUIKit;
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewer.app */;
@@ -270,6 +278,7 @@
 				E9AB8513306F733800D32891 /* RuntimeViewerApplication */,
 				E9AB8514306F733800D32891 /* RuntimeViewerUtilities */,
 				E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */,
+				E9B10E070000000000000000 /* RuntimeViewerInjection */,
 			);
 			productName = "RuntimeViewerUsingUIKit-JB";
 			productReference = E9AB851E306F733800D32891 /* RuntimeViewerJailbroken.app */;
@@ -682,7 +691,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = NO;
@@ -728,7 +737,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = NO;
@@ -841,13 +850,25 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerApplication;
 		};
+		E9AB8514306F733800D32891 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
+		};
 		E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerDeviceInjection;
 		};
-		E9AB8514306F733800D32891 /* RuntimeViewerUtilities */ = {
+		E9B10E050000000000000000 /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerUtilities;
+			productName = RuntimeViewerInjection;
+		};
+		E9B10E060000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
+		};
+		E9B10E070000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

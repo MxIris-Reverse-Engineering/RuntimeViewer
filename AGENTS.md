@@ -331,6 +331,14 @@ The project uses three Swift Package Manager packages:
 **RuntimeViewerCore** (`RuntimeViewerCore/`):
 - `RuntimeViewerCore` — Runtime inspection engine using MachOObjCSection (ObjC) and MachOSwiftSection (Swift)
 - `RuntimeViewerCommunication` — XPC/TCP-based IPC layer for cross-process inspection
+- `RuntimeViewerInjection` — process injection as a RuntimeEngine command extension: the
+  `RuntimeInjectionService` protocol, the wire types (`RuntimeProcess`,
+  `RuntimeInjectionAvailability`, `RuntimePayloadRendezvous`), the five injection commands and
+  the engine-side callers. `RuntimeViewerCore` holds none of it — injecting needs MachInjector on
+  iOS and the privileged helper daemon on macOS, while Core also builds for watchOS, tvOS and
+  visionOS. **Every process that serves an engine and links this module must call
+  `RuntimeInjection.install()` once at its entry point**, including the ones that cannot inject;
+  see *Injection commands* below
 - `RuntimeViewerCoreObjC` — Objective-C interop utilities (internal target)
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
@@ -506,6 +514,46 @@ When adding new features, you **MUST** follow these rules:
 6. **Singletons go through `@Dependency`**：每个项目 singleton 都声明为 `fileprivate static let shared`，并通过 `extension DependencyValues` 中的 `@DependencyEntry` 暴露。调用方统一使用 `@Dependency(\.xxx)`；禁止 `public static let shared`，也禁止在定义文件外调用 `Foo.shared.bar()`。详见 Code Style 下的 **Singletons & Dependency Injection**。
 7. **AppDelegate stays thin**: AppDelegate is a dispatch shell, not a service container. Every non-trivial lifecycle responsibility (appearance, debug menu, update checking, version probes, etc.) lives in its own `@MainActor` controller class under `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via `@Dependency` per rule #6. See **AppDelegate Convention** under Code Style.
 8. **Single-object interface fetches go through the document's interface cache**: fetch one object's interface via `documentState.interfaceCache.interface(for:options:)` with `ViewModel.currentMergedGenerationOptions` as the options — never bare `appDefaults.options` and never `runtimeEngine.interface(...)` directly — so cache keys line up with the content pane and exported text matches what it displays. Bulk consumers (interface export, MCP tools) deliberately bypass the cache and call the engine directly; do not route them through it. See `Documentations/Plans/2026-08-04-navigation-interface-cache.md`.
+9. **A RuntimeEngine command that is not Core's own goes in its own module, not into Core**:
+   declare its short name in `extension RuntimeEngine.CommandName` (keeping Core's namespace
+   prefix, which is the wire contract), declare the `RuntimeEngineCommand` conformers under that
+   module's own namespace, and install them from
+   `RuntimeEngine.addCommandExtension(named:install:)`. Nothing
+   in `RuntimeViewerCore` changes. `RuntimeViewerInjection` is the reference implementation; see
+   *Injection commands* below for the one obligation this puts on every process.
+
+## Injection commands
+
+The five injection commands (`injectionCapability`, `processList`, `applicationIcons`,
+`injectIntoProcess`, `stopKeepingProcessAwake`) live in `RuntimeViewerInjection`, not in
+`RuntimeViewerCore`, and are installed into the engine command table at runtime.
+
+**Every process that serves a `RuntimeEngine` and links `RuntimeViewerInjection` must call
+`RuntimeInjection.install()` exactly once at its entry point, before any engine connects** —
+including the processes that cannot inject anything. The rule has no exceptions to reason about:
+*linked it ⇒ call it*. The nine places that do, today:
+
+| Process | Where |
+|---------|-------|
+| macOS app | `AppDelegate.main()` |
+| Local-runtime XPC service | `RuntimeViewerLocalRuntimeService/main.swift` |
+| Mac Catalyst helper | `AppKitPluginImpl.launch()` |
+| `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
+| iOS / visionOS / jailbroken iOS apps | `InjectionServiceRegistrar.registerIfAvailable()` |
+| Injected payload (`RuntimeViewerServer` / `RuntimeViewerMobileServer`) | `RuntimeViewerServer.main()` |
+
+**Forgetting the call is not a compile error.** Handlers are installed as a connection is set up,
+so a process that never registers simply has no handler for the capability query — and a dispatch
+that fails is indistinguishable, to a host, from a peer built before these commands existed. The
+symptom is a device running the correct variant being reported as unanswerable, with the injection
+entry point silently disabled. `RuntimeEngine.addCommandExtension` logs an `.error` for a
+registration that arrives after the first connection, and the registrar logs a `.fault` for a
+duplicate wire name; those two log lines are the only trail this failure leaves.
+
+`RuntimeInjection.install(service:)` takes this machine's `RuntimeInjectionService` when it has
+one — only the jailbroken iOS variant does; macOS injects through the privileged helper daemon
+instead. Passing `nil` never clears a service already recorded, so the order of two calls in one
+process does not matter.
 
 ## SourceEditor Module
 

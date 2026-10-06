@@ -4,14 +4,15 @@
 public import Foundation
 // Re-exports OSToolbox, where the `#log` macro lives.
 import FoundationToolbox
-import RuntimeViewerCommunication
+public import RuntimeViewerCore
 
 /// Log host for this file.
 ///
 /// `RuntimeEngine` carries `@Loggable(.private)`, which scopes its `logger` to
 /// the file that declares it — so `#log` cannot be used from an extension in
-/// another file. Rather than widen that access, or hand-roll an `os.Logger`
-/// against the project's convention, this file gets a logger of its own.
+/// another file, let alone another module. Rather than widen that access, or
+/// hand-roll an `os.Logger` against the project's convention, this file gets a
+/// logger of its own.
 @Loggable(.private)
 private enum InjectionCommandLog {
     static func capabilityQueryFailed(_ error: any Error) {
@@ -24,136 +25,6 @@ private enum InjectionCommandLog {
 
     static func stopKeepingAwakeFailed(_ processIdentifier: pid_t, _ error: any Error) {
         #log(.default, "Could not tell the peer to stop keeping process \(processIdentifier, privacy: .public) awake; it may hold its assertion until that process exits: \(error.localizedDescription, privacy: .public)")
-    }
-}
-
-// MARK: - Injection
-
-/// The commands that let a host act on the machine an engine belongs to rather
-/// than on its own.
-///
-/// They are one feature in parts, and the split is deliberate:
-/// ``RuntimeEngine/InjectionCapabilityRequest`` is cheap and answers a gate,
-/// ``RuntimeEngine/ProcessListRequest`` is the expensive enumeration,
-/// ``RuntimeEngine/InjectIntoProcessRequest`` is the act, and
-/// ``RuntimeEngine/StopKeepingProcessAwakeRequest`` is how the host gives back
-/// whatever the act had to hold. A host asks the first before offering the
-/// others, so an unavailable peer is never enumerated.
-///
-/// All of them go through `registerSharedHandlers`, so `RuntimeEngineProxyServer`
-/// forwards them for free. A mirrored engine therefore reports the capability of
-/// the machine at the *far* end of the chain, which is the only answer that is
-/// ever useful — no per-hop special casing is needed to get that.
-extension RuntimeEngine {
-    /// Whether the machine this engine belongs to can inject, and when not, why.
-    ///
-    /// Registered by **every** engine, not only ones that can inject. An engine
-    /// that answers `unavailable` is still the one that has to answer, because
-    /// it is the only party that knows its own platform and configuration.
-    struct InjectionCapabilityRequest: RuntimeEngineRequest {
-        static var commandName: String { CommandNames.injectionCapability.commandName }
-
-        func perform(on engine: RuntimeEngine) async throws -> RuntimeInjectionAvailability {
-            guard let injectionService = RuntimeEngine.injectionService else {
-                return .withoutInjectionService
-            }
-            return await injectionService.injectionAvailability()
-        }
-    }
-
-    /// The process table of the machine this engine belongs to.
-    ///
-    /// Never mixed with the asking host's own processes. Offering local pids for
-    /// a remote machine would let a user pick a target on the wrong machine, and
-    /// the two lists are not distinguishable once merged.
-    struct ProcessListRequest: RuntimeEngineRequest {
-        static var commandName: String { CommandNames.processList.commandName }
-
-        func perform(on engine: RuntimeEngine) async throws -> [RuntimeProcess] {
-            guard let injectionService = RuntimeEngine.injectionService else { return [] }
-            return try await injectionService.processList()
-        }
-    }
-
-    /// The icons of a named set of application bundles on the machine this
-    /// engine belongs to.
-    ///
-    /// Separate from ``RuntimeEngine/ProcessListRequest`` rather than folded
-    /// into it, for two reasons that are both about what the list costs: the
-    /// several processes of one application share one icon, and every caller
-    /// that wants no icons keeps the list it has today.
-    ///
-    /// The host decides which bundles to ask about, from the
-    /// ``RuntimeProcess/applicationBundlePath`` of the list it already has — so
-    /// the paths in this request are always paths the far end itself reported.
-    /// That does not make validating them unnecessary at the far end; see
-    /// ``RuntimeInjectionService/applicationIcons(forBundlesAtPaths:)``.
-    struct ApplicationIconsRequest: RuntimeEngineRequest {
-        let applicationBundlePaths: [String]
-
-        static var commandName: String { CommandNames.applicationIcons.commandName }
-
-        func perform(on engine: RuntimeEngine) async throws -> [String: Data] {
-            guard let injectionService = RuntimeEngine.injectionService else { return [:] }
-            return await injectionService.applicationIcons(forBundlesAtPaths: applicationBundlePaths)
-        }
-    }
-
-    /// Loads the payload into a process on the machine this engine belongs to.
-    ///
-    /// The response reports how it ended; it does not carry the injected
-    /// engine's identity. The host learns that from the connection the payload
-    /// makes — by claim token when it was given a rendezvous, and off the
-    /// Bonjour advertisement when it was not — so an injection stays the same
-    /// shape to the host however it was performed.
-    struct InjectIntoProcessRequest: RuntimeEngineRequest {
-        let processIdentifier: pid_t
-
-        /// Where the payload should report in, and as what.
-        ///
-        /// Optional, and the absence is a real case rather than a default: it is
-        /// what the simulator path sends, where the payload advertising itself
-        /// works and is already verified. It is also the compatibility point in
-        /// both directions — an injector built before this sends no such key and
-        /// a peer built before this ignores one it does not know, so either
-        /// mixture falls back to advertising instead of failing.
-        let rendezvous: RuntimePayloadRendezvous?
-
-        static var commandName: String { CommandNames.injectIntoProcess.commandName }
-
-        func perform(on engine: RuntimeEngine) async throws -> RuntimeProcessInjectionResult {
-            guard let injectionService = RuntimeEngine.injectionService else {
-                return .failed(
-                    code: 0,
-                    reason: "No injection service is registered in the process that owns this engine.",
-                )
-            }
-            return await injectionService.inject(
-                intoProcessWithIdentifier: processIdentifier,
-                rendezvous: rendezvous,
-            )
-        }
-    }
-
-    /// Tells the machine this engine belongs to that an injected process no
-    /// longer needs to be kept able to run.
-    ///
-    /// Returns nothing, and cannot report a failure, because there is nothing a
-    /// caller could do about one: it is sent while tearing an engine down, and
-    /// the machine releasing a little early or not at all is not a state the
-    /// user can act on. What it *is* is the counterpart to the device holding a
-    /// RunningBoard assertion across the whole life of an injected engine —
-    /// without it, an injected app would stay awake until it exited.
-    struct StopKeepingProcessAwakeRequest: RuntimeEngineRequest {
-        let processIdentifier: pid_t
-
-        static var commandName: String { CommandNames.stopKeepingProcessAwake.commandName }
-
-        func perform(on engine: RuntimeEngine) async throws -> Bool {
-            guard let injectionService = RuntimeEngine.injectionService else { return false }
-            await injectionService.stopKeepingProcessAwake(withIdentifier: processIdentifier)
-            return true
-        }
     }
 }
 
@@ -210,10 +81,12 @@ extension RuntimeEngine {
     /// unavailable" — so it is done once, here. A peer built before these
     /// commands existed has no handler for this one and fails the dispatch,
     /// which is indistinguishable from, and means the same as, a peer that
-    /// cannot inject.
+    /// cannot inject. A peer that simply forgot to call
+    /// ``RuntimeInjection/install(service:)`` is indistinguishable from both —
+    /// which is the one cost of installing these commands from outside Core.
     public func injectionAvailability() async -> RuntimeInjectionAvailability {
         do {
-            return try await dispatch(InjectionCapabilityRequest())
+            return try await dispatch(RuntimeInjection.InjectionCapabilityCommand())
         } catch {
             InjectionCommandLog.capabilityQueryFailed(error)
             return .unsupported(reason: "Could not ask this engine whether it supports injection.")
@@ -226,7 +99,7 @@ extension RuntimeEngine {
     /// the gate has already said yes, so a failure here is a real one the user
     /// needs to see rather than a state to render.
     public func processList() async throws -> [RuntimeProcess] {
-        try await dispatch(ProcessListRequest())
+        try await dispatch(RuntimeInjection.ProcessListCommand())
     }
 
     /// The icons of these application bundles on the machine this engine
@@ -244,7 +117,7 @@ extension RuntimeEngine {
     public func applicationIcons(forBundlesAtPaths applicationBundlePaths: [String]) async -> [String: Data] {
         guard !applicationBundlePaths.isEmpty else { return [:] }
         do {
-            return try await dispatch(ApplicationIconsRequest(applicationBundlePaths: applicationBundlePaths))
+            return try await dispatch(RuntimeInjection.ApplicationIconsCommand(applicationBundlePaths: applicationBundlePaths))
         } catch {
             InjectionCommandLog.applicationIconsQueryFailed(error)
             return [:]
@@ -269,7 +142,7 @@ extension RuntimeEngine {
         rendezvous: RuntimePayloadRendezvous?,
     ) async throws -> RuntimeProcessInjectionResult {
         try await dispatch(
-            InjectIntoProcessRequest(
+            RuntimeInjection.InjectIntoProcessCommand(
                 processIdentifier: processIdentifier,
                 rendezvous: rendezvous,
             )
@@ -286,7 +159,7 @@ extension RuntimeEngine {
     /// anything awake. Either way there is nothing to tell the user.
     public func stopKeepingProcessAwake(withIdentifier processIdentifier: pid_t) async {
         do {
-            _ = try await dispatch(StopKeepingProcessAwakeRequest(processIdentifier: processIdentifier))
+            _ = try await dispatch(RuntimeInjection.StopKeepingProcessAwakeCommand(processIdentifier: processIdentifier))
         } catch {
             InjectionCommandLog.stopKeepingAwakeFailed(processIdentifier, error)
         }

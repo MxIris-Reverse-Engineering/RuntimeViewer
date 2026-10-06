@@ -590,7 +590,8 @@ port = connection.connectionInfo.port
 | 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeForwardingConnection` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
 | 本地引擎为什么在另一个进程、service 崩了怎么恢复 | §3.6 + §5 的事件一节 + 提案 [draft-local-runtime-xpc-service](Evolutions/draft-local-runtime-xpc-service.md) |
 | 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
-| 加一条业务 RPC 命令 | `RuntimeEngine.CommandNames` + `RuntimeEngine.registerSharedHandlers`（Proxy 自动继承） |
+| 加一条业务 RPC 命令（Core 自己的） | 在 `RuntimeEngineCommandName.swift` 加一个 `CommandName` 常量 + 在 `RuntimeEngine.registerBuiltInHandlers` 加一行（Proxy 自动继承） |
+| 加一条**别的模块**的 RPC 命令 | `extension RuntimeEngine.CommandName` 声明短名（前缀不变），再在那个模块里 `RuntimeEngine.addCommandExtension(named:install:)`；Core 一行不改。该模块的每个进程入口要调一次它的 install，漏调没有编译错误 —— 参照 `RuntimeViewerInjection` |
 | 调 Bonjour 发现/心跳/重试参数 | `RuntimeEngineManager` 顶部的 static 常量 |
 | 理解镜像/断开/去重规则 | `RuntimeEngineMirrorRegistry`（纯逻辑，有单测）+ `Documentations/EngineMirroringWalkthrough.md` |
 | 沙盒注入端口/角色反转 | `RuntimeLocalSocketConnection.swift` 顶部文档 + `RuntimeLocalSocketPortDiscovery` |

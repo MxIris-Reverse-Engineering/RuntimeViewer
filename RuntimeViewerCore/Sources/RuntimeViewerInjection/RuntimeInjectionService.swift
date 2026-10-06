@@ -3,14 +3,15 @@ public import Foundation
 /// The machine-local half of process injection, supplied by whoever can actually
 /// perform it.
 ///
-/// `RuntimeViewerCore` holds none of the implementation on purpose. Injecting
-/// needs MachInjector linked into the process on iOS and the privileged helper
-/// daemon on macOS, while this module also builds for watchOS, tvOS and
-/// visionOS, where neither exists. The engine only forwards a request to
-/// whatever was registered and reports the honest answer when nothing was — see
+/// Neither `RuntimeViewerCore` nor this module holds an implementation, and
+/// that is the point: injecting needs MachInjector linked into the process on
+/// iOS and the privileged helper daemon on macOS, while both modules also build
+/// for watchOS, tvOS and visionOS, where neither exists. The commands only
+/// forward a request to whatever ``RuntimeInjection/install(service:)`` was
+/// given, and report the honest answer when it was given nothing — see
 /// ``RuntimeInjectionAvailability/withoutInjectionService``.
 ///
-/// This mirrors how ``RuntimeEngine/engineListProvider`` is wired: a capability
+/// This mirrors how `RuntimeEngine.engineListProvider` is wired: a capability
 /// the engine serves on request but does not own.
 public protocol RuntimeInjectionService: Sendable {
     /// Whether this machine can inject at all, and when it cannot, why.

@@ -12,6 +12,14 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerInjection
+
+// Before the engine exists, because the injection commands are installed as a
+// connection is set up and there is no path that adds them afterwards. This
+// service cannot inject anything itself — the Mac injects through the
+// privileged helper daemon — but it still has to answer the capability query,
+// or a host cannot tell it apart from a build that predates these commands.
+RuntimeInjection.install()
 
 let engine = RuntimeEngine(source: .local, engineID: "local-runtime-service.\(ProcessInfo.processInfo.processIdentifier)")
 

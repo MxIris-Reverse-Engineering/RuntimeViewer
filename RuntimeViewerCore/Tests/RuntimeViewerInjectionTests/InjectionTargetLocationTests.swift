@@ -1,7 +1,8 @@
 import Testing
 import Foundation
 import RuntimeViewerCommunication
-@testable import RuntimeViewerCore
+import RuntimeViewerCore
+@testable import RuntimeViewerInjection
 
 /// Which side of the attach flow an engine lands on.
 ///

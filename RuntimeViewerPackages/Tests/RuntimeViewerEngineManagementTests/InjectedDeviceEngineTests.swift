@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerInjection
 @testable import RuntimeViewerEngineManagement
 
 /// The host's half of the reverse-connection path: the source it listens on,

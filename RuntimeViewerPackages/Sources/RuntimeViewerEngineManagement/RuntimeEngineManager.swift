@@ -8,6 +8,7 @@ import Dependencies
 import DependenciesMacros
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerInjection
 import RuntimeViewerHelperClient
 import RuntimeViewerCatalystExtensions
 

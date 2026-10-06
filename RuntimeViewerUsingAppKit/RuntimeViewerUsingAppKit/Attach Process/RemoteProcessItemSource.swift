@@ -1,6 +1,7 @@
 import AppKit
 import UniformTypeIdentifiers
 import RuntimeViewerCore
+import RuntimeViewerInjection
 import RuntimeViewerUI
 
 /// Supplies the process picker with the process table of the machine an engine belongs to,

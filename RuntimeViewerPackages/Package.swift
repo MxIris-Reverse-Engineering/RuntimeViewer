@@ -498,6 +498,7 @@ let package = Package(
                 "RuntimeViewerProcessEnumerationSupport",
                 "RuntimeViewerRunningBoardSupport",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: [.iOS])),
             ],
         ),
@@ -535,6 +536,7 @@ let package = Package(
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerUtilities", package: "RuntimeViewerCore"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
@@ -559,6 +561,7 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerDeviceInjection",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
             ],
         ),
 
@@ -576,6 +579,7 @@ let package = Package(
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
             ],
         ),
 

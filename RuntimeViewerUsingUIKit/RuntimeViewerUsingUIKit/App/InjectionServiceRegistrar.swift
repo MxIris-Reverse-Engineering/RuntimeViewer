@@ -1,50 +1,66 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerInjection
 
 #if RUNTIME_VIEWER_JAILBROKEN
 import RuntimeViewerDeviceInjection
 #endif
 
-/// Hands this process's injection implementation to `RuntimeEngine`, in the
-/// variant that has one.
+/// Installs the injection commands into the engine command table, and hands
+/// over this process's injection implementation in the variant that has one.
 ///
-/// The whole type is behind `RUNTIME_VIEWER_JAILBROKEN`, which only the
-/// `RuntimeViewerUsingUIKit-JB` target defines. The file itself is in the
-/// synchronized group all three app targets share, so the ordinary builds
-/// compile it to nothing — they neither link `RuntimeViewerDeviceInjection` nor
-/// register anything, and `RuntimeEngine.injectionService` stays `nil`. That is
-/// the meaningful state that makes them answer `requiresJailbrokenVariant`
-/// rather than a lie about the platform.
+/// **Both halves run in every variant; only the second is conditional.** The
+/// commands go in unconditionally because the capability query is how a host
+/// learns that a build cannot inject — a variant that registered nothing would
+/// be indistinguishable from an app built before these commands existed, so a
+/// device running a perfectly good ordinary build would read as unanswerable
+/// instead of as `requiresJailbrokenVariant`.
+///
+/// `RUNTIME_VIEWER_JAILBROKEN`, which only the `RuntimeViewerUsingUIKit-JB`
+/// target defines, decides the service. The file is in the synchronized group
+/// all three app targets share, so the ordinary builds compile that half to
+/// nothing, never link `RuntimeViewerDeviceInjection`, and leave
+/// ``RuntimeInjection/service`` at `nil`. That is the meaningful state that
+/// makes them answer `requiresJailbrokenVariant` rather than a lie about the
+/// platform.
 @Loggable
 enum InjectionServiceRegistrar {
     /// Must run before any engine can be asked about its capabilities, so it
     /// goes first in `didFinishLaunchingWithOptions` — ahead of
     /// `RuntimeEngine.local` and the Bonjour server engine, either of which a
-    /// host may query as soon as it is reachable.
+    /// host may query as soon as it is reachable. The commands are installed as
+    /// a connection is set up, so "before any engine connects" is a hard
+    /// requirement, not an ordering preference.
     static func registerIfAvailable() {
+        RuntimeInjection.install(service: injectionService())
+    }
+
+    /// This variant's injection implementation, or `nil` when it has none.
+    private static func injectionService() -> (any RuntimeInjectionService)? {
         #if RUNTIME_VIEWER_JAILBROKEN
         guard let frameworksURL = Bundle.main.privateFrameworksURL,
               let payloadURL = payloadURL(inFrameworksAt: frameworksURL)
         else {
-            // Registered anyway: the service reports a missing payload as its
+            // A service is returned anyway: it reports a missing payload as its
             // own distinct reason, and that is more useful to a user than this
             // build pretending to be the ordinary variant.
             #log(.error, "Jailbroken variant found no embedded payload; injection will report it as unavailable")
-            RuntimeEngine.injectionService = RuntimeDeviceInjectionService(
+            return RuntimeDeviceInjectionService(
                 payloadURL: URL(fileURLWithPath: "/nonexistent/RuntimeViewerServer"),
                 dependencyDirectoryURL: URL(fileURLWithPath: "/nonexistent", isDirectory: true),
             )
-            return
         }
         #log(.info, "Registering device injection service with payload at \(payloadURL.path, privacy: .public)")
         // The same directory serves as the dependency source: the payload
         // loads `@rpath/libswiftCompatibilitySpan.dylib`, which Xcode embeds
         // right beside it, and the staged copy has to carry it along.
-        RuntimeEngine.injectionService = RuntimeDeviceInjectionService(
+        return RuntimeDeviceInjectionService(
             payloadURL: payloadURL,
             dependencyDirectoryURL: frameworksURL,
         )
+        #else
+        return nil
         #endif
     }
 

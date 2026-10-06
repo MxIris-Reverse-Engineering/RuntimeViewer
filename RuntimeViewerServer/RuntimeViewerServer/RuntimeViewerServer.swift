@@ -2,6 +2,7 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerInjection
 import RuntimeViewerUtilities
 
 #if canImport(UIKit)
@@ -44,6 +45,15 @@ private enum RuntimeViewerServer {
         // before any identity is derived: the payload runs inside a process it
         // does not own and must not persist anything into that process.
         RuntimeNetworkBonjour.isRunningInsideInjectedProcess = true
+        // The engine this payload becomes serves a host, so it carries the
+        // injection commands like any other serving engine — before the engine
+        // is built, because they are installed as its connection is set up. The
+        // payload has no injection implementation of its own: it is the thing
+        // that was injected, and nothing asks it to inject further. Registering
+        // the commands anyway is what lets the host's capability query get an
+        // honest "no" instead of a dispatch failure that reads as an outdated
+        // peer.
+        RuntimeInjection.install()
         #log(.default, "Attach successfully")
         Task {
             do {

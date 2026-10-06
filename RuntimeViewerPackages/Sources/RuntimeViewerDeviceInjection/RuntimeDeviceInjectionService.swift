@@ -2,6 +2,7 @@
 
 public import Foundation
 public import RuntimeViewerCore
+public import RuntimeViewerInjection
 import MachInjector
 
 /// Injection performed from inside the device, in this process.
