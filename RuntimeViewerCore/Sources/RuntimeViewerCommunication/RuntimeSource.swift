@@ -242,6 +242,32 @@ extension RuntimeSource: Hashable {
 }
 
 extension RuntimeSource {
+    /// Whether an engine on this source may be advertised to mirror peers.
+    ///
+    /// **This is a wire-compatibility rule, not a policy about usefulness.**
+    /// `engineList` sends `[RuntimeRemoteEngineDescriptor]` as one array, each
+    /// carrying its engine's source, and the source's `Codable` is synthesized
+    /// — so a case added here encodes as a key an older peer has no match for,
+    /// and that peer's decode of the *whole array* throws. Its heartbeat then
+    /// counts the failure as a dead link and stops the engine, so it loses
+    /// every engine mirrored from this Mac, not just the one it could not read.
+    /// Already-shipped peers cannot be fixed, which leaves the sending side.
+    ///
+    /// So a new case starts out **not** mirrorable, and becomes mirrorable only
+    /// once peers that can read it are the only ones left.
+    /// `injectedTCP` is the case this rule was written for: it was added after
+    /// mirroring shipped, so every released peer fails on it. Mirroring an
+    /// injected device process was never a verified path anyway — the engine is
+    /// reachable through its device's own engine, which peers can already see.
+    public var isMirrorableToPeers: Bool {
+        switch self {
+        case .local, .remote, .bonjour, .localSocket, .directTCP:
+            return true
+        case .injectedTCP:
+            return false
+        }
+    }
+
     /// A stable string identifier for this runtime source, suitable for use as a notification or storage key.
     public var identifier: String {
         switch self {
@@ -258,11 +284,11 @@ extension RuntimeSource {
             return role.isClient ? id.rawValue : "localSocketServer.\(id.rawValue)"
         case .directTCP(let name, let host, let port, let role):
             return role.isClient ? "tcp.\(name).\(host ?? "").\(port)" : "tcpServer.\(name).\(port)"
-        case .injectedTCP(_, _, _, let id, let role):
+        case .injectedTCP(_, _, _, let claimToken, let role):
             // Prefixed on both sides, unlike `localSocket`, whose business
             // client returns the bare identifier because a caller parses a pid
             // back out of it. Nothing parses this one — it is a claim token.
-            return role.isClient ? "injectedTCP.\(id.rawValue)" : "injectedTCPServer.\(id.rawValue)"
+            return role.isClient ? "injectedTCP.\(claimToken.rawValue)" : "injectedTCPServer.\(claimToken.rawValue)"
         }
     }
 }

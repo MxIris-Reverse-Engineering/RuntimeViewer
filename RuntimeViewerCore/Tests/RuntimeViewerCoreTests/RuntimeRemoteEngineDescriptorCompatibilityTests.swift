@@ -190,4 +190,80 @@ struct RuntimeRemoteEngineDescriptorCompatibilityTests {
 
         #expect(json == #"{"bonjour":{"identifier":"DEVICE-4242","name":"SpringBoard","role":{"client":{}}}}"#)
     }
+
+    // MARK: Adding a source case
+
+    /// `RuntimeSource` as it stood when engine mirroring shipped.
+    ///
+    /// **Five cases, and deliberately not the current type.** The frozen
+    /// descriptor above reuses `RuntimeSource` itself, so it proves nothing
+    /// about a case being *added* — the very change this guards. `Codable` here
+    /// is synthesized, exactly as it is on the real type, so a new case encodes
+    /// as a key this reader has no match for.
+    private enum FrozenFiveCaseSource: Codable, Equatable {
+        case local
+        case remote(name: String, identifier: String, role: RuntimeSource.Role)
+        case bonjour(name: String, identifier: String, role: RuntimeSource.Role)
+        case localSocket(name: String, identifier: String, role: RuntimeSource.Role)
+        case directTCP(name: String, host: String?, port: UInt16, role: RuntimeSource.Role)
+    }
+
+    /// **One undecodable element fails the whole array, not just that element.**
+    ///
+    /// This is what makes a new case a mixed-version break rather than a
+    /// cosmetic gap: `engineList` is one `JSONDecoder` call over
+    /// `[RuntimeRemoteEngineDescriptor]`, so a peer that cannot read one
+    /// descriptor reads none of them — and the heartbeat counts that as a dead
+    /// link, so after two consecutive failures it stops the engine and takes
+    /// every mirrored engine from that peer with it.
+    ///
+    /// Characterization, not a regression test: this is the receiver that is
+    /// already shipped and cannot be changed. It is here to say why the sending
+    /// side has to be the one that holds the line.
+    @Test("A source case the old reader lacks fails the entire descriptor array")
+    func oneUnknownCaseFailsTheWholeArray() throws {
+        let readable = RuntimeSource.bonjour(name: "SpringBoard", identifier: "DEVICE-4242", role: .client)
+        let unreadable = RuntimeSource.injectedTCP(
+            name: "sharingd",
+            host: "192.168.64.1",
+            port: 51234,
+            identifier: "A-CLAIM-TOKEN",
+            role: .client,
+        )
+        let data = try JSONEncoder().encode([readable, unreadable])
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode([FrozenFiveCaseSource].self, from: data)
+        }
+        // The readable one on its own is fine, so it really is the new case.
+        #expect(throws: Never.self) {
+            _ = try JSONDecoder().decode([FrozenFiveCaseSource].self, from: try JSONEncoder().encode([readable]))
+        }
+    }
+
+    /// The rule the sending side holds: **nothing that an already-shipped peer
+    /// cannot decode may be put in front of one.**
+    ///
+    /// Stated over the source kinds rather than over one case, so that adding a
+    /// case fails here unless its author has decided which side of the line it
+    /// falls on. A case that is mirrorable must survive the frozen reader; a
+    /// case that is not is simply never advertised.
+    @Test(
+        "Every mirrorable source kind decodes in a peer that predates this build",
+        arguments: [
+            RuntimeSource.local,
+            .remote(name: "Catalyst", identifier: "catalyst", role: .client),
+            .bonjour(name: "SpringBoard", identifier: "DEVICE-4242", role: .client),
+            .localSocket(name: "Finder", identifier: "4242", role: .client),
+            .directTCP(name: "Mirrored", host: "10.0.0.2", port: 50000, role: .client),
+            .injectedTCP(name: "sharingd", host: "192.168.64.1", port: 51234, identifier: "TOKEN", role: .client),
+        ],
+    )
+    func mirrorableSourcesStayReadableByOlderPeers(source: RuntimeSource) throws {
+        guard source.isMirrorableToPeers else { return }
+        let data = try JSONEncoder().encode(source)
+        #expect(throws: Never.self) {
+            _ = try JSONDecoder().decode(FrozenFiveCaseSource.self, from: data)
+        }
+    }
 }
