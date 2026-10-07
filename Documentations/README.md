@@ -96,6 +96,7 @@
 
 按时间倒序。
 
+- [标题一长，工具栏右侧的按钮全进了溢出菜单](ResolvedIssues/2026-10-02-long-toolbar-title-pushed-items-into-overflow.md)（2026-10-02）—— NSToolbar 在独立的布局引擎里以优先级 200 把 item 的 view 压到 0 宽来测最小宽度，再只按最小宽度决定谁进溢出菜单；标题 label 的抗压缩是 250，整段文字就成了最小宽度。只把抗压缩降到 200 以下还不够：测出的宽度恰好为 0 时工具栏退回用 view 的 frame，标题被定成 0 宽；纵向 stack 的 hugging 又把较宽的 label 压到较窄的那么宽。`TitleToolbarItem` 挪进 `RuntimeViewerUI`，加齐四项尺寸设置，回归测试逐项去掉都会失败；15.8.1、26.6、27.0 行为一致。
 - [App 图标里的头文件文字比原来暗淡](ResolvedIssues/2026-09-28-icon-code-listing-too-thin.md)（2026-09-28）—— 09-19 把位图前景拆成矢量图层时，生成脚本只按首行宽度匹配旧位图，选了 SF Mono Regular；等宽字体各字重一样宽，宽度选不出字重，按墨迹量比对应该是 Bold。代码层的深色填充又是灰蓝色而不是白色。两处都已改正；另记一个坑：矢量层删掉 dark 特化不等于保持原色，深色外观会把它染成背景的蓝色。
 
 - [发版归档：包丢了 x86_64，归档又变成了通用归档](ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md)（2026-09-27）—— v3.0.0-beta.5 三次 CI 都挂在 Catalyst 插件的 `Unable to resolve module dependency` 上。当初以为是构建顺序竞态，实际上是 Xcode 27 新的 package PIF builder 把每个包的 macOS 架构写死成 `arm64 arm64e arm64e.x1`，x86_64 没了；用不用新 builder 由各机器的 Xcode 默认值决定，所以开发机能过、runner 过不了。`ArchiveScript.sh` 改为显式关掉新 builder。之后又撞上内嵌 CLI 没设 `SKIP_INSTALL`、归档变成通用归档、Developer ID 导出失败；已补上设置，脚本也会在归档后立刻检查归档类型。
