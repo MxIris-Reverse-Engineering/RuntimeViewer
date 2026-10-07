@@ -72,7 +72,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // Set once and left alone: the framework never writes it on this scroll view — its only
         // `setAutohidesScrollers:` call belongs to the Go To list — and the scroller-style
         // observer `installScrollView()` registers only recomputes an inset.
-        sourceEditorView.scrollView.autohidesScrollers = true
+//        sourceEditorView.scrollView.autohidesScrollers = true
 
         gutter.enableLineNumbers()
         gutter.emphasizeActiveLines = true
