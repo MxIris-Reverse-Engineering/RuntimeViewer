@@ -297,6 +297,7 @@ The project uses three Swift Package Manager packages:
 **RuntimeViewerCommandLine** (`RuntimeViewerCommandLine/`) — the `runtime-viewer-cli` tool (macOS 15+ only), built with plain `swift build`; depends on `RuntimeViewerCore` and on the UI-free products of `RuntimeViewerPackages` (`RuntimeViewerEngineManagement`, `RuntimeViewerHelperClient`):
 - `RuntimeViewerCommandLineInterface` — everything but `main.swift`: Codable command/result models, the length-prefixed JSON protocol over a Unix domain socket, `CommandExecutor` + `SourceResolving` (`EngineManagerSourceResolver` serves every source a `RuntimeEngineManager` holds and answers `sources` / `attach` / `detach`; `LocalSourceResolver` is the local-only fallback), the resident CLI host (`CommandLineHostServer`, spawned on demand, idle exit) and its client, `HostTakeover` / `HostRetirement` (the app replacing a standalone host, the client replacing an outdated one), renderers, and the swift-argument-parser commands. The app links this library too: `CommandLineHostController` makes the running app the host
 - `runtime-viewer-cli` — one-line executable entry point
+- Outside the package, `AgentPlugins/runtime-viewer/` is the agent plugin that teaches this tool. A change to the surface its skill describes (subcommands, flags, output, exit statuses, host behaviour) updates that skill in the same commit and bumps `version` in both of its plugin manifests — installed plugins only update when the version changes
 
 ### Application Targets
 

@@ -1,0 +1,20 @@
+{
+  "name": "runtimeviewer",
+  "interface": {
+    "displayName": "RuntimeViewer"
+  },
+  "plugins": [
+    {
+      "name": "runtime-viewer",
+      "source": {
+        "source": "local",
+        "path": "./AgentPlugins/runtime-viewer"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
