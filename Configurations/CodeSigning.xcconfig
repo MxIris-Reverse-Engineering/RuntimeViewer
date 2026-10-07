@@ -8,6 +8,16 @@ RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer
 RUNTIME_VIEWER_APP_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer.arm64e
 RUNTIME_VIEWER_APP_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer
 
+// Jailbroken iOS variant (RuntimeViewerUsingUIKit-JB target). A separate
+// identifier so it can sit on a device beside the ordinary build rather than
+// replacing it: the two differ in what they can do, and comparing them is the
+// point. Its entitlements are in
+// RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements, and
+// no provisioning profile grants those — this variant is signed ad-hoc and
+// installed by something that honours them, never by Xcode.
+RUNTIME_VIEWER_APP_DEBUG_JAILBROKEN_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer.Jailbroken
+RUNTIME_VIEWER_APP_RELEASE_JAILBROKEN_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer.Jailbroken
+
 // SMJobBless privileged helper (com.JH.RuntimeViewerService target)
 RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService
 

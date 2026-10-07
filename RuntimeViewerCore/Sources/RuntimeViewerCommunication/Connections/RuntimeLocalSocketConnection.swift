@@ -124,12 +124,18 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         self.socketFD = socketFD
     }
 
-    init(port: UInt16) throws {
-        #log(.info, "Creating connection to localhost:\(port, privacy: .public)")
-        try connectToLocalhost(port: port)
+    /// Connects to a host's listening socket.
+    ///
+    /// - Parameter host: The address to dial. ``RuntimeLocalSocketAddress/loopback``
+    ///   for the localhost case this class was written for; a host's address on
+    ///   the network for the injected-payload case, which is the same inversion
+    ///   over a route that leaves the machine.
+    init(host: String, port: UInt16) throws {
+        #log(.info, "Creating connection to \(host, privacy: .public):\(port, privacy: .public)")
+        try connect(toHost: host, port: port)
     }
 
-    private func connectToLocalhost(port: UInt16) throws {
+    private func connect(toHost host: String, port: UInt16) throws {
         errno = 0
         socketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard socketFD >= 0 else {
@@ -139,7 +145,14 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
-        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        // `inet_pton`, not `inet_addr`: the latter reports failure as
+        // 0xFFFFFFFF, which is also a valid broadcast address, so a typo in a
+        // host address would become a connection attempt rather than an error.
+        guard inet_pton(AF_INET, host, &addr.sin_addr) == 1 else {
+            close(socketFD)
+            socketFD = -1
+            throw RuntimeLocalSocketError.invalidHostAddress(host)
+        }
 
         errno = 0
         let result = withUnsafePointer(to: &addr) { ptr in
@@ -152,15 +165,75 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         guard result == 0 else {
             close(socketFD)
             socketFD = -1
-            throw RuntimeLocalSocketError.connectFailed(errno: connectErrno, port: port)
+            throw RuntimeLocalSocketError.connectFailed(errno: connectErrno, host: host, port: port)
         }
+
+        Self.configureSocketOptions(socketFD)
+
+        #log(.info, "Connected to \(host, privacy: .public):\(port, privacy: .public)")
+    }
+
+    /// Applies the options every connected socket here wants, whichever end
+    /// opened it.
+    ///
+    /// **Keepalive is the load-bearing one, and it is not an optimisation.**
+    /// A peer that closes its socket sends a FIN and `recv` returns 0, which is
+    /// how a disconnect is normally noticed. A peer that *vanishes* sends
+    /// nothing at all — a powered-off virtual machine, a link that goes away, a
+    /// process killed in a way whose last packets never arrive. Without
+    /// keepalive the kernel holds that half-open connection indefinitely:
+    /// `recv` blocks forever, no state change is ever published, and the engine
+    /// stays in the list looking connected. Measured exactly that way — with
+    /// the guest powered off, this Mac still held
+    /// `169.254.46.29:60121->169.254.21.214:49351 (ESTABLISHED)` to a machine
+    /// that no longer existed, and its injected engine was still listed.
+    ///
+    /// The system default idle is two hours, which is indistinguishable from
+    /// never for this purpose. The values below declare a peer dead in roughly
+    /// twenty-five seconds, which suits a link-local connection to a device on
+    /// the same desk.
+    ///
+    /// Done at the socket layer rather than as a protocol heartbeat on purpose:
+    /// the probes are the kernel's on both ends, so a payload built before this
+    /// existed answers them without knowing anything about it. A heartbeat
+    /// would have needed both sides rebuilt.
+    ///
+    /// **`SO_NOSIGPIPE` is not an optimisation either.** Once the peer has
+    /// reset the connection — the user detaching while a large reply is still
+    /// being read, a device process killed, keepalive giving up — the next
+    /// `send` fails with `EPIPE`, and without this option the kernel raises
+    /// `SIGPIPE` first, whose default action ends the process. That is the
+    /// host app on one end and, on the other, whatever process the payload was
+    /// injected into. Nothing here ignores the signal process-wide, and a
+    /// payload must not change its host process's signal dispositions, so it
+    /// is set on the socket.
+    static func configureSocketOptions(_ socketFD: Int32) {
+        var noSignalOnBrokenPipe: Int32 = 1
+        setsockopt(socketFD, SOL_SOCKET, SO_NOSIGPIPE, &noSignalOnBrokenPipe, socklen_t(MemoryLayout<Int32>.size))
 
         // Disable Nagle algorithm for lower latency
         var noDelay: Int32 = 1
         setsockopt(socketFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
 
-        #log(.info, "Connected to localhost:\(port, privacy: .public)")
+        var keepAlive: Int32 = 1
+        setsockopt(socketFD, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, socklen_t(MemoryLayout<Int32>.size))
+        // Seconds of idle before the first probe. Darwin spells this
+        // `TCP_KEEPALIVE`; the name `TCP_KEEPIDLE` is the Linux one and does
+        // not exist here.
+        var idleSeconds = Self.keepAliveIdleSeconds
+        setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPALIVE, &idleSeconds, socklen_t(MemoryLayout<Int32>.size))
+        var intervalSeconds = Self.keepAliveIntervalSeconds
+        setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPINTVL, &intervalSeconds, socklen_t(MemoryLayout<Int32>.size))
+        var probeCount = Self.keepAliveProbeCount
+        setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPCNT, &probeCount, socklen_t(MemoryLayout<Int32>.size))
     }
+
+    /// Idle seconds before the first keepalive probe.
+    static let keepAliveIdleSeconds: Int32 = 10
+    /// Seconds between probes once they start.
+    static let keepAliveIntervalSeconds: Int32 = 5
+    /// Unanswered probes before the connection is declared dead.
+    static let keepAliveProbeCount: Int32 = 3
 
     // MARK: - Lifecycle
 
@@ -337,10 +410,11 @@ enum RuntimeLocalSocketError: Error, LocalizedError, CustomStringConvertible, Se
     case notConnected
     case receiveFailed
     case socketCreationFailed(errno: Int32)
-    case bindFailed(errno: Int32, port: UInt16)
+    case bindFailed(errno: Int32, host: String, port: UInt16)
     case listenFailed(errno: Int32)
     case acceptFailed(errno: Int32)
-    case connectFailed(errno: Int32, port: UInt16)
+    case connectFailed(errno: Int32, host: String, port: UInt16)
+    case invalidHostAddress(String)
     case sendFailed(errno: Int32)
     case portFileNotFound(path: String, timeout: TimeInterval)
     case invalidPortFile(path: String, content: String?)
@@ -353,14 +427,16 @@ enum RuntimeLocalSocketError: Error, LocalizedError, CustomStringConvertible, Se
             return "RuntimeLocalSocketError.receiveFailed: Failed to receive data from socket"
         case .socketCreationFailed(let errno):
             return "RuntimeLocalSocketError.socketCreationFailed: Failed to create socket - \(Self.errnoDescription(errno))"
-        case .bindFailed(let errno, let port):
-            return "RuntimeLocalSocketError.bindFailed: Failed to bind to 127.0.0.1:\(port) - \(Self.errnoDescription(errno))"
+        case .bindFailed(let errno, let host, let port):
+            return "RuntimeLocalSocketError.bindFailed: Failed to bind to \(host):\(port) - \(Self.errnoDescription(errno))"
         case .listenFailed(let errno):
             return "RuntimeLocalSocketError.listenFailed: Failed to listen on socket - \(Self.errnoDescription(errno))"
         case .acceptFailed(let errno):
             return "RuntimeLocalSocketError.acceptFailed: Failed to accept connection - \(Self.errnoDescription(errno))"
-        case .connectFailed(let errno, let port):
-            return "RuntimeLocalSocketError.connectFailed: Failed to connect to 127.0.0.1:\(port) - \(Self.errnoDescription(errno))"
+        case .connectFailed(let errno, let host, let port):
+            return "RuntimeLocalSocketError.connectFailed: Failed to connect to \(host):\(port) - \(Self.errnoDescription(errno))"
+        case .invalidHostAddress(let host):
+            return "RuntimeLocalSocketError.invalidHostAddress: '\(host)' is not an IPv4 address this connection can dial"
         case .sendFailed(let errno):
             return "RuntimeLocalSocketError.sendFailed: Failed to send data - \(Self.errnoDescription(errno))"
         case .portFileNotFound(let path, let timeout):
@@ -446,6 +522,16 @@ enum RuntimeLocalSocketError: Error, LocalizedError, CustomStringConvertible, Se
         default: return "UNKNOWN"
         }
     }
+}
+
+// MARK: - RuntimeLocalSocketAddress
+
+/// The addresses these connections dial and bind.
+enum RuntimeLocalSocketAddress {
+    /// The only address this family used before an injected payload had to
+    /// reach a host across a network. Spelled once so the localhost case and
+    /// the injected case are visibly the same code with a different address.
+    static let loopback = "127.0.0.1"
 }
 
 // MARK: - RuntimeLocalSocketPortDiscovery
@@ -537,6 +623,11 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
     private var _underlyingConnection: RuntimeLocalSocketConnection?
 
     private let identifier: String
+
+    /// The address this side dials, and keeps dialing: the reconnection loop
+    /// reuses it, which is what lets an injected payload survive the host
+    /// restarting without being injected again.
+    private let host: String
     private let port: UInt16
 
     /// Stable state subject that survives underlying connection replacement.
@@ -588,6 +679,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
     /// - Throws: `RuntimeLocalSocketError` if connection cannot be established.
     init(identifier: String, timeout: TimeInterval = 10) async throws {
         self.identifier = identifier
+        self.host = RuntimeLocalSocketAddress.loopback
         self.port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
 
         // Retry connection until server is ready or timeout
@@ -596,7 +688,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
 
         while Date().timeIntervalSince(startTime) < timeout {
             do {
-                let connection = try RuntimeLocalSocketConnection(port: port)
+                let connection = try RuntimeLocalSocketConnection(host: host, port: port)
                 self._underlyingConnection = connection
                 applyPendingHandlers(to: connection)
                 observeUnderlyingConnectionState(connection)
@@ -609,24 +701,87 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             }
         }
 
-        throw lastError ?? RuntimeLocalSocketError.connectFailed(errno: ETIMEDOUT, port: port)
+        throw lastError ?? RuntimeLocalSocketError.connectFailed(errno: ETIMEDOUT, host: host, port: port)
     }
 
-    /// Creates a client connection to a known port.
+    /// Creates a client connection to a known port on the local machine.
     ///
     /// - Parameters:
     ///   - port: The server port to connect to.
     /// - Throws: `RuntimeLocalSocketError` if connection cannot be established.
     init(port: UInt16) throws {
         self.identifier = ""
+        self.host = RuntimeLocalSocketAddress.loopback
         self.port = port
 
-        let connection = try RuntimeLocalSocketConnection(port: port)
+        let connection = try RuntimeLocalSocketConnection(host: host, port: port)
         self._underlyingConnection = connection
         applyPendingHandlers(to: connection)
         observeUnderlyingConnectionState(connection)
         try connection.start()
         stateSubject.send(.connected)
+    }
+
+    /// Creates a client connection to a host at a known address and port.
+    ///
+    /// The injected-payload case. The address and port are not derived from the
+    /// identifier the way ``init(identifier:timeout:)`` derives the port: the
+    /// host is listening before the payload exists, so it chooses both and hands
+    /// them over. The identifier it also hands over is the claim token, which
+    /// this side only has to present.
+    ///
+    /// **Never gives up.** If the first window of attempts fails it keeps trying
+    /// in the background rather than throwing, and this returns a connection
+    /// that is not connected yet.
+    ///
+    /// That is not caution, it is the only correct behaviour here: an injected
+    /// payload gets exactly one chance to run. It is started by its
+    /// `__attribute__((constructor))`, which dyld runs once, and a second
+    /// `dlopen` of an image already in the process returns the existing handle
+    /// without running anything. So a payload that gives up leaves the target
+    /// permanently unusable — measured on a device, where a target that had
+    /// failed once then accepted injection after injection, each reporting
+    /// success, while nothing ran and nothing connected.
+    ///
+    /// The first window exists only so that the common case — the host is
+    /// already listening, which it is, because it listens before injecting —
+    /// reports `.connected` to the caller instead of `.connecting`.
+    ///
+    /// - Parameters:
+    ///   - host: The host's address, as reached from this machine.
+    ///   - port: The port the host is listening on.
+    ///   - identifier: The claim token to present; carried for diagnostics, and
+    ///     not used to compute anything.
+    ///   - firstAttemptWindow: How long to keep trying before handing over to
+    ///     the background retry loop.
+    init(host: String, port: UInt16, identifier: String, firstAttemptWindow: TimeInterval = 10) async throws {
+        self.identifier = identifier
+        self.host = host
+        self.port = port
+
+        let startTime = Date()
+
+        repeat {
+            do {
+                let connection = try RuntimeLocalSocketConnection(host: host, port: port)
+                self._underlyingConnection = connection
+                applyPendingHandlers(to: connection)
+                observeUnderlyingConnectionState(connection)
+                try connection.start()
+                stateSubject.send(.connected)
+                return
+            } catch RuntimeLocalSocketError.invalidHostAddress(let host) {
+                // The one failure retrying cannot fix: a string that is not an
+                // address will not become one. Thrown, so the payload falls back
+                // to advertising itself instead of dialling nothing forever.
+                throw RuntimeLocalSocketError.invalidHostAddress(host)
+            } catch {
+                try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+        } while Date().timeIntervalSince(startTime) < firstAttemptWindow
+
+        #log(.info, "No answer on \(host, privacy: .public):\(port, privacy: .public) yet; retrying in the background rather than giving up")
+        startReconnecting()
     }
 
     // MARK: - Message Handler Replay
@@ -751,7 +906,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             guard !isStopped else { return }
 
             do {
-                let newConnection = try RuntimeLocalSocketConnection(port: port)
+                let newConnection = try RuntimeLocalSocketConnection(host: host, port: port)
                 self._underlyingConnection?.stop()
                 self._underlyingConnection = newConnection
                 applyPendingHandlers(to: newConnection)
@@ -841,6 +996,15 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
     private var serverSocketFD: Int32 = -1
     private let identifier: String
 
+    /// The address this side binds.
+    ///
+    /// Loopback for the localhost case. For an injected payload on another
+    /// machine it is the host's own address on the route the payload was told to
+    /// take — binding exactly that, rather than every interface, turns an
+    /// address the device could never have reached into an immediate local
+    /// failure instead of a payload that quietly never arrives.
+    private let bindAddress: String
+
     /// Pending message handlers to apply to new connections.
     ///
     /// Mirrors `RuntimeLocalSocketClientConnection`: public `setMessageHandler`
@@ -879,6 +1043,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
     /// - Parameter identifier: Unique identifier used to compute the port.
     init(identifier: String) {
         self.identifier = identifier
+        self.bindAddress = RuntimeLocalSocketAddress.loopback
         self.port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
     }
 
@@ -887,6 +1052,22 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
     /// - Parameter port: The port to listen on (0 for auto-assign).
     init(port: UInt16 = 0) {
         self.identifier = ""
+        self.bindAddress = RuntimeLocalSocketAddress.loopback
+        self.port = port
+    }
+
+    /// Creates a server connection on a specific address and port.
+    ///
+    /// The injected-payload case: the payload cannot bind, so this side does,
+    /// and it has to be reachable from the device rather than from loopback.
+    ///
+    /// - Parameters:
+    ///   - bindAddress: The local address to bind, which is also the address the
+    ///     payload was told to dial.
+    ///   - port: The port to listen on (0 for auto-assign).
+    init(bindAddress: String, port: UInt16) {
+        self.identifier = ""
+        self.bindAddress = bindAddress
         self.port = port
     }
 
@@ -971,7 +1152,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
     /// and the port file has been written for client discovery.
     /// Connections are accepted asynchronously in the background.
     func start() async throws {
-        #log(.info, "Starting local socket server on port \(self.port, privacy: .public) for identifier: \(self.identifier, privacy: .public)")
+        #log(.info, "Starting local socket server on \(self.bindAddress, privacy: .public):\(self.port, privacy: .public) for identifier: \(self.identifier, privacy: .public)")
         errno = 0
         serverSocketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard serverSocketFD >= 0 else {
@@ -984,7 +1165,13 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
-        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        // See the note on `connect(toHost:port:)`: `inet_addr` would turn a
+        // malformed address into a bind on the broadcast address.
+        guard inet_pton(AF_INET, bindAddress, &addr.sin_addr) == 1 else {
+            close(serverSocketFD)
+            serverSocketFD = -1
+            throw RuntimeLocalSocketError.invalidHostAddress(bindAddress)
+        }
 
         errno = 0
         let bindResult = withUnsafePointer(to: &addr) { ptr in
@@ -997,7 +1184,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
         guard bindResult == 0 else {
             close(serverSocketFD)
             serverSocketFD = -1
-            throw RuntimeLocalSocketError.bindFailed(errno: bindErrno, port: port)
+            throw RuntimeLocalSocketError.bindFailed(errno: bindErrno, host: bindAddress, port: port)
         }
 
         errno = 0
@@ -1008,7 +1195,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
             throw RuntimeLocalSocketError.listenFailed(errno: listenErrno)
         }
 
-        #log(.info, "Server listening on 127.0.0.1:\(self.port, privacy: .public)")
+        #log(.info, "Server listening on \(self.bindAddress, privacy: .public):\(self.port, privacy: .public)")
 
         // Start accepting connections in background (non-blocking)
         startAcceptingConnections()
@@ -1049,9 +1236,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
 
         #log(.info, "Accepted local socket client connection (fd=\(clientFD, privacy: .public)) on port \(self.port, privacy: .public)")
 
-        // Disable Nagle algorithm for lower latency
-        var noDelay: Int32 = 1
-        setsockopt(clientFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
+        // The accepting end needs these as much as the dialling end does — more,
+        // in fact: on a device injection this is the end that outlives the peer.
+        RuntimeLocalSocketConnection.configureSocketOptions(clientFD)
 
         let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD)
         self._underlyingConnection = socketConnection

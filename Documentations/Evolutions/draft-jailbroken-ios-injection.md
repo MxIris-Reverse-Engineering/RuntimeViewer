@@ -1,12 +1,12 @@
 # Draft - 越狱版 RV iOS：枚举设备进程并注入
 
-- **状态**: Draft
+- **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-10-01
-- **最后更新**: 2026-10-02
+- **最后更新**: 2026-10-04
 - **所属愿景**: 无
 - **关联提案**: [0014](0014-inject-ios-simulator-process.md)（模拟器注入；本提案是它明确列为非目标的「真机」那一半）
-- **实现分支 / PR**: 待定
+- **实现分支 / PR**: `feature/jailbroken-ios-injection`
 - **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
 
 ## 摘要
@@ -149,6 +149,11 @@ uid 501 + 沙盒逃逸的 App 实测：`proc_listallpids` 返回 438 个 pid，`
 且带沙盒逃逸的 App 能往那里写。**不要放 App 自己的 bundle 或容器里**：目标进程未必读得到
 另一个 App 的容器。
 
+**这 4 次验证的范围要说清楚**：注的是一个自带的测试 dylib，它没有任何 `@rpath` 依赖，所以这组
+数据只证明了「路径可写、目标可 dlopen」，**没有**证明真正的 payload 能加载——后者多一条
+`@rpath/libswiftCompatibilitySpan.dylib`，是落地时才发现并单独处理的（见决策日志）。真 payload
+的端到端加载属第 8 步。
+
 ### vphone 侧（已验证，与本提案的耦合面）
 
 - **私有 Virtualization entitlement 只在 `vphone-vm` 上**（`com.apple.private.virtualization`、
@@ -194,6 +199,41 @@ uid 501 + 沙盒逃逸的 App 实测：`proc_listallpids` 返回 438 个 pid，`
 
 **所以 ViewModel 层本来就是抽象的** —— 它只认 `any RunningItem` 这个存在类型。要动的是
 UI 层与数据源层，业务层不受影响。这决定了本提案的抽象只做数据源一层（见替代方案考量）。
+
+### 真机 payload 能构建（2026-10-02 补测，撤销一条误报的前置）
+
+此前记录的「`RuntimeViewerMobileServer` 以 `generic/platform=iOS` 构建时，`swift-async-algorithms`
+报 `returning 'result' as a 'sending' result risks causing data races`」**是用错入口造成的**。
+
+| 入口 | 结果 |
+|---|---|
+| `RuntimeViewerServer/RuntimeViewerServer.xcodeproj`（独立工程） | ❌ 挂 —— 但 **macOS 目标也挂**，且挂在更前面的 `SwiftyXPC` 上（`stored properties cannot be marked unavailable with '@available'`） |
+| `RuntimeViewer-Debug.xcworkspace`（`RunScript.sh:263` 实际用的那个） | ✅ `EXIT=0` |
+
+两条结论：
+
+1. **这不是 iOS 特有问题**，而是那个独立 `.xcodeproj` 自带的 `Package.resolved` 整体陈旧
+   （`swift-async-algorithms` 钉在 1.1.1，上游已到 1.1.7；那段代码正是被 upstream `#399`
+   「Fix a data race error with the internal `Optional.takeSending`」与 `#419` 改掉的）。
+   `MachOSwiftSection` 声明的是 `from: "1.0.4"`，1.1.7 完全在允许范围内。
+   官方构建从不走这个入口（`RunScript.sh` 用 `-workspace RuntimeViewer-Debug.xcworkspace`），
+   所以这份陈旧锁文件一直没人撞到。**它是一个独立的小问题，与本提案无关，不在本次范围内。**
+2. **真机 payload 实测可构建，且能构建成 arm64e。**
+
+| 构建 | 产物 | `lipo -info` | `LC_BUILD_VERSION` |
+|---|---|---|---|
+| 默认（`ARCHS_STANDARD`） | 53 MB | `arm64` | `platform 2`（PLATFORM_IOS）/ `minos 15.0` / `sdk 27.0` |
+| **`ARCHS=arm64e`** | 55 MB | **`arm64e`** | 同上 |
+
+**`ARCHS_STANDARD` 在 iphoneos 上就是 `arm64`，不含 arm64e** —— 工程里写的是
+`ARCHS = $(ARCHS_STANDARD)`，所以越狱版那条构建路径必须显式传 `ARCHS=arm64e`。SwiftPM 那一侧
+不用额外处理：`RuntimeViewer-Debug.xcworkspace` 的 `WorkspaceSettings.xcsettings` 已经带
+`iOSPackagesShouldBuildARM64e = true`。
+
+**待定（落地第 3 步时确认）**：payload 要不要跟注入器一样强制 arm64e。注入器必须 arm64e 是已验证
+的硬约束（pauth 指令），但 payload 是被 `dlopen` 进目标进程的 dylib，它的架构要求取决于目标进程
+的架构而不是注入器的。iOS 系统进程是 arm64e，所以**倾向于编 arm64e**（架构对齐无歧义，且代价只有
+2 MB）；「arm64 dylib 能不能 dlopen 进 arm64e 进程」这一条**未实测**，不拿它当依据。
 
 ## 提议方案
 
@@ -243,7 +283,8 @@ UI 层与数据源层，业务层不受影响。这决定了本提案的抽象�
 2. 连上之后，Attach to Process 先发 `injectionCapability` 判断对端能否注入；能则发 `processList`
    取**该设备**的进程清单（绝不列本机进程），显示选择器。
 3. 用户挑选目标 → 发 `injectIntoProcess(pid)`。
-4. 越狱版把内嵌 payload 暂存到 `/private/var/tmp/` 并注入。
+4. 越狱版把内嵌 payload **连同它的 `@rpath` 依赖**暂存到 `/private/var/tmp/RuntimeViewerPayload/`
+   并注入（布局见「payload 内嵌与暂存」）。
 5. 宿主用 `awaitInjectedBonjourEngine` 等被注入进程广播，出现后作为同一设备 Section 下的
    新条目展示。
 
@@ -341,84 +382,147 @@ UI 层与数据源层，业务层不受影响。这决定了本提案的抽象�
   提示，和一个不会妨碍将来解禁的能力模型（`injectionCapability` 经 ProxyServer 转发天然可用）。
 - **不改动本机那条 attach 路径。** 目标是宿主进程时整条远端链路不介入，一次 RPC 都不发，
   行为与今天逐像素一致——这是「不破坏现有功能体验」的硬要求，不是顺带的优化。
-- **不解决 iphoneos payload 的构建问题。** 见下。
+- **不改 payload 的构建方式。** 真机 payload 已验证能构建（见「前期调研」最后一节），
+  本次只是在越狱版 target 里引用它，不新增构建脚本、不改 `RunScript.sh` 现有的模拟器那一支。
 
 ### 前置依赖（不在本提案范围）
 
-`RuntimeViewerMobileServer` 以 `generic/platform=iOS` 构建时，依赖 `swift-async-algorithms`
-报 Swift 并发错误（`returning 'result' as a 'sending' result risks causing data races`）。这是
-与本次改动无关的既有问题，但**整条链以它为前置**——没有真机 payload，被注入的进程起不来
-server。按项目 CLAUDE.md，下一步应改用 `../MxIris-Reverse-Engineering.xcworkspace` 走本地
-checkout 验证。本提案假设它已被单独修好。
+只剩一条：**`MachInjector` 的 iOS 支持要合入上游并发版**。提案已写在那个仓库
+（`Documentations/Evolutions/draft-ios-support.md`，状态 Draft），实测改动已提交在它的
+`feature/ios-support` 分支。在它发版之前，本仓库的开发可以用 `USING_LOCAL_DEPENDENCIES=1`
+走本地 checkout —— `RunScript.sh:127` 的注释正好把这个场景写成了典型例子
+（「MachInjector reached through swift-helper-service is the usual case」）。
+
+原先这里还列了第二条「修 `RuntimeViewerMobileServer` 的 iphoneos 构建」。**那一条是误报，已撤销**，
+原因见下一节。
 
 ## 详细设计
 
 ### 新命令签名
 
-```swift
-extension RuntimeEngine.CommandNames {
-    /// 这一端有没有注入能力。**每个引擎都注册**，是门禁的唯一数据来源。
-    static let injectionCapability = "injectionCapability"
-    /// 这一端所在机器的进程清单。
-    static let processList = "processList"
-    /// 把 payload 注入这一端机器上的某个 pid。
-    static let injectIntoProcess = "injectIntoProcess"
-}
+**以下是实现后的真实形态。** 初稿这一节写错了三处 API，纠正记在决策日志里：`CommandNames` 是
+`String, CaseIterable` 的 **enum**（不能用 extension 加「case」），命令协议叫
+`RuntimeEngineRequest`（带 `associatedtype Response`，没有 `RuntimeRequest` / `RuntimeResponse`
+这两个类型），而 `InjectionTargetPlatform` 是 `#if os(macOS)` 且在 macOS-only 模块里、**连 iOS
+真机的 case 都没有**（`PLATFORM_IOS` = 2 落在 `.unsupported(2)`），所以当不了跨平台的门禁类型。
 
-/// 为什么能／不能注入。`unavailable` 的每个 case 都对应一句用户能照着做的提示，
-/// 所以它不是一个布尔值 —— 「不支持」与「装个越狱版就支持」对用户是两回事。
+三条命令作为 case 直接加进 `RuntimeEngine.CommandNames`：
+
+```swift
+enum CommandNames: String, CaseIterable {
+    // ... 既有 case ...
+    case injectionCapability
+    case processList
+    case injectIntoProcess
+}
+```
+
+模型落在 `RuntimeViewerCore/Sources/RuntimeViewerCore/Injection/`：
+
+```swift
 public enum RuntimeInjectionAvailability: Codable, Hashable, Sendable {
     case available
-    /// iOS 非越狱版：能看自己，不能注入别人。
     case requiresJailbrokenVariant
-    /// macOS 侧特权 daemon 未安装。
     case helperDaemonNotInstalled
-    /// 这个平台上没有这条路（附一句如实的原因，供 UI 直接显示）。
     case unsupported(reason: String)
+
+    public var isAvailable: Bool { ... }
+
+    /// 没注册 service 的进程答什么。三个平台含义不同，所以不是一个常量。
+    public static var withoutInjectionService: RuntimeInjectionAvailability { ... }
 }
 
-public struct RuntimeInjectionCapabilityRequest: RuntimeRequest {
-    public typealias Response = RuntimeInjectionCapability
-}
-
-public struct RuntimeInjectionCapability: RuntimeResponse {
-    public let availability: RuntimeInjectionAvailability
-}
-
-/// 这一端机器上的一个进程。**由远端填好，包括能不能注入它** —— 只有远端知道自己的 uid、
-/// entitlement 与 daemon 状态，宿主不该猜。
 public struct RuntimeProcess: Codable, Hashable, Sendable {
+    public enum Injectability: Codable, Hashable, Sendable {
+        case injectable
+        case requiresRootOnTarget
+        case notInjectable(reason: String)
+        public var isInjectable: Bool { ... }
+    }
     public let processIdentifier: pid_t
     public let name: String
     public let executablePath: String?
     public let userIdentifier: uid_t
     public let injectability: Injectability
-
-    public enum Injectability: Codable, Hashable, Sendable {
-        case injectable
-        /// 实测：uid 501 的越狱版 App 拿不到 uid 0 进程的 task port。
-        case requiresRootOnTarget
-        case notInjectable(reason: String)
-    }
 }
 
-public struct RuntimeProcessListRequest: RuntimeRequest {
-    public typealias Response = RuntimeProcessListResponse
-}
-
-public struct RuntimeProcessInjectionRequest: RuntimeRequest {
-    public typealias Response = RuntimeProcessInjectionResponse
-    public let processIdentifier: pid_t
+public enum RuntimeProcessInjectionResult: Codable, Hashable, Sendable {
+    case injected
+    case taskPortUnavailable(reason: String)   // MachInjector code 3
+    case targetRefusedPayload(reason: String)  // MachInjector code 18
+    case failed(code: Int, reason: String)
+    public var isInjected: Bool { ... }
 }
 ```
 
-**`RuntimeInjectionAvailability` 刻意不是 `Bool`。** 「这台设备装的是非越狱版」与「这个平台
-根本没这条路」对用户是两件完全不同的事——前者有补救动作（装越狱版），后者没有。门禁要能把
-这个差别讲给用户，所以原因必须跟着答案一起过线。
+请求类型按既有写法，`RuntimeViewerCore/RuntimeEngine+InjectionRequests.swift`：
 
-注入的**失败**响应里同样要能区分「拿不到 task port」（缺 `task_for_pid-allow`，或目标是 root
-进程）与「目标拒绝 dlopen」——这两者的处置完全不同，而实测它们对应 MachInjector 的 `code=3`
-与 `code=18`。
+```swift
+extension RuntimeEngine {
+    struct InjectionCapabilityRequest: RuntimeEngineRequest {
+        static var commandName: String { CommandNames.injectionCapability.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeInjectionAvailability
+    }
+    struct ProcessListRequest: RuntimeEngineRequest {
+        static var commandName: String { CommandNames.processList.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> [RuntimeProcess]
+    }
+    struct InjectIntoProcessRequest: RuntimeEngineRequest {
+        let processIdentifier: pid_t
+        static var commandName: String { CommandNames.injectIntoProcess.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeProcessInjectionResult
+    }
+}
+```
+
+三条都加进 `registerSharedHandlers`，于是 `RuntimeEngineProxyServer` 自动转发。
+
+### 平台实现挂在哪：沿用 `engineListProvider` 那条既有接缝
+
+`RuntimeViewerCore` 里**不放任何平台相关的注入代码** —— 它还要为 watchOS / tvOS / visionOS 构建，
+那些平台上既没有 MachInjector 也没有 daemon。注入实现由持有它的进程注册进来：
+
+```swift
+public protocol RuntimeInjectionService: Sendable {
+    func injectionAvailability() async -> RuntimeInjectionAvailability
+    func processList() async throws -> [RuntimeProcess]
+    func inject(intoProcessWithIdentifier processIdentifier: pid_t) async -> RuntimeProcessInjectionResult
+}
+
+extension RuntimeEngine {
+    public static var injectionService: (any RuntimeInjectionService)?
+}
+```
+
+这不是新发明的模式 —— `RuntimeEngine` 已经有 `static var engineListProvider` /
+`engineListChangedHandler`（注释写的就是「Callback for serving engine list requests. Set by
+RuntimeEngineManager.」），同样是「引擎按请求代答、但自己不拥有」的能力。
+
+**`static` 而非 per-engine**：注入能力是机器的属性，同一进程服务的每个引擎答案都一样。宿主问
+*远端*引擎时拿到的是那台机器自己的值，走的是连接而不是这个变量。
+
+**`nil` 是有意义的状态，不是未初始化**：iOS 非越狱版就是刻意不注册。各平台此时答什么由
+`withoutInjectionService` 决定，而它三个分支含义不同 —— iOS 上答 `requiresJailbrokenVariant`
+（有补救动作）；macOS 上 App 总会注册 service、由那个 service 自己报
+`helperDaemonNotInstalled`，所以到这里意味着没人接线，答 `unsupported` 并如实说明，**不能谎报
+成缺 daemon**（那会把用户送去重装一个装了也没用的东西）；其余平台是真没有实现。
+
+### 调用侧：能力查询不抛，另两条抛
+
+```swift
+extension RuntimeEngine {
+    public func injectionAvailability() async -> RuntimeInjectionAvailability   // 不抛
+    public func processList() async throws -> [RuntimeProcess]
+    public func inject(intoProcessWithIdentifier processIdentifier: pid_t) async throws -> RuntimeProcessInjectionResult
+}
+```
+
+**能力查询刻意不抛。** 它决定一个控件 enable 与否，每个调用方都只会把抛出的错误变成同一件事
+（「当作不可用」），所以这件事做一次、做在这里。顺带解决一个兼容问题：**比这三条命令更早构建的
+对端没有这个 handler，dispatch 会失败** —— 而那与「对端不能注入」不可区分，含义也相同。
+
+另两条抛，因为调用到它们时门禁已经放行，这时的失败是用户需要看到的真失败，不是一种要渲染的状态。
+注入的「抛」与「返回失败结果」含义不同：抛是请求没送达，结果是注入本身有了结论。
 
 ### 枚举实现
 
@@ -433,10 +537,29 @@ int proc_pidpath(int pid, void *buffer, uint32_t buffersize);
 
 `proc_listallpids(NULL, 0)` 返回的是容量提示而非精确数量，要按它分配后再取实际返回值。
 
-### payload 暂存
+### payload 内嵌与暂存
 
-越狱版内嵌 `RuntimeViewerServer.framework`（iphoneos 切片），首次注入时拷到
-`/private/var/tmp/`（已验证目标可 dlopen、App 可写入），注入该绝对路径。
+越狱版用**常规的 target dependency + Embed Frameworks** 内嵌 `RuntimeViewerServer.framework`
+（iphoneos 切片，`arm64 arm64e`），落在 bundle 的 `Frameworks/` 下。macOS 侧那套「脚本构建 →
+固定路径暂存 → copy phase」是被 Xcode 拒收跨平台内嵌内容逼出来的，越狱版自己是 iOS，不受这条限制。
+
+注入前把 payload 暂存到目标进程读得到的地方 —— **不是单个 Mach-O，而是一个目录**：
+
+```
+/private/var/tmp/RuntimeViewerPayload/
+    RuntimeViewerServer              ← 注入这个绝对路径
+    Frameworks/
+        libswiftCompatibilitySpan.dylib   ← 不拷它,目标 dlopen 必失败
+        …                                  ← App bundle 里其余内嵌库
+```
+
+这个布局不是随意定的：payload 自己的 run-path 里有 `@loader_path/Frameworks`，而 loader 就是
+暂存出来的那个副本，所以依赖放在同名子目录里即可被解析，**不需要改写二进制**。为什么必须拷依赖
+见决策日志里 `libswiftCompatibilitySpan.dylib` 那条 —— 简短版：它是 Swift 的向后部署垫片，
+iOS 26.5 的系统里有、iOS 27 里没有，赌系统自带会得到一个随设备版本漂移的 bug。
+
+逻辑落在 `RuntimePayloadStaging`，**刻意不加 iOS 编译门**，以便在 macOS 上用真实文件系统测
+（布局错了的表现是在别的进程里 `dlopen` 失败，是整个功能最难观测的位置）。
 
 ### 选择器的数据源抽象（上游 `RunningApplicationKit`）
 
@@ -631,13 +754,26 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 1. **MachInjector 的 iOS 支持并入上游。** 把 spike 分支 `feature/ios-support` 的 5 处改动按
    MachInjector 自己 `CLAUDE.md` 的规矩走一份提案后并入 `main`，发版。验证标准：macOS
    `swift build` 无回归 + iOS arm64e 能编出 `libMachInjector.a`。
-2. **（前置，不在本提案）修 `RuntimeViewerMobileServer` 的 iphoneos 构建。**
+2. ~~（前置，不在本提案）修 `RuntimeViewerMobileServer` 的 iphoneos 构建。~~
+   **已撤销 —— 误报。** 2026-10-02 补测：经 `RuntimeViewer-Debug.xcworkspace` 构建
+   `generic/platform=iOS` 为 `EXIT=0`，加 `ARCHS=arm64e` 同样通过。原先的失败来自那个独立
+   `.xcodeproj` 的陈旧 `Package.resolved`，而官方构建从不走它。详见「前期调研」最后一节。
 3. **新建越狱版 target**，含 entitlements、独立 bundle identifier、图标，和一个编译期能力开关。
    验证标准：两个版本都能构建，越狱版的 `dump-entitlements` 含那三条。
+   **并把 payload 内嵌进去**：越狱版与 payload 同属 iOS，所以这里**可以**用常规的
+   target dependency + Embed Frameworks，不必走 macOS 那套「脚本构建 → 固定路径暂存 →
+   copy phase」（那是被 Xcode 拒收跨平台内嵌内容逼出来的）。payload 落在 `Frameworks/`，
+   `ARCHS[sdk=iphoneos*] = arm64 arm64e`。验证标准：产物里 `Frameworks/RuntimeViewerServer.framework`
+   存在、两个切片都在、能力门禁不再报「缺 payload」。
 4. **实现设备侧枚举**（自带 `libproc` 原型）与**注入**（调 `MIMachInjector`，payload 暂存到
    `/private/var/tmp/`），注册三条 RPC 命令。带单测：`libproc` 原型的声明与 macOS 头一致、
    错误码映射正确。
-5. **`RunningApplicationKit` 的上游改动。** 三件事：①加 `RunningItemSource`、把泛型 picker 改
+5. **`RunningApplicationKit` 的上游改动。** ✅ **已实现并发版 `0.7.0`**(提案见该仓库
+   `Documentations/Evolutions/0003-injected-item-source.md`;83 个测试全绿,原有 69 个未改)。
+   **落地形态与下面写的不同** —— 公开面小得多,见决策日志 2026-10-02 那条:没有公开泛型
+   picker,而是给门面 `RunningPickerTabViewController` 加 `Configuration.tabs` 与
+   `processItemSource`。本仓库的依赖已从临时分支 pin 换回 `from: "0.7.0"`。
+   原计划的三件事：①加 `RunningItemSource`、把泛型 picker 改
    public 并接受外部注入的 items，现有两种来源各自成为其实现；②`shouldSelect(item:)` 已存在且已
    接在 `shouldSelectRow` 上，补上**渲染侧的变灰**（现在返 `false` 只是选不中，行看起来仍正常）；
    ③加**特殊进程规则**，`kernel_task`（pid 0）/ `launchd`（pid 1）显示但不可选中——库里现在没有
@@ -645,7 +781,7 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
    `Documentations/Evolutions/`（已有 0001、0002），这是公开 API 变更，**要在那边单独走一份
    提案**后合入并发版。验证标准：RuntimeViewer 侧两个 tab 除「特殊进程变灰」外行为不变（它的
    `PickerStructureTests` / `ListRowLayoutTests` 继续全绿），并给特殊进程规则补单测。
-6. **宿主侧 attach 路径**：先按「目标是不是宿主进程」分流——是则原样走今天的本机分支、**一次
+6. **宿主侧 attach 路径** ✅ **已实现**(门禁 + 选择器整体切换 + 远端 attach)。先按「目标是不是宿主进程」分流——是则原样走今天的本机分支、**一次
    RPC 都不发**；不是才 `attachToRemoteProcess` + `injectionCapability` + `processList`（远端清单
    只来自远端，不混入本机进程）。镜像引擎短路成占位，不实现。按项目规矩给新 ViewModel 补
    `RuntimeViewerApplicationTests` 契约测试。
@@ -685,3 +821,52 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-02 | 查证发现一处真实的行为收紧，已如实留档 | 实现这条 disable 规则前查了现状：**今天的 Attach to Process 与选中引擎完全无关**，唯一的门是 `SIPChecker.isDisabled()`，`attachItem` 没有任何 `isEnabled` 控制。所以按引擎 disable **会拿掉一个现有能力**——今天选中 iOS 引擎照样能 attach 本机进程。判定为**有意的语义收紧**：attach 从此表示「在当前引擎所在那台机器上挑进程」，而「不管在看哪台机器总是挑本机」在有了设备引擎之后会让人挑错机器。替代路径是把引擎切回 My Mac（toolbar 上的常规操作）。顺带记下 SIP 那条门用的是弹提示、与新门禁的 disable 不一致，是否统一列为待决。 |
 | 2026-10-02 | 特殊进程显示但不可选中，上游改动因此变三件 | 用户要求把 `kernel_task` / `launchd` 这类特殊进程 disable 掉、显示但不可选中。查证：上游**已有** `shouldSelect(item:)` 并已接在 `tableView(_:shouldSelectRow:)` 上，所以机制现成；缺的是①**渲染侧变灰**（返 `false` 只是选不中，行看起来仍正常）与②**特殊进程规则本身**（库里现在没有任何此类处理）。远端条目的 `injectability` 映射到同一个钩子，宿主不必为远端再发明一套禁用机制。**本机那条路一并受益**：今天它可以选中 launchd 然后注入失败。 |
 | 2026-10-02 | 上游改动变成两处 | 除 MachInjector 外，`RunningApplicationKit` 也要改（加数据源抽象 + 公开泛型 picker）。该仓库同样有自己的 `Documentations/Evolutions/`，且这是公开 API 变更，所以要在那边单独走提案。本提案的落地步骤因此多出一条，且两处上游都得先发版才能动宿主侧。 |
+| 2026-10-02 | 状态 Draft → Accepted，开始实现 | 用户批准并要求开工。实现落在 `feature/jailbroken-ios-injection`（worktree `.worktrees/RuntimeViewer-JailbrokenIOSInjection`，基线 `next` @ 968b20e7）。两处仍未决的假设（SIP 那条门是否也改成 disable + tooltip、「获取越狱版」入口的位置）不阻塞落地步骤 1–6，按提案里已写的假设实现，第 7 步前再确认。 |
+| 2026-10-02 | 撤销「iphoneos payload 构建失败」这条前置 —— 是我用错了构建入口 | 原记录说真机 payload 以 `swift-async-algorithms` 的并发错误构建失败，并把它列为整条链的前置。补测推翻：那是用独立 `RuntimeViewerServer.xcodeproj` 构建的结果，而**它的 macOS 目标也挂**，且挂在更前面的 `SwiftyXPC` 上 —— 说明问题是那个工程自带的 `Package.resolved` 整体陈旧（async-algorithms 钉 1.1.1，上游 1.1.7 已修掉那段代码），不是 iOS 特有。改用 `RunScript.sh:263` 实际使用的 `RuntimeViewer-Debug.xcworkspace` 后 `EXIT=0`。**教训：复现失败前先确认自己用的是官方构建路径**，否则会把别人的陈旧锁文件当成自己的阻塞。 |
+| 2026-10-02 | payload 的 arm64e 要显式指定，并留下一个未实测的待定 | 工程写的是 `ARCHS = $(ARCHS_STANDARD)`，而 `ARCHS_STANDARD` 在 iphoneos 上**不含 arm64e**，所以默认产物是 arm64。传 `ARCHS=arm64e` 同样构建通过（55 MB，`platform 2` / `minos 15.0`）。SwiftPM 侧不用额外处理 —— Debug workspace 已带 `iOSPackagesShouldBuildARM64e = true`。**倾向编 arm64e**（iOS 系统进程是 arm64e，架构对齐无歧义，代价 2 MB）；「arm64 dylib 能不能 dlopen 进 arm64e 进程」未实测，不拿它当依据，落地第 3 步时定。 |
+| 2026-10-02 | MachInjector 的 iOS 提案已落盘，成为唯一剩下的前置 | 在 `MachInjector` 仓库建 `Documentations/Evolutions/draft-ios-support.md`（Draft，待批准），实测改动提交在它的 `feature/ios-support` 分支（`81aaaba`），macOS 构建与 28 个测试全绿。该提案比 spike 多一项决定：**remap 路径在 iOS 上按 `#if TARGET_OS_OSX` 整体关掉**，理由是它内嵌的 loader 是 macOS dylib、只能在运行时失败，编译期不存在优于运行时失败，顺带去掉 11167 行 dylib 字节。上游发版前本仓库用 `USING_LOCAL_DEPENDENCIES=1` 开发。 |
+| 2026-10-02 | 详细设计里有三处 API 写错，已按真实代码重写 | 初稿的签名是凭印象写的，落地时逐条对不上：①`CommandNames` 是 `String, CaseIterable` 的 **enum**，`extension … { static let … }` 加不进「case」，只能直接加 case；②命令协议叫 `RuntimeEngineRequest`（带 `associatedtype Response`），代码里**没有** `RuntimeRequest` / `RuntimeResponse` 这两个类型；③`InjectionTargetPlatform` 是 `#if os(macOS)` 且在 macOS-only 模块 `RuntimeViewerHelperClient` 里，而且**连 iOS 真机的 case 都没有**（`PLATFORM_IOS` = 2 落在 `.unsupported(2)`，那是「没有对应 payload 切片」而不是「这是真机」）—— 所以它当不了跨平台门禁的判据，门禁属性必须落在 Core。 |
+| 2026-10-02 | 平台实现沿用 `engineListProvider` 的既有接缝，不新发明机制 | 注入实现由进程注册：`RuntimeEngine.injectionService`（`static`，因为注入能力是机器的属性，同进程每个引擎答案相同）。`RuntimeViewerCore` 里不放任何平台相关注入代码 —— 它还要为 watchOS / tvOS / visionOS 构建。`nil` 是**有意义的状态**：iOS 非越狱版刻意不注册。各平台此时的答案由 `withoutInjectionService` 给，三个分支含义不同，**macOS 上不能谎报成缺 daemon**（那会把用户送去重装一个装了也没用的东西），要如实答「没人接线」。 |
+| 2026-10-02 | 能力查询定为不抛，并顺带解决旧对端兼容 | `injectionAvailability()` 返回值而不抛：它决定控件 enable 与否，每个调用方都只会把错误变成同一件事（当作不可用），所以做一次、做在 Core。连带好处是**比这三条命令更早构建的对端没有这个 handler、dispatch 会失败**，而那与「对端不能注入」不可区分、含义也相同，于是旧对端自动降级为不可用，不需要版本协商。另两条照常抛 —— 调用到它们时门禁已放行，那时的失败是真失败。 |
+| 2026-10-02 | 越狱版 target 落地,名为 `RuntimeViewerUsingUIKit-JB` | 用户在 Xcode 里 Duplicate 出 target,我接着配置。Xcode 的复制品有三处必须修:①复制出的 Info.plist 文件引用是**绝对路径**(钉死在一个 worktree,别人检出即坏)——改成相对路径并重命名为 `RuntimeViewerUsingUIKit-Jailbroken-Info.plist`;②`PRODUCT_BUNDLE_IDENTIFIER` 与非越狱版**完全相同**,两个版本无法共存——新增 `RUNTIME_VIEWER_APP_{DEBUG,RELEASE}_JAILBROKEN_BUNDLE_IDENTIFIER` 两个变量;③`CODE_SIGN_ENTITLEMENTS` 仍指向共享的空 entitlements 文件。另外把 `ENABLE_APP_SANDBOX` 置 `NO` —— 它会生成 `com.apple.security.app-sandbox`,与 `no-sandbox` 直接矛盾。两个 app target 共用同一个 `fileSystemSynchronizedGroups`,所以不需要维护文件清单。 |
+| 2026-10-02 | 签名刻意设为 Manual + `CODE_SIGNING_ALLOWED = NO` | Xcode 签不出那三条私有 entitlement(没有 provisioning profile 授予),所以这个 target **永远不由 Xcode 安装**。设成 Automatic 会让它悄悄取得一个开发 profile、把 entitlements 剥掉,产出一个看起来正常、却恰好少了全部能力的包 —— 那种失败很难自查。Manual + 禁止签名让它在构建期就说清楚。 |
+| 2026-10-02 | 能力开关实现为 `SWIFT_ACTIVE_COMPILATION_CONDITIONS` 的 `RUNTIME_VIEWER_JAILBROKEN` | 注册代码(`InjectionServiceRegistrar`)放在三个 target 共用的同步目录里,整体包在这个条件后面。非越狱版因此既不链 `RuntimeViewerDeviceInjection` 也不注册任何东西,`RuntimeEngine.injectionService` 保持 `nil` —— 那正是让它如实回答 `requiresJailbrokenVariant` 的状态,而不是注册一个永远答「不可用」的实现。 |
+| 2026-10-02 | payload 缺失单独成一种不可用原因 | 一个 entitlement 齐全但没内嵌 payload 的构建,**能枚举但注不进去**,这是它自己的失败,和「还在容器里」不是一回事。把两者合成一句会把用户送去重装,而问题在 build phase。所以 `injectionAvailability()` 先查 payload 在不在,给出单独的原因。 |
+| 2026-10-02 | 下游集成挖出 MachInjector 0.6.0 的一个 bug,已发 0.6.1 | 提案和 MachInjector 的 README 都写「iOS 必须 arm64e」,**那对运行成立、对构建不成立**:Xcode 的 `iOSPackagesShouldBuildARM64e` 是往包的架构里**追加** arm64e 而非替换 arm64,所以即使 App target 钉 `ARCHS = arm64e`,包仍两份一起编,arm64 那份在 `loader_arm64.s` 上报 `instruction requires: pauth`,整个构建挂。修法是在两个 `.s` 的 `#ifdef __arm64__` 内加 `.arch_extension pauth`;实测 10 个切片全部汇编通过,**arm64e 的 `__DATA` 字节逐字节不变**。macOS 永远看不到这个 —— 它的 arm64 基线是 armv8.3,iOS 的要覆盖 A7–A11。 |
+| 2026-10-02 | `ARCHS` 必须写在 target 上,不能写在 xcodebuild 命令行 | 第一次试图用命令行 `ARCHS=arm64e`,结果宿主宏可执行文件(`MemberwiseInitMacros` / `PerceptionMacros`)也被强制成 arm64e 而找不到,构建失败。命令行设置会到达**每一个** target —— 项目的 `RunScript.sh:218-224` 早就写明了这点并特意改用 `EXCLUDED_ARCHS`,是我没照做。 |
+| 2026-10-02 | 一次假绿:手工改 pbxproj 把四个设置写到了 `buildSettings` 字典外面 | 追加位置落在闭合的 `};` 之后,Xcode 当成 `XCBuildConfiguration` 的游离键,构建看不见。`BUILD SUCCEEDED` 照样出现,但产物是 arm64、**`RUNTIME_VIEWER_JAILBROKEN` 从未被定义**(registrar 编译成空的)。两个巧合把失效伪装成了成功:`CODE_SIGNING_ALLOWED` 我在命令行也传了,`ONLY_ACTIVE_ARCH = NO` 恰好是该 destination 的默认值。是去查产物架构才掉出来的。**教训:改完构建设置先 `-showBuildSettings` 查解析值,再构建;绿灯不证明设置生效。** |
+| 2026-10-02 | payload 内嵌走常规 target dependency,**不照搬 macOS 那套暂存脚本** | macOS 侧之所以要「脚本构建 → 固定路径暂存 → copy phase」,是因为 Xcode 拒绝把 iOS-family 内嵌内容挂成 macOS App target 的依赖(项目 `CLAUDE.md` 已记)。越狱版自己就是 iOS,这条限制不存在,于是改用最普通的 `PBXTargetDependency` + Embed Frameworks。差别不只是少写一个脚本:**陈旧 payload 这个失败模式整类消失**——macOS 那边 copy phase 无法分辨暂存路径上的产物是不是本次构建的,所以 `RunScript.sh` 要在 payload 构建失败时**主动清空**暂存目录;依赖关系让构建系统自己保证时序。跨工程引用是现成的:UIKit 工程早已把 `RuntimeViewerServer.xcodeproj` 作为子工程引入,两个 `PBXReferenceProxy` 都在,本次只补了一个 `proxyType = 1` 的 proxy。 |
+| 2026-10-02 | payload 定为 **fat(arm64 + arm64e)**,推翻上面「倾向编 arm64e」那条待定 | 当时待定的问题是「arm64 dylib 能不能 dlopen 进 arm64e 进程」。真正该问的是反过来那一半:**iOS 上系统进程是 arm64e,而所有第三方 App 是 arm64**(App Store 不分发 arm64e)。只带 arm64e 就注不进任何第三方 App,只带 arm64 就注不进 `backboardd` 这类系统进程——两种都砍掉一半目标。所以 payload 必须两个切片都有,代价是 Debug 下体积翻倍(55 MB → 约 110 MB)。注入器自己仍是 arm64e-only(App target 按 Xcode 的安全设置参考「Apps stay arm64e-only」),**但「arm64e 进程里的注入器能否注入 arm64 目标」尚未实测**,留到第 8 步;那是 MachInjector 的 shellcode 问题,与 payload 架构是两件事。 |
+| 2026-10-02 | 架构写在 `ARCHS[sdk=iphoneos*]` 上,刻意不碰 Distribution 配置 | payload target(`RuntimeViewerMobileServer`)是**共享**的:macOS App 的模拟器 payload 和对外发布的 XCFramework 都用它。条件写成 `[sdk=iphoneos*]` 后模拟器与 Catalyst 原样不动(实测仍为 `arm64 x86_64`),而 Distribution 配置**一行不改**——XCFramework 由 `BuildRuntimeViewerServerXCFramework.sh` 以 Distribution 构建,对外发布的 iOS 切片因此保持 arm64,不会因为本提案变成 fat。Debug 还额外需要 `ONLY_ACTIVE_ARCH[sdk=iphoneos*] = NO`:工程级 Debug 是 `YES`,接着真机构建时只会编设备自身那一个架构,arm64 切片会**静默**消失。 |
+| 2026-10-02 | 实测:`ENABLE_POINTER_AUTHENTICATION` 不控制 PAC 代码生成 | 先按 Xcode 自带的安全构建设置参考(「`ENABLE_POINTER_AUTHENTICATION = YES` Builds for arm64e pointer signing」)给 payload 也加了这条,随后发现**越狱版 App target 自己这条是 `NO`**,而它上一轮已经编出过 arm64e 产物。去数产物里的 PAC 指令:主二进制 31 条、debug dylib 345432 条(`pacibsp` / `retab` / `braa` 一类),`cpusubtype 2 / caps 0x80` 与系统 arm64e 二进制一致。结论:PAC 代码生成跟的是 `arm64e-apple-ios` 三元组,那个设置管的是别的事。**所以把它撤掉了**——留一条实测证明为空操作的设置,下一个读到的人会当它是关键。顺带确认上一轮验证的 arm64e 产物是有效的,不是「挂着 arm64e 名字的非 PAC 二进制」。 |
+| 2026-10-02 | payload 放 `Frameworks/` 而不是跟 macOS 一样放 `Resources/` | iOS App bundle 是平的,`Bundle.main.resourceURL` 就是 bundle 根,所以 macOS 侧 `url(forResource:withExtension:)` 那套到 `Frameworks/` 里的东西是看不见的。两个选择里取了 iOS 的惯例位置,registrar 改用 `Bundle.main.privateFrameworksURL`。注意**宿主侧仍然是 `Resources/`**(`RuntimeInjectClient` 只会去那里找),两边不统一是有意的,各自随各自平台的惯例。 |
+| 2026-10-02 | 记下一个留给第 7 步的隐患:payload 的 `SKIP_INSTALL = NO` | 项目 `CLAUDE.md` 已记过同类坑:带产物的 target 若 `SKIP_INSTALL = NO`,归档时会把自己装进 archive,archive 就不再是 app archive、导出直接失败。payload target 为了发 XCFramework 必须 `SKIP_INSTALL = NO`,而它现在是越狱版的依赖。**普通构建不受影响**(该设置只在 install / archive 动作生效),但第 7 步真要用 `xcodebuild archive` 打 IPA 时会撞上,届时要么用 `-exportArchive` 之外的打包方式,要么在归档命令里覆盖它。先留档,不提前改共享 target。 |
+| 2026-10-02 | `otool -L` 查出 payload 有一条非系统依赖,暂存逻辑整体重做 | 内嵌成功后去查产物的加载命令,发现 payload 依赖 `@rpath/libswiftCompatibilitySpan.dylib` —— Swift 的 `Span` 向后部署垫片,因为 payload 的部署目标(15.0)早于把 `Span` 并进 `libswiftCore` 的那个版本,Xcode 于是链接工具链副本并把它内嵌进 App bundle。**原来的 `stagePayload()` 只拷那一个 Mach-O**,目标进程 `dlopen` 时会在自己的 `@executable_path/Frameworks` 里找这个 dylib,找不到。这条差点漏掉的原因很值得记:它的第一条 run-path 是 `/usr/lib/swift`,而**iOS 26.5 的 `/usr/lib/swift` 里确实有这个 dylib、iOS 27 里没有了**(SDK 里对应的 `.tbd` 已改成指向 `libswiftCore` 的别名)—— 所以在 26.5 上测会通过,在 27 上失败,是个按设备版本漂移的 bug。macOS 侧从来没撞上:macOS 27 仍自带它。**修法不改二进制**:payload 本来就带 `@loader_path/Frameworks` 这条 run-path,所以把依赖拷到暂存目录下一个叫 `Frameworks` 的子目录里即可自洽。 |
+| 2026-10-02 | 暂存逻辑抽成 `RuntimePayloadStaging`,跨平台以便可测 | 沿用本模块里枚举器的既有先例(刻意不加 iOS 门以便在 macOS 上测)。理由在这里更强:布局错了的表现是**在别人的进程里** `dlopen` 失败,栈上没有我们的帧,是整个功能最难看出错的地方。配 11 个测试,钉住的是会被将来的人改坏的那几条不变量:payload 在暂存根、依赖在 `Frameworks/` 子目录、依赖目录名必须等于 run-path 里那个词、payload 自己的 `.framework` 不重复拷(否则白拷一百多 MB)、权限 0o755、重复暂存可行且不动暂存目录里别人的文件、上游删掉的依赖不会在暂存副本里残留。 |
+| 2026-10-02 | 依赖选择取「全拷,排除 payload 自己」而非解析 load command | 更精确的做法是读 payload 的 `LC_LOAD_DYLIB` 只拷实际需要的(App 已经依赖 MachOKit,做得到)。没选它:多拷的那几百 KB 什么都不值,而「将来上游新增一条依赖、只在别人进程里以 `dlopen` 失败的形式暴露」这个代价很高。精确性在这里不是收益方向,冗余才是。 |
+| 2026-10-02 | 上游 `RunningApplicationKit` 已实现,但公开面比本提案设想的小一个数量级 | 本提案原话是「把泛型 picker 公开」。落地时发现这句的代价被低估了:**Swift 要求公开类里的每个 `override` 也必须公开**,于是公开泛型 picker 会连带把四十来个 subclass hook、`BaseConfiguration`、`PickerField` 全部推上公开 API —— 更糟的是让 `didConfirm(item:)` / `loadItems()` 变成**外部可调用**,等于绕过 picker 直接触发代理回调。改成走那个库已有的门面模式:`RunningPickerTabViewController` 新增 `Configuration.tabs`(单个 tab 时不再套 `NSTabViewController`,直接托管那一个列表)和 `processItemSource` 一个初始化参数,三个 picker 全部保持 internal。上游提案:`RunningApplicationKit` 仓库的 `0003-injected-item-source.md`,已合入 `main` 并发版 `0.7.0`,83 个测试全绿(原有 69 个一字未改,正是本步的验收标准)。 |
+| 2026-10-02 | 不把本机两种数据源改造成 `RunningItemSource` 的实现 | 本提案原话是「现有的两种来源各自成为它的实现」。不照做:进程选择器的刷新是**增量**的(diff 新增/消失的 pid,避免每 2 秒重建四百个对象),而 `loadItems() async throws -> [Item]` 是全量快照语义。套上去等于把一条调过的性能路径换掉,换来的只有形式统一 —— 而本步的验收标准恰恰是「现有两个 tab 行为不变」,改造它是唯一可能破坏该标准的动作。 |
+| 2026-10-02 | 不另造 `RuntimeRemoteRunningItem`,改为公开 `RunningProcess.init` | 本提案草拟过一个宿主侧的 `RunningItem` 实现。实现时发现没必要:`RunningProcess` 是纯数据结构、字段齐全(含 `platform`),公开它的 memberwise init 就够了。少一个平行类型,而且列、角标、排序、右键菜单全部直接复用。 |
+| 2026-10-02 | 门禁的分流判据落成 `RuntimeEngine.injectionTargetsRunOnThisMachine`,`nonisolated` | 读 `source` 而不做探测:这是「连接通向哪里」的属性,发任何东西之前就已知。`local` / `remote`(XPC 只能到自己 bundle 里的服务)/ `localSocket`(本机已注入的进程,含模拟器)为本机;`bonjour` / `directTCP` 跨网络接口 —— **即使走 loopback 也算远端**,因为进程表归对端所有。`nonisolated` 是必要的:UI 要在显示任何东西之前选分支,让它 `await` 引擎就把这个属性存在的意义(省掉那次往返)又抵消了。switch 不带 `default`,新增 source case 会编译失败,配 8 个测试写明新 case 该落在哪一边。 |
+| 2026-10-02 | SIP 那条待决项定了:统一成 disable + tooltip,**且只在「目标是本机进程」那一支生效** | 之前列为待决。按用户定的原则(「动作不可用就是控件不可用」)统一是显然的,但查实现时发现一个更实质的问题:**原来的 SIP 检查无条件拦在点击处**,所以选中一台 iOS 设备引擎时也会弹「请关闭 SIP」—— 而那台设备自己做注入,与本机 SIP 状态毫无关系。所以 SIP 不是按钮整体的门,而是本机那一支的门。 |
+| 2026-10-02 | 镜像引擎按提案所述短路成占位,不发探测 | `isMirrored` 问的是引擎管理器而不是引擎本身:引擎「怎么来的」是管理器掌握的事实,`RuntimeSource` 表达不了 —— 镜像引擎的 `directTCP` source 和直连的长得一样。 |
+| 2026-10-02 | RunningApplicationKit 依赖临时钉到分支,**已换回版本号 `from: "0.7.0"`** | 用户定的:先把依赖换成 `feature/injected-item-source` 分支跑通,合并后再换回版本号。分支 pin 不可复现,**绝不能进发布归档** —— `Package.swift` 里那条依赖上曾留了注明这件事的注释,现已随分支 pin 一并删除。上游分支已 fast-forward 合入 `main` 并打 `0.7.0`,四个 `Package.resolved`(Debug / Distribution / Packages / CommandLine)全部重新解析过。顺带发现两件事:上游提案的「方案 二/三」还在描述那条被撤回的公开 picker 方案(**那次 commit message 声称提案已记下撤回,实际只记在 CLAUDE.md 里**),已改写并落地编号 0003;Distribution 与两个包级锁文件早已对不上各自的 manifest(UIFoundation 要求 ≥0.37.0 却钉着 0.32.0,MachInjector 要求 ≥0.6.0 却钉着 0.5.1),这次解析一并补齐 —— 对不上的锁文件会被 SwiftPM 直接忽略重算,等于没有锁。 |
+| 2026-10-02 | 真机注入后怎么被认领:查清了,复用模拟器那条路 | 上一轮报告里列为待查项。宿主用 `{deviceID}-{pid}` 匹配注入后冒出来的 Bonjour 端点,所以注入**之前**就得知道设备 ID。唯一诚实的来源是 `engine.bookmarkScope` 的 `.identified(.bonjour(deviceID:…))` —— 它把设备 ID 当成可选值携带。**不能用 `hostInfo.hostID`**:对端不发布该键时它会回落到 instance ID 甚至显示名,拿那个去匹配会把本次请求配到另一个进程上。设备 ID 缺失时宁可报错也不猜。注入后等待直接复用 `awaitInjectedBonjourEngine`:真机 payload 和模拟器 payload 走的是同一段代码(`RuntimeViewerServer.swift` 里非 macOS 那一支),广播方式完全一致,所以不需要新机制。 |
+| 2026-10-02 | 远端条目的可注入性存在宿主侧,未知 pid 答「不可注入」 | picker 的行类型(`RunningProcess`)描述一个进程,不描述对它的判断,所以判断由 `RemoteProcessItemSource` 在取清单时记下、再经 `shouldSelect` 答回去(同时变灰)。未知 pid 答 `false`:既覆盖清单到达前那一小段,也是安全方向 —— 给出一个对端没有背书的目标,结果是注入失败而不是一个灰行。 |
+| 2026-10-02 | **设备进程清单只有真实数量的 ¼,且丢的全是低 pid** —— `proc_listallpids` 的返回值是个数不是字节数 | 真机上暴露:408 个进程只到达 102 个,最小的 pid 三百多,`launchd`(1)、`SpringBoard`(34)、`backboardd`(69) 全不见,于是**唯一能注进去的那类目标(daemon)恰好全被藏起来了**。根因是 `processIdentifiers()` 把第二次调用的返回值当字节数又除了一次 `MemoryLayout<pid_t>.size`,而 `proc_listallpids` 内部已经除过 `sizeof(int)`。在 macOS 上实测:`proc_listallpids(nil,0)` = 1501、带缓冲区调用 = 1482(`ps` 报 1480),现有代码会报 370。内核**按 pid 倒序写入**,所以截断保留的是高位那一截 —— 这就是「只剩新进程」的由来。代码里那句「the kernel has been observed to return a byte count」的注释把一个错误认知写死了,是它导致了这次多余的除法。回归测试断言清单里有 pid 1:launchd 必定存在、必定是第一个被截掉的,与机器上有多少进程无关。 |
+| 2026-10-02 | **挂起的 App 注不进去**,报的却是无信息的 `injection timed out` | 真机上第一次注入 `Preferences`(560)失败。逐项排除后定位:`MIMachInjector.m` 注入后等远程线程回报 `MI_INJECTION_DONE` 的预算是 `usleep(10000)` + 10×`usleep(20000)` = **210 毫秒**;而 iOS 会挂起后台 App,挂起进程的线程不被内核调度,引导线程永远跑不到设置标志那一步。证据链:payload 已暂存到盘上(77 MB + `Frameworks/`,权限 0755)、`task_for_pid` 成功(否则是另一个错误码)、靶子毫发无伤仍活着、驻留仅 1 MB 说明 payload 没载入。判据是 jetsam band:挂起的 App 在 band 0、个位数 MB、几乎无 CPU,`backboardd` 在 band 30、127 MB。**这是设计缺口而非环境怪癖** —— 用户从进程表里挑的 App 大概率就是挂起的。调大 210 ms 没用,挂起的进程等多久都不会醒。待定方案见「未决」。 |
+| 2026-10-02 | **真机端到端跑通了(对允许 bind 的目标)** —— 注入 → payload 启动 → 广播 → 宿主连接 → **浏览到目标进程里的接口** | vphone guest(iOS 26.6.2)实测:注入 `chronod`(115)后,Mac 的引擎选择器出现 `chronod` 并**分组在 `iphone` 下**(分组键是 `rv-device-id`,所以设备身份是一致的 —— 我此前怀疑它不一致,**推断错误,已推翻**);进去后从设备的 dyld shared cache 读出 `ActivityKit` 的完整 Swift 类型树(enum/struct/泛型角标齐全)。**注意 `chronod` 主二进制本身显示「不含任何类」是正确结果**,daemon 的主二进制常是薄壳,类在它链接的框架里 —— 和 0014 记过的 SpringBoard 是同一个陷阱,判断「浏览接口」是否可用时不能用主二进制。 |
+| 2026-10-02 | **实测:`bind()` 被禁的进程里,向外 `connect()` 是放行的** —— 反向连接的前提成立,而且现成的传输层就能用 | 为此写了一次性探针(`SandboxReachabilityProbe`,不进功能分支),故意打一个没人监听的端口,让失败方式本身成为答案:`ECONNREFUSED` = 沙盒放行、对端拒绝,`EPERM` = 沙盒拦下。在 `dasd`(内核日志同时记下 `deny(1) network-bind`,对照组成立)里:`raw-connect` 到**回环**与到 **Mac 的局域网地址**都是 `errno 61 Connection refused`,即两者都放行。Network.framework 同样放行 —— `[C1 … lo0]` 与 `[C2 … en0]` 两条流都走到 `flow:failed_connect, error Connection refused`。(探针本身漏了一个状态:`NWConnection` 把「被拒」报成 `.waiting` 而非 `.failed`,而处理只覆盖了 `.ready/.failed/.cancelled`,所以这两行没打出来 —— 是测量的缺陷,不是平台的。)**关键附带发现**:`RuntimeLocalSocketConnection` 是裸 BSD socket(`socket(AF_INET, SOCK_STREAM, 0)`)、不走 Network.framework,因此完全绕开 NECP —— 而日志里所有 `NECP … Operation not permitted` 全部出在监听那条路上。所以 macOS 为同一个理由已经在用的那个传输层,本来就能在 iOS 上用。失败链条在日志里完整可见:`nw_listener_socket_inbox_create_socket bind(15,…) failed [1]` → `Bonjour listener failed` → `failed to create runtime engine`。目标统计更新为 7 个里 3 个允许 bind(chronod、sharingd、identityservices)、4 个被禁(searchpartyd、mediaplaybackd、backboardd、dasd)。 |
+| 2026-10-02 | **认领失败的真因确认:`localDeviceID` 在别人的进程里逐个目标而异** | 引擎选择器里出现了**两个都叫 `iphone` 的分组** —— `chronod` 独占一组,`RuntimeViewer JB` 与 `sharingd` 同在另一组。分组键就是 `rv-device-id`,所以 `chronod` 里算出的设备 ID 与 App 的**不同**,而 `sharingd` 里算出的**相同**;后者的认领随即成功(面板不再报错,直接切过去)。这证实了 `RuntimeNetworkBonjour+LocalIdentity.swift` 注释里预言的那条路:MobileGestalt 答得上来就用它,答不上来退到 keychain 里的 UUID,而**从别人的进程里查 keychain 按进程解析**。注释称这条路「目前不可达而非被防住,靠两道闸」—— 真机上第一道闸(`SIMULATOR_UDID`)根本不存在,只剩 MobileGestalt 一道,而它取决于目标进程的 entitlement:`sharingd` 本职处理设备身份,答得上来;`chronod` 答不上来。**这坐实了落地步骤的第一步(注入时把身份显式交给 payload)修的正是真问题,不再是推断。**(过程更正:我曾因一张只显示单个分组的截图撤回过这个推断,撤错了。) |
+| 2026-10-02 | 但 attach 面板仍报超时 —— **引擎来了,认领没认出来** | 同一次注入:宿主 30 秒内没把新引擎认成「刚请求的那个」,弹出 `bonjourEngineNeverAdvertised`,而引擎其实已经连上并可用。已排除的:设备身份不一致(分组证明一致)、payload 启动慢(设备日志显示 `Attach successfully` → `Did Launch` 仅一秒)。剩下两种可能未分清:`{deviceID}-{pid}` 这个 key 逐字对不上,或宿主侧 `connect()` 握手比 30 秒慢(引擎要**握手完成后**才进入 `bonjourRuntimeEngines`,即可被认领的列表)。分清需要一次带 `dns-sd -Z` 的注入,直接读 payload 广播的 TXT。 |
+| 2026-10-02 | **payload 继承的是目标进程的沙盒,而 iOS daemon 普遍禁止 `network-bind`** —— 本提案「payload 自己广播 Bonjour」的前提在真机上不成立 | 真机实测,内核直接给出判据:注入 `searchpartyd`(159)后 payload 启动、随即 `Listener failed: NWError 1 (Operation not permitted)`,内核日志 `Sandbox: searchpartyd(159) deny(1) network-bind local:*:55330`。注入 `chronod`(115)则**允许**绑定、注册成功;`mediaplaybackd`(346)同样被拒,`sharingd`(74)允许。**四个目标里两个被拒,所以不能假定目标能监听**,不是偶发,是**逐个目标而异**:payload 跑在目标的沙盒里,能不能监听取决于那个 daemon 的 profile,而 `network-bind` 恰是 iOS daemon 最常被禁的一项。模拟器验不出来:模拟器 guest 的沙盒宽松得多。**本仓库已有现成的先例**:macOS 那条路遇到目标沙盒阻断 XPC 时,回退到「只需要向外 `connect()`」的本地 socket(`RuntimeViewerServer.swift` 里那个 `SandboxProbe.isMachLookupBlocked` 分支);iOS 这条路没有任何回退,只会监听。方向因此是让 payload **反向连接**注入方(App 自己不受沙盒限制、也有本地网络授权),而不是自己开监听 —— 但这会改变谁监听谁连接,宿主侧的 `awaitInjectedBonjourEngine` 认领假设也要跟着改,属于架构级改动,未实施。 |
+| 2026-10-02 | 即使目标允许绑定,注入后宿主仍拿不到引擎;**疑为设备 App 自己抢走了唯一的连接名额**(未证实) | `chronod` 那次:payload 注册成功(`DNSServiceRegister … REGISTERED`,端口 55329),**一秒后注销**(`STOP -- duration: 1s`),而服务端的 `connect()` 正是等到有人连上才返回 —— 时间戳与 "Did Launch" 对齐,说明确实有人连上了。但宿主报 `bonjourEngineNeverAdvertised`。怀疑对象:`RuntimeNetworkConnection` 的监听器**接受一个连接就自我取消**(「Stop accepting new connections immediately」),只有一个名额;而浏览端只过滤掉**本进程自己**的广播(`instanceID == localInstanceID`),payload 是另一个进程,所以**设备上的 RV App 看得见也会去连它**,同机必然快过跨网络的 Mac。模拟器同样验不出:模拟器里没有第二个 RV 实例在浏览。证实需要一次目标允许绑定的注入 + `level:"all"` 的日志,看 `Accepted new Bonjour connection` 的对端是谁。 |
+| 2026-10-02 | 注入失败的提示文案是模拟器专用的,真机上是错的 | 弹窗写「A **simulator** payload does not connect back…」并建议跑 `xcrun simctl spawn <udid> log show`。那条路的文案被原样复用到设备路径上,建议与操作对真机都不适用。 |
+| 2026-10-02 | 远端行有三个字段刻意留空,`platform` 整个不配置 | 跨连接取不到图标;对端不报告内核实际运行的架构;沙盒状态也不报告 —— `isSandboxed: false` 渲染出来是**没有**沙盒角标,而那个角标只在为真时出现,所以这正是「未报告」的诚实呈现。`platform` 字段连配置都不加:一台设备上每个进程平台相同,那一列区分不了任何东西(它存在的意义是在 Mac 上区分模拟器进程与宿主进程)。 |
+| 2026-10-02 | 两处映射没有单测,如实记下 | `AttachToProcessViewModel` / `MainViewModel` / `RemoteProcessItemSource` 都住在 App target,而**这个 target 没有测试 bundle**(工程里唯一的测试 target 是 `RuntimeViewerSourceEditorBridgeTests`)。这是既有结构,不在本提案范围内改。因此落地步骤 6 原写的「补 `RuntimeViewerApplicationTests` 契约测试」在这里不适用 —— 真正可测的部分已经测了:门禁的分流判据在 `RuntimeViewerCoreTests`(8 例),选择器的两条可选性规则与数据源在上游仓库(14 例)。剩下的映射只能靠第 8 步端到端覆盖。 |
+| 2026-10-02 | sheet 把引擎**持住**,不在确认时重读 | 读自己写的代码时发现的一个窄口子:选择器用「打开 sheet 那一刻的引擎」列清单,而 ViewModel 原本在用户确认时才去读 `documentState.runtimeEngine`。两者可以不一致 —— 对端断开后被替换会在 sheet 打开期间换掉文档的引擎 —— 而用户挑的那个 pid **只在它被列出来的那台机器上有意义**。重读等于拿另一台机器进程表里的标识符去注入当前选中的引擎,正是本设计一再要避免的那类错误。改成由协调器把同一个引擎传给两半。 |
+| 2026-10-02 | 顺带在真实构建里验证了模拟器切片未受影响 | 为了拿一个干净的绿灯,把模拟器 payload 建出来暂存到 copy phase 期望的位置。产物是 `x86_64 arm64` —— 这比之前只用 `-showBuildSettings` 查解析值更硬地证明了 `ARCHS[sdk=iphoneos*]` 那条改动没有碰到模拟器与 Catalyst 切片。 |
+| 2026-10-04 | 打包固化成仓库里的 `BuildJailbrokenIPAScript.sh` | 越狱版的签名**不可能**交给 Xcode（五条 entitlement 没有任何 provisioning profile 授予，target 因此带 `CODE_SIGNING_ALLOWED = NO`、产物是未签名的），所以它从来是「`xcodebuild` 构建 → `vphone-cli sign` 逐个签 → 手工 zip 成 `Payload/`」三段手工操作，此前只存在于一个一次性脚本里。固化时把原先写死的三处改成现读：**bundle identifier 从产物 `Info.plist` 读**（Debug 是 `dev.JH…`、Release 是 `com.JH…`，写死一个会在另一个配置上签错身份）；**要签的 Mach-O 用 `find` + `file` 现找**（内嵌框架随包依赖图变，写死清单会静默过期，而漏签一个框架的表现是设备上启动失败、离脚本很远）；**校验用的 entitlement 清单从 entitlements 文件自己读**（一次性脚本那条 grep 漏匹配了 `com.apple.multitasking.unlimitedassertions`，五条只显示四条，得另外手工核对，现在加一条就自动纳入校验且少一条直接失败）。另加两条原先没有的检查：主可执行必须有 **arm64e** 切片（没有就注不进系统进程），以及 entitlements 从**打好的 .ipa** 里读回来核对，因为被安装的是 .ipa 而不是暂存目录。只删 `__preview.dylib`、保留 `.debug.dylib`：`otool -L` 查过，主可执行真的链接后者，删了起不来。默认 `Debug`，因为那是真机验证过的配置。 |
+| 2026-10-04 | **越狱版只能用带 `iOSPackagesShouldBuildARM64e` 的 workspace 构建** —— `RuntimeViewer.xcworkspace` 不带，用它构建必在链接载荷时失败 | 写打包脚本时默认选了 `RuntimeViewer.xcworkspace`（主 workspace，远程 pin，看起来是最中立的选择），构建跑了十分钟后死在 `RuntimeViewerMobileServer` 的链接步：`Undefined symbols for architecture arm64e`，点名 `RuntimeViewerCore.RuntimePayloadRendezvous`、`RuntimeViewerCommunication.RuntimeNetworkBonjour`、`OSToolbox.LoggableMacro` —— 即它链接的每个 SwiftPM 包产物都没有 arm64e 切片。根因是**那是个 workspace 级设置**：三个 workspace 里只有 `-Debug` 和 `-Distribution` 的 `WorkspaceSettings.xcsettings` 写了 `iOSPackagesShouldBuildARM64e=true`，主 workspace 没有。越狱版 App 是 `ARCHS = arm64e`、载荷是 `arm64 arm64e`，两者都要包产物有 arm64e，所以这个开关对本变体是硬前提。**错误信息里没有任何一个字指向 workspace**，而代价是一次完整冷编，所以脚本里加了一条前置检查：workspace 的 settings 不含这个键就立刻失败并说明换哪个。脚本默认因此改为 `RuntimeViewer-Debug.xcworkspace`。验收（走 Debug workspace 重跑）：主可执行 `arm64e`、载荷 `arm64 arm64e`、四个内层 Mach-O 各自有签名、五条 entitlement 从打好的 .ipa 里逐条读回来全部命中、被跟踪的 `Package.resolved` SHA 未变。 |
+| 2026-10-05 | 打包脚本不再写死 `vphone-cli`，签名器改为 `vphone-cli` / `ldid` 二选一、按装了哪个自动挑，`--signer` 可指定 | 用户在一台没装 `vphone-cli` 的机器上跑脚本直接被拒。而脚本自己的注释早就写明 `vphone-cli sign` 写出来的字节和 `ldid -S -M -K -I` 一样 —— 既然等价，就没有理由把唯一的那个包装器设成硬前提。实测 `ldid` 这条路：主执行档 `ldid -S<ent> -I<id>` 后 `codesign -dv` 显示 `Identifier` 与 `CodeDirectory` 都正确嵌入，五条 entitlement 能被脚本原有的 `codesign -d --entitlements -` 校验步骤完整读回；胖二进制（载荷 arm64 + arm64e）两个 slice 都签上。`codesign` 在 stderr 报的 `no signature` 指的是没有 CMS 证书签名，伪签名本来就没有，和原注释说的「`codesign --verify` 按设计就会拒」是同一件事，不影响校验。顺带把 `--help` 的 `sed -n '2,28p'` 改成按 `set -euo` 定位 —— 写死的行号在这次改动里当场就过时了，而且是静默截断用法说明。 |
+| 2026-10-06 | **PR #119 review：`injectionTargetsRunOnThisMachine` 把模拟器判成了远端**，与本提案第 302 行的表格自相矛盾 | 那张表写明「本机 / Catalyst / iOS 模拟器」这一行照走今天的本机 picker、一次 RPC 都不发。但落地时这个属性对所有 `.bonjour` 一律返回 false，而**模拟器正是走 `.bonjour`** —— 模拟器里的载荷和跑在模拟器里的 RuntimeViewer 都用 `advertisingSource()`。于是选中模拟器引擎时去问对端，对端（装着 service 的那条 `os(iOS)` 分支）回答 `requiresJailbrokenVariant`，按钮变灰、提示让用户去装一个在模拟器上根本用不了的构建。相对 `next` 是回退：那里只要 SIP 关着，Attach 就打开本机 picker。修法是 `.bonjour` 分支读 `hostInfo.metadata.isSimulator`（对端经 TXT 的 `rv-sim` 报告），并改掉属性与测试里两处「模拟器走 `localSocket`」的错注释。副作用：另一台 Mac 上的模拟器也会被判成本机 —— 广播里没有任何字段能区分谁的模拟器，而这正是本属性存在之前每个模拟器都得到的答案 |

@@ -75,6 +75,17 @@ let package = Package(
             name: "RuntimeViewerUtilities",
             targets: ["RuntimeViewerUtilities"],
         ),
+        // Process injection, as a RuntimeEngine command extension. Separate
+        // from `RuntimeViewerCore` because injecting needs MachInjector on iOS
+        // and the privileged helper daemon on macOS, while Core also builds for
+        // watchOS, tvOS and visionOS, where neither exists. In this package
+        // rather than `RuntimeViewerPackages` because the injected payload
+        // links it and deploys to iOS 15 / macOS 10.15, below that package's
+        // floor of macOS 15 / iOS 18.
+        .library(
+            name: "RuntimeViewerInjection",
+            targets: ["RuntimeViewerInjection"],
+        ),
     ],
     dependencies: [
         .package(
@@ -233,6 +244,18 @@ let package = Package(
             ],
         ),
         .target(
+            name: "RuntimeViewerInjection",
+            dependencies: [
+                "RuntimeViewerCore",
+                "RuntimeViewerCommunication",
+                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
+            ],
+            swiftSettings: [
+                .internalImportsByDefault,
+                .immutableWeakCaptures,
+            ],
+        ),
+        .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
                 "RuntimeViewerObjC",
@@ -253,6 +276,14 @@ let package = Package(
         .testTarget(
             name: "RuntimeViewerCommunicationTests",
             dependencies: [
+                "RuntimeViewerCommunication",
+            ],
+        ),
+        .testTarget(
+            name: "RuntimeViewerInjectionTests",
+            dependencies: [
+                "RuntimeViewerInjection",
+                "RuntimeViewerCore",
                 "RuntimeViewerCommunication",
             ],
         ),

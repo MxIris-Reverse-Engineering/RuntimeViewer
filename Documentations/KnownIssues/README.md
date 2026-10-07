@@ -191,3 +191,24 @@ when picking up follow-up work.
   stays as the user already decided (`ComparableBuildable` left alone);
   `OBJID.11` — `lhs` / `rhs` across every comparison operator and sort
   closure — was fixed repository-wide in a follow-up at the user's call.
+- [2026-10-06-pr119-review-findings.md](2026-10-06-pr119-review-findings.md) —
+  `/code-review max` on PR #119 (`feature/jailbroken-ios-injection`, five
+  proposals, +12228/-630), IDs `PR119.<N>`, plus the four unaddressed Copilot
+  comments as `PR119.C<N>` and one finding the review missed as `PR119.N1`.
+  Twelve fixed in the same batch, among them a latent `SIGPIPE` that kills the
+  app or the injected system daemon on any write to a reset peer (pre-existing
+  on `main`, so it also got its own PR there), three defects in the device
+  keep-awake assertion's lifetime that each contradicted the suspension design
+  the same PR documents — released on a Wi-Fi blip, released at attach time
+  when the payload advertises, and never released at all once the device
+  reconnects — a new `RuntimeSource` case that made an older peer drop its
+  whole mirror link, and a simulator misclassified as a remote device, which
+  was a regression against `next`. `PR119.8` (optimistic `connected` window)
+  and `PR119.12` (frozen glyph tint) are backlogged; `PR119.14` stays as
+  written; `PR119.5` and `PR119.9` are **false positives** with their reopen
+  conditions recorded, as is Copilot's claim-token comment. Copilot's
+  no-authentication comment is **escalated to its own proposal** — the
+  increment over the baseline is small, since an unauthenticated peer could
+  already `dlopen` an arbitrary path, but the threat model deserves stating
+  rather than patching. Also records four fixes that have no test seam, and
+  why.

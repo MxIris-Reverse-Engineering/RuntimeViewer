@@ -1,5 +1,5 @@
 {
-  "originHash" : "bde5c81806cb6e70f4b7df5b8014611039e0222fcbf71e6ccb97a6a99ab259fe",
+  "originHash" : "c310144adb25c2800c1d3ac744f7e0d78f08d314ce8ddfd1f0de3f69d2acc568",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/capstone",
       "state" : {
-        "revision" : "948031e03ddd5835b733efb82e01ebb6fb30a35a",
-        "version" : "5.0.100"
+        "revision" : "81d9ca83416426a5cd05fcd95c6fba3ef5492e27",
+        "version" : "6.0.100"
       }
     },
     {
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "revision" : "f39e8a085cf257a55462aa08a8e917d814e2701b",
-        "version" : "0.5.1"
+        "revision" : "1aab1373d14f7566d1ccd31e6bbe56410a81af83",
+        "version" : "0.6.1"
       }
     },
     {
@@ -151,7 +151,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
         "branch" : "next",
-        "revision" : "61e0a436e6f083f2f6ca8b1fa893ef3c367ff3e5"
+        "revision" : "2b3e8cc943fcbbaa55851f74cc443f1d657772e5"
       }
     },
     {
@@ -159,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "5623c702a29c48c7c61579f745ee36a83ed56a15",
-        "version" : "0.1.1"
+        "revision" : "177fc1820d12bdd4059e2fd9bb505317545b139f",
+        "version" : "1.0.0"
       }
     },
     {
@@ -169,7 +169,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "c741301a107e75bdc7213722e36cb18c0642cc07"
+        "revision" : "db0712bcdc73c234473ddafe8d418f927abdbc42"
       }
     },
     {
@@ -178,7 +178,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "eeb203033b5713b0544441ab5afc2674c93244c9"
+        "revision" : "9c3e598af36f1b5d25d2fd0630906441183d0cbf"
       }
     },
     {
@@ -204,8 +204,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Rainbow",
       "state" : {
-        "revision" : "cdf146ae671b2624917648b61c908d1244b98ca1",
-        "version" : "4.2.1"
+        "revision" : "711ca908ca19d16e577d575c8d0a48151a16bb1b",
+        "version" : "4.2.2"
       }
     },
     {
@@ -213,8 +213,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "revision" : "a229465b463d90485c775f0b1c91260e30f0c813",
-        "version" : "0.6.0"
+        "revision" : "9ffb48aa92d9a6ebdd77bb696039112bd76034aa",
+        "version" : "0.7.0"
       }
     },
     {
@@ -357,8 +357,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-binary-parse-support.git",
       "state" : {
-        "revision" : "5fb96b503672ea4752eded6b4e301fd87214b03b",
-        "version" : "0.2.1"
+        "revision" : "b4042df3819fde93ce952a111607ec8ffc4ee704",
+        "version" : "0.3.0"
       }
     },
     {
@@ -366,8 +366,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-capstone",
       "state" : {
-        "revision" : "33998b4516d65fef2e0bb23876b2b04a91d47bfc",
-        "version" : "5.0.0"
+        "revision" : "8ef4766f2526aac7faf80379f3cc5dbdb4d321a2",
+        "version" : "6.0.1"
       }
     },
     {
@@ -411,8 +411,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
-        "version" : "3.15.1"
+        "revision" : "bb4ba815dab96d4edc1e0b86d7b9acf9ff973a84",
+        "version" : "4.3.1"
       }
     },
     {
@@ -429,8 +429,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "8f32e30bfdc9c9cc0d3aeb010739dd7e74ccdbed",
-        "version" : "0.6.3"
+        "revision" : "0b5a939e107d18284bb986873e54880370b05b3a",
+        "version" : "0.7.1"
       }
     },
     {
@@ -447,8 +447,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-fileio.git",
       "state" : {
-        "revision" : "e581ae04d4079c675042fa62aeabc5ba7480d3df",
-        "version" : "0.14.0"
+        "revision" : "13a83389fb4844f279b43012c4b8d7a3f95773bf",
+        "version" : "0.15.1"
       }
     },
     {
@@ -456,8 +456,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-fileio-extra.git",
       "state" : {
-        "revision" : "8d83506dd4dff737807d90dbf2264096ed98c7a7",
-        "version" : "0.2.2"
+        "revision" : "8e7d47436bd3b2d73ddd4e0be0c689b3c8aa1b87",
+        "version" : "0.4.0"
       }
     },
     {
@@ -556,7 +556,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
         "branch" : "next",
-        "revision" : "ff626b0f9d2d163b08270644ceaf08605ee0e6ff"
+        "revision" : "ef4bd30930ee4db1d285f6a23337100a5a1142c0"
       }
     },
     {
@@ -582,8 +582,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "665ccaac727fd41a5c5b0eb57da367d617d0e897",
-        "version" : "0.32.0"
+        "revision" : "2bc19f0a27ee9d53d75e09c90a0a7e6b99268e84",
+        "version" : "0.37.0"
       }
     },
     {

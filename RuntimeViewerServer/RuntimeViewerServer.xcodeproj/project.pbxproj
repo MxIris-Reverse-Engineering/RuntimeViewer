@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */; };
 		E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E994E3C72F325593009DD28A /* RuntimeViewerCore */; };
+		E9B10F080000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E080000000000000000 /* RuntimeViewerInjection */; };
+		E9B10F090000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E090000000000000000 /* RuntimeViewerInjection */; };
 		E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */; };
 		E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
@@ -34,6 +36,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */,
+				E9B10F080000000000000000 /* RuntimeViewerInjection in Frameworks */,
 				E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -43,6 +46,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */,
+				E9B10F090000000000000000 /* RuntimeViewerInjection in Frameworks */,
 				E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -116,6 +120,7 @@
 			name = RuntimeViewerServer;
 			packageProductDependencies = (
 				E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */,
+				E9B10E080000000000000000 /* RuntimeViewerInjection */,
 				E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerServer;
@@ -141,6 +146,7 @@
 			name = RuntimeViewerMobileServer;
 			packageProductDependencies = (
 				E994E3C72F325593009DD28A /* RuntimeViewerCore */,
+				E9B10E090000000000000000 /* RuntimeViewerInjection */,
 				E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerServer;
@@ -155,7 +161,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2620;
-				LastUpgradeCheck = 2700;
+				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					E978F9182F1BBB38004C09B4 = {
 						CreatedOnToolsVersion = 26.2;
@@ -638,6 +644,10 @@
 			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				"ARCHS[sdk=iphoneos*]" = (
+					arm64,
+					arm64e,
+				);
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Manual;
@@ -665,6 +675,7 @@
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				"ONLY_ACTIVE_ARCH[sdk=iphoneos*]" = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = RuntimeViewerServer;
 				SDKROOT = auto;
@@ -693,6 +704,10 @@
 			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				"ARCHS[sdk=iphoneos*]" = (
+					arm64,
+					arm64e,
+				);
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Manual;
@@ -871,6 +886,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
+				"ARCHS[sdk=iphoneos*]" = (
+					arm64,
+					arm64e,
+				);
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Manual;
@@ -898,6 +917,7 @@
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				"ONLY_ACTIVE_ARCH[sdk=iphoneos*]" = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = RuntimeViewerServer;
 				SDKROOT = auto;
@@ -967,6 +987,14 @@
 		E994E3C72F325593009DD28A /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
+		};
+		E9B10E080000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
+		};
+		E9B10E090000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
 		};
 		E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;

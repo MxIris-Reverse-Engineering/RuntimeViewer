@@ -298,9 +298,9 @@ struct RuntimeSpecializationSelectionTests {
     }
 }
 
-// MARK: - RuntimeEngine.SpecializeRequest
+// MARK: - RuntimeEngine.SpecializeCommand
 
-@Suite("RuntimeEngine.SpecializeRequest")
+@Suite("RuntimeEngine.SpecializeCommand")
 struct RuntimeEngineSpecializeRequestTests {
     @Test("encodes and decodes through Codable")
     func codableRoundTrip() throws {
@@ -319,10 +319,10 @@ struct RuntimeEngineSpecializeRequestTests {
             kind: .struct
         )
         let selection = RuntimeSpecializationSelection(arguments: ["A": .candidate(candidate)])
-        let original = RuntimeEngine.SpecializeRequest(object: object, selection: selection)
+        let original = RuntimeEngine.SpecializeCommand(object: object, selection: selection)
 
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(RuntimeEngine.SpecializeRequest.self, from: data)
+        let decoded = try JSONDecoder().decode(RuntimeEngine.SpecializeCommand.self, from: data)
 
         #expect(decoded.object == original.object)
         #expect(decoded.selection == original.selection)
@@ -330,18 +330,18 @@ struct RuntimeEngineSpecializeRequestTests {
     }
 }
 
-// MARK: - RuntimeEngine.SpecializationRequestForCandidateRequest
+// MARK: - RuntimeEngine.SpecializationRequestForCandidateCommand
 
-@Suite("RuntimeEngine.SpecializationRequestForCandidateRequest")
+@Suite("RuntimeEngine.SpecializationRequestForCandidateCommand")
 struct RuntimeEngineSpecializationRequestForCandidateRequestTests {
     @Test("encodes and decodes through Codable")
     func codableRoundTrip() throws {
-        let original = RuntimeEngine.SpecializationRequestForCandidateRequest(
+        let original = RuntimeEngine.SpecializationRequestForCandidateCommand(
             candidateID: "$s4Test5ArrayV",
             imagePath: "/usr/lib/libswiftCore.dylib"
         )
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(RuntimeEngine.SpecializationRequestForCandidateRequest.self, from: data)
+        let decoded = try JSONDecoder().decode(RuntimeEngine.SpecializationRequestForCandidateCommand.self, from: data)
         #expect(decoded.candidateID == original.candidateID)
         #expect(decoded.imagePath == original.imagePath)
     }
