@@ -358,6 +358,12 @@ enum RuntimeInterfaceTextMatcher {
     /// A hit that starts inside one of `excludedUTF8Ranges` — ascending,
     /// non-overlapping — is neither reported nor counted. A regular
     /// expression spends `budget`; see `hits(in:pattern:budget:)`.
+    ///
+    /// `isCollecting` false asks for the count alone, as a search past its
+    /// result limit does. A count needs no line table, and over every kind no
+    /// span table either: each table is built for the first hit that needs
+    /// it, the span kinds for a hit whose kind decides something, the lines
+    /// for a hit collected.
     @discardableResult
     static func matches(
         in interface: FrozenSemanticString,
@@ -365,14 +371,16 @@ enum RuntimeInterfaceTextMatcher {
         pattern: Pattern,
         budget: inout RegularExpressionBudget,
         excludingUTF8Ranges excludedUTF8Ranges: [Range<Int>] = [],
+        isCollecting isCollectingAtStart: Bool = true,
         collect: (RuntimeInterfaceSearchMatch) -> Bool
     ) throws -> Int {
         let hits = try hits(in: interface.text, pattern: pattern, budget: &budget)
         guard !hits.isEmpty else { return 0 }
 
-        let layout = Layout(interface)
+        var spanKindTable: SpanKindTable?
+        var lineTable: RuntimeInterfaceLineTable?
         var count = 0
-        var isCollecting = true
+        var isCollecting = isCollectingAtStart
         var excludedRangeIndex = 0
         for hit in hits {
             while excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].upperBound <= hit.utf8Offset {
@@ -381,28 +389,46 @@ enum RuntimeInterfaceTextMatcher {
             if excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].contains(hit.utf8Offset) {
                 continue
             }
-            let kind = layout.semanticKind(atUTF8Offset: hit.utf8Offset)
+            let kind: RuntimeSemanticKind
+            if !isCollecting, pattern.scope == .all {
+                // Counted and never shown: its kind decides nothing.
+                kind = .other
+            } else {
+                let entrySpanKindTable: SpanKindTable
+                if let spanKindTable {
+                    entrySpanKindTable = spanKindTable
+                } else {
+                    entrySpanKindTable = SpanKindTable(interface)
+                    spanKindTable = entrySpanKindTable
+                    RuntimeInterfaceSearchWorkLog.record(.spanKindTable)
+                }
+                kind = entrySpanKindTable.semanticKind(atUTF8Offset: hit.utf8Offset)
+            }
             guard pattern.scope.includes(kind) else { continue }
             count += 1
             guard isCollecting else { continue }
-            let match = makeMatch(for: hit, kind: kind, in: layout, object: object)
+            let entryLineTable: RuntimeInterfaceLineTable
+            if let lineTable {
+                entryLineTable = lineTable
+            } else {
+                entryLineTable = RuntimeInterfaceLineTable(interface.text)
+                lineTable = entryLineTable
+                RuntimeInterfaceSearchWorkLog.record(.lineTable)
+            }
+            let match = makeMatch(for: hit, kind: kind, in: interface.text, lineTable: entryLineTable, object: object)
             isCollecting = collect(match)
         }
         return count
     }
 
-    /// Line starts and span starts of one interface, built once per scan.
-    struct Layout {
-        let text: String
-        let lineTable: RuntimeInterfaceLineTable
+    /// The semantic kind of every span of one interface, looked up by UTF-8
+    /// offset: all a count over a scope needs.
+    struct SpanKindTable {
         /// UTF-8 offset at which each span begins, plus a trailing sentinel.
         let spanStartOffsets: [Int]
         let spanKinds: [RuntimeSemanticKind]
 
         init(_ interface: FrozenSemanticString) {
-            self.text = interface.text
-            self.lineTable = RuntimeInterfaceLineTable(interface.text)
-
             var spanStartOffsets: [Int] = []
             spanStartOffsets.reserveCapacity(interface.spans.count + 1)
             var spanKinds: [RuntimeSemanticKind] = []
@@ -418,36 +444,25 @@ enum RuntimeInterfaceTextMatcher {
             self.spanKinds = spanKinds
         }
 
-        /// 0-based index of the line containing the byte at `offset`.
-        func lineIndex(containingUTF8Offset offset: Int) -> Int {
-            lineTable.lineIndex(containingUTF8Offset: offset)
-        }
-
         func semanticKind(atUTF8Offset offset: Int) -> RuntimeSemanticKind {
             guard !spanKinds.isEmpty else { return .other }
-            var low = 0
-            var high = spanKinds.count - 1
-            while low < high {
-                let middle = (low + high + 1) / 2
+            var lowerBound = 0
+            var upperBound = spanKinds.count - 1
+            while lowerBound < upperBound {
+                let middle = (lowerBound + upperBound + 1) / 2
                 if spanStartOffsets[middle] <= offset {
-                    low = middle
+                    lowerBound = middle
                 } else {
-                    high = middle - 1
+                    upperBound = middle - 1
                 }
             }
-            return spanKinds[low]
-        }
-
-        /// UTF-8 range of line `lineIndex`, without its terminator.
-        func lineUTF8Range(at lineIndex: Int) -> Range<Int> {
-            lineTable.lineUTF8Range(at: lineIndex)
+            return spanKinds[lowerBound]
         }
     }
 
-    private static func makeMatch(for hit: Hit, kind: RuntimeSemanticKind, in layout: Layout, object: RuntimeObject) -> RuntimeInterfaceSearchMatch {
-        let text = layout.text
-        let lineIndex = layout.lineIndex(containingUTF8Offset: hit.utf8Offset)
-        let lineRange = layout.lineUTF8Range(at: lineIndex)
+    private static func makeMatch(for hit: Hit, kind: RuntimeSemanticKind, in text: String, lineTable: RuntimeInterfaceLineTable, object: RuntimeObject) -> RuntimeInterfaceSearchMatch {
+        let lineIndex = lineTable.lineIndex(containingUTF8Offset: hit.utf8Offset)
+        let lineRange = lineTable.lineUTF8Range(at: lineIndex)
         let utf8 = text.utf8
         let lineStartIndex = utf8.index(text.startIndex, offsetBy: lineRange.lowerBound)
         let lineEndIndex = utf8.index(text.startIndex, offsetBy: lineRange.upperBound)

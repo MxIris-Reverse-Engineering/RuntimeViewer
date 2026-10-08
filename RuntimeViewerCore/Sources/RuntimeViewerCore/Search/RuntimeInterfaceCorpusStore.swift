@@ -641,7 +641,7 @@ actor RuntimeInterfaceCorpusStore {
             resultLimit: query.resultLimit,
             regularExpressionTimeLimit: regularExpressionTimeLimit,
             onProgress: onProgress
-        ) { entry, budget, collect in
+        ) { entry, budget, isCollecting, collect in
             // The text the content pane shows under the query's options, so
             // every hit is visible and its line reads as displayed. Its
             // nested types' blocks are skipped: they are entries of their
@@ -655,7 +655,7 @@ actor RuntimeInterfaceCorpusStore {
                 interface = entry.interface
                 nestedDefinitionRanges = entry.nestedDefinitionRanges
             }
-            return try RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: nestedDefinitionRanges, collect: collect)
+            return try RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: nestedDefinitionRanges, isCollecting: isCollecting, collect: collect)
         }
         return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
     }
@@ -677,10 +677,10 @@ actor RuntimeInterfaceCorpusStore {
             resultLimit: query.resultLimit,
             regularExpressionTimeLimit: regularExpressionTimeLimit,
             onProgress: onProgress
-        ) { entry, budget, collect in
+        ) { entry, budget, isCollectingAtStart, collect in
             guard let pattern else { return 0 }
             var matchCount = 0
-            var isCollecting = true
+            var isCollecting = isCollectingAtStart
             // Projected only once a member of this entry matches: most
             // entries have none, and they cost nothing.
             var projection: (projection: VisibilityProjection, lineTable: RuntimeInterfaceLineTable)??
@@ -727,7 +727,10 @@ actor RuntimeInterfaceCorpusStore {
     /// searches differ only in `matchEntry`, which hands each match of an
     /// entry to its last argument — `false` back means the result limit is
     /// reached and nothing more is taken — and returns how many matches the
-    /// entry has. One regular expression budget serves the whole search.
+    /// entry has. Its third argument says whether anything is still taken
+    /// when the entry starts; past the limit an entry is only counted, which
+    /// needs much less work. One regular expression budget serves the whole
+    /// search.
     ///
     /// Checks for cancellation before every entry and before an image's
     /// batch goes out, so a cancelled search delivers nothing more; the
@@ -741,7 +744,7 @@ actor RuntimeInterfaceCorpusStore {
         resultLimit: Int,
         regularExpressionTimeLimit: TimeInterval,
         onProgress: @Sendable ([Match]) async -> Void,
-        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ collect: (Match) -> Bool) throws -> Int
+        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ isCollecting: Bool, _ collect: (Match) -> Bool) throws -> Int
     ) async throws -> SearchScan {
         var scan = SearchScan()
         var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: regularExpressionTimeLimit)
@@ -754,11 +757,11 @@ actor RuntimeInterfaceCorpusStore {
                 for entry in corpus.entries {
                     try Task.checkCancellation()
                     scan.scannedObjectCount += 1
-                    scan.totalMatchCount += try matchEntry(entry, &budget) { match in
+                    scan.totalMatchCount += try matchEntry(entry, &budget, collectedCount < resultLimit) { match in
                         guard collectedCount < resultLimit else { return false }
                         batch.append(match)
                         collectedCount += 1
-                        return true
+                        return collectedCount < resultLimit
                     }
                 }
             } catch RuntimeInterfaceTextMatcher.PatternError.regularExpressionTooExpensive {

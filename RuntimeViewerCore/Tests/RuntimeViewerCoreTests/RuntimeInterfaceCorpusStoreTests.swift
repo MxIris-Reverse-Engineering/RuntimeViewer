@@ -843,6 +843,30 @@ struct RuntimeInterfaceCorpusStoreTests {
         #expect(matches.count == 2)
     }
 
+    /// Once the result limit is reached a search only counts, and a count
+    /// needs no line table — nor, over every kind, a span table. Alpha, Beta
+    /// and Gamma each have one hit of `member`; only Alpha's is collected.
+    @Test("a search past its result limit builds no tables for the hits it only counts", arguments: [
+        (RuntimeInterfaceSearchScope.all, 1, 1),
+        (RuntimeInterfaceSearchScope.symbolsOnly, 1, 3),
+    ])
+    func countingPastTheLimitBuildsNoTables(scope: RuntimeInterfaceSearchScope, expectedLineTableCount: Int, expectedSpanKindTableCount: Int) async throws {
+        let fixture = makeStore()
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
+        _ = try await store.build(imagePath: Self.imageB, transformer: .default)
+        let workLog = RuntimeInterfaceSearchWorkLog()
+
+        let summary = try await RuntimeInterfaceSearchWorkLog.$current.withValue(workLog) {
+            try await store.searchInterfaces(RuntimeInterfaceSearchQuery(text: "member", scope: scope, resultLimit: 1), indexedImagePaths: []) { _ in }
+        }
+
+        #expect(summary.totalMatchCount == 3)
+        #expect(workLog.count(of: .lineTable) == expectedLineTableCount)
+        #expect(workLog.count(of: .spanKindTable) == expectedSpanKindTableCount)
+    }
+
     @Test("evicting drops the corpus and its failure record")
     func eviction() async throws {
         let fixture = makeStore()

@@ -5766,7 +5766,7 @@ func searchBatchSendsEachObjectOnce() throws {
 
 - **严重度**：Minor（性能）
 - **审查编号**：F6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusStoreTests.countingPastTheLimitBuildsNoTables`（三个条目各一个 `member` 命中、`resultLimit` 为 1，用新加的 `RuntimeInterfaceSearchWorkLog` 数一次搜索建了几张表：修前范围 `.all` 建了 3 张行表、3 张 span 表，`.symbolsOnly` 3 张行表；修后分别是 1 和 1、1 和 3）；守护用例 `RuntimeInterfaceTextMatcherTests.countingAloneMatchesCollecting`（四种范围、有无排除区间，只计数与收集的计数相同，期望值手写）。「省了」用计数证明，没有计时。与草案的出入：草案把行表与 span 表留在 `Layout` 里复用，实际上种类查好之后造命中只用得到行表，所以 `Layout` 拆掉：span 表成了独立的 `SpanKindTable`，行表（PR121.24 的 `RuntimeInterfaceLineTable`）在第一条被收集的命中时才建；扫描驱动把「条目开始时是否还在收集」传给每个条目，收集的闭包改为返回「还能不能再收」，收满那一刻起同一条目里余下的命中也不再查种类。工作日志 `RuntimeInterfaceSearchWorkLog` 是任务局部变量，只在测试里绑定；PR121.21 用它数投影次数。同类：成员搜索收满后只做名字匹配，不建表，没有这个问题（它现在也从驱动拿到同一个「是否还在收集」）
 
 **问题**：搜索收满 `resultLimit`（默认 1000）之后仍会扫完全部语料，只为了把总数数准。但匹配器对每个有命中的条目都照样构建完整的 `Layout`（`RuntimeInterfaceTextMatcher.swift:184`）：扫一遍全文建行表，再遍历全部 span 建语义类别表；接着对每个命中都查一次语义类别（:195-198）。而这时行表根本用不上；搜索范围是 `.all` 时，语义类别也用不上。常见词（`View`、`init`）往往在前几个镜像里就收满了，剩下的所有条目都在白建这两张表。
 **四问**：复现——在 SwiftUI 加 Foundation 的语料上搜 `init`，收满 1000 条后，用 signpost 看每个条目的耗时，`Layout.init` 占大头；基线——本 PR 新引入；影响——只影响搜索耗时，结果正确，改动小，建议修；历史——新代码。

@@ -240,6 +240,38 @@ struct RuntimeInterfaceTextMatcherTests {
         #expect(count == 2)
     }
 
+    /// `foo` appears four times in the fixture: the type `Foo` on line 1,
+    /// the variable `fooBar`, the comment's `fooBar` and the end of the
+    /// function `barFoo`. Line 1, `class Foo {` and its line break, is the
+    /// first 12 bytes.
+    @Test("counting alone gives the count collecting gives, in every scope", arguments: [
+        (RuntimeInterfaceSearchScope.all, 4, 3),
+        (RuntimeInterfaceSearchScope.excludeComments, 3, 2),
+        (RuntimeInterfaceSearchScope.commentsOnly, 1, 1),
+        (RuntimeInterfaceSearchScope.symbolsOnly, 3, 2),
+    ])
+    func countingAloneMatchesCollecting(scope: RuntimeInterfaceSearchScope, expectedCount: Int, expectedCountWithoutLineOne: Int) throws {
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(RuntimeInterfaceSearchQuery(text: "foo", scope: scope))
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget()
+        let lineOne = [0 ..< 12]
+
+        let collectingCount = try RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, budget: &budget) { _ in true }
+        let countingCount = try RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, budget: &budget, isCollecting: false) { _ in
+            Issue.record("nothing is collected past the limit")
+            return false
+        }
+        let collectingCountWithoutLineOne = try RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: lineOne) { _ in true }
+        let countingCountWithoutLineOne = try RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: lineOne, isCollecting: false) { _ in
+            Issue.record("nothing is collected past the limit")
+            return false
+        }
+
+        #expect(collectingCount == expectedCount)
+        #expect(countingCount == expectedCount)
+        #expect(collectingCountWithoutLineOne == expectedCountWithoutLineOne)
+        #expect(countingCountWithoutLineOne == expectedCountWithoutLineOne)
+    }
+
     @Test("a long line is windowed around the hit")
     func longLineWindow() {
         let padding = String(repeating: "x", count: 900)
