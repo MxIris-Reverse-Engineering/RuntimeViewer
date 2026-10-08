@@ -15,3 +15,18 @@ public struct RuntimeNetworkRequestError: Error, Codable, LocalizedError {
 
     public var errorDescription: String? { message }
 }
+
+extension RuntimeNetworkRequestError {
+    /// How a peer words its reply to a command it has no handler for. Every
+    /// release since 2.1.0 answers with exactly this prefix and the command
+    /// name, and nothing else: matching the text is the only way to recognise
+    /// a peer older than a command, so the channel that writes the reply and
+    /// the code that reads it share this constant.
+    public static let unknownCommandMessagePrefix = "No handler registered for "
+
+    /// The peer does not know the command: it predates it, or a peer it
+    /// forwards to does.
+    public var isUnknownCommand: Bool {
+        message.hasPrefix(Self.unknownCommandMessagePrefix)
+    }
+}

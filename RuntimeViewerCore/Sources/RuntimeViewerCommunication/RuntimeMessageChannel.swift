@@ -620,7 +620,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         guard let handler = handler(for: requestData.identifier) else {
             if requestData.nonce != nil {
                 #log(.error, "No handler for: \(requestData.identifier, privacy: .public); replying with error so the caller doesn't hang")
-                sendErrorReply(for: requestData, message: "No handler registered for \(requestData.identifier)", rawWriter: rawWriter)
+                sendErrorReply(for: requestData, message: RuntimeNetworkRequestError.unknownCommandMessagePrefix + requestData.identifier, rawWriter: rawWriter)
             } else {
                 #log(.default, "No handler for fire-and-forget: \(requestData.identifier, privacy: .public)")
             }
@@ -649,7 +649,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                     try await self.send(data: encoded, writer: rawWriter)
                 } catch {
                     self.logHandlerFailure(requestData.identifier, error: error)
-                    self.sendErrorReply(for: requestData, message: "\(error)", rawWriter: rawWriter)
+                    self.sendErrorReply(for: requestData, message: Self.replyMessage(for: error), rawWriter: rawWriter)
                 }
             }
         }
@@ -711,6 +711,19 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                 #log(.error, "Failed to send error reply for \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
             }
         }
+    }
+
+    /// What an error reply says about `error`. A failure that is itself an
+    /// error reply from further along — a relay whose own forwarded request
+    /// failed — goes on in the words it arrived in, so the caller reads what
+    /// the peer that produced it wrote: "No handler registered for …" from a
+    /// peer behind the relay stays recognisable (`isUnknownCommand`) instead
+    /// of arriving wrapped in this type's description.
+    private static func replyMessage(for error: any Error) -> String {
+        if let remoteError = error as? RuntimeNetworkRequestError {
+            return remoteError.message
+        }
+        return "\(error)"
     }
 
     private func logHandlerFailure(_ identifier: String, error: any Error) {

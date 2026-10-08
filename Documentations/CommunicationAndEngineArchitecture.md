@@ -382,7 +382,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 第二例是进度请求信封 `RuntimeEngineProgressEnvelope` 的 `requestIdentifier`（§4.5）：可选字段，为 `nil` 时不编码。只有新命令的信封带它，`objectsInImage`、`loadImageWithProgress` 这些旧命令的信封与旧版逐字节相同；旧对端即使收到也只会跳过这个键。`RemoteRequestIdentifierTests` 守住「旧命令不带」这一条。
 
-新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。
+新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。旧对端只回这一段文字，所以识别只能靠前缀：`RuntimeNetworkRequestError.isUnknownCommand`，前缀是 `unknownCommandMessagePrefix`，通道拼这条回复用的也是它。中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，错误回复照原文写下去（`RuntimeMessageChannel.replyMessage(for:)`），不再包一层类型描述，所以经过新版中转，旧对端照样认得出（`RemoteUnknownCommandTests`）。第一个用它的是语料协调器的 `isCorpusUnsupportedByEngine`（PR121.37）。经 Mach service 的旧版注入 payload 对未知命令不回这段文字，见 PR121.73。
 
 ### 4.5 跨连接取消（引擎层，`RuntimeEngineRequestCancellation.swift`）
 

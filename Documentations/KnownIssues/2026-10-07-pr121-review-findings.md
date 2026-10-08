@@ -8219,7 +8219,11 @@ func coverageRefreshesCoalesce() async throws {
 
 - **严重度**：Minor
 - **审查编号**：新发现（模块 C 起草方案时发现，不在审查清单里）
-- **状态**：方案待批，代码未改
+- **状态**：已修复（引擎与协调器这一半；界面那一半待办，见下）。复现测试：`FindCorpusCoordinatorOlderPeerTests.peerWithoutCorpusCommandsRecordsNoFailure`（对端是一条什么命令都不服务的 TCP 连接；修前两个镜像各记一条 `.failed(message: "RuntimeNetworkRequestError(message: \"No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.buildInterfaceCorpus\")")`，状态里也留着两条 Failed）、`RemoteUnknownCommandTests`（经一台新版中转时，修前调用方收到 `RuntimeNetworkRequestError(message: "RuntimeNetworkRequestError(message: \"No handler registered for …\")")`，前缀对不上）。修后都绿。
+- **落地与偏离**：
+  - 比方案多一处：中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，通道把它的原文回给调用方（`RuntimeMessageChannel.replyMessage(for:)`），而不是 `"\(error)"`。否则经过一台新版中转（镜像链），这段文字会被包上一层类型描述，`isUnknownCommand` 认不出，正是问题描述里「经镜像链路转发到这样的对端」那种情形。
+  - **界面部分待办**：`isCorpusUnsupportedByEngine` 已经发布，但 Report navigator 显示一条说明（界面批次，PR121.55 一带）、Find 摘要改用「此设备上的 RuntimeViewer 版本不支持 Find」这类文字（模块 D1）都还没做；搜索命令遇到旧对端时 FindSession 换一句说明的同类也归 D1。
+  - 经 Mach service 的旧版注入 payload 对未知命令不回这段文字，这里认不出，见 PR121.73。
 
 **问题**：
 - 对端是不认识语料命令的旧版本时，例如还在跑 v3.0.0-beta.6 的 iPhone、iPad 或模拟器 App，或经镜像链路转发到这样的对端，每个构建请求都会以「No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.buildInterfaceCorpus」失败。

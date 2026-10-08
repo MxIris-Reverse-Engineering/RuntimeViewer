@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
 #if canImport(RuntimeViewerSettings)
 import RuntimeViewerSettings
@@ -111,6 +112,13 @@ public final class FindCorpusCoordinator {
     @RxObserved
     public private(set) var buildStatesByImagePath: [String: RuntimeInterfaceCorpusBuildState] = [:]
 
+    /// The engine's process does not know the corpus commands: a peer older
+    /// than the Find navigator, or one a relay forwards to. Nothing is asked
+    /// of it until the engine is swapped, and the Report navigator and the
+    /// Find summary can say why instead of listing one failure per image.
+    @RxObserved
+    public private(set) var isCorpusUnsupportedByEngine: Bool = false
+
     /// Builds that ended, newest first, at most `maximumFinishedBuildCount`
     /// of them. Corpora other documents built come after the ones this
     /// document saw end: the engine does not say when they were built.
@@ -198,7 +206,7 @@ public final class FindCorpusCoordinator {
     /// moved to the front of the engine's queue instead. The path may be
     /// spelled either way; see `canonicalImagePath(_:)`.
     public func requestBuild(of requestedImagePath: String, isPrioritized: Bool = false) {
-        guard isEnabled, !isClosed else { return }
+        guard isEnabled, !isClosed, !isCorpusUnsupportedByEngine else { return }
         let imagePath = canonicalImagePath(requestedImagePath)
         if buildRequests[imagePath] != nil {
             if isPrioritized {
@@ -235,7 +243,7 @@ public final class FindCorpusCoordinator {
     /// Every image the engine has indexed, queued in one go — the switch
     /// turning on, or a fresh engine.
     public func requestBuildOfIndexedImages() {
-        guard isEnabled, !isClosed else { return }
+        guard isEnabled, !isClosed, !isCorpusUnsupportedByEngine else { return }
         let engine = engine
         Task { [weak self] in
             guard let imagePaths = try? await engine.indexedImagePathList() else { return }
@@ -358,6 +366,14 @@ public final class FindCorpusCoordinator {
             // Not indexed yet: nothing to print, and nothing went wrong. The
             // image is asked for again once the engine reports it indexed.
             buildStatesByImagePath[imagePath] = nil
+        case .failure(let error as RuntimeNetworkRequestError) where error.isUnknownCommand:
+            // Not a failed build: the peer predates corpora. Every request
+            // would fail the same way, so none is kept and none is made again
+            // until the engine is swapped.
+            #log(.info, "The engine's process does not know the corpus commands; corpora are off for it")
+            withdrawEveryBuild()
+            buildStatesByImagePath = [:]
+            isCorpusUnsupportedByEngine = true
         case .failure(let error):
             #log(.error, "Corpus build of \(imagePath, privacy: .public) failed: \(error, privacy: .public)")
             let message = "\(error)"
@@ -488,6 +504,7 @@ public final class FindCorpusCoordinator {
     private func handleEngineSwap(to newEngine: RuntimeEngine) {
         stopPumps()
         withdrawEveryBuild()
+        isCorpusUnsupportedByEngine = false
         _ = progressStaging.drain()
         buildStatesByImagePath = [:]
         requestedImagePaths.removeAll()
