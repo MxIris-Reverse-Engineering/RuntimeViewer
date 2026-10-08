@@ -370,6 +370,18 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - macOS：`RuntimeRequest` **refine** `HelperCommunication.Request`，于是任何 daemon-bound 业务请求能直接挂到 `HelperService` / `HelperPeer` 上。
 - 同文件还定义了跨进程共享的 Mach 服务名 `RuntimeViewerMachServiceName`（Debug 下按 arm64e 变体切换）与协议版本 `RuntimeViewerServiceVersion`。
 
+### 4.4 改已有命令的载荷形状
+
+引擎之间的连接不交换协议版本（`RuntimeViewerServiceVersion` 只管 helper daemon），新旧版本的对端互连是常态（§8「双向兼容，不要求同版本」）：Mac 连着旧版的 iPhone、经旧版 Mac 中转的镜像、升级前就注入且还在运行的 payload。所以**已经发布的命令，请求与回复的形状只能这样改**：
+
+- **接收方容错**：新的解码同时接受旧形状；两种都解不出来时，抛新形状那次的错误，它描述的是当前格式。
+- **发送方保守**：只有请求方声明读得懂时才发新形状——请求里加一个可选字段，旧对端解码时跳过它，旧请求解出 `nil`——其余一律发旧形状。中转节点（服务一个本身是客户端的引擎的 proxy）按收到的形状原样写出：它转发的就是自己请求方那条请求，声明一并带上，所以这个形状请求方一定读得了；经过旧节点时退回旧形状，代价只是体积。
+- **配冻结读端测试**：旧回复用手写的 JSON 夹具，旧请求与旧读端照发布时的声明在测试里另写一份、冻结不动，不复用当前类型——当前类型自编自解，只能证明它和自己一致。新旧组合与经新版中转都要在真实连接上跑一遍；Mach service 走的是 SwiftyXPC 的 `XPCEncoder`，不是 JSON，这条路也要覆盖。
+
+第一例是接口请求（`InterfaceRequest`）：`interfaceString` 改存 `FrozenSemanticString` 后，自动合成的编码从组件数组变成了带键的列式对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.03）。现在列式编码只发给带 `acceptsColumnarInterfaceString: true` 的请求方，回复类型 `RuntimeObjectInterfaceResponse` 两种形状都能解，测试是 `RuntimeObjectInterfaceWireCompatibilityTests`。
+
+新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。
+
 ---
 
 # 第二部分：RuntimeEngineManager / ProxyServer 架构

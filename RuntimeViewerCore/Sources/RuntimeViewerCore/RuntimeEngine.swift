@@ -1012,7 +1012,7 @@ extension RuntimeEngine {
     }
 
     public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        try await dispatch(InterfaceRequest(object: object, options: options))
+        try await dispatch(InterfaceRequest(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
     }
 
     public func objects(in image: String) async throws -> [RuntimeObject] {

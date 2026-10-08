@@ -37,6 +37,10 @@ Xcode Find navigator 的 view hierarchy 实现，由用户提供，本提案不�
 Frozen 的列式编码比逐 component 编码小一个数量级；语料条目本来就是 Frozen，不改边界就要在 store 里再冻一次、
 两种形态并存。
 
+**列式编码只发给声明读得懂的请求方。** 3.0.0-beta.6 及更早的对端只认逐 component 的数组，引擎连接上又不交换协议版本，
+所以接口请求带上 `acceptsColumnarInterfaceString`，没带的一律回旧形状，回复两种形状都能解（决策日志 2026-10-08；
+规则见 `CommunicationAndEngineArchitecture.md` §4.4）。
+
 `next` 上的消费点比分支当年多，rebase 时逐个改：`ContentTextViewModel`（`interfaceString` 类型与
 `RenderedInterface.semanticString`）、`RuntimeInterfaceCache`、`ThemePreset+ThemeProfile`、
 `ContentSourceEditorViewController`、`MainViewModel` 的导出、`RuntimeInterfaceExportEvent.objectCompleted`、
@@ -754,3 +758,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-04 | 菜单加 Current Find Results，取筛选栏筛过之后可见行所在的镜像；没有可见行时置灰 | Xcode 的菜单有这一项，取的也是可见结果（§9）；在方案里列给用户，用户确认。实现只是把可见行的镜像收成 `.images(…)`。 |
 | 2026-10-04 | 表单用行选中（⌘ / ⇧ 多选）代替勾选框；只认用户自己的选择改动；过滤不改选择，用户在过滤后的列表里改选择时以看得见的选中为准 | 行选中照 Xcode 的大纲，在方案里列给用户；过滤与选择的规则是实施时定的，未问用户。过滤后改选择以看得见的为准：常见的用法是过滤出一个框架再点它，若保留被过滤掉的旧选中，OK 会把看不见的镜像也带上。代价是跨两次过滤累加选择时要清空过滤框再多选。 |
 | 2026-10-04 | 一个都没选时 OK 置灰；表单列表覆写 `mouseDown(with:)`；菜单项不带图标 | Xcode 的 OK 此时能点却不改范围，置灰更直观。不覆写时 macOS 27 的列表点击不给焦点，选中的行一直是灰色，与 `StatefulOutlineView` 同一取舍。我们没有与 Xcode 那几个范围对应的图标。 |
+| 2026-10-08 | 接口请求的列式编码只发给声明读得懂的请求方，回复两种形状都能解；中转节点按收到的形状原样写出 | PR #121 审查（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.03）：`interfaceString` 改成 `FrozenSemanticString` 后，自动合成的编码从数组变成带键对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白；而项目承诺新旧版本互通，iOS 端混版是常态。用户在三个方案里选了这一个：另开新命令要多一轮回退往返，2.1.0 之前的对端还要等到超时；接受破坏违背承诺。请求里加一个可选字段最小：旧端跳过它，新端缺省回旧形状。复现测试 `RuntimeObjectInterfaceWireCompatibilityTests` 在真实连接上跑新旧组合与经新版中转：修复前新客户端对旧服务端、旧客户端对新服务端、三种中转组合共五条红（`DecodingError.typeMismatch`），修复后全绿。 |

@@ -550,7 +550,7 @@ struct FindSessionLifecycleTests {
 
 - **严重度**：Major
 - **审查编号**：C36
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeObjectInterfaceWireCompatibilityTests`，在真实 TCP 连接上跑新旧组合与经新版中转，旧回复是手写的 3.0.0-beta.6 JSON 夹具，旧请求与旧读端照 beta.6 的声明冻结。修复前五条红：新客户端读旧服务端的回复抛 `DecodingError.typeMismatch`（期望 Dictionary、实为数组），旧客户端读新服务端的回复抛 `typeMismatch`（期望 Array、实为字典），三种经新版中转的组合也都失败。修复后另加 `null` 回复、两种都解不出时抛列式那次的错误、经 SwiftyXPC `XPCEncoder`（Mach service）的三条。
 
 **问题**：`RuntimeObjectInterface` 的 Codable 是编译器自动合成的。这个 PR 把 `interfaceString` 从 `SemanticString` 换成了 `FrozenSemanticString`，线上格式随之改变：
 - **旧格式**：组件数组，每项是 `{string,type,identifier?}`。
