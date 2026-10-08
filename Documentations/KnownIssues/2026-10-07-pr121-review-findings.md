@@ -437,6 +437,12 @@ struct FindSessionLifecycleTests {
 - `RuntimeBackgroundIndexingCoordinator.swift:33` 只在 init 里读，安全。
 - `DocumentState.swift:264` 的 `SelectionRouter` 由 `DocumentState` 独占，没有闭包捕获它，安全。
 - `InspectorRelationshipsViewModel.swift:67` 的 `flatMapLatest { [unowned self] … }`（af8961c5）字面上违反了 AGENTS.md「Rx 算子闭包不用 unowned」。但这个闭包由 ViewModel 自己的 relay 驱动，随 disposeBag 一起退订，deinit 之后不会执行。它不在本 PR 范围内，建议另开一个改动改成 `[weak self]`，或者记入 KnownIssues。
+  - **落地**：按横向排查的规则随本条改成 `[weak self]`，单独一个提交 `39a422cf`。它今天触发不了，写不出修前失败的测试，提交说明里写明了这一点。
+
+**落地后的补充排查（主会话，2026-10-08）**：`git grep -n unowned` 列出仓库里其余的 `unowned`，逐个看了生命期：
+- `ViewModel.router`（基类，基线已有）：路由器是持有 ViewController 的 coordinator，ViewController 又持有 ViewModel。会出问题的只有「ViewModel 被某个异步任务留住、在 `await` 之后再调 `router`」这种路径。本 PR 新增的 `FindViewModel`、`FindScopeChooserViewModel`、`ReportViewModel` 都只在同步的输入处理里调 `router` / `appRouter`，没有这种路径。改基类要动所有 ViewModel，不在本 PR 范围，**不修**。
+- `ExportingViewController.router`、`MainToolbarController.delegate`（基线已有）：持有者就是被引用的对象，生命期包含引用方，安全。
+- `RuntimeEngine` 注册消息处理器时的 `[unowned object]`、Core 的 `RuntimeBackgroundIndexingManager.engine`：基线已有；后者在 main 上已由 PR #118 改成 `weak`，随 main 合入，不在本 PR 处理。
 
 **工作量**：S。不依赖其他条目，建议最先单独提交；PR121.05 在它之上继续改。
 
@@ -5483,7 +5489,9 @@ echo "exit $?"
 **同类**：
 - **一起修的**：四个 `@UserDefault` 属性；`SidebarAutosaveKeyCleanup` 对标准域的写入；ContentTextPipelineTests 借共享默认域传值的写法；SidebarSearchCaseSensitivityTests 防残留的重置。
 - **不算同类**：`StatefulOutlineView` 也写 `UserDefaults.standard`，但它的测试每条用独立的 key 并会清理。
-- **另记，不在本条修**：同文件的 `liveSettings()` 解析的是真实的 live settings，因为 `withLiveDependencyContext` 只覆盖了 `appDefaults`。所以字号测试会改写开发者的 `RuntimeViewer-Debug/settings.json` 再还原（基线已有，30d6fefc）。这与曾经发生过的 Debug 设置被清空同源，建议另立一条，改用 `SettingsAccess.preview`。
+- ~~**另记，不在本条修**：同文件的 `liveSettings()` 解析的是真实的 live settings，因为 `withLiveDependencyContext` 只覆盖了 `appDefaults`。所以字号测试会改写开发者的 `RuntimeViewer-Debug/settings.json` 再还原（基线已有，30d6fefc）。这与曾经发生过的 Debug 设置被清空同源，建议另立一条，改用 `SettingsAccess.preview`。~~
+  - **落地时核实为不成立，而且方向反了**：ContentTextPipelineTests 自己的 `withLiveDependencyContext` 遮蔽了测试 target 共用的那个，它从 `429476a0` 起就把 `\.settings` 钉成 in-memory 的 `testSettings`，碰不到真实的 settings.json；它漏钉的是 `\.appDefaults`，于是这个套件里的 ViewModel 解析到生产环境的 `AppDefaults.shared`（用户真实的书签目录）。已在本条一并修掉，复现测试是 `liveDependencyContextResolvesIsolatedAppDefaults`。主会话核对过：今天跑过的所有测试都没有改动 `~/Library/Application Support/AppStorage` 里的文件。
+- **另记，基线已有、本批不修**：`SidebarAutosaveKeyCleanupTests` 与 CLI 的 `ApplicationOptionsReaderTests` 每条测试建一个独立的 user defaults suite，测完 `removePersistentDomain(forName:)`。它们不会互相干扰，但这个调用只清空不删文件，每跑一次就在 `~/Library/Preferences` 留下一批空 plist（本机已有 51 个）。这是测试残留，不是本 PR 的缺陷；`ApplicationOptionsReaderTests` 必须按 bundle identifier 建真正的 suite，不能照搬 `UserDefaultsNamespace` 的键前缀，修法要另行设计，需要时另立一条。
 
 **工作量**：S–M。一处生产代码的初始化方法、一个新测试文件、五个测试文件去锁或调整。不依赖其它条目；做完后，模块 D1 / D2 新写的测试不再需要拿锁。
 
