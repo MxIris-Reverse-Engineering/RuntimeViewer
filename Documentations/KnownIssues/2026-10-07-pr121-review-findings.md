@@ -15501,7 +15501,7 @@ func cancelledRelationshipSearchThrows() async throws {
 
 - **严重度**：Major
 - **审查编号**：新发现（起草修复方案时由模块 B2 发现，主会话核实）
-- **状态**：方案待批，代码未改
+- **状态**：已修复（与 PR121.71 同一个提交）。落地记录见本条末尾。
 
 **问题**：Debug 和 Distribution 两个 workspace 的 `Package.resolved` 锁定 MachOSwiftSection 的 `86f65341`（2026-10-01，由 c30a8daf 写入）。这个修订之后被变基孤立了：远端 `feature/runtime-viewer/find-navigator` 现在指向 `beae202d`（2026-10-07，一次把 MachOSwiftSection `next` 合进来的 merge）。GitHub compare 显示 `86f65341` 相对新末端是 `diverged`，有 10 个提交不在远端任何分支上。SwiftPM 只抓取分支和 tag 能到达的对象，所以 CI 或另一台机器从空缓存解析时拿不到这个修订。本机能编，是因为本地 SwiftPM 缓存里还留着它。普通的 `RuntimeViewer.xcworkspace` 钉的又是另一个修订 `b72638f8`，比新末端落后 35 个提交。三个 workspace 一共钉了两个不同的修订。
 
@@ -15573,12 +15573,27 @@ queued-build xcodebuild build -workspace RuntimeViewer-Distribution.xcworkspace 
 **同类**：`RuntimeViewerPackages/Package.resolved` 和 `RuntimeViewerCommandLine/Package.resolved` 里的 MachOSwiftSection 还钉着 `next` 分支，与 manifest 声明的 feature 分支不符。SwiftPM 解析时会自动纠正，不会失败，但锁文件是陈旧的，随本条一起重新解析。RxAppKit 的同类不一致见 PR121.71。
 **工作量**：S（加一次 Distribution 构建）；应放在第一批，PR121.71 和其它依赖改动都建立在它之上。
 
+**落地记录（2026-10-08，与 PR121.71 同一个提交）**：
+- 三个 workspace 用 `UpdatePackagesScript.sh --clean`（Xcode 27.0）重新解析。Debug 与 Distribution 各有 14 条 pin 变化，两份完全一致：
+  - MachOSwiftSection `86f65341 → beae202d`，即分支末端；
+  - 随分支末端一起前进的 MachOKit `next@2b3e8cc9 → ecae5d19`、MachOObjCSection `next@ced3fea0 → ea14b1da`、MachOKitExtensions 1.0.0 → 1.2.0；
+  - AppKitPlus-Release 0.6.0 → 0.7.0、MachInjector 0.5.1 → 0.6.1、RunningApplicationKit 0.6.0 → 0.7.0、swift-subprocess 0.5.0 → 1.0.0、SwiftMCP 1.13.0 → 1.14.0；
+  - JSONFoundation、swift-collections、swift-log、swift-nio、swift-service-lifecycle 的补丁版本。
+- 三个包级锁文件（Core、Packages、CommandLine）删掉后用 `swift package resolve` 从空 scratch 重新解析，结果与 Distribution workspace 的 pin 完全相同，只多一个 workspace 用预编译包代替的 swift-syntax。Core 的锁文件原先缺所有按分支依赖的包、还钉着 swift-capstone 5，属于同类，一并刷新。
+- 验证：
+  - 第 1 步：六份锁文件里钉住的 MachOSwiftSection 修订与分支末端比较，全部 `identical`；其余四个按分支依赖的包（MachOKit、MachOObjCSection、swift-demangling、swift-semantic-string）也都等于各自的分支末端。
+  - Core、Packages、CommandLine 三个包的 `swift build --build-tests` 通过；App 用 Debug workspace、`-onlyUsePackageVersionsFromResolvedFile` 构建通过。
+  - Distribution 的 macOS Release 与 iOS Simulator 构建放到全部条目修完后统一跑（iOS 要先有 PR121.01）。
+- 依赖前进后跑了一次 Core 全量测试（381 个）作为后续各条的基线，2 个失败都与锁文件无关：
+  - 关系快照少了 `Foundation.AttributeScopes._DefaultScopeRegistration`。快照录于 macOS 27，本机（macOS 26.7）的 Foundation 里没有这个类，已用 `objc_copyClassNamesForImage` 核实。
+  - 后台索引的 `cancelBatchStopsPendingItemsAndEmitsCancelledEvent` 在满载并行时偶发超时，单独跑通过。
+
 
 ### PR121.71 RxAppKit 在 App 是 0.6.0、包测试与 CLI 锁文件是 0.5.4
 
 - **严重度**：Minor（单独看不出错，但它决定 PR121.53 的修复和测试在哪个版本下成立）
 - **审查编号**：新发现（模块 E 写 C17 方案时发现）
-- **状态**：方案待批，代码未改
+- **状态**：已修复（与 PR121.70 同一个提交）。落地记录见 PR121.70 末尾。
 
 **问题**：
 - App 用的三个 workspace（`RuntimeViewer`、`-Debug`、`-Distribution`）的锁文件解析到 RxAppKit **0.6.0**。
