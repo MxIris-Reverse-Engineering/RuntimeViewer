@@ -6217,7 +6217,7 @@ func memberLocatedInProjection() {
 
 - **严重度**：Minor
 - **审查编号**：U1（审查末尾未经验证的补充项，本步已在代码层面核实）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusStoreTests.entryByteCountCoversMembers`（修前 `byteCount` 是 2758，应不少于 6349——40 个成员的结构体与名字都没算；条目里的成员存着整行文本而不是名字）；守护断言：`buildAndSearch` 里 `declarationText == "var memberBeta: Int"`（命中时把行读回，修前修后都绿），`RuntimeInterfaceSearchTests.memberSearch` 在 Foundation 上覆盖同一条路径，`RuntimeInterfaceCorpusNestingTests` 的字段定位也经成员搜索读回。实测（Debug，Foundation 语料 34249 个成员，驱逐语料前后的 malloc 用量差，单独运行）：修前预算记 13.99 MB、驱逐释放 25.8 MB（少算 46%）；修后预算记 17.98 MB、驱逐释放 21.7 MB（两次 21.75 / 21.71，少算 17%，在 ±25% 内），语料本身因为不再存行副本小了约 4 MB。与草案的出入：实测用 Foundation 而不是 AppKit（在测试进程里加载 AppKit 有在 Dock 留图标之虞，Foundation 的成员已足够密）；成员搜索收满后不为没收集的成员读行。与 PR121.10（S5b）的关系：定位器仍在组装时临时生成行文本，条目建好即丢，改写定位器时可以把「不留行文本」挪进它的输出
 
 **问题**：语料的常驻预算（默认 256 MB）按 `RuntimeInterfaceCorpusEntry.byteCount` 计算，而它只算文本、span 表、标识符表和区域表（`RuntimeInterfaceCorpusStore.swift:54-63`），完全不算成员。偏偏成员里有一大块重复数据：定位器给每个找到行的成员都存了一份去掉缩进的整行文本 `declarationText`（`RuntimeMemberDeclarationLocator.swift:51-52`）。另外还有每个成员的名字字符串、`RuntimeMemberDeclaration` 结构体本身、`memberDeclarationLineRanges`、`nestedDefinitionRanges` 和条目上的 `object`，都没计入。对于成员密集的 Objective-C 类，接口几乎每一行都是一个成员，单是复制的行文本就接近接口文本本身的大小，所以实际占用可能接近设定上限的两倍。Report navigator 显示的语料大小同样偏小。
 **四问**：复现——读代码可以确认漏算的部分；倍数还没实测，实测方法见下文；基线——本 PR 新引入；影响——预算本来就是为了限制内存，漏算一半就失去了意义，在内存紧张的机器上尤其明显，建议修；历史——新代码，`byteCount` 的注释说成员「比文本小，而且与 section 共享」，但存下来的 `declarationText` 是定位器新建的字符串，并不与 section 共享。

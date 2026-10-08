@@ -15,6 +15,11 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
 
     let visibilityRegions: VisibilityRegionTable
 
+    /// The members its structures list, located, but without their
+    /// declaration lines: each `declarationText` is the member's name,
+    /// sharing its storage, and `displayedMember(at:)` reads the line back
+    /// out of `interface` for a member that is shown. A copy of every line
+    /// costs about as much as the text itself for a type of mostly members.
     let members: [RuntimeMemberDeclaration]
 
     /// Where each member's declaration line lies in `interface`, as UTF-8
@@ -39,7 +44,9 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
         self.object = object
         self.interface = interface
         self.visibilityRegions = visibilityRegions
-        self.members = members
+        self.members = members.map { member in
+            RuntimeMemberDeclaration(name: member.name, kind: member.kind, isStatic: member.isStatic, declarationText: member.name, lineNumber: member.lineNumber)
+        }
         self.nestedDefinitionRanges = nestedDefinitionRanges
         let lineTable = RuntimeInterfaceLineTable(interface.text)
         memberDeclarationLineRanges = members.map { member in
@@ -48,15 +55,30 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
         }
     }
 
-    /// Resident bytes: the text once, the span table, the interned
-    /// identifiers, the region table. The `RuntimeObject` and member list are
-    /// not counted — they are small next to the text and shared with the
-    /// section anyway.
+    /// Resident bytes, estimated: the text once, the span table, the
+    /// interned identifiers, the region table, the members with their line
+    /// ranges and names, the nested blocks and the object. An estimate in
+    /// the right order of magnitude, not to the byte: allocation headers and
+    /// rounding are left out — evicting Foundation's corpus frees about a
+    /// fifth more than its entries count.
     var byteCount: Int {
         interface.text.utf8.count
             + interface.spans.count * MemoryLayout<FrozenSemanticString.Span>.stride
             + interface.identifierTable.reduce(0) { $0 + $1.utf8.count }
             + visibilityRegions.regions.count * MemoryLayout<VisibilityRegionTable.Region>.stride
+            + members.count * (MemoryLayout<RuntimeMemberDeclaration>.stride + MemoryLayout<Range<Int>?>.stride)
+            + members.reduce(0) { total, member in total + Self.allocatedByteCount(of: member.name) }
+            + nestedDefinitionRanges.count * MemoryLayout<Range<Int>>.stride
+            + MemoryLayout<RuntimeObject>.stride
+            + Self.allocatedByteCount(of: object.name)
+            + Self.allocatedByteCount(of: object.displayName)
+    }
+
+    /// What a string allocates: nothing up to 15 UTF-8 bytes, which Swift
+    /// stores inline, and above that its bytes plus the allocation's header.
+    private static func allocatedByteCount(of string: String) -> Int {
+        let utf8Count = string.utf8.count
+        return utf8Count <= 15 ? 0 : utf8Count + 32
     }
 
     /// The interface as it reads under `visibility`: `interface` itself when
@@ -77,6 +99,17 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
         guard pattern.regex == nil else { return true }
         let hiddenRanges = visibilityRegions.hiddenUTF8Ranges(inTextOfUTF8Count: interface.text.utf8.count, where: visibility.isOptionEnabled)
         return RuntimeInterfaceTextMatcher.literalPattern(pattern, mayHitTextOf: interface.text, hidingUTF8Ranges: hiddenRanges)
+    }
+
+    /// The member at `memberIndex` as the full interface shows it, its
+    /// declaration line read back out of `interface` and trimmed of its
+    /// indentation, as the locator wrote it. A member with no known line
+    /// keeps its name as its declaration.
+    func displayedMember(at memberIndex: Int) -> RuntimeMemberDeclaration {
+        let member = members[memberIndex]
+        guard let lineNumber = member.lineNumber, let lineRange = memberDeclarationLineRanges[memberIndex] else { return member }
+        let lineText = String(decoding: interface.text.utf8.dropFirst(lineRange.lowerBound).prefix(lineRange.count), as: UTF8.self)
+        return member.located(at: lineNumber, declarationText: lineText.trimmingCharacters(in: .whitespaces))
     }
 
     /// `nestedDefinitionRanges` in `projection`'s text: each block from its
@@ -705,20 +738,21 @@ actor RuntimeInterfaceCorpusStore {
             for (memberIndex, member) in entry.members.enumerated() {
                 if let kinds, !kinds.contains(member.kind) { continue }
                 guard let range = try RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, pattern: pattern, budget: &budget) else { continue }
-                var shownMember = member
+                var projectedMember: RuntimeMemberDeclaration?
                 if let visibility {
                     if projection == nil {
                         projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceLineTable($0.text.text)) }
                     }
                     if let entryProjection = projection ?? nil {
                         // Hidden under the query's options: not a match.
-                        guard let projectedMember = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineTable: entryProjection.lineTable) else { continue }
-                        shownMember = projectedMember
+                        guard let memberUnderOptions = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineTable: entryProjection.lineTable) else { continue }
+                        projectedMember = memberUnderOptions
                     }
                 }
                 matchCount += 1
                 if isCollecting {
-                    isCollecting = collect(RuntimeMemberMatch(object: entry.object, member: shownMember, matchRangeInName: range))
+                    // The line is read back out of the text only for a member collected.
+                    isCollecting = collect(RuntimeMemberMatch(object: entry.object, member: projectedMember ?? entry.displayedMember(at: memberIndex), matchRangeInName: range))
                 }
             }
             return matchCount

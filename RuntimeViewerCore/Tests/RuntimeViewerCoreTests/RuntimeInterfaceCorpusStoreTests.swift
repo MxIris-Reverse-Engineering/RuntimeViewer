@@ -453,6 +453,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         #expect(memberSummary.totalMatchCount == 1)
         #expect(memberMatches.first?.member.name == "memberBeta")
         #expect(memberMatches.first?.member.lineNumber == 2)
+        #expect(memberMatches.first?.member.declarationText == "var memberBeta: Int")
         #expect(memberMatches.first?.matchRangeInName == RuntimeTextRange(location: 6, length: 4))
 
         let filtered = try await store.searchMembers(RuntimeMemberSearchQuery(text: "beta", kinds: [.objcMethod]), indexedImagePaths: []) { _ in }
@@ -905,6 +906,35 @@ struct RuntimeInterfaceCorpusStoreTests {
         #expect(batches.all.flatMap { $0 }.map(\.lineText) == ["var needle: Int"])
         #expect(summary.scannedObjectCount == 3)
         #expect(workLog.count(of: .projection) == 1)
+    }
+
+    /// The resident budget counted an entry's text and tables but none of
+    /// its members, while each located member kept a copy of its whole
+    /// declaration line: for a class of mostly members, about the size of
+    /// the text again.
+    @Test("an entry counts its members and keeps no copy of their declaration lines")
+    func entryByteCountCoversMembers() {
+        let memberNames = (1 ... 40).map { number in "memberNumber\(number)WithADescriptiveName" }
+        let interface = SemanticString {
+            Standard(memberNames.map { name in "    func \(name)(argument: Int) -> String" }.joined(separator: "\n"))
+        }.frozen()
+        let members = memberNames.enumerated().map { index, name in
+            RuntimeMemberDeclaration(name: name, kind: .swiftFunction, isStatic: false, declarationText: "func \(name)(argument: Int) -> String", lineNumber: index + 1)
+        }
+        let entry = RuntimeInterfaceCorpusEntry(
+            object: RuntimeObject(name: "Owner", displayName: "Owner", kind: .swift(.type(.class)), imagePath: Self.imageA, children: []),
+            interface: interface,
+            members: members
+        )
+
+        let textAndSpans = interface.text.utf8.count + interface.spans.count * MemoryLayout<FrozenSemanticString.Span>.stride
+        let memberStructures = members.count * MemoryLayout<RuntimeMemberDeclaration>.stride
+        let memberNameBytes = memberNames.reduce(0) { total, name in total + name.utf8.count }
+        #expect(entry.byteCount >= textAndSpans + memberStructures + memberNameBytes)
+        #expect(entry.members.allSatisfy { member in member.declarationText == member.name })
+        // The line is read back when a member is shown.
+        #expect(entry.displayedMember(at: 2).declarationText == "func memberNumber3WithADescriptiveName(argument: Int) -> String")
+        #expect(entry.displayedMember(at: 2).lineNumber == 3)
     }
 
     @Test("evicting drops the corpus and its failure record")
