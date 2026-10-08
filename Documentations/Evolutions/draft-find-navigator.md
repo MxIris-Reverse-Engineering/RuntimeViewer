@@ -258,7 +258,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 
   | 关系 | ObjC | Swift |
   |------|------|-------|
-  | 父类链 | `classGroup.info`（自身在前，父类逐级，跨镜像已解析） | `classDescriptor.superclassTypeMangledName(in:)` 逐级 demangle + remangle（与 `RuntimeSwiftInterfaceIndexer.prepare` 建子类表的钥匙同一空间） |
+  | 父类链 | `classGroup.info`（自身在前，父类逐级，跨镜像已解析） | `classDescriptor.superclassTypeMangledName(in:)` 逐级 demangle + remangle（与 `RuntimeSwiftInterfaceIndexer.prepare` 建子类表的钥匙同一空间）；绑定了泛型实参的父类按泛型类本身登记（子类表同时保留绑定后的键），导入的 ObjC 父类另记运行时类名，ObjC 回退只按它查找 |
   | 类型 → 协议 | `ObjCClassInfo.protocols`（含 category 采纳） | `SwiftDeclarationIndexer.conformingProtocolNamesByTypeName` |
   | 子类（已有） | `subclasses(of:)` | `subclasses(of:)` |
   | conformer（已有） | `conformingClasses(toProtocol:)` | `conformingTypes(of:)` |
@@ -763,3 +763,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | `FindSession` 对文档改为 `weak`，`Document.close()` 调新增的 `documentWillClose()`：取消进行中的搜索、退订选项与语料协调器的信号 | PR #121 审查 PR121.02：XPC 上的引擎调用取消不掉，搜索 Task 等待期间留住会话；关窗后在别的窗口改一项 Generation Options，孤儿会话重跑搜索、经 `unowned` 读到已释放的 `DocumentState`，整个 App 中止。`FindSessionLifecycleTests` 修前即在 `swift_abortRetainUnowned` 处中止。 |
 | 2026-10-08 | 正则的 `^` / `$` 按行锚定（`.anchorsMatchLines`） | PR #121 审查 PR121.15：条目是整段多行接口，结果却按行报告；不按行时 `^@property`、`;$` 这类按声明形状找的写法永远是 0 条，只有恰好是第一行的 `^@interface` 能用。Xcode 的 Find 按行处理。成员名与类型名是单行，不受影响。§3.1 原写 Swift `Regex`，与实现不符，一并改正。 |
 | 2026-10-08 | 接口请求的列式编码只发给声明读得懂的请求方，回复两种形状都能解；中转节点按收到的形状原样写出 | PR #121 审查（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.03）：`interfaceString` 改成 `FrozenSemanticString` 后，自动合成的编码从数组变成带键对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白；而项目承诺新旧版本互通，iOS 端混版是常态。用户在三个方案里选了这一个：另开新命令要多一轮回退往返，2.1.0 之前的对端还要等到超时；接受破坏违背承诺。请求里加一个可选字段最小：旧端跳过它，新端缺省回旧形状。复现测试 `RuntimeObjectInterfaceWireCompatibilityTests` 在真实连接上跑新旧组合与经新版中转：修复前新客户端对旧服务端、旧客户端对新服务端、三种中转组合共五条红（`DecodingError.typeMismatch`），修复后全绿。 |
+| 2026-10-08 | 父类绑定了泛型实参时，父类与子类关系按去掉实参后的泛型类登记，子类表同时保留绑定后的键；Swift 父类不在任何已索引镜像里时，只在它是导入的 ObjC 类时按 `prepare()` 记下的运行时类名去 ObjC 那边找，不再取打印名的最后一段去猜 | PR #121 审查 PR121.14：原来的键是绑定后的名字，类型表里永远查不到。`UpdateMenuAction: IncrementalUpdateAction<Menu, MenuItem>` 的 Ancestor 断在一个未解析的叶子上；`IncrementalUpdateAction` 的 Descendent Types 和 Inspector 的子类列表都是空的，后者在 main 上就是这样。取打印名的最后一段去猜 ObjC 类，对泛型父类一定落空，还可能撞上同名的无关 ObjC 类。复现测试 `RuntimeTypeRelationshipsGenericSuperclassTests` 修前两条红，修后全绿。 |

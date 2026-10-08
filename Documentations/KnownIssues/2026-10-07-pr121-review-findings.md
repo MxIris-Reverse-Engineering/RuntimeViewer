@@ -4660,7 +4660,7 @@ func preferredCarrierImagePath() {
 
 - **严重度**：Major
 - **审查编号**：C32
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeTypeRelationshipsGenericSuperclassTests`（只加载 AppKit；锚点 `UpdateMenuAction: IncrementalUpdateAction<Menu, MenuItem>` 在 macOS 26.7 与 27.0 的 AppKit 里都有）。修前两条红：`ancestorsReachTheGenericSuperclass` 拿到的父类节点 `AppKit.IncrementalUpdateAction` 未解析（`object → nil`）；`genericSuperclassListsTheSubclass` 里 `IncrementalUpdateAction` 的 Descendent Types 树与 Inspector 的子类列表都是 `[]`。第三条 `swiftClassReachesItsImportedObjCSuperclass`（`NSScrollPocket: NSView`）守住改写后的 ObjC 回退，修前修后都绿。与下文方案的两处差别：去掉实参的 helper 另外处理 extension 上下文，规则与上游 `getUnspecialized` 一致；ObjC 运行时类名从去掉实参后的节点读，所以绑定了实参的导入 ObjC 泛型父类（`NSCache<NSString, NSData>` 这种）也能回退到 ObjC 那边。这两种情形在系统镜像里都没找到实例，与 `Outer<Int>.Inner` 一样没有测试覆盖
 
 **问题**：`RuntimeSwiftInterfaceIndexer.prepare()` 把父类的类型名 demangle 后再 remangle，用结果作父类键（`RuntimeSwiftInterfaceIndexer.swift:280-285`）。如果父类绑定了泛型实参（例如 `NSHostingController<SettingsView>`），这个键是绑定后的名字，而类型表的键是泛型定义本身的名字（:269-270），两者永远对不上。
 

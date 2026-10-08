@@ -230,8 +230,10 @@ actor RuntimeTypeRelationshipsResolver {
 
     /// A Swift struct's, enum's, actor's or class's ancestors: the protocols
     /// it conforms to, then — for a class — its superclass with the same
-    /// underneath. A superclass no Swift image defines is looked up as an
-    /// Objective-C class by its printed name before it is given up on.
+    /// underneath. A superclass bound to generic arguments is the generic
+    /// class itself. One no Swift image defines is looked up as an
+    /// Objective-C class when it is an imported one, by the runtime name the
+    /// indexer recorded, and is left unresolved otherwise.
     private func swiftTypeAncestorNodes(of object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
         let indexer = swiftSectionFactory.indexer
         var nodes = await swiftProtocolNodes(
@@ -253,14 +255,14 @@ actor RuntimeTypeRelationshipsResolver {
         }
 
         let displayName = indexer.superclassDisplayName(forMangledTypeName: object.name) ?? superclassMangledName
-        let simpleName = displayName.components(separatedBy: ".").last ?? displayName
-        if let objcSuperclass = await materializeObjCClass(named: simpleName) {
+        if let objcClassName = indexer.superclassObjCClassName(forMangledTypeName: object.name),
+           let objcSuperclass = await materializeObjCClass(named: objcClassName) {
             guard !visited.contains(visitedKey(for: objcSuperclass)) else { return nodes }
             var visited = visited
             visited.insert(visitedKey(for: objcSuperclass))
             let children = await ancestorNodes(of: objcSuperclass, visited: visited, depth: depth + 1)
             nodes.append(RuntimeRelationshipNode(object: objcSuperclass, children: children))
-        } else if !visited.contains("unresolved:" + displayName) {
+        } else {
             nodes.append(RuntimeRelationshipNode(name: displayName, object: nil, children: []))
         }
         return nodes

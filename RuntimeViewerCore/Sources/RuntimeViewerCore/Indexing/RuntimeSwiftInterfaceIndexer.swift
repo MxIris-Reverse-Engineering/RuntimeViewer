@@ -124,6 +124,9 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// subclasses in this image. The upstream indexer does not build this;
     /// `prepare()` does, with a demangle+remangle round-trip so the key sits
     /// in the same canonical string space as `mangleAsString(typeName.node)`.
+    /// A subclass of a generic class bound to arguments is filed twice: under
+    /// the bound name it inherits from, and under the generic class's own
+    /// name, which is the one the generic class is listed and asked about by.
     /// Insertion order preserved per superclass via `OrderedSet`, so result
     /// ordering across queries is stable.
     @Mutex
@@ -144,7 +147,9 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     private var protocolNameByMangledName: [String: SwiftDeclaration.ProtocolName] = [:]
 
     /// Mangled class name → mangled name of its superclass, for every class
-    /// with one, plus the superclass's printed name for the case where the
+    /// with one — the generic class itself when the superclass is bound to
+    /// generic arguments, since that is the name the type tables know it
+    /// by — plus the superclass's printed name for the case where the
     /// superclass is not a Swift type this aggregate knows (an Objective-C
     /// class, or one in an unindexed image). Recorded by `prepare()` while
     /// building the subclass table, which already resolves the superclass.
@@ -153,6 +158,15 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
 
     @Mutex
     private var superclassDisplayNameByMangledName: [String: String] = [:]
+
+    /// The runtime name of that superclass when it is an imported
+    /// Objective-C class (`__C.NSView`), for the relationship walk to look it
+    /// up by on the Objective-C side. Never derived from the printed name,
+    /// which names Swift classes too — a generic one with its arguments —
+    /// and whose last component can be any unrelated Objective-C class's
+    /// name.
+    @Mutex
+    private var superclassObjCClassNameByMangledName: [String: String] = [:]
 
     /// Qualified protocol name → the protocols it refines, read from the
     /// requirement signature's base-conformance entries (the ones on `Self`).
@@ -241,6 +255,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         var protocolNameTable: [String: SwiftDeclaration.ProtocolName] = [:]
         var superclassMangledNameTable: [String: String] = [:]
         var superclassDisplayNameTable: [String: String] = [:]
+        var superclassObjCClassNameTable: [String: String] = [:]
         var refinedProtocolsTable: [String: OrderedSet<RuntimeSwiftRefinedProtocol>] = [:]
         var refiningProtocolsTable: [String: OrderedSet<RuntimeSwiftProtocolReference>] = [:]
         var protocolReferenceTable: [String: RuntimeSwiftProtocolReference] = [:]
@@ -280,15 +295,33 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
             guard let superclassNode = try? SymbolicDemangler.demangleType(for: superclassMangled, in: machO.context),
                   let superclassKey = try? await mangleAsString(superclassNode)
             else { continue }
+            // A superclass bound to generic arguments
+            // (`IncrementalUpdateAction<Menu, MenuItem>`) is filed under the
+            // generic class as well: that is the name the type tables know it
+            // by, and the one Descendent Types and the Inspector ask about it
+            // under. The bound name stays for a type the user specialized,
+            // whose name is the bound one.
+            let unspecializedSuperclassNode = Self.unspecializedNominalTypeNode(of: superclassNode)
+            var unspecializedSuperclassKey: String?
+            if let unspecializedSuperclassNode {
+                unspecializedSuperclassKey = try? await mangleAsString(unspecializedSuperclassNode)
+            }
             subclassTable[superclassKey, default: []].append(childKey)
-            superclassMangledNameTable[childKey] = superclassKey
+            if let unspecializedSuperclassKey, unspecializedSuperclassKey != superclassKey {
+                subclassTable[unspecializedSuperclassKey, default: []].append(childKey)
+            }
+            superclassMangledNameTable[childKey] = unspecializedSuperclassKey ?? superclassKey
             superclassDisplayNameTable[childKey] = await superclassNode.print(using: .interfaceTypeBuilderOnly)
+            if let objcClassName = Self.importedObjCClassName(of: unspecializedSuperclassNode ?? superclassNode) {
+                superclassObjCClassNameTable[childKey] = objcClassName
+            }
         }
         subclassesBySuperclassMangledName = subclassTable
         typeNameByMangledName = typeNameTable
         protocolNameByMangledName = protocolNameTable
         superclassMangledNameByMangledName = superclassMangledNameTable
         superclassDisplayNameByMangledName = superclassDisplayNameTable
+        superclassObjCClassNameByMangledName = superclassObjCClassNameTable
         refinedProtocolsByQualifiedName = refinedProtocolsTable
         refiningProtocolsByQualifiedName = refiningProtocolsTable
         protocolReferenceByQualifiedName = protocolReferenceTable
@@ -327,6 +360,82 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
             }
         }
         return result
+    }
+
+    // MARK: - Superclass Names
+
+    /// The nominal type a type node instantiates, with every generic argument
+    /// removed and spelled the way that type's own descriptor demangles:
+    /// `IncrementalUpdateAction<Menu, MenuItem>` becomes
+    /// `IncrementalUpdateAction`, and a bound enclosing type is unbound as
+    /// well (`Outer<Int>.Inner`). `nil` when nothing in it is bound, which is
+    /// the case for every non-generic superclass, so those cost no second
+    /// mangling.
+    ///
+    /// swift-demangling's `getUnspecialized` does this for every kind of node
+    /// but is internal to that library. A superclass is always a nominal type,
+    /// so this covers what can occur here, under the same rules: a bound
+    /// generic node gives way to the type it binds, and a nominal type or an
+    /// extension is rebuilt around its unspecialized context.
+    private static func unspecializedNominalTypeNode(of typeNode: Node) -> Node? {
+        guard let nominalNode = unspecializedNominalNode(of: typeNode) else { return nil }
+        return Node.create(kind: .type, child: nominalNode)
+    }
+
+    /// `unspecializedNominalTypeNode(of:)` below the `type` wrapper.
+    private static func unspecializedNominalNode(of node: Node) -> Node? {
+        switch node.kind {
+        case .type:
+            return node.firstChild.flatMap(unspecializedNominalNode(of:))
+        case .boundGenericClass,
+             .boundGenericStructure,
+             .boundGenericEnum,
+             .boundGenericOtherNominalType,
+             .boundGenericTypeAlias:
+            guard let unboundTypeNode = node.firstChild,
+                  unboundTypeNode.kind == .type,
+                  let nominalNode = unboundTypeNode.firstChild
+            else { return nil }
+            return unspecializedNominalNode(of: nominalNode) ?? nominalNode
+        case .class,
+             .structure,
+             .enum,
+             .otherNominalType,
+             .typeAlias:
+            guard let contextNode = node.firstChild,
+                  let unspecializedContextNode = unspecializedNominalNode(of: contextNode)
+            else { return nil }
+            return Node.create(kind: node.kind, children: [unspecializedContextNode] + node.children.dropFirst())
+        case .extension:
+            // The module, the extended type, and the extension's generic
+            // signature when it has one.
+            guard node.children.count >= 2,
+                  let unspecializedExtendedTypeNode = unspecializedNominalNode(of: node.children[1])
+            else { return nil }
+            return Node.create(kind: .extension, children: [node.children[0], unspecializedExtendedTypeNode] + node.children.dropFirst(2))
+        default:
+            return nil
+        }
+    }
+
+    /// The runtime name of the Objective-C class a type node names — a class
+    /// of the Clang importer's `__C` module, such as the `NSView` a Swift
+    /// view subclasses — or `nil` for any other type. An imported class is
+    /// mangled under its Objective-C name, so this is the name the
+    /// Objective-C tables know it by.
+    private static func importedObjCClassName(of typeNode: Node) -> String? {
+        var node = typeNode
+        while node.kind == .type, let childNode = node.firstChild {
+            node = childNode
+        }
+        guard node.kind == .class,
+              let moduleNode = node.firstChild,
+              moduleNode.kind == .module,
+              moduleNode.text == "__C",
+              let identifierNode = node[safeChild: 1],
+              identifierNode.kind == .identifier
+        else { return nil }
+        return identifierNode.text
     }
 
     // MARK: - Relationship Query
@@ -442,8 +551,9 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     }
 
     /// The mangled name of the superclass of the class with this mangled
-    /// name, or `nil` for a root class or a type this aggregate does not
-    /// know. The superclass itself need not be known to any indexer.
+    /// name — the generic class itself when the superclass is bound to
+    /// arguments — or `nil` for a root class or a type this aggregate does
+    /// not know. The superclass itself need not be known to any indexer.
     func superclassMangledName(forMangledTypeName mangledName: String) -> String? {
         if let superclass = superclassMangledNameByMangledName[mangledName] {
             return superclass
@@ -464,6 +574,21 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         }
         for subIndexer in subIndexers {
             if let name = subIndexer.superclassDisplayName(forMangledTypeName: mangledName) {
+                return name
+            }
+        }
+        return nil
+    }
+
+    /// The runtime name of that superclass when it is an imported
+    /// Objective-C class, the name the Objective-C tables know it by. `nil`
+    /// for a Swift superclass, which only the Swift tables can resolve.
+    func superclassObjCClassName(forMangledTypeName mangledName: String) -> String? {
+        if let name = superclassObjCClassNameByMangledName[mangledName] {
+            return name
+        }
+        for subIndexer in subIndexers {
+            if let name = subIndexer.superclassObjCClassName(forMangledTypeName: mangledName) {
                 return name
             }
         }
