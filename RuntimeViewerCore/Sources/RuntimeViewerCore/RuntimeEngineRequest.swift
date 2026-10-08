@@ -155,14 +155,14 @@ extension RuntimeEngine {
     /// runs this handler in a task nobody holds a handle to. Through a proxy
     /// whose engine is itself a client, cancelling that task cancels the
     /// engine's own forwarded request, which withdraws it upstream in turn.
-    static func registerProgress<R: RuntimeEngineProgressRequest>(
-        _ requestType: R.Type,
+    static func registerProgress<ProgressRequest: RuntimeEngineProgressRequest>(
+        _ requestType: ProgressRequest.Type,
         on connection: any RuntimeConnection,
         engine: RuntimeEngine,
         inboundRequests: RuntimeEngineInboundRequests
     ) {
-        connection.setMessageHandler(name: R.commandName) { (envelope: RuntimeEngineProgressEnvelope<R>) -> R.Response in
-            let onProgress: (@Sendable (R.Progress) async -> Void)?
+        connection.setMessageHandler(name: ProgressRequest.commandName) { (envelope: RuntimeEngineProgressEnvelope<ProgressRequest>) -> ProgressRequest.Response in
+            let onProgress: (@Sendable (ProgressRequest.Progress) async -> Void)?
             if let token = envelope.progressToken {
                 onProgress = { progress in
                     guard let payload = try? JSONEncoder().encode(progress) else { return }

@@ -996,29 +996,29 @@ extension RuntimeEngine {
     /// straight through. Passing `nil` skips all progress machinery on both
     /// sides. A request type that cancels across connections is forwarded by
     /// `forwardWithdrawably(_:onProgress:over:)` instead.
-    func dispatch<R: RuntimeEngineProgressRequest>(
-        _ request: R,
-        onProgress: (@Sendable (R.Progress) async -> Void)?
-    ) async throws -> R.Response {
+    func dispatch<ProgressRequest: RuntimeEngineProgressRequest>(
+        _ request: ProgressRequest,
+        onProgress: (@Sendable (ProgressRequest.Progress) async -> Void)?
+    ) async throws -> ProgressRequest.Response {
         if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
-            if R.cancelsAcrossConnections {
+            if ProgressRequest.cancelsAcrossConnections {
                 return try await forwardWithdrawably(request, onProgress: onProgress, over: connection)
             }
             guard let onProgress else {
                 return try await connection.sendMessage(
-                    name: R.commandName,
+                    name: ProgressRequest.commandName,
                     request: RuntimeEngineProgressEnvelope(progressToken: nil, request: request, requestIdentifier: nil)
                 )
             }
             let token = UUID().uuidString
             progressRoutes[token] = { payload in
-                guard let progress = try? JSONDecoder().decode(R.Progress.self, from: payload) else { return }
+                guard let progress = try? JSONDecoder().decode(ProgressRequest.Progress.self, from: payload) else { return }
                 await onProgress(progress)
             }
             defer { progressRoutes.removeValue(forKey: token) }
             return try await connection.sendMessage(
-                name: R.commandName,
+                name: ProgressRequest.commandName,
                 request: RuntimeEngineProgressEnvelope(progressToken: token, request: request, requestIdentifier: nil)
             )
         }
@@ -1035,14 +1035,14 @@ extension RuntimeEngine {
     /// forwarded request upstream. Whatever failure comes back to a caller
     /// that has been cancelled is reported as that cancellation: the peer's
     /// own `CancellationError` crosses the connection as a description only.
-    private func forwardWithdrawably<R: RuntimeEngineProgressRequest>(
-        _ request: R,
-        onProgress: (@Sendable (R.Progress) async -> Void)?,
+    private func forwardWithdrawably<ProgressRequest: RuntimeEngineProgressRequest>(
+        _ request: ProgressRequest,
+        onProgress: (@Sendable (ProgressRequest.Progress) async -> Void)?,
         over connection: any RuntimeConnection
-    ) async throws -> R.Response {
+    ) async throws -> ProgressRequest.Response {
         try Task.checkCancellation()
         let requestIdentifier = UUID().uuidString
-        let forwardedRequest = RuntimeEngineForwardedRequest<R.Response>()
+        let forwardedRequest = RuntimeEngineForwardedRequest<ProgressRequest.Response>()
         var progressToken: String?
         if let onProgress {
             let token = UUID().uuidString
@@ -1050,7 +1050,7 @@ extension RuntimeEngine {
                 // A push that lands after the caller gave up belongs to work
                 // nobody waits for any more, whatever the peer's version.
                 guard !forwardedRequest.isCancelled,
-                      let progress = try? JSONDecoder().decode(R.Progress.self, from: payload)
+                      let progress = try? JSONDecoder().decode(ProgressRequest.Progress.self, from: payload)
                 else { return }
                 await onProgress(progress)
             }
@@ -1065,7 +1065,7 @@ extension RuntimeEngine {
         do {
             return try await withTaskCancellationHandler {
                 try await forwardedRequest.response {
-                    try await connection.sendMessage(name: R.commandName, request: envelope)
+                    try await connection.sendMessage(name: ProgressRequest.commandName, request: envelope)
                 }
             } onCancel: {
                 guard forwardedRequest.cancel() else { return }
