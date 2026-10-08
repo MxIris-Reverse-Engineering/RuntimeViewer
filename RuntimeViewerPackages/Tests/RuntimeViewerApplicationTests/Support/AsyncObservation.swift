@@ -81,6 +81,20 @@ func values<Source: ObservableConvertibleType>(
     }
 }
 
+/// Polls `condition` on the main actor until it holds, for state that no
+/// observable reports — a test seam such as a refresh in flight.
+@MainActor
+func waitUntil(
+    timeout: TimeInterval = 10,
+    _ condition: () -> Bool
+) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+    while !condition() {
+        guard Date() < deadline else { throw AwaitTimeout(seconds: timeout) }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+}
+
 /// Lets the main queue drain the synchronous Rx work a relay emission kicked
 /// off (Signal handlers, `observeOnMainScheduler` hops) before asserting.
 @MainActor

@@ -202,11 +202,19 @@ struct FindSessionCorpusTests {
         let documentState = environment.documentState
         let coordinator = environment.make { documentState.findCorpusCoordinator }
         defer { withExtendedLifetime(coordinator) {} }
-        // What the coordinator does as it starts — ask for the indexed images,
-        // fetch the coverage — has to be over before the states are set here.
+        // What the coordinator does as it starts — ask for the indexed images
+        // and request each, fetch the coverage — has to be over before the
+        // states are set here. Its requests for libobjc go out under the
+        // simulator path and come back unindexed from this in-process engine,
+        // clearing that path's state; a coverage answer merges over every
+        // state without a request in flight. Waiting for libobjc to show as
+        // built is not enough on its own: the fetch of the indexed images can
+        // still be out when it does, and the requests it turns into land on
+        // the states below.
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 20) { states in
             states[TestImages.libobjc]?.isBuilt == true && !states.values.contains(where: \.isActive)
         }
+        try await waitUntil(timeout: 20) { !coordinator.hasWorkUnderWay }
         let canonicalPath = Self.simulatorPath(of: TestImages.libobjc)
         // libobjc built, as a simulator engine reports it.
         coordinator.mergeCoverage(RuntimeInterfaceCorpusCoverage(
@@ -222,7 +230,7 @@ struct FindSessionCorpusTests {
         // A request for it would come back unindexed from this in-process
         // engine and take the built state with it.
         let states = try await values(from: coordinator.$buildStatesByImagePath.asDriver(), during: 1)
-        #expect(states.allSatisfy { $0[canonicalPath]?.isBuilt == true }, "picking a built image asked for its corpus again")
+        #expect(states.allSatisfy { $0[canonicalPath]?.isBuilt == true }, "picking a built image asked for its corpus again; states: \(states)")
         await engine.stop()
     }
 

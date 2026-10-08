@@ -98,6 +98,19 @@ public final class FindCorpusCoordinator {
     /// Round trips `refreshCoverage()` has made. Test seam.
     private(set) var coverageFetchCount = 0
 
+    /// Fetches of the engine's indexed images that
+    /// `requestBuildOfIndexedImages()` started and that have not answered.
+    private var indexedImageFetchesUnderWay = 0
+
+    /// Whether the coordinator still has anything of its own in flight: a
+    /// build request, a fetch of the indexed images about to turn into build
+    /// requests, a coverage refresh or one queued behind it. Test seam: a
+    /// test that sets states itself waits for this to be `false` first, or
+    /// the coordinator's own work, landing later, writes over them.
+    var hasWorkUnderWay: Bool {
+        !buildRequests.isEmpty || indexedImageFetchesUnderWay > 0 || coverageRefreshTask != nil || isCoverageRefreshPending
+    }
+
     private let progressStaging = ProgressStaging()
 
     private let corpusBuiltRelay = PublishRelay<String>()
@@ -269,9 +282,12 @@ public final class FindCorpusCoordinator {
     public func requestBuildOfIndexedImages() {
         guard isEnabled, !isClosed, !isCorpusUnsupportedByEngine else { return }
         let engine = engine
+        indexedImageFetchesUnderWay += 1
         Task { [weak self] in
-            guard let imagePaths = try? await engine.indexedImagePathList() else { return }
-            guard let self, self.engine === engine else { return }
+            let imagePaths = try? await engine.indexedImagePathList()
+            guard let self else { return }
+            self.indexedImageFetchesUnderWay -= 1
+            guard let imagePaths, self.engine === engine else { return }
             for imagePath in imagePaths {
                 self.requestBuild(of: imagePath)
             }
