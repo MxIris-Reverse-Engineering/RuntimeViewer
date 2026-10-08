@@ -154,18 +154,31 @@ public struct RuntimeInterfaceSearchSummary: Hashable, Codable, Sendable {
     /// the UI can say what the search did not see. Only the images the query
     /// covers count: every indexed image, or those of its `imagePaths`.
     public let unbuiltIndexedImagePaths: [String]
+    /// Set when the search stopped before reading everything it covers.
+    /// What it delivered until then is correct, and its counts stand for what
+    /// it read. `nil` for a search that read everything.
+    public let stopReason: RuntimeInterfaceSearchStopReason?
 
     public var scannedImageCount: Int {
         scannedImagePaths.count
     }
 
-    public init(totalMatchCount: Int, scannedImagePaths: [String], scannedObjectCount: Int, isTruncated: Bool, unbuiltIndexedImagePaths: [String]) {
+    public init(totalMatchCount: Int, scannedImagePaths: [String], scannedObjectCount: Int, isTruncated: Bool, unbuiltIndexedImagePaths: [String], stopReason: RuntimeInterfaceSearchStopReason? = nil) {
         self.totalMatchCount = totalMatchCount
         self.scannedImagePaths = scannedImagePaths
         self.scannedObjectCount = scannedObjectCount
         self.isTruncated = isTruncated
         self.unbuiltIndexedImagePaths = unbuiltIndexedImagePaths
+        self.stopReason = stopReason
     }
+}
+
+/// Why a text or member search stopped before reading every corpus it
+/// covers.
+public enum RuntimeInterfaceSearchStopReason: String, Codable, Hashable, Sendable {
+    /// The regular expression spent the search's time budget backtracking:
+    /// `(\w+)+\(` over a long identifier never finishes on its own.
+    case regularExpressionTooExpensive
 }
 
 // MARK: - Corpus building

@@ -189,8 +189,8 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 | 命令 | 类型 | 进度 | 响应 |
 |------|------|------|------|
 | `BuildInterfaceCorpusCommand { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `RuntimeInterfaceCorpusBuildOutcome`：`built(CorpusBuildSummary { objectCount, skippedCount, byteCount })` / `cancelled` / `imageNotIndexed`（2026-10-08，PR121.30：取消是值不是错误，才跨得过连接；公开 API 仍返回 summary） |
-| `SearchInterfacesCommand { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
-| `SearchMembersCommand { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
+| `SearchInterfacesCommand { query, options, generationOptions, resultLimit }` | progress | `RuntimeInterfaceSearchBatch`：对象表加带下标的命中，每个对象一批只发一次（按镜像粒度增量推送）；`searchInterfaces` 在客户端解包回 `[GlobalSearchMatch]` | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
+| `SearchMembersCommand { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `RuntimeMemberSearchBatch`，同上的对象表加下标（按镜像粒度）；`searchMembers` 解包回 `[RuntimeMemberMatch]` | 同上形态的 summary |
 | `TypeRelationshipsCommand { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |
 | `InterfaceCorpusCoverageCommand` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
 
@@ -207,6 +207,11 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   推进，命中时 O(1) 取语义类别做域过滤；行号 / 行文本由命中偏移向两侧找 `\n`。Starting With / Ending With 以标识符
   字符类 `[A-Za-z0-9_$]` 判边界，Matching Word 两侧都判。Regular Expression 模式对每个条目的 `text` 跑
   `NSRegularExpression`（引擎的部署目标早于 Swift `Regex`），`^` / `$` 按行锚定，与 Xcode 的 Find 一致。
+- 搜索不占用语料存储：store 只在自己的 actor 上取快照（要搜的镜像与各自的条目数组，写时复制）并记下搜索时间，扫描在
+  actor 外进行，文本与成员搜索共用一个扫描驱动；每个条目前检查取消，每个镜像的批次发出前再查一次，每扫完一个镜像让出一次。
+  正则受每次搜索 10 s 的累计时间预算约束：用完即停，已交付的结果保留，摘要的 `stopReason` 说明原因；关系搜索没有部分结果，
+  改为抛出可读的错误。含被量词修饰的分组的正则（只有它会指数回溯）带 `.reportProgress` 运行，回调里检查取消与预算，
+  能在一次匹配中途停下；其余正则在命中之间与两次调用之间检查。
 - 搜索域 → `SemanticType` 映射（闭合定义，单测按此断言）：
 
   | 域 | 命中的语义类别 |
@@ -783,3 +788,9 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 语料协调器的 coverage 刷新最多一个在途、外加一个排队：在途时再来的调用只置一个标志，在途那次完成后补刷一次；换引擎与关窗时取消在途的刷新，回来的答案不再合并 | PR #121 审查 PR121.35：每个构建请求完成都单独刷新一次，第二个窗口打开时它对已建好的语料发的请求几乎同时返回，于是 N 个镜像就是 N 次往返、每次带回 N 个状态，合并又是 O(N)，开窗时主线程卡一下。补刷那一次保证最后一次调用之后的状态总能拿到。过期答案靠取消识别而不是比引擎身份：服务重启后 `.switchEngine` 可能把同一台引擎放回去。 |
 | 2026-10-08 | `DocumentState` 新增「引擎已重置」信号 `runtimeEngineDidReset`：`.switchEngine` 生效时发，引擎在文档什么都没打开时重新就绪也发（引擎第一次连上同样算）；Find 的会话与语料协调器改订阅它。连接在构建途中丢失（XPC service 退出、socket 断开）时，被打断的构建不记 Failed，清掉状态，等重置后随协调器重新开始再请求；判定用 `RuntimeViewerCommunication` 新增的 `RuntimeConnectionError.isLostConnection(_:)` | PR #121 审查 PR121.30 剩下的一半与 PR121.05 留下的缺口：XPC service 被重启时、socket 断开时，每个在途构建各记一条假的 Failed；文档停在镜像列表根处时 `.switchEngine` 什么都不做、`$runtimeEngine` 不发值，于是屏上一直是已经不在的那个进程的搜索结果，协调器也一直把旧进程的语料当 built。各传输的断连错误有几种是 internal 的，只能在通信模块里判。被打断的镜像不另记一份逐个重请：同一进程重连时「请求全部已索引镜像」已经包含它们，服务重启后的新进程里它们没有索引，等再被索引时由 PR121.04 的那一路请求。 |
 | 2026-10-08 | 合入 `next`：Find 的命令随 `next` 的命名改成 `…Command`（`BuildInterfaceCorpusCommand` 等，协议 `RuntimeEngineProgressCommand`，命令名常量移到 `RuntimeEngineCommandName.swift`），由 `RuntimeEngine.registerBuiltInHandlers(into:)` 经 `RuntimeEngineCommandRegistrar` 注册；`cancelRequest` 与 `dyldRootPath` 在注册器里由本进程作答、不转发；取消登记表交给注册器，命令扩展的进度命令也撤得回；`next` 新增的五条注入命令不开 `cancelsAcrossConnections` | `next` 把封闭的 `CommandNames` 枚举换成别的模块可以扩展的 `CommandName` struct，把硬编码清单换成「内置清单 + 进程级扩展表」，命令协议改名 `RuntimeEngineCommand`；Find 的命令跟着改名，免得同一张命令表里两种叫法。线上格式两边都没变：命令名字符串照旧，`requestIdentifier` 照旧只出现在开启取消的命令的信封里。注入命令不开取消的理由见 `CommunicationAndEngineArchitecture.md` §4.5：服务它们的对端（合入之前从 `next` 构建、装在真机上的设备载荷）不认识 `cancelRequest`，改成进度命令还会改掉它们的线上格式，而且它们没有值得撤回的长工作。 |
+| 2026-10-08 | 语料构建按身份号区分：取消运行中的构建时立刻把它移出可加入的构建表、以 `CancellationError` 结束全部订阅者，任务继续占着构建槽直到在途打印返回，之后它产出的一切（进度、整份语料）都丢弃；同一镜像的新请求另起一个构建排在它后面 | PR #121 审查 PR121.08：原来取消只调 `task.cancel()`，构建仍留在表里，之后同一镜像的请求（含换了 transformer 的）挂上去，跟着它以取消结束，这个镜像就一直搜不到；唯一的取消检查在组装之前，组装期间到达的驱逐拦不住，旧 transformer 的语料、关掉开关后刚驱逐的语料又被存成已建好。打印没有取消点，所以只能等它让出槽位；代价是这段时间里排队的镜像显示 pending、没有镜像显示 building。 |
+| 2026-10-08 | 文本与成员搜索的扫描移出 store actor（actor 上只取快照与记录搜索时间），两种搜索共用一个扫描驱动，逐条目检查取消；正则受每次搜索 10 s 的累计时间预算约束，超出即停、保留已交付的结果、摘要加 `stopReason`，关系搜索改为抛出可读的错误；只对含被量词修饰的分组的正则开 `.reportProgress` | PR #121 审查 PR121.06：原实现在 actor 上同步扫完一个镜像，`(\w+)+\(` 这类灾难性回溯会永久占住整个引擎的语料存储，构建、覆盖查询和之后的每次搜索都排在它后面。Darwin 上 `.reportProgress` 的回调在一次匹配内部也会到来（20 ms 预算让 `(a+)+\(` 在约 22 ms 停下），但块几乎每前进一个 UTF-16 单元就被调一次：Foundation 语料上常见正则从约 43 ms 涨到约 148 ms（Debug 构建），超过草案定的 20% 门槛，按草案的退路只给可能指数回溯的模式开，其余与修前持平。没有这类分组、但有多个相邻无界量词的模式（`.*.*.*X`）仍可能在一个条目内多项式回溯，只在条目之间受预算约束。界面上的「结果不完整」提示随 Find 界面一起做。 |
+| 2026-10-08 | 文本搜索收满 `resultLimit` 之后只计数：行表只为被收集的命中建，范围是 all 时连 span 表也不建；`Layout` 拆成独立的 span 种类表与按需的行表 | PR #121 审查 PR121.23：常见词往往在前几个镜像就收满 1000 条，之后每个有命中的条目仍要扫一遍全文建行表、遍历全部 span 建种类表，只为把总数数准。用计数而不是计时验证：三个条目各一个命中、上限 1 时，修前建 3 张行表与 3 张 span 表，修后 1 张与 1 张（范围 all）、1 张与 3 张（symbolsOnly）。 |
+| 2026-10-08 | 带 Generation Options 的字面量文本搜索先问「投影后可能有命中吗」，答「不可能」的条目不建投影：原文有命中、或任一接缝（隐藏内容被删掉的位置）前后各 needle 长度内有横跨或紧挨接缝的命中才建；正则照旧先投影 | PR #121 审查 PR121.21：建投影要把条目复制三四份，而绝大多数条目对一个具体查询没有命中。判断必须不漏报：投影里的命中要么就是原文的命中，要么碰到接缝，所以逐个检查接缝附近的每个起点，不能用贪心扫描（它会被窗口边缘的重叠候选带偏）。Foundation 上（Debug，默认选项）投影次数从 2290 降到 25–1452，预检本身 135–264 ms，建全部投影约 1.25 s；固定种子的随机对拍对四种匹配方式各 6000 次检查没有一次漏报。 |
+| 2026-10-08 | 语料条目里的成员只存名字（与名字共用存储），声明行在成员被收集时从接口文本里读回；常驻预算补算成员结构体与行区间、成员名、嵌套块区间和对象 | PR #121 审查 PR121.25：预算只算文本与几张表，而定位器给每个成员存了一份去掉缩进的整行，成员密集的类型几乎多存一遍文本，Report navigator 显示的大小也偏小。Foundation 上（Debug，按驱逐语料释放的 malloc 量计）：修前预算 14.0 MB、实际 25.8 MB；修后预算 18.0 MB、实际 21.7 MB。 |
+| 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |

@@ -793,7 +793,7 @@ func imageOpenedInTheSidebarBecomesSearchable() async throws {
 
 - **严重度**：Major
 - **审查编号**：C03（含 S3 的 store 一半）
-- **状态**：方案待批，代码未改
+- **状态**：已修复，界面部分待办：`stopReason` 非空时 Find 提示「结果不完整」，归 Find 界面批次（S6）；本批只把 `stopReason` 发布进摘要，没有碰 `FindSession`。复现测试：`RuntimeInterfaceCorpusStoreTests.storeAnswersWhileSearching`（修前 coverage 排在整个扫描之后，返回时搜索已结束，用例 4.6 s）、`searchStopsInsideAnImage`（修前取消后照常返回 summary）、`searchReportsWhyItStopped` 与 `memberSearchReportsWhyItStopped`（修前 `stopReason` 恒为 nil）、`RuntimeInterfaceTextMatcherTests.regularExpressionBudgetStopsOneMatch`（修前两次调用都不抛错，24 个 a 共跑 2.2 s；修后两个 20 ms 预算共 44 ms）、`RuntimeInterfaceSearchTests.relationshipSearchOverBudgetFailsReadably`（修前照常返回两棵树）；守护用例 `RuntimeInterfaceTextMatcherTests.quantifiedGroups`（16 个手写用例）。测试 4 实测（Debug 构建，Foundation 语料 2388 条、573 万 UTF-8 字节、564 万 UTF-16 单元，五轮取中位数）：开着 `.reportProgress` 时块几乎每前进一个 UTF-16 单元就被调一次（约 590 万次），常见正则从约 43 ms 涨到约 148 ms（+200%～+450%），慢正则（约 1.4 s）+10%～+14%，超过 20%，按退路只对含被量词修饰的分组的模式开启；之后不含这类分组的模式与修前持平（−1%～+4%），含的（`(NS)?String\b`、`(?:init|copy)+With`）+127%～+159%。与草案的出入：超出预算的错误是 `PatternError` 新增的 `regularExpressionTooExpensive(pattern:)`（`PatternError` 随之 `Equatable`），说明里带上用户写的模式；取消与时钟都每 64 次回调看一次（块在每个位置都被调，每次查取消也有代价）；不保留不带预算的 `hits(in:pattern:)` 重载，生产代码的每个调用点都显式传预算；store 与关系解析器的 init 各加 internal 的 `regularExpressionTimeLimit`（默认 10 s）供测试注入，关系搜索的测试用 0 秒预算，单次匹配中途停下由匹配器测试覆盖；成员搜索收满后不再为每个命中建一个 `RuntimeMemberMatch` 再丢掉；停下或取消时正在扫的镜像仍记入 `scannedImagePaths`。残留风险：没有被量词修饰的分组、但有多个相邻无界量词的模式（如 `.*.*.*X`）在一个条目内是多项式回溯，只在两次正则调用之间（条目之间）受预算约束。同类：成员名、类型名与文本共用 `hits(in:pattern:budget:)`，预算在一处生效；其余正则创建点（`SwiftStdlib+.swift`、`TransformerSettingsView.swift`）是固定模式；CLI 的 `searchTypes` 按上文不在本条范围
 
 **问题**：
 - 文本搜索和成员搜索都是语料存储 actor 上的方法。它们在 actor 上同步扫完一整个镜像：条目循环里没有挂起点（`RuntimeInterfaceCorpusStore.swift:597-618`、:668-693），取消只在镜像与镜像之间检查一次（:593、:664），正则用 `regex.matches(in:)` 一口气跑完（`RuntimeInterfaceTextMatcher.swift:92`），没有任何上限。
@@ -2174,7 +2174,7 @@ func selectionFollowsTheUsersChoice() async throws {
 
 - **严重度**：Major
 - **审查编号**：C01（= S1）+ C02
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusStoreTests.requestAfterCancellingRunningBuildStartsAfresh`、`transformerChangeWhilePrintingRebuilds`、`evictionDuringAssemblyLeavesNothing`（修前：前两个的第二个请求挂到了已取消的构建上，等不到它自己的构建排队（`waitForCoverage` 超时），随后 `second.value` 抛 `CancellationError`；第三个组装期间的驱逐拦不住，`buildA` 返回 `objectCount: 2, byteCount: 206` 的 summary，语料与 coverage 里的 built 都还在）。与草案的出入：`RunningBuild` 只存身份号与任务，不存路径（没有读它的地方）。同类：全仓库按镜像路径对应一个可加入任务的结构只有这一处，后台索引按批次 id 管理，不受影响
 
 **问题**：语料存储取消一个**正在运行**的构建时，只调用了 `task.cancel()`，构建仍留在 `builds` 里（`RuntimeInterfaceCorpusStore.swift:385-388`）。
 - **C01**：之后同一镜像的新请求一看 `builds` 里有构建，就把自己挂上去（:342-343），即使它要的 transformer 不同也一样（:329-334 先取消，接着照样走到 :342）。被挂上的请求最后跟着旧构建一起以 `CancellationError` 结束（:539-540），也不会重新排队，这个镜像就一直搜不到。
@@ -4157,7 +4157,7 @@ func invalidRegularExpressionSearchFailsReadably() async throws {
 
 - **严重度**：Minor（性能）
 - **审查编号**：F2
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusStoreTests.searchProjectsOnlyCandidateEntries`（三个条目各在行尾藏一段注释、只有一个含查询词，用 `RuntimeInterfaceSearchWorkLog` 数投影次数：修前 3，修后 1）。精确性：`RuntimeInterfaceProjectionPrefilterTests.prefilterCases` 18 个手写用例，投影后的文本、预检的回答、投影里有没有命中三样期望值都是字面量，覆盖横跨一个和两个接缝、接缝前后的词边界字节变化（变成边界、仍是标识符字节、非 ASCII 字节、文本两端）、相邻隐藏区域合并、条件成立的区域不算接缝、大小写折叠、自身重叠的 needle、窗口要跳过更近的隐藏区域、只在隐藏文本里命中（保守地答「可能」）；`prefilterNeverSkipsAHit` 对四种字面量匹配方式各跑 3000 个固定种子的随机文本、大小写两种，用投影本身和匹配器做判据，一次也没有跳过有命中的条目（每种方式跳过 4117–5707 次，保守地答「可能」却没有命中 89–522 次）。实测（Debug 构建，Foundation 2388 个条目、2290 个带区域，默认 Generation Options）：投影次数从 2290 降到 1452（`init`）、270（`NSString`）、50（`delegate`）、25（`objectForKey`）；为全部带区域的条目建投影约 1.25 s，预检扫完它们 135–264 ms，仅作参考。与草案的出入：草案在每个接缝的窗口上跑贪心的字面量扫描，而贪心扫描会先吃掉窗口边缘一个边界判错的重叠候选、跳过真正横跨接缝的命中，所以改为逐个起点检查，窗口两侧各取 needle 长度加 1 个保留字节，使每个起点的词边界都按投影里真实的字节或真实的文本两端判断；隐藏区间按投影的规则精确计算（条件不成立的区域、排序后把相接或重叠的合并、空区域不算、越界截断）；接缝两侧紧挨的两个保留字节都不在 needle 的字节里时整个接缝跳过（每个候选起点必然覆盖其中之一，所以仍然精确）；匹配器的逐位置判定抽成 `isLiteralHit` 供扫描与窗口共用，保证两边语义相同。同类：成员搜索本来就是有成员命中才投影，关系搜索不投影，不需要改
 
 **问题**：文本搜索带上内容区的 Generation Options 时，只要这些选项隐藏了任何东西，store 就先给每个条目建投影，再在投影上匹配（`RuntimeInterfaceCorpusStore.swift:605`），不管这个条目有没有命中。建一次投影要做这些事：把文本复制成字节数组，建一张逐字节的「是否保留」表，再复制保留下来的字节和 span，最后新建一个 String（swift-semantic-string next 分支的 `VisibilityProjection.swift`）。总量约为条目大小的 3–4 倍。绝大多数条目对一个具体查询没有命中，这些开销都白花了。审查估计它是每次搜索最大的单项开销，在 27 MB 的语料上约 100 ms。成员搜索已经是有成员命中才投影，没有这个问题。
 **四问**：复现——默认选项下（会隐藏偏移、地址等内容）搜任意词，用 signpost 统计投影次数，等于条目总数；基线——本 PR 新引入；影响——只影响耗时与内存抖动，不影响结果，建议在 PR121.06 之后做；历史——新代码。
@@ -4426,7 +4426,7 @@ func projectionPrefilterKeepsEverySeamHit() throws {
 
 - **严重度**：Minor（性能），但要在发版前做
 - **审查编号**：F5
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceSearchTests.searchProgressCarriesEachObjectOnce`（在 libobjc 的语料上跑两种搜索请求自己的 `perform`，把每个要过线的进度值编成 JSON、数里面的对象：修前文本搜索编了 68 个对象，其实只涉及 5 个；成员搜索编了 4 个，其实 2 个；修后分别是 5 和 2）；`RuntimeObjectIndexedBatchTests` 四例（每个对象只发一次、解包后与原命中逐条相同且对象内容一致；一个带嵌套类型的对象重复 20 次时新格式的 JSON 不到旧格式的一半；对端发来越界或负的下标时只丢那一条；同 key 而内容不同的对象各占一个槽位）。端到端经打包再解包的路径由 `textSearch`、`memberSearch` 与 `RuntimeInterfaceCorpusNestingTests` 覆盖。实测（Foundation，收满 1000 条）：`init` 1000 条命中涉及 418 个对象，批次从 423064 字节降到 313175 字节（−26%）；`NSString` 755 条涉及 264 个对象，从 383504 降到 231287（−40%）；Foundation 的对象多为没有嵌套类型的 ObjC 类，带嵌套树的 Swift 类型省得更多。线上格式定稿：这两个命令是本 PR 新增的，从未进过任何发布版本（`git tag --contains 8b4309b2` 为空，main 与 origin/next 上都没有 `SearchInterfacesRequest`），S2 在 `CommunicationAndEngineArchitecture.md` §4.4 写下的「改已有命令的载荷形状」规则只管已发布的命令，不适用于它们，所以不保留旧格式。与草案的出入：同 key 而内容不同的对象各占一个槽位（草案按 key 取第一个，`==` 只比身份，这样也不会丢信息）。合并时注意：S3a 在这两个请求结构体里加了 `cancelsAcrossConnections`，与本条改的 `Progress` / `perform` 相邻，两者都要保留
 
 **问题**：文本命中 `RuntimeInterfaceSearchMatch` 和成员命中 `RuntimeMemberMatch` 都直接带着完整的 `RuntimeObject`（`Common/RuntimeInterfaceSearch.swift:124-141`、`Common/RuntimeMemberDeclaration.swift:89-99`），其中包括递归的 `children`。进度推送按镜像成批发出，批里每条命中都要把它的对象连同整棵嵌套子树单独编码一遍。一个接口里常有几十条命中：在 SwiftUI 里搜 `View`、在 Foundation 里搜 `init`，同一个类型会在一批里重复几十次，每次带着它的整棵子树走一趟 XPC 或 socket。
 **四问**：复现——对任何多命中的搜索，把一批进度的 JSON 打出来，同一个对象会重复出现；基线——本 PR 新引入（搜索命令是新的）；影响——只影响传输量和编解码耗时，结果正确。但**这两个线上类型是本 PR 新加的，现在改没有兼容负担，发版后再改就得兼容新旧两种格式**，所以建议在发版前修；历史——新代码。
@@ -4638,7 +4638,7 @@ func searchBatchSendsEachObjectOnce() throws {
 
 - **严重度**：Minor（性能）
 - **审查编号**：F6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusStoreTests.countingPastTheLimitBuildsNoTables`（三个条目各一个 `member` 命中、`resultLimit` 为 1，用新加的 `RuntimeInterfaceSearchWorkLog` 数一次搜索建了几张表：修前范围 `.all` 建了 3 张行表、3 张 span 表，`.symbolsOnly` 3 张行表；修后分别是 1 和 1、1 和 3）；守护用例 `RuntimeInterfaceTextMatcherTests.countingAloneMatchesCollecting`（四种范围、有无排除区间，只计数与收集的计数相同，期望值手写）。「省了」用计数证明，没有计时。与草案的出入：草案把行表与 span 表留在 `Layout` 里复用，实际上种类查好之后造命中只用得到行表，所以 `Layout` 拆掉：span 表成了独立的 `SpanKindTable`，行表（PR121.24 的 `RuntimeInterfaceLineTable`）在第一条被收集的命中时才建；扫描驱动把「条目开始时是否还在收集」传给每个条目，收集的闭包改为返回「还能不能再收」，收满那一刻起同一条目里余下的命中也不再查种类。工作日志 `RuntimeInterfaceSearchWorkLog` 是任务局部变量，只在测试里绑定；PR121.21 用它数投影次数。同类：成员搜索收满后只做名字匹配，不建表，没有这个问题（它现在也从驱动拿到同一个「是否还在收集」）
 
 **问题**：搜索收满 `resultLimit`（默认 1000）之后仍会扫完全部语料，只为了把总数数准。但匹配器对每个有命中的条目都照样构建完整的 `Layout`（`RuntimeInterfaceTextMatcher.swift:184`）：扫一遍全文建行表，再遍历全部 span 建语义类别表；接着对每个命中都查一次语义类别（:195-198）。而这时行表根本用不上；搜索范围是 `.all` 时，语义类别也用不上。常见词（`View`、`init`）往往在前几个镜像里就收满了，剩下的所有条目都在白建这两张表。
 **四问**：复现——在 SwiftUI 加 Foundation 的语料上搜 `init`，收满 1000 条后，用 signpost 看每个条目的耗时，`Layout.init` 占大头；基线——本 PR 新引入；影响——只影响搜索耗时，结果正确，改动小，建议修；历史——新代码。
@@ -4847,7 +4847,7 @@ func countingAloneMatchesCollecting(scope: RuntimeInterfaceSearchScope) throws {
 
 - **严重度**：Cleanup
 - **审查编号**：R6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，行为不变：守护用例 `RuntimeInterfaceCorpusStoreTests.memberLocatedInProjection`（成员搜索带 Generation Options 时在投影文本里重新定位行号，此前没有任何测试走这条路）先按旧签名写好，在改动前的代码上跑过并通过，重构后改用新签名仍通过；其余由 `RuntimeInterfaceTextMatcherTests`、`RuntimeInterfaceCorpusStoreTests`、`RuntimeInterfaceSearchTests`（含 `memberSearch`）、`RuntimeInterfaceCorpusNestingTests`、`RuntimeMemberDeclarationLocatorTests` 覆盖，重构后五个套件全过。与草案的出入：草案的守护用例夹具算错了——`Comment(_:)` 自己会加 `// `，照草案写 `Comment("    // hidden\n")` 得到的是 `//     // hidden`，隐藏区间切在行中间、留下 `en`，在未改动的代码上就是红的（成员落在第 3 行）；改成 `Standard("    ")` 加 `Comment("hidden\n")`，并用手写字面量断言全文与投影后的文本。没有可数的省却：调用次数与建表次数都不变，改的是两份切行实现合成一份（条目一侧从 `utf8.enumerated()` 换成 `withUTF8`）。同类：`RuntimeMemberDeclarationLocator` 的切行归 PR121.10（S5b），本条不动
 
 **问题**：「把文本按 `\n` 切成行起点数组」以及「按偏移找所在行」，在搜索代码里实现了两遍。一份在 `RuntimeInterfaceCorpusEntry`（`RuntimeInterfaceCorpusStore.swift:111-131`，用 `utf8.enumerated()` 扫描，二分查找写成上下界形式），另一份在匹配器的 `Layout`（`RuntimeInterfaceTextMatcher.swift:214-254`、:271-281，用 `withUTF8` 扫描，二分查找写成 `low` / `high` 形式）。两份目前行为一致，但「行尾不含换行符」「最后一行到文本末尾」这类约定得在两处分别维护。
 **四问**：复现——读代码即可看到两份实现；基线——本 PR 新引入；影响——没有行为差异，属于清理，建议与 PR121.23 同批做；历史——新代码。
@@ -5089,7 +5089,7 @@ func memberLocatedInProjection() {
 
 - **严重度**：Minor
 - **审查编号**：U1（审查末尾未经验证的补充项，本步已在代码层面核实）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusStoreTests.entryByteCountCoversMembers`（修前 `byteCount` 是 2758，应不少于 6349——40 个成员的结构体与名字都没算；条目里的成员存着整行文本而不是名字）；守护断言：`buildAndSearch` 里 `declarationText == "var memberBeta: Int"`（命中时把行读回，修前修后都绿），`RuntimeInterfaceSearchTests.memberSearch` 在 Foundation 上覆盖同一条路径，`RuntimeInterfaceCorpusNestingTests` 的字段定位也经成员搜索读回。实测（Debug，Foundation 语料 34249 个成员，驱逐语料前后的 malloc 用量差，单独运行）：修前预算记 13.99 MB、驱逐释放 25.8 MB（少算 46%）；修后预算记 17.98 MB、驱逐释放 21.7 MB（两次 21.75 / 21.71，少算 17%，在 ±25% 内），语料本身因为不再存行副本小了约 4 MB。与草案的出入：实测用 Foundation 而不是 AppKit（在测试进程里加载 AppKit 有在 Dock 留图标之虞，Foundation 的成员已足够密）；成员搜索收满后不为没收集的成员读行。与 PR121.10（S5b）的关系：定位器仍在组装时临时生成行文本，条目建好即丢，改写定位器时可以把「不留行文本」挪进它的输出
 
 **问题**：语料的常驻预算（默认 256 MB）按 `RuntimeInterfaceCorpusEntry.byteCount` 计算，而它只算文本、span 表、标识符表和区域表（`RuntimeInterfaceCorpusStore.swift:54-63`），完全不算成员。偏偏成员里有一大块重复数据：定位器给每个找到行的成员都存了一份去掉缩进的整行文本 `declarationText`（`RuntimeMemberDeclarationLocator.swift:51-52`）。另外还有每个成员的名字字符串、`RuntimeMemberDeclaration` 结构体本身、`memberDeclarationLineRanges`、`nestedDefinitionRanges` 和条目上的 `object`，都没计入。对于成员密集的 Objective-C 类，接口几乎每一行都是一个成员，单是复制的行文本就接近接口文本本身的大小，所以实际占用可能接近设定上限的两倍。Report navigator 显示的语料大小同样偏小。
 **四问**：复现——读代码可以确认漏算的部分；倍数还没实测，实测方法见下文；基线——本 PR 新引入；影响——预算本来就是为了限制内存，漏算一半就失去了意义，在内存紧张的机器上尤其明显，建议修；历史——新代码，`byteCount` 的注释说成员「比文本小，而且与 section 共享」，但存下来的 `declarationText` 是定位器新建的字符串，并不与 section 共享。
@@ -5227,7 +5227,7 @@ func entryByteCountCoversMembers() {
 
 - **严重度**：Cleanup
 - **审查编号**：S1 遗留（审查日志 S1 的后半句）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，没有可观察的行为变化，不新增测试：由 `RuntimeInterfaceCorpusStoreTests`（`waitForCoverage` 的全部用例、`skippedObject`、`failedBuild`、`lastSubscriberCancels`，以及 PR121.08 新加的两处 coverage 断言）与 `RuntimeInterfaceSearchTests.textSearch` 的 `interfaceCorpusCoverage()` 断言覆盖，改动后两套件 35 个测试全过。同类：调用点与下文一致（定义 1、引擎 1、测试 5——比草案多出的一处是 PR121.08 的新用例）
 
 **问题**：`RuntimeInterfaceCorpusStore.coverage(indexedImagePaths:)` 根本不读它的参数（`RuntimeInterfaceCorpusStore.swift:300` 的 `_ = indexedImagePaths`），但引擎每次回答覆盖查询之前都会先算出这个参数（`RuntimeEngine+Search.swift:131`）。这一步要分别调用 ObjC、Swift 两个 section 工厂 actor 才能取到交集（:148-152），算完就丢。Report navigator 打开时以及每次构建结束都会查询覆盖情况，所以每次都白白多两跳。
 **四问**：复现——读代码即可确认，参数从未被使用；基线——本 PR 新引入；影响——只浪费两次 actor 调用，不影响行为，顺手清理；历史——新代码。参数的文档注释说「已索引但存储里没有的镜像报告为缺席」，而实现里「缺席」就是不在表里，用不着这个集合。

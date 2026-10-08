@@ -15,6 +15,11 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
 
     let visibilityRegions: VisibilityRegionTable
 
+    /// The members its structures list, located, but without their
+    /// declaration lines: each `declarationText` is the member's name,
+    /// sharing its storage, and `displayedMember(at:)` reads the line back
+    /// out of `interface` for a member that is shown. A copy of every line
+    /// costs about as much as the text itself for a type of mostly members.
     let members: [RuntimeMemberDeclaration]
 
     /// Where each member's declaration line lies in `interface`, as UTF-8
@@ -39,34 +44,72 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
         self.object = object
         self.interface = interface
         self.visibilityRegions = visibilityRegions
-        self.members = members
+        self.members = members.map { member in
+            RuntimeMemberDeclaration(name: member.name, kind: member.kind, isStatic: member.isStatic, declarationText: member.name, lineNumber: member.lineNumber)
+        }
         self.nestedDefinitionRanges = nestedDefinitionRanges
-        let lineStartOffsets = Self.lineStartOffsets(of: interface.text)
-        let textByteCount = interface.text.utf8.count
+        let lineTable = RuntimeInterfaceLineTable(interface.text)
         memberDeclarationLineRanges = members.map { member in
-            guard let lineNumber = member.lineNumber, lineNumber >= 1, lineNumber <= lineStartOffsets.count else { return nil }
-            let lineStart = lineStartOffsets[lineNumber - 1]
-            let lineEnd = lineNumber < lineStartOffsets.count ? lineStartOffsets[lineNumber] - 1 : textByteCount
-            return lineStart ..< lineEnd
+            guard let lineNumber = member.lineNumber, lineNumber >= 1, lineNumber <= lineTable.lineCount else { return nil }
+            return lineTable.lineUTF8Range(at: lineNumber - 1)
         }
     }
 
-    /// Resident bytes: the text once, the span table, the interned
-    /// identifiers, the region table. The `RuntimeObject` and member list are
-    /// not counted — they are small next to the text and shared with the
-    /// section anyway.
+    /// Resident bytes, estimated: the text once, the span table, the
+    /// interned identifiers, the region table, the members with their line
+    /// ranges and names, the nested blocks and the object. An estimate in
+    /// the right order of magnitude, not to the byte: allocation headers and
+    /// rounding are left out — evicting Foundation's corpus frees about a
+    /// fifth more than its entries count.
     var byteCount: Int {
         interface.text.utf8.count
             + interface.spans.count * MemoryLayout<FrozenSemanticString.Span>.stride
             + interface.identifierTable.reduce(0) { $0 + $1.utf8.count }
             + visibilityRegions.regions.count * MemoryLayout<VisibilityRegionTable.Region>.stride
+            + members.count * (MemoryLayout<RuntimeMemberDeclaration>.stride + MemoryLayout<Range<Int>?>.stride)
+            + members.reduce(0) { total, member in total + Self.allocatedByteCount(of: member.name) }
+            + nestedDefinitionRanges.count * MemoryLayout<Range<Int>>.stride
+            + MemoryLayout<RuntimeObject>.stride
+            + Self.allocatedByteCount(of: object.name)
+            + Self.allocatedByteCount(of: object.displayName)
+    }
+
+    /// What a string allocates: nothing up to 15 UTF-8 bytes, which Swift
+    /// stores inline, and above that its bytes plus the allocation's header.
+    private static func allocatedByteCount(of string: String) -> Int {
+        let utf8Count = string.utf8.count
+        return utf8Count <= 15 ? 0 : utf8Count + 32
     }
 
     /// The interface as it reads under `visibility`: `interface` itself when
     /// nothing in it depends on the options.
     func projection(under visibility: RuntimeInterfaceVisibility) -> VisibilityProjection? {
         guard !visibilityRegions.isEmpty else { return nil }
+        RuntimeInterfaceSearchWorkLog.record(.projection)
         return visibilityRegions.projection(of: interface, where: visibility.isOptionEnabled)
+    }
+
+    /// Whether `pattern` can hit the interface as `visibility` shows it,
+    /// decided without building that projection, which copies the entry
+    /// several times over. Never no for an entry the projection gives a hit
+    /// in, so a search can skip the entry on a no; see
+    /// `RuntimeInterfaceTextMatcher.literalPattern(_:mayHitTextOf:hidingUTF8Ranges:)`.
+    /// Always yes for a regular expression.
+    func mayHaveHits(of pattern: RuntimeInterfaceTextMatcher.Pattern, under visibility: RuntimeInterfaceVisibility) -> Bool {
+        guard pattern.regex == nil else { return true }
+        let hiddenRanges = visibilityRegions.hiddenUTF8Ranges(inTextOfUTF8Count: interface.text.utf8.count, where: visibility.isOptionEnabled)
+        return RuntimeInterfaceTextMatcher.literalPattern(pattern, mayHitTextOf: interface.text, hidingUTF8Ranges: hiddenRanges)
+    }
+
+    /// The member at `memberIndex` as the full interface shows it, its
+    /// declaration line read back out of `interface` and trimmed of its
+    /// indentation, as the locator wrote it. A member with no known line
+    /// keeps its name as its declaration.
+    func displayedMember(at memberIndex: Int) -> RuntimeMemberDeclaration {
+        let member = members[memberIndex]
+        guard let lineNumber = member.lineNumber, let lineRange = memberDeclarationLineRanges[memberIndex] else { return member }
+        let lineText = String(decoding: interface.text.utf8.dropFirst(lineRange.lowerBound).prefix(lineRange.count), as: UTF8.self)
+        return member.located(at: lineNumber, declarationText: lineText.trimmingCharacters(in: .whitespaces))
     }
 
     /// `nestedDefinitionRanges` in `projection`'s text: each block from its
@@ -85,7 +128,7 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     /// The member at `memberIndex` as the projection shows it — its line
     /// number and declaration line in the projected text — or `nil` when the
     /// projection hid it. A member with no known line is kept as it is.
-    func member(at memberIndex: Int, in projection: VisibilityProjection, projectedLineStartOffsets: [Int]) -> RuntimeMemberDeclaration? {
+    func member(at memberIndex: Int, in projection: VisibilityProjection, projectedLineTable: RuntimeInterfaceLineTable) -> RuntimeMemberDeclaration? {
         let member = members[memberIndex]
         guard let lineRange = memberDeclarationLineRanges[memberIndex] else { return member }
         let originalBytes = interface.text.utf8
@@ -100,34 +143,10 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
             byteIndex = originalBytes.index(after: byteIndex)
         }
         guard let surviving else { return nil }
-        let lineIndex = Self.lineIndex(containing: surviving, lineStartOffsets: projectedLineStartOffsets)
-        let projectedText = projection.text.text.utf8
-        let lineStart = projectedLineStartOffsets[lineIndex]
-        let lineEnd = lineIndex + 1 < projectedLineStartOffsets.count ? projectedLineStartOffsets[lineIndex + 1] - 1 : projectedText.count
-        let lineText = String(decoding: projectedText.dropFirst(lineStart).prefix(lineEnd - lineStart), as: UTF8.self)
+        let lineIndex = projectedLineTable.lineIndex(containingUTF8Offset: surviving)
+        let projectedLineRange = projectedLineTable.lineUTF8Range(at: lineIndex)
+        let lineText = String(decoding: projection.text.text.utf8.dropFirst(projectedLineRange.lowerBound).prefix(projectedLineRange.count), as: UTF8.self)
         return member.located(at: lineIndex + 1, declarationText: lineText.trimmingCharacters(in: .whitespaces))
-    }
-
-    static func lineStartOffsets(of text: String) -> [Int] {
-        var offsets = [0]
-        for (offset, byte) in text.utf8.enumerated() where byte == UInt8(ascii: "\n") {
-            offsets.append(offset + 1)
-        }
-        return offsets
-    }
-
-    private static func lineIndex(containing offset: Int, lineStartOffsets: [Int]) -> Int {
-        var lowerBound = 0
-        var upperBound = lineStartOffsets.count
-        while upperBound - lowerBound > 1 {
-            let middle = (lowerBound + upperBound) / 2
-            if lineStartOffsets[middle] <= offset {
-                lowerBound = middle
-            } else {
-                upperBound = middle
-            }
-        }
-        return lowerBound
     }
 }
 
@@ -170,10 +189,14 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///   last subscriber goes away. Two documents sharing the `.local` engine
 ///   therefore cannot cancel each other's corpus.
 /// - **Cancellation leaves nothing behind; failure is remembered.** A
-///   cancelled build is simply not built. A build that threw is recorded as
-///   `failed` and stays so until the image is asked for again, which retries.
-///   One object that fails to print does not fail the build — it is skipped
-///   and counted.
+///   cancelled build is simply not built: its subscribers hear so at once,
+///   and nothing its task finishes afterwards is kept. A print in flight
+///   cannot be interrupted, so a cancelled running build holds the slot
+///   until its task ends; meanwhile the images queued behind it, a new
+///   request for the same image included, read as pending. A build that
+///   threw is recorded as `failed` and stays so until the image is asked for
+///   again, which retries. One object that fails to print does not fail the
+///   build — it is skipped and counted.
 /// - **One print serves every Generation Options value.** Each interface is
 ///   printed with everything any options could show, the optional parts
 ///   marked with the option they depend on; a search reads it through those
@@ -221,11 +244,25 @@ actor RuntimeInterfaceCorpusStore {
         let continuation: CheckedContinuation<RuntimeInterfaceCorpusBuildSummary, any Swift.Error>
     }
 
+    /// A build that takes subscribers. A cancelled build leaves `builds` at
+    /// once, its subscribers told; whatever its task still produces after
+    /// that — progress, a whole corpus — is dropped, because `identifier`
+    /// no longer names the image's build.
     private struct Build {
+        /// Tells this build from a later one of the same image.
+        let identifier: UInt64
         let transformer: Transformer.Configuration
         var subscribers: [Subscriber] = []
-        var task: Task<Void, Never>?
         var progress = RuntimeInterfaceCorpusBuildProgress(built: 0, total: 0)
+    }
+
+    /// The build holding the single slot. It keeps the slot after it is
+    /// cancelled, until its task ends — a print in flight cannot be
+    /// interrupted — while its image may already have a newer build, queued
+    /// behind it.
+    private struct RunningBuild {
+        let buildIdentifier: UInt64
+        let task: Task<Void, Never>
     }
 
     private enum BuildOutcome {
@@ -254,20 +291,32 @@ actor RuntimeInterfaceCorpusStore {
     /// Images waiting for the single build slot, in request order.
     private var pendingImagePaths: [String] = []
 
-    private var runningImagePath: String?
+    private var runningBuild: RunningBuild?
 
     private var failureMessages: [String: String] = [:]
 
     private var nextSubscriberIdentifier: UInt64 = 0
 
+    private var nextBuildIdentifier: UInt64 = 0
+
+    /// `RuntimeInterfaceCorpusAssembly.entries(from:)`, replaceable so a test
+    /// can hold a build in its assembly and act on it there.
+    private let assembleEntries: @Sendable ([RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry]
+
+    private let regularExpressionTimeLimit: TimeInterval
+
     init(
         builder: any RuntimeInterfaceCorpusBuilding,
         residentByteLimit: Int = RuntimeInterfaceCorpusStore.defaultResidentByteLimit,
-        printingWidth: Int = RuntimeInterfaceCorpusStore.defaultPrintingWidth
+        printingWidth: Int = RuntimeInterfaceCorpusStore.defaultPrintingWidth,
+        regularExpressionTimeLimit: TimeInterval = RuntimeInterfaceTextMatcher.RegularExpressionBudget.defaultTimeLimit,
+        assembleEntries: @escaping @Sendable ([RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] = { prints in RuntimeInterfaceCorpusAssembly.entries(from: prints) }
     ) {
         self.builder = builder
         self.residentByteLimit = residentByteLimit
         self.printingWidth = max(1, printingWidth)
+        self.regularExpressionTimeLimit = regularExpressionTimeLimit
+        self.assembleEntries = assembleEntries
     }
 
     // MARK: - Reading
@@ -284,20 +333,26 @@ actor RuntimeInterfaceCorpusStore {
         corpora[imagePath]
     }
 
-    /// `indexedImagePaths` are the images the engine has indexed; those the
-    /// store holds nothing for are reported as absent, not as pending.
-    func coverage(indexedImagePaths: Set<String>) -> RuntimeInterfaceCorpusCoverage {
+    /// How many requests wait on the image's build — what a test checks
+    /// before it acts on a subscription it has just made.
+    func subscriberCount(for imagePath: String) -> Int {
+        builds[imagePath]?.subscribers.count ?? 0
+    }
+
+    /// Every image the store knows about. An image it holds nothing for —
+    /// never asked for, evicted, cancelled — is absent from the map, not
+    /// reported as pending.
+    func coverage() -> RuntimeInterfaceCorpusCoverage {
         var states: [String: RuntimeInterfaceCorpusBuildState] = [:]
         for (imagePath, corpus) in corpora {
             states[imagePath] = .built(corpus.summary)
         }
         for (imagePath, build) in builds {
-            states[imagePath] = runningImagePath == imagePath ? .building(build.progress) : .pending
+            states[imagePath] = runningBuild?.buildIdentifier == build.identifier ? .building(build.progress) : .pending
         }
         for (imagePath, message) in failureMessages where states[imagePath] == nil {
             states[imagePath] = .failed(message: message)
         }
-        _ = indexedImagePaths
         return RuntimeInterfaceCorpusCoverage(
             statesByImagePath: states,
             residentByteCount: residentByteCount,
@@ -339,10 +394,13 @@ actor RuntimeInterfaceCorpusStore {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let subscriber = Subscriber(identifier: identifier, onProgress: onProgress, continuation: continuation)
+                // `builds` never holds a cancelled build, so a subscriber that
+                // joins here cannot inherit a cancellation meant for others.
                 if builds[imagePath] != nil {
                     builds[imagePath]!.subscribers.append(subscriber)
                 } else {
-                    builds[imagePath] = Build(transformer: transformer, subscribers: [subscriber])
+                    nextBuildIdentifier += 1
+                    builds[imagePath] = Build(identifier: nextBuildIdentifier, transformer: transformer, subscribers: [subscriber])
                     pendingImagePaths.append(imagePath)
                 }
                 if isPrioritized {
@@ -379,36 +437,38 @@ actor RuntimeInterfaceCorpusStore {
     }
 
     /// Cancels the image's build whether it is queued or running, resuming
-    /// every remaining subscriber with `CancellationError`.
+    /// every remaining subscriber with `CancellationError` at once. A running
+    /// build keeps the slot until its task ends, but it leaves `builds` now:
+    /// a request that comes after it starts a build of its own, queued behind
+    /// it, instead of joining one that is already lost.
     private func cancelBuild(imagePath: String) {
-        guard let build = builds[imagePath] else { return }
-        if runningImagePath == imagePath {
-            // `finishBuild(.cancelled)` runs when the task observes the
-            // cancellation; it resumes the subscribers and frees the slot.
-            build.task?.cancel()
+        guard let build = builds.removeValue(forKey: imagePath) else { return }
+        if let runningBuild, runningBuild.buildIdentifier == build.identifier {
+            // `finishBuild` frees the slot when the task ends, and drops what
+            // it produced: this build is no longer in `builds`.
+            runningBuild.task.cancel()
         } else {
             pendingImagePaths.removeAll { $0 == imagePath }
-            builds[imagePath] = nil
-            for subscriber in build.subscribers {
-                subscriber.continuation.resume(throwing: CancellationError())
-            }
+        }
+        for subscriber in build.subscribers {
+            subscriber.continuation.resume(throwing: CancellationError())
         }
     }
 
     private func pump() {
-        guard runningImagePath == nil, !pendingImagePaths.isEmpty else { return }
+        guard runningBuild == nil, !pendingImagePaths.isEmpty else { return }
         let imagePath = pendingImagePaths.removeFirst()
-        guard var build = builds[imagePath] else {
+        guard let build = builds[imagePath] else {
             pump()
             return
         }
-        runningImagePath = imagePath
+        let buildIdentifier = build.identifier
         let transformer = build.transformer
-        build.task = Task.detached(priority: .utility) { [weak self] in
+        let task = Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            await self.run(imagePath: imagePath, transformer: transformer)
+            await self.run(imagePath: imagePath, buildIdentifier: buildIdentifier, transformer: transformer)
         }
-        builds[imagePath] = build
+        runningBuild = RunningBuild(buildIdentifier: buildIdentifier, task: task)
         #log(.info, "Building corpus for \(imagePath, privacy: .public)")
     }
 
@@ -417,8 +477,9 @@ actor RuntimeInterfaceCorpusStore {
     /// `.utility` priority comes from the detached task that calls it.
     /// Families print `printingWidth` at a time and their prints land in the
     /// slots of the objects they belong to, so the entries keep the listing
-    /// order.
-    private func run(imagePath: String, transformer: Transformer.Configuration) async {
+    /// order. `buildIdentifier` goes with everything it reports: once the
+    /// build is cancelled the image's build is another one, or none.
+    private func run(imagePath: String, buildIdentifier: UInt64, transformer: Transformer.Configuration) async {
         let start = Date()
         var skippedCount = 0
         let outcome: BuildOutcome
@@ -426,7 +487,7 @@ actor RuntimeInterfaceCorpusStore {
             guard let builder else { throw CancellationError() }
             let objects = try await builder.corpusObjects(in: imagePath)
             let total = objects.count
-            await publishProgress(imagePath: imagePath, built: 0, total: total)
+            await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: 0, total: total)
             var printsByObjectIndex = [RuntimeInterfaceCorpusPrint?](repeating: nil, count: total)
             let families = Self.families(in: objects)
             func printOperation(forFamilyAt familyIndex: Int) -> @Sendable () async throws -> (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]) {
@@ -460,7 +521,7 @@ actor RuntimeInterfaceCorpusStore {
                     let previouslyBuilt = built
                     built += familyRange.count
                     if built / Self.progressReportStride > previouslyBuilt / Self.progressReportStride || built == total {
-                        await publishProgress(imagePath: imagePath, built: built, total: total)
+                        await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: built, total: total)
                     }
                     if nextFamilyIndex < families.count {
                         group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
@@ -468,6 +529,8 @@ actor RuntimeInterfaceCorpusStore {
                     }
                 }
             }
+            // Saves an assembly nobody will take. A cancellation that comes
+            // during the assembly is caught by `finishBuild`.
             try Task.checkCancellation()
             let entries = await assemble(printsByObjectIndex.compactMap { $0 })
             let byteCount = entries.reduce(0) { $0 + $1.byteCount }
@@ -481,7 +544,7 @@ actor RuntimeInterfaceCorpusStore {
             outcome = .failed(error)
             #log(.error, "Corpus build of \(imagePath, privacy: .public) failed: \(error, privacy: .public)")
         }
-        finishBuild(imagePath: imagePath, outcome: outcome)
+        finishBuild(imagePath: imagePath, buildIdentifier: buildIdentifier, outcome: outcome)
     }
 
     /// The objects in print units, each a range of the listing: an object
@@ -509,37 +572,51 @@ actor RuntimeInterfaceCorpusStore {
     /// a walk over every interface of the image — runs off this actor, which
     /// stays free to answer searches and coverage meanwhile.
     private nonisolated func assemble(_ prints: [RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] {
-        RuntimeInterfaceCorpusAssembly.entries(from: prints)
+        await assembleEntries(prints)
     }
 
-    private func publishProgress(imagePath: String, built: Int, total: Int) async {
+    /// Reaches only the subscribers of build `buildIdentifier`: a cancelled
+    /// build's task may still report while a newer build of its image waits
+    /// for the slot.
+    private func publishProgress(imagePath: String, buildIdentifier: UInt64, built: Int, total: Int) async {
+        guard var build = builds[imagePath], build.identifier == buildIdentifier else { return }
         let progress = RuntimeInterfaceCorpusBuildProgress(built: built, total: total)
-        guard builds[imagePath] != nil else { return }
-        builds[imagePath]!.progress = progress
-        let handlers = builds[imagePath]!.subscribers.map(\.onProgress)
+        build.progress = progress
+        builds[imagePath] = build
+        let handlers = build.subscribers.map(\.onProgress)
         for handler in handlers {
             await handler(progress)
         }
     }
 
-    private func finishBuild(imagePath: String, outcome: BuildOutcome) {
-        let build = builds.removeValue(forKey: imagePath)
-        if runningImagePath == imagePath {
-            runningImagePath = nil
+    /// Frees the slot, then settles build `buildIdentifier` — unless it was
+    /// cancelled while it ran, in which case its subscribers were told then
+    /// and what it produced, even a whole corpus, is stale. A subscriber's
+    /// continuation is resumed in one place only: whoever takes its build out
+    /// of `builds`.
+    private func finishBuild(imagePath: String, buildIdentifier: UInt64, outcome: BuildOutcome) {
+        if runningBuild?.buildIdentifier == buildIdentifier {
+            runningBuild = nil
         }
+        defer { pump() }
+        guard let build = builds[imagePath], build.identifier == buildIdentifier else {
+            #log(.info, "Dropping what the cancelled corpus build of \(imagePath, privacy: .public) produced")
+            return
+        }
+        builds[imagePath] = nil
         switch outcome {
         case .built(let corpus):
             corpora[imagePath] = corpus
             failureMessages[imagePath] = nil
-            build?.subscribers.forEach { $0.continuation.resume(returning: corpus.summary) }
+            build.subscribers.forEach { $0.continuation.resume(returning: corpus.summary) }
             enforceResidentLimit(protecting: imagePath)
         case .failed(let error):
             failureMessages[imagePath] = "\(error)"
-            build?.subscribers.forEach { $0.continuation.resume(throwing: error) }
+            build.subscribers.forEach { $0.continuation.resume(throwing: error) }
         case .cancelled:
-            build?.subscribers.forEach { $0.continuation.resume(throwing: CancellationError()) }
+            // Still the image's build yet cancelled: the builder went away.
+            build.subscribers.forEach { $0.continuation.resume(throwing: CancellationError()) }
         }
-        pump()
     }
 
     // MARK: - Eviction
@@ -574,9 +651,30 @@ actor RuntimeInterfaceCorpusStore {
 
     // MARK: - Searching
 
+    /// One corpus as a search reads it, taken on this actor so the scan can
+    /// run off it. The entries are values: a corpus evicted while the scan
+    /// runs stays readable — and resident, over the budget — until the scan
+    /// is done with it.
+    private struct SearchedCorpus: Sendable {
+        let imagePath: String
+        let entries: [RuntimeInterfaceCorpusEntry]
+    }
+
+    /// What the scan of one search came to.
+    private struct SearchScan: Sendable {
+        var totalMatchCount = 0
+        var collectedCount = 0
+        var scannedObjectCount = 0
+        var scannedImagePaths: [String] = []
+        var stopReason: RuntimeInterfaceSearchStopReason?
+    }
+
     /// Runs `query` over every built corpus, pushing matches to `onProgress`
     /// one image at a time, and returns the summary. Matches are collected up
-    /// to `query.resultLimit`; the count goes on past it.
+    /// to `query.resultLimit`; the count goes on past it. The scan runs off
+    /// this actor, so whatever the pattern costs, the store keeps answering;
+    /// a regular expression that spends the search's budget stops it, with
+    /// what was delivered standing and the summary saying why.
     func searchInterfaces(
         _ query: RuntimeInterfaceSearchQuery,
         indexedImagePaths: Set<String>,
@@ -584,70 +682,39 @@ actor RuntimeInterfaceCorpusStore {
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(query)
         let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
-        var totalMatchCount = 0
-        var collectedCount = 0
-        var scannedObjectCount = 0
-        var scannedImagePaths: [String] = []
-        let now = Date()
-        for imagePath in searchedImagePaths(within: query.imagePaths) {
-            try Task.checkCancellation()
-            guard let corpus = corpora[imagePath] else { continue }
-            scannedImagePaths.append(imagePath)
-            var batch: [RuntimeInterfaceSearchMatch] = []
-            for entry in corpus.entries {
-                scannedObjectCount += 1
-                // The text the content pane shows under the query's options,
-                // so every hit is visible and its line reads as displayed.
-                // Its nested types' blocks are skipped: they are entries of
-                // their own, which report those hits.
-                let interface: FrozenSemanticString
-                let nestedDefinitionRanges: [Range<Int>]
-                if let projection = visibility.flatMap({ entry.projection(under: $0) }) {
-                    interface = projection.text
-                    nestedDefinitionRanges = entry.nestedDefinitionRanges.isEmpty ? [] : entry.nestedDefinitionRanges(in: projection)
-                } else {
-                    interface = entry.interface
-                    nestedDefinitionRanges = entry.nestedDefinitionRanges
-                }
-                totalMatchCount += RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, excludingUTF8Ranges: nestedDefinitionRanges) { match in
-                    guard collectedCount < query.resultLimit else { return false }
-                    batch.append(match)
-                    collectedCount += 1
-                    return true
-                }
+        let scan = try await Self.scan(
+            corporaToSearch(within: query.imagePaths),
+            resultLimit: query.resultLimit,
+            regularExpressionTimeLimit: regularExpressionTimeLimit,
+            onProgress: onProgress
+        ) { entry, budget, isCollecting, collect in
+            // Most entries have no hit at all; under options that hide
+            // something, learn that before paying for the projection.
+            if let visibility, !entry.visibilityRegions.isEmpty, !entry.mayHaveHits(of: pattern, under: visibility) {
+                return 0
             }
-            corpora[imagePath]?.lastSearchedAt = now
-            if !batch.isEmpty {
-                await onProgress(batch)
+            // The text the content pane shows under the query's options, so
+            // every hit is visible and its line reads as displayed. Its
+            // nested types' blocks are skipped: they are entries of their
+            // own, which report those hits.
+            let interface: FrozenSemanticString
+            let nestedDefinitionRanges: [Range<Int>]
+            if let projection = visibility.flatMap({ entry.projection(under: $0) }) {
+                interface = projection.text
+                nestedDefinitionRanges = entry.nestedDefinitionRanges.isEmpty ? [] : entry.nestedDefinitionRanges(in: projection)
+            } else {
+                interface = entry.interface
+                nestedDefinitionRanges = entry.nestedDefinitionRanges
             }
+            return try RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: nestedDefinitionRanges, isCollecting: isCollecting, collect: collect)
         }
-        return RuntimeInterfaceSearchSummary(
-            totalMatchCount: totalMatchCount,
-            scannedImagePaths: scannedImagePaths,
-            scannedObjectCount: scannedObjectCount,
-            isTruncated: totalMatchCount > collectedCount,
-            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: query.imagePaths)
-        )
-    }
-
-    /// The built images a search reads, in path order: all of them, or
-    /// those of `scope` when the query names some.
-    private func searchedImagePaths(within scope: Set<String>?) -> [String] {
-        let imagePaths = corpora.keys.sorted()
-        guard let scope else { return imagePaths }
-        return imagePaths.filter(scope.contains)
-    }
-
-    /// The indexed images a search could not read for want of a corpus, of
-    /// those it was asked to cover: all of them, or those of `scope`.
-    private func unbuiltImagePaths(among indexedImagePaths: Set<String>, within scope: Set<String>?) -> [String] {
-        let coveredImagePaths = scope.map(indexedImagePaths.intersection) ?? indexedImagePaths
-        return coveredImagePaths.subtracting(corpora.keys).sorted()
+        return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
     }
 
     /// The member counterpart of `searchInterfaces`: member names matched
     /// with the text search's match styles, optional kind filter, same
-    /// collection and counting rules. An empty query matches no member.
+    /// collection, counting and stopping rules. An empty query matches no
+    /// member.
     func searchMembers(
         _ query: RuntimeMemberSearchQuery,
         indexedImagePaths: Set<String>,
@@ -655,53 +722,134 @@ actor RuntimeInterfaceCorpusStore {
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = query.text.isEmpty ? nil : try RuntimeInterfaceTextMatcher.Pattern(text: query.text, matchMode: query.matchMode, isCaseSensitive: query.isCaseSensitive)
         let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
-        var totalMatchCount = 0
-        var collectedCount = 0
-        var scannedObjectCount = 0
-        var scannedImagePaths: [String] = []
-        let now = Date()
-        for imagePath in searchedImagePaths(within: query.imagePaths) {
-            try Task.checkCancellation()
-            guard let corpus = corpora[imagePath] else { continue }
-            scannedImagePaths.append(imagePath)
-            var batch: [RuntimeMemberMatch] = []
-            for entry in corpus.entries {
-                scannedObjectCount += 1
-                guard let pattern else { continue }
-                // Projected only once a member of this entry matches: most
-                // entries have none, and they cost nothing.
-                var projection: (projection: VisibilityProjection, lineStartOffsets: [Int])??
-                for (memberIndex, member) in entry.members.enumerated() {
-                    if let kinds = query.kinds, !kinds.contains(member.kind) { continue }
-                    guard let range = RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, pattern: pattern) else { continue }
-                    var shownMember = member
-                    if let visibility {
-                        if projection == nil {
-                            projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceCorpusEntry.lineStartOffsets(of: $0.text.text)) }
-                        }
-                        if let entryProjection = projection ?? nil {
-                            // Hidden under the query's options: not a match.
-                            guard let projectedMember = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineStartOffsets: entryProjection.lineStartOffsets) else { continue }
-                            shownMember = projectedMember
-                        }
+        let kinds = query.kinds
+        let scan = try await Self.scan(
+            corporaToSearch(within: query.imagePaths),
+            resultLimit: query.resultLimit,
+            regularExpressionTimeLimit: regularExpressionTimeLimit,
+            onProgress: onProgress
+        ) { entry, budget, isCollectingAtStart, collect in
+            guard let pattern else { return 0 }
+            var matchCount = 0
+            var isCollecting = isCollectingAtStart
+            // Projected only once a member of this entry matches: most
+            // entries have none, and they cost nothing.
+            var projection: (projection: VisibilityProjection, lineTable: RuntimeInterfaceLineTable)??
+            for (memberIndex, member) in entry.members.enumerated() {
+                if let kinds, !kinds.contains(member.kind) { continue }
+                guard let range = try RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, pattern: pattern, budget: &budget) else { continue }
+                var projectedMember: RuntimeMemberDeclaration?
+                if let visibility {
+                    if projection == nil {
+                        projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceLineTable($0.text.text)) }
                     }
-                    totalMatchCount += 1
-                    guard collectedCount < query.resultLimit else { continue }
-                    batch.append(RuntimeMemberMatch(object: entry.object, member: shownMember, matchRangeInName: range))
-                    collectedCount += 1
+                    if let entryProjection = projection ?? nil {
+                        // Hidden under the query's options: not a match.
+                        guard let memberUnderOptions = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineTable: entryProjection.lineTable) else { continue }
+                        projectedMember = memberUnderOptions
+                    }
+                }
+                matchCount += 1
+                if isCollecting {
+                    // The line is read back out of the text only for a member collected.
+                    isCollecting = collect(RuntimeMemberMatch(object: entry.object, member: projectedMember ?? entry.displayedMember(at: memberIndex), matchRangeInName: range))
                 }
             }
+            return matchCount
+        }
+        return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
+    }
+
+    /// The built corpora a search reads, in path order — all of them, or
+    /// those of `scope` when the query names some — marked searched now.
+    private func corporaToSearch(within scope: Set<String>?) -> [SearchedCorpus] {
+        let now = Date()
+        var imagePaths = corpora.keys.sorted()
+        if let scope {
+            imagePaths = imagePaths.filter(scope.contains)
+        }
+        return imagePaths.compactMap { imagePath in
+            guard let corpus = corpora[imagePath] else { return nil }
             corpora[imagePath]?.lastSearchedAt = now
+            return SearchedCorpus(imagePath: imagePath, entries: corpus.entries)
+        }
+    }
+
+    /// Reads `corpora` entry by entry, off this actor: the text and member
+    /// searches differ only in `matchEntry`, which hands each match of an
+    /// entry to its last argument — `false` back means the result limit is
+    /// reached and nothing more is taken — and returns how many matches the
+    /// entry has. Its third argument says whether anything is still taken
+    /// when the entry starts; past the limit an entry is only counted, which
+    /// needs much less work. One regular expression budget serves the whole
+    /// search.
+    ///
+    /// Checks for cancellation before every entry and before an image's
+    /// batch goes out, so a cancelled search delivers nothing more; the
+    /// regular expression engine looks at the task itself in between. Yields
+    /// after every image. A regular expression that spends the budget ends
+    /// the scan where it is: the matches of the image under way still go
+    /// out, and `stopReason` says why nothing follows.
+    @concurrent
+    private static func scan<Match: Sendable>(
+        _ corpora: [SearchedCorpus],
+        resultLimit: Int,
+        regularExpressionTimeLimit: TimeInterval,
+        onProgress: @Sendable ([Match]) async -> Void,
+        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ isCollecting: Bool, _ collect: (Match) -> Bool) throws -> Int
+    ) async throws -> SearchScan {
+        var scan = SearchScan()
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: regularExpressionTimeLimit)
+        for corpus in corpora {
+            try Task.checkCancellation()
+            scan.scannedImagePaths.append(corpus.imagePath)
+            var batch: [Match] = []
+            var collectedCount = scan.collectedCount
+            do {
+                for entry in corpus.entries {
+                    try Task.checkCancellation()
+                    scan.scannedObjectCount += 1
+                    scan.totalMatchCount += try matchEntry(entry, &budget, collectedCount < resultLimit) { match in
+                        guard collectedCount < resultLimit else { return false }
+                        batch.append(match)
+                        collectedCount += 1
+                        return collectedCount < resultLimit
+                    }
+                }
+            } catch RuntimeInterfaceTextMatcher.PatternError.regularExpressionTooExpensive {
+                scan.stopReason = .regularExpressionTooExpensive
+            }
+            scan.collectedCount = collectedCount
+            try Task.checkCancellation()
             if !batch.isEmpty {
                 await onProgress(batch)
             }
+            if scan.stopReason != nil {
+                break
+            }
+            await Task.yield()
+        }
+        return scan
+    }
+
+    private func summary(of scan: SearchScan, indexedImagePaths: Set<String>, within scope: Set<String>?) -> RuntimeInterfaceSearchSummary {
+        if scan.stopReason != nil {
+            #log(.info, "A search stopped after \(scan.scannedObjectCount, privacy: .public) objects: its regular expression spent the time budget")
         }
         return RuntimeInterfaceSearchSummary(
-            totalMatchCount: totalMatchCount,
-            scannedImagePaths: scannedImagePaths,
-            scannedObjectCount: scannedObjectCount,
-            isTruncated: totalMatchCount > collectedCount,
-            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: query.imagePaths)
+            totalMatchCount: scan.totalMatchCount,
+            scannedImagePaths: scan.scannedImagePaths,
+            scannedObjectCount: scan.scannedObjectCount,
+            isTruncated: scan.totalMatchCount > scan.collectedCount,
+            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: scope),
+            stopReason: scan.stopReason
         )
+    }
+
+    /// The indexed images a search could not read for want of a corpus, of
+    /// those it was asked to cover: all of them, or those of `scope`.
+    private func unbuiltImagePaths(among indexedImagePaths: Set<String>, within scope: Set<String>?) -> [String] {
+        let coveredImagePaths = scope.map(indexedImagePaths.intersection) ?? indexedImagePaths
+        return coveredImagePaths.subtracting(corpora.keys).sorted()
     }
 }

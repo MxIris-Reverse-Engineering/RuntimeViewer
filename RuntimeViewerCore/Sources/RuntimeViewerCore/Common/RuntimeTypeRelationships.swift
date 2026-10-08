@@ -25,7 +25,7 @@ public struct RuntimeTypeRelationshipsQuery: Hashable, Codable, Sendable {
     /// styles under its rules, applied to the type's own name — the last
     /// component of its qualified name, where Xcode's type hierarchy queries
     /// anchor them — or to the whole qualified name when `text` has a dot in
-    /// it. See `RuntimeInterfaceTextMatcher.typeNameMatches(_:pattern:)`.
+    /// it. See `RuntimeInterfaceTextMatcher.typeNameMatches(_:pattern:budget:)`.
     public var matchMode: RuntimeInterfaceSearchMatchMode
     public var relationship: RuntimeTypeRelationship
     public var isCaseSensitive: Bool
