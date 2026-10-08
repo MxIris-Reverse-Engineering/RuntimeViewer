@@ -301,13 +301,15 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - `identifier`：命令名。
 - `data`：内层 payload 的 JSON。
 - `nonce`：**每次往返的路由键**。让多个同名并发请求不在 pending 表里撞车——因此 `sendSemaphore` 不必端到端串行化往返。对端处理器必须原样回显 nonce；缺省则回退用 `identifier`（旧版单飞行行为）。
-- `isError`：标记响应体装的是 `RuntimeNetworkRequestError` 而非期望的 `Response`，让 `sendRequest` 能把远端失败还原成真正的 error，而不是一个 `DecodingError` 或全 optional 的"假成功"。
+- `isError`：标记响应体装的是 `RuntimeNetworkRequestError` 而非期望的 `Response`，让 `sendRequest` 能把远端失败还原成真正的 error，而不是一个 `DecodingError` 或全 optional 的"假成功"。`RuntimeNetworkRequestError` 遵循 `LocalizedError`，`localizedDescription` 就是对端写下的描述，弹窗和日志里读到的是这段文字，而不是「…RuntimeNetworkRequestError error 1.」。
 
 ### 4.2 关键机制
 
 - **`ReceiveBuffer` + `scannedPrefix`**：跨多次 append 记住已扫描偏移，把分块到达的大消息从 O(n²) 降到 O(n)。
 - **`pendingRequests`（Mutex）**：按路由键存 `PendingRequest`（continuation + 超时 Task）。成功/写失败路径会**取消定时器**，避免已完成请求的孤儿定时器误伤后来同名请求。
-- **`onMessageReceived`** 回调把完整帧交给分发逻辑：先看是否命中某个 pending（响应），否则查 handler（请求）。
+- **分发（`beginDispatch`）**：帧按到达顺序逐个处理。命中某个 pending 的是回复，当场交给等待的请求；没命中的帧里，错误信封和已放弃请求的回复直接丢弃（见下）；其余按命令名查 handler：不回复的处理器（推送）排在串行尾链 `orderedHandlerTail` 上按发送顺序执行，要回复的处理器并发执行，慢处理器不挡后面的请求。
+- **回复屏障**：对端为一个请求推送的东西（进度、Find 的命中批次）和排在它前面的状态同步，都写在回复之前；推送却在尾链上排队，回复当场交付。所以回复交付时连带记下当时的尾链，`sendRequest` 等这条链跑完再返回：回复之前推来的东西，在调用方继续之前都已处理完，与 XPC 一样（XPC 上每条推送都是一次往返）。没有屏障时，请求一返回，引擎就在 `dispatch` 的 `defer` 里删掉进度路由，还排在尾链上的推送随之丢掉，Find 会缺最后几批结果（PR #121 的审查发现，复现测试 `TransportReplyOrderingTests`）。屏障只在接收端，不改线格式，对旧对端同样有效。从尾链上的处理器发出的请求不等屏障——屏障等的正是它自己；标记是 `@TaskLocal isRunningOnOrderedHandlerTail`，处理器派生的 `Task` 会继承。唯一会死锁的写法：处理器等待一段在自己任务树之外（`Task.detached`、dispatch queue、回调）向同一连接发请求的工作。
+- **迟到的回复不回应**：请求超时后从 `pendingRequests` 删掉，nonce 记进最多 256 条的「已放弃」列表，之后到达的同 nonce 帧直接丢弃；错误信封只可能是回复，没人等就丢，绝不交给处理器。以前迟到的回复会被当成一条新请求：发起方没有这条命令的处理器，回一个同 nonce 的错误信封；对端有这条命令的处理器，把错误信封当请求再执行一遍、再回复……两端往返不止，直到断开（同一次审查发现，复现测试 `TransportLateReplyTests`）。旧对端仍会对我们的迟到回复回一次错误信封，新端不再回应，循环在第一圈断开。以后任何「不等回复就提前返回」的路径都要调用 `rememberAbandonedRequest(nonce:)`。
 - 处理器注册表 `messageHandlers`、received 流 `SharedAsyncSequence` 均用 `Mutex` 保护，`AsyncSemaphore` 序列化发送。
 
 ### 4.3 `RuntimeRequest` / `RuntimeResponse`（`RuntimeRequestResponse.swift`）
