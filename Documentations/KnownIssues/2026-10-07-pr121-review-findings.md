@@ -184,7 +184,8 @@
 
 - **严重度**：Blocker
 - **审查编号**：C35
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`CrossPlatformSourceGuardTests`（源码检查，修前红：报出 `ReportNode.swift:3 imports RxAppKit` 与 `ReportViewModel.swift:133 uses appRouter` 两处，四个 target 里没有别的命中）
+- **落地与偏离**：护栏比下文的示例多做了三件事。一，它也查符号：收集这四个 target 只在 macOS 分支里声明的 `@DependencyEntry` 键（`appRouter`、`resolvedThemeStream`、`runtimeEngineIconProvider` 等），iOS 家族会编译到的代码里出现就报，所以 `appRouter` 那一半也挡得住。二，`#if` 按 iOS 与 visionOS 两个平台用三值逻辑求值（`!`、`&&`、`||`、括号、`os()`、`canImport()`、`targetEnvironment()`），不再按子串猜，`#if os(macOS) || os(iOS)` 这类条件不会被误当成守卫；求值器本身有 11 个用例钉住。三，macOS 专属模块表从 `Package.swift` 里 `.when(platforms: appkitPlatforms)` 的依赖读出，再加 AppKit / Cocoa，新增依赖不用改测试。仍然抓不到的：经再导出拿到的 AppKit 类型、别的模块只在 macOS 声明的成员，这些还得真编一次 iOS。
 
 **问题**：iOS、visionOS 和越狱版 App 都会编译 `RuntimeViewerApplication`，但它在这三个平台上编译失败，原因有两处：
 - `Reports/ReportNode.swift:3` 没加平台守卫就 `import RxAppKit`，而 RxAppKit 只在 macOS 上链接（`RuntimeViewerPackages/Package.swift:344`）。

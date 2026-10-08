@@ -127,12 +127,16 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         }
         .disposed(by: rx.disposeBag)
 
+        // `appRouter` and the Settings window it opens exist on macOS only; elsewhere nothing
+        // sends `openSettings`.
+        #if os(macOS)
         // Resolved when the item is chosen, not while the page is bound.
         input.openSettings.emitOnNext { [weak self] in
             guard let self else { return }
             appRouter.trigger(.settings)
         }
         .disposed(by: rx.disposeBag)
+        #endif
 
         input.filterString.driveOnNext { [weak self] filterString in
             guard let self else { return }

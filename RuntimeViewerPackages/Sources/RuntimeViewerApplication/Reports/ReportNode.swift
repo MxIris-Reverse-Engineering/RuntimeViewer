@@ -1,6 +1,8 @@
 import Foundation
 import RuntimeViewerCore
-import RxAppKit
+// Not RxAppKit, which links on macOS only: this module exports RxAppKit on macOS and RxUIKit on
+// the iOS family, and both declare `OutlineNodeType`.
+import RuntimeViewerArchitectures
 
 /// The two kinds of work the Report navigator lists, each the first level of its outline — the
 /// part Xcode's own Report navigator gives to a scheme or a package.
