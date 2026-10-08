@@ -58,12 +58,15 @@ actor RuntimeTypeRelationshipsResolver {
 
     // MARK: - Query
 
-    /// Throws when the query is a regular expression that does not compile.
+    /// Throws when the query is a regular expression that does not compile,
+    /// and `CancellationError` when the task asking is cancelled — a walk cut
+    /// short is never handed out as if it were the whole tree.
     func trees(for query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
         let candidates = try await candidateTypes(matching: query)
         var trees: [RuntimeRelationshipTree] = []
         trees.reserveCapacity(candidates.count)
         for candidate in candidates {
+            try Task.checkCancellation()
             let visited: Set<String> = [visitedKey(for: candidate)]
             let nodes: [RuntimeRelationshipNode]
             switch query.relationship {
@@ -74,6 +77,9 @@ actor RuntimeTypeRelationshipsResolver {
             case .conformers:
                 nodes = await conformerNodes(of: candidate)
             }
+            // A cancelled walk stops where it is and returns what it had
+            // reached; throw rather than pass that off as the tree.
+            try Task.checkCancellation()
             if let imagePaths = query.imagePaths {
                 // A protocol copy outside the images moves onto a copy inside
                 // them before the tree is cut down to them.
@@ -148,18 +154,24 @@ actor RuntimeTypeRelationshipsResolver {
             }
         }
 
+        // Every image costs a hop to its section, and `try?` below would read
+        // a cancellation from underneath as "no objects", so the task is
+        // checked here, once per image.
         for imagePath in await objcSectionFactory.cachedImagePaths.sorted() {
+            try Task.checkCancellation()
             guard let section = await objcSectionFactory.existingSection(for: imagePath),
                   let objects = try? await section.allObjects()
             else { continue }
             objects.forEach(considerTree)
         }
         for imagePath in await swiftSectionFactory.cachedImagePaths.sorted() {
+            try Task.checkCancellation()
             guard let section = await swiftSectionFactory.existingSection(for: imagePath),
                   let objects = try? await section.allObjects()
             else { continue }
             objects.forEach(considerTree)
         }
+        try Task.checkCancellation()
 
         // A Swift face that matched as well keeps the spelling the sidebar
         // lists it under, whichever of its two faces came first.
@@ -237,7 +249,7 @@ actor RuntimeTypeRelationshipsResolver {
     // MARK: - Ancestors
 
     private func ancestorNodes(of object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth else { return [] }
+        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
         switch object.kind {
         case .objc(.type(.class)):
             return await objcClassAncestorNodes(named: object.name, visited: visited, depth: depth)
@@ -257,6 +269,7 @@ actor RuntimeTypeRelationshipsResolver {
     /// superclass carrying the same for itself, recursively — the shape
     /// Xcode nests them in.
     private func objcClassAncestorNodes(named className: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+        guard !Task.isCancelled else { return [] }
         guard let (group, classImagePath) = objcSectionFactory.indexer.classGroupAcrossImages(forName: className),
               let classInfo = group.info.first
         else { return [] }
@@ -284,7 +297,7 @@ actor RuntimeTypeRelationshipsResolver {
     /// refining protocol a node stands for — and each node prefers that
     /// image's own copy.
     private func objcProtocolNodes(named protocolNames: [String], referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth else { return [] }
+        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
         var nodes: [RuntimeRelationshipNode] = []
         for protocolName in protocolNames {
             let key = "objcProtocol:" + protocolName
@@ -319,6 +332,7 @@ actor RuntimeTypeRelationshipsResolver {
     /// Objective-C class when it is an imported one, by the runtime name the
     /// indexer recorded, and is left unresolved otherwise.
     private func swiftTypeAncestorNodes(of object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+        guard !Task.isCancelled else { return [] }
         let indexer = swiftSectionFactory.indexer
         var nodes = await swiftProtocolNodes(
             qualifiedNames: indexer.conformingProtocolNames(forMangledTypeName: object.name).map(\.name),
@@ -356,7 +370,7 @@ actor RuntimeTypeRelationshipsResolver {
     }
 
     private func swiftProtocolAncestorNodes(qualifiedName: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth else { return [] }
+        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
         let declaringImagePath = swiftSectionFactory.indexer.protocolReference(forQualifiedName: qualifiedName)?.imagePath
         var nodes: [RuntimeRelationshipNode] = []
         for refined in swiftSectionFactory.indexer.refinedProtocols(ofQualifiedName: qualifiedName) {
@@ -372,7 +386,7 @@ actor RuntimeTypeRelationshipsResolver {
     /// Nodes for Swift protocols by qualified name, each carrying the
     /// protocols it refines underneath.
     private func swiftProtocolNodes(qualifiedNames: [String], visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth else { return [] }
+        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
         var nodes: [RuntimeRelationshipNode] = []
         for qualifiedName in qualifiedNames {
             let key = "swiftProtocol:" + qualifiedName
@@ -389,7 +403,7 @@ actor RuntimeTypeRelationshipsResolver {
     // MARK: - Descendants
 
     private func descendantNodes(of object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth else { return [] }
+        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
         switch object.kind {
         case .objc(.type(.class)), .swift(.type(.class)):
             var nodes: [RuntimeRelationshipNode] = []
@@ -419,6 +433,7 @@ actor RuntimeTypeRelationshipsResolver {
     /// copy of the image the parent node stands for when it carries one —
     /// and the level is listed by name.
     private func refiningProtocolNodes(ofObjCProtocolNamed protocolName: String, referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+        guard !Task.isCancelled else { return [] }
         var carrierImagePathsByProtocolName: OrderedDictionary<String, [String]> = [:]
         for reference in objcSectionFactory.indexer.refiningProtocols(of: protocolName) {
             carrierImagePathsByProtocolName[reference.protocolName, default: []].append(reference.imagePath)
@@ -444,7 +459,7 @@ actor RuntimeTypeRelationshipsResolver {
     }
 
     private func swiftRefiningProtocolNodes(of name: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth else { return [] }
+        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
         var nodes: [RuntimeRelationshipNode] = []
         for reference in swiftSectionFactory.indexer.refiningProtocols(ofQualifiedName: name) {
             let key = "swiftProtocol:" + reference.qualifiedName

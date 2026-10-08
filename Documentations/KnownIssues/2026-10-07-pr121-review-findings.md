@@ -13807,7 +13807,7 @@ func swiftClassAncestorsIncludeAdoptedObjCProtocols() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C28
-- **状态**：方案待批，代码未改
+- **状态**：已修复遍历本身；取消要跨过连接传到 service 端，还得等 PR121.29。复现测试：`RuntimeInterfaceSearchTests.cancelledRelationshipSearchThrows`。修前红：Task 一建好就取消，`typeRelationships` 仍把 `NSObject` 完整的 Descendent 树交回来（`an error was expected but none was thrown`）。这条测试只证明入口处的检查，遍历中途的取消没有稳定的注入点。落地时比方案多一处：`candidateTypes` 收完全部镜像之后再查一次，因为随后物化候选的代表对象时，每个带 `isSwiftClass` 的 ObjC 类都要跨一次 actor。限定范围时挪动协议副本那一步（PR121.13）不查取消：它总会做完，不会交出半截结果
 
 **问题**：
 - `RuntimeTypeRelationshipsResolver.trees(for:)` 和各个递归遍历函数都没有检查取消。`candidateTypes` 用 `try?` 读每个镜像的对象，下层抛出的取消也会被当成「没有对象」吞掉。
