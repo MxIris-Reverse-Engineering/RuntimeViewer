@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 
 /// The Find navigator's engine requests against real system frameworks:
 /// a corpus built for Foundation, text and member searches over it, and
@@ -268,5 +268,28 @@ struct RuntimeInterfaceSearchTests {
         await #expect(throws: CancellationError.self) {
             try await search.value
         }
+    }
+
+    /// A relationship search has no partial result to keep, so a regular
+    /// expression that spends its budget fails it, in words. The resolver is
+    /// the engine's, over the same sections, with no budget at all: the
+    /// first type name the expression reads spends it.
+    @Test("a relationship search whose regular expression spends its budget fails in words")
+    func relationshipSearchOverBudgetFailsReadably() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "test-search-relationships-budget")
+        try await engine.connect()
+        try await engine.loadImage(at: Anchors.libobjcPath)
+        let resolver = RuntimeTypeRelationshipsResolver(
+            objcSectionFactory: await engine.objcSectionFactory,
+            swiftSectionFactory: await engine.swiftSectionFactory,
+            relationshipsResolver: await engine.relationshipsResolver,
+            regularExpressionTimeLimit: 0
+        )
+        let query = RuntimeTypeRelationshipsQuery(text: "^NSObj", matchMode: .regularExpression, relationship: .ancestors)
+
+        let error = await #expect(throws: RuntimeInterfaceTextMatcher.PatternError.regularExpressionTooExpensive(pattern: "^NSObj")) {
+            try await resolver.trees(for: query)
+        }
+        #expect(error?.localizedDescription == "“^NSObj” takes too long to match. Nested repetition such as (\\w+)+ is the usual cause.")
     }
 }

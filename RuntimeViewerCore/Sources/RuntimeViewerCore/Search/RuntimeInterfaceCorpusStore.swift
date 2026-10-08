@@ -284,15 +284,19 @@ actor RuntimeInterfaceCorpusStore {
     /// can hold a build in its assembly and act on it there.
     private let assembleEntries: @Sendable ([RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry]
 
+    private let regularExpressionTimeLimit: TimeInterval
+
     init(
         builder: any RuntimeInterfaceCorpusBuilding,
         residentByteLimit: Int = RuntimeInterfaceCorpusStore.defaultResidentByteLimit,
         printingWidth: Int = RuntimeInterfaceCorpusStore.defaultPrintingWidth,
+        regularExpressionTimeLimit: TimeInterval = RuntimeInterfaceTextMatcher.RegularExpressionBudget.defaultTimeLimit,
         assembleEntries: @escaping @Sendable ([RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] = { prints in RuntimeInterfaceCorpusAssembly.entries(from: prints) }
     ) {
         self.builder = builder
         self.residentByteLimit = residentByteLimit
         self.printingWidth = max(1, printingWidth)
+        self.regularExpressionTimeLimit = regularExpressionTimeLimit
         self.assembleEntries = assembleEntries
     }
 
@@ -622,9 +626,30 @@ actor RuntimeInterfaceCorpusStore {
 
     // MARK: - Searching
 
+    /// One corpus as a search reads it, taken on this actor so the scan can
+    /// run off it. The entries are values: a corpus evicted while the scan
+    /// runs stays readable — and resident, over the budget — until the scan
+    /// is done with it.
+    private struct SearchedCorpus: Sendable {
+        let imagePath: String
+        let entries: [RuntimeInterfaceCorpusEntry]
+    }
+
+    /// What the scan of one search came to.
+    private struct SearchScan: Sendable {
+        var totalMatchCount = 0
+        var collectedCount = 0
+        var scannedObjectCount = 0
+        var scannedImagePaths: [String] = []
+        var stopReason: RuntimeInterfaceSearchStopReason?
+    }
+
     /// Runs `query` over every built corpus, pushing matches to `onProgress`
     /// one image at a time, and returns the summary. Matches are collected up
-    /// to `query.resultLimit`; the count goes on past it.
+    /// to `query.resultLimit`; the count goes on past it. The scan runs off
+    /// this actor, so whatever the pattern costs, the store keeps answering;
+    /// a regular expression that spends the search's budget stops it, with
+    /// what was delivered standing and the summary saying why.
     func searchInterfaces(
         _ query: RuntimeInterfaceSearchQuery,
         indexedImagePaths: Set<String>,
@@ -632,70 +657,34 @@ actor RuntimeInterfaceCorpusStore {
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(query)
         let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
-        var totalMatchCount = 0
-        var collectedCount = 0
-        var scannedObjectCount = 0
-        var scannedImagePaths: [String] = []
-        let now = Date()
-        for imagePath in searchedImagePaths(within: query.imagePaths) {
-            try Task.checkCancellation()
-            guard let corpus = corpora[imagePath] else { continue }
-            scannedImagePaths.append(imagePath)
-            var batch: [RuntimeInterfaceSearchMatch] = []
-            for entry in corpus.entries {
-                scannedObjectCount += 1
-                // The text the content pane shows under the query's options,
-                // so every hit is visible and its line reads as displayed.
-                // Its nested types' blocks are skipped: they are entries of
-                // their own, which report those hits.
-                let interface: FrozenSemanticString
-                let nestedDefinitionRanges: [Range<Int>]
-                if let projection = visibility.flatMap({ entry.projection(under: $0) }) {
-                    interface = projection.text
-                    nestedDefinitionRanges = entry.nestedDefinitionRanges.isEmpty ? [] : entry.nestedDefinitionRanges(in: projection)
-                } else {
-                    interface = entry.interface
-                    nestedDefinitionRanges = entry.nestedDefinitionRanges
-                }
-                totalMatchCount += RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, excludingUTF8Ranges: nestedDefinitionRanges) { match in
-                    guard collectedCount < query.resultLimit else { return false }
-                    batch.append(match)
-                    collectedCount += 1
-                    return true
-                }
+        let scan = try await Self.scan(
+            corporaToSearch(within: query.imagePaths),
+            resultLimit: query.resultLimit,
+            regularExpressionTimeLimit: regularExpressionTimeLimit,
+            onProgress: onProgress
+        ) { entry, budget, collect in
+            // The text the content pane shows under the query's options, so
+            // every hit is visible and its line reads as displayed. Its
+            // nested types' blocks are skipped: they are entries of their
+            // own, which report those hits.
+            let interface: FrozenSemanticString
+            let nestedDefinitionRanges: [Range<Int>]
+            if let projection = visibility.flatMap({ entry.projection(under: $0) }) {
+                interface = projection.text
+                nestedDefinitionRanges = entry.nestedDefinitionRanges.isEmpty ? [] : entry.nestedDefinitionRanges(in: projection)
+            } else {
+                interface = entry.interface
+                nestedDefinitionRanges = entry.nestedDefinitionRanges
             }
-            corpora[imagePath]?.lastSearchedAt = now
-            if !batch.isEmpty {
-                await onProgress(batch)
-            }
+            return try RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: nestedDefinitionRanges, collect: collect)
         }
-        return RuntimeInterfaceSearchSummary(
-            totalMatchCount: totalMatchCount,
-            scannedImagePaths: scannedImagePaths,
-            scannedObjectCount: scannedObjectCount,
-            isTruncated: totalMatchCount > collectedCount,
-            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: query.imagePaths)
-        )
-    }
-
-    /// The built images a search reads, in path order: all of them, or
-    /// those of `scope` when the query names some.
-    private func searchedImagePaths(within scope: Set<String>?) -> [String] {
-        let imagePaths = corpora.keys.sorted()
-        guard let scope else { return imagePaths }
-        return imagePaths.filter(scope.contains)
-    }
-
-    /// The indexed images a search could not read for want of a corpus, of
-    /// those it was asked to cover: all of them, or those of `scope`.
-    private func unbuiltImagePaths(among indexedImagePaths: Set<String>, within scope: Set<String>?) -> [String] {
-        let coveredImagePaths = scope.map(indexedImagePaths.intersection) ?? indexedImagePaths
-        return coveredImagePaths.subtracting(corpora.keys).sorted()
+        return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
     }
 
     /// The member counterpart of `searchInterfaces`: member names matched
     /// with the text search's match styles, optional kind filter, same
-    /// collection and counting rules. An empty query matches no member.
+    /// collection, counting and stopping rules. An empty query matches no
+    /// member.
     func searchMembers(
         _ query: RuntimeMemberSearchQuery,
         indexedImagePaths: Set<String>,
@@ -703,53 +692,130 @@ actor RuntimeInterfaceCorpusStore {
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = query.text.isEmpty ? nil : try RuntimeInterfaceTextMatcher.Pattern(text: query.text, matchMode: query.matchMode, isCaseSensitive: query.isCaseSensitive)
         let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
-        var totalMatchCount = 0
-        var collectedCount = 0
-        var scannedObjectCount = 0
-        var scannedImagePaths: [String] = []
-        let now = Date()
-        for imagePath in searchedImagePaths(within: query.imagePaths) {
-            try Task.checkCancellation()
-            guard let corpus = corpora[imagePath] else { continue }
-            scannedImagePaths.append(imagePath)
-            var batch: [RuntimeMemberMatch] = []
-            for entry in corpus.entries {
-                scannedObjectCount += 1
-                guard let pattern else { continue }
-                // Projected only once a member of this entry matches: most
-                // entries have none, and they cost nothing.
-                var projection: (projection: VisibilityProjection, lineStartOffsets: [Int])??
-                for (memberIndex, member) in entry.members.enumerated() {
-                    if let kinds = query.kinds, !kinds.contains(member.kind) { continue }
-                    guard let range = RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, pattern: pattern) else { continue }
-                    var shownMember = member
-                    if let visibility {
-                        if projection == nil {
-                            projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceCorpusEntry.lineStartOffsets(of: $0.text.text)) }
-                        }
-                        if let entryProjection = projection ?? nil {
-                            // Hidden under the query's options: not a match.
-                            guard let projectedMember = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineStartOffsets: entryProjection.lineStartOffsets) else { continue }
-                            shownMember = projectedMember
-                        }
+        let kinds = query.kinds
+        let scan = try await Self.scan(
+            corporaToSearch(within: query.imagePaths),
+            resultLimit: query.resultLimit,
+            regularExpressionTimeLimit: regularExpressionTimeLimit,
+            onProgress: onProgress
+        ) { entry, budget, collect in
+            guard let pattern else { return 0 }
+            var matchCount = 0
+            var isCollecting = true
+            // Projected only once a member of this entry matches: most
+            // entries have none, and they cost nothing.
+            var projection: (projection: VisibilityProjection, lineStartOffsets: [Int])??
+            for (memberIndex, member) in entry.members.enumerated() {
+                if let kinds, !kinds.contains(member.kind) { continue }
+                guard let range = try RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, pattern: pattern, budget: &budget) else { continue }
+                var shownMember = member
+                if let visibility {
+                    if projection == nil {
+                        projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceCorpusEntry.lineStartOffsets(of: $0.text.text)) }
                     }
-                    totalMatchCount += 1
-                    guard collectedCount < query.resultLimit else { continue }
-                    batch.append(RuntimeMemberMatch(object: entry.object, member: shownMember, matchRangeInName: range))
-                    collectedCount += 1
+                    if let entryProjection = projection ?? nil {
+                        // Hidden under the query's options: not a match.
+                        guard let projectedMember = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineStartOffsets: entryProjection.lineStartOffsets) else { continue }
+                        shownMember = projectedMember
+                    }
+                }
+                matchCount += 1
+                if isCollecting {
+                    isCollecting = collect(RuntimeMemberMatch(object: entry.object, member: shownMember, matchRangeInName: range))
                 }
             }
+            return matchCount
+        }
+        return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
+    }
+
+    /// The built corpora a search reads, in path order — all of them, or
+    /// those of `scope` when the query names some — marked searched now.
+    private func corporaToSearch(within scope: Set<String>?) -> [SearchedCorpus] {
+        let now = Date()
+        var imagePaths = corpora.keys.sorted()
+        if let scope {
+            imagePaths = imagePaths.filter(scope.contains)
+        }
+        return imagePaths.compactMap { imagePath in
+            guard let corpus = corpora[imagePath] else { return nil }
             corpora[imagePath]?.lastSearchedAt = now
+            return SearchedCorpus(imagePath: imagePath, entries: corpus.entries)
+        }
+    }
+
+    /// Reads `corpora` entry by entry, off this actor: the text and member
+    /// searches differ only in `matchEntry`, which hands each match of an
+    /// entry to its last argument — `false` back means the result limit is
+    /// reached and nothing more is taken — and returns how many matches the
+    /// entry has. One regular expression budget serves the whole search.
+    ///
+    /// Checks for cancellation before every entry and before an image's
+    /// batch goes out, so a cancelled search delivers nothing more; the
+    /// regular expression engine looks at the task itself in between. Yields
+    /// after every image. A regular expression that spends the budget ends
+    /// the scan where it is: the matches of the image under way still go
+    /// out, and `stopReason` says why nothing follows.
+    @concurrent
+    private static func scan<Match: Sendable>(
+        _ corpora: [SearchedCorpus],
+        resultLimit: Int,
+        regularExpressionTimeLimit: TimeInterval,
+        onProgress: @Sendable ([Match]) async -> Void,
+        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ collect: (Match) -> Bool) throws -> Int
+    ) async throws -> SearchScan {
+        var scan = SearchScan()
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: regularExpressionTimeLimit)
+        for corpus in corpora {
+            try Task.checkCancellation()
+            scan.scannedImagePaths.append(corpus.imagePath)
+            var batch: [Match] = []
+            var collectedCount = scan.collectedCount
+            do {
+                for entry in corpus.entries {
+                    try Task.checkCancellation()
+                    scan.scannedObjectCount += 1
+                    scan.totalMatchCount += try matchEntry(entry, &budget) { match in
+                        guard collectedCount < resultLimit else { return false }
+                        batch.append(match)
+                        collectedCount += 1
+                        return true
+                    }
+                }
+            } catch RuntimeInterfaceTextMatcher.PatternError.regularExpressionTooExpensive {
+                scan.stopReason = .regularExpressionTooExpensive
+            }
+            scan.collectedCount = collectedCount
+            try Task.checkCancellation()
             if !batch.isEmpty {
                 await onProgress(batch)
             }
+            if scan.stopReason != nil {
+                break
+            }
+            await Task.yield()
+        }
+        return scan
+    }
+
+    private func summary(of scan: SearchScan, indexedImagePaths: Set<String>, within scope: Set<String>?) -> RuntimeInterfaceSearchSummary {
+        if scan.stopReason != nil {
+            #log(.info, "A search stopped after \(scan.scannedObjectCount, privacy: .public) objects: its regular expression spent the time budget")
         }
         return RuntimeInterfaceSearchSummary(
-            totalMatchCount: totalMatchCount,
-            scannedImagePaths: scannedImagePaths,
-            scannedObjectCount: scannedObjectCount,
-            isTruncated: totalMatchCount > collectedCount,
-            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: query.imagePaths)
+            totalMatchCount: scan.totalMatchCount,
+            scannedImagePaths: scan.scannedImagePaths,
+            scannedObjectCount: scan.scannedObjectCount,
+            isTruncated: scan.totalMatchCount > scan.collectedCount,
+            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: scope),
+            stopReason: scan.stopReason
         )
+    }
+
+    /// The indexed images a search could not read for want of a corpus, of
+    /// those it was asked to cover: all of them, or those of `scope`.
+    private func unbuiltImagePaths(among indexedImagePaths: Set<String>, within scope: Set<String>?) -> [String] {
+        let coveredImagePaths = scope.map(indexedImagePaths.intersection) ?? indexedImagePaths
+        return coveredImagePaths.subtracting(corpora.keys).sorted()
     }
 }

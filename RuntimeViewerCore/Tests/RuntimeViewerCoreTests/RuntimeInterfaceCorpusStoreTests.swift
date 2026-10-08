@@ -18,6 +18,9 @@ struct RuntimeInterfaceCorpusStoreTests {
         var delayNanosecondsByObjectName: [String: UInt64] = [:]
         /// Holds every print until the test opens it.
         var printGate: Gate?
+        /// Replaces the scripted interface of the objects it names with this
+        /// text alone, no members.
+        var interfaceTextByObjectName: [String: String] = [:]
         private(set) var printedObjectNames: [String] = []
         private(set) var maximumConcurrentPrintCount = 0
         private var concurrentPrintCount = 0
@@ -63,6 +66,15 @@ struct RuntimeInterfaceCorpusStoreTests {
                 throw ScriptedError.objectFailed(object.name)
             }
             lock.withLock { printedObjectNames.append(object.name) }
+            if let interfaceText = interfaceTextByObjectName[object.name] {
+                return RuntimeInterfaceCorpusPrint(
+                    object: object,
+                    interface: SemanticString { Standard(interfaceText) }.frozen(),
+                    visibilityRegions: .empty,
+                    members: [],
+                    nestedDefinitionRanges: []
+                )
+            }
             let interface = SemanticString {
                 Keyword("class")
                 Standard(" ")
@@ -149,11 +161,35 @@ struct RuntimeInterfaceCorpusStoreTests {
         let builder: ScriptedBuilder
     }
 
-    private func makeStore(printingWidth: Int = 1, _ configure: (ScriptedBuilder) -> Void = { _ in }) -> Fixture {
+    private func makeStore(
+        printingWidth: Int = 1,
+        regularExpressionTimeLimit: TimeInterval = RuntimeInterfaceTextMatcher.RegularExpressionBudget.defaultTimeLimit,
+        _ configure: (ScriptedBuilder) -> Void = { _ in }
+    ) -> Fixture {
         let builder = ScriptedBuilder()
         builder.objectNamesByImagePath = [Self.imageA: ["Alpha", "Beta"], Self.imageB: ["Gamma"]]
         configure(builder)
-        return Fixture(store: RuntimeInterfaceCorpusStore(builder: builder, printingWidth: printingWidth), builder: builder)
+        let store = RuntimeInterfaceCorpusStore(builder: builder, printingWidth: printingWidth, regularExpressionTimeLimit: regularExpressionTimeLimit)
+        return Fixture(store: store, builder: builder)
+    }
+
+    /// Long enough that `(a+)+\(` takes seconds to give up on it: every way
+    /// of splitting the run is tried before the missing `(` is accepted.
+    private static let slowEntryText = "var " + String(repeating: "a", count: 26) + ": Int"
+
+    private static let slowRegularExpressionQuery = RuntimeInterfaceSearchQuery(text: #"(a+)+\("#, matchMode: .regularExpression, isCaseSensitive: true)
+
+    final class Flag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+
+        var isSet: Bool {
+            lock.withLock { value }
+        }
+
+        func set() {
+            lock.withLock { value = true }
+        }
     }
 
     private static let manyObjectNames = (1 ... 12).map { "Object\($0)" }
@@ -406,6 +442,101 @@ struct RuntimeInterfaceCorpusStoreTests {
             Issue.record("the search should have failed")
         } catch {
             #expect(error.localizedDescription == "“(” is not a valid regular expression.")
+        }
+    }
+
+    /// The scan ran on the store's actor, so a regular expression that
+    /// backtracks without end held every build, coverage query and search of
+    /// the engine behind it.
+    @Test("the store answers other calls while a search scans")
+    func storeAnswersWhileSearching() async throws {
+        let fixture = makeStore { builder in
+            builder.objectNamesByImagePath[Self.imageC] = ["Slow"]
+            builder.interfaceTextByObjectName["Slow"] = Self.slowEntryText
+        }
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageC, transformer: .default)
+        let searchFinished = Flag()
+        let search = Task {
+            defer { searchFinished.set() }
+            return try await store.searchInterfaces(Self.slowRegularExpressionQuery, indexedImagePaths: []) { _ in }
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        _ = await store.coverage()
+
+        #expect(!searchFinished.isSet, "coverage waited for the whole scan")
+        search.cancel()
+        _ = try? await search.value
+    }
+
+    @Test("a search stops inside an image once it is cancelled")
+    func searchStopsInsideAnImage() async throws {
+        let fixture = makeStore { builder in
+            builder.objectNamesByImagePath[Self.imageC] = ["Slow"]
+            builder.interfaceTextByObjectName["Slow"] = Self.slowEntryText
+        }
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageC, transformer: .default)
+        let search = Task {
+            try await store.searchInterfaces(Self.slowRegularExpressionQuery, indexedImagePaths: []) { _ in }
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        search.cancel()
+
+        await #expect(throws: CancellationError.self) { try await search.value }
+    }
+
+    @Test("a search whose regular expression spends its budget keeps what it found and says why it stopped")
+    func searchReportsWhyItStopped() async throws {
+        let fixture = makeStore(regularExpressionTimeLimit: 0.05) { builder in
+            builder.objectNamesByImagePath[Self.imageC] = ["Slow"]
+            builder.interfaceTextByObjectName["Slow"] = Self.slowEntryText
+        }
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
+        _ = try await store.build(imagePath: Self.imageC, transformer: .default)
+        // A's `memberAlpha` matches at once; C's run of a's never settles.
+        let query = RuntimeInterfaceSearchQuery(text: #"memberAlpha|(a+)+\("#, matchMode: .regularExpression, isCaseSensitive: true)
+        let batches = MatchBatches<RuntimeInterfaceSearchMatch>()
+
+        let summary = try await store.searchInterfaces(query, indexedImagePaths: []) { batch in
+            batches.append(batch)
+        }
+
+        #expect(batches.all.flatMap { $0 }.map(\.object.name) == ["Alpha"])
+        #expect(summary.stopReason == .regularExpressionTooExpensive)
+        #expect(summary.scannedImagePaths == [Self.imageA, Self.imageC])
+    }
+
+    @Test("a member search whose regular expression spends its budget says why it stopped")
+    func memberSearchReportsWhyItStopped() async throws {
+        let fixture = makeStore(regularExpressionTimeLimit: 0)
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
+
+        let summary = try await store.searchMembers(RuntimeMemberSearchQuery(text: "^member", matchMode: .regularExpression), indexedImagePaths: []) { _ in }
+
+        #expect(summary.stopReason == .regularExpressionTooExpensive)
+    }
+
+    /// Batches delivered to a search's progress handler, which is
+    /// `@Sendable`.
+    final class MatchBatches<Match: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var batches: [[Match]] = []
+
+        var all: [[Match]] {
+            lock.withLock { batches }
+        }
+
+        func append(_ batch: [Match]) {
+            lock.withLock { batches.append(batch) }
         }
     }
 

@@ -47,14 +47,18 @@ actor RuntimeTypeRelationshipsResolver {
 
     private let relationshipsResolver: RuntimeRelationshipsResolver
 
+    private let regularExpressionTimeLimit: TimeInterval
+
     init(
         objcSectionFactory: RuntimeObjCSectionFactory,
         swiftSectionFactory: RuntimeSwiftSectionFactory,
-        relationshipsResolver: RuntimeRelationshipsResolver
+        relationshipsResolver: RuntimeRelationshipsResolver,
+        regularExpressionTimeLimit: TimeInterval = RuntimeInterfaceTextMatcher.RegularExpressionBudget.defaultTimeLimit
     ) {
         self.objcSectionFactory = objcSectionFactory
         self.swiftSectionFactory = swiftSectionFactory
         self.relationshipsResolver = relationshipsResolver
+        self.regularExpressionTimeLimit = regularExpressionTimeLimit
     }
 
     // MARK: - Query
@@ -112,7 +116,7 @@ actor RuntimeTypeRelationshipsResolver {
     /// over a type's own name, so `View` finds `SwiftUI.View` and the module
     /// or an enclosing type matches nothing by itself; a query with a dot in
     /// it runs over the qualified name (`RuntimeInterfaceTextMatcher
-    /// .typeNameMatches(_:pattern:)`). A query limited to some images puts
+    /// .typeNameMatches(_:pattern:budget:)`). A query limited to some images puts
     /// their types first among the exact matches and among the rest, so the
     /// candidate limit is spent on them before the types whose trees may
     /// have nothing left in those images.
@@ -132,9 +136,13 @@ actor RuntimeTypeRelationshipsResolver {
         // of it. The first copy found holds the protocol's place; which copy
         // the candidate stands for is decided once all of them are known.
         var objcProtocolCopiesByName: [String: [RuntimeObject]] = [:]
-        func consider(_ object: RuntimeObject) {
+        // One budget for the whole candidate scan. A relationship search has
+        // no partial result to keep, so a regular expression that spends it
+        // fails the query, in words.
+        var regularExpressionBudget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: regularExpressionTimeLimit)
+        func consider(_ object: RuntimeObject) throws {
             guard Self.isRelationshipCandidate(object),
-                  RuntimeInterfaceTextMatcher.typeNameMatches(object.displayName, pattern: pattern)
+                  try RuntimeInterfaceTextMatcher.typeNameMatches(object.displayName, pattern: pattern, budget: &regularExpressionBudget)
             else { return }
             if object.kind == .objc(.type(.protocol)) {
                 let isFirstCopy = objcProtocolCopiesByName[object.name] == nil
@@ -148,10 +156,10 @@ actor RuntimeTypeRelationshipsResolver {
                 partialMatches.append(object)
             }
         }
-        func considerTree(_ object: RuntimeObject) {
-            consider(object)
+        func considerTree(_ object: RuntimeObject) throws {
+            try consider(object)
             for child in object.children {
-                considerTree(child)
+                try considerTree(child)
             }
         }
 
@@ -163,14 +171,18 @@ actor RuntimeTypeRelationshipsResolver {
             guard let section = await objcSectionFactory.existingSection(for: imagePath),
                   let objects = try? await section.allObjects()
             else { continue }
-            objects.forEach(considerTree)
+            for object in objects {
+                try considerTree(object)
+            }
         }
         for imagePath in await swiftSectionFactory.cachedImagePaths.sorted() {
             try Task.checkCancellation()
             guard let section = await swiftSectionFactory.existingSection(for: imagePath),
                   let objects = try? await section.allObjects()
             else { continue }
-            objects.forEach(considerTree)
+            for object in objects {
+                try considerTree(object)
+            }
         }
         try Task.checkCancellation()
 

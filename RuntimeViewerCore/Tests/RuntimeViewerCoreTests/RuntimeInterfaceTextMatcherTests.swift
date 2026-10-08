@@ -38,8 +38,9 @@ struct RuntimeInterfaceTextMatcherTests {
 
     private func matches(_ query: RuntimeInterfaceSearchQuery) throws -> (matches: [RuntimeInterfaceSearchMatch], count: Int) {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(query)
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget()
         var collected: [RuntimeInterfaceSearchMatch] = []
-        let count = RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern) { match in
+        let count = try RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, budget: &budget) { match in
             collected.append(match)
             return true
         }
@@ -53,8 +54,9 @@ struct RuntimeInterfaceTextMatcherTests {
         // The comment line, `    // fooBar comment`.
         let commentLine = try #require(text.range(of: "    // fooBar comment"))
         let excludedRange = text.utf8.distance(from: text.startIndex, to: commentLine.lowerBound) ..< text.utf8.distance(from: text.startIndex, to: commentLine.upperBound)
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget()
         var collected: [RuntimeInterfaceSearchMatch] = []
-        let count = RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, excludingUTF8Ranges: [excludedRange]) { match in
+        let count = try RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: [excludedRange]) { match in
             collected.append(match)
             return true
         }
@@ -143,11 +145,75 @@ struct RuntimeInterfaceTextMatcherTests {
         #expect(error.map { patternError in "\(patternError)" } == "“(” is not a valid regular expression.")
     }
 
+    /// `(a+)+\(` tries every way of splitting a run of a's before it accepts
+    /// that no `(` follows, so over a long run one single match never ends on
+    /// its own. The budget has to stop it from inside that match.
+    @Test("a regular expression that spends its budget stops inside a single match")
+    func regularExpressionBudgetStopsOneMatch() throws {
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: #"(a+)+\("#, matchMode: .regularExpression, isCaseSensitive: true)
+        let run = String(repeating: "a", count: 24)
+        let tooExpensive = RuntimeInterfaceTextMatcher.PatternError.regularExpressionTooExpensive(pattern: #"(a+)+\("#)
+
+        var textBudget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: 0.02)
+        #expect(throws: tooExpensive) {
+            try RuntimeInterfaceTextMatcher.hits(in: "var \(run): Int", pattern: pattern, budget: &textBudget)
+        }
+        var nameBudget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: 0.02)
+        #expect(throws: tooExpensive) {
+            try RuntimeInterfaceTextMatcher.memberNameMatchRange(in: run, pattern: pattern, budget: &nameBudget)
+        }
+        // What every path an error travels shows.
+        #expect(tooExpensive.localizedDescription == #"“(a+)+\(” takes too long to match. Nested repetition such as (\w+)+ is the usual cause."#)
+        #expect("\(tooExpensive)" == tooExpensive.localizedDescription)
+    }
+
+    /// One regular expression and whether a quantifier applies to a group
+    /// of it.
+    struct QuantifiedGroupCase: Sendable, CustomTestStringConvertible {
+        let pattern: String
+        let hasQuantifiedGroup: Bool
+
+        var testDescription: String {
+            "\(pattern) \(hasQuantifiedGroup ? "has" : "has no") quantified group"
+        }
+    }
+
+    /// Progress reports cost a call per position scanned, so only the
+    /// patterns that can backtrack exponentially get them.
+    @Test("only a pattern with a quantified group reports progress while it matches", arguments: [
+        QuantifiedGroupCase(pattern: #"(a+)+\("#, hasQuantifiedGroup: true),
+        QuantifiedGroupCase(pattern: #"(?:ab)*c"#, hasQuantifiedGroup: true),
+        QuantifiedGroupCase(pattern: #"(x|y){2,}"#, hasQuantifiedGroup: true),
+        QuantifiedGroupCase(pattern: #"(NS)?String"#, hasQuantifiedGroup: true),
+        // An escaped backslash, then a group.
+        QuantifiedGroupCase(pattern: #"\\(a)+"#, hasQuantifiedGroup: true),
+        // Free spacing: the quantifier stands apart from its group.
+        QuantifiedGroupCase(pattern: #"(?x)(a+) +"#, hasQuantifiedGroup: true),
+        QuantifiedGroupCase(pattern: #"init\("#, hasQuantifiedGroup: false),
+        QuantifiedGroupCase(pattern: #"\bNSString\b"#, hasQuantifiedGroup: false),
+        QuantifiedGroupCase(pattern: #"^\s+func\s+\w+\("#, hasQuantifiedGroup: false),
+        QuantifiedGroupCase(pattern: #"@property\s*\([^)]*copy"#, hasQuantifiedGroup: false),
+        // Groups, none of them quantified.
+        QuantifiedGroupCase(pattern: #"(\w+)\s*:\s*(\w+)"#, hasQuantifiedGroup: false),
+        // Escaped parentheses, parentheses in a set, in nested sets, quoted.
+        QuantifiedGroupCase(pattern: #"\(a\)+"#, hasQuantifiedGroup: false),
+        QuantifiedGroupCase(pattern: #"[()]+"#, hasQuantifiedGroup: false),
+        QuantifiedGroupCase(pattern: #"[[a-z]&&[^)]]+"#, hasQuantifiedGroup: false),
+        QuantifiedGroupCase(pattern: #"\Q(a)+\E"#, hasQuantifiedGroup: false),
+        QuantifiedGroupCase(pattern: #"(?i)abc"#, hasQuantifiedGroup: false),
+    ])
+    func quantifiedGroups(_ testCase: QuantifiedGroupCase) throws {
+        #expect(RuntimeInterfaceTextMatcher.hasQuantifiedGroup(testCase.pattern) == testCase.hasQuantifiedGroup)
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: testCase.pattern, matchMode: .regularExpression, isCaseSensitive: true)
+        #expect(pattern.reportsProgressWhileMatching == testCase.hasQuantifiedGroup)
+    }
+
     @Test("counting goes on after collection stops")
     func countingPastCollection() throws {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(RuntimeInterfaceSearchQuery(text: "fooBar"))
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget()
         var collected = 0
-        let count = RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern) { _ in
+        let count = try RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, budget: &budget) { _ in
             collected += 1
             return false
         }
@@ -204,7 +270,8 @@ struct RuntimeInterfaceTextMatcherTests {
     ])
     func memberNameMatchStyles(_ testCase: MemberNameCase) throws {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: testCase.query, matchMode: testCase.matchMode, isCaseSensitive: testCase.isCaseSensitive)
-        #expect(RuntimeInterfaceTextMatcher.memberNameMatchRange(in: testCase.name, pattern: pattern) == testCase.expectedRange)
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget()
+        #expect(try RuntimeInterfaceTextMatcher.memberNameMatchRange(in: testCase.name, pattern: pattern, budget: &budget) == testCase.expectedRange)
     }
 
     /// One qualified type name, one query, and whether the query finds the
@@ -249,6 +316,7 @@ struct RuntimeInterfaceTextMatcherTests {
     ])
     func typeNameMatchStyles(_ testCase: TypeNameCase) throws {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: testCase.query, matchMode: testCase.matchMode, isCaseSensitive: testCase.isCaseSensitive)
-        #expect(RuntimeInterfaceTextMatcher.typeNameMatches(testCase.name, pattern: pattern) == testCase.matches)
+        var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget()
+        #expect(try RuntimeInterfaceTextMatcher.typeNameMatches(testCase.name, pattern: pattern, budget: &budget) == testCase.matches)
     }
 }

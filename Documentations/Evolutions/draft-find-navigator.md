@@ -205,6 +205,11 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   推进，命中时 O(1) 取语义类别做域过滤；行号 / 行文本由命中偏移向两侧找 `\n`。Starting With / Ending With 以标识符
   字符类 `[A-Za-z0-9_$]` 判边界，Matching Word 两侧都判。Regular Expression 模式对每个条目的 `text` 跑
   `NSRegularExpression`（引擎的部署目标早于 Swift `Regex`），`^` / `$` 按行锚定，与 Xcode 的 Find 一致。
+- 搜索不占用语料存储：store 只在自己的 actor 上取快照（要搜的镜像与各自的条目数组，写时复制）并记下搜索时间，扫描在
+  actor 外进行，文本与成员搜索共用一个扫描驱动；每个条目前检查取消，每个镜像的批次发出前再查一次，每扫完一个镜像让出一次。
+  正则受每次搜索 10 s 的累计时间预算约束：用完即停，已交付的结果保留，摘要的 `stopReason` 说明原因；关系搜索没有部分结果，
+  改为抛出可读的错误。含被量词修饰的分组的正则（只有它会指数回溯）带 `.reportProgress` 运行，回调里检查取消与预算，
+  能在一次匹配中途停下；其余正则在命中之间与两次调用之间检查。
 - 搜索域 → `SemanticType` 映射（闭合定义，单测按此断言）：
 
   | 域 | 命中的语义类别 |
@@ -767,3 +772,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 关系树里一个 ObjC 协议只出一个节点：候选与 Descendent 的兄弟节点按名字归组；节点代表哪份副本按「引用它的镜像 → 范围内路径最小 → 全部路径最小」选；限定范围时任一携带镜像在范围内即算在内；Descendent 的协议层按名字排序；带 `isSwiftClass` 的 ObjC 类换成同一镜像的 Swift 面后再参与候选 | PR #121 审查 PR121.13：每个按某协议编译的镜像都带一份完整副本，没有权威的定义镜像（`ResolvedIssues/2026-08-05-objc-protocol-ownership-filter.md`）。按副本计数时，`NSObject` 的协议副本挤掉了 NSObject 类，兄弟节点重复，归属还跟着索引顺序变；限定在 Foundation 查 `NSArray` 的 Ancestors，整棵树被剪光。去重放在关系层，不放索引层：侧栏照旧列出全部副本，不丢数据。层内顺序原本来自上游协议表的字典键，每次启动都不同。范围语义采用审查文档的推荐，经用户同意。复现测试 `RuntimeTypeRelationshipsProtocolCopyTests` 修前六条全红，修后全绿；选副本的规则另有单元测试。 |
 | 2026-10-08 | Swift 类的 Ancestor Types 在 Swift 协议之后、父类之前，补上它的 ObjC 面采纳的协议（经 `objcClassName(forCounterpartOf:)` 找到 ObjC 面，读同一镜像的 `ObjCClassInfo.protocols`）；另一个镜像里声明的一致性仍不显示 | PR #121 审查 PR121.66：Swift 类采纳 `@objc` 协议时不产生 Swift 一致性记录，只写进 ObjC 面的协议表。Conforming Types 读的正是这张表，所以两个方向对不上：在 `NSCopying` 的 Conforming Types 里查得到的 Swift 类，它自己的 Ancestors 里没有 `NSCopying`。复现测试 `RuntimeInterfaceSearchTests.swiftClassAncestorsIncludeAdoptedObjCProtocols` 修前三个类（`NSNotificationCenter.NotificationMessageKey` 等）都只有父类 `NSObject`，修后全绿。跨镜像声明的一致性（CoreTransferable 里的 `String: Transferable`）两个方向本来就都缺，不是这次的不对称，裁决不修，见 KnownIssues。 |
 | 2026-10-08 | 语料构建按身份号区分：取消运行中的构建时立刻把它移出可加入的构建表、以 `CancellationError` 结束全部订阅者，任务继续占着构建槽直到在途打印返回，之后它产出的一切（进度、整份语料）都丢弃；同一镜像的新请求另起一个构建排在它后面 | PR #121 审查 PR121.08：原来取消只调 `task.cancel()`，构建仍留在表里，之后同一镜像的请求（含换了 transformer 的）挂上去，跟着它以取消结束，这个镜像就一直搜不到；唯一的取消检查在组装之前，组装期间到达的驱逐拦不住，旧 transformer 的语料、关掉开关后刚驱逐的语料又被存成已建好。打印没有取消点，所以只能等它让出槽位；代价是这段时间里排队的镜像显示 pending、没有镜像显示 building。 |
+| 2026-10-08 | 文本与成员搜索的扫描移出 store actor（actor 上只取快照与记录搜索时间），两种搜索共用一个扫描驱动，逐条目检查取消；正则受每次搜索 10 s 的累计时间预算约束，超出即停、保留已交付的结果、摘要加 `stopReason`，关系搜索改为抛出可读的错误；只对含被量词修饰的分组的正则开 `.reportProgress` | PR #121 审查 PR121.06：原实现在 actor 上同步扫完一个镜像，`(\w+)+\(` 这类灾难性回溯会永久占住整个引擎的语料存储，构建、覆盖查询和之后的每次搜索都排在它后面。Darwin 上 `.reportProgress` 的回调在一次匹配内部也会到来（20 ms 预算让 `(a+)+\(` 在约 22 ms 停下），但块几乎每前进一个 UTF-16 单元就被调一次：Foundation 语料上常见正则从约 43 ms 涨到约 148 ms（Debug 构建），超过草案定的 20% 门槛，按草案的退路只给可能指数回溯的模式开，其余与修前持平。没有这类分组、但有多个相邻无界量词的模式（`.*.*.*X`）仍可能在一个条目内多项式回溯，只在条目之间受预算约束。界面上的「结果不完整」提示随 Find 界面一起做。 |
