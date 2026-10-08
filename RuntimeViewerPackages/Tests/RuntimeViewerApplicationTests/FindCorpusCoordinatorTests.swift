@@ -216,6 +216,62 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
+    /// The store evicts to stay under its budget without telling anyone, so
+    /// the coordinator kept such an image as built, the session's scope never
+    /// asked for it again, and a Current Image search reported it not yet
+    /// searchable for good (PR121.34). The assertion is on the engine's
+    /// coverage: the coordinator's stale state alone would read as built.
+    @Test("a corpus the store evicted silently is rebuilt once a search in its scope says it is unbuilt")
+    func silentlyEvictedCorpusIsRebuiltAfterASearch() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.silentEviction", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let documentState = environment.documentState
+        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        defer { withExtendedLifetime(coordinator) {} }
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
+
+        // What the resident budget does: no event, no notice.
+        try await engine.evictInterfaceCorpus(for: TestImages.libobjc)
+
+        documentState.findSession.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true, scope: .images([TestImages.libobjc])))
+
+        let coverage = try await waitForCoverage(of: engine, timeout: 30) { $0.statesByImagePath[TestImages.libobjc]?.isBuilt == true }
+        #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt == true, "the evicted corpus was never asked for again")
+        await engine.stop()
+    }
+
+    /// The history learns of corpora other documents built from the
+    /// coverage. Full, it returned before remembering them as listed, so
+    /// Clear History brought them all back at the next refresh — undoing,
+    /// at capacity, what e7186ae1 was for (PR121.34). Three merges with no
+    /// suspension point between them: the outcome is fixed.
+    @Test("a cleared history stays cleared when corpora were learned while it was full")
+    func clearedHistoryStaysClearedAtCapacity() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.historyCapacity")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+        let summary = RuntimeInterfaceCorpusBuildSummary(objectCount: 1, skippedCount: 0, byteCount: 1)
+        func coverage(ofImageCount imageCount: Int) -> RuntimeInterfaceCorpusCoverage {
+            let states = Dictionary(uniqueKeysWithValues: (0 ..< imageCount).map { imageIndex in
+                ("/learned/Image\(imageIndex).dylib", RuntimeInterfaceCorpusBuildState.built(summary))
+            })
+            return RuntimeInterfaceCorpusCoverage(statesByImagePath: states, residentByteCount: 0, residentByteLimit: 0)
+        }
+
+        coordinator.mergeCoverage(coverage(ofImageCount: FindCorpusCoordinator.maximumFinishedBuildCount))
+        #expect(coordinator.finishedBuilds.count == FindCorpusCoordinator.maximumFinishedBuildCount)
+        // Three more corpora appear while the history is full.
+        coordinator.mergeCoverage(coverage(ofImageCount: FindCorpusCoordinator.maximumFinishedBuildCount + 3))
+        coordinator.clearFinishedBuilds()
+        coordinator.mergeCoverage(coverage(ofImageCount: FindCorpusCoordinator.maximumFinishedBuildCount + 3))
+
+        #expect(coordinator.finishedBuilds.isEmpty, "corpora learned while the history was full came back after Clear History: \(coordinator.finishedBuilds.map(\.imagePath))")
+        await engine.stop()
+    }
+
     @Test("the resident limit from Settings reaches the engine")
     func residentLimitReachesEngine() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.limit", loading: [TestImages.libobjc])

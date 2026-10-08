@@ -309,6 +309,40 @@ public final class FindCorpusCoordinator {
         }
     }
 
+    /// Squares this document's states with what a finished search could not
+    /// read. The store evicts without telling anyone, so an image this
+    /// document still believes built may be gone: its state goes. The images
+    /// of the search's scope are asked for first. With every indexed image in
+    /// scope, only images this document never asked for are: those are the
+    /// ones it was never told about — indexed in the serving process without
+    /// this engine's API — while asking again for every evicted one would,
+    /// with a budget too small for them all, rebuild on each search what the
+    /// budget just evicted. Paths may be spelled either way; see
+    /// `canonicalImagePath(_:)`.
+    func reconcile(unbuiltIndexedImagePaths: [String], scopeImagePaths: Set<String>?) {
+        guard isEnabled, !isClosed, !isCorpusUnsupportedByEngine else { return }
+        let unbuiltImagePaths = unbuiltIndexedImagePaths
+            .map(canonicalImagePath)
+            .filter { buildRequests[$0] == nil }
+        var states = buildStatesByImagePath
+        for imagePath in unbuiltImagePaths where states[imagePath]?.isBuilt == true {
+            states[imagePath] = nil
+        }
+        if states != buildStatesByImagePath {
+            buildStatesByImagePath = states
+        }
+        let canonicalScopeImagePaths = scopeImagePaths.map { Set($0.map(canonicalImagePath)) }
+        for imagePath in unbuiltImagePaths {
+            if let canonicalScopeImagePaths {
+                if canonicalScopeImagePaths.contains(imagePath) {
+                    requestBuild(of: imagePath, isPrioritized: true)
+                }
+            } else if !requestedImagePaths.contains(imagePath) {
+                requestBuild(of: imagePath)
+            }
+        }
+    }
+
     /// Withdraws every request this document holds, leaving the images they
     /// were following unbuilt as far as it is concerned.
     private func withdrawEveryBuild() {
@@ -438,8 +472,11 @@ public final class FindCorpusCoordinator {
                     nil
                 }
             }
-        guard !learnedBuilds.isEmpty, finishedBuilds.count < Self.maximumFinishedBuildCount else { return }
+        // Remembered whether or not they fit: one that does not is older than
+        // everything listed, so it is the one a full history drops — and one
+        // never remembered would come back after Clear History.
         imagePathsListedInHistory.formUnion(learnedBuilds.map(\.imagePath))
+        guard !learnedBuilds.isEmpty, finishedBuilds.count < Self.maximumFinishedBuildCount else { return }
         finishedBuilds = Array((finishedBuilds + learnedBuilds).prefix(Self.maximumFinishedBuildCount))
     }
 

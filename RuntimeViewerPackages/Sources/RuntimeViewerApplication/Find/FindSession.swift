@@ -546,6 +546,10 @@ public final class FindSession {
             finished.unbuiltImagePaths = summary.unbuiltIndexedImagePaths
         }
         setResults(finished)
+        // What the search could not read is asked for now — an image the
+        // store evicted behind the coordinator's back included: this is the
+        // moment the user has just been told it is missing.
+        corpusCoordinator?.reconcile(unbuiltIndexedImagePaths: summary.unbuiltIndexedImagePaths, scopeImagePaths: shownSearch.scopeImagePaths)
     }
 
     /// A corpus the coordinator reports built is read by the search on

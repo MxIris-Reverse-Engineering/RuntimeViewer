@@ -60,6 +60,37 @@ struct FindCorpusCoordinatorRemoteTests {
         #expect(states.allSatisfy { $0[TestImages.foundation] == nil }, "the cancelled row came back from the coverage")
     }
 
+    /// An image the serving process indexed without this engine's API — for
+    /// another client, or for itself — reaches no "indexed" report here,
+    /// and nothing asked for its corpus until another window opened. A
+    /// search over every indexed image says it could not read it; that is
+    /// when it is asked for. Only images this document never asked for are:
+    /// asking again for every evicted one would rebuild on each search what
+    /// a small budget just evicted (PR121.34).
+    @Test("an image indexed behind the coordinator's back is asked for once a search over every image says it is unbuilt")
+    func imageIndexedElsewhereIsAskedForAfterASearch() async throws {
+        let fixture = try await LocalRuntimeServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.indexedElsewhere")
+        defer { Task { await fixture.stop() } }
+        let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
+        environment.settings.search.isCorpusEnabled = true
+        let documentState = environment.documentState
+        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        defer { withExtendedLifetime(coordinator) {} }
+        // The coordinator's catch-up over the images indexed when it started
+        // has nothing to find, and is over before the image gets indexed.
+        try await Task.sleep(for: .seconds(1))
+
+        try await fixture.serving.loadImage(at: TestImages.libobjc)
+
+        let session = documentState.findSession
+        session.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true))
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { !$0 }
+        #expect(session.results.unbuiltImagePaths.contains(TestImages.libobjc), "the search read an image nobody asked to make searchable")
+
+        let coverage = try await Self.waitForServingCoverage(of: fixture.serving, timeout: 30) { $0.statesByImagePath[TestImages.libobjc]?.isBuilt == true }
+        #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt == true, "the image indexed elsewhere was never asked for")
+    }
+
     @Test("a build the service gives up leaves no failed entry in the history")
     func storeCancellationIsNotAFailure() async throws {
         let fixture = try await LocalRuntimeServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.storeCancellation")

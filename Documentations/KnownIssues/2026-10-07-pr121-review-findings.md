@@ -6466,7 +6466,14 @@ func rawAndCanonicalPathsAreOneImage() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C16 + AL5
-- **状态**：方案待批，代码未改
+- **状态**：(a)(b) 已修复；AL5 其余部分不修，裁决见下面的「不修」。复现测试：`FindCorpusCoordinatorTests.silentlyEvictedCorpusIsRebuiltAfterASearch`（修前 30 秒内引擎的 coverage 一直没有 libobjc：「the evicted corpus was never asked for again」）、`FindCorpusCoordinatorRemoteTests.imageIndexedElsewhereIsAskedForAfterASearch`（「全部镜像」那一支：服务进程里绕开本引擎 API 索引的 libobjc，修前搜索报它没建之后也没人请求，30 秒内 coverage 里没有它）、`FindCorpusCoordinatorTests.clearedHistoryStaysClearedAtCapacity`（修前 Clear History 之后，满额时学到的三条又回来了：`/learned/Image100.dylib`、`Image101.dylib`、`Image102.dylib`）。修后都绿。
+- **落地与偏离**：
+  - `reconcile(unbuiltIndexedImagePaths:scopeImagePaths:)` 定为 internal：调用方只有同模块的会话。入口处把两组路径都按引擎规范化，与协调器其它入口一致（PR121.33），会话传原始的范围路径即可；清掉过期 built 的那一步合成一次赋值，不是每个镜像发一次。
+  - 会话在每次文本 / 成员搜索结束时调用，补搜也算（补搜的摘要只覆盖它读的镜像）；关系搜索与失败的搜索不调。
+  - 草案只给作用域那一支写了测试；「全部镜像」那一支另加一条，用 XPC 装置在服务进程那边直接索引镜像，模拟「别的进程索引的镜像」。
+- **不修**（AL5 的其余部分，已定）：
+  - 靠轮询 coverage 学习其他文档的构建，是提案认可的设计（`draft-find-navigator.md` 决策日志 2026-10-01）。改成由 store 主动推送事件需要一条新命令，还要为旧对端另做兜底，收益抵不过成本；需要准确时刻的地方——搜索结束、Report navigator 出现、本文档的构建完成——都已经有刷新或对账。
+  - 「部分放得下时全部记为已列过」与「最旧的被挤出」的语义一致，不改。
 
 **问题**：本条包含两个独立的问题。
 
