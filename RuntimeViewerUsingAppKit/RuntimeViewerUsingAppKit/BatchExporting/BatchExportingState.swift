@@ -1,5 +1,6 @@
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 enum BatchExportingStep: Int {
@@ -12,7 +13,6 @@ enum BatchExportingStep: Int {
 struct BatchExportingImage: Hashable, Sendable {
     let path: String
     let name: String
-    let group: String
 }
 
 /// A single object whose interface failed to export, kept so the per-image row
@@ -132,11 +132,12 @@ final class BatchExportingState {
     @RxObserved
     var availableImages: [BatchExportingImage] = []
 
+    /// The tree the image selection step shows; `nil` until the coordinator has built it.
     @RxObserved
-    var selectedImagePaths: Set<String> = []
+    var imageTree: BatchExportingImageTree?
 
     @RxObserved
-    var searchString: String = ""
+    var selectedImagePaths: Set<String> = []
 
     @RxObserved
     var objcFormat: ExportFormat = .directory

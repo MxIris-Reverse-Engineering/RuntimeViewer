@@ -65,7 +65,7 @@ CLI 与 MCP 的 `.string`。`FrozenSemanticString.components` 仍在，需要 co
   `RuntimeEngine.stop()`（`releaseIndexedSections`）时同步清掉该镜像的语料。Settings 总开关关掉时整体清空。
 - 驻留预算：store 记录 Frozen 总字节数，硬上限 256 MB；超限按「最久未被搜索命中」整镜像驱逐回未构建。
 - 构建队列在 store 内串行（并发 1）、`.utility`；同镜像重复入队按 `buildStateByImagePath` 去重。
-- **取消按订阅引用计数**：每个 `BuildInterfaceCorpusRequest` 只是对该镜像构建的一次订阅，最后一个订阅者退订才取消
+- **取消按订阅引用计数**：每个 `BuildInterfaceCorpusCommand` 只是对该镜像构建的一次订阅，最后一个订阅者退订才取消
   构建任务。多文档共享 `.local` 引擎时，文档 A 关闭不会砍掉文档 B 在等的语料。
 
 **语料 = 全量打印 + 可见性区域，搜索时按当前选项投影**（2026-09-29 取代原先的「canonical 选项」，见决策日志）。
@@ -167,7 +167,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   `projectedUTF8Offset(ofOriginalUTF8Offset:)` 换算后跳过；成员定位排除这些区间内的行。Foundation 上的数字：
   修复前 16317 个已定位 Swift 成员里 1183 个落在嵌套类型的行上，修复后 0；嵌套块全部找到。
 - **根协议默认实现的重复核实属实并已修**：见决策日志。
-- **第 3 条**：构建请求加 `isPrioritized`，第一次请求就置顶；已有订阅的镜像再被点开时发 `PrioritizeInterfaceCorpusRequest`，
+- **第 3 条**：构建请求加 `isPrioritized`，第一次请求就置顶；已有订阅的镜像再被点开时发 `PrioritizeInterfaceCorpusCommand`，
   不加订阅。
 - **第 4 条**：`FindCorpusCoordinator` 发布 `buildStatesByImagePath`、`finishedBuilds`（100 条封顶）、`corpusBuilt` 与
   `hasActiveBuild`；进度经加锁的暂存 16 ms 合并后上主线程；启动、换引擎与每次构建结束后用 coverage 补快照（规则见
@@ -184,17 +184,17 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 - **未做**：probe 的运行（等用户同意）；并行宽度的放开（等 MachOSwiftSection 的并发打印安全落地）；两份上游提案
   由 MachOSwiftSection 那边的会话实现。
 
-### 2. 引擎请求（全部经 `registerSharedHandlers` 注册，XPC / TCP / proxy 链自动透传）
+### 2. 引擎命令（全部列在 `RuntimeEngine.registerBuiltInHandlers(into:)`，XPC / TCP / proxy 链自动透传）
 
-| 请求 | 类型 | 进度 | 响应 |
+| 命令 | 类型 | 进度 | 响应 |
 |------|------|------|------|
-| `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `RuntimeInterfaceCorpusBuildOutcome`：`built(CorpusBuildSummary { objectCount, skippedCount, byteCount })` / `cancelled` / `imageNotIndexed`（2026-10-08，PR121.30：取消是值不是错误，才跨得过连接；公开 API 仍返回 summary） |
-| `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
-| `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
-| `TypeRelationshipsRequest { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |
-| `InterfaceCorpusCoverageRequest` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
+| `BuildInterfaceCorpusCommand { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `RuntimeInterfaceCorpusBuildOutcome`：`built(CorpusBuildSummary { objectCount, skippedCount, byteCount })` / `cancelled` / `imageNotIndexed`（2026-10-08，PR121.30：取消是值不是错误，才跨得过连接；公开 API 仍返回 summary） |
+| `SearchInterfacesCommand { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
+| `SearchMembersCommand { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
+| `TypeRelationshipsCommand { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |
+| `InterfaceCorpusCoverageCommand` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
 
-前四条请求开启 `cancelsAcrossConnections`：调用方取消即返回，经 `cancelRequest` 撤回对端正在做的工作（2026-10-08，PR121.29，协议见 `CommunicationAndEngineArchitecture.md` §4.5）。
+前四条命令开启 `cancelsAcrossConnections`：调用方取消即返回，经 `cancelRequest` 撤回对端正在做的工作（2026-10-08，PR121.29，协议见 `CommunicationAndEngineArchitecture.md` §4.5）。
 
 `Progress` 必须是具名 `Codable` struct，不能是 tuple（审查意见 2）。请求与结果模型放在 `RuntimeViewerCore/Common/`，
 命名与 CLI / MCP 的 `--json` 词汇对齐，将来暴露成命令只是机械包装（本提案不做，见「不做」）。
@@ -782,3 +782,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 每次文本 / 成员搜索结束时，会话把摘要里没建的已索引镜像交给协调器对账（`reconcile`）：本文档以为已建好、实际已被驱逐的镜像清掉状态；作用域里的镜像按优先级重新请求；作用域是全部镜像时只请求本文档从没请求过的。历史满额时学到的语料也记为「已列过」 | PR #121 审查 PR121.34：store 按预算驱逐语料不通知任何人，协调器一直当它 built，Current Image 搜索永远报「not yet searchable」，也不去重新请求；历史满额时 `mergeCoverage` 在记下「已列过」之前就返回，Clear History 之后这些语料又被列回来，等于在满额时撤销了 e7186ae1。搜索结束正是用户刚被告知缺了哪些镜像的时刻。全部镜像时不重新请求被驱逐的，免得预算偏小时每搜一次就把刚挤掉的重建一遍；从没请求过的正是 PR121.04 之后仍然听不到的那类（服务进程里绕开本引擎 API 索引的镜像）。靠轮询得知别处构建的设计维持不变（不修，理由见 KnownIssues）。 |
 | 2026-10-08 | 语料协调器的 coverage 刷新最多一个在途、外加一个排队：在途时再来的调用只置一个标志，在途那次完成后补刷一次；换引擎与关窗时取消在途的刷新，回来的答案不再合并 | PR #121 审查 PR121.35：每个构建请求完成都单独刷新一次，第二个窗口打开时它对已建好的语料发的请求几乎同时返回，于是 N 个镜像就是 N 次往返、每次带回 N 个状态，合并又是 O(N)，开窗时主线程卡一下。补刷那一次保证最后一次调用之后的状态总能拿到。过期答案靠取消识别而不是比引擎身份：服务重启后 `.switchEngine` 可能把同一台引擎放回去。 |
 | 2026-10-08 | `DocumentState` 新增「引擎已重置」信号 `runtimeEngineDidReset`：`.switchEngine` 生效时发，引擎在文档什么都没打开时重新就绪也发（引擎第一次连上同样算）；Find 的会话与语料协调器改订阅它。连接在构建途中丢失（XPC service 退出、socket 断开）时，被打断的构建不记 Failed，清掉状态，等重置后随协调器重新开始再请求；判定用 `RuntimeViewerCommunication` 新增的 `RuntimeConnectionError.isLostConnection(_:)` | PR #121 审查 PR121.30 剩下的一半与 PR121.05 留下的缺口：XPC service 被重启时、socket 断开时，每个在途构建各记一条假的 Failed；文档停在镜像列表根处时 `.switchEngine` 什么都不做、`$runtimeEngine` 不发值，于是屏上一直是已经不在的那个进程的搜索结果，协调器也一直把旧进程的语料当 built。各传输的断连错误有几种是 internal 的，只能在通信模块里判。被打断的镜像不另记一份逐个重请：同一进程重连时「请求全部已索引镜像」已经包含它们，服务重启后的新进程里它们没有索引，等再被索引时由 PR121.04 的那一路请求。 |
+| 2026-10-08 | 合入 `next`：Find 的命令随 `next` 的命名改成 `…Command`（`BuildInterfaceCorpusCommand` 等，协议 `RuntimeEngineProgressCommand`，命令名常量移到 `RuntimeEngineCommandName.swift`），由 `RuntimeEngine.registerBuiltInHandlers(into:)` 经 `RuntimeEngineCommandRegistrar` 注册；`cancelRequest` 与 `dyldRootPath` 在注册器里由本进程作答、不转发；取消登记表交给注册器，命令扩展的进度命令也撤得回；`next` 新增的五条注入命令不开 `cancelsAcrossConnections` | `next` 把封闭的 `CommandNames` 枚举换成别的模块可以扩展的 `CommandName` struct，把硬编码清单换成「内置清单 + 进程级扩展表」，命令协议改名 `RuntimeEngineCommand`；Find 的命令跟着改名，免得同一张命令表里两种叫法。线上格式两边都没变：命令名字符串照旧，`requestIdentifier` 照旧只出现在开启取消的命令的信封里。注入命令不开取消的理由见 `CommunicationAndEngineArchitecture.md` §4.5：服务它们的对端（合入之前从 `next` 构建、装在真机上的设备载荷）不认识 `cancelRequest`，改成进度命令还会改掉它们的线上格式，而且它们没有值得撤回的长工作。 |

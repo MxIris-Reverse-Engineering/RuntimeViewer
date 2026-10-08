@@ -29,6 +29,10 @@
 		E9A2B530306373AB00D5A652 /* AppIconXcode26.icon in Resources */ = {isa = PBXBuildFile; fileRef = E9A2B52C306373AB00D5A652 /* AppIconXcode26.icon */; };
 		E9A9CCE22F5D880400A10DD3 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */; };
 		E9A9CCF12F5D884900A10DD3 /* $(RUNTIME_VIEWER_SERVICE_NAME) in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E9B10F010000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E010000000000000000 /* RuntimeViewerInjection */; };
+		E9B10F020000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E020000000000000000 /* RuntimeViewerInjection */; };
+		E9B10F030000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E030000000000000000 /* RuntimeViewerInjection */; };
+		E9B10F040000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E040000000000000000 /* RuntimeViewerInjection */; };
 		E9C11D0A2FAB000000000001 /* RuntimeViewerCommandLineInterface in Frameworks */ = {isa = PBXBuildFile; productRef = E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -339,6 +343,7 @@
 			files = (
 				E9186330306120AA00DCEAC1 /* RuntimeViewerCore in Frameworks */,
 				E9186331306120AA00DCEAC1 /* RuntimeViewerCommunication in Frameworks */,
+				E9B10F010000000000000000 /* RuntimeViewerInjection in Frameworks */,
 			);
 		};
 		E9432FDF2C0D614900362862 /* Frameworks */ = {
@@ -348,6 +353,7 @@
 				E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
 				E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */,
 				E9C11D0A2FAB000000000001 /* RuntimeViewerCommandLineInterface in Frameworks */,
+				E9B10F020000000000000000 /* RuntimeViewerInjection in Frameworks */,
 				E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */,
 				E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */,
 			);
@@ -371,6 +377,7 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				E99510F33052AA8100D3FAB2 /* RuntimeViewerCommandLineInterface in Frameworks */,
+				E9B10F030000000000000000 /* RuntimeViewerInjection in Frameworks */,
 			);
 		};
 		E9A9CCE12F5D880400A10DD3 /* Frameworks */ = {
@@ -385,6 +392,7 @@
 				E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
 				E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */,
 				E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */,
+				E9B10F040000000000000000 /* RuntimeViewerInjection in Frameworks */,
 			);
 		};
 		E9E900E52C2D0D5B00FADDCC /* Frameworks */ = {
@@ -483,6 +491,7 @@
 			packageProductDependencies = (
 				E9186332306120AA00DCEAC1 /* RuntimeViewerCore */,
 				E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */,
+				E9B10E010000000000000000 /* RuntimeViewerInjection */,
 			);
 			productName = RuntimeViewerLocalRuntimeService;
 			productReference = E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */;
@@ -523,6 +532,7 @@
 				E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */,
 				E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */,
 				E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */,
+				E9B10E020000000000000000 /* RuntimeViewerInjection */,
 				E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */,
 				E910124C38FF8B6334251802 /* Sparkle */,
 			);
@@ -607,6 +617,7 @@
 			name = RuntimeViewerCommandLineTool;
 			packageProductDependencies = (
 				E99510F23052AA8100D3FAB2 /* RuntimeViewerCommandLineInterface */,
+				E9B10E030000000000000000 /* RuntimeViewerInjection */,
 			);
 			productName = RuntimeViewerCommandLineTool;
 			productReference = E99510EA3052AA7800D3FAB2 /* runtime-viewer-cli */;
@@ -650,6 +661,7 @@
 				E985A9CD2D9AF505005A573C /* RuntimeViewerCore */,
 				E927C2312E9444F300084A7B /* RuntimeViewerCommunication */,
 				E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */,
+				E9B10E040000000000000000 /* RuntimeViewerInjection */,
 			);
 			productName = RuntimeViewerCatalystHelperPlugin;
 			productReference = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */;
@@ -680,7 +692,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2660;
-				LastUpgradeCheck = 2700;
+				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					E918631030611D0200DCEAC1 = {
 						CreatedOnToolsVersion = 26.6;
@@ -2124,6 +2136,22 @@
 		E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerService;
+		};
+		E9B10E010000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
+		};
+		E9B10E020000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
+		};
+		E9B10E030000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
+		};
+		E9B10E040000000000000000 /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
 		};
 		E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */ = {
 			isa = XCSwiftPackageProductDependency;

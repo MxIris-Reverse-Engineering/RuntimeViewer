@@ -195,6 +195,75 @@ struct RuntimeSourceTests {
         let decoded = try JSONDecoder().decode(RuntimeSource.self, from: data)
         #expect(decoded == original)
     }
+
+    // MARK: - injectedTCP
+
+    private static func injected(
+        name: String = "sharingd",
+        host: String = "192.168.64.1",
+        port: UInt16 = 51234,
+        identifier: RuntimeSource.Identifier = "claim-token",
+        role: RuntimeSource.Role = .server,
+    ) -> RuntimeSource {
+        .injectedTCP(name: name, host: host, port: port, identifier: identifier, role: role)
+    }
+
+    @Test("injectedTCP description is the name")
+    func injectedTCPDescription() {
+        #expect(Self.injected().description == "sharingd")
+    }
+
+    @Test("injectedTCP is remote, is not XPC, and reports its role")
+    func injectedTCPClassification() {
+        #expect(Self.injected().isRemote)
+        #expect(Self.injected().isXPC == false)
+        #expect(Self.injected(role: .server).remoteRole == .server)
+        #expect(Self.injected(role: .client).remoteRole == .client)
+    }
+
+    /// The address is part of identity here, unlike `localSocket`, where it is a constant.
+    /// Two payloads reporting to two different hosts are two different sources even with
+    /// the same token — which should not happen, and must not silently collapse if it does.
+    @Test("injectedTCP equality uses host, port, identifier and role, ignores name")
+    func injectedTCPEquality() {
+        #expect(Self.injected(name: "A") == Self.injected(name: "B"))
+        #expect(Self.injected() != Self.injected(host: "10.0.0.2"))
+        #expect(Self.injected() != Self.injected(port: 51235))
+        #expect(Self.injected() != Self.injected(identifier: "another-token"))
+        #expect(Self.injected() != Self.injected(role: .client))
+    }
+
+    /// A `localSocket` and an `injectedTCP` carrying the same identifier are different
+    /// engines, and the stable key has to say so — it keys notifications and storage.
+    @Test("injectedTCP keys itself apart from localSocket and from its own counterpart")
+    func injectedTCPStableIdentifier() {
+        let businessServer = Self.injected(role: .server)
+        let businessClient = Self.injected(role: .client)
+        #expect(businessServer.identifier != businessClient.identifier)
+
+        let localSocket = RuntimeSource.localSocket(name: "sharingd", identifier: "claim-token", role: .server)
+        #expect(businessServer.identifier != localSocket.identifier)
+        #expect(businessClient.identifier != localSocket.identifier)
+    }
+
+    @Test("injectedTCP hashes equal when equal, and is usable in a Set")
+    func injectedTCPHashing() {
+        #expect(Self.injected(name: "A").hashValue == Self.injected(name: "B").hashValue)
+        let set: Set<RuntimeSource> = [
+            Self.injected(),
+            Self.injected(name: "different name only"),
+            Self.injected(port: 51235),
+        ]
+        #expect(set.count == 2)
+    }
+
+    @Test("injectedTCP Codable round-trip")
+    func injectedTCPCodable() throws {
+        let original = Self.injected()
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(RuntimeSource.self, from: data)
+        #expect(decoded == original)
+    }
 }
 
 // MARK: - Role Tests

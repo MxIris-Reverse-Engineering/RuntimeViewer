@@ -16,6 +16,9 @@ struct SourceCatalogTests {
         #expect(SourceKind(source: TestEngines.attached(name: "Mail", processIdentifier: 551, isSandbox: true).source) == .attachedSocket)
         #expect(SourceKind(source: TestEngines.bonjour(name: "SpringBoard", endpointKey: "device-1-77").source) == .bonjour)
         #expect(SourceKind(source: TestEngines.mirrored(name: "Finder").source) == .mirrored)
+        // Its own kind, not `attachedSocket`. Same transport, but that kind
+        // reads "a process on this Mac" and this target is on a phone.
+        #expect(SourceKind(source: TestEngines.injectedDevice(name: "sharingd").source) == .injectedDevice)
     }
 
     @Test("The selector of an engine is the one that resolves back to it")
@@ -33,6 +36,12 @@ struct SourceCatalogTests {
         #expect(SourceSelector.selector(for: mail) == .attachedProcess(processIdentifier: 551))
         #expect(SourceSelector.selector(for: springBoard) == .engine(identifier: springBoard.engineID))
         #expect(SourceSelector.selector(for: mirrored) == .engine(identifier: mirrored.engineID))
+
+        // By engine identifier, never `pid:`. The pid belongs to the device, and
+        // `pid:` names a process on this Mac — one would resolve to the other
+        // and attach to whatever holds that pid here.
+        let injectedDevice = TestEngines.injectedDevice(name: "sharingd")
+        #expect(SourceSelector.selector(for: injectedDevice) == .engine(identifier: injectedDevice.engineID))
 
         let snapshot = SourceCatalogSnapshot.grouping(
             systemEngines: [local, catalyst],

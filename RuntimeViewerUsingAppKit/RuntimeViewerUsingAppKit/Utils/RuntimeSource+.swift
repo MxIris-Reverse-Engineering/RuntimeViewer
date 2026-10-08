@@ -21,7 +21,11 @@ extension RuntimeSource: MainMenuItemRepresentable {
             }
         case .bonjour:
             return .symbol(systemName: .bonjour)
-        case .localSocket, .directTCP:
+        case .localSocket, .directTCP, .injectedTCP:
+            // Grouped with `localSocket`, its closest sibling: both are a
+            // payload this app injected, reached over a socket. Giving an
+            // injected device process a symbol of its own is a UI decision
+            // this transport change has no business making.
             return .symbol(systemName: .network)
         }
     }

@@ -54,6 +54,15 @@ extension RuntimeBookmarkScope {
         case remote(identifier: String, role: RuntimeSource.Role)
         case localSocket(identifier: String, role: RuntimeSource.Role)
 
+        /// The claim token the host issued for one injection into a process on
+        /// a device.
+        ///
+        /// Per-injection, so bookmarks do not carry over from one injection of
+        /// a process to the next. That is the same limitation `localSocket`
+        /// already has — its identifier carries a pid — and widening it is
+        /// `draft-runtime-bookmark-scope`'s subject, not this path's.
+        case injectedTCP(identifier: String, role: RuntimeSource.Role)
+
         /// Port first, host second — see ``rawValue`` for why the order is
         /// load-bearing.
         case directTCP(port: UInt16, host: String?, role: RuntimeSource.Role)
@@ -74,6 +83,7 @@ extension RuntimeBookmarkScope.Identity {
         case local
         case remote
         case localSocket
+        case injectedTCP
         case directTCP
         case bonjour
     }
@@ -83,6 +93,7 @@ extension RuntimeBookmarkScope.Identity {
         case .local: .local
         case .remote: .remote
         case .localSocket: .localSocket
+        case .injectedTCP: .injectedTCP
         case .directTCP: .directTCP
         case .bonjour: .bonjour
         }
@@ -91,7 +102,7 @@ extension RuntimeBookmarkScope.Identity {
     public var role: RuntimeSource.Role? {
         switch self {
         case .local: nil
-        case .remote(_, let role), .localSocket(_, let role): role
+        case .remote(_, let role), .localSocket(_, let role), .injectedTCP(_, let role): role
         case .directTCP(_, _, let role), .bonjour(_, _, let role): role
         }
     }
@@ -126,7 +137,8 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
     /// - `.directTCP` → `<port>:<host>`. Port leads *because* a host can be a
     ///   bracket-less IPv6 literal, which is nothing but colons; a port is
     ///   pure digits and cannot be mistaken for one.
-    /// - `.remote` / `.localSocket` → the identifier, whole, swallowing.
+    /// - `.remote` / `.localSocket` / `.injectedTCP` → the identifier, whole,
+    ///   swallowing.
     /// - `.local` → empty.
     public var rawValue: String {
         let separator = String(Self.segmentSeparator)
@@ -140,7 +152,7 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
         switch self {
         case .local:
             return ""
-        case .remote(let identifier, _), .localSocket(let identifier, _):
+        case .remote(let identifier, _), .localSocket(let identifier, _), .injectedTCP(let identifier, _):
             return identifier
         case .directTCP(let port, let host, _):
             // A nil host encodes as empty. The two are not distinguishable on
@@ -172,11 +184,16 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
             guard roleToken.isEmpty, remainder.isEmpty else { return nil }
             self = .local
 
-        case .remote, .localSocket:
+        case .remote, .localSocket, .injectedTCP:
             guard let role = RuntimeSource.Role(roleToken: roleToken), !remainder.isEmpty else { return nil }
-            self = kind == .remote
-                ? .remote(identifier: remainder, role: role)
-                : .localSocket(identifier: remainder, role: role)
+            switch kind {
+            case .remote:
+                self = .remote(identifier: remainder, role: role)
+            case .localSocket:
+                self = .localSocket(identifier: remainder, role: role)
+            default:
+                self = .injectedTCP(identifier: remainder, role: role)
+            }
 
         case .directTCP:
             guard let role = RuntimeSource.Role(roleToken: roleToken) else { return nil }
@@ -345,6 +362,9 @@ extension RuntimeBookmarkScope {
 
         case .localSocket(_, let identifier, let role):
             return .identified(.localSocket(identifier: identifier.rawValue, role: role))
+
+        case .injectedTCP(_, _, _, let identifier, let role):
+            return .identified(.injectedTCP(identifier: identifier.rawValue, role: role))
 
         case .directTCP(_, let host, let port, let role):
             return .identified(.directTCP(port: port, host: host, role: role))

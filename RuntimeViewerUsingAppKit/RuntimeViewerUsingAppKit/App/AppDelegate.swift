@@ -3,6 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
+import RuntimeViewerInjection
 import RuntimeViewerMCPBridge
 import RuntimeViewerSimulatorInstaller
 
@@ -45,6 +46,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
 
         SystemAutoFillMenuSuppression.install()
+
+        // Puts the injection commands into the engine command table. Has to
+        // happen before any engine connects, because handlers are installed as
+        // a connection is set up — and window restoration inside
+        // `NSApplication.run()` builds engines. Every process that serves an
+        // engine makes this call; forgetting it is not a compile error, it just
+        // makes this process look to a host like a build without those
+        // commands. The Mac's own injection goes through the privileged helper
+        // daemon rather than a `RuntimeInjectionService`, so there is no
+        // service to hand over here.
+        RuntimeInjection.install()
+
         let application = autoreleasepool {
             @Dependency(\.mainMenuController) var mainMenuController
 

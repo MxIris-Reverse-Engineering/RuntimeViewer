@@ -666,10 +666,11 @@ struct RuntimeLocalSocketErrorTests {
             .notConnected,
             .receiveFailed,
             .socketCreationFailed(errno: EMFILE),
-            .bindFailed(errno: EADDRINUSE, port: 8080),
+            .bindFailed(errno: EADDRINUSE, host: "127.0.0.1", port: 8080),
             .listenFailed(errno: EACCES),
             .acceptFailed(errno: EINTR),
-            .connectFailed(errno: ECONNREFUSED, port: 9999),
+            .connectFailed(errno: ECONNREFUSED, host: "127.0.0.1", port: 9999),
+            .invalidHostAddress("not-an-address"),
             .sendFailed(errno: EPIPE),
         ]
 
@@ -680,12 +681,19 @@ struct RuntimeLocalSocketErrorTests {
         }
     }
 
-    @Test("Error description contains errno details")
+    /// The address is in the message because it stopped being a constant: a
+    /// failure that names `127.0.0.1` while the attempt went to a host across
+    /// the network is the kind of diagnostic that sends the reader the wrong way.
+    @Test("Error description contains the address it failed to reach, and errno details")
     func testErrorDescriptionDetails() {
-        let error = RuntimeLocalSocketError.connectFailed(errno: ECONNREFUSED, port: 9999)
+        let error = RuntimeLocalSocketError.connectFailed(errno: ECONNREFUSED, host: "192.168.64.1", port: 9999)
         let description = error.description
+        #expect(description.contains("192.168.64.1"))
         #expect(description.contains("9999"))
         #expect(description.contains("connect"))
+
+        let bindError = RuntimeLocalSocketError.bindFailed(errno: EADDRNOTAVAIL, host: "192.168.64.1", port: 9999)
+        #expect(bindError.description.contains("192.168.64.1"))
     }
 
     @Test("portFileNotFound and invalidPortFile error descriptions")
@@ -804,5 +812,182 @@ struct RuntimeLocalSocketClientConcurrentTests {
         client.stop()
 
         #expect(client.state.isDisconnected)
+    }
+}
+
+// MARK: - The injected-payload path
+
+/// The same two classes, with the address no longer a constant.
+///
+/// This is what `RuntimeSource.injectedTCP` runs on: a payload inside a process on a
+/// device dials a host across the network, because its target's sandbox denies
+/// `network-bind` and so it cannot listen. Exercised here over loopback — the address
+/// being a parameter is the whole change, so loopback tests it as well as any other
+/// address would, and the two failure cases below are the ones that could not be
+/// measured on a device at all.
+@Suite("RuntimeLocalSocket injected-payload addressing", .serialized)
+struct RuntimeLocalSocketInjectedAddressingTests {
+    /// Borrowed from the deterministic port hash purely to pick a port unlikely to be
+    /// in use. Nothing here derives a port from an identifier — the host chooses it,
+    /// because it has to be listening before the payload exists.
+    private static func unusedPort() -> UInt16 {
+        RuntimeLocalSocketPortDiscovery.computePort(for: "injected-addressing-\(UUID().uuidString)")
+    }
+
+    private static let loopback = "127.0.0.1"
+
+    /// An address no machine owns. RFC 5737 reserves 192.0.2.0/24 for documentation
+    /// precisely so that it is not routable anywhere.
+    private static let unassignableAddress = "192.0.2.1"
+
+    /// The accept happens on a background queue, so the host does not have a connection
+    /// to send over the moment the payload's `connect` returns.
+    private static func waitForConnection(of connection: RuntimeLocalSocketServerConnection) async throws {
+        for _ in 0 ..< 100 where !connection.state.isConnected {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
+    /// The business direction is the inverted one: the host asks and the payload answers,
+    /// even though the payload is the side that dialled.
+    @Test("A payload dialling an explicit address answers the host that injected it")
+    func roundTripOverAnExplicitAddress() async throws {
+        let port = Self.unusedPort()
+        let host = RuntimeLocalSocketServerConnection(bindAddress: Self.loopback, port: port)
+        try await host.start()
+        defer { host.stop() }
+
+        let payload = try await RuntimeLocalSocketClientConnection(
+            host: Self.loopback,
+            port: port,
+            identifier: "claim-token",
+            firstAttemptWindow: 5,
+        )
+        defer { payload.stop() }
+        payload.setMessageHandler(requestType: EchoRequest.self) { request in
+            EchoResponse(message: "payload received: \(request.message)")
+        }
+
+        try await Self.waitForConnection(of: host)
+        let response = try await host.sendMessage(request: EchoRequest(message: "hello"))
+        #expect(response.message == "payload received: hello")
+    }
+
+    /// The point of binding the advertised address rather than every interface. An
+    /// address the device could never have reached fails here, at the host, with the
+    /// address in the message — instead of leaving a payload dialling nothing and a user
+    /// looking at a process that never appears.
+    @Test("Binding an address this machine does not own fails, and names it")
+    func bindingAnUnassignableAddressFails() async throws {
+        let host = RuntimeLocalSocketServerConnection(
+            bindAddress: Self.unassignableAddress,
+            port: Self.unusedPort(),
+        )
+        defer { host.stop() }
+
+        do {
+            try await host.start()
+            Issue.record("Expected binding \(Self.unassignableAddress) to fail")
+        } catch let error as RuntimeLocalSocketError {
+            #expect(error.description.contains(Self.unassignableAddress))
+        }
+    }
+
+    /// Not retried: a string that is not an address will not become one in ten seconds,
+    /// and the payload has somewhere better to spend that time. Asserted on the elapsed
+    /// time as well as on the error, because returning the right error after waiting out
+    /// the whole timeout would satisfy an error-only check.
+    @Test("A malformed address is reported at once rather than retried")
+    func malformedAddressFailsImmediately() async throws {
+        let startTime = Date()
+        do {
+            _ = try await RuntimeLocalSocketClientConnection(
+                host: "not-an-address",
+                port: Self.unusedPort(),
+                identifier: "claim-token",
+                firstAttemptWindow: 5,
+            )
+            Issue.record("Expected a malformed address to be rejected")
+        } catch RuntimeLocalSocketError.invalidHostAddress(let host) {
+            #expect(host == "not-an-address")
+        }
+        #expect(Date().timeIntervalSince(startTime) < 1)
+    }
+
+    /// The defect this exists to prevent, and the reason it matters more here
+    /// than anywhere else: an injected payload gets exactly one chance to run.
+    /// Its `__attribute__((constructor))` runs once, and a second `dlopen` of an
+    /// image already in the process returns the existing handle without running
+    /// anything — so a payload that gives up leaves that target permanently
+    /// unusable, while every later injection still reports success.
+    ///
+    /// Measured on a device: a target that had failed once then accepted
+    /// injection after injection, each reporting success, with nothing running
+    /// and nothing connecting, until the process itself was restarted.
+    @Test("A payload that finds nobody listening waits instead of giving up")
+    func payloadKeepsTryingWhenNobodyIsListeningYet() async throws {
+        let port = Self.unusedPort()
+
+        // No listener at all yet. The old behaviour threw here.
+        let payload = try await RuntimeLocalSocketClientConnection(
+            host: Self.loopback,
+            port: port,
+            identifier: "claim-token",
+            firstAttemptWindow: 1,
+        )
+        defer { payload.stop() }
+        payload.setMessageHandler(requestType: EchoRequest.self) { request in
+            EchoResponse(message: "payload received: \(request.message)")
+        }
+        #expect(!payload.state.isConnected, "Nothing is listening, so it cannot be connected")
+
+        // The host turns up late, which on a device is the ordinary case for
+        // anything that restarted.
+        let host = RuntimeLocalSocketServerConnection(bindAddress: Self.loopback, port: port)
+        try await host.start()
+        defer { host.stop() }
+
+        var response: EchoResponse?
+        for _ in 0 ..< 40 where response == nil {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            response = try? await host.sendMessage(request: EchoRequest(message: "late"))
+        }
+        #expect(response?.message == "payload received: late")
+    }
+
+    /// What makes the host restarting survivable without injecting everything again. The
+    /// payload keeps the address it was given and keeps dialling it, so a new listener on
+    /// the same address and port is found by the payload already in place.
+    @Test("The payload comes back on its own after the host's listener goes away")
+    func payloadReconnectsToANewListenerOnTheSameAddress() async throws {
+        let port = Self.unusedPort()
+
+        let firstHost = RuntimeLocalSocketServerConnection(bindAddress: Self.loopback, port: port)
+        try await firstHost.start()
+        let payload = try await RuntimeLocalSocketClientConnection(
+            host: Self.loopback,
+            port: port,
+            identifier: "claim-token",
+            firstAttemptWindow: 5,
+        )
+        defer { payload.stop() }
+        payload.setMessageHandler(requestType: EchoRequest.self) { request in
+            EchoResponse(message: "payload received: \(request.message)")
+        }
+        try await Self.waitForConnection(of: firstHost)
+        firstHost.stop()
+
+        let secondHost = RuntimeLocalSocketServerConnection(bindAddress: Self.loopback, port: port)
+        try await secondHost.start()
+        defer { secondHost.stop() }
+
+        // Polled rather than slept out: the reconnection interval is an implementation
+        // detail, and pinning one sleep to it would make this a timing assertion.
+        var response: EchoResponse?
+        for _ in 0 ..< 40 where response == nil {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            response = try? await secondHost.sendMessage(request: EchoRequest(message: "again"))
+        }
+        #expect(response?.message == "payload received: again")
     }
 }

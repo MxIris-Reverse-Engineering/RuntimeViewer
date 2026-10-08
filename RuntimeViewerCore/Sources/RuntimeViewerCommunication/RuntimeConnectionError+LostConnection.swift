@@ -45,7 +45,7 @@ extension RuntimeConnectionError {
             switch localSocketError {
             case .notConnected, .receiveFailed, .sendFailed:
                 return true
-            case .socketCreationFailed, .bindFailed, .listenFailed, .acceptFailed, .connectFailed, .portFileNotFound, .invalidPortFile:
+            case .socketCreationFailed, .bindFailed, .listenFailed, .acceptFailed, .connectFailed, .invalidHostAddress, .portFileNotFound, .invalidPortFile:
                 return false
             }
         }

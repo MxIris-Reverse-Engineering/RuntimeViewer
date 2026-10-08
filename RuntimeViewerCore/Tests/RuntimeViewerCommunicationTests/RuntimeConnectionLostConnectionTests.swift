@@ -55,7 +55,8 @@ struct RuntimeConnectionLostConnectionTests {
             RuntimeConnectionError.listenerWaiting,
             RuntimeConnectionError.unknown("Something else"),
             RuntimeNetworkError.invalidPort,
-            RuntimeLocalSocketError.connectFailed(errno: ECONNREFUSED, port: 1),
+            RuntimeLocalSocketError.connectFailed(errno: ECONNREFUSED, host: "127.0.0.1", port: 1),
+            RuntimeLocalSocketError.invalidHostAddress("not-an-address"),
             CancellationError(),
             DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Not JSON")),
         ]

@@ -40,7 +40,7 @@ struct ScriptedPeer {
 
     /// Answers every `command` request with what `handler` returns, whatever
     /// the request says.
-    func serve<Response: Codable>(_ command: RuntimeEngine.CommandNames, with handler: @escaping @Sendable () async throws -> Response) {
+    func serve<Response: Codable>(_ command: RuntimeEngine.CommandName, with handler: @escaping @Sendable () async throws -> Response) {
         connection.setMessageHandler(name: command.commandName) { (_: IgnoredRequest) async throws -> Response in
             try await handler()
         }

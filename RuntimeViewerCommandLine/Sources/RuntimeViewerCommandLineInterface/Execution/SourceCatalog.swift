@@ -78,6 +78,8 @@ extension SourceKind {
             self = identifier == .macCatalyst ? .macCatalyst : .attachedXPC
         case .localSocket:
             self = .attachedSocket
+        case .injectedTCP:
+            self = .injectedDevice
         case .bonjour:
             self = .bonjour
         case .directTCP:
@@ -101,7 +103,10 @@ extension SourceSelector {
                 return .attachedProcess(processIdentifier: processIdentifier)
             }
             return .engine(identifier: engine.engineID)
-        case .bonjour, .mirrored:
+        case .bonjour, .mirrored, .injectedDevice:
+            // By engine identifier, not by pid. The pid is the device's, and
+            // `pid:<n>` means a process on this Mac — resolving one to the
+            // other would attach to whatever happens to hold that pid here.
             return .engine(identifier: engine.engineID)
         }
     }

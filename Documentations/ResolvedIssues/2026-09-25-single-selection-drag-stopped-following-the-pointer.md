@@ -119,3 +119,26 @@ macOS 27.0（26A428）上各跑一遍，窗口为 key：
   测试用 `USING_LOCAL_DEPENDENCIES=1` 走 `.worktrees/` 下的本地 checkout，在独立的 scratch 目录里编。
 - **探针**（上表）：覆写 `mouseDown:` 的子类在 macOS 27 上恢复逐行跟随，拖出底边时自动滚动并继续选中。
 - 真实 App 里的确认由用户运行 Debug 构建完成。
+
+## Addendum, 2026-10-05 — the recognizer test is gone, because macOS 27.2 renamed them
+
+`StatefulOutlineViewTrackingLoopTests` went red on **macOS 27.2 (26B5091g)**, on the half that checked
+a *plain* `NSOutlineView` — its canary, not the behaviour. It asserted the literal name
+`NSTableView.mousePanGestureRecognizer`, which 27.2 no longer has. Measured, a plain outline view now
+reports:
+
+```
+NSTableView.swipeGestureRecognizer            NSTableView.dragPressGestureRecognizer
+NSTableView.longTouchPressGestureRecognizer   NSTableView.dragPanGestureRecognizer          (_NSTableViewPanGestureRecognizer)
+NSTableView.extendSelectionGestureRecognizer  (NSPanGestureRecognizer)
+NSTableView.tapGestureRecognizer              NSTableView.doubleTapGestureRecognizer
+```
+
+The one pan recognizer split in two, a drag half and a selection half. The behaviour the suite guarded
+is unchanged: on the same system a subclass overriding `mouseDown(with:)` still gets **none** of them.
+
+**The suite has been deleted rather than widened.** It existed while the plan was to reach the old
+behaviour through the private gesture API; overriding `mouseDown(with:)` is what the fix actually does,
+and that does not depend on the recognizers' names. A test written over them has no handle on this
+project's correctness — it reports Apple's renames, which is what just happened. The fix itself stays,
+and so does the comment on the override explaining why the empty-looking method must not be removed.

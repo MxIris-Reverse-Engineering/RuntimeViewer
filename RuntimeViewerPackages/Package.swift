@@ -126,6 +126,10 @@ let package = Package(
             targets: ["RuntimeViewerHelperClient"],
         ),
         .library(
+            name: "RuntimeViewerDeviceInjection",
+            targets: ["RuntimeViewerDeviceInjection"],
+        ),
+        .library(
             name: "RuntimeViewerEngineManagement",
             targets: ["RuntimeViewerEngineManagement"],
         ),
@@ -256,6 +260,21 @@ let package = Package(
             ),
         ),
         
+        // Reached directly rather than through swift-helper-service, whose
+        // products this package gates to AppKit platforms: on iOS there is no
+        // helper daemon to go through, so the app links the injector itself.
+        // 0.6.0 is the first release with iOS support.
+        .package(
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("MachInjector"),
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
+                from: "0.6.0",
+            ),
+        ),
+
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
@@ -265,9 +284,12 @@ let package = Package(
                 path: "../../RunningApplicationKit",
                 isRelative: true,
             ),
+            // 0.7.0 is the first release with the supplied-item-source API the device
+            // process picker needs: `RunningItemSource` / `AnyRunningItemSource`,
+            // `Configuration.tabs`, `processItemSource:` and `RestrictedProcess`.
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
-                from: "0.6.0",
+                from: "0.7.0",
             ),
         ),
 
@@ -465,6 +487,42 @@ let package = Package(
                 .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
+
+        // The iOS counterpart of RuntimeViewerHelperClient. On macOS injection
+        // is delegated to a privileged helper daemon because an app cannot take
+        // another process's task port; on iOS an app that escaped its sandbox
+        // can, so this does the work in process and there is no daemon layer at
+        // all.
+        //
+        // Builds everywhere rather than iOS-only, so the enumerator's buffer
+        // sizing and injectability rules are covered by tests on a Mac. The
+        // part that needs MachInjector is `#if os(iOS)` inside.
+        .target(
+            name: "RuntimeViewerDeviceInjection",
+            dependencies: [
+                "RuntimeViewerProcessEnumerationSupport",
+                "RuntimeViewerRunningBoardSupport",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
+                .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: [.iOS])),
+            ],
+        ),
+
+        // `libproc` declarations the iOS SDK withholds. See the header: iOS
+        // ships no <libproc.h> and no <sys/proc_info.h>, while every routine is
+        // exported from the public libSystem.B.tbd.
+        .target(
+            name: "RuntimeViewerProcessEnumerationSupport",
+        ),
+
+        // The RunningBoardServices surface that stops a process being
+        // suspended. Unlike the target above there is nothing to link: the iOS
+        // SDK ships no stub for this framework at all, so the header declares
+        // protocols and the implementation goes through the Objective-C
+        // runtime. See its header for why naming a class would break the link.
+        .target(
+            name: "RuntimeViewerRunningBoardSupport",
+        ),
         .target(
             name: "RuntimeViewerCatalystExtensions",
             dependencies: [
@@ -483,6 +541,7 @@ let package = Package(
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerUtilities", package: "RuntimeViewerCore"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
@@ -503,6 +562,15 @@ let package = Package(
         ),
 
         .testTarget(
+            name: "RuntimeViewerDeviceInjectionTests",
+            dependencies: [
+                "RuntimeViewerDeviceInjection",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
+            ],
+        ),
+
+        .testTarget(
             name: "RuntimeViewerHelperClientTests",
             dependencies: [
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
@@ -516,6 +584,7 @@ let package = Package(
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
             ],
         ),
 

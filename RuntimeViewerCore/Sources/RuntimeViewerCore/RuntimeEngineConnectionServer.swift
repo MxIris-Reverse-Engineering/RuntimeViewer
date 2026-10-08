@@ -42,11 +42,13 @@ public actor RuntimeEngineConnectionServer {
 
     // MARK: - Request handlers
 
-    /// Installs the shared command table.
+    /// Installs the shared command table: Core's built-in commands, then
+    /// whatever other modules added through
+    /// `RuntimeEngine.addCommandExtension(named:install:)`.
     ///
     /// Every request routes through `engine.dispatch(_:)`, so an engine that is
     /// itself a client of another process forwards instead of running the
-    /// local arm — see `RuntimeEngine.register(_:on:engine:)`.
+    /// local arm — see `RuntimeEngineCommandRegistrar.register(_:)`.
     public func registerRequestHandlers() {
         RuntimeEngine.registerSharedHandlers(on: connection, engine: engine, inboundRequests: inboundRequests)
         #log(.info, "[\(self.label, privacy: .public)] request handlers registered")
@@ -70,7 +72,7 @@ public actor RuntimeEngineConnectionServer {
                 #log(.info, "[\(label, privacy: .public)] relaying imageNodes (\(imageNodes.count, privacy: .public) nodes)")
                 Task {
                     try? await connection.sendMessage(
-                        name: RuntimeEngine.CommandNames.imageNodes.commandName,
+                        name: RuntimeEngine.CommandName.imageNodes.commandName,
                         request: imageNodes
                     )
                 }
@@ -87,12 +89,12 @@ public actor RuntimeEngineConnectionServer {
                     if case .fullReload = change {
                         let imageList = await self.engine.imageList
                         try? await connection.sendMessage(
-                            name: RuntimeEngine.CommandNames.imageList.commandName,
+                            name: RuntimeEngine.CommandName.imageList.commandName,
                             request: imageList
                         )
                     }
                     try? await connection.sendMessage(
-                        name: RuntimeEngine.CommandNames.dataDidChange.commandName,
+                        name: RuntimeEngine.CommandName.dataDidChange.commandName,
                         request: change
                     )
                 }
@@ -104,7 +106,7 @@ public actor RuntimeEngineConnectionServer {
                 #log(.debug, "[\(label, privacy: .public)] relaying imageDidLoad for \(path, privacy: .public)")
                 Task {
                     try? await connection.sendMessage(
-                        name: RuntimeEngine.CommandNames.imageDidLoad.commandName,
+                        name: RuntimeEngine.CommandName.imageDidLoad.commandName,
                         request: path
                     )
                 }
@@ -122,18 +124,18 @@ public actor RuntimeEngineConnectionServer {
         let imageNodes = engine.imageNodes
         #log(.info, "[\(self.label, privacy: .public)] sending initial data: imageList=\(imageList.count, privacy: .public), imageNodes=\(imageNodes.count, privacy: .public)")
         do {
-            try await connection.sendMessage(name: RuntimeEngine.CommandNames.imageList.commandName, request: imageList)
+            try await connection.sendMessage(name: RuntimeEngine.CommandName.imageList.commandName, request: imageList)
         } catch {
             #log(.error, "[\(self.label, privacy: .public)] failed to send imageList: \(error.localizedDescription, privacy: .public)")
         }
         do {
-            try await connection.sendMessage(name: RuntimeEngine.CommandNames.imageNodes.commandName, request: imageNodes)
+            try await connection.sendMessage(name: RuntimeEngine.CommandName.imageNodes.commandName, request: imageNodes)
         } catch {
             #log(.error, "[\(self.label, privacy: .public)] failed to send imageNodes: \(error.localizedDescription, privacy: .public)")
         }
         do {
             try await connection.sendMessage(
-                name: RuntimeEngine.CommandNames.dataDidChange.commandName,
+                name: RuntimeEngine.CommandName.dataDidChange.commandName,
                 request: RuntimeDataChange.fullReload(isReloadImageNodes: true)
             )
         } catch {

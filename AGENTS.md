@@ -51,6 +51,43 @@ injection has to be tested through `RunScript.sh`**, not through the GUI.
 A build phase that produced both automatically was tried and withdrawn; see
 evolution 0015 for what it cost and why the helper half never actually worked.
 
+**None of the above applies to the jailbroken iOS variant, which embeds the same
+payload the ordinary way.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so
+Xcode has no objection: it carries a plain `PBXTargetDependency` on
+`RuntimeViewerMobileServer` plus an `Embed RuntimeViewerMobileServer Framework`
+copy phase, and building the scheme builds the payload. Nothing is staged, and
+the stale-payload hazard above does not exist there. Three things that are
+specific to it:
+
+- The payload lands in `Frameworks/`, not `Contents/Resources/` — an iOS bundle
+  is flat, so `url(forResource:withExtension:)` would not find it. The variant's
+  `InjectionServiceRegistrar` goes through `Bundle.main.privateFrameworksURL`.
+- `ARCHS[sdk=iphoneos*] = arm64 arm64e` on the payload target, because iOS
+  system processes are arm64e while every third-party app is arm64; one slice
+  reaches half the targets. The condition keeps the simulator and Catalyst
+  slices as they were, and the `Distribution` configuration — the one
+  `BuildRuntimeViewerServerXCFramework.sh` uses — is deliberately left alone, so
+  the published XCFramework is unaffected. Debug also needs
+  `ONLY_ACTIVE_ARCH[sdk=iphoneos*] = NO`, or a build onto a connected device
+  silently drops the arm64 slice.
+- **What gets injected is a staged directory, not a lone Mach-O.** The payload
+  links `@rpath/libswiftCompatibilitySpan.dylib`, a back-deployment shim Xcode
+  embeds beside it; `/usr/lib/swift` is its first run-path entry, and iOS 26.5
+  happens to ship that shim while iOS 27 no longer does. So
+  `RuntimePayloadStaging` copies the app's embedded libraries into a `Frameworks`
+  directory beside the staged payload, which is what the payload's own
+  `@loader_path/Frameworks` entry resolves. macOS never had to deal with this —
+  macOS 27 still ships the shim in `/usr/lib/swift`.
+- **Signing and packaging are not Xcode's job here.** No provisioning profile
+  grants the variant's five entitlements, so the target sets
+  `CODE_SIGNING_ALLOWED = NO` and the product comes out unsigned;
+  `BuildJailbrokenIPAScript.sh` pseudo-signs every Mach-O in it and packages the
+  `.ipa`. A build installed by Xcode carries none of the five and can neither
+  list processes nor inject into one. The signing is done by `vphone-cli sign`
+  or by `ldid`, whichever is installed (`--signer` overrides): the first is a
+  wrapper that writes byte for byte what `ldid -S -M -K -I` writes, so they are
+  interchangeable here, and which one a machine has differs.
+
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace
 # RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; builds
@@ -73,6 +110,24 @@ evolution 0015 for what it cost and why the helper half never actually worked.
 
 # Build RuntimeViewerServer XCFramework (all platforms)
 ./BuildRuntimeViewerServerXCFramework.sh
+
+# Build the jailbroken iOS variant and package it as an installable .ipa, signed
+# with the five entitlements it needs (scheme "RuntimeViewer iOS Jailbroken").
+# Goes through RuntimeViewer-Debug.xcworkspace, NOT RuntimeViewer.xcworkspace:
+# the variant is arm64e and only the Debug and Distribution workspaces set
+# iOSPackagesShouldBuildARM64e, so through the plain workspace every package
+# product comes out arm64-only and the payload fails to link. The script checks
+# for that setting up front rather than letting a cold build discover it.
+# Output: Products/Jailbroken/RuntimeViewerJailbroken.ipa. The script reads the
+# entitlements back off the packaged .ipa and fails when one is missing. Install
+# it with something that honours the entitlements already on the binary — vphoned
+# preserves them, a jailbreak installer grants them; Xcode re-signs and loses all
+# five. Defaults to Debug, the configuration verified on a device.
+./BuildJailbrokenIPAScript.sh
+./BuildJailbrokenIPAScript.sh --configuration Release
+./BuildJailbrokenIPAScript.sh --signer ldid  # vphone-cli | ldid | auto (default)
+./BuildJailbrokenIPAScript.sh --no-build   # re-package the last build
+./BuildJailbrokenIPAScript.sh --dry-run    # print commands without running
 
 # Update the package pins of all three workspaces (RuntimeViewer, -Debug,
 # -Distribution) to the newest versions the manifests allow. Use this instead of
@@ -276,6 +331,14 @@ The project uses three Swift Package Manager packages:
 **RuntimeViewerCore** (`RuntimeViewerCore/`):
 - `RuntimeViewerCore` — Runtime inspection engine using MachOObjCSection (ObjC) and MachOSwiftSection (Swift)
 - `RuntimeViewerCommunication` — XPC/TCP-based IPC layer for cross-process inspection
+- `RuntimeViewerInjection` — process injection as a RuntimeEngine command extension: the
+  `RuntimeInjectionService` protocol, the wire types (`RuntimeProcess`,
+  `RuntimeInjectionAvailability`, `RuntimePayloadRendezvous`), the five injection commands and
+  the engine-side callers. `RuntimeViewerCore` holds none of it — injecting needs MachInjector on
+  iOS and the privileged helper daemon on macOS, while Core also builds for watchOS, tvOS and
+  visionOS. **Every process that serves an engine and links this module must call
+  `RuntimeInjection.install()` once at its entry point**, including the ones that cannot inject;
+  see *Injection commands* below
 - `RuntimeViewerCoreObjC` — Objective-C interop utilities (internal target)
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
@@ -297,6 +360,7 @@ The project uses three Swift Package Manager packages:
 **RuntimeViewerCommandLine** (`RuntimeViewerCommandLine/`) — the `runtime-viewer-cli` tool (macOS 15+ only), built with plain `swift build`; depends on `RuntimeViewerCore` and on the UI-free products of `RuntimeViewerPackages` (`RuntimeViewerEngineManagement`, `RuntimeViewerHelperClient`):
 - `RuntimeViewerCommandLineInterface` — everything but `main.swift`: Codable command/result models, the length-prefixed JSON protocol over a Unix domain socket, `CommandExecutor` + `SourceResolving` (`EngineManagerSourceResolver` serves every source a `RuntimeEngineManager` holds and answers `sources` / `attach` / `detach`; `LocalSourceResolver` is the local-only fallback), the resident CLI host (`CommandLineHostServer`, spawned on demand, idle exit) and its client, `HostTakeover` / `HostRetirement` (the app replacing a standalone host, the client replacing an outdated one), renderers, and the swift-argument-parser commands. The app links this library too: `CommandLineHostController` makes the running app the host
 - `runtime-viewer-cli` — one-line executable entry point
+- Outside the package, `AgentPlugins/runtime-viewer/` is the agent plugin that teaches this tool. A change to the surface its skill describes (subcommands, flags, output, exit statuses, host behaviour) updates that skill in the same commit and bumps `version` in both of its plugin manifests — installed plugins only update when the version changes
 
 ### Application Targets
 
@@ -451,6 +515,46 @@ When adding new features, you **MUST** follow these rules:
 6. **Singletons go through `@Dependency`**：每个项目 singleton 都声明为 `fileprivate static let shared`，并通过 `extension DependencyValues` 中的 `@DependencyEntry` 暴露。调用方统一使用 `@Dependency(\.xxx)`；禁止 `public static let shared`，也禁止在定义文件外调用 `Foo.shared.bar()`。详见 Code Style 下的 **Singletons & Dependency Injection**。
 7. **AppDelegate stays thin**: AppDelegate is a dispatch shell, not a service container. Every non-trivial lifecycle responsibility (appearance, debug menu, update checking, version probes, etc.) lives in its own `@MainActor` controller class under `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via `@Dependency` per rule #6. See **AppDelegate Convention** under Code Style.
 8. **Single-object interface fetches go through the document's interface cache**: fetch one object's interface via `documentState.interfaceCache.interface(for:options:)` with `ViewModel.currentMergedGenerationOptions` as the options — never bare `appDefaults.options` and never `runtimeEngine.interface(...)` directly — so cache keys line up with the content pane and exported text matches what it displays. Bulk consumers (interface export, MCP tools) deliberately bypass the cache and call the engine directly; do not route them through it. See `Documentations/Plans/2026-08-04-navigation-interface-cache.md`.
+9. **A RuntimeEngine command that is not Core's own goes in its own module, not into Core**:
+   declare its short name in `extension RuntimeEngine.CommandName` (keeping Core's namespace
+   prefix, which is the wire contract), declare the `RuntimeEngineCommand` conformers under that
+   module's own namespace, and install them from
+   `RuntimeEngine.addCommandExtension(named:install:)`. Nothing
+   in `RuntimeViewerCore` changes. `RuntimeViewerInjection` is the reference implementation; see
+   *Injection commands* below for the one obligation this puts on every process.
+
+## Injection commands
+
+The five injection commands (`injectionCapability`, `processList`, `applicationIcons`,
+`injectIntoProcess`, `stopKeepingProcessAwake`) live in `RuntimeViewerInjection`, not in
+`RuntimeViewerCore`, and are installed into the engine command table at runtime.
+
+**Every process that serves a `RuntimeEngine` and links `RuntimeViewerInjection` must call
+`RuntimeInjection.install()` exactly once at its entry point, before any engine connects** —
+including the processes that cannot inject anything. The rule has no exceptions to reason about:
+*linked it ⇒ call it*. The nine places that do, today:
+
+| Process | Where |
+|---------|-------|
+| macOS app | `AppDelegate.main()` |
+| Local-runtime XPC service | `RuntimeViewerLocalRuntimeService/main.swift` |
+| Mac Catalyst helper | `AppKitPluginImpl.launch()` |
+| `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
+| iOS / visionOS / jailbroken iOS apps | `InjectionServiceRegistrar.registerIfAvailable()` |
+| Injected payload (`RuntimeViewerServer` / `RuntimeViewerMobileServer`) | `RuntimeViewerServer.main()` |
+
+**Forgetting the call is not a compile error.** Handlers are installed as a connection is set up,
+so a process that never registers simply has no handler for the capability query — and a dispatch
+that fails is indistinguishable, to a host, from a peer built before these commands existed. The
+symptom is a device running the correct variant being reported as unanswerable, with the injection
+entry point silently disabled. `RuntimeEngine.addCommandExtension` logs an `.error` for a
+registration that arrives after the first connection, and the registrar logs a `.fault` for a
+duplicate wire name; those two log lines are the only trail this failure leaves.
+
+`RuntimeInjection.install(service:)` takes this machine's `RuntimeInjectionService` when it has
+one — only the jailbroken iOS variant does; macOS injects through the privileged helper daemon
+instead. Passing `nil` never clears a service already recorded, so the order of two calls in one
+process does not matter.
 
 ## SourceEditor Module
 
@@ -966,7 +1070,7 @@ Full write-up, including the frame table that pinned it down: `Documentations/Re
 
 **A selection that stays grey in a key window, and a context menu that will not open, is not flicker.** It means focus is parked on a plain container *above* the list. While an ancestor container is first responder, a right-click on a cell's text does not open the table's menu, and on macOS 27 a left click no longer moves focus into the table either: macOS 27 handles table clicks with gesture recognizers, whatever SDK the app links against, and they take focus only for Sidecar touches. macOS 26 hides all of it, because there `-[NSTableView mouseDown:]` takes focus on every click — so reproduce on macOS 27, and do not read anything into re-stamping the binary's SDK. AppKitPlus's navigation controller hands the first responder to the page's `preferredFirstResponder` at the end of every push, pop and `set`, so a page that holds a list overrides it to return the list, only while it is in the window — `TabViewController` forwards it to the tab on screen. Reproduce this with a real navigation, not by making the outline first responder first: that skips the very state that triggers it. Write-up: `Documentations/ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md`.
 
-**`StatefulOutlineView` overrides `mouseDown(with:)` on purpose — keep it.** The body is only `super`; the override exists so that AppKit installs none of its table gesture recognizers and the outline stays on macOS 26's tracking loop. On macOS 27 those recognizers handle every table's mouse input, whatever SDK the app links against, and their drag handler moves the selection with the pointer only when `allowsMultipleSelection` is on: in the single-selection sidebar lists, pressing a row and dragging left the selection where the drag began while the list autoscrolled under the pointer. The tracking loop also takes focus on every click, as on macOS 26, so the left-click half of the paragraph above no longer applies to these two lists; keep the `preferredFirstResponder` handover anyway, for keyboard focus straight after a navigation and for the right-click case. AppKit logs an error for each such outline, "Gesture recognizer support has been disabled because NSTableView subclass … overrides either mouseDown: or mouseDragged:" — expected. `StatefulOutlineViewTrackingLoopTests` fails if the recognizers come back. Write-up: `Documentations/ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md`.
+**`StatefulOutlineView` overrides `mouseDown(with:)` on purpose — keep it.** The body is only `super`; the override exists so that AppKit installs none of its table gesture recognizers and the outline stays on macOS 26's tracking loop. On macOS 27 those recognizers handle every table's mouse input, whatever SDK the app links against, and their drag handler moves the selection with the pointer only when `allowsMultipleSelection` is on: in the single-selection sidebar lists, pressing a row and dragging left the selection where the drag began while the list autoscrolled under the pointer. The tracking loop also takes focus on every click, as on macOS 26, so the left-click half of the paragraph above no longer applies to these two lists; keep the `preferredFirstResponder` handover anyway, for keyboard focus straight after a navigation and for the right-click case. AppKit logs an error for each such outline, "Gesture recognizer support has been disabled because NSTableView subclass … overrides either mouseDown: or mouseDragged:" — expected. Nothing tests this: the recognizers are private and macOS 27.2 renamed them, so a test over their names reports Apple's renames rather than a regression here. Write-up: `Documentations/ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md`.
 
 **`StatefulOutlineView` turns AppKit's row height estimation off in its `delegate` setter — keep it there.** A source list outline with group rows has rows of different heights, so AppKit places the rows it has not measured at an estimated position, and `-[NSOutlineView setDelegate:]` turns that estimation back on at every change of delegate — including the nil-then-proxy resets RxCocoa's delegate proxy performs on its own. While it is on, a reload (every filter keystroke) or an expansion after a jump far down the object list leaves part of the visible rows at the old estimate, and the next scroll draws rows over them. The switch is UIFoundation's `box.estimatesRowHeights` (`AppleInternal` trait), and the setter is the one safe place for it: switching discards the row geometry without reloading or moving the row views already on screen, so switching a list that shows estimated rows misplaces them until the next `reloadData()`. Do not move it to `setupBindings` or anywhere after rows are shown. `StatefulOutlineViewRowGeometryTests` fails if the estimation comes back; its expansion cases need a fresh list per position, because a sweep over one list measures the rows that would go wrong. Write-up: `Documentations/ResolvedIssues/2026-09-27-sidebar-rows-drawn-over-each-other.md`.
 
@@ -1115,7 +1219,7 @@ extension MyViewController {
 - **Publish once per change.** Build the new struct and assign it once, and only when it differs (`Equatable`). The macro generates a plain getter and setter, so `appearance.title = …` field by field sends one event per statement.
 - **The cell binds `$appearance` once** and applies it in one place. When the appearance changes many times a second (a row showing progress), set each part only when it differs, as `ReportCellView` does.
 - **State nothing displays stays a plain property.** A flag only the filter reads (`ReportCellViewModel.isInProgress`) has no observer to serve.
-- **A cell ViewModel subscribes to nothing in `init`.** A row that observes shared state itself — a selection set, a progress stream — builds its relay and its subscription for every row, on screen or not. The parent ViewModel keeps its rows and pushes the change into them through an `update(…)`, the way `BatchExportingImageSelectionViewModel` pushes the selection.
+- **A cell ViewModel subscribes to nothing in `init`.** A row that observes shared state itself — a selection set, a progress stream — builds its relay and its subscription for every row, on screen or not. The parent ViewModel keeps its rows and pushes the change into them through an `update(…)`, the way the batch export picker does: `BatchExportingImageSelectionViewModel` hands every new selection to `BatchExportingImageTree.updateSelection(_:)`, which recomputes the checkbox of each row shown and assigns a row's one `@RxObserved`, `selection`, only when it changed.
 
 ```swift
 public final class CandidateCellViewModel: NSObject, @unchecked Sendable {

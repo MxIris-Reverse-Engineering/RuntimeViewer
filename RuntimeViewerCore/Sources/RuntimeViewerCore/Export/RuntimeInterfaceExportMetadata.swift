@@ -167,12 +167,12 @@ extension RuntimeInterfaceExportMetadata.DumpOptionsInfo {
             option(
                 "Strip protocol conformance",
                 options.stripProtocolConformance,
-                "Omits protocol conformance lists from generated Objective-C declarations."
+                "Omits the properties and methods the adopted protocols declare, keeping the protocol list, as a hand-written header does."
             ),
             option(
                 "Strip overrides",
                 options.stripOverrides,
-                "Omits method override markers from generated Objective-C declarations."
+                "Omits methods and properties that merely override a superclass member."
             ),
             option(
                 "Strip synthesized ivars",

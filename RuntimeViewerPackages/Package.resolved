@@ -1,13 +1,13 @@
 {
-  "originHash" : "4e48af1cf004844c6908f89c0bcd329c24ef8312ef408fc5920d04e1f7378761",
+  "originHash" : "638fc46de3cd6f28388080b1b5b8e8864dd331e864e244362414766f940f94d5",
   "pins" : [
     {
       "identity" : "appkitplus-release",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "4a9fbcacda2790ed8235e762bc09d0ea49b35e0e",
-        "version" : "0.7.0"
+        "revision" : "4ef42b953ca8cb3518b004dcdcb39352a16a07cf",
+        "version" : "0.8.0"
       }
     },
     {
@@ -178,7 +178,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "feature/runtime-viewer/find-navigator",
-        "revision" : "beae202dd484489cd12fc52af3696df8c8f80453"
+        "revision" : "0269828284dbd55933e34b4289c086dbae8f3e65"
       }
     },
     {

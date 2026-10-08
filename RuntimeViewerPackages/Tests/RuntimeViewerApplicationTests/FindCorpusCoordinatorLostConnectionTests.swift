@@ -48,7 +48,7 @@ struct FindCorpusCoordinatorLostConnectionTests {
             try await host.start()
             // SwiftyXPC copies a listener's handlers onto each connection it
             // accepts, so the replacement has to precede the activation.
-            listener.setMessageHandler(name: RuntimeEngine.CommandNames.buildInterfaceCorpus.commandName) { (_: IgnoredRequest) async throws -> Bool in
+            listener.setMessageHandler(name: RuntimeEngine.CommandName.buildInterfaceCorpus.commandName) { (_: IgnoredRequest) async throws -> Bool in
                 try await holdBuild()
             }
             host.activate()

@@ -15,7 +15,7 @@ extension RuntimeEngine {
     /// no one else is waiting for it. Over a connection the withdrawal
     /// reaches the serving process as a `cancelRequest`, and the caller
     /// returns without waiting for it (see
-    /// `RuntimeEngineProgressRequest.cancelsAcrossConnections`).
+    /// `RuntimeEngineProgressCommand.cancelsAcrossConnections`).
     ///
     /// `isPrioritized` puts the image at the front of the build queue — an
     /// image the user just opened, say. The image being built at the moment
@@ -31,7 +31,7 @@ extension RuntimeEngine {
         isPrioritized: Bool = false,
         onProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void = { _ in }
     ) async throws -> RuntimeInterfaceCorpusBuildSummary {
-        let outcome = try await dispatch(BuildInterfaceCorpusRequest(imagePath: imagePath, transformer: transformer, isPrioritized: isPrioritized), onProgress: onProgress)
+        let outcome = try await dispatch(BuildInterfaceCorpusCommand(imagePath: imagePath, transformer: transformer, isPrioritized: isPrioritized), onProgress: onProgress)
         switch outcome {
         case .built(let summary):
             return summary
@@ -47,7 +47,7 @@ extension RuntimeEngine {
     /// asked for the image before. Does nothing when the image is not queued:
     /// built, being built, or never asked for.
     public func prioritizeInterfaceCorpus(for imagePath: String) async throws {
-        _ = try await dispatch(PrioritizeInterfaceCorpusRequest(imagePath: imagePath))
+        _ = try await dispatch(PrioritizeInterfaceCorpusCommand(imagePath: imagePath))
     }
 
     /// Text search over every built corpus. Matches arrive through
@@ -59,7 +59,7 @@ extension RuntimeEngine {
         _ query: RuntimeInterfaceSearchQuery,
         onProgress: @escaping @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
-        try await dispatch(SearchInterfacesRequest(query: query), onProgress: onProgress)
+        try await dispatch(SearchInterfacesCommand(query: query), onProgress: onProgress)
     }
 
     /// Member-name search over every built corpus, same delivery and
@@ -68,7 +68,7 @@ extension RuntimeEngine {
         _ query: RuntimeMemberSearchQuery,
         onProgress: @escaping @Sendable ([RuntimeMemberMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
-        try await dispatch(SearchMembersRequest(query: query), onProgress: onProgress)
+        try await dispatch(SearchMembersCommand(query: query), onProgress: onProgress)
     }
 
     /// Ancestor, descendant or conformer trees for every indexed type whose
@@ -78,31 +78,31 @@ extension RuntimeEngine {
     /// task returns it at once and cancels the task answering the query in
     /// the serving process.
     public func typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
-        try await dispatch(TypeRelationshipsRequest(query: query))
+        try await dispatch(TypeRelationshipsCommand(query: query))
     }
 
     /// Where every image's corpus stands, plus the resident budget.
     public func interfaceCorpusCoverage() async throws -> RuntimeInterfaceCorpusCoverage {
-        try await dispatch(InterfaceCorpusCoverageRequest())
+        try await dispatch(InterfaceCorpusCoverageCommand())
     }
 
     /// Every image with both sections built — the images a corpus can be
     /// built for. The same predicate as `isImageIndexed(path:)`, answered for
     /// all images at once.
     public func indexedImagePathList() async throws -> [String] {
-        try await dispatch(IndexedImagePathsRequest())
+        try await dispatch(IndexedImagePathsCommand())
     }
 
     /// Drops one image's corpus, or every corpus when `imagePath` is `nil`.
     /// A build under way for it is cancelled.
     public func evictInterfaceCorpus(for imagePath: String?) async throws {
-        _ = try await dispatch(EvictInterfaceCorpusRequest(imagePath: imagePath))
+        _ = try await dispatch(EvictInterfaceCorpusCommand(imagePath: imagePath))
     }
 
     /// Sets the resident budget of the corpus store; corpora least recently
     /// searched are evicted until the total fits.
     public func setInterfaceCorpusResidentByteLimit(_ byteLimit: Int) async throws {
-        _ = try await dispatch(SetInterfaceCorpusResidentByteLimitRequest(byteLimit: byteLimit))
+        _ = try await dispatch(SetInterfaceCorpusResidentByteLimitCommand(byteLimit: byteLimit))
     }
 }
 
@@ -242,96 +242,96 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
     }
 }
 
-// MARK: - Requests
+// MARK: - Commands
 
 extension RuntimeEngine {
     /// Answers with an outcome rather than a bare summary: the command is as
     /// new as the corpus, so its reply could take the shape a cancellation
     /// needs to cross a connection.
-    struct BuildInterfaceCorpusRequest: RuntimeEngineProgressRequest {
+    struct BuildInterfaceCorpusCommand: RuntimeEngineProgressCommand {
         typealias Response = RuntimeInterfaceCorpusBuildOutcome
         typealias Progress = RuntimeInterfaceCorpusBuildProgress
         let imagePath: String
         let transformer: Transformer.Configuration
         let isPrioritized: Bool
-        static var commandName: String { CommandNames.buildInterfaceCorpus.commandName }
+        static var commandName: String { CommandName.buildInterfaceCorpus.commandName }
         static var cancelsAcrossConnections: Bool { true }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void) async throws -> RuntimeInterfaceCorpusBuildOutcome {
             try await engine._buildInterfaceCorpus(for: imagePath, transformer: transformer, isPrioritized: isPrioritized, reportProgress: reportProgress)
         }
     }
 
-    struct PrioritizeInterfaceCorpusRequest: RuntimeEngineRequest {
+    struct PrioritizeInterfaceCorpusCommand: RuntimeEngineCommand {
         let imagePath: String
-        static var commandName: String { CommandNames.prioritizeInterfaceCorpus.commandName }
+        static var commandName: String { CommandName.prioritizeInterfaceCorpus.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             await engine._prioritizeInterfaceCorpus(for: imagePath)
             return RuntimeEngineEmpty()
         }
     }
 
-    struct SearchInterfacesRequest: RuntimeEngineProgressRequest {
+    struct SearchInterfacesCommand: RuntimeEngineProgressCommand {
         typealias Response = RuntimeInterfaceSearchSummary
         typealias Progress = [RuntimeInterfaceSearchMatch]
         let query: RuntimeInterfaceSearchQuery
-        static var commandName: String { CommandNames.searchInterfaces.commandName }
+        static var commandName: String { CommandName.searchInterfaces.commandName }
         static var cancelsAcrossConnections: Bool { true }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
             try await engine._searchInterfaces(query, reportProgress: reportProgress)
         }
     }
 
-    struct SearchMembersRequest: RuntimeEngineProgressRequest {
+    struct SearchMembersCommand: RuntimeEngineProgressCommand {
         typealias Response = RuntimeInterfaceSearchSummary
         typealias Progress = [RuntimeMemberMatch]
         let query: RuntimeMemberSearchQuery
-        static var commandName: String { CommandNames.searchMembers.commandName }
+        static var commandName: String { CommandName.searchMembers.commandName }
         static var cancelsAcrossConnections: Bool { true }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable ([RuntimeMemberMatch]) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
             try await engine._searchMembers(query, reportProgress: reportProgress)
         }
     }
 
-    /// A progress request that reports no progress: only so its caller can
+    /// A progress command that reports no progress: only so its caller can
     /// withdraw it from the serving process. The command is as new as
     /// `cancelRequest`, so changing its shape cost no peer anything.
-    struct TypeRelationshipsRequest: RuntimeEngineProgressRequest {
+    struct TypeRelationshipsCommand: RuntimeEngineProgressCommand {
         typealias Response = [RuntimeRelationshipTree]
         typealias Progress = RuntimeEngineEmpty
         let query: RuntimeTypeRelationshipsQuery
-        static var commandName: String { CommandNames.typeRelationships.commandName }
+        static var commandName: String { CommandName.typeRelationships.commandName }
         static var cancelsAcrossConnections: Bool { true }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeEngineEmpty) async -> Void) async throws -> [RuntimeRelationshipTree] {
             try await engine._typeRelationships(query)
         }
     }
 
-    struct IndexedImagePathsRequest: RuntimeEngineRequest {
-        static var commandName: String { CommandNames.indexedImagePaths.commandName }
+    struct IndexedImagePathsCommand: RuntimeEngineCommand {
+        static var commandName: String { CommandName.indexedImagePaths.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [String] {
             await engine.indexedImagePaths().sorted()
         }
     }
 
-    struct InterfaceCorpusCoverageRequest: RuntimeEngineRequest {
-        static var commandName: String { CommandNames.interfaceCorpusCoverage.commandName }
+    struct InterfaceCorpusCoverageCommand: RuntimeEngineCommand {
+        static var commandName: String { CommandName.interfaceCorpusCoverage.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeInterfaceCorpusCoverage {
             await engine._interfaceCorpusCoverage()
         }
     }
 
-    struct EvictInterfaceCorpusRequest: RuntimeEngineRequest {
+    struct EvictInterfaceCorpusCommand: RuntimeEngineCommand {
         let imagePath: String?
-        static var commandName: String { CommandNames.evictInterfaceCorpus.commandName }
+        static var commandName: String { CommandName.evictInterfaceCorpus.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             await engine._evictInterfaceCorpus(for: imagePath)
             return RuntimeEngineEmpty()
         }
     }
 
-    struct SetInterfaceCorpusResidentByteLimitRequest: RuntimeEngineRequest {
+    struct SetInterfaceCorpusResidentByteLimitCommand: RuntimeEngineCommand {
         let byteLimit: Int
-        static var commandName: String { CommandNames.setInterfaceCorpusResidentByteLimit.commandName }
+        static var commandName: String { CommandName.setInterfaceCorpusResidentByteLimit.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             await engine._setInterfaceCorpusResidentByteLimit(byteLimit)
             return RuntimeEngineEmpty()

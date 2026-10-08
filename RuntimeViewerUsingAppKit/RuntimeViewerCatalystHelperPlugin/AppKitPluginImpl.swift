@@ -4,6 +4,7 @@ import OSLog
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerCatalystExtensions
+import RuntimeViewerInjection
 
 extension NSObject {
     @objc func rvch_makeKeyAndOrderFront(_ sender: Any?) {}
@@ -48,6 +49,15 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
     }
 
     func launch() {
+        // Before the engine is built, because the injection commands are
+        // installed as its connection is set up. The helper cannot inject
+        // anything — the Mac injects through the privileged helper daemon, and
+        // the processes a Catalyst engine could attach to are this Mac's, which
+        // the app enumerates itself — but it still has to carry the capability
+        // query, or the app cannot tell this helper apart from one built before
+        // these commands existed.
+        RuntimeInjection.install()
+
         let runtimeEngine = RuntimeEngine(source: .macCatalystServer)
         self.runtimeEngine = runtimeEngine
         observeEngineState(of: runtimeEngine)

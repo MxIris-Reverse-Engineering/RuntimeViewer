@@ -48,72 +48,6 @@ extension RuntimeEngine {
 
 @Loggable(.private)
 public actor RuntimeEngine {
-    enum CommandNames: String, CaseIterable {
-        case imageList
-        case imageNodes
-        case loadImage
-        /// `loadImage` as a `RuntimeEngineProgressRequest`: same work, but the
-        /// section factories' indexing progress is pushed back to the caller.
-        /// A separate command rather than a widening of `loadImage`, because
-        /// a progress request ships a different wire envelope.
-        case loadImageWithProgress
-        case isImageLoaded
-        case isImageIndexed
-        case mainExecutablePath
-        case loadImageForBackgroundIndexing
-        case canOpenImage
-        case rpathsForImage
-        case dependenciesForImage
-        case runtimeObjectHierarchy
-        case runtimeRelationshipsForObject
-        case runtimeCounterpartForObject
-        case runtimeObjectInfo
-        case imageNameOfClassName
-        case observeRuntime
-        case runtimeInterfaceExportModuleInfo
-        case runtimeInterfaceForRuntimeObjectInImageWithOptions
-        case runtimeObjectsOfKindInImage
-        case runtimeObjectsInImage
-        case imageDidLoad
-        case memberAddresses
-        case engineList
-        case engineListChanged
-        /// Shared side channel for `RuntimeEngineProgressRequest` pushes.
-        /// Carries `RuntimeEngineProgressPush` frames routed by token, so a
-        /// single command name serves every progress-bearing request type.
-        case progressEvent
-        /// Withdraws one request the peer is serving, named by the
-        /// `requestIdentifier` its envelope carried. Expects no reply, and is
-        /// sent only for request types that opt in through
-        /// `RuntimeEngineProgressRequest.cancelsAcrossConnections`.
-        case cancelRequest
-        case specializationRequest
-        case specializationRequestForCandidate
-        case runtimePreflight
-        case specialize
-        case dataDidChange
-        /// `reloadData(isReloadImageNodes:)` forwarded to the process that
-        /// owns the images, so a client engine never reads its own dyld state.
-        case reloadData
-        /// The Find navigator's requests; see `RuntimeEngine+Search.swift`.
-        case buildInterfaceCorpus
-        case prioritizeInterfaceCorpus
-        case searchInterfaces
-        case searchMembers
-        case typeRelationships
-        case interfaceCorpusCoverage
-        case indexedImagePaths
-        case evictInterfaceCorpus
-        case setInterfaceCorpusResidentByteLimit
-        /// The `DYLD_ROOT_PATH` of the process that owns the peer's images;
-        /// see `RuntimeEngine+ImagePathCanonicalization.swift`.
-        case dyldRootPath
-
-        var commandName: String {
-            "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
-        }
-    }
-
     /// This Mac's runtime. Where its work happens is the process's own
     /// business: a process whose bundle embeds the local-runtime XPC
     /// service — the app — connects to it and forwards everything, so it
@@ -310,6 +244,21 @@ public actor RuntimeEngine {
     /// The connection to the sender or receiver, established by `connect()`.
     private var connection: (any RuntimeConnection)?
 
+    /// This process's own address on the route to this engine's peer, as the
+    /// peer would have to dial it — `nil` for the transports that cannot say,
+    /// which is all of them but a live network connection.
+    ///
+    /// Read, not stored: the path can move under a connection, and a value
+    /// captured at connect time would outlive the interface it names.
+    ///
+    /// One caller: injecting into a process on this engine's machine has to tell
+    /// the payload where to report, and this connection is what knows. See
+    /// ``RuntimePayloadRendezvous``.
+    public var localAddressSeenByPeer: RuntimeLocalAddressReachability {
+        connection?.localAddressSeenByPeer
+            ?? .unknown(reason: "this engine has no connection")
+    }
+
     /// `connect(credential:)` was given a credential for the `.local`
     /// source: this engine's work happens in another process, and
     /// `connection` leads there.
@@ -501,8 +450,8 @@ public actor RuntimeEngine {
                 let askedAt = Date()
                 do {
                     let rootPath: String? = try await connection.sendMessage(
-                        name: DyldRootPathRequest.commandName,
-                        request: DyldRootPathRequest(),
+                        name: DyldRootPathCommand.commandName,
+                        request: DyldRootPathCommand(),
                         timeout: Self.servingDyldRootPathTimeout
                     )
                     guard !Task.isCancelled else { return }
@@ -615,7 +564,7 @@ public actor RuntimeEngine {
         #log(.debug, "Client message handlers setup complete")
     }
 
-    private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
+    private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandName, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
         guard let connection else {
             #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
@@ -625,7 +574,7 @@ public actor RuntimeEngine {
         }
     }
 
-    private func setMessageHandlerBinding<Object: AnyObject, Request: Codable, Response: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Response)) {
+    private func setMessageHandlerBinding<Object: AnyObject, Request: Codable, Response: Codable>(forName name: CommandName, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Response)) {
         guard let connection else {
             #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
@@ -636,7 +585,7 @@ public actor RuntimeEngine {
         }
     }
 
-    private func setMessageHandlerBinding<Response: Codable>(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine, Response) async throws -> Void) {
+    private func setMessageHandlerBinding<Response: Codable>(forName name: CommandName, perform: @escaping (isolated RuntimeEngine, Response) async throws -> Void) {
         guard let connection else {
             #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
@@ -647,7 +596,7 @@ public actor RuntimeEngine {
         }
     }
 
-    private func setMessageHandlerBinding(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine) async throws -> Void) {
+    private func setMessageHandlerBinding(forName name: CommandName, perform: @escaping (isolated RuntimeEngine) async throws -> Void) {
         guard let connection else {
             #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
@@ -660,7 +609,7 @@ public actor RuntimeEngine {
 
     /// Overload for commands with no request body but a response.
     private func setMessageHandlerBinding<Response: Codable>(
-        forName name: CommandNames,
+        forName name: CommandName,
         respond: @escaping (isolated RuntimeEngine) async throws -> Response,
     ) {
         guard let connection else {
@@ -685,7 +634,7 @@ public actor RuntimeEngine {
     public func reloadData(isReloadImageNodes: Bool) async {
         if forwardsRequests {
             do {
-                _ = try await dispatch(ReloadDataRequest(isReloadImageNodes: isReloadImageNodes))
+                _ = try await dispatch(ReloadDataCommand(isReloadImageNodes: isReloadImageNodes))
             } catch {
                 #log(.error, "Forwarded reloadData failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -963,16 +912,21 @@ extension RuntimeEngine {
 
     /// Dispatch the request against this engine. On a client engine the call
     /// is serialized and forwarded to the connected server; otherwise the
-    /// local `RuntimeEngineRequest.perform(on:)` implementation runs.
+    /// local `RuntimeEngineCommand.perform(on:)` implementation runs.
     ///
-    /// Lives in this file rather than `RuntimeEngineRequest.swift` so it can read
+    /// Lives in this file rather than `RuntimeEngineCommand.swift` so it can read
     /// the file-private `connection` directly without widening visibility.
-    func dispatch<R: RuntimeEngineRequest>(_ request: R) async throws -> R.Response {
+    ///
+    /// `public` because a command extension in another module has to be able to
+    /// *send* the commands it declares, not only serve them — a module that
+    /// could register a handler but not dispatch could only ever be half of a
+    /// feature. See ``addCommandExtension(named:install:)``.
+    public func dispatch<Command: RuntimeEngineCommand>(_ command: Command) async throws -> Command.Response {
         if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
-            return try await connection.sendMessage(name: R.commandName, request: request)
+            return try await connection.sendMessage(name: Command.commandName, request: command)
         }
-        return try await request.perform(on: self)
+        return try await command.perform(on: self)
     }
 
     /// Progress-request overload of `dispatch(_:)` with no progress listener.
@@ -980,9 +934,9 @@ extension RuntimeEngine {
     /// always ship the `RuntimeEngineProgressEnvelope` (here with a `nil`
     /// token) because the peer's handler decodes the envelope, not the bare
     /// request. Being more constrained than the base overload, Swift selects
-    /// this one automatically for any `RuntimeEngineProgressRequest` conformer.
-    func dispatch<R: RuntimeEngineProgressRequest>(_ request: R) async throws -> R.Response {
-        try await dispatch(request, onProgress: nil)
+    /// this one automatically for any `RuntimeEngineProgressCommand` conformer.
+    public func dispatch<Command: RuntimeEngineProgressCommand>(_ command: Command) async throws -> Command.Response {
+        try await dispatch(command, onProgress: nil)
     }
 
     /// Dispatch a progress-reporting request.
@@ -994,35 +948,35 @@ extension RuntimeEngine {
     /// payloads to `onProgress` until the response resolves. Locally the
     /// request's `perform(on:reportProgress:)` runs with `onProgress` wired
     /// straight through. Passing `nil` skips all progress machinery on both
-    /// sides. A request type that cancels across connections is forwarded by
+    /// sides. A command type that cancels across connections is forwarded by
     /// `forwardWithdrawably(_:onProgress:over:)` instead.
-    func dispatch<ProgressRequest: RuntimeEngineProgressRequest>(
-        _ request: ProgressRequest,
-        onProgress: (@Sendable (ProgressRequest.Progress) async -> Void)?
-    ) async throws -> ProgressRequest.Response {
+    public func dispatch<Command: RuntimeEngineProgressCommand>(
+        _ command: Command,
+        onProgress: (@Sendable (Command.Progress) async -> Void)?
+    ) async throws -> Command.Response {
         if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
-            if ProgressRequest.cancelsAcrossConnections {
-                return try await forwardWithdrawably(request, onProgress: onProgress, over: connection)
+            if Command.cancelsAcrossConnections {
+                return try await forwardWithdrawably(command, onProgress: onProgress, over: connection)
             }
             guard let onProgress else {
                 return try await connection.sendMessage(
-                    name: ProgressRequest.commandName,
-                    request: RuntimeEngineProgressEnvelope(progressToken: nil, request: request, requestIdentifier: nil)
+                    name: Command.commandName,
+                    request: RuntimeEngineProgressEnvelope(progressToken: nil, request: command, requestIdentifier: nil)
                 )
             }
             let token = UUID().uuidString
             progressRoutes[token] = { payload in
-                guard let progress = try? JSONDecoder().decode(ProgressRequest.Progress.self, from: payload) else { return }
+                guard let progress = try? JSONDecoder().decode(Command.Progress.self, from: payload) else { return }
                 await onProgress(progress)
             }
             defer { progressRoutes.removeValue(forKey: token) }
             return try await connection.sendMessage(
-                name: ProgressRequest.commandName,
-                request: RuntimeEngineProgressEnvelope(progressToken: token, request: request, requestIdentifier: nil)
+                name: Command.commandName,
+                request: RuntimeEngineProgressEnvelope(progressToken: token, request: command, requestIdentifier: nil)
             )
         }
-        return try await request.perform(on: self, reportProgress: onProgress ?? { _ in })
+        return try await command.perform(on: self, reportProgress: onProgress ?? { _ in })
     }
 
     /// Forwards a request its caller can withdraw from the serving peer.
@@ -1035,14 +989,14 @@ extension RuntimeEngine {
     /// forwarded request upstream. Whatever failure comes back to a caller
     /// that has been cancelled is reported as that cancellation: the peer's
     /// own `CancellationError` crosses the connection as a description only.
-    private func forwardWithdrawably<ProgressRequest: RuntimeEngineProgressRequest>(
-        _ request: ProgressRequest,
-        onProgress: (@Sendable (ProgressRequest.Progress) async -> Void)?,
+    private func forwardWithdrawably<Command: RuntimeEngineProgressCommand>(
+        _ command: Command,
+        onProgress: (@Sendable (Command.Progress) async -> Void)?,
         over connection: any RuntimeConnection
-    ) async throws -> ProgressRequest.Response {
+    ) async throws -> Command.Response {
         try Task.checkCancellation()
         let requestIdentifier = UUID().uuidString
-        let forwardedRequest = RuntimeEngineForwardedRequest<ProgressRequest.Response>()
+        let forwardedRequest = RuntimeEngineForwardedRequest<Command.Response>()
         var progressToken: String?
         if let onProgress {
             let token = UUID().uuidString
@@ -1050,7 +1004,7 @@ extension RuntimeEngine {
                 // A push that lands after the caller gave up belongs to work
                 // nobody waits for any more, whatever the peer's version.
                 guard !forwardedRequest.isCancelled,
-                      let progress = try? JSONDecoder().decode(ProgressRequest.Progress.self, from: payload)
+                      let progress = try? JSONDecoder().decode(Command.Progress.self, from: payload)
                 else { return }
                 await onProgress(progress)
             }
@@ -1061,17 +1015,17 @@ extension RuntimeEngine {
                 progressRoutes.removeValue(forKey: progressToken)
             }
         }
-        let envelope = RuntimeEngineProgressEnvelope(progressToken: progressToken, request: request, requestIdentifier: requestIdentifier)
+        let envelope = RuntimeEngineProgressEnvelope(progressToken: progressToken, request: command, requestIdentifier: requestIdentifier)
         do {
             return try await withTaskCancellationHandler {
                 try await forwardedRequest.response {
-                    try await connection.sendMessage(name: ProgressRequest.commandName, request: envelope)
+                    try await connection.sendMessage(name: Command.commandName, request: envelope)
                 }
             } onCancel: {
                 guard forwardedRequest.cancel() else { return }
                 Task {
                     try? await connection.sendMessage(
-                        name: CommandNames.cancelRequest.commandName,
+                        name: CommandName.cancelRequest.commandName,
                         request: RuntimeEngineRequestCancellation(requestIdentifier: requestIdentifier)
                     )
                 }
@@ -1092,7 +1046,7 @@ extension RuntimeEngine {
     }
 
     public func isImageLoaded(path: String) async throws -> Bool {
-        try await dispatch(IsImageLoadedRequest(path: path))
+        try await dispatch(IsImageLoadedCommand(path: path))
     }
 
     func _isImageLoaded(path: String) -> Bool {
@@ -1101,7 +1055,7 @@ extension RuntimeEngine {
 
     public func loadImage(at path: String) async throws {
         try await performingForegroundLoad {
-            _ = try await dispatch(LoadImageRequest(path: path))
+            _ = try await dispatch(LoadImageCommand(path: path))
         }
         imageDidIndexSubject.send(path)
     }
@@ -1119,7 +1073,7 @@ extension RuntimeEngine {
         onProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void
     ) async throws {
         try await performingForegroundLoad {
-            _ = try await dispatch(LoadImageWithProgressRequest(path: path), onProgress: onProgress)
+            _ = try await dispatch(LoadImageWithProgressCommand(path: path), onProgress: onProgress)
         }
         imageDidIndexSubject.send(path)
     }
@@ -1146,7 +1100,7 @@ extension RuntimeEngine {
         sendRemoteImageDidLoadIfNeeded(path: canonical)
     }
 
-    /// Local arm of `LoadImageWithProgressRequest`'s progress-bearing
+    /// Local arm of `LoadImageWithProgressCommand`'s progress-bearing
     /// `perform`. See `_objects(in:reportProgress:)` for the bridging.
     func _loadImage(at path: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws {
         try await pumpingIndexingProgress(to: reportProgress) { continuation in
@@ -1155,11 +1109,11 @@ extension RuntimeEngine {
     }
 
     public func imageName(ofObjectName name: RuntimeObject) async throws -> String? {
-        try await dispatch(ImageNameOfObjectRequest(object: name))
+        try await dispatch(ImageNameOfObjectCommand(object: name))
     }
 
     public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        try await dispatch(InterfaceRequest(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
+        try await dispatch(InterfaceCommand(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
     }
 
     public func objects(in image: String) async throws -> [RuntimeObject] {
@@ -1191,7 +1145,7 @@ extension RuntimeEngine {
         onProgress: (@Sendable (RuntimeObjectsLoadingProgress) async -> Void)?
     ) async throws -> [RuntimeObject] {
         let objects = try await performingForegroundLoad {
-            try await dispatch(ObjectsInImageRequest(image: image), onProgress: onProgress)
+            try await dispatch(ObjectsInImageCommand(image: image), onProgress: onProgress)
         }
         imageDidIndexSubject.send(image)
         return objects
@@ -1218,7 +1172,7 @@ extension RuntimeEngine {
         }
     }
 
-    /// Local arm of `ObjectsInImageRequest`'s progress-bearing `perform`.
+    /// Local arm of `ObjectsInImageCommand`'s progress-bearing `perform`.
     func _objects(in image: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
         try await pumpingIndexingProgress(to: reportProgress) { continuation in
             try await _localObjectsWithProgress(in: image, continuation: continuation)
@@ -1227,7 +1181,7 @@ extension RuntimeEngine {
 
     /// Bridges the continuation-based indexing internals (section factories
     /// take a `LoadingEventContinuation`) to the closure-based
-    /// `RuntimeEngineProgressRequest` reporting surface. The pump task awaits
+    /// `RuntimeEngineProgressCommand` reporting surface. The pump task awaits
     /// `reportProgress` per event, preserving order; it is drained before
     /// returning so no progress event can trail the response on the wire.
     private func pumpingIndexingProgress<Result>(
@@ -1272,7 +1226,7 @@ extension RuntimeEngine {
     }
 
     public func hierarchy(for object: RuntimeObject) async throws -> [String] {
-        try await dispatch(HierarchyRequest(object: object))
+        try await dispatch(HierarchyCommand(object: object))
     }
 
     func _hierarchy(for object: RuntimeObject) async throws -> [String] {
@@ -1295,7 +1249,7 @@ extension RuntimeEngine {
     /// factories; this method keeps only the thin local/remote dispatch.
     /// The remote arm forwards the query to the connected server.
     public func relationships(for object: RuntimeObject) async throws -> RuntimeRelationships {
-        try await dispatch(RelationshipsRequest(object: object))
+        try await dispatch(RelationshipsCommand(object: object))
     }
 
     func _relationships(for object: RuntimeObject) async -> RuntimeRelationships {
@@ -1311,7 +1265,7 @@ extension RuntimeEngine {
     /// The answer is keyed like the sidebar's own entry for it, so pushing it
     /// selects that row. Both faces live in the object's own image.
     public func counterpart(for object: RuntimeObject) async throws -> RuntimeObject? {
-        try await dispatch(CounterpartRequest(object: object))
+        try await dispatch(CounterpartCommand(object: object))
     }
 
     func _counterpart(for object: RuntimeObject) async -> RuntimeObject? {
@@ -1332,7 +1286,7 @@ extension RuntimeEngine {
     }
 
     public func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
-        try await dispatch(MemberAddressesRequest(object: object, memberName: memberName))
+        try await dispatch(MemberAddressesCommand(object: object, memberName: memberName))
     }
 
     func _memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
@@ -1376,23 +1330,23 @@ extension RuntimeEngine {
 }
 
 extension RuntimeConnection {
-    func sendMessage(name: RuntimeEngine.CommandNames) async throws {
+    func sendMessage(name: RuntimeEngine.CommandName) async throws {
         return try await sendMessage(name: name.commandName)
     }
 
-    func sendMessage<Request: Codable>(name: RuntimeEngine.CommandNames, request: Request) async throws {
+    func sendMessage<Request: Codable>(name: RuntimeEngine.CommandName, request: Request) async throws {
         return try await sendMessage(name: name.commandName, request: request)
     }
 
-    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames) async throws -> Response {
+    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandName) async throws -> Response {
         return try await sendMessage(name: name.commandName)
     }
 
-    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames, timeout: TimeInterval?) async throws -> Response {
+    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandName, timeout: TimeInterval?) async throws -> Response {
         return try await sendMessage(name: name.commandName, timeout: timeout)
     }
 
-    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames, request: some Codable) async throws -> Response {
+    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandName, request: some Codable) async throws -> Response {
         return try await sendMessage(name: name.commandName, request: request)
     }
 }
@@ -1496,7 +1450,7 @@ extension RuntimeEngine {
 
             if configuration.includeMetadata {
                 let module = try await dispatch(
-                    ExportModuleInfoRequest(
+                    ExportModuleInfoCommand(
                         imagePath: configuration.imagePath,
                         imageName: configuration.imageName
                     )
