@@ -7306,7 +7306,7 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Cleanup
 - **审查编号**：S3（会话一半）
-- **状态**：方案待批，代码未改
+- **状态**：已修复（纯重构，没有新测试）。两个分组类型合成文件私有协议 `FindGroupedMatch` 约束的 `MatchGroups<Match>`；与草案的差别只有一处：协议要求的是实例方法 `resultNode(index:)`，不是以自身为参数的静态方法。行为不变的证据：覆盖文本与成员分组、摘要计数和补搜合并的 8 个套件（`FindSessionLifecycleTests`、`FindSessionCorpusTests`、`FindViewModelTests`、`FindGenerationOptionsTests` 与四个 `FindCorpusCoordinator*` 套件，共 50 个测试）改前改后都全部通过
 
 **问题**：`FindSession` 里的 `TextMatchGroups` 和 `MemberMatchGroups`（`FindSession.swift:465-530`）逐行相同，只有两处不同：元素类型，以及建子节点时调用 `.textMatch` 还是 `.member`。以后改分组规则（例如按类型缓存节点）就得两边同步改。store 里两个搜索函数的重复归 PR121.06 处理。
 

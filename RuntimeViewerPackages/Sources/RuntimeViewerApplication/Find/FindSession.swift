@@ -82,9 +82,9 @@ public final class FindSession {
     /// it is still the current one.
     private var searchGeneration = 0
 
-    private var textMatchGroups = TextMatchGroups()
+    private var textMatchGroups = MatchGroups<RuntimeInterfaceSearchMatch>()
 
-    private var memberMatchGroups = MemberMatchGroups()
+    private var memberMatchGroups = MatchGroups<RuntimeMemberMatch>()
 
     /// The text or member search `results` shows, kept so a corpus built
     /// later can be read by it. `nil` for no search, a relationship search
@@ -185,8 +185,8 @@ public final class FindSession {
         searchTask = nil
         shownSearch = nil
         imagePathsBuiltDuringSearch = []
-        textMatchGroups = TextMatchGroups()
-        memberMatchGroups = MemberMatchGroups()
+        textMatchGroups = MatchGroups<RuntimeInterfaceSearchMatch>()
+        memberMatchGroups = MatchGroups<RuntimeMemberMatch>()
         setResults(Results())
         guard !query.isEmpty else {
             isSearching = false
@@ -486,18 +486,19 @@ public final class FindSession {
 
     // MARK: - Grouping
 
-    /// Hits grouped by the type they are in, in the order types first
-    /// appeared; batches arrive per image, so a type's hits are contiguous.
-    private struct TextMatchGroups {
-        private var matchesByObject: [RuntimeObjectKey: [RuntimeInterfaceSearchMatch]] = [:]
+    /// Hits or members grouped by the type they are in, in the order types
+    /// first appeared; batches arrive per image, so a type's matches are
+    /// contiguous.
+    private struct MatchGroups<Match: FindGroupedMatch> {
+        private var matchesByObject: [RuntimeObjectKey: [Match]] = [:]
         private var order: [RuntimeObject] = []
         private(set) var matchCount = 0
-        /// Hits collected by the search under way, for its interim count.
+        /// Matches collected by the search under way, for its interim count.
         private(set) var matchCountSinceLastFinish = 0
 
         var typeCount: Int { order.count }
 
-        mutating func append(_ batch: [RuntimeInterfaceSearchMatch]) {
+        mutating func append(_ batch: [Match]) {
             for match in batch {
                 if matchesByObject[match.object.key] == nil {
                     order.append(match.object)
@@ -515,41 +516,31 @@ public final class FindSession {
         func nodes() -> [FindResultNode] {
             order.map { object in
                 let matches = matchesByObject[object.key] ?? []
-                let children = matches.enumerated().map { index, match in FindResultNode.textMatch(match, index: index) }
+                let children = matches.enumerated().map { index, match in match.resultNode(index: index) }
                 return FindResultNode.object(object, matchCount: matches.count, children: children)
             }
         }
     }
+}
 
-    private struct MemberMatchGroups {
-        private var matchesByObject: [RuntimeObjectKey: [RuntimeMemberMatch]] = [:]
-        private var order: [RuntimeObject] = []
-        private(set) var matchCount = 0
-        private(set) var matchCountSinceLastFinish = 0
+/// A text hit or a member match, as the results tree groups it under the
+/// type it is in. Private to this file, so the two conformances below are
+/// this module's business alone.
+private protocol FindGroupedMatch {
+    var object: RuntimeObject { get }
 
-        var typeCount: Int { order.count }
+    /// The row the match makes under its type, the `index`th of them.
+    func resultNode(index: Int) -> FindResultNode
+}
 
-        mutating func append(_ batch: [RuntimeMemberMatch]) {
-            for match in batch {
-                if matchesByObject[match.object.key] == nil {
-                    order.append(match.object)
-                }
-                matchesByObject[match.object.key, default: []].append(match)
-                matchCount += 1
-                matchCountSinceLastFinish += 1
-            }
-        }
+extension RuntimeInterfaceSearchMatch: FindGroupedMatch {
+    fileprivate func resultNode(index: Int) -> FindResultNode {
+        .textMatch(self, index: index)
+    }
+}
 
-        mutating func markFinished() {
-            matchCountSinceLastFinish = 0
-        }
-
-        func nodes() -> [FindResultNode] {
-            order.map { object in
-                let matches = matchesByObject[object.key] ?? []
-                let children = matches.enumerated().map { index, match in FindResultNode.member(match, index: index) }
-                return FindResultNode.object(object, matchCount: matches.count, children: children)
-            }
-        }
+extension RuntimeMemberMatch: FindGroupedMatch {
+    fileprivate func resultNode(index: Int) -> FindResultNode {
+        .member(self, index: index)
     }
 }
