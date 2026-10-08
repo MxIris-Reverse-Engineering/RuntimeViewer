@@ -310,9 +310,10 @@ actor RuntimeInterfaceCorpusStore {
         corpora[imagePath]
     }
 
-    /// `indexedImagePaths` are the images the engine has indexed; those the
-    /// store holds nothing for are reported as absent, not as pending.
-    func coverage(indexedImagePaths: Set<String>) -> RuntimeInterfaceCorpusCoverage {
+    /// Every image the store knows about. An image it holds nothing for —
+    /// never asked for, evicted, cancelled — is absent from the map, not
+    /// reported as pending.
+    func coverage() -> RuntimeInterfaceCorpusCoverage {
         var states: [String: RuntimeInterfaceCorpusBuildState] = [:]
         for (imagePath, corpus) in corpora {
             states[imagePath] = .built(corpus.summary)
@@ -323,7 +324,6 @@ actor RuntimeInterfaceCorpusStore {
         for (imagePath, message) in failureMessages where states[imagePath] == nil {
             states[imagePath] = .failed(message: message)
         }
-        _ = indexedImagePaths
         return RuntimeInterfaceCorpusCoverage(
             statesByImagePath: states,
             residentByteCount: residentByteCount,

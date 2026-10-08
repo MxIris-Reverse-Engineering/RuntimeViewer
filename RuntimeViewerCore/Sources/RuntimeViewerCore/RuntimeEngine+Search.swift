@@ -128,7 +128,7 @@ extension RuntimeEngine {
     }
 
     func _interfaceCorpusCoverage() async -> RuntimeInterfaceCorpusCoverage {
-        await interfaceCorpusStore.coverage(indexedImagePaths: await indexedImagePaths())
+        await interfaceCorpusStore.coverage()
     }
 
     func _evictInterfaceCorpus(for imagePath: String?) async {

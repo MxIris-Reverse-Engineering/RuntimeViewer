@@ -244,7 +244,7 @@ struct RuntimeInterfaceCorpusStoreTests {
     ) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if predicate(await store.coverage(indexedImagePaths: [])) { return }
+            if predicate(await store.coverage()) { return }
             try await Task.sleep(nanoseconds: 5_000_000)
         }
         Issue.record("the store never reached the expected coverage")
@@ -428,7 +428,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         let summary = try await store.build(imagePath: Self.imageA, transformer: .default)
         #expect(summary.objectCount == 1)
         #expect(summary.skippedCount == 1)
-        #expect(await store.coverage(indexedImagePaths: []).statesByImagePath[Self.imageA]?.isBuilt == true)
+        #expect(await store.coverage().statesByImagePath[Self.imageA]?.isBuilt == true)
     }
 
     @Test("a failed build is remembered until the image is asked for again")
@@ -440,7 +440,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         await #expect(throws: ScriptedError.self) {
             try await store.build(imagePath: Self.imageA, transformer: .default)
         }
-        guard case .failed = await store.coverage(indexedImagePaths: []).statesByImagePath[Self.imageA] else {
+        guard case .failed = await store.coverage().statesByImagePath[Self.imageA] else {
             Issue.record("expected a failed state")
             return
         }
@@ -497,7 +497,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         await #expect(throws: CancellationError.self) { try await only.value }
         // The build task observes the cancellation on its next await.
         try await Task.sleep(nanoseconds: 120_000_000)
-        #expect(await store.coverage(indexedImagePaths: []).statesByImagePath[Self.imageA] == nil)
+        #expect(await store.coverage().statesByImagePath[Self.imageA] == nil)
         #expect(builder.printedObjectNames.count < 2)
     }
 
@@ -569,7 +569,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         // outcome has been handled.
         _ = try await store.build(imagePath: Self.imageB, transformer: .default)
         #expect(await store.corpus(for: Self.imageA) == nil)
-        #expect(await store.coverage(indexedImagePaths: []).statesByImagePath[Self.imageA] == nil)
+        #expect(await store.coverage().statesByImagePath[Self.imageA] == nil)
     }
 
     @Test("a different transformer evicts and rebuilds")

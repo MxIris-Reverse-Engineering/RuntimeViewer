@@ -6355,7 +6355,7 @@ func entryByteCountCoversMembers() {
 
 - **严重度**：Cleanup
 - **审查编号**：S1 遗留（审查日志 S1 的后半句）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，没有可观察的行为变化，不新增测试：由 `RuntimeInterfaceCorpusStoreTests`（`waitForCoverage` 的全部用例、`skippedObject`、`failedBuild`、`lastSubscriberCancels`，以及 PR121.08 新加的两处 coverage 断言）与 `RuntimeInterfaceSearchTests.textSearch` 的 `interfaceCorpusCoverage()` 断言覆盖，改动后两套件 35 个测试全过。同类：调用点与下文一致（定义 1、引擎 1、测试 5——比草案多出的一处是 PR121.08 的新用例）
 
 **问题**：`RuntimeInterfaceCorpusStore.coverage(indexedImagePaths:)` 根本不读它的参数（`RuntimeInterfaceCorpusStore.swift:300` 的 `_ = indexedImagePaths`），但引擎每次回答覆盖查询之前都会先算出这个参数（`RuntimeEngine+Search.swift:131`）。这一步要分别调用 ObjC、Swift 两个 section 工厂 actor 才能取到交集（:148-152），算完就丢。Report navigator 打开时以及每次构建结束都会查询覆盖情况，所以每次都白白多两跳。
 **四问**：复现——读代码即可确认，参数从未被使用；基线——本 PR 新引入；影响——只浪费两次 actor 调用，不影响行为，顺手清理；历史——新代码。参数的文档注释说「已索引但存储里没有的镜像报告为缺席」，而实现里「缺席」就是不在表里，用不着这个集合。
