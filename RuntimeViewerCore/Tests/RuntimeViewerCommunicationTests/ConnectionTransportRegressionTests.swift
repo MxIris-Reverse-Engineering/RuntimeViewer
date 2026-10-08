@@ -561,3 +561,91 @@ struct TransportReplyOrderingTests {
         server.stop()
     }
 }
+
+// MARK: - A reply that arrives after its request gave up
+
+/// A request that times out leaves the pending table, but its reply can still
+/// arrive. A frame that matches no pending request used to be taken for a new
+/// request: the requester, which has no handler for its own command, answered
+/// with an error envelope under the same nonce; the serving peer has that
+/// handler, took the envelope for a request and ran it again, and its reply
+/// went the same way — the two peers echoed each other until the connection
+/// closed. The Bonjour heartbeat's `engineList` request is one with a timeout,
+/// and its handler decodes an empty payload, which an error envelope decodes
+/// as just as well.
+@Suite("Transport Regression: reply after timeout", .serialized)
+struct TransportLateReplyTests {
+
+    private struct EmptyRequest: Codable {}
+
+    private actor InvocationCounter {
+        private(set) var count = 0
+        func increment() { count += 1 }
+    }
+
+    private actor WrittenFrames {
+        private(set) var frames: [Data] = []
+        func record(_ frame: Data) { frames.append(frame) }
+    }
+
+    @Test("LocalSocket: a reply that arrives after its request timed out is dropped, not answered")
+    func testLateReplyIsNotAnswered() async throws {
+        let identifier = "test-late-reply-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let invocations = InvocationCounter()
+        server.setMessageHandler(name: "slow") { (_: EmptyRequest) -> Int in
+            await invocations.increment()
+            try await Task.sleep(nanoseconds: 300_000_000)
+            return 1
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        try await waitUntilConnected(server)
+
+        await #expect(throws: RuntimeMessageChannelError.requestTimeout) {
+            let _: Int = try await client.sendMessage(name: "slow", request: EmptyRequest(), timeout: 0.1)
+        }
+        // Long enough for the late reply to arrive and for several rounds of an echo loop.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        let invocationCount = await invocations.count
+        #expect(invocationCount == 1, "the late reply was answered, and the server ran its handler \(invocationCount) times")
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+
+    /// What a peer built before the late-reply rule still does with a late
+    /// reply of ours: it answers it once, with an error envelope. That
+    /// envelope must end the exchange here instead of being run as a request.
+    @Test("An error envelope that matches no pending request is never handed to a handler")
+    func testUnmatchedErrorEnvelopeIsNotHandled() async throws {
+        let channel = RuntimeMessageChannel()
+        let invocations = InvocationCounter()
+        channel.setMessageHandler(name: "slow") { (_: EmptyRequest) -> Int in
+            await invocations.increment()
+            return 1
+        }
+        let writtenFrames = WrittenFrames()
+        channel.beginDispatch { frame in
+            await writtenFrames.record(frame)
+        }
+
+        let errorPayload = try JSONEncoder().encode(RuntimeNetworkRequestError(message: "No handler registered for slow"))
+        let errorEnvelope = RuntimeRequestData(identifier: "slow", data: errorPayload, nonce: UUID().uuidString, isError: true)
+        channel.appendReceivedData(try JSONEncoder().encode(errorEnvelope) + RuntimeMessageChannel.endMarkerData)
+
+        // Give the dispatch loop, and a handler it might wrongly start, time to run.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let invocationCount = await invocations.count
+        let writtenFrameCount = await writtenFrames.frames.count
+        #expect(invocationCount == 0, "an error envelope was run as a request")
+        #expect(writtenFrameCount == 0, "an error envelope was answered")
+        channel.finishReceiving()
+    }
+}
