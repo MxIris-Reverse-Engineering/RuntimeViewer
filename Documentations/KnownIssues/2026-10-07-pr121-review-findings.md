@@ -5320,7 +5320,7 @@ git grep -n CorpusBuildTimingProbe
   - 探针改按 `SourceEditorLoader` 的方式实例化 bridge（`principalClass as? SourceEditorBridging.Type` 再 `init()`），并按「同类」给 `navigationDelegate` / `minimapLandmarkIconProvider` 设了一个空实现，两个 setter 也在每个 Xcode 上走一遍。
   - 下文注释里「callout 会把空范围扩成整行」「两个调用都排队」是推断，没有逆向或探针证据，按 AGENTS.md「SourceEditor Module」不写成事实：注释只说这一步覆盖的边界（末尾之后的偏移、零宽的 callout），以及每步之后让 run loop 转 0.5 秒、让它们留下的工作执行。
   - **没有运行**：脚本会建 `NSWindow` 并触发 callout，超出本批「只加载框架、调用接口」的运行许可，而且要先有构建好的 bridge bundle。本机有 Xcode 26.6 与 27.0；每个版本打出 `OK   revealCharacterRange` 与 `OK   revealCharacterRange at the end of the text` 这一步仍待有人在本机跑 `Stubs/VerifyAcrossXcodes.sh <bundle>`。
-  - AGENTS.md「SourceEditor Module」写的 dump 位置 `/Volumes/Code/Dump/SourceEditor/Xcode/<version>/` 已不存在，dump 实际在 `/Volumes/RE/SourceEditor/Xcode/{26.6,27.0}/`（`ObjCHeaders/` 与 `SwiftInterfaces/` 都在）。本条只改验证脚本，没有改 AGENTS.md。
+  - AGENTS.md「SourceEditor Module」写的 dump 位置 `/Volumes/Code/Dump/SourceEditor/Xcode/<version>/` 已不存在，dump 实际在 `/Volumes/RE/SourceEditor/Xcode/{26.6,27.0}/`（`ObjCHeaders/` 与 `SwiftInterfaces/` 都在）。本条只改验证脚本；AGENTS.md 的路径随后在单独的文档提交里改正。
 
 **问题**：`Stubs/VerifyAcrossXcodes.swift` 的职责，是在每个已安装的 Xcode 上加载 SourceEditor bridge 并跑完它的全部接口。可它手抄的协议里（第 41 行）还是已删除的 `scrollToCharacterIndex(_:)`。c3ad0839 把这个方法换成了 `revealCharacterRange(_:)`，后者第一次用到四个私有 API：
 - `ScrollPlacement`，一个 resilient enum，case 序号由声明顺序决定；

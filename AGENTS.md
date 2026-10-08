@@ -467,7 +467,7 @@ reasoning about what the framework "must" do instead of reading what it does.
 
 What has to be present:
 
-1. **A RuntimeViewer dump of the frameworks** — `/Volumes/Code/Dump/SourceEditor/Xcode/<version>/`,
+1. **A RuntimeViewer dump of the frameworks** — `/Volumes/RE/SourceEditor/Xcode/<version>/`,
    one directory per framework, each holding **both** `ObjCHeaders/` and `SwiftInterfaces/`.
 
    **It has to be RuntimeViewer's own export, and both directories have to be there.** A dump
