@@ -1,10 +1,18 @@
 // Drives one built bridge bundle against one Xcode, in a process of its own.
 //
-//   xcrun swift VerifyAcrossXcodes.swift <Xcode.app> <RuntimeViewerSourceEditorBridge.bundle>
+//   VerifyAcrossXcodes <Xcode.app> <RuntimeViewerSourceEditorBridge.bundle>
 //
 // Run by VerifyAcrossXcodes.sh, which is what supplies the loop over installed Xcodes. One
 // process per Xcode is not a convenience: the frameworks are `dlopen`ed and never unloaded, so a
 // single process can only ever exercise one version of them.
+//
+// Compiled by that script together with the bridge's own
+// `RuntimeViewerUsingAppKit/RuntimeViewerSourceEditorBridge/SourceEditorBridging.swift`, not
+// against a copy of the protocol. A copy went stale once — it still listed a removed method, so the
+// probe stayed green while the method replacing it was never called on any Xcode. Compiled against
+// the real declaration, a renamed or removed requirement stops this file from compiling instead.
+// The consequence for whoever changes the bridge: what it newly calls is called here too, in the
+// same change (`Stubs/README.md`).
 //
 // Loads the frameworks the way `SourceEditorLoader` does — by absolute path, in a fixed-point
 // loop, with RTLD_GLOBAL — then drives the whole `SourceEditorBridging` surface. Printing "OK" per
@@ -14,31 +22,28 @@ import AppKit
 import Foundation
 
 guard CommandLine.arguments.count == 3 else {
-    print("usage: VerifyAcrossXcodes.swift <Xcode.app> <bridge bundle>")
+    print("usage: VerifyAcrossXcodes <Xcode.app> <bridge bundle>")
     exit(2)
 }
 let xcodeURL = URL(fileURLWithPath: CommandLine.arguments[1])
 let bundleURL = URL(fileURLWithPath: CommandLine.arguments[2])
 
-/// Declared here rather than imported: the app and the bundle meet through the Objective-C
-/// runtime, which matches this protocol to the bundle's conformance by name.
-@objc(RuntimeViewerSourceEditorBridging)
-protocol SourceEditorBridging: NSObjectProtocol {
-    var editorView: NSView { get }
-    func setSource(_ source: String, languageIdentifier: String, semanticRanges: [NSValue], semanticNodeTypeNames: [String])
-    func applyBackgroundColor(_ backgroundColor: NSColor)
-    func applyDisplayOptions(
-        showsLineNumbers: Bool,
-        showsFoldingRibbon: Bool,
-        showsStickyHeaders: Bool,
-        showsMinimap: Bool,
-        showsScopeGuides: Bool,
-        showsInvisibles: Bool,
-        showsMarkSeparators: Bool
-    )
-    func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont)
-    func applyTopContentInset(_ topInset: CGFloat)
-    func scrollToCharacterIndex(_ characterIndex: Int)
+/// Answers both of the bridge's callbacks with nothing. Set on the bridge so that its two
+/// delegate setters run against every Xcode too; the callbacks themselves need a click or a hover.
+final class InertBridgeDelegate: NSObject, SourceEditorBridgingNavigationDelegate, SourceEditorBridgingMinimapLandmarkIconProvider {
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {}
+
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem] {
+        []
+    }
+
+    func sourceEditorBridge(
+        _ bridge: SourceEditorBridging,
+        minimapIconForLandmarkOfKind kind: SourceEditorBridgingLandmarkKind,
+        pointSize: CGFloat
+    ) -> NSImage? {
+        nil
+    }
 }
 
 func report(_ message: String) { print("OK   \(message)") }
@@ -84,16 +89,25 @@ do {
 }
 report("bundle")
 
-guard let bridgeClass = bundle.principalClass as? NSObject.Type else { fail("no principal class") }
-guard let bridge = bridgeClass.init() as? SourceEditorBridging else {
-    fail("\(bridgeClass) does not conform to RuntimeViewerSourceEditorBridging")
+// The cast `SourceEditorLoader` makes: the Objective-C runtime matches the bundle's conformance to
+// the protocol by name.
+guard let principalClass = bundle.principalClass else { fail("no principal class") }
+guard let bridgeClass = principalClass as? SourceEditorBridging.Type else {
+    fail("\(principalClass) does not conform to RuntimeViewerSourceEditorBridging")
 }
+let bridge = bridgeClass.init()
 report("bridge \(bridgeClass)")
 
 // MARK: - The surface
 
 let editorView = bridge.editorView
 report("editorView \(type(of: editorView))")
+
+// Held here because the bridge holds both weakly.
+let inertBridgeDelegate = InertBridgeDelegate()
+bridge.navigationDelegate = inertBridgeDelegate
+bridge.minimapLandmarkIconProvider = inertBridgeDelegate
+report("navigationDelegate + minimapLandmarkIconProvider")
 
 let window = NSWindow(
     contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
@@ -167,5 +181,20 @@ report("setSource swift")
 editorView.layoutSubtreeIfNeeded()
 editorView.display()
 report("layout + display")
+
+// The Find navigator's reveal: a position lookup in the data source, a selection with a scroll
+// placement — `ScrollPlacement` is a resilient enum, so its case travels as an index taken from
+// declaration order — and the callout. The run loop turns after each call so whatever they leave
+// for it, a scroll or the callout's animation, runs before the step is reported.
+guard let probeValueRange = swiftSource.range(of: "probeValue") else { fail("no probeValue in the Swift probe") }
+bridge.revealCharacterRange(NSRange(probeValueRange, in: swiftSource))
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.5))
+report("revealCharacterRange")
+
+// The boundary case of both: an empty range at the very end of the text, so the position lookup is
+// asked for the offset one past the last character and the callout for a range with no width.
+bridge.revealCharacterRange(NSRange(location: (swiftSource as NSString).length, length: 0))
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.5))
+report("revealCharacterRange at the end of the text")
 
 print("DONE")

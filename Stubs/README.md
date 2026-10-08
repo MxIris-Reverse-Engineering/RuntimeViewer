@@ -67,7 +67,9 @@ name it (`symbol not found in flat namespace '_$s12SourceEditor0aB4ViewCMn'`), w
 - `./VerifyAcrossXcodes.sh <bridge bundle>` loads the bundle against every installed Xcode, one
   process each, and drives the whole bridging surface. The per-process part is the point: the
   frameworks are `dlopen`ed once and never unloaded, so a single test bundle can only ever
-  exercise one version.
+  exercise one version. The probe is compiled together with the bridge's own
+  `SourceEditorBridging.swift`, so a requirement renamed or removed there fails the script at
+  compile time.
 
 **The `.tbd` files are still needed** — `RuntimeViewerSourceEditorBridgeTests` links them
 (`-weak_framework`, resolved through `LD_RUNPATH_SEARCH_PATHS`), so `UsedSymbols.txt`,
@@ -160,6 +162,12 @@ address. `SourceEditorView.scrollView` is declared this way, typed as `NSScrollV
 real class, `SourceEditorScrollView`, is Objective-C with no header here. The cost is that a
 selector missing from some Xcode fails when it is sent, not when the bridge loads — which is
 what `VerifyAcrossXcodes.sh` is for.
+
+**Whatever the bridge newly calls, `VerifyAcrossXcodes.swift` calls too, in the same change.**
+Compiling the probe against the real protocol catches a requirement that is renamed or removed,
+not one that is added: the probe still drives only the calls it makes. `revealCharacterRange(_:)`
+was exercised against no Xcode at all until the PR #121 review, because the probe then carried a
+copy of the protocol that still listed the method it replaced.
 
 ## When two Xcodes disagree on a requirement's signature
 

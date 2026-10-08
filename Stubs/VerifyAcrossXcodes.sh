@@ -13,7 +13,12 @@
 # What it catches: an install-name change like Xcode 27's `SharedFrameworks/` insertion, a symbol
 # the bridge references that a version does not export, and a framework layout that moved.
 #
-# Read-only throughout: it opens files and loads libraries, and writes nothing.
+# The probe is compiled once, together with the bridge's own `SourceEditorBridging.swift`, so a
+# requirement renamed or removed there fails this script at compile time instead of leaving the
+# probe green while the new requirement is never called.
+#
+# Writes nothing but that compiled probe, in a temporary directory removed on exit; otherwise it
+# only opens files and loads libraries.
 
 set -euo pipefail
 
@@ -53,6 +58,16 @@ if [ ${#xcode_paths[@]} -eq 0 ]; then
     exit 1
 fi
 
+# Compiled with the bridge's real protocol declaration rather than a copy of it: the copy this
+# replaced still listed a removed method, and stayed green. `main.swift` is the name `swiftc` runs
+# top-level code from when it is given more than one file.
+probe_directory="$(mktemp -d)"
+trap 'rm -rf "$probe_directory"' EXIT
+cp VerifyAcrossXcodes.swift "$probe_directory/main.swift"
+xcrun swiftc -o "$probe_directory/VerifyAcrossXcodes" \
+    "$probe_directory/main.swift" \
+    ../RuntimeViewerUsingAppKit/RuntimeViewerSourceEditorBridge/SourceEditorBridging.swift
+
 failures=0
 for xcode_path in "${xcode_paths[@]}"; do
     version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$xcode_path/Contents/Info.plist" 2>/dev/null || echo "?")"
@@ -63,9 +78,7 @@ for xcode_path in "${xcode_paths[@]}"; do
         continue
     fi
 
-    # `swift` rather than a compiled binary: the probe is 150 lines and runs three times, so the
-    # ~10s of compiling it each time is cheaper than a build product to keep track of.
-    if ! xcrun swift VerifyAcrossXcodes.swift "$xcode_path" "$bundle_path"; then
+    if ! "$probe_directory/VerifyAcrossXcodes" "$xcode_path" "$bundle_path"; then
         failures=$((failures + 1))
     fi
 done
