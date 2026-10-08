@@ -21,6 +21,9 @@ struct RuntimeInterfaceCorpusStoreTests {
         /// Replaces the scripted interface of the objects it names with this
         /// text alone, no members.
         var interfaceTextByObjectName: [String: String] = [:]
+        /// The visibility regions of the texts `interfaceTextByObjectName`
+        /// names.
+        var visibilityRegionsByObjectName: [String: VisibilityRegionTable] = [:]
         private(set) var printedObjectNames: [String] = []
         private(set) var maximumConcurrentPrintCount = 0
         private var concurrentPrintCount = 0
@@ -70,7 +73,7 @@ struct RuntimeInterfaceCorpusStoreTests {
                 return RuntimeInterfaceCorpusPrint(
                     object: object,
                     interface: SemanticString { Standard(interfaceText) }.frozen(),
-                    visibilityRegions: .empty,
+                    visibilityRegions: visibilityRegionsByObjectName[object.name] ?? .empty,
                     members: [],
                     nestedDefinitionRanges: []
                 )
@@ -865,6 +868,43 @@ struct RuntimeInterfaceCorpusStoreTests {
         #expect(summary.totalMatchCount == 3)
         #expect(workLog.count(of: .lineTable) == expectedLineTableCount)
         #expect(workLog.count(of: .spanKindTable) == expectedSpanKindTableCount)
+    }
+
+    /// A text search under options that hide something used to project
+    /// every entry before looking for a hit, though most have none: each
+    /// projection copies the entry several times over. Every entry here
+    /// hides a trailing comment under an option no printer knows, so it is
+    /// hidden whatever the options; only `Second` has the word.
+    @Test("a text search projects only the entries that may have a hit")
+    func searchProjectsOnlyCandidateEntries() async throws {
+        let hiddenComment = " // offset 0x8"
+        let visibleTextsByObjectName = ["First": "var first: Int", "Second": "var needle: Int", "Third": "var third: Int"]
+        let fixture = makeStore { builder in
+            builder.objectNamesByImagePath[Self.imageC] = ["First", "Second", "Third"]
+            for (objectName, visibleText) in visibleTextsByObjectName {
+                builder.interfaceTextByObjectName[objectName] = visibleText + hiddenComment
+                builder.visibilityRegionsByObjectName[objectName] = VisibilityRegionTable(
+                    regions: [VisibilityRegionTable.Region(utf8Offset: UInt32(visibleText.utf8.count), utf8Length: UInt32(hiddenComment.utf8.count), conditionIndex: 0)],
+                    conditions: [.enabled("test.optionNoPrinterKnows")]
+                )
+            }
+        }
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageC, transformer: .default)
+        let workLog = RuntimeInterfaceSearchWorkLog()
+        let batches = MatchBatches<RuntimeInterfaceSearchMatch>()
+        let query = RuntimeInterfaceSearchQuery(text: "needle", generationOptions: .mcp)
+
+        let summary = try await RuntimeInterfaceSearchWorkLog.$current.withValue(workLog) {
+            try await store.searchInterfaces(query, indexedImagePaths: []) { batch in
+                batches.append(batch)
+            }
+        }
+
+        #expect(batches.all.flatMap { $0 }.map(\.lineText) == ["var needle: Int"])
+        #expect(summary.scannedObjectCount == 3)
+        #expect(workLog.count(of: .projection) == 1)
     }
 
     @Test("evicting drops the corpus and its failure record")

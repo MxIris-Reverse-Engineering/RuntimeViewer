@@ -63,7 +63,20 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     /// nothing in it depends on the options.
     func projection(under visibility: RuntimeInterfaceVisibility) -> VisibilityProjection? {
         guard !visibilityRegions.isEmpty else { return nil }
+        RuntimeInterfaceSearchWorkLog.record(.projection)
         return visibilityRegions.projection(of: interface, where: visibility.isOptionEnabled)
+    }
+
+    /// Whether `pattern` can hit the interface as `visibility` shows it,
+    /// decided without building that projection, which copies the entry
+    /// several times over. Never no for an entry the projection gives a hit
+    /// in, so a search can skip the entry on a no; see
+    /// `RuntimeInterfaceTextMatcher.literalPattern(_:mayHitTextOf:hidingUTF8Ranges:)`.
+    /// Always yes for a regular expression.
+    func mayHaveHits(of pattern: RuntimeInterfaceTextMatcher.Pattern, under visibility: RuntimeInterfaceVisibility) -> Bool {
+        guard pattern.regex == nil else { return true }
+        let hiddenRanges = visibilityRegions.hiddenUTF8Ranges(inTextOfUTF8Count: interface.text.utf8.count, where: visibility.isOptionEnabled)
+        return RuntimeInterfaceTextMatcher.literalPattern(pattern, mayHitTextOf: interface.text, hidingUTF8Ranges: hiddenRanges)
     }
 
     /// `nestedDefinitionRanges` in `projection`'s text: each block from its
@@ -642,6 +655,11 @@ actor RuntimeInterfaceCorpusStore {
             regularExpressionTimeLimit: regularExpressionTimeLimit,
             onProgress: onProgress
         ) { entry, budget, isCollecting, collect in
+            // Most entries have no hit at all; under options that hide
+            // something, learn that before paying for the projection.
+            if let visibility, !entry.visibilityRegions.isEmpty, !entry.mayHaveHits(of: pattern, under: visibility) {
+                return 0
+            }
             // The text the content pane shows under the query's options, so
             // every hit is visible and its line reads as displayed. Its
             // nested types' blocks are skipped: they are entries of their

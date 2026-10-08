@@ -287,42 +287,147 @@ enum RuntimeInterfaceTextMatcher {
     }
 
     private static func literalHits(in text: String, pattern: Pattern) -> [Hit] {
-        let needle = pattern.needle
-        guard !needle.isEmpty else { return [] }
-        let isCaseSensitive = pattern.isCaseSensitive
-        let matchMode = pattern.matchMode
         var text = text
-        return text.withUTF8 { haystack -> [Hit] in
+        return text.withUTF8 { haystack in
+            literalHits(inUTF8: haystack, pattern: pattern, stoppingAtFirstHit: false)
+        }
+    }
+
+    /// `literalHits(in:pattern:)` over raw UTF-8 bytes, the buffer's ends
+    /// counting as the text's ends; with `stoppingAtFirstHit`, at most the
+    /// first hit.
+    private static func literalHits(inUTF8 haystack: UnsafeBufferPointer<UInt8>, pattern: Pattern, stoppingAtFirstHit: Bool) -> [Hit] {
+        pattern.needle.withUnsafeBufferPointer { needle -> [Hit] in
             var result: [Hit] = []
-            let haystackCount = haystack.count
             let needleCount = needle.count
-            guard haystackCount >= needleCount else { return result }
+            guard needleCount > 0, haystack.count >= needleCount else { return result }
+            let isCaseSensitive = pattern.isCaseSensitive
+            let matchMode = pattern.matchMode
             let firstNeedleByte = needle[0]
             var index = 0
-            let lastStart = haystackCount - needleCount
+            let lastStart = haystack.count - needleCount
             while index <= lastStart {
                 let candidate = isCaseSensitive ? haystack[index] : Pattern.asciiLowercased(haystack[index])
-                guard candidate == firstNeedleByte else {
-                    index += 1
-                    continue
-                }
-                var matchedCount = 1
-                while matchedCount < needleCount {
-                    let byte = haystack[index + matchedCount]
-                    let folded = isCaseSensitive ? byte : Pattern.asciiLowercased(byte)
-                    guard folded == needle[matchedCount] else { break }
-                    matchedCount += 1
-                }
-                guard matchedCount == needleCount,
-                      boundariesSatisfied(in: haystack, start: index, length: needleCount, matchMode: matchMode)
+                guard candidate == firstNeedleByte,
+                      isLiteralHit(in: haystack, at: index, needle: needle, isCaseSensitive: isCaseSensitive, matchMode: matchMode)
                 else {
                     index += 1
                     continue
                 }
                 result.append(Hit(utf8Offset: index, utf8Length: needleCount))
+                if stoppingAtFirstHit {
+                    break
+                }
                 index += needleCount
             }
             return result
+        }
+    }
+
+    /// Whether `needle` — case-folded already when the search is
+    /// insensitive — starts at `index` of `haystack`, word boundaries
+    /// included. The buffer's ends count as the text's ends.
+    @inline(__always)
+    private static func isLiteralHit(in haystack: UnsafeBufferPointer<UInt8>, at index: Int, needle: UnsafeBufferPointer<UInt8>, isCaseSensitive: Bool, matchMode: RuntimeInterfaceSearchMatchMode) -> Bool {
+        guard index >= 0, index + needle.count <= haystack.count else { return false }
+        for needleOffset in 0 ..< needle.count {
+            let byte = haystack[index + needleOffset]
+            let folded = isCaseSensitive ? byte : Pattern.asciiLowercased(byte)
+            guard folded == needle[needleOffset] else { return false }
+        }
+        return boundariesSatisfied(in: haystack, start: index, length: needle.count, matchMode: matchMode)
+    }
+
+    /// Whether the literal `pattern` can hit what `text` becomes once
+    /// `hiddenUTF8Ranges` — ascending, disjoint, none touching another — are
+    /// taken out of it, decided without building that text. Never says no
+    /// for a text with a hit; it may say yes for one with none. A regular
+    /// expression can match across any length, so for one the answer is
+    /// always yes.
+    ///
+    /// A hit of the shortened text either lies inside one stretch the cut
+    /// left whole, with the bytes on either side of it unchanged — then it is
+    /// a hit of `text` itself — or it touches a seam, where hidden bytes were
+    /// taken out: it runs across the seam, or begins or ends right at it, so
+    /// the byte its word boundary depends on changed. So any hit of `text`
+    /// answers yes, and otherwise every start from a needle's length before
+    /// each seam up to the seam is tried on the kept bytes around it — every
+    /// start, not a greedy scan, which could take an overlapping start that
+    /// misses the seam and step over the one that crosses it. The kept bytes
+    /// reach one past the needle on each side, so the word boundary of every
+    /// start is read from the bytes the shortened text really has there, or
+    /// from its true ends.
+    static func literalPattern(_ pattern: Pattern, mayHitTextOf text: String, hidingUTF8Ranges hiddenUTF8Ranges: [Range<Int>]) -> Bool {
+        guard pattern.regex == nil else { return true }
+        let needleCount = pattern.needle.count
+        guard needleCount > 0 else { return false }
+        var text = text
+        return text.withUTF8 { bytes in
+            if !literalHits(inUTF8: bytes, pattern: pattern, stoppingAtFirstHit: true).isEmpty {
+                return true
+            }
+            return pattern.needle.withUnsafeBufferPointer { needle in
+                let isCaseSensitive = pattern.isCaseSensitive
+                // Every start tried at a seam covers the kept byte right
+                // before the seam or the one right after it, so a seam with
+                // neither among the needle's bytes needs no window — the
+                // common case, a comment taken out between a declaration's
+                // `;` and its line break.
+                var isNeedleByte = [Bool](repeating: false, count: 256)
+                for byte in needle {
+                    isNeedleByte[Int(byte)] = true
+                }
+                func mayBeNeedleByte(at position: Int) -> Bool {
+                    guard position >= 0, position < bytes.count else { return false }
+                    let byte = bytes[position]
+                    return isNeedleByte[Int(isCaseSensitive ? byte : Pattern.asciiLowercased(byte))]
+                }
+                var keptBytesBefore: [UInt8] = []
+                keptBytesBefore.reserveCapacity(needleCount + 1)
+                var window: [UInt8] = []
+                window.reserveCapacity(2 * needleCount + 2)
+                for (seamIndex, hiddenRange) in hiddenUTF8Ranges.enumerated() {
+                    // The ranges touch no other, so these two bytes are kept.
+                    guard mayBeNeedleByte(at: hiddenRange.lowerBound - 1) || mayBeNeedleByte(at: hiddenRange.upperBound) else { continue }
+                    // The kept bytes before the seam, nearest first, skipping
+                    // the hidden ranges closer than that.
+                    keptBytesBefore.removeAll(keepingCapacity: true)
+                    var position = hiddenRange.lowerBound
+                    var earlierRangeIndex = seamIndex - 1
+                    while keptBytesBefore.count <= needleCount, position > 0 {
+                        position -= 1
+                        if earlierRangeIndex >= 0, hiddenUTF8Ranges[earlierRangeIndex].contains(position) {
+                            position = hiddenUTF8Ranges[earlierRangeIndex].lowerBound
+                            earlierRangeIndex -= 1
+                            continue
+                        }
+                        keptBytesBefore.append(bytes[position])
+                    }
+                    window.removeAll(keepingCapacity: true)
+                    window.append(contentsOf: keptBytesBefore.reversed())
+                    let seamOffset = window.count
+                    position = hiddenRange.upperBound
+                    var laterRangeIndex = seamIndex + 1
+                    while window.count - seamOffset <= needleCount, position < bytes.count {
+                        if laterRangeIndex < hiddenUTF8Ranges.count, hiddenUTF8Ranges[laterRangeIndex].contains(position) {
+                            position = hiddenUTF8Ranges[laterRangeIndex].upperBound
+                            laterRangeIndex += 1
+                            continue
+                        }
+                        window.append(bytes[position])
+                        position += 1
+                    }
+                    let touchesSeam = window.withUnsafeBufferPointer { windowBytes in
+                        (max(0, seamOffset - needleCount) ... seamOffset).contains { start in
+                            isLiteralHit(in: windowBytes, at: start, needle: needle, isCaseSensitive: isCaseSensitive, matchMode: pattern.matchMode)
+                        }
+                    }
+                    if touchesSeam {
+                        return true
+                    }
+                }
+                return false
+            }
         }
     }
 

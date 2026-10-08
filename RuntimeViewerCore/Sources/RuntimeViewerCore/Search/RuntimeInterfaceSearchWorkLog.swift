@@ -12,6 +12,8 @@ final class RuntimeInterfaceSearchWorkLog: @unchecked Sendable {
         case lineTable
         /// The semantic kind of each span of one interface.
         case spanKindTable
+        /// An entry's interface as some Generation Options show it.
+        case projection
     }
 
     @TaskLocal static var current: RuntimeInterfaceSearchWorkLog?
