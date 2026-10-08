@@ -5350,7 +5350,7 @@ struct RuntimeTypeRelationshipsGenericSuperclassTests {
 
 - **严重度**：Minor
 - **审查编号**：C23
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceTextMatcherTests.regularExpressionAnchorsMatchLines`（修前两个计数都是 0：`^\s+var\s` 与 `\(\)$` 各找不到一条）。落地时重新 grep 过全部正则创建点，结论与下文「同类」一致
 
 **问题**：文本搜索把一个条目的整段多行接口交给正则，编译时却没加 `.anchorsMatchLines`（`RuntimeInterfaceTextMatcher.swift:49`），所以 `^` 和 `$` 只匹配整段接口的开头和结尾，而结果是按行报告的。`^@property`、`^\s*func\s`、`;$` 这类按「声明形状」找东西的写法全部返回 0 条结果，界面也不提示原因；只有 `^@interface` 因为碰巧是接口第一行而能用。
 **四问**：复现——Find › Text › Regular Expression 搜 `^@property`，任何 Objective-C 语料都是 0 条；基线——本 PR 新引入（8b4309b2）；影响——用锚点按形状找声明是常见用法，Xcode 的 Find 也按行处理 `^` / `$`，改动只有一个选项，建议修；历史——新代码，现有带锚点的测试都只在单行的成员名或类型名上跑。

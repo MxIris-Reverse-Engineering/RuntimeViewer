@@ -198,8 +198,8 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 
 - 匹配：对每个条目在 `frozen.text` 的 UTF-8 上做 ASCII case-folding 子串扫描（非 ASCII 字节精确匹配）；span 游标随扫描
   推进，命中时 O(1) 取语义类别做域过滤；行号 / 行文本由命中偏移向两侧找 `\n`。Starting With / Ending With 以标识符
-  字符类 `[A-Za-z0-9_$]` 判边界，Matching Word 两侧都判。Regular Expression 模式对每个条目的 `text` 跑 Swift `Regex`
-  （`text` 是现成 `String`，逐条目取消）。
+  字符类 `[A-Za-z0-9_$]` 判边界，Matching Word 两侧都判。Regular Expression 模式对每个条目的 `text` 跑
+  `NSRegularExpression`（引擎的部署目标早于 Swift `Regex`），`^` / `$` 按行锚定，与 Xcode 的 Find 一致。
 - 搜索域 → `SemanticType` 映射（闭合定义，单测按此断言）：
 
   | 域 | 命中的语义类别 |
@@ -756,3 +756,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-04 | 一个都没选时 OK 置灰；表单列表覆写 `mouseDown(with:)`；菜单项不带图标 | Xcode 的 OK 此时能点却不改范围，置灰更直观。不覆写时 macOS 27 的列表点击不给焦点，选中的行一直是灰色，与 `StatefulOutlineView` 同一取舍。我们没有与 Xcode 那几个范围对应的图标。 |
 | 2026-10-08 | 撤下 `withSharedGenerationOptionsLock`（推翻 2026-10-01 那条）：隔离的 `AppDefaults` 改为连 user defaults 一起隔离，所有隔离实例共用一个 suite、各用一个键前缀（`UserDefaultsNamespace`） | PR #121 审查 PR121.18：锁只修了表面，等搜索结果的测试已有两处没拿锁。当初没走 suite 方案是因为每个实例一个 suite 会在 `~/Library/Preferences` 留一个 plist；共用一个 suite、按键区分就没有这个代价，KVO 按键通知，实例之间互不可见。 |
 | 2026-10-08 | `FindSession` 对文档改为 `weak`，`Document.close()` 调新增的 `documentWillClose()`：取消进行中的搜索、退订选项与语料协调器的信号 | PR #121 审查 PR121.02：XPC 上的引擎调用取消不掉，搜索 Task 等待期间留住会话；关窗后在别的窗口改一项 Generation Options，孤儿会话重跑搜索、经 `unowned` 读到已释放的 `DocumentState`，整个 App 中止。`FindSessionLifecycleTests` 修前即在 `swift_abortRetainUnowned` 处中止。 |
+| 2026-10-08 | 正则的 `^` / `$` 按行锚定（`.anchorsMatchLines`） | PR #121 审查 PR121.15：条目是整段多行接口，结果却按行报告；不按行时 `^@property`、`;$` 这类按声明形状找的写法永远是 0 条，只有恰好是第一行的 `^@interface` 能用。Xcode 的 Find 按行处理。成员名与类型名是单行，不受影响。§3.1 原写 Swift `Regex`，与实现不符，一并改正。 |

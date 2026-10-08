@@ -46,7 +46,15 @@ enum RuntimeInterfaceTextMatcher {
             guard !text.isEmpty else { throw PatternError.emptyQuery }
             if matchMode == .regularExpression {
                 do {
-                    self.regex = try NSRegularExpression(pattern: text, options: isCaseSensitive ? [] : [.caseInsensitive])
+                    // `^` and `$` anchor at line boundaries, as in Xcode's Find: an
+                    // entry is a whole multi-line interface while a hit is reported
+                    // on its line. Member and type names are one line, so for them
+                    // nothing changes.
+                    var options: NSRegularExpression.Options = [.anchorsMatchLines]
+                    if !isCaseSensitive {
+                        options.insert(.caseInsensitive)
+                    }
+                    self.regex = try NSRegularExpression(pattern: text, options: options)
                 } catch {
                     throw PatternError.invalidRegularExpression("\(error)")
                 }

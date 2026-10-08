@@ -118,6 +118,20 @@ struct RuntimeInterfaceTextMatcherTests {
         }
     }
 
+    /// An entry is a whole multi-line interface while a hit is reported on
+    /// its line, so `^` and `$` have to anchor at lines — as they do in
+    /// Xcode's Find — or a search for a declaration's shape finds nothing.
+    @Test("^ and $ anchor at the lines of a multi-line interface")
+    func regularExpressionAnchorsMatchLines() throws {
+        let variableLines = try matches(RuntimeInterfaceSearchQuery(text: #"^\s+var\s"#, matchMode: .regularExpression, isCaseSensitive: true))
+        #expect(variableLines.count == 1)
+        #expect(variableLines.matches.first?.lineNumber == 2)
+
+        let functionLineEnds = try matches(RuntimeInterfaceSearchQuery(text: #"\(\)$"#, matchMode: .regularExpression, isCaseSensitive: true))
+        #expect(functionLineEnds.count == 1)
+        #expect(functionLineEnds.matches.first?.lineNumber == 4)
+    }
+
     @Test("counting goes on after collection stops")
     func countingPastCollection() throws {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(RuntimeInterfaceSearchQuery(text: "fooBar"))
