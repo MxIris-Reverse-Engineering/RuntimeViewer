@@ -50,7 +50,11 @@ public final class FindSession {
     /// reads; the count goes on past it.
     static let resultLimit = 1000
 
-    public unowned let documentState: DocumentState
+    /// Weak: the session can outlive its document. An engine call over a
+    /// connection runs to its answer even when cancelled, and until it does a
+    /// closed window's session is still alive — and still subscribed to the
+    /// Generation Options every window shares.
+    private weak var documentState: DocumentState?
 
     @RxObserved
     public private(set) var query: FindQuery = FindQuery()
@@ -101,7 +105,8 @@ public final class FindSession {
     @Dependency(\.appDefaults)
     private var appDefaults
 
-    private let disposeBag = DisposeBag()
+    /// Replaced when the document closes, which ends every subscription.
+    private var disposeBag = DisposeBag()
 
     public init(documentState: DocumentState) {
         self.documentState = documentState
@@ -120,6 +125,19 @@ public final class FindSession {
 
     deinit {
         searchTask?.cancel()
+    }
+
+    /// The document is closing. The search under way is cancelled, and nothing
+    /// starts another one: not a Generation Options change made in another
+    /// window, not a corpus the coordinator reports built.
+    public func documentWillClose() {
+        searchTask?.cancel()
+        searchTask = nil
+        // A search still finishing compares its generation with this one and
+        // leaves the session alone.
+        searchGeneration += 1
+        isSearching = false
+        disposeBag = DisposeBag()
     }
 
     /// Hooks the session to the document's corpus coordinator, which calls
@@ -219,7 +237,8 @@ public final class FindSession {
         case .allIndexedImages:
             nil
         case .currentImage:
-            documentState.currentImageNode.map { [$0.path] } ?? []
+            // A closed document has no sidebar, so no image either.
+            (documentState?.currentImageNode).map { [$0.path] } ?? []
         case .images(let imagePaths):
             imagePaths
         }
@@ -256,10 +275,15 @@ public final class FindSession {
     /// folds what it finds into the results. A search that widens one already
     /// shown keeps the results it is merged into when it fails.
     private func startSearch(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, isWidening: Bool) {
+        // Closed while an engine call kept this session alive: there is no
+        // document to search for any more.
+        guard let engine = documentState?.runtimeEngine else {
+            isSearching = false
+            return
+        }
         isSearching = true
         searchGeneration += 1
         let generation = searchGeneration
-        let engine = documentState.runtimeEngine
         searchTask = Task { [weak self] in
             do {
                 try await self?.perform(query, imagePaths: imagePaths, generationOptions: generationOptions, isWidening: isWidening, on: engine)

@@ -27,6 +27,7 @@ final class Document: NSDocument {
 
     override func close() {
         documentState.backgroundIndexingCoordinator.documentWillClose()
+        documentState.findSession.documentWillClose()
         super.close()
     }
 

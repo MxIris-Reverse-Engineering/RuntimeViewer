@@ -356,7 +356,8 @@ queued-build xcodebuild build \
 
 - **严重度**：Major
 - **审查编号**：C10
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindSessionLifecycleTests.sessionOutlivingItsDocumentIgnoresOptionsChange`（修前测试进程中止：`Fatal error: Attempted to read an unowned reference but object … was already destroyed`，signal 6）、`FindSessionLifecycleTests.closedSessionStartsNoSearch`（`documentWillClose()` 的契约）
+- **落地与偏离**：`documentWillClose()` 比下文多一步，把 `isSearching` 置回 false：进行中的搜索被取消后按代数核对不会再清这个标志，不清就一直是 true。测试去掉了 `withSharedGenerationOptionsLock`（PR121.18 已撤下这把锁）。同类里 `InspectorRelationshipsViewModel` 的 `flatMapLatest { [unowned self] … }` 改成 `[weak self]` + `guard let self`，单独一个 refactor 提交：写不出修前失败的测试，因为这个闭包只由 ViewModel 自己的 `$runtimeObject` 驱动、订阅放在它自己的 `disposeBag` 里，deinit 时随之退订，之后不会再执行。`RuntimeViewerPackages/Sources` 与 `RuntimeViewerUsingAppKit` 里再没有别的 `[unowned self]`。
 
 **问题**：`FindSession` 用 `unowned let documentState` 引用文档，但它可能活得比文档长。在 XPC 上，引擎调用取消不掉，搜索 Task 在等待期间强持有会话（`FindSession.swift:265` 的 `try await self?.perform(...)`）。会话又订阅着所有窗口共用的 Generation Options。关窗后，只要在别的窗口改一下选项，孤儿会话就会重跑搜索，读到已经释放的 `DocumentState`，整个 App 在 `swift_abortRetainUnowned` 处中止。
 
