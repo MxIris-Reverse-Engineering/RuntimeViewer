@@ -189,8 +189,8 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 | 请求 | 类型 | 进度 | 响应 |
 |------|------|------|------|
 | `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `CorpusBuildSummary { objectCount, skippedCount, byteCount }` |
-| `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
-| `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
+| `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `RuntimeInterfaceSearchBatch`：对象表加带下标的命中，每个对象一批只发一次（按镜像粒度增量推送）；`searchInterfaces` 在客户端解包回 `[GlobalSearchMatch]` | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
+| `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `RuntimeMemberSearchBatch`，同上的对象表加下标（按镜像粒度）；`searchMembers` 解包回 `[RuntimeMemberMatch]` | 同上形态的 summary |
 | `TypeRelationshipsRequest { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | 普通 | — | `[RuntimeRelationshipTree]` |
 | `InterfaceCorpusCoverageRequest` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
 
@@ -776,3 +776,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 文本搜索收满 `resultLimit` 之后只计数：行表只为被收集的命中建，范围是 all 时连 span 表也不建；`Layout` 拆成独立的 span 种类表与按需的行表 | PR #121 审查 PR121.23：常见词往往在前几个镜像就收满 1000 条，之后每个有命中的条目仍要扫一遍全文建行表、遍历全部 span 建种类表，只为把总数数准。用计数而不是计时验证：三个条目各一个命中、上限 1 时，修前建 3 张行表与 3 张 span 表，修后 1 张与 1 张（范围 all）、1 张与 3 张（symbolsOnly）。 |
 | 2026-10-08 | 带 Generation Options 的字面量文本搜索先问「投影后可能有命中吗」，答「不可能」的条目不建投影：原文有命中、或任一接缝（隐藏内容被删掉的位置）前后各 needle 长度内有横跨或紧挨接缝的命中才建；正则照旧先投影 | PR #121 审查 PR121.21：建投影要把条目复制三四份，而绝大多数条目对一个具体查询没有命中。判断必须不漏报：投影里的命中要么就是原文的命中，要么碰到接缝，所以逐个检查接缝附近的每个起点，不能用贪心扫描（它会被窗口边缘的重叠候选带偏）。Foundation 上（Debug，默认选项）投影次数从 2290 降到 25–1452，预检本身 135–264 ms，建全部投影约 1.25 s；固定种子的随机对拍对四种匹配方式各 6000 次检查没有一次漏报。 |
 | 2026-10-08 | 语料条目里的成员只存名字（与名字共用存储），声明行在成员被收集时从接口文本里读回；常驻预算补算成员结构体与行区间、成员名、嵌套块区间和对象 | PR #121 审查 PR121.25：预算只算文本与几张表，而定位器给每个成员存了一份去掉缩进的整行，成员密集的类型几乎多存一遍文本，Report navigator 显示的大小也偏小。Foundation 上（Debug，按驱逐语料释放的 malloc 量计）：修前预算 14.0 MB、实际 25.8 MB；修后预算 18.0 MB、实际 21.7 MB。 |
+| 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |

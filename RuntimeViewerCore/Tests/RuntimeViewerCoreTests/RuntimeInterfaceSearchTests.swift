@@ -251,6 +251,79 @@ struct RuntimeInterfaceSearchTests {
         #expect(classesMissingTheProtocol.isEmpty, "\(classesMissingTheProtocol)")
     }
 
+    /// What a search request pushes across a connection, encoded as it
+    /// travels.
+    final class EncodedProgress: @unchecked Sendable {
+        private let lock = NSLock()
+        private var payloads: [Data] = []
+
+        var all: [Data] {
+            lock.withLock { payloads }
+        }
+
+        func append(_ payload: Data?) {
+            guard let payload else { return }
+            lock.withLock { payloads.append(payload) }
+        }
+    }
+
+    /// The objects encoded in `payload`: every dictionary with an object's
+    /// keys, nested ones included.
+    private static func encodedObjectCount(in payload: Data) throws -> Int {
+        func count(in value: Any) -> Int {
+            if let dictionary = value as? [String: Any] {
+                let ownCount = dictionary["imagePath"] != nil && dictionary["displayName"] != nil ? 1 : 0
+                return ownCount + dictionary.values.reduce(0) { total, nestedValue in total + count(in: nestedValue) }
+            }
+            if let array = value as? [Any] {
+                return array.reduce(0) { total, element in total + count(in: element) }
+            }
+            return 0
+        }
+        return count(in: try JSONSerialization.jsonObject(with: payload))
+    }
+
+    /// A search's progress crosses a connection as JSON, one batch per
+    /// image. Every match used to carry its object, nested types and all, so
+    /// an object went across once for each of its hits.
+    @Test("a search's progress carries each object once, however many of its hits a batch holds")
+    func searchProgressCarriesEachObjectOnce() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "test-search-progress-objects")
+        try await engine.connect()
+        try await engine.loadImage(at: Anchors.libobjcPath)
+        _ = try await engine.buildInterfaceCorpus(for: Anchors.libobjcPath, transformer: .default)
+
+        let textQuery = RuntimeInterfaceSearchQuery(text: "id", matchMode: .matchingWord, isCaseSensitive: true)
+        let textProgress = EncodedProgress()
+        _ = try await RuntimeEngine.SearchInterfacesRequest(query: textQuery).perform(on: engine) { batch in
+            textProgress.append(try? JSONEncoder().encode(batch))
+        }
+        var textMatches: [RuntimeInterfaceSearchMatch] = []
+        _ = try await engine.searchInterfaces(textQuery) { batch in
+            textMatches += batch
+        }
+
+        let memberQuery = RuntimeMemberSearchQuery(text: "init", matchMode: .startingWith, isCaseSensitive: true)
+        let memberProgress = EncodedProgress()
+        _ = try await RuntimeEngine.SearchMembersRequest(query: memberQuery).perform(on: engine) { batch in
+            memberProgress.append(try? JSONEncoder().encode(batch))
+        }
+        var memberMatches: [RuntimeMemberMatch] = []
+        _ = try await engine.searchMembers(memberQuery) { batch in
+            memberMatches += batch
+        }
+
+        let textObjectCount = Set(textMatches.map(\.object.key)).count
+        let memberObjectCount = Set(memberMatches.map(\.object.key)).count
+        // The case worth sending once: objects with more than one hit.
+        #expect(textMatches.count > 2 * textObjectCount, "\(textMatches.count) text matches in \(textObjectCount) objects")
+        #expect(memberMatches.count > memberObjectCount, "\(memberMatches.count) member matches in \(memberObjectCount) objects")
+        let textEncodedObjectCount = try textProgress.all.reduce(0) { total, payload in total + (try Self.encodedObjectCount(in: payload)) }
+        let memberEncodedObjectCount = try memberProgress.all.reduce(0) { total, payload in total + (try Self.encodedObjectCount(in: payload)) }
+        #expect(textEncodedObjectCount == textObjectCount)
+        #expect(memberEncodedObjectCount == memberObjectCount)
+    }
+
     /// A walk cut short hands back only what it had reached, so a cancelled
     /// search throws instead. The engine here runs in process — the test
     /// process names no local runtime service — so cancelling the task asking

@@ -5554,7 +5554,7 @@ func projectionPrefilterKeepsEverySeamHit() throws {
 
 - **严重度**：Minor（性能），但要在发版前做
 - **审查编号**：F5
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceSearchTests.searchProgressCarriesEachObjectOnce`（在 libobjc 的语料上跑两种搜索请求自己的 `perform`，把每个要过线的进度值编成 JSON、数里面的对象：修前文本搜索编了 68 个对象，其实只涉及 5 个；成员搜索编了 4 个，其实 2 个；修后分别是 5 和 2）；`RuntimeObjectIndexedBatchTests` 四例（每个对象只发一次、解包后与原命中逐条相同且对象内容一致；一个带嵌套类型的对象重复 20 次时新格式的 JSON 不到旧格式的一半；对端发来越界或负的下标时只丢那一条；同 key 而内容不同的对象各占一个槽位）。端到端经打包再解包的路径由 `textSearch`、`memberSearch` 与 `RuntimeInterfaceCorpusNestingTests` 覆盖。实测（Foundation，收满 1000 条）：`init` 1000 条命中涉及 418 个对象，批次从 423064 字节降到 313175 字节（−26%）；`NSString` 755 条涉及 264 个对象，从 383504 降到 231287（−40%）；Foundation 的对象多为没有嵌套类型的 ObjC 类，带嵌套树的 Swift 类型省得更多。线上格式定稿：这两个命令是本 PR 新增的，从未进过任何发布版本（`git tag --contains 8b4309b2` 为空，main 与 origin/next 上都没有 `SearchInterfacesRequest`），S2 在 `CommunicationAndEngineArchitecture.md` §4.4 写下的「改已有命令的载荷形状」规则只管已发布的命令，不适用于它们，所以不保留旧格式。与草案的出入：同 key 而内容不同的对象各占一个槽位（草案按 key 取第一个，`==` 只比身份，这样也不会丢信息）。合并时注意：S3a 在这两个请求结构体里加了 `cancelsAcrossConnections`，与本条改的 `Progress` / `perform` 相邻，两者都要保留
 
 **问题**：文本命中 `RuntimeInterfaceSearchMatch` 和成员命中 `RuntimeMemberMatch` 都直接带着完整的 `RuntimeObject`（`Common/RuntimeInterfaceSearch.swift:124-141`、`Common/RuntimeMemberDeclaration.swift:89-99`），其中包括递归的 `children`。进度推送按镜像成批发出，批里每条命中都要把它的对象连同整棵嵌套子树单独编码一遍。一个接口里常有几十条命中：在 SwiftUI 里搜 `View`、在 Foundation 里搜 `init`，同一个类型会在一批里重复几十次，每次带着它的整棵子树走一趟 XPC 或 socket。
 **四问**：复现——对任何多命中的搜索，把一批进度的 JSON 打出来，同一个对象会重复出现；基线——本 PR 新引入（搜索命令是新的）；影响——只影响传输量和编解码耗时，结果正确。但**这两个线上类型是本 PR 新加的，现在改没有兼容负担，发版后再改就得兼容新旧两种格式**，所以建议在发版前修；历史——新代码。

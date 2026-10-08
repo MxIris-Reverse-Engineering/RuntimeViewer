@@ -41,7 +41,9 @@ extension RuntimeEngine {
         _ query: RuntimeInterfaceSearchQuery,
         onProgress: @escaping @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
-        try await dispatch(SearchInterfacesRequest(query: query), onProgress: onProgress)
+        try await dispatch(SearchInterfacesRequest(query: query)) { batch in
+            await onProgress(batch.matches)
+        }
     }
 
     /// Member-name search over every built corpus, same delivery as
@@ -50,7 +52,9 @@ extension RuntimeEngine {
         _ query: RuntimeMemberSearchQuery,
         onProgress: @escaping @Sendable ([RuntimeMemberMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
-        try await dispatch(SearchMembersRequest(query: query), onProgress: onProgress)
+        try await dispatch(SearchMembersRequest(query: query)) { batch in
+            await onProgress(batch.matches)
+        }
     }
 
     /// Ancestor, descendant or conformer trees for every indexed type whose
@@ -221,21 +225,25 @@ extension RuntimeEngine {
 
     struct SearchInterfacesRequest: RuntimeEngineProgressRequest {
         typealias Response = RuntimeInterfaceSearchSummary
-        typealias Progress = [RuntimeInterfaceSearchMatch]
+        typealias Progress = RuntimeInterfaceSearchBatch
         let query: RuntimeInterfaceSearchQuery
         static var commandName: String { CommandNames.searchInterfaces.commandName }
-        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
-            try await engine._searchInterfaces(query, reportProgress: reportProgress)
+        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeInterfaceSearchBatch) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
+            try await engine._searchInterfaces(query) { matches in
+                await reportProgress(RuntimeInterfaceSearchBatch(matches))
+            }
         }
     }
 
     struct SearchMembersRequest: RuntimeEngineProgressRequest {
         typealias Response = RuntimeInterfaceSearchSummary
-        typealias Progress = [RuntimeMemberMatch]
+        typealias Progress = RuntimeMemberSearchBatch
         let query: RuntimeMemberSearchQuery
         static var commandName: String { CommandNames.searchMembers.commandName }
-        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable ([RuntimeMemberMatch]) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
-            try await engine._searchMembers(query, reportProgress: reportProgress)
+        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeMemberSearchBatch) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
+            try await engine._searchMembers(query) { matches in
+                await reportProgress(RuntimeMemberSearchBatch(matches))
+            }
         }
     }
 
