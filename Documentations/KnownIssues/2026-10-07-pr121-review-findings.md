@@ -6645,7 +6645,8 @@ func clearedHistoryStaysClearedAtCapacity() async throws {
 
 - **严重度**：Minor（性能）
 - **审查编号**：F8
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindCorpusCoordinatorTests.coverageRefreshesCoalesce`（先只加 `coverageFetchCount` 计数、不改刷新逻辑时红：「11 coverage round trips for one burst」，启动 1 次加 10 次调用各 1 次）。修后最多 2 次，绿。
+- **落地与偏离**：丢弃过期刷新的判据与草案不同：不比引擎身份，而是取消在途的刷新 Task、回来后看 `Task.isCancelled`。服务重启后 `.switchEngine` 会把同一台引擎放回去（文档里有打开的内容时今天就是这样），身份比较认不出那次刷新属于重启之前的进程，还会把新一次刷新的句柄清掉。取消放在 `stopPumps()` 里，换引擎与关窗都经过它；`deinit` 也取消。
 
 **问题**：
 - 本文档的每个构建请求成功后，`finishBuildRequest` 都调用一次 `refreshCoverage()`。

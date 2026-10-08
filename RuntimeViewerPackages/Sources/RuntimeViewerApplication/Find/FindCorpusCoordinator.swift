@@ -86,6 +86,16 @@ public final class FindCorpusCoordinator {
     /// transformer change knows what to rebuild.
     private var requestedImagePaths: Set<String> = []
 
+    /// The coverage refresh in flight, if any. One at a time: a call made
+    /// while it runs only sets `isCoverageRefreshPending`.
+    private var coverageRefreshTask: Task<Void, Never>?
+
+    /// A refresh was asked for while one ran; it runs once that one is done.
+    private var isCoverageRefreshPending = false
+
+    /// Round trips `refreshCoverage()` has made. Test seam.
+    private(set) var coverageFetchCount = 0
+
     private let progressStaging = ProgressStaging()
 
     private let corpusBuiltRelay = PublishRelay<String>()
@@ -171,6 +181,7 @@ public final class FindCorpusCoordinator {
 
     deinit {
         transformerRebuildTask?.cancel()
+        coverageRefreshTask?.cancel()
         for request in buildRequests.values {
             request.task.cancel()
         }
@@ -300,13 +311,40 @@ public final class FindCorpusCoordinator {
     /// see `mergeCoverage(_:)`. Runs on start and after every build; the
     /// Report navigator calls it when it appears, because the store evicts
     /// without telling anyone.
+    ///
+    /// One round trip at a time: calls made while one is in flight coalesce
+    /// into a single one after it, which still answers for the latest call.
+    /// Requests that end together — every corpus already built when a second
+    /// window opens — cost two round trips, not one each.
     public func refreshCoverage() {
-        let engine = engine
-        Task { [weak self] in
-            guard let coverage = try? await engine.interfaceCorpusCoverage() else { return }
-            guard let self, self.engine === engine else { return }
-            self.mergeCoverage(coverage)
+        guard coverageRefreshTask == nil else {
+            isCoverageRefreshPending = true
+            return
         }
+        let engine = engine
+        coverageFetchCount += 1
+        coverageRefreshTask = Task { [weak self] in
+            let coverage = try? await engine.interfaceCorpusCoverage()
+            // Cancelled by an engine swap or the document closing: the answer
+            // is about a process this document has left, and a refresh of the
+            // new one may be under way already. An identity check would not
+            // do, since a reset can put the same engine back.
+            guard let self, !Task.isCancelled else { return }
+            self.coverageRefreshTask = nil
+            if let coverage {
+                self.mergeCoverage(coverage)
+            }
+            if self.isCoverageRefreshPending {
+                self.isCoverageRefreshPending = false
+                self.refreshCoverage()
+            }
+        }
+    }
+
+    private func cancelCoverageRefresh() {
+        coverageRefreshTask?.cancel()
+        coverageRefreshTask = nil
+        isCoverageRefreshPending = false
     }
 
     /// Squares this document's states with what a finished search could not
@@ -510,6 +548,7 @@ public final class FindCorpusCoordinator {
         imageIndexedSubscription = nil
         transformerRebuildTask?.cancel()
         transformerRebuildTask = nil
+        cancelCoverageRefresh()
     }
 
     /// An image the engine reports indexed. One with a request open is left

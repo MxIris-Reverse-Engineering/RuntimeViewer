@@ -272,6 +272,29 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
+    /// Every request that ended refreshed the coverage on its own, so a
+    /// second window — whose requests for corpora already built all come
+    /// back at once — made one round trip per image, each bringing back
+    /// every image's state (PR121.35).
+    @Test("a burst of coverage refreshes costs at most two round trips")
+    func coverageRefreshesCoalesce() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.coalescedRefresh")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+
+        // Starting asked for one; ten more arrive while it is in flight, as
+        // ten requests ending together would.
+        for _ in 0 ..< 10 {
+            coordinator.refreshCoverage()
+        }
+        _ = try await values(from: coordinator.$buildStatesByImagePath.asDriver(), during: 1)
+
+        #expect(coordinator.coverageFetchCount <= 2, "\(coordinator.coverageFetchCount) coverage round trips for one burst")
+        await engine.stop()
+    }
+
     @Test("the resident limit from Settings reaches the engine")
     func residentLimitReachesEngine() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.limit", loading: [TestImages.libobjc])
