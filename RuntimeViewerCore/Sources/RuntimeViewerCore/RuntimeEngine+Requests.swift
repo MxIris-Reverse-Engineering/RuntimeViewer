@@ -112,9 +112,23 @@ extension RuntimeEngine {
     struct InterfaceRequest: RuntimeEngineRequest {
         let object: RuntimeObject
         let options: RuntimeObjectInterface.GenerationOptions
+        /// `true` from builds that read `interfaceString` in the columnar
+        /// `FrozenSemanticString` encoding. Builds up to 3.0.0-beta.6 send no
+        /// such key, so their requests decode it as `nil`, and skip it when
+        /// they decode a request of this build; either way they are answered
+        /// in the component array they read. See `RuntimeObjectInterfaceResponse`.
+        let acceptsColumnarInterfaceString: Bool?
         static var commandName: String { CommandNames.runtimeInterfaceForRuntimeObjectInImageWithOptions.commandName }
-        func perform(on engine: RuntimeEngine) async throws -> RuntimeObjectInterface? {
-            try await engine._interface(for: object, options: options)
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeObjectInterfaceResponse {
+            try await response(for: engine._interface(for: object, options: options))
+        }
+
+        /// The reply, in the encoding the sender of this request reads.
+        func response(for interface: RuntimeObjectInterface?) -> RuntimeObjectInterfaceResponse {
+            RuntimeObjectInterfaceResponse(
+                interface: interface,
+                interfaceStringEncoding: acceptsColumnarInterfaceString == true ? .columnar : .components
+            )
         }
     }
 

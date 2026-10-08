@@ -267,6 +267,44 @@ struct TransportHandlerErrorTests {
         client.stop()
         server.stop()
     }
+
+    /// What an alert or a log line shows is `localizedDescription`, not
+    /// `"\(error)"`; without `LocalizedError` it reads
+    /// "The operation couldn't be completed. (… RuntimeNetworkRequestError error 1.)".
+    @Test("LocalSocket: a throwing handler's message is what the caller's error reads as")
+    func testLocalSocketHandlerErrorReadsAsItsMessage() async throws {
+        let identifier = "test-handler-error-description-\(UUID().uuidString)"
+        let marker = "MARKER-\(UUID().uuidString.prefix(8))"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        server.setMessageHandler(name: "boom") { (_: String) -> String in
+            throw TransportTestError.marked(String(marker))
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        try await waitUntilConnected(server)
+
+        do {
+            let _: String = try await withTransportTimeout(3.0) {
+                try await client.sendMessage(name: "boom", request: "x")
+            }
+            Issue.record("expected the handler error to propagate")
+        } catch is TransportTimeoutError {
+            Issue.record("handler-error request hung")
+        } catch {
+            #expect(
+                error.localizedDescription.contains(String(marker)),
+                "the remote failure reads as: \(error.localizedDescription)"
+            )
+        }
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
 }
 
 // MARK: - Ordering guard for fire-and-forget pushes
@@ -386,5 +424,266 @@ struct TransportTrailingChunkTests {
 
         #expect(drops == 0, "\(drops)/\(trials) trailing messages were dropped (coalesced data+FIN bug)")
         #endif
+    }
+}
+
+// MARK: - Pushes sent before a reply are handled before the request returns
+
+/// A serving peer writes every push a request produces — progress, search
+/// results — before it writes the reply. The receiving channel runs pushes on
+/// its serial fire-and-forget tail but used to hand the reply to the waiting
+/// request inline, so the request returned while pushes sent ahead of it were
+/// still queued; the engine then removed the request's progress route and
+/// those pushes were dropped. Over XPC every push is a round trip, so there a
+/// reply can never overtake the pushes before it.
+@Suite("Transport Regression: pushes sent before a reply", .serialized)
+struct TransportReplyOrderingTests {
+
+    private actor HandledValues {
+        private(set) var values: [Int] = []
+        func record(_ value: Int) { values.append(value) }
+    }
+
+    @Test("LocalSocket: pushes sent before a reply are handled before the request returns")
+    func testPushesAreHandledBeforeTheReplyReturns() async throws {
+        let identifier = "test-reply-barrier-\(UUID().uuidString)"
+        let pushCount = 5
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        server.setMessageHandler(name: "work") { [weak server] (count: Int) -> Int in
+            guard let server else { return 0 }
+            for index in 0 ..< count {
+                try await server.sendMessage(name: "tick", request: index)
+            }
+            return count
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        let handledValues = HandledValues()
+        client.setMessageHandler(name: "tick") { (value: Int) in
+            // A consumer slower than the wire, like a Find window applying a batch.
+            try await Task.sleep(nanoseconds: 20_000_000)
+            await handledValues.record(value)
+        }
+        try await waitUntilConnected(server)
+
+        let returned: Int = try await withTransportTimeout(5.0) {
+            try await client.sendMessage(name: "work", request: pushCount)
+        }
+        let handled = await handledValues.values
+        #expect(returned == pushCount)
+        #expect(handled == Array(0 ..< pushCount), "the reply overtook the pushes sent before it; handled \(handled)")
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+
+    @Test("LocalSocket: pushes sent before a failure reply are handled before the error surfaces")
+    func testPushesAreHandledBeforeAFailureReplySurfaces() async throws {
+        let identifier = "test-reply-barrier-failure-\(UUID().uuidString)"
+        let pushCount = 5
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        server.setMessageHandler(name: "work") { [weak server] (count: Int) -> Int in
+            guard let server else { return 0 }
+            for index in 0 ..< count {
+                try await server.sendMessage(name: "tick", request: index)
+            }
+            throw TransportTestError.marked("failed after its pushes")
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        let handledValues = HandledValues()
+        client.setMessageHandler(name: "tick") { (value: Int) in
+            try await Task.sleep(nanoseconds: 20_000_000)
+            await handledValues.record(value)
+        }
+        try await waitUntilConnected(server)
+
+        do {
+            let _: Int = try await withTransportTimeout(5.0) {
+                try await client.sendMessage(name: "work", request: pushCount)
+            }
+            Issue.record("expected the handler's failure to propagate")
+        } catch is TransportTimeoutError {
+            Issue.record("the failing request hung")
+        } catch {
+            // Expected: the server's failure, surfaced after the pushes.
+        }
+        let handled = await handledValues.values
+        #expect(handled == Array(0 ..< pushCount), "the failure overtook the pushes sent before it; handled \(handled)")
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+
+    @Test("LocalSocket: a push handler that sends a request over the same connection still completes")
+    func testPushHandlerRequestDoesNotDeadlockOnTheBarrier() async throws {
+        let identifier = "test-reply-barrier-nested-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        server.setMessageHandler(name: "echo") { (value: Int) -> Int in value }
+        server.setMessageHandler(name: "work") { [weak server] (value: Int) -> Int in
+            guard let server else { return 0 }
+            try await server.sendMessage(name: "tick", request: value)
+            return value
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        let handledValues = HandledValues()
+        client.setMessageHandler(name: "tick") { [weak client] (value: Int) in
+            guard let client else { return }
+            // The reply to this request arrives while this very handler is
+            // the tail; waiting for the tail here would wait for itself.
+            let echoed: Int = try await client.sendMessage(name: "echo", request: value)
+            await handledValues.record(echoed)
+        }
+        try await waitUntilConnected(server)
+
+        let returned: Int = try await withTransportTimeout(4.0) {
+            try await client.sendMessage(name: "work", request: 7)
+        }
+        #expect(returned == 7)
+        #expect(await handledValues.values == [7])
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+
+    @Test("LocalSocket: a push handler waiting on a task that sends a request over the same connection still completes")
+    func testPushHandlerTaskRequestDoesNotDeadlockOnTheBarrier() async throws {
+        let identifier = "test-reply-barrier-task-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        server.setMessageHandler(name: "echo") { (value: Int) -> Int in value }
+        server.setMessageHandler(name: "work") { [weak server] (value: Int) -> Int in
+            guard let server else { return 0 }
+            try await server.sendMessage(name: "tick", request: value)
+            return value
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        let handledValues = HandledValues()
+        client.setMessageHandler(name: "tick") { [weak client] (value: Int) in
+            guard let client else { return }
+            // A task the handler starts and waits for: it inherits the
+            // handler's task-local context, so its request skips the barrier
+            // just like one sent from the handler itself.
+            let echoTask = Task { () -> Int in
+                try await client.sendMessage(name: "echo", request: value)
+            }
+            let echoed = try await echoTask.value
+            await handledValues.record(echoed)
+        }
+        try await waitUntilConnected(server)
+
+        let returned: Int = try await withTransportTimeout(4.0) {
+            try await client.sendMessage(name: "work", request: 11)
+        }
+        #expect(returned == 11)
+        #expect(await handledValues.values == [11])
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+}
+
+// MARK: - A reply that arrives after its request gave up
+
+/// A request that times out leaves the pending table, but its reply can still
+/// arrive. A frame that matches no pending request used to be taken for a new
+/// request: the requester, which has no handler for its own command, answered
+/// with an error envelope under the same nonce; the serving peer has that
+/// handler, took the envelope for a request and ran it again, and its reply
+/// went the same way — the two peers echoed each other until the connection
+/// closed. The Bonjour heartbeat's `engineList` request is one with a timeout,
+/// and its handler decodes an empty payload, which an error envelope decodes
+/// as just as well.
+@Suite("Transport Regression: reply after timeout", .serialized)
+struct TransportLateReplyTests {
+
+    private struct EmptyRequest: Codable {}
+
+    private actor InvocationCounter {
+        private(set) var count = 0
+        func increment() { count += 1 }
+    }
+
+    private actor WrittenFrames {
+        private(set) var frames: [Data] = []
+        func record(_ frame: Data) { frames.append(frame) }
+    }
+
+    @Test("LocalSocket: a reply that arrives after its request timed out is dropped, not answered")
+    func testLateReplyIsNotAnswered() async throws {
+        let identifier = "test-late-reply-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let invocations = InvocationCounter()
+        server.setMessageHandler(name: "slow") { (_: EmptyRequest) -> Int in
+            await invocations.increment()
+            try await Task.sleep(nanoseconds: 300_000_000)
+            return 1
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        try await waitUntilConnected(server)
+
+        await #expect(throws: RuntimeMessageChannelError.requestTimeout) {
+            let _: Int = try await client.sendMessage(name: "slow", request: EmptyRequest(), timeout: 0.1)
+        }
+        // Long enough for the late reply to arrive and for several rounds of an echo loop.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        let invocationCount = await invocations.count
+        #expect(invocationCount == 1, "the late reply was answered, and the server ran its handler \(invocationCount) times")
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+
+    /// What a peer built before the late-reply rule still does with a late
+    /// reply of ours: it answers it once, with an error envelope. That
+    /// envelope must end the exchange here instead of being run as a request.
+    @Test("An error envelope that matches no pending request is never handed to a handler")
+    func testUnmatchedErrorEnvelopeIsNotHandled() async throws {
+        let channel = RuntimeMessageChannel()
+        let invocations = InvocationCounter()
+        channel.setMessageHandler(name: "slow") { (_: EmptyRequest) -> Int in
+            await invocations.increment()
+            return 1
+        }
+        let writtenFrames = WrittenFrames()
+        channel.beginDispatch { frame in
+            await writtenFrames.record(frame)
+        }
+
+        let errorPayload = try JSONEncoder().encode(RuntimeNetworkRequestError(message: "No handler registered for slow"))
+        let errorEnvelope = RuntimeRequestData(identifier: "slow", data: errorPayload, nonce: UUID().uuidString, isError: true)
+        channel.appendReceivedData(try JSONEncoder().encode(errorEnvelope) + RuntimeMessageChannel.endMarkerData)
+
+        // Give the dispatch loop, and a handler it might wrongly start, time to run.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let invocationCount = await invocations.count
+        let writtenFrameCount = await writtenFrames.frames.count
+        #expect(invocationCount == 0, "an error envelope was run as a request")
+        #expect(writtenFrameCount == 0, "an error envelope was answered")
+        channel.finishReceiving()
     }
 }

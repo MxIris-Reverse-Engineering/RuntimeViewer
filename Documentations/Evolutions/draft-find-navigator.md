@@ -37,6 +37,10 @@ Xcode Find navigator 的 view hierarchy 实现，由用户提供，本提案不�
 Frozen 的列式编码比逐 component 编码小一个数量级；语料条目本来就是 Frozen，不改边界就要在 store 里再冻一次、
 两种形态并存。
 
+**列式编码只发给声明读得懂的请求方。** 3.0.0-beta.6 及更早的对端只认逐 component 的数组，引擎连接上又不交换协议版本，
+所以接口请求带上 `acceptsColumnarInterfaceString`，没带的一律回旧形状，回复两种形状都能解（决策日志 2026-10-08；
+规则见 `CommunicationAndEngineArchitecture.md` §4.4）。
+
 `next` 上的消费点比分支当年多，rebase 时逐个改：`ContentTextViewModel`（`interfaceString` 类型与
 `RenderedInterface.semanticString`）、`RuntimeInterfaceCache`、`ThemePreset+ThemeProfile`、
 `ContentSourceEditorViewController`、`MainViewModel` 的导出、`RuntimeInterfaceExportEvent.objectCompleted`、
@@ -758,3 +762,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 撤下 `withSharedGenerationOptionsLock`（推翻 2026-10-01 那条）：隔离的 `AppDefaults` 改为连 user defaults 一起隔离，所有隔离实例共用一个 suite、各用一个键前缀（`UserDefaultsNamespace`） | PR #121 审查 PR121.18：锁只修了表面，等搜索结果的测试已有两处没拿锁。当初没走 suite 方案是因为每个实例一个 suite 会在 `~/Library/Preferences` 留一个 plist；共用一个 suite、按键区分就没有这个代价，KVO 按键通知，实例之间互不可见。 |
 | 2026-10-08 | `FindSession` 对文档改为 `weak`，`Document.close()` 调新增的 `documentWillClose()`：取消进行中的搜索、退订选项与语料协调器的信号 | PR #121 审查 PR121.02：XPC 上的引擎调用取消不掉，搜索 Task 等待期间留住会话；关窗后在别的窗口改一项 Generation Options，孤儿会话重跑搜索、经 `unowned` 读到已释放的 `DocumentState`，整个 App 中止。`FindSessionLifecycleTests` 修前即在 `swift_abortRetainUnowned` 处中止。 |
 | 2026-10-08 | 正则的 `^` / `$` 按行锚定（`.anchorsMatchLines`） | PR #121 审查 PR121.15：条目是整段多行接口，结果却按行报告；不按行时 `^@property`、`;$` 这类按声明形状找的写法永远是 0 条，只有恰好是第一行的 `^@interface` 能用。Xcode 的 Find 按行处理。成员名与类型名是单行，不受影响。§3.1 原写 Swift `Regex`，与实现不符，一并改正。 |
+| 2026-10-08 | 接口请求的列式编码只发给声明读得懂的请求方，回复两种形状都能解；中转节点按收到的形状原样写出 | PR #121 审查（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.03）：`interfaceString` 改成 `FrozenSemanticString` 后，自动合成的编码从数组变成带键对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白；而项目承诺新旧版本互通，iOS 端混版是常态。用户在三个方案里选了这一个：另开新命令要多一轮回退往返，2.1.0 之前的对端还要等到超时；接受破坏违背承诺。请求里加一个可选字段最小：旧端跳过它，新端缺省回旧形状。复现测试 `RuntimeObjectInterfaceWireCompatibilityTests` 在真实连接上跑新旧组合与经新版中转：修复前新客户端对旧服务端、旧客户端对新服务端、三种中转组合共五条红（`DecodingError.typeMismatch`），修复后全绿。 |
