@@ -13941,7 +13941,7 @@ func cancelledRelationshipSearchThrows() async throws {
 
 - **严重度**：建议不修
 - **审查编号**：C34（同 R5）
-- **状态**：方案待批，代码未改
+- **状态**：不修（已裁决，用户同意）。行为不变，只在 `materializeObjCClass(named:)` 上补了下文那段注释，说明这个差异是有意的，随 PR121.69 一起提交
 
 **问题**：两条路径在同一种情况下做法不同：Swift-stable 类（ObjC 运行时里由 Swift 定义的类）找不到对应的 Swift 面。
 - Ancestor 树用的 `materializeObjCClass(named:)` 会退回 ObjC 面，用 ObjC 名把节点画出来（`RuntimeTypeRelationshipsResolver.swift:373-381`）。
@@ -13955,7 +13955,7 @@ func cancelledRelationshipSearchThrows() async throws {
 - **影响**：几乎碰不到。即使碰到，Ancestor 一侧的做法也更好，建议不修。
 - **历史**：AC6（关系结果里的桥接类一律显示为 Swift 面，配不上就丢弃）是 Inspector 关系视图定下的规则。`materializeObjCClass` 是本 PR 为祖先链新写的，没有照搬 AC6 的丢弃，但也没写注释说明原因。
 
-**裁决理由**（将来原样写进 KnownIssues）：
+**裁决理由**：
 > Ancestor Types 对配不上 Swift 面的 Swift-stable 类回退到 ObjC 面，而 Inspector / Descendant / Conforming 按 AC6 丢弃——这一差异有意保留。丢掉一个节点的代价在两种结构里不同：列表里丢一条只少一行；祖先链里丢掉父类，会把它上面直到 `NSObject` 的整条链连同链上的协议一起截掉，用户看到一棵断掉的树，比看到这个类的 ObjC 面更糟。另外，两个面自 2026-09-27 起按类对象指针配对，配不上只剩「该镜像没有 Swift section」一种情况，而 `RuntimeEngine` 总是同时建两个 section，实际几乎不发生。若将来出现能稳定触发的场景，再重新裁决。
 
 **改法**：行为不变，只在 `materializeObjCClass` 上补一段注释说明这个差异是有意的，免得以后被当成不一致「统一」掉。
@@ -13991,7 +13991,7 @@ func cancelledRelationshipSearchThrows() async throws {
 
 - **严重度**：Cleanup
 - **审查编号**：S4
-- **状态**：方案待批，代码未改
+- **状态**：已修复（纯重构，没有新测试）。落地时按「落地顺序」吸收了前面几条：PR121.67 的取消判断并进 `descending(into:)`，各函数里的 `!Task.isCancelled` 随之删掉；PR121.13 的 `referencedFrom:` 仍是参数；`unresolved:` 那一行 PR121.14 已删。行为不变的证据有两份。一是逐字节比对：用一个不提交的临时测试把 40 条关系查询的树全部写成文本，覆盖 Ancestors、Descendent、Conforming、限定范围、正则和候选上限，以及 ObjC 类与协议、Swift 类与协议、绑定泛型的父类、ObjC 面采纳的协议，加载 libobjc、CoreFoundation、Foundation、AppKit。在 `SWIFT_DETERMINISTIC_HASHING=1` 下改前改后各跑一次，两份输出（13,039 行，2,088,882 字节）逐字节相同；改前那份与 PR121.67 落地前的一份也逐字节相同，说明这份输出本身稳定。二是覆盖每种遍历的既有测试全绿：`RuntimeInterfaceSearchTests`、`RuntimeTypeRelationshipsImageScopeTests`，以及本批新加的 `RuntimeTypeRelationshipsProtocolCopyTests`、`RuntimeTypeRelationshipsGenericSuperclassTests`。关系快照与 `RelationshipsTests` 也跑了，但它们只查 Inspector 的 `relationships(for:)`，不经过这里改的遍历：Swift 半边通过，ObjC 半边只差已知的 `_DefaultScopeRegistration` 一行。PR121.68 的那段注释随本条提交
 
 **问题**：`RuntimeTypeRelationshipsResolver` 的遍历代码有三个毛病，读起来费劲，也容易改漏。
 - 8 处几乎一样的代码块：拷贝 `visited`，插入键，再递归。

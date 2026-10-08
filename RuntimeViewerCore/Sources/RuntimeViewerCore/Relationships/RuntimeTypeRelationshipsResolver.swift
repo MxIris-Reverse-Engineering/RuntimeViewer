@@ -20,11 +20,12 @@ import SwiftDeclaration
 /// unresolved — a chain ending at `NSObject` shows `NSObject` even when
 /// libobjc was never indexed.
 ///
-/// The visited set is per path, not per tree: a protocol reached along two
-/// paths — `NSObject` under `NSItemProviderReading` and again under the
-/// `NSObject` class — appears under both, the way Xcode lists it, while a
-/// cycle along one path (only a corrupt image has one) is still cut, and a
-/// depth cap backs that up.
+/// The walk keeps the path from a tree's root to the node it is building
+/// (`RelationshipWalkPath`), not a visited set per tree: a protocol reached
+/// along two paths — `NSObject` under `NSItemProviderReading` and again under
+/// the `NSObject` class — appears under both, the way Xcode lists it, while a
+/// cycle along one path (only a corrupt image has one) is still cut, a depth
+/// cap backs that up, and a cancelled task stops every further step.
 ///
 /// Every image compiled against an Objective-C protocol carries a full copy
 /// of it, and none of them owns it. A protocol is one candidate, and one node
@@ -67,13 +68,13 @@ actor RuntimeTypeRelationshipsResolver {
         trees.reserveCapacity(candidates.count)
         for candidate in candidates {
             try Task.checkCancellation()
-            let visited: Set<String> = [visitedKey(for: candidate)]
+            let path = RelationshipWalkPath(root: identity(of: candidate))
             let nodes: [RuntimeRelationshipNode]
             switch query.relationship {
             case .ancestors:
-                nodes = await ancestorNodes(of: candidate, visited: visited, depth: 0)
+                nodes = await ancestorNodes(of: candidate, path: path)
             case .descendants:
-                nodes = await descendantNodes(of: candidate, visited: visited, depth: 0)
+                nodes = await descendantNodes(of: candidate, path: path)
             case .conformers:
                 nodes = await conformerNodes(of: candidate)
             }
@@ -248,18 +249,17 @@ actor RuntimeTypeRelationshipsResolver {
 
     // MARK: - Ancestors
 
-    private func ancestorNodes(of object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
+    /// `object`'s ancestors; `path` already ends at `object`.
+    private func ancestorNodes(of object: RuntimeObject, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         switch object.kind {
         case .objc(.type(.class)):
-            return await objcClassAncestorNodes(named: object.name, visited: visited, depth: depth)
+            return await objcClassAncestorNodes(named: object.name, path: path)
         case .objc(.type(.protocol)):
-            return await objcProtocolAncestorNodes(named: object.name, referencedFrom: object.imagePath, visited: visited, depth: depth)
+            return await objcProtocolAncestorNodes(named: object.name, referencedFrom: object.imagePath, path: path)
         case .swift(.type(.protocol)):
-            let qualifiedName = swiftSectionFactory.indexer.protocolName(forMangledName: object.name)?.name ?? object.displayName
-            return await swiftProtocolAncestorNodes(qualifiedName: qualifiedName, visited: visited, depth: depth)
+            return await swiftProtocolAncestorNodes(qualifiedName: swiftProtocolQualifiedName(of: object), path: path)
         case .swift(.type):
-            return await swiftTypeAncestorNodes(of: object, visited: visited, depth: depth)
+            return await swiftTypeAncestorNodes(of: object, path: path)
         default:
             return []
         }
@@ -268,44 +268,36 @@ actor RuntimeTypeRelationshipsResolver {
     /// An Objective-C class's ancestors: the protocols it adopts, then its
     /// superclass carrying the same for itself, recursively — the shape
     /// Xcode nests them in.
-    private func objcClassAncestorNodes(named className: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard !Task.isCancelled else { return [] }
+    private func objcClassAncestorNodes(named className: String, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         guard let (group, classImagePath) = objcSectionFactory.indexer.classGroupAcrossImages(forName: className),
               let classInfo = group.info.first
         else { return [] }
-        var nodes = await objcProtocolNodes(named: classInfo.protocols.map(\.name), referencedFrom: classImagePath, visited: visited, depth: depth + 1)
-        if let superclassName = classInfo.superClassName, !superclassName.isEmpty {
-            let key = "objc:" + superclassName
-            if !visited.contains(key) {
-                var visited = visited
-                visited.insert(key)
-                let superclass = await materializeObjCClass(named: superclassName)
-                let children = await objcClassAncestorNodes(named: superclassName, visited: visited, depth: depth + 1)
-                nodes.append(RuntimeRelationshipNode(name: superclass?.displayName ?? superclassName, object: superclass, children: children))
-            }
+        var nodes = await objcProtocolNodes(named: classInfo.protocols.map(\.name), referencedFrom: classImagePath, path: path)
+        if let superclassName = classInfo.superClassName, !superclassName.isEmpty,
+           let superclassPath = path.descending(into: .objcClass(name: superclassName)) {
+            let superclass = await materializeObjCClass(named: superclassName)
+            let children = await objcClassAncestorNodes(named: superclassName, path: superclassPath)
+            nodes.append(RuntimeRelationshipNode(name: superclass?.displayName ?? superclassName, object: superclass, children: children))
         }
         return nodes
     }
 
-    private func objcProtocolAncestorNodes(named protocolName: String, referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        await objcProtocolNodes(named: objcSectionFactory.indexer.refinedProtocolNames(of: protocolName), referencedFrom: referencingImagePath, visited: visited, depth: depth + 1)
+    private func objcProtocolAncestorNodes(named protocolName: String, referencedFrom referencingImagePath: String?, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
+        await objcProtocolNodes(named: objcSectionFactory.indexer.refinedProtocolNames(of: protocolName), referencedFrom: referencingImagePath, path: path)
     }
 
     /// Nodes for Objective-C protocols by name, each carrying the protocols
     /// it adopts underneath. `referencingImagePath` is the image whose
     /// metadata named them — the adopting class's, or the copy of the
     /// refining protocol a node stands for — and each node prefers that
-    /// image's own copy.
-    private func objcProtocolNodes(named protocolNames: [String], referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
+    /// image's own copy. It changes from node to node, so it is passed along
+    /// rather than kept in the path.
+    private func objcProtocolNodes(named protocolNames: [String], referencedFrom referencingImagePath: String?, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         var nodes: [RuntimeRelationshipNode] = []
         for protocolName in protocolNames {
-            let key = "objcProtocol:" + protocolName
-            guard !visited.contains(key) else { continue }
-            var visited = visited
-            visited.insert(key)
+            guard let protocolPath = path.descending(into: .objcProtocol(name: protocolName)) else { continue }
             let object = await materializeObjCProtocol(named: protocolName, referencedFrom: referencingImagePath)
-            let children = await objcProtocolAncestorNodes(named: protocolName, referencedFrom: object?.imagePath ?? referencingImagePath, visited: visited, depth: depth)
+            let children = await objcProtocolAncestorNodes(named: protocolName, referencedFrom: object?.imagePath ?? referencingImagePath, path: protocolPath)
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? protocolName, object: object, children: children))
         }
         return nodes
@@ -315,13 +307,13 @@ actor RuntimeTypeRelationshipsResolver {
     /// Swift conformance record: it is written into the class's Objective-C
     /// face, where Conforming Types reads it, so Ancestor Types reads it
     /// there too. A class with no Objective-C face adopts none.
-    private func objcProtocolNodes(adoptedBySwiftClass object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+    private func objcProtocolNodes(adoptedBySwiftClass object: RuntimeObject, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath),
               let objcClassName = await swiftSection.objcClassName(forCounterpartOf: object),
               let objcSection = await objcSectionFactory.existingSection(for: object.imagePath),
               let classInfo = objcSection.objcIndexer.classGroup(forName: objcClassName)?.info.first
         else { return [] }
-        return await objcProtocolNodes(named: classInfo.protocols.map(\.name), referencedFrom: object.imagePath, visited: visited, depth: depth)
+        return await objcProtocolNodes(named: classInfo.protocols.map(\.name), referencedFrom: object.imagePath, path: path)
     }
 
     /// A Swift struct's, enum's, actor's or class's ancestors: the protocols
@@ -331,26 +323,22 @@ actor RuntimeTypeRelationshipsResolver {
     /// class itself. One no Swift image defines is looked up as an
     /// Objective-C class when it is an imported one, by the runtime name the
     /// indexer recorded, and is left unresolved otherwise.
-    private func swiftTypeAncestorNodes(of object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard !Task.isCancelled else { return [] }
+    private func swiftTypeAncestorNodes(of object: RuntimeObject, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         let indexer = swiftSectionFactory.indexer
         var nodes = await swiftProtocolNodes(
             qualifiedNames: indexer.conformingProtocolNames(forMangledTypeName: object.name).map(\.name),
-            visited: visited,
-            depth: depth + 1
+            path: path
         )
         if case .swift(.type(.class)) = object.kind {
-            nodes += await objcProtocolNodes(adoptedBySwiftClass: object, visited: visited, depth: depth + 1)
+            nodes += await objcProtocolNodes(adoptedBySwiftClass: object, path: path)
         }
         guard case .swift(.type(.class)) = object.kind,
               let superclassMangledName = indexer.superclassMangledName(forMangledTypeName: object.name)
         else { return nodes }
 
         if let superclass = await materializeSwiftType(mangledName: superclassMangledName) {
-            guard !visited.contains(visitedKey(for: superclass)) else { return nodes }
-            var visited = visited
-            visited.insert(visitedKey(for: superclass))
-            let children = await swiftTypeAncestorNodes(of: superclass, visited: visited, depth: depth + 1)
+            guard let superclassPath = path.descending(into: .swiftType(mangledName: superclass.name)) else { return nodes }
+            let children = await swiftTypeAncestorNodes(of: superclass, path: superclassPath)
             nodes.append(RuntimeRelationshipNode(object: superclass, children: children))
             return nodes
         }
@@ -358,10 +346,10 @@ actor RuntimeTypeRelationshipsResolver {
         let displayName = indexer.superclassDisplayName(forMangledTypeName: object.name) ?? superclassMangledName
         if let objcClassName = indexer.superclassObjCClassName(forMangledTypeName: object.name),
            let objcSuperclass = await materializeObjCClass(named: objcClassName) {
-            guard !visited.contains(visitedKey(for: objcSuperclass)) else { return nodes }
-            var visited = visited
-            visited.insert(visitedKey(for: objcSuperclass))
-            let children = await ancestorNodes(of: objcSuperclass, visited: visited, depth: depth + 1)
+            guard let superclassIdentity = identity(of: objcSuperclass),
+                  let superclassPath = path.descending(into: superclassIdentity)
+            else { return nodes }
+            let children = await ancestorNodes(of: objcSuperclass, path: superclassPath)
             nodes.append(RuntimeRelationshipNode(object: objcSuperclass, children: children))
         } else {
             nodes.append(RuntimeRelationshipNode(name: displayName, object: nil, children: []))
@@ -369,15 +357,14 @@ actor RuntimeTypeRelationshipsResolver {
         return nodes
     }
 
-    private func swiftProtocolAncestorNodes(qualifiedName: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
+    private func swiftProtocolAncestorNodes(qualifiedName: String, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         let declaringImagePath = swiftSectionFactory.indexer.protocolReference(forQualifiedName: qualifiedName)?.imagePath
         var nodes: [RuntimeRelationshipNode] = []
         for refined in swiftSectionFactory.indexer.refinedProtocols(ofQualifiedName: qualifiedName) {
             if refined.isObjC {
-                nodes += await objcProtocolNodes(named: [refined.qualifiedName], referencedFrom: declaringImagePath, visited: visited, depth: depth + 1)
+                nodes += await objcProtocolNodes(named: [refined.qualifiedName], referencedFrom: declaringImagePath, path: path)
             } else {
-                nodes += await swiftProtocolNodes(qualifiedNames: [refined.qualifiedName], visited: visited, depth: depth + 1)
+                nodes += await swiftProtocolNodes(qualifiedNames: [refined.qualifiedName], path: path)
             }
         }
         return nodes
@@ -385,16 +372,12 @@ actor RuntimeTypeRelationshipsResolver {
 
     /// Nodes for Swift protocols by qualified name, each carrying the
     /// protocols it refines underneath.
-    private func swiftProtocolNodes(qualifiedNames: [String], visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
+    private func swiftProtocolNodes(qualifiedNames: [String], path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         var nodes: [RuntimeRelationshipNode] = []
         for qualifiedName in qualifiedNames {
-            let key = "swiftProtocol:" + qualifiedName
-            guard !visited.contains(key) else { continue }
-            var visited = visited
-            visited.insert(key)
+            guard let protocolPath = path.descending(into: .swiftProtocol(qualifiedName: qualifiedName)) else { continue }
             let object = await materializeSwiftProtocol(qualifiedName: qualifiedName)
-            let children = await swiftProtocolAncestorNodes(qualifiedName: qualifiedName, visited: visited, depth: depth)
+            let children = await swiftProtocolAncestorNodes(qualifiedName: qualifiedName, path: protocolPath)
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? qualifiedName, object: object, children: children))
         }
         return nodes
@@ -402,24 +385,23 @@ actor RuntimeTypeRelationshipsResolver {
 
     // MARK: - Descendants
 
-    private func descendantNodes(of object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
+    /// `object`'s descendants; `path` already ends at `object`.
+    private func descendantNodes(of object: RuntimeObject, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         switch object.kind {
         case .objc(.type(.class)), .swift(.type(.class)):
             var nodes: [RuntimeRelationshipNode] = []
             for subclass in await relationshipsResolver.relationships(for: object).subclasses {
-                guard !visited.contains(visitedKey(for: subclass)) else { continue }
-                var visited = visited
-                visited.insert(visitedKey(for: subclass))
-                let children = await descendantNodes(of: subclass, visited: visited, depth: depth + 1)
+                guard let subclassIdentity = identity(of: subclass),
+                      let subclassPath = path.descending(into: subclassIdentity)
+                else { continue }
+                let children = await descendantNodes(of: subclass, path: subclassPath)
                 nodes.append(RuntimeRelationshipNode(object: subclass, children: children))
             }
             return nodes
         case .objc(.type(.protocol)):
-            return await refiningProtocolNodes(ofObjCProtocolNamed: object.name, referencedFrom: object.imagePath, visited: visited, depth: depth)
+            return await refiningProtocolNodes(ofObjCProtocolNamed: object.name, referencedFrom: object.imagePath, path: path)
         case .swift(.type(.protocol)):
-            let qualifiedName = swiftSectionFactory.indexer.protocolName(forMangledName: object.name)?.name ?? object.displayName
-            return await refiningProtocolNodes(ofSwiftProtocolNamed: qualifiedName, visited: visited, depth: depth)
+            return await refiningProtocolNodes(ofSwiftProtocolNamed: swiftProtocolQualifiedName(of: object), path: path)
         default:
             return []
         }
@@ -432,42 +414,34 @@ actor RuntimeTypeRelationshipsResolver {
     /// protocol reports it, so one node stands for all of its copies — the
     /// copy of the image the parent node stands for when it carries one —
     /// and the level is listed by name.
-    private func refiningProtocolNodes(ofObjCProtocolNamed protocolName: String, referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard !Task.isCancelled else { return [] }
+    private func refiningProtocolNodes(ofObjCProtocolNamed protocolName: String, referencedFrom referencingImagePath: String?, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         var carrierImagePathsByProtocolName: OrderedDictionary<String, [String]> = [:]
         for reference in objcSectionFactory.indexer.refiningProtocols(of: protocolName) {
             carrierImagePathsByProtocolName[reference.protocolName, default: []].append(reference.imagePath)
         }
         var nodes: [RuntimeRelationshipNode] = []
         for (refiningProtocolName, carrierImagePaths) in carrierImagePathsByProtocolName {
-            let key = "objcProtocol:" + refiningProtocolName
-            guard !visited.contains(key),
+            guard let protocolPath = path.descending(into: .objcProtocol(name: refiningProtocolName)),
                   let carrierImagePath = Self.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: referencingImagePath, imagePaths: nil)
             else { continue }
-            var visited = visited
-            visited.insert(key)
             let object = await objcSectionFactory.existingSection(for: carrierImagePath)?.makeRuntimeObject(forProtocolName: refiningProtocolName)
-            let children = await refiningProtocolNodes(ofObjCProtocolNamed: refiningProtocolName, referencedFrom: carrierImagePath, visited: visited, depth: depth + 1)
+            let children = await refiningProtocolNodes(ofObjCProtocolNamed: refiningProtocolName, referencedFrom: carrierImagePath, path: protocolPath)
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? refiningProtocolName, object: object, children: children))
         }
-        nodes += await swiftRefiningProtocolNodes(of: protocolName, visited: visited, depth: depth)
+        nodes += await swiftRefiningProtocolNodes(of: protocolName, path: path)
         return Self.sortedByName(nodes)
     }
 
-    private func refiningProtocolNodes(ofSwiftProtocolNamed qualifiedName: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        await swiftRefiningProtocolNodes(of: qualifiedName, visited: visited, depth: depth)
+    private func refiningProtocolNodes(ofSwiftProtocolNamed qualifiedName: String, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
+        await swiftRefiningProtocolNodes(of: qualifiedName, path: path)
     }
 
-    private func swiftRefiningProtocolNodes(of name: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard depth < Self.maximumDepth, !Task.isCancelled else { return [] }
+    private func swiftRefiningProtocolNodes(of name: String, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
         var nodes: [RuntimeRelationshipNode] = []
         for reference in swiftSectionFactory.indexer.refiningProtocols(ofQualifiedName: name) {
-            let key = "swiftProtocol:" + reference.qualifiedName
-            guard !visited.contains(key) else { continue }
-            var visited = visited
-            visited.insert(key)
+            guard let protocolPath = path.descending(into: .swiftProtocol(qualifiedName: reference.qualifiedName)) else { continue }
             let object = await swiftSectionFactory.existingSection(for: reference.imagePath)?.makeRuntimeObject(forMangledProtocolName: reference.mangledName)
-            let children = await swiftRefiningProtocolNodes(of: reference.qualifiedName, visited: visited, depth: depth + 1)
+            let children = await swiftRefiningProtocolNodes(of: reference.qualifiedName, path: protocolPath)
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? reference.qualifiedName, object: object, children: children))
         }
         return Self.sortedByName(nodes)
@@ -484,6 +458,15 @@ actor RuntimeTypeRelationshipsResolver {
     /// The `RuntimeObject` for an Objective-C class from whichever indexed
     /// image declares it — as its Swift face when the class is a Swift class,
     /// the way the sidebar and the Inspector list it.
+    ///
+    /// Unlike `RuntimeRelationshipsResolver.materializeObjCReference(_:)`,
+    /// which drops a Swift class whose Swift face it cannot find, this falls
+    /// back to the Objective-C face, deliberately: a list loses one row to a
+    /// dropped entry, but an ancestor chain would lose the superclass and
+    /// everything above it, up to `NSObject` and the protocols on the way.
+    /// Since the two faces are paired through the class object, a class goes
+    /// unpaired only when its image has no Swift section, which
+    /// `RuntimeEngine` never builds apart from the Objective-C one.
     private func materializeObjCClass(named className: String) async -> RuntimeObject? {
         guard let (group, imagePath) = objcSectionFactory.indexer.classGroupAcrossImages(forName: className) else { return nil }
         if group.objcClass.isSwiftStable,
@@ -512,8 +495,77 @@ actor RuntimeTypeRelationshipsResolver {
         return await swiftSectionFactory.existingSection(for: reference.imagePath)?.makeRuntimeObject(forMangledProtocolName: reference.mangledName)
     }
 
-    private func visitedKey(for object: RuntimeObject) -> String {
-        "\(object.kind)|\(object.name)"
+    // MARK: - Walk State
+
+    /// The identity a materialized type is walked under, `nil` for kinds a
+    /// walk never stands on.
+    private func identity(of object: RuntimeObject) -> RelationshipTypeIdentity? {
+        switch object.kind {
+        case .objc(.type(.class)):
+            return .objcClass(name: object.name)
+        case .objc(.type(.protocol)):
+            return .objcProtocol(name: object.name)
+        case .swift(.type(.protocol)):
+            return .swiftProtocol(qualifiedName: swiftProtocolQualifiedName(of: object))
+        case .swift(.type):
+            return .swiftType(mangledName: object.name)
+        default:
+            return nil
+        }
+    }
+
+    /// The qualified name the Swift tables key a protocol by. One protocol
+    /// arrives under more than one printed name — the sidebar lists a
+    /// protocol nested in a type by its own short name — so it is recovered
+    /// from the mangled name rather than read off `displayName`.
+    private func swiftProtocolQualifiedName(of object: RuntimeObject) -> String {
+        swiftSectionFactory.indexer.protocolName(forMangledName: object.name)?.name ?? object.displayName
+    }
+
+    /// One type a walk can stand on. A class and a protocol of one name are
+    /// two types, and so are a Swift class and the Objective-C class it is
+    /// registered as. Every step keys the path by this one value, so a cycle
+    /// cannot slip past under a second spelling of the same type.
+    private enum RelationshipTypeIdentity: Hashable {
+        case objcClass(name: String)
+        case objcProtocol(name: String)
+        case swiftType(mangledName: String)
+        case swiftProtocol(qualifiedName: String)
+    }
+
+    /// The path from a tree's root to the node being built: the types on it
+    /// and how deep it runs. Siblings each descend from the same path, so a
+    /// type reached along two paths shows under both, while a cycle along one
+    /// — only a corrupt image has one — is cut, with the depth cap as the
+    /// backstop. A cancelled task descends no further: the walk then returns
+    /// what it had, and `trees(for:)` throws instead of handing that out.
+    private struct RelationshipWalkPath {
+        private var identities: Set<RelationshipTypeIdentity>
+
+        private var depth: Int
+
+        init(root: RelationshipTypeIdentity?) {
+            if let root {
+                identities = [root]
+            } else {
+                identities = []
+            }
+            depth = 0
+        }
+
+        /// The path one step further, onto `identity`; `nil` when that type
+        /// is on the path already, when the path is as deep as a walk goes,
+        /// or when the task asking has been cancelled.
+        func descending(into identity: RelationshipTypeIdentity) -> RelationshipWalkPath? {
+            guard depth < RuntimeTypeRelationshipsResolver.maximumDepth,
+                  !Task.isCancelled,
+                  !identities.contains(identity)
+            else { return nil }
+            var path = self
+            path.identities.insert(identity)
+            path.depth += 1
+            return path
+        }
     }
 
     // MARK: - Objective-C Protocol Copies
