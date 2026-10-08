@@ -41,13 +41,10 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
         self.visibilityRegions = visibilityRegions
         self.members = members
         self.nestedDefinitionRanges = nestedDefinitionRanges
-        let lineStartOffsets = Self.lineStartOffsets(of: interface.text)
-        let textByteCount = interface.text.utf8.count
+        let lineTable = RuntimeInterfaceLineTable(interface.text)
         memberDeclarationLineRanges = members.map { member in
-            guard let lineNumber = member.lineNumber, lineNumber >= 1, lineNumber <= lineStartOffsets.count else { return nil }
-            let lineStart = lineStartOffsets[lineNumber - 1]
-            let lineEnd = lineNumber < lineStartOffsets.count ? lineStartOffsets[lineNumber] - 1 : textByteCount
-            return lineStart ..< lineEnd
+            guard let lineNumber = member.lineNumber, lineNumber >= 1, lineNumber <= lineTable.lineCount else { return nil }
+            return lineTable.lineUTF8Range(at: lineNumber - 1)
         }
     }
 
@@ -85,7 +82,7 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     /// The member at `memberIndex` as the projection shows it — its line
     /// number and declaration line in the projected text — or `nil` when the
     /// projection hid it. A member with no known line is kept as it is.
-    func member(at memberIndex: Int, in projection: VisibilityProjection, projectedLineStartOffsets: [Int]) -> RuntimeMemberDeclaration? {
+    func member(at memberIndex: Int, in projection: VisibilityProjection, projectedLineTable: RuntimeInterfaceLineTable) -> RuntimeMemberDeclaration? {
         let member = members[memberIndex]
         guard let lineRange = memberDeclarationLineRanges[memberIndex] else { return member }
         let originalBytes = interface.text.utf8
@@ -100,34 +97,10 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
             byteIndex = originalBytes.index(after: byteIndex)
         }
         guard let surviving else { return nil }
-        let lineIndex = Self.lineIndex(containing: surviving, lineStartOffsets: projectedLineStartOffsets)
-        let projectedText = projection.text.text.utf8
-        let lineStart = projectedLineStartOffsets[lineIndex]
-        let lineEnd = lineIndex + 1 < projectedLineStartOffsets.count ? projectedLineStartOffsets[lineIndex + 1] - 1 : projectedText.count
-        let lineText = String(decoding: projectedText.dropFirst(lineStart).prefix(lineEnd - lineStart), as: UTF8.self)
+        let lineIndex = projectedLineTable.lineIndex(containingUTF8Offset: surviving)
+        let projectedLineRange = projectedLineTable.lineUTF8Range(at: lineIndex)
+        let lineText = String(decoding: projection.text.text.utf8.dropFirst(projectedLineRange.lowerBound).prefix(projectedLineRange.count), as: UTF8.self)
         return member.located(at: lineIndex + 1, declarationText: lineText.trimmingCharacters(in: .whitespaces))
-    }
-
-    static func lineStartOffsets(of text: String) -> [Int] {
-        var offsets = [0]
-        for (offset, byte) in text.utf8.enumerated() where byte == UInt8(ascii: "\n") {
-            offsets.append(offset + 1)
-        }
-        return offsets
-    }
-
-    private static func lineIndex(containing offset: Int, lineStartOffsets: [Int]) -> Int {
-        var lowerBound = 0
-        var upperBound = lineStartOffsets.count
-        while upperBound - lowerBound > 1 {
-            let middle = (lowerBound + upperBound) / 2
-            if lineStartOffsets[middle] <= offset {
-                lowerBound = middle
-            } else {
-                upperBound = middle
-            }
-        }
-        return lowerBound
     }
 }
 
@@ -704,18 +677,18 @@ actor RuntimeInterfaceCorpusStore {
             var isCollecting = true
             // Projected only once a member of this entry matches: most
             // entries have none, and they cost nothing.
-            var projection: (projection: VisibilityProjection, lineStartOffsets: [Int])??
+            var projection: (projection: VisibilityProjection, lineTable: RuntimeInterfaceLineTable)??
             for (memberIndex, member) in entry.members.enumerated() {
                 if let kinds, !kinds.contains(member.kind) { continue }
                 guard let range = try RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, pattern: pattern, budget: &budget) else { continue }
                 var shownMember = member
                 if let visibility {
                     if projection == nil {
-                        projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceCorpusEntry.lineStartOffsets(of: $0.text.text)) }
+                        projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceLineTable($0.text.text)) }
                     }
                     if let entryProjection = projection ?? nil {
                         // Hidden under the query's options: not a match.
-                        guard let projectedMember = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineStartOffsets: entryProjection.lineStartOffsets) else { continue }
+                        guard let projectedMember = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineTable: entryProjection.lineTable) else { continue }
                         shownMember = projectedMember
                     }
                 }

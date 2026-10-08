@@ -394,22 +394,14 @@ enum RuntimeInterfaceTextMatcher {
     /// Line starts and span starts of one interface, built once per scan.
     struct Layout {
         let text: String
-        /// UTF-8 offsets at which lines begin; the first is always 0.
-        let lineStartOffsets: [Int]
+        let lineTable: RuntimeInterfaceLineTable
         /// UTF-8 offset at which each span begins, plus a trailing sentinel.
         let spanStartOffsets: [Int]
         let spanKinds: [RuntimeSemanticKind]
 
         init(_ interface: FrozenSemanticString) {
             self.text = interface.text
-            var lineStartOffsets = [0]
-            var text = interface.text
-            text.withUTF8 { bytes in
-                for (index, byte) in bytes.enumerated() where byte == UInt8(ascii: "\n") {
-                    lineStartOffsets.append(index + 1)
-                }
-            }
-            self.lineStartOffsets = lineStartOffsets
+            self.lineTable = RuntimeInterfaceLineTable(interface.text)
 
             var spanStartOffsets: [Int] = []
             spanStartOffsets.reserveCapacity(interface.spans.count + 1)
@@ -428,18 +420,7 @@ enum RuntimeInterfaceTextMatcher {
 
         /// 0-based index of the line containing the byte at `offset`.
         func lineIndex(containingUTF8Offset offset: Int) -> Int {
-            // Last line start that is <= offset.
-            var low = 0
-            var high = lineStartOffsets.count - 1
-            while low < high {
-                let middle = (low + high + 1) / 2
-                if lineStartOffsets[middle] <= offset {
-                    low = middle
-                } else {
-                    high = middle - 1
-                }
-            }
-            return low
+            lineTable.lineIndex(containingUTF8Offset: offset)
         }
 
         func semanticKind(atUTF8Offset offset: Int) -> RuntimeSemanticKind {
@@ -459,14 +440,7 @@ enum RuntimeInterfaceTextMatcher {
 
         /// UTF-8 range of line `lineIndex`, without its terminator.
         func lineUTF8Range(at lineIndex: Int) -> Range<Int> {
-            let start = lineStartOffsets[lineIndex]
-            let end: Int
-            if lineIndex + 1 < lineStartOffsets.count {
-                end = lineStartOffsets[lineIndex + 1] - 1
-            } else {
-                end = text.utf8.count
-            }
-            return start ..< max(start, end)
+            lineTable.lineUTF8Range(at: lineIndex)
         }
     }
 

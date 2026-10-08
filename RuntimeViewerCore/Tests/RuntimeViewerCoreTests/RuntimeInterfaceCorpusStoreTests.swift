@@ -540,6 +540,44 @@ struct RuntimeInterfaceCorpusStoreTests {
         }
     }
 
+    /// The member search under Generation Options locates each member again
+    /// in the projected text; no other test reaches that path.
+    @Test("a member under options is located on its line of the projected text")
+    func memberLocatedInProjection() {
+        // Line 2 is hidden under the options, so `shown` moves from line 3 to
+        // line 2. `Comment` writes the `// ` itself.
+        let interface = SemanticString {
+            Keyword("struct")
+            Standard(" S {\n")
+            Standard("    ")
+            Comment("hidden\n")
+            Standard("    ")
+            Keyword("var")
+            Standard(" ")
+            Variable("shown")
+            Standard(": Int\n}")
+        }.frozen()
+        // "struct S {\n" is 11 bytes; the comment span, newline included, is 14.
+        let regions = VisibilityRegionTable(
+            regions: [VisibilityRegionTable.Region(utf8Offset: 11, utf8Length: 14, conditionIndex: 0)],
+            conditions: [.enabled("test.showsComments")]
+        )
+        let entry = RuntimeInterfaceCorpusEntry(
+            object: RuntimeObject(name: "S", displayName: "S", kind: .swift(.type(.struct)), imagePath: Self.imageA, children: []),
+            interface: interface,
+            visibilityRegions: regions,
+            members: [RuntimeMemberDeclaration(name: "shown", kind: .swiftVariable, isStatic: false, declarationText: "shown", lineNumber: 3)]
+        )
+        let projection = regions.projection(of: interface) { _ in false }
+        #expect(interface.text == "struct S {\n    // hidden\n    var shown: Int\n}")
+        #expect(projection.text.text == "struct S {\n    var shown: Int\n}")
+
+        let shown = entry.member(at: 0, in: projection, projectedLineTable: RuntimeInterfaceLineTable(projection.text.text))
+
+        #expect(shown?.lineNumber == 2)
+        #expect(shown?.declarationText == "var shown: Int")
+    }
+
     @Test("a second build of the same image returns the corpus already built")
     func rebuildIsFree() async throws {
         let fixture = makeStore()

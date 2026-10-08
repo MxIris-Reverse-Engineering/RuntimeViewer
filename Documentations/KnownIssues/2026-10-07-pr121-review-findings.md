@@ -5975,7 +5975,7 @@ func countingAloneMatchesCollecting(scope: RuntimeInterfaceSearchScope) throws {
 
 - **严重度**：Cleanup
 - **审查编号**：R6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，行为不变：守护用例 `RuntimeInterfaceCorpusStoreTests.memberLocatedInProjection`（成员搜索带 Generation Options 时在投影文本里重新定位行号，此前没有任何测试走这条路）先按旧签名写好，在改动前的代码上跑过并通过，重构后改用新签名仍通过；其余由 `RuntimeInterfaceTextMatcherTests`、`RuntimeInterfaceCorpusStoreTests`、`RuntimeInterfaceSearchTests`（含 `memberSearch`）、`RuntimeInterfaceCorpusNestingTests`、`RuntimeMemberDeclarationLocatorTests` 覆盖，重构后五个套件全过。与草案的出入：草案的守护用例夹具算错了——`Comment(_:)` 自己会加 `// `，照草案写 `Comment("    // hidden\n")` 得到的是 `//     // hidden`，隐藏区间切在行中间、留下 `en`，在未改动的代码上就是红的（成员落在第 3 行）；改成 `Standard("    ")` 加 `Comment("hidden\n")`，并用手写字面量断言全文与投影后的文本。没有可数的省却：调用次数与建表次数都不变，改的是两份切行实现合成一份（条目一侧从 `utf8.enumerated()` 换成 `withUTF8`）。同类：`RuntimeMemberDeclarationLocator` 的切行归 PR121.10（S5b），本条不动
 
 **问题**：「把文本按 `\n` 切成行起点数组」以及「按偏移找所在行」，在搜索代码里实现了两遍。一份在 `RuntimeInterfaceCorpusEntry`（`RuntimeInterfaceCorpusStore.swift:111-131`，用 `utf8.enumerated()` 扫描，二分查找写成上下界形式），另一份在匹配器的 `Layout`（`RuntimeInterfaceTextMatcher.swift:214-254`、:271-281，用 `withUTF8` 扫描，二分查找写成 `low` / `high` 形式）。两份目前行为一致，但「行尾不含换行符」「最后一行到文本末尾」这类约定得在两处分别维护。
 **四问**：复现——读代码即可看到两份实现；基线——本 PR 新引入；影响——没有行为差异，属于清理，建议与 PR121.23 同批做；历史——新代码。
