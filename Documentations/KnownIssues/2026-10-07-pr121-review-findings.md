@@ -4279,7 +4279,7 @@ func protocolDefaultImplementationsLocated() async throws {
 
 - **严重度**：Major
 - **审查编号**：C08（上次第 12 条，审查判为「疑似」）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`TransportReplyOrderingTests`（`ConnectionTransportRegressionTests.swift`）。修复前，回复和失败回复返回时，5 条各要处理 20 ms 的推送一条都还没处理（`handled == []`）；两条「推送处理器自己发请求」的用例也在处理器跑完之前就返回了。只加屏障、不加 `@TaskLocal` 跳过时，这两条死锁、4 秒后超时——它们守的正是这个风险；加上跳过后四条全过。
 
 **问题**：
 - 在 socket 传输上（沙盒化的附加 App、iOS 模拟器 payload、Bonjour 设备、镜像引擎），服务端先按顺序发出全部进度推送，最后才写回复。
@@ -8213,7 +8213,7 @@ socket 版本按同样的两条断言再写一遍，把装置换成一对 `.loca
 
 - **严重度**：Minor
 - **审查编号**：C07（属于上次第 8 条的一部分）
-- **状态**：方案待批，代码未改
+- **状态**：部分修复（LocalizedError），其余随 PR121.29 一批。LocalizedError 的复现测试：`TransportHandlerErrorTests.testLocalSocketHandlerErrorReadsAsItsMessage`，修复前调用方拿到的 `localizedDescription` 是「The operation couldn’t be completed. (RuntimeViewerCommunication.RuntimeNetworkRequestError error 1.)」。
 
 **问题**：store 有时会替所有订阅者取消一次构建，例如另一个窗口改了 transformer 后清掉全部语料，或者语料开关被关掉。订阅者此时收到 `CancellationError`，但这个错误跨不过连接：
 - XPC 只传 `localizedDescription`，客户端收到的是 `RuntimeXPCServiceConnectionError.remoteFailure("…Swift.CancellationError error 1.")`。
@@ -8431,9 +8431,9 @@ func storeCancellationIsNotAFailure() async throws {
 
 ### PR121.31 socket 上迟到的回复在两端之间无限往返
 
-- **严重度**：Major（读代码推出，尚未复现）
+- **严重度**：Major（读代码推出，修复前已用测试复现）
 - **审查编号**：新发现（模块 C 在起草跨连接取消时发现，不在审查清单里）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`TransportLateReplyTests`（`ConnectionTransportRegressionTests.swift`）。修复前：超时 0.1 秒、处理器要跑 0.3 秒的请求，超时后的 1 秒里服务端把处理器跑了 4 遍；直接喂给通道一个没人等的错误信封，处理器被调用 1 次、回了 1 帧。
 
 **问题**：在 socket 传输上，请求超时后，待处理表里就删掉了它。如果回复之后才到，接收端找不到等着它的请求，就把它当成一条新请求去找处理器。发起方通常没有这条命令的处理器，于是回一个带同一 nonce 的错误信封。对端也没有这个 nonce 的待处理项，却**有**这条命令的处理器，于是把错误信封当成请求再执行一遍，然后回复，回复又被当成请求……两端就这样无限循环，持续占用 CPU 和网络，直到连接断开。如果处理器的请求类型从错误 JSON 解码失败，循环照样进行，只是两端变成互相回错误信封。
 
