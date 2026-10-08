@@ -99,6 +99,22 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Unique identifier for this channel.
     let id = UUID()
 
+    /// Set while a fire-and-forget handler runs on `orderedHandlerTail`.
+    ///
+    /// A request sent from there does not wait for the pushes that preceded
+    /// its reply (see `sendRequest`): that wait is for the tail, and the
+    /// sender is part of the tail, so it would wait for itself. Tasks a
+    /// handler starts inherit the flag, which only gives up the ordering
+    /// guarantee for their requests. It is not per channel, so that handlers
+    /// of two channels waiting on requests over each other cannot deadlock
+    /// either.
+    ///
+    /// What still deadlocks: a handler that waits for work sending a request
+    /// over this channel from outside the handler's task tree — a
+    /// `Task.detached`, a dispatch queue, a completion handler. That request
+    /// waits for the tail, and the tail waits for the handler. Don't.
+    @TaskLocal static var isRunningOnOrderedHandlerTail = false
+
     /// Called when a complete message is received.
     /// - Note: This callback is called from a locked context; avoid long-running operations.
     var onMessageReceived: (@Sendable (Data) -> Void)?
@@ -206,7 +222,11 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         }
         #log(.debug, "Delivered response to pending request: \(routingKey, privacy: .public)")
         pending.cancelTimeoutTask()
-        pending.continuation.resume(returning: data)
+        // Frames are dispatched in arrival order, so every fire-and-forget
+        // message that arrived before this reply is on the tail by now. The
+        // requester waits for them before it continues; see `sendRequest`.
+        let precedingHandlers = orderedHandlerTail.withLock { $0 }
+        pending.continuation.resume(returning: ReceivedReply(data: data, precedingHandlers: precedingHandlers))
         return true
     }
 
@@ -346,6 +366,12 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// without collision; the peer must echo the nonce verbatim in its
     /// response envelope.
     ///
+    /// Ordering: when this returns, every fire-and-forget message the peer
+    /// sent before the reply has been handled — the reply is delivered inline
+    /// but this waits for the handler tail as it stood when the reply arrived.
+    /// A request sent from a handler on that tail skips the wait; see
+    /// `isRunningOnOrderedHandlerTail`.
+    ///
     /// - Parameters:
     ///   - requestData: The request payload framed by `RuntimeRequestData`.
     ///     If `nonce` is `nil` a fresh `UUID` is stamped before sending.
@@ -373,7 +399,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         let dataToSend = data + Self.endMarkerData
 
         // Register pending request before sending
-        let responseData: Data = try await withCheckedThrowingContinuation { continuation in
+        let reply: ReceivedReply = try await withCheckedThrowingContinuation { continuation in
             let pending = PendingRequest(continuation: continuation)
             pendingRequests.withLock { $0[nonce] = pending }
 
@@ -418,8 +444,17 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
             }
         }
 
+        // The pushes the peer sent before this reply — this request's own
+        // progress, the state syncs ahead of it — are handled before the
+        // caller continues, as they are over XPC, where every push is a round
+        // trip. Without this wait the reply overtakes them: a request that
+        // drops its progress route on return drops with it the pushes still
+        // queued on the tail.
+        if !Self.isRunningOnOrderedHandlerTail {
+            await reply.precedingHandlers.value
+        }
         #log(.debug, "Received response for: \(stamped.identifier, privacy: .public) [nonce \(nonce, privacy: .public)]")
-        let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
+        let response = try JSONDecoder().decode(RuntimeRequestData.self, from: reply.data)
         // A peer that couldn't service the request (handler threw, or no handler
         // was registered) flags the envelope and ships a `RuntimeNetworkRequestError`
         // in `data`. Surface that as the thrown error instead of blindly decoding
@@ -480,7 +515,8 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Serial tail for fire-and-forget handler execution. Each enqueued unit of
     /// work `await`s its predecessor, so push handlers run in submission order
     /// (e.g. `imageList` → `imageNodes` → `dataDidChange`) even though they run
-    /// off the receive loop.
+    /// off the receive loop. A reply carries the tail as it stood when the
+    /// reply arrived, and `sendRequest` waits for it.
     private let orderedHandlerTail = Mutex<Task<Void, Never>>(Task {})
 
     /// Long-lived task draining the dedicated dispatch stream below.
@@ -505,6 +541,10 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     ///   over the same connection) from deadlocking the loop.
     /// - **Fire-and-forget handlers preserve order.** They run on a serial tail
     ///   so state-sync pushes are applied in the order they were sent.
+    /// - **A request returns after the pushes sent before its reply.** The
+    ///   reply is delivered inline but its requester waits for the tail as it
+    ///   stood when the reply arrived (`sendRequest`), so a reply never
+    ///   overtakes the progress or results pushed ahead of it.
     /// - **Response-producing handlers run concurrently.** A slow handler can no
     ///   longer head-of-line block unrelated requests; each reply is routed by
     ///   its nonce.
@@ -598,7 +638,9 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
             let previous = tail
             tail = Task {
                 await previous.value
-                await work()
+                await Self.$isRunningOnOrderedHandlerTail.withValue(true) {
+                    await work()
+                }
             }
         }
     }
@@ -629,15 +671,23 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
 // MARK: - PendingRequest
 
+/// A reply as `sendRequest` receives it: the envelope, and the tail of
+/// fire-and-forget handlers as it stood when the reply arrived — the pushes
+/// the peer sent before it.
+private struct ReceivedReply: Sendable {
+    let data: Data
+    let precedingHandlers: Task<Void, Never>
+}
+
 /// Bookkeeping for a single in-flight request. Owns the continuation that `sendRequest`
 /// is awaiting and an optional timeout `Task` whose handle is held under a lock so the
 /// success and writer-error paths can cancel it before it has a chance to fire against a
 /// later request that registered under the same identifier.
 private final class PendingRequest: @unchecked Sendable {
-    let continuation: CheckedContinuation<Data, Error>
+    let continuation: CheckedContinuation<ReceivedReply, Error>
     private let timeoutTask = Mutex<Task<Void, Never>?>(nil)
 
-    init(continuation: CheckedContinuation<Data, Error>) {
+    init(continuation: CheckedContinuation<ReceivedReply, Error>) {
         self.continuation = continuation
     }
 
