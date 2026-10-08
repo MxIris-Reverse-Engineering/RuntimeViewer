@@ -136,13 +136,14 @@ struct RuntimeInterfaceCorpusStoreTests {
             }
         }
 
-        /// Returns once someone waits here, so a test acts while that work
-        /// is in flight.
-        func waitForWaiter(timeout: TimeInterval = 10) async throws {
+        /// Returns once `count` callers wait here, so a test acts while that
+        /// work is held — a state that lasts until the test opens the gate,
+        /// however long the machine takes to get there.
+        func waitForWaiters(_ count: Int = 1, timeout: TimeInterval = 10) async throws {
             let deadline = Date().addingTimeInterval(timeout)
-            while waiterCount == 0 {
+            while waiterCount < count {
                 guard Date() < deadline else {
-                    Issue.record("nothing ever waited at the gate")
+                    Issue.record("\(count) callers never waited at the gate")
                     return
                 }
                 try await Task.sleep(nanoseconds: 5_000_000)
@@ -177,7 +178,10 @@ struct RuntimeInterfaceCorpusStoreTests {
     /// of splitting the run is tried before the missing `(` is accepted.
     private static let slowEntryText = "var " + String(repeating: "a", count: 26) + ": Int"
 
-    private static let slowRegularExpressionQuery = RuntimeInterfaceSearchQuery(text: #"(a+)+\("#, matchMode: .regularExpression, isCaseSensitive: true)
+    /// A's `memberAlpha` matches at once; C's run of a's then keeps the
+    /// regular expression engine busy for seconds. A's batch arriving says
+    /// the scan is under way and about to read C.
+    private static let alphaThenSlowQuery = RuntimeInterfaceSearchQuery(text: #"memberAlpha|(a+)+\("#, matchMode: .regularExpression, isCaseSensitive: true)
 
     final class Flag: @unchecked Sendable {
         private let lock = NSLock()
@@ -189,6 +193,19 @@ struct RuntimeInterfaceCorpusStoreTests {
 
         func set() {
             lock.withLock { value = true }
+        }
+
+        /// Returns once the flag is set. A set flag stays set, so polling
+        /// cannot miss it.
+        func waitUntilSet(timeout: TimeInterval = 10) async throws {
+            let deadline = Date().addingTimeInterval(timeout)
+            while !isSet {
+                guard Date() < deadline else {
+                    Issue.record("the flag was never set")
+                    return
+                }
+                try await Task.sleep(nanoseconds: 5_000_000)
+            }
         }
     }
 
@@ -227,13 +244,19 @@ struct RuntimeInterfaceCorpusStoreTests {
 
     @Test("no more objects are printed at once than the printing width")
     func printingWidthBoundsConcurrency() async throws {
+        let printGate = Gate()
         let fixture = makeStore(printingWidth: 3) { builder in
             builder.objectNamesByImagePath[Self.imageC] = Self.manyObjectNames
-            builder.delayPerObjectNanoseconds = 20_000_000
+            builder.printGate = printGate
         }
         defer { withExtendedLifetime(fixture) {} }
+        let build = Task { try await fixture.store.build(imagePath: Self.imageC, transformer: .default) }
 
-        _ = try await fixture.store.build(imagePath: Self.imageC, transformer: .default)
+        // Every print waits at the gate, so the width is reached for certain
+        // — and a fourth print could only start beside them.
+        try await printGate.waitForWaiters(3)
+        printGate.open()
+        _ = try await build.value
 
         #expect(fixture.builder.maximumConcurrentPrintCount == 3)
     }
@@ -286,16 +309,14 @@ struct RuntimeInterfaceCorpusStoreTests {
         Issue.record("the store never reached the expected coverage")
     }
 
-    private func isBuilding(_ state: RuntimeInterfaceCorpusBuildState?) -> Bool {
-        if case .building = state { return true }
-        return false
-    }
-
-    /// Image A building, then B and C queued behind it, in that order.
-    private func queueBehindRunningImage(_ fixture: Fixture, prioritizingC isPrioritized: Bool) async throws -> [Task<RuntimeInterfaceCorpusBuildSummary, any Swift.Error>] {
+    /// Image A building, held at its first print by `printGate` until the
+    /// test opens it, then B and C queued behind it, in that order. The
+    /// builder must hold its prints at `printGate`. A build kept going by a
+    /// delay instead could finish before a loaded machine had seen it run.
+    private func queueBehindRunningImage(_ fixture: Fixture, printGate: Gate, prioritizingC isPrioritized: Bool) async throws -> [Task<RuntimeInterfaceCorpusBuildSummary, any Swift.Error>] {
         let store = fixture.store
         let buildA = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
-        try await waitForCoverage(of: store) { isBuilding($0.statesByImagePath[Self.imageA]) }
+        try await printGate.waitForWaiters()
         let buildB = Task { try await store.build(imagePath: Self.imageB, transformer: .default) }
         try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageB] == .pending }
         let buildC = Task { try await store.build(imagePath: Self.imageC, transformer: .default, isPrioritized: isPrioritized) }
@@ -305,14 +326,16 @@ struct RuntimeInterfaceCorpusStoreTests {
 
     @Test("a prioritized image is built right after the image under way")
     func prioritizedImageBuiltNext() async throws {
+        let printGate = Gate()
         let fixture = makeStore {
             $0.objectNamesByImagePath[Self.imageC] = ["Delta"]
-            $0.delayPerObjectNanoseconds = 100_000_000
+            $0.printGate = printGate
         }
         defer { withExtendedLifetime(fixture) {} }
-        let builds = try await queueBehindRunningImage(fixture, prioritizingC: false)
+        let builds = try await queueBehindRunningImage(fixture, printGate: printGate, prioritizingC: false)
 
         await fixture.store.prioritize(imagePath: Self.imageC)
+        printGate.open()
 
         for build in builds {
             _ = try await build.value
@@ -322,12 +345,14 @@ struct RuntimeInterfaceCorpusStoreTests {
 
     @Test("a build asked for with priority goes ahead of the images already waiting")
     func prioritizedRequestJumpsTheQueue() async throws {
+        let printGate = Gate()
         let fixture = makeStore {
             $0.objectNamesByImagePath[Self.imageC] = ["Delta"]
-            $0.delayPerObjectNanoseconds = 100_000_000
+            $0.printGate = printGate
         }
         defer { withExtendedLifetime(fixture) {} }
-        let builds = try await queueBehindRunningImage(fixture, prioritizingC: true)
+        let builds = try await queueBehindRunningImage(fixture, printGate: printGate, prioritizingC: true)
+        printGate.open()
 
         for build in builds {
             _ = try await build.value
@@ -456,13 +481,17 @@ struct RuntimeInterfaceCorpusStoreTests {
         }
         defer { withExtendedLifetime(fixture) {} }
         let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
         _ = try await store.build(imagePath: Self.imageC, transformer: .default)
+        let firstBatchArrived = Flag()
         let searchFinished = Flag()
         let search = Task {
             defer { searchFinished.set() }
-            return try await store.searchInterfaces(Self.slowRegularExpressionQuery, indexedImagePaths: []) { _ in }
+            return try await store.searchInterfaces(Self.alphaThenSlowQuery, indexedImagePaths: []) { _ in
+                firstBatchArrived.set()
+            }
         }
-        try await Task.sleep(nanoseconds: 200_000_000)
+        try await firstBatchArrived.waitUntilSet()
 
         _ = await store.coverage()
 
@@ -479,11 +508,15 @@ struct RuntimeInterfaceCorpusStoreTests {
         }
         defer { withExtendedLifetime(fixture) {} }
         let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
         _ = try await store.build(imagePath: Self.imageC, transformer: .default)
+        let firstBatchArrived = Flag()
         let search = Task {
-            try await store.searchInterfaces(Self.slowRegularExpressionQuery, indexedImagePaths: []) { _ in }
+            try await store.searchInterfaces(Self.alphaThenSlowQuery, indexedImagePaths: []) { _ in
+                firstBatchArrived.set()
+            }
         }
-        try await Task.sleep(nanoseconds: 200_000_000)
+        try await firstBatchArrived.waitUntilSet()
 
         search.cancel()
 
@@ -492,7 +525,9 @@ struct RuntimeInterfaceCorpusStoreTests {
 
     @Test("a search whose regular expression spends its budget keeps what it found and says why it stopped")
     func searchReportsWhyItStopped() async throws {
-        let fixture = makeStore(regularExpressionTimeLimit: 0.05) { builder in
+        // Far more than A's few lines take even on a loaded machine, far less
+        // than C's run of a's.
+        let fixture = makeStore(regularExpressionTimeLimit: 0.5) { builder in
             builder.objectNamesByImagePath[Self.imageC] = ["Slow"]
             builder.interfaceTextByObjectName["Slow"] = Self.slowEntryText
         }
@@ -500,11 +535,9 @@ struct RuntimeInterfaceCorpusStoreTests {
         let store = fixture.store
         _ = try await store.build(imagePath: Self.imageA, transformer: .default)
         _ = try await store.build(imagePath: Self.imageC, transformer: .default)
-        // A's `memberAlpha` matches at once; C's run of a's never settles.
-        let query = RuntimeInterfaceSearchQuery(text: #"memberAlpha|(a+)+\("#, matchMode: .regularExpression, isCaseSensitive: true)
         let batches = MatchBatches<RuntimeInterfaceSearchMatch>()
 
-        let summary = try await store.searchInterfaces(query, indexedImagePaths: []) { batch in
+        let summary = try await store.searchInterfaces(Self.alphaThenSlowQuery, indexedImagePaths: []) { batch in
             batches.append(batch)
         }
 
@@ -624,50 +657,77 @@ struct RuntimeInterfaceCorpusStoreTests {
     /// after it was gone, aborting the process.
     @Test("a build still queued when the builder goes away ends cancelled")
     func queuedBuildOutlivesBuilder() async throws {
+        let printGate = Gate()
         var builder: ScriptedBuilder? = ScriptedBuilder()
         builder?.objectNamesByImagePath = [Self.imageA: ["Alpha", "Beta"], Self.imageB: ["Gamma"]]
-        builder?.delayPerObjectNanoseconds = 50_000_000
+        builder?.printGate = printGate
         let store = RuntimeInterfaceCorpusStore(builder: try #require(builder), printingWidth: 1)
         let buildA = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
-        try await waitForCoverage(of: store) { isBuilding($0.statesByImagePath[Self.imageA]) }
+        try await printGate.waitForWaiters()
         let buildB = Task { try await store.build(imagePath: Self.imageB, transformer: .default) }
         try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageB] == .pending }
 
+        // A's build holds the builder until it ends; then nothing does.
         builder = nil
+        printGate.open()
 
         // A was under way and may finish or not; B must not start on a builder that is gone.
         _ = try? await buildA.value
         await #expect(throws: CancellationError.self) { try await buildB.value }
     }
 
+    /// Polls until `count` requests wait on the image's build. Once made, a
+    /// subscription stays until the test acts, so polling cannot miss it.
+    private func waitForSubscribers(_ count: Int, of imagePath: String, in store: RuntimeInterfaceCorpusStore, timeout: TimeInterval = 10) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if await store.subscriberCount(for: imagePath) >= count { return }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        Issue.record("the build of \(imagePath) never had \(count) subscribers")
+    }
+
     @Test("cancelling one of two subscribers leaves the build running")
     func subscriptionRefcount() async throws {
-        let fixture = makeStore { $0.delayPerObjectNanoseconds = 50_000_000 }
+        let printGate = Gate()
+        let fixture = makeStore { $0.printGate = printGate }
         defer { withExtendedLifetime(fixture) {} }
         let store = fixture.store
         let first = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
+        try await printGate.waitForWaiters()
         let second = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        try await waitForSubscribers(2, of: Self.imageA, in: store)
+
         first.cancel()
+
         await #expect(throws: CancellationError.self) { try await first.value }
+        printGate.open()
         let summary = try await second.value
         #expect(summary.objectCount == 2)
+        // One build served both.
+        #expect(fixture.builder.printedObjectNames == ["Alpha", "Beta"])
     }
 
     @Test("cancelling the last subscriber cancels the build and leaves nothing behind")
     func lastSubscriberCancels() async throws {
-        let fixture = makeStore { $0.delayPerObjectNanoseconds = 50_000_000 }
+        let printGate = Gate()
+        let fixture = makeStore { $0.printGate = printGate }
         defer { withExtendedLifetime(fixture) {} }
         let store = fixture.store
-        let builder = fixture.builder
         let only = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        try await printGate.waitForWaiters()
+
         only.cancel()
+
         await #expect(throws: CancellationError.self) { try await only.value }
-        // The build task observes the cancellation on its next await.
-        try await Task.sleep(nanoseconds: 120_000_000)
         #expect(await store.coverage().statesByImagePath[Self.imageA] == nil)
-        #expect(builder.printedObjectNames.count < 2)
+        printGate.open()
+        // B starts once A's task has handed the slot back, so by now A has
+        // stopped: the print under way when it was cancelled finished, and
+        // no other print began.
+        _ = try await store.build(imagePath: Self.imageB, transformer: .default)
+        #expect(fixture.builder.printedObjectNames == ["Alpha", "Gamma"])
+        #expect(await store.corpus(for: Self.imageA) == nil)
     }
 
     /// A running build cannot be interrupted while a print is in flight, so
@@ -680,7 +740,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         defer { withExtendedLifetime(fixture) {} }
         let store = fixture.store
         let first = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
-        try await gate.waitForWaiter()
+        try await gate.waitForWaiters()
 
         await store.evict(imagePath: Self.imageA)
         let second = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
@@ -703,7 +763,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         var changed = Transformer.Configuration.default
         changed.objc.cType.isEnabled.toggle()
         let first = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
-        try await gate.waitForWaiter()
+        try await gate.waitForWaiters()
 
         let second = Task { try await store.build(imagePath: Self.imageA, transformer: changed) }
         try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageA] == .pending }
@@ -728,7 +788,7 @@ struct RuntimeInterfaceCorpusStoreTests {
             return RuntimeInterfaceCorpusAssembly.entries(from: prints)
         }
         let buildA = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
-        try await assemblyGate.waitForWaiter()
+        try await assemblyGate.waitForWaiters()
 
         await store.evict(imagePath: Self.imageA)
         assemblyGate.open()

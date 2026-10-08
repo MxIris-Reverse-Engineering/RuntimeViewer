@@ -287,6 +287,12 @@ actor RuntimeInterfaceCorpusStore {
         corpora[imagePath]
     }
 
+    /// How many requests wait on the image's build — what a test checks
+    /// before it acts on a subscription it has just made.
+    func subscriberCount(for imagePath: String) -> Int {
+        builds[imagePath]?.subscribers.count ?? 0
+    }
+
     /// Every image the store knows about. An image it holds nothing for —
     /// never asked for, evicted, cancelled — is absent from the map, not
     /// reported as pending.

@@ -167,6 +167,25 @@ struct RuntimeInterfaceTextMatcherTests {
         #expect("\(tooExpensive)" == tooExpensive.localizedDescription)
     }
 
+    /// The same stop for a cancelled task. Nothing looks at the task before
+    /// the match begins, so a match started by a task already cancelled shows
+    /// whether the check inside the match works: without it, the match runs
+    /// its full second and returns no hits.
+    @Test("a regular expression stops inside a single match once its task is cancelled")
+    func regularExpressionStopsOneMatchWhenCancelled() async throws {
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: #"(a+)+\("#, matchMode: .regularExpression, isCaseSensitive: true)
+        let text = "var " + String(repeating: "a", count: 24) + ": Int"
+        let match = Task {
+            withUnsafeCurrentTask { currentTask in
+                currentTask?.cancel()
+            }
+            var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget()
+            return try RuntimeInterfaceTextMatcher.hits(in: text, pattern: pattern, budget: &budget)
+        }
+
+        await #expect(throws: CancellationError.self) { try await match.value }
+    }
+
     /// One regular expression and whether a quantifier applies to a group
     /// of it.
     struct QuantifiedGroupCase: Sendable, CustomTestStringConvertible {
