@@ -83,7 +83,11 @@ public final class FindCorpusCoordinator {
 
     private let corpusBuiltRelay = PublishRelay<String>()
 
-    private let disposeBag = DisposeBag()
+    /// Replaced when the document closes, which ends every subscription.
+    private var disposeBag = DisposeBag()
+
+    /// The document closed; see `documentWillClose()`.
+    private var isClosed = false
 
     #if canImport(RuntimeViewerSettings)
     @Dependency(\.settings)
@@ -171,7 +175,7 @@ public final class FindCorpusCoordinator {
     /// for the image is not repeated; with `isPrioritized` it is moved to the
     /// front of the engine's queue instead.
     public func requestBuild(of imagePath: String, isPrioritized: Bool = false) {
-        guard isEnabled else { return }
+        guard isEnabled, !isClosed else { return }
         if buildRequests[imagePath] != nil {
             if isPrioritized {
                 let engine = engine
@@ -207,7 +211,7 @@ public final class FindCorpusCoordinator {
     /// Every image the engine has indexed, queued in one go — the switch
     /// turning on, or a fresh engine.
     public func requestBuildOfIndexedImages() {
-        guard isEnabled else { return }
+        guard isEnabled, !isClosed else { return }
         let engine = engine
         Task { [weak self] in
             guard let imagePaths = try? await engine.indexedImagePathList() else { return }
@@ -227,6 +231,19 @@ public final class FindCorpusCoordinator {
         request.task.cancel()
         buildStatesByImagePath[imagePath] = nil
         recordFinishedBuild(FindCorpusFinishedBuild(imagePath: imagePath, outcome: .cancelled, finishedAt: Date()))
+    }
+
+    /// The document is closing: every request it holds is withdrawn — over a
+    /// connection each withdrawal reaches the serving process as a
+    /// `cancelRequest` — and nothing asks for a corpus again, not an image the
+    /// engine indexes, not a settings change made in another window, not an
+    /// engine swap. `DocumentState` holds this coordinator and can outlive
+    /// the window, so `deinit` is too late to count on.
+    public func documentWillClose() {
+        isClosed = true
+        stopPumps()
+        withdrawEveryBuild()
+        disposeBag = DisposeBag()
     }
 
     /// Empties `finishedBuilds`. The corpora listed so far stay off it: a
@@ -455,7 +472,8 @@ public final class FindCorpusCoordinator {
             _ = settings.transformer
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                // A closed document stops listening.
+                guard let self, !self.isClosed else { return }
                 self.handleSettingsChange()
                 self.subscribeToSettings()
             }

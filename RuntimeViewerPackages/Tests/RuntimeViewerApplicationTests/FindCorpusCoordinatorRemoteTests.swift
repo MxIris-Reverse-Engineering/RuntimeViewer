@@ -57,6 +57,32 @@ struct FindCorpusCoordinatorRemoteTests {
         return try await engine.interfaceCorpusCoverage()
     }
 
+    @Test("cancelling a build over the local runtime service stops it there, and the row stays gone")
+    func cancelReachesTheServingProcess() async throws {
+        let fixture = try await LocalRuntimeServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.cancel")
+        defer { Task { await fixture.stop() } }
+        try await fixture.serving.loadImage(at: TestImages.foundation)
+        let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+
+        coordinator.requestBuild(of: TestImages.foundation)
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { Self.isBuilding($0[TestImages.foundation]) }
+
+        coordinator.cancelBuild(of: TestImages.foundation)
+
+        // This document was the build's only subscriber, so the service gives
+        // the build up.
+        let coverage = try await Self.waitForServingCoverage(of: fixture.serving, timeout: 5) { $0.statesByImagePath[TestImages.foundation] == nil }
+        #expect(coverage.statesByImagePath[TestImages.foundation] == nil, "the local runtime service kept building: \(String(describing: coverage.statesByImagePath[TestImages.foundation]))")
+
+        // And a refresh does not bring the row back.
+        coordinator.refreshCoverage()
+        let states = try await values(from: coordinator.$buildStatesByImagePath.asDriver(), during: 1)
+        #expect(states.allSatisfy { $0[TestImages.foundation] == nil }, "the cancelled row came back from the coverage")
+    }
+
     @Test("a build the service gives up leaves no failed entry in the history")
     func storeCancellationIsNotAFailure() async throws {
         let fixture = try await LocalRuntimeServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.storeCancellation")

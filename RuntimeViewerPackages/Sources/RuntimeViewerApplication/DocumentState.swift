@@ -184,18 +184,27 @@ public final class DocumentState {
 
     /// Per-Document background indexing coordinator.
     ///
-    /// Force-initialized on the first Document lifecycle hook
-    /// (`makeWindowControllers` / `close`) and kept alive for the rest of
-    /// the Document's lifetime, even when the feature is disabled at open
-    /// time, so it can react to settings off→on toggles. The `lazy`
-    /// modifier is retained as an init-deferral mechanism, not as a
+    /// Brought into being on first use — `makeWindowControllers` touches it —
+    /// and kept alive for the rest of the Document's lifetime, even when the
+    /// feature is disabled at open time, so it can react to settings off→on
+    /// toggles. Deferring the creation is an init-deferral mechanism, not a
     /// gating-by-enablement: every opened Document instantiates one
     /// coordinator regardless of `Settings.Indexing.BackgroundMode.isEnabled`.
+    /// `documentWillClose()` closes it only if it exists.
     ///
     /// The coordinator captures `runtimeEngine` initially and rewires onto
     /// a new engine via the `$runtimeEngine` subscription on every source
     /// switch — see that property's doc comment for the swap contract.
-    public private(set) lazy var backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
+    public var backgroundIndexingCoordinator: RuntimeBackgroundIndexingCoordinator {
+        if let backgroundIndexingCoordinatorStorage {
+            return backgroundIndexingCoordinatorStorage
+        }
+        let backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
+        backgroundIndexingCoordinatorStorage = backgroundIndexingCoordinator
+        return backgroundIndexingCoordinator
+    }
+
+    private var backgroundIndexingCoordinatorStorage: RuntimeBackgroundIndexingCoordinator?
 
     /// Per-Document interface cache. Content navigation (push, tab switch,
     /// back/forward) rebinds `ContentTextViewModel` and used to re-fetch
@@ -207,12 +216,57 @@ public final class DocumentState {
 
     /// The Find navigator's query and results, shared by the page in each
     /// sidebar level. See `FindSession`.
-    public private(set) lazy var findSession = FindSession(documentState: self)
+    public var findSession: FindSession {
+        if let findSessionStorage {
+            return findSessionStorage
+        }
+        let findSession = FindSession(documentState: self)
+        findSessionStorage = findSession
+        return findSession
+    }
+
+    private var findSessionStorage: FindSession?
 
     /// Keeps the engine's interface corpus in step with what this document
     /// indexes. Like `backgroundIndexingCoordinator`, touched on the first
     /// Document lifecycle hook so it exists for the document's whole life.
-    public private(set) lazy var findCorpusCoordinator = FindCorpusCoordinator(documentState: self)
+    public var findCorpusCoordinator: FindCorpusCoordinator {
+        if let findCorpusCoordinatorStorage {
+            return findCorpusCoordinatorStorage
+        }
+        let findCorpusCoordinator = FindCorpusCoordinator(documentState: self)
+        findCorpusCoordinatorStorage = findCorpusCoordinator
+        return findCorpusCoordinator
+    }
+
+    private var findCorpusCoordinatorStorage: FindCorpusCoordinator?
+
+    /// Whether `findSession` has been brought into being. Test seam.
+    var hasCreatedFindSession: Bool {
+        findSessionStorage != nil
+    }
+
+    /// Whether `findCorpusCoordinator` has been brought into being. Test seam.
+    var hasCreatedFindCorpusCoordinator: Bool {
+        findCorpusCoordinatorStorage != nil
+    }
+
+    /// The document is closing; `Document.close()` calls this and nothing
+    /// else. Each member that exists lets go of its work — the indexing
+    /// batches this document started, the corpus builds it asked for, the
+    /// search under way — and stops reacting to anything. A member never
+    /// brought into being stays that way: creating it now would only start
+    /// the observation and the requests closing is meant to stop.
+    ///
+    /// Needed because this object can outlive its window, and with it every
+    /// member it holds, so their `deinit` is no place to let go of work.
+    public func documentWillClose() {
+        #if canImport(RuntimeViewerSettings)
+        backgroundIndexingCoordinatorStorage?.documentWillClose()
+        #endif
+        findCorpusCoordinatorStorage?.documentWillClose()
+        findSessionStorage?.documentWillClose()
+    }
 
     /// Whether the Report navigator has work in progress: an indexing batch, or a corpus queued or
     /// being printed. Worked out once here, so both sidebar levels mark their Report navigator tab

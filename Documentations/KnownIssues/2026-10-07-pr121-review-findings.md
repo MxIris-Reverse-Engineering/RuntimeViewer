@@ -3105,7 +3105,11 @@ func evictionDuringAssemblyLeavesNothing() async throws {
 
 - **严重度**：Major
 - **审查编号**：C06（属于上次第 9 条）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindCorpusCoordinatorRemoteTests.cancelReachesTheServingProcess`（XPC service 匿名 listener，即 App 里 My Mac 的真实路径；修前 Cancel 之后 5 秒 service 里仍是 `.building(1648/2388)`，刷新 coverage 后那一行又回来了；随 PR121.29 的取消协议转绿），`DocumentStateLifecycleTests`（关窗；先搭好接缝、照旧的 `Document.close()` 写法关时两条都红：为关窗新建了一个 `FindSession`；关窗 5 秒后引擎仍在建 Foundation `.building(1320/2388)`，另一个窗口把语料开关拨一下，已关的文档又请求了 libobjc 与 Foundation）。
+- **落地与偏离**：
+  - 关窗收拢成 `DocumentState.documentWillClose()`，`Document.close()` 只调它（主会话审 S1 时提出）：`backgroundIndexingCoordinator`、`findCorpusCoordinator`、`findSession` 由 `lazy var` 改为可选的后备存储，只关已经创建过的，从没打开过 Find 的窗口关闭时不再为关闭而新建会话和协调器。
+  - 协调器的 `documentWillClose()` 比草案多两步：置 `isClosed`、换掉 disposeBag。`requestBuild`、`requestBuildOfIndexedImages` 与设置观察都认 `isClosed`，关掉的文档不再因为别的窗口改设置、换引擎而请求语料；草案只停事件泵、撤回请求，设置观察仍会触发补建。
+  - 撤回路径本身照方案没改：`cancelBuild`、`withdrawEveryBuild` 与 `deinit` 取消 Task 后，由 PR121.29 的 `onCancel` 发出 `cancelRequest`。`buildInterfaceCorpus` 的文档注释随 PR121.29 一起改了。
 
 **问题**：
 - 撤回一次语料构建时，协调器只取消了本进程里的那个 `Task`。触发撤回的有：Report navigator 的 Cancel 和 Cancel All、换引擎、关文档。
