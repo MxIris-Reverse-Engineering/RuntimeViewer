@@ -170,10 +170,14 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///   last subscriber goes away. Two documents sharing the `.local` engine
 ///   therefore cannot cancel each other's corpus.
 /// - **Cancellation leaves nothing behind; failure is remembered.** A
-///   cancelled build is simply not built. A build that threw is recorded as
-///   `failed` and stays so until the image is asked for again, which retries.
-///   One object that fails to print does not fail the build — it is skipped
-///   and counted.
+///   cancelled build is simply not built: its subscribers hear so at once,
+///   and nothing its task finishes afterwards is kept. A print in flight
+///   cannot be interrupted, so a cancelled running build holds the slot
+///   until its task ends; meanwhile the images queued behind it, a new
+///   request for the same image included, read as pending. A build that
+///   threw is recorded as `failed` and stays so until the image is asked for
+///   again, which retries. One object that fails to print does not fail the
+///   build — it is skipped and counted.
 /// - **One print serves every Generation Options value.** Each interface is
 ///   printed with everything any options could show, the optional parts
 ///   marked with the option they depend on; a search reads it through those
@@ -221,11 +225,25 @@ actor RuntimeInterfaceCorpusStore {
         let continuation: CheckedContinuation<RuntimeInterfaceCorpusBuildSummary, any Swift.Error>
     }
 
+    /// A build that takes subscribers. A cancelled build leaves `builds` at
+    /// once, its subscribers told; whatever its task still produces after
+    /// that — progress, a whole corpus — is dropped, because `identifier`
+    /// no longer names the image's build.
     private struct Build {
+        /// Tells this build from a later one of the same image.
+        let identifier: UInt64
         let transformer: Transformer.Configuration
         var subscribers: [Subscriber] = []
-        var task: Task<Void, Never>?
         var progress = RuntimeInterfaceCorpusBuildProgress(built: 0, total: 0)
+    }
+
+    /// The build holding the single slot. It keeps the slot after it is
+    /// cancelled, until its task ends — a print in flight cannot be
+    /// interrupted — while its image may already have a newer build, queued
+    /// behind it.
+    private struct RunningBuild {
+        let buildIdentifier: UInt64
+        let task: Task<Void, Never>
     }
 
     private enum BuildOutcome {
@@ -254,20 +272,28 @@ actor RuntimeInterfaceCorpusStore {
     /// Images waiting for the single build slot, in request order.
     private var pendingImagePaths: [String] = []
 
-    private var runningImagePath: String?
+    private var runningBuild: RunningBuild?
 
     private var failureMessages: [String: String] = [:]
 
     private var nextSubscriberIdentifier: UInt64 = 0
 
+    private var nextBuildIdentifier: UInt64 = 0
+
+    /// `RuntimeInterfaceCorpusAssembly.entries(from:)`, replaceable so a test
+    /// can hold a build in its assembly and act on it there.
+    private let assembleEntries: @Sendable ([RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry]
+
     init(
         builder: any RuntimeInterfaceCorpusBuilding,
         residentByteLimit: Int = RuntimeInterfaceCorpusStore.defaultResidentByteLimit,
-        printingWidth: Int = RuntimeInterfaceCorpusStore.defaultPrintingWidth
+        printingWidth: Int = RuntimeInterfaceCorpusStore.defaultPrintingWidth,
+        assembleEntries: @escaping @Sendable ([RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] = { prints in RuntimeInterfaceCorpusAssembly.entries(from: prints) }
     ) {
         self.builder = builder
         self.residentByteLimit = residentByteLimit
         self.printingWidth = max(1, printingWidth)
+        self.assembleEntries = assembleEntries
     }
 
     // MARK: - Reading
@@ -292,7 +318,7 @@ actor RuntimeInterfaceCorpusStore {
             states[imagePath] = .built(corpus.summary)
         }
         for (imagePath, build) in builds {
-            states[imagePath] = runningImagePath == imagePath ? .building(build.progress) : .pending
+            states[imagePath] = runningBuild?.buildIdentifier == build.identifier ? .building(build.progress) : .pending
         }
         for (imagePath, message) in failureMessages where states[imagePath] == nil {
             states[imagePath] = .failed(message: message)
@@ -339,10 +365,13 @@ actor RuntimeInterfaceCorpusStore {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 let subscriber = Subscriber(identifier: identifier, onProgress: onProgress, continuation: continuation)
+                // `builds` never holds a cancelled build, so a subscriber that
+                // joins here cannot inherit a cancellation meant for others.
                 if builds[imagePath] != nil {
                     builds[imagePath]!.subscribers.append(subscriber)
                 } else {
-                    builds[imagePath] = Build(transformer: transformer, subscribers: [subscriber])
+                    nextBuildIdentifier += 1
+                    builds[imagePath] = Build(identifier: nextBuildIdentifier, transformer: transformer, subscribers: [subscriber])
                     pendingImagePaths.append(imagePath)
                 }
                 if isPrioritized {
@@ -379,36 +408,38 @@ actor RuntimeInterfaceCorpusStore {
     }
 
     /// Cancels the image's build whether it is queued or running, resuming
-    /// every remaining subscriber with `CancellationError`.
+    /// every remaining subscriber with `CancellationError` at once. A running
+    /// build keeps the slot until its task ends, but it leaves `builds` now:
+    /// a request that comes after it starts a build of its own, queued behind
+    /// it, instead of joining one that is already lost.
     private func cancelBuild(imagePath: String) {
-        guard let build = builds[imagePath] else { return }
-        if runningImagePath == imagePath {
-            // `finishBuild(.cancelled)` runs when the task observes the
-            // cancellation; it resumes the subscribers and frees the slot.
-            build.task?.cancel()
+        guard let build = builds.removeValue(forKey: imagePath) else { return }
+        if let runningBuild, runningBuild.buildIdentifier == build.identifier {
+            // `finishBuild` frees the slot when the task ends, and drops what
+            // it produced: this build is no longer in `builds`.
+            runningBuild.task.cancel()
         } else {
             pendingImagePaths.removeAll { $0 == imagePath }
-            builds[imagePath] = nil
-            for subscriber in build.subscribers {
-                subscriber.continuation.resume(throwing: CancellationError())
-            }
+        }
+        for subscriber in build.subscribers {
+            subscriber.continuation.resume(throwing: CancellationError())
         }
     }
 
     private func pump() {
-        guard runningImagePath == nil, !pendingImagePaths.isEmpty else { return }
+        guard runningBuild == nil, !pendingImagePaths.isEmpty else { return }
         let imagePath = pendingImagePaths.removeFirst()
-        guard var build = builds[imagePath] else {
+        guard let build = builds[imagePath] else {
             pump()
             return
         }
-        runningImagePath = imagePath
+        let buildIdentifier = build.identifier
         let transformer = build.transformer
-        build.task = Task.detached(priority: .utility) { [weak self] in
+        let task = Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            await self.run(imagePath: imagePath, transformer: transformer)
+            await self.run(imagePath: imagePath, buildIdentifier: buildIdentifier, transformer: transformer)
         }
-        builds[imagePath] = build
+        runningBuild = RunningBuild(buildIdentifier: buildIdentifier, task: task)
         #log(.info, "Building corpus for \(imagePath, privacy: .public)")
     }
 
@@ -417,8 +448,9 @@ actor RuntimeInterfaceCorpusStore {
     /// `.utility` priority comes from the detached task that calls it.
     /// Families print `printingWidth` at a time and their prints land in the
     /// slots of the objects they belong to, so the entries keep the listing
-    /// order.
-    private func run(imagePath: String, transformer: Transformer.Configuration) async {
+    /// order. `buildIdentifier` goes with everything it reports: once the
+    /// build is cancelled the image's build is another one, or none.
+    private func run(imagePath: String, buildIdentifier: UInt64, transformer: Transformer.Configuration) async {
         let start = Date()
         var skippedCount = 0
         let outcome: BuildOutcome
@@ -426,7 +458,7 @@ actor RuntimeInterfaceCorpusStore {
             guard let builder else { throw CancellationError() }
             let objects = try await builder.corpusObjects(in: imagePath)
             let total = objects.count
-            await publishProgress(imagePath: imagePath, built: 0, total: total)
+            await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: 0, total: total)
             var printsByObjectIndex = [RuntimeInterfaceCorpusPrint?](repeating: nil, count: total)
             let families = Self.families(in: objects)
             func printOperation(forFamilyAt familyIndex: Int) -> @Sendable () async throws -> (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]) {
@@ -460,7 +492,7 @@ actor RuntimeInterfaceCorpusStore {
                     let previouslyBuilt = built
                     built += familyRange.count
                     if built / Self.progressReportStride > previouslyBuilt / Self.progressReportStride || built == total {
-                        await publishProgress(imagePath: imagePath, built: built, total: total)
+                        await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: built, total: total)
                     }
                     if nextFamilyIndex < families.count {
                         group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
@@ -468,6 +500,8 @@ actor RuntimeInterfaceCorpusStore {
                     }
                 }
             }
+            // Saves an assembly nobody will take. A cancellation that comes
+            // during the assembly is caught by `finishBuild`.
             try Task.checkCancellation()
             let entries = await assemble(printsByObjectIndex.compactMap { $0 })
             let byteCount = entries.reduce(0) { $0 + $1.byteCount }
@@ -481,7 +515,7 @@ actor RuntimeInterfaceCorpusStore {
             outcome = .failed(error)
             #log(.error, "Corpus build of \(imagePath, privacy: .public) failed: \(error, privacy: .public)")
         }
-        finishBuild(imagePath: imagePath, outcome: outcome)
+        finishBuild(imagePath: imagePath, buildIdentifier: buildIdentifier, outcome: outcome)
     }
 
     /// The objects in print units, each a range of the listing: an object
@@ -509,37 +543,51 @@ actor RuntimeInterfaceCorpusStore {
     /// a walk over every interface of the image — runs off this actor, which
     /// stays free to answer searches and coverage meanwhile.
     private nonisolated func assemble(_ prints: [RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] {
-        RuntimeInterfaceCorpusAssembly.entries(from: prints)
+        await assembleEntries(prints)
     }
 
-    private func publishProgress(imagePath: String, built: Int, total: Int) async {
+    /// Reaches only the subscribers of build `buildIdentifier`: a cancelled
+    /// build's task may still report while a newer build of its image waits
+    /// for the slot.
+    private func publishProgress(imagePath: String, buildIdentifier: UInt64, built: Int, total: Int) async {
+        guard var build = builds[imagePath], build.identifier == buildIdentifier else { return }
         let progress = RuntimeInterfaceCorpusBuildProgress(built: built, total: total)
-        guard builds[imagePath] != nil else { return }
-        builds[imagePath]!.progress = progress
-        let handlers = builds[imagePath]!.subscribers.map(\.onProgress)
+        build.progress = progress
+        builds[imagePath] = build
+        let handlers = build.subscribers.map(\.onProgress)
         for handler in handlers {
             await handler(progress)
         }
     }
 
-    private func finishBuild(imagePath: String, outcome: BuildOutcome) {
-        let build = builds.removeValue(forKey: imagePath)
-        if runningImagePath == imagePath {
-            runningImagePath = nil
+    /// Frees the slot, then settles build `buildIdentifier` — unless it was
+    /// cancelled while it ran, in which case its subscribers were told then
+    /// and what it produced, even a whole corpus, is stale. A subscriber's
+    /// continuation is resumed in one place only: whoever takes its build out
+    /// of `builds`.
+    private func finishBuild(imagePath: String, buildIdentifier: UInt64, outcome: BuildOutcome) {
+        if runningBuild?.buildIdentifier == buildIdentifier {
+            runningBuild = nil
         }
+        defer { pump() }
+        guard let build = builds[imagePath], build.identifier == buildIdentifier else {
+            #log(.info, "Dropping what the cancelled corpus build of \(imagePath, privacy: .public) produced")
+            return
+        }
+        builds[imagePath] = nil
         switch outcome {
         case .built(let corpus):
             corpora[imagePath] = corpus
             failureMessages[imagePath] = nil
-            build?.subscribers.forEach { $0.continuation.resume(returning: corpus.summary) }
+            build.subscribers.forEach { $0.continuation.resume(returning: corpus.summary) }
             enforceResidentLimit(protecting: imagePath)
         case .failed(let error):
             failureMessages[imagePath] = "\(error)"
-            build?.subscribers.forEach { $0.continuation.resume(throwing: error) }
+            build.subscribers.forEach { $0.continuation.resume(throwing: error) }
         case .cancelled:
-            build?.subscribers.forEach { $0.continuation.resume(throwing: CancellationError()) }
+            // Still the image's build yet cancelled: the builder went away.
+            build.subscribers.forEach { $0.continuation.resume(throwing: CancellationError()) }
         }
-        pump()
     }
 
     // MARK: - Eviction

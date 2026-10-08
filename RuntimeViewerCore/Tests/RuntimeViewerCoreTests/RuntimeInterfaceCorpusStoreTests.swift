@@ -16,6 +16,8 @@ struct RuntimeInterfaceCorpusStoreTests {
         var delayPerObjectNanoseconds: UInt64 = 0
         /// Overrides `delayPerObjectNanoseconds` for the objects it names.
         var delayNanosecondsByObjectName: [String: UInt64] = [:]
+        /// Holds every print until the test opens it.
+        var printGate: Gate?
         private(set) var printedObjectNames: [String] = []
         private(set) var maximumConcurrentPrintCount = 0
         private var concurrentPrintCount = 0
@@ -50,6 +52,9 @@ struct RuntimeInterfaceCorpusStoreTests {
                 maximumConcurrentPrintCount = max(maximumConcurrentPrintCount, concurrentPrintCount)
             }
             defer { lock.withLock { concurrentPrintCount -= 1 } }
+            if let printGate {
+                await printGate.wait()
+            }
             let delayNanoseconds = delayNanosecondsByObjectName[object.name] ?? delayPerObjectNanoseconds
             if delayNanoseconds > 0 {
                 try await Task.sleep(nanoseconds: delayNanoseconds)
@@ -81,6 +86,56 @@ struct RuntimeInterfaceCorpusStoreTests {
     enum ScriptedError: Swift.Error {
         case imageFailed(String)
         case objectFailed(String)
+    }
+
+    /// Holds whoever waits at it until the test opens it, and ignores
+    /// cancellation meanwhile — as MachOSwiftSection's printing does, which
+    /// has no cancellation point.
+    final class Gate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var isOpen = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        var waiterCount: Int {
+            lock.withLock { waiters.count }
+        }
+
+        func wait() async {
+            await withCheckedContinuation { continuation in
+                let resumesNow = lock.withLock {
+                    if isOpen { return true }
+                    waiters.append(continuation)
+                    return false
+                }
+                if resumesNow {
+                    continuation.resume()
+                }
+            }
+        }
+
+        func open() {
+            let releasedWaiters = lock.withLock {
+                isOpen = true
+                defer { waiters.removeAll() }
+                return waiters
+            }
+            for waiter in releasedWaiters {
+                waiter.resume()
+            }
+        }
+
+        /// Returns once someone waits here, so a test acts while that work
+        /// is in flight.
+        func waitForWaiter(timeout: TimeInterval = 10) async throws {
+            let deadline = Date().addingTimeInterval(timeout)
+            while waiterCount == 0 {
+                guard Date() < deadline else {
+                    Issue.record("nothing ever waited at the gate")
+                    return
+                }
+                try await Task.sleep(nanoseconds: 5_000_000)
+            }
+        }
     }
 
     private static let imageA = "/images/A"
@@ -444,6 +499,77 @@ struct RuntimeInterfaceCorpusStoreTests {
         try await Task.sleep(nanoseconds: 120_000_000)
         #expect(await store.coverage(indexedImagePaths: []).statesByImagePath[Self.imageA] == nil)
         #expect(builder.printedObjectNames.count < 2)
+    }
+
+    /// A running build cannot be interrupted while a print is in flight, so
+    /// cancelling it used to leave it in place, accepting subscribers: a
+    /// request that came next joined it and was cancelled with it.
+    @Test("a request after the running build of its image was cancelled starts a build of its own")
+    func requestAfterCancellingRunningBuildStartsAfresh() async throws {
+        let gate = Gate()
+        let fixture = makeStore { $0.printGate = gate }
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        let first = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
+        try await gate.waitForWaiter()
+
+        await store.evict(imagePath: Self.imageA)
+        let second = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
+        // The first print is still held: the cancelled build keeps the slot,
+        // and the second request waits behind it with a build of its own.
+        try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageA] == .pending }
+        gate.open()
+
+        await #expect(throws: CancellationError.self) { try await first.value }
+        let summary = try await second.value
+        #expect(summary.objectCount == 2)
+    }
+
+    @Test("a different transformer asked for while the image prints gets a build of its own")
+    func transformerChangeWhilePrintingRebuilds() async throws {
+        let gate = Gate()
+        let fixture = makeStore { $0.printGate = gate }
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        var changed = Transformer.Configuration.default
+        changed.objc.cType.isEnabled.toggle()
+        let first = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
+        try await gate.waitForWaiter()
+
+        let second = Task { try await store.build(imagePath: Self.imageA, transformer: changed) }
+        try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageA] == .pending }
+        gate.open()
+
+        await #expect(throws: CancellationError.self) { try await first.value }
+        _ = try await second.value
+        #expect(await store.corpus(for: Self.imageA)?.transformer == changed)
+    }
+
+    /// The only cancellation check came before the assembly, so an eviction
+    /// that arrived during it was stored as built anyway — stale entries, or
+    /// a corpus back in memory right after the user turned corpora off.
+    @Test("a build evicted while its entries are assembled leaves nothing behind")
+    func evictionDuringAssemblyLeavesNothing() async throws {
+        let assemblyGate = Gate()
+        let builder = ScriptedBuilder()
+        builder.objectNamesByImagePath = [Self.imageA: ["Alpha", "Beta"], Self.imageB: ["Gamma"]]
+        defer { withExtendedLifetime(builder) {} }
+        let store = RuntimeInterfaceCorpusStore(builder: builder, printingWidth: 1) { prints in
+            await assemblyGate.wait()
+            return RuntimeInterfaceCorpusAssembly.entries(from: prints)
+        }
+        let buildA = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
+        try await assemblyGate.waitForWaiter()
+
+        await store.evict(imagePath: Self.imageA)
+        assemblyGate.open()
+
+        await #expect(throws: CancellationError.self) { try await buildA.value }
+        // B starts only once A's task has handed the slot back, so by now A's
+        // outcome has been handled.
+        _ = try await store.build(imagePath: Self.imageB, transformer: .default)
+        #expect(await store.corpus(for: Self.imageA) == nil)
+        #expect(await store.coverage(indexedImagePaths: []).statesByImagePath[Self.imageA] == nil)
     }
 
     @Test("a different transformer evicts and rebuilds")

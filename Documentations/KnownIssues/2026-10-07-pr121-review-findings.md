@@ -2739,7 +2739,7 @@ func selectionFollowsTheUsersChoice() async throws {
 
 - **严重度**：Major
 - **审查编号**：C01（= S1）+ C02
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusStoreTests.requestAfterCancellingRunningBuildStartsAfresh`、`transformerChangeWhilePrintingRebuilds`、`evictionDuringAssemblyLeavesNothing`（修前：前两个的第二个请求挂到了已取消的构建上，等不到它自己的构建排队（`waitForCoverage` 超时），随后 `second.value` 抛 `CancellationError`；第三个组装期间的驱逐拦不住，`buildA` 返回 `objectCount: 2, byteCount: 206` 的 summary，语料与 coverage 里的 built 都还在）。与草案的出入：`RunningBuild` 只存身份号与任务，不存路径（没有读它的地方）。同类：全仓库按镜像路径对应一个可加入任务的结构只有这一处，后台索引按批次 id 管理，不受影响
 
 **问题**：语料存储取消一个**正在运行**的构建时，只调用了 `task.cancel()`，构建仍留在 `builds` 里（`RuntimeInterfaceCorpusStore.swift:385-388`）。
 - **C01**：之后同一镜像的新请求一看 `builds` 里有构建，就把自己挂上去（:342-343），即使它要的 transformer 不同也一样（:329-334 先取消，接着照样走到 :342）。被挂上的请求最后跟着旧构建一起以 `CancellationError` 结束（:539-540），也不会重新排队，这个镜像就一直搜不到。
