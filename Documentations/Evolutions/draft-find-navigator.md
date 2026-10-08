@@ -91,7 +91,8 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 - 构建串行、单线程、`.utility`，只跑 2 个效率核；
 - 用户自己的显示选项是 Swift 全开，所以「语料不打昂贵选项」不可行，行号会和内容区对不上。
 
-**计量先行**：分支专属的可执行目标 `CorpusBuildTimingProbe`（`RuntimeViewerCore/Sources/CorpusBuildTimingProbe/`，不合入）：
+**计量先行**：分支专属的可执行目标 `CorpusBuildTimingProbe`（`RuntimeViewerCore/Sources/CorpusBuildTimingProbe/`，交付前已移除；
+源码与 target 声明留在提交 `d1c3cb57`，`git show d1c3cb57` 可取回，用法见该提交说明）：
 `corpus` 模式计真实构建，`display <preset>` 模式按预设选项经内容区路径打印全部对象，预设两两相减得到每个选项的代价；
 `--top-level-only` 量出嵌套重复的份额。每个预设各起一个进程。Release 下对 Foundation / SwiftUI / libswiftCore 各测一遍，
 优化前后的数字记入决策日志。

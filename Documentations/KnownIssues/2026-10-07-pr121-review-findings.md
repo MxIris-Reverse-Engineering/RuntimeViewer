@@ -5413,7 +5413,7 @@ func regularExpressionAnchorsMatchLines() throws {
 
 - **严重度**：Cleanup
 - **审查编号**：C37
-- **状态**：方案待批，代码未改
+- **状态**：已修复。按文档用命令验证代替测试：RuntimeViewerCore 移除后仍能编译，`git grep -n CorpusBuildTimingProbe` 只剩提案里的历史引用与本文件
 
 **问题**：`RuntimeViewerCore/Package.swift:261-268` 声明了可执行目标 `CorpusBuildTimingProbe`，源码在 `Sources/CorpusBuildTimingProbe/`，共 390 行，来自 d1c3cb57。这是为 Find 语料构建计时用的探针，提交说明里写着「Not to be merged: drop this commit when the branch is delivered」，提案 `draft-find-navigator.md:94` 也写了「不合入」。没有产品依赖它，App 不受影响；代价只是每次 `swift build` / `swift test` RuntimeViewerCore 都要多编它，Xcode 里也多出一个 scheme。
 

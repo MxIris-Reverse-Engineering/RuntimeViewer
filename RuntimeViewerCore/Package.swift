@@ -258,14 +258,6 @@ let package = Package(
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
             ],
         ),
-        // Branch-only measurement tool for the Find corpus build
-        // (draft-find-navigator §1.1). Never merged.
-        .executableTarget(
-            name: "CorpusBuildTimingProbe",
-            dependencies: [
-                "RuntimeViewerCore",
-            ],
-        ),
         .testTarget(
             name: "RuntimeViewerCoreTests",
             dependencies: [
