@@ -99,6 +99,10 @@ let package = Package(
             name: "runtime-viewer-cli",
             dependencies: [
                 "RuntimeViewerCommandLineInterface",
+                // Linked for one call: `RuntimeInjection.install()` at the
+                // entry point. Every process that serves an engine makes it,
+                // and the resident CLI host serves engines.
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore"),
             ]
         ),
         .testTarget(

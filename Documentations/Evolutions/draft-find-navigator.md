@@ -65,7 +65,7 @@ CLI 与 MCP 的 `.string`。`FrozenSemanticString.components` 仍在，需要 co
   `RuntimeEngine.stop()`（`releaseIndexedSections`）时同步清掉该镜像的语料。Settings 总开关关掉时整体清空。
 - 驻留预算：store 记录 Frozen 总字节数，硬上限 256 MB；超限按「最久未被搜索命中」整镜像驱逐回未构建。
 - 构建队列在 store 内串行（并发 1）、`.utility`；同镜像重复入队按 `buildStateByImagePath` 去重。
-- **取消按订阅引用计数**：每个 `BuildInterfaceCorpusRequest` 只是对该镜像构建的一次订阅，最后一个订阅者退订才取消
+- **取消按订阅引用计数**：每个 `BuildInterfaceCorpusCommand` 只是对该镜像构建的一次订阅，最后一个订阅者退订才取消
   构建任务。多文档共享 `.local` 引擎时，文档 A 关闭不会砍掉文档 B 在等的语料。
 
 **语料 = 全量打印 + 可见性区域，搜索时按当前选项投影**（2026-09-29 取代原先的「canonical 选项」，见决策日志）。
@@ -167,7 +167,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   `projectedUTF8Offset(ofOriginalUTF8Offset:)` 换算后跳过；成员定位排除这些区间内的行。Foundation 上的数字：
   修复前 16317 个已定位 Swift 成员里 1183 个落在嵌套类型的行上，修复后 0；嵌套块全部找到。
 - **根协议默认实现的重复核实属实并已修**：见决策日志。
-- **第 3 条**：构建请求加 `isPrioritized`，第一次请求就置顶；已有订阅的镜像再被点开时发 `PrioritizeInterfaceCorpusRequest`，
+- **第 3 条**：构建请求加 `isPrioritized`，第一次请求就置顶；已有订阅的镜像再被点开时发 `PrioritizeInterfaceCorpusCommand`，
   不加订阅。
 - **第 4 条**：`FindCorpusCoordinator` 发布 `buildStatesByImagePath`、`finishedBuilds`（100 条封顶）、`corpusBuilt` 与
   `hasActiveBuild`；进度经加锁的暂存 16 ms 合并后上主线程；启动、换引擎与每次构建结束后用 coverage 补快照（规则见
@@ -184,17 +184,17 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 - **未做**：probe 的运行（等用户同意）；并行宽度的放开（等 MachOSwiftSection 的并发打印安全落地）；两份上游提案
   由 MachOSwiftSection 那边的会话实现。
 
-### 2. 引擎请求（全部经 `registerSharedHandlers` 注册，XPC / TCP / proxy 链自动透传）
+### 2. 引擎命令（全部列在 `RuntimeEngine.registerBuiltInHandlers(into:)`，XPC / TCP / proxy 链自动透传）
 
-| 请求 | 类型 | 进度 | 响应 |
+| 命令 | 类型 | 进度 | 响应 |
 |------|------|------|------|
-| `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `RuntimeInterfaceCorpusBuildOutcome`：`built(CorpusBuildSummary { objectCount, skippedCount, byteCount })` / `cancelled` / `imageNotIndexed`（2026-10-08，PR121.30：取消是值不是错误，才跨得过连接；公开 API 仍返回 summary） |
-| `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
-| `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
-| `TypeRelationshipsRequest { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |
-| `InterfaceCorpusCoverageRequest` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
+| `BuildInterfaceCorpusCommand { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `RuntimeInterfaceCorpusBuildOutcome`：`built(CorpusBuildSummary { objectCount, skippedCount, byteCount })` / `cancelled` / `imageNotIndexed`（2026-10-08，PR121.30：取消是值不是错误，才跨得过连接；公开 API 仍返回 summary） |
+| `SearchInterfacesCommand { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
+| `SearchMembersCommand { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
+| `TypeRelationshipsCommand { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |
+| `InterfaceCorpusCoverageCommand` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
 
-前四条请求开启 `cancelsAcrossConnections`：调用方取消即返回，经 `cancelRequest` 撤回对端正在做的工作（2026-10-08，PR121.29，协议见 `CommunicationAndEngineArchitecture.md` §4.5）。
+前四条命令开启 `cancelsAcrossConnections`：调用方取消即返回，经 `cancelRequest` 撤回对端正在做的工作（2026-10-08，PR121.29，协议见 `CommunicationAndEngineArchitecture.md` §4.5）。
 
 `Progress` 必须是具名 `Codable` struct，不能是 tuple（审查意见 2）。请求与结果模型放在 `RuntimeViewerCore/Common/`，
 命名与 CLI / MCP 的 `--json` 词汇对齐，将来暴露成命令只是机械包装（本提案不做，见「不做」）。
@@ -774,3 +774,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 父类绑定了泛型实参时，父类与子类关系按去掉实参后的泛型类登记，子类表同时保留绑定后的键；Swift 父类不在任何已索引镜像里时，只在它是导入的 ObjC 类时按 `prepare()` 记下的运行时类名去 ObjC 那边找，不再取打印名的最后一段去猜 | PR #121 审查 PR121.14：原来的键是绑定后的名字，类型表里永远查不到。`UpdateMenuAction: IncrementalUpdateAction<Menu, MenuItem>` 的 Ancestor 断在一个未解析的叶子上；`IncrementalUpdateAction` 的 Descendent Types 和 Inspector 的子类列表都是空的，后者在 main 上就是这样。取打印名的最后一段去猜 ObjC 类，对泛型父类一定落空，还可能撞上同名的无关 ObjC 类。复现测试 `RuntimeTypeRelationshipsGenericSuperclassTests` 修前两条红，修后全绿。 |
 | 2026-10-08 | 关系树里一个 ObjC 协议只出一个节点：候选与 Descendent 的兄弟节点按名字归组；节点代表哪份副本按「引用它的镜像 → 范围内路径最小 → 全部路径最小」选；限定范围时任一携带镜像在范围内即算在内；Descendent 的协议层按名字排序；带 `isSwiftClass` 的 ObjC 类换成同一镜像的 Swift 面后再参与候选 | PR #121 审查 PR121.13：每个按某协议编译的镜像都带一份完整副本，没有权威的定义镜像（`ResolvedIssues/2026-08-05-objc-protocol-ownership-filter.md`）。按副本计数时，`NSObject` 的协议副本挤掉了 NSObject 类，兄弟节点重复，归属还跟着索引顺序变；限定在 Foundation 查 `NSArray` 的 Ancestors，整棵树被剪光。去重放在关系层，不放索引层：侧栏照旧列出全部副本，不丢数据。层内顺序原本来自上游协议表的字典键，每次启动都不同。范围语义采用审查文档的推荐，经用户同意。复现测试 `RuntimeTypeRelationshipsProtocolCopyTests` 修前六条全红，修后全绿；选副本的规则另有单元测试。 |
 | 2026-10-08 | Swift 类的 Ancestor Types 在 Swift 协议之后、父类之前，补上它的 ObjC 面采纳的协议（经 `objcClassName(forCounterpartOf:)` 找到 ObjC 面，读同一镜像的 `ObjCClassInfo.protocols`）；另一个镜像里声明的一致性仍不显示 | PR #121 审查 PR121.66：Swift 类采纳 `@objc` 协议时不产生 Swift 一致性记录，只写进 ObjC 面的协议表。Conforming Types 读的正是这张表，所以两个方向对不上：在 `NSCopying` 的 Conforming Types 里查得到的 Swift 类，它自己的 Ancestors 里没有 `NSCopying`。复现测试 `RuntimeInterfaceSearchTests.swiftClassAncestorsIncludeAdoptedObjCProtocols` 修前三个类（`NSNotificationCenter.NotificationMessageKey` 等）都只有父类 `NSObject`，修后全绿。跨镜像声明的一致性（CoreTransferable 里的 `String: Transferable`）两个方向本来就都缺，不是这次的不对称，裁决不修，见 KnownIssues。 |
+| 2026-10-08 | 合入 `next`：Find 的命令随 `next` 的命名改成 `…Command`（`BuildInterfaceCorpusCommand` 等，协议 `RuntimeEngineProgressCommand`，命令名常量移到 `RuntimeEngineCommandName.swift`），由 `RuntimeEngine.registerBuiltInHandlers(into:)` 经 `RuntimeEngineCommandRegistrar` 注册；`cancelRequest` 与 `dyldRootPath` 在注册器里由本进程作答、不转发；取消登记表交给注册器，命令扩展的进度命令也撤得回；`next` 新增的五条注入命令不开 `cancelsAcrossConnections` | `next` 把封闭的 `CommandNames` 枚举换成别的模块可以扩展的 `CommandName` struct，把硬编码清单换成「内置清单 + 进程级扩展表」，命令协议改名 `RuntimeEngineCommand`；Find 的命令跟着改名，免得同一张命令表里两种叫法。线上格式两边都没变：命令名字符串照旧，`requestIdentifier` 照旧只出现在开启取消的命令的信封里。注入命令不开取消的理由见 `CommunicationAndEngineArchitecture.md` §4.5：服务它们的对端（合入之前从 `next` 构建、装在真机上的设备载荷）不认识 `cancelRequest`，改成进度命令还会改掉它们的线上格式，而且它们没有值得撤回的长工作。 |

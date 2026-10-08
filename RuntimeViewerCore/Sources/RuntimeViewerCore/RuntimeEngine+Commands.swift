@@ -4,41 +4,41 @@ import RuntimeViewerCommunication
 // MARK: - Image queries
 
 extension RuntimeEngine {
-    struct IsImageLoadedRequest: RuntimeEngineRequest {
+    struct IsImageLoadedCommand: RuntimeEngineCommand {
         let path: String
-        static var commandName: String { CommandNames.isImageLoaded.commandName }
+        static var commandName: String { CommandName.isImageLoaded.commandName }
         func perform(on engine: RuntimeEngine) async throws -> Bool {
             await engine._isImageLoaded(path: path)
         }
     }
 
-    struct IsImageIndexedRequest: RuntimeEngineRequest {
+    struct IsImageIndexedCommand: RuntimeEngineCommand {
         let path: String
-        static var commandName: String { CommandNames.isImageIndexed.commandName }
+        static var commandName: String { CommandName.isImageIndexed.commandName }
         func perform(on engine: RuntimeEngine) async throws -> Bool {
             await engine._isImageIndexed(path: path)
         }
     }
 
-    struct MainExecutablePathRequest: RuntimeEngineRequest {
-        static var commandName: String { CommandNames.mainExecutablePath.commandName }
+    struct MainExecutablePathCommand: RuntimeEngineCommand {
+        static var commandName: String { CommandName.mainExecutablePath.commandName }
         func perform(on engine: RuntimeEngine) async throws -> String {
             DyldUtilities.mainExecutablePath()
         }
     }
 
-    struct LoadImageRequest: RuntimeEngineRequest {
+    struct LoadImageCommand: RuntimeEngineCommand {
         let path: String
-        static var commandName: String { CommandNames.loadImage.commandName }
+        static var commandName: String { CommandName.loadImage.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             try await engine._loadImage(at: path)
             return RuntimeEngineEmpty()
         }
     }
 
-    struct LoadImageWithProgressRequest: RuntimeEngineProgressRequest {
+    struct LoadImageWithProgressCommand: RuntimeEngineProgressCommand {
         let path: String
-        static var commandName: String { CommandNames.loadImageWithProgress.commandName }
+        static var commandName: String { CommandName.loadImageWithProgress.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             try await engine._loadImage(at: path)
             return RuntimeEngineEmpty()
@@ -50,18 +50,18 @@ extension RuntimeEngine {
         }
     }
 
-    struct LoadImageForBackgroundIndexingRequest: RuntimeEngineRequest {
+    struct LoadImageForBackgroundIndexingCommand: RuntimeEngineCommand {
         let path: String
-        static var commandName: String { CommandNames.loadImageForBackgroundIndexing.commandName }
+        static var commandName: String { CommandName.loadImageForBackgroundIndexing.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             try await engine._loadImageForBackgroundIndexing(at: path)
             return RuntimeEngineEmpty()
         }
     }
 
-    struct ReloadDataRequest: RuntimeEngineRequest {
+    struct ReloadDataCommand: RuntimeEngineCommand {
         let isReloadImageNodes: Bool
-        static var commandName: String { CommandNames.reloadData.commandName }
+        static var commandName: String { CommandName.reloadData.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             await engine.reloadLocalData(isReloadImageNodes: isReloadImageNodes)
             return RuntimeEngineEmpty()
@@ -72,9 +72,9 @@ extension RuntimeEngine {
     /// pre-refactor behavior where the local arm always returned `nil` and
     /// only the remote arm answered meaningfully — so a proxy / server engine
     /// keeps that empty answer when no upstream lookup is available.
-    struct ImageNameOfObjectRequest: RuntimeEngineRequest {
+    struct ImageNameOfObjectCommand: RuntimeEngineCommand {
         let object: RuntimeObject
-        static var commandName: String { CommandNames.imageNameOfClassName.commandName }
+        static var commandName: String { CommandName.imageNameOfClassName.commandName }
         func perform(on engine: RuntimeEngine) async throws -> String? {
             nil
         }
@@ -84,10 +84,10 @@ extension RuntimeEngine {
     /// that actually owns the image, so export README metadata is not polluted
     /// by the macOS host process picking up a same-named framework via
     /// `DyldUtilities`' basename fallback.
-    struct ExportModuleInfoRequest: RuntimeEngineRequest {
+    struct ExportModuleInfoCommand: RuntimeEngineCommand {
         let imagePath: String
         let imageName: String
-        static var commandName: String { CommandNames.runtimeInterfaceExportModuleInfo.commandName }
+        static var commandName: String { CommandName.runtimeInterfaceExportModuleInfo.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeInterfaceExportMetadata.ModuleInfo {
             RuntimeInterfaceExportMetadata.ModuleInfo.resolve(imagePath: imagePath, imageName: imageName)
         }
@@ -97,9 +97,9 @@ extension RuntimeEngine {
 // MARK: - Objects & interfaces
 
 extension RuntimeEngine {
-    struct ObjectsInImageRequest: RuntimeEngineProgressRequest {
+    struct ObjectsInImageCommand: RuntimeEngineProgressCommand {
         let image: String
-        static var commandName: String { CommandNames.runtimeObjectsInImage.commandName }
+        static var commandName: String { CommandName.runtimeObjectsInImage.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeObject] {
             try await engine._objects(in: image)
         }
@@ -109,7 +109,7 @@ extension RuntimeEngine {
         }
     }
 
-    struct InterfaceRequest: RuntimeEngineRequest {
+    struct InterfaceCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         let options: RuntimeObjectInterface.GenerationOptions
         /// `true` from builds that read `interfaceString` in the columnar
@@ -118,7 +118,7 @@ extension RuntimeEngine {
         /// they decode a request of this build; either way they are answered
         /// in the component array they read. See `RuntimeObjectInterfaceResponse`.
         let acceptsColumnarInterfaceString: Bool?
-        static var commandName: String { CommandNames.runtimeInterfaceForRuntimeObjectInImageWithOptions.commandName }
+        static var commandName: String { CommandName.runtimeInterfaceForRuntimeObjectInImageWithOptions.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeObjectInterfaceResponse {
             try await response(for: engine._interface(for: object, options: options))
         }
@@ -132,34 +132,34 @@ extension RuntimeEngine {
         }
     }
 
-    struct HierarchyRequest: RuntimeEngineRequest {
+    struct HierarchyCommand: RuntimeEngineCommand {
         let object: RuntimeObject
-        static var commandName: String { CommandNames.runtimeObjectHierarchy.commandName }
+        static var commandName: String { CommandName.runtimeObjectHierarchy.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [String] {
             try await engine._hierarchy(for: object)
         }
     }
 
-    struct RelationshipsRequest: RuntimeEngineRequest {
+    struct RelationshipsCommand: RuntimeEngineCommand {
         let object: RuntimeObject
-        static var commandName: String { CommandNames.runtimeRelationshipsForObject.commandName }
+        static var commandName: String { CommandName.runtimeRelationshipsForObject.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeRelationships {
             await engine._relationships(for: object)
         }
     }
 
-    struct CounterpartRequest: RuntimeEngineRequest {
+    struct CounterpartCommand: RuntimeEngineCommand {
         let object: RuntimeObject
-        static var commandName: String { CommandNames.runtimeCounterpartForObject.commandName }
+        static var commandName: String { CommandName.runtimeCounterpartForObject.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeObject? {
             await engine._counterpart(for: object)
         }
     }
 
-    struct MemberAddressesRequest: RuntimeEngineRequest {
+    struct MemberAddressesCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         let memberName: String?
-        static var commandName: String { CommandNames.memberAddresses.commandName }
+        static var commandName: String { CommandName.memberAddresses.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeMemberAddress] {
             try await engine._memberAddresses(for: object, memberName: memberName)
         }
@@ -171,37 +171,37 @@ extension RuntimeEngine {
 extension RuntimeEngine {
     /// Wire form of `specializationRequest(for:)`. The `for object:` half is in
     /// `RuntimeEngine+GenericSpecialization.swift` so the public API and its
-    /// `RuntimeEngineRequest` shim stay co-located.
-    struct SpecializationRequestForObjectRequest: RuntimeEngineRequest {
+    /// `RuntimeEngineCommand` shim stay co-located.
+    struct SpecializationRequestForObjectCommand: RuntimeEngineCommand {
         let object: RuntimeObject
-        static var commandName: String { CommandNames.specializationRequest.commandName }
+        static var commandName: String { CommandName.specializationRequest.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeSpecializationRequest {
             try await engine._specializationRequest(for: object)
         }
     }
 
-    struct SpecializationRequestForCandidateRequest: RuntimeEngineRequest {
+    struct SpecializationRequestForCandidateCommand: RuntimeEngineCommand {
         let candidateID: String
         let imagePath: String
-        static var commandName: String { CommandNames.specializationRequestForCandidate.commandName }
+        static var commandName: String { CommandName.specializationRequestForCandidate.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeSpecializationRequest {
             try await engine._specializationRequest(forCandidateID: candidateID, in: imagePath)
         }
     }
 
-    struct RuntimePreflightRequest: RuntimeEngineRequest {
+    struct RuntimePreflightCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         let selection: RuntimeSpecializationSelection
-        static var commandName: String { CommandNames.runtimePreflight.commandName }
+        static var commandName: String { CommandName.runtimePreflight.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeSpecializationValidation {
             try await engine._runtimePreflight(for: object, with: selection)
         }
     }
 
-    struct SpecializeRequest: RuntimeEngineRequest {
+    struct SpecializeCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         let selection: RuntimeSpecializationSelection
-        static var commandName: String { CommandNames.specialize.commandName }
+        static var commandName: String { CommandName.specialize.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeObject {
             try await engine._specialize(object, with: selection)
         }

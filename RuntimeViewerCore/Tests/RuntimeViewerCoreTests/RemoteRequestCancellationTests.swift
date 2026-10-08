@@ -187,12 +187,12 @@ struct RemoteRequestIdentifierTests {
             try await Task.sleep(for: .milliseconds(20))
         }
         let commandNames = [
-            RuntimeEngine.BuildInterfaceCorpusRequest.commandName,
-            RuntimeEngine.SearchInterfacesRequest.commandName,
-            RuntimeEngine.SearchMembersRequest.commandName,
-            RuntimeEngine.TypeRelationshipsRequest.commandName,
-            RuntimeEngine.ObjectsInImageRequest.commandName,
-            RuntimeEngine.LoadImageWithProgressRequest.commandName,
+            RuntimeEngine.BuildInterfaceCorpusCommand.commandName,
+            RuntimeEngine.SearchInterfacesCommand.commandName,
+            RuntimeEngine.SearchMembersCommand.commandName,
+            RuntimeEngine.TypeRelationshipsCommand.commandName,
+            RuntimeEngine.ObjectsInImageCommand.commandName,
+            RuntimeEngine.LoadImageWithProgressCommand.commandName,
         ]
         for commandName in commandNames {
             peer.setMessageHandler(name: commandName) { (envelope: ReceivedEnvelope) -> RuntimeEngineEmpty in

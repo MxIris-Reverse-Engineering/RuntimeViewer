@@ -58,6 +58,15 @@ extension RuntimeEngine {
     /// root is `nil`; and a payload of an earlier release injected over a
     /// Mach service takes a command it does not know for its client going
     /// away (PR121.73), so it is never sent one.
+    ///
+    /// `injectedTCP` is a socket and still not asked. It leads only to a
+    /// payload on a real device — a simulator's payload advertises over
+    /// Bonjour instead — whose root is `nil`. And there the question costs
+    /// more than a round trip: the engine manager tells a target that exited
+    /// from a link that dropped by how the socket ended, a close or a reset,
+    /// and a payload that exits with the question still unread resets the
+    /// connection instead of closing it, so the target would be kept as if
+    /// only its link had dropped.
     static func asksForServingDyldRootPath(on source: RuntimeSource) -> Bool {
         switch source {
         case .bonjour(_, _, let role),
@@ -65,26 +74,26 @@ extension RuntimeEngine {
              .directTCP(_, _, _, let role):
             role.isClient
         case .local,
-             .remote:
+             .remote,
+             .injectedTCP:
             false
         }
     }
 
     /// The question a client asks its peer, answered with the
     /// `DYLD_ROOT_PATH` of the process that owns the peer's images.
-    struct DyldRootPathRequest: Codable, Sendable {
-        static var commandName: String { CommandNames.dyldRootPath.commandName }
-    }
-
-    /// Answers `DyldRootPathRequest` from what `engine` already knows, and
-    /// never forwards it: the root of its own process for an engine that does
-    /// its own work, the root it learned on connecting for one that forwards
-    /// over a socket — a proxy in front of a simulator process — and its own
-    /// process's, `nil`, for one that forwards over XPC, whose peer is a Mac
-    /// process and may be a payload of an earlier release that must not be
-    /// sent a command it does not know.
-    static func registerDyldRootPathHandler(on connection: any RuntimeConnection, engine: RuntimeEngine) {
-        connection.setMessageHandler(name: DyldRootPathRequest.commandName) { (_: DyldRootPathRequest) -> String? in
+    ///
+    /// Answered from what the serving engine already knows, and never
+    /// forwarded — the registrar installs it with
+    /// `registerAnsweredInThisProcess(_:)`, not `register(_:)`: the root of its
+    /// own process for an engine that does its own work, the root it learned
+    /// on connecting for one that forwards over a socket — a proxy in front
+    /// of a simulator process — and its own process's, `nil`, for one that
+    /// forwards over XPC, whose peer is a Mac process and may be a payload of
+    /// an earlier release that must not be sent a command it does not know.
+    struct DyldRootPathCommand: RuntimeEngineCommand {
+        static var commandName: String { CommandName.dyldRootPath.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> String? {
             engine.servingDyldRootPath.value
         }
     }

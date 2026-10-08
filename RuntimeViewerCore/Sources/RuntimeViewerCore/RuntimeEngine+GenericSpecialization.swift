@@ -13,7 +13,7 @@ extension RuntimeEngine {
     /// (`RuntimeSpecializationRequest`) so the client does not need
     /// `@_spi(Support) SwiftInterface` to deserialize the response.
     public func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
-        try await dispatch(SpecializationRequestForObjectRequest(object: object))
+        try await dispatch(SpecializationRequestForObjectCommand(object: object))
     }
 
     func _specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
@@ -37,7 +37,7 @@ extension RuntimeEngine {
         for object: RuntimeObject,
         with selection: RuntimeSpecializationSelection
     ) async throws -> RuntimeSpecializationValidation {
-        try await dispatch(RuntimePreflightRequest(object: object, selection: selection))
+        try await dispatch(RuntimePreflightCommand(object: object, selection: selection))
     }
 
     func _runtimePreflight(
@@ -67,7 +67,7 @@ extension RuntimeEngine {
         _ object: RuntimeObject,
         with selection: RuntimeSpecializationSelection
     ) async throws -> RuntimeObject {
-        try await dispatch(SpecializeRequest(object: object, selection: selection))
+        try await dispatch(SpecializeCommand(object: object, selection: selection))
     }
 
     @discardableResult
@@ -93,7 +93,7 @@ extension RuntimeEngine {
         forCandidateID candidateID: String,
         in imagePath: String
     ) async throws -> RuntimeSpecializationRequest {
-        try await dispatch(SpecializationRequestForCandidateRequest(candidateID: candidateID, imagePath: imagePath))
+        try await dispatch(SpecializationRequestForCandidateCommand(candidateID: candidateID, imagePath: imagePath))
     }
 
     func _specializationRequest(

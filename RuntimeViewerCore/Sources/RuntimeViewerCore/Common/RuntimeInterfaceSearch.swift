@@ -172,7 +172,7 @@ public struct RuntimeInterfaceSearchSummary: Hashable, Codable, Sendable {
 
 /// Progress of one image's corpus build: objects printed so far out of the
 /// image's total. A named struct rather than a tuple because
-/// `RuntimeEngineProgressRequest.Progress` has to be `Codable`.
+/// `RuntimeEngineProgressCommand.Progress` has to be `Codable`.
 public struct RuntimeInterfaceCorpusBuildProgress: Hashable, Codable, Sendable {
     public let built: Int
     public let total: Int

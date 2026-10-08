@@ -167,6 +167,17 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.isSavable.drive(toolbarController.saveItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
 
+        // The tooltip goes on the button, not on the toolbar item: the item carries a
+        // custom view, and AppKit does not forward `NSToolbarItem.toolTip` to one. A
+        // disabled button still shows it, which is the whole arrangement — the reason the
+        // action is unavailable has to be readable without clicking.
+        output.attachAvailability.driveOnNext { [weak self] availability in
+            guard let self else { return }
+            toolbarController.attachItem.button.isEnabled = availability.isEnabled
+            toolbarController.attachItem.button.toolTip = availability.explanation
+        }
+        .disposed(by: rx.disposeBag)
+
         output.isSidebarBackHidden.drive(toolbarController.sidebarBackItem.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.isNavigationHidden.drive(toolbarController.navigationItem.rx.isHidden).disposed(by: rx.disposeBag)

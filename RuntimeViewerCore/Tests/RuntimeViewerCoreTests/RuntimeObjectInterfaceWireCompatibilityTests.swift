@@ -27,7 +27,8 @@ import SwiftyXPC
 struct RuntimeObjectInterfaceWireCompatibilityTests {
     // MARK: - The shipped peer
 
-    /// `InterfaceRequest` as 3.0.0-beta.6 declares it.
+    /// `InterfaceCommand` as 3.0.0-beta.6 declares it, under the name it had
+    /// then, `InterfaceRequest`.
     private struct ShippedInterfaceRequest: Codable {
         let object: RuntimeObject
         let options: RuntimeObjectInterface.GenerationOptions
@@ -102,7 +103,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
             try await waitUntilConnected(connection)
             let reply = try JSONDecoder().decode(JSONValue.self, from: Data(RuntimeObjectInterfaceWireCompatibilityTests.replyFromShippedServer.utf8))
             let receivedRequests = receivedRequests
-            connection.setMessageHandler(name: RuntimeEngine.InterfaceRequest.commandName) { (request: JSONValue) -> JSONValue in
+            connection.setMessageHandler(name: RuntimeEngine.InterfaceCommand.commandName) { (request: JSONValue) -> JSONValue in
                 await receivedRequests.record(request)
                 _ = try JSONDecoder().decode(ShippedInterfaceRequest.self, from: JSONEncoder().encode(request))
                 return reply
@@ -155,7 +156,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
 
     private static func requestAsShippedClient(over connection: RuntimeDirectTCPClientConnection) async throws -> ShippedRuntimeObjectInterface? {
         try await connection.sendMessage(
-            name: RuntimeEngine.InterfaceRequest.commandName,
+            name: RuntimeEngine.InterfaceCommand.commandName,
             request: ShippedInterfaceRequest(object: object, options: RuntimeObjectInterface.GenerationOptions()),
             timeout: 10
         )
@@ -215,7 +216,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
 
     @Test("a request that declares the columnar encoding is answered in it")
     func columnarRequestIsAnsweredInColumnarEncoding() async throws {
-        /// `InterfaceRequest` as this build sends it, written out by hand.
+        /// `InterfaceCommand` as this build sends it, written out by hand.
         struct DeclaringInterfaceRequest: Codable {
             let object: RuntimeObject
             let options: RuntimeObjectInterface.GenerationOptions
@@ -228,7 +229,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         try await server.serveConnectedPeer()
 
         let reply: JSONValue = try await client.sendMessage(
-            name: RuntimeEngine.InterfaceRequest.commandName,
+            name: RuntimeEngine.InterfaceCommand.commandName,
             request: DeclaringInterfaceRequest(object: Self.object, options: RuntimeObjectInterface.GenerationOptions(), acceptsColumnarInterfaceString: true),
             timeout: 10
         )
@@ -310,7 +311,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
 
     @Test("no interface travels as null, whatever the request declares", arguments: [nil, false, true] as [Bool?])
     func missingInterfaceIsNull(acceptsColumnarInterfaceString: Bool?) throws {
-        let request = RuntimeEngine.InterfaceRequest(
+        let request = RuntimeEngine.InterfaceCommand(
             object: Self.object,
             options: RuntimeObjectInterface.GenerationOptions(),
             acceptsColumnarInterfaceString: acceptsColumnarInterfaceString
@@ -362,7 +363,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
     @Test("over a Mach service, a client that predates the columnar encoding reads the reply to its request")
     func shippedClientReadsMachServiceReply() throws {
         let shippedRequest = ShippedInterfaceRequest(object: Self.object, options: RuntimeObjectInterface.GenerationOptions())
-        let request = try XPCDecoder().decode(type: RuntimeEngine.InterfaceRequest.self, from: XPCEncoder().encode(shippedRequest))
+        let request = try XPCDecoder().decode(type: RuntimeEngine.InterfaceCommand.self, from: XPCEncoder().encode(shippedRequest))
         let interface = RuntimeObjectInterface(object: Self.object, interfaceString: SemanticString(components: Self.shippedInterfaceComponents))
 
         let encodedReply = try XPCEncoder().encode(request.response(for: interface))
@@ -374,7 +375,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
 
     @Test("over a Mach service, two peers of this build exchange the columnar encoding")
     func currentPeersExchangeColumnarEncodingOverMachService() throws {
-        let request = RuntimeEngine.InterfaceRequest(object: Self.object, options: RuntimeObjectInterface.GenerationOptions(), acceptsColumnarInterfaceString: true)
+        let request = RuntimeEngine.InterfaceCommand(object: Self.object, options: RuntimeObjectInterface.GenerationOptions(), acceptsColumnarInterfaceString: true)
         let interface = RuntimeObjectInterface(object: Self.object, interfaceString: SemanticString(components: Self.shippedInterfaceComponents))
 
         let encodedReply = try XPCEncoder().encode(request.response(for: interface))

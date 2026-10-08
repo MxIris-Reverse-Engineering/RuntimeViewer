@@ -1,7 +1,7 @@
 import Foundation
 import Semantic
 
-/// `InterfaceRequest`'s reply. On the wire it is exactly a
+/// `InterfaceCommand`'s reply. On the wire it is exactly a
 /// `RuntimeObjectInterface?`, with `interfaceString` in one of the two
 /// encodings peers have shipped with:
 ///

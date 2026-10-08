@@ -1,0 +1,28 @@
+{
+  "name": "runtime-viewer",
+  "version": "1.0.0",
+  "description": "Teaches coding agents to drive runtime-viewer-cli: Objective-C and Swift interfaces, class hierarchies and member addresses read from a live runtime — this Mac, Mac Catalyst, attached processes and Bonjour peers.",
+  "author": {
+    "name": "MxIris-Reverse-Engineering",
+    "url": "https://github.com/MxIris-Reverse-Engineering"
+  },
+  "homepage": "https://github.com/MxIris-Reverse-Engineering/RuntimeViewer#agent-plugin",
+  "repository": "https://github.com/MxIris-Reverse-Engineering/RuntimeViewer",
+  "license": "MIT",
+  "keywords": ["objective-c", "swift", "runtime", "reverse-engineering", "macos", "cli"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "RuntimeViewer CLI",
+    "shortDescription": "ObjC and Swift interfaces from a live runtime",
+    "longDescription": "How to drive runtime-viewer-cli, the command-line tool inside RuntimeViewer.app: images, types, search, interface, hierarchy, relationships, members, specialize and export against the local runtime, Mac Catalyst, attached processes or Bonjour peers; how image, type and source names resolve; the --json and exit-status contract; and the background host. Requires RuntimeViewer 3.0.0-beta.5 or later, which ships the tool inside the app.",
+    "developerName": "MxIris-Reverse-Engineering",
+    "category": "Developer Tools",
+    "capabilities": ["Read"],
+    "websiteURL": "https://github.com/MxIris-Reverse-Engineering/RuntimeViewer",
+    "defaultPrompt": [
+      "Show the interface of NSTextInputContext with member addresses",
+      "Find the implementation address of this Objective-C method",
+      "Export AppKit's headers and Swift interfaces"
+    ]
+  }
+}

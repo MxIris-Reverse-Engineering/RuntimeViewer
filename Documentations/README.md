@@ -18,6 +18,7 @@
 - [`CommunicationAndEngineArchitecture.md`](CommunicationAndEngineArchitecture.md) —— `RuntimeViewerCommunication` 的连接实现，以及 `RuntimeEngineManager` / `ProxyServer` 的整体架构。
 - [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) —— 跨主机 RuntimeEngine 共享系统的只读走读：四类 engine 集合如何拼合、Bonjour 如何建立管理通道、runtime 数据如何流经 proxy 层。读 `RuntimeEngineManager.swift`（`RuntimeViewerEngineManagement`）等源码前建议先看。
 - [`SwiftObjectTreeWalkthrough.md`](SwiftObjectTreeWalkthrough.md) —— 侧栏里一个镜像的 Swift 条目是怎么来的：编译器何时把嵌套类型的父级记成扩展上下文、MachOSwiftSection 索引器把类型放进哪几张表、`RuntimeSwiftSection.allObjects()` 哪些扩展单独列出哪些并入类型节点、每个节点的 interface 与子节点从哪来，以及 C 导入类型的索引配置为何不能运行时切换。按 libswiftObservation / libswiftCoreAudio / AppKit / SwiftUI 逐个举实测例子。
+- [`DevicePayloadReverseConnection.md`](DevicePayloadReverseConnection.md) —— 真机注入的载荷为什么反着连，以及读 `RuntimeViewerServer.main()` / `RuntimeSource.injectedTCP` / `RuntimePayloadRendezvous` 之前该知道的三条实测事实：载荷继承的是**目标**的沙盒（多数 iOS daemon 被拒 `network-bind`）、身份不能在别人的进程里推导、宿主地址只有到那台设备的那条活连接知道。附「注了但没连上」的排查顺序与已知不支持的目标。
 - [`SparkleRelease.md`](SparkleRelease.md) —— 发布流程、EdDSA 密钥管理与应急处理手册。
 
 ## 愿景（Visions）
@@ -29,13 +30,15 @@
 
 - [`CommandLineInterface.md`](Guides/CommandLineInterface.md) —— `runtime-viewer-cli` 的命令一览、类型 / 镜像 / 来源的解析规则、必须遵守的契约（相对路径在客户端解析、Debug / Release 成对、host 空闲退出、退出码）、CLI host 的文件布局、App 优先与接管、attach 的前提与手动验证清单。
 
+- [`JailbrokenDeviceInjection.md`](Guides/JailbrokenDeviceInjection.md) —— 注入越狱 iOS 设备上的进程：三条 entitlement 前提、网络方向是「设备连 Mac」（防火墙与虚拟机网络模式的要求）、越狱版必须在设备屏幕上、能注什么不能注什么，以及每条错误文案该怎么读。
+
 ## 术语表
 
-- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、镜像引擎、合成扩展、并入。
+- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、rendezvous、认领令牌、反向连接、镜像引擎、合成扩展、并入。
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 26 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、高基数 Cell ViewModel 的 Appearance 单流化、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮、App 图标按 Icon Composer 版本分两份文档、RuntimeObject 的相等性只表达身份、Reveal in Sidebar Navigator（在侧栏里选中并滚到当前对象）、加载指示换成系统菊花并把内容区加载改成 Xcode 式的整块遮罩、`BaseViewController` 改接 UIFoundation 的 `LayerBackedViewController`；另有 13 篇待编号草案：Find navigator（查找文本 / 类型关系 / 成员，文本语料按 `feature/interface-corpus-probe` 的设计稿）、Report navigator（后台索引与语料构建的状态搬进侧栏）、本地运行时引擎搬进内嵌 XPC service（`.local` 身份不变，执行方式改为 XPC service）、RuntimeBookmarkScope（把持久化身份从显示名手里拿走）、给 `@objc @implementation` 实现的 ObjC 类加粉色角标、ObjC 类与 Swift 类互标角标并互相跳转、运行时对象列表的图标加 tooltip、后台索引给前台加载让路（后台在建时打开镜像不再被拖到后台建完）、Catalyst helper 的图标（主图标加 CATALYST 角标）、字号调整从工具栏挪到 View 菜单（⌘+ / ⌘- / ⌘0），以及愿景《无头 RuntimeViewer》下的四篇——引擎管理下沉为无 UI 模块、`runtime-viewer-cli` 基础（协议 / 常驻 host / 本地来源）、多来源与 App 充当 host、嵌入 App 包与设置页、一条命令更新三个 workspace 的依赖。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 28 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、高基数 Cell ViewModel 的 Appearance 单流化、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮、App 图标按 Icon Composer 版本分两份文档、RuntimeObject 的相等性只表达身份、Reveal in Sidebar Navigator（在侧栏里选中并滚到当前对象）、加载指示换成系统菊花并把内容区加载改成 Xcode 式的整块遮罩、`BaseViewController` 改接 UIFoundation 的 `LayerBackedViewController`、一条命令更新三个 workspace 的依赖、ObjC 类与 Swift 类互标角标并互相跳转、后台索引给前台加载让路、Catalyst helper 的图标加 CATALYST 角标；另有 18 篇待编号草案：Find navigator（查找文本 / 类型关系 / 成员，文本语料按 `feature/interface-corpus-probe` 的设计稿）、Report navigator（后台索引与语料构建的状态搬进侧栏）、本地运行时引擎搬进内嵌 XPC service（`.local` 身份不变，执行方式改为 XPC service）、RuntimeBookmarkScope（把持久化身份从显示名手里拿走）、给 `@objc @implementation` 实现的 ObjC 类加粉色角标、运行时对象列表的图标加 tooltip、字号调整从工具栏挪到 View 菜单（⌘+ / ⌘- / ⌘0）、批量导出的镜像选择改成三态勾选树（搜索支持正则，可按完整路径匹配）、越狱版 RV iOS（枚举设备进程并注入，补 0014 列为非目标的真机那一半）、真机注入载荷改为反向连接（载荷继承目标的沙盒、多数 daemon 被拒 `network-bind`，改为向外连宿主）、阻止进程被挂起（一条 `RBSCPUAccessGrant` assertion 同时解决越狱版保活与注入已启动的 App）、设备进程 picker 显示 app 图标（设备端按 `Info.plist` 的 `CFBundleIconFiles` 基名找 bundle 根的 PNG 原样回传，走按 bundle 去重的新命令而非内联进进程列表）、把注入能力搬出 `RuntimeViewerCore`（整体进新 target `RuntimeViewerInjection`，`CommandNames` 改成可被别的模块 extension 的 `CommandName` struct，`registerSharedHandlers` 的硬编码清单改成内置清单加进程级扩展表，线上格式零改动）、把 `runtime-viewer-cli` 的用法做成 agent 插件随仓库发布（Claude Code / Codex 均可安装），以及愿景《无头 RuntimeViewer》下的四篇——引擎管理下沉为无 UI 模块、`runtime-viewer-cli` 基础（协议 / 常驻 host / 本地来源）、多来源与 App 充当 host、嵌入 App 包与设置页。
 
 ## 设计与实现计划（Plans，归档）
 
@@ -96,6 +99,7 @@
 
 按时间倒序。
 
+- [标题一长，工具栏右侧的按钮全进了溢出菜单](ResolvedIssues/2026-10-02-long-toolbar-title-pushed-items-into-overflow.md)（2026-10-02）—— NSToolbar 在独立的布局引擎里以优先级 200 把 item 的 view 压到 0 宽来测最小宽度，再只按最小宽度决定谁进溢出菜单；标题 label 的抗压缩是 250，整段文字就成了最小宽度。只把抗压缩降到 200 以下还不够：测出的宽度恰好为 0 时工具栏退回用 view 的 frame，标题被定成 0 宽；纵向 stack 的 hugging 又把较宽的 label 压到较窄的那么宽。`TitleToolbarItem` 挪进 `RuntimeViewerUI`，加齐四项尺寸设置，回归测试逐项去掉都会失败；15.8.1、26.6、27.0 行为一致。
 - [Find 搜不到任何结果：后台索引的事件被两个读者瓜分](ResolvedIssues/2026-09-29-find-corpus-never-built-indexing-events-split.md)（2026-09-29）—— `RuntimeBackgroundIndexingManager.events` 把同一条 `AsyncStream` 交给每个调用者，而 `AsyncStream` 的每个元素只交给一个读者。Find 的语料库协调器成了每个文档的第二个读者，和索引协调器轮流瓜分事件：它一个「任务完成」都没拿到，一次建库都没请求，搜索恒为 0 结果、已索引镜像全报「not yet searchable」；索引协调器则收不到「批次结束」，弹窗把完成的批次一直挂在 ACTIVE 下。`events` 改为每个订阅者一条流、广播给全部订阅者，新订阅者先收到进行中批次的快照；这也修好了 `main` 上多窗口共用 My Mac 引擎时互相瓜分事件的老问题。
 - [App 图标里的头文件文字比原来暗淡](ResolvedIssues/2026-09-28-icon-code-listing-too-thin.md)（2026-09-28）—— 09-19 把位图前景拆成矢量图层时，生成脚本只按首行宽度匹配旧位图，选了 SF Mono Regular；等宽字体各字重一样宽，宽度选不出字重，按墨迹量比对应该是 Bold。代码层的深色填充又是灰蓝色而不是白色。两处都已改正；另记一个坑：矢量层删掉 dark 特化不等于保持原色，深色外观会把它染成背景的蓝色。
 

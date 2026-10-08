@@ -75,7 +75,7 @@ The MCP bridge starts automatically on app launch; check the toolbar status indi
 
 ### Command Line Interface
 
-Build the tool from the `RuntimeViewerCommandLine` package and point it at a type:
+From 3.0.0-beta.5 on, the app ships the tool at `RuntimeViewer.app/Contents/Applications/runtime-viewer-cli`. There is no installer step yet; symlink it onto your `PATH` to call it by its short name. To build it from source instead, use the `RuntimeViewerCommandLine` package and point it at a type:
 
 ```bash
 cd RuntimeViewerCommandLine
@@ -89,6 +89,28 @@ swift build -c release --product runtime-viewer-cli
 ```
 
 Every source the app can inspect is available from the terminal: the local runtime, the Mac Catalyst runtime, processes you attach to (the helper daemon and an installed RuntimeViewer.app are needed, as in the app), devices on the local network and engines other RuntimeViewers forward. While the app is running it answers the commands itself, so its attached processes and peers are visible to the tool; otherwise the first call starts a background host that owns the engines and exits on its own after ten minutes without work (`host status`, `host stop` and `host restart` manage it). Details, contracts and exit codes: [`Documentations/Guides/CommandLineInterface.md`](Documentations/Guides/CommandLineInterface.md).
+
+### Agent Plugin
+
+The `runtime-viewer` plugin teaches coding agents to drive `runtime-viewer-cli`: which subcommand answers which question, how image, type and source names resolve, the annotation level that carries member addresses, the `--json` and exit-status contract, the background host, and the traps that produce a plausible but wrong answer. It is a skill only — the tool itself comes with the app (see [Command Line Interface](#command-line-interface)).
+
+Until 3.0 is released the plugin lives on the `next` branch, so the marketplace is added from there. Once 3.0 ships, drop the `#next` and `--ref next` parts.
+
+**Claude Code** — inside a session:
+
+```
+/plugin marketplace add MxIris-Reverse-Engineering/RuntimeViewer#next
+/plugin install runtime-viewer@runtimeviewer
+```
+
+**Codex**:
+
+```bash
+codex plugin marketplace add MxIris-Reverse-Engineering/RuntimeViewer --ref next
+codex plugin add runtime-viewer@runtimeviewer
+```
+
+An installed plugin only picks up a new revision when its `version` changes. To pull one in: `claude plugin marketplace update runtimeviewer` then `claude plugin update runtime-viewer@runtimeviewer` for Claude Code, `codex plugin marketplace upgrade runtimeviewer` for Codex.
 
 ### Connecting to Other Devices
 

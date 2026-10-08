@@ -34,6 +34,25 @@ enum TestEngines {
         )
     }
 
+    /// A payload injected into a process on a device, dialling back here.
+    static func injectedDevice(
+        name: String,
+        claimToken: String = "06A9F1C2-1C1B-4A9E-9C2E-7E6A2F0D3B41",
+        engineID: String? = nil,
+    ) -> RuntimeEngine {
+        RuntimeEngine(
+            source: .injectedTCP(
+                name: name,
+                host: "192.168.64.1",
+                port: 51234,
+                identifier: .init(rawValue: claimToken),
+                role: .client,
+            ),
+            engineID: engineID ?? "engine.injectedDevice.\(claimToken)",
+            hostInfo: phoneHost,
+        )
+    }
+
     static func mirrored(name: String, engineID: String = "engine.mirrored") -> RuntimeEngine {
         RuntimeEngine(source: .directTCP(name: name, host: "10.0.0.2", port: 4242, role: .client), engineID: engineID, hostInfo: phoneHost)
     }

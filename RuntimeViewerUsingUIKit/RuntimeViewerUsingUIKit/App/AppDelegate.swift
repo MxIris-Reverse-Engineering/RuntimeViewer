@@ -10,6 +10,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         #log(.info,"Application did finish launching")
+        // Before any engine exists: a host can query either of the engines
+        // below for injection capability as soon as it can reach them, and the
+        // answer comes from this registration.
+        InjectionServiceRegistrar.registerIfAvailable()
+        // Also before anything else: from here on this process keeps answering
+        // after it leaves the foreground, which is what makes an attach from
+        // the Mac possible without first bringing the app forward on the
+        // device.
+        SuspensionPreventionRegistrar.registerIfAvailable()
         #log(.info,"Initializing local runtime engine...")
         DispatchQueue.global().async {
             _ = RuntimeEngine.local

@@ -234,8 +234,11 @@ open class StatefulOutlineView: OutlineView {
     /// mouseDown: or mouseDragged:". That is expected. The tracking loop also makes the outline
     /// first responder on every click, as on macOS 26. What it costs: no native Sidecar touch
     /// handling for these lists (touches reach them through the system's mouse emulation), and none
-    /// of what AppKit later adds to the gesture path. `StatefulOutlineViewTrackingLoopTests` fails
-    /// if the recognizers come back. Background:
+    /// of what AppKit later adds to the gesture path. There is deliberately no test pinning this:
+    /// the only observable handle on it is the set of private `NSTableView.*` gesture recognizers,
+    /// and macOS 27.2 renamed them — `mousePanGestureRecognizer` split into
+    /// `dragPanGestureRecognizer` and `extendSelectionGestureRecognizer` — so a test over them
+    /// reports Apple's renames rather than this project's regressions. Background:
     /// `Documentations/ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md`.
     open override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)

@@ -4,7 +4,7 @@ import MachOKit
 
 extension RuntimeEngine {
     public func isImageIndexed(path: String) async throws -> Bool {
-        try await dispatch(IsImageIndexedRequest(path: path))
+        try await dispatch(IsImageIndexedCommand(path: path))
     }
 
     func _isImageIndexed(path: String) async -> Bool {
@@ -21,7 +21,7 @@ extension RuntimeEngine {
     /// `_NSGetExecutablePath` (wrapped by `DyldUtilities.mainExecutablePath`)
     /// always returns the host binary.
     public func mainExecutablePath() async throws -> String {
-        try await dispatch(MainExecutablePathRequest())
+        try await dispatch(MainExecutablePathCommand())
     }
 
     /// Like `loadImage(at:)` but does **not** call `reloadData()` and does
@@ -36,7 +36,7 @@ extension RuntimeEngine {
     /// It does emit `imageDidIndexPublisher`, which nothing in background
     /// indexing listens to; the Find corpus coordinator does.
     public func loadImageForBackgroundIndexing(at path: String) async throws {
-        _ = try await dispatch(LoadImageForBackgroundIndexingRequest(path: path))
+        _ = try await dispatch(LoadImageForBackgroundIndexingCommand(path: path))
         imageDidIndexSubject.send(path)
     }
 
@@ -86,11 +86,11 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
         // Errors map to `false` (treat as "can't open"), matching the
         // pre-dispatch behaviour where a missing image silently returned
         // `false` rather than throwing.
-        await (try? dispatch(CanOpenImageRequest(path: path))) ?? false
+        await (try? dispatch(CanOpenImageCommand(path: path))) ?? false
     }
 
     func rpaths(for path: String) async throws -> [String] {
-        try await dispatch(RpathsRequest(path: path))
+        try await dispatch(RpathsCommand(path: path))
     }
 
     func dependencies(for path: String,
@@ -98,7 +98,7 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
                       mainExecutablePath: String) async throws
         -> [(installName: String, resolvedPath: String?)] {
         let entries: [RuntimeDependencyEntry] = try await dispatch(
-            DependenciesRequest(
+            DependenciesCommand(
                 path: path,
                 ancestorRpaths: ancestorRpaths,
                 mainExecutablePath: mainExecutablePath,
@@ -207,27 +207,27 @@ public struct RuntimeDependencyEntry: Codable, Sendable {
 // MARK: - Request types
 
 extension RuntimeEngine {
-    struct CanOpenImageRequest: RuntimeEngineRequest {
+    struct CanOpenImageCommand: RuntimeEngineCommand {
         let path: String
-        static var commandName: String { CommandNames.canOpenImage.commandName }
+        static var commandName: String { CommandName.canOpenImage.commandName }
         func perform(on engine: RuntimeEngine) async throws -> Bool {
             await engine._canOpenImage(at: path)
         }
     }
 
-    struct RpathsRequest: RuntimeEngineRequest {
+    struct RpathsCommand: RuntimeEngineCommand {
         let path: String
-        static var commandName: String { CommandNames.rpathsForImage.commandName }
+        static var commandName: String { CommandName.rpathsForImage.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [String] {
             await engine._rpaths(for: path)
         }
     }
 
-    struct DependenciesRequest: RuntimeEngineRequest {
+    struct DependenciesCommand: RuntimeEngineCommand {
         let path: String
         let ancestorRpaths: [String]
         let mainExecutablePath: String
-        static var commandName: String { CommandNames.dependenciesForImage.commandName }
+        static var commandName: String { CommandName.dependenciesForImage.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeDependencyEntry] {
             await engine._dependencies(
                 for: path,
