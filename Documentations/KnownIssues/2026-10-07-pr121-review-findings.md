@@ -7625,7 +7625,12 @@ struct RuntimeInterfaceCorpusEligibilityTests {
 
 - **严重度**：Minor
 - **审查编号**：C14
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindCorpusCoordinatorTests.rawAndCanonicalPathsAreOneImage`（先只加接缝、不改协调器时红：同一镜像记成 `/sim_root/usr/lib/libobjc.A.dylib` 与 `/usr/lib/libobjc.A.dylib` 两行）、`DocumentStateCurrentImageTests.objectOfTheListedImageOnASimulatorEngine`（同样只有接缝时红：模拟器引擎上 Reveal in Sidebar 的判定为假）、`RuntimeEngineImagePathCanonicalizationTests`（只有接缝时红的是「TCP 客户端学到对端根路径」：5 秒后仍按 `/usr/lib/libobjc.A.dylib` 记键；纯函数、XPC 客户端从不问、不认识这条命令的对端不拖住连接三条守住其余约定）。修后都绿。
+- **落地与偏离**：
+  - **后台问，不挡 `.connected`**。草案在发出 `.connected` 之前 await 这一问：2.1.0 之前的对端不回复未知命令，每次连它都要等满超时；而 proxy 只在客户端连上之后才装命令表，第一问常常落空。现在每次连上（含重连）后在后台问，回错误的隔 250 ms 再问、最多 4 次，超时的不再问。代价是刚连上的一瞬间若有路径被记键，用的是原始写法；App 里从引擎连上到用户选中它，远不止这一瞬。
+  - **处理器不经 `dispatch` 转发**。草案用 `register` 经 `dispatch`，那样经 XPC 转发的引擎（My Mac、Catalyst helper、经 Mach service 注入的 App）会把这条新命令转给对端，而对端可能是旧版注入 payload——正是 PR121.73 的风险。现在处理器只答自己知道的：本地臂答本进程的根路径，经 socket 转发的答它连上时问来的，经 XPC 转发的答本进程的 `nil`。`DyldRootPathRequest` 因此只是载荷，不遵循 `RuntimeEngineRequest`。
+  - 删掉了没人处理的 `CommandNames.patchImagePathForDyld`；`CommunicationAndEngineArchitecture.md` 新增 §4.6 写下两种写法与这条命令。
+  - **同类里留给别的批次的**（文档原本就这样分派）：`FindSession` 的 `prioritizeCorpora` 与 `corpusDidBuild` 一带拿原始的范围路径对规范的键，归 PR121.05（批次 S3b）；`FindScopeChooserViewModel.swift:76` 拿原始的当前镜像路径对 `indexedImagePathList` 的规范路径，归 PR121.45（界面批次）。协调器已提供 `canonicalImagePath(_:)` 与 `buildState(forImagePath:)` 给它们用。
 
 **问题**：
 - 引擎遵循「服务端存规范路径、线上传原始路径」的约定（a60155af）。规范路径是在模拟器进程里补上 `DYLD_ROOT_PATH` 前缀后的路径。

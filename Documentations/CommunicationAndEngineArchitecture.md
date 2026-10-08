@@ -398,6 +398,15 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - **只对新命令开启**：语料构建、文本搜索、成员搜索、类型关系。类型关系原是普通请求，改成了不发推送（`Progress = RuntimeEngineEmpty`）的进度请求，好带上 id；这四条命令都与 `cancelRequest` 同时出现，服务它们的对端一定认识 `cancelRequest`。`objectsInImage`、`loadImageWithProgress` 不开启：`dlopen` 撤不回来，而且它们由旧对端服务，而旧对端不认识 `cancelRequest`——socket 上只记一行日志，经 Mach service 的旧版注入 payload 却会把未知消息当成客户端离开（PR121.73）。所以取消不会给旧 payload 多送一条它不认识的命令：会被取消的请求本身就是新命令，旧 payload 收到它时已经是未知消息，剩下的风险来自语料命令本身，见 PR121.73。
 - 测试：`RemoteRequestCancellationTests`（XPC service 与 TCP 两条真实连接：取消后 2 秒内返回、服务端放弃构建、之后不再收到进度；对端忽略取消时调用方也不被拖住；搜索被慢消费者拖住时照样立即返回；类型关系照常跨连接作答）、`RemoteRequestIdentifierTests`（线上哪些命令带 id）、`RemoteRequestCancellationPartTests`（先到的取消、记录上限、客户端状态机）。
 
+### 4.6 镜像路径的两种写法（iOS 模拟器，`RuntimeEngine+ImagePathCanonicalization.swift`）
+
+模拟器里的进程按自己的 `DYLD_ROOT_PATH` 给镜像记键：`/usr/lib/libobjc.A.dylib` 在那里是 `<root>/usr/lib/libobjc.A.dylib`。约定是**服务端存规范路径、线上传原始路径**（a60155af）：本地臂收到路径先用 `DyldUtilities.patchImagePathForDyld` 规范化（幂等），侧栏节点、后台索引的依赖路径、搜索范围用的仍是原始写法；而 Find 的新命令把规范路径带回了客户端——coverage 的键、`indexedImagePathList`、搜索摘要的 `unbuiltIndexedImagePaths`、`RuntimeObject.imagePath`。客户端自己算不出规范路径，根路径属于服务进程，所以（PR121.33）：
+
+- 新命令 `dyldRootPath`（载荷 `DyldRootPathRequest`），回答服务进程的 `DYLD_ROOT_PATH`。处理器只答自己知道的，从不转发：本地臂答本进程的；经 socket 转发的客户端引擎（proxy 后面是模拟器进程）答它连接时问来的；经 XPC 转发的答本进程的 `nil`——XPC 的对端都是 Mac 进程，而且可能是旧版注入 payload，不能把它不认识的命令转过去（PR121.73）。
+- 只有 socket 类的客户端引擎（bonjour、localSocket、directTCP）去问，在每次连上（含重连）后**后台**问，不挡 `.connected`：2.1.0 之前的对端不回复未知命令，挡着就要等满超时。proxy 只在客户端连上之后才装命令表，所以回错误的问题隔 250 ms 再问，最多 4 次；超时的不再问。问不到就保持 `nil`，路径原样。XPC 类来源与 `.local` 从不问。
+- `RuntimeEngine.canonicalImagePath(_:)`（`nonisolated`）用问来的根路径规范化，幂等。客户端要拿原始路径与引擎给的路径比较或当键时，先过它：`FindCorpusCoordinator` 在 `requestBuild` / `cancelBuild` 入口统一规范化并提供 `buildState(forImagePath:)`，`DocumentState.isSelectedRuntimeObjectInCurrentImage` 比较前规范化节点路径。
+- 测试：`RuntimeEngineImagePathCanonicalizationTests`（纯函数；TCP 客户端学到根路径；XPC 客户端从不问；不认识这条命令的对端既不拖住连接也不改路径），`setDyldRootPathForTesting(_:)` 是模拟根路径的接缝。
+
 ---
 
 # 第二部分：RuntimeEngineManager / ProxyServer 架构

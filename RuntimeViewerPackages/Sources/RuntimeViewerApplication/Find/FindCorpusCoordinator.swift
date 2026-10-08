@@ -169,13 +169,31 @@ public final class FindCorpusCoordinator {
         #endif
     }
 
+    // MARK: - Paths
+
+    /// `imagePath` as the engine keys it. Every path this coordinator stores
+    /// or reports is in this form: on an iOS Simulator engine the sidebar, the
+    /// background indexer and a search scope spell paths without the
+    /// simulator's root, while coverage and search summaries spell them with
+    /// it.
+    public func canonicalImagePath(_ imagePath: String) -> String {
+        engine.canonicalImagePath(imagePath)
+    }
+
+    /// `imagePath`'s state, however the caller spells the path.
+    public func buildState(forImagePath imagePath: String) -> RuntimeInterfaceCorpusBuildState? {
+        buildStatesByImagePath[canonicalImagePath(imagePath)]
+    }
+
     // MARK: - Triggers
 
-    /// Asks the engine to build `imagePath`'s corpus. A request already open
-    /// for the image is not repeated; with `isPrioritized` it is moved to the
-    /// front of the engine's queue instead.
-    public func requestBuild(of imagePath: String, isPrioritized: Bool = false) {
+    /// Asks the engine to build `requestedImagePath`'s corpus. A request
+    /// already open for the image is not repeated; with `isPrioritized` it is
+    /// moved to the front of the engine's queue instead. The path may be
+    /// spelled either way; see `canonicalImagePath(_:)`.
+    public func requestBuild(of requestedImagePath: String, isPrioritized: Bool = false) {
         guard isEnabled, !isClosed else { return }
+        let imagePath = canonicalImagePath(requestedImagePath)
         if buildRequests[imagePath] != nil {
             if isPrioritized {
                 let engine = engine
@@ -226,7 +244,8 @@ public final class FindCorpusCoordinator {
     /// navigator's Cancel. Another document asking for the image keeps its
     /// build going, and the withdrawal is not sticky: the next trigger for the
     /// image asks again.
-    public func cancelBuild(of imagePath: String) {
+    public func cancelBuild(of requestedImagePath: String) {
+        let imagePath = canonicalImagePath(requestedImagePath)
         guard let request = buildRequests.removeValue(forKey: imagePath) else { return }
         request.task.cancel()
         buildStatesByImagePath[imagePath] = nil

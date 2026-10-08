@@ -64,7 +64,6 @@ public actor RuntimeEngine {
         case canOpenImage
         case rpathsForImage
         case dependenciesForImage
-        case patchImagePathForDyld
         case runtimeObjectHierarchy
         case runtimeRelationshipsForObject
         case runtimeCounterpartForObject
@@ -106,6 +105,9 @@ public actor RuntimeEngine {
         case indexedImagePaths
         case evictInterfaceCorpus
         case setInterfaceCorpusResidentByteLimit
+        /// The `DYLD_ROOT_PATH` of the process that owns the peer's images;
+        /// see `RuntimeEngine+ImagePathCanonicalization.swift`.
+        case dyldRootPath
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -255,6 +257,14 @@ public actor RuntimeEngine {
     /// subject) keeps concurrent progress-bearing requests from
     /// cross-talking.
     private var progressRoutes: [String: @Sendable (Data) async -> Void] = [:]
+
+    /// The root `canonicalImagePath(_:)` applies: this process's own, until a
+    /// client connection learns the serving process's.
+    nonisolated let servingDyldRootPath = RuntimeEngineDyldRootPath(ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"])
+
+    /// The question to the peer about its root under way; see
+    /// `learnServingDyldRootPath()`.
+    private var servingDyldRootPathTask: Task<Void, Never>?
 
     /// The requests this engine serves on its connection as a server that
     /// the requesting peer can still withdraw. One for the connection's
@@ -423,6 +433,11 @@ public actor RuntimeEngine {
         case .connected:
             #log(.info, "Connection state -> connected (source: \(String(describing: self.source), privacy: .public))")
             stateSubject.send(.connected)
+            // The first connection, or one that came back — possibly to
+            // another process, a relaunched simulator app.
+            if forwardsRequests {
+                learnServingDyldRootPath()
+            }
             // Re-register handlers and push data when server reconnects to a new client
             if needsReregistrationOnConnect, source.remoteRole == .server {
                 needsReregistrationOnConnect = false
@@ -445,8 +460,46 @@ public actor RuntimeEngine {
         }
     }
 
+    /// Asks the peer for the `DYLD_ROOT_PATH` of the process that owns its
+    /// images, so `canonicalImagePath(_:)` keys paths the way that process
+    /// does. Only a socket peer is asked; see `asksForServingDyldRootPath(on:)`.
+    ///
+    /// In the background, not before `.connected` goes out: a peer older than
+    /// 2.1.0 never answers a command it does not know, and holding every
+    /// connection to one up for the timeout would cost more than the moment
+    /// in which a path is keyed without the root. A proxy installs its command
+    /// table only once this client has connected, so a question it answers
+    /// with an error is asked again a moment later; one that times out is
+    /// not. A peer that predates the question leaves the root as it is.
+    private func learnServingDyldRootPath() {
+        guard Self.asksForServingDyldRootPath(on: source), let connection else { return }
+        servingDyldRootPathTask?.cancel()
+        let servingDyldRootPath = servingDyldRootPath
+        servingDyldRootPathTask = Task {
+            for attempt in 1 ... Self.servingDyldRootPathAttemptCount {
+                let askedAt = Date()
+                do {
+                    let rootPath: String? = try await connection.sendMessage(
+                        name: DyldRootPathRequest.commandName,
+                        request: DyldRootPathRequest(),
+                        timeout: Self.servingDyldRootPathTimeout
+                    )
+                    guard !Task.isCancelled else { return }
+                    servingDyldRootPath.update(rootPath)
+                    return
+                } catch {
+                    let isAnsweredWithError = Date().timeIntervalSince(askedAt) < Self.servingDyldRootPathTimeout
+                    guard isAnsweredWithError, attempt < Self.servingDyldRootPathAttemptCount, !Task.isCancelled else { return }
+                    try? await Task.sleep(nanoseconds: Self.servingDyldRootPathRetryDelayNanoseconds)
+                }
+            }
+        }
+    }
+
     /// Stops the engine and its connection.
     public func stop() {
+        servingDyldRootPathTask?.cancel()
+        servingDyldRootPathTask = nil
         connectionStateTask?.cancel()
         connectionStateTask = nil
         connectionStateContinuation?.finish()

@@ -233,5 +233,6 @@ extension RuntimeEngine {
         register(IndexedImagePathsRequest.self, on: connection, engine: engine)
         register(EvictInterfaceCorpusRequest.self, on: connection, engine: engine)
         register(SetInterfaceCorpusResidentByteLimitRequest.self, on: connection, engine: engine)
+        registerDyldRootPathHandler(on: connection, engine: engine)
     }
 }

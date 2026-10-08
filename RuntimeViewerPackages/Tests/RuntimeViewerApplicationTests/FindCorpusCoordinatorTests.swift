@@ -1,5 +1,5 @@
 import Foundation
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 import Testing
 @testable import RuntimeViewerApplication
 @testable import RuntimeViewerSettings
@@ -256,6 +256,37 @@ struct FindCorpusCoordinatorTests {
         #expect(states[unloadedImagePath] == nil, "an image that is not loaded was left as \(String(describing: states[unloadedImagePath]))")
         #expect(coordinator.finishedBuilds.isEmpty, "the history lists \(coordinator.finishedBuilds.map(\.outcome))")
         #expect(try await engine.isImageIndexed(path: loadedImagePath) == false, "asking for the corpus indexed the image")
+        await engine.stop()
+    }
+
+    /// On an iOS Simulator engine the sidebar, the background indexer and a
+    /// search scope spell an image without the simulator's root, while the
+    /// engine's coverage spells it with it. The coordinator used to key both
+    /// spellings, one row each, and a search read the image twice (PR121.33).
+    /// The root comes from the test seam; requesting and merging have no
+    /// suspension point in between, so the request has not run yet when the
+    /// keys are read.
+    @Test("a raw path and its canonical form are one image")
+    func rawAndCanonicalPathsAreOneImage() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.canonicalPaths")
+        engine.setDyldRootPathForTesting("/sim_root")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+        let rawPath = "/usr/lib/libobjc.A.dylib"
+        let canonicalPath = "/sim_root/usr/lib/libobjc.A.dylib"
+
+        coordinator.requestBuild(of: rawPath)
+        coordinator.mergeCoverage(RuntimeInterfaceCorpusCoverage(
+            statesByImagePath: [canonicalPath: .building(RuntimeInterfaceCorpusBuildProgress(built: 1, total: 10))],
+            residentByteCount: 0,
+            residentByteLimit: 0
+        ))
+
+        #expect(Set(coordinator.buildStatesByImagePath.keys) == [canonicalPath], "the image is keyed as \(coordinator.buildStatesByImagePath.keys.sorted())")
+        #expect(coordinator.buildState(forImagePath: rawPath) != nil)
+        #expect(coordinator.buildState(forImagePath: canonicalPath) != nil)
         await engine.stop()
     }
 }

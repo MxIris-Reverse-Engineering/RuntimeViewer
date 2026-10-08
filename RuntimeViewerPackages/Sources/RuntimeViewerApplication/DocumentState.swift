@@ -163,7 +163,9 @@ public final class DocumentState {
     /// of Navigate ▸ Reveal in Sidebar Navigator.
     public var isSelectedRuntimeObjectInCurrentImage: Bool {
         guard let selectedRuntimeObject, let currentImageNode else { return false }
-        return selectedRuntimeObject.imagePath == currentImageNode.path
+        // An object's image path is the engine's key; a sidebar node's is
+        // not, on an iOS Simulator engine.
+        return selectedRuntimeObject.imagePath == runtimeEngine.canonicalImagePath(currentImageNode.path)
     }
 
     /// Mutation surface for every observable state on this `DocumentState`.
