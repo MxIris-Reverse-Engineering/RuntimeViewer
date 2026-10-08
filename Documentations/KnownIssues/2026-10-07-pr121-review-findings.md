@@ -3873,7 +3873,7 @@ struct TransportReplyOrderingTests {
 
 - **严重度**：Major
 - **审查编号**：C30、C33、C29，另含一处同类：Swift 类的 ObjC 面成为单独的候选
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeTypeRelationshipsProtocolCopyTests`（前六条复现本条，第七条见下；只加载 libobjc、CoreFoundation、Foundation；`requireCarried` 在系统不再由两个镜像同时携带时明确失败），选副本的纯函数另有单元测试 `RuntimeTypeRelationshipsImageScopeTests.protocolCopyChoice`。修前六条全红：候选上限为 2 时，两个名额都被 CoreFoundation 与 Foundation 的 `NSObject` 协议副本占去，没有类树；`NSCoding` 第一层是 `["NSSecureCoding", "NSSecureCoding"]`；两种加载顺序得到的 `NSString` 树不同，`NSSecureCoding` 落在 CoreFoundation 的副本上；限定在 Foundation 查 `NSArray` 的 Ancestors，整棵树被剪光（`nil`）；`NSObject` 协议的 Descendent 有 3 层不按名字排序（第一层以 `ODRServerProtocol, NSURLSessionDelegate, …` 开头）；`_NSFileManagerBridge` 的 ObjC 面与 Swift 面各出一棵树。第七条 `swiftFaceKeepsItsSidebarName` 守住修复本身的一个副作用：ObjC 面换成的 Swift 面是按 mangled 名重新物化的，不带私有判别符；两个面都命中时，它若先登记，会顶掉侧栏那份对象（`==` 只比身份），根节点的名字就从 `Foundation.(__JSONEncoder in _12768CA1…)` 变成 `Foundation.__JSONEncoder`。修法是两面都命中时沿用侧栏那份；去掉这一步，这一条就是红的。与下文示例的差别：第六条的锚点按类名排序后取第一个有 Swift 面的类（经 `engine.counterpart(for:)`），并断言根就是那个 Swift 面，不取字典顺序里的第一个；第二、五条把出问题的层收拢成一条断言；同名不分大小写时，排序先比原样拼写，再比种类。仍然留着一处顺序依赖：Ancestor 里协议 refine 的列表照旧从最先登记的那份副本读（`refinedProtocolNames(of:)`）。同一协议的各份副本出自同一份头文件，实际上列表相同，所以没有改
 
 **问题**：每个按某个 ObjC 协议编译的镜像都会在自己的 `__objc_protolist` 里带一份完整副本。关系解析器在三处把这些副本当成不同的类型：
 - **候选**：同名协议在每个携带镜像里各占一个名额，而 `/System/…` 按路径排在 `/usr/lib/libobjc.A.dylib` 之前。所以查 `NSObject` 时，50 个名额先被协议副本占满，真正的 NSObject 类可能被挤掉。
@@ -4412,7 +4412,7 @@ func preferredCarrierImagePath() {
 
 - **严重度**：Major
 - **审查编号**：C32
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeTypeRelationshipsGenericSuperclassTests`（只加载 AppKit；锚点 `UpdateMenuAction: IncrementalUpdateAction<Menu, MenuItem>` 在 macOS 26.7 与 27.0 的 AppKit 里都有）。修前两条红：`ancestorsReachTheGenericSuperclass` 拿到的父类节点 `AppKit.IncrementalUpdateAction` 未解析（`object → nil`）；`genericSuperclassListsTheSubclass` 里 `IncrementalUpdateAction` 的 Descendent Types 树与 Inspector 的子类列表都是 `[]`。第三条 `swiftClassReachesItsImportedObjCSuperclass`（`NSScrollPocket: NSView`）守住改写后的 ObjC 回退，修前修后都绿。与下文方案的两处差别：去掉实参的 helper 另外处理 extension 上下文，规则与上游 `getUnspecialized` 一致；ObjC 运行时类名从去掉实参后的节点读，所以绑定了实参的导入 ObjC 泛型父类（`NSCache<NSString, NSData>` 这种）也能回退到 ObjC 那边。这两种情形在系统镜像里都没找到实例，与 `Outer<Int>.Inner` 一样没有测试覆盖
 
 **问题**：`RuntimeSwiftInterfaceIndexer.prepare()` 把父类的类型名 demangle 后再 remangle，用结果作父类键（`RuntimeSwiftInterfaceIndexer.swift:280-285`）。如果父类绑定了泛型实参（例如 `NSHostingController<SettingsView>`），这个键是绑定后的名字，而类型表的键是泛型定义本身的名字（:269-270），两者永远对不上。
 
@@ -12704,7 +12704,7 @@ func doubleClickOnTurnedOffRowOpensSettings() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C31
-- **状态**：方案待批，代码未改
+- **状态**：Swift 类的 ObjC 面那一半已修复；跨镜像一致性那一半不修（已裁决，用户同意，裁决原文见下文「同类」）。复现测试：`RuntimeInterfaceSearchTests.swiftClassAncestorsIncludeAdoptedObjCProtocols`。修前红：Foundation 里经 Conforming Types 查到的三个采纳 `NSCopying` 的 Swift 类（`__C.NSNotificationCenter.NotificationMessageKey`、`Foundation.__KVOKeyPathBridgeMachinery.BridgeKey`、`Foundation._NSLocalizedStringResourceSwiftWrapper`），它们的 Ancestors 都只有父类 `["NSObject"]`。与下文示例的差别：测试对每个这样的类都断言，不在找到第一个后返回；按类自己的名字以 Matching Word 查，不按显示名查。ObjC 面采纳的协议从这个 Swift 类所在镜像的 ObjC 索引读，不用 `classGroupAcrossImages(forName:)`，因为 `@objc(Name)` 改名的类可能和别的镜像里的同名类撞名
 
 **问题**：Swift 类型的 Ancestor Types 只读 Swift 的一致性记录（`swiftTypeAncestorNodes` → `conformingProtocolNames`）。Swift 类采纳 ObjC 协议时不会产生这种记录，只会写进类的 ObjC 面（`class_ro_t` 的协议表）。Conforming Types 走的正是 ObjC 表，会把这些类列出来（并按 AC6 换成 Swift 面），所以两个方向对不上：在 Conforming Types 里查得到某个类，它的 Ancestor Types 里却没有这个协议。
 
@@ -12808,7 +12808,7 @@ func swiftClassAncestorsIncludeAdoptedObjCProtocols() async throws {
 
 **同类**：
 - **查过，不需要改**：ObjC 类的 Ancestor 走 `ObjCClassInfo.protocols`，本来就包括 category 采纳的协议（见提案表格）。struct 和 enum 只有 Swift 一致性。
-- **跨镜像一致性，建议不修**。拟写进 KnownIssues 的裁决原文：
+- **跨镜像一致性：不修**（已裁决，用户同意）。裁决原文：
 
   > Swift 类型在别的镜像里声明的一致性（如 CoreTransferable 的 `String: Transferable`）在 Ancestor Types 和 Conforming Types / Inspector 两个方向上都不出现：一致性记录所在的镜像不定义该类型，按记录所在镜像物化时失败被丢弃。两边一致，不是本 PR 引入的不对称；要修需要先定「到定义该类型的镜像去物化，并决定节点显示哪个镜像」，两个方向一起改，另案处理。
 
@@ -12819,7 +12819,7 @@ func swiftClassAncestorsIncludeAdoptedObjCProtocols() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C28
-- **状态**：方案待批，代码未改
+- **状态**：已修复遍历本身；取消要跨过连接传到 service 端，还得等 PR121.29。复现测试：`RuntimeInterfaceSearchTests.cancelledRelationshipSearchThrows`。修前红：Task 一建好就取消，`typeRelationships` 仍把 `NSObject` 完整的 Descendent 树交回来（`an error was expected but none was thrown`）。这条测试只证明入口处的检查，遍历中途的取消没有稳定的注入点。落地时比方案多一处：`candidateTypes` 收完全部镜像之后再查一次，因为随后物化候选的代表对象时，每个带 `isSwiftClass` 的 ObjC 类都要跨一次 actor。限定范围时挪动协议副本那一步（PR121.13）不查取消：它总会做完，不会交出半截结果
 
 **问题**：
 - `RuntimeTypeRelationshipsResolver.trees(for:)` 和各个递归遍历函数都没有检查取消。`candidateTypes` 用 `try?` 读每个镜像的对象，下层抛出的取消也会被当成「没有对象」吞掉。
@@ -12953,7 +12953,7 @@ func cancelledRelationshipSearchThrows() async throws {
 
 - **严重度**：建议不修
 - **审查编号**：C34（同 R5）
-- **状态**：方案待批，代码未改
+- **状态**：不修（已裁决，用户同意）。行为不变，只在 `materializeObjCClass(named:)` 上补了下文那段注释，说明这个差异是有意的，随 PR121.69 一起提交
 
 **问题**：两条路径在同一种情况下做法不同：Swift-stable 类（ObjC 运行时里由 Swift 定义的类）找不到对应的 Swift 面。
 - Ancestor 树用的 `materializeObjCClass(named:)` 会退回 ObjC 面，用 ObjC 名把节点画出来（`RuntimeTypeRelationshipsResolver.swift:373-381`）。
@@ -12967,7 +12967,7 @@ func cancelledRelationshipSearchThrows() async throws {
 - **影响**：几乎碰不到。即使碰到，Ancestor 一侧的做法也更好，建议不修。
 - **历史**：AC6（关系结果里的桥接类一律显示为 Swift 面，配不上就丢弃）是 Inspector 关系视图定下的规则。`materializeObjCClass` 是本 PR 为祖先链新写的，没有照搬 AC6 的丢弃，但也没写注释说明原因。
 
-**裁决理由**（将来原样写进 KnownIssues）：
+**裁决理由**：
 > Ancestor Types 对配不上 Swift 面的 Swift-stable 类回退到 ObjC 面，而 Inspector / Descendant / Conforming 按 AC6 丢弃——这一差异有意保留。丢掉一个节点的代价在两种结构里不同：列表里丢一条只少一行；祖先链里丢掉父类，会把它上面直到 `NSObject` 的整条链连同链上的协议一起截掉，用户看到一棵断掉的树，比看到这个类的 ObjC 面更糟。另外，两个面自 2026-09-27 起按类对象指针配对，配不上只剩「该镜像没有 Swift section」一种情况，而 `RuntimeEngine` 总是同时建两个 section，实际几乎不发生。若将来出现能稳定触发的场景，再重新裁决。
 
 **改法**：行为不变，只在 `materializeObjCClass` 上补一段注释说明这个差异是有意的，免得以后被当成不一致「统一」掉。
@@ -13003,7 +13003,7 @@ func cancelledRelationshipSearchThrows() async throws {
 
 - **严重度**：Cleanup
 - **审查编号**：S4
-- **状态**：方案待批，代码未改
+- **状态**：已修复（纯重构，没有新测试）。落地时按「落地顺序」吸收了前面几条：PR121.67 的取消判断并进 `descending(into:)`，各函数里的 `!Task.isCancelled` 随之删掉；PR121.13 的 `referencedFrom:` 仍是参数；`unresolved:` 那一行 PR121.14 已删。行为不变的证据有两份。一是逐字节比对：用一个不提交的临时测试把 40 条关系查询的树全部写成文本，覆盖 Ancestors、Descendent、Conforming、限定范围、正则和候选上限，以及 ObjC 类与协议、Swift 类与协议、绑定泛型的父类、ObjC 面采纳的协议，加载 libobjc、CoreFoundation、Foundation、AppKit。在 `SWIFT_DETERMINISTIC_HASHING=1` 下改前改后各跑一次，两份输出（13,039 行，2,088,882 字节）逐字节相同；改前那份与 PR121.67 落地前的一份也逐字节相同，说明这份输出本身稳定。二是覆盖每种遍历的既有测试全绿：`RuntimeInterfaceSearchTests`、`RuntimeTypeRelationshipsImageScopeTests`，以及本批新加的 `RuntimeTypeRelationshipsProtocolCopyTests`、`RuntimeTypeRelationshipsGenericSuperclassTests`。关系快照与 `RelationshipsTests` 也跑了，但它们只查 Inspector 的 `relationships(for:)`，不经过这里改的遍历：Swift 半边通过，ObjC 半边只差已知的 `_DefaultScopeRegistration` 一行。PR121.68 的那段注释随本条提交
 
 **问题**：`RuntimeTypeRelationshipsResolver` 的遍历代码有三个毛病，读起来费劲，也容易改漏。
 - 8 处几乎一样的代码块：拷贝 `visited`，插入键，再递归。

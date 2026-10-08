@@ -33,4 +33,24 @@ struct RuntimeTypeRelationshipsImageScopeTests {
             Self.node("UnresolvedToInside", in: nil, children: [Self.node("InsideBelowUnresolved", in: Self.insideImagePath)]),
         ])
     }
+
+    /// The rule on its own, with no image: the copy of the image that named
+    /// the protocol, then the first by path among the query's images, then
+    /// the first by path.
+    @Test("the copy of an Objective-C protocol a node stands for")
+    func protocolCopyChoice() {
+        let carrierImagePaths = ["/images/B", "/images/A", "/images/C"]
+        // The image that named the protocol, when it carries one.
+        #expect(RuntimeTypeRelationshipsResolver.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: "/images/C", imagePaths: nil) == "/images/C")
+        // Otherwise the first carrier by path, whatever order they came in.
+        #expect(RuntimeTypeRelationshipsResolver.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: "/images/D", imagePaths: nil) == "/images/A")
+        #expect(RuntimeTypeRelationshipsResolver.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: nil, imagePaths: nil) == "/images/A")
+        // A limited query never leaves its images for the referencing one.
+        #expect(RuntimeTypeRelationshipsResolver.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: "/images/C", imagePaths: ["/images/B"]) == "/images/B")
+        #expect(RuntimeTypeRelationshipsResolver.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: "/images/C", imagePaths: ["/images/C", "/images/A"]) == "/images/C")
+        // No carrier inside the images: the first carrier by path, cut later.
+        #expect(RuntimeTypeRelationshipsResolver.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: nil, imagePaths: ["/images/X"]) == "/images/A")
+        // Nothing carries it.
+        #expect(RuntimeTypeRelationshipsResolver.preferredCarrierImagePath(among: [], referencedFrom: "/images/C", imagePaths: nil) == nil)
+    }
 }

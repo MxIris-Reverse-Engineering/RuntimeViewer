@@ -351,6 +351,24 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
         return nil
     }
 
+    /// Every image in this aggregate whose `__objc_protolist` carries a
+    /// protocol named `name`, this indexer's own image first. Each image that
+    /// compiled against a protocol carries a full copy and none of them owns
+    /// it (`Documentations/ResolvedIssues/2026-08-05-objc-protocol-ownership-filter.md`),
+    /// so the relationship walk chooses among the copies itself instead of
+    /// taking whichever image happened to be indexed first, the way
+    /// `protocolGroupAcrossImages(forName:)` answers.
+    func protocolCarrierImagePaths(forName name: String) -> [String] {
+        var carrierImagePaths: [String] = []
+        if upstream.protocolGroup(forName: name) != nil {
+            carrierImagePaths.append(imagePath)
+        }
+        for subIndexer in subIndexers {
+            carrierImagePaths.append(contentsOf: subIndexer.protocolCarrierImagePaths(forName: name))
+        }
+        return carrierImagePaths
+    }
+
     // MARK: - Aggregation
 
     /// Register a per-image indexer with this aggregate, so the query methods

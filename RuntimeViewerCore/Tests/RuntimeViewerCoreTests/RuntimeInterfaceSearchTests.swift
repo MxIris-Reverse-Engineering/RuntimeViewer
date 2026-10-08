@@ -221,4 +221,52 @@ struct RuntimeInterfaceSearchTests {
         }
         Issue.record("no Swift class with a superclass in the Foundation overlay")
     }
+
+    /// Adopting an Objective-C protocol leaves a Swift class no Swift
+    /// conformance record; the adoption is written into its Objective-C
+    /// face, which Conforming Types reads. Ancestor Types has to agree.
+    /// Foundation's `NSNotificationCenter.NotificationMessageKey` and a
+    /// private `BridgeKey` adopt `NSCopying` on macOS 26.7 and 27.0.
+    @Test("a Swift class lists the Objective-C protocols its Objective-C face adopts")
+    func swiftClassAncestorsIncludeAdoptedObjCProtocols() async throws {
+        let engine = try await Self.makeEngine("swift-class-objc-protocols")
+        let conformerTrees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: "NSCopying", matchMode: .matchingWord, relationship: .conformers, isCaseSensitive: true))
+        let swiftClasses = conformerTrees
+            .filter { $0.root.kind == .objc(.type(.protocol)) }
+            .flatMap(\.nodes)
+            .compactMap(\.object)
+            .filter { $0.kind == .swift(.type(.class)) }
+        try #require(!swiftClasses.isEmpty, "Foundation has no Swift class adopting NSCopying")
+
+        var classesMissingTheProtocol: [String] = []
+        for swiftClass in swiftClasses {
+            let ownName = swiftClass.displayName.components(separatedBy: ".").last ?? swiftClass.displayName
+            let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: ownName, matchMode: .matchingWord, relationship: .ancestors, isCaseSensitive: true, candidateLimit: .max))
+            let tree = try #require(trees.first { $0.root == swiftClass }, "no Ancestor tree for \(swiftClass.displayName)")
+            // Before: only the protocols of its Swift conformance records.
+            if !tree.nodes.contains(where: { $0.name == "NSCopying" && $0.object?.kind == .objc(.type(.protocol)) }) {
+                classesMissingTheProtocol.append("\(swiftClass.displayName): \(tree.nodes.map(\.name))")
+            }
+        }
+        #expect(classesMissingTheProtocol.isEmpty, "\(classesMissingTheProtocol)")
+    }
+
+    /// A walk cut short hands back only what it had reached, so a cancelled
+    /// search throws instead. The engine here runs in process — the test
+    /// process names no local runtime service — so cancelling the task asking
+    /// reaches the walk directly. This proves the checks on the way in; a
+    /// cancellation in the middle of a walk has no stable point to inject.
+    @Test("a cancelled relationship search throws instead of returning a partial tree")
+    func cancelledRelationshipSearchThrows() async throws {
+        let engine = try await Self.makeEngine("relationships-cancelled")
+        let search = Task {
+            try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: "NSObject", relationship: .descendants, isCaseSensitive: true))
+        }
+        search.cancel()
+
+        // Before: nothing on the way checked, and the whole tree came back.
+        await #expect(throws: CancellationError.self) {
+            try await search.value
+        }
+    }
 }
