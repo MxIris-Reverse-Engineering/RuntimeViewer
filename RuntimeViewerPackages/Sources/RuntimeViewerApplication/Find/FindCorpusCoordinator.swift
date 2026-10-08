@@ -20,8 +20,10 @@ import RuntimeViewerSettings
 /// engine's `RuntimeInterfaceCorpusStore`; this coordinator decides *which*
 /// images to ask for and *when*:
 ///
-/// 1. an image the background indexer finished;
-/// 2. an image the user opened, moved to the front of the queue;
+/// 1. every image the engine's API indexed — the background indexer's loads,
+///    an export's, an image the sidebar opened — the one the sidebar shows
+///    moved to the front of the queue (`RuntimeEngine.imageDidIndexPublisher`);
+/// 2. every image indexed before the coordinator started listening, once;
 /// 3. the corpus switch turning on, for every indexed image;
 /// 4. the transformer settings changing, after a two-second lull: every
 ///    corpus is printed with them, so all are dropped and rebuilt.
@@ -59,13 +61,16 @@ public final class FindCorpusCoordinator {
         let task: Task<Void, Never>
     }
 
-    private unowned let documentState: DocumentState
-
     private var engine: RuntimeEngine
 
-    private var eventPumpTask: Task<Void, Never>?
+    /// The engine's "image indexed" reports, each of which asks for the
+    /// image's corpus.
+    private var imageIndexedSubscription: AnyCancellable?
 
-    private var imageDidLoadSubscription: AnyCancellable?
+    /// The path of the image the sidebar lists, as the sidebar spells it. An
+    /// image that becomes indexed while it is on screen goes to the front of
+    /// the queue.
+    private var currentImagePath: String?
 
     /// The build requests this document holds open, by image path.
     /// Cancelling one withdraws only this document's interest.
@@ -132,19 +137,20 @@ public final class FindCorpusCoordinator {
             .distinctUntilChanged()
     }
 
+    /// Reads `documentState` here and keeps nothing of it but subscriptions:
+    /// the coordinator can outlive the document.
     public init(documentState: DocumentState) {
-        self.documentState = documentState
         self.engine = documentState.runtimeEngine
         #if canImport(RuntimeViewerSettings)
         bootstrapSettingsObservation()
         #endif
-        bootstrapEngineObservation()
+        bootstrapEngineObservation(of: documentState)
+        bootstrapCurrentImageObservation(of: documentState)
         documentState.findSession.follow(self)
         startPumps()
     }
 
     deinit {
-        eventPumpTask?.cancel()
         transformerRebuildTask?.cancel()
         for request in buildRequests.values {
             request.task.cancel()
@@ -414,30 +420,21 @@ public final class FindCorpusCoordinator {
 
     private func startPumps() {
         let engine = engine
-        eventPumpTask = Task { [weak self] in
-            let stream = await engine.backgroundIndexingManager.events
-            // Subscribed before asking, so no image slips through in between:
-            // one that finishes from here on arrives below as an event, one
-            // that finished earlier is in the engine's indexed list.
-            if let self, self.engine === engine {
-                self.requestBuildOfIndexedImages()
-            }
-            for await event in stream {
-                guard let self, self.engine === engine else { return }
-                if case .taskFinished(_, let path, let result) = event, case .completed = result {
-                    self.requestBuild(of: path)
-                }
-            }
-        }
-        imageDidLoadSubscription = engine.imageDidLoadPublisher
+        // Subscribed before asking, so no image slips through in between: one
+        // indexed from here on arrives below, one indexed earlier is in the
+        // engine's indexed list. The engine reports every image its own API
+        // indexed — the background indexer's loads, an export's, an image the
+        // sidebar opened — so only images another process indexed are left to
+        // the catch-up a finished search runs.
+        imageIndexedSubscription = engine.imageDidIndexPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] imagePath in
                 MainActor.assumeIsolated {
                     guard let self, self.engine === engine else { return }
-                    // The user opened it, so it goes first.
-                    self.requestBuild(of: imagePath, isPrioritized: true)
+                    self.imageDidIndex(at: imagePath)
                 }
             }
+        requestBuildOfIndexedImages()
         // What other documents sharing the engine have built or are building.
         refreshCoverage()
         #if canImport(RuntimeViewerSettings)
@@ -446,16 +443,36 @@ public final class FindCorpusCoordinator {
     }
 
     private func stopPumps() {
-        eventPumpTask?.cancel()
-        eventPumpTask = nil
-        imageDidLoadSubscription = nil
+        imageIndexedSubscription = nil
         transformerRebuildTask?.cancel()
         transformerRebuildTask = nil
     }
 
+    /// An image the engine reports indexed. One with a request open is left
+    /// to it, one already built needs nothing; the image the sidebar shows
+    /// goes to the front of the queue, every other one — an export's, the
+    /// background indexer's — waits its turn.
+    private func imageDidIndex(at reportedImagePath: String) {
+        let imagePath = canonicalImagePath(reportedImagePath)
+        let isOnScreen = currentImagePath.map(canonicalImagePath) == imagePath
+        if buildRequests[imagePath] == nil, buildStatesByImagePath[imagePath]?.isBuilt == true {
+            return
+        }
+        requestBuild(of: imagePath, isPrioritized: isOnScreen)
+    }
+
+    private func bootstrapCurrentImageObservation(of documentState: DocumentState) {
+        documentState.$currentImageNode
+            .subscribeOnNext { [weak self] imageNode in
+                guard let self else { return }
+                self.currentImagePath = imageNode?.path
+            }
+            .disposed(by: disposeBag)
+    }
+
     // MARK: - Engine swap
 
-    private func bootstrapEngineObservation() {
+    private func bootstrapEngineObservation(of documentState: DocumentState) {
         documentState.$runtimeEngine
             .skip(1)
             .subscribeOnNext { [weak self] newEngine in

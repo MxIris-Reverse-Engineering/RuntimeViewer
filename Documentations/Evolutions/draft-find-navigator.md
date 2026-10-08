@@ -277,12 +277,13 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 
 - **`GlobalSearchCorpusCoordinator`**（`RuntimeViewerApplication`，`@MainActor`，与
   `RuntimeBackgroundIndexingCoordinator` 平级，同样订阅 `documentState.$runtimeEngine` 换引擎重接）。触发源：
-  1. `backgroundIndexingManager.events` 的 `.taskFinished(result: .completed)` → 该镜像排队。`events` 每次访问都是
-     一条独立的订阅，与索引协调器互不抢事件；订阅到手后先把已索引的镜像补队，堵住订阅之前刚好索引完的那段空隙
-     （决策日志 2026-09-29「后台索引事件改为广播」）；
-  2. `imageDidLoadPublisher`（用户显式点开镜像）→ 排队并置顶；
-  3. Settings 开关 off → on → 对所有已索引镜像补队；
-  4. `settings.transformer` 变更（约 2 s debounce）→ 全量驱逐重建。
+  1. `RuntimeEngine.imageDidIndexPublisher`：引擎的 API（`objects(in:)`、`objectsWithProgress(in:)`、两个
+     `loadImage(at:)`、`loadImageForBackgroundIndexing(at:)`）每把一个镜像索引好就报一次，由调用方手里那台引擎在本进程
+     发出，不需要对端发消息 → 该镜像排队，侧栏正显示的那个置顶；订阅之后先把已索引的镜像补队一次。原先的两路
+     （后台索引事件流的 `.taskFinished`、`imageDidLoadPublisher`）漏掉了侧栏经 `objects(in:)` 打开的已加载镜像，
+     2026-10-08 由这一路取代（PR121.04，决策日志）；
+  2. Settings 开关 off → on → 对所有已索引镜像补队；
+  3. `settings.transformer` 变更（约 2 s debounce）→ 全量驱逐重建。
   独立于背景索引 coordinator：那个管「让镜像有索引」，这个管「让已索引镜像可搜」，生命周期与取消语义不同。
 - **Settings**：新增 `Settings.search` 分支：`isCorpusEnabled`（默认开）、`residentByteLimit`（默认 256 MB）。
   加进 `accessPersistedValues()` 与 `SettingsPersistenceTests` 的覆盖表。
@@ -768,3 +769,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 语料构建、两种搜索与类型关系的取消跨过连接：引擎层按请求 id 取消，新增不等回复的 `cancelRequest`，只对这四条新命令开启；调用方取消即返回，不等对端确认 | PR #121 审查 PR121.29：传输层取消不了已发出的请求，服务端在没人持有句柄的 Task 里跑请求，所以 App 里（My Mac 转发给 XPC service）取消一次 Foundation 的语料构建，调用方还要等 8–11 秒，服务端照建不误，Find 换查询后旧批次照样送达。用户选了推荐方案：不改 SwiftyXPC、HelperPeer 和 socket 的帧，旧对端永远收不到不认识的命令（经 Mach service 的旧版注入 payload 会把未知消息当成客户端离开，PR121.73）。比方案多走一步：调用方不等对端回复就返回，否则对端不响应取消时调用方照样被拖住。协议写在 `CommunicationAndEngineArchitecture.md` §4.5；复现测试 `RemoteRequestCancellationTests` 在 XPC service 与 TCP 两条真实连接上修前全红、修后全绿。 |
 | 2026-10-08 | 语料只从引擎已经建好的 section 打印，绝不为语料去索引镜像；没有索引的镜像回 `.imageNotIndexed`，协调器清掉状态、不记历史 | PR #121 审查 PR121.32：语料构建列对象时走的是会建 section 的 `_objects(in:)`，于是作用域里没索引的镜像会在两套索引调度之外被 utility 优先级整个索引一遍，Cancel 也停不下；没加载的镜像每次都记一条 Failed；dyld 不认识的路径经 section 工厂按文件名回退，把同名镜像（macOS 27 的 cache 里有 267 个重名）索引到这个假路径下，coverage 与 section 缓存从此多一条错的。section 工厂自己的回退不能动，模拟器上的路径匹配靠它，所以在语料入口挡：本地臂先查两个 section 都在，`corpusObjects` 只读已有的 section（第二道防线）。复现测试 `RuntimeInterfaceCorpusEligibilityTests` 三条修前全红。 |
 | 2026-10-08 | 客户端按服务进程的 `DYLD_ROOT_PATH` 规范化路径：新命令 `dyldRootPath`，socket 类客户端连上后在后台问；协调器入口统一规范化，`DocumentState.isSelectedRuntimeObjectInCurrentImage` 比较前也规范化 | PR #121 审查 PR121.33：引擎的约定是服务端存规范路径、线上传原始路径，Find 的新命令却把规范路径带回了客户端（coverage、已索引列表、搜索摘要、`RuntimeObject.imagePath`），侧栏、后台索引与搜索范围仍是原始路径。模拟器引擎上同一镜像于是记成两行，补搜两次、命中翻倍；Reveal in Sidebar 在模拟器上一直是灰的（基线就有）。根路径属于服务进程，客户端只能问；不在 `.connected` 之前等回答，因为 2.1.0 之前的对端不回复未知命令。处理器从不转发，经 XPC 的对端可能是旧版注入 payload（PR121.73）。复现测试 `FindCorpusCoordinatorTests.rawAndCanonicalPathsAreOneImage` 等三组在只加接缝时红、修后绿；协议写在 `CommunicationAndEngineArchitecture.md` §4.6。 |
+| 2026-10-08 | 语料协调器只订阅引擎的 `imageDidIndexPublisher`：`objects(in:)`、`objectsWithProgress(in:)`、两个 `loadImage(at:)` 与 `loadImageForBackgroundIndexing(at:)` 成功返回时由调用方手里的引擎发出；只有侧栏正显示的镜像置顶；协调器不再保存 `documentState` | PR #121 审查 PR121.04：协调器只认后台索引完成与 `imageDidLoad` 两路，侧栏打开早已加载的镜像走 `objects(in:)`，索引好了却不发事件，默认设置下（后台索引关）Foundation、AppKit、libobjc 这些最常用的镜像永远建不出语料，摘要却一直说「再等等」；附加到别的进程时几乎所有镜像都是这种状态。事件在客户端引擎的 API 边界发，不加推送命令，对端是旧版也一样有效；别的进程索引的镜像靠开窗补建与搜索后的对账（PR121.34）。事件泵随之删掉，PR121.36（事件泵在主线程上空转）一并消失。复现测试 `FindCorpusCoordinatorIndexedImageTests` 修前 20 秒等不到语料，修后绿。 |

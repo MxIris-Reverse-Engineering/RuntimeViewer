@@ -250,6 +250,27 @@ public actor RuntimeEngine {
 
     private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()
 
+    /// Publisher that emits an image's path each time this engine's API
+    /// returns with the image indexed: `objects(in:)`,
+    /// `objectsWithProgress(in:)`, both `loadImage(at:)` overloads and
+    /// `loadImageForBackgroundIndexing(at:)` — the calls whose contract is
+    /// that both sections exist when they return.
+    ///
+    /// Emitted by the engine the caller holds, in the caller's process, so a
+    /// client engine reports what its own requests indexed without a message
+    /// from the peer, whatever the peer's release. An image already indexed is
+    /// reported again; subscribers deduplicate. The path is the caller's
+    /// spelling, not the canonical one — see `canonicalImagePath(_:)`.
+    ///
+    /// `nonisolated` for the same reason as `imageDidLoadPublisher`.
+    public nonisolated var imageDidIndexPublisher: some Publisher<String, Never> {
+        imageDidIndexSubject
+    }
+
+    // Internal, not private: `loadImageForBackgroundIndexing(at:)` emits it
+    // from RuntimeEngine+BackgroundIndexing.swift.
+    nonisolated let imageDidIndexSubject = PassthroughSubject<String, Never>()
+
     /// In-flight progress routes keyed by the per-round-trip token minted in
     /// `dispatch(_:onProgress:)`. Inbound `progressEvent` pushes look up
     /// their token here and forward the decoded payload to the awaiting
@@ -1082,6 +1103,7 @@ extension RuntimeEngine {
         try await performingForegroundLoad {
             _ = try await dispatch(LoadImageRequest(path: path))
         }
+        imageDidIndexSubject.send(path)
     }
 
     /// `loadImage(at:)` that reports the indexing it performs.
@@ -1099,6 +1121,7 @@ extension RuntimeEngine {
         try await performingForegroundLoad {
             _ = try await dispatch(LoadImageWithProgressRequest(path: path), onProgress: onProgress)
         }
+        imageDidIndexSubject.send(path)
     }
 
     /// Local implementation of `loadImage(at:)`. Canonicalizes on entry so
@@ -1167,9 +1190,11 @@ extension RuntimeEngine {
         in image: String,
         onProgress: (@Sendable (RuntimeObjectsLoadingProgress) async -> Void)?
     ) async throws -> [RuntimeObject] {
-        try await performingForegroundLoad {
+        let objects = try await performingForegroundLoad {
             try await dispatch(ObjectsInImageRequest(image: image), onProgress: onProgress)
         }
+        imageDidIndexSubject.send(image)
+        return objects
     }
 
     /// Runs one image load made for the user, holding back new background

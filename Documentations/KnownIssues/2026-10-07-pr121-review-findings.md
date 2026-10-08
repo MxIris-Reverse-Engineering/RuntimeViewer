@@ -612,7 +612,8 @@ struct FindSessionLifecycleTests {
 
 - **严重度**：Major
 - **审查编号**：C15（含 U2）（上次第 4 条）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindCorpusCoordinatorIndexedImageTests.imageOpenedInTheSidebarBecomesSearchable`（修前在新引擎上对已加载、未索引的 libobjc 调 `objects(in:)`，20 秒内等不到它的语料建好：「no matching element arrived within 20.0s」），发布者本身的约定由 `RuntimeEngineImageDidIndexTests` 守住（`objects(in:)` 与 `loadImageForBackgroundIndexing(at:)` 都用调用方的路径报一次；转发引擎为自己的请求报，不需要对端发消息）。
+- **落地与偏离**：照方案做，另有两处细化。一，协调器记的是侧栏节点的原始路径，比较时再按引擎规范化（PR121.33 先落地）：根路径是连上之后在后台问来的，记键时就规范化，问到之前记下的就会过期。二，`imageDidIndex(at:)` 先规范化收到的路径，「已有在途请求」交给 `requestBuild` 自己判断（它只在要求置顶时把排队的那条移到队首）。PR121.36 随本条消失。
 
 **问题**：
 - 语料协调器只认两种触发：后台索引的 `taskFinished` 和 `imageDidLoadPublisher`。
@@ -8186,7 +8187,7 @@ func coverageRefreshesCoalesce() async throws {
 
 - **严重度**：Cleanup（随 PR121.04 一起消失；单独看建议不修）
 - **审查编号**：U2（审查扫尾阶段发现，未经投票核实）
-- **状态**：方案待批，代码未改
+- **状态**：随 PR121.04 一起消失：协调器不再消费后台索引事件流（`eventPumpTask` 已删），改为订阅 `RuntimeEngine.imageDidIndexPublisher`，经 `.receive(on: DispatchQueue.main)` 回主线程，每个镜像被索引时唤醒一次，`taskStarted` 与批次事件不再唤醒主线程。没有单独的提交与测试，照下文「复现测试」一节的说明。
 
 **问题**：
 - 语料协调器在 `startPumps` 里创建事件泵（`eventPumpTask = Task { … }`，`FindCorpusCoordinator.swift:377-391`）。协调器是 `@MainActor` 类，这个 `Task` 继承了主 actor，于是后台索引的每个事件都要唤醒一次主线程，包括 `taskStarted`、`taskFinished`、批次开始和结束。
