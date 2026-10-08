@@ -77,6 +77,39 @@ struct FindSessionCorpusTests {
         await engine.stop()
     }
 
+    /// A transformer change drops every corpus and builds them again, and
+    /// the search on screen used to stay as the old prints had it: every
+    /// rebuilt image was one it had already read, so it widened to none of
+    /// them (PR121.40).
+    @Test("a transformer change runs the search on screen again once the corpora are dropped for rebuilding")
+    func transformerChangeRerunsTheSearchOnScreen() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindSessionCorpusTests.transformer", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let documentState = environment.documentState
+        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        defer { withExtendedLifetime(coordinator) {} }
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
+
+        let session = documentState.findSession
+        session.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true))
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
+        #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
+
+        var transformer = environment.settings.transformer
+        transformer.objc.ivarOffset.isEnabled = true
+        environment.settings.transformer = transformer
+
+        // Two seconds for the edit to settle, then the drop: the search on
+        // screen starts over.
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { $0 }
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 120) { $0[TestImages.libobjc]?.isBuilt == true }
+        try await settleMainQueue()
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+        #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc }, "the rebuilt corpus was not read again")
+        await engine.stop()
+    }
+
     @Test("picking images asks the corpus coordinator for those not yet searchable")
     func pickingImagesAsksForTheirCorpora() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindSessionCorpusTests.pickedCorpora")

@@ -27,7 +27,8 @@ import RuntimeViewerSettings
 /// 2. every image indexed before the coordinator started listening, once;
 /// 3. the corpus switch turning on, for every indexed image;
 /// 4. the transformer settings changing, after a two-second lull: every
-///    corpus is printed with them, so all are dropped and rebuilt.
+///    corpus is printed with them, so all are dropped and rebuilt, and the
+///    search on screen runs again (`corporaRebuilt`).
 ///
 /// Turning the switch off drops every corpus. A source switch rewires onto
 /// the new engine and starts over.
@@ -89,6 +90,8 @@ public final class FindCorpusCoordinator {
 
     private let corpusBuiltRelay = PublishRelay<String>()
 
+    private let corporaRebuiltRelay = PublishRelay<Void>()
+
     /// Replaced when the document closes, which ends every subscription.
     private var disposeBag = DisposeBag()
 
@@ -136,6 +139,14 @@ public final class FindCorpusCoordinator {
     /// image's corpus built.
     public var corpusBuilt: Signal<String> {
         corpusBuiltRelay.asSignal()
+    }
+
+    /// Every corpus was dropped to be printed again under a new transformer,
+    /// and the rebuilds are requested. A search on screen read the old
+    /// prints, and the images being rebuilt are ones it has already read, so
+    /// it has to run again rather than widen.
+    var corporaRebuilt: Signal<Void> {
+        corporaRebuiltRelay.asSignal()
     }
 
     /// Whether an image is waiting for its corpus or being printed.
@@ -585,6 +596,9 @@ public final class FindCorpusCoordinator {
             for imagePath in imagePaths {
                 self.requestBuild(of: imagePath)
             }
+            // After the requests, so a search run again at once finds its
+            // images queued.
+            self.corporaRebuiltRelay.accept(())
         }
     }
     #endif

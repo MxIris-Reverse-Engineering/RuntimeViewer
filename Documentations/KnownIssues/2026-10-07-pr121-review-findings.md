@@ -7188,7 +7188,8 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Minor
 - **审查编号**：U3
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindSessionCorpusTests.transformerChangeRerunsTheSearchOnScreen`（修前改 transformer 后会话不再搜索，等 `isSearching == true` 30 秒超时：「no matching element arrived within 30.0s」）。修后绿。
+- **落地与偏离**：照方案。协调器重新请求构建之后发 `corporaRebuilt`，会话在 `follow(_:)` 里订阅，收到后调用 PR121.39 的 `rerunShownSearch()`；测试去掉了草案里的 `withSharedGenerationOptionsLock`。协调器的类注释与提案 §4 的触发源 3 同步写上这一步。
 
 **问题**：改了 transformer 设置后，`scheduleTransformerRebuild`（`FindCorpusCoordinator.swift:499-513`）会驱逐全部语料、再逐个重建，每建好一个就经 `corpusBuilt` 通知会话。但会话补搜前会先减去已经搜过的镜像（`FindSession.swift:384`），而重建的恰恰都是搜过的镜像，于是全部被跳过。屏上的结果一直是旧 transformer 打印出的行，而内容区已经按新 transformer 显示，点击时两边的行对不上，高亮只能退到降级匹配。
 

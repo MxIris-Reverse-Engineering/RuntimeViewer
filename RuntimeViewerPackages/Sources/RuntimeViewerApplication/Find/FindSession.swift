@@ -171,7 +171,9 @@ public final class FindSession {
 
     /// Hooks the session to the document's corpus coordinator, which calls
     /// this once it exists: its build states feed the summary bar, and each
-    /// corpus it reports built is read by the search in force.
+    /// corpus it reports built is read by the search in force. Once every
+    /// corpus is dropped to be printed with a new transformer, that search
+    /// runs again: the images rebuilt are ones it has already read.
     func follow(_ corpusCoordinator: FindCorpusCoordinator) {
         self.corpusCoordinator = corpusCoordinator
         corpusCoordinator.$buildStatesByImagePath.asDriver()
@@ -185,6 +187,12 @@ public final class FindSession {
             .emitOnNextMainActor { [weak self] imagePath in
                 guard let self else { return }
                 self.corpusDidBuild(at: imagePath)
+            }
+            .disposed(by: disposeBag)
+        corpusCoordinator.corporaRebuilt
+            .emitOnNextMainActor { [weak self] in
+                guard let self else { return }
+                self.rerunShownSearch()
             }
             .disposed(by: disposeBag)
     }
@@ -247,10 +255,11 @@ public final class FindSession {
 
     /// A text or member search on screen answers for the options it ran
     /// under; run it again so it answers for the ones the content pane now
-    /// displays with. It is the search on screen that runs again, over the
-    /// images its scope stood for then: not the query the mode path and the
-    /// toggles are being edited into, which stays as it is. Relationship
-    /// searches do not depend on the options.
+    /// displays with — or, after a transformer change, for the corpora being
+    /// printed again, which come back one by one as they are rebuilt. It is
+    /// the search on screen that runs again, over the images its scope stood
+    /// for then: not the query the mode path and the toggles are being edited
+    /// into, which stays as it is. Relationship searches depend on neither.
     private func rerunShownSearch() {
         guard let shownSearch else { return }
         let generationOptions = appDefaults.options

@@ -283,7 +283,8 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
      （后台索引事件流的 `.taskFinished`、`imageDidLoadPublisher`）漏掉了侧栏经 `objects(in:)` 打开的已加载镜像，
      2026-10-08 由这一路取代（PR121.04，决策日志）；
   2. Settings 开关 off → on → 对所有已索引镜像补队；
-  3. `settings.transformer` 变更（约 2 s debounce）→ 全量驱逐重建。
+  3. `settings.transformer` 变更（约 2 s debounce）→ 全量驱逐重建，重新请求之后发 `corporaRebuilt`，屏上读语料的那次搜索
+     从头重跑：重建的都是它已经读过的镜像，补搜不会再读它们（2026-10-08，PR121.40）。
   独立于背景索引 coordinator：那个管「让镜像有索引」，这个管「让已索引镜像可搜」，生命周期与取消语义不同。
 - **Settings**：新增 `Settings.search` 分支：`isCorpusEnabled`（默认开）、`residentByteLimit`（默认 256 MB）。
   加进 `accessPersistedValues()` 与 `SettingsPersistenceTests` 的覆盖表。
@@ -776,3 +777,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | Swift 类的 Ancestor Types 在 Swift 协议之后、父类之前，补上它的 ObjC 面采纳的协议（经 `objcClassName(forCounterpartOf:)` 找到 ObjC 面，读同一镜像的 `ObjCClassInfo.protocols`）；另一个镜像里声明的一致性仍不显示 | PR #121 审查 PR121.66：Swift 类采纳 `@objc` 协议时不产生 Swift 一致性记录，只写进 ObjC 面的协议表。Conforming Types 读的正是这张表，所以两个方向对不上：在 `NSCopying` 的 Conforming Types 里查得到的 Swift 类，它自己的 Ancestors 里没有 `NSCopying`。复现测试 `RuntimeInterfaceSearchTests.swiftClassAncestorsIncludeAdoptedObjCProtocols` 修前三个类（`NSNotificationCenter.NotificationMessageKey` 等）都只有父类 `NSObject`，修后全绿。跨镜像声明的一致性（CoreTransferable 里的 `String: Transferable`）两个方向本来就都缺，不是这次的不对称，裁决不修，见 KnownIssues。 |
 | 2026-10-08 | 每次引擎调用（首搜或补搜）是一个 `SearchRun`，会话只认当前那一个：批次与回复回到主线程先核对，不是当前的就丢掉；搜索 Task 只持有 run、不持有会话；换引擎后在新引擎上重跑屏上那次查询（`committedQuery`，范围不变，隔一个主线程回合）；当前调用不论成败都由 `runDidEnd` 收尾，补搜失败只记日志、保留已有结果 | PR #121 审查 PR121.05 / PR121.38：PR121.29 让取消能跨过连接，但引擎在取消前一刻交出的批次照样排在主线程队尾，之后落进替换它的那次搜索或刚清空的列表；会话也从不观察文档的引擎，换数据源后旧行一直留着。补搜失败时 Task 在清 `isSearching` 之前就返回，转圈不停，之后建好的语料也都不再补搜。第三层是 PR121.02 留下的：搜索 Task 在等引擎期间强持有会话，文档不在了会话也走不了，`deinit` 也就撤不回调用。重跑隔一个回合，是因为 App 里 `FindViewModel` 先于语料协调器建出会话，同步重跑会把置顶请求发给还没切到新引擎的协调器。`run` 与 `start` 分开，重跑不改写页面正在编辑的查询。复现测试在 `FindSessionLifecycleTests`，修前全红。 |
 | 2026-10-08 | Generation Options 变化时重跑的是屏上那次搜索（`rerunShownSearch()`：用它当时的查询与当时解析出的范围），不改写页面正在编辑的模式、大小写与范围；点击结果时的高亮按结果所答的查询（`Results.query`）取模式与大小写 | PR #121 审查 PR121.39：原实现重跑的是编辑中的查询——模式改成 Members 还没按回车，改一项选项就跑成成员搜索；改成关系模式则干脆不重跑，屏上的文本结果停在旧选项下；点击高亮也用编辑中的大小写。这与 §5「重跑正在显示的文本 / 成员搜索」不符。范围沿用当时解析出的（推荐项）：`.currentImage` 不按此刻的侧栏重新解析，免得改一项选项就悄悄换了被搜的镜像。 |
+| 2026-10-08 | transformer 变化后，协调器驱逐并重新请求全部语料，随即发 `corporaRebuilt`，屏上读语料的那次搜索从头重跑（查询与范围不变）；不做「保留旧结果、逐镜像替换命中」 | PR #121 审查 PR121.40：会话补搜前先减去已经搜过的镜像，而重建的恰恰都是搜过的镜像，于是全部被跳过；屏上一直是旧 transformer 打印出的行，内容区却已按新 transformer 显示，点击时行对不上，高亮只能退到降级匹配。从头重跑时语料多半还没建好，结果先是「0 results · N images being made searchable」，再随重建逐个补回，与启动时一致。逐镜像替换要按镜像记录总数，复杂得多（推荐项）。关掉语料开关不发这个信号：结果留在屏上，之后不再补搜。 |
