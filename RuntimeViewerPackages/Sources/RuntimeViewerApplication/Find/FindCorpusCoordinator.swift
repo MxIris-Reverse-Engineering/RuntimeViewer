@@ -329,6 +329,10 @@ public final class FindCorpusCoordinator {
             // The store cancelled the build for everyone: another document
             // asked for it under a different transformer, or evicted it.
             buildStatesByImagePath[imagePath] = nil
+        case .failure(is RuntimeInterfaceCorpusBuildError):
+            // Not indexed yet: nothing to print, and nothing went wrong. The
+            // image is asked for again once the engine reports it indexed.
+            buildStatesByImagePath[imagePath] = nil
         case .failure(let error):
             #log(.error, "Corpus build of \(imagePath, privacy: .public) failed: \(error, privacy: .public)")
             let message = "\(error)"

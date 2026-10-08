@@ -7469,7 +7469,8 @@ struct TransportLateReplyTests {
 
 - **严重度**：Minor
 - **审查编号**：C13
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusEligibilityTests`（进程内引擎，三条修前都红：`/tmp/NoSuchDirectory/libobjc.A.dylib` 不抛错，coverage 里这个假路径成了 `.built(objectCount: 6, byteCount: 23426)`，`isImageIndexed` 也成了真；没索引的 libobjc 不抛错、被顺手索引；没加载的 GameController 在 coverage 里留下 `.failed(message: "invalidMachOImage")`），协调器一侧 `FindCorpusCoordinatorTests.unindexedImageIsLeftAlone`（只去掉协调器的新分支时红：两个镜像各记一条 `.failed(message: "imageNotIndexed(…)")`）。修后都绿。
+- **落地与偏离**：第一条用 libobjc 的文件名造假路径，不用草案的 Foundation：按文件名回退一样触发，修前的红跑不必把 Foundation 整个打印一遍。测试里先确认 GameController 确实没被测试进程加载。
 
 **问题**：语料构建器 `corpusObjects(in:)` 调用的是会创建 section 的 `_objects(in:)`，但协调器会把作用域里任意镜像都送去构建，包括没有索引的镜像。后果分三种：
 - 镜像没有加载：报 `invalidMachOImage`，Report 里每次搜索都多一条 Failed。

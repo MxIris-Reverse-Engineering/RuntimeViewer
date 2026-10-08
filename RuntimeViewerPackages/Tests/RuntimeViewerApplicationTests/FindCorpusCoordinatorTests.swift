@@ -228,4 +228,34 @@ struct FindCorpusCoordinatorTests {
         #expect(coverage.residentByteLimit == 96 * 1024 * 1024)
         await engine.stop()
     }
+
+    /// A scope can name an image the engine has not indexed — a scope kept
+    /// across an engine switch, the sidebar's image before it is listed. The
+    /// corpus used to index such an image itself, outside both indexing
+    /// schedulers, and an image that is not loaded at all left a failed build
+    /// behind (PR121.32).
+    @Test("asking for the corpus of an image that is not indexed indexes nothing and records no failure")
+    func unindexedImageIsLeftAlone() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.unindexed")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+        // Loaded in the test process, but this engine has not indexed it.
+        let loadedImagePath = TestImages.libobjc
+        // Not loaded in the test process at all.
+        let unloadedImagePath = "/System/Library/Frameworks/GameController.framework/GameController"
+
+        coordinator.requestBuild(of: loadedImagePath)
+        coordinator.requestBuild(of: unloadedImagePath)
+
+        let states = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 30) { states in
+            states.values.allSatisfy { !$0.isActive }
+        }
+        #expect(states[loadedImagePath] == nil, "the corpus of an image nobody indexed was \(String(describing: states[loadedImagePath]))")
+        #expect(states[unloadedImagePath] == nil, "an image that is not loaded was left as \(String(describing: states[unloadedImagePath]))")
+        #expect(coordinator.finishedBuilds.isEmpty, "the history lists \(coordinator.finishedBuilds.map(\.outcome))")
+        #expect(try await engine.isImageIndexed(path: loadedImagePath) == false, "asking for the corpus indexed the image")
+        await engine.stop()
+    }
 }

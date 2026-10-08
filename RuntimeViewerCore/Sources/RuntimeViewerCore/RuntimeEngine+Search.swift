@@ -112,6 +112,14 @@ extension RuntimeEngine {
     /// The cancellation the store ends a build with comes back as
     /// `.cancelled`, a value, so it survives the trip to a caller in another
     /// process; see `RuntimeInterfaceCorpusBuildOutcome`.
+    ///
+    /// A corpus is printed from the sections the engine already built; asking
+    /// for it never indexes an image. Indexing here would bypass both the
+    /// foreground and the background schedulers, an image that is not loaded
+    /// would fail and stay failed, and for a path dyld does not know, the
+    /// section factories' file-name fallback would index a same-named image
+    /// under that path. An image without both sections is `.imageNotIndexed`
+    /// and leaves the store untouched; it is asked for again once indexed.
     func _buildInterfaceCorpus(
         for imagePath: String,
         transformer: Transformer.Configuration,
@@ -119,6 +127,7 @@ extension RuntimeEngine {
         reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void
     ) async throws -> RuntimeInterfaceCorpusBuildOutcome {
         let canonical = DyldUtilities.patchImagePathForDyld(imagePath)
+        guard await _isImageIndexed(path: canonical) else { return .imageNotIndexed }
         do {
             let summary = try await interfaceCorpusStore.build(imagePath: canonical, transformer: transformer, isPrioritized: isPrioritized, onProgress: reportProgress)
             return .built(summary)
@@ -183,8 +192,18 @@ extension RuntimeEngine {
 // MARK: - Corpus building
 
 extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
+    /// The sections already built, never new ones — see
+    /// `_buildInterfaceCorpus`. Missing ones mean the engine let go of them
+    /// while the build waited for its turn.
     func corpusObjects(in imagePath: String) async throws -> [RuntimeObject] {
-        try await _objects(in: imagePath).flatMap(\.corpusFamily)
+        guard let objcSection = await objcSectionFactory.existingSection(for: imagePath),
+              let swiftSection = await swiftSectionFactory.existingSection(for: imagePath)
+        else {
+            throw RuntimeInterfaceCorpusBuildError.imageNotIndexed(imagePath: imagePath)
+        }
+        let objcObjects = try await objcSection.allObjects()
+        let swiftObjects = try await swiftSection.allObjects()
+        return (objcObjects + swiftObjects).flatMap(\.corpusFamily)
     }
 
     /// A Swift family goes to its section whole, which takes the nested
