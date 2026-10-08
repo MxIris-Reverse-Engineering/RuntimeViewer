@@ -129,6 +129,13 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// a *different* request that happened to be registered under the same identifier.
     private let pendingRequests = Mutex<[String: PendingRequest]>([:])
 
+    /// Nonces of requests this side stopped waiting for, oldest first; see
+    /// `rememberAbandonedRequest(nonce:)`. Bounded, because a reply that never
+    /// comes leaves an entry that only ages out.
+    private let abandonedRequestNonces = Mutex<[String]>([])
+
+    private static let maximumAbandonedRequestNonceCount = 256
+
     /// Buffer for incoming data, plus how far it has already been scanned for an
     /// end-marker. Persisting the scan offset across appends keeps a large
     /// message that arrives in many chunks at O(n) total instead of O(n²) — the
@@ -376,8 +383,9 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     ///   - requestData: The request payload framed by `RuntimeRequestData`.
     ///     If `nonce` is `nil` a fresh `UUID` is stamped before sending.
     ///   - timeout: Optional deadline (seconds). When non-nil, if no response arrives within
-    ///     the deadline the call throws `RuntimeMessageChannelError.requestTimeout` and the
-    ///     pending entry is removed, so a late response will be ignored. When `nil` the call
+    ///     the deadline the call throws `RuntimeMessageChannelError.requestTimeout`, the
+    ///     pending entry is removed and its nonce remembered as abandoned, so a late
+    ///     response is dropped rather than taken for a request. When `nil` the call
     ///     waits indefinitely (the historical behaviour) and only unblocks when the response
     ///     arrives, the writer fails, or `finishReceiving` is invoked.
     ///   - writer: Async closure that performs the actual transport write.
@@ -414,6 +422,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                     if Task.isCancelled { return }
                     if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: nonce) }) {
                         #log(.error, "Request \(identifier, privacy: .public) [nonce \(nonce, privacy: .public)] timed out after \(timeout, privacy: .public)s")
+                        self.rememberAbandonedRequest(nonce: nonce)
                         pending.continuation.resume(throwing: RuntimeMessageChannelError.requestTimeout)
                     }
                 }
@@ -553,6 +562,10 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     ///   That unblocks the caller instead of leaving it to hang on a `nil`
     ///   timeout, while staying silent for fire-and-forget to avoid an error
     ///   ping-pong.
+    /// - **A reply nobody waits for is dropped, never handled.** An error
+    ///   envelope, or the late reply to a request that timed out, matches no
+    ///   pending request; taken for a request, it would be answered, and the
+    ///   answer answered back.
     ///
     /// - Parameter rawWriter: Performs the actual on-wire write for replies.
     ///   Framing (`\nOK`) and send-serialization are added by `send(data:writer:)`.
@@ -594,6 +607,16 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
             return
         }
 
+        // A reply nobody waits for any more must not be taken for a request:
+        // answering it sends the peer an envelope of its own command, which the
+        // peer runs and answers in turn, and the two echo each other until the
+        // connection closes. An error envelope is only ever a reply; any other
+        // frame is one when its nonce names a request this side gave up on.
+        if requestData.isError == true || takeAbandonedRequest(nonce: requestData.nonce) {
+            #log(.debug, "Dropped a reply nobody waits for: \(requestData.identifier, privacy: .public)")
+            return
+        }
+
         guard let handler = handler(for: requestData.identifier) else {
             if requestData.nonce != nil {
                 #log(.error, "No handler for: \(requestData.identifier, privacy: .public); replying with error so the caller doesn't hang")
@@ -629,6 +652,32 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                     self.sendErrorReply(for: requestData, message: "\(error)", rawWriter: rawWriter)
                 }
             }
+        }
+    }
+
+    /// Records that this side stopped waiting for the request with `nonce`.
+    /// Its reply can still arrive, and has to be recognised as a reply then
+    /// (`dispatchReceived`). Every path that gives up on a request before its
+    /// reply arrives must call this — today only the timeout does; a new early
+    /// return (a cancellation, a shorter deadline) has to as well.
+    private func rememberAbandonedRequest(nonce: String) {
+        abandonedRequestNonces.withLock { nonces in
+            nonces.append(nonce)
+            let overflowCount = nonces.count - Self.maximumAbandonedRequestNonceCount
+            if overflowCount > 0 {
+                nonces.removeFirst(overflowCount)
+            }
+        }
+    }
+
+    /// Whether `nonce` names a request this side abandoned, forgetting it:
+    /// a request has one reply.
+    private func takeAbandonedRequest(nonce: String?) -> Bool {
+        guard let nonce else { return false }
+        return abandonedRequestNonces.withLock { nonces in
+            guard let index = nonces.firstIndex(of: nonce) else { return false }
+            nonces.remove(at: index)
+            return true
         }
     }
 
