@@ -34,48 +34,40 @@ struct FindGenerationOptionsTests {
             $0.name == Self.queryItemClassName && $0.kind == .objc(.type(.class))
         })
 
-        // The options are shared by every test in the process; see
-        // `withSharedGenerationOptionsLock`.
-        try await withSharedGenerationOptionsLock {
-            // `appDefaults.options` is backed by the shared user defaults, so it
-            // is changed only around the searches and restored right after.
-            let appDefaults = environment.appDefaults
-            let originalOptions = appDefaults.options
-            defer { appDefaults.options = originalOptions }
+        // The environment's own store: no other test reads these options.
+        let appDefaults = environment.appDefaults
+        var strippingOptions = RuntimeObjectInterface.GenerationOptions()
+        strippingOptions.objcHeaderOptions.stripSynthesizedIvars = true
+        strippingOptions.objcHeaderOptions.stripSynthesizedMethods = true
+        appDefaults.options = strippingOptions
 
-            var strippingOptions = RuntimeObjectInterface.GenerationOptions()
-            strippingOptions.objcHeaderOptions.stripSynthesizedIvars = true
-            strippingOptions.objcHeaderOptions.stripSynthesizedMethods = true
-            appDefaults.options = strippingOptions
+        let strippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
+        #expect(strippedIvarLines.isEmpty, "the stripped ivar is found: \(strippedIvarLines.map(\.lineText))")
 
-            let strippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
-            #expect(strippedIvarLines.isEmpty, "the stripped ivar is found: \(strippedIvarLines.map(\.lineText))")
+        let strippedMembers = Self.memberMatches(in: try await search(FindQuery(mode: .members, text: "value", isCaseSensitive: true), with: session))
+        #expect(!strippedMembers.contains { $0.member.kind == .objcIvar && $0.member.name == "_value" }, "the stripped ivar is a member match")
+        #expect(!strippedMembers.contains { $0.member.kind == .objcMethod && $0.member.name == "value" }, "the stripped getter is a member match")
+        #expect(strippedMembers.contains { $0.member.kind == .objcProperty && $0.member.name == "value" }, "the property itself is shown and should be found")
 
-            let strippedMembers = Self.memberMatches(in: try await search(FindQuery(mode: .members, text: "value", isCaseSensitive: true), with: session))
-            #expect(!strippedMembers.contains { $0.member.kind == .objcIvar && $0.member.name == "_value" }, "the stripped ivar is a member match")
-            #expect(!strippedMembers.contains { $0.member.kind == .objcMethod && $0.member.name == "value" }, "the stripped getter is a member match")
-            #expect(strippedMembers.contains { $0.member.kind == .objcProperty && $0.member.name == "value" }, "the property itself is shown and should be found")
-
-            // Every line a search reports is a line the content pane shows.
-            var displayOptions = strippingOptions
-            displayOptions.transformer = environment.settings.transformer
-            let displayedInterface = try #require(try await engine.interface(for: queryItem, options: displayOptions))
-            let displayedLines = Set(displayedInterface.interfaceString.string.components(separatedBy: "\n"))
-            let valueLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "value", isCaseSensitive: true), with: session))
-            #expect(!valueLines.isEmpty)
-            for match in valueLines {
-                #expect(displayedLines.contains(match.lineText), "not a line the content pane shows: \(match.lineText)")
-            }
-
-            // Stop stripping: found at the next search, from the same corpus.
-            appDefaults.options = RuntimeObjectInterface.GenerationOptions()
-            let unstrippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
-            #expect(!unstrippedIvarLines.isEmpty, "the ivar is shown again but not found")
-            let unstrippedMembers = Self.memberMatches(in: try await search(FindQuery(mode: .members, text: "value", isCaseSensitive: true), with: session))
-            #expect(unstrippedMembers.contains { $0.member.kind == .objcIvar && $0.member.name == "_value" })
-            #expect(unstrippedMembers.contains { $0.member.kind == .objcMethod && $0.member.name == "value" })
-            #expect(try await engine.interfaceCorpusCoverage().statesByImagePath[TestImages.foundation] == builtState, "the corpus was built again")
+        // Every line a search reports is a line the content pane shows.
+        var displayOptions = strippingOptions
+        displayOptions.transformer = environment.settings.transformer
+        let displayedInterface = try #require(try await engine.interface(for: queryItem, options: displayOptions))
+        let displayedLines = Set(displayedInterface.interfaceString.string.components(separatedBy: "\n"))
+        let valueLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "value", isCaseSensitive: true), with: session))
+        #expect(!valueLines.isEmpty)
+        for match in valueLines {
+            #expect(displayedLines.contains(match.lineText), "not a line the content pane shows: \(match.lineText)")
         }
+
+        // Stop stripping: found at the next search, from the same corpus.
+        appDefaults.options = RuntimeObjectInterface.GenerationOptions()
+        let unstrippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
+        #expect(!unstrippedIvarLines.isEmpty, "the ivar is shown again but not found")
+        let unstrippedMembers = Self.memberMatches(in: try await search(FindQuery(mode: .members, text: "value", isCaseSensitive: true), with: session))
+        #expect(unstrippedMembers.contains { $0.member.kind == .objcIvar && $0.member.name == "_value" })
+        #expect(unstrippedMembers.contains { $0.member.kind == .objcMethod && $0.member.name == "value" })
+        #expect(try await engine.interfaceCorpusCoverage().statesByImagePath[TestImages.foundation] == builtState, "the corpus was built again")
 
         await engine.stop()
     }

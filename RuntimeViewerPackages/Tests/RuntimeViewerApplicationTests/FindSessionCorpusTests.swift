@@ -20,35 +20,30 @@ struct FindSessionCorpusTests {
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
-        // A write to the shared Generation Options from another suite would
-        // make the session search again from scratch, which is exactly what
-        // this test proves does not happen when a corpus arrives.
-        try await withSharedGenerationOptionsLock {
-            let session = documentState.findSession
-            session.run(FindQuery(mode: .text, text: "NSObject"))
-            _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
-            #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
+        let session = documentState.findSession
+        session.run(FindQuery(mode: .text, text: "NSObject"))
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
+        #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
 
-            var sawResultsCleared = false
-            let disposeBag = DisposeBag()
-            session.$results.asDriver()
-                .driveOnNext { results in
-                    if results.nodes.isEmpty { sawResultsCleared = true }
-                }
-                .disposed(by: disposeBag)
-
-            // Opening Foundation is what brings its corpus in after the search.
-            try await engine.loadImage(at: TestImages.foundation)
-
-            let widened = try await nextValue(from: session.$results.asDriver(), timeout: 180) { results in
-                results.nodes.contains { Self.imagePath(of: $0) == TestImages.foundation }
+        var sawResultsCleared = false
+        let disposeBag = DisposeBag()
+        session.$results.asDriver()
+            .driveOnNext { results in
+                if results.nodes.isEmpty { sawResultsCleared = true }
             }
-            #expect(widened.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
-            #expect(!sawResultsCleared, "the results were emptied on the way instead of being merged into")
-            _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
-            #expect(session.summary?.contains("results in") == true)
-            withExtendedLifetime(disposeBag) {}
+            .disposed(by: disposeBag)
+
+        // Opening Foundation is what brings its corpus in after the search.
+        try await engine.loadImage(at: TestImages.foundation)
+
+        let widened = try await nextValue(from: session.$results.asDriver(), timeout: 180) { results in
+            results.nodes.contains { Self.imagePath(of: $0) == TestImages.foundation }
         }
+        #expect(widened.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
+        #expect(!sawResultsCleared, "the results were emptied on the way instead of being merged into")
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+        #expect(session.summary?.contains("results in") == true)
+        withExtendedLifetime(disposeBag) {}
 
         await engine.stop()
     }
@@ -63,23 +58,21 @@ struct FindSessionCorpusTests {
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
-        try await withSharedGenerationOptionsLock {
-            let session = documentState.findSession
-            session.run(FindQuery(mode: .text, text: "NSObject", scope: .images([TestImages.libobjc])))
-            _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
+        let session = documentState.findSession
+        session.run(FindQuery(mode: .text, text: "NSObject", scope: .images([TestImages.libobjc])))
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
 
-            // Opening Foundation brings its corpus in after the search. The
-            // session hears of it one main-actor turn after the coordinator
-            // reports it, so that turn has to pass before a search it would
-            // start can be waited for.
-            try await engine.loadImage(at: TestImages.foundation)
-            _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 180) { $0[TestImages.foundation]?.isBuilt == true }
-            try await settleMainQueue()
-            _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+        // Opening Foundation brings its corpus in after the search. The
+        // session hears of it one main-actor turn after the coordinator
+        // reports it, so that turn has to pass before a search it would
+        // start can be waited for.
+        try await engine.loadImage(at: TestImages.foundation)
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 180) { $0[TestImages.foundation]?.isBuilt == true }
+        try await settleMainQueue()
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
 
-            #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
-            #expect(!session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.foundation })
-        }
+        #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
+        #expect(!session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.foundation })
 
         await engine.stop()
     }

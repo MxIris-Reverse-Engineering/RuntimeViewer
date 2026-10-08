@@ -1,4 +1,3 @@
-import Dependencies
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -118,15 +117,6 @@ struct SidebarSearchCaseSensitivityTests {
     private func makeLoadedViewModel(
         router: MockRouter<SidebarRuntimeObjectRoute>
     ) async throws -> CaseFixtureSidebarViewModel {
-        // Only the plain-contains mode (`filterMode == nil`, the sidebar's
-        // default) consults the flag at all — both fuzzy modes ignore it —
-        // so a mode persisted by an earlier run would turn this suite into
-        // a no-op that still passes in one direction.
-        withLiveDependencyContext {
-            @Dependency(\.appDefaults) var appDefaults
-            appDefaults.filterMode = nil
-        }
-
         let viewModel = CaseFixtureSidebarViewModel(
             seededRuntimeObjects: Self.caseFixtureRuntimeObjects,
             imageNode: try await makeLoadedImageNode(),

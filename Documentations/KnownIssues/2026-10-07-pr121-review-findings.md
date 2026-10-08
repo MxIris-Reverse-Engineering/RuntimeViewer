@@ -5649,7 +5649,11 @@ echo "exit $?"
 
 - **严重度**：Minor
 - **审查编号**：AL3
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`AppDefaultsIsolationTests`（前三条修前红，后两条守住新机制不留残留）、`ContentTextPipelineTests.liveDependencyContextResolvesIsolatedAppDefaults`（修前红）
+- **落地与偏离**：
+  - **没有按下文给每个实例一个 suite**：实测 `removePersistentDomain(forName:)` 只清空域、不删文件，`~/Library/Preferences` 里已有 45 个其它测试这样留下的 42 字节空 plist；一次测试运行会建上百个隔离实例，就会再留上百个。2026-10-01 提案决策日志当初也是因为这个代价才没走 suite 方案而改用锁。落地做法：所有隔离实例共用一个 suite（`RuntimeViewer.AppDefaults.Isolated`），各自用带进程号和 UUID 的键前缀（`UserDefaultsNamespace`）；KVO 按键通知，互不可见；实例释放时删自己的键；从没释放的实例（`testFallback`、泄漏、崩溃）留下的键，由下一个进程在第一次用到这个 suite 时按「进程已结束」清掉，同时在跑的另一个测试进程不受影响。生产实例仍是 `.standard`、键名不变。
+  - **`SidebarAutosaveKeyCleanup` 只对标准域执行**，而不是改为对隔离 suite 执行：它清的是 `StatefulOutlineView` 写在标准域里的条目，隔离命名空间里没有，执行只会多写一个标记。
+  - **「另记」那条核实为不成立**：`ContentTextPipelineTests` 有自己的私有 `withLiveDependencyContext`，自 429476a0 起就把 `\.settings` 覆盖成内存里的 `SettingsAccess.preview`，`liveSettings()` 碰不到真实的 `settings.json`（本批每次跑测试前后该文件 SHA 均为 `d811d35e…` 未变）。**但反过来的问题是真的**：这个私有辅助函数遮蔽了全局的同名函数，却没有固定 `\.appDefaults`，所以这个套件里的 ViewModel 解析到的是生产实例 `AppDefaults.shared`（真实的 `Application Support/AppStorage` 书签目录和测试进程的标准域）。d42aff4c 只改了全局那个。已一并修：私有辅助函数也固定隔离实例，复现测试即上面的第二个名字。
 
 **问题**：测试用 `AppDefaults.isolated()` 拿到「隔离」的实例，但它只隔离了书签文件。四个 `@UserDefault` 属性（`options`、`filterMode`、两个迁移标志）没有传 `suite`，全都落在 `UserDefaults.standard` 上，因为 RxDefaultsPlus 的 `UserDefault` 默认就是 `suite: .standard`。后果有三：
 - **写入互相可见**：`$options` 是对 `generationOptions` 这一个键的 KVO（键值观察），一个测试写入，所有存活的 FindSession 都会以为用户改了选项，于是重跑搜索。

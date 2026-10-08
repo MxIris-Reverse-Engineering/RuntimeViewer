@@ -21,9 +21,11 @@ public final class AppDefaults: @unchecked Sendable {
     /// context without an explicit `withDependencies` override — typically a
     /// cell ViewModel that a sidebar pipeline builds on a GCD thread, where no
     /// task-local override can reach. Lives in a throwaway temporary directory
-    /// so a stray test access can never touch the user's files.
+    /// and an isolated user defaults namespace, so a stray test access can
+    /// never touch the user's files or the test process's standard defaults.
     fileprivate static let testFallback = AppDefaults(
-        storageDirectoryURL: makeTemporaryStorageDirectoryURL(label: "test-fallback")
+        storageDirectoryURL: makeTemporaryStorageDirectoryURL(label: "test-fallback"),
+        userDefaultsNamespace: .makeIsolated()
     )
 
     /// `~/Library/Application Support/AppStorage`, the directory the app has
@@ -45,17 +47,32 @@ public final class AppDefaults: @unchecked Sendable {
     }
 
     /// Creates a defaults store whose bookmark files live under
-    /// `storageDirectoryURL`.
+    /// `storageDirectoryURL` and whose other values live in
+    /// `userDefaultsNamespace`.
     ///
     /// Production only ever uses the single Application Support instance
-    /// behind `DependencyValues.appDefaults`. The initializer is `internal` so
-    /// the package's tests can build isolated instances that point at a
-    /// directory the app never reads: the storage path is not scoped by bundle
-    /// identifier and the app is not sandboxed, so a test that resolved the
-    /// shared instance would read and overwrite the user's real bookmark
-    /// files. The one-time migrations read their legacy files from the same
-    /// directory, so an isolated instance migrates nothing.
-    init(storageDirectoryURL: URL?) {
+    /// behind `DependencyValues.appDefaults`, on the standard defaults. The
+    /// initializer is `internal` so the package's tests can build isolated
+    /// instances that point at a directory the app never reads: the storage
+    /// path is not scoped by bundle identifier and the app is not sandboxed,
+    /// so a test that resolved the shared instance would read and overwrite
+    /// the user's real bookmark files. The one-time migrations read their
+    /// legacy files from the same directory, so an isolated instance migrates
+    /// nothing.
+    ///
+    /// The namespace matters as much as the directory. `$options` observes a
+    /// single user defaults key, so instances sharing the standard defaults
+    /// hear each other's writes — a Find session in one test searched again
+    /// whenever another test changed the Generation Options — and every write
+    /// stayed in the test process's defaults for the next run to read.
+    init(storageDirectoryURL: URL?, userDefaultsNamespace: UserDefaultsNamespace = .standard) {
+        self.userDefaultsNamespace = userDefaultsNamespace
+        let userDefaults = userDefaultsNamespace.userDefaults
+        _options = UserDefault(key: userDefaultsNamespace.key("generationOptions"), defaultValue: .init(), suite: userDefaults)
+        _filterMode = UserDefault(key: userDefaultsNamespace.key("filterMode"), defaultValue: nil, suite: userDefaults)
+        _bookmarkMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkMigrationCompleted"), defaultValue: false, suite: userDefaults)
+        _bookmarkScopeMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkScopeMigrationCompleted"), defaultValue: false, suite: userDefaults)
+
         if let storageDirectoryURL {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directoryURL: storageDirectoryURL)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directoryURL: storageDirectoryURL)
@@ -68,25 +85,41 @@ public final class AppDefaults: @unchecked Sendable {
         // and has to happen before a sidebar writes under its new key — which
         // it does shortly after this type is first resolved, since the sidebar
         // ViewModels reach for `@Dependency(\.appDefaults)` on the way up.
-        SidebarAutosaveKeyCleanup.runIfNeeded(flagKey: Self.sidebarAutosaveCleanupFlagKey)
+        //
+        // Only on the standard defaults: that is where `StatefulOutlineView`
+        // writes the autosave entries this removes, so an isolated instance
+        // has none, and running it there would leave the cleanup flag in the
+        // test process's standard defaults.
+        if case .standard = userDefaultsNamespace {
+            SidebarAutosaveKeyCleanup.runIfNeeded(flagKey: Self.sidebarAutosaveCleanupFlagKey)
+        }
 
         guard let storageDirectoryURL else { return }
         migrateFlatBookmarkArraysIfNeeded(in: storageDirectoryURL)
         migrateBookmarksToScopeKeysIfNeeded(in: storageDirectoryURL)
     }
 
+    /// An isolated namespace belongs to this instance alone, so it goes with
+    /// it. The standard defaults are left as they are.
+    deinit {
+        userDefaultsNamespace.removeIsolatedValues()
+    }
+
     static let sidebarAutosaveCleanupFlagKey = "sidebarAutosaveKeyCleanupCompleted"
 
-    @UserDefault(key: "generationOptions", defaultValue: .init())
+    /// Where the four values below live; see `init`.
+    let userDefaultsNamespace: UserDefaultsNamespace
+
+    @UserDefault
     public var options: RuntimeObjectInterface.GenerationOptions
 
-    @UserDefault(key: "filterMode", defaultValue: nil)
+    @UserDefault
     public var filterMode: FilterMode?
 
-    @UserDefault(key: "bookmarkMigrationCompleted", defaultValue: false)
+    @UserDefault
     private var bookmarkMigrationCompleted: Bool
 
-    @UserDefault(key: "bookmarkScopeMigrationCompleted", defaultValue: false)
+    @UserDefault
     private var bookmarkScopeMigrationCompleted: Bool
 
     /// Bookmarked images, keyed by ``RuntimeBookmarkScope/bookmarkKey``.
@@ -211,7 +244,7 @@ extension DependencyValues {
     /// The property initializer becomes the key's `testValue`. It must never
     /// be `AppDefaults.shared`: that let any test resolving this key silently
     /// read and write the user's real bookmark files (see
-    /// `AppDefaults.init(storageDirectoryURL:)`). Tests that assert on stored
+    /// `AppDefaults.init(storageDirectoryURL:userDefaultsNamespace:)`). Tests that assert on stored
     /// bookmarks still inject their own instance through `withDependencies`;
     /// the fallback only covers accesses no override can reach.
     @DependencyEntry(liveValue: AppDefaults.shared)

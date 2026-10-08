@@ -50,10 +50,14 @@ struct ViewModelTestEnvironment {
 }
 
 extension AppDefaults {
-    /// A store in a fresh temporary directory, so instances built by tests
-    /// running in parallel never see each other's files, and nothing from an
-    /// earlier run leaks in.
+    /// A store in a fresh temporary directory and a user defaults namespace
+    /// of its own, so instances built by tests running in parallel never see
+    /// each other's files or options, and nothing from an earlier run leaks
+    /// in.
     static func isolated() -> AppDefaults {
-        AppDefaults(storageDirectoryURL: makeTemporaryStorageDirectoryURL(label: "isolated"))
+        AppDefaults(
+            storageDirectoryURL: makeTemporaryStorageDirectoryURL(label: "isolated"),
+            userDefaultsNamespace: .makeIsolated()
+        )
     }
 }
