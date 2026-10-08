@@ -12,7 +12,10 @@ extension RuntimeEngine {
     /// Runs in the process that owns the image; over a connection only the
     /// progress and the summary travel. Cancelling the calling task withdraws
     /// this caller's subscription to the build, not the build itself, unless
-    /// no one else is waiting for it.
+    /// no one else is waiting for it. Over a connection the withdrawal
+    /// reaches the serving process as a `cancelRequest`, and the caller
+    /// returns without waiting for it (see
+    /// `RuntimeEngineProgressRequest.cancelsAcrossConnections`).
     ///
     /// `isPrioritized` puts the image at the front of the build queue — an
     /// image the user just opened, say. The image being built at the moment
@@ -36,7 +39,9 @@ extension RuntimeEngine {
 
     /// Text search over every built corpus. Matches arrive through
     /// `onProgress` one image at a time, up to `query.resultLimit` of them;
-    /// the summary's total keeps counting past that.
+    /// the summary's total keeps counting past that. Cancelling the calling
+    /// task stops the search, in the serving process too, and no batch
+    /// reaches `onProgress` afterwards.
     public func searchInterfaces(
         _ query: RuntimeInterfaceSearchQuery,
         onProgress: @escaping @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void
@@ -44,8 +49,8 @@ extension RuntimeEngine {
         try await dispatch(SearchInterfacesRequest(query: query), onProgress: onProgress)
     }
 
-    /// Member-name search over every built corpus, same delivery as
-    /// `searchInterfaces`.
+    /// Member-name search over every built corpus, same delivery and
+    /// cancellation as `searchInterfaces`.
     public func searchMembers(
         _ query: RuntimeMemberSearchQuery,
         onProgress: @escaping @Sendable ([RuntimeMemberMatch]) async -> Void
@@ -56,7 +61,9 @@ extension RuntimeEngine {
     /// Ancestor, descendant or conformer trees for every indexed type whose
     /// name matches the query, holding only the types of the query's images
     /// when it names some. Needs no corpus: the relationship tables are built
-    /// when an image is indexed.
+    /// when an image is indexed. Over a connection, cancelling the calling
+    /// task returns it at once and cancels the task answering the query in
+    /// the serving process.
     public func typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
         try await dispatch(TypeRelationshipsRequest(query: query))
     }
@@ -205,6 +212,7 @@ extension RuntimeEngine {
         let transformer: Transformer.Configuration
         let isPrioritized: Bool
         static var commandName: String { CommandNames.buildInterfaceCorpus.commandName }
+        static var cancelsAcrossConnections: Bool { true }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void) async throws -> RuntimeInterfaceCorpusBuildSummary {
             try await engine._buildInterfaceCorpus(for: imagePath, transformer: transformer, isPrioritized: isPrioritized, reportProgress: reportProgress)
         }
@@ -224,6 +232,7 @@ extension RuntimeEngine {
         typealias Progress = [RuntimeInterfaceSearchMatch]
         let query: RuntimeInterfaceSearchQuery
         static var commandName: String { CommandNames.searchInterfaces.commandName }
+        static var cancelsAcrossConnections: Bool { true }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
             try await engine._searchInterfaces(query, reportProgress: reportProgress)
         }
@@ -234,15 +243,22 @@ extension RuntimeEngine {
         typealias Progress = [RuntimeMemberMatch]
         let query: RuntimeMemberSearchQuery
         static var commandName: String { CommandNames.searchMembers.commandName }
+        static var cancelsAcrossConnections: Bool { true }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable ([RuntimeMemberMatch]) async -> Void) async throws -> RuntimeInterfaceSearchSummary {
             try await engine._searchMembers(query, reportProgress: reportProgress)
         }
     }
 
-    struct TypeRelationshipsRequest: RuntimeEngineRequest {
+    /// A progress request that reports no progress: only so its caller can
+    /// withdraw it from the serving process. The command is as new as
+    /// `cancelRequest`, so changing its shape cost no peer anything.
+    struct TypeRelationshipsRequest: RuntimeEngineProgressRequest {
+        typealias Response = [RuntimeRelationshipTree]
+        typealias Progress = RuntimeEngineEmpty
         let query: RuntimeTypeRelationshipsQuery
         static var commandName: String { CommandNames.typeRelationships.commandName }
-        func perform(on engine: RuntimeEngine) async throws -> [RuntimeRelationshipTree] {
+        static var cancelsAcrossConnections: Bool { true }
+        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeEngineEmpty) async -> Void) async throws -> [RuntimeRelationshipTree] {
             try await engine._typeRelationships(query)
         }
     }

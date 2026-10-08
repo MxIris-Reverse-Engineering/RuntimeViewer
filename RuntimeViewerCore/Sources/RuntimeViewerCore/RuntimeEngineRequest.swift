@@ -40,16 +40,33 @@ public struct RuntimeEngineEmpty: Codable, Sendable {
 ///
 /// ## Wire form
 /// Progress requests travel as `RuntimeEngineProgressEnvelope`
-/// (`{progressToken, request}`) under the request's own `commandName` —
-/// never as the bare request, so plain and progress-listening callers share
-/// one server handler. While the request executes, the serving peer pushes
-/// `RuntimeEngineProgressPush` (`{token, payload}`) frames on the shared
-/// `CommandNames.progressEvent` channel; the requesting engine routes each
-/// push back to the in-flight call by token, so concurrent requests never
-/// cross-talk. A `nil` token means the caller doesn't observe progress and
-/// the serving peer skips the pushes entirely.
+/// (`{progressToken, request, requestIdentifier}`) under the request's own
+/// `commandName` — never as the bare request, so plain and
+/// progress-listening callers share one server handler. While the request
+/// executes, the serving peer pushes `RuntimeEngineProgressPush`
+/// (`{token, payload}`) frames on the shared `CommandNames.progressEvent`
+/// channel; the requesting engine routes each push back to the in-flight call
+/// by token, so concurrent requests never cross-talk. A `nil` token means the
+/// caller doesn't observe progress and the serving peer skips the pushes
+/// entirely.
+///
+/// ## Cancellation
+/// A request type that opts in through `cancelsAcrossConnections` names each
+/// round trip with a `requestIdentifier`. Cancelling its caller then returns
+/// the caller at once and withdraws the request from the serving peer with
+/// `CommandNames.cancelRequest` — see `RuntimeEngineInboundRequests` and
+/// `RuntimeEngineForwardedRequest`, and `CommunicationAndEngineArchitecture.md`
+/// §4.5 for the protocol.
 public protocol RuntimeEngineProgressRequest: RuntimeEngineRequest {
     associatedtype Progress: Codable & Sendable
+
+    /// Whether cancelling the caller of a forwarded request withdraws it in
+    /// the serving process too. Opt in only for a command no peer serves
+    /// without also knowing `cancelRequest` — one added in the same release
+    /// as `cancelRequest`, or later: a peer that predates it does not ignore
+    /// an unknown message on every transport (an injected payload reached
+    /// over a Mach service takes one for its client going away).
+    static var cancelsAcrossConnections: Bool { get }
 
     /// Local implementation reporting incremental progress. Implementations
     /// must `await` `reportProgress` at each report site so events stay
@@ -58,6 +75,10 @@ public protocol RuntimeEngineProgressRequest: RuntimeEngineRequest {
 }
 
 extension RuntimeEngineProgressRequest {
+    public static var cancelsAcrossConnections: Bool {
+        false
+    }
+
     /// Plain execution defaults to the progress-bearing variant with a no-op
     /// listener, so conformers implement a single method.
     public func perform(on engine: RuntimeEngine) async throws -> Response {
@@ -72,6 +93,12 @@ struct RuntimeEngineProgressEnvelope<Request: Codable & Sendable>: Codable, Send
     /// round trip; `nil` disables progress reporting.
     let progressToken: String?
     let request: Request
+    /// Names this round trip for `CommandNames.cancelRequest`. Set only for
+    /// request types that cancel across connections; `nil` — and then absent
+    /// from the encoding — for every other, so a peer that predates it is
+    /// never sent the key. A peer that predates it skips the key anyway, and
+    /// one that receives no key serves the request as it always did.
+    let requestIdentifier: String?
 }
 
 /// A single progress event pushed back to the requester on the shared
@@ -122,21 +149,36 @@ extension RuntimeEngine {
     /// The progress push is best-effort (`try?`) — a dropped push must not
     /// fail the request itself, matching the pre-existing behavior of the
     /// hand-rolled `objectsLoadingProgress` channel this replaces.
+    ///
+    /// A request whose envelope names itself runs in a task `inboundRequests`
+    /// holds, so the sender's `cancelRequest` can reach it: the transport
+    /// runs this handler in a task nobody holds a handle to. Through a proxy
+    /// whose engine is itself a client, cancelling that task cancels the
+    /// engine's own forwarded request, which withdraws it upstream in turn.
     static func registerProgress<R: RuntimeEngineProgressRequest>(
         _ requestType: R.Type,
         on connection: any RuntimeConnection,
-        engine: RuntimeEngine
+        engine: RuntimeEngine,
+        inboundRequests: RuntimeEngineInboundRequests
     ) {
         connection.setMessageHandler(name: R.commandName) { (envelope: RuntimeEngineProgressEnvelope<R>) -> R.Response in
-            guard let token = envelope.progressToken else {
-                return try await engine.dispatch(envelope.request, onProgress: nil)
+            let onProgress: (@Sendable (R.Progress) async -> Void)?
+            if let token = envelope.progressToken {
+                onProgress = { progress in
+                    guard let payload = try? JSONEncoder().encode(progress) else { return }
+                    try? await connection.sendMessage(
+                        name: RuntimeEngine.CommandNames.progressEvent.commandName,
+                        request: RuntimeEngineProgressPush(token: token, payload: payload)
+                    )
+                }
+            } else {
+                onProgress = nil
             }
-            return try await engine.dispatch(envelope.request) { progress in
-                guard let payload = try? JSONEncoder().encode(progress) else { return }
-                try? await connection.sendMessage(
-                    name: RuntimeEngine.CommandNames.progressEvent.commandName,
-                    request: RuntimeEngineProgressPush(token: token, payload: payload)
-                )
+            guard let requestIdentifier = envelope.requestIdentifier else {
+                return try await engine.dispatch(envelope.request, onProgress: onProgress)
+            }
+            return try await inboundRequests.run(requestIdentifier) {
+                try await engine.dispatch(envelope.request, onProgress: onProgress)
             }
         }
     }
@@ -146,12 +188,25 @@ extension RuntimeEngine {
     /// Adding a command requires only appending one line here — see the
     /// matching Request struct in `RuntimeEngine+Requests.swift` /
     /// `RuntimeEngine+GenericSpecialization.swift`.
-    static func registerSharedHandlers(on connection: any RuntimeConnection, engine: RuntimeEngine) {
+    ///
+    /// `inboundRequests` is the connection's registry of withdrawable
+    /// requests. An identifier means something only to the peer that minted
+    /// it, so a connection's owner passes the one it keeps for that
+    /// connection; the default, a registry of this call's own, serves a
+    /// connection whose handlers are installed once.
+    static func registerSharedHandlers(
+        on connection: any RuntimeConnection,
+        engine: RuntimeEngine,
+        inboundRequests: RuntimeEngineInboundRequests = RuntimeEngineInboundRequests()
+    ) {
+        connection.setMessageHandler(name: CommandNames.cancelRequest.commandName) { (cancellation: RuntimeEngineRequestCancellation) in
+            await inboundRequests.cancel(cancellation.requestIdentifier)
+        }
         register(IsImageLoadedRequest.self, on: connection, engine: engine)
         register(IsImageIndexedRequest.self, on: connection, engine: engine)
         register(MainExecutablePathRequest.self, on: connection, engine: engine)
         register(LoadImageRequest.self, on: connection, engine: engine)
-        registerProgress(LoadImageWithProgressRequest.self, on: connection, engine: engine)
+        registerProgress(LoadImageWithProgressRequest.self, on: connection, engine: engine, inboundRequests: inboundRequests)
         register(LoadImageForBackgroundIndexingRequest.self, on: connection, engine: engine)
         register(ReloadDataRequest.self, on: connection, engine: engine)
         register(CanOpenImageRequest.self, on: connection, engine: engine)
@@ -159,7 +214,7 @@ extension RuntimeEngine {
         register(DependenciesRequest.self, on: connection, engine: engine)
         register(ImageNameOfObjectRequest.self, on: connection, engine: engine)
         register(ExportModuleInfoRequest.self, on: connection, engine: engine)
-        registerProgress(ObjectsInImageRequest.self, on: connection, engine: engine)
+        registerProgress(ObjectsInImageRequest.self, on: connection, engine: engine, inboundRequests: inboundRequests)
         register(InterfaceRequest.self, on: connection, engine: engine)
         register(HierarchyRequest.self, on: connection, engine: engine)
         register(RelationshipsRequest.self, on: connection, engine: engine)
@@ -169,11 +224,11 @@ extension RuntimeEngine {
         register(SpecializationRequestForCandidateRequest.self, on: connection, engine: engine)
         register(RuntimePreflightRequest.self, on: connection, engine: engine)
         register(SpecializeRequest.self, on: connection, engine: engine)
-        registerProgress(BuildInterfaceCorpusRequest.self, on: connection, engine: engine)
+        registerProgress(BuildInterfaceCorpusRequest.self, on: connection, engine: engine, inboundRequests: inboundRequests)
         register(PrioritizeInterfaceCorpusRequest.self, on: connection, engine: engine)
-        registerProgress(SearchInterfacesRequest.self, on: connection, engine: engine)
-        registerProgress(SearchMembersRequest.self, on: connection, engine: engine)
-        register(TypeRelationshipsRequest.self, on: connection, engine: engine)
+        registerProgress(SearchInterfacesRequest.self, on: connection, engine: engine, inboundRequests: inboundRequests)
+        registerProgress(SearchMembersRequest.self, on: connection, engine: engine, inboundRequests: inboundRequests)
+        registerProgress(TypeRelationshipsRequest.self, on: connection, engine: engine, inboundRequests: inboundRequests)
         register(InterfaceCorpusCoverageRequest.self, on: connection, engine: engine)
         register(IndexedImagePathsRequest.self, on: connection, engine: engine)
         register(EvictInterfaceCorpusRequest.self, on: connection, engine: engine)

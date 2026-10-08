@@ -83,6 +83,11 @@ public actor RuntimeEngine {
         /// Carries `RuntimeEngineProgressPush` frames routed by token, so a
         /// single command name serves every progress-bearing request type.
         case progressEvent
+        /// Withdraws one request the peer is serving, named by the
+        /// `requestIdentifier` its envelope carried. Expects no reply, and is
+        /// sent only for request types that opt in through
+        /// `RuntimeEngineProgressRequest.cancelsAcrossConnections`.
+        case cancelRequest
         case specializationRequest
         case specializationRequestForCandidate
         case runtimePreflight
@@ -250,6 +255,12 @@ public actor RuntimeEngine {
     /// subject) keeps concurrent progress-bearing requests from
     /// cross-talking.
     private var progressRoutes: [String: @Sendable (Data) async -> Void] = [:]
+
+    /// The requests this engine serves on its connection as a server that
+    /// the requesting peer can still withdraw. One for the connection's
+    /// life, so a request survives the handlers being installed again after
+    /// a reconnect.
+    private let inboundRequests = RuntimeEngineInboundRequests()
 
     let objcSectionFactory: RuntimeObjCSectionFactory
 
@@ -496,7 +507,7 @@ public actor RuntimeEngine {
         // Progress-bearing commands (`runtimeObjectsInImage`) are included:
         // `registerProgress` relays their progress pushes automatically, so
         // no server-only override is needed here anymore.
-        Self.registerSharedHandlers(on: connection, engine: self)
+        Self.registerSharedHandlers(on: connection, engine: self, inboundRequests: inboundRequests)
 
         // Server-only: manager-layer engine list lookup. Not part of the
         // shared registry because `RuntimeEngineProxyServer` runs below the
@@ -909,17 +920,21 @@ extension RuntimeEngine {
     /// payloads to `onProgress` until the response resolves. Locally the
     /// request's `perform(on:reportProgress:)` runs with `onProgress` wired
     /// straight through. Passing `nil` skips all progress machinery on both
-    /// sides.
+    /// sides. A request type that cancels across connections is forwarded by
+    /// `forwardWithdrawably(_:onProgress:over:)` instead.
     func dispatch<R: RuntimeEngineProgressRequest>(
         _ request: R,
         onProgress: (@Sendable (R.Progress) async -> Void)?
     ) async throws -> R.Response {
         if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
+            if R.cancelsAcrossConnections {
+                return try await forwardWithdrawably(request, onProgress: onProgress, over: connection)
+            }
             guard let onProgress else {
                 return try await connection.sendMessage(
                     name: R.commandName,
-                    request: RuntimeEngineProgressEnvelope(progressToken: nil, request: request)
+                    request: RuntimeEngineProgressEnvelope(progressToken: nil, request: request, requestIdentifier: nil)
                 )
             }
             let token = UUID().uuidString
@@ -930,10 +945,66 @@ extension RuntimeEngine {
             defer { progressRoutes.removeValue(forKey: token) }
             return try await connection.sendMessage(
                 name: R.commandName,
-                request: RuntimeEngineProgressEnvelope(progressToken: token, request: request)
+                request: RuntimeEngineProgressEnvelope(progressToken: token, request: request, requestIdentifier: nil)
             )
         }
         return try await request.perform(on: self, reportProgress: onProgress ?? { _ in })
+    }
+
+    /// Forwards a request its caller can withdraw from the serving peer.
+    ///
+    /// The envelope names the round trip with an identifier of its own.
+    /// Cancelling the caller returns it at once with `CancellationError`,
+    /// drops every push that lands afterwards, and sends the peer a
+    /// `cancelRequest` naming that identifier, which cancels the task serving
+    /// the request there — and, on a peer that forwards in turn, its own
+    /// forwarded request upstream. Whatever failure comes back to a caller
+    /// that has been cancelled is reported as that cancellation: the peer's
+    /// own `CancellationError` crosses the connection as a description only.
+    private func forwardWithdrawably<R: RuntimeEngineProgressRequest>(
+        _ request: R,
+        onProgress: (@Sendable (R.Progress) async -> Void)?,
+        over connection: any RuntimeConnection
+    ) async throws -> R.Response {
+        try Task.checkCancellation()
+        let requestIdentifier = UUID().uuidString
+        let forwardedRequest = RuntimeEngineForwardedRequest<R.Response>()
+        var progressToken: String?
+        if let onProgress {
+            let token = UUID().uuidString
+            progressRoutes[token] = { payload in
+                // A push that lands after the caller gave up belongs to work
+                // nobody waits for any more, whatever the peer's version.
+                guard !forwardedRequest.isCancelled,
+                      let progress = try? JSONDecoder().decode(R.Progress.self, from: payload)
+                else { return }
+                await onProgress(progress)
+            }
+            progressToken = token
+        }
+        defer {
+            if let progressToken {
+                progressRoutes.removeValue(forKey: progressToken)
+            }
+        }
+        let envelope = RuntimeEngineProgressEnvelope(progressToken: progressToken, request: request, requestIdentifier: requestIdentifier)
+        do {
+            return try await withTaskCancellationHandler {
+                try await forwardedRequest.response {
+                    try await connection.sendMessage(name: R.commandName, request: envelope)
+                }
+            } onCancel: {
+                guard forwardedRequest.cancel() else { return }
+                Task {
+                    try? await connection.sendMessage(
+                        name: CommandNames.cancelRequest.commandName,
+                        request: RuntimeEngineRequestCancellation(requestIdentifier: requestIdentifier)
+                    )
+                }
+            }
+        } catch _ where Task.isCancelled {
+            throw CancellationError()
+        }
     }
 
     /// Routes an inbound `progressEvent` push to the in-flight `dispatch`

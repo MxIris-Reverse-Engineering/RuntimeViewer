@@ -6705,7 +6705,13 @@ func defaultImplementationsPrintedExactlyOnce() async throws {
 
 - **严重度**：Major
 - **审查编号**：A1-2（PR121.05、PR121.06、PR121.09、PR121.30 都以它为前提）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RemoteRequestCancellationTests`（XPC service 匿名 listener 与 TCP 两条真实连接，参数化跑两遍）。修前全红：语料构建在收到首条进度后取消，调用方 XPC 上又等了 11.1 秒、TCP 上 8.5 秒才返回，拿到的是完整的 summary（2388 个对象）而不是 `CancellationError`，服务端 coverage 一直是 `.building`，取消之后又收到 245 / 247 条进度；对端忽略取消时等了 8.4 秒、249 条进度；搜索被慢消费者拖住时两种传输都等了 4.2 秒。修后 11 条全绿（另含 `RemoteRequestIdentifierTests`、`RemoteRequestCancellationPartTests`）。
+- **落地与偏离**：
+  - **调用方不等对端确认就返回**。草案用 `withTaskCancellationHandler` 包住 `connection.sendMessage`，可两种传输的发送都不响应取消，调用方仍要等到对端回复；对端不响应取消时（取消处理器没装上、对端忙）就会一直挂着。现在发送放在 `RuntimeEngineForwardedRequest` 自己的 Task 里，调用方等「回复与取消，先到者」，取消即以 `CancellationError` 返回。传输层的请求并不提前放弃，那个 Task 照样等到回复，所以 PR121.31 的「没人等的回复」不会因此出现。
+  - **登记表由连接的主人持有**：`RuntimeEngine` 的 server 角色与 `RuntimeEngineConnectionServer` 各存一个，`registerSharedHandlers` 收它作参数（缺省时每次调用新建一个）。草案在每次注册时新建，重连后重新注册处理器、proxy 换客户端时，在途请求会登记在旧表里，取消就到不了。
+  - **同类一并做了**：`TypeRelationshipsRequest` 改成不发推送（`Progress = RuntimeEngineEmpty`）的进度请求并开启取消；服务端遍历本身何时检查取消是 PR121.67（批次 S5a）的事。
+  - socket 的复现用 `RuntimeDirectTCPServerConnection`（端口 0）而不是草案说的 `.localSocket`：后者的端口由标识符哈希而来，并行测试会撞端口。
+  - 文档：`CommunicationAndEngineArchitecture.md` 新增 §4.5（取消协议）并在 §4.4 记下信封字段这一例；`draft-find-navigator.md` 决策日志一行。
 
 **问题**：调用方取消一个转发出去的请求时，取消既到不了服务端，也不会让调用方提前返回。在 XPC 上，SwiftyXPC 的 `sendMessage` 是一个不响应取消的 continuation，服务端为每条消息开一个没有句柄的 `Task`。在 socket 上，`RuntimeMessageChannel.sendRequest` 也一样不响应取消。引擎层的 `dispatch(_:onProgress:)` 也没有 `withTaskCancellationHandler`。后果有三：Find 换了查询后，旧搜索的批次照样送达；Report navigator 点 Cancel 后，服务端照样在构建；关窗口、换引擎后，服务进程或被注入的进程还在为没人要的结果干活。
 

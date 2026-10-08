@@ -380,7 +380,22 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 第一例是接口请求（`InterfaceRequest`）：`interfaceString` 改存 `FrozenSemanticString` 后，自动合成的编码从组件数组变成了带键的列式对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.03）。现在列式编码只发给带 `acceptsColumnarInterfaceString: true` 的请求方，回复类型 `RuntimeObjectInterfaceResponse` 两种形状都能解，测试是 `RuntimeObjectInterfaceWireCompatibilityTests`。
 
+第二例是进度请求信封 `RuntimeEngineProgressEnvelope` 的 `requestIdentifier`（§4.5）：可选字段，为 `nil` 时不编码。只有新命令的信封带它，`objectsInImage`、`loadImageWithProgress` 这些旧命令的信封与旧版逐字节相同；旧对端即使收到也只会跳过这个键。`RemoteRequestIdentifierTests` 守住「旧命令不带」这一条。
+
 新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。
+
+### 4.5 跨连接取消（引擎层，`RuntimeEngineRequestCancellation.swift`）
+
+传输层取消不了已经发出的请求：SwiftyXPC 的 `sendMessage` 是一个不响应取消的 continuation，socket 通道的 `sendRequest` 同样只等回复；服务端则在一个没人持有句柄的 Task 里跑每条请求。所以调用方取消后，既不会提前返回，也传不到服务端——语料构建会一直等到整个镜像打印完（实测 Foundation 8–11 秒，期间进度照收），服务进程照建不误（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.29）。取消做在**引擎层**，不改任何传输的帧格式：
+
+- **请求带 id**：`RuntimeEngineProgressRequest.cancelsAcrossConnections` 为真的请求类型，转发时信封里带一个新铸的 `requestIdentifier`（字段规则见 §4.4）。其余请求照旧，不带 id。
+- **新命令 `cancelRequest`**：载荷 `RuntimeEngineRequestCancellation(requestIdentifier:)`，不等回复——socket 上它是一条推送，排在接收端通道的尾链上（§4.2）；XPC 上每条消息都是往返，它的回复是空的。处理器由 `registerSharedHandlers` 注册，引擎的 server 角色、`RuntimeEngineConnectionServer`（proxy、内嵌 XPC service）都自动有。
+- **服务端**：每条连接一个 `RuntimeEngineInboundRequests` actor，由连接的主人持有——`RuntimeEngine` 的 server 角色与 `RuntimeEngineConnectionServer` 各存一个，重新安装处理器（重连、proxy 换客户端）时沿用，在途的请求仍取消得到。`registerProgress` 收到带 id 的信封，把 `engine.dispatch` 放进一个自己握有句柄的 Task，按 id 登记；`cancelRequest` 按 id 取消它。服务端的 `engine.dispatch` 若本身是转发（proxy 后面是客户端引擎），那个 Task 被取消就是它自己的转发请求被取消，于是向上游再发一次 `cancelRequest`——镜像链路逐跳传下去，不需要额外代码。
+- **取消可能先于请求被处理**：两者是独立的消息，socket 上取消在尾链、请求在独立的 Task，XPC 上两者各是一个 Task，先后没有保证。所以还没登记的 id 先记下，请求登记时立即取消。这份记录最多 256 条，先进先出：请求已经结束才到的取消会留下一条没人认领的记录，只会老化。
+- **客户端**（`RuntimeEngine.forwardWithdrawably`）：发送前先 `Task.checkCancellation()`；发送放在 `RuntimeEngineForwardedRequest` 自己的 Task 里，调用方等的是「回复与取消，先到者」。调用方被取消时：立即以 `CancellationError` 返回；进度路由此后收到的推送一律丢弃，不管对端什么版本；再异步发出 `cancelRequest`。调用方已经取消时，对端回来的任何失败都按 `CancellationError` 上报——对端自己的 `CancellationError` 跨连接后只剩一段描述。
+- **与 §4.1 / §4.2 的关系**：传输层的请求**不**提前放弃。发送它的那个 Task 仍在等回复，对端收到取消后会及时回复（被取消的工作以失败结束），所以不会出现「没人等的回复」，也不需要 `rememberAbandonedRequest`；回复屏障照常作用在那个 Task 上，只是调用方已经不在等它。对端不响应取消时（例如取消处理器没装上），那个 Task 等到对端做完为止，调用方照样立即返回。
+- **只对新命令开启**：语料构建、文本搜索、成员搜索、类型关系。类型关系原是普通请求，改成了不发推送（`Progress = RuntimeEngineEmpty`）的进度请求，好带上 id；这四条命令都与 `cancelRequest` 同时出现，服务它们的对端一定认识 `cancelRequest`。`objectsInImage`、`loadImageWithProgress` 不开启：`dlopen` 撤不回来，而且它们由旧对端服务，而旧对端不认识 `cancelRequest`——socket 上只记一行日志，经 Mach service 的旧版注入 payload 却会把未知消息当成客户端离开（PR121.73）。所以取消不会给旧 payload 多送一条它不认识的命令：会被取消的请求本身就是新命令，旧 payload 收到它时已经是未知消息，剩下的风险来自语料命令本身，见 PR121.73。
+- 测试：`RemoteRequestCancellationTests`（XPC service 与 TCP 两条真实连接：取消后 2 秒内返回、服务端放弃构建、之后不再收到进度；对端忽略取消时调用方也不被拖住；搜索被慢消费者拖住时照样立即返回；类型关系照常跨连接作答）、`RemoteRequestIdentifierTests`（线上哪些命令带 id）、`RemoteRequestCancellationPartTests`（先到的取消、记录上限、客户端状态机）。
 
 ---
 
@@ -605,6 +620,7 @@ port = connection.connectionInfo.port
 | 本地引擎为什么在另一个进程、service 崩了怎么恢复 | §3.6 + §5 的事件一节 + 提案 [draft-local-runtime-xpc-service](Evolutions/draft-local-runtime-xpc-service.md) |
 | 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
 | 加一条业务 RPC 命令 | `RuntimeEngine.CommandNames` + `RuntimeEngine.registerSharedHandlers`（Proxy 自动继承） |
+| 让一条长命令的取消跨过连接 | §4.5：进度请求加 `cancelsAcrossConnections`；只对旧对端从没服务过的新命令开启 |
 | 调 Bonjour 发现/心跳/重试参数 | `RuntimeEngineManager` 顶部的 static 常量 |
 | 理解镜像/断开/去重规则 | `RuntimeEngineMirrorRegistry`（纯逻辑，有单测）+ `Documentations/EngineMirroringWalkthrough.md` |
 | 沙盒注入端口/角色反转 | `RuntimeLocalSocketConnection.swift` 顶部文档 + `RuntimeLocalSocketPortDiscovery` |

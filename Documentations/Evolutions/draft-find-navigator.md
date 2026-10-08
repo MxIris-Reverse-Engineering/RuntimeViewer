@@ -191,8 +191,10 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 | `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `CorpusBuildSummary { objectCount, skippedCount, byteCount }` |
 | `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
 | `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
-| `TypeRelationshipsRequest { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | 普通 | — | `[RuntimeRelationshipTree]` |
+| `TypeRelationshipsRequest { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |
 | `InterfaceCorpusCoverageRequest` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
+
+前四条请求开启 `cancelsAcrossConnections`：调用方取消即返回，经 `cancelRequest` 撤回对端正在做的工作（2026-10-08，PR121.29，协议见 `CommunicationAndEngineArchitecture.md` §4.5）。
 
 `Progress` 必须是具名 `Codable` struct，不能是 tuple（审查意见 2）。请求与结果模型放在 `RuntimeViewerCore/Common/`，
 命名与 CLI / MCP 的 `--json` 词汇对齐，将来暴露成命令只是机械包装（本提案不做，见「不做」）。
@@ -763,3 +765,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | `FindSession` 对文档改为 `weak`，`Document.close()` 调新增的 `documentWillClose()`：取消进行中的搜索、退订选项与语料协调器的信号 | PR #121 审查 PR121.02：XPC 上的引擎调用取消不掉，搜索 Task 等待期间留住会话；关窗后在别的窗口改一项 Generation Options，孤儿会话重跑搜索、经 `unowned` 读到已释放的 `DocumentState`，整个 App 中止。`FindSessionLifecycleTests` 修前即在 `swift_abortRetainUnowned` 处中止。 |
 | 2026-10-08 | 正则的 `^` / `$` 按行锚定（`.anchorsMatchLines`） | PR #121 审查 PR121.15：条目是整段多行接口，结果却按行报告；不按行时 `^@property`、`;$` 这类按声明形状找的写法永远是 0 条，只有恰好是第一行的 `^@interface` 能用。Xcode 的 Find 按行处理。成员名与类型名是单行，不受影响。§3.1 原写 Swift `Regex`，与实现不符，一并改正。 |
 | 2026-10-08 | 接口请求的列式编码只发给声明读得懂的请求方，回复两种形状都能解；中转节点按收到的形状原样写出 | PR #121 审查（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.03）：`interfaceString` 改成 `FrozenSemanticString` 后，自动合成的编码从数组变成带键对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白；而项目承诺新旧版本互通，iOS 端混版是常态。用户在三个方案里选了这一个：另开新命令要多一轮回退往返，2.1.0 之前的对端还要等到超时；接受破坏违背承诺。请求里加一个可选字段最小：旧端跳过它，新端缺省回旧形状。复现测试 `RuntimeObjectInterfaceWireCompatibilityTests` 在真实连接上跑新旧组合与经新版中转：修复前新客户端对旧服务端、旧客户端对新服务端、三种中转组合共五条红（`DecodingError.typeMismatch`），修复后全绿。 |
+| 2026-10-08 | 语料构建、两种搜索与类型关系的取消跨过连接：引擎层按请求 id 取消，新增不等回复的 `cancelRequest`，只对这四条新命令开启；调用方取消即返回，不等对端确认 | PR #121 审查 PR121.29：传输层取消不了已发出的请求，服务端在没人持有句柄的 Task 里跑请求，所以 App 里（My Mac 转发给 XPC service）取消一次 Foundation 的语料构建，调用方还要等 8–11 秒，服务端照建不误，Find 换查询后旧批次照样送达。用户选了推荐方案：不改 SwiftyXPC、HelperPeer 和 socket 的帧，旧对端永远收不到不认识的命令（经 Mach service 的旧版注入 payload 会把未知消息当成客户端离开，PR121.73）。比方案多走一步：调用方不等对端回复就返回，否则对端不响应取消时调用方照样被拖住。协议写在 `CommunicationAndEngineArchitecture.md` §4.5；复现测试 `RemoteRequestCancellationTests` 在 XPC service 与 TCP 两条真实连接上修前全红、修后全绿。 |
