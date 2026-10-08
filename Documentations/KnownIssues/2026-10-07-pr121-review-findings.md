@@ -6390,6 +6390,7 @@ struct RuntimeInterfaceCorpusEligibilityTests {
   - **处理器不经 `dispatch` 转发**。草案用 `register` 经 `dispatch`，那样经 XPC 转发的引擎（My Mac、Catalyst helper、经 Mach service 注入的 App）会把这条新命令转给对端，而对端可能是旧版注入 payload——正是 PR121.73 的风险。现在处理器只答自己知道的：本地臂答本进程的根路径，经 socket 转发的答它连上时问来的，经 XPC 转发的答本进程的 `nil`。`DyldRootPathRequest` 因此只是载荷，不遵循 `RuntimeEngineRequest`。
   - 删掉了没人处理的 `CommandNames.patchImagePathForDyld`；`CommunicationAndEngineArchitecture.md` 新增 §4.6 写下两种写法与这条命令。
   - **同类里留给别的批次的**（文档原本就这样分派）：`FindSession` 的 `prioritizeCorpora` 与 `corpusDidBuild` 一带拿原始的范围路径对规范的键，归 PR121.05（批次 S3b）；`FindScopeChooserViewModel.swift:76` 拿原始的当前镜像路径对 `indexedImagePathList` 的规范路径，归 PR121.45（界面批次）。协调器已提供 `canonicalImagePath(_:)` 与 `buildState(forImagePath:)` 给它们用。
+  - **`FindSession` 这一半已修**（批次 S3b，单独一个提交）：一共三处。`prioritizeCorpora` 改问协调器的 `buildState(forImagePath:)`；补搜时的「已建 − 已搜 ∩ 范围」与摘要栏按范围计数之前，两边都先经引擎规范化。发给引擎的范围仍是原始写法，由服务端自己规范化。复现测试在 `FindSessionCorpusTests`，用引擎的根路径接缝，修前三条都红：`simulatorCorpusBuiltLaterInsideTheScopeIsRead`（范围内后建成的语料不补搜，`session.isSearching` 不成立）、`simulatorSummaryCountsTheScopesImages`（摘要栏 20 秒内一直没有「1 image being made searchable」）、`simulatorPickingABuiltImageAsksForNothing`（选中一个已建好的镜像也会再请求一次，请求在进程内引擎上以未索引返回，把 built 状态冲掉）。
 
 **问题**：
 - 引擎遵循「服务端存规范路径、线上传原始路径」的约定（a60155af）。规范路径是在模拟器进程里补上 `DYLD_ROOT_PATH` 前缀后的路径。

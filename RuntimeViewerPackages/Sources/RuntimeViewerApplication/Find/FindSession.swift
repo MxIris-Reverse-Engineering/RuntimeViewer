@@ -289,9 +289,22 @@ public final class FindSession {
     /// favourites.
     private func prioritizeCorpora(of scopeImagePaths: Set<String>?) {
         guard let scopeImagePaths, let corpusCoordinator else { return }
-        for imagePath in scopeImagePaths.sorted() where corpusBuildStates[imagePath]?.isBuilt != true {
+        for imagePath in scopeImagePaths.sorted() where corpusCoordinator.buildState(forImagePath: imagePath)?.isBuilt != true {
             corpusCoordinator.requestBuild(of: imagePath, isPrioritized: true)
         }
+    }
+
+    /// `imagePath` as the document's engine keys it: the form of the corpus
+    /// coordinator's states, of the engine's summaries and of the corpora it
+    /// reports built. A scope and the sidebar spell an image without an iOS
+    /// Simulator's root, so two paths are compared only once both are in
+    /// this form; see `RuntimeEngine.canonicalImagePath(_:)`.
+    private func canonicalImagePath(_ imagePath: String) -> String {
+        documentState?.runtimeEngine.canonicalImagePath(imagePath) ?? imagePath
+    }
+
+    private func canonicalImagePaths(_ imagePaths: Set<String>) -> Set<String> {
+        Set(imagePaths.map(canonicalImagePath))
     }
 
     // MARK: - Execution
@@ -521,12 +534,12 @@ public final class FindSession {
     }
 
     private func searchImagesBuiltDuringSearch() {
-        let imagePaths = imagePathsBuiltDuringSearch
+        let builtImagePaths = canonicalImagePaths(imagePathsBuiltDuringSearch)
         imagePathsBuiltDuringSearch = []
         guard let shownSearch else { return }
-        var unsearchedImagePaths = imagePaths.subtracting(shownSearch.searchedImagePaths)
+        var unsearchedImagePaths = builtImagePaths.subtracting(canonicalImagePaths(shownSearch.searchedImagePaths))
         if let scopeImagePaths = shownSearch.scopeImagePaths {
-            unsearchedImagePaths.formIntersection(scopeImagePaths)
+            unsearchedImagePaths.formIntersection(canonicalImagePaths(scopeImagePaths))
         }
         guard !unsearchedImagePaths.isEmpty else { return }
         startSearch(shownSearch.query, imagePaths: unsearchedImagePaths, generationOptions: shownSearch.generationOptions, isWidening: true)
@@ -561,8 +574,13 @@ public final class FindSession {
     private func updateSummary() {
         // Only a text or member search reads the corpora, and only those of
         // its scope; a relationship search or a failure has nothing to say
-        // about them.
-        let newSummary = Self.summary(of: results, corpusBuildStates: shownSearch == nil ? [:] : corpusBuildStates, within: shownSearch?.scopeImagePaths)
+        // about them. The states are keyed as the engine keys an image, so
+        // the scope is spelled that way too.
+        let newSummary = Self.summary(
+            of: results,
+            corpusBuildStates: shownSearch == nil ? [:] : corpusBuildStates,
+            within: shownSearch?.scopeImagePaths.map(canonicalImagePaths)
+        )
         if newSummary != summary {
             summary = newSummary
         }
