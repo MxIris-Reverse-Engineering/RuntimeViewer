@@ -14,7 +14,10 @@ import RuntimeViewerArchitectures
 /// Searches are engine requests: text and member searches stream their
 /// matches in per-image batches, which land here as results grow, so the
 /// outline fills while the engine is still scanning; relationship searches
-/// answer in one piece. A new search cancels the one in flight.
+/// answer in one piece. A new search cancels the one in flight, and whatever
+/// the cancelled one still delivers is dropped (see `SearchRun`). The results
+/// belong to the document's engine: when the document moves to another
+/// engine, the search on screen runs again on it.
 ///
 /// Text and member searches read the interfaces under the Generation Options
 /// the content pane displays with, so they find only what it shows; when
@@ -50,10 +53,11 @@ public final class FindSession {
     /// reads; the count goes on past it.
     static let resultLimit = 1000
 
-    /// Weak: the session can outlive its document. An engine call over a
-    /// connection runs to its answer even when cancelled, and until it does a
-    /// closed window's session is still alive — and still subscribed to the
-    /// Generation Options every window shares.
+    /// Weak: the session can outlive its document — a page's view model holds
+    /// it while the window comes down — and is then still subscribed to the
+    /// Generation Options every window shares until the document closes it.
+    /// A search under way does not keep it: its task holds the run, not the
+    /// session.
     private weak var documentState: DocumentState?
 
     @RxObserved
@@ -76,11 +80,17 @@ public final class FindSession {
     /// field — Edit ▸ Find ▸ Find in Indexed Images.
     public let focusSearchFieldRelay = PublishRelay<Void>()
 
+    /// The engine call under way, if any; see `SearchRun`.
+    private var currentRun: SearchRun?
+
+    /// The task making `currentRun`'s engine call. Kept on the session, not
+    /// on the run, so `deinit` can cancel it.
     private var searchTask: Task<Void, Never>?
 
-    /// Bumped per search; a finishing search only clears `isSearching` when
-    /// it is still the current one.
-    private var searchGeneration = 0
+    /// The query whose results are on screen: the one last run, whatever the
+    /// mode path and the toggles show by now. `nil` before the first search
+    /// and once the field is cleared.
+    private var committedQuery: FindQuery?
 
     private var textMatchGroups = MatchGroups<RuntimeInterfaceSearchMatch>()
 
@@ -121,6 +131,21 @@ public final class FindSession {
                 }
             }
             .disposed(by: disposeBag)
+        documentState.$runtimeEngine
+            .skip(1)
+            // One turn later. The page's view model brings this session into
+            // being before the corpus coordinator exists, so the coordinator
+            // hears of a new engine after this subscriber does; searching at
+            // once would put the scope's images at the front of the old
+            // engine's queue, to be withdrawn straight away.
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribeOnNext { [weak self] _ in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    self.engineDidChange()
+                }
+            }
+            .disposed(by: disposeBag)
     }
 
     deinit {
@@ -129,13 +154,12 @@ public final class FindSession {
 
     /// The document is closing. The search under way is cancelled, and nothing
     /// starts another one: not a Generation Options change made in another
-    /// window, not a corpus the coordinator reports built.
+    /// window, not a corpus the coordinator reports built, not an engine
+    /// switch.
     public func documentWillClose() {
-        searchTask?.cancel()
-        searchTask = nil
-        // A search still finishing compares its generation with this one and
-        // leaves the session alone.
-        searchGeneration += 1
+        // A search still finishing finds it is no longer the current run and
+        // leaves the session alone, `isSearching` included.
+        cancelCurrentRun()
         isSearching = false
         disposeBag = DisposeBag()
     }
@@ -181,8 +205,15 @@ public final class FindSession {
     /// results instead.
     public func run(_ query: FindQuery) {
         self.query = query
-        searchTask?.cancel()
-        searchTask = nil
+        start(query)
+    }
+
+    /// Runs `query` without touching the one the page edits, so a search run
+    /// again on another engine leaves the mode path and the toggles as the
+    /// user left them.
+    private func start(_ query: FindQuery) {
+        cancelCurrentRun()
+        committedQuery = query.isEmpty ? nil : query
         shownSearch = nil
         imagePathsBuiltDuringSearch = []
         textMatchGroups = MatchGroups<RuntimeInterfaceSearchMatch>()
@@ -225,6 +256,14 @@ public final class FindSession {
         var cleared = query
         cleared.text = ""
         run(cleared)
+    }
+
+    /// The document moved to another engine: nothing on screen belongs to
+    /// the engine now. The search on screen runs again on it, under the same
+    /// scope; a cleared field stays cleared.
+    private func engineDidChange() {
+        guard let committedQuery else { return }
+        start(committedQuery)
     }
 
     // MARK: - Scope
@@ -271,42 +310,74 @@ public final class FindSession {
         var isTruncated = false
     }
 
+    /// One engine call: a search, or a widening of the one on screen. What it
+    /// brings back is applied only while it is `currentRun`. Cancelling the
+    /// call stops it — in a serving process too — and nothing reaches the
+    /// session from the engine afterwards, but a batch or a reply already on
+    /// its way to the main actor still arrives, behind whatever the window was
+    /// busy with; it is dropped here instead of landing in the results of the
+    /// search that replaced it. Identity is all a run carries.
+    private final class SearchRun: Sendable {}
+
+    /// The engine request a query makes.
+    private enum SearchRequest: Sendable {
+        case text(RuntimeInterfaceSearchQuery)
+        case members(RuntimeMemberSearchQuery)
+        case relationships(RuntimeTypeRelationshipsQuery)
+    }
+
+    /// What the engine answered a `SearchRequest` with.
+    private enum SearchResponse: Sendable {
+        case text(RuntimeInterfaceSearchSummary)
+        case members(RuntimeInterfaceSearchSummary)
+        case relationships([RuntimeRelationshipTree])
+    }
+
     /// Runs `query` over `imagePaths` — every built image when `nil` — and
     /// folds what it finds into the results. A search that widens one already
     /// shown keeps the results it is merged into when it fails.
     private func startSearch(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, isWidening: Bool) {
-        // Closed while an engine call kept this session alive: there is no
-        // document to search for any more.
+        cancelCurrentRun()
+        // The session outlived its document: there is nothing to search.
         guard let engine = documentState?.runtimeEngine else {
             isSearching = false
             return
         }
+        let run = SearchRun()
+        currentRun = run
         isSearching = true
-        searchGeneration += 1
-        let generation = searchGeneration
+        let request = searchRequest(for: query, imagePaths: imagePaths, generationOptions: generationOptions)
+        // The task holds the run, never the session: a document that goes
+        // away mid-search takes its session with it, and the session's
+        // `deinit` withdraws the call.
         searchTask = Task { [weak self] in
+            let outcome: Result<SearchResponse, any Swift.Error>
             do {
-                try await self?.perform(query, imagePaths: imagePaths, generationOptions: generationOptions, isWidening: isWidening, on: engine)
-            } catch is CancellationError {
-                // Superseded; the newer search owns the results now.
+                switch request {
+                case .text(let engineQuery):
+                    let summary = try await engine.searchInterfaces(engineQuery) { [weak self] batch in
+                        await self?.appendTextMatches(batch, from: run)
+                    }
+                    outcome = .success(.text(summary))
+                case .members(let engineQuery):
+                    let summary = try await engine.searchMembers(engineQuery) { [weak self] batch in
+                        await self?.appendMemberMatches(batch, from: run)
+                    }
+                    outcome = .success(.members(summary))
+                case .relationships(let engineQuery):
+                    outcome = .success(.relationships(try await engine.typeRelationships(engineQuery)))
+                }
             } catch {
-                #log(.error, "Find failed: \(error, privacy: .public)")
-                guard let self, self.searchGeneration == generation, !isWidening else { return }
-                self.shownSearch = nil
-                var failed = Results()
-                failed.summary = "Search failed: \(error.localizedDescription)"
-                self.setResults(failed)
+                outcome = .failure(error)
             }
-            guard let self, self.searchGeneration == generation else { return }
-            self.isSearching = false
-            self.searchImagesBuiltDuringSearch()
+            self?.runDidEnd(run, with: outcome, isWidening: isWidening)
         }
     }
 
-    private func perform(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, isWidening: Bool, on engine: RuntimeEngine) async throws {
+    private func searchRequest(for query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions) -> SearchRequest {
         switch query.mode {
         case .text, .regularExpression:
-            let engineQuery = RuntimeInterfaceSearchQuery(
+            .text(RuntimeInterfaceSearchQuery(
                 text: query.trimmedText,
                 matchMode: query.mode == .regularExpression ? .regularExpression : query.textMatchStyle.matchMode,
                 isCaseSensitive: query.isCaseSensitive,
@@ -314,14 +385,9 @@ public final class FindSession {
                 resultLimit: max(0, Self.resultLimit - textMatchGroups.matchCount),
                 generationOptions: generationOptions,
                 imagePaths: imagePaths
-            )
-            let summary = try await engine.searchInterfaces(engineQuery) { [weak self] batch in
-                await self?.appendTextMatches(batch)
-            }
-            try Task.checkCancellation()
-            finish(with: summary, nodes: textMatchGroups.nodes(), typeCount: textMatchGroups.typeCount, isWidening: isWidening)
+            ))
         case .members:
-            let engineQuery = RuntimeMemberSearchQuery(
+            .members(RuntimeMemberSearchQuery(
                 text: query.trimmedText,
                 matchMode: query.memberMatchStyle.matchMode,
                 kinds: query.memberKindFilter.kinds,
@@ -329,41 +395,92 @@ public final class FindSession {
                 resultLimit: max(0, Self.resultLimit - memberMatchGroups.matchCount),
                 generationOptions: generationOptions,
                 imagePaths: imagePaths
-            )
-            let summary = try await engine.searchMembers(engineQuery) { [weak self] batch in
-                await self?.appendMemberMatches(batch)
-            }
-            try Task.checkCancellation()
-            finish(with: summary, nodes: memberMatchGroups.nodes(), typeCount: memberMatchGroups.typeCount, isWidening: isWidening)
+            ))
         case .ancestorTypes, .descendantTypes, .conformingTypes:
-            let relationship = query.mode.relationship ?? .ancestors
-            let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: query.trimmedText, matchMode: query.textMatchStyle.matchMode, relationship: relationship, isCaseSensitive: query.isCaseSensitive, imagePaths: imagePaths))
-            try Task.checkCancellation()
-            var nodes: [FindResultNode] = []
-            var relatedTypeCount = 0
-            for tree in trees {
-                let children = tree.nodes.enumerated().map { index, node in
-                    FindResultNode.relationship(node, path: "tree|\(tree.root.kind)|\(tree.root.name)|\(tree.root.imagePath)#\(index)")
-                }
-                relatedTypeCount += Self.count(children)
-                nodes.append(FindResultNode.object(tree.root, matchCount: children.count, children: children))
-            }
-            var relationshipResults = Results()
-            relationshipResults.nodes = nodes
-            relationshipResults.summary = nodes.isEmpty
-                ? "No matching types"
-                : "\(relatedTypeCount) \(relatedTypeCount == 1 ? "type" : "types") for \(nodes.count) \(nodes.count == 1 ? "match" : "matches")"
-            setResults(relationshipResults)
+            .relationships(RuntimeTypeRelationshipsQuery(
+                text: query.trimmedText,
+                matchMode: query.textMatchStyle.matchMode,
+                relationship: query.mode.relationship ?? .ancestors,
+                isCaseSensitive: query.isCaseSensitive,
+                imagePaths: imagePaths
+            ))
         }
     }
 
-    /// One image's batch, folded into the tree while the search goes on.
-    private func appendTextMatches(_ batch: [RuntimeInterfaceSearchMatch]) {
+    /// An engine call came to its end. One that is no longer `currentRun`
+    /// was replaced — by a newer search, an engine switch, the document
+    /// closing — and the results are not its to touch. The current one,
+    /// whatever its outcome, leaves the session idle and reads the corpora
+    /// built while it ran.
+    private func runDidEnd(_ run: SearchRun, with outcome: Result<SearchResponse, any Swift.Error>, isWidening: Bool) {
+        guard run === currentRun else { return }
+        currentRun = nil
+        searchTask = nil
+        switch outcome {
+        case .success(.text(let summary)):
+            finish(with: summary, nodes: textMatchGroups.nodes(), typeCount: textMatchGroups.typeCount, isWidening: isWidening)
+        case .success(.members(let summary)):
+            finish(with: summary, nodes: memberMatchGroups.nodes(), typeCount: memberMatchGroups.typeCount, isWidening: isWidening)
+        case .success(.relationships(let trees)):
+            showRelationshipTrees(trees)
+        case .failure(is CancellationError):
+            // Cancelled on the engine's side: there is nothing to show.
+            break
+        case .failure(let error):
+            #log(.error, "Find failed: \(error, privacy: .public)")
+            // A widening search keeps the results it would have merged into,
+            // and the images it was sent to read stay unsearched; it is not
+            // tried again, which a connection that is gone would turn into a
+            // loop. Until it went idle here, every corpus built later waited
+            // on it.
+            if !isWidening {
+                shownSearch = nil
+                var failed = Results()
+                failed.summary = "Search failed: \(error.localizedDescription)"
+                setResults(failed)
+            }
+        }
+        isSearching = false
+        searchImagesBuiltDuringSearch()
+    }
+
+    /// Stops the engine call under way and stops listening to it: whatever it
+    /// still delivers is dropped.
+    private func cancelCurrentRun() {
+        searchTask?.cancel()
+        searchTask = nil
+        currentRun = nil
+    }
+
+    /// The trees a relationship search answered with, one per matching type.
+    private func showRelationshipTrees(_ trees: [RuntimeRelationshipTree]) {
+        var nodes: [FindResultNode] = []
+        var relatedTypeCount = 0
+        for tree in trees {
+            let children = tree.nodes.enumerated().map { index, node in
+                FindResultNode.relationship(node, path: "tree|\(tree.root.kind)|\(tree.root.name)|\(tree.root.imagePath)#\(index)")
+            }
+            relatedTypeCount += Self.count(children)
+            nodes.append(FindResultNode.object(tree.root, matchCount: children.count, children: children))
+        }
+        var relationshipResults = Results()
+        relationshipResults.nodes = nodes
+        relationshipResults.summary = nodes.isEmpty
+            ? "No matching types"
+            : "\(relatedTypeCount) \(relatedTypeCount == 1 ? "type" : "types") for \(nodes.count) \(nodes.count == 1 ? "match" : "matches")"
+        setResults(relationshipResults)
+    }
+
+    /// One image's batch, folded into the tree while the search goes on — if
+    /// the call that brought it is still the current one.
+    private func appendTextMatches(_ batch: [RuntimeInterfaceSearchMatch], from run: SearchRun) {
+        guard run === currentRun else { return }
         textMatchGroups.append(batch)
         setResults(results(from: textMatchGroups.nodes(), matchCount: (shownSearch?.totalMatchCount ?? 0) + textMatchGroups.matchCountSinceLastFinish, typeCount: textMatchGroups.typeCount))
     }
 
-    private func appendMemberMatches(_ batch: [RuntimeMemberMatch]) {
+    private func appendMemberMatches(_ batch: [RuntimeMemberMatch], from run: SearchRun) {
+        guard run === currentRun else { return }
         memberMatchGroups.append(batch)
         setResults(results(from: memberMatchGroups.nodes(), matchCount: (shownSearch?.totalMatchCount ?? 0) + memberMatchGroups.matchCountSinceLastFinish, typeCount: memberMatchGroups.typeCount))
     }
@@ -394,7 +511,9 @@ public final class FindSession {
     /// A corpus the coordinator reports built is read by the search on
     /// screen, unless it already was; a search still running reads it once
     /// it ends.
-    private func corpusDidBuild(at imagePath: String) {
+    ///
+    /// Internal so a test can stand in for the coordinator.
+    func corpusDidBuild(at imagePath: String) {
         guard shownSearch != nil else { return }
         imagePathsBuiltDuringSearch.insert(imagePath)
         guard !isSearching else { return }

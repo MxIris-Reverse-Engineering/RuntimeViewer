@@ -14,29 +14,6 @@ import Testing
 @Suite("FindCorpusCoordinator over the local runtime service", .serialized)
 @MainActor
 struct FindCorpusCoordinatorRemoteTests {
-    /// The service and the client engine the app would hold.
-    private struct LocalRuntimeServiceFixture {
-        let client: RuntimeEngine
-        let serving: RuntimeEngine
-        let host: RuntimeLocalRuntimeServiceHost
-
-        static func make(label: String) async throws -> LocalRuntimeServiceFixture {
-            let serving = RuntimeEngine(source: .local, engineID: "\(label).serving")
-            let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
-            let host = RuntimeLocalRuntimeServiceHost(engine: serving, connection: listener)
-            try await host.start()
-            host.activate()
-            let client = RuntimeEngine(source: .local, engineID: "\(label).client")
-            try await client.connect(credential: .xpcService(.anonymousListener(endpoint)))
-            return LocalRuntimeServiceFixture(client: client, serving: serving, host: host)
-        }
-
-        func stop() async {
-            await client.stop()
-            await host.stop()
-        }
-    }
-
     private static func isBuilding(_ state: RuntimeInterfaceCorpusBuildState?) -> Bool {
         if case .building = state { return true }
         return false

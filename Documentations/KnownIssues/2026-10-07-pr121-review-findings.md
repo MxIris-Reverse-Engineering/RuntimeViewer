@@ -325,6 +325,7 @@ queued-build xcodebuild build \
 - **审查编号**：C10
 - **状态**：已修复。复现测试：`FindSessionLifecycleTests.sessionOutlivingItsDocumentIgnoresOptionsChange`（修前测试进程中止：`Fatal error: Attempted to read an unowned reference but object … was already destroyed`，signal 6）、`FindSessionLifecycleTests.closedSessionStartsNoSearch`（`documentWillClose()` 的契约）
 - **落地与偏离**：`documentWillClose()` 比下文多一步，把 `isSearching` 置回 false：进行中的搜索被取消后按代数核对不会再清这个标志，不清就一直是 true。测试去掉了 `withSharedGenerationOptionsLock`（PR121.18 已撤下这把锁）。同类里 `InspectorRelationshipsViewModel` 的 `flatMapLatest { [unowned self] … }` 改成 `[weak self]` + `guard let self`，单独一个 refactor 提交：写不出修前失败的测试，因为这个闭包只由 ViewModel 自己的 `$runtimeObject` 驱动、订阅放在它自己的 `disposeBag` 里，deinit 时随之退订，之后不会再执行。`RuntimeViewerPackages/Sources` 与 `RuntimeViewerUsingAppKit` 里再没有别的 `[unowned self]`。
+- **第三层**（搜索 Task 在等引擎期间不持有会话）随 PR121.05 落地（批次 S3b）：Task 只持有本次的 `SearchRun`。测试 `FindSessionLifecycleTests.sessionGoesWithItsDocumentMidSearch`：对端把搜索请求挂着时放掉文档，修前会话被搜索 Task 留住、`releasedSession == nil` 不成立，修后会话随文档释放，它的 `deinit` 撤回引擎调用。
 
 **问题**：`FindSession` 用 `unowned let documentState` 引用文档，但它可能活得比文档长。在 XPC 上，引擎调用取消不掉，搜索 Task 在等待期间强持有会话（`FindSession.swift:265` 的 `try await self?.perform(...)`）。会话又订阅着所有窗口共用的 Generation Options。关窗后，只要在别的窗口改一下选项，孤儿会话就会重跑搜索，读到已经释放的 `DocumentState`，整个 App 在 `swift_abortRetainUnowned` 处中止。
 
@@ -681,7 +682,14 @@ func imageOpenedInTheSidebarBecomesSearchable() async throws {
 
 - **严重度**：Major
 - **审查编号**：C05 + C09
-- **状态**：方案待批，代码未改
+- **状态**：已修复，与 PR121.38 同一个提交。复现测试都在 `FindSessionLifecycleTests`：`replacedSearchBatchIsDropped`（参数化：新搜索 / 清空搜索框；修前两种都红，`leakedResults.isEmpty` 与 `session.results.nodes.isEmpty` 都不成立：被替换那次搜索已经交出的 libobjc 批次落进了新搜索的结果，或刚清空的列表）、`sourceSwitchRunsTheSearchOnTheNewEngine`（修前换引擎后等不到重跑，「no matching element arrived within 30.0s」，旧引擎的行留在屏上）、`sessionGoesWithItsDocumentMidSearch`（PR121.02 的第三层：修前 `releasedSession == nil` 不成立，搜索 Task 在等对端回答期间留住了文档已经不在的会话）。修后都绿，Find 的 8 个套件 54 个测试全过。
+- **落地与偏离**：
+  - **复现方式与草案不同**。草案让两次 `run` 写在同一个同步块里，靠转发对证明旧批次混入；PR121.29 落地后它在修前也是绿的：任务还没开始就被取消，`forwardWithdrawably` 发送前先 `checkCancellation()`，取消之后到达的推送也在路由处丢掉。剩下的窗口是「批次在取消前一刻已经交出、正排队等主线程」，窗口忙着绘制时就是这样。测试用进程内引擎复现它：先让搜索开始，在主线程上停一秒，让引擎读完 libobjc、把批次交出去排在主线程队尾，再换搜索或清空。
+  - **第三层的测试用一个只服务测试指定命令的 TCP 对端**（`Support/ScriptedPeer.swift`），把搜索请求一直挂着，等请求到了对端才放掉文档。先试过「`Task.yield()` 之后立即放掉文档」，那一版在修前的代码上时红时绿（取决于搜索任务那一刻是否已在引擎调用里），弃用。
+  - **`SearchRun` 只承担身份**，不带草案里的 `task` 和 `engine`：任务仍放在会话上（`searchTask`），`deinit` 照旧只取消它，不必在非隔离的 `deinit` 里读另一个对象的状态；引擎由任务直接捕获。
+  - 草案的 `makeForwardingPair` 没加：XPC 装置原本是 `FindCorpusCoordinatorRemoteTests` 的私有类型，挪到 `Support/LocalRuntimeServiceFixture.swift` 共用。
+  - 「把 `isSearching` 并进 `Results`」照方案不做，留作可选的后续项：`results` 与 `isSearching` 总在同一个主线程回合里修改，没有闪烁。
+  - 「同类」最后一条说本条不修的缺口（XPC service 重启时文档停在镜像列表根处，`.switchEngine` 提前返回，`$runtimeEngine` 不发值）随 PR121.30 剩下的那一半一起修：`DocumentState` 新增「引擎已重置」信号，会话与语料协调器都改订阅它，见 PR121.30。
 
 **问题**：一次文本或成员搜索的结果分批送到，按镜像一批一批到达。追加这些批次的 `appendTextMatches` / `appendMemberMatches`（`FindSession.swift:337-345`）从不检查这批结果属于哪次搜索。在 App 的 XPC 引擎上，取消搜索的 Task 也停不下已经发出的请求：服务端会把剩下的每一批照样推回来。于是新查询的结果里会混进旧查询的命中，点了 Clear 的空列表又被填满，计数也和总数对不上。另外，会话从不观察 `documentState.$runtimeEngine`，换数据源以后旧行原样留着；新引擎每建好一个语料，还会在新引擎上补搜，再把结果并进旧引擎的结果里。
 
@@ -6870,7 +6878,8 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C11
-- **状态**：方案待批，代码未改
+- **状态**：已修复，随 PR121.05 同一个提交：当前这次调用不论成败都由 `runDidEnd` 收尾。复现测试：`FindSessionLifecycleTests.failedWideningSearchEndsTheSearch`（修前补搜以 `RuntimeXPCServiceConnectionError.connectionInvalid` 失败后 `isSearching` 一直为真，「no matching element arrived within 10.0s」）。修后绿。按已定决定，补搜失败只记日志，摘要里不提示失败的镜像数。
+- **落地与偏离**：测试用共用的 `Support/LocalRuntimeServiceFixture`（XPC 装置），不是草案的 `makeForwardingPair`：客户端 `stop()` 之后每个请求都以 `connectionInvalid` 失败，不是取消。`corpusDidBuild` 照方案放宽为 internal，供测试代替协调器调用。
 
 **问题**：屏上的搜索在新语料建好后会再读一次（补搜）。补搜如果因为取消以外的原因失败，`FindSession.swift:270` 的 `guard …, !isWidening else { return }` 会直接从 Task 闭包返回，跳过 `:277` 的 `isSearching = false`。之后转圈一直不停；`corpusDidBuild` 也一直卡在 `guard !isSearching`（`:376`），后来建好的语料全都不再补搜，直到用户再按一次回车。
 
