@@ -132,6 +132,17 @@ struct RuntimeInterfaceTextMatcherTests {
         #expect(functionLineEnds.matches.first?.lineNumber == 4)
     }
 
+    @Test("an invalid regular expression is reported in words on every path an error travels")
+    func invalidRegularExpressionReadsAsText() {
+        let error = #expect(throws: RuntimeInterfaceTextMatcher.PatternError.self) {
+            try RuntimeInterfaceTextMatcher.Pattern(RuntimeInterfaceSearchQuery(text: "(", matchMode: .regularExpression))
+        }
+        // What the Find navigator shows, and what the XPC transport carries.
+        #expect(error?.localizedDescription == "“(” is not a valid regular expression.")
+        // What the socket transports carry.
+        #expect(error.map { patternError in "\(patternError)" } == "“(” is not a valid regular expression.")
+    }
+
     @Test("counting goes on after collection stops")
     func countingPastCollection() throws {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(RuntimeInterfaceSearchQuery(text: "fooBar"))

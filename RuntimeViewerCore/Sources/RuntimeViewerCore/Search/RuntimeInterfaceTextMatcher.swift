@@ -19,9 +19,27 @@ enum RuntimeInterfaceTextMatcher {
         let utf8Length: Int
     }
 
-    enum PatternError: Swift.Error {
+    /// Reads as a sentence on every path an error travels: the Find navigator
+    /// and the XPC transport show `localizedDescription`, while the socket
+    /// transports send `"\(error)"` across — so `description` says the same.
+    enum PatternError: LocalizedError, CustomStringConvertible {
         case emptyQuery
-        case invalidRegularExpression(String)
+        /// `reason` is Foundation's own account of what is wrong, kept for the
+        /// log; the reader is shown the pattern instead.
+        case invalidRegularExpression(pattern: String, reason: String)
+
+        var errorDescription: String? {
+            switch self {
+            case .emptyQuery:
+                "Type something to search for."
+            case .invalidRegularExpression(let pattern, _):
+                "“\(pattern)” is not a valid regular expression."
+            }
+        }
+
+        var description: String {
+            errorDescription ?? "The search pattern is not valid."
+        }
     }
 
     /// The query compiled once per search, not once per interface. Text and
@@ -56,7 +74,7 @@ enum RuntimeInterfaceTextMatcher {
                     }
                     self.regex = try NSRegularExpression(pattern: text, options: options)
                 } catch {
-                    throw PatternError.invalidRegularExpression("\(error)")
+                    throw PatternError.invalidRegularExpression(pattern: text, reason: error.localizedDescription)
                 }
                 self.needle = []
             } else {

@@ -6231,7 +6231,7 @@ echo "exit $?"
 
 - **严重度**：Minor
 - **审查编号**：C26
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceTextMatcherTests.invalidRegularExpressionReadsAsText`（修前 `localizedDescription` 是「The operation couldn’t be completed. (RuntimeViewerCore.RuntimeInterfaceTextMatcher.PatternError error 0.)」，`"\(error)"` 是 `invalidRegularExpression("Error Domain=NSCocoaErrorDomain Code=2048 …")`）、`RuntimeInterfaceCorpusStoreTests.invalidRegularExpressionSearchFailsReadably`（修前同一句通用文字）。XPC 路径已核实可读：服务端把 `error.localizedDescription` 放进回复帧，客户端以 `RuntimeXPCServiceConnectionError.remoteFailure` 抛出，其 `errorDescription` 就是这句话；socket 路径的 `RuntimeNetworkRequestError` 仍归模块 C
 
 **问题**：正则写错时，`Pattern` 抛出 `PatternError.invalidRegularExpression`，它只是普通的 `Swift.Error`（`RuntimeInterfaceTextMatcher.swift:22-25`），里面装的是整段 NSError 转储（:51）。Find 的摘要栏显示 `error.localizedDescription`（`FindSession.swift:273`），用户看到的是「Search failed: The operation couldn’t be completed. (RuntimeViewerCore.RuntimeInterfaceTextMatcher.PatternError error 1.)」，看不出是正则写错了。提案写明「正则写错时整次搜索失败、报在摘要栏」。
 **四问**：复现——Text 或 Members 模式选 Regular Expression，输入 `(`，按回车；基线——本 PR 新引入；影响——只影响报错文字，不影响结果，改动很小，建议修；历史——新代码。

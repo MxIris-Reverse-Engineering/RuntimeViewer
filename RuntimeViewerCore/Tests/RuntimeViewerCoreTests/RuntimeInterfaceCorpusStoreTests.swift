@@ -340,6 +340,20 @@ struct RuntimeInterfaceCorpusStoreTests {
         #expect(filtered.totalMatchCount == 0)
     }
 
+    @Test("a search with an invalid regular expression fails with a readable reason")
+    func invalidRegularExpressionSearchFailsReadably() async throws {
+        let fixture = makeStore()
+        defer { withExtendedLifetime(fixture) {} }
+        _ = try await fixture.store.build(imagePath: Self.imageA, transformer: .default)
+
+        do {
+            _ = try await fixture.store.searchInterfaces(RuntimeInterfaceSearchQuery(text: "(", matchMode: .regularExpression), indexedImagePaths: []) { _ in }
+            Issue.record("the search should have failed")
+        } catch {
+            #expect(error.localizedDescription == "“(” is not a valid regular expression.")
+        }
+    }
+
     @Test("a second build of the same image returns the corpus already built")
     func rebuildIsFree() async throws {
         let fixture = makeStore()
