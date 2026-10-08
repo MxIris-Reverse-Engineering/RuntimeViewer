@@ -14821,7 +14821,14 @@ struct RuntimeInterfaceRepeatedProtocolCopyTests {
 
 - **严重度**：待核实（若成立：Minor）
 - **审查编号**：新发现（模块 C 提出，未经审查投票）
-- **状态**：部分核实；方案待核实后再定，代码未改
+- **状态**：进程内部分已核实，没有改代码；Mach service 那一段（B、C）仍待用户手工验证。核实测试：`RuntimeXPCServiceUnknownMessageTests.unknownMessageOutcome`（`RuntimeXPCServiceConnectionTests.swift`，先只记录现象，结论定了之后改成下列断言，作为回归测试保留）。
+- **核实结论**（在与 payload 同一套 SwiftyXPC 机制上，匿名 listener）：
+  - **A：发送方不会挂住，而是立刻失败**。接收方 `respond(to:)` 找不到处理器，把 `unexpectedMessage` 交给 errorHandler 后不回复；XPC 随即以 `XPC_ERROR_CONNECTION_INTERRUPTED` 回给发送方的 reply handler，`RuntimeXPCServiceConnection` 把它报成 `serviceExited`（实测几毫秒内）。发送方自己的连接状态仍是 connected。
+  - **接收方报 peer 离开**：listener 的 errorHandler 收到 `unexpectedMessage`，`handlePeerError` 把它当成 peer 断开，状态变成 `.disconnected`；下一条它认识的消息把发送方重新认领为 peer，又报 `.connected`。上文「已核实的部分」第 2–5 条的推断成立。
+  - **由此推到真实场景**（进程内测不了）：对一个经 Mach service 连着的旧版注入 payload，每条语料请求（构建、两种搜索、类型关系）都会立刻以一个「中断」类错误失败，所以 Report 的行不会停在 Waiting、Find 也不会一直转圈；但每个镜像会各记一条 Failed，错误文字也不是「No handler registered for …」，PR121.37 的 `isUnknownCommand` 认不出。同时 payload 一侧每收到一条都报一次断开。
+- **仍待用户手工验证**（照「怎么验证」第 2 条）：B——payload 被标成断开之后，它后续推送的 `imageNodes`、`dataDidChange` 是否还到得了 App，App 端经 HelperPeer 的连接会不会因 reply 被中断而把引擎当成断开、从侧栏移走；C——实际碰到的频率。
+- **PR121.29 已经避开的部分**：`cancelRequest` 只跟着四条与它同时出现的新命令走，这些命令对旧 payload 本来就是未知消息，取消不会多送一种它不认识的命令（`RemoteRequestIdentifierTests` 守住「旧命令不带请求 id」）。PR121.33 的 `dyldRootPath` 只问 socket 类对端，处理器也从不转发，不会经 Mach service 送到 payload。
+- **还剩的风险**：全在新命令本身。对旧版注入 payload，每条语料、搜索、关系请求都会让 payload 报一次断开、App 记一条失败；候选改法（按 payload 版本门控，不发任何新命令）要等 B 的结论，本批没有做。
 
 **问题**：
 - 一个非沙盒的 App 被注入的 payload（`RuntimeViewerServer`）通过 mach service 与 RuntimeViewer 通信。
