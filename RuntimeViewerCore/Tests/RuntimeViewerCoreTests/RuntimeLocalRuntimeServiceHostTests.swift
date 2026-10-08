@@ -122,8 +122,13 @@ private actor PathRecorder {
     }
 }
 
+/// Waits for `condition`, returning as soon as it holds. The bound is generous
+/// on purpose: it only matters when the condition never holds, and a full
+/// parallel run of this target — which builds Foundation's corpus over real
+/// connections in several suites at once — keeps the machine busy enough that
+/// the service's first image list once took longer than five seconds to arrive.
 private func pollUntil(
-    timeout: Duration = .seconds(5),
+    timeout: Duration = .seconds(30),
     _ condition: () async -> Bool
 ) async -> Bool {
     let deadline = ContinuousClock.now + timeout
