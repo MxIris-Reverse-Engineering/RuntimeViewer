@@ -106,7 +106,7 @@
 |---|---|---|
 | PR121.01 | Blocker | RuntimeViewerApplication 在 iOS / visionOS 上编不过（已修复 `fffe00d3`） |
 | PR121.02 | Major | FindSession 的 unowned documentState 在关窗后崩溃（已修复 `5746c2e0`） |
-| PR121.03 | Major | interfaceString 改成 FrozenSemanticString 破坏新旧版本互通 |
+| PR121.03 | Major | interfaceString 改成 FrozenSemanticString 破坏新旧版本互通（已修复 `90d0bb1c`） |
 | PR121.04 | Major | 在侧栏打开的已加载镜像永远建不出语料 |
 | PR121.05 | Major | 旧搜索的批次混进当前结果；换引擎后结果混杂 |
 | PR121.06 | Major | 搜索在 store actor 上同步扫描，病态正则卡死 |
@@ -115,7 +115,7 @@
 | PR121.09 | Major | Report 的取消到不了服务端 |
 | PR121.10 | Major | 成员定位按名字抢行 |
 | PR121.11 | Major | 顶层协议的默认实现进不了 Members 搜索 |
-| PR121.12 | Major | socket 上回复先于进度推送被处理，丢掉最后几批结果 |
+| PR121.12 | Major | socket 上回复先于进度推送被处理，丢掉最后几批结果（已修复 `400f721f`） |
 | PR121.13 | Major | ObjC 协议按携带镜像重复、归属取决于索引顺序 |
 | PR121.14 | Major | 父类是绑定泛型的 Swift 类，Ancestor 树被截断 |
 | PR121.15 | Minor | 正则的 ^ / $ 不按行匹配（已修复 `950c8402`） |
@@ -133,8 +133,8 @@
 | PR121.27 | Minor | RuntimeViewer 复制了上游打印器的私有规则 |
 | PR121.28 | Cleanup | 可见性映射复制了 Swift 打印配置 |
 | PR121.29 | Major | 取消传不过连接（跨连接取消的整体设计） |
-| PR121.30 | Minor | store 发起的取消跨过连接后被记成失败 |
-| PR121.31 | Major（读代码推出，尚未复现） | socket 上迟到的回复在两端之间无限往返 |
+| PR121.30 | Minor | store 发起的取消跨过连接后被记成失败（部分修复：LocalizedError `cc8bf048`；其余随 PR121.29） |
+| PR121.31 | Major（已用测试复现） | socket 上迟到的回复在两端之间无限往返（已修复 `17ab55d2`） |
 | PR121.32 | Minor | 为没有索引的镜像请求语料 |
 | PR121.33 | Minor | iOS 模拟器引擎上同一镜像按原始路径和规范路径各记一份 |
 | PR121.34 | Minor | 被悄悄驱逐的语料仍显示已建好；历史满额时 Clear History 失效 |
@@ -173,8 +173,8 @@
 | PR121.67 | Minor | 关系遍历不检查取消 |
 | PR121.68 | 建议不修 | materializeObjCClass 回退到 ObjC 面（建议不修） |
 | PR121.69 | Cleanup | 关系遍历代码重复、visited 键写法不统一 |
-| PR121.70 | Major | 锁文件钉着被变基孤立的 MachOSwiftSection 修订 |
-| PR121.71 | Minor（单独看不出错，但它决定 PR121.53 的修复和测试在哪个版本下成立） | RxAppKit 在 App 是 0.6.0、包测试与 CLI 锁文件是 0.5.4 |
+| PR121.70 | Major | 锁文件钉着被变基孤立的 MachOSwiftSection 修订（已修复 `0b257a8d`） |
+| PR121.71 | Minor（单独看不出错，但它决定 PR121.53 的修复和测试在哪个版本下成立） | RxAppKit 在 App 是 0.6.0、包测试与 CLI 锁文件是 0.5.4（已修复 `0b257a8d`） |
 | PR121.72 | Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分） | 语料为协议副本和 Swift 类的 ObjC 面各建一条，搜索重复命中 |
 | PR121.73 | 待核实（若成立：Minor） | 旧版注入 payload 收到不认识的命令可能被标成断开 |
 
@@ -482,203 +482,7 @@ struct FindSessionLifecycleTests {
   - 接受破坏：违背已写明的兼容承诺，属于破坏性改动，要走完整提案。
 - **文档同步**：注释、架构文档（新增 §4.4，写下「改已有命令载荷形状」的规则）、提案 §0 和决策日志，同批更新。
 
-**拟修改**：
-```diff
---- a/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+Requests.swift
-+++ b/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+Requests.swift
-@@ -112,8 +112,23 @@ extension RuntimeEngine {
-     struct InterfaceRequest: RuntimeEngineRequest {
-         let object: RuntimeObject
-         let options: RuntimeObjectInterface.GenerationOptions
-+        /// Sent as `true` by builds that read `interfaceString` in the
-+        /// columnar `FrozenSemanticString` encoding. Builds before it send no
-+        /// such key and decode it as `nil`; servers before it ignore it. Both
-+        /// get the component array they were built for — see
-+        /// `RuntimeObjectInterfaceResponse`.
-+        let acceptsColumnarInterfaceString: Bool?
-         static var commandName: String { CommandNames.runtimeInterfaceForRuntimeObjectInImageWithOptions.commandName }
--        func perform(on engine: RuntimeEngine) async throws -> RuntimeObjectInterface? {
--            try await engine._interface(for: object, options: options)
-+        func perform(on engine: RuntimeEngine) async throws -> RuntimeObjectInterfaceResponse {
-+            let interface = try await engine._interface(for: object, options: options)
-+            return response(for: interface)
-+        }
-+
-+        /// The reply, in the encoding the sender of this request reads.
-+        func response(for interface: RuntimeObjectInterface?) -> RuntimeObjectInterfaceResponse {
-+            RuntimeObjectInterfaceResponse(
-+                interface: interface,
-+                interfaceStringEncoding: acceptsColumnarInterfaceString == true ? .columnar : .components
-+            )
-         }
-     }
-```
-
-```diff
---- /dev/null
-+++ b/RuntimeViewerCore/Sources/RuntimeViewerCore/Common/RuntimeObjectInterfaceResponse.swift
-@@ -0,0 +1,87 @@
-+import Foundation
-+import Semantic
-+
-+/// `InterfaceRequest`'s reply. On the wire it is exactly a
-+/// `RuntimeObjectInterface?`, with `interfaceString` in one of the two
-+/// encodings peers have shipped with:
-+///
-+/// - `components`: `SemanticString`'s array of components, the only shape
-+///   builds up to 3.0.0-beta.6 can read;
-+/// - `columnar`: `FrozenSemanticString`'s own encoding, an order of magnitude
-+///   smaller, sent only to a requester that says it reads it.
-+///
-+/// Engine connections exchange no protocol version, and peers of different
-+/// builds are expected to talk to each other (`CommunicationAndEngineArchitecture.md`
-+/// §4.4), so the request states what its sender reads and this type decodes
-+/// either shape.
-+struct RuntimeObjectInterfaceResponse: Sendable {
-+    enum InterfaceStringEncoding: Sendable {
-+        case components
-+        case columnar
-+    }
-+
-+    let interface: RuntimeObjectInterface?
-+
-+    /// Chosen from the request on the serving side; recorded from what
-+    /// arrived on the receiving side. A proxy relaying the reply therefore
-+    /// writes it on in the shape it got — which its own requester can read,
-+    /// because the proxy forwarded that requester's request unchanged.
-+    let interfaceStringEncoding: InterfaceStringEncoding
-+}
-+
-+extension RuntimeObjectInterfaceResponse: Codable {
-+    init(from decoder: any Decoder) throws {
-+        let container = try decoder.singleValueContainer()
-+        if container.decodeNil() {
-+            interface = nil
-+            interfaceStringEncoding = .components
-+            return
-+        }
-+        do {
-+            interface = try container.decode(RuntimeObjectInterface.self)
-+            interfaceStringEncoding = .columnar
-+        } catch let columnarDecodingError {
-+            // Not the columnar shape: a peer that predates it. If it is not
-+            // the component shape either, the columnar failure is the one that
-+            // describes the current format.
-+            guard let componentEncodedInterface = try? container.decode(ComponentEncodedRuntimeObjectInterface.self) else {
-+                throw columnarDecodingError
-+            }
-+            interface = componentEncodedInterface.runtimeObjectInterface
-+            interfaceStringEncoding = .components
-+        }
-+    }
-+
-+    func encode(to encoder: any Encoder) throws {
-+        var container = encoder.singleValueContainer()
-+        guard let interface else {
-+            try container.encodeNil()
-+            return
-+        }
-+        switch interfaceStringEncoding {
-+        case .columnar:
-+            try container.encode(interface)
-+        case .components:
-+            try container.encode(ComponentEncodedRuntimeObjectInterface(interface))
-+        }
-+    }
-+}
-+
-+/// `RuntimeObjectInterface` as builds up to 3.0.0-beta.6 declare it. The
-+/// synthesized `Codable` is the point: it has to stay byte for byte what
-+/// those builds read and write.
-+struct ComponentEncodedRuntimeObjectInterface: Codable, Sendable {
-+    let object: RuntimeObject
-+    let interfaceString: SemanticString
-+
-+    init(_ interface: RuntimeObjectInterface) {
-+        object = interface.object
-+        interfaceString = SemanticString(components: interface.interfaceString.components)
-+    }
-+
-+    /// Frozen again on the way in: everything past the wire handles the
-+    /// frozen form only.
-+    var runtimeObjectInterface: RuntimeObjectInterface {
-+        RuntimeObjectInterface(object: object, interfaceString: interfaceString)
-+    }
-+}
-```
-
-```diff
---- a/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift
-+++ b/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift
-@@ -1013,5 +1013,5 @@
- 
-     public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
--        try await dispatch(InterfaceRequest(object: object, options: options))
-+        try await dispatch(InterfaceRequest(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
-     }
- 
-```
-
-```diff
---- a/RuntimeViewerCore/Sources/RuntimeViewerCore/Common/RuntimeObjectInterface.swift
-+++ b/RuntimeViewerCore/Sources/RuntimeViewerCore/Common/RuntimeObjectInterface.swift
-@@ -7,9 +7,11 @@ public struct RuntimeObjectInterface: Codable, Sendable {
-     /// The generated interface in its immutable terminal form. A stored
-     /// interface is only rendered, encoded, exported, or searched from here
-     /// on — never recomposed — so it is frozen at this boundary: one text
-     /// string plus 8-byte spans instead of the printer's component
-     /// representation (~40 B/token flat, ~144 B/token as a construction
--    /// tree). Freezing also switches the wire format to the columnar
--    /// `FrozenSemanticString` encoding, which is an order of magnitude
--    /// smaller over XPC/TCP.
-+    /// tree). This type's own `Codable` is the columnar
-+    /// `FrozenSemanticString` encoding, an order of magnitude smaller over
-+    /// XPC/TCP; the interface request sends it only to a requester that says
-+    /// it reads it, and the component array to everyone else — see
-+    /// `RuntimeObjectInterfaceResponse`.
-     public let interfaceString: FrozenSemanticString
-```
-
-```diff
---- a/Documentations/CommunicationAndEngineArchitecture.md
-+++ b/Documentations/CommunicationAndEngineArchitecture.md
-@@ -367,6 +367,16 @@
- - 非 macOS：`RuntimeRequest: Codable & Sendable`，带 `associatedtype Response: RuntimeResponse` 与 `static var identifier`。
- - macOS：`RuntimeRequest` **refine** `HelperCommunication.Request`，于是任何 daemon-bound 业务请求能直接挂到 `HelperService` / `HelperPeer` 上。
- - 同文件还定义了跨进程共享的 Mach 服务名 `RuntimeViewerMachServiceName`（Debug 下按 arm64e 变体切换）与协议版本 `RuntimeViewerServiceVersion`。
- 
-+### 4.4 改已有命令的载荷形状
-+
-+引擎之间的连接不交换协议版本（`RuntimeViewerServiceVersion` 只管 helper daemon），新旧版本的对端互连是常态（§8「双向兼容，不要求同版本」）。所以**已经发布的命令，请求与回复的形状只能这样改**：
-+
-+- **接收方容错**：新的解码同时接受旧形状；两种都解不出来时，抛新形状那次的错误。
-+- **发送方保守**：只有请求方声明读得懂时才发新形状——请求里加一个可选字段，旧对端解码时会忽略它，旧请求解出 `nil`——其余一律发旧形状。经过旧节点转发时退回旧形状，代价只是体积。
-+- **配冻结读端测试**：旧读端与旧请求在测试里手写，照发布时的形状冻结，不复用当前类型。用当前类型自编自解，只能证明它和自己一致。
-+
-+第一例是接口请求：`interfaceString` 的列式编码只发给带 `acceptsColumnarInterfaceString: true` 的请求方，回复类型 `RuntimeObjectInterfaceResponse` 两种形状都能解。新增**命令**不在此列，但旧对端会对它回「No handler registered」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。
-+
- ---
- 
-```
-
-```diff
---- a/Documentations/Evolutions/draft-find-navigator.md
-+++ b/Documentations/Evolutions/draft-find-navigator.md
-@@ -35,6 +35,10 @@
- `FrozenSemanticString`、`388dd212` 应用侧改按 span 渲染）先单独 rebase 到 `next` 合入。理由有两条，都与本提案无关也
- 成立：`RuntimeObjectInterface` 现在每一份都过 XPC（「My Mac」引擎已在 `RuntimeViewerLocalRuntimeService.xpc` 里），
- Frozen 的列式编码比逐 component 编码小一个数量级；语料条目本来就是 Frozen，不改边界就要在 store 里再冻一次、
- 两种形态并存。
- 
-+**列式编码只发给声明读得懂的请求方。** 3.0.0-beta.6 及更早的对端只认逐 component 的数组，引擎连接上又不交换协议版本，
-+所以接口请求带上 `acceptsColumnarInterfaceString`，没带的一律回旧形状，回复两种形状都能解（决策日志 2026-10-07；
-+规则见 `CommunicationAndEngineArchitecture.md` §4.4）。
-+
- `next` 上的消费点比分支当年多，rebase 时逐个改：`ContentTextViewModel`（`interfaceString` 类型与
-@@ -756,1 +760,2 @@
- | 2026-10-04 | 一个都没选时 OK 置灰；表单列表覆写 `mouseDown(with:)`；菜单项不带图标 | Xcode 的 OK 此时能点却不改范围，置灰更直观。不覆写时 macOS 27 的列表点击不给焦点，选中的行一直是灰色，与 `StatefulOutlineView` 同一取舍。我们没有与 Xcode 那几个范围对应的图标。 |
-+| 2026-10-07 | 接口请求的列式编码只发给声明读得懂的请求方，回复两种形状都能解 | PR #121 审查发现：`interfaceString` 改成 `FrozenSemanticString` 后，自动合成的编码从数组变成带键对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白；而项目承诺新旧版本互通，iOS 端混版是常态。另开新命令要多一轮回退往返，2.1.0 之前的对端还会等到超时；接受破坏违背承诺。请求里加一个可选字段最小：旧端忽略它，新端缺省回旧形状。 |
-```
+**修复**：`90d0bb1c`
 
 **复现测试（示例）**：新建 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/RuntimeObjectInterfaceWireCompatibilityTests.swift`，照 db700876 和 `RuntimeRemoteEngineDescriptorCompatibilityTests` 的写法冻结旧读端与旧请求。
 - **为什么修前会红**：前两条要在修复前先跑一遍，写法是把 `RuntimeObjectInterfaceResponse` 换成当前的回复类型 `RuntimeObjectInterface?`，此时：
@@ -4214,104 +4018,7 @@ func protocolDefaultImplementationsLocated() async throws {
   - 推送改成需要确认的往返：旧客户端不回确认，会挂住新服务端。
   - 把命中放进最终回复：失去按镜像流式显示的效果。
 
-**拟修改**：
-```diff
---- a/RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeMessageChannel.swift
-+++ b/RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeMessageChannel.swift
-@@ -98,7 +98,16 @@ protocol RuntimeMessageProtocol: Sendable {
- final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-     /// Unique identifier for this channel.
-     let id = UUID()
- 
-+    /// Set while a fire-and-forget handler runs on `orderedHandlerTail`. A
-+    /// request sent from there skips the reply barrier in `sendRequest`: the
-+    /// barrier waits for the tail, and the sender is part of the tail. Tasks a
-+    /// tail handler spawns inherit it, which only gives up the ordering
-+    /// guarantee for them. Never `await` a `Task.detached` from a tail handler
-+    /// that sends a request over this channel — it does not inherit the flag
-+    /// and would wait for the handler awaiting it.
-+    @TaskLocal static var isRunningOnOrderedHandlerTail = false
-+
-     /// Called when a complete message is received.
-     /// - Note: This callback is called from a locked context; avoid long-running operations.
-     var onMessageReceived: (@Sendable (Data) -> Void)?
-@@ -203,9 +212,12 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-     func deliverToPendingRequest(routingKey: String, data: Data) -> Bool {
-         guard let pending = pendingRequests.withLock({ $0.removeValue(forKey: routingKey) }) else {
-             return false
-         }
-         #log(.debug, "Delivered response to pending request: \(routingKey, privacy: .public)")
-         pending.cancelTimeoutTask()
--        pending.continuation.resume(returning: data)
-+        // Every fire-and-forget message that arrived before this reply is on
-+        // the tail by now; the requester waits for them before it continues.
-+        let precedingHandlers = orderedHandlerTail.withLock { $0 }
-+        pending.continuation.resume(returning: ReceivedReply(data: data, precedingHandlers: precedingHandlers))
-         return true
-     }
-@@ -373,7 +385,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-         let dataToSend = data + Self.endMarkerData
- 
-         // Register pending request before sending
--        let responseData: Data = try await withCheckedThrowingContinuation { continuation in
-+        let reply: ReceivedReply = try await withCheckedThrowingContinuation { continuation in
-             let pending = PendingRequest(continuation: continuation)
-             pendingRequests.withLock { $0[nonce] = pending }
- 
-@@ -418,6 +430,15 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-             }
-         }
- 
-+        // Pushes the peer sent before this reply — progress for this very
-+        // request, the state syncs ahead of it — are applied before the caller
-+        // continues, as they are over XPC, where each push is a round trip.
-+        // Without this, a request that removes its progress route on return
-+        // drops the pushes still queued on the tail.
-+        if !Self.isRunningOnOrderedHandlerTail {
-+            await reply.precedingHandlers.value
-+        }
-+        let responseData = reply.data
-         #log(.debug, "Received response for: \(stamped.identifier, privacy: .public) [nonce \(nonce, privacy: .public)]")
-         let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
-         // A peer that couldn't service the request (handler threw, or no handler
-@@ -596,9 +617,11 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-     private func enqueueOrdered(_ work: @escaping @Sendable () async -> Void) {
-         orderedHandlerTail.withLock { tail in
-             let previous = tail
-             tail = Task {
-                 await previous.value
--                await work()
-+                await Self.$isRunningOnOrderedHandlerTail.withValue(true) {
-+                    await work()
-+                }
-             }
-         }
-     }
-@@ -630,13 +653,20 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
- // MARK: - PendingRequest
- 
-+/// A reply as `sendRequest` receives it: the envelope, and the tail of
-+/// fire-and-forget handlers that were queued when it arrived.
-+private struct ReceivedReply: Sendable {
-+    let data: Data
-+    let precedingHandlers: Task<Void, Never>
-+}
-+
- /// Bookkeeping for a single in-flight request. Owns the continuation that `sendRequest`
- /// is awaiting and an optional timeout `Task` whose handle is held under a lock so the
- /// success and writer-error paths can cancel it before it has a chance to fire against a
- /// later request that registered under the same identifier.
- private final class PendingRequest: @unchecked Sendable {
--    let continuation: CheckedContinuation<Data, Error>
-+    let continuation: CheckedContinuation<ReceivedReply, Error>
-     private let timeoutTask = Mutex<Task<Void, Never>?>(nil)
- 
--    init(continuation: CheckedContinuation<Data, Error>) {
-+    init(continuation: CheckedContinuation<ReceivedReply, Error>) {
-         self.continuation = continuation
-     }
-```
-修改后，`PendingRequest` 的其余用法（超时、写入失败、`finishReceiving` 里的 `resume(throwing:)`）都不用动。超时只在等回复的阶段计时，回复交付时已经取消计时，之后等屏障不会触发超时。
+**修复**：`400f721f`
 
 **复现测试（示例）**：
 - 在 `RuntimeViewerCore/Tests/RuntimeViewerCommunicationTests/ConnectionTransportRegressionTests.swift` 新增一个 suite，复用文件里现成的 `withTransportTimeout` 和 `waitUntilConnected`。
@@ -7690,79 +7397,7 @@ func storeCancellationIsNotAFailure() async throws {
 - `isError == true` 的帧一律当作回复处理，绝不交给处理器。错误信封只可能是回复。
 - 两条规则都只作用于接收端，不改线格式。旧对端仍会发出那一条多余的错误信封，但新端不再回应，循环在第一圈就断开。
 
-**拟修改**：
-```diff
---- a/RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeMessageChannel.swift
-+++ b/RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeMessageChannel.swift
-@@ -113,6 +113,15 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-     /// a *different* request that happened to be registered under the same identifier.
-     private let pendingRequests = Mutex<[String: PendingRequest]>([:])
- 
-+    /// Nonces of requests this side stopped waiting for (timed out), newest
-+    /// last. Their replies can still arrive; one that is not recognised as a
-+    /// reply is taken for a request of the same command and answered, and the
-+    /// two peers echo each other forever. Bounded: a reply that never comes
-+    /// leaves an entry that only ages out.
-+    private let abandonedRequestNonces = Mutex<[String]>([])
-+
-+    private static let maximumAbandonedRequestNonceCount = 256
-+
-     /// Buffer for incoming data, plus how far it has already been scanned for an
-     /// end-marker. Persisting the scan offset across appends keeps a large
-     /// message that arrives in many chunks at O(n) total instead of O(n²) — the
-@@ -387,7 +396,8 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                     if Task.isCancelled { return }
-                     if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: nonce) }) {
-                         #log(.error, "Request \(identifier, privacy: .public) [nonce \(nonce, privacy: .public)] timed out after \(timeout, privacy: .public)s")
-+                        self.rememberAbandonedRequest(nonce: nonce)
-                         pending.continuation.resume(throwing: RuntimeMessageChannelError.requestTimeout)
-                     }
-                 }
-@@ -553,7 +563,15 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-         if deliverToPendingRequest(routingKey: routingKey, data: data) {
-             return
-         }
- 
-+        // A reply nobody waits for any more must not be taken for a request:
-+        // answering it sends the peer an envelope of its own command, which it
-+        // runs and answers again. An error envelope is always a reply.
-+        if requestData.isError == true || takeAbandonedRequest(nonce: requestData.nonce) {
-+            #log(.debug, "Dropped a reply to an abandoned request: \(requestData.identifier, privacy: .public)")
-+            return
-+        }
-+
-         guard let handler = handler(for: requestData.identifier) else {
-             if requestData.nonce != nil {
-                 #log(.error, "No handler for: \(requestData.identifier, privacy: .public); replying with error so the caller doesn't hang")
-@@ -592,6 +611,26 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
-         }
-     }
- 
-+    private func rememberAbandonedRequest(nonce: String) {
-+        abandonedRequestNonces.withLock { nonces in
-+            nonces.append(nonce)
-+            let overflow = nonces.count - Self.maximumAbandonedRequestNonceCount
-+            if overflow > 0 {
-+                nonces.removeFirst(overflow)
-+            }
-+        }
-+    }
-+
-+    /// Whether `nonce` names a request this side abandoned, forgetting it.
-+    private func takeAbandonedRequest(nonce: String?) -> Bool {
-+        guard let nonce else { return false }
-+        return abandonedRequestNonces.withLock { nonces in
-+            guard let index = nonces.firstIndex(of: nonce) else { return false }
-+            nonces.remove(at: index)
-+            return true
-+        }
-+    }
-+
-     /// Appends `work` to the serial fire-and-forget tail, preserving order.
-     private func enqueueOrdered(_ work: @escaping @Sendable () async -> Void) {
-         orderedHandlerTail.withLock { tail in
-```
+**修复**：`17ab55d2`
 
 **复现测试（示例）**：
 - 放在 `RuntimeViewerCore/Tests/RuntimeViewerCommunicationTests/ConnectionTransportRegressionTests.swift`。
@@ -14750,41 +14385,7 @@ func cancelledRelationshipSearchThrows() async throws {
 - 脚本会把所有按分支依赖的包一起推到各自的分支末端。review 锁文件 diff 时，确认除 MachOSwiftSection 之外的变化也都是预期的。不想一起动的包，按「升级单个 SPM pin」的做法只删 MachOSwiftSection 那一条 pin 再解析。
 - 以后上游分支要变基或强推时，先确认 RuntimeViewer 这边钉的修订还在新历史里；不在，就在同一批里重新解析锁文件。
 
-**拟修改**（预期结果。实际修订以脚本解析出的为准；其它包可能也会变化）：
-```diff
---- a/RuntimeViewer-Distribution.xcworkspace/xcshareddata/swiftpm/Package.resolved
-+++ b/RuntimeViewer-Distribution.xcworkspace/xcshareddata/swiftpm/Package.resolved
-@@ -184,9 +184,9 @@
-       "identity" : "machoswiftsection",
-       "kind" : "remoteSourceControl",
-       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-       "state" : {
-         "branch" : "feature/runtime-viewer/find-navigator",
--        "revision" : "86f653418ef8a8d989fd6b8e778322cb22dc271a"
-+        "revision" : "beae202dd484489cd12fc52af3696df8c8f80453"
-       }
-     },
-```
-```diff
---- a/RuntimeViewer-Debug.xcworkspace/xcshareddata/swiftpm/Package.resolved
-+++ b/RuntimeViewer-Debug.xcworkspace/xcshareddata/swiftpm/Package.resolved
-@@
-       "state" : {
-         "branch" : "feature/runtime-viewer/find-navigator",
--        "revision" : "86f653418ef8a8d989fd6b8e778322cb22dc271a"
-+        "revision" : "beae202dd484489cd12fc52af3696df8c8f80453"
-       }
-```
-```diff
---- a/RuntimeViewer.xcworkspace/xcshareddata/swiftpm/Package.resolved
-+++ b/RuntimeViewer.xcworkspace/xcshareddata/swiftpm/Package.resolved
-@@ -184,9 +184,9 @@
-       "state" : {
-         "branch" : "feature/runtime-viewer/find-navigator",
--        "revision" : "b72638f8cb61739cfa88577cc1a594e4866de070"
-+        "revision" : "beae202dd484489cd12fc52af3696df8c8f80453"
-       }
-```
+**修复**：`0b257a8d`（与 PR121.71 同一个提交）
 
 **验证（代替测试代码）**：
 ```bash
@@ -14854,55 +14455,7 @@ queued-build xcodebuild build -workspace RuntimeViewer-Distribution.xcworkspace 
 - 已知的连带影响：改 `RuntimeViewerPackages/Package.swift` 的任何一行都会触发整体重新解析，提交的锁文件过不了这一关（branch pin 和 capstone 那几条会一起变）。所以这次一定会连带一次锁文件更新。建议把锁文件单独作为一个 `build(deps)` 提交，和代码改动分开，方便审阅。`originHash` 也会随 manifest 改变。
 - 这是依赖下限的升级，没有破坏性 API 变更，不需要提案。
 
-**拟修改**：
-```diff
---- a/RuntimeViewerPackages/Package.swift
-+++ b/RuntimeViewerPackages/Package.swift
-@@ -215,9 +215,12 @@ let package = Package(
-                 path: "../../RxAppKit",
-                 isRelative: true,
-             ),
-             remote: .package(
-                 url: "https://github.com/Mx-Iris/RxAppKit",
--                from: "0.5.4",
-+                // 0.6.0 compares outline nodes by diffing semantics: value-type trees such as
-+                // `ReportNode` rely on it (identity `==`, recursive `isContentEqual`). Below it the
-+                // reload adapter compares with `==` and swallows every change inside a subtree.
-+                from: "0.6.0",
-             ),
-         ),
-```
-
-```diff
---- a/RuntimeViewerPackages/Package.resolved
-+++ b/RuntimeViewerPackages/Package.resolved
-@@ -222,8 +222,8 @@
-       "kind" : "remoteSourceControl",
-       "location" : "https://github.com/Mx-Iris/RxAppKit",
-       "state" : {
--        "revision" : "cc84d4f0d9b86a1a3b8e042150254128998d1dc0",
--        "version" : "0.5.4"
-+        "revision" : "c196e6f69c8a4508ed602363e31a41fd347a0514",
-+        "version" : "0.6.0"
-       }
-     },
-```
-
-```diff
---- a/RuntimeViewerCommandLine/Package.resolved
-+++ b/RuntimeViewerCommandLine/Package.resolved
-@@ -222,8 +222,8 @@
-       "kind" : "remoteSourceControl",
-       "location" : "https://github.com/Mx-Iris/RxAppKit",
-       "state" : {
--        "revision" : "cc84d4f0d9b86a1a3b8e042150254128998d1dc0",
--        "version" : "0.5.4"
-+        "revision" : "c196e6f69c8a4508ed602363e31a41fd347a0514",
-+        "version" : "0.6.0"
-       }
-     },
-```
-（两个锁文件这里只列出 `rxappkit` 这一条，以及上面说明的连带变化。实际提交的锁文件由 SwiftPM 重新解析生成，不手工编辑。）
+**修复**：`0b257a8d`（与 PR121.70 同一个提交）
 
 **复现测试（示例）**：这一条是构建验证类，用命令代替测试代码。目录都是 agent 专用的，构建经 `queued-build` 排队，测试只看原始退出码。
 ```bash
