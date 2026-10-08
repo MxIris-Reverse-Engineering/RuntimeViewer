@@ -58,6 +58,71 @@ struct DocumentStateEngineRestartTests {
         #expect(documentState.currentImageNode == nil)
     }
 
+    /// `.switchEngine` leaves a document with nothing open alone, so the
+    /// engine coming back used to reach no one: whatever a member had learned
+    /// from the old process — the Find results, the corpus states — stayed.
+    @Test("The engine coming back while nothing is open announces a reset, and sends no route")
+    func comingBackWithNothingOpenAnnouncesAReset() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "DocumentStateEngineRestartTests.resetAtTheImageList")
+        let documentState = DocumentState(runtimeEngine: engine)
+        defer { withExtendedLifetime(documentState) {} }
+        var routes: [SelectionRoute] = []
+        var resetEngines: [RuntimeEngine] = []
+        let routeSubscription = documentState.routeSignal.emit(onNext: { routes.append($0) })
+        let resetSubscription = documentState.runtimeEngineDidReset.emit(onNext: { resetEngines.append($0) })
+        defer {
+            routeSubscription.dispose()
+            resetSubscription.dispose()
+        }
+
+        await engine.stop()
+        try await engine.connect()
+
+        let isAnnounced = await pollUntil(timeout: .seconds(5)) { !resetEngines.isEmpty }
+        #expect(isAnnounced, "the engine came back and nothing heard of it")
+        #expect(resetEngines.count == 1)
+        #expect(resetEngines.first === engine)
+        #expect(routes.isEmpty)
+    }
+
+    @Test("The engine coming back while an image is open walks back through the route and announces the reset once")
+    func comingBackWhileBrowsingAnnouncesTheResetOnce() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "DocumentStateEngineRestartTests.resetWhileBrowsing")
+        let documentState = DocumentState(runtimeEngine: engine)
+        defer { withExtendedLifetime(documentState) {} }
+        documentState.selectionRouter.trigger(.switchImage(Self.makeImageNode()))
+        var resetEngines: [RuntimeEngine] = []
+        let resetSubscription = documentState.runtimeEngineDidReset.emit(onNext: { resetEngines.append($0) })
+        defer { resetSubscription.dispose() }
+
+        await engine.stop()
+        try await engine.connect()
+
+        let resetToRoot = await pollUntil(timeout: .seconds(5)) { documentState.currentImageNode == nil }
+        #expect(resetToRoot)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(resetEngines.count == 1, "the reset was announced \(resetEngines.count) times")
+    }
+
+    @Test("Switching to another engine announces the reset; putting back the engine in place with nothing open does not")
+    func switchingEnginesAnnouncesTheReset() async throws {
+        let firstEngine = try await TestRuntimeEngine.makeConnected(engineID: "DocumentStateEngineRestartTests.announce-first")
+        let secondEngine = try await TestRuntimeEngine.makeConnected(engineID: "DocumentStateEngineRestartTests.announce-second")
+        let documentState = DocumentState(runtimeEngine: firstEngine)
+        defer { withExtendedLifetime(documentState) {} }
+        var resetEngines: [RuntimeEngine] = []
+        let resetSubscription = documentState.runtimeEngineDidReset.emit(onNext: { resetEngines.append($0) })
+        defer { resetSubscription.dispose() }
+
+        documentState.selectionRouter.trigger(.switchEngine(secondEngine))
+        #expect(resetEngines.count == 1)
+        #expect(resetEngines.first === secondEngine)
+
+        // The route's own no-op: the same engine, nothing open.
+        documentState.selectionRouter.trigger(.switchEngine(secondEngine))
+        #expect(resetEngines.count == 1)
+    }
+
     @Test("Switching to another engine moves the restart watch with it")
     func watchFollowsEngineSwitch() async throws {
         let firstEngine = try await TestRuntimeEngine.makeConnected(engineID: "DocumentStateEngineRestartTests.first-of-two")

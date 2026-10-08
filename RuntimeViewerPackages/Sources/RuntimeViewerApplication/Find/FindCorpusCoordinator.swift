@@ -30,8 +30,10 @@ import RuntimeViewerSettings
 ///    corpus is printed with them, so all are dropped and rebuilt, and the
 ///    search on screen runs again (`corporaRebuilt`).
 ///
-/// Turning the switch off drops every corpus. A source switch rewires onto
-/// the new engine and starts over.
+/// Turning the switch off drops every corpus. A source switch, or the engine
+/// coming back with a new process behind it, rewires onto the engine and
+/// starts over (`DocumentState.runtimeEngineDidReset`); a build the lost
+/// connection interrupted is not recorded as failed.
 ///
 /// It also says how its requests are going: `buildStatesByImagePath` takes
 /// every image it asked for from queued to built or failed, progress
@@ -449,6 +451,13 @@ public final class FindCorpusCoordinator {
             // Not indexed yet: nothing to print, and nothing went wrong. The
             // image is asked for again once the engine reports it indexed.
             buildStatesByImagePath[imagePath] = nil
+        case .failure(let error) where RuntimeConnectionError.isLostConnection(error):
+            // Not a failed build: the connection went away under it — the
+            // service exited, the peer closed its socket. Once the engine is
+            // back, the coordinator starts over on it and asks again for every
+            // image its process has indexed.
+            #log(.info, "Corpus build of \(imagePath, privacy: .public) was interrupted: the connection went away (\(error, privacy: .public))")
+            buildStatesByImagePath[imagePath] = nil
         case .failure(let error as RuntimeNetworkRequestError) where error.isUnknownCommand:
             // Not a failed build: the peer predates corpora. Every request
             // would fail the same way, so none is kept and none is made again
@@ -575,19 +584,24 @@ public final class FindCorpusCoordinator {
 
     // MARK: - Engine swap
 
+    /// Follows the document's engine resets — another engine, or the same
+    /// one with a new process behind it, whether or not the document had
+    /// anything open (`DocumentState.runtimeEngineDidReset`) — at once, so a
+    /// search run again on the new process finds this coordinator on it.
     private func bootstrapEngineObservation(of documentState: DocumentState) {
-        documentState.$runtimeEngine
-            .skip(1)
-            .subscribeOnNext { [weak self] newEngine in
+        documentState.runtimeEngineDidReset
+            .emitOnNext { [weak self] newEngine in
                 guard let self else { return }
                 self.handleEngineSwap(to: newEngine)
             }
             .disposed(by: disposeBag)
     }
 
-    /// The new engine has corpora of its own, so the states start over; the
-    /// history stays — it reads as what this document built this session,
-    /// like the indexing history.
+    /// The process behind the engine has corpora of its own, so the states
+    /// start over and every image it has indexed is asked for again — an
+    /// image whose build a lost connection interrupted among them, while the
+    /// process still has it. The history stays: it reads as what this
+    /// document built this session, like the indexing history.
     private func handleEngineSwap(to newEngine: RuntimeEngine) {
         stopPumps()
         withdrawEveryBuild()

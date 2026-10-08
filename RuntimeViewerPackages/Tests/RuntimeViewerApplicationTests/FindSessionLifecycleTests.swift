@@ -168,6 +168,31 @@ struct FindSessionLifecycleTests {
         await newEngine.stop()
     }
 
+    /// The local-runtime service relaunching while the document sits at the
+    /// image list with nothing open: `.switchEngine` has nothing to walk back
+    /// there, so the engine never "changed", and the rows of the process that
+    /// is gone stayed on screen (the gap PR121.05 left, closed with PR121.30).
+    /// An in-process engine goes through the same edge with `stop()` and
+    /// `connect()`.
+    @Test("a search on screen runs again when the engine comes back while the document has nothing open")
+    func engineComingBackAtTheImageListRunsTheSearchAgain() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindSessionLifecycleTests.engineBack", loading: [TestImages.libobjc])
+        _ = try await engine.buildInterfaceCorpus(for: TestImages.libobjc, transformer: .default)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let session = environment.make { environment.documentState.findSession }
+        session.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true))
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { !$0 }
+        #expect(environment.documentState.currentImageNode == nil)
+
+        await engine.stop()
+        try await engine.connect()
+
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 10) { $0 }
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { !$0 }
+        #expect(session.query.text == "NSObject")
+        await engine.stop()
+    }
+
     // MARK: - A widening search that fails
 
     #if os(macOS)

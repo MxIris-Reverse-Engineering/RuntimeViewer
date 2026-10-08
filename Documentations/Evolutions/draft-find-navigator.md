@@ -276,7 +276,8 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 ### 4. App 侧
 
 - **`GlobalSearchCorpusCoordinator`**（`RuntimeViewerApplication`，`@MainActor`，与
-  `RuntimeBackgroundIndexingCoordinator` 平级，同样订阅 `documentState.$runtimeEngine` 换引擎重接）。触发源：
+  `RuntimeBackgroundIndexingCoordinator` 平级，换引擎重接；2026-10-08 起改订阅 `DocumentState.runtimeEngineDidReset`，
+  引擎在文档什么都没打开时重新就绪也重新开始，见决策日志）。触发源：
   1. `RuntimeEngine.imageDidIndexPublisher`：引擎的 API（`objects(in:)`、`objectsWithProgress(in:)`、两个
      `loadImage(at:)`、`loadImageForBackgroundIndexing(at:)`）每把一个镜像索引好就报一次，由调用方手里那台引擎在本进程
      发出，不需要对端发消息 → 该镜像排队，侧栏正显示的那个置顶；订阅之后先把已索引的镜像补队一次。原先的两路
@@ -780,3 +781,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | transformer 变化后，协调器驱逐并重新请求全部语料，随即发 `corporaRebuilt`，屏上读语料的那次搜索从头重跑（查询与范围不变）；不做「保留旧结果、逐镜像替换命中」 | PR #121 审查 PR121.40：会话补搜前先减去已经搜过的镜像，而重建的恰恰都是搜过的镜像，于是全部被跳过；屏上一直是旧 transformer 打印出的行，内容区却已按新 transformer 显示，点击时行对不上，高亮只能退到降级匹配。从头重跑时语料多半还没建好，结果先是「0 results · N images being made searchable」，再随重建逐个补回，与启动时一致。逐镜像替换要按镜像记录总数，复杂得多（推荐项）。关掉语料开关不发这个信号：结果留在屏上，之后不再补搜。 |
 | 2026-10-08 | 每次文本 / 成员搜索结束时，会话把摘要里没建的已索引镜像交给协调器对账（`reconcile`）：本文档以为已建好、实际已被驱逐的镜像清掉状态；作用域里的镜像按优先级重新请求；作用域是全部镜像时只请求本文档从没请求过的。历史满额时学到的语料也记为「已列过」 | PR #121 审查 PR121.34：store 按预算驱逐语料不通知任何人，协调器一直当它 built，Current Image 搜索永远报「not yet searchable」，也不去重新请求；历史满额时 `mergeCoverage` 在记下「已列过」之前就返回，Clear History 之后这些语料又被列回来，等于在满额时撤销了 e7186ae1。搜索结束正是用户刚被告知缺了哪些镜像的时刻。全部镜像时不重新请求被驱逐的，免得预算偏小时每搜一次就把刚挤掉的重建一遍；从没请求过的正是 PR121.04 之后仍然听不到的那类（服务进程里绕开本引擎 API 索引的镜像）。靠轮询得知别处构建的设计维持不变（不修，理由见 KnownIssues）。 |
 | 2026-10-08 | 语料协调器的 coverage 刷新最多一个在途、外加一个排队：在途时再来的调用只置一个标志，在途那次完成后补刷一次；换引擎与关窗时取消在途的刷新，回来的答案不再合并 | PR #121 审查 PR121.35：每个构建请求完成都单独刷新一次，第二个窗口打开时它对已建好的语料发的请求几乎同时返回，于是 N 个镜像就是 N 次往返、每次带回 N 个状态，合并又是 O(N)，开窗时主线程卡一下。补刷那一次保证最后一次调用之后的状态总能拿到。过期答案靠取消识别而不是比引擎身份：服务重启后 `.switchEngine` 可能把同一台引擎放回去。 |
+| 2026-10-08 | `DocumentState` 新增「引擎已重置」信号 `runtimeEngineDidReset`：`.switchEngine` 生效时发，引擎在文档什么都没打开时重新就绪也发（引擎第一次连上同样算）；Find 的会话与语料协调器改订阅它。连接在构建途中丢失（XPC service 退出、socket 断开）时，被打断的构建不记 Failed，清掉状态，等重置后随协调器重新开始再请求；判定用 `RuntimeViewerCommunication` 新增的 `RuntimeConnectionError.isLostConnection(_:)` | PR #121 审查 PR121.30 剩下的一半与 PR121.05 留下的缺口：XPC service 被重启时、socket 断开时，每个在途构建各记一条假的 Failed；文档停在镜像列表根处时 `.switchEngine` 什么都不做、`$runtimeEngine` 不发值，于是屏上一直是已经不在的那个进程的搜索结果，协调器也一直把旧进程的语料当 built。各传输的断连错误有几种是 internal 的，只能在通信模块里判。被打断的镜像不另记一份逐个重请：同一进程重连时「请求全部已索引镜像」已经包含它们，服务重启后的新进程里它们没有索引，等再被索引时由 PR121.04 的那一路请求。 |

@@ -71,6 +71,8 @@ func stop()
 ```
 状态机只有三态（`RuntimeConnectionState.swift`）：`.connecting → .connected → .disconnected(error:)`。
 
+**连接丢了与对端回了失败要分开**。连接在请求途中丢失时，各传输交给在途请求的错误各不相同，其中几种还是本模块 internal 的类型：XPC service 的 `RuntimeXPCServiceConnectionError.serviceExited` / `connectionInvalid`，消息通道的 `RuntimeMessageChannelError.notConnected`，本地 socket 与 stdio 的断开，`NWError`，Mach service 上 SwiftyXPC 的 `connectionInterrupted` 与 HelperPeer 的断开。要区分「连接丢了」和「对端回了一个失败」的调用方问 `RuntimeConnectionError.isLostConnection(_:)`（`RuntimeConnectionError+LostConnection.swift`）；请求超时、对端的失败回复与取消都不算。第一个用它的是语料协调器：连接中断时被打断的构建不记为失败，等引擎回来后重新开始（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.30），测试是 `RuntimeConnectionLostConnectionTests`。
+
 `statePublisher` 通过关联类型声明，各实现以 `some Publisher<RuntimeConnectionState, Never>` 返回私有的 `CurrentValueSubject`（SwiftUI `View.body` 式的 opaque witness）——订阅方拿不到 `send` 能力，subject 的可变性被完全封在实现内部。在 `any RuntimeConnection` 上访问时被擦除为 `any Publisher<RuntimeConnectionState, Never>`，直接 `.sink` 即可。
 
 **② 发送消息（多种重载）**
@@ -321,7 +323,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - `RuntimeXPCServiceClientConnection`（App 侧）。`init` 顺序是 **先 `modifier` 装 handler、后 `activate()`、最后发 `hello`**——service 在认领 peer 后立刻会推送，handler 必须已经就位；`hello` 的往返完成是「service 活着」的唯一证据（`activate()` 并不确认 service 存在，对内嵌 service 这次往返就是拉起本身），所以 `init` 返回时连接已是 `.connected`，连不上则 `init` 直接抛错。连接**在 service 退出后仍然可用**：SwiftyXPC 把 `XPC_ERROR_CONNECTION_INTERRUPTED` 报成 `XPCError.connectionInterrupted`，此时下一条消息会让 launchd 重新拉起 service；这个类把中断报成 `.disconnected(error:)`，然后**自己重连**：按 1s / 2s / 4s 重发 `hello` 三次，成功即 `.connected`；三次用尽后停在 `.disconnected`，下一条业务消息先补一次 `hello` 再发（也保证 service 的初始数据推送先于那条消息的应答）。终态只有两个：`stop()` 与 `XPCError.connectionInvalid`（`isUsable == false`），终态后不再重连。测试用 `simulateInterruptionForTesting()` / `setHelloFailureForTesting(_:)` / `setReattachDelays(inNanoseconds:)` 三个 `@testable` 缝驱动整条状态机。
 - `RuntimeXPCServiceListenerConnection`（service 侧）。SwiftyXPC **在接受连接时把 listener 上已登记的 handler 复制到新连接上**，因此所有 `setMessageHandler` 必须先于 `activate()`；对内嵌 service，`activate()` 就是 `xpc_main`，不返回，也不能 `cancel()`。它只保留一个 peer 槽位：client 的 `hello`（listener 自己装的 handler）把该连接收为 peer 并报 `.connected`——每个新认领的 peer 都报，顶掉旧 peer 的也报——推送发给它；`RuntimeLocalRuntimeServiceHost` 在这个状态变化上推 imageList / imageNodes / `.fullReload`。测试用 `anonymous()` 得到匿名监听器与端点，两端跑在同一进程里。
 
-**引擎侧的配合**：没有。引擎不知道 `hello`、不知道重连——`RuntimeEngine.connect(credential:)` 对 `.local` 带凭证时走与远端 client **同一段** client 路径（装 client handler、观察连接状态），`forwardsRequests`（client 角色 **或** `.local` 带凭证）取代了原来散在 `dispatch` 里的 `remoteRole.isClient` 判断；此后连接报什么它就跟什么：`.disconnected` → `.disconnected`，`.connected` → `.connected`。XPC service 相关代码只在两处：本文件，与 `RuntimeViewerCore/LocalRuntimeService/`（`LocalRuntimeService`：`Info.plist` 键与凭证；`RuntimeLocalRuntimeServiceHost`：service 侧）。
+**引擎侧的配合**：没有。引擎不知道 `hello`、不知道重连——`RuntimeEngine.connect(credential:)` 对 `.local` 带凭证时走与远端 client **同一段** client 路径（装 client handler、观察连接状态），`forwardsRequests`（client 角色 **或** `.local` 带凭证）取代了原来散在 `dispatch` 里的 `remoteRole.isClient` 判断；此后连接报什么它就跟什么：`.disconnected` → `.disconnected`，`.connected` → `.connected`。引擎的状态重新就绪之后的事归上层：`DocumentState` 把文档退回镜像列表，并发出 `runtimeEngineDidReset`——文档什么都没打开、无处可退时也发——Find 的会话与语料协调器据此丢掉从旧进程得来的一切、重新开始。XPC service 相关代码只在两处：本文件，与 `RuntimeViewerCore/LocalRuntimeService/`（`LocalRuntimeService`：`Info.plist` 键与凭证；`RuntimeLocalRuntimeServiceHost`：service 侧）。
 
 ---
 
@@ -404,7 +406,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 - 新命令 `dyldRootPath`（载荷 `DyldRootPathRequest`），回答服务进程的 `DYLD_ROOT_PATH`。处理器只答自己知道的，从不转发：本地臂答本进程的；经 socket 转发的客户端引擎（proxy 后面是模拟器进程）答它连接时问来的；经 XPC 转发的答本进程的 `nil`——XPC 的对端都是 Mac 进程，而且可能是旧版注入 payload，不能把它不认识的命令转过去（PR121.73）。
 - 只有 socket 类的客户端引擎（bonjour、localSocket、directTCP）去问，在每次连上（含重连）后**后台**问，不挡 `.connected`：2.1.0 之前的对端不回复未知命令，挡着就要等满超时。proxy 只在客户端连上之后才装命令表，所以回错误的问题隔 250 ms 再问，最多 4 次；超时的不再问。问不到就保持 `nil`，路径原样。XPC 类来源与 `.local` 从不问。
-- `RuntimeEngine.canonicalImagePath(_:)`（`nonisolated`）用问来的根路径规范化，幂等。客户端要拿原始路径与引擎给的路径比较或当键时，先过它：`FindCorpusCoordinator` 在 `requestBuild` / `cancelBuild` 入口统一规范化并提供 `buildState(forImagePath:)`，`DocumentState.isSelectedRuntimeObjectInCurrentImage` 比较前规范化节点路径。
+- `RuntimeEngine.canonicalImagePath(_:)`（`nonisolated`）用问来的根路径规范化，幂等。客户端要拿原始路径与引擎给的路径比较或当键时，先过它：`FindCorpusCoordinator` 在 `requestBuild` / `cancelBuild` / `reconcile` 入口统一规范化并提供 `buildState(forImagePath:)`，`DocumentState.isSelectedRuntimeObjectInCurrentImage` 比较前规范化节点路径，`FindSession` 的三处比较（置顶请求、补搜的「已建 − 已搜 ∩ 范围」、摘要栏按范围计数）两边都先规范化。发给引擎的范围仍是原始写法，服务端自己规范化。
 - 测试：`RuntimeEngineImagePathCanonicalizationTests`（纯函数；TCP 客户端学到根路径；XPC 客户端从不问；不认识这条命令的对端既不拖住连接也不改路径），`setDyldRootPathForTesting(_:)` 是模拟根路径的接缝。
 
 ---

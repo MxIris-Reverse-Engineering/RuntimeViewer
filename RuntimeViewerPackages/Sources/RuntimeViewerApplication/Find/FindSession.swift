@@ -16,8 +16,10 @@ import RuntimeViewerArchitectures
 /// outline fills while the engine is still scanning; relationship searches
 /// answer in one piece. A new search cancels the one in flight, and whatever
 /// the cancelled one still delivers is dropped (see `SearchRun`). The results
-/// belong to the document's engine: when the document moves to another
-/// engine, the search on screen runs again on it.
+/// belong to the process behind the document's engine: when the document
+/// moves to another engine, or its engine comes back with a new process
+/// behind it, the search on screen runs again
+/// (`DocumentState.runtimeEngineDidReset`).
 ///
 /// Text and member searches read the interfaces under the Generation Options
 /// the content pane displays with, so they find only what it shows; when
@@ -136,13 +138,13 @@ public final class FindSession {
                 }
             }
             .disposed(by: disposeBag)
-        documentState.$runtimeEngine
-            .skip(1)
+        documentState.runtimeEngineDidReset
+            .asObservable()
             // One turn later. The page's view model brings this session into
             // being before the corpus coordinator exists, so the coordinator
-            // hears of a new engine after this subscriber does; searching at
-            // once would put the scope's images at the front of the old
-            // engine's queue, to be withdrawn straight away.
+            // hears of the reset after this subscriber does; searching at
+            // once would put the scope's images at the front of a queue the
+            // coordinator is about to withdraw.
             .observe(on: MainScheduler.asyncInstance)
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
@@ -285,9 +287,10 @@ public final class FindSession {
         run(cleared)
     }
 
-    /// The document moved to another engine: nothing on screen belongs to
-    /// the engine now. The search on screen runs again on it, under the same
-    /// scope; a cleared field stays cleared.
+    /// The document moved to another engine, or its engine came back with a
+    /// new process behind it: nothing on screen belongs to that process. The
+    /// search on screen runs again on it, under the same scope; a cleared
+    /// field stays cleared.
     private func engineDidChange() {
         guard let committedQuery else { return }
         start(committedQuery)

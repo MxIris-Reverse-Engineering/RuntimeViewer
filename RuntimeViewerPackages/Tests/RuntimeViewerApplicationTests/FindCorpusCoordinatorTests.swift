@@ -295,6 +295,35 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
+    /// The local-runtime service relaunching while the document has nothing
+    /// open: `.switchEngine` has nothing to walk back, so the coordinator never
+    /// heard, and went on listing the corpora of the process that is gone as
+    /// built — and skipping them when asked for (PR121.30, the part left to
+    /// batch S3b). An in-process engine goes through the same edge with
+    /// `stop()` and `connect()`; stopping it drops its corpora as well.
+    @Test("the corpus coordinator starts over when the engine comes back while the document has nothing open")
+    func engineComingBackAtTheImageListStartsTheCoordinatorOver() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.engineBack", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
+        #expect(environment.documentState.currentImageNode == nil)
+        // The coverage refresh that follows the build is over before the
+        // engine goes: landing afterwards, it would empty the states by
+        // itself and hide whether the coordinator heard of the reset.
+        try await Task.sleep(for: .seconds(1))
+
+        await engine.stop()
+        try await engine.connect()
+
+        // What it knew of the old process goes, before it asks the new one.
+        let states = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 10) { $0.isEmpty }
+        #expect(states.isEmpty)
+        await engine.stop()
+    }
+
     @Test("the resident limit from Settings reaches the engine")
     func residentLimitReachesEngine() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.limit", loading: [TestImages.libobjc])

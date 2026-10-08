@@ -36,6 +36,28 @@ public final class DocumentState {
     /// a `false → true` edge can be told apart from the replayed current state.
     private var engineWasReady = false
 
+    /// Fires with the document's engine each time the document starts over on
+    /// it: the `.switchEngine` route put an engine in place — another one, or
+    /// the same one after the process behind it came back — or the engine
+    /// came back while the document had nothing open, which leaves the route
+    /// nothing to walk back (see `observeReadiness(of:)`). Whatever was
+    /// learned from the process behind the engine is stale by then: its
+    /// corpora, the searches run on it, the builds it was running.
+    ///
+    /// `$runtimeEngine` does not cover the second case: nothing is assigned
+    /// when nothing is open.
+    public var runtimeEngineDidReset: Signal<RuntimeEngine> {
+        runtimeEngineDidResetRelay.asSignal()
+    }
+
+    fileprivate let runtimeEngineDidResetRelay = PublishRelay<RuntimeEngine>()
+
+    /// The sidebar at the image list and nothing on the timeline: an engine
+    /// coming back has nothing to walk the document back from.
+    fileprivate var hasNothingOpen: Bool {
+        currentImageNode == nil && selectionStack.isEmpty
+    }
+
     /// Walks the document back to the image list when its engine stops being
     /// ready and then becomes ready again.
     ///
@@ -43,9 +65,11 @@ public final class DocumentState {
     /// the engine object survives, but the process behind it is new and holds
     /// none of the images this document was browsing, so every request from
     /// where the user stands would fail. The `.switchEngine` route onto the
-    /// same engine is the existing "start over on this engine" reset, and its
-    /// own guard makes it a no-op when nothing is open — which covers the
-    /// engine's very first connection as well.
+    /// same engine is the existing "start over on this engine" reset. With
+    /// nothing open it would be a no-op, so the edge then only announces the
+    /// reset (`runtimeEngineDidReset`) — the engine's very first connection
+    /// included, which is no different from a reset as far as anything that
+    /// asked the engine before is concerned.
     ///
     /// Keyed on `isReady`, not on a particular state: an in-process engine
     /// goes `.localOnly` rather than `.connected`, and a test can drive the
@@ -67,7 +91,11 @@ public final class DocumentState {
         let becameReadyAgain = isReady && !engineWasReady
         engineWasReady = isReady
         guard becameReadyAgain else { return }
-        selectionRouter.trigger(.switchEngine(engine))
+        if hasNothingOpen {
+            runtimeEngineDidResetRelay.accept(engine)
+        } else {
+            selectionRouter.trigger(.switchEngine(engine))
+        }
     }
 
     /// Currently inspected runtime image. `nil` when the sidebar is at the
@@ -340,7 +368,7 @@ private final class SelectionRouter: Router {
     ) {
         switch route {
         case .switchEngine(let engine):
-            if documentState.runtimeEngine === engine, documentState.currentImageNode == nil, documentState.selectionStack.isEmpty { return }
+            if documentState.runtimeEngine === engine, documentState.hasNothingOpen { return }
             if documentState.runtimeEngine !== engine {
                 documentState.observeReadiness(of: engine)
             }
@@ -464,6 +492,10 @@ private final class SelectionRouter: Router {
         // suppresses redundant `tabs` emissions on plain navigation.
         syncActiveTabObject()
         routeRelay.accept(route)
+        // Announced once the document stands on the engine, like the route.
+        if case .switchEngine(let engine) = route {
+            documentState.runtimeEngineDidResetRelay.accept(engine)
+        }
         completion?(EmptyRouteTransitionContext.shared)
     }
 
