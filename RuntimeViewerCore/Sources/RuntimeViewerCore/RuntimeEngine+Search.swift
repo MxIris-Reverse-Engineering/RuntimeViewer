@@ -20,13 +20,26 @@ extension RuntimeEngine {
     /// `isPrioritized` puts the image at the front of the build queue — an
     /// image the user just opened, say. The image being built at the moment
     /// still finishes first.
+    ///
+    /// Throws `CancellationError` when the build was given up — by this
+    /// caller, or by the store for every subscriber — in whichever process
+    /// it ran, and `RuntimeInterfaceCorpusBuildError` when there was nothing
+    /// to build.
     public func buildInterfaceCorpus(
         for imagePath: String,
         transformer: Transformer.Configuration,
         isPrioritized: Bool = false,
         onProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void = { _ in }
     ) async throws -> RuntimeInterfaceCorpusBuildSummary {
-        try await dispatch(BuildInterfaceCorpusRequest(imagePath: imagePath, transformer: transformer, isPrioritized: isPrioritized), onProgress: onProgress)
+        let outcome = try await dispatch(BuildInterfaceCorpusRequest(imagePath: imagePath, transformer: transformer, isPrioritized: isPrioritized), onProgress: onProgress)
+        switch outcome {
+        case .built(let summary):
+            return summary
+        case .cancelled:
+            throw CancellationError()
+        case .imageNotIndexed:
+            throw RuntimeInterfaceCorpusBuildError.imageNotIndexed(imagePath: imagePath)
+        }
     }
 
     /// Moves `imagePath`, already queued, to the front of the build queue
@@ -96,14 +109,22 @@ extension RuntimeEngine {
 // MARK: - Local arms
 
 extension RuntimeEngine {
+    /// The cancellation the store ends a build with comes back as
+    /// `.cancelled`, a value, so it survives the trip to a caller in another
+    /// process; see `RuntimeInterfaceCorpusBuildOutcome`.
     func _buildInterfaceCorpus(
         for imagePath: String,
         transformer: Transformer.Configuration,
         isPrioritized: Bool,
         reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void
-    ) async throws -> RuntimeInterfaceCorpusBuildSummary {
+    ) async throws -> RuntimeInterfaceCorpusBuildOutcome {
         let canonical = DyldUtilities.patchImagePathForDyld(imagePath)
-        return try await interfaceCorpusStore.build(imagePath: canonical, transformer: transformer, isPrioritized: isPrioritized, onProgress: reportProgress)
+        do {
+            let summary = try await interfaceCorpusStore.build(imagePath: canonical, transformer: transformer, isPrioritized: isPrioritized, onProgress: reportProgress)
+            return .built(summary)
+        } catch is CancellationError {
+            return .cancelled
+        }
     }
 
     func _prioritizeInterfaceCorpus(for imagePath: String) async {
@@ -205,15 +226,18 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
 // MARK: - Requests
 
 extension RuntimeEngine {
+    /// Answers with an outcome rather than a bare summary: the command is as
+    /// new as the corpus, so its reply could take the shape a cancellation
+    /// needs to cross a connection.
     struct BuildInterfaceCorpusRequest: RuntimeEngineProgressRequest {
-        typealias Response = RuntimeInterfaceCorpusBuildSummary
+        typealias Response = RuntimeInterfaceCorpusBuildOutcome
         typealias Progress = RuntimeInterfaceCorpusBuildProgress
         let imagePath: String
         let transformer: Transformer.Configuration
         let isPrioritized: Bool
         static var commandName: String { CommandNames.buildInterfaceCorpus.commandName }
         static var cancelsAcrossConnections: Bool { true }
-        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void) async throws -> RuntimeInterfaceCorpusBuildSummary {
+        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void) async throws -> RuntimeInterfaceCorpusBuildOutcome {
             try await engine._buildInterfaceCorpus(for: imagePath, transformer: transformer, isPrioritized: isPrioritized, reportProgress: reportProgress)
         }
     }

@@ -188,7 +188,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 
 | 请求 | 类型 | 进度 | 响应 |
 |------|------|------|------|
-| `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `CorpusBuildSummary { objectCount, skippedCount, byteCount }` |
+| `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `RuntimeInterfaceCorpusBuildOutcome`：`built(CorpusBuildSummary { objectCount, skippedCount, byteCount })` / `cancelled` / `imageNotIndexed`（2026-10-08，PR121.30：取消是值不是错误，才跨得过连接；公开 API 仍返回 summary） |
 | `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
 | `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
 | `TypeRelationshipsRequest { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |

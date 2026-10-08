@@ -7161,7 +7161,8 @@ socket 版本按同样的两条断言再写一遍，把装置换成一对 `.loca
 
 - **严重度**：Minor
 - **审查编号**：C07（属于上次第 8 条的一部分）
-- **状态**：部分修复（LocalizedError），其余随 PR121.29 一批。LocalizedError 的复现测试：`TransportHandlerErrorTests.testLocalSocketHandlerErrorReadsAsItsMessage`，修复前调用方拿到的 `localizedDescription` 是「The operation couldn’t be completed. (RuntimeViewerCommunication.RuntimeNetworkRequestError error 1.)」。
+- **状态**：已修复，两个提交：LocalizedError 在 `cc8bf048`（批次 S2），构建结果值在批次 S3a。LocalizedError 的复现测试：`TransportHandlerErrorTests.testLocalSocketHandlerErrorReadsAsItsMessage`，修复前调用方拿到的 `localizedDescription` 是「The operation couldn’t be completed. (RuntimeViewerCommunication.RuntimeNetworkRequestError error 1.)」。结果值的复现测试：`RemoteCorpusBuildOutcomeTests.storeCancellationCrossesTheConnection`（XPC service 与 TCP 两条真实连接，修前 XPC 上抛 `RuntimeXPCServiceConnectionError.remoteFailure("The operation couldn’t be completed. (Swift.CancellationError error 1.)")`，TCP 上抛 `RuntimeNetworkRequestError(message: "CancellationError()")`）与 `FindCorpusCoordinatorRemoteTests.storeCancellationIsNotAFailure`（修前状态与历史里各留一条 `.failed(message: "remoteFailure(\"The operation couldn’t be completed. (Swift.CancellationError error 1.)\")")`），修后都绿。
+- **落地与偏离**：`RuntimeInterfaceCorpusBuildOutcome` 与公开的 `RuntimeInterfaceCorpusBuildError.imageNotIndexed` 照方案一次加齐，`.imageNotIndexed` 由 PR121.32 产生。「连接中断时每个在途构建记一条 Failed」这一同类**没有做，留给批次 S3b**：它要 PR121.05 的「引擎已重置」信号（与之配套的公开断连判定也在那时加），本批没有这个信号；S3b 做 PR121.05 时一并处理。
 
 **问题**：store 有时会替所有订阅者取消一次构建，例如另一个窗口改了 transformer 后清掉全部语料，或者语料开关被关掉。订阅者此时收到 `CancellationError`，但这个错误跨不过连接：
 - XPC 只传 `localizedDescription`，客户端收到的是 `RuntimeXPCServiceConnectionError.remoteFailure("…Swift.CancellationError error 1.")`。

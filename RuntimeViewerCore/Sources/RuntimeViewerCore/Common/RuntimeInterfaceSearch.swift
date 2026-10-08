@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 public import Semantic
 
 // MARK: - Semantic kinds
@@ -196,6 +196,39 @@ public struct RuntimeInterfaceCorpusBuildSummary: Hashable, Codable, Sendable {
         self.objectCount = objectCount
         self.skippedCount = skippedCount
         self.byteCount = byteCount
+    }
+}
+
+/// How a corpus build request ended, as it travels between engines.
+///
+/// The ends that are not a summary are values rather than thrown errors so
+/// they cross every transport, and any number of relaying engines, intact: a
+/// thrown error crosses a connection as its description only, and a
+/// `CancellationError` that arrives as a description reads as a failure.
+/// `RuntimeEngine.buildInterfaceCorpus` turns them back into errors in the
+/// caller's process.
+enum RuntimeInterfaceCorpusBuildOutcome: Hashable, Codable, Sendable {
+    case built(RuntimeInterfaceCorpusBuildSummary)
+    /// The store gave the build up for every subscriber — the image was
+    /// evicted, another document asked for it under another transformer — or
+    /// this caller withdrew.
+    case cancelled
+    /// The image does not have both of its sections built, so there is
+    /// nothing to print; nothing was attempted.
+    case imageNotIndexed
+}
+
+/// Why a corpus build request ended without a corpus, other than being
+/// cancelled.
+public enum RuntimeInterfaceCorpusBuildError: Swift.Error, Hashable, Sendable, LocalizedError {
+    /// The image is not indexed yet. Asking again once it is will build it.
+    case imageNotIndexed(imagePath: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .imageNotIndexed(let imagePath):
+            "\(imagePath) is not indexed yet, so its interfaces cannot be searched."
+        }
     }
 }
 
