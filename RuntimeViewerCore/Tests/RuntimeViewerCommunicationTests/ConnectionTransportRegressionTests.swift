@@ -267,6 +267,44 @@ struct TransportHandlerErrorTests {
         client.stop()
         server.stop()
     }
+
+    /// What an alert or a log line shows is `localizedDescription`, not
+    /// `"\(error)"`; without `LocalizedError` it reads
+    /// "The operation couldn't be completed. (… RuntimeNetworkRequestError error 1.)".
+    @Test("LocalSocket: a throwing handler's message is what the caller's error reads as")
+    func testLocalSocketHandlerErrorReadsAsItsMessage() async throws {
+        let identifier = "test-handler-error-description-\(UUID().uuidString)"
+        let marker = "MARKER-\(UUID().uuidString.prefix(8))"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        server.setMessageHandler(name: "boom") { (_: String) -> String in
+            throw TransportTestError.marked(String(marker))
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        try await waitUntilConnected(server)
+
+        do {
+            let _: String = try await withTransportTimeout(3.0) {
+                try await client.sendMessage(name: "boom", request: "x")
+            }
+            Issue.record("expected the handler error to propagate")
+        } catch is TransportTimeoutError {
+            Issue.record("handler-error request hung")
+        } catch {
+            #expect(
+                error.localizedDescription.contains(String(marker)),
+                "the remote failure reads as: \(error.localizedDescription)"
+            )
+        }
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
 }
 
 // MARK: - Ordering guard for fire-and-forget pushes
