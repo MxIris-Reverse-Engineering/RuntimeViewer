@@ -72,6 +72,62 @@ struct FindGenerationOptionsTests {
         await engine.stop()
     }
 
+    // MARK: - The search on screen, not the query being edited
+
+    /// A Generation Options change runs the search on screen again. It used
+    /// to run the query the mode path and the toggles had been edited into
+    /// since — Return not pressed — so an edit to a relationship mode left the
+    /// text results under the old options, and an edit to Members turned them
+    /// into a member search (PR121.39). Both run on the shared engine, whose
+    /// Foundation corpus is built once per process.
+    @Test("a Generation Options change runs the text search on screen again while the mode path is edited to a relationship mode")
+    func optionsChangeRerunsTheShownSearchWhileARelationshipModeIsEdited() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        _ = try await engine.buildInterfaceCorpus(for: TestImages.foundation, transformer: .default)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let session = environment.make { environment.documentState.findSession }
+        let appDefaults = environment.appDefaults
+        var strippingOptions = RuntimeObjectInterface.GenerationOptions()
+        strippingOptions.objcHeaderOptions.stripSynthesizedIvars = true
+        appDefaults.options = strippingOptions
+
+        let strippedIvarLines = Self.textMatches(in: try await search(FindQuery(mode: .text, text: "_value", isCaseSensitive: true), with: session))
+        #expect(strippedIvarLines.isEmpty, "the stripped ivar is found: \(strippedIvarLines.map(\.lineText))")
+
+        // Edited, not run: Return was never pressed.
+        session.update { $0.mode = .ancestorTypes }
+        appDefaults.options = RuntimeObjectInterface.GenerationOptions()
+        try await settleMainQueue()
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+        #expect(!Self.textMatches(in: session.results).isEmpty, "the text search on screen was not run again under the new options")
+        #expect(session.query.mode == .ancestorTypes, "the edit in progress was overwritten")
+    }
+
+    @Test("a Generation Options change keeps a text search on screen a text search while Members is only being edited")
+    func optionsChangeKeepsTheShownSearchesMode() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        _ = try await engine.buildInterfaceCorpus(for: TestImages.foundation, transformer: .default)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let session = environment.make { environment.documentState.findSession }
+        let appDefaults = environment.appDefaults
+
+        _ = try await search(FindQuery(mode: .text, text: "value", isCaseSensitive: true), with: session)
+        #expect(!Self.textMatches(in: session.results).isEmpty)
+
+        // Edited, not run.
+        session.update { $0.mode = .members }
+        var changedOptions = appDefaults.options
+        changedOptions.objcHeaderOptions.stripSynthesizedIvars.toggle()
+        appDefaults.options = changedOptions
+        try await settleMainQueue()
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+        #expect(!Self.textMatches(in: session.results).isEmpty, "the rerun dropped the text search on screen")
+        #expect(Self.memberMatches(in: session.results).isEmpty, "the rerun ran the edited Members query instead")
+        #expect(session.query.mode == .members, "the edit in progress was overwritten")
+    }
+
     // MARK: - Helpers
 
     private func search(_ query: FindQuery, with session: FindSession) async throws -> FindSession.Results {

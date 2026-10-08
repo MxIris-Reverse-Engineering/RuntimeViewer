@@ -45,6 +45,11 @@ public final class FindSession {
         /// Images the search did not see because their corpus is not built.
         public var unbuiltImagePaths: [String] = []
         public var isTruncated = false
+        /// The query these results answer: the one last run, not the one
+        /// the mode path and the toggles may have been edited into since. A
+        /// click highlights with its mode and case. `nil` with nothing
+        /// searched.
+        public internal(set) var query: FindQuery?
 
         public init() {}
     }
@@ -127,7 +132,7 @@ public final class FindSession {
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
                 MainActor.assumeIsolated {
-                    self.rerunAfterGenerationOptionsChange()
+                    self.rerunShownSearch()
                 }
             }
             .disposed(by: disposeBag)
@@ -214,11 +219,7 @@ public final class FindSession {
     private func start(_ query: FindQuery) {
         cancelCurrentRun()
         committedQuery = query.isEmpty ? nil : query
-        shownSearch = nil
-        imagePathsBuiltDuringSearch = []
-        textMatchGroups = MatchGroups<RuntimeInterfaceSearchMatch>()
-        memberMatchGroups = MatchGroups<RuntimeMemberMatch>()
-        setResults(Results())
+        resetResults()
         guard !query.isEmpty else {
             isSearching = false
             return
@@ -244,12 +245,29 @@ public final class FindSession {
         run(query)
     }
 
-    /// A text or member search already shown answers for the options it ran
+    /// A text or member search on screen answers for the options it ran
     /// under; run it again so it answers for the ones the content pane now
-    /// displays with. Relationship searches do not depend on them.
-    private func rerunAfterGenerationOptionsChange() {
-        guard !query.isEmpty, query.mode.relationship == nil, results.summary != nil || isSearching else { return }
-        run(query)
+    /// displays with. It is the search on screen that runs again, over the
+    /// images its scope stood for then: not the query the mode path and the
+    /// toggles are being edited into, which stays as it is. Relationship
+    /// searches do not depend on the options.
+    private func rerunShownSearch() {
+        guard let shownSearch else { return }
+        let generationOptions = appDefaults.options
+        cancelCurrentRun()
+        resetResults()
+        self.shownSearch = ShownSearch(query: shownSearch.query, generationOptions: generationOptions, scopeImagePaths: shownSearch.scopeImagePaths)
+        prioritizeCorpora(of: shownSearch.scopeImagePaths)
+        startSearch(shownSearch.query, imagePaths: shownSearch.scopeImagePaths, generationOptions: generationOptions, isWidening: false)
+    }
+
+    /// Empties the results and everything the search on screen gathered.
+    private func resetResults() {
+        shownSearch = nil
+        imagePathsBuiltDuringSearch = []
+        textMatchGroups = MatchGroups<RuntimeInterfaceSearchMatch>()
+        memberMatchGroups = MatchGroups<RuntimeMemberMatch>()
+        setResults(Results())
     }
 
     public func clear() {
@@ -566,8 +584,11 @@ public final class FindSession {
 
     // MARK: - Summary
 
+    /// Publishes `newResults` as the answer to the query on screen.
     private func setResults(_ newResults: Results) {
-        results = newResults
+        var stampedResults = newResults
+        stampedResults.query = committedQuery
+        results = stampedResults
         updateSummary()
     }
 

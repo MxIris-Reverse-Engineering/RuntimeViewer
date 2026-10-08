@@ -201,7 +201,9 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
 
     private func navigate(to node: FindResultNode, inNewTab: Bool) {
         guard let (object, _) = node.navigationTarget else { return }
-        let highlight = Self.highlight(for: node, query: session.query)
+        // The query the rows answer, not the one the mode path and the
+        // toggles may have been edited into since.
+        let highlight = Self.highlight(for: node, query: session.results.query ?? session.query)
         switch (inNewTab, highlight) {
         case (false, nil):
             documentState.selectionRouter.trigger(.push(object))

@@ -207,6 +207,33 @@ struct FindViewModelTests {
         #expect(router.triggeredRoutes.isEmpty)
     }
 
+    /// The highlight a click hands the content pane used to take its case
+    /// sensitivity and its mode from the query being edited, not from the
+    /// search whose rows are on screen (PR121.39).
+    @Test("a click highlights with the case sensitivity of the search on screen, not the toggle being edited")
+    func clickHighlightsWithTheShownSearchesQuery() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        searchCommittedRelay.accept("initwithformat:")
+        let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
+        let hit = try #require(nodes.first?.children.first)
+        guard case .textMatch(let match) = hit.content else {
+            Issue.record("expected a text hit")
+            return
+        }
+
+        // Toggled, not run.
+        caseSensitiveToggledRelay.accept(true)
+        resultClickedRelay.accept(hit)
+        try await settleMainQueue()
+
+        let highlight = try #require(environment.documentState.takeContentHighlight(for: match.object))
+        #expect(highlight.isCaseSensitive == false, "the highlight took the case sensitivity being edited")
+        #expect(highlight.query == "initwithformat:")
+    }
+
     @Test("clicking a type row pushes it with no highlight; opening in a new tab adds a tab")
     func clickingTypeRow() async throws {
         let environment = try await Self.makeEnvironmentWithCorpus()

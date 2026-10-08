@@ -6976,7 +6976,8 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C12
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindGenerationOptionsTests.optionsChangeRerunsTheShownSearchWhileARelationshipModeIsEdited`（修前模式被编辑成 Ancestor Types 后改选项不重跑，屏上仍找不到 `_value` 的 ivar 行）、`FindGenerationOptionsTests.optionsChangeKeepsTheShownSearchesMode`（修前重跑成了成员搜索：文本命中消失，成员命中出现）、`FindViewModelTests.clickHighlightsWithTheShownSearchesQuery`（修前高亮请求带着编辑中的大小写，`highlight.isCaseSensitive == false` 不成立）。修后都绿。
+- **落地与偏离**：照方案，采用 `Results.query` 这一路；PR121.50 在界面批次里把 `navigationTarget` 改成只返回对象，与此不冲突。测试去掉了草案里的 `withSharedGenerationOptionsLock`（PR121.18 已撤下这把锁），选项写在各自环境隔离的 `AppDefaults` 上。`rerunShownSearch()` 的判断条件「有 `shownSearch`」对失败的搜索与原条件不完全等价：原条件下搜索失败后改选项会重跑那次失败的搜索，现在不会——失败时没有屏上的搜索可以按新选项重跑。
 
 **问题**：用户改模式、大小写或范围时，`update(_:)` 只修改正在编辑的查询，不会触发搜索；要按回车才会搜。可是 Generation Options 一变，`rerunAfterGenerationOptionsChange`（`FindSession.swift:201-204`）重跑的却是这个编辑中的查询：
 - 模式已改成 Members 但没按回车时，选项一变就跑成一次成员搜索，结果整体换了类型。
