@@ -26,9 +26,16 @@ import SwiftDeclaration
 /// cycle along one path (only a corrupt image has one) is still cut, and a
 /// depth cap backs that up.
 ///
+/// Every image compiled against an Objective-C protocol carries a full copy
+/// of it, and none of them owns it. A protocol is one candidate, and one node
+/// on a level, however many images carry it; the copy a node stands for is
+/// chosen the same way whatever order the images were indexed in
+/// (`preferredCarrierImagePath(among:referencedFrom:imagePaths:)`).
+///
 /// A query limited to some images walks the same trees and then keeps only
-/// those images' types and the nodes leading to them; the type asked about
-/// is looked up everywhere regardless.
+/// those images' types and the nodes leading to them, a protocol counting as
+/// theirs when any of them carries a copy; the type asked about is looked up
+/// everywhere regardless.
 @Loggable(.private)
 actor RuntimeTypeRelationshipsResolver {
     static let maximumDepth = 64
@@ -68,7 +75,10 @@ actor RuntimeTypeRelationshipsResolver {
                 nodes = await conformerNodes(of: candidate)
             }
             if let imagePaths = query.imagePaths {
-                let keptNodes = Self.nodes(nodes, leadingInto: imagePaths)
+                // A protocol copy outside the images moves onto a copy inside
+                // them before the tree is cut down to them.
+                let movedNodes = await movingObjCProtocolCopies(of: nodes, into: imagePaths)
+                let keptNodes = Self.nodes(movedNodes, leadingInto: imagePaths)
                 guard !keptNodes.isEmpty else { continue }
                 trees.append(RuntimeRelationshipTree(root: candidate, nodes: keptNodes))
             } else {
@@ -99,6 +109,10 @@ actor RuntimeTypeRelationshipsResolver {
     /// their types first among the exact matches and among the rest, so the
     /// candidate limit is spent on them before the types whose trees may
     /// have nothing left in those images.
+    ///
+    /// One candidate per type: an Objective-C protocol every carrying image
+    /// lists a copy of is one candidate, and a Swift class registered with
+    /// the Objective-C runtime is a candidate under its Swift face.
     private func candidateTypes(matching query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeObject] {
         let text = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return [] }
@@ -107,10 +121,19 @@ actor RuntimeTypeRelationshipsResolver {
 
         var exactMatches: OrderedSet<RuntimeObject> = []
         var partialMatches: OrderedSet<RuntimeObject> = []
+        // Every image compiled against an Objective-C protocol carries a copy
+        // of it. The first copy found holds the protocol's place; which copy
+        // the candidate stands for is decided once all of them are known.
+        var objcProtocolCopiesByName: [String: [RuntimeObject]] = [:]
         func consider(_ object: RuntimeObject) {
             guard Self.isRelationshipCandidate(object),
                   RuntimeInterfaceTextMatcher.typeNameMatches(object.displayName, pattern: pattern)
             else { return }
+            if object.kind == .objc(.type(.protocol)) {
+                let isFirstCopy = objcProtocolCopiesByName[object.name] == nil
+                objcProtocolCopiesByName[object.name, default: []].append(object)
+                guard isFirstCopy else { return }
+            }
             let ownName = RuntimeInterfaceTextMatcher.ownTypeName(of: object.displayName)
             if object.displayName.compare(text, options: options) == .orderedSame || ownName.compare(text, options: options) == .orderedSame {
                 exactMatches.append(object)
@@ -138,7 +161,30 @@ actor RuntimeTypeRelationshipsResolver {
             objects.forEach(considerTree)
         }
 
-        let sortedPartialMatches = partialMatches.sorted { left, right in
+        // A Swift face that matched as well keeps the spelling the sidebar
+        // lists it under, whichever of its two faces came first.
+        func listedObject(_ object: RuntimeObject) -> RuntimeObject {
+            if let index = exactMatches.firstIndex(of: object) {
+                return exactMatches[index]
+            }
+            if let index = partialMatches.firstIndex(of: object) {
+                return partialMatches[index]
+            }
+            return object
+        }
+        // An exact match wins over a partial one standing for the same type.
+        var representedExactMatches: OrderedSet<RuntimeObject> = []
+        for object in exactMatches {
+            representedExactMatches.append(listedObject(await representative(of: object, objcProtocolCopiesByName: objcProtocolCopiesByName, imagePaths: query.imagePaths)))
+        }
+        var representedPartialMatches: OrderedSet<RuntimeObject> = []
+        for object in partialMatches {
+            let representedObject = listedObject(await representative(of: object, objcProtocolCopiesByName: objcProtocolCopiesByName, imagePaths: query.imagePaths))
+            guard !representedExactMatches.contains(representedObject) else { continue }
+            representedPartialMatches.append(representedObject)
+        }
+
+        let sortedPartialMatches = representedPartialMatches.sorted { left, right in
             left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
         }
         let candidates: [RuntimeObject]
@@ -146,11 +192,32 @@ actor RuntimeTypeRelationshipsResolver {
             func inImagesFirst(_ objects: [RuntimeObject]) -> [RuntimeObject] {
                 objects.filter { imagePaths.contains($0.imagePath) } + objects.filter { !imagePaths.contains($0.imagePath) }
             }
-            candidates = inImagesFirst(Array(exactMatches)) + inImagesFirst(sortedPartialMatches)
+            candidates = inImagesFirst(Array(representedExactMatches)) + inImagesFirst(sortedPartialMatches)
         } else {
-            candidates = Array(exactMatches) + sortedPartialMatches
+            candidates = Array(representedExactMatches) + sortedPartialMatches
         }
         return Array(candidates.prefix(max(0, query.candidateLimit)))
+    }
+
+    /// The object a candidate stands for: the chosen copy of an Objective-C
+    /// protocol, and the Swift face of a Swift class registered with the
+    /// Objective-C runtime — the face the sidebar, the Inspector and every
+    /// node of the walk show. A class with no Swift face to pair it with
+    /// keeps its Objective-C one, as `materializeObjCClass(named:)` does.
+    private func representative(of object: RuntimeObject, objcProtocolCopiesByName: [String: [RuntimeObject]], imagePaths scopeImagePaths: Set<String>?) async -> RuntimeObject {
+        switch object.kind {
+        case .objc(.type(.protocol)):
+            let copies = objcProtocolCopiesByName[object.name] ?? [object]
+            let preferredImagePath = Self.preferredCarrierImagePath(among: copies.map(\.imagePath), referencedFrom: nil, imagePaths: scopeImagePaths)
+            return copies.first { $0.imagePath == preferredImagePath } ?? object
+        case .objc(.type(.class)) where object.properties.contains(.isSwiftClass):
+            guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath),
+                  let swiftFace = await swiftSection.makeRuntimeObject(forObjCRuntimeClassName: object.name)
+            else { return object }
+            return swiftFace
+        default:
+            return object
+        }
     }
 
     /// Types with a place in a hierarchy: classes and protocols on both
@@ -175,7 +242,7 @@ actor RuntimeTypeRelationshipsResolver {
         case .objc(.type(.class)):
             return await objcClassAncestorNodes(named: object.name, visited: visited, depth: depth)
         case .objc(.type(.protocol)):
-            return await objcProtocolAncestorNodes(named: object.name, visited: visited, depth: depth)
+            return await objcProtocolAncestorNodes(named: object.name, referencedFrom: object.imagePath, visited: visited, depth: depth)
         case .swift(.type(.protocol)):
             let qualifiedName = swiftSectionFactory.indexer.protocolName(forMangledName: object.name)?.name ?? object.displayName
             return await swiftProtocolAncestorNodes(qualifiedName: qualifiedName, visited: visited, depth: depth)
@@ -190,10 +257,10 @@ actor RuntimeTypeRelationshipsResolver {
     /// superclass carrying the same for itself, recursively — the shape
     /// Xcode nests them in.
     private func objcClassAncestorNodes(named className: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        guard let (group, _) = objcSectionFactory.indexer.classGroupAcrossImages(forName: className),
+        guard let (group, classImagePath) = objcSectionFactory.indexer.classGroupAcrossImages(forName: className),
               let classInfo = group.info.first
         else { return [] }
-        var nodes = await objcProtocolNodes(named: classInfo.protocols.map(\.name), visited: visited, depth: depth + 1)
+        var nodes = await objcProtocolNodes(named: classInfo.protocols.map(\.name), referencedFrom: classImagePath, visited: visited, depth: depth + 1)
         if let superclassName = classInfo.superClassName, !superclassName.isEmpty {
             let key = "objc:" + superclassName
             if !visited.contains(key) {
@@ -207,13 +274,16 @@ actor RuntimeTypeRelationshipsResolver {
         return nodes
     }
 
-    private func objcProtocolAncestorNodes(named protocolName: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        await objcProtocolNodes(named: objcSectionFactory.indexer.refinedProtocolNames(of: protocolName), visited: visited, depth: depth + 1)
+    private func objcProtocolAncestorNodes(named protocolName: String, referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+        await objcProtocolNodes(named: objcSectionFactory.indexer.refinedProtocolNames(of: protocolName), referencedFrom: referencingImagePath, visited: visited, depth: depth + 1)
     }
 
     /// Nodes for Objective-C protocols by name, each carrying the protocols
-    /// it adopts underneath.
-    private func objcProtocolNodes(named protocolNames: [String], visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+    /// it adopts underneath. `referencingImagePath` is the image whose
+    /// metadata named them — the adopting class's, or the copy of the
+    /// refining protocol a node stands for — and each node prefers that
+    /// image's own copy.
+    private func objcProtocolNodes(named protocolNames: [String], referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
         guard depth < Self.maximumDepth else { return [] }
         var nodes: [RuntimeRelationshipNode] = []
         for protocolName in protocolNames {
@@ -221,8 +291,8 @@ actor RuntimeTypeRelationshipsResolver {
             guard !visited.contains(key) else { continue }
             var visited = visited
             visited.insert(key)
-            let object = await materializeObjCProtocol(named: protocolName)
-            let children = await objcProtocolAncestorNodes(named: protocolName, visited: visited, depth: depth)
+            let object = await materializeObjCProtocol(named: protocolName, referencedFrom: referencingImagePath)
+            let children = await objcProtocolAncestorNodes(named: protocolName, referencedFrom: object?.imagePath ?? referencingImagePath, visited: visited, depth: depth)
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? protocolName, object: object, children: children))
         }
         return nodes
@@ -270,10 +340,11 @@ actor RuntimeTypeRelationshipsResolver {
 
     private func swiftProtocolAncestorNodes(qualifiedName: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
         guard depth < Self.maximumDepth else { return [] }
+        let declaringImagePath = swiftSectionFactory.indexer.protocolReference(forQualifiedName: qualifiedName)?.imagePath
         var nodes: [RuntimeRelationshipNode] = []
         for refined in swiftSectionFactory.indexer.refinedProtocols(ofQualifiedName: qualifiedName) {
             if refined.isObjC {
-                nodes += await objcProtocolNodes(named: [refined.qualifiedName], visited: visited, depth: depth + 1)
+                nodes += await objcProtocolNodes(named: [refined.qualifiedName], referencedFrom: declaringImagePath, visited: visited, depth: depth + 1)
             } else {
                 nodes += await swiftProtocolNodes(qualifiedNames: [refined.qualifiedName], visited: visited, depth: depth + 1)
             }
@@ -314,7 +385,7 @@ actor RuntimeTypeRelationshipsResolver {
             }
             return nodes
         case .objc(.type(.protocol)):
-            return await refiningProtocolNodes(ofObjCProtocolNamed: object.name, visited: visited, depth: depth)
+            return await refiningProtocolNodes(ofObjCProtocolNamed: object.name, referencedFrom: object.imagePath, visited: visited, depth: depth)
         case .swift(.type(.protocol)):
             let qualifiedName = swiftSectionFactory.indexer.protocolName(forMangledName: object.name)?.name ?? object.displayName
             return await refiningProtocolNodes(ofSwiftProtocolNamed: qualifiedName, visited: visited, depth: depth)
@@ -326,20 +397,29 @@ actor RuntimeTypeRelationshipsResolver {
     /// The protocols refining an Objective-C protocol: Objective-C ones from
     /// the ObjC tables, and Swift ones — a Swift protocol may refine an
     /// Objective-C protocol — from the Swift tables, which key them by the
-    /// same runtime name.
-    private func refiningProtocolNodes(ofObjCProtocolNamed protocolName: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
-        var nodes: [RuntimeRelationshipNode] = []
+    /// same runtime name. Every image carrying a refining Objective-C
+    /// protocol reports it, so one node stands for all of its copies — the
+    /// copy of the image the parent node stands for when it carries one —
+    /// and the level is listed by name.
+    private func refiningProtocolNodes(ofObjCProtocolNamed protocolName: String, referencedFrom referencingImagePath: String?, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+        var carrierImagePathsByProtocolName: OrderedDictionary<String, [String]> = [:]
         for reference in objcSectionFactory.indexer.refiningProtocols(of: protocolName) {
-            let key = "objcProtocol:" + reference.protocolName
-            guard !visited.contains(key) else { continue }
+            carrierImagePathsByProtocolName[reference.protocolName, default: []].append(reference.imagePath)
+        }
+        var nodes: [RuntimeRelationshipNode] = []
+        for (refiningProtocolName, carrierImagePaths) in carrierImagePathsByProtocolName {
+            let key = "objcProtocol:" + refiningProtocolName
+            guard !visited.contains(key),
+                  let carrierImagePath = Self.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: referencingImagePath, imagePaths: nil)
+            else { continue }
             var visited = visited
             visited.insert(key)
-            let object = await objcSectionFactory.existingSection(for: reference.imagePath)?.makeRuntimeObject(forProtocolName: reference.protocolName)
-            let children = await refiningProtocolNodes(ofObjCProtocolNamed: reference.protocolName, visited: visited, depth: depth + 1)
-            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? reference.protocolName, object: object, children: children))
+            let object = await objcSectionFactory.existingSection(for: carrierImagePath)?.makeRuntimeObject(forProtocolName: refiningProtocolName)
+            let children = await refiningProtocolNodes(ofObjCProtocolNamed: refiningProtocolName, referencedFrom: carrierImagePath, visited: visited, depth: depth + 1)
+            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? refiningProtocolName, object: object, children: children))
         }
         nodes += await swiftRefiningProtocolNodes(of: protocolName, visited: visited, depth: depth)
-        return nodes
+        return Self.sortedByName(nodes)
     }
 
     private func refiningProtocolNodes(ofSwiftProtocolNamed qualifiedName: String, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
@@ -358,7 +438,7 @@ actor RuntimeTypeRelationshipsResolver {
             let children = await swiftRefiningProtocolNodes(of: reference.qualifiedName, visited: visited, depth: depth + 1)
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? reference.qualifiedName, object: object, children: children))
         }
-        return nodes
+        return Self.sortedByName(nodes)
     }
 
     // MARK: - Conformers
@@ -382,9 +462,12 @@ actor RuntimeTypeRelationshipsResolver {
         return await objcSectionFactory.existingSection(for: imagePath)?.makeRuntimeObject(forClassName: className)
     }
 
-    private func materializeObjCProtocol(named protocolName: String) async -> RuntimeObject? {
-        guard let (_, imagePath) = objcSectionFactory.indexer.protocolGroupAcrossImages(forName: protocolName) else { return nil }
-        return await objcSectionFactory.existingSection(for: imagePath)?.makeRuntimeObject(forProtocolName: protocolName)
+    /// The `RuntimeObject` for the copy of an Objective-C protocol a node
+    /// stands for; see `preferredCarrierImagePath(among:referencedFrom:imagePaths:)`.
+    private func materializeObjCProtocol(named protocolName: String, referencedFrom referencingImagePath: String?) async -> RuntimeObject? {
+        let carrierImagePaths = objcSectionFactory.indexer.protocolCarrierImagePaths(forName: protocolName)
+        guard let carrierImagePath = Self.preferredCarrierImagePath(among: carrierImagePaths, referencedFrom: referencingImagePath, imagePaths: nil) else { return nil }
+        return await objcSectionFactory.existingSection(for: carrierImagePath)?.makeRuntimeObject(forProtocolName: protocolName)
     }
 
     private func materializeSwiftType(mangledName: String) async -> RuntimeObject? {
@@ -399,5 +482,72 @@ actor RuntimeTypeRelationshipsResolver {
 
     private func visitedKey(for object: RuntimeObject) -> String {
         "\(object.kind)|\(object.name)"
+    }
+
+    // MARK: - Objective-C Protocol Copies
+
+    /// The copy of an Objective-C protocol a node stands for. Every image
+    /// compiled against a protocol carries a full copy and none of them owns
+    /// it, so the choice only has to be stable — the same indexed images give
+    /// the same copy whatever order they were indexed in: the copy of the
+    /// image whose metadata named the protocol, when it carries one and the
+    /// query's images do not leave it out; then the first copy by path among
+    /// the query's images; then the first copy by path.
+    static func preferredCarrierImagePath(among carrierImagePaths: [String], referencedFrom referencingImagePath: String?, imagePaths scopeImagePaths: Set<String>?) -> String? {
+        if let referencingImagePath,
+           carrierImagePaths.contains(referencingImagePath),
+           scopeImagePaths?.contains(referencingImagePath) ?? true {
+            return referencingImagePath
+        }
+        if let scopeImagePaths,
+           let firstCarrierInScope = carrierImagePaths.filter({ scopeImagePaths.contains($0) }).min() {
+            return firstCarrierInScope
+        }
+        return carrierImagePaths.min()
+    }
+
+    /// A query limited to some images counts an Objective-C protocol as
+    /// theirs when any of them carries a copy, the way their sidebar lists
+    /// it: a node standing for a copy outside them moves onto the first copy
+    /// inside them, so cutting the tree down to them keeps it.
+    private func movingObjCProtocolCopies(of nodes: [RuntimeRelationshipNode], into imagePaths: Set<String>) async -> [RuntimeRelationshipNode] {
+        var movedNodes: [RuntimeRelationshipNode] = []
+        movedNodes.reserveCapacity(nodes.count)
+        for node in nodes {
+            let children = await movingObjCProtocolCopies(of: node.children, into: imagePaths)
+            var object = node.object
+            if let protocolObject = node.object,
+               protocolObject.kind == .objc(.type(.protocol)),
+               !imagePaths.contains(protocolObject.imagePath),
+               let carrierImagePath = Self.preferredCarrierImagePath(
+                   among: objcSectionFactory.indexer.protocolCarrierImagePaths(forName: protocolObject.name),
+                   referencedFrom: nil,
+                   imagePaths: imagePaths
+               ),
+               imagePaths.contains(carrierImagePath),
+               let movedObject = await objcSectionFactory.existingSection(for: carrierImagePath)?.makeRuntimeObject(forProtocolName: protocolObject.name) {
+                object = movedObject
+            }
+            movedNodes.append(RuntimeRelationshipNode(name: node.name, object: object, children: children))
+        }
+        return movedNodes
+    }
+
+    /// A level of Descendent Types listed by name, the way the Inspector
+    /// lists subclasses. Left alone it would follow the dictionary order of
+    /// the library's protocol table, which changes with every launch, and
+    /// the order the images were indexed in. Names that compare equal
+    /// ignoring case fall back to their exact spelling, then to the kind.
+    private static func sortedByName(_ nodes: [RuntimeRelationshipNode]) -> [RuntimeRelationshipNode] {
+        nodes.sorted { left, right in
+            let comparison = left.name.localizedCaseInsensitiveCompare(right.name)
+            if comparison != .orderedSame {
+                return comparison == .orderedAscending
+            }
+            if left.name != right.name {
+                return left.name < right.name
+            }
+            return String(describing: left.object?.kind) < String(describing: right.object?.kind)
+        }
     }
 }

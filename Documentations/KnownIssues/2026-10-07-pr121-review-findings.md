@@ -4121,7 +4121,7 @@ struct TransportReplyOrderingTests {
 
 - **严重度**：Major
 - **审查编号**：C30、C33、C29，另含一处同类：Swift 类的 ObjC 面成为单独的候选
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeTypeRelationshipsProtocolCopyTests`（前六条复现本条，第七条见下；只加载 libobjc、CoreFoundation、Foundation；`requireCarried` 在系统不再由两个镜像同时携带时明确失败），选副本的纯函数另有单元测试 `RuntimeTypeRelationshipsImageScopeTests.protocolCopyChoice`。修前六条全红：候选上限为 2 时，两个名额都被 CoreFoundation 与 Foundation 的 `NSObject` 协议副本占去，没有类树；`NSCoding` 第一层是 `["NSSecureCoding", "NSSecureCoding"]`；两种加载顺序得到的 `NSString` 树不同，`NSSecureCoding` 落在 CoreFoundation 的副本上；限定在 Foundation 查 `NSArray` 的 Ancestors，整棵树被剪光（`nil`）；`NSObject` 协议的 Descendent 有 3 层不按名字排序（第一层以 `ODRServerProtocol, NSURLSessionDelegate, …` 开头）；`_NSFileManagerBridge` 的 ObjC 面与 Swift 面各出一棵树。第七条 `swiftFaceKeepsItsSidebarName` 守住修复本身的一个副作用：ObjC 面换成的 Swift 面是按 mangled 名重新物化的，不带私有判别符；两个面都命中时，它若先登记，会顶掉侧栏那份对象（`==` 只比身份），根节点的名字就从 `Foundation.(__JSONEncoder in _12768CA1…)` 变成 `Foundation.__JSONEncoder`。修法是两面都命中时沿用侧栏那份；去掉这一步，这一条就是红的。与下文示例的差别：第六条的锚点按类名排序后取第一个有 Swift 面的类（经 `engine.counterpart(for:)`），并断言根就是那个 Swift 面，不取字典顺序里的第一个；第二、五条把出问题的层收拢成一条断言；同名不分大小写时，排序先比原样拼写，再比种类。仍然留着一处顺序依赖：Ancestor 里协议 refine 的列表照旧从最先登记的那份副本读（`refinedProtocolNames(of:)`）。同一协议的各份副本出自同一份头文件，实际上列表相同，所以没有改
 
 **问题**：每个按某个 ObjC 协议编译的镜像都会在自己的 `__objc_protolist` 里带一份完整副本。关系解析器在三处把这些副本当成不同的类型：
 - **候选**：同名协议在每个携带镜像里各占一个名额，而 `/System/…` 按路径排在 `/usr/lib/libobjc.A.dylib` 之前。所以查 `NSObject` 时，50 个名额先被协议副本占满，真正的 NSObject 类可能被挤掉。
