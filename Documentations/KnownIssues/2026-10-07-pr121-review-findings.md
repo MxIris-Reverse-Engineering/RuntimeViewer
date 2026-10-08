@@ -13692,7 +13692,7 @@ func doubleClickOnTurnedOffRowOpensSettings() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C31
-- **状态**：方案待批，代码未改
+- **状态**：Swift 类的 ObjC 面那一半已修复；跨镜像一致性那一半不修（已裁决，用户同意，裁决原文见下文「同类」）。复现测试：`RuntimeInterfaceSearchTests.swiftClassAncestorsIncludeAdoptedObjCProtocols`。修前红：Foundation 里经 Conforming Types 查到的三个采纳 `NSCopying` 的 Swift 类（`__C.NSNotificationCenter.NotificationMessageKey`、`Foundation.__KVOKeyPathBridgeMachinery.BridgeKey`、`Foundation._NSLocalizedStringResourceSwiftWrapper`），它们的 Ancestors 都只有父类 `["NSObject"]`。与下文示例的差别：测试对每个这样的类都断言，不在找到第一个后返回；按类自己的名字以 Matching Word 查，不按显示名查。ObjC 面采纳的协议从这个 Swift 类所在镜像的 ObjC 索引读，不用 `classGroupAcrossImages(forName:)`，因为 `@objc(Name)` 改名的类可能和别的镜像里的同名类撞名
 
 **问题**：Swift 类型的 Ancestor Types 只读 Swift 的一致性记录（`swiftTypeAncestorNodes` → `conformingProtocolNames`）。Swift 类采纳 ObjC 协议时不会产生这种记录，只会写进类的 ObjC 面（`class_ro_t` 的协议表）。Conforming Types 走的正是 ObjC 表，会把这些类列出来（并按 AC6 换成 Swift 面），所以两个方向对不上：在 Conforming Types 里查得到某个类，它的 Ancestor Types 里却没有这个协议。
 
@@ -13796,7 +13796,7 @@ func swiftClassAncestorsIncludeAdoptedObjCProtocols() async throws {
 
 **同类**：
 - **查过，不需要改**：ObjC 类的 Ancestor 走 `ObjCClassInfo.protocols`，本来就包括 category 采纳的协议（见提案表格）。struct 和 enum 只有 Swift 一致性。
-- **跨镜像一致性，建议不修**。拟写进 KnownIssues 的裁决原文：
+- **跨镜像一致性：不修**（已裁决，用户同意）。裁决原文：
 
   > Swift 类型在别的镜像里声明的一致性（如 CoreTransferable 的 `String: Transferable`）在 Ancestor Types 和 Conforming Types / Inspector 两个方向上都不出现：一致性记录所在的镜像不定义该类型，按记录所在镜像物化时失败被丢弃。两边一致，不是本 PR 引入的不对称；要修需要先定「到定义该类型的镜像去物化，并决定节点显示哪个镜像」，两个方向一起改，另案处理。
 

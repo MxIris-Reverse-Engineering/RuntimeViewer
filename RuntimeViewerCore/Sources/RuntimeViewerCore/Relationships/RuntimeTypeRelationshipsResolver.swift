@@ -298,8 +298,22 @@ actor RuntimeTypeRelationshipsResolver {
         return nodes
     }
 
+    /// The Objective-C protocols a Swift class adopts. Adopting one leaves no
+    /// Swift conformance record: it is written into the class's Objective-C
+    /// face, where Conforming Types reads it, so Ancestor Types reads it
+    /// there too. A class with no Objective-C face adopts none.
+    private func objcProtocolNodes(adoptedBySwiftClass object: RuntimeObject, visited: Set<String>, depth: Int) async -> [RuntimeRelationshipNode] {
+        guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath),
+              let objcClassName = await swiftSection.objcClassName(forCounterpartOf: object),
+              let objcSection = await objcSectionFactory.existingSection(for: object.imagePath),
+              let classInfo = objcSection.objcIndexer.classGroup(forName: objcClassName)?.info.first
+        else { return [] }
+        return await objcProtocolNodes(named: classInfo.protocols.map(\.name), referencedFrom: object.imagePath, visited: visited, depth: depth)
+    }
+
     /// A Swift struct's, enum's, actor's or class's ancestors: the protocols
-    /// it conforms to, then — for a class — its superclass with the same
+    /// it conforms to — for a class, the Objective-C ones its Objective-C face
+    /// adopts as well — then, for a class, its superclass with the same
     /// underneath. A superclass bound to generic arguments is the generic
     /// class itself. One no Swift image defines is looked up as an
     /// Objective-C class when it is an imported one, by the runtime name the
@@ -311,6 +325,9 @@ actor RuntimeTypeRelationshipsResolver {
             visited: visited,
             depth: depth + 1
         )
+        if case .swift(.type(.class)) = object.kind {
+            nodes += await objcProtocolNodes(adoptedBySwiftClass: object, visited: visited, depth: depth + 1)
+        }
         guard case .swift(.type(.class)) = object.kind,
               let superclassMangledName = indexer.superclassMangledName(forMangledTypeName: object.name)
         else { return nodes }
