@@ -16,6 +16,11 @@ import Foundation
 struct RuntimeEngineImagePathCanonicalizationTests {
     private static let simulatorRootPath = "/sim_root"
 
+    /// As long as the client itself waits for an answer: a peer under load —
+    /// a full parallel run — answers late, and the wait ends as soon as the
+    /// root is learned.
+    private static let answerWaitLimit = Duration.seconds(RuntimeEngine.servingDyldRootPathDeadline)
+
     @Test("The serving root is prefixed once, and a path without a root is left alone")
     func canonicalizationAppliesTheRootOnce() {
         let engine = RuntimeEngine(source: .local, engineID: "image-path-canonicalization.pure")
@@ -37,7 +42,7 @@ struct RuntimeEngineImagePathCanonicalizationTests {
         let pair = try await RemoteEnginePair.make(.socket, label: "image-path-canonicalization.socket", serving: serving)
         defer { Task { await pair.stop(); await serving.stop() } }
 
-        let learned = await waitForCondition(timeout: .seconds(5)) {
+        let learned = await waitForCondition(timeout: Self.answerWaitLimit) {
             pair.client.canonicalImagePath("/usr/lib/libobjc.A.dylib") == "/sim_root/usr/lib/libobjc.A.dylib"
         }
         #expect(learned, "the client keys \(pair.client.canonicalImagePath("/usr/lib/libobjc.A.dylib"))")
@@ -58,6 +63,65 @@ struct RuntimeEngineImagePathCanonicalizationTests {
         #expect(pair.client.canonicalImagePath("/usr/lib/libobjc.A.dylib") == "/usr/lib/libobjc.A.dylib")
     }
 
+    /// A peer that knows the question can still be slow to answer it: under
+    /// load its reply queues behind the pushes a fresh connection sends. A
+    /// slow answer is not a missing one, so the client keeps waiting for it —
+    /// it used to give up for good after 3 seconds — and does not ask again
+    /// for its taking long.
+    @Test("A client keeps waiting for a peer that is slow to answer")
+    func slowPeerIsWaitedFor() async throws {
+        let slowPeer = try await RuntimeDirectTCPServerConnection(port: 0, waitForConnection: false)
+        let client = RuntimeEngine(
+            source: .directTCP(name: "image-path-canonicalization.slow", host: "127.0.0.1", port: slowPeer.port, role: .client),
+            engineID: "image-path-canonicalization.slow"
+        )
+        defer { Task { await client.stop(); slowPeer.stop() } }
+        let answeredQuestions = AnsweredQuestionCounter()
+
+        try await client.connect()
+        // The TCP server has no connection to mount a handler on until the
+        // client connects; a question that comes first is answered "No
+        // handler registered" and asked again.
+        #expect(await waitForCondition { slowPeer.state == .connected })
+        slowPeer.setMessageHandler(name: RuntimeEngine.DyldRootPathCommand.commandName) { (_: RuntimeEngine.DyldRootPathCommand) -> String? in
+            answeredQuestions.increment()
+            try await Task.sleep(for: .seconds(4))
+            return Self.simulatorRootPath
+        }
+
+        let learned = await waitForCondition(timeout: Self.answerWaitLimit) {
+            client.canonicalImagePath("/usr/lib/libobjc.A.dylib") == "/sim_root/usr/lib/libobjc.A.dylib"
+        }
+        #expect(learned, "the client keys \(client.canonicalImagePath("/usr/lib/libobjc.A.dylib")) after its peer answered")
+        #expect(answeredQuestions.count == 1, "a slow peer was asked again")
+    }
+
+    /// A proxy installs its command table only once a client has connected,
+    /// and answers "No handler registered" until then — for as long as a busy
+    /// process takes to get there. The client used to give up after four such
+    /// answers, a quarter of a second apart.
+    @Test("A client keeps asking a peer whose answer is not in place yet")
+    func lateCommandTableIsAskedAgain() async throws {
+        let latePeer = try await RuntimeDirectTCPServerConnection(port: 0, waitForConnection: false)
+        let client = RuntimeEngine(
+            source: .directTCP(name: "image-path-canonicalization.late", host: "127.0.0.1", port: latePeer.port, role: .client),
+            engineID: "image-path-canonicalization.late"
+        )
+        defer { Task { await client.stop(); latePeer.stop() } }
+
+        try await client.connect()
+        #expect(await waitForCondition { latePeer.state == .connected })
+        try await Task.sleep(for: .milliseconds(1500))
+        latePeer.setMessageHandler(name: RuntimeEngine.DyldRootPathCommand.commandName) { (_: RuntimeEngine.DyldRootPathCommand) -> String? in
+            Self.simulatorRootPath
+        }
+
+        let learned = await waitForCondition(timeout: Self.answerWaitLimit) {
+            client.canonicalImagePath("/usr/lib/libobjc.A.dylib") == "/sim_root/usr/lib/libobjc.A.dylib"
+        }
+        #expect(learned, "the client keys \(client.canonicalImagePath("/usr/lib/libobjc.A.dylib")) after its peer could answer")
+    }
+
     @Test("A peer that does not know the question neither holds the connection up nor changes a path")
     func peerWithoutTheCommandLeavesPathsAlone() async throws {
         // Serves no command at all, the way a release older than the question
@@ -75,6 +139,21 @@ struct RuntimeEngineImagePathCanonicalizationTests {
 
         try await Task.sleep(for: .seconds(2))
         #expect(client.canonicalImagePath("/usr/lib/libobjc.A.dylib") == "/usr/lib/libobjc.A.dylib")
+    }
+}
+
+/// How many times a peer's handler was reached, from the handler's task.
+private final class AnsweredQuestionCounter: @unchecked Sendable {
+    private let lock = NSLock()
+
+    private var storedCount = 0
+
+    var count: Int {
+        lock.withLock { storedCount }
+    }
+
+    func increment() {
+        lock.withLock { storedCount += 1 }
     }
 }
 

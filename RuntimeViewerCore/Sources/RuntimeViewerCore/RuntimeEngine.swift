@@ -436,31 +436,39 @@ public actor RuntimeEngine {
     ///
     /// In the background, not before `.connected` goes out: a peer older than
     /// 2.1.0 never answers a command it does not know, and holding every
-    /// connection to one up for the timeout would cost more than the moment
-    /// in which a path is keyed without the root. A proxy installs its command
-    /// table only once this client has connected, so a question it answers
-    /// with an error is asked again a moment later; one that times out is
-    /// not. A peer that predates the question leaves the root as it is.
+    /// connection to one up for the wait would cost more than the moment in
+    /// which a path is keyed without the root. Until
+    /// `servingDyldRootPathDeadline` runs out, a question that goes unanswered
+    /// is waited for and one answered with an error is asked again with a
+    /// growing, capped delay: a busy peer answers late, and a proxy answers
+    /// with an error until it has installed its command table (see the
+    /// constant). A peer that predates the question leaves the root as it is.
     private func learnServingDyldRootPath() {
         guard Self.asksForServingDyldRootPath(on: source), let connection else { return }
         servingDyldRootPathTask?.cancel()
         let servingDyldRootPath = servingDyldRootPath
         servingDyldRootPathTask = Task {
-            for attempt in 1 ... Self.servingDyldRootPathAttemptCount {
-                let askedAt = Date()
+            let deadline = Date().addingTimeInterval(Self.servingDyldRootPathDeadline)
+            var retryDelay = Self.servingDyldRootPathInitialRetryDelay
+            while !Task.isCancelled {
+                let remainingTime = deadline.timeIntervalSinceNow
+                guard remainingTime > 0 else { return }
                 do {
                     let rootPath: String? = try await connection.sendMessage(
                         name: DyldRootPathCommand.commandName,
                         request: DyldRootPathCommand(),
-                        timeout: Self.servingDyldRootPathTimeout
+                        timeout: remainingTime
                     )
                     guard !Task.isCancelled else { return }
                     servingDyldRootPath.update(rootPath)
                     return
                 } catch {
-                    let isAnsweredWithError = Date().timeIntervalSince(askedAt) < Self.servingDyldRootPathTimeout
-                    guard isAnsweredWithError, attempt < Self.servingDyldRootPathAttemptCount, !Task.isCancelled else { return }
-                    try? await Task.sleep(nanoseconds: Self.servingDyldRootPathRetryDelayNanoseconds)
+                    // Answered with an error, or timed out — and a timeout
+                    // has used up the whole deadline, which the guard above
+                    // then turns into giving up.
+                    let delay = min(retryDelay, max(0, deadline.timeIntervalSinceNow))
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    retryDelay = min(retryDelay * 2, Self.servingDyldRootPathMaximumRetryDelay)
                 }
             }
         }

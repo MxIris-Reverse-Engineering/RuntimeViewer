@@ -22,16 +22,33 @@ final class RuntimeEngineDyldRootPath: Sendable {
 }
 
 extension RuntimeEngine {
-    /// How often a client asks its peer for the peer's `DYLD_ROOT_PATH`, how
-    /// long it waits between two questions, and how long for an answer. A
-    /// proxy installs its command table only once a client has connected, so
-    /// the first question can arrive before it can be answered; a peer older
-    /// than 2.1.0 does not answer a command it does not know at all.
-    static let servingDyldRootPathAttemptCount = 4
+    /// How long, in all, a client tries to learn its peer's
+    /// `DYLD_ROOT_PATH`. Neither way a question can fail ends the attempt
+    /// before this, because under load both happen to a peer that does know
+    /// the question:
+    ///
+    /// - An unanswered question is waited for with whatever is left of the
+    ///   deadline, never asked again for having taken long. The reply queues
+    ///   behind the pushes a fresh connection sends, and over an ordered
+    ///   stream a second question cannot be answered before the first. A peer
+    ///   older than 2.1.0 does not answer a command it does not know at all;
+    ///   waiting for it costs one background task and one pending entry for
+    ///   this long, and nothing ever arrives late to be dropped.
+    /// - A question answered with an error is asked again after
+    ///   `servingDyldRootPathInitialRetryDelay`, doubling each time up to
+    ///   `servingDyldRootPathMaximumRetryDelay`. A proxy installs its command
+    ///   table only once a client has connected, and answers "No handler
+    ///   registered" until it has — for as long as a busy process takes to get
+    ///   there; a full parallel test run has taken more than 15 seconds. The
+    ///   cap bounds how long after that the question comes. A peer of 2.1.0 or
+    ///   later that predates the question answers the same way every time, so
+    ///   it is asked about twenty times over the deadline, each one a log line
+    ///   on its side.
+    static let servingDyldRootPathDeadline: TimeInterval = 60
 
-    static let servingDyldRootPathRetryDelayNanoseconds: UInt64 = 250_000_000
+    static let servingDyldRootPathInitialRetryDelay: TimeInterval = 0.25
 
-    static let servingDyldRootPathTimeout: TimeInterval = 3
+    static let servingDyldRootPathMaximumRetryDelay: TimeInterval = 4
 
     /// `imagePath` as the process that owns this engine's images keys it —
     /// the form corpus coverage, the indexed image list, search summaries and
