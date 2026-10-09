@@ -32,8 +32,12 @@ extension RuntimeEngine {
     /// background batch; emitting `imageDidLoadPublisher` would feed
     /// `RuntimeBackgroundIndexingCoordinator`'s image-loaded pump and
     /// recursively spawn a fresh batch for every image we just indexed.
+    ///
+    /// It does emit `imageDidIndexPublisher`, which nothing in background
+    /// indexing listens to; the Find corpus coordinator does.
     public func loadImageForBackgroundIndexing(at path: String) async throws {
         _ = try await dispatch(LoadImageForBackgroundIndexingCommand(path: path))
+        imageDidIndexSubject.send(path)
     }
 
     /// Local implementation of `loadImageForBackgroundIndexing(at:)`. Mirrors
@@ -104,6 +108,10 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
         // against; only the wire form needs a named struct (tuples aren't
         // Codable). Repack here.
         return entries.map { ($0.installName, $0.resolvedPath) }
+    }
+
+    func reloadDataAfterBackgroundIndexing() async {
+        await reloadData(isReloadImageNodes: false)
     }
 }
 

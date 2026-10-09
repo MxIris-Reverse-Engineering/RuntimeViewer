@@ -24,6 +24,23 @@ struct RuntimeSwiftTypeReference: Hashable, Sendable {
     let imagePath: String
 }
 
+/// A Swift protocol paired with the image declaring it, addressed both by
+/// the qualified name the indexer keys protocols by and by the mangled name
+/// a `RuntimeObject` carries.
+struct RuntimeSwiftProtocolReference: Hashable, Sendable {
+    let qualifiedName: String
+    let mangledName: String
+    let imagePath: String
+}
+
+/// A protocol named in another protocol's requirement signature as a base
+/// conformance: a Swift protocol by qualified name, or an Objective-C
+/// protocol by its runtime name (`isObjC`), which the ObjC tables resolve.
+struct RuntimeSwiftRefinedProtocol: Hashable, Sendable {
+    let qualifiedName: String
+    let isObjC: Bool
+}
+
 /// Per-image Swift interface index: a project-owned wrapper around the
 /// upstream `MachOSwiftSection` `SwiftDeclarationIndexer` that layers on the
 /// relationship reverse tables backing the Inspector's Relationships tab.
@@ -80,7 +97,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// `RuntimeSwiftSectionFactory.sections` uses, and therefore the one every
     /// `RuntimeSwiftTypeReference` this indexer produces must carry. Not the
     /// same string as `machO.imagePath`; see `init`.
-    private let imagePath: String
+    let imagePath: String
 
     // MARK: - Upstream Indexer
 
@@ -107,6 +124,9 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// subclasses in this image. The upstream indexer does not build this;
     /// `prepare()` does, with a demangle+remangle round-trip so the key sits
     /// in the same canonical string space as `mangleAsString(typeName.node)`.
+    /// A subclass of a generic class bound to arguments is filed twice: under
+    /// the bound name it inherits from, and under the generic class's own
+    /// name, which is the one the generic class is listed and asked about by.
     /// Insertion order preserved per superclass via `OrderedSet`, so result
     /// ordering across queries is stable.
     @Mutex
@@ -125,6 +145,45 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// `ProtocolName` in `O(1)` for `makeRuntimeObject(forMangledProtocolName:)`.
     @Mutex
     private var protocolNameByMangledName: [String: SwiftDeclaration.ProtocolName] = [:]
+
+    /// Mangled class name → mangled name of its superclass, for every class
+    /// with one — the generic class itself when the superclass is bound to
+    /// generic arguments, since that is the name the type tables know it
+    /// by — plus the superclass's printed name for the case where the
+    /// superclass is not a Swift type this aggregate knows (an Objective-C
+    /// class, or one in an unindexed image). Recorded by `prepare()` while
+    /// building the subclass table, which already resolves the superclass.
+    @Mutex
+    private var superclassMangledNameByMangledName: [String: String] = [:]
+
+    @Mutex
+    private var superclassDisplayNameByMangledName: [String: String] = [:]
+
+    /// The runtime name of that superclass when it is an imported
+    /// Objective-C class (`__C.NSView`), for the relationship walk to look it
+    /// up by on the Objective-C side. Never derived from the printed name,
+    /// which names Swift classes too — a generic one with its arguments —
+    /// and whose last component can be any unrelated Objective-C class's
+    /// name.
+    @Mutex
+    private var superclassObjCClassNameByMangledName: [String: String] = [:]
+
+    /// Qualified protocol name → the protocols it refines, read from the
+    /// requirement signature's base-conformance entries (the ones on `Self`).
+    /// Built by `prepare()`; the Find navigator's Ancestor Types walks it.
+    @Mutex
+    private var refinedProtocolsByQualifiedName: [String: OrderedSet<RuntimeSwiftRefinedProtocol>] = [:]
+
+    /// The reverse of `refinedProtocolsByQualifiedName`: a protocol name —
+    /// Swift qualified or Objective-C — → the protocols of this image refining
+    /// it. Descendent Types walks it.
+    @Mutex
+    private var refiningProtocolsByQualifiedName: [String: OrderedSet<RuntimeSwiftProtocolReference>] = [:]
+
+    /// Qualified protocol name → its reference, so a name from a requirement
+    /// signature can be materialized without a linear scan.
+    @Mutex
+    private var protocolReferenceByQualifiedName: [String: RuntimeSwiftProtocolReference] = [:]
 
     /// Per-image sub-indexers registered via `addSubIndexer`. Empty on a
     /// section's own indexer; on the `RuntimeSwiftSectionFactory` aggregate it
@@ -194,9 +253,22 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         var subclassTable: [String: OrderedSet<String>] = [:]
         var typeNameTable: [String: SwiftDeclaration.TypeName] = [:]
         var protocolNameTable: [String: SwiftDeclaration.ProtocolName] = [:]
-        for (protocolName, _) in upstream.allProtocolDefinitions {
+        var superclassMangledNameTable: [String: String] = [:]
+        var superclassDisplayNameTable: [String: String] = [:]
+        var superclassObjCClassNameTable: [String: String] = [:]
+        var refinedProtocolsTable: [String: OrderedSet<RuntimeSwiftRefinedProtocol>] = [:]
+        var refiningProtocolsTable: [String: OrderedSet<RuntimeSwiftProtocolReference>] = [:]
+        var protocolReferenceTable: [String: RuntimeSwiftProtocolReference] = [:]
+        for (protocolName, protocolDefinition) in upstream.allProtocolDefinitions {
             guard let key = try? await mangleAsString(protocolName.node) else { continue }
             protocolNameTable[key] = protocolName
+            let qualifiedName = protocolName.name
+            let reference = RuntimeSwiftProtocolReference(qualifiedName: qualifiedName, mangledName: key, imagePath: imagePath)
+            protocolReferenceTable[qualifiedName] = reference
+            for refined in await refinedProtocols(ofProtocolDescribedBy: protocolDefinition.protocolDescriptor) {
+                refinedProtocolsTable[qualifiedName, default: []].append(refined)
+                refiningProtocolsTable[refined.qualifiedName, default: []].append(reference)
+            }
         }
         for (typeName, typeDefinition) in upstream.allTypeDefinitions {
             // Record `mangledName -> TypeName` for every type, regardless of
@@ -213,21 +285,157 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
             typeNameTable[childKey] = typeName
 
             guard case .class(let classDescriptor) = typeDefinition.typeContextDescriptorWrapper else { continue }
-            guard let superclassMangled = try? classDescriptor.superclassTypeMangledName(in: machO)
+            guard let superclassMangled = try? classDescriptor.superclassTypeMangledName(in: machO.context)
             else { continue }
             // Round-trip through demangle + remangle so the superclass key
             // sits in the same canonical string space as the child key
             // (`mangleAsString(typeName.node)`), which is also how the
             // relationships pipeline derives the lookup key from a target
             // Swift class.
-            guard let superclassNode = try? SymbolicDemangler.demangleType(for: superclassMangled, in: machO),
+            guard let superclassNode = try? SymbolicDemangler.demangleType(for: superclassMangled, in: machO.context),
                   let superclassKey = try? await mangleAsString(superclassNode)
             else { continue }
+            // A superclass bound to generic arguments
+            // (`IncrementalUpdateAction<Menu, MenuItem>`) is filed under the
+            // generic class as well: that is the name the type tables know it
+            // by, and the one Descendent Types and the Inspector ask about it
+            // under. The bound name stays for a type the user specialized,
+            // whose name is the bound one.
+            let unspecializedSuperclassNode = Self.unspecializedNominalTypeNode(of: superclassNode)
+            var unspecializedSuperclassKey: String?
+            if let unspecializedSuperclassNode {
+                unspecializedSuperclassKey = try? await mangleAsString(unspecializedSuperclassNode)
+            }
             subclassTable[superclassKey, default: []].append(childKey)
+            if let unspecializedSuperclassKey, unspecializedSuperclassKey != superclassKey {
+                subclassTable[unspecializedSuperclassKey, default: []].append(childKey)
+            }
+            superclassMangledNameTable[childKey] = unspecializedSuperclassKey ?? superclassKey
+            superclassDisplayNameTable[childKey] = await superclassNode.print(using: .interfaceTypeBuilderOnly)
+            if let objcClassName = Self.importedObjCClassName(of: unspecializedSuperclassNode ?? superclassNode) {
+                superclassObjCClassNameTable[childKey] = objcClassName
+            }
         }
         subclassesBySuperclassMangledName = subclassTable
         typeNameByMangledName = typeNameTable
         protocolNameByMangledName = protocolNameTable
+        superclassMangledNameByMangledName = superclassMangledNameTable
+        superclassDisplayNameByMangledName = superclassDisplayNameTable
+        superclassObjCClassNameByMangledName = superclassObjCClassNameTable
+        refinedProtocolsByQualifiedName = refinedProtocolsTable
+        refiningProtocolsByQualifiedName = refiningProtocolsTable
+        protocolReferenceByQualifiedName = protocolReferenceTable
+    }
+
+    /// The protocols a protocol refines: the requirement-signature entries
+    /// whose subject is `Self` (mangled `x`) and whose content is a protocol.
+    /// A Swift protocol is named the way `ProtocolName.name` names it, so the
+    /// result keys straight into the aggregate's protocol tables; an
+    /// Objective-C protocol is named by its runtime name and flagged. Entries
+    /// that cannot be resolved are dropped rather than guessed at.
+    private func refinedProtocols(ofProtocolDescribedBy descriptor: ProtocolDescriptor) async -> [RuntimeSwiftRefinedProtocol] {
+        guard let protocolModel = try? MachOSwiftSection.`Protocol`(descriptor: descriptor, in: machO.context) else { return [] }
+        var result: [RuntimeSwiftRefinedProtocol] = []
+        for requirement in protocolModel.requirementInSignatures {
+            guard requirement.paramManagledName.rawString == "x",
+                  case .protocol(let symbolOrElement) = requirement.content
+            else { continue }
+            switch symbolOrElement {
+            case .symbol(let symbol):
+                guard let node = try? SymbolicDemangler.demangleType(for: symbol, in: machO.context) else { continue }
+                let qualifiedName = await node.print(using: .interfaceTypeBuilderOnly)
+                guard !qualifiedName.isEmpty else { continue }
+                result.append(RuntimeSwiftRefinedProtocol(qualifiedName: qualifiedName, isObjC: false))
+            case .element(let descriptorWithObjCInterop):
+                switch descriptorWithObjCInterop {
+                case .swift(let refinedDescriptor):
+                    guard let node = try? SymbolicDemangler.demangleContext(for: .protocol(refinedDescriptor), in: machO.context) else { continue }
+                    let qualifiedName = await node.print(using: .interfaceTypeBuilderOnly)
+                    guard !qualifiedName.isEmpty else { continue }
+                    result.append(RuntimeSwiftRefinedProtocol(qualifiedName: qualifiedName, isObjC: false))
+                case .objc(let objcProtocol):
+                    guard let name = try? objcProtocol.name(in: machO.context), !name.isEmpty else { continue }
+                    result.append(RuntimeSwiftRefinedProtocol(qualifiedName: name, isObjC: true))
+                }
+            }
+        }
+        return result
+    }
+
+    // MARK: - Superclass Names
+
+    /// The nominal type a type node instantiates, with every generic argument
+    /// removed and spelled the way that type's own descriptor demangles:
+    /// `IncrementalUpdateAction<Menu, MenuItem>` becomes
+    /// `IncrementalUpdateAction`, and a bound enclosing type is unbound as
+    /// well (`Outer<Int>.Inner`). `nil` when nothing in it is bound, which is
+    /// the case for every non-generic superclass, so those cost no second
+    /// mangling.
+    ///
+    /// swift-demangling's `getUnspecialized` does this for every kind of node
+    /// but is internal to that library. A superclass is always a nominal type,
+    /// so this covers what can occur here, under the same rules: a bound
+    /// generic node gives way to the type it binds, and a nominal type or an
+    /// extension is rebuilt around its unspecialized context.
+    private static func unspecializedNominalTypeNode(of typeNode: Node) -> Node? {
+        guard let nominalNode = unspecializedNominalNode(of: typeNode) else { return nil }
+        return Node.create(kind: .type, child: nominalNode)
+    }
+
+    /// `unspecializedNominalTypeNode(of:)` below the `type` wrapper.
+    private static func unspecializedNominalNode(of node: Node) -> Node? {
+        switch node.kind {
+        case .type:
+            return node.firstChild.flatMap(unspecializedNominalNode(of:))
+        case .boundGenericClass,
+             .boundGenericStructure,
+             .boundGenericEnum,
+             .boundGenericOtherNominalType,
+             .boundGenericTypeAlias:
+            guard let unboundTypeNode = node.firstChild,
+                  unboundTypeNode.kind == .type,
+                  let nominalNode = unboundTypeNode.firstChild
+            else { return nil }
+            return unspecializedNominalNode(of: nominalNode) ?? nominalNode
+        case .class,
+             .structure,
+             .enum,
+             .otherNominalType,
+             .typeAlias:
+            guard let contextNode = node.firstChild,
+                  let unspecializedContextNode = unspecializedNominalNode(of: contextNode)
+            else { return nil }
+            return Node.create(kind: node.kind, children: [unspecializedContextNode] + node.children.dropFirst())
+        case .extension:
+            // The module, the extended type, and the extension's generic
+            // signature when it has one.
+            guard node.children.count >= 2,
+                  let unspecializedExtendedTypeNode = unspecializedNominalNode(of: node.children[1])
+            else { return nil }
+            return Node.create(kind: .extension, children: [node.children[0], unspecializedExtendedTypeNode] + node.children.dropFirst(2))
+        default:
+            return nil
+        }
+    }
+
+    /// The runtime name of the Objective-C class a type node names — a class
+    /// of the Clang importer's `__C` module, such as the `NSView` a Swift
+    /// view subclasses — or `nil` for any other type. An imported class is
+    /// mangled under its Objective-C name, so this is the name the
+    /// Objective-C tables know it by.
+    private static func importedObjCClassName(of typeNode: Node) -> String? {
+        var node = typeNode
+        while node.kind == .type, let childNode = node.firstChild {
+            node = childNode
+        }
+        guard node.kind == .class,
+              let moduleNode = node.firstChild,
+              moduleNode.kind == .module,
+              moduleNode.text == "__C",
+              let identifierNode = node[safeChild: 1],
+              identifierNode.kind == .identifier
+        else { return nil }
+        return identifierNode.text
     }
 
     // MARK: - Relationship Query
@@ -314,6 +522,118 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         return nil
     }
     
+    /// The type definition behind a mangled type name and the image that
+    /// declares it, from whichever indexer in this aggregate names the type.
+    func typeDefinition(forMangledName mangledName: String) -> (definition: TypeDefinition, imagePath: String)? {
+        if let typeName = typeNameByMangledName[mangledName], let definition = upstream.allTypeDefinitions[typeName] {
+            return (definition, imagePath)
+        }
+        for subIndexer in subIndexers {
+            if let found = subIndexer.typeDefinition(forMangledName: mangledName) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// The protocols the type with this mangled name conforms to, as its
+    /// declaring image indexed them (direct conformances, in record order).
+    func conformingProtocolNames(forMangledTypeName mangledName: String) -> [SwiftDeclaration.ProtocolName] {
+        if let typeName = typeNameByMangledName[mangledName] {
+            return Array(upstream.conformingProtocolNamesByTypeName[typeName] ?? [])
+        }
+        for subIndexer in subIndexers {
+            if subIndexer.typeNameByMangledName[mangledName] != nil {
+                return subIndexer.conformingProtocolNames(forMangledTypeName: mangledName)
+            }
+        }
+        return []
+    }
+
+    /// The mangled name of the superclass of the class with this mangled
+    /// name — the generic class itself when the superclass is bound to
+    /// arguments — or `nil` for a root class or a type this aggregate does
+    /// not know. The superclass itself need not be known to any indexer.
+    func superclassMangledName(forMangledTypeName mangledName: String) -> String? {
+        if let superclass = superclassMangledNameByMangledName[mangledName] {
+            return superclass
+        }
+        for subIndexer in subIndexers {
+            if let superclass = subIndexer.superclassMangledName(forMangledTypeName: mangledName) {
+                return superclass
+            }
+        }
+        return nil
+    }
+
+    /// The printed name of that superclass, for a superclass no indexer can
+    /// materialize — an Objective-C class, or one in an unindexed image.
+    func superclassDisplayName(forMangledTypeName mangledName: String) -> String? {
+        if let name = superclassDisplayNameByMangledName[mangledName] {
+            return name
+        }
+        for subIndexer in subIndexers {
+            if let name = subIndexer.superclassDisplayName(forMangledTypeName: mangledName) {
+                return name
+            }
+        }
+        return nil
+    }
+
+    /// The runtime name of that superclass when it is an imported
+    /// Objective-C class, the name the Objective-C tables know it by. `nil`
+    /// for a Swift superclass, which only the Swift tables can resolve.
+    func superclassObjCClassName(forMangledTypeName mangledName: String) -> String? {
+        if let name = superclassObjCClassNameByMangledName[mangledName] {
+            return name
+        }
+        for subIndexer in subIndexers {
+            if let name = subIndexer.superclassObjCClassName(forMangledTypeName: mangledName) {
+                return name
+            }
+        }
+        return nil
+    }
+
+    /// The protocols `qualifiedName` refines, from the image declaring it.
+    func refinedProtocols(ofQualifiedName qualifiedName: String) -> [RuntimeSwiftRefinedProtocol] {
+        if let refined = refinedProtocolsByQualifiedName[qualifiedName] {
+            return Array(refined)
+        }
+        for subIndexer in subIndexers {
+            if subIndexer.protocolReferenceByQualifiedName[qualifiedName] != nil {
+                return subIndexer.refinedProtocols(ofQualifiedName: qualifiedName)
+            }
+        }
+        return []
+    }
+
+    /// The protocols refining `name` — a Swift qualified name or an
+    /// Objective-C protocol name — across this indexer and every sub-indexer.
+    func refiningProtocols(ofQualifiedName name: String) -> [RuntimeSwiftProtocolReference] {
+        var result = refiningProtocolsByQualifiedName[name] ?? []
+        for subIndexer in subIndexers {
+            for reference in subIndexer.refiningProtocols(ofQualifiedName: name) {
+                result.append(reference)
+            }
+        }
+        return Array(result)
+    }
+
+    /// The reference of the protocol with this qualified name, from whichever
+    /// indexer declares it.
+    func protocolReference(forQualifiedName qualifiedName: String) -> RuntimeSwiftProtocolReference? {
+        if let reference = protocolReferenceByQualifiedName[qualifiedName] {
+            return reference
+        }
+        for subIndexer in subIndexers {
+            if let reference = subIndexer.protocolReference(forQualifiedName: qualifiedName) {
+                return reference
+            }
+        }
+        return nil
+    }
+
     // MARK: - Aggregation
 
     /// Register a per-image indexer with this aggregate. Appends it to

@@ -155,8 +155,10 @@ struct ContentTextPipelineTests {
     func failedFetchKeepsPipelineAlive() async throws {
         let fetchRecorder = InterfaceFetchRecorder(failingFirstFetches: 1)
         let fixtureRuntimeObject = makeRuntimeObject()
+        let appDefaults = AppDefaults.isolated()
         let (viewModel, mockRouter) = makeViewModel(
             runtimeObject: fixtureRuntimeObject,
+            appDefaults: appDefaults,
             interfaceProvider: { runtimeObject, _ in
                 if fetchRecorder.recordFetch() {
                     throw StubInterfaceFetchError()
@@ -173,10 +175,8 @@ struct ContentTextPipelineTests {
 
         // Re-trigger the fetch half via a generation-option change; before
         // the split this subscription was already dead (`catchAndReturn` on
-        // the outer chain completed it on the first error).
-        let appDefaults = liveAppDefaults()
-        let originalOptions = appDefaults.options
-        defer { appDefaults.options = originalOptions }
+        // the outer chain completed it on the first error). The store is the
+        // view model's own, so no other test hears the change.
         appDefaults.options.swiftInterfaceOptions.printFieldOffset.toggle()
 
         let recovered = try await pollUntil(timeout: .seconds(10)) {
@@ -260,7 +260,7 @@ struct ContentTextPipelineTests {
     @Test("renderAttributedString matches a direct builder invocation and returns an immutable string")
     func renderMatchesDirectBuilderInvocation() {
         let fixtureRuntimeObject = makeRuntimeObject()
-        let interfaceString: SemanticString = "class ContentPipelineFixture {}"
+        let interfaceString = ("class ContentPipelineFixture {}" as SemanticString).frozen()
         let theme = ResolvedTheme.fallback
 
         let rendered = ContentTextViewModel.renderAttributedString(
@@ -276,13 +276,46 @@ struct ContentTextPipelineTests {
         #expect(ContentTextViewModel.renderAttributedString(for: nil, theme: theme) == nil)
     }
 
+    // MARK: - The live context keeps the app's own defaults out of reach
+
+    /// The live context the pipeline needs resolves every key it does not
+    /// override to its live value, and for `\.appDefaults` that is the app's
+    /// own store: the bookmark files under `Application Support/AppStorage`
+    /// and the standard defaults. The target-wide `withLiveDependencyContext`
+    /// pins it to an isolated instance, but this suite's helper of the same
+    /// name shadows that one, so it has to pin it as well.
+    @Test("the suite's live dependency context resolves an isolated AppDefaults, not the app's own")
+    func liveDependencyContextResolvesIsolatedAppDefaults() {
+        let generationOptionsKey = "generationOptions"
+        let standardOptionsBefore = UserDefaults.standard.data(forKey: generationOptionsKey)
+        // Only a broken pin writes the standard defaults; put them back then,
+        // so the failure does not leak into the next run.
+        defer {
+            if UserDefaults.standard.data(forKey: generationOptionsKey) != standardOptionsBefore {
+                UserDefaults.standard.set(standardOptionsBefore, forKey: generationOptionsKey)
+            }
+        }
+
+        let appDefaults = withLiveDependencyContext {
+            @Dependency(\.appDefaults) var appDefaults
+            return appDefaults
+        }
+        appDefaults.options.objcHeaderOptions.stripSynthesizedIvars.toggle()
+
+        #expect(
+            UserDefaults.standard.data(forKey: generationOptionsKey) == standardOptionsBefore,
+            "the live context resolved the app's own AppDefaults, which writes the standard defaults"
+        )
+    }
+
     // MARK: - Fixtures
 
     private func makeViewModel(
         runtimeObject: RuntimeObject,
+        appDefaults: AppDefaults = .isolated(),
         interfaceProvider: @escaping ContentTextViewModel.InterfaceProvider
     ) -> (viewModel: ContentTextViewModel, router: MockRouter<ContentRoute>) {
-        withLiveDependencyContext {
+        withLiveDependencyContext(appDefaults: appDefaults) {
             let documentState = DocumentState()
             let mockRouter = MockRouter<ContentRoute>()
             let viewModel = ContentTextViewModel(
@@ -360,14 +393,25 @@ struct ContentTextPipelineTests {
     ///
     /// `\.settings` is then overridden back to an in-memory store. The live
     /// context is what the other entries need, but for this one it resolves to
-    /// the real settings file — see ``testSettings``. Keep the override here
-    /// rather than at the call sites: every path into the pipeline goes through
-    /// this helper, so one omission at a call site would quietly reconnect the
-    /// real file.
-    private func withLiveDependencyContext<Result>(_ operation: () throws -> Result) rethrows -> Result {
+    /// the real settings file — see ``testSettings``. `\.appDefaults` is
+    /// pinned to an isolated store for the same reason: its live value is the
+    /// app's own, backed by the user's bookmark files and the standard
+    /// defaults. This helper shadows the target-wide one of the same name,
+    /// which pins `\.appDefaults` too, so it has to repeat that override.
+    /// Keep both overrides here rather than at the call sites: every path into
+    /// the pipeline goes through this helper, so one omission at a call site
+    /// would quietly reconnect the real files.
+    ///
+    /// Pass `appDefaults` to share a store with the view model built inside,
+    /// so a test can change the options that view model reads.
+    private func withLiveDependencyContext<Result>(
+        appDefaults: AppDefaults = .isolated(),
+        _ operation: () throws -> Result
+    ) rethrows -> Result {
         try withDependencies {
             $0.context = .live
             $0.settings = Self.testSettings
+            $0.appDefaults = appDefaults
         } operation: {
             try operation()
         }
@@ -377,13 +421,6 @@ struct ContentTextPipelineTests {
         withLiveDependencyContext {
             @Dependency(\.settings) var settings
             return settings
-        }
-    }
-
-    private func liveAppDefaults() -> AppDefaults {
-        withLiveDependencyContext {
-            @Dependency(\.appDefaults) var appDefaults
-            return appDefaults
         }
     }
 

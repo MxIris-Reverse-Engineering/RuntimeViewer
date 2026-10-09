@@ -36,6 +36,28 @@ public final class DocumentState {
     /// a `false → true` edge can be told apart from the replayed current state.
     private var engineWasReady = false
 
+    /// Fires with the document's engine each time the document starts over on
+    /// it: the `.switchEngine` route put an engine in place — another one, or
+    /// the same one after the process behind it came back — or the engine
+    /// came back while the document had nothing open, which leaves the route
+    /// nothing to walk back (see `observeReadiness(of:)`). Whatever was
+    /// learned from the process behind the engine is stale by then: its
+    /// corpora, the searches run on it, the builds it was running.
+    ///
+    /// `$runtimeEngine` does not cover the second case: nothing is assigned
+    /// when nothing is open.
+    public var runtimeEngineDidReset: Signal<RuntimeEngine> {
+        runtimeEngineDidResetRelay.asSignal()
+    }
+
+    fileprivate let runtimeEngineDidResetRelay = PublishRelay<RuntimeEngine>()
+
+    /// The sidebar at the image list and nothing on the timeline: an engine
+    /// coming back has nothing to walk the document back from.
+    fileprivate var hasNothingOpen: Bool {
+        currentImageNode == nil && selectionStack.isEmpty
+    }
+
     /// Walks the document back to the image list when its engine stops being
     /// ready and then becomes ready again.
     ///
@@ -43,9 +65,11 @@ public final class DocumentState {
     /// the engine object survives, but the process behind it is new and holds
     /// none of the images this document was browsing, so every request from
     /// where the user stands would fail. The `.switchEngine` route onto the
-    /// same engine is the existing "start over on this engine" reset, and its
-    /// own guard makes it a no-op when nothing is open — which covers the
-    /// engine's very first connection as well.
+    /// same engine is the existing "start over on this engine" reset. With
+    /// nothing open it would be a no-op, so the edge then only announces the
+    /// reset (`runtimeEngineDidReset`) — the engine's very first connection
+    /// included, which is no different from a reset as far as anything that
+    /// asked the engine before is concerned.
     ///
     /// Keyed on `isReady`, not on a particular state: an in-process engine
     /// goes `.localOnly` rather than `.connected`, and a test can drive the
@@ -67,7 +91,11 @@ public final class DocumentState {
         let becameReadyAgain = isReady && !engineWasReady
         engineWasReady = isReady
         guard becameReadyAgain else { return }
-        selectionRouter.trigger(.switchEngine(engine))
+        if hasNothingOpen {
+            runtimeEngineDidResetRelay.accept(engine)
+        } else {
+            selectionRouter.trigger(.switchEngine(engine))
+        }
     }
 
     /// Currently inspected runtime image. `nil` when the sidebar is at the
@@ -163,7 +191,9 @@ public final class DocumentState {
     /// of Navigate ▸ Reveal in Sidebar Navigator.
     public var isSelectedRuntimeObjectInCurrentImage: Bool {
         guard let selectedRuntimeObject, let currentImageNode else { return false }
-        return selectedRuntimeObject.imagePath == currentImageNode.path
+        // An object's image path is the engine's key; a sidebar node's is
+        // not, on an iOS Simulator engine.
+        return selectedRuntimeObject.imagePath == runtimeEngine.canonicalImagePath(currentImageNode.path)
     }
 
     /// Mutation surface for every observable state on this `DocumentState`.
@@ -184,18 +214,27 @@ public final class DocumentState {
 
     /// Per-Document background indexing coordinator.
     ///
-    /// Force-initialized on the first Document lifecycle hook
-    /// (`makeWindowControllers` / `close`) and kept alive for the rest of
-    /// the Document's lifetime, even when the feature is disabled at open
-    /// time, so it can react to settings off→on toggles. The `lazy`
-    /// modifier is retained as an init-deferral mechanism, not as a
+    /// Brought into being on first use — `makeWindowControllers` touches it —
+    /// and kept alive for the rest of the Document's lifetime, even when the
+    /// feature is disabled at open time, so it can react to settings off→on
+    /// toggles. Deferring the creation is an init-deferral mechanism, not a
     /// gating-by-enablement: every opened Document instantiates one
     /// coordinator regardless of `Settings.Indexing.BackgroundMode.isEnabled`.
+    /// `documentWillClose()` closes it only if it exists.
     ///
     /// The coordinator captures `runtimeEngine` initially and rewires onto
     /// a new engine via the `$runtimeEngine` subscription on every source
     /// switch — see that property's doc comment for the swap contract.
-    public private(set) lazy var backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
+    public var backgroundIndexingCoordinator: RuntimeBackgroundIndexingCoordinator {
+        if let backgroundIndexingCoordinatorStorage {
+            return backgroundIndexingCoordinatorStorage
+        }
+        let backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
+        backgroundIndexingCoordinatorStorage = backgroundIndexingCoordinator
+        return backgroundIndexingCoordinator
+    }
+
+    private var backgroundIndexingCoordinatorStorage: RuntimeBackgroundIndexingCoordinator?
 
     /// Per-Document interface cache. Content navigation (push, tab switch,
     /// back/forward) rebinds `ContentTextViewModel` and used to re-fetch
@@ -204,6 +243,73 @@ public final class DocumentState {
     /// `RuntimeInterfaceCache` for the invalidation contract (engine swaps
     /// and `dataChangePublisher` events flush it).
     public private(set) lazy var interfaceCache = RuntimeInterfaceCache(documentState: self)
+
+    /// The Find navigator's query and results, shared by the page in each
+    /// sidebar level. See `FindSession`.
+    public var findSession: FindSession {
+        if let findSessionStorage {
+            return findSessionStorage
+        }
+        let findSession = FindSession(documentState: self)
+        findSessionStorage = findSession
+        return findSession
+    }
+
+    private var findSessionStorage: FindSession?
+
+    /// Keeps the engine's interface corpus in step with what this document
+    /// indexes. Like `backgroundIndexingCoordinator`, touched on the first
+    /// Document lifecycle hook so it exists for the document's whole life.
+    public var findCorpusCoordinator: FindCorpusCoordinator {
+        if let findCorpusCoordinatorStorage {
+            return findCorpusCoordinatorStorage
+        }
+        let findCorpusCoordinator = FindCorpusCoordinator(documentState: self)
+        findCorpusCoordinatorStorage = findCorpusCoordinator
+        return findCorpusCoordinator
+    }
+
+    private var findCorpusCoordinatorStorage: FindCorpusCoordinator?
+
+    /// Whether `findSession` has been brought into being. Test seam.
+    var hasCreatedFindSession: Bool {
+        findSessionStorage != nil
+    }
+
+    /// Whether `findCorpusCoordinator` has been brought into being. Test seam.
+    var hasCreatedFindCorpusCoordinator: Bool {
+        findCorpusCoordinatorStorage != nil
+    }
+
+    /// The document is closing; `Document.close()` calls this and nothing
+    /// else. Each member that exists lets go of its work — the indexing
+    /// batches this document started, the corpus builds it asked for, the
+    /// search under way — and stops reacting to anything. A member never
+    /// brought into being stays that way: creating it now would only start
+    /// the observation and the requests closing is meant to stop.
+    ///
+    /// Needed because this object can outlive its window, and with it every
+    /// member it holds, so their `deinit` is no place to let go of work.
+    public func documentWillClose() {
+        #if canImport(RuntimeViewerSettings)
+        backgroundIndexingCoordinatorStorage?.documentWillClose()
+        #endif
+        findCorpusCoordinatorStorage?.documentWillClose()
+        findSessionStorage?.documentWillClose()
+    }
+
+    /// Whether the Report navigator has work in progress: an indexing batch, or a corpus queued or
+    /// being printed. Worked out once here, so both sidebar levels mark their Report navigator tab
+    /// from the same answer.
+    public var reportActivity: Driver<Bool> {
+        Driver.combineLatest(
+            backgroundIndexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
+            findCorpusCoordinator.hasActiveBuild
+        ) { hasActiveBatch, hasActiveBuild in
+            hasActiveBatch || hasActiveBuild
+        }
+        .distinctUntilChanged()
+    }
 }
 
 private final class SelectionRouter: Router {
@@ -236,7 +342,7 @@ private final class SelectionRouter: Router {
     ) {
         switch route {
         case .switchEngine(let engine):
-            if documentState.runtimeEngine === engine, documentState.currentImageNode == nil, documentState.selectionStack.isEmpty { return }
+            if documentState.runtimeEngine === engine, documentState.hasNothingOpen { return }
             if documentState.runtimeEngine !== engine {
                 documentState.observeReadiness(of: engine)
             }
@@ -314,6 +420,13 @@ private final class SelectionRouter: Router {
             documentState.tabs.append(DocumentTab(object: object))
             documentState.activeTabIndex = documentState.tabs.count - 1
             pushOntoTimeline(object)
+        case .pushHighlighting(let object, _):
+            // The highlight rides on the route itself, to the content pane.
+            pushOntoTimeline(object)
+        case .openInNewTabHighlighting(let object, _):
+            documentState.tabs.append(DocumentTab(object: object))
+            documentState.activeTabIndex = documentState.tabs.count - 1
+            pushOntoTimeline(object)
         case .switchTab(let index):
             guard index >= 0, index < documentState.tabs.count, index != documentState.activeTabIndex else { return }
             documentState.activeTabIndex = index
@@ -352,6 +465,10 @@ private final class SelectionRouter: Router {
         // suppresses redundant `tabs` emissions on plain navigation.
         syncActiveTabObject()
         routeRelay.accept(route)
+        // Announced once the document stands on the engine, like the route.
+        if case .switchEngine(let engine) = route {
+            documentState.runtimeEngineDidResetRelay.accept(engine)
+        }
         completion?(EmptyRouteTransitionContext.shared)
     }
 

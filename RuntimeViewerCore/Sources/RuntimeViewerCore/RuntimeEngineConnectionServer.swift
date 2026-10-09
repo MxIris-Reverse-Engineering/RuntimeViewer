@@ -23,6 +23,11 @@ public actor RuntimeEngineConnectionServer {
     /// tell their traffic apart.
     private let label: String
 
+    /// The requests served on `connection` that the requesting peer can
+    /// still withdraw. Kept here rather than created per registration: a
+    /// proxy installs the command table again for every client that connects.
+    private let inboundRequests = RuntimeEngineInboundRequests()
+
     /// Push-relay subscriptions. They live in their own set so
     /// `installPushRelay()` can drop the previous client's relays before wiring
     /// new ones — otherwise each reconnect would stack another relay and every
@@ -45,7 +50,7 @@ public actor RuntimeEngineConnectionServer {
     /// itself a client of another process forwards instead of running the
     /// local arm — see `RuntimeEngineCommandRegistrar.register(_:)`.
     public func registerRequestHandlers() {
-        RuntimeEngine.registerSharedHandlers(on: connection, engine: engine)
+        RuntimeEngine.registerSharedHandlers(on: connection, engine: engine, inboundRequests: inboundRequests)
         #log(.info, "[\(self.label, privacy: .public)] request handlers registered")
     }
 

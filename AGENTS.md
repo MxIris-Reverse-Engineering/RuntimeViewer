@@ -571,7 +571,7 @@ reasoning about what the framework "must" do instead of reading what it does.
 
 What has to be present:
 
-1. **A RuntimeViewer dump of the frameworks** — `/Volumes/Code/Dump/SourceEditor/Xcode/<version>/`,
+1. **A RuntimeViewer dump of the frameworks** — `/Volumes/RE/SourceEditor/Xcode/<version>/`,
    one directory per framework, each holding **both** `ObjCHeaders/` and `SwiftInterfaces/`.
 
    **It has to be RuntimeViewer's own export, and both directories have to be there.** A dump
@@ -964,7 +964,10 @@ override func setupBindings(for viewModel: MyViewModel) {
 | `VStackView(alignment:spacing:) { ... }` | `NSStackView(orientation: .vertical)` |
 | `HStackView(spacing:) { ... }` | `NSStackView(orientation: .horizontal)` |
 | `ScrollView()` | `NSScrollView()` |
+| `PopUpPathControl()` (RuntimeViewerUI) | `NSPathControl()` for an Xcode-style path of menus (`Find ▸ Text ▸ Containing`) |
 | `final class XxxView: LayerBackedView` | `final class XxxView: NSView` (when it needs `cornerRadius` / border / `backgroundColor` / shadow) |
+
+**`PopUpPathControl` is Xcode's `DVTPathControl` rebuilt, not a dressed-up `NSPathControl`.** It draws everything itself — the hover highlight, the chevron that turns into a pop-up indicator, the menu laid over the component, the title that fades out — to measurements read out of Xcode 27's DVTKit, and each rule names the DVTKit method it comes from. Change a measurement only against that evidence: the table and the deliberate departures are in `Documentations/Evolutions/0029-find-navigator.md` §4.2. It only reports choices — `lastSelection` plus the action, read with `rx.click(with: \.lastSelection)` — and the owner answers by setting new `components`.
 
 **Layer-backed views** — any custom AppKit view that needs layer-level visuals (rounded corners, border, background color, shadow) MUST inherit `UIFoundationAppKit.LayerBackedView`, never raw `NSView` with hand-rolled `wantsLayer = true` + `layer?.cornerRadius / layer?.borderColor / layer?.backgroundColor = ....cgColor`. The base class already sets `wantsLayer + layerContentsRedrawPolicy = .onSetNeedsDisplay` and centralizes everything in `updateLayer()`, so:
 
@@ -1171,16 +1174,25 @@ Pass a custom builder when the cell needs non-default initialization: `outlineVi
 ```swift
 extension MyViewController {
     fileprivate final class CandidateCellView: TableCellView {
+        private let iconImageView = ImageView()
+
         private let nameLabel = Label()
 
         override func setup() {
             super.setup()
 
             hierarchy {
+                iconImageView
                 nameLabel
             }
+            iconImageView.snp.makeConstraints { make in
+                make.leading.equalToSuperview().inset(4)
+                make.centerY.equalToSuperview()
+                make.size.equalTo(16)
+            }
             nameLabel.snp.makeConstraints { make in
-                make.leading.trailing.equalToSuperview().inset(4)
+                make.leading.equalTo(iconImageView.snp.trailing).offset(4)
+                make.trailing.equalToSuperview().inset(4)
                 make.centerY.equalToSuperview()
             }
             nameLabel.maximumNumberOfLines = 1
@@ -1189,35 +1201,57 @@ extension MyViewController {
         func bind(to viewModel: CandidateCellViewModel) {
             rx.disposeBag = DisposeBag()
 
-            viewModel.$name.asDriver().drive(nameLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
-            viewModel.$icon.asDriver().drive(iconImageView.rx.image).disposed(by: rx.disposeBag)
+            viewModel.$appearance.asDriver().driveOnNext { [weak self] appearance in
+                guard let self else { return }
+                iconImageView.image = appearance.icon
+                nameLabel.attributedStringValue = appearance.name
+            }
+            .disposed(by: rx.disposeBag)
         }
     }
 }
 ```
 
-**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, hold the underlying model as a stored `let`, and expose every piece of display state (icons, attributed names, filter results) as `@RxObserved public private(set) var` so the cell view can drive its UI off the projected `$property` driver in `bind(to:)`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
+**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, and hold the underlying model as a stored `let`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
+
+**Everything a row shows goes into one `Appearance` struct behind a single `@RxObserved` — never one `@RxObserved` per icon, label or status.** A cell ViewModel exists once per row, and these lists run to thousands of rows. An `@RxObserved` costs only its value and an empty reference until its `$property` is touched, but `bind(to:)` touches every one it binds: each becomes a `BehaviorRelay` — a `BehaviorSubject` with an `NSRecursiveLock` of its own — that lives as long as the cell ViewModel, and each `asDriver()` adds a share-replay operator with another lock for as long as the row is on screen. Five properties per row means five of each; folding the sidebar's five into one took the process from about 125,000 locks to 42,000 after scrolling through every object in SwiftUI (`Documentations/Evolutions/0005-cellvm-appearance-single-observed.md`). `SidebarRootCellViewModel` and `ReportCellViewModel` are the references.
+
+- **Publish once per change.** Build the new struct and assign it once, and only when it differs (`Equatable`). The macro generates a plain getter and setter, so `appearance.title = …` field by field sends one event per statement.
+- **The cell binds `$appearance` once** and applies it in one place. When the appearance changes many times a second (a row showing progress), set each part only when it differs, as `ReportCellView` does.
+- **State nothing displays stays a plain property.** A flag only the filter reads (`ReportCellViewModel.isInProgress`) has no observer to serve.
+- **A cell ViewModel subscribes to nothing in `init`.** A row that observes shared state itself — a selection set, a progress stream — builds its relay and its subscription for every row, on screen or not. The parent ViewModel keeps its rows and pushes the change into them through an `update(…)`, the way the batch export picker does: `BatchExportingImageSelectionViewModel` hands every new selection to `BatchExportingImageTree.updateSelection(_:)`, which recomputes the checkbox of each row shown and assigns a row's one `@RxObserved`, `selection`, only when it changed.
 
 ```swift
 public final class CandidateCellViewModel: NSObject, @unchecked Sendable {
+    public struct Appearance: Equatable {
+        public var icon: NSUIImage?
+        public var name: NSAttributedString
+    }
+
     public let candidate: Candidate
 
     @RxObserved
-    public private(set) var name: NSAttributedString
-
-    @RxObserved
-    public private(set) var icon: NSUIImage?
+    public private(set) var appearance: Appearance
 
     public init(candidate: Candidate) {
         self.candidate = candidate
-        self.name = NSAttributedString {
-            AText(candidate.displayName)
-                .foregroundColor(.labelColor)
-                .font(.systemFont(ofSize: 13))
-                .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
-        }
-        self.icon = candidate.icon
+        self.appearance = Appearance(
+            icon: candidate.icon,
+            name: NSAttributedString {
+                AText(candidate.displayName)
+                    .foregroundColor(.labelColor)
+                    .font(.systemFont(ofSize: 13))
+                    .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
+            }
+        )
         super.init()
+    }
+
+    func update(icon: NSUIImage?, name: NSAttributedString) {
+        let newAppearance = Appearance(icon: icon, name: name)
+        if appearance != newAppearance {
+            appearance = newAppearance
+        }
     }
 }
 ```
@@ -1234,6 +1268,8 @@ extension XxxCellViewModel: Differentiable {
 #endif
 ```
 For cell ViewModels that own no extra state beyond the underlying `Hashable` domain object, an empty `extension XxxCellViewModel: Differentiable {}` is acceptable — DifferenceKit synthesizes `differenceIdentifier = self` / `isContentEqual = ==` from `Hashable + Equatable`.
+
+**Value-type outline trees** (a `struct` node that carries its `children`, such as `ReportNode`) follow RxAppKit's contract since 0.6.0: `==` and `hash(into:)` use the identifier alone, and `isContentEqual(to:)` compares the whole subtree recursively. The reload adapter (`rx.nodes(options: [])`) asks `isContentEqual` of the first level only and reloads nothing when every root answers yes, so a shallow answer swallows every change below it; and `NSOutlineView` keeps a row expanded across `reloadData()` only when the new item is `==` to the old one, so a synthesized whole-subtree `==` collapses every row whose subtree changed. When the rows' cells are bound to cell ViewModels kept across rebuilds, compare those by identity in `isContentEqual` too, so a row that got a new cell ViewModel is reloaded and its cell rebinds. `ReportOutlineBindingTests` pins all three on a real outline.
 
 **7. Click / selection events** — derive from `tableView.rx.itemClicked()` / `tableView.rx.modelSelected()` / `outlineView.rx.modelDoubleClicked()` instead of `target` + `@objc` plumbing:
 ```swift
@@ -1402,7 +1438,7 @@ swift test --skip-build --scratch-path /tmp/<agent>/SwiftPM/RuntimeViewerPackage
 
 Rules for `RuntimeViewerApplicationTests` (every ViewModel in `RuntimeViewerApplication` has a contract suite there, next to the defect-specific regression suites):
 
-- **Build ViewModels inside `ViewModelTestEnvironment.make { }`.** It overrides `appDefaults`, `settings` and `resolvedThemeStream` with test-owned instances. `AppDefaults` is file-backed under a path the running app shares (`~/Library/Application Support/AppStorage`, not bundle-scoped, and the app is not sandboxed), so a test that resolves `AppDefaults.shared` reads and writes the user's real bookmark files. The key's `testValue` is an isolated temporary-directory instance for that reason, and `withLiveDependencyContext` pins the same — never point either back at `.shared`. `settings` is `SettingsAccess.preview` (in-memory); the live one auto-saves over the user's `RuntimeViewer-Debug/settings.json`.
+- **Build ViewModels inside `ViewModelTestEnvironment.make { }`.** It overrides `appDefaults`, `settings` and `resolvedThemeStream` with test-owned instances. `AppDefaults` is file-backed under a path the running app shares (`~/Library/Application Support/AppStorage`, not bundle-scoped, and the app is not sandboxed), so a test that resolves `AppDefaults.shared` reads and writes the user's real bookmark files. The key's `testValue` is an isolated temporary-directory instance for that reason, and `withLiveDependencyContext` pins the same — never point either back at `.shared`. A suite that writes its own live-context helper has to pin `\.appDefaults` as well: `ContentTextPipelineTests` shadowed the shared helper with one that did not, and reached `.shared` until PR121.18. An isolated instance also keeps its Generation Options, filter mode and migration flags in a user defaults namespace of its own (`UserDefaultsNamespace`), so tests neither hear each other's option changes nor write the test process's standard defaults, and need no lock around them. `settings` is `SettingsAccess.preview` (in-memory); the live one auto-saves over the user's `RuntimeViewer-Debug/settings.json`.
 - **Engine-backed behaviour uses a real in-process `RuntimeEngine`**, the same way RuntimeViewerCore's tests do: `TestRuntimeEngine.shared()` (a dedicated engine with libobjc + Foundation loaded once per process; never call `loadImage` on it) or `TestRuntimeEngine.makeConnected(...)` for tests that change engine state. ViewModels bound to it through `.switchEngine` do not need `withSharedLocalEngineLock`; that lock is for tests coupled to `RuntimeEngine.local`. Anchor assertions on stable symbols (`NSObject`, `NSString`, `NSMutableString`).
 - **Keep the ViewModel alive until the assertion** (`defer { withExtendedLifetime(viewModel) {} }`): `transform` handlers capture `[weak self]`, so a dropped ViewModel silently does nothing.
 - **Await Rx through the helpers**: `nextValue(from:where:)` for the first matching element, `values(from:during:)` to prove nothing was emitted. Navigation is asserted on `DocumentState` (`selectedRuntimeObject`, `tabs`) or on a `MockRouter`.

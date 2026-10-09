@@ -21,6 +21,14 @@ struct RuntimeObjCClassReference: Hashable, Sendable {
     let isSwiftStable: Bool
 }
 
+/// An Objective-C protocol found to adopt (refine) another protocol, paired
+/// with the image declaring it. Same in-process-only status as
+/// `RuntimeObjCClassReference`.
+struct RuntimeObjCProtocolReference: Hashable, Sendable {
+    let protocolName: String
+    let imagePath: String
+}
+
 /// Per-image Objective-C interface index: a project-owned wrapper around the
 /// upstream `MachOObjCSection` `ObjCInterfaceIndexer` that layers on the
 /// relationship reverse tables backing the Inspector's Relationships tab.
@@ -166,6 +174,22 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// `upstream.prepare()` returns and so can store them inline.
     private let relationshipTables: RuntimeObjCRelationshipTables
 
+    /// The dyld-canonical path of this indexer's image — the key the section
+    /// factory caches it under, and what a cross-image lookup answers with so
+    /// the caller can reach the defining section. The relationship events
+    /// carry it themselves; the protocol-refinement table below, built after
+    /// the walk, does not, so the wrapper keeps it after all (the type's
+    /// documentation above predates that table).
+    let imagePath: String
+
+    /// Protocol name → the protocols of this image that adopt it. Built by
+    /// `prepare()` from each protocol's own adoption list, because the
+    /// library's event stream reports class adoptions only. The Find
+    /// navigator's Descendent Types walks it; Ancestor Types reads the
+    /// forward direction straight off `protocolGroup(forName:)`.
+    @Mutex
+    private var refiningProtocolsByProtocolName: [String: OrderedSet<RuntimeObjCProtocolReference>] = [:]
+
     /// Per-image sub-indexers registered via `addSubIndexer`. Empty on a
     /// section's own indexer; on the `RuntimeObjCSectionFactory` aggregate it
     /// holds every loaded image's indexer, so the query methods fan out across
@@ -187,6 +211,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     init(machO: MachOImage, imagePath: String, progressContinuation: LoadingEventContinuation? = nil) {
         let relationshipTables = RuntimeObjCRelationshipTables()
         self.relationshipTables = relationshipTables
+        self.imagePath = imagePath
         self.upstream = ObjCInterfaceIndexer(
             machO: machO,
             imagePath: imagePath,
@@ -221,6 +246,14 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// second `prepare()`, which would double every relationship.
     func prepare() async throws {
         try await upstream.prepare()
+        var refiningTable: [String: OrderedSet<RuntimeObjCProtocolReference>] = [:]
+        for protocolName in upstream.protocolNames {
+            guard let group = upstream.protocolGroup(forName: protocolName) else { continue }
+            for adopted in group.info.protocols {
+                refiningTable[adopted.name, default: []].append(RuntimeObjCProtocolReference(protocolName: protocolName, imagePath: imagePath))
+            }
+        }
+        refiningProtocolsByProtocolName = refiningTable
     }
 
     // MARK: - Upstream Method Forwarding
@@ -268,6 +301,72 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
             }
         }
         return Array(result)
+    }
+
+    /// The protocols `protocolName` adopts — the forward direction of
+    /// `refiningProtocols(of:)` — read off the declaring image's group. Empty
+    /// when no indexer in this aggregate declares the protocol.
+    func refinedProtocolNames(of protocolName: String) -> [String] {
+        guard let (group, _) = protocolGroupAcrossImages(forName: protocolName) else { return [] }
+        return group.info.protocols.map(\.name)
+    }
+
+    /// The protocols adopting `protocolName`, across this indexer and every
+    /// registered sub-indexer, each with the image declaring it.
+    func refiningProtocols(of protocolName: String) -> [RuntimeObjCProtocolReference] {
+        var result = refiningProtocolsByProtocolName[protocolName] ?? []
+        for subIndexer in subIndexers {
+            for reference in subIndexer.refiningProtocols(of: protocolName) {
+                result.append(reference)
+            }
+        }
+        return Array(result)
+    }
+
+    /// The class group for `name` from whichever image in this aggregate
+    /// declares the class, with that image's path — this indexer's own image
+    /// first, then each sub-indexer in registration order.
+    func classGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachOImage>.ObjCClassGroup, imagePath: String)? {
+        if let group = upstream.classGroup(forName: name) {
+            return (group, imagePath)
+        }
+        for subIndexer in subIndexers {
+            if let found = subIndexer.classGroupAcrossImages(forName: name) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// `classGroupAcrossImages(forName:)` for protocols.
+    func protocolGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachOImage>.ObjCProtocolGroup, imagePath: String)? {
+        if let group = upstream.protocolGroup(forName: name) {
+            return (group, imagePath)
+        }
+        for subIndexer in subIndexers {
+            if let found = subIndexer.protocolGroupAcrossImages(forName: name) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// Every image in this aggregate whose `__objc_protolist` carries a
+    /// protocol named `name`, this indexer's own image first. Each image that
+    /// compiled against a protocol carries a full copy and none of them owns
+    /// it (`Documentations/ResolvedIssues/2026-08-05-objc-protocol-ownership-filter.md`),
+    /// so the relationship walk chooses among the copies itself instead of
+    /// taking whichever image happened to be indexed first, the way
+    /// `protocolGroupAcrossImages(forName:)` answers.
+    func protocolCarrierImagePaths(forName name: String) -> [String] {
+        var carrierImagePaths: [String] = []
+        if upstream.protocolGroup(forName: name) != nil {
+            carrierImagePaths.append(imagePath)
+        }
+        for subIndexer in subIndexers {
+            carrierImagePaths.append(contentsOf: subIndexer.protocolCarrierImagePaths(forName: name))
+        }
+        return carrierImagePaths
     }
 
     // MARK: - Aggregation

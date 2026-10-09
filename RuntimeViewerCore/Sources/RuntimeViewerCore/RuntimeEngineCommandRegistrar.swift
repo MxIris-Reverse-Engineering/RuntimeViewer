@@ -26,9 +26,25 @@ public final class RuntimeEngineCommandRegistrar: @unchecked Sendable {
 
     private let engine: RuntimeEngine
 
-    init(connection: any RuntimeConnection, engine: RuntimeEngine) {
+    /// The connection's registry of requests its peer can still withdraw; see
+    /// ``registerProgress(_:)`` and `registerRequestCancellation()`.
+    private let inboundRequests: RuntimeEngineInboundRequests
+
+    /// - Parameter inboundRequests: The registry the connection's owner keeps
+    ///   for it. An identifier means something only to the peer that minted
+    ///   it, so the owner of a connection whose handlers are installed again —
+    ///   an engine reconnecting, a proxy taking its next client — passes the
+    ///   one it keeps, and a request survives the reinstallation. The default,
+    ///   a registry of this registrar's own, serves a connection whose handlers
+    ///   are installed once.
+    init(
+        connection: any RuntimeConnection,
+        engine: RuntimeEngine,
+        inboundRequests: RuntimeEngineInboundRequests = RuntimeEngineInboundRequests()
+    ) {
         self.connection = connection
         self.engine = engine
+        self.inboundRequests = inboundRequests
     }
 
     /// Installs one plain command, routing inbound requests of that type
@@ -70,20 +86,67 @@ public final class RuntimeEngineCommandRegistrar: @unchecked Sendable {
     /// The progress push is best-effort (`try?`) — a dropped push must not
     /// fail the request itself, matching the pre-existing behavior of the
     /// hand-rolled `objectsLoadingProgress` channel this replaces.
+    ///
+    /// A request whose envelope names itself — a command type that cancels
+    /// across connections — runs in a task `inboundRequests` holds, so the
+    /// sender's `cancelRequest` can reach it: the transport runs this handler
+    /// in a task nobody holds a handle to. Through a proxy whose engine is
+    /// itself a client, cancelling that task cancels the engine's own
+    /// forwarded request, which withdraws it upstream in turn.
     public func registerProgress<Command: RuntimeEngineProgressCommand>(_ commandType: Command.Type) {
         guard claim(Command.commandName) else { return }
         let connection = connection
-        connection.setMessageHandler(name: Command.commandName) { [engine] (envelope: RuntimeEngineProgressEnvelope<Command>) -> Command.Response in
-            guard let token = envelope.progressToken else {
-                return try await engine.dispatch(envelope.request, onProgress: nil)
+        connection.setMessageHandler(name: Command.commandName) { [engine, inboundRequests] (envelope: RuntimeEngineProgressEnvelope<Command>) -> Command.Response in
+            let onProgress: (@Sendable (Command.Progress) async -> Void)?
+            if let token = envelope.progressToken {
+                onProgress = { progress in
+                    guard let payload = try? JSONEncoder().encode(progress) else { return }
+                    try? await connection.sendMessage(
+                        name: RuntimeEngine.CommandName.progressEvent.commandName,
+                        request: RuntimeEngineProgressPush(token: token, payload: payload),
+                    )
+                }
+            } else {
+                onProgress = nil
             }
-            return try await engine.dispatch(envelope.request) { progress in
-                guard let payload = try? JSONEncoder().encode(progress) else { return }
-                try? await connection.sendMessage(
-                    name: RuntimeEngine.CommandName.progressEvent.commandName,
-                    request: RuntimeEngineProgressPush(token: token, payload: payload),
-                )
+            guard let requestIdentifier = envelope.requestIdentifier else {
+                return try await engine.dispatch(envelope.request, onProgress: onProgress)
             }
+            return try await inboundRequests.run(requestIdentifier) {
+                try await engine.dispatch(envelope.request, onProgress: onProgress)
+            }
+        }
+    }
+
+    // MARK: - Commands answered by this process
+
+    /// Installs `cancelRequest`, which withdraws a request this connection is
+    /// serving, named by the `requestIdentifier` its envelope carried.
+    ///
+    /// Answered here and never forwarded: the identifier names a task in this
+    /// process. On a proxy whose engine forwards in turn, cancelling that task
+    /// is what sends the next `cancelRequest` upstream.
+    func registerRequestCancellation() {
+        let commandName = RuntimeEngine.CommandName.cancelRequest.commandName
+        guard claim(commandName) else { return }
+        connection.setMessageHandler(name: commandName) { [inboundRequests] (cancellation: RuntimeEngineRequestCancellation) in
+            await inboundRequests.cancel(cancellation.requestIdentifier)
+        }
+    }
+
+    /// Installs one command that this process answers itself, running
+    /// `perform(on:)` directly instead of going through `engine.dispatch(_:)`.
+    ///
+    /// The opposite of what ``register(_:)`` has to do, and right only for a
+    /// command whose answer belongs to the process serving this connection
+    /// rather than to the process that owns the images: `dyldRootPath`, which
+    /// an engine answers from what it already knows (see
+    /// `RuntimeEngine.DyldRootPathCommand`). Internal, because no command of
+    /// another module has had a reason to be answered this way.
+    func registerAnsweredInThisProcess<Command: RuntimeEngineCommand>(_ commandType: Command.Type) {
+        guard claim(Command.commandName) else { return }
+        connection.setMessageHandler(name: Command.commandName) { [engine] (command: Command) -> Command.Response in
+            try await command.perform(on: engine)
         }
     }
 
@@ -164,8 +227,18 @@ extension RuntimeEngine {
     /// ``registerBuiltInHandlers(into:)``. Adding one from *another* module
     /// means a call to ``addCommandExtension(named:install:)`` and no edit
     /// here at all.
-    static func registerSharedHandlers(on connection: any RuntimeConnection, engine: RuntimeEngine) {
-        let registrar = RuntimeEngineCommandRegistrar(connection: connection, engine: engine)
+    ///
+    /// `inboundRequests` is the connection's registry of withdrawable
+    /// requests. An identifier means something only to the peer that minted
+    /// it, so a connection's owner passes the one it keeps for that
+    /// connection; the default, a registry of this call's own, serves a
+    /// connection whose handlers are installed once.
+    static func registerSharedHandlers(
+        on connection: any RuntimeConnection,
+        engine: RuntimeEngine,
+        inboundRequests: RuntimeEngineInboundRequests = RuntimeEngineInboundRequests()
+    ) {
+        let registrar = RuntimeEngineCommandRegistrar(connection: connection, engine: engine, inboundRequests: inboundRequests)
         registerBuiltInHandlers(into: registrar)
         for commandExtension in commandExtensionsForInstallation() {
             commandExtension.install(registrar)

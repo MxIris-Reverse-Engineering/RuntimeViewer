@@ -115,7 +115,11 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                branch: "next"
+                // The Find navigator's corpus needs what this branch carries and
+                // next does not yet: concurrent definition printing, memoized
+                // nested field offsets and nested definition regions. Back to
+                // next once the branch is merged there.
+                branch: "feature/runtime-viewer/find-navigator"
             ),
         ),
         .package(
@@ -125,6 +129,19 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
+                branch: "next"
+            ),
+        ),
+        // Imported directly, and wanted from next: MachOSwiftSection asks for a
+        // 0.7 release, which lacks the unretained kind queries that let several
+        // corpus prints run side by side.
+        .package(
+            local: .package(
+                path: "../../swift-demangling",
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
                 branch: "next"
             ),
         ),
@@ -201,6 +218,7 @@ let package = Package(
                 .product(name: "ObjCIndexing", package: "MachOObjCSection"),
                 .product(name: "ObjCInterface", package: "MachOObjCSection"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
+                .product(name: "Demangling", package: "swift-demangling"),
                 .product(name: "OutputTransformer", package: "swift-semantic-string"),
                 .product(name: "ObjCOutputTransformer", package: "MachOObjCSection"),
                 .product(name: "SwiftOutputTransformer", package: "MachOSwiftSection"),

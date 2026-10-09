@@ -184,6 +184,27 @@ public actor RuntimeEngine {
 
     private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()
 
+    /// Publisher that emits an image's path each time this engine's API
+    /// returns with the image indexed: `objects(in:)`,
+    /// `objectsWithProgress(in:)`, both `loadImage(at:)` overloads and
+    /// `loadImageForBackgroundIndexing(at:)` — the calls whose contract is
+    /// that both sections exist when they return.
+    ///
+    /// Emitted by the engine the caller holds, in the caller's process, so a
+    /// client engine reports what its own requests indexed without a message
+    /// from the peer, whatever the peer's release. An image already indexed is
+    /// reported again; subscribers deduplicate. The path is the caller's
+    /// spelling, not the canonical one — see `canonicalImagePath(_:)`.
+    ///
+    /// `nonisolated` for the same reason as `imageDidLoadPublisher`.
+    public nonisolated var imageDidIndexPublisher: some Publisher<String, Never> {
+        imageDidIndexSubject
+    }
+
+    // Internal, not private: `loadImageForBackgroundIndexing(at:)` emits it
+    // from RuntimeEngine+BackgroundIndexing.swift.
+    nonisolated let imageDidIndexSubject = PassthroughSubject<String, Never>()
+
     /// In-flight progress routes keyed by the per-round-trip token minted in
     /// `dispatch(_:onProgress:)`. Inbound `progressEvent` pushes look up
     /// their token here and forward the decoded payload to the awaiting
@@ -192,6 +213,20 @@ public actor RuntimeEngine {
     /// cross-talking.
     private var progressRoutes: [String: @Sendable (Data) async -> Void] = [:]
 
+    /// The root `canonicalImagePath(_:)` applies: this process's own, until a
+    /// client connection learns the serving process's.
+    nonisolated let servingDyldRootPath = RuntimeEngineDyldRootPath(ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"])
+
+    /// The question to the peer about its root under way; see
+    /// `learnServingDyldRootPath()`.
+    private var servingDyldRootPathTask: Task<Void, Never>?
+
+    /// The requests this engine serves on its connection as a server that
+    /// the requesting peer can still withdraw. One for the connection's
+    /// life, so a request survives the handlers being installed again after
+    /// a reconnect.
+    private let inboundRequests = RuntimeEngineInboundRequests()
+
     let objcSectionFactory: RuntimeObjCSectionFactory
 
     let swiftSectionFactory: RuntimeSwiftSectionFactory
@@ -199,6 +234,10 @@ public actor RuntimeEngine {
     /// Cross-image relationship resolver. Owns the `relationships(for:)`
     /// computation so this engine file carries only the dispatch wrapper.
     let relationshipsResolver: RuntimeRelationshipsResolver
+
+    /// The Find navigator's relationship trees (ancestors, descendants,
+    /// conformers), built over the same section factories.
+    let typeRelationshipsResolver: RuntimeTypeRelationshipsResolver
 
     private let communicator = RuntimeCommunicator()
 
@@ -232,6 +271,11 @@ public actor RuntimeEngine {
     public private(set) lazy var backgroundIndexingManager: RuntimeBackgroundIndexingManager =
         .init(engine: self)
 
+    /// Every searchable interface of this engine's images, built on demand
+    /// by the Find navigator; `lazy` for the same reason as
+    /// `backgroundIndexingManager`.
+    private(set) lazy var interfaceCorpusStore: RuntimeInterfaceCorpusStore = .init(builder: self)
+
     public init(
         source: RuntimeSource,
         engineID: String = UUID().uuidString,
@@ -256,6 +300,11 @@ public actor RuntimeEngine {
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
         self.relationshipsResolver = .init(objcSectionFactory: objcSectionFactory, swiftSectionFactory: swiftSectionFactory)
+        self.typeRelationshipsResolver = .init(
+            objcSectionFactory: objcSectionFactory,
+            swiftSectionFactory: swiftSectionFactory,
+            relationshipsResolver: relationshipsResolver,
+        )
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
@@ -354,6 +403,11 @@ public actor RuntimeEngine {
         case .connected:
             #log(.info, "Connection state -> connected (source: \(String(describing: self.source), privacy: .public))")
             stateSubject.send(.connected)
+            // The first connection, or one that came back — possibly to
+            // another process, a relaunched simulator app.
+            if forwardsRequests {
+                learnServingDyldRootPath()
+            }
             // Re-register handlers and push data when server reconnects to a new client
             if needsReregistrationOnConnect, source.remoteRole == .server {
                 needsReregistrationOnConnect = false
@@ -376,8 +430,54 @@ public actor RuntimeEngine {
         }
     }
 
+    /// Asks the peer for the `DYLD_ROOT_PATH` of the process that owns its
+    /// images, so `canonicalImagePath(_:)` keys paths the way that process
+    /// does. Only a socket peer is asked; see `asksForServingDyldRootPath(on:)`.
+    ///
+    /// In the background, not before `.connected` goes out: a peer older than
+    /// 2.1.0 never answers a command it does not know, and holding every
+    /// connection to one up for the wait would cost more than the moment in
+    /// which a path is keyed without the root. Until
+    /// `servingDyldRootPathDeadline` runs out, a question that goes unanswered
+    /// is waited for and one answered with an error is asked again with a
+    /// growing, capped delay: a busy peer answers late, and a proxy answers
+    /// with an error until it has installed its command table (see the
+    /// constant). A peer that predates the question leaves the root as it is.
+    private func learnServingDyldRootPath() {
+        guard Self.asksForServingDyldRootPath(on: source), let connection else { return }
+        servingDyldRootPathTask?.cancel()
+        let servingDyldRootPath = servingDyldRootPath
+        servingDyldRootPathTask = Task {
+            let deadline = Date().addingTimeInterval(Self.servingDyldRootPathDeadline)
+            var retryDelay = Self.servingDyldRootPathInitialRetryDelay
+            while !Task.isCancelled {
+                let remainingTime = deadline.timeIntervalSinceNow
+                guard remainingTime > 0 else { return }
+                do {
+                    let rootPath: String? = try await connection.sendMessage(
+                        name: DyldRootPathCommand.commandName,
+                        request: DyldRootPathCommand(),
+                        timeout: remainingTime
+                    )
+                    guard !Task.isCancelled else { return }
+                    servingDyldRootPath.update(rootPath)
+                    return
+                } catch {
+                    // Answered with an error, or timed out — and a timeout
+                    // has used up the whole deadline, which the guard above
+                    // then turns into giving up.
+                    let delay = min(retryDelay, max(0, deadline.timeIntervalSinceNow))
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    retryDelay = min(retryDelay * 2, Self.servingDyldRootPathMaximumRetryDelay)
+                }
+            }
+        }
+    }
+
     /// Stops the engine and its connection.
     public func stop() {
+        servingDyldRootPathTask?.cancel()
+        servingDyldRootPathTask = nil
         connectionStateTask?.cancel()
         connectionStateTask = nil
         connectionStateContinuation?.finish()
@@ -404,7 +504,10 @@ public actor RuntimeEngine {
     private func releaseIndexedSections() {
         let swiftSectionFactory = swiftSectionFactory
         let objcSectionFactory = objcSectionFactory
+        // The corpus is text printed from those sections; it goes with them.
+        let interfaceCorpusStore = interfaceCorpusStore
         Task {
+            await interfaceCorpusStore.evictAll()
             await swiftSectionFactory.removeAllSections()
             await objcSectionFactory.removeAllSections()
         }
@@ -435,7 +538,7 @@ public actor RuntimeEngine {
         // Progress-bearing commands (`runtimeObjectsInImage`) are included:
         // `registerProgress` relays their progress pushes automatically, so
         // no server-only override is needed here anymore.
-        Self.registerSharedHandlers(on: connection, engine: self)
+        Self.registerSharedHandlers(on: connection, engine: self, inboundRequests: inboundRequests)
 
         // Server-only: manager-layer engine list lookup. Not part of the
         // shared registry because `RuntimeEngineProxyServer` runs below the
@@ -853,17 +956,21 @@ extension RuntimeEngine {
     /// payloads to `onProgress` until the response resolves. Locally the
     /// request's `perform(on:reportProgress:)` runs with `onProgress` wired
     /// straight through. Passing `nil` skips all progress machinery on both
-    /// sides.
+    /// sides. A command type that cancels across connections is forwarded by
+    /// `forwardWithdrawably(_:onProgress:over:)` instead.
     public func dispatch<Command: RuntimeEngineProgressCommand>(
         _ command: Command,
         onProgress: (@Sendable (Command.Progress) async -> Void)?
     ) async throws -> Command.Response {
         if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
+            if Command.cancelsAcrossConnections {
+                return try await forwardWithdrawably(command, onProgress: onProgress, over: connection)
+            }
             guard let onProgress else {
                 return try await connection.sendMessage(
                     name: Command.commandName,
-                    request: RuntimeEngineProgressEnvelope(progressToken: nil, request: command)
+                    request: RuntimeEngineProgressEnvelope(progressToken: nil, request: command, requestIdentifier: nil)
                 )
             }
             let token = UUID().uuidString
@@ -874,10 +981,66 @@ extension RuntimeEngine {
             defer { progressRoutes.removeValue(forKey: token) }
             return try await connection.sendMessage(
                 name: Command.commandName,
-                request: RuntimeEngineProgressEnvelope(progressToken: token, request: command)
+                request: RuntimeEngineProgressEnvelope(progressToken: token, request: command, requestIdentifier: nil)
             )
         }
         return try await command.perform(on: self, reportProgress: onProgress ?? { _ in })
+    }
+
+    /// Forwards a request its caller can withdraw from the serving peer.
+    ///
+    /// The envelope names the round trip with an identifier of its own.
+    /// Cancelling the caller returns it at once with `CancellationError`,
+    /// drops every push that lands afterwards, and sends the peer a
+    /// `cancelRequest` naming that identifier, which cancels the task serving
+    /// the request there — and, on a peer that forwards in turn, its own
+    /// forwarded request upstream. Whatever failure comes back to a caller
+    /// that has been cancelled is reported as that cancellation: the peer's
+    /// own `CancellationError` crosses the connection as a description only.
+    private func forwardWithdrawably<Command: RuntimeEngineProgressCommand>(
+        _ command: Command,
+        onProgress: (@Sendable (Command.Progress) async -> Void)?,
+        over connection: any RuntimeConnection
+    ) async throws -> Command.Response {
+        try Task.checkCancellation()
+        let requestIdentifier = UUID().uuidString
+        let forwardedRequest = RuntimeEngineForwardedRequest<Command.Response>()
+        var progressToken: String?
+        if let onProgress {
+            let token = UUID().uuidString
+            progressRoutes[token] = { payload in
+                // A push that lands after the caller gave up belongs to work
+                // nobody waits for any more, whatever the peer's version.
+                guard !forwardedRequest.isCancelled,
+                      let progress = try? JSONDecoder().decode(Command.Progress.self, from: payload)
+                else { return }
+                await onProgress(progress)
+            }
+            progressToken = token
+        }
+        defer {
+            if let progressToken {
+                progressRoutes.removeValue(forKey: progressToken)
+            }
+        }
+        let envelope = RuntimeEngineProgressEnvelope(progressToken: progressToken, request: command, requestIdentifier: requestIdentifier)
+        do {
+            return try await withTaskCancellationHandler {
+                try await forwardedRequest.response {
+                    try await connection.sendMessage(name: Command.commandName, request: envelope)
+                }
+            } onCancel: {
+                guard forwardedRequest.cancel() else { return }
+                Task {
+                    try? await connection.sendMessage(
+                        name: CommandName.cancelRequest.commandName,
+                        request: RuntimeEngineRequestCancellation(requestIdentifier: requestIdentifier)
+                    )
+                }
+            }
+        } catch _ where Task.isCancelled {
+            throw CancellationError()
+        }
     }
 
     /// Routes an inbound `progressEvent` push to the in-flight `dispatch`
@@ -902,6 +1065,7 @@ extension RuntimeEngine {
         try await performingForegroundLoad {
             _ = try await dispatch(LoadImageCommand(path: path))
         }
+        imageDidIndexSubject.send(path)
     }
 
     /// `loadImage(at:)` that reports the indexing it performs.
@@ -919,6 +1083,7 @@ extension RuntimeEngine {
         try await performingForegroundLoad {
             _ = try await dispatch(LoadImageWithProgressCommand(path: path), onProgress: onProgress)
         }
+        imageDidIndexSubject.send(path)
     }
 
     /// Local implementation of `loadImage(at:)`. Canonicalizes on entry so
@@ -956,7 +1121,7 @@ extension RuntimeEngine {
     }
 
     public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        try await dispatch(InterfaceCommand(object: object, options: options))
+        try await dispatch(InterfaceCommand(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
     }
 
     public func objects(in image: String) async throws -> [RuntimeObject] {
@@ -987,9 +1152,11 @@ extension RuntimeEngine {
         in image: String,
         onProgress: (@Sendable (RuntimeObjectsLoadingProgress) async -> Void)?
     ) async throws -> [RuntimeObject] {
-        try await performingForegroundLoad {
+        let objects = try await performingForegroundLoad {
             try await dispatch(ObjectsInImageCommand(image: image), onProgress: onProgress)
         }
+        imageDidIndexSubject.send(image)
+        return objects
     }
 
     /// Runs one image load made for the user, holding back new background

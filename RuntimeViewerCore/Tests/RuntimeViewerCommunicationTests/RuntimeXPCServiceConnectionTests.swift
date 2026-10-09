@@ -228,6 +228,99 @@ struct RuntimeXPCServiceClientConnectionReattachTests {
     }
 }
 
+/// A message the receiving side has no handler for, over SwiftyXPC — what a
+/// payload injected by an earlier release meets when this build sends it a
+/// command added since (PR121.73).
+///
+/// The payload serves over a Mach service, through HelperPeer, which this
+/// process cannot stand up. The listener here sits on the same SwiftyXPC
+/// mechanism: an accepted connection carries the listener's error handler,
+/// SwiftyXPC hands that handler `unexpectedMessage` for a name it has no
+/// handler for and sends no reply, and both `RuntimeXPCServiceListenerConnection`
+/// and HelperPeer's server report whatever reaches that handler as the peer
+/// going away.
+@Suite("RuntimeXPCServiceConnection unknown message")
+struct RuntimeXPCServiceUnknownMessageTests {
+    @Test("A message the receiving side has no handler for fails the sender at once, and the receiver reports its peer gone until the next message it knows")
+    func unknownMessageOutcome() async throws {
+        let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
+        listener.setMessageHandler(name: "ping") {}
+        listener.activate()
+        let client = try await RuntimeXPCServiceClientConnection(target: .anonymousListener(endpoint))
+        defer {
+            client.stop()
+            listener.stop()
+        }
+        #expect(listener.state.isConnected, "the hello did not adopt the client")
+
+        let outcome = await Self.outcome(within: .seconds(3)) {
+            try await client.sendMessage(name: "com.RuntimeViewer.Tests.unknownCommand", request: "x")
+        }
+        let listenerStateAfterUnknownMessage = listener.state
+        let clientStateAfterUnknownMessage = client.state
+
+        // Not a hang: the receiver drops the message without a reply, and XPC
+        // answers the sender with an interruption, which this connection
+        // reports as the service having exited.
+        guard case .some(.failure(let error)) = outcome else {
+            Issue.record("the sender's outcome: \(String(describing: outcome))")
+            return
+        }
+        #expect(error as? RuntimeXPCServiceConnectionError == .serviceExited, "the sender got \(error)")
+        #expect(clientStateAfterUnknownMessage.isConnected, "the sender's connection reports \(clientStateAfterUnknownMessage)")
+        // The receiver's error handler took the unknown message for its peer
+        // leaving.
+        #expect(listenerStateAfterUnknownMessage.isConnected == false, "the listener reports \(listenerStateAfterUnknownMessage) after the unknown message")
+
+        // Any message the listener knows adopts the sender again.
+        try await client.sendMessage(name: "ping")
+        #expect(listener.state.isConnected, "the listener reports \(listener.state) after a known message")
+    }
+
+    /// Races `send` against `timeout` without waiting for the loser — `nil`
+    /// when the deadline wins. SwiftyXPC's send does not answer to
+    /// cancellation, so a send that never hears back would hold a task
+    /// group's scope forever.
+    private static func outcome(within timeout: Duration, of send: @escaping @Sendable () async throws -> Void) async -> Result<Void, Swift.Error>? {
+        let resolution = OutcomeResolution()
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Result<Void, Swift.Error>?, Never>) in
+            resolution.install(continuation)
+            Task {
+                do {
+                    try await send()
+                    resolution.resolve(.success(()))
+                } catch {
+                    resolution.resolve(.failure(error))
+                }
+            }
+            Task {
+                try? await Task.sleep(for: timeout)
+                resolution.resolve(nil)
+            }
+        }
+    }
+
+    private final class OutcomeResolution: @unchecked Sendable {
+        private let lock = NSLock()
+
+        private var continuation: CheckedContinuation<Result<Void, Swift.Error>?, Never>?
+
+        func install(_ continuation: CheckedContinuation<Result<Void, Swift.Error>?, Never>) {
+            lock.lock()
+            defer { lock.unlock() }
+            self.continuation = continuation
+        }
+
+        func resolve(_ outcome: Result<Void, Swift.Error>?) {
+            lock.lock()
+            let continuation = self.continuation
+            self.continuation = nil
+            lock.unlock()
+            continuation?.resume(returning: outcome)
+        }
+    }
+}
+
 private actor PushRecorder {
     private(set) var greetings: [RuntimeXPCServiceConnectionTests.Greeting] = []
 

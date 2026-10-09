@@ -71,6 +71,8 @@ func stop()
 ```
 状态机只有三态（`RuntimeConnectionState.swift`）：`.connecting → .connected → .disconnected(error:)`。
 
+**连接丢了与对端回了失败要分开**。连接在请求途中丢失时，各传输交给在途请求的错误各不相同，其中几种还是本模块 internal 的类型：XPC service 的 `RuntimeXPCServiceConnectionError.serviceExited` / `connectionInvalid`，消息通道的 `RuntimeMessageChannelError.notConnected`，本地 socket 与 stdio 的断开，`NWError`，Mach service 上 SwiftyXPC 的 `connectionInterrupted` 与 HelperPeer 的断开。要区分「连接丢了」和「对端回了一个失败」的调用方问 `RuntimeConnectionError.isLostConnection(_:)`（`RuntimeConnectionError+LostConnection.swift`）；请求超时、对端的失败回复与取消都不算。第一个用它的是语料协调器：连接中断时被打断的构建不记为失败，等引擎回来后重新开始（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.30），测试是 `RuntimeConnectionLostConnectionTests`。
+
 `statePublisher` 通过关联类型声明，各实现以 `some Publisher<RuntimeConnectionState, Never>` 返回私有的 `CurrentValueSubject`（SwiftUI `View.body` 式的 opaque witness）——订阅方拿不到 `send` 能力，subject 的可变性被完全封在实现内部。在 `any RuntimeConnection` 上访问时被擦除为 `any Publisher<RuntimeConnectionState, Never>`，直接 `.sink` 即可。
 
 **② 发送消息（多种重载）**
@@ -321,7 +323,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - `RuntimeXPCServiceClientConnection`（App 侧）。`init` 顺序是 **先 `modifier` 装 handler、后 `activate()`、最后发 `hello`**——service 在认领 peer 后立刻会推送，handler 必须已经就位；`hello` 的往返完成是「service 活着」的唯一证据（`activate()` 并不确认 service 存在，对内嵌 service 这次往返就是拉起本身），所以 `init` 返回时连接已是 `.connected`，连不上则 `init` 直接抛错。连接**在 service 退出后仍然可用**：SwiftyXPC 把 `XPC_ERROR_CONNECTION_INTERRUPTED` 报成 `XPCError.connectionInterrupted`，此时下一条消息会让 launchd 重新拉起 service；这个类把中断报成 `.disconnected(error:)`，然后**自己重连**：按 1s / 2s / 4s 重发 `hello` 三次，成功即 `.connected`；三次用尽后停在 `.disconnected`，下一条业务消息先补一次 `hello` 再发（也保证 service 的初始数据推送先于那条消息的应答）。终态只有两个：`stop()` 与 `XPCError.connectionInvalid`（`isUsable == false`），终态后不再重连。测试用 `simulateInterruptionForTesting()` / `setHelloFailureForTesting(_:)` / `setReattachDelays(inNanoseconds:)` 三个 `@testable` 缝驱动整条状态机。
 - `RuntimeXPCServiceListenerConnection`（service 侧）。SwiftyXPC **在接受连接时把 listener 上已登记的 handler 复制到新连接上**，因此所有 `setMessageHandler` 必须先于 `activate()`；对内嵌 service，`activate()` 就是 `xpc_main`，不返回，也不能 `cancel()`。它只保留一个 peer 槽位：client 的 `hello`（listener 自己装的 handler）把该连接收为 peer 并报 `.connected`——每个新认领的 peer 都报，顶掉旧 peer 的也报——推送发给它；`RuntimeLocalRuntimeServiceHost` 在这个状态变化上推 imageList / imageNodes / `.fullReload`。测试用 `anonymous()` 得到匿名监听器与端点，两端跑在同一进程里。
 
-**引擎侧的配合**：没有。引擎不知道 `hello`、不知道重连——`RuntimeEngine.connect(credential:)` 对 `.local` 带凭证时走与远端 client **同一段** client 路径（装 client handler、观察连接状态），`forwardsRequests`（client 角色 **或** `.local` 带凭证）取代了原来散在 `dispatch` 里的 `remoteRole.isClient` 判断；此后连接报什么它就跟什么：`.disconnected` → `.disconnected`，`.connected` → `.connected`。XPC service 相关代码只在两处：本文件，与 `RuntimeViewerCore/LocalRuntimeService/`（`LocalRuntimeService`：`Info.plist` 键与凭证；`RuntimeLocalRuntimeServiceHost`：service 侧）。
+**引擎侧的配合**：没有。引擎不知道 `hello`、不知道重连——`RuntimeEngine.connect(credential:)` 对 `.local` 带凭证时走与远端 client **同一段** client 路径（装 client handler、观察连接状态），`forwardsRequests`（client 角色 **或** `.local` 带凭证）取代了原来散在 `dispatch` 里的 `remoteRole.isClient` 判断；此后连接报什么它就跟什么：`.disconnected` → `.disconnected`，`.connected` → `.connected`。引擎的状态重新就绪之后的事归上层：`DocumentState` 把文档退回镜像列表，并发出 `runtimeEngineDidReset`——文档什么都没打开、无处可退时也发——Find 的会话与语料协调器据此丢掉从旧进程得来的一切、重新开始。XPC service 相关代码只在两处：本文件，与 `RuntimeViewerCore/LocalRuntimeService/`（`LocalRuntimeService`：`Info.plist` 键与凭证；`RuntimeLocalRuntimeServiceHost`：service 侧）。
 
 ---
 
@@ -353,13 +355,15 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - `identifier`：命令名。
 - `data`：内层 payload 的 JSON。
 - `nonce`：**每次往返的路由键**。让多个同名并发请求不在 pending 表里撞车——因此 `sendSemaphore` 不必端到端串行化往返。对端处理器必须原样回显 nonce；缺省则回退用 `identifier`（旧版单飞行行为）。
-- `isError`：标记响应体装的是 `RuntimeNetworkRequestError` 而非期望的 `Response`，让 `sendRequest` 能把远端失败还原成真正的 error，而不是一个 `DecodingError` 或全 optional 的"假成功"。
+- `isError`：标记响应体装的是 `RuntimeNetworkRequestError` 而非期望的 `Response`，让 `sendRequest` 能把远端失败还原成真正的 error，而不是一个 `DecodingError` 或全 optional 的"假成功"。`RuntimeNetworkRequestError` 遵循 `LocalizedError`，`localizedDescription` 就是对端写下的描述，弹窗和日志里读到的是这段文字，而不是「…RuntimeNetworkRequestError error 1.」。
 
 ### 4.2 关键机制
 
 - **`ReceiveBuffer` + `scannedPrefix`**：跨多次 append 记住已扫描偏移，把分块到达的大消息从 O(n²) 降到 O(n)。
 - **`pendingRequests`（Mutex）**：按路由键存 `PendingRequest`（continuation + 超时 Task）。成功/写失败路径会**取消定时器**，避免已完成请求的孤儿定时器误伤后来同名请求。
-- **`onMessageReceived`** 回调把完整帧交给分发逻辑：先看是否命中某个 pending（响应），否则查 handler（请求）。
+- **分发（`beginDispatch`）**：帧按到达顺序逐个处理。命中某个 pending 的是回复，当场交给等待的请求；没命中的帧里，错误信封和已放弃请求的回复直接丢弃（见下）；其余按命令名查 handler：不回复的处理器（推送）排在串行尾链 `orderedHandlerTail` 上按发送顺序执行，要回复的处理器并发执行，慢处理器不挡后面的请求。
+- **回复屏障**：对端为一个请求推送的东西（进度、Find 的命中批次）和排在它前面的状态同步，都写在回复之前；推送却在尾链上排队，回复当场交付。所以回复交付时连带记下当时的尾链，`sendRequest` 等这条链跑完再返回：回复之前推来的东西，在调用方继续之前都已处理完，与 XPC 一样（XPC 上每条推送都是一次往返）。没有屏障时，请求一返回，引擎就在 `dispatch` 的 `defer` 里删掉进度路由，还排在尾链上的推送随之丢掉，Find 会缺最后几批结果（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.12）。屏障只在接收端，不改线格式，对旧对端同样有效。从尾链上的处理器发出的请求不等屏障——屏障等的正是它自己；标记是 `@TaskLocal isRunningOnOrderedHandlerTail`，处理器派生的 `Task` 会继承。唯一会死锁的写法：处理器等待一段在自己任务树之外（`Task.detached`、dispatch queue、回调）向同一连接发请求的工作。
+- **迟到的回复不回应**：请求超时后从 `pendingRequests` 删掉，nonce 记进最多 256 条的「已放弃」列表，之后到达的同 nonce 帧直接丢弃；错误信封只可能是回复，没人等就丢，绝不交给处理器。以前迟到的回复会被当成一条新请求：发起方没有这条命令的处理器，回一个同 nonce 的错误信封；对端有这条命令的处理器，把错误信封当请求再执行一遍、再回复……两端往返不止，直到断开（同上，PR121.31）。旧对端仍会对我们的迟到回复回一次错误信封，新端不再回应，循环在第一圈断开。以后任何「不等回复就提前返回」的路径都要调用 `rememberAbandonedRequest(nonce:)`。
 - 处理器注册表 `messageHandlers`、received 流 `SharedAsyncSequence` 均用 `Mutex` 保护，`AsyncSemaphore` 序列化发送。
 
 ### 4.3 `RuntimeRequest` / `RuntimeResponse`（`RuntimeRequestResponse.swift`）
@@ -367,6 +371,44 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - 非 macOS：`RuntimeRequest: Codable & Sendable`，带 `associatedtype Response: RuntimeResponse` 与 `static var identifier`。
 - macOS：`RuntimeRequest` **refine** `HelperCommunication.Request`，于是任何 daemon-bound 业务请求能直接挂到 `HelperService` / `HelperPeer` 上。
 - 同文件还定义了跨进程共享的 Mach 服务名 `RuntimeViewerMachServiceName`（Debug 下按 arm64e 变体切换）与协议版本 `RuntimeViewerServiceVersion`。
+
+### 4.4 改已有命令的载荷形状
+
+引擎之间的连接不交换协议版本（`RuntimeViewerServiceVersion` 只管 helper daemon），新旧版本的对端互连是常态（§8「双向兼容，不要求同版本」）：Mac 连着旧版的 iPhone、经旧版 Mac 中转的镜像、升级前就注入且还在运行的 payload。所以**已经发布的命令，请求与回复的形状只能这样改**：
+
+- **接收方容错**：新的解码同时接受旧形状；两种都解不出来时，抛新形状那次的错误，它描述的是当前格式。
+- **发送方保守**：只有请求方声明读得懂时才发新形状——请求里加一个可选字段，旧对端解码时跳过它，旧请求解出 `nil`——其余一律发旧形状。中转节点（服务一个本身是客户端的引擎的 proxy）按收到的形状原样写出：它转发的就是自己请求方那条请求，声明一并带上，所以这个形状请求方一定读得了；经过旧节点时退回旧形状，代价只是体积。
+- **配冻结读端测试**：旧回复用手写的 JSON 夹具，旧请求与旧读端照发布时的声明在测试里另写一份、冻结不动，不复用当前类型——当前类型自编自解，只能证明它和自己一致。新旧组合与经新版中转都要在真实连接上跑一遍；Mach service 走的是 SwiftyXPC 的 `XPCEncoder`，不是 JSON，这条路也要覆盖。
+
+第一例是接口命令（`InterfaceCommand`，命令类型改名 `…Command` 之前叫 `InterfaceRequest`）：`interfaceString` 改存 `FrozenSemanticString` 后，自动合成的编码从组件数组变成了带键的列式对象，与 3.0.0-beta.6 及更早的对端互相解不开，内容面板静默空白（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.03）。现在列式编码只发给带 `acceptsColumnarInterfaceString: true` 的请求方，回复类型 `RuntimeObjectInterfaceResponse` 两种形状都能解，测试是 `RuntimeObjectInterfaceWireCompatibilityTests`。
+
+第二例是进度请求信封 `RuntimeEngineProgressEnvelope` 的 `requestIdentifier`（§4.5）：可选字段，为 `nil` 时不编码。只有新命令的信封带它，`objectsInImage`、`loadImageWithProgress` 这些旧命令的信封与旧版逐字节相同；旧对端即使收到也只会跳过这个键。`RemoteRequestIdentifierTests` 守住「旧命令不带」这一条。
+
+新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。旧对端只回这一段文字，所以识别只能靠前缀：`RuntimeNetworkRequestError.isUnknownCommand`，前缀是 `unknownCommandMessagePrefix`，通道拼这条回复用的也是它。中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，错误回复照原文写下去（`RuntimeMessageChannel.replyMessage(for:)`），不再包一层类型描述，所以经过新版中转，旧对端照样认得出（`RemoteUnknownCommandTests`）。第一个用它的是语料协调器的 `isCorpusUnsupportedByEngine`（PR121.37）。经 Mach service 的旧版注入 payload 对未知命令不回这段文字，见 PR121.73。
+
+### 4.5 跨连接取消（引擎层，`RuntimeEngineRequestCancellation.swift`）
+
+传输层取消不了已经发出的请求：SwiftyXPC 的 `sendMessage` 是一个不响应取消的 continuation，socket 通道的 `sendRequest` 同样只等回复；服务端则在一个没人持有句柄的 Task 里跑每条请求。所以调用方取消后，既不会提前返回，也传不到服务端——语料构建会一直等到整个镜像打印完（实测 Foundation 8–11 秒，期间进度照收），服务进程照建不误（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.29）。取消做在**引擎层**，不改任何传输的帧格式：
+
+- **请求带 id**：`RuntimeEngineProgressCommand.cancelsAcrossConnections` 为真的命令类型，转发时信封里带一个新铸的 `requestIdentifier`（字段规则见 §4.4）。其余请求照旧，不带 id。
+- **新命令 `cancelRequest`**：载荷 `RuntimeEngineRequestCancellation(requestIdentifier:)`，不等回复——socket 上它是一条推送，排在接收端通道的尾链上（§4.2）；XPC 上每条消息都是往返，它的回复是空的。它是内置命令，`RuntimeEngine.registerBuiltInHandlers(into:)` 第一行 `registerRequestCancellation()` 经 `RuntimeEngineCommandRegistrar` 装上（与其它命令一样先到先得地占住命令名），在本进程作答、从不转发；引擎的 server 角色、`RuntimeEngineConnectionServer`（proxy、内嵌 XPC service）都自动有。
+- **服务端**：每条连接一个 `RuntimeEngineInboundRequests` actor，由连接的主人持有——`RuntimeEngine` 的 server 角色与 `RuntimeEngineConnectionServer` 各存一个，重新安装处理器（重连、proxy 换客户端）时沿用，在途的请求仍取消得到。这张登记表由 `registerSharedHandlers(on:engine:inboundRequests:)` 交给那条连接的 `RuntimeEngineCommandRegistrar`；`registerProgress` 收到带 id 的信封，把 `engine.dispatch` 放进一个自己握有句柄的 Task，按 id 登记；`cancelRequest` 按 id 取消它。命令扩展装的进度命令走的是同一个 `registerProgress`，所以同样撤得回。服务端的 `engine.dispatch` 若本身是转发（proxy 后面是客户端引擎），那个 Task 被取消就是它自己的转发请求被取消，于是向上游再发一次 `cancelRequest`——镜像链路逐跳传下去，不需要额外代码。
+- **取消可能先于请求被处理**：两者是独立的消息，socket 上取消在尾链、请求在独立的 Task，XPC 上两者各是一个 Task，先后没有保证。所以还没登记的 id 先记下，请求登记时立即取消。这份记录最多 256 条，先进先出：请求已经结束才到的取消会留下一条没人认领的记录，只会老化。
+- **客户端**（`RuntimeEngine.forwardWithdrawably`）：发送前先 `Task.checkCancellation()`；发送放在 `RuntimeEngineForwardedRequest` 自己的 Task 里，调用方等的是「回复与取消，先到者」。调用方被取消时：立即以 `CancellationError` 返回；进度路由此后收到的推送一律丢弃，不管对端什么版本；再异步发出 `cancelRequest`。调用方已经取消时，对端回来的任何失败都按 `CancellationError` 上报——对端自己的 `CancellationError` 跨连接后只剩一段描述。
+- **与 §4.1 / §4.2 的关系**：传输层的请求**不**提前放弃。发送它的那个 Task 仍在等回复，对端收到取消后会及时回复（被取消的工作以失败结束，语料构建则回 `.cancelled` 结果值，见下一条），所以不会出现「没人等的回复」，也不需要 `rememberAbandonedRequest`；回复屏障照常作用在那个 Task 上，只是调用方已经不在等它。对端不响应取消时（例如取消处理器没装上），那个 Task 等到对端做完为止，调用方照样立即返回。
+- **对端自己放弃的语料构建是结果值，不是错误**：store 会替所有订阅者放弃一次构建（别的窗口改了 transformer、语料被驱逐、开关关掉），订阅者收到 `CancellationError`。抛出的错误跨连接只剩描述（XPC 上是 `remoteFailure("…Swift.CancellationError error 1.")`，socket 上是 `RuntimeNetworkRequestError("CancellationError()")`），调用方认不出它是取消，Report 就记一条假的 Failed（PR121.30）。所以 `BuildInterfaceCorpusCommand` 的回复是 `RuntimeInterfaceCorpusBuildOutcome`（`built` / `cancelled` / `imageNotIndexed`）：服务端在本地臂接住 `CancellationError` 回 `.cancelled`，这个值原样穿过任何传输与任意长的中转链，公开的 `buildInterfaceCorpus` 在调用方进程里再把它还原成 `CancellationError`。命令是新的，回复形状随便定；测试是 `RemoteCorpusBuildOutcomeTests`。
+- **只对新命令开启**：语料构建、文本搜索、成员搜索、类型关系。类型关系原是普通命令，改成了不发推送（`Progress = RuntimeEngineEmpty`）的进度命令，好带上 id；这四条命令都与 `cancelRequest` 同时出现，服务它们的对端一定认识 `cancelRequest`。`objectsInImage`、`loadImageWithProgress` 不开启：`dlopen` 撤不回来，而且它们由旧对端服务，而旧对端不认识 `cancelRequest`——socket 上只记一行日志，经 Mach service 的旧版注入 payload 却会把未知消息当成客户端离开（PR121.73；`RuntimeXPCServiceUnknownMessageTests` 在同一套 SwiftyXPC 机制上核实：接收方不回复、报 peer 离开，发送方立刻收到 `connectionInterrupted`）。所以取消不会给旧 payload 多送一条它不认识的命令：会被取消的请求本身就是新命令，旧 payload 收到它时已经是未知消息，剩下的风险来自语料命令本身，见 PR121.73。
+- **注入命令不开启**：`RuntimeViewerInjection` 这个命令扩展的五条命令——`injectionCapability`、`processList`、`applicationIcons`、`injectIntoProcess`、`stopKeepingProcessAwake`——同样是 3.0.0-beta.6 之后才有的，但按上一条的规则仍不能开启：服务它们的对端不一定认识 `cancelRequest`，合入 Find navigator 之前从 `next` 构建、已经装在越狱真机上验证过的设备载荷就不认识。开启还得把它们改成进度命令，线上从裸命令变成信封，而那些载荷只认裸命令（`InjectionCommandWireFormatTests` 钉住的正是这个格式）。它们也用不着：`injectionCapability`、`stopKeepingProcessAwake` 是一来一回的小查询与通知；`processList`、`applicationIcons` 是一次快照，调用方不要了丢掉结果即可；`injectIntoProcess` 是往目标进程里 `dlopen`，与 `loadImageWithProgress` 一样撤不回来，半途撤回只会留下一个已经注入、宿主却不再等它报到的进程。以后哪个扩展模块加了真正的长命令，照本节的规则判断：声明成进度命令、设 `cancelsAcrossConnections`，并保证服务它的对端都认识 `cancelRequest`；扩展的注册器会像对 Core 的命令一样登记与撤回它。
+- 测试：`RemoteRequestCancellationTests`（XPC service 与 TCP 两条真实连接：取消后 2 秒内返回、服务端放弃构建、之后不再收到进度；对端忽略取消时调用方也不被拖住；搜索被慢消费者拖住时照样立即返回；类型关系照常跨连接作答）、`RemoteRequestIdentifierTests`（线上哪些命令带 id）、`RemoteRequestCancellationPartTests`（先到的取消、记录上限、客户端状态机）。
+
+### 4.6 镜像路径的两种写法（iOS 模拟器，`RuntimeEngine+ImagePathCanonicalization.swift`）
+
+模拟器里的进程按自己的 `DYLD_ROOT_PATH` 给镜像记键：`/usr/lib/libobjc.A.dylib` 在那里是 `<root>/usr/lib/libobjc.A.dylib`。约定是**服务端存规范路径、线上传原始路径**（a60155af）：本地臂收到路径先用 `DyldUtilities.patchImagePathForDyld` 规范化（幂等），侧栏节点、后台索引的依赖路径、搜索范围用的仍是原始写法；而 Find 的新命令把规范路径带回了客户端——coverage 的键、`indexedImagePathList`、搜索摘要的 `unbuiltIndexedImagePaths`、`RuntimeObject.imagePath`。客户端自己算不出规范路径，根路径属于服务进程，所以（PR121.33）：
+
+- 新命令 `dyldRootPath`（`DyldRootPathCommand`），回答服务进程的 `DYLD_ROOT_PATH`。处理器只答自己知道的，从不转发——内置命令表用 `RuntimeEngineCommandRegistrar.registerAnsweredInThisProcess(_:)` 装它，直接调 `perform(on:)`，不经 `engine.dispatch`：本地臂答本进程的；经 socket 转发的客户端引擎（proxy 后面是模拟器进程）答它连接时问来的；经 XPC 转发的答本进程的 `nil`——XPC 的对端都是 Mac 进程，而且可能是旧版注入 payload，不能把它不认识的命令转过去（PR121.73）。
+- 只有 socket 类的客户端引擎（bonjour、localSocket、directTCP）去问，在每次连上（含重连）后**后台**问，不挡 `.connected`：2.1.0 之前的对端不回复未知命令，挡着就要等满超时。在总时限 60 秒（`servingDyldRootPathDeadline`）内一直设法学到：**没回答的等，不重问**——一问就用掉剩下的全部时限：新版对端忙时回答会晚（回复要排在连接刚建立时那批推送后面写出），但不会不回，而 socket 是有序的流，第二问不可能先于第一问得到回答；**回错误的按退避重问**——间隔从 250 ms 起每次翻倍、封顶 4 秒：proxy 只在客户端连上之后才装命令表，装好之前回「No handler registered」，进程一忙就要十几秒，封顶是为了装好之后不必再等太久。早先超时一次、或回错误 4 次（约 0.75 秒）就永久放弃，满载时新版对端也被当成旧对端，客户端再也学不到根路径（PR121.33 落地后发现，`slowPeerIsWaitedFor` 与 `lateCommandTableIsAskedAgain` 复现）。对旧对端无害：2.1.0 之前的不回复，只多占一个后台 Task 和一个待处理项到时限为止，发出的仍只有一帧，没有迟到回复可言，时限到了 nonce 记为已放弃，之后真到的回复按 §4.2「迟到的回复不回应」丢弃；2.1.0 起、早于这条命令的，60 秒里被问约 19 次，每次只是它那边一行日志。问不到就保持 `nil`，路径原样。经 socket 转发的 proxy 答的是它此刻已经学到的根路径，自己那一问还没回来时会答 `nil`，下游就此不再问——已知、未修。XPC 类来源与 `.local` 从不问。`injectedTCP` 虽然也是 socket，同样不问：它只通向真机上的载荷（模拟器里的载荷照旧走 Bonjour），答案总是 `nil`；而且问题会留在对端的接收缓冲里——载荷进程若在读到它之前退出，内核发出的是 RST 而不是 FIN，而引擎管理器正是靠「对端关闭」与「socket 出错」来区分「目标退出了」与「链路断了」（`RuntimeEngineManager.injectedDeviceEngineIsFinished`），已经退出的目标就会被当成断线一直留着。合入 `next` 时曾让它也去问，`InjectedDeviceEngineTests` 的「A payload that closes cleanly finishes the engine」随即变红。
+- `RuntimeEngine.canonicalImagePath(_:)`（`nonisolated`）用问来的根路径规范化，幂等。客户端要拿原始路径与引擎给的路径比较或当键时，先过它：`FindCorpusCoordinator` 在 `requestBuild` / `cancelBuild` / `reconcile` 入口统一规范化并提供 `buildState(forImagePath:)`，`DocumentState.isSelectedRuntimeObjectInCurrentImage` 比较前规范化节点路径，`FindSession` 的三处比较（置顶请求、补搜的「已建 − 已搜 ∩ 范围」、摘要栏按范围计数）两边都先规范化。发给引擎的范围仍是原始写法，服务端自己规范化。
+- 测试：`RuntimeEngineImagePathCanonicalizationTests`（纯函数；TCP 客户端学到根路径；对端答得慢时客户端照样等到、且只问一次；对端连上之后好一会儿才装上处理器时客户端照样问到；XPC 客户端从不问；不认识这条命令的对端既不拖住连接也不改路径），`setDyldRootPathForTesting(_:)` 是模拟根路径的接缝。
 
 ---
 
@@ -592,6 +634,7 @@ port = connection.connectionInfo.port
 | 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
 | 加一条业务 RPC 命令（Core 自己的） | 在 `RuntimeEngineCommandName.swift` 加一个 `CommandName` 常量 + 在 `RuntimeEngine.registerBuiltInHandlers` 加一行（Proxy 自动继承） |
 | 加一条**别的模块**的 RPC 命令 | `extension RuntimeEngine.CommandName` 声明短名（前缀不变），再在那个模块里 `RuntimeEngine.addCommandExtension(named:install:)`；Core 一行不改。该模块的每个进程入口要调一次它的 install，漏调没有编译错误 —— 参照 `RuntimeViewerInjection` |
+| 让一条长命令的取消跨过连接 | §4.5：进度命令加 `cancelsAcrossConnections`；只对旧对端从没服务过的新命令开启（命令扩展的命令同一条规则） |
 | 调 Bonjour 发现/心跳/重试参数 | `RuntimeEngineManager` 顶部的 static 常量 |
 | 理解镜像/断开/去重规则 | `RuntimeEngineMirrorRegistry`（纯逻辑，有单测）+ `Documentations/EngineMirroringWalkthrough.md` |
 | 沙盒注入端口/角色反转 | `RuntimeLocalSocketConnection.swift` 顶部文档 + `RuntimeLocalSocketPortDiscovery` |

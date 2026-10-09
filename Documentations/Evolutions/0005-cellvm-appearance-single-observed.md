@@ -150,3 +150,27 @@ cell view 的 `bind(to:)` 单订阅、单闭包内更新全部 outlet。订阅�
 per-outlet driver 作出错误推断。上述三点即为更正。
 
 本节不改变提案状态（仍为 `Implemented`），也不改变已落地的代码。
+
+## 后续适用（2026-10-05 补记）
+
+本提案只改了侧边栏的两个 cellVM，规则本身没有写进 AGENTS.md——「Cell ViewModel wrapper」一节反而写着每个显示状态一个
+`@RxObserved`，后来的 cellVM 就照着写回了多流。2026-10-05 用户指出 `ReportCellViewModel` 的五个 `@RxObserved` 后，在
+`feature/find-navigator` 上按本提案的做法补齐，并把规则连同成本写进 AGENTS.md 那一节（示例代码一并改掉）：
+
+- `ReportCellViewModel`（Report navigator 的行）：icon / title / detail / status / toolTip → 一个 `Appearance`。决策见
+  [0030-report-navigator](0030-report-navigator.md) 的决策日志。
+- `BatchExportingProgressRowViewModel`（批量导出进度页的行，行数 = 选中的镜像数，Select All 即引擎列出的全部镜像）：
+  status / progress / progressText / objectFailures → 一个 `State`，每次状态切换整体赋值一次；cell 去掉了把四条流再合一次的
+  `combineLatest`。
+- `BatchExportingImageSelectionCellViewModel`（选镜像页的行）：原来只有一个 `@RxObserved`，但每行在 `init` 里订阅共享的
+  选中集合，于是每一行——不管显示过没有——构造时就建好 relay 与一个 `DisposeBag`，搜索框每敲一个字整批重建。改为父 ViewModel
+  按镜像缓存行（搜索时复用）、选中变化时推给每一行，只有 cell 绑定过的行才建 relay。
+  （2026-10-08 合并 `next` 时补：这一页在 `next` 上已换成三态勾选树，见
+  [draft-batch-export-image-tree-picker](draft-batch-export-image-tree-picker.md)，这个 cellVM 随之删除。树的行
+  `BatchExportingImageTreeNode` 只有一个 `@RxObserved`——`selection`，即勾选状态与「已选 / 命中」两个计数——由
+  `BatchExportingImageTree.updateSelection(_:)` 推送，不等才赋值，`init` 里不订阅任何东西；行在选择页的整个生命周期里只建一次，
+  搜索只改变目录显示哪些子行。上面这几条在新的行上都成立，合并时没有再改它的代码。）
+
+成本的前提与本提案落地时不同：[0017](0017-observed-lazy-relay.md)、[0018](0018-rxobserved-macro.md) 之后 `@RxObserved`
+在 `$property` 首次被访问前不建 relay，所以「每属性一套 subject + lock」现在只落在 cell 绑定过的行上；而 cell 的
+`bind(to:)` 会访问它绑定的每一个 `$property`，所以对显示过的行，这笔账照旧成立。

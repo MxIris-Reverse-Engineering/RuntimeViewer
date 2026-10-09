@@ -21,14 +21,16 @@ import RuntimeViewerCore
 /// injected-provider pipelines) must not take the lock — it serializes.
 func withSharedLocalEngineLock<Result>(_ body: () async throws -> Result) async rethrows -> Result {
     await ensureSharedLocalEngineSettled()
-    await SharedLocalEngineTestLock.shared.acquire()
+    await sharedLocalEngineTestLock.acquire()
     defer {
         Task {
-            await SharedLocalEngineTestLock.shared.release()
+            await sharedLocalEngineTestLock.release()
         }
     }
     return try await body()
 }
+
+private let sharedLocalEngineTestLock = CrossSuiteTestLock()
 
 /// One-shot process-wide barrier against the shared engine's bring-up
 /// traffic.
@@ -62,32 +64,5 @@ private actor SharedLocalEngineStartupBarrier {
         }
         try? await Task.sleep(for: .milliseconds(250))
         hasSettled = true
-    }
-}
-
-private actor SharedLocalEngineTestLock {
-    static let shared = SharedLocalEngineTestLock()
-
-    private var isLocked = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func acquire() async {
-        if !isLocked {
-            isLocked = true
-            return
-        }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
-        // Ownership was handed over by `release()` without clearing
-        // `isLocked`, so nothing more to do here.
-    }
-
-    func release() {
-        if waiters.isEmpty {
-            isLocked = false
-        } else {
-            waiters.removeFirst().resume()
-        }
     }
 }

@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 
 import UIKit
+import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
@@ -22,18 +23,23 @@ class ContentCoordinator: NavigationCoordinator<ContentRoute> {
             contentPlaceholderViewController.setupBindings(for: contentPlaceholderViewModel)
             return .set([contentPlaceholderViewController], animation: nil)
         case .root(let runtimeObjectType):
-            let contentTextViewController = ContentTextViewController()
-            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, documentState: documentState, router: self)
-            contentTextViewController.setupBindings(for: contentTextViewModel)
-            return .set([contentTextViewController], animation: .default)
+            return .set([makeTextViewController(for: runtimeObjectType)], animation: .default)
+        case .rootHighlighting(let runtimeObjectType, let highlightRequest):
+            return .set([makeTextViewController(for: runtimeObjectType, highlightRequest: highlightRequest)], animation: .default)
         case .next(let runtimeObjectType):
-            let contentTextViewController = ContentTextViewController()
-            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, documentState: documentState, router: self)
-            contentTextViewController.setupBindings(for: contentTextViewModel)
-            return .push(contentTextViewController, animation: .default)
+            return .push(makeTextViewController(for: runtimeObjectType), animation: .default)
+        case .nextHighlighting(let runtimeObjectType, let highlightRequest):
+            return .push(makeTextViewController(for: runtimeObjectType, highlightRequest: highlightRequest), animation: .default)
         case .back:
             return .pop(animation: .default)
         }
+    }
+
+    private func makeTextViewController(for runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil) -> ContentTextViewController {
+        let contentTextViewController = ContentTextViewController()
+        let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObject, highlightRequest: highlightRequest, documentState: documentState, router: self)
+        contentTextViewController.setupBindings(for: contentTextViewModel)
+        return contentTextViewController
     }
 }
 

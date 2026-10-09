@@ -77,14 +77,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             let viewModel = MCPStatusPopoverViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
             return .popover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
-        case .backgroundIndexing(let sender):
-            let viewController = BackgroundIndexingPopoverViewController()
-            let viewModel = BackgroundIndexingPopoverViewModel(
-                documentState: documentState,
-                router: self
-            )
-            viewController.setupBindings(for: viewModel)
-            return .popover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
         case .attachToProcess:
             // Which machine's processes the sheet offers follows the selected engine. The
             // host case is the one that already worked and keeps enumerating locally; a
@@ -129,6 +121,16 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             return .multiple(
                 .expand(itemAt: 0),
                 .trigger(.revealSelectedRuntimeObject, on: sidebarCoordinator)
+            )
+        case .find:
+            return .multiple(
+                .expand(itemAt: 0),
+                .trigger(.showFind, on: sidebarCoordinator)
+            )
+        case .reports:
+            return .multiple(
+                .expand(itemAt: 0),
+                .trigger(.showReports, on: sidebarCoordinator)
             )
         }
     }
@@ -178,6 +180,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         case .push(let object):
             contentCoordinator.contextTrigger(.next(object))
             inspectorCoordinator.contextTrigger(.next(.object(object)))
+        case .pushHighlighting(let object, let highlightRequest):
+            // The highlight travels with the content route, so it lives exactly as long as the
+            // content ViewModel built for this navigation.
+            contentCoordinator.contextTrigger(.nextHighlighting(object, highlightRequest))
+            inspectorCoordinator.contextTrigger(.next(.object(object)))
         case .pop:
             if documentState.selectionStack.isEmpty {
                 contentCoordinator.contextTrigger(.placeholder)
@@ -218,6 +225,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // New tab already showing `object`, which was also recorded on the
             // timeline; bind both panes to it.
             contentCoordinator.contextTrigger(.root(object))
+            inspectorCoordinator.contextTrigger(.root(.object(object)))
+        case .openInNewTabHighlighting(let object, let highlightRequest):
+            contentCoordinator.contextTrigger(.rootHighlighting(object, highlightRequest))
             inspectorCoordinator.contextTrigger(.root(.object(object)))
         case .switchTab, .closeTab:
             // The active tab changed and its object was recorded on the

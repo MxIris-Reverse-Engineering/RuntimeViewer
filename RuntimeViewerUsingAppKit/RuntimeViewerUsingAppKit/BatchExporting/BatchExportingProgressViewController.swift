@@ -129,6 +129,9 @@ extension BatchExportingProgressViewController {
 
         private var isSymbolEffectRunning = false
 
+        /// The failures the tooltip was last built from; `nil` until this row's first state.
+        private var appliedObjectFailures: [BatchExportingObjectFailure]?
+
         override func setup() {
             super.setup()
 
@@ -171,19 +174,14 @@ extension BatchExportingProgressViewController {
 
         func bind(to rowViewModel: BatchExportingProgressRowViewModel) {
             rx.disposeBag = DisposeBag()
+            appliedObjectFailures = nil
 
             installFreshProgressBar()
             nameLabel.stringValue = rowViewModel.image.name
 
-            Driver.combineLatest(
-                rowViewModel.$status.asDriver(),
-                rowViewModel.$progress.asDriver(),
-                rowViewModel.$progressText.asDriver(),
-                rowViewModel.$objectFailures.asDriver(),
-            )
-            .driveOnNext { [weak self] status, progress, progressText, objectFailures in
+            rowViewModel.$state.asDriver().driveOnNext { [weak self] state in
                 guard let self else { return }
-                applyState(status: status, progress: progress, progressText: progressText, objectFailures: objectFailures)
+                applyState(state)
             }
             .disposed(by: rx.disposeBag)
         }
@@ -220,14 +218,14 @@ extension BatchExportingProgressViewController {
             progressBar = freshProgressBar
         }
 
-        private func applyState(
-            status: BatchExportingProgressRowViewModel.Status,
-            progress: Double,
-            progressText: String,
-            objectFailures: [BatchExportingObjectFailure],
-        ) {
-            toolTip = objectFailures.exportFailureTooltip
-            switch status {
+        /// The tooltip is the one part the status branches below do not set, so it is set only
+        /// when the failures it lists changed; the rest follows the status and is set anyway.
+        private func applyState(_ state: BatchExportingProgressRowViewModel.State) {
+            if appliedObjectFailures != state.objectFailures {
+                appliedObjectFailures = state.objectFailures
+                toolTip = state.objectFailures.exportFailureTooltip
+            }
+            switch state.status {
             case .queued:
                 statusIcon.image = .symbol(systemName: .circle)
                 statusIcon.contentTintColor = .tertiaryLabelColor
@@ -235,9 +233,9 @@ extension BatchExportingProgressViewController {
                 detailLabel.textColor = .tertiaryLabelColor
                 progressBarContainer.isHidden = true
             case .running:
-                progressBar?.doubleValue = progress
+                progressBar?.doubleValue = state.progress
                 progressBarContainer.isHidden = false
-                detailLabel.stringValue = progressText
+                detailLabel.stringValue = state.progressText
                 detailLabel.textColor = .secondaryLabelColor
                 if !isSymbolEffectRunning {
                     statusIcon.image = .symbol(systemName: .arrowTriangle2Circlepath)

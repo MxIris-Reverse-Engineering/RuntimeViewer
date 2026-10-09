@@ -1,5 +1,5 @@
 import Testing
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 @testable import RuntimeViewerApplication
 
 /// `isSelectedRuntimeObjectInCurrentImage` decides whether Navigate ▸ Reveal
@@ -66,5 +66,21 @@ struct DocumentStateCurrentImageTests {
         documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "SampleClass")))
 
         #expect(documentState.isSelectedRuntimeObjectInCurrentImage == false)
+    }
+
+    /// An object's image path is the engine's key, which on an iOS Simulator
+    /// engine carries the simulator's root; the sidebar's node does not. The
+    /// two used to be compared as they were, so Reveal in Sidebar Navigator
+    /// stayed disabled for every image of a simulator process (PR121.33).
+    @Test("on an iOS Simulator engine an object of the listed image is in the current image")
+    func objectOfTheListedImageOnASimulatorEngine() throws {
+        let engine = RuntimeEngine(source: .local, engineID: "DocumentStateCurrentImageTests.simulator")
+        engine.setDyldRootPathForTesting("/sim_root")
+        let documentState = DocumentState(runtimeEngine: engine)
+
+        documentState.selectionRouter.trigger(.switchImage(try sampleImageNode()))
+        documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "SampleClass", imagePath: "/sim_root" + Fixtures.sampleImagePath)))
+
+        #expect(documentState.isSelectedRuntimeObjectInCurrentImage)
     }
 }

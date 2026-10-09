@@ -16,6 +16,14 @@ open class StatefulOutlineView: OutlineView {
     private var filteringState: FilteringState = .idle
     private var isReloadingData = false
 
+    /// Keeps the selection on the same item across `reloadData()`. AppKit keeps the selected row
+    /// *index*, so a reload that inserts rows above the selection moves the highlight onto another
+    /// item. Needs items whose `==` is their identity, so the item that replaces the selected one
+    /// finds its row; the selection goes when no row has it any more. The list is not scrolled to
+    /// it: the user's place stays where it was. Off by default — the sidebar restores its own
+    /// selection.
+    open var preservesSelectedItemAcrossReloads = false
+
     // MARK: - Expansion Autosave Configuration
     //
     // Manual replacement for NSOutlineView's `autosaveExpandedItems`. The
@@ -251,6 +259,13 @@ open class StatefulOutlineView: OutlineView {
         isReloadingData = true
         defer { isReloadingData = false }
 
+        // Filtering saves and restores the selection itself.
+        let selectedItemBeforeReload: AnyHashable? = if preservesSelectedItemAcrossReloads, filteringState == .idle, selectedRow >= 0 {
+            item(atRow: selectedRow) as? AnyHashable
+        } else {
+            nil
+        }
+
         dataStructureVersion &+= 1
         super.reloadData()
 
@@ -263,6 +278,15 @@ open class StatefulOutlineView: OutlineView {
             restoreExpansionState()
             restoreSelectedItem()
             filteringState = .idle
+        }
+
+        if let selectedItemBeforeReload {
+            let rowAfterReload = row(forItem: selectedItemBeforeReload)
+            if rowAfterReload < 0 {
+                deselectAll(nil)
+            } else if rowAfterReload != selectedRow {
+                selectRowIndexes(IndexSet(integer: rowAfterReload), byExtendingSelection: false)
+            }
         }
     }
 

@@ -212,3 +212,13 @@ when picking up follow-up work.
   already `dlopen` an arbitrary path, but the threat model deserves stating
   rather than patching. Also records four fixes that have no test seam, and
   why.
+- [2026-10-07-pr121-review-findings.md](2026-10-07-pr121-review-findings.md) —
+  `/code-review max` on `feature/find-navigator` (PR #121, the Find navigator
+  and Report navigator proposals) @ `12e1227b`, IDs `PR121.<N>`. 54 defects
+  plus performance and cleanup items, each re-verified against the code, and
+  four findings the review missed (`PR121.70`–`73`, among them lock files
+  pinned to a MachOSwiftSection revision orphaned by an upstream rebase).
+  Written before any fix: every entry carries a draft diff against
+  `12e1227b` (not compiled) and an example reproduction test, and the head of
+  the file lists the decisions still open and the order to land the fixes in.
+  As each entry is fixed, its diff is replaced by the fix commit.

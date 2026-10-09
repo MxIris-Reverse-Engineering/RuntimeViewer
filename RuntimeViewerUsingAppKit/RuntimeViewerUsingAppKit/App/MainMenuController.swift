@@ -92,15 +92,34 @@ final class MainMenuController {
     private func editMenuItem() -> NSMenuItem {
         MainMenu.edit { builder in
             builder.item(for: .Edit.Find.find)?.action = #selector(NSResponder.performTextFinderAction(_:))
+            builder.insertItems(after: .Edit.Find.find) {
+                findInIndexedImagesItem()
+            }
         }
+    }
+
+    /// Xcode's Find in Workspace, shortcut included; the Find navigator searches every indexed
+    /// image of the document's engine.
+    private func findInIndexedImagesItem() -> NSMenuItem {
+        NSMenuItem(
+            "Find in Indexed Images…",
+            action: #selector(MainWindowController.showFindNavigator(_:)),
+            keyEquivalent: "F",
+            modifiers: [.shift, .command],
+        )
+        .image(SFSymbols(systemName: .magnifyingglass).nsImage)
     }
 
     // MARK: - View
 
-    /// The standard items, then the font-size commands. These change `Settings.theme.fontSize`,
-    /// which every document shares, but they are only enabled while a document window is key.
+    /// The standard items, with the Report navigator next to the sidebar, then the font-size
+    /// commands. These change `Settings.theme.fontSize`, which every document shares, but they are
+    /// only enabled while a document window is key.
     private func viewMenuItem() -> NSMenuItem {
         MainMenu.view { builder in
+            builder.insertItems(after: .View.showSidebar) {
+                showReportNavigatorItem()
+            }
             builder.insertItems(after: .View.enterFullScreen) {
                 NSMenuItem.separator()
                 increaseFontSizeItem()
@@ -108,6 +127,16 @@ final class MainMenuController {
                 resetFontSizeItem()
             }
         }
+    }
+
+    /// Xcode's View ▸ Navigators ▸ Show Report Navigator, shortcut included.
+    private func showReportNavigatorItem() -> NSMenuItem {
+        NSMenuItem(
+            "Show Report Navigator",
+            action: #selector(MainWindowController.showReportNavigator(_:)),
+            keyEquivalent: "9",
+        )
+        .image(SFSymbols.reportNavigator.nsImage)
     }
 
     /// `+` is shifted on most layouts, so this is ⇧⌘= to press — the same key as Format › Font › Bigger.

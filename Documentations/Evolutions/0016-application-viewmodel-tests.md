@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-09-02
-- **最后更新**: 2026-09-02
+- **最后更新**: 2026-10-08
 
 ## 摘要
 
@@ -50,6 +50,10 @@
 - 现在 `testValue` 指向 `AppDefaults.testFallback`（临时目录）。它只兜底那些 `withDependencies` 作用域够不到的
   解析——典型是 Sidebar 管线在 GCD 线程上新建的 cell ViewModel。要断言书签内容的测试仍各自注入
   `AppDefaults.isolated()`。`withLiveDependencyContext` 也改为固定注入隔离实例，其余键继续走 live。
+- （2026-10-08）隔离实例原先只隔离了书签文件，Generation Options、过滤模式和两个迁移标记仍在测试进程的
+  `UserDefaults.standard` 上，互相能读到、`$options` 的 KVO 互相能收到，写入还跨运行残留。现在每个隔离实例
+  （含 `testFallback`）有自己的 user defaults 命名空间 `UserDefaultsNamespace`：共用一个 suite，按键前缀区分，
+  实例释放时删自己的键，没释放的由下一个进程按「进程已结束」清掉。见 PR #121 审查条目 PR121.18。
 
 ### 依赖注入约定
 
@@ -105,3 +109,4 @@ swift test --skip-build --scratch-path /tmp/<agent>/SwiftPM/RuntimeViewerPackage
 | 2026-09-02 | 测试的 `settings` 一律用 `SettingsAccess.preview` | live 实例背后是用户的 `RuntimeViewer-Debug/settings.json`，写入会随自动保存落盘 |
 | 2026-09-02 | 最初在 `main` 检出上完成，随后按 `next` 的 API（scope 键书签、`SettingsAccess`、`RuntimeObjectCellAppearance`、过滤管线）重做并只落在 `next` | 这项工作本应在 `next` 上进行；两支的 ViewModel 已大幅分叉，补丁无法直接搬运 |
 | 2026-09-02 | 编号 0016、状态 Implemented，与测试代码同一批次落地 | 落地时取 `origin/main` 与 `origin/next` 的全局最大编号（0015）+1；无需配套指南，运行方式与约定已写入 `AGENTS.md` 的 Testing 一节；未引入新术语，词汇表不变 |
+| 2026-10-08 | 隔离的 `AppDefaults` 连 user defaults 一起隔离：所有隔离实例共用一个 suite，各用一个键前缀（`UserDefaultsNamespace`），不是每个实例一个 suite；`ContentTextPipelineTests` 自己的 `withLiveDependencyContext` 也固定注入隔离实例 | 只隔离文件时，一个测试改 Generation Options，别的测试里存活的 Find 会话就按「用户改了选项」重跑（PR121.18）。每实例一个 suite 不可取：`removePersistentDomain(forName:)` 不删 plist，一次运行会在 `~/Library/Preferences` 留上百个空文件。那个私有辅助函数遮蔽了全局同名函数却没固定 `\.appDefaults`，此前一直解析到 `AppDefaults.shared` |

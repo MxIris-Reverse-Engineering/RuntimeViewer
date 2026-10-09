@@ -69,7 +69,6 @@ extension RuntimeEngine.CommandName {
     static let canOpenImage = Self("canOpenImage")
     static let rpathsForImage = Self("rpathsForImage")
     static let dependenciesForImage = Self("dependenciesForImage")
-    static let patchImagePathForDyld = Self("patchImagePathForDyld")
     static let runtimeObjectHierarchy = Self("runtimeObjectHierarchy")
     static let runtimeRelationshipsForObject = Self("runtimeRelationshipsForObject")
     static let runtimeCounterpartForObject = Self("runtimeCounterpartForObject")
@@ -88,6 +87,11 @@ extension RuntimeEngine.CommandName {
     /// Carries `RuntimeEngineProgressPush` frames routed by token, so a
     /// single command name serves every progress-bearing command type.
     static let progressEvent = Self("progressEvent")
+    /// Withdraws one request the peer is serving, named by the
+    /// `requestIdentifier` its envelope carried. Expects no reply, and is
+    /// sent only for command types that opt in through
+    /// `RuntimeEngineProgressCommand.cancelsAcrossConnections`.
+    static let cancelRequest = Self("cancelRequest")
     static let specializationRequest = Self("specializationRequest")
     static let specializationRequestForCandidate = Self("specializationRequestForCandidate")
     static let runtimePreflight = Self("runtimePreflight")
@@ -96,4 +100,17 @@ extension RuntimeEngine.CommandName {
     /// `reloadData(isReloadImageNodes:)` forwarded to the process that
     /// owns the images, so a client engine never reads its own dyld state.
     static let reloadData = Self("reloadData")
+    /// The Find navigator's commands; see `RuntimeEngine+Search.swift`.
+    static let buildInterfaceCorpus = Self("buildInterfaceCorpus")
+    static let prioritizeInterfaceCorpus = Self("prioritizeInterfaceCorpus")
+    static let searchInterfaces = Self("searchInterfaces")
+    static let searchMembers = Self("searchMembers")
+    static let typeRelationships = Self("typeRelationships")
+    static let interfaceCorpusCoverage = Self("interfaceCorpusCoverage")
+    static let indexedImagePaths = Self("indexedImagePaths")
+    static let evictInterfaceCorpus = Self("evictInterfaceCorpus")
+    static let setInterfaceCorpusResidentByteLimit = Self("setInterfaceCorpusResidentByteLimit")
+    /// The `DYLD_ROOT_PATH` of the process that owns the peer's images;
+    /// see `RuntimeEngine+ImagePathCanonicalization.swift`.
+    static let dyldRootPath = Self("dyldRootPath")
 }

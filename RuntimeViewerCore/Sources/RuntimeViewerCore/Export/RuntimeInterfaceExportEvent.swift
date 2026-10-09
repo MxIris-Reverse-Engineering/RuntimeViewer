@@ -7,7 +7,7 @@ public enum RuntimeInterfaceExportEvent: Sendable {
     case phaseFailed(Phase, any Swift.Error & Sendable)
 
     case objectStarted(RuntimeObject, current: Int, total: Int)
-    case objectCompleted(RuntimeObject, SemanticString)
+    case objectCompleted(RuntimeObject, FrozenSemanticString)
     case objectFailed(RuntimeObject, any Swift.Error & Sendable)
 
     case completed(RuntimeInterfaceExportResult)
@@ -19,7 +19,7 @@ public enum RuntimeInterfaceExportEvent: Sendable {
     }
 }
 
-public struct RuntimeInterfaceExportResult: Sendable {
+public struct RuntimeInterfaceExportResult: Sendable, Equatable {
     public let succeeded: Int
     public let failed: Int
     public let totalDuration: TimeInterval

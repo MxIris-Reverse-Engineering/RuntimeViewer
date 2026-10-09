@@ -42,16 +42,35 @@ public struct RuntimeEngineEmpty: Codable, Sendable {
 ///
 /// ## Wire form
 /// Progress requests travel as `RuntimeEngineProgressEnvelope`
-/// (`{progressToken, request}`) under the request's own `commandName` —
-/// never as the bare request, so plain and progress-listening callers share
-/// one server handler. While the request executes, the serving peer pushes
-/// `RuntimeEngineProgressPush` (`{token, payload}`) frames on the shared
-/// `CommandName.progressEvent` channel; the requesting engine routes each
-/// push back to the in-flight call by token, so concurrent requests never
-/// cross-talk. A `nil` token means the caller doesn't observe progress and
-/// the serving peer skips the pushes entirely.
+/// (`{progressToken, request, requestIdentifier}`) under the command's own
+/// `commandName` — never as the bare command, so plain and
+/// progress-listening callers share one server handler. While the request
+/// executes, the serving peer pushes `RuntimeEngineProgressPush`
+/// (`{token, payload}`) frames on the shared `CommandName.progressEvent`
+/// channel; the requesting engine routes each push back to the in-flight call
+/// by token, so concurrent requests never cross-talk. A `nil` token means the
+/// caller doesn't observe progress and the serving peer skips the pushes
+/// entirely.
+///
+/// ## Cancellation
+/// A command type that opts in through `cancelsAcrossConnections` names each
+/// round trip with a `requestIdentifier`. Cancelling its caller then returns
+/// the caller at once and withdraws the request from the serving peer with
+/// `CommandName.cancelRequest` — see `RuntimeEngineInboundRequests` and
+/// `RuntimeEngineForwardedRequest`, and `CommunicationAndEngineArchitecture.md`
+/// §4.5 for the protocol.
 public protocol RuntimeEngineProgressCommand: RuntimeEngineCommand {
     associatedtype Progress: Codable & Sendable
+
+    /// Whether cancelling the caller of a forwarded request withdraws it in
+    /// the serving process too. Opt in only for a command no peer serves
+    /// without also knowing `cancelRequest` — one added in the same release
+    /// as `cancelRequest`, or later: a peer that predates it does not ignore
+    /// an unknown message on every transport (an injected payload reached
+    /// over a Mach service takes one for its client going away). A command of
+    /// another module is held to the same rule: its registrar withdraws it
+    /// exactly as it withdraws Core's.
+    static var cancelsAcrossConnections: Bool { get }
 
     /// Local implementation reporting incremental progress. Implementations
     /// must `await` `reportProgress` at each report site so events stay
@@ -60,6 +79,10 @@ public protocol RuntimeEngineProgressCommand: RuntimeEngineCommand {
 }
 
 extension RuntimeEngineProgressCommand {
+    public static var cancelsAcrossConnections: Bool {
+        false
+    }
+
     /// Plain execution defaults to the progress-bearing variant with a no-op
     /// listener, so conformers implement a single method.
     public func perform(on engine: RuntimeEngine) async throws -> Response {
@@ -79,6 +102,13 @@ struct RuntimeEngineProgressEnvelope<Command: Codable & Sendable>: Codable, Send
     /// `Request` → `Command` rename still encode and decode. Renaming it would
     /// change the wire format, which the rename deliberately did not.
     let request: Command
+
+    /// Names this round trip for `CommandName.cancelRequest`. Set only for
+    /// command types that cancel across connections; `nil` — and then absent
+    /// from the encoding — for every other, so a peer that predates it is
+    /// never sent the key. A peer that predates it skips the key anyway, and
+    /// one that receives no key serves the request as it always did.
+    let requestIdentifier: String?
 }
 
 /// A single progress event pushed back to the requester on the shared
@@ -97,10 +127,11 @@ extension RuntimeEngine {
     ///
     /// Adding a command to Core is one line here plus the matching command
     /// struct in `RuntimeEngine+Commands.swift` /
-    /// `RuntimeEngine+GenericSpecialization.swift`. A command belonging to
-    /// another module does not come here at all — see
+    /// `RuntimeEngine+GenericSpecialization.swift` / `RuntimeEngine+Search.swift`.
+    /// A command belonging to another module does not come here at all — see
     /// ``addCommandExtension(named:install:)``.
     static func registerBuiltInHandlers(into registrar: RuntimeEngineCommandRegistrar) {
+        registrar.registerRequestCancellation()
         registrar.register(IsImageLoadedCommand.self)
         registrar.register(IsImageIndexedCommand.self)
         registrar.register(MainExecutablePathCommand.self)
@@ -123,5 +154,15 @@ extension RuntimeEngine {
         registrar.register(SpecializationRequestForCandidateCommand.self)
         registrar.register(RuntimePreflightCommand.self)
         registrar.register(SpecializeCommand.self)
+        registrar.registerProgress(BuildInterfaceCorpusCommand.self)
+        registrar.register(PrioritizeInterfaceCorpusCommand.self)
+        registrar.registerProgress(SearchInterfacesCommand.self)
+        registrar.registerProgress(SearchMembersCommand.self)
+        registrar.registerProgress(TypeRelationshipsCommand.self)
+        registrar.register(InterfaceCorpusCoverageCommand.self)
+        registrar.register(IndexedImagePathsCommand.self)
+        registrar.register(EvictInterfaceCorpusCommand.self)
+        registrar.register(SetInterfaceCorpusResidentByteLimitCommand.self)
+        registrar.registerAnsweredInThisProcess(DyldRootPathCommand.self)
     }
 }

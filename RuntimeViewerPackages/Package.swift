@@ -221,7 +221,12 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
-                from: "0.5.4",
+                // 0.6.0 is the first release whose outline adapters decide "nothing changed" by
+                // `differenceIdentifier` and `isContentEqual` instead of `==`. Outline nodes keep
+                // `==` on identity so that rows stay expanded across an update, so below 0.6.0 an
+                // update that only changes a subtree is dropped. The workspaces resolve 0.6.0
+                // already; this floor keeps the package tests on the adapter the app runs.
+                from: "0.6.0",
             ),
         ),
         

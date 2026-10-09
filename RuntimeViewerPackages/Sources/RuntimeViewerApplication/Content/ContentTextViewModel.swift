@@ -55,7 +55,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     public struct RenderedInterface {
         /// Semantic runs from the generator: what each identifier actually *is*, which no
         /// amount of scanning the rendered text can recover.
-        public let semanticString: SemanticString
+        public let semanticString: FrozenSemanticString
 
         /// The same content with the theme's colors and fonts applied, plus the `.link`
         /// attributes that carry jump targets.
@@ -68,17 +68,32 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @RxObserved
     public private(set) var attributedString: NSAttributedString?
 
-    public convenience init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<ContentRoute>) {
-        self.init(runtimeObject: runtimeObject, documentState: documentState, router: router, interfaceProvider: nil)
+    /// The range the `ContentHighlightRequest` this ViewModel was built with
+    /// resolved to in the text on screen — the Find navigator's hit, once the
+    /// interface is rendered.
+    private let highlightRangeRelay = PublishRelay<NSRange>()
+
+    /// The Find navigator hit this ViewModel was built to show, until its first render uses it.
+    /// Owned here, not by the document, so it goes away with the navigation that brought it: a
+    /// navigation that moves on, an interface that cannot be fetched or an engine switch drops
+    /// the ViewModel and the request with it.
+    private var pendingHighlightRequest: ContentHighlightRequest?
+
+    /// - Parameter highlightRequest: where the Find navigator's hit sits, to reveal once the
+    ///   interface is first on screen; `nil` for every other way of showing an object.
+    public convenience init(runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, documentState: DocumentState, router: any Router<ContentRoute>) {
+        self.init(runtimeObject: runtimeObject, highlightRequest: highlightRequest, documentState: documentState, router: router, interfaceProvider: nil)
     }
 
     init(
         runtimeObject: RuntimeObject,
+        highlightRequest: ContentHighlightRequest? = nil,
         documentState: DocumentState,
         router: any Router<ContentRoute>,
         interfaceProvider: InterfaceProvider?
     ) {
         self.runtimeObject = runtimeObject
+        self.pendingHighlightRequest = highlightRequest
         self.theme = ResolvedTheme.fallback
         let interfaceCache = documentState.interfaceCache
         let contentLoadingDelay = Self.contentLoadingDelay()
@@ -149,7 +164,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 appDefaults.$options.distinctUntilChanged(),
                 transformerObservable.distinctUntilChanged()
             )
-            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer -> Observable<(interfaceString: SemanticString, runtimeObject: RuntimeObject)?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer -> Observable<(interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?> in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 return Observable.async {
@@ -205,6 +220,25 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .map { $0?.attributedString }
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
+
+        // A Find navigator hit arrives with the route that built this ViewModel;
+        // once the object's text is first rendered, locate it in that text (off
+        // main — the text can be megabytes) and hand the range to the view.
+        // Used once: later renders (theme, options) leave the scroll position alone.
+        $renderedInterface
+            .compactMap { $0 }
+            .flatMapLatest { [weak self] rendered -> Observable<NSRange?> in
+                guard let self, let request = self.pendingHighlightRequest else { return .empty() }
+                self.pendingHighlightRequest = nil
+                let displayedText = rendered.attributedString.string
+                return Observable.just(())
+                    .observe(on: renderScheduler)
+                    .map { request.locate(in: displayedText) }
+            }
+            .observeOnMainScheduler()
+            .compactMap { $0 }
+            .bind(to: highlightRangeRelay)
+            .disposed(by: rx.disposeBag)
     }
 
     /// The wait Settings › Developer puts ahead of every fetch; zero while its master switch is
@@ -228,7 +262,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// `nonisolated` for the same reason as ``renderAttributedString(for:theme:)``, which it
     /// delegates the theming pass to: this runs on the render half's background scheduler.
     nonisolated static func renderInterface(
-        for interfacePair: (interfaceString: SemanticString, runtimeObject: RuntimeObject)?,
+        for interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?,
         theme: ThemeProfile
     ) -> RenderedInterface? {
         guard let interfacePair,
@@ -247,7 +281,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// init-time-precomputed read-only tables, and the builder allocates
     /// only immutable font/color/string values, returning an immutable copy.
     nonisolated static func renderAttributedString(
-        for interfacePair: (interfaceString: SemanticString, runtimeObject: RuntimeObject)?,
+        for interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?,
         theme: ThemeProfile
     ) -> NSAttributedString? {
         guard let interfacePair else { return nil }
@@ -272,6 +306,9 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         public let imageNameOfRuntimeObject: Driver<String?>
         public let selectedRuntimeObjectName: Driver<String>
         public let runtimeObjectNotFound: Signal<Void>
+        /// Scroll to and flash this range: a Find navigator hit located in the
+        /// text on screen. Emits at most once per pending highlight.
+        public let highlightRange: Signal<NSRange>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -329,7 +366,8 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             theme: $theme.asDriver(),
             imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver(),
             selectedRuntimeObjectName: documentState.$selectedRuntimeObject.asDriver().map { $0?.displayName ?? "" },
-            runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal()
+            runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal(),
+            highlightRange: highlightRangeRelay.asSignal()
         )
     }
 }
