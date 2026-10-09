@@ -4204,6 +4204,7 @@ func storeCancellationIsNotAFailure() async throws {
 - `RuntimeNetworkRequestError` 的 `LocalizedError`：已在上面的 diff 中。
 - 连接中断时记 Failed：见「改法」最后一条，和「引擎已重置」信号一起做。
 - 搜索与关系查询的「调用方已取消」：由 PR121.29 的 `catch _ where` 统一处理。
+- **后台索引管理器把断连记成失败（批次 S7 补上，S3b 交接）**：`RuntimeBackgroundIndexingManager.runSingleIndex` 把连接丢失同样记成镜像 Failed（分叉点 `9ca0d5a6` 就这样），XPC service 重启或对端断开时，批次里剩下的每个镜像各记一条带传输层措辞的失败（"serviceExited"、"notConnected"、"Connection closed by peer"）。改用 `RuntimeConnectionError.isLostConnection(_:)` 判定：连接丢失时这个镜像记为 cancelled、不发失败的 `taskFinished`，批次就此停下并以 cancelled 结束——与换引擎时协调器归档进历史的样子一致（PR121.57 让真正的终态就地替换那份归档）。索引的历史以批次为单位，所以「不写历史」在这里落为「不把中断写成失败」：批次照样以 Cancelled 进历史。复现测试 `RuntimeBackgroundIndexingManagerTests.lostConnectionInterruptsTheBatchInsteadOfFailingItsImages`（Mock 引擎对每个镜像抛 `RuntimeConnectionError.peerClosed`）：修前批次以 finished 结束，三个镜像各是 `failed(message: "Connection closed by peer")` 并各发一条失败的 `taskFinished`；修后批次 cancelled，没有任何 failed。修复：（哈希随本批的补哈希提交补上）。仍未做：文档停在镜像列表时引擎重新就绪，索引协调器不像语料协调器那样订阅 `runtimeEngineDidReset` 重新开始，被打断的批次不会自己重启（修前也不会，只是记成了失败），留作后续。
 
 **工作量**：S–M。依赖 PR121.29（`dispatch` 的改动）。PR121.32 依赖本条新增的 `.imageNotIndexed`。
 

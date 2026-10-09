@@ -1,5 +1,6 @@
 import Foundation
 import DequeModule
+import RuntimeViewerCommunication
 
 public actor RuntimeBackgroundIndexingManager {
     struct BatchState {
@@ -474,6 +475,13 @@ public actor RuntimeBackgroundIndexingManager {
                                result: .completed))
         } catch is CancellationError {
             updateItemState(batchID: batchID, path: path, state: .cancelled)
+        } catch where RuntimeConnectionError.isLostConnection(error) {
+            // Not a failed image: the connection under the load went away —
+            // the serving process exited, the peer closed its end. Every image
+            // still to load would fail the same way, so the batch stops here and
+            // ends cancelled, as an engine swap ends it.
+            updateItemState(batchID: batchID, path: path, state: .cancelled)
+            cancelBatch(batchID)
         } catch {
             let state: RuntimeIndexingTaskState =
                 .failed(message: error.localizedDescription)

@@ -1,6 +1,7 @@
 import Foundation
 import Semaphore
 import Testing
+import RuntimeViewerCommunication
 @testable import RuntimeViewerCore
 
 @Suite final class RuntimeBackgroundIndexingManagerTests {
@@ -357,6 +358,34 @@ import Testing
             return
         }
         #expect(!message.isEmpty)
+    }
+
+    /// A load the connection drops under is not a failed image. The process behind a remote
+    /// engine went away — the local runtime service exited, a device or an injected app closed
+    /// its socket — and every image still to load would fail the same way, each recorded as a
+    /// failure with the transport's words for it ("serviceExited", "notConnected"). The batch
+    /// stops there and ends cancelled, as an engine swap ends it (the indexing half of PR121.30).
+    @Test func lostConnectionInterruptsTheBatchInsteadOfFailingItsImages() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        let lostConnection = RuntimeConnectionError.peerClosed
+        engine.program(path: "/App", .init(shouldFailLoad: lostConnection,
+                                           dependencies: [("/A", "/A"), ("/B", "/B")]))
+        engine.program(path: "/A", .init(shouldFailLoad: lostConnection))
+        engine.program(path: "/B", .init(shouldFailLoad: lostConnection))
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+        let recorder = EventRecorder()
+        let recording = recorder.startRecording(await manager.events)
+        defer { recording.cancel() }
+
+        let batch = await runToFinish(manager: manager, root: "/App", depth: 1, maxConcurrency: 1)
+        _ = await waitUntil {
+            recorder.recordedEvents.contains { $0.hasPrefix("batchCancelled") || $0.hasPrefix("batchFinished") }
+        }
+
+        #expect(batch.isCancelled, "a batch the connection dropped under ran to its end")
+        #expect(batch.failedCount == 0, "a lost connection was recorded as failed images: \(batch.items.map { "\($0.id) \($0.state)" })")
+        let failedTaskEvents = recorder.recordedEvents.filter { $0.hasPrefix("taskFinished") && $0.contains("failed") }
+        #expect(failedTaskEvents.isEmpty, "\(failedTaskEvents)")
     }
 
     /// A batch's end makes the engine re-read its data once, however many subscribers listen.
