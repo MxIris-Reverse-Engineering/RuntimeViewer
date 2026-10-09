@@ -10119,7 +10119,7 @@ grep -A6 '"identity" : "rxappkit"' Package.resolved          # expect "version" 
 
 - **严重度**：Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分）
 - **审查编号**：新发现（模块 F 在 C30 的同类排查中提出）
-- **状态**：方案待批，代码未改
+- **状态**：协议副本部分已修复；Swift 类 ObjC 面那一半按裁决不修（理由见下文「裁决理由」）；会话侧跨补搜去重评估后不做（理由见本行末尾）。复现测试：`RuntimeInterfaceRepeatedProtocolCopyTests`（新文件，用 `@testable` 读 store 与可见性类型）——`identicalCopiesReportedOnce`（修前两个镜像里逐字相同的 `NSCopying` 文本与成员各报一次，`totalMatchCount` 是 2）、`copiesAlikeUnderTheOptionsFolded`（两份副本只差一条默认选项隐藏的 IMP 注释：默认选项下修前报两次，修后只报第一个镜像那份；全部显示时两份读起来不同，照常各报一次）、`repeatedCopyReportedOnceAcrossRealImages`（本机 macOS 26.7 上 CoreFoundation 与 Foundation 都带 `NSCopying` 且默认选项下读起来一样，修前文本与成员搜索都从两个镜像各报一次，修后只从 CoreFoundation 报、`omittedRepeatedMatchCount > 0`）；守护用例 `differingCopiesKeepTheirHits`（文本不同的副本各自报告）与 `identicalClassesKeepTheirHits`（逐字相同的类不合并）修前修后都绿。与草案的出入：PR121.06 已把扫描搬进 store 外的扫描驱动，改动按草案所说落在驱动里而不是两份搜索各写一遍——`matchEntry` 多一个参数，条目在第一个命中之前（文本搜索在匹配前，成员搜索在第一个命中的成员处）把它在本次选项下读出的文本交给驱动，驱动判断是否重复、记账；摘要字段在 init 里默认 0。会话侧跨补搜去重不做：会话手里只有命中、没有文本，判断只能在引擎里做，于是补搜的查询要带上此前显示过哪些协议副本（名字与镜像）、引擎再从语料里找出那几份按同一选项投影来比较，搜索与成员两个查询都要加字段，会话要从结果里记下协议副本，而那几份语料在两次搜索之间可能已被预算驱逐、无从比较——跨查询格式、store 与会话三处，不是小改动；主搜索已覆盖当时建好的全部镜像，重复只出现在补搜里。留给 Find 界面模块，连同「另有 N 处合并」的文案
 
 **问题**：`corpusObjects(in:)` 原样取 `_objects(in:)`，侧栏列出的每个对象都会建一条语料（`RuntimeEngine+Search.swift:158-160`）。这导致两类重复：
 - **ObjC 协议副本**：编译器会给每个见过某个 `@protocol` 声明的镜像各发射一份 `protocol_t`；而且自 2026-08-05 起，侧栏有意按 `__objc_protolist` 全量列出这些副本。跨多个镜像搜索时，同一条协议声明就会按携带它的镜像各命中一次。比如搜 `copyWithZone`，CoreFoundation 和 Foundation 里的 `NSCopying` 各报一遍；`NSObject` 协议几乎每个 ObjC 镜像都带，搜 `respondsToSelector` 时每个镜像都报一遍。这些重复会挤占 1000 条的结果上限，也会把总数虚高。

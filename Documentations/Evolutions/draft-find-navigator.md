@@ -189,7 +189,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 | 命令 | 类型 | 进度 | 响应 |
 |------|------|------|------|
 | `BuildInterfaceCorpusCommand { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `RuntimeInterfaceCorpusBuildOutcome`：`built(CorpusBuildSummary { objectCount, skippedCount, byteCount })` / `cancelled` / `imageNotIndexed`（2026-10-08，PR121.30：取消是值不是错误，才跨得过连接；公开 API 仍返回 summary） |
-| `SearchInterfacesCommand { query, options, generationOptions, resultLimit }` | progress | `RuntimeInterfaceSearchBatch`：对象表加带下标的命中，每个对象一批只发一次（按镜像粒度增量推送）；`searchInterfaces` 在客户端解包回 `[GlobalSearchMatch]` | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
+| `SearchInterfacesCommand { query, options, generationOptions, resultLimit }` | progress | `RuntimeInterfaceSearchBatch`：对象表加带下标的命中，每个对象一批只发一次（按镜像粒度增量推送）；`searchInterfaces` 在客户端解包回 `[GlobalSearchMatch]` | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths, stopReason, omittedRepeatedMatchCount }` |
 | `SearchMembersCommand { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `RuntimeMemberSearchBatch`，同上的对象表加下标（按镜像粒度）；`searchMembers` 解包回 `[RuntimeMemberMatch]` | 同上形态的 summary |
 | `TypeRelationshipsCommand { query, matchMode, isCaseSensitive, relationship: ancestors / descendants / conformers }` | progress（不发推送，只为能被取消） | `RuntimeEngineEmpty` | `[RuntimeRelationshipTree]` |
 | `InterfaceCorpusCoverageCommand` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
@@ -227,6 +227,12 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 - `GlobalSearchMatch`（过线的只有它，不含 Frozen 本体）：`object`、`imagePath`、`lineNumber`、`lineText`、
   `matchRangeInLine`（UTF-16）、`semanticKind`（`SemanticType` 的 Codable 镜像）。
 - 父 / 子对象的 interface 有少量重叠（探针实测 child 部分占 17–31.5%），两处命中都如实报告，不去重（与 Xcode 一致）。
+- **ObjC 协议副本只报告一次**：编译器给每个见过 `@protocol` 声明的镜像各发射一份 `protocol_t`，侧栏有意全量列出，所以一次
+  跨镜像搜索会按携带镜像把同一条声明各命中一遍。扫描驱动在一次搜索内部记下已报告过命中的协议副本（按名字，存它在本次选项下
+  读出的文本）；之后同名、文本逐字相同的副本只计数，不收集、不计入 `totalMatchCount`，计入摘要的
+  `omittedRepeatedMatchCount`。镜像按路径顺序读，留下的是路径最小的那份；文本不同的副本（例如按旧头文件编出的）照常报告。
+  文本搜索在匹配前比较（投影本来就要算），成员搜索在条目的第一个命中处比较。只在一次搜索内部去重：补搜是另一次搜索，
+  不与此前已显示的副本比较（理由见 KnownIssues PR121.72）。Swift 类的 ObjC 面与 Swift 面打印的是不同的事实，不去重。
 
 #### 3.2 成员
 
@@ -803,3 +809,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |
 | 2026-10-09 | 成员定位改按「种类 + 是否静态 + 名字」对齐，每种成员只认渲染器给它用的那种 span，删掉跨种类回退；同一成员的两遍渲染只认一行；函数认紧跟 `func` 的名字，运算符函数也能定位；定位器改用 `RuntimeInterfaceLineTable` 切行、不再生成行文本 | PR #121 审查 PR121.10：按名字认领时，property 会抢同名 ivar 行和位域字段行，`static func degrees` 会抢 `init(degrees:)` 行，类属性与实例属性互换。Foundation 上（本机 macOS 26.7）修前有 146 个成员落在别的声明行上，修后 0 个；ObjC property / ivar 全部定位，方法只差 4 个空标签选择子（`executeWithInterpreter:arguments::`，渲染器把空标签折掉了）。草案假设两遍渲染在同一行，实测变量的第二遍接在第一遍的 `}` 后面，所以加了「以 `}` 开头的行不登记 Swift 键」（ObjC 不受影响：内联展开的 struct ivar 正是 `} _flags;`）。草案的「func 行的第一个函数片段」会把运算符的参数标签 `_` 当名字，改为认紧跟 `func` 的那段：Swift 函数从 6063 / 6800 升到 6800 / 6800。 |
 | 2026-10-09 | 协议的成员表按结构列出默认实现：协议要求之后列 `defaultImplementationExtensions` 里各扩展的成员，追加在后面的同一个扩展按对象身份跳过；打印出的文本不变 | PR #121 审查 PR121.11：顶层协议的默认实现由打印器自己接在协议后面印出，成员表却只读 `printedDefinitions`，1954a8a5 为了不重复打印删掉那份副本后，这些成员就从 Members 搜索里消失了（SwiftUI 的 view modifier、`LocalizedError.errorDescription` 的默认实现等），嵌套协议反而正常。Foundation 上带挂接默认实现的 29 个协议里修前 27 个一个都定位不到，修后全部定位到。按身份而不是按 `isAttachedToProtocolDefinition` 判断，因为 MachOSwiftSection 为没有可挂符号扫描扩展块的协议合成的默认实现扩展不带这个标记。成员表从此不再需要知道默认实现由谁打印。 |
+| 2026-10-09 | 一次文本 / 成员搜索内部，与已报告命中的同名 ObjC 协议副本在本次选项下逐字相同的副本只计数，计入摘要新增的 `omittedRepeatedMatchCount`，不收集、不计入 `totalMatchCount`；补搜之间不去重；Swift 类的 ObjC 面不去重 | PR #121 审查 PR121.72：侧栏按 `__objc_protolist` 全量列出协议副本（2026-08-05 起有意如此，见 `ResolvedIssues/2026-08-05-objc-protocol-ownership-filter.md`），搜 `copyWithZone` 时 CoreFoundation 与 Foundation 的 `NSCopying` 各报一遍，`NSObject` 协议几乎每个镜像都报一遍，挤占 1000 条上限、虚高总数。当年「索引层宁可多列，去重放到用的地方做」，这里就是用的地方。要求文本逐字相同，是因为各镜像的副本来自各自编译时看到的头文件，可能不同，不同的副本里可能有别处没有的命中。保留路径最小的那份，与关系树（PR121.13）的代表副本规则一致。补搜之间去重要让引擎知道此前显示过哪些副本、按什么文本——查询与摘要都得加字段，期间那份语料还可能被驱逐，不属于小改动，留给 Find 界面模块；「另有 N 处合并」的文案也归界面。ObjC 面与 Swift 面一个有运行时名、选择子与 IMP，一个有 Swift 类型与布局，两处命中都有用。 |

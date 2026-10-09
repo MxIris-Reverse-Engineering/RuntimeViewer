@@ -158,18 +158,24 @@ public struct RuntimeInterfaceSearchSummary: Hashable, Codable, Sendable {
     /// What it delivered until then is correct, and its counts stand for what
     /// it read. `nil` for a search that read everything.
     public let stopReason: RuntimeInterfaceSearchStopReason?
+    /// Hits in Objective-C protocol copies that read exactly like a copy the
+    /// search already reported hits in — the same declaration, carried by
+    /// another image. Neither collected nor part of `totalMatchCount`; the
+    /// UI can say how many were folded into the copy it shows.
+    public let omittedRepeatedMatchCount: Int
 
     public var scannedImageCount: Int {
         scannedImagePaths.count
     }
 
-    public init(totalMatchCount: Int, scannedImagePaths: [String], scannedObjectCount: Int, isTruncated: Bool, unbuiltIndexedImagePaths: [String], stopReason: RuntimeInterfaceSearchStopReason? = nil) {
+    public init(totalMatchCount: Int, scannedImagePaths: [String], scannedObjectCount: Int, isTruncated: Bool, unbuiltIndexedImagePaths: [String], stopReason: RuntimeInterfaceSearchStopReason? = nil, omittedRepeatedMatchCount: Int = 0) {
         self.totalMatchCount = totalMatchCount
         self.scannedImagePaths = scannedImagePaths
         self.scannedObjectCount = scannedObjectCount
         self.isTruncated = isTruncated
         self.unbuiltIndexedImagePaths = unbuiltIndexedImagePaths
         self.stopReason = stopReason
+        self.omittedRepeatedMatchCount = omittedRepeatedMatchCount
     }
 }
 

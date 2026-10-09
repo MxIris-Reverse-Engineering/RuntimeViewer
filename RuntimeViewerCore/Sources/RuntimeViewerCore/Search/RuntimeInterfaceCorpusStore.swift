@@ -663,6 +663,7 @@ actor RuntimeInterfaceCorpusStore {
     /// What the scan of one search came to.
     private struct SearchScan: Sendable {
         var totalMatchCount = 0
+        var omittedRepeatedMatchCount = 0
         var collectedCount = 0
         var scannedObjectCount = 0
         var scannedImagePaths: [String] = []
@@ -674,7 +675,9 @@ actor RuntimeInterfaceCorpusStore {
     /// to `query.resultLimit`; the count goes on past it. The scan runs off
     /// this actor, so whatever the pattern costs, the store keeps answering;
     /// a regular expression that spends the search's budget stops it, with
-    /// what was delivered standing and the summary saying why.
+    /// what was delivered standing and the summary saying why. An
+    /// Objective-C protocol copy that reads exactly like one already
+    /// reported is only counted — see `scan`.
     func searchInterfaces(
         _ query: RuntimeInterfaceSearchQuery,
         indexedImagePaths: Set<String>,
@@ -687,7 +690,7 @@ actor RuntimeInterfaceCorpusStore {
             resultLimit: query.resultLimit,
             regularExpressionTimeLimit: regularExpressionTimeLimit,
             onProgress: onProgress
-        ) { entry, budget, isCollecting, collect in
+        ) { entry, budget, isCollecting, reportsHits, collect in
             // Most entries have no hit at all; under options that hide
             // something, learn that before paying for the projection.
             if let visibility, !entry.visibilityRegions.isEmpty, !entry.mayHaveHits(of: pattern, under: visibility) {
@@ -706,7 +709,10 @@ actor RuntimeInterfaceCorpusStore {
                 interface = entry.interface
                 nestedDefinitionRanges = entry.nestedDefinitionRanges
             }
-            return try RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: nestedDefinitionRanges, isCollecting: isCollecting, collect: collect)
+            // The text is at hand, so a repeated protocol copy is told before
+            // its hits are looked for, and then only counted.
+            let isReported = reportsHits(interface.text)
+            return try RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, budget: &budget, excludingUTF8Ranges: nestedDefinitionRanges, isCollecting: isCollecting && isReported, collect: collect)
         }
         return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
     }
@@ -728,10 +734,13 @@ actor RuntimeInterfaceCorpusStore {
             resultLimit: query.resultLimit,
             regularExpressionTimeLimit: regularExpressionTimeLimit,
             onProgress: onProgress
-        ) { entry, budget, isCollectingAtStart, collect in
+        ) { entry, budget, isCollectingAtStart, reportsHits, collect in
             guard let pattern else { return 0 }
             var matchCount = 0
             var isCollecting = isCollectingAtStart
+            // Whether a repeated protocol copy is only counted is settled at
+            // the entry's first match, once the text it reads as is known.
+            var isReported: Bool?
             // Projected only once a member of this entry matches: most
             // entries have none, and they cost nothing.
             var projection: (projection: VisibilityProjection, lineTable: RuntimeInterfaceLineTable)??
@@ -748,6 +757,11 @@ actor RuntimeInterfaceCorpusStore {
                         guard let memberUnderOptions = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineTable: entryProjection.lineTable) else { continue }
                         projectedMember = memberUnderOptions
                     }
+                }
+                if isReported == nil {
+                    let reported = reportsHits((projection ?? nil)?.projection.text.text ?? entry.interface.text)
+                    isReported = reported
+                    isCollecting = isCollecting && reported
                 }
                 matchCount += 1
                 if isCollecting {
@@ -784,6 +798,16 @@ actor RuntimeInterfaceCorpusStore {
     /// needs much less work. One regular expression budget serves the whole
     /// search.
     ///
+    /// Its fourth argument folds repeated Objective-C protocol copies. An
+    /// image carries a copy of every protocol it saw declared, so a search
+    /// over several images meets the same declaration once per carrier;
+    /// `matchEntry` calls it once, no later than its first match, with the
+    /// text the entry reads as under the search's options. `false` back
+    /// means the entry is a protocol copy that reads exactly like one this
+    /// search already reported hits in: its matches are then only counted,
+    /// into `omittedRepeatedMatchCount` instead of the total. Corpora are
+    /// read in path order, so the copy shown is the first image's.
+    ///
     /// Checks for cancellation before every entry and before an image's
     /// batch goes out, so a cancelled search delivers nothing more; the
     /// regular expression engine looks at the task itself in between. Yields
@@ -796,10 +820,11 @@ actor RuntimeInterfaceCorpusStore {
         resultLimit: Int,
         regularExpressionTimeLimit: TimeInterval,
         onProgress: @Sendable ([Match]) async -> Void,
-        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ isCollecting: Bool, _ collect: (Match) -> Bool) throws -> Int
+        matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ isCollecting: Bool, _ reportsHits: (_ shownText: String) -> Bool, _ collect: (Match) -> Bool) throws -> Int
     ) async throws -> SearchScan {
         var scan = SearchScan()
         var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: regularExpressionTimeLimit)
+        var repeatedProtocolCopies = RuntimeInterfaceRepeatedProtocolCopies()
         for corpus in corpora {
             try Task.checkCancellation()
             scan.scannedImagePaths.append(corpus.imagePath)
@@ -809,11 +834,25 @@ actor RuntimeInterfaceCorpusStore {
                 for entry in corpus.entries {
                     try Task.checkCancellation()
                     scan.scannedObjectCount += 1
-                    scan.totalMatchCount += try matchEntry(entry, &budget, collectedCount < resultLimit) { match in
+                    var isRepeatedCopy = false
+                    var shownText: String?
+                    let matchCount = try matchEntry(entry, &budget, collectedCount < resultLimit, { text in
+                        isRepeatedCopy = repeatedProtocolCopies.isRepeated(entry, readingAs: text)
+                        shownText = text
+                        return !isRepeatedCopy
+                    }) { match in
                         guard collectedCount < resultLimit else { return false }
                         batch.append(match)
                         collectedCount += 1
                         return collectedCount < resultLimit
+                    }
+                    if isRepeatedCopy {
+                        scan.omittedRepeatedMatchCount += matchCount
+                    } else {
+                        scan.totalMatchCount += matchCount
+                        if matchCount > 0, let shownText {
+                            repeatedProtocolCopies.recordReported(entry, readingAs: shownText)
+                        }
                     }
                 }
             } catch RuntimeInterfaceTextMatcher.PatternError.regularExpressionTooExpensive {
@@ -842,7 +881,8 @@ actor RuntimeInterfaceCorpusStore {
             scannedObjectCount: scan.scannedObjectCount,
             isTruncated: scan.totalMatchCount > scan.collectedCount,
             unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: scope),
-            stopReason: scan.stopReason
+            stopReason: scan.stopReason,
+            omittedRepeatedMatchCount: scan.omittedRepeatedMatchCount
         )
     }
 
