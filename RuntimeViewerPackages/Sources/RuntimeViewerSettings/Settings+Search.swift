@@ -6,7 +6,7 @@ extension Settings {
     /// all, and how much of them may stay resident.
     ///
     /// The corpus is the text of every indexed image's interfaces, printed
-    /// once per image in the engine's process (proposal `draft-find-navigator`
+    /// once per image in the engine's process (proposal `0029-find-navigator`
     /// §1). Text and member searches read it; the relationship modes do not
     /// need it and keep working with it off.
     @Codable

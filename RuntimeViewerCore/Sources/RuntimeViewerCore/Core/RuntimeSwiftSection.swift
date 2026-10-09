@@ -1759,7 +1759,7 @@ extension RuntimeSwiftSection {
     /// The first object is printed with the corpus printer, marked for every
     /// combination of the Generation Options and around every nested
     /// definition. Each object nested in it then takes its own definition out
-    /// of that print instead of printing it again (`draft-find-navigator`
+    /// of that print instead of printing it again (`0029-find-navigator`
     /// §1.1, option D: nested types are about four tenths of what an image
     /// prints), and prints only what follows its definition — its extensions,
     /// a protocol's default implementations. One whose definition cannot be

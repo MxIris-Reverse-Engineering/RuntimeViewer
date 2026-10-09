@@ -15,7 +15,7 @@ import UIFoundation
 /// the highlight under the pointer, the chevron that turns into a pop-up indicator, the menu laid
 /// over the component, the title that fades out instead of being truncated. Each rule below names
 /// the DVTKit method it was read from, in Xcode 27.0; the measurements are collected in the Find
-/// navigator proposal, `draft-find-navigator` §4.2.
+/// navigator proposal, `0029-find-navigator` §4.2.
 ///
 /// The control only reports choices: picking a menu item sets `lastSelection` and sends the
 /// action, and the owner answers by setting new `components`.

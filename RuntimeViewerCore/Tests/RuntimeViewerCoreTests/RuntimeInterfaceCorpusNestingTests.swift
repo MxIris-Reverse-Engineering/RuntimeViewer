@@ -233,7 +233,7 @@ struct RuntimeInterfaceCorpusNestingTests {
     /// The corpus takes a nested type's own definition out of its parent's
     /// print rather than printing it again; what comes out must be what
     /// printing the type on its own gives, or a search would show other text
-    /// than the content pane — `draft-find-navigator` §1.1, option D.
+    /// than the content pane — `0029-find-navigator` §1.1, option D.
     @Test("every nested type's corpus interface is exactly its interface printed on its own")
     func nestedInterfaceEqualsItsOwnPrint() async throws {
         let engine = try await Self.foundationEngine.value

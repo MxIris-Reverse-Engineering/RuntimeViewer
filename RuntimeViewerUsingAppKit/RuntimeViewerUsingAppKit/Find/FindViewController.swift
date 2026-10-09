@@ -7,7 +7,7 @@ import SFSymbols
 import SnapKit
 
 /// The Find navigator page, laid out to the measurements of Xcode 26's — proposal
-/// `draft-find-navigator` §4.1. Four blocks, top to bottom: the query parameters (three
+/// `0029-find-navigator` §4.1. Four blocks, top to bottom: the query parameters (three
 /// 24-point rows: the mode path and the case toggle, the search field, the scope — and in
 /// Members mode the member kinds), the summary bar (22 points, only while there are results), the
 /// results outline, and the 44-point filter bar at the bottom.

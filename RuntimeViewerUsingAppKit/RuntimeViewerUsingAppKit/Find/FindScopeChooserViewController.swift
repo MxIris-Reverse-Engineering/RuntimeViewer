@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 import SnapKit
 
 /// The Find navigator's scope chooser, the sheet the scope menu's Custom Scopes… opens — proposal
-/// `draft-find-navigator` §9, after Xcode's `IDEFindNavigatorScopeChooserController`: a prompt, a
+/// `0029-find-navigator` §9, after Xcode's `IDEFindNavigatorScopeChooserController`: a prompt, a
 /// filter field, the indexed images — any number of which can be selected, each with where its
 /// corpus stands — and Cancel and OK. OK, or a double-clicked row, makes the selection the scope.
 ///

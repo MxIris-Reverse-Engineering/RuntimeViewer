@@ -3,7 +3,7 @@ import Semantic
 
 /// Where a corpus print's nested types lie, and how a nested type's own
 /// definition is taken out of the print of the object it is nested in rather
-/// than printed a second time — option D of `draft-find-navigator` §1.1.
+/// than printed a second time — option D of `0029-find-navigator` §1.1.
 ///
 /// A type's interface prints its nested types inline, and the corpus holds
 /// every nested type as an entry of its own as well. The Swift printer marks

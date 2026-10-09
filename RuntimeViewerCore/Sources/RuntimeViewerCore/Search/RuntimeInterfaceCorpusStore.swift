@@ -174,7 +174,7 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///
 /// Lives on the `RuntimeEngine` that owns the images, so the text never
 /// crosses a process boundary — searches travel as requests and results.
-/// The proposal `draft-find-navigator` §1 is the contract; the points that
+/// The proposal `0029-find-navigator` §1 is the contract; the points that
 /// matter when changing this:
 ///
 /// - **One build at a time, `.utility` priority.** Printing a large image
@@ -220,7 +220,7 @@ actor RuntimeInterfaceCorpusStore {
     /// How many families of an image are printed at once: four at most, half
     /// the cores on a smaller machine.
     ///
-    /// Measured on a 28-core machine (`draft-find-navigator`, decision log
+    /// Measured on a 28-core machine (`0029-find-navigator`, decision log
     /// 2026-10-01): four prints build SwiftUI's corpus in 6.7 s against 17 s
     /// for one, at a third more processor time; fourteen take 12 s and six
     /// times the processor time of four, contending in MachOSwiftSection's

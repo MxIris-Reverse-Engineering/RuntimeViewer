@@ -8,7 +8,7 @@ import RuntimeViewerCore
 /// The corpus and the pane print the same object, but the corpus prints
 /// with every annotation on while the pane prints with the user's display
 /// options, so the line number alone is not enough. The pane locates the hit
-/// in its own text in this order (proposal `draft-find-navigator` §4):
+/// in its own text in this order (proposal `0029-find-navigator` §4):
 ///
 /// 1. a line equal to `lineText`, the one nearest `lineNumber` when several
 ///    are, with `matchRangeInLine` applied inside it — or, when `lineText` is

@@ -158,7 +158,7 @@ per-outlet driver 作出错误推断。上述三点即为更正。
 `feature/find-navigator` 上按本提案的做法补齐，并把规则连同成本写进 AGENTS.md 那一节（示例代码一并改掉）：
 
 - `ReportCellViewModel`（Report navigator 的行）：icon / title / detail / status / toolTip → 一个 `Appearance`。决策见
-  [draft-report-navigator](draft-report-navigator.md) 的决策日志。
+  [0030-report-navigator](0030-report-navigator.md) 的决策日志。
 - `BatchExportingProgressRowViewModel`（批量导出进度页的行，行数 = 选中的镜像数，Select All 即引擎列出的全部镜像）：
   status / progress / progressText / objectFailures → 一个 `State`，每次状态切换整体赋值一次；cell 去掉了把四条流再合一次的
   `combineLatest`。

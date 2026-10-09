@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 import SFSymbols
 import SnapKit
 
-/// The Report navigator page, laid out after Xcode 26's — proposal `draft-report-navigator`.
+/// The Report navigator page, laid out after Xcode 26's — proposal `0030-report-navigator`.
 /// Like Xcode's: one source-list outline of 24-point rows, the kinds of work as first-level rows,
 /// each piece of work under its kind with a spinner while it runs; and the 44-point bar at the
 /// bottom with an actions button and a filter field whose clock toggle keeps only the work in

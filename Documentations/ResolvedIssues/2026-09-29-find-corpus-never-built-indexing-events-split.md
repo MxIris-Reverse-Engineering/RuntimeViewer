@@ -1,7 +1,7 @@
 # 2026-09-29 Find 搜不到任何结果：后台索引的事件被两个读者瓜分，语料库一个都没建
 
 **调查日期：** 2026-09-29
-**修复落地：** 本日，分支 `feature/find-navigator`，随提案 [draft-find-navigator](../Evolutions/draft-find-navigator.md) 一批
+**修复落地：** 本日，分支 `feature/find-navigator`，随提案 [0029-find-navigator](../Evolutions/0029-find-navigator.md) 一批
 **Severity：** High —— Find 的文本与成员搜索完全不可用：已索引的镜像全部报「not yet searchable」，结果恒为 0，没有任何报错
 **触发场景：** 文档打开后由后台索引（Always Index 条目、启动时的主程序批次）把镜像索引完，再在 Find 里做文本或成员搜索
 

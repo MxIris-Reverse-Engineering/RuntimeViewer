@@ -15,7 +15,7 @@ import RuntimeViewerSettings
 /// The counterpart of `RuntimeBackgroundIndexingCoordinator`, and kept apart
 /// from it on purpose: that one makes images *indexed*, this one makes
 /// indexed images *searchable*, and the two have different queues and
-/// cancellation rules (proposal `draft-find-navigator` §4). The building
+/// cancellation rules (proposal `0029-find-navigator` §4). The building
 /// itself — one image at a time, at utility priority, deduplicated across
 /// documents, cancelled only when its last subscriber leaves — is the
 /// engine's `RuntimeInterfaceCorpusStore`; this coordinator decides *which*

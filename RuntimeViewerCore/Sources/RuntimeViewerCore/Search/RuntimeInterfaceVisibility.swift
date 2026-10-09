@@ -7,7 +7,7 @@ import ObjCDeclarationRendering
 ///
 /// The corpus is printed once with everything any option could show, each
 /// optional piece marked with the option it depends on (proposal
-/// `draft-find-navigator` §1). The option names are the printers' own —
+/// `0029-find-navigator` §1). The option names are the printers' own —
 /// `objc.…` from MachOObjCSection, `swift.…` from MachOSwiftSection — so the
 /// answer comes from their predicates, fed with what RuntimeViewer's options
 /// map to.

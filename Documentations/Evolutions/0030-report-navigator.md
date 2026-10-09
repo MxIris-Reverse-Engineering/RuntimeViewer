@@ -1,9 +1,10 @@
-# Draft - Report navigator：后台索引与语料构建的状态搬进侧栏
+# 0030 - Report navigator：后台索引与语料构建的状态搬进侧栏
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-09-30
-- **最后更新**: 2026-10-05
-- **关联提案**: [draft-find-navigator](draft-find-navigator.md)（语料构建的状态来源）、[0002-background-indexing](0002-background-indexing.md)（被替换的 toolbar 按钮与弹窗）
+- **最后更新**: 2026-10-09
+- **配套文档**: 无（理由见决策日志 2026-10-09 的 Implemented 一行）
+- **关联提案**: [0029-find-navigator](0029-find-navigator.md)（语料构建的状态来源）、[0002-background-indexing](0002-background-indexing.md)（被替换的 toolbar 按钮与弹窗）
 
 ## 摘要
 
@@ -104,3 +105,4 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
 | 2026-10-09 | 双击 "Turned off in Settings" 行打开设置的判断挪进 ViewModel（`Input.doubleClickedNode`，取自 `rx.modelDoubleClicked()`） | PR #121 审查 PR121.64：判断原来写在 VC 的 `@objc` 双击处理器里，VC 只该把事件交给 ViewModel；挪进来之后有了测试 `doubleClickOnTurnedOffRowOpensSettings`。 |
 | 2026-10-09 | 别处发起的语料构建照常显示但不能取消：协调器发布 `followedImagePaths`（本文档持有请求的镜像），不跟踪的行说明写 "Building"、不显示百分比、tooltip 注明 "Requested by another window"；Cancel All 只撤回本文档的，可用与否看 `hasCancellableWork`；还有不跟踪的活跃行时每 2 秒刷新一次 coverage；对端不认识语料命令时，语料类别下显示一行 "Not supported by this source" | PR #121 审查 PR121.55：coverage 快照把别的窗口（或镜像对端）正在建的语料也写进本文档的状态，Report 给所有活跃行都开了 Cancel，可本文档没有请求、撤不回；这些行收不到进度，百分比停住；别处的构建结束后，这一行与分页的活动标记一直亮到 Report 页再次出现。活动标记仍计入别处的构建（方案 A）：语料整个引擎共用，用户想知道的是「还有什么在跑」。定时刷新只在功能打开、文档未关时挂一个，换引擎或关窗即停，走 S3b 的 `refreshCoverage` 合并入口。顺带补上 PR121.37 留给界面的 Report 一半。 |
 | 2026-10-09 | Report 页只在屏上时建树（`Input.isVisible`，由 `rx.viewWillAppear` / `rx.viewWillDisappear` 驱动）；建树挪进非泛型的 `ReportTreeBuilder`，按类别分开重建，索引历史与已结束的语料构建按条目缓存子树 | PR #121 审查 PR121.59：六路输入 `combineLatest` 到一个整树重建上，索引事件与语料进度各按 16 ms 合并，任何一路一动就把 100 条历史连同其下全部镜像行、再加 100 条语料历史重建并重新 configure 一遍；两层侧栏各绑一个 Report 页，看不见的那页照样每秒约 60 次。现在变为可见时 `combineLatest` 回放各路最新值、在页面画出来之前建好树，顺带做原来 `appeared` 做的 `refreshCoverage()`；语料进度只重建它那一行与类别行。历史条目是不变的快照，按标识缓存，快照被替换（PR121.57）时在原来的 cell ViewModel 上重建；代价是结束时间里的 "Today" 过了午夜不会自己变成 "Yesterday"。`ReportTreeBuilderTests` 用 `builtNodeCount` 计数钉住（60 次进度只建 120 个节点；不变的历史只建类别行），`hiddenPageBuildsNoTree` 钉住门控；`rx.viewWillAppear` 在泛型 VC 上可用由 `GenericViewControllerAppearanceEventTests` 证明。 |
+| 2026-10-09 | Implemented，编号 0030：随 PR #121 与 0029 一起合入 `next` | 与 0029 同一个 PR、同一轮审查与验证（审查里归 Report 的条目见 KnownIssues 的 PR121.55、PR121.59 等）。编号排在 0029 之后，因为本提案的语料状态来自 0029。配套文档：不另写——页面照 Xcode 26 的 Report navigator 做，状态来源与取消规则在本提案和 0029 里；没有新术语。 |

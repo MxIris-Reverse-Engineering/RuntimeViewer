@@ -1,6 +1,6 @@
 # PR #121 审查裁决与修复方案 — 2026-10-07
 
-审查对象：PR #121（`feature/find-navigator` → `next`），即 Find navigator 与 Report navigator 两份提案的实现（`draft-find-navigator.md`、`draft-report-navigator.md`）。head `12e1227b`，分叉点 `9ca0d5a6`。
+审查对象：PR #121（`feature/find-navigator` → `next`），即 Find navigator 与 Report navigator 两份提案的实现（`0029-find-navigator.md`、`0030-report-navigator.md`；审查时两份还是草案 `draft-find-navigator.md`、`draft-report-navigator.md`，合入 `next` 时编号，下文的行号指草案）。head `12e1227b`，分叉点 `9ca0d5a6`。
 
 **经过**
 1. `/code-review max`：从 16 个角度找问题，每条候选再由一个独立的验证者投票。确认 54 条缺陷，另有 8 条性能问题和约 15 条清理项。
@@ -2313,7 +2313,7 @@ func regularExpressionAnchorsMatchLines() throws {
 - **审查编号**：C37
 - **状态**：已修复。按文档用命令验证代替测试：RuntimeViewerCore 移除后仍能编译，`git grep -n CorpusBuildTimingProbe` 只剩提案里的历史引用与本文件
 
-**问题**：`RuntimeViewerCore/Package.swift:261-268` 声明了可执行目标 `CorpusBuildTimingProbe`，源码在 `Sources/CorpusBuildTimingProbe/`，共 390 行，来自 d1c3cb57。这是为 Find 语料构建计时用的探针，提交说明里写着「Not to be merged: drop this commit when the branch is delivered」，提案 `draft-find-navigator.md:94` 也写了「不合入」。没有产品依赖它，App 不受影响；代价只是每次 `swift build` / `swift test` RuntimeViewerCore 都要多编它，Xcode 里也多出一个 scheme。
+**问题**：`RuntimeViewerCore/Package.swift:261-268` 声明了可执行目标 `CorpusBuildTimingProbe`，源码在 `Sources/CorpusBuildTimingProbe/`，共 390 行，来自 d1c3cb57。这是为 Find 语料构建计时用的探针，提交说明里写着「Not to be merged: drop this commit when the branch is delivered」，提案 `0029-find-navigator.md:94` 也写了「不合入」。没有产品依赖它，App 不受影响；代价只是每次 `swift build` / `swift test` RuntimeViewerCore 都要多编它，Xcode 里也多出一个 scheme。
 
 **四问**：
 - **复现**：在 PR 分支上执行 `git grep -n CorpusBuildTimingProbe RuntimeViewerCore/Package.swift`，能命中这个 target。
@@ -3017,7 +3017,7 @@ func defaultImplementationsPrintedExactlyOnce() async throws {
   - **登记表由连接的主人持有**：`RuntimeEngine` 的 server 角色与 `RuntimeEngineConnectionServer` 各存一个，`registerSharedHandlers` 收它作参数（缺省时每次调用新建一个）。草案在每次注册时新建，重连后重新注册处理器、proxy 换客户端时，在途请求会登记在旧表里，取消就到不了。
   - **同类一并做了**：`TypeRelationshipsRequest` 改成不发推送（`Progress = RuntimeEngineEmpty`）的进度请求并开启取消；服务端遍历本身何时检查取消是 PR121.67（批次 S5a）的事。
   - socket 的复现用 `RuntimeDirectTCPServerConnection`（端口 0）而不是草案说的 `.localSocket`：后者的端口由标识符哈希而来，并行测试会撞端口。
-  - 文档：`CommunicationAndEngineArchitecture.md` 新增 §4.5（取消协议）并在 §4.4 记下信封字段这一例；`draft-find-navigator.md` 决策日志一行。
+  - 文档：`CommunicationAndEngineArchitecture.md` 新增 §4.5（取消协议）并在 §4.4 记下信封字段这一例；`0029-find-navigator.md` 决策日志一行。
 
 **问题**：调用方取消一个转发出去的请求时，取消既到不了服务端，也不会让调用方提前返回。在 XPC 上，SwiftyXPC 的 `sendMessage` 是一个不响应取消的 continuation，服务端为每条消息开一个没有句柄的 `Task`。在 socket 上，`RuntimeMessageChannel.sendRequest` 也一样不响应取消。引擎层的 `dispatch(_:onProgress:)` 也没有 `withTaskCancellationHandler`。后果有三：Find 换了查询后，旧搜索的批次照样送达；Report navigator 点 Cancel 后，服务端照样在构建；关窗口、换引擎后，服务进程或被注入的进程还在为没人要的结果干活。
 
@@ -3560,7 +3560,7 @@ func rawAndCanonicalPathsAreOneImage() async throws {
   - 会话在每次文本 / 成员搜索结束时调用，补搜也算（补搜的摘要只覆盖它读的镜像）；关系搜索与失败的搜索不调。
   - 草案只给作用域那一支写了测试；「全部镜像」那一支另加一条，用 XPC 装置在服务进程那边直接索引镜像，模拟「别的进程索引的镜像」。
 - **不修**（AL5 的其余部分，已定）：
-  - 靠轮询 coverage 学习其他文档的构建，是提案认可的设计（`draft-find-navigator.md` 决策日志 2026-10-01）。改成由 store 主动推送事件需要一条新命令，还要为旧对端另做兜底，收益抵不过成本；需要准确时刻的地方——搜索结束、Report navigator 出现、本文档的构建完成——都已经有刷新或对账。
+  - 靠轮询 coverage 学习其他文档的构建，是提案认可的设计（`0029-find-navigator.md` 决策日志 2026-10-01）。改成由 store 主动推送事件需要一条新命令，还要为旧对端另做兜底，收益抵不过成本；需要准确时刻的地方——搜索结束、Report navigator 出现、本文档的构建完成——都已经有刷新或对账。
   - 「部分放得下时全部记为已列过」与「最旧的被挤出」的语义一致，不改。
 
 **问题**：本条包含两个独立的问题。
@@ -3584,7 +3584,7 @@ func rawAndCanonicalPathsAreOneImage() async throws {
   - (b) 只影响显示，但它让 e7186ae1 在满额时失效，建议顺手修。
 - **历史**：
   - e7186ae1 加上了「已列过」的记录，但当时没有考虑满额的情况。
-  - 「历史靠轮询 coverage 学习」是提案认可的设计，见 `draft-find-navigator.md` 决策日志 2026-10-01。
+  - 「历史靠轮询 coverage 学习」是提案认可的设计，见 `0029-find-navigator.md` 决策日志 2026-10-01。
 
 **改法**：
 - **(a) 新增 `reconcile(unbuiltIndexedImagePaths:scopeImagePaths:)`**，由 FindSession 在每次搜索结束时调用。搜索结束正是要紧的时刻：搜索刚刚把「哪些镜像没看到」告诉了用户。
@@ -3921,7 +3921,7 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 - **复现**：搜一次 Text，再把模式改成 Members（不按回车），然后改任意一项 Generation Option，列表会变成成员结果。改成 Ancestor Types 再改选项，文本结果不会更新。
 - **基线**：本 PR 新引入（4a0f1f5f）。
 - **影响**：要先「编辑但不提交」再改选项才会触发，频率低，但结果与提案描述相反。建议修。
-- **历史**：新代码。提案写的是「重跑正在显示的文本 / 成员搜索」（`draft-find-navigator.md:486`，决策日志在 `:708`），实现偏离了提案；现有测试没有覆盖「编辑后不提交」这种状态。
+- **历史**：新代码。提案写的是「重跑正在显示的文本 / 成员搜索」（`0029-find-navigator.md:486`，决策日志在 `:708`），实现偏离了提案；现有测试没有覆盖「编辑后不提交」这种状态。
 
 **改法**：
 - **重跑对象改成屏上的搜索**：重跑用 `shownSearch` 里那次搜索的查询，以及它当时解析好的范围；`.currentImage` 不按此刻的侧栏重新解析，免得改个选项就悄悄换了被搜索的镜像。重跑时不改写 `self.query`，所以编辑中的模式、大小写和范围保持原样。

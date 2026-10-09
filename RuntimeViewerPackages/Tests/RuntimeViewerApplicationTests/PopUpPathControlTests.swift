@@ -6,7 +6,7 @@ import Testing
 /// `PopUpPathControl`, Xcode's `DVTPathControl` rebuilt: where the components go, how a squeezed path
 /// gives way, what the pointer highlights, the menu a component opens and what choosing from it
 /// sends, and keyboard and accessibility access. Every expected measurement is DVTKit's, read out
-/// of Xcode 27.0 — proposal `draft-find-navigator` §4.2.
+/// of Xcode 27.0 — proposal `0029-find-navigator` §4.2.
 ///
 /// Component frames are read the way VoiceOver reads them, from the accessibility elements; the
 /// highlight from what the control draws. Menus go through the control's `menuPresenter`, since a

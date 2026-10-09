@@ -90,7 +90,7 @@ enum FindResultsOutline {
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 /// How a Find result the user chose is opened, read off the event that chose it.
 public enum FindResultActivation {
-    /// With ⌥ held the result opens in a new tab — proposal `draft-find-navigator` §4 — otherwise
+    /// With ⌥ held the result opens in a new tab — proposal `0029-find-navigator` §4 — otherwise
     /// in the current one.
     public static func opensInNewTab(for triggeringEvent: NSEvent?) -> Bool {
         triggeringEvent?.modifierFlags.contains(.option) == true
