@@ -6988,7 +6988,7 @@ func partialFilterSharesTheAppearance() throws {
 
 - **严重度**：Cleanup
 - **审查编号**：CV6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯替换，行为不变：`searchField` 换成 `SearchField`、`memberKindPopUpButton` 换成 `PopUpButton`、三条分隔线换成 `Box`；`FindScopeButton` 改继承 `PopUpButton`，原来的 `commonInit()` 挪进 `setup()`，两个初始化器的重写与无参便利初始化器删去（`titleItem` 是带初值的存储属性，在 `super.init` 调用 `setup()` 之前已初始化）。按文档保留原生类的两处：`caseSensitiveButton`（要 `.smallSquare` + `.pushOnPushOff`，`PushButton` 固定 `.push`）与 `searchProgressIndicator`（UIFoundation 的 `ProgressIndicator` 只是过滤框的私有件）；两个只承载布局的 `NSView` 也保留。App target 没有单元测试，以 App 编译验证；要在真实窗口里看一眼模式路径、范围按钮、成员种类弹出菜单与三条分隔线的外观与改动前一致。同类：`ReportViewController` / `ReportCellView` 的那几处归 PR121.64（S7）
 
 **问题**：AGENTS.md 的「UI Component Selection」要求先用项目的封装类型，只有封装做不到时才回退到原生 AppKit 类。`FindViewController.swift` 里有五处可以用封装却用了原生类：`:31` 的 `NSSearchField`、`:37` 的 `NSPopUpButton`，以及 `:45`、`:53`、`:57` 的三个 `NSBox`。UIFoundation 有对应的 `SearchField`、`PopUpButton`、`Box`；同一个 PR 里的 Scope chooser 已经在用 `SearchField`。
 

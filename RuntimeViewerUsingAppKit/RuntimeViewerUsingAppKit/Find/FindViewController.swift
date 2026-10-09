@@ -30,13 +30,13 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let caseSensitiveButton = NSButton()
 
-    private let searchField = NSSearchField()
+    private let searchField = SearchField()
 
     private let searchProgressIndicator = NSProgressIndicator()
 
     private let scopeButton = FindScopeButton()
 
-    private let memberKindPopUpButton = NSPopUpButton()
+    private let memberKindPopUpButton = PopUpButton()
 
     // MARK: - Summary Bar
 
@@ -44,7 +44,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let summaryLabel = Label()
 
-    private let summarySeparatorView = NSBox()
+    private let summarySeparatorView = Box()
 
     private var summaryHeightConstraint: Constraint?
 
@@ -52,7 +52,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
 
-    private let resultsTopSeparatorView = NSBox()
+    private let resultsTopSeparatorView = Box()
 
     /// The rows' context menu, rebuilt from the clicked row each time it opens. A click on empty
     /// space, or on a row that goes nowhere, gets no items, so AppKit shows no menu at all.
@@ -60,7 +60,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     // MARK: - Filter Bar
 
-    private let filterSeparatorView = NSBox()
+    private let filterSeparatorView = Box()
 
     private let filterSearchField = FilterSearchField()
 
@@ -518,27 +518,16 @@ private struct FindResultMenuItem: RxMenuItemRepresentable {
 ///
 /// Declared outside the generic view controller: a view nested in a generic class is generic
 /// itself.
-private final class FindScopeButton: NSPopUpButton {
+private final class FindScopeButton: PopUpButton {
     /// The menu to show the next time it opens.
     var menuItems: [FindScopeMenuItem] = []
 
+    /// Initialised before `super.init`, so `setup()` — which the superclass's initialisers
+    /// call — can hand it to the cell.
     private let titleItem = NSMenuItem()
 
-    convenience init() {
-        self.init(frame: .zero, pullsDown: false)
-    }
-
-    override init(frame buttonFrame: NSRect, pullsDown flag: Bool) {
-        super.init(frame: buttonFrame, pullsDown: flag)
-        commonInit()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        commonInit()
-    }
-
-    private func commonInit() {
+    override func setup() {
+        super.setup()
         (cell as? NSPopUpButtonCell)?.do {
             $0.usesItemFromMenu = false
             $0.menuItem = titleItem
