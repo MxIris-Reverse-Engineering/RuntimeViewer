@@ -4680,6 +4680,7 @@ func coverageRefreshesCoalesce() async throws {
   - 比方案多一处：中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，通道把它的原文回给调用方（`RuntimeMessageChannel.replyMessage(for:)`），而不是 `"\(error)"`。否则经过一台新版中转（镜像链），这段文字会被包上一层类型描述，`isUnknownCommand` 认不出，正是问题描述里「经镜像链路转发到这样的对端」那种情形。
   - **界面部分待办**：`isCorpusUnsupportedByEngine` 已经发布，但 Report navigator 显示一条说明（界面批次，PR121.55 一带）、Find 摘要改用「此设备上的 RuntimeViewer 版本不支持 Find」这类文字（模块 D1）都还没做；搜索命令遇到旧对端时 FindSession 换一句说明的同类也归 D1。
   - 经 Mach service 的旧版注入 payload 对未知命令不回这段文字，这里认不出，见 PR121.73。
+  - **Report 一半（批次 S7，随 PR121.55 的提交）**：协调器的 `isCorpusUnsupportedByEngine` 为真、语料功能打开时，Report 的 Searchable Interfaces 类别下显示一行 "Not supported by this source"（`ReportNodeIdentifier.unsupportedByEngine`，tooltip 说明对端的 RuntimeViewer 比可搜索接口早、要在那边更新），测试 `ReportViewModelTests.corpusUnsupportedByEngineRow`。Find 摘要那一半归批次 S6。
 
 **问题**：
 - 对端是不认识语料命令的旧版本时，例如还在跑 v3.0.0-beta.6 的 iPhone、iPad 或模拟器 App，或经镜像链路转发到这样的对端，每个构建请求都会以「No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.buildInterfaceCorpus」失败。
@@ -7640,7 +7641,11 @@ func filteringIsAnnouncedBeforeTheNarrowedTree() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C18（A4-3、A3-6 的显示一半，属于上次第 9 条的一部分）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`ReportViewModelTests.unfollowedBuildIsNotCancellable`（向协调器合并一份「别处正在建 AppKit」的快照）。修前红：该行 `isCancellable` 为真，说明是 "10% · 10 of 100"，测试引擎上并没有这个构建，可 6 秒内这一行都等不到消失（没有任何刷新；测试在这里超时，没走到分页标记那一步）；修后行不可取消、说明是 "Building"、`hasCancellableWork` 为假，下一次定时刷新后行与标记都消失
+- **落地与偏离**：
+  - 照方案：`FindCorpusCoordinator.followedImagePaths`（在 `buildRequests` 的 `didSet` 里同步）、`configure(_:forCorpusOf:state:isFollowed:)`、Cancel All 只撤回本文档跟踪的、`hasWorkInProgress` 改为 `hasCancellableWork`、活动标记仍计入别处的构建（方案 A）。
+  - 定时刷新与草案的出入：S3b 已经把 `coverageRefreshTask` 用作「同一时间只一个刷新」的合并任务，这里另起 `unfollowedBuildRefreshTask`，到点调 `refreshCoverage()`（走合并入口）；只在功能打开、文档未关时挂，`stopPumps`（换引擎、关窗）与 `deinit` 取消；不计入测试接缝 `hasWorkUnderWay`（它是周期轮询，不是协调器自己的在途工作）。
+  - 顺带补上 PR121.37 留给界面的 Report 一半：引擎不认识语料命令时，语料类别下显示一行 "Not supported by this source"（`ReportNodeIdentifier.unsupportedByEngine`，tooltip 说明对端的 RuntimeViewer 太旧、要在那边更新），功能关闭时只显示 "Turned off in Settings"。测试 `ReportViewModelTests.corpusUnsupportedByEngineRow`（对端是一条什么命令都不服务的 TCP 连接）；这一行是新增的界面，修前无从写成红灯。Find 摘要那一半归批次 S6。
 
 **问题**：
 - `FindCorpusCoordinator.mergeCoverage` 会把引擎快照里「本文档没请求过」的镜像也写进 `buildStatesByImagePath`（FindCorpusCoordinator.swift:340-347），也就是别的窗口、或镜像对端正在建的语料。

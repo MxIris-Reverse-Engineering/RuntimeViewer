@@ -48,7 +48,7 @@ struct ImageDisplayNameTests {
         let itemRow = ReportCellViewModel(identifier: .indexingItem(batchID: RuntimeIndexingBatchID(), imagePath: Self.imagePath))
         ReportOutline.configure(itemRow, for: RuntimeIndexingTaskItem(id: Self.imagePath, resolvedPath: Self.imagePath, state: .completed, hasPriorityBoost: false))
         let buildRow = ReportCellViewModel(identifier: .corpusBuild(imagePath: Self.imagePath))
-        ReportOutline.configure(buildRow, forCorpusOf: Self.imagePath, state: .pending)
+        ReportOutline.configure(buildRow, forCorpusOf: Self.imagePath, state: .pending, isFollowed: true)
         let finishedBuild = FindCorpusFinishedBuild(imagePath: Self.imagePath, outcome: .cancelled, finishedAt: nil)
         let finishedBuildRow = ReportCellViewModel(identifier: .finishedCorpusBuild(finishedBuild.id))
         ReportOutline.configure(finishedBuildRow, for: finishedBuild)

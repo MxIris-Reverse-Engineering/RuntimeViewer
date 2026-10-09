@@ -49,7 +49,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         filterSearchField
     }
 
-    private var hasWorkInProgress = false
+    private var hasCancellableWork = false
 
     private var hasHistory = false
 
@@ -226,8 +226,9 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         }
         .disposed(by: rx.disposeBag)
 
-        output.hasWorkInProgress.driveOnNext { [weak self] hasWorkInProgress in
-            self?.hasWorkInProgress = hasWorkInProgress
+        output.hasCancellableWork.driveOnNext { [weak self] hasCancellableWork in
+            guard let self else { return }
+            self.hasCancellableWork = hasCancellableWork
         }
         .disposed(by: rx.disposeBag)
 
@@ -242,7 +243,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     @objc private func actionsButtonClicked(_ sender: NSButton) {
         let menu = NSMenu().then { menu in
-            menu.addItem(withTitle: "Cancel All", action: hasWorkInProgress ? #selector(cancelAllMenuItemAction(_:)) : nil, keyEquivalent: "").then {
+            menu.addItem(withTitle: "Cancel All", action: hasCancellableWork ? #selector(cancelAllMenuItemAction(_:)) : nil, keyEquivalent: "").then {
                 $0.target = self
                 $0.image = SFSymbols(systemName: .xmarkCircle).nsImage
             }

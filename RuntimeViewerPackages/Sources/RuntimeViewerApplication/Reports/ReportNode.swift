@@ -19,6 +19,9 @@ public enum ReportNodeIdentifier: Hashable, Sendable {
     case category(ReportCategory)
     /// The single row a category shows while its feature is turned off in Settings.
     case turnedOff(ReportCategory)
+    /// The row a category shows while the engine's process cannot do its kind of work: a peer
+    /// older than searchable interfaces.
+    case unsupportedByEngine(ReportCategory)
     case indexingBatch(RuntimeIndexingBatchID)
     case indexingItem(batchID: RuntimeIndexingBatchID, imagePath: String)
     /// A corpus queued or being printed, by image.

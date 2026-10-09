@@ -57,6 +57,11 @@ public final class FindCorpusCoordinator {
     /// rebuilt.
     static let transformerRebuildDelayNanoseconds: UInt64 = 2_000_000_000
 
+    /// How often the engine is asked again while a build this document did not
+    /// ask for is under way: nothing else tells this document how it goes, or
+    /// that it ended.
+    static let unfollowedBuildCoverageRefreshIntervalNanoseconds: UInt64 = 2_000_000_000
+
     /// A build request this document holds open — one subscription on the
     /// store's build of the image. The identifier tells a request apart from
     /// the one that replaced it after a withdrawal.
@@ -78,7 +83,14 @@ public final class FindCorpusCoordinator {
 
     /// The build requests this document holds open, by image path.
     /// Cancelling one withdraws only this document's interest.
-    private var buildRequests: [String: BuildRequest] = [:]
+    private var buildRequests: [String: BuildRequest] = [:] {
+        didSet {
+            let imagePaths = Set(buildRequests.keys)
+            if imagePaths != followedImagePaths {
+                followedImagePaths = imagePaths
+            }
+        }
+    }
 
     private var nextBuildRequestIdentifier: UInt64 = 0
 
@@ -94,6 +106,9 @@ public final class FindCorpusCoordinator {
 
     /// A refresh was asked for while one ran; it runs once that one is done.
     private var isCoverageRefreshPending = false
+
+    /// The refresh `scheduleCoverageRefreshWhileOthersBuild()` has waiting.
+    private var unfollowedBuildRefreshTask: Task<Void, Never>?
 
     /// Round trips `refreshCoverage()` has made. Test seam.
     private(set) var coverageFetchCount = 0
@@ -153,6 +168,14 @@ public final class FindCorpusCoordinator {
     @RxObserved
     public private(set) var finishedBuilds: [FindCorpusFinishedBuild] = []
 
+    /// The images this document holds a build request for: the corpus rows the
+    /// Report navigator can cancel. Every other active state came from a
+    /// coverage snapshot — another document's build, or one the engine runs for
+    /// a peer — and this document can neither follow its progress nor withdraw
+    /// it.
+    @RxObserved
+    public private(set) var followedImagePaths: Set<String> = []
+
     /// Every image that has had a place in `finishedBuilds`, kept through
     /// `clearFinishedBuilds()`: a coverage snapshot lists only corpora this
     /// document has never listed, or a cleared entry would come back with the
@@ -197,6 +220,7 @@ public final class FindCorpusCoordinator {
     deinit {
         transformerRebuildTask?.cancel()
         coverageRefreshTask?.cancel()
+        unfollowedBuildRefreshTask?.cancel()
         for request in buildRequests.values {
             request.task.cancel()
         }
@@ -363,6 +387,30 @@ public final class FindCorpusCoordinator {
         coverageRefreshTask?.cancel()
         coverageRefreshTask = nil
         isCoverageRefreshPending = false
+        unfollowedBuildRefreshTask?.cancel()
+        unfollowedBuildRefreshTask = nil
+    }
+
+    /// While a build this document does not follow is under way, its row and
+    /// the Report navigator's activity mark show the engine's last word on it,
+    /// which nothing else refreshes. Asks again every two seconds until no such
+    /// build is left; an engine swap or the document closing stops it.
+    private func scheduleCoverageRefreshWhileOthersBuild() {
+        let hasUnfollowedActiveBuild = buildStatesByImagePath.contains { imagePath, state in
+            state.isActive && buildRequests[imagePath] == nil
+        }
+        guard hasUnfollowedActiveBuild, isEnabled, !isClosed else {
+            unfollowedBuildRefreshTask?.cancel()
+            unfollowedBuildRefreshTask = nil
+            return
+        }
+        guard unfollowedBuildRefreshTask == nil else { return }
+        unfollowedBuildRefreshTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.unfollowedBuildCoverageRefreshIntervalNanoseconds)
+            guard let self, !Task.isCancelled else { return }
+            self.unfollowedBuildRefreshTask = nil
+            self.refreshCoverage()
+        }
     }
 
     /// Squares this document's states with what a finished search could not
@@ -515,6 +563,7 @@ public final class FindCorpusCoordinator {
         if states != buildStatesByImagePath {
             buildStatesByImagePath = states
         }
+        scheduleCoverageRefreshWhileOthersBuild()
 
         imagePathsListedInHistory.formIntersection(coverage.statesByImagePath.keys)
         let recordedImagePaths = Set(finishedBuilds.map(\.imagePath))

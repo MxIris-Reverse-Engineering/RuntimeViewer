@@ -1,6 +1,7 @@
 import Dependencies
 import Foundation
 import RuntimeViewerArchitectures
+import RuntimeViewerCommunication
 import RuntimeViewerCore
 import RuntimeViewerUI
 import Testing
@@ -205,6 +206,78 @@ struct ReportViewModelTests {
         #expect(appRouter.triggeredRoutes.count == 1)
         await engine.stop()
     }
+
+    /// A coverage snapshot brings in the corpus builds other windows asked for. Their rows offered
+    /// Cancel, which did nothing for a build this document holds no request for, showed a
+    /// percentage that never moved, and stayed — with the tab's activity mark — until this page
+    /// was shown again, since nothing refreshed the coverage while they ran (PR121.55).
+    @Test("a corpus build another window asked for shows without Cancel or a frozen percentage, and goes once the engine stops reporting it")
+    func unfollowedBuildIsNotCancellable() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.unfollowedBuild")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let page = environment.make { Page(documentState: environment.documentState) }
+        defer { withExtendedLifetime(page) {} }
+        let coordinator = environment.documentState.findCorpusCoordinator
+        // What the coordinator does as it starts has to be over first, or its own coverage answer
+        // lands on the state set below.
+        try await waitUntil(timeout: 20) { !coordinator.hasWorkUnderWay }
+        let imagePath = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
+        let buildIdentifier = ReportNodeIdentifier.corpusBuild(imagePath: imagePath)
+
+        // What a coverage snapshot says while another window's build of the image runs.
+        coordinator.mergeCoverage(RuntimeInterfaceCorpusCoverage(
+            statesByImagePath: [imagePath: .building(RuntimeInterfaceCorpusBuildProgress(built: 10, total: 100))],
+            residentByteCount: 0,
+            residentByteLimit: 0
+        ))
+
+        let nodes = try await nextValue(from: page.output.nodes) { Self.node(buildIdentifier, in: $0) != nil }
+        let row = try #require(Self.node(buildIdentifier, in: nodes))
+        #expect(!row.cellViewModel.isCancellable, "this window cannot withdraw another window's build")
+        #expect(row.cellViewModel.appearance.detail == "Building")
+        #expect(try await nextValue(from: page.output.hasCancellableWork) == false, "Cancel All offers to cancel a build this window cannot withdraw")
+
+        // This engine runs no such build, so a refresh clears the row, and the tab's mark.
+        _ = try await nextValue(from: page.output.nodes, timeout: 6) { Self.node(buildIdentifier, in: $0) == nil }
+        _ = try await nextValue(from: environment.documentState.reportActivity, timeout: 6) { !$0 }
+        await engine.stop()
+    }
+
+    #if canImport(Network)
+    /// A peer older than searchable interfaces turns corpora off for its engine (PR121.37's
+    /// coordinator half); the Report navigator says so in one row instead of showing nothing.
+    @Test("an engine whose process predates searchable interfaces gets one row saying so")
+    func corpusUnsupportedByEngineRow() async throws {
+        // A connection that serves no command at all: what a peer older than the Find navigator
+        // is, as far as corpus commands go.
+        let olderPeer = try await RuntimeCommunicator().connect(
+            to: .directTCP(name: "ReportViewModelTests.olderPeer", host: nil, port: 0, role: .server),
+            waitForConnection: false
+        )
+        defer { olderPeer.stop() }
+        let port = try #require(olderPeer.connectionInfo?.port)
+        let engine = RuntimeEngine(
+            source: .directTCP(name: "ReportViewModelTests.olderPeer.client", host: "127.0.0.1", port: port, role: .client),
+            engineID: "ReportViewModelTests.olderPeer.client"
+        )
+        try await engine.connect()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let page = environment.make { Page(documentState: environment.documentState) }
+        defer { withExtendedLifetime(page) {} }
+
+        environment.documentState.findCorpusCoordinator.requestBuild(of: TestImages.libobjc)
+
+        let nodes = try await nextValue(from: page.output.nodes, timeout: 10) { Self.node(.unsupportedByEngine(.searchableInterfaces), in: $0) != nil }
+        let corpusCategory = try #require(Self.node(.category(.searchableInterfaces), in: nodes))
+        #expect(corpusCategory.children.map(\.identifier) == [.unsupportedByEngine(.searchableInterfaces)])
+        let row = try #require(corpusCategory.children.first)
+        #expect(row.cellViewModel.appearance.title == "Not supported by this source")
+        #expect(!row.cellViewModel.isCancellable)
+        await engine.stop()
+    }
+    #endif
 
     // MARK: - The filter bar
 

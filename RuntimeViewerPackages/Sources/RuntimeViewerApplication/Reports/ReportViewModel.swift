@@ -47,8 +47,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         public let filteringChanged: Signal<Bool>
         /// Nothing at all to report — no batch, no build, no feature turned off.
         public let isEmpty: Driver<Bool>
-        /// Some work has not ended yet, so Cancel All has something to cancel.
-        public let hasWorkInProgress: Driver<Bool>
+        /// Some row can be withdrawn from this page, so Cancel All has something to cancel. A
+        /// corpus build another window asked for is in progress, but not this page's to cancel.
+        public let hasCancellableWork: Driver<Bool>
         public let hasHistory: Driver<Bool>
     }
 
@@ -92,19 +93,23 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             indexingCoordinator.batchesObservable,
             indexingCoordinator.historyObservable,
             corpusCoordinator.$buildStatesByImagePath.asObservable(),
+            corpusCoordinator.$followedImagePaths.asObservable(),
             corpusCoordinator.$finishedBuilds.asObservable(),
+            corpusCoordinator.$isCorpusUnsupportedByEngine.asObservable(),
             $isIndexingEnabled.asObservable(),
             $isCorpusEnabled.asObservable()
         )
         .observe(on: MainScheduler.instance)
-        .subscribeOnNext { [weak self] batches, history, corpusStates, finishedBuilds, isIndexingEnabled, isCorpusEnabled in
+        .subscribeOnNext { [weak self] batches, history, corpusStates, followedImagePaths, finishedBuilds, isCorpusUnsupportedByEngine, isIndexingEnabled, isCorpusEnabled in
             guard let self else { return }
             MainActor.assumeIsolated {
                 self.allNodes = self.makeNodes(
                     batches: batches,
                     history: history,
                     corpusStates: corpusStates,
+                    followedImagePaths: followedImagePaths,
                     finishedBuilds: finishedBuilds,
+                    isCorpusUnsupportedByEngine: isCorpusUnsupportedByEngine,
                     isIndexingEnabled: isIndexingEnabled,
                     isCorpusEnabled: isCorpusEnabled
                 )
@@ -123,7 +128,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 indexingCoordinator.cancelBatch(batchID)
             case .corpusBuild(let imagePath):
                 corpusCoordinator.cancelBuild(of: imagePath)
-            case .category, .turnedOff, .indexingItem, .finishedCorpusBuild:
+            case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild:
                 break
             }
         }
@@ -131,7 +136,8 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
         input.cancelAll.emitOnNext {
             indexingCoordinator.cancelAllBatches()
-            for (imagePath, state) in corpusCoordinator.buildStatesByImagePath where state.isActive {
+            // Only what this document asked for; another window's build is not this page's to stop.
+            for imagePath in corpusCoordinator.followedImagePaths {
                 corpusCoordinator.cancelBuild(of: imagePath)
             }
         }
@@ -193,7 +199,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             nodesToExpand: nodesToExpand,
             filteringChanged: filteringChangedRelay.asSignal(),
             isEmpty: $allNodes.asDriver().map(\.isEmpty).distinctUntilChanged(),
-            hasWorkInProgress: $allNodes.asDriver().map { nodes in nodes.contains(where: ReportOutline.isInProgress) }.distinctUntilChanged(),
+            hasCancellableWork: $allNodes.asDriver().map { nodes in nodes.contains(where: ReportOutline.isCancellable) }.distinctUntilChanged(),
             hasHistory: Driver.combineLatest(indexingCoordinator.historyObservable.asDriver(onErrorJustReturn: []), corpusCoordinator.$finishedBuilds.asDriver()) { history, finishedBuilds in
                 !history.isEmpty || !finishedBuilds.isEmpty
             }
@@ -217,7 +223,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         batches: [RuntimeIndexingBatch],
         history: [RuntimeIndexingBatch],
         corpusStates: [String: RuntimeInterfaceCorpusBuildState],
+        followedImagePaths: Set<String>,
         finishedBuilds: [FindCorpusFinishedBuild],
+        isCorpusUnsupportedByEngine: Bool,
         isIndexingEnabled: Bool,
         isCorpusEnabled: Bool
     ) -> [ReportNode] {
@@ -246,6 +254,8 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         var corpusChildren: [ReportNode] = []
         if !isCorpusEnabled {
             corpusChildren.append(node(.turnedOff(.searchableInterfaces)) { $0.update(icon: ReportOutline.turnedOffIcon, title: "Turned off in Settings") })
+        } else if isCorpusUnsupportedByEngine {
+            corpusChildren.append(node(.unsupportedByEngine(.searchableInterfaces)) { ReportOutline.configureUnsupportedCorpusRow($0) })
         }
         // The image being printed first, then the waiting ones by name.
         let activeBuilds = corpusStates.filter(\.value.isActive).sorted { leftEntry, rightEntry in
@@ -257,7 +267,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             return FindScope.imageName(of: leftEntry.key) < FindScope.imageName(of: rightEntry.key)
         }
         for (imagePath, state) in activeBuilds {
-            corpusChildren.append(node(.corpusBuild(imagePath: imagePath)) { ReportOutline.configure($0, forCorpusOf: imagePath, state: state) })
+            corpusChildren.append(node(.corpusBuild(imagePath: imagePath)) {
+                ReportOutline.configure($0, forCorpusOf: imagePath, state: state, isFollowed: followedImagePaths.contains(imagePath))
+            })
         }
         for finishedBuild in finishedBuilds {
             corpusChildren.append(node(.finishedCorpusBuild(finishedBuild.id)) { ReportOutline.configure($0, for: finishedBuild) })
@@ -383,18 +395,37 @@ enum ReportOutline {
         cellViewModel.update(icon: icon(forImagePath: item.id), title: FindScope.imageName(of: item.id), detail: detail, status: status, toolTip: item.id, isInProgress: !item.state.isTerminal)
     }
 
-    static func configure(_ cellViewModel: ReportCellViewModel, forCorpusOf imagePath: String, state: RuntimeInterfaceCorpusBuildState) {
+    /// `isFollowed`: this document asked for the build, so its progress reaches the row and Cancel
+    /// withdraws it. Any other build is the engine's last snapshot of it, for a window or a peer
+    /// this page cannot speak for: its numbers would sit still, and Cancel would do nothing.
+    static func configure(_ cellViewModel: ReportCellViewModel, forCorpusOf imagePath: String, state: RuntimeInterfaceCorpusBuildState, isFollowed: Bool) {
         let detail: String
         let status: ReportRowStatus
         switch state {
         case .building(let progress):
-            detail = progress.total > 0 ? "\(progress.built * 100 / progress.total)% · \(progress.built) of \(progress.total)" : "Starting"
+            if isFollowed {
+                detail = progress.total > 0 ? "\(progress.built * 100 / progress.total)% · \(progress.built) of \(progress.total)" : "Starting"
+            } else {
+                detail = "Building"
+            }
             status = .running
         case .pending, .built, .failed:
             detail = "Waiting"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: imagePath, isCancellable: true, isInProgress: true)
+        let toolTip = isFollowed ? imagePath : "\(imagePath)\nRequested by another window"
+        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: toolTip, isCancellable: isFollowed, isInProgress: true)
+    }
+
+    /// The Searchable Interfaces category's one row while the engine's process does not know the
+    /// corpus commands — a RuntimeViewer older than them on the other end — instead of a failed
+    /// build per image (PR121.37).
+    static func configureUnsupportedCorpusRow(_ cellViewModel: ReportCellViewModel) {
+        cellViewModel.update(
+            icon: unsupportedIcon,
+            title: "Not supported by this source",
+            toolTip: "The RuntimeViewer this source runs is older than searchable interfaces. Update it there to search this source's images."
+        )
     }
 
     static func configure(_ cellViewModel: ReportCellViewModel, for finishedBuild: FindCorpusFinishedBuild) {
@@ -475,6 +506,10 @@ enum ReportOutline {
         node.cellViewModel.isInProgress || node.children.contains(where: isInProgress)
     }
 
+    static func isCancellable(_ node: ReportNode) -> Bool {
+        node.cellViewModel.isCancellable || node.children.contains(where: isCancellable)
+    }
+
     static func isBuilding(_ state: RuntimeInterfaceCorpusBuildState) -> Bool {
         if case .building = state { return true }
         return false
@@ -487,6 +522,8 @@ enum ReportOutline {
     static let corpusIcon: NSUIImage = SFSymbols(systemName: .magnifyingglass).nsuiImgae
 
     static let turnedOffIcon: NSUIImage = SFSymbols(systemName: .powerCircle).nsuiImgae
+
+    static let unsupportedIcon: NSUIImage = SFSymbols(systemName: .exclamationmarkCircle).nsuiImgae
 
     static func icon(forImagePath imagePath: String) -> NSUIImage {
         imagePath.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon
