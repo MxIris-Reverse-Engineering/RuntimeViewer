@@ -1,3 +1,4 @@
+import Dependencies
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -26,7 +27,7 @@ struct ReportViewModelTests {
         let viewModel: ReportViewModel<SidebarRootRoute>
         let output: ReportViewModel<SidebarRootRoute>.Output
 
-        init(documentState: DocumentState, filterString: Driver<String> = .just(""), showsOnlyInProgress: Driver<Bool> = .just(false)) {
+        init(documentState: DocumentState, doubleClickedNode: Signal<ReportNode> = .empty(), filterString: Driver<String> = .just(""), showsOnlyInProgress: Driver<Bool> = .just(false)) {
             viewModel = ReportViewModel(documentState: documentState, router: router)
             output = viewModel.transform(ReportViewModel<SidebarRootRoute>.Input(
                 appeared: .empty(),
@@ -34,6 +35,7 @@ struct ReportViewModelTests {
                 cancelAll: cancelAllRelay.asSignal(),
                 clearHistory: clearHistoryRelay.asSignal(),
                 openSettings: .empty(),
+                doubleClickedNode: doubleClickedNode,
                 filterString: filterString,
                 showsOnlyInProgress: showsOnlyInProgress
             ))
@@ -173,6 +175,34 @@ struct ReportViewModelTests {
         page.cancelAllRelay.accept(())
 
         #expect(try await nextValue(from: activity, timeout: 30) { !$0 } == false)
+        await engine.stop()
+    }
+
+    /// Double-clicking a row was decided in the view controller, which has no test target; the
+    /// decision is the ViewModel's now (PR121.64).
+    @Test("double-clicking a feature's turned-off row opens Settings; other rows open nothing")
+    func doubleClickOnTurnedOffRowOpensSettings() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.doubleClick")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.indexing.isEnabled = false
+        environment.settings.search.isCorpusEnabled = false
+        let appRouter = MockRouter<AppRoute>()
+        let doubleClickRelay = PublishRelay<ReportNode>()
+        let page = withDependencies {
+            $0.appRouter = appRouter
+        } operation: {
+            environment.make { Page(documentState: environment.documentState, doubleClickedNode: doubleClickRelay.asSignal()) }
+        }
+        defer { withExtendedLifetime((page, appRouter)) {} }
+        let nodes = try await nextValue(from: page.output.nodes) { !$0.isEmpty }
+        let categoryRow = try #require(Self.node(.category(.backgroundIndexing), in: nodes))
+        let turnedOffRow = try #require(Self.node(.turnedOff(.backgroundIndexing), in: nodes))
+
+        doubleClickRelay.accept(categoryRow)
+        #expect(appRouter.triggeredRoutes.isEmpty)
+
+        doubleClickRelay.accept(turnedOffRow)
+        #expect(appRouter.triggeredRoutes.count == 1)
         await engine.stop()
     }
 

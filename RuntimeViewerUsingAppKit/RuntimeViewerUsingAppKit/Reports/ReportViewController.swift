@@ -137,8 +137,6 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             $0.preservesSelectedItemAcrossReloads = true
             $0.headerView = nil
             $0.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-            $0.target = self
-            $0.doubleAction = #selector(outlineViewDoubleClicked(_:))
             $0.menu = NSMenu().then {
                 $0.delegate = self
             }
@@ -179,6 +177,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             cancelAll: cancelAllRelay.asSignal(),
             clearHistory: clearHistoryRelay.asSignal(),
             openSettings: openSettingsRelay.asSignal(),
+            doubleClickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
             showsOnlyInProgress: showsOnlyInProgressButton.rx.state.asDriver().map { $0 == .on }.startWith(false)
         )
@@ -233,7 +232,8 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         .disposed(by: rx.disposeBag)
 
         output.hasHistory.driveOnNext { [weak self] hasHistory in
-            self?.hasHistory = hasHistory
+            guard let self else { return }
+            self.hasHistory = hasHistory
         }
         .disposed(by: rx.disposeBag)
     }
@@ -278,14 +278,6 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
     @objc private func cancelMenuItemAction(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? ReportNode else { return }
         cancelRelay.accept(node)
-    }
-
-    /// A feature's "turned off" row opens Settings, where it is turned back on.
-    @objc private func outlineViewDoubleClicked(_ sender: NSOutlineView) {
-        guard sender.clickedRow >= 0, let node = sender.item(atRow: sender.clickedRow) as? ReportNode else { return }
-        if case .turnedOff = node.identifier {
-            openSettingsRelay.accept(())
-        }
     }
 
     // MARK: - Context Menu

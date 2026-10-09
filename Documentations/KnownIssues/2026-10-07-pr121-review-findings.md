@@ -9556,7 +9556,8 @@ struct ReportTreeBuilderTests {
 
 - **严重度**：Cleanup
 - **审查编号**：CV4（= R7）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。行为测试：`ReportViewModelTests.doubleClickOnTurnedOffRowOpensSettings`（`appRouter` 换成 `MockRouter<AppRoute>`：双击类别行不触发路由，双击 "Turned off in Settings" 行触发一次）。被替换的判断写在 App target 的 VC 里，修前无法写成红灯（文档已说明）；App target 编译验证
+- **落地与偏离**：双击改为 `outlineView.rx.modelDoubleClicked()` 进 `Input.doubleClickedNode`，判断挪进 ViewModel 的 `#if os(macOS)` 段；删掉 `target` / `doubleAction` 与 `@objc` 处理器；`hasHistory` 的订阅改为 `guard let self`（`hasWorkInProgress` 那一处在 PR121.55 改名为 `hasCancellableWork` 时一起改）。动作菜单与右键菜单的 relay 按文档保留。`appeared` 那一半按文档以 PR121.59 为准：本提交不动，PR121.59 整个换成 `isVisible`。
 
 **问题**：
 - `ReportViewController` 用手写的 `appearedRelay` 加一个 `viewDidAppear` 覆写来报告「页面出现了」（ReportViewController.swift:19-20、164-167）。RxAppKit 已经有现成的 `rx.viewDidAppear`，批量导出的几个页面都在用。

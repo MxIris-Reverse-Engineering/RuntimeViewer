@@ -25,6 +25,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         public let cancelAll: Signal<Void>
         public let clearHistory: Signal<Void>
         public let openSettings: Signal<Void>
+        /// A row double-clicked. A feature's "Turned off in Settings" row opens Settings, where it
+        /// is turned back on; the other rows open nothing.
+        public let doubleClickedNode: Signal<ReportNode>
         /// The filter bar, as typed: rows whose title contains it, with their ancestors. Need not
         /// start with a value — until it reports one the outline is unfiltered.
         public let filterString: Driver<String>
@@ -146,6 +149,12 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         // Resolved when the item is chosen, not while the page is bound.
         input.openSettings.emitOnNext { [weak self] in
             guard let self else { return }
+            appRouter.trigger(.settings)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.doubleClickedNode.emitOnNext { [weak self] node in
+            guard let self, case .turnedOff = node.identifier else { return }
             appRouter.trigger(.settings)
         }
         .disposed(by: rx.disposeBag)
