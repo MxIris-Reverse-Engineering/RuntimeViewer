@@ -652,7 +652,7 @@ public final class FindSession {
             }
             .min { $0.imagePath < $1.imagePath }
         if let building, building.progress.total > 0 {
-            let imageName = (building.imagePath as NSString).lastPathComponent
+            let imageName = FindScope.imageName(of: building.imagePath)
             text += " · building \(imageName) \(building.progress.built * 100 / building.progress.total)%"
         }
         return text

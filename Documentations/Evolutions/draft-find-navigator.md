@@ -377,7 +377,8 @@ placeholder 随模式变：`Text` / `Regular Expression` / `Type Name`（三种�
 - **一级行（类型 / 文件，高 22）**：disclosure 按钮 frame `(12, 0, 13, 22)`；cell 起点 x = 27，宽 `W − 27 − 16`；
   cell 内图标 16×16 在 `(0, 3)`（Xcode 是文件类型图标，我们用 `RuntimeObjectIcon` 的类型图标），文字 frame
   `(19, 3, cellW − 23, 16)`，字号 13 regular、`labelColor`、截尾；内容是主名 + 次要文字（Xcode：`Package.swift`
-  + 所在 group；我们：类型 `displayName` + 镜像名，次要部分 `secondaryLabelColor`）。
+  + 所在 group；我们：类型 `displayName` + 镜像的文件名（带扩展名，与范围选择、摘要栏和 Report navigator 同一个
+  `FindScope.imageName(of:)`），次要部分 `secondaryLabelColor`）。
 - **二级行（命中，高 22 或 38）**：cell 起点 x = 41（多一级缩进 14），无 disclosure；图标 16×16 在 `(0, 3)`、
   `alphaValue = 0.45`（Xcode 是三横线的圆角方块，我们用 SF Symbol `text.alignleft`）；文字 frame `(19, 3, cellW − 23, 16 或 32)`，
   字号 13、**按词换行、最多两行、`truncatesLastVisibleLine`**，两行时行高 38；命中片段按 `matchRangeInLine` 用
@@ -794,3 +795,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 带 Generation Options 的字面量文本搜索先问「投影后可能有命中吗」，答「不可能」的条目不建投影：原文有命中、或任一接缝（隐藏内容被删掉的位置）前后各 needle 长度内有横跨或紧挨接缝的命中才建；正则照旧先投影 | PR #121 审查 PR121.21：建投影要把条目复制三四份，而绝大多数条目对一个具体查询没有命中。判断必须不漏报：投影里的命中要么就是原文的命中，要么碰到接缝，所以逐个检查接缝附近的每个起点，不能用贪心扫描（它会被窗口边缘的重叠候选带偏）。Foundation 上（Debug，默认选项）投影次数从 2290 降到 25–1452，预检本身 135–264 ms，建全部投影约 1.25 s；固定种子的随机对拍对四种匹配方式各 6000 次检查没有一次漏报。 |
 | 2026-10-08 | 语料条目里的成员只存名字（与名字共用存储），声明行在成员被收集时从接口文本里读回；常驻预算补算成员结构体与行区间、成员名、嵌套块区间和对象 | PR #121 审查 PR121.25：预算只算文本与几张表，而定位器给每个成员存了一份去掉缩进的整行，成员密集的类型几乎多存一遍文本，Report navigator 显示的大小也偏小。Foundation 上（Debug，按驱逐语料释放的 malloc 量计）：修前预算 14.0 MB、实际 25.8 MB；修后预算 18.0 MB、实际 21.7 MB。 |
 | 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |
+| 2026-10-09 | 结果行的镜像名改为带扩展名的文件名，与范围选择、摘要栏和 Report navigator 一致；四处都用 `FindScope.imageName(of:)` | PR #121 审查 PR121.62：「镜像怎么显示名字」有三份实现，结果行的副标题却用了 `RuntimeObject.imageName`（去掉扩展名），同一个 libobjc 在结果行里叫 "libobjc.A"、在别处叫 "libobjc.A.dylib"。统一取文件名——Xcode 的导航器也显示文件名；`RuntimeObject.imageName` 是 Core 的公共 API、侧栏等处在用，不动。`ImageDisplayNameTests` 修前结果行与关系行两条红（"NSObject  libobjc.A"）。 |

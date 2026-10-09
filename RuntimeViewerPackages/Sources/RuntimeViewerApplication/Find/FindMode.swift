@@ -185,7 +185,8 @@ public enum FindScope: Hashable, Sendable {
     /// accents every scope but the workspace.
     public var isAccented: Bool { self != .allIndexedImages }
 
-    /// An image's name as the navigator shows it: its file name.
+    /// An image's name wherever the navigators show one — Find's scope, result rows and summary
+    /// bar, and the Report navigator's rows: its file name, extension included.
     public static func imageName(of imagePath: String) -> String {
         (imagePath as NSString).lastPathComponent
     }

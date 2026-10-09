@@ -114,7 +114,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         switch content {
         case .object(let object, _):
             appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
-            appearance.title = titleWithSubtitle(object.displayName, subtitle: object.imageName)
+            appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
         case .textMatch(let match):
             appearance.icon = FindResultCellStyle.matchIcon
             appearance.iconAlpha = FindResultCellStyle.matchIconAlpha
@@ -128,7 +128,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         case .relationship(let name, let object):
             if let object {
                 appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
-                appearance.title = titleWithSubtitle(object.displayName, subtitle: object.imageName)
+                appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
             } else {
                 appearance.icon = FindResultCellStyle.unresolvedIcon
                 appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha

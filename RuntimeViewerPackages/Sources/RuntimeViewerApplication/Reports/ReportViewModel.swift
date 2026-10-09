@@ -208,7 +208,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             if leftIsBuilding != rightIsBuilding {
                 return leftIsBuilding
             }
-            return ReportOutline.imageName(of: leftEntry.key) < ReportOutline.imageName(of: rightEntry.key)
+            return FindScope.imageName(of: leftEntry.key) < FindScope.imageName(of: rightEntry.key)
         }
         for (imagePath, state) in activeBuilds {
             corpusChildren.append(node(.corpusBuild(imagePath: imagePath)) { ReportOutline.configure($0, forCorpusOf: imagePath, state: state) })
@@ -311,7 +311,7 @@ enum ReportOutline {
             detail = "Cancelled"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: item.id), title: imageName(of: item.id), detail: detail, status: status, toolTip: item.id, isInProgress: !item.state.isTerminal)
+        cellViewModel.update(icon: icon(forImagePath: item.id), title: FindScope.imageName(of: item.id), detail: detail, status: status, toolTip: item.id, isInProgress: !item.state.isTerminal)
     }
 
     static func configure(_ cellViewModel: ReportCellViewModel, forCorpusOf imagePath: String, state: RuntimeInterfaceCorpusBuildState) {
@@ -325,7 +325,7 @@ enum ReportOutline {
             detail = "Waiting"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: imagePath), title: imageName(of: imagePath), detail: detail, status: status, toolTip: imagePath, isCancellable: true, isInProgress: true)
+        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: imagePath, isCancellable: true, isInProgress: true)
     }
 
     static func configure(_ cellViewModel: ReportCellViewModel, for finishedBuild: FindCorpusFinishedBuild) {
@@ -348,7 +348,7 @@ enum ReportOutline {
             detail = time.isEmpty ? "Cancelled" : "Cancelled · \(time)"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: finishedBuild.imagePath), title: imageName(of: finishedBuild.imagePath), detail: detail, status: status, toolTip: toolTip)
+        cellViewModel.update(icon: icon(forImagePath: finishedBuild.imagePath), title: FindScope.imageName(of: finishedBuild.imagePath), detail: detail, status: status, toolTip: toolTip)
     }
 
     // MARK: - Filtering
@@ -394,10 +394,6 @@ enum ReportOutline {
 
     static func icon(forImagePath imagePath: String) -> NSUIImage {
         imagePath.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon
-    }
-
-    static func imageName(of imagePath: String) -> String {
-        (imagePath as NSString).lastPathComponent
     }
 
     static func title(for reason: RuntimeIndexingBatchReason) -> String {

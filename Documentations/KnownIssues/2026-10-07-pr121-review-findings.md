@@ -9305,7 +9305,8 @@ struct ReportTreeBuilderTests {
 
 - **严重度**：Cleanup
 - **审查编号**：R8
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`ImageDisplayNameTests`（五条，四处各一条，加范围名本身）。修前红两条：Find 结果的类型行与关系行副标题读作 "NSObject  libobjc.A"（期望以 " libobjc.A.dylib" 结尾）；范围、摘要栏与 Report 三条本来就一致，修前修后都绿，作为钉住行为的护栏。修后五条全绿；连同 Find 与 Report 的其余套件共 14 个套件、97 个测试全过
+- **落地与偏离**：按拍板统一为带扩展名的文件名，Find 结果行副标题跟着改（类型行与关系行两处）；`ReportOutline.imageName` 删除，Report 的四处（语料行排序、索引镜像行、语料行、已结束构建行）与 `FindSession.corpusStatus` 的内联写法都改调 `FindScope.imageName(of:)`，它的文档注释改为「the navigators」。没有另起中立的 `RuntimeImageDisplayName`。Find 提案 §4 的结果行描述与决策日志同步。注意：批次 S6 的 PR121.50 去掉 `FindResultNode.object(_:matchCount:children:)` 的 `matchCount` 后，`ImageDisplayNameTests.typeResultRow` 的构造要随之去掉这个参数
 
 **问题**：「镜像怎么显示名字」这件事，本 PR 里写了三处，结果还不止一种：
 - `ReportOutline.imageName(of:)`（ReportViewModel.swift:395）和 `FindScope.imageName(of:)`（FindMode.swift:189）都取路径最后一段，保留扩展名，比如 "libobjc.A.dylib"。
