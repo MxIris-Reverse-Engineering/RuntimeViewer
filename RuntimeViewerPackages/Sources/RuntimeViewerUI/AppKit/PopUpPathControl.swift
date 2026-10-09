@@ -636,7 +636,7 @@ public final class PopUpPathControl: Control {
 
     // MARK: - Drawing
 
-    public override func draw(_ dirtyRect: NSRect) {
+    public override func draw(_ dirtyRectangle: NSRect) {
         let frames = componentFrames()
         let isWindowActive = isWindowActive
         let isDarkAppearance = isDarkAppearance

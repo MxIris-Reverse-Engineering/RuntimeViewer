@@ -202,13 +202,13 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             corpusChildren.append(node(.turnedOff(.searchableInterfaces)) { $0.update(icon: ReportOutline.turnedOffIcon, title: "Turned off in Settings") })
         }
         // The image being printed first, then the waiting ones by name.
-        let activeBuilds = corpusStates.filter(\.value.isActive).sorted { lhs, rhs in
-            let lhsIsBuilding = ReportOutline.isBuilding(lhs.value)
-            let rhsIsBuilding = ReportOutline.isBuilding(rhs.value)
-            if lhsIsBuilding != rhsIsBuilding {
-                return lhsIsBuilding
+        let activeBuilds = corpusStates.filter(\.value.isActive).sorted { leftEntry, rightEntry in
+            let leftIsBuilding = ReportOutline.isBuilding(leftEntry.value)
+            let rightIsBuilding = ReportOutline.isBuilding(rightEntry.value)
+            if leftIsBuilding != rightIsBuilding {
+                return leftIsBuilding
             }
-            return ReportOutline.imageName(of: lhs.key) < ReportOutline.imageName(of: rhs.key)
+            return ReportOutline.imageName(of: leftEntry.key) < ReportOutline.imageName(of: rightEntry.key)
         }
         for (imagePath, state) in activeBuilds {
             corpusChildren.append(node(.corpusBuild(imagePath: imagePath)) { ReportOutline.configure($0, forCorpusOf: imagePath, state: state) })

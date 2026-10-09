@@ -9732,7 +9732,8 @@ func doubleClickOnTurnedOffRowOpensSettings() async throws {
 
 - **严重度**：Cleanup
 - **审查编号**：CV7
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，没有可观察的行为变化，不新增测试：语料行的排序走这段比较，`ReportViewModelTests` 改后全过（9 个）
+- **落地与偏离**：按批次要求把「本 PR 新增的代码」又按全局命名规则查了一遍（新增行里声明的局部变量、循环变量、闭包参数、函数参数、泛型参数），另有三处缩写一并改名：`RuntimeObjCSection+Corpus.swift` 列 ObjC 成员时的 `ivars` 参数与 `ivar` 循环变量 → `instanceVariables` / `instanceVariable`（`RuntimeInterfaceSearchTests`、`RuntimeInterfaceCorpusStoreTests`、`RuntimeMemberDeclarationLocatorTests` 改后全过，三套件 49 个）；`PopUpPathControl.draw(_:)` 的 `dirtyRect` 与 `PopUpPathControlTests` 辅助函数的 `rect` → `dirtyRectangle` / `rectangle`（该套件改后只有熄屏下必挂的那一条失败，见 BRIEFING）；`TabViewController` 活动标记的 `dotRect` → `dotRectangle`（App 构建验证）。保留未改的：取自类型或框架 API 名的 `classInfo` / `protocolInfo` / `categoryInfo`（`ObjCClassInfo` 等）与 `utf8`（`String.utf8`），`Identifiable` 要求的 `id`，以及早已是项目 API 一部分的 `ObjC`、`ID`（`RuntimeIndexingBatchID`、`engineID:`）
 
 **问题**：`ReportViewModel.makeNodes` 给进行中的语料构建排序时，闭包参数和局部变量叫 `lhs`、`rhs`、`lhsIsBuilding`、`rhsIsBuilding`（ReportViewModel.swift:201-207）。全局规则要求所有标识符都用完整名称，不允许缩写。
 

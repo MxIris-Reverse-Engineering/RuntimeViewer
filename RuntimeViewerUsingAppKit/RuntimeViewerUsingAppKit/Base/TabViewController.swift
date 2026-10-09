@@ -238,12 +238,12 @@ extension NSImage {
         let gap: CGFloat = 1.5
         let badged = NSImage(size: size, flipped: false) { [self] bounds in
             draw(in: bounds)
-            let dotRect = NSRect(x: bounds.maxX - dotDiameter, y: bounds.maxY - dotDiameter, width: dotDiameter, height: dotDiameter)
+            let dotRectangle = NSRect(x: bounds.maxX - dotDiameter, y: bounds.maxY - dotDiameter, width: dotDiameter, height: dotDiameter)
             NSGraphicsContext.current?.compositingOperation = .clear
-            NSBezierPath(ovalIn: dotRect.insetBy(dx: -gap, dy: -gap)).fill()
+            NSBezierPath(ovalIn: dotRectangle.insetBy(dx: -gap, dy: -gap)).fill()
             NSGraphicsContext.current?.compositingOperation = .sourceOver
             NSColor.black.setFill()
-            NSBezierPath(ovalIn: dotRect).fill()
+            NSBezierPath(ovalIn: dotRectangle).fill()
             return true
         }
         badged.isTemplate = true

@@ -42,7 +42,7 @@ extension RuntimeObjCSection {
                 classProperties: classInfo.classProperties,
                 methods: classInfo.methods,
                 classMethods: classInfo.classMethods,
-                ivars: classInfo.ivars
+                instanceVariables: classInfo.ivars
             )
         case .objc(.type(.protocol)):
             guard let protocolInfo = objcIndexer.protocolGroup(forName: name.name)?.info else { return [] }
@@ -51,7 +51,7 @@ extension RuntimeObjCSection {
                 classProperties: protocolInfo.classProperties + protocolInfo.optionalClassProperties,
                 methods: protocolInfo.methods + protocolInfo.optionalMethods,
                 classMethods: protocolInfo.classMethods + protocolInfo.optionalClassMethods,
-                ivars: []
+                instanceVariables: []
             )
         case .objc(.category(.class)):
             guard let categoryInfo = objcIndexer.categoryGroup(forName: name.name)?.info else { return [] }
@@ -60,7 +60,7 @@ extension RuntimeObjCSection {
                 classProperties: categoryInfo.classProperties,
                 methods: categoryInfo.methods,
                 classMethods: categoryInfo.classMethods,
-                ivars: []
+                instanceVariables: []
             )
         default:
             return []
@@ -72,7 +72,7 @@ extension RuntimeObjCSection {
         classProperties: [ObjCPropertyInfo],
         methods: [ObjCMethodInfo],
         classMethods: [ObjCMethodInfo],
-        ivars: [ObjCIvarInfo]
+        instanceVariables: [ObjCIvarInfo]
     ) -> [RuntimeMemberDeclaration] {
         var members: [RuntimeMemberDeclaration] = []
         for property in properties {
@@ -81,8 +81,8 @@ extension RuntimeObjCSection {
         for property in classProperties {
             members.append(RuntimeMemberDeclaration(name: property.name, kind: .objcProperty, isStatic: true, declarationText: property.name, lineNumber: nil))
         }
-        for ivar in ivars {
-            members.append(RuntimeMemberDeclaration(name: ivar.name, kind: .objcIvar, isStatic: false, declarationText: ivar.name, lineNumber: nil))
+        for instanceVariable in instanceVariables {
+            members.append(RuntimeMemberDeclaration(name: instanceVariable.name, kind: .objcIvar, isStatic: false, declarationText: instanceVariable.name, lineNumber: nil))
         }
         for method in classMethods {
             members.append(RuntimeMemberDeclaration(name: method.name, kind: .objcMethod, isStatic: true, declarationText: method.name, lineNumber: nil))

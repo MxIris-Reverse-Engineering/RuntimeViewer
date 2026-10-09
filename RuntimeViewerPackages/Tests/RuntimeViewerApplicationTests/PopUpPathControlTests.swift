@@ -391,12 +391,12 @@ extension PopUpPathControlTests {
             RunLoop.main.run(until: Date().addingTimeInterval(0.5))
         }
 
-        /// How many pixels inside `rect` — in the control's flipped coordinates, which bitmap rows
-        /// follow top to bottom — differ between two renderings.
-        static func changedPixelCount(between first: NSBitmapImageRep, and second: NSBitmapImageRep, in rect: NSRect, of view: NSView) -> Int {
+        /// How many pixels inside `rectangle` — in the control's flipped coordinates, which bitmap
+        /// rows follow top to bottom — differ between two renderings.
+        static func changedPixelCount(between first: NSBitmapImageRep, and second: NSBitmapImageRep, in rectangle: NSRect, of view: NSView) -> Int {
             let scale = CGFloat(first.pixelsWide) / view.bounds.width
-            let columns = Int((rect.minX * scale).rounded(.down)) ..< min(first.pixelsWide, Int((rect.maxX * scale).rounded(.up)))
-            let rows = Int((rect.minY * scale).rounded(.down)) ..< min(first.pixelsHigh, Int((rect.maxY * scale).rounded(.up)))
+            let columns = Int((rectangle.minX * scale).rounded(.down)) ..< min(first.pixelsWide, Int((rectangle.maxX * scale).rounded(.up)))
+            let rows = Int((rectangle.minY * scale).rounded(.down)) ..< min(first.pixelsHigh, Int((rectangle.maxY * scale).rounded(.up)))
             var firstSamples = [Int](repeating: 0, count: first.samplesPerPixel)
             var secondSamples = [Int](repeating: 0, count: second.samplesPerPixel)
             var changedPixelCount = 0
