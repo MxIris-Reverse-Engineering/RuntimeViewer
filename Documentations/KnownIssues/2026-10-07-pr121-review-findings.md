@@ -20,6 +20,8 @@
 
 ## 需要拍板的决定
 
+**已定（2026-10-08）**：用户批准「把发现的问题全部修了」，下面 10 项全部采用推荐选项，第 10 项列出的「不修」裁决全部成立；其后「没有异议就照推荐做」的各项也都照推荐做了。决定前的原文保留如下。
+
 下面 10 项需要权衡，每项都给了推荐选项。
 
 1. **PR121.03 序列化格式怎样兼容旧版本**
@@ -123,7 +125,7 @@
 | PR121.17 | Minor | VerifyAcrossXcodes 没跟上 bridge 的接口（已修复 `04cb730b`） |
 | PR121.18 | Minor | AppDefaults 的 UserDefaults 在测试之间共享（已修复 `c7358ac2`） |
 | PR121.19 | Minor | 无效正则的报错不可读（已修复 `c11aed6b`） |
-| PR121.20 | 建议不修 | 镜像对端共享主机的语料存储（建议不修） |
+| PR121.20 | 建议不修 | 镜像对端共享主机的语料存储（建议不修）（不修，已留裁决） |
 | PR121.21 | Minor（性能） | 搜索先投影每个条目再看有没有命中（已修复 `d505c6e3`） |
 | PR121.22 | Minor（性能），但要在发版前做 | 每条命中都带完整的 RuntimeObject（已修复 `6fa83d9a`） |
 | PR121.23 | Minor（性能） | 收满上限后仍为每个命中建 Layout（已修复 `be3f9607`） |
@@ -3334,7 +3336,7 @@ func invalidRegularExpressionSearchFailsReadably() async throws {
 
 - **严重度**：建议不修
 - **审查编号**：C04（即 C1-6）
-- **状态**：方案待批，代码未改
+- **状态**：不修（已裁决，用户 2026-10-08 同意）。理由见下文，代码不改。
 
 **问题**：每个引擎只有一个语料存储（`RuntimeEngine.swift:286`），每条连接的请求都由 `RuntimeEngine.registerSharedHandlers` 派到同一个引擎（`RuntimeEngineConnectionServer.swift:45-47`）。所以把引擎镜像给另一台 Mac 之后，对端的操作会直接作用在主机的语料上：
 - 对端用另一个 transformer 请求同一镜像，主机上的那份语料会被驱逐并重建（`RuntimeInterfaceCorpusStore.swift:322-334`）。
