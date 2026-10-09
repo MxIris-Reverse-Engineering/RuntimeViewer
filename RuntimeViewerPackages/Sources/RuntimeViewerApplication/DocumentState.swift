@@ -303,7 +303,7 @@ public final class DocumentState {
     /// from the same answer.
     public var reportActivity: Driver<Bool> {
         Driver.combineLatest(
-            backgroundIndexingCoordinator.aggregateStateObservable.map(\.hasActiveBatch).asDriver(onErrorJustReturn: false),
+            backgroundIndexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
             findCorpusCoordinator.hasActiveBuild
         ) { hasActiveBatch, hasActiveBuild in
             hasActiveBatch || hasActiveBuild

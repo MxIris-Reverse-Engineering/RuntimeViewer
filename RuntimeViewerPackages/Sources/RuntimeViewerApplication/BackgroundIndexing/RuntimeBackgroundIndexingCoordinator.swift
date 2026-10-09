@@ -18,18 +18,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// can still manually clear via `clearHistory()`.
     private static let maxHistoryEntries = 100
 
-    public struct AggregateState: Equatable, Sendable {
-        public var hasActiveBatch: Bool
-        public var hasAnyFailure: Bool
-        public var progress: Double?   // 0...1, nil when idle
-
-        public init(hasActiveBatch: Bool, hasAnyFailure: Bool, progress: Double?) {
-            self.hasActiveBatch = hasActiveBatch
-            self.hasAnyFailure = hasAnyFailure
-            self.progress = progress
-        }
-    }
-
     private unowned let documentState: DocumentState
     /// The engine this coordinator currently drives. Mutable so `MainCoordinator`
     /// can switch sources (Local ↔ XPC ↔ Bonjour) without recreating the
@@ -41,9 +29,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     private let batchesRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
     private let historyRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
-    private let aggregateRelay = BehaviorRelay<AggregateState>(
-        value: .init(hasActiveBatch: false, hasAnyFailure: false, progress: nil)
-    )
+    /// Whether a batch is under way — what the Report navigator's tab marks. The rest of what the
+    /// toolbar popover used to show, the overall progress and whether anything failed, went with
+    /// it, and nothing reads it any more.
+    private let hasActiveBatchRelay = BehaviorRelay<Bool>(value: false)
 
     /// Authoritative staging state for in-flight batches plus the dirty flags
     /// the flush path consumes. Lives behind an `NSLock` rather than on the
@@ -108,8 +97,8 @@ public final class RuntimeBackgroundIndexingCoordinator {
         batchesRelay.asObservable()
     }
 
-    public var aggregateStateObservable: Observable<AggregateState> {
-        aggregateRelay.asObservable()
+    public var hasActiveBatchObservable: Observable<Bool> {
+        hasActiveBatchRelay.asObservable()
     }
 
     public var historyObservable: Observable<[RuntimeIndexingBatch]> {
@@ -200,7 +189,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
             batchesRelay.accept(snapshot.batches)
         }
         if snapshot.aggregateChanged {
-            refreshAggregate(batches: snapshot.batches)
+            refreshHasActiveBatch(batches: snapshot.batches)
         }
         // Now safe to push history: subscribers see (new batches without
         // finished, new history with finished) — a fully consistent state.
@@ -233,22 +222,11 @@ public final class RuntimeBackgroundIndexingCoordinator {
         historyRelay.accept(updatedHistory)
     }
 
-    private func refreshAggregate(batches: [RuntimeIndexingBatch]) {
-        let hasActive = !batches.isEmpty
-        let hasFailure = batches.contains { batch in
-            batch.items.contains { item in
-                if case .failed = item.state { return true }
-                return false
-            }
+    private func refreshHasActiveBatch(batches: [RuntimeIndexingBatch]) {
+        let hasActiveBatch = !batches.isEmpty
+        if hasActiveBatchRelay.value != hasActiveBatch {
+            hasActiveBatchRelay.accept(hasActiveBatch)
         }
-        let totalItems = batches.reduce(0) { $0 + $1.totalCount }
-        let doneItems = batches.reduce(0) { $0 + $1.finishedCount }
-        let progress: Double? = totalItems > 0
-            ? Double(doneItems) / Double(totalItems)
-            : nil
-        aggregateRelay.accept(
-            .init(hasActiveBatch: hasActive, hasAnyFailure: hasFailure,
-                  progress: progress))
     }
 
     // MARK: - Engine swap (source switch)
@@ -316,7 +294,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
         //    see the ordering note on `flushPendingUpdates`.
         let drained = staging.drainForEngineSwap()
         batchesRelay.accept([])
-        refreshAggregate(batches: [])
+        refreshHasActiveBatch(batches: [])
         for batch in drained.pendingHistory {
             appendToHistory(batch)
         }
@@ -765,23 +743,21 @@ extension RuntimeBackgroundIndexingCoordinator {
                 hasPendingActiveChange = true
                 pendingAggregateRefresh = true
                 outcome.requiresImmediateFlush = true
+            // Only a batch starting or ending changes whether one is under
+            // way, so task events leave that refresh alone.
             case .taskStarted(let id, let path):
                 if mutateTaskItemLocked(batchID: id, path: path, { item in
                     item.state = .running
                 }) {
                     hasPendingActiveChange = true
-                    pendingAggregateRefresh = true
                 }
             case .taskFinished(let id, let path, let result):
                 if mutateTaskItemLocked(batchID: id, path: path, { item in
                     item.state = result
                 }) {
                     hasPendingActiveChange = true
-                    pendingAggregateRefresh = true
                 }
             case .taskPrioritized(let id, let path):
-                // Priority boost doesn't change progress / hasFailure /
-                // hasActive, so we skip the aggregate refresh.
                 if mutateTaskItemLocked(batchID: id, path: path, { item in
                     item.hasPriorityBoost = true
                 }) {

@@ -9075,7 +9075,8 @@ struct ReportTreeBuilderTests {
 
 - **严重度**：Cleanup
 - **审查编号**：S8
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，不新增测试：分页活动标记随批次出现与消失的行为由既有的 `ReportViewModelTests.activityFollowsWorkInProgress` 覆盖，改后通过；`DocumentState` 相关套件同时通过
+- **落地与偏离**：照方案，`AggregateState` 换成 `hasActiveBatchObservable`（值不变时不重发），任务级事件不再置位 aggregate 刷新；`pendingAggregateRefresh` / `aggregateChanged` 两个名字保留。仓库里没有别的读取方。提案「活动信号只算一处」一句同步。
 
 **问题**：`RuntimeBackgroundIndexingCoordinator.AggregateState` 里的 `progress` 和 `hasAnyFailure` 原本给 toolbar 弹窗用（显示「37% complete」和失败标记）。本 PR 删掉弹窗后，只剩 `DocumentState.reportActivity` 还在读 `hasActiveBatch`（DocumentState.swift:222）。但 `refreshAggregate` 仍然在每次 16 ms 的刷新里遍历所有进行中批次的全部镜像，去算失败数和进度（RuntimeBackgroundIndexingCoordinator.swift:229-245）。任务级事件（某个镜像开始或结束）也都会触发这次遍历。
 

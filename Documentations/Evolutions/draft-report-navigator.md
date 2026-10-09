@@ -58,7 +58,7 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
   放进 `finishedBuilds` 时排在本文档条目之后、不按时间排，**每个镜像只学一次**——Clear History 清掉的不会被下一次快照带回来，
   镜像的语料从引擎里消失后才可能再被学到。**驱逐后状态过期**：store 的预算驱逐与 `evict` 都不发事件，Reports 页出现时与每次构建
   结束后重取一次 coverage；让 store 发驱逐事件是后续项。Clear History 同时清索引协调器的 history 与 `finishedBuilds`。
-- **活动信号只算一处**：`DocumentState.reportActivity: Driver<Bool>`（索引协调器的 `aggregateState.hasActiveBatch` ∨
+- **活动信号只算一处**：`DocumentState.reportActivity: Driver<Bool>`（索引协调器的 `hasActiveBatchObservable` ∨
   `FindCorpusCoordinator.hasActiveBuild`，后者即任一语料 pending / building）。
 - **活动标记的绑定位置**：`TabViewItem` 带一个可选的 `activity: Driver<Bool>`，`TabViewController` 在 `setTabViewItems` 时订阅、
   挂在自己的 dispose bag 上，状态存在 controller 里，每次重设分段图后重新套上；普通图与选中图（`setImage` /
