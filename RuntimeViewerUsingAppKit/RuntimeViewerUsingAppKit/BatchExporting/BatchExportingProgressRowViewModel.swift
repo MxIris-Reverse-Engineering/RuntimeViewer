@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
 final class BatchExportingProgressRowViewModel: CellViewModel {
-    enum Status: Sendable {
+    enum Status: Sendable, Equatable {
         case queued
         case running
         case succeeded(RuntimeInterfaceExportResult)
@@ -15,7 +15,7 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
     /// image the engine lists, after Select All — and every `@RxObserved` a cell binds costs a
     /// relay with a lock of its own for as long as the row exists (proposal
     /// 0005-cellvm-appearance-single-observed).
-    struct State {
+    struct State: Equatable {
         var status: Status = .queued
 
         /// Fraction of the current phase that is done. Each phase — every indexing
@@ -96,13 +96,15 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
         }
     }
 
-    /// Applies a transition to a copy and publishes it in one assignment. `@RxObserved` sends an
-    /// event for every assignment, so setting the fields one by one would redraw the cell once
-    /// per field.
+    /// Applies a transition to a copy and publishes it in one assignment, and only when it
+    /// changed. `@RxObserved` sends an event for every assignment, so setting the fields one by
+    /// one, or publishing again what the row already shows, would redraw the cell for nothing.
     private func updateState(_ transition: (inout State) -> Void) {
         var newState = state
         transition(&newState)
-        state = newState
+        if newState != state {
+            state = newState
+        }
     }
 }
 

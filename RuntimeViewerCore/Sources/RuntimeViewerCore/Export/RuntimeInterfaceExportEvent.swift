@@ -19,7 +19,7 @@ public enum RuntimeInterfaceExportEvent: Sendable {
     }
 }
 
-public struct RuntimeInterfaceExportResult: Sendable {
+public struct RuntimeInterfaceExportResult: Sendable, Equatable {
     public let succeeded: Int
     public let failed: Int
     public let totalDuration: TimeInterval

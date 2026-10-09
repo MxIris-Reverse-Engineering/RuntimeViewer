@@ -129,6 +129,9 @@ extension BatchExportingProgressViewController {
 
         private var isSymbolEffectRunning = false
 
+        /// The failures the tooltip was last built from; `nil` until this row's first state.
+        private var appliedObjectFailures: [BatchExportingObjectFailure]?
+
         override func setup() {
             super.setup()
 
@@ -171,6 +174,7 @@ extension BatchExportingProgressViewController {
 
         func bind(to rowViewModel: BatchExportingProgressRowViewModel) {
             rx.disposeBag = DisposeBag()
+            appliedObjectFailures = nil
 
             installFreshProgressBar()
             nameLabel.stringValue = rowViewModel.image.name
@@ -214,8 +218,13 @@ extension BatchExportingProgressViewController {
             progressBar = freshProgressBar
         }
 
+        /// The tooltip is the one part the status branches below do not set, so it is set only
+        /// when the failures it lists changed; the rest follows the status and is set anyway.
         private func applyState(_ state: BatchExportingProgressRowViewModel.State) {
-            toolTip = state.objectFailures.exportFailureTooltip
+            if appliedObjectFailures != state.objectFailures {
+                appliedObjectFailures = state.objectFailures
+                toolTip = state.objectFailures.exportFailureTooltip
+            }
             switch state.status {
             case .queued:
                 statusIcon.image = .symbol(systemName: .circle)

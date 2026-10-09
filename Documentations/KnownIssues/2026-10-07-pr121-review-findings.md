@@ -9443,7 +9443,8 @@ struct ReportTreeBuilderTests {
 
 - **严重度**：Cleanup
 - **审查编号**：CV3
-- **状态**：方案待批，代码未改
+- **状态**：已修复。按拍板不写测试（这个行 ViewModel 在 App target 里，没有单元测试 target），只靠代码审查；App target 编译验证
+- **落地与偏离**：照方案：Core 的 `RuntimeInterfaceExportResult` 加 `Equatable`（自动合成，不破坏 API），`Status` 与 `State` 加 `Equatable`，`updateState` 在新旧状态相等时不赋值；cell 只在 `objectFailures` 变化时重设 tooltip（`appliedObjectFailures`，`bind(to:)` 时清空）。
 
 **问题**：本 PR 把批量导出进度行的显示状态合并成一个 `State`，挂在单个 `@RxObserved` 上。但 `State` 没有实现 `Equatable`，所以 `updateState` 不管内容是否真的变了，每次都赋值、每次都发事件（BatchExportingProgressRowViewModel.swift:102-106）。cell 的 `applyState` 收到后，会把 tooltip、图标、文字、进度条全部重设一遍（BatchExportingProgressViewController.swift:217-265）。本 PR 在 0005 补记里刚定下的规矩是「只在变了时整体赋值一次，cell 只重设变了的部分」；同批改过的另一种行 `BatchExportingImageSelectionCellViewModel` 已经做到了，这一种漏了。
 
