@@ -13,6 +13,9 @@
 		E9B10F090000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E090000000000000000 /* RuntimeViewerInjection */; };
 		E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */; };
 		E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */; };
+		E9CA7A1B000000000000000F /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000C /* RuntimeViewerCore */; };
+		E9CA7A1B0000000000000010 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000D /* RuntimeViewerInjection */; };
+		E9CA7A1B0000000000000011 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000E /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +23,7 @@
 		E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
 		E994E2962F323A51009DD28A /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E994E3CB2F3257B6009DD28A /* RuntimeViewerCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = RuntimeViewerCore; path = ../RuntimeViewerCore; sourceTree = SOURCE_ROOT; };
+		E9CA7A1B000000000000000B /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerMobileServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -51,6 +55,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9CA7A1B0000000000000009 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9CA7A1B000000000000000F /* RuntimeViewerCore in Frameworks */,
+				E9CA7A1B0000000000000010 /* RuntimeViewerInjection in Frameworks */,
+				E9CA7A1B0000000000000011 /* RuntimeViewerUtilities in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -70,6 +84,7 @@
 			children = (
 				E978F9192F1BBB38004C09B4 /* RuntimeViewerServer.framework */,
 				E994E2962F323A51009DD28A /* RuntimeViewerServer.framework */,
+				E9CA7A1B000000000000000B /* RuntimeViewerMobileServer.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -92,6 +107,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E994E28D2F323A51009DD28A /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9CA7A1B0000000000000007 /* Headers */ = {
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -153,6 +175,32 @@
 			productReference = E994E2962F323A51009DD28A /* RuntimeViewerServer.framework */;
 			productType = "com.apple.product-type.framework";
 		};
+		E9CA7A1B0000000000000001 /* RuntimeViewerSimulatorServer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E9CA7A1B0000000000000002 /* Build configuration list for PBXNativeTarget "RuntimeViewerSimulatorServer" */;
+			buildPhases = (
+				E9CA7A1B0000000000000007 /* Headers */,
+				E9CA7A1B0000000000000008 /* Sources */,
+				E9CA7A1B0000000000000009 /* Frameworks */,
+				E9CA7A1B000000000000000A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E978F91B2F1BBB38004C09B4 /* RuntimeViewerServer */,
+			);
+			name = RuntimeViewerSimulatorServer;
+			packageProductDependencies = (
+				E9CA7A1B000000000000000C /* RuntimeViewerCore */,
+				E9CA7A1B000000000000000D /* RuntimeViewerInjection */,
+				E9CA7A1B000000000000000E /* RuntimeViewerUtilities */,
+			);
+			productName = RuntimeViewerMobileServer;
+			productReference = E9CA7A1B000000000000000B /* RuntimeViewerMobileServer.framework */;
+			productType = "com.apple.product-type.framework";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +232,7 @@
 			targets = (
 				E978F9182F1BBB38004C09B4 /* RuntimeViewerServer */,
 				E994E2892F323A51009DD28A /* RuntimeViewerMobileServer */,
+				E9CA7A1B0000000000000001 /* RuntimeViewerSimulatorServer */,
 			);
 		};
 /* End PBXProject section */
@@ -203,6 +252,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9CA7A1B000000000000000A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -214,6 +270,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E994E28E2F323A51009DD28A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9CA7A1B0000000000000008 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -941,6 +1004,186 @@
 			};
 			name = "Debug-arm64e";
 		};
+		E9CA7A1B0000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@loader_path/Frameworks",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = RuntimeViewerMobileServer;
+				SDKROOT = iphonesimulator;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E9CA7A1B0000000000000004 /* Debug-arm64e */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@loader_path/Frameworks",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = RuntimeViewerMobileServer;
+				SDKROOT = iphonesimulator;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = "Debug-arm64e";
+		};
+		E9CA7A1B0000000000000005 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@loader_path/Frameworks",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = RuntimeViewerMobileServer;
+				SDKROOT = iphonesimulator;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E9CA7A1B0000000000000006 /* Distribution */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@loader_path/Frameworks",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = RuntimeViewerMobileServer;
+				SDKROOT = iphonesimulator;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = iphonesimulator;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Distribution;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -977,6 +1220,17 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		E9CA7A1B0000000000000002 /* Build configuration list for PBXNativeTarget "RuntimeViewerSimulatorServer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9CA7A1B0000000000000003 /* Debug */,
+				E9CA7A1B0000000000000004 /* Debug-arm64e */,
+				E9CA7A1B0000000000000005 /* Release */,
+				E9CA7A1B0000000000000006 /* Distribution */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1001,6 +1255,18 @@
 			productName = RuntimeViewerUtilities;
 		};
 		E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
+		};
+		E9CA7A1B000000000000000C /* RuntimeViewerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCore;
+		};
+		E9CA7A1B000000000000000D /* RuntimeViewerInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerInjection;
+		};
+		E9CA7A1B000000000000000E /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUtilities;
 		};

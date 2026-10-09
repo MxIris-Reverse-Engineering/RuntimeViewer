@@ -186,6 +186,10 @@ test target 已登记进 `RuntimeViewerUsingAppKit.xctestplan`。但走 scheme �
 暂存到固定路径（见 AGENTS.md「Embedded iOS-family products」），普通 `xcodebuild` 遇不到它就报
 "couldn't be opened"。测试本身是无宿主的，不需要 app，所以直接跑 bundle：
 
+（2026-10-09 起这个限制已不存在：载荷改由 `RuntimeViewerSimulatorServer` target 作为 app 的依赖
+一起构建，走 scheme 的那条路也能跑。现行说明见 AGENTS.md「Embedded non-macOS products」。下面
+直接跑 bundle 的做法仍然可用。）
+
 ```sh
 xcodebuild -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj \
   -target RuntimeViewerSourceEditorBridgeTests -configuration Debug ARCHS=arm64 \

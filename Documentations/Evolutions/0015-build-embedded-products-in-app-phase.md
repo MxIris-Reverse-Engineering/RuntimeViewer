@@ -145,5 +145,7 @@ GUI 会，这让它无法被命令行验证。
 `SUPPORTS_MACCATALYST = YES`，这种写法只有在 destination 是 Mac Catalyst 时才变成 Catalyst。改成
 `SDKROOT = macosx` + `SDK_VARIANT = iosmac` 之后，Swift Build 按 target 自己的设置决定 SDK 变体，
 helper 就能作为 App 的普通 target 依赖、在 macOS destination 的同一次构建里编成 Catalyst 并嵌入；
-「一次构建只有一个 destination」不再是障碍。模拟器载荷没有对应的 macOS 写法，仍由脚本暂存。现行
-说明见 `AGENTS.md`。
+「一次构建只有一个 destination」不再是障碍。模拟器载荷随后用同一个道理解决：新建
+`RuntimeViewerSimulatorServer` target，写死 `SDKROOT = iphonesimulator`，作为 App 的依赖构建、只拷贝
+不链接。两件嵌入产物从此都不再暂存，本提案要解决的「GUI 构建拿到过期产物」也就不存在了。现行说明见
+`AGENTS.md`。

@@ -1,6 +1,8 @@
 .DS_Store
 /Configurations/custom.xcconfig
 .swiftpm
+# Staging paths of the old embedding flow. Nothing writes them any more, but
+# checkouts that predate the change may still hold copies.
 RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
 RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework
 archive

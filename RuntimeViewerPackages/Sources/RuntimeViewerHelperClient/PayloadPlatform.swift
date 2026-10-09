@@ -33,8 +33,11 @@ public enum PayloadPlatform: Sendable, Hashable, CaseIterable {
     ///
     /// The two slices are the same architecture and differ only in platform, so
     /// a single fat binary cannot hold both — they ship and install as sibling
-    /// bundles instead. Each is named after the scheme that produces it, so the
-    /// bundle sitting in `/Library/Frameworks` says which build it came from.
+    /// bundles instead, named so that the bundle sitting in `/Library/Frameworks`
+    /// says which one it is. The macOS bundle is the `RuntimeViewerServer`
+    /// target's product; the simulator one is `RuntimeViewerSimulatorServer`'s,
+    /// whose product name keeps the `RuntimeViewerMobileServer` name it had when
+    /// the `RuntimeViewerMobileServer` scheme built it.
     public var frameworkBundleBaseName: String {
         switch self {
         case .macOS: return "RuntimeViewerServer"

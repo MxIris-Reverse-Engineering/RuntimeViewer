@@ -25,15 +25,8 @@ cd "$PROJECT_DIR"
 # Defaults
 WORKSPACE="RuntimeViewer-Debug.xcworkspace"
 SCHEME="RuntimeViewer macOS"
-MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
-
-# Where the app's "Embed RuntimeViewerMobileServer Framework" copy phase expects
-# the iOS Simulator payload. A fixed path inside the project rather than one
-# under DerivedData, because the phase is a plain file reference, which needs no
-# shell script.
-MOBILE_SERVER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework"
 
 # DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
 # SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
@@ -94,7 +87,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
-        --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
         --derived-data) DERIVED_DATA="$2"; shift 2;;
@@ -209,39 +201,10 @@ COMMON_XCODEBUILD_SETTINGS=(
 
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
 
-# The Mac Catalyst helper needs no step of its own: it is a target dependency of
-# the app, built in the same configuration and embedded by its "Embed Catalyst
-# Helpers" phase.
-
-# The iOS Simulator injection payload, built before the app and staged at
-# $MOBILE_SERVER_STAGED_PATH — the fixed path referenced by the app's "Embed
-# RuntimeViewerMobileServer Framework" copy phase. It is deliberately not a
-# target dependency: Xcode rejects iOS-family embedded content from a macOS app
-# target. (The Catalyst helper escapes this by declaring SDKROOT = macosx with
-# SDK_VARIANT = iosmac; a simulator product has no such macOS spelling.)
-#
-# A failure here is not fatal: the app builds and runs, and only injecting into
-# simulator processes is unavailable.
-log "Building iOS Simulator injection payload"
-SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
-if XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
-    -workspace "$WORKSPACE" \
-    -scheme "$MOBILE_SERVER_SCHEME" \
-    -configuration "$CONFIGURATION" \
-    -destination 'generic/platform=iOS Simulator' \
-    -derivedDataPath "$DERIVED_DATA" \
-    -skipPackagePluginValidation -skipMacroValidation \
-    "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
-    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
-    run ditto "$SIMULATOR_PAYLOAD_PATH" "$MOBILE_SERVER_STAGED_PATH"
-else
-    log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this build"
-    # Clear the staged copy rather than leaving the last good one there. The
-    # copy phase has no way to tell a current payload from a stale one, so
-    # without this the app would embed — and inject — a build that this run
-    # just failed to produce, with only the warning above to say otherwise.
-    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
-fi
+# The two embedded products that are not macOS — the Mac Catalyst helper and
+# the iOS Simulator injection payload — need no step of their own: both are
+# target dependencies of the app, built in the same configuration and copied in
+# by its embed phases. See "Embedded non-macOS products" in AGENTS.md.
 
 log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \

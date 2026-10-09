@@ -10,65 +10,67 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 **Workspace preference**: Before running any `xcodebuild` / `swift build` / `swift test`, check whether `../MxIris-Reverse-Engineering.xcworkspace` (sibling of this repo) exists. If it does, **use that workspace** via `xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme <scheme> ...` — it wires this repo together with local checkouts of MachOKit / MachOObjCSection / MachOSwiftSection / swift-capstone / swift-demangling / swift-semantic-string / swift-syntax that may contain in-progress fixes not yet published upstream. Building against the remote SPM resolution can hit stale errors (e.g. the MachOSwiftSection `@Mutex` macro expansion bug) that the workspace's local checkout already fixes. Only fall back to the standalone commands below when the workspace is absent.
 
 **Embedded non-macOS products**: the app embeds two products that are not
-macOS — `RuntimeViewerCatalystHelper` (Mac Catalyst) and the
-`RuntimeViewerMobileServer` payload (iOS Simulator). They reach the app in
-different ways.
+macOS — the Mac Catalyst helper and the iOS Simulator injection payload. **Both
+are ordinary target dependencies of the app.** Building `RuntimeViewer macOS` —
+in the GUI, through `RunScript.sh` or through `ArchiveScript.sh` — builds them in
+the app's configuration, and the app's copy phases embed the built products.
+Nothing is built separately or staged.
 
-**The Catalyst helper is an ordinary target dependency of the app.** Building
-`RuntimeViewer macOS` — in the GUI, through `RunScript.sh` or through
-`ArchiveScript.sh` — builds the helper in the same configuration into
-`<configuration>-maccatalyst/`, and `Embed Catalyst Helpers` copies that product
-into `Contents/Applications/`. This works only because the helper target declares
-Catalyst itself, in all three configurations: **`SDKROOT = macosx` with
-`SDK_VARIANT = iosmac`**. The usual spelling, `SDKROOT = iphoneos` with
+| Product | Target | Platform settings | Built into | Embedded by, at |
+|---------|--------|-------------------|------------|-----------------|
+| Catalyst helper | `RuntimeViewerCatalystHelper` | `SDKROOT = macosx`, `SDK_VARIANT = iosmac` | `<configuration>-maccatalyst/` | `Embed Catalyst Helpers`, `Contents/Applications/` |
+| Simulator payload | `RuntimeViewerSimulatorServer` (in `RuntimeViewerServer.xcodeproj`) | `SDKROOT = iphonesimulator` | `<configuration>-iphonesimulator/` | `Embed RuntimeViewerMobileServer Framework`, `Contents/Resources/` |
+
+**This works only because each of those targets pins its own platform.** Swift
+Build builds a dependency for the platform named by its own `SDKROOT` /
+`SDK_VARIANT`; only `SDKROOT = auto` takes the app's. Leave these settings alone:
+the usual Catalyst spelling, `SDKROOT = iphoneos` with
 `SUPPORTS_MACCATALYST = YES`, turns into Catalyst only when the run destination
-is Mac Catalyst; under the app's macOS destination it builds an `iphoneos`
-product, which Xcode rejects as iOS-family content in a macOS app. Swift Build
-reads `SDK_VARIANT` from the target's own settings whatever the destination.
-Do not switch the helper back to `iphoneos`. Two more settings follow from it:
+is Mac Catalyst, and under the app's macOS destination it builds an `iphoneos`
+product instead. Xcode's build settings editor does not show `SDK_VARIANT` at
+all, so these are edited in the project file. All three configurations of the
+helper and all four of the payload target carry them, along with:
 
-- `SKIP_INSTALL = YES`, so archiving the app does not also install the helper as
-  a product of its own — that would make the archive a generic one, which
-  `-exportArchive` refuses. Exporting the app re-signs the embedded helper for
+- `SKIP_INSTALL = YES`, so archiving the app does not also install the helper or
+  the payload as a product of its own — that would make the archive a generic
+  one, which `-exportArchive` refuses. Exporting the app re-signs both for
   Developer ID along with everything else.
-- `RUNTIME_VIEWER_SERVICE_NAME` is set on the helper target itself, per
-  configuration (`com.mxiris…` for Release, `dev.mxiris…` for Debug,
-  `dev.arm64e.mxiris…` for Debug-arm64e), and must match the app's. The helper
-  reaches the app through the helper daemon of that name; a helper on another
-  daemon never finds the app's endpoint and the Catalyst engine loads forever.
-  Building both in one configuration keeps them in step — **a new configuration
-  needs the name on the helper too**. Background:
-  `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
+- On the helper, `RUNTIME_VIEWER_SERVICE_NAME`, per configuration (`com.mxiris…`
+  for Release, `dev.mxiris…` for Debug, `dev.arm64e.mxiris…` for Debug-arm64e).
+  It must match the app's: the helper reaches the app through the helper daemon
+  of that name, and a helper on another daemon never finds the app's endpoint,
+  so the Catalyst engine loads forever. Building both in one configuration keeps
+  them in step — **a new configuration needs the name on the helper too**.
+  Background: `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
 
-`RuntimeViewerCatalystHelperPlugin`, the code the helper loads, is still a macOS
+`RuntimeViewerCatalystHelperPlugin`, the code the helper loads, is a plain macOS
 bundle: it builds into `<configuration>/` and the helper's `Embed PlugIns` phase
 copies it in.
 
-**The simulator payload is still staged by a script.** The scripts build it,
-stage it at `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework`
-(gitignored), and `Embed RuntimeViewerMobileServer Framework` copies it from
-there. Both scripts clear the staged copy when its build fails, so a stale one
-is never sealed in. The payload lands in `Contents/Resources/` because
+**The simulator payload has a target of its own.** `RuntimeViewerSimulatorServer`
+compiles the same synchronized `RuntimeViewerServer/` folder and links the same
+packages as `RuntimeViewerMobileServer`, which stays `SDKROOT = auto` because
+`BuildRuntimeViewerServerXCFramework.sh` builds every other platform from it and
+the jailbroken variant depends on it. Its `PRODUCT_NAME` is
+`RuntimeViewerMobileServer`, the bundle name `PayloadPlatform` looks for;
+`RuntimeInjectClient` reaches the binary through `Bundle.executableURL`, so the
+binary's own name does not matter. The payload is copied, never linked — a macOS
+app cannot link a simulator binary — and lands in `Contents/Resources/` because
 `RuntimeInjectClient` finds it with `Bundle.main.url(forResource:withExtension:)`,
-which looks nowhere else.
+which looks nowhere else. A payload that fails to build now fails the app's
+build too; the old scripts carried on without it.
 
-A plain Xcode GUI build does not build the payload: it embeds whatever is
-already at that path, left there by the last script run. In a fresh checkout or
-worktree nothing is there yet and the copy phase fails the build — run
-`./RunScript.sh --no-launch` once first; do not remove the phase to get past it.
-And **anything involving simulator injection has to be tested through
-`RunScript.sh`**, not through the GUI.
-
+The old staging paths, `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app`
+and `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework`, are still
+gitignored for checkouts that predate the change; nothing reads or writes them.
 A build phase that built both from inside the app's build was tried and
-withdrawn; see evolution 0015. Its helper half failed for the `iphoneos` reason
-above.
+withdrawn before this; see evolution 0015.
 
-**None of the above applies to the jailbroken iOS variant, which embeds the same
-payload the ordinary way.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so
-Xcode has no objection: it carries a plain `PBXTargetDependency` on
-`RuntimeViewerMobileServer` plus an `Embed RuntimeViewerMobileServer Framework`
-copy phase, and building the scheme builds the payload. Nothing is staged, and
-the stale-payload hazard above does not exist there. Three things that are
+**The jailbroken iOS variant embeds the payload from `RuntimeViewerMobileServer`
+directly.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so the
+`SDKROOT = auto` target resolves to iOS for it: it carries a plain
+`PBXTargetDependency` on `RuntimeViewerMobileServer` plus an
+`Embed RuntimeViewerMobileServer Framework` copy phase. Three things that are
 specific to it:
 
 - The payload lands in `Frameworks/`, not `Contents/Resources/` — an iOS bundle
@@ -102,9 +104,9 @@ specific to it:
 
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace
-# RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; stages the
-# simulator payload, then builds the main app, which builds
-# RuntimeViewerCatalystHelper as a dependency). This is the only
+# RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; builds the
+# main app, which builds the Catalyst helper and the simulator payload as
+# dependencies). This is the only
 # working path for Debug-arm64e — the Xcode GUI fails to compile under
 # iOSPackagesShouldBuildARM64e=true. Product: RuntimeViewer-Debug-arm64e.app
 # under /Volumes/DerivedData/RuntimeViewer/Debug-arm64e when that volume

@@ -24,7 +24,6 @@ cd "$PROJECT_DIR"
 # Defaults
 WORKSPACE="RuntimeViewer-Distribution.xcworkspace"
 SCHEME="RuntimeViewer macOS"
-MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Release"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 
@@ -95,7 +94,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
-        --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
         --local-deps) LOCAL_DEPENDENCIES=true; shift;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
@@ -148,10 +146,6 @@ log "update_packages=$UPDATE_PACKAGES update_appcast=$UPDATE_APPCAST upload_to_g
 
 BUILD_PATH="$PROJECT_DIR/Products/Archives"
 EXPORT_PATH="$BUILD_PATH/Products/Export"
-# Where the app's "Embed RuntimeViewerMobileServer Framework" copy phase expects
-# the iOS Simulator payload — a fixed path inside the project, because the phase
-# is a plain file reference rather than a script phase reading a build setting.
-MOBILE_SERVER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework"
 MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
 # Build against the local sibling checkouts of the dependency repos rather
 # than the pinned remote versions. Needed whenever a change under test lives
@@ -374,47 +368,11 @@ verify_application_archive() {
     fail "$archive_path is a generic archive, not an app archive, so it cannot be exported with developer-id. Products installed outside the app (set SKIP_INSTALL = YES on the targets that produce them):"$'\n'"$stray_products"
 }
 
-# The Mac Catalyst helper needs no step of its own: it is a target dependency of
-# the app, archived with it (SKIP_INSTALL = YES keeps it out of the archive's
-# own products) and re-signed for Developer ID when the app is exported.
-
-# The iOS Simulator injection payload, built before the app and staged at
-# $MOBILE_SERVER_STAGED_PATH — the fixed path referenced by the app's "Embed
-# RuntimeViewerMobileServer Framework" copy phase. It cannot be a target
-# dependency: Xcode rejects iOS-family embedded content from a macOS app target.
-# (The Catalyst helper escapes this by declaring SDKROOT = macosx with
-# SDK_VARIANT = iosmac; a simulator product has no such macOS spelling.)
-#
-# A failure is not fatal for a local build: it still ships, only without the
-# ability to inject simulator processes.
-log "Building iOS Simulator injection payload"
-SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
-if XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
-    -workspace "$WORKSPACE" \
-    -scheme "$MOBILE_SERVER_SCHEME" \
-    -configuration "$CONFIGURATION" \
-    -destination 'generic/platform=iOS Simulator' \
-    -derivedDataPath "$DERIVED_DATA" \
-    -skipPackagePluginValidation -skipMacroValidation \
-    "${XCODEBUILD_USER_DEFAULTS[@]}" \
-    "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
-    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
-    run ditto "$SIMULATOR_PAYLOAD_PATH" "$MOBILE_SERVER_STAGED_PATH"
-else
-    log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this release"
-    # Clear the staged copy rather than leaving the last good one there. The
-    # copy phase cannot tell a current payload from a stale one, so without this
-    # the archive would seal in — and ship — a build this run just failed to
-    # produce, with only the warning above to say otherwise.
-    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
-    # A local build may legitimately ship without the payload — only injecting
-    # simulator processes is lost. A publishing run may not: the artefact goes
-    # out to people who cannot tell it is missing until injection fails on
-    # their machine.
-    if $PUBLISHING; then
-        fail "iOS Simulator payload failed to build; refusing to publish without it (drop --upload-to-github / --update-appcast / --commit-push to build locally anyway)"
-    fi
-fi
+# The two embedded products that are not macOS — the Mac Catalyst helper and
+# the iOS Simulator injection payload — need no step of their own: both are
+# target dependencies of the app, archived with it (SKIP_INSTALL = YES keeps
+# them out of the archive's own products) and re-signed for Developer ID when
+# the app is exported. See "Embedded non-macOS products" in AGENTS.md.
 
 log "Archiving main app"
 XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
@@ -457,10 +415,11 @@ if ! $DRY_RUN; then
     log "catalyst_helper_icon ok: $EXPORTED_CATALYST_HELPER_ICON"
 fi
 
-# Check the shipped bundle, not the intermediate step that was supposed to fill
-# it. The embed phase reports a missing payload with `warning:` and exits 0, so
-# a build where it never ran — or ran against a source that had just been
-# cleared — reaches here looking exactly like a successful one.
+# Check the shipped bundle, not the steps that were supposed to fill it. The
+# payload is a target dependency, so a build that fails to produce it fails
+# outright; this stays as the last word on what actually ships, because a
+# published artefact without it goes out to people who cannot tell it is
+# missing until injection fails on their machine.
 if $PUBLISHING; then
     EMBEDDED_SIMULATOR_PAYLOAD="$APP_PATH/Contents/Resources/RuntimeViewerMobileServer.framework"
     [[ -d "$EMBEDDED_SIMULATOR_PAYLOAD" ]] \
