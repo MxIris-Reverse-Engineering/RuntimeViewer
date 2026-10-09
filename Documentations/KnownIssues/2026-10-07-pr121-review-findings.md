@@ -8,10 +8,12 @@
 
 两步都是静态分析：没有构建，也没有运行。
 
-**本文档的状态：方案待批，代码未改。**
-- 每条的「拟修改」是基于 `12e1227b` 写的 diff 草案，**没有经过编译验证**。
-- 「复现测试」是示例代码。落地时要先确认它在修复前确实失败，再做修复。
-- 方案批准后，按文末的「落地顺序」分批实施。每修好一条，就把这条的 diff 换成修复提交的哈希，测试名保留。这与本目录其它文件的约定一致。
+**本文档的状态（2026-10-09）：已全部落地，只剩 PR121.73 的一段手工验证。**
+- 2026-10-08 用户批准全部按推荐项修。修好的每一条，「拟修改」的 diff 草案都已换成修复提交的哈希，测试名保留；条目索引里每行括号写着修复提交。每条都先写了修复前失败的测试（按拍板不写测试的 PR121.63 除外），各条「状态」记着修前修后的实测。
+- 按裁决不修、只留理由：PR121.20、PR121.66 里跨镜像一致性那一半、PR121.68、PR121.34 里「靠轮询得知别处构建」的设计本身、PR121.72 里 Swift 类 ObjC 面那一半。
+- PR121.73：进程内部分已核实（`f25edaa2`，未改代码）；经 Mach service 连接的旧版注入 payload 那一段只能在真实注入的旧 payload 上手工验证，等用户做完再定改不改。
+- 修复过程中顺带发现、不归本 PR 的问题记在「另记」一节。
+- 下面「需要拍板的决定」「落地顺序」与各条的「问题」「四问」保留审查时的原文；那时的「拟修改」是基于 `12e1227b` 写的草案，没有经过编译验证，落地时与草案的出入写在各条「状态」里。
 
 **约定**
 - 四问里的「基线」指分叉点 `9ca0d5a6`（在 `next` 上），不是 `main`。
@@ -102,6 +104,16 @@
 - `CommunicationAndEngineArchitecture.md`：取消协议、回复屏障，以及改动已有命令格式时的兼容规则
 - `AGENTS.md`：值类型树节点的判等约定
 
+## 另记
+
+修复过程中顺带发现的问题。它们在分叉点 `9ca0d5a6` 上就已存在，或者与本 PR 的改动无关，本 PR 不修，留在这里等另立修复。
+
+- **CLI 的 attach 进度阶段顺序没有保证**：`EngineManagerSourceResolver.attach` 把每个进度阶段各放进一个独立的 `Task` 回报，阶段到达调用方的先后不定（自 `e4d4b652` 起就是这样）。CommandLine 全量测试偶发一次失败，单独重跑全过。修法是让阶段顺序经过同一条串行通道回报。
+- **`RuntimeViewerServer.xcodeproj` 自带的锁文件陈旧**：`RuntimeViewerServer/RuntimeViewerServer.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` 仍钉着 MachOSwiftSection 0.17.1、MachOKit 0.52.101 等旧版本。它不在 PR121.70 刷新的六份锁文件之内，三个 workspace 也不读它；单独打开这个工程时才会用到。
+- **经 socket 转发的中转节点在自己没学到根路径时回 `nil`**：PR121.33 的后续修复（`f4b106e4`）让客户端在一分钟内持续向对端要 `DYLD_ROOT_PATH`，但一台经 socket 转发的中转节点回答的是它自己此刻学到的值；它自己的问题还没得到回答时回 `nil`，下游客户端把 `nil` 当成最终答案、不再问。只影响从另一台 Mac 镜像过来的模拟器引擎，且下游连上得比中转节点学到根路径更早。详见 PR121.33 正文与 `CommunicationAndEngineArchitecture.md` §4.6。
+- **满载时偶发失败的测试**：`RuntimeInterfaceCorpusStoreTests` 的「no more objects are printed at once than the printing width」在 Core 全量并行时失败过一次，单独跑整个套件 32/32 通过，属于满载时序问题，与本 PR 的修复无关。同类的已知偶发项还有 `cancelBatchStopsPendingItemsAndEmitsCancelledEvent`；`RelationshipsEquivalenceSnapshotTests` 在 macOS 26.7 上缺 `Foundation.AttributeScopes._DefaultScopeRegistration`，是系统版本差异；`PopUpPathControlTests` 在显示器熄屏时失败。
+- **测试在 `~/Library/Preferences` 留空 plist**：见 PR121.18「另记，基线已有、本批不修」。
+
 ## 条目索引
 
 | ID | 严重度 | 标题 |
@@ -138,7 +150,7 @@
 | PR121.30 | Minor | store 发起的取消跨过连接后被记成失败（已修复 `cc8bf048`、`3cb1ec87`、`efdb1337`；索引管理器的断连 `d183f1c8`） |
 | PR121.31 | Major（已用测试复现） | socket 上迟到的回复在两端之间无限往返（已修复 `17ab55d2`） |
 | PR121.32 | Minor | 为没有索引的镜像请求语料（已修复 `bcf421a0`） |
-| PR121.33 | Minor | iOS 模拟器引擎上同一镜像按原始路径和规范路径各记一份（已修复 `56805f74`；FindSession 那一半 `316fa633`） |
+| PR121.33 | Minor | iOS 模拟器引擎上同一镜像按原始路径和规范路径各记一份（已修复 `56805f74`；FindSession 那一半 `316fa633`；忙时学不到根路径的后续 `f4b106e4`） |
 | PR121.34 | Minor | 被悄悄驱逐的语料仍显示已建好；历史满额时 Clear History 失效（已修复 `77aed354`；轮询的设计不修） |
 | PR121.35 | Minor（性能） | 每个请求完成都单独刷新一次 coverage（已修复 `9d4dc9fc`） |
 | PR121.36 | Cleanup（随 PR121.04 一起消失；单独看建议不修） | 语料事件泵跑在 main actor 上（随 PR121.04 消失 `eef0d40a`） |
@@ -177,7 +189,7 @@
 | PR121.69 | Cleanup | 关系遍历代码重复、visited 键写法不统一（已修复 `fb353cdd`） |
 | PR121.70 | Major | 锁文件钉着被变基孤立的 MachOSwiftSection 修订（已修复 `0b257a8d`） |
 | PR121.71 | Minor（单独看不出错，但它决定 PR121.53 的修复和测试在哪个版本下成立） | RxAppKit 在 App 是 0.6.0、包测试与 CLI 锁文件是 0.5.4（已修复 `0b257a8d`） |
-| PR121.72 | Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分） | 语料为协议副本和 Swift 类的 ObjC 面各建一条，搜索重复命中（协议副本部分已修复 `e5ad471b`，摘要提示见正文；ObjC 面一半不修） |
+| PR121.72 | Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分） | 语料为协议副本和 Swift 类的 ObjC 面各建一条，搜索重复命中（协议副本部分已修复 `e5ad471b`；摘要提示 `8093857b`；ObjC 面一半不修） |
 | PR121.73 | 待核实（若成立：Minor） | 旧版注入 payload 收到不认识的命令可能被标成断开（进程内部分已核实 `f25edaa2`，未改代码；Mach service 一段待用户手工验证） |
 
 ## 条目
@@ -3536,7 +3548,7 @@ func rawAndCanonicalPathsAreOneImage() async throws {
   - `lateCommandTableIsAskedAgain`（「A client keeps asking a peer whose answer is not in place yet」）：连上 1.5 秒后才装处理器。修前红：4 次错误回答后放弃，同样一直按原始路径记键。
   - 修后两条都绿（单独跑约 4.3 秒、1.8 秒）；原有那条测试的等待上限从 5 秒放宽到与客户端相同的时限，条件一成立即返回。Core 全量并行时它两次分别用了 24.9 秒和 34.5 秒才通过——修前早就放弃了，也超过了起初拟定的 30 秒，这是时限定为 60 秒、退避封顶 4 秒的依据。
 - **同类，未修**：经 socket 转发的 proxy 答的是「它此刻已经学到的」根路径。它自己那一问还没得到回答时，下游客户端问它，会立刻得到 `nil` 并当作成功，此后不再问。只出现在「镜像一台 Mac 上的模拟器引擎」这条链路、且下游恰好在 proxy 学到之前连上时；本次没有改，要修得让 proxy 在学到之前不以 `nil` 作答，需另案设计。
-- **提交**：`fix(core): keep trying to learn a busy peer's DYLD_ROOT_PATH instead of giving up early`
+- **提交**：`f4b106e4`
 
 ### PR121.34 被悄悄驱逐的语料仍显示已建好；历史满额时 Clear History 失效
 
@@ -6086,7 +6098,7 @@ grep -A6 '"identity" : "rxappkit"' Package.resolved          # expect "version" 
   - 补搜（新语料建好后对新镜像再搜一次）是另一次搜索，新镜像里的副本不会和此前已显示的副本比较。要彻底去掉，需要会话在合并结果时也做一次同样的判断，留给 D1 评估。
   - 如果 PR121.06 先落地（它把扫描移出 store actor），本条的改动要跟着搬进它抽出的扫描函数，逻辑不变。
 
-**修复**：`e5ad471b`（协议副本部分；Swift 类 ObjC 面部分按裁决不修）；Find 摘要里的提示文字见提交 `fix(find): count hits folded into identical protocol copies in the summary`
+**修复**：`e5ad471b`（协议副本部分；Swift 类 ObjC 面部分按裁决不修）；Find 摘要里的提示文字 `8093857b`
 
 **复现测试（示例）**：新建 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/RuntimeInterfaceRepeatedProtocolCopyTests.swift`。要用 `@testable` 读取 store 和可见性类型，所以不放进不带 `@testable` 的 `RuntimeInterfaceSearchTests`。
 - 先用 `#require` 确认两个镜像都带 `NSCopying`，并且在这组选项下两份读起来一样；系统变了，测试会明确失败，而不是悄悄失效。
