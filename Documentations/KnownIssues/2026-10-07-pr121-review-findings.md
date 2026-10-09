@@ -7401,7 +7401,10 @@ extension ReportOutlineBindingTests {
 
 - **严重度**：Minor
 - **审查编号**：C19（A4-4，属于上次的第 7 条）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。行为测试：`ReportViewModelTests.rowsOpenOnlyOnFirstSight`（纯函数：类别与进行中且有子行的批次只在第一次出现时展开，此后不再展开；新批次出现时只展开它）与 `ReportViewModelTests.filteringIsAnnouncedBeforeTheNarrowedTree`（过滤开始与结束的通知都先于被过滤的树到达，过滤期间不展开任何行）。按文档，被修的「每次都展开」写在 App target 的 VC 里，修前无法写成红灯；真实大纲里重载能否保住展开由 PR121.53 的 `ReportOutlineBindingTests.reloadKeepsExpansion` 负责，那条修前是红的
+- **落地与偏离**：
+  - 策略照方案：`ReportOutline.nodesToExpand(in:seenIdentifiers:)` 纯函数，ViewModel 持有已见过的标识，输出 `nodesToExpand`，VC 在节点绑定之后订阅；过滤改用 `StatefulOutlineView.beginFiltering()` / `endFiltering()`，`filteringChanged` 在过滤状态改变之前发出。
+  - 比草案多一条：**过滤期间 `nodesToExpand` 为空，也不登记「见过」**。过滤时大纲本来就全部展开，而 `endFiltering` 会把展开状态恢复成过滤开始时存下的样子；过滤期间第一次出现的批次若在那时就登记为见过，过滤结束后它就永远是折叠的。现在它们在过滤结束后的那次更新里才算第一次出现。
 
 **问题**：`ReportViewController` 的展开逻辑（ReportViewController.swift:198-214）在 `nodes` 每次发射后都执行一遍：把所有类别、以及所有「进行中且有子行」的批次逐个展开。工作进行期间，索引事件和语料进度大约每 16 ms 合并成一次发射，所以用户刚折叠的类别或批次，下一帧就被重新打开，根本收不起来。这段代码原本是在补 PR121.53 里「整树 `==` 让重载后的行回来全是折叠的」那个缺口。
 

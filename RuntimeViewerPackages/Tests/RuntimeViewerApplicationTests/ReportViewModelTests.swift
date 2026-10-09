@@ -259,6 +259,65 @@ struct ReportViewModelTests {
         #expect(cellViewModel.appearance.toolTip == "\(imagePath)\nimage not found")
     }
 
+    // MARK: - Expansion
+
+    /// The page used to open every kind of work and every running batch on each update — about
+    /// every 16 ms while work runs — so a row the user collapsed opened again on the next frame
+    /// (PR121.54). Now a row is opened the first time it appears, and never touched again.
+    @Test("each kind of work and each running batch open the first time they appear, and never again")
+    func rowsOpenOnlyOnFirstSight() {
+        let runningBatchIdentifier = RuntimeIndexingBatchID()
+        let runningBatch = Self.row(.indexingBatch(runningBatchIdentifier), title: "Manual Indexing", isInProgress: true, children: [
+            Self.row(.indexingItem(batchID: runningBatchIdentifier, imagePath: "/A"), title: "A", isInProgress: true),
+        ])
+        let finishedBatchIdentifier = RuntimeIndexingBatchID()
+        let finishedBatch = Self.row(.indexingBatch(finishedBatchIdentifier), title: "App Launch Indexing", children: [
+            Self.row(.indexingItem(batchID: finishedBatchIdentifier, imagePath: "/B"), title: "B"),
+        ])
+        var seenIdentifiers: Set<ReportNodeIdentifier> = []
+
+        let category = Self.row(.category(.backgroundIndexing), title: "Background Indexing", children: [runningBatch, finishedBatch])
+        #expect(ReportOutline.nodesToExpand(in: [category], seenIdentifiers: &seenIdentifiers).map(\.identifier) == [category.identifier, runningBatch.identifier])
+        // The next update, after the user collapsed both.
+        #expect(ReportOutline.nodesToExpand(in: [category], seenIdentifiers: &seenIdentifiers).isEmpty)
+
+        let newBatchIdentifier = RuntimeIndexingBatchID()
+        let newBatch = Self.row(.indexingBatch(newBatchIdentifier), title: "Manual Indexing", isInProgress: true, children: [
+            Self.row(.indexingItem(batchID: newBatchIdentifier, imagePath: "/C"), title: "C", isInProgress: true),
+        ])
+        let grownCategory = Self.row(.category(.backgroundIndexing), title: "Background Indexing", children: [newBatch, runningBatch, finishedBatch])
+        #expect(ReportOutline.nodesToExpand(in: [grownCategory], seenIdentifiers: &seenIdentifiers).map(\.identifier) == [newBatch.identifier])
+    }
+
+    @Test("the filter bar announces it starts and stops narrowing before the outline it narrowed arrives")
+    func filteringIsAnnouncedBeforeTheNarrowedTree() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.filteringAnnounced")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        // Both turned off, so the outline has its two rows at once.
+        environment.settings.indexing.isEnabled = false
+        environment.settings.search.isCorpusEnabled = false
+        let filterRelay = PublishRelay<String>()
+        let page = environment.make { Page(documentState: environment.documentState, filterString: filterRelay.asDriver(onErrorJustReturn: "")) }
+        defer { withExtendedLifetime(page) {} }
+        _ = try await nextValue(from: page.output.nodes) { !$0.isEmpty }
+
+        var events: [String] = []
+        let disposeBag = DisposeBag()
+        page.output.filteringChanged.emitOnNext { isFiltering in events.append("filtering \(isFiltering)") }.disposed(by: disposeBag)
+        page.output.nodes.skip(1).driveOnNext { nodes in events.append("nodes \(nodes.count)") }.disposed(by: disposeBag)
+        page.output.nodesToExpand.skip(1).driveOnNext { nodes in events.append("expand \(nodes.count)") }.disposed(by: disposeBag)
+
+        filterRelay.accept("Turned")
+        try await settleMainQueue()
+        filterRelay.accept("")
+        try await settleMainQueue()
+
+        // Narrowing keeps both "Turned off in Settings" rows, so the outline does not change; the
+        // announcements still come first, and nothing is opened while the bar narrows.
+        #expect(events == ["filtering true", "nodes 2", "expand 0", "filtering false", "nodes 2", "expand 0"], "\(events)")
+        await engine.stop()
+    }
+
     // MARK: - Helpers
 
     private static func row(

@@ -197,20 +197,25 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         })
         .disposed(by: rx.disposeBag)
 
-        // Subscribed after the nodes binding, so the adapter has reloaded by the time this runs:
-        // each kind of work, and whatever runs under it, is shown open, as Xcode opens the
-        // newest builds; what the user collapses or opens otherwise stays as it is.
-        output.nodes.driveOnNext { [weak self] nodes in
+        // Subscribed after the nodes binding, so the adapter has reloaded by the time this runs.
+        // Each row is opened at most once, the first time it appears, as Xcode opens its newest
+        // builds; what the user collapses stays collapsed.
+        output.nodesToExpand.driveOnNext { [weak self] nodes in
             guard let self else { return }
-            for categoryNode in nodes {
-                if !outlineView.isItemExpanded(categoryNode) {
-                    outlineView.expandItem(categoryNode)
-                }
-                for node in categoryNode.children where node.cellViewModel.isInProgress && !node.children.isEmpty {
-                    if !outlineView.isItemExpanded(node) {
-                        outlineView.expandItem(node)
-                    }
-                }
+            for node in nodes {
+                outlineView.expandItem(node)
+            }
+        }
+        .disposed(by: rx.disposeBag)
+
+        // Every row opens while the filter bar narrows the outline, and the user's own expansion
+        // and selection come back when it stops — the sidebar's behaviour.
+        output.filteringChanged.emitOnNext { [weak self] isFiltering in
+            guard let self else { return }
+            if isFiltering {
+                outlineView.beginFiltering()
+            } else {
+                outlineView.endFiltering()
             }
         }
         .disposed(by: rx.disposeBag)

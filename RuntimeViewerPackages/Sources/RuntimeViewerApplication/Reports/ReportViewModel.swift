@@ -34,6 +34,14 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
     public struct Output {
         public let nodes: Driver<[ReportNode]>
+        /// Rows to open once the outline shows `nodes`: each kind of work, and each batch still
+        /// running with images under it, the first time it appears. Nothing is opened or closed
+        /// after that, and nothing while the filter bar narrows the outline.
+        public let nodesToExpand: Driver<[ReportNode]>
+        /// The filter bar starts (`true`) or stops narrowing the outline. Sent before the narrowed
+        /// tree, so the outline knows which reload opens every row and which puts the user's own
+        /// expansion back.
+        public let filteringChanged: Signal<Bool>
         /// Nothing at all to report — no batch, no build, no feature turned off.
         public let isEmpty: Driver<Bool>
         /// Some work has not ended yet, so Cancel All has something to cancel.
@@ -62,6 +70,11 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
     @RxObserved
     private var showsOnlyInProgress: Bool = false
+
+    /// Every row `ReportOutline.nodesToExpand(in:seenIdentifiers:)` has seen on this page.
+    private var seenNodeIdentifiers: Set<ReportNodeIdentifier> = []
+
+    private let filteringChangedRelay = PublishRelay<Bool>()
 
     public override init(documentState: DocumentState, router: any Router<Route>) {
         super.init(documentState: documentState, router: router)
@@ -140,22 +153,36 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
         input.filterString.driveOnNext { [weak self] filterString in
             guard let self else { return }
+            announceFilteringChange(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
             self.filterString = filterString
         }
         .disposed(by: rx.disposeBag)
 
         input.showsOnlyInProgress.driveOnNext { [weak self] showsOnlyInProgress in
             guard let self else { return }
+            announceFilteringChange(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
             self.showsOnlyInProgress = showsOnlyInProgress
         }
         .disposed(by: rx.disposeBag)
 
-        let nodes = Driver.combineLatest($allNodes.asDriver(), $filterString.asDriver(), $showsOnlyInProgress.asDriver()) { nodes, filterString, showsOnlyInProgress in
-            ReportOutline.filtered(nodes, by: filterString, showsOnlyInProgress: showsOnlyInProgress)
+        let filteredOutline = Driver.combineLatest($allNodes.asDriver(), $filterString.asDriver(), $showsOnlyInProgress.asDriver()) { nodes, filterString, showsOnlyInProgress in
+            (
+                nodes: ReportOutline.filtered(nodes, by: filterString, showsOnlyInProgress: showsOnlyInProgress),
+                isFiltering: ReportOutline.isFiltering(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
+            )
+        }
+        let nodes = filteredOutline.map(\.nodes)
+        // While the filter bar narrows the outline every row is open, and the rows seen meanwhile
+        // get their first sight once it stops, against the user's own expansion.
+        let nodesToExpand = filteredOutline.map { [weak self] filteredOutline -> [ReportNode] in
+            guard let self, !filteredOutline.isFiltering else { return [] }
+            return ReportOutline.nodesToExpand(in: filteredOutline.nodes, seenIdentifiers: &seenNodeIdentifiers)
         }
 
         return Output(
             nodes: nodes,
+            nodesToExpand: nodesToExpand,
+            filteringChanged: filteringChangedRelay.asSignal(),
             isEmpty: $allNodes.asDriver().map(\.isEmpty).distinctUntilChanged(),
             hasWorkInProgress: $allNodes.asDriver().map { nodes in nodes.contains(where: ReportOutline.isInProgress) }.distinctUntilChanged(),
             hasHistory: Driver.combineLatest(indexingCoordinator.historyObservable.asDriver(onErrorJustReturn: []), corpusCoordinator.$finishedBuilds.asDriver()) { history, finishedBuilds in
@@ -163,6 +190,16 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             }
             .distinctUntilChanged()
         )
+    }
+
+    /// Tells the page the filter bar starts or stops narrowing the outline, before the narrowed
+    /// tree reaches it.
+    private func announceFilteringChange(filterString newFilterString: String, showsOnlyInProgress newShowsOnlyInProgress: Bool) {
+        let wasFiltering = ReportOutline.isFiltering(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
+        let isFiltering = ReportOutline.isFiltering(filterString: newFilterString, showsOnlyInProgress: newShowsOnlyInProgress)
+        if isFiltering != wasFiltering {
+            filteringChangedRelay.accept(isFiltering)
+        }
     }
 
     // MARK: - Building the outline
@@ -368,8 +405,8 @@ enum ReportOutline {
     /// The filter bar: a row stays when its title contains the filter string, or when one of its
     /// descendants does; the clock toggle keeps only the work in progress the same way.
     static func filtered(_ nodes: [ReportNode], by filterString: String, showsOnlyInProgress: Bool) -> [ReportNode] {
+        guard isFiltering(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress) else { return nodes }
         let needle = filterString.trimmingCharacters(in: .whitespaces)
-        guard !needle.isEmpty || showsOnlyInProgress else { return nodes }
         func keep(_ node: ReportNode) -> ReportNode? {
             let children = node.children.compactMap(keep)
             let matchesText = needle.isEmpty || node.cellViewModel.appearance.title.range(of: needle, options: .caseInsensitive) != nil
@@ -380,6 +417,33 @@ enum ReportOutline {
             return nil
         }
         return nodes.compactMap(keep)
+    }
+
+    /// Whether the filter bar narrows the outline at all.
+    static func isFiltering(filterString: String, showsOnlyInProgress: Bool) -> Bool {
+        !filterString.trimmingCharacters(in: .whitespaces).isEmpty || showsOnlyInProgress
+    }
+
+    // MARK: - Expansion
+
+    /// The rows to open: each kind of work, and each batch still running with images under it, the
+    /// first time it appears — as Xcode opens its newest builds. A row seen once is never opened
+    /// or closed again, so what the user collapses stays collapsed. `seenIdentifiers` carries what
+    /// has been seen from one call to the next.
+    static func nodesToExpand(in nodes: [ReportNode], seenIdentifiers: inout Set<ReportNodeIdentifier>) -> [ReportNode] {
+        var nodesToExpand: [ReportNode] = []
+        for categoryNode in nodes {
+            if seenIdentifiers.insert(categoryNode.identifier).inserted {
+                nodesToExpand.append(categoryNode)
+            }
+            for node in categoryNode.children {
+                guard seenIdentifiers.insert(node.identifier).inserted else { continue }
+                if node.cellViewModel.isInProgress, !node.children.isEmpty {
+                    nodesToExpand.append(node)
+                }
+            }
+        }
+        return nodesToExpand
     }
 
     static func isCategory(_ node: ReportNode) -> Bool {
