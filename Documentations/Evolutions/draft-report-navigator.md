@@ -56,7 +56,7 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
   每个构建请求的 `onProgress` 与任务结果驱动，进度按 16 ms 合并后再发。启动与换引擎时先用 `interfaceCorpusCoverage()` 补一次快照，
   把别的文档已经开始的构建也算进来；**合并规则**：快照不覆盖本文档请求已经写入的状态；快照里没有完成时间，别的文档先建好的镜像
   放进 `finishedBuilds` 时排在本文档条目之后、不按时间排，**每个镜像只学一次**——Clear History 清掉的不会被下一次快照带回来，
-  镜像的语料从引擎里消失后才可能再被学到。**驱逐后状态过期**：store 的预算驱逐与 `evict` 都不发事件，Reports 页出现时与每次构建
+  镜像的语料从引擎里消失后才可能再被学到。**驱逐后状态过期**：store 的预算驱逐与 `evict` 都不发事件，Reports 页变为可见时（`viewWillAppear`）与每次构建
   结束后重取一次 coverage；让 store 发驱逐事件是后续项。Clear History 同时清索引协调器的 history 与 `finishedBuilds`。
 - **活动信号只算一处**：`DocumentState.reportActivity: Driver<Bool>`（索引协调器的 `hasActiveBatchObservable` ∨
   `FindCorpusCoordinator.hasActiveBuild`，后者即任一语料 pending / building）。
@@ -103,3 +103,4 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
 | 2026-10-09 | 展开策略改为「首次出现时展开一次」：类别与进行中且有子行的批次第一次出现时展开，此后不再用代码改任何行的展开状态；过滤时改用 `StatefulOutlineView` 的 `beginFiltering` / `endFiltering` | PR #121 审查 PR121.54：页面在每次 `nodes` 发射后把所有类别与进行中的批次逐个展开，工作进行时约每 16 ms 一次，用户刚折叠的行下一帧又被打开。判定写成 `ReportOutline.nodesToExpand(in:seenIdentifiers:)`，已见过的标识由 ViewModel 持有；有了 PR121.53 的身份 `==`，出现过的行在重载后自己保住展开状态。过滤期间全部展开、清空后恢复用户原来的展开与选中（侧栏的做法），`filteringChanged` 先于被过滤的树发出；过滤期间第一次出现的行等过滤结束才算第一次出现。与 Find 页同一个规则。 |
 | 2026-10-09 | 双击 "Turned off in Settings" 行打开设置的判断挪进 ViewModel（`Input.doubleClickedNode`，取自 `rx.modelDoubleClicked()`） | PR #121 审查 PR121.64：判断原来写在 VC 的 `@objc` 双击处理器里，VC 只该把事件交给 ViewModel；挪进来之后有了测试 `doubleClickOnTurnedOffRowOpensSettings`。 |
 | 2026-10-09 | 别处发起的语料构建照常显示但不能取消：协调器发布 `followedImagePaths`（本文档持有请求的镜像），不跟踪的行说明写 "Building"、不显示百分比、tooltip 注明 "Requested by another window"；Cancel All 只撤回本文档的，可用与否看 `hasCancellableWork`；还有不跟踪的活跃行时每 2 秒刷新一次 coverage；对端不认识语料命令时，语料类别下显示一行 "Not supported by this source" | PR #121 审查 PR121.55：coverage 快照把别的窗口（或镜像对端）正在建的语料也写进本文档的状态，Report 给所有活跃行都开了 Cancel，可本文档没有请求、撤不回；这些行收不到进度，百分比停住；别处的构建结束后，这一行与分页的活动标记一直亮到 Report 页再次出现。活动标记仍计入别处的构建（方案 A）：语料整个引擎共用，用户想知道的是「还有什么在跑」。定时刷新只在功能打开、文档未关时挂一个，换引擎或关窗即停，走 S3b 的 `refreshCoverage` 合并入口。顺带补上 PR121.37 留给界面的 Report 一半。 |
+| 2026-10-09 | Report 页只在屏上时建树（`Input.isVisible`，由 `rx.viewWillAppear` / `rx.viewWillDisappear` 驱动）；建树挪进非泛型的 `ReportTreeBuilder`，按类别分开重建，索引历史与已结束的语料构建按条目缓存子树 | PR #121 审查 PR121.59：六路输入 `combineLatest` 到一个整树重建上，索引事件与语料进度各按 16 ms 合并，任何一路一动就把 100 条历史连同其下全部镜像行、再加 100 条语料历史重建并重新 configure 一遍；两层侧栏各绑一个 Report 页，看不见的那页照样每秒约 60 次。现在变为可见时 `combineLatest` 回放各路最新值、在页面画出来之前建好树，顺带做原来 `appeared` 做的 `refreshCoverage()`；语料进度只重建它那一行与类别行。历史条目是不变的快照，按标识缓存，快照被替换（PR121.57）时在原来的 cell ViewModel 上重建；代价是结束时间里的 "Today" 过了午夜不会自己变成 "Yesterday"。`ReportTreeBuilderTests` 用 `builtNodeCount` 计数钉住（60 次进度只建 120 个节点；不变的历史只建类别行），`hiddenPageBuildsNoTree` 钉住门控；`rx.viewWillAppear` 在泛型 VC 上可用由 `GenericViewControllerAppearanceEventTests` 证明。 |

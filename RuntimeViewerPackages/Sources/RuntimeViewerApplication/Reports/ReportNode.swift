@@ -30,6 +30,20 @@ public enum ReportNodeIdentifier: Hashable, Sendable {
     case finishedCorpusBuild(UUID)
 }
 
+extension ReportNodeIdentifier {
+    /// The kind of work the row belongs to.
+    var category: ReportCategory {
+        switch self {
+        case .category(let category), .turnedOff(let category), .unsupportedByEngine(let category):
+            category
+        case .indexingBatch, .indexingItem:
+            .backgroundIndexing
+        case .corpusBuild, .finishedCorpusBuild:
+            .searchableInterfaces
+        }
+    }
+}
+
 /// The trailing status of a row: the small spinner while its work runs, an issue mark once it went
 /// wrong — Xcode's `IDELogNavigatorStatusView`.
 public enum ReportRowStatus: Hashable, Sendable {

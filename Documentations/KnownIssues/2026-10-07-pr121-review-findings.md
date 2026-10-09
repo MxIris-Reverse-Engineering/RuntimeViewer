@@ -8554,7 +8554,12 @@ private final class ReloadCounter: @unchecked Sendable {
 
 - **严重度**：Minor（性能）
 - **审查编号**：F3
-- **状态**：方案待批，代码未改
+- **状态**：已修复。性能项，按文档用计数验证：`ReportTreeBuilderTests`（五条：语料进度 60 次只建该行与类别行共 120 个节点，100 条×50 镜像的历史一个不重建；批次从进行中进历史、历史快照被替换时都沿用原来的 cell ViewModel；重建一类不动另一类的 cell ViewModel）与 `ReportViewModelTests.hiddenPageBuildsNoTree`（不可见时 0.5 秒内一个节点都不出，变为可见立刻建出两类）。按文档，这几条依赖新的输入与 builder，修前无法编译，是防回退的护栏而不是修前红灯
+- **落地与偏离**：
+  - 照方案：`Input.isVisible` 取代 `appeared`（VC 由 `rx.viewWillAppear` 发 true、`rx.viewWillDisappear` 发 false，初值 false），`flatMapLatest` 只在可见时订阅上游，可见的上升沿顺带 `refreshCoverage()`；按类别拆开；历史子树按批次标识缓存、比较快照是否相等；已结束的语料构建按条目缓存；建树在非泛型 `ReportTreeBuilder`（`builtNodeCount` 测试接缝）。
+  - 比草案多一处：历史快照被替换时（PR121.57 的就地替换），在**缓存子树原来的 cell ViewModel** 上重建。缓存的子树不经过「本次用到的 cell ViewModel」那张表，下一次重建就被丢出表；草案照表新建一个，屏上的 cell 仍绑着旧对象，而树的形状没变、大纲不会重载——那一行就停在旧内容上。PR121.53 的 `isContentEqual` 比较 cell ViewModel 同一性，作为第二道保险。
+  - 文档提醒的「`rx.viewWillAppear` 靠 `methodInvoked` 拦截，仓库里还没有泛型 VC 用过」：按要求不启动 App，在包测试里写了最小的泛型 `NSViewController` 子类驱动 `viewWillAppear()` / `viewWillDisappear()`（`GenericViewControllerAppearanceEventTests`），事件按序到达。真实窗口里切换分页时是否触发仍需用户确认。
+  - 不加 signpost：文档建议用 signpost 量修前修后的差别，这需要在真实 App 里录 Instruments，本批不启动 App；计数测试已钉住省掉的部分。
 
 **问题**：`ReportViewModel.transform` 用 `combineLatest` 把六路输入接到 `makeNodes`（ReportViewModel.swift:75-97）。任何一路一动——索引事件或语料进度，各自按 16 ms 合并——都会把整棵树重建一遍，并对每个节点重新 `configure`：100 条索引历史连同其下全部镜像行（一个主程序批次就有几百个镜像），再加 100 条语料历史。两层侧栏在建好时就各自创建并绑定了一个 Report 页（SidebarRootCoordinator.swift:32-34、SidebarRuntimeObjectCoordinator.swift:39-40），不管这一页看不看得见，所以后台索引期间两页都在每秒约 60 次地整树重建。
 

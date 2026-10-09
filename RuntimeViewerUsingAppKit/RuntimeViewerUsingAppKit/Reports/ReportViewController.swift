@@ -16,9 +16,6 @@ import SnapKit
 final class ReportViewController<Route: Routable>: BaseEffectViewController<ReportViewModel<Route>>, NSMenuDelegate {
     // MARK: - Relays
 
-    /// The page has no control whose accessor says "came on screen".
-    private let appearedRelay = PublishRelay<Void>()
-
     /// The actions menu and the context menu are built on demand, so their items report here.
     private let cancelRelay = PublishRelay<ReportNode>()
 
@@ -161,18 +158,16 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         }
     }
 
-    override func viewDidAppear() {
-        super.viewDidAppear()
-        appearedRelay.accept(())
-    }
-
     // MARK: - Bindings
 
     override func setupBindings(for viewModel: ReportViewModel<Route>) {
         super.setupBindings(for: viewModel)
 
         let input = ReportViewModel<Route>.Input(
-            appeared: appearedRelay.asSignal(),
+            // Before the page is drawn, so the tree it shows is already current.
+            isVisible: Observable.merge(rx.viewWillAppear.map { true }, rx.viewWillDisappear.map { false })
+                .asDriver(onErrorJustReturn: false)
+                .startWith(false),
             cancel: cancelRelay.asSignal(),
             cancelAll: cancelAllRelay.asSignal(),
             clearHistory: clearHistoryRelay.asSignal(),

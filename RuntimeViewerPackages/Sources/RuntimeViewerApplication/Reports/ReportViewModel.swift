@@ -18,9 +18,10 @@ import RuntimeViewerSettings
 public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
     @MemberwiseInit(.public)
     public struct Input {
-        /// The page came on screen. The corpus store evicts without telling anyone, so the corpus
-        /// states are asked for again.
-        public let appeared: Signal<Void>
+        /// Whether the page is on screen. A page nobody sees builds no tree; coming on screen
+        /// builds it from the latest of every input and asks for the corpus states again — the
+        /// store evicts without telling anyone. Off until it reports otherwise.
+        public let isVisible: Driver<Bool>
         public let cancel: Signal<ReportNode>
         public let cancelAll: Signal<Void>
         public let clearHistory: Signal<Void>
@@ -53,9 +54,8 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         public let hasHistory: Driver<Bool>
     }
 
-    /// The rows' cell ViewModels by what they stand for, kept across rebuilds so a row on screen
-    /// keeps its cell and updates in place. Rows that disappear are dropped on the next rebuild.
-    private var cellViewModelsByIdentifier: [ReportNodeIdentifier: ReportCellViewModel] = [:]
+    /// Builds the tree one kind of work at a time, keeping cell ViewModels and finished rows.
+    private let treeBuilder = ReportTreeBuilder()
 
     @RxObserved
     private var allNodes: [ReportNode] = []
@@ -89,38 +89,61 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         let indexingCoordinator = documentState.backgroundIndexingCoordinator
         let corpusCoordinator = documentState.findCorpusCoordinator
 
-        Observable.combineLatest(
-            indexingCoordinator.batchesObservable,
-            indexingCoordinator.historyObservable,
-            corpusCoordinator.$buildStatesByImagePath.asObservable(),
-            corpusCoordinator.$followedImagePaths.asObservable(),
-            corpusCoordinator.$finishedBuilds.asObservable(),
-            corpusCoordinator.$isCorpusUnsupportedByEngine.asObservable(),
-            $isIndexingEnabled.asObservable(),
-            $isCorpusEnabled.asObservable()
-        )
-        .observe(on: MainScheduler.instance)
-        .subscribeOnNext { [weak self] batches, history, corpusStates, followedImagePaths, finishedBuilds, isCorpusUnsupportedByEngine, isIndexingEnabled, isCorpusEnabled in
-            guard let self else { return }
-            MainActor.assumeIsolated {
-                self.allNodes = self.makeNodes(
-                    batches: batches,
-                    history: history,
-                    corpusStates: corpusStates,
-                    followedImagePaths: followedImagePaths,
-                    finishedBuilds: finishedBuilds,
-                    isCorpusUnsupportedByEngine: isCorpusUnsupportedByEngine,
-                    isIndexingEnabled: isIndexingEnabled,
-                    isCorpusEnabled: isCorpusEnabled
-                )
-            }
-        }
-        .disposed(by: rx.disposeBag)
+        let treeBuilder = treeBuilder
+        let isIndexingEnabled = $isIndexingEnabled.asObservable()
+        let isCorpusEnabled = $isCorpusEnabled.asObservable()
+        let isVisible = input.isVisible.asObservable().distinctUntilChanged()
 
-        input.appeared.emitOnNext {
-            corpusCoordinator.refreshCoverage()
-        }
-        .disposed(by: rx.disposeBag)
+        isVisible
+            .flatMapLatest { isVisible -> Observable<[ReportNode]> in
+                // A page nobody sees builds nothing. Coming on screen replays the latest of every
+                // input, so the tree is current before the page is drawn.
+                guard isVisible else { return .empty() }
+                // Each kind is rebuilt from its own inputs only: a corpus build's progress leaves
+                // the indexing rows alone.
+                let indexingCategory = Observable.combineLatest(
+                    indexingCoordinator.batchesObservable,
+                    indexingCoordinator.historyObservable,
+                    isIndexingEnabled
+                )
+                .observe(on: MainScheduler.instance)
+                .map { batches, history, isIndexingEnabled in
+                    MainActor.assumeIsolated {
+                        treeBuilder.indexingCategory(batches: batches, history: history, isEnabled: isIndexingEnabled)
+                    }
+                }
+                let corpusCategory = Observable.combineLatest(
+                    corpusCoordinator.$buildStatesByImagePath.asObservable(),
+                    corpusCoordinator.$followedImagePaths.asObservable(),
+                    corpusCoordinator.$finishedBuilds.asObservable(),
+                    corpusCoordinator.$isCorpusUnsupportedByEngine.asObservable(),
+                    isCorpusEnabled
+                )
+                .observe(on: MainScheduler.instance)
+                .map { states, followedImagePaths, finishedBuilds, isCorpusUnsupportedByEngine, isCorpusEnabled in
+                    MainActor.assumeIsolated {
+                        treeBuilder.corpusCategory(
+                            states: states,
+                            followedImagePaths: followedImagePaths,
+                            finishedBuilds: finishedBuilds,
+                            isUnsupportedByEngine: isCorpusUnsupportedByEngine,
+                            isEnabled: isCorpusEnabled
+                        )
+                    }
+                }
+                return Observable.combineLatest(indexingCategory, corpusCategory) { indexingCategory, corpusCategory in
+                    [indexingCategory, corpusCategory].compactMap { $0 }
+                }
+            }
+            .bind(to: $allNodes)
+            .disposed(by: rx.disposeBag)
+
+        isVisible
+            .filter { $0 }
+            .subscribeOnNext { _ in
+                corpusCoordinator.refreshCoverage()
+            }
+            .disposed(by: rx.disposeBag)
 
         input.cancel.emitOnNext { node in
             switch node.identifier {
@@ -215,75 +238,6 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         if isFiltering != wasFiltering {
             filteringChangedRelay.accept(isFiltering)
         }
-    }
-
-    // MARK: - Building the outline
-
-    private func makeNodes(
-        batches: [RuntimeIndexingBatch],
-        history: [RuntimeIndexingBatch],
-        corpusStates: [String: RuntimeInterfaceCorpusBuildState],
-        followedImagePaths: Set<String>,
-        finishedBuilds: [FindCorpusFinishedBuild],
-        isCorpusUnsupportedByEngine: Bool,
-        isIndexingEnabled: Bool,
-        isCorpusEnabled: Bool
-    ) -> [ReportNode] {
-        var usedIdentifiers: Set<ReportNodeIdentifier> = []
-        func node(_ identifier: ReportNodeIdentifier, children: [ReportNode] = [], configure: (ReportCellViewModel) -> Void) -> ReportNode {
-            let cellViewModel = cellViewModelsByIdentifier[identifier] ?? ReportCellViewModel(identifier: identifier)
-            cellViewModelsByIdentifier[identifier] = cellViewModel
-            usedIdentifiers.insert(identifier)
-            configure(cellViewModel)
-            return ReportNode(identifier: identifier, cellViewModel: cellViewModel, children: children)
-        }
-
-        var indexingChildren: [ReportNode] = []
-        if !isIndexingEnabled {
-            indexingChildren.append(node(.turnedOff(.backgroundIndexing)) { $0.update(icon: ReportOutline.turnedOffIcon, title: "Turned off in Settings") })
-        }
-        // The manager appends batches as they start, and history is newest first already.
-        for batch in batches.reversed() + history {
-            let showsItems = ReportOutline.showsItems(of: batch)
-            let items = showsItems ? batch.items.map { item in
-                node(.indexingItem(batchID: batch.id, imagePath: item.id)) { ReportOutline.configure($0, for: item) }
-            } : []
-            indexingChildren.append(node(.indexingBatch(batch.id), children: items) { ReportOutline.configure($0, for: batch) })
-        }
-
-        var corpusChildren: [ReportNode] = []
-        if !isCorpusEnabled {
-            corpusChildren.append(node(.turnedOff(.searchableInterfaces)) { $0.update(icon: ReportOutline.turnedOffIcon, title: "Turned off in Settings") })
-        } else if isCorpusUnsupportedByEngine {
-            corpusChildren.append(node(.unsupportedByEngine(.searchableInterfaces)) { ReportOutline.configureUnsupportedCorpusRow($0) })
-        }
-        // The image being printed first, then the waiting ones by name.
-        let activeBuilds = corpusStates.filter(\.value.isActive).sorted { leftEntry, rightEntry in
-            let leftIsBuilding = ReportOutline.isBuilding(leftEntry.value)
-            let rightIsBuilding = ReportOutline.isBuilding(rightEntry.value)
-            if leftIsBuilding != rightIsBuilding {
-                return leftIsBuilding
-            }
-            return FindScope.imageName(of: leftEntry.key) < FindScope.imageName(of: rightEntry.key)
-        }
-        for (imagePath, state) in activeBuilds {
-            corpusChildren.append(node(.corpusBuild(imagePath: imagePath)) {
-                ReportOutline.configure($0, forCorpusOf: imagePath, state: state, isFollowed: followedImagePaths.contains(imagePath))
-            })
-        }
-        for finishedBuild in finishedBuilds {
-            corpusChildren.append(node(.finishedCorpusBuild(finishedBuild.id)) { ReportOutline.configure($0, for: finishedBuild) })
-        }
-
-        var nodes: [ReportNode] = []
-        if !indexingChildren.isEmpty {
-            nodes.append(node(.category(.backgroundIndexing), children: indexingChildren) { $0.update(icon: ReportOutline.indexingIcon, title: "Background Indexing") })
-        }
-        if !corpusChildren.isEmpty {
-            nodes.append(node(.category(.searchableInterfaces), children: corpusChildren) { $0.update(icon: ReportOutline.corpusIcon, title: "Searchable Interfaces") })
-        }
-        cellViewModelsByIdentifier = cellViewModelsByIdentifier.filter { usedIdentifiers.contains($0.key) }
-        return nodes
     }
 
     // MARK: - Settings

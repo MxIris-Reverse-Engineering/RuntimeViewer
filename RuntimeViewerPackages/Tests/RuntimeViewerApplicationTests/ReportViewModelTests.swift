@@ -28,10 +28,10 @@ struct ReportViewModelTests {
         let viewModel: ReportViewModel<SidebarRootRoute>
         let output: ReportViewModel<SidebarRootRoute>.Output
 
-        init(documentState: DocumentState, doubleClickedNode: Signal<ReportNode> = .empty(), filterString: Driver<String> = .just(""), showsOnlyInProgress: Driver<Bool> = .just(false)) {
+        init(documentState: DocumentState, isVisible: Driver<Bool> = .just(true), doubleClickedNode: Signal<ReportNode> = .empty(), filterString: Driver<String> = .just(""), showsOnlyInProgress: Driver<Bool> = .just(false)) {
             viewModel = ReportViewModel(documentState: documentState, router: router)
             output = viewModel.transform(ReportViewModel<SidebarRootRoute>.Input(
-                appeared: .empty(),
+                isVisible: isVisible,
                 cancel: cancelRelay.asSignal(),
                 cancelAll: cancelAllRelay.asSignal(),
                 clearHistory: clearHistoryRelay.asSignal(),
@@ -109,6 +109,28 @@ struct ReportViewModelTests {
         #expect(Self.node(buildIdentifier, in: laterNodes)?.cellViewModel === row.cellViewModel)
         // `==` on nodes is identity only; whether the outline reloads is `isContentEqual(to:)`.
         #expect(laterNodes.elementsEqual(nodes) { $0.isContentEqual(to: $1) }, "the outline would reload for a change only the row's own cell shows")
+        await engine.stop()
+    }
+
+    /// Both sidebar levels bind a Report page when they are built, seen or not, and the page
+    /// rebuilt its whole tree on every update — about every 16 ms while work ran (PR121.59).
+    @Test("a page nobody sees builds no tree, and builds it as soon as it comes on screen")
+    func hiddenPageBuildsNoTree() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.hiddenPage")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        // Both turned off: a visible page shows their two rows at once.
+        environment.settings.indexing.isEnabled = false
+        environment.settings.search.isCorpusEnabled = false
+        let visibility = BehaviorRelay<Bool>(value: false)
+        let page = environment.make { Page(documentState: environment.documentState, isVisible: visibility.asDriver()) }
+        defer { withExtendedLifetime(page) {} }
+
+        #expect(try await values(from: page.output.nodes, during: 0.5).allSatisfy(\.isEmpty))
+
+        visibility.accept(true)
+
+        let nodes = try await nextValue(from: page.output.nodes) { !$0.isEmpty }
+        #expect(nodes.map(\.identifier) == [.category(.backgroundIndexing), .category(.searchableInterfaces)])
         await engine.stop()
     }
 
