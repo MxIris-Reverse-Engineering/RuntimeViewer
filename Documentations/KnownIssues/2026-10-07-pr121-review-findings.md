@@ -5338,7 +5338,7 @@ func onlyRowsThatGoSomewhereOpenInNewTab() throws {
 
 - **严重度**：Minor
 - **审查编号**：C40 + F7
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试（修前都红，红的那一轮先只加了行为不变的接缝 `applyListing` 与恒空的 `revealedImagePath`）：`FindScopeChooserViewModelTests.buildProgressLeavesTheRowsAlone`（两次只改状态的进度刷新各重发一次列表）、`revealsTheScopeOnce`（新契约，修前没有一次性的揭示输出）、`simulatorScopeIsSelectedAsTheEngineListsIt`（S3a 交接的同类，见 PR121.33：模拟器引擎上范围里的镜像按原始路径选中，而引擎与协调器按带根的规范路径列出，选中落空、同一镜像列两行）。列表只在列出的镜像变了时才重排、重发；状态变化经 cell 的绑定原地刷新。「把范围的第一个镜像滚进视野」改为 ViewModel 的一次性输出 `revealedImagePath`，引擎第一次答复索引列表时发一次，用户改过选择后不再发；VC 去掉 `isRevealingSelection` 与选中订阅里的滚动，收到它时先滚动再强制布局。范围的镜像与引擎的列表都先经 `canonicalImagePath` 规范化（幂等，对 macOS 引擎是原样）。`loadIndexedImagePaths` 里的 `self?.` 一并改成 await 之后的 `guard let self`（PR121.51 的一处）。既有的 `pickedImageNotIndexed` 原先靠「列表重发」看到 `not indexed`，改为盯住那一行的状态（状态从此原地刷新、不再重发列表）。VC 改动在 App target，要在真实窗口里确认：语料构建期间往下滚动列表不再被拽回第一个选中行，打开表单时范围的第一个镜像仍滚进视野
 
 **问题**：
 - `FindScopeChooserViewModel` 每收到一次 `buildStatesByImagePath`（语料构建期间约每 16 ms 一次），就重算整个列表、用 `localizedCaseInsensitiveCompare` 全量重排（F7），再重新给 `allRows` 赋值（`FindScopeChooserViewModel.swift:84-95`）。`rows` 随之重发。

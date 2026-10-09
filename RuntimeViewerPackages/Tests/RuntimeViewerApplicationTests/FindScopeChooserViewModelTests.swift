@@ -1,6 +1,6 @@
 import Foundation
 import RuntimeViewerArchitectures
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 import Testing
 @testable import RuntimeViewerApplication
 
@@ -52,12 +52,16 @@ struct FindScopeChooserViewModelTests {
         let (viewModel, output) = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        // Said once the engine has listed what it indexed, and not before.
+        // Said once the engine has listed what it indexed, and not before. A status reaches its
+        // row in place, without the rows being published again, so the row is watched.
         let rows = try await nextValue(from: output.rows, timeout: 30) { rows in
-            rows.contains { $0.imagePath == Self.alphaImagePath && $0.status == "not indexed" }
+            rows.contains { $0.imagePath == Self.alphaImagePath } && rows.contains { $0.imagePath == TestImages.libobjc }
         }
+        let alphaRow = try #require(rows.first { $0.imagePath == Self.alphaImagePath })
+        let libobjcRow = try #require(rows.first { $0.imagePath == TestImages.libobjc })
+        try await waitUntil(timeout: 30) { alphaRow.status == "not indexed" }
 
-        #expect(rows.first { $0.imagePath == TestImages.libobjc }?.status != "not indexed")
+        #expect(libobjcRow.status != "not indexed")
         await engine.stop()
     }
 
@@ -198,6 +202,78 @@ struct FindScopeChooserViewModelTests {
             return false
         }
         .count
+    }
+
+    // MARK: - Listing while corpora build
+
+    @Test("a build state change updates its row's status without publishing the rows again")
+    func buildProgressLeavesTheRowsAlone() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.progress", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let rows = try await nextValue(from: output.rows, timeout: 30) { rows in rows.contains { $0.imagePath == TestImages.libobjc } }
+        let libobjcRow = try #require(rows.first { $0.imagePath == TestImages.libobjc })
+        let listedImagePaths = rows.map(\.imagePath)
+
+        var publishedRowCount = 0
+        let subscription = output.rows.driveOnNext { _ in publishedRowCount += 1 }
+        defer { subscription.dispose() }
+        try await settleMainQueue()
+        let publishedBeforeProgress = publishedRowCount
+
+        // Two progress flushes, as the coordinator sends about every 16 ms while corpora
+        // build: the same images, other states.
+        viewModel.applyListing(indexedImagePaths: listedImagePaths, buildStates: [TestImages.libobjc: .pending])
+        #expect(libobjcRow.status == "waiting")
+        viewModel.applyListing(indexedImagePaths: listedImagePaths, buildStates: [TestImages.libobjc: .failed(message: "fixture")])
+        #expect(libobjcRow.status == "failed")
+        try await settleMainQueue()
+
+        #expect(publishedRowCount == publishedBeforeProgress, "every progress flush published the rows again, and the list scrolled back to the scope")
+        await engine.stop()
+    }
+
+    @Test("the scope's first image is revealed once the engine lists its images, and never again")
+    func revealsTheScopeOnce() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.reveal", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.make { environment.documentState.findSession }.update { $0.scope = .images([TestImages.libobjc]) }
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        #expect(try await nextValue(from: output.revealedImagePath, timeout: 30) == TestImages.libobjc)
+
+        var laterReveals: [String] = []
+        let subscription = output.revealedImagePath.emitOnNext { laterReveals.append($0) }
+        defer { subscription.dispose() }
+        let listedImagePaths = try await nextValue(from: output.rows).map(\.imagePath)
+        viewModel.applyListing(indexedImagePaths: listedImagePaths, buildStates: [TestImages.libobjc: .pending])
+        selectionChangedRelay.accept([TestImages.libobjc])
+        viewModel.applyListing(indexedImagePaths: listedImagePaths, buildStates: [:])
+        try await settleMainQueue()
+        #expect(laterReveals.isEmpty)
+        await engine.stop()
+    }
+
+    @Test("on a simulator engine the scope's images start out selected as the engine lists them")
+    func simulatorScopeIsSelectedAsTheEngineListsIt() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindScopeChooserViewModelTests.simulator", loading: [TestImages.libobjc])
+        // A scope spells an image as the sidebar does, without the simulator's root; the
+        // engine's list and the corpus coordinator spell it with the root.
+        engine.setDyldRootPathForTesting("/sim_root")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.make { environment.documentState.findSession }.update { $0.scope = .images([TestImages.libobjc]) }
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        let canonicalPath = "/sim_root" + TestImages.libobjc
+        #expect(try await nextValue(from: output.selectedImagePaths) == [canonicalPath])
+        // Listed once, under the engine's spelling.
+        viewModel.applyListing(indexedImagePaths: [canonicalPath], buildStates: [:])
+        let rows = try await nextValue(from: output.rows)
+        #expect(rows.filter { $0.name == "libobjc.A.dylib" }.map(\.imagePath) == [canonicalPath])
+        await engine.stop()
     }
 
     /// Binds inside the environment's dependencies: `transform` reads the

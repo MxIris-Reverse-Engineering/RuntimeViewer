@@ -41,19 +41,39 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
         public let selectedImagePaths: Driver<Set<String>>
         /// OK cannot be clicked while nothing is selected.
         public let isOKEnabled: Driver<Bool>
+        /// The image to scroll into view, once, when the list is first complete: the first
+        /// image the scope holds, in display order.
+        public let revealedImagePath: Signal<String>
     }
 
     private let session: FindSession
 
     /// The images the scope held when the sheet opened, listed whether or not
-    /// the engine has them.
+    /// the engine has them. Spelled as the engine spells an image — with an iOS
+    /// Simulator's root — like the engine's list and the build states they
+    /// are compared with.
     private let scopeImagePaths: Set<String>
 
     /// The rows' cell ViewModels by image, kept so a row on screen keeps its
     /// cell and updates in place. Images that leave the list are dropped.
     private var cellViewModelsByImagePath: [String: FindScopeImageCellViewModel] = [:]
 
-    /// The engine's indexed images; `nil` until it answers.
+    /// The listed images in display order, and the same images as a set. Sorted again only
+    /// when the images listed change — not on every build state change, which comes about
+    /// every 16 ms while corpora build.
+    private var sortedImagePaths: [String] = []
+
+    private var sortedImagePathSet: Set<String> = []
+
+    /// Whether the scope's first image has been brought into view, which happens once.
+    private var hasRevealedSelection = false
+
+    /// Whether the user has changed the selection; after that nothing is revealed.
+    private var hasUserChangedSelection = false
+
+    private let revealedImagePathRelay = PublishRelay<String>()
+
+    /// The engine's indexed images, as the engine spells them; `nil` until it answers.
     @RxObserved
     private var indexedImagePaths: [String]? = nil
 
@@ -73,7 +93,8 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
 
     public override init(documentState: DocumentState, router: any Router<Route>) {
         self.session = documentState.findSession
-        let scopeImagePaths = Self.imagePaths(of: documentState.findSession.query.scope, currentImagePath: documentState.currentImageNode?.path)
+        let corpusCoordinator = documentState.findCorpusCoordinator
+        let scopeImagePaths = Set(Self.imagePaths(of: documentState.findSession.query.scope, currentImagePath: documentState.currentImageNode?.path).map { corpusCoordinator.canonicalImagePath($0) })
         self.scopeImagePaths = scopeImagePaths
         self.selectedImagePaths = scopeImagePaths
         super.init(documentState: documentState, router: router)
@@ -89,7 +110,7 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
         .subscribeOnNext { [weak self] indexedImagePaths, buildStates in
             guard let self else { return }
             MainActor.assumeIsolated {
-                self.allRows = self.makeRows(indexedImagePaths: indexedImagePaths, buildStates: buildStates)
+                self.applyListing(indexedImagePaths: indexedImagePaths, buildStates: buildStates)
             }
         }
         .disposed(by: rx.disposeBag)
@@ -102,6 +123,7 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
 
         input.selectionChanged.emitOnNext { [weak self] imagePaths in
             guard let self else { return }
+            hasUserChangedSelection = true
             selectedImagePaths = imagePaths
         }
         .disposed(by: rx.disposeBag)
@@ -127,7 +149,8 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
         return Output(
             rows: rows,
             selectedImagePaths: $selectedImagePaths.asDriver(),
-            isOKEnabled: $selectedImagePaths.asDriver().map { !$0.isEmpty }.distinctUntilChanged()
+            isOKEnabled: $selectedImagePaths.asDriver().map { !$0.isEmpty }.distinctUntilChanged(),
+            revealedImagePath: revealedImagePathRelay.asSignal()
         )
     }
 
@@ -161,16 +184,23 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
         let engine = documentState.runtimeEngine
         Task { [weak self] in
             guard let imagePaths = try? await engine.indexedImagePathList() else { return }
-            self?.indexedImagePaths = imagePaths
+            // After the await: the ViewModel is not kept alive while the engine answers.
+            guard let self else { return }
+            // The engine spells its images with a simulator's root already; spelling them
+            // again is a no-op, and keeps an engine that does not in step with the scope.
+            indexedImagePaths = imagePaths.map { engine.canonicalImagePath($0) }
         }
     }
 
     private func makeRows(indexedImagePaths: [String]?, buildStates: [String: RuntimeInterfaceCorpusBuildState]) -> [FindScopeImageCellViewModel] {
         let knownImagePaths = Set(indexedImagePaths ?? []).union(buildStates.keys)
         let listedImagePaths = knownImagePaths.union(scopeImagePaths)
-        let sortedImagePaths = listedImagePaths.sorted { leftImagePath, rightImagePath in
-            let order = FindScope.imageName(of: leftImagePath).localizedCaseInsensitiveCompare(FindScope.imageName(of: rightImagePath))
-            return order == .orderedSame ? leftImagePath < rightImagePath : order == .orderedAscending
+        if listedImagePaths != sortedImagePathSet {
+            sortedImagePaths = listedImagePaths.sorted { leftImagePath, rightImagePath in
+                let order = FindScope.imageName(of: leftImagePath).localizedCaseInsensitiveCompare(FindScope.imageName(of: rightImagePath))
+                return order == .orderedSame ? leftImagePath < rightImagePath : order == .orderedAscending
+            }
+            sortedImagePathSet = listedImagePaths
         }
         let rows = sortedImagePaths.map { imagePath in
             let cellViewModel = cellViewModelsByImagePath[imagePath] ?? FindScopeImageCellViewModel(imagePath: imagePath)
@@ -183,6 +213,32 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
         }
         cellViewModelsByImagePath = cellViewModelsByImagePath.filter { listedImagePaths.contains($0.key) }
         return rows
+    }
+
+    /// The engine's images and their build states, as they change: rows for them, published
+    /// again only when the images listed change — a status alone has already reached its row
+    /// through the cell's binding — and the scope revealed once the list is complete.
+    ///
+    /// Internal so a test can stand in for the engine's answer and the coordinator's flushes.
+    func applyListing(indexedImagePaths: [String]?, buildStates: [String: RuntimeInterfaceCorpusBuildState]) {
+        let rows = makeRows(indexedImagePaths: indexedImagePaths, buildStates: buildStates)
+        if rows.map(\.imagePath) != allRows.map(\.imagePath) {
+            allRows = rows
+        }
+        // The list is complete once the engine has listed its images.
+        if indexedImagePaths != nil {
+            revealSelectionOnce(in: rows)
+        }
+    }
+
+    /// Brings the scope's first image into view, once: when the engine has listed its images,
+    /// for only then is the list complete — as Xcode's chooser reveals the scope's items when
+    /// it opens. Nothing is revealed after the user has changed the selection.
+    private func revealSelectionOnce(in rows: [FindScopeImageCellViewModel]) {
+        guard !hasRevealedSelection, !hasUserChangedSelection else { return }
+        hasRevealedSelection = true
+        guard let firstSelectedRow = rows.first(where: { selectedImagePaths.contains($0.imagePath) }) else { return }
+        revealedImagePathRelay.accept(firstSelectedRow.imagePath)
     }
 
     /// What a row says about its image's corpus.
