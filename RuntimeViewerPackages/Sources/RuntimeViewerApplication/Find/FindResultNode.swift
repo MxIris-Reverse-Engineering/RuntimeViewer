@@ -68,6 +68,12 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         }
     }
 
+    /// Whether the row goes somewhere, so its context menu offers Open in New Tab: an
+    /// unresolved relationship node does not.
+    public var canOpenInNewTab: Bool {
+        navigationTarget != nil
+    }
+
     /// The text the bottom filter bar matches against.
     public var filterableText: String {
         switch content {

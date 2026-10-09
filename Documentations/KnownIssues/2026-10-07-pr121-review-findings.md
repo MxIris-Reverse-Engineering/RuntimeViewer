@@ -5186,7 +5186,7 @@ func sameTreeIsSameContent() {
 
 - **严重度**：Minor
 - **审查编号**：C41
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.onlyRowsThatGoSomewhereOpenInNewTab`——先把 `canOpenInNewTab` 以修前菜单的行为（处处可用）落地，未解析的关系节点那一条为红，再改成 `navigationTarget != nil`。菜单每次弹出前按 `clickedRow` 重建（`contextMenu.rx.needsUpdate`，与侧栏同法），空白处或不能跳转的行给空列表，AppKit 就不弹菜单；选中项经 `contextMenu.rx.itemSelected` 送进 `resultOpenedInNewTab`，与 PR121.07 的 ⌥-点击合并；`openInNewTabRelay` 与 `@objc` action 删除。接线在 App target，没有单元测试，要在真实窗口里确认：空白处、灰色关系节点上右键都不弹菜单，命中行右键 Open in New Tab 新开标签
 
 **问题**：Find 结果大纲挂的是一份静态菜单（`FindViewController.swift:272`），只有一项「Open in New Tab」，永远可用。在空白处右键，或者右键一个没有解析出类型的关系节点（灰色、不可跳转的那种），菜单照样弹出。点下去，`openInNewTabMenuItemAction`（`:425`）的守卫、或者 `FindViewModel.navigate` 里的 `navigationTarget == nil` 会悄悄返回，什么也不发生。
 

@@ -18,8 +18,6 @@ import SnapKit
 final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewController<FindViewModel<Route>>, NSOutlineViewDelegate {
     // MARK: - Relays
 
-    private let openInNewTabRelay = PublishRelay<FindResultNode>()
-
     /// What the outline shows. Its data source subscribes to this relay, so the presentation's
     /// subscriber hands the nodes over synchronously and can expand and select rows right after.
     private let displayedNodesRelay = PublishRelay<[FindResultNode]>()
@@ -55,6 +53,10 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
     private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
 
     private let resultsTopSeparatorView = NSBox()
+
+    /// The rows' context menu, rebuilt from the clicked row each time it opens. A click on empty
+    /// space, or on a row that goes nowhere, gets no items, so AppKit shows no menu at all.
+    private let contextMenu = NSMenu()
 
     // MARK: - Filter Bar
 
@@ -272,12 +274,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             $0.allowsTypeSelect = true
             $0.headerView = nil
             $0.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-            $0.menu = NSMenu().then {
-                $0.addItem(withTitle: "Open in New Tab", action: #selector(openInNewTabMenuItemAction(_:)), keyEquivalent: "").then {
-                    $0.image = SFSymbols(systemName: .plusSquareOnSquare).nsImage
-                    $0.target = self
-                }
-            }
+            $0.menu = contextMenu
         }
 
         filterSearchField.do {
@@ -316,6 +313,24 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         let resultOpenedWithOption: Signal<FindResultNode> = activation
             .filter { FindResultActivation.opensInNewTab(for: $0.triggeringEvent) }
             .map(\.item)
+
+        let contextMenuItems: Observable<[FindResultMenuItem]> = contextMenu.rx.needsUpdate
+            .asObservable()
+            .map { [weak outlineView] _ -> [FindResultMenuItem] in
+                guard let outlineView,
+                      outlineView.clickedRow >= 0,
+                      let node = outlineView.item(atRow: outlineView.clickedRow) as? FindResultNode,
+                      node.canOpenInNewTab
+                else { return [] }
+                return [FindResultMenuItem(title: "Open in New Tab", image: SFSymbols(systemName: .plusSquareOnSquare).nsImage, node: node)]
+            }
+        contextMenu.rx.items(source: contextMenuItems)({ menuItem, entry in
+            menuItem.image = entry.image
+        })
+        .disposed(by: rx.disposeBag)
+        let resultOpenedFromMenu: Signal<FindResultNode> = contextMenu.rx.itemSelected(FindResultMenuItem.self)
+            .map(\.item.node)
+            .asSignal(onErrorSignalWith: .empty())
 
         let resultsSelected: Signal<[FindResultNode]> = outlineView.rx.proposedSelection()
             .asSignal()
@@ -359,7 +374,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in searchField.stringValue },
             filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
             resultClicked: resultClicked,
-            resultOpenedInNewTab: .merge(openInNewTabRelay.asSignal(), resultOpenedWithOption),
+            resultOpenedInNewTab: .merge(resultOpenedFromMenu, resultOpenedWithOption),
             resultCollapsed: resultCollapsed,
             resultExpanded: resultExpanded,
             resultsSelected: resultsSelected
@@ -473,13 +488,18 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         summaryView.isHidden = summary == nil
         summaryHeightConstraint?.update(offset: summary == nil ? 0 : 22)
     }
+}
 
-    // MARK: - Context Menu
+// MARK: - Context Menu Item
 
-    @objc private func openInNewTabMenuItemAction(_ sender: NSMenuItem) {
-        guard outlineView.hasValidClickedRow, let node = outlineView.itemAtClickedRow as? FindResultNode else { return }
-        openInNewTabRelay.accept(node)
-    }
+/// One entry of the results' context menu, carrying the row it acts on.
+///
+/// Declared outside the generic view controller: a type nested in a generic class is generic
+/// itself.
+private struct FindResultMenuItem: RxMenuItemRepresentable {
+    let title: String
+    let image: NSImage?
+    let node: FindResultNode
 }
 
 // MARK: - Scope Button

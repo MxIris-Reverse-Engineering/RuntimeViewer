@@ -66,6 +66,21 @@ struct FindResultNodeTests {
         #expect(!after.isContentEqual(to: before))
     }
 
+    // MARK: - Context menu
+
+    /// The results' context menu offered Open in New Tab everywhere, an unresolved relationship
+    /// row and empty space included, and the item then did nothing (PR121.44).
+    @Test("a row opens in a new tab only when it goes somewhere")
+    func onlyRowsThatGoSomewhereOpenInNewTab() throws {
+        let type = FindResultFixtures.type("Alpha", hitCount: 1)
+        #expect(type.canOpenInNewTab)
+        #expect(try #require(type.children.first).canOpenInNewTab)
+        #expect(FindResultFixtures.relationship(named: "Resolved", path: "tree").canOpenInNewTab)
+
+        let unresolved = FindResultNode(content: .relationship(name: "MissingType", object: nil), identifier: "tree/MissingType")
+        #expect(!unresolved.canOpenInNewTab)
+    }
+
     // MARK: - Filtering
 
     /// The filter bar used to build every row it kept again, each hit's attributed line included,
