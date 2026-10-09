@@ -1,4 +1,6 @@
 import Foundation
+import MachOKit
+@_spi(Support) import SwiftPrinting
 import Testing
 @testable import RuntimeViewerCore
 
@@ -12,6 +14,10 @@ struct RuntimeInterfaceCorpusNestingTests {
     private enum Anchors {
         static let foundationPath = "/System/Library/Frameworks/Foundation.framework/Foundation"
         static let libobjcPath = "/usr/lib/libobjc.A.dylib"
+        /// Declares `BNNSGraph.Builder.OperationParameter`, a protocol nested
+        /// in a type of its own module that has default implementations —
+        /// Foundation has none.
+        static let swiftAccelerateOverlayPath = "/usr/lib/swift/libswiftAccelerate.dylib"
     }
 
     /// One engine holding Foundation's corpus for the whole suite: building
@@ -28,6 +34,17 @@ struct RuntimeInterfaceCorpusNestingTests {
     private static func foundationEntries() async throws -> [RuntimeInterfaceCorpusEntry] {
         let engine = try await foundationEngine.value
         return try #require(await engine.interfaceCorpusStore.corpus(for: Anchors.foundationPath)?.entries)
+    }
+
+    /// The Accelerate overlay's corpus, in an engine of its own so the
+    /// searches of the other tests keep running over Foundation alone.
+    private static let swiftAccelerateOverlayEngine = Task<RuntimeEngine, Swift.Error> {
+        let engine = RuntimeEngine(source: .local, engineID: "test-corpus-nesting-accelerate")
+        try await engine.connect()
+        try await engine.loadImage(at: Anchors.libobjcPath)
+        try await engine.loadImage(at: Anchors.swiftAccelerateOverlayPath)
+        _ = try await engine.buildInterfaceCorpus(for: Anchors.swiftAccelerateOverlayPath, transformer: .default)
+        return engine
     }
 
     @Test("a field is located on its own declaration, not on the nested CodingKeys case that shares its name")
@@ -244,31 +261,67 @@ struct RuntimeInterfaceCorpusNestingTests {
         #expect(different.isEmpty, "\(different.count) of \(nestedEntries.count) nested types differ, e.g.\n\(different.prefix(10).joined(separator: "\n"))")
     }
 
-    /// A protocol declared in an extension of a type from another module —
-    /// `extension NSNotificationCenter { protocol AsyncMessage }` — is printed
-    /// without its default implementations, the way its parent prints it
-    /// inline, so its own interface has to bring them along.
-    @Test("a protocol declared in another module's extension shows its default implementations")
-    func extensionProtocolShowsDefaultImplementations() async throws {
-        let engine = try await Self.foundationEngine.value
-        let entries = try await Self.foundationEntries()
+    /// Who prints a protocol's default implementations is split between two
+    /// parties: MachOSwiftSection's printer trails the declaration with them
+    /// for some protocols, and `printedDefinitions` appends them for the
+    /// others. Both read `printsDefaultImplementationExtensionsAfterDeclaration`,
+    /// but what matters is what the printer does, so it is checked against a
+    /// print of the declaration on its own, in every placement — at the top
+    /// level and in an extension of another module's type (Foundation), nested
+    /// in a type (the Accelerate overlay). A printer that stops following the
+    /// rule shows up as default implementations printed twice or not at all.
+    @Test("each protocol's default implementations are printed by exactly one of the printer and printedDefinitions")
+    func defaultImplementationsPrintedByExactlyOneSide() async throws {
+        var checkedCountByPlacement: [String: Int] = [:]
+        var mismatched: [String] = []
+        for (engine, imagePath) in [
+            (try await Self.foundationEngine.value, Anchors.foundationPath),
+            (try await Self.swiftAccelerateOverlayEngine.value, Anchors.swiftAccelerateOverlayPath),
+        ] {
+            try await Self.checkDefaultImplementationPrinting(in: engine, imagePath: imagePath, checkedCountByPlacement: &checkedCountByPlacement, mismatched: &mismatched)
+        }
+        #expect(checkedCountByPlacement["top level", default: 0] > 0, "\(checkedCountByPlacement)")
+        #expect(checkedCountByPlacement["nested in a type", default: 0] > 0, "The Accelerate overlay declares no nested protocol with default implementations any more: \(checkedCountByPlacement)")
+        #expect(checkedCountByPlacement["in another module's extension", default: 0] > 0, "Foundation declares no protocol with default implementations in an extension any more: \(checkedCountByPlacement)")
+        #expect(mismatched.isEmpty, "\(mismatched.joined(separator: "\n"))")
+    }
+
+    private static func checkDefaultImplementationPrinting(
+        in engine: RuntimeEngine,
+        imagePath: String,
+        checkedCountByPlacement: inout [String: Int],
+        mismatched: inout [String]
+    ) async throws {
+        let entries = try #require(await engine.interfaceCorpusStore.corpus(for: imagePath)?.entries)
         let firstSwiftEntry = try #require(entries.first { $0.object.kind.isSwift })
         let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstSwiftEntry.object.imagePath))
-        var checkedCount = 0
-        var missing: [String] = []
-        for entry in entries where entry.object.kind.isSwift {
-            guard case .protocol(let definition) = try? await section.printedDefinitions(for: entry.object).first,
-                  definition.extensionContext != nil,
+        let machO = try #require(DyldUtilities.machOImage(forPath: imagePath))
+        let printer = SwiftDeclarationPrinter<MachOImage>(configuration: .init(), eventHandlers: [], in: machO)
+        for entry in entries where entry.object.kind == .swift(.type(.protocol)) {
+            guard let definitions = try? await section.printedDefinitions(for: entry.object),
+                  case .protocol(let definition) = definitions.first,
                   !definition.defaultImplementationExtensions.isEmpty
             else { continue }
-            checkedCount += 1
-            let extensionCount = Self.extensionBlocks(of: entry.interface.text).count
-            if extensionCount < definition.defaultImplementationExtensions.count {
-                missing.append("\(entry.object.displayName): \(extensionCount) of \(definition.defaultImplementationExtensions.count) default implementation extensions")
+            let placement = definition.parent != nil ? "nested in a type" : definition.extensionContext != nil ? "in another module's extension" : "top level"
+            checkedCountByPlacement[placement, default: 0] += 1
+            let defaultImplementationCount = definition.defaultImplementationExtensions.count
+            // What the printer trails the declaration with on its own.
+            let trailedCount = extensionBlocks(of: try await printer.printProtocolDefinition(definition).string).count
+            // What `printedDefinitions` appends after it.
+            let defaultImplementationIdentifiers = Set(definition.defaultImplementationExtensions.map(ObjectIdentifier.init))
+            let appendedCount = definitions.dropFirst().filter { printedDefinition in
+                guard case .extension(let extensionDefinition) = printedDefinition else { return false }
+                return defaultImplementationIdentifiers.contains(ObjectIdentifier(extensionDefinition))
+            }.count
+            let printedByExactlyOneSide = (trailedCount == defaultImplementationCount && appendedCount == 0)
+                || (trailedCount == 0 && appendedCount == defaultImplementationCount)
+            // And the corpus, which prints both parts, shows each block once.
+            let printedCount = extensionBlocks(of: entry.interface.text).count
+            let otherAppendedCount = definitions.count - 1 - appendedCount
+            if !printedByExactlyOneSide || printedCount != defaultImplementationCount + otherAppendedCount {
+                mismatched.append("\(entry.object.displayName) (\(placement)): \(defaultImplementationCount) default implementation extensions, \(trailedCount) trailed by the printer, \(appendedCount) appended, \(printedCount) extension blocks in the corpus with \(otherAppendedCount) other extensions")
             }
         }
-        #expect(checkedCount > 0, "Foundation declares no protocol with default implementations in an extension any more")
-        #expect(missing.isEmpty, "\(missing.joined(separator: "\n"))")
     }
 
     /// The options a search reads the corpus under: none — everything — or

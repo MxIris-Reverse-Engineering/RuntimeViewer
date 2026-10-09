@@ -434,12 +434,14 @@ extension RuntimeSwiftSection {
     }
 
     /// The protocol's default implementations, unless the printer prints them
-    /// itself — which it does after a protocol declared at the top level only.
-    /// A protocol nested in a type, or declared in an extension of a type from
-    /// another module, is printed without them, the same way its parent
-    /// prints it inline.
+    /// after the declaration itself — MachOSwiftSection's
+    /// `printsDefaultImplementationExtensionsAfterDeclaration` says which,
+    /// the one statement of that rule its printer and interface builder read
+    /// too. A protocol the printer prints without them — nested in a type,
+    /// or declared in an extension of another module's type — is printed
+    /// here the way its parent prints it inline, and they follow it.
     private func defaultImplementationExtensionsLeftToPrint(of definition: ProtocolDefinition) -> [PrintedDefinition] {
-        guard definition.parent != nil || definition.extensionContext != nil else { return [] }
+        guard !definition.printsDefaultImplementationExtensionsAfterDeclaration else { return [] }
         return definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
     }
 

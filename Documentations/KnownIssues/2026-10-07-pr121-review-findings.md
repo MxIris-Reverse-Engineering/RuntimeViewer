@@ -3659,7 +3659,7 @@ func entryByteCountCoversMembers() {
 
 - **严重度**：Minor
 - **审查编号**：AL4
-- **状态**：方案待批，代码未改
+- **状态**：已修复（按推荐的上游方案）。上游：MachOSwiftSection `feature/runtime-viewer/find-navigator` 的 `52460a79` 公开了 `ProtocolDefinition.printsDefaultImplementationExtensionsAfterDeclaration`，打印器与 `SwiftInterfaceBuilder` 都改读它；锁文件提交 `464dd170` 把六份锁文件的 MachOSwiftSection pin 从 `02698282` 前移到 `52460a79`（同次解析另有 swift-subprocess 1.0.0 → 1.0.1，只在两个 workspace）。`defaultImplementationExtensionsLeftToPrint(of:)` 改读这个属性，RuntimeViewer 里不再有这条规则的拷贝（全仓再搜 `extensionContext` / `parent != nil`，只剩这一处读属性）。护栏测试：`RuntimeInterfaceCorpusNestingTests.defaultImplementationsPrintedByExactlyOneSide`，取代 `extensionProtocolShowsDefaultImplementations`。它是护栏不是复现，修前（照抄的规则）修后都过。对每个带默认实现的协议，把声明单独交给 MachOSwiftSection 的打印器、数它自己接在后面的扩展块，再数 `printedDefinitions` 追加的默认实现扩展：必须恰好一方印全部、另一方一个不印，且语料接口里的扩展块数等于默认实现数加其它追加的扩展数。三种位置都有样本：顶层与「别的模块类型的扩展里」取 Foundation（本机 macOS 26.7 上分别 27 个、2 个），「嵌套在类型里」Foundation 一个都没有，改取 Accelerate overlay（`libswiftAccelerate.dylib` 的 `BNNSGraph.Builder.OperationParameter`），在单独的引擎里建语料，不影响套件里其它搜索。上游规则一变而 RuntimeViewer 没跟上时它会红：把判断换回 74c349c7 之前的 `parent != nil` 模拟一次，`AsyncMessage` 与 `MainActorMessage` 报「1 default implementation extensions, 0 trailed by the printer, 0 appended, 0 extension blocks in the corpus」——两边都不印；反方向（两边都印）会报 trailed 与 appended 同时非零。与草案的出入：草案的护栏按属性推算打印器会接几块，这里让打印器单独打印声明来数，所以打印器哪天不再读这个属性也能发现；嵌套位置的样本改从 Accelerate overlay 取。「同类」里 main 上 PR #117 改读属性要等上游发版，不在本分支做；成员列表对打印器的另外两处假设照条目只记录
 
 **问题**：MachOSwiftSection（MSS）的打印器只给顶层协议在声明后面接着打印默认实现，嵌套协议和声明在别的模块扩展里的协议不在此列。RuntimeViewer 的 `defaultImplementationExtensionsLeftToPrint` 用的是这条规则取反后的一份拷贝，靠它决定哪些协议要自己补印默认实现；内容区和 Find 语料都经过 `printedDefinitions`，所以拷贝错了两边会一起错。
 
