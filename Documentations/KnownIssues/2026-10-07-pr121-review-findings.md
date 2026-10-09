@@ -3520,6 +3520,23 @@ func rawAndCanonicalPathsAreOneImage() async throws {
 
 **工作量**：M。PR121.04 和 PR121.34 的比较都要用到这里的规范化。
 
+**落地后发现：对端忙时客户端永久学不到根路径**（合并验证中发现，已修复）
+- **现象**：Core 全量并行跑时，`RuntimeEngineImagePathCanonicalizationTests` 的「A client over a socket learns the root of the process it forwards to」连续两次超时，单独跑能过。
+- **原因**：客户端在后台问 `dyldRootPath` 时有两处会过早放弃，满载时都会落到一个认识这条命令的新版对端身上：
+  - **超时一次就永久放弃**。每问超时 3 秒，原意是认出 2.1.0 之前、对不认识的命令根本不回的旧对端。但新版对端忙时回答也会超过 3 秒：回复要排在连接刚建立时那一批推送后面写出，满载时处理器本身也排不上。超时之后回复照样到达，却按 PR121.31 的规则当作「已放弃请求的迟到回复」丢掉。
+  - **回错误的只再问 3 次、间隔 250 ms**，约 0.75 秒后放弃。proxy 只在客户端连上之后才装命令表，装好之前对这一问回「No handler registered」；进程一忙，装表就不止 0.75 秒。那条测试正是这个形状：服务端等看到连接后才装处理器（`RemoteEnginePair.make(.socket, …)`）。
+  - 两种情形下客户端的根路径都停在 `nil`，模拟器引擎上的路径规范化随之失效，本条修掉的「同一镜像按原始路径和规范路径各记一份」会重现。
+- **修法**：失败不再等同于「对端不认识」，改为**总时限 60 秒**（`servingDyldRootPathDeadline`）内一直设法学到：
+  - **没回答的等，不重问**：一问就用掉剩下的全部时限。socket 是有序的流，第二问不可能比第一问先得到回答，重问只会给忙着的对端多塞一条请求、多一条要丢的迟到回复。
+  - **回错误的按退避重问**：间隔从 250 ms 起每次翻倍，封顶 4 秒（`servingDyldRootPathInitialRetryDelay` / `servingDyldRootPathMaximumRetryDelay`），直到时限用完。封顶是因为满载时装表可能要十几秒：不封顶的话间隔会涨到 8 秒、16 秒，处理器装好后要再等那么久才被问到，甚至落到时限之外。
+  - **对旧对端无害**：2.1.0 之前的不回复，客户端只多占一个后台 Task 和一个待处理项到时限为止，发出的仍只有一帧，没有回复也就没有迟到回复；时限到了 nonce 记为已放弃（PR121.31 的列表多一条、按上限老化），之后真到的回复照样丢弃、不回应。2.1.0 起、但早于这条命令的对端每问都回「No handler registered」，60 秒里被问约 19 次（修前 4 次），每次只是它那边一行日志。
+  - 只问 socket 类来源、XPC 从不问（PR121.73）、`injectedTCP` 不问，这些都不变。
+- **复现测试**（`RuntimeEngineImagePathCanonicalizationTests`，对端都是一条裸 TCP 服务端连接，在看到客户端连上之后才装 `dyldRootPath` 处理器）：
+  - `slowPeerIsWaitedFor`（「A client keeps waiting for a peer that is slow to answer」）：处理器先等 4 秒再答，并断言对端只被问到一次。修前红：3 秒超时后放弃，30 秒后仍按 `/usr/lib/libobjc.A.dylib` 记键（处理器确实被问到了一次，「只问一次」那条断言照样成立）。
+  - `lateCommandTableIsAskedAgain`（「A client keeps asking a peer whose answer is not in place yet」）：连上 1.5 秒后才装处理器。修前红：4 次错误回答后放弃，同样一直按原始路径记键。
+  - 修后两条都绿（单独跑约 4.3 秒、1.8 秒）；原有那条测试的等待上限从 5 秒放宽到与客户端相同的时限，条件一成立即返回。Core 全量并行时它两次分别用了 24.9 秒和 34.5 秒才通过——修前早就放弃了，也超过了起初拟定的 30 秒，这是时限定为 60 秒、退避封顶 4 秒的依据。
+- **同类，未修**：经 socket 转发的 proxy 答的是「它此刻已经学到的」根路径。它自己那一问还没得到回答时，下游客户端问它，会立刻得到 `nil` 并当作成功，此后不再问。只出现在「镜像一台 Mac 上的模拟器引擎」这条链路、且下游恰好在 proxy 学到之前连上时；本次没有改，要修得让 proxy 在学到之前不以 `nil` 作答，需另案设计。
+- **提交**：`fix(core): keep trying to learn a busy peer's DYLD_ROOT_PATH instead of giving up early`
 
 ### PR121.34 被悄悄驱逐的语料仍显示已建好；历史满额时 Clear History 失效
 
