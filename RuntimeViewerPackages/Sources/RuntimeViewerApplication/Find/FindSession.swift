@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
 
 /// The Find navigator's state for one document: the query in force, the
@@ -47,6 +48,10 @@ public final class FindSession {
         /// Images the search did not see because their corpus is not built.
         public var unbuiltImagePaths: [String] = []
         public var isTruncated = false
+        /// Why the engine stopped before reading everything the search
+        /// covers, which leaves these results incomplete; `nil` when it read
+        /// it all.
+        public var stopReason: RuntimeInterfaceSearchStopReason?
         /// The query these results answer: the one last run, not the one
         /// the mode path and the toggles may have been edited into since. A
         /// click highlights with its mode and case. `nil` with nothing
@@ -59,6 +64,14 @@ public final class FindSession {
     /// The most hits or members a search collects, across every image it
     /// reads; the count goes on past it.
     static let resultLimit = 1000
+
+    /// What the summary bar adds when the engine stopped a regular
+    /// expression that spent the search's time budget backtracking.
+    static let regularExpressionTooExpensiveNotice = "incomplete: the pattern takes too long to match"
+
+    /// The summary bar for a source whose RuntimeViewer predates Find's
+    /// commands, worded as the Report navigator words it.
+    static let unsupportedBySourceSummary = "Not supported by this source"
 
     /// Weak: the session can outlive its document — a page's view model holds
     /// it while the window comes down — and is then still subscribed to the
@@ -483,7 +496,7 @@ public final class FindSession {
             if !isWidening {
                 shownSearch = nil
                 var failed = Results()
-                failed.summary = "Search failed: \(error.localizedDescription)"
+                failed.summary = Self.failureSummary(for: error)
                 setResults(failed)
             }
         }
@@ -546,6 +559,9 @@ public final class FindSession {
         shownSearch.isTruncated = shownSearch.isTruncated || summary.isTruncated
         self.shownSearch = shownSearch
         var finished = results(from: nodes, matchCount: shownSearch.totalMatchCount, typeCount: typeCount)
+        // A search that stopped early leaves the results incomplete, and a
+        // widening search merged into them does not make them whole.
+        finished.stopReason = isWidening ? (summary.stopReason ?? results.stopReason) : summary.stopReason
         if isWidening {
             let scannedImagePaths = Set(summary.scannedImagePaths)
             finished.unbuiltImagePaths = results.unbuiltImagePaths.filter { !scannedImagePaths.contains($0) }
@@ -594,6 +610,7 @@ public final class FindSession {
         updated.nodes = nodes
         updated.isTruncated = shownSearch?.isTruncated ?? false
         updated.unbuiltImagePaths = results.unbuiltImagePaths
+        updated.stopReason = results.stopReason
         var text = "\(matchCount) \(matchCount == 1 ? "result" : "results") in \(typeCount) \(typeCount == 1 ? "type" : "types")"
         if updated.isTruncated {
             text += ", showing the first \(nodes.reduce(0) { $0 + $1.children.count })"
@@ -635,7 +652,20 @@ public final class FindSession {
             let count = results.unbuiltImagePaths.count
             text += " · \(count) \(count == 1 ? "image" : "images") not yet searchable"
         }
+        if results.stopReason == .regularExpressionTooExpensive {
+            text += " · " + regularExpressionTooExpensiveNotice
+        }
         return text
+    }
+
+    /// The summary bar for a search that failed. A peer that does not know
+    /// the search commands — a RuntimeViewer older than Find on the other
+    /// end — is not a failure to report but a source Find cannot serve.
+    static func failureSummary(for error: any Swift.Error) -> String {
+        if let requestError = error as? RuntimeNetworkRequestError, requestError.isUnknownCommand {
+            return unsupportedBySourceSummary
+        }
+        return "Search failed: \(error.localizedDescription)"
     }
 
     /// `2 images being made searchable · building Foundation 37%`, counting
