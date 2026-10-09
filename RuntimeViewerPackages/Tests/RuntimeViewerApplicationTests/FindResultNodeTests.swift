@@ -66,6 +66,42 @@ struct FindResultNodeTests {
         #expect(!after.isContentEqual(to: before))
     }
 
+    // MARK: - Filtering
+
+    /// The filter bar used to build every row it kept again, each hit's attributed line included,
+    /// on every keystroke (PR121.49).
+    @Test("the filter returns the rows it does not change: matching hits, and a type it keeps whole")
+    func filterKeepsUnchangedRows() throws {
+        // Both hits read "- (void)sample;".
+        let alpha = FindResultFixtures.type("Alpha", hitCount: 2)
+
+        let kept = try #require(FindViewModel<SidebarRootRoute>.filtered([alpha], by: "sample").first)
+
+        #expect(kept === alpha)
+        #expect(kept.children.first === alpha.children.first)
+    }
+
+    @Test("a type the filter keeps in part shares its row's appearance and keeps its matching hits")
+    func partialFilterSharesTheAppearance() throws {
+        let type = FindResultFixtures.type(FindResultFixtures.object(named: "Alpha"), hits: [
+            FindResultFixtures.hit(in: "Alpha", lineNumber: 1, lineText: "- (void)first;"),
+            FindResultFixtures.hit(in: "Alpha", lineNumber: 2, lineText: "- (void)second;"),
+        ])
+
+        let copy = try #require(FindViewModel<SidebarRootRoute>.filtered([type], by: "second").first)
+
+        #expect(copy !== type)
+        #expect(copy.identifier == type.identifier)
+        #expect(copy.children.count == 1)
+        #expect(copy.children.first === type.children.last)
+        #expect(copy.appearance.title === type.appearance.title)
+    }
+
+    @Test("a row neither matching nor holding a match is dropped")
+    func filterDropsWhatDoesNotMatch() {
+        #expect(FindViewModel<SidebarRootRoute>.filtered([FindResultFixtures.type("Alpha", hitCount: 1)], by: "absent").isEmpty)
+    }
+
     @Test("a rebuilt tree that shows the same is the same content")
     func sameTreeIsSameContent() {
         let before = FindResultFixtures.type("Alpha", hitCount: 3)

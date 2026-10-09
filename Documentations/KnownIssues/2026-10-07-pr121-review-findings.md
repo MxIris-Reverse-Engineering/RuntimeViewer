@@ -6539,7 +6539,7 @@ struct FindSessionGroupingTests {
 
 - **严重度**：Minor
 - **审查编号**：F4
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.filterKeepsUnchangedRows`（修前红：整个保留的类型与它的命中都是新实例）、`partialFilterSharesTheAppearance`（修前红：部分保留的类型的命中是新实例、标题属性串重新构建）；`filterDropsWhatDoesNotMatch` 守住「不匹配就丢掉」。过滤的语义不变：自身匹配的行连同全部子节点保留，否则只留匹配的后代。同类：Report 的过滤重建节点归 PR121.59；范围选择器的过滤只是挑出已有的 cell ViewModel，不重建
 
 **问题**：底部过滤栏每敲一个键，`FindViewModel.filtered(_:by:)`（`FindViewModel.swift:253`）都会把保留下来的行全部新建一遍：
 - 子节点全部保留的类型也会新建；

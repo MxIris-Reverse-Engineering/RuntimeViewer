@@ -83,11 +83,21 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         String(filterableText.drop { $0.isWhitespace })
     }
 
-    public init(content: Content, children: [FindResultNode] = [], identifier: String) {
+    public convenience init(content: Content, children: [FindResultNode] = [], identifier: String) {
+        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeAppearance(for: content))
+    }
+
+    /// `node` with other children — what the filter bar keeps of a row — sharing its appearance,
+    /// which depends on the content alone, instead of building it again.
+    public convenience init(copying node: FindResultNode, children: [FindResultNode]) {
+        self.init(content: node.content, children: children, identifier: node.identifier, appearance: node.appearance)
+    }
+
+    private init(content: Content, children: [FindResultNode], identifier: String, appearance: FindResultCellAppearance) {
         self.content = content
         self.children = children
         self.identifier = identifier
-        self.appearance = Self.makeAppearance(for: content)
+        self.appearance = appearance
         super.init()
     }
 

@@ -318,13 +318,22 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         return nodes.compactMap { filtered($0, by: needle) }
     }
 
+    /// Rows the filter does not change are returned as they are — the same instances, which the
+    /// outline's diff takes as unchanged at a glance — and a row it keeps in part is copied with
+    /// the appearance it already has. A keystroke builds nothing it does not have to.
     private static func filtered(_ node: FindResultNode, by needle: String) -> FindResultNode? {
         let matchesItself = node.filterableText.range(of: needle, options: [.caseInsensitive]) != nil
-        let children = node.children.compactMap { filtered($0, by: needle) }
-        if matchesItself, children.isEmpty, !node.children.isEmpty {
+        if matchesItself, node.children.isEmpty {
             return node
         }
-        guard matchesItself || !children.isEmpty else { return nil }
-        return FindResultNode(content: node.content, children: children, identifier: node.identifier)
+        let children = node.children.compactMap { filtered($0, by: needle) }
+        if matchesItself, children.isEmpty {
+            return node
+        }
+        guard !children.isEmpty else { return nil }
+        if children.count == node.children.count, zip(children, node.children).allSatisfy({ child, original in child === original }) {
+            return node
+        }
+        return FindResultNode(copying: node, children: children)
     }
 }
