@@ -23,6 +23,7 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
     private var paths: [String: ProgrammedPath] = [:]
     private var loadOrder: [String] = []
     private var dependenciesCallLog: [DependenciesCall] = []
+    private var reloadCount = 0
     var mainExecutable: String = "/fake/MainApp"
 
     func program(path: String, _ entry: ProgrammedPath) {
@@ -38,6 +39,15 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
     func dependenciesCalls() -> [DependenciesCall] {
         lock.lock(); defer { lock.unlock() }
         return dependenciesCallLog
+    }
+
+    /// How many times the manager asked the engine to re-read its data.
+    func reloadDataCount() -> Int {
+        lock.withLock { reloadCount }
+    }
+
+    func reloadDataAfterBackgroundIndexing() async {
+        lock.withLock { reloadCount += 1 }
     }
 
     func isImageIndexed(path: String) async -> Bool {

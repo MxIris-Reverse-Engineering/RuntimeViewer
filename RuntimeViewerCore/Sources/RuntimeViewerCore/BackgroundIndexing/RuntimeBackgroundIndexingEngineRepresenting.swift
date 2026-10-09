@@ -45,4 +45,9 @@ protocol RuntimeBackgroundIndexingEngineRepresenting: AnyObject, Sendable {
                       ancestorRpaths: [String],
                       mainExecutablePath: String)
         async throws -> [(installName: String, resolvedPath: String?)]
+    /// Re-reads the engine's image data once a batch has ended: the images it
+    /// indexed change what the sidebar and the interface caches show. The
+    /// manager calls it once per batch, so every document watching the engine
+    /// hears one `.fullReload`, however many documents there are.
+    func reloadDataAfterBackgroundIndexing() async
 }

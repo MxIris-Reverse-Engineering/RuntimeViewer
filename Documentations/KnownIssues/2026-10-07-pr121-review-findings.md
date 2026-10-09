@@ -8281,7 +8281,8 @@ struct RuntimeBackgroundIndexingStagingTests {
 
 - **严重度**：Minor
 - **审查编号**：C22 / AL2（C1-7）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：Application 层 `RuntimeBackgroundIndexingReloadTests.batchEndReloadsOnceForTwoDocuments`（两个文档共用一个真实引擎，数一个批次结束后引擎广播了几次 `.fullReload`），修前 2 次、修后 1 次；Core 层 `RuntimeBackgroundIndexingManagerTests.batchEndReloadsEngineDataOnce`（两个订阅者、一个批次），修前 manager 一次也不 reload（0 次）、修后恰好 1 次
+- **落地与偏离**：照方案把 reload 挪进 `RuntimeBackgroundIndexingManager.finalize`（`RuntimeBackgroundIndexingEngineRepresenting.reloadDataAfterBackgroundIndexing()`，`RuntimeEngine` 的实现就是 `reloadData(isReloadImageNodes: false)`），协调器删掉 `shouldReloadEngineImages` 与 `handleEvent` 的 `engine` 参数。与草案的出入：reload 不在 `finalize` 里读 `self.engine`，而是在 `startBatch` 时就把引擎取出、由驱动任务持有到批次结束，批次跑完后在一个独立的 `Task` 里调。草案注释说「驱动任务还在跑，所以引擎活着」并不成立：`engine` 是 `unowned`，换引擎会取消旧引擎的全部批次，而被取消的批次可能在旧引擎已无人持有之后才收尾——照草案写，Core 的套件当场在 `Attempted to read an unowned reference but object … was already destroyed` 处中止（测试结束后才收尾的批次读到已释放的 Mock）。独立的 `Task` 是为了不让被取消的批次把取消传给转发出去的 reload：被取消的批次也索引过一部分镜像。同批改了协调器里历史那段注释（历史是「本文档在它连过的引擎上看到的全部批次」）与 `2026-09-29-find-corpus-never-built-indexing-events-split.md` 的「行为变化」段。「同类」说这个协议只有 `RuntimeEngine` 与 Mock 两个实现，实际还有 `RuntimeBackgroundIndexingManagerTests` 里统计并发用的 `InstrumentedEngine`，它转发给被包住的引擎。
 
 **问题**：本 PR 把后台索引事件改成广播：每个订阅者都收到全部事件。于是共用同一个引擎的 N 个文档，每个文档的索引协调器都会收到同一个批次结束事件，并各自调用一次 `engine.reloadData(isReloadImageNodes: false)`（RuntimeBackgroundIndexingCoordinator.swift:173-180）。每次 reload 又会广播一次 `.fullReload`（RuntimeEngine.swift:614-622），落到全部 N 个窗口上：侧栏对象列表重载、`RuntimeInterfaceCache` 清空、always-index 重试泵各跑一遍。所以 N 个窗口时，一个批次结束会引起 N² 次侧栏重载和缓存清空。
 

@@ -76,6 +76,10 @@ Swift 标准库的 `AsyncStream`（`stdlib/public/Concurrency/AsyncStreamBuffer.
 多个文档共用一个引擎（My Mac）时，每个文档的索引弹窗都会看到这个引擎上的全部批次，每个批次结束时各文档各发一次
 `reloadData`。以前是各自只看到一部分，状态错乱。
 
+**2026-10-09 补记**：「各文档各发一次」实际是 N² 次——每次 `reloadData` 都广播 `.fullReload` 给共用这个引擎的全部 N 个窗口，
+侧栏对象列表重载与接口缓存清空各跑 N×N 次（PR #121 审查 PR121.58）。批次结束后的那次 reload 已挪进
+`RuntimeBackgroundIndexingManager.finalize`，每个引擎每个批次一次，与窗口数无关，没有窗口在听时也照样一次；每个窗口照旧看到全部批次。
+
 ## 横向排查
 
 全仓公开暴露、可能被多处读的 `AsyncStream` 只有这一条。其余都是「一条流一个读者」：`RuntimeEngine` 的连接状态流、

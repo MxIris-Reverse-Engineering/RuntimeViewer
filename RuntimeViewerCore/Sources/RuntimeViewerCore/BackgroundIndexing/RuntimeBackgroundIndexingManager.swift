@@ -227,6 +227,12 @@ public actor RuntimeBackgroundIndexingManager {
         activeBatches[id] = state
         emit(.batchStarted(batch))
 
+        // Read while the caller holds the engine, and kept by the driving task
+        // for the batch's life: `engine` is `unowned`, and a cancelled batch —
+        // an engine swap cancels every batch of the engine it leaves — can end
+        // after nothing else holds that engine.
+        let engine = self.engine
+
         // `.utility` so the kernel's QoS-aware scheduler lets the main thread
         // preempt indexing work during user interaction. Without an explicit
         // priority this task inherits the caller's (`@MainActor` coordinator
@@ -238,6 +244,15 @@ public actor RuntimeBackgroundIndexingManager {
         let drivingTask = Task(priority: .utility) { [weak self] in
             guard let self else { return }
             await self.runBatch(id: id)
+            // The engine re-reads its data once per batch, here rather than in
+            // each subscriber: every document on the engine hears every event,
+            // and each asking for its own reload made N windows reload the
+            // engine N times, every reload reaching all N. A task of its own,
+            // so a cancelled batch — which still indexed what it got through —
+            // does not hand its cancellation to a forwarded reload.
+            Task {
+                await engine.reloadDataAfterBackgroundIndexing()
+            }
         }
         activeBatches[id]?.drivingTask = drivingTask
         return id

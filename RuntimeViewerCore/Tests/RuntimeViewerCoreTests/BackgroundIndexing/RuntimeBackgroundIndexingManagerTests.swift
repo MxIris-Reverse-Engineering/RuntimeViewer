@@ -359,6 +359,31 @@ import Testing
         #expect(!message.isEmpty)
     }
 
+    /// A batch's end makes the engine re-read its data once, however many subscribers listen.
+    /// Every document on an engine hears every event, and each used to ask for its own reload,
+    /// so N windows on one engine reloaded it N times per batch — and each reload reached every
+    /// window (PR121.58).
+    @Test func batchEndReloadsEngineDataOnce() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        engine.program(path: "/A", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+        let firstRecorder = EventRecorder()
+        let secondRecorder = EventRecorder()
+        let firstRecording = firstRecorder.startRecording(await manager.events)
+        let secondRecording = secondRecorder.startRecording(await manager.events)
+        defer {
+            firstRecording.cancel()
+            secondRecording.cancel()
+        }
+
+        _ = await manager.startBatch(rootImagePath: "/A", depth: 0, maxConcurrency: 1, reason: .manual)
+
+        let didReload = await waitUntil { engine.reloadDataCount() >= 1 }
+        #expect(didReload, "a finished batch left the engine's data as it was")
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(engine.reloadDataCount() == 1)
+    }
+
     @Test func cancelBatchStopsPendingItemsAndEmitsCancelledEvent() async {
         let engine = keep(MockBackgroundIndexingEngine())
         let deps = (0..<5).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
@@ -711,6 +736,9 @@ import Testing
             try await base.dependencies(for: path,
                                         ancestorRpaths: ancestorRpaths,
                                         mainExecutablePath: mainExecutablePath)
+        }
+        func reloadDataAfterBackgroundIndexing() async {
+            await base.reloadDataAfterBackgroundIndexing()
         }
     }
 }

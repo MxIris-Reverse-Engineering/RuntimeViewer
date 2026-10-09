@@ -109,6 +109,10 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
         // Codable). Repack here.
         return entries.map { ($0.installName, $0.resolvedPath) }
     }
+
+    func reloadDataAfterBackgroundIndexing() async {
+        await reloadData(isReloadImageNodes: false)
+    }
 }
 
 // MARK: - Local implementations of the BFS metadata methods

@@ -158,7 +158,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
             let stream = await engine.backgroundIndexingManager.events
             for await event in stream {
                 guard let self else { return }
-                self.handleEvent(event, on: engine)
+                self.handleEvent(event)
             }
         }
     }
@@ -166,18 +166,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// Off-main event entry point. Mutates the lock-protected staging state
     /// inline, then dispatches the minimal main-actor work the outcome
     /// requires (immediate flush for lifecycle events, scheduled flush for
-    /// task events, `engine.reloadData` for batch terminations).
-    nonisolated private func handleEvent(_ event: RuntimeIndexingEvent, on engine: RuntimeEngine) {
+    /// task events). The engine's reload after a batch ends is the manager's
+    /// own, once per batch however many documents are on the engine.
+    nonisolated private func handleEvent(_ event: RuntimeIndexingEvent) {
         let outcome = staging.applyEvent(event)
-
-        if outcome.shouldReloadEngineImages {
-            // Fire-and-forget: each finished/cancelled batch nudges the engine
-            // to reload its non-image-node data. Detached + capture so the
-            // dispatch isn't tied to coordinator isolation.
-            Task { [engine] in
-                await engine.reloadData(isReloadImageNodes: false)
-            }
-        }
 
         if outcome.requiresImmediateFlush {
             Task { @MainActor [weak self] in
@@ -316,8 +308,9 @@ public final class RuntimeBackgroundIndexingCoordinator {
         //    batches whose history hop was still waiting on the coalesce
         //    window are archived as-is. History itself survives the swap:
         //    entries are pure value snapshots with session-unique UUID ids,
-        //    and the popover history reads as "what this document indexed
-        //    this session", not as engine-scoped state. Only the user's
+        //    and the history reads as "what this document saw indexed this
+        //    session" — every batch on the engines it was on, its own and
+        //    other documents' alike — not as engine-scoped state. Only the user's
         //    Clear History empties it. Active batches must leave
         //    `batchesRelay` before any of them appears in `historyRelay` —
         //    see the ordering note on `flushPendingUpdates`.
@@ -705,7 +698,6 @@ extension RuntimeBackgroundIndexingCoordinator {
     struct ApplyOutcome {
         var requiresImmediateFlush: Bool = false
         var didScheduleCoalescedFlush: Bool = false
-        var shouldReloadEngineImages: Bool = false
     }
 
     /// Snapshot taken at the start of a flush. The lock is released before the
@@ -799,8 +791,7 @@ extension RuntimeBackgroundIndexingCoordinator {
                 if swapArchivedBatchIDs.remove(finished.id) != nil {
                     pendingHistoryReplacements.append(finished)
                     outcome.requiresImmediateFlush = true
-                    outcome.shouldReloadEngineImages = true
-                    break
+                        break
                 }
                 stagedBatches.removeAll { $0.id == finished.id }
                 documentBatchIDs.remove(finished.id)
@@ -808,15 +799,13 @@ extension RuntimeBackgroundIndexingCoordinator {
                 hasPendingActiveChange = true
                 pendingAggregateRefresh = true
                 outcome.requiresImmediateFlush = true
-                outcome.shouldReloadEngineImages = true
             case .batchCancelled(let cancelled):
                 // Cancellation always removes from active. Lands in history
                 // too so the user can review what got cancelled.
                 if swapArchivedBatchIDs.remove(cancelled.id) != nil {
                     pendingHistoryReplacements.append(cancelled)
                     outcome.requiresImmediateFlush = true
-                    outcome.shouldReloadEngineImages = true
-                    break
+                        break
                 }
                 stagedBatches.removeAll { $0.id == cancelled.id }
                 documentBatchIDs.remove(cancelled.id)
@@ -824,7 +813,6 @@ extension RuntimeBackgroundIndexingCoordinator {
                 hasPendingActiveChange = true
                 pendingAggregateRefresh = true
                 outcome.requiresImmediateFlush = true
-                outcome.shouldReloadEngineImages = true
             }
 
             // Schedule a coalesced flush only when nothing else has staked a
