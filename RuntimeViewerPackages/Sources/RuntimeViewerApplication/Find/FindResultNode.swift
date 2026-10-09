@@ -227,8 +227,22 @@ extension FindResultNode: OutlineNodeType {}
 extension FindResultNode: Differentiable {
     public var differenceIdentifier: String { identifier }
 
+    /// Whether the row and everything beneath it shows the same as `source`. The outline's
+    /// adapter skips a row this calls unchanged, so it has to look at the whole subtree: the
+    /// filter bar can swap which hits a type shows without changing how many.
     public func isContentEqual(to source: FindResultNode) -> Bool {
-        content == source.content && children.count == source.children.count
+        if self === source {
+            return true
+        }
+        // `content` compares a type by identity alone; the row also shows its display name,
+        // which another run can spell differently.
+        guard content == source.content,
+              appearance.title.isEqual(to: source.appearance.title),
+              children.count == source.children.count
+        else { return false }
+        return zip(children, source.children).allSatisfy { child, sourceChild in
+            child.identifier == sourceChild.identifier && child.isContentEqual(to: sourceChild)
+        }
     }
 }
 

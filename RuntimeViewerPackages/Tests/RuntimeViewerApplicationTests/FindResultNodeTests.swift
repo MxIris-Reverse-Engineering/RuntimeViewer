@@ -1,0 +1,61 @@
+import Foundation
+import RuntimeViewerArchitectures
+import RuntimeViewerCore
+import Testing
+@testable import RuntimeViewerApplication
+
+/// What a Find result row is to the outline that shows it: when two rows are the same row, and
+/// when a row — with everything beneath it — still shows the same.
+@Suite("FindResultNode")
+@MainActor
+struct FindResultNodeTests {
+    // MARK: - Content
+
+    /// The outline's adapter skips a row its content comparison calls unchanged, and that
+    /// comparison used to look at the number of children alone (PR121.43): the filter bar swapping
+    /// which hits a type shows, as many as before, never reached the outline.
+    @Test("a type whose hits changed is different content, even with as many hits")
+    func contentComparesTheHits() {
+        let object = FindResultFixtures.object(named: "Alpha")
+        let before = FindResultFixtures.type(object, hits: [FindResultFixtures.hit(in: "Alpha", lineNumber: 1)])
+        let after = FindResultFixtures.type(object, hits: [FindResultFixtures.hit(in: "Alpha", lineNumber: 7)])
+
+        #expect(!after.isContentEqual(to: before))
+    }
+
+    @Test("a change two levels down is different content")
+    func contentComparesEveryLevel() {
+        let object = FindResultFixtures.object(named: "Root")
+        func tree(grandchildName: String) -> FindResultNode {
+            FindResultNode.object(object, matchCount: 2, children: [
+                FindResultFixtures.relationship(named: "First", path: "tree", children: [
+                    FindResultFixtures.relationship(named: grandchildName, path: "tree/First"),
+                ]),
+                FindResultFixtures.relationship(named: "Second", path: "tree"),
+            ])
+        }
+
+        #expect(!tree(grandchildName: "Swapped").isContentEqual(to: tree(grandchildName: "Original")))
+    }
+
+    /// A type compares by identity — `(imagePath, name, kind)` — while its row shows the display
+    /// name, which another run can spell differently.
+    @Test("a type shown under another display name is different content")
+    func contentComparesTheTitle() {
+        let shortName = Fixtures.runtimeObject(name: "Outer.Inner", displayName: "Inner", kind: .swift(.type(.protocol)))
+        let qualifiedName = Fixtures.runtimeObject(name: "Outer.Inner", displayName: "Outer.Inner", kind: .swift(.type(.protocol)))
+        let before = FindResultFixtures.type(shortName, hits: [])
+        let after = FindResultFixtures.type(qualifiedName, hits: [])
+
+        #expect(!after.isContentEqual(to: before))
+    }
+
+    @Test("a rebuilt tree that shows the same is the same content")
+    func sameTreeIsSameContent() {
+        let before = FindResultFixtures.type("Alpha", hitCount: 3)
+        let after = FindResultFixtures.type("Alpha", hitCount: 3)
+
+        #expect(after !== before)
+        #expect(after.isContentEqual(to: before))
+    }
+}

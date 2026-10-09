@@ -5100,7 +5100,7 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C39
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.contentComparesTheHits`、`contentComparesEveryLevel`、`contentComparesTheTitle`（修前三条都红：同一类型换了一条命中、第二层换了一个孙节点、同一身份换了显示名，`isContentEqual` 都答「没变」）；对照用例 `sameTreeIsSameContent` 修前修后都绿。比方案多一条「第二层变化」的用例，正是「问题」里说的关系模式情形。夹具 `Support/FindResultFixtures.swift` 供 PR121.07 / 44 / 48 / 49 的测试共用。同类：树节点里只有 `ReportNode.isContentEqual` 同样浅比较，归 PR121.53；其余 `isContentEqual` 都是平铺列表的行，没有子节点
 
 **问题**：`FindResultNode.isContentEqual`（`FindResultNode.swift:230`）只比 `content` 和子节点**个数**。RxAppKit 靠它判断一行「有没有变」。过滤栏把同一类型下显示的命中换成另外几条、个数却不变时，adapter 判定没变，跳过刷新，大纲留着旧命中；点下去，打开的是旧节点。
 
