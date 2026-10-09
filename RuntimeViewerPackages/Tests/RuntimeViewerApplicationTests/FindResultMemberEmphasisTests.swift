@@ -45,4 +45,29 @@ struct FindResultMemberEmphasisTests {
         )
         #expect(emphasizedText == "did")
     }
+
+    @Test("a name that also occurs inside a type name is set apart where it stands on its own")
+    func nameThatAlsoOccursInsideATypeName() {
+        let emphasizedText = Self.emphasizedText(
+            ofMember: "URL",
+            declaredAs: "@property (readonly, copy) NSURL *URL;",
+            matchRangeInName: RuntimeTextRange(location: 0, length: 3)
+        )
+        #expect(emphasizedText == "URL")
+        let declarationText = "@property (readonly, copy) NSURL *URL;"
+        #expect(Self.emphasizedRanges(ofMember: "URL", declaredAs: declarationText, matchRangeInName: RuntimeTextRange(location: 0, length: 3)) == [NSRange(location: (declarationText as NSString).range(of: "*URL").location + 1, length: 3)])
+    }
+
+    private static func emphasizedRanges(ofMember name: String, declaredAs declarationText: String, matchRangeInName: RuntimeTextRange) -> [NSRange] {
+        let member = RuntimeMemberDeclaration(name: name, kind: .objcProperty, isStatic: false, declarationText: declarationText, lineNumber: 1)
+        let match = RuntimeMemberMatch(object: object, member: member, matchRangeInName: matchRangeInName)
+        let title = FindResultNode.member(match, index: 0).appearance.title
+        var emphasizedRanges: [NSRange] = []
+        title.enumerateAttribute(.font, in: NSRange(location: 0, length: title.length)) { font, range, _ in
+            if (font as? NSFont) == FindResultCellStyle.emphasisFont {
+                emphasizedRanges.append(range)
+            }
+        }
+        return emphasizedRanges
+    }
 }

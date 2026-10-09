@@ -306,7 +306,10 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   同时把 `PendingHighlight { query, lineNumber, lineText, matchRangeInLine }` 写进 `DocumentState` 的一次性握手字段，
   内容区渲染完成后按优先级定位、滚动、闪烁高亮：
   1. 整行匹配：找与 `lineText` 完全相等的行，多行相等取行号最接近 `lineNumber` 的，行内套 `matchRangeInLine`；
-  2. query 降级：整行 miss（搜索之后又改了显示选项，或成员排序与语料不同）时按同规则找 `query`，取行号最接近的一处；
+     `lineText` 是长行截出的窗口（两端的「…」标记截断处）时，改找包含窗口正文的行，命中位置 = 窗口在该行的偏移 +
+     命中在窗口内的偏移（2026-10-09，决策日志）；
+  2. query 降级：整行 miss（搜索之后又改了显示选项，或成员排序与语料不同）时按同规则找 `query`——匹配方式、大小写、
+     标识符边界、正则都与搜索一致——取行号最接近的一处；
   3. 完全 miss：只跳到对象，find bar 预填 query，提示「命中内容受当前 Generation Options 影响未显示」。
   `ContentTextViewModel` 加一个 `highlightRequest` 输出。NSTextView 路径：`scrollRangeToVisible` +
   `showFindIndicator(for:)`。SourceEditor 路径：实现桥的 `scrollToCharacterIndex(_:)`（今天是 TODO）并加高亮——
@@ -797,3 +800,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |
 | 2026-10-09 | Find 结果大纲按身份增量更新：`FindResultNode` 以 `identifier` 判等，大纲改用 `rx.nodes(options: .diffable)`；展开与选中由 ViewModel 决定（除了用户折叠的全部展开，全部展开超过 500 行的关系树只展开第一层；用户的选中按标识恢复）；导航改由用户本人的选中触发（`Reactive<NSOutlineView>.userActivatedItem()`），键入跳转取行文本并去抖 800 ms，⌥ 在新标签打开，再次点击仍在显示的命中不重新导航 | PR #121 审查 PR121.07 / PR121.48：节点按指针判等，每一批结果、每次补搜、过滤栏每敲一个键都是 AppKit 不认识的新行，用户折叠的类型重新展开、选中按行号落到别的行；导航挂在 `modelSelected()` 上，reload 与程序化选中也会导航并截掉「前进」历史；§4 承诺的 ⌥ 在新标签打开没有实现。规则写成 `FindResultsOutline` 与 `FindResultsPresentation.apply(to:)`，在包测试里用离屏大纲验证。500 行与「不重新跳转」是审查推荐项。 |
 | 2026-10-09 | 内容区的高亮请求随路由走：`ContentRoute` 加 `.rootHighlighting` / `.nextHighlighting`，`MainCoordinator` 转交，`ContentCoordinator` 传进 `ContentTextViewModel` 的构造器，第一次渲染时用掉；删掉 `DocumentState.pendingContentHighlight`、`takeContentHighlight(for:)` 与 `PendingContentHighlight` | PR #121 审查 PR121.46：文档级的邮箱只在同一对象渲染完成时才被取走。点了 A 的命中、A 还没渲染完就去了 B，或者 A 的接口取不回来，请求就一直留着，之后不管从哪里回到 A 都会闪一下旧命中、滚动位置跳过去。请求的生命期改为等于那个 ViewModel：被替换、取失败、换引擎都随它一起消失。内容区本来就为每次导航新建 ViewModel，同一对象上再点一条命中照样重新定位。复现测试 `ContentTextHighlightTests.abandonedHighlightNeverReachesALaterVisit`。 |
+| 2026-10-09 | 内容区二次定位按搜索的语义找回命中：长行的窗口按「包含」找回所在行、命中位置取窗口内的偏移；降级一步用搜索同样的匹配方式（Core 新增公开的 `RuntimeTextPattern`，复用引擎的匹配器：匹配方式、ASCII 大小写折叠、标识符边界、正则），正则请求带真实 pattern；成员请求带名字在声明里的范围，名字按标识符边界查找（行内加粗用同一个范围） | PR #121 审查 PR121.47：超过 320 个 UTF-16 单位的行只交出窗口，整行比较永远不等，正则命中一律定位不到，其它模式落在更早的同名子串上；成员 `URL` 的加粗与高亮都落在 `NSURL` 里。降级一步对整段文本匹配一次再按行号取最近，正则只花一份时间预算。`memberSortOrder` 仍按 2026-09-29 不处理。 |

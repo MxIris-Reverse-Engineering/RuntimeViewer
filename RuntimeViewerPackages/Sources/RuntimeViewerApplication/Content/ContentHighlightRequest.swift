@@ -11,9 +11,12 @@ import RuntimeViewerCore
 /// in its own text in this order (proposal `draft-find-navigator` §4):
 ///
 /// 1. a line equal to `lineText`, the one nearest `lineNumber` when several
-///    are, with `matchRangeInLine` applied inside it;
-/// 2. failing that, `query` searched the same way the navigator did, the
-///    hit nearest `lineNumber`;
+///    are, with `matchRangeInLine` applied inside it — or, when `lineText` is
+///    a window the engine cut out of a long line, a line containing it, with
+///    the hit at the same place inside the window;
+/// 2. failing that, `query` matched the way the search matched it — its
+///    `matchMode`, ASCII case folding, identifier boundaries, regular
+///    expressions — the hit nearest `lineNumber`;
 /// 3. failing that, nothing — the pane stays at the top of the object.
 public struct ContentHighlightRequest: Hashable, Sendable {
     /// 1-based line in the corpus interface.
@@ -25,15 +28,19 @@ public struct ContentHighlightRequest: Hashable, Sendable {
     /// text search.
     public let matchRangeInLine: RuntimeTextRange?
     /// The text to fall back to when `lineText` is not on screen: the query
-    /// of a text search, the member name of a member search.
+    /// of a text search — the pattern itself for a regular expression — or
+    /// the member name of a member search.
     public let query: String
+    /// How `query` matches, as the search that found the hit matched it.
+    public let matchMode: RuntimeInterfaceSearchMatchMode
     public let isCaseSensitive: Bool
 
-    public init(lineNumber: Int, lineText: String, matchRangeInLine: RuntimeTextRange?, query: String, isCaseSensitive: Bool) {
+    public init(lineNumber: Int, lineText: String, matchRangeInLine: RuntimeTextRange?, query: String, matchMode: RuntimeInterfaceSearchMatchMode = .containing, isCaseSensitive: Bool) {
         self.lineNumber = lineNumber
         self.lineText = lineText
         self.matchRangeInLine = matchRangeInLine
         self.query = query
+        self.matchMode = matchMode
         self.isCaseSensitive = isCaseSensitive
     }
 
@@ -45,36 +52,85 @@ public struct ContentHighlightRequest: Hashable, Sendable {
         let lines = Self.lines(of: displayedText)
         guard !lines.isEmpty else { return nil }
         let targetLineIndex = max(0, lineNumber - 1)
-        let normalizedLineText = Self.normalized(lineText)
+        let pattern = query.isEmpty ? nil : try? RuntimeTextPattern(text: query, matchMode: matchMode, isCaseSensitive: isCaseSensitive)
 
-        // 1. Whole-line match, nearest to the corpus line number.
-        if !normalizedLineText.isEmpty {
-            var bestLine: Line?
-            for line in lines where Self.normalized(line.text) == normalizedLineText {
-                if bestLine == nil || abs(line.index - targetLineIndex) < abs(bestLine!.index - targetLineIndex) {
-                    bestLine = line
-                }
+        // 1. The corpus line, nearest to the corpus line number.
+        if let window = Self.window(of: lineText) {
+            // A long line reached the navigator as a window cut around the hit; the line on
+            // screen contains the window, and the hit sits at the same place inside it.
+            if let range = locateWindow(window, in: lines, nearLineIndex: targetLineIndex) {
+                return range
             }
-            if let bestLine {
-                return rangeInsideLine(bestLine, of: displayedText)
+        } else {
+            let normalizedLineText = Self.normalized(lineText)
+            if !normalizedLineText.isEmpty {
+                var bestLine: Line?
+                for line in lines where Self.normalized(line.text) == normalizedLineText {
+                    if bestLine == nil || abs(line.index - targetLineIndex) < abs(bestLine!.index - targetLineIndex) {
+                        bestLine = line
+                    }
+                }
+                if let bestLine {
+                    return rangeInsideLine(bestLine, pattern: pattern)
+                }
             }
         }
 
-        // 2. The query itself, nearest to the corpus line number.
-        guard !query.isEmpty else { return nil }
-        let options: String.CompareOptions = isCaseSensitive ? [] : [.caseInsensitive]
+        // 2. The query, matched as the search matched it, nearest to the corpus line number.
+        // Matched over the whole text in one pass, so a regular expression spends one time
+        // budget, not one per line; `^` and `$` anchor at lines, as in the search.
+        guard let pattern else { return nil }
+        var bestRange: NSRange?
+        var bestDistance = Int.max
+        var lineCursor = 0
+        for found in pattern.ranges(in: displayedText) {
+            while lineCursor + 1 < lines.count, lines[lineCursor + 1].utf16Offset <= found.location {
+                lineCursor += 1
+            }
+            let distance = abs(lines[lineCursor].index - targetLineIndex)
+            guard distance < bestDistance else { continue }
+            bestDistance = distance
+            bestRange = found
+        }
+        return bestRange
+    }
+
+    /// The hit inside the line on screen that contains `window`, the line nearest
+    /// `targetLineIndex` when several do; `nil` when no line contains it.
+    private func locateWindow(_ window: (text: String, leadingMarkerLength: Int), in lines: [Line], nearLineIndex targetLineIndex: Int) -> NSRange? {
+        guard !window.text.isEmpty, let matchRangeInLine else { return nil }
+        let locationInWindow = matchRangeInLine.location - window.leadingMarkerLength
+        guard locationInWindow >= 0, locationInWindow + matchRangeInLine.length <= window.text.utf16.count else { return nil }
         var bestRange: NSRange?
         var bestDistance = Int.max
         for line in lines {
-            guard let found = line.text.range(of: query, options: options) else { continue }
+            let windowRange = (line.text as NSString).range(of: window.text)
+            guard windowRange.location != NSNotFound else { continue }
             let distance = abs(line.index - targetLineIndex)
             guard distance < bestDistance else { continue }
             bestDistance = distance
-            let location = line.utf16Offset + line.text.utf16.distance(from: line.text.startIndex, to: found.lowerBound)
-            let length = line.text.utf16.distance(from: found.lowerBound, to: found.upperBound)
-            bestRange = NSRange(location: location, length: length)
+            bestRange = NSRange(location: line.utf16Offset + windowRange.location + locationInWindow, length: matchRangeInLine.length)
         }
         return bestRange
+    }
+
+    /// The text of a window the engine cut out of a long line, without the ellipsis that marks
+    /// each cut edge, and the UTF-16 length of the leading mark; `nil` for a whole line.
+    /// `RuntimeInterfaceTextMatcher.windowed` marks every edge it cuts, so a line with no mark
+    /// at either end is whole.
+    private static func window(of lineText: String) -> (text: String, leadingMarkerLength: Int)? {
+        let marker = "…"
+        let hasLeadingMarker = lineText.hasPrefix(marker)
+        let hasTrailingMarker = lineText.hasSuffix(marker)
+        guard hasLeadingMarker || hasTrailingMarker else { return nil }
+        var text = Substring(lineText)
+        if hasLeadingMarker {
+            text = text.dropFirst()
+        }
+        if hasTrailingMarker, !text.isEmpty {
+            text = text.dropLast()
+        }
+        return (String(text), hasLeadingMarker ? marker.utf16.count : 0)
     }
 
     private struct Line {
@@ -96,17 +152,14 @@ public struct ContentHighlightRequest: Hashable, Sendable {
         return lines
     }
 
-    /// Lines compare with their indentation and the navigator's ellipsis
-    /// window trimmed, so a hit on an indented member still matches its
-    /// windowed corpus line.
+    /// Lines compare with their indentation trimmed, so a hit on an indented
+    /// member still matches its corpus line. A windowed corpus line never gets
+    /// here: `locateWindow` looks for it instead.
     private static func normalized(_ line: String) -> String {
-        var trimmed = line.trimmingCharacters(in: .whitespaces)
-        if trimmed.hasPrefix("…") { trimmed.removeFirst() }
-        if trimmed.hasSuffix("…") { trimmed.removeLast() }
-        return trimmed
+        line.trimmingCharacters(in: .whitespaces)
     }
 
-    private func rangeInsideLine(_ line: Line, of displayedText: String) -> NSRange {
+    private func rangeInsideLine(_ line: Line, pattern: RuntimeTextPattern?) -> NSRange {
         let leadingWhitespaceCount = line.text.utf16.distance(
             from: line.text.startIndex,
             to: line.text.firstIndex { !$0.isWhitespace } ?? line.text.endIndex
@@ -114,22 +167,19 @@ public struct ContentHighlightRequest: Hashable, Sendable {
         let lineStart = line.utf16Offset + leadingWhitespaceCount
         let lineContentLength = line.text.utf16.count - leadingWhitespaceCount
         // The corpus line was normalized the same way, so the range is
-        // relative to its first non-blank character (after any ellipsis).
+        // relative to its first non-blank character.
         let corpusLeadingCount = lineText.utf16.distance(
             from: lineText.startIndex,
             to: lineText.firstIndex { !$0.isWhitespace } ?? lineText.endIndex
-        ) + (lineText.trimmingCharacters(in: .whitespaces).hasPrefix("…") ? 1 : 0)
+        )
         if let matchRangeInLine {
             let location = matchRangeInLine.location - corpusLeadingCount
             if location >= 0, location + matchRangeInLine.length <= lineContentLength {
                 return NSRange(location: lineStart + location, length: matchRangeInLine.length)
             }
         }
-        let options: String.CompareOptions = isCaseSensitive ? [] : [.caseInsensitive]
-        if !query.isEmpty, let found = line.text.range(of: query, options: options) {
-            let location = line.text.utf16.distance(from: line.text.startIndex, to: found.lowerBound)
-            let length = line.text.utf16.distance(from: found.lowerBound, to: found.upperBound)
-            return NSRange(location: line.utf16Offset + location, length: length)
+        if let found = pattern?.ranges(in: line.text).first {
+            return NSRange(location: line.utf16Offset + found.location, length: found.length)
         }
         return NSRange(location: lineStart, length: lineContentLength)
     }

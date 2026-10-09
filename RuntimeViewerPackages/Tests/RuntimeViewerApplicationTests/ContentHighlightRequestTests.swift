@@ -84,4 +84,71 @@ struct ContentHighlightRequestTests {
         #expect(request.locate(in: displayedText) == nil)
         #expect(request.locate(in: "") == nil)
     }
+
+    // MARK: - Long lines
+
+    /// A line longer than the navigator keeps whole: `SwiftUI.View` sits past column 320, after
+    /// an earlier `View` inside another type's name.
+    private static let longLine = "public func makeBody(effect: _BackgroundViewHoverEffect, "
+        + String(repeating: "parameter: Swift.Int, ", count: 14)
+        + "content: SwiftUI.View) -> some SwiftUI.View"
+    private static let longLinePrefix = "struct Sample {\n    "
+    private static let longLineText = longLinePrefix + longLine + "\n}"
+    /// The hit: `View` in `content: SwiftUI.View`.
+    private static let longLineHitRange = NSRange(location: (longLine as NSString).range(of: "content: SwiftUI.View").location + "content: SwiftUI.".utf16.count, length: 4)
+
+    /// The window `RuntimeInterfaceTextMatcher.windowed` cuts around a hit in a line longer than
+    /// 320 UTF-16 units: from 100 units ahead of the hit, 320 in all, each cut edge marked `…`.
+    private static func window(of line: String, around hitRange: NSRange) -> (text: String, rangeInWindow: RuntimeTextRange) {
+        let utf16 = Array(line.utf16)
+        let windowStart = max(0, min(hitRange.location - 100, utf16.count - 320))
+        let windowEnd = min(utf16.count, windowStart + 320)
+        var text = String(decoding: utf16[windowStart ..< windowEnd], as: UTF16.self)
+        var location = hitRange.location - windowStart
+        if windowStart > 0 {
+            text = "…" + text
+            location += 1
+        }
+        if windowEnd < utf16.count {
+            text += "…"
+        }
+        return (text, RuntimeTextRange(location: location, length: hitRange.length))
+    }
+
+    @Test("a regular-expression hit on a long line is found inside the window the navigator kept")
+    func regularExpressionHitOnALongLine() {
+        #expect(Self.longLine.utf16.count > 320)
+        let window = Self.window(of: Self.longLine, around: Self.longLineHitRange)
+        // How the Find page built a regular-expression request before the fix: no query to fall back to.
+        let request = ContentHighlightRequest(lineNumber: 2, lineText: window.text, matchRangeInLine: window.rangeInWindow, query: "", isCaseSensitive: true)
+        let expected = NSRange(location: Self.longLinePrefix.utf16.count + Self.longLineHitRange.location, length: 4)
+        #expect(request.locate(in: Self.longLineText) == expected)
+    }
+
+    @Test("a literal hit on a long line is not taken by an earlier occurrence of the same text")
+    func literalHitOnALongLine() {
+        let window = Self.window(of: Self.longLine, around: Self.longLineHitRange)
+        let request = ContentHighlightRequest(lineNumber: 2, lineText: window.text, matchRangeInLine: window.rangeInWindow, query: "View", isCaseSensitive: true)
+        let expected = NSRange(location: Self.longLinePrefix.utf16.count + Self.longLineHitRange.location, length: 4)
+        #expect(request.locate(in: Self.longLineText) == expected)
+    }
+
+    @Test("the fallback matches as the search did: a whole word is not found inside a longer one")
+    func fallbackHonoursTheMatchStyle() {
+        let text = "@interface Sample : NSObject\n@property (readonly) NSView *view;\n- (void)View;\n@end"
+        let request = ContentHighlightRequest(lineNumber: 2, lineText: "a line the pane no longer shows", matchRangeInLine: nil, query: "View", matchMode: .matchingWord, isCaseSensitive: true)
+        #expect(request.locate(in: text) == utf16Range(of: "View;", in: text).withLength(4))
+    }
+
+    @Test("a regular expression falls back to the pattern itself, matched as the search matched it")
+    func regularExpressionFallback() {
+        let request = ContentHighlightRequest(lineNumber: 3, lineText: "a line the pane no longer shows", matchRangeInLine: nil, query: #"locale:\(\w+\)"#, matchMode: .regularExpression, isCaseSensitive: true)
+        #expect(request.locate(in: displayedText) == utf16Range(of: "locale:(id)", in: displayedText))
+    }
+}
+
+extension NSRange {
+    fileprivate func withLength(_ length: Int) -> NSRange {
+        NSRange(location: location, length: length)
+    }
 }

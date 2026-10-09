@@ -5917,7 +5917,7 @@ func requestIsLocatedOnTheFirstRender() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C43
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试（修前都红）：`ContentHighlightRequestTests.regularExpressionHitOnALongLine`（窗口行等不了整行、正则请求又不带 query，定位返回 `nil`）、`literalHitOnALongLine`（落在 `_BackgroundViewHoverEffect` 里更早的 `View` 上）、`FindResultMemberEmphasisTests.nameThatAlsoOccursInsideATypeName`（加粗的是 `NSURL` 里的 `URL`）、`FindViewModelTests.memberHighlightLandsOnTheName`（端到端：Foundation 的成员命中 `URL`，请求定位到 `NSURL` 里）。新契约：`ContentHighlightRequestTests.fallbackHonoursTheMatchStyle`、`regularExpressionFallback`，Core 的 `RuntimeTextPatternTests`。与草案的出入：第二步不再逐行调用匹配器，而是对整段显示文本匹配一次、再按行号取最近的一处——正则的时间预算因此只花一份（逐行调用会让一个灾难性回溯的正则每行各花一份预算）；`RuntimeTextPattern` 的预算默认 1 秒，超时时返回空，按「完全找不到」处理。`normalized` 与 `rangeInsideLine` 里为窗口行留的「…」处理随之删去（窗口行改走 `locateWindow`）。`memberSortOrder` 那一条（By Offset 排序后行号变了、内容完全相同的行取错）按决策日志 2026-09-29 不修，理由仍成立：两行内容完全相同时取哪一行都显示同样的文字。同类：`ContentHighlightRequest` 里两处 `range(of:options:)`、`FindResultNode` 的名字查找都已一并改
 
 **问题**：点 Find 结果后，内容区用 `ContentHighlightRequest.locate(in:)` 在屏上的文本里找回那处命中。有三种情况会定位错，或者根本定位不到。
 

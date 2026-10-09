@@ -402,6 +402,31 @@ struct FindViewModelTests {
         #expect(highlight.query == match.member.name)
     }
 
+    @Test("a member hit's highlight lands on the member's name, not inside a type name before it")
+    func memberHighlightLandsOnTheName() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        modePathChoiceSelectedRelay.accept(.mode(.members))
+        memberKindFilterSelectedRelay.accept(.kind(.objcProperty))
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept("URL")
+        let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
+        let member = try #require(nodes.flatMap(\.children).first { node in
+            guard case .member(let match) = node.content else { return false }
+            return match.member.name == "URL" && match.member.lineNumber != nil && match.member.declarationText.contains("NSURL *URL")
+        })
+        guard case .member(let match) = member.content else { return }
+
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(member)
+        }
+        let (_, highlight) = try #require(Self.highlightingPush(in: routes))
+        let declarationText = match.member.declarationText as NSString
+        #expect(highlight.locate(in: match.member.declarationText) == NSRange(location: declarationText.range(of: "*URL").location + 1, length: 3))
+    }
+
     // MARK: - Relationships
 
     @Test("a relationship search builds one tree per matching type")

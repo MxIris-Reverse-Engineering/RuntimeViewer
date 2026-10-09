@@ -291,7 +291,8 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
                 lineNumber: match.lineNumber,
                 lineText: match.lineText,
                 matchRangeInLine: match.matchRangeInLine,
-                query: query.mode == .regularExpression ? "" : query.trimmedText,
+                query: query.trimmedText,
+                matchMode: query.mode == .regularExpression ? .regularExpression : query.textMatchStyle.matchMode,
                 isCaseSensitive: query.isCaseSensitive
             )
         case .member(let match):
@@ -299,8 +300,10 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             return ContentHighlightRequest(
                 lineNumber: lineNumber,
                 lineText: match.member.declarationText,
-                matchRangeInLine: nil,
+                // The part of the name the row sets apart, so the pane flashes the same span.
+                matchRangeInLine: FindResultNode.nameRange(of: match).map { RuntimeTextRange(location: $0.location, length: $0.length) },
                 query: match.member.name,
+                matchMode: .matchingWord,
                 isCaseSensitive: true
             )
         case .object, .relationship:

@@ -201,22 +201,26 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         }
         return result
     }
+    #endif
+
+    // MARK: - Member Names
 
     /// Where the query matched the member's name, inside its declaration. A
-    /// name the declaration spells whole is found as is; a multi-part
-    /// selector is spelled piece by piece with its parameters in between, so
-    /// the piece the match starts in is found instead, keyword and colon.
-    private static func nameRange(of match: RuntimeMemberMatch) -> NSRange? {
+    /// name the declaration spells whole is found where it stands on its own —
+    /// `URL` in `NSURL *URL` is the last one, not the one inside `NSURL`; a
+    /// multi-part selector is spelled piece by piece with its parameters in
+    /// between, so the piece the match starts in is found instead, keyword and
+    /// colon. The row sets this range apart, and the content pane flashes it.
+    static func nameRange(of match: RuntimeMemberMatch) -> NSRange? {
         let declarationText = match.member.declarationText as NSString
         let name = match.member.name as NSString
         let matchRange = match.matchRangeInName.nsRange
-        let wholeNameRange = declarationText.range(of: name as String)
-        if wholeNameRange.location != NSNotFound {
+        if let wholeNameRange = identifierRange(of: name as String, in: declarationText) {
             return NSRange(location: wholeNameRange.location + matchRange.location, length: matchRange.length)
                 .clamped(toLengthOf: wholeNameRange)
         }
         guard let pieceRange = selectorPieceRange(in: name, containing: matchRange.location),
-              let pieceRangeInDeclaration = keywordRange(of: name.substring(with: pieceRange), in: declarationText)
+              let pieceRangeInDeclaration = identifierRange(of: name.substring(with: pieceRange), in: declarationText)
         else { return nil }
         return NSRange(location: pieceRangeInDeclaration.location + matchRange.location - pieceRange.location, length: matchRange.length)
             .clamped(toLengthOf: pieceRangeInDeclaration)
@@ -237,14 +241,19 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         return nil
     }
 
-    /// The first place `keyword` starts a word in `declarationText`, so a
-    /// keyword is never found at the end of a longer one.
-    private static func keywordRange(of keyword: String, in declarationText: NSString) -> NSRange? {
+    /// The first place `identifier` stands on its own in `declarationText`: not preceded by an
+    /// identifier character, and — unless it ends in a selector's colon — not followed by one.
+    /// So a name is never found inside a longer one, at either end.
+    private static func identifierRange(of identifier: String, in declarationText: NSString) -> NSRange? {
+        let identifierText = identifier as NSString
+        let checksTrailingBoundary = identifierText.length > 0 && isIdentifierCharacter(identifierText.character(at: identifierText.length - 1))
         var searchStart = 0
         while searchStart < declarationText.length {
-            let found = declarationText.range(of: keyword, range: NSRange(location: searchStart, length: declarationText.length - searchStart))
+            let found = declarationText.range(of: identifier, range: NSRange(location: searchStart, length: declarationText.length - searchStart))
             guard found.location != NSNotFound else { return nil }
-            if found.location == 0 || !isIdentifierCharacter(declarationText.character(at: found.location - 1)) {
+            let startsOnItsOwn = found.location == 0 || !isIdentifierCharacter(declarationText.character(at: found.location - 1))
+            let endsOnItsOwn = !checksTrailingBoundary || NSMaxRange(found) == declarationText.length || !isIdentifierCharacter(declarationText.character(at: NSMaxRange(found)))
+            if startsOnItsOwn, endsOnItsOwn {
                 return found
             }
             searchStart = found.location + 1
@@ -256,7 +265,6 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         guard let scalar = Unicode.Scalar(character) else { return true }
         return scalar == "_" || scalar == "$" || CharacterSet.alphanumerics.contains(scalar)
     }
-    #endif
 }
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
@@ -284,6 +292,8 @@ extension FindResultNode: Differentiable {
     }
 }
 
+#endif
+
 extension NSRange {
     /// `self` cut down to lie inside `bounds`; an empty range at `bounds.location`
     /// when they do not overlap.
@@ -294,4 +304,3 @@ extension NSRange {
         return NSRange(location: lower, length: upper - lower)
     }
 }
-#endif
