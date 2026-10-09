@@ -233,6 +233,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   `omittedRepeatedMatchCount`。镜像按路径顺序读，留下的是路径最小的那份；文本不同的副本（例如按旧头文件编出的）照常报告。
   文本搜索在匹配前比较（投影本来就要算），成员搜索在条目的第一个命中处比较。只在一次搜索内部去重：补搜是另一次搜索，
   不与此前已显示的副本比较（理由见 KnownIssues PR121.72）。Swift 类的 ObjC 面与 Swift 面打印的是不同的事实，不去重。
+  摘要栏在计数之后说出折叠了多少：`12 results in 3 types · 4 more in identical protocol copies`，补搜折叠的计数累加进去。
 
 #### 3.2 成员
 
@@ -821,3 +822,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-09 | 内容区的高亮请求随路由走：`ContentRoute` 加 `.rootHighlighting` / `.nextHighlighting`，`MainCoordinator` 转交，`ContentCoordinator` 传进 `ContentTextViewModel` 的构造器，第一次渲染时用掉；删掉 `DocumentState.pendingContentHighlight`、`takeContentHighlight(for:)` 与 `PendingContentHighlight` | PR #121 审查 PR121.46：文档级的邮箱只在同一对象渲染完成时才被取走。点了 A 的命中、A 还没渲染完就去了 B，或者 A 的接口取不回来，请求就一直留着，之后不管从哪里回到 A 都会闪一下旧命中、滚动位置跳过去。请求的生命期改为等于那个 ViewModel：被替换、取失败、换引擎都随它一起消失。内容区本来就为每次导航新建 ViewModel，同一对象上再点一条命中照样重新定位。复现测试 `ContentTextHighlightTests.abandonedHighlightNeverReachesALaterVisit`。 |
 | 2026-10-09 | 内容区二次定位按搜索的语义找回命中：长行的窗口按「包含」找回所在行、命中位置取窗口内的偏移；降级一步用搜索同样的匹配方式（Core 新增公开的 `RuntimeTextPattern`，复用引擎的匹配器：匹配方式、ASCII 大小写折叠、标识符边界、正则），正则请求带真实 pattern；成员请求带名字在声明里的范围，名字按标识符边界查找（行内加粗用同一个范围） | PR #121 审查 PR121.47：超过 320 个 UTF-16 单位的行只交出窗口，整行比较永远不等，正则命中一律定位不到，其它模式落在更早的同名子串上；成员 `URL` 的加粗与高亮都落在 `NSURL` 里。降级一步对整段文本匹配一次再按行号取最近，正则只花一份时间预算。`memberSortOrder` 仍按 2026-09-29 不处理。 |
 | 2026-10-09 | 摘要栏说清楚两种不完整的答案：引擎因正则超出时间预算停下时末尾加「incomplete: the pattern takes too long to match」；对端的 RuntimeViewer 不认识搜索命令时整条摘要是「Not supported by this source」，与 Report navigator 同一说法 | PR #121 审查 PR121.06 与 PR121.37 留给界面的一半：前者 Core 已把 `stopReason` 发进搜索摘要，界面没说，用户看到的是一份看似完整的结果；后者原先显示「Search failed: No handler registered for …」。「已合并 N 处协议副本命中」（PR121.72）依赖语料批次新增的摘要字段，合入后再补。 |
+| 2026-10-09 | 摘要栏在计数之后加「N more in identical protocol copies」：`FindSession.Results` 带上 `omittedRepeatedMatchCount`，补搜折叠的计数累加 | PR #121 审查 PR121.72 留给界面的一半：引擎把与已报告副本逐字相同的 ObjC 协议副本只计数，计入摘要的 `omittedRepeatedMatchCount`，界面原先不说，一个看着偏小的总数没有解释。放在计数之后、语料状态之前，因为它说的是计数。哪些副本读起来一样取决于本机系统框架，Application 层的测试由脚本化的对端回一个折叠计数，引擎那一半由 `RuntimeInterfaceRepeatedProtocolCopyTests` 覆盖；`FindSessionSummaryNoticeTests.foldedProtocolCopyHitsAreCounted` 修前摘要只有「0 results in 0 types」。 |

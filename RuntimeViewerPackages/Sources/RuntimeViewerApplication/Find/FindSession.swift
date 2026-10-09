@@ -52,6 +52,10 @@ public final class FindSession {
         /// covers, which leaves these results incomplete; `nil` when it read
         /// it all.
         public var stopReason: RuntimeInterfaceSearchStopReason?
+        /// Hits the engine left out of the count because they sit in an
+        /// Objective-C protocol copy that reads exactly like one already
+        /// shown, across every search merged into these results.
+        public var omittedRepeatedMatchCount = 0
         /// The query these results answer: the one last run, not the one
         /// the mode path and the toggles may have been edited into since. A
         /// click highlights with its mode and case. `nil` with nothing
@@ -72,6 +76,14 @@ public final class FindSession {
     /// The summary bar for a source whose RuntimeViewer predates Find's
     /// commands, worded as the Report navigator words it.
     static let unsupportedBySourceSummary = "Not supported by this source"
+
+    /// What the summary bar adds when the engine folded the hits of
+    /// Objective-C protocol copies that read exactly like one already shown —
+    /// the same declaration, carried by another image — so a total lower than
+    /// the copies suggest has its explanation in view.
+    static func foldedProtocolCopiesNotice(count: Int) -> String {
+        "\(count) more in identical protocol copies"
+    }
 
     /// Weak: the session can outlive its document — a page's view model holds
     /// it while the window comes down — and is then still subscribed to the
@@ -363,6 +375,7 @@ public final class FindSession {
         let scopeImagePaths: Set<String>?
         var searchedImagePaths: Set<String> = []
         var totalMatchCount = 0
+        var omittedRepeatedMatchCount = 0
         var isTruncated = false
     }
 
@@ -556,6 +569,7 @@ public final class FindSession {
         guard var shownSearch else { return }
         shownSearch.searchedImagePaths.formUnion(summary.scannedImagePaths)
         shownSearch.totalMatchCount += summary.totalMatchCount
+        shownSearch.omittedRepeatedMatchCount += summary.omittedRepeatedMatchCount
         shownSearch.isTruncated = shownSearch.isTruncated || summary.isTruncated
         self.shownSearch = shownSearch
         var finished = results(from: nodes, matchCount: shownSearch.totalMatchCount, typeCount: typeCount)
@@ -609,6 +623,7 @@ public final class FindSession {
         var updated = Results()
         updated.nodes = nodes
         updated.isTruncated = shownSearch?.isTruncated ?? false
+        updated.omittedRepeatedMatchCount = shownSearch?.omittedRepeatedMatchCount ?? 0
         updated.unbuiltImagePaths = results.unbuiltImagePaths
         updated.stopReason = results.stopReason
         var text = "\(matchCount) \(matchCount == 1 ? "result" : "results") in \(typeCount) \(typeCount == 1 ? "type" : "types")"
@@ -646,6 +661,9 @@ public final class FindSession {
 
     static func summary(of results: Results, corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState], within scopeImagePaths: Set<String>? = nil) -> String? {
         guard var text = results.summary else { return nil }
+        if results.omittedRepeatedMatchCount > 0 {
+            text += " · " + foldedProtocolCopiesNotice(count: results.omittedRepeatedMatchCount)
+        }
         if let corpusStatus = corpusStatus(of: corpusBuildStates, within: scopeImagePaths) {
             text += " · " + corpusStatus
         } else if !results.unbuiltImagePaths.isEmpty {

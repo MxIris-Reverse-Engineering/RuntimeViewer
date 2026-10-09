@@ -1,13 +1,14 @@
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCommunication
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 import Testing
 @testable import RuntimeViewerApplication
 
 /// What the summary bar says when a search could not give a full answer: a regular expression
 /// the engine stopped because it took too long (PR121.06), and a source whose RuntimeViewer is
-/// older than Find itself (PR121.37), said the way the Report navigator says it.
+/// older than Find itself (PR121.37), said the way the Report navigator says it — and when its
+/// total leaves out hits folded into an identical protocol copy (PR121.72).
 @Suite("FindSession summary notices", .serialized)
 @MainActor
 struct FindSessionSummaryNoticeTests {
@@ -37,6 +38,39 @@ struct FindSessionSummaryNoticeTests {
     }
 
     #if canImport(Network)
+    /// The engine folds the hits of an Objective-C protocol copy that reads exactly like one it
+    /// already reported into a count of its own (PR121.72); the summary bar says how many, so a
+    /// total that looks low next to the per-image copies has its explanation in view. Which copies
+    /// read alike depends on the system's frameworks, so a peer answers with the count instead —
+    /// the engine side has its own suite. A widening search folds more and adds to it.
+    @Test("hits folded into an identical protocol copy are counted in the summary")
+    func foldedProtocolCopyHitsAreCounted() async throws {
+        let peer = try await ScriptedPeer.make(label: "FindSessionSummaryNoticeTests.protocolCopies")
+        peer.serve(.searchInterfaces) {
+            RuntimeInterfaceSearchSummary(
+                totalMatchCount: 0,
+                scannedImagePaths: [],
+                scannedObjectCount: 0,
+                isTruncated: false,
+                unbuiltIndexedImagePaths: [],
+                omittedRepeatedMatchCount: 3
+            )
+        }
+        let environment = ViewModelTestEnvironment(runtimeEngine: peer.client)
+        let session = environment.make { environment.documentState.findSession }
+
+        session.run(FindQuery(mode: .text, text: "copyWithZone"))
+        let summary = try await nextValue(from: session.$summary.asDriver(), timeout: 20) { $0 != nil }
+        #expect(summary == "0 results in 0 types · " + FindSession.foldedProtocolCopiesNotice(count: 3))
+
+        session.corpusDidBuild(at: TestImages.foundation)
+        let widenedSummary = try await nextValue(from: session.$summary.asDriver(), timeout: 20) {
+            $0 != summary && $0 != nil
+        }
+        #expect(widenedSummary == "0 results in 0 types · " + FindSession.foldedProtocolCopiesNotice(count: 6))
+        await peer.stop()
+    }
+
     @Test("a source older than Find says it does not support it, as the Report navigator does")
     func sourceWithoutFindSaysItIsNotSupported() async throws {
         // A connection that serves no command at all: what a peer older than the Find

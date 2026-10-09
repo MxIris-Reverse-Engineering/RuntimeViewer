@@ -111,7 +111,7 @@
 | PR121.03 | Major | interfaceString 改成 FrozenSemanticString 破坏新旧版本互通（已修复 `90d0bb1c`） |
 | PR121.04 | Major | 在侧栏打开的已加载镜像永远建不出语料（已修复 `eef0d40a`） |
 | PR121.05 | Major | 旧搜索的批次混进当前结果；换引擎后结果混杂（已修复 `4bb21e01`） |
-| PR121.06 | Major | 搜索在 store actor 上同步扫描，病态正则卡死（已修复 `233f63ce`） |
+| PR121.06 | Major | 搜索在 store actor 上同步扫描，病态正则卡死（已修复 `233f63ce`；界面提示 `8a514ed2`） |
 | PR121.07 | Major | Find 结果每批整树重载：折叠、选中丢失，误导航（已修复 `d86f4cab`） |
 | PR121.08 | Major | 被取消的构建仍接受新请求；组装期间的取消被无视（已修复 `e6a82c35`） |
 | PR121.09 | Major | Report 的取消到不了服务端（已修复 `e137a239`） |
@@ -142,7 +142,7 @@
 | PR121.34 | Minor | 被悄悄驱逐的语料仍显示已建好；历史满额时 Clear History 失效（已修复 `77aed354`；轮询的设计不修） |
 | PR121.35 | Minor（性能） | 每个请求完成都单独刷新一次 coverage（已修复 `9d4dc9fc`） |
 | PR121.36 | Cleanup（随 PR121.04 一起消失；单独看建议不修） | 语料事件泵跑在 main actor 上（随 PR121.04 消失 `eef0d40a`） |
-| PR121.37 | Minor | 对端不支持语料命令时每个镜像记一条失败（已修复 `48534e18`；Report 里的说明 `a5227836`；Find 摘要的说明待界面批次 S6） |
+| PR121.37 | Minor | 对端不支持语料命令时每个镜像记一条失败（已修复 `48534e18`；Report 里的说明 `a5227836`；Find 摘要的说明 `8a514ed2`） |
 | PR121.38 | Minor | 补搜失败后转圈不停（已修复 `4bb21e01`） |
 | PR121.39 | Minor | 选项重跑和点击高亮用了未提交的查询（已修复 `76eb5187`） |
 | PR121.40 | Minor | 改 transformer 后屏上的搜索不重跑（已修复 `a4440bea`） |
@@ -177,7 +177,7 @@
 | PR121.69 | Cleanup | 关系遍历代码重复、visited 键写法不统一（已修复 `fb353cdd`） |
 | PR121.70 | Major | 锁文件钉着被变基孤立的 MachOSwiftSection 修订（已修复 `0b257a8d`） |
 | PR121.71 | Minor（单独看不出错，但它决定 PR121.53 的修复和测试在哪个版本下成立） | RxAppKit 在 App 是 0.6.0、包测试与 CLI 锁文件是 0.5.4（已修复 `0b257a8d`） |
-| PR121.72 | Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分） | 语料为协议副本和 Swift 类的 ObjC 面各建一条，搜索重复命中（协议副本部分已修复 `e5ad471b`；ObjC 面一半不修） |
+| PR121.72 | Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分） | 语料为协议副本和 Swift 类的 ObjC 面各建一条，搜索重复命中（协议副本部分已修复 `e5ad471b`，摘要提示见正文；ObjC 面一半不修） |
 | PR121.73 | 待核实（若成立：Minor） | 旧版注入 payload 收到不认识的命令可能被标成断开（进程内部分已核实 `f25edaa2`，未改代码；Mach service 一段待用户手工验证） |
 
 ## 条目
@@ -795,7 +795,7 @@ func imageOpenedInTheSidebarBecomesSearchable() async throws {
 
 - **严重度**：Major
 - **审查编号**：C03（含 S3 的 store 一半）
-- **状态**：已修复，界面部分待办：`stopReason` 非空时 Find 提示「结果不完整」，归 Find 界面批次（S6）；本批只把 `stopReason` 发布进摘要，没有碰 `FindSession`。复现测试：`RuntimeInterfaceCorpusStoreTests.storeAnswersWhileSearching`（修前 coverage 排在整个扫描之后，返回时搜索已结束，用例 4.6 s）、`searchStopsInsideAnImage`（修前取消后照常返回 summary）、`searchReportsWhyItStopped` 与 `memberSearchReportsWhyItStopped`（修前 `stopReason` 恒为 nil）、`RuntimeInterfaceTextMatcherTests.regularExpressionBudgetStopsOneMatch`（修前两次调用都不抛错，24 个 a 共跑 2.2 s；修后两个 20 ms 预算共 44 ms）、`RuntimeInterfaceSearchTests.relationshipSearchOverBudgetFailsReadably`（修前照常返回两棵树）；守护用例 `RuntimeInterfaceTextMatcherTests.quantifiedGroups`（16 个手写用例）。测试 4 实测（Debug 构建，Foundation 语料 2388 条、573 万 UTF-8 字节、564 万 UTF-16 单元，五轮取中位数）：开着 `.reportProgress` 时块几乎每前进一个 UTF-16 单元就被调一次（约 590 万次），常见正则从约 43 ms 涨到约 148 ms（+200%～+450%），慢正则（约 1.4 s）+10%～+14%，超过 20%，按退路只对含被量词修饰的分组的模式开启；之后不含这类分组的模式与修前持平（−1%～+4%），含的（`(NS)?String\b`、`(?:init|copy)+With`）+127%～+159%。与草案的出入：超出预算的错误是 `PatternError` 新增的 `regularExpressionTooExpensive(pattern:)`（`PatternError` 随之 `Equatable`），说明里带上用户写的模式；取消与时钟都每 64 次回调看一次（块在每个位置都被调，每次查取消也有代价）；不保留不带预算的 `hits(in:pattern:)` 重载，生产代码的每个调用点都显式传预算；store 与关系解析器的 init 各加 internal 的 `regularExpressionTimeLimit`（默认 10 s）供测试注入，关系搜索的测试用 0 秒预算，单次匹配中途停下由匹配器测试覆盖；成员搜索收满后不再为每个命中建一个 `RuntimeMemberMatch` 再丢掉；停下或取消时正在扫的镜像仍记入 `scannedImagePaths`。残留风险：没有被量词修饰的分组、但有多个相邻无界量词的模式（如 `.*.*.*X`）在一个条目内是多项式回溯，只在两次正则调用之间（条目之间）受预算约束。同类：成员名、类型名与文本共用 `hits(in:pattern:budget:)`，预算在一处生效；其余正则创建点（`SwiftStdlib+.swift`、`TransformerSettingsView.swift`）是固定模式；CLI 的 `searchTypes` 按上文不在本条范围
+- **状态**：已修复。界面一半（`stopReason` 非空时 Find 提示「结果不完整」）由批次 S6 的 `8a514ed2` 补上，见下一项；本批只把 `stopReason` 发布进摘要，没有碰 `FindSession`。复现测试：`RuntimeInterfaceCorpusStoreTests.storeAnswersWhileSearching`（修前 coverage 排在整个扫描之后，返回时搜索已结束，用例 4.6 s）、`searchStopsInsideAnImage`（修前取消后照常返回 summary）、`searchReportsWhyItStopped` 与 `memberSearchReportsWhyItStopped`（修前 `stopReason` 恒为 nil）、`RuntimeInterfaceTextMatcherTests.regularExpressionBudgetStopsOneMatch`（修前两次调用都不抛错，24 个 a 共跑 2.2 s；修后两个 20 ms 预算共 44 ms）、`RuntimeInterfaceSearchTests.relationshipSearchOverBudgetFailsReadably`（修前照常返回两棵树）；守护用例 `RuntimeInterfaceTextMatcherTests.quantifiedGroups`（16 个手写用例）。测试 4 实测（Debug 构建，Foundation 语料 2388 条、573 万 UTF-8 字节、564 万 UTF-16 单元，五轮取中位数）：开着 `.reportProgress` 时块几乎每前进一个 UTF-16 单元就被调一次（约 590 万次），常见正则从约 43 ms 涨到约 148 ms（+200%～+450%），慢正则（约 1.4 s）+10%～+14%，超过 20%，按退路只对含被量词修饰的分组的模式开启；之后不含这类分组的模式与修前持平（−1%～+4%），含的（`(NS)?String\b`、`(?:init|copy)+With`）+127%～+159%。与草案的出入：超出预算的错误是 `PatternError` 新增的 `regularExpressionTooExpensive(pattern:)`（`PatternError` 随之 `Equatable`），说明里带上用户写的模式；取消与时钟都每 64 次回调看一次（块在每个位置都被调，每次查取消也有代价）；不保留不带预算的 `hits(in:pattern:)` 重载，生产代码的每个调用点都显式传预算；store 与关系解析器的 init 各加 internal 的 `regularExpressionTimeLimit`（默认 10 s）供测试注入，关系搜索的测试用 0 秒预算，单次匹配中途停下由匹配器测试覆盖；成员搜索收满后不再为每个命中建一个 `RuntimeMemberMatch` 再丢掉；停下或取消时正在扫的镜像仍记入 `scannedImagePaths`。残留风险：没有被量词修饰的分组、但有多个相邻无界量词的模式（如 `.*.*.*X`）在一个条目内是多项式回溯，只在两次正则调用之间（条目之间）受预算约束。同类：成员名、类型名与文本共用 `hits(in:pattern:budget:)`，预算在一处生效；其余正则创建点（`SwiftStdlib+.swift`、`TransformerSettingsView.swift`）是固定模式；CLI 的 `searchTypes` 按上文不在本条范围
 - **界面一半（批次 S6）**：`FindSession.Results` 带上 `stopReason`（扩展搜索合并进来时保留已有的），摘要栏在 `stopReason == .regularExpressionTooExpensive` 时于末尾加「incomplete: the pattern takes too long to match」。复现测试 `FindSessionSummaryNoticeTests.regularExpressionTooExpensiveSaysResultsAreIncomplete`（真引擎上搜 `(\w+)+\(`，修前摘要只有「0 results in 0 types」）与 `noticeFollowsTheCounts`（修前不加提示）；修后都绿。
 
 **问题**：
@@ -821,7 +821,7 @@ func imageOpenedInTheSidebarBecomesSearchable() async throws {
   - `RuntimeInterfaceTextMatcherTests` 和 `RuntimeInterfaceCorpusStoreTests` 里现有调用的签名跟着改（加 `try` 与预算参数）。单次调用可以用新增的不带预算的 `hits(in:pattern:)` 重载。这部分改动是机械的，未列出。
   - 开销实测（见测试 4）若超标，「只对含被量词修饰的分组的模式开 `.reportProgress`」这一退路也未写进 diff。
 
-**修复**：`233f63ce`（界面上「结果不完整」的提示随 Find 界面批次）
+**修复**：`233f63ce`；界面上「结果不完整」的提示 `8a514ed2`（批次 S6）
 
 **复现测试（示例）**：用例 1、2 放在 `RuntimeViewerCoreTests/RuntimeInterfaceCorpusStoreTests.swift`，只用现有的 API，修复前在运行时就是红的。
 - 用例 1：修复前，`coverage` 要排在整个扫描后面，它返回时搜索早已结束。
@@ -3728,13 +3728,13 @@ func coverageRefreshesCoalesce() async throws {
 
 - **严重度**：Minor
 - **审查编号**：新发现（模块 C 起草方案时发现，不在审查清单里）
-- **状态**：已修复（引擎与协调器这一半；界面那一半待办，见下）。复现测试：`FindCorpusCoordinatorOlderPeerTests.peerWithoutCorpusCommandsRecordsNoFailure`（对端是一条什么命令都不服务的 TCP 连接；修前两个镜像各记一条 `.failed(message: "RuntimeNetworkRequestError(message: \"No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.buildInterfaceCorpus\")")`，状态里也留着两条 Failed）、`RemoteUnknownCommandTests`（经一台新版中转时，修前调用方收到 `RuntimeNetworkRequestError(message: "RuntimeNetworkRequestError(message: \"No handler registered for …\")")`，前缀对不上）。修后都绿。
+- **状态**：已修复（引擎与协调器 `48534e18`；Report 的说明 `a5227836`；Find 摘要的说明 `8a514ed2`）。复现测试：`FindCorpusCoordinatorOlderPeerTests.peerWithoutCorpusCommandsRecordsNoFailure`（对端是一条什么命令都不服务的 TCP 连接；修前两个镜像各记一条 `.failed(message: "RuntimeNetworkRequestError(message: \"No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.buildInterfaceCorpus\")")`，状态里也留着两条 Failed）、`RemoteUnknownCommandTests`（经一台新版中转时，修前调用方收到 `RuntimeNetworkRequestError(message: "RuntimeNetworkRequestError(message: \"No handler registered for …\")")`，前缀对不上）。修后都绿。
 - **Find 摘要一半（批次 S6）**：搜索命令被旧对端以「No handler registered for …」拒绝时（`RuntimeNetworkRequestError.isUnknownCommand`），摘要栏不再显示「Search failed: No handler registered for …」，而是与 Report 同一说法「Not supported by this source」（`FindSession.failureSummary(for:)`）。按搜索自己的失败判定，而不是读协调器的 `isCorpusUnsupportedByEngine`：搜索可能先于任何语料请求发出，那时协调器还不知道。复现测试 `FindSessionSummaryNoticeTests.sourceWithoutFindSaysItIsNotSupported`（对端是什么命令都不服务的 TCP 连接，修前摘要为「Search failed: No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.searchInterfaces」），修后绿。
 - **落地与偏离**：
   - 比方案多一处：中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，通道把它的原文回给调用方（`RuntimeMessageChannel.replyMessage(for:)`），而不是 `"\(error)"`。否则经过一台新版中转（镜像链），这段文字会被包上一层类型描述，`isUnknownCommand` 认不出，正是问题描述里「经镜像链路转发到这样的对端」那种情形。
-  - **界面部分待办**：`isCorpusUnsupportedByEngine` 已经发布，但 Report navigator 显示一条说明（界面批次，PR121.55 一带）、Find 摘要改用「此设备上的 RuntimeViewer 版本不支持 Find」这类文字（模块 D1）都还没做；搜索命令遇到旧对端时 FindSession 换一句说明的同类也归 D1。
+  - **界面部分**（引擎批次落地时待办，现已做完）：Report navigator 的说明见下文「Report 一半」，Find 摘要的说明见上文「Find 摘要一半」。
   - 经 Mach service 的旧版注入 payload 对未知命令不回这段文字，这里认不出，见 PR121.73。
-  - **Report 一半（批次 S7，`a5227836`，随 PR121.55）**：协调器的 `isCorpusUnsupportedByEngine` 为真、语料功能打开时，Report 的 Searchable Interfaces 类别下显示一行 "Not supported by this source"（`ReportNodeIdentifier.unsupportedByEngine`，tooltip 说明对端的 RuntimeViewer 比可搜索接口早、要在那边更新），测试 `ReportViewModelTests.corpusUnsupportedByEngineRow`。Find 摘要那一半归批次 S6。
+  - **Report 一半（批次 S7，`a5227836`，随 PR121.55）**：协调器的 `isCorpusUnsupportedByEngine` 为真、语料功能打开时，Report 的 Searchable Interfaces 类别下显示一行 "Not supported by this source"（`ReportNodeIdentifier.unsupportedByEngine`，tooltip 说明对端的 RuntimeViewer 比可搜索接口早、要在那边更新），测试 `ReportViewModelTests.corpusUnsupportedByEngineRow`。Find 摘要那一半见上文（`8a514ed2`）。
 
 **问题**：
 - 对端是不认识语料命令的旧版本时，例如还在跑 v3.0.0-beta.6 的 iPhone、iPad 或模拟器 App，或经镜像链路转发到这样的对端，每个构建请求都会以「No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.buildInterfaceCorpus」失败。
@@ -3763,7 +3763,7 @@ func coverageRefreshesCoalesce() async throws {
   - 这个标志对外发布，供 Report 显示一条说明（模块 E，PR121.55 一带），也供 Find 的摘要改用「此设备上的 RuntimeViewer 版本不支持 Find」这类文字（模块 D1）。
 - **识别不到的情况**：经 mach service 连接的旧版注入 payload 收到不认识的命令时根本不回复，所以靠错误识别不到。见 PR121.73。
 
-**修复**：`48534e18`（引擎与协调器）；Report 里的说明 `a5227836`（批次 S7，随 PR121.55）；Find 摘要的说明归界面批次 S6
+**修复**：`48534e18`（引擎与协调器）；Report 里的说明 `a5227836`（批次 S7，随 PR121.55）；Find 摘要的说明 `8a514ed2`（批次 S6）
 
 **复现测试（示例）**：
 - 放在 `FindCorpusCoordinatorTests.swift`。
@@ -6039,6 +6039,7 @@ grep -A6 '"identity" : "rxappkit"' Package.resolved          # expect "version" 
 - **严重度**：Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分）
 - **审查编号**：新发现（模块 F 在 C30 的同类排查中提出）
 - **状态**：协议副本部分已修复；Swift 类 ObjC 面那一半按裁决不修（理由见下文「裁决理由」）；会话侧跨补搜去重评估后不做（理由见本行末尾）。复现测试：`RuntimeInterfaceRepeatedProtocolCopyTests`（新文件，用 `@testable` 读 store 与可见性类型）——`identicalCopiesReportedOnce`（修前两个镜像里逐字相同的 `NSCopying` 文本与成员各报一次，`totalMatchCount` 是 2）、`copiesAlikeUnderTheOptionsFolded`（两份副本只差一条默认选项隐藏的 IMP 注释：默认选项下修前报两次，修后只报第一个镜像那份；全部显示时两份读起来不同，照常各报一次）、`repeatedCopyReportedOnceAcrossRealImages`（本机 macOS 26.7 上 CoreFoundation 与 Foundation 都带 `NSCopying` 且默认选项下读起来一样，修前文本与成员搜索都从两个镜像各报一次，修后只从 CoreFoundation 报、`omittedRepeatedMatchCount > 0`）；守护用例 `differingCopiesKeepTheirHits`（文本不同的副本各自报告）与 `identicalClassesKeepTheirHits`（逐字相同的类不合并）修前修后都绿。与草案的出入：PR121.06 已把扫描搬进 store 外的扫描驱动，改动按草案所说落在驱动里而不是两份搜索各写一遍——`matchEntry` 多一个参数，条目在第一个命中之前（文本搜索在匹配前，成员搜索在第一个命中的成员处）把它在本次选项下读出的文本交给驱动，驱动判断是否重复、记账；摘要字段在 init 里默认 0。会话侧跨补搜去重不做：会话手里只有命中、没有文本，判断只能在引擎里做，于是补搜的查询要带上此前显示过哪些协议副本（名字与镜像）、引擎再从语料里找出那几份按同一选项投影来比较，搜索与成员两个查询都要加字段，会话要从结果里记下协议副本，而那几份语料在两次搜索之间可能已被预算驱逐、无从比较——跨查询格式、store 与会话三处，不是小改动；主搜索已覆盖当时建好的全部镜像，重复只出现在补搜里。留给 Find 界面模块，连同「另有 N 处合并」的文案
+- **Find 摘要一半（合入语料批次之后）**：`FindSession.Results` 带上 `omittedRepeatedMatchCount`（补搜折叠的计数累加进去），摘要栏在计数之后加「N more in identical protocol copies」（`FindSession.foldedProtocolCopiesNotice(count:)`）。会话侧跨补搜去重仍按上文不做，补搜里折叠不了的副本照常各报一次。复现测试 `FindSessionSummaryNoticeTests.foldedProtocolCopyHitsAreCounted`：真引擎上折叠多少取决于本机系统框架里的副本是否逐字相同（引擎一侧的 `repeatedCopyReportedOnceAcrossRealImages` 用 `#require` 守着这个前提），这里只测会话怎么转述这个数，所以由脚本化的对端回一个 `omittedRepeatedMatchCount: 3` 的摘要，再补搜一次累加到 6；修前摘要只有「0 results in 0 types」，修后绿。横向：命令行与 MCP 不消费搜索摘要，没有第二处要说。
 
 **问题**：`corpusObjects(in:)` 原样取 `_objects(in:)`，侧栏列出的每个对象都会建一条语料（`RuntimeEngine+Search.swift:158-160`）。这导致两类重复：
 - **ObjC 协议副本**：编译器会给每个见过某个 `@protocol` 声明的镜像各发射一份 `protocol_t`；而且自 2026-08-05 起，侧栏有意按 `__objc_protolist` 全量列出这些副本。跨多个镜像搜索时，同一条协议声明就会按携带它的镜像各命中一次。比如搜 `copyWithZone`，CoreFoundation 和 Foundation 里的 `NSCopying` 各报一遍；`NSObject` 协议几乎每个 ObjC 镜像都带，搜 `respondsToSelector` 时每个镜像都报一遍。这些重复会挤占 1000 条的结果上限，也会把总数虚高。
@@ -6068,7 +6069,7 @@ grep -A6 '"identity" : "rxappkit"' Package.resolved          # expect "version" 
   - 补搜（新语料建好后对新镜像再搜一次）是另一次搜索，新镜像里的副本不会和此前已显示的副本比较。要彻底去掉，需要会话在合并结果时也做一次同样的判断，留给 D1 评估。
   - 如果 PR121.06 先落地（它把扫描移出 store actor），本条的改动要跟着搬进它抽出的扫描函数，逻辑不变。
 
-**修复**：`e5ad471b`（协议副本部分；Swift 类 ObjC 面部分按裁决不修；Find 摘要里的提示文字随界面批次）
+**修复**：`e5ad471b`（协议副本部分；Swift 类 ObjC 面部分按裁决不修）；Find 摘要里的提示文字见提交 `fix(find): count hits folded into identical protocol copies in the summary`
 
 **复现测试（示例）**：新建 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/RuntimeInterfaceRepeatedProtocolCopyTests.swift`。要用 `@testable` 读取 store 和可见性类型，所以不放进不带 `@testable` 的 `RuntimeInterfaceSearchTests`。
 - 先用 `#require` 确认两个镜像都带 `NSCopying`，并且在这组选项下两份读起来一样；系统变了，测试会明确失败，而不是悄悄失效。
