@@ -434,12 +434,14 @@ extension RuntimeSwiftSection {
     }
 
     /// The protocol's default implementations, unless the printer prints them
-    /// itself — which it does after a protocol declared at the top level only.
-    /// A protocol nested in a type, or declared in an extension of a type from
-    /// another module, is printed without them, the same way its parent
-    /// prints it inline.
+    /// after the declaration itself — MachOSwiftSection's
+    /// `printsDefaultImplementationExtensionsAfterDeclaration` says which,
+    /// the one statement of that rule its printer and interface builder read
+    /// too. A protocol the printer prints without them — nested in a type,
+    /// or declared in an extension of another module's type — is printed
+    /// here the way its parent prints it inline, and they follow it.
     private func defaultImplementationExtensionsLeftToPrint(of definition: ProtocolDefinition) -> [PrintedDefinition] {
-        guard definition.parent != nil || definition.extensionContext != nil else { return [] }
+        guard !definition.printsDefaultImplementationExtensionsAfterDeclaration else { return [] }
         return definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
     }
 
@@ -1297,7 +1299,7 @@ extension RuntimeSwiftSection {
         )
         printer.updateConfiguration(newPrintConfiguration)
 
-        if options.synthesizeOpaqueType {
+        if options.resolvesOpaqueTypes {
             printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
         } else {
             printer.removeAllTypeNameResolvers()
@@ -1323,16 +1325,7 @@ extension RuntimeSwiftSection {
         }
 
         var newConfiguration = SwiftDeclarationPrintConfiguration(
-            printStrippedSymbolicItem: options.printStrippedSymbolicItem,
-            printFieldOffset: options.printFieldOffset,
-            printExpandedFieldOffsets: options.printExpandedFieldOffset,
-            printMemberAddress: options.printMemberAddress,
-            printVTableOffset: options.printVTableOffset,
-            printPWTOffset: options.printPWTOffset,
-            infersObjCOverridesFromSelectorNames: options.infersObjCOverridesFromSelectorNames,
             memberSortOrder: swiftInterfaceMemberSortOrder,
-            printTypeLayout: options.printTypeLayout,
-            printEnumLayout: options.printEnumLayout,
             memberAddressTransformer: oldConfiguration.memberAddressTransformer,
             vtableOffsetTransformer: oldConfiguration.vtableOffsetTransformer,
             fieldOffsetTransformer: oldConfiguration.fieldOffsetTransformer,
@@ -1340,6 +1333,7 @@ extension RuntimeSwiftSection {
             enumLayoutTransformer: oldConfiguration.enumLayoutTransformer,
             enumLayoutCaseTransformer: oldConfiguration.enumLayoutCaseTransformer,
         )
+        newConfiguration.applySwitches(of: options)
 
         // The transformer templates render library-side
         // (`OutputTransformer` + the closure factories in
@@ -1351,6 +1345,34 @@ extension RuntimeSwiftSection {
             newConfiguration.applyTransformers(transformer)
         }
         return newConfiguration
+    }
+}
+
+extension SwiftDeclarationPrintConfiguration {
+    /// Sets the switches RuntimeViewer's Swift Generation Options decide —
+    /// the one mapping from those options to the printer's. The content
+    /// pane's printer is configured with it, and a Find search reads the
+    /// corpus under it (`RuntimeInterfaceVisibility`), so the two cannot
+    /// disagree on what an option shows.
+    mutating func applySwitches(of options: SwiftGenerationOptions) {
+        printStrippedSymbolicItem = options.printStrippedSymbolicItem
+        printFieldOffset = options.printFieldOffset
+        printExpandedFieldOffsets = options.printExpandedFieldOffset
+        printMemberAddress = options.printMemberAddress
+        printVTableOffset = options.printVTableOffset
+        printPWTOffset = options.printPWTOffset
+        printTypeLayout = options.printTypeLayout
+        printEnumLayout = options.printEnumLayout
+        infersObjCOverridesFromSelectorNames = options.infersObjCOverridesFromSelectorNames
+    }
+}
+
+extension SwiftGenerationOptions {
+    /// Whether the printer resolves opaque types: the content pane registers
+    /// the opaque type resolver exactly when this is on, and a search's
+    /// visibility predicate reads the corpus's resolved constraints under it.
+    var resolvesOpaqueTypes: Bool {
+        synthesizeOpaqueType
     }
 }
 
@@ -1842,8 +1864,21 @@ extension RuntimeSwiftSection {
     /// The members `definitions` list, not yet located in any text. Reads
     /// whatever the definitions have indexed so far; after they are printed,
     /// that is everything.
+    ///
+    /// A protocol's default implementations are its members wherever they
+    /// end up printed: the printer trails a top-level protocol with them
+    /// itself, and `printedDefinitions(for:)` appends them after any other
+    /// protocol. So they are listed with the protocol, from its
+    /// `defaultImplementationExtensions`, in the order they print, and an
+    /// extension that is one of them is skipped when it comes up as a
+    /// definition of its own — whoever prints them, the list does not need to
+    /// know. Identity decides, not `isAttachedToProtocolDefinition`:
+    /// MachOSwiftSection synthesizes an unflagged default-implementation
+    /// extension for a protocol no symbol-scan extension block was attached
+    /// to.
     static func memberDeclarations(of definitions: [PrintedDefinition]) -> [RuntimeMemberDeclaration] {
         var members: [RuntimeMemberDeclaration] = []
+        var listedDefaultImplementationExtensions: Set<ObjectIdentifier> = []
         for definition in definitions {
             switch definition {
             case .type(let typeDefinition):
@@ -1854,7 +1889,12 @@ extension RuntimeSwiftSection {
                 members += Self.memberDeclarations(of: typeDefinition)
             case .protocol(let protocolDefinition):
                 members += Self.memberDeclarations(of: protocolDefinition)
+                for extensionDefinition in protocolDefinition.defaultImplementationExtensions {
+                    listedDefaultImplementationExtensions.insert(ObjectIdentifier(extensionDefinition))
+                    members += Self.memberDeclarations(of: extensionDefinition)
+                }
             case .extension(let extensionDefinition):
+                guard !listedDefaultImplementationExtensions.contains(ObjectIdentifier(extensionDefinition)) else { continue }
                 members += Self.memberDeclarations(of: extensionDefinition)
             }
         }

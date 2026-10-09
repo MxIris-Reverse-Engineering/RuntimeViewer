@@ -1818,7 +1818,7 @@ func cancelReachesTheServingProcess() async throws {
 
 - **严重度**：Major
 - **审查编号**：C24、C25（含三处同类：静态性不分、一行登记两次、跨种类回退；另含选择子 `foo` / `foo:` 互抢）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeMemberDeclarationLocatorTests` 的 `objectiveCMembersSharingAName`（修前 `[11, 7, 2, 4, 8, 9, 5, 11, 12]`，九个成员错八个）、`swiftLabelsAndStaticMembers`（修前两个 `static func` 落在 `init` 行、两个 `zero` 互换）、`memberPrintedUnderBothVerdicts`（修前默认实现的 `summary` 落在需求第二遍渲染的 `}var` 行上）、`operatorFunction`（修前运算符函数没有行号，`static func _` 落在运算符那一行）；端到端不变量 `RuntimeInterfaceCorpusNestingTests.locatedLinesDeclareTheirMembers`（修前 Foundation 上 146 个成员落在别的声明行上，例如 `NSMorphology` 的 property `_adjectival` 落在同名 ivar 行、ivar 落在 property 行；Swift 函数只定位到 6063 / 6800）。修后 0 个错位，定位率 property 1988 / 1988、ivar 2479 / 2479、方法 14164 / 14168（差的 4 个是含空标签的选择子，如 `executeWithInterpreter:arguments::`，渲染器把空标签折掉了，修前同样定位不到）、Swift 函数 6800 / 6800；门槛按实测定为 99%，Swift 函数一并纳入。与草案的出入：（1）草案以为同一成员的两遍渲染（两种 ObjC 裁决）在同一行，实测函数在同一行、变量与下标的第二遍接在第一遍的闭合花括号后面（`    }var summary…`），所以另加「以 `}` 开头的行不登记 Swift 键」；ObjC 不受影响，内联展开的 struct ivar 正是 `} _flags;`。Foundation 里没有这种双重渲染（0 处），由单元测试守住。（2）草案「`func` 行的第一个函数片段是基本名」对运算符函数不成立：打印器把运算符当纯文本写在 `func` 后，第一个函数片段是参数标签 `_`；改为认紧跟 `func` 的那段。（3）按 S4 的交接，定位器不再生成行文本，只记行号（声明行由 `displayedMember(at:)` 读回），切行改用 `RuntimeInterfaceLineTable`；原有两个用例改为经条目读回声明行。另记（未改）：变量在两种裁决下各印一遍时，成员定位在第一遍（信任选择子证据）那一行，默认选项把这一遍整行投影掉，成员搜索会把它当作隐藏；修前同样如此，Foundation 上 0 例
 
 **问题**：Members 搜索给每个成员记一个声明行号，定位器的做法是让成员认领「第一个带它名字、还没被认领的行」。可是不同种类的成员会同名：ObjC 的 property 和同名 ivar、匿名 struct 里的位域字段和读它的 property、类属性和实例属性、Swift 的 `init(degrees:)` 参数标签和 `static func degrees(_:)`。ObjC 先打印 ivar 块，Swift 先打印 init，于是 property 落到 ivar 行或位域行，`static func degrees` 落到 init 行。点开命中会跳到错的行；开着 Strip Synthesized Ivars 时，property 所在的那一行被隐藏，property 干脆从结果里消失。
 
@@ -2452,7 +2452,7 @@ private static func line(_ line: Substring, declares member: RuntimeMemberDeclar
 
 - **严重度**：Major
 - **审查编号**：C27
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusNestingTests.topLevelProtocolDefaultImplementationsAreMembers`（修前 Members 搜 `errorDescription` 在 `LocalizedError` 里只命中 1 条，即协议要求）、`RuntimeInterfaceCorpusNestingTests.protocolDefaultImplementationsLocated`（修前 Foundation 上带挂接默认实现的 29 个协议里 27 个在默认实现里一个成员都定位不到，例如 `Foundation.AttributedStringKey`）。修后两条都过，PR121.10 的不变量 `locatedLinesDeclareTheirMembers` 在多出的成员上照样 0 错位。按草案实现，没有出入。合成默认实现扩展那种边角情况照「同类」所说只记录、不修
 
 **问题**：顶层 Swift 协议的语料条目只把协议要求列为成员。它的默认实现由 MachOSwiftSection（MSS）的打印器接在协议后面打印出来，所以 Text 搜索能找到，但这些成员从不进 `memberDeclarations(of:)`，Members 搜索因此找不到。
 
@@ -3661,7 +3661,7 @@ func entryByteCountCoversMembers() {
 
 - **严重度**：Minor
 - **审查编号**：AL4
-- **状态**：方案待批，代码未改
+- **状态**：已修复（按推荐的上游方案）。上游：MachOSwiftSection `feature/runtime-viewer/find-navigator` 的 `52460a79` 公开了 `ProtocolDefinition.printsDefaultImplementationExtensionsAfterDeclaration`，打印器与 `SwiftInterfaceBuilder` 都改读它；锁文件提交 `464dd170` 把六份锁文件的 MachOSwiftSection pin 从 `02698282` 前移到 `52460a79`（同次解析另有 swift-subprocess 1.0.0 → 1.0.1，只在两个 workspace）。`defaultImplementationExtensionsLeftToPrint(of:)` 改读这个属性，RuntimeViewer 里不再有这条规则的拷贝（全仓再搜 `extensionContext` / `parent != nil`，只剩这一处读属性）。护栏测试：`RuntimeInterfaceCorpusNestingTests.defaultImplementationsPrintedByExactlyOneSide`，取代 `extensionProtocolShowsDefaultImplementations`。它是护栏不是复现，修前（照抄的规则）修后都过。对每个带默认实现的协议，把声明单独交给 MachOSwiftSection 的打印器、数它自己接在后面的扩展块，再数 `printedDefinitions` 追加的默认实现扩展：必须恰好一方印全部、另一方一个不印，且语料接口里的扩展块数等于默认实现数加其它追加的扩展数。三种位置都有样本：顶层与「别的模块类型的扩展里」取 Foundation（本机 macOS 26.7 上分别 27 个、2 个），「嵌套在类型里」Foundation 一个都没有，改取 Accelerate overlay（`libswiftAccelerate.dylib` 的 `BNNSGraph.Builder.OperationParameter`），在单独的引擎里建语料，不影响套件里其它搜索。上游规则一变而 RuntimeViewer 没跟上时它会红：把判断换回 74c349c7 之前的 `parent != nil` 模拟一次，`AsyncMessage` 与 `MainActorMessage` 报「1 default implementation extensions, 0 trailed by the printer, 0 appended, 0 extension blocks in the corpus」——两边都不印；反方向（两边都印）会报 trailed 与 appended 同时非零。与草案的出入：草案的护栏按属性推算打印器会接几块，这里让打印器单独打印声明来数，所以打印器哪天不再读这个属性也能发现；嵌套位置的样本改从 Accelerate overlay 取。「同类」里 main 上 PR #117 改读属性要等上游发版，不在本分支做；成员列表对打印器的另外两处假设照条目只记录
 
 **问题**：MachOSwiftSection（MSS）的打印器只给顶层协议在声明后面接着打印默认实现，嵌套协议和声明在别的模块扩展里的协议不在此列。RuntimeViewer 的 `defaultImplementationExtensionsLeftToPrint` 用的是这条规则取反后的一份拷贝，靠它决定哪些协议要自己补印默认实现；内容区和 Find 语料都经过 `printedDefinitions`，所以拷贝错了两边会一起错。
 
@@ -3815,7 +3815,7 @@ func defaultImplementationsPrintedExactlyOnce() async throws {
 
 - **严重度**：Cleanup
 - **审查编号**：S7（= R1 = AL7）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，行为不变，不新增测试：九个开关的映射只剩 `SwiftDeclarationPrintConfiguration.applySwitches(of:)`（`SwiftDeclarationPrintConfiguration` 是 MachOSwiftSection 的类型，写成 RuntimeViewer 里的 extension，上游不动），「是否注册 opaque type 解析器」只剩 `SwiftGenerationOptions.resolvesOpaqueTypes`；内容区的 `buildPrintConfiguration` / `updateConfiguration` 与搜索的 `RuntimeInterfaceVisibility` 都改读它们。由 `RuntimeInterfaceCorpusVisibilityTests`（四组选项下逐条比较投影后的语料与内容区打印的接口，文本与 span 都相等）与 `GenerationOptionsTests` / `SwiftGenerationOptionsTests` / `ObjCGenerationOptionsTests` / `TransformerConfigurationTests` 覆盖，改后 5 个套件 15 个测试全过。同类：全仓库再没有别的选项到打印配置的映射（`RuntimeInterfaceExportMetadata` 只是把选项列成说明文字）
 
 **问题**：Find 搜索是在语料文本上按用户的生成选项做投影的，投影规则必须和内容区打印时的规则完全一致。现在这套规则写了两份：
 - 内容区：`RuntimeSwiftSection.buildPrintConfiguration` 把 `SwiftGenerationOptions` 的 9 个开关映射到 `SwiftDeclarationPrintConfiguration`。
@@ -8351,7 +8351,7 @@ grep -A6 '"identity" : "rxappkit"' Package.resolved          # expect "version" 
 
 - **严重度**：Minor（协议副本部分）；建议不修（Swift 类 ObjC 面部分）
 - **审查编号**：新发现（模块 F 在 C30 的同类排查中提出）
-- **状态**：方案待批，代码未改
+- **状态**：协议副本部分已修复；Swift 类 ObjC 面那一半按裁决不修（理由见下文「裁决理由」）；会话侧跨补搜去重评估后不做（理由见本行末尾）。复现测试：`RuntimeInterfaceRepeatedProtocolCopyTests`（新文件，用 `@testable` 读 store 与可见性类型）——`identicalCopiesReportedOnce`（修前两个镜像里逐字相同的 `NSCopying` 文本与成员各报一次，`totalMatchCount` 是 2）、`copiesAlikeUnderTheOptionsFolded`（两份副本只差一条默认选项隐藏的 IMP 注释：默认选项下修前报两次，修后只报第一个镜像那份；全部显示时两份读起来不同，照常各报一次）、`repeatedCopyReportedOnceAcrossRealImages`（本机 macOS 26.7 上 CoreFoundation 与 Foundation 都带 `NSCopying` 且默认选项下读起来一样，修前文本与成员搜索都从两个镜像各报一次，修后只从 CoreFoundation 报、`omittedRepeatedMatchCount > 0`）；守护用例 `differingCopiesKeepTheirHits`（文本不同的副本各自报告）与 `identicalClassesKeepTheirHits`（逐字相同的类不合并）修前修后都绿。与草案的出入：PR121.06 已把扫描搬进 store 外的扫描驱动，改动按草案所说落在驱动里而不是两份搜索各写一遍——`matchEntry` 多一个参数，条目在第一个命中之前（文本搜索在匹配前，成员搜索在第一个命中的成员处）把它在本次选项下读出的文本交给驱动，驱动判断是否重复、记账；摘要字段在 init 里默认 0。会话侧跨补搜去重不做：会话手里只有命中、没有文本，判断只能在引擎里做，于是补搜的查询要带上此前显示过哪些协议副本（名字与镜像）、引擎再从语料里找出那几份按同一选项投影来比较，搜索与成员两个查询都要加字段，会话要从结果里记下协议副本，而那几份语料在两次搜索之间可能已被预算驱逐、无从比较——跨查询格式、store 与会话三处，不是小改动；主搜索已覆盖当时建好的全部镜像，重复只出现在补搜里。留给 Find 界面模块，连同「另有 N 处合并」的文案
 
 **问题**：`corpusObjects(in:)` 原样取 `_objects(in:)`，侧栏列出的每个对象都会建一条语料（`RuntimeEngine+Search.swift:158-160`）。这导致两类重复：
 - **ObjC 协议副本**：编译器会给每个见过某个 `@protocol` 声明的镜像各发射一份 `protocol_t`；而且自 2026-08-05 起，侧栏有意按 `__objc_protolist` 全量列出这些副本。跨多个镜像搜索时，同一条协议声明就会按携带它的镜像各命中一次。比如搜 `copyWithZone`，CoreFoundation 和 Foundation 里的 `NSCopying` 各报一遍；`NSObject` 协议几乎每个 ObjC 镜像都带，搜 `respondsToSelector` 时每个镜像都报一遍。这些重复会挤占 1000 条的结果上限，也会把总数虚高。

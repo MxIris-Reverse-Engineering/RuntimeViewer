@@ -20,21 +20,12 @@ struct RuntimeInterfaceVisibility: Sendable {
 
     init(_ options: RuntimeObjectInterface.GenerationOptions) {
         objcOptions = options.objcHeaderOptions
-        let swiftOptions = options.swiftInterfaceOptions
+        // The mapping the content pane's printer is configured with
+        // (`RuntimeSwiftSection.buildPrintConfiguration`).
         var swiftConfiguration = SwiftDeclarationPrintConfiguration()
-        swiftConfiguration.printStrippedSymbolicItem = swiftOptions.printStrippedSymbolicItem
-        swiftConfiguration.printFieldOffset = swiftOptions.printFieldOffset
-        swiftConfiguration.printExpandedFieldOffsets = swiftOptions.printExpandedFieldOffset
-        swiftConfiguration.printMemberAddress = swiftOptions.printMemberAddress
-        swiftConfiguration.printVTableOffset = swiftOptions.printVTableOffset
-        swiftConfiguration.printPWTOffset = swiftOptions.printPWTOffset
-        swiftConfiguration.printTypeLayout = swiftOptions.printTypeLayout
-        swiftConfiguration.printEnumLayout = swiftOptions.printEnumLayout
-        swiftConfiguration.infersObjCOverridesFromSelectorNames = swiftOptions.infersObjCOverridesFromSelectorNames
+        swiftConfiguration.applySwitches(of: options.swiftInterfaceOptions)
         self.swiftConfiguration = swiftConfiguration
-        // The display path registers the opaque type resolver exactly when
-        // this is on (`RuntimeSwiftSection.updateConfiguration`).
-        resolvesOpaqueTypes = swiftOptions.synthesizeOpaqueType
+        resolvesOpaqueTypes = options.swiftInterfaceOptions.resolvesOpaqueTypes
     }
 
     /// Whether the option a region is conditioned on is on. The two
