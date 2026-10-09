@@ -267,31 +267,42 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
     // MARK: - Settings
 
-    private func bootstrapSettingsObservation() {
-        #if canImport(RuntimeViewerSettings)
-        isIndexingEnabled = settings.indexing.isEnabled
-        isCorpusEnabled = settings.search.isCorpusEnabled
-        registerSettingsObservation()
-        #endif
+    /// The two switches the outline shows a "Turned off in Settings" row for.
+    private struct FeatureSwitches: Equatable {
+        let isIndexingEnabled: Bool
+        let isCorpusEnabled: Bool
     }
 
-    #if canImport(RuntimeViewerSettings)
-    /// `withObservationTracking` fires once, so the observation registers itself again on every
-    /// change.
-    private func registerSettingsObservation() {
-        withObservationTracking {
-            _ = settings.indexing.isEnabled
-            _ = settings.search.isCorpusEnabled
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.isIndexingEnabled = self.settings.indexing.isEnabled
-                self.isCorpusEnabled = self.settings.search.isCorpusEnabled
-                self.registerSettingsObservation()
+    /// Follows the two switches for as long as the page lives: the first value arrives while
+    /// subscribing, every change after it on the main queue.
+    private func bootstrapSettingsObservation() {
+        #if canImport(RuntimeViewerSettings)
+        // Resolved once: `Observable.tracking` re-arms on a main-queue hop where the dependency
+        // context is gone. This is `ViewModel`'s own `settings`, resolved by `super.init`.
+        let trackedSettings = settings
+        Observable<FeatureSwitches>
+            .tracking {
+                // Main-actor state read from `tracking`'s synchronous first access, as
+                // `ContentTextViewModel` reads the transformer.
+                MainActor.assumeIsolated {
+                    FeatureSwitches(isIndexingEnabled: trackedSettings.indexing.isEnabled, isCorpusEnabled: trackedSettings.search.isCorpusEnabled)
+                }
             }
-        }
+            .distinctUntilChanged()
+            .subscribeOnNext { [weak self] featureSwitches in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    if self.isIndexingEnabled != featureSwitches.isIndexingEnabled {
+                        self.isIndexingEnabled = featureSwitches.isIndexingEnabled
+                    }
+                    if self.isCorpusEnabled != featureSwitches.isCorpusEnabled {
+                        self.isCorpusEnabled = featureSwitches.isCorpusEnabled
+                    }
+                }
+            }
+            .disposed(by: rx.disposeBag)
+        #endif
     }
-    #endif
 }
 
 /// How the Report navigator's rows read and how its filter bar narrows them — kept apart from the

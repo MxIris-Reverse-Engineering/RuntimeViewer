@@ -9228,7 +9228,8 @@ struct ReportTreeBuilderTests {
 
 - **严重度**：Cleanup
 - **审查编号**：R4
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，不新增测试：既有的 `ReportViewModelTests.turnedOffFeatureRow`（开关关闭时显示一行、重新打开后消失）正好走这条订阅的初值与后续变化，改后通过
+- **落地与偏离**：照方案改用 `Observable.tracking`（依赖在外面取一次、首次读包 `MainActor.assumeIsolated`），订阅挂在 `rx.disposeBag` 上；两个开关合成一个 `Equatable` 小结构体后 `distinctUntilChanged`，写回时只赋值变了的那一个，另一个 `@RxObserved` 不白发一次。`FindCorpusCoordinator` 与索引协调器的同类手写循环按文档不改（不是 Rx ViewModel，没有 dispose bag 可挂）。
 
 **问题**：`ReportViewModel.registerSettingsObservation`（ReportViewModel.swift:237-252）手写了一个「`withObservationTracking` 触发后再注册自己」的循环来跟踪两个开关。项目里已有现成的 `Observable.tracking`（RuntimeViewerArchitectures/Observable+Tracking.swift），它把同样的事包成一个可以随 dispose bag 释放的 Rx 序列，`ContentTextViewModel` 和 `ResolvedThemeStream` 都在用。手写版本没有释放点，只靠 `[weak self]` 在 ViewModel 释放后才停下。
 
