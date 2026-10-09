@@ -196,17 +196,17 @@ struct FindViewModelTests {
             return
         }
 
-        resultClickedRelay.accept(hit)
-        try await settleMainQueue()
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(hit)
+        }
 
         #expect(environment.documentState.selectedRuntimeObject == match.object)
-        let highlight = try #require(environment.documentState.takeContentHighlight(for: match.object))
+        let (object, highlight) = try #require(Self.highlightingPush(in: routes))
+        #expect(object == match.object)
         #expect(highlight.lineNumber == match.lineNumber)
         #expect(highlight.lineText == match.lineText)
         #expect(highlight.matchRangeInLine == match.matchRangeInLine)
         #expect(highlight.query == "initWithFormat:")
-        // Taken once: the second ask finds nothing.
-        #expect(environment.documentState.takeContentHighlight(for: match.object) == nil)
         #expect(router.triggeredRoutes.isEmpty)
     }
 
@@ -229,10 +229,12 @@ struct FindViewModelTests {
 
         // Toggled, not run.
         caseSensitiveToggledRelay.accept(true)
-        resultClickedRelay.accept(hit)
-        try await settleMainQueue()
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(hit)
+        }
 
-        let highlight = try #require(environment.documentState.takeContentHighlight(for: match.object))
+        let (object, highlight) = try #require(Self.highlightingPush(in: routes))
+        #expect(object == match.object)
         #expect(highlight.isCaseSensitive == false, "the highlight took the case sensitivity being edited")
         #expect(highlight.query == "initwithformat:")
     }
@@ -251,10 +253,16 @@ struct FindViewModelTests {
             return
         }
 
-        resultClickedRelay.accept(typeNode)
-        try await settleMainQueue()
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(typeNode)
+        }
         #expect(environment.documentState.selectedRuntimeObject == object)
-        #expect(environment.documentState.pendingContentHighlight == nil)
+        // A plain push: nothing for the content pane to highlight.
+        guard routes.count == 1, case .push(let pushedObject) = routes[0] else {
+            Issue.record("expected one plain push, got \(routes)")
+            return
+        }
+        #expect(pushedObject == object)
 
         let tabCount = environment.documentState.tabs.count
         resultOpenedInNewTabRelay.accept(typeNode)
@@ -386,9 +394,10 @@ struct FindViewModelTests {
         #expect(match.member.kind == .objcMethod)
         #expect(match.member.name.contains("initWithFormat:"))
 
-        resultClickedRelay.accept(member)
-        try await settleMainQueue()
-        let highlight = try #require(environment.documentState.takeContentHighlight(for: match.object))
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(member)
+        }
+        let (_, highlight) = try #require(Self.highlightingPush(in: routes))
         #expect(highlight.lineNumber == match.member.lineNumber)
         #expect(highlight.query == match.member.name)
     }
@@ -715,6 +724,23 @@ struct FindViewModelTests {
     }
 
     // MARK: - Helpers
+
+    /// The selection routes `action` sets off, as the main coordinator hears them: a hit's
+    /// highlight travels on the route, to the content pane.
+    private func selectionRoutes(of environment: ViewModelTestEnvironment, during action: () -> Void) async throws -> [SelectionRoute] {
+        var routes: [SelectionRoute] = []
+        let routeSubscription = environment.documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { routeSubscription.dispose() }
+        action()
+        try await settleMainQueue()
+        return routes
+    }
+
+    /// The object and highlight of the last route when it is a highlighting push.
+    private static func highlightingPush(in routes: [SelectionRoute]) -> (RuntimeObject, ContentHighlightRequest)? {
+        guard case .pushHighlighting(let object, let highlight)? = routes.last else { return nil }
+        return (object, highlight)
+    }
 
     private static func imagePath(of node: FindResultNode) -> String? {
         if case .object(let object) = node.content {

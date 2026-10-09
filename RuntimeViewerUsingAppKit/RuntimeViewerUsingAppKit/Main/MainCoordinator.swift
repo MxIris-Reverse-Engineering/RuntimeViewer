@@ -177,10 +177,13 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // `documentState.$selectedRuntimeObject` directly — no
             // coordinator routing is needed for a pure UI
             // scroll-and-highlight.
-        case .push(let object), .pushHighlighting(let object, _):
-            // The highlight rides on `DocumentState.pendingContentHighlight`;
-            // the panes are told the same thing either way.
+        case .push(let object):
             contentCoordinator.contextTrigger(.next(object))
+            inspectorCoordinator.contextTrigger(.next(.object(object)))
+        case .pushHighlighting(let object, let highlightRequest):
+            // The highlight travels with the content route, so it lives exactly as long as the
+            // content ViewModel built for this navigation.
+            contentCoordinator.contextTrigger(.nextHighlighting(object, highlightRequest))
             inspectorCoordinator.contextTrigger(.next(.object(object)))
         case .pop:
             if documentState.selectionStack.isEmpty {
@@ -218,10 +221,13 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // is untouched (tabs do not carry an image selection).
             contentCoordinator.contextTrigger(.placeholder)
             inspectorCoordinator.contextTrigger(.placeholder)
-        case .openInNewTab(let object), .openInNewTabHighlighting(let object, _):
+        case .openInNewTab(let object):
             // New tab already showing `object`, which was also recorded on the
             // timeline; bind both panes to it.
             contentCoordinator.contextTrigger(.root(object))
+            inspectorCoordinator.contextTrigger(.root(.object(object)))
+        case .openInNewTabHighlighting(let object, let highlightRequest):
+            contentCoordinator.contextTrigger(.rootHighlighting(object, highlightRequest))
             inspectorCoordinator.contextTrigger(.root(.object(object)))
         case .switchTab, .closeTab:
             // The active tab changed and its object was recorded on the

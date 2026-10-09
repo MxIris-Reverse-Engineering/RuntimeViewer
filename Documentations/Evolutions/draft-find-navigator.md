@@ -317,9 +317,10 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   两层侧栏各自的 `FindViewModel<Route>` 只是它的适配器——ViewModel 的 router 是各自层级的 coordinator，会随
   push / pop 销毁，所以状态不能住在 ViewModel 里。语料协调器叫 `FindCorpusCoordinator`
   （`DocumentState.findCorpusCoordinator`，Document 打开时唤起）。内容区握手是 `SelectionRoute` 的两个新 case
-  `pushHighlighting` / `openInNewTabHighlighting`，把 `ContentHighlightRequest` 挂到
-  `DocumentState.pendingContentHighlight`，`ContentTextViewModel` 渲染完成后 `takeContentHighlight(for:)` 取走并按
-  优先级链在显示文本里定位，`Output.highlightRange` 交给两个内容 ViewController：NSTextView 路径
+  `pushHighlighting` / `openInNewTabHighlighting`，`MainCoordinator` 把其中的 `ContentHighlightRequest` 转成
+  `ContentRoute.nextHighlighting` / `.rootHighlighting`，`ContentCoordinator` 把它交给为这次导航新建的
+  `ContentTextViewModel` 的构造器，ViewModel 第一次渲染完成时用掉它，按优先级链在显示文本里定位（2026-10-09 起；
+  原先挂在文档级的 `DocumentState.pendingContentHighlight` 上，见决策日志），`Output.highlightRange` 交给两个内容 ViewController：NSTextView 路径
   `scrollRangeToVisible` + `setSelectedRange` + `showFindIndicator`；SourceEditor 路径走桥的新方法
   `revealCharacterRange(_:)`。完全 miss 时只跳到对象，**没有做**「find bar 预填 query + 提示」那一档降级（决策日志）。
 - **SourceEditor 桥的证据**：按 dump（`/Volumes/RE/SourceEditor/Xcode/26.6/`，27.0 一致）给 stub 补了
@@ -795,3 +796,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 语料条目里的成员只存名字（与名字共用存储），声明行在成员被收集时从接口文本里读回；常驻预算补算成员结构体与行区间、成员名、嵌套块区间和对象 | PR #121 审查 PR121.25：预算只算文本与几张表，而定位器给每个成员存了一份去掉缩进的整行，成员密集的类型几乎多存一遍文本，Report navigator 显示的大小也偏小。Foundation 上（Debug，按驱逐语料释放的 malloc 量计）：修前预算 14.0 MB、实际 25.8 MB；修后预算 18.0 MB、实际 21.7 MB。 |
 | 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |
 | 2026-10-09 | Find 结果大纲按身份增量更新：`FindResultNode` 以 `identifier` 判等，大纲改用 `rx.nodes(options: .diffable)`；展开与选中由 ViewModel 决定（除了用户折叠的全部展开，全部展开超过 500 行的关系树只展开第一层；用户的选中按标识恢复）；导航改由用户本人的选中触发（`Reactive<NSOutlineView>.userActivatedItem()`），键入跳转取行文本并去抖 800 ms，⌥ 在新标签打开，再次点击仍在显示的命中不重新导航 | PR #121 审查 PR121.07 / PR121.48：节点按指针判等，每一批结果、每次补搜、过滤栏每敲一个键都是 AppKit 不认识的新行，用户折叠的类型重新展开、选中按行号落到别的行；导航挂在 `modelSelected()` 上，reload 与程序化选中也会导航并截掉「前进」历史；§4 承诺的 ⌥ 在新标签打开没有实现。规则写成 `FindResultsOutline` 与 `FindResultsPresentation.apply(to:)`，在包测试里用离屏大纲验证。500 行与「不重新跳转」是审查推荐项。 |
+| 2026-10-09 | 内容区的高亮请求随路由走：`ContentRoute` 加 `.rootHighlighting` / `.nextHighlighting`，`MainCoordinator` 转交，`ContentCoordinator` 传进 `ContentTextViewModel` 的构造器，第一次渲染时用掉；删掉 `DocumentState.pendingContentHighlight`、`takeContentHighlight(for:)` 与 `PendingContentHighlight` | PR #121 审查 PR121.46：文档级的邮箱只在同一对象渲染完成时才被取走。点了 A 的命中、A 还没渲染完就去了 B，或者 A 的接口取不回来，请求就一直留着，之后不管从哪里回到 A 都会闪一下旧命中、滚动位置跳过去。请求的生命期改为等于那个 ViewModel：被替换、取失败、换引擎都随它一起消失。内容区本来就为每次导航新建 ViewModel，同一对象上再点一条命中照样重新定位。复现测试 `ContentTextHighlightTests.abandonedHighlightNeverReachesALaterVisit`。 |

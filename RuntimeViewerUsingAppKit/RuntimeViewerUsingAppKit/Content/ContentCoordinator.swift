@@ -86,8 +86,12 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
             return enterPlaceholderScene()
         case .root(let runtimeObject):
             return enterTextScene(for: runtimeObject, forceRebind: true)
+        case .rootHighlighting(let runtimeObject, let highlightRequest):
+            return enterTextScene(for: runtimeObject, highlightRequest: highlightRequest, forceRebind: true)
         case .next(let runtimeObject):
             return enterTextScene(for: runtimeObject, forceRebind: true)
+        case .nextHighlighting(let runtimeObject, let highlightRequest):
+            return enterTextScene(for: runtimeObject, highlightRequest: highlightRequest, forceRebind: true)
         case .back:
             if let selected = documentState.selectedRuntimeObject {
                 return enterTextScene(for: selected, forceRebind: false)
@@ -106,8 +110,8 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         return .set([placeholderViewController], animated: false)
     }
 
-    private func enterTextScene(for runtimeObject: RuntimeObject, forceRebind: Bool) -> ContentTransition {
-        let didReplaceViewController = rebindTextViewController(for: runtimeObject, forceRebind: forceRebind)
+    private func enterTextScene(for runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, forceRebind: Bool) -> ContentTransition {
+        let didReplaceViewController = rebindTextViewController(for: runtimeObject, highlightRequest: highlightRequest, forceRebind: forceRebind)
         // A replacement has to be installed even when the text scene is already showing:
         // otherwise the freshly built view controller is bound but never displayed.
         guard !isCurrentTextScene || didReplaceViewController else { return .none() }
@@ -117,7 +121,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     /// - Returns: whether the view controller itself was replaced.
     @discardableResult
-    private func rebindTextViewController(for runtimeObject: RuntimeObject, forceRebind: Bool) -> Bool {
+    private func rebindTextViewController(for runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, forceRebind: Bool) -> Bool {
         let desiredKind = desiredEditorKind()
         var didReplaceViewController = false
         if !isCurrentTextScene || currentEditorKind != desiredKind {
@@ -128,7 +132,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         }
         guard forceRebind || boundRuntimeObject != runtimeObject else { return didReplaceViewController }
         boundRuntimeObject = runtimeObject
-        let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+        let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, highlightRequest: highlightRequest, documentState: documentState, router: self)
         textViewController.setupBindings(for: viewModel)
         textViewController.loadViewIfNeeded()
         return didReplaceViewController

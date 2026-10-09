@@ -5584,7 +5584,7 @@ func revealsTheScopeOnce() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C42 + AL6
-- **状态**：方案待批，代码未改
+- **状态**：已修复（推荐方案：请求随路由走）。复现测试：`ContentTextHighlightTests.abandonedHighlightNeverReachesALaterVisit`——修前红（点了 Foo 的命中又去了 Bar，之后为 Foo 新建的 ViewModel 一渲染完就从邮箱取走旧请求，发出一个范围）。原 `highlightIsLocatedAndTaken` 改为构造时传入请求（`requestIsLocatedOnTheFirstRender`），只测邮箱的 `foreignHighlightIsLeftAlone` 随邮箱删除；`FindViewModelTests` 里读邮箱的四处改为订阅 `routeSignal` 看 `.pushHighlighting` 带的请求，类型行的点击断言是一个不带高亮的 `.push`。iOS 的 `ContentCoordinator` 同样处理两个新 case（未编 iOS，见本批汇报）。提案 §4「落地形态」与决策日志已同步。同类：无
 
 **问题**：点 Find 结果时，高亮请求放在文档级的一个「邮箱」里，即 `DocumentState.pendingContentHighlight`（`DocumentState.swift:235`）。它只在**同一对象**渲染完成时，才由内容区的 ViewModel 用 `takeContentHighlight(for:)` 取走（`ContentTextViewModel.swift:220`）。
 

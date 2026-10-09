@@ -310,32 +310,6 @@ public final class DocumentState {
         }
         .distinctUntilChanged()
     }
-
-    /// Where the content pane should scroll once it shows `object`, set by
-    /// the highlighting selection routes and taken by the pane's ViewModel
-    /// through `takeContentHighlight(for:)` — a one-shot handshake, not
-    /// state the panes render.
-    @RxObserved
-    public fileprivate(set) var pendingContentHighlight: PendingContentHighlight? = nil
-
-    /// The pending highlight for `object`, cleared on the way out; `nil`
-    /// when there is none or it was meant for another object.
-    public func takeContentHighlight(for object: RuntimeObject) -> ContentHighlightRequest? {
-        guard let pendingContentHighlight, pendingContentHighlight.object == object else { return nil }
-        self.pendingContentHighlight = nil
-        return pendingContentHighlight.request
-    }
-}
-
-/// A `ContentHighlightRequest` bound to the object it belongs to.
-public struct PendingContentHighlight: Hashable, Sendable {
-    public let object: RuntimeObject
-    public let request: ContentHighlightRequest
-
-    public init(object: RuntimeObject, request: ContentHighlightRequest) {
-        self.object = object
-        self.request = request
-    }
 }
 
 private final class SelectionRouter: Router {
@@ -446,11 +420,10 @@ private final class SelectionRouter: Router {
             documentState.tabs.append(DocumentTab(object: object))
             documentState.activeTabIndex = documentState.tabs.count - 1
             pushOntoTimeline(object)
-        case .pushHighlighting(let object, let highlight):
-            documentState.pendingContentHighlight = PendingContentHighlight(object: object, request: highlight)
+        case .pushHighlighting(let object, _):
+            // The highlight rides on the route itself, to the content pane.
             pushOntoTimeline(object)
-        case .openInNewTabHighlighting(let object, let highlight):
-            documentState.pendingContentHighlight = PendingContentHighlight(object: object, request: highlight)
+        case .openInNewTabHighlighting(let object, _):
             documentState.tabs.append(DocumentTab(object: object))
             documentState.activeTabIndex = documentState.tabs.count - 1
             pushOntoTimeline(object)
