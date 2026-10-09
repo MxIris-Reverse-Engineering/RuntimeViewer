@@ -129,6 +129,58 @@ struct RuntimeInterfaceCorpusNestingTests {
         }
     }
 
+    /// The printer trails a top-level protocol with its default
+    /// implementations itself, so nothing in the definitions the corpus
+    /// prints from lists them — the member list has to.
+    @Test("a top-level protocol's default implementations are found by a member search")
+    func topLevelProtocolDefaultImplementationsAreMembers() async throws {
+        let engine = try await Self.foundationEngine.value
+        var matches: [RuntimeMemberMatch] = []
+        _ = try await engine.searchMembers(RuntimeMemberSearchQuery(text: "errorDescription", kinds: [.swiftVariable], isCaseSensitive: true)) { batch in
+            matches += batch
+        }
+        let isLocalizedError: (RuntimeObject) -> Bool = { $0.kind == .swift(.type(.protocol)) && $0.displayName.hasSuffix("LocalizedError") }
+        // The requirement and the default implementation the printer trails
+        // the protocol with.
+        let protocolMatches = matches.filter { isLocalizedError($0.object) && $0.member.name == "errorDescription" }
+        #expect(protocolMatches.count == 2, "\(protocolMatches.map(\.member.declarationText))")
+
+        let entry = try #require(try await Self.foundationEntries().first { isLocalizedError($0.object) })
+        let lines = entry.interface.text.split(separator: "\n", omittingEmptySubsequences: false)
+        let firstExtensionLineNumber = try #require(lines.firstIndex { $0.hasPrefix("extension ") }) + 1
+        let lineNumbers = protocolMatches.compactMap(\.member.lineNumber)
+        #expect(Set(lineNumbers).count == 2)
+        #expect(lineNumbers.contains { $0 > firstExtensionLineNumber }, "no match inside the default implementations: \(lineNumbers)")
+    }
+
+    @Test("every protocol with default implementations has a member located among them")
+    func protocolDefaultImplementationsLocated() async throws {
+        let engine = try await Self.foundationEngine.value
+        let entries = try await Self.foundationEntries()
+        let firstSwiftEntry = try #require(entries.first { $0.object.kind.isSwift })
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstSwiftEntry.object.imagePath))
+        var checkedCount = 0
+        var missing: [String] = []
+        for entry in entries where entry.object.kind == .swift(.type(.protocol)) {
+            // Only symbol-scan extension blocks, which every placement
+            // prints: a synthesized one is not printed for a nested protocol.
+            guard case .protocol(let definition) = try? await section.printedDefinitions(for: entry.object).first,
+                  definition.defaultImplementationExtensions.contains(where: \.isAttachedToProtocolDefinition)
+            else { continue }
+            checkedCount += 1
+            let lines = entry.interface.text.split(separator: "\n", omittingEmptySubsequences: false)
+            guard let firstExtensionLineIndex = lines.firstIndex(where: { $0.hasPrefix("extension ") }) else {
+                missing.append("\(entry.object.displayName): prints no extension")
+                continue
+            }
+            if !entry.members.contains(where: { ($0.lineNumber ?? 0) > firstExtensionLineIndex + 1 }) {
+                missing.append("\(entry.object.displayName): no member located in its default implementations")
+            }
+        }
+        #expect(checkedCount > 10)
+        #expect(missing.isEmpty, "\(missing.count) of \(checkedCount) protocols, e.g.\n\(missing.prefix(10).joined(separator: "\n"))")
+    }
+
     @Test("every nested type's block is found in the interface of the object listing it")
     func everyNestedBlockFound() async throws {
         let entries = try await Self.foundationEntries()

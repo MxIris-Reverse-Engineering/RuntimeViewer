@@ -235,7 +235,9 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   `methods` / `classMethods` / `ivars`）、`ObjCProtocolInfo`（含 optional 四组）、`ObjCCategoryInfo`。
   Swift：`TypeDefinition`（`fields`、`variables` / `functions` / `subscripts` 及 `static*`、`constructors` /
   `allocators`、`orderedMembers`）、`ProtocolDefinition`（同一组 + `strippedSymbolicRequirements`）、
-  `ExtensionDefinition`（同一组）。
+  `ExtensionDefinition`（同一组）。协议的成员还包括它的默认实现（`defaultImplementationExtensions` 里各扩展的成员，
+  排在协议要求之后），不论默认实现由打印器接在顶层协议后面印出，还是由 `printedDefinitions` 追加在其它协议后面；
+  后一种情况里同一个扩展再作为定义出现时按对象身份跳过。
 - **为什么和语料同一趟构建。** Swift 定义的成员是惰性索引的：`TypeDefinition.index(in:)` 是 MachOSwiftSection 的
   package 级方法，只有打印（`SwiftDeclarationPrinter`）才触发；语料构建正好把每个对象打印一遍，打印完
   `definition.isIndexed == true`，成员表现成。不打印就拿不到 Swift 成员，除非上游开一个公开的索引入口——本提案不改
@@ -800,3 +802,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 语料条目里的成员只存名字（与名字共用存储），声明行在成员被收集时从接口文本里读回；常驻预算补算成员结构体与行区间、成员名、嵌套块区间和对象 | PR #121 审查 PR121.25：预算只算文本与几张表，而定位器给每个成员存了一份去掉缩进的整行，成员密集的类型几乎多存一遍文本，Report navigator 显示的大小也偏小。Foundation 上（Debug，按驱逐语料释放的 malloc 量计）：修前预算 14.0 MB、实际 25.8 MB；修后预算 18.0 MB、实际 21.7 MB。 |
 | 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |
 | 2026-10-09 | 成员定位改按「种类 + 是否静态 + 名字」对齐，每种成员只认渲染器给它用的那种 span，删掉跨种类回退；同一成员的两遍渲染只认一行；函数认紧跟 `func` 的名字，运算符函数也能定位；定位器改用 `RuntimeInterfaceLineTable` 切行、不再生成行文本 | PR #121 审查 PR121.10：按名字认领时，property 会抢同名 ivar 行和位域字段行，`static func degrees` 会抢 `init(degrees:)` 行，类属性与实例属性互换。Foundation 上（本机 macOS 26.7）修前有 146 个成员落在别的声明行上，修后 0 个；ObjC property / ivar 全部定位，方法只差 4 个空标签选择子（`executeWithInterpreter:arguments::`，渲染器把空标签折掉了）。草案假设两遍渲染在同一行，实测变量的第二遍接在第一遍的 `}` 后面，所以加了「以 `}` 开头的行不登记 Swift 键」（ObjC 不受影响：内联展开的 struct ivar 正是 `} _flags;`）。草案的「func 行的第一个函数片段」会把运算符的参数标签 `_` 当名字，改为认紧跟 `func` 的那段：Swift 函数从 6063 / 6800 升到 6800 / 6800。 |
+| 2026-10-09 | 协议的成员表按结构列出默认实现：协议要求之后列 `defaultImplementationExtensions` 里各扩展的成员，追加在后面的同一个扩展按对象身份跳过；打印出的文本不变 | PR #121 审查 PR121.11：顶层协议的默认实现由打印器自己接在协议后面印出，成员表却只读 `printedDefinitions`，1954a8a5 为了不重复打印删掉那份副本后，这些成员就从 Members 搜索里消失了（SwiftUI 的 view modifier、`LocalizedError.errorDescription` 的默认实现等），嵌套协议反而正常。Foundation 上带挂接默认实现的 29 个协议里修前 27 个一个都定位不到，修后全部定位到。按身份而不是按 `isAttachedToProtocolDefinition` 判断，因为 MachOSwiftSection 为没有可挂符号扫描扩展块的协议合成的默认实现扩展不带这个标记。成员表从此不再需要知道默认实现由谁打印。 |

@@ -2450,7 +2450,7 @@ private static func line(_ line: Substring, declares member: RuntimeMemberDeclar
 
 - **严重度**：Major
 - **审查编号**：C27
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeInterfaceCorpusNestingTests.topLevelProtocolDefaultImplementationsAreMembers`（修前 Members 搜 `errorDescription` 在 `LocalizedError` 里只命中 1 条，即协议要求）、`RuntimeInterfaceCorpusNestingTests.protocolDefaultImplementationsLocated`（修前 Foundation 上带挂接默认实现的 29 个协议里 27 个在默认实现里一个成员都定位不到，例如 `Foundation.AttributedStringKey`）。修后两条都过，PR121.10 的不变量 `locatedLinesDeclareTheirMembers` 在多出的成员上照样 0 错位。按草案实现，没有出入。合成默认实现扩展那种边角情况照「同类」所说只记录、不修
 
 **问题**：顶层 Swift 协议的语料条目只把协议要求列为成员。它的默认实现由 MachOSwiftSection（MSS）的打印器接在协议后面打印出来，所以 Text 搜索能找到，但这些成员从不进 `memberDeclarations(of:)`，Members 搜索因此找不到。
 

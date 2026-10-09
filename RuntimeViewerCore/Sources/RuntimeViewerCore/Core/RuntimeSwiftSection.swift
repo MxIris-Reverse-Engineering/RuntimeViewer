@@ -1842,8 +1842,21 @@ extension RuntimeSwiftSection {
     /// The members `definitions` list, not yet located in any text. Reads
     /// whatever the definitions have indexed so far; after they are printed,
     /// that is everything.
+    ///
+    /// A protocol's default implementations are its members wherever they
+    /// end up printed: the printer trails a top-level protocol with them
+    /// itself, and `printedDefinitions(for:)` appends them after any other
+    /// protocol. So they are listed with the protocol, from its
+    /// `defaultImplementationExtensions`, in the order they print, and an
+    /// extension that is one of them is skipped when it comes up as a
+    /// definition of its own — whoever prints them, the list does not need to
+    /// know. Identity decides, not `isAttachedToProtocolDefinition`:
+    /// MachOSwiftSection synthesizes an unflagged default-implementation
+    /// extension for a protocol no symbol-scan extension block was attached
+    /// to.
     static func memberDeclarations(of definitions: [PrintedDefinition]) -> [RuntimeMemberDeclaration] {
         var members: [RuntimeMemberDeclaration] = []
+        var listedDefaultImplementationExtensions: Set<ObjectIdentifier> = []
         for definition in definitions {
             switch definition {
             case .type(let typeDefinition):
@@ -1854,7 +1867,12 @@ extension RuntimeSwiftSection {
                 members += Self.memberDeclarations(of: typeDefinition)
             case .protocol(let protocolDefinition):
                 members += Self.memberDeclarations(of: protocolDefinition)
+                for extensionDefinition in protocolDefinition.defaultImplementationExtensions {
+                    listedDefaultImplementationExtensions.insert(ObjectIdentifier(extensionDefinition))
+                    members += Self.memberDeclarations(of: extensionDefinition)
+                }
             case .extension(let extensionDefinition):
+                guard !listedDefaultImplementationExtensions.contains(ObjectIdentifier(extensionDefinition)) else { continue }
                 members += Self.memberDeclarations(of: extensionDefinition)
             }
         }
