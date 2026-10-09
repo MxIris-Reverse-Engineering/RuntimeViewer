@@ -325,7 +325,8 @@ extension PopUpPathControlTests {
             pathControl.controlSize = .small
             contentView.addSubview(pathControl)
             pathControl.menuPresenter = { [weak self] menu, positioningItem, location, _ in
-                self?.presentedMenus.append((menu, positioningItem, location))
+                guard let self else { return }
+                presentedMenus.append((menu, positioningItem, location))
             }
             pathControl.target = actionRecorder
             pathControl.action = #selector(ActionRecorder.recordAction(_:))

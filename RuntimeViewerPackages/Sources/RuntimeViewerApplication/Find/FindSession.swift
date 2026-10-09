@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
 
 /// The Find navigator's state for one document: the query in force, the
@@ -47,6 +48,10 @@ public final class FindSession {
         /// Images the search did not see because their corpus is not built.
         public var unbuiltImagePaths: [String] = []
         public var isTruncated = false
+        /// Why the engine stopped before reading everything the search
+        /// covers, which leaves these results incomplete; `nil` when it read
+        /// it all.
+        public var stopReason: RuntimeInterfaceSearchStopReason?
         /// The query these results answer: the one last run, not the one
         /// the mode path and the toggles may have been edited into since. A
         /// click highlights with its mode and case. `nil` with nothing
@@ -59,6 +64,14 @@ public final class FindSession {
     /// The most hits or members a search collects, across every image it
     /// reads; the count goes on past it.
     static let resultLimit = 1000
+
+    /// What the summary bar adds when the engine stopped a regular
+    /// expression that spent the search's time budget backtracking.
+    static let regularExpressionTooExpensiveNotice = "incomplete: the pattern takes too long to match"
+
+    /// The summary bar for a source whose RuntimeViewer predates Find's
+    /// commands, worded as the Report navigator words it.
+    static let unsupportedBySourceSummary = "Not supported by this source"
 
     /// Weak: the session can outlive its document — a page's view model holds
     /// it while the window comes down — and is then still subscribed to the
@@ -399,12 +412,14 @@ public final class FindSession {
                 switch request {
                 case .text(let engineQuery):
                     let summary = try await engine.searchInterfaces(engineQuery) { [weak self] batch in
-                        await self?.appendTextMatches(batch, from: run)
+                        guard let self else { return }
+                        await appendTextMatches(batch, from: run)
                     }
                     outcome = .success(.text(summary))
                 case .members(let engineQuery):
                     let summary = try await engine.searchMembers(engineQuery) { [weak self] batch in
-                        await self?.appendMemberMatches(batch, from: run)
+                        guard let self else { return }
+                        await appendMemberMatches(batch, from: run)
                     }
                     outcome = .success(.members(summary))
                 case .relationships(let engineQuery):
@@ -413,7 +428,9 @@ public final class FindSession {
             } catch {
                 outcome = .failure(error)
             }
-            self?.runDidEnd(run, with: outcome, isWidening: isWidening)
+            // After the awaits: the session is not kept alive while the engine searches.
+            guard let self else { return }
+            runDidEnd(run, with: outcome, isWidening: isWidening)
         }
     }
 
@@ -479,7 +496,7 @@ public final class FindSession {
             if !isWidening {
                 shownSearch = nil
                 var failed = Results()
-                failed.summary = "Search failed: \(error.localizedDescription)"
+                failed.summary = Self.failureSummary(for: error)
                 setResults(failed)
             }
         }
@@ -504,7 +521,7 @@ public final class FindSession {
                 FindResultNode.relationship(node, path: "tree|\(tree.root.kind)|\(tree.root.name)|\(tree.root.imagePath)#\(index)")
             }
             relatedTypeCount += Self.count(children)
-            nodes.append(FindResultNode.object(tree.root, matchCount: children.count, children: children))
+            nodes.append(FindResultNode.object(tree.root, children: children))
         }
         var relationshipResults = Results()
         relationshipResults.nodes = nodes
@@ -542,6 +559,9 @@ public final class FindSession {
         shownSearch.isTruncated = shownSearch.isTruncated || summary.isTruncated
         self.shownSearch = shownSearch
         var finished = results(from: nodes, matchCount: shownSearch.totalMatchCount, typeCount: typeCount)
+        // A search that stopped early leaves the results incomplete, and a
+        // widening search merged into them does not make them whole.
+        finished.stopReason = isWidening ? (summary.stopReason ?? results.stopReason) : summary.stopReason
         if isWidening {
             let scannedImagePaths = Set(summary.scannedImagePaths)
             finished.unbuiltImagePaths = results.unbuiltImagePaths.filter { !scannedImagePaths.contains($0) }
@@ -590,6 +610,7 @@ public final class FindSession {
         updated.nodes = nodes
         updated.isTruncated = shownSearch?.isTruncated ?? false
         updated.unbuiltImagePaths = results.unbuiltImagePaths
+        updated.stopReason = results.stopReason
         var text = "\(matchCount) \(matchCount == 1 ? "result" : "results") in \(typeCount) \(typeCount == 1 ? "type" : "types")"
         if updated.isTruncated {
             text += ", showing the first \(nodes.reduce(0) { $0 + $1.children.count })"
@@ -631,7 +652,20 @@ public final class FindSession {
             let count = results.unbuiltImagePaths.count
             text += " · \(count) \(count == 1 ? "image" : "images") not yet searchable"
         }
+        if results.stopReason == .regularExpressionTooExpensive {
+            text += " · " + regularExpressionTooExpensiveNotice
+        }
         return text
+    }
+
+    /// The summary bar for a search that failed. A peer that does not know
+    /// the search commands — a RuntimeViewer older than Find on the other
+    /// end — is not a failure to report but a source Find cannot serve.
+    static func failureSummary(for error: any Swift.Error) -> String {
+        if let requestError = error as? RuntimeNetworkRequestError, requestError.isUnknownCommand {
+            return unsupportedBySourceSummary
+        }
+        return "Search failed: \(error.localizedDescription)"
     }
 
     /// `2 images being made searchable · building Foundation 37%`, counting
@@ -663,9 +697,14 @@ public final class FindSession {
     /// Hits or members grouped by the type they are in, in the order types
     /// first appeared; batches arrive per image, so a type's matches are
     /// contiguous.
-    private struct MatchGroups<Match: FindGroupedMatch> {
+    struct MatchGroups<Match: FindGroupedMatch> {
         private var matchesByObject: [RuntimeObjectKey: [Match]] = [:]
         private var order: [RuntimeObject] = []
+        /// Each type's row, built once and kept until the type receives more
+        /// matches. A batch holds one image's matches, so it builds rows for
+        /// its own types only; every other row stays the instance the outline
+        /// already shows, which its diff takes as unchanged at a glance.
+        private var nodesByObject: [RuntimeObjectKey: FindResultNode] = [:]
         private(set) var matchCount = 0
         /// Matches collected by the search under way, for its interim count.
         private(set) var matchCountSinceLastFinish = 0
@@ -678,6 +717,7 @@ public final class FindSession {
                     order.append(match.object)
                 }
                 matchesByObject[match.object.key, default: []].append(match)
+                nodesByObject[match.object.key] = nil
                 matchCount += 1
                 matchCountSinceLastFinish += 1
             }
@@ -687,20 +727,31 @@ public final class FindSession {
             matchCountSinceLastFinish = 0
         }
 
-        func nodes() -> [FindResultNode] {
-            order.map { object in
+        /// The rows, in the order types first appeared: the kept row of every
+        /// type that received nothing since, and a new row for each that did.
+        mutating func nodes() -> [FindResultNode] {
+            var nodes: [FindResultNode] = []
+            nodes.reserveCapacity(order.count)
+            for object in order {
+                if let node = nodesByObject[object.key] {
+                    nodes.append(node)
+                    continue
+                }
                 let matches = matchesByObject[object.key] ?? []
                 let children = matches.enumerated().map { index, match in match.resultNode(index: index) }
-                return FindResultNode.object(object, matchCount: matches.count, children: children)
+                let node = FindResultNode.object(object, children: children)
+                nodesByObject[object.key] = node
+                nodes.append(node)
             }
+            return nodes
         }
     }
 }
 
 /// A text hit or a member match, as the results tree groups it under the
-/// type it is in. Private to this file, so the two conformances below are
-/// this module's business alone.
-private protocol FindGroupedMatch {
+/// type it is in. Internal, so the two conformances below are this module's
+/// business alone.
+protocol FindGroupedMatch {
     var object: RuntimeObject { get }
 
     /// The row the match makes under its type, the `index`th of them.
@@ -708,13 +759,13 @@ private protocol FindGroupedMatch {
 }
 
 extension RuntimeInterfaceSearchMatch: FindGroupedMatch {
-    fileprivate func resultNode(index: Int) -> FindResultNode {
+    func resultNode(index: Int) -> FindResultNode {
         .textMatch(self, index: index)
     }
 }
 
 extension RuntimeMemberMatch: FindGroupedMatch {
-    fileprivate func resultNode(index: Int) -> FindResultNode {
+    func resultNode(index: Int) -> FindResultNode {
         .member(self, index: index)
     }
 }

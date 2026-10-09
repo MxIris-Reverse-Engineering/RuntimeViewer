@@ -25,10 +25,6 @@ final class FindScopeChooserViewController<Route: FindNavigatorRoutable>: BaseVi
 
     private let okButton = PushButton(title: "OK", titleFont: .systemFont(ofSize: 13))
 
-    /// Whether the list still brings the first selected row into view as its rows change, as
-    /// Xcode's chooser reveals the scope's items when it opens. It stops once the user selects.
-    private var isRevealingSelection = true
-
     override var contentInsets: NSDirectionalEdgeInsets { .init(top: 20, leading: 20, bottom: 20, trailing: 20) }
 
     // MARK: - Lifecycle
@@ -166,21 +162,25 @@ final class FindScopeChooserViewController<Route: FindNavigatorRoutable>: BaseVi
         // Subscribed after the rows binding, so the list has reloaded by the time this runs. A
         // reload keeps the selection by row number, which a row inserted above — an image indexed
         // while the sheet is open — would move onto another image.
-        Driver.combineLatest(output.rows, output.selectedImagePaths).driveOnNext { [weak self] rows, selectedImagePaths in
-            guard let self else { return }
+        Driver.combineLatest(output.rows, output.selectedImagePaths).driveOnNext { rows, selectedImagePaths in
             let selectedRowIndexes = IndexSet(rows.indices.filter { selectedImagePaths.contains(rows[$0].imagePath) })
             if tableView.selectedRowIndexes != selectedRowIndexes {
                 tableView.selectRowIndexes(selectedRowIndexes, byExtendingSelection: false)
             }
-            if isRevealingSelection, let firstSelectedRow = selectedRowIndexes.first {
-                tableView.scrollRowToVisible(firstSelectedRow)
-            }
         }
         .disposed(by: rx.disposeBag)
 
-        tableView.rx.proposedSelection().asSignal().emitOnNext { [weak self] _ in
-            guard let self else { return }
-            isRevealingSelection = false
+        // Once, when the list is first complete: the scope's first image scrolled into view, as
+        // Xcode's chooser reveals the scope's items when it opens. Not on every change of the
+        // rows, which would pull the list back while the user scrolls it during corpus builds.
+        // The layout is forced so the row view exists before anything selects it again.
+        output.revealedImagePath.emitOnNext { imagePath in
+            let row = (0 ..< tableView.numberOfRows).first { row in
+                (try? tableView.rx.model(at: row) as FindScopeImageCellViewModel)?.imagePath == imagePath
+            }
+            guard let row else { return }
+            tableView.scrollRowToVisible(row)
+            tableView.layoutSubtreeIfNeeded()
         }
         .disposed(by: rx.disposeBag)
 

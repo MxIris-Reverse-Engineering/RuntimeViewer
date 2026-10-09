@@ -796,6 +796,7 @@ func imageOpenedInTheSidebarBecomesSearchable() async throws {
 - **严重度**：Major
 - **审查编号**：C03（含 S3 的 store 一半）
 - **状态**：已修复，界面部分待办：`stopReason` 非空时 Find 提示「结果不完整」，归 Find 界面批次（S6）；本批只把 `stopReason` 发布进摘要，没有碰 `FindSession`。复现测试：`RuntimeInterfaceCorpusStoreTests.storeAnswersWhileSearching`（修前 coverage 排在整个扫描之后，返回时搜索已结束，用例 4.6 s）、`searchStopsInsideAnImage`（修前取消后照常返回 summary）、`searchReportsWhyItStopped` 与 `memberSearchReportsWhyItStopped`（修前 `stopReason` 恒为 nil）、`RuntimeInterfaceTextMatcherTests.regularExpressionBudgetStopsOneMatch`（修前两次调用都不抛错，24 个 a 共跑 2.2 s；修后两个 20 ms 预算共 44 ms）、`RuntimeInterfaceSearchTests.relationshipSearchOverBudgetFailsReadably`（修前照常返回两棵树）；守护用例 `RuntimeInterfaceTextMatcherTests.quantifiedGroups`（16 个手写用例）。测试 4 实测（Debug 构建，Foundation 语料 2388 条、573 万 UTF-8 字节、564 万 UTF-16 单元，五轮取中位数）：开着 `.reportProgress` 时块几乎每前进一个 UTF-16 单元就被调一次（约 590 万次），常见正则从约 43 ms 涨到约 148 ms（+200%～+450%），慢正则（约 1.4 s）+10%～+14%，超过 20%，按退路只对含被量词修饰的分组的模式开启；之后不含这类分组的模式与修前持平（−1%～+4%），含的（`(NS)?String\b`、`(?:init|copy)+With`）+127%～+159%。与草案的出入：超出预算的错误是 `PatternError` 新增的 `regularExpressionTooExpensive(pattern:)`（`PatternError` 随之 `Equatable`），说明里带上用户写的模式；取消与时钟都每 64 次回调看一次（块在每个位置都被调，每次查取消也有代价）；不保留不带预算的 `hits(in:pattern:)` 重载，生产代码的每个调用点都显式传预算；store 与关系解析器的 init 各加 internal 的 `regularExpressionTimeLimit`（默认 10 s）供测试注入，关系搜索的测试用 0 秒预算，单次匹配中途停下由匹配器测试覆盖；成员搜索收满后不再为每个命中建一个 `RuntimeMemberMatch` 再丢掉；停下或取消时正在扫的镜像仍记入 `scannedImagePaths`。残留风险：没有被量词修饰的分组、但有多个相邻无界量词的模式（如 `.*.*.*X`）在一个条目内是多项式回溯，只在两次正则调用之间（条目之间）受预算约束。同类：成员名、类型名与文本共用 `hits(in:pattern:budget:)`，预算在一处生效；其余正则创建点（`SwiftStdlib+.swift`、`TransformerSettingsView.swift`）是固定模式；CLI 的 `searchTypes` 按上文不在本条范围
+- **界面一半（批次 S6）**：`FindSession.Results` 带上 `stopReason`（扩展搜索合并进来时保留已有的），摘要栏在 `stopReason == .regularExpressionTooExpensive` 时于末尾加「incomplete: the pattern takes too long to match」。复现测试 `FindSessionSummaryNoticeTests.regularExpressionTooExpensiveSaysResultsAreIncomplete`（真引擎上搜 `(\w+)+\(`，修前摘要只有「0 results in 0 types」）与 `noticeFollowsTheCounts`（修前不加提示）；修后都绿。
 
 **问题**：
 - 文本搜索和成员搜索都是语料存储 actor 上的方法。它们在 actor 上同步扫完一整个镜像：条目循环里没有挂起点（`RuntimeInterfaceCorpusStore.swift:597-618`、:668-693），取消只在镜像与镜像之间检查一次（:593、:664），正则用 `regex.matches(in:)` 一口气跑完（`RuntimeInterfaceTextMatcher.swift:92`），没有任何上限。
@@ -942,7 +943,15 @@ func regularExpressionBudgetStopsOneMatch() throws {
 
 - **严重度**：Major
 - **审查编号**：C38（含 C44、S5）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.sameRowIsEqual`（修前红：同一行的两个实例不相等、哈希不同）、`FindResultsOutlineTests.laterBatchKeepsCollapseAndSelection`（修前红：下一批的新实例 AppKit 不认识，`isItemExpanded(alpha)` 为假）；新契约：`FindResultsOutlineTests.reloadPutsTheSelectionBack`、`removingAnExpandedRowReportsNoCollapse`、`onlyTheUsersChoiceActivates`，`FindResultsPresentationTests`（五条），`FindResultActivationTests`（三条，含 C44 的 ⌥），`FindViewModelTests.expansionFollowsTheUsersCollapse`、`selectionFollowsTheUsersChoice`、`clickingTheShownHitAgainGoesNowhere`。后两类里有两条先以「不生效」的形式落地、确认为红再实现：关系树 601 行时修前全部展开（`largeRelationshipTreeOpensItsFirstLevel`），第二次点击修前照样导航（`clickingTheShownHitAgainGoesNowhere`，路由数 2 而非 1）。
+- **落地与偏离**：
+  - 展开与选中的规则写成 `FindResultsOutline`（非泛型、可单测），一次更新的结果是 `FindResultsPresentation`；「先把节点交给数据源、再展开、再恢复选中」写成 `FindResultsPresentation.apply(to:)` 放在 Application 层，App 里的页面只调它，AppKit 测试跑的就是页面跑的那段代码。
+  - 展开策略照本条「除了用户折叠的，全部展开」，再加 PR121.48 定的关系模式规则：全部展开后超过 500 行的关系树只展开第一层（匹配到的类型）。注意 PR121.54 的条目写的是「与 Find 页一致：首次出现时展开一次」，两条描述不一致；Find 这边按本条做，原因是过滤栏清空后被过滤掉又回来的类型应当重新展开，而「首次出现时展开一次」要靠 `beginFiltering` / `endFiltering` 才能做到，合并时请统一两条的文字。
+  - 「再次点击已选中的命中时不重新跳转」放在 ViewModel 判断：上一次从本页导航到的就是这一行、且文档仍显示它的类型时不再导航；文档已显示别的东西（例如在内容区点了链接）时，点同一行照常导航回去。没有在 `userActivatedItem()` 里按「提议的选中等于当前选中」过滤：那样用户离开后点仍选中的那一行永远回不去。AppKit 在点击已选中的行时是否还会询问 `selectionIndexesForProposedSelection` 没能在测试里确认（测试只能直接调用 delegate，真实点击要窗口事件循环），ViewModel 的判断让行为与它无关。
+  - 测试顺带钉住了三条 AppKit 事实：大纲按 `isEqual` / `hash` 找行（新实例也能 `isItemExpanded` / `row(forItem:)`）；diff 删除行或整表 reload 都不发 collapse 通知（所以把通知交给 ViewModel 是安全的）；整表 reload 后选中按行号保留（所以要按标识恢复）。
+  - 键入跳转：页面实现 `outlineView(_:typeSelectStringFor:item:)`，取 `FindResultNode.typeSelectString`（行文本去掉前导空白）；按键事件的分类 `FindResultActivation.isTypeSelect(_:)` 与 ⌥ 的判断放在 Application 以便测试，去抖 800 ms 留在页面。
+  - `Output.nodes` 保留（范围菜单的 Current Find Results 与测试在用），新增 `Output.presentation` 驱动大纲；`expandAll` 删除；搜索框占位符改为绑定 `output.searchFieldPlaceholder`，`viewDidLoad` 与 `query` 订阅里的两份设置删掉。
+  - 同类：侧栏 `SidebarRuntimeObjectViewController` 也手写了「单行 + 触发事件 + 去抖」，但它的大纲是单选、行为正确，这次不迁到 `userActivatedItem()`；Report 页的同一问题归 PR121.53 / PR121.54。
 
 **问题**：Find 结果大纲用 `rx.nodes(options: [])` 绑定，而 `FindSession` 每来一批（以及每次补搜、过滤栏每敲一个键）都给所有行新建 `FindResultNode`。这些节点是按指针判等的 `NSObject`，AppKit 在 `reloadData()` 之后认不出旧行：用户折叠的类型被重新展开（`FindViewController.swift:387-391` 每次都 `expandItem(nil, expandChildren: true)`），选中只按行号保留，落到别的行上。导航挂在 `rx.modelSelected()`（`selectionDidChangeNotification`）上，所以 reload、程序化选中、⌘A 引起的选中变化也会导航，`pushOntoTimeline` 还会截掉「前进」历史。另外，提案承诺的「⌥-点击在新标签打开」没有实现（C44），`Output.expandAll` 一直没人用（S5）。
 
@@ -4137,6 +4146,7 @@ func coverageRefreshesCoalesce() async throws {
 - **严重度**：Minor
 - **审查编号**：新发现（模块 C 起草方案时发现，不在审查清单里）
 - **状态**：已修复（引擎与协调器这一半；界面那一半待办，见下）。复现测试：`FindCorpusCoordinatorOlderPeerTests.peerWithoutCorpusCommandsRecordsNoFailure`（对端是一条什么命令都不服务的 TCP 连接；修前两个镜像各记一条 `.failed(message: "RuntimeNetworkRequestError(message: \"No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.buildInterfaceCorpus\")")`，状态里也留着两条 Failed）、`RemoteUnknownCommandTests`（经一台新版中转时，修前调用方收到 `RuntimeNetworkRequestError(message: "RuntimeNetworkRequestError(message: \"No handler registered for …\")")`，前缀对不上）。修后都绿。
+- **Find 摘要一半（批次 S6）**：搜索命令被旧对端以「No handler registered for …」拒绝时（`RuntimeNetworkRequestError.isUnknownCommand`），摘要栏不再显示「Search failed: No handler registered for …」，而是与 Report 同一说法「Not supported by this source」（`FindSession.failureSummary(for:)`）。按搜索自己的失败判定，而不是读协调器的 `isCorpusUnsupportedByEngine`：搜索可能先于任何语料请求发出，那时协调器还不知道。复现测试 `FindSessionSummaryNoticeTests.sourceWithoutFindSaysItIsNotSupported`（对端是什么命令都不服务的 TCP 连接，修前摘要为「Search failed: No handler registered for com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.searchInterfaces」），修后绿。
 - **落地与偏离**：
   - 比方案多一处：中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，通道把它的原文回给调用方（`RuntimeMessageChannel.replyMessage(for:)`），而不是 `"\(error)"`。否则经过一台新版中转（镜像链），这段文字会被包上一层类型描述，`isUnknownCommand` 认不出，正是问题描述里「经镜像链路转发到这样的对端」那种情形。
   - **界面部分待办**：`isCorpusUnsupportedByEngine` 已经发布，但 Report navigator 显示一条说明（界面批次，PR121.55 一带）、Find 摘要改用「此设备上的 RuntimeViewer 版本不支持 Find」这类文字（模块 D1）都还没做；搜索命令遇到旧对端时 FindSession 换一句说明的同类也归 D1。
@@ -4505,7 +4515,7 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Minor（加固，目前不出错）
 - **审查编号**：AL8
-- **状态**：方案待批，代码未改
+- **状态**：已修复（加固）。大小写开关的输入改为 `caseSensitiveButton.rx.click(with: \.state)`——点击时才读按钮状态，从构造上就不带初值，不再靠重载决议落到 RxAppKit 那个无初值的版本；`FindViewModel.Input` 的文档注释写明「写进查询的输入必须是纯事件」及原因。原写法当时不出错，写不出修复前会红的测试，也没有 App target 的单元测试，按文档以 App 编译验证。同类：模式路径、成员种类、范围菜单、回车提交已是 `rx.click(with:)` / `rx.controlEvent`；范围选择表单只在 OK 时写一次会话
 
 **问题**：两层侧栏各有一个 Find 页，共用文档的同一个 `FindSession`。所以每一页写进会话的输入都必须是纯事件：页面绑定时如果重放一个初值（控件的默认状态），就会覆盖另一页已经设好的查询。现在大小写开关的输入是 `caseSensitiveButton.rx.state.asSignal()`（`FindViewController.swift:320`），只是碰巧解析到了 RxAppKit 那个不带初值的重载。换一种写法，例如 `.asSignal(onErrorJustReturn:)`，就会解析到 RxCocoa 带初值的 `ControlProperty`。那样一来，后创建的那一页一绑定，就会把默认的 `.off` 写进会话，冲掉另一页设好的「区分大小写」。
 
@@ -4562,7 +4572,7 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C39
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.contentComparesTheHits`、`contentComparesEveryLevel`、`contentComparesTheTitle`（修前三条都红：同一类型换了一条命中、第二层换了一个孙节点、同一身份换了显示名，`isContentEqual` 都答「没变」）；对照用例 `sameTreeIsSameContent` 修前修后都绿。比方案多一条「第二层变化」的用例，正是「问题」里说的关系模式情形。夹具 `Support/FindResultFixtures.swift` 供 PR121.07 / 44 / 48 / 49 的测试共用。同类：树节点里只有 `ReportNode.isContentEqual` 同样浅比较，归 PR121.53；其余 `isContentEqual` 都是平铺列表的行，没有子节点
 
 **问题**：`FindResultNode.isContentEqual`（`FindResultNode.swift:230`）只比 `content` 和子节点**个数**。RxAppKit 靠它判断一行「有没有变」。过滤栏把同一类型下显示的命中换成另外几条、个数却不变时，adapter 判定没变，跳过刷新，大纲留着旧命中；点下去，打开的是旧节点。
 
@@ -4640,7 +4650,7 @@ func sameTreeIsSameContent() {
 
 - **严重度**：Minor
 - **审查编号**：C41
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.onlyRowsThatGoSomewhereOpenInNewTab`——先把 `canOpenInNewTab` 以修前菜单的行为（处处可用）落地，未解析的关系节点那一条为红，再改成 `navigationTarget != nil`。菜单每次弹出前按 `clickedRow` 重建（`contextMenu.rx.needsUpdate`，与侧栏同法），空白处或不能跳转的行给空列表，AppKit 就不弹菜单；选中项经 `contextMenu.rx.itemSelected` 送进 `resultOpenedInNewTab`，与 PR121.07 的 ⌥-点击合并；`openInNewTabRelay` 与 `@objc` action 删除。接线在 App target，没有单元测试，要在真实窗口里确认：空白处、灰色关系节点上右键都不弹菜单，命中行右键 Open in New Tab 新开标签
 
 **问题**：Find 结果大纲挂的是一份静态菜单（`FindViewController.swift:272`），只有一项「Open in New Tab」，永远可用。在空白处右键，或者右键一个没有解析出类型的关系节点（灰色、不可跳转的那种），菜单照样弹出。点下去，`openInNewTabMenuItemAction`（`:425`）的守卫、或者 `FindViewModel.navigate` 里的 `navigationTarget == nil` 会悄悄返回，什么也不发生。
 
@@ -4792,7 +4802,7 @@ func onlyRowsThatGoSomewhereOpenInNewTab() throws {
 
 - **严重度**：Minor
 - **审查编号**：C40 + F7
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试（修前都红，红的那一轮先只加了行为不变的接缝 `applyListing` 与恒空的 `revealedImagePath`）：`FindScopeChooserViewModelTests.buildProgressLeavesTheRowsAlone`（两次只改状态的进度刷新各重发一次列表）、`revealsTheScopeOnce`（新契约，修前没有一次性的揭示输出）、`simulatorScopeIsSelectedAsTheEngineListsIt`（S3a 交接的同类，见 PR121.33：模拟器引擎上范围里的镜像按原始路径选中，而引擎与协调器按带根的规范路径列出，选中落空、同一镜像列两行）。列表只在列出的镜像变了时才重排、重发；状态变化经 cell 的绑定原地刷新。「把范围的第一个镜像滚进视野」改为 ViewModel 的一次性输出 `revealedImagePath`，引擎第一次答复索引列表时发一次，用户改过选择后不再发；VC 去掉 `isRevealingSelection` 与选中订阅里的滚动，收到它时先滚动再强制布局。范围的镜像与引擎的列表都先经 `canonicalImagePath` 规范化（幂等，对 macOS 引擎是原样）。`loadIndexedImagePaths` 里的 `self?.` 一并改成 await 之后的 `guard let self`（PR121.51 的一处）。既有的 `pickedImageNotIndexed` 原先靠「列表重发」看到 `not indexed`，改为盯住那一行的状态（状态从此原地刷新、不再重发列表）。VC 改动在 App target，要在真实窗口里确认：语料构建期间往下滚动列表不再被拽回第一个选中行，打开表单时范围的第一个镜像仍滚进视野
 
 **问题**：
 - `FindScopeChooserViewModel` 每收到一次 `buildStatesByImagePath`（语料构建期间约每 16 ms 一次），就重算整个列表、用 `localizedCaseInsensitiveCompare` 全量重排（F7），再重新给 `allRows` 赋值（`FindScopeChooserViewModel.swift:84-95`）。`rows` 随之重发。
@@ -5038,7 +5048,7 @@ func revealsTheScopeOnce() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C42 + AL6
-- **状态**：方案待批，代码未改
+- **状态**：已修复（推荐方案：请求随路由走）。复现测试：`ContentTextHighlightTests.abandonedHighlightNeverReachesALaterVisit`——修前红（点了 Foo 的命中又去了 Bar，之后为 Foo 新建的 ViewModel 一渲染完就从邮箱取走旧请求，发出一个范围）。原 `highlightIsLocatedAndTaken` 改为构造时传入请求（`requestIsLocatedOnTheFirstRender`），只测邮箱的 `foreignHighlightIsLeftAlone` 随邮箱删除；`FindViewModelTests` 里读邮箱的四处改为订阅 `routeSignal` 看 `.pushHighlighting` 带的请求，类型行的点击断言是一个不带高亮的 `.push`。iOS 的 `ContentCoordinator` 同样处理两个新 case（未编 iOS，见本批汇报）。提案 §4「落地形态」与决策日志已同步。同类：无
 
 **问题**：点 Find 结果时，高亮请求放在文档级的一个「邮箱」里，即 `DocumentState.pendingContentHighlight`（`DocumentState.swift:235`）。它只在**同一对象**渲染完成时，才由内容区的 ViewModel 用 `takeContentHighlight(for:)` 取走（`ContentTextViewModel.swift:220`）。
 
@@ -5371,7 +5381,7 @@ func requestIsLocatedOnTheFirstRender() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C43
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试（修前都红）：`ContentHighlightRequestTests.regularExpressionHitOnALongLine`（窗口行等不了整行、正则请求又不带 query，定位返回 `nil`）、`literalHitOnALongLine`（落在 `_BackgroundViewHoverEffect` 里更早的 `View` 上）、`FindResultMemberEmphasisTests.nameThatAlsoOccursInsideATypeName`（加粗的是 `NSURL` 里的 `URL`）、`FindViewModelTests.memberHighlightLandsOnTheName`（端到端：Foundation 的成员命中 `URL`，请求定位到 `NSURL` 里）。新契约：`ContentHighlightRequestTests.fallbackHonoursTheMatchStyle`、`regularExpressionFallback`，Core 的 `RuntimeTextPatternTests`。与草案的出入：第二步不再逐行调用匹配器，而是对整段显示文本匹配一次、再按行号取最近的一处——正则的时间预算因此只花一份（逐行调用会让一个灾难性回溯的正则每行各花一份预算）；`RuntimeTextPattern` 的预算默认 1 秒，超时时返回空，按「完全找不到」处理。`normalized` 与 `rangeInsideLine` 里为窗口行留的「…」处理随之删去（窗口行改走 `locateWindow`）。`memberSortOrder` 那一条（By Offset 排序后行号变了、内容完全相同的行取错）按决策日志 2026-09-29 不修，理由仍成立：两行内容完全相同时取哪一行都显示同样的文字。同类：`ContentHighlightRequest` 里两处 `range(of:options:)`、`FindResultNode` 的名字查找都已一并改
 
 **问题**：点 Find 结果后，内容区用 `ContentHighlightRequest.locate(in:)` 在屏上的文本里找回那处命中。有三种情况会定位错，或者根本定位不到。
 
@@ -5834,7 +5844,7 @@ func memberHighlightLandsOnTheName() async throws {
 
 - **严重度**：Minor
 - **审查编号**：F1
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindSessionGroupingTests.laterBatchKeepsEarlierRows`、`repeatedRequestBuildsNothing`（修前都红：每次 `nodes()` 都为每个类型新建行，`===` 不成立）；`moreHitsRebuildTheirType` 守住「收到新命中的类型要换新行」，修前修后都绿。与草案的出入：PR121.41 已把两份分组合成一个泛型 `MatchGroups<Match>`，缓存只写一份；`FindGroupedMatch` 随之从 `private` 放宽到 internal（泛型参数的约束不能比类型本身更私有）。关系模式的自动展开规则（树不超过 500 行时全部展开，否则只展开第一层）随 PR121.07 的展开策略一起落地，见那一条
 
 **问题**：文本 / 成员搜索的结果是一批一批（每个镜像一批）送到 `FindSession` 的。每来一批，`TextMatchGroups.nodes()` 和 `MemberMatchGroups.nodes()`（`FindSession.swift:491`、`:523`）都会把**所有**类型、**所有**命中重新 `init` 一遍。`FindResultNode` 在 `init` 里就构建带属性的标题，所以命中越多、批次越多，重复的工作就越多。两层侧栏各有一个 `FindViewModel` 绑着同一个 session，所以每一批都要处理两份；看不见的那一层也逃不掉。
 
@@ -5993,7 +6003,7 @@ struct FindSessionGroupingTests {
 
 - **严重度**：Minor
 - **审查编号**：F4
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.filterKeepsUnchangedRows`（修前红：整个保留的类型与它的命中都是新实例）、`partialFilterSharesTheAppearance`（修前红：部分保留的类型的命中是新实例、标题属性串重新构建）；`filterDropsWhatDoesNotMatch` 守住「不匹配就丢掉」。过滤的语义不变：自身匹配的行连同全部子节点保留，否则只留匹配的后代。同类：Report 的过滤重建节点归 PR121.59；范围选择器的过滤只是挑出已有的 cell ViewModel，不重建
 
 **问题**：底部过滤栏每敲一个键，`FindViewModel.filtered(_:by:)`（`FindViewModel.swift:253`）都会把保留下来的行全部新建一遍：
 - 子节点全部保留的类型也会新建；
@@ -6103,7 +6113,7 @@ func partialFilterSharesTheAppearance() throws {
 
 - **严重度**：Cleanup
 - **审查编号**：S6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，行为不变，没有新增测试：`navigationTarget` 只返回 `RuntimeObject?`，`Content.object` 去掉 `matchCount`，`object(_:children:)` 工厂随之去掉这个参数；PR121.39 没有走「把高亮存进节点」那条路（高亮按 `Results.query` 计算），所以不恢复高亮位。由全部 Find 套件覆盖（`--filter Find` 跑 Application 测试，110 个既有测试全过）；测试里的模式匹配与夹具一并改。同类：无
 
 **问题**：
 - `FindResultNode.navigationTarget`（`FindResultNode.swift:55`）返回 `(object, highlight)`，但每个分支的 `highlight` 都写死成 `nil`。真正的高亮由 `FindViewModel.highlight(for:query:)` 另外计算，所以元组的第二位只是个永远为空的占位。
@@ -6267,7 +6277,7 @@ func partialFilterSharesTheAppearance() throws {
 
 - **严重度**：Cleanup
 - **审查编号**：CV5
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯风格，行为不变，没有新增测试，由既有套件覆盖（`FindViewModelTests`、`FindScopeChooserViewModelTests`、`FindCorpusCoordinatorTests`、`FindSession*Tests`、`PopUpPathControlTests`，App 编译验证 `FindViewController` 与 `ContentSourceEditorViewController`）。按文档改的：`FindViewModel` 两处（第三处 `resultClicked` 已随 PR121.07 改过）、`FindViewController` 一处、`ContentSourceEditorViewController` 一处、`FindCorpusCoordinator` 三处（异步闭包只在 await 之后 `guard`）、`PopUpPathControlTests` 一处；`FindScopeChooserViewModel` 那一处随 PR121.45 改了；`ReportViewController` 两处已由 Report 批次（S7）在主分支上改掉，这里不再碰，免得冲突。偏离：文档留给 PR121.02 的 `FindSession` 三处，那一条修完后仍是 `self?.`（搜索任务的进度闭包与收尾），这次一并改成 await 之后的 `guard let self`，生命期与原来相同。再 grep 本 PR 新增的 61 个 Swift 文件，没有别的漏网；`FindCorpusCoordinator` 里保留的那处 `if let self`（长 `for await` 循环）已不在了。`ContentSourceEditorViewController.swift:63` 与文档列的另外三处是本 PR 之前就有的，不在这一条
 
 **问题**：本 PR 新增的 16 处闭包没按项目约定写：AGENTS.md「Closures & Self Capture」要求一律 `guard let self else { return }`，这些地方却用了 `self?.` 或 `if let self`。
 
@@ -6442,7 +6452,7 @@ func partialFilterSharesTheAppearance() throws {
 
 - **严重度**：Cleanup
 - **审查编号**：CV6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯替换，行为不变：`searchField` 换成 `SearchField`、`memberKindPopUpButton` 换成 `PopUpButton`、三条分隔线换成 `Box`；`FindScopeButton` 改继承 `PopUpButton`，原来的 `commonInit()` 挪进 `setup()`，两个初始化器的重写与无参便利初始化器删去（`titleItem` 是带初值的存储属性，在 `super.init` 调用 `setup()` 之前已初始化）。按文档保留原生类的两处：`caseSensitiveButton`（要 `.smallSquare` + `.pushOnPushOff`，`PushButton` 固定 `.push`）与 `searchProgressIndicator`（UIFoundation 的 `ProgressIndicator` 只是过滤框的私有件）；两个只承载布局的 `NSView` 也保留。App target 没有单元测试，以 App 编译验证；要在真实窗口里看一眼模式路径、范围按钮、成员种类弹出菜单与三条分隔线的外观与改动前一致。同类：`ReportViewController` / `ReportCellView` 的那几处归 PR121.64（S7）
 
 **问题**：AGENTS.md 的「UI Component Selection」要求先用项目的封装类型，只有封装做不到时才回退到原生 AppKit 类。`FindViewController.swift` 里有五处可以用封装却用了原生类：`:31` 的 `NSSearchField`、`:37` 的 `NSPopUpButton`，以及 `:45`、`:53`、`:57` 的三个 `NSBox`。UIFoundation 有对应的 `SearchField`、`PopUpButton`、`Box`；同一个 PR 里的 Scope chooser 已经在用 `SearchField`。
 

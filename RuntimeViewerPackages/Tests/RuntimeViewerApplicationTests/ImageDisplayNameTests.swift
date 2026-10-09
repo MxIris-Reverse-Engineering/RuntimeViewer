@@ -23,7 +23,7 @@ struct ImageDisplayNameTests {
 
     @Test("a Find result row for a type names the type's image the same way")
     func typeResultRow() {
-        let title = FindResultNode.object(Self.object, matchCount: 1, children: []).appearance.title.string
+        let title = FindResultNode.object(Self.object, children: []).appearance.title.string
 
         #expect(title.hasPrefix("NSObject"))
         #expect(title.hasSuffix(" libobjc.A.dylib"), "the row reads \(title)")

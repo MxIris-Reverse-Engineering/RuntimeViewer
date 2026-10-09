@@ -136,7 +136,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         .disposed(by: rx.disposeBag)
 
         output.highlightRange.emitOnNextMainActor { [weak self] range in
-            self?.bridge?.revealCharacterRange(range)
+            guard let self else { return }
+            bridge?.revealCharacterRange(range)
         }
         .disposed(by: rx.disposeBag)
 

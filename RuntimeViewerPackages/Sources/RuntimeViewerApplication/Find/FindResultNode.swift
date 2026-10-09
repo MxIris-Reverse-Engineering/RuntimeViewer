@@ -25,16 +25,19 @@ public struct FindResultCellAppearance: Equatable {
 /// One row of the Find navigator's outline: a type with its hits underneath,
 /// a hit, a member, or a node of a relationship tree.
 ///
-/// A class (an `NSObject`) because `NSOutlineView` identifies items by
-/// pointer; `differenceIdentifier` is a string that stays stable across the
-/// incremental batches a search delivers, so DifferenceKit keeps rows in
-/// place while more arrive. The appearance is built on construction — every
-/// field is known from the content — which is what lets the outline render
-/// it without a ViewModel per row.
+/// A class (an `NSObject`) because `NSOutlineView` takes objects as items.
+/// Two nodes with the same `identifier` are equal, whichever instances they
+/// are: AppKit keeps a row expanded and finds its row only for an item equal
+/// to the one it knows, and every update of the results brings new nodes.
+/// What a row shows is compared by `isContentEqual(to:)`. The identifier
+/// stays stable across the incremental batches a search delivers, so
+/// DifferenceKit keeps rows in place while more arrive. The appearance is
+/// built on construction — every field is known from the content — which is
+/// what lets the outline render it without a ViewModel per row.
 public final class FindResultNode: NSObject, @unchecked Sendable {
     public enum Content: Hashable {
-        /// A type grouping the hits or members found in it.
-        case object(RuntimeObject, matchCount: Int)
+        /// A type grouping the hits or members found in it, which are its children.
+        case object(RuntimeObject)
         case textMatch(RuntimeInterfaceSearchMatch)
         case member(RuntimeMemberMatch)
         /// A node of a relationship tree. `object` is `nil` for a type no
@@ -50,43 +53,78 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     public let appearance: FindResultCellAppearance
 
-    /// The type a click navigates to, and where in it, or `nil` for an
-    /// unresolved relationship node.
-    public var navigationTarget: (object: RuntimeObject, highlight: ContentHighlightRequest?)? {
+    /// The type a click navigates to, or `nil` for an unresolved
+    /// relationship node. Where in the type a hit sits is `FindViewModel`'s to
+    /// work out, from the query the results answer.
+    public var navigationTarget: RuntimeObject? {
         switch content {
-        case .object(let object, _):
-            return (object, nil)
+        case .object(let object):
+            return object
         case .textMatch(let match):
-            return (match.object, nil)
+            return match.object
         case .member(let match):
-            return (match.object, nil)
+            return match.object
         case .relationship(_, let object):
-            return object.map { ($0, nil) }
+            return object
         }
+    }
+
+    /// Whether the row goes somewhere, so its context menu offers Open in New Tab: an
+    /// unresolved relationship node does not.
+    public var canOpenInNewTab: Bool {
+        navigationTarget != nil
     }
 
     /// The text the bottom filter bar matches against.
     public var filterableText: String {
         switch content {
-        case .object(let object, _): object.displayName
+        case .object(let object): object.displayName
         case .textMatch(let match): match.lineText
         case .member(let match): match.member.declarationText
         case .relationship(let name, _): name
         }
     }
 
-    public init(content: Content, children: [FindResultNode] = [], identifier: String) {
+    /// What type-select matches the row by: the start of the text it shows.
+    public var typeSelectString: String {
+        String(filterableText.drop { $0.isWhitespace })
+    }
+
+    public convenience init(content: Content, children: [FindResultNode] = [], identifier: String) {
+        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeAppearance(for: content))
+    }
+
+    /// `node` with other children — what the filter bar keeps of a row — sharing its appearance,
+    /// which depends on the content alone, instead of building it again.
+    public convenience init(copying node: FindResultNode, children: [FindResultNode]) {
+        self.init(content: node.content, children: children, identifier: node.identifier, appearance: node.appearance)
+    }
+
+    private init(content: Content, children: [FindResultNode], identifier: String, appearance: FindResultCellAppearance) {
         self.content = content
         self.children = children
         self.identifier = identifier
-        self.appearance = Self.makeAppearance(for: content)
+        self.appearance = appearance
         super.init()
+    }
+
+    // MARK: - Identity
+
+    /// The same row, whichever instance: the identifiers match. See the type's
+    /// documentation for why the outline needs this.
+    public override func isEqual(_ object: Any?) -> Bool {
+        guard let other = object as? FindResultNode else { return false }
+        return identifier == other.identifier
+    }
+
+    public override var hash: Int {
+        identifier.hashValue
     }
 
     // MARK: - Construction
 
-    public static func object(_ object: RuntimeObject, matchCount: Int, children: [FindResultNode]) -> FindResultNode {
-        FindResultNode(content: .object(object, matchCount: matchCount), children: children, identifier: "object|\(object.kind)|\(object.name)|\(object.imagePath)")
+    public static func object(_ object: RuntimeObject, children: [FindResultNode]) -> FindResultNode {
+        FindResultNode(content: .object(object), children: children, identifier: "object|\(object.kind)|\(object.name)|\(object.imagePath)")
     }
 
     public static func textMatch(_ match: RuntimeInterfaceSearchMatch, index: Int) -> FindResultNode {
@@ -112,7 +150,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         var appearance = FindResultCellAppearance()
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         switch content {
-        case .object(let object, _):
+        case .object(let object):
             appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
             appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
         case .textMatch(let match):
@@ -163,22 +201,26 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         }
         return result
     }
+    #endif
+
+    // MARK: - Member Names
 
     /// Where the query matched the member's name, inside its declaration. A
-    /// name the declaration spells whole is found as is; a multi-part
-    /// selector is spelled piece by piece with its parameters in between, so
-    /// the piece the match starts in is found instead, keyword and colon.
-    private static func nameRange(of match: RuntimeMemberMatch) -> NSRange? {
+    /// name the declaration spells whole is found where it stands on its own —
+    /// `URL` in `NSURL *URL` is the last one, not the one inside `NSURL`; a
+    /// multi-part selector is spelled piece by piece with its parameters in
+    /// between, so the piece the match starts in is found instead, keyword and
+    /// colon. The row sets this range apart, and the content pane flashes it.
+    static func nameRange(of match: RuntimeMemberMatch) -> NSRange? {
         let declarationText = match.member.declarationText as NSString
         let name = match.member.name as NSString
         let matchRange = match.matchRangeInName.nsRange
-        let wholeNameRange = declarationText.range(of: name as String)
-        if wholeNameRange.location != NSNotFound {
+        if let wholeNameRange = identifierRange(of: name as String, in: declarationText) {
             return NSRange(location: wholeNameRange.location + matchRange.location, length: matchRange.length)
                 .clamped(toLengthOf: wholeNameRange)
         }
         guard let pieceRange = selectorPieceRange(in: name, containing: matchRange.location),
-              let pieceRangeInDeclaration = keywordRange(of: name.substring(with: pieceRange), in: declarationText)
+              let pieceRangeInDeclaration = identifierRange(of: name.substring(with: pieceRange), in: declarationText)
         else { return nil }
         return NSRange(location: pieceRangeInDeclaration.location + matchRange.location - pieceRange.location, length: matchRange.length)
             .clamped(toLengthOf: pieceRangeInDeclaration)
@@ -199,14 +241,19 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         return nil
     }
 
-    /// The first place `keyword` starts a word in `declarationText`, so a
-    /// keyword is never found at the end of a longer one.
-    private static func keywordRange(of keyword: String, in declarationText: NSString) -> NSRange? {
+    /// The first place `identifier` stands on its own in `declarationText`: not preceded by an
+    /// identifier character, and — unless it ends in a selector's colon — not followed by one.
+    /// So a name is never found inside a longer one, at either end.
+    private static func identifierRange(of identifier: String, in declarationText: NSString) -> NSRange? {
+        let identifierText = identifier as NSString
+        let checksTrailingBoundary = identifierText.length > 0 && isIdentifierCharacter(identifierText.character(at: identifierText.length - 1))
         var searchStart = 0
         while searchStart < declarationText.length {
-            let found = declarationText.range(of: keyword, range: NSRange(location: searchStart, length: declarationText.length - searchStart))
+            let found = declarationText.range(of: identifier, range: NSRange(location: searchStart, length: declarationText.length - searchStart))
             guard found.location != NSNotFound else { return nil }
-            if found.location == 0 || !isIdentifierCharacter(declarationText.character(at: found.location - 1)) {
+            let startsOnItsOwn = found.location == 0 || !isIdentifierCharacter(declarationText.character(at: found.location - 1))
+            let endsOnItsOwn = !checksTrailingBoundary || NSMaxRange(found) == declarationText.length || !isIdentifierCharacter(declarationText.character(at: NSMaxRange(found)))
+            if startsOnItsOwn, endsOnItsOwn {
                 return found
             }
             searchStart = found.location + 1
@@ -218,7 +265,6 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         guard let scalar = Unicode.Scalar(character) else { return true }
         return scalar == "_" || scalar == "$" || CharacterSet.alphanumerics.contains(scalar)
     }
-    #endif
 }
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
@@ -227,10 +273,26 @@ extension FindResultNode: OutlineNodeType {}
 extension FindResultNode: Differentiable {
     public var differenceIdentifier: String { identifier }
 
+    /// Whether the row and everything beneath it shows the same as `source`. The outline's
+    /// adapter skips a row this calls unchanged, so it has to look at the whole subtree: the
+    /// filter bar can swap which hits a type shows without changing how many.
     public func isContentEqual(to source: FindResultNode) -> Bool {
-        content == source.content && children.count == source.children.count
+        if self === source {
+            return true
+        }
+        // `content` compares a type by identity alone; the row also shows its display name,
+        // which another run can spell differently.
+        guard content == source.content,
+              appearance.title.isEqual(to: source.appearance.title),
+              children.count == source.children.count
+        else { return false }
+        return zip(children, source.children).allSatisfy { child, sourceChild in
+            child.identifier == sourceChild.identifier && child.isContentEqual(to: sourceChild)
+        }
     }
 }
+
+#endif
 
 extension NSRange {
     /// `self` cut down to lie inside `bounds`; an empty range at `bounds.location`
@@ -242,4 +304,3 @@ extension NSRange {
         return NSRange(location: lower, length: upper - lower)
     }
 }
-#endif

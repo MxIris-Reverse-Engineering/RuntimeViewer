@@ -319,7 +319,10 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   同时把 `PendingHighlight { query, lineNumber, lineText, matchRangeInLine }` 写进 `DocumentState` 的一次性握手字段，
   内容区渲染完成后按优先级定位、滚动、闪烁高亮：
   1. 整行匹配：找与 `lineText` 完全相等的行，多行相等取行号最接近 `lineNumber` 的，行内套 `matchRangeInLine`；
-  2. query 降级：整行 miss（搜索之后又改了显示选项，或成员排序与语料不同）时按同规则找 `query`，取行号最接近的一处；
+     `lineText` 是长行截出的窗口（两端的「…」标记截断处）时，改找包含窗口正文的行，命中位置 = 窗口在该行的偏移 +
+     命中在窗口内的偏移（2026-10-09，决策日志）；
+  2. query 降级：整行 miss（搜索之后又改了显示选项，或成员排序与语料不同）时按同规则找 `query`——匹配方式、大小写、
+     标识符边界、正则都与搜索一致——取行号最接近的一处；
   3. 完全 miss：只跳到对象，find bar 预填 query，提示「命中内容受当前 Generation Options 影响未显示」。
   `ContentTextViewModel` 加一个 `highlightRequest` 输出。NSTextView 路径：`scrollRangeToVisible` +
   `showFindIndicator(for:)`。SourceEditor 路径：实现桥的 `scrollToCharacterIndex(_:)`（今天是 TODO）并加高亮——
@@ -330,9 +333,10 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   两层侧栏各自的 `FindViewModel<Route>` 只是它的适配器——ViewModel 的 router 是各自层级的 coordinator，会随
   push / pop 销毁，所以状态不能住在 ViewModel 里。语料协调器叫 `FindCorpusCoordinator`
   （`DocumentState.findCorpusCoordinator`，Document 打开时唤起）。内容区握手是 `SelectionRoute` 的两个新 case
-  `pushHighlighting` / `openInNewTabHighlighting`，把 `ContentHighlightRequest` 挂到
-  `DocumentState.pendingContentHighlight`，`ContentTextViewModel` 渲染完成后 `takeContentHighlight(for:)` 取走并按
-  优先级链在显示文本里定位，`Output.highlightRange` 交给两个内容 ViewController：NSTextView 路径
+  `pushHighlighting` / `openInNewTabHighlighting`，`MainCoordinator` 把其中的 `ContentHighlightRequest` 转成
+  `ContentRoute.nextHighlighting` / `.rootHighlighting`，`ContentCoordinator` 把它交给为这次导航新建的
+  `ContentTextViewModel` 的构造器，ViewModel 第一次渲染完成时用掉它，按优先级链在显示文本里定位（2026-10-09 起；
+  原先挂在文档级的 `DocumentState.pendingContentHighlight` 上，见决策日志），`Output.highlightRange` 交给两个内容 ViewController：NSTextView 路径
   `scrollRangeToVisible` + `setSelectedRange` + `showFindIndicator`；SourceEditor 路径走桥的新方法
   `revealCharacterRange(_:)`。完全 miss 时只跳到对象，**没有做**「find bar 预填 query + 提示」那一档降级（决策日志）。
 - **SourceEditor 桥的证据**：按 dump（`/Volumes/RE/SourceEditor/Xcode/26.6/`，27.0 一致）给 stub 补了
@@ -813,3 +817,7 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-09 | 协议的成员表按结构列出默认实现：协议要求之后列 `defaultImplementationExtensions` 里各扩展的成员，追加在后面的同一个扩展按对象身份跳过；打印出的文本不变 | PR #121 审查 PR121.11：顶层协议的默认实现由打印器自己接在协议后面印出，成员表却只读 `printedDefinitions`，1954a8a5 为了不重复打印删掉那份副本后，这些成员就从 Members 搜索里消失了（SwiftUI 的 view modifier、`LocalizedError.errorDescription` 的默认实现等），嵌套协议反而正常。Foundation 上带挂接默认实现的 29 个协议里修前 27 个一个都定位不到，修后全部定位到。按身份而不是按 `isAttachedToProtocolDefinition` 判断，因为 MachOSwiftSection 为没有可挂符号扫描扩展块的协议合成的默认实现扩展不带这个标记。成员表从此不再需要知道默认实现由谁打印。 |
 | 2026-10-09 | 一次文本 / 成员搜索内部，与已报告命中的同名 ObjC 协议副本在本次选项下逐字相同的副本只计数，计入摘要新增的 `omittedRepeatedMatchCount`，不收集、不计入 `totalMatchCount`；补搜之间不去重；Swift 类的 ObjC 面不去重 | PR #121 审查 PR121.72：侧栏按 `__objc_protolist` 全量列出协议副本（2026-08-05 起有意如此，见 `ResolvedIssues/2026-08-05-objc-protocol-ownership-filter.md`），搜 `copyWithZone` 时 CoreFoundation 与 Foundation 的 `NSCopying` 各报一遍，`NSObject` 协议几乎每个镜像都报一遍，挤占 1000 条上限、虚高总数。当年「索引层宁可多列，去重放到用的地方做」，这里就是用的地方。要求文本逐字相同，是因为各镜像的副本来自各自编译时看到的头文件，可能不同，不同的副本里可能有别处没有的命中。保留路径最小的那份，与关系树（PR121.13）的代表副本规则一致。补搜之间去重要让引擎知道此前显示过哪些副本、按什么文本——查询与摘要都得加字段，期间那份语料还可能被驱逐，不属于小改动，留给 Find 界面模块；「另有 N 处合并」的文案也归界面。ObjC 面与 Swift 面一个有运行时名、选择子与 IMP，一个有 Swift 类型与布局，两处命中都有用。 |
 | 2026-10-09 | `printedDefinitions` 是否给协议补印默认实现，改读 MachOSwiftSection 的 `ProtocolDefinition.printsDefaultImplementationExtensionsAfterDeclaration`（上游 `52460a79`，锁文件随之前移），不再照抄打印器的条件；护栏测试让打印器单独打印声明，核对顶层、嵌套、别的模块扩展里三种协议的默认实现恰好由一方印出 | PR #121 审查 PR121.27：哪些协议由打印器把默认实现接在声明后面，原先 RuntimeViewer 照抄打印器的私有条件取反，上游加 `extensionContext == nil` 时（a93960d3）只能在 74c349c7 里跟着改，MachOSwiftSection 内部的 `SwiftInterfaceBuilder` 也另抄一份。拷贝一旦落后，默认实现会悄悄丢失或重复，内容区和 Find 语料一起错。规则现在只在上游一处，打印器、整镜像接口与 RuntimeViewer 读同一个属性。Foundation 里没有嵌套在类型里、带默认实现的协议，嵌套位置的样本取 Accelerate overlay。 |
+| 2026-10-09 | Find 结果大纲按身份增量更新：`FindResultNode` 以 `identifier` 判等，大纲改用 `rx.nodes(options: .diffable)`；展开与选中由 ViewModel 决定（除了用户折叠的全部展开，全部展开超过 500 行的关系树只展开第一层；用户的选中按标识恢复）；导航改由用户本人的选中触发（`Reactive<NSOutlineView>.userActivatedItem()`），键入跳转取行文本并去抖 800 ms，⌥ 在新标签打开，再次点击仍在显示的命中不重新导航 | PR #121 审查 PR121.07 / PR121.48：节点按指针判等，每一批结果、每次补搜、过滤栏每敲一个键都是 AppKit 不认识的新行，用户折叠的类型重新展开、选中按行号落到别的行；导航挂在 `modelSelected()` 上，reload 与程序化选中也会导航并截掉「前进」历史；§4 承诺的 ⌥ 在新标签打开没有实现。规则写成 `FindResultsOutline` 与 `FindResultsPresentation.apply(to:)`，在包测试里用离屏大纲验证。500 行与「不重新跳转」是审查推荐项。 |
+| 2026-10-09 | 内容区的高亮请求随路由走：`ContentRoute` 加 `.rootHighlighting` / `.nextHighlighting`，`MainCoordinator` 转交，`ContentCoordinator` 传进 `ContentTextViewModel` 的构造器，第一次渲染时用掉；删掉 `DocumentState.pendingContentHighlight`、`takeContentHighlight(for:)` 与 `PendingContentHighlight` | PR #121 审查 PR121.46：文档级的邮箱只在同一对象渲染完成时才被取走。点了 A 的命中、A 还没渲染完就去了 B，或者 A 的接口取不回来，请求就一直留着，之后不管从哪里回到 A 都会闪一下旧命中、滚动位置跳过去。请求的生命期改为等于那个 ViewModel：被替换、取失败、换引擎都随它一起消失。内容区本来就为每次导航新建 ViewModel，同一对象上再点一条命中照样重新定位。复现测试 `ContentTextHighlightTests.abandonedHighlightNeverReachesALaterVisit`。 |
+| 2026-10-09 | 内容区二次定位按搜索的语义找回命中：长行的窗口按「包含」找回所在行、命中位置取窗口内的偏移；降级一步用搜索同样的匹配方式（Core 新增公开的 `RuntimeTextPattern`，复用引擎的匹配器：匹配方式、ASCII 大小写折叠、标识符边界、正则），正则请求带真实 pattern；成员请求带名字在声明里的范围，名字按标识符边界查找（行内加粗用同一个范围） | PR #121 审查 PR121.47：超过 320 个 UTF-16 单位的行只交出窗口，整行比较永远不等，正则命中一律定位不到，其它模式落在更早的同名子串上；成员 `URL` 的加粗与高亮都落在 `NSURL` 里。降级一步对整段文本匹配一次再按行号取最近，正则只花一份时间预算。`memberSortOrder` 仍按 2026-09-29 不处理。 |
+| 2026-10-09 | 摘要栏说清楚两种不完整的答案：引擎因正则超出时间预算停下时末尾加「incomplete: the pattern takes too long to match」；对端的 RuntimeViewer 不认识搜索命令时整条摘要是「Not supported by this source」，与 Report navigator 同一说法 | PR #121 审查 PR121.06 与 PR121.37 留给界面的一半：前者 Core 已把 `stopReason` 发进搜索摘要，界面没说，用户看到的是一份看似完整的结果；后者原先显示「Search failed: No handler registered for …」。「已合并 N 处协议副本命中」（PR121.72）依赖语料批次新增的摘要字段，合入后再补。 |

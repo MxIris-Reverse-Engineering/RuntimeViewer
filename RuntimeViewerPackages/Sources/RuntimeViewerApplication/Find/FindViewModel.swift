@@ -9,6 +9,11 @@ import MemberwiseInit
 /// document's `FindSession`, which both pages bind to, and the scope chooser
 /// is presented by whichever level the page is on.
 public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route> {
+    /// Every input that writes the query is an event, never a state with an initial value. Both
+    /// sidebar levels have a page bound to the document's one `FindSession`, and a value a page
+    /// replays as it binds — its controls' defaults — would overwrite the query the other page
+    /// set. Read a control's state when it is clicked (`rx.click(with:)`), not through a
+    /// property that may start with a value under some overloads.
     @MemberwiseInit(.public)
     public struct Input {
         /// A choice made in one of the mode path's menus.
@@ -21,8 +26,15 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let searchCommitted: Signal<String>
         /// The bottom filter bar, as typed.
         public let filterString: Driver<String>
+        /// The row the user chose, to open in place.
         public let resultClicked: Signal<FindResultNode>
         public let resultOpenedInNewTab: Signal<FindResultNode>
+        /// Rows the outline collapsed or expanded.
+        public let resultCollapsed: Signal<FindResultNode>
+        public let resultExpanded: Signal<FindResultNode>
+        /// The rows the user selected — by click, arrow key or type-select — never a selection
+        /// the outline put back after its rows changed.
+        public let resultsSelected: Signal<[FindResultNode]>
     }
 
     public struct Output {
@@ -41,19 +53,29 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let scopeMenuItems: Driver<[FindScopeMenuItem]>
         public let searchFieldPlaceholder: Driver<String>
         public let nodes: Driver<[FindResultNode]>
+        /// `nodes` with what to expand and select once the outline has them; drives the outline.
+        public let presentation: Driver<FindResultsPresentation>
         /// `nil` hides the summary bar.
         public let summary: Driver<String?>
         public let isSearching: Driver<Bool>
         public let focusSearchField: Signal<Void>
-        /// Fired after a search delivers its first results, so the outline
-        /// expands them; matches are only useful expanded.
-        public let expandAll: Signal<Void>
     }
 
     private let session: FindSession
 
     @RxObserved
     private var filterString: String = ""
+
+    /// Rows the user collapsed during the search on screen, by identifier; every other row with
+    /// children shows expanded. Read when the rows change, never observed.
+    private var collapsedResultIdentifiers: Set<String> = []
+
+    /// The rows the user selected, by identifier, put back on the same rows when an update moves
+    /// them. Read when the rows change, never observed.
+    private var selectedResultIdentifiers: Set<String> = []
+
+    /// The row the last navigation from this page went to, by identifier.
+    private var lastNavigatedResultIdentifier: String?
 
     public override init(documentState: DocumentState, router: any Router<Route>) {
         self.session = documentState.findSession
@@ -90,30 +112,73 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         .disposed(by: rx.disposeBag)
 
         input.filterString.driveOnNext { [weak self] filterString in
-            self?.filterString = filterString
+            guard let self else { return }
+            self.filterString = filterString
         }
         .disposed(by: rx.disposeBag)
 
         input.resultClicked.emitOnNext { [weak self] node in
-            self?.navigate(to: node, inNewTab: false)
+            guard let self else { return }
+            // The row whose type the document still shows because of it — the second click of a
+            // double-click, or the same row clicked again — is not navigated to again: that would
+            // only scroll back and flash once more. Once the document shows something else, the
+            // row navigates back to it.
+            guard !isShowingNavigation(to: node) else { return }
+            navigate(to: node, inNewTab: false)
         }
         .disposed(by: rx.disposeBag)
 
         input.resultOpenedInNewTab.emitOnNext { [weak self] node in
-            self?.navigate(to: node, inNewTab: true)
+            guard let self else { return }
+            navigate(to: node, inNewTab: true)
         }
         .disposed(by: rx.disposeBag)
 
-        let nodes = Driver.combineLatest(session.$results.asDriver(), $filterString.asDriver()) { results, filterString -> [FindResultNode] in
-            Self.filtered(results.nodes, by: filterString)
+        input.resultCollapsed.emitOnNext { [weak self] node in
+            guard let self else { return }
+            collapsedResultIdentifiers.insert(node.identifier)
         }
+        .disposed(by: rx.disposeBag)
 
-        let expandAll = session.$results.asObservable()
-            .map { !$0.nodes.isEmpty }
-            .distinctUntilChanged()
-            .filter { $0 }
-            .map { _ in () }
-            .asSignal(onErrorSignalWith: .empty())
+        input.resultExpanded.emitOnNext { [weak self] node in
+            guard let self else { return }
+            collapsedResultIdentifiers.remove(node.identifier)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.resultsSelected.emitOnNext { [weak self] nodes in
+            guard let self else { return }
+            selectedResultIdentifiers = Set(nodes.map(\.identifier))
+        }
+        .disposed(by: rx.disposeBag)
+
+        // A new search starts with every row expanded and nothing selected: whatever starts one —
+        // Return, a cleared field, an engine switch, a rerun under other Generation Options —
+        // publishes empty results before anything else.
+        session.$results.asDriver()
+            .filter(\.nodes.isEmpty)
+            .driveOnNext { [weak self] _ in
+                guard let self else { return }
+                collapsedResultIdentifiers = []
+                selectedResultIdentifiers = []
+                lastNavigatedResultIdentifier = nil
+            }
+            .disposed(by: rx.disposeBag)
+
+        let filteredResults = Driver.combineLatest(session.$results.asDriver(), $filterString.asDriver()) { results, filterString in
+            (nodes: Self.filtered(results.nodes, by: filterString), isRelationshipTree: results.query?.mode.relationship != nil)
+        }
+        let nodes = filteredResults.map(\.nodes)
+        let presentation = filteredResults.map { [weak self] filteredResults -> FindResultsPresentation in
+            guard let self else {
+                return FindResultsPresentation(nodes: filteredResults.nodes, nodesToExpand: [], nodesToSelect: [])
+            }
+            return FindResultsPresentation(
+                nodes: filteredResults.nodes,
+                nodesToExpand: FindResultsOutline.nodesToExpand(in: filteredResults.nodes, collapsedIdentifiers: collapsedResultIdentifiers, isRelationshipTree: filteredResults.isRelationshipTree),
+                nodesToSelect: FindResultsOutline.nodes(in: filteredResults.nodes, identifiedBy: selectedResultIdentifiers)
+            )
+        }
 
         let scope = session.$query.asDriver().map(\.scope).distinctUntilChanged()
         let currentImagePath = documentState.$currentImageNode.asDriver().map { $0?.path }
@@ -134,10 +199,10 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             scopeMenuItems: scopeMenuItems,
             searchFieldPlaceholder: session.$query.asDriver().map(\.mode.searchFieldPlaceholder),
             nodes: nodes,
+            presentation: presentation,
             summary: session.$summary.asDriver(),
             isSearching: session.$isSearching.asDriver(),
-            focusSearchField: session.focusSearchFieldRelay.asSignal(),
-            expandAll: expandAll
+            focusSearchField: session.focusSearchFieldRelay.asSignal()
         )
     }
 
@@ -170,7 +235,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         var imagePaths: Set<String> = []
         func collect(_ nodes: [FindResultNode]) {
             for node in nodes {
-                if let imagePath = node.navigationTarget?.object.imagePath {
+                if let imagePath = node.navigationTarget?.imagePath {
                     imagePaths.insert(imagePath)
                 }
                 collect(node.children)
@@ -199,8 +264,16 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
 
     // MARK: - Navigation
 
+    /// Whether the last navigation from this page went to `node`, and the document shows its
+    /// type still.
+    private func isShowingNavigation(to node: FindResultNode) -> Bool {
+        guard node.identifier == lastNavigatedResultIdentifier, let object = node.navigationTarget else { return false }
+        return documentState.selectedRuntimeObject == object
+    }
+
     private func navigate(to node: FindResultNode, inNewTab: Bool) {
-        guard let (object, _) = node.navigationTarget else { return }
+        guard let object = node.navigationTarget else { return }
+        lastNavigatedResultIdentifier = node.identifier
         // The query the rows answer, not the one the mode path and the
         // toggles may have been edited into since.
         let highlight = Self.highlight(for: node, query: session.results.query ?? session.query)
@@ -225,7 +298,8 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
                 lineNumber: match.lineNumber,
                 lineText: match.lineText,
                 matchRangeInLine: match.matchRangeInLine,
-                query: query.mode == .regularExpression ? "" : query.trimmedText,
+                query: query.trimmedText,
+                matchMode: query.mode == .regularExpression ? .regularExpression : query.textMatchStyle.matchMode,
                 isCaseSensitive: query.isCaseSensitive
             )
         case .member(let match):
@@ -233,8 +307,10 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             return ContentHighlightRequest(
                 lineNumber: lineNumber,
                 lineText: match.member.declarationText,
-                matchRangeInLine: nil,
+                // The part of the name the row sets apart, so the pane flashes the same span.
+                matchRangeInLine: FindResultNode.nameRange(of: match).map { RuntimeTextRange(location: $0.location, length: $0.length) },
                 query: match.member.name,
+                matchMode: .matchingWord,
                 isCaseSensitive: true
             )
         case .object, .relationship:
@@ -252,13 +328,22 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         return nodes.compactMap { filtered($0, by: needle) }
     }
 
+    /// Rows the filter does not change are returned as they are — the same instances, which the
+    /// outline's diff takes as unchanged at a glance — and a row it keeps in part is copied with
+    /// the appearance it already has. A keystroke builds nothing it does not have to.
     private static func filtered(_ node: FindResultNode, by needle: String) -> FindResultNode? {
         let matchesItself = node.filterableText.range(of: needle, options: [.caseInsensitive]) != nil
-        let children = node.children.compactMap { filtered($0, by: needle) }
-        if matchesItself, children.isEmpty, !node.children.isEmpty {
+        if matchesItself, node.children.isEmpty {
             return node
         }
-        guard matchesItself || !children.isEmpty else { return nil }
-        return FindResultNode(content: node.content, children: children, identifier: node.identifier)
+        let children = node.children.compactMap { filtered($0, by: needle) }
+        if matchesItself, children.isEmpty {
+            return node
+        }
+        guard !children.isEmpty else { return nil }
+        if children.count == node.children.count, zip(children, node.children).allSatisfy({ child, original in child === original }) {
+            return node
+        }
+        return FindResultNode(copying: node, children: children)
     }
 }

@@ -25,6 +25,9 @@ struct FindViewModelTests {
     private let filterStringRelay = BehaviorRelay<String>(value: "")
     private let resultClickedRelay = PublishRelay<FindResultNode>()
     private let resultOpenedInNewTabRelay = PublishRelay<FindResultNode>()
+    private let resultCollapsedRelay = PublishRelay<FindResultNode>()
+    private let resultExpandedRelay = PublishRelay<FindResultNode>()
+    private let resultsSelectedRelay = PublishRelay<[FindResultNode]>()
 
     private static func makeEnvironmentWithCorpus() async throws -> ViewModelTestEnvironment {
         let engine = try await TestRuntimeEngine.shared()
@@ -157,12 +160,12 @@ struct FindViewModelTests {
         searchCommittedRelay.accept("NSMutableString")
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { nodes in
             nodes.contains { node in
-                if case .object(let object, _) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
+                if case .object(let object) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
                 return false
             }
         }
         let typeNode = try #require(nodes.first { node in
-            if case .object(let object, _) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
+            if case .object(let object) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
             return false
         })
         #expect(!typeNode.children.isEmpty)
@@ -193,17 +196,17 @@ struct FindViewModelTests {
             return
         }
 
-        resultClickedRelay.accept(hit)
-        try await settleMainQueue()
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(hit)
+        }
 
         #expect(environment.documentState.selectedRuntimeObject == match.object)
-        let highlight = try #require(environment.documentState.takeContentHighlight(for: match.object))
+        let (object, highlight) = try #require(Self.highlightingPush(in: routes))
+        #expect(object == match.object)
         #expect(highlight.lineNumber == match.lineNumber)
         #expect(highlight.lineText == match.lineText)
         #expect(highlight.matchRangeInLine == match.matchRangeInLine)
         #expect(highlight.query == "initWithFormat:")
-        // Taken once: the second ask finds nothing.
-        #expect(environment.documentState.takeContentHighlight(for: match.object) == nil)
         #expect(router.triggeredRoutes.isEmpty)
     }
 
@@ -226,10 +229,12 @@ struct FindViewModelTests {
 
         // Toggled, not run.
         caseSensitiveToggledRelay.accept(true)
-        resultClickedRelay.accept(hit)
-        try await settleMainQueue()
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(hit)
+        }
 
-        let highlight = try #require(environment.documentState.takeContentHighlight(for: match.object))
+        let (object, highlight) = try #require(Self.highlightingPush(in: routes))
+        #expect(object == match.object)
         #expect(highlight.isCaseSensitive == false, "the highlight took the case sensitivity being edited")
         #expect(highlight.query == "initwithformat:")
     }
@@ -243,15 +248,21 @@ struct FindViewModelTests {
         searchCommittedRelay.accept("NSMutableString")
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
         let typeNode = try #require(nodes.first)
-        guard case .object(let object, _) = typeNode.content else {
+        guard case .object(let object) = typeNode.content else {
             Issue.record("expected a type row")
             return
         }
 
-        resultClickedRelay.accept(typeNode)
-        try await settleMainQueue()
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(typeNode)
+        }
         #expect(environment.documentState.selectedRuntimeObject == object)
-        #expect(environment.documentState.pendingContentHighlight == nil)
+        // A plain push: nothing for the content pane to highlight.
+        guard routes.count == 1, case .push(let pushedObject) = routes[0] else {
+            Issue.record("expected one plain push, got \(routes)")
+            return
+        }
+        #expect(pushedObject == object)
 
         let tabCount = environment.documentState.tabs.count
         resultOpenedInNewTabRelay.accept(typeNode)
@@ -276,6 +287,92 @@ struct FindViewModelTests {
         #expect(try await nextValue(from: output.nodes) { $0.count == unfiltered.count }.count == unfiltered.count)
     }
 
+    // MARK: - Expansion and selection
+
+    /// The page used to expand every row after every update, so a type the user collapsed opened
+    /// again with the next batch (PR121.07); the outline is now told what to expand.
+    @Test("rows stay expanded except the ones the user collapsed, until a new search")
+    func expansionFollowsTheUsersCollapse() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        searchCommittedRelay.accept("initWithFormat:")
+        let first = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        let collapsedType = try #require(first.nodes.first)
+        #expect(first.nodesToExpand.contains(collapsedType))
+
+        resultCollapsedRelay.accept(collapsedType)
+        // Any update publishes the tree again; the filter bar is the simplest one to make.
+        filterStringRelay.accept("init")
+        let afterCollapse = try await nextValue(from: output.presentation) { $0.nodes.contains(collapsedType) }
+        #expect(!afterCollapse.nodesToExpand.contains(collapsedType))
+
+        resultExpandedRelay.accept(collapsedType)
+        filterStringRelay.accept("initWith")
+        let afterExpand = try await nextValue(from: output.presentation) { $0.nodes.contains(collapsedType) }
+        #expect(afterExpand.nodesToExpand.contains(collapsedType))
+
+        resultCollapsedRelay.accept(collapsedType)
+        filterStringRelay.accept("")
+        searchCommittedRelay.accept("initWithFormat:")
+        _ = try await nextValue(from: output.presentation, timeout: 60) { $0.nodes.isEmpty }
+        let afterNewSearch = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        #expect(afterNewSearch.nodesToExpand.contains(collapsedType))
+    }
+
+    @Test("the hit the user selected is selected again after an update, and forgotten by a new search")
+    func selectionFollowsTheUsersChoice() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        searchCommittedRelay.accept("initWithFormat:")
+        let first = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        let selectedHit = try #require(first.nodes.last?.children.first)
+        resultsSelectedRelay.accept([selectedHit])
+
+        filterStringRelay.accept("initWithFormat")
+        let filtered = try await nextValue(from: output.presentation) { !$0.nodesToSelect.isEmpty }
+        #expect(filtered.nodesToSelect.map(\.identifier) == [selectedHit.identifier])
+
+        filterStringRelay.accept("")
+        searchCommittedRelay.accept("NSMutableString")
+        let afterNewSearch = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        #expect(afterNewSearch.nodesToSelect.isEmpty)
+    }
+
+    /// Decided with the review (PR121.07): a click on the hit whose type is already on screen
+    /// because of it — the second click of a double-click, or the row clicked again — does not
+    /// navigate again. Once the document has moved on, the same row navigates back to it.
+    @Test("clicking the hit on screen again goes nowhere; after the document moved on it navigates back")
+    func clickingTheShownHitAgainGoesNowhere() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        searchCommittedRelay.accept("initWithFormat:")
+        let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
+        let hit = try #require(nodes.first?.children.first)
+        var routes: [SelectionRoute] = []
+        let routeSubscription = environment.documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { routeSubscription.dispose() }
+
+        resultClickedRelay.accept(hit)
+        try await settleMainQueue()
+        #expect(routes.count == 1)
+
+        resultClickedRelay.accept(hit)
+        try await settleMainQueue()
+        #expect(routes.count == 1, "the second click navigated again: \(routes)")
+
+        environment.documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "Elsewhere", kind: .objc(.type(.class)))))
+        resultClickedRelay.accept(hit)
+        try await settleMainQueue()
+        #expect(routes.count == 3)
+        #expect(environment.documentState.selectedRuntimeObject == hit.navigationTarget)
+    }
+
     // MARK: - Members
 
     @Test("a member search lists members of the chosen kind and highlights their declaration line")
@@ -297,11 +394,37 @@ struct FindViewModelTests {
         #expect(match.member.kind == .objcMethod)
         #expect(match.member.name.contains("initWithFormat:"))
 
-        resultClickedRelay.accept(member)
-        try await settleMainQueue()
-        let highlight = try #require(environment.documentState.takeContentHighlight(for: match.object))
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(member)
+        }
+        let (_, highlight) = try #require(Self.highlightingPush(in: routes))
         #expect(highlight.lineNumber == match.member.lineNumber)
         #expect(highlight.query == match.member.name)
+    }
+
+    @Test("a member hit's highlight lands on the member's name, not inside a type name before it")
+    func memberHighlightLandsOnTheName() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        modePathChoiceSelectedRelay.accept(.mode(.members))
+        memberKindFilterSelectedRelay.accept(.kind(.objcProperty))
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept("URL")
+        let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
+        let member = try #require(nodes.flatMap(\.children).first { node in
+            guard case .member(let match) = node.content else { return false }
+            return match.member.name == "URL" && match.member.lineNumber != nil && match.member.declarationText.contains("NSURL *URL")
+        })
+        guard case .member(let match) = member.content else { return }
+
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(member)
+        }
+        let (_, highlight) = try #require(Self.highlightingPush(in: routes))
+        let declarationText = match.member.declarationText as NSString
+        #expect(highlight.locate(in: match.member.declarationText) == NSRange(location: declarationText.range(of: "*URL").location + 1, length: 3))
     }
 
     // MARK: - Relationships
@@ -318,7 +441,7 @@ struct FindViewModelTests {
         searchCommittedRelay.accept("NSMutableString")
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
         let tree = try #require(nodes.first { node in
-            if case .object(let object, _) = node.content { return object.name == "NSMutableString" }
+            if case .object(let object) = node.content { return object.name == "NSMutableString" }
             return false
         })
         let superclass = try #require(tree.children.first { node in
@@ -345,7 +468,7 @@ struct FindViewModelTests {
 
         // The whole name only: NSString's tree, and not NSMutableString's.
         let rootNames = session.results.nodes.compactMap { node -> String? in
-            if case .object(let object, _) = node.content { return object.displayName }
+            if case .object(let object) = node.content { return object.displayName }
             return nil
         }
         #expect(rootNames.contains("NSString"))
@@ -611,7 +734,7 @@ struct FindViewModelTests {
 
         // NSObject itself is libobjc's; what is listed under it is Foundation's.
         let tree = try #require(nodes.first { node in
-            if case .object(let object, _) = node.content { return object.name == "NSObject" && object.kind == .objc(.type(.class)) }
+            if case .object(let object) = node.content { return object.name == "NSObject" && object.kind == .objc(.type(.class)) }
             return false
         })
         func everyNode(of nodes: [FindResultNode]) -> [FindResultNode] {
@@ -627,8 +750,25 @@ struct FindViewModelTests {
 
     // MARK: - Helpers
 
+    /// The selection routes `action` sets off, as the main coordinator hears them: a hit's
+    /// highlight travels on the route, to the content pane.
+    private func selectionRoutes(of environment: ViewModelTestEnvironment, during action: () -> Void) async throws -> [SelectionRoute] {
+        var routes: [SelectionRoute] = []
+        let routeSubscription = environment.documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { routeSubscription.dispose() }
+        action()
+        try await settleMainQueue()
+        return routes
+    }
+
+    /// The object and highlight of the last route when it is a highlighting push.
+    private static func highlightingPush(in routes: [SelectionRoute]) -> (RuntimeObject, ContentHighlightRequest)? {
+        guard case .pushHighlighting(let object, let highlight)? = routes.last else { return nil }
+        return (object, highlight)
+    }
+
     private static func imagePath(of node: FindResultNode) -> String? {
-        if case .object(let object, _) = node.content {
+        if case .object(let object) = node.content {
             return object.imagePath
         }
         return nil
@@ -653,7 +793,10 @@ struct FindViewModelTests {
             searchCommitted: searchCommittedRelay.asSignal(),
             filterString: filterStringRelay.asDriver(),
             resultClicked: resultClickedRelay.asSignal(),
-            resultOpenedInNewTab: resultOpenedInNewTabRelay.asSignal()
+            resultOpenedInNewTab: resultOpenedInNewTabRelay.asSignal(),
+            resultCollapsed: resultCollapsedRelay.asSignal(),
+            resultExpanded: resultExpandedRelay.asSignal(),
+            resultsSelected: resultsSelectedRelay.asSignal()
         ))
         return (viewModel, output)
     }

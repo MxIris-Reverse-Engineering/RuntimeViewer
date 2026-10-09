@@ -68,21 +68,32 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @RxObserved
     public private(set) var attributedString: NSAttributedString?
 
-    /// The range a pending `ContentHighlightRequest` resolved to in the text
-    /// on screen — the Find navigator's hit, once the interface is rendered.
+    /// The range the `ContentHighlightRequest` this ViewModel was built with
+    /// resolved to in the text on screen — the Find navigator's hit, once the
+    /// interface is rendered.
     private let highlightRangeRelay = PublishRelay<NSRange>()
 
-    public convenience init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<ContentRoute>) {
-        self.init(runtimeObject: runtimeObject, documentState: documentState, router: router, interfaceProvider: nil)
+    /// The Find navigator hit this ViewModel was built to show, until its first render uses it.
+    /// Owned here, not by the document, so it goes away with the navigation that brought it: a
+    /// navigation that moves on, an interface that cannot be fetched or an engine switch drops
+    /// the ViewModel and the request with it.
+    private var pendingHighlightRequest: ContentHighlightRequest?
+
+    /// - Parameter highlightRequest: where the Find navigator's hit sits, to reveal once the
+    ///   interface is first on screen; `nil` for every other way of showing an object.
+    public convenience init(runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, documentState: DocumentState, router: any Router<ContentRoute>) {
+        self.init(runtimeObject: runtimeObject, highlightRequest: highlightRequest, documentState: documentState, router: router, interfaceProvider: nil)
     }
 
     init(
         runtimeObject: RuntimeObject,
+        highlightRequest: ContentHighlightRequest? = nil,
         documentState: DocumentState,
         router: any Router<ContentRoute>,
         interfaceProvider: InterfaceProvider?
     ) {
         self.runtimeObject = runtimeObject
+        self.pendingHighlightRequest = highlightRequest
         self.theme = ResolvedTheme.fallback
         let interfaceCache = documentState.interfaceCache
         let contentLoadingDelay = Self.contentLoadingDelay()
@@ -210,14 +221,15 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
 
-        // A Find navigator hit arrives as a pending highlight on the document;
-        // once this object's text is rendered, locate it in that text (off
+        // A Find navigator hit arrives with the route that built this ViewModel;
+        // once the object's text is first rendered, locate it in that text (off
         // main — the text can be megabytes) and hand the range to the view.
-        // Taken, not observed: the request belongs to exactly one render.
+        // Used once: later renders (theme, options) leave the scroll position alone.
         $renderedInterface
             .compactMap { $0 }
             .flatMapLatest { [weak self] rendered -> Observable<NSRange?> in
-                guard let self, let request = self.documentState.takeContentHighlight(for: self.runtimeObject) else { return .empty() }
+                guard let self, let request = self.pendingHighlightRequest else { return .empty() }
+                self.pendingHighlightRequest = nil
                 let displayedText = rendered.attributedString.string
                 return Observable.just(())
                     .observe(on: renderScheduler)
