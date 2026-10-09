@@ -56,7 +56,7 @@ struct FindResultsOutlineTests {
         fixture.outlineView.selectRowIndexes(IndexSet(integer: fixture.outlineView.row(forItem: selectedHit)), byExtendingSelection: false)
 
         // The filter keeps two of the three hits — new rows, the same identifiers as before.
-        let filtered = FindResultNode.object(object, matchCount: 2, children: [
+        let filtered = FindResultNode.object(object, children: [
             FindResultNode.textMatch(first, index: 0),
             FindResultNode.textMatch(third, index: 2),
         ])
@@ -171,7 +171,7 @@ extension FindResultsOutlineTests {
 
         func typeNode(named name: String) -> FindResultNode? {
             displayedNodes.first { node in
-                if case .object(let object, _) = node.content { return object.name == name }
+                if case .object(let object) = node.content { return object.name == name }
                 return false
             }
         }

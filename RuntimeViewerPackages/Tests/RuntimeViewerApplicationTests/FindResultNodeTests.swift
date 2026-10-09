@@ -43,7 +43,7 @@ struct FindResultNodeTests {
     func contentComparesEveryLevel() {
         let object = FindResultFixtures.object(named: "Root")
         func tree(grandchildName: String) -> FindResultNode {
-            FindResultNode.object(object, matchCount: 2, children: [
+            FindResultNode.object(object, children: [
                 FindResultFixtures.relationship(named: "First", path: "tree", children: [
                     FindResultFixtures.relationship(named: grandchildName, path: "tree/First"),
                 ]),

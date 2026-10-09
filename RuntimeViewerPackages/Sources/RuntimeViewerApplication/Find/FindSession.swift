@@ -504,7 +504,7 @@ public final class FindSession {
                 FindResultNode.relationship(node, path: "tree|\(tree.root.kind)|\(tree.root.name)|\(tree.root.imagePath)#\(index)")
             }
             relatedTypeCount += Self.count(children)
-            nodes.append(FindResultNode.object(tree.root, matchCount: children.count, children: children))
+            nodes.append(FindResultNode.object(tree.root, children: children))
         }
         var relationshipResults = Results()
         relationshipResults.nodes = nodes
@@ -705,7 +705,7 @@ public final class FindSession {
                 }
                 let matches = matchesByObject[object.key] ?? []
                 let children = matches.enumerated().map { index, match in match.resultNode(index: index) }
-                let node = FindResultNode.object(object, matchCount: matches.count, children: children)
+                let node = FindResultNode.object(object, children: children)
                 nodesByObject[object.key] = node
                 nodes.append(node)
             }

@@ -6649,7 +6649,7 @@ func partialFilterSharesTheAppearance() throws {
 
 - **严重度**：Cleanup
 - **审查编号**：S6
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，行为不变，没有新增测试：`navigationTarget` 只返回 `RuntimeObject?`，`Content.object` 去掉 `matchCount`，`object(_:children:)` 工厂随之去掉这个参数；PR121.39 没有走「把高亮存进节点」那条路（高亮按 `Results.query` 计算），所以不恢复高亮位。由全部 Find 套件覆盖（`--filter Find` 跑 Application 测试，110 个既有测试全过）；测试里的模式匹配与夹具一并改。同类：无
 
 **问题**：
 - `FindResultNode.navigationTarget`（`FindResultNode.swift:55`）返回 `(object, highlight)`，但每个分支的 `highlight` 都写死成 `nil`。真正的高亮由 `FindViewModel.highlight(for:query:)` 另外计算，所以元组的第二位只是个永远为空的占位。

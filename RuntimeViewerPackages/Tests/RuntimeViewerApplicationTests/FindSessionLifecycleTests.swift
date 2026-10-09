@@ -234,7 +234,7 @@ struct FindSessionLifecycleTests {
     }
 
     static func imagePath(of node: FindResultNode) -> String? {
-        if case .object(let object, _) = node.content {
+        if case .object(let object) = node.content {
             return object.imagePath
         }
         return nil

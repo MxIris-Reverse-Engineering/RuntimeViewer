@@ -160,12 +160,12 @@ struct FindViewModelTests {
         searchCommittedRelay.accept("NSMutableString")
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { nodes in
             nodes.contains { node in
-                if case .object(let object, _) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
+                if case .object(let object) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
                 return false
             }
         }
         let typeNode = try #require(nodes.first { node in
-            if case .object(let object, _) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
+            if case .object(let object) = node.content { return object.name == "NSMutableString" && object.kind == .objc(.type(.class)) }
             return false
         })
         #expect(!typeNode.children.isEmpty)
@@ -246,7 +246,7 @@ struct FindViewModelTests {
         searchCommittedRelay.accept("NSMutableString")
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
         let typeNode = try #require(nodes.first)
-        guard case .object(let object, _) = typeNode.content else {
+        guard case .object(let object) = typeNode.content else {
             Issue.record("expected a type row")
             return
         }
@@ -362,7 +362,7 @@ struct FindViewModelTests {
         resultClickedRelay.accept(hit)
         try await settleMainQueue()
         #expect(routes.count == 3)
-        #expect(environment.documentState.selectedRuntimeObject == hit.navigationTarget?.object)
+        #expect(environment.documentState.selectedRuntimeObject == hit.navigationTarget)
     }
 
     // MARK: - Members
@@ -407,7 +407,7 @@ struct FindViewModelTests {
         searchCommittedRelay.accept("NSMutableString")
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
         let tree = try #require(nodes.first { node in
-            if case .object(let object, _) = node.content { return object.name == "NSMutableString" }
+            if case .object(let object) = node.content { return object.name == "NSMutableString" }
             return false
         })
         let superclass = try #require(tree.children.first { node in
@@ -434,7 +434,7 @@ struct FindViewModelTests {
 
         // The whole name only: NSString's tree, and not NSMutableString's.
         let rootNames = session.results.nodes.compactMap { node -> String? in
-            if case .object(let object, _) = node.content { return object.displayName }
+            if case .object(let object) = node.content { return object.displayName }
             return nil
         }
         #expect(rootNames.contains("NSString"))
@@ -700,7 +700,7 @@ struct FindViewModelTests {
 
         // NSObject itself is libobjc's; what is listed under it is Foundation's.
         let tree = try #require(nodes.first { node in
-            if case .object(let object, _) = node.content { return object.name == "NSObject" && object.kind == .objc(.type(.class)) }
+            if case .object(let object) = node.content { return object.name == "NSObject" && object.kind == .objc(.type(.class)) }
             return false
         })
         func everyNode(of nodes: [FindResultNode]) -> [FindResultNode] {
@@ -717,7 +717,7 @@ struct FindViewModelTests {
     // MARK: - Helpers
 
     private static func imagePath(of node: FindResultNode) -> String? {
-        if case .object(let object, _) = node.content {
+        if case .object(let object) = node.content {
             return object.imagePath
         }
         return nil

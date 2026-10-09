@@ -24,7 +24,7 @@ enum FindResultFixtures {
         let hitNodes = hits.enumerated().map { index, hit in
             FindResultNode.textMatch(hit, index: index)
         }
-        return FindResultNode.object(object, matchCount: hitNodes.count, children: hitNodes)
+        return FindResultNode.object(object, children: hitNodes)
     }
 
     /// A type row named `name` with `hitCount` hits, on lines 1 through `hitCount`.

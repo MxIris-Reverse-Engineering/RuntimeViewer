@@ -36,8 +36,8 @@ public struct FindResultCellAppearance: Equatable {
 /// what lets the outline render it without a ViewModel per row.
 public final class FindResultNode: NSObject, @unchecked Sendable {
     public enum Content: Hashable {
-        /// A type grouping the hits or members found in it.
-        case object(RuntimeObject, matchCount: Int)
+        /// A type grouping the hits or members found in it, which are its children.
+        case object(RuntimeObject)
         case textMatch(RuntimeInterfaceSearchMatch)
         case member(RuntimeMemberMatch)
         /// A node of a relationship tree. `object` is `nil` for a type no
@@ -53,18 +53,19 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     public let appearance: FindResultCellAppearance
 
-    /// The type a click navigates to, and where in it, or `nil` for an
-    /// unresolved relationship node.
-    public var navigationTarget: (object: RuntimeObject, highlight: ContentHighlightRequest?)? {
+    /// The type a click navigates to, or `nil` for an unresolved
+    /// relationship node. Where in the type a hit sits is `FindViewModel`'s to
+    /// work out, from the query the results answer.
+    public var navigationTarget: RuntimeObject? {
         switch content {
-        case .object(let object, _):
-            return (object, nil)
+        case .object(let object):
+            return object
         case .textMatch(let match):
-            return (match.object, nil)
+            return match.object
         case .member(let match):
-            return (match.object, nil)
+            return match.object
         case .relationship(_, let object):
-            return object.map { ($0, nil) }
+            return object
         }
     }
 
@@ -77,7 +78,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
     /// The text the bottom filter bar matches against.
     public var filterableText: String {
         switch content {
-        case .object(let object, _): object.displayName
+        case .object(let object): object.displayName
         case .textMatch(let match): match.lineText
         case .member(let match): match.member.declarationText
         case .relationship(let name, _): name
@@ -122,8 +123,8 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     // MARK: - Construction
 
-    public static func object(_ object: RuntimeObject, matchCount: Int, children: [FindResultNode]) -> FindResultNode {
-        FindResultNode(content: .object(object, matchCount: matchCount), children: children, identifier: "object|\(object.kind)|\(object.name)|\(object.imagePath)")
+    public static func object(_ object: RuntimeObject, children: [FindResultNode]) -> FindResultNode {
+        FindResultNode(content: .object(object), children: children, identifier: "object|\(object.kind)|\(object.name)|\(object.imagePath)")
     }
 
     public static func textMatch(_ match: RuntimeInterfaceSearchMatch, index: Int) -> FindResultNode {
@@ -149,7 +150,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         var appearance = FindResultCellAppearance()
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         switch content {
-        case .object(let object, _):
+        case .object(let object):
             appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
             appearance.title = titleWithSubtitle(object.displayName, subtitle: object.imageName)
         case .textMatch(let match):

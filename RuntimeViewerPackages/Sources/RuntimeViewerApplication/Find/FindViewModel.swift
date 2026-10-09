@@ -228,7 +228,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         var imagePaths: Set<String> = []
         func collect(_ nodes: [FindResultNode]) {
             for node in nodes {
-                if let imagePath = node.navigationTarget?.object.imagePath {
+                if let imagePath = node.navigationTarget?.imagePath {
                     imagePaths.insert(imagePath)
                 }
                 collect(node.children)
@@ -260,12 +260,12 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     /// Whether the last navigation from this page went to `node`, and the document shows its
     /// type still.
     private func isShowingNavigation(to node: FindResultNode) -> Bool {
-        guard node.identifier == lastNavigatedResultIdentifier, let (object, _) = node.navigationTarget else { return false }
+        guard node.identifier == lastNavigatedResultIdentifier, let object = node.navigationTarget else { return false }
         return documentState.selectedRuntimeObject == object
     }
 
     private func navigate(to node: FindResultNode, inNewTab: Bool) {
-        guard let (object, _) = node.navigationTarget else { return }
+        guard let object = node.navigationTarget else { return }
         lastNavigatedResultIdentifier = node.identifier
         // The query the rows answer, not the one the mode path and the
         // toggles may have been edited into since.
