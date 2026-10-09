@@ -663,9 +663,14 @@ public final class FindSession {
     /// Hits or members grouped by the type they are in, in the order types
     /// first appeared; batches arrive per image, so a type's matches are
     /// contiguous.
-    private struct MatchGroups<Match: FindGroupedMatch> {
+    struct MatchGroups<Match: FindGroupedMatch> {
         private var matchesByObject: [RuntimeObjectKey: [Match]] = [:]
         private var order: [RuntimeObject] = []
+        /// Each type's row, built once and kept until the type receives more
+        /// matches. A batch holds one image's matches, so it builds rows for
+        /// its own types only; every other row stays the instance the outline
+        /// already shows, which its diff takes as unchanged at a glance.
+        private var nodesByObject: [RuntimeObjectKey: FindResultNode] = [:]
         private(set) var matchCount = 0
         /// Matches collected by the search under way, for its interim count.
         private(set) var matchCountSinceLastFinish = 0
@@ -678,6 +683,7 @@ public final class FindSession {
                     order.append(match.object)
                 }
                 matchesByObject[match.object.key, default: []].append(match)
+                nodesByObject[match.object.key] = nil
                 matchCount += 1
                 matchCountSinceLastFinish += 1
             }
@@ -687,20 +693,31 @@ public final class FindSession {
             matchCountSinceLastFinish = 0
         }
 
-        func nodes() -> [FindResultNode] {
-            order.map { object in
+        /// The rows, in the order types first appeared: the kept row of every
+        /// type that received nothing since, and a new row for each that did.
+        mutating func nodes() -> [FindResultNode] {
+            var nodes: [FindResultNode] = []
+            nodes.reserveCapacity(order.count)
+            for object in order {
+                if let node = nodesByObject[object.key] {
+                    nodes.append(node)
+                    continue
+                }
                 let matches = matchesByObject[object.key] ?? []
                 let children = matches.enumerated().map { index, match in match.resultNode(index: index) }
-                return FindResultNode.object(object, matchCount: matches.count, children: children)
+                let node = FindResultNode.object(object, matchCount: matches.count, children: children)
+                nodesByObject[object.key] = node
+                nodes.append(node)
             }
+            return nodes
         }
     }
 }
 
 /// A text hit or a member match, as the results tree groups it under the
-/// type it is in. Private to this file, so the two conformances below are
-/// this module's business alone.
-private protocol FindGroupedMatch {
+/// type it is in. Internal, so the two conformances below are this module's
+/// business alone.
+protocol FindGroupedMatch {
     var object: RuntimeObject { get }
 
     /// The row the match makes under its type, the `index`th of them.
@@ -708,13 +725,13 @@ private protocol FindGroupedMatch {
 }
 
 extension RuntimeInterfaceSearchMatch: FindGroupedMatch {
-    fileprivate func resultNode(index: Int) -> FindResultNode {
+    func resultNode(index: Int) -> FindResultNode {
         .textMatch(self, index: index)
     }
 }
 
 extension RuntimeMemberMatch: FindGroupedMatch {
-    fileprivate func resultNode(index: Int) -> FindResultNode {
+    func resultNode(index: Int) -> FindResultNode {
         .member(self, index: index)
     }
 }

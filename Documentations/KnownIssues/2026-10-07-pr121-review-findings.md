@@ -6372,7 +6372,7 @@ func memberHighlightLandsOnTheName() async throws {
 
 - **严重度**：Minor
 - **审查编号**：F1
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindSessionGroupingTests.laterBatchKeepsEarlierRows`、`repeatedRequestBuildsNothing`（修前都红：每次 `nodes()` 都为每个类型新建行，`===` 不成立）；`moreHitsRebuildTheirType` 守住「收到新命中的类型要换新行」，修前修后都绿。与草案的出入：PR121.41 已把两份分组合成一个泛型 `MatchGroups<Match>`，缓存只写一份；`FindGroupedMatch` 随之从 `private` 放宽到 internal（泛型参数的约束不能比类型本身更私有）。关系模式的自动展开规则（树不超过 500 行时全部展开，否则只展开第一层）随 PR121.07 的展开策略一起落地，见那一条
 
 **问题**：文本 / 成员搜索的结果是一批一批（每个镜像一批）送到 `FindSession` 的。每来一批，`TextMatchGroups.nodes()` 和 `MemberMatchGroups.nodes()`（`FindSession.swift:491`、`:523`）都会把**所有**类型、**所有**命中重新 `init` 一遍。`FindResultNode` 在 `init` 里就构建带属性的标题，所以命中越多、批次越多，重复的工作就越多。两层侧栏各有一个 `FindViewModel` 绑着同一个 session，所以每一批都要处理两份；看不见的那一层也逃不掉。
 
