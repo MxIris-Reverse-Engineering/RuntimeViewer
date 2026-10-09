@@ -7943,7 +7943,8 @@ func unfollowedBuildIsNotCancellable() async throws {
 
 - **严重度**：Minor
 - **审查编号**：C20（A4-5、B4）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`ReportViewModelTests.flattenedAlwaysIndexFailureShowsItsReason`（纯函数）。修前红：状态是 `.failed(message: "1 of 1 images failed to index")`、说明是 "1 image · 1 failed"、tooltip 只有根路径；修后状态带原始原因 "image not found"、说明 "Failed"、tooltip 是「路径 + 换行 + 原因」，`ReportViewModelTests` 全过
+- **落地与偏离**：比草案多一个条件：只在批次已结束时改用镜像的失败状态（`batch.isFinished`）。镜像失败与批次收尾之间可能有一次刷新，那时批次还在跑，照旧显示进行中，不提前把行改成「已失败、不可取消」。
 
 **问题**：Report 页把只含一个镜像的 Always Index 批次压平，不再给镜像单独一行（ReportViewModel.swift:189）。这样一来，那个镜像的 `.failed(message:)` 就没有地方显示。批次行本身只写一句通用的 "1 of 1 images failed to index"（:275），用户看不出失败的原因，比如镜像不存在、加载报错。
 

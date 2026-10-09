@@ -190,7 +190,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         }
         // The manager appends batches as they start, and history is newest first already.
         for batch in batches.reversed() + history {
-            let showsItems = !(batch.reason.category == .alwaysIndex && batch.items.count <= 1)
+            let showsItems = ReportOutline.showsItems(of: batch)
             let items = showsItems ? batch.items.map { item in
                 node(.indexingItem(batchID: batch.id, imagePath: item.id)) { ReportOutline.configure($0, for: item) }
             } : []
@@ -260,7 +260,19 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 /// How the Report navigator's rows read and how its filter bar narrows them — kept apart from the
 /// generic `ReportViewModel`, which can hold no static stored values, and tested on its own.
 enum ReportOutline {
+    /// Whether a batch shows a row per image. An Always Index entry names one image, so a batch of
+    /// one shows none: the batch's own row stands for the image.
+    static func showsItems(of batch: RuntimeIndexingBatch) -> Bool {
+        !(batch.reason.category == .alwaysIndex && batch.items.count <= 1)
+    }
+
     static func configure(_ cellViewModel: ReportCellViewModel, for batch: RuntimeIndexingBatch) {
+        // The batch's row stands for its only image, which has no row of its own to say why it
+        // failed — what the toolbar popover showed as `path — message`.
+        if !showsItems(of: batch), batch.isFinished, let item = batch.items.first, case .failed(let message) = item.state {
+            cellViewModel.update(icon: indexingIcon, title: title(for: batch.reason), detail: "Failed", status: .failed(message: message), toolTip: "\(item.id)\n\(message)")
+            return
+        }
         let isRunning = !batch.isFinished
         var detail: String
         if isRunning {

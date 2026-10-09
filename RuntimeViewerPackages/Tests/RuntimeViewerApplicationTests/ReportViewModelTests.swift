@@ -233,6 +233,32 @@ struct ReportViewModelTests {
         #expect(filtered.first?.children.map(\.identifier) == [buildingRow.identifier, queuedRow.identifier])
     }
 
+    /// An Always Index batch of one image shows no row for the image — the batch's row stands for
+    /// it — so the image's own failure had nowhere to show, and the row said only "1 of 1 images
+    /// failed to index". The toolbar popover it replaced listed the image as `path — message`
+    /// (PR121.56).
+    @Test("a single-image Always Index batch that failed says why on its own row")
+    func flattenedAlwaysIndexFailureShowsItsReason() {
+        let imagePath = "/usr/lib/libMissing.dylib"
+        let batch = RuntimeIndexingBatch(
+            id: RuntimeIndexingBatchID(),
+            rootImagePath: imagePath,
+            depth: 0,
+            reason: .alwaysIndex(identifier: "libMissing.dylib"),
+            items: [RuntimeIndexingTaskItem(id: imagePath, resolvedPath: imagePath, state: .failed(message: "image not found"), hasPriorityBoost: false)],
+            isCancelled: false,
+            isFinished: true
+        )
+        let cellViewModel = ReportCellViewModel(identifier: .indexingBatch(batch.id))
+
+        ReportOutline.configure(cellViewModel, for: batch)
+
+        #expect(!ReportOutline.showsItems(of: batch))
+        #expect(cellViewModel.appearance.status == .failed(message: "image not found"))
+        #expect(cellViewModel.appearance.detail == "Failed")
+        #expect(cellViewModel.appearance.toolTip == "\(imagePath)\nimage not found")
+    }
+
     // MARK: - Helpers
 
     private static func row(
