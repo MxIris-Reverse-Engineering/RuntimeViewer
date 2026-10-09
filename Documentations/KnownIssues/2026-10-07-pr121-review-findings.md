@@ -1816,7 +1816,7 @@ func cancelReachesTheServingProcess() async throws {
 
 - **严重度**：Major
 - **审查编号**：C24、C25（含三处同类：静态性不分、一行登记两次、跨种类回退；另含选择子 `foo` / `foo:` 互抢）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeMemberDeclarationLocatorTests` 的 `objectiveCMembersSharingAName`（修前 `[11, 7, 2, 4, 8, 9, 5, 11, 12]`，九个成员错八个）、`swiftLabelsAndStaticMembers`（修前两个 `static func` 落在 `init` 行、两个 `zero` 互换）、`memberPrintedUnderBothVerdicts`（修前默认实现的 `summary` 落在需求第二遍渲染的 `}var` 行上）、`operatorFunction`（修前运算符函数没有行号，`static func _` 落在运算符那一行）；端到端不变量 `RuntimeInterfaceCorpusNestingTests.locatedLinesDeclareTheirMembers`（修前 Foundation 上 146 个成员落在别的声明行上，例如 `NSMorphology` 的 property `_adjectival` 落在同名 ivar 行、ivar 落在 property 行；Swift 函数只定位到 6063 / 6800）。修后 0 个错位，定位率 property 1988 / 1988、ivar 2479 / 2479、方法 14164 / 14168（差的 4 个是含空标签的选择子，如 `executeWithInterpreter:arguments::`，渲染器把空标签折掉了，修前同样定位不到）、Swift 函数 6800 / 6800；门槛按实测定为 99%，Swift 函数一并纳入。与草案的出入：（1）草案以为同一成员的两遍渲染（两种 ObjC 裁决）在同一行，实测函数在同一行、变量与下标的第二遍接在第一遍的闭合花括号后面（`    }var summary…`），所以另加「以 `}` 开头的行不登记 Swift 键」；ObjC 不受影响，内联展开的 struct ivar 正是 `} _flags;`。Foundation 里没有这种双重渲染（0 处），由单元测试守住。（2）草案「`func` 行的第一个函数片段是基本名」对运算符函数不成立：打印器把运算符当纯文本写在 `func` 后，第一个函数片段是参数标签 `_`；改为认紧跟 `func` 的那段。（3）按 S4 的交接，定位器不再生成行文本，只记行号（声明行由 `displayedMember(at:)` 读回），切行改用 `RuntimeInterfaceLineTable`；原有两个用例改为经条目读回声明行。另记（未改）：变量在两种裁决下各印一遍时，成员定位在第一遍（信任选择子证据）那一行，默认选项把这一遍整行投影掉，成员搜索会把它当作隐藏；修前同样如此，Foundation 上 0 例
 
 **问题**：Members 搜索给每个成员记一个声明行号，定位器的做法是让成员认领「第一个带它名字、还没被认领的行」。可是不同种类的成员会同名：ObjC 的 property 和同名 ivar、匿名 struct 里的位域字段和读它的 property、类属性和实例属性、Swift 的 `init(degrees:)` 参数标签和 `static func degrees(_:)`。ObjC 先打印 ivar 块，Swift 先打印 init，于是 property 落到 ivar 行或位域行，`static func degrees` 落到 init 行。点开命中会跳到错的行；开着 Strip Synthesized Ivars 时，property 所在的那一行被隐藏，property 干脆从结果里消失。
 

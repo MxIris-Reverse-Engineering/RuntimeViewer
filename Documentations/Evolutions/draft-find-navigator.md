@@ -244,9 +244,14 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   `objcProperty / objcMethod / objcIvar / swiftField / swiftEnumCase / swiftFunction / swiftVariable /
   swiftSubscript / swiftInitializer`。用户要的六类（ObjC Property、Methods、Swift Field、Function、Variable、
   Subscript）是面板上的过滤组，ivar / enum case / initializer 归入相邻组或单列，由 UI 定。
-- **行号来自同一趟打印的 span 序列**：打印完成后顺序遍历 Frozen 的 `.member(.declaration)` /
-  `.function(.declaration)` / `.variable` span，与结构成员按名字顺序对齐（ObjC 多段 selector 取第一段对齐）。对不上
-  的成员 `lineNumber` 为空，仍可搜、点击只跳到类型。
+- **行号来自同一趟打印的 span 序列**：打印完成后顺序遍历 Frozen 的 span（行按 `RuntimeInterfaceLineTable` 切），
+  按「种类 + 是否静态 + 名字」对齐，每种成员只认渲染器给它用的那种 span：ObjC property 只认 `@property` 行的
+  `.member(.declaration)`（行上有 `class` 即类属性），ivar 只认 `@interface` 那组 ivar 花括号内深度 1 的 `.variable`，
+  方法认 `-` / `+` 行拼出的完整选择子；Swift 的 field / enum case / variable 认 `.member(.declaration)` 或
+  `.variable`（行上有 `static` / `class` 即静态），函数认紧跟 `func` 的名字（运算符函数是 `func` 后的纯文本），
+  `init` / `subscript` 只认关键字。同一行同一个键只登记一次；同一成员在两种 ObjC 裁决下各印一遍时，变量的第二遍接在
+  第一遍的闭合花括号行上，这种以 `}` 开头的行不登记 Swift 键。重载按打印顺序认领。对不上的成员 `lineNumber` 为空，
+  仍可搜、点击只跳到类型。定位器只记行号，声明行由条目在成员被收集时读回。
 - 查询：名字按匹配方式匹配（Containing / Matching Word / Starting With / Ending With / 正则，规则与文本模式相同，
   见 §7；2026-10-03 之前只有子串），大小写可选，`kinds` 过滤；`RuntimeMemberMatch { object, member, matchRangeInName }`。
   `resultLimit` / truncated 语义与文本相同。
@@ -794,3 +799,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-08 | 带 Generation Options 的字面量文本搜索先问「投影后可能有命中吗」，答「不可能」的条目不建投影：原文有命中、或任一接缝（隐藏内容被删掉的位置）前后各 needle 长度内有横跨或紧挨接缝的命中才建；正则照旧先投影 | PR #121 审查 PR121.21：建投影要把条目复制三四份，而绝大多数条目对一个具体查询没有命中。判断必须不漏报：投影里的命中要么就是原文的命中，要么碰到接缝，所以逐个检查接缝附近的每个起点，不能用贪心扫描（它会被窗口边缘的重叠候选带偏）。Foundation 上（Debug，默认选项）投影次数从 2290 降到 25–1452，预检本身 135–264 ms，建全部投影约 1.25 s；固定种子的随机对拍对四种匹配方式各 6000 次检查没有一次漏报。 |
 | 2026-10-08 | 语料条目里的成员只存名字（与名字共用存储），声明行在成员被收集时从接口文本里读回；常驻预算补算成员结构体与行区间、成员名、嵌套块区间和对象 | PR #121 审查 PR121.25：预算只算文本与几张表，而定位器给每个成员存了一份去掉缩进的整行，成员密集的类型几乎多存一遍文本，Report navigator 显示的大小也偏小。Foundation 上（Debug，按驱逐语料释放的 malloc 量计）：修前预算 14.0 MB、实际 25.8 MB；修后预算 18.0 MB、实际 21.7 MB。 |
 | 2026-10-08 | 文本与成员搜索的进度过线时改为「对象表 + 带下标的命中」（`RuntimeObjectIndexedBatch`），一批里每个对象只发一次；`searchInterfaces` / `searchMembers` 在客户端解包回原来的命中，App 侧接口不变；对端发来越界的下标只丢那一条 | PR #121 审查 PR121.22：每条命中都带着完整的 `RuntimeObject`（含递归的 `children`），一个接口里常有几十条命中，同一个对象连同子树在一批里重复几十次。两个命令是本 PR 新增的、从未发布，现在改没有兼容负担，发版后再改就得兼容两种格式。Foundation 上收满 1000 条时批次小 26%–40%。 |
+| 2026-10-09 | 成员定位改按「种类 + 是否静态 + 名字」对齐，每种成员只认渲染器给它用的那种 span，删掉跨种类回退；同一成员的两遍渲染只认一行；函数认紧跟 `func` 的名字，运算符函数也能定位；定位器改用 `RuntimeInterfaceLineTable` 切行、不再生成行文本 | PR #121 审查 PR121.10：按名字认领时，property 会抢同名 ivar 行和位域字段行，`static func degrees` 会抢 `init(degrees:)` 行，类属性与实例属性互换。Foundation 上（本机 macOS 26.7）修前有 146 个成员落在别的声明行上，修后 0 个；ObjC property / ivar 全部定位，方法只差 4 个空标签选择子（`executeWithInterpreter:arguments::`，渲染器把空标签折掉了）。草案假设两遍渲染在同一行，实测变量的第二遍接在第一遍的 `}` 后面，所以加了「以 `}` 开头的行不登记 Swift 键」（ObjC 不受影响：内联展开的 struct ivar 正是 `} _flags;`）。草案的「func 行的第一个函数片段」会把运算符的参数标签 `_` 当名字，改为认紧跟 `func` 的那段：Swift 函数从 6063 / 6800 升到 6800 / 6800。 |

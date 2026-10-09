@@ -65,6 +65,70 @@ struct RuntimeInterfaceCorpusNestingTests {
         #expect(misplaced.isEmpty, "\(misplaced.count) of \(locatedCount) members located inside a nested type, e.g.\n\(misplaced.prefix(10).joined(separator: "\n"))")
     }
 
+    /// Members of different kinds share names — an Objective-C property and
+    /// its ivar, a class and an instance property, an initializer's label and
+    /// a static function — so a member located by its name alone lands on
+    /// another declaration's line. Checked with words only, so the check does
+    /// not lean on the span rules the locator uses.
+    @Test("every located member's line declares a member of its own kind")
+    func locatedLinesDeclareTheirMembers() async throws {
+        let entries = try await Self.foundationEntries()
+        var misplaced: [String] = []
+        var listedCountByKind: [RuntimeMemberKind: Int] = [:]
+        var locatedCountByKind: [RuntimeMemberKind: Int] = [:]
+        for entry in entries {
+            let lines = entry.interface.text.split(separator: "\n", omittingEmptySubsequences: false)
+            for member in entry.members {
+                listedCountByKind[member.kind, default: 0] += 1
+                guard let lineNumber = member.lineNumber else { continue }
+                locatedCountByKind[member.kind, default: 0] += 1
+                let line = lines[lineNumber - 1]
+                if !Self.line(line, declares: member) {
+                    misplaced.append("\(entry.object.displayName) \(member.kind.rawValue)\(member.isStatic ? " static" : "") \(member.name) → line \(lineNumber): \(line)")
+                }
+            }
+        }
+        #expect(misplaced.isEmpty, "\(misplaced.count) members located on another declaration's line, e.g.\n\(misplaced.prefix(10).joined(separator: "\n"))")
+        let locationRates = RuntimeMemberKind.allCases.map { kind in
+            "\(kind.rawValue) \(locatedCountByKind[kind, default: 0]) of \(listedCountByKind[kind, default: 0])"
+        }
+        for kind in [RuntimeMemberKind.objcProperty, .objcIvar, .objcMethod, .swiftFunction] {
+            let listedCount = listedCountByKind[kind, default: 0]
+            let locatedCount = locatedCountByKind[kind, default: 0]
+            #expect(listedCount > 0 && locatedCount * 100 >= listedCount * 99, "\(kind.rawValue): \(locatedCount) of \(listedCount) located; all kinds: \(locationRates.joined(separator: ", "))")
+        }
+    }
+
+    /// What a line has to read like for `member` to be declared on it —
+    /// words only, so the check does not lean on the span rules the locator
+    /// uses.
+    private static func line(_ line: Substring, declares member: RuntimeMemberDeclaration) -> Bool {
+        let trimmedLine = line.drop(while: { $0 == " " })
+        let words = Set(trimmedLine.split(whereSeparator: { !$0.isLetter && $0 != "@" }).map(String.init))
+        let readsStatic = words.contains("static") || words.contains("class")
+        switch member.kind {
+        case .objcProperty:
+            return trimmedLine.hasPrefix("@property") && words.contains("class") == member.isStatic
+        case .objcIvar:
+            // One level into the `@interface` braces; an expanded struct's
+            // fields sit deeper.
+            let indentation = line.prefix(while: { $0 == " " }).count
+            return indentation == 4 && !trimmedLine.hasPrefix("@property") && !trimmedLine.hasPrefix("-") && !trimmedLine.hasPrefix("+")
+        case .objcMethod:
+            return trimmedLine.hasPrefix(member.isStatic ? "+" : "-")
+        case .swiftInitializer:
+            return words.contains("init")
+        case .swiftFunction:
+            return words.contains("func") && readsStatic == member.isStatic
+        case .swiftSubscript:
+            return words.contains("subscript") && readsStatic == member.isStatic
+        case .swiftVariable, .swiftField:
+            return (words.contains("var") || words.contains("let")) && readsStatic == member.isStatic
+        case .swiftEnumCase:
+            return words.contains("case")
+        }
+    }
+
     @Test("every nested type's block is found in the interface of the object listing it")
     func everyNestedBlockFound() async throws {
         let entries = try await Self.foundationEntries()
