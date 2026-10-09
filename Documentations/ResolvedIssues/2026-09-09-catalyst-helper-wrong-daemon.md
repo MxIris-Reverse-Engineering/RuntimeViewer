@@ -73,6 +73,8 @@ daemon 里的 endpoint 登记表（`MainService.endpointByInfo`）只在内存�
 
 **为什么不改 daemon 端**（`swift-helper-service` 的 `ApplicationsService` 用 `createsNewApplicationInstance = false`）：那是外部库，且 App 侧清旧实例后语义已经等价；登记表落盘也不解决变体错配。留待该库自己演进。
 
+**后续（2026-10-09）**：第 6 步的构建侧做法已被取代。helper target 改为 `SDKROOT = macosx` + `SDK_VARIANT = iosmac`，成为 App 的普通 target 依赖，与 App 在同一配置下构建，变体错配从构建上就不再可能发生。staged 路径、`RunScript.sh` 的暂存步骤、**Verify Catalyst Helper Variant** 阶段和 `RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER` 一并移除；helper `Info.plist` 里的 `RuntimeViewerServiceName` 键保留，没有用处但也无害。现行说明见 `AGENTS.md` 的 Embedded non-macOS products 一节。第 1–5 步不受影响。
+
 ## 验证
 
 - `RuntimeEngineManagerMacCatalystLaunchTests`（新增，RuntimeViewerEngineManagementTests），通过 `MacCatalystLaunching` seam 用替身引擎驱动，不碰 daemon：

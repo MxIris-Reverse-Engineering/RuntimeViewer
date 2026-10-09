@@ -139,3 +139,11 @@ GUI 会，这让它无法被命令行验证。
 
 方案与决策日志里那三个约束（`env -i`、独立 DerivedData、失败语义）仍然成立，只是不再有代码依赖
 它们。谁将来再想自动化这件事，先读它们，别重新踩一遍。
+
+**后续（2026-10-09）**：helper 这一半后来用另一种办法解决了，不需要构建阶段。决策日志里「helper 的
+产物落在 `Debug-iphoneos/`」的原因是 helper target 写的是 `SDKROOT = iphoneos` +
+`SUPPORTS_MACCATALYST = YES`，这种写法只有在 destination 是 Mac Catalyst 时才变成 Catalyst。改成
+`SDKROOT = macosx` + `SDK_VARIANT = iosmac` 之后，Swift Build 按 target 自己的设置决定 SDK 变体，
+helper 就能作为 App 的普通 target 依赖、在 macOS destination 的同一次构建里编成 Catalyst 并嵌入；
+「一次构建只有一个 destination」不再是障碍。模拟器载荷没有对应的 macOS 写法，仍由脚本暂存。现行
+说明见 `AGENTS.md`。

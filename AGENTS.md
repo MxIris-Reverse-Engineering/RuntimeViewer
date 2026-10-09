@@ -9,47 +9,59 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 
 **Workspace preference**: Before running any `xcodebuild` / `swift build` / `swift test`, check whether `../MxIris-Reverse-Engineering.xcworkspace` (sibling of this repo) exists. If it does, **use that workspace** via `xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme <scheme> ...` — it wires this repo together with local checkouts of MachOKit / MachOObjCSection / MachOSwiftSection / swift-capstone / swift-demangling / swift-semantic-string / swift-syntax that may contain in-progress fixes not yet published upstream. Building against the remote SPM resolution can hit stale errors (e.g. the MachOSwiftSection `@Mutex` macro expansion bug) that the workspace's local checkout already fixes. Only fall back to the standalone commands below when the workspace is absent.
 
-**Embedded iOS-family products**: the app embeds two products that are not
+**Embedded non-macOS products**: the app embeds two products that are not
 macOS — `RuntimeViewerCatalystHelper` (Mac Catalyst) and the
-`RuntimeViewerMobileServer` payload (iOS Simulator). Neither can be a target
-dependency: Xcode treats both as iOS-family embedded content and rejects them
-from the macOS app target.
+`RuntimeViewerMobileServer` payload (iOS Simulator). They reach the app in
+different ways.
 
-**Nothing builds them for you.** Both are handed over the same way: a script
-builds the product, stages it at a fixed path under `RuntimeViewerUsingAppKit/`,
-and a `PBXCopyFilesBuildPhase` referencing that path embeds it.
+**The Catalyst helper is an ordinary target dependency of the app.** Building
+`RuntimeViewer macOS` — in the GUI, through `RunScript.sh` or through
+`ArchiveScript.sh` — builds the helper in the same configuration into
+`<configuration>-maccatalyst/`, and `Embed Catalyst Helpers` copies that product
+into `Contents/Applications/`. This works only because the helper target declares
+Catalyst itself, in all three configurations: **`SDKROOT = macosx` with
+`SDK_VARIANT = iosmac`**. The usual spelling, `SDKROOT = iphoneos` with
+`SUPPORTS_MACCATALYST = YES`, turns into Catalyst only when the run destination
+is Mac Catalyst; under the app's macOS destination it builds an `iphoneos`
+product, which Xcode rejects as iOS-family content in a macOS app. Swift Build
+reads `SDK_VARIANT` from the target's own settings whatever the destination.
+Do not switch the helper back to `iphoneos`. Two more settings follow from it:
 
-| Product | Staged at | Copied by |
-|---------|-----------|-----------|
-| Catalyst helper | `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app` | `Embed Catalyst Helpers` |
-| Simulator payload | `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework` | `Embed RuntimeViewerMobileServer Framework` |
+- `SKIP_INSTALL = YES`, so archiving the app does not also install the helper as
+  a product of its own — that would make the archive a generic one, which
+  `-exportArchive` refuses. Exporting the app re-signs the embedded helper for
+  Developer ID along with everything else.
+- `RUNTIME_VIEWER_SERVICE_NAME` is set on the helper target itself, per
+  configuration (`com.mxiris…` for Release, `dev.mxiris…` for Debug,
+  `dev.arm64e.mxiris…` for Debug-arm64e), and must match the app's. The helper
+  reaches the app through the helper daemon of that name; a helper on another
+  daemon never finds the app's endpoint and the Catalyst engine loads forever.
+  Building both in one configuration keeps them in step — **a new configuration
+  needs the name on the helper too**. Background:
+  `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
 
-Both staged paths are gitignored. `ArchiveScript.sh` writes the helper there via
-`-exportArchive`, `RunScript.sh` with `ditto` from its `Debug-arm64e-maccatalyst`
-product; both scripts stage the payload with `ditto`, and clear it when its
-build fails so a stale one is never sealed in. The payload lands in
-`Contents/Resources/` because `RuntimeInjectClient` finds it with
-`Bundle.main.url(forResource:withExtension:)`, which looks nowhere else.
+`RuntimeViewerCatalystHelperPlugin`, the code the helper loads, is still a macOS
+bundle: it builds into `<configuration>/` and the helper's `Embed PlugIns` phase
+copies it in.
 
-**The staged helper must come from the same configuration as the app.** The
-helper-daemon mach service name is baked into each binary per configuration
-(`RUNTIME_VIEWER_SERVICE_NAME`: `com.mxiris…` for Release, `dev.mxiris…` for
-Debug, `dev.arm64e.mxiris…` for Debug-arm64e), and the helper's XPC handshake
-goes through that daemon. A Release helper embedded in a Debug-arm64e app asks
-the Release daemon for the app's endpoint, never finds it, and the app's Catalyst
-engine loads forever. The helper's `Info.plist` records the name it was built
-against (`RuntimeViewerServiceName`), and the app's **Verify Catalyst Helper
-Variant** phase fails the build when it differs from the app's — the message
-names both. `RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER=YES` downgrades it
-to a warning for a build that does not need Catalyst. Background:
-`Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
+**The simulator payload is still staged by a script.** The scripts build it,
+stage it at `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework`
+(gitignored), and `Embed RuntimeViewerMobileServer Framework` copies it from
+there. Both scripts clear the staged copy when its build fails, so a stale one
+is never sealed in. The payload lands in `Contents/Resources/` because
+`RuntimeInjectClient` finds it with `Bundle.main.url(forResource:withExtension:)`,
+which looks nowhere else.
 
-A plain Xcode GUI build stages neither: it embeds whatever is already at those
-paths, left there by the last script run. So **anything involving simulator
-injection has to be tested through `RunScript.sh`**, not through the GUI.
+A plain Xcode GUI build does not build the payload: it embeds whatever is
+already at that path, left there by the last script run. In a fresh checkout or
+worktree nothing is there yet and the copy phase fails the build — run
+`./RunScript.sh --no-launch` once first; do not remove the phase to get past it.
+And **anything involving simulator injection has to be tested through
+`RunScript.sh`**, not through the GUI.
 
-A build phase that produced both automatically was tried and withdrawn; see
-evolution 0015 for what it cost and why the helper half never actually worked.
+A build phase that built both from inside the app's build was tried and
+withdrawn; see evolution 0015. Its helper half failed for the `iphoneos` reason
+above.
 
 **None of the above applies to the jailbroken iOS variant, which embeds the same
 payload the ordinary way.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so
@@ -90,8 +102,9 @@ specific to it:
 
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace
-# RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; builds
-# RuntimeViewerCatalystHelper first, then the main app). This is the only
+# RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; stages the
+# simulator payload, then builds the main app, which builds
+# RuntimeViewerCatalystHelper as a dependency). This is the only
 # working path for Debug-arm64e — the Xcode GUI fails to compile under
 # iOSPackagesShouldBuildARM64e=true. Product: RuntimeViewer-Debug-arm64e.app
 # under /Volumes/DerivedData/RuntimeViewer/Debug-arm64e when that volume
@@ -101,7 +114,7 @@ specific to it:
 ./RunScript.sh --update-packages   # refresh SPM pins before building
 ./RunScript.sh --dry-run           # print commands without running
 
-# Release build (archives Catalyst helper + main app, notarizes, and optionally
+# Release build (archives the main app with the Catalyst helper embedded, notarizes, and optionally
 # generates appcast + uploads GitHub Release). Uses scheme "RuntimeViewer macOS".
 # Omit the distribution flags for a local signed zip only.
 ./ArchiveScript.sh
@@ -185,7 +198,8 @@ the same flag. Background:
 
 **Build Schemes**:
 - `RuntimeViewer macOS` — main app; Debug-arm64e via `RunScript.sh`, Release archives via `ArchiveScript.sh`
-- `RuntimeViewerCatalystHelper` — Mac Catalyst helper, always built before the main app
+- `RuntimeViewerCatalystHelper` — the Mac Catalyst helper on its own; building the main app builds
+  it as a dependency, so this scheme is only for working on the helper
 - `RuntimeViewerUsingAppKit` — plain Debug builds of the AppKit app target
 - `RuntimeViewerCommandLineTool` — the copy of `runtime-viewer-cli` embedded in the app bundle.
   The target is named after the scheme, not after its product (`PRODUCT_NAME` is pinned to

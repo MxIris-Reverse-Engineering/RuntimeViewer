@@ -24,7 +24,6 @@ cd "$PROJECT_DIR"
 # Defaults
 WORKSPACE="RuntimeViewer-Distribution.xcworkspace"
 SCHEME="RuntimeViewer macOS"
-CATALYST_SCHEME="RuntimeViewerCatalystHelper"
 MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Release"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
@@ -96,7 +95,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
-        --catalyst-helper-scheme) CATALYST_SCHEME="$2"; shift 2;;
         --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
         --local-deps) LOCAL_DEPENDENCIES=true; shift;;
         --configuration) CONFIGURATION="$2"; shift 2;;
@@ -150,13 +148,10 @@ log "update_packages=$UPDATE_PACKAGES update_appcast=$UPDATE_APPCAST upload_to_g
 
 BUILD_PATH="$PROJECT_DIR/Products/Archives"
 EXPORT_PATH="$BUILD_PATH/Products/Export"
-CATALYST_EXPORT_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit"
 # Where the app's "Embed RuntimeViewerMobileServer Framework" copy phase expects
-# the iOS Simulator payload — a fixed path inside the project, beside the
-# Catalyst helper's own export location, because both are plain file references
-# in the project rather than script phases reading a build setting.
+# the iOS Simulator payload — a fixed path inside the project, because the phase
+# is a plain file reference rather than a script phase reading a build setting.
 MOBILE_SERVER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework"
-CATALYST_HELPER_ARCHIVE="$BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive"
 MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
 # Build against the local sibling checkouts of the dependency repos rather
 # than the pinned remote versions. Needed whenever a change under test lives
@@ -249,13 +244,6 @@ update_packages() {
     # state file is enough -- checkouts/ and repositories/ are still reused, which
     # keeps this far cheaper than wiping SourcePackages wholesale.
     run rm -f "$DERIVED_DATA/SourcePackages/workspace-state.json"
-
-    XCODEBUILD_LOG_NAME="resolve-catalyst-helper-packages" run_piped xcodebuild -resolvePackageDependencies \
-        -workspace "$WORKSPACE" \
-        -scheme "$CATALYST_SCHEME" \
-        -derivedDataPath "$DERIVED_DATA" \
-        -skipPackagePluginValidation -skipMacroValidation \
-        "${XCODEBUILD_USER_DEFAULTS[@]}"
 
     XCODEBUILD_LOG_NAME="resolve-main-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
@@ -386,35 +374,16 @@ verify_application_archive() {
     fail "$archive_path is a generic archive, not an app archive, so it cannot be exported with developer-id. Products installed outside the app (set SKIP_INSTALL = YES on the targets that produce them):"$'\n'"$stray_products"
 }
 
-log "Archiving Catalyst helper"
-XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
-    -workspace "$WORKSPACE" \
-    -scheme "$CATALYST_SCHEME" \
-    -configuration "$CONFIGURATION" \
-    -destination 'generic/platform=macOS,variant=Mac Catalyst' \
-    -archivePath "$CATALYST_HELPER_ARCHIVE" \
-    -derivedDataPath "$DERIVED_DATA" \
-    -skipPackagePluginValidation -skipMacroValidation \
-    "${XCODEBUILD_USER_DEFAULTS[@]}" \
-    "${COMMON_XCODEBUILD_SETTINGS[@]}"
-verify_application_archive "$CATALYST_HELPER_ARCHIVE"
-
-run rm -rf "$CATALYST_EXPORT_PATH/RuntimeViewerCatalystHelper.app"
-XCODEBUILD_LOG_NAME="export-catalyst-helper" run_piped xcodebuild -exportArchive \
-    -archivePath "$CATALYST_HELPER_ARCHIVE" \
-    -configuration "$CONFIGURATION" \
-    -exportPath "$CATALYST_EXPORT_PATH" \
-    -exportOptionsPlist "$PROJECT_DIR/ArchiveExportConfig-Catalyst.plist"
-run rm -f "$CATALYST_EXPORT_PATH/Packaging.log" \
-        "$CATALYST_EXPORT_PATH/DistributionSummary.plist" \
-        "$CATALYST_EXPORT_PATH/ExportOptions.plist"
+# The Mac Catalyst helper needs no step of its own: it is a target dependency of
+# the app, archived with it (SKIP_INSTALL = YES keeps it out of the archive's
+# own products) and re-signed for Developer ID when the app is exported.
 
 # The iOS Simulator injection payload, built before the app and staged at
 # $MOBILE_SERVER_STAGED_PATH — the fixed path referenced by the app's "Embed
-# RuntimeViewerMobileServer Framework" copy phase, exactly how the Catalyst
-# helper is handed over. It
-# cannot be a target dependency: Xcode rejects iOS-family embedded content from
-# a macOS app target, which is the same constraint that keeps the helper out.
+# RuntimeViewerMobileServer Framework" copy phase. It cannot be a target
+# dependency: Xcode rejects iOS-family embedded content from a macOS app target.
+# (The Catalyst helper escapes this by declaring SDKROOT = macosx with
+# SDK_VARIANT = iosmac; a simulator product has no such macOS spelling.)
 #
 # A failure is not fatal for a local build: it still ships, only without the
 # ability to inject simulator processes.

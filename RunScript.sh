@@ -25,26 +25,15 @@ cd "$PROJECT_DIR"
 # Defaults
 WORKSPACE="RuntimeViewer-Debug.xcworkspace"
 SCHEME="RuntimeViewer macOS"
-CATALYST_SCHEME="RuntimeViewerCatalystHelper"
 MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 
 # Where the app's "Embed RuntimeViewerMobileServer Framework" copy phase expects
 # the iOS Simulator payload. A fixed path inside the project rather than one
-# under DerivedData, because the phase is a plain file reference — the same
-# arrangement that carries the Catalyst helper, and the reason neither needs a
+# under DerivedData, because the phase is a plain file reference, which needs no
 # shell script.
 MOBILE_SERVER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework"
-
-# Where the app's "Embed Catalyst Helpers" copy phase expects the Mac Catalyst
-# helper. ArchiveScript.sh exports its Release helper here; this script has to
-# stage the helper it just built in the same place, or the Debug-arm64e app
-# embeds whatever the last archive left behind. A Release helper resolves the
-# helper-daemon name to the Release daemon, never finds the Debug-arm64e app's
-# endpoint, and the app's Catalyst engine loads forever — see
-# Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md.
-CATALYST_HELPER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app"
 
 # DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
 # SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
@@ -105,7 +94,6 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
-        --catalyst-helper-scheme) CATALYST_SCHEME="$2"; shift 2;;
         --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
@@ -171,12 +159,6 @@ update_packages() {
     # keeps this far cheaper than wiping SourcePackages wholesale.
     run rm -f "$DERIVED_DATA/SourcePackages/workspace-state.json"
 
-    XCODEBUILD_LOG_NAME="resolve-catalyst-helper-packages" run_piped xcodebuild -resolvePackageDependencies \
-        -workspace "$WORKSPACE" \
-        -scheme "$CATALYST_SCHEME" \
-        -derivedDataPath "$DERIVED_DATA" \
-        -skipPackagePluginValidation -skipMacroValidation
-
     XCODEBUILD_LOG_NAME="resolve-main-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
         -scheme "$SCHEME" \
@@ -227,34 +209,16 @@ COMMON_XCODEBUILD_SETTINGS=(
 
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
 
-log "Building Catalyst helper"
-XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
-    -workspace "$WORKSPACE" \
-    -scheme "$CATALYST_SCHEME" \
-    -configuration "$CONFIGURATION" \
-    -destination 'generic/platform=macOS,variant=Mac Catalyst' \
-    -derivedDataPath "$DERIVED_DATA" \
-    -skipPackagePluginValidation -skipMacroValidation \
-    "${COMMON_XCODEBUILD_SETTINGS[@]}"
-
-# Stage the helper this configuration produced where the copy phase looks. The
-# helper is required, so unlike the simulator payload below a missing product
-# is fatal rather than a warning.
-CATALYST_HELPER_PRODUCT_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-maccatalyst/RuntimeViewerCatalystHelper.app"
-if $DRY_RUN || [[ -d "$CATALYST_HELPER_PRODUCT_PATH" ]]; then
-    run rm -rf "$CATALYST_HELPER_STAGED_PATH"
-    run ditto "$CATALYST_HELPER_PRODUCT_PATH" "$CATALYST_HELPER_STAGED_PATH"
-    log "Staged Catalyst helper at $CATALYST_HELPER_STAGED_PATH"
-else
-    fail "expected the Catalyst helper at $CATALYST_HELPER_PRODUCT_PATH"
-fi
+# The Mac Catalyst helper needs no step of its own: it is a target dependency of
+# the app, built in the same configuration and embedded by its "Embed Catalyst
+# Helpers" phase.
 
 # The iOS Simulator injection payload, built before the app and staged at
 # $MOBILE_SERVER_STAGED_PATH — the fixed path referenced by the app's "Embed
-# RuntimeViewerMobileServer Framework" copy phase, the same arrangement the
-# Catalyst helper uses. It is
-# deliberately not a target dependency: Xcode rejects iOS-family embedded
-# content from a macOS app target, which is what keeps the helper out too.
+# RuntimeViewerMobileServer Framework" copy phase. It is deliberately not a
+# target dependency: Xcode rejects iOS-family embedded content from a macOS app
+# target. (The Catalyst helper escapes this by declaring SDKROOT = macosx with
+# SDK_VARIANT = iosmac; a simulator product has no such macOS spelling.)
 #
 # A failure here is not fatal: the app builds and runs, and only injecting into
 # simulator processes is unavailable.

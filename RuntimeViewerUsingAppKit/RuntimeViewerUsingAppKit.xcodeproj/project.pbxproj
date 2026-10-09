@@ -11,7 +11,7 @@
 		E9186330306120AA00DCEAC1 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9186332306120AA00DCEAC1 /* RuntimeViewerCore */; };
 		E9186331306120AA00DCEAC1 /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */; };
 		E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E927C2312E9444F300084A7B /* RuntimeViewerCommunication */; };
-		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
 		E95ED17E0000000000000001 /* RuntimeViewerSourceEditorBridge.bundle in Embed SourceEditor Bridge */ = {isa = PBXBuildFile; fileRef = E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -102,6 +102,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = E9E900DB2C2CF9A500FADDCC;
 			remoteInfo = RuntimeViewerCatalystHelperPlugin;
+		};
+		E9CA7A1A0000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E947C3662C2A4D0400296B2E;
+			remoteInfo = RuntimeViewerCatalystHelper;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -202,7 +209,6 @@
 		E9A2B52B306373AB00D5A652 /* AppIconBetaXcode26.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBetaXcode26.icon; path = ../Resources/AppIconBetaXcode26.icon; sourceTree = SOURCE_ROOT; };
 		E9A2B52C306373AB00D5A652 /* AppIconXcode26.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconXcode26.icon; path = ../Resources/AppIconXcode26.icon; sourceTree = SOURCE_ROOT; };
 		E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
-		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
 		E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = RuntimeViewerMobileServer.framework; sourceTree = "<group>"; };
 		E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "$(RUNTIME_VIEWER_SERVICE_NAME)"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -422,7 +428,6 @@
 				E9A2B52C306373AB00D5A652 /* AppIconXcode26.icon */,
 				E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */,
 				E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */,
-				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */,
 				E9DAF4962FEE740D00DD20CB /* RuntimeViewerUsingAppKit */,
 				E9DAF5022FEE741200DD20CB /* RuntimeViewerCatalystHelper */,
@@ -509,7 +514,6 @@
 				E9CAFE010000000000000022 /* Embed RuntimeViewerMobileServer Framework */,
 				E9CAFE010000000000000001 /* Generate LaunchDaemon plist */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
-				E9CAFE010000000000000031 /* Verify Catalyst Helper Variant */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Catalyst Helpers */,
 				E95ED17E0000000000000005 /* Embed SourceEditor Bridge */,
 				E918631A30611D0200DCEAC1 /* Embed XPC Services */,
@@ -522,6 +526,7 @@
 				E9862A292F36F66400139991 /* PBXTargetDependency */,
 				E95ED17E000000000000000F /* PBXTargetDependency */,
 				E918631930611D0200DCEAC1 /* PBXTargetDependency */,
+				E9CA7A1A0000000000000002 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				E9DAF4962FEE740D00DD20CB /* RuntimeViewerUsingAppKit */,
@@ -827,37 +832,6 @@
 				"",
 			);
 		};
-		E9CAFE010000000000000031 /* Verify Catalyst Helper Variant */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			inputPaths = (
-				"$(SRCROOT)/RuntimeViewerCatalystHelper.app/Contents/Info.plist",
-			);
-			name = "Verify Catalyst Helper Variant";
-			shellPath = /bin/sh;
-			shellScript = (
-				"set -e",
-				"HELPER=\"${SRCROOT}/RuntimeViewerCatalystHelper.app\"",
-				"PLIST=\"${HELPER}/Contents/Info.plist\"",
-				"if [ ! -f \"${PLIST}\" ]; then",
-				"  echo \"error: No Catalyst helper is staged at ${HELPER}. The Xcode GUI does not build it: run ./RunScript.sh (Debug-arm64e) or ./ArchiveScript.sh (Release) once, which builds the helper and stages it there.\"",
-				"  exit 1",
-				"fi",
-				"STAGED_NAME=$(/usr/libexec/PlistBuddy -c 'Print :RuntimeViewerServiceName' \"${PLIST}\" 2>/dev/null || true)",
-				"if [ \"${STAGED_NAME}\" != \"${RUNTIME_VIEWER_SERVICE_NAME}\" ]; then",
-				"  MESSAGE=\"The staged Catalyst helper targets helper daemon '${STAGED_NAME:-<unknown, predates the RuntimeViewerServiceName key>}' but this ${CONFIGURATION} build uses '${RUNTIME_VIEWER_SERVICE_NAME}'. A helper on another daemon never finds this app's endpoint, and the Catalyst engine would load forever. Re-stage it: ./RunScript.sh for Debug-arm64e, ./ArchiveScript.sh for Release, or ditto the ${CONFIGURATION}-maccatalyst product over ${HELPER}.\"",
-				"  if [ \"${RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER:-NO}\" = \"YES\" ]; then",
-				"    echo \"warning: ${MESSAGE}\"",
-				"  else",
-				"    echo \"error: ${MESSAGE} (Set RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER=YES to embed it anyway.)\"",
-				"    exit 1",
-				"  fi",
-				"else",
-				"  echo \"Staged Catalyst helper targets ${STAGED_NAME}, matching this build\"",
-				"fi",
-				"",
-			);
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -944,6 +918,11 @@
 			platformFilter = maccatalyst;
 			target = E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */;
 			targetProxy = E9C9E9D82C2D161000C4AA34 /* PBXContainerItemProxy */;
+		};
+		E9CA7A1A0000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E947C3662C2A4D0400296B2E /* RuntimeViewerCatalystHelper */;
+			targetProxy = E9CA7A1A0000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1316,9 +1295,10 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_2600 = Xcode26;
 				RUNTIME_VIEWER_SERVICE_NAME = dev.mxiris.runtimeviewer.service;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = NO;
-				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				SDKROOT = macosx;
+				SDK_VARIANT = iosmac;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -1365,9 +1345,10 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_2600 = Xcode26;
 				RUNTIME_VIEWER_SERVICE_NAME = com.mxiris.runtimeviewer.service;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = NO;
-				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				SDKROOT = macosx;
+				SDK_VARIANT = iosmac;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -1782,9 +1763,10 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_2600 = Xcode26;
 				RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = NO;
-				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
+				SDKROOT = macosx;
+				SDK_VARIANT = iosmac;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = YES;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
