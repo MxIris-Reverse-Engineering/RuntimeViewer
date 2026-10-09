@@ -1269,6 +1269,8 @@ extension XxxCellViewModel: Differentiable {
 ```
 For cell ViewModels that own no extra state beyond the underlying `Hashable` domain object, an empty `extension XxxCellViewModel: Differentiable {}` is acceptable — DifferenceKit synthesizes `differenceIdentifier = self` / `isContentEqual = ==` from `Hashable + Equatable`.
 
+**Value-type outline trees** (a `struct` node that carries its `children`, such as `ReportNode`) follow RxAppKit's contract since 0.6.0: `==` and `hash(into:)` use the identifier alone, and `isContentEqual(to:)` compares the whole subtree recursively. The reload adapter (`rx.nodes(options: [])`) asks `isContentEqual` of the first level only and reloads nothing when every root answers yes, so a shallow answer swallows every change below it; and `NSOutlineView` keeps a row expanded across `reloadData()` only when the new item is `==` to the old one, so a synthesized whole-subtree `==` collapses every row whose subtree changed. When the rows' cells are bound to cell ViewModels kept across rebuilds, compare those by identity in `isContentEqual` too, so a row that got a new cell ViewModel is reloaded and its cell rebinds. `ReportOutlineBindingTests` pins all three on a real outline.
+
 **7. Click / selection events** — derive from `tableView.rx.itemClicked()` / `tableView.rx.modelSelected()` / `outlineView.rx.modelDoubleClicked()` instead of `target` + `@objc` plumbing:
 ```swift
 let rowClicked: Signal<Candidate> = tableView.rx

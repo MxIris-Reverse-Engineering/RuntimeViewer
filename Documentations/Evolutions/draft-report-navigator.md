@@ -38,8 +38,10 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
   复用。图标、标题、说明、状态与 tooltip 合成一个 `Appearance`，只挂一个 `@RxObserved`（规矩见
   [0005](0005-cellvm-appearance-single-observed.md)）；cell 在 `bind(to:)` 里绑这一条流，只重设变了的部分——进度直接落到
   屏幕上的行，不需要大纲重载。
-  树本身是值类型 `ReportNode`，相等性比较整棵子树（大纲适配器只在树变了时 `reloadData`），哈希只取标识（大纲每次查找都要哈希
-  一个 item，而一类下面可以有上百个批次）。原计划的三种 CellViewModel 合成了一种：Xcode 每一行的构成都一样。
+  树本身是值类型 `ReportNode`，按 RxAppKit 0.6.0 的节点约定：`==` 与哈希只取标识（NSOutlineView 只为相等的项保住展开状态，
+  大纲每次查找都要哈希一个 item），`isContentEqual` 递归比较整棵子树的形状与各行的 cell ViewModel 是否同一个对象（适配器只在
+  根层问它，再据此决定要不要 `reloadData`）。大纲开着 `StatefulOutlineView.preservesSelectedItemAcrossReloads`，重载后选中留在
+  原来的项上。原计划的三种 CellViewModel 合成了一种：Xcode 每一行的构成都一样。
   大纲用 `StatefulOutlineView`：带分组行的 source list，正是 2026-09-27 那份已解决问题描述的行高估算风险形状。
 - **功能关闭时**：在该类下面放一行 "Turned off in Settings"（右键 / 双击打开设置），而不是整页占位——另一类的工作照常可见。
   索引与语料各看自己的开关（`settings.indexing.isEnabled`、`settings.search.isCorpusEnabled`）。
@@ -96,3 +98,4 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
 | 2026-10-05 | 行的显示内容合成一个 `Appearance`，`ReportCellViewModel` 只留一个 `@RxObserved`；`update(...)` 不等才整体赋值一次，cell 只重设变了的部分 | 用户指出：行是一行一个实例、成百上千，原来的五个 `@RxObserved` 一经 cell 绑定就是五个 relay，各带一把锁、跟着行一直活着，每个 `asDriver()` 在行显示期间再加一把。[0005](0005-cellvm-appearance-single-observed.md) 早定过这条规矩，但没写进 AGENTS.md，「Cell ViewModel wrapper」一节反而教每个显示属性一个 `@RxObserved`，这里就是照着写的；同批把那一节改掉。cell 逐部分比较是为了保住原来「只有变了的那部分才重设」：运行中的行每秒更新多次，标题、图标、tooltip 与状态位不动。新测试 `ReportCellViewModelTests`（多处改动只发一个事件、重复内容不发事件），临时改成逐字段赋值时两条都红。批量导出的两种行按同一规矩一起改了，记在 0005 的补记里。 |
 | 2026-10-08 | 修：别的窗口改了 transformer、语料被驱逐时，经连接的构建不再记成 Failed；构建命令的回复改成结果值 `built` / `cancelled` / `imageNotIndexed` | PR #121 审查 PR121.30：store 替所有订阅者放弃构建时，订阅者收到 `CancellationError`，可它跨连接后只剩一段描述，协调器的 `.failure(is CancellationError)` 分支永远匹配不上，My Mac（经 XPC service）上就多出一条「Failed: …Swift.CancellationError error 1.」。服务端改为回 `.cancelled` 这个值，公开 API 在调用方进程里还原成 `CancellationError`，协调器不用改。复现测试 `FindCorpusCoordinatorRemoteTests.storeCancellationIsNotAFailure` 修前红（状态与历史里各一条 Failed）、修后绿。连接中断时在途构建各记一条 Failed 的同类留给 PR121.05 的「引擎已重置」信号一起做。 |
 | 2026-10-08 | 修：Report 的 Cancel 撤回到服务进程；关窗收拢成 `DocumentState.documentWillClose()`，只关已经建过的成员，关掉的文档不再请求语料 | PR #121 审查 PR121.09：撤回只取消了本进程的 Task，My Mac（转发给 XPC service）上服务端照建，下次刷新 coverage 那一行又以 Building 回来，再点 Cancel 什么也不做。PR121.29 的取消协议让撤回经 `cancelRequest` 到达服务端，协调器的撤回路径不用改。关窗：协调器加 `documentWillClose()`，撤回全部请求、停掉事件泵与订阅，此后别的窗口改设置、换引擎都不再让它请求；`DocumentState` 的三个惰性成员改为可选后备存储，`Document.close()` 只调 `documentWillClose()`，不再为了关闭而新建 Find 会话与协调器。复现测试 `FindCorpusCoordinatorRemoteTests.cancelReachesTheServingProcess`（修前取消 5 秒后 service 仍在建，刷新后那一行回来）与 `DocumentStateLifecycleTests`（修前关窗新建了会话、关窗后引擎照建、拨一下开关又请求了两个镜像）。 |
+| 2026-10-09 | `ReportNode` 的 `==` 只比标识，`isContentEqual` 递归比较整棵子树；`StatefulOutlineView` 加默认关闭的 `preservesSelectedItemAcrossReloads`，Report 页打开 | PR #121 审查 PR121.53：分叉前三个 workspace 已解析到 RxAppKit 0.6.0，它的重载适配器只在根层问 `isContentEqual`，而 `ReportNode` 只比直接子节点的标识，批次下的镜像行一变（过滤、时钟）大纲就不重载；合成的整树 `==` 又让子树变了的行在 `reloadData` 之后回来是折叠的。改成 RxAppKit 测试里 `DiffNode` 的约定，另把 cell ViewModel 的同一性算进内容（一行换了 cell ViewModel 必须重载，屏上的 cell 才会改绑）。只改身份 `==` 之后先跑了选中那条测试：AppKit 的 `reloadData` 按行号保留选中，最新的批次插在最上面时高亮落到了新批次上，所以加了这个开关——重载前记下选中的项，重载后用 `row(forItem:)` 选回，不滚动；侧栏自己恢复选中，开关默认关。不改用 `.diffable`：它也只对根层出 changeset，类别有内容变化就是 `elementUpdated`，照样退回 `reloadData`。`ReportOutlineBindingTests` 在真实大纲上修前三条全红（过滤后仍是 5 行、类别与批次被折叠、选中丢失），修后全绿；AGENTS.md「Differentiable conformance」补上值类型树节点的约定。 |

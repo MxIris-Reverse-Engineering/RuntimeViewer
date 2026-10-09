@@ -7086,7 +7086,11 @@ queued-build ./RunScript.sh --no-launch --derived-data /Volumes/DerivedData/Agen
 
 - **严重度**：Minor
 - **审查编号**：C17（A4-2、A5-5）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`ReportOutlineBindingTests`（真实的 `StatefulOutlineView`，与 Report 页同样的 `rx.nodes(options: [])` 绑定）。修前三条全红：过滤掉批次下的两个镜像后大纲仍是 5 行（期望 3）；插入新批次后类别与原批次都被折叠；选中的批次在重载后丢失（`selectedNode?.identifier → nil`）。修后三条全绿，`ReportViewModelTests` 同时通过
+- **落地与偏离**：
+  - 按文档先只改身份 `==` 与递归 `isContentEqual` 跑了测试 3：仍红——AppKit 的 `reloadData` 并不按项保住选中（实测是选中直接丢了，不只是落到别的行），所以照方案给 `StatefulOutlineView` 加了默认关闭的 `preservesSelectedItemAcrossReloads`，Report 页与测试夹具打开。重载前记下选中的项，重载后 `row(forItem:)` 选回，找不到就取消选中；过滤期间不管（`beginFiltering` / `endFiltering` 自己存取选中）；**不滚动**——保留用户所在的位置，与「先滚动再选中」那条规则针对的场景（把一行带到眼前）不同。`mouseDown` 覆写与 delegate setter 里的行高估算开关都没动。
+  - 比草案多一处：`isContentEqual` 还比较各行的 cell ViewModel 是不是同一个对象。屏上的 cell 在建出来时绑定 cell ViewModel，大纲不重载就不会改绑；一行换了 cell ViewModel（PR121.59 的缓存里会出现）却被判为「没变」，那一行就停在旧对象上。
+  - 文档同批改：提案「列表的数据」一段与决策日志；AGENTS.md「Differentiable conformance」补上值类型树节点的约定（身份 `==`、递归 `isContentEqual`、cell ViewModel 同一性）。
 
 **问题**：Report 大纲用 `rx.nodes(options: [])`（每次更新整表 `reloadData`）。App 链接的 RxAppKit 0.6.0 只在根层判断「树变了没有」：比较 `differenceIdentifier`，再问根节点的 `isContentEqual`。`ReportNode.isContentEqual` 只比较直接子节点的标识。根节点是两个类别，所以批次里的镜像行一变——过滤框打字、时钟开关只留进行中的工作——判断都说「没变」，大纲不重载，留着被过滤掉的行。另外，`ReportNode` 的 `==` 是合成的整树相等：一棵子树一变，节点就不等于旧的自己，`reloadData` 之后这一行回来就是折叠的。PR121.54 那段「每次更新都展开」正是在补这个缺口，同时也把用户的折叠撤销了。
 

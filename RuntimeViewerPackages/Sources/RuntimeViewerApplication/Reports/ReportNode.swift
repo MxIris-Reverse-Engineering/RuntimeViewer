@@ -53,10 +53,16 @@ public struct ReportNode: Hashable, OutlineNodeType {
         self.children = children
     }
 
-    /// Equality stays the synthesized, whole-subtree one — the outline adapter reloads only when
-    /// the new tree differs from the old — but the hash is the identifier's alone. The outline
-    /// hashes its items for every lookup, and a category's subtree is up to a hundred batches of
-    /// images.
+    /// Equality and the hash are the identifier's alone — RxAppKit's contract for outline nodes
+    /// since 0.6.0. `NSOutlineView` keeps a row open across `reloadData()` only when the new item
+    /// is equal to the old one, so a batch whose images changed must still equal itself; whether
+    /// anything changed is `isContentEqual(to:)`'s question, asked of the whole subtree. The hash
+    /// stays cheap too: the outline hashes its items for every lookup, and a category's subtree is
+    /// up to a hundred batches of images.
+    public static func == (leftNode: ReportNode, rightNode: ReportNode) -> Bool {
+        leftNode.identifier == rightNode.identifier
+    }
+
     public func hash(into hasher: inout Hasher) {
         hasher.combine(identifier)
     }
@@ -66,10 +72,18 @@ public struct ReportNode: Hashable, OutlineNodeType {
 extension ReportNode: Differentiable {
     public var differenceIdentifier: ReportNodeIdentifier { identifier }
 
-    /// A row's own content changes through its cell ViewModel, never through the node, so only
-    /// its children can make a node differ from the one it replaces.
+    /// A row's own content changes through its cell ViewModel, never through the node, so a node
+    /// differs from the one it replaces only in the shape of its subtree, or in a row whose cell
+    /// ViewModel is another object — a cell on screen stays bound to the one it was made with until
+    /// its row is reloaded. RxAppKit's reload adapter asks this of the first level alone and trusts
+    /// the answer for every level below, so it walks the whole subtree.
     public func isContentEqual(to source: ReportNode) -> Bool {
-        children.map(\.identifier) == source.children.map(\.identifier)
+        identifier == source.identifier
+            && cellViewModel === source.cellViewModel
+            && children.count == source.children.count
+            && zip(children, source.children).allSatisfy { child, sourceChild in
+                child.isContentEqual(to: sourceChild)
+            }
     }
 }
 #endif

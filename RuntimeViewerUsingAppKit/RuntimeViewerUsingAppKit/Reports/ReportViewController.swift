@@ -133,6 +133,8 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
             $0.allowsTypeSelect = true
+            // The newest work is inserted at the top; the highlight stays on the row it was on.
+            $0.preservesSelectedItemAcrossReloads = true
             $0.headerView = nil
             $0.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
             $0.target = self

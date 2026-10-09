@@ -104,7 +104,8 @@ struct ReportViewModelTests {
 
         let laterNodes = try await nextValue(from: page.output.nodes)
         #expect(Self.node(buildIdentifier, in: laterNodes)?.cellViewModel === row.cellViewModel)
-        #expect(laterNodes == nodes, "the outline would reload for a change only the row's own cell shows")
+        // `==` on nodes is identity only; whether the outline reloads is `isContentEqual(to:)`.
+        #expect(laterNodes.elementsEqual(nodes) { $0.isContentEqual(to: $1) }, "the outline would reload for a change only the row's own cell shows")
         await engine.stop()
     }
 
