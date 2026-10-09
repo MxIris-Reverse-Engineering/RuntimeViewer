@@ -11,6 +11,7 @@ extension LSBundleProxy {
     }
 }
 
+#if os(macOS)
 extension NSRunningApplication {
     public var applicationProxy: LSApplicationProxy? {
         guard let bundleIdentifier else { return nil }
@@ -21,5 +22,6 @@ extension NSRunningApplication {
         applicationProxy?.isSandbox ?? false
     }
 }
+#endif
 
 #endif
