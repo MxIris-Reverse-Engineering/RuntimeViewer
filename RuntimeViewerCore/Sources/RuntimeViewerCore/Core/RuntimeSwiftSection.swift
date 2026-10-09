@@ -1297,7 +1297,7 @@ extension RuntimeSwiftSection {
         )
         printer.updateConfiguration(newPrintConfiguration)
 
-        if options.synthesizeOpaqueType {
+        if options.resolvesOpaqueTypes {
             printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
         } else {
             printer.removeAllTypeNameResolvers()
@@ -1323,16 +1323,7 @@ extension RuntimeSwiftSection {
         }
 
         var newConfiguration = SwiftDeclarationPrintConfiguration(
-            printStrippedSymbolicItem: options.printStrippedSymbolicItem,
-            printFieldOffset: options.printFieldOffset,
-            printExpandedFieldOffsets: options.printExpandedFieldOffset,
-            printMemberAddress: options.printMemberAddress,
-            printVTableOffset: options.printVTableOffset,
-            printPWTOffset: options.printPWTOffset,
-            infersObjCOverridesFromSelectorNames: options.infersObjCOverridesFromSelectorNames,
             memberSortOrder: swiftInterfaceMemberSortOrder,
-            printTypeLayout: options.printTypeLayout,
-            printEnumLayout: options.printEnumLayout,
             memberAddressTransformer: oldConfiguration.memberAddressTransformer,
             vtableOffsetTransformer: oldConfiguration.vtableOffsetTransformer,
             fieldOffsetTransformer: oldConfiguration.fieldOffsetTransformer,
@@ -1340,6 +1331,7 @@ extension RuntimeSwiftSection {
             enumLayoutTransformer: oldConfiguration.enumLayoutTransformer,
             enumLayoutCaseTransformer: oldConfiguration.enumLayoutCaseTransformer,
         )
+        newConfiguration.applySwitches(of: options)
 
         // The transformer templates render library-side
         // (`OutputTransformer` + the closure factories in
@@ -1351,6 +1343,34 @@ extension RuntimeSwiftSection {
             newConfiguration.applyTransformers(transformer)
         }
         return newConfiguration
+    }
+}
+
+extension SwiftDeclarationPrintConfiguration {
+    /// Sets the switches RuntimeViewer's Swift Generation Options decide —
+    /// the one mapping from those options to the printer's. The content
+    /// pane's printer is configured with it, and a Find search reads the
+    /// corpus under it (`RuntimeInterfaceVisibility`), so the two cannot
+    /// disagree on what an option shows.
+    mutating func applySwitches(of options: SwiftGenerationOptions) {
+        printStrippedSymbolicItem = options.printStrippedSymbolicItem
+        printFieldOffset = options.printFieldOffset
+        printExpandedFieldOffsets = options.printExpandedFieldOffset
+        printMemberAddress = options.printMemberAddress
+        printVTableOffset = options.printVTableOffset
+        printPWTOffset = options.printPWTOffset
+        printTypeLayout = options.printTypeLayout
+        printEnumLayout = options.printEnumLayout
+        infersObjCOverridesFromSelectorNames = options.infersObjCOverridesFromSelectorNames
+    }
+}
+
+extension SwiftGenerationOptions {
+    /// Whether the printer resolves opaque types: the content pane registers
+    /// the opaque type resolver exactly when this is on, and a search's
+    /// visibility predicate reads the corpus's resolved constraints under it.
+    var resolvesOpaqueTypes: Bool {
+        synthesizeOpaqueType
     }
 }
 

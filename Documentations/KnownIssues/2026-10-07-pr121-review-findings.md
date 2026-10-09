@@ -3813,7 +3813,7 @@ func defaultImplementationsPrintedExactlyOnce() async throws {
 
 - **严重度**：Cleanup
 - **审查编号**：S7（= R1 = AL7）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯清理，行为不变，不新增测试：九个开关的映射只剩 `SwiftDeclarationPrintConfiguration.applySwitches(of:)`（`SwiftDeclarationPrintConfiguration` 是 MachOSwiftSection 的类型，写成 RuntimeViewer 里的 extension，上游不动），「是否注册 opaque type 解析器」只剩 `SwiftGenerationOptions.resolvesOpaqueTypes`；内容区的 `buildPrintConfiguration` / `updateConfiguration` 与搜索的 `RuntimeInterfaceVisibility` 都改读它们。由 `RuntimeInterfaceCorpusVisibilityTests`（四组选项下逐条比较投影后的语料与内容区打印的接口，文本与 span 都相等）与 `GenerationOptionsTests` / `SwiftGenerationOptionsTests` / `ObjCGenerationOptionsTests` / `TransformerConfigurationTests` 覆盖，改后 5 个套件 15 个测试全过。同类：全仓库再没有别的选项到打印配置的映射（`RuntimeInterfaceExportMetadata` 只是把选项列成说明文字）
 
 **问题**：Find 搜索是在语料文本上按用户的生成选项做投影的，投影规则必须和内容区打印时的规则完全一致。现在这套规则写了两份：
 - 内容区：`RuntimeSwiftSection.buildPrintConfiguration` 把 `SwiftGenerationOptions` 的 9 个开关映射到 `SwiftDeclarationPrintConfiguration`。
