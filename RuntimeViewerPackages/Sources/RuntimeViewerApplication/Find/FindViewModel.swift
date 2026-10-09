@@ -112,7 +112,8 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         .disposed(by: rx.disposeBag)
 
         input.filterString.driveOnNext { [weak self] filterString in
-            self?.filterString = filterString
+            guard let self else { return }
+            self.filterString = filterString
         }
         .disposed(by: rx.disposeBag)
 
@@ -128,7 +129,8 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         .disposed(by: rx.disposeBag)
 
         input.resultOpenedInNewTab.emitOnNext { [weak self] node in
-            self?.navigate(to: node, inNewTab: true)
+            guard let self else { return }
+            navigate(to: node, inNewTab: true)
         }
         .disposed(by: rx.disposeBag)
 

@@ -266,13 +266,16 @@ public final class FindCorpusCoordinator {
             let result: Result<RuntimeInterfaceCorpusBuildSummary, any Swift.Error>
             do {
                 let summary = try await engine.buildInterfaceCorpus(for: imagePath, transformer: transformer, isPrioritized: isPrioritized) { [weak self] progress in
-                    self?.stageProgress(progress, for: imagePath, requestIdentifier: identifier)
+                    guard let self else { return }
+                    stageProgress(progress, for: imagePath, requestIdentifier: identifier)
                 }
                 result = .success(summary)
             } catch {
                 result = .failure(error)
             }
-            self?.finishBuildRequest(identifier, of: imagePath, with: result)
+            // After the await: the coordinator is not kept alive while the corpus builds.
+            guard let self else { return }
+            finishBuildRequest(identifier, of: imagePath, with: result)
         }
         buildRequests[imagePath] = BuildRequest(identifier: identifier, task: task)
     }
@@ -429,7 +432,8 @@ public final class FindCorpusCoordinator {
         guard progressStaging.record(progress, for: imagePath, requestIdentifier: requestIdentifier) else { return }
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: Self.progressCoalescingWindowNanoseconds)
-            self?.flushProgress()
+            guard let self else { return }
+            flushProgress()
         }
     }
 

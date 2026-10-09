@@ -399,12 +399,14 @@ public final class FindSession {
                 switch request {
                 case .text(let engineQuery):
                     let summary = try await engine.searchInterfaces(engineQuery) { [weak self] batch in
-                        await self?.appendTextMatches(batch, from: run)
+                        guard let self else { return }
+                        await appendTextMatches(batch, from: run)
                     }
                     outcome = .success(.text(summary))
                 case .members(let engineQuery):
                     let summary = try await engine.searchMembers(engineQuery) { [weak self] batch in
-                        await self?.appendMemberMatches(batch, from: run)
+                        guard let self else { return }
+                        await appendMemberMatches(batch, from: run)
                     }
                     outcome = .success(.members(summary))
                 case .relationships(let engineQuery):
@@ -413,7 +415,9 @@ public final class FindSession {
             } catch {
                 outcome = .failure(error)
             }
-            self?.runDidEnd(run, with: outcome, isWidening: isWidening)
+            // After the awaits: the session is not kept alive while the engine searches.
+            guard let self else { return }
+            runDidEnd(run, with: outcome, isWidening: isWidening)
         }
     }
 

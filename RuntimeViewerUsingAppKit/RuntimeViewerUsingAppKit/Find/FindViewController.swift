@@ -457,7 +457,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
 
         output.summary.driveOnNext { [weak self] summary in
-            self?.setSummary(summary)
+            guard let self else { return }
+            setSummary(summary)
         }
         .disposed(by: rx.disposeBag)
 

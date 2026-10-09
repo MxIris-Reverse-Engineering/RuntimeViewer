@@ -6813,7 +6813,7 @@ func partialFilterSharesTheAppearance() throws {
 
 - **严重度**：Cleanup
 - **审查编号**：CV5
-- **状态**：方案待批，代码未改
+- **状态**：已修复。纯风格，行为不变，没有新增测试，由既有套件覆盖（`FindViewModelTests`、`FindScopeChooserViewModelTests`、`FindCorpusCoordinatorTests`、`FindSession*Tests`、`PopUpPathControlTests`，App 编译验证 `FindViewController` 与 `ContentSourceEditorViewController`）。按文档改的：`FindViewModel` 两处（第三处 `resultClicked` 已随 PR121.07 改过）、`FindViewController` 一处、`ContentSourceEditorViewController` 一处、`FindCorpusCoordinator` 三处（异步闭包只在 await 之后 `guard`）、`PopUpPathControlTests` 一处；`FindScopeChooserViewModel` 那一处随 PR121.45 改了；`ReportViewController` 两处已由 Report 批次（S7）在主分支上改掉，这里不再碰，免得冲突。偏离：文档留给 PR121.02 的 `FindSession` 三处，那一条修完后仍是 `self?.`（搜索任务的进度闭包与收尾），这次一并改成 await 之后的 `guard let self`，生命期与原来相同。再 grep 本 PR 新增的 61 个 Swift 文件，没有别的漏网；`FindCorpusCoordinator` 里保留的那处 `if let self`（长 `for await` 循环）已不在了。`ContentSourceEditorViewController.swift:63` 与文档列的另外三处是本 PR 之前就有的，不在这一条
 
 **问题**：本 PR 新增的 16 处闭包没按项目约定写：AGENTS.md「Closures & Self Capture」要求一律 `guard let self else { return }`，这些地方却用了 `self?.` 或 `if let self`。
 
