@@ -8029,7 +8029,8 @@ func flattenedAlwaysIndexFailureShowsItsReason() {
 
 - **严重度**：Minor
 - **审查编号**：C21（B3）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`RuntimeBackgroundIndexingStagingTests`（直接按顺序把事件喂给 `StagingStore`，与切引擎的时机无关）。修前两条红：补发的 `.batchStarted` 让被归档的批次回到进行中（"the replayed batch is running again"）；它真正的终态又被追加进历史一次（`historyAdditions` 里还是这个批次）。修后三条全绿（第三条钉住「没切过引擎的批次照旧进历史一次」）
+- **落地与偏离**：照方案：`swapArchivedBatchIDs` 在 `drainForEngineSwap` 登记，补发的开始事件被忽略，终态事件按标识就地替换归档快照（Clear History 之后什么也不做），`appendToHistory` 按标识幂等；`StagingStore` 与它返回的两个类型改为 internal。修红灯时先只做了访问级别的改动（没有行为变化），再写测试。终态替换那两处原本要同时标 `shouldReloadEngineImages`，PR121.58 把这条路径整个删了，按文档以 58 为准。
 
 **问题**：文档从引擎 A 切到 B 时，`handleEngineSwap` 先给 A 发一个即发即弃的 `cancelAllBatches`，再把 A 上还在跑的批次 X 合成一份「已取消」快照放进历史（RuntimeBackgroundIndexingCoordinator.swift:292-317）。如果用户在 A 真正结束 X 之前又切回 A，就会出两次重复：
 - 新订阅会先补发一个 `.batchStarted(X)`（RuntimeBackgroundIndexingManager.swift:82-84）。`applyEvent` 不加判断就把它放回进行中（:741-745），于是 X 同时出现在进行中和历史里。

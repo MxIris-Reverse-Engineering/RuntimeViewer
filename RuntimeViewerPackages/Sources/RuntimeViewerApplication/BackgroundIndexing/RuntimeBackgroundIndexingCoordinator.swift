@@ -215,14 +215,29 @@ public final class RuntimeBackgroundIndexingCoordinator {
         for batch in snapshot.historyAdditions {
             appendToHistory(batch)
         }
+        for batch in snapshot.historyReplacements {
+            replaceInHistory(batch)
+        }
     }
 
     private func appendToHistory(_ batch: RuntimeIndexingBatch) {
         var updatedHistory = historyRelay.value
+        // One entry per batch, whichever route its end took to get here.
+        updatedHistory.removeAll { $0.id == batch.id }
         updatedHistory.insert(batch, at: 0)
         if updatedHistory.count > Self.maxHistoryEntries {
             updatedHistory.removeLast(updatedHistory.count - Self.maxHistoryEntries)
         }
+        historyRelay.accept(updatedHistory)
+    }
+
+    /// Puts a batch's real end in place of the cancelled snapshot an engine
+    /// swap archived for it, where that snapshot stands. Gone already — the
+    /// user cleared the history — leaves nothing to replace.
+    private func replaceInHistory(_ batch: RuntimeIndexingBatch) {
+        var updatedHistory = historyRelay.value
+        guard let historyIndex = updatedHistory.firstIndex(where: { $0.id == batch.id }) else { return }
+        updatedHistory[historyIndex] = batch
         historyRelay.accept(updatedHistory)
     }
 
@@ -687,7 +702,7 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// Outcome of `StagingStore.applyEvent` — tells the coordinator what main-
     /// actor work the event triggered. Computed under the staging lock so the
     /// "did I just take ownership of the in-flight flush?" decision is atomic.
-    fileprivate struct ApplyOutcome {
+    struct ApplyOutcome {
         var requiresImmediateFlush: Bool = false
         var didScheduleCoalescedFlush: Bool = false
         var shouldReloadEngineImages: Bool = false
@@ -696,26 +711,36 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// Snapshot taken at the start of a flush. The lock is released before the
     /// coordinator publishes to the relays, so subscribers run unblocked while
     /// the next batch of events keeps mutating the staging store.
-    fileprivate struct FlushSnapshot {
+    struct FlushSnapshot {
         let activeChanged: Bool
         let aggregateChanged: Bool
         let batches: [RuntimeIndexingBatch]
         let historyAdditions: [RuntimeIndexingBatch]
+        /// Real ends of batches an engine swap archived, each to take its
+        /// archive's place.
+        let historyReplacements: [RuntimeIndexingBatch]
 
-        var hasWork: Bool { activeChanged || aggregateChanged || !historyAdditions.isEmpty }
+        var hasWork: Bool { activeChanged || aggregateChanged || !historyAdditions.isEmpty || !historyReplacements.isEmpty }
     }
 
     /// Lock-protected staging for `RuntimeBackgroundIndexingCoordinator`.
     /// Holds everything the off-main event pump touches; the coordinator's
     /// main-actor methods only see snapshots produced under the same lock.
     /// `@unchecked Sendable` because synchronization is via `NSLock` rather
-    /// than the data-race detector.
-    fileprivate final class StagingStore: @unchecked Sendable {
+    /// than the data-race detector. Internal so its tests can drive it event
+    /// by event (`RuntimeBackgroundIndexingStagingTests`).
+    final class StagingStore: @unchecked Sendable {
         private let lock = NSLock()
 
         // All fields below are touched only under `lock`.
         private var stagedBatches: [RuntimeIndexingBatch] = []
         private var pendingHistoryAdditions: [RuntimeIndexingBatch] = []
+        private var pendingHistoryReplacements: [RuntimeIndexingBatch] = []
+        /// Batches an engine swap archived as cancelled while their engine
+        /// was still ending them. A subscription made after swapping back
+        /// replays them as under way; that replay is ignored, and their end
+        /// replaces the archive.
+        private var swapArchivedBatchIDs: Set<RuntimeIndexingBatchID> = []
         private var hasPendingActiveChange = false
         private var pendingAggregateRefresh = false
         /// `true` while a `Task { @MainActor } sleep+flush` pair is outstanding.
@@ -739,6 +764,11 @@ extension RuntimeBackgroundIndexingCoordinator {
 
             switch event {
             case .batchStarted(let batch):
+                // An engine swap archived this batch as cancelled and asked its
+                // engine to stop it; a subscription made after swapping back
+                // replays it as still under way. It is not running again — its
+                // end is what comes next.
+                guard !swapArchivedBatchIDs.contains(batch.id) else { break }
                 stagedBatches.append(batch)
                 hasPendingActiveChange = true
                 pendingAggregateRefresh = true
@@ -766,6 +796,12 @@ extension RuntimeBackgroundIndexingCoordinator {
                     hasPendingActiveChange = true
                 }
             case .batchFinished(let finished):
+                if swapArchivedBatchIDs.remove(finished.id) != nil {
+                    pendingHistoryReplacements.append(finished)
+                    outcome.requiresImmediateFlush = true
+                    outcome.shouldReloadEngineImages = true
+                    break
+                }
                 stagedBatches.removeAll { $0.id == finished.id }
                 documentBatchIDs.remove(finished.id)
                 pendingHistoryAdditions.append(finished)
@@ -776,6 +812,12 @@ extension RuntimeBackgroundIndexingCoordinator {
             case .batchCancelled(let cancelled):
                 // Cancellation always removes from active. Lands in history
                 // too so the user can review what got cancelled.
+                if swapArchivedBatchIDs.remove(cancelled.id) != nil {
+                    pendingHistoryReplacements.append(cancelled)
+                    outcome.requiresImmediateFlush = true
+                    outcome.shouldReloadEngineImages = true
+                    break
+                }
                 stagedBatches.removeAll { $0.id == cancelled.id }
                 documentBatchIDs.remove(cancelled.id)
                 pendingHistoryAdditions.append(cancelled)
@@ -823,10 +865,12 @@ extension RuntimeBackgroundIndexingCoordinator {
             let activeChanged = hasPendingActiveChange
             let aggregateChanged = pendingAggregateRefresh
             let historyAdditions = pendingHistoryAdditions
+            let historyReplacements = pendingHistoryReplacements
 
             hasPendingActiveChange = false
             pendingAggregateRefresh = false
             pendingHistoryAdditions = []
+            pendingHistoryReplacements = []
             hasScheduledFlush = false
 
             // Snapshot batches only when the flush will actually publish them
@@ -837,7 +881,8 @@ extension RuntimeBackgroundIndexingCoordinator {
                 activeChanged: activeChanged,
                 aggregateChanged: aggregateChanged,
                 batches: batches,
-                historyAdditions: historyAdditions
+                historyAdditions: historyAdditions,
+                historyReplacements: historyReplacements
             )
         }
 
@@ -850,6 +895,9 @@ extension RuntimeBackgroundIndexingCoordinator {
             lock.lock()
             defer { lock.unlock() }
             let drained = (activeBatches: stagedBatches, pendingHistory: pendingHistoryAdditions)
+            // The caller archives these as cancelled while their engine may
+            // still be ending them; see `applyEvent`.
+            swapArchivedBatchIDs.formUnion(stagedBatches.map(\.id))
             stagedBatches.removeAll()
             pendingHistoryAdditions.removeAll()
             hasPendingActiveChange = false
