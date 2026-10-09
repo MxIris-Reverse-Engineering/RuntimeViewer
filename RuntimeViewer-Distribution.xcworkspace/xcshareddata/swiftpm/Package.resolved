@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "feature/runtime-viewer/find-navigator",
-        "revision" : "0269828284dbd55933e34b4289c086dbae8f3e65"
+        "revision" : "52460a79c3574f6c53a6f9e70f99d2438114782f"
       }
     },
     {
@@ -689,8 +689,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-subprocess.git",
       "state" : {
-        "revision" : "b3937ab85dd32f6e9435914599c1519074769c1a",
-        "version" : "1.0.0"
+        "revision" : "55d30558b8b12c0343793421328fe81a4919c776",
+        "version" : "1.0.1"
       }
     },
     {
