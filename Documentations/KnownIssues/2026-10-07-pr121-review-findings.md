@@ -5051,7 +5051,7 @@ func peerWithoutCorpusCommandsTurnsCorporaOff() async throws {
 
 - **严重度**：Minor（加固，目前不出错）
 - **审查编号**：AL8
-- **状态**：方案待批，代码未改
+- **状态**：已修复（加固）。大小写开关的输入改为 `caseSensitiveButton.rx.click(with: \.state)`——点击时才读按钮状态，从构造上就不带初值，不再靠重载决议落到 RxAppKit 那个无初值的版本；`FindViewModel.Input` 的文档注释写明「写进查询的输入必须是纯事件」及原因。原写法当时不出错，写不出修复前会红的测试，也没有 App target 的单元测试，按文档以 App 编译验证。同类：模式路径、成员种类、范围菜单、回车提交已是 `rx.click(with:)` / `rx.controlEvent`；范围选择表单只在 OK 时写一次会话
 
 **问题**：两层侧栏各有一个 Find 页，共用文档的同一个 `FindSession`。所以每一页写进会话的输入都必须是纯事件：页面绑定时如果重放一个初值（控件的默认状态），就会覆盖另一页已经设好的查询。现在大小写开关的输入是 `caseSensitiveButton.rx.state.asSignal()`（`FindViewController.swift:320`），只是碰巧解析到了 RxAppKit 那个不带初值的重载。换一种写法，例如 `.asSignal(onErrorJustReturn:)`，就会解析到 RxCocoa 带初值的 `ControlProperty`。那样一来，后创建的那一页一绑定，就会把默认的 `.off` 写进会话，冲掉另一页设好的「区分大小写」。
 

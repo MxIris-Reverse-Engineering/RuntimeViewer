@@ -9,6 +9,11 @@ import MemberwiseInit
 /// document's `FindSession`, which both pages bind to, and the scope chooser
 /// is presented by whichever level the page is on.
 public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route> {
+    /// Every input that writes the query is an event, never a state with an initial value. Both
+    /// sidebar levels have a page bound to the document's one `FindSession`, and a value a page
+    /// replays as it binds — its controls' defaults — would overwrite the query the other page
+    /// set. Read a control's state when it is clicked (`rx.click(with:)`), not through a
+    /// property that may start with a value under some overloads.
     @MemberwiseInit(.public)
     public struct Input {
         /// A choice made in one of the mode path's menus.

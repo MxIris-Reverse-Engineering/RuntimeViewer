@@ -369,7 +369,10 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         let input = FindViewModel<Route>.Input(
             modePathChoiceSelected: modePathChoiceSelected,
             memberKindFilterSelected: memberKindFilterSelected,
-            caseSensitiveToggled: caseSensitiveButton.rx.state.asSignal().map { $0 == .on },
+            // A click, read when it happens. `rx.state` carries an initial value under some
+            // overloads, and the page bound second would write its default into the session
+            // both pages share.
+            caseSensitiveToggled: caseSensitiveButton.rx.click(with: \.state).asSignal().map { $0 == .on },
             scopeMenuChoiceSelected: scopeMenuChoiceSelected,
             searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in searchField.stringValue },
             filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
