@@ -9,6 +9,22 @@ import Testing
 @Suite("FindResultNode")
 @MainActor
 struct FindResultNodeTests {
+    // MARK: - Identity
+
+    /// `NSOutlineView` keeps a row expanded, and finds its row, only for an item equal to the one
+    /// it knows, and every batch of a search used to bring new instances of every row; nodes
+    /// compared by pointer, so a batch collapsed the types and lost the selection (PR121.07).
+    @Test("two instances of the same row are equal and hash alike, as AppKit needs to keep it expanded")
+    func sameRowIsEqual() {
+        let first = FindResultFixtures.type("Alpha", hitCount: 1)
+        let second = FindResultFixtures.type("Alpha", hitCount: 1)
+
+        #expect(first !== second)
+        #expect(first == second)
+        #expect(first.hash == second.hash)
+        #expect(first != FindResultFixtures.type("Beta", hitCount: 1))
+    }
+
     // MARK: - Content
 
     /// The outline's adapter skips a row its content comparison calls unchanged, and that

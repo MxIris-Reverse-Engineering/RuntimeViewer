@@ -940,7 +940,15 @@ func regularExpressionBudgetStopsOneMatch() throws {
 
 - **严重度**：Major
 - **审查编号**：C38（含 C44、S5）
-- **状态**：方案待批，代码未改
+- **状态**：已修复。复现测试：`FindResultNodeTests.sameRowIsEqual`（修前红：同一行的两个实例不相等、哈希不同）、`FindResultsOutlineTests.laterBatchKeepsCollapseAndSelection`（修前红：下一批的新实例 AppKit 不认识，`isItemExpanded(alpha)` 为假）；新契约：`FindResultsOutlineTests.reloadPutsTheSelectionBack`、`removingAnExpandedRowReportsNoCollapse`、`onlyTheUsersChoiceActivates`，`FindResultsPresentationTests`（五条），`FindResultActivationTests`（三条，含 C44 的 ⌥），`FindViewModelTests.expansionFollowsTheUsersCollapse`、`selectionFollowsTheUsersChoice`、`clickingTheShownHitAgainGoesNowhere`。后两类里有两条先以「不生效」的形式落地、确认为红再实现：关系树 601 行时修前全部展开（`largeRelationshipTreeOpensItsFirstLevel`），第二次点击修前照样导航（`clickingTheShownHitAgainGoesNowhere`，路由数 2 而非 1）。
+- **落地与偏离**：
+  - 展开与选中的规则写成 `FindResultsOutline`（非泛型、可单测），一次更新的结果是 `FindResultsPresentation`；「先把节点交给数据源、再展开、再恢复选中」写成 `FindResultsPresentation.apply(to:)` 放在 Application 层，App 里的页面只调它，AppKit 测试跑的就是页面跑的那段代码。
+  - 展开策略照本条「除了用户折叠的，全部展开」，再加 PR121.48 定的关系模式规则：全部展开后超过 500 行的关系树只展开第一层（匹配到的类型）。注意 PR121.54 的条目写的是「与 Find 页一致：首次出现时展开一次」，两条描述不一致；Find 这边按本条做，原因是过滤栏清空后被过滤掉又回来的类型应当重新展开，而「首次出现时展开一次」要靠 `beginFiltering` / `endFiltering` 才能做到，合并时请统一两条的文字。
+  - 「再次点击已选中的命中时不重新跳转」放在 ViewModel 判断：上一次从本页导航到的就是这一行、且文档仍显示它的类型时不再导航；文档已显示别的东西（例如在内容区点了链接）时，点同一行照常导航回去。没有在 `userActivatedItem()` 里按「提议的选中等于当前选中」过滤：那样用户离开后点仍选中的那一行永远回不去。AppKit 在点击已选中的行时是否还会询问 `selectionIndexesForProposedSelection` 没能在测试里确认（测试只能直接调用 delegate，真实点击要窗口事件循环），ViewModel 的判断让行为与它无关。
+  - 测试顺带钉住了三条 AppKit 事实：大纲按 `isEqual` / `hash` 找行（新实例也能 `isItemExpanded` / `row(forItem:)`）；diff 删除行或整表 reload 都不发 collapse 通知（所以把通知交给 ViewModel 是安全的）；整表 reload 后选中按行号保留（所以要按标识恢复）。
+  - 键入跳转：页面实现 `outlineView(_:typeSelectStringFor:item:)`，取 `FindResultNode.typeSelectString`（行文本去掉前导空白）；按键事件的分类 `FindResultActivation.isTypeSelect(_:)` 与 ⌥ 的判断放在 Application 以便测试，去抖 800 ms 留在页面。
+  - `Output.nodes` 保留（范围菜单的 Current Find Results 与测试在用），新增 `Output.presentation` 驱动大纲；`expandAll` 删除；搜索框占位符改为绑定 `output.searchFieldPlaceholder`，`viewDidLoad` 与 `query` 订阅里的两份设置删掉。
+  - 同类：侧栏 `SidebarRuntimeObjectViewController` 也手写了「单行 + 触发事件 + 去抖」，但它的大纲是单选、行为正确，这次不迁到 `userActivatedItem()`；Report 页的同一问题归 PR121.53 / PR121.54。
 
 **问题**：Find 结果大纲用 `rx.nodes(options: [])` 绑定，而 `FindSession` 每来一批（以及每次补搜、过滤栏每敲一个键）都给所有行新建 `FindResultNode`。这些节点是按指针判等的 `NSObject`，AppKit 在 `reloadData()` 之后认不出旧行：用户折叠的类型被重新展开（`FindViewController.swift:387-391` 每次都 `expandItem(nil, expandChildren: true)`），选中只按行号保留，落到别的行上。导航挂在 `rx.modelSelected()`（`selectionDidChangeNotification`）上，所以 reload、程序化选中、⌘A 引起的选中变化也会导航，`pushOntoTimeline` 还会截掉「前进」历史。另外，提案承诺的「⌥-点击在新标签打开」没有实现（C44），`Output.expandAll` 一直没人用（S5）。
 

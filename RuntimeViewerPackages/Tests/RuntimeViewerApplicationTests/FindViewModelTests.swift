@@ -25,6 +25,9 @@ struct FindViewModelTests {
     private let filterStringRelay = BehaviorRelay<String>(value: "")
     private let resultClickedRelay = PublishRelay<FindResultNode>()
     private let resultOpenedInNewTabRelay = PublishRelay<FindResultNode>()
+    private let resultCollapsedRelay = PublishRelay<FindResultNode>()
+    private let resultExpandedRelay = PublishRelay<FindResultNode>()
+    private let resultsSelectedRelay = PublishRelay<[FindResultNode]>()
 
     private static func makeEnvironmentWithCorpus() async throws -> ViewModelTestEnvironment {
         let engine = try await TestRuntimeEngine.shared()
@@ -274,6 +277,92 @@ struct FindViewModelTests {
 
         filterStringRelay.accept("")
         #expect(try await nextValue(from: output.nodes) { $0.count == unfiltered.count }.count == unfiltered.count)
+    }
+
+    // MARK: - Expansion and selection
+
+    /// The page used to expand every row after every update, so a type the user collapsed opened
+    /// again with the next batch (PR121.07); the outline is now told what to expand.
+    @Test("rows stay expanded except the ones the user collapsed, until a new search")
+    func expansionFollowsTheUsersCollapse() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        searchCommittedRelay.accept("initWithFormat:")
+        let first = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        let collapsedType = try #require(first.nodes.first)
+        #expect(first.nodesToExpand.contains(collapsedType))
+
+        resultCollapsedRelay.accept(collapsedType)
+        // Any update publishes the tree again; the filter bar is the simplest one to make.
+        filterStringRelay.accept("init")
+        let afterCollapse = try await nextValue(from: output.presentation) { $0.nodes.contains(collapsedType) }
+        #expect(!afterCollapse.nodesToExpand.contains(collapsedType))
+
+        resultExpandedRelay.accept(collapsedType)
+        filterStringRelay.accept("initWith")
+        let afterExpand = try await nextValue(from: output.presentation) { $0.nodes.contains(collapsedType) }
+        #expect(afterExpand.nodesToExpand.contains(collapsedType))
+
+        resultCollapsedRelay.accept(collapsedType)
+        filterStringRelay.accept("")
+        searchCommittedRelay.accept("initWithFormat:")
+        _ = try await nextValue(from: output.presentation, timeout: 60) { $0.nodes.isEmpty }
+        let afterNewSearch = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        #expect(afterNewSearch.nodesToExpand.contains(collapsedType))
+    }
+
+    @Test("the hit the user selected is selected again after an update, and forgotten by a new search")
+    func selectionFollowsTheUsersChoice() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        searchCommittedRelay.accept("initWithFormat:")
+        let first = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        let selectedHit = try #require(first.nodes.last?.children.first)
+        resultsSelectedRelay.accept([selectedHit])
+
+        filterStringRelay.accept("initWithFormat")
+        let filtered = try await nextValue(from: output.presentation) { !$0.nodesToSelect.isEmpty }
+        #expect(filtered.nodesToSelect.map(\.identifier) == [selectedHit.identifier])
+
+        filterStringRelay.accept("")
+        searchCommittedRelay.accept("NSMutableString")
+        let afterNewSearch = try await nextValue(from: output.presentation, timeout: 60) { !$0.nodes.isEmpty }
+        #expect(afterNewSearch.nodesToSelect.isEmpty)
+    }
+
+    /// Decided with the review (PR121.07): a click on the hit whose type is already on screen
+    /// because of it — the second click of a double-click, or the row clicked again — does not
+    /// navigate again. Once the document has moved on, the same row navigates back to it.
+    @Test("clicking the hit on screen again goes nowhere; after the document moved on it navigates back")
+    func clickingTheShownHitAgainGoesNowhere() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        searchCommittedRelay.accept("initWithFormat:")
+        let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
+        let hit = try #require(nodes.first?.children.first)
+        var routes: [SelectionRoute] = []
+        let routeSubscription = environment.documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { routeSubscription.dispose() }
+
+        resultClickedRelay.accept(hit)
+        try await settleMainQueue()
+        #expect(routes.count == 1)
+
+        resultClickedRelay.accept(hit)
+        try await settleMainQueue()
+        #expect(routes.count == 1, "the second click navigated again: \(routes)")
+
+        environment.documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "Elsewhere", kind: .objc(.type(.class)))))
+        resultClickedRelay.accept(hit)
+        try await settleMainQueue()
+        #expect(routes.count == 3)
+        #expect(environment.documentState.selectedRuntimeObject == hit.navigationTarget?.object)
     }
 
     // MARK: - Members
@@ -653,7 +742,10 @@ struct FindViewModelTests {
             searchCommitted: searchCommittedRelay.asSignal(),
             filterString: filterStringRelay.asDriver(),
             resultClicked: resultClickedRelay.asSignal(),
-            resultOpenedInNewTab: resultOpenedInNewTabRelay.asSignal()
+            resultOpenedInNewTab: resultOpenedInNewTabRelay.asSignal(),
+            resultCollapsed: resultCollapsedRelay.asSignal(),
+            resultExpanded: resultExpandedRelay.asSignal(),
+            resultsSelected: resultsSelectedRelay.asSignal()
         ))
         return (viewModel, output)
     }

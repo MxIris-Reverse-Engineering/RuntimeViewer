@@ -25,12 +25,15 @@ public struct FindResultCellAppearance: Equatable {
 /// One row of the Find navigator's outline: a type with its hits underneath,
 /// a hit, a member, or a node of a relationship tree.
 ///
-/// A class (an `NSObject`) because `NSOutlineView` identifies items by
-/// pointer; `differenceIdentifier` is a string that stays stable across the
-/// incremental batches a search delivers, so DifferenceKit keeps rows in
-/// place while more arrive. The appearance is built on construction — every
-/// field is known from the content — which is what lets the outline render
-/// it without a ViewModel per row.
+/// A class (an `NSObject`) because `NSOutlineView` takes objects as items.
+/// Two nodes with the same `identifier` are equal, whichever instances they
+/// are: AppKit keeps a row expanded and finds its row only for an item equal
+/// to the one it knows, and every update of the results brings new nodes.
+/// What a row shows is compared by `isContentEqual(to:)`. The identifier
+/// stays stable across the incremental batches a search delivers, so
+/// DifferenceKit keeps rows in place while more arrive. The appearance is
+/// built on construction — every field is known from the content — which is
+/// what lets the outline render it without a ViewModel per row.
 public final class FindResultNode: NSObject, @unchecked Sendable {
     public enum Content: Hashable {
         /// A type grouping the hits or members found in it.
@@ -75,12 +78,30 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         }
     }
 
+    /// What type-select matches the row by: the start of the text it shows.
+    public var typeSelectString: String {
+        String(filterableText.drop { $0.isWhitespace })
+    }
+
     public init(content: Content, children: [FindResultNode] = [], identifier: String) {
         self.content = content
         self.children = children
         self.identifier = identifier
         self.appearance = Self.makeAppearance(for: content)
         super.init()
+    }
+
+    // MARK: - Identity
+
+    /// The same row, whichever instance: the identifiers match. See the type's
+    /// documentation for why the outline needs this.
+    public override func isEqual(_ object: Any?) -> Bool {
+        guard let other = object as? FindResultNode else { return false }
+        return identifier == other.identifier
+    }
+
+    public override var hash: Int {
+        identifier.hashValue
     }
 
     // MARK: - Construction

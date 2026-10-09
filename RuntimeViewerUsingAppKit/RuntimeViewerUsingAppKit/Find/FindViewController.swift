@@ -15,10 +15,14 @@ import SnapKit
 /// Generic over the sidebar level's route because the page is a tab of both levels; both bind
 /// the document's one `FindSession` through their own `FindViewModel`, and the scope chooser is
 /// presented by whichever level the page is on.
-final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewController<FindViewModel<Route>> {
+final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewController<FindViewModel<Route>>, NSOutlineViewDelegate {
     // MARK: - Relays
 
     private let openInNewTabRelay = PublishRelay<FindResultNode>()
+
+    /// What the outline shows. Its data source subscribes to this relay, so the presentation's
+    /// subscriber hands the nodes over synchronously and can expand and select rows right after.
+    private let displayedNodesRelay = PublishRelay<[FindResultNode]>()
 
     // MARK: - Query Parameters
 
@@ -201,7 +205,6 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             $0.sendsWholeSearchString = true
             $0.sendsSearchStringImmediately = false
             $0.maximumRecents = 0
-            $0.placeholderString = FindMode.text.searchFieldPlaceholder
         }
 
         searchProgressIndicator.do {
@@ -293,7 +296,41 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
     override func setupBindings(for viewModel: FindViewModel<Route>) {
         super.setupBindings(for: viewModel)
 
-        let resultClicked: Signal<FindResultNode> = outlineView.rx.modelSelected().asSignal()
+        // What the user chose: one row, by click, arrow key or type-select — never a reload, the
+        // selection the page puts back after one, or a selection of several rows. Type-select
+        // reports every keystroke, so that path waits for the typing to settle, as the sidebar's
+        // does; ⌥ opens the row in a new tab.
+        let userActivation = outlineView.rx.userActivatedItem(FindResultNode.self)
+        let activation: Signal<OutlineViewUserActivation<FindResultNode>> = .merge(
+            userActivation
+                .filter { !FindResultActivation.isTypeSelect($0.triggeringEvent) }
+                .asSignal(onErrorSignalWith: .empty()),
+            userActivation
+                .filter { FindResultActivation.isTypeSelect($0.triggeringEvent) }
+                .debounce(.milliseconds(800), scheduler: MainScheduler.instance)
+                .asSignal(onErrorSignalWith: .empty())
+        )
+        let resultClicked: Signal<FindResultNode> = activation
+            .filter { !FindResultActivation.opensInNewTab(for: $0.triggeringEvent) }
+            .map(\.item)
+        let resultOpenedWithOption: Signal<FindResultNode> = activation
+            .filter { FindResultActivation.opensInNewTab(for: $0.triggeringEvent) }
+            .map(\.item)
+
+        let resultsSelected: Signal<[FindResultNode]> = outlineView.rx.proposedSelection()
+            .asSignal()
+            .map { [weak outlineView] proposedSelection in
+                guard let outlineView else { return [] }
+                return proposedSelection.indexes.compactMap { row in outlineView.item(atRow: row) as? FindResultNode }
+            }
+        let resultCollapsed: Signal<FindResultNode> = NotificationCenter.default.rx
+            .notification(NSOutlineView.itemDidCollapseNotification, object: outlineView)
+            .compactMap { notification in notification.userInfo?["NSObject"] as? FindResultNode }
+            .asSignal(onErrorSignalWith: .empty())
+        let resultExpanded: Signal<FindResultNode> = NotificationCenter.default.rx
+            .notification(NSOutlineView.itemDidExpandNotification, object: outlineView)
+            .compactMap { notification in notification.userInfo?["NSObject"] as? FindResultNode }
+            .asSignal(onErrorSignalWith: .empty())
 
         // Only what the user picks: the pop-up's own selection when it is bound would overwrite
         // a kind chosen on the other sidebar level's page.
@@ -322,7 +359,10 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in searchField.stringValue },
             filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
             resultClicked: resultClicked,
-            resultOpenedInNewTab: openInNewTabRelay.asSignal()
+            resultOpenedInNewTab: .merge(openInNewTabRelay.asSignal(), resultOpenedWithOption),
+            resultCollapsed: resultCollapsed,
+            resultExpanded: resultExpanded,
+            resultsSelected: resultsSelected
         )
         let output = viewModel.transform(input)
 
@@ -334,9 +374,6 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
         output.query.driveOnNext { [weak self] query in
             guard let self else { return }
-            if searchField.placeholderString != query.mode.searchFieldPlaceholder {
-                searchField.placeholderString = query.mode.searchFieldPlaceholder
-            }
             let caseState: NSControl.StateValue = query.isCaseSensitive ? .on : .off
             if caseSensitiveButton.state != caseState {
                 caseSensitiveButton.state = caseState
@@ -363,13 +400,19 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
         output.scopeToolTip.drive(scopeButton.rx.toolTip).disposed(by: rx.disposeBag)
 
+        output.searchFieldPlaceholder
+            .distinctUntilChanged()
+            .map { Optional($0) }
+            .drive(searchField.rx.placeholderString)
+            .disposed(by: rx.disposeBag)
+
         output.scopeMenuItems.driveOnNext { [weak self] menuItems in
             guard let self else { return }
             scopeButton.menuItems = menuItems
         }
         .disposed(by: rx.disposeBag)
 
-        output.nodes.drive(outlineView.rx.nodes(options: []))({ (outlineView: NSOutlineView, _: NSTableColumn?, node: FindResultNode) -> NSView? in
+        outlineView.rx.nodes(source: displayedNodesRelay, options: .diffable)({ (outlineView: NSOutlineView, _: NSTableColumn?, node: FindResultNode) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: FindResultCellView.self)
             cellView.configure(with: node.appearance)
             return cellView
@@ -382,13 +425,18 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         })
         .disposed(by: rx.disposeBag)
 
-        // Subscribed after the nodes binding, so the adapter has reloaded by the time this
-        // runs: hits are only useful with their type expanded, as Xcode shows them.
-        output.nodes.driveOnNext { [weak self] nodes in
-            guard let self, !nodes.isEmpty else { return }
-            outlineView.expandItem(nil, expandChildren: true)
+        // One pass per update, in this order: the data source takes the nodes — synchronously,
+        // through the relay — then the rows are expanded and the user's selection is put back.
+        // Nodes compare by identifier, so a batch that only appends types is inserted without
+        // touching the rows on screen, and a reload keeps every row the user left expanded.
+        output.presentation.driveOnNext { [weak self] presentation in
+            guard let self else { return }
+            displayedNodesRelay.accept(presentation.nodes)
+            presentation.apply(to: outlineView)
         }
         .disposed(by: rx.disposeBag)
+
+        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
 
         output.summary.driveOnNext { [weak self] summary in
             self?.setSummary(summary)
@@ -410,6 +458,12 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             view.window?.makeFirstResponder(searchField)
         }
         .disposed(by: rx.disposeBag)
+    }
+
+    // MARK: - Type Select
+
+    func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
+        (item as? FindResultNode)?.typeSelectString
     }
 
     // MARK: - Summary
