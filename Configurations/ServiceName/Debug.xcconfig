@@ -1,0 +1,12 @@
+// The privileged helper daemon's name in this configuration. The app, the Catalyst helper and the
+// daemon target (Configurations/LaunchDaemon) all include this file, so the name is written once:
+//
+// - the daemon's PRODUCT_NAME, and the file name the app embeds under Contents/Library/LaunchServices;
+// - the build-time-generated launchd plist (Label / MachServices) and the app Info.plist
+//   RuntimeViewerServiceName key. At runtime RuntimeViewerMachServiceName reads it back: launchd env
+//   for the daemon, Info.plist for the app;
+// - the Catalyst helper's own copy, which must match the app's: the helper reaches the app through
+//   the daemon of that name, and a helper on another daemon never finds the app's endpoint.
+//
+// A new configuration needs a file of its own here, included by all three.
+RUNTIME_VIEWER_SERVICE_NAME = dev.mxiris.runtimeviewer.service

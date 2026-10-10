@@ -1,0 +1,18 @@
+#include "../Version.xcconfig"
+
+// The tests link the SourceEditor frameworks weakly, against the stubs in Stubs/, and find the real
+// ones at run time in the SharedFrameworks directory of the Xcode they were built with.
+FRAMEWORK_SEARCH_PATHS = $(SRCROOT)/../Stubs
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks $(DEVELOPER_DIR)/../SharedFrameworks
+OTHER_LDFLAGS = -weak_framework SourceEditor -weak_framework SourceModelSupport -weak_framework SourceModel
+
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_POINTER_AUTHENTICATION = NO
+GENERATE_INFOPLIST_FILE = YES
+MACOSX_DEPLOYMENT_TARGET = 15.0
+ONLY_ACTIVE_ARCH = NO
+PRODUCT_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER).Tests
+PRODUCT_NAME = $(TARGET_NAME)
+SWIFT_EMIT_LOC_STRINGS = NO
+SWIFT_VERSION = 5.0

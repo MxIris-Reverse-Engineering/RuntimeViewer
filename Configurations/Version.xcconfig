@@ -1,0 +1,12 @@
+// The version RuntimeViewer reports: the app, the Catalyst helper and its plugin, the SourceEditor
+// bridge and its tests, and the local-runtime XPC service all include this file.
+//
+// A release bumps MARKETING_VERSION here and nowhere else. ArchiveScript.sh reads it back through
+// -showBuildSettings and refuses to archive when it does not match --version-tag. Do not change it
+// in a target's General tab: that writes a target-level value which overrides this file for that
+// one target only.
+//
+// RunScript.sh and ArchiveScript.sh pass a date-based CURRENT_PROJECT_VERSION on the command line;
+// 1 is what a plain Xcode build reports.
+MARKETING_VERSION = 3.0.0
+CURRENT_PROJECT_VERSION = 1

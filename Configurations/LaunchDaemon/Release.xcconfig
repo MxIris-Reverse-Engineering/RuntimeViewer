@@ -1,0 +1,5 @@
+#include "Shared.xcconfig"
+#include "../ServiceName/Release.xcconfig"
+
+ARCHS = $(ARCHS_STANDARD)
+ENABLE_POINTER_AUTHENTICATION = YES

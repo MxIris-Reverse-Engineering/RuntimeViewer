@@ -1,0 +1,4 @@
+#include "Shared.xcconfig"
+#include "../ServiceName/Debug.xcconfig"
+
+ENABLE_POINTER_AUTHENTICATION = NO

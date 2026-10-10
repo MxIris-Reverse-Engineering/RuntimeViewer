@@ -1,0 +1,20 @@
+// runtime-viewer-cli as embedded at Contents/Applications/runtime-viewer-cli; one file for every
+// configuration. The target is named after the scheme, not after its product: the workspace also
+// holds the SwiftPM package's executable of that name.
+PRODUCT_NAME = runtime-viewer-cli
+
+// Has to track the app's: Xcode fills in the current SDK version otherwise, and the embedded tool
+// would refuse to launch on systems the app itself supports.
+MACOSX_DEPLOYMENT_TARGET = 15.0
+
+// A command-line tool otherwise installs itself into the archive's usr/local/bin, the archive stops
+// being an app archive, and the Developer ID export fails.
+SKIP_INSTALL = YES
+
+CODE_SIGN_ENTITLEMENTS = runtime-viewer-cli/runtime-viewer-cli.entitlements
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_HARDENED_RUNTIME = YES
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+SWIFT_VERSION = 5.0

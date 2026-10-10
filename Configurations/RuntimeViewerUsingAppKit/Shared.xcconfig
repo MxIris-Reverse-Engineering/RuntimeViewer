@@ -1,3 +1,5 @@
+#include "../Version.xcconfig"
+
 // The asset catalog's app icon. Debug.xcconfig and Release.xcconfig, which include this file,
 // fold both axes — release channel and toolchain — into RUNTIME_VIEWER_APP_ICON_NAME; the comment
 // there explains them.
@@ -7,3 +9,43 @@
 // toolchain, and nothing reports it until ArchiveScript.sh's icon check fails a beta archive. The
 // App Icon field in the target's General tab edits exactly that target-level setting.
 ASSETCATALOG_COMPILER_APPICON_NAME = $(RUNTIME_VIEWER_APP_ICON_NAME)
+
+// The rest of the app target's build settings. The target sets nothing in the project file, and the
+// Tuist-generated project builds it from these same files.
+ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO
+AUTOMATION_APPLE_EVENTS = NO
+CLANG_ENABLE_MODULES = YES
+CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements
+CODE_SIGN_STYLE = Manual
+COMBINE_HIDPI_IMAGES = YES
+DEAD_CODE_STRIPPING = YES
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_POINTER_AUTHENTICATION = NO
+ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO
+ENABLE_RESOURCE_ACCESS_CALENDARS = NO
+ENABLE_RESOURCE_ACCESS_CAMERA = NO
+ENABLE_RESOURCE_ACCESS_CONTACTS = NO
+ENABLE_RESOURCE_ACCESS_LOCATION = NO
+ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO
+ENABLE_USER_SCRIPT_SANDBOXING = NO
+FUSE_BUILD_SCRIPT_PHASES = NO
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.developer-tools
+INFOPLIST_KEY_NSHumanReadableCopyright =
+INFOPLIST_KEY_NSLocalNetworkUsageDescription = RuntimeViewer requires local network permissions to use the Bonjour discovery service
+INFOPLIST_KEY_NSPrincipalClass = NSApplication
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks
+MACOSX_DEPLOYMENT_TARGET = 15.0
+RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO
+RUNTIME_EXCEPTION_ALLOW_JIT = NO
+RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO
+RUNTIME_EXCEPTION_DEBUGGING_TOOL = YES
+RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO
+RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES
+SWIFT_EMIT_LOC_STRINGS = YES
+SWIFT_VERSION = 5.0

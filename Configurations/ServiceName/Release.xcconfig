@@ -1,0 +1,2 @@
+// The privileged helper daemon's name in this configuration; Debug.xcconfig explains who reads it.
+RUNTIME_VIEWER_SERVICE_NAME = com.mxiris.runtimeviewer.service

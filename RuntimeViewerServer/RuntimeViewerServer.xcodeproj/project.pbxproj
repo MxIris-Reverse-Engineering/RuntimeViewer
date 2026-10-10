@@ -24,6 +24,12 @@
 		E994E2962F323A51009DD28A /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E994E3CB2F3257B6009DD28A /* RuntimeViewerCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = RuntimeViewerCore; path = ../RuntimeViewerCore; sourceTree = SOURCE_ROOT; };
 		E9CA7A1B000000000000000B /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerMobileServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9C0F16A0000000000000001 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		E9C0F16A0000000000000002 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		E9C0F16A0000000000000003 /* Debug-arm64e.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Debug-arm64e.xcconfig"; sourceTree = "<group>"; };
+		E9C0F16A0000000000000004 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		E9C0F16A0000000000000005 /* Distribution.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Distribution.xcconfig; sourceTree = "<group>"; };
+		E9C0F16A0000000000000006 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -72,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */,
+				E9C0F16A0000000000000010 /* Configurations */,
 				E994E3CB2F3257B6009DD28A /* RuntimeViewerCore */,
 				E978F91B2F1BBB38004C09B4 /* RuntimeViewerServer */,
 				E978F9282F1C98F1004C09B4 /* Frameworks */,
@@ -94,6 +101,36 @@
 			children = (
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		E9C0F16A0000000000000010 /* Configurations */ = {
+			isa = PBXGroup;
+			children = (
+				E9C0F16A0000000000000011 /* RuntimeViewerServer */,
+				E9C0F16A0000000000000012 /* RuntimeViewerSimulatorServer */,
+			);
+			name = Configurations;
+			path = ../Configurations;
+			sourceTree = SOURCE_ROOT;
+		};
+		E9C0F16A0000000000000011 /* RuntimeViewerServer */ = {
+			isa = PBXGroup;
+			children = (
+				E9C0F16A0000000000000001 /* Shared.xcconfig */,
+				E9C0F16A0000000000000002 /* Debug.xcconfig */,
+				E9C0F16A0000000000000003 /* Debug-arm64e.xcconfig */,
+				E9C0F16A0000000000000004 /* Release.xcconfig */,
+				E9C0F16A0000000000000005 /* Distribution.xcconfig */,
+			);
+			path = RuntimeViewerServer;
+			sourceTree = "<group>";
+		};
+		E9C0F16A0000000000000012 /* RuntimeViewerSimulatorServer */ = {
+			isa = PBXGroup;
+			children = (
+				E9C0F16A0000000000000006 /* Shared.xcconfig */,
+			);
+			path = RuntimeViewerSimulatorServer;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -350,57 +387,8 @@
 		};
 		E9321B2B2F34A40A00665281 /* Distribution */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			baseConfigurationReference = E9C0F16A0000000000000005 /* Distribution.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
-				ARCHS = "$(ARCHS_STANDARD)";
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
-					"@loader_path/Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = auto;
-				SKIP_INSTALL = NO;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = macosx;
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 6;
-				TVOS_DEPLOYMENT_TARGET = 13.0;
-				WATCHOS_DEPLOYMENT_TARGET = 6.0;
-				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Distribution;
 		};
@@ -593,112 +581,15 @@
 		};
 		E978F9212F1BBB38004C09B4 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			baseConfigurationReference = E9C0F16A0000000000000002 /* Debug.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
-					"@loader_path/Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = auto;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = macosx;
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 6;
-				TVOS_DEPLOYMENT_TARGET = 13.0;
-				WATCHOS_DEPLOYMENT_TARGET = 6.0;
-				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Debug;
 		};
 		E978F9222F1BBB38004C09B4 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			baseConfigurationReference = E9C0F16A0000000000000004 /* Release.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
-				ARCHS = "$(ARCHS_STANDARD)";
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
-					"@loader_path/Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = auto;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = macosx;
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 6;
-				TVOS_DEPLOYMENT_TARGET = 13.0;
-				WATCHOS_DEPLOYMENT_TARGET = 6.0;
-				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Release;
 		};
@@ -893,55 +784,8 @@
 		};
 		E9958CDF2FAB79270073036F /* Debug-arm64e */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9C0F16A0000000000000003 /* Debug-arm64e.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
-					"@loader_path/Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = auto;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = macosx;
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 6;
-				TVOS_DEPLOYMENT_TARGET = 13.0;
-				WATCHOS_DEPLOYMENT_TARGET = 6.0;
-				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = "Debug-arm64e";
 		};
@@ -1006,181 +850,29 @@
 		};
 		E9CA7A1B0000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			baseConfigurationReference = E9C0F16A0000000000000006 /* Shared.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = RuntimeViewerMobileServer;
-				SDKROOT = iphonesimulator;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = iphonesimulator;
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
 		E9CA7A1B0000000000000004 /* Debug-arm64e */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			baseConfigurationReference = E9C0F16A0000000000000006 /* Shared.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = RuntimeViewerMobileServer;
-				SDKROOT = iphonesimulator;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = iphonesimulator;
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = "Debug-arm64e";
 		};
 		E9CA7A1B0000000000000005 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			baseConfigurationReference = E9C0F16A0000000000000006 /* Shared.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = RuntimeViewerMobileServer;
-				SDKROOT = iphonesimulator;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = iphonesimulator;
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
 		E9CA7A1B0000000000000006 /* Distribution */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */;
+			baseConfigurationReference = E9C0F16A0000000000000006 /* Shared.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
-				CODE_SIGN_IDENTITY = "";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"@loader_path/Frameworks",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
-				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = RuntimeViewerMobileServer;
-				SDKROOT = iphonesimulator;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = iphonesimulator;
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_INSTALL_MODULE = YES;
-				SWIFT_INSTALL_OBJC_HEADER = NO;
-				SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Distribution;
 		};

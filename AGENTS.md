@@ -27,9 +27,11 @@ Build builds a dependency for the platform named by its own `SDKROOT` /
 the usual Catalyst spelling, `SDKROOT = iphoneos` with
 `SUPPORTS_MACCATALYST = YES`, turns into Catalyst only when the run destination
 is Mac Catalyst, and under the app's macOS destination it builds an `iphoneos`
-product instead. Xcode's build settings editor does not show `SDK_VARIANT` at
-all, so these are edited in the project file. All three configurations of the
-helper and all four of the payload target carry them, along with:
+product instead. They live in the targets' xcconfig files,
+`Configurations/RuntimeViewerCatalystHelper/Shared.xcconfig` and
+`Configurations/RuntimeViewerSimulatorServer/Shared.xcconfig` — Xcode's build
+settings editor does not show `SDK_VARIANT` at all — and every configuration of
+both targets gets them from there, along with:
 
 - `SKIP_INSTALL = YES`, so archiving the app does not also install the helper or
   the payload as a product of its own — that would make the archive a generic
@@ -39,8 +41,11 @@ helper and all four of the payload target carry them, along with:
   for Release, `dev.mxiris…` for Debug, `dev.arm64e.mxiris…` for Debug-arm64e).
   It must match the app's: the helper reaches the app through the helper daemon
   of that name, and a helper on another daemon never finds the app's endpoint,
-  so the Catalyst engine loads forever. Building both in one configuration keeps
-  them in step — **a new configuration needs the name on the helper too**.
+  so the Catalyst engine loads forever. The name is written once per
+  configuration, in `Configurations/ServiceName/<configuration>.xcconfig`, which
+  the app, the helper and the daemon target (whose `PRODUCT_NAME` it is) all
+  include, and building both in one configuration keeps them in step — **a new
+  configuration needs a file of its own there, included by all three**.
   Background: `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
 
 `RuntimeViewerCatalystHelperPlugin`, the code the helper loads, is a plain macOS
@@ -209,6 +214,24 @@ the same flag. Background:
   that name, and two schemes called `runtime-viewer-cli` make `xcodebuild -scheme` pick one
   silently. The app target depends on it, so building the app builds it too.
 
+## Build Settings
+
+**Build settings live in xcconfig files, not in the project files.** Every target of
+`RuntimeViewerUsingAppKit.xcodeproj` (except the old `com.JH.RuntimeViewerService`), the
+project level, and `RuntimeViewerServer` / `RuntimeViewerSimulatorServer` in
+`RuntimeViewerServer.xcodeproj` set nothing in their project files; their settings are in
+`Configurations/<target>/` (`Shared.xcconfig` plus a file per configuration that has values of its
+own), the daemon's in `Configurations/LaunchDaemon/`, the AppKit project level's in
+`Configurations/RuntimeViewerUsingAppKitProject/`. Two values are written once for everyone:
+
+- `Configurations/Version.xcconfig` — `MARKETING_VERSION`, the one place a release bumps (the
+  `ArchiveScript.sh` check against `--version-tag` reads it back);
+- `Configurations/ServiceName/<configuration>.xcconfig` — `RUNTIME_VIEWER_SERVICE_NAME`, see
+  *Embedded non-macOS products*.
+
+Edit those files, never Xcode's build settings editor or a target's General tab: both write a
+target-level value into the project file, which outranks the xcconfig.
+
 ## App Icon
 
 Four Icon Composer documents sit under `Resources/`, all four in the app target's Resources build
@@ -248,8 +271,8 @@ The same script produces the Catalyst helper's pair, below. Background: evolutio
 `CatalystHelperIcon.icon` and its generated `CatalystHelperIconXcode26.icon` live in
 `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/`, which is a synchronized folder of the helper
 target, so they are its resources without any file reference in the project — and never the app's.
-The helper has no xcconfig, so the toolchain rule lives in its target-level build settings, all
-three configurations: `ASSETCATALOG_COMPILER_APPICON_NAME` expands
+The toolchain rule lives in the helper's own xcconfig, `Configurations/RuntimeViewerCatalystHelper/Shared.xcconfig`:
+`ASSETCATALOG_COMPILER_APPICON_NAME` expands
 `RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`. It has no beta variant. Its
 three lower groups and their assets are copies of `AppIcon.icon`'s, so an edit to the shared layers
 goes into `AppIcon.icon`, `AppIconBeta.icon` and `CatalystHelperIcon.icon` alike, then the variants

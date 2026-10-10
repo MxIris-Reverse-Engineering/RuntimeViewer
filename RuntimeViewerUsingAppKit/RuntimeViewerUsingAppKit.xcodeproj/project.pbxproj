@@ -837,19 +837,7 @@
 			name = "Generate LaunchDaemon plist";
 			shellPath = /bin/sh;
 			shellScript = (
-				"set -e",
-				"LAUNCHD_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons\"",
-				"PLIST=\"${LAUNCHD_DIR}/${RUNTIME_VIEWER_SERVICE_NAME}.plist\"",
-				"mkdir -p \"${LAUNCHD_DIR}\"",
-				"rm -f \"${PLIST}\"",
-				"printf '%s\\n' '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' '<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">' '<plist version=\"1.0\"><dict/></plist>' > \"${PLIST}\"",
-				"PB=/usr/libexec/PlistBuddy",
-				"\"${PB}\" -c \"Add :Label string ${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"",
-				"\"${PB}\" -c \"Add :BundleProgram string Contents/Library/LaunchServices/${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"",
-				"\"${PB}\" -c \"Add :KeepAlive bool true\" \"${PLIST}\"",
-				"\"${PB}\" -c \"Add :MachServices dict\" \"${PLIST}\"",
-				"\"${PB}\" -c \"Add :MachServices:${RUNTIME_VIEWER_SERVICE_NAME} bool true\" \"${PLIST}\"",
-				"echo \"Generated LaunchDaemon plist: ${PLIST}\"",
+				"\"${SRCROOT}/BuildPhases/GenerateLaunchDaemonPlist.sh\"",
 				"",
 			);
 		};
@@ -955,223 +943,41 @@
 /* Begin XCBuildConfiguration section */
 		E918631C30611D0200DCEAC1 /* Debug configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerLocalRuntimeService/Debug.xcconfig;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalRuntimeService/RuntimeViewerLocalRuntimeService.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = D5Q73692VW;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerLocalRuntimeService/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalRuntimeService;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
 		E918631D30611D0200DCEAC1 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = "RuntimeViewerLocalRuntimeService/Debug-arm64e.xcconfig";
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalRuntimeService/RuntimeViewerLocalRuntimeService.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = D5Q73692VW;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerLocalRuntimeService/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalRuntimeService;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = "Debug-arm64e";
 		};
 		E918631E30611D0200DCEAC1 /* Release configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerLocalRuntimeService/Release.xcconfig;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalRuntimeService/RuntimeViewerLocalRuntimeService.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = D5Q73692VW;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerLocalRuntimeService/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalRuntimeService;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_RELEASE_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
 		E9432FED2C0D614A00362862 /* Debug configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
-			baseConfigurationReferenceRelativePath = CodeSigning.xcconfig;
+			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKitProject/Debug.xcconfig;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COMPILATION_CACHE_ENABLE_CACHING = YES;
-				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D5Q73692VW;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
 		};
 		E9432FEE2C0D614A00362862 /* Release configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
-			baseConfigurationReferenceRelativePath = CodeSigning.xcconfig;
+			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKitProject/Release.xcconfig;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COMPILATION_CACHE_ENABLE_CACHING = YES;
-				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = D5Q73692VW;
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
 			};
 			name = Release;
 		};
@@ -1180,53 +986,6 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKit/Debug.xcconfig;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				AUTOMATION_APPLE_EVENTS = NO;
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				FUSE_BUILD_SCRIPT_PHASES = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer requires local network permissions to use the Bonjour discovery service";
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "RuntimeViewer-Debug";
-				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
-				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
-				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
-				RUNTIME_EXCEPTION_DEBUGGING_TOOL = YES;
-				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
-				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -1235,467 +994,102 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKit/Release.xcconfig;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				AUTOMATION_APPLE_EVENTS = NO;
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				FUSE_BUILD_SCRIPT_PHASES = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer requires local network permissions to use the Bonjour discovery service";
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_RELEASE_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = RuntimeViewer;
-				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
-				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
-				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
-				RUNTIME_EXCEPTION_DEBUGGING_TOOL = YES;
-				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
-				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
 		E947C3782C2A4D0500296B2E /* Debug configuration for PBXNativeTarget "RuntimeViewerCatalystHelper" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCatalystHelper/Debug.xcconfig;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "CatalystHelperIcon$(RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR))";
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerCatalystHelper/Info.plist;
-				INFOPLIST_KEY_LSBackgroundOnly = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_2600 = Xcode26;
-				RUNTIME_VIEWER_SERVICE_NAME = dev.mxiris.runtimeviewer.service;
-				SDKROOT = macosx;
-				SDK_VARIANT = iosmac;
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = macosx;
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Debug;
 		};
 		E947C3792C2A4D0500296B2E /* Release configuration for PBXNativeTarget "RuntimeViewerCatalystHelper" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCatalystHelper/Release.xcconfig;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "CatalystHelperIcon$(RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR))";
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerCatalystHelper/Info.plist;
-				INFOPLIST_KEY_LSBackgroundOnly = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_2600 = Xcode26;
-				RUNTIME_VIEWER_SERVICE_NAME = com.mxiris.runtimeviewer.service;
-				SDKROOT = macosx;
-				SDK_VARIANT = iosmac;
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = macosx;
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,6";
-				VALIDATE_PRODUCT = NO;
 			};
 			name = Release;
 		};
 		E95ED17E000000000000000C /* Debug configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridge" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerSourceEditorBridge/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSPrincipalClass = RuntimeViewerSourceEditorBridge;
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				OTHER_LDFLAGS = (
-					"-undefined",
-					dynamic_lookup,
-				);
-				OTHER_SWIFT_FLAGS = "-Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = bundle;
 			};
 			name = Debug;
 		};
 		E95ED17E000000000000000D /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridge" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = "RuntimeViewerSourceEditorBridge/Debug-arm64e.xcconfig";
 			buildSettings = {
-				ARCHS = arm64;
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSPrincipalClass = RuntimeViewerSourceEditorBridge;
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				OTHER_LDFLAGS = (
-					"-undefined",
-					dynamic_lookup,
-				);
-				OTHER_SWIFT_FLAGS = "-Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = bundle;
 			};
 			name = "Debug-arm64e";
 		};
 		E95ED17E000000000000000E /* Release configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridge" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerSourceEditorBridge/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSPrincipalClass = RuntimeViewerSourceEditorBridge;
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				OTHER_LDFLAGS = (
-					"-undefined",
-					dynamic_lookup,
-				);
-				OTHER_SWIFT_FLAGS = "-Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel";
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = bundle;
 			};
 			name = Release;
 		};
 		E95ED17F0000000000000007 /* Debug configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerSourceEditorBridgeTests/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-					"$(DEVELOPER_DIR)/../SharedFrameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				OTHER_LDFLAGS = (
-					"-weak_framework",
-					SourceEditor,
-					"-weak_framework",
-					SourceModelSupport,
-					"-weak_framework",
-					SourceModel,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER).Tests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
 		E95ED17F0000000000000008 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = "RuntimeViewerSourceEditorBridgeTests/Debug-arm64e.xcconfig";
 			buildSettings = {
-				ARCHS = arm64;
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-					"$(DEVELOPER_DIR)/../SharedFrameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				OTHER_LDFLAGS = (
-					"-weak_framework",
-					SourceEditor,
-					"-weak_framework",
-					SourceModelSupport,
-					"-weak_framework",
-					SourceModel,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER).Tests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
 			};
 			name = "Debug-arm64e";
 		};
 		E95ED17F0000000000000009 /* Release configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerSourceEditorBridgeTests/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-					"$(DEVELOPER_DIR)/../SharedFrameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				OTHER_LDFLAGS = (
-					"-weak_framework",
-					SourceEditor,
-					"-weak_framework",
-					SourceModelSupport,
-					"-weak_framework",
-					SourceModel,
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER).Tests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
 		E99510EF3052AA7800D3FAB2 /* Debug configuration for PBXNativeTarget "RuntimeViewerCommandLineTool" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCommandLineTool/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "runtime-viewer-cli/runtime-viewer-cli.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = "runtime-viewer-cli";
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
 		E99510F03052AA7800D3FAB2 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerCommandLineTool" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCommandLineTool/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "runtime-viewer-cli/runtime-viewer-cli.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = "runtime-viewer-cli";
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = "Debug-arm64e";
 		};
 		E99510F13052AA7800D3FAB2 /* Release configuration for PBXNativeTarget "RuntimeViewerCommandLineTool" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCommandLineTool/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "runtime-viewer-cli/runtime-viewer-cli.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = "runtime-viewer-cli";
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
 		E9958CD62FAB79100073036F /* Debug-arm64e configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
-			baseConfigurationReferenceRelativePath = CodeSigning.xcconfig;
+			baseConfigurationReferenceRelativePath = "RuntimeViewerUsingAppKitProject/Debug-arm64e.xcconfig";
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COMPILATION_CACHE_ENABLE_CACHING = YES;
-				COPY_PHASE_STRIP = NO;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D5Q73692VW;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG RUNTIMEVIEWER_ARM64E $(inherited)";
-				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = "Debug-arm64e";
 		};
@@ -1704,126 +1098,22 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = "RuntimeViewerUsingAppKit/Debug-arm64e.xcconfig";
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				AUTOMATION_APPLE_EVENTS = NO;
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
-				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
-				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				FUSE_BUILD_SCRIPT_PHASES = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer requires local network permissions to use the Bonjour discovery service";
-				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_ARM64E_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "RuntimeViewer-Debug-arm64e";
-				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
-				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
-				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
-				RUNTIME_EXCEPTION_DEBUGGING_TOOL = YES;
-				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
-				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 			};
 			name = "Debug-arm64e";
 		};
 		E9958CD82FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerCatalystHelper" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = "RuntimeViewerCatalystHelper/Debug-arm64e.xcconfig";
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "CatalystHelperIcon$(RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR))";
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
-				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
-				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = RuntimeViewerCatalystHelper/Info.plist;
-				INFOPLIST_KEY_LSBackgroundOnly = YES;
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_2600 = Xcode26;
-				RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service;
-				SDKROOT = macosx;
-				SDK_VARIANT = iosmac;
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = macosx;
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = "Debug-arm64e";
 		};
 		E9958CD92FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCatalystHelperPlugin/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = bundle;
 			};
 			name = "Debug-arm64e";
 		};
@@ -1849,102 +1139,41 @@
 		};
 		E9958CDB2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = "LaunchDaemon/Debug-arm64e.xcconfig";
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = dev.arm64e.mxiris.runtimeviewer.service;
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = "Debug-arm64e";
 		};
 		E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = LaunchDaemon/Debug.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = dev.mxiris.runtimeviewer.service;
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
 		E9A9CCE62F5D880400A10DD3 /* Release configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = LaunchDaemon/Release.xcconfig;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
-				CODE_SIGN_STYLE = Manual;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = com.mxiris.runtimeviewer.service;
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
 		E9E900DE2C2CF9A500FADDCC /* Debug configuration for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCatalystHelperPlugin/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = bundle;
 			};
 			name = Debug;
 		};
 		E9E900DF2C2CF9A500FADDCC /* Release configuration for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerCatalystHelperPlugin/Shared.xcconfig;
 			buildSettings = {
-				CODE_SIGN_STYLE = Manual;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.0.0;
-				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				WRAPPER_EXTENSION = bundle;
 			};
 			name = Release;
 		};
