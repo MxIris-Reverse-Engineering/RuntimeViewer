@@ -43,6 +43,12 @@ helper and all four of the payload target carry them, along with:
   them in step — **a new configuration needs the name on the helper too**.
   Background: `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
 
+Xcode's build settings editor shows the payload target's Base SDK as
+"iphonesimulator (SDK not found)". That is the editor only: its Base SDK pop-up
+offers no simulator SDK, while the build resolves `iphonesimulator` normally.
+Leave it — picking any SDK in that pop-up overwrites `SDKROOT`, and the payload
+then builds for the wrong platform without an error.
+
 `RuntimeViewerCatalystHelperPlugin`, the code the helper loads, is a plain macOS
 bundle: it builds into `<configuration>/` and the helper's `Embed PlugIns` phase
 copies it in.
@@ -64,7 +70,10 @@ The old staging paths, `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
 and `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework`, are still
 gitignored for checkouts that predate the change; nothing reads or writes them.
 A build phase that built both from inside the app's build was tried and
-withdrawn before this; see evolution 0015.
+withdrawn before this; see evolution 0015. `Experiments/CatalystXPCServiceProbe`
+reproduces both recipes in a minimal project, and also shows that a Mac Catalyst
+XPC service embedded in a macOS app launches and works — read its README before
+turning the helper into one.
 
 **The jailbroken iOS variant embeds the payload from `RuntimeViewerMobileServer`
 directly.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so the

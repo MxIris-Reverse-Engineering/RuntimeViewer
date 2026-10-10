@@ -1,0 +1,70 @@
+# Minimal stand-in for RuntimeViewer's Mac Catalyst helper, rebuilt as an XPC
+# service: a macOS app (ProbeHost) embeds a Mac Catalyst XPC service
+# (ProbeService), which loads a macOS plugin bundle (ProbePlugin) that does
+# the work. build.sh builds the three and assembles them.
+name: CatalystXPCServiceProbe
+
+options:
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+
+settings:
+  base:
+    ARCHS: arm64
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    # Keep each product a single Mach-O, so the platform check in build.sh
+    # looks at the real code.
+    ENABLE_DEBUG_DYLIB: NO
+
+targets:
+  ProbeHost:
+    type: application
+    platform: macOS
+    sources: [Sources/ProbeHost]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbeHost
+    info:
+      path: Generated/ProbeHost-Info.plist
+      properties:
+        ProbeServiceName: dev.JH.CatalystXPCServiceProbe.ProbeHost.ProbeService
+    scheme: {}
+
+  ProbeService:
+    type: xpc-service
+    platform: iOS
+    sources: [Sources/ProbeService]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbeHost.ProbeService
+        # The Catalyst settings RuntimeViewerCatalystHelper had before it
+        # became a target dependency of the app.
+        SUPPORTS_MACCATALYST: YES
+        SUPPORTED_PLATFORMS: "iphonesimulator iphoneos"
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    info:
+      path: Generated/ProbeService-Info.plist
+      properties:
+        XPCService:
+          ServiceType: Application
+    scheme: {}
+
+  ProbePlugin:
+    type: bundle
+    platform: macOS
+    sources: [Sources/ProbePlugin]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbePlugin
+    info:
+      path: Generated/ProbePlugin-Info.plist
+      properties:
+        NSPrincipalClass: ProbePluginEntry
+    scheme: {}

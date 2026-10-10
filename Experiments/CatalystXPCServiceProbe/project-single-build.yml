@@ -1,0 +1,144 @@
+# Can a Mac Catalyst product be an ordinary target dependency of a macOS app,
+# built and embedded by one macOS build — no separate Catalyst build, no
+# staging?
+#
+# project.yml marks Catalyst the way RuntimeViewerCatalystHelper did
+# (SDKROOT = iphoneos, SUPPORTS_MACCATALYST = YES), which only turns into
+# Catalyst when the run destination is Mac Catalyst; under a macOS
+# destination the helper comes out as an iphoneos build. Here the Catalyst
+# targets say so themselves: SDKROOT = macosx, SDK_VARIANT = iosmac. Swift
+# Build takes SDK_VARIANT from the target's own settings, so this should hold
+# under any destination.
+#
+# Both product types are tried: the XPC service, and a UIKit app standing in
+# for the current helper app, embedded where the real one goes.
+#
+# ProbeSimulatorPayload asks the same of an iOS Simulator product, standing in
+# for the RuntimeViewerMobileServer payload: SDKROOT is pinned to
+# iphonesimulator on the target, and it links a package (SDKROOT = auto), which
+# has to come out as a simulator build too. It is embedded in Resources, where
+# the real payload goes.
+#
+# All of it held, and RuntimeViewer now builds its helper and payload this way:
+# AGENTS.md, "Embedded non-macOS products".
+name: CatalystXPCServiceProbeSingleBuild
+
+options:
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+
+packages:
+  ProbeLibrary:
+    path: Packages/ProbeLibrary
+
+settings:
+  base:
+    ARCHS: arm64
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_DEBUG_DYLIB: NO
+
+targets:
+  ProbeHost:
+    type: application
+    platform: macOS
+    sources: [Sources/ProbeHost]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbeHost
+    info:
+      path: Generated/SingleBuild-ProbeHost-Info.plist
+      properties:
+        ProbeServiceName: dev.JH.CatalystXPCServiceProbe.ProbeHost.ProbeService
+    dependencies:
+      - target: ProbeService
+        embed: true
+        codeSign: true
+        copy:
+          destination: productsDirectory
+          subpath: $(CONTENTS_FOLDER_PATH)/XPCServices
+      - target: ProbeHelperApp
+        embed: true
+        codeSign: true
+        copy:
+          destination: productsDirectory
+          subpath: $(CONTENTS_FOLDER_PATH)/Applications
+      # Copied, never linked: the host cannot link a simulator binary, and the
+      # real payload is only ever loaded into a simulator process.
+      - target: ProbeSimulatorPayload
+        link: false
+        embed: true
+        codeSign: true
+        copy:
+          destination: resources
+    scheme: {}
+
+  ProbeSimulatorPayload:
+    type: framework
+    platform: iOS
+    sources: [Sources/ProbeSimulatorPayload]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbeSimulatorPayload
+        SDKROOT: iphonesimulator
+        SUPPORTED_PLATFORMS: iphonesimulator
+        SUPPORTS_MACCATALYST: NO
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - package: ProbeLibrary
+
+  ProbeService:
+    type: xpc-service
+    platform: macOS
+    sources: [Sources/ProbeService]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbeHost.ProbeService
+        SDK_VARIANT: iosmac
+        SUPPORTS_MACCATALYST: YES
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+    info:
+      path: Generated/SingleBuild-ProbeService-Info.plist
+      properties:
+        XPCService:
+          ServiceType: Application
+    dependencies:
+      - target: ProbePlugin
+        embed: true
+        codeSign: true
+        copy:
+          destination: plugins
+
+  ProbeHelperApp:
+    type: application
+    platform: macOS
+    sources: [Sources/ProbeHelperApp]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbeHelperApp
+        SDK_VARIANT: iosmac
+        SUPPORTS_MACCATALYST: YES
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1,2,6"
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+    info:
+      path: Generated/SingleBuild-ProbeHelperApp-Info.plist
+
+  ProbePlugin:
+    type: bundle
+    platform: macOS
+    sources: [Sources/ProbePlugin]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.JH.CatalystXPCServiceProbe.ProbePlugin
+    info:
+      path: Generated/SingleBuild-ProbePlugin-Info.plist
+      properties:
+        NSPrincipalClass: ProbePluginEntry

@@ -156,3 +156,9 @@
 ## 待办问题快照（KnownIssues）
 
 见 [`KnownIssues/README.md`](KnownIssues/README.md)。逐条裁决过的审查发现快照，按 `<slice>.<N>` 编号以便被 commit 与后续审查引用；判为「不修」或「误报」的同样留档，下一轮审查据此跳过。
+
+## 实验工程（Experiments）
+
+仓库根目录 `Experiments/` 下的最小验证工程，连同复现命令与实测结果一起保留。
+
+- [`CatalystXPCServiceProbe`](../Experiments/CatalystXPCServiceProbe/README.md)（2026-10-09）—— 两个问题：Mac Catalyst 版 XPC service 嵌在 macOS app 里能否被拉起、没有 `UIApplication` 时 UIKit 能否使用（都能，这是把 Catalyst helper 换成 XPC service 的前置验证，命令行工具那条路仍是硬冲突）；Catalyst 与模拟器产物能否作为 macOS app 的 target 依赖一起构建（能，主工程已采用）。
