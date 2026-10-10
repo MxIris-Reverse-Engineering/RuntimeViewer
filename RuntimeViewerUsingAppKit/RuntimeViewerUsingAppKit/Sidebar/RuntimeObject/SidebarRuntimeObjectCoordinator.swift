@@ -11,8 +11,16 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
 
     let imageNode: RuntimeImageNode
 
-    /// Kept for `.revealSelectedRuntimeObject`, which the list answers itself.
+    /// Kept for `.revealSelectedRuntimeObject`, which the list answers itself,
+    /// and for `.privateDeclaration`, whose popover recovers source files
+    /// from the objects the list holds.
     private var listViewModel: SidebarRuntimeObjectListViewModel?
+
+    /// The two lists whose rows carry tags, asked for the tag a popover
+    /// anchors at. The tab view controller owns them.
+    private weak var listViewController: SidebarRuntimeObjectListViewController?
+
+    private weak var bookmarkViewController: SidebarRuntimeObjectBookmarkViewController?
 
     init(documentState: DocumentState, imageNode: RuntimeImageNode) {
         self.documentState = documentState
@@ -27,10 +35,12 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             let listViewModel = SidebarRuntimeObjectListViewModel(imageNode: imageNode, documentState: documentState, router: self)
             listViewController.setupBindings(for: listViewModel)
             self.listViewModel = listViewModel
+            self.listViewController = listViewController
 
             let bookmarkViewController = SidebarRuntimeObjectBookmarkViewController()
             let bookmarkViewModel = SidebarRuntimeObjectBookmarkViewModel(imageNode: imageNode, documentState: documentState, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
+            self.bookmarkViewController = bookmarkViewController
 
             let findViewController = FindViewController<SidebarRuntimeObjectRoute>()
             let findViewModel = FindViewModel<SidebarRuntimeObjectRoute>(documentState: documentState, router: self)
@@ -93,6 +103,20 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             )
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
+        case .privateDeclaration(let cellViewModel):
+            // The row's own list answers; the other one does not hold it.
+            guard let anchorView = listViewController?.anchorView(forTag: .privateDeclaration, of: cellViewModel)
+                ?? bookmarkViewController?.anchorView(forTag: .privateDeclaration, of: cellViewModel)
+            else { return .none() }
+            let viewController = PrivateDeclarationViewController()
+            let viewModel = PrivateDeclarationViewModel(
+                runtimeObject: cellViewModel.runtimeObject,
+                imageRuntimeObjects: listViewModel?.nodes.map(\.runtimeObject) ?? [],
+                documentState: documentState,
+                router: self
+            )
+            viewController.setupBindings(for: viewModel)
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: anchorView.bounds, ofView: anchorView, preferredEdge: .maxX, behavior: .transient))
         }
     }
 }

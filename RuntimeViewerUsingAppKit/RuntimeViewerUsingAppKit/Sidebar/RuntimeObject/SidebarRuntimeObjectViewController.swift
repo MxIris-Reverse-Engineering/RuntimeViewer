@@ -37,6 +37,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
+    /// Clicks on the rows' tags. Each cell reports which of its tags was
+    /// clicked; the cell provider pairs that with the row the cell is bound to.
+    private let tagClickedRelay = PublishRelay<SidebarRuntimeObjectViewModel.TagClick>()
+
     /// The empty string, sent when the view model clears its filter on its
     /// own. Setting the search field's `stringValue` does not reach
     /// `rx.stringValue`, so the cleared text is fed into the search input here.
@@ -76,6 +80,19 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             outlineView.layoutSubtreeIfNeeded()
         }
         outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+    }
+
+    /// The tag a popover about `cellViewModel`'s row anchors at, or `nil` when
+    /// the row is not in this list or not on screen. Asked by the coordinator,
+    /// so that neither the route nor the view model carries a view.
+    func anchorView(forTag tagIdentifier: RuntimeObjectCellTag.Identifier, of cellViewModel: SidebarRuntimeObjectCellViewModel) -> NSView? {
+        let row = outlineView.row(forItem: cellViewModel)
+        guard row >= 0,
+              let cellView = outlineView.view(atColumn: 0, row: row, makeIfNecessary: false) as? RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel>,
+              let tagView = cellView.tagView(for: tagIdentifier),
+              tagView.window != nil
+        else { return nil }
+        return tagView
     }
 
     override func viewDidLoad() {
@@ -191,13 +208,20 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             ),
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
             runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
+            runtimeObjectTagClicked: tagClickedRelay.asSignal(),
         )
 
         let output = viewModel.transform(input)
 
-        let cellProvider: Reactive<NSOutlineView>.OutlineCellViewProvider<SidebarRuntimeObjectCellViewModel> = { outlineView, _, viewModel in
+        let cellProvider: Reactive<NSOutlineView>.OutlineCellViewProvider<SidebarRuntimeObjectCellViewModel> = { [tagClickedRelay] outlineView, _, viewModel in
             outlineView.box.makeView(ofClass: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel>.self).then {
                 $0.bind(to: viewModel)
+                // `bind(to:)` empties the cell's dispose bag, so a reused cell
+                // stops reporting for the row it showed before.
+                $0.tagClicked
+                    .map { SidebarRuntimeObjectViewModel.TagClick(cellViewModel: viewModel, tagIdentifier: $0) }
+                    .emit(to: tagClickedRelay)
+                    .disposed(by: $0.rx.disposeBag)
             }
         }
 

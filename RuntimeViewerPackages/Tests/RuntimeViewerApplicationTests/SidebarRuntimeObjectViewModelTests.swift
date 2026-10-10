@@ -131,7 +131,44 @@ struct SidebarRuntimeObjectViewModelTests {
         #expect(environment.documentState.selectedRuntimeObject == nil)
     }
 
+    // MARK: - Tags
+
+    @Test("a click on a row's Private tag opens the private declaration popover for that row")
+    func privateTagClickOpensPopoverForRow() async throws {
+        let environment = ViewModelTestEnvironment(runtimeEngine: try await TestRuntimeEngine.shared())
+        let tagClickedRelay = PublishRelay<SidebarRuntimeObjectViewModel.TagClick>()
+        let (viewModel, _) = try makeViewModel(imagePath: TestImages.libobjc, tagClicked: tagClickedRelay.asSignal(), in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let privateType = Fixtures.runtimeObject(
+            name: "SwiftUI.EnabledKey",
+            privateDeclarations: [RuntimePrivateDeclaration(name: "EnabledKey", discriminator: "_09CE35833F3876FE3A3A46977D61FC64")]
+        )
+        let cellViewModel = environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: privateType, forOpenQuickly: false) }
+
+        tagClickedRelay.accept(SidebarRuntimeObjectViewModel.TagClick(cellViewModel: cellViewModel, tagIdentifier: .privateDeclaration))
+
+        let routes = try await triggeredRoutes { !$0.isEmpty }
+        guard routes.count == 1, case .privateDeclaration(let routedCellViewModel) = routes[0] else {
+            Issue.record("expected one privateDeclaration route, got \(routes)")
+            return
+        }
+        #expect(routedCellViewModel === cellViewModel)
+    }
+
     // MARK: - Helpers
+
+    /// The router's routes once `condition` holds; the view model triggers
+    /// them from a main-actor task, after the event that caused them.
+    private func triggeredRoutes(
+        timeout: Duration = .seconds(5),
+        where condition: ([SidebarRuntimeObjectRoute]) -> Bool
+    ) async throws -> [SidebarRuntimeObjectRoute] {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !condition(router.triggeredRoutes), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return router.triggeredRoutes
+    }
 
     /// A class of Foundation that is a Swift class bridged out and does find
     /// its Swift face — whichever the running system has first.
@@ -147,16 +184,18 @@ struct SidebarRuntimeObjectViewModelTests {
     private func makeViewModel(
         imagePath: String,
         counterpartRequested: Signal<SidebarRuntimeObjectCellViewModel> = .empty(),
+        tagClicked: Signal<SidebarRuntimeObjectViewModel.TagClick> = .empty(),
         in environment: ViewModelTestEnvironment
     ) throws -> (SidebarRuntimeObjectViewModel, SidebarRuntimeObjectViewModel.Output) {
         let tree = Fixtures.imageTree(rootName: "Root", imagePaths: [imagePath])
         let leaf = try #require(tree.leaf(forImagePath: imagePath))
-        return try makeViewModel(imageNode: leaf, counterpartRequested: counterpartRequested, in: environment)
+        return try makeViewModel(imageNode: leaf, counterpartRequested: counterpartRequested, tagClicked: tagClicked, in: environment)
     }
 
     private func makeViewModel(
         imageNode: RuntimeImageNode,
         counterpartRequested: Signal<SidebarRuntimeObjectCellViewModel> = .empty(),
+        tagClicked: Signal<SidebarRuntimeObjectViewModel.TagClick> = .empty(),
         in environment: ViewModelTestEnvironment
     ) throws -> (SidebarRuntimeObjectViewModel, SidebarRuntimeObjectViewModel.Output) {
         let viewModel = environment.make {
@@ -169,7 +208,8 @@ struct SidebarRuntimeObjectViewModelTests {
                 loadImageClicked: loadImageRelay.asSignal(),
                 searchString: .just(""),
                 isSearchCaseSensitive: .just(false),
-                runtimeObjectCounterpartRequested: counterpartRequested
+                runtimeObjectCounterpartRequested: counterpartRequested,
+                runtimeObjectTagClicked: tagClicked
             )
         )
         return (viewModel, output)

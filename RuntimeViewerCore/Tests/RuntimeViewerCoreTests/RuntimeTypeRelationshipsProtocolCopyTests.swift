@@ -141,35 +141,42 @@ struct RuntimeTypeRelationshipsProtocolCopyTests {
         #expect(trees.map(\.root) == [swiftFace], "\(trees.map { "\($0.root.kind) \($0.root.displayName)" })")
     }
 
-    /// A private Swift class is listed with its discriminator
-    /// (`Foundation.(_CombineRunLoopAction in _AE6B…)`), while the Swift face
-    /// found from its Objective-C class is not. When a query matches both
-    /// faces, the candidate keeps the sidebar's spelling.
+    /// The Swift face found from a private class's Objective-C class is
+    /// materialized again from its mangled name, apart from the sidebar's
+    /// object. Until the sidebar stopped spelling private discriminators
+    /// (draft-private-discriminator-tag) the two were spelled differently, and
+    /// a query matching both faces had to keep the sidebar's; now both are
+    /// printed from the same demangled name, so the candidate carries the
+    /// sidebar row's name and private declarations whichever it keeps.
     @Test("a Swift class both of whose faces match keeps the name the sidebar lists it under")
     func swiftFaceKeepsItsSidebarName() async throws {
         let engine = try await Self.makeEngine("sidebar-name", loading: [Anchors.libobjcPath, Anchors.foundationPath])
         let objects = try await engine.objects(in: Anchors.foundationPath)
         let sidebarSwiftClasses = objects.filter { $0.kind == .swift(.type(.class)) }
-        var anchor: (sidebarSwiftFace: RuntimeObject, identifier: String)?
+        var anchor: (sidebarSwiftFace: RuntimeObject, swiftFace: RuntimeObject, identifier: String)?
         let objcFaces = objects
             .filter { $0.kind == .objc(.type(.class)) && $0.properties.contains(.isSwiftClass) }
             .sorted { left, right in left.name < right.name }
         for objcFace in objcFaces {
             guard let swiftFace = try await engine.counterpart(for: objcFace),
                   let sidebarSwiftFace = sidebarSwiftClasses.first(where: { $0 == swiftFace }),
-                  sidebarSwiftFace.displayName != swiftFace.displayName,
+                  !sidebarSwiftFace.privateDeclarations.isEmpty,
                   let identifier = swiftFace.displayName.components(separatedBy: ".").last,
                   objcFace.name.contains(identifier),
                   sidebarSwiftFace.displayName.contains(identifier)
             else { continue }
-            anchor = (sidebarSwiftFace, identifier)
+            anchor = (sidebarSwiftFace, swiftFace, identifier)
             break
         }
-        let (sidebarSwiftFace, identifier) = try #require(anchor, "Foundation has no private Swift class registered with the Objective-C runtime")
+        let (sidebarSwiftFace, swiftFace, identifier) = try #require(anchor, "Foundation has no private Swift class registered with the Objective-C runtime")
+
+        #expect(swiftFace.displayName == sidebarSwiftFace.displayName)
+        #expect(swiftFace.privateDeclarations == sidebarSwiftFace.privateDeclarations)
 
         let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: identifier, matchMode: .containing, relationship: .ancestors, isCaseSensitive: true, candidateLimit: .max))
         let tree = try #require(trees.first { $0.root == sidebarSwiftFace })
 
         #expect(tree.root.displayName == sidebarSwiftFace.displayName)
+        #expect(tree.root.privateDeclarations == sidebarSwiftFace.privateDeclarations)
     }
 }

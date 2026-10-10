@@ -244,7 +244,8 @@ actor RuntimeSwiftSection {
             kind: kind,
             imagePath: imagePath,
             children: typeChildren + protocolChildren,
-            properties: objcImplementationClassName == nil ? [] : [.isObjCImplementation]
+            properties: objcImplementationClassName == nil ? [] : [.isObjCImplementation],
+            privateDeclarations: extensionName.privateDeclarations
         )
         interfaceDefinitionNameByObject[runtimeObjectName.key] = definitionName
         if let objcImplementationClassName {
@@ -258,10 +259,10 @@ actor RuntimeSwiftSection {
         let mangledName = try mangleAsString(protocolDefintion.protocolName.node)
         let runtimeObjectName: RuntimeObject
         if isChild {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [])
+            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [], privateDeclarations: protocolDefintion.protocolName.privateDeclarations)
             interfaceDefinitionNameByObject[runtimeObjectName.key] = .childProtocol(protocolDefintion.protocolName)
         } else {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [])
+            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [], privateDeclarations: protocolDefintion.protocolName.privateDeclarations)
             interfaceDefinitionNameByObject[runtimeObjectName.key] = .rootProtocol(protocolDefintion.protocolName)
         }
         return runtimeObjectName
@@ -312,7 +313,7 @@ actor RuntimeSwiftSection {
         if objcClassPairs.objcClassNameByMangledTypeName[mangledName] != nil {
             properties.insert(.isObjCClass)
         }
-        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric).union(.showPrivateDiscriminators)) : typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.union(.showPrivateDiscriminators))
+        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.name
 
         let runtimeObject = RuntimeObject(
             name: mangledName,
@@ -321,6 +322,7 @@ actor RuntimeSwiftSection {
             imagePath: imagePath,
             children: allChildren,
             properties: properties,
+            privateDeclarations: typeDefinition.typeName.privateDeclarations,
         )
         if isSpecialized, let unspecializedTypeName {
             interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
@@ -688,6 +690,7 @@ extension RuntimeSwiftSection {
             imagePath: imagePath,
             children: [],
             properties: properties,
+            privateDeclarations: typeName.privateDeclarations,
         )
     }
 
@@ -707,6 +710,7 @@ extension RuntimeSwiftSection {
             kind: protocolName.runtimeObjectKind,
             imagePath: imagePath,
             children: [],
+            privateDeclarations: protocolName.privateDeclarations,
         )
     }
 
@@ -1511,6 +1515,25 @@ extension SwiftDeclaration.ExtensionName {
         case .typeAlias:
             return .swift(.conformance(.typeAlias))
         }
+    }
+}
+
+extension SwiftDeclaration.DefinitionName {
+    /// The private declarations this name runs through, from its `privateDeclName` nodes: the
+    /// first child is the discriminator, the second the declaration's name. Display names are
+    /// printed without `.showPrivateDiscriminators`, so `RuntimeObject.privateDeclarations` is
+    /// where the discriminators are kept. Preorder is the order the name reads; each is kept once,
+    /// since a specialized type can repeat a generic argument's.
+    fileprivate var privateDeclarations: [RuntimePrivateDeclaration] {
+        var privateDeclarations: [RuntimePrivateDeclaration] = []
+        for privateDeclarationNode in node.all(of: .privateDeclName) {
+            guard let discriminator = privateDeclarationNode.children.at(0)?.text else { continue }
+            let privateDeclaration = RuntimePrivateDeclaration(name: privateDeclarationNode.children.at(1)?.text, discriminator: discriminator)
+            if !privateDeclarations.contains(privateDeclaration) {
+                privateDeclarations.append(privateDeclaration)
+            }
+        }
+        return privateDeclarations
     }
 }
 

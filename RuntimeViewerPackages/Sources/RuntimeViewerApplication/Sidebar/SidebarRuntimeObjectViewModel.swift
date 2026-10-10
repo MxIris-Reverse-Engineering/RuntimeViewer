@@ -198,6 +198,16 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// (`RuntimeEngine.counterpart(for:)`). macOS only.
         @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
         public let runtimeObjectCounterpartRequested: Signal<SidebarRuntimeObjectCellViewModel>
+        /// A click on one of a row's tags (`RuntimeObjectCellTag`). macOS only.
+        @Init(default: Signal<TagClick>.empty())
+        public let runtimeObjectTagClicked: Signal<TagClick>
+    }
+
+    /// One click on a row's tag: which row, and which of its tags.
+    @MemberwiseInit(.public)
+    public struct TagClick {
+        public let cellViewModel: SidebarRuntimeObjectCellViewModel
+        public let tagIdentifier: RuntimeObjectCellTag.Identifier
     }
 
     public struct Output {
@@ -330,6 +340,16 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                     errorRelay.accept(CounterpartNotFoundError(runtimeObject: lookup.runtimeObject))
                 case .failure(let error):
                     errorRelay.accept(error)
+                }
+            }
+            .disposed(by: rx.disposeBag)
+
+        input.runtimeObjectTagClicked
+            .emitOnNextMainActor { [weak self] tagClick in
+                guard let self else { return }
+                switch tagClick.tagIdentifier {
+                case .privateDeclaration:
+                    router.trigger(.privateDeclaration(tagClick.cellViewModel))
                 }
             }
             .disposed(by: rx.disposeBag)

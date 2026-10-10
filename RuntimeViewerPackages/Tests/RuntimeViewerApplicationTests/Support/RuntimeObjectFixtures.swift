@@ -13,7 +13,8 @@ enum Fixtures {
         kind: RuntimeObjectKind = .swift(.type(.class)),
         imagePath: String = sampleImagePath,
         children: [RuntimeObject] = [],
-        properties: RuntimeObject.Properties = []
+        properties: RuntimeObject.Properties = [],
+        privateDeclarations: [RuntimePrivateDeclaration] = []
     ) -> RuntimeObject {
         RuntimeObject(
             name: name,
@@ -21,7 +22,8 @@ enum Fixtures {
             kind: kind,
             imagePath: imagePath,
             children: children,
-            properties: properties
+            properties: properties,
+            privateDeclarations: privateDeclarations
         )
     }
 

@@ -15,6 +15,27 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
 
     private let subtitleLabel = Label()
 
+    /// The appearance's tags, after the title: one `TagButton` each, rebuilt
+    /// only when the tags change.
+    private let tagStackView = HStackView(spacing: 4) {}
+
+    private var tagButtons: [TagButton] = []
+
+    private var appliedTags: [RuntimeObjectCellTag] = []
+
+    /// Clicks on the buttons of the tags currently applied; replaced with them.
+    private var tagButtonDisposeBag = DisposeBag()
+
+    /// The tag buttons are rebuilt with the row's data, so their clicks are
+    /// gathered here rather than exposed one control at a time.
+    private let tagClickedRelay = PublishRelay<RuntimeObjectCellTag.Identifier>()
+
+    /// The identifier of each clickable tag a click lands on. The list's view
+    /// controller pairs it with the row it bound this cell to.
+    var tagClicked: Signal<RuntimeObjectCellTag.Identifier> {
+        tagClickedRelay.asSignal()
+    }
+
     let contentInsets: NSEdgeInsets
 
     let minimumHeight: CGFloat?
@@ -64,6 +85,16 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
             .contentHugging(h: .defaultLow)
             .box
             .contentCompressionResistance(h: .defaultLow)
+        // After a title that takes the slack, so tags line up at the row's
+        // trailing edge; the title truncates before a tag does. A stack view
+        // has no intrinsic size, so content hugging does nothing for it: it
+        // hugs its views with its own hugging priority, which defaults to
+        // `.defaultLow` — the text stack's too. With the two equal, Auto
+        // Layout widened either one, and a row whose tag stack it widened
+        // showed the tag right after the title.
+        tagStackView
+            .box
+            .hugging(h: NSLayoutConstraint.Priority.defaultHigh.rawValue)
     }
 
     override func setup() {
@@ -102,6 +133,8 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
             $0.isHidden = true
         }
 
+        tagStackView.isHidden = true
+
         let viewsWithTooltip: [NSView] = [primaryIconImageView, secondaryIconImageView, tertiaryIconImageView, titleLabel, subtitleLabel]
         for viewWithTooltip in viewsWithTooltip {
             viewWithTooltip.customTooltipStyle = .runtimeObjectCell
@@ -134,12 +167,43 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
 
         subtitleLabel.attributedStringValue = appearance.subtitle ?? NSAttributedString()
         subtitleLabel.isHidden = appearance.subtitle == nil
+
+        apply(appearance.tags)
+    }
+
+    private func apply(_ tags: [RuntimeObjectCellTag]) {
+        guard tags != appliedTags else { return }
+        appliedTags = tags
+        tagButtonDisposeBag = DisposeBag()
+        while tagButtons.count < tags.count {
+            let tagButton = TagButton()
+            tagButton.customTooltipStyle = .runtimeObjectCell
+            tagButtons.append(tagButton)
+        }
+        let shownTagButtons = Array(tagButtons.prefix(tags.count))
+        for (tagButton, tag) in zip(shownTagButtons, tags) {
+            tagButton.title = tag.title
+            tagButton.toolTip = tag.toolTip
+            tagButton.isClickable = tag.isClickable
+            tagButton.rx.click
+                .asSignal()
+                .map { tag.identifier }
+                .emit(to: tagClickedRelay)
+                .disposed(by: tagButtonDisposeBag)
+        }
+        tagStackView.setViews(shownTagButtons, in: .leading)
+        tagStackView.isHidden = tags.isEmpty
+    }
+
+    /// The button showing the tag `identifier` names, for a popover to anchor at.
+    func tagView(for identifier: RuntimeObjectCellTag.Identifier) -> NSView? {
+        zip(tagButtons, appliedTags).first { _, tag in tag.identifier == identifier }?.0
     }
 }
 
 extension ToolTipStyle {
-    /// Every tooltip in a runtime-object cell: the three icons and both
-    /// labels. Built on `.default`, not `.system`: a corner radius makes
+    /// Every tooltip in a runtime-object cell: the three icons, both labels
+    /// and the tags. Built on `.default`, not `.system`: a corner radius makes
     /// UIFoundation swap the system's blurred background for a plain layer,
     /// and a style without a colour of its own would then have that layer
     /// filled with AppKit's private `toolTipColor`, which is made to go with

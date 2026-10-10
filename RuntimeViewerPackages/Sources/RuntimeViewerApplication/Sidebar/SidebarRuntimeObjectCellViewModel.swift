@@ -347,7 +347,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             kind: runtimeObject.kind,
             imagePath: runtimeObject.imagePath,
             children: _children.map { $0.materializedRuntimeObject() },
-            properties: runtimeObject.properties
+            properties: runtimeObject.properties,
+            privateDeclarations: runtimeObject.privateDeclarations
         )
     }
 
@@ -383,6 +384,11 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         if runtimeObject.properties.contains(.isSpecialized) {
             refreshedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
             refreshedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForSpecialized
+        }
+
+        // Open Quickly opens a row on any click, so its tag only shows.
+        if !runtimeObject.privateDeclarations.isEmpty {
+            refreshedAppearance.tags = [.privateDeclaration(isClickable: !forOpenQuickly)]
         }
 
         publishAppearance(refreshedAppearance)

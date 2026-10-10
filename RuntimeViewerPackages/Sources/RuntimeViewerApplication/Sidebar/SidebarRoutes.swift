@@ -73,6 +73,11 @@ public enum SidebarRuntimeObjectRoute: Routable {
         availableKinds: Set<RuntimeObjectKind>,
         availableProperties: RuntimeObject.Properties
     )
+    /// The popover a row's `Private` tag opens (`PrivateDeclarationViewModel`).
+    /// Carries the row rather than the tag: the coordinator asks the list for
+    /// the tag to anchor at, so neither this route nor a view model holds a
+    /// view.
+    case privateDeclaration(SidebarRuntimeObjectCellViewModel)
 }
 
 // Both levels have the Find navigator among their tabs; the enum cases are

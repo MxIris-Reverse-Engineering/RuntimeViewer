@@ -67,12 +67,20 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     @Init(default: [])
     public let properties: Properties
 
+    /// The `private` and `fileprivate` declarations a Swift name runs through, in the order the
+    /// name reads them, each once — read off the `privateDeclName` nodes of the demangled name.
+    /// `displayName` is printed without their discriminators, so this is where they are kept.
+    /// Empty for every other object.
+    @Default([])
+    @Init(default: [])
+    public let privateDeclarations: [RuntimePrivateDeclaration]
+
     public var id: RuntimeObjectKey { key }
 
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
 
     public func withImagePath(_ imagePath: String) -> RuntimeObject {
-        .init(name: name, displayName: displayName, kind: kind, imagePath: imagePath, children: children, properties: properties)
+        .init(name: name, displayName: displayName, kind: kind, imagePath: imagePath, children: children, properties: properties, privateDeclarations: privateDeclarations)
     }
 
     /// Returns a copy of this object with `child` appended to its `children`.
@@ -86,6 +94,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             imagePath: imagePath,
             children: children + [child],
             properties: properties,
+            privateDeclarations: privateDeclarations,
         )
     }
 }
@@ -94,8 +103,9 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
 /// operators below are defined through it, so `a == b` and `a.key == b.key`
 /// agree by construction rather than by two field lists kept in step.
 ///
-/// `displayName`, `children` and `properties` are excluded on purpose: they
-/// differ between two materializations of one type, and every caller that asks
+/// `displayName`, `children`, `properties` and `privateDeclarations` are
+/// excluded on purpose: they can differ between two materializations of one
+/// type, and every caller that asks
 /// `==` is asking "is this the same type", not "is this byte-identical". The
 /// question they are not asking has its own method, `hasSameContent(as:)`.
 ///
@@ -112,7 +122,7 @@ extension RuntimeObject {
     }
 
     /// Whether these two describe the same type in the same state — what `==`
-    /// asks, plus the three fields identity leaves out.
+    /// asks, plus the four fields identity leaves out.
     ///
     /// Shallow by design: `children` are compared by identity, one element at a
     /// time, so a child appearing, disappearing or being replaced is visible
@@ -125,6 +135,7 @@ extension RuntimeObject {
         self == other
             && displayName == other.displayName
             && properties == other.properties
+            && privateDeclarations == other.privateDeclarations
             && children == other.children
     }
 }
