@@ -214,7 +214,7 @@ the same flag. Background:
   that name, and two schemes called `runtime-viewer-cli` make `xcodebuild -scheme` pick one
   silently. The app target depends on it, so building the app builds it too.
 
-## Build Settings
+## Build Settings and the Tuist Development Workspace
 
 **Build settings live in xcconfig files, not in the project files.** Every target of
 `RuntimeViewerUsingAppKit.xcodeproj` (except the old `com.JH.RuntimeViewerService`), the
@@ -230,7 +230,42 @@ own), the daemon's in `Configurations/LaunchDaemon/`, the AppKit project level's
   *Embedded non-macOS products*.
 
 Edit those files, never Xcode's build settings editor or a target's General tab: both write a
-target-level value into the project file, which outranks the xcconfig.
+target-level value into the project file, which outranks the xcconfig and which the Tuist project
+below does not see. `./TuistScript.sh check` reports any such value.
+
+**`RuntimeViewer-Tuist.xcworkspace` is a second, development-only way to build the macOS app.**
+Tuist generates it from `Tuist.swift`, `Workspace.swift`, `Tuist/Package.swift` and
+`RuntimeViewerUsingAppKit/Project.swift`; it builds the same targets from the same sources and the
+same xcconfig files, with every third-party dependency taken from Tuist's local binary cache and
+the four local packages as source. **Releases, CI, `RunScript.sh`, `ArchiveScript.sh` and every
+other script use the native projects only**, and the generated files are gitignored.
+
+```bash
+mise install                      # the Tuist mise.toml pins
+./TuistScript.sh warm             # resolve, build the dependencies into the cache, generate
+open RuntimeViewer-Tuist.xcworkspace
+./TuistScript.sh build --configuration Debug-arm64e --launch   # like RunScript.sh
+./TuistScript.sh check            # before committing a change to the native projects
+```
+
+Rules that keep the two in step:
+
+- **A commit that changes the native projects' targets, dependencies, embedded products or
+  settings updates the Tuist description in the same commit**, and `./TuistScript.sh check` passes
+  before it is committed. `check` compares the projects' settings wiring, the local packages'
+  target lists with `Tuist.swift` and `Tuist/ProjectDescriptionHelpers/LocalPackages.swift`, the
+  two lock files, and the trait-conditioned settings Tuist drops; `check --build` also builds both
+  workspaces and compares the two apps.
+- **`Tuist/Package.resolved` pins what the native lock files pin.** `UpdatePackagesScript.sh`
+  updates it after the Debug workspace. Resolve with the Xcode the native lock files were resolved
+  with: some packages pick their manifest by Swift version.
+- **Build the app with the `RuntimeViewer macOS` scheme only.** The simulator payload and the
+  Catalyst helper's plugin are built first by the scheme's fixed order, not as dependencies.
+
+Agents run `TuistScript.sh` with `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent>/Tuist`
+and through `queued-build`. Usage, the Tuist workarounds behind the oddities in the manifests, and
+the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
+Background: `Documentations/Evolutions/draft-tuist-coexistence.md`.
 
 ## App Icon
 
