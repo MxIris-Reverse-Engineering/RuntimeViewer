@@ -98,8 +98,10 @@ runtime-viewer-cli members NSTextInputContext --image AppKit --member insertText
 The type argument is matched against the type's `name`, then its `displayName`, then either one
 case-insensitively, descending into specializations that already exist. A Swift type's
 `displayName` is **module-qualified** and its `name` is a mangled form, so it is
-`Combine.Just`, never `Just` — the bare name fails with `typeNotFound`. When unsure, `search`
-first and copy the name it prints.
+`Combine.Just`, never `Just` — the bare name fails with `typeNotFound`. The exception is a type
+declared in a function or closure body, which is listed the way a reader says it, after the
+function and without modules: `Visitor #1 in TableDataSource.performDrop(to:)`. When unsure,
+`search` first and copy the name it prints.
 
 ### Sources: `--source`
 

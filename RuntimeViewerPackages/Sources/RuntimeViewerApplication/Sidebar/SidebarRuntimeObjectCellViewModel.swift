@@ -386,9 +386,13 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             refreshedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForSpecialized
         }
 
+        if runtimeObject.properties.contains(.isLocalType) {
+            refreshedAppearance.tags.append(.localType(isPositionNamed: runtimeObject.properties.contains(.isPositionNamedLocalType)))
+        }
+
         // Open Quickly opens a row on any click, so its tag only shows.
         if !runtimeObject.privateDeclarations.isEmpty {
-            refreshedAppearance.tags = [.privateDeclaration(isClickable: !forOpenQuickly)]
+            refreshedAppearance.tags.append(.privateDeclaration(isClickable: !forOpenQuickly))
         }
 
         publishAppearance(refreshedAppearance)

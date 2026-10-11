@@ -4,6 +4,7 @@
 @_spi(Support) import SwiftSpecialization
 @_spi(Support) import SwiftPrinting
 @_spi(Support) import SwiftInterface
+@_spi(Support) import SwiftPrivateDiscriminators
 @_spi(Internals) import SwiftInspection
 import Demangling
 import Foundation
@@ -93,6 +94,12 @@ actor RuntimeSwiftSection {
     /// methods without an actor hop — `RuntimeSwiftInterfaceIndexer` is
     /// `Sendable` and guards its own state.
     nonisolated let indexer: RuntimeSwiftInterfaceIndexer
+
+    /// The source files of this image's private discriminators, recovered from
+    /// candidates the image's own names make and remembered per discriminator.
+    /// `nonisolated let` so a search, which can run for seconds, holds no actor:
+    /// the index guards its own state.
+    private nonisolated let privateDiscriminatorSourceFileIndex: PrivateDiscriminatorSourceFileIndex
 
     private let printer: SwiftDeclarationPrinter<MachOImage>
 
@@ -200,7 +207,10 @@ actor RuntimeSwiftSection {
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
         let eventHandlers: [SwiftIndexEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
-        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: imagePath, configuration: Self.indexConfiguration, eventHandlers: eventHandlers)
+        let indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: imagePath, configuration: Self.indexConfiguration, eventHandlers: eventHandlers)
+        self.indexer = indexer
+        // Reads the indexer's names on its first request, long after `prepare()`.
+        self.privateDiscriminatorSourceFileIndex = PrivateDiscriminatorSourceFileIndex(indexer: indexer.upstream)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         // `prepare()` runs the upstream extraction and then builds the
         // relationship reverse tables — that work now lives in
@@ -240,7 +250,7 @@ actor RuntimeSwiftSection {
         let objcImplementationClassName = extensionDefintions.lazy.compactMap { $0.objcImplementation?.className }.first
         let runtimeObjectName = RuntimeObject(
             name: mangledName,
-            displayName: extensionName.name,
+            displayName: extensionName.runtimeObjectDisplayName,
             kind: kind,
             imagePath: imagePath,
             children: typeChildren + protocolChildren,
@@ -313,7 +323,8 @@ actor RuntimeSwiftSection {
         if objcClassPairs.objcClassNameByMangledTypeName[mangledName] != nil {
             properties.insert(.isObjCClass)
         }
-        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.name
+        properties.formUnion(typeDefinition.typeName.localTypeProperties)
+        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.runtimeObjectDisplayName
 
         let runtimeObject = RuntimeObject(
             name: mangledName,
@@ -513,6 +524,18 @@ extension RuntimeSwiftSection {
 }
 
 extension RuntimeSwiftSection {
+    /// The source file of each of `discriminators` that a candidate of this image produces; a
+    /// discriminator none does is left out. A discriminator nothing recovers runs through every
+    /// candidate — seconds for SwiftUI in a debug build — which is why this holds no actor, and
+    /// why every answer is remembered.
+    nonisolated func privateDeclarationSourceFiles(forDiscriminators discriminators: [String]) async -> [String: RuntimePrivateDeclarationSourceFile] {
+        privateDiscriminatorSourceFileIndex.sourceFiles(forDiscriminators: discriminators).mapValues {
+            RuntimePrivateDeclarationSourceFile(fileName: $0.fileName, moduleName: $0.moduleName, isSynthesized: $0.isSynthesized)
+        }
+    }
+}
+
+extension RuntimeSwiftSection {
     func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
         #log(.debug, "Getting member addresses for: \(object.displayName, privacy: .public)")
         // Ensure the definition is indexed by generating the interface (uses internal cache)
@@ -680,9 +703,10 @@ extension RuntimeSwiftSection {
         if objcClassPairs.objcClassNameByMangledTypeName[mangledName] != nil {
             properties.insert(.isObjCClass)
         }
+        properties.formUnion(typeName.localTypeProperties)
         let displayName = isSpecialized
             ? typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric))
-            : typeName.name
+            : typeName.runtimeObjectDisplayName
         return RuntimeObject(
             name: mangledName,
             displayName: displayName,
@@ -1519,21 +1543,36 @@ extension SwiftDeclaration.ExtensionName {
 }
 
 extension SwiftDeclaration.DefinitionName {
-    /// The private declarations this name runs through, from its `privateDeclName` nodes: the
-    /// first child is the discriminator, the second the declaration's name. Display names are
-    /// printed without `.showPrivateDiscriminators`, so `RuntimeObject.privateDeclarations` is
-    /// where the discriminators are kept. Preorder is the order the name reads; each is kept once,
-    /// since a specialized type can repeat a generic argument's.
+    /// The private declarations this name reads, as MachOSwiftSection reads them
+    /// (`DemanglingNode.privateDeclarations`): in the order the name reads them, each once, a
+    /// declaring function's signature and a position-based local type's `$` address left out.
+    /// Display names are printed without discriminators, so `RuntimeObject.privateDeclarations`
+    /// is where they are kept.
     fileprivate var privateDeclarations: [RuntimePrivateDeclaration] {
-        var privateDeclarations: [RuntimePrivateDeclaration] = []
-        for privateDeclarationNode in node.all(of: .privateDeclName) {
-            guard let discriminator = privateDeclarationNode.children.at(0)?.text else { continue }
-            let privateDeclaration = RuntimePrivateDeclaration(name: privateDeclarationNode.children.at(1)?.text, discriminator: discriminator)
-            if !privateDeclarations.contains(privateDeclaration) {
-                privateDeclarations.append(privateDeclaration)
-            }
+        node.privateDeclarations.map { RuntimePrivateDeclaration(name: $0.name, discriminator: $0.discriminator) }
+    }
+
+    /// The name an object is listed under: a type declared in a function or closure body, or one
+    /// nested in such a type, the way MachOSwiftSection says it to a reader
+    /// (`Visitor #1 in TableDataSource.performDrop(to:)`) — the compiler's own name carries the
+    /// function's whole signature; every other name as `name` prints it.
+    fileprivate var runtimeObjectDisplayName: String {
+        localTypeDisplayName ?? name
+    }
+}
+
+extension SwiftDeclaration.TypeName {
+    /// `isLocalType` for a type declared in a function or closure body, with
+    /// `isPositionNamedLocalType` when the binary names no function for it.
+    fileprivate var localTypeProperties: RuntimeObject.Properties {
+        switch node.localTypeNaming {
+        case .compilerSpelled?:
+            [.isLocalType]
+        case .positionBased?:
+            [.isLocalType, .isPositionNamedLocalType]
+        case nil:
+            []
         }
-        return privateDeclarations
     }
 }
 

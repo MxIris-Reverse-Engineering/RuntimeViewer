@@ -1308,6 +1308,23 @@ extension RuntimeEngine {
         }
     }
 
+    /// The source file each of `discriminators` was derived from, recovered in the engine's
+    /// process from the names `imagePath` declares and remembered per image; a discriminator no
+    /// candidate produces is left out, as is every one of an image whose Swift section is not
+    /// loaded. A discriminator nothing recovers is the slow one — seconds for SwiftUI in a debug
+    /// build — so ask for the ones shown.
+    ///
+    /// An engine that predates this command does not answer it: the call throws, and the caller
+    /// shows the discriminators unrecovered.
+    public func privateDeclarationSourceFiles(forDiscriminators discriminators: [String], inImage imagePath: String) async throws -> [String: RuntimePrivateDeclarationSourceFile] {
+        try await dispatch(PrivateDeclarationSourceFilesCommand(discriminators: discriminators, imagePath: imagePath))
+    }
+
+    func _privateDeclarationSourceFiles(forDiscriminators discriminators: [String], inImage imagePath: String) async -> [String: RuntimePrivateDeclarationSourceFile] {
+        guard let swiftSection = await swiftSectionFactory.existingSection(for: imagePath) else { return [:] }
+        return await swiftSection.privateDeclarationSourceFiles(forDiscriminators: discriminators)
+    }
+
     /// Asks the connected peer for its shared engine list.
     ///
     /// On macOS the peer answers with a non-empty descriptor list; on platforms without

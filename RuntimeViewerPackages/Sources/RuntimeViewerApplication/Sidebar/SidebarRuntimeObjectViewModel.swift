@@ -350,6 +350,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 switch tagClick.tagIdentifier {
                 case .privateDeclaration:
                     router.trigger(.privateDeclaration(tagClick.cellViewModel))
+                case .localType:
+                    // Never clickable: its click goes to the row.
+                    break
                 }
             }
             .disposed(by: rx.disposeBag)

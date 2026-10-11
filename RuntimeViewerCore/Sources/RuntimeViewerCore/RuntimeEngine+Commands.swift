@@ -164,6 +164,15 @@ extension RuntimeEngine {
             try await engine._memberAddresses(for: object, memberName: memberName)
         }
     }
+
+    struct PrivateDeclarationSourceFilesCommand: RuntimeEngineCommand {
+        let discriminators: [String]
+        let imagePath: String
+        static var commandName: String { CommandName.privateDeclarationSourceFiles.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> [String: RuntimePrivateDeclarationSourceFile] {
+            await engine._privateDeclarationSourceFiles(forDiscriminators: discriminators, inImage: imagePath)
+        }
+    }
 }
 
 // MARK: - Generic specialization

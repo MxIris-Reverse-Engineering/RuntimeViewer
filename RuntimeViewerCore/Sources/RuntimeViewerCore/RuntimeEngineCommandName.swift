@@ -81,6 +81,9 @@ extension RuntimeEngine.CommandName {
     static let runtimeObjectsInImage = Self("runtimeObjectsInImage")
     static let imageDidLoad = Self("imageDidLoad")
     static let memberAddresses = Self("memberAddresses")
+    /// The source files of private discriminators, recovered in the engine process from the
+    /// image's own names; see `RuntimeEngine.privateDeclarationSourceFiles(forDiscriminators:inImage:)`.
+    static let privateDeclarationSourceFiles = Self("privateDeclarationSourceFiles")
     static let engineList = Self("engineList")
     static let engineListChanged = Self("engineListChanged")
     /// Shared side channel for `RuntimeEngineProgressCommand` pushes.

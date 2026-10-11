@@ -111,7 +111,6 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             let viewController = PrivateDeclarationViewController()
             let viewModel = PrivateDeclarationViewModel(
                 runtimeObject: cellViewModel.runtimeObject,
-                imageRuntimeObjects: listViewModel?.nodes.map(\.runtimeObject) ?? [],
                 documentState: documentState,
                 router: self
             )

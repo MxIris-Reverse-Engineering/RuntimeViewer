@@ -2,7 +2,7 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-10-10
-- **最后更新**: 2026-10-10
+- **最后更新**: 2026-10-11
 
 ## 摘要
 
@@ -43,12 +43,12 @@ SwiftUICore 约 68%。128 位哈希一旦对上就等于确认，所以结果只
 
 - 引擎打印 `displayName` 时不再打印私有鉴别器：`SwiftUI.(EnabledKey in _09CE…)` 回到 825db142 之前的
   `SwiftUI.EnabledKey`。
-- 鉴别器从 demangle 出的名字里取：每个 `privateDeclName` 节点的第一个子节点是鉴别器，第二个是声明名。按阅读顺序
-  （前序遍历）放进 `RuntimeObject.privateDeclarations`，重复的只留一个。`RuntimeSwiftSection` 里所有构造 Swift
-  对象的地方都填这个字段：列表、嵌套类型，以及跳转和关系树按 mangled 名重新物化的对象。所以同一个类型不管从哪条
-  路径拿到，名字和私有声明都一样。
+- 鉴别器由 MachOSwiftSection 从 demangle 出的名字里读（`DemanglingNode.privateDeclarations`，规则见下面
+  「下沉到 MachOSwiftSection」一节），按阅读顺序放进 `RuntimeObject.privateDeclarations`，重复的只留一个。
+  `RuntimeSwiftSection` 里所有构造 Swift 对象的地方都填这个字段：列表、嵌套类型，以及跳转和关系树按 mangled 名
+  重新物化的对象。所以同一个类型不管从哪条路径拿到，名字和私有声明都一样。
 - `privateDeclarations` 是 `RuntimeObject` 的新字段，带 `@Default([])`：旧版本引擎发来的对象解出来是空数组，
-  旧版本 App 收到新字段会忽略。不新增引擎命令。
+  旧版本 App 收到新字段会忽略。取私有声明不新增引擎命令；反推源文件另有一条，见「数据」。
 
 **`Private` tag。** 侧栏的对象列表、书签和 Open Quickly 共用 `SidebarRuntimeObjectCellViewModel`，改动落在这里。
 
@@ -73,8 +73,9 @@ SwiftUICore 约 68%。128 位哈希一旦对上就等于确认，所以结果只
 - `displayName` 不再带鉴别器，这一点不只影响侧栏：标签页标题、工具栏、前进/后退菜单、MCP、CLI 与导出的文件名，
   都回到 825db142 之前的写法。批量导出拿 `displayName` 当文件名，同一镜像里同名的私有类型会落到同一个文件名上；
   825db142 之前就是这样。要精确指到某一个类型时，MCP 与 CLI 都接受 `RuntimeObject.name`（mangled 名）。
-- 反推（`RuntimePrivateDiscriminatorSourceFiles`）放进 `RuntimeViewerCore`，写成纯函数，输入是要还原的鉴别器
-  （popover 那一行的 `privateDeclarations`）和镜像的对象列表：
+- 反推在 MachOSwiftSection：`SwiftPrivateDiscriminators` 的 `PrivateDiscriminatorSourceFileIndex`，引擎按镜像持有一个，
+  popover 经引擎命令 `privateDeclarationSourceFiles` 要 popover 那一行的鉴别器的结果。2026-10-11 之前它是
+  `RuntimeViewerCore` 里的纯函数 `RuntimePrivateDiscriminatorSourceFiles`，在 App 进程里调用；算法原样搬了过去：
   - 模块名的候选是镜像文件名（`SwiftUICore`，哈希用的是它，不是 ABI 名 `SwiftUI`），加上私有对象名字里的模块名。
     哈希用 CryptoKit 的 `Insecure.MD5`。合成文件的鉴别器是 `MD5(所属文件的鉴别器 + "SYNTHESIZED FILE")`，
     顺带一起解出。
@@ -91,20 +92,24 @@ SwiftUICore 约 68%。128 位哈希一旦对上就等于确认，所以结果只
     既是 SwiftUICore 的 `Glue.swift`，也是 SwiftUI 的 `CoreGlue.swift`。一律按模块名的先后取前一种，结果不随候选
     的尝试顺序变。
   - 候选只是猜测，128 位哈希对上才算数，所以这里按文本切词不会产生错的结果，最多是还原不出。
-- 已知文件名清单（`RuntimePrivateDiscriminatorSourceFiles+KnownFileNames.swift`，2007 个）由
-  `RuntimeViewerCore/Scripts/GenerateKnownSwiftSourceFileNames.sh` 生成：经 `gh` 读下面几个仓库的文件树，取其中的
+- 已知文件名清单（MachOSwiftSection 的 `PrivateDiscriminatorSourceFiles+KnownFileNames.swift`，2007 个）由
+  MachOSwiftSection 的 `Scripts/GenerateKnownSwiftSourceFileNames.sh` 生成：经 `gh` 读下面几个仓库的文件树，取其中的
   Swift 文件名（测试、基准与示例除外），每个来源钉在一个 commit 上，写进生成文件的文件头。只收文件名，不收代码。
   清单不手改，要更新就重跑脚本。
   - OpenSwiftUI（MIT）：它为 SwiftUI 与 SwiftUICore 复原出的文件名。文件头写了 `ID:`（即鉴别器）的 533 个文件里，
     519 个用 MD5 验证得上。
   - swift-foundation、Swift 标准库，以及 `stdlib/public/Darwin/` 下已经删掉的 Darwin overlay 的两个历史版本（都是
     Apache 2.0）。
-- 候选必须来自整张对象表：只用类型自己名字里的单词，SwiftUICore 只能还原 31%。对象列表的 ViewModel 已经拿到了
-  这张表，coordinator 打开 popover 时把它交给 `PrivateDeclarationViewModel`，由它在主线程以外现算
-  （`@concurrent`）；列表手里没有对象时，改向引擎要 `objects(in:)`。不缓存。在最初的规则下，把候选扩大到 dump 里的
-  全部标识符也只从 68% 涨到 71%，不值得为此新增引擎命令。
-- 实测（macOS 26.7，Debug 构建，即不开优化）。后两列是打开一行 popover 的耗时，每个镜像抽 10 个还原得出的和 3 个
-  还原不出的：
+- 候选必须来自整张名字表：只用类型自己名字里的单词，SwiftUICore 只能还原 31%。现在由 MachOSwiftSection 从镜像
+  自己取：索引器里 Swift 类型、协议、扩展的名字，加上镜像的 ObjC 类与协议名。
+  - 这和侧栏对象表不是同一批：多了侧栏并进类型那一行的扩展，它们的名字多半和类型名重复；少了侧栏列出的 C struct /
+    union 名、ObjC 分类名，以及 Swift 类的 `_Tt…` 运行时名。
+  - 下面的实测是 2026-10-11 之前用侧栏那批候选量的，换到 MachOSwiftSection 之后没有重新量。
+  - 按镜像缓存：名字在第一次请求时才读，每个鉴别器的答案都记住，还原不出的也记，同一行第二次打开不再算。
+  - 在最初的规则下，把候选扩大到 dump 里的全部标识符也只从 68% 涨到 71%，所以候选没有扩大。
+  - 2026-10-11 之前是 coordinator 把对象表交给 `PrivateDeclarationViewModel`，在 App 进程里现算、不缓存。
+- 实测（macOS 26.7，Debug 构建，即不开优化；候选是当时的侧栏对象表）。后两列是打开一行 popover 的耗时，每个镜像
+  抽 10 个还原得出的和 3 个还原不出的：
 
   | 镜像 | 鉴别器 | 最初的规则 | 只用镜像里的名字 | 加上已知文件名 | 还原得出 | 还原不出 |
   |---|---|---|---|---|---|---|
@@ -130,21 +135,59 @@ SwiftUICore 约 68%。128 位哈希一旦对上就等于确认，所以结果只
   `Foundation.__JSONEncoder`，`privateDeclarations` 是 `__JSONEncoder` 与 `_12768CA1…`；列表里没有一个名字含有
   自己的鉴别器。`RuntimeTypeRelationshipsProtocolCopyTests.swiftFaceKeepsItsSidebarName` 改为断言：从 ObjC 类找到
   的 Swift 面与侧栏那份的名字、私有声明都相同，关系树的根也一样。
-- Core，反推（`RuntimePrivateDiscriminatorSourceFilesTests`）：用 SwiftUICore 与 Foundation 的真实鉴别器，期望值
-  全部用 `md5 -s` 在代码之外算出。每条规则都不带已知文件名单独测：「哈希用镜像文件名而非 ABI 名」「文件名来自镜像
-  里另一个类型的名字」「嵌套在别的对象里的私有类型」「缩写词」「名字中间的一段单词」「常见结尾词」「复数」「同一
-  鉴别器下的 类型+分类」「任一类型名接分类」「合成文件」「模块名取自名字」「只算要的鉴别器」与「还原不出」。另有
-  「已知文件名」「默认带上的清单」，以及「两种读法取前一个模块名」，最后这条的鉴别器是编出来的。
+- 反推的测试随代码搬到 MachOSwiftSection（`PrivateDiscriminatorSourceFilesTests`）：用 SwiftUICore 与 Foundation
+  的真实鉴别器，期望值全部用 `md5 -s` 在代码之外算出，每条规则都不带已知文件名单独测。本仓库只测引擎命令：Foundation
+  的 `__JSONEncoder` → `JSONEncoder.swift`，没有 Swift 段的镜像回答空。
 - 还原率与耗时用一个临时测试量：真实引擎加载四个镜像，结果见「数据」。量完删掉，不提交。
 - Application（`SidebarPrivateDeclarationTagTests`、`PrivateDeclarationViewModelTests`，以及
   `SidebarRuntimeObjectViewModelTests` 新增的用例）：有私有声明的行带 tag、没有的不带，嵌套的私有类型只标它自己
-  那一行，Open Quickly 的 tag 不可点；点 tag 触发 `.privateDeclaration` 并带上这一行；popover 列出鉴别器与反推
-  结果，还原不出时为 `unrecovered`，没交对象时去问引擎（Foundation 的 `__JSONEncoder` → `JSONEncoder.swift`）。
+  那一行，Open Quickly 的 tag 不可点；点 tag 触发 `.privateDeclaration` 并带上这一行；popover 列出鉴别器与引擎
+  反推的结果（Foundation 的 `__JSONEncoder` → `JSONEncoder.swift`），还原不出时为 `unrecovered`，引擎答不了时
+  每个都是 `unrecovered`、鉴别器照常列出。
 - UI（`TagButtonHitTestingTests`）：在真实的 `StatefulOutlineView` 行里做命中测试（hit-test）——点在可点的 tag 上
   命中 tag，点在不可点的 tag 上落回这一行。
 - tag 右对齐没有自动测试：`RuntimeObjectCellView` 在 App target 里，App 没有单元测试 target。
 - 手工验证：macOS 27 上表格行内控件的点击路径变过，命中测试只能证明点击落在了 tag 上；tag 的动作有没有真的触发、
   会不会顺带选中这一行，badge 样式在选中行上的配色，以及 tag 是否贴着行尾，要在 App 里实测。
+
+**下沉到 MachOSwiftSection，加上局部类型（2026-10-11 追加）。** MachOSwiftSection 一侧见它的提案 0063
+（`0063-private-declarations.md`）。上面「名字与鉴别器」「数据」里被这一节取代的说法原地改写。
+
+- **只管展示**：取私有声明、反推源文件都搬到 MachOSwiftSection，RuntimeViewer 只负责展示，即 `Private` / `Local`
+  标签和 popover。
+  - 删掉的：`DefinitionName.privateDeclarations`、`RuntimePrivateDiscriminatorSourceFiles`（连同已知文件名清单、生成脚本
+    `GenerateKnownSwiftSourceFileNames.sh`）以及 `RuntimePrivateDiscriminatorSourceFilesTests`。改调 MachOSwiftSection。
+  - `RuntimePrivateDeclaration` 留着，它是线上传输的类型。
+- **反推改在引擎进程里做**：新增引擎命令 `privateDeclarationSourceFiles`，属于 Core 自己的命令。
+  - 请求带镜像路径和要还原的鉴别器；回答每个鉴别器的源文件：文件名、哈希用的模块名、是否合成文件。
+  - `RuntimeSwiftSection` 按镜像持有 MachOSwiftSection 的反推对象，镜像卸载时一起释放。同一个鉴别器第二次问不再算。
+  - popover 改为向引擎发这条命令，不再从对象列表拿整张表，也不再向引擎要 `objects(in:)`；coordinator 不再传表。
+  - 不认识这条命令的旧引擎（例如旧版注入载荷）按「还原不出」显示。
+- **私有声明按 MachOSwiftSection 的新规则取**：取的是显示名里读得到的私有声明，仍是整树搜索，只跳过两处。
+  - 占位名的 `$地址` 不再被当成鉴别器。
+  - 函数、闭包的签名不进，所以局部类型所在函数的参数、返回值里出现的 private 类型不再算。局部类型的显示名本来就不打印签名。
+  - 不带函数上下文的名字，结果和今天一样，特化类型的泛型实参照旧算。
+  - 所在函数本身是 private 时算，popover 里写的是函数名。
+- **局部类型的名字**：MachOSwiftSection 修好局部类型之后，函数、闭包里声明的类型挂在外层类型下，名字是编译器全名，带着
+  所在函数的完整签名。
+  - 侧栏改用 MachOSwiftSection 给读者看的名字：`Visitor #1 in TableDataSource.performDrop(to:)`，按位置命名的写
+    `TableDataSource.(Visitor in $1a2b3c)`。嵌在局部类型里的类型同样处理。
+  - 改的是 `displayName`，所以标签页、MCP、CLI 与导出文件名跟着变。
+- **`Local` 标签**：
+  - `RuntimeObject.Properties` 新增两个标记：`isLocalType`，以及二进制里找不到所在函数时的
+    `isPositionNamedLocalType`。用标记位而不是新字段，见决策日志。
+  - 有 `isLocalType` 时行尾放一个 `Local` 标签，排在 `Private` 前面，不可点。悬停提示说明它声明在函数或闭包里；按位置命名的再加一句：
+    二进制里没有记录是哪个函数，`$` 后面是包着它的匿名上下文的地址。
+  - 侧栏、书签与 Open Quickly 都显示。嵌在局部类型里的类型不带这个标签，它的父行已经带了。
+- **依赖**：要用 MachOSwiftSection 的新接口，0062 与 0063 都已在它的 `next` 上推送（origin/next b8db48bf）。
+  - Core 的 MachOSwiftSection 依赖从 `feature/runtime-viewer/find-navigator` 改回 `next`；那条分支已全部合进 `next`。
+  - 五个锁文件（Core、Packages、命令行工具、Debug 与 Distribution 两个 workspace）随之改钉 `next`，只有这一条钉变。
+- **测试**：
+  - Core：真实引擎加载 SwiftUI，断言局部类型的名字、私有声明与局部类型标记。private 函数里的局部类型带函数的鉴别器；
+    同一类型里不同函数的同名局部类型各占一行。新命令另有引擎测试：Foundation 的 `__JSONEncoder` → `JSONEncoder.swift`。
+  - Application：`Local` 标签的有无与不可点。
+  - 手工：最初报告的孤立 Ex（`AccessibilityRotorInfo` 里 `IndexWrappingVisitor` 的那个扩展）并回了类型条目。
+- **文档**：AGENTS.md「Row tags」一条同批改，反推与已知文件名清单已不在本仓库。
 
 ## 决策日志
 
@@ -169,3 +212,14 @@ SwiftUICore 约 68%。128 位哈希一旦对上就等于确认，所以结果只
 | 2026-10-10 | 已知文件名写成生成的 Swift 源文件，不用 SwiftPM 资源 | 注入载荷与 CLI 里没有资源包，`Bundle.module` 找不到时直接崩；清单只有 56 KB |
 | 2026-10-10 | 一段哈希输入有两种读法时，取先试的那个模块名 | 改代码时发现：`SwiftUI` 是 `SwiftUICore` 的前缀，原来读成哪一种取决于候选的遍历顺序。macOS 26.7 的四个镜像里没有实际撞上 |
 | 2026-10-10 | 按现状提交推送，包括还原不出时 Debug 构建里 3–4 秒的耗时；反推与已知文件名清单以后下沉到 MachOSwiftSection | 用户：「先提交推送」。下沉的拆法（取鉴别器进 `SwiftDeclaration`，反推进一个新 target，`swift-section` 加子命令）与接法（仍在 App 进程里算，或新增引擎命令、在引擎进程里按镜像缓存）都未定，到 MachOSwiftSection 另写提案 |
+| 2026-10-11 | 取私有声明与反推源文件下沉到 MachOSwiftSection，RuntimeViewer 只负责展示 | 用户：「你这边把私有鉴别器的逻辑下沉到MachOSwiftSection，RV这边只负责展示的逻辑」。拆法见 MachOSwiftSection 的 0063（`0063-private-declarations`） |
+| 2026-10-11 | 反推在引擎进程里做，新增引擎命令 `privateDeclarationSourceFiles` | 用户选择。推荐的是在 App 进程里拿侧栏对象表现算、不加命令，未采纳 |
+| 2026-10-11 | 局部类型显示不带模块名与参数类型的名字，另加不可点的 `Local` 标签 | 用户选择；`Local` 标签是 MachOSwiftSection 0062 讨论时定的 |
+| 2026-10-11 | 局部类型所在的函数是 private 时显示 `Private` 标签 | 用户选择，与「名字经过的私有声明都算」一致 |
+| 2026-10-11 | 以上追加的方案待用户点头；之前的部分保持 In Progress | — |
+| 2026-10-11 | 追加的方案获批，随本提案继续 In Progress | 用户批准：「开工」 |
+| 2026-10-11 | 局部类型的标记用 `RuntimeObject.Properties` 的两个位（`isLocalType`、`isPositionNamedLocalType`），不新增字段 | 实现时改的。线上格式要向前兼容：旧 App 收到不认识的位会忽略；新增一个枚举字段的话，以后一旦加 case，旧 App 解码整个对象就会失败 |
+| 2026-10-11 | 命令行工具的使用说明同批改：Swift 类型的 `displayName` 带模块名一句加上局部类型的例外，插件版本 1.0.0 → 1.0.1 | 本仓库规定：工具输出有变，说明同一个提交里改，并提升两个插件清单的版本 |
+| 2026-10-11 | 更正「MachOSwiftSection 取的候选与侧栏对象表是同一批，还原率不变」，实测表注明是旧候选量的 | MachOSwiftSection 会话审查它那一侧时指出：它多收了侧栏并进类型的扩展名字；对照侧栏的 `objects(in:)` 又发现，它没收侧栏列出的 C struct / union 名、ObjC 分类名和 `_Tt…` 名。表里的数没有用新候选重新量 |
+| 2026-10-11 | MachOSwiftSection 一侧落地为 0063，合进它的本地 `next`（1800b859），未推送；本文对它的引用随之改名 | MachOSwiftSection 会话复审通过后合并；推不推由用户定 |
+| 2026-10-11 | MachOSwiftSection 推送（origin/next b8db48bf）后提交本分支：Core 的依赖改回 `next`，五个锁文件改钉 `next` | 依赖改动是用户自己改的，用户：「是我改的，一起带上」。锁文件按 2026-09-15 改钉 `next` 那次的做法同批改 |

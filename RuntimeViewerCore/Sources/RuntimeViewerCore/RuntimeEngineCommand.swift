@@ -150,6 +150,7 @@ extension RuntimeEngine {
         registrar.register(RelationshipsCommand.self)
         registrar.register(CounterpartCommand.self)
         registrar.register(MemberAddressesCommand.self)
+        registrar.register(PrivateDeclarationSourceFilesCommand.self)
         registrar.register(SpecializationRequestForObjectCommand.self)
         registrar.register(SpecializationRequestForCandidateCommand.self)
         registrar.register(RuntimePreflightCommand.self)

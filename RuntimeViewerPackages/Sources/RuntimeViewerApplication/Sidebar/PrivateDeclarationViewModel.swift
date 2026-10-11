@@ -7,9 +7,8 @@ import MemberwiseInit
 /// through (`RuntimeObject.privateDeclarations`), with its discriminator and the source file it was
 /// derived from.
 ///
-/// The source files are recovered from every name in the row's image
-/// (`RuntimePrivateDiscriminatorSourceFiles`) off the main thread. The coordinator hands over the
-/// objects the image's list already holds; when it holds none, they are asked of the engine.
+/// The source files are recovered by the engine, from the names of the row's image
+/// (`RuntimeEngine.privateDeclarationSourceFiles(forDiscriminators:inImage:)`); this only shows them.
 public final class PrivateDeclarationViewModel: ViewModel<SidebarRuntimeObjectRoute> {
     public struct Declaration: Equatable {
         /// The declaration's name; `nil` when the demangled name gives it none.
@@ -31,12 +30,12 @@ public final class PrivateDeclarationViewModel: ViewModel<SidebarRuntimeObjectRo
         case unrecovered
     }
 
-    /// The source files of the image's discriminators, as one value: rows can never show a
+    /// The source files of the row's discriminators, as one value: rows can never show a
     /// placeholder next to a recovered name.
     enum SourceFilesState {
         case pending
         case recovering
-        case recovered(RuntimePrivateDiscriminatorSourceFiles)
+        case recovered([String: RuntimePrivateDeclarationSourceFile])
     }
 
     @MemberwiseInit(.public)
@@ -54,7 +53,6 @@ public final class PrivateDeclarationViewModel: ViewModel<SidebarRuntimeObjectRo
 
     public init(
         runtimeObject: RuntimeObject,
-        imageRuntimeObjects: [RuntimeObject],
         documentState: DocumentState,
         router: any Router<SidebarRuntimeObjectRoute>
     ) {
@@ -67,17 +65,17 @@ public final class PrivateDeclarationViewModel: ViewModel<SidebarRuntimeObjectRo
         let discriminators = runtimeObject.privateDeclarations.map(\.discriminator)
         let runtimeEngine = documentState.runtimeEngine
         Observable<SourceFilesState>.async {
-            let runtimeObjects = imageRuntimeObjects.isEmpty ? try await runtimeEngine.objects(in: imagePath) : imageRuntimeObjects
-            return .recovered(await PrivateDeclarationViewModel.recoverSourceFiles(of: discriminators, imagePath: imagePath, runtimeObjects: runtimeObjects))
+            .recovered(try await runtimeEngine.privateDeclarationSourceFiles(forDiscriminators: discriminators, inImage: imagePath))
         }
         .withLoadingPlaceholder(
             .recovering,
             appearsAfter: LoadingPlaceholderTiming.appearsAfter,
             staysAtLeast: LoadingPlaceholderTiming.staysAtLeast
         )
-        // An image whose objects cannot be listed recovers nothing: every
+        // An engine that cannot answer — one built before the command
+        // existed, or one that lost its connection — recovers nothing: every
         // declaration still shows its discriminator.
-        .catchAndReturn(.recovered(RuntimePrivateDiscriminatorSourceFiles(recovering: [], imagePath: imagePath, runtimeObjects: [])))
+        .catchAndReturn(.recovered([:]))
         .observeOnMainScheduler()
         .bind(to: $sourceFilesState)
         .disposed(by: rx.disposeBag)
@@ -105,21 +103,12 @@ public final class PrivateDeclarationViewModel: ViewModel<SidebarRuntimeObjectRo
             .pending
         case .recovering:
             .recovering
-        case .recovered(let sourceFiles):
-            if let sourceFile = sourceFiles.sourceFile(forDiscriminator: discriminator) {
+        case .recovered(let sourceFileByDiscriminator):
+            if let sourceFile = sourceFileByDiscriminator[discriminator] {
                 .recovered(fileName: sourceFile.fileName, moduleName: sourceFile.moduleName, isSynthesized: sourceFile.isSynthesized)
             } else {
                 .unrecovered
             }
         }
-    }
-
-    /// Candidates from every name in the image, nested types included, hashed
-    /// against this row's discriminators until all are found. A discriminator
-    /// nothing produces runs through every candidate — three to four seconds for
-    /// SwiftUICore in a debug build — so never on the main actor.
-    @concurrent
-    private nonisolated static func recoverSourceFiles(of discriminators: [String], imagePath: String, runtimeObjects: [RuntimeObject]) async -> RuntimePrivateDiscriminatorSourceFiles {
-        RuntimePrivateDiscriminatorSourceFiles(recovering: discriminators, imagePath: imagePath, runtimeObjects: runtimeObjects)
     }
 }

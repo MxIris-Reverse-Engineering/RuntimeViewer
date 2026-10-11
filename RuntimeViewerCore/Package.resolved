@@ -1,5 +1,5 @@
 {
-  "originHash" : "563dfc7894058dc872aef02115117a0d203678954f3ce47ba612a2ce47febcad",
+  "originHash" : "c60e673604cee26218f38f0130020fb65b99f2ab48664d2f92b3d16775471395",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -96,8 +96,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "branch" : "feature/runtime-viewer/find-navigator",
-        "revision" : "52460a79c3574f6c53a6f9e70f99d2438114782f"
+        "branch" : "next",
+        "revision" : "b8db48bfde81b685fe2990b777ef37e8f69bf003"
       }
     },
     {

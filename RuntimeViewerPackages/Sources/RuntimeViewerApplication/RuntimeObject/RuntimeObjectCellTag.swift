@@ -11,6 +11,10 @@ public struct RuntimeObjectCellTag: Hashable, Sendable {
         /// The row's object has private declarations (`RuntimeObject.privateDeclarations`); the
         /// tag's popover shows their discriminators and the source files they were derived from.
         case privateDeclaration
+
+        /// The row's object is a Swift type declared in a function or closure body
+        /// (`RuntimeObject.Properties.isLocalType`).
+        case localType
     }
 
     public let identifier: Identifier
@@ -35,6 +39,19 @@ public struct RuntimeObjectCellTag: Hashable, Sendable {
             title: "Private",
             toolTip: isClickable ? "Show Private Declaration Details" : "Private Declaration",
             isClickable: isClickable
+        )
+    }
+
+    /// `Local`, after the name of a type declared in a function or closure body. Never clickable:
+    /// the name already says which function, or — when the binary names none — that it cannot.
+    public static func localType(isPositionNamed: Bool) -> RuntimeObjectCellTag {
+        RuntimeObjectCellTag(
+            identifier: .localType,
+            title: "Local",
+            toolTip: isPositionNamed
+                ? "Declared in a function or closure the binary does not name; the $ number is the address of the anonymous context around the type"
+                : "Declared in a function or closure",
+            isClickable: false
         )
     }
 }

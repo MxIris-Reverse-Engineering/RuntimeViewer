@@ -115,11 +115,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                // The Find navigator's corpus needs what this branch carries and
-                // next does not yet: concurrent definition printing, memoized
-                // nested field offsets and nested definition regions. Back to
-                // next once the branch is merged there.
-                branch: "feature/runtime-viewer/find-navigator"
+                branch: "next"
             ),
         ),
         .package(
@@ -132,9 +128,6 @@ let package = Package(
                 branch: "next"
             ),
         ),
-        // Imported directly, and wanted from next: MachOSwiftSection asks for a
-        // 0.7 release, which lacks the unretained kind queries that let several
-        // corpus prints run side by side.
         .package(
             local: .package(
                 path: "../../swift-demangling",
@@ -228,6 +221,7 @@ let package = Package(
                 .product(name: "SwiftPrinting", package: "MachOSwiftSection"),
                 .product(name: "SwiftSpecialization", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
+                .product(name: "SwiftPrivateDiscriminators", package: "MachOSwiftSection"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "DequeModule", package: "swift-collections"),

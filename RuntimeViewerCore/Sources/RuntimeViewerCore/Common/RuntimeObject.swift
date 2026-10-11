@@ -39,6 +39,17 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// class list carries it too. Generic and specialized classes have no
         /// static class object and never get it.
         public static let isObjCClass = Self(rawValue: 1 << 4)
+
+        /// Marks a Swift type declared in a function or closure body. Its
+        /// `displayName` is the name a reader is shown of it,
+        /// `Visitor #1 in TableDataSource.performDrop(to:)`. A type nested in
+        /// a local type is not one itself.
+        public static let isLocalType = Self(rawValue: 1 << 5)
+
+        /// Marks an `isLocalType` type whose function or closure the binary
+        /// does not name, so it is named by the address of the anonymous
+        /// context wrapping it: `TableDataSource.(Visitor in $1a2b3c)`.
+        public static let isPositionNamedLocalType = Self(rawValue: 1 << 6)
     }
 
     public let name: String
