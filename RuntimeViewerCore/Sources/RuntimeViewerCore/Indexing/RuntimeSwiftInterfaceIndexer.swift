@@ -8,6 +8,7 @@ import OrderedCollections
 import SwiftStdlibToolbox
 @_spi(Internals) import SwiftInspection
 @_spi(Support) import SwiftInterface
+@_spi(Support) import SwiftSpecialization
 
 /// Per-image Swift interface index: a project-owned wrapper around the
 /// upstream `MachOSwiftSection` `SwiftDeclarationIndexer` that layers on the
@@ -110,6 +111,11 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// images load. Mirrors `RuntimeObjCInterfaceIndexer.subIndexers`.
     @Mutex
     private var subIndexers: [RuntimeSwiftInterfaceIndexer] = []
+
+    /// The provider `conformanceProvider` hands out, built on first read and
+    /// dropped by `addSubIndexer`. Only the aggregate's is ever read.
+    @Mutex
+    private var currentConformanceProvider: IndexerConformanceProvider<MachOImage>? = nil
 
     // MARK: - Init
 
@@ -278,8 +284,32 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// Callers pass `RuntimeSwiftInterfaceIndexer` values and never reach for
     /// `.upstream`. Mirrors `RuntimeObjCInterfaceIndexer.addSubIndexer(_:)`;
     /// `RuntimeSwiftSectionFactory` calls it as each section is created.
+    ///
+    /// Drops the conformance provider, so the next specializer reads one that
+    /// covers this image too; see `conformanceProvider`.
     func addSubIndexer(_ subIndexer: RuntimeSwiftInterfaceIndexer) {
         upstream.addSubIndexer(subIndexer.upstream)
         _subIndexers.withLock { $0.append(subIndexer) }
+        currentConformanceProvider = nil
+    }
+
+    /// The conformance provider every generic specializer over this aggregate
+    /// reads, shared until the next `addSubIndexer`.
+    ///
+    /// A provider builds the class hierarchy behind a class-bound parameter's
+    /// candidates once, over the images registered at that moment, and never
+    /// refreshes it. So it is shared — a provider per request walked every
+    /// indexed class again each time — and replaced once an image is added: a
+    /// provider kept for good left the new image's subclasses out of the
+    /// candidates.
+    var conformanceProvider: IndexerConformanceProvider<MachOImage> {
+        _currentConformanceProvider.withLock { currentConformanceProvider in
+            if let currentConformanceProvider {
+                return currentConformanceProvider
+            }
+            let conformanceProvider = IndexerConformanceProvider(indexer: upstream)
+            currentConformanceProvider = conformanceProvider
+            return conformanceProvider
+        }
     }
 }

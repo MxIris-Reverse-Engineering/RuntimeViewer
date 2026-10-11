@@ -95,13 +95,6 @@ actor RuntimeSwiftSection {
 
     private var interfaceDefinitionNameByObject: [RuntimeObjectKey: InterfaceDefinitionName] = [:]
 
-    /// Lazily-constructed specializer reused for both `makeRequest(for:)`
-    /// and `specialize(_:with:)`. Lives on the actor so the underlying
-    /// indexer reference is captured exactly once and the caches built by
-    /// repeated `findCandidates` invocations stay warm across user
-    /// interactions.
-    private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream), indexer: factory.indexer.upstream)
-
     private enum InterfaceDefinitionName {
         case rootType(SwiftDeclaration.TypeName)
         case childType(SwiftDeclaration.TypeName)
@@ -615,10 +608,29 @@ extension RuntimeSwiftSection {
 extension RuntimeSwiftSection {
     // MARK: - Generic Specialization
 
+    /// A specializer for type descriptors in `machO`, reading the conformance
+    /// provider the factory's aggregate holds for the images indexed right
+    /// now.
+    ///
+    /// Built per request, never kept: a kept specializer keeps its provider,
+    /// whose class hierarchy leaves out every image indexed after it was built
+    /// (see `RuntimeSwiftInterfaceIndexer.conformanceProvider`). The hierarchy
+    /// is the one thing worth keeping, and the shared provider keeps it; the
+    /// specializer itself caches nothing.
+    private func makeSpecializer(for machO: MachOImage) -> GenericSpecializer<MachOImage> {
+        let specializer = GenericSpecializer<MachOImage>(
+            machO: machO,
+            conformanceProvider: factory.indexer.conformanceProvider,
+            indexer: factory.indexer.upstream
+        )
+        specializer.maxBindingDepth = Self.maxSpecializationDepth
+        return specializer
+    }
+
     func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
         do {
             let typeDefinition = try requireGenericTypeDefinition(for: object)
-            let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+            let upstreamRequest = try makeSpecializer(for: machO).makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
         } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
             throw Self.translate(error)
@@ -644,17 +656,12 @@ extension RuntimeSwiftSection {
             // a `git grep`-able token in the binary.
             throw RuntimeEngine.EngineError.unindexedCandidate(displayName: candidateID, imagePath: imagePath)
         }
-        // Bind the specializer to the candidate's own image. `self.specializer`
-        // is bound to *this* section's MachO, but the candidate's descriptor
-        // can live in a different image (the aggregate is cross-image), and
-        // parsing offsets against the wrong Mach-O reads garbage that the
-        // demangler later trips on at the first byte.
-        let candidateSpecializer = GenericSpecializer<MachOImage>(
-            machO: matched.entry.machO,
-            conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream),
-            indexer: factory.indexer.upstream
-        )
-        candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
+        // Bind the specializer to the candidate's own image, not this
+        // section's: the candidate's descriptor can live in a different image
+        // (the aggregate is cross-image), and parsing offsets against the
+        // wrong Mach-O reads garbage that the demangler later trips on at the
+        // first byte.
+        let candidateSpecializer = makeSpecializer(for: matched.entry.machO)
         do {
             let upstreamRequest = try candidateSpecializer.makeRequest(for: matched.entry.value.type.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
@@ -672,6 +679,7 @@ extension RuntimeSwiftSection {
     ) async throws -> RuntimeObject {
         try Task.checkCancellation()
         let baseTypeDefinition = try requireGenericTypeDefinition(for: object)
+        let specializer = makeSpecializer(for: machO)
         let upstreamRequest = try specializer.makeRequest(for: baseTypeDefinition.type.typeContextDescriptorWrapper)
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
         try Task.checkCancellation()
@@ -730,6 +738,7 @@ extension RuntimeSwiftSection {
     ) async throws -> RuntimeSpecializationValidation {
         try Task.checkCancellation()
         let typeDefinition = try requireGenericTypeDefinition(for: object)
+        let specializer = makeSpecializer(for: machO)
         let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
         try Task.checkCancellation()
@@ -920,28 +929,23 @@ extension RuntimeSwiftSection {
             let matchedBase = try matchUpstreamCandidate(runtimeBase, in: parameter)
             // CRITICAL: inner candidates can live in a different image than
             // the outer generic (`Array` / `Dictionary` live in stdlib, not
-            // the outer's hosting image). `self.specializer` is bound to the
-            // outer's `machO`, so calling `self.specializer.makeRequest` on
-            // an inner descriptor would parse offsets against the *wrong*
-            // Mach-O and read garbage — in practice surfaces as a multi-GB
+            // the outer's hosting image). The outer's specializer is bound to
+            // the outer's `machO`, so calling its `makeRequest` on an inner
+            // descriptor would parse offsets against the *wrong* Mach-O and
+            // read garbage — in practice surfaces as a multi-GB
             // `numberOfElements` inside `TargetGenericContext.initialize` and
             // hangs the process.
             //
-            // Build a fresh specializer bound to the inner candidate's own
-            // image (mirrors what upstream's internal `makeInnerContext(for:)`
-            // does, but expressed here because that helper is `internal`).
+            // Build a specializer bound to the inner candidate's own image
+            // (mirrors what upstream's internal `makeInnerContext(for:)` does,
+            // but expressed here because that helper is `internal`).
             guard let innerEntry = factory.indexer.allAllTypeDefinitions[matchedBase.typeName] else {
                 throw RuntimeEngine.EngineError.unindexedCandidate(
                     displayName: runtimeBase.displayName,
                     imagePath: runtimeBase.imagePath
                 )
             }
-            let innerSpecializer = GenericSpecializer<MachOImage>(
-                machO: innerEntry.machO,
-                conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream),
-                indexer: factory.indexer.upstream
-            )
-            innerSpecializer.maxBindingDepth = Self.maxSpecializationDepth
+            let innerSpecializer = makeSpecializer(for: innerEntry.machO)
             let innerRequest: SpecializationRequest
             do {
                 innerRequest = try innerSpecializer.makeRequest(for: innerEntry.value.type.typeContextDescriptorWrapper)
