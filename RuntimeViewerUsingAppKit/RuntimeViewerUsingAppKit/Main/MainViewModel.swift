@@ -120,14 +120,14 @@ final class MainViewModel: ViewModel<MainRoute> {
         let navigationHistorySelected: Signal<Int>
         let saveClick: Signal<Void>
         let switchSource: Signal<String?>
-        let generationOptionsClick: Signal<NSView>
+        let generationOptionsClick: Signal<Void>
         let increaseFontSize: Signal<Void>
         let decreaseFontSize: Signal<Void>
         let resetFontSize: Signal<Void>
         let loadFrameworksClick: Signal<Void>
 //        let installHelperClick: Signal<Void>
         let attachToProcessClick: Signal<Void>
-        let mcpStatusClick: Signal<NSView>
+        let mcpStatusClick: Signal<Void>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
         let tabSelected: Signal<Int>
@@ -328,9 +328,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
+        input.generationOptionsClick.emit(with: self) { owner, _ in owner.router.trigger(.generationOptions) }.disposed(by: rx.disposeBag)
 
-        input.mcpStatusClick.emit(with: self) { $0.router.trigger(.mcpStatus(sender: $1)) }.disposed(by: rx.disposeBag)
+        input.mcpStatusClick.emit(with: self) { owner, _ in owner.router.trigger(.mcpStatus) }.disposed(by: rx.disposeBag)
 
         let selectedRuntimeObjectObservable: Observable<RuntimeObject?> =
             documentState.$selectedRuntimeObject.asObservable()

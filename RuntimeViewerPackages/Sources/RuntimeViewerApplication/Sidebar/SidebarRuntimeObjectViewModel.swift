@@ -201,6 +201,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// A click on one of a row's tags (`RuntimeObjectCellTag`). macOS only.
         @Init(default: Signal<TagClick>.empty())
         public let runtimeObjectTagClicked: Signal<TagClick>
+        /// A press on the filter bar's scope button, which opens the scope
+        /// popover. macOS only.
+        @Init(default: Signal<Void>.empty())
+        public let filterScopeClicked: Signal<Void>
     }
 
     /// One click on a row's tag: which row, and which of its tags.
@@ -354,6 +358,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                     // Never clickable: its click goes to the row.
                     break
                 }
+            }
+            .disposed(by: rx.disposeBag)
+
+        input.filterScopeClicked
+            .emitOnNextMainActor { [weak self] in
+                guard let self else { return }
+                router.trigger(.scope(relay: $scope, availableKinds: availableKinds, availableProperties: availableProperties))
             }
             .disposed(by: rx.disposeBag)
         #endif

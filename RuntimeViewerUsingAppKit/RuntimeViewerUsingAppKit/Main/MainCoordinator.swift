@@ -66,17 +66,19 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 .route(on: contentCoordinator, to: .placeholder),
                 .route(on: inspectorCoordinator, to: .placeholder),
             )
-        case .generationOptions(let sender):
+        case .generationOptions:
+            guard let anchorView = popoverAnchorView(of: rootWindowController.toolbarController.generationOptionsItem) else { return .none() }
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(documentState: documentState, router: self)
             viewController.loadViewIfNeeded()
             viewController.setupBindings(for: viewModel)
-            return .popover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
-        case .mcpStatus(let sender):
+            return .popover(viewController, relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY, behavior: .transient)
+        case .mcpStatus:
+            guard let anchorView = popoverAnchorView(of: rootWindowController.toolbarController.mcpStatusItem) else { return .none() }
             let viewController = MCPStatusPopoverViewController()
             let viewModel = MCPStatusPopoverViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
-            return .popover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
+            return .popover(viewController, relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY, behavior: .transient)
         case .attachToProcess:
             // Which machine's processes the sheet offers follows the selected engine. The
             // host case is the one that already worked and keeps enumerating locally; a
@@ -133,6 +135,15 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 .trigger(.showReports, on: sidebarCoordinator)
             )
         }
+    }
+
+    /// The button a popover about `toolbarItem` anchors at, looked up here so
+    /// that neither the route nor the view model carries a view. `nil` while
+    /// the item sits in the toolbar's overflow menu, where its button is in no
+    /// window and cannot anchor anything.
+    private func popoverAnchorView(of toolbarItem: MainToolbarController.IconButtonToolbarItem) -> NSView? {
+        let button = toolbarItem.button
+        return button.window != nil ? button : nil
     }
 
     override func completeTransition(for route: MainRoute) {

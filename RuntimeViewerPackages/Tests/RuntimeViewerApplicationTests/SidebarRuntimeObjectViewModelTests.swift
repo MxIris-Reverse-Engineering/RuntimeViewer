@@ -155,6 +155,30 @@ struct SidebarRuntimeObjectViewModelTests {
         #expect(routedCellViewModel === cellViewModel)
     }
 
+    // MARK: - Scope
+
+    /// The route carries no view: the coordinator finds the button to anchor
+    /// at. What it does carry is the view model's own scope relay, which the
+    /// popover writes into, and what the image has to offer.
+    @Test("a press on the scope button opens the scope popover over the view model's own scope")
+    func scopeButtonOpensPopoverOverOwnScope() async throws {
+        let environment = ViewModelTestEnvironment(runtimeEngine: try await TestRuntimeEngine.shared())
+        let filterScopeClickedRelay = PublishRelay<Void>()
+        let (viewModel, _) = try makeViewModel(imagePath: TestImages.libobjc, filterScopeClicked: filterScopeClickedRelay.asSignal(), in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        filterScopeClickedRelay.accept(())
+
+        let routes = try await triggeredRoutes { !$0.isEmpty }
+        guard routes.count == 1, case .scope(let relay, let availableKinds, let availableProperties) = routes[0] else {
+            Issue.record("expected one scope route, got \(routes)")
+            return
+        }
+        #expect(relay === viewModel.$scope)
+        #expect(availableKinds == viewModel.availableKinds)
+        #expect(availableProperties == viewModel.availableProperties)
+    }
+
     // MARK: - Helpers
 
     /// The router's routes once `condition` holds; the view model triggers
@@ -185,17 +209,19 @@ struct SidebarRuntimeObjectViewModelTests {
         imagePath: String,
         counterpartRequested: Signal<SidebarRuntimeObjectCellViewModel> = .empty(),
         tagClicked: Signal<SidebarRuntimeObjectViewModel.TagClick> = .empty(),
+        filterScopeClicked: Signal<Void> = .empty(),
         in environment: ViewModelTestEnvironment
     ) throws -> (SidebarRuntimeObjectViewModel, SidebarRuntimeObjectViewModel.Output) {
         let tree = Fixtures.imageTree(rootName: "Root", imagePaths: [imagePath])
         let leaf = try #require(tree.leaf(forImagePath: imagePath))
-        return try makeViewModel(imageNode: leaf, counterpartRequested: counterpartRequested, tagClicked: tagClicked, in: environment)
+        return try makeViewModel(imageNode: leaf, counterpartRequested: counterpartRequested, tagClicked: tagClicked, filterScopeClicked: filterScopeClicked, in: environment)
     }
 
     private func makeViewModel(
         imageNode: RuntimeImageNode,
         counterpartRequested: Signal<SidebarRuntimeObjectCellViewModel> = .empty(),
         tagClicked: Signal<SidebarRuntimeObjectViewModel.TagClick> = .empty(),
+        filterScopeClicked: Signal<Void> = .empty(),
         in environment: ViewModelTestEnvironment
     ) throws -> (SidebarRuntimeObjectViewModel, SidebarRuntimeObjectViewModel.Output) {
         let viewModel = environment.make {
@@ -209,7 +235,8 @@ struct SidebarRuntimeObjectViewModelTests {
                 searchString: .just(""),
                 isSearchCaseSensitive: .just(false),
                 runtimeObjectCounterpartRequested: counterpartRequested,
-                runtimeObjectTagClicked: tagClicked
+                runtimeObjectTagClicked: tagClicked,
+                filterScopeClicked: filterScopeClicked
             )
         )
         return (viewModel, output)

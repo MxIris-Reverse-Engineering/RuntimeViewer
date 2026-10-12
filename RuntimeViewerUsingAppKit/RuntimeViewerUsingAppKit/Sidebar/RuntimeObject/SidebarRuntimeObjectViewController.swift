@@ -42,8 +42,13 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     /// clicked; the cell provider pairs that with the row the cell is bound to.
     private let tagClickedRelay = PublishRelay<SidebarRuntimeObjectViewModel.TagClick>()
 
-    /// The filter scope item's button on the bar, each time it is pressed — the anchor of the scope popover.
-    private let filterScopeItemPressedRelay = PublishRelay<NSButton>()
+    /// Presses on the filter scope item's button on the bar.
+    private let filterScopeItemPressedRelay = PublishRelay<Void>()
+
+    /// The filter scope item's button on the bar, kept from its last press:
+    /// `NSFilterControlBarItem` hands out its button only as the sender of its
+    /// action. The anchor of the scope popover — see `filterScopeAnchorView`.
+    private weak var filterScopeButton: NSButton?
 
     /// The empty string, sent when the view model clears its filter on its
     /// own. Setting the search field's `stringValue` does not reach
@@ -99,6 +104,14 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         return tagView
     }
 
+    /// The filter bar's scope button, which the scope popover anchors at, or
+    /// `nil` when this list is not on screen. Asked by the coordinator, so
+    /// that neither the route nor the view model carries a view.
+    var filterScopeAnchorView: NSView? {
+        guard let filterScopeButton, filterScopeButton.window != nil else { return nil }
+        return filterScopeButton
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -143,7 +156,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     }
 
     @objc private func filterScopeItemPressed(_ sender: NSButton) {
-        filterScopeItemPressedRelay.accept(sender)
+        filterScopeButton = sender
+        filterScopeItemPressedRelay.accept(())
     }
 
     override func setupBindings(for viewModel: ViewModel) {
@@ -222,6 +236,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
             runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
             runtimeObjectTagClicked: tagClickedRelay.asSignal(),
+            filterScopeClicked: filterScopeItemPressedRelay.asSignal(),
         )
 
         let output = viewModel.transform(input)
@@ -335,20 +350,6 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         let scopeKey = viewModel.documentState.runtimeEngine.bookmarkScope.sidebarAutosaveKey
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(scopeKey)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(scopeKey)"
-
-        filterScopeItemPressedRelay.asSignal()
-            .emitOnNextMainActor { [weak viewModel] sender in
-                guard let viewModel else { return }
-                viewModel.router.trigger(
-                    .scope(
-                        sender: sender,
-                        relay: viewModel.$scope,
-                        availableKinds: viewModel.availableKinds,
-                        availableProperties: viewModel.availableProperties,
-                    ),
-                )
-            }
-            .disposed(by: rx.disposeBag)
 
         viewModel.$scope
             .asDriver()

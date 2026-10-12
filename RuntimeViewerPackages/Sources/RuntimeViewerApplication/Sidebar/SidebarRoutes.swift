@@ -3,10 +3,6 @@ import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-#endif
-
 @AssociatedValue(.public)
 @CaseCheckable(.public)
 public enum SidebarRoute: Routable {
@@ -61,14 +57,14 @@ public enum SidebarRuntimeObjectRoute: Routable {
     /// Switch to the object list and have it reveal the document's object on
     /// screen — see `SidebarRuntimeObjectListViewModel.revealSelectedRuntimeObject()`.
     case revealSelectedRuntimeObject
-    /// Open the scope popover anchored at `sender`. The popover view model
-    /// reads/writes the same `BehaviorRelay` the sidebar view model exposes,
-    /// so user edits land live without an explicit Apply. `availableKinds`
-    /// and `availableProperties` are a snapshot of what the current image
-    /// actually contains — the popover uses them to skip drawing rows that
-    /// would have no effect.
+    /// Open the scope popover. The popover view model reads/writes the same
+    /// `BehaviorRelay` the sidebar view model exposes, so user edits land live
+    /// without an explicit Apply. `availableKinds` and `availableProperties`
+    /// are a snapshot of what the current image actually contains — the
+    /// popover uses them to skip drawing rows that would have no effect. Like
+    /// every route, it carries no view: the coordinator asks the list on
+    /// screen for its scope button to anchor at.
     case scope(
-        sender: NSView,
         relay: BehaviorRelay<RuntimeObjectScope>,
         availableKinds: Set<RuntimeObjectKind>,
         availableProperties: RuntimeObject.Properties

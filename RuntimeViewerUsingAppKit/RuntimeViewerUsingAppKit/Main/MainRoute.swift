@@ -1,7 +1,6 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
-import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
@@ -9,9 +8,12 @@ import RuntimeViewerApplication
 @CaseCheckable(.public)
 public enum MainRoute: Routable {
     case main(RuntimeEngine)
-    case generationOptions(sender: NSView)
+    /// The Generation Options popover. Like every route, it carries no view:
+    /// `MainCoordinator` takes the toolbar item's button to anchor it at.
+    case generationOptions
     case attachToProcess
-    case mcpStatus(sender: NSView)
+    /// The MCP status popover, anchored the same way as `generationOptions`.
+    case mcpStatus
     case dismiss
     case exportInterfaces
     case exportMultipleImages

@@ -17,7 +17,8 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
     private var listViewModel: SidebarRuntimeObjectListViewModel?
 
     /// The two lists whose rows carry tags, asked for the tag a popover
-    /// anchors at. The tab view controller owns them.
+    /// anchors at, and for the scope button the scope popover anchors at. The
+    /// tab view controller owns them.
     private weak var listViewController: SidebarRuntimeObjectListViewController?
 
     private weak var bookmarkViewController: SidebarRuntimeObjectBookmarkViewController?
@@ -92,7 +93,11 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
                     completion?()
                 }
             )
-        case .scope(let sender, let relay, let availableKinds, let availableProperties):
+        case .scope(let relay, let availableKinds, let availableProperties):
+            // Only the list on screen answers: the two are tabs of one view.
+            guard let anchorView = listViewController?.filterScopeAnchorView
+                ?? bookmarkViewController?.filterScopeAnchorView
+            else { return .none() }
             let viewController = SidebarRuntimeObjectScopeViewController()
             let viewModel = SidebarRuntimeObjectScopeViewModel<SidebarRuntimeObjectRoute>(
                 relay: relay,
@@ -102,7 +107,7 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
                 router: self
             )
             viewController.setupBindings(for: viewModel)
-            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: anchorView.bounds, ofView: anchorView, preferredEdge: .maxY, behavior: .transient))
         case .privateDeclaration(let cellViewModel):
             // The row's own list answers; the other one does not hold it.
             guard let anchorView = listViewController?.anchorView(forTag: .privateDeclaration, of: cellViewModel)

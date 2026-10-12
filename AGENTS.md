@@ -1394,6 +1394,23 @@ public enum MyRoute: Routable {
 }
 ```
 
+**Routes carry no views** — a route's associated values never include an AppKit or UIKit type: no
+`NSView` / `NSButton` sender, no `NSWindow`, `NSEvent` or `NSMenu`. The same goes for a ViewModel's
+`Input`, which is where such a value would come from: a button press is a `Signal<Void>`, never a
+`Signal<NSView>`. A popover that needs an anchor gets it in the coordinator's `prepareTransition`,
+which asks the view layer, and returns `.none()` when the anchor is not on screen. Three shapes exist:
+
+- A fixed control the coordinator can reach — `MainCoordinator.popoverAnchorView(of:)` takes the
+  toolbar item's button for the Generation Options and MCP status popovers.
+- A control the view controller holds — the controller exposes it, as
+  `SidebarRuntimeObjectViewController.filterScopeAnchorView` does for the scope popover.
+  `NSFilterControlBarItem` hands out its button only as the sender of its action, so that controller
+  keeps the button from the last press.
+- A row — the route carries the row and the controller looks up the view in it; see *Row tags* under
+  *NSTableView / NSOutlineView Rx Data Source*.
+
+Background: `Documentations/Evolutions/draft-routes-carry-no-views.md`.
+
 **ViewController creation** — always in Coordinator's `prepareTransition`, not in ViewController:
 ```swift
 override func prepareTransition(for route: MainRoute) -> MainTransition {
