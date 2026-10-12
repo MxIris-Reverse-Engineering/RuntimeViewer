@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerApplication
@@ -26,13 +27,14 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let queryParametersView = NSView()
 
-    private let modePathControl = PopUpPathControl()
+    private let modePathControl = NSPopUpPathControl()
+
+    /// Puts the view model's mode path on `modePathControl` and reports the choices made in it.
+    private lazy var modePathControlAdapter = FindModePathControlAdapter(pathControl: modePathControl)
 
     private let caseSensitiveButton = NSButton()
 
-    private let searchField = SearchField()
-
-    private let searchProgressIndicator = NSProgressIndicator()
+    private let searchField = NSFilterSearchField()
 
     private let scopeButton = FindScopeButton()
 
@@ -62,7 +64,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let filterSeparatorView = Box()
 
-    private let filterSearchField = FilterSearchField()
+    private let filterSearchField = NSFilterSearchField()
+
+    private let filterControlBar = NSFilterControlBar()
 
     override var containerViewUsingSafeArea: Bool { true }
 
@@ -82,7 +86,6 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                 modePathControl
                 caseSensitiveButton
                 searchField
-                searchProgressIndicator
                 scopeButton
                 memberKindPopUpButton
             }
@@ -93,7 +96,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             resultsTopSeparatorView
             scrollView
             filterSeparatorView
-            filterSearchField
+            filterControlBar
         }
 
         queryParametersView.snp.makeConstraints { make in
@@ -122,12 +125,6 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             make.top.equalToSuperview().offset(25)
             make.leading.trailing.equalToSuperview().inset(8)
             make.height.equalTo(22)
-        }
-
-        searchProgressIndicator.snp.makeConstraints { make in
-            make.centerY.equalTo(searchField)
-            make.trailing.equalTo(searchField).inset(24)
-            make.size.equalTo(14)
         }
 
         scopeButton.snp.makeConstraints { make in
@@ -172,23 +169,19 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             make.bottom.equalTo(filterSeparatorView.snp.top)
         }
 
-        // The filter bar: 44 points, its field 28 points tall with 8-point margins.
         filterSeparatorView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
+            make.bottom.equalTo(filterControlBar.snp.top)
             make.height.equalTo(1)
         }
 
-        filterSearchField.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview().inset(8)
-            make.bottom.equalToSuperview().inset(8)
-            make.height.equalTo(28)
+        // The filter bar: under the macOS 26 design, 44 points with its large field 28 points tall, as Xcode's.
+        filterControlBar.snp.makeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview()
         }
 
-        modePathControl.do {
-            $0.controlSize = .small
-            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        }
+        // Its horizontal compression resistance is already low: the path is what gives way.
+        modePathControl.controlSize = .small
 
         caseSensitiveButton.do {
             $0.title = "Aa"
@@ -203,17 +196,13 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         searchField.do {
             $0.controlSize = .small
             $0.font = .systemFont(ofSize: 11)
+            // Xcode's field here, `IDEProgressSearchField`, is a `DVTSearchField` showing the
+            // magnifying glass rather than the filter icon; its spinner is the field's `progress`.
+            $0.usesFilterAppearance = false
             // Return searches; typing does not, as in Xcode.
             $0.sendsWholeSearchString = true
             $0.sendsSearchStringImmediately = false
             $0.maximumRecents = 0
-        }
-
-        searchProgressIndicator.do {
-            $0.style = .spinning
-            $0.controlSize = .small
-            $0.isDisplayedWhenStopped = false
-            $0.isIndeterminate = true
         }
 
         scopeButton.do {
@@ -277,8 +266,13 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             $0.menu = contextMenu
         }
 
-        filterSearchField.do {
+        // The bar sets the field's control size, which sets its font, so the field's own settings come after it.
+        filterControlBar.do {
+            $0.filterField = filterSearchField
             $0.controlSize = .large
+        }
+
+        filterSearchField.do {
             $0.font = .systemFont(ofSize: 13)
             $0.placeholderString = "Filter"
             $0.toolTip = "Show results with matching text"
@@ -356,18 +350,13 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                 FindMemberKindFilter.allCases.indices.contains(index) ? FindMemberKindFilter.allCases[index] : nil
             }
 
-        let modePathChoiceSelected: Signal<FindModePathChoice> = modePathControl.rx
-            .click(with: \.lastSelection)
-            .asSignal()
-            .compactMap { $0?.value as? FindModePathChoice }
-
         let scopeMenuChoiceSelected: Signal<FindScopeMenuChoice> = scopeButton.rx
             .click(with: \.selectedItem)
             .asSignal()
             .compactMap { $0?.representedObject as? FindScopeMenuChoice }
 
         let input = FindViewModel<Route>.Input(
-            modePathChoiceSelected: modePathChoiceSelected,
+            modePathChoiceSelected: modePathControlAdapter.choiceSelected,
             memberKindFilterSelected: memberKindFilterSelected,
             // A click, read when it happens. `rx.state` carries an initial value under some
             // overloads, and the page bound second would write its default into the session
@@ -386,7 +375,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
         output.modePath.driveOnNext { [weak self] modePath in
             guard let self else { return }
-            modePathControl.components = modePath.map(\.pathControlComponent)
+            modePathControlAdapter.show(modePath)
         }
         .disposed(by: rx.disposeBag)
 
@@ -464,11 +453,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
         output.isSearching.driveOnNext { [weak self] isSearching in
             guard let self else { return }
-            if isSearching {
-                searchProgressIndicator.startAnimation(nil)
-            } else {
-                searchProgressIndicator.stopAnimation(nil)
-            }
+            searchField.progress = isSearching ? NSFilterFieldProgressIndeterminate : NSFilterFieldProgressNone
         }
         .disposed(by: rx.disposeBag)
 
@@ -567,22 +552,5 @@ private final class FindScopeButton: PopUpButton {
         }
         // A scope picked in the chooser has no item: nothing is checked then.
         select(checkedItem)
-    }
-}
-
-// MARK: - Mode Path
-
-extension FindModePathComponent {
-    /// The component as the mode path control draws it: an accented choice takes the accent
-    /// colour, and each menu item carries the choice it makes.
-    fileprivate var pathControlComponent: PopUpPathControl.Component {
-        PopUpPathControl.Component(
-            title: title,
-            titleColor: isAccented ? .controlAccentColor : nil,
-            value: choice.map(AnyHashable.init),
-            menuItems: menuChoices.map { menuChoice in
-                PopUpPathControl.MenuItem(title: menuChoice.title, value: menuChoice, isPrecededBySeparator: menuChoice.isPrecededBySeparator)
-            }
-        )
     }
 }

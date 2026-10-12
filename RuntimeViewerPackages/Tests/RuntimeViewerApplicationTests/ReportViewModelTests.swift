@@ -1,3 +1,4 @@
+import AppKitPlus
 import Dependencies
 import Foundation
 import RuntimeViewerArchitectures
@@ -313,7 +314,7 @@ struct ReportViewModelTests {
         // The page's own filter field, read the way the page reads it: its `rx.stringValue` reports
         // only what is typed into it, so an untouched field says nothing at all — nor does a clock
         // toggle nobody has clicked.
-        let filterSearchField = FilterSearchField()
+        let filterSearchField = NSFilterSearchField()
         let page = environment.make {
             Page(
                 documentState: environment.documentState,

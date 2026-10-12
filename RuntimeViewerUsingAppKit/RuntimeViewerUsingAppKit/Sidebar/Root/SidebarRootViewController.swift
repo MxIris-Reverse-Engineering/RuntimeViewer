@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -11,7 +12,9 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
     let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
 
-    private let filterSearchField = FilterSearchField()
+    private let filterSearchField = NSFilterSearchField()
+
+    private let filterControlBar = NSFilterControlBar()
 
     private let bottomSeparatorView = NSBox()
 
@@ -31,7 +34,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         containerView.hierarchy {
             scrollView
             bottomSeparatorView
-            filterSearchField
+            filterControlBar
         }
 
         scrollView.snp.makeConstraints { make in
@@ -41,16 +44,17 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
         bottomSeparatorView.snp.makeConstraints { make in
             make.left.right.equalToSuperview()
-            make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
+            make.bottom.equalTo(filterControlBar.snp.top)
             make.height.equalTo(1)
         }
 
-        filterSearchField.snp.makeConstraints { make in
-            make.left.right.equalToSuperview().inset(10)
+        // The bar's intrinsic height carries the margins around the field.
+        filterControlBar.snp.makeConstraints { make in
+            make.left.right.equalToSuperview()
             if #available(macOS 26.0, *) {
-                make.bottom.equalTo(view.layoutGuide(for: .safeArea())).inset(8)
+                make.bottom.equalTo(view.layoutGuide(for: .safeArea()))
             } else {
-                make.bottom.equalToSuperview().inset(8)
+                make.bottom.equalToSuperview()
             }
         }
 
@@ -58,14 +62,21 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
             $0.boxType = .separator
         }
 
-        filterSearchField.do {
+        // The bar sets the field's control size, which sets its font, so the field's own settings come after it.
+        filterControlBar.do {
+            $0.filterField = filterSearchField
             if #available(macOS 26.0, *) {
                 $0.controlSize = .extraLarge
+            } else {
+                $0.controlSize = .large
+            }
+        }
+
+        filterSearchField.do {
+            if #available(macOS 26.0, *) {
                 $0.font = .systemFont(ofSize: NSFont.systemFontSize)
                 $0.cell?.font = .systemFont(ofSize: NSFont.systemFontSize)
                 $0.textFieldCell?.placeholderString = nil
-            } else {
-                $0.controlSize = .large
             }
         }
 
