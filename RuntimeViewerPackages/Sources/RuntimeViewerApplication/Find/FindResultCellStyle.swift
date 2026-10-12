@@ -34,12 +34,12 @@ public enum FindResultCellStyle {
     // MARK: - Type Rows
 
     /// A type's name.
-    static let titleFont: NSFont = .systemFont(ofSize: 14)
+    static let titleFont: NSFont = .systemFont(ofSize: 13, weight: .medium)
 
     static let titleColor: NSColor = .labelColor
 
     /// The image the type is in, after its name.
-    static let subtitleFont: NSFont = .systemFont(ofSize: 11)
+    static let subtitleFont: NSFont = .systemFont(ofSize: 13)
 
     static let subtitleColor: NSColor = .secondaryLabelColor
 
