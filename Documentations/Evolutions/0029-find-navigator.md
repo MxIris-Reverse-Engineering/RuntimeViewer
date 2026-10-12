@@ -5,9 +5,9 @@
 - **最后更新**: 2026-10-11
 - **配套文档**: 无（理由见决策日志 2026-10-09 的 Implemented 一行）；审查与修复记录见 [`KnownIssues/2026-10-07-pr121-review-findings.md`](../KnownIssues/2026-10-07-pr121-review-findings.md)
 - **所属愿景**: 无（内容区的行定位部分与《自建代码视图引擎》相邻，但本提案不改视图引擎的方向）
-- **前置设计**: `feature/interface-corpus-probe` 分支上的
-  `Documentations/Plans/2026-07-26-global-search-design.md`（2026-07-27 按
-  `Reviews/2026-07-27-global-search-design-review.md` 修订）。文本搜索这一半**原样采用**那份设计，本提案只把它迁进
+- **前置设计**: [`Plans/2026-07-26-global-search-design.md`](../Plans/2026-07-26-global-search-design.md)（2026-07-27 按
+  [`Reviews/2026-07-27-global-search-design-review.md`](../Reviews/2026-07-27-global-search-design-review.md) 修订；原在
+  `feature/interface-corpus-probe` 分支上，2026-10-12 搬进 `next`，分支随即删除）。文本搜索这一半**原样采用**那份设计，本提案只把它迁进
   提案制、补上与 `next` 分叉后过时的三处，并加上关系与成员两种模式。
 
 ## 摘要

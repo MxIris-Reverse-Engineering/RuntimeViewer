@@ -8,7 +8,7 @@ import RuntimeViewerInjection
 /// The host's half of the reverse-connection path: the source it listens on,
 /// and what it tells the user when nothing arrives.
 ///
-/// Background: `Documentations/Evolutions/draft-device-payload-reverse-connection.md`.
+/// Background: `Documentations/Evolutions/0044-device-payload-reverse-connection.md`.
 @Suite("Injected device engines")
 @MainActor
 struct InjectedDeviceEngineTests {

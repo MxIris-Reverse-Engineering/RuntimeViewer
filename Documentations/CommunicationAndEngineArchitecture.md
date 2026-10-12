@@ -52,7 +52,7 @@
 | `.stdio` | stdin/stdout 管道 | CLI 工具、Language Server | ✅ | 无 |
 | `.local` + `.xpcService` 凭证 | 内嵌 XPC service（SwiftyXPC 直连，无 daemon） | App 的「My Mac」引擎：dlopen 与索引搬出 App 进程 | ✅ | service 随 App 打包 |
 
-> `.local` 描述的是身份（这台 Mac），不是传输。不带凭证时 `RuntimeCommunicator.connect(to: .local)` 仍抛 `localConnectionNotSupported`——进程内执行的本地引擎不走连接层，直接在 `RuntimeEngine` 内联；App 进程里的 `RuntimeEngine.local` 以 `credential: .xpcService(target)` 建连（凭证来自 `LocalRuntimeService.embeddedServiceCredential`，由进程自己的 `Info.plist` 决定），见 §2.4、§3.6 与提案 [draft-local-runtime-xpc-service](Evolutions/draft-local-runtime-xpc-service.md)。
+> `.local` 描述的是身份（这台 Mac），不是传输。不带凭证时 `RuntimeCommunicator.connect(to: .local)` 仍抛 `localConnectionNotSupported`——进程内执行的本地引擎不走连接层，直接在 `RuntimeEngine` 内联；App 进程里的 `RuntimeEngine.local` 以 `credential: .xpcService(target)` 建连（凭证来自 `LocalRuntimeService.embeddedServiceCredential`，由进程自己的 `Info.plist` 决定），见 §2.4、§3.6 与提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md)。
 
 ---
 
@@ -113,7 +113,7 @@ func stop()
 > `v1:bonjour:client:{deviceID}:SpringBoard`。取不到稳定身份时退到 legacy，且**书签与 sidebar
 > autosave 两个消费点分别取值**——sidebar 绝不能用 `identifier`，那正是带 pid 的那个。
 >
-> 完整取舍见提案 [`draft-runtime-bookmark-scope`](Evolutions/draft-runtime-bookmark-scope.md)。
+> 完整取舍见提案 [`0033-runtime-bookmark-scope`](Evolutions/0033-runtime-bookmark-scope.md)。
 
 ### 2.4 `RuntimeConnectionCredential`（`RuntimeConnectionCredential.swift`）—— 会话级凭证
 
@@ -312,7 +312,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ### 3.6 XPC service 连接（`RuntimeXPCServiceConnection.swift`，仅 macOS）
 
-**用途**：主 App ↔ 随 App 打包的 `RuntimeViewerLocalRuntimeService.xpc`——「My Mac」引擎的执行进程。它不对应新的 `RuntimeSource` case：引擎的 `source` 仍是 `.local`；`RuntimeEngine.local` 用 `LocalRuntimeService.embeddedServiceCredential` 连接——进程自己的 `Info.plist` 里有 `RuntimeViewerLocalRuntimeServiceBundleIdentifier` 就是 `.xpcService(.bundleIdentifier(id))`，走 client 路径，否则为 `nil`、留在进程内——工厂的 `.local` 分支只在带这个凭证时才交出连接。设计与取舍见提案 [draft-local-runtime-xpc-service](Evolutions/draft-local-runtime-xpc-service.md)。
+**用途**：主 App ↔ 随 App 打包的 `RuntimeViewerLocalRuntimeService.xpc`——「My Mac」引擎的执行进程。它不对应新的 `RuntimeSource` case：引擎的 `source` 仍是 `.local`；`RuntimeEngine.local` 用 `LocalRuntimeService.embeddedServiceCredential` 连接——进程自己的 `Info.plist` 里有 `RuntimeViewerLocalRuntimeServiceBundleIdentifier` 就是 `.xpcService(.bundleIdentifier(id))`，走 client 路径，否则为 `nil`、留在进程内——工厂的 `.local` 分支只在带这个凭证时才交出连接。设计与取舍见提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md)。
 
 **与 §3.1 的区别**：不经特权 daemon。App 侧一条 `XPCConnection(type: .remoteService(bundleID:))`，launchd 在**调用进程自己的 bundle** 里找到 service 并按需拉起；service 侧一个 `XPCListener(type: .service)`。所以只有 App 能用它——测试进程与 CLI 独立 host 都拿不到 App 包里的 `.xpc`，它们继续用进程内引擎。
 
@@ -429,7 +429,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 `RuntimeEngineManager` 通过 `@Dependency(\.runtimeEngineManager)` 注入（遵循项目单例规范，`shared` 为 `fileprivate`）。
 
 `RuntimeViewerEngineManagement` 是 `RuntimeViewerPackages` 里一个**不依赖 AppKit / RxSwift / Settings** 的 target（提案
-[draft-engine-management-module](Evolutions/draft-engine-management-module.md)），无窗口的进程可以只链它。三件事因此留在模块外或以缝的形式出现：
+[0035-engine-management-module](Evolutions/0035-engine-management-module.md)），无窗口的进程可以只链它。三件事因此留在模块外或以缝的形式出现：
 
 - **配置**：`RuntimeEngineManagerConfiguration` 决定 Bonjour 广播、引擎共享、系统引擎、已注入进程重连各自开不开。App 用 `.application`（全开），无头 host 用 `.headlessHost`（只浏览、只重连，不广播不共享）。「My Mac」在哪个进程执行不是配置：`RuntimeEngine.local` 自己按进程 bundle 决定（§3.6），无头 host 是裸可执行文件、没有那个键，自动留在进程内。
 - **事件**：manager 不再直接调用通知服务，而是发 `RuntimeEngineManagerEvent`（`engineConnected` / `hostDisconnected` / `catalystHelperUnavailable`）；App 层的 `RuntimeConnectionNotificationService.start()` 订阅 `eventPublisher` 转成系统通知。事件不重放，订阅要在第一条连接建立前完成（App 在 `applicationDidFinishLaunching` 里做）。**manager 从不观察 `RuntimeEngine.local` 的状态**：别的引擎报 `.disconnected` 即出列表，它报 `.disconnected` 意味着 service 退出了，引擎留在原位、连接自己重连；「重启了」这条通知由 `RuntimeConnectionNotificationService` 直接观察 `RuntimeEngine.local.statePublisher` 的 `.disconnected → .connected` 边沿发出，首次 `.connected` 不发。
@@ -630,7 +630,7 @@ port = connection.connectionInfo.port
 | 我想…… | 看这里 |
 |--------|--------|
 | 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeForwardingConnection` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
-| 本地引擎为什么在另一个进程、service 崩了怎么恢复 | §3.6 + §5 的事件一节 + 提案 [draft-local-runtime-xpc-service](Evolutions/draft-local-runtime-xpc-service.md) |
+| 本地引擎为什么在另一个进程、service 崩了怎么恢复 | §3.6 + §5 的事件一节 + 提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md) |
 | 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
 | 加一条业务 RPC 命令（Core 自己的） | 在 `RuntimeEngineCommandName.swift` 加一个 `CommandName` 常量 + 在 `RuntimeEngine.registerBuiltInHandlers` 加一行（Proxy 自动继承） |
 | 加一条**别的模块**的 RPC 命令 | `extension RuntimeEngine.CommandName` 声明短名（前缀不变），再在那个模块里 `RuntimeEngine.addCommandExtension(named:install:)`；Core 一行不改。该模块的每个进程入口要调一次它的 install，漏调没有编译错误 —— 参照 `RuntimeViewerInjection` |

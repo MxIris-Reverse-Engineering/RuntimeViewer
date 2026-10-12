@@ -1,8 +1,8 @@
-# Draft - 给 @objc @implementation 实现的 ObjC 类加粉色角标
+# 0038 - 给 @objc @implementation 实现的 ObjC 类加粉色角标
 
-- **状态**: Accepted
+- **状态**: Implemented
 - **创建日期**: 2026-09-22
-- **最后更新**: 2026-09-22
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
 
 ## 摘要
@@ -76,3 +76,4 @@ Relationships 与 Specializations 三处 cell ViewModel 原本各自抄了一遍
 | 2026-09-22 | 状态置为 Accepted，开始实现 | 用户「直接写就好了」 |
 | 2026-09-22 | 删除 `RuntimeObject.secondaryKind`，那一位改为 `Properties.isSwiftClass`（`1 << 3`） | 该字段类型是完整的 `RuntimeObjectKind?`，但唯一的写入方是 `RuntimeObjCSection`，唯一写得出的非 `nil` 值是 `.swift(.type(.class))`；本质是布尔量，却让每个构造点都要写 `secondaryKind: nil`。与 `isObjCImplementation` 同在一个 `OptionSet` 里，互斥关系才写得清楚 |
 | 2026-09-22 | 这一轮不做性能测量 | 用户「性能问题后面再说」；索引改为惰性构建，未列出过对象的镜像不付成本 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0038 | 实现 `a61200b9`、`3dd038c0`（2026-09-22、23）直接提交到 `next`。用户：「提案收一下尾」。第 75 行「用 signpost 实测」已被第 78 行「这一轮不做性能测量」取代，代码里没有 signpost，性能测量留作后续。第 45–47 行「只有粉、蓝两种角标」之后由 [0026](0026-objc-swift-class-counterparts.md) 扩展：新增橙色 `C`（`isObjCClass`），粉色 `C` 也挂到 Swift 一侧。不另写配套文档，没有新术语 |

@@ -397,7 +397,7 @@ The project uses three Swift Package Manager packages:
   XPC-service code lives in two places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
   (transport, `hello`, reattach) and `RuntimeViewerCore/LocalRuntimeService/` (`Info.plist` key and
   credential, the service-side host); `RuntimeEngine` and `RuntimeEngineManager` know nothing about
-  XPC, keep it that way. Background: `Documentations/Evolutions/draft-local-runtime-xpc-service.md`;
+  XPC, keep it that way. Background: `Documentations/Evolutions/0037-local-runtime-xpc-service.md`;
   the transport: `Documentations/CommunicationAndEngineArchitecture.md` §3.6
 - `RuntimeViewerCatalystHelper` — Mac Catalyst support bridge
 - `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
@@ -1409,7 +1409,7 @@ which asks the view layer, and returns `.none()` when the anchor is not on scree
 - A row — the route carries the row and the controller looks up the view in it; see *Row tags* under
   *NSTableView / NSOutlineView Rx Data Source*.
 
-Background: `Documentations/Evolutions/draft-routes-carry-no-views.md`.
+Background: `Documentations/Evolutions/0048-routes-carry-no-views.md`.
 
 **ViewController creation** — always in Coordinator's `prepareTransition`, not in ViewController:
 ```swift

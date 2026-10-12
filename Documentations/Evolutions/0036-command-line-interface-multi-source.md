@@ -1,12 +1,12 @@
-# Draft - `runtime-viewer-cli` 多来源：全部运行时来源、attach 与 App 充当 host
+# 0036 - `runtime-viewer-cli` 多来源：全部运行时来源、attach 与 App 充当 host
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-09-06
-- **最后更新**: 2026-09-06
+- **最后更新**: 2026-10-12
 - **所属愿景**: [无头 RuntimeViewer](../Visions/HeadlessRuntimeViewer.md)
-- **关联提案**: 依赖 [draft-engine-management-module](draft-engine-management-module.md) 与 [draft-command-line-interface-foundation](draft-command-line-interface-foundation.md)；[0014](0014-inject-ios-simulator-process.md)（Simulator attach 的语义）；[draft-runtime-bookmark-scope](draft-runtime-bookmark-scope.md)（`sources` 输出的稳定身份）
-- **实现分支 / PR**: `feature/command-line-interface-multi-source`（worktree `.worktrees/RuntimeViewer-CLIMultiSource`），从基础提案的 `feature/command-line-interface`（`6c7bc74f`）切出并合入抽模块提案的 `feature/engine-management-module`（`2214167c`）。没有按草案「在 `feature/command-line-interface` 上继续」：前两篇尚未合入 `next`，在基础提案的分支上继续会把抽模块提案的提交带进去；两篇合入 `next` 后本分支可直接合入。PR 待定
+- **关联提案**: 依赖 [0035-engine-management-module](0035-engine-management-module.md) 与 [0034-command-line-interface-foundation](0034-command-line-interface-foundation.md)；[0014](0014-inject-ios-simulator-process.md)（Simulator attach 的语义）；[0033-runtime-bookmark-scope](0033-runtime-bookmark-scope.md)（`sources` 输出的稳定身份）
+- **实现分支 / PR**: `feature/command-line-interface-multi-source`（worktree `.worktrees/RuntimeViewer-CLIMultiSource`），从基础提案的 `feature/command-line-interface`（`6c7bc74f`）切出并合入抽模块提案的 `feature/engine-management-module`（`2214167c`）。没有按草案「在 `feature/command-line-interface` 上继续」：前两篇尚未合入 `next`，在基础提案的分支上继续会把抽模块提案的提交带进去；两篇合入 `next` 后本分支可直接合入。PR #113 的 base 是 `feature/command-line-interface`，没有走 GitHub 合并：#112 合入两分钟后，本分支由 `c79cf1e9`（2026-09-09）直接合进 `next`，#113 随后关闭
 - **配套文档**: [`Guides/CommandLineInterface.md`](../Guides/CommandLineInterface.md) 新增「来源怎么解析」「App 优先与接管」「手动验证清单」并改写契约与已知的坑；术语表 [`Glossary.md`](../Glossary.md) 新增「host takeover（App 优先）」
 
 ## 摘要
@@ -281,3 +281,4 @@ macOS 15+；attach 与 Catalyst 需要 App 已安装 helper daemon 且 SIP 按 R
 | 2026-09-06 | App target 直接链 `RuntimeViewerCommandLineInterface`（连带 swift-argument-parser 进 App） | 库不拆；嵌入提案若在意体积再把命令行层拆出去 |
 | 2026-09-06 | 接管的 `SIGTERM` 回退分支没有自动化测试 | 需要一个握手后不应答的外部进程；`HostRetirement` 对本进程内的 host 只看 socket、绝不发信号，测试里的 host 都在进程内 |
 | 2026-09-06 | 收尾判断：配套文档 = 指南三节 + 契约 / 坑；术语表新增 host takeover | 见头部「配套文档」 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0036 | 见头部「实现分支 / PR」。用户：「提案收一下尾」。第 207 行需要 helper daemon 与真实 App 的部分（attach 成功、Catalyst、App 接管）仍待按指南「手动验证清单」手动做；接管时 `SIGTERM` 回退没有自动化测试是已接受的取舍 |

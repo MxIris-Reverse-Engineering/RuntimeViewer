@@ -1,12 +1,12 @@
 # Draft - `runtime-viewer-cli` 嵌入 App 包与设置页
 
-- **状态**: Draft
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-09-06
-- **最后更新**: 2026-09-10
+- **最后更新**: 2026-10-12
 - **所属愿景**: [无头 RuntimeViewer](../Visions/HeadlessRuntimeViewer.md)
-- **关联提案**: 依赖 [draft-command-line-interface-foundation](draft-command-line-interface-foundation.md)；「允许命令行访问」开关依赖 [draft-command-line-interface-multi-source](draft-command-line-interface-multi-source.md)；[0015](0015-build-embedded-products-in-app-phase.md)（嵌入产物的教训：能做 target 依赖就不要用脚本 staging）
-- **实现分支 / PR**: 待定 —— 在 `feature/command-line-interface` 上继续
+- **关联提案**: 依赖 [0034-command-line-interface-foundation](0034-command-line-interface-foundation.md)；「允许命令行访问」开关依赖 [0036-command-line-interface-multi-source](0036-command-line-interface-multi-source.md)；[0015](0015-build-embedded-products-in-app-phase.md)（嵌入产物的教训：能做 target 依赖就不要用脚本 staging）
+- **实现分支 / PR**: `next` 上已有 target 与嵌入阶段（`7f4a7239`）、`SKIP_INSTALL = YES`（`80f53bec`）和 `ArchiveScript.sh` 的零散产物检查（`7def07a2`）；安装器、设置页与开关只在 `feature/command-line-interface-app-embedding`（`c8b8f039`），未合入
 - **配套文档**: 待定 —— 落地时更新 `Guides/CommandLineInterface.md`（安装方式）
 
 ## 摘要
@@ -178,3 +178,4 @@ macOS 15+，仅 macOS。
 | 2026-09-10 | 嵌入位置改为 `Contents/Applications/` | 用户在落地 target 时指定，推翻上一行的 `Contents/Helpers/`。先定的是 `Contents/MacOS/`，同一轮内又改到 `Contents/Applications/` |
 | 2026-09-10 | target 名 `RuntimeViewerCommandLineTool`，`PRODUCT_NAME` 钉 `runtime-viewer-cli` | 落地时实测：与 SwiftPM 可执行 product 同名会让 workspace 出现两个同名 scheme，`xcodebuild -scheme runtime-viewer-cli` 静默选中 SwiftPM 那个，Xcode target 一行都不编 |
 | 2026-09-10 | 入口文件名 `RuntimeViewerCommandLineMain.swift`，且要 `import ArgumentParser` | 落地时实测：`main.swift` 是顶层代码文件，与 `@main` 互斥；Xcode target 默认开 `MemberImportVisibility`，传递导入不够 |
+| 2026-10-12 | 状态改为 In Progress，不编号 | 用户：「提案收一下尾」，核对后只收一半。已在 `next`：target、嵌入阶段、签名与公证，v3.0.0-beta.5 / beta.6 已带着嵌入的工具发出。只在分支上：`CommandLineToolInstaller`（`/usr/local/bin` 符号链接）及其测试、设置页、开关 `settings.commandLineTool.allowsAccessWhileRunning`（第 65 行写的 `commandLine` 在分支上已改名）、`CommandLineHostController` 跟随开关启停、指南的「安装」一节。那条分支早于 `7f4a7239` 切出，自带一套放 `Contents/Helpers/` 的 target，与 `next` 的冲突，不能直接合；要搬只取安装器、设置与文档，路径改成 `Contents/Applications/`。第 73 行「不改 `ArchiveScript.sh`」已不成立。另：分支上嵌入入口里打开 `runtimeViewerIsARM64EVariant` 的那一行 `next` 上没有，Debug-arm64e 构建里嵌入的工具可能连到另一个 helper daemon，未复现 |

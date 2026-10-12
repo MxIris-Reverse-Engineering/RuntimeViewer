@@ -226,7 +226,7 @@ damage"*。防护落在了对外广播名（`PR106.10`）上，宿主侧这三�
 做键，反转了 `917002cc` 刻意建立的稳定身份）裁决要引入 `RuntimeBookmarkScope` 去解决的同一个问题。
 两者必须**同批设计**，因此本条随 `PR106.1` 一起推迟到该提案，不在本 PR 打补丁。
 
-**提案已起草**：[`Evolutions/draft-runtime-bookmark-scope.md`](../Evolutions/draft-runtime-bookmark-scope.md)。
+**提案已起草**：[`Evolutions/0033-runtime-bookmark-scope.md`](../Evolutions/0033-runtime-bookmark-scope.md)。
 它把上面那个错误修法记进了「替代方案考量」，并明确等 PR #106 合入 `next` 后才开工。
 
 **横向同类实例（确认为真，一并归入该提案的范围）**：

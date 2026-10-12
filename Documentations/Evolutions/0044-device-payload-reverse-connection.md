@@ -1,11 +1,11 @@
-# Draft - 真机注入载荷改为反向连接
+# 0044 - 真机注入载荷改为反向连接
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-02
-- **最后更新**: 2026-10-02
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
-- **关联提案**: [draft-jailbroken-ios-injection.md](draft-jailbroken-ios-injection.md)（本提案修正它对传输层的假设）
+- **关联提案**: [0043-jailbroken-ios-injection.md](0043-jailbroken-ios-injection.md)（本提案修正它对传输层的假设）
 - **实现分支 / PR**: `feature/jailbroken-ios-injection`（未推送）
 - **配套文档**: [`DevicePayloadReverseConnection.md`](../DevicePayloadReverseConnection.md)（实现说明）、[`Guides/JailbrokenDeviceInjection.md`](../Guides/JailbrokenDeviceInjection.md)（使用指南）
 
@@ -19,7 +19,7 @@
 
 ## 动机
 
-[draft-jailbroken-ios-injection.md](draft-jailbroken-ios-injection.md) 落地后在 vphone guest（iOS 26.6.2）上做端到端验证，**对允许绑定的目标整条链路是通的** —— 注入 `chronod`、`sharingd`、`identityservices` 都成功，能从设备的 dyld shared cache 读出完整的 Objective-C 与 Swift 类型树。
+[0043-jailbroken-ios-injection.md](0043-jailbroken-ios-injection.md) 落地后在 vphone guest（iOS 26.6.2）上做端到端验证，**对允许绑定的目标整条链路是通的** —— 注入 `chronod`、`sharingd`、`identityservices` 都成功，能从设备的 dyld shared cache 读出完整的 Objective-C 与 Swift 类型树。
 
 但对另一类目标，注入后什么都没有发生。原因在内核日志里：
 
@@ -432,7 +432,7 @@ iOS 上只有一个 App 能在前台。要注入 App X，越狱版必须在跑�
 
 1. **保活** —— 越狱版离开前台一秒内就被挂起（实测，见上）。想在后台继续服务就得用后台模式、
    RunningBoard 自持断言，或干脆把注入器改成 LaunchDaemon。属于父提案
-   [draft-jailbroken-ios-injection.md](draft-jailbroken-ios-injection.md) 的设备侧架构，完整档。
+   [0043-jailbroken-ios-injection.md](0043-jailbroken-ios-injection.md) 的设备侧架构，完整档。
 2. **注入 App** —— iOS 只给一个 App 前台，注入器在跑就意味着目标 App 不在跑。这不是「碰巧被挂起」，
    是结构性的，且只有解决了第 1 条才谈得上。
 3. **`backboardd`** —— 失败在 `dlopen` / MachInjector 那一层。macOS 上同类问题的解法
@@ -464,4 +464,5 @@ iOS 上只有一个 App 能在前台。要注入 App X，越狱版必须在跑�
 | 2026-10-06 | **PR #119 review：裸 socket 这条路的第二笔账 —— `SIGPIPE`** | 第四节记过「选裸 socket 而不用 Network.framework，有一笔没算到的账，就是 keepalive」。`SIGPIPE` 是同一笔账的另一半：`sendRaw` 以 flags 0 调 `send`，而 fd 从未设 `SO_NOSIGPIPE`，仓库里也没有任何地方忽略这个信号。对端 RST 之后下一次 `send` 拿到 `EPIPE`，内核先发 `SIGPIPE`，默认动作是结束进程 —— 一端是 App，另一端是被注入的目标（可能是系统守护进程）。触发场景平常：加载中途 detach 或退出、目标被杀、keepalive 判死。基线（`next` / `main`）同样有，已随正式版发出，所以另开了一个只改这一处的 PR 给 main；本分支在 `configureSocketOptions` 里一处设上，拨出与接入两端都覆盖 |
 | 2026-10-06 | 被动断线不再拆掉注入引擎，监听保留等载荷重拨 | 载荷只认 rendezvous 里那一个地址和端口，且永远重拨：重新注入同一暂存路径只会拿到已加载的 image、不跑构造器，所以拆掉监听等于永久关掉它唯一会拨的端口 —— 目标在重启前再也接不上，而宿主把后续每次尝试报成超时并归咎于挂起或防火墙。界线用传输已有的区分：socket 错误是链路（25 秒 keepalive 预算、RST），载荷还在；`peerClosed` 是进程，而被杀的进程由内核关掉 socket，所以 `kill -9` 也走这条 —— 不需要额外定时器去发现真的死掉的目标。「断线即拆」原本来自回环，那里每次断开确实都等于目标已消失 |
 | 2026-10-06 | 暂存目录按目标 pid 分开（Copilot `r4192141724`） | 原本所有注入共用 `/private/var/tmp/RuntimeViewerPayload`，而 `stage` 会先删后写 payload、依赖和 rendezvous，一次注入最长等 20 秒裁决。第二次注入落在这个窗口里就会把第一个载荷还没读的 rendezvous 换掉：它于是拨到第二次的端口被当成另一个进程认领，或正好撞上删与写之间的空档、读不到文件而退回广播 —— 在不能 bind 的目标上等于永远不报到。单个 picker 用 `isAttaching` 串行化，所以要两个发起方（第二个文档窗口、MCP、CLI）才会撞上，但它们互不感知。按 pid 而不是按认领令牌分目录：同一 pid 重注入复用自己的目录，不会每次留一份 |
-| 2026-10-06 | 新增的 `.injectedTCP` 不进引擎镜像描述符 —— 否则旧版 Mac 会丢掉整条镜像连接（Copilot `r4192141644` 也报了同一条） | `RuntimeSource` 的 `Codable` 是合成的，而 `engineList` 是对**整个** `[RuntimeRemoteEngineDescriptor]` 一次解码，所以旧对端遇到它没有的 case 就整次失败；它的心跳再把失败当死链，连续 2 次（间隔 30 秒）即停掉引擎 —— 这台 Mac 镜像过去的**所有**引擎一起消失，直到 Bonjour 重新发现，然后循环。**这是镜像上线以来第一次新增 source case**，所以是第一个触发这个既存脆弱点的改动；旧版已发出，只能在发送端修。修法是 `RuntimeSource.isMirrorableToPeers`（新 case 默认不镜像）＋ `buildEngineDescriptors` 按它过滤。代价为零：`draft-jailbroken-ios-injection` 的 UI 表格本来就把「远程同步来的镜像引擎」列为 disabled，而经该设备自己的引擎就能看到这个进程。测试用新写的五 case 冻结解码器 —— 既有的冻结 descriptor 复用当前 `RuntimeSource`，证不了「新增 case」这件事 |
+| 2026-10-06 | 新增的 `.injectedTCP` 不进引擎镜像描述符 —— 否则旧版 Mac 会丢掉整条镜像连接（Copilot `r4192141644` 也报了同一条） | `RuntimeSource` 的 `Codable` 是合成的，而 `engineList` 是对**整个** `[RuntimeRemoteEngineDescriptor]` 一次解码，所以旧对端遇到它没有的 case 就整次失败；它的心跳再把失败当死链，连续 2 次（间隔 30 秒）即停掉引擎 —— 这台 Mac 镜像过去的**所有**引擎一起消失，直到 Bonjour 重新发现，然后循环。**这是镜像上线以来第一次新增 source case**，所以是第一个触发这个既存脆弱点的改动；旧版已发出，只能在发送端修。修法是 `RuntimeSource.isMirrorableToPeers`（新 case 默认不镜像）＋ `buildEngineDescriptors` 按它过滤。代价为零：`0043-jailbroken-ios-injection` 的 UI 表格本来就把「远程同步来的镜像引擎」列为 disabled，而经该设备自己的引擎就能看到这个进程。测试用新写的五 case 冻结解码器 —— 既有的冻结 descriptor 复用当前 `RuntimeSource`，证不了「新增 case」这件事 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0044 | 经 PR #119 合入 `next`（`84faeb3d`，2026-10-07），落地步骤 5 的真机验证已做。用户：「提案收一下尾」。第 387 行「已注入的 daemon 载荷在设备引擎断开后不受影响」在验证记录里没有单独确认，仍标待验证。配套文档见头部；rendezvous、认领令牌、反向连接已在术语表 |

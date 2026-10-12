@@ -29,7 +29,7 @@ import RuntimeViewerCommunication
 /// startup. Absent means the injector predates this and the payload falls back
 /// to advertising itself, which is still what the simulator does.
 ///
-/// Background: `Documentations/Evolutions/draft-device-payload-reverse-connection.md`.
+/// Background: `Documentations/Evolutions/0044-device-payload-reverse-connection.md`.
 public struct RuntimePayloadRendezvous: Codable, Sendable, Hashable {
     /// The host's address as reached *from the device*.
     ///

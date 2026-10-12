@@ -1,12 +1,12 @@
-# Draft - RuntimeBookmarkScope：把持久化身份从显示名手里拿走
+# 0033 - RuntimeBookmarkScope：把持久化身份从显示名手里拿走
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-08-27
-- **最后更新**: 2026-08-28
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
 - **关联提案**: [0014](0014-inject-ios-simulator-process.md)（本提案处理它暴露出的持久化身份问题）
-- **实现分支 / PR**: `feature/runtime-bookmark-scope`（从 `feature/inject-ios-simulator-process` 分出）
+- **实现分支 / PR**: `feature/runtime-bookmark-scope`（从 `feature/inject-ios-simulator-process` 分出），经 `c9f3809a`（2026-08-29）一次合进 `next`，没有拆 PR；分支已删
 - **配套文档**: [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §2.3 的注与 `buildEngineDescriptors` 字段表（同批次更新）
 
 ## 摘要
@@ -579,6 +579,17 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
     发现连接层根本没引用它。记在这里，因为它说明这类归属判断必须以 grep 结果为准，不能凭印象。
 
     拆完之后 `DeviceMetadataTests.swift` 只剩 `RuntimeDeviceMetadata` 一个 suite，名副其实。
+
+### 收尾（2026-10-12）
+
+状态改为 Implemented，落地编号 0033。用户：「提案收一下尾」。
+
+- 实现分三步提交（`0c34e8b1`、`ea51ed6a`、`b2d719ad`）加上面的实现期修正，经 `c9f3809a` 一次合进 `next`，
+  没有按「迁移与发布」拆三个 PR；那一节第 343 行「放 `RuntimeViewerCommunication`」已被实现期修正推翻，
+  类型最终在 Core 的 `Common/`。
+- 剩第 331 行的手工验证：连上 iOS 对端 → 收藏 → 重启对端 → 收藏还在。下面「尚未决定」三条按原定不做。
+- 第 503 行写项目没有术语表，如今有了，`RuntimeBookmarkScope` 随本次收尾登记进去；配套文档仍是
+  架构文档 §2.3 的注。
 
 ### 尚未决定
 

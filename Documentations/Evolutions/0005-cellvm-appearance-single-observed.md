@@ -166,7 +166,7 @@ per-outlet driver 作出错误推断。上述三点即为更正。
   选中集合，于是每一行——不管显示过没有——构造时就建好 relay 与一个 `DisposeBag`，搜索框每敲一个字整批重建。改为父 ViewModel
   按镜像缓存行（搜索时复用）、选中变化时推给每一行，只有 cell 绑定过的行才建 relay。
   （2026-10-08 合并 `next` 时补：这一页在 `next` 上已换成三态勾选树，见
-  [draft-batch-export-image-tree-picker](draft-batch-export-image-tree-picker.md)，这个 cellVM 随之删除。树的行
+  [0041-batch-export-image-tree-picker](0041-batch-export-image-tree-picker.md)，这个 cellVM 随之删除。树的行
   `BatchExportingImageTreeNode` 只有一个 `@RxObserved`——`selection`，即勾选状态与「已选 / 命中」两个计数——由
   `BatchExportingImageTree.updateSelection(_:)` 推送，不等才赋值，`init` 里不订阅任何东西；行在选择页的整个生命周期里只建一次，
   搜索只改变目录显示哪些子行。上面这几条在新的行上都成立，合并时没有再改它的代码。）

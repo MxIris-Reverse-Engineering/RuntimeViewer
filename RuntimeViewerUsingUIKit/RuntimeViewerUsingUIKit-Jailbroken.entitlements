@@ -60,7 +60,7 @@
   proposal and a wider grant than this needs.
 
   Measurements and addresses:
-  Documentations/Evolutions/draft-device-process-assertions.md.
+  Documentations/Evolutions/0045-device-process-assertions.md.
 
   Xcode cannot sign these — no provisioning profile grants them — so a build
   installed by Xcode cannot inject. The variant is signed ad-hoc with these

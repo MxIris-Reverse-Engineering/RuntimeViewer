@@ -1,13 +1,13 @@
-# Draft - 引擎管理下沉为无 UI 模块 `RuntimeViewerEngineManagement`
+# 0035 - 引擎管理下沉为无 UI 模块 `RuntimeViewerEngineManagement`
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-09-06
-- **最后更新**: 2026-09-06
+- **最后更新**: 2026-10-12
 - **所属愿景**: [无头 RuntimeViewer](../Visions/HeadlessRuntimeViewer.md)
-- **关联提案**: [0014](0014-inject-ios-simulator-process.md)（attach 流程的 Simulator 一半来自它，本提案把它搬家）、[draft-runtime-bookmark-scope](draft-runtime-bookmark-scope.md)（同一批被搬的文件上有它的改动）、[draft-command-line-interface-multi-source](draft-command-line-interface-multi-source.md)（本提案的第一个 GUI 之外的消费者）
-- **实现分支 / PR**: `feature/engine-management-module`（worktree `.worktrees/RuntimeViewer-EngineManagementModule`），**从 `next` 切出**（理由见「落地步骤」）；PR 待定
-- **配套文档**: 待定 —— 落地时更新 `CommunicationAndEngineArchitecture.md` §5 / §7 与 `EngineMirroringWalkthrough.md` 的模块定位
+- **关联提案**: [0014](0014-inject-ios-simulator-process.md)（attach 流程的 Simulator 一半来自它，本提案把它搬家）、[0033-runtime-bookmark-scope](0033-runtime-bookmark-scope.md)（同一批被搬的文件上有它的改动）、[0036-command-line-interface-multi-source](0036-command-line-interface-multi-source.md)（本提案的第一个 GUI 之外的消费者）
+- **实现分支 / PR**: `feature/engine-management-module`（worktree `.worktrees/RuntimeViewer-EngineManagementModule`），**从 `next` 切出**（理由见「落地步骤」）；没有单独的 PR，`2214167c` 先合进多来源分支，随它经 `c79cf1e9`（2026-09-09）进入 `next`
+- **配套文档**: [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §5 / §7 与 [`EngineMirroringWalkthrough.md`](../EngineMirroringWalkthrough.md) 的模块定位（已更新）
 
 ## 摘要
 
@@ -24,7 +24,7 @@
 
 完整动机见愿景《无头 RuntimeViewer》「现状与代价」。这一步特有的理由只有一条：**没有它，任何
 GUI 之外的进程都拿不到本地以外的来源。** 命令行工具的多来源提案
-（[draft-command-line-interface-multi-source](draft-command-line-interface-multi-source.md)）与将来
+（[0036-command-line-interface-multi-source](0036-command-line-interface-multi-source.md)）与将来
 的 MCP 无头化都以它为前置。用户已选定「先抽模块，再建 CLI」，否决了「CLI 直接链
 `RuntimeViewerApplication`」（愿景取舍一）。
 
@@ -294,3 +294,4 @@ public final class RuntimeProcessAttacher {
 | 2026-09-06 | `AppDelegate.applicationDidFinishLaunching` 新增一行 `runtimeConnectionNotificationService.start()` | 事件不重放，通知服务要在连接任务跑起来前订阅；符合 AppDelegate 一行调用的约定 |
 | 2026-09-06 | `Driver` 订阅改为 Combine `sink`（同步、`willSet` 时刻）；`subscribeOnNextMainActor` 改为 `sink` + `Task { @MainActor }` | 与被替换的 RxSwiftPlus 语义一一对应；`detach(_:)` 因只做同步终止而不再 `async` |
 | 2026-09-06 | `launchAttachedRuntimeEngine` / `awaitInjectedBonjourEngine` 改为 `@discardableResult` 返回引擎 | `RuntimeProcessAttacher.Outcome.engine` 需要；既有调用方不受影响 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0035 | 见头部「实现分支 / PR」。用户：「提案收一下尾」。第 277 行步骤 6 的活体检查（attach 本机进程、看到 Bonjour 对端、Catalyst 引擎出现）仍待用户在 Debug 构建里做。配套文档已按头部更新，没有新术语。与 0034 同一天进入 `next`，晚两分钟，编号排在其后 |

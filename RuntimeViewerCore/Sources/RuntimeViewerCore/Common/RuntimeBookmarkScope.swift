@@ -15,7 +15,7 @@ public import RuntimeViewerCommunication
 ///
 /// Both mistakes were live in three separate places before this type existed,
 /// each having independently reached for whatever string was nearest. See
-/// `Documentations/Evolutions/draft-runtime-bookmark-scope.md`.
+/// `Documentations/Evolutions/0033-runtime-bookmark-scope.md`.
 ///
 /// Lives here, beside ``RuntimeImageBookmark`` and ``RuntimeObjectBookmark``,
 /// rather than beside `RuntimeSource` in `RuntimeViewerCommunication`. It is
@@ -60,7 +60,7 @@ extension RuntimeBookmarkScope {
         /// Per-injection, so bookmarks do not carry over from one injection of
         /// a process to the next. That is the same limitation `localSocket`
         /// already has — its identifier carries a pid — and widening it is
-        /// `draft-runtime-bookmark-scope`'s subject, not this path's.
+        /// `runtime-bookmark-scope`'s subject, not this path's.
         case injectedTCP(identifier: String, role: RuntimeSource.Role)
 
         /// Port first, host second — see ``rawValue`` for why the order is

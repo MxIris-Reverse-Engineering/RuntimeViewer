@@ -1,9 +1,9 @@
-# Draft - 把 `runtime-viewer-cli` 的用法做成 agent 插件随仓库发布
+# 0042 - 把 `runtime-viewer-cli` 的用法做成 agent 插件随仓库发布
 
 - **状态**: Implemented
 - **创建日期**: 2026-10-05
-- **最后更新**: 2026-10-05
-- **实现分支 / PR**: `feature/agent-plugin`（从 `next` 切出），合入 `next`，随 3.0 进 `main`
+- **最后更新**: 2026-10-12
+- **实现分支 / PR**: `feature/agent-plugin`（从 `next` 切出），经 `9a4adb5a`（2026-10-07）合入 `next`，分支已删；随 3.0 进 `main`
 
 ## 摘要
 
@@ -43,3 +43,4 @@ commit 里跟着改。做法与 MachOSwiftSection 的 `swift-section` 插件相�
 | 2026-10-05 | 插件放 `next`，不放 `main` | CLI 与其使用指南都只在 `next` 上，`main` 当前版本没有这个工具 |
 | 2026-10-05 | 插件版本号独立于 App / CLI 版本，从 `1.0.0` 起 | skill 可能在两次发版之间修订；跟 App 版本走则修订无法送达已安装的用户 |
 | 2026-10-05 | Implemented | 两个工具的校验器均通过，与插件同一个 commit 落地 |
+| 2026-10-12 | 落地编号 0042 | 用户：「提案收一下尾」。按进入 `next` 的顺序排在 0041 之后。两份插件清单的版本此后因 CLI 输出变化升到 `1.0.1`（`d6d37947`，见 [0031](0031-private-discriminator-tag.md)），第 36 行的 `1.0.0` 是起点 |

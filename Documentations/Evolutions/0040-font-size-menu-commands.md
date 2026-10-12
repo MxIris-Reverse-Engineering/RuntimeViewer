@@ -1,8 +1,8 @@
-# Draft - 字号调整从工具栏挪到 View 菜单
+# 0040 - 字号调整从工具栏挪到 View 菜单
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-09-28
-- **最后更新**: 2026-09-28
+- **最后更新**: 2026-10-12
 
 ## 摘要
 
@@ -42,3 +42,4 @@ Size**（⌘0），工具栏上不再展示。调整的仍是全局的 `Settings
 | 2026-09-28 | 放在 View 菜单，不新建 Editor 菜单 | App 没有 Editor 菜单，为三项命令新开一个顶层菜单不划算 |
 | 2026-09-28 | 加 Reset Font Size（⌘0） | 用户在方案确认时同意加上 |
 | 2026-09-28 | 动作挂在 `MainWindowController`，不做 App 级控制器 | 上下限与节流已在 `MainViewModel`，沿用现有菜单动作的 responder chain 写法，改动最小 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0040 | 实现 `cca38f29`（2026-09-28）直接提交到 `next`。用户：「提案收一下尾」。之后 [0030](0030-report-navigator.md) 在同一个 View 菜单的 Show Sidebar 之后加了 Show Report Navigator，与本提案的三项互不影响。正文没有留下界面验证记录，菜单与快捷键的手工确认仍待用户做。不另写配套文档，没有新术语 |

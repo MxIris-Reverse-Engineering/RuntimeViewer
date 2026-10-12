@@ -142,7 +142,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     /// It then waits for either arrangement. A simulator payload, and a device app built
     /// before the rendezvous existed, still advertise themselves instead; the wait races
     /// both and drops the half nobody used. See
-    /// `Documentations/Evolutions/draft-device-payload-reverse-connection.md`.
+    /// `Documentations/Evolutions/0044-device-payload-reverse-connection.md`.
     ///
     /// - Parameter icon: What the picker showed for this process — the application's own
     ///   icon, or the generic executable icon for a daemon. Recorded against the engine

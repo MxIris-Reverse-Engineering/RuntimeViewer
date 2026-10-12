@@ -1,6 +1,6 @@
-# Draft - Route 不携带视图
+# 0048 - Route 不携带视图
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-12
 - **最后更新**: 2026-10-12
 
@@ -43,3 +43,4 @@ AppKit。改为 Route 不带任何 AppKit / UIKit 类型，锚点由 coordinator
 | 2026-10-12 | 锚点由 coordinator 向视图层要，不另造锚点标识 | 与 `privateDeclaration` 的 `anchorView(forTag:of:)` 同一套做法，Route 与 ViewModel 都不必知道锚点 |
 | 2026-10-12 | 范围按钮的按钮由 ViewController 在点击时记下，不改 AppKitPlus | `NSFilterControlBarItem` 没有公开按钮；为此给 AppKitPlus 加公开 API 要发版抬 pin，换来的只是少存一个弱引用 |
 | 2026-10-12 | `.scope` 的触发从 ViewController 挪进 ViewModel | Route 签名本来就要改；ViewController 直接调 router 违反 MVVM-C 的分工 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0048 | 实现 `47450de9`（2026-10-12）直接提交到 `next`。用户：「提案收一下尾」。第 33 行的手工验证（三个 popover 是否仍从各自按钮弹出）仍待用户做。约定写在 `AGENTS.md` 的 *Routes carry no views*，不另写配套文档，没有新术语 |

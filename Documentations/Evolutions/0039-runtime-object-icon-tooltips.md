@@ -1,8 +1,8 @@
-# Draft - 运行时对象列表的图标加 tooltip
+# 0039 - 运行时对象列表的图标加 tooltip
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-09-25
-- **最后更新**: 2026-09-25
+- **最后更新**: 2026-10-12
 
 ## 摘要
 
@@ -80,10 +80,11 @@ string 成为 tooltip」一条，在没有修复的 `Label` 上失败。UIFounda
 | 2026-09-25 | Created as Draft | 用户：「给RuntimeObjectIcon加一下tooltip」；`RuntimeObjectCellAppearance` 里的三个 tooltip 字段是用户先加的 |
 | 2026-09-25 | 用 UIFoundationAppleInternal 的 `customTooltipStyle`，加圆角、加大字号 | 用户：「tooltip用UIFoundationAppleInternal里面的customTooltipStyle，加圆角和加大字体」 |
 | 2026-09-25 | 样式基于 `.default`，13pt、圆角 8 | 只设圆角会丢掉系统毛玻璃、落到私有 `toolTipColor` 平涂，见「方案」；两个数值是提议值，用户认可 |
-| 2026-09-25 | 文案与图标同处决定，第二图标的优先级只写一处 | 与 [draft-objc-implementation-class-badge](draft-objc-implementation-class-badge.md) 收拢 `secondaryIcon(for:)` 同一理由：互斥规则只该有一处实现 |
+| 2026-09-25 | 文案与图标同处决定，第二图标的优先级只写一处 | 与 [0038-objc-implementation-class-badge](0038-objc-implementation-class-badge.md) 收拢 `secondaryIcon(for:)` 同一理由：互斥规则只该有一处实现 |
 | 2026-09-25 | 标题与副标题标签的 tooltip 也用同一样式 | 用户：「可以，一起改」 |
 | 2026-09-25 | Accepted，随即 In Progress | 用户：「可以，一起改，先这样吧」 |
 | 2026-09-25 | 标题与副标题的 tooltip 在 cell 里显式设置，不再依赖 `syncStringValueToolTip` | 实现时发现该同步只挂在 `stringValue` 的 setter 上，标题却走 `attributedStringValue`，是否生效无法反查确认。用户：「标题加上吧」。副标题同一个问题、当初也是一起打开的，一并处理 |
 | 2026-09-25 | 字号回到 `.default` 自带的 12pt，只保留圆角 8；`view.box.customTooltipStyle` 简写为 `view.customTooltipStyle` | 用户看过实际效果后自行微调：「我微调了一下，可以了」「那个可以走dynamicMemberLookup，可以省掉box」 |
 | 2026-09-25 | 根因修在 UIFoundation：`Label` 同步 `attributedStringValue`（用户本地改动，未发版） | cell 里的显式设置保留到抬 pin 为止，保证用已发版的 UIFoundation 构建时标题也有 tooltip |
 | 2026-09-25 | 发布 UIFoundation 0.36.1（`Label` 修复 + `LabelToolTipTests`），最低版本抬到 `0.36.1`，删掉 cell 里手动设 tooltip 的代码 | 用户：「UIFoundation的更改还没发版，你发一版然后把手动设置tooltip的代码删掉」。测试先在未修复的 `Label` 上失败、修复后通过，顺带实测确认了 AppKit 的 `attributedStringValue` setter 不经过 `stringValue` |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0039 | 实现 `c38e752a`（2026-09-25）直接提交到 `next`。用户：「提案收一下尾」。第 49–50、89 行的 UIFoundation 最低版本此后又因侧栏行高修复抬到 `0.37.0`；第 65–66 行列的 `BackgroundIndexingPopoverViewController` 已随后台索引搬进 Report navigator 删除（`8f3cf1cf`）。第 74 行标题 tooltip 的人工复看仍待用户做。不另写配套文档，没有新术语 |

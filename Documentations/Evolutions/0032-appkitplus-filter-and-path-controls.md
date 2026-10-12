@@ -52,7 +52,7 @@ RuntimeViewer 没有现成的 token 框，放在哪里都是一套新的过滤�
     菜单与图片由它自己管，菜单以下拉的脸开头），`ItemPopUpButton` 删除。顺带修掉一个旧问题：启动时恢复的模式在菜单里打了勾，按钮却仍是普通图标，
     要点一次才变强调色。
   - 侧栏对象列表的「过滤范围」：不设菜单，按下由栏上的按钮发 action；按钮就是 popover 的锚点，原样交给 `.scope(sender:)` 路由。
-    落地之后，[draft-routes-carry-no-views](draft-routes-carry-no-views.md) 把这一步改掉了：路由不再带按钮，视图控制器记下最近一次
+    落地之后，[0048-routes-carry-no-views](0048-routes-carry-no-views.md) 把这一步改掉了：路由不再带按钮，视图控制器记下最近一次
     按下的按钮（`filterScopeAnchorView`），coordinator 向它要锚点。
   - Report 的「操作」：原先每次点击现建一份菜单再弹出，换成常驻的菜单交给 item（栏以下拉方式弹出、从不改动菜单，菜单以一个
     空的脸开头），Cancel All 与

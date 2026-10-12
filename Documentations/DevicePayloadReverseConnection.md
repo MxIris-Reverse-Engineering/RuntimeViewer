@@ -4,8 +4,8 @@
 或 `RuntimeLocalSocketConnection` 之前先看这篇。它们的形状是被下面这些从代码里看不出来的事实逼出来的，
 每一条都在真机上量过，而每一条的「显然做法」都是错的。
 
-对应提案：[真机注入载荷改为反向连接](Evolutions/draft-device-payload-reverse-connection.md)、
-[阻止进程被挂起](Evolutions/draft-device-process-assertions.md)（第八节）。
+对应提案：[真机注入载荷改为反向连接](Evolutions/0044-device-payload-reverse-connection.md)、
+[阻止进程被挂起](Evolutions/0045-device-process-assertions.md)（第八节）。
 
 ---
 
@@ -188,7 +188,7 @@ domain 32 的 entitlement。
   **按固定间隔采样目标进程的 band 和 CPU**，时限会直接显示成一个整齐的秒数。
 
 细节与逐条地址见提案
-[阻止进程被挂起](Evolutions/draft-device-process-assertions.md)。
+[阻止进程被挂起](Evolutions/0045-device-process-assertions.md)。
 
 ---
 

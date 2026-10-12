@@ -1,7 +1,7 @@
 # 使用指南：`runtime-viewer-cli`
 
 - **面向**: 在终端或脚本里查本机运行时的人；把 RuntimeViewer 接进 agent 工作流的人
-- **对应提案**: [draft-command-line-interface-foundation](../Evolutions/draft-command-line-interface-foundation.md)、[draft-command-line-interface-multi-source](../Evolutions/draft-command-line-interface-multi-source.md)
+- **对应提案**: [0034-command-line-interface-foundation](../Evolutions/0034-command-line-interface-foundation.md)、[0036-command-line-interface-multi-source](../Evolutions/0036-command-line-interface-multi-source.md)
 - **最后更新**: 2026-09-06
 
 不打开 RuntimeViewer 的窗口，用一条命令拿到某个类型的接口、某个镜像的类型清单，或把整个镜像

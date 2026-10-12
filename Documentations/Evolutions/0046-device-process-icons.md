@@ -1,12 +1,12 @@
-# Draft - 设备进程显示 app 图标
+# 0046 - 设备进程显示 app 图标
 
-- **状态**: Accepted
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-05
-- **最后更新**: 2026-10-05
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
-- **关联提案**: [`draft-jailbroken-ios-injection`](draft-jailbroken-ios-injection.md)（它把这件事明确列为「将来」）
-- **实现分支 / PR**: `feature/jailbroken-ios-injection`
+- **关联提案**: [`0043-jailbroken-ios-injection`](0043-jailbroken-ios-injection.md)（它把这件事明确列为「将来」）
+- **实现分支 / PR**: `feature/jailbroken-ios-injection`，经 PR #119 合入 `next`（`84faeb3d`，2026-10-07）
 
 ## 摘要
 
@@ -16,7 +16,7 @@
 并把同一张图接到注入成功后 Toolbar 那个引擎列表的行上。
 
 这不是修 bug：三处留空都是
-[`draft-jailbroken-ios-injection`](draft-jailbroken-ios-injection.md) 当初有意为之的，那份提案
+[`0043-jailbroken-ios-injection`](0043-jailbroken-ios-injection.md) 当初有意为之的，那份提案
 第 608 行写着「将来若要显示 app 图标，走已有的『带 PNG 字节、由宿主解码』那条路」。本提案就是
 兑现它。
 
@@ -355,3 +355,4 @@ if #available(macOS 26, *) {
 | 2026-10-05 | 圆角半径取边长的 0.2237，定为具名常量 | iOS 图标遮罩一贯的比例。这是观感问题不是正确性问题，所以用本项目自己的图标按 picker 实际尺寸（22 点）渲染出来看过再定；要调是一处编辑 |
 | 2026-10-06 | **PR #119 review：`.app` 本身是符号链接时会被放行**，决策日志里「拒绝符号链接」只做了一半 | 叶子图标文件那一半是对的（`attributesOfItem` 不跟随链接，已有测试钉住），但 `.app` 目录那一层漏了：三道校验全是对**字符串**的判断（绝对路径、无 `..`、以 `.app` 结尾），而内核解析路径时会跟随每一个目录分量，所以指向任意目录的 `Link.app` 能让 `Data(contentsOf:)` 读到任何 bundle 之外的 `Info.plist`，再读它声明的 PNG。路径来自对端，而设备侧的 Bonjour server 不鉴权，所以「以 `.app` 结尾」不是关于那个目录的证据。实际危害接近零 —— 链接得事先布在设备上，而同一条连接本来就提供任意路径的 `loadImage`（基线既有）—— 但模块注释自称「confined to application bundles」「not an arbitrary file read primitive」，比实现强。修法是对末段 lstat、要求是目录，三行；注释与本提案这条措辞一并改准 |
 | 2026-10-06 | 范围外记录：`DeviceGlyph` 的屏幕色在构建时被冻结，切换浅/深色后不更新（PR #119 review `PR119.12`，判为待办不修） | `physicalConfiguration` 把 systemCyan / systemBlue 与白色混色，得到的是固定 RGB，只有 `labelColor` 会在绘制时重新解析 —— 所以浅色下建好的图在系统切到深色后仍是浅色时的亮屏颜色，直到引擎列表下次变化才重建。本提案第 212 行「会在外观切换时重新解析颜色」因此只对 `labelColor` 成立。review 另称「每次调用重建是浪费」，不成立：每次发射只为几行机器各建一张图。要修就把两种屏幕色换成 `NSColor(name:dynamicProvider:)`、配置改 static；纯观感，故留待办 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0046 | 实现 `fbb85267`（2026-10-05），真机验证已做，经 PR #119 合入 `next`。用户：「提案收一下尾」。`PR119.12`（亮屏色构建期冻结）仍是待办不修；由系统渲染图标的私有 API 那条路仍是后续。不另写配套文档，没有新术语 |

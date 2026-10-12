@@ -20,7 +20,7 @@
 //  a device SDK that has no such symbol to resolve.
 //
 //  Why this framework at all, and why these specific classes:
-//  `Documentations/Evolutions/draft-device-process-assertions.md` carries the
+//  `Documentations/Evolutions/0045-device-process-assertions.md` carries the
 //  measurements, each cited with its address in the 26.3.1 shared cache.
 //
 //  The short version is that RunningBoard decides "running versus suspended"

@@ -24,7 +24,7 @@ public protocol RuntimeDeviceSuspensionAssertionHolding: AnyObject {
 /// scheduled to run injected code in, so an injection into one waits out its
 /// whole verdict budget and then reports a timeout. Measured, plus the gate
 /// each call below passes through:
-/// `Documentations/Evolutions/draft-device-process-assertions.md`.
+/// `Documentations/Evolutions/0045-device-process-assertions.md`.
 public final class RuntimeDeviceSuspensionAssertion: RuntimeDeviceSuspensionAssertionHolding {
     /// Why an assertion could not be had.
     ///

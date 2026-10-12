@@ -1,13 +1,13 @@
-# Draft - 本地运行时引擎搬进内嵌 XPC service
+# 0037 - 本地运行时引擎搬进内嵌 XPC service
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-09-21
-- **最后更新**: 2026-09-21
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
-- **关联提案**: [draft-engine-management-module](draft-engine-management-module.md)（本提案借它开出的 `RuntimeEngineManagerConfiguration` 与 `RuntimeResourceLocating` 两条缝，不另起炉灶）、[0014](0014-inject-ios-simulator-process.md)（注入路径不受影响，但其 `SandboxProbe` 说明了为什么 service 不能开沙盒）
-- **实现分支 / PR**: `feature/local-runtime-xpc-service`（worktree `.worktrees/RuntimeViewer-LocalRuntimeXPCService`），从 `next` 切出；PR 待定
-- **配套文档**: 待定 —— 落地时更新 [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §1 传输对照表、§3 新增一节 XPC service 连接、§5 / §7 系统引擎的构成，以及 `AGENTS.md` 的 Application Targets 与 Architecture 两节
+- **关联提案**: [0035-engine-management-module](0035-engine-management-module.md)（本提案借它开出的 `RuntimeEngineManagerConfiguration` 与 `RuntimeResourceLocating` 两条缝，不另起炉灶）、[0014](0014-inject-ios-simulator-process.md)（注入路径不受影响，但其 `SandboxProbe` 说明了为什么 service 不能开沙盒）
+- **实现分支 / PR**: `feature/local-runtime-xpc-service`（worktree `.worktrees/RuntimeViewer-LocalRuntimeXPCService`），从 `next` 切出；最终以 `3d2ae6dc`（2026-09-21）直接提交到 `next`，没有 PR，分支已删
+- **配套文档**: [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §2.4、§3.6（XPC service 连接，兼作实现说明）等节，`AGENTS.md` 的 Application Targets 与 Architecture 两节，术语表「本地运行时 service」
 
 ## 摘要
 
@@ -324,3 +324,4 @@ client 连接把 `XPCError.connectionInterrupted` 包成 `RuntimeConnectionError
 | 2026-09-21 | `.local` 连不连 service 由进程 `Info.plist` 决定，不加配置项 | 否决「App 启动时设全局开关」（先设后读的时序坑，arm64e 变体开关的前车之鉴）与保留 `LocalEngineExecution` 配置（管理器不再需要造引擎）。bundle 即配置：launchd 只在调用进程自己的 bundle 里找 service。代价：Core 里出现一次 `Bundle.main` 读取（`LocalRuntimeService.embeddedServiceBundleIdentifier`）。 |
 | 2026-09-21 | 重启通知改由通知服务直接观察 `RuntimeEngine.local` | 管理器从不观察 `.local`，为它加观察 + 事件 + CLI 穷举是三处散落；通知服务本就是「连接事件 → 系统通知」的落点，直接看引擎状态的 `.disconnected → .connected` 边沿即可。 |
 | 2026-09-21 | `RuntimeXPCConnection` 改名 `RuntimeXPCMachServiceConnection` | 用户要求：两族 XPC 连接并存后，经 daemon 的那族按传输实质命名（Mach service），子类同步为 `RuntimeXPCMachServiceClientConnection` / `RuntimeXPCMachServiceServerConnection`。历史文档（Plans / ResolvedIssues / KnownIssues）里的旧名保留，它们记录的是当时的状态。 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0037 | 用户：「提案收一下尾」。收尾时的两项判断：①配套文档——不另写实现说明，第 297 行列的三条契约（handler 先于 `activate()` 登记、`hello` 兼作重连探针、`.local` 读自己的 `Info.plist` 决定去向）都已写进架构文档 §3.6 与 §2.4；②术语——「本地运行时 service」已在术语表。第 214 行后台索引缓存的核对：`RuntimeBackgroundIndexingCoordinator` 不缓存 `isImageIndexed`，每次都问引擎，崩溃前的「已索引」结论不会沿用。核对时另发现一处疑似缺口，未实测，记为后续：「始终索引」的已派发集合 `dispatchedAlwaysIndexIdentifiers` 只在 `handleEngineSwap` 里清空，而 service 重启触发的 `.switchEngine` 在文档什么都没打开时直接返回，于是这些镜像不会在重启后的 service 里重新派发。第 273 行验收要求 `lipo` 含 arm64e，第 3 步实测（第 286 行）是 arm64、与 App 切片一致，以实测为准。仍待用户做第 6 步人工验收，前期调研 §5 的两条推测随之验证 |

@@ -1,13 +1,13 @@
-# Draft - 把注入能力搬出 RuntimeViewerCore，并把命令表对外开放
+# 0047 - 把注入能力搬出 RuntimeViewerCore，并把命令表对外开放
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-06
-- **最后更新**: 2026-10-06
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
-- **关联提案**: [0014](0014-inject-ios-simulator-process.md)（注入 iOS Simulator 进程）、[draft-jailbroken-ios-injection](draft-jailbroken-ios-injection.md)（越狱 iOS 变体）、[draft-device-payload-reverse-connection](draft-device-payload-reverse-connection.md)（设备载荷反向连接）
-- **实现分支 / PR**: `feature/jailbroken-ios-injection`
-- **配套文档**: 待定 —— 落地时登记实现说明的链接
+- **关联提案**: [0014](0014-inject-ios-simulator-process.md)（注入 iOS Simulator 进程）、[0043-jailbroken-ios-injection](0043-jailbroken-ios-injection.md)（越狱 iOS 变体）、[0044-device-payload-reverse-connection](0044-device-payload-reverse-connection.md)（设备载荷反向连接）
+- **实现分支 / PR**: `feature/jailbroken-ios-injection`，经 PR #119 合入 `next`（`84faeb3d`，2026-10-07）
+- **配套文档**: `AGENTS.md` 的 Package Structure 与 *Injection commands* 两节（「链接了就调 `install()`」的规则与调用点清单）；术语表「命令扩展」
 
 ## 摘要
 
@@ -528,7 +528,7 @@ macOS 10.15，而 `RuntimeViewerPackages` 的下限是 macOS 15 / iOS 18。这�
 | 2026-10-06 | 搬迁边界定为「全搬」 | 完整档澄清提问第 1 轮。`RuntimePayloadRendezvous` 与 `injectionTargetsRunOnThisMachine` 两个边界件都进新 target，Core 里不留一个注入字眼。代价是载荷 target 要新增链接 —— 已接受。 |
 | 2026-10-06 | 开放机制定为「进程级扩展表 + 显式 install」 | 第 1 轮。否掉了「Core 保留 handler 装配只搬实现」（不满足需求）。接受「九处显式调用、漏调只在运行时表现」这个代价。 |
 | 2026-10-06 | service 归属定为 `RuntimeInjection.install(service:)` | 第 1 轮。注册命令与登记 service 合成一次调用，少一个能忘的地方；没有 service 的进程调无参版本。 |
-| 2026-10-06 | 另开一份提案，不并入 draft-jailbroken-ios-injection | 第 1 轮。那份讲功能，这份讲结构。 |
+| 2026-10-06 | 另开一份提案，不并入 0043-jailbroken-ios-injection | 第 1 轮。那份讲功能，这份讲结构。 |
 | 2026-10-06 | 唯一性由注册器当场拒绝重名保证 | 第 2 轮。取代 `CaseIterable.allCases` 查重的测试；运行时检测更强，且能捕跨模块冲突。先到先得，内置命令先装，所以外部模块抢不走 Core 的名字。 |
 | 2026-10-06 | target 名定为 `RuntimeViewerInjection` | 第 2 轮。与 Core / Communication / Utilities 同一命名节奏；`RuntimeViewerDeviceInjection`（iOS 实现）保持分离。 |
 | 2026-10-06 | pbxproj 由 agent 手改 | 第 2 轮。本会话无 Xcode MCP 工具；按现有 `RuntimeViewerCore` 链接条目的形状照抄三件套，改完先给用户看 diff。 |
@@ -542,3 +542,4 @@ macOS 10.15，而 `RuntimeViewerPackages` 的下限是 macOS 15 / iOS 18。这�
 | 2026-10-06 | 注册器测试改钉 `isImageLoaded` | 初版钉了 `imageList`，但它是推送通道而非请求命令，从来不在注册器里，两条用例因此是假阳性/假阴性。换成内置清单真会装的命令名。 |
 | 2026-10-06 | `RuntimeEngineRequest` → `RuntimeEngineCommand`，29 个遵循者一起改 | 协议文档第一句本来就叫它 command、要求的属性叫 `commandName`、还带 `perform(on:)`；本提案把周围全改成 command 之后错配更刺眼；且与 Communication 的 `RuntimeRequest` 族撞名。遵循者全是 internal，线上格式零影响。泛型参数顺手去掉单字母。 |
 | 2026-10-06 | `associatedtype Response` 不改成 `Result` | `Result` 遮蔽 `Swift.Result`（本仓库有过 `Semantic` 遮蔽 `Error` 的前例），且「Result」在项目里已指领域结果 —— `InjectIntoProcessCommand` 的 Response 正是 `RuntimeProcessInjectionResult`。`Response` 也与 Communication 侧对齐。 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0047 | 实现 `5a100210`（2026-10-06）经 PR #119 合入 `next`。用户：「提案收一下尾」。不另写实现说明，约定写在 `AGENTS.md`，术语已登记（见头部）。在越狱 iOS 这条线的五篇里最后落地，编号排在最后 |

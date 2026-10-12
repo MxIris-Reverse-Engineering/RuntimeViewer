@@ -1,12 +1,12 @@
-# Draft - `runtime-viewer-cli` 基础：命令级协议、常驻 CLI host 与本地来源
+# 0034 - `runtime-viewer-cli` 基础：命令级协议、常驻 CLI host 与本地来源
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-09-06
-- **最后更新**: 2026-09-06
+- **最后更新**: 2026-10-12
 - **所属愿景**: [无头 RuntimeViewer](../Visions/HeadlessRuntimeViewer.md)
-- **关联提案**: [0006](0006-mcp-transport-bind-failure-teardown.md)（本地端点文件「谁绑定成功谁删」的守卫，本提案沿用）、[draft-command-line-interface-multi-source](draft-command-line-interface-multi-source.md)（在本提案的缝上接多来源与 App 充当 host）、[draft-command-line-interface-app-embedding](draft-command-line-interface-app-embedding.md)
-- **实现分支 / PR**: `feature/command-line-interface`（worktree `.worktrees/RuntimeViewer-CLIFoundation`），从 `next`（`080b2b64`，含愿景与四篇草案的文档提交）切出；不依赖抽模块提案的分支；PR 待定
+- **关联提案**: [0006](0006-mcp-transport-bind-failure-teardown.md)（本地端点文件「谁绑定成功谁删」的守卫，本提案沿用）、[0036-command-line-interface-multi-source](0036-command-line-interface-multi-source.md)（在本提案的缝上接多来源与 App 充当 host）、[draft-command-line-interface-app-embedding](draft-command-line-interface-app-embedding.md)
+- **实现分支 / PR**: `feature/command-line-interface`（worktree `.worktrees/RuntimeViewer-CLIFoundation`），从 `next`（`080b2b64`，含愿景与四篇草案的文档提交）切出；不依赖抽模块提案的分支；经 PR #112 合入 `next`（`8c04a6d4`，2026-09-09），分支已删
 - **配套文档**: [`Guides/CommandLineInterface.md`](../Guides/CommandLineInterface.md)（使用指南）；术语表 [`Glossary.md`](../Glossary.md) 新建并登记「CLI host」「source selector」
 
 ## 摘要
@@ -323,3 +323,4 @@ macOS 15+（跟随 `RuntimeViewerPackages`，为多来源提案预留同一下�
 | 2026-09-08 | 共享资源的取消要分清所有权：客户端拨号 host 的 task 可以被调用者取消，host 侧共享的引擎连接不可以 | 修复批次复核发现这是回归——一个客户端的 `--timeout` 会让另一个客户端收到 `cancelled`（PR112.19） |
 | 2026-09-08 | `--timeout` 的应用收敛到 `CommandRunner.withOptionalTimeout(_:)`，等 `Welcome` 的 continuation 也可取消 | 「host accept 了却永不握手」实测挂死到被强杀；`host status` / `restart` 原本完全不受 `--timeout` 约束（PR112.20） |
 | 2026-09-08 | 客户端只把**常规文件**的裸名当路径，目录不算 | 项目里有 `Foundation/` 目录时 `--image Foundation` 会被劫持（PR112.21） |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0034 | 见头部「实现分支 / PR」。用户：「提案收一下尾」。第 260、277 行「仅 `swift build` 产物 / 不随 App 分发」是本提案落地时的状态，之后工具已作为 target 依赖嵌进 App（`Contents/Applications/runtime-viewer-cli`，见 [draft-command-line-interface-app-embedding](draft-command-line-interface-app-embedding.md)）。配套文档与术语表见头部，已就位 |

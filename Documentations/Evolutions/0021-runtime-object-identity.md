@@ -5,7 +5,7 @@
 - **创建日期**: 2026-09-23
 - **最后更新**: 2026-09-23
 - **所属愿景**: 无
-- **关联提案**: [给 @objc @implementation 实现的 ObjC 类加粉色角标](draft-objc-implementation-class-badge.md)（`secondaryKind` 折叠成 `Properties.isSwiftClass` 在那份里）
+- **关联提案**: [给 @objc @implementation 实现的 ObjC 类加粉色角标](0038-objc-implementation-class-badge.md)（`secondaryKind` 折叠成 `Properties.isSwiftClass` 在那份里）
 - **实现分支 / PR**: `feature/runtime-object-identity`（从 `next` 切，并回 `next`）；复审修复在 `feature/runtime-object-identity-review-fixes`
 - **配套文档**: 无 —— 判定理由见决策日志
 

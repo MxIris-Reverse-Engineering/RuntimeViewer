@@ -1,13 +1,13 @@
-# Draft - 越狱版 RV iOS：枚举设备进程并注入
+# 0043 - 越狱版 RV iOS：枚举设备进程并注入
 
-- **状态**: Accepted
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-01
-- **最后更新**: 2026-10-04
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
 - **关联提案**: [0014](0014-inject-ios-simulator-process.md)（模拟器注入；本提案是它明确列为非目标的「真机」那一半）
-- **实现分支 / PR**: `feature/jailbroken-ios-injection`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/jailbroken-ios-injection`，经 PR #119 合入 `next`（`84faeb3d`，2026-10-07），分支已删
+- **配套文档**: [`Guides/JailbrokenDeviceInjection.md`](../Guides/JailbrokenDeviceInjection.md)（使用指南）、[`DevicePayloadReverseConnection.md`](../DevicePayloadReverseConnection.md)（实现说明）
 
 ## 摘要
 
@@ -307,7 +307,7 @@ UI 层与数据源层，业务层不受影响。这决定了本提案的抽象�
 **注入不可用时直接 disable toolbar item，不弹任何提示。** 这是 Mac 原生的表达方式——动作不可用
 就是控件不可用，用户不需要先点一下才被告知做不到。原因挂在 **tooltip** 上（文案由
 `injectionCapability` 的 `reason` 提供），这样解释不丢，又不打断操作。项目里已有自定义 tooltip
-的既有做法可以复用（见 [`draft-runtime-object-icon-tooltips`](draft-runtime-object-icon-tooltips.md)
+的既有做法可以复用（见 [`0039-runtime-object-icon-tooltips`](0039-runtime-object-icon-tooltips.md)
 用的 `UIFoundationAppleInternal` 的 `customTooltipStyle` 与 `CustomToolTipManager`）。
 
 **连带后果：「获取越狱版」的入口不能再挂在提示里了**，因为提示不存在了。**假设（可改）**：
@@ -870,3 +870,4 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-04 | **越狱版只能用带 `iOSPackagesShouldBuildARM64e` 的 workspace 构建** —— `RuntimeViewer.xcworkspace` 不带，用它构建必在链接载荷时失败 | 写打包脚本时默认选了 `RuntimeViewer.xcworkspace`（主 workspace，远程 pin，看起来是最中立的选择），构建跑了十分钟后死在 `RuntimeViewerMobileServer` 的链接步：`Undefined symbols for architecture arm64e`，点名 `RuntimeViewerCore.RuntimePayloadRendezvous`、`RuntimeViewerCommunication.RuntimeNetworkBonjour`、`OSToolbox.LoggableMacro` —— 即它链接的每个 SwiftPM 包产物都没有 arm64e 切片。根因是**那是个 workspace 级设置**：三个 workspace 里只有 `-Debug` 和 `-Distribution` 的 `WorkspaceSettings.xcsettings` 写了 `iOSPackagesShouldBuildARM64e=true`，主 workspace 没有。越狱版 App 是 `ARCHS = arm64e`、载荷是 `arm64 arm64e`，两者都要包产物有 arm64e，所以这个开关对本变体是硬前提。**错误信息里没有任何一个字指向 workspace**，而代价是一次完整冷编，所以脚本里加了一条前置检查：workspace 的 settings 不含这个键就立刻失败并说明换哪个。脚本默认因此改为 `RuntimeViewer-Debug.xcworkspace`。验收（走 Debug workspace 重跑）：主可执行 `arm64e`、载荷 `arm64 arm64e`、四个内层 Mach-O 各自有签名、五条 entitlement 从打好的 .ipa 里逐条读回来全部命中、被跟踪的 `Package.resolved` SHA 未变。 |
 | 2026-10-05 | 打包脚本不再写死 `vphone-cli`，签名器改为 `vphone-cli` / `ldid` 二选一、按装了哪个自动挑，`--signer` 可指定 | 用户在一台没装 `vphone-cli` 的机器上跑脚本直接被拒。而脚本自己的注释早就写明 `vphone-cli sign` 写出来的字节和 `ldid -S -M -K -I` 一样 —— 既然等价，就没有理由把唯一的那个包装器设成硬前提。实测 `ldid` 这条路：主执行档 `ldid -S<ent> -I<id>` 后 `codesign -dv` 显示 `Identifier` 与 `CodeDirectory` 都正确嵌入，五条 entitlement 能被脚本原有的 `codesign -d --entitlements -` 校验步骤完整读回；胖二进制（载荷 arm64 + arm64e）两个 slice 都签上。`codesign` 在 stderr 报的 `no signature` 指的是没有 CMS 证书签名，伪签名本来就没有，和原注释说的「`codesign --verify` 按设计就会拒」是同一件事，不影响校验。顺带把 `--help` 的 `sed -n '2,28p'` 改成按 `set -euo` 定位 —— 写死的行号在这次改动里当场就过时了，而且是静默截断用法说明。 |
 | 2026-10-06 | **PR #119 review：`injectionTargetsRunOnThisMachine` 把模拟器判成了远端**，与本提案第 302 行的表格自相矛盾 | 那张表写明「本机 / Catalyst / iOS 模拟器」这一行照走今天的本机 picker、一次 RPC 都不发。但落地时这个属性对所有 `.bonjour` 一律返回 false，而**模拟器正是走 `.bonjour`** —— 模拟器里的载荷和跑在模拟器里的 RuntimeViewer 都用 `advertisingSource()`。于是选中模拟器引擎时去问对端，对端（装着 service 的那条 `os(iOS)` 分支）回答 `requiresJailbrokenVariant`，按钮变灰、提示让用户去装一个在模拟器上根本用不了的构建。相对 `next` 是回退：那里只要 SIP 关着，Attach 就打开本机 picker。修法是 `.bonjour` 分支读 `hostInfo.metadata.isSimulator`（对端经 TXT 的 `rv-sim` 报告），并改掉属性与测试里两处「模拟器走 `localSocket`」的错注释。副作用：另一台 Mac 上的模拟器也会被判成本机 —— 广播里没有任何字段能区分谁的模拟器，而这正是本属性存在之前每个模拟器都得到的答案 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0043；§三.1 的「获取越狱版 RV iOS」入口（从 GitHub release 下载 IPA、落盘后供用户拖进设备）降为后续，另起提案 | 用户选择「降为后续，收尾」。核心功能（越狱 target、设备进程枚举与注入、attach 路径、注入命令、打包脚本）都在 `next`；这个入口没有实现，实际做法是用 `BuildJailbrokenIPAScript.sh` 打包，再用保留 entitlement 的方式安装。摘要第 18 行与第 281 行的承诺以本行为准。仍待：落地步骤 8 的端到端真机验证；PR #119 审查判为待办不修的 `PR119.8`（载荷拨入前设备引擎就报已连接）见 [`KnownIssues/2026-10-06-pr119-review-findings.md`](../KnownIssues/2026-10-06-pr119-review-findings.md)。配套文档见头部，没有新术语 |

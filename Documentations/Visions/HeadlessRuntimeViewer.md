@@ -1,8 +1,8 @@
 # 愿景：无头 RuntimeViewer
 
-- **状态**: Draft
-- **最后更新**: 2026-09-06
-- **相关提案**: [draft-engine-management-module](../Evolutions/draft-engine-management-module.md)、[draft-command-line-interface-foundation](../Evolutions/draft-command-line-interface-foundation.md)、[draft-command-line-interface-multi-source](../Evolutions/draft-command-line-interface-multi-source.md)、[draft-command-line-interface-app-embedding](../Evolutions/draft-command-line-interface-app-embedding.md)
+- **状态**: Active
+- **最后更新**: 2026-10-12
+- **相关提案**: [0035-engine-management-module](../Evolutions/0035-engine-management-module.md)、[0034-command-line-interface-foundation](../Evolutions/0034-command-line-interface-foundation.md)、[0036-command-line-interface-multi-source](../Evolutions/0036-command-line-interface-multi-source.md)、[draft-command-line-interface-app-embedding](../Evolutions/draft-command-line-interface-app-embedding.md)
 
 愿景**不做具体决定**，它划定一个方向的边界与取舍原则，让后续每个提案不必重新论证一遍。
 
@@ -127,17 +127,17 @@ DirectTCP 客户端引擎跑现有 RPC。查询零新协议；但每次调用两
 
 四篇提案，依赖关系如图；②不依赖①，③依赖①与②，④依赖②（其中的开关依赖③）。
 
-1. **引擎管理下沉**（[draft-engine-management-module](../Evolutions/draft-engine-management-module.md)）——
+1. **引擎管理下沉**（[0035-engine-management-module](../Evolutions/0035-engine-management-module.md)）——
    `RuntimeEngineManager` 搬进无 UI 模块，加配置缝、资源定位缝、`RuntimeProcessAttacher`。
    行为零变化。
-2. **命令行工具基础**（[draft-command-line-interface-foundation](../Evolutions/draft-command-line-interface-foundation.md)）——
+2. **命令行工具基础**（[0034-command-line-interface-foundation](../Evolutions/0034-command-line-interface-foundation.md)）——
    新包、命令与结果模型、线路协议、常驻 host 的拉起 / 单例 / 空闲退出、本地来源上的全部查询
    命令。不启动 App 就能查本机运行时，即用户最初的诉求。
-3. **多来源与 App 充当 host**（[draft-command-line-interface-multi-source](../Evolutions/draft-command-line-interface-multi-source.md)）——
+3. **多来源与 App 充当 host**（[0036-command-line-interface-multi-source](../Evolutions/0036-command-line-interface-multi-source.md)）——
    独立 host 换上①的模块，`sources` / `attach` / `detach` 与全部来源寻址；App 启动即充当 host
    并接管独立 host。
 4. **嵌入 App 包与设置页**（[draft-command-line-interface-app-embedding](../Evolutions/draft-command-line-interface-app-embedding.md)）——
-   Xcode tool target 嵌到 `Contents/Helpers/`，设置页做 `/usr/local/bin` 符号链接与「允许命令行
+   Xcode tool target 嵌到 `Contents/Applications/`，设置页做 `/usr/local/bin` 符号链接与「允许命令行
    访问」开关。
 
 之后可以接：**MCP 无头化**（bridge 搬进 host，工具直接复用命令词汇）、**独立二进制发布**。
@@ -159,10 +159,10 @@ DirectTCP 客户端引擎跑现有 RPC。查询零新协议；但每次调用两
 
 | 提案 | 状态 | 它推进了愿景的哪一部分 |
 |------|------|------------------------|
-| [draft-engine-management-module](../Evolutions/draft-engine-management-module.md) | Draft | 方向一：引擎管理下沉为无 UI 模块 |
-| [draft-command-line-interface-foundation](../Evolutions/draft-command-line-interface-foundation.md) | In Progress | 方向二、四、六（独立包）：协议、常驻 host、本地来源上的全部查询命令 |
-| [draft-command-line-interface-multi-source](../Evolutions/draft-command-line-interface-multi-source.md) | In Progress | 方向三、五：全部来源、attach、App 充当 host |
-| [draft-command-line-interface-app-embedding](../Evolutions/draft-command-line-interface-app-embedding.md) | Draft | 方向六（嵌入 App 包）与设置页 |
+| [0035-engine-management-module](../Evolutions/0035-engine-management-module.md) | Implemented | 方向一：引擎管理下沉为无 UI 模块 |
+| [0034-command-line-interface-foundation](../Evolutions/0034-command-line-interface-foundation.md) | Implemented | 方向二、四、六（独立包）：协议、常驻 host、本地来源上的全部查询命令 |
+| [0036-command-line-interface-multi-source](../Evolutions/0036-command-line-interface-multi-source.md) | Implemented | 方向三、五：全部来源、attach、App 充当 host |
+| [draft-command-line-interface-app-embedding](../Evolutions/draft-command-line-interface-app-embedding.md) | In Progress（工具已嵌入，设置页与安装器未合入） | 方向六（嵌入 App 包）与设置页 |
 
 ---
 

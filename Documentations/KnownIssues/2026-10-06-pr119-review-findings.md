@@ -2,9 +2,9 @@
 
 审查对象：PR #119「Inject into device processes from the jailbroken iOS variant (five proposals)」
 的 head `d2feb526`（43 个提交，118 个文件，+12228/-630）。相关提案五份，均在
-[`../Evolutions/`](../Evolutions/)：`draft-jailbroken-ios-injection`、
-`draft-device-payload-reverse-connection`、`draft-device-process-assertions`、
-`draft-device-process-icons`，以及把注入搬出 Core 的那次重构。
+[`../Evolutions/`](../Evolutions/)：`0043-jailbroken-ios-injection`、
+`0044-device-payload-reverse-connection`、`0045-device-process-assertions`、
+`0046-device-process-icons`，以及把注入搬出 Core 的那次重构。
 
 `/code-review max` 报了 15 条。每条按四问逐一核复（能否复现 / 与基线比 / 值不值得修 / 以前修过
 吗），另把 PR 上 Copilot 四条一直没人处理的评论一并走了同样的流程，并在核复过程中新发现 1 条。
@@ -27,7 +27,7 @@ ID 为 `PR119.<N>`，与审查报告的顺序一致；Copilot 的四条为 `PR11
 | PR119.3 | Major | 载荷走广播而非直拨时，保活 assertion 在 attach 当下就被还掉。`awaitInjectedDeviceEngine` 两处（`:878` 与最终检查 `:898`，review 只点了前者）在广播一方胜出时 `terminateRuntimeEngine(for: listeningSource)`，而那正是刚连上的那个进程的 assertion；胜出的 `.bonjour` 引擎不带记录，之后 detach 也释放不了任何东西。后台 App 目标随即可被挂起。可达性：载荷只在 `stagedBesideImage` 返回 nil 时改走广播 —— 并发注入共用暂存目录的窗口（即 `PR119.C4`）是现实来源之一。**本 PR 新引入** | 新增 `.supersededByAdvertisement` 原因（不释放），并把记录改挂到胜出引擎的 source 上，两处都改 | `theHoldOutlivesABlipButNotTheInjection` |
 | PR119.N1 | Major | **核复时新发现**：设备连接重连过一次后，保活 assertion 永远释放不掉。记录用 weak 引用指向「当时那个」`RuntimeEngine` 对象，而设备的 Bonjour 连接每次重连都新建对象（`:418`）、旧对象随即释放 —— 之后 detach 时引用已是 nil，`stopKeepingDeviceTargetAwake` 直接返回，目标在后台一直跑到越狱版自身退出。注释只预料到「用户先 detach 越狱版」这一种 nil。修好 `PR119.2` 后更容易踩到（引擎跨断线存活，期间设备引擎可能已换过对象）。**本 PR 新引入** | 记录改存设备 `hostID`，释放时在 `bonjourRuntimeEngines` 里找当前引擎 | 无单元测试（`bonjourRuntimeEngines` 的写入口 `appendBonjourRuntimeEngine` 是 private）。见下「测试缺口」 |
 | PR119.4 | Major | 旧版 Mac 会断开和新版 Mac 的整条镜像连接。注入的设备引擎进 `attachedRuntimeEngines` → `updateProxyServers` 给它开 proxy → `buildEngineDescriptors` 把 `source: .injectedTCP` 发出去。`RuntimeSource` 的 `Codable` 是合成的，`engineList` 又是对**整个数组**一次 `JSONDecoder`，所以旧对端一个元素认不出就整次解码失败；它的心跳把失败当死链，连续 2 次（间隔 30 秒）即 `runtimeEngine.stop()` —— 这台 Mac 镜像过去的**所有**引擎一起消失，直到 Bonjour 重新发现，然后循环。接收端的脆弱（整体解码 + 解码错误当死链）`next` 与 `main` 都有；本 PR 是**镜像上线以来第一次新增 source case**（上次改 case 是 `1a4e99c4`，早于镜像的 `b7bdb7d4`），所以是第一个触发它的改动。旧版已发出，只能在发送端修。Copilot 的 `r4192141644` 也独立报了这一条 | `RuntimeSource.isMirrorableToPeers`：新 case 默认**不**镜像，`buildEngineDescriptors` 按它过滤。镜像注入的设备进程本来也不是验证过的路径 —— 对端经该设备自己的引擎就能看到它 | `mirrorableSourcesStayReadableByOlderPeers`（6 例，修前只有 `.injectedTCP` 那例红）、`oneUnknownCaseFailsTheWholeArray`（characterization：证明一个元素坏掉整个数组失败）。用新写的五 case 冻结解码器，既有的冻结 descriptor 复用当前 `RuntimeSource`，证不了「新增 case」 |
-| PR119.6 | Major | 选中模拟器引擎时 Attach 按钮变灰，提示还让用户去装越狱版 —— 而越狱版在模拟器上根本用不了。`injectionTargetsRunOnThisMachine` 对所有 `.bonjour` 返回 false，**而模拟器正是走 `.bonjour`**（模拟器里的载荷和跑在模拟器里的 RuntimeViewer 都用 `advertisingSource()`）；于是去问对端，对端的 `os(iOS)` 分支答 `requiresJailbrokenVariant`。**相对 `next` 是回退**：那里只要 SIP 关着 Attach 就打开本机 picker。也与本 PR 自己的设计表格矛盾（`draft-jailbroken-ios-injection.md:302`、`:329`：这一行应可用且一次 RPC 都不发）。属性与测试里两处「模拟器走 `localSocket`」的注释都写错了 —— 模拟器从基线起就是 `.bonjour` | `.bonjour` 分支读 `hostInfo.metadata.isSimulator`（对端经 TXT 的 `rv-sim` 报告），两处错注释一并改 | `bonjourSimulatorIsThisMachine`（修前红） |
+| PR119.6 | Major | 选中模拟器引擎时 Attach 按钮变灰，提示还让用户去装越狱版 —— 而越狱版在模拟器上根本用不了。`injectionTargetsRunOnThisMachine` 对所有 `.bonjour` 返回 false，**而模拟器正是走 `.bonjour`**（模拟器里的载荷和跑在模拟器里的 RuntimeViewer 都用 `advertisingSource()`）；于是去问对端，对端的 `os(iOS)` 分支答 `requiresJailbrokenVariant`。**相对 `next` 是回退**：那里只要 SIP 关着 Attach 就打开本机 picker。也与本 PR 自己的设计表格矛盾（`0043-jailbroken-ios-injection.md:302`、`:329`：这一行应可用且一次 RPC 都不发）。属性与测试里两处「模拟器走 `localSocket`」的注释都写错了 —— 模拟器从基线起就是 `.bonjour` | `.bonjour` 分支读 `hostInfo.metadata.isSimulator`（对端经 TXT 的 `rv-sim` 报告），两处错注释一并改 | `bonjourSimulatorIsThisMachine`（修前红） |
 | PR119.C3 | Major | 注入超时的诊断文案声称「目标已确认在运行，所以挂起不是原因」，但注入前的检查只拦 `.suspended`，`.unknown` 直接放行 —— 而缺 `com.apple.runningboard.process-state` 的构建对每个目标都读到 `.unknown`。于是在最常见的「读不到运行状态」情形下，这句话没有依据，把用户赶去查载荷和目标，而原因可能就是挂起。**本 PR 新引入**（`81a874de`，那次改写本身是改进，只是没覆盖 `.unknown`） | 文案改为「持有 assertion 是已做的事；起始时未被报告为挂起，但在读不到运行状态的构建上这是未知而非已排除」，并把「目标可能仍被挂起」列为三种可能之一。`.unknown` 不改为拦下 —— 那会让没有该 entitlement 的构建完全无法注入，而注入本身不需要这个答案 | `timedOutReasonDoesNotOverstateWhatWasChecked`（修前命中「confirmed」与「is not the explanation」） |
 | PR119.C4 | Major | 并发注入共用暂存目录会互相破坏。所有注入都暂存到固定的 `/private/var/tmp/RuntimeViewerPayload`，而 `stage` 先删后写 payload、依赖和 rendezvous，一次注入最长等 20 秒裁决。第二次注入落在窗口里就把第一个载荷还没读的 rendezvous 换掉：它于是拨到第二次的端口被当成另一个进程认领，或撞上删与写之间的空档、读不到文件而退回广播（在不能 bind 的目标上等于永不报到，即 `PR119.3` 的触发来源）。单个 picker 用 `isAttaching` 串行化，所以要两个发起方（第二个文档窗口、MCP、CLI）才撞上，而它们互不感知。**本 PR 新引入** | `RuntimePayloadStaging.isolated(forProcessWithIdentifier:)`，按目标 pid 分子目录。按 pid 而非按认领令牌：同一 pid 重注入复用自己的目录，不会每次留一份 | `concurrentInjectionsDoNotShareADirectory`（把 `isolated` 临时改回返回共享目录后实测红：两个 payload URL 相同、第一个的 rendezvous 被覆盖）、`restagingOneTargetReusesItsDirectory` |
 | PR119.7 | Minor | 监听建立失败时残留一条保活记录。`launchInjectedDeviceEngine` 在 `connect()` 之前就记账，而调用方 `AttachToProcessViewModel.attachToRemoteProcess` 在 `do/catch` **之外**调它 —— 所以 `connect()` 抛错（咨询端口被抢、接口 IPv4 中途消失、fd 耗尽）时 `terminateInjectedDeviceEngine` 永不执行，记录（key 是一次性 UUID，不会被覆盖）永远回收不掉。注释「每条 attach 失败路径都经过 `terminateRuntimeEngine`」对这一条不成立。影响极小：还没取 assertion，设备侧不受影响 | 记账挪到 `connect()` 成功之后、注入之前；注释一并改准 | 无（记录是 private）。见下「测试缺口」 |
@@ -181,5 +181,5 @@ keepalive 工作引入的）：本分支在该函数里设一次，两端都经�
 Copilot 的第四条 `r4192141690` 已作为 `PR119.C3` 修掉；`r4192141572` 判误报（`PR119.C1`）；
 `r4192141724` 已修（`PR119.C4`）；`r4192141610` 升级为独立提案（`PR119.C2`）。
 
-`draft-device-process-assertions.md` 原先记录的范围外缺口「App 里没有 Detach 入口」仍然成立，且
+`0045-device-process-assertions.md` 原先记录的范围外缺口「App 里没有 Detach 入口」仍然成立，且
 `PR119.2` 的修复使它更值得补 —— 保留一个跨断线存活的引擎，意味着用户需要一个主动结束它的入口。

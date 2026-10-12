@@ -1,13 +1,13 @@
-# Draft - 阻止进程被挂起：越狱版保活与注入 App
+# 0045 - 阻止进程被挂起：越狱版保活与注入 App
 
-- **状态**: Accepted
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-03
-- **最后更新**: 2026-10-03
+- **最后更新**: 2026-10-12
 - **所属愿景**: 无
 - **关联提案**:
-  [draft-jailbroken-ios-injection](draft-jailbroken-ios-injection.md)（父提案：越狱版枚举并注入设备进程；它的非目标里「注入其它 App」这一条由本提案接走）、
-  [draft-device-payload-reverse-connection](draft-device-payload-reverse-connection.md)（载荷反向连接；本提案不改动那条通道）
+  [0043-jailbroken-ios-injection](0043-jailbroken-ios-injection.md)（父提案：越狱版枚举并注入设备进程；它的非目标里「注入其它 App」这一条由本提案接走）、
+  [0044-device-payload-reverse-connection](0044-device-payload-reverse-connection.md)（载荷反向连接；本提案不改动那条通道）
 - **实现分支 / PR**: `feature/jailbroken-ios-injection`
 - **配套文档**:
   [`DevicePayloadReverseConnection.md`](../DevicePayloadReverseConnection.md) 第八节（实现说明，本提案推翻了它原先的一条结论）、
@@ -536,7 +536,7 @@ guard injection.success else {
 - 最低系统版本不变。
 - 新代码只在 iOS 设备上生效；`RuntimeDeviceSuspensionController` 在 macOS 上编译并被测试，
   但没有 RunningBoard 可谈。
-- **实测基线是 iOS 26.6.2（待验证）/ 26.3.1（静态结论来源）**。更低的 iOS 版本未考察。
+- **实测基线是 iOS 26.6.2（落地步骤 8 已在真机验证）/ 26.3.1（静态结论来源）**。更低的 iOS 版本未考察。
 
 ### 发布
 
@@ -609,3 +609,4 @@ RV 退出。补这个口子要先设计 Detach 的 UI，是另一件事。
 | 2026-10-03 | 新增术语 `受限 entitlement` | 这次弯路的可复用教训：判断一条私有 entitlement 可不可用，必须跟到消费方构造权限集合那一步 |
 | 2026-10-06 | **PR #119 review 推翻「挂在 `terminateRuntimeEngine` 上一处覆盖全部路径」** —— 改为带 `TerminationReason`，被动断线与广播胜出都不释放 | 上面那条决策只盘点了用户主动发起的拆引擎路径（CLI detach、attach 回滚），漏了 `handleStateChange` 收到 `.disconnected` 也走同一处。后果有两个，都与本提案自己写的「assertion 跨连接存活、只在用户 detach 或目标退出时结束」矛盾：Wi-Fi 抖动约 25 秒即释放 assertion，目标随后可被挂起；`awaitInjectedDeviceEngine` 里广播一方胜出时拆掉监听源，等于在 attach 当下就把刚连上的那个进程的 assertion 还掉（Copilot 的 `r4192141759` 也独立报了这一条）。修法是给拆除加原因：`.requested` 与 `.connectionLost(.peerClosed)` 释放，传输错误与 `.supersededByAdvertisement` 保留，后者把记账改挂到胜出的引擎上 |
 | 2026-10-06 | 配对记录改存设备 `hostID`，不再存引擎对象的 weak 引用；且改到 `connect()` 成功之后才记 | 两处都是上面「记早不记晚」那条决策的副作用。weak 引用指向的是**当时那个** `RuntimeEngine` 对象，而设备的 Bonjour 连接每次重连都新建对象、旧对象随即释放 —— 之后 detach 时引用已是 nil，释放命令根本发不出去，目标会在后台一直跑到越狱版退出。改为存 `hostID`、释放时再在 `bonjourRuntimeEngines` 里找当前引擎。记账时机则是：调用方在 `do/catch` 之外调 `launchInjectedDeviceEngine`，所以 `connect()` 抛错（端口被抢、接口地址消失）时记录永远回收不掉；挪到 `connect()` 之后、注入之前，既不漏失败路径也不泄漏 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0045 | 经 PR #119 合入 `next`（`84faeb3d`，2026-10-07），落地步骤 1–8 均已完成，含 26.6.2 真机验证，第 539 行的「待验证」随之去掉。用户：「提案收一下尾」。范围外的已知缺口照旧：App 里没有 Detach 入口；列为后续的几项（私有 API 提升到 UIFoundationAppleInternal 等）不变 |
