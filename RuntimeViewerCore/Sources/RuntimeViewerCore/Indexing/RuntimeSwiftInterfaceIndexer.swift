@@ -8,6 +8,7 @@ import OrderedCollections
 import SwiftStdlibToolbox
 @_spi(Internals) import SwiftInspection
 @_spi(Support) import SwiftInterface
+@_spi(Support) import SwiftSpecialization
 
 /// A Swift type found to subclass another type or to conform to a protocol,
 /// paired with the image that named it.
@@ -192,6 +193,12 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// images load. Mirrors `RuntimeObjCInterfaceIndexer.subIndexers`.
     @Mutex
     private var subIndexers: [RuntimeSwiftInterfaceIndexer] = []
+
+    /// The provider `conformanceProvider` hands out, built on first read and
+    /// dropped by `addSubIndexer` and `removeSubIndexer`. Only the aggregate's
+    /// is ever read.
+    @Mutex
+    private var currentConformanceProvider: IndexerConformanceProvider<MachOImage>? = nil
 
     // MARK: - Init
 
@@ -649,11 +656,15 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// only do that if the two arrays stay in lockstep. Registering outside the
     /// lock leaves a window in which two concurrent calls interleave the two
     /// appends differently and the arrays permanently disagree.
+    ///
+    /// Drops the conformance provider, so the next specializer reads one that
+    /// covers this image too; see `conformanceProvider`.
     func addSubIndexer(_ subIndexer: RuntimeSwiftInterfaceIndexer) {
         _subIndexers.withLock { subIndexers in
             upstream.addSubIndexer(subIndexer.upstream)
             subIndexers.append(subIndexer)
         }
+        currentConformanceProvider = nil
     }
 
     /// Detach a previously registered per-image indexer, undoing both the local
@@ -670,11 +681,35 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// operation and uses one index for both arrays — see `addSubIndexer`.
     /// Identity comparison, not equality: two indexers over the same image are
     /// still two indexers.
+    ///
+    /// Drops the conformance provider as well: its class hierarchy would go on
+    /// offering the removed image's classes, and keep their type names alive.
     func removeSubIndexer(_ subIndexer: RuntimeSwiftInterfaceIndexer) {
         _subIndexers.withLock { subIndexers in
             guard let index = subIndexers.firstIndex(where: { $0 === subIndexer }) else { return }
             subIndexers.remove(at: index)
             upstream.removeSubIndexer(at: index)
+        }
+        currentConformanceProvider = nil
+    }
+
+    /// The conformance provider every generic specializer over this aggregate
+    /// reads, shared until the next `addSubIndexer` or `removeSubIndexer`.
+    ///
+    /// A provider builds the class hierarchy behind a class-bound parameter's
+    /// candidates once, over the images registered at that moment, and never
+    /// refreshes it. So it is shared — a provider per request walked every
+    /// indexed class again each time — and replaced once an image is added or
+    /// removed: a provider kept for good left the new image's subclasses out of
+    /// the candidates.
+    var conformanceProvider: IndexerConformanceProvider<MachOImage> {
+        _currentConformanceProvider.withLock { currentConformanceProvider in
+            if let currentConformanceProvider {
+                return currentConformanceProvider
+            }
+            let conformanceProvider = IndexerConformanceProvider(indexer: upstream)
+            currentConformanceProvider = conformanceProvider
+            return conformanceProvider
         }
     }
 }

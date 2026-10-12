@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **日期**: 2026-05-08
-- **最后更新**: 2026-05-09
+- **最后更新**: 2026-10-11
 
 ## 摘要
 
@@ -83,7 +83,7 @@ extension GenericSpecializer where MachO == MachOImage {
 **关键调用形态(两步)**:
 
 ```swift
-let specializer = GenericSpecializer(indexer: indexer)         // 一次性构造,可缓存
+let specializer = GenericSpecializer(indexer: indexer)         // 自身不带缓存,按请求构造(决策日志 2026-10-11)
 let request = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
 // ... 用户填 selection ...
 let result = try specializer.specialize(request, with: selection)
@@ -149,7 +149,7 @@ let specializedDefinition = try await typeDefinition.specialize(with: result, in
 │       通过 request<T>(local:remote:) 分发,远程抛 unsupported             │
 │                                                                           │
 │   RuntimeSwiftSection (actor)                                            │
-│     + lazy specializer: GenericSpecializer<MachOImage>                    │
+│     + makeSpecializer(for:):按请求构造,共用聚合索引器的 provider        │
 │     + specializationRequest(for:) / specialize(for:with:)                 │
 │     + makeRuntimeObject 把 specializedTypeDefinitions 拼为 children       │
 │       并对 metadata != nil 的 typeDefinition 标 isSpecialized             │
@@ -191,11 +191,15 @@ let allChildren = typeChildren + protocolChildren + specializedChildren
 #### `RuntimeSwiftSection` 扩展(actor)
 
 ```swift
-private lazy var specializer = GenericSpecializer(indexer: indexer)
+// 按请求构造,不按镜像持有:conformance provider 由聚合索引器共享,
+// 每加入或移除一个镜像换一份(决策日志 2026-10-11)
+private func makeSpecializer(for machO: MachOImage) -> GenericSpecializer<MachOImage> {
+    GenericSpecializer(machO: machO, conformanceProvider: factory.indexer.conformanceProvider, indexer: factory.indexer.upstream)
+}
 
 func specializationRequest(for object: RuntimeObject) async throws -> SpecializationRequest {
     let typeDefinition = try requireTypeDefinition(for: object)
-    return try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+    return try makeSpecializer(for: machO).makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
 }
 
 func specialize(
@@ -203,6 +207,7 @@ func specialize(
     with selection: SpecializationSelection
 ) async throws -> RuntimeObject {
     let baseTypeDefinition = try requireTypeDefinition(for: object)
+    let specializer = makeSpecializer(for: machO)
     let request = try specializer.makeRequest(for: baseTypeDefinition.type.typeContextDescriptorWrapper)
     let result  = try specializer.specialize(request, with: selection)
     let specializedDefinition = try await baseTypeDefinition.specialize(with: result, in: machO)
@@ -678,7 +683,7 @@ runtimeEngine 是 XPC / Bonjour
 
 Document 关闭:
   DocumentState 释放 → RuntimeEngine 释放
-  → indexer / specializer / 所有 typeDefinitions 包括 specializedTypeDefinitions 一同消失
+  → indexer / 共享的 conformance provider / 所有 typeDefinitions 包括 specializedTypeDefinitions 一同消失
   → 任何在途的 SpecializationCoordinator 也通过 parent ARC 释放
 ```
 
@@ -758,7 +763,7 @@ RuntimeViewerCore/Sources/RuntimeViewerCore/Common/RuntimeObject.swift
     + Properties.isSpecialized
 
 RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeSwiftSection.swift
-    + lazy specializer
+    + makeSpecializer(for:)
     + specializationRequest(for:) / specialize(for:with:)
     + makeRuntimeObject 拼接 specializedTypeDefinitions 为 children + 标 isSpecialized
     + interfaceByName 失效逻辑
@@ -850,3 +855,4 @@ UsingAppKit 的新 .swift 文件加入 Xcode project 通过 `xcodeproj` MCP 完�
 | 2026-05-09 | 候选选择器用 Popover + NSSearchField + NSTableView | 候选可上千,搜索体验最好;比 NSMenu 强 |
 | 2026-05-09 | 已特化版本列表行点击 → 改 documentState.selectedRuntimeObject(联动 Sidebar) | 全局联动一致;复用现有 selectedRuntimeObject 通道 |
 | 2026-05-09 | 状态 Draft → In Progress | 上游 API ready,RuntimeViewer 侧开始实施 |
+| 2026-10-11 | specializer 不再按镜像 lazy 持有,改为每次请求现建;conformance provider 由聚合索引器共享(`RuntimeSwiftInterfaceIndexer.conformanceProvider`),每加入或移除一个镜像换一份 | provider 第一次用到时遍历所有已索引镜像里的类,建出约束为类的参数的子类表,之后不再更新。按镜像 lazy 持有时,之后索引进来的镜像(包括后台索引)里的子类进不了候选;嵌套特化每次请求都新建 provider,每次重建这张表。移除镜像(`removeSubIndexer`)时也要换,否则这张表会继续给出已移除镜像里的类,并让它们的类型名一直留在内存里。复现测试 `RuntimeSpecializationClassBoundCandidatesTests`(Foundation 的 `NSObject.KeyValueObservingPublisher`,之后加载 CoreData) |
