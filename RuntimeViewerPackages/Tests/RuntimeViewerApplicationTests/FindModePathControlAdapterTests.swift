@@ -6,7 +6,7 @@ import Testing
 @testable import RuntimeViewerApplication
 
 /// `FindModePathControlAdapter`: the Find page's mode path on AppKitPlus's `NSPopUpPathControl` —
-/// proposal `draft-appkitplus-filter-and-path-controls`. The control is a real one, off screen. What
+/// proposal `appkitplus-filter-and-path-controls`. The control is a real one, off screen. What
 /// it shows is read from its path cell. A choice is made the way the control makes one — it selects
 /// the chosen row's item, then tells its delegate — because a menu's tracking loop cannot run in a
 /// test.

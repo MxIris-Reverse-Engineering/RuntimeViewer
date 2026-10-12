@@ -144,7 +144,7 @@ struct RuntimeTypeRelationshipsProtocolCopyTests {
     /// The Swift face found from a private class's Objective-C class is
     /// materialized again from its mangled name, apart from the sidebar's
     /// object. Until the sidebar stopped spelling private discriminators
-    /// (draft-private-discriminator-tag) the two were spelled differently, and
+    /// (private-discriminator-tag) the two were spelled differently, and
     /// a query matching both faces had to keep the sidebar's; now both are
     /// printed from the same demangled name, so the candidate carries the
     /// sidebar row's name and private declarations whichever it keeps.

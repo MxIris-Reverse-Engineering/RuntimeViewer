@@ -4,7 +4,7 @@ import Testing
 import RuntimeViewerUI
 
 /// `ChoiceFilterControlBarItem`: the filter bar item the sidebar's filter mode sits on — proposal
-/// `draft-appkitplus-filter-and-path-controls`. A choice is made the way a menu makes one: the
+/// `appkitplus-filter-and-path-controls`. A choice is made the way a menu makes one: the
 /// chosen item's action is sent to its target, from the item, because a menu's tracking loop
 /// cannot run in a test.
 @Suite("ChoiceFilterControlBarItem")

@@ -1,6 +1,6 @@
-# Draft - 接入 AppKitPlus 的过滤框、过滤栏与弹出式路径控件
+# 0032 - 接入 AppKitPlus 的过滤框、过滤栏与弹出式路径控件
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-11
 - **最后更新**: 2026-10-12
 
@@ -12,18 +12,19 @@ RuntimeViewer 自己维护着同类的东西：Find 导航器的模式路径用�
 [0029](0029-find-navigator.md) §4.2），五处过滤栏用的是 UIFoundation `FilterUI` trait 里的 `FilterSearchField`。本提案把它们
 换成 AppKitPlus 的控件，删掉自写的路径控件。0.10.0 又带来 `NSFilterControlBar`（Xcode 导航器底部那条过滤栏 `DVTFilterControlBar`
 的移植）与栏上的按钮 `NSFilterControlBarItem`：侧栏各页、Find、Report 底部那四条手搭的过滤栏换成它，框外的按钮换成 item。
-AppKitPlus 升到 0.10.1：0.10.1 是为这次接入发的修复版，栏上的 item 原先会洗掉符号的颜色（见「过滤栏」）。`NSFilterTokenField` 这次不接：
+AppKitPlus 升到 0.11.0：0.10.1 与 0.11.0 都是为这次接入发的修复版，前者修栏上的 item 洗掉符号颜色，后者让 item 的菜单像下拉
+`NSPopUpButton` 那样弹出、不再盖住 item（见「过滤栏」与决策日志）。`NSFilterTokenField` 这次不接：
 RuntimeViewer 没有现成的 token 框，放在哪里都是一套新的过滤设计，另起提案。
 
 ## 方案
 
 **依赖**
 
-- `RuntimeViewerPackages/Package.swift`：AppKitPlus-Release 的下限 `0.4.2` → `0.10.1`；`uiFoundationTraits` 去掉 `FilterUI`
+- `RuntimeViewerPackages/Package.swift`：AppKitPlus-Release 的下限 `0.4.2` → `0.11.0`；`uiFoundationTraits` 去掉 `FilterUI`
   （RuntimeViewer 只用到其中的 `FilterSearchField`，侧栏模糊搜索用的是独立的 fuzzy-search 包）；`RuntimeViewerApplication`
   与它的测试 target 显式依赖 AppKitPlus。
 - 被跟踪的四份锁文件（Debug / Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandLine`）只把
-  appkitplus-release 从 0.8.0 改到 0.10.1。
+  appkitplus-release 从 0.8.0 改到 0.11.0（中间经过 0.9.0、0.10.0、0.10.1，见「验证」与决策日志）。
 
 **路径控件**：Find 导航器顶部的 `Find ▸ Text ▸ Containing` 换成 `NSPopUpPathControl`，打开 `selectsComponentsOneAtATime`
 ——AppKitPlus 为查找导航器模式条留的模式：各段是独立的选项，菜单不带子菜单。
@@ -51,6 +52,8 @@ RuntimeViewer 没有现成的 token 框，放在哪里都是一套新的过滤�
     菜单与图片由它自己管，菜单以下拉的脸开头），`ItemPopUpButton` 删除。顺带修掉一个旧问题：启动时恢复的模式在菜单里打了勾，按钮却仍是普通图标，
     要点一次才变强调色。
   - 侧栏对象列表的「过滤范围」：不设菜单，按下由栏上的按钮发 action；按钮就是 popover 的锚点，原样交给 `.scope(sender:)` 路由。
+    落地之后，[draft-routes-carry-no-views](draft-routes-carry-no-views.md) 把这一步改掉了：路由不再带按钮，视图控制器记下最近一次
+    按下的按钮（`filterScopeAnchorView`），coordinator 向它要锚点。
   - Report 的「操作」：原先每次点击现建一份菜单再弹出，换成常驻的菜单交给 item（栏以下拉方式弹出、从不改动菜单，菜单以一个
     空的脸开头），Cancel All 与
     Clear History 的可用状态改由 ViewModel 的输出直接设到菜单项上。
@@ -139,3 +142,4 @@ RuntimeViewer 没有现成的 token 框，放在哪里都是一套新的过滤�
 | 2026-10-12 | 四条过滤栏一律 `large`，侧栏两页与 Report 不再在 macOS 26 起用 `extraLarge` | 用户原话：「把extraLarge全部改成large，换了AppKitPlus的控件后large足够了，extraLarge太大了」。`extraLarge` 是沿用旧过滤框的尺寸；AppKitPlus 的框与同尺寸的 `NSSearchField` 等高，栏再加上下边距（large 44、extraLarge 52），不再是 UIFoundation 写死的框高（large 24、extraLarge 30） |
 | 2026-10-12 | 侧栏镜像列表与 Find 结果过滤框不再手动设 13pt 字体，跟随 `large` 的字体 | 用户原话：「换，现在字体太大了」，Find 那处由用户自己去掉。手设的字体写在设尺寸之后，会盖掉 AppKitPlus 按尺寸挑的字体；侧栏那两行是 2025-10 配 `extraLarge` 加的。侧栏同一处 macOS 26 起清空占位文字的那行，用户也一并删掉了 |
 | 2026-10-12 | 过滤栏 item 的菜单改由 AppKitPlus 以下拉 `NSPopUpButton` 的方式弹出，第 0 项是不列出的脸：`ChoiceFilterControlBarItem` 与 Report 的操作菜单各自以一个空项开头；AppKitPlus 发 0.11.0，RuntimeViewer 的下限与四份锁文件抬到 0.11.0 | 用户反馈：过滤模式的菜单弹出后把 item 整个盖住（截图），Xcode 的菜单在按钮上方；原来的 `ItemPopUpButton` 是下拉 `NSPopUpButton`，没有这个问题。AppKitPlus 0.10.0–0.10.2 自己按固定位置把菜单弹在按钮下方，窗口在屏幕底部时被系统推回来盖住按钮。用户选定「换成 PopUpButton，跟 Xcode 一样」，第 0 项归按钮（备选：AppKitPlus 覆写私有方法让整份菜单照旧显示），照 Xcode 先往下弹、放不下再往上（备选：照 `ItemPopUpButton` 设 `preferredEdge = .minY` 先往上）。修复与复现测试在 AppKitPlus（过滤栏提案同日一行）；`ChoiceFilterControlBarItemTests` 改为只看脸之后列出的项，另加一条测脸本身（修改前 5 条全红，修改后全绿）。用户批准发版（原话：「可以，发版吧」）：修复（72e3215）与 `chore(release): 0.11.0`（d897910）快进合进 AppKitPlus 的 `main`，`publish-release.sh` 先演练再用 Xcode 26.6 发布（发布仓库 `Release 0.11.0` a8bdf92，产物 SHA-256 `3ab18e12…`），最后推 `main`。破坏性变更（菜单第 0 项不再列出）写在 0.11.0 的发布说明里，所以升次版本号 |
+| 2026-10-12 | 状态改为 Implemented，落地编号 0032；摘要与「依赖」里的版本号更正为实际钉的 0.11.0 | 实现已合进 `next`（合并提交 d0ed0eee，其后的尺寸、字体与菜单位置调整也在 `next` 上），分支随后删除；用户：「收尾」。原先「没做」的两项里，在运行中的 App 里看外观与点菜单已由用户做过，后三条决策都出自这次查看；Distribution workspace 的 Release 归档仍未单独做。按落地编号规则取 `origin/next` 与 `origin/main` 的全局最大值 0030 往后排，排在同日收尾、更早进入 `next` 的 0031 之后。不另写使用指南或实现说明：用法与陷阱写在 `AGENTS.md` 的 *Filter fields, filter bars and pop-up paths come from AppKitPlus* 一条。没有需要进术语表的新术语：`NSFilterControlBar` 等是 AppKitPlus 的 API 名，不是本项目的术语 |
