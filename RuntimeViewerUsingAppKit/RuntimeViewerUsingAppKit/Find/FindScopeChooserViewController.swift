@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
@@ -15,7 +16,7 @@ final class FindScopeChooserViewController<Route: FindNavigatorRoutable>: BaseVi
 
     private let promptLabel = Label("Choose a search scope:")
 
-    private let filterSearchField = SearchField()
+    private let filterSearchField = NSFilterSearchField()
 
     private let (scrollView, tableView): (ScrollView, FindScopeImageTableView) = FindScopeImageTableView.scrollableTableView()
 

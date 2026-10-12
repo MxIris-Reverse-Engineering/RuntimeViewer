@@ -93,7 +93,7 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD", "AppKitPlus"]
+let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD", "AppKitPlus"]
 
 let package = Package(
     name: "RuntimeViewerPackages",
@@ -191,7 +191,7 @@ let package = Package(
         .package(
             remote: .package(
                 url: "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
-                from: "0.4.2",
+                from: "0.10.1",
             ),
         ),
 
@@ -447,6 +447,7 @@ let package = Package(
                 .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
@@ -597,6 +598,7 @@ let package = Package(
                 "RuntimeViewerUI",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 

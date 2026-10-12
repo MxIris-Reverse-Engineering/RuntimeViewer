@@ -980,10 +980,19 @@ override func setupBindings(for viewModel: MyViewModel) {
 | `VStackView(alignment:spacing:) { ... }` | `NSStackView(orientation: .vertical)` |
 | `HStackView(spacing:) { ... }` | `NSStackView(orientation: .horizontal)` |
 | `ScrollView()` | `NSScrollView()` |
-| `PopUpPathControl()` (RuntimeViewerUI) | `NSPathControl()` for an Xcode-style path of menus (`Find ▸ Text ▸ Containing`) |
+| `NSPopUpPathControl()` (AppKitPlus) | `NSPathControl()` for an Xcode-style path of menus (`Find ▸ Text ▸ Containing`) |
+| `NSFilterSearchField()` (AppKitPlus) | `NSSearchField()` above a list it filters — the field of a page's filter bar, a picker's filter field |
+| `NSFilterControlBar()` (AppKitPlus) | an `HStackView` of buttons and a search field at the bottom of a sidebar page |
 | `final class XxxView: LayerBackedView` | `final class XxxView: NSView` (when it needs `cornerRadius` / border / `backgroundColor` / shadow) |
 
-**`PopUpPathControl` is Xcode's `DVTPathControl` rebuilt, not a dressed-up `NSPathControl`.** It draws everything itself — the hover highlight, the chevron that turns into a pop-up indicator, the menu laid over the component, the title that fades out — to measurements read out of Xcode 27's DVTKit, and each rule names the DVTKit method it comes from. Change a measurement only against that evidence: the table and the deliberate departures are in `Documentations/Evolutions/0029-find-navigator.md` §4.2. It only reports choices — `lastSelection` plus the action, read with `rx.click(with: \.lastSelection)` — and the owner answers by setting new `components`.
+**Filter fields, filter bars and pop-up paths come from AppKitPlus.** `NSFilterSearchField`, `NSFilterControlBar` and `NSPopUpPathControl` are ports of Xcode's own `DVTSearchField`, `DVTFilterControlBar` and `DVTPathControl`; RuntimeViewer keeps no copies of its own any more — UIFoundation's `FilterSearchField` went with its `FilterUI` trait, and the old `PopUpPathControl` and `ItemPopUpButton` were deleted. Background: `Documentations/Evolutions/draft-appkitplus-filter-and-path-controls.md`. Things to know:
+
+- The bar at the bottom of a sidebar page is an `NSFilterControlBar`. Give it the page's field as `filterField`, put the buttons beside the field in it as `NSFilterControlBarItem`s, and pin it to the edges: its intrinsic height carries the margins around the field. Set `controlSize` on the bar, never on its field: the bar sets the field's size whenever it takes the field or changes size.
+- An item with a menu pops the menu up; `ChoiceFilterControlBarItem` (RuntimeViewerUI) is the one for a choice of one case or none, such as the filter mode. An item without a menu sends its action from its button on the bar, and that button is the view to show a popover from. An item has no tint: to show it as active, swap in a symbol coloured with the accent colour, which the bar keeps from AppKitPlus 0.10.1 on.
+- Add a filter toggle with `addFilterButton(with:alternateImage:toolTip:accessibilityLabel:)` and leave its frame alone: the field lays its buttons out itself, and a constraint on one breaks that.
+- Setting a field's `controlSize` also sets its `font`, to that size's system font, as Xcode does — in a bar, setting the bar's does. A field that needs another font sets it afterwards.
+- Work in progress shows as the field's own `progress`, never as a spinner laid over the field.
+- `NSPopUpPathControl` selects the chosen item before it tells its delegate. The Find page's mode path is the view model's to decide, so `FindModePathControlAdapter` puts the view model's path back in `popUpPathControl(_:didSelect:)` and only reports the choice. A path that an owner decides needs the same, or the control shows the bare chosen item for a moment.
 
 **Layer-backed views** — any custom AppKit view that needs layer-level visuals (rounded corners, border, background color, shadow) MUST inherit `UIFoundationAppKit.LayerBackedView`, never raw `NSView` with hand-rolled `wantsLayer = true` + `layer?.cornerRadius / layer?.borderColor / layer?.backgroundColor = ....cgColor`. The base class already sets `wantsLayer + layerContentsRedrawPolicy = .onSetNeedsDisplay` and centralizes everything in `updateLayer()`, so:
 

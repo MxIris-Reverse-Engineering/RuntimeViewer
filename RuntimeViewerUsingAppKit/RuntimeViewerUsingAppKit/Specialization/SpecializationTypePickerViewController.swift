@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -9,7 +10,7 @@ import SnapKit
 final class SpecializationTypePickerViewController: BaseViewController<SpecializationTypePickerViewModel> {
     // MARK: - Subviews
 
-    private let searchField = NSSearchField()
+    private let searchField = NSFilterSearchField()
 
     private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
 

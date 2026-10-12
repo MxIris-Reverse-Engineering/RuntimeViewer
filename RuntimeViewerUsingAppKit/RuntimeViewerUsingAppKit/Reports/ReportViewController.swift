@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
@@ -7,8 +8,8 @@ import SnapKit
 
 /// The Report navigator page, laid out after Xcode 26's — proposal `0030-report-navigator`.
 /// Like Xcode's: one source-list outline of 24-point rows, the kinds of work as first-level rows,
-/// each piece of work under its kind with a spinner while it runs; and the 44-point bar at the
-/// bottom with an actions button and a filter field whose clock toggle keeps only the work in
+/// each piece of work under its kind with a spinner while it runs; and the filter bar at the
+/// bottom with an actions menu and a filter field whose clock toggle keeps only the work in
 /// progress. Unlike Xcode's, selecting a row opens nothing: the reports have no page of their own.
 ///
 /// Generic over the sidebar level's route because the page is a tab of both levels; both bind the
@@ -35,20 +36,20 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     private let bottomSeparatorView = NSBox()
 
-    private let actionsButton = NSButton()
+    /// Built once; its items are enabled from the view model's output, since the bar shows the menu as it is.
+    private let actionsMenu = NSMenu()
 
-    private let filterSearchField = FilterSearchField()
+    private let cancelAllMenuItem = NSMenuItem(title: "Cancel All", action: nil, keyEquivalent: "")
+
+    private let clearHistoryMenuItem = NSMenuItem(title: "Clear History", action: nil, keyEquivalent: "")
+
+    private lazy var actionsItem = NSFilterControlBarItem(image: SFSymbols(systemName: .ellipsisCircle).nsuiImgae, menu: actionsMenu)
+
+    private let filterSearchField = NSFilterSearchField()
 
     private var showsOnlyInProgressButton: NSButton!
 
-    private lazy var filterStackView = HStackView(distribution: .fill, alignment: .fill, spacing: 6) {
-        actionsButton
-        filterSearchField
-    }
-
-    private var hasCancellableWork = false
-
-    private var hasHistory = false
+    private let filterControlBar = NSFilterControlBar()
 
     override var containerViewUsingSafeArea: Bool { true }
 
@@ -64,15 +65,17 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         super.viewDidLoad()
 
         showsOnlyInProgressButton = filterSearchField.addFilterButton(
-            systemSymbolName: "clock",
-            toolTip: "Show only reports in progress"
+            with: .symbol(systemName: .clock),
+            alternateImage: .symbol(systemName: .clockFill),
+            toolTip: "Show only reports in progress",
+            accessibilityLabel: "Reports in Progress"
         )
 
         containerView.hierarchy {
             scrollView
             emptyLabel
             bottomSeparatorView
-            filterStackView
+            filterControlBar
         }
 
         scrollView.snp.makeConstraints { make in
@@ -89,16 +92,12 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         bottomSeparatorView.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
             make.height.equalTo(1)
-            make.bottom.equalTo(filterStackView.snp.top).offset(-8)
+            make.bottom.equalTo(filterControlBar.snp.top)
         }
 
-        showsOnlyInProgressButton.snp.makeConstraints { make in
-            make.top.bottom.equalToSuperview()
-        }
-
-        filterStackView.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview().inset(12)
-            make.bottom.equalToSuperview().inset(8)
+        // The bar's intrinsic height carries the margins around the field.
+        filterControlBar.snp.makeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview()
         }
 
         bottomSeparatorView.boxType = .separator
@@ -139,22 +138,47 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             }
         }
 
-        actionsButton.do {
-            $0.isBordered = false
-            $0.imagePosition = .imageOnly
-            $0.image = SFSymbols(systemName: .ellipsisCircle).nsuiImgae
-            $0.toolTip = "Report Actions"
+        cancelAllMenuItem.do {
             $0.target = self
-            $0.action = #selector(actionsButtonClicked(_:))
+            $0.action = #selector(cancelAllMenuItemAction(_:))
+            $0.image = SFSymbols(systemName: .xmarkCircle).nsImage
+            $0.isEnabled = false
         }
 
-        filterSearchField.do {
+        clearHistoryMenuItem.do {
+            $0.target = self
+            $0.action = #selector(clearHistoryMenuItemAction(_:))
+            $0.image = SFSymbols(systemName: .trash).nsImage
+            $0.isEnabled = false
+        }
+
+        actionsMenu.do { menu in
+            menu.autoenablesItems = false
+            menu.addItem(cancelAllMenuItem)
+            menu.addItem(clearHistoryMenuItem)
+            menu.addItem(.separator())
+            menu.addItem(withTitle: "Open Settings…", action: #selector(openSettingsMenuItemAction(_:)), keyEquivalent: "").then {
+                $0.target = self
+                $0.image = SFSymbols(systemName: .gearshape).nsImage
+            }
+        }
+
+        actionsItem.do {
+            $0.title = "Report Actions"
+            $0.toolTip = "Report Actions"
+        }
+
+        filterSearchField.toolTip = "Show reports with matching name"
+
+        // The bar sizes the field and the item together; it sets the field's control size, so the size goes here.
+        filterControlBar.do {
+            $0.filterField = filterSearchField
+            $0.leadingItems = [actionsItem]
             if #available(macOS 26.0, *) {
                 $0.controlSize = .extraLarge
             } else {
                 $0.controlSize = .large
             }
-            $0.toolTip = "Show reports with matching name"
         }
     }
 
@@ -223,41 +247,18 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
         output.hasCancellableWork.driveOnNext { [weak self] hasCancellableWork in
             guard let self else { return }
-            self.hasCancellableWork = hasCancellableWork
+            cancelAllMenuItem.isEnabled = hasCancellableWork
         }
         .disposed(by: rx.disposeBag)
 
         output.hasHistory.driveOnNext { [weak self] hasHistory in
             guard let self else { return }
-            self.hasHistory = hasHistory
+            clearHistoryMenuItem.isEnabled = hasHistory
         }
         .disposed(by: rx.disposeBag)
     }
 
     // MARK: - Actions
-
-    @objc private func actionsButtonClicked(_ sender: NSButton) {
-        let menu = NSMenu().then { menu in
-            menu.addItem(withTitle: "Cancel All", action: hasCancellableWork ? #selector(cancelAllMenuItemAction(_:)) : nil, keyEquivalent: "").then {
-                $0.target = self
-                $0.image = SFSymbols(systemName: .xmarkCircle).nsImage
-            }
-            menu.addItem(withTitle: "Clear History", action: hasHistory ? #selector(clearHistoryMenuItemAction(_:)) : nil, keyEquivalent: "").then {
-                $0.target = self
-                $0.image = SFSymbols(systemName: .trash).nsImage
-            }
-            menu.addItem(.separator())
-            menu.addItem(withTitle: "Open Settings…", action: #selector(openSettingsMenuItemAction(_:)), keyEquivalent: "").then {
-                $0.target = self
-                $0.image = SFSymbols(systemName: .gearshape).nsImage
-            }
-        }
-        menu.autoenablesItems = false
-        for item in menu.items {
-            item.isEnabled = item.action != nil
-        }
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 2), in: sender)
-    }
 
     @objc private func cancelAllMenuItemAction(_ sender: NSMenuItem) {
         cancelAllRelay.accept(())

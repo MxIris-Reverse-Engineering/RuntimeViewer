@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -36,6 +37,9 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     private let openInNewTabRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+
+    /// The filter scope item's button on the bar, each time it is pressed — the anchor of the scope popover.
+    private let filterScopeItemPressedRelay = PublishRelay<NSButton>()
 
     /// The empty string, sent when the view model clears its filter on its
     /// own. Setting the search field's `stringValue` does not reach
@@ -106,14 +110,23 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             $0.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
         }
 
-        imageLoadedView.filterModeButton.do {
-            $0.onItem = appDefaults.filterMode
-            $0.stateChanged = { [weak self] filterMode in
+        imageLoadedView.filterModeItem.do {
+            $0.selectedChoice = appDefaults.filterMode
+            $0.selectionChanged = { [weak self] filterMode in
                 guard let self else { return }
                 appDefaults.filterMode = filterMode
                 filterModeDidChange.accept()
             }
         }
+
+        imageLoadedView.filterScopeItem.do {
+            $0.target = self
+            $0.action = #selector(filterScopeItemPressed(_:))
+        }
+    }
+
+    @objc private func filterScopeItemPressed(_ sender: NSButton) {
+        filterScopeItemPressedRelay.accept(sender)
     }
 
     override func setupBindings(for viewModel: ViewModel) {
@@ -299,12 +312,12 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(scopeKey)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(scopeKey)"
 
-        imageLoadedView.filterScopeButton.rx.click.asSignal()
-            .emitOnNextMainActor { [weak self, weak viewModel] in
-                guard let self, let viewModel else { return }
+        filterScopeItemPressedRelay.asSignal()
+            .emitOnNextMainActor { [weak viewModel] sender in
+                guard let viewModel else { return }
                 viewModel.router.trigger(
                     .scope(
-                        sender: imageLoadedView.filterScopeButton,
+                        sender: sender,
                         relay: viewModel.$scope,
                         availableKinds: viewModel.availableKinds,
                         availableProperties: viewModel.availableProperties,
@@ -319,7 +332,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             .distinctUntilChanged()
             .driveOnNextMainActor { [weak self] isActive in
                 guard let self else { return }
-                imageLoadedView.filterScopeButton.contentTintColor = isActive ? .controlAccentColor : .labelColor
+                imageLoadedView.isFilterScopeActive = isActive
             }
             .disposed(by: rx.disposeBag)
     }
@@ -418,19 +431,29 @@ extension SidebarRuntimeObjectViewController {
 
         let bottomSeparatorView = NSBox()
 
-        let filterModeButton = ItemPopUpButton<FilterMode>()
+        let filterModeItem = ChoiceFilterControlBarItem<FilterMode>(
+            image: .symbol(systemName: .line3HorizontalDecrease),
+            alternateImage: SFSymbols(systemName: .line3HorizontalDecrease).hierarchicalColor(.controlAccentColor).nsuiImgae
+        )
 
-        let filterScopeButton = NSButton()
+        /// Has no menu: pressing it sends the view controller's action from its button, which the scope popover is
+        /// shown from.
+        let filterScopeItem = NSFilterControlBarItem(image: .symbol(systemName: .sliderHorizontal3), target: nil, action: nil)
 
-        let filterSearchField = FilterSearchField()
+        let filterSearchField = NSFilterSearchField()
 
-        private lazy var filterStackView = HStackView(distribution: .fill, alignment: .fill, spacing: 6) {
-            filterModeButton
-            filterScopeButton
-            filterSearchField
-        }
+        let filterControlBar = NSFilterControlBar()
 
         private(set) var matchCaseButton: NSButton!
+
+        /// Shows the scope item in the accent colour while a scope narrows the list.
+        var isFilterScopeActive = false {
+            didSet {
+                filterScopeItem.image = isFilterScopeActive
+                    ? SFSymbols(systemName: .sliderHorizontal3).paletteColors([.controlAccentColor]).nsuiImgae
+                    : .symbol(systemName: .sliderHorizontal3)
+            }
+        }
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
@@ -442,15 +465,17 @@ extension SidebarRuntimeObjectViewController {
             // backwards from the icon everyone recognizes. Leaving it
             // unselected keeps the effective default (ignore case).
             matchCaseButton = filterSearchField.addFilterButton(
-                systemSymbolName: "textformat",
+                with: .symbol(systemName: .textformat),
+                alternateImage: nil,
                 toolTip: "Match Case",
+                accessibilityLabel: "Match Case"
             )
 
             hierarchy {
                 scrollView
                 emptyLabel
                 bottomSeparatorView
-                filterStackView
+                filterControlBar
             }
 
             scrollView.snp.makeConstraints { make in
@@ -469,32 +494,12 @@ extension SidebarRuntimeObjectViewController {
             bottomSeparatorView.snp.makeConstraints { make in
                 make.left.right.equalToSuperview()
                 make.height.equalTo(1)
-//                make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
-                make.bottom.equalTo(filterStackView.snp.top).offset(-8)
+                make.bottom.equalTo(filterControlBar.snp.top)
             }
 
-            matchCaseButton.snp.makeConstraints { make in
-                make.top.bottom.equalToSuperview()
-            }
-//            filterModeButton.snp.makeConstraints { make in
-//                make.left.equalToSuperview().inset(12)
-//                make.centerY.equalTo(filterSearchField)
-//            }
-//
-//            filterScopeButton.snp.makeConstraints { make in
-//                make.left.equalTo(filterModeButton.snp.right).offset(6)
-//                make.centerY.equalTo(filterSearchField)
-//            }
-//
-//            filterSearchField.snp.makeConstraints { make in
-//                make.left.equalTo(filterScopeButton.snp.right).offset(6)
-//                make.right.equalToSuperview().inset(10)
-//                make.bottom.equalToSuperview().inset(8)
-//            }
-
-            filterStackView.snp.makeConstraints { make in
-                make.leading.trailing.equalToSuperview().inset(12)
-                make.bottom.equalToSuperview().inset(8)
+            // The bar's intrinsic height carries the margins around the field.
+            filterControlBar.snp.makeConstraints { make in
+                make.leading.trailing.bottom.equalToSuperview()
             }
 
             emptyLabel.do {
@@ -512,20 +517,20 @@ extension SidebarRuntimeObjectViewController {
                 $0.boxType = .separator
             }
 
-            filterModeButton.do {
-                $0.icon = .symbol(systemName: .line3HorizontalDecrease)
-                $0.alternateIcon = SFSymbols(systemName: .line3HorizontalDecrease).hierarchicalColor(.controlAccentColor).nsuiImgae
-                $0.setup()
+            filterModeItem.do {
+                $0.title = "Filter Mode"
+                $0.toolTip = "Filter Mode"
             }
 
-            filterScopeButton.do {
-                $0.isBordered = false
-                $0.imagePosition = .imageOnly
-                $0.image = .symbol(systemName: .sliderHorizontal3)
+            filterScopeItem.do {
+                $0.title = "Filter Scope"
                 $0.toolTip = "Filter Scope"
             }
 
-            filterSearchField.do {
+            // The bar sizes the field and the items together; it sets the field's control size, so the size goes here.
+            filterControlBar.do {
+                $0.filterField = filterSearchField
+                $0.leadingItems = [filterModeItem, filterScopeItem]
                 if #available(macOS 26.0, *) {
                     $0.controlSize = .extraLarge
                 } else {

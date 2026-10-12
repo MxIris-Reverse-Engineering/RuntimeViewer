@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -11,9 +12,14 @@ final class BatchExportingImageSelectionViewController: BaseViewController<Batch
 
     private let matchTargetPopUpButton = PopUpButton()
 
-    private let searchField = FilterSearchField()
+    private let searchField = NSFilterSearchField()
 
-    private lazy var matchCaseButton = searchField.addFilterButton(systemSymbolName: "textformat", toolTip: "Match Case")
+    private lazy var matchCaseButton = searchField.addFilterButton(
+        with: .symbol(systemName: .textformat),
+        alternateImage: nil,
+        toolTip: "Match Case",
+        accessibilityLabel: "Match Case"
+    )
 
     // MARK: - Selection
 
