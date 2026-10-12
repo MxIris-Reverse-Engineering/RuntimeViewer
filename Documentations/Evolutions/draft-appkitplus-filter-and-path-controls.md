@@ -2,7 +2,7 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-10-11
-- **最后更新**: 2026-10-11
+- **最后更新**: 2026-10-12
 
 ## 摘要
 
@@ -43,8 +43,8 @@ RuntimeViewer 没有现成的 token 框，放在哪里都是一套新的过滤�
 过滤框）加手写的边距，换成 `NSFilterControlBar`。
 
 - 页面自己的 `NSFilterSearchField` 交给栏当 `filterField`，栏贴住左右与底边，高度用栏的 intrinsic 高度（边距在里面）。分隔线
-  保留，贴在栏的上沿。控件尺寸设在栏上：栏接手框、改尺寸时都会改框的尺寸与字体，所以侧栏镜像列表与 Find 自己的字体设在栏之后。
-  尺寸沿用各页原来的：侧栏两页与 Report 在 macOS 26 起 extraLarge、之前 large，Find 一律 large。
+  保留，贴在栏的上沿。控件尺寸设在栏上：栏接手框、改尺寸时都会改框的尺寸与字体，所以页面对框的其余设置写在栏之后。
+  四条栏一律 large。侧栏两页与 Report 起初沿用原来的尺寸（macOS 26 起 extraLarge），换上 AppKitPlus 的控件后显得太大，改回 large（见决策日志）。
 - 框外的按钮换成 `NSFilterControlBarItem`，框里的开关（Match Case、时钟）照旧留在框里，Xcode 也是这样分的：
   - 侧栏对象列表的「过滤模式」：菜单列出各个 `FilterMode`，最多一个打勾，点打勾的那项取消。原先是 `RuntimeViewerUI` 的
     `ItemPopUpButton`（下拉按钮拿菜单第 0 项当脸），换成同一位置的 `ChoiceFilterControlBarItem`（`NSFilterControlBarItem` 的子类，
@@ -75,7 +75,7 @@ RuntimeViewer 没有现成的 token 框，放在哪里都是一套新的过滤�
 **没有询问就采用的假设**
 
 - 字体跟 AppKitPlus 走：它在设 `controlSize` 时把字体换成该尺寸的系统字体（数字等宽），与 Xcode 一致。原先显式设了字号的
-  地方保留原字号；侧栏对象列表、Report、批量导出原本没设，继承的是 UIFoundation 默认的 11pt，换后随控件尺寸变化。
+  地方起初保留原字号，侧栏镜像列表与 Find 结果过滤框这两处后来去掉了（见决策日志）；侧栏对象列表、Report、批量导出原本没设，继承的是 UIFoundation 默认的 11pt，换后随控件尺寸变化。
 - 高度跟 AppKitPlus 走：与同尺寸的 `NSSearchField` 等高，不再是 UIFoundation 写死的值（large 24、extraLarge 30），侧栏
   底部的过滤栏可能因此变高。
 - Find 查询框的描边方式没有逆向（Xcode 的 `DVTFindPatternSearchField` 怎么设 `DVTSearchFieldCell` 的描边模式），先用
@@ -135,3 +135,5 @@ RuntimeViewer 没有现成的 token 框，放在哪里都是一套新的过滤�
 | 2026-10-11 | `ItemPopUpButton` 换成新的 `ChoiceFilterControlBarItem`（`NSFilterControlBarItem` 的子类）后删除 | 它唯一的用处就是过滤模式按钮。子类让 item 直接放进栏的 `leadingItems`，菜单、打勾与换图都在它里面，视图控制器的写法与原先一样；新增 `ChoiceFilterControlBarItemTests` |
 | 2026-10-11 | 分隔线保留，栏不放进 split view 的底部附件 | 未单独询问，在对话里列为默认、用户未反对。底部附件挂在 split view item 上，侧栏却是每页一条栏的多页导航，另起 |
 | 2026-10-11 | AppKitPlus 0.10.1 发布，RuntimeViewer 的下限与四份锁文件抬到 0.10.1 | 用户批准发版（原话：「发」）。照 AppKitPlus 的发版指南：修复（f4581b3）与 `chore(release): 0.10.1`（726f64c）快进合进 AppKitPlus 的 `main`，`publish-release.sh` 先演练再发布（发布仓库 `Release 0.10.1` 654ff81，产物 SHA-256 `e5c9305e…`），最后推 `main` |
+| 2026-10-12 | 四条过滤栏一律 `large`，侧栏两页与 Report 不再在 macOS 26 起用 `extraLarge` | 用户原话：「把extraLarge全部改成large，换了AppKitPlus的控件后large足够了，extraLarge太大了」。`extraLarge` 是沿用旧过滤框的尺寸；AppKitPlus 的框与同尺寸的 `NSSearchField` 等高，栏再加上下边距（large 44、extraLarge 52），不再是 UIFoundation 写死的框高（large 24、extraLarge 30） |
+| 2026-10-12 | 侧栏镜像列表与 Find 结果过滤框不再手动设 13pt 字体，跟随 `large` 的字体 | 用户原话：「换，现在字体太大了」，Find 那处由用户自己去掉。手设的字体写在设尺寸之后，会盖掉 AppKitPlus 按尺寸挑的字体；侧栏那两行是 2025-10 配 `extraLarge` 加的。侧栏同一处 macOS 26 起清空占位文字的那行，用户也一并删掉了 |

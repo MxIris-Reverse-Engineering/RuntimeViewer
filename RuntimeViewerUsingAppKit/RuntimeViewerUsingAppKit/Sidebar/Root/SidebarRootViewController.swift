@@ -65,19 +65,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         // The bar sets the field's control size, which sets its font, so the field's own settings come after it.
         filterControlBar.do {
             $0.filterField = filterSearchField
-            if #available(macOS 26.0, *) {
-                $0.controlSize = .extraLarge
-            } else {
-                $0.controlSize = .large
-            }
-        }
-
-        filterSearchField.do {
-            if #available(macOS 26.0, *) {
-                $0.font = .systemFont(ofSize: NSFont.systemFontSize)
-                $0.cell?.font = .systemFont(ofSize: NSFont.systemFontSize)
-                $0.textFieldCell?.placeholderString = nil
-            }
+            $0.controlSize = .large
         }
 
         scrollView.do {

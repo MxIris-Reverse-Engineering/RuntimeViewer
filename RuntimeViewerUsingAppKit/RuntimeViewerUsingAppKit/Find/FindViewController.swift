@@ -273,7 +273,6 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         }
 
         filterSearchField.do {
-            $0.font = .systemFont(ofSize: 13)
             $0.placeholderString = "Filter"
             $0.toolTip = "Show results with matching text"
             $0.sendsWholeSearchString = false

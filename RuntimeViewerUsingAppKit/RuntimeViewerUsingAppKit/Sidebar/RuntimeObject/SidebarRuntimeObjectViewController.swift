@@ -555,11 +555,7 @@ extension SidebarRuntimeObjectViewController {
             filterControlBar.do {
                 $0.filterField = filterSearchField
                 $0.leadingItems = [filterModeItem, filterScopeItem]
-                if #available(macOS 26.0, *) {
-                    $0.controlSize = .extraLarge
-                } else {
-                    $0.controlSize = .large
-                }
+                $0.controlSize = .large
             }
         }
     }
