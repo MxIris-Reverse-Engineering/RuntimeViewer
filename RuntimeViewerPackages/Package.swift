@@ -191,7 +191,7 @@ let package = Package(
         .package(
             remote: .package(
                 url: "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
-                from: "0.10.1",
+                from: "0.11.0",
             ),
         ),
 

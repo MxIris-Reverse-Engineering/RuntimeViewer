@@ -154,6 +154,8 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
         actionsMenu.do { menu in
             menu.autoenablesItems = false
+            // Item 0 is the face of the pull-down the bar pops the menu up as; the open menu lists the items after it.
+            menu.addItem(NSMenuItem(title: "", action: nil, keyEquivalent: ""))
             menu.addItem(cancelAllMenuItem)
             menu.addItem(clearHistoryMenuItem)
             menu.addItem(.separator())

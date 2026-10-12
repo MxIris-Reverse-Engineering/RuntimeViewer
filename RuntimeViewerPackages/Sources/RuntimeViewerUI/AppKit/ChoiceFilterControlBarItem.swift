@@ -3,10 +3,10 @@
 import AppKit
 import AppKitPlus
 
-/// A filter bar item whose menu lists every case of `Choice`, with at most one of them on: choosing a case turns it on
-/// and the others off, and choosing the case that is on turns it off again. The item shows `image` while no case is
-/// on and `alternateImage` while one is — an accent-coloured symbol, say, whose colours the bar keeps from AppKitPlus
-/// 0.10.1 on.
+/// A filter bar item whose menu lists every case of `Choice`, after the empty item a pull-down keeps for its face, with
+/// at most one of them on: choosing a case turns it on and the others off, and choosing the case that is on turns it
+/// off again. The item shows `image` while no case is on and `alternateImage` while one is — an accent-coloured symbol,
+/// say, whose colours the bar keeps from AppKitPlus 0.10.1 on.
 public final class ChoiceFilterControlBarItem<Choice: CaseIterable & CustomStringConvertible & Equatable>: NSFilterControlBarItem {
     /// The case that is on, or `nil` while none is. Setting it updates the menu and the image, and does not call
     /// `selectionChanged`.
@@ -27,6 +27,8 @@ public final class ChoiceFilterControlBarItem<Choice: CaseIterable & CustomStrin
         self.unselectedImage = image
         self.selectedImage = alternateImage
         super.init(image: image, menu: NSMenu())
+        // Item 0 is the face of the pull-down the bar pops the menu up as; the open menu lists the items after it.
+        menu?.addItem(NSMenuItem(title: "", action: nil, keyEquivalent: ""))
         for (index, choice) in Choice.allCases.enumerated() {
             let menuItem = NSMenuItem(title: choice.description, action: #selector(menuItemChosen(_:)), keyEquivalent: "")
             menuItem.target = self
@@ -48,7 +50,7 @@ public final class ChoiceFilterControlBarItem<Choice: CaseIterable & CustomStrin
     }
 
     private func updateSelectionAppearance() {
-        for (menuItem, choice) in zip(menu?.items ?? [], Choice.allCases) {
+        for (menuItem, choice) in zip(menu?.items.dropFirst() ?? [], Choice.allCases) {
             menuItem.state = choice == selectedChoice ? .on : .off
         }
         image = selectedChoice == nil ? unselectedImage : selectedImage

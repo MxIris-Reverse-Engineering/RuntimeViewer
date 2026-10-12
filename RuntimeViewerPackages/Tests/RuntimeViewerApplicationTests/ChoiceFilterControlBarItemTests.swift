@@ -35,26 +35,41 @@ struct ChoiceFilterControlBarItemTests {
         ChoiceFilterControlBarItem<Fruit>(image: image, alternateImage: alternateImage)
     }
 
+    /// The items the open menu lists: every one but item 0, which a pull-down — AppKitPlus's filter bar item
+    /// pops its menu up as one — keeps for its face.
+    private func listedItems(of item: ChoiceFilterControlBarItem<Fruit>) -> [NSMenuItem] {
+        Array(item.menu?.items.dropFirst() ?? [])
+    }
+
     private func choose(_ fruit: Fruit, in item: ChoiceFilterControlBarItem<Fruit>) throws {
-        let index = try #require(Fruit.allCases.firstIndex(of: fruit))
-        let menuItem = try #require(item.menu?.item(at: index))
+        let menuItem = try #require(listedItems(of: item).first { $0.title == fruit.description })
         let target = try #require(menuItem.target as? NSObject)
         let action = try #require(menuItem.action)
         _ = target.perform(action, with: menuItem)
     }
 
     private func menuItemStates(of item: ChoiceFilterControlBarItem<Fruit>) -> [NSControl.StateValue] {
-        item.menu?.items.map(\.state) ?? []
+        listedItems(of: item).map(\.state)
     }
 
     @Test("its menu lists every case, none of them on, and it shows its image")
     func listsEveryCase() {
         let item = makeItem()
 
-        #expect(item.menu?.items.map(\.title) == ["Apple", "Pear", "Plum"])
+        #expect(listedItems(of: item).map(\.title) == ["Apple", "Pear", "Plum"])
         #expect(menuItemStates(of: item) == [.off, .off, .off])
         #expect(item.selectedChoice == nil)
         #expect(item.image === image)
+    }
+
+    @Test("its menu starts with the pull-down's face, an item that shows nothing and does nothing")
+    func startsWithTheFace() throws {
+        let item = makeItem()
+
+        let face = try #require(item.menu?.items.first)
+        #expect(face.title.isEmpty)
+        #expect(face.image == nil)
+        #expect(face.action == nil)
     }
 
     @Test("choosing a case turns it on and the others off, shows the alternate image and reports the case")
