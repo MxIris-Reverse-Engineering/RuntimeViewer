@@ -89,7 +89,7 @@ class TabViewController: NSLayerBackedViewController {
             }
         }
 
-        tabView.view.snp.makeConstraints { make in
+        tabView.snp.makeConstraints { make in
             make.top.equalTo(segmentedControl.snp.bottom).offset(10)
             make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
         }
