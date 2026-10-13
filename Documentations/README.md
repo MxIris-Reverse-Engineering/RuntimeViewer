@@ -101,6 +101,7 @@
 
 按时间倒序。
 
+- [切到别的 App 后，后台索引与语料构建慢了四到十倍](ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md)（2026-10-13）—— 本地引擎的 XPC 服务是 launchd 的 adaptive job，没被提升时就在 Darwin 后台档（优先级 4、只用效率核）；它的提升来自 App 挂着未回复的请求，而 App 进了 App Nap 就不再给出 importance。用户切走约 30 秒后，SwiftUI 的语料从 18 秒变成 187 秒。文档有后台工作时（`DocumentState.reportActivity`），App 改为持有一个 user-initiated 的 process activity，不进 App Nap；工作结束即放掉。导出、MCP 桥、CLI host 同样会受影响，尚未处理。
 - [标题一长，工具栏右侧的按钮全进了溢出菜单](ResolvedIssues/2026-10-02-long-toolbar-title-pushed-items-into-overflow.md)（2026-10-02）—— NSToolbar 在独立的布局引擎里以优先级 200 把 item 的 view 压到 0 宽来测最小宽度，再只按最小宽度决定谁进溢出菜单；标题 label 的抗压缩是 250，整段文字就成了最小宽度。只把抗压缩降到 200 以下还不够：测出的宽度恰好为 0 时工具栏退回用 view 的 frame，标题被定成 0 宽；纵向 stack 的 hugging 又把较宽的 label 压到较窄的那么宽。`TitleToolbarItem` 挪进 `RuntimeViewerUI`，加齐四项尺寸设置，回归测试逐项去掉都会失败；15.8.1、26.6、27.0 行为一致。
 - [Find 搜不到任何结果：后台索引的事件被两个读者瓜分](ResolvedIssues/2026-09-29-find-corpus-never-built-indexing-events-split.md)（2026-09-29）—— `RuntimeBackgroundIndexingManager.events` 把同一条 `AsyncStream` 交给每个调用者，而 `AsyncStream` 的每个元素只交给一个读者。Find 的语料库协调器成了每个文档的第二个读者，和索引协调器轮流瓜分事件：它一个「任务完成」都没拿到，一次建库都没请求，搜索恒为 0 结果、已索引镜像全报「not yet searchable」；索引协调器则收不到「批次结束」，弹窗把完成的批次一直挂在 ACTIVE 下。`events` 改为每个订阅者一条流、广播给全部订阅者，新订阅者先收到进行中批次的快照；这也修好了 `main` 上多窗口共用 My Mac 引擎时互相瓜分事件的老问题。
 - [App 图标里的头文件文字比原来暗淡](ResolvedIssues/2026-09-28-icon-code-listing-too-thin.md)（2026-09-28）—— 09-19 把位图前景拆成矢量图层时，生成脚本只按首行宽度匹配旧位图，选了 SF Mono Regular；等宽字体各字重一样宽，宽度选不出字重，按墨迹量比对应该是 Bold。代码层的深色填充又是灰蓝色而不是白色。两处都已改正；另记一个坑：矢量层删掉 dark 特化不等于保持原色，深色外观会把它染成背景的蓝色。

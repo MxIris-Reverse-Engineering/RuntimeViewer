@@ -24,6 +24,7 @@ struct DocumentStateLifecycleTests {
 
         #expect(!documentState.hasCreatedFindSession, "closing the document created a Find session")
         #expect(!documentState.hasCreatedFindCorpusCoordinator, "closing the document created a corpus coordinator")
+        #expect(!documentState.hasCreatedBackgroundWorkProcessActivity, "closing the document created its background work activity")
     }
 
     @Test("closing a document withdraws its corpus builds, and nothing asks for one afterwards")

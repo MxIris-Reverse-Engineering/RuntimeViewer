@@ -276,17 +276,41 @@ public final class DocumentState {
         findSessionStorage != nil
     }
 
+    /// Keeps the app out of App Nap while `reportActivity` says this document has work in
+    /// progress. Like the coordinators it watches, touched on the first Document lifecycle hook
+    /// so it exists for the document's whole life.
+    public var backgroundWorkProcessActivity: BackgroundWorkProcessActivity {
+        if let backgroundWorkProcessActivityStorage {
+            return backgroundWorkProcessActivityStorage
+        }
+        let backgroundWorkProcessActivity = BackgroundWorkProcessActivity(isWorkInProgress: reportActivity, scheduler: processActivityScheduler)
+        backgroundWorkProcessActivityStorage = backgroundWorkProcessActivity
+        return backgroundWorkProcessActivity
+    }
+
+    private var backgroundWorkProcessActivityStorage: BackgroundWorkProcessActivity?
+
+    /// What `backgroundWorkProcessActivity` begins and ends its activity with, read when it is
+    /// brought into being. Test seam.
+    var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
+
     /// Whether `findCorpusCoordinator` has been brought into being. Test seam.
     var hasCreatedFindCorpusCoordinator: Bool {
         findCorpusCoordinatorStorage != nil
     }
 
+    /// Whether `backgroundWorkProcessActivity` has been brought into being. Test seam.
+    var hasCreatedBackgroundWorkProcessActivity: Bool {
+        backgroundWorkProcessActivityStorage != nil
+    }
+
     /// The document is closing; `Document.close()` calls this and nothing
     /// else. Each member that exists lets go of its work — the indexing
     /// batches this document started, the corpus builds it asked for, the
-    /// search under way — and stops reacting to anything. A member never
-    /// brought into being stays that way: creating it now would only start
-    /// the observation and the requests closing is meant to stop.
+    /// search under way, the activity held for them — and stops reacting to
+    /// anything. A member never brought into being stays that way: creating it
+    /// now would only start the observation and the requests closing is meant
+    /// to stop.
     ///
     /// Needed because this object can outlive its window, and with it every
     /// member it holds, so their `deinit` is no place to let go of work.
@@ -296,6 +320,7 @@ public final class DocumentState {
         #endif
         findCorpusCoordinatorStorage?.documentWillClose()
         findSessionStorage?.documentWillClose()
+        backgroundWorkProcessActivityStorage?.documentWillClose()
     }
 
     /// Whether the Report navigator has work in progress: an indexing batch, or a corpus queued or

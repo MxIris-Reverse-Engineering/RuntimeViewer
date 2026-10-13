@@ -23,6 +23,10 @@ final class Document: NSDocument {
         // keeps the engine's interface corpus in step with what this document
         // indexes, and reacts to the Find settings for the document's life.
         _ = documentState.findCorpusCoordinator
+        // Keeps the app out of App Nap while either coordinator has work in
+        // progress, so the local-runtime service doing it keeps its priority
+        // when the user switches to another app.
+        _ = documentState.backgroundWorkProcessActivity
     }
 
     override func close() {

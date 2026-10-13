@@ -397,8 +397,17 @@ The project uses three Swift Package Manager packages:
   XPC-service code lives in two places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
   (transport, `hello`, reattach) and `RuntimeViewerCore/LocalRuntimeService/` (`Info.plist` key and
   credential, the service-side host); `RuntimeEngine` and `RuntimeEngineManager` know nothing about
-  XPC, keep it that way. Background: `Documentations/Evolutions/0037-local-runtime-xpc-service.md`;
-  the transport: `Documentations/CommunicationAndEngineArchitecture.md` §3.6
+  XPC, keep it that way. **The service runs at the priority of the requests waiting on it.** launchd
+  starts it as an adaptive job, which sits in the Darwin background band — priority 4, efficiency
+  cores only — whenever no request from an app that donates importance is outstanding, and an app in
+  App Nap donates nothing: about thirty seconds after the user switches away, work the app is
+  waiting on slows down four- to tenfold. So long-running work the app waits on has to keep the app
+  out of App Nap. `BackgroundWorkProcessActivity` holds a user-initiated activity while
+  `DocumentState.reportActivity` is true (indexing batches, corpus builds); new work of that kind
+  reports through that signal or holds an activity of its own. Background:
+  `Documentations/Evolutions/0037-local-runtime-xpc-service.md`; the transport:
+  `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
+  `Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`
 - `RuntimeViewerCatalystHelper` — Mac Catalyst support bridge
 - `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
