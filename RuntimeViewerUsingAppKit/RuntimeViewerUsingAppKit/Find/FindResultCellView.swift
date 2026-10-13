@@ -22,15 +22,15 @@ final class FindResultCellView: TableCellView {
         }
 
         iconImageView.snp.makeConstraints { make in
-            make.leading.equalToSuperview()
+            make.leading.equalToSuperview().offset(6)
             make.top.equalToSuperview().offset(3)
             make.bottom.lessThanOrEqualToSuperview().inset(3)
             make.size.equalTo(FindResultCellStyle.iconSize)
         }
 
         titleLabel.snp.makeConstraints { make in
-            make.leading.equalTo(iconImageView.snp.trailing).offset(3)
-            make.trailing.equalToSuperview().inset(4)
+            make.leading.equalTo(iconImageView.snp.trailing).offset(6)
+            make.trailing.equalToSuperview().inset(6)
             make.top.equalToSuperview().offset(3)
             make.bottom.equalToSuperview().inset(3)
         }
