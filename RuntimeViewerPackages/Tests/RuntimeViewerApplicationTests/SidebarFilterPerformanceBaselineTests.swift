@@ -228,7 +228,7 @@ struct SidebarFilterPerformanceBaselineTests {
 
     @Test("pipeline output matches the mutating cascade level by level")
     func pipelineMatchesMutatingCascade() throws {
-        let scope = RuntimeObjectScope(generic: .only)
+        let scope = RuntimeObjectScope(propertyStates: [.generic: .only])
         let contexts = [
             FilterContext(query: "Needle", isCaseInsensitive: true, mode: nil),
             FilterContext(query: "Needle", isCaseInsensitive: false, mode: .fuzzySearch),

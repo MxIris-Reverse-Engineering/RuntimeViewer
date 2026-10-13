@@ -259,6 +259,25 @@ struct RuntimeObjectTests {
         #expect(decoded.children.count == 1)
     }
 
+    // MARK: - Properties
+
+    /// `properties` travels as its raw value, so each flag's bit is wire
+    /// format: an engine of another build reads the same number. The expected
+    /// values are the bits as they shipped, written out rather than derived
+    /// from `Properties.Flag`.
+    @Test("every flag keeps the bit it shipped with", arguments: [
+        (RuntimeObject.Properties.isGeneric, 1),
+        (.isSpecialized, 2),
+        (.isObjCImplementation, 4),
+        (.isSwiftClass, 8),
+        (.isObjCClass, 16),
+        (.isLocalType, 32),
+        (.isPositionNamedLocalType, 64),
+    ] as [(RuntimeObject.Properties, Int)])
+    func flagKeepsItsShippedBit(flag: RuntimeObject.Properties, shippedRawValue: Int) {
+        #expect(flag.rawValue == shippedRawValue)
+    }
+
     // MARK: - exportFileName
 
     @Test("Swift type export produces .swiftinterface extension")

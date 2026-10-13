@@ -538,6 +538,14 @@ When adding new features, you **MUST** follow these rules:
    `RuntimeEngine.addCommandExtension(named:install:)`. Nothing
    in `RuntimeViewerCore` changes. `RuntimeViewerInjection` is the reference implementation; see
    *Injection commands* below for the one obligation this puts on every process.
+10. **A new `RuntimeObject.Properties` flag gets a row in the sidebar's Filter Scope**: declare it as
+   a new case of `RuntimeObject.Properties.Flag` with the next bit position — the positions are wire
+   format, so never renumber or reuse one — and build its static from that case, never from
+   `init(rawValue:)`. `RuntimeObjectScope.Property.init(filtering:)` switches over `Flag`
+   exhaustively, so the build fails until the flag has a row: a new `Property` case, with its title
+   and tooltip in `SidebarRuntimeObjectScopeViewController`, or an existing case when the flag is
+   another face of the same thing (`isSwiftClass` and `isObjCClass` share `bridgedSwiftClass`).
+   Background: `Documentations/Evolutions/0049-scope-filter-all-object-properties.md`.
 
 ## Injection commands
 

@@ -40,8 +40,7 @@ final class SidebarRuntimeObjectScopeViewModel<Route: Routable>: ViewModel<Route
     struct Input {
         let toggleKind: Signal<RuntimeObjectKind>
         let toggleGroup: Signal<RuntimeObjectScope.KindGroup>
-        let setGeneric: Signal<RuntimeObjectScope.PropertyState>
-        let setSpecialized: Signal<RuntimeObjectScope.PropertyState>
+        let setPropertyState: Signal<(RuntimeObjectScope.Property, RuntimeObjectScope.PropertyState)>
         let reset: Signal<Void>
     }
 
@@ -66,18 +65,10 @@ final class SidebarRuntimeObjectScopeViewModel<Route: Routable>: ViewModel<Route
         }
         .disposed(by: rx.disposeBag)
 
-        input.setGeneric.emitOnNext { [weak self] state in
+        input.setPropertyState.emitOnNext { [weak self] property, state in
             guard let self else { return }
             var next = draft
-            next.generic = state
-            commit(next)
-        }
-        .disposed(by: rx.disposeBag)
-
-        input.setSpecialized.emitOnNext { [weak self] state in
-            guard let self else { return }
-            var next = draft
-            next.specialized = state
+            next[property] = state
             commit(next)
         }
         .disposed(by: rx.disposeBag)

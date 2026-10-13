@@ -7,7 +7,7 @@ import RuntimeViewerCore
 /// the sidebar pipeline narrows nodes by `RuntimeObjectScope` first, then
 /// hands the survivors to `FilterEngine.filter` for fuzzy/contains matching.
 public struct RuntimeObjectScope: Hashable, Sendable {
-    /// Tristate constraint applied to one bit of `RuntimeObject.Properties`.
+    /// Tristate constraint applied to one `Property`.
     public enum PropertyState: Hashable, Sendable {
         /// No constraint — objects with or without the property both pass.
         case any
@@ -15,6 +15,50 @@ public struct RuntimeObjectScope: Hashable, Sendable {
         case only
         /// Object must NOT carry the property.
         case exclude
+    }
+
+    /// One row of the scope popover's Properties section, in display order.
+    /// A row filters by one or more `RuntimeObject.Properties` flags, and an
+    /// object has the property when it carries any of them.
+    public enum Property: Hashable, CaseIterable, Sendable {
+        case generic
+        case specialized
+        case objcImplementation
+        case bridgedSwiftClass
+        case localType
+        case positionNamedLocalType
+
+        /// The row that filters by `flag`. Exhaustive on purpose: a flag added
+        /// to `RuntimeObject.Properties.Flag` does not build until it has a
+        /// row here — a new case, or an existing one when it is another face
+        /// of the same thing.
+        public init(filtering flag: RuntimeObject.Properties.Flag) {
+            switch flag {
+            case .isGeneric: self = .generic
+            case .isSpecialized: self = .specialized
+            case .isObjCImplementation: self = .objcImplementation
+            // One bridged class is listed twice, and each entry carries its
+            // own flag: the Objective-C class `isSwiftClass`, the Swift class
+            // `isObjCClass`. One row selects both.
+            case .isSwiftClass, .isObjCClass: self = .bridgedSwiftClass
+            case .isLocalType: self = .localType
+            case .isPositionNamedLocalType: self = .positionNamedLocalType
+            }
+        }
+
+        /// The flags this row filters by — read back from
+        /// `init(filtering:)`, so the two can never disagree.
+        public var flags: RuntimeObject.Properties {
+            Self.flagsByProperty[self, default: []]
+        }
+
+        private static let flagsByProperty: [Property: RuntimeObject.Properties] = {
+            var flagsByProperty: [Property: RuntimeObject.Properties] = [:]
+            for flag in RuntimeObject.Properties.Flag.allCases {
+                flagsByProperty[Property(filtering: flag), default: []].insert(RuntimeObject.Properties(flag))
+            }
+            return flagsByProperty
+        }()
     }
 
     /// Top-level coarse buckets that match the disclosure groups in the
@@ -74,26 +118,30 @@ public struct RuntimeObjectScope: Hashable, Sendable {
     /// every kind is allowed. Non-empty means strict whitelist.
     public var includedKinds: Set<RuntimeObjectKind>
 
-    /// Constraint on `RuntimeObject.Properties.isGeneric`.
-    public var generic: PropertyState
-
-    /// Constraint on `RuntimeObject.Properties.isSpecialized`.
-    public var specialized: PropertyState
+    /// The constrained properties. `.any` is never stored, so two scopes that
+    /// constrain the same properties the same way are equal however they got
+    /// there — the scope popover drops a commit that changes nothing on that
+    /// equality. Read and written through `subscript(_:)`.
+    private var propertyStates: [Property: PropertyState]
 
     public init(
         includedKinds: Set<RuntimeObjectKind> = [],
-        generic: PropertyState = .any,
-        specialized: PropertyState = .any
+        propertyStates: [Property: PropertyState] = [:]
     ) {
         self.includedKinds = includedKinds
-        self.generic = generic
-        self.specialized = specialized
+        self.propertyStates = propertyStates.filter { $0.value != .any }
+    }
+
+    /// The constraint on `property`; `.any` when there is none.
+    public subscript(property: Property) -> PropertyState {
+        get { propertyStates[property] ?? .any }
+        set { propertyStates[property] = newValue == .any ? nil : newValue }
     }
 
     /// Whether the scope deviates from the default (everything allowed). The
     /// sidebar uses this to draw an active accent on the scope button.
     public var isActive: Bool {
-        !includedKinds.isEmpty || generic != .any || specialized != .any
+        !includedKinds.isEmpty || !propertyStates.isEmpty
     }
 
     /// True iff `object` itself satisfies every active constraint.
@@ -101,11 +149,11 @@ public struct RuntimeObjectScope: Hashable, Sendable {
         if !includedKinds.isEmpty, !includedKinds.contains(object.kind) {
             return false
         }
-        if !matchesProperty(generic, has: object.properties.contains(.isGeneric)) {
-            return false
-        }
-        if !matchesProperty(specialized, has: object.properties.contains(.isSpecialized)) {
-            return false
+        for (property, state) in propertyStates {
+            let hasProperty = !object.properties.isDisjoint(with: property.flags)
+            if !matchesProperty(state, has: hasProperty) {
+                return false
+            }
         }
         return true
     }

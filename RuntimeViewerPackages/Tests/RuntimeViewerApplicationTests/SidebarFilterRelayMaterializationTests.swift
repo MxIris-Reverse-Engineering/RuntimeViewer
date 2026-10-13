@@ -26,7 +26,7 @@ struct SidebarFilterRelayMaterializationTests {
             FilterContext(query: "", isCaseInsensitive: true, mode: nil),
         ]
         for context in contexts {
-            for scope in [RuntimeObjectScope(), RuntimeObjectScope(generic: .only)] {
+            for scope in [RuntimeObjectScope(), RuntimeObjectScope(propertyStates: [.generic: .only])] {
                 let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: cells, scope: scope)
                 let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context)
                 _ = try #require(

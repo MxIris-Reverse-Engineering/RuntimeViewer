@@ -50,7 +50,7 @@ struct RuntimeObjectScopeTests {
     @Test("PropertyState.only requires the bit set")
     func propertyOnlyRequiresBit() {
         var scope = RuntimeObjectScope()
-        scope.generic = .only
+        scope[.generic] = .only
 
         #expect(scope.passes(object(properties: [.isGeneric])))
         #expect(!scope.passes(object(properties: [])))
@@ -60,7 +60,7 @@ struct RuntimeObjectScopeTests {
     @Test("PropertyState.exclude rejects objects carrying the bit")
     func propertyExcludeRejectsBit() {
         var scope = RuntimeObjectScope()
-        scope.specialized = .exclude
+        scope[.specialized] = .exclude
 
         #expect(scope.passes(object(properties: [])))
         #expect(scope.passes(object(properties: [.isGeneric])))
@@ -71,8 +71,8 @@ struct RuntimeObjectScopeTests {
     @Test("generic and specialized tristates compose independently")
     func tristatesComposeIndependently() {
         var scope = RuntimeObjectScope()
-        scope.generic = .exclude
-        scope.specialized = .only
+        scope[.generic] = .exclude
+        scope[.specialized] = .only
 
         // Generic-only: rejected (generic excluded, no specialized bit).
         #expect(!scope.passes(object(properties: [.isGeneric])))
@@ -82,12 +82,91 @@ struct RuntimeObjectScopeTests {
         #expect(!scope.passes(object(properties: [])))
     }
 
+    // MARK: - Property rows
+
+    @Test("each row filters by the flags it is named after", arguments: [
+        (RuntimeObjectScope.Property.generic, RuntimeObject.Properties.isGeneric),
+        (.specialized, .isSpecialized),
+        (.objcImplementation, .isObjCImplementation),
+        (.bridgedSwiftClass, [.isSwiftClass, .isObjCClass]),
+        (.localType, .isLocalType),
+        (.positionNamedLocalType, .isPositionNamedLocalType),
+    ] as [(RuntimeObjectScope.Property, RuntimeObject.Properties)])
+    func rowFiltersByItsFlags(property: RuntimeObjectScope.Property, expectedFlags: RuntimeObject.Properties) {
+        #expect(property.flags == expectedFlags)
+    }
+
+    @Test("every row filters by at least one flag", arguments: RuntimeObjectScope.Property.allCases)
+    func everyRowFiltersBySomeFlag(property: RuntimeObjectScope.Property) {
+        #expect(!property.flags.isEmpty)
+    }
+
+    @Test("Only on the row of a flag admits objects carrying the flag and nothing else", arguments: RuntimeObject.Properties.Flag.allCases)
+    func onlyAdmitsObjectsCarryingTheFlag(flag: RuntimeObject.Properties.Flag) {
+        var scope = RuntimeObjectScope()
+        scope[RuntimeObjectScope.Property(filtering: flag)] = .only
+
+        #expect(scope.isActive)
+        #expect(scope.passes(object(properties: RuntimeObject.Properties(flag))))
+        #expect(!scope.passes(object(properties: [])))
+    }
+
+    @Test("Exclude on the row of a flag rejects objects carrying the flag", arguments: RuntimeObject.Properties.Flag.allCases)
+    func excludeRejectsObjectsCarryingTheFlag(flag: RuntimeObject.Properties.Flag) {
+        var scope = RuntimeObjectScope()
+        scope[RuntimeObjectScope.Property(filtering: flag)] = .exclude
+
+        #expect(scope.isActive)
+        #expect(!scope.passes(object(properties: RuntimeObject.Properties(flag))))
+        #expect(scope.passes(object(properties: [])))
+    }
+
+    @Test("setting a row back to Any leaves the default scope", arguments: RuntimeObjectScope.Property.allCases)
+    func anyRestoresTheDefaultScope(property: RuntimeObjectScope.Property) {
+        var scope = RuntimeObjectScope()
+        scope[property] = .only
+        scope[property] = .any
+
+        #expect(scope == RuntimeObjectScope())
+        #expect(!scope.isActive)
+    }
+
+    @Test("Any passed to the initializer constrains nothing")
+    func initializerIgnoresAny() {
+        let scope = RuntimeObjectScope(propertyStates: [.generic: .any, .localType: .any])
+
+        #expect(scope == RuntimeObjectScope())
+        #expect(!scope.isActive)
+    }
+
+    @Test("the bridged row selects both entries of a bridged class, and no @objc @implementation class")
+    func bridgedRowSelectsBothEntries() {
+        var scope = RuntimeObjectScope()
+        scope[.bridgedSwiftClass] = .only
+
+        #expect(scope.passes(object(kind: .objc(.type(.class)), properties: [.isSwiftClass])))
+        #expect(scope.passes(object(kind: .swift(.type(.class)), properties: [.isObjCClass])))
+        #expect(!scope.passes(object(kind: .objc(.type(.class)), properties: [.isObjCImplementation])))
+        #expect(!scope.passes(object(kind: .objc(.type(.class)))))
+    }
+
+    @Test("Local Only with Position-Named Exclude keeps the local types whose function is named")
+    func localTypesWhoseFunctionIsNamed() {
+        var scope = RuntimeObjectScope()
+        scope[.localType] = .only
+        scope[.positionNamedLocalType] = .exclude
+
+        #expect(scope.passes(object(properties: [.isLocalType])))
+        #expect(!scope.passes(object(properties: [.isLocalType, .isPositionNamedLocalType])))
+        #expect(!scope.passes(object(properties: [])))
+    }
+
     // MARK: - Recursive matching
 
     @Test("recursive matching pulls in a generic parent when a specialized child matches")
     func recursivePullsInGenericParentForSpecializedScope() {
         var scope = RuntimeObjectScope()
-        scope.specialized = .only
+        scope[.specialized] = .only
 
         let specializedChild = object(
             kind: .swift(.type(.class)),
@@ -103,6 +182,20 @@ struct RuntimeObjectScopeTests {
         #expect(!scope.passes(genericParent))
         // But recursive check accepts it because the child matches.
         #expect(scope.matchesRecursively(genericParent))
+    }
+
+    @Test("recursive matching keeps the type a local type is declared in")
+    func recursiveKeepsTheTypeEnclosingALocalType() {
+        var scope = RuntimeObjectScope()
+        scope[.localType] = .only
+
+        // The sidebar lists a local type under the type whose function
+        // declares it.
+        let localType = object(kind: .swift(.type(.struct)), properties: [.isLocalType])
+        let enclosingType = object(kind: .swift(.type(.class)), children: [localType])
+
+        #expect(!scope.passes(enclosingType))
+        #expect(scope.matchesRecursively(enclosingType))
     }
 
     @Test("recursive matching rejects when no descendant matches")

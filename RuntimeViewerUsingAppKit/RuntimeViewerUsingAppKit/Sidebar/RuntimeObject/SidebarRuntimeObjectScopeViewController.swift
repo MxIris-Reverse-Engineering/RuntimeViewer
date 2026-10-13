@@ -37,9 +37,15 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
 
     // MARK: - Property section
 
+    private let propertySeparator = NSBox()
     private let propertyHeaderLabel = Label("Properties")
-    private let genericRow = PropertyRow(title: "Generic")
-    private let specializedRow = PropertyRow(title: "Specialized")
+    private let propertyRows = RuntimeObjectScope.Property.allCases.map { PropertyRow(property: $0) }
+    private lazy var propertyStack = VStackView(distribution: .fill, alignment: .fill, spacing: 6) {
+        propertyHeaderLabel
+        for propertyRow in propertyRows {
+            propertyRow
+        }
+    }
 
     // MARK: - Layout
 
@@ -57,12 +63,6 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
             groupRows[.swift]!
         }
 
-        let propertyStack = VStackView(distribution: .fill, alignment: .fill, spacing: 6) {
-            propertyHeaderLabel
-            genericRow
-            specializedRow
-        }
-
         let headerRow = HStackView(distribution: .fill, alignment: .fill, spacing: 8) {
             titleLabel
             NSView()
@@ -75,7 +75,7 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
                 .box
                 .size(height: 1)
             kindStack
-            NSBox().then { $0.boxType = .separator }
+            propertySeparator
                 .box
                 .size(height: 1)
             propertyStack
@@ -121,6 +121,7 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
     }
 
     private func configurePropertySection() {
+        propertySeparator.boxType = .separator
         propertyHeaderLabel.do {
             $0.font = .systemFont(ofSize: 11, weight: .medium)
             $0.textColor = .secondaryLabelColor
@@ -145,8 +146,7 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
         let input = SidebarRuntimeObjectScopeViewModel<SidebarRuntimeObjectRoute>.Input(
             toggleKind: toggleKindStream.asSignal(onErrorSignalWith: .empty()),
             toggleGroup: toggleGroupStream.asSignal(onErrorSignalWith: .empty()),
-            setGeneric: genericRow.stateChanged.asSignal(onErrorSignalWith: .empty()),
-            setSpecialized: specializedRow.stateChanged.asSignal(onErrorSignalWith: .empty()),
+            setPropertyState: Observable.merge(propertyRows.map(\.stateChanged)).asSignal(onErrorSignalWith: .empty()),
             reset: resetButton.rx.click.asSignal()
         )
 
@@ -198,7 +198,7 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
 
     /// One-shot at popover-open time: hide group rows whose intersection
     /// with `kinds` is empty, hide individual kind checkboxes for kinds
-    /// that don't appear in the image, and hide property rows for bits
+    /// that don't appear in the image, and hide property rows whose flags
     /// nothing in the image carries.
     private func applyAvailability(
         kinds: Set<RuntimeObjectKind>,
@@ -209,16 +209,23 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
             row.isHidden = visibleKinds.isEmpty
             row.applyVisibleKinds(visibleKinds)
         }
-        genericRow.isHidden = !properties.contains(.isGeneric)
-        specializedRow.isHidden = !properties.contains(.isSpecialized)
+        for propertyRow in propertyRows {
+            propertyRow.isHidden = properties.isDisjoint(with: propertyRow.property.flags)
+        }
+        // With no row left — a plain C or Objective-C image — the section
+        // would otherwise be a heading over nothing.
+        let isPropertySectionEmpty = propertyRows.allSatisfy(\.isHidden)
+        propertySeparator.isHidden = isPropertySectionEmpty
+        propertyStack.isHidden = isPropertySectionEmpty
     }
 
     private func apply(_ scope: RuntimeObjectScope) {
         for (group, row) in groupRows {
             row.apply(scope: scope, group: group)
         }
-        genericRow.apply(state: scope.generic)
-        specializedRow.apply(state: scope.specialized)
+        for propertyRow in propertyRows {
+            propertyRow.apply(scope: scope)
+        }
         preferredContentSize = view.fittingSize
     }
 }
@@ -466,23 +473,29 @@ extension SidebarRuntimeObjectScopeViewController {
 extension SidebarRuntimeObjectScopeViewController {
     /// One property row: title on the left, Any / Only / Exclude segmented
     /// control on the right. The control width matches across rows so the
-    /// rightmost edges line up visually.
+    /// rightmost edges line up visually. Like `KindGroupRow` with its group,
+    /// the row knows its `property` and reports it with every state change.
     fileprivate final class PropertyRow: NSView {
-        var stateChanged: Observable<RuntimeObjectScope.PropertyState> {
+        let property: RuntimeObjectScope.Property
+
+        var stateChanged: Observable<(RuntimeObjectScope.Property, RuntimeObjectScope.PropertyState)> {
             stateChangedRelay.asObservable()
         }
 
-        private let stateChangedRelay = PublishRelay<RuntimeObjectScope.PropertyState>()
+        private let stateChangedRelay = PublishRelay<(RuntimeObjectScope.Property, RuntimeObjectScope.PropertyState)>()
 
         private let titleLabel = Label()
         private let segmented = NSSegmentedControl()
         private var rowStackView: NSStackView?
 
-        init(title: String) {
+        init(property: RuntimeObjectScope.Property) {
+            self.property = property
             super.init(frame: .zero)
 
             titleLabel.do {
-                $0.stringValue = title
+                $0.stringValue = property.scopePopoverTitle
+                // After `stringValue`, which `Label` mirrors into its tooltip.
+                $0.toolTip = property.scopePopoverToolTip
                 $0.font = .systemFont(ofSize: 12)
                 $0.textColor = .labelColor
             }
@@ -516,12 +529,12 @@ extension SidebarRuntimeObjectScopeViewController {
             // `selectedSegment`, so reading it inside the bind closure
             // returns the post-click value.
             segmented.rx.click
-                .compactMap { [weak segmented] _ -> RuntimeObjectScope.PropertyState? in
+                .compactMap { [weak segmented, property] _ -> (RuntimeObjectScope.Property, RuntimeObjectScope.PropertyState)? in
                     guard let segmented else { return nil }
                     switch segmented.selectedSegment {
-                    case 1: return .only
-                    case 2: return .exclude
-                    default: return .any
+                    case 1: return (property, .only)
+                    case 2: return (property, .exclude)
+                    default: return (property, .any)
                     }
                 }
                 .bind(to: stateChangedRelay)
@@ -536,12 +549,46 @@ extension SidebarRuntimeObjectScopeViewController {
             return NSSize(width: NSView.noIntrinsicMetric, height: rowStackView.fittingSize.height)
         }
 
-        func apply(state: RuntimeObjectScope.PropertyState) {
-            switch state {
+        func apply(scope: RuntimeObjectScope) {
+            switch scope[property] {
             case .any: segmented.selectedSegment = 0
             case .only: segmented.selectedSegment = 1
             case .exclude: segmented.selectedSegment = 2
             }
+        }
+    }
+}
+
+// MARK: - Property labels
+
+extension RuntimeObjectScope.Property {
+    /// The row's title in the scope popover.
+    fileprivate var scopePopoverTitle: String {
+        switch self {
+        case .generic: return "Generic"
+        case .specialized: return "Specialized"
+        case .objcImplementation: return "@objc @implementation"
+        case .bridgedSwiftClass: return "Bridged Swift Class"
+        case .localType: return "Local"
+        case .positionNamedLocalType: return "Position-Named Local"
+        }
+    }
+
+    /// What the row selects, shown over its title.
+    fileprivate var scopePopoverToolTip: String {
+        switch self {
+        case .generic:
+            return "Generic types"
+        case .specialized:
+            return "Generic types specialized with concrete type arguments"
+        case .objcImplementation:
+            return "Objective-C classes implemented in Swift through @objc @implementation, and the Swift extensions implementing them"
+        case .bridgedSwiftClass:
+            return "Swift classes the Objective-C runtime also lists, both as Objective-C classes and as Swift classes"
+        case .localType:
+            return "Swift types declared in a function or closure"
+        case .positionNamedLocalType:
+            return "Local types whose function or closure the binary does not name; their names carry the address of the anonymous context around them"
         }
     }
 }

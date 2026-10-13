@@ -6,17 +6,41 @@ public import SwiftStdlibToolbox
 @MemberwiseInit(.public)
 public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public struct Properties: OptionSet, Codable, Hashable, Sendable {
+        /// Every flag, one case each, named after its static below; the raw
+        /// value is the position of the flag's bit. The bits are wire format —
+        /// `properties` encodes as its raw value, and engines of other builds
+        /// read it — so a case never changes its raw value and a retired one
+        /// is never reused. A new flag is a new case with the next position,
+        /// and its static is built from that case, never from
+        /// `init(rawValue:)` directly.
+        ///
+        /// Every flag is also something the sidebar's Filter Scope can filter
+        /// by: `RuntimeObjectScope.Property.init(filtering:)` in
+        /// RuntimeViewerApplication switches over this enum exhaustively, so a
+        /// new case does not build until the Filter Scope has a row for it.
+        public enum Flag: Int, CaseIterable, Sendable {
+            case isGeneric = 0
+            case isSpecialized = 1
+            case isObjCImplementation = 2
+            case isSwiftClass = 3
+            case isObjCClass = 4
+            case isLocalType = 5
+            case isPositionNamedLocalType = 6
+        }
+
         public let rawValue: Int
 
         public init(rawValue: Int) { self.rawValue = rawValue }
 
-        public static let isGeneric = Self(rawValue: 1 << 0)
+        public init(_ flag: Flag) { self.init(rawValue: 1 << flag.rawValue) }
+
+        public static let isGeneric = Self(.isGeneric)
 
         /// Marks a runtime object that was produced by user-driven specialization
         /// of a generic Swift type. The corresponding TypeDefinition carries a
         /// non-nil `metadata` and is rendered with concrete generic arguments
         /// substituted in.
-        public static let isSpecialized = Self(rawValue: 1 << 1)
+        public static let isSpecialized = Self(.isSpecialized)
 
         /// Marks both faces of a class implemented through an
         /// `@objc @implementation extension` (SE-0436): the Objective-C class,
@@ -26,30 +50,30 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// two are mutually exclusive for that reason, and the badge they
         /// drive is picked in one place:
         /// `RuntimeObjectIcon.secondaryIcon(for:)`.
-        public static let isObjCImplementation = Self(rawValue: 1 << 2)
+        public static let isObjCImplementation = Self(.isObjCImplementation)
 
         /// Marks an Objective-C class that is really a Swift class bridged out
         /// to the Objective-C runtime — the Swift bit of its class data
         /// pointer is set (`isSwiftStable`). Mutually exclusive with
         /// `isObjCImplementation`; see that case for why.
-        public static let isSwiftClass = Self(rawValue: 1 << 3)
+        public static let isSwiftClass = Self(.isSwiftClass)
 
         /// The Swift face of `isSwiftClass`: a Swift class whose class object
         /// its image registers with the Objective-C runtime, so the Objective-C
         /// class list carries it too. Generic and specialized classes have no
         /// static class object and never get it.
-        public static let isObjCClass = Self(rawValue: 1 << 4)
+        public static let isObjCClass = Self(.isObjCClass)
 
         /// Marks a Swift type declared in a function or closure body. Its
         /// `displayName` is the name a reader is shown of it,
         /// `Visitor #1 in TableDataSource.performDrop(to:)`. A type nested in
         /// a local type is not one itself.
-        public static let isLocalType = Self(rawValue: 1 << 5)
+        public static let isLocalType = Self(.isLocalType)
 
         /// Marks an `isLocalType` type whose function or closure the binary
         /// does not name, so it is named by the address of the anonymous
         /// context wrapping it: `TableDataSource.(Visitor in $1a2b3c)`.
-        public static let isPositionNamedLocalType = Self(rawValue: 1 << 6)
+        public static let isPositionNamedLocalType = Self(.isPositionNamedLocalType)
     }
 
     public let name: String
