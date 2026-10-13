@@ -454,6 +454,30 @@ enum RuntimeInterfaceTextMatcher {
         }
     }
 
+    /// `isIdentifierByte` as a character class of a regular expression, which
+    /// sees characters rather than bytes: a character outside ASCII is
+    /// encoded in non-ASCII bytes alone, so it is an identifier character.
+    static let identifierCharacterClass = #"[A-Za-z0-9_$\x{80}-\x{10FFFF}]"#
+
+    /// `regularExpression` with the boundaries `matchMode` puts around a
+    /// literal query in `boundariesSatisfied(in:start:length:matchMode:)`:
+    /// lookarounds over `identifierCharacterClass`, not ICU's `\b`, which
+    /// counts neither `$` nor every character outside ASCII as part of a word.
+    static func regularExpression(_ regularExpression: String, boundedAs matchMode: RuntimeInterfaceSearchMatchMode) -> String {
+        let notAfterIdentifier = "(?<!\(identifierCharacterClass))"
+        let notBeforeIdentifier = "(?!\(identifierCharacterClass))"
+        switch matchMode {
+        case .containing, .regularExpression:
+            return regularExpression
+        case .startingWith:
+            return "\(notAfterIdentifier)(?:\(regularExpression))"
+        case .endingWith:
+            return "(?:\(regularExpression))\(notBeforeIdentifier)"
+        case .matchingWord:
+            return "\(notAfterIdentifier)(?:\(regularExpression))\(notBeforeIdentifier)"
+        }
+    }
+
     // MARK: - Matches
 
     /// Runs `pattern` over `interface` and reports every hit inside the

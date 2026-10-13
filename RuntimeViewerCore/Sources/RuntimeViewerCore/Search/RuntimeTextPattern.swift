@@ -33,4 +33,19 @@ public struct RuntimeTextPattern: Sendable {
             return NSRange(startIndex ..< endIndex, in: text)
         }
     }
+
+    /// `regularExpression` with the boundaries a literal query has under `matchMode`, for a
+    /// query that has to be sent as a regular expression but keep its match style — one with
+    /// find patterns among its text.
+    ///
+    /// The boundaries are the engine's identifier boundaries: a word is a run of `A`–`Z`, `a`–`z`,
+    /// `0`–`9`, `_`, `$` and characters outside ASCII. They are not ICU's `\b`, which leaves out
+    /// `$` and treats characters outside ASCII by their Unicode properties. A literal query sent
+    /// escaped through this finds what the engine finds for it as plain text, but for case:
+    /// insensitive, a regular expression folds the case of every letter, the literal search of
+    /// ASCII letters alone. `.containing` and `.regularExpression` leave `regularExpression` as it
+    /// is.
+    public static func regularExpression(_ regularExpression: String, boundedAs matchMode: RuntimeInterfaceSearchMatchMode) -> String {
+        RuntimeInterfaceTextMatcher.regularExpression(regularExpression, boundedAs: matchMode)
+    }
 }
