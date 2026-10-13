@@ -308,7 +308,7 @@ public final class FindSession {
 
     public func clear() {
         var cleared = query
-        cleared.text = ""
+        cleared.term = FindQueryTerm()
         run(cleared)
     }
 
@@ -447,12 +447,16 @@ public final class FindSession {
         }
     }
 
+    /// A query with find patterns goes out as a regular expression, the
+    /// engine's form for anything that is not literal text; see
+    /// `FindQueryTerm.searchText(literalMatchMode:isRegularExpression:)`.
     private func searchRequest(for query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions) -> SearchRequest {
         switch query.mode {
         case .text, .regularExpression:
-            .text(RuntimeInterfaceSearchQuery(
-                text: query.trimmedText,
-                matchMode: query.mode == .regularExpression ? .regularExpression : query.textMatchStyle.matchMode,
+            let searchText = query.textSearchText
+            return .text(RuntimeInterfaceSearchQuery(
+                text: searchText.text,
+                matchMode: searchText.matchMode,
                 isCaseSensitive: query.isCaseSensitive,
                 scope: .all,
                 resultLimit: max(0, Self.resultLimit - textMatchGroups.matchCount),
@@ -460,9 +464,10 @@ public final class FindSession {
                 imagePaths: imagePaths
             ))
         case .members:
-            .members(RuntimeMemberSearchQuery(
-                text: query.trimmedText,
-                matchMode: query.memberMatchStyle.matchMode,
+            let searchText = query.memberSearchText
+            return .members(RuntimeMemberSearchQuery(
+                text: searchText.text,
+                matchMode: searchText.matchMode,
                 kinds: query.memberKindFilter.kinds,
                 isCaseSensitive: query.isCaseSensitive,
                 resultLimit: max(0, Self.resultLimit - memberMatchGroups.matchCount),
@@ -470,9 +475,10 @@ public final class FindSession {
                 imagePaths: imagePaths
             ))
         case .ancestorTypes, .descendantTypes, .conformingTypes:
-            .relationships(RuntimeTypeRelationshipsQuery(
-                text: query.trimmedText,
-                matchMode: query.textMatchStyle.matchMode,
+            let searchText = query.relationshipSearchText
+            return .relationships(RuntimeTypeRelationshipsQuery(
+                text: searchText.text,
+                matchMode: searchText.matchMode,
                 relationship: query.mode.relationship ?? .ancestors,
                 isCaseSensitive: query.isCaseSensitive,
                 imagePaths: imagePaths

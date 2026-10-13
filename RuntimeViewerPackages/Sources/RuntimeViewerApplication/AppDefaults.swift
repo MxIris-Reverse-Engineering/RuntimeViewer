@@ -76,9 +76,11 @@ public final class AppDefaults: @unchecked Sendable {
         if let storageDirectoryURL {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directoryURL: storageDirectoryURL)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directoryURL: storageDirectoryURL)
+            _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directoryURL: storageDirectoryURL)
         } else {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directory: .applicationSupportDirectory)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directory: .applicationSupportDirectory)
+            _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directory: .applicationSupportDirectory)
         }
 
         // Not a bookmark concern, but it belongs to the same one-time rekeying
@@ -138,6 +140,13 @@ public final class AppDefaults: @unchecked Sendable {
     /// then by image path.
     @ResilientFileStorage
     public var objectBookmarksByScopeAndImagePath: [String: [String: [RuntimeObjectBookmark]]]
+
+    /// The Find navigator's recent queries, most recent first, keyed by
+    /// ``RuntimeBookmarkScope/bookmarkKey`` as the bookmarks are: a query
+    /// restores its scope, and the images a scope names belong to one source.
+    /// See `FindRecentQueries`.
+    @ResilientFileStorage
+    public var findRecentQueriesByScope: [String: [FindQuery]]
 }
 
 // MARK: - Bookmark migrations

@@ -34,7 +34,12 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let caseSensitiveButton = NSButton()
 
-    private let searchField = NSFilterSearchField()
+    /// Xcode's find field: text with find patterns among it, which a search sends as a regular
+    /// expression. Read with `findPatternComponents`; `stringValue` holds U+FFFC for each token.
+    private let searchField = NSFindPatternSearchField()
+
+    /// Builds the search field's menu — Insert Pattern and the recent queries — each time it opens.
+    private lazy var searchFieldMenuAdapter = FindQueryFieldMenuAdapter(queryField: searchField)
 
     private let scopeButton = FindScopeButton()
 
@@ -199,9 +204,12 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             // Xcode's field here, `IDEProgressSearchField`, is a `DVTSearchField` showing the
             // magnifying glass rather than the filter icon; its spinner is the field's `progress`.
             $0.usesFilterAppearance = false
-            // Return searches; typing does not, as in Xcode.
+            // Return searches; typing does not, and neither does inserting a pattern, as in Xcode.
             $0.sendsWholeSearchString = true
             $0.sendsSearchStringImmediately = false
+            $0.searchesImmediatelyAfterInsertingPattern = false
+            // AppKit's recent searches keep `stringValue` and lose the patterns; the field's menu
+            // lists the document's own.
             $0.maximumRecents = 0
         }
 
@@ -362,7 +370,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             // both pages share.
             caseSensitiveToggled: caseSensitiveButton.rx.click(with: \.state).asSignal().map { $0 == .on },
             scopeMenuChoiceSelected: scopeMenuChoiceSelected,
-            searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in searchField.stringValue },
+            searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in FindQueryTerm(components: searchField.findPatternComponents) },
+            recentQuerySelected: searchFieldMenuAdapter.recentQuerySelected,
+            clearRecentQueriesSelected: searchFieldMenuAdapter.clearRecentQueriesSelected,
             filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
             resultClicked: resultClicked,
             resultOpenedInNewTab: .merge(resultOpenedFromMenu, resultOpenedWithOption),
@@ -388,8 +398,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             // turns bold and takes the accent colour; off, it is regular and untinted.
             caseSensitiveButton.font = query.isCaseSensitive ? .boldSystemFont(ofSize: 11) : .systemFont(ofSize: 11)
             caseSensitiveButton.contentTintColor = query.isCaseSensitive ? .controlAccentColor : nil
-            if searchField.stringValue != query.text, searchField.currentEditor() == nil {
-                searchField.stringValue = query.text
+            if searchField.findPatternComponents != query.term.components, searchField.currentEditor() == nil {
+                searchField.findPatternComponents = query.term.components
             }
             memberKindPopUpButton.isHidden = !query.mode.hasMemberKinds
             if let kindIndex = FindMemberKindFilter.allCases.firstIndex(of: query.memberKindFilter), memberKindPopUpButton.indexOfSelectedItem != kindIndex {
@@ -411,6 +421,18 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             .map { Optional($0) }
             .drive(searchField.rx.placeholderString)
             .disposed(by: rx.disposeBag)
+
+        output.allowsPatternInsertion.driveOnNext { [weak self] allowsPatternInsertion in
+            guard let self else { return }
+            searchField.allowsPatternInsertion = allowsPatternInsertion
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.recentQueries.driveOnNext { [weak self] recentQueries in
+            guard let self else { return }
+            searchFieldMenuAdapter.recentQueries = recentQueries
+        }
+        .disposed(by: rx.disposeBag)
 
         output.scopeMenuItems.driveOnNext { [weak self] menuItems in
             guard let self else { return }

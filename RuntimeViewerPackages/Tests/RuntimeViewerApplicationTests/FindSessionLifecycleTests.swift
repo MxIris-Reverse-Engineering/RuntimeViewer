@@ -163,7 +163,7 @@ struct FindSessionLifecycleTests {
         }
         #expect(!rerunResults.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc }, "the old engine's rows stayed on screen")
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { !$0 }
-        #expect(session.query.text == "NSObject", "the query on the page changed")
+        #expect(session.query.term == "NSObject", "the query on the page changed")
         await oldEngine.stop()
         await newEngine.stop()
     }
@@ -189,7 +189,7 @@ struct FindSessionLifecycleTests {
 
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 10) { $0 }
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { !$0 }
-        #expect(session.query.text == "NSObject")
+        #expect(session.query.term == "NSObject")
         await engine.stop()
     }
 

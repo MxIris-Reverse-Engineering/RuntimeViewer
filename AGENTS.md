@@ -999,6 +999,7 @@ override func setupBindings(for viewModel: MyViewModel) {
 | `ScrollView()` | `NSScrollView()` |
 | `NSPopUpPathControl()` (AppKitPlus) | `NSPathControl()` for an Xcode-style path of menus (`Find ▸ Text ▸ Containing`) |
 | `NSFilterSearchField()` (AppKitPlus) | `NSSearchField()` above a list it filters — the field of a page's filter bar, a picker's filter field |
+| `NSFindPatternSearchField()` (AppKitPlus) | `NSSearchField()` for a query that takes find patterns (Digits, Any Word Characters…) among its text — the Find page's query field. Read `findPatternComponents`, never `stringValue`, which holds U+FFFC for each token |
 | `NSFilterControlBar()` (AppKitPlus) | an `HStackView` of buttons and a search field at the bottom of a sidebar page |
 | `final class XxxView: LayerBackedView` | `final class XxxView: NSView` (when it needs `cornerRadius` / border / `backgroundColor` / shadow) |
 
@@ -1010,6 +1011,7 @@ override func setupBindings(for viewModel: MyViewModel) {
 - Setting a field's `controlSize` also sets its `font`, to that size's system font, as Xcode does — in a bar, setting the bar's does. A field that needs another font sets it afterwards.
 - Work in progress shows as the field's own `progress`, never as a spinner laid over the field.
 - `NSPopUpPathControl` selects the chosen item before it tells its delegate. The Find page's mode path is the view model's to decide, so `FindModePathControlAdapter` puts the view model's path back in `popUpPathControl(_:didSelect:)` and only reports the choice. A path that an owner decides needs the same, or the control shows the bare chosen item for a moment.
+- The Find page's query field is an `NSFindPatternSearchField`, whose content is a `FindQueryTerm`. A term with find patterns goes to the engine as a regular expression bounded by the engine's own identifier boundaries (`RuntimeTextPattern.regularExpression(_:boundedAs:)`), never ICU's `\b`, so a match style means the same with patterns and without; patterns can be inserted in Text mode alone (`allowsPatternInsertion`). Its magnifying glass's menu — Insert Pattern and the recent queries, kept per source in `AppDefaults.findRecentQueriesByScope` — is built by `FindQueryFieldMenuAdapter`, the field's delegate. Background: `Documentations/Evolutions/0050-find-patterns-and-recent-queries.md`.
 
 **Layer-backed views** — any custom AppKit view that needs layer-level visuals (rounded corners, border, background color, shadow) MUST inherit `UIFoundationAppKit.LayerBackedView`, never raw `NSView` with hand-rolled `wantsLayer = true` + `layer?.cornerRadius / layer?.borderColor / layer?.backgroundColor = ....cgColor`. The base class already sets `wantsLayer + layerContentsRedrawPolicy = .onSetNeedsDisplay` and centralizes everything in `updateLayer()`, so:
 

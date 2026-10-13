@@ -22,8 +22,12 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let caseSensitiveToggled: Signal<Bool>
         /// A choice made in the scope button's menu.
         public let scopeMenuChoiceSelected: Signal<FindScopeMenuChoice>
-        /// Return in the search field: the text to search for.
-        public let searchCommitted: Signal<String>
+        /// Return in the search field: what it holds.
+        public let searchCommitted: Signal<FindQueryTerm>
+        /// A recent query chosen from the search field's menu, to run as it was.
+        public let recentQuerySelected: Signal<FindQuery>
+        /// Clear Recents chosen from the search field's menu.
+        public let clearRecentQueriesSelected: Signal<Void>
         /// The bottom filter bar, as typed.
         public let filterString: Driver<String>
         /// The row the user chose, to open in place.
@@ -52,6 +56,11 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         /// from the latest value each time it opens, as Xcode rebuilds its own.
         public let scopeMenuItems: Driver<[FindScopeMenuItem]>
         public let searchFieldPlaceholder: Driver<String>
+        /// Whether find patterns can be inserted into the search field: in Text mode alone.
+        public let allowsPatternInsertion: Driver<Bool>
+        /// The recent queries of the document's source, most recent first, for the search field's
+        /// menu.
+        public let recentQueries: Driver<[FindQuery]>
         public let nodes: Driver<[FindResultNode]>
         /// `nodes` with what to expand and select once the outline has them; drives the outline.
         public let presentation: Driver<FindResultsPresentation>
@@ -104,10 +113,25 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         }
         .disposed(by: rx.disposeBag)
 
-        input.searchCommitted.emitOnNext { [session] text in
+        input.searchCommitted.emitOnNext { [weak self] term in
+            guard let self else { return }
             var query = session.query
-            query.text = text
-            session.run(query)
+            query.term = term
+            run(query)
+        }
+        .disposed(by: rx.disposeBag)
+
+        // `-userDidSelectHistoricQuery:`: the whole query comes back — mode, term, match style,
+        // member kinds, case and scope — and runs at once.
+        input.recentQuerySelected.emitOnNext { [weak self] recentQuery in
+            guard let self else { return }
+            run(recentQuery)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.clearRecentQueriesSelected.emitOnNext { [weak self] in
+            guard let self else { return }
+            appDefaults.findRecentQueriesByScope[recentQueriesKey] = nil
         }
         .disposed(by: rx.disposeBag)
 
@@ -190,6 +214,15 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         }
         .distinctUntilChanged()
 
+        // The source's own list: another source's scopes name images this one may not have.
+        let recentQueries = Driver.combineLatest(
+            appDefaults.$findRecentQueriesByScope.asDriver(onErrorJustReturn: [:]),
+            documentState.$runtimeEngine.asDriver()
+        ) { recentQueriesByScope, runtimeEngine in
+            recentQueriesByScope[runtimeEngine.bookmarkScope.bookmarkKey] ?? []
+        }
+        .distinctUntilChanged()
+
         return Output(
             query: session.$query.asDriver(),
             modePath: session.$query.asDriver().map(FindModePathComponent.path(for:)).distinctUntilChanged(),
@@ -198,12 +231,31 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             scopeToolTip: scopeToolTip,
             scopeMenuItems: scopeMenuItems,
             searchFieldPlaceholder: session.$query.asDriver().map(\.mode.searchFieldPlaceholder),
+            allowsPatternInsertion: session.$query.asDriver().map(\.mode.supportsPatterns).distinctUntilChanged(),
+            recentQueries: recentQueries,
             nodes: nodes,
             presentation: presentation,
             summary: session.$summary.asDriver(),
             isSearching: session.$isSearching.asDriver(),
             focusSearchField: session.focusSearchFieldRelay.asSignal()
         )
+    }
+
+    // MARK: - Running
+
+    /// Runs `query` as the user asked for it, and records it among the recent queries
+    /// (`-[IDEFindNavigatorQueryParametersController initiateQuery]`). A search that runs again by
+    /// itself goes through the session alone and is not recorded.
+    private func run(_ query: FindQuery) {
+        session.run(query)
+        guard !query.isEmpty else { return }
+        let key = recentQueriesKey
+        appDefaults.findRecentQueriesByScope[key] = FindRecentQueries.recording(query, in: appDefaults.findRecentQueriesByScope[key] ?? [])
+    }
+
+    /// Where the recent queries of the document's source are kept: the key its bookmarks are under.
+    private var recentQueriesKey: String {
+        documentState.runtimeEngine.bookmarkScope.bookmarkKey
     }
 
     // MARK: - Scope
@@ -290,16 +342,19 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     }
 
     /// Where in the object's interface a hit or member sits, for the content
-    /// pane to scroll to; type rows and relationship rows carry no place.
+    /// pane to scroll to; type rows and relationship rows carry no place. A
+    /// hit is found again with what the search sent the engine, the regular
+    /// expression of a query with patterns included.
     private static func highlight(for node: FindResultNode, query: FindQuery) -> ContentHighlightRequest? {
         switch node.content {
         case .textMatch(let match):
+            let searchText = query.textSearchText
             return ContentHighlightRequest(
                 lineNumber: match.lineNumber,
                 lineText: match.lineText,
                 matchRangeInLine: match.matchRangeInLine,
-                query: query.trimmedText,
-                matchMode: query.mode == .regularExpression ? .regularExpression : query.textMatchStyle.matchMode,
+                query: searchText.text,
+                matchMode: searchText.matchMode,
                 isCaseSensitive: query.isCaseSensitive
             )
         case .member(let match):

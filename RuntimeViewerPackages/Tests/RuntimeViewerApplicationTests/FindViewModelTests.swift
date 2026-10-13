@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -21,7 +22,9 @@ struct FindViewModelTests {
     private let memberKindFilterSelectedRelay = PublishRelay<FindMemberKindFilter>()
     private let caseSensitiveToggledRelay = PublishRelay<Bool>()
     private let scopeMenuChoiceSelectedRelay = PublishRelay<FindScopeMenuChoice>()
-    private let searchCommittedRelay = PublishRelay<String>()
+    private let searchCommittedRelay = PublishRelay<FindQueryTerm>()
+    private let recentQuerySelectedRelay = PublishRelay<FindQuery>()
+    private let clearRecentQueriesSelectedRelay = PublishRelay<Void>()
     private let filterStringRelay = BehaviorRelay<String>(value: "")
     private let resultClickedRelay = PublishRelay<FindResultNode>()
     private let resultOpenedInNewTabRelay = PublishRelay<FindResultNode>()
@@ -781,6 +784,108 @@ struct FindViewModelTests {
         }
     }
 
+    // MARK: - Find patterns
+
+    @Test("a query with patterns finds what its regular expression matches, and a click highlights with that expression")
+    func patternQueryFindsAndHighlights() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        let word = try #require(NSFindPattern.standardPatternGroups.flatMap { $0 }.first { $0.title == "Any Word Characters" }).withIdentifier("word")
+        modePathChoiceSelectedRelay.accept(.textMatchStyle(.matchingWord))
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept(FindQueryTerm(components: NSFindPatternComponents([.text("NSMutable"), .pattern(word)])))
+        let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
+        let hits = nodes.flatMap(\.children).compactMap { node -> RuntimeInterfaceSearchMatch? in
+            if case .textMatch(let match) = node.content { return match }
+            return nil
+        }
+        #expect(!hits.isEmpty)
+        for hit in hits {
+            let matchedText = (hit.lineText as NSString).substring(with: NSRange(location: hit.matchRangeInLine.location, length: hit.matchRangeInLine.length))
+            #expect(matchedText.hasPrefix("NSMutable") && matchedText.count > "NSMutable".count, "“\(matchedText)” is not NSMutable and a word")
+        }
+
+        let hitNode = try #require(nodes.first?.children.first)
+        let routes = try await selectionRoutes(of: environment) {
+            resultClickedRelay.accept(hitNode)
+        }
+        let (_, highlight) = try #require(Self.highlightingPush(in: routes))
+        #expect(highlight.matchMode == .regularExpression)
+        #expect(highlight.query == RuntimeTextPattern.regularExpression(#"NSMutable(\w+)"#, boundedAs: .matchingWord))
+    }
+
+    @Test("patterns can be inserted in Text mode alone")
+    func patternsCanBeInsertedInTextModeAlone() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        #expect(try await nextValue(from: output.allowsPatternInsertion) == true)
+        for mode in FindMode.allCases where mode != .text {
+            modePathChoiceSelectedRelay.accept(.mode(mode))
+            #expect(try await nextValue(from: output.allowsPatternInsertion) { !$0 } == false, "\(mode)")
+            modePathChoiceSelectedRelay.accept(.mode(.text))
+            #expect(try await nextValue(from: output.allowsPatternInsertion) { $0 } == true)
+        }
+    }
+
+    // MARK: - Recent queries
+
+    @Test("Return records the query for the document's source, latest first, and only a query that searches something")
+    func returnRecordsTheQuery() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        #expect(try await nextValue(from: output.recentQueries).isEmpty)
+        searchCommittedRelay.accept("NSObject")
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept("NSString")
+        searchCommittedRelay.accept("   ")
+        let recentQueries = try await nextValue(from: output.recentQueries) { $0.count == 2 }
+        #expect(recentQueries == [FindQuery(text: "NSString", isCaseSensitive: true), FindQuery(text: "NSObject")])
+        try await settleMainQueue()
+        #expect(environment.appDefaults.findRecentQueriesByScope.keys.sorted() == [engine.bookmarkScope.bookmarkKey])
+    }
+
+    @Test("choosing a recent query runs it as it was — mode, term, styles, kinds, case and scope — and moves it first")
+    func choosingARecentQueryRunsIt() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let olderQuery = FindQuery(mode: .members, text: "frame", memberMatchStyle: .matchingWord, memberKindFilter: .kind(.objcProperty), isCaseSensitive: true, scope: .images([TestImages.foundation]))
+        let newerQuery = FindQuery(text: "NSObject")
+        environment.appDefaults.findRecentQueriesByScope = [engine.bookmarkScope.bookmarkKey: [newerQuery, olderQuery]]
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        recentQuerySelectedRelay.accept(olderQuery)
+        #expect(try await nextValue(from: output.query) { $0 == olderQuery } == olderQuery)
+        #expect(try await nextValue(from: output.recentQueries) { $0.first == olderQuery } == [olderQuery, newerQuery])
+        #expect(environment.documentState.findSession.results.query == olderQuery, "the restored query did not run")
+        _ = try await nextValue(from: output.isSearching, timeout: 60) { !$0 }
+    }
+
+    @Test("Clear Recents empties the source's list; another source's list is neither shown nor cleared")
+    func clearRecentsKeepsToTheSource() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let otherSourceQueries = [FindQuery(text: "elsewhere")]
+        environment.appDefaults.findRecentQueriesByScope = [
+            engine.bookmarkScope.bookmarkKey: [FindQuery(text: "here")],
+            "another source": otherSourceQueries,
+        ]
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        #expect(try await nextValue(from: output.recentQueries) == [FindQuery(text: "here")])
+        clearRecentQueriesSelectedRelay.accept(())
+        #expect(try await nextValue(from: output.recentQueries) { $0.isEmpty }.isEmpty)
+        #expect(environment.appDefaults.findRecentQueriesByScope == ["another source": otherSourceQueries])
+    }
+
     private func makeViewModel(in environment: ViewModelTestEnvironment) -> (FindViewModel<SidebarRootRoute>, FindViewModel<SidebarRootRoute>.Output) {
         let viewModel = environment.make {
             FindViewModel<SidebarRootRoute>(documentState: environment.documentState, router: router)
@@ -791,6 +896,8 @@ struct FindViewModelTests {
             caseSensitiveToggled: caseSensitiveToggledRelay.asSignal(),
             scopeMenuChoiceSelected: scopeMenuChoiceSelectedRelay.asSignal(),
             searchCommitted: searchCommittedRelay.asSignal(),
+            recentQuerySelected: recentQuerySelectedRelay.asSignal(),
+            clearRecentQueriesSelected: clearRecentQueriesSelectedRelay.asSignal(),
             filterString: filterStringRelay.asDriver(),
             resultClicked: resultClickedRelay.asSignal(),
             resultOpenedInNewTab: resultOpenedInNewTabRelay.asSignal(),

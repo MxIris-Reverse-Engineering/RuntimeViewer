@@ -3,7 +3,7 @@ import RuntimeViewerCore
 
 /// What the Find navigator looks for — the second component of its mode
 /// path (`Find ▸ Text ▸ Containing`), in the order Xcode lists its own.
-public enum FindMode: String, CaseIterable, Hashable, Sendable {
+public enum FindMode: String, CaseIterable, Hashable, Sendable, Codable {
     case text
     case regularExpression
     case ancestorTypes
@@ -43,6 +43,13 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable {
     /// the scope row the member kinds.
     public var hasMemberKinds: Bool { self == .members }
 
+    /// Whether find patterns can be inserted into the query field: in Text
+    /// alone, the one query Xcode declares `supportsPatterns` for
+    /// (`-[IDEFindNavigatorQueryParametersController supportsPatterns]`). The
+    /// patterns already in the field stay when the mode changes, as in Xcode,
+    /// and search in any mode.
+    public var supportsPatterns: Bool { self == .text }
+
     /// The relationship a relationship mode walks; `nil` for the others.
     public var relationship: RuntimeTypeRelationship? {
         switch self {
@@ -67,7 +74,7 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable {
 /// match styles. One choice serves all of those modes, as Xcode keeps one
 /// anchoring for every query: Matching Word picked in Text mode is still
 /// picked in Ancestor Types.
-public enum FindTextMatchStyle: String, CaseIterable, Hashable, Sendable {
+public enum FindTextMatchStyle: String, CaseIterable, Hashable, Sendable, Codable {
     case containing
     case matchingWord
     case startingWith
@@ -95,7 +102,7 @@ public enum FindTextMatchStyle: String, CaseIterable, Hashable, Sendable {
 /// The third path component in member mode: the text match styles, matched
 /// against member names under the text search's rules, plus a regular
 /// expression — which text mode offers as a mode of its own, as Xcode does.
-public enum FindMemberMatchStyle: String, CaseIterable, Hashable, Sendable {
+public enum FindMemberMatchStyle: String, CaseIterable, Hashable, Sendable, Codable {
     case containing
     case matchingWord
     case startingWith
@@ -124,7 +131,7 @@ public enum FindMemberMatchStyle: String, CaseIterable, Hashable, Sendable {
 }
 
 /// The member kinds, offered in the scope row while the mode is Members.
-public enum FindMemberKindFilter: Hashable, Sendable {
+public enum FindMemberKindFilter: Hashable, Sendable, Codable {
     case any
     case kind(RuntimeMemberKind)
 
@@ -147,7 +154,7 @@ public enum FindMemberKindFilter: Hashable, Sendable {
 }
 
 /// The images a search reads — the scope row's button.
-public enum FindScope: Hashable, Sendable {
+public enum FindScope: Hashable, Sendable, Codable {
     /// Every indexed image.
     case allIndexedImages
     /// The image the sidebar lists, `DocumentState.currentImageNode`, as it
@@ -193,9 +200,12 @@ public enum FindScope: Hashable, Sendable {
 }
 
 /// Everything the navigator sends to the engine for one search.
-public struct FindQuery: Hashable, Sendable {
+///
+/// `Codable` for the recent queries, which outlive the app.
+public struct FindQuery: Hashable, Sendable, Codable {
     public var mode: FindMode = .text
-    public var text: String = ""
+    /// What the query field holds: text, and the find patterns among it.
+    public var term: FindQueryTerm = FindQueryTerm()
     /// The match style of Text and the relationship modes, one for all of them.
     public var textMatchStyle: FindTextMatchStyle = .containing
     /// Kept apart from `textMatchStyle`: it can be a regular expression,
@@ -207,7 +217,7 @@ public struct FindQuery: Hashable, Sendable {
 
     public init(
         mode: FindMode = .text,
-        text: String = "",
+        term: FindQueryTerm = FindQueryTerm(),
         textMatchStyle: FindTextMatchStyle = .containing,
         memberMatchStyle: FindMemberMatchStyle = .containing,
         memberKindFilter: FindMemberKindFilter = .any,
@@ -215,7 +225,7 @@ public struct FindQuery: Hashable, Sendable {
         scope: FindScope = .allIndexedImages
     ) {
         self.mode = mode
-        self.text = text
+        self.term = term
         self.textMatchStyle = textMatchStyle
         self.memberMatchStyle = memberMatchStyle
         self.memberKindFilter = memberKindFilter
@@ -223,9 +233,42 @@ public struct FindQuery: Hashable, Sendable {
         self.scope = scope
     }
 
-    public var trimmedText: String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// A query for text alone, with no patterns.
+    public init(
+        mode: FindMode = .text,
+        text: String,
+        textMatchStyle: FindTextMatchStyle = .containing,
+        memberMatchStyle: FindMemberMatchStyle = .containing,
+        memberKindFilter: FindMemberKindFilter = .any,
+        isCaseSensitive: Bool = false,
+        scope: FindScope = .allIndexedImages
+    ) {
+        self.init(
+            mode: mode,
+            term: FindQueryTerm(text: text),
+            textMatchStyle: textMatchStyle,
+            memberMatchStyle: memberMatchStyle,
+            memberKindFilter: memberKindFilter,
+            isCaseSensitive: isCaseSensitive,
+            scope: scope
+        )
     }
 
-    public var isEmpty: Bool { trimmedText.isEmpty }
+    public var isEmpty: Bool { term.isEmpty }
+
+    /// What a text or regular expression search sends the engine.
+    public var textSearchText: FindSearchText {
+        term.searchText(literalMatchMode: textMatchStyle.matchMode, isRegularExpression: mode == .regularExpression)
+    }
+
+    /// What a member search sends the engine.
+    public var memberSearchText: FindSearchText {
+        term.searchText(literalMatchMode: memberMatchStyle.matchMode, isRegularExpression: memberMatchStyle == .regularExpression)
+    }
+
+    /// What a relationship search sends the engine, which runs a regular
+    /// expression over a type's qualified name.
+    public var relationshipSearchText: FindSearchText {
+        term.searchText(literalMatchMode: textMatchStyle.matchMode, isRegularExpression: false)
+    }
 }
