@@ -34,7 +34,13 @@ public final class RuntimeHelperClient: @unchecked Sendable {
 
     fileprivate static let shared = RuntimeHelperClient()
 
-    @Dependency(\.helperServiceManager) private var helperServiceManager
+    /// The helper service manager, resolved on the main actor; see the property of the same name
+    /// on `RuntimeInjectClient`, which has the same non-isolated callers.
+    @MainActor
+    private var helperServiceManager: HelperServiceManager {
+        @Dependency(\.helperServiceManager) var resolvedHelperServiceManager
+        return resolvedHelperServiceManager
+    }
 
     @Dependency(\.runtimeResourceLocator) private var runtimeResourceLocator
 

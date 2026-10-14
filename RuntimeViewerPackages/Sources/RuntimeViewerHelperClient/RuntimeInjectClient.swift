@@ -35,7 +35,20 @@ public final class RuntimeInjectClient: @unchecked Sendable {
 
     fileprivate static let shared = RuntimeInjectClient()
 
-    @Dependency(\.helperServiceManager) private var helperServiceManager
+    /// The helper service manager, resolved on the main actor.
+    ///
+    /// `\.helperServiceManager` builds its live value behind `MainActor.assumeIsolated`, so the key
+    /// may only be resolved on the main actor — and this client's methods are not isolated:
+    /// `RuntimeEngineManager`'s reconnect pass calls them from the cooperative pool. A stored
+    /// `@Dependency` read in one of them resolved the key on whatever thread the call was on, and
+    /// aborted the process whenever that read was the first in it. Isolating the accessor makes
+    /// every read hop to the main actor first, and the compiler holds new call sites to that. The
+    /// hop stays in the calling task, so `withDependencies` overrides still apply.
+    @MainActor
+    private var helperServiceManager: HelperServiceManager {
+        @Dependency(\.helperServiceManager) var resolvedHelperServiceManager
+        return resolvedHelperServiceManager
+    }
 
     @Dependency(\.runtimeResourceLocator) private var runtimeResourceLocator
 
