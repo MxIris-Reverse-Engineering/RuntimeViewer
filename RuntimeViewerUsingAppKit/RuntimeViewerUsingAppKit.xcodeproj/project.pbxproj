@@ -35,6 +35,7 @@
 		E9B10F040000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E040000000000000000 /* RuntimeViewerInjection */; };
 		E9C11D0A2FAB000000000001 /* RuntimeViewerCommandLineInterface in Frameworks */ = {isa = PBXBuildFile; productRef = E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */; };
 		E9C5E7A10000000000000001 /* RuntimeViewerCatalystService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E9C5E7A10000000000000002 /* RuntimeViewerCatalystService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E9C64C94307F26EA006EC990 /* LookInsideServer in Frameworks */ = {isa = PBXBuildFile; productRef = E9C64C93307F26EA006EC990 /* LookInsideServer */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed Catalyst Plugin */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E9CA7A1A0000000000000006 /* RuntimeViewerMobileServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */; };
@@ -409,6 +410,7 @@
 		E9432FDF2C0D614900362862 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				E9C64C94307F26EA006EC990 /* LookInsideServer in Frameworks */,
 				E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */,
 				E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
 				E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */,
@@ -605,6 +607,7 @@
 				E9B10E020000000000000000 /* RuntimeViewerInjection */,
 				E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */,
 				E910124C38FF8B6334251802 /* Sparkle */,
+				E9C64C93307F26EA006EC990 /* LookInsideServer */,
 			);
 			productName = RuntimeViewerUsingAppKit;
 			productReference = E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */;
@@ -809,6 +812,7 @@
 			mainGroup = E9432FD92C0D614900362862;
 			packageReferences = (
 				E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				E9C64C92307F26EA006EC990 /* XCRemoteSwiftPackageReference "LookInside-Release" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = E9432FE32C0D614900362862 /* Products */;
@@ -1335,6 +1339,7 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				EXCLUDED_SOURCE_FILE_NAMES = "LookInsideServer*";
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
@@ -2288,6 +2293,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		E9C64C92307F26EA006EC990 /* XCRemoteSwiftPackageReference "LookInside-Release" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/LookInsideApp/LookInside-Release";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.1;
+			};
+		};
 		E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -2367,6 +2380,11 @@
 		E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCommandLineInterface;
+		};
+		E9C64C93307F26EA006EC990 /* LookInsideServer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E9C64C92307F26EA006EC990 /* XCRemoteSwiftPackageReference "LookInside-Release" */;
+			productName = LookInsideServer;
 		};
 		E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;
