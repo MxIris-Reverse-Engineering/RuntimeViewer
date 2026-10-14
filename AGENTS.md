@@ -775,6 +775,8 @@ extension DependencyValues {
 
 `@DependencyEntry` 生成的 key 是 `nonisolated`。因此，`@MainActor` singleton 的 `liveValue` 必须像上例一样使用 `MainActor.assumeIsolated`；这类依赖只允许在既有的 main-actor 调用路径中首次解析。非 `@MainActor` singleton 直接使用 `@DependencyEntry(liveValue: MyService.shared)`，不再手写 `DependencyKey`。
 
+**非隔离的类型（普通 class、actor、`nonisolated` 成员）不要用存储属性 `@Dependency` 持有这类依赖。** 存储属性在哪个线程被读，就在哪个线程解析；只要那是进程里第一次读，`MainActor.assumeIsolated` 就会让进程中止。而「别处已经先在主线程取过」只是启动顺序的巧合，换个顺序就崩——`15ed432a` 修过 `\.settings` 的一处，2026-10-14 又在 `RuntimeInjectClient` / `RuntimeHelperClient` 上崩了一次（`Documentations/ResolvedIssues/2026-10-14-helper-service-manager-resolved-off-main-actor.md`）。改成 `@MainActor` 的计算属性、在 getter 里声明 `@Dependency`（参照 `RuntimeInjectClient.helperServiceManager`）：每个读都先跳到主线程，新调用点漏了 `await` 编译不过；跳转留在同一个任务里，`withDependencies` 的覆盖照常生效。
+
 **调用方**始终通过 `@Dependency` 使用：
 
 ```swift
