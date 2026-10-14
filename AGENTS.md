@@ -67,6 +67,20 @@ up from either shell's own bundle (`Contents/XPCServices/…` and
 lacks it; the app's copy covers macOS and Mac Catalyst alike, so the Catalyst
 processes load it too. Moving the plugin, or a shell, changes those paths.
 
+**Running the app from Xcode needs one Xcode default per machine.** While Xcode debugs the app it
+also attaches to the app's embedded XPC services and hands them the app's injected libraries,
+including the macOS view-debugger library, which cannot load in a Mac Catalyst process (dyld:
+`Symbol not found: _OBJC_CLASS_$_ABPeoplePickerView`). The Catalyst service dies before `main`, the
+debugger keeps the process, and "My Mac (Mac Catalyst)" never appears — with no error, since the app's
+`hello` is simply never answered. Xcode does pick the Catalyst variant of that library per launch session
+from the binary's Mach-O platform, but the services reuse the app session's choice, and no setting
+reaches a single service. Set
+`defaults write com.apple.dt.Xcode DBGViewDebuggerInsertDylibOnDemand -bool YES` instead: Xcode stops
+inserting the view debugger at launch and loads it when a view hierarchy is captured, so Debug View
+Hierarchy keeps working. The README's Troubleshooting section says the same for contributors.
+Background, with the decompiled evidence:
+`Documentations/ResolvedIssues/2026-10-14-xcode-view-debugger-stops-catalyst-service.md`.
+
 **The simulator payload has a target of its own.** `RuntimeViewerSimulatorServer`
 compiles the same synchronized `RuntimeViewerServer/` folder and links the same
 packages as `RuntimeViewerMobileServer`, which stays `SDKROOT = auto` because

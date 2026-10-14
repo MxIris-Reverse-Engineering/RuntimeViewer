@@ -31,7 +31,7 @@ App 里的「My Mac (Mac Catalyst)」今天经特权 helper daemon 拉起 `Runti
 - **CLI**：`--source catalyst` 找不到时的提示改成两种 host 都成立的说法；`SourceCatalogTests`、`SourceCommandTests` 等 3 个套件 22 个测试全过。
 - **App**：`RuntimeViewer macOS` 的 Debug-arm64e 冷编与改完最后几处后的增量编译都通过。产物检查：service 平台 `MACCATALYST`（minos 18.0），`CFBundleIdentifier` 与 App `Info.plist` 的 `RuntimeViewerCatalystServiceBundleIdentifier` 同为 `dev.JH.RuntimeViewerCatalystService.arm64e`，`XPC!` / `ServiceType = Application`；plugin 只在 App 的 `PlugIns`（helper 里已没有），rpath 依次是 `/usr/lib/swift` 与 `@loader_path/../../../../Frameworks`，后者指向的 `libswiftCompatibilitySpan.dylib` 存在、含 macOS 与 Mac Catalyst 两个平台；service、plugin、helper 同一 team 签名、开着 hardened runtime，`codesign --verify --deep --strict` 通过。
 
-还没做、需要用户的：在真实 App 里打开「My Mac (Mac Catalyst)」并确认镜像列表正常、进程里出现 `RuntimeViewerCatalystService`；`kill` 掉 service 看引擎留在菜单、文档退回镜像列表、再次请求时自动重连；Release 归档与 Developer ID 签名下 plugin 能否载入（库校验）；macOS 15 实机。
+用户已在真实 App 里看到 service 拉起（从 Xcode 运行要先设 `DBGViewDebuggerInsertDylibOnDemand`，见决策日志末行），设好后回复「可以了」。还没做、需要用户的：`kill` 掉 service 看引擎留在菜单、文档退回镜像列表、再次请求时自动重连；Release 归档与 Developer ID 签名下 plugin 能否载入（库校验）；macOS 15 实机。
 
 文档同批更新 `AGENTS.md`、`CommunicationAndEngineArchitecture.md`、术语表、CLI 指南与 agent 插件 skill（`catalyst` 来源在 App 运行时不再需要 daemon，插件升到 1.0.2），实验 README 标注已落地，`RunScript.sh` / `ArchiveScript.sh` 的注释改为三个非 macOS 产物。
 
@@ -52,3 +52,4 @@ App 里的「My Mac (Mac Catalyst)」今天经特权 helper daemon 拉起 `Runti
 | 2026-10-14 | Core 测试先红后绿 | 通信层改动撤掉时，新测试在 0.5 秒内以 `connectionInvalid` 失败（旧代码把 `.xpcService` 凭证忽略，走了 daemon）；恢复后通过 |
 | 2026-10-14 | 状态改为 Implemented，落地编号 0051，合进本地 `next`（不推送） | 用户：「合并到next不推送」。编号取 `origin/main`、`origin/next` 与本地 `next` 上的最大号 0050 加一。收尾时的两项判断：①配套文档——不另写实现说明，形状与契约（谁走哪条路由 `Info.plist` 决定、两个外壳只加载同一个 plugin、走 service 时不观察引擎）已写进 `CommunicationAndEngineArchitecture.md` §3.6 与 §7.1 和 `AGENTS.md`；②术语——新增「Catalyst service」，改了「Catalyst helper」，都在术语表。仍待用户做「验证」一段末尾列的人工验收 |
 | 2026-10-14 | 修掉合入后启动即崩的问题 | 用户合入后启动 App，「重连已注入进程」在线程池上第一次取 `\.helperServiceManager`，`MainActor.assumeIsolated` 中止进程。根因在 `RuntimeInjectClient` / `RuntimeHelperClient` 用存储属性在非隔离方法里读这个键；本提案第 6 条让走 service 的 App 不再调 `observeDaemonAvailability()`，拿掉了它顺带在主线程做的那次解析，问题才暴露。两个客户端改用 `@MainActor` 计算属性，退出测试先红后绿；经过与同类排查见 `ResolvedIssues/2026-10-14-helper-service-manager-resolved-off-main-actor.md` |
+| 2026-10-14 | 从 Xcode 运行要设 Xcode 的 user default `DBGViewDebuggerInsertDylibOnDemand`，不改 scheme | 用户在 Xcode 里运行时看得到 service 进程、看不到引擎：Xcode 附加 service 时把 App 的 macOS 版视图调试库一起注入，Catalyst 进程里缺符号，dyld 在 `main` 前中止。逆向确认 Xcode 按会话二进制的平台选库、service 沿用 App 的结论，没有按 service 的设置；这个开关让视图调试库改为按需载入，两个 service 照样能自动附加调试器，主 App 的视图调试也保住。用户设好后回复「可以了」，要求写进文档与 README。见 `ResolvedIssues/2026-10-14-xcode-view-debugger-stops-catalyst-service.md` |

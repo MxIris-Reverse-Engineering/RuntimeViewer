@@ -131,7 +131,14 @@ Runtime Viewer uses [Sparkle](https://sparkle-project.org/) for automatic update
 
 ### Troubleshooting
 
-If Catalyst or code-injected applications don't appear in the directory list, try restarting the application.
+- If Catalyst or code-injected applications don't appear in the directory list, try restarting the application.
+- **Running a source build from Xcode:** if **My Mac (Mac Catalyst)** never appears, Xcode's view debugger is the cause. While Xcode debugs the app it also attaches to the app's embedded XPC services and injects its macOS view-debugging library into them, and that library cannot load into the Mac Catalyst runtime service, which then stops before it starts. Run this once, then start the debug session again:
+
+  ```bash
+  defaults write com.apple.dt.Xcode DBGViewDebuggerInsertDylibOnDemand -bool YES
+  ```
+
+  Xcode then loads the view debugger only when you capture a view hierarchy, so **Debug View Hierarchy** keeps working. Release builds and builds launched outside Xcode are not affected.
 
 ## Requirements
 
