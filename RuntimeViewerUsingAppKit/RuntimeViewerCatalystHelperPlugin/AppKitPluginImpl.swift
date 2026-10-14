@@ -20,6 +20,10 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
 
     private var engineStateSubscription: AnyCancellable?
 
+    /// What the XPC service serves its engine through; kept for the life of
+    /// the process.
+    private var serviceHost: RuntimeLocalRuntimeServiceHost?
+
     override required init() {
         super.init()
         // The helper is the fourth executable entry point that has to pick the
@@ -31,15 +35,6 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
         #if RUNTIMEVIEWER_ARM64E
         runtimeViewerIsARM64EVariant = true
         #endif
-        NSApplication.shared.setActivationPolicy(.prohibited)
-        if let UINSWindow = objc_getClass("UINSWindow") as? AnyClass {
-            let m1 = class_getInstanceMethod(UINSWindow, #selector(NSWindow.makeKeyAndOrderFront(_:)))
-            let m2 = class_getInstanceMethod(UINSWindow, #selector(NSObject.rvch_makeKeyAndOrderFront(_:)))
-            if let m1, let m2 {
-                method_exchangeImplementations(m1, m2)
-            }
-        }
-        NotificationCenter.default.addObserver(self, selector: #selector(setupWindow(_:)), name: Notification.Name("_NSWindowWillBecomeVisible"), object: nil)
     }
 
     @objc func setupWindow(_ notification: Notification) {
@@ -49,6 +44,8 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
     }
 
     func launch() {
+        hideApplication()
+
         // Before the engine is built, because the injection commands are
         // installed as its connection is set up. The helper cannot inject
         // anything — the Mac injects through the privileged helper daemon, and
@@ -74,6 +71,72 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
                 Self.terminate()
             }
         }
+    }
+
+    func runService() {
+        // Before the engine is built, for the reason given in `launch()`.
+        RuntimeInjection.install()
+
+        // Nothing in the service is a UIKit application, so it starts without
+        // UIKit and the hundreds of images behind it, and its image list would
+        // come out shorter than the helper application's. Loading UIKit once,
+        // before the engine takes its first look, starts the service where the
+        // helper application starts.
+        if dlopen("/System/Library/Frameworks/UIKit.framework/UIKit", RTLD_NOW) == nil {
+            let reason = dlerror().map { String(cString: $0) } ?? "unknown error"
+            Self.logger.error("Mac Catalyst service could not load UIKit: \(reason, privacy: .public)")
+        }
+
+        // The same job as the local-runtime service, so the same host: an
+        // in-process engine served on this service's listener. The app's
+        // client engine is `.macCatalystClient`; which process answers it is
+        // the transport's business.
+        let runtimeEngine = RuntimeEngine(source: .local, engineID: "catalyst-runtime-service.\(ProcessInfo.processInfo.processIdentifier)")
+        self.runtimeEngine = runtimeEngine
+        let serviceHost: RuntimeLocalRuntimeServiceHost
+        do {
+            serviceHost = RuntimeLocalRuntimeServiceHost(engine: runtimeEngine, connection: try RuntimeXPCServiceListenerConnection.embeddedService())
+        } catch {
+            // Without a listener there is no service; let launchd see a clean failure.
+            Self.logger.error("Mac Catalyst service could not create its listener: \(error, privacy: .public)")
+            exit(EXIT_FAILURE)
+        }
+        self.serviceHost = serviceHost
+
+        // Every handler has to be in place before the listener activates, and
+        // `activate()` is `xpc_main`, which parks the main thread for good. So
+        // the asynchronous set-up runs off the main thread while the main
+        // thread waits for it, the way the local-runtime service's `main.swift`
+        // does it.
+        let setupFinished = DispatchSemaphore(value: 0)
+        Task.detached {
+            do {
+                try await serviceHost.start()
+            } catch {
+                Self.logger.error("Mac Catalyst service could not start its runtime engine: \(error, privacy: .public)")
+                exit(EXIT_FAILURE)
+            }
+            setupFinished.signal()
+        }
+        setupFinished.wait()
+
+        serviceHost.activate()
+    }
+
+    /// Keeps the helper application out of sight. As a UIKit application it
+    /// would show a window and a Dock icon; it is a background process. Only
+    /// the helper application needs this — the XPC service has no
+    /// application to hide.
+    private func hideApplication() {
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        if let windowClass = objc_getClass("UINSWindow") as? AnyClass {
+            let originalMethod = class_getInstanceMethod(windowClass, #selector(NSWindow.makeKeyAndOrderFront(_:)))
+            let replacementMethod = class_getInstanceMethod(windowClass, #selector(NSObject.rvch_makeKeyAndOrderFront(_:)))
+            if let originalMethod, let replacementMethod {
+                method_exchangeImplementations(originalMethod, replacementMethod)
+            }
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(setupWindow(_:)), name: Notification.Name("_NSWindowWillBecomeVisible"), object: nil)
     }
 
     /// Exits once the app side goes away. The daemon terminates the helper

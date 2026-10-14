@@ -3,7 +3,7 @@
 两个最小实验工程，2026-10-09 在 Xcode 26.6 上跑过。它们回答两个问题：
 
 1. **Mac Catalyst 版的 XPC service 能不能嵌在 macOS app 里用？**（`project.yml` + `build.sh`）
-   这是为「把 `RuntimeViewerCatalystHelper.app` 换成 XPC service」做的可行性验证。结论是能，但迁移还没开始，见文末。
+   这是为「把 `RuntimeViewerCatalystHelper.app` 换成 XPC service」做的可行性验证。结论是能，主工程已经这样改了：App 用 `RuntimeViewerCatalystService`，命令行工具的独立 host 保留 helper App，见文末。
 2. **Catalyst 产物和 iOS Simulator 产物能不能作为 macOS app 的普通 target 依赖，在一次 macOS destination 的构建里编出来？**（`project-single-build.yml`）
    结论是能，主工程已经这样改了，见 `AGENTS.md` 的「Embedded non-macOS products」。
 
@@ -66,15 +66,15 @@ vtool -show-build <可执行文件>   # 看每个产物的 platform
 
 **和现在的 helper 有一处差别**：service 刚启动时只有 348 个镜像，UIKitCore 和 AppKit 都还没载入。换成 XPC service 后，「My Mac (Mac Catalyst)」一开始列出的镜像会比现在少。启动时先 `dlopen` 一次 UIKit 就能补上，上表已经证明这样做没问题。
 
-## 如果要把 helper 换成 XPC service
+## 把 helper 换成 XPC service
 
-能省掉的东西：helper 不再经特权 helper daemon 拉起和握手，launchd 按 app 实例查找 service，Debug / Debug-arm64e / Release 三个变体不会连错 daemon（`Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md` 那类问题会消失）；启动前杀旧实例、15 秒轮询、app 退出后自行退出都交给 launchd；service 没有 `UIApplication`，藏窗口和 Dock 图标的 hack 可以删掉。连接代码可以照着 `RuntimeViewerLocalRuntimeService` 写。
+**2026-10-14 起已落地**，设计与取舍见 `Documentations/Evolutions/0051-catalyst-xpc-service.md`。下面是当初实验后的分析，保留作记录，括号里是落地时的处理。
+
+能省掉的东西：helper 不再经特权 helper daemon 拉起和握手，launchd 按 app 实例查找 service，Debug / Debug-arm64e / Release 三个变体不会连错 daemon（`Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md` 那类问题会消失）；启动前杀旧实例、15 秒轮询、app 退出后自行退出都交给 launchd；service 没有 `UIApplication`，藏窗口和 Dock 图标的 hack 用不上（这段 hack 从插件的 `init()` 挪进了 helper 专用的 `launch()`，helper 还在用）。连接代码可以照着 `RuntimeViewerLocalRuntimeService` 写（落地时服务端直接复用了它的 `RuntimeLocalRuntimeServiceHost`）。
 
 API 方面：service 这边要用的 `xpc_main`、`NSXPCListener.service()`、`XPCListener(service:)` 在 Catalyst 上都可用。`NSXPCConnection(serviceName:)` 在 Catalyst 上不可用，但发起连接的是 macOS app，不受影响。
 
-还没解决的：
+当时没解决的：
 
-- **命令行工具，这是硬冲突**。app 没在运行时，`runtime-viewer-cli` 会经 daemon 从已安装的 app 里拉起 Catalyst helper。XPC service 只有包含它的那个 app 能找到，命令行工具的 main bundle 不是 app，找不到它（`Documentations/Evolutions/draft-local-runtime-xpc-service.md` 里有同样的结论）。要么给命令行工具保留 `.app` 版 helper，等于维护两条路径；要么接受命令行工具单独运行时没有 Catalyst 来源。app 在运行时，命令行工具仍能通过 app 拿到 Catalyst 引擎。
-- **正式签名没测**。实验用的是 ad-hoc 签名，关掉了 hardened runtime，也只编了 arm64。换成 Developer ID 签名后，插件和用户选的镜像能不能载入要再确认，可能要像 `RuntimeViewerLocalRuntimeService` 那样加 `disable-library-validation` entitlement。
-
-迁移属于架构改动，要先写完整档提案，第一个要定的就是命令行工具那条路怎么处理。
+- **命令行工具，这是硬冲突**。app 没在运行时，`runtime-viewer-cli` 会经 daemon 从已安装的 app 里拉起 Catalyst helper。XPC service 只有包含它的那个 app 能找到，命令行工具的 main bundle 不是 app，找不到它（`Documentations/Evolutions/draft-local-runtime-xpc-service.md` 里有同样的结论）。要么给命令行工具保留 `.app` 版 helper，等于维护两条路径；要么接受命令行工具单独运行时没有 Catalyst 来源。app 在运行时，命令行工具仍能通过 app 拿到 Catalyst 引擎。（选了前者：helper App 留给独立 host，两个外壳都只加载同一个插件，维护的只是两个几行的外壳。）
+- **正式签名没测**。实验用的是 ad-hoc 签名，关掉了 hardened runtime，也只编了 arm64。换成 Developer ID 签名后，插件和用户选的镜像能不能载入要再确认，可能要像 `RuntimeViewerLocalRuntimeService` 那样加 `disable-library-validation` entitlement。（仍然待验证：service 的 entitlements 与 helper 一样为空，库校验开着，Catalyst 来源能载入什么与 helper 相同。）

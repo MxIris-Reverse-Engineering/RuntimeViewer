@@ -9,15 +9,16 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 
 **Workspace preference**: Before running any `xcodebuild` / `swift build` / `swift test`, check whether `../MxIris-Reverse-Engineering.xcworkspace` (sibling of this repo) exists. If it does, **use that workspace** via `xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme <scheme> ...` — it wires this repo together with local checkouts of MachOKit / MachOObjCSection / MachOSwiftSection / swift-capstone / swift-demangling / swift-semantic-string / swift-syntax that may contain in-progress fixes not yet published upstream. Building against the remote SPM resolution can hit stale errors (e.g. the MachOSwiftSection `@Mutex` macro expansion bug) that the workspace's local checkout already fixes. Only fall back to the standalone commands below when the workspace is absent.
 
-**Embedded non-macOS products**: the app embeds two products that are not
-macOS — the Mac Catalyst helper and the iOS Simulator injection payload. **Both
-are ordinary target dependencies of the app.** Building `RuntimeViewer macOS` —
-in the GUI, through `RunScript.sh` or through `ArchiveScript.sh` — builds them in
-the app's configuration, and the app's copy phases embed the built products.
-Nothing is built separately or staged.
+**Embedded non-macOS products**: the app embeds three products that are not
+macOS — the Mac Catalyst service, the Mac Catalyst helper and the iOS Simulator
+injection payload. **All three are ordinary target dependencies of the app.**
+Building `RuntimeViewer macOS` — in the GUI, through `RunScript.sh` or through
+`ArchiveScript.sh` — builds them in the app's configuration, and the app's copy
+phases embed the built products. Nothing is built separately or staged.
 
 | Product | Target | Platform settings | Built into | Embedded by, at |
 |---------|--------|-------------------|------------|-----------------|
+| Catalyst service | `RuntimeViewerCatalystService` | `SDKROOT = macosx`, `SDK_VARIANT = iosmac` | `<configuration>-maccatalyst/` | `Embed XPC Services`, `Contents/XPCServices/` |
 | Catalyst helper | `RuntimeViewerCatalystHelper` | `SDKROOT = macosx`, `SDK_VARIANT = iosmac` | `<configuration>-maccatalyst/` | `Embed Catalyst Helpers`, `Contents/Applications/` |
 | Simulator payload | `RuntimeViewerSimulatorServer` (in `RuntimeViewerServer.xcodeproj`) | `SDKROOT = iphonesimulator` | `<configuration>-iphonesimulator/` | `Embed RuntimeViewerMobileServer Framework`, `Contents/Resources/` |
 
@@ -29,19 +30,24 @@ the usual Catalyst spelling, `SDKROOT = iphoneos` with
 is Mac Catalyst, and under the app's macOS destination it builds an `iphoneos`
 product instead. Xcode's build settings editor does not show `SDK_VARIANT` at
 all, so these are edited in the project file. All three configurations of the
-helper and all four of the payload target carry them, along with:
+service and of the helper, and all four of the payload target, carry them, along
+with:
 
-- `SKIP_INSTALL = YES`, so archiving the app does not also install the helper or
-  the payload as a product of its own — that would make the archive a generic
-  one, which `-exportArchive` refuses. Exporting the app re-signs both for
-  Developer ID along with everything else.
+- `SKIP_INSTALL = YES`, so archiving the app does not also install the service,
+  the helper or the payload as a product of its own — that would make the archive
+  a generic one, which `-exportArchive` refuses. Exporting the app re-signs them
+  for Developer ID along with everything else.
 - On the helper, `RUNTIME_VIEWER_SERVICE_NAME`, per configuration (`com.mxiris…`
   for Release, `dev.mxiris…` for Debug, `dev.arm64e.mxiris…` for Debug-arm64e).
-  It must match the app's: the helper reaches the app through the helper daemon
-  of that name, and a helper on another daemon never finds the app's endpoint,
+  It must match the app's: the helper reaches its host through the helper daemon
+  of that name, and a helper on another daemon never finds the host's endpoint,
   so the Catalyst engine loads forever. Building both in one configuration keeps
   them in step — **a new configuration needs the name on the helper too**.
   Background: `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
+  The service needs no such name: launchd finds it by bundle identifier inside
+  the app, never through the daemon. A new configuration gives it a bundle
+  identifier and sets `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER` in the
+  app's xcconfig to match, the way the local-runtime service is done.
 
 Xcode's build settings editor shows the payload target's Base SDK as
 "iphonesimulator (SDK not found)". That is the editor only: its Base SDK pop-up
@@ -49,9 +55,17 @@ offers no simulator SDK, while the build resolves `iphonesimulator` normally.
 Leave it — picking any SDK in that pop-up overwrites `SDKROOT`, and the payload
 then builds for the wrong platform without an error.
 
-`RuntimeViewerCatalystHelperPlugin`, the code the helper loads, is a plain macOS
-bundle: it builds into `<configuration>/` and the helper's `Embed PlugIns` phase
-copies it in.
+`RuntimeViewerCatalystHelperPlugin`, the code both Catalyst shells load, is a
+plain macOS bundle: it builds into `<configuration>/`, and the app's
+`Embed Catalyst Plugin` phase copies it into `Contents/PlugIns/`. **The app ships
+one copy, not one per shell** — the plugin is about 44 MB in Release, the
+service and the helper are kilobytes — and `AppKitBridge` finds it two levels
+up from either shell's own bundle (`Contents/XPCServices/…` and
+`Contents/Applications/…` both sit below `Contents`). Its run path
+`@loader_path/../../../../Frameworks` is the app's `Frameworks`, which is where
+`libswiftCompatibilitySpan.dylib` comes from on a system whose `/usr/lib/swift`
+lacks it; the app's copy covers macOS and Mac Catalyst alike, so the Catalyst
+processes load it too. Moving the plugin, or a shell, changes those paths.
 
 **The simulator payload has a target of its own.** `RuntimeViewerSimulatorServer`
 compiles the same synchronized `RuntimeViewerServer/` folder and links the same
@@ -71,9 +85,10 @@ and `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework`, are still
 gitignored for checkouts that predate the change; nothing reads or writes them.
 A build phase that built both from inside the app's build was tried and
 withdrawn before this; see evolution 0015. `Experiments/CatalystXPCServiceProbe`
-reproduces both recipes in a minimal project, and also shows that a Mac Catalyst
-XPC service embedded in a macOS app launches and works — read its README before
-turning the helper into one.
+reproduces both recipes in a minimal project, and also showed that a Mac Catalyst
+XPC service embedded in a macOS app launches and works, which is what
+`RuntimeViewerCatalystService` is built on; its README records what was
+measured.
 
 **The jailbroken iOS variant embeds the payload from `RuntimeViewerMobileServer`
 directly.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so the
@@ -210,7 +225,8 @@ the same flag. Background:
 **Build Schemes**:
 - `RuntimeViewer macOS` — main app; Debug-arm64e via `RunScript.sh`, Release archives via `ArchiveScript.sh`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper on its own; building the main app builds
-  it as a dependency, so this scheme is only for working on the helper
+  it as a dependency, so this scheme is only for working on the helper. It no longer builds the
+  plugin, which belongs to the app now; the Catalyst service has no scheme of its own
 - `RuntimeViewerUsingAppKit` — plain Debug builds of the AppKit app target
 - `RuntimeViewerCommandLineTool` — the copy of `runtime-viewer-cli` embedded in the app bundle.
   The target is named after the scheme, not after its product (`PRODUCT_NAME` is pinned to
@@ -397,16 +413,19 @@ The project uses three Swift Package Manager packages:
   indexes an image itself.** `RuntimeEngine.local` decides where its work happens from the process's
   own `Info.plist`: the app's names the service it embeds under
   `RuntimeViewerLocalRuntimeServiceBundleIdentifier`, so the app's `.local` forwards to it, while the
-  service itself, the standalone CLI host, the Catalyst helper and the tests (no key) stay in
+  service itself, the standalone CLI host, the Catalyst helper and service and the tests (no key) stay in
   process — launchd only finds an embedded service inside the calling process's own bundle, so the
   bundle is the configuration; nothing is set before first use. The "Load Frameworks…" picker goes
   through `engine.loadImage(at:)`, not `Bundle.load`. A service crash costs the loaded images, not
   the app: the connection reattaches on its own, the engine only sees `.disconnected` then
   `.connected`, documents walk back to the image list and the app posts a notification. **All
-  XPC-service code lives in two places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
-  (transport, `hello`, reattach) and `RuntimeViewerCore/LocalRuntimeService/` (`Info.plist` key and
-  credential, the service-side host); `RuntimeEngine` and `RuntimeEngineManager` know nothing about
-  XPC, keep it that way. **The service runs at the priority of the requests waiting on it.** launchd
+  XPC-service code lives in a few named places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
+  (transport, `hello`, reattach) plus the two `.xpcService` branches of `RuntimeCommunicator`;
+  `RuntimeViewerCore/LocalRuntimeService/` (this service's `Info.plist` key and credential, and the
+  service-side host both services run); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift`
+  (the Catalyst service's key and credential); and the two service entry points. `RuntimeEngine` and
+  `RuntimeEngineManager` know nothing about XPC — they hand an opaque credential on — keep it that
+  way. **The service runs at the priority of the requests waiting on it.** launchd
   starts it as an adaptive job, which sits in the Darwin background band — priority 4, efficiency
   cores only — whenever no request from an app that donates importance is outstanding, and an app in
   App Nap donates nothing: about thirty seconds after the user switches away, work the app is
@@ -417,7 +436,23 @@ The project uses three Swift Package Manager packages:
   `Documentations/Evolutions/0037-local-runtime-xpc-service.md`; the transport:
   `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
   `Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`
-- `RuntimeViewerCatalystHelper` — Mac Catalyst support bridge
+- `RuntimeViewerCatalystService` — the Mac Catalyst XPC service the app's "My Mac (Mac Catalyst)"
+  engine runs in, embedded at `Contents/XPCServices/`. Like the local-runtime service, the process's
+  own `Info.plist` picks the path: the app's names it under `RuntimeViewerCatalystServiceBundleIdentifier`
+  (`MacCatalystRuntimeService` in `RuntimeViewerCatalystExtensions`), so the app's `.macCatalystClient`
+  engine connects to it directly — no helper daemon, no handshake polling, and a crash is a
+  reattach, not a lost engine, because the manager does not observe that engine any more than it
+  observes `.local`. A process without the key — the standalone CLI host — keeps launching
+  `RuntimeViewerCatalystHelper`. Being an XPC service, it also runs at the priority of the requests
+  waiting on it, exactly as the local-runtime service above does — the helper app, an application of
+  its own, never did — so the same App Nap rule covers work on the Catalyst engine. The service has
+  no "restarted" notification yet. Background: `Documentations/Evolutions/0051-catalyst-xpc-service.md`
+- `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
+  the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
+  only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
+  `Contents/PlugIns` (`AppKitBridge`, compiled into both); the plugin does the work — `launch()` for
+  the helper, `runService()` for the service. Changes to what the Catalyst runtime does go into the
+  plugin, not into the shells
 - `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
   entitlements carry `disable-library-validation`, and its deployment target has to track the app's
@@ -574,12 +609,13 @@ The five injection commands (`injectionCapability`, `processList`, `applicationI
 **Every process that serves a `RuntimeEngine` and links `RuntimeViewerInjection` must call
 `RuntimeInjection.install()` exactly once at its entry point, before any engine connects** —
 including the processes that cannot inject anything. The rule has no exceptions to reason about:
-*linked it ⇒ call it*. The nine places that do, today:
+*linked it ⇒ call it*. The ten places that do, today:
 
 | Process | Where |
 |---------|-------|
 | macOS app | `AppDelegate.main()` |
 | Local-runtime XPC service | `RuntimeViewerLocalRuntimeService/main.swift` |
+| Mac Catalyst service | `AppKitPluginImpl.runService()` |
 | Mac Catalyst helper | `AppKitPluginImpl.launch()` |
 | `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
 | iOS / visionOS / jailbroken iOS apps | `InjectionServiceRegistrar.registerIfAvailable()` |

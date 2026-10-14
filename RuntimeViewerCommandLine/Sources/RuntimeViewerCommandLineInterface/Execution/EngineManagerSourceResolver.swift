@@ -126,9 +126,11 @@ public final class EngineManagerSourceResolver: SourceResolving {
                 return .found(engine)
             }
             let reason = snapshot.catalystHelperFailure.map { " (\($0))" } ?? ""
+            // Worded for both hosts: the app runs this runtime in its own embedded service,
+            // while a standalone host launches the Catalyst helper through the daemon.
             return .missing(CommandFailure(
                 code: .sourceUnavailable,
-                message: "The Mac Catalyst runtime is not available\(reason). It needs the helper daemon and the Catalyst helper inside RuntimeViewer.app: install the daemon in RuntimeViewer → Settings → Helper Service, then run `host restart`."
+                message: "The Mac Catalyst runtime is not available\(reason). While RuntimeViewer is running it comes from the app, so relaunch RuntimeViewer; a standalone host needs the helper daemon and the Catalyst helper inside RuntimeViewer.app: install the daemon in RuntimeViewer → Settings → Helper Service, then run `host restart`."
             ))
 
         case .attachedProcess(let processIdentifier):

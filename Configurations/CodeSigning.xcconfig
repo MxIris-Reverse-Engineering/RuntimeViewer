@@ -35,7 +35,17 @@ RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeVie
 RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerLocalRuntimeService.arm64e
 RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerLocalRuntimeService
 
-// Mac Catalyst helper plugin bundle (RuntimeViewerCatalystHelperPlugin target).
+// Mac Catalyst XPC service (RuntimeViewerCatalystService target), the process the app's
+// "My Mac (Mac Catalyst)" engine runs in. One identifier per configuration for the same reason
+// as the local-runtime service above; the app reads its configuration's value back from its
+// Info.plist (RuntimeViewerCatalystServiceBundleIdentifier). The Catalyst helper app keeps its
+// own identifiers: the standalone command-line host still launches it through the daemon.
+RUNTIME_VIEWER_CATALYST_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystService
+RUNTIME_VIEWER_CATALYST_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystService.arm64e
+RUNTIME_VIEWER_CATALYST_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystService
+
+// Mac Catalyst helper plugin bundle (RuntimeViewerCatalystHelperPlugin target), the code
+// both the helper app and the Catalyst XPC service load from the app's PlugIns.
 // Plugin uses one identifier across all configurations because the helper app
 // loads it by exact bundle identifier and a debug variant would silently fail
 // to load when run from Xcode against a release-built helper.

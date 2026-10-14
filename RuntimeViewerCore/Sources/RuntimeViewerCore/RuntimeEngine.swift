@@ -52,7 +52,7 @@ public actor RuntimeEngine {
     /// business: a process whose bundle embeds the local-runtime XPC
     /// service — the app — connects to it and forwards everything, so it
     /// never dlopens an image itself; every other process (the service
-    /// itself, the standalone CLI host, the Catalyst helper, a test) loads
+    /// itself, the standalone CLI host, the Catalyst helper and service, a test) loads
     /// and indexes in process. See ``LocalRuntimeService``.
     public static let local: RuntimeEngine = {
         let runtimeEngine = RuntimeEngine(source: .local)

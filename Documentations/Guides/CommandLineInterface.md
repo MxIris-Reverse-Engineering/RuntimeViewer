@@ -59,13 +59,13 @@ swift build -c release --product runtime-viewer-cli
 | selector | 命中什么 | 找不到时 |
 |---|---|---|
 | `local` | 系统引擎组里的本机进程内引擎 | 刚拉起的 host 还没把它起来，稍后重试 |
-| `catalyst` | 系统引擎组里 `source == .macCatalystClient` 的引擎 | 报 `sourceUnavailable`，附上管理器记录的 Catalyst helper 失败原因；需要 helper daemon 与 App 包里的 Catalyst helper |
+| `catalyst` | 系统引擎组里 `source == .macCatalystClient` 的引擎 | 报 `sourceUnavailable`，附上管理器记录的失败原因。App 充当 host 时它是 App 内嵌的 Catalyst service，不需要 helper daemon；独立 host 需要 helper daemon 与 App 包里的 Catalyst helper |
 | `pid:<n>` | attach 组里 identifier 等于该 pid 的引擎（XPC 或 local socket 都算） | 提示先 `attach <n>` |
 | `process:<名>` | attach 组里显示名等于该名字（不分大小写）的引擎；多个同名报 `sourceUnavailable` 并列出各自的 `pid:` | 提示 `attach <名>` |
 | `engine:<id>` | 四组里 `engineID` 相等的引擎——Bonjour 直连、镜像引擎，以及 sections 里隐藏的管理连接都靠它 | 提示 `sources --wait 5` 重新发现；对端重连后 id 会变 |
 
 - 命中的引擎还要处于连接态；没连上时报 `sourceUnavailable` 并说明状态（still connecting / disconnected）。
-- **刚拉起的 host 有 8 s 启动宽限**：管理器是异步把引擎起来的（`.local` 立刻，Catalyst helper 与
+- **刚拉起的 host 有 8 s 启动宽限**：管理器是异步把引擎起来的（`.local` 立刻，Catalyst 引擎与
   已注入进程的重连稍后），resolver 创建后 8 s 内的未命中会每 100 ms 重试，宽限过了才报错。所以
   第一条命令不会因为时序失败，但一个确实不存在的 `pid:` 在这 8 s 里要等到宽限结束才得到错误。
 - **attach 的前提**：helper daemon 已安装（RuntimeViewer → Settings → Helper Service），以及一份

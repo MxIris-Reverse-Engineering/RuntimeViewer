@@ -9,7 +9,9 @@ import Combine
 /// The local engine running out of process, with both processes played by
 /// this one: a `RuntimeLocalRuntimeServiceHost` over an anonymous listener
 /// stands in for the embedded service, and a `.local` engine connected with
-/// `.xpcService(.anonymousListener(…))` stands in for the app's.
+/// `.xpcService(.anonymousListener(…))` stands in for the app's. A `.remote`
+/// client on the same credential stands in for the app's Mac Catalyst
+/// engine, whose service runs the same host.
 ///
 /// What the engine does when the service goes away is not exercised here —
 /// the engine only reacts to its connection's state, and the connection's
@@ -97,6 +99,35 @@ struct RuntimeLocalRuntimeServiceHostTests {
 
         let secondReceived = await pollUntil { await secondClient.imageList == hostImageList }
         #expect(secondReceived, "the second client did not receive the service's data")
+    }
+
+    /// The app's Mac Catalyst engine: a `.remote` *client* whose peer runs in
+    /// an embedded service instead of a process reached through the helper
+    /// daemon. The credential alone picks the transport, so the source — and
+    /// everything keyed on it — stays what it was.
+    @Test("A .remote client engine connected with the service credential reaches the service")
+    func remoteClientWithServiceCredentialReachesTheService() async throws {
+        let (host, endpoint) = try await Self.makeHost()
+        let source = RuntimeSource.remote(name: "Embedded service client", identifier: "local-runtime-service-test.remote-client", role: .client)
+        let client = RuntimeEngine(source: source, engineID: "local-runtime-service-test.remote-client")
+        defer { Task { await client.stop(); await host.stop() } }
+
+        try await client.connect(credential: .xpcService(.anonymousListener(endpoint)))
+
+        let hostImageList = await host.engine.imageList
+        let received = await pollUntil { await client.imageList == hostImageList }
+        // Checked before any request is forwarded: over any other transport
+        // nothing answers, and a request would wait for good.
+        try #require(received, "the client did not receive the service's image list")
+
+        try await client.loadImage(at: Self.libobjcPath)
+        let hostLoadedPaths = await host.engine.loadedImagePaths
+        let forwardsRequests = await client.forwardsRequests
+
+        #expect(hostLoadedPaths.contains(Self.libobjcPath), "the load was not forwarded to the service")
+        #expect(forwardsRequests)
+        #expect(client.state == .connected)
+        #expect(client.source == source)
     }
 
     @Test("Without a credential a .local engine stays in process")

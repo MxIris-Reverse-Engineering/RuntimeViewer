@@ -108,7 +108,7 @@ function and without modules: `Visitor #1 in TableDataSource.performDrop(to:)`. 
 | Selector | Reaches |
 |---|---|
 | `local` (default) | The local runtime of the host |
-| `catalyst` | The Mac Catalyst runtime; needs the helper daemon and the Catalyst helper inside RuntimeViewer.app |
+| `catalyst` | The Mac Catalyst runtime. With RuntimeViewer running it is the app's own and needs nothing else; a standalone host needs the helper daemon and the Catalyst helper inside RuntimeViewer.app |
 | `pid:<n>` | A process attached earlier, by process identifier |
 | `process:<name>` | A process attached earlier, by name, case-insensitively; several matches are an error that lists their `pid:` selectors |
 | `engine:<id>` | Any engine the host knows — Bonjour peers and the engines they forward; the identifier changes when the peer reconnects |

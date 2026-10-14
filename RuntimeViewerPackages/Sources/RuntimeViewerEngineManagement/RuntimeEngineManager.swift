@@ -70,9 +70,10 @@ public final class RuntimeEngineManager {
 
     private var bonjourServerEngine: RuntimeEngine?
 
-    /// The Mac Catalyst client engine whose helper has answered, tracked by
-    /// identity so a relaunch replaces exactly this one. `nil` while none is
-    /// up, including for the whole of a launch attempt.
+    /// The Mac Catalyst client engine whose peer — the embedded service or the
+    /// helper application — has answered, tracked by identity so a relaunch
+    /// replaces exactly this one. `nil` while none is up, including for the
+    /// whole of a launch attempt.
     private var macCatalystRuntimeEngine: RuntimeEngine?
 
     /// The launch or relaunch of the Mac Catalyst engine in flight, if any.
@@ -80,7 +81,8 @@ public final class RuntimeEngineManager {
     /// starting over, so two attempts never race for the helper.
     private var macCatalystLaunchTask: Task<Void, Never>?
 
-    /// How the Mac Catalyst engine and its helper are brought up; the test seam.
+    /// How the Mac Catalyst engine is brought up, on the embedded service or
+    /// with the helper application; the test seam.
     private let macCatalystLaunching: MacCatalystLaunching
 
     /// Subscription to the helper daemon's availability; see
@@ -208,40 +210,68 @@ public final class RuntimeEngineManager {
     }
 
     /// The pieces of the Mac Catalyst launch that reach outside this process:
-    /// the XPC client engine, the helper application, and how long the helper
-    /// gets to answer. Tests replace them to drive the handshake paths without
-    /// a daemon.
+    /// the XPC client engine and, when its peer is the helper application,
+    /// that application and how long it gets to answer. Tests replace them to
+    /// drive both paths without a daemon or a Catalyst process.
     struct MacCatalystLaunching {
-        /// Creates the client engine and connects its local half.
+        /// The helper application a client engine waits for: opened through
+        /// the daemon, connecting back through it.
+        struct HelperApplication {
+            /// Opens a fresh helper instance through the daemon.
+            var launch: @MainActor () async throws -> Void
+
+            /// Ends the running helper, if any, once its engine is torn down.
+            var terminate: @MainActor () async -> Void
+
+            /// How long the helper gets to connect back. It is a cold Catalyst
+            /// app launch plus two XPC round-trips through the daemon, seconds
+            /// rather than milliseconds on a busy machine.
+            var handshakeTimeout: TimeInterval
+        }
+
+        /// Creates the client engine and connects it. On the embedded service
+        /// that is the whole launch: the connection's `hello` is what starts
+        /// the service, and it fails here when the service cannot run.
         var makeConnectedEngine: @MainActor () async throws -> RuntimeEngine
 
-        /// Opens a fresh helper instance through the daemon.
-        var launchHelper: @MainActor () async throws -> Void
+        /// The helper application to open and wait for, or `nil` when the
+        /// engine's peer is the app's embedded Mac Catalyst service.
+        var helperApplication: HelperApplication?
 
-        /// Ends the running helper, if any, once its engine is torn down.
-        var terminateHelper: @MainActor () async -> Void
-
-        /// How long the helper gets to connect back. It is a cold Catalyst
-        /// app launch plus two XPC round-trips through the daemon, seconds
-        /// rather than milliseconds on a busy machine.
-        var handshakeTimeout: TimeInterval
-
-        static let live = MacCatalystLaunching(
-            makeConnectedEngine: {
-                let runtimeEngine = RuntimeEngine(source: .macCatalystClient)
-                try await runtimeEngine.connect()
-                return runtimeEngine
-            },
-            launchHelper: {
-                @Dependency(\.runtimeHelperClient) var runtimeHelperClient
-                try await runtimeHelperClient.launchMacCatalystHelper()
-            },
-            terminateHelper: {
-                @Dependency(\.runtimeHelperClient) var runtimeHelperClient
-                await runtimeHelperClient.terminateMacCatalystHelper()
-            },
-            handshakeTimeout: 15
-        )
+        /// The app embeds the Mac Catalyst service and reaches it directly;
+        /// a process whose bundle does not — the standalone CLI host — opens
+        /// the helper application through the daemon. See
+        /// `MacCatalystRuntimeService`.
+        static let live: MacCatalystLaunching = {
+            if let credential = MacCatalystRuntimeService.embeddedServiceCredential {
+                return MacCatalystLaunching(
+                    makeConnectedEngine: {
+                        let runtimeEngine = RuntimeEngine(source: .macCatalystClient)
+                        try await runtimeEngine.connect(credential: credential)
+                        return runtimeEngine
+                    },
+                    helperApplication: nil
+                )
+            }
+            return MacCatalystLaunching(
+                makeConnectedEngine: {
+                    let runtimeEngine = RuntimeEngine(source: .macCatalystClient)
+                    try await runtimeEngine.connect()
+                    return runtimeEngine
+                },
+                helperApplication: HelperApplication(
+                    launch: {
+                        @Dependency(\.runtimeHelperClient) var runtimeHelperClient
+                        try await runtimeHelperClient.launchMacCatalystHelper()
+                    },
+                    terminate: {
+                        @Dependency(\.runtimeHelperClient) var runtimeHelperClient
+                        await runtimeHelperClient.terminateMacCatalystHelper()
+                    },
+                    handshakeTimeout: 15
+                )
+            )
+        }()
     }
 
     /// Why the Mac Catalyst engine was not brought up, beyond the transport
@@ -305,7 +335,7 @@ public final class RuntimeEngineManager {
             startSharingEngines()
         }
 
-        if startupSteps.contains(.systemEngines) {
+        if startupSteps.contains(.systemEngines), macCatalystLaunching.helperApplication != nil {
             observeDaemonAvailability()
         }
     }
@@ -318,6 +348,9 @@ public final class RuntimeEngineManager {
     /// helper looks this process's endpoint up in, so a helper launched
     /// against the old daemon is waiting on a registration that no longer
     /// exists.
+    ///
+    /// Only the helper application path goes through the daemon; an engine
+    /// on the embedded service never notices it, so nothing subscribes then.
     private func observeDaemonAvailability() {
         daemonAvailabilitySubscription = helperServiceManager.daemonAvailabilityPublisher
             .sink { [weak self] in
@@ -524,8 +557,9 @@ public final class RuntimeEngineManager {
     }
 
     /// Tears the Mac Catalyst engine down, if one is up, and brings it up
-    /// again with a fresh helper. Safe to call while a launch is in flight:
-    /// that launch is cancelled and awaited first.
+    /// again — with a fresh helper on the helper application path. Safe to
+    /// call while a launch is in flight: that launch is cancelled and awaited
+    /// first.
     ///
     /// Does nothing for a configuration that does not launch system engines.
     public func relaunchMacCatalystRuntimeEngine() {
@@ -535,7 +569,7 @@ public final class RuntimeEngineManager {
         macCatalystLaunchTask = Task { @MainActor in
             await previousLaunchTask?.value
             self.terminateMacCatalystRuntimeEngine()
-            await self.macCatalystLaunching.terminateHelper()
+            await self.macCatalystLaunching.helperApplication?.terminate()
             await self.launchMacCatalystRuntimeEngineReportingFailure()
         }
     }
@@ -572,40 +606,68 @@ public final class RuntimeEngineManager {
 
     /// Brings the Mac Catalyst engine up and only then makes it visible.
     ///
-    /// `RuntimeEngine.connect()` on a client source reports `.connected` as
-    /// soon as its own listener is registered with the daemon; it does not
-    /// wait for the helper. The helper connects back through the daemon it
-    /// resolves on *its* side, and when that is not the daemon this process
-    /// registered with — the helper belongs to another build variant, or the
-    /// daemon was replaced in between — it fails quietly and the engine would
-    /// sit in the menu with nothing behind it, loading forever. So the engine
-    /// is probed until the helper answers, bounded by
-    /// ``MacCatalystLaunching/handshakeTimeout``, and appended only after that.
-    /// The attach flow does the same for injected processes with
+    /// On the embedded service, connecting is the proof: the connection's
+    /// `hello` is a round trip to the service it just started, so an engine
+    /// that connected has a live peer.
+    ///
+    /// On the helper application path it is not. `RuntimeEngine.connect()`
+    /// on a client source reports `.connected` as soon as its own listener is
+    /// registered with the daemon; it does not wait for the helper. The
+    /// helper connects back through the daemon it resolves on *its* side, and
+    /// when that is not the daemon this process registered with — the helper
+    /// belongs to another build variant, or the daemon was replaced in
+    /// between — it fails quietly and the engine would sit in the menu with
+    /// nothing behind it, loading forever. So the engine is probed until the
+    /// helper answers, bounded by ``MacCatalystLaunching/HelperApplication/handshakeTimeout``,
+    /// and appended only after that. The attach flow does the same for
+    /// injected processes with
     /// ``confirmAttachedRuntimeEngineConnected(name:identifier:isSandbox:timeout:)``.
     private func launchMacCatalystRuntimeEngine() async throws {
         #log(.info,"Creating Mac Catalyst client runtime engine...")
         let macCatalystClientEngine = try await macCatalystLaunching.makeConnectedEngine()
+        let helperApplication = macCatalystLaunching.helperApplication
         do {
             try Task.checkCancellation()
-            #log(.info,"Mac Catalyst client engine connected, launching helper...")
-            try await macCatalystLaunching.launchHelper()
-            let timeout = macCatalystLaunching.handshakeTimeout
-            #log(.info,"Mac Catalyst helper launched, waiting up to \(timeout, privacy: .public)s for it to connect back")
-            guard await Self.pollUntilPeerAnswers(engine: macCatalystClientEngine, timeout: timeout) else {
-                try Task.checkCancellation()
-                throw MacCatalystHelperError.handshakeTimedOut(timeout)
+            if let helperApplication {
+                try await waitForHelperApplication(helperApplication, toAnswer: macCatalystClientEngine)
             }
-            try Task.checkCancellation()
         } catch {
             await macCatalystClientEngine.stop()
             throw error
         }
-        #log(.info,"Mac Catalyst helper connected back")
         macCatalystRuntimeEngine = macCatalystClientEngine
         systemRuntimeEngines.append(macCatalystClientEngine)
-        observeRuntimeEngineState(macCatalystClientEngine)
+        if helperApplication != nil {
+            observeRuntimeEngineState(macCatalystClientEngine)
+        } else {
+            // Not observed, the same as `.local`: when the service exits, its
+            // connection reattaches to the relaunched one by itself, the engine
+            // only goes `.disconnected` and back, and documents walk back to the
+            // image list. Observing would remove the engine on that first
+            // `.disconnected`. The one event observing would have produced is
+            // the connection the engine has just made.
+            #log(.info,"Mac Catalyst runtime engine connected to the embedded service")
+            eventSubject.send(.engineConnected(macCatalystClientEngine))
+        }
         rebuildSections()
+    }
+
+    /// Opens the helper application and waits for it to connect back; see
+    /// ``launchMacCatalystRuntimeEngine()`` for why connecting is not enough.
+    private func waitForHelperApplication(
+        _ helperApplication: MacCatalystLaunching.HelperApplication,
+        toAnswer macCatalystClientEngine: RuntimeEngine
+    ) async throws {
+        #log(.info,"Mac Catalyst client engine connected, launching helper...")
+        try await helperApplication.launch()
+        let timeout = helperApplication.handshakeTimeout
+        #log(.info,"Mac Catalyst helper launched, waiting up to \(timeout, privacy: .public)s for it to connect back")
+        guard await Self.pollUntilPeerAnswers(engine: macCatalystClientEngine, timeout: timeout) else {
+            try Task.checkCancellation()
+            throw MacCatalystHelperError.handshakeTimedOut(timeout)
+        }
+        try Task.checkCancellation()
+        #log(.info,"Mac Catalyst helper connected back")
     }
 
     private func reconnectInjectedEngines() async {
