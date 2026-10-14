@@ -68,7 +68,7 @@ vtool -show-build <可执行文件>   # 看每个产物的 platform
 
 ## 把 helper 换成 XPC service
 
-**2026-10-14 起已落地**，设计与取舍见 `Documentations/Evolutions/draft-catalyst-xpc-service.md`。下面是当初实验后的分析，保留作记录，括号里是落地时的处理。
+**2026-10-14 起已落地**，设计与取舍见 `Documentations/Evolutions/0051-catalyst-xpc-service.md`。下面是当初实验后的分析，保留作记录，括号里是落地时的处理。
 
 能省掉的东西：helper 不再经特权 helper daemon 拉起和握手，launchd 按 app 实例查找 service，Debug / Debug-arm64e / Release 三个变体不会连错 daemon（`Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md` 那类问题会消失）；启动前杀旧实例、15 秒轮询、app 退出后自行退出都交给 launchd；service 没有 `UIApplication`，藏窗口和 Dock 图标的 hack 用不上（这段 hack 从插件的 `init()` 挪进了 helper 专用的 `launch()`，helper 还在用）。连接代码可以照着 `RuntimeViewerLocalRuntimeService` 写（落地时服务端直接复用了它的 `RuntimeLocalRuntimeServiceHost`）。
 

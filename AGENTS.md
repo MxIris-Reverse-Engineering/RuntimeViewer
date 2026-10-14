@@ -446,7 +446,7 @@ The project uses three Swift Package Manager packages:
   `RuntimeViewerCatalystHelper`. Being an XPC service, it also runs at the priority of the requests
   waiting on it, exactly as the local-runtime service above does — the helper app, an application of
   its own, never did — so the same App Nap rule covers work on the Catalyst engine. The service has
-  no "restarted" notification yet. Background: `Documentations/Evolutions/draft-catalyst-xpc-service.md`
+  no "restarted" notification yet. Background: `Documentations/Evolutions/0051-catalyst-xpc-service.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
   only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's

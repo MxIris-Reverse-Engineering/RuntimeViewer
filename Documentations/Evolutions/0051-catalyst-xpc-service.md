@@ -1,6 +1,6 @@
-# Draft - Mac Catalyst 运行时：App 改用内嵌 XPC service，CLI 保留 helper App
+# 0051 - Mac Catalyst 运行时：App 改用内嵌 XPC service，CLI 保留 helper App
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-14
 - **最后更新**: 2026-10-14
 
@@ -50,3 +50,4 @@ App 里的「My Mac (Mac Catalyst)」今天经特权 helper daemon 拉起 `Runti
 | 2026-10-14 | 记下：Catalyst 运行时从此受 App Nap 降速影响，不另做处理 | XPC service 是 adaptive 任务，App 进 App Nap 后它只跑效率核（`ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`）；helper App 是独立应用，没有这个问题。现有的 `BackgroundWorkProcessActivity` 按文档状态持有 activity，不分引擎，Catalyst 文档的索引与语料构建同样被覆盖 |
 | 2026-10-14 | 改 CLI 里 `--source catalyst` 找不到时的提示 | 原文固定说「需要 helper daemon」，App 充当 host 时已经不对；只改文案、不加分支，两种 host 都成立（App 在跑就重开 App，独立 host 照旧装 daemon） |
 | 2026-10-14 | Core 测试先红后绿 | 通信层改动撤掉时，新测试在 0.5 秒内以 `connectionInvalid` 失败（旧代码把 `.xpcService` 凭证忽略，走了 daemon）；恢复后通过 |
+| 2026-10-14 | 状态改为 Implemented，落地编号 0051，合进本地 `next`（不推送） | 用户：「合并到next不推送」。编号取 `origin/main`、`origin/next` 与本地 `next` 上的最大号 0050 加一。收尾时的两项判断：①配套文档——不另写实现说明，形状与契约（谁走哪条路由 `Info.plist` 决定、两个外壳只加载同一个 plugin、走 service 时不观察引擎）已写进 `CommunicationAndEngineArchitecture.md` §3.6 与 §7.1 和 `AGENTS.md`；②术语——新增「Catalyst service」，改了「Catalyst helper」，都在术语表。仍待用户做「验证」一段末尾列的人工验收 |

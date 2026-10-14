@@ -317,7 +317,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 **用途**：主 App ↔ 随 App 打包的两个 service。它们都不对应新的 `RuntimeSource` case，引擎身份不变，凭证决定传输：
 
 - `RuntimeViewerLocalRuntimeService.xpc`——「My Mac」引擎的执行进程。引擎的 `source` 仍是 `.local`；`RuntimeEngine.local` 用 `LocalRuntimeService.embeddedServiceCredential` 连接——进程自己的 `Info.plist` 里有 `RuntimeViewerLocalRuntimeServiceBundleIdentifier` 就是 `.xpcService(.bundleIdentifier(id))`，走 client 路径，否则为 `nil`、留在进程内——工厂的 `.local` 分支只在带这个凭证时才交出连接。设计与取舍见提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md)。
-- `RuntimeViewerCatalystService.xpc`——「My Mac (Mac Catalyst)」引擎的执行进程，一个 Mac Catalyst 平台的 XPC service。引擎的 `source` 仍是 `.macCatalystClient`（`.remote` client）；管理器用 `MacCatalystRuntimeService.embeddedServiceCredential`（`RuntimeViewerCatalystExtensions`，键 `RuntimeViewerCatalystServiceBundleIdentifier`）连接，工厂的 `.remote` client 分支见到 `.xpcService` 凭证就建本节的连接、不经 daemon。没有这个键的进程（CLI 独立 host）凭证为 `nil`，照旧经 daemon 拉起 helper App（§3.1）。设计与取舍见提案 [draft-catalyst-xpc-service](Evolutions/draft-catalyst-xpc-service.md)。
+- `RuntimeViewerCatalystService.xpc`——「My Mac (Mac Catalyst)」引擎的执行进程，一个 Mac Catalyst 平台的 XPC service。引擎的 `source` 仍是 `.macCatalystClient`（`.remote` client）；管理器用 `MacCatalystRuntimeService.embeddedServiceCredential`（`RuntimeViewerCatalystExtensions`，键 `RuntimeViewerCatalystServiceBundleIdentifier`）连接，工厂的 `.remote` client 分支见到 `.xpcService` 凭证就建本节的连接、不经 daemon。没有这个键的进程（CLI 独立 host）凭证为 `nil`，照旧经 daemon 拉起 helper App（§3.1）。设计与取舍见提案 [0051-catalyst-xpc-service](Evolutions/0051-catalyst-xpc-service.md)。
 
 **与 §3.1 的区别**：不经特权 daemon。App 侧一条 `XPCConnection(type: .remoteService(bundleID:))`，launchd 在**调用进程自己的 bundle** 里找到 service 并按需拉起；service 侧一个 `XPCListener(type: .service)`。所以只有 App 能用它——测试进程与 CLI 独立 host 都拿不到 App 包里的 `.xpc`：它们的本地引擎留在进程内，Catalyst 引擎继续经 daemon 拉 helper App。
 
@@ -640,7 +640,7 @@ port = connection.connectionInfo.port
 |--------|--------|
 | 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeForwardingConnection` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
 | 本地引擎为什么在另一个进程、service 崩了怎么恢复 | §3.6 + §5 的事件一节 + 提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md) |
-| Mac Catalyst 引擎在 App 里为什么连 XPC service、CLI 独立 host 为什么还拉 helper App | §3.6 + §7.1 + 提案 [draft-catalyst-xpc-service](Evolutions/draft-catalyst-xpc-service.md) |
+| Mac Catalyst 引擎在 App 里为什么连 XPC service、CLI 独立 host 为什么还拉 helper App | §3.6 + §7.1 + 提案 [0051-catalyst-xpc-service](Evolutions/0051-catalyst-xpc-service.md) |
 | 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
 | 加一条业务 RPC 命令（Core 自己的） | 在 `RuntimeEngineCommandName.swift` 加一个 `CommandName` 常量 + 在 `RuntimeEngine.registerBuiltInHandlers` 加一行（Proxy 自动继承） |
 | 加一条**别的模块**的 RPC 命令 | `extension RuntimeEngine.CommandName` 声明短名（前缀不变），再在那个模块里 `RuntimeEngine.addCommandExtension(named:install:)`；Core 一行不改。该模块的每个进程入口要调一次它的 install，漏调没有编译错误 —— 参照 `RuntimeViewerInjection` |
