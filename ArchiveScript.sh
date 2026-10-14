@@ -368,11 +368,12 @@ verify_application_archive() {
     fail "$archive_path is a generic archive, not an app archive, so it cannot be exported with developer-id. Products installed outside the app (set SKIP_INSTALL = YES on the targets that produce them):"$'\n'"$stray_products"
 }
 
-# The two embedded products that are not macOS — the Mac Catalyst helper and
-# the iOS Simulator injection payload — need no step of their own: both are
-# target dependencies of the app, archived with it (SKIP_INSTALL = YES keeps
-# them out of the archive's own products) and re-signed for Developer ID when
-# the app is exported. See "Embedded non-macOS products" in AGENTS.md.
+# The three embedded products that are not macOS — the Mac Catalyst service,
+# the Mac Catalyst helper and the iOS Simulator injection payload — need no
+# step of their own: all are target dependencies of the app, archived with it
+# (SKIP_INSTALL = YES keeps them out of the archive's own products) and
+# re-signed for Developer ID when the app is exported. See "Embedded non-macOS
+# products" in AGENTS.md.
 
 log "Archiving main app"
 XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \

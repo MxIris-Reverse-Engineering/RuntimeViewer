@@ -201,10 +201,11 @@ COMMON_XCODEBUILD_SETTINGS=(
 
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
 
-# The two embedded products that are not macOS — the Mac Catalyst helper and
-# the iOS Simulator injection payload — need no step of their own: both are
-# target dependencies of the app, built in the same configuration and copied in
-# by its embed phases. See "Embedded non-macOS products" in AGENTS.md.
+# The three embedded products that are not macOS — the Mac Catalyst service,
+# the Mac Catalyst helper and the iOS Simulator injection payload — need no
+# step of their own: all are target dependencies of the app, built in the same
+# configuration and copied in by its embed phases. See "Embedded non-macOS
+# products" in AGENTS.md.
 
 log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \

@@ -10,5 +10,6 @@
 // from each process's own bundle at runtime.
 RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service
 
-// The arm64e variant embeds its own service, named after its own app identifier.
+// The arm64e variant embeds its own services, named after its own app identifier.
 RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER)
+RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_CATALYST_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER)

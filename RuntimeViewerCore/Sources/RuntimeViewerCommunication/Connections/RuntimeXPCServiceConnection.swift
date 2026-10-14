@@ -56,12 +56,14 @@ public enum RuntimeXPCServiceConnectionError: Error, LocalizedError, Sendable, E
 
     public var errorDescription: String? {
         switch self {
+        // Worded for any embedded service: the local runtime and the Mac
+        // Catalyst runtime both run in one, and these texts reach the user.
         case .serviceExited:
-            return "The local runtime exited while handling this request."
+            return "The runtime service exited while handling this request."
         case .connectionInvalid:
-            return "The connection to the local runtime is no longer valid."
+            return "The connection to the runtime service is no longer valid."
         case .noClientAttached:
-            return "No client is attached to the local runtime service."
+            return "No client is attached to the runtime service."
         case .remoteFailure(let description):
             return description
         }

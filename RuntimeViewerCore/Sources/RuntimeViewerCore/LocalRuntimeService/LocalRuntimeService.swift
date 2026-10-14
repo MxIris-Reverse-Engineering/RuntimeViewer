@@ -12,7 +12,7 @@ public import RuntimeViewerCommunication
 /// ``bundleIdentifierInfoDictionaryKey``, and `RuntimeEngine.local` connects
 /// with ``embeddedServiceCredential`` — a credential in the app, `nil`
 /// everywhere else (the service itself, the standalone CLI host, the
-/// Catalyst helper, a test), where the engine stays in process. There is
+/// Catalyst helper and service, a test), where the engine stays in process. There is
 /// nothing to configure and nothing to set before first use, which is the
 /// point: launchd only finds an embedded service in the calling process's
 /// own bundle, so the bundle *is* the configuration.

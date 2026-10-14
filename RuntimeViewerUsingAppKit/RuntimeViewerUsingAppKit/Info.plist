@@ -30,6 +30,8 @@
 	</dict>
 	<key>RuntimeViewerBuildDate</key>
 	<string>$(RUNTIME_VIEWER_BUILD_DATE)</string>
+	<key>RuntimeViewerCatalystServiceBundleIdentifier</key>
+	<string>$(RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER)</string>
 	<key>RuntimeViewerGitBranch</key>
 	<string>$(RUNTIME_VIEWER_GIT_BRANCH)</string>
 	<key>RuntimeViewerGitCommit</key>

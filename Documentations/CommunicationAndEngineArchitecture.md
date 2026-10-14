@@ -16,7 +16,7 @@
 
 ## 1. 总览：一个协议，六种传输
 
-整个通信层围绕单一协议 `RuntimeConnection` 建立。上层（`RuntimeEngine`）永远只面对这个协议，不关心底下究竟是 XPC、TCP 还是 stdin/stdout。选择哪种传输由工厂 `RuntimeCommunicator` 根据 `RuntimeSource` 决定。内嵌 XPC service（§3.6）也走这一个 `switch`：它不对应新的 `RuntimeSource` case，而是 `.local` 加上 `.xpcService(target)` 凭证——身份仍是这台 Mac，要连哪个 service 是会话级信息，和 Bonjour 的端点一样放在 `credential:` 里。
+整个通信层围绕单一协议 `RuntimeConnection` 建立。上层（`RuntimeEngine`）永远只面对这个协议，不关心底下究竟是 XPC、TCP 还是 stdin/stdout。选择哪种传输由工厂 `RuntimeCommunicator` 根据 `RuntimeSource` 决定。内嵌 XPC service（§3.6）也走这一个 `switch`：它不对应新的 `RuntimeSource` case，而是 `.local` 加上 `.xpcService(target)` 凭证——身份仍是这台 Mac，要连哪个 service 是会话级信息，和 Bonjour 的端点一样放在 `credential:` 里。App 的 Mac Catalyst 引擎同理：身份仍是 `.remote` client（`.macCatalystClient`），带上同一个凭证就改连 App 内嵌的 Mac Catalyst service，不再经 daemon。
 
 ```
                         ┌─────────────────────────────────┐
@@ -45,7 +45,8 @@
 
 | Source | 传输 | 典型场景 | 沙盒兼容 | 需要配置 |
 |--------|------|----------|:---:|----------|
-| `.remote` | XPC Mach Service | 同机跨进程（需特权 helper）、代码注入非沙盒 App | ❌ | helper 安装 |
+| `.remote` | XPC Mach Service | 同机跨进程（需特权 helper）、代码注入非沙盒 App、独立 CLI host 的 Mac Catalyst helper App | ❌ | helper 安装 |
+| `.remote` client + `.xpcService` 凭证 | 内嵌 XPC service（同下） | App 的「My Mac (Mac Catalyst)」引擎 | ✅ | service 随 App 打包 |
 | `.bonjour` | Bonjour + NWConnection | iOS/visionOS 设备 ↔ Mac（局域网自动发现） | ❌ | `NSBonjourServices` |
 | `.localSocket` | TCP `127.0.0.1` | 注入到**沙盒** App | ✅ | 无 |
 | `.directTCP` | 直连 TCP `host:port` | 已知地址直连 / 引擎镜像代理 | ✅ | 无 |
@@ -123,6 +124,7 @@ func stop()
 |--------|-----------|---------|
 | `.bonjour` + `.client` | `.bonjour(NWEndpoint)` | 必需（端点由 `NWBrowser` 运行时产出） |
 | `.remote` + `.client`（重连） | `.xpcServer(HelperPeerEndpoint)` | 可选（直连重连已注入进程） |
+| `.remote` + `.client` 在 XPC service 里执行 | `.xpcService(RuntimeXPCServiceTarget)` | 可选——带上它就连内嵌 service、不经 daemon（App 的 Mac Catalyst 引擎，凭证来自 `MacCatalystRuntimeService.embeddedServiceCredential`） |
 | `.local` 在 XPC service 里执行 | `.xpcService(RuntimeXPCServiceTarget)` | 必需——没有它 `.local` 根本没有连接（bundle ID 指向 App 内嵌的 service，匿名端点供测试） |
 | 其它 | `nil` | — |
 
@@ -177,7 +179,7 @@ RuntimeConnection (protocol, associatedtype StatePublisher)
 
 ### 3.1 XPC Mach service 连接（`RuntimeXPCMachServiceConnection.swift`，仅 macOS）
 
-**用途**：主 App ↔ Mac Catalyst helper；特权操作；注入非沙盒 App 后的重连。
+**用途**：独立 CLI host ↔ Mac Catalyst helper App（App 自己的 Catalyst 引擎改连内嵌 service，见 §3.6）；特权操作；注入非沙盒 App 后的重连。
 
 `RuntimeXPCMachServiceConnection` 是 `HelperPeer.PeerConnection` 的薄适配器：把 peer 的 `AsyncStream<PeerConnectionState>` 桥接成 Combine 的 `CurrentValueSubject<RuntimeConnectionState>`，所有 `sendMessage` 直接转发给 `peer`。
 
@@ -312,9 +314,14 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ### 3.6 XPC service 连接（`RuntimeXPCServiceConnection.swift`，仅 macOS）
 
-**用途**：主 App ↔ 随 App 打包的 `RuntimeViewerLocalRuntimeService.xpc`——「My Mac」引擎的执行进程。它不对应新的 `RuntimeSource` case：引擎的 `source` 仍是 `.local`；`RuntimeEngine.local` 用 `LocalRuntimeService.embeddedServiceCredential` 连接——进程自己的 `Info.plist` 里有 `RuntimeViewerLocalRuntimeServiceBundleIdentifier` 就是 `.xpcService(.bundleIdentifier(id))`，走 client 路径，否则为 `nil`、留在进程内——工厂的 `.local` 分支只在带这个凭证时才交出连接。设计与取舍见提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md)。
+**用途**：主 App ↔ 随 App 打包的两个 service。它们都不对应新的 `RuntimeSource` case，引擎身份不变，凭证决定传输：
 
-**与 §3.1 的区别**：不经特权 daemon。App 侧一条 `XPCConnection(type: .remoteService(bundleID:))`，launchd 在**调用进程自己的 bundle** 里找到 service 并按需拉起；service 侧一个 `XPCListener(type: .service)`。所以只有 App 能用它——测试进程与 CLI 独立 host 都拿不到 App 包里的 `.xpc`，它们继续用进程内引擎。
+- `RuntimeViewerLocalRuntimeService.xpc`——「My Mac」引擎的执行进程。引擎的 `source` 仍是 `.local`；`RuntimeEngine.local` 用 `LocalRuntimeService.embeddedServiceCredential` 连接——进程自己的 `Info.plist` 里有 `RuntimeViewerLocalRuntimeServiceBundleIdentifier` 就是 `.xpcService(.bundleIdentifier(id))`，走 client 路径，否则为 `nil`、留在进程内——工厂的 `.local` 分支只在带这个凭证时才交出连接。设计与取舍见提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md)。
+- `RuntimeViewerCatalystService.xpc`——「My Mac (Mac Catalyst)」引擎的执行进程，一个 Mac Catalyst 平台的 XPC service。引擎的 `source` 仍是 `.macCatalystClient`（`.remote` client）；管理器用 `MacCatalystRuntimeService.embeddedServiceCredential`（`RuntimeViewerCatalystExtensions`，键 `RuntimeViewerCatalystServiceBundleIdentifier`）连接，工厂的 `.remote` client 分支见到 `.xpcService` 凭证就建本节的连接、不经 daemon。没有这个键的进程（CLI 独立 host）凭证为 `nil`，照旧经 daemon 拉起 helper App（§3.1）。设计与取舍见提案 [draft-catalyst-xpc-service](Evolutions/draft-catalyst-xpc-service.md)。
+
+**与 §3.1 的区别**：不经特权 daemon。App 侧一条 `XPCConnection(type: .remoteService(bundleID:))`，launchd 在**调用进程自己的 bundle** 里找到 service 并按需拉起；service 侧一个 `XPCListener(type: .service)`。所以只有 App 能用它——测试进程与 CLI 独立 host 都拿不到 App 包里的 `.xpc`：它们的本地引擎留在进程内，Catalyst 引擎继续经 daemon 拉 helper App。
+
+**Catalyst service 的服务端**：service 本身只是一个外壳，`main.swift` 从 App 的 `Contents/PlugIns` 加载 `RuntimeViewerCatalystHelperPlugin`（macOS bundle，helper App 也加载同一份），调用 `runService()`。plugin 先 `dlopen` 一次 UIKit——service 里没有 UIKit 应用，不补的话镜像列表比 helper App 少一大截——再把一台进程内 `.local` 引擎交给 `RuntimeLocalRuntimeServiceHost`，挂在 `embeddedService()` 的 listener 上，与本地引擎 service 是同一套服务端。管理器这一侧（§7.1）：不拉 helper、不做握手轮询（连上时 `hello` 已经往返过）、不观察引擎状态，所以 service 退出后与 `.local` 一样由连接自己重连，引擎留在列表里。
 
 **线路**：每条消息一个 `Data` 负载进、一个 `RuntimeXPCServiceReplyFrame`（`payload` + `failure`）出，负载是 JSON——与其它传输同一套编码，`RuntimeImageNode` 这类已经跨过 socket 的值原样跨 XPC。对端 handler 抛的错误以描述字符串随帧返回，client 侧抛 `RuntimeXPCServiceConnectionError.remoteFailure`，不依赖 SwiftyXPC 只回传已注册错误类型的 error registry。
 
@@ -325,7 +332,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 **优先级跟着挂着的请求走**：launchd 把 service 当作 adaptive job 拉起（`launchctl print` 里是 `spawn type = adaptive`），runningboard 不管它的角色。App 发来的请求在回复之前一直挂在 service 上——SwiftyXPC 到回复时才用原请求 `xpc_dictionary_create_reply`——这段时间里只要 App 还在给出 importance，service 就按各线程自己的 QoS 全速跑；否则落到 Darwin 后台档：优先级 4，Apple Silicon 上只用效率核。App 进了 App Nap 就不再给出 importance（XNU 默认的 `TASK_POLICY_SUPPRESSION_NONDONOR`），用户切走约 30 秒后，App 正在等的活就慢四到十倍。所以 App 等着 service 干的长活要让 App 别进 App Nap：索引批次和语料构建由 `BackgroundWorkProcessActivity` 负责（`DocumentState.reportActivity` 为真时持有一个 user-initiated activity）。经过与证据见 [ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap](ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md)。
 
-**引擎侧的配合**：没有。引擎不知道 `hello`、不知道重连——`RuntimeEngine.connect(credential:)` 对 `.local` 带凭证时走与远端 client **同一段** client 路径（装 client handler、观察连接状态），`forwardsRequests`（client 角色 **或** `.local` 带凭证）取代了原来散在 `dispatch` 里的 `remoteRole.isClient` 判断；此后连接报什么它就跟什么：`.disconnected` → `.disconnected`，`.connected` → `.connected`。引擎的状态重新就绪之后的事归上层：`DocumentState` 把文档退回镜像列表，并发出 `runtimeEngineDidReset`——文档什么都没打开、无处可退时也发——Find 的会话与语料协调器据此丢掉从旧进程得来的一切、重新开始。XPC service 相关代码只在两处：本文件，与 `RuntimeViewerCore/LocalRuntimeService/`（`LocalRuntimeService`：`Info.plist` 键与凭证；`RuntimeLocalRuntimeServiceHost`：service 侧）。
+**引擎侧的配合**：没有。引擎不知道 `hello`、不知道重连——`RuntimeEngine.connect(credential:)` 对 `.local` 带凭证时走与远端 client **同一段** client 路径（装 client handler、观察连接状态），Catalyst 引擎本来就是远端 client；`forwardsRequests`（client 角色 **或** `.local` 带凭证）取代了原来散在 `dispatch` 里的 `remoteRole.isClient` 判断；此后连接报什么它就跟什么：`.disconnected` → `.disconnected`，`.connected` → `.connected`。引擎的状态重新就绪之后的事归上层：`DocumentState` 把文档退回镜像列表，并发出 `runtimeEngineDidReset`——文档什么都没打开、无处可退时也发——Find 的会话与语料协调器据此丢掉从旧进程得来的一切、重新开始。XPC service 相关代码只在这几处：本文件与工厂里接受 `.xpcService` 凭证的两个分支；`RuntimeViewerCore/LocalRuntimeService/`（`LocalRuntimeService`：本地引擎 service 的 `Info.plist` 键与凭证；`RuntimeLocalRuntimeServiceHost`：两个 service 共用的服务端）；`RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift`（Catalyst service 的键与凭证）；两个 service 的入口（本地引擎 service 的 `main.swift`，Catalyst plugin 的 `runService()`）。
 
 ---
 
@@ -425,7 +432,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 | **`RuntimeEngine`**（actor） | `RuntimeViewerCore` | 单个运行时的连接 + 数据（imageList / imageNodes / 查询 RPC）。既能当 server 也能当 client；`RuntimeEngine.local` 按进程 bundle 决定在本进程执行还是转发给内嵌 XPC service（§3.6）。 |
 | **`RuntimeEngineConnectionServer`**（actor） | `RuntimeViewerCore` | 「在一条连接上服务一台 engine」的公共部分：共享命令表、四种推送转发、初始数据。下面两个都用它。 |
 | **`RuntimeEngineProxyServer`**（actor） | `RuntimeViewerCore` | 给**一个** engine 套一层 DirectTCP server，把它转成可被远端直连、镜像的服务；自己只管 TCP 传输与图标应答。 |
-| **`RuntimeLocalRuntimeServiceHost`**（class） | `RuntimeViewerCore` | `RuntimeViewerLocalRuntimeService.xpc` 的全部工作：一台进程内 `.local` 引擎放在 service 的 listener 上对外服务。 |
+| **`RuntimeLocalRuntimeServiceHost`**（class） | `RuntimeViewerCore` | `RuntimeViewerLocalRuntimeService.xpc` 的全部工作：一台进程内 `.local` 引擎放在 service 的 listener 上对外服务。`RuntimeViewerCatalystService.xpc` 在 Catalyst 进程里做同一件事，用的也是它。 |
 | **`RuntimeEngineManager`**（@MainActor class） | `RuntimeViewerEngineManagement` | 进程级单例。发现/生命周期/分组，编排 Sharing（server 侧）与 Mirroring（client 侧）。 |
 
 `RuntimeEngineManager` 通过 `@Dependency(\.runtimeEngineManager)` 注入（遵循项目单例规范，`shared` 为 `fileprivate`）。
@@ -434,7 +441,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 [0035-engine-management-module](Evolutions/0035-engine-management-module.md)），无窗口的进程可以只链它。三件事因此留在模块外或以缝的形式出现：
 
 - **配置**：`RuntimeEngineManagerConfiguration` 决定 Bonjour 广播、引擎共享、系统引擎、已注入进程重连各自开不开。App 用 `.application`（全开），无头 host 用 `.headlessHost`（只浏览、只重连，不广播不共享）。「My Mac」在哪个进程执行不是配置：`RuntimeEngine.local` 自己按进程 bundle 决定（§3.6），无头 host 是裸可执行文件、没有那个键，自动留在进程内。
-- **事件**：manager 不再直接调用通知服务，而是发 `RuntimeEngineManagerEvent`（`engineConnected` / `hostDisconnected` / `catalystHelperUnavailable`）；App 层的 `RuntimeConnectionNotificationService.start()` 订阅 `eventPublisher` 转成系统通知。事件不重放，订阅要在第一条连接建立前完成（App 在 `applicationDidFinishLaunching` 里做）。**manager 从不观察 `RuntimeEngine.local` 的状态**：别的引擎报 `.disconnected` 即出列表，它报 `.disconnected` 意味着 service 退出了，引擎留在原位、连接自己重连；「重启了」这条通知由 `RuntimeConnectionNotificationService` 直接观察 `RuntimeEngine.local.statePublisher` 的 `.disconnected → .connected` 边沿发出，首次 `.connected` 不发。
+- **事件**：manager 不再直接调用通知服务，而是发 `RuntimeEngineManagerEvent`（`engineConnected` / `hostDisconnected` / `catalystHelperUnavailable`）；App 层的 `RuntimeConnectionNotificationService.start()` 订阅 `eventPublisher` 转成系统通知。事件不重放，订阅要在第一条连接建立前完成（App 在 `applicationDidFinishLaunching` 里做）。**manager 从不观察 `RuntimeEngine.local` 的状态**：别的引擎报 `.disconnected` 即出列表，它报 `.disconnected` 意味着 service 退出了，引擎留在原位、连接自己重连；「重启了」这条通知由 `RuntimeConnectionNotificationService` 直接观察 `RuntimeEngine.local.statePublisher` 的 `.disconnected → .connected` 边沿发出，首次 `.connected` 不发。**连内嵌 service 的 Mac Catalyst 引擎同样不被观察**，理由相同；它连上时 manager 补发一次 `engineConnected`（观察本来会在订阅时发出的那一次），service 重启后暂不发通知。走 helper App 的 Catalyst 引擎（CLI 独立 host）照旧被观察，断线即出列表。
 - **App 层叠加**（都在 `RuntimeViewerApplication/Engine/`）：`RuntimeEngineIconProvider` 负责图标（本机进程查 Launch Services，镜像引擎解码 manager 保留的 `remoteIconData(for:)`）；`RuntimeEngineManager+Reactive` 提供 `rx.runtimeEngines` / `rx.runtimeEngineSections` 两个 `Driver`。
 - **attach 流程**：`RuntimeProcessAttacher`（同模块）承接原先散在 `AttachToProcessViewModel` 里的「选载荷 → 装载荷 → 选传输 → 注入 → 确认握手」，ViewModel 只剩调用。载荷与 Catalyst helper 的路径经 `RuntimeViewerHelperClient` 的 `RuntimeResourceLocating` 取得，默认实现读 `Bundle.main`。
 
@@ -492,7 +499,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 Manager 把所有引擎按来源分成五组 `@Published`，`runtimeEngines` 计算属性是前四组之和：
 
-- **`systemRuntimeEngines`**：`RuntimeEngine.local`（App 里转发给内嵌 XPC service，无头 host 里在进程内，见 §3.6）+ Mac Catalyst client 引擎。`launchSystemRuntimeEngines()` 把前者加进列表（它自己连接）；Catalyst 一半尽力而为，helper 拉不起来只记日志并发 `catalystHelperUnavailable` 事件，不再连带跳过后面的已注入进程重连。
+- **`systemRuntimeEngines`**：`RuntimeEngine.local`（App 里转发给内嵌 XPC service，无头 host 里在进程内，见 §3.6）+ Mac Catalyst client 引擎。`launchSystemRuntimeEngines()` 把前者加进列表（它自己连接）；Catalyst 一半尽力而为，起不来只记日志并发 `catalystHelperUnavailable` 事件，不再连带跳过后面的已注入进程重连。Catalyst 引擎怎么起来由 `MacCatalystLaunching` 决定（测试缝）：`live` 在 App 里（`MacCatalystRuntimeService.embeddedServiceCredential` 非 `nil`）连内嵌的 Catalyst service，`helperApplication` 为 `nil`——连上即算数，不拉 helper、不轮询、不观察，也不订阅 daemon 可用性；在 CLI 独立 host 里经 daemon 拉 helper App，用 `engineList` 探测轮询最多 15 秒等它连回来，断线即出列表，daemon 重装时重启 Catalyst 引擎。
 - **`attachedRuntimeEngines`**：注入到别的 App 得到的引擎——非沙盒走 XPC（`.remote`），沙盒走 localSocket。支持从持久化记录**重连已注入进程**（`reconnectInjectedXPCEngines` 读 Mach Service 注册表；`reconnectInjectedSocketEngines` 读本地 JSON 并 `kill(pid,0)` 探活）。
 - **`bonjourRuntimeEngines`**：Bonjour 发现的对端。默认作为**管理型连接**（只跑引擎清单交换）在 UI 里隐藏；若对端不支持引擎共享（返回 0 个描述符）则升级为 `directBonjourEngines` 直接展示。
 - **`mirroredEngines`**：经由引擎共享协议**镜像**来的远端引擎（`OrderedDictionary<engineID, Engine>`），由 `RuntimeEngineMirrorRegistry` 管理。
@@ -633,6 +640,7 @@ port = connection.connectionInfo.port
 |--------|--------|
 | 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeForwardingConnection` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
 | 本地引擎为什么在另一个进程、service 崩了怎么恢复 | §3.6 + §5 的事件一节 + 提案 [0037-local-runtime-xpc-service](Evolutions/0037-local-runtime-xpc-service.md) |
+| Mac Catalyst 引擎在 App 里为什么连 XPC service、CLI 独立 host 为什么还拉 helper App | §3.6 + §7.1 + 提案 [draft-catalyst-xpc-service](Evolutions/draft-catalyst-xpc-service.md) |
 | 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
 | 加一条业务 RPC 命令（Core 自己的） | 在 `RuntimeEngineCommandName.swift` 加一个 `CommandName` 常量 + 在 `RuntimeEngine.registerBuiltInHandlers` 加一行（Proxy 自动继承） |
 | 加一条**别的模块**的 RPC 命令 | `extension RuntimeEngine.CommandName` 声明短名（前缀不变），再在那个模块里 `RuntimeEngine.addCommandExtension(named:install:)`；Core 一行不改。该模块的每个进程入口要调一次它的 install，漏调没有编译错误 —— 参照 `RuntimeViewerInjection` |

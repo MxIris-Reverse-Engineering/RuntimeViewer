@@ -7,9 +7,11 @@ import RuntimeViewerCore
 import RuntimeViewerCommunication
 @testable import RuntimeViewerEngineManagement
 
-/// The Mac Catalyst launch: an engine is only offered once its helper has
-/// answered, a helper that never answers is reported instead of shown, and a
-/// relaunch replaces whatever was there, in flight or not.
+/// The Mac Catalyst launch: an engine is only offered once its peer has
+/// answered — the helper application within its handshake, the embedded
+/// service by being connected to at all — a helper that never answers is
+/// reported instead of shown, an engine on the embedded service outlives a
+/// disconnect, and a relaunch replaces whatever was there, in flight or not.
 ///
 /// Drives the manager through its ``RuntimeEngineManager/MacCatalystLaunching``
 /// seam with stand-in engines, so nothing here reaches the helper daemon or
@@ -50,10 +52,18 @@ struct RuntimeEngineManagerMacCatalystLaunchTests {
     ) -> MacCatalystLaunching {
         MacCatalystLaunching(
             makeConnectedEngine: { engine() },
-            launchHelper: { onLaunchHelper() },
-            terminateHelper: {},
-            handshakeTimeout: handshakeTimeout
+            helperApplication: .init(
+                launch: { onLaunchHelper() },
+                terminate: {},
+                handshakeTimeout: handshakeTimeout
+            )
         )
+    }
+
+    /// The app's path: the engine is connected to the embedded service, and
+    /// there is no helper application at all.
+    private static func embeddedServiceLaunching(engine: @escaping @MainActor () -> RuntimeEngine) -> MacCatalystLaunching {
+        MacCatalystLaunching(makeConnectedEngine: { engine() }, helperApplication: nil)
     }
 
     private static func macCatalystEngines(of manager: RuntimeEngineManager) -> [RuntimeEngine] {
@@ -155,9 +165,7 @@ struct RuntimeEngineManagerMacCatalystLaunchTests {
                 attempt += 1
                 return attempt == 1 ? Self.silentEngine() : Self.answeringEngine()
             },
-            launchHelper: {},
-            terminateHelper: {},
-            handshakeTimeout: 30
+            helperApplication: .init(launch: {}, terminate: {}, handshakeTimeout: 30)
         ))
         var events: [RuntimeEngineManagerEvent] = []
         let subscription = manager.eventPublisher.sink { events.append($0) }
@@ -176,6 +184,71 @@ struct RuntimeEngineManagerMacCatalystLaunchTests {
         #expect(manager.systemRuntimeEngines.count == 1)
         #expect(!events.contains { if case .catalystHelperUnavailable = $0 { return true } else { return false } },
                 "a superseded launch is not a failure")
+    }
+
+    /// Connecting to the embedded service is a round trip to it, so there is
+    /// nothing left to wait for. The stand-in is a silent engine, one that
+    /// never answers a probe: a launch that still probed could not show it.
+    @Test("On the embedded service the engine is shown at once, without probing it")
+    func embeddedServiceEngineIsShownWithoutProbing() async {
+        let manager = Self.makeManager(launching: Self.embeddedServiceLaunching(engine: Self.silentEngine))
+        var events: [RuntimeEngineManagerEvent] = []
+        let subscription = manager.eventPublisher.sink { events.append($0) }
+        defer { subscription.cancel() }
+
+        let started = Date()
+        manager.relaunchMacCatalystRuntimeEngine()
+        await manager.waitForMacCatalystLaunch()
+
+        let engine = manager.currentMacCatalystRuntimeEngine
+        #expect(engine != nil)
+        #expect(Date().timeIntervalSince(started) < 2, "nothing was waited for")
+        #expect(manager.systemRuntimeEngines.count == 1)
+        #expect(manager.systemRuntimeEngines.first === engine)
+        let connectedEngines = events.compactMap { event -> RuntimeEngine? in
+            guard case .engineConnected(let connectedEngine) = event else { return nil }
+            return connectedEngine
+        }
+        #expect(connectedEngines.count == 1, "the connection is announced once, as an observed engine's would be")
+        #expect(connectedEngines.first === engine)
+        #expect(!events.contains { if case .catalystHelperUnavailable = $0 { return true } else { return false } })
+    }
+
+    /// The service exiting is its connection's business: the connection
+    /// reattaches to the relaunched service by itself, and the engine only
+    /// goes `.disconnected` and back. Removing the engine on that
+    /// `.disconnected`, as the helper application path does, would take
+    /// "My Mac (Mac Catalyst)" out of the menu for good.
+    @Test("On the embedded service a disconnect leaves the engine in place")
+    func embeddedServiceEngineSurvivesADisconnect() async throws {
+        let manager = Self.makeManager(launching: Self.embeddedServiceLaunching(engine: Self.silentEngine))
+        manager.relaunchMacCatalystRuntimeEngine()
+        await manager.waitForMacCatalystLaunch()
+        let engine = try #require(manager.currentMacCatalystRuntimeEngine)
+
+        // Stands in for the service exiting: the engine reports `.disconnected`.
+        await engine.stop()
+        // Long enough for an observation, were there one, to hop to the main
+        // actor and remove the engine; the helper path below does it in less.
+        try await Task.sleep(for: .milliseconds(300))
+
+        #expect(manager.currentMacCatalystRuntimeEngine === engine)
+        #expect(manager.systemRuntimeEngines.first === engine)
+    }
+
+    /// The contrast the test above relies on: nothing relaunches the helper
+    /// application, so its engine goes when it disconnects.
+    @Test("On the helper application path a disconnect removes the engine")
+    func helperApplicationEngineGoesWithADisconnect() async throws {
+        let manager = Self.makeManager(launching: Self.launching(engine: Self.answeringEngine, handshakeTimeout: 2))
+        manager.relaunchMacCatalystRuntimeEngine()
+        await manager.waitForMacCatalystLaunch()
+        let engine = try #require(manager.currentMacCatalystRuntimeEngine)
+
+        await engine.stop()
+        let removed = await Self.eventually { manager.currentMacCatalystRuntimeEngine == nil && manager.systemRuntimeEngines.isEmpty }
+
+        #expect(removed, "the helper's engine was not removed after it disconnected")
     }
 
     @Test("A configuration without system engines ignores relaunch requests")

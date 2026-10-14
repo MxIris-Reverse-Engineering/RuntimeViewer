@@ -56,8 +56,9 @@ public final class RuntimeCommunicator {
     ///   - source: The runtime source to connect to.
     ///   - credential: Session-scoped credential resolved at connect time. Required for
     ///     `.bonjour` + `.client` (the discovered `NWEndpoint`); optional for `.remote` + `.client`
-    ///     (a previously-handshaked XPC peer endpoint enables direct reconnect); the only way
-    ///     `.local` gets a connection at all (`.xpcService(target)`, the embedded service). See
+    ///     (a previously-handshaked XPC peer endpoint enables direct reconnect, and an embedded
+    ///     XPC service replaces the helper daemon altogether); the only way `.local` gets a
+    ///     connection at all (`.xpcService(target)`, the embedded service). See
     ///     `RuntimeConnectionCredential` for the full matrix.
     ///   - waitForConnection: For `.directTCP` server only — whether to block until the first
     ///     client connects.
@@ -99,6 +100,15 @@ public final class RuntimeCommunicator {
                     #log(.debug, "Creating XPC client connection (direct reconnect) with identifier: \(String(describing: identifier), privacy: .public)")
                     let connection = try await RuntimeXPCMachServiceClientConnection(identifier: identifier, serverEndpoint: serverEndpoint, modifier: modifier)
                     #log(.info, "XPC client direct reconnection established")
+                    return connection
+                } else if case .xpcService(let target) = credential {
+                    // The peer is an XPC service embedded in this process's
+                    // bundle — the app's Mac Catalyst runtime — so there is no
+                    // daemon to go through: the source names the peer, the
+                    // credential names the service that runs it.
+                    #log(.debug, "Creating XPC service client connection for identifier \(String(describing: identifier), privacy: .public): \(String(describing: target), privacy: .public)")
+                    let connection = try await RuntimeXPCServiceClientConnection(target: target, modifier: modifier)
+                    #log(.info, "XPC service client connection established")
                     return connection
                 } else {
                     #log(.debug, "Creating XPC client connection with identifier: \(String(describing: identifier), privacy: .public)")

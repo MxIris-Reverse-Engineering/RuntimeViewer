@@ -20,6 +20,7 @@ public import HelperCommunication
 /// |---------------------------------|---------------------------|-----------|
 /// | `.bonjour` + `.client`          | `.bonjour(endpoint)`      | Required  |
 /// | `.remote` + `.client` (reconnect) | `.xpcServer(endpoint)` | Optional, enables direct reconnect |
+/// | `.remote` + `.client` run in an XPC service | `.xpcService(target)` | Optional; the embedded service replaces the helper daemon (the app's Mac Catalyst runtime) |
 /// | `.local` run in the XPC service | `.xpcService(target)`     | Required to get a connection at all; without it `.local` has none |
 /// | All other cases                 | `nil`                     | —         |
 public enum RuntimeConnectionCredential: Sendable {
@@ -37,13 +38,15 @@ public enum RuntimeConnectionCredential: Sendable {
     /// used for reattaching to previously-injected processes.
     case xpcServer(HelperPeerEndpoint)
 
-    /// The embedded XPC service a `.local` engine forwards its work to.
+    /// The embedded XPC service an engine's work runs in.
     ///
     /// `.local` names this Mac, not a transport, so on its own it yields no connection. This is
     /// the one thing that gives it one: which service to reach (the app's, by bundle identifier,
-    /// or an anonymous listener in a test). It is a credential rather than part of the source
-    /// for the same reason the Bonjour endpoint is — the engine's identity, and everything keyed
-    /// on it, must not change because its work moved to another process.
+    /// or an anonymous listener in a test). A `.remote` client takes it too — the app's Mac
+    /// Catalyst engine, whose peer is an embedded service instead of a process reached through
+    /// the helper daemon. It is a credential rather than part of the source for the same reason
+    /// the Bonjour endpoint is — the engine's identity, and everything keyed on it, must not
+    /// change because its work moved to another process.
     case xpcService(RuntimeXPCServiceTarget)
     #endif
 }

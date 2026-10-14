@@ -5,9 +5,10 @@ import RuntimeViewerArchitectures
 /// Keeps the app out of App Nap while a document has background work in progress: an indexing
 /// batch, or a corpus queued or being printed — `DocumentState.reportActivity`.
 ///
-/// That work runs in the local-runtime XPC service, which launchd starts as an adaptive job: it
-/// runs at full speed while a request from an app that donates importance is waiting on it, and
-/// in the Darwin background band otherwise — priority 4, efficiency cores only. An app in App Nap
+/// That work runs in the local-runtime XPC service — or, for a Mac Catalyst document, the Mac
+/// Catalyst service — which launchd starts as an adaptive job: it runs at full speed while a
+/// request from an app that donates importance is waiting on it, and in the Darwin background
+/// band otherwise — priority 4, efficiency cores only. An app in App Nap
 /// donates nothing, so once the user had been in another app for about thirty seconds, every
 /// request the app had waiting stopped boosting the service, and SwiftUI's corpus took 187
 /// seconds to print instead of 18. Holding a user-initiated activity keeps the app out of App Nap

@@ -10,7 +10,9 @@ public import RuntimeViewerCommunication
 ///
 /// The service's `main.swift` builds one of these around an engine and a
 /// `RuntimeXPCServiceListenerConnection.embeddedService()`, calls `start()`,
-/// then `activate()`. Tests build the same type around an anonymous listener
+/// then `activate()`. The Mac Catalyst service does the same from
+/// `RuntimeViewerCatalystHelperPlugin`'s `runService()`: its job is this one,
+/// run in a Catalyst process. Tests build the same type around an anonymous listener
 /// and connect a client engine to its endpoint, so the whole path — hello,
 /// initial data, forwarded requests, pushes — runs inside one process.
 ///
