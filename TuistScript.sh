@@ -67,7 +67,8 @@ run() {
 }
 
 # Runs a command with its output in a log under $LOG_DIR, echoing only its errors and the last
-# lines. Returns the command's own exit code.
+# lines. For xcodebuild, whose output runs to thousands of lines. Returns the command's own exit
+# code.
 run_logged() {
     local log_name="$1"; shift
     if $DRY_RUN; then
@@ -84,6 +85,43 @@ run_logged() {
         tail -5 "$log_path" | sed 's/^/    /' >&2
     fi
     return $status
+}
+
+# Runs a Tuist command with its output on the terminal as well as in a log under $LOG_DIR. Tuist's
+# output is short, and the reason a step failed is often on a line no pattern would pick out of a
+# log: a repository that fails to clone reports git's own error on the line after the "error:".
+#
+# On a terminal the command runs under script(1), which gives it a terminal of its own and records
+# the session into the log: piped into tee, Tuist sees no terminal and drops its colors. Only when
+# standard input is a terminal too, or script forwards the end of the input as a ^D. Anywhere else
+# (UpdatePackagesScript.sh, Xcode's command plugin) the output goes through tee as plain text.
+# Returns the command's own exit code either way.
+run_tuist() {
+    local log_name="$1"; shift
+    if $DRY_RUN; then
+        printf '+ '; printf '%q ' "$@"; printf '| tee %q\n' "$LOG_DIR/$log_name.log"
+        return 0
+    fi
+    mkdir -p "$LOG_DIR"
+    local log_path="$LOG_DIR/$log_name.log"
+    log "  log: $log_path"
+    local exit_code=0
+    if [[ -t 0 && -t 1 ]]; then
+        script -q "$log_path" "$@" || exit_code=$?
+    else
+        "$@" 2>&1 | tee "$log_path" || exit_code=${PIPESTATUS[0]}
+    fi
+    return $exit_code
+}
+
+# Writes the JSON `tuist dump <arguments>` prints to $1, and fails showing everything Tuist said
+# when the dump fails.
+dump_tuist_manifest() {
+    local output_path="$1"; shift
+    "${TUIST[@]}" dump "$@" > "$output_path" 2> "$output_path.err" || {
+        cat "$output_path" "$output_path.err" >&2
+        fail "tuist dump $* failed"
+    }
 }
 
 while [[ $# -gt 0 ]]; do
@@ -194,7 +232,7 @@ LOCK_FILE_HINT="Some packages pick their manifest by Swift version, so an Xcode 
 
 install_dependencies() {
     log "Resolving the dependencies (tuist install)"
-    run_logged "install" "${TUIST[@]}" install || fail "tuist install failed"
+    run_tuist "install" "${TUIST[@]}" install || fail "tuist install failed"
     if ! $DRY_RUN; then
         if ! compare_lock_files; then
             warn "$TUIST_PACKAGE_RESOLVED now differs from $NATIVE_PACKAGE_RESOLVED (above). $LOCK_FILE_HINT"
@@ -215,13 +253,13 @@ generate_workspace() {
     local configuration="${1:-$CONFIGURATION}"
     ensure_dependencies
     log "Generating $WORKSPACE ($configuration)"
-    run_logged "generate-$configuration" "${TUIST[@]}" generate --no-open --configuration "$configuration" \
+    run_tuist "generate-$configuration" "${TUIST[@]}" generate --no-open --configuration "$configuration" \
         || fail "tuist generate failed"
 }
 
 restore_resting_generation() {
     log "Generating $WORKSPACE for $RESTING_CONFIGURATION again"
-    run_logged "generate-$RESTING_CONFIGURATION" "${TUIST[@]}" generate --no-open --configuration "$RESTING_CONFIGURATION" \
+    run_tuist "generate-$RESTING_CONFIGURATION" "${TUIST[@]}" generate --no-open --configuration "$RESTING_CONFIGURATION" \
         || warn "generating $WORKSPACE for $RESTING_CONFIGURATION failed; run ./TuistScript.sh generate"
 }
 
@@ -244,7 +282,7 @@ warm_cache() {
     # Without --cache-profile, `tuist cache warm` ignores the default profile in Tuist.swift and
     # caches every target it can, local ones included; the simulator payload then breaks its
     # device build.
-    run_logged "warm-$CONFIGURATION" "${TUIST[@]}" cache warm --configuration "$CONFIGURATION" \
+    run_tuist "warm-$CONFIGURATION" "${TUIST[@]}" cache warm --configuration "$CONFIGURATION" \
         --cache-profile development --no-upload \
         || fail "tuist cache warm failed"
     # A workspace generated before the warm-up still builds the dependencies from source.
@@ -319,14 +357,14 @@ check_command() {
     mkdir -p "$work_directory/Manifests" "$work_directory/Dependencies"
 
     log "Reading the manifests"
-    "${TUIST[@]}" dump config > "$work_directory/Manifests/TuistConfig.json" 2>/dev/null || fail "tuist dump config failed"
-    "${TUIST[@]}" dump package --path Tuist > "$work_directory/Manifests/PackageSettings.json" 2>/dev/null || fail "tuist dump package failed"
-    "${TUIST[@]}" dump workspace > "$work_directory/Manifests/Workspace.json" 2>/dev/null || fail "tuist dump workspace failed"
+    dump_tuist_manifest "$work_directory/Manifests/TuistConfig.json" config
+    dump_tuist_manifest "$work_directory/Manifests/PackageSettings.json" package --path Tuist
+    dump_tuist_manifest "$work_directory/Manifests/Workspace.json" workspace
     local package_directory
     for package_directory in "${LOCAL_PACKAGES[@]}" Tuist; do
         swift package --package-path "$package_directory" --scratch-path "$work_directory/Scratch/$package_directory" \
             dump-package > "$work_directory/Manifests/$package_directory.json" 2> "$work_directory/Manifests/$package_directory.err" \
-            || fail "swift package dump-package failed in $package_directory (see $work_directory/Manifests/$package_directory.err)"
+            || { cat "$work_directory/Manifests/$package_directory.err" >&2; fail "swift package dump-package failed in $package_directory"; }
     done
     # Every dependency's manifest, as the selected Xcode's SwiftPM reads it.
     find "$DEPENDENCIES_DIRECTORY/checkouts" -mindepth 1 -maxdepth 1 -type d -print0 \

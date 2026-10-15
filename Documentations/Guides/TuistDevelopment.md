@@ -133,6 +133,10 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 `<checkout>` 是 checkout 目录名加路径的短 hash，同名的两个 worktree 不会混用。想从头来：删掉
 `Dependencies/<checkout>/` 后 `install`，删掉 `Cache/` 后 `warm`。
 
+脚本的日志在仓库内的 `Products/Logs/Tuist/`（已忽略）。Tuist 命令（`install`、`generate`、`cache warm`）的输出
+原样显示在终端，同时记进日志——在终端里经 `script` 运行，颜色与直接跑 Tuist 一样；`xcodebuild` 的输出只记进日志，
+失败时终端只显示错误摘要。
+
 Agent 运行时用 `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent>/Tuist`，并经
 `queued-build` 运行脚本。
 
