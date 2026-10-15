@@ -1,0 +1,4 @@
+#include "Shared.xcconfig"
+#include "../ServiceName/Debug-arm64e.xcconfig"
+
+ENABLE_POINTER_AUTHENTICATION = YES

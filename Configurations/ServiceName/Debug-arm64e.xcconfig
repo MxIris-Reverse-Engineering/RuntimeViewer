@@ -1,0 +1,4 @@
+// The privileged helper daemon's name in this configuration; Debug.xcconfig explains who reads it.
+// The arm64e variant has a launch-service identity of its own, so it never collides with a plain
+// Debug build.
+RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service

@@ -274,7 +274,7 @@ resolve_generate_appcast() {
 }
 
 # Catch version drift early: --version-tag vX.Y.Z[-beta.N] must agree with the
-# MARKETING_VERSION baked into project.pbxproj. Otherwise the archive self-reports
+# MARKETING_VERSION set in Configurations/Version.xcconfig. Otherwise the archive self-reports
 # the old version and the generated appcast advertises a download whose internal
 # shortVersionString never bumps — Sparkle then never offers the update. Skipped
 # when no tag is given (local debug builds).
@@ -287,7 +287,7 @@ verify_marketing_version() {
         | awk -F' = ' '$1 ~ /^[[:space:]]*MARKETING_VERSION$/ { print $2; exit }')
     [[ -n "$actual" ]] || fail "could not read MARKETING_VERSION from scheme '$SCHEME'; run --update-packages or verify the workspace path."
     if [[ "$actual" != "$expected" ]]; then
-        fail "MARKETING_VERSION ($actual) does not match --version-tag ($VERSION_TAG, expected $expected). Bump MARKETING_VERSION in project.pbxproj before re-running."
+        fail "MARKETING_VERSION ($actual) does not match --version-tag ($VERSION_TAG, expected $expected). Bump MARKETING_VERSION in Configurations/Version.xcconfig before re-running."
     fi
     log "MARKETING_VERSION ok: $actual matches $VERSION_TAG"
 }

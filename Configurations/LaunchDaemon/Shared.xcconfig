@@ -1,0 +1,16 @@
+// The privileged helper daemon, target com.mxiris.runtimeviewer.service. (The directory is not named
+// after the target: a folder ending in .service is a bundle to Finder and Xcode.)
+//
+// Its product is named after the daemon of the configuration being built, which each configuration
+// file includes from Configurations/ServiceName. The app copies it in by that name: a reference to
+// the product itself would resolve the file name in the default configuration only.
+PRODUCT_NAME = $(RUNTIME_VIEWER_SERVICE_NAME)
+
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_HARDENED_RUNTIME = YES
+MACOSX_DEPLOYMENT_TARGET = 15.0
+SKIP_INSTALL = YES
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+SWIFT_VERSION = 5.0

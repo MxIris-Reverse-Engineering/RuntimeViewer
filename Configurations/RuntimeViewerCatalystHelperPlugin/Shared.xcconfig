@@ -1,0 +1,25 @@
+#include "../Version.xcconfig"
+
+// The macOS bundle both Catalyst shells — the helper app and the XPC service — load from the app's
+// PlugIns; one file for every configuration.
+CODE_SIGN_STYLE = Manual
+COMBINE_HIDPI_IMAGES = YES
+DEAD_CODE_STRIPPING = YES
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_POINTER_AUTHENTICATION = NO
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_KEY_NSHumanReadableCopyright =
+INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl
+INSTALL_PATH = $(LOCAL_LIBRARY_DIR)/Bundles
+// The app's Frameworks, four levels up from the plugin's executable in Contents/PlugIns: that is
+// where libswiftCompatibilitySpan.dylib comes from on a system whose /usr/lib/swift lacks it.
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @loader_path/../../../../Frameworks
+MACOSX_DEPLOYMENT_TARGET = 15.0
+ONLY_ACTIVE_ARCH = NO
+PRODUCT_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER)
+PRODUCT_NAME = $(TARGET_NAME)
+SKIP_INSTALL = YES
+SWIFT_EMIT_LOC_STRINGS = YES
+SWIFT_VERSION = 5.0
+WRAPPER_EXTENSION = bundle

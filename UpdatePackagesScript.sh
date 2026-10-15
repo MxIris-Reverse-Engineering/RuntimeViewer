@@ -12,6 +12,10 @@
 # resolves afresh in a DerivedData of this script's own. Xcode may stay open:
 # it resolves to the new Package.resolved from the mirrors fetched here.
 #
+# After the Debug workspace, it updates Tuist/Package.resolved, the lock file of
+# the development-only Tuist workspace (TuistScript.sh): seeded from the Debug
+# workspace's, resolved with `./TuistScript.sh install`, and compared with it.
+#
 # Usage:
 #   ./UpdatePackagesScript.sh                        # all three workspaces
 #   ./UpdatePackagesScript.sh --workspace Debug      # one workspace; repeatable
@@ -340,10 +344,47 @@ for workspace_name in "${SELECTED_WORKSPACES[@]}"; do
     fi
 done
 
+# Tuist/Package.resolved has to pin what the native lock files pin. It starts as
+# a copy of the Debug workspace's, so the pins are right even when Tuist cannot
+# run here (Xcode's command plugin may not see mise); `tuist install` then
+# checks that Tuist resolves the same, with this script's Xcode, and records the
+# hash of Tuist/Package.swift.
+update_tuist_lock_file() {
+    local debug_package_resolved
+    debug_package_resolved="$(package_resolved_path "RuntimeViewer-Debug")"
+    log "Tuist/Package.resolved"
+    run cp "$debug_package_resolved" "$PROJECT_DIR/Tuist/Package.resolved"
+    if $DRY_RUN; then
+        run "$PROJECT_DIR/TuistScript.sh" install
+        return 0
+    fi
+    if ! "$PROJECT_DIR/TuistScript.sh" install 2>&1 | sed 's/^/    /'; then
+        warn "\`./TuistScript.sh install\` failed; Tuist/Package.resolved holds the Debug workspace's pins. Run it again where Tuist is installed."
+    fi
+}
+
+tuist_lock_file_updated=false
+for workspace_name in "${SELECTED_WORKSPACES[@]}"; do
+    if [[ "$workspace_name" == "RuntimeViewer-Debug" ]] && [[ -f "$PROJECT_DIR/Tuist/Package.swift" ]]; then
+        if [[ " ${failed_workspaces[*]:-} " == *" RuntimeViewer-Debug "* ]]; then
+            warn "Tuist/Package.resolved not updated: the Debug workspace's resolution failed"
+        else
+            update_tuist_lock_file
+            tuist_lock_file_updated=true
+        fi
+    fi
+done
+
 if ! $DRY_RUN && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     changed_tracked_files=()
+    candidate_paths=()
     for workspace_name in "${SELECTED_WORKSPACES[@]}"; do
-        relative_path="$workspace_name.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        candidate_paths+=("$workspace_name.xcworkspace/xcshareddata/swiftpm/Package.resolved")
+    done
+    if $tuist_lock_file_updated; then
+        candidate_paths+=("Tuist/Package.resolved")
+    fi
+    for relative_path in "${candidate_paths[@]}"; do
         if git ls-files --error-unmatch -- "$relative_path" >/dev/null 2>&1 \
             && ! git diff --quiet -- "$relative_path"; then
             changed_tracked_files+=("$relative_path")

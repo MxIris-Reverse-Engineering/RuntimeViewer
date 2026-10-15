@@ -1,15 +1,16 @@
 #include "../CodeSigning.xcconfig"
 #include "Shared.xcconfig"
 
-SMPrivilegedExecutable = $(RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE)
+// RUNTIME_VIEWER_SERVICE_NAME, the privileged helper daemon's name; the file explains who reads it.
+#include "../ServiceName/Debug.xcconfig"
 
-// LaunchDaemon helper identity for Debug builds. (Debug-arm64e overrides this in the app
-// target's Debug-arm64e build settings with dev.arm64e.mxiris.runtimeviewer.service.)
-// Single build-time source consumed by the merged service target's PRODUCT_NAME, the
-// build-time-generated launchd plist (name / Label / MachServices / EnvironmentVariables),
-// and the app Info.plist RuntimeViewerServiceName key. At runtime RuntimeViewerMachServiceName
-// reads it back: launchd env for the daemon, Info.plist for the app.
-RUNTIME_VIEWER_SERVICE_NAME = dev.mxiris.runtimeviewer.service
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+ONLY_ACTIVE_ARCH = YES
+PRODUCT_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER)
+PRODUCT_NAME = RuntimeViewer-Debug
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+
+SMPrivilegedExecutable = $(RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE)
 
 // Which of the Icon Composer documents under Resources/ the app ships, along two axes.
 //

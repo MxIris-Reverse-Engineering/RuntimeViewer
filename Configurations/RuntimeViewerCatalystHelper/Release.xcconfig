@@ -1,0 +1,7 @@
+#include "Shared.xcconfig"
+
+// The helper reaches the app through the privileged helper daemon, so it has to name the same one.
+#include "../ServiceName/Release.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER)
+VALIDATE_PRODUCT = NO

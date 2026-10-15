@@ -1,0 +1,5 @@
+# The Tuist that generates RuntimeViewer-Tuist.xcworkspace, the development-only Tuist workspace
+# (Documentations/Guides/TuistDevelopment.md). Release and CI builds go through the native Xcode
+# projects and do not use it.
+[tools]
+tuist = "4.210.0"

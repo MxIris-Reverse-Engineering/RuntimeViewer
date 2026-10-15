@@ -1,0 +1,27 @@
+#include "../Version.xcconfig"
+
+// The only code that links Xcode's private SourceEditor frameworks. It builds against the stub
+// interfaces in Stubs/ (Stubs/README.md) and leaves the frameworks' symbols undefined, to be bound
+// when the app loads the bundle.
+FRAMEWORK_SEARCH_PATHS = $(SRCROOT)/../Stubs
+OTHER_LDFLAGS = -undefined dynamic_lookup
+OTHER_SWIFT_FLAGS = -Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel
+
+CODE_SIGN_STYLE = Manual
+COMBINE_HIDPI_IMAGES = YES
+DEAD_CODE_STRIPPING = YES
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_POINTER_AUTHENTICATION = NO
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_KEY_NSHumanReadableCopyright =
+INFOPLIST_KEY_NSPrincipalClass = RuntimeViewerSourceEditorBridge
+INSTALL_PATH = $(LOCAL_LIBRARY_DIR)/Bundles
+MACOSX_DEPLOYMENT_TARGET = 15.0
+ONLY_ACTIVE_ARCH = NO
+PRODUCT_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)
+PRODUCT_NAME = $(TARGET_NAME)
+SKIP_INSTALL = YES
+SWIFT_EMIT_LOC_STRINGS = YES
+SWIFT_VERSION = 5.0
+WRAPPER_EXTENSION = bundle

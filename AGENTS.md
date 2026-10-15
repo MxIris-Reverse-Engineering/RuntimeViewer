@@ -28,10 +28,12 @@ Build builds a dependency for the platform named by its own `SDKROOT` /
 the usual Catalyst spelling, `SDKROOT = iphoneos` with
 `SUPPORTS_MACCATALYST = YES`, turns into Catalyst only when the run destination
 is Mac Catalyst, and under the app's macOS destination it builds an `iphoneos`
-product instead. Xcode's build settings editor does not show `SDK_VARIANT` at
-all, so these are edited in the project file. All three configurations of the
-service and of the helper, and all four of the payload target, carry them, along
-with:
+product instead. They live in the targets' xcconfig files,
+`Configurations/RuntimeViewerCatalystService/Shared.xcconfig`,
+`Configurations/RuntimeViewerCatalystHelper/Shared.xcconfig` and
+`Configurations/RuntimeViewerSimulatorServer/Shared.xcconfig` — Xcode's build
+settings editor does not show `SDK_VARIANT` at all — and every configuration of
+the three targets gets them from there, along with:
 
 - `SKIP_INSTALL = YES`, so archiving the app does not also install the service,
   the helper or the payload as a product of its own — that would make the archive
@@ -41,12 +43,16 @@ with:
   for Release, `dev.mxiris…` for Debug, `dev.arm64e.mxiris…` for Debug-arm64e).
   It must match the app's: the helper reaches its host through the helper daemon
   of that name, and a helper on another daemon never finds the host's endpoint,
-  so the Catalyst engine loads forever. Building both in one configuration keeps
-  them in step — **a new configuration needs the name on the helper too**.
+  so the Catalyst engine loads forever. The name is written once per
+  configuration, in `Configurations/ServiceName/<configuration>.xcconfig`, which
+  the app, the helper and the daemon target (whose `PRODUCT_NAME` it is) all
+  include, and building both in one configuration keeps them in step — **a new
+  configuration needs a file of its own there, included by all three**.
   Background: `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
   The service needs no such name: launchd finds it by bundle identifier inside
   the app, never through the daemon. A new configuration gives it a bundle
-  identifier and sets `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER` in the
+  identifier, in a `Configurations/RuntimeViewerCatalystService/<configuration>.xcconfig`
+  of its own, and sets `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER` in the
   app's xcconfig to match, the way the local-runtime service is done.
 
 Xcode's build settings editor shows the payload target's Base SDK as
@@ -248,6 +254,59 @@ the same flag. Background:
   that name, and two schemes called `runtime-viewer-cli` make `xcodebuild -scheme` pick one
   silently. The app target depends on it, so building the app builds it too.
 
+## Build Settings and the Tuist Development Workspace
+
+**Build settings live in xcconfig files, not in the project files.** Every target of
+`RuntimeViewerUsingAppKit.xcodeproj` (except the old `com.JH.RuntimeViewerService`), the
+project level, and `RuntimeViewerServer` / `RuntimeViewerSimulatorServer` in
+`RuntimeViewerServer.xcodeproj` set nothing in their project files; their settings are in
+`Configurations/<target>/` (`Shared.xcconfig` plus a file per configuration that has values of its
+own), the daemon's in `Configurations/LaunchDaemon/`, the AppKit project level's in
+`Configurations/RuntimeViewerUsingAppKitProject/`. Two values are written once for everyone:
+
+- `Configurations/Version.xcconfig` — `MARKETING_VERSION`, the one place a release bumps (the
+  `ArchiveScript.sh` check against `--version-tag` reads it back);
+- `Configurations/ServiceName/<configuration>.xcconfig` — `RUNTIME_VIEWER_SERVICE_NAME`, see
+  *Embedded non-macOS products*.
+
+Edit those files, never Xcode's build settings editor or a target's General tab: both write a
+target-level value into the project file, which outranks the xcconfig and which the Tuist project
+below does not see. `./TuistScript.sh check` reports any such value.
+
+**`RuntimeViewer-Tuist.xcworkspace` is a second, development-only way to build the macOS app.**
+Tuist generates it from `Tuist.swift`, `Workspace.swift`, `Tuist/Package.swift` and
+`RuntimeViewerUsingAppKit/Project.swift`; it builds the same targets from the same sources and the
+same xcconfig files, with every third-party dependency taken from Tuist's local binary cache and
+the four local packages as source. **Releases, CI, `RunScript.sh`, `ArchiveScript.sh` and every
+other script use the native projects only**, and the generated files are gitignored.
+
+```bash
+mise install                      # the Tuist mise.toml pins
+./TuistScript.sh warm             # resolve, build the dependencies into the cache, generate
+open RuntimeViewer-Tuist.xcworkspace
+./TuistScript.sh build --configuration Debug-arm64e --launch   # like RunScript.sh
+./TuistScript.sh check            # before committing a change to the native projects
+```
+
+Rules that keep the two in step:
+
+- **A commit that changes the native projects' targets, dependencies, embedded products or
+  settings updates the Tuist description in the same commit**, and `./TuistScript.sh check` passes
+  before it is committed. `check` compares the projects' settings wiring, the local packages'
+  target lists with `Tuist.swift` and `Tuist/ProjectDescriptionHelpers/LocalPackages.swift`, the
+  two lock files, and the trait-conditioned settings Tuist drops; `check --build` also builds both
+  workspaces and compares the two apps.
+- **`Tuist/Package.resolved` pins what the native lock files pin.** `UpdatePackagesScript.sh`
+  updates it after the Debug workspace. Resolve with the Xcode the native lock files were resolved
+  with: some packages pick their manifest by Swift version.
+- **Build the app with the `RuntimeViewer macOS` scheme only.** The simulator payload and the
+  Catalyst plugin are built first by the scheme's fixed order, not as dependencies.
+
+Agents run `TuistScript.sh` with `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent>/Tuist`
+and through `queued-build`. Usage, the Tuist workarounds behind the oddities in the manifests, and
+the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
+Background: `Documentations/Evolutions/0053-tuist-coexistence.md`.
+
 ## App Icon
 
 Four Icon Composer documents sit under `Resources/`, all four in the app target's Resources build
@@ -287,8 +346,8 @@ The same script produces the Catalyst helper's pair, below. Background: evolutio
 `CatalystHelperIcon.icon` and its generated `CatalystHelperIconXcode26.icon` live in
 `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/`, which is a synchronized folder of the helper
 target, so they are its resources without any file reference in the project — and never the app's.
-The helper has no xcconfig, so the toolchain rule lives in its target-level build settings, all
-three configurations: `ASSETCATALOG_COMPILER_APPICON_NAME` expands
+The toolchain rule lives in the helper's own xcconfig, `Configurations/RuntimeViewerCatalystHelper/Shared.xcconfig`:
+`ASSETCATALOG_COMPILER_APPICON_NAME` expands
 `RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`. It has no beta variant. Its
 three lower groups and their assets are copies of `AppIcon.icon`'s, so an edit to the shared layers
 goes into `AppIcon.icon`, `AppIconBeta.icon` and `CatalystHelperIcon.icon` alike, then the variants

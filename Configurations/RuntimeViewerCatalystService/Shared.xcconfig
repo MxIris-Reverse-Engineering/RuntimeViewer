@@ -1,0 +1,36 @@
+#include "../Version.xcconfig"
+
+// The Mac Catalyst XPC service the app's "My Mac (Mac Catalyst)" engine runs in, embedded at
+// Contents/XPCServices. Each configuration embeds a service of its own identifier, which the app
+// reads back from its Info.plist (RuntimeViewerCatalystServiceBundleIdentifier) to open the
+// connection.
+//
+// Like the Catalyst helper, it is built as a target dependency of the macOS app, so it pins its own
+// platform; RuntimeViewerCatalystHelper/Shared.xcconfig explains why, and AGENTS.md, "Embedded
+// non-macOS products", has the whole story.
+SDKROOT = macosx
+SDK_VARIANT = iosmac
+SUPPORTED_PLATFORMS = macosx
+SUPPORTS_MACCATALYST = YES
+
+ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO
+CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystService/RuntimeViewerCatalystService.entitlements
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_IDENTITY[sdk=macosx*] = Apple Development
+CODE_SIGN_STYLE = Manual
+DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_POINTER_AUTHENTICATION = NO
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = RuntimeViewerCatalystService/Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerCatalystService
+INFOPLIST_KEY_NSHumanReadableCopyright =
+IPHONEOS_DEPLOYMENT_TARGET = 18.0
+ONLY_ACTIVE_ARCH = NO
+PRODUCT_NAME = $(TARGET_NAME)
+SKIP_INSTALL = YES
+SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO
+SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO
+SWIFT_VERSION = 5.0
+TARGETED_DEVICE_FAMILY = 1,2,6

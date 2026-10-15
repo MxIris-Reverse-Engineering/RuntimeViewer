@@ -1,0 +1,6 @@
+#include "Shared.xcconfig"
+
+// The helper reaches the app through the privileged helper daemon, so it has to name the same one.
+#include "../ServiceName/Debug.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER)
