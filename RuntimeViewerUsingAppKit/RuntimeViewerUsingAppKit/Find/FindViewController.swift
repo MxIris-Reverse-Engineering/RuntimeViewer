@@ -25,7 +25,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     // MARK: - Query Parameters
 
-    private let queryParametersView = NSView()
+    /// Taken for a bar by the results' top scroll pocket, as Xcode's query parameters view is
+    /// (`DVTStackViewWithScrollPocketElementStyleBar` in `IDEFindNavigatorQueryParametersController.nib`).
+    private let queryParametersView = ScrollPocketBarView()
 
     private let modePathControl = NSPopUpPathControl()
 
@@ -47,7 +49,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     // MARK: - Summary Bar
 
-    private let summaryView = NSView()
+    /// Taken for a bar by the results' top scroll pocket, as Xcode's summary row is
+    /// (`NSViewWithScrollPocketElementStyleBar` in `IDEFindNavigator.nib`).
+    private let summaryView = ScrollPocketBarView()
 
     private let summaryLabel = Label()
 
@@ -71,11 +75,18 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let filterSearchField = NSFilterSearchField()
 
-    private let filterControlBar = NSFilterControlBar()
+    private let filterControlBar = NavigatorFilterControlBar()
 
     /// Runs the results under the query area, the tab switcher's bar and the filter bar from macOS 26
     /// on. Made in `viewDidLoad`.
     private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
+    /// The tab switcher's bar while this page is on screen under it (`NavigatorTabPage`).
+    var tabSwitcherOverlayViews: [NSView] = [] {
+        didSet {
+            navigatorScrollViewLayout?.inheritedTopOverlayViews = tabSwitcherOverlayViews
+        }
+    }
 
     /// From macOS 26 the results reach the top of the page, under the toolbar, the tab switcher's bar
     /// and the query area, which float over them as Xcode's do (`-[IDEFindNavigator viewDidLoad]`
@@ -293,6 +304,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             topOverlayViews: [queryParametersView, summaryView],
             bottomOverlayViews: [filterControlBar]
         )
+        navigatorScrollViewLayout?.inheritedTopOverlayViews = tabSwitcherOverlayViews
 
         scrollView.do {
             $0.borderType = .noBorder
@@ -544,6 +556,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         summaryHeightConstraint?.update(offset: summary == nil ? 0 : 22)
     }
 }
+
+extension FindViewController: NavigatorTabPage {}
 
 // MARK: - Context Menu Item
 

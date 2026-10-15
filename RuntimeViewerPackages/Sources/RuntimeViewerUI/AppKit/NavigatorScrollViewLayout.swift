@@ -20,10 +20,16 @@ import UIFoundation
 ///   so the first row starts a little below the bars and the last one scrolls clear of the filter
 ///   bar. A change keeps the rows where they were: a list at its top stays at its top. The scroll view
 ///   keeps adjusting its own insets, which keeps the scroller clear of the bars.
-/// - **Both edges always show their pocket.** AppKit sizes the top pocket by the safe area and the
-///   bottom one by the bottom content inset, so the rows fade out under exactly the views that float
-///   over them. Xcode also registers those views with the scroll view as the pockets' containers; the
-///   private call for that is not in the UIFoundation release this app builds against yet.
+/// - **The views floating over an edge are registered as the containers of that edge's pocket**, and
+///   both edges always show their pocket. AppKit sizes the top pocket by the safe area and the bottom
+///   one by the bottom content inset, each united with the containers registered there, so the rows fade
+///   out under exactly the views that float over them. A container tells the pocket what it is through
+///   `_scrollPocketElementStyle`; Xcode's bars answer as bars, and so do `ScrollPocketBarView` and
+///   `NavigatorFilterControlBar`. The tab switcher's bar, which lives outside the page, is registered too
+///   while the page is the one on screen (`inheritedTopOverlayViews`).
+/// - **On macOS 26 both pockets get style 2**, as Xcode's navigators do there. On macOS 27 Xcode sets
+///   the top pocket's style to 2 only under a chooser showing a second level of tabs, which the tab
+///   switcher never has, and leaves both at 0, the default.
 ///
 /// The layout keeps itself up to date: it follows the scroll view's safe area and the frames of the
 /// scroll view and of every overlay view, so nothing has to call it from a layout pass. Before macOS 26
@@ -35,17 +41,28 @@ public final class NavigatorScrollViewLayout: NSObject {
     /// `dvt_positionSubviewsAndSizeSelfAfterSubviewLayout`, 0x840A40).
     public static let topContentInsetBeyondSafeArea: CGFloat = 8
 
-    /// One bit per edge, the top edge's first, the way `alwaysShownPocketEdges` takes them. Xcode passes 3
-    /// (`-[IDENavigatorArea replacementView:didInstallViewController:]`, 0x2924A0).
-    private static let topAndBottomPocketEdges: Int64 = 0b11
-
     public let scrollView: NSScrollView
 
-    /// The views floating over the scroll view's top edge, such as the Find page's query area.
+    /// The views of the page floating over the scroll view's top edge, such as the Find page's query area.
     public let topOverlayViews: [NSView]
 
     /// The views floating over its bottom edge: the filter bar.
     public let bottomOverlayViews: [NSView]
+
+    /// Views from outside the page that float over the scroll view's top edge: the tab switcher's bar, while
+    /// the page is the one on screen under it. They are registered as containers of the top pocket, as
+    /// `topOverlayViews` are, but add no safe area: their depth already reaches the scroll view from outside,
+    /// as the safe area of the tab view.
+    public var inheritedTopOverlayViews: [NSView] = [] {
+        didSet {
+            updateTopPocketContainers()
+        }
+    }
+
+    /// The views registered as containers of the top pocket. Kept here so that a view is registered once and
+    /// unregistered when it goes: how AppKit stores its containers was never worked out, so nothing relies on
+    /// it ignoring a second registration of the same view.
+    private var registeredTopPocketContainers: [NSView] = []
 
     private var safeAreaInsetsObservation: NSKeyValueObservation?
 
@@ -58,8 +75,19 @@ public final class NavigatorScrollViewLayout: NSObject {
         guard #available(macOS 26.0, *) else { return }
 
         scrollView.contentView.automaticallyAdjustsContentInsets = false
-        if scrollView.responds(to: #selector(setter: NSScrollView.alwaysShownPocketEdges)) {
-            scrollView.alwaysShownPocketEdges = Self.topAndBottomPocketEdges
+        // What Xcode's navigator area does to each navigator it installs (`-[IDENavigatorArea
+        // replacementView:didInstallViewController:]`, 0x2924A0): both edges always shown, the bars
+        // registered, and on macOS 26 style 2 on both edges. The bars of the navigators themselves are
+        // registered by the navigators (`-[IDEFindNavigator viewDidLoad]`, 0x1B42C0;
+        // `-[IDEExplorableNavigatorView viewDidMoveToWindow]`, 0x76344C).
+        scrollView.box.alwaysShownScrollPocketEdges = [.top, .bottom]
+        for bottomOverlayView in bottomOverlayViews {
+            scrollView.box.registerScrollPocketContainer(bottomOverlayView, on: .bottom)
+        }
+        updateTopPocketContainers()
+        if #unavailable(macOS 27.0) {
+            scrollView.box.setScrollPocketStyle(2, on: .top)
+            scrollView.box.setScrollPocketStyle(2, on: .bottom)
         }
 
         safeAreaInsetsObservation = scrollView.observe(\.safeAreaInsets) { [weak self] _, _ in
@@ -85,6 +113,23 @@ public final class NavigatorScrollViewLayout: NSObject {
 
     @objc private func viewFrameDidChange(_ notification: Notification) {
         update()
+    }
+
+    /// Unregisters the top containers that went and registers the ones that came, the page's own overlays
+    /// first. A view listed twice is registered once.
+    private func updateTopPocketContainers() {
+        guard #available(macOS 26.0, *) else { return }
+        var topPocketContainers: [NSView] = []
+        for view in topOverlayViews + inheritedTopOverlayViews where !topPocketContainers.contains(where: { $0 === view }) {
+            topPocketContainers.append(view)
+        }
+        for view in registeredTopPocketContainers where !topPocketContainers.contains(where: { $0 === view }) {
+            scrollView.box.unregisterScrollPocketContainer(view, on: .top)
+        }
+        for view in topPocketContainers where !registeredTopPocketContainers.contains(where: { $0 === view }) {
+            scrollView.box.registerScrollPocketContainer(view, on: .top)
+        }
+        registeredTopPocketContainers = topPocketContainers
     }
 
     private func updateAdditionalSafeAreaInsets() {

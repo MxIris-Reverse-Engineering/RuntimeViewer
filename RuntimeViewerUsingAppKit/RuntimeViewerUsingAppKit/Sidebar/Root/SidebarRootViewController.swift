@@ -14,13 +14,20 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
     private let filterSearchField = NSFilterSearchField()
 
-    private let filterControlBar = NSFilterControlBar()
+    private let filterControlBar = NavigatorFilterControlBar()
 
     private let bottomSeparatorView = NSBox()
 
     /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on. Made in
     /// `viewDidLoad`.
     private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
+    /// The tab switcher's bar while this page is on screen under it (`NavigatorTabPage`).
+    var tabSwitcherOverlayViews: [NSView] = [] {
+        didSet {
+            navigatorScrollViewLayout?.inheritedTopOverlayViews = tabSwitcherOverlayViews
+        }
+    }
 
     override var shouldDisplayCommonLoading: Bool {
         true
@@ -86,6 +93,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         }
 
         navigatorScrollViewLayout = NavigatorScrollViewLayout(scrollView: scrollView, bottomOverlayViews: [filterControlBar])
+        navigatorScrollViewLayout?.inheritedTopOverlayViews = tabSwitcherOverlayViews
 
         // The bar sets the field's control size, which sets its font, so the field's own settings come after it.
         filterControlBar.do {
@@ -200,3 +208,5 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         return cellViewModel.appearance.name.string
     }
 }
+
+extension SidebarRootViewController: NavigatorTabPage {}

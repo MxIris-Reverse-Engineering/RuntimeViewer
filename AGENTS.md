@@ -1068,12 +1068,12 @@ override func setupBindings(for viewModel: MyViewModel) {
 | `NSPopUpPathControl()` (AppKitPlus) | `NSPathControl()` for an Xcode-style path of menus (`Find ▸ Text ▸ Containing`) |
 | `NSFilterSearchField()` (AppKitPlus) | `NSSearchField()` above a list it filters — the field of a page's filter bar, a picker's filter field |
 | `NSFindPatternSearchField()` (AppKitPlus) | `NSSearchField()` for a query that takes find patterns (Digits, Any Word Characters…) among its text — the Find page's query field. Read `findPatternComponents`, never `stringValue`, which holds U+FFFC for each token |
-| `NSFilterControlBar()` (AppKitPlus) | an `HStackView` of buttons and a search field at the bottom of a sidebar page |
+| `NavigatorFilterControlBar()` (RuntimeViewerUI, an AppKitPlus `NSFilterControlBar`) | an `HStackView` of buttons and a search field at the bottom of a sidebar page |
 | `final class XxxView: LayerBackedView` | `final class XxxView: NSView` (when it needs `cornerRadius` / border / `backgroundColor` / shadow) |
 
 **Filter fields, filter bars and pop-up paths come from AppKitPlus.** `NSFilterSearchField`, `NSFilterControlBar` and `NSPopUpPathControl` are ports of Xcode's own `DVTSearchField`, `DVTFilterControlBar` and `DVTPathControl`; RuntimeViewer keeps no copies of its own any more — UIFoundation's `FilterSearchField` went with its `FilterUI` trait, and the old `PopUpPathControl` and `ItemPopUpButton` were deleted. Background: `Documentations/Evolutions/0032-appkitplus-filter-and-path-controls.md`. Things to know:
 
-- The bar at the bottom of a sidebar page is an `NSFilterControlBar`. Give it the page's field as `filterField`, put the buttons beside the field in it as `NSFilterControlBarItem`s, and pin it to the edges: its intrinsic height carries the margins around the field. Set `controlSize` on the bar, never on its field: the bar sets the field's size whenever it takes the field or changes size.
+- The bar at the bottom of a sidebar page is a `NavigatorFilterControlBar` (RuntimeViewerUI): AppKitPlus's `NSFilterControlBar`, taken for a bar by the list's scroll pocket — a plain `NSFilterControlBar` there loses that without a sign; see *Navigator pages run under their bars*. Give it the page's field as `filterField`, put the buttons beside the field in it as `NSFilterControlBarItem`s, and pin it to the edges: its intrinsic height carries the margins around the field. Set `controlSize` on the bar, never on its field: the bar sets the field's size whenever it takes the field or changes size.
 - An item with a menu pops the menu up as a pull-down `NSPopUpButton` does, which is what Xcode's bar has: below the item, or above it when the window is at the bottom of the screen. **Item 0 of the menu is the pull-down's face and is never listed**, so a menu starts with an empty item, or its first entry goes missing; the item shows its own `image`, not item 0's. `ChoiceFilterControlBarItem` (RuntimeViewerUI) is the one for a choice of one case or none, such as the filter mode, and puts the face in itself. An item without a menu sends its action from its button on the bar, and that button is the view to show a popover from. An item has no tint: to show it as active, swap in a symbol coloured with the accent colour, which the bar keeps from AppKitPlus 0.10.1 on.
 - Add a filter toggle with `addFilterButton(with:alternateImage:toolTip:accessibilityLabel:)` and leave its frame alone: the field lays its buttons out itself, and a constraint on one breaks that.
 - Setting a field's `controlSize` also sets its `font`, to that size's system font, as Xcode does — in a bar, setting the bar's does. A field that needs another font sets it afterwards.
@@ -1199,10 +1199,23 @@ safe area. Before macOS 26 the pages stay stacked.
   `automaticallyAdjustsContentInsets` and the scroll view's `additionalSafeAreaInsets` to the layout. AppKit sizes the
   bottom scroll pocket by the scroll view's own bottom content inset, not the clip view's (measured on macOS 27.2), so
   a scroll view whose automatic insets are off gets no bottom edge effect even though its rows still clear the bar.
-- Xcode adds private calls on top — `-[NSScrollView registerPocketContainer:onEdge:]` and `setScrollPocketStyle:onEdge:`,
-  and a bar answering `_scrollPocketElementStyle` with 2 — which wait for a UIFoundation release; until then
-  `alwaysShownPocketEdges` (declared in UIFoundation 0.38.0) keeps both pockets shown. Background, with the
-  reverse-engineered addresses: `Documentations/Evolutions/0052-xcode-navigator-overlay-bars.md`.
+- The views floating over the list are registered with its scroll view as containers of their edge's scroll pocket,
+  as Xcode registers its bars (`-[NSScrollView registerPocketContainer:onEdge:]`, through UIFoundation's
+  `NSScrollView.box`), and they answer AppKit's `_scrollPocketElementStyle` with 2, the value Xcode's bars answer: the
+  filter bar is a `NavigatorFilterControlBar`, and the Find page's query area and summary row and the tab switcher's bar
+  are `ScrollPocketBarView`s (both RuntimeViewerUI). A plain `NSFilterControlBar` or `NSView` in their place still gets
+  the edge effect, only not as a bar, and nothing shows that anything is missing. `NavigatorScrollViewLayout` makes
+  every pocket call — it registers the overlays, keeps both edges always shown (`alwaysShownPocketEdges = 3`) and, on
+  macOS 26 only, sets style 2 on both edges as Xcode does there — so nothing else touches a page's scroll view.
+- The tab switcher's bar belongs to `TabViewController`, not to the page, and reaches the list through
+  `NavigatorTabPage`: the switcher sets `tabSwitcherOverlayViews` to the bar on the page on screen and back to none on
+  the page before, at the end of every path that changes the selection — its tab view has no delegate, so nothing
+  reports a selection — and the page passes them to its layout as `inheritedTopOverlayViews`, which are registered but
+  add no safe area: the bar's height already arrives through `tabView.additionalSafeAreaInsets`. One scroll view holds
+  the bar at a time. A new page class shown in a sidebar switcher adopts `NavigatorTabPage` and keeps the value until
+  it makes its layout, because `NSTabViewItem(viewController:)` loads a page's view only when it is first shown. The
+  inspector's switcher does none of this. Background, with the reverse-engineered addresses:
+  `Documentations/Evolutions/0052-xcode-navigator-overlay-bars.md`.
 
 ### Diagnosing UI Flicker
 

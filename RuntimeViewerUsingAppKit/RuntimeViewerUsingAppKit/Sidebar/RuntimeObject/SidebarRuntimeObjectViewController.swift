@@ -410,6 +410,15 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     }
 }
 
+extension SidebarRuntimeObjectViewController: NavigatorTabPage {
+    /// The tab switcher's bar while this page is on screen under it. The list's layout lives in
+    /// `imageLoadedView`, which exists from `init` on, so there is nothing to keep here.
+    var tabSwitcherOverlayViews: [NSView] {
+        get { imageLoadedView.inheritedTopOverlayViews }
+        set { imageLoadedView.inheritedTopOverlayViews = newValue }
+    }
+}
+
 /// A runtime-object outline context-menu entry for `menu.rx.items` /
 /// `itemSelected`. Carries its own `action` closure so the generic base view
 /// controller can forward selection without knowing which subclass contributed
@@ -477,12 +486,18 @@ extension SidebarRuntimeObjectViewController {
 
         let filterSearchField = NSFilterSearchField()
 
-        let filterControlBar = NSFilterControlBar()
+        let filterControlBar = NavigatorFilterControlBar()
 
         private(set) var matchCaseButton: NSButton!
 
-        /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on.
+        /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on. Made in `init`.
         private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
+        /// The tab switcher's bar while the page is on screen under it, passed to the list's layout.
+        var inheritedTopOverlayViews: [NSView] {
+            get { navigatorScrollViewLayout?.inheritedTopOverlayViews ?? [] }
+            set { navigatorScrollViewLayout?.inheritedTopOverlayViews = newValue }
+        }
 
         /// Shows the scope item in the accent colour while a scope narrows the list.
         var isFilterScopeActive = false {

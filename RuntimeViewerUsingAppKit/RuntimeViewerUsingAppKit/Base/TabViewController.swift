@@ -13,6 +13,16 @@ struct TabViewItem {
     var activity: Driver<Bool>? = nil
 }
 
+/// A page that runs its list under the bar of the tab switcher it sits in (`TabViewController.PageLayout.underSegmentedControl`).
+@MainActor
+protocol NavigatorTabPage: AnyObject {
+    /// The switcher's views floating over the top of the page's list: its bar while this page is the one on screen,
+    /// none otherwise. The page hands them to its list's `NavigatorScrollViewLayout` as inherited top overlays —
+    /// right away, or when it makes the layout if its view has not loaded yet — which registers them with the
+    /// list's scroll view as containers of the top scroll pocket.
+    var tabSwitcherOverlayViews: [NSView] { get set }
+}
+
 class TabViewController: NSLayerBackedViewController {
     /// Where the pages sit relative to the segmented control from macOS 26 on. Xcode lays out the two
     /// areas that carry this control differently, and each tab switcher here follows one of them.
@@ -63,8 +73,12 @@ class TabViewController: NSLayerBackedViewController {
 
     /// The full-width bar that holds the segmented control from macOS 26 on, the control 8 points in
     /// from either side, as in Xcode's `IDETwoLevelChooserView`. Under `underSegmentedControl` it
-    /// floats over the pages.
-    private let segmentedControlBarView = NSView()
+    /// floats over the pages, and the page on screen registers it as a container of its list's top
+    /// scroll pocket, which takes it for a bar as Xcode's chooser is taken.
+    private let segmentedControlBarView = ScrollPocketBarView()
+
+    /// The page the bar was last handed to, which gives it back when another page comes on screen.
+    private weak var pageHoldingSegmentedControlBar: NavigatorTabPage?
 
     /// The style is applied here rather than in `viewDidLoad` on purpose:
     /// `setTabViewItems` runs before the view ever loads — it only touches this
@@ -91,6 +105,7 @@ class TabViewController: NSLayerBackedViewController {
             guard index >= 0, index < tabView.numberOfTabViewItems, index < segmentedControl.segmentCount else { return }
             tabView.selectTabViewItem(at: index)
             segmentedControl.selectedSegment = index
+            handSegmentedControlBarToSelectedPage()
         }
     }
 
@@ -176,10 +191,28 @@ class TabViewController: NSLayerBackedViewController {
         tabView.additionalSafeAreaInsets = NSEdgeInsets(top: barHeight, left: 0, bottom: 0, right: 0)
     }
 
+    /// Under `underSegmentedControl`, hands the bar to the page on screen and takes it back from the
+    /// page before, so that the bar is a container of one list's top scroll pocket at a time: the
+    /// list under it. Xcode's navigator area registers its chooser with each navigator as it installs
+    /// it (`-[IDENavigatorArea replacementView:didInstallViewController:]`, IDEKit 27.2, 0x2924A0).
+    ///
+    /// Called at the end of every path that changes the selection; the selections a path makes on
+    /// the way, and the neighbour `NSTabView` falls back to when the selected item is removed, do
+    /// not count. The tab view has no delegate, so nothing reports a selection on its own.
+    private func handSegmentedControlBarToSelectedPage() {
+        guard #available(macOS 26.0, *), pageLayout == .underSegmentedControl else { return }
+        let selectedPage = tabView.selectedTabViewItem?.viewController as? NavigatorTabPage
+        guard selectedPage !== pageHoldingSegmentedControlBar else { return }
+        pageHoldingSegmentedControlBar?.tabSwitcherOverlayViews = []
+        selectedPage?.tabSwitcherOverlayViews = [segmentedControlBarView]
+        pageHoldingSegmentedControlBar = selectedPage
+    }
+
     @objc private func handleSegmentedControlAction(_ sender: Any) {
         let index = segmentedControl.selectedSegment
         guard index >= 0, index < tabView.numberOfTabViewItems else { return }
         tabView.selectTabViewItem(at: index)
+        handSegmentedControlBarToSelectedPage()
         if let autosaveName {
             UserDefaults.standard.set(index, forKey: autosaveName)
         }
@@ -211,6 +244,7 @@ class TabViewController: NSLayerBackedViewController {
             if newValue < segmentedControl.segmentCount {
                 segmentedControl.selectedSegment = newValue
             }
+            handSegmentedControlBarToSelectedPage()
         }
         get { tabView.selectedTabViewItem.map { tabView.indexOfTabViewItem($0) } ?? NSNotFound }
     }
@@ -267,6 +301,9 @@ class TabViewController: NSLayerBackedViewController {
         }
 
         selectedTabViewItemIndex = selectedIndex
+        // Also when `selectedIndex` is out of range and the setter above returns early: the
+        // removals may still have moved the selection.
+        handSegmentedControlBarToSelectedPage()
     }
 
     private func indexOfTabViewItem(for viewController: NSViewController) -> Int? {

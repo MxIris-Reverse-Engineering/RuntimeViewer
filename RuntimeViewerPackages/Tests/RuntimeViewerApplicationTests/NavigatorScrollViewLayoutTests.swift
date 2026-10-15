@@ -97,6 +97,84 @@ struct NavigatorScrollViewLayoutTests {
         #expect(fixture.scrollView.automaticallyAdjustsContentInsets == true)
         #expect(fixture.scrollView.alwaysShownPocketEdges == 0b11)
     }
+
+    // MARK: - Scroll pocket containers
+
+    // A bottom pocket exists only while its edge is always shown or has a container, and the top pocket is
+    // as tall as the top safe area united with its containers (UIFoundation's ScrollPocketTests). Taking the
+    // always-shown edges away, or leaving the safe area out, is what makes a registration visible.
+
+    @available(macOS 26.0, *)
+    @Test("without a bar over the bottom edge, the bottom pocket goes once the edge is no longer always shown")
+    func bottomPocketNeedsAlwaysShownEdgeWithoutBar() {
+        let fixture = Fixture()
+        defer { fixture.tearDown() }
+
+        fixture.scrollView.box.alwaysShownScrollPocketEdges = []
+        fixture.layOut()
+
+        #expect((fixture.scrollView.box.scrollPocket(on: .bottom)?.frame.height ?? 0) == 0)
+    }
+
+    @available(macOS 26.0, *)
+    @Test("the bar over the bottom edge is registered as a container of the bottom pocket")
+    func bottomOverlayIsRegisteredWithBottomPocket() {
+        let fixture = Fixture(bottomOverlayHeight: 44)
+        defer { fixture.tearDown() }
+
+        fixture.scrollView.box.alwaysShownScrollPocketEdges = []
+        fixture.layOut()
+
+        #expect(fixture.scrollView.box.scrollPocket(on: .bottom)?.frame.height == 44)
+    }
+
+    @available(macOS 26.0, *)
+    @Test("an inherited bar is registered with the top pocket without adding safe area, and unregistered when it goes")
+    func inheritedTopOverlayIsRegisteredAndUnregistered() {
+        let fixture = Fixture(inheritedTopOverlayHeight: 28)
+        defer { fixture.tearDown() }
+
+        #expect((fixture.scrollView.box.scrollPocket(on: .top)?.frame.height ?? 0) == 0)
+
+        fixture.layout.inheritedTopOverlayViews = [fixture.inheritedTopOverlayView]
+        fixture.layOut()
+
+        #expect(fixture.scrollView.additionalSafeAreaInsets.top == 0)
+        #expect(fixture.scrollView.box.scrollPocket(on: .top)?.frame.height == 28)
+
+        // Handing the same bar over again changes nothing; taking it away unregisters it.
+        fixture.layout.inheritedTopOverlayViews = [fixture.inheritedTopOverlayView, fixture.inheritedTopOverlayView]
+        fixture.layOut()
+        #expect(fixture.scrollView.box.scrollPocket(on: .top)?.frame.height == 28)
+
+        fixture.layout.inheritedTopOverlayViews = []
+        fixture.layOut()
+
+        #expect((fixture.scrollView.box.scrollPocket(on: .top)?.frame.height ?? 0) == 0)
+    }
+
+    @available(macOS 26.0, *)
+    @Test("the bars are taken for bars")
+    func barsAnswerTheBarElementStyle() {
+        #expect(ScrollPocketBarView()._scrollPocketElementStyle == NSView.barScrollPocketElementStyle)
+        #expect(NavigatorFilterControlBar()._scrollPocketElementStyle == NSView.barScrollPocketElementStyle)
+    }
+
+    @available(macOS 26.0, *)
+    @Test("the pocket styles are Xcode's: 2 on both edges on macOS 26, the default 0 from macOS 27")
+    func pocketStylesFollowXcode() {
+        let fixture = Fixture(bottomOverlayHeight: 44)
+        defer { fixture.tearDown() }
+
+        let expectedStyle: Int
+        if #available(macOS 27.0, *) {
+            expectedStyle = 0
+        } else {
+            expectedStyle = 2
+        }
+        #expect(fixture.scrollView.box.scrollPocketStyle(on: .top) == expectedStyle)
+        #expect(fixture.scrollView.box.scrollPocketStyle(on: .bottom) == expectedStyle)
+    }
 }
 
 // MARK: - Fixture
@@ -109,12 +187,19 @@ extension NavigatorScrollViewLayoutTests {
         let scrollView = NSScrollView()
         let topOverlayView = NSView()
         let bottomOverlayView = NSView()
+        /// Stands in for the tab switcher's bar: on the container's top edge, and no part of the page.
+        let inheritedTopOverlayView = NSView()
         private(set) var bottomOverlayHeightConstraint: Constraint?
         private(set) var layout: NavigatorScrollViewLayout!
 
         var clipView: NSClipView { scrollView.contentView }
 
-        init(outsideTopInset: CGFloat = 0, topOverlayHeight: CGFloat? = nil, bottomOverlayHeight: CGFloat? = nil) {
+        init(
+            outsideTopInset: CGFloat = 0,
+            topOverlayHeight: CGFloat? = nil,
+            bottomOverlayHeight: CGFloat? = nil,
+            inheritedTopOverlayHeight: CGFloat = 0
+        ) {
             window = NSWindow(
                 contentRect: NSRect(x: -6000, y: -6000, width: 300, height: 600),
                 styleMask: [.titled],
@@ -132,6 +217,7 @@ extension NavigatorScrollViewLayoutTests {
                 scrollView
                 topOverlayView
                 bottomOverlayView
+                inheritedTopOverlayView
             }
 
             scrollView.snp.makeConstraints { make in
@@ -149,6 +235,11 @@ extension NavigatorScrollViewLayoutTests {
             bottomOverlayView.snp.makeConstraints { make in
                 make.leading.trailing.bottom.equalToSuperview()
                 bottomOverlayHeightConstraint = make.height.equalTo(bottomOverlayHeight ?? 0).constraint
+            }
+
+            inheritedTopOverlayView.snp.makeConstraints { make in
+                make.top.leading.trailing.equalToSuperview()
+                make.height.equalTo(inheritedTopOverlayHeight)
             }
 
             // Made before the first layout pass, as a page makes it in `viewDidLoad`: the frames it

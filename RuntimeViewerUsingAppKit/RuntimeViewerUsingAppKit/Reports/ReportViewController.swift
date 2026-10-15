@@ -49,11 +49,18 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     private var showsOnlyInProgressButton: NSButton!
 
-    private let filterControlBar = NSFilterControlBar()
+    private let filterControlBar = NavigatorFilterControlBar()
 
     /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on. Made in
     /// `viewDidLoad`.
     private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
+    /// The tab switcher's bar while this page is on screen under it (`NavigatorTabPage`).
+    var tabSwitcherOverlayViews: [NSView] = [] {
+        didSet {
+            navigatorScrollViewLayout?.inheritedTopOverlayViews = tabSwitcherOverlayViews
+        }
+    }
 
     /// From macOS 26 the list reaches the top of the page, under the toolbar and the tab switcher's
     /// bar; its content inset keeps the rows clear of them instead.
@@ -135,6 +142,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         }
 
         navigatorScrollViewLayout = NavigatorScrollViewLayout(scrollView: scrollView, bottomOverlayViews: [filterControlBar])
+        navigatorScrollViewLayout?.inheritedTopOverlayViews = tabSwitcherOverlayViews
 
         emptyLabel.do {
             $0.font = .systemFont(ofSize: 13)
@@ -331,3 +339,5 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         }
     }
 }
+
+extension ReportViewController: NavigatorTabPage {}
