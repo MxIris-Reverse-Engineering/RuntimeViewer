@@ -41,7 +41,7 @@ struct TabSwitcherBarSafeAreaTests {
         defer { fixture.tearDown() }
 
         fixture.switcherViewController.tabView.selectTabViewItem(at: 1)
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         let barHeight = fixture.switcherViewController.barView.frame.height
         #expect(
@@ -58,7 +58,7 @@ struct TabSwitcherBarSafeAreaTests {
 
         let largeBarHeight = fixture.switcherViewController.barView.frame.height
         fixture.switcherViewController.segmentedControl.controlSize = .small
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         let smallBarHeight = fixture.switcherViewController.barView.frame.height
         #expect(smallBarHeight < largeBarHeight)
@@ -107,11 +107,11 @@ extension TabSwitcherBarSafeAreaTests {
             switcherViewController.view.additionalSafeAreaInsets = NSEdgeInsets(top: Self.toolbarInset, left: 0, bottom: 0, right: 0)
 
             window.orderFrontRegardless()
-            layOut()
+            layoutAndDisplay()
         }
 
         /// What the window does at the end of a run loop turn.
-        func layOut() {
+        func layoutAndDisplay() {
             switcherViewController.view.layoutSubtreeIfNeeded()
             window.displayIfNeeded()
         }

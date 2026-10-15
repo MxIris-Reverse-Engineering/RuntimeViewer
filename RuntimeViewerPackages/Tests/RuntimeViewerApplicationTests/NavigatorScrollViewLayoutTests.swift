@@ -54,7 +54,7 @@ struct NavigatorScrollViewLayoutTests {
 
         // What the tab switcher does once its bar has a height: 28 more on top of the toolbar's 52.
         fixture.containerView.additionalSafeAreaInsets.top = 80
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         #expect(fixture.clipView.contentInsets.top == 88)
         #expect(fixture.clipView.contentInsets.bottom == 44)
@@ -68,7 +68,7 @@ struct NavigatorScrollViewLayoutTests {
 
         fixture.scroll(toDistanceFromTop: 100)
         fixture.containerView.additionalSafeAreaInsets.top = 80
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         #expect(fixture.clipView.contentInsets.top == 88)
         #expect(fixture.clipView.bounds.minY + fixture.clipView.contentInsets.top == 100)
@@ -81,7 +81,7 @@ struct NavigatorScrollViewLayoutTests {
         defer { fixture.tearDown() }
 
         fixture.bottomOverlayHeightConstraint?.update(offset: 56)
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         #expect(fixture.scrollView.additionalSafeAreaInsets.bottom == 56)
         #expect(fixture.clipView.contentInsets.bottom == 56)
@@ -111,7 +111,7 @@ struct NavigatorScrollViewLayoutTests {
         defer { fixture.tearDown() }
 
         fixture.scrollView.box.alwaysShownScrollPocketEdges = []
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         #expect((fixture.scrollView.box.scrollPocket(on: .bottom)?.frame.height ?? 0) == 0)
     }
@@ -123,7 +123,7 @@ struct NavigatorScrollViewLayoutTests {
         defer { fixture.tearDown() }
 
         fixture.scrollView.box.alwaysShownScrollPocketEdges = []
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         #expect(fixture.scrollView.box.scrollPocket(on: .bottom)?.frame.height == 44)
     }
@@ -137,18 +137,18 @@ struct NavigatorScrollViewLayoutTests {
         #expect((fixture.scrollView.box.scrollPocket(on: .top)?.frame.height ?? 0) == 0)
 
         fixture.layout.inheritedTopOverlayViews = [fixture.inheritedTopOverlayView]
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         #expect(fixture.scrollView.additionalSafeAreaInsets.top == 0)
         #expect(fixture.scrollView.box.scrollPocket(on: .top)?.frame.height == 28)
 
         // Handing the same bar over again changes nothing; taking it away unregisters it.
         fixture.layout.inheritedTopOverlayViews = [fixture.inheritedTopOverlayView, fixture.inheritedTopOverlayView]
-        fixture.layOut()
+        fixture.layoutAndDisplay()
         #expect(fixture.scrollView.box.scrollPocket(on: .top)?.frame.height == 28)
 
         fixture.layout.inheritedTopOverlayViews = []
-        fixture.layOut()
+        fixture.layoutAndDisplay()
 
         #expect((fixture.scrollView.box.scrollPocket(on: .top)?.frame.height ?? 0) == 0)
     }
@@ -251,18 +251,18 @@ extension NavigatorScrollViewLayoutTests {
             )
 
             window.orderFrontRegardless()
-            layOut()
+            layoutAndDisplay()
         }
 
         /// Scrolls the document so that its top is the given distance above the top of the content area.
         func scroll(toDistanceFromTop distance: CGFloat) {
             clipView.scroll(to: NSPoint(x: 0, y: distance - clipView.contentInsets.top))
             scrollView.reflectScrolledClipView(clipView)
-            layOut()
+            layoutAndDisplay()
         }
 
         /// What the window does at the end of a run loop turn.
-        func layOut() {
+        func layoutAndDisplay() {
             containerView.layoutSubtreeIfNeeded()
             window.displayIfNeeded()
         }

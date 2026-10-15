@@ -125,7 +125,7 @@ class TabViewController: NSLayerBackedViewController {
         }
 
         if #available(macOS 26.0, *) {
-            layOutSegmentedControlBar()
+            layoutSegmentedControlBar()
         } else {
             contentView.hierarchy {
                 segmentedControl
@@ -152,7 +152,7 @@ class TabViewController: NSLayerBackedViewController {
     /// The bar is added after the tab view so that, when the pages run under it, it is drawn and
     /// hit-tested above them.
     @available(macOS 26.0, *)
-    private func layOutSegmentedControlBar() {
+    private func layoutSegmentedControlBar() {
         contentView.hierarchy {
             tabView
             segmentedControlBarView.hierarchy {

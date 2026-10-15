@@ -128,7 +128,7 @@ extension TitleToolbarItemOverflowTests {
             window.toolbarStyle = .unified
             window.toolbar = toolbar
             window.orderFrontRegardless()
-            layOut()
+            layoutAndDisplay()
         }
 
         func tearDown() {
@@ -138,11 +138,11 @@ extension TitleToolbarItemOverflowTests {
         func show(title: String, subtitle: String) {
             titleItem.displayTitle = title
             titleItem.displaySubtitle = subtitle
-            layOut()
+            layoutAndDisplay()
         }
 
         /// What the window does at the end of a run loop turn.
-        func layOut() {
+        func layoutAndDisplay() {
             window.layoutIfNeeded()
             window.displayIfNeeded()
         }

@@ -56,7 +56,7 @@ struct StatefulOutlineViewRowGeometryTests {
         let node = try #require(fixture.visibleNodeWithNestedTypes())
         let rowCountBeforeExpanding = fixture.outlineView.numberOfRows
         fixture.outlineView.expandItem(node)
-        fixture.layOutAndDisplay()
+        fixture.layoutAndDisplay()
         try #require(fixture.outlineView.numberOfRows == rowCountBeforeExpanding + node.children.count)
         fixture.scroll(toOriginY: originY - 100)
 
@@ -132,18 +132,18 @@ extension StatefulOutlineViewRowGeometryTests {
         /// every filter keystroke and every full reload of the sidebar comes to.
         func republishSections() {
             sectionsRelay.accept(sections)
-            layOutAndDisplay()
+            layoutAndDisplay()
         }
 
         func scroll(toOriginY originY: CGFloat) {
             let clipView = scrollView.contentView
             clipView.scroll(to: NSPoint(x: 0, y: originY))
             scrollView.reflectScrolledClipView(clipView)
-            layOutAndDisplay()
+            layoutAndDisplay()
         }
 
         /// What the window does at the end of a run loop turn.
-        func layOutAndDisplay() {
+        func layoutAndDisplay() {
             outlineView.layoutSubtreeIfNeeded()
             window.displayIfNeeded()
         }

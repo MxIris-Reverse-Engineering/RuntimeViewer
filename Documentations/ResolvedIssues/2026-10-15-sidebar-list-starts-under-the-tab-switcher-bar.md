@@ -34,7 +34,7 @@ AppKit 26.7 的排版顺序（反编译 `/Volumes/DyldSharedCaches/macOS/26.7/Ap
 
 `FloatingBarSafeAreaLayout(barView:coveredView:)` 监听栏的 `NSView.frameDidChangeNotification`，把栏高写进被盖住的视图的 `additionalSafeAreaInsets.top`。它落在正确的时机：栏与 tab view 是兄弟视图，两者的 frame 都在 `contentView.layout` 里设定；`-[NSView _postFrameChangeNotification]`（0x184A25524）在设 frame 时同步发通知（只在 `setFrame:` 这类合并修改期间暂缓到修改结束），AppKit 之后才递归去排 tab view 的子树，所以页面在同一轮里就看到了栏。
 
-`TabViewController` 在 `layOutSegmentedControlBar()` 里（`.underSegmentedControl` 时）创建它，删掉了 `viewDidLayout` 覆写。写入的仍是栏高，与原来的语义一致：栏贴在 tab view 已有 safe area 的上沿，栏高就是它多盖住的深度。
+`TabViewController` 在 `layoutSegmentedControlBar()` 里（`.underSegmentedControl` 时）创建它，删掉了 `viewDidLayout` 覆写。写入的仍是栏高，与原来的语义一致：栏贴在 tab view 已有 safe area 的上沿，栏高就是它多盖住的深度。
 
 没有采用的写法：
 

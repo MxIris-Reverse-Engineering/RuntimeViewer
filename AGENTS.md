@@ -756,6 +756,7 @@ conclusion — the next task on this module starts by reading them.
 
 - **ViewController** classes must always end with `ViewController` suffix (e.g., `MCPStatusPopoverViewController`, NOT `MCPStatusPopoverController`)
 - **ViewModel** classes must always end with `ViewModel` suffix (e.g., `MCPStatusPopoverViewModel`)
+- **`layout` and `setup` are one word** in identifiers: `layoutSegmentedControlBar()`, `layoutAndDisplay()`, `setupBindings(for:)` — NOT `layOutSegmentedControlBar()` or `setUpBindings(for:)`. Only an override of a framework method keeps the framework's spelling (XCTest's `setUp()`)
 
 ### Access Control
 
