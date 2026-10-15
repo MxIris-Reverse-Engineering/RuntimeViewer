@@ -14,6 +14,21 @@ struct TabViewItem {
 }
 
 class TabViewController: NSLayerBackedViewController {
+    /// Where the pages sit relative to the segmented control from macOS 26 on. Xcode lays out the two
+    /// areas that carry this control differently, and each tab switcher here follows one of them.
+    /// Before macOS 26 the pages always sit below the control.
+    enum PageLayout {
+        /// Xcode's navigator: the pages fill the whole view, under the toolbar and under the bar that
+        /// holds the segmented control, and the bar's height reaches them as safe area. A page's list
+        /// starts below the bar and scrolls under it, into the scroll edge effect.
+        case underSegmentedControl
+        /// Xcode's inspector: the pages start below the segmented control.
+        case belowSegmentedControl
+    }
+
+    /// Overridden by the sidebar's tab switchers, which lay out like Xcode's navigator.
+    var pageLayout: PageLayout { .belowSegmentedControl }
+
     /// Transparent from macOS 26: the page sits directly on the split view item's glass, which no
     /// colour or material reproduces. The opaque backdrop a push / pop needs is inserted under the
     /// page for the length of the transition by `NavigationTransitionBackdropController` and removed
@@ -24,19 +39,32 @@ class TabViewController: NSLayerBackedViewController {
         NSVisualEffectView()
     }
 
+    /// Configured as Xcode configures the navigator's (`IDETwoLevelChooserView.init(frame:)`): the
+    /// selected segment drawn in the accent colour, a drag held over a segment switching to it, and
+    /// on macOS 27 the tabs role, drawn without clipping to its bounds.
     private let segmentedControl: any SegmentedControl = {
         if #available(macOS 26.0, *) {
             let segmentedControl = NSSegmentedControl()
+            segmentedControl.selectedSegmentBezelColor = .controlAccentColor
+            segmentedControl.isSpringLoaded = true
             #if compiler(>=6.4)
             if #available(macOS 27.0, *) {
                 segmentedControl.role = .tabs
             }
             #endif
+            if #available(macOS 27.0, *) {
+                segmentedControl.clipsToBounds = false
+            }
             return segmentedControl
         } else {
             return AreaSegmentedControl()
         }
     }()
+
+    /// The full-width bar that holds the segmented control from macOS 26 on, the control 8 points in
+    /// from either side, as in Xcode's `IDETwoLevelChooserView`. Under `underSegmentedControl` it
+    /// floats over the pages.
+    private let segmentedControlBarView = NSView()
 
     /// The style is applied here rather than in `viewDidLoad` on purpose:
     /// `setTabViewItems` runs before the view ever loads — it only touches this
@@ -70,28 +98,29 @@ class TabViewController: NSLayerBackedViewController {
         super.viewDidLoad()
 
         hierarchy {
-            contentView.hierarchy {
-                segmentedControl
-                tabView
-            }
+            contentView
         }
 
         contentView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
 
-        segmentedControl.snp.makeConstraints { make in
-            make.top.equalTo(contentView.safeAreaLayoutGuide)
-            if #available(macOS 26.0, *) {
-                make.leading.trailing.equalTo(contentView.safeAreaLayoutGuide).inset(8)
-            } else {
-                make.leading.trailing.equalTo(contentView.safeAreaLayoutGuide)
+        if #available(macOS 26.0, *) {
+            layOutSegmentedControlBar()
+        } else {
+            contentView.hierarchy {
+                segmentedControl
+                tabView
             }
-        }
 
-        tabView.snp.makeConstraints { make in
-            make.top.equalTo(segmentedControl.snp.bottom)//.offset(10)
-            make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
+            segmentedControl.snp.makeConstraints { make in
+                make.top.leading.trailing.equalTo(contentView.safeAreaLayoutGuide)
+            }
+
+            tabView.snp.makeConstraints { make in
+                make.top.equalTo(segmentedControl.snp.bottom)//.offset(10)
+                make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
+            }
         }
 
 //        segmentedControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -99,6 +128,52 @@ class TabViewController: NSLayerBackedViewController {
         segmentedControl.selectedSegment = 0
         segmentedControl.target = self
         segmentedControl.action = #selector(handleSegmentedControlAction(_:))
+    }
+
+    /// The bar is added after the tab view so that, when the pages run under it, it is drawn and
+    /// hit-tested above them.
+    @available(macOS 26.0, *)
+    private func layOutSegmentedControlBar() {
+        contentView.hierarchy {
+            tabView
+            segmentedControlBarView.hierarchy {
+                segmentedControl
+            }
+        }
+
+        segmentedControlBarView.snp.makeConstraints { make in
+            make.top.leading.trailing.equalTo(contentView.safeAreaLayoutGuide)
+        }
+
+        segmentedControl.snp.makeConstraints { make in
+            make.top.bottom.equalToSuperview()
+            make.leading.trailing.equalToSuperview().inset(8)
+        }
+
+        tabView.snp.makeConstraints { make in
+            switch pageLayout {
+            case .underSegmentedControl:
+                make.edges.equalToSuperview()
+            case .belowSegmentedControl:
+                make.top.equalTo(segmentedControlBarView.snp.bottom)
+                make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
+            }
+        }
+    }
+
+    /// Under `underSegmentedControl` the bar's height becomes extra safe area for everything in the
+    /// tab view, which is how Xcode hands its bar to the navigator (`IDENavigatorArea.ContentView`
+    /// sets its own `additionalSafeAreaInsets`): a page's scroll view insets its content by that
+    /// safe area, and AppKit sizes the scroll pocket on the top edge by the same safe area, so the
+    /// edge effect reaches down to the bar's bottom. Set once the bar has a height and whenever it
+    /// changes.
+    override func viewDidLayout() {
+        super.viewDidLayout()
+
+        guard #available(macOS 26.0, *), pageLayout == .underSegmentedControl else { return }
+        let barHeight = segmentedControlBarView.frame.height
+        guard tabView.additionalSafeAreaInsets.top != barHeight else { return }
+        tabView.additionalSafeAreaInsets = NSEdgeInsets(top: barHeight, left: 0, bottom: 0, right: 0)
     }
 
     @objc private func handleSegmentedControlAction(_ sender: Any) {

@@ -51,7 +51,27 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     private let filterControlBar = NSFilterControlBar()
 
-    override var containerViewUsingSafeArea: Bool { true }
+    /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on. Made in
+    /// `viewDidLoad`.
+    private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
+    /// From macOS 26 the list reaches the top of the page, under the toolbar and the tab switcher's
+    /// bar; its content inset keeps the rows clear of them instead.
+    override var containerViewUsingSafeArea: Bool {
+        if #available(macOS 26.0, *) {
+            false
+        } else {
+            true
+        }
+    }
+
+    override var contentInsets: NSDirectionalEdgeInsets {
+        if #available(macOS 26.0, *) {
+            .init()
+        } else {
+            super.contentInsets
+        }
+    }
 
     /// The outline takes keyboard focus when the sidebar shows this page, like the other sidebar
     /// lists — see `SidebarRootViewController.preferredFirstResponder`.
@@ -80,11 +100,17 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
         scrollView.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(bottomSeparatorView.snp.top)
+            if #available(macOS 26.0, *) {
+                // Under the filter bar as well, which floats over the list's bottom edge.
+                make.bottom.equalToSuperview()
+            } else {
+                make.bottom.equalTo(bottomSeparatorView.snp.top)
+            }
         }
 
+        // Centred in what the bars leave of the list, which is all of it before macOS 26.
         emptyLabel.snp.makeConstraints { make in
-            make.center.equalTo(scrollView)
+            make.center.equalTo(scrollView.safeAreaLayoutGuide)
             make.leading.greaterThanOrEqualToSuperview().offset(16)
             make.trailing.lessThanOrEqualToSuperview().offset(-16)
         }
@@ -100,7 +126,15 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             make.leading.trailing.bottom.equalToSuperview()
         }
 
-        bottomSeparatorView.boxType = .separator
+        bottomSeparatorView.do {
+            $0.boxType = .separator
+            // From macOS 26 the rows fade out under the bar instead, as in Xcode.
+            if #available(macOS 26.0, *) {
+                $0.isHidden = true
+            }
+        }
+
+        navigatorScrollViewLayout = NavigatorScrollViewLayout(scrollView: scrollView, bottomOverlayViews: [filterControlBar])
 
         emptyLabel.do {
             $0.font = .systemFont(ofSize: 13)

@@ -4,4 +4,6 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class SidebarRootTabViewController: TabViewController {}
+final class SidebarRootTabViewController: TabViewController {
+    override var pageLayout: PageLayout { .underSegmentedControl }
+}

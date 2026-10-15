@@ -73,7 +73,29 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let filterControlBar = NSFilterControlBar()
 
-    override var containerViewUsingSafeArea: Bool { true }
+    /// Runs the results under the query area, the tab switcher's bar and the filter bar from macOS 26
+    /// on. Made in `viewDidLoad`.
+    private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
+    /// From macOS 26 the results reach the top of the page, under the toolbar, the tab switcher's bar
+    /// and the query area, which float over them as Xcode's do (`-[IDEFindNavigator viewDidLoad]`
+    /// registers the query parameters and the summary row with the results' top scroll pocket); the
+    /// results' content inset keeps the rows clear of them instead.
+    override var containerViewUsingSafeArea: Bool {
+        if #available(macOS 26.0, *) {
+            false
+        } else {
+            true
+        }
+    }
+
+    override var contentInsets: NSDirectionalEdgeInsets {
+        if #available(macOS 26.0, *) {
+            .init()
+        } else {
+            super.contentInsets
+        }
+    }
 
     /// The outline takes keyboard focus when the sidebar shows this page, like the other
     /// sidebar lists — see `SidebarRootViewController.preferredFirstResponder`.
@@ -86,7 +108,10 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // The results first: from macOS 26 everything else floats over them, so it has to be drawn and
+        // hit-tested above them.
         containerView.hierarchy {
+            scrollView
             queryParametersView.hierarchy {
                 modePathControl
                 caseSensitiveButton
@@ -99,13 +124,18 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                 summarySeparatorView
             }
             resultsTopSeparatorView
-            scrollView
             filterSeparatorView
             filterControlBar
         }
 
         queryParametersView.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview()
+            if #available(macOS 26.0, *) {
+                // Right below the toolbar and the tab switcher's bar.
+                make.top.equalTo(containerView.safeAreaLayoutGuide)
+            } else {
+                make.top.equalToSuperview()
+            }
+            make.leading.trailing.equalToSuperview()
             make.height.equalTo(72)
         }
 
@@ -169,9 +199,13 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         }
 
         scrollView.snp.makeConstraints { make in
-            make.top.equalTo(resultsTopSeparatorView.snp.bottom)
-            make.leading.trailing.equalToSuperview()
-            make.bottom.equalTo(filterSeparatorView.snp.top)
+            if #available(macOS 26.0, *) {
+                make.edges.equalToSuperview()
+            } else {
+                make.top.equalTo(resultsTopSeparatorView.snp.bottom)
+                make.leading.trailing.equalToSuperview()
+                make.bottom.equalTo(filterSeparatorView.snp.top)
+            }
         }
 
         filterSeparatorView.snp.makeConstraints { make in
@@ -247,7 +281,18 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
         for separatorView in [summarySeparatorView, resultsTopSeparatorView, filterSeparatorView] {
             separatorView.boxType = .separator
+            // From macOS 26 the results fade out under the views above and below them instead, as in
+            // Xcode, which also stops drawing its border there on macOS 27.
+            if #available(macOS 26.0, *) {
+                separatorView.isHidden = true
+            }
         }
+
+        navigatorScrollViewLayout = NavigatorScrollViewLayout(
+            scrollView: scrollView,
+            topOverlayViews: [queryParametersView, summaryView],
+            bottomOverlayViews: [filterControlBar]
+        )
 
         scrollView.do {
             $0.borderType = .noBorder

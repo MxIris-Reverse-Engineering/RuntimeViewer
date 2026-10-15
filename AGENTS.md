@@ -1162,6 +1162,41 @@ buttonStack.snp.makeConstraints { make in
 }
 ```
 
+### Navigator pages run under their bars (macOS 26 and later)
+
+The sidebar is laid out the way Xcode lays out its navigator area: a page's list runs the whole height of the
+sidebar — under the toolbar, under the tab switcher's segmented control and under the filter bar — and those bars
+float over it. The list keeps its content clear of them through safe area, not through constraints, and AppKit draws
+the scroll edge effect (the blur where content scrolls under a bar, which AppKit calls a scroll pocket) over that same
+safe area. Before macOS 26 the pages stay stacked.
+
+- `TabViewController.pageLayout` picks the layout per switcher: `.underSegmentedControl` for the sidebar's two
+  (`SidebarRootTabViewController`, `SidebarRuntimeObjectTabViewController`), `.belowSegmentedControl` — the default —
+  for the inspector's, which Xcode stacks too. Under `.underSegmentedControl` the tab view fills the view, the bar
+  holding the segmented control is drawn over it, and `viewDidLayout` writes the bar's height (28 at `.large`) into
+  `tabView.additionalSafeAreaInsets.top`.
+- A page shown in a sidebar switcher lets its list's scroll view reach all four edges of the page and hands the list
+  to a `NavigatorScrollViewLayout` (RuntimeViewerUI), never a container inset or a constraint to a bar. The four page
+  base classes (`SidebarRootViewController`, `SidebarRuntimeObjectViewController`, `FindViewController`,
+  `ReportViewController`) override `contentInsets` to zero from macOS 26 for this reason. A scroll view that stops
+  below the titlebar is not registered with the window, so it gets no top pocket, and its rows are cut off at the bar
+  instead of scrolling under it.
+- `NavigatorScrollViewLayout` takes the views that float over the list's edges: the filter bar as
+  `bottomOverlayViews`, the Find page's query area and summary row as `topOverlayViews`. It turns the depth they cover
+  into the scroll view's own `additionalSafeAreaInsets` and sets the clip view's `contentInsets` to the safe area plus
+  8 points at the top, as Xcode does; it follows the safe area and the views' frames by itself. Add the scroll view
+  before those views, so that they draw and take clicks above it; hide the 1-point separators from macOS 26 — the edge
+  effect replaces them; centre empty-state text and placeholders in the safe area (`scrollView.safeAreaLayoutGuide`),
+  not in the scroll view.
+- Keep the scroll view's own `automaticallyAdjustsContentInsets` on, and leave the clip view's insets, its
+  `automaticallyAdjustsContentInsets` and the scroll view's `additionalSafeAreaInsets` to the layout. AppKit sizes the
+  bottom scroll pocket by the scroll view's own bottom content inset, not the clip view's (measured on macOS 27.2), so
+  a scroll view whose automatic insets are off gets no bottom edge effect even though its rows still clear the bar.
+- Xcode adds private calls on top — `-[NSScrollView registerPocketContainer:onEdge:]` and `setScrollPocketStyle:onEdge:`,
+  and a bar answering `_scrollPocketElementStyle` with 2 — which wait for a UIFoundation release; until then
+  `alwaysShownPocketEdges` (declared in UIFoundation 0.38.0) keeps both pockets shown. Background, with the
+  reverse-engineered addresses: `Documentations/Evolutions/0052-xcode-navigator-overlay-bars.md`.
+
 ### Diagnosing UI Flicker
 
 **Measure the frames before changing anything.** Flicker is a one-to-three-frame artifact; reading the code and reasoning about what "should" happen has repeatedly produced confident, wrong answers here. Ask for a screen recording, export **every** frame with `AVAssetReader` (time-point sampling is too coarse and misses the artifact outright), then pixel-diff consecutive frames and report changed-pixel count plus the y-range of the changed rows. Which pixels changed on which frame is the thing inference cannot give you.

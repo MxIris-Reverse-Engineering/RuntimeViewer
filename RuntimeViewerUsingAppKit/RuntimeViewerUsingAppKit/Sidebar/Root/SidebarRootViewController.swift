@@ -18,8 +18,22 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
     private let bottomSeparatorView = NSBox()
 
+    /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on. Made in
+    /// `viewDidLoad`.
+    private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
     override var shouldDisplayCommonLoading: Bool {
         true
+    }
+
+    /// From macOS 26 the list reaches the top of the page, under the tab switcher's bar; the gap below
+    /// that bar is in the list's content inset instead.
+    override var contentInsets: NSDirectionalEdgeInsets {
+        if #available(macOS 26.0, *) {
+            .init()
+        } else {
+            super.contentInsets
+        }
     }
 
     /// The list takes keyboard focus when the sidebar pops back to it — see the same override in
@@ -39,7 +53,12 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
         scrollView.snp.makeConstraints { make in
             make.top.left.right.equalToSuperview()
-            make.bottom.equalTo(bottomSeparatorView.snp.top)
+            if #available(macOS 26.0, *) {
+                // Under the filter bar as well, which floats over the list's bottom edge.
+                make.bottom.equalToSuperview()
+            } else {
+                make.bottom.equalTo(bottomSeparatorView.snp.top)
+            }
         }
 
         bottomSeparatorView.snp.makeConstraints { make in
@@ -60,7 +79,13 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
         bottomSeparatorView.do {
             $0.boxType = .separator
+            // From macOS 26 the rows fade out under the bar instead, as in Xcode.
+            if #available(macOS 26.0, *) {
+                $0.isHidden = true
+            }
         }
+
+        navigatorScrollViewLayout = NavigatorScrollViewLayout(scrollView: scrollView, bottomOverlayViews: [filterControlBar])
 
         // The bar sets the field's control size, which sets its font, so the field's own settings come after it.
         filterControlBar.do {

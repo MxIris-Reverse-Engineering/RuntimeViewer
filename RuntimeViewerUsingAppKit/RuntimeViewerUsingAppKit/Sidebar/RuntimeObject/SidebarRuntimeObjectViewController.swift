@@ -69,6 +69,16 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         outlineView.window != nil ? outlineView : nil
     }
 
+    /// From macOS 26 the list reaches the top of the page, under the tab switcher's bar; the gap below
+    /// that bar is in the list's content inset instead.
+    override var contentInsets: NSDirectionalEdgeInsets {
+        if #available(macOS 26.0, *) {
+            .init()
+        } else {
+            super.contentInsets
+        }
+    }
+
     /// Move the visual selection to `row`, bringing it on screen first.
     ///
     /// The order matters. `NSOutlineView` materializes a row view only as the
@@ -471,6 +481,9 @@ extension SidebarRuntimeObjectViewController {
 
         private(set) var matchCaseButton: NSButton!
 
+        /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on.
+        private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
+
         /// Shows the scope item in the accent colour while a scope narrows the list.
         var isFilterScopeActive = false {
             didSet {
@@ -505,13 +518,20 @@ extension SidebarRuntimeObjectViewController {
 
             scrollView.snp.makeConstraints { make in
                 make.top.left.right.equalToSuperview()
-                make.bottom.equalTo(bottomSeparatorView.snp.top)
+                if #available(macOS 26.0, *) {
+                    // Under the filter bar as well, which floats over the list's bottom edge.
+                    make.bottom.equalToSuperview()
+                } else {
+                    make.bottom.equalTo(bottomSeparatorView.snp.top)
+                }
             }
 
+            // Centred in what the bars leave of the list, which is all of it before macOS 26.
             emptyLabel.snp.makeConstraints { make in
                 make.centerX.equalToSuperview()
-                make.centerY.equalTo(scrollView)
-                make.top.left.greaterThanOrEqualTo(16).priority(.high)
+                make.centerY.equalTo(scrollView.safeAreaLayoutGuide)
+                make.top.greaterThanOrEqualTo(safeAreaLayoutGuide).offset(16).priority(.high)
+                make.left.greaterThanOrEqualTo(16).priority(.high)
                 make.right.lessThanOrEqualTo(-16).priority(.high)
                 make.bottom.lessThanOrEqualTo(bottomSeparatorView.snp.top).offset(-16).priority(.high)
             }
@@ -540,6 +560,10 @@ extension SidebarRuntimeObjectViewController {
 
             bottomSeparatorView.do {
                 $0.boxType = .separator
+                // From macOS 26 the rows fade out under the bar instead, as in Xcode.
+                if #available(macOS 26.0, *) {
+                    $0.isHidden = true
+                }
             }
 
             filterModeItem.do {
@@ -558,6 +582,8 @@ extension SidebarRuntimeObjectViewController {
                 $0.leadingItems = [NSFilterControlBarItemGroup(subitems: [filterModeItem, filterScopeItem])]
                 $0.controlSize = .large
             }
+
+            navigatorScrollViewLayout = NavigatorScrollViewLayout(scrollView: scrollView, bottomOverlayViews: [filterControlBar])
         }
     }
 
@@ -579,8 +605,9 @@ extension SidebarRuntimeObjectViewController {
                 contentStack
             }
 
+            // The safe area: from macOS 26 the page runs under the toolbar and the tab switcher's bar.
             contentStack.snp.makeConstraints { make in
-                make.center.equalToSuperview()
+                make.center.equalTo(safeAreaLayoutGuide)
             }
 
             progressIndicator.snp.makeConstraints { make in
@@ -630,8 +657,9 @@ extension SidebarRuntimeObjectViewController {
                 contentView
             }
 
+            // The safe area: from macOS 26 the page runs under the toolbar and the tab switcher's bar.
             contentView.snp.makeConstraints { make in
-                make.center.equalToSuperview()
+                make.center.equalTo(safeAreaLayoutGuide)
                 make.width.equalTo(200)
             }
 
