@@ -296,9 +296,10 @@ Rules that keep the two in step:
   target lists with `Tuist.swift` and `Tuist/ProjectDescriptionHelpers/LocalPackages.swift`, the
   two lock files, and the trait-conditioned settings Tuist drops; `check --build` also builds both
   workspaces and compares the two apps.
-- **`Tuist/Package.resolved` pins what the native lock files pin.** `UpdatePackagesScript.sh`
-  updates it after the Debug workspace. Resolve with the Xcode the native lock files were resolved
-  with: some packages pick their manifest by Swift version.
+- **`Tuist/Package.resolved` is not committed** (it is ignored). `./TuistScript.sh install` starts
+  it from the Debug workspace's lock file every time, so it pins what the native lock files pin, and
+  `UpdatePackagesScript.sh` runs that install after updating the Debug workspace. Install with the
+  Xcode the native lock files were resolved with: some packages pick their manifest by Swift version.
 - **Build the app with the `RuntimeViewer macOS` scheme only.** The simulator payload and the
   Catalyst plugin are built first by the scheme's fixed order, not as dependencies.
 

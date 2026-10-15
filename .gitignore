@@ -49,3 +49,6 @@ RuntimeViewer-iOS-Simulator.zip
 # four packages already ignore theirs.
 /RuntimeViewerPrecompiledLibraries/swift-syntax/.build/
 /Tuist/.build/
+# `./TuistScript.sh install` starts it from RuntimeViewer-Debug.xcworkspace's lock file every time;
+# the native lock files are the ones to commit.
+/Tuist/Package.resolved

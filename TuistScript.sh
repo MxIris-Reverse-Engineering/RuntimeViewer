@@ -228,9 +228,13 @@ if differences:
 PYTHON
 }
 
-LOCK_FILE_HINT="Some packages pick their manifest by Swift version, so an Xcode other than the one the native lock files were resolved with resolves other packages: run again with that Xcode (DEVELOPER_DIR), or run ./UpdatePackagesScript.sh, which updates both."
+LOCK_FILE_HINT="Run ./TuistScript.sh install with the Xcode the native lock files were resolved with (DEVELOPER_DIR): some packages pick their manifest by Swift version, so another Xcode resolves other packages."
 
 install_dependencies() {
+    # Tuist/Package.resolved is not committed. Every install starts it from the Debug workspace's
+    # lock file, so Tuist resolves the versions the native workspaces pin rather than the newest
+    # ones, and the comparison below shows whether it resolved the same.
+    run cp "$NATIVE_PACKAGE_RESOLVED" "$TUIST_PACKAGE_RESOLVED"
     log "Resolving the dependencies (tuist install)"
     run_tuist "install" "${TUIST[@]}" install || fail "tuist install failed"
     if ! $DRY_RUN; then

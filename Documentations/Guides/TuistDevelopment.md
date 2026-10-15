@@ -47,7 +47,7 @@ Xcode 27 解析出 `swift-issue-reporting` 2.1），锁文件就和原生的对�
 | 命令行构建（同 `RunScript.sh` 的参数） | `./TuistScript.sh build [--configuration Debug-arm64e] [--launch]` |
 | 本地包里增删了源文件 | `./TuistScript.sh generate`（Tuist 转换包时按 glob 展开文件；只改已有文件不用） |
 | 改了某个 `Package.swift`（依赖、target、设置） | `./TuistScript.sh install`，再 `generate` |
-| 依赖升级 | `./UpdatePackagesScript.sh`（顺带更新 `Tuist/Package.resolved`），再 `./TuistScript.sh warm`（只重编变了的） |
+| 依赖升级 | `./UpdatePackagesScript.sh`（顺带跑一次 `./TuistScript.sh install`），再 `./TuistScript.sh warm`（只重编变了的） |
 | 换了 Xcode 版本 | `./TuistScript.sh warm` |
 | 改了原生工程的结构或设置 | 同批更新 Tuist 描述，提交前 `./TuistScript.sh check`（见下文） |
 
@@ -85,9 +85,10 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
    （`RuntimeViewerUsingAppKit/Project.swift`、`Tuist/Package.swift`、`Workspace.swift`、
    `Tuist/ProjectDescriptionHelpers/LocalPackages.swift`、`Tuist.swift`），提交前 `./TuistScript.sh check`
    通过。
-4. **`Tuist/Package.resolved` 与原生锁文件钉同样的版本。** `UpdatePackagesScript.sh` 更新完 Debug
-   workspace 后会以它为初值重写 `Tuist/Package.resolved` 并跑 `tuist install` 核对。手动跑
-   `./TuistScript.sh install` 后锁文件变了，多半是 Xcode 不对（见上文）。
+4. **`Tuist/Package.resolved` 不提交（已忽略），版本跟着原生锁文件走。** `./TuistScript.sh install` 每次都先把
+   Debug workspace 的锁文件拷过来当初值再解析，所以它钉的就是原生锁文件的版本；`UpdatePackagesScript.sh` 更新完
+   Debug workspace 后会顺带跑这一步。解析完与原生的不一致（`install` 结束时与 `check` 都会报），多半是 Xcode
+   不对（见上文）。
 5. **Tuist workspace 不用来归档或发版。**
 
 ## `check` 查什么
@@ -120,7 +121,7 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 | `… sets X in the project file` | 有人在 Xcode 里改了设置。把值挪进它说的那个 xcconfig，工程文件里删掉 |
 | `Target … has no counterpart …` | 原生工程加了 target 而 `Project.swift` 没跟上（或反之） |
 | `… localPackageTargetNames: X is missing` | 本地包加了 target：`Tuist.swift` 与 `LocalPackages.swift` 两处都加上 |
-| 锁文件不一致 | 用原生锁文件那个 Xcode 跑 `./TuistScript.sh install`，或跑 `./UpdatePackagesScript.sh` |
+| 锁文件不一致 | 用原生锁文件那个 Xcode 跑 `./TuistScript.sh install` |
 | `… is missing from Tuist/Package.swift's targetSettings` | 某个依赖开启了新的 trait 宏，照 Capstone 的写法补进 `targetSettings` |
 | `… lacks -ObjC` / `… leaves out N Objective-C class(es)` | 有 target 没带 `-ObjC`：新 target 走 `targetSettings`、新测试 target 进 `LocalPackages.testTargetNames` 就会带上 |
 | `… needs MACOSX_DEPLOYMENT_TARGET 14.0` | 某个本地包把 macOS 最低版本降到了 14 以下：照 Core 的写法在 `localTestTargetSettings` 里给它的测试 target 抬部署版本 |
