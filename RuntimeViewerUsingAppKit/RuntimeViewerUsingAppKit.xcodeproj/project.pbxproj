@@ -15,7 +15,7 @@
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
 		E95ED17E0000000000000001 /* RuntimeViewerSourceEditorBridge.bundle in Embed SourceEditor Bridge */ = {isa = PBXBuildFile; fileRef = E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Embed RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E961FEEC2F54513E00ED3419 /* .framework in Embed RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* .framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */ = {isa = PBXBuildFile; productRef = E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */; };
@@ -37,7 +37,7 @@
 		E9C5E7A10000000000000001 /* RuntimeViewerCatalystService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E9C5E7A10000000000000002 /* RuntimeViewerCatalystService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9C64C94307F26EA006EC990 /* LookInsideServer in Frameworks */ = {isa = PBXBuildFile; productRef = E9C64C93307F26EA006EC990 /* LookInsideServer */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed Catalyst Plugin */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E9CA7A1A0000000000000006 /* RuntimeViewerMobileServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E9CAFE010000000000000021 /* .framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E9CA7A1A0000000000000006 /* .framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
 
@@ -160,7 +160,7 @@
 			dstPath = "";
 			dstSubfolder = Resources;
 			files = (
-				E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Embed RuntimeViewerServer Framework */,
+				E961FEEC2F54513E00ED3419 /* .framework in Embed RuntimeViewerServer Framework */,
 			);
 			name = "Embed RuntimeViewerServer Framework";
 		};
@@ -213,7 +213,7 @@
 			dstPath = "";
 			dstSubfolder = Resources;
 			files = (
-				E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed RuntimeViewerMobileServer Framework */,
+				E9CAFE010000000000000021 /* .framework in Embed RuntimeViewerMobileServer Framework */,
 			);
 			name = "Embed RuntimeViewerMobileServer Framework";
 		};
@@ -532,9 +532,9 @@
 		E98BF6322F1D4ABB0041DB20 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */,
+				E98BF6372F1D4ABB0041DB20 /* .framework */,
 				E94C1B8F2F35E7AC005DF968 /* RuntimeViewerServer.framework */,
-				E9CA7A1A0000000000000006 /* RuntimeViewerMobileServer.framework */,
+				E9CA7A1A0000000000000006 /* .framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -847,17 +847,17 @@
 			remoteRef = E94C1B8E2F35E7AC005DF968 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */ = {
+		E98BF6372F1D4ABB0041DB20 /* .framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
-			path = RuntimeViewerServer.framework;
+			path = .framework;
 			remoteRef = E98BF6362F1D4ABB0041DB20 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		E9CA7A1A0000000000000006 /* RuntimeViewerMobileServer.framework */ = {
+		E9CA7A1A0000000000000006 /* .framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
-			path = RuntimeViewerMobileServer.framework;
+			path = .framework;
 			remoteRef = E9CA7A1A0000000000000005 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
