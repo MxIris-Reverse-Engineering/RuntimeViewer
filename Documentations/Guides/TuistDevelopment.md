@@ -63,6 +63,13 @@ Debug 生成回来；`warm` 收尾也生成 Debug。要在 Xcode 里编别的配
 生成之后，四个本地包目录里各多一个 `<包名>.xcodeproj` 和 `Derived/`。直接在 Xcode 里打开包目录时，
 Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.swift` 不受影响。
 
+**workspace 的导航栏照原生 workspace 排**：四个本地包与 App 工程按 `RuntimeViewer-Debug.xcworkspace` 列出的
+顺序放在顶层（Core、Packages、MCP、CommandLine、App 工程、swift-syntax），第三方工程收在 Dependencies 组里。
+这是脚本在每次生成之后重写 `RuntimeViewer-Tuist.xcworkspace/contents.xcworkspacedata` 得来的；Tuist 自己没有
+这个选项，它按路径排序，并以所有工程（依赖也算）的公共父目录为根逐层分组——依赖在 `/Volumes/DerivedData`
+下时，公共父目录只剩 `/Volumes`，本地工程就从 `Repositories/Private/…` 一层层嵌套下来。所以别直接跑
+`tuist generate`，用 `./TuistScript.sh generate`。
+
 ## 必须遵守的约定
 
 1. **App 只能用 `RuntimeViewer macOS` scheme 构建。** 模拟器注入载荷和 Catalyst 插件不是任何

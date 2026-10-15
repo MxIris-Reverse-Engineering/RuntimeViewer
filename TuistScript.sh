@@ -255,12 +255,112 @@ generate_workspace() {
     log "Generating $WORKSPACE ($configuration)"
     run_tuist "generate-$configuration" "${TUIST[@]}" generate --no-open --configuration "$configuration" \
         || fail "tuist generate failed"
+    arrange_workspace_like_native
 }
 
 restore_resting_generation() {
     log "Generating $WORKSPACE for $RESTING_CONFIGURATION again"
-    run_tuist "generate-$RESTING_CONFIGURATION" "${TUIST[@]}" generate --no-open --configuration "$RESTING_CONFIGURATION" \
-        || warn "generating $WORKSPACE for $RESTING_CONFIGURATION failed; run ./TuistScript.sh generate"
+    if run_tuist "generate-$RESTING_CONFIGURATION" "${TUIST[@]}" generate --no-open --configuration "$RESTING_CONFIGURATION"; then
+        arrange_workspace_like_native
+    else
+        warn "generating $WORKSPACE for $RESTING_CONFIGURATION failed; run ./TuistScript.sh generate"
+    fi
+}
+
+# Lays the generated workspace out the way the native workspaces are: the local packages and the
+# app project at the top level, in the order $NATIVE_WORKSPACE lists their directories, and the
+# third-party projects in the Dependencies group Tuist puts them in. Tuist offers no say in this: it
+# sorts the projects by path and nests them in a group per directory below the common ancestor of
+# every project, dependencies included (WorkspaceStructureGenerator in Tuist 4.210), so with the
+# dependencies outside the checkout the local projects sat under groups for /Volumes and down. The
+# workspace keeps Tuist's own layout, with a warning, if its contents are not what this expects.
+arrange_workspace_like_native() {
+    if $DRY_RUN; then
+        log "would arrange $WORKSPACE like $NATIVE_WORKSPACE"
+        return 0
+    fi
+    local arranged=true
+    python3 - "$PROJECT_DIR" "$WORKSPACE" "$NATIVE_WORKSPACE" <<'PYTHON' || arranged=false
+import os
+import sys
+import xml.etree.ElementTree as ElementTree
+from xml.sax.saxutils import quoteattr
+
+project_directory, workspace_name, native_workspace_name = sys.argv[1:4]
+contents_path = os.path.join(project_directory, workspace_name, "contents.xcworkspacedata")
+
+def resolve(location, base):
+    """The absolute path of a workspace location: group: is relative to the enclosing group,
+    container: to the directory holding the workspace."""
+    kind, _, value = location.partition(":")
+    if kind == "group":
+        return os.path.normpath(os.path.join(base, value))
+    if kind == "container":
+        return os.path.normpath(os.path.join(project_directory, value))
+    if kind == "absolute":
+        return os.path.normpath(value)
+    raise ValueError(f"unexpected location {location!r}")
+
+def file_paths(element, base):
+    """The absolute paths of the file references in an element and the groups below it."""
+    if element.tag == "FileRef":
+        return [resolve(element.get("location", ""), base)]
+    if element.tag == "Group":
+        directory = resolve(element.get("location", ""), base)
+        return [path for child in element for path in file_paths(child, directory)]
+    raise ValueError(f"unexpected element <{element.tag}>")
+
+def is_dependencies_group(element):
+    return element.tag == "Group" and element.get("name") == "Dependencies" and element.get("location") == "container:"
+
+def location_of(path):
+    relative = os.path.relpath(path, project_directory)
+    return f"absolute:{path}" if relative.startswith("..") else f"group:{relative}"
+
+try:
+    generated = ElementTree.parse(contents_path).getroot()
+    native = ElementTree.parse(os.path.join(project_directory, native_workspace_name, "contents.xcworkspacedata")).getroot()
+    # A native reference is a package directory or a project; either way it names the directory the
+    # Tuist project of the same code is generated in.
+    native_directories = [os.path.dirname(path) if path.endswith(".xcodeproj") else path
+                          for element in native for path in file_paths(element, project_directory)]
+    local_paths, dependency_paths = [], []
+    for element in generated:
+        paths = file_paths(element, project_directory)
+        (dependency_paths if is_dependencies_group(element) else local_paths).extend(paths)
+except (OSError, ElementTree.ParseError, ValueError) as error:
+    print(f"    {error}", file=sys.stderr)
+    sys.exit(1)
+
+def native_rank(path):
+    directory = os.path.dirname(path)
+    return native_directories.index(directory) if directory in native_directories else len(native_directories)
+
+def file_reference(path, indentation):
+    return [f"{indentation}<FileRef", f"{indentation}   location = {quoteattr(location_of(path))}>", f"{indentation}</FileRef>"]
+
+lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<Workspace", '   version = "1.0">']
+# A stable sort: projects in no native directory keep Tuist's order, after the others.
+for path in sorted(local_paths, key=native_rank):
+    lines += file_reference(path, "   ")
+if dependency_paths:
+    lines += ["   <Group", '      location = "container:"', '      name = "Dependencies">']
+    for path in dependency_paths:
+        lines += file_reference(path, "      ")
+    lines.append("   </Group>")
+lines.append("</Workspace>")
+contents = "\n".join(lines) + "\n"
+
+with open(contents_path) as handle:
+    unchanged = handle.read() == contents
+if not unchanged:
+    with open(contents_path, "w") as handle:
+        handle.write(contents)
+print(f"    {len(local_paths)} projects in {native_workspace_name}'s order, {len(dependency_paths)} under Dependencies")
+PYTHON
+    if ! $arranged; then
+        warn "could not arrange $WORKSPACE like $NATIVE_WORKSPACE (above); it keeps Tuist's layout"
+    fi
 }
 
 # For the commands that build: generate for $CONFIGURATION, and for Debug again when the script exits.
