@@ -17,6 +17,7 @@ import SnapKit
 /// the document's one `FindSession` through their own `FindViewModel`, and the scope chooser is
 /// presented by whichever level the page is on.
 final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewController<FindViewModel<Route>>, NSOutlineViewDelegate {
+    
     // MARK: - Relays
 
     /// What the outline shows. Its data source subscribes to this relay, so the presentation's

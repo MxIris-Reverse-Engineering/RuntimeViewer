@@ -10,7 +10,7 @@ struct TabViewItem {
     let viewController: NSViewController
     /// While this is `true` the tab's symbol carries a dot — the Report navigator's tab while
     /// work is running. `nil` for a tab that never shows one.
-    var activity: Driver<Bool>? = nil
+    var activity: Driver<Bool>?
 }
 
 /// A page that runs its list under the bar of the tab switcher it sits in (`TabViewController.PageLayout.underSegmentedControl`).
