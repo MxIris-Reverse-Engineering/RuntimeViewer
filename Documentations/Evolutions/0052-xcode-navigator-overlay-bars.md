@@ -100,3 +100,4 @@
 | 2026-10-15 | Find 页的查询区与 summary 行也回答 Bar | Xcode 27.2 的 `IDEFindNavigator.nib` 与 `IDEFindNavigatorQueryParametersController.nib` 里，这两处用的就是 Bar 样式的类 |
 | 2026-10-15 | `SwiftDeclaration.Definition` 的 `@FrameworkToolboxExtension` 加 `referenceSemantics: true` | FrameworkToolbox 0.14.0 起不加，编译器在 SILGen 崩溃（a2bf5cb 的提交说明里写了这个陷阱）；全仓库只有这一处 |
 | 2026-10-15 | 状态改为 Implemented | 两期都已落地。不另写使用指南与实现说明：给贡献者的规则在 `AGENTS.md` 的「Navigator pages run under their bars」，实现细节在本提案。不新增术语：scroll pocket 是 AppKit 自己的名字，摘要与 `AGENTS.md` 都解释了。目视验收仍待用户 |
+| 2026-10-15 | 栏高改由 `FloatingBarSafeAreaLayout`（RuntimeViewerUI）跟随栏的 frame 写入 tab view 的 safe area，不再在 `viewDidLayout` 里读 | 目视验收发现推进来的对象列表页第一行压在栏下。`viewDidLayout` 执行时 AppKit 只排好了根视图的直接子视图，栏的 frame 是上一轮的，第一轮为 0；推进来的页面只排一次版，这 28 点就一直没加上。见 [ResolvedIssues/2026-10-15-sidebar-list-starts-under-the-tab-switcher-bar.md](../ResolvedIssues/2026-10-15-sidebar-list-starts-under-the-tab-switcher-bar.md)；方案一节里「`viewDidLayout` 里把栏的实际高度写进…」是原先的做法，保留原文 |

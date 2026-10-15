@@ -1180,8 +1180,12 @@ safe area. Before macOS 26 the pages stay stacked.
 - `TabViewController.pageLayout` picks the layout per switcher: `.underSegmentedControl` for the sidebar's two
   (`SidebarRootTabViewController`, `SidebarRuntimeObjectTabViewController`), `.belowSegmentedControl` — the default —
   for the inspector's, which Xcode stacks too. Under `.underSegmentedControl` the tab view fills the view, the bar
-  holding the segmented control is drawn over it, and `viewDidLayout` writes the bar's height (28 at `.large`) into
-  `tabView.additionalSafeAreaInsets.top`.
+  holding the segmented control is drawn over it, and a `FloatingBarSafeAreaLayout` (RuntimeViewerUI) writes the bar's
+  height (28 at `.large`) into `tabView.additionalSafeAreaInsets.top` whenever the bar's frame changes. **Never from
+  the switcher's `viewDidLayout`**: AppKit calls it before it lays out anything below the controller's view's direct
+  subviews, so the bar — one level further down — still has the frame of the pass before, none at all on the first; a
+  page pushed onto the sidebar may get no second pass, and its list then starts under the bar. `TabSwitcherBarSafeAreaTests`
+  covers it; background: `Documentations/ResolvedIssues/2026-10-15-sidebar-list-starts-under-the-tab-switcher-bar.md`.
 - A page shown in a sidebar switcher lets its list's scroll view reach all four edges of the page and hands the list
   to a `NavigatorScrollViewLayout` (RuntimeViewerUI), never a container inset or a constraint to a bar. The four page
   base classes (`SidebarRootViewController`, `SidebarRuntimeObjectViewController`, `FindViewController`,

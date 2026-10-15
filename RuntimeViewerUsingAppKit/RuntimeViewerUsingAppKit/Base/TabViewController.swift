@@ -80,6 +80,10 @@ class TabViewController: NSLayerBackedViewController {
     /// The page the bar was last handed to, which gives it back when another page comes on screen.
     private weak var pageHoldingSegmentedControlBar: NavigatorTabPage?
 
+    /// Hands the bar's height to the pages as safe area under `underSegmentedControl`. Made in
+    /// `viewDidLoad`.
+    private var segmentedControlBarSafeAreaLayout: FloatingBarSafeAreaLayout?
+
     /// The style is applied here rather than in `viewDidLoad` on purpose:
     /// `setTabViewItems` runs before the view ever loads — it only touches this
     /// stored property — and until the style lands AppKit still reserves room
@@ -174,21 +178,17 @@ class TabViewController: NSLayerBackedViewController {
                 make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
             }
         }
-    }
 
-    /// Under `underSegmentedControl` the bar's height becomes extra safe area for everything in the
-    /// tab view, which is how Xcode hands its bar to the navigator (`IDENavigatorArea.ContentView`
-    /// sets its own `additionalSafeAreaInsets`): a page's scroll view insets its content by that
-    /// safe area, and AppKit sizes the scroll pocket on the top edge by the same safe area, so the
-    /// edge effect reaches down to the bar's bottom. Set once the bar has a height and whenever it
-    /// changes.
-    override func viewDidLayout() {
-        super.viewDidLayout()
-
-        guard #available(macOS 26.0, *), pageLayout == .underSegmentedControl else { return }
-        let barHeight = segmentedControlBarView.frame.height
-        guard tabView.additionalSafeAreaInsets.top != barHeight else { return }
-        tabView.additionalSafeAreaInsets = NSEdgeInsets(top: barHeight, left: 0, bottom: 0, right: 0)
+        // Under `underSegmentedControl` the bar's height becomes extra safe area for everything in
+        // the tab view, which is how Xcode hands its bar to the navigator (`IDENavigatorArea.ContentView`
+        // sets its own `additionalSafeAreaInsets`): a page's scroll view insets its content by that
+        // safe area, and AppKit sizes the scroll pocket on the top edge by the same safe area, so the
+        // edge effect reaches down to the bar's bottom. It follows the bar's frame, not this
+        // controller's `viewDidLayout`, which runs before AppKit lays the bar out — see
+        // `FloatingBarSafeAreaLayout`.
+        if pageLayout == .underSegmentedControl {
+            segmentedControlBarSafeAreaLayout = FloatingBarSafeAreaLayout(barView: segmentedControlBarView, coveredView: tabView)
+        }
     }
 
     /// Under `underSegmentedControl`, hands the bar to the page on screen and takes it back from the
