@@ -150,9 +150,16 @@ let package = Package(
             url: "https://github.com/apple/swift-collections",
             from: "1.6.0",
         ),
+        // A floor, not an exact pin. The exact pin went in after FrameworkToolbox 0.10.0 made its one
+        // dynamic product, ObjCRuntimeToolbox, depend on OSToolbox: Xcode then built OSToolbox and
+        // FrameworkToolbox as dynamic frameworks, and the helper daemon, which has no run path to the
+        // app's Frameworks directory, crashed in dyld. 0.11.0 made ObjCRuntimeToolbox macro-only again,
+        // and FrameworkToolbox's PackageTopologyGuardTests keep it that way. A release build's embedded
+        // executables still must not link an @rpath toolbox framework other than ObjCRuntimeToolbox
+        // (`otool -L`).
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox",
-            exact: "0.12.0",
+            from: "0.15.0",
         ),
         .package(
             local: .package(

@@ -1801,7 +1801,10 @@ actor RuntimeSwiftSectionFactory {
     }
 }
 
-@FrameworkToolboxExtension(.internal)
+// `Definition` is class-bound, so the generated `box` setter must not assign `self`: from
+// FrameworkToolbox 0.14 on it does unless told otherwise, and the compiler crashes in SILGen
+// instead of reporting it.
+@FrameworkToolboxExtension(.internal, referenceSemantics: true)
 extension SwiftDeclaration.Definition {}
 
 extension SwiftDeclaration.AccessorKind {

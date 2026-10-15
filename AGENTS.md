@@ -547,10 +547,17 @@ LLM Client
   `0.17.0` or later for Settings. `0.16.0` carries the observable reference-model
   store but *not* `SettingsConfiguration`, which landed after that tag; `0.17.0`
   is the first release with both, plus the window frame restoration below. The
-  declared floor is `0.37.0`, the first release with `NSTableView.box.estimatesRowHeights`
+  declared floor is `0.39.0`, the first release with the scroll pocket calls
+  (`NSScrollView.box.registerScrollPocketContainer(_:on:)`, `setScrollPocketStyle(_:on:)`,
+  `NSView.barScrollPocketElementStyle` and the `_scrollPocketElementStyle` declaration,
+  `AppleInternal` trait) that `NavigatorScrollViewLayout` and the navigator bars use — see
+  *Navigator pages run under their bars*. `0.39.0` needs FrameworkToolbox `0.15.0` or later,
+  which is why `RuntimeViewerCore` takes FrameworkToolbox `from: "0.15.0"` instead of the
+  exact pin it had; the comment there says what to check when FrameworkToolbox moves. Before
+  it, `0.37.0` was the first release with `NSTableView.box.estimatesRowHeights`
   (`AppleInternal` trait), which `StatefulOutlineView` uses to keep AppKit's row
   height estimation off — see the `StatefulOutlineView` notes under *Diagnosing UI
-  Flicker*. Before it, `0.36.1` was the first release whose `Label` mirrors
+  Flicker*. Before that, `0.36.1` was the first release whose `Label` mirrors
   `attributedStringValue` into its tooltip: `RuntimeObjectCellView` feeds its
   labels attributed strings and relies on that for the title and subtitle
   tooltips instead of setting them by hand. Settings alone would need `0.22.0`,
