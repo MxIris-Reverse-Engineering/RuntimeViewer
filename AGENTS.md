@@ -1187,12 +1187,18 @@ safe area. Before macOS 26 the pages stay stacked.
   subviews, so the bar — one level further down — still has the frame of the pass before, none at all on the first; a
   page pushed onto the sidebar may get no second pass, and its list then starts under the bar. `TabSwitcherBarSafeAreaTests`
   covers it; background: `Documentations/ResolvedIssues/2026-10-15-sidebar-list-starts-under-the-tab-switcher-bar.md`.
+- **Every page of every switcher starts its content 8 points below the segmented control**
+  (`TabViewController.pageTopSpacing`, which is `NavigatorScrollViewLayout.topContentInsetBeyondSafeArea`, so every
+  such gap follows that one value). A page stacked below the control — every page before macOS 26, the inspector's on
+  every system — gets the gap from the switcher and starts its own content at its top edge, with no top margin of its
+  own: the inspector's headers and the Class page's disclosure title sit at the page's top. A page running under the
+  bar gets it from its list's content inset, and the Find page's query area from a constraint on `pageTopSpacing`.
 - A page shown in a sidebar switcher lets its list's scroll view reach all four edges of the page and hands the list
   to a `NavigatorScrollViewLayout` (RuntimeViewerUI), never a container inset or a constraint to a bar. The four page
   base classes (`SidebarRootViewController`, `SidebarRuntimeObjectViewController`, `FindViewController`,
-  `ReportViewController`) override `contentInsets` to zero from macOS 26 for this reason. A scroll view that stops
-  below the titlebar is not registered with the window, so it gets no top pocket, and its rows are cut off at the bar
-  instead of scrolling under it.
+  `ReportViewController`) keep `BaseViewController`'s `contentInsets`, which are zero, for this reason. A scroll view
+  that stops below the titlebar is not registered with the window, so it gets no top pocket, and its rows are cut off
+  at the bar instead of scrolling under it.
 - `NavigatorScrollViewLayout` takes the views that float over the list's edges: the filter bar as
   `bottomOverlayViews`, the Find page's query area and summary row as `topOverlayViews`. It turns the depth they cover
   into the scroll view's own `additionalSafeAreaInsets` and sets the clip view's `contentInsets` to the safe area plus

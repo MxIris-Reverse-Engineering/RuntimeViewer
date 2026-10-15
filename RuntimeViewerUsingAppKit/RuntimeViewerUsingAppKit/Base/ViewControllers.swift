@@ -27,7 +27,7 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: LayerBackedViewCont
 
     public private(set) var containerView = NSView()
 
-    open var contentInsets: NSDirectionalEdgeInsets { .init(top: 10, leading: 0, bottom: 0, trailing: 0) }
+    open var contentInsets: NSDirectionalEdgeInsets { .zero }
 
     open var shouldDisplayCommonLoading: Bool { false }
 

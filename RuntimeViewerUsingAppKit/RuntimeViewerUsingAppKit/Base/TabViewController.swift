@@ -39,6 +39,15 @@ class TabViewController: NSLayerBackedViewController {
     /// Overridden by the sidebar's tab switchers, which lay out like Xcode's navigator.
     var pageLayout: PageLayout { .belowSegmentedControl }
 
+    /// How far below the segmented control every page of every switcher starts its content: the 8
+    /// points by which a navigator list starts below the bar it runs under
+    /// (`NavigatorScrollViewLayout.topContentInsetBeyondSafeArea`, Xcode's value). A page stacked
+    /// below the control — every page before macOS 26, the inspector's on every system — gets the
+    /// gap from the switcher and starts its own content at its top edge. A page running under the
+    /// bar gets it from its list's content inset, and the Find page's query area from a constraint
+    /// on this value.
+    static let pageTopSpacing = NavigatorScrollViewLayout.topContentInsetBeyondSafeArea
+
     /// Transparent from macOS 26: the page sits directly on the split view item's glass, which no
     /// colour or material reproduces. The opaque backdrop a push / pop needs is inserted under the
     /// page for the length of the transition by `NavigationTransitionBackdropController` and removed
@@ -137,7 +146,7 @@ class TabViewController: NSLayerBackedViewController {
             }
 
             tabView.snp.makeConstraints { make in
-                make.top.equalTo(segmentedControl.snp.bottom)//.offset(10)
+                make.top.equalTo(segmentedControl.snp.bottom).offset(Self.pageTopSpacing)
                 make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
             }
         }
@@ -174,7 +183,7 @@ class TabViewController: NSLayerBackedViewController {
             case .underSegmentedControl:
                 make.edges.equalToSuperview()
             case .belowSegmentedControl:
-                make.top.equalTo(segmentedControlBarView.snp.bottom)
+                make.top.equalTo(segmentedControlBarView.snp.bottom).offset(Self.pageTopSpacing)
                 make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
             }
         }

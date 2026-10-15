@@ -33,16 +33,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         true
     }
 
-    /// From macOS 26 the list reaches the top of the page, under the tab switcher's bar; the gap below
-    /// that bar is in the list's content inset instead.
-    override var contentInsets: NSDirectionalEdgeInsets {
-        if #available(macOS 26.0, *) {
-            .init()
-        } else {
-            super.contentInsets
-        }
-    }
-
     /// The list takes keyboard focus when the sidebar pops back to it — see the same override in
     /// `SidebarRuntimeObjectViewController`.
     override var preferredFirstResponder: NSResponder? {

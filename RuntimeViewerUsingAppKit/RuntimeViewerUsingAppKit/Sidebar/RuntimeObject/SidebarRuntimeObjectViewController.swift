@@ -69,16 +69,6 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         outlineView.window != nil ? outlineView : nil
     }
 
-    /// From macOS 26 the list reaches the top of the page, under the tab switcher's bar; the gap below
-    /// that bar is in the list's content inset instead.
-    override var contentInsets: NSDirectionalEdgeInsets {
-        if #available(macOS 26.0, *) {
-            .init()
-        } else {
-            super.contentInsets
-        }
-    }
-
     /// Move the visual selection to `row`, bringing it on screen first.
     ///
     /// The order matters. `NSOutlineView` materializes a row view only as the

@@ -30,8 +30,10 @@ final class InspectorSwiftSpecializationViewController: BaseEffectViewController
             addSpecializationButton
         }
 
+        // At the page's top edge: the tab switcher leaves the gap above the page (`TabViewController.pageTopSpacing`).
         headerLabel.snp.makeConstraints { make in
-            make.top.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
+            make.top.equalTo(view.safeAreaLayoutGuide)
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
         }
 
         scrollView.snp.makeConstraints { make in

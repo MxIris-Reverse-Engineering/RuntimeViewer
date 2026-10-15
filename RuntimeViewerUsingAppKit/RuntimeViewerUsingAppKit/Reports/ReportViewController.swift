@@ -72,14 +72,6 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         }
     }
 
-    override var contentInsets: NSDirectionalEdgeInsets {
-        if #available(macOS 26.0, *) {
-            .init()
-        } else {
-            super.contentInsets
-        }
-    }
-
     /// The outline takes keyboard focus when the sidebar shows this page, like the other sidebar
     /// lists — see `SidebarRootViewController.preferredFirstResponder`.
     override var preferredFirstResponder: NSResponder? {

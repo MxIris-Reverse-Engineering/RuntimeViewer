@@ -101,14 +101,6 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         }
     }
 
-    override var contentInsets: NSDirectionalEdgeInsets {
-        if #available(macOS 26.0, *) {
-            .init()
-        } else {
-            super.contentInsets
-        }
-    }
-
     /// The outline takes keyboard focus when the sidebar shows this page, like the other
     /// sidebar lists — see `SidebarRootViewController.preferredFirstResponder`.
     override var preferredFirstResponder: NSResponder? {
@@ -142,8 +134,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
         queryParametersView.snp.makeConstraints { make in
             if #available(macOS 26.0, *) {
-                // Right below the toolbar and the tab switcher's bar.
-                make.top.equalTo(containerView.safeAreaLayoutGuide)
+                // Below the toolbar and the tab switcher's bar by the gap every page starts below its
+                // switcher. Before macOS 26 the switcher leaves that gap above the page itself.
+                make.top.equalTo(containerView.safeAreaLayoutGuide).offset(TabViewController.pageTopSpacing)
             } else {
                 make.top.equalToSuperview()
             }
@@ -151,17 +144,18 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             make.height.equalTo(72)
         }
 
-        // Row 1 (y 0–24): the mode path at (3, 3), W − 39 wide, the case toggle 21×16 at the
-        // trailing edge.
+        // Row 1 (y 0–24): the mode path at (3, 0), W − 39 wide, and the case toggle, 21×16, at the
+        // trailing edge, level with the path. Xcode puts both 3 points lower; here the gap above them
+        // is the one every page starts below its switcher (`TabViewController.pageTopSpacing`).
         modePathControl.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(3)
+            make.top.equalToSuperview()
             make.leading.equalToSuperview().offset(3)
             make.trailing.equalTo(caseSensitiveButton.snp.leading).offset(-7)
             make.height.equalTo(17)
         }
 
         caseSensitiveButton.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(3)
+            make.top.equalTo(modePathControl)
             make.trailing.equalToSuperview().inset(8)
             make.width.equalTo(21)
             make.height.equalTo(16)

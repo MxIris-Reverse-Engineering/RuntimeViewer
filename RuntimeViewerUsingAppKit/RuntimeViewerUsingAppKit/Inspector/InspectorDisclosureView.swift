@@ -17,13 +17,19 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
                 disclosureButton
             }
 
+            // Nothing above the title and the button, and 8 points in from the sides, as the headers
+            // of the inspector's other pages: the view sits at the top of the Class page, which starts
+            // its content at its top edge, below the gap the tab switcher leaves
+            // (`TabViewController.pageTopSpacing`).
             titleLabel.snp.makeConstraints { make in
-                make.top.left.equalToSuperview().inset(15)
+                make.top.equalToSuperview()
+                make.left.equalToSuperview().inset(8)
                 make.bottom.equalToSuperview()
             }
 
             disclosureButton.snp.makeConstraints { make in
-                make.top.right.equalToSuperview().inset(15)
+                make.top.equalToSuperview()
+                make.right.equalToSuperview().inset(8)
                 make.left.greaterThanOrEqualTo(titleLabel.snp.right).offset(15)
             }
 
@@ -92,9 +98,12 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
 
     private func setupContentViewConstraints(for disclosureState: NSControl.StateValue) {
         contentView.snp.remakeConstraints { make in
-            make.top.equalTo(headerView.snp.bottom).offset(15)
-            make.left.bottom.equalToSuperview().inset(15)
-            make.right.lessThanOrEqualToSuperview().inset(15)
+            // 8 points below the title and in line with it, as the lists below the headers of the
+            // inspector's other pages.
+            make.top.equalTo(headerView.snp.bottom).offset(8)
+            make.left.equalToSuperview().inset(8)
+            make.right.lessThanOrEqualToSuperview().inset(8)
+            make.bottom.equalToSuperview().inset(15)
             switch disclosureState {
             case .on:
                 make.height.equalTo(0)
