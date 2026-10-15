@@ -555,7 +555,7 @@ extension SidebarRuntimeObjectViewController {
             // The bar sizes the field and the items together; it sets the field's control size, so the size goes here.
             filterControlBar.do {
                 $0.filterField = filterSearchField
-                $0.leadingItems = [filterModeItem, filterScopeItem]
+                $0.leadingItems = [NSFilterControlBarItemGroup(subitems: [filterModeItem, filterScopeItem])]
                 $0.controlSize = .large
             }
         }
