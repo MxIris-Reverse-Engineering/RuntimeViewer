@@ -18,10 +18,13 @@ final class Document: NSDocument {
 
     override func makeWindowControllers() {
         addWindowController(mainCoordinator.windowController)
+        // The engine's background indexing, shared with every document on the
+        // engine: the first document opened on it starts it.
         documentState.backgroundIndexingCoordinator.documentDidOpen()
-        // Brought to life here, like the indexing coordinator: from now on it
-        // keeps the engine's interface corpus in step with what this document
-        // indexes, and reacts to the Find settings for the document's life.
+        // Joined here, like the indexing coordinator: the engine's corpus
+        // coordinator, shared the same way, keeps its interface corpus in step
+        // with what the engine indexes, and this document's Find session
+        // follows it.
         _ = documentState.findCorpusCoordinator
         // Keeps the app out of App Nap while either coordinator has work in
         // progress, so the local-runtime service doing it keeps its priority

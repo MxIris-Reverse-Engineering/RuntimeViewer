@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-09-29
-- **最后更新**: 2026-10-11
+- **最后更新**: 2026-10-16
 - **配套文档**: 无（理由见决策日志 2026-10-09 的 Implemented 一行）；审查与修复记录见 [`KnownIssues/2026-10-07-pr121-review-findings.md`](../KnownIssues/2026-10-07-pr121-review-findings.md)
 - **所属愿景**: 无（内容区的行定位部分与《自建代码视图引擎》相邻，但本提案不改视图引擎的方向）
 - **前置设计**: [`Plans/2026-07-26-global-search-design.md`](../Plans/2026-07-26-global-search-design.md)（2026-07-27 按
@@ -826,3 +826,4 @@ Filter Scope 仍把按钮视图经 ViewModel 传给路由，本次不动。
 | 2026-10-09 | 摘要栏在计数之后加「N more in identical protocol copies」：`FindSession.Results` 带上 `omittedRepeatedMatchCount`，补搜折叠的计数累加 | PR #121 审查 PR121.72 留给界面的一半：引擎把与已报告副本逐字相同的 ObjC 协议副本只计数，计入摘要的 `omittedRepeatedMatchCount`，界面原先不说，一个看着偏小的总数没有解释。放在计数之后、语料状态之前，因为它说的是计数。哪些副本读起来一样取决于本机系统框架，Application 层的测试由脚本化的对端回一个折叠计数，引擎那一半由 `RuntimeInterfaceRepeatedProtocolCopyTests` 覆盖；`FindSessionSummaryNoticeTests.foldedProtocolCopyHitsAreCounted` 修前摘要只有「0 results in 0 types」。 |
 | 2026-10-09 | Implemented，编号 0029：随 PR #121 合入 `next` | 用户 2026-10-08「把发现的问题全部修了吧」、同日「你弄完直接推送合并吧」。PR #121 的审查确认 73 条问题，全部按推荐项修复或按裁决不修，记录在 `KnownIssues/2026-10-07-pr121-review-findings.md`，每条先写修复前失败的测试；只剩 PR121.73 经 Mach service 的旧版注入 payload 那一段待用户手工验证。合入前在 `feature/find-navigator` 上跑了 Core、Packages、CommandLine 全量测试，编了 MCP、App Debug，以及 Distribution workspace 的 macOS Release 与 iOS Simulator Release。编号取合入时 `main` / `next` 上的最大号 0028 加一。配套文档：不另写使用指南——界面照 Xcode 的 Find navigator 做，用法与之相同；不另写实现说明——语料、扫描驱动、取消协议与回复屏障的设计理由在本提案、`CommunicationAndEngineArchitecture.md` §4 与 KnownIssues 各条里，`PopUpPathControl` 的维护约束写在 `AGENTS.md`。术语表新增「补搜（widening search）」与「协议副本（protocol copy）」，「Find 语料」已在表中。 |
 | 2026-10-11 | §4.2 的模式路径控件换成 AppKitPlus 自带的 `NSPopUpPathControl`，`RuntimeViewerUI` 的 `PopUpPathControl` 与 `PopUpPathControlTests` 删除；查询框、底部过滤框与范围表单的过滤框换成 `NSFilterSearchField`，查询框的进度圈改用框自带的 `progress`；底部过滤栏换成 `NSFilterControlBar`（large，新设计下仍是 44 点高、框 28 点） | 见 [0032](0032-appkitplus-filter-and-path-controls.md)。AppKitPlus 的两个控件同样移植自 Xcode 的 `DVTPathControl` / `DVTSearchField`；§4.2 的测量表仍是对 Xcode 的记录，与原控件的差别（`Find` 段悬停时高亮、禁用时标题变暗）写在那篇里 |
+| 2026-10-16 | `FindCorpusCoordinator` 改为每个 Engine 一个，由这个 Engine 上的文档共用（`RuntimeEngineBackgroundWork`）：`init(engine:)` 取代 `init(documentState:)`；侧栏正在看的镜像改由 `DocumentState` 告诉它（每个文档一项），Find 会话由 `DocumentState` 让它跟随当前 Engine 的协调器；Engine 背后换了进程由协调器自己从就绪状态得知；`documentWillClose()` 改为最后一个文档离开时的 `close()`。Report 上「别处发起」的语料行只剩别的连接发起的，提示改为 Requested by another connection（[后台工作按 Engine 共享](0055-engine-scoped-background-work.md)） | 每个文档一个协调器时，每个文档为每个已索引镜像各请求一遍语料、各记各的完成记录：第二个窗口看到第一个窗口的构建只有 Building、不能取消，结束后记成「别处建的」、没有时间；transformer 一改，每个文档各自清空重建一遍。用户要求同一 Engine 的窗口 Report 一样 |

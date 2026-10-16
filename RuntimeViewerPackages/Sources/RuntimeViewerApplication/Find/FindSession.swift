@@ -139,9 +139,11 @@ public final class FindSession {
     /// The corpus coordinator's build states, for the summary bar.
     private var corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState] = [:]
 
-    /// The coordinator `follow(_:)` hooked the session to; it moves the
-    /// images in scope to the front of its queue. `nil` until it exists, and
-    /// the session never brings it into being itself.
+    /// The coordinator `follow(_:)` hooked the session to — the corpus
+    /// coordinator of the engine the document is on, which every document on
+    /// the engine shares; it moves the images in scope to the front of its
+    /// queue. `nil` until it exists, and the session never brings it into
+    /// being itself.
     private weak var corpusCoordinator: FindCorpusCoordinator?
 
     @Dependency(\.appDefaults)
@@ -149,6 +151,11 @@ public final class FindSession {
 
     /// Replaced when the document closes, which ends every subscription.
     private var disposeBag = DisposeBag()
+
+    /// The subscriptions to the coordinator `follow(_:)` hooked the session
+    /// to, replaced when the document moves to another engine's and when the
+    /// document closes.
+    private var corpusCoordinatorDisposeBag = DisposeBag()
 
     public init(documentState: DocumentState) {
         self.documentState = documentState
@@ -165,11 +172,11 @@ public final class FindSession {
             .disposed(by: disposeBag)
         documentState.runtimeEngineDidReset
             .asObservable()
-            // One turn later. The page's view model brings this session into
-            // being before the corpus coordinator exists, so the coordinator
-            // hears of the reset after this subscriber does; searching at
-            // once would put the scope's images at the front of a queue the
-            // coordinator is about to withdraw.
+            // One turn later. The engine coming back reaches its corpus
+            // coordinator from the engine itself, on a main-actor turn queued
+            // ahead of this one, and that coordinator then starts over;
+            // searching at once would put the scope's images at the front of a
+            // queue it is about to withdraw.
             .observe(on: MainScheduler.asyncInstance)
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
@@ -194,34 +201,39 @@ public final class FindSession {
         cancelCurrentRun()
         isSearching = false
         disposeBag = DisposeBag()
+        corpusCoordinatorDisposeBag = DisposeBag()
     }
 
-    /// Hooks the session to the document's corpus coordinator, which calls
-    /// this once it exists: its build states feed the summary bar, and each
-    /// corpus it reports built is read by the search in force. Once every
-    /// corpus is dropped to be printed with a new transformer, that search
-    /// runs again: the images rebuilt are ones it has already read.
+    /// Hooks the session to the corpus coordinator of the document's engine.
+    /// `DocumentState` calls this once the document needs that coordinator,
+    /// and again with the next engine's each time the document moves to
+    /// another engine: its build states feed the summary bar, and each corpus
+    /// it reports built is read by the search in force. Once every corpus is
+    /// dropped to be printed with a new transformer, that search runs again:
+    /// the images rebuilt are ones it has already read.
     func follow(_ corpusCoordinator: FindCorpusCoordinator) {
+        guard self.corpusCoordinator !== corpusCoordinator else { return }
         self.corpusCoordinator = corpusCoordinator
+        corpusCoordinatorDisposeBag = DisposeBag()
         corpusCoordinator.$buildStatesByImagePath.asDriver()
             .driveOnNextMainActor { [weak self] states in
                 guard let self else { return }
                 self.corpusBuildStates = states
                 self.updateSummary()
             }
-            .disposed(by: disposeBag)
+            .disposed(by: corpusCoordinatorDisposeBag)
         corpusCoordinator.corpusBuilt
             .emitOnNextMainActor { [weak self] imagePath in
                 guard let self else { return }
                 self.corpusDidBuild(at: imagePath)
             }
-            .disposed(by: disposeBag)
+            .disposed(by: corpusCoordinatorDisposeBag)
         corpusCoordinator.corporaRebuilt
             .emitOnNextMainActor { [weak self] in
                 guard let self else { return }
                 self.rerunShownSearch()
             }
-            .disposed(by: disposeBag)
+            .disposed(by: corpusCoordinatorDisposeBag)
     }
 
     // MARK: - Query

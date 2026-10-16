@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Observation
 import RuntimeViewerCore
@@ -9,6 +10,14 @@ import Dependencies
 import RuntimeViewerSettings
 #endif
 
+/// Drives one engine's background indexing for every document on the engine, and keeps what the
+/// Report navigator lists of it: the batches under way and, newest first, those that ended.
+///
+/// One per engine, shared by the documents on it — see `RuntimeEngineBackgroundWork`. They all
+/// hear every batch the engine's manager runs, and there used to be a coordinator per document:
+/// each dispatched the Always Index rows again, and each kept a history of its own, begun when it
+/// opened, so two windows on one engine showed two different Reports. Brought into being with the
+/// engine's work when the first document needs it, and closed when the last one leaves.
 @MainActor
 public final class RuntimeBackgroundIndexingCoordinator {
     /// Soft cap on `historyRelay` size. A long-running session that triggers
@@ -18,14 +27,17 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// can still manually clear via `clearHistory()`.
     private static let maxHistoryEntries = 100
 
-    private unowned let documentState: DocumentState
-    /// The engine this coordinator currently drives. Mutable so `MainCoordinator`
-    /// can switch sources (Local ↔ XPC ↔ Bonjour) without recreating the
-    /// coordinator: an RxSwift subscription on `documentState.$runtimeEngine`
-    /// picks up reassignments and rewires the pumps onto the new engine's
-    /// `backgroundIndexingManager`.
-    private var engine: RuntimeEngine
-    private let disposeBag = DisposeBag()
+    /// The engine whose background indexing this coordinator drives.
+    private let engine: RuntimeEngine
+
+    /// The last document on the engine left; see `close()`.
+    private var isClosed = false
+
+    /// Moves on each time what the coordinator dispatched stops counting: the
+    /// engine coming back with a new process behind it, the coordinator
+    /// closing. A dispatch that comes back under an older value was made for a
+    /// process, or a coordinator, that is gone; see `isCurrent(_:)`.
+    private var session = 0
 
     private let batchesRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
     private let historyRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
@@ -48,48 +60,67 @@ public final class RuntimeBackgroundIndexingCoordinator {
     private static let coalesceWindowNanos: UInt64 = 16_000_000
 
     private var eventPumpTask: Task<Void, Never>?
-    /// Pump that re-runs `startAlwaysIndexBatches()` after every fullReload.
+    /// Pump that retries the always-index rows after every fullReload.
     /// Required because remote engines (XPC / Bonjour) populate `imageList`
     /// asynchronously: the first `documentDidOpen` may see an empty list and
     /// resolve every imageName-only identifier to nil. Once the server's
     /// fullReload broadcast lands and the client's `imageList` is set, this
     /// pump retries. `dispatchedAlwaysIndexIdentifiers` gates re-entry so
-    /// the pump idles for identifiers that have already produced a batch
-    /// this engine session — otherwise every batch finish → `reloadData` →
-    /// pump → empty-batch-start → finish → loop would spin forever.
+    /// the pump idles for rows already dispatched this engine session, and a
+    /// retry waits for the passes still dispatching
+    /// (`alwaysIndexPassesUnderWay`): every batch's end reloads the engine,
+    /// so without both, one pass's batches ending would set off pass after
+    /// pass over the same rows.
     private var reloadDataPumpTask: Task<Void, Never>?
+    #if canImport(RuntimeViewerSettings)
+    @Dependency(\.settings)
+    private var settings
+    /// `documentDidOpen()` has run: a document opened on the engine.
+    private var hasStarted = false
+    /// Whether the engine was ready when last heard from, so a `false → true`
+    /// edge — a new process behind the engine — can be told from the state
+    /// replayed on subscribing.
+    private var engineWasReady = false
+    private var engineReadinessSubscription: AnyCancellable?
     /// Last observed values of each Settings.Indexing toggle, used by
     /// `handleSettingsChange` to detect transitions and dispatch only the
     /// minimal start / cancel work. Seeded by `bootstrapSettingsObservation`.
     private var lastKnownMasterEnabled: Bool = false
     private var lastKnownHeuristicEnabled: Bool = false
     private var lastKnownCustomEnabled: Bool = false
-    #if canImport(RuntimeViewerSettings)
-    /// What `custom.entries` asked of the current engine when last looked
-    /// at, as `alwaysIndexDispatches(of:)` projects it. Compared in place of
-    /// the entries themselves, so an edit that changes nothing on this
-    /// engine — another engine's choice on a row — is not taken for one
-    /// that does. Re-seeded on engine swap, because the projection is the
-    /// engine's.
+    /// What `custom.entries` asked of the engine when last looked at, as
+    /// `alwaysIndexDispatches(of:)` projects it. Compared in place of the
+    /// entries themselves, so an edit that changes nothing on this engine —
+    /// another engine's choice on a row — is not taken for one that does.
     private var lastKnownAlwaysIndexDispatches: [AlwaysIndexDispatch] = []
     /// Identifiers from `custom.entries` that have successfully resolved
     /// to a path and had `startBatch` dispatched at least once during the
-    /// current engine session. Used by `startAlwaysIndexBatches` to skip
-    /// no-op re-entry triggered by the reload pump. Reset on engine swap,
-    /// master off→on, custom off→on, and a change to what the entries ask
-    /// of this engine so genuinely new work re-runs.
+    /// current engine session — whether that started a batch, joined one,
+    /// or found the image indexed already. Used by `startAlwaysIndexBatches`
+    /// to skip no-op re-entry triggered by the reload pump. Reset when the
+    /// engine comes back with a new process, on master off→on, custom off→on,
+    /// and a change to what the entries ask of this engine, so genuinely new
+    /// work re-runs.
     private var dispatchedAlwaysIndexIdentifiers: Set<String> = []
+    /// Always-index passes of the current engine session still dispatching.
+    /// A pass's rows enter `dispatchedAlwaysIndexIdentifiers` only as each
+    /// dispatch comes back, so a pass started meanwhile would dispatch them
+    /// a second time; the reload pump waits for these instead.
+    private var alwaysIndexPassesUnderWay = 0
+    /// An engine reload asked for a retry while a pass was dispatching; it
+    /// runs once none is.
+    private var isAlwaysIndexRetryPending = false
     #endif
 
-    public init(documentState: DocumentState) {
-        self.documentState = documentState
-        self.engine = documentState.runtimeEngine
+    /// Brought into being by `RuntimeEngineBackgroundWork` for its engine.
+    init(engine: RuntimeEngine) {
+        self.engine = engine
         startEventPump()
         #if canImport(RuntimeViewerSettings)
         startReloadDataPump()
         bootstrapSettingsObservation()
+        observeEngineReadiness()
         #endif
-        bootstrapEngineObservation()
     }
 
     deinit {
@@ -113,6 +144,8 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     // MARK: - Public command surface
 
+    /// Every command below speaks for every document on the engine: they all
+    /// show this coordinator's batches and history.
     public func cancelBatch(_ id: RuntimeIndexingBatchID) {
         Task { [engine] in
             await engine.backgroundIndexingManager.cancelBatch(id)
@@ -137,6 +170,36 @@ public final class RuntimeBackgroundIndexingCoordinator {
         // after the user cleared.
         staging.clearPendingHistory()
         historyRelay.accept([])
+    }
+
+    /// The last document on the engine left — closed, or moved to another
+    /// engine. Nobody is left to show the engine's batches, so every one still
+    /// under way is cancelled, and the coordinator asks for nothing again: not
+    /// on an engine reload, not on a settings change, not on the engine coming
+    /// back. Its history goes with it; the next document on the engine gets a
+    /// coordinator of its own. `RuntimeEngineBackgroundWork` calls this.
+    func close() {
+        guard !isClosed else { return }
+        isClosed = true
+        session += 1
+        eventPumpTask?.cancel()
+        reloadDataPumpTask?.cancel()
+        eventPumpTask = nil
+        reloadDataPumpTask = nil
+        #if canImport(RuntimeViewerSettings)
+        engineReadinessSubscription = nil
+        alwaysIndexPassesUnderWay = 0
+        isAlwaysIndexRetryPending = false
+        #endif
+        Task { [engine] in
+            await engine.backgroundIndexingManager.cancelAllBatches()
+        }
+    }
+
+    /// Whether `session` is still the coordinator's: it has not closed, and
+    /// the engine has not come back with a new process since.
+    private func isCurrent(_ session: Int) -> Bool {
+        !isClosed && self.session == session
     }
 
     // MARK: - Event pump (AsyncStream → Relay)
@@ -202,29 +265,16 @@ public final class RuntimeBackgroundIndexingCoordinator {
         for batch in snapshot.historyAdditions {
             appendToHistory(batch)
         }
-        for batch in snapshot.historyReplacements {
-            replaceInHistory(batch)
-        }
     }
 
     private func appendToHistory(_ batch: RuntimeIndexingBatch) {
         var updatedHistory = historyRelay.value
-        // One entry per batch, whichever route its end took to get here.
+        // One entry per batch, should its end ever be heard twice.
         updatedHistory.removeAll { $0.id == batch.id }
         updatedHistory.insert(batch, at: 0)
         if updatedHistory.count > Self.maxHistoryEntries {
             updatedHistory.removeLast(updatedHistory.count - Self.maxHistoryEntries)
         }
-        historyRelay.accept(updatedHistory)
-    }
-
-    /// Puts a batch's real end in place of the cancelled snapshot an engine
-    /// swap archived for it, where that snapshot stands. Gone already — the
-    /// user cleared the history — leaves nothing to replace.
-    private func replaceInHistory(_ batch: RuntimeIndexingBatch) {
-        var updatedHistory = historyRelay.value
-        guard let historyIndex = updatedHistory.firstIndex(where: { $0.id == batch.id }) else { return }
-        updatedHistory[historyIndex] = batch
         historyRelay.accept(updatedHistory)
     }
 
@@ -234,119 +284,28 @@ public final class RuntimeBackgroundIndexingCoordinator {
             hasActiveBatchRelay.accept(hasActiveBatch)
         }
     }
-
-    // MARK: - Engine swap (source switch)
-
-    /// Subscribes to `documentState.$runtimeEngine`. When `MainCoordinator`
-    /// reassigns the engine on a source switch, `handleEngineSwap` tears down
-    /// the old pumps, cancels in-flight document batches on the old manager,
-    /// and rewires onto the new engine's manager.
-    private func bootstrapEngineObservation() {
-        // skip(1) — BehaviorRelay replays its current value on subscribe; that
-        // value matches the engine captured in init, so we don't need to react
-        // to it. Only subsequent reassignments are real source switches.
-        documentState.$runtimeEngine
-            .skip(1)
-            .subscribeOnNext { [weak self] newEngine in
-                guard let self else { return }
-                self.handleEngineSwap(to: newEngine)
-            }
-            .disposed(by: disposeBag)
-    }
-
-    private func handleEngineSwap(to newEngine: RuntimeEngine) {
-        // Capture the old engine before we overwrite, so we can dispatch a
-        // cancel to its manager covering both already-tracked batches and
-        // any swap-window arrivals.
-        let oldEngine = engine
-
-        // 1) Stop pumps tied to the old engine. The Tasks were `for await`
-        //    looping over an AsyncStream owned by the old manager; cancelling
-        //    them ends the loops cleanly.
-        eventPumpTask?.cancel()
-        reloadDataPumpTask?.cancel()
-        eventPumpTask = nil
-        reloadDataPumpTask = nil
-
-        // 2) Cancel **all** in-flight batches on the old manager — not just
-        //    the ones in `documentBatchIDs`. A `startBatch` Task that
-        //    suspended before its id was inserted into `documentBatchIDs`
-        //    would otherwise leak: the `self.engine === engine` guard in
-        //    `startMainExecutableBatch` / `startAlwaysIndexBatches` correctly
-        //    drops its id, but the batch itself remains active on the old
-        //    manager and runs to completion uninterrupted, occupying CPU and
-        //    the section-cache slots until the old engine is finally
-        //    deinit'd. `cancelAllBatches` covers both already-tracked
-        //    batches and any swap-window arrivals.
-        //
-        //    Fire-and-forget — old engine's manager will deinit shortly.
-        Task {
-            await oldEngine.backgroundIndexingManager.cancelAllBatches()
-        }
-
-        // 3) Archive, then drop, the active UI state. The old engine's
-        //    still-running batches were just cancelled on its manager, but
-        //    the event pump is already stopped, so their `.batchCancelled`
-        //    events can never arrive — synthesize the same terminal snapshot
-        //    `finalize` would have emitted and land it in history. Finalized
-        //    batches whose history hop was still waiting on the coalesce
-        //    window are archived as-is. History itself survives the swap:
-        //    entries are pure value snapshots with session-unique UUID ids,
-        //    and the history reads as "what this document saw indexed this
-        //    session" — every batch on the engines it was on, its own and
-        //    other documents' alike — not as engine-scoped state. Only the user's
-        //    Clear History empties it. Active batches must leave
-        //    `batchesRelay` before any of them appears in `historyRelay` —
-        //    see the ordering note on `flushPendingUpdates`.
-        let drained = staging.drainForEngineSwap()
-        batchesRelay.accept([])
-        refreshHasActiveBatch(batches: [])
-        for batch in drained.pendingHistory {
-            appendToHistory(batch)
-        }
-        for batch in drained.activeBatches {
-            appendToHistory(Self.cancelledSwapSnapshot(of: batch))
-        }
-
-        // 4) Switch the captured engine reference.
-        engine = newEngine
-
-        // 5) Restart pumps on the new engine's manager.
-        startEventPump()
-        #if canImport(RuntimeViewerSettings)
-        startReloadDataPump()
-        // New engine session — clear the dispatched-identifiers gate so the
-        // always-index list re-dispatches against the new engine's image
-        // list (which starts empty for remote engines), and take the new
-        // engine's view of the list as the baseline later edits compare to.
-        dispatchedAlwaysIndexIdentifiers.removeAll()
-        lastKnownAlwaysIndexDispatches = alwaysIndexDispatches(of: currentIndexingSettings().custom.entries)
-        // If the feature is enabled, treat the swap like a fresh document
-        // open — the new engine's main executable should be indexed.
-        // `documentDidOpen()` also triggers the always-index list.
-        documentDidOpen()
-        #endif
-    }
-
-    /// Mirrors `RuntimeBackgroundIndexingManager.finalize(id:cancelled:)` for
-    /// batches whose real `.batchCancelled` event can never be observed —
-    /// the pump is stopped before the old manager processes the swap's
-    /// `cancelAllBatches`.
-    private static func cancelledSwapSnapshot(of batch: RuntimeIndexingBatch) -> RuntimeIndexingBatch {
-        var archived = batch
-        archived.isFinished = true
-        archived.isCancelled = true
-        for itemIndex in archived.items.indices where !archived.items[itemIndex].state.isTerminal {
-            archived.items[itemIndex].state = .cancelled
-        }
-        return archived
-    }
 }
 
 #if canImport(RuntimeViewerSettings)
 extension RuntimeBackgroundIndexingCoordinator {
+    /// A document opened on the engine. The first one starts the engine's
+    /// background indexing — the main executable and the Always Index rows, as
+    /// Settings has them — and from then on the engine reloading, Settings
+    /// changing and the engine coming back carry it on, whichever windows are
+    /// open. Every later document finds it started: the rows were dispatched
+    /// for the engine, not for a window, and each window dispatching them
+    /// again is what filled every Report on the engine with batches of 0
+    /// images.
     public func documentDidOpen() {
-        let indexing = currentIndexingSettings()
+        guard !isClosed, !hasStarted else { return }
+        hasStarted = true
+        dispatchForOpening()
+    }
+
+    /// What opening dispatches, and what an engine coming back with a new
+    /// process needs dispatched again.
+    private func dispatchForOpening() {
+        let indexing = settings.indexing
         guard indexing.isEnabled else { return }
         if indexing.heuristic.isEnabled {
             startMainExecutableBatch(reason: .appLaunch)
@@ -356,23 +315,69 @@ extension RuntimeBackgroundIndexingCoordinator {
         }
     }
 
-    /// Shared logic for "index the main executable" batches. Both the document
-    /// open path (reason `.appLaunch`) and the off→on settings toggle (reason
-    /// `.settingsEnabled`) funnel through here so the popover's title-by-reason
+    // MARK: - The engine coming back
+
+    /// Follows the engine's readiness. A `false → true` edge is a new process
+    /// behind the engine — the local runtime service relaunched, a peer
+    /// reconnected, the engine's first connection — which has indexed none of
+    /// what the old one had. The coordinator hears of it from the engine
+    /// itself, whatever the documents on it have open: a document walks back
+    /// to the image list only when it had something open, and the coordinator
+    /// used to hear of the new process only through that walk.
+    private func observeEngineReadiness() {
+        engineWasReady = engine.state.isReady
+        engineReadinessSubscription = engine.statePublisher
+            .map(\.isReady)
+            .sink { [weak self] isReady in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.handleEngineReadinessChange(isReady)
+                }
+            }
+    }
+
+    private func handleEngineReadinessChange(_ isReady: Bool) {
+        guard !isClosed else { return }
+        let becameReadyAgain = isReady && !engineWasReady
+        engineWasReady = isReady
+        guard becameReadyAgain else { return }
+        engineDidReset()
+    }
+
+    /// What ran on the old process is cancelled, and opening's dispatch runs
+    /// again on the new one. The history stays: it reads as what was indexed
+    /// on the engine, as it did across a document's resets.
+    private func engineDidReset() {
+        session += 1
+        alwaysIndexPassesUnderWay = 0
+        isAlwaysIndexRetryPending = false
+        dispatchedAlwaysIndexIdentifiers.removeAll()
+        Task { [weak self, engine, session] in
+            // Before anything is dispatched again: a batch of the old process
+            // still under way would otherwise be handed back for its root,
+            // and end cancelled with the row counted as dispatched.
+            await engine.backgroundIndexingManager.cancelAllBatches()
+            guard let self, self.isCurrent(session), self.hasStarted else { return }
+            self.dispatchForOpening()
+        }
+    }
+
+    // MARK: - Dispatching
+
+    /// Shared logic for "index the main executable" batches. Both the opening
+    /// path (reason `.appLaunch`) and the off→on settings toggle (reason
+    /// `.settingsEnabled`) funnel through here so the Report's title-by-reason
     /// branch surfaces the correct label instead of always saying "App launch
     /// indexing". Callers are responsible for checking master / heuristic
     /// enablement before invoking — this method does not re-check.
     private func startMainExecutableBatch(reason: RuntimeIndexingBatchReason) {
-        // The class is `@MainActor`, so this Task inherits main-actor isolation
-        // and can mutate `documentBatchIDs` synchronously after the awaits.
-        // Capture `engine` at task creation so every await below targets the
-        // same engine even if `handleEngineSwap` reassigns `self.engine` while
-        // we are suspended — otherwise we could submit the old engine's root
-        // path to the new engine's manager and leak a stray batch id into
-        // `documentBatchIDs`.
-        Task { [weak self, engine] in
-            guard let self else { return }
-            let indexing = self.currentIndexingSettings()
+        // The class is `@MainActor`, so this Task inherits main-actor isolation.
+        // `session` is captured at task creation: a batch set up for a process
+        // that has gone, or after the last document left, must not be taken
+        // for one of the current session.
+        Task { [weak self, engine, session] in
+            guard let self, self.isCurrent(session) else { return }
+            let indexing = self.settings.indexing
             // Re-check both gates after the Task hop because the settings
             // observation may have flipped a toggle between the caller's check
             // and this Task running.
@@ -381,27 +386,24 @@ extension RuntimeBackgroundIndexingCoordinator {
             // sources may fail; on launch we silently skip the batch in that
             // case rather than surface the error to the user.
             guard let root = try? await engine.mainExecutablePath(),
-                  !root.isEmpty else { return }
-            let id = await engine.backgroundIndexingManager.startBatch(
+                  !root.isEmpty, self.isCurrent(session) else { return }
+            let batchIdentifier = await engine.backgroundIndexingManager.startBatch(
                 rootImagePath: root,
                 depth: indexing.heuristic.depth,
                 maxConcurrency: indexing.maxConcurrency,
                 reason: reason)
-            // If the engine swapped while we were suspended, the batch landed
-            // on the now-old manager which `handleEngineSwap` has already
-            // cleaned up; don't pollute `documentBatchIDs` with an id whose
-            // manager we no longer drive.
-            guard self.engine === engine else { return }
-            self.staging.insertDocumentBatchID(id)
+            self.batchDidStart(batchIdentifier, in: session)
         }
     }
 
-    public func documentWillClose() {
-        let ids = staging.takeAllDocumentBatchIDs()
+    /// A batch a dispatch of `session` started has come back. The last
+    /// document left while it was being set up — after the close had
+    /// cancelled every batch on the engine — and nobody is left to show it
+    /// either.
+    private func batchDidStart(_ batchIdentifier: RuntimeIndexingBatchID?, in session: Int) {
+        guard isClosed, let batchIdentifier else { return }
         Task { [engine] in
-            for id in ids {
-                await engine.backgroundIndexingManager.cancelBatch(id)
-            }
+            await engine.backgroundIndexingManager.cancelBatch(batchIdentifier)
         }
     }
 
@@ -415,8 +417,8 @@ extension RuntimeBackgroundIndexingCoordinator {
         let followDependencies: Bool
     }
 
-    /// Projects `entries` onto the current engine, in list order: what each
-    /// enabled entry that applies here asks this engine to index.
+    /// Projects `entries` onto the engine, in list order: what each enabled
+    /// entry that applies here asks this engine to index.
     private func alwaysIndexDispatches(of entries: [Settings.Indexing.AlwaysIndexEntry]) -> [AlwaysIndexDispatch] {
         let engineKey = Settings.Indexing.EngineReference.key(for: engine)
         return entries
@@ -424,8 +426,8 @@ extension RuntimeBackgroundIndexingCoordinator {
             .map { AlwaysIndexDispatch(identifier: $0.identifier, followDependencies: $0.followDependencies) }
     }
 
-    /// Reads `Settings.Indexing.custom.entries` and starts one batch per
-    /// resolvable entry that applies to this engine. Entries that don't
+    /// Reads `Settings.Indexing.custom.entries` and asks the manager to index
+    /// each resolvable entry that applies to this engine. Entries that don't
     /// resolve to a path in the engine's `imageList` are silently skipped —
     /// they stay out of `dispatchedAlwaysIndexIdentifiers`, so the next
     /// fullReload retry can pick them up.
@@ -444,49 +446,93 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// so the BFS walks the full dependency closure like the main-executable
     /// batch.
     ///
-    /// The Manager dedups by `rootImagePath`, so re-entry on the same path
-    /// is a cheap no-op that returns the existing batch id — making this
-    /// method safe to call from multiple triggers (documentDidOpen, fullReload,
-    /// settings change, engine swap). Callers are responsible for checking
-    /// master / custom enablement before invoking.
+    /// The manager hands a request for a root under way the batch running it,
+    /// and starts none for an image indexed already, so re-entry on the same
+    /// path is cheap — making this method safe to call from multiple
+    /// triggers (opening, settings change, the engine coming back; the reload
+    /// pump comes in through `retryAlwaysIndexBatches()`). Callers are
+    /// responsible for checking master / custom enablement before invoking.
     private func startAlwaysIndexBatches() {
+        guard !isClosed else { return }
         // Gate: only process entries we haven't dispatched yet this
         // session. The reload pump re-enters here after every fullReload,
-        // including ones our own batch finishes emit; without this filter
-        // we'd start a fresh zero-item batch for each already-dispatched
-        // identifier, which finishes immediately, fires reloadData,
-        // re-enters here, loops forever.
-        let pendingDispatches = alwaysIndexDispatches(of: currentIndexingSettings().custom.entries).filter {
+        // including the ones the engine's own batches cause as they end;
+        // without this filter every end would dispatch every row again.
+        let pendingDispatches = alwaysIndexDispatches(of: settings.indexing.custom.entries).filter {
             !dispatchedAlwaysIndexIdentifiers.contains($0.identifier)
         }
         guard !pendingDispatches.isEmpty else { return }
-        Task { [weak self, engine] in
+        alwaysIndexPassesUnderWay += 1
+        Task { [weak self, engine, session] in
             guard let self else { return }
-            let indexing = self.currentIndexingSettings()
-            // Re-check both gates after the Task hop (mirrors
-            // `startMainExecutableBatch`).
-            guard indexing.isEnabled, indexing.custom.isEnabled else { return }
-            // `engine.imageList` is `actor`-isolated; one hop fetches the
-            // snapshot we'll use to resolve every identifier this round.
-            // Remote engines populate `imageList` asynchronously via the
-            // `imageList` message handler, so an early call here may see
-            // `[]` — `startReloadDataPump` retries after fullReload, and
-            // the gate above leaves unresolved identifiers eligible for
-            // retry until they finally match a path in `imageList`.
-            let imageList = await engine.imageList
-            for dispatch in pendingDispatches {
-                guard let resolvedPath = resolveAlwaysIndexIdentifier(dispatch.identifier, in: imageList) else { continue }
-                let effectiveDepth = dispatch.followDependencies ? indexing.heuristic.depth : 0
-                let id = await engine.backgroundIndexingManager.startBatch(
-                    rootImagePath: resolvedPath,
-                    depth: effectiveDepth,
-                    maxConcurrency: indexing.maxConcurrency,
-                    reason: .alwaysIndex(identifier: dispatch.identifier))
-                guard self.engine === engine else { return }
-                self.staging.insertDocumentBatchID(id)
-                self.dispatchedAlwaysIndexIdentifiers.insert(dispatch.identifier)
-            }
+            await self.dispatchAlwaysIndexEntries(pendingDispatches, on: engine, in: session)
+            self.alwaysIndexPassDidEnd(in: session)
         }
+    }
+
+    /// One pass over `dispatches`, in list order.
+    private func dispatchAlwaysIndexEntries(
+        _ dispatches: [AlwaysIndexDispatch],
+        on engine: RuntimeEngine,
+        in session: Int
+    ) async {
+        guard isCurrent(session) else { return }
+        let indexing = settings.indexing
+        // Re-check both gates after the Task hop (mirrors
+        // `startMainExecutableBatch`).
+        guard indexing.isEnabled, indexing.custom.isEnabled else { return }
+        // `engine.imageList` is `actor`-isolated; one hop fetches the
+        // snapshot we'll use to resolve every identifier this round.
+        // Remote engines populate `imageList` asynchronously via the
+        // `imageList` message handler, so an early call here may see
+        // `[]` — `startReloadDataPump` retries after fullReload, and
+        // the gate leaves unresolved identifiers eligible for
+        // retry until they finally match a path in `imageList`.
+        let imageList = await engine.imageList
+        guard isCurrent(session) else { return }
+        for dispatch in dispatches {
+            guard let resolvedPath = resolveAlwaysIndexIdentifier(dispatch.identifier, in: imageList) else { continue }
+            let effectiveDepth = dispatch.followDependencies ? indexing.heuristic.depth : 0
+            // No batch comes back for an image indexed already; the row is
+            // dispatched all the same.
+            let batchIdentifier = await engine.backgroundIndexingManager.startBatch(
+                rootImagePath: resolvedPath,
+                depth: effectiveDepth,
+                maxConcurrency: indexing.maxConcurrency,
+                reason: .alwaysIndex(identifier: dispatch.identifier))
+            guard isCurrent(session) else {
+                batchDidStart(batchIdentifier, in: session)
+                return
+            }
+            dispatchedAlwaysIndexIdentifiers.insert(dispatch.identifier)
+        }
+    }
+
+    /// A pass is over. Once none is under way, the retry an engine reload
+    /// asked for meanwhile runs.
+    private func alwaysIndexPassDidEnd(in session: Int) {
+        // A pass of a session that is over: the engine coming back, or the
+        // close, reset the count.
+        guard isCurrent(session) else { return }
+        alwaysIndexPassesUnderWay -= 1
+        guard alwaysIndexPassesUnderWay == 0, isAlwaysIndexRetryPending else { return }
+        isAlwaysIndexRetryPending = false
+        let indexing = settings.indexing
+        guard indexing.isEnabled, indexing.custom.isEnabled else { return }
+        startAlwaysIndexBatches()
+    }
+
+    /// The reload pump's way in. A pass still dispatching has not put its
+    /// rows in the gate yet, so a pass started now would dispatch them a
+    /// second time — every engine reload during a pass used to start one, the
+    /// reloads its own batches' ends cause included. The retry waits for the
+    /// passes under way instead.
+    private func retryAlwaysIndexBatches() {
+        guard alwaysIndexPassesUnderWay == 0 else {
+            isAlwaysIndexRetryPending = true
+            return
+        }
+        startAlwaysIndexBatches()
     }
 
     /// Maps a user-supplied identifier to a path that exists in `imageList`.
@@ -508,32 +554,27 @@ extension RuntimeBackgroundIndexingCoordinator {
         }
     }
 
-    /// Pump that listens for `engine.reloadDataPublisher` and retries
-    /// `startAlwaysIndexBatches()` after each fullReload. Required so remote
-    /// engines whose `imageList` arrives asynchronously can still resolve
-    /// imageName identifiers once the list lands. Manager dedup keeps
-    /// already-running batches unique across retries.
+    /// Pump that listens for `engine.reloadDataPublisher` and retries the
+    /// always-index rows after each fullReload. Required so remote engines
+    /// whose `imageList` arrives asynchronously can still resolve imageName
+    /// identifiers once the list lands. The manager has a retry join the
+    /// batches already running.
     private func startReloadDataPump() {
         reloadDataPumpTask = Task { [weak self, engine] in
             guard let self else { return }
             for await _ in engine.reloadDataPublisher.values {
                 await MainActor.run {
-                    guard self.engine === engine else { return }
-                    let indexing = self.currentIndexingSettings()
+                    guard !self.isClosed else { return }
+                    let indexing = self.settings.indexing
                     guard indexing.isEnabled, indexing.custom.isEnabled else { return }
-                    self.startAlwaysIndexBatches()
+                    self.retryAlwaysIndexBatches()
                 }
             }
         }
     }
 
-    private func currentIndexingSettings() -> Settings.Indexing {
-        @Dependency(\.settings) var settings
-        return settings.indexing
-    }
-
     private func bootstrapSettingsObservation() {
-        let indexing = currentIndexingSettings()
+        let indexing = settings.indexing
         self.lastKnownMasterEnabled = indexing.isEnabled
         self.lastKnownHeuristicEnabled = indexing.heuristic.isEnabled
         self.lastKnownCustomEnabled = indexing.custom.isEnabled
@@ -543,7 +584,7 @@ extension RuntimeBackgroundIndexingCoordinator {
 
     private func subscribeToSettings() {
         withObservationTracking {
-            let snapshot = currentIndexingSettings()
+            let snapshot = settings.indexing
             _ = snapshot.isEnabled
             _ = snapshot.maxConcurrency
             _ = snapshot.heuristic.isEnabled
@@ -558,7 +599,8 @@ extension RuntimeBackgroundIndexingCoordinator {
             // onChange fires off the main actor synchronously after any mutation.
             // Hop back to MainActor to (a) handle the change and (b) re-register.
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                // A closed coordinator stops listening.
+                guard let self, !self.isClosed else { return }
                 self.handleSettingsChange()
                 self.subscribeToSettings()
             }
@@ -580,7 +622,7 @@ extension RuntimeBackgroundIndexingCoordinator {
     ///   gate and dispatch always-index.
     /// - custom on → off (master stays on) : cancel only batches whose
     ///   reason `isCustom`; heuristic batches keep running.
-    /// - what custom.entries ask of this engine changed (both stay on) :
+    /// - what custom.entries ask of the engine changed (both stay on) :
     ///   drop removed identifiers from the gate, reset edited ones, dispatch
     ///   fresh entries. An edit that only touches other engines changes
     ///   nothing here.
@@ -590,7 +632,7 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// `maxConcurrency` across all batches, so from then on it bounds the
     /// batches still running too.
     private func handleSettingsChange() {
-        let indexing = currentIndexingSettings()
+        let indexing = settings.indexing
         let wasMaster = lastKnownMasterEnabled
         let wasHeuristic = lastKnownHeuristicEnabled
         let wasCustom = lastKnownCustomEnabled
@@ -666,7 +708,7 @@ extension RuntimeBackgroundIndexingCoordinator {
         // followDependencies on an existing entry also kicks off a new batch:
         // Manager dedup is by `rootImagePath`, so the existing depth=0 batch
         // stays the in-flight winner until it finishes. The depth change
-        // picks up on the next start (e.g. document reopen).
+        // picks up on the next start (the engine's next coordinator, say).
         let previousDispatches = lastKnownAlwaysIndexDispatches
         let latestDispatches = alwaysIndexDispatches(of: indexing.custom.entries)
         let dispatchesChanged = latestDispatches != previousDispatches
@@ -716,11 +758,8 @@ extension RuntimeBackgroundIndexingCoordinator {
         let aggregateChanged: Bool
         let batches: [RuntimeIndexingBatch]
         let historyAdditions: [RuntimeIndexingBatch]
-        /// Real ends of batches an engine swap archived, each to take its
-        /// archive's place.
-        let historyReplacements: [RuntimeIndexingBatch]
 
-        var hasWork: Bool { activeChanged || aggregateChanged || !historyAdditions.isEmpty || !historyReplacements.isEmpty }
+        var hasWork: Bool { activeChanged || aggregateChanged || !historyAdditions.isEmpty }
     }
 
     /// Lock-protected staging for `RuntimeBackgroundIndexingCoordinator`.
@@ -735,12 +774,6 @@ extension RuntimeBackgroundIndexingCoordinator {
         // All fields below are touched only under `lock`.
         private var stagedBatches: [RuntimeIndexingBatch] = []
         private var pendingHistoryAdditions: [RuntimeIndexingBatch] = []
-        private var pendingHistoryReplacements: [RuntimeIndexingBatch] = []
-        /// Batches an engine swap archived as cancelled while their engine
-        /// was still ending them. A subscription made after swapping back
-        /// replays them as under way; that replay is ignored, and their end
-        /// replaces the archive.
-        private var swapArchivedBatchIDs: Set<RuntimeIndexingBatchID> = []
         private var hasPendingActiveChange = false
         private var pendingAggregateRefresh = false
         /// `true` while a `Task { @MainActor } sleep+flush` pair is outstanding.
@@ -749,13 +782,12 @@ extension RuntimeBackgroundIndexingCoordinator {
         /// events that all arrive inside the window collapse into a single
         /// publish exactly as before.
         private var hasScheduledFlush = false
-        private var documentBatchIDs: Set<RuntimeIndexingBatchID> = []
 
         /// Mutates the staged state for one event from the manager's
         /// AsyncStream. Returns the work the coordinator owes to the main
-        /// actor. Stale events that arrive after a swap or cancellation —
-        /// where the batch / item can no longer be located — are dropped
-        /// silently rather than poisoning the dirty flags.
+        /// actor. Stale events that arrive after a cancellation — where the
+        /// batch / item can no longer be located — are dropped silently
+        /// rather than poisoning the dirty flags.
         func applyEvent(_ event: RuntimeIndexingEvent) -> ApplyOutcome {
             lock.lock()
             defer { lock.unlock() }
@@ -764,11 +796,6 @@ extension RuntimeBackgroundIndexingCoordinator {
 
             switch event {
             case .batchStarted(let batch):
-                // An engine swap archived this batch as cancelled and asked its
-                // engine to stop it; a subscription made after swapping back
-                // replays it as still under way. It is not running again — its
-                // end is what comes next.
-                guard !swapArchivedBatchIDs.contains(batch.id) else { break }
                 stagedBatches.append(batch)
                 hasPendingActiveChange = true
                 pendingAggregateRefresh = true
@@ -794,13 +821,7 @@ extension RuntimeBackgroundIndexingCoordinator {
                     hasPendingActiveChange = true
                 }
             case .batchFinished(let finished):
-                if swapArchivedBatchIDs.remove(finished.id) != nil {
-                    pendingHistoryReplacements.append(finished)
-                    outcome.requiresImmediateFlush = true
-                        break
-                }
                 stagedBatches.removeAll { $0.id == finished.id }
-                documentBatchIDs.remove(finished.id)
                 pendingHistoryAdditions.append(finished)
                 hasPendingActiveChange = true
                 pendingAggregateRefresh = true
@@ -808,13 +829,7 @@ extension RuntimeBackgroundIndexingCoordinator {
             case .batchCancelled(let cancelled):
                 // Cancellation always removes from active. Lands in history
                 // too so the user can review what got cancelled.
-                if swapArchivedBatchIDs.remove(cancelled.id) != nil {
-                    pendingHistoryReplacements.append(cancelled)
-                    outcome.requiresImmediateFlush = true
-                        break
-                }
                 stagedBatches.removeAll { $0.id == cancelled.id }
-                documentBatchIDs.remove(cancelled.id)
                 pendingHistoryAdditions.append(cancelled)
                 hasPendingActiveChange = true
                 pendingAggregateRefresh = true
@@ -859,12 +874,10 @@ extension RuntimeBackgroundIndexingCoordinator {
             let activeChanged = hasPendingActiveChange
             let aggregateChanged = pendingAggregateRefresh
             let historyAdditions = pendingHistoryAdditions
-            let historyReplacements = pendingHistoryReplacements
 
             hasPendingActiveChange = false
             pendingAggregateRefresh = false
             pendingHistoryAdditions = []
-            pendingHistoryReplacements = []
             hasScheduledFlush = false
 
             // Snapshot batches only when the flush will actually publish them
@@ -875,50 +888,14 @@ extension RuntimeBackgroundIndexingCoordinator {
                 activeChanged: activeChanged,
                 aggregateChanged: aggregateChanged,
                 batches: batches,
-                historyAdditions: historyAdditions,
-                historyReplacements: historyReplacements
+                historyAdditions: historyAdditions
             )
-        }
-
-        /// Atomically drains everything the engine swap needs to archive —
-        /// the still-active batches plus the finalized batches whose history
-        /// hop was waiting on the coalesce window — then resets all staging
-        /// state. One lock acquisition so a concurrent event can't slip a
-        /// batch in between the read and the clear.
-        func drainForEngineSwap() -> (activeBatches: [RuntimeIndexingBatch], pendingHistory: [RuntimeIndexingBatch]) {
-            lock.lock()
-            defer { lock.unlock() }
-            let drained = (activeBatches: stagedBatches, pendingHistory: pendingHistoryAdditions)
-            // The caller archives these as cancelled while their engine may
-            // still be ending them; see `applyEvent`.
-            swapArchivedBatchIDs.formUnion(stagedBatches.map(\.id))
-            stagedBatches.removeAll()
-            pendingHistoryAdditions.removeAll()
-            hasPendingActiveChange = false
-            pendingAggregateRefresh = false
-            hasScheduledFlush = false
-            documentBatchIDs.removeAll()
-            return drained
         }
 
         func clearPendingHistory() {
             lock.lock()
             defer { lock.unlock() }
             pendingHistoryAdditions.removeAll()
-        }
-
-        func insertDocumentBatchID(_ id: RuntimeIndexingBatchID) {
-            lock.lock()
-            defer { lock.unlock() }
-            documentBatchIDs.insert(id)
-        }
-
-        func takeAllDocumentBatchIDs() -> Set<RuntimeIndexingBatchID> {
-            lock.lock()
-            defer { lock.unlock() }
-            let ids = documentBatchIDs
-            documentBatchIDs.removeAll()
-            return ids
         }
     }
 }

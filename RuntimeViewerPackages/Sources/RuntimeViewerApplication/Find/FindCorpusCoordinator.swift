@@ -8,32 +8,38 @@ import RuntimeViewerArchitectures
 import RuntimeViewerSettings
 #endif
 
-/// Keeps the engine's interface corpus in step with what the document has
+/// Keeps the engine's interface corpus in step with what the engine has
 /// indexed, so a text or member search finds every indexed image already
 /// built.
 ///
 /// The counterpart of `RuntimeBackgroundIndexingCoordinator`, and kept apart
 /// from it on purpose: that one makes images *indexed*, this one makes
 /// indexed images *searchable*, and the two have different queues and
-/// cancellation rules (proposal `0029-find-navigator` §4). The building
-/// itself — one image at a time, at utility priority, deduplicated across
-/// documents, cancelled only when its last subscriber leaves — is the
-/// engine's `RuntimeInterfaceCorpusStore`; this coordinator decides *which*
-/// images to ask for and *when*:
+/// cancellation rules (proposal `0029-find-navigator` §4). Like it, one per
+/// engine, shared by every document on the engine (see
+/// `RuntimeEngineBackgroundWork`): there used to be one per document, each
+/// asking for every corpus again and keeping builds of its own, so a second
+/// window showed the first one's builds frozen, could not cancel them, and
+/// listed their ends as corpora built elsewhere. The building itself — one
+/// image at a time, at utility priority, deduplicated across requests,
+/// cancelled only when its last subscriber leaves — is the engine's
+/// `RuntimeInterfaceCorpusStore`; this coordinator decides *which* images to
+/// ask for and *when*:
 ///
 /// 1. every image the engine's API indexed — the background indexer's loads,
-///    an export's, an image the sidebar opened — the one the sidebar shows
-///    moved to the front of the queue (`RuntimeEngine.imageDidIndexPublisher`);
+///    an export's, an image the sidebar opened — an image any document's
+///    sidebar shows moved to the front of the queue
+///    (`RuntimeEngine.imageDidIndexPublisher`);
 /// 2. every image indexed before the coordinator started listening, once;
 /// 3. the corpus switch turning on, for every indexed image;
 /// 4. the transformer settings changing, after a two-second lull: every
 ///    corpus is printed with them, so all are dropped and rebuilt, and the
 ///    search on screen runs again (`corporaRebuilt`).
 ///
-/// Turning the switch off drops every corpus. A source switch, or the engine
-/// coming back with a new process behind it, rewires onto the engine and
-/// starts over (`DocumentState.runtimeEngineDidReset`); a build the lost
-/// connection interrupted is not recorded as failed.
+/// Turning the switch off drops every corpus. The engine coming back with a
+/// new process behind it starts the coordinator over; a build the lost
+/// connection interrupted is not recorded as failed. A document moving to
+/// another engine moves to that engine's coordinator.
 ///
 /// It also says how its requests are going: `buildStatesByImagePath` takes
 /// every image it asked for from queued to built or failed, progress
@@ -57,12 +63,12 @@ public final class FindCorpusCoordinator {
     /// rebuilt.
     static let transformerRebuildDelayNanoseconds: UInt64 = 2_000_000_000
 
-    /// How often the engine is asked again while a build this document did not
-    /// ask for is under way: nothing else tells this document how it goes, or
-    /// that it ended.
+    /// How often the engine is asked again while a build the coordinator did
+    /// not ask for — another connection to the engine's process did — is under
+    /// way: nothing else tells the coordinator how it goes, or that it ended.
     static let unfollowedBuildCoverageRefreshIntervalNanoseconds: UInt64 = 2_000_000_000
 
-    /// A build request this document holds open — one subscription on the
+    /// A build request the coordinator holds open — one subscription on the
     /// store's build of the image. The identifier tells a request apart from
     /// the one that replaced it after a withdrawal.
     private struct BuildRequest {
@@ -70,19 +76,27 @@ public final class FindCorpusCoordinator {
         let task: Task<Void, Never>
     }
 
-    private var engine: RuntimeEngine
+    private let engine: RuntimeEngine
 
     /// The engine's "image indexed" reports, each of which asks for the
     /// image's corpus.
     private var imageIndexedSubscription: AnyCancellable?
 
-    /// The path of the image the sidebar lists, as the sidebar spells it. An
-    /// image that becomes indexed while it is on screen goes to the front of
-    /// the queue.
-    private var currentImagePath: String?
+    /// The image each document's sidebar lists, as the sidebar spells it, by
+    /// document. An image that becomes indexed while a sidebar on the engine
+    /// shows it goes to the front of the queue.
+    private var onScreenImagePathsByDocument: [ObjectIdentifier: String] = [:]
 
-    /// The build requests this document holds open, by image path.
-    /// Cancelling one withdraws only this document's interest.
+    /// Whether the engine was ready when last heard from, so a `false → true`
+    /// edge — a new process behind the engine — can be told from the state
+    /// replayed on subscribing.
+    private var engineWasReady = false
+
+    private var engineReadinessSubscription: AnyCancellable?
+
+    /// The build requests the coordinator holds open, by image path, for every
+    /// document on the engine. Cancelling one withdraws the coordinator's
+    /// interest, which a build another connection asked for outlives.
     private var buildRequests: [String: BuildRequest] = [:] {
         didSet {
             let imagePaths = Set(buildRequests.keys)
@@ -96,7 +110,7 @@ public final class FindCorpusCoordinator {
 
     private var transformerRebuildTask: Task<Void, Never>?
 
-    /// Images this document asked to build under the current engine, so a
+    /// Images the coordinator asked to build of the engine's process, so a
     /// transformer change knows what to rebuild.
     private var requestedImagePaths: Set<String> = []
 
@@ -132,10 +146,7 @@ public final class FindCorpusCoordinator {
 
     private let corporaRebuiltRelay = PublishRelay<Void>()
 
-    /// Replaced when the document closes, which ends every subscription.
-    private var disposeBag = DisposeBag()
-
-    /// The document closed; see `documentWillClose()`.
+    /// The last document on the engine left; see `close()`.
     private var isClosed = false
 
     #if canImport(RuntimeViewerSettings)
@@ -149,7 +160,7 @@ public final class FindCorpusCoordinator {
     private var lastKnownResidentByteLimit = 0
     #endif
 
-    /// Where each image's corpus stands as this document follows it: the
+    /// Where each image's corpus stands as the coordinator follows it: the
     /// images it asked for, from `.pending` to `.built` or `.failed`, and the
     /// rest as the engine last reported them. An absent image is unbuilt.
     @RxObserved
@@ -163,27 +174,28 @@ public final class FindCorpusCoordinator {
     public private(set) var isCorpusUnsupportedByEngine: Bool = false
 
     /// Builds that ended, newest first, at most `maximumFinishedBuildCount`
-    /// of them. Corpora other documents built come after the ones this
-    /// document saw end: the engine does not say when they were built.
+    /// of them — what every window on the engine lists. Corpora built for
+    /// another connection, or before the coordinator started, come after the
+    /// ones it saw end: the engine does not say when they were built.
     @RxObserved
     public private(set) var finishedBuilds: [FindCorpusFinishedBuild] = []
 
-    /// The images this document holds a build request for: the corpus rows the
-    /// Report navigator can cancel. Every other active state came from a
-    /// coverage snapshot — another document's build, or one the engine runs for
-    /// a peer — and this document can neither follow its progress nor withdraw
-    /// it.
+    /// The images the coordinator holds a build request for, for every
+    /// document on the engine: the corpus rows the Report navigator can
+    /// cancel. Every other active state came from a coverage snapshot — a
+    /// build another connection to the engine's process asked for — and the
+    /// coordinator can neither follow its progress nor withdraw it.
     @RxObserved
     public private(set) var followedImagePaths: Set<String> = []
 
     /// Every image that has had a place in `finishedBuilds`, kept through
-    /// `clearFinishedBuilds()`: a coverage snapshot lists only corpora this
-    /// document has never listed, or a cleared entry would come back with the
-    /// next refresh. An image leaves once its corpus is gone from the engine,
-    /// so a corpus rebuilt after an eviction is listed again.
+    /// `clearFinishedBuilds()`: a coverage snapshot lists only corpora the
+    /// coordinator has never listed, or a cleared entry would come back with
+    /// the next refresh. An image leaves once its corpus is gone from the
+    /// engine, so a corpus rebuilt after an eviction is listed again.
     private var imagePathsListedInHistory: Set<String> = []
 
-    /// An image's path, each time a request of this document ends with the
+    /// An image's path, each time a request of the coordinator ends with the
     /// image's corpus built.
     public var corpusBuilt: Signal<String> {
         corpusBuiltRelay.asSignal()
@@ -204,16 +216,15 @@ public final class FindCorpusCoordinator {
             .distinctUntilChanged()
     }
 
-    /// Reads `documentState` here and keeps nothing of it but subscriptions:
-    /// the coordinator can outlive the document.
-    public init(documentState: DocumentState) {
-        self.engine = documentState.runtimeEngine
+    /// Brought into being by `RuntimeEngineBackgroundWork` for its engine. A
+    /// document's Find session follows it through `DocumentState`, which
+    /// also tells it which image the document's sidebar shows.
+    init(engine: RuntimeEngine) {
+        self.engine = engine
         #if canImport(RuntimeViewerSettings)
         bootstrapSettingsObservation()
         #endif
-        bootstrapEngineObservation(of: documentState)
-        bootstrapCurrentImageObservation(of: documentState)
-        documentState.findSession.follow(self)
+        observeEngineReadiness()
         startPumps()
     }
 
@@ -314,17 +325,17 @@ public final class FindCorpusCoordinator {
             let imagePaths = try? await engine.indexedImagePathList()
             guard let self else { return }
             self.indexedImageFetchesUnderWay -= 1
-            guard let imagePaths, self.engine === engine else { return }
+            guard let imagePaths, !self.isClosed else { return }
             for imagePath in imagePaths {
                 self.requestBuild(of: imagePath)
             }
         }
     }
 
-    /// Withdraws this document's request for `imagePath` — the Report
-    /// navigator's Cancel. Another document asking for the image keeps its
-    /// build going, and the withdrawal is not sticky: the next trigger for the
-    /// image asks again.
+    /// Withdraws the request for `imagePath` — the Report navigator's Cancel,
+    /// in whichever window on the engine. A build another connection asked
+    /// for goes on for it, and the withdrawal is not sticky: the next trigger
+    /// for the image asks again.
     public func cancelBuild(of requestedImagePath: String) {
         let imagePath = canonicalImagePath(requestedImagePath)
         guard let request = buildRequests.removeValue(forKey: imagePath) else { return }
@@ -333,17 +344,27 @@ public final class FindCorpusCoordinator {
         recordFinishedBuild(FindCorpusFinishedBuild(imagePath: imagePath, outcome: .cancelled, finishedAt: Date()))
     }
 
-    /// The document is closing: every request it holds is withdrawn — over a
-    /// connection each withdrawal reaches the serving process as a
-    /// `cancelRequest` — and nothing asks for a corpus again, not an image the
-    /// engine indexes, not a settings change made in another window, not an
-    /// engine swap. `DocumentState` holds this coordinator and can outlive
-    /// the window, so `deinit` is too late to count on.
-    public func documentWillClose() {
+    /// The last document on the engine left — closed, or moved to another
+    /// engine: every request is withdrawn — over a connection each withdrawal
+    /// reaches the serving process as a `cancelRequest` — and nothing asks for
+    /// a corpus again, not an image the engine indexes, not a settings change,
+    /// not the engine coming back. Its builds go with it; the next document on
+    /// the engine gets a coordinator of its own. A `DocumentState` that held
+    /// this coordinator can outlive its window, so `deinit` is too late to
+    /// count on. `RuntimeEngineBackgroundWork` calls this.
+    func close() {
+        guard !isClosed else { return }
         isClosed = true
         stopPumps()
+        engineReadinessSubscription = nil
         withdrawEveryBuild()
-        disposeBag = DisposeBag()
+    }
+
+    /// The image the sidebar of `document` lists, as the sidebar spells it,
+    /// or `nil` once it lists none — the document went to the image list, to
+    /// another engine, or closed.
+    func setOnScreenImagePath(_ imagePath: String?, ofDocument document: ObjectIdentifier) {
+        onScreenImagePathsByDocument[document] = imagePath
     }
 
     /// Empties `finishedBuilds`. The corpora listed so far stay off it: a
@@ -359,8 +380,8 @@ public final class FindCorpusCoordinator {
     ///
     /// One round trip at a time: calls made while one is in flight coalesce
     /// into a single one after it, which still answers for the latest call.
-    /// Requests that end together — every corpus already built when a second
-    /// window opens — cost two round trips, not one each.
+    /// Requests that end together — every corpus already built when the
+    /// coordinator starts — cost two round trips, not one each.
     public func refreshCoverage() {
         guard coverageRefreshTask == nil else {
             isCoverageRefreshPending = true
@@ -370,10 +391,10 @@ public final class FindCorpusCoordinator {
         coverageFetchCount += 1
         coverageRefreshTask = Task { [weak self] in
             let coverage = try? await engine.interfaceCorpusCoverage()
-            // Cancelled by an engine swap or the document closing: the answer
-            // is about a process this document has left, and a refresh of the
+            // Cancelled by the engine coming back or the coordinator closing:
+            // the answer is about a process that is gone, and a refresh of the
             // new one may be under way already. An identity check would not
-            // do, since a reset can put the same engine back.
+            // do: the engine is the same.
             guard let self, !Task.isCancelled else { return }
             self.coverageRefreshTask = nil
             if let coverage {
@@ -394,10 +415,11 @@ public final class FindCorpusCoordinator {
         unfollowedBuildRefreshTask = nil
     }
 
-    /// While a build this document does not follow is under way, its row and
+    /// While a build the coordinator does not follow is under way, its row and
     /// the Report navigator's activity mark show the engine's last word on it,
     /// which nothing else refreshes. Asks again every two seconds until no such
-    /// build is left; an engine swap or the document closing stops it.
+    /// build is left; the engine coming back or the coordinator closing stops
+    /// it.
     private func scheduleCoverageRefreshWhileOthersBuild() {
         let hasUnfollowedActiveBuild = buildStatesByImagePath.contains { imagePath, state in
             state.isActive && buildRequests[imagePath] == nil
@@ -416,13 +438,13 @@ public final class FindCorpusCoordinator {
         }
     }
 
-    /// Squares this document's states with what a finished search could not
-    /// read. The store evicts without telling anyone, so an image this
-    /// document still believes built may be gone: its state goes. The images
-    /// of the search's scope are asked for first. With every indexed image in
-    /// scope, only images this document never asked for are: those are the
-    /// ones it was never told about — indexed in the serving process without
-    /// this engine's API — while asking again for every evicted one would,
+    /// Squares the coordinator's states with what a finished search could not
+    /// read. The store evicts without telling anyone, so an image the
+    /// coordinator still believes built may be gone: its state goes. The
+    /// images of the search's scope are asked for first. With every indexed
+    /// image in scope, only images the coordinator never asked for are: those
+    /// are the ones it was never told about — indexed in the serving process
+    /// without this engine's API — while asking again for every evicted one would,
     /// with a budget too small for them all, rebuild on each search what the
     /// budget just evicted. Paths may be spelled either way; see
     /// `canonicalImagePath(_:)`.
@@ -450,7 +472,7 @@ public final class FindCorpusCoordinator {
         }
     }
 
-    /// Withdraws every request this document holds, leaving the images they
+    /// Withdraws every request the coordinator holds, leaving the images they
     /// were following unbuilt as far as it is concerned.
     private func withdrawEveryBuild() {
         for request in buildRequests.values {
@@ -505,14 +527,14 @@ public final class FindCorpusCoordinator {
         case .success(let summary):
             buildStatesByImagePath[imagePath] = .built(summary)
             // A corpus that was already there comes back without a single
-            // progress report; it is not a build this document saw.
+            // progress report; it is not a build the coordinator saw.
             if hasReportedProgress {
                 recordFinishedBuild(FindCorpusFinishedBuild(imagePath: imagePath, outcome: .built(summary), finishedAt: Date()))
             }
             corpusBuiltRelay.accept(imagePath)
             refreshCoverage()
         case .failure(is CancellationError):
-            // The store cancelled the build for everyone: another document
+            // The store cancelled the build for everyone: another connection
             // asked for it under a different transformer, or evicted it.
             buildStatesByImagePath[imagePath] = nil
         case .failure(is RuntimeInterfaceCorpusBuildError):
@@ -552,13 +574,13 @@ public final class FindCorpusCoordinator {
         finishedBuilds = builds
     }
 
-    /// Folds the engine's coverage into what this document shows. An image
-    /// this document holds a request for keeps the state its request
-    /// reports; every other image takes the engine's word — a corpus another
-    /// document built, one being built for another document, or one evicted
-    /// since, which would otherwise stay built here forever. Corpora that
-    /// ended without this document seeing them go to the end of the history,
-    /// in path order.
+    /// Folds the engine's coverage into what the coordinator shows. An image
+    /// it holds a request for keeps the state its request reports; every
+    /// other image takes the engine's word — a corpus built before the
+    /// coordinator started or for another connection, one being built for
+    /// another connection, or one evicted since, which would otherwise stay
+    /// built here forever. Corpora that ended without the coordinator seeing
+    /// them go to the end of the history, in path order.
     func mergeCoverage(_ coverage: RuntimeInterfaceCorpusCoverage) {
         var states = buildStatesByImagePath
         for imagePath in Set(states.keys).union(coverage.statesByImagePath.keys) where buildRequests[imagePath] == nil {
@@ -610,12 +632,13 @@ public final class FindCorpusCoordinator {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] imagePath in
                 MainActor.assumeIsolated {
-                    guard let self, self.engine === engine else { return }
+                    guard let self, !self.isClosed else { return }
                     self.imageDidIndex(at: imagePath)
                 }
             }
         requestBuildOfIndexedImages()
-        // What other documents sharing the engine have built or are building.
+        // What the engine's process has built or is building already: before
+        // the coordinator started, or for another connection.
         refreshCoverage()
         #if canImport(RuntimeViewerSettings)
         applyResidentByteLimit()
@@ -630,55 +653,57 @@ public final class FindCorpusCoordinator {
     }
 
     /// An image the engine reports indexed. One with a request open is left
-    /// to it, one already built needs nothing; the image the sidebar shows
-    /// goes to the front of the queue, every other one — an export's, the
-    /// background indexer's — waits its turn.
+    /// to it, one already built needs nothing; an image a sidebar on the
+    /// engine shows goes to the front of the queue, every other one — an
+    /// export's, the background indexer's — waits its turn.
     private func imageDidIndex(at reportedImagePath: String) {
         let imagePath = canonicalImagePath(reportedImagePath)
-        let isOnScreen = currentImagePath.map(canonicalImagePath) == imagePath
+        let isOnScreen = onScreenImagePathsByDocument.values.contains { canonicalImagePath($0) == imagePath }
         if buildRequests[imagePath] == nil, buildStatesByImagePath[imagePath]?.isBuilt == true {
             return
         }
         requestBuild(of: imagePath, isPrioritized: isOnScreen)
     }
 
-    private func bootstrapCurrentImageObservation(of documentState: DocumentState) {
-        documentState.$currentImageNode
-            .subscribeOnNext { [weak self] imageNode in
-                guard let self else { return }
-                self.currentImagePath = imageNode?.path
+    // MARK: - The engine coming back
+
+    /// Follows the engine's readiness. A `false → true` edge is a new process
+    /// behind the engine — the local runtime service relaunched, a peer
+    /// reconnected, the engine's first connection — heard from the engine
+    /// itself, whatever its documents have open, so a search run again on the
+    /// new process finds the coordinator on it already.
+    private func observeEngineReadiness() {
+        engineWasReady = engine.state.isReady
+        engineReadinessSubscription = engine.statePublisher
+            .map(\.isReady)
+            .sink { [weak self] isReady in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.handleEngineReadinessChange(isReady)
+                }
             }
-            .disposed(by: disposeBag)
     }
 
-    // MARK: - Engine swap
-
-    /// Follows the document's engine resets — another engine, or the same
-    /// one with a new process behind it, whether or not the document had
-    /// anything open (`DocumentState.runtimeEngineDidReset`) — at once, so a
-    /// search run again on the new process finds this coordinator on it.
-    private func bootstrapEngineObservation(of documentState: DocumentState) {
-        documentState.runtimeEngineDidReset
-            .emitOnNext { [weak self] newEngine in
-                guard let self else { return }
-                self.handleEngineSwap(to: newEngine)
-            }
-            .disposed(by: disposeBag)
+    private func handleEngineReadinessChange(_ isReady: Bool) {
+        guard !isClosed else { return }
+        let becameReadyAgain = isReady && !engineWasReady
+        engineWasReady = isReady
+        guard becameReadyAgain else { return }
+        engineDidReset()
     }
 
     /// The process behind the engine has corpora of its own, so the states
     /// start over and every image it has indexed is asked for again — an
     /// image whose build a lost connection interrupted among them, while the
-    /// process still has it. The history stays: it reads as what this
-    /// document built this session, like the indexing history.
-    private func handleEngineSwap(to newEngine: RuntimeEngine) {
+    /// process still has it. The history stays: it reads as what was built on
+    /// the engine, like the indexing history.
+    private func engineDidReset() {
         stopPumps()
         withdrawEveryBuild()
         isCorpusUnsupportedByEngine = false
         _ = progressStaging.drain()
         buildStatesByImagePath = [:]
         requestedImagePaths.removeAll()
-        engine = newEngine
         startPumps()
     }
 
@@ -699,7 +724,7 @@ public final class FindCorpusCoordinator {
             _ = settings.transformer
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
-                // A closed document stops listening.
+                // A closed coordinator stops listening.
                 guard let self, !self.isClosed else { return }
                 self.handleSettingsChange()
                 self.subscribeToSettings()
@@ -740,17 +765,17 @@ public final class FindCorpusCoordinator {
     }
 
     /// Every corpus was printed with the old transformer; after the edits
-    /// settle, drop them all and rebuild the ones this document asked for.
+    /// settle, drop them all and rebuild the ones the coordinator asked for.
     private func scheduleTransformerRebuild() {
         transformerRebuildTask?.cancel()
         let engine = engine
         transformerRebuildTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.transformerRebuildDelayNanoseconds)
-            guard !Task.isCancelled, let self, self.engine === engine else { return }
+            guard !Task.isCancelled, let self, !self.isClosed else { return }
             let imagePaths = self.requestedImagePaths
             self.withdrawEveryBuild()
             try? await engine.evictInterfaceCorpus(for: nil)
-            guard self.engine === engine else { return }
+            guard !Task.isCancelled, !self.isClosed else { return }
             self.buildStatesByImagePath = [:]
             for imagePath in imagePaths {
                 self.requestBuild(of: imagePath)

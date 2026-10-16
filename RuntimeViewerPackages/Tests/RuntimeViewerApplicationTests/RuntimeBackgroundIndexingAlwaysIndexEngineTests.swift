@@ -147,9 +147,12 @@ struct RuntimeBackgroundIndexingAlwaysIndexEngineTests {
         #expect(try await Self.alwaysIndexBatches(Self.libobjc, in: coordinator).isEmpty)
 
         environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(secondEngine)) }
+        // The second engine's own coordinator: what the document shows follows its engine.
+        let secondCoordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        defer { withExtendedLifetime(secondCoordinator) {} }
 
-        try await Self.waitForAlwaysIndexBatch(Self.libobjc, in: coordinator)
-        #expect(try await Self.alwaysIndexBatches(Self.libdispatch, in: coordinator).count == 1)
+        try await Self.waitForAlwaysIndexBatch(Self.libobjc, in: secondCoordinator)
+        #expect(try await Self.alwaysIndexBatches(Self.libdispatch, in: secondCoordinator).isEmpty)
         await firstEngine.stop()
         await secondEngine.stop()
     }

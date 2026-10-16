@@ -31,31 +31,36 @@ import RuntimeViewerCommunication
         #expect(batches.isEmpty)
     }
 
-    @Test func eventsStreamYieldsBatchStartedThenFinishedForEmptyGraph() async {
+    /// A root that is indexed already leaves nothing to do — the walk does not
+    /// look past an indexed image — so no batch is started: nothing is
+    /// announced, the engine is not reloaded, and `nil` comes back.
+    ///
+    /// Every document on an engine hears every batch, so such a batch used to
+    /// land in each one's Report as a row of 0 images whenever a document
+    /// dispatched its Always Index rows again — a second window opening on the
+    /// engine, say — and each one's end reloaded the engine.
+    @Test func startBatchStartsNoBatchWhenTheRootIsIndexed() async {
         let engine = keep(MockBackgroundIndexingEngine())
-        engine.program(path: "/fake/Root",
-                       .init(isIndexed: true))   // short-circuit immediately
+        engine.program(path: "/Indexed", .init(isIndexed: true))
+        engine.program(path: "/Marker", .init())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
+        let recorder = EventRecorder()
+        let recording = recorder.startRecording(await manager.events)
+        defer { recording.cancel() }
 
-        let events = await manager.events
-        let consumer = Task {
-            var seen: [String] = []
-            for await event in events {
-                switch event {
-                case .batchStarted: seen.append("started")
-                case .batchFinished: seen.append("finished"); return seen
-                case .batchCancelled: seen.append("cancelled"); return seen
-                default: break
-                }
-            }
-            return seen
-        }
+        let identifier = await manager.startBatch(rootImagePath: "/Indexed", depth: 5,
+                                                  maxConcurrency: 1, reason: .manual)
+        // Events arrive in the order they happen, so the batch started next
+        // ending marks the end of whatever the first call set off.
+        _ = await manager.startBatch(rootImagePath: "/Marker", depth: 0,
+                                     maxConcurrency: 1, reason: .manual)
+        _ = await waitUntil { recorder.recordedEvents.contains { $0.hasPrefix("batchFinished /Marker") } }
 
-        _ = await manager.startBatch(rootImagePath: "/fake/Root",
-                                     depth: 0, maxConcurrency: 1,
-                                     reason: .manual)
-        let finalSeen = await consumer.value
-        #expect(finalSeen == ["started", "finished"])
+        #expect(identifier == nil)
+        #expect(!recorder.recordedEvents.contains { $0.contains("/Indexed") }, "\(recorder.recordedEvents)")
+        _ = await waitUntil { engine.reloadDataCount() >= 1 }
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(engine.reloadDataCount() == 1, "the engine reloaded for a batch with nothing to index")
     }
 
     /// Every subscriber hears every event.
@@ -413,7 +418,7 @@ import RuntimeViewerCommunication
         #expect(engine.reloadDataCount() == 1)
     }
 
-    @Test func cancelBatchStopsPendingItemsAndEmitsCancelledEvent() async {
+    @Test func cancelBatchStopsPendingItemsAndEmitsCancelledEvent() async throws {
         let engine = keep(MockBackgroundIndexingEngine())
         let deps = (0..<5).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
         engine.program(path: "/App", .init(dependencies: deps))
@@ -428,8 +433,8 @@ import RuntimeViewerCommunication
             }
             fatalError()
         }
-        let id = await manager.startBatch(rootImagePath: "/App", depth: 1,
-                                          maxConcurrency: 1, reason: .manual)
+        let id = try #require(await manager.startBatch(rootImagePath: "/App", depth: 1,
+                                                       maxConcurrency: 1, reason: .manual))
         try? await Task.sleep(nanoseconds: 10_000_000)
         await manager.cancelBatch(id)
         let batch = await consumer.value
@@ -503,7 +508,7 @@ import RuntimeViewerCommunication
     /// second batch with `.settingsEnabled`. Without dedup these become two
     /// parallel batches indexing the same dependency graph. The manager must
     /// collapse them to a single batch (same id returned).
-    @Test func startBatchDedupsByRootImagePathAcrossDifferentReasons() async {
+    @Test func startBatchDedupsByRootImagePathAcrossDifferentReasons() async throws {
         let engine = keep(MockBackgroundIndexingEngine())
         // depth 0 with `isIndexed: false` → batch contains one pending item
         // whose load awaits 5ms in the mock; batch A stays active during the
@@ -511,9 +516,9 @@ import RuntimeViewerCommunication
         engine.program(path: "/App", .init())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
-        let firstId = await manager.startBatch(
+        let firstId = try #require(await manager.startBatch(
             rootImagePath: "/App", depth: 0,
-            maxConcurrency: 1, reason: .appLaunch)
+            maxConcurrency: 1, reason: .appLaunch))
         let secondId = await manager.startBatch(
             rootImagePath: "/App", depth: 0,
             maxConcurrency: 1, reason: .settingsEnabled)
@@ -589,8 +594,8 @@ import RuntimeViewerCommunication
     /// path and stuffing that into the reason).
     @Test func alwaysIndexReasonRoundTripsThroughEvents() async {
         let engine = keep(MockBackgroundIndexingEngine())
-        engine.program(path: "/System/Library/Frameworks/Foundation.framework/Foundation",
-                       .init(isIndexed: true))   // short-circuit immediately
+        // Not indexed yet: a root indexed already would start no batch at all.
+        engine.program(path: "/System/Library/Frameworks/Foundation.framework/Foundation", .init())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
         let events = await manager.events
@@ -624,7 +629,7 @@ import RuntimeViewerCommunication
 
     /// After a batch finishes, the same root may be re-batched (e.g. another
     /// dlopen of an unloaded dep). Dedup must NOT bind to historical batches.
-    @Test func startBatchAllowsNewBatchAfterPreviousFinishedForSameRoot() async {
+    @Test func startBatchAllowsNewBatchAfterPreviousFinishedForSameRoot() async throws {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
@@ -633,13 +638,47 @@ import RuntimeViewerCommunication
                                            root: "/App", depth: 0,
                                            maxConcurrency: 1)
         // After the batch completes, a fresh startBatch on the same root must
-        // produce a new id — the prior batch is no longer active.
-        let secondId = await manager.startBatch(
+        // produce a new id — the prior batch is no longer active. The root is
+        // unindexed again first: an indexed one starts no batch at all.
+        engine.program(path: "/App", .init())
+        let secondId = try #require(await manager.startBatch(
             rootImagePath: "/App", depth: 0,
-            maxConcurrency: 1, reason: .manual)
+            maxConcurrency: 1, reason: .manual))
         #expect(firstBatch.id != secondId)
 
         await manager.cancelBatch(secondId)
+    }
+
+    /// A cancelled batch is on its way out, however long its last load still
+    /// takes, so a request for its root starts a batch of its own. Handing it
+    /// back gave a dispatch made straight after the cancellation — the last
+    /// document leaving an engine and another coming onto it — a batch about
+    /// to end cancelled, and the row counted as dispatched, so nothing indexed
+    /// it again.
+    @Test func cancelledBatchIsNotReused() async throws {
+        let mockEngine = keep(MockBackgroundIndexingEngine())
+        mockEngine.program(path: "/A", .init())
+        let engine = keep(HeldLoadEngine(base: mockEngine))
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+        let recorder = EventRecorder()
+        let recording = recorder.startRecording(await manager.events)
+        defer { recording.cancel() }
+        let firstIdentifier = try #require(await manager.startBatch(rootImagePath: "/A", depth: 0,
+                                                                    maxConcurrency: 1, reason: .manual))
+        // The load is on its way, and cancelling the batch cannot call it back.
+        _ = await waitUntil { recorder.recordedEvents.contains("taskStarted /A") }
+        await manager.cancelBatch(firstIdentifier)
+
+        let secondIdentifier = await manager.startBatch(rootImagePath: "/A", depth: 0,
+                                                        maxConcurrency: 1, reason: .manual)
+
+        #expect(secondIdentifier != nil)
+        #expect(secondIdentifier != firstIdentifier, "a request was handed a batch being cancelled")
+        if let secondIdentifier {
+            await manager.cancelBatch(secondIdentifier)
+        }
+        engine.releaseLoad()
+        engine.releaseLoad()
     }
 
     // MARK: - Test helpers
@@ -765,6 +804,50 @@ import RuntimeViewerCommunication
             try await base.dependencies(for: path,
                                         ancestorRpaths: ancestorRpaths,
                                         mainExecutablePath: mainExecutablePath)
+        }
+        func reloadDataAfterBackgroundIndexing() async {
+            await base.reloadDataAfterBackgroundIndexing()
+        }
+    }
+
+    /// Holds every background load until `releaseLoad()`, whether or not the
+    /// task waiting on it has been cancelled — what a load forwarded over a
+    /// connection does, since a request on its way cannot be called back.
+    private final class HeldLoadEngine: RuntimeBackgroundIndexingEngineRepresenting,
+                                        @unchecked Sendable
+    {
+        let base: MockBackgroundIndexingEngine
+        private let loadGate = AsyncSemaphore(value: 0)
+        init(base: MockBackgroundIndexingEngine) {
+            self.base = base
+        }
+        func releaseLoad() {
+            loadGate.signal()
+        }
+        func isImageIndexed(path: String) async throws -> Bool {
+            await base.isImageIndexed(path: path)
+        }
+        func loadImageForBackgroundIndexing(at path: String) async throws {
+            await loadGate.wait()
+            try await base.loadImageForBackgroundIndexing(at: path)
+        }
+        func mainExecutablePath() async throws -> String {
+            await base.mainExecutablePath()
+        }
+        func canOpenImage(at path: String) async -> Bool {
+            await base.canOpenImage(at: path)
+        }
+        func rpaths(for path: String) async throws -> [String] {
+            await base.rpaths(for: path)
+        }
+        func dependencies(for path: String,
+                          ancestorRpaths: [String],
+                          mainExecutablePath: String)
+            async throws -> [(installName: String, resolvedPath: String?)]
+        {
+            await base.dependencies(for: path,
+                                    ancestorRpaths: ancestorRpaths,
+                                    mainExecutablePath: mainExecutablePath)
         }
         func reloadDataAfterBackgroundIndexing() async {
             await base.reloadDataAfterBackgroundIndexing()

@@ -15,8 +15,8 @@ final class ReportTreeBuilder {
     /// A reused finished subtree holds its own and is not in here.
     private var cellViewModelsByIdentifier: [ReportNodeIdentifier: ReportCellViewModel] = [:]
 
-    /// The indexing history's subtrees by batch, with the snapshot each was built from: an engine
-    /// swap can put a batch's real end in place of the snapshot it archived.
+    /// The indexing history's subtrees by batch, with the snapshot each was built from, so an entry
+    /// that changes is built again.
     private var historyBatchNodes: [RuntimeIndexingBatchID: (batch: RuntimeIndexingBatch, node: ReportNode)] = [:]
 
     /// Ended corpus builds' rows by entry. An entry never changes once recorded.

@@ -54,7 +54,7 @@ struct ReportViewModelTests {
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
 
-        let batchID = await engine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual)
+        let batchID = try #require(await engine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual))
 
         let nodes = try await nextValue(from: page.output.nodes, timeout: 60) { nodes in
             Self.node(.indexingBatch(batchID), in: nodes)?.cellViewModel.isInProgress == false
@@ -168,7 +168,7 @@ struct ReportViewModelTests {
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
 
-        let batchID = await engine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual)
+        let batchID = try #require(await engine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual))
         // What the batch indexes gets its corpus built as well; wait for all of it, or a build
         // would land after the history is cleared.
         _ = try await nextValue(from: page.output.nodes, timeout: 120) { nodes in
@@ -230,11 +230,13 @@ struct ReportViewModelTests {
         await engine.stop()
     }
 
-    /// A coverage snapshot brings in the corpus builds other windows asked for. Their rows offered
-    /// Cancel, which did nothing for a build this document holds no request for, showed a
-    /// percentage that never moved, and stayed — with the tab's activity mark — until this page
-    /// was shown again, since nothing refreshed the coverage while they ran (PR121.55).
-    @Test("a corpus build another window asked for shows without Cancel or a frozen percentage, and goes once the engine stops reporting it")
+    /// A coverage snapshot brings in the corpus builds another connection to the engine's process
+    /// asked for — and, before the windows on an engine shared one corpus coordinator, the builds
+    /// other windows asked for. Their rows offered Cancel, which did nothing for a build the
+    /// coordinator holds no request for, showed a percentage that never moved, and stayed — with
+    /// the tab's activity mark — until this page was shown again, since nothing refreshed the
+    /// coverage while they ran (PR121.55).
+    @Test("a corpus build another connection asked for shows without Cancel or a frozen percentage, and goes once the engine stops reporting it")
     func unfollowedBuildIsNotCancellable() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.unfollowedBuild")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
@@ -248,7 +250,7 @@ struct ReportViewModelTests {
         let imagePath = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
         let buildIdentifier = ReportNodeIdentifier.corpusBuild(imagePath: imagePath)
 
-        // What a coverage snapshot says while another window's build of the image runs.
+        // What a coverage snapshot says while another connection's build of the image runs.
         coordinator.mergeCoverage(RuntimeInterfaceCorpusCoverage(
             statesByImagePath: [imagePath: .building(RuntimeInterfaceCorpusBuildProgress(built: 10, total: 100))],
             residentByteCount: 0,
@@ -257,7 +259,7 @@ struct ReportViewModelTests {
 
         let nodes = try await nextValue(from: page.output.nodes) { Self.node(buildIdentifier, in: $0) != nil }
         let row = try #require(Self.node(buildIdentifier, in: nodes))
-        #expect(!row.cellViewModel.isCancellable, "this window cannot withdraw another window's build")
+        #expect(!row.cellViewModel.isCancellable, "this window cannot withdraw another connection's build")
         #expect(row.cellViewModel.appearance.detail == "Building")
         #expect(try await nextValue(from: page.output.hasCancellableWork) == false, "Cancel All offers to cancel a build this window cannot withdraw")
 

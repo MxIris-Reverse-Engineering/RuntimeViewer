@@ -41,7 +41,7 @@ struct FindCorpusCoordinatorRemoteTests {
         try await fixture.serving.loadImage(at: TestImages.foundation)
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         coordinator.requestBuild(of: TestImages.foundation)
@@ -98,7 +98,7 @@ struct FindCorpusCoordinatorRemoteTests {
         try await fixture.serving.loadImage(at: TestImages.foundation)
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         coordinator.requestBuild(of: TestImages.foundation)

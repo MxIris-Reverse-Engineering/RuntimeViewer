@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-09-30
-- **最后更新**: 2026-10-11
+- **最后更新**: 2026-10-16
 - **配套文档**: 无（理由见决策日志 2026-10-09 的 Implemented 一行）
 - **关联提案**: [0029-find-navigator](0029-find-navigator.md)（语料构建的状态来源）、[0002-background-indexing](0002-background-indexing.md)（被替换的 toolbar 按钮与弹窗）
 
@@ -107,3 +107,4 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
 | 2026-10-09 | Report 页只在屏上时建树（`Input.isVisible`，由 `rx.viewWillAppear` / `rx.viewWillDisappear` 驱动）；建树挪进非泛型的 `ReportTreeBuilder`，按类别分开重建，索引历史与已结束的语料构建按条目缓存子树 | PR #121 审查 PR121.59：六路输入 `combineLatest` 到一个整树重建上，索引事件与语料进度各按 16 ms 合并，任何一路一动就把 100 条历史连同其下全部镜像行、再加 100 条语料历史重建并重新 configure 一遍；两层侧栏各绑一个 Report 页，看不见的那页照样每秒约 60 次。现在变为可见时 `combineLatest` 回放各路最新值、在页面画出来之前建好树，顺带做原来 `appeared` 做的 `refreshCoverage()`；语料进度只重建它那一行与类别行。历史条目是不变的快照，按标识缓存，快照被替换（PR121.57）时在原来的 cell ViewModel 上重建；代价是结束时间里的 "Today" 过了午夜不会自己变成 "Yesterday"。`ReportTreeBuilderTests` 用 `builtNodeCount` 计数钉住（60 次进度只建 120 个节点；不变的历史只建类别行），`hiddenPageBuildsNoTree` 钉住门控；`rx.viewWillAppear` 在泛型 VC 上可用由 `GenericViewControllerAppearanceEventTests` 证明。 |
 | 2026-10-09 | Implemented，编号 0030：随 PR #121 与 0029 一起合入 `next` | 与 0029 同一个 PR、同一轮审查与验证（审查里归 Report 的条目见 KnownIssues 的 PR121.55、PR121.59 等）。编号排在 0029 之后，因为本提案的语料状态来自 0029。配套文档：不另写——页面照 Xcode 26 的 Report navigator 做，状态来源与取消规则在本提案和 0029 里；没有新术语。 |
 | 2026-10-11 | 过滤栏的 `FilterSearchField`（UIFoundation `FilterUI` trait）换成 AppKitPlus 的 `NSFilterSearchField`，时钟开关改用 `addFilterButton(with:alternateImage:toolTip:accessibilityLabel:)`；整条栏换成 `NSFilterControlBar`，操作按钮换成带常驻菜单的 `NSFilterControlBarItem` | 见 [0032](0032-appkitplus-filter-and-path-controls.md)。开关的位置与大小改由过滤框自己排布，原先加在开关上的约束删除。操作菜单原先每次点击现建，现在建一次交给 item，Cancel All / Clear History 的可用状态由 ViewModel 的输出设到菜单项上 |
+| 2026-10-16 | Report 按 Engine 共享：页面读的是文档当前 Engine 的两个协调器（每个 Engine 一个，由这个 Engine 上的文档共用），随 `runtimeEngine` 切换重新绑定；Cancel、Cancel All、Clear History 作用于这个 Engine，同一 Engine 的所有窗口一起变；最后一个文档离开 Engine 时 Report 清空（[后台工作按 Engine 共享](0055-engine-scoped-background-work.md)） | 用户：「开不同的Engine才不同，一样的Engine显示一样」。原先历史与语料构建是每个文档各记一份，两个窗口开在同一 Engine 上 Report 也不一样 |

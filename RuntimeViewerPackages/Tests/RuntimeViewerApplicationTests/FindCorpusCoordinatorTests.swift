@@ -29,7 +29,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.request", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         coordinator.requestBuild(of: TestImages.libobjc)
@@ -91,7 +91,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.switch", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         // The coordinator queues every indexed image on creation.
@@ -117,7 +117,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.states", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         // The coordinator asks for every indexed image as it starts.
@@ -133,12 +133,12 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
-    @Test("cancelling a build withdraws this document's request and records the cancellation")
+    @Test("cancelling a build withdraws the coordinator's request and records the cancellation")
     func cancelRecordsCancellation() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.cancel", loading: [TestImages.libobjc, TestImages.foundation])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         // Foundation takes tens of seconds to print, so its progress shows.
@@ -149,25 +149,27 @@ struct FindCorpusCoordinatorTests {
         #expect(coordinator.buildStatesByImagePath[TestImages.foundation] == nil)
         #expect(coordinator.finishedBuilds.first?.imagePath == TestImages.foundation)
         #expect(coordinator.finishedBuilds.first?.outcome == .cancelled)
-        // This document was the build's only subscriber, so the engine gives
-        // it up as well.
+        // The coordinator was the build's only subscriber, so the engine
+        // gives it up as well.
         let coverage = try await waitForCoverage(of: engine, timeout: 30) { $0.statesByImagePath[TestImages.foundation] == nil }
         #expect(coverage.statesByImagePath[TestImages.foundation] == nil)
         await engine.stop()
     }
 
-    @Test("a corpus another document built is listed after this document's own builds, without a time")
+    /// The second coordinator stands for another connection to the engine's
+    /// process: the documents on one engine share its coordinator.
+    @Test("a corpus another connection built is listed after the coordinator's own builds, without a time")
     func corpusBuiltElsewhereIsLearned() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.learned", loading: [TestImages.libobjc])
         let firstEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         firstEnvironment.settings.search.isCorpusEnabled = true
-        let firstCoordinator = firstEnvironment.make { FindCorpusCoordinator(documentState: firstEnvironment.documentState) }
+        let firstCoordinator = firstEnvironment.make { FindCorpusCoordinator(engine: firstEnvironment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(firstCoordinator) {} }
         _ = try await nextValue(from: firstCoordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
         let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         secondEnvironment.settings.search.isCorpusEnabled = true
-        let secondCoordinator = secondEnvironment.make { FindCorpusCoordinator(documentState: secondEnvironment.documentState) }
+        let secondCoordinator = secondEnvironment.make { FindCorpusCoordinator(engine: secondEnvironment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(secondCoordinator) {} }
 
         let history = try await nextValue(from: secondCoordinator.$finishedBuilds.asDriver(), timeout: 20) { !$0.isEmpty }
@@ -185,7 +187,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.clearedHistory", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$finishedBuilds.asDriver(), timeout: 60) { !$0.isEmpty }
 
@@ -203,7 +205,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.eviction", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
@@ -241,8 +243,8 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
-    /// The history learns of corpora other documents built from the
-    /// coverage. Full, it returned before remembering them as listed, so
+    /// The history learns of corpora built elsewhere from the coverage.
+    /// Full, it returned before remembering them as listed, so
     /// Clear History brought them all back at the next refresh — undoing,
     /// at capacity, what e7186ae1 was for (PR121.34). Three merges with no
     /// suspension point between them: the outcome is fixed.
@@ -251,7 +253,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.historyCapacity")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
         let summary = RuntimeInterfaceCorpusBuildSummary(objectCount: 1, skippedCount: 0, byteCount: 1)
         func coverage(ofImageCount imageCount: Int) -> RuntimeInterfaceCorpusCoverage {
@@ -281,7 +283,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.coalescedRefresh")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         // Starting asked for one; ten more arrive while it is in flight, as
@@ -299,14 +301,15 @@ struct FindCorpusCoordinatorTests {
     /// open: `.switchEngine` has nothing to walk back, so the coordinator never
     /// heard, and went on listing the corpora of the process that is gone as
     /// built — and skipping them when asked for (PR121.30, the part left to
-    /// batch S3b). An in-process engine goes through the same edge with
+    /// batch S3b). The coordinator hears of the new process from the engine
+    /// itself now. An in-process engine goes through the same edge with
     /// `stop()` and `connect()`; stopping it drops its corpora as well.
     @Test("the corpus coordinator starts over when the engine comes back while the document has nothing open")
     func engineComingBackAtTheImageListStartsTheCoordinatorOver() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.engineBack", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
         #expect(environment.documentState.currentImageNode == nil)
@@ -329,7 +332,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.limit", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.residentByteLimitMegabytes = 96
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         let coverage = try await waitForCoverage(of: engine) { $0.residentByteLimit == 96 * 1024 * 1024 }
@@ -347,7 +350,7 @@ struct FindCorpusCoordinatorTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.unindexed")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
         // Loaded in the test process, but this engine has not indexed it.
         let loadedImagePath = TestImages.libobjc
@@ -380,7 +383,7 @@ struct FindCorpusCoordinatorTests {
         engine.setDyldRootPathForTesting("/sim_root")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
         let rawPath = "/usr/lib/libobjc.A.dylib"
         let canonicalPath = "/sim_root/usr/lib/libobjc.A.dylib"

@@ -541,6 +541,19 @@ The project uses three Swift Package Manager packages:
 ### Key Architectural Patterns
 
 - **Document-Based App**: NSDocument architecture; each document creates its own `DocumentState` instance
+- **Engine work is shared by the documents on the engine**: each engine has one background indexing
+  coordinator and one Find corpus coordinator, held by every document on it
+  (`RuntimeEngineBackgroundWork`, handed out per engine by `RuntimeEngineBackgroundWorkRegistry`), so
+  the windows on one engine show one Report — the same running work, the same history — and only
+  windows on different engines show different ones. `DocumentState.backgroundIndexingCoordinator` /
+  `findCorpusCoordinator` return the coordinators of the engine the document is on, and anything that
+  binds to them follows `$runtimeEngine`: `.switchEngine` moves the document onto the new engine's
+  work before it assigns the engine. A document that closes or moves away only leaves — nothing is
+  cancelled while another document is on the engine — and the last one leaving cancels the engine's
+  work and drops its Report. Cancel, Cancel All and Clear History speak for every window on the
+  engine. Never give a document indexing or corpus state of its own again. A root already indexed
+  starts no batch at all. Background: `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
+  `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection

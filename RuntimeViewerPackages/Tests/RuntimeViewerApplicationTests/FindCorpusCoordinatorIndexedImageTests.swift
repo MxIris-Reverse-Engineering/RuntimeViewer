@@ -19,7 +19,7 @@ struct FindCorpusCoordinatorIndexedImageTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorIndexedImageTests.sidebarOpen")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
         // The coordinator's catch-up over the images indexed when it started
         // has nothing to find, and is over before the image gets indexed.

@@ -32,7 +32,7 @@ struct FindCorpusCoordinatorOlderPeerTests {
         try await engine.connect()
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { environment.documentState.findCorpusCoordinator }
         defer { withExtendedLifetime(coordinator) {} }
 
         coordinator.requestBuild(of: TestImages.libobjc)
@@ -53,10 +53,14 @@ struct FindCorpusCoordinatorOlderPeerTests {
         coordinator.requestBuild(of: TestImages.libobjc)
         #expect(coordinator.buildStatesByImagePath.isEmpty, "a request went out to a peer known not to serve it")
 
-        // …and another engine starts over.
+        // …and a document moved to another engine gets that engine's
+        // coordinator, which asks it as usual.
         let otherEngine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorOlderPeerTests.other")
-        environment.documentState.selectionRouter.trigger(.switchEngine(otherEngine))
-        #expect(coordinator.isCorpusUnsupportedByEngine == false)
+        environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(otherEngine)) }
+        let otherCoordinator = environment.make { environment.documentState.findCorpusCoordinator }
+        defer { withExtendedLifetime(otherCoordinator) {} }
+        #expect(otherCoordinator !== coordinator)
+        #expect(otherCoordinator.isCorpusUnsupportedByEngine == false)
         await engine.stop()
         await otherEngine.stop()
     }

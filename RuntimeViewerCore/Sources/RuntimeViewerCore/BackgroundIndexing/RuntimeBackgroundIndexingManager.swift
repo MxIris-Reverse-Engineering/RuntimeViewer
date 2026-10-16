@@ -170,6 +170,16 @@ public actor RuntimeBackgroundIndexingManager {
 
     /// Starts indexing `rootImagePath` and its dependencies down to `depth`.
     ///
+    /// A batch already under way for the same root is not started twice: its
+    /// identifier comes back instead. A root found to be indexed already
+    /// leaves nothing to do — the walk does not look past an indexed image —
+    /// so no batch is started: nothing is announced, the engine is not
+    /// reloaded, and `nil` comes back. Every document on an engine hears every
+    /// batch, so such a batch used to land in each one's Report as a row of 0
+    /// images whenever the rows were dispatched again — a second window
+    /// opening on the engine among those times — and each one's end reloaded
+    /// the engine.
+    ///
     /// `maxConcurrency` is the Max Concurrent Tasks setting and bounds the
     /// background loads of every batch together, not of this one alone; the
     /// value passed last is the one in force. Lowering it lets running loads
@@ -179,7 +189,7 @@ public actor RuntimeBackgroundIndexingManager {
         depth: Int,
         maxConcurrency: Int,
         reason: RuntimeIndexingBatchReason
-    ) async -> RuntimeIndexingBatchID {
+    ) async -> RuntimeIndexingBatchID? {
         backgroundLoadLimit = max(1, maxConcurrency)
         grantBackgroundLoadSlots()
 
@@ -199,7 +209,6 @@ public actor RuntimeBackgroundIndexingManager {
             return existingId
         }
 
-        let id = RuntimeIndexingBatchID()
         let items = await expandDependencyGraph(rootPath: rootImagePath, depth: depth)
 
         // Re-check after the suspension: actor reentrancy means another
@@ -218,6 +227,9 @@ public actor RuntimeBackgroundIndexingManager {
             return existingId
         }
 
+        guard !items.isEmpty else { return nil }
+
+        let id = RuntimeIndexingBatchID()
         let batch = RuntimeIndexingBatch(
             id: id, rootImagePath: rootImagePath, depth: depth,
             reason: reason, items: items,
@@ -230,8 +242,8 @@ public actor RuntimeBackgroundIndexingManager {
 
         // Read while the caller holds the engine, and kept by the driving task
         // for the batch's life: `engine` is `unowned`, and a cancelled batch —
-        // an engine swap cancels every batch of the engine it leaves — can end
-        // after nothing else holds that engine.
+        // the last document leaving an engine cancels every batch on it — can
+        // end after nothing else holds that engine.
         let engine = self.engine
 
         // `.utility` so the kernel's QoS-aware scheduler lets the main thread
@@ -259,10 +271,19 @@ public actor RuntimeBackgroundIndexingManager {
         return id
     }
 
+    /// The batch under way for `rootImagePath` that a request for the root can
+    /// share, if there is one.
+    ///
+    /// A cancelled batch is on its way out, however long its last load still
+    /// takes, so a request for its root starts a batch of its own. Handing it
+    /// back gave a dispatch made straight after the cancellation — the last
+    /// document leaving an engine and another coming onto it, Always Index
+    /// switched off and on — a batch about to end cancelled, and the row
+    /// counted as dispatched, so nothing indexed it again.
     private func findActiveBatchID(forRootImagePath rootImagePath: String)
         -> RuntimeIndexingBatchID? {
         activeBatches.first { _, state in
-            !state.batch.isFinished && state.batch.rootImagePath == rootImagePath
+            !state.batch.isFinished && !state.batch.isCancelled && state.batch.rootImagePath == rootImagePath
         }?.key
     }
 

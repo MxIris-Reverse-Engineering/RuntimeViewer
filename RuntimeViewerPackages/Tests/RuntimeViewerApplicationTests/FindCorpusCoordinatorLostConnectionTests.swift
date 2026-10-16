@@ -82,7 +82,7 @@ struct FindCorpusCoordinatorLostConnectionTests {
         let peer = try await Self.makeHoldingPeer(transport, label: "FindCorpusCoordinatorLostConnectionTests.\(transport.rawValue)", heldBuilds: heldBuilds)
         let environment = ViewModelTestEnvironment(runtimeEngine: peer.client)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        let coordinator = environment.make { FindCorpusCoordinator(engine: environment.documentState.runtimeEngine) }
         defer { withExtendedLifetime(coordinator) {} }
 
         coordinator.requestBuild(of: TestImages.libobjc)

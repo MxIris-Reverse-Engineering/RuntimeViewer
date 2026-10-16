@@ -13,8 +13,10 @@ import RuntimeViewerSettings
 /// first-level row, the newest work first, a spinner on whatever is still running.
 ///
 /// Generic over the sidebar level's route because the page is a tab of both levels; both read the
-/// document's `RuntimeBackgroundIndexingCoordinator` and `FindCorpusCoordinator`, so the two pages
-/// always agree.
+/// `RuntimeBackgroundIndexingCoordinator` and `FindCorpusCoordinator` of the engine the document is
+/// on, so the two pages always agree — and so does every window on that engine, since the engine's
+/// documents share both (`RuntimeEngineBackgroundWork`). Only windows on different engines show
+/// different Reports.
 public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
     @MemberwiseInit(.public)
     public struct Input {
@@ -49,7 +51,8 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         /// Nothing at all to report — no batch, no build, no feature turned off.
         public let isEmpty: Driver<Bool>
         /// Some row can be withdrawn from this page, so Cancel All has something to cancel. A
-        /// corpus build another window asked for is in progress, but not this page's to cancel.
+        /// corpus build another connection to the engine's process asked for is in progress, but
+        /// not this page's to cancel.
         public let hasCancellableWork: Driver<Bool>
         public let hasHistory: Driver<Bool>
     }
@@ -86,19 +89,29 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
     }
 
     public func transform(_ input: Input) -> Output {
-        let indexingCoordinator = documentState.backgroundIndexingCoordinator
-        let corpusCoordinator = documentState.findCorpusCoordinator
-
+        let documentState = documentState
         let treeBuilder = treeBuilder
         let isIndexingEnabled = $isIndexingEnabled.asObservable()
         let isCorpusEnabled = $isCorpusEnabled.asObservable()
         let isVisible = input.isVisible.asObservable().distinctUntilChanged()
+        // The coordinators of the engine the document is on, again after every move to another
+        // engine: `.switchEngine` moves the document onto the new engine's before it assigns the
+        // engine.
+        let coordinators = documentState.$runtimeEngine.asObservable()
+            .map { _ in
+                MainActor.assumeIsolated {
+                    (indexing: documentState.backgroundIndexingCoordinator, corpus: documentState.findCorpusCoordinator)
+                }
+            }
+            .share(replay: 1)
 
-        isVisible
-            .flatMapLatest { isVisible -> Observable<[ReportNode]> in
+        Observable.combineLatest(isVisible, coordinators)
+            .flatMapLatest { isVisible, coordinators -> Observable<[ReportNode]> in
                 // A page nobody sees builds nothing. Coming on screen replays the latest of every
                 // input, so the tree is current before the page is drawn.
                 guard isVisible else { return .empty() }
+                let indexingCoordinator = coordinators.indexing
+                let corpusCoordinator = coordinators.corpus
                 // Each kind is rebuilt from its own inputs only: a corpus build's progress leaves
                 // the indexing rows alone.
                 let indexingCategory = Observable.combineLatest(
@@ -138,19 +151,22 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             .bind(to: $allNodes)
             .disposed(by: rx.disposeBag)
 
-        isVisible
-            .filter { $0 }
-            .subscribeOnNext { _ in
-                corpusCoordinator.refreshCoverage()
+        Observable.combineLatest(isVisible, coordinators)
+            .filter { isVisible, _ in isVisible }
+            .subscribeOnNext { _, coordinators in
+                MainActor.assumeIsolated {
+                    coordinators.corpus.refreshCoverage()
+                }
             }
             .disposed(by: rx.disposeBag)
 
+        // The commands go to the engine's coordinators, so every window on the engine sees them.
         input.cancel.emitOnNext { node in
             switch node.identifier {
             case .indexingBatch(let batchID):
-                indexingCoordinator.cancelBatch(batchID)
+                documentState.backgroundIndexingCoordinator.cancelBatch(batchID)
             case .corpusBuild(let imagePath):
-                corpusCoordinator.cancelBuild(of: imagePath)
+                documentState.findCorpusCoordinator.cancelBuild(of: imagePath)
             case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild:
                 break
             }
@@ -158,8 +174,10 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         .disposed(by: rx.disposeBag)
 
         input.cancelAll.emitOnNext {
-            indexingCoordinator.cancelAllBatches()
-            // Only what this document asked for; another window's build is not this page's to stop.
+            documentState.backgroundIndexingCoordinator.cancelAllBatches()
+            // What the engine's documents asked for; a build another connection asked for is not
+            // this page's to stop.
+            let corpusCoordinator = documentState.findCorpusCoordinator
             for imagePath in corpusCoordinator.followedImagePaths {
                 corpusCoordinator.cancelBuild(of: imagePath)
             }
@@ -167,8 +185,8 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         .disposed(by: rx.disposeBag)
 
         input.clearHistory.emitOnNext {
-            indexingCoordinator.clearHistory()
-            corpusCoordinator.clearFinishedBuilds()
+            documentState.backgroundIndexingCoordinator.clearHistory()
+            documentState.findCorpusCoordinator.clearFinishedBuilds()
         }
         .disposed(by: rx.disposeBag)
 
@@ -223,10 +241,14 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             filteringChanged: filteringChangedRelay.asSignal(),
             isEmpty: $allNodes.asDriver().map(\.isEmpty).distinctUntilChanged(),
             hasCancellableWork: $allNodes.asDriver().map { nodes in nodes.contains(where: ReportOutline.isCancellable) }.distinctUntilChanged(),
-            hasHistory: Driver.combineLatest(indexingCoordinator.historyObservable.asDriver(onErrorJustReturn: []), corpusCoordinator.$finishedBuilds.asDriver()) { history, finishedBuilds in
-                !history.isEmpty || !finishedBuilds.isEmpty
-            }
-            .distinctUntilChanged()
+            hasHistory: coordinators
+                .flatMapLatest { coordinators in
+                    Observable.combineLatest(coordinators.indexing.historyObservable, coordinators.corpus.$finishedBuilds.asObservable()) { history, finishedBuilds in
+                        !history.isEmpty || !finishedBuilds.isEmpty
+                    }
+                }
+                .asDriver(onErrorJustReturn: false)
+                .distinctUntilChanged()
         )
     }
 
@@ -349,9 +371,10 @@ enum ReportOutline {
         cellViewModel.update(icon: icon(forImagePath: item.id), title: FindScope.imageName(of: item.id), detail: detail, status: status, toolTip: item.id, isInProgress: !item.state.isTerminal)
     }
 
-    /// `isFollowed`: this document asked for the build, so its progress reaches the row and Cancel
-    /// withdraws it. Any other build is the engine's last snapshot of it, for a window or a peer
-    /// this page cannot speak for: its numbers would sit still, and Cancel would do nothing.
+    /// `isFollowed`: the engine's corpus coordinator asked for the build — for whichever window on
+    /// the engine — so its progress reaches the row and Cancel withdraws it. Any other build is the
+    /// engine's last snapshot of it, for another connection to the engine's process that this page
+    /// cannot speak for: its numbers would sit still, and Cancel would do nothing.
     static func configure(_ cellViewModel: ReportCellViewModel, forCorpusOf imagePath: String, state: RuntimeInterfaceCorpusBuildState, isFollowed: Bool) {
         let detail: String
         let status: ReportRowStatus
@@ -367,7 +390,7 @@ enum ReportOutline {
             detail = "Waiting"
             status = .none
         }
-        let toolTip = isFollowed ? imagePath : "\(imagePath)\nRequested by another window"
+        let toolTip = isFollowed ? imagePath : "\(imagePath)\nRequested by another connection"
         cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: toolTip, isCancellable: isFollowed, isInProgress: true)
     }
 
