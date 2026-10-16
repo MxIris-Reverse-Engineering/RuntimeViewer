@@ -10,11 +10,14 @@
 		E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */; };
 		E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E994E3C72F325593009DD28A /* RuntimeViewerCore */; };
 		E9B10F080000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E080000000000000000 /* RuntimeViewerInjection */; };
+		E9C70F080000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E080000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9B10F090000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E090000000000000000 /* RuntimeViewerInjection */; };
+		E9C70F090000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E090000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */; };
 		E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */; };
 		E9CA7A1B000000000000000F /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000C /* RuntimeViewerCore */; };
 		E9CA7A1B0000000000000010 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000D /* RuntimeViewerInjection */; };
+		E9C70F0A0000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E0A0000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9CA7A1B0000000000000011 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000E /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
 
@@ -47,6 +50,7 @@
 			files = (
 				E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */,
 				E9B10F080000000000000000 /* RuntimeViewerInjection in Frameworks */,
+				E9C70F080000000000000000 /* RuntimeViewerCrossReferences in Frameworks */,
 				E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -57,6 +61,7 @@
 			files = (
 				E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */,
 				E9B10F090000000000000000 /* RuntimeViewerInjection in Frameworks */,
+				E9C70F090000000000000000 /* RuntimeViewerCrossReferences in Frameworks */,
 				E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -67,6 +72,7 @@
 			files = (
 				E9CA7A1B000000000000000F /* RuntimeViewerCore in Frameworks */,
 				E9CA7A1B0000000000000010 /* RuntimeViewerInjection in Frameworks */,
+				E9C70F0A0000000000000000 /* RuntimeViewerCrossReferences in Frameworks */,
 				E9CA7A1B0000000000000011 /* RuntimeViewerUtilities in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -180,6 +186,7 @@
 			packageProductDependencies = (
 				E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */,
 				E9B10E080000000000000000 /* RuntimeViewerInjection */,
+				E9C70E080000000000000000 /* RuntimeViewerCrossReferences */,
 				E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerServer;
@@ -206,6 +213,7 @@
 			packageProductDependencies = (
 				E994E3C72F325593009DD28A /* RuntimeViewerCore */,
 				E9B10E090000000000000000 /* RuntimeViewerInjection */,
+				E9C70E090000000000000000 /* RuntimeViewerCrossReferences */,
 				E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerServer;
@@ -232,6 +240,7 @@
 			packageProductDependencies = (
 				E9CA7A1B000000000000000C /* RuntimeViewerCore */,
 				E9CA7A1B000000000000000D /* RuntimeViewerInjection */,
+				E9C70E0A0000000000000000 /* RuntimeViewerCrossReferences */,
 				E9CA7A1B000000000000000E /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerMobileServer;
@@ -938,9 +947,17 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
 		};
+		E9C70E080000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
+		};
 		E9B10E090000000000000000 /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
+		};
+		E9C70E090000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
 		};
 		E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -957,6 +974,10 @@
 		E9CA7A1B000000000000000D /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
+		};
+		E9C70E0A0000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
 		};
 		E9CA7A1B000000000000000E /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -4,6 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
 import RuntimeViewerInjection
+import RuntimeViewerCrossReferences
 import RuntimeViewerMCPBridge
 import RuntimeViewerSimulatorInstaller
 
@@ -57,6 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // daemon rather than a `RuntimeInjectionService`, so there is no
         // service to hand over here.
         RuntimeInjection.install()
+        // The cross-reference commands, by the same rule and for the same
+        // reason.
+        RuntimeCrossReferences.install()
 
         let application = autoreleasepool {
             @Dependency(\.mainMenuController) var mainMenuController

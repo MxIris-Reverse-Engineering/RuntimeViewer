@@ -2,6 +2,7 @@ import UIKit
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerCrossReferences
 
 @Loggable
 @main
@@ -14,6 +15,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // below for injection capability as soon as it can reach them, and the
         // answer comes from this registration.
         InjectionServiceRegistrar.registerIfAvailable()
+        // The cross-reference commands, before any engine for the same reason:
+        // a host asking this device's engines for callers is answered here.
+        RuntimeCrossReferences.install()
         // Also before anything else: from here on this process keeps answering
         // after it leaves the foreground, which is what makes an attach from
         // the Mac possible without first bringing the app forward on the

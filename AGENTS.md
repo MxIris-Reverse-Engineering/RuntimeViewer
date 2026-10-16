@@ -454,6 +454,12 @@ The project uses three Swift Package Manager packages:
   visionOS. **Every process that serves an engine and links this module must call
   `RuntimeInjection.install()` once at its entry point**, including the ones that cannot inject;
   see *Injection commands* below
+- `RuntimeViewerCrossReferences` — cross references (callers and callees) read from arm64 machine
+  code, as a RuntimeEngine command extension over MachOSwiftSection's `CrossReferenceAnalysis`:
+  the wire types (`RuntimeCrossReferenceSubject`, `RuntimeCrossReference`, …), the two commands
+  and the engine-side on-demand scan. Same obligation as the injection module:
+  `RuntimeCrossReferences.install()` once at every serving process's entry point; see
+  *Injection commands* below. Background: `Documentations/Evolutions/draft-cross-references.md`
 - `RuntimeViewerCoreObjC` — Objective-C interop utilities (internal target)
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
@@ -727,6 +733,16 @@ duplicate wire name; those two log lines are the only trail this failure leaves.
 one — only the jailbroken iOS variant does; macOS injects through the privileged helper daemon
 instead. Passing `nil` never clears a service already recorded, so the order of two calls in one
 process does not matter.
+
+**The cross-reference commands follow the same rule.** `crossReferenceCallees` and
+`crossReferenceCallers` live in `RuntimeViewerCrossReferences`, and every place in the table above
+calls `RuntimeCrossReferences.install()` right after `RuntimeInjection.install()` — the iOS apps in
+their `AppDelegate`, right after `InjectionServiceRegistrar.registerIfAvailable()`. Skipping it
+fails the same silent way: the engine has no handler, and a host cannot tell it from an older
+peer. A new process that serves an engine links both modules and makes both calls. The commands
+run in the process that serves the engine, because the scan reads that process's own images and
+the shared cache it maps: the local-runtime service answers for "My Mac", an injected payload for
+the process it was injected into.
 
 ## SourceEditor Module
 

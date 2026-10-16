@@ -86,6 +86,14 @@ let package = Package(
             name: "RuntimeViewerInjection",
             targets: ["RuntimeViewerInjection"],
         ),
+        // Cross references read from machine code, as a RuntimeEngine command
+        // extension. Separate from `RuntimeViewerCore` for the same reason as
+        // `RuntimeViewerInjection`: Core knows nothing of the commands, and
+        // the injected payload links it too.
+        .library(
+            name: "RuntimeViewerCrossReferences",
+            targets: ["RuntimeViewerCrossReferences"],
+        ),
     ],
     dependencies: [
         .package(
@@ -113,9 +121,11 @@ let package = Package(
                 path: "../../MachOSwiftSection",
                 isRelative: true,
             ),
+            // The cross references feature branch, until MachOSwiftSection
+            // releases `CrossReferenceAnalysis`; then back to the release pin.
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                branch: "next"
+                branch: "feature/cross-reference-analysis"
             ),
         ),
         .package(
@@ -275,6 +285,20 @@ let package = Package(
             ],
         ),
         .target(
+            name: "RuntimeViewerCrossReferences",
+            dependencies: [
+                "RuntimeViewerCore",
+                "RuntimeViewerCommunication",
+                .product(name: "CrossReferenceAnalysis", package: "MachOSwiftSection"),
+                .product(name: "Demangling", package: "swift-demangling"),
+                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
+            ],
+            swiftSettings: [
+                .internalImportsByDefault,
+                .immutableWeakCaptures,
+            ],
+        ),
+        .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
                 "RuntimeViewerObjC",
@@ -304,6 +328,15 @@ let package = Package(
                 "RuntimeViewerInjection",
                 "RuntimeViewerCore",
                 "RuntimeViewerCommunication",
+            ],
+        ),
+        .testTarget(
+            name: "RuntimeViewerCrossReferencesTests",
+            dependencies: [
+                "RuntimeViewerCrossReferences",
+                "RuntimeViewerCore",
+                "RuntimeViewerCommunication",
+                .product(name: "CrossReferenceAnalysis", package: "MachOSwiftSection"),
             ],
         ),
     ],

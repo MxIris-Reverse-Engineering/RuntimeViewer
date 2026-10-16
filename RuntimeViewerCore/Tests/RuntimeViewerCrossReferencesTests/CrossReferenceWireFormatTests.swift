@@ -1,0 +1,103 @@
+import Testing
+import Foundation
+import RuntimeViewerCore
+@testable import RuntimeViewerCrossReferences
+
+/// The commands cross a process boundary between two builds — the app and an
+/// XPC service, a host and an injected payload — so the names and the encoded
+/// form are a contract, not an implementation detail.
+@Suite("Cross-reference command wire format")
+struct CrossReferenceWireFormatTests {
+    @Test("Command names are the documented strings")
+    func commandNames() {
+        let prefix = "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine."
+        #expect(RuntimeEngine.CommandName.crossReferenceCallees.commandName == prefix + "crossReferenceCallees")
+        #expect(RuntimeEngine.CommandName.crossReferenceCallers.commandName == prefix + "crossReferenceCallers")
+    }
+
+    @Test("Request types name their own command")
+    func requestTypesNameTheirCommand() {
+        #expect(RuntimeCrossReferences.CalleesCommand.commandName == RuntimeEngine.CommandName.crossReferenceCallees.commandName)
+        #expect(RuntimeCrossReferences.CallersCommand.commandName == RuntimeEngine.CommandName.crossReferenceCallers.commandName)
+        // Cancelling a caller must stop a scan of thousands of images where it
+        // runs, not only where it was asked.
+        #expect(RuntimeCrossReferences.CallersCommand.cancelsAcrossConnections)
+    }
+
+    @Test("A callers request survives a round trip")
+    func callersRequestRoundTrip() throws {
+        let command = RuntimeCrossReferences.CallersCommand(
+            subject: .function(imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", address: 0x1_8AE3_35C0),
+            scope: .allImages,
+            options: RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: true, receiverClassName: "NSWindow", resultLimit: 200)
+        )
+        let decoded = try JSONDecoder().decode(RuntimeCrossReferences.CallersCommand.self, from: JSONEncoder().encode(command))
+        #expect(decoded.subject == command.subject)
+        #expect(decoded.scope == command.scope)
+        #expect(decoded.options == command.options)
+    }
+
+    @Test("Every subject survives a round trip", arguments: [
+        RuntimeCrossReferenceSubject.function(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x1_8000_1000),
+        .selector("makeKeyAndOrderFront:"),
+    ])
+    func subjectRoundTrip(_ subject: RuntimeCrossReferenceSubject) throws {
+        #expect(try roundTrip(subject) == subject)
+    }
+
+    @Test("A result with every kind of target survives a round trip")
+    func resultRoundTrip() throws {
+        let caller = RuntimeFunctionReference(
+            imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+            address: 0x1_8AE3_35C0,
+            displayName: "-[NSWindow makeKeyAndOrderFront:]",
+            symbolName: "-[NSWindow makeKeyAndOrderFront:]",
+            member: nil,
+            foldedSymbolCount: 0
+        )
+        let unnamed = RuntimeFunctionReference(imagePath: caller.imagePath, address: 0x1_8AE3_0000, displayName: nil, symbolName: nil, member: nil, foldedSymbolCount: 0)
+        let targets: [RuntimeCrossReferenceTarget] = [
+            .function(unnamed),
+            .importedSymbol(name: "_CFRelease"),
+            .selector(name: "orderWindow:relativeTo:", receiverClassName: "NSWindow"),
+            .selector(name: "count", receiverClassName: nil),
+            .type(name: "NSWindow", object: nil),
+            .indirect(tableOffset: 0x30, pointerAuthenticationConstant: 0x60F0),
+            .unrecognizedCode(address: 0x1234),
+        ]
+        let result = RuntimeCrossReferenceQueryResult(
+            references: targets.enumerated().map { index, target in
+                RuntimeCrossReference(
+                    referencingFunction: caller,
+                    instructionAddress: caller.address + UInt64(index * 4),
+                    kind: .call,
+                    target: target,
+                    precision: .exact,
+                    isRuntimeHelperCall: false
+                )
+            },
+            isComplete: false
+        )
+        #expect(try roundTrip(result) == result)
+    }
+
+    @Test("Errors keep their meaning across a round trip of their description")
+    func errorsDescribeThemselves() {
+        // A handler's thrown error reaches the host as its description only, so
+        // every case must say what went wrong on its own.
+        let errors: [RuntimeCrossReferenceError] = [
+            .unsupportedArchitecture,
+            .imageNotFound(path: "/nowhere"),
+            .functionNotFound(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x10),
+            .memberNotFound(objectName: "NSObject", memberName: "nothing"),
+            .selectorHasNoCallees("count"),
+        ]
+        for error in errors {
+            #expect(error.errorDescription?.isEmpty == false)
+        }
+    }
+
+    private func roundTrip<Value: Codable>(_ value: Value) throws -> Value {
+        try JSONDecoder().decode(Value.self, from: JSONEncoder().encode(value))
+    }
+}

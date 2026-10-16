@@ -1,5 +1,6 @@
 import RuntimeViewerCommandLineInterface
 import RuntimeViewerInjection
+import RuntimeViewerCrossReferences
 
 /// The whole executable: everything else lives in the library so a second
 /// entry point (the copy embedded in the app bundle) is the same three lines.
@@ -16,6 +17,9 @@ enum RuntimeViewerCommandLineMain {
         // privileged helper daemon, and a capability query answered honestly
         // is what tells a host that.
         RuntimeInjection.install()
+        // The cross-reference commands too: the host's engines answer them in
+        // this process.
+        RuntimeCrossReferences.install()
         await RuntimeViewerCommandLineTool.main()
     }
 }

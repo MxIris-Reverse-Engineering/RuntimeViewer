@@ -22,8 +22,11 @@
 		E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */; };
 		E9AB8550306F733800D32891 /* RuntimeViewerServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E97BF5C62F82C386006943C2 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9B10F050000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E050000000000000000 /* RuntimeViewerInjection */; };
+		E9C70F050000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E050000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9B10F060000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E060000000000000000 /* RuntimeViewerInjection */; };
+		E9C70F060000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E060000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9B10F070000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E070000000000000000 /* RuntimeViewerInjection */; };
+		E9C70F070000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E070000000000000000 /* RuntimeViewerCrossReferences */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -133,6 +136,7 @@
 				E9A9CCDA2F5D82AE00A10DD3 /* RuntimeViewerUtilities in Frameworks */,
 				E9038FC32C31A8810051B6AC /* RuntimeViewerUI in Frameworks */,
 				E9B10F050000000000000000 /* RuntimeViewerInjection in Frameworks */,
+				E9C70F050000000000000000 /* RuntimeViewerCrossReferences in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -143,6 +147,7 @@
 				E9A9CCD82F5D82A700A10DD3 /* RuntimeViewerUtilities in Frameworks */,
 				E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */,
 				E9B10F060000000000000000 /* RuntimeViewerInjection in Frameworks */,
+				E9C70F060000000000000000 /* RuntimeViewerCrossReferences in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -154,6 +159,7 @@
 				E9AB8518306F733800D32891 /* RuntimeViewerApplication in Frameworks */,
 				E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */,
 				E9B10F070000000000000000 /* RuntimeViewerInjection in Frameworks */,
+				E9C70F070000000000000000 /* RuntimeViewerCrossReferences in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -226,6 +232,7 @@
 				E985A9D52D9AF52E005A573C /* RuntimeViewerCore */,
 				E9A9CCD92F5D82AE00A10DD3 /* RuntimeViewerUtilities */,
 				E9B10E050000000000000000 /* RuntimeViewerInjection */,
+				E9C70E050000000000000000 /* RuntimeViewerCrossReferences */,
 			);
 			productName = RuntimeViewerUsingVision;
 			productReference = E9038F982C31A81F0051B6AC /* RuntimeViewer.app */;
@@ -251,6 +258,7 @@
 				E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */,
 				E9A9CCD72F5D82A700A10DD3 /* RuntimeViewerUtilities */,
 				E9B10E060000000000000000 /* RuntimeViewerInjection */,
+				E9C70E060000000000000000 /* RuntimeViewerCrossReferences */,
 			);
 			productName = RuntimeViewerUsingUIKit;
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewer.app */;
@@ -279,6 +287,7 @@
 				E9AB8514306F733800D32891 /* RuntimeViewerUtilities */,
 				E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */,
 				E9B10E070000000000000000 /* RuntimeViewerInjection */,
+				E9C70E070000000000000000 /* RuntimeViewerCrossReferences */,
 			);
 			productName = "RuntimeViewerUsingUIKit-JB";
 			productReference = E9AB851E306F733800D32891 /* RuntimeViewerJailbroken.app */;
@@ -868,13 +877,25 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
 		};
+		E9C70E050000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
+		};
 		E9B10E060000000000000000 /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
 		};
+		E9C70E060000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
+		};
 		E9B10E070000000000000000 /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
+		};
+		E9C70E070000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

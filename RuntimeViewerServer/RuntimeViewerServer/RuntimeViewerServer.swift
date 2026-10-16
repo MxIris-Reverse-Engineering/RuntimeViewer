@@ -3,6 +3,7 @@ import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerInjection
+import RuntimeViewerCrossReferences
 import RuntimeViewerUtilities
 
 #if canImport(UIKit)
@@ -54,6 +55,9 @@ private enum RuntimeViewerServer {
         // honest "no" instead of a dispatch failure that reads as an outdated
         // peer.
         RuntimeInjection.install()
+        // The cross-reference commands as well: a callers query asked of this
+        // engine scans the images of the process the payload was injected into.
+        RuntimeCrossReferences.install()
         #log(.default, "Attach successfully")
         Task {
             do {

@@ -11,6 +11,7 @@ let localPackageTargetNames = [
     "RuntimeViewerCore",
     "RuntimeViewerCommunication",
     "RuntimeViewerInjection",
+    "RuntimeViewerCrossReferences",
     "RuntimeViewerUtilities",
     // RuntimeViewerPackages
     "RuntimeViewerArchitectures",

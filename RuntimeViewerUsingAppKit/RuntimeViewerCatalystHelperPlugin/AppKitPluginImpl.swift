@@ -5,6 +5,7 @@ import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerCatalystExtensions
 import RuntimeViewerInjection
+import RuntimeViewerCrossReferences
 
 extension NSObject {
     @objc func rvch_makeKeyAndOrderFront(_ sender: Any?) {}
@@ -54,6 +55,7 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
         // query, or the app cannot tell this helper apart from one built before
         // these commands existed.
         RuntimeInjection.install()
+        RuntimeCrossReferences.install()
 
         let runtimeEngine = RuntimeEngine(source: .macCatalystServer)
         self.runtimeEngine = runtimeEngine
@@ -76,6 +78,7 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
     func runService() {
         // Before the engine is built, for the reason given in `launch()`.
         RuntimeInjection.install()
+        RuntimeCrossReferences.install()
 
         // Nothing in the service is a UIKit application, so it starts without
         // UIKit and the hundreds of images behind it, and its image list would

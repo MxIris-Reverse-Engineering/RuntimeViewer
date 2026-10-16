@@ -5,7 +5,7 @@
 - **创建日期**: 2026-10-16
 - **最后更新**: 2026-10-16
 - **所属愿景**: 无（CLI 与 MCP 部分沿用[《无头 RuntimeViewer》](../Visions/HeadlessRuntimeViewer.md)「GUI、命令行与 MCP 三个前端共用同一套命令词汇」的取向，但不推进该愿景的步骤）
-- **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案（动工时创建）
+- **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案 `draft-cross-reference-analysis`（在 MachOSwiftSection 仓库，分支 `feature/cross-reference-analysis`）
 - **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）
 - **配套文档**: 待定 —— 落地时判断：CLI / MCP 的目标写法与精度标注是否需要使用指南；两种桩布局、鉴别常量反查这些解析规则是否需要实现说明
 
@@ -208,6 +208,7 @@ SwiftUICore 里的两种典型形态：
 ### 验证过什么、还没验证什么
 
 - 已验证：上文标「实测」的各条，以及「落地第一步的核实」里的各条。
+- 第 3 步验证过的：见「第 3 步的落地记录」。
 - 未验证：真机上 App 进程能否读到 `.symbols`；26.x 及更早的缓存里 selector 引用是否唯一化（只在 27.2 上测过）；核心更少的机器上的实际扫描时间（只在 28 核机器上用 4、8 线程模拟过）。
 
 ## 提议方案
@@ -434,10 +435,15 @@ public enum RuntimeCrossReferencePrecision: String, Hashable, Codable, Sendable 
 }
 
 public enum RuntimeCrossReferenceTarget: Hashable, Codable, Sendable {
+    /// Named or not: an unnamed function is a function reference whose names are `nil`.
     case function(RuntimeFunctionReference)
+    /// A stub whose slot could not be followed, by the symbol it imports.
+    case importedSymbol(name: String)
     case selector(name: String, receiverClassName: String?)
     case type(name: String, object: RuntimeObject?)
-    case unnamedCode(imagePath: String, address: UInt64)
+    case indirect(tableOffset: Int64?, pointerAuthenticationConstant: UInt16?)
+    /// A branch to code no image holds, or data in `__text` that decoded as one.
+    case unrecognizedCode(address: UInt64)
 }
 
 public struct RuntimeCrossReference: Hashable, Codable, Sendable {
@@ -471,15 +477,26 @@ public struct RuntimeCrossReferenceQueryOptions: Hashable, Codable, Sendable {
     public var resultLimit: Int?
 }
 
+/// Carries what the images finished since the last report held: over a whole query the
+/// reports add up to the result, so a caller that stops waiting keeps what it saw.
 public struct RuntimeCrossReferenceQueryProgress: Hashable, Codable, Sendable {
     public let scannedImageCount: Int
     public let totalImageCount: Int
+    public let references: [RuntimeCrossReference]
 }
 
 public struct RuntimeCrossReferenceQueryResult: Hashable, Codable, Sendable {
     public let references: [RuntimeCrossReference]
-    /// `false` when a limit, a time budget or a cancellation cut the scan short.
+    /// `false` when `resultLimit` cut the scan short.
     public let isComplete: Bool
+}
+
+public enum RuntimeCrossReferenceError: Error, LocalizedError, Sendable, Equatable {
+    case unsupportedArchitecture
+    case imageNotFound(path: String)
+    case functionNotFound(imagePath: String, address: UInt64)
+    case memberNotFound(objectName: String, memberName: String)
+    case selectorHasNoCallees(String)
 }
 ```
 
@@ -496,43 +513,53 @@ extension RuntimeEngine {
     /// Who references `subject` within `scope`.
     public func callers(
         of subject: RuntimeCrossReferenceSubject,
-        in scope: RuntimeCrossReferenceScope,
-        options: RuntimeCrossReferenceQueryOptions,
-        reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
+        in scope: RuntimeCrossReferenceScope = .allImages,
+        options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
+        reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult
 
-    /// Which functions reference the type `object` within `scope`.
+    /// Which functions reference the type `object` within `scope`. Not yet: arrives with
+    /// MachOSwiftSection's second batch, which reads type references (see below).
     public func typeReferences(
         to object: RuntimeObject,
         in scope: RuntimeCrossReferenceScope,
         options: RuntimeCrossReferenceQueryOptions,
-        reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
+        reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)?
     ) async throws -> RuntimeCrossReferenceQueryResult
 }
 
 extension RuntimeEngine.CommandName {
     static let crossReferenceCallees = Self("crossReferenceCallees")
     static let crossReferenceCallers = Self("crossReferenceCallers")
-    static let crossReferenceTypeReferences = Self("crossReferenceTypeReferences")
+    // With the type references: crossReferenceTypeReferences
 }
 ```
 
 - 线上名字保留 Core 的命名空间前缀（`RuntimeViewerInjection` 的 `RuntimeInjection+CommandNames.swift` 讲了原因：拼出来的完整字符串就是线上契约）。
-- `callers` 与 `typeReferences` 是 `RuntimeEngineProgressCommand`，并把 `cancelsAcrossConnections` 设为 `true`：调用方一取消，请求就从提供服务的那一端撤回。
+- `callers`（以及将来的 `typeReferences`）是 `RuntimeEngineProgressCommand`，并把 `cancelsAcrossConnections` 设为 `true`：调用方一取消，请求就从提供服务的那一端撤回。
+- **第 3 步只落地了 `callees` 与 `callers`。** MachOSwiftSection 第一批的扫描器还不产生类型引用（`typeMetadataAccessor`、`mangledTypeName`、`objectiveCClass` 三种目标有声明、没人产出），先上一个只认得 Swift 元数据访问器调用的 `typeReferences`，等第二批补齐时它的结果含义会变，所以这个命令和第二批一起来。
 - 旧引擎（没有这个扩展的载荷、旧版 App 的对端）对这些命令没有处理器，派发会失败；前端统一显示「这个引擎不支持交叉引用（需要更新载荷或 App）」，与注入能力查询的处理方式一致。
 
 ### 6. 查询路径
 
-**调了谁**：在 subject 所在的镜像里找到函数——成员沿用 `memberAddresses` 的取法得到实现地址，ObjC 方法用 IMP；selector 作为 subject 没有意义，直接报错——然后只解码这一个函数。按 AppKit 的平均值，解码一个函数约 1 微秒。
+查询在提供引擎的那个进程里执行：扫描读的是这个进程自己映射的镜像和共享缓存。App 的「My Mac」由本地运行时 service 回答，注入的载荷回答它所在的进程。分析器（MachOSwiftSection 的 `CrossReferenceAnalyzer`）是进程镜像的快照，每次查询前比对一遍缓存外已加载的镜像，变了就换一个新的，此前的扫描结果一并作废（镜像序号可能变了）。
 
-**本库的调用者与类型引用**：第一次查某个镜像时，把它的全部函数（有名字的和没名字的）扫一遍，把「目标 → 引用」的反向表留在引擎进程里。每个镜像一份，会话内有效，按字节预算做 LRU 淘汰，做法与 Find 语料相同。实测单线程扫一个 AppKit（19 MiB 代码）约 0.1 秒，全缓存平均每个镜像约 6 毫秒。
+**调了谁**：在 subject 所在的镜像里找到函数，然后只解码这一个函数。按 AppKit 的平均值，解码一个函数约 1 微秒。
 
-**跨库查询**（一律按需扫描，不做存盘索引）：
+- 成员经 `memberAddresses` 取实现地址，但那个接口为搜索框服务、按子串匹配，这里只认名字、种类、静态性都对得上的行：ObjC 方法一个函数，属性取 getter 与 setter，Swift 变量与下标取全部访问器，函数取全部同名重载（成员列表本来就不区分重载），初始化方法取 `init` 与 `allocator` 两种行。ivar、字段、枚举 case 没有代码，报「成员不存在」。
+- selector 作为 subject 没有被调，直接报错。
+- 被调目标的函数名需要目标镜像的函数表；分析器会记住这些表，记满 64 个镜像就换一个同样镜像集合的新分析器，把表放掉（镜像序号不变，扫描结果仍然有效）。
 
-1. 预筛：导出符号 → 导入了它的镜像（符号表里的未定义符号）；ObjC 方法 → 引用了这个 selector 的镜像（`__objc_selrefs`）；类型 → 导入了它的类型描述符（`$s…Mn`）、元数据访问器（`$s…Ma`）或 `_OBJC_CLASS_$_…` 的镜像；不导出的函数 → 只有它所在的镜像。候选镜像取自 `DyldCacheLoaded.machOImages()`，再加上进程里已加载的非缓存镜像。实测按 selector 筛，中位数只剩 1 个镜像，第 99 百分位 15 个，最多 2,758 个（`init`）。
-2. 在引擎进程里有界并发地扫描候选镜像（并发数取处理器核数），复用已缓存的反向表，按镜像报告进度，结果随到随出。最坏情况是扫完整个缓存：实测 28 核约 1 秒，4 个线程约 4 秒。
-3. 取消与时限：调用方取消即撤回（`cancelsAcrossConnections`）；MCP 的 30 秒或 CLI 的 `--timeout` 一到，就返回已有结果并标 `isComplete == false`。扫完的镜像留在缓存里，重试会接着扫剩下的。
-4. 内存：全缓存去重后的「函数 → 目标」边约 5,200 万条（有名字和没名字的函数各占一半），全部留在内存里约要 600 MB，所以按字节预算淘汰。最热的几个 selector 每次都可能要重扫一部分镜像，这是不做存盘索引的代价。
+**谁调了它**（本库与跨库同一条路，一律按需扫描，不做存盘索引）：
+
+1. 预筛：函数 → 它自己的镜像，加上导入了它任一个符号名（含代码合并留下的别名）的镜像；ObjC 方法另加引用了它 selector 的镜像（`__objc_selrefs`）；selector → 引用了它的镜像。类型的预筛随类型引用一起做。实测按 selector 筛，中位数只剩 1 个镜像，第 99 百分位 15 个，最多 2,758 个（`init`）。预筛「不漏」由 MachOSwiftSection 的抽样测试保证：在预筛丢掉的镜像里每 16 个扫 1 个，不许有一处引用。
+2. 有界并发地扫描候选镜像，每个镜像只留命中这个 subject 的引用（`references(to:inImageAt:)`），不建整镜像的反向表——库第一批实测一张 AppKit 的整表约 100 MB，并发建整表的峰值会让分配器留下上 GB 的脏页。并发数取处理器核数减一，给进程里其他工作留一个协作线程。每扫完一个镜像报一次进度，进度里带着这个镜像的结果；调用方中途放弃时，手里已经有这些。
+3. 取消与时限：调用方取消即撤回（`cancelsAcrossConnections`），扫描在下一个镜像前停下并抛出取消。`resultLimit` 到了就停，结果标 `isComplete == false`。MCP 的 30 秒与 CLI 的 `--timeout` 由前端实现：到时取消，用进度里已收到的结果。
+4. 会话内的扫描缓存：按「查询键 → 各镜像的命中」存，64 MB 预算，按最近使用淘汰。同一个主体再查一次（重试、调用层级的同一节点展开两次），已扫过的镜像直接用，只扫剩下的。单个主体的结果超出预算（`init` 的调用者）就不缓存，每次重扫——这是不做存盘索引的代价。
+
+**ObjC 发送的精度**（第 4 节规则的落地）：查某个方法的调用者时，selector 相同的发送逐条判断。接收者是发送方法自己的 `self` 时，发送方法是类方法则接收者是类对象、否则是实例；类对象够不到实例方法（根类 `NSObject`、`NSProxy` 的实例方法除外，按名字认），实例够不到类方法，这两种排除。类名与目标方法相同记「确定」，不同记「按 selector」（可能是子类，不查类层级）；接收者未知记「按 selector」；super 发送不知道父类，记「按 selector」。代码合并把多个方法并成一个函数时，按其中任何一个能够到就算。直接按 selector 查时，每处发送都是「确定」。
+
+**跨镜像的 Swift 虚方法与协议方法**：调用经导出的 dispatch thunk（`…Tj`）进来，第 3 步还没把 thunk 当作调用者的入口，这类调用者要等第三批（间接调用与候选目标）一起补上。
 
 原设计在这里还有「全量索引」（由本地运行时 service 在第一次跨库查询时建好、按缓存 UUID 存进 `~/Library/Caches`）和「路由」（`RuntimeCrossReferenceRouter`）两部分。落地第一步实测扫完整个缓存只要 1–4 秒，用户据此决定不做存盘索引，这两部分连同 Report 导航页的索引条目一并删去，理由见决策日志。
 
@@ -661,7 +688,7 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 
 1. **核实前提**（已完成，结论见「前期调研 › 落地第一步的核实」）：在 App 进程里读取一个未加载缓存镜像的 `__text` 与符号表；测量 Capstone 与手写解码在 AppKit / SwiftUICore 上的吞吐，估算全量扫描的耗时与规模；对照编译器源码核实 arm64e 鉴别常量能否反查到声明；核实 iOS 真机与 Simulator 上本地符号放在哪里。任何一条结论推翻了设计，就回到本提案修改，并重新确认。
 2. **MachOSwiftSection 的库提案与 `CrossReferenceAnalysis`**：函数表与命名、单函数的引用提取、两种桩布局（镜像自带的桩与全缓存共用的桩）与 selector 解析、类型引用、鉴别常量反查、运行时辅助调用分类、预筛。批量扫描用手写解码，写 fixture 测试，并以 Capstone 的结果和 `dyld_info` / IDA 抽样作对照。然后发版。
-3. **`RuntimeViewerCrossReferences` 模块**：线上类型与命令；在 `AGENTS.md`「Injection commands」那张表列出的全部入口调用 `install()`，并把这条义务写进 `AGENTS.md`；本库扫描与会话缓存；跨库按需扫描（预筛、并发、进度、取消）。
+3. **`RuntimeViewerCrossReferences` 模块**：线上类型与命令；在 `AGENTS.md`「Injection commands」那张表列出的全部入口调用 `install()`，并把这条义务写进 `AGENTS.md`；本库扫描与会话缓存；跨库按需扫描（预筛、并发、进度、取消）。**已完成（2026-10-16）**，`typeReferences` 除外（随 MachOSwiftSection 第二批），记录见「第 3 步的落地记录」。
 4. **CLI 与 MCP**：三个子命令、三个工具，agent 插件的 skill 与版本号，以及 `Guides/CommandLineInterface.md`。
 5. **Find 导航页的三种模式**：逆向 Xcode 27 的 Call Hierarchy 来对齐界面；结果树、范围控件、精度标记、运行时调用开关；按 `RuntimeViewerApplicationTests` 的规则写 ViewModel 契约测试。
 6. **内容区右键与 Inspector 的 References 标签**：成员按行对齐、两条文本路径的菜单、光标所在成员、标签本身及其 ViewModel 测试。
@@ -674,6 +701,34 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 
 - **要不要配套专题文章** —— 预计需要：一份使用指南（目标写法、精度标注的含义、哪些引用静态看不见），一份实现说明（两种桩布局、鉴别常量反查与无符号函数的处理规则）。写了就登记到头部的「配套文档」。
 - **有没有引入新术语** —— 预计有：交叉引用、按需扫描与预筛、候选目标、运行时辅助调用、全缓存共用桩、无符号函数。同批次登记进 `Documentations/Glossary.md`。
+
+## 第 3 步的落地记录（2026-10-16）
+
+**落地内容。** `RuntimeViewerCore` 包新增 target 与 product `RuntimeViewerCrossReferences`：线上类型（第 5 节）、两个命令 `crossReferenceCallees` / `crossReferenceCallers`、引擎侧的查询（`CrossReferenceQuery`）、进程级的会话（`CrossReferenceSession`：分析器与扫描缓存）、ObjC 发送的精度规则（`ObjectiveCSendMatching`）和命名（`CrossReferenceNaming`）。`RuntimeCrossReferences.install()` 接进了 `AGENTS.md` 那张表的全部七个进程、八处入口，义务写进了 `AGENTS.md`；三个 Xcode 工程里链接注入模块的 10 个 target、CLI 包的可执行 target 和 Tuist 描述的 6 个 target 都加上了新 product。MachOSwiftSection 临时钉在功能分支 `feature/cross-reference-analysis`，五份被跟踪的锁文件（Core、Packages、CommandLine 三个包，Debug 与 Distribution 两个 workspace）只有这一条 pin 变了（`RuntimeViewerServer.xcodeproj` 自带的那份本来就远落后于 workspace，没有动）；MachOSwiftSection 发版后改回版本钉。
+
+**与设计的出入**（第 5、6 节已按实现改写）：
+
+- `typeReferences` 推迟到 MachOSwiftSection 第二批：第一批的扫描器还不产生类型引用。
+- 不建整镜像的反向表，扫描只留命中的引用；会话缓存改成「查询键 → 各镜像命中」，64 MB 预算。
+- 进度事件带上这一批的结果，前端超时时手里有部分结果。
+- 线上目标去掉 `unnamedCode(imagePath:address:)`：无符号函数就是名字为空的 `.function`。另加 `importedSymbol`、`indirect` 和 `unrecognizedCode(address:)`（落在所有镜像之外的跳转）。
+- 并发数取处理器核数减一，不是核数：扫描是同步的计算，占满协作线程池会让进程里其他请求等上一两秒。
+- ObjC 精度不查类层级，根类按名字认 `NSObject`、`NSProxy`（第 6 节）。
+- 跨镜像经 dispatch thunk（`…Tj`）进来的 Swift 虚方法与协议方法调用者，第 3 步不收，随第三批。
+
+**接入时发现的库缺陷。** 查 `-[NSObject description]` 的调用者，libobjc 里一条都没有。追下去：`-[NSObject debugDescription]` 在 macOS 27.2 上是 `adrp x8; add x1, x8, #…; b _objc_msgSend`——缓存构建器把读 selector 引用改写成了直接算出字符串地址，而第一批只认「从 selector 引用读来的 `x1`」，这些传统发送全被当成对 `objc_msgSend` 的普通调用。MachOSwiftSection `8eea8cb7` 修了它，回归测试改前红、改后绿；同一个提交补上了预筛「不漏」的抽样测试（此前只测过「筛得够狠」）。
+
+**验证**（JHs-Mac-Studio-Ultra，macOS 27.2，Xcode 27.2；依赖全部走远端，MachOSwiftSection 为功能分支 `8eea8cb7`）：
+
+- `RuntimeViewerCrossReferencesTests` 4 个套件 33 个测试通过：安装（两个命令都进了命令表，重复安装不重复）、线上格式（命令名、往返编码、错误描述）、匹配规则（ObjC 发送精度的每一种情形、成员行的筛选、显示名）、真实共享缓存上的查询（`-[NSWindow makeKeyAndOrderFront:]` 的被调、AppKit 里 `orderWindow:relativeTo:` 的发送者且进度之和等于结果、Foundation 经桩对 `CFRelease` 的调用落到 CoreFoundation、全部镜像查询确实经过预筛、上限截断、取消、会话缓存复用与预算、NSObject 成员的被调与调用者精度、ivar 报错）。
+- MachOSwiftSection：`CrossReferenceAnalysisTests` 24 个、`SwiftThunkAnalysisTests` 82 个测试通过。
+- 构建：macOS App（`RuntimeViewer-Debug.xcworkspace`、`RuntimeViewer macOS`、Debug）连同全部内嵌产物构建通过，App、本地运行时 service、内嵌 CLI、Catalyst 插件、macOS 与 Simulator 两份载荷的二进制里都有新模块的符号和线上命令名；CLI 包 `swift build` 通过；iOS App（`RuntimeViewer iOS`，通用 iOS Simulator 目标，只编译不启动）构建通过，有一条落在 `FoundationToolbox.o` 里的链接器警告，未与基线对比。
+- Tuist：`TUIST_SCRIPT_ROOT=<agent 目录> ./TuistScript.sh check` 通过（项目接线、本地包 target 清单、两份锁文件、trait 设置都与原生工程一致）。
+- `RuntimeViewerCore` 全量 `swift test`：Core 套件 499 个测试里 1 个失败（`RuntimeBackgroundIndexingManagerTests` 的批次取消，用的是假引擎与假路径，与本次无关），那次全量与三个平台的构建同时在跑；单独重跑这个套件 27 个全过。其余测试目标全过。
+- 注入载荷照 `BuildRuntimeViewerServerXCFramework.sh` 的方式（Distribution workspace、`RuntimeViewerMobileServer`、Distribution 配置）构建：tvOS、visionOS 通过；watchOS 在依赖的部署目标校验阶段就失败（多个包的 watchOS 部署目标是 8.0，Xcode 27.2 只接受 9.0 起，另有 armv7k 已弃用），新模块还没开始编译。`next`（`aa935aa2`）用它自己的锁文件构建，失败完全相同，所以这个问题早于本次改动，没有在这里修。
+- 没有验证：visionOS App 与越狱版 arm64e 变体的构建；经 XPC 或 TCP 的真实跨进程查询（测试只走了进程内派发，命令注册由安装测试覆盖）；Mac Catalyst 引擎上的查询。
+
+**留给后面的**：给调用者起名时，有命中的镜像要再建一次函数表（扫描时建的那张已经丢了），查 `init` 这种上千个镜像都有命中的主体，每个镜像都多建一遍（多花多少没有测）。可以让 MachOSwiftSection 的过滤扫描顺带交出命中函数的 `CodeFunction`，随第二批一起做。
 
 ## 决策日志
 
@@ -702,3 +757,10 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 | 2026-10-16 | 状态 → In Progress；落地第一步完成 | 结论写入「前期调研 › 落地第一步的核实」。批量扫描用手写解码（按默认假设「先实测 Capstone 再决定」，实测快 25–50 倍）。桩布局、鉴别常量两条直接改写设计细节；全量索引与无符号函数两条推翻了当初的前提，交给用户重新确认 |
 | 2026-10-16 | 不做存盘的全量索引，只按需扫描 | 重新确认。实测扫完整个缓存 1–4 秒，推翻了「建一次要好几分钟」的前提。否：照原设计两条路都做（索引约 200–400 MB，查询毫秒级）；只做存盘索引、iOS 仍按需。随之删去原第 5 步、`RuntimeCrossReferenceRouter`、索引相关的线上类型与命令、Report 条目和缓存目录；取代第二至四轮里关于全量索引的三条决定 |
 | 2026-10-16 | 无符号函数照样扫描，作为调用者显示地址 | 重新确认。实测全缓存一半函数没有符号，它们发出的调用约占一半，227 个镜像全无符号。仍不推测名字，边界取自 `LC_FUNCTION_STARTS`。否：照原设计不显示；显示并归到取它地址的有名字函数下（留给后续）。修订用户最初「被脱掉符号的函数不做」的限定 |
+| 2026-10-16 | 第 3 步：`typeReferences` 随 MachOSwiftSection 第二批落地 | 第一批的扫描器还不产生类型引用；先上一个只认 Swift 元数据访问器调用的版本，第二批时结果含义会变 |
+| 2026-10-16 | 第 3 步：只按键扫描、不建整镜像反向表；会话缓存按「查询键 → 各镜像命中」，64 MB | 库第一批实测一张 AppKit 整表约 100 MB，并发建整表的峰值让分配器留下上 GB 脏页；原设计的「本库反向表」随之取消 |
+| 2026-10-16 | 第 3 步：进度事件携带结果 | 前端（MCP 30 秒、CLI `--timeout`）到时取消，手里要有已扫镜像的结果 |
+| 2026-10-16 | 第 3 步：线上目标改为 `importedSymbol` / `indirect` / `unrecognizedCode`，去掉 `unnamedCode` | 无符号函数本来就是函数，名字为空即可；落在所有镜像之外的地址没有镜像路径可填 |
+| 2026-10-16 | 第 3 步：并发数为核数减一 | 扫描是同步计算，占满协作线程池会让同进程的其他请求干等 |
+| 2026-10-16 | 第 3 步：ObjC 精度不查类层级，根类按名字认 | 被查的类常在没加载的镜像里，运行时问不到；接收者类不同只降为「按 selector」，不排除 |
+| 2026-10-16 | 第 3 步完成（`typeReferences` 除外） | 记录见「第 3 步的落地记录」；接入时发现并修好 MachOSwiftSection 第一批漏认缓存内传统发送的缺陷（`8eea8cb7`） |

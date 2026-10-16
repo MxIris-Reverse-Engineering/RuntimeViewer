@@ -13,6 +13,7 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerInjection
+import RuntimeViewerCrossReferences
 
 // Before the engine exists, because the injection commands are installed as a
 // connection is set up and there is no path that adds them afterwards. This
@@ -20,6 +21,9 @@ import RuntimeViewerInjection
 // privileged helper daemon — but it still has to answer the capability query,
 // or a host cannot tell it apart from a build that predates these commands.
 RuntimeInjection.install()
+// The cross-reference commands, for the same reason. A callers query scans the
+// images mapped into this process, which is where the app's "My Mac" engine runs.
+RuntimeCrossReferences.install()
 
 let engine = RuntimeEngine(source: .local, engineID: "local-runtime-service.\(ProcessInfo.processInfo.processIdentifier)")
 
