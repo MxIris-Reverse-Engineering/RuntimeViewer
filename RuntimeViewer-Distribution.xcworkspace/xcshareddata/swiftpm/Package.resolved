@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "7aa5427a97f9f44834d8ef2d2dfd32e892877632",
-        "version" : "0.14.0"
+        "revision" : "fc1f0f65766fd0955e1bc5f5ff00d37399d82051",
+        "version" : "0.15.0"
       }
     },
     {
@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "8e4cc08e3769f16ed0fb6a9aaf7856a319eb87e7"
+        "revision" : "a6d91652fec7f78172906190ce1af12544afe05c"
       }
     },
     {
@@ -195,7 +195,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "956b4e09066db47e56f68c938d3930206dc148c8"
+        "revision" : "b7be58ecef72d0a330594d33dab38d46f1f2a812"
       }
     },
     {
@@ -455,8 +455,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-concurrency-extras",
       "state" : {
-        "revision" : "695e5d125a475ac0a2c30ece03d7985f54ffc7c9",
-        "version" : "1.4.2"
+        "revision" : "8a4260f7373493435bd21194585c95b72bfdd401",
+        "version" : "1.4.3"
       }
     },
     {
@@ -681,7 +681,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
         "branch" : "next",
-        "revision" : "ef4bd30930ee4db1d285f6a23337100a5a1142c0"
+        "revision" : "14a1486712b051f8400fb4e93317ef1a0a90c072"
       }
     },
     {
@@ -698,8 +698,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-subprocess.git",
       "state" : {
-        "revision" : "55d30558b8b12c0343793421328fe81a4919c776",
-        "version" : "1.0.1"
+        "revision" : "dbe21bd7dfd4ffef8c32588918542a8abfa1b54c",
+        "version" : "1.0.2"
       }
     },
     {

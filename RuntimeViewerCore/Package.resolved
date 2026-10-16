@@ -88,7 +88,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "ea14b1da4560af3aa9c54ed16d3a9f8e88c3539b"
+        "revision" : "a6d91652fec7f78172906190ce1af12544afe05c"
       }
     },
     {
@@ -97,7 +97,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "b8db48bfde81b685fe2990b777ef37e8f69bf003"
+        "revision" : "b7be58ecef72d0a330594d33dab38d46f1f2a812"
       }
     },
     {
@@ -213,8 +213,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",
       "state" : {
-        "revision" : "3b69cedbaa49957e97c092ae400bb57602ef941f",
-        "version" : "1.7.2"
+        "revision" : "35a1edcb8ebd2bfe251d587f0b69e62af28f508c",
+        "version" : "1.7.3"
       }
     },
     {
@@ -222,8 +222,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-concurrency-extras",
       "state" : {
-        "revision" : "5fa253428866f2360c3754e88537f700ed2656b5",
-        "version" : "1.4.1"
+        "revision" : "8a4260f7373493435bd21194585c95b72bfdd401",
+        "version" : "1.4.3"
       }
     },
     {
@@ -241,7 +241,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
         "branch" : "next",
-        "revision" : "e17ae7fd06df9b1442929c0a59f6c28a154f94fa"
+        "revision" : "230d3fd3c90251190a04cebf7a77c2617ae167b6"
       }
     },
     {
@@ -285,8 +285,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-issue-reporting",
       "state" : {
-        "revision" : "75b000cea2ca6d7527a57e1b9cc0bdf21a9abe9f",
-        "version" : "2.1.1"
+        "revision" : "b23bb4493c439d3e05152bc167014235ba3d47fc",
+        "version" : "2.1.2"
       }
     },
     {
@@ -340,7 +340,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
         "branch" : "next",
-        "revision" : "ef4bd30930ee4db1d285f6a23337100a5a1142c0"
+        "revision" : "14a1486712b051f8400fb4e93317ef1a0a90c072"
       }
     },
     {
