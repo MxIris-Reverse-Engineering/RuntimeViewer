@@ -1814,6 +1814,8 @@ extension SwiftDeclaration.AccessorKind {
         case .setter: return "setter"
         case .modifyAccessor: return "modifyAccessor"
         case .readAccessor: return "readAccessor"
+        case .borrowAccessor: return "borrowAccessor"
+        case .mutateAccessor: return "mutateAccessor"
         case .none: return "none"
         }
     }
