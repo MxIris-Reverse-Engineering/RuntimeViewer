@@ -42,6 +42,8 @@ cd "$PROJECT_DIR"
 WORKSPACE="RuntimeViewer-Tuist.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 NATIVE_WORKSPACE="RuntimeViewer-Debug.xcworkspace"
+TUIST_APP_PROJECT="RuntimeViewerUsingAppKit/RuntimeViewer-Tuist.xcodeproj"
+NATIVE_APP_PROJECT="RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj"
 NATIVE_PACKAGE_RESOLVED="$NATIVE_WORKSPACE/xcshareddata/swiftpm/Package.resolved"
 TUIST_PACKAGE_RESOLVED="Tuist/Package.resolved"
 LOCAL_PACKAGES=("RuntimeViewerCore" "RuntimeViewerPackages" "RuntimeViewerMCP" "RuntimeViewerCommandLine")
@@ -260,12 +262,14 @@ generate_workspace() {
     run_tuist "generate-$configuration" "${TUIST[@]}" generate --no-open --configuration "$configuration" \
         || fail "tuist generate failed"
     arrange_workspace_like_native
+    arrange_project_like_native
 }
 
 restore_resting_generation() {
     log "Generating $WORKSPACE for $RESTING_CONFIGURATION again"
     if run_tuist "generate-$RESTING_CONFIGURATION" "${TUIST[@]}" generate --no-open --configuration "$RESTING_CONFIGURATION"; then
         arrange_workspace_like_native
+        arrange_project_like_native
     else
         warn "generating $WORKSPACE for $RESTING_CONFIGURATION failed; run ./TuistScript.sh generate"
     fi
@@ -364,6 +368,370 @@ print(f"    {len(local_paths)} projects in {native_workspace_name}'s order, {len
 PYTHON
     if ! $arranged; then
         warn "could not arrange $WORKSPACE like $NATIVE_WORKSPACE (above); it keeps Tuist's layout"
+    fi
+}
+
+# Lays the generated app project's navigator out the way $NATIVE_APP_PROJECT's is, and lists the
+# targets in its order. Tuist puts every folder in a group called Project, lists the xcconfig files
+# it was given instead of the Configurations folder, files the app icons under a Resources group,
+# leaves out what no target builds (the test plan, the old service's folder) and sorts the targets by
+# name. Each item of the native navigator is matched by where it points and moved to the native
+# place; what the native project has and this one does not is added for browsing only, never to a
+# target, and a project file never, or Xcode would load it as a subproject. RuntimeViewerServer.xcodeproj,
+# whose targets this project builds, is stood in for by the group of their sources. The build
+# configurations then name their xcconfig files through the Configurations folder, as the native
+# ones do, rather than through file references of their own. What the native project lacks — the
+# server targets, the dependencies' products, the frameworks — stays as Tuist made it, after the
+# native items, with the referenced projects collected in a Dependencies group. Nothing but the
+# navigator, the target order and that one way of naming xcconfig files changes, every file is still
+# where it was, and the project keeps Tuist's layout, with a warning, when any of that would not hold.
+arrange_project_like_native() {
+    if $DRY_RUN; then
+        log "would arrange $TUIST_APP_PROJECT like $NATIVE_APP_PROJECT"
+        return 0
+    fi
+    local arranged=true
+    python3 - "$PROJECT_DIR/$NATIVE_APP_PROJECT" "$PROJECT_DIR/$TUIST_APP_PROJECT" <<'PYTHON' || arranged=false
+import copy
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+native_project, generated_project = sys.argv[1:3]
+# Both projects sit in the same directory, so a path means the same in either.
+root_directory = os.path.dirname(native_project)
+native_name = os.path.basename(native_project)
+
+NAVIGATION_TYPES = {"PBXGroup", "PBXVariantGroup", "PBXFileReference", "PBXFileSystemSynchronizedRootGroup"}
+GROUP_TYPES = {"PBXGroup", "PBXVariantGroup"}
+LAYOUT_KEYS = {"children", "name", "path", "sourceTree"}
+BROWSING_KEYS = {"isa", "name", "path", "sourceTree", "lastKnownFileType", "explicitFileType", "includeInIndex",
+                 "fileEncoding", "indentWidth", "tabWidth", "usesTabs", "wrapsLines", "lineEnding",
+                 "explicitFileTypes", "explicitFolders"}
+
+class ArrangementError(Exception):
+    pass
+
+def read_project(path):
+    return json.loads(subprocess.check_output(["plutil", "-convert", "json", "-o", "-", path]))
+
+def is_navigation(item):
+    return item.get("isa") in NAVIGATION_TYPES
+
+def label(item):
+    return item.get("name") or os.path.basename(item.get("path", ""))
+
+def is_project_file(item, location):
+    return item.get("lastKnownFileType") == "wrapper.pb-project" or location[1].endswith(".xcodeproj")
+
+def derived_identifier(seed):
+    return hashlib.sha256(f"TuistScript:{seed}".encode()).hexdigest()[:24].upper()
+
+def parents_of(objects):
+    parents = {}
+    for identifier, item in objects.items():
+        if is_navigation(item):
+            for child in item.get("children", []):
+                if child in parents:
+                    raise ArrangementError(f"navigator item {child} has two parents")
+                parents[child] = identifier
+    return parents
+
+def locations_of(objects):
+    """Where every navigator item points: ("local", absolute path) for the file system, (source
+    tree, path) for a place only the build knows, such as a product's."""
+    parents = parents_of(objects)
+    locations = {}
+    def resolve(identifier):
+        if identifier not in locations:
+            item = objects[identifier]
+            path = item.get("path", "")
+            source_tree = item.get("sourceTree", "<group>")
+            if source_tree == "<group>":
+                parent = parents.get(identifier)
+                kind, base = resolve(parent) if parent else ("local", root_directory)
+                locations[identifier] = (kind, os.path.normpath(os.path.join(base, path)))
+            elif source_tree in ("SOURCE_ROOT", "<absolute>"):
+                locations[identifier] = ("local", os.path.normpath(os.path.join(root_directory, path)))
+            else:
+                locations[identifier] = (source_tree, path)
+        return locations[identifier]
+    for identifier, item in objects.items():
+        if is_navigation(item):
+            resolve(identifier)
+    return locations
+
+def node_key(item, location):
+    return (item["isa"], location, label(item)) if item["isa"] in GROUP_TYPES else (item["isa"], location)
+
+def strings_outside_navigation(objects):
+    """Every string the project holds outside the navigator's parent-child links: whatever names an
+    object there still needs it."""
+    found = set()
+    def collect(value):
+        if isinstance(value, dict):
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+        else:
+            found.add(value)
+    for item in objects.values():
+        collect({key: value for key, value in item.items() if key != "children"} if is_navigation(item) else item)
+    return found
+
+UNQUOTED = re.compile(r"[A-Za-z0-9_.]+")
+ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\t": "\\t", "\r": "\\r"}
+
+def quoted(string):
+    if UNQUOTED.fullmatch(string):
+        return string
+    return '"' + "".join(ESCAPES.get(character, f"\\U{ord(character):04x}" if ord(character) < 0x20 else character)
+                         for character in string) + '"'
+
+def serialized(value, indentation=""):
+    inner = indentation + "\t"
+    if isinstance(value, dict):
+        keys = sorted(value, key=lambda key: (key != "isa", key))
+        return "{\n" + "".join(f"{inner}{quoted(key)} = {serialized(value[key], inner)};\n" for key in keys) + indentation + "}"
+    if isinstance(value, list):
+        return "(\n" + "".join(f"{inner}{serialized(element, inner)},\n" for element in value) + indentation + ")"
+    if isinstance(value, str):
+        return quoted(value)
+    raise ArrangementError(f"unexpected value {value!r} in the project file")
+
+def arrange():
+    native = read_project(os.path.join(native_project, "project.pbxproj"))
+    document = read_project(os.path.join(generated_project, "project.pbxproj"))
+    baseline = copy.deepcopy(document)
+    native_objects = native["objects"]
+    native_root = native_objects[native["rootObject"]]
+    objects = document["objects"]
+    root = objects[document["rootObject"]]
+    for project_root in (native_root, root):
+        if project_root.get("projectDirPath") or project_root.get("projectRoot"):
+            raise ArrangementError("a project with a projectDirPath or projectRoot of its own")
+    native_locations = locations_of(native_objects)
+    baseline_locations = locations_of(objects)
+    intended_locations = dict(baseline_locations)
+
+    # The targets in the native order; the ones the native project does not have (the server
+    # targets, which live in RuntimeViewerServer.xcodeproj) after them, in Tuist's.
+    native_target_names = [native_objects[identifier]["name"] for identifier in native_root["targets"]]
+    targets_by_name = {objects[identifier]["name"]: identifier for identifier in root["targets"]}
+    if len(targets_by_name) != len(root["targets"]):
+        raise ArrangementError("two targets share a name")
+    root["targets"] = ([targets_by_name[name] for name in native_target_names if name in targets_by_name]
+                       + [identifier for identifier in root["targets"] if objects[identifier]["name"] not in native_target_names])
+
+    main_group = objects[root["mainGroup"]]
+    for identifier in list(main_group["children"]):
+        item = objects[identifier]
+        if item["isa"] == "PBXGroup" and item.get("name") == "Project" and "path" not in item:
+            position = main_group["children"].index(identifier)
+            main_group["children"][position:position + 1] = item.get("children", [])
+            del objects[identifier]
+
+    previous_children = {identifier: list(item.get("children", [])) for identifier, item in objects.items() if is_navigation(item)}
+    candidates, groups_by_location = {}, {}
+    for identifier, item in objects.items():
+        if is_navigation(item):
+            candidates.setdefault(node_key(item, baseline_locations[identifier]), []).append(identifier)
+            if item["isa"] in GROUP_TYPES:
+                groups_by_location.setdefault(baseline_locations[identifier], []).append(identifier)
+    native_products = {native_objects[identifier].get("productReference"): native_objects[identifier]["name"] for identifier in native_root["targets"]}
+    products = {objects[identifier]["name"]: objects[identifier].get("productReference") for identifier in root["targets"]}
+    claimed, restored_children, added, stand_ins, left_out = set(), {}, [], [], []
+
+    def unclaimed(identifiers):
+        return next((identifier for identifier in identifiers if identifier not in claimed), None)
+
+    def match(native_identifier, native_item, native_location):
+        if native_identifier == native_root.get("productRefGroup"):
+            return root.get("productRefGroup")
+        if native_identifier in native_products:
+            return products.get(native_products[native_identifier])
+        found = unclaimed(candidates.get(node_key(native_item, native_location), []))
+        if found is None and native_location[0] == "local" and is_project_file(native_item, native_location):
+            found = unclaimed(groups_by_location.get(("local", os.path.dirname(native_location[1])), []))
+            if found:
+                stand_ins.append(f"{label(objects[found])} stands in for {label(native_item)}")
+        return found
+
+    def add_for_browsing(native_identifier, native_item, native_location):
+        if native_item["isa"] not in GROUP_TYPES and (native_location[0] != "local" or not os.path.exists(native_location[1])
+                                                      or is_project_file(native_item, native_location)):
+            return None
+        identifier = derived_identifier(native_identifier)
+        if identifier in objects:
+            raise ArrangementError(f"identifier {identifier} for {label(native_item)} is taken")
+        objects[identifier] = {key: value for key, value in native_item.items() if key in BROWSING_KEYS}
+        if "children" in native_item:
+            objects[identifier]["children"] = []
+        intended_locations[identifier] = native_location
+        added.append(label(native_item))
+        return identifier
+
+    def restore(native_identifier, identifier=None):
+        native_item = native_objects[native_identifier]
+        if not is_navigation(native_item):
+            return None
+        native_location = native_locations[native_identifier]
+        identifier = (identifier or match(native_identifier, native_item, native_location)
+                      or add_for_browsing(native_identifier, native_item, native_location))
+        if identifier is None:
+            left_out.append(label(native_item) + (" (product)" if native_location[0] == "BUILT_PRODUCTS_DIR" else ""))
+            return None
+        if identifier in claimed:
+            raise ArrangementError(f"{label(native_item)} matches an item already placed")
+        claimed.add(identifier)
+        if "children" in native_item:
+            restored_children[identifier] = [child for child in map(restore, native_item["children"]) if child]
+        return identifier
+
+    restore(native_root["mainGroup"], root["mainGroup"])
+    for identifier, item in objects.items():
+        if is_navigation(item) and "children" in item:
+            item["children"] = restored_children.get(identifier, []) + [child for child in previous_children.get(identifier, []) if child not in claimed]
+
+    # The build configurations name their xcconfig files through the Configurations folder, the
+    # way the native ones do, so the folder shows them and no file reference lists them twice.
+    folders = [(intended_locations[identifier][1], identifier) for identifier in claimed
+               if objects[identifier]["isa"] == "PBXFileSystemSynchronizedRootGroup" and intended_locations[identifier][0] == "local"]
+    converted = {}
+    for identifier, item in objects.items():
+        if item.get("isa") != "XCBuildConfiguration" or "baseConfigurationReference" not in item:
+            continue
+        kind, path = intended_locations.get(item["baseConfigurationReference"], (None, ""))
+        enclosing = [folder for folder in folders if path.startswith(folder[0] + os.sep)]
+        if kind != "local" or not enclosing:
+            continue
+        folder_path, folder = max(enclosing, key=lambda folder: len(folder[0]))
+        converted[identifier] = item.pop("baseConfigurationReference")
+        item["baseConfigurationReferenceAnchor"] = folder
+        item["baseConfigurationReferenceRelativePath"] = os.path.relpath(path, folder_path)
+    still_named = strings_outside_navigation(objects)
+    removed = {reference for reference in converted.values() if reference not in still_named}
+    for identifier in removed:
+        del objects[identifier]
+    for item in objects.values():
+        if is_navigation(item) and "children" in item:
+            item["children"] = [child for child in item["children"] if child not in removed]
+
+    project_references = [reference["ProjectRef"] for reference in root.get("projectReferences", [])]
+    if project_references:
+        group_identifier = derived_identifier("Dependencies")
+        group = objects.setdefault(group_identifier, {"isa": "PBXGroup", "children": [], "name": "Dependencies", "sourceTree": "<group>"})
+        if group.get("isa") != "PBXGroup" or group.get("name") != "Dependencies":
+            raise ArrangementError(f"identifier {group_identifier} for the Dependencies group is taken")
+        intended_locations.setdefault(group_identifier, ("local", root_directory))
+        for item in objects.values():
+            if is_navigation(item) and "children" in item:
+                item["children"] = [child for child in item["children"] if child not in project_references and child != group_identifier]
+        group["children"] = sorted(project_references, key=lambda identifier: label(objects[identifier]).lower())
+        main_group["children"].append(group_identifier)
+
+    def prune(identifier):
+        kept = []
+        for child in objects[identifier].get("children", []):
+            if objects[child]["isa"] == "PBXGroup":
+                prune(child)
+                if not objects[child]["children"] and child not in restored_children:
+                    del objects[child]
+                    continue
+            kept.append(child)
+        objects[identifier]["children"] = kept
+    prune(root["mainGroup"])
+
+    display_names = {identifier: label(item) for identifier, item in objects.items() if is_navigation(item)}
+    for identifier, parent in parents_of(objects).items():
+        item = objects[identifier]
+        if item.get("sourceTree", "<group>") != "<group>":
+            continue
+        kind, path = intended_locations[identifier]
+        parent_kind, parent_path = intended_locations[parent]
+        if kind != "local" or parent_kind != "local":
+            raise ArrangementError(f"cannot move {display_names[identifier]} into a group of another source tree")
+        relative_path = os.path.relpath(path, parent_path)
+        if relative_path == "." and "path" not in item:
+            continue
+        item["path"] = relative_path
+        if "/" in relative_path and "name" not in item:
+            item["name"] = display_names[identifier]
+
+    # Everything but the navigator, the target order and the xcconfig naming is as Tuist wrote it,
+    # and every item still points where it did.
+    locations = locations_of(objects)
+    for identifier, previous in baseline["objects"].items():
+        current = objects.get(identifier)
+        if identifier in removed:
+            continue
+        if is_navigation(previous):
+            if current is None:
+                if previous["isa"] == "PBXGroup":
+                    continue
+                raise ArrangementError(f"{label(previous)} would go missing")
+            if {key: value for key, value in previous.items() if key not in LAYOUT_KEYS} != {key: value for key, value in current.items() if key not in LAYOUT_KEYS}:
+                raise ArrangementError(f"{label(previous)} would change more than its place")
+            if locations[identifier] != baseline_locations[identifier]:
+                raise ArrangementError(f"{label(previous)} would point elsewhere")
+        elif identifier == document["rootObject"]:
+            if sorted(current["targets"]) != sorted(previous["targets"]) or {**current, "targets": previous["targets"]} != previous:
+                raise ArrangementError("the project object would change more than its target order")
+        elif identifier in converted:
+            unchanged = {key: value for key, value in current.items() if not key.startswith("baseConfigurationReference")}
+            anchor_kind, anchor_path = locations[current["baseConfigurationReferenceAnchor"]]
+            if (unchanged != {key: value for key, value in previous.items() if key != "baseConfigurationReference"}
+                    or os.path.normpath(os.path.join(anchor_path, current["baseConfigurationReferenceRelativePath"])) != baseline_locations[converted[identifier]][1]):
+                raise ArrangementError(f"build configuration {current.get('name')} would get another base xcconfig")
+        elif current != previous:
+            raise ArrangementError(f"{previous.get('isa')} {identifier} would change")
+    for identifier in objects.keys() - baseline["objects"].keys():
+        if not is_navigation(objects[identifier]) or locations[identifier] != intended_locations[identifier]:
+            raise ArrangementError(f"added item {display_names.get(identifier, identifier)} would point elsewhere")
+    gone = baseline["objects"].keys() - objects.keys()
+    if gone & (strings_outside_navigation(objects) | {child for item in objects.values() for child in item.get("children", [])}):
+        raise ArrangementError("an object still in use would be deleted")
+    parents, baseline_parents = parents_of(objects), parents_of(baseline["objects"])
+    if any(identifier not in parents and identifier in baseline_parents for identifier, item in objects.items() if is_navigation(item)):
+        raise ArrangementError("an item would drop out of the navigator")
+
+    summary = [f"targets and navigator in {native_name}'s order" + (" (unchanged)" if document == baseline else "")]
+    if added:
+        summary.append(f"added for browsing: {', '.join(added)}")
+    summary += stand_ins
+    if left_out:
+        summary.append(f"not in this project: {', '.join(left_out)}")
+    if document == baseline:
+        print("\n".join(f"    {line}" for line in summary))
+        return
+    project_file = os.path.join(generated_project, "project.pbxproj")
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=generated_project, prefix=".project-", suffix=".pbxproj", delete=False)
+    try:
+        with handle:
+            handle.write("// !$*UTF8*$!\n" + serialized(document) + "\n")
+        if read_project(handle.name) != document:
+            raise ArrangementError("the rewritten project file does not read back the same")
+        os.chmod(handle.name, os.stat(project_file).st_mode & 0o777)
+        os.replace(handle.name, project_file)
+    finally:
+        if os.path.exists(handle.name):
+            os.remove(handle.name)
+    print("\n".join(f"    {line}" for line in summary))
+
+try:
+    arrange()
+except (OSError, subprocess.CalledProcessError, json.JSONDecodeError, KeyError, ArrangementError) as error:
+    print(f"    {type(error).__name__}: {error}", file=sys.stderr)
+    sys.exit(1)
+PYTHON
+    if ! $arranged; then
+        warn "could not arrange $TUIST_APP_PROJECT like $NATIVE_APP_PROJECT (above); it keeps Tuist's layout"
     fi
 }
 

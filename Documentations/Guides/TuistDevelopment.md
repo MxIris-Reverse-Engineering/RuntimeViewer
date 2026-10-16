@@ -70,6 +70,22 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 下时，公共父目录只剩 `/Volumes`，本地工程就从 `Repositories/Private/…` 一层层嵌套下来。所以别直接跑
 `tuist generate`，用 `./TuistScript.sh generate`。
 
+**App 工程的导航栏和 target 顺序照 `RuntimeViewerUsingAppKit.xcodeproj` 排**，也是脚本在每次生成之后改写
+`RuntimeViewer-Tuist.xcodeproj` 得来的。Tuist 原样生成的工程把所有目录包在一个 `Project` 组里，列的是它拿到的
+那几个 xcconfig 而不是整个 Configurations 文件夹，图标归在 `Resources` 组下，target 按名字排。改写后：
+
+- 原生导航栏里的每一项按它指向的位置找到 Tuist 工程里的对应项，挪到原生的位置；原生有、Tuist 没有的
+  （测试计划、旧 service 的目录、Configurations 文件夹、`Recovered References` 组）补上，只供浏览，不进任何
+  target。工程文件例外：`RuntimeViewerServer.xcodeproj` 的 target 在这个工程里编，补上它 Xcode 会把它当子工程
+  加载，所以它的位置放这些 target 的源码组 `RuntimeViewerServer`。
+- 各配置改成经 Configurations 文件夹引用自己的 xcconfig（原生工程也是这样），Tuist 为它们单建的文件引用随之删掉。
+- 原生没有的东西留在原生各项之后、保持 Tuist 的样子：服务器的两个 target、依赖的产物、`Frameworks` 里的
+  xcframework；引用的依赖工程收进末尾的 Dependencies 组。
+
+脚本写回之前会核对：除了导航栏、target 顺序和 xcconfig 的引用方式，工程里别的内容都没动，每个文件仍指向原处；
+有一条不成立就保留 Tuist 原样的工程并给出警告。实测改写前后三套配置下 11 个 target 的 `-showBuildSettings` 逐项相同。
+包的四个工程没有改写，仍是 Tuist 的样子（`Project` 组下分 `Sources`、`Tests`、`Derived`）。
+
 ## 必须遵守的约定
 
 1. **App 只能用 `RuntimeViewer macOS` scheme 构建。** 模拟器注入载荷和 Catalyst 插件不是任何
