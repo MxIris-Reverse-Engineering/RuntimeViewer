@@ -418,6 +418,9 @@ let package = Package(
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerSimulatorInstaller", condition: .when(platforms: appkitPlatforms)),
+                // The Indexing page lists the connected engines for the
+                // Always Index rows' engine menus.
+                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationSettingsUI", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
@@ -558,6 +561,8 @@ let package = Package(
             name: "RuntimeViewerSettingsTests",
             dependencies: [
                 "RuntimeViewerSettings",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
             ],
         ),

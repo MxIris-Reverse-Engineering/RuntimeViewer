@@ -179,6 +179,27 @@ extension Settings {
         @Default(Heuristic.default)
         public var heuristic: Heuristic
 
+        /// One engine an always-index entry is limited to. `key` is what the
+        /// entry matches an engine by — see `key(for:)`. `name` and
+        /// `hostName` are what the engine was called when the user picked
+        /// it, kept only to show the choice while that engine is not
+        /// connected.
+        ///
+        /// Declared before `AlwaysIndexEntry` for the same MetaCodable reason
+        /// `AlwaysIndexEntry` is declared before `Custom`.
+        @Codable
+        @MemberInit
+        public struct EngineReference: Hashable, Sendable {
+            @Default("")
+            public var key: String
+
+            @Default("")
+            public var name: String
+
+            @Default("")
+            public var hostName: String
+        }
+
         /// One row in the user-configured "always-index" list. `identifier`
         /// is either a full imagePath (leading `/`) matched verbatim against
         /// the engine's `imageList`, or an imageName matched against the
@@ -198,6 +219,15 @@ extension Settings {
         /// so adding "SwiftUICore" indexes SwiftUICore literally rather
         /// than every framework it links against.
         ///
+        /// `appliesToAllEngines` and `engines` decide which engines the row
+        /// is dispatched on: every engine while the former is on, otherwise
+        /// only those listed — none when the list is empty. The list is kept
+        /// while the row applies to all engines, so switching back restores
+        /// it. Taking an engine off a row is the same as switching the row
+        /// off on that engine: a batch already running there finishes
+        /// naturally. Rows persisted before the switch existed decode as
+        /// applying to all engines, which is what they did.
+        ///
         /// Declared before `Custom` so MetaCodable's `@Codable` macro can
         /// resolve the type when expanding `Custom`'s synthesized codable
         /// implementation; macro-generated code does not see types declared
@@ -214,7 +244,47 @@ extension Settings {
             @Default(false)
             public var followDependencies: Bool
 
+            @Default(true)
+            public var appliesToAllEngines: Bool
+
+            /// Fully qualified for the same MetaCodable reason as
+            /// `Custom.entries`.
+            @Default([])
+            public var engines: [Settings.Indexing.EngineReference]
+
             public static let `default` = Self()
+
+            /// Whether the row is dispatched on the engine `engineKey`
+            /// names, an `EngineReference.key(for:)` value. Says nothing
+            /// about `isEnabled`, which callers check on their own.
+            public func applies(toEngineWithKey engineKey: String) -> Bool {
+                appliesToAllEngines || engines.contains { $0.key == engineKey }
+            }
+
+            /// Whether the engine `engineKey` names is one the row has been
+            /// limited to. False for every engine while the row applies to
+            /// all of them, since none is singled out.
+            public func selectsEngine(withKey engineKey: String) -> Bool {
+                !appliesToAllEngines && engines.contains { $0.key == engineKey }
+            }
+
+            /// Selects `engine` for the row or deselects it. Selecting one
+            /// while the row applies to all engines limits the row to that
+            /// engine alone. Deselecting the last one leaves the row on no
+            /// engine rather than falling back to all of them, which would
+            /// widen what deselecting was meant to narrow.
+            public mutating func setEngine(_ engine: Settings.Indexing.EngineReference, isSelected: Bool) {
+                if appliesToAllEngines {
+                    guard isSelected else { return }
+                    appliesToAllEngines = false
+                    engines = [engine]
+                } else if isSelected {
+                    guard !engines.contains(where: { $0.key == engine.key }) else { return }
+                    engines.append(engine)
+                } else {
+                    engines.removeAll { $0.key == engine.key }
+                }
+            }
         }
 
         /// Custom always-index list: user-maintained images that get indexed

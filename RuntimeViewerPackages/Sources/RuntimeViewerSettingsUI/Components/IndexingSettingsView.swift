@@ -3,6 +3,7 @@
 import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
+import RuntimeViewerEngineManagement
 import UIFoundationSettingsUI
 
 struct IndexingSettingsView: View {
@@ -56,14 +57,20 @@ struct IndexingSettingsView: View {
 }
 
 /// Editor section for `Settings.Indexing.custom`. Renders the custom toggle,
-/// each entry as an editable row (enable switch, identifier field, labeled
-/// Recursive switch, delete button), plus a trailing Add button. The list is
-/// order-preserving — duplicate / blank entries are accepted and only
-/// filtered at the resolution step in the coordinator.
+/// each entry as an editable row (enable switch, identifier field, engine
+/// menu, labeled Recursive switch, delete button), plus a trailing Add
+/// button. The list is order-preserving — duplicate / blank entries are
+/// accepted and only filtered at the resolution step in the coordinator.
 private struct AlwaysIndexSection: View {
     @Binding var isEnabled: Bool
     @Binding var entries: [RuntimeViewerSettings.Settings.Indexing.AlwaysIndexEntry]
     let masterEnabled: Bool
+
+    @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
+
+    /// The engines connected now, grouped by host as the toolbar's source
+    /// switcher groups them.
+    @State private var connectedEngineSections: [EngineMenuSection] = []
 
     private var entryFieldsDisabled: Bool { !masterEnabled || !isEnabled }
 
@@ -101,6 +108,17 @@ private struct AlwaysIndexSection: View {
                     )
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
+                    .disabled(entryFieldsDisabled || !entryEnabled)
+                    AlwaysIndexEngineMenu(
+                        entry: Binding(
+                            get: { entries.indices.contains(index) ? entries[index] : .default },
+                            set: { newValue in
+                                guard entries.indices.contains(index) else { return }
+                                entries[index] = newValue
+                            }
+                        ),
+                        connectedEngineSections: connectedEngineSections
+                    )
                     .disabled(entryFieldsDisabled || !entryEnabled)
                     Text("Recursive")
                         .font(.callout)
@@ -141,8 +159,96 @@ private struct AlwaysIndexSection: View {
         } header: {
             Text("Always Index")
         } footer: {
-            Text("Images listed here are indexed in the background whenever a document opens, the runtime engine changes, or this list changes. Each entry may be a full path (starting with \"/\") or just the image's file name (matched against loaded images by last path component). Entries that don't match any loaded image are silently skipped. The leading switch enables or disables the row without deleting it — a disabled row is skipped, and a batch already running finishes naturally. The Recursive switch additionally indexes the image's full dependency closure using the Heuristic Discovery depth above; when off, only the image itself is indexed.")
+            Text("Images listed here are indexed in the background whenever a document opens, the runtime engine changes, or this list changes. Each entry may be a full path (starting with \"/\") or just the image's file name (matched against loaded images by last path component). Entries that don't match any loaded image are silently skipped. The leading switch enables or disables the row without deleting it — a disabled row is skipped, and a batch already running finishes naturally. The engine menu picks the runtime engines the row is indexed on: All Engines, which includes engines connected later, or only the engines checked, which are remembered while they are not connected. A process attached on this Mac is matched by its name, so the choice still holds after it relaunches. Taking an engine off a row works like disabling the row on that engine. The Recursive switch additionally indexes the image's full dependency closure using the Heuristic Discovery depth above; when off, only the image itself is indexed.")
         }
+        .onReceive(runtimeEngineManager.$runtimeEngineSections) { sections in
+            connectedEngineSections = sections.map(EngineMenuSection.init(section:))
+        }
+    }
+}
+
+/// One host's engines in an always-index row's engine menu.
+private struct EngineMenuSection: Identifiable {
+    let id: String
+    let hostName: String
+    /// One reference per key: two engines that share a key — two attached
+    /// processes of one name — are one choice.
+    let engines: [RuntimeViewerSettings.Settings.Indexing.EngineReference]
+
+    init(section: RuntimeEngineSection) {
+        id = section.hostID
+        hostName = section.hostName
+        var seenKeys: Set<String> = []
+        engines = section.engines
+            .map(RuntimeViewerSettings.Settings.Indexing.EngineReference.init(engine:))
+            .filter { seenKeys.insert($0.key).inserted }
+    }
+}
+
+/// The engine menu of one always-index row: All Engines at the top, then the
+/// connected engines by host, then the engines the row is limited to that are
+/// not connected now.
+private struct AlwaysIndexEngineMenu: View {
+    @Binding var entry: RuntimeViewerSettings.Settings.Indexing.AlwaysIndexEntry
+    let connectedEngineSections: [EngineMenuSection]
+
+    var body: some View {
+        Menu {
+            Section {
+                Toggle("All Engines", isOn: $entry.appliesToAllEngines)
+            }
+            ForEach(connectedEngineSections) { section in
+                Section(section.hostName) {
+                    ForEach(section.engines, id: \.key) { engine in
+                        Toggle(engine.name, isOn: selectionBinding(for: engine))
+                    }
+                }
+            }
+            if !disconnectedEngines.isEmpty {
+                Section("Not Connected") {
+                    ForEach(disconnectedEngines, id: \.key) { engine in
+                        Toggle(
+                            engine.hostName.isEmpty ? engine.name : "\(engine.name) — \(engine.hostName)",
+                            isOn: selectionBinding(for: engine)
+                        )
+                    }
+                }
+            }
+        } label: {
+            Text(title)
+        }
+        .fixedSize()
+        .help("The runtime engines this image is indexed on. All Engines includes engines connected later.")
+    }
+
+    private var title: String {
+        if entry.appliesToAllEngines {
+            return "All Engines"
+        }
+        switch entry.engines.count {
+        case 0:
+            return "No Engines"
+        case 1:
+            return entry.engines[0].name
+        default:
+            return "\(entry.engines.count) Engines"
+        }
+    }
+
+    /// The engines the row is limited to that no connected engine answers to.
+    /// None while the row applies to all engines: the engines it remembers
+    /// for later are not a choice in effect.
+    private var disconnectedEngines: [RuntimeViewerSettings.Settings.Indexing.EngineReference] {
+        guard !entry.appliesToAllEngines else { return [] }
+        let connectedKeys = Set(connectedEngineSections.flatMap { $0.engines.map(\.key) })
+        return entry.engines.filter { !connectedKeys.contains($0.key) }
+    }
+
+    private func selectionBinding(for engine: RuntimeViewerSettings.Settings.Indexing.EngineReference) -> Binding<Bool> {
+        Binding(
+            get: { entry.selectsEngine(withKey: engine.key) },
+            set: { isSelected in entry.setEngine(engine, isSelected: isSelected) }
+        )
     }
 }
 

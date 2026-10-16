@@ -65,13 +65,19 @@ public final class RuntimeBackgroundIndexingCoordinator {
     private var lastKnownHeuristicEnabled: Bool = false
     private var lastKnownCustomEnabled: Bool = false
     #if canImport(RuntimeViewerSettings)
-    private var lastKnownCustomEntries: [Settings.Indexing.AlwaysIndexEntry] = []
+    /// What `custom.entries` asked of the current engine when last looked
+    /// at, as `alwaysIndexDispatches(of:)` projects it. Compared in place of
+    /// the entries themselves, so an edit that changes nothing on this
+    /// engine — another engine's choice on a row — is not taken for one
+    /// that does. Re-seeded on engine swap, because the projection is the
+    /// engine's.
+    private var lastKnownAlwaysIndexDispatches: [AlwaysIndexDispatch] = []
     /// Identifiers from `custom.entries` that have successfully resolved
     /// to a path and had `startBatch` dispatched at least once during the
     /// current engine session. Used by `startAlwaysIndexBatches` to skip
     /// no-op re-entry triggered by the reload pump. Reset on engine swap,
-    /// master off→on, custom off→on, and entry-list change so genuinely
-    /// new work re-runs.
+    /// master off→on, custom off→on, and a change to what the entries ask
+    /// of this engine so genuinely new work re-runs.
     private var dispatchedAlwaysIndexIdentifiers: Set<String> = []
     #endif
 
@@ -311,8 +317,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
         startReloadDataPump()
         // New engine session — clear the dispatched-identifiers gate so the
         // always-index list re-dispatches against the new engine's image
-        // list (which starts empty for remote engines).
+        // list (which starts empty for remote engines), and take the new
+        // engine's view of the list as the baseline later edits compare to.
         dispatchedAlwaysIndexIdentifiers.removeAll()
+        lastKnownAlwaysIndexDispatches = alwaysIndexDispatches(of: currentIndexingSettings().custom.entries)
         // If the feature is enabled, treat the swap like a fresh document
         // open — the new engine's main executable should be indexed.
         // `documentDidOpen()` also triggers the always-index list.
@@ -399,17 +407,36 @@ extension RuntimeBackgroundIndexingCoordinator {
 
     // MARK: - Always-index list
 
+    /// One always-index entry as it applies to this coordinator's engine:
+    /// the image to resolve and whether to follow its dependencies. An entry
+    /// that is switched off, or limited to other engines, has none.
+    struct AlwaysIndexDispatch: Equatable {
+        let identifier: String
+        let followDependencies: Bool
+    }
+
+    /// Projects `entries` onto the current engine, in list order: what each
+    /// enabled entry that applies here asks this engine to index.
+    private func alwaysIndexDispatches(of entries: [Settings.Indexing.AlwaysIndexEntry]) -> [AlwaysIndexDispatch] {
+        let engineKey = Settings.Indexing.EngineReference.key(for: engine)
+        return entries
+            .filter { $0.isEnabled && $0.applies(toEngineWithKey: engineKey) }
+            .map { AlwaysIndexDispatch(identifier: $0.identifier, followDependencies: $0.followDependencies) }
+    }
+
     /// Reads `Settings.Indexing.custom.entries` and starts one batch per
-    /// resolvable entry. Entries that don't resolve to a path in the engine's
-    /// `imageList` are silently skipped — they remain in
-    /// `lastKnownCustomEntries` as still-pending so the next fullReload
-    /// retry can pick them up.
+    /// resolvable entry that applies to this engine. Entries that don't
+    /// resolve to a path in the engine's `imageList` are silently skipped —
+    /// they stay out of `dispatchedAlwaysIndexIdentifiers`, so the next
+    /// fullReload retry can pick them up.
     ///
     /// `isEnabled` is the per-row switch: disabled entries are skipped at
     /// dispatch time with the same semantics as a removed row — an
     /// already-running batch finishes naturally, only future dispatches
-    /// are suppressed. Re-enabling flips entry equality, which resets the
-    /// dispatched gate in `handleSettingsChange` so the entry re-dispatches.
+    /// are suppressed. Re-enabling changes what the entries ask of this
+    /// engine, which resets the dispatched gate in `handleSettingsChange`
+    /// so the entry re-dispatches. An entry limited to other engines is
+    /// skipped the same way: on this engine it is a row switched off.
     ///
     /// `followDependencies` controls the per-entry depth: when false, the
     /// batch is pinned to `depth: 0` so the BFS only emits the resolved
@@ -423,18 +450,16 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// settings change, engine swap). Callers are responsible for checking
     /// master / custom enablement before invoking.
     private func startAlwaysIndexBatches() {
-        let entries = currentIndexingSettings().custom.entries
-        guard !entries.isEmpty else { return }
-        // Gate: only process enabled entries we haven't dispatched yet this
+        // Gate: only process entries we haven't dispatched yet this
         // session. The reload pump re-enters here after every fullReload,
         // including ones our own batch finishes emit; without this filter
         // we'd start a fresh zero-item batch for each already-dispatched
         // identifier, which finishes immediately, fires reloadData,
         // re-enters here, loops forever.
-        let pendingEntries = entries.filter {
-            $0.isEnabled && !dispatchedAlwaysIndexIdentifiers.contains($0.identifier)
+        let pendingDispatches = alwaysIndexDispatches(of: currentIndexingSettings().custom.entries).filter {
+            !dispatchedAlwaysIndexIdentifiers.contains($0.identifier)
         }
-        guard !pendingEntries.isEmpty else { return }
+        guard !pendingDispatches.isEmpty else { return }
         Task { [weak self, engine] in
             guard let self else { return }
             let indexing = self.currentIndexingSettings()
@@ -449,17 +474,17 @@ extension RuntimeBackgroundIndexingCoordinator {
             // the gate above leaves unresolved identifiers eligible for
             // retry until they finally match a path in `imageList`.
             let imageList = await engine.imageList
-            for entry in pendingEntries {
-                guard let resolvedPath = resolveAlwaysIndexIdentifier(entry.identifier, in: imageList) else { continue }
-                let effectiveDepth = entry.followDependencies ? indexing.heuristic.depth : 0
+            for dispatch in pendingDispatches {
+                guard let resolvedPath = resolveAlwaysIndexIdentifier(dispatch.identifier, in: imageList) else { continue }
+                let effectiveDepth = dispatch.followDependencies ? indexing.heuristic.depth : 0
                 let id = await engine.backgroundIndexingManager.startBatch(
                     rootImagePath: resolvedPath,
                     depth: effectiveDepth,
                     maxConcurrency: indexing.maxConcurrency,
-                    reason: .alwaysIndex(identifier: entry.identifier))
+                    reason: .alwaysIndex(identifier: dispatch.identifier))
                 guard self.engine === engine else { return }
                 self.staging.insertDocumentBatchID(id)
-                self.dispatchedAlwaysIndexIdentifiers.insert(entry.identifier)
+                self.dispatchedAlwaysIndexIdentifiers.insert(dispatch.identifier)
             }
         }
     }
@@ -512,7 +537,7 @@ extension RuntimeBackgroundIndexingCoordinator {
         self.lastKnownMasterEnabled = indexing.isEnabled
         self.lastKnownHeuristicEnabled = indexing.heuristic.isEnabled
         self.lastKnownCustomEnabled = indexing.custom.isEnabled
-        self.lastKnownCustomEntries = indexing.custom.entries
+        self.lastKnownAlwaysIndexDispatches = alwaysIndexDispatches(of: indexing.custom.entries)
         self.subscribeToSettings()
     }
 
@@ -525,8 +550,9 @@ extension RuntimeBackgroundIndexingCoordinator {
             _ = snapshot.heuristic.depth
             _ = snapshot.custom.isEnabled
             // Track custom entries too so the observation re-fires when the
-            // user adds / edits / removes a row or flips a per-row toggle
-            // (isEnabled / followDependencies) in Settings UI.
+            // user adds / edits / removes a row, flips a per-row toggle
+            // (isEnabled / followDependencies) or changes a row's engines in
+            // Settings UI.
             _ = snapshot.custom.entries
         } onChange: { [weak self] in
             // onChange fires off the main actor synchronously after any mutation.
@@ -554,8 +580,10 @@ extension RuntimeBackgroundIndexingCoordinator {
     ///   gate and dispatch always-index.
     /// - custom on → off (master stays on) : cancel only batches whose
     ///   reason `isCustom`; heuristic batches keep running.
-    /// - custom.entries changed (both stay on) : drop removed identifiers
-    ///   from the gate, reset edited ones, dispatch fresh entries.
+    /// - what custom.entries ask of this engine changed (both stay on) :
+    ///   drop removed identifiers from the gate, reset edited ones, dispatch
+    ///   fresh entries. An edit that only touches other engines changes
+    ///   nothing here.
     ///
     /// `depth` / `maxConcurrency` changes are intentional no-ops; next
     /// `startBatch` picks up the new values. The manager counts
@@ -586,7 +614,7 @@ extension RuntimeBackgroundIndexingCoordinator {
             }
             // Sync the entries baseline so the entries-changed branch below
             // doesn't double-fire after this off→on sweep.
-            lastKnownCustomEntries = indexing.custom.entries
+            lastKnownAlwaysIndexDispatches = alwaysIndexDispatches(of: indexing.custom.entries)
             return
         }
 
@@ -625,41 +653,43 @@ extension RuntimeBackgroundIndexingCoordinator {
             }
         }
 
-        // Entry list changes: trigger always-index when content actually
-        // changed and both master + custom are enabled. Adding / editing
-        // entries (or flipping a per-row toggle) kicks off batches for the
-        // new content; removing entries — and disabling a row via its
-        // isEnabled switch — is silent: already-running batches keep
-        // running unless the user cancels them from the popover, and
-        // `startAlwaysIndexBatches` skips disabled rows on future
-        // dispatches. Toggling followDependencies on an existing entry
-        // also kicks off a new batch: Manager dedup is by `rootImagePath`,
-        // so the existing depth=0 batch stays the in-flight winner until
-        // it finishes. The depth change picks up on the next start (e.g.
-        // document reopen).
-        let previousEntries = lastKnownCustomEntries
-        let latestEntries = indexing.custom.entries
-        let entriesChanged = latestEntries != previousEntries
-        lastKnownCustomEntries = latestEntries
+        // Entry list changes: trigger always-index when what the entries ask
+        // of this engine actually changed and both master + custom are
+        // enabled. Adding / editing entries (or flipping a per-row toggle,
+        // or adding this engine to a row) kicks off batches for the new
+        // content; removing entries — and disabling a row via its isEnabled
+        // switch, or taking this engine off it — is silent: already-running
+        // batches keep running unless the user cancels them from the Report
+        // navigator, and `startAlwaysIndexBatches` skips those rows on future
+        // dispatches. Changing only other engines' choice on a row leaves the
+        // projection as it was, so nothing happens here. Toggling
+        // followDependencies on an existing entry also kicks off a new batch:
+        // Manager dedup is by `rootImagePath`, so the existing depth=0 batch
+        // stays the in-flight winner until it finishes. The depth change
+        // picks up on the next start (e.g. document reopen).
+        let previousDispatches = lastKnownAlwaysIndexDispatches
+        let latestDispatches = alwaysIndexDispatches(of: indexing.custom.entries)
+        let dispatchesChanged = latestDispatches != previousDispatches
+        lastKnownAlwaysIndexDispatches = latestDispatches
         // Skip when custom off→on already fired startAlwaysIndexBatches
         // above to avoid a duplicate (Manager dedup would no-op the second
         // call, but skipping the redundant Task hop is cleaner).
-        if entriesChanged, nowMaster, nowCustom, wasCustom {
-            // Drop identifiers no longer in the list and reset
+        if dispatchesChanged, nowMaster, nowCustom, wasCustom {
+            // Drop identifiers no longer asked of this engine and reset
             // followDependencies-flipped ones so they can re-dispatch with
-            // the new depth. Identifiers whose row was untouched stay in
+            // the new depth. Identifiers whose dispatch was untouched stay in
             // the set so we don't pointlessly re-run their batches.
             // Duplicate identifiers in either list collapse to "last wins";
             // a per-identifier resolution can only produce one rootImagePath
             // anyway, so equivalence under the last copy is good enough.
-            let latestByID = Dictionary(latestEntries.map { ($0.identifier, $0) },
-                                        uniquingKeysWith: { _, latest in latest })
-            let previousByID = Dictionary(previousEntries.map { ($0.identifier, $0) },
-                                          uniquingKeysWith: { _, latest in latest })
+            let latestByIdentifier = Dictionary(latestDispatches.map { ($0.identifier, $0) },
+                                                uniquingKeysWith: { _, latest in latest })
+            let previousByIdentifier = Dictionary(previousDispatches.map { ($0.identifier, $0) },
+                                                  uniquingKeysWith: { _, latest in latest })
             dispatchedAlwaysIndexIdentifiers = dispatchedAlwaysIndexIdentifiers.filter { identifier in
-                guard let latestEntry = latestByID[identifier] else { return false }
-                guard let previousEntry = previousByID[identifier] else { return true }
-                return latestEntry == previousEntry
+                guard let latestDispatch = latestByIdentifier[identifier] else { return false }
+                guard let previousDispatch = previousByIdentifier[identifier] else { return true }
+                return latestDispatch == previousDispatch
             }
             startAlwaysIndexBatches()
         }

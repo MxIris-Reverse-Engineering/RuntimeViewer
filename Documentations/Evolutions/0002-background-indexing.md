@@ -3,7 +3,7 @@
 - **状态**: Accepted
 - **作者**: JH
 - **日期**: 2026-04-24
-- **最后更新**: 2026-08-03
+- **最后更新**: 2026-10-15
 
 ## 摘要
 
@@ -859,3 +859,4 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift
 | 2026-08-03 | **Always Index 行级开关与 Recursive 标签**:`AlwaysIndexEntry` 新增 `@Default(true) isEnabled`;Settings UI 每行改为「启用开关 + 输入框 + `Recursive` 标签开关 + 删除」布局,两个开关均带 `.help()` tooltip;`startAlwaysIndexBatches` 派发时跳过 `isEnabled == false` 的条目 | 用户反馈:原每行唯一的开关绑定 `followDependencies`(递归索引依赖闭包)却因 `labelsHidden()` 无任何可见说明,易被误认为"是否索引该条目";且暂停某个镜像只能整行删除。行开关关闭语义与删除行一致 —— 在跑批次自然跑完,仅抑制后续派发;重新打开时 entries 的 `Equatable` 变化会重置 dispatched gate 自动重新派发。`@Default(true)` 保证旧持久化数据解码为启用,无迁移成本 |
 | 2026-08-03 | **修订 2026-04-28 engine swap 决策**:`handleEngineSwap` 不再清 `historyRelay`,历史跨源切换保留;`StagingStore.clearForEngineSwap` 改为原子 `drainForEngineSwap`,swap 时把等待 coalesce 窗口的已完结批次原样落入 history,仍在跑的批次经 `cancelledSwapSnapshot` 合成为已取消快照(镜像 manager `finalize` 语义:`isFinished`/`isCancelled` 置位,非 terminal item 置 `.cancelled`)后落入 history;仅用户 Clear History 清空 | 用户反馈:切换源后弹出框的索引历史被清空。原设计认为"旧引擎的批次和历史不再适用",但 history 条目是纯值快照(UUID id,无引擎引用),语义上是"本 Document 会话索引过什么"而非引擎状态。swap 时在跑批次的 `.batchCancelled` 事件因 pump 已停永不到达,不合成快照就会凭空消失;`batchesRelay` 先清空再落 history,维持 `flushPendingUpdates` 的 active-then-history 顺序约束 |
 | 2026-10-01 | toolbar 的 Background Indexing 按钮与弹窗由侧栏的 Report navigator 取代（`feature/find-navigator`，[0030-report-navigator](0030-report-navigator.md)） | 后台索引的批次与 Find 语料的构建放到同一页里看；本提案的协调器、manager 与事件流不变，变的只是展示它们的地方。弹窗的行为逐条去留见该提案。 |
+| 2026-10-15 | **Always Index 按 Engine 区分**：`AlwaysIndexEntry` 新增 `appliesToAllEngines`（默认 true）与 `engines`；协调器先把条目投影到自己的 Engine 再派发、再比较前后变化，只改别的 Engine 的选择不会在本 Engine 上重新派发；设置页每行加 Engine 多选菜单（[0054-always-index-per-engine](0054-always-index-per-engine.md)） | 用户反馈：清单原先对每个 Engine 都生效，同一个镜像在 My Mac、Mac Catalyst、Attach 的进程、设备上各索引一遍。旧的持久化数据解码为对所有 Engine 生效，行为不变。Always Index 的派发语义以该提案为准 |
