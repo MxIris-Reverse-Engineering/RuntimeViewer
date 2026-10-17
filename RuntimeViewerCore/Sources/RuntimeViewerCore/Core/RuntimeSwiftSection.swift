@@ -328,7 +328,9 @@ extension RuntimeSwiftSection {
         case .rootProtocol(let rootProtocolName):
             guard let definition = indexer.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObject }
             try await newInterfaceString.append(printer.printProtocolDefinition(definition))
-            if !definition.defaultImplementationExtensions.isEmpty {
+            // The printer trails a protocol without a parent type definition with its default
+            // implementations itself; appending them here as well printed them twice.
+            if definition.parent != nil, !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
@@ -339,7 +341,9 @@ extension RuntimeSwiftSection {
         case .childProtocol(let childProtocolName):
             guard let definition = indexer.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObject }
             try await newInterfaceString.append(printer.printProtocolDefinition(definition))
-            if !definition.defaultImplementationExtensions.isEmpty {
+            // The printer trails a protocol without a parent type definition with its default
+            // implementations itself; appending them here as well printed them twice.
+            if definition.parent != nil, !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }

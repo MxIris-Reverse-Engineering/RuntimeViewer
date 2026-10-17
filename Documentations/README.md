@@ -79,6 +79,7 @@
 
 按时间倒序。
 
+- [协议的默认实现被打印两遍](ResolvedIssues/2026-10-01-protocol-default-implementations-printed-twice.md)（2026-10-01）—— 上游打印器开始自己补打之后，本仓库的追加成了第二遍。
 - [「剥离合成方法」从来没剥掉过 setter](ResolvedIssues/2026-08-15-synthesized-setter-selector-strip.md)（2026-08-15）—— 收集的是 `setFoo`，匹配的是 `setFoo:`。
 - [库校验拦住 dlopen 注入](ResolvedIssues/2026-08-06-library-validation-blocks-dlopen-injection.md)（2026-08-06）—— Music 一类 Apple App 附加不上的原因。
 - [从 Inspector 跳转时 sidebar 选中高亮闪烁](ResolvedIssues/2026-08-05-sidebar-selection-highlight-flicker.md)（2026-08-05）
