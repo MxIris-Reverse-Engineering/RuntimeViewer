@@ -801,11 +801,22 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 
 **光标所在成员**：`DocumentState.cursorMember`，由内容区在选区变化时更新，只认当前显示对象的成员。Inspector 的 References 标签与主菜单命令都跟随它。
 
-**Inspector 的 References 标签**：ObjC 类、Swift 结构体、枚举、类显示这个标签。三段：调用者、被调（不含运行时辅助调用）、类型引用，各列一层，一段最多 200 行；光标不在成员上时只显示类型引用，并提示把光标放到方法或属性上。行可点击跳到成员的声明；段头的按钮把同一条查询交给 Find 导航页展开成树。每段各有一个状态值与一条管线，按各自的主题取消旧查询：光标换到另一个成员只重查调用，类型引用不动。
+**Inspector 的 References 标签**：ObjC 类、Swift 结构体、枚举、类显示这个标签。三段：调用者、被调（不含运行时辅助调用）、类型引用，各列一层，一段最多 200 行；光标不在成员上时只显示类型引用，并提示把光标放到方法或属性上。**只查对象所在的那一个镜像**（标题下注明「In AppKit」），要看全部镜像用段尾的 Show in Find Navigator；**标签不在屏幕上时什么都不查**，出现时再查隐藏期间变了的主题（2026-10-17 试用后改，见「试用后的修复」）。行可点击跳到成员的声明；段头的按钮把同一条查询交给 Find 导航页展开成树。每段各有一个状态值与一条管线，按各自的主题取消旧查询：光标换到另一个成员只重查调用，类型引用不动。
 
 **还没做的**：SourceEditor 路径不跟随光标——桥接层没有选区变化的回调，要按 SourceEditor 模块的规矩（先有 dump、再改存根）另做；这条路径上右键菜单照常可用。嵌套类型里的成员在外层类型的内容里不提供命令（它们属于嵌套类型，不是这个对象的），要用就打开嵌套类型本身。
 
 **测试**：`RuntimeDeclaredMemberTests`（Core，按行读成员的规则）、`ContentCrossReferenceTests`（成员属性、右键命令、光标成员、主菜单命令的目标）、`InspectorReferencesViewModelTests`（共享测试引擎，范围限定在 Foundation）。
+
+## 试用后的修复（2026-10-17）
+
+第 5、6 步落地后用户第一次试用（Debug 构建）：查 AppKit 内部结构体 `NSSmartNamingSuggestion` 的类型引用，Find 与 Inspector 一起转了几分钟，本地运行时服务占满 27 个核心。排查记录：[2026-10-17 交叉引用查询又慢又占满 CPU](../ResolvedIssues/2026-10-17-cross-reference-queries-slow-and-cpu-bound.md)。用户批准全部四项修复：
+
+- 库：Swift 类型的预筛先看定义镜像导不导出它的符号，一个都不导出就只扫定义镜像（MachOSwiftSection `e470f193`，本仓库钉到它）。这次查询从 231 秒降到 6.8 秒（Debug）。
+- Inspector：只在标签可见时查，只查对象所在的镜像。
+- 引擎：会话共享进行中的扫描，同一镜像同一主题同时只扫一次。
+- Find：展开行不再同步发布结果（RxSwift 的重入警告）。
+
+Debug 构建里扫描器没有优化、比 Release 慢一个数量级以上，这一条不修。
 
 ## 审查与修复（2026-10-17）
 
@@ -868,3 +879,5 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 | 2026-10-17 | 第 6 步：成员按行对齐用 Core 的反向读行接口，以 `.runtimeViewerDeclaredMember` 属性标在内容文本上 | 和类型名的 `.link` 同一个做法，两条文本路径共用；读行规则与 Find 语料定位成员的是同一套，不另写一份 |
 | 2026-10-17 | 主菜单只给 Find Call Hierarchy 设快捷键 ⌃⇧⌘H | 照 Xcode 的按键绑定；Callees 与 Type References 在 Xcode 里没有对应命令 |
 | 2026-10-17 | Inspector 的 References 标签只给 ObjC 类与 Swift 结构体、枚举、类；SourceEditor 路径暂不跟随光标 | 这些类型的成员有代码、引用也找得到；SourceEditor 的桥接层没有选区回调，要另按该模块的规矩做 |
+| 2026-10-17 | Inspector 的 References 标签只查对象所在的镜像，且只在可见时查 | 用户试用时 Inspector 每换一个对象就发起一次全部镜像的扫描，看不见时也查；用户选「只查对象所在的镜像」，全部镜像交给 Find |
+| 2026-10-17 | 会话共享进行中的扫描（`sharedScan`）；展开行时下一层延到主线程下一轮再启动 | Find 与 Inspector 同时查同一主题各扫一遍；展开时同步发布引起 RxSwift 重入警告。各带修复前失败的测试 |
