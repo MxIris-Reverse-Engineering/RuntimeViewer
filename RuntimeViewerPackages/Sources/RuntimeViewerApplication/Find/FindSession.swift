@@ -805,11 +805,15 @@ public final class FindSession {
         guard let direction = query.mode.crossReferenceDirection else { return }
         let tree = FindCrossReferenceTree(direction: direction, roots: roots)
         crossReferenceTree = tree
+        // The rows first, for the load requests the queue is checked against;
+        // then the first level, and the rows once more with it loading.
         publishCrossReferenceTree()
         for identifier in roots.indices.map(tree.rootIdentifier(at:)) where tree.expandedIdentifiers.contains(identifier) {
             enqueueCrossReferenceLevel(of: identifier)
         }
-        loadNextCrossReferenceLevel()
+        if startNextCrossReferenceLevel() {
+            publishCrossReferenceTree()
+        }
         updateCrossReferenceSearchingState()
     }
 
@@ -821,12 +825,24 @@ public final class FindSession {
 
     /// A row of the cross-reference tree was expanded — by the user, or by the
     /// page putting an expansion back. Its level loads, unless it has.
+    ///
+    /// The load starts on the main actor's next turn, never inside this call:
+    /// the page puts expansions back while it applies the rows the session
+    /// last published, and publishing again from in there would deliver new
+    /// rows to the page in the middle of applying the old ones — RxSwift's
+    /// "Reentrancy anomaly", seen when a finished level let the next one start
+    /// as the page re-expanded its rows.
     public func crossReferenceRowDidExpand(_ identifier: String) {
         guard crossReferenceTree != nil else { return }
         crossReferenceTree?.expand(identifier)
         enqueueCrossReferenceLevel(of: identifier)
-        loadNextCrossReferenceLevel()
-        updateCrossReferenceSearchingState()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if startNextCrossReferenceLevel() {
+                publishCrossReferenceTree()
+            }
+            updateCrossReferenceSearchingState()
+        }
     }
 
     public func crossReferenceRowDidCollapse(_ identifier: String) {
@@ -851,12 +867,14 @@ public final class FindSession {
         crossReferenceLoadQueue.append(identifier)
     }
 
-    /// Starts the next level waiting, unless one is loading.
-    private func loadNextCrossReferenceLevel() {
+    /// Starts the next level waiting, unless one is loading, and says whether
+    /// it started one. It publishes nothing: the caller publishes the rows
+    /// once, with whatever else it changed.
+    private func startNextCrossReferenceLevel() -> Bool {
         guard crossReferenceLoadRun == nil,
               let engine = documentState?.runtimeEngine,
               let direction = crossReferenceTree?.direction
-        else { return }
+        else { return false }
         while !crossReferenceLoadQueue.isEmpty {
             let identifier = crossReferenceLoadQueue.removeFirst()
             guard crossReferenceTree?.loadState(of: identifier) == nil, let request = crossReferenceLoadRequests[identifier] else { continue }
@@ -864,7 +882,6 @@ public final class FindSession {
             crossReferenceLoadRun = run
             crossReferenceLoadProgress = nil
             crossReferenceTree?.setLoadState(.loading, of: identifier)
-            publishCrossReferenceTree()
             let scopes = crossReferenceScopes()
             crossReferenceLoadTask = Task { [weak self] in
                 let outcome: Result<RuntimeCrossReferenceQueryResult, any Swift.Error>
@@ -878,8 +895,9 @@ public final class FindSession {
                 guard let self else { return }
                 crossReferenceLevelDidLoad(identifier, outcome: outcome, from: run)
             }
-            return
+            return true
         }
+        return false
     }
 
     /// One level: a row's callers, its callees with the runtime helper calls
@@ -953,8 +971,10 @@ public final class FindSession {
             tree.setLoadState(.failed(Self.crossReferenceFailureMessage(for: error)), of: identifier)
         }
         crossReferenceTree = tree
+        // The next level starts before the rows are published, so one update
+        // carries both: the page re-expands rows as it applies it.
+        _ = startNextCrossReferenceLevel()
         publishCrossReferenceTree()
-        loadNextCrossReferenceLevel()
         updateCrossReferenceSearchingState()
     }
 

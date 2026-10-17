@@ -325,6 +325,32 @@ struct FindViewModelCrossReferenceTests {
         #expect(expandedNodes.first?.children.first { $0.identifier == caller.identifier }?.children.allSatisfy { $0.identifier.hasPrefix(caller.identifier + "/") } == true)
     }
 
+    @Test("expanding a row starts its level on the main actor's next turn, never inside the expansion")
+    func expansionNeverPublishesWhileThePageApplies() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let member = try await Self.appendString(on: engine)
+        recentQuerySelectedRelay.accept(Self.query(.callHierarchy, for: .member(member, declaration: nil)))
+        let callers = try #require(Self.loadedLevel(of: try await nextValue(from: output.nodes, timeout: 60) { Self.loadedLevel(of: $0)?.isEmpty == false }))
+        let caller = try #require(callers.first { Self.row(of: $0)?.isRecursive == false })
+        let session = environment.documentState.findSession
+        var publishedCount = 0
+        let subscription = session.$results.asObservable().subscribeOnNext { _ in publishedCount += 1 }
+        defer { subscription.dispose() }
+        let publishedBefore = publishedCount
+
+        // What the page does while it applies published rows: put an expansion back.
+        session.crossReferenceRowDidExpand(caller.identifier)
+        #expect(publishedCount == publishedBefore, "rows published from inside the expansion reach the page while it applies the last ones")
+
+        _ = try await nextValue(from: output.nodes, timeout: 60) { nodes in
+            nodes.first?.children.first { $0.identifier == caller.identifier }.map { !$0.children.contains(where: Self.isLoadingRow) } == true
+        }
+        #expect(publishedCount > publishedBefore)
+    }
+
     @Test("Callees lists what the member calls, the runtime helper calls only once shown")
     func calleesWithAndWithoutRuntimeHelperCalls() async throws {
         let engine = try await TestRuntimeEngine.shared()
