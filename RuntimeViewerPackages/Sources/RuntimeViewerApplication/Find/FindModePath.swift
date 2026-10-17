@@ -35,7 +35,13 @@ public enum FindModePathChoice: Hashable, Sendable {
 
     func apply(to query: inout FindQuery) {
         switch self {
-        case .mode(let mode): query.mode = mode
+        case .mode(let mode):
+            query.mode = mode
+            // A command's root goes with a mode it does not fit: a member has
+            // calls, a type has references.
+            if let direction = mode.crossReferenceDirection, let root = query.crossReferenceRoot, !root.fits(direction) {
+                query.crossReferenceRoot = nil
+            }
         case .textMatchStyle(let style): query.textMatchStyle = style
         case .memberMatchStyle(let style): query.memberMatchStyle = style
         }

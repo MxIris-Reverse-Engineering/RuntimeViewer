@@ -78,6 +78,14 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let filterControlBar = NavigatorFilterControlBar()
 
+    /// Show Runtime Calls, on the bar's trailing side while the mode is Callees. An item has no
+    /// state of its own: it shows on in the accent colour.
+    private let runtimeHelperCallsToggle = FindFilterBarToggle(
+        image: SFSymbols(systemName: .memorychip).nsuiImgae,
+        activeImage: SFSymbols(systemName: .memorychip).paletteColors([.controlAccentColor]).nsuiImgae,
+        toolTip: "Show Runtime Calls"
+    )
+
     /// Runs the results under the query area, the tab switcher's bar and the filter bar from macOS 26
     /// on. Made in `viewDidLoad`.
     private var navigatorScrollViewLayout: NavigatorScrollViewLayout?
@@ -367,23 +375,38 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             .filter { FindResultActivation.opensInNewTab(for: $0.triggeringEvent) }
             .map(\.item)
 
+        // Xcode's result rows offer Find Call Hierarchy first (`NavigatorContextualMenu` in
+        // IDEKit's plug-in data); the commands of the other cross-reference modes follow it.
         let contextMenuItems: Observable<[FindResultMenuItem]> = contextMenu.rx.needsUpdate
             .asObservable()
             .map { [weak outlineView] _ -> [FindResultMenuItem] in
                 guard let outlineView,
                       outlineView.clickedRow >= 0,
-                      let node = outlineView.item(atRow: outlineView.clickedRow) as? FindResultNode,
-                      node.canOpenInNewTab
+                      let node = outlineView.item(atRow: outlineView.clickedRow) as? FindResultNode
                 else { return [] }
-                return [FindResultMenuItem(title: "Open in New Tab", image: SFSymbols(systemName: .plusSquareOnSquare).nsImage, node: node)]
+                var items = node.crossReferenceModes.map { mode in
+                    FindResultMenuItem(title: "Find \(mode.title)", image: nil, node: node, action: .crossReference(mode))
+                }
+                if node.canOpenInNewTab {
+                    items.append(FindResultMenuItem(title: "Open in New Tab", image: SFSymbols(systemName: .plusSquareOnSquare).nsImage, node: node, action: .openInNewTab))
+                }
+                return items
             }
         contextMenu.rx.items(source: contextMenuItems)({ menuItem, entry in
             menuItem.image = entry.image
         })
         .disposed(by: rx.disposeBag)
-        let resultOpenedFromMenu: Signal<FindResultNode> = contextMenu.rx.itemSelected(FindResultMenuItem.self)
-            .map(\.item.node)
+        let contextMenuItemSelected = contextMenu.rx.itemSelected(FindResultMenuItem.self)
+            .map(\.item)
             .asSignal(onErrorSignalWith: .empty())
+        let resultOpenedFromMenu: Signal<FindResultNode> = contextMenuItemSelected
+            .filter { $0.action == .openInNewTab }
+            .map(\.node)
+        let crossReferenceCommandSelected: Signal<FindCrossReferenceCommand> = contextMenuItemSelected
+            .compactMap { menuItem in
+                guard case .crossReference(let mode) = menuItem.action else { return nil }
+                return FindCrossReferenceCommand(node: menuItem.node, mode: mode)
+            }
 
         let resultsSelected: Signal<[FindResultNode]> = outlineView.rx.proposedSelection()
             .asSignal()
@@ -430,7 +453,11 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             resultOpenedInNewTab: .merge(resultOpenedFromMenu, resultOpenedWithOption),
             resultCollapsed: resultCollapsed,
             resultExpanded: resultExpanded,
-            resultsSelected: resultsSelected
+            resultsSelected: resultsSelected,
+            crossReferenceCommandSelected: crossReferenceCommandSelected,
+            runtimeHelperCallsToggled: runtimeHelperCallsToggle.clicked
+                .map { [weak runtimeHelperCallsToggle] in !(runtimeHelperCallsToggle?.isActive ?? false) }
+                .asSignal(onErrorSignalWith: .empty())
         )
         let output = viewModel.transform(input)
 
@@ -535,6 +562,28 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             view.window?.makeFirstResponder(searchField)
         }
         .disposed(by: rx.disposeBag)
+
+        // Off for a tree that loads its rows as they are expanded, as Xcode's is; the text stays,
+        // and applies again to the next search that can be filtered.
+        output.isFilterEnabled.driveOnNext { [weak self] isFilterEnabled in
+            guard let self else { return }
+            filterSearchField.isEnabled = isFilterEnabled
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.isScopeEnabled.drive(scopeButton.rx.isEnabled).disposed(by: rx.disposeBag)
+
+        output.isRuntimeHelperCallsToggleShown.driveOnNext { [weak self] isShown in
+            guard let self else { return }
+            filterControlBar.trailingItems = isShown ? [runtimeHelperCallsToggle.item] : []
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.showsRuntimeHelperCalls.driveOnNext { [weak self] showsRuntimeHelperCalls in
+            guard let self else { return }
+            runtimeHelperCallsToggle.isActive = showsRuntimeHelperCalls
+        }
+        .disposed(by: rx.disposeBag)
     }
 
     // MARK: - Type Select
@@ -561,9 +610,52 @@ extension FindViewController: NavigatorTabPage {}
 /// Declared outside the generic view controller: a type nested in a generic class is generic
 /// itself.
 private struct FindResultMenuItem: RxMenuItemRepresentable {
+    enum Action: Equatable {
+        case openInNewTab
+        /// Find Call Hierarchy, Find Callees or Find Type References.
+        case crossReference(FindMode)
+    }
+
     let title: String
     let image: NSImage?
     let node: FindResultNode
+    let action: Action
+}
+
+// MARK: - Filter Bar Toggle
+
+/// An item of the filter bar that switches something on and off, showing on in the accent
+/// colour: a bar item has no state of its own, and no `rx` accessor either, so it reports its
+/// presses through `clicked`.
+///
+/// Declared outside the generic view controller, which an `@objc` target cannot be nested in.
+private final class FindFilterBarToggle: NSObject {
+    private(set) var item: NSFilterControlBarItem!
+
+    private let image: NSImage
+
+    private let activeImage: NSImage
+
+    let clicked = PublishRelay<Void>()
+
+    var isActive = false {
+        didSet {
+            item.image = isActive ? activeImage : image
+        }
+    }
+
+    init(image: NSImage, activeImage: NSImage, toolTip: String) {
+        self.image = image
+        self.activeImage = activeImage
+        super.init()
+        item = NSFilterControlBarItem(image: image, target: self, action: #selector(itemPressed(_:)))
+        item.toolTip = toolTip
+        item.title = toolTip
+    }
+
+    @objc private func itemPressed(_ sender: Any?) {
+        clicked.accept(())
+    }
 }
 
 // MARK: - Scope Button

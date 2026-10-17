@@ -694,7 +694,7 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 2. **MachOSwiftSection 的库提案与 `CrossReferenceAnalysis`**：函数表与命名、单函数的引用提取、两种桩布局（镜像自带的桩与全缓存共用的桩）与 selector 解析、类型引用、鉴别常量反查、运行时辅助调用分类、预筛。批量扫描用手写解码，写 fixture 测试，并以 Capstone 的结果和 `dyld_info` / IDA 抽样作对照。然后发版。
 3. **`RuntimeViewerCrossReferences` 模块**：线上类型与命令；在 `AGENTS.md`「Injection commands」那张表列出的全部入口调用 `install()`，并把这条义务写进 `AGENTS.md`；本库扫描与会话缓存；跨库按需扫描（预筛、并发、进度、取消）。**已完成（2026-10-16）**，`typeReferences` 随 MachOSwiftSection 第二批于 2026-10-17 补上，记录见「第 3 步的落地记录」与「第 3 步续：类型引用」。
 4. **CLI 与 MCP**：三个子命令、三个工具，agent 插件的 skill 与版本号，以及 `Guides/CommandLineInterface.md`。**顺序已调整（2026-10-17）**：放到第 5、6 步之后，界面做完、没有问题再做。
-5. **Find 导航页的三种模式**：逆向 Xcode 27 的 Call Hierarchy 来对齐界面；结果树、范围控件、精度标记、运行时调用开关；按 `RuntimeViewerApplicationTests` 的规则写 ViewModel 契约测试。
+5. **Find 导航页的三种模式**：逆向 Xcode 27 的 Call Hierarchy 来对齐界面；结果树、范围控件、精度标记、运行时调用开关；按 `RuntimeViewerApplicationTests` 的规则写 ViewModel 契约测试。**已完成（2026-10-17）**，记录见「第 5 步的落地记录」。
 6. **内容区右键与 Inspector 的 References 标签**：成员按行对齐、两条文本路径的菜单、光标所在成员、标签本身及其 ViewModel 测试。
 
 原设计的第 5 步「全量索引」随存盘索引一起删去。
@@ -757,6 +757,38 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 - Tuist：`install` 后 `check` 通过（工程接线、本地包 target 清单、锁文件、trait 设置都与原生工程一致）。
 - 没有验证：经 XPC 或 TCP 的真实跨进程查询（与第 3 步相同，命令注册由安装测试覆盖）；Mac Catalyst 引擎上的查询；注入载荷与越狱版的构建。
 
+## 第 5 步的落地记录（2026-10-17）
+
+**依据**：逆向 Xcode 27.2（27B5028f）的 IDEKit 与 IDEFoundation，证据（符号、地址、plist 键）记在 `/Volumes/RE/Xcode/27.2/README.md` 的「Find navigator: call hierarchy and symbol queries (2026-10-17)」一节；IDEFoundation 的导出与 IDA 库是这次新建的，在同版本目录下。
+
+**照 Xcode 做的**：
+
+- 模式名 Call Hierarchy，查询框占位文字「Method, Property, or Function」（`IDEFoundation.xcplugindata` 的 `queryTermPlaceholderText`），支持四种匹配方式与区分大小写，模式菜单里排在类型模式之后。Xcode 没有 Callees 与 Type References，这两种沿用同一套做法。
+- 键入的词按名字找根：普通名字按匹配方式与大小写匹配方法、属性、函数（类型引用匹配类型）；带类型的写法（`-[NSWindow makeKeyAndOrderFront:]`、`NSWindow.title`）先找成员名、再精确比对类型，匹配方式与大小写不起作用。每个匹配是一个根，只收有代码的成员。
+- 结果树按需加载：没加载的行一律带展开三角，展开时才查下一层，查出空的行三角消失；根到达时自动展开；一个函数又出现在自己这一支的上方时标为递归、不再加载；每层按标题 `-[NSString compare:]` 排序（区分大小写，大写在前）。
+- 有结果时没有汇总行；底部过滤框在这三种模式里禁用（Xcode 的 `enableFilter` 是 `!lazilyFaultsChildren`）；结果行右键第一项是 Find Call Hierarchy，以该行为根重新查询，范围回到默认。
+
+**与 Xcode 不同的地方，及原因**：
+
+| 不同 | 原因 |
+|---|---|
+| 一个调用者一行，标出调用次数；Xcode 每个调用点一行 | 调用点只有指令地址、没有源码行，逐点成行会是一排看不出区别的重复行 |
+| 范围限定在哪些镜像里找调用者与类型引用；Xcode 的调用层级不看范围 | 提案原设计；Callees 只读一个函数，范围按钮在这个模式里禁用 |
+| 展开后、下一层回来前，显示一行「Loading…」，汇总栏显示扫描进度；Xcode 两者都没有 | 一次全缓存扫描要几秒，Xcode 的索引是立刻回答的 |
+| 根超过 10 个时不自动展开；一次只加载一层，按展开的顺序排队 | 每个根、每一层都是一次扫描，每次扫描已占用除一个之外的全部核心 |
+| 不预取下一层（Xcode 加载一层时顺带预取下一层，用来决定要不要显示三角） | 预取意味着对每个调用者再扫一遍；三角照 Xcode 对未加载的行一律显示 |
+| 递归行的图标是 SF Symbol `arrow.triangle.2.circlepath`；Xcode 用自带的 `function_recursive` 图 | Xcode 的图片资源不能拿来用 |
+
+**落地中顺带修掉的引擎问题**（各带一个修复前失败的测试）：
+
+- 经框架符号链接加载的镜像（`Foundation.framework/Foundation`）查不到：链接指向的文件只在共享缓存里，文件系统解析不了。现在查不到时交给 dyld，按句柄找到它登记的那个名字（`imagesNamedThroughFrameworkSymlinksAreFound`）。
+- 调用者与被调里的 ObjC 方法不带所属成员，点了无处可去：现在按名字带上类与 selector，类放在定义它的镜像里——方法所在镜像定义了这个类就是它，否则问运行时类是从哪个镜像加载的（`objectiveCCallersCarryTheirMember`）。
+- 范围选了多个镜像时，客户端曾按范围里的路径过滤引擎的结果，而两边对同一个镜像的路径写法可能不同，结果会被滤空。现在逐个镜像发查询，路径由引擎所在进程解析（`scopesOfSeveralImages`）。
+
+**还没做的**：Swift 的调用者与被调不带所属成员，点了不跳转（要从符号解出所属类型的 key，另做）；结果行没有 Xcode 的 Copy；x86_64 引擎没有把三种模式置灰（第 9 节），现在是展开时出一行错误说明。
+
+**测试**：`FindCrossReferenceTreeTests`（分组、排序、加载与递归、名字解析，不需要引擎）、`FindViewModelCrossReferenceTests`（在共享测试引擎上，范围限定在 Foundation：三种模式、逐层展开、运行时调用开关、键入的词找根、右键命令、点击跳转、多镜像范围），以及 `RuntimeViewerCrossReferencesTests` 新增的两个引擎测试。
+
 ## 审查与修复（2026-10-17）
 
 第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
@@ -812,3 +844,6 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 | 2026-10-17 | 审查后修复 XR.C2、C3、C12、D1、D4、C13；MachOSwiftSection 钉到 `0f1de10d`（缓存外镜像的路径、改名再导出、瞬时 demangle、寄存器写入） | 用户批准「先按你推荐的路径修」；逐条见 2026-10-17 交叉引用审查记录 |
 | 2026-10-17 | 落地顺序调整：修完审查问题后先做第 5、6 步（界面），第 4 步（CLI 与 MCP）放最后 | 用户原话：「修完接UI，MCP和CLI放最后，没问题再做」 |
 | 2026-10-17 | 库的审查 A5（循环头沿用 `x19`–`x28` 的旧值）保持现状 | 精确做法多花 35%–60% 的扫描时间，只换来 0.02%–0.04% 的引用；本仓库按接收者类不同只降级、不排除，这些错误不会让调用者从结果里消失 |
+| 2026-10-17 | 第 5 步照 Xcode 27.2 的 Call Hierarchy 做：按需加载、根自动展开、递归标记、按标题排序、无汇总行、禁用过滤框、Xcode 的占位文字 | 逆向结果见「第 5 步的落地记录」与 `/Volumes/RE/Xcode/27.2/README.md`；用户要求「做得和 Xcode 一样」靠逆向而不是照截图 |
+| 2026-10-17 | 与 Xcode 的六处不同（一个调用者一行、范围生效、Loading 行与进度、根多时不自动展开、一次一层、不预取） | 理由逐条见「第 5 步的落地记录」的表 |
+| 2026-10-17 | 多镜像范围改为逐个镜像查询；引擎按 dyld 解析框架符号链接路径；ObjC 方法的调用者与被调带上所属成员 | 落地测试抓出的三个缺陷，各带修复前失败的测试 |

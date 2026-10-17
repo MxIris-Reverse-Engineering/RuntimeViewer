@@ -10,6 +10,14 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable, Codable {
     case descendantTypes
     case conformingTypes
     case members
+    /// Who calls a method, property or function, a level at a time; Xcode's Call Hierarchy,
+    /// which it lists after the type modes (`displayOrder` 8 in `IDEFoundation.xcplugindata`).
+    case callHierarchy
+    /// What a method, property or function calls, a level at a time. Xcode has no such query.
+    case callees
+    /// The functions that reference a type. Xcode's closest query is Symbols with Include
+    /// References, which finds a symbol's occurrences in source.
+    case typeReferences
 
     public var title: String {
         switch self {
@@ -20,6 +28,9 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable, Codable {
         case .descendantTypes: "Descendent Types"
         case .conformingTypes: "Conforming Types"
         case .members: "Members"
+        case .callHierarchy: "Call Hierarchy"
+        case .callees: "Callees"
+        case .typeReferences: "Type References"
         }
     }
 
@@ -30,14 +41,17 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable, Codable {
         case .regularExpression: "Regular Expression"
         case .ancestorTypes, .descendantTypes, .conformingTypes: "Type Name"
         case .members: "Member Name"
+        // Xcode's `queryTermPlaceholderText` for Call Hierarchy.
+        case .callHierarchy, .callees: "Method, Property, or Function"
+        case .typeReferences: "Type Name"
         }
     }
 
-    /// Whether the third path component offers the text match styles: Text
-    /// and the relationship modes, the queries Xcode declares
-    /// `supportsAnchoring` for. Regular Expression is a pattern of its own and
-    /// offers none, in Xcode too.
-    public var hasTextMatchStyles: Bool { self == .text || relationship != nil }
+    /// Whether the third path component offers the text match styles: Text,
+    /// the relationship modes and the cross-reference modes, the queries Xcode
+    /// declares `supportsAnchoring` for (Call Hierarchy among them). Regular
+    /// Expression is a pattern of its own and offers none, in Xcode too.
+    public var hasTextMatchStyles: Bool { self == .text || relationship != nil || crossReferenceDirection != nil }
 
     /// Whether the third path component offers the member match styles, and
     /// the scope row the member kinds.
@@ -56,18 +70,49 @@ public enum FindMode: String, CaseIterable, Hashable, Sendable, Codable {
         case .ancestorTypes: .ancestors
         case .descendantTypes: .descendants
         case .conformingTypes: .conformers
-        case .text, .regularExpression, .members: nil
+        case .text, .regularExpression, .members, .callHierarchy, .callees, .typeReferences: nil
         }
     }
 
-    /// Whether results come out of the interface corpus (and so depend on it
-    /// being built) rather than out of the relationship tables.
-    public var readsCorpus: Bool {
+    /// What a cross-reference mode loads under each row; `nil` for the other
+    /// modes.
+    public var crossReferenceDirection: FindCrossReferenceDirection? {
         switch self {
-        case .text, .regularExpression, .members: true
-        case .ancestorTypes, .descendantTypes, .conformingTypes: false
+        case .callHierarchy: .callers
+        case .callees: .callees
+        case .typeReferences: .typeReferences
+        case .text, .regularExpression, .ancestorTypes, .descendantTypes, .conformingTypes, .members: nil
         }
     }
+
+    /// Whether the results are a tree whose rows load what is below them when
+    /// they are first expanded. Xcode disables the bottom filter for such a tree
+    /// (`-[IDEFindNavigator enableFilter]` is `!lazilyFaultsChildren`): the rows
+    /// not loaded yet could not be matched.
+    public var loadsChildrenLazily: Bool { crossReferenceDirection != nil }
+
+    /// Whether the scope limits the search: every mode but Callees, which reads
+    /// the one function a row stands for. Xcode keeps the scope out of its Call
+    /// Hierarchy altogether; here it limits where callers are looked for.
+    public var usesScope: Bool { self != .callees }
+
+    /// Whether results come out of the interface corpus (and so depend on it
+    /// being built) rather than out of the relationship tables. The call modes
+    /// find their methods, properties and functions there.
+    public var readsCorpus: Bool {
+        switch self {
+        case .text, .regularExpression, .members, .callHierarchy, .callees: true
+        case .ancestorTypes, .descendantTypes, .conformingTypes, .typeReferences: false
+        }
+    }
+}
+
+/// What a cross-reference mode loads under a row: who calls it, what it
+/// calls, or which functions reference it.
+public enum FindCrossReferenceDirection: String, Hashable, Sendable, Codable {
+    case callers
+    case callees
+    case typeReferences
 }
 
 /// The third path component in text and relationship modes: Xcode's four
@@ -214,6 +259,13 @@ public struct FindQuery: Hashable, Sendable, Codable {
     public var memberKindFilter: FindMemberKindFilter = .any
     public var isCaseSensitive: Bool = false
     public var scope: FindScope = .allIndexedImages
+    /// What a cross-reference mode starts from when a command named it — Find
+    /// Call Hierarchy on a member in the content pane or on a result row —
+    /// with its name in `term`. `nil` matches `term` against names instead.
+    /// Xcode's `-[IDEFindNavigatorQueryParametersController
+    /// initiateCallHierarchyQueryWithSymbol:]` hands its query the symbol the
+    /// same way.
+    public var crossReferenceRoot: FindCrossReferenceRoot?
 
     public init(
         mode: FindMode = .text,
@@ -222,7 +274,8 @@ public struct FindQuery: Hashable, Sendable, Codable {
         memberMatchStyle: FindMemberMatchStyle = .containing,
         memberKindFilter: FindMemberKindFilter = .any,
         isCaseSensitive: Bool = false,
-        scope: FindScope = .allIndexedImages
+        scope: FindScope = .allIndexedImages,
+        crossReferenceRoot: FindCrossReferenceRoot? = nil
     ) {
         self.mode = mode
         self.term = term
@@ -231,6 +284,22 @@ public struct FindQuery: Hashable, Sendable, Codable {
         self.memberKindFilter = memberKindFilter
         self.isCaseSensitive = isCaseSensitive
         self.scope = scope
+        self.crossReferenceRoot = crossReferenceRoot
+    }
+
+    /// The query a command runs for `root` in a cross-reference mode: its name
+    /// in the field, and the scope back at its default, as Xcode's Find Call
+    /// Hierarchy resets it (`-[IDEFindNavigatorCommands
+    /// initiateCallHierarchyQueryWithSymbol:inWorkspaceTabController:]`). The
+    /// match style and the case are left as they were; they do not apply to a
+    /// root.
+    public func crossReferenceQuery(_ mode: FindMode, for root: FindCrossReferenceRoot) -> FindQuery {
+        var query = self
+        query.mode = mode
+        query.term = FindQueryTerm(text: root.title)
+        query.scope = .allIndexedImages
+        query.crossReferenceRoot = root
+        return query
     }
 
     /// A query for text alone, with no patterns.

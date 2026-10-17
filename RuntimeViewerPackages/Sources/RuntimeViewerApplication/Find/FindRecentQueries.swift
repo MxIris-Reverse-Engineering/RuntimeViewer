@@ -27,7 +27,8 @@ enum FindRecentQueries {
     }
 
     /// `text containing`, `regular expression`, `ancestor types starting with`, `ObjC Method
-    /// members ending with`: what a query searches, as the middle of its title.
+    /// members ending with`, `call hierarchy of`: what a query searches, as the middle of its
+    /// title.
     static func searchDescription(of query: FindQuery) -> String {
         switch query.mode {
         case .text:
@@ -38,6 +39,11 @@ enum FindRecentQueries {
             "\(query.mode.title.lowercased()) \(query.textMatchStyle.title.lowercased())"
         case .members:
             "\(membersDescription(of: query.memberKindFilter)) \(memberMatchStyleDescription(of: query.memberMatchStyle))"
+        case .callHierarchy, .callees, .typeReferences:
+            // A command names its root, which no match style applies to.
+            query.crossReferenceRoot == nil
+                ? "\(query.mode.title.lowercased()) \(query.textMatchStyle.title.lowercased())"
+                : "\(query.mode.title.lowercased()) of"
         }
     }
 

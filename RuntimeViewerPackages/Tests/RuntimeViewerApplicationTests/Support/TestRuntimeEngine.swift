@@ -1,5 +1,6 @@
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 
 /// Images every macOS test process already has mapped, so loading them is cheap
 /// and `isImageLoaded` is true from the start.
@@ -35,7 +36,12 @@ enum TestRuntimeEngine {
     }
 
     /// A private local engine for tests that change engine state themselves.
+    ///
+    /// The cross-reference commands are installed first, as every process that serves an engine
+    /// installs them at its entry point: an engine connected before they are has no handler for
+    /// them. Installing is idempotent.
     static func makeConnected(engineID: String, loading imagePaths: [String] = []) async throws -> RuntimeEngine {
+        RuntimeCrossReferences.install()
         let engine = RuntimeEngine(source: .local, engineID: engineID)
         try await engine.connect()
         for imagePath in imagePaths {

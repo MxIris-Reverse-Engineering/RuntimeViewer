@@ -5,6 +5,7 @@ import RxAppKit
 
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
@@ -23,7 +24,8 @@ public struct FindResultCellAppearance: Equatable {
 }
 
 /// One row of the Find navigator's outline: a type with its hits underneath,
-/// a hit, a member, or a node of a relationship tree.
+/// a hit, a member, a node of a relationship tree, or a row of a
+/// cross-reference tree.
 ///
 /// A class (an `NSObject`) because `NSOutlineView` takes objects as items.
 /// Two nodes with the same `identifier` are equal, whichever instances they
@@ -43,6 +45,11 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         /// A node of a relationship tree. `object` is `nil` for a type no
         /// indexed image defines; the row then shows `name` and goes nowhere.
         case relationship(name: String, object: RuntimeObject?)
+        /// What a cross-reference search starts from; what it found loads
+        /// below it.
+        case crossReferenceRoot(FindCrossReferenceRoot, direction: FindCrossReferenceDirection)
+        /// A row a cross-reference search found below another.
+        case crossReference(FindCrossReferenceRow)
     }
 
     public let content: Content
@@ -66,6 +73,10 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
             return match.object
         case .relationship(_, let object):
             return object
+        case .crossReferenceRoot(let root, _):
+            return root.navigationTarget
+        case .crossReference(let row):
+            return row.navigationTarget
         }
     }
 
@@ -82,6 +93,8 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         case .textMatch(let match): match.lineText
         case .member(let match): match.member.declarationText
         case .relationship(let name, _): name
+        case .crossReferenceRoot(let root, _): root.title
+        case .crossReference(let row): row.title
         }
     }
 
@@ -135,6 +148,18 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         FindResultNode(content: .member(match), identifier: "member|\(match.object.kind)|\(match.object.name)|\(match.object.imagePath)|\(match.member.kind.rawValue)|\(match.member.name)|\(index)")
     }
 
+    /// A root of a cross-reference tree, with the rows loaded below it.
+    static func crossReferenceRoot(_ root: FindCrossReferenceRoot, direction: FindCrossReferenceDirection, identifier: String, children: [FindResultNode]) -> FindResultNode {
+        FindResultNode(content: .crossReferenceRoot(root, direction: direction), children: children, identifier: identifier)
+    }
+
+    /// A row of a cross-reference tree. Its identifier is its path from the
+    /// root, so a row keeps its place, its expansion and its selection when
+    /// the rows above it load more.
+    static func crossReference(_ row: FindCrossReferenceRow, identifier: String, children: [FindResultNode]) -> FindResultNode {
+        FindResultNode(content: .crossReference(row), children: children, identifier: identifier)
+    }
+
     public static func relationship(_ node: RuntimeRelationshipNode, path: String) -> FindResultNode {
         let identifier = path + "/" + (node.object.map { "\($0.kind)|\($0.name)" } ?? node.name)
         return FindResultNode(
@@ -172,6 +197,19 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
                 appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
                 appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor)
                 appearance.isSecondary = true
+            }
+        case .crossReferenceRoot(let root, _):
+            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: root)
+            appearance.title = titleWithSubtitle(root.title, subtitle: FindScope.imageName(of: root.imagePath))
+        case .crossReference(let row):
+            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: row)
+            switch row.item {
+            case .loading, .failure:
+                appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
+                appearance.title = plainTitle(row.title, color: FindResultCellStyle.unresolvedTitleColor)
+                appearance.isSecondary = true
+            case .function, .target, .image:
+                appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle)
             }
         }
         #endif
