@@ -6,11 +6,15 @@ import RuntimeViewerArchitectures
 import SnapKit
 
 /// The Inspector's References tab: who calls the member at the content pane's insertion point,
-/// what it calls, and which functions use the type on screen — a section each, one level deep, with
-/// Show in Find Navigator for the whole tree. The sections stack in a page that scrolls; each list
-/// grows to fit its rows up to a cap and scrolls inside it past that.
+/// what it calls, and which functions use the type on screen — a section each, one level deep and in
+/// the object's own image, with Show in Find Navigator for the whole tree across every image. The
+/// sections stack in a page that scrolls; each list grows to fit its rows up to a cap and scrolls
+/// inside it past that.
 final class InspectorReferencesViewController: BaseEffectViewController<InspectorReferencesViewModel> {
     private let headerLabel = Label()
+
+    /// `In AppKit`: the image the sections read.
+    private let scopeLabel = Label()
 
     /// What the calls need when the insertion point is on no member's line.
     private let hintLabel = Label(wrappingLabelWithString: "Put the insertion point on a method or property to see its callers and callees.")
@@ -24,7 +28,10 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
     private let pageScrollView = ScrollView()
 
     private lazy var pageStackView = VStackView(alignment: .leading, spacing: 16) {
-        headerLabel
+        VStackView(alignment: .leading, spacing: 2) {
+            headerLabel
+            scopeLabel
+        }
         hintLabel
         callersSectionView
         calleesSectionView
@@ -84,6 +91,12 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
             $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
 
+        scopeLabel.do {
+            $0.font = .systemFont(ofSize: 11)
+            $0.textColor = .secondaryLabelColor
+            $0.toolTip = "Show in Find Navigator searches every image"
+        }
+
         hintLabel.do {
             $0.textColor = .secondaryLabelColor
             $0.font = .systemFont(ofSize: 11)
@@ -99,11 +112,15 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
             rowClicked: Signal.merge(sectionViews.map(\.rowClicked)),
             showInFindNavigatorClicked: Signal.merge(sectionViews.map { sectionView in
                 sectionView.showInFindNavigatorButton.rx.click.asSignal().map { sectionView.section }
-            })
+            }),
+            // Nothing is asked while the tab is off screen.
+            isVisible: Observable.merge(rx.viewWillAppear.map { true }, rx.viewWillDisappear.map { false })
+                .asDriver(onErrorJustReturn: false)
         )
         let output = viewModel.transform(input)
 
         output.subjectTitle.drive(headerLabel.rx.stringValue).disposed(by: rx.disposeBag)
+        output.scopeTitle.drive(scopeLabel.rx.stringValue).disposed(by: rx.disposeBag)
 
         for (sectionView, state) in [(callersSectionView, output.callers), (calleesSectionView, output.callees), (typeReferencesSectionView, output.typeReferences)] {
             sectionView.bind(to: state, disposedBy: rx.disposeBag)

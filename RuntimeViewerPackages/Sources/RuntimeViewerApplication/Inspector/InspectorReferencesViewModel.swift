@@ -6,13 +6,19 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 
 /// The Inspector's References tab: who calls the member at the content pane's insertion point, what
-/// it calls, and which functions use the type on screen — one level of each, and Show in Find
-/// Navigator for the whole tree there.
+/// it calls, and which functions use the type on screen — one level of each, in the object's own
+/// image, and Show in Find Navigator for the whole tree across every image.
 ///
 /// The member follows `DocumentState.cursorMember` while it is a member of the object on screen
 /// with code of its own; off every member's line, the tab shows the type's references alone. Each
 /// section is one state value built by its own pipeline, keyed on what it is about: moving the
 /// insertion point to another member reloads the calls and leaves the type's references alone.
+///
+/// Nothing is asked while the tab is off screen: the Inspector keeps every tab of the object up to
+/// date, and a scan for each object the user passes on the way would keep the engine's process
+/// busy for nothing. A subject that changed while the tab was hidden is asked for when it shows.
+/// Only the object's own image is read — the glance the tab is for — so a query is one image's
+/// scan, which the Find navigator widens.
 public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjectRoute> {
     public enum Section: CaseIterable, Sendable {
         case callers
@@ -67,6 +73,10 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     @RxObserved
     private var runtimeObject: RuntimeObject
 
+    /// Whether the tab is on screen; see the type's documentation.
+    @RxObserved
+    private var isVisible: Bool = false
+
     /// The member at the insertion point, when it is the shown object's and has code.
     @RxObserved
     public private(set) var member: RuntimeMemberReference?
@@ -84,30 +94,25 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     public struct Input {
         public let rowClicked: Signal<InspectorReferenceCellViewModel>
         public let showInFindNavigatorClicked: Signal<Section>
+        /// The tab appearing (`true`) and disappearing (`false`).
+        public let isVisible: Driver<Bool>
     }
 
     public struct Output {
         /// The member the calls are about, or the type when there is none.
         public let subjectTitle: Driver<String>
+        /// `In AppKit`: the image the sections read.
+        public let scopeTitle: Driver<String>
         public let callers: Driver<SectionState>
         public let callees: Driver<SectionState>
         public let typeReferences: Driver<SectionState>
     }
 
-    /// Where callers and references are looked for: every image, as the Find navigator's default
-    /// scope; one image in tests, which keeps each scan to that image.
-    private let scope: RuntimeCrossReferenceScope
-
     /// The lookup a click on a member's row started; the next click cancels it.
     private var memberDeclarationLookupTask: Task<Void, Never>?
 
-    public convenience init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<InspectorRuntimeObjectRoute>) {
-        self.init(runtimeObject: runtimeObject, documentState: documentState, router: router, scope: .allImages)
-    }
-
-    init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<InspectorRuntimeObjectRoute>, scope: RuntimeCrossReferenceScope) {
+    public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<InspectorRuntimeObjectRoute>) {
         self.runtimeObject = runtimeObject
-        self.scope = scope
         super.init(documentState: documentState, router: router)
 
         Observable.combineLatest($runtimeObject.asObservable(), documentState.$cursorMember.asObservable()) { object, cursorMember -> RuntimeMemberReference? in
@@ -154,12 +159,19 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
         }
         .disposed(by: rx.disposeBag)
 
+        input.isVisible.driveOnNext { [weak self] isVisible in
+            guard let self else { return }
+            self.isVisible = isVisible
+        }
+        .disposed(by: rx.disposeBag)
+
         let subjectTitle = Driver.combineLatest($member.asDriver(), $runtimeObject.asDriver()) { member, object in
             member.map(FindCrossReferenceNaming.title(of:)) ?? object.displayName
         }
 
         return Output(
             subjectTitle: subjectTitle,
+            scopeTitle: $runtimeObject.asDriver().map { FindScope.images([$0.imagePath]).title },
             callers: $callersState.asDriver(),
             callees: $calleesState.asDriver(),
             typeReferences: $typeReferencesState.asDriver()
@@ -171,8 +183,11 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     /// One section's pipeline: each subject is asked for once, the newest replacing the one in
     /// flight, behind the shared loading placeholder.
     private func sectionStates(_ section: Section, from subjects: Observable<FindCrossReferenceTree.LoadRequest?>) -> Observable<SectionState> {
-        let scope = self.scope
-        return subjects
+        // A subject is asked for once the tab is on screen, and only once:
+        // hiding and showing the tab again asks nothing more.
+        Observable.combineLatest(subjects.distinctUntilChanged(), $isVisible.asObservable())
+            .filter { _, isVisible in isVisible }
+            .map { request, _ in request }
             .distinctUntilChanged()
             .flatMapLatest { [weak self] request -> Observable<SectionResult> in
                 guard let request else { return .just(.unavailable) }
@@ -180,7 +195,7 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
                 let engine = documentState.runtimeEngine
                 return Observable<SectionResult>.async {
                     do {
-                        return .loaded(try await Self.rows(for: request, in: section, scope: scope, engine: engine))
+                        return .loaded(try await Self.rows(for: request, in: section, engine: engine))
                     } catch {
                         return .failed(FindSession.crossReferenceFailureMessage(for: error))
                     }
@@ -209,20 +224,20 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
             }
     }
 
-    /// One level of the section, as the Find navigator groups it: one row per caller or callee,
-    /// the runtime helper calls left out; for the type, its referencing functions across images,
-    /// by title.
-    private nonisolated static func rows(for request: FindCrossReferenceTree.LoadRequest, in section: Section, scope: RuntimeCrossReferenceScope, engine: RuntimeEngine) async throws -> [FindCrossReferenceRow] {
+    /// One level of the section, in the subject's own image, as the Find navigator groups it: one
+    /// row per caller or callee, the runtime helper calls left out; for the type, its referencing
+    /// functions, by title.
+    private nonisolated static func rows(for request: FindCrossReferenceTree.LoadRequest, in section: Section, engine: RuntimeEngine) async throws -> [FindCrossReferenceRow] {
         let options = RuntimeCrossReferenceQueryOptions(resultLimit: referenceLimit)
         switch (section, request) {
-        case (.callers, .calls(let subject)):
-            let result = try await engine.callers(of: subject, in: scope, options: options)
+        case (.callers, .calls(.member(let member))):
+            let result = try await engine.callers(of: .member(member), in: .image(path: member.object.imagePath), options: options)
             return FindCrossReferenceTree.rows(for: result.references, direction: .callers).map(\.row)
         case (.callees, .calls(let subject)):
             let result = try await engine.callees(of: subject, options: options)
             return FindCrossReferenceTree.rows(for: result.references, direction: .callees).map(\.row).filter { !$0.isRuntimeHelperCall }
         case (.typeReferences, .typeReferences(let object)):
-            let result = try await engine.typeReferences(to: object, in: scope, options: options)
+            let result = try await engine.typeReferences(to: object, in: .image(path: object.imagePath), options: options)
             return FindCrossReferenceTree.rows(for: result.references, direction: .typeReferences)
                 .flatMap { $0.children.map(\.row) }
                 .sorted { ($0.title as NSString).compare($1.title) == .orderedAscending }

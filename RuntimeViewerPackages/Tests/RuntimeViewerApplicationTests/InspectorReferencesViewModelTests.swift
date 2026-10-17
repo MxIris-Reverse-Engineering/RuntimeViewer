@@ -14,14 +14,16 @@ struct InspectorReferencesViewModelTests {
     private let router = MockRouter<InspectorRuntimeObjectRoute>()
     private let rowClickedRelay = PublishRelay<InspectorReferenceCellViewModel>()
     private let showInFindNavigatorClickedRelay = PublishRelay<InspectorReferencesViewModel.Section>()
+    private let isVisibleRelay = BehaviorRelay<Bool>(value: true)
 
     private func makeViewModel(for object: RuntimeObject, in environment: ViewModelTestEnvironment) -> (InspectorReferencesViewModel, InspectorReferencesViewModel.Output) {
         let viewModel = environment.make {
-            InspectorReferencesViewModel(runtimeObject: object, documentState: environment.documentState, router: router, scope: .image(path: object.imagePath))
+            InspectorReferencesViewModel(runtimeObject: object, documentState: environment.documentState, router: router)
         }
         let output = viewModel.transform(.init(
             rowClicked: rowClickedRelay.asSignal(),
-            showInFindNavigatorClicked: showInFindNavigatorClickedRelay.asSignal()
+            showInFindNavigatorClicked: showInFindNavigatorClickedRelay.asSignal(),
+            isVisible: isVisibleRelay.asDriver()
         ))
         return (viewModel, output)
     }
@@ -102,6 +104,32 @@ struct InspectorReferencesViewModelTests {
         #expect(session.query.mode == .callHierarchy)
         #expect(session.query.crossReferenceRoot == .member(member, declaration: nil))
         #expect(showRequestCount == 2)
+    }
+
+    @Test("nothing is asked while the tab is hidden; showing it asks for what changed meanwhile, in the object's image")
+    func queriesWaitForTheTabToShow() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let mutableString = try await engine.runtimeObject(named: "NSMutableString", kind: .objc(.type(.class)), in: TestImages.foundation)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        isVisibleRelay.accept(false)
+        let (viewModel, output) = makeViewModel(for: mutableString, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        // Hidden: the type's references are not asked for.
+        try await settleMainQueue()
+        #expect(Self.isUnavailable(try await nextValue(from: output.typeReferences)))
+        let member = RuntimeMemberReference(object: mutableString, name: "appendString:", kind: .objcMethod, isStatic: false)
+        environment.documentState.updateCursorMember(member)
+        try await settleMainQueue()
+        #expect(Self.isUnavailable(try await nextValue(from: output.callers)))
+
+        // Shown: both, for the member chosen while hidden, read in Foundation alone.
+        isVisibleRelay.accept(true)
+        let typeReferences = try #require(Self.loadedRows(try await nextValue(from: output.typeReferences, timeout: 60) { Self.loadedRows($0) != nil }))
+        #expect(typeReferences.allSatisfy { $0.row.subtitle.hasPrefix("Foundation") })
+        let callers = try #require(Self.loadedRows(try await nextValue(from: output.callers, timeout: 60) { Self.loadedRows($0) != nil }))
+        #expect(callers.allSatisfy { $0.row.subtitle.hasPrefix("Foundation") })
+        #expect(try await nextValue(from: output.scopeTitle) == "In Foundation")
     }
 
     @Test("a protocol has no type references section")
