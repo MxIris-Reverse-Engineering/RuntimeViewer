@@ -2,6 +2,23 @@ import Foundation
 import FoundationToolbox
 import Combine
 
+// MARK: - Socket Options
+
+/// Makes a write to a peer that went away fail with `EPIPE` instead of raising
+/// `SIGPIPE`, whose default action terminates the process.
+///
+/// Both ends of every connection need it, and for opposite reasons. The app writes
+/// to a target that can die mid-request; the injected payload writes to an app that
+/// can quit — or that closes the connection with a reply still in flight, which
+/// answers with a reset. Nothing in the app, the helper or the payload installs a
+/// handler for `SIGPIPE`, so either side would simply disappear. `stop()` reaches the
+/// same place from inside: its `shutdown(SHUT_RDWR)` wakes a blocked `send` with
+/// `EPIPE`.
+private func suppressBrokenPipeSignal(on socketFileDescriptor: Int32) {
+    var suppress: Int32 = 1
+    setsockopt(socketFileDescriptor, SOL_SOCKET, SO_NOSIGPIPE, &suppress, socklen_t(MemoryLayout<Int32>.size))
+}
+
 // MARK: - RuntimeLocalSocketConnection
 
 /// A bidirectional communication channel over TCP localhost socket.
@@ -110,7 +127,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         stateSubject.value
     }
 
-    private var socketFD: Int32 = -1
+    private(set) var socketFD: Int32 = -1
     private let messageChannel = RuntimeMessageChannel()
 
     private var isStarted = false
@@ -158,6 +175,8 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         // Disable Nagle algorithm for lower latency
         var noDelay: Int32 = 1
         setsockopt(socketFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
+
+        suppressBrokenPipeSignal(on: socketFD)
 
         #log(.info, "Connected to localhost:\(port, privacy: .public)")
     }
@@ -1048,6 +1067,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
         // Disable Nagle algorithm for lower latency
         var noDelay: Int32 = 1
         setsockopt(clientFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
+
+        // Set on the accepted descriptor, not inherited from the listening one.
+        suppressBrokenPipeSignal(on: clientFD)
 
         let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD)
         self.underlyingConnection = socketConnection

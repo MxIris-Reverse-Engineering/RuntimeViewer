@@ -240,6 +240,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 **其它工程细节**：
 - 底层 `RuntimeLocalSocketConnection` 用裸 BSD socket + 独立 `readQueue`/`writeQueue`，`TCP_NODELAY` 关 Nagle。
 - 收包循环对 `EINTR`/`EAGAIN`/`EWOULDBLOCK` 重试（注入进程里信号频繁），对端关闭 → `.peerClosed`。
+- **拨出与 accept 得到的两个 fd 都设 `SO_NOSIGPIPE`**（`suppressBrokenPipeSignal`，accept 得到的那个不继承监听 socket 的设置，要单独设）。向已消失的对端写数据必须以 `EPIPE` 失败，而不是触发 `SIGPIPE` —— App、helper 与注入载荷都没有装 `SIGPIPE` 处理器，默认动作是结束进程。两端都需要：目标进程可能在请求中途死掉，而 App 也可能在回包还没发完时退出或关掉连接（后者会回 RST）。`stop()` 的 `shutdown(SHUT_RDWR)` 从进程内部到达同一处——它会让阻塞中的 `send` 以 `EPIPE` 返回。回归测试：`RuntimeLocalSocketBrokenPipeTests`。
 - `stop()` 先 `shutdown(SHUT_RDWR)` 再 `close()`，可靠唤醒阻塞在另一线程的 `recv()`。
 - 客户端 `RuntimeLocalSocketClientConnection` 内置**重连循环**（500ms 间隔）+ `pendingHandlers` 快照，断线后自动重连并重装处理器，用自持的 private `stateSubject` 跨重连桥接状态。
 
