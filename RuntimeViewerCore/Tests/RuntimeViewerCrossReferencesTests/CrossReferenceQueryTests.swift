@@ -1,6 +1,7 @@
 #if arch(arm64)
 import Testing
 import Foundation
+import ObjectiveC
 import RuntimeViewerCore
 import CrossReferenceAnalysis
 @testable import RuntimeViewerCrossReferences
@@ -106,6 +107,42 @@ struct CrossReferenceQueryTests {
         let result = try await Self.makeQuery().callees(of: .function(imagePath: path, address: function.location.address), options: RuntimeCrossReferenceQueryOptions())
         #expect(!result.references.isEmpty)
         #expect(result.references.allSatisfy { $0.referencingFunction.imagePath == path })
+    }
+
+    @Test("An Objective-C method found as a caller carries its member: the selector of the class that defines it")
+    func objectiveCCallersCarryTheirMember() async throws {
+        let result = try await Self.makeQuery().callers(of: .selector("appendString:"), in: .image(path: Self.foundationPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let methodCallers = result.references.map(\.referencingFunction).filter { $0.displayName?.hasPrefix("-[") == true || $0.displayName?.hasPrefix("+[") == true }
+        try #require(!methodCallers.isEmpty)
+        for caller in methodCallers {
+            let member = try #require(caller.member, "\(caller.displayName ?? "") maps to no member")
+            #expect(member.kind == .objcMethod)
+            #expect(member.object.kind == .objc(.type(.class)))
+            // A category method keeps its category in the name, not in the member: the class has it.
+            let displayName = try #require(caller.displayName)
+            #expect(displayName.hasPrefix("\(member.isStatic ? "+" : "-")[\(member.object.name)"))
+            #expect(displayName.hasSuffix(" \(member.name)]"))
+        }
+        // The member's type is in the image defining the class — Foundation for its own classes,
+        // libobjc for a Foundation category on `NSObject` — as the runtime of this process, which
+        // has both loaded, says.
+        var checkedClassCount = 0
+        for caller in methodCallers {
+            guard let member = caller.member, let classObject = objc_lookUpClass(member.object.name), let classImageName = class_getImageName(classObject) else { continue }
+            #expect(member.object.imagePath == String(cString: classImageName), "\(caller.displayName ?? "")")
+            checkedClassCount += 1
+        }
+        #expect(checkedClassCount > 0)
+    }
+
+    @Test("A cache image named through its framework's symlinks — whose target only the shared cache holds — is found")
+    func imagesNamedThroughFrameworkSymlinksAreFound() async throws {
+        // `Foundation.framework/Foundation` points at `Versions/C/Foundation`, which is no file:
+        // the file system cannot resolve the link, dyld can.
+        let symlinkedPath = "/System/Library/Frameworks/Foundation.framework/Foundation"
+        #expect(URL(fileURLWithPath: symlinkedPath).resolvingSymlinksInPath().path == symlinkedPath)
+        let result = try await Self.makeQuery().callers(of: .selector("appendString:"), in: .image(path: symlinkedPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        #expect(!result.references.isEmpty)
     }
 
     // MARK: - Callers

@@ -1,5 +1,6 @@
 import Foundation
 import FoundationToolbox
+import MachO
 import RuntimeViewerCore
 import CrossReferenceAnalysis
 
@@ -28,7 +29,7 @@ struct CrossReferenceQuery {
         }
         let (analyzer, generation) = try session.currentAnalyzer()
         let resolvedSubject = try await resolve(subject, with: analyzer)
-        var builder = FunctionReferenceBuilder(imagePaths: analyzer.imagePaths)
+        var builder = FunctionReferenceBuilder(analyzer: analyzer)
         var references: [RuntimeCrossReference] = []
 
         for subjectFunction in resolvedSubject.functions {
@@ -127,7 +128,7 @@ struct CrossReferenceQuery {
         session.noteFunctionTables(ofImagesAt: resolvedSubject.functions.map(\.function.location.imageIndex), generation: generation)
         let keys = resolvedSubject.callerKeys
         let candidates = try candidateImages(for: resolvedSubject, in: scope, analyzer: analyzer)
-        var builder = FunctionReferenceBuilder(imagePaths: analyzer.imagePaths)
+        var builder = FunctionReferenceBuilder(analyzer: analyzer)
         var subjectFunctionsByLocation: [CodeLocation: RuntimeFunctionReference] = [:]
         for subjectFunction in resolvedSubject.functions where subjectFunctionsByLocation[subjectFunction.function.location] == nil {
             subjectFunctionsByLocation[subjectFunction.function.location] = builder.reference(for: subjectFunction.function, member: subjectFunction.member)
@@ -466,12 +467,37 @@ struct CrossReferenceQuery {
 
     /// The analyzer's index for an image path: an install name for a shared
     /// cache image, and for any other a path whose symbolic links resolve to
-    /// the image's.
+    /// the image's — or, for an image the process has loaded, any path dyld
+    /// opens it by.
     static func imageIndex(forPath path: String, in analyzer: CrossReferenceAnalyzer) -> Int? {
         if let imageIndex = analyzer.imageIndex(forPath: path) { return imageIndex }
         let resolvedPath = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
         if let imageIndex = analyzer.imageIndex(forPath: resolvedPath) { return imageIndex }
-        return analyzer.imagePaths.firstIndex { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path == resolvedPath }
+        if let imageIndex = analyzer.imagePaths.firstIndex(where: { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path == resolvedPath }) {
+            return imageIndex
+        }
+        // `Foundation.framework/Foundation` links to `Versions/C/Foundation`,
+        // a file only the shared cache holds, so the file system cannot
+        // resolve it — and an engine that loaded the framework by that path
+        // names its objects' image by it. dyld resolves it against the cache.
+        return loadedImagePath(openedBy: path).flatMap(analyzer.imageIndex(forPath:))
+    }
+
+    /// The name dyld lists a loaded image under, for a path that opens it;
+    /// `nil` when the path opens no image the process has loaded.
+    static func loadedImagePath(openedBy path: String) -> String? {
+        guard let handle = dlopen(path, RTLD_NOLOAD | RTLD_LAZY) else { return nil }
+        defer { dlclose(handle) }
+        for imageIndex in 0 ..< _dyld_image_count() {
+            guard let imageName = _dyld_get_image_name(imageIndex),
+                  let imageHandle = dlopen(imageName, RTLD_NOLOAD | RTLD_LAZY)
+            else { continue }
+            dlclose(imageHandle)
+            if imageHandle == handle {
+                return String(cString: imageName)
+            }
+        }
+        return nil
     }
 
     /// Whether a converted reference survives
@@ -496,7 +522,7 @@ private struct CallerMatcher: Sendable {
     func callerReferences(from references: [CodeReference], analyzer: CrossReferenceAnalyzer) -> [RuntimeCrossReference] {
         guard !references.isEmpty else { return [] }
         let referencingFunctions = analyzer.functions(containing: references.map(\.function))
-        var builder = FunctionReferenceBuilder(imagePaths: analyzer.imagePaths)
+        var builder = FunctionReferenceBuilder(analyzer: analyzer)
         var referencingReferences: [CodeLocation: RuntimeFunctionReference] = [:]
         var converted: [RuntimeCrossReference] = []
         for reference in references {
@@ -632,7 +658,7 @@ private enum TypeReferenceConversion {
     static func references(from references: [CodeReference], to target: RuntimeCrossReferenceTarget, analyzer: CrossReferenceAnalyzer) -> [RuntimeCrossReference] {
         guard !references.isEmpty else { return [] }
         let referencingFunctions = analyzer.functions(containing: references.map(\.function))
-        var builder = FunctionReferenceBuilder(imagePaths: analyzer.imagePaths)
+        var builder = FunctionReferenceBuilder(analyzer: analyzer)
         var referencingReferences: [CodeLocation: RuntimeFunctionReference] = [:]
         return references.map { reference in
             let referencingReference: RuntimeFunctionReference
