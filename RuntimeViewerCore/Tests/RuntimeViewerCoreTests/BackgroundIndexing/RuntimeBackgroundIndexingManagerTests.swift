@@ -6,15 +6,15 @@ import Testing
 @Suite final class RuntimeBackgroundIndexingManagerTests {
     /// Keepalives for engines / wrappers passed to a manager.
     ///
-    /// Production safety: `RuntimeBackgroundIndexingManager.engine` is `unowned`
-    /// because the engine owns the manager (`RuntimeEngine.backgroundIndexingManager`),
-    /// so the engine always outlives the manager in real code.
+    /// `RuntimeBackgroundIndexingManager.engine` is weak because the engine owns
+    /// the manager (`RuntimeEngine.backgroundIndexingManager`), and a manager
+    /// whose engine is gone cancels what is left of its batches.
     ///
     /// In tests we construct mocks as locals and ARC may eagerly release them
-    /// across `await` suspension points — at which point the manager's unowned
-    /// reference dangles and the next access traps. Stash mocks in this array
-    /// to pin them to the suite instance's lifetime; Swift Testing instantiates
-    /// a fresh suite per test, so the array is scoped to one test naturally.
+    /// across `await` suspension points — at which point the manager would see
+    /// its engine gone. Stash mocks in this array to pin them to the suite
+    /// instance's lifetime; Swift Testing instantiates a fresh suite per test,
+    /// so the array is scoped to one test naturally.
     private var aliveObjects: [AnyObject] = []
 
     @discardableResult
@@ -55,6 +55,40 @@ import Testing
                                      reason: .manual)
         let finalSeen = await consumer.value
         #expect(finalSeen == ["started", "finished"])
+    }
+
+    /// The engine owns the manager, but a batch under way keeps the manager
+    /// alive through its task, so the engine can go away first — a document
+    /// closed together with an engine only it held. The manager held the
+    /// engine `unowned`, and the batch's next load read it after it was gone,
+    /// aborting the process.
+    @Test func batchWhoseEngineGoesAwayEndsCancelled() async throws {
+        var engine: MockBackgroundIndexingEngine? = MockBackgroundIndexingEngine()
+        let imagePaths = (1 ... 20).map { "/fake/Image\($0)" }
+        engine?.program(path: "/fake/Root", .init(dependencies: imagePaths.map { ($0, $0) }))
+        for imagePath in imagePaths {
+            engine?.program(path: imagePath, .init())
+        }
+        // Handed over as a temporary: a local would keep the engine alive to
+        // the end of the test in a Debug build.
+        let manager = RuntimeBackgroundIndexingManager(engine: try #require(engine))
+        let events = manager.events
+        let consumer = Task {
+            for await event in events {
+                switch event {
+                case .batchCancelled: return "cancelled"
+                case .batchFinished: return "finished"
+                default: break
+                }
+            }
+            return "stream ended"
+        }
+
+        _ = await manager.startBatch(rootImagePath: "/fake/Root", depth: 1,
+                                     maxConcurrency: 1, reason: .manual)
+        engine = nil
+
+        #expect(await consumer.value == "cancelled")
     }
 
     @Test func expandEmptyWhenRootAlreadyIndexed() async {
