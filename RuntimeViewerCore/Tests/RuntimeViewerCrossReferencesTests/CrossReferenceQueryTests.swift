@@ -392,6 +392,20 @@ struct CrossReferenceQueryTests {
         #expect(recorder.reports.count == 1)
     }
 
+    @Test("Two queries asking about the same thing at once scan each image once")
+    func concurrentQueriesShareTheirScans() async throws {
+        let session = Self.makeSteadySession()
+        let query = Self.makeQuery(session: session)
+        // The Find navigator and the Inspector asking about one type at once: both find nothing
+        // kept yet, and both start on AppKit.
+        async let first = query.callers(of: .selector("makeKeyAndOrderFront:"), in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        async let second = query.callers(of: .selector("makeKeyAndOrderFront:"), in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let (firstResult, secondResult) = try await (first, second)
+
+        #expect(firstResult == secondResult)
+        #expect(session.startedScanCount == 1)
+    }
+
     @Test("A scan found larger than the budget is not recorded again, and pushes nothing out a second time")
     func oversizedScansAreNotRecordedAgain() async throws {
         // About 440 sends in about a hundred images, and a dozen in AppKit.

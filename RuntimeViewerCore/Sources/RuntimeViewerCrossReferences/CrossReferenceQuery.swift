@@ -343,9 +343,11 @@ struct CrossReferenceQuery {
                 var nextCandidate = remainingCandidates.makeIterator()
                 func addNextScan() {
                     guard let imageIndex = nextCandidate.next() else { return }
-                    group.addTask {
+                    group.addTask { [session] in
                         try Task.checkCancellation()
-                        let found = find(imageIndex)
+                        let found = await session.sharedScan(of: scanKey, inImageAt: imageIndex, generation: generation) {
+                            find(imageIndex)
+                        }
                         return (imageIndex, found, convert(found))
                     }
                 }

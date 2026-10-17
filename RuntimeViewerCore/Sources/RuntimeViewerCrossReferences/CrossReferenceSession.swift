@@ -48,7 +48,7 @@ final class CrossReferenceSession: Sendable {
 
     init(
         scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget,
-        imagesOutsideSharedCache: @escaping @Sendable () -> [UInt] = CrossReferenceSession.processImagesOutsideSharedCache
+        imagesOutsideSharedCache: @escaping @Sendable () -> [UInt] = { CrossReferenceSession.processImagesOutsideSharedCache() }
     ) {
         self.scanByteBudget = scanByteBudget
         self.imagesOutsideSharedCache = imagesOutsideSharedCache
@@ -167,6 +167,46 @@ final class CrossReferenceSession: Sendable {
         state.withLock { $0.scanByteCount }
     }
 
+    /// How many image scans the session's queries started; for tests.
+    var startedScanCount: Int {
+        state.withLock { $0.startedScanCount }
+    }
+
+    /// What scanning the image at `imageIndex` for `key` finds — scanned by
+    /// `scan`, unless another query is scanning the same image for the same key
+    /// now, whose result this one waits for and shares. Two parts of one
+    /// window ask about one subject at once — the Find navigator and the
+    /// Inspector — and each image is scanned once for both.
+    ///
+    /// The scan runs to its end once started, as a scan of one image always
+    /// has; what cancelling a query stops is the images it has not started.
+    func sharedScan(of key: CrossReferenceScanKey, inImageAt imageIndex: Int, generation: Int, scan: @escaping @Sendable () -> [CodeReference]) async -> [CodeReference] {
+        let scanIdentity = InFlightScan(key: key, imageIndex: imageIndex, generation: generation)
+        let task = state.withLock { state -> Task<[CodeReference], Never> in
+            if let task = state.inFlightScans[scanIdentity] {
+                return task
+            }
+            state.startedScanCount += 1
+            let task = Task { scan() }
+            state.inFlightScans[scanIdentity] = task
+            return task
+        }
+        let references = await task.value
+        state.withLock { state in
+            if state.inFlightScans[scanIdentity] == task {
+                state.inFlightScans[scanIdentity] = nil
+            }
+        }
+        return references
+    }
+
+    /// One image's scan for one key, in one generation.
+    private struct InFlightScan: Hashable {
+        let key: CrossReferenceScanKey
+        let imageIndex: Int
+        let generation: Int
+    }
+
     private struct Scan {
         var referencesByImage: [Int: [CodeReference]] = [:]
         var byteCount = 0
@@ -183,6 +223,9 @@ final class CrossReferenceSession: Sendable {
         var oversizedScanKeys: Set<CrossReferenceScanKey> = []
         var scanByteCount = 0
         var useCounter: UInt64 = 0
+        var startedScanCount = 0
+        /// The scans running now, which a query asking for the same waits for.
+        var inFlightScans: [InFlightScan: Task<[CodeReference], Never>] = [:]
     }
 }
 
