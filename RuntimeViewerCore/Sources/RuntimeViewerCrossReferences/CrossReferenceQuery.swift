@@ -203,7 +203,19 @@ struct CrossReferenceQuery {
         case .allImages:
             candidates = type.candidateImages(among: analyzer.imagePaths.indices, analyzer: analyzer)
         }
-        let target = RuntimeCrossReferenceTarget.type(name: object.displayName, object: object)
+        // Who the type is, without its children — nested types and
+        // specializations, which a reference to it does not need and would
+        // carry once per reference.
+        let targetObject = RuntimeObject(
+            name: object.name,
+            displayName: object.displayName,
+            kind: object.kind,
+            imagePath: object.imagePath,
+            children: [],
+            properties: object.properties,
+            privateDeclarations: object.privateDeclarations
+        )
+        let target = RuntimeCrossReferenceTarget.type(name: object.displayName, object: targetObject)
         let (result, cachedImageCount) = try await scan(
             candidates,
             for: type.scanKey,
@@ -272,7 +284,7 @@ struct CrossReferenceQuery {
     /// The type `object` is: an Objective-C class by its runtime name, a
     /// Swift type by its mangling — the name Runtime Viewer gives both — in
     /// the image that defines it.
-    private func resolveType(_ object: RuntimeObject, with analyzer: CrossReferenceAnalyzer) throws -> ResolvedType {
+    func resolveType(_ object: RuntimeObject, with analyzer: CrossReferenceAnalyzer) throws -> ResolvedType {
         guard let imageIndex = Self.imageIndex(forPath: object.imagePath, in: analyzer) else {
             throw RuntimeCrossReferenceError.imageNotFound(path: object.imagePath)
         }

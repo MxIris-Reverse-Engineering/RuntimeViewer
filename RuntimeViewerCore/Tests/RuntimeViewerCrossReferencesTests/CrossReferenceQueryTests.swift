@@ -6,9 +6,9 @@ import CrossReferenceAnalysis
 @testable import RuntimeViewerCrossReferences
 
 /// Queries against the dyld shared cache this process maps — the same code
-/// the engine's process reads in the app. Expectations come from the cache
-/// itself (a function's address is looked up, never written down), so an OS
-/// update changes what is found, not whether the tests hold.
+/// the engine's process reads in the app. Addresses come from the cache itself,
+/// never written down; what a few tests expect a function to send or call is
+/// macOS 27.2's code, and moves when an update compiles it differently.
 @Suite("Cross-reference queries")
 struct CrossReferenceQueryTests {
     private static let appKitPath = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
@@ -67,11 +67,14 @@ struct CrossReferenceQueryTests {
         }
         #expect(sendsOrderWindow)
         #expect(!result.references.contains { $0.isRuntimeHelperCall })
-        // A send's receiver is either known — and then exact — or not.
-        for reference in result.references {
-            guard case .selector(_, let receiverClassName) = reference.target, reference.kind == .messageSend else { continue }
-            #expect(reference.precision == (receiverClassName == nil ? .matchedBySelector : .exact))
+        // `[self orderWindow:… relativeTo:…]`: a send to the method's own
+        // receiver, so to an NSWindow, and exact.
+        let orderWindow = result.references.first { reference in
+            guard case .selector("orderWindow:relativeTo:", _) = reference.target else { return false }
+            return true
         }
+        #expect(orderWindow?.target == .selector(name: "orderWindow:relativeTo:", receiverClassName: "NSWindow"))
+        #expect(orderWindow?.precision == .exact)
 
         let withHelpers = try await engine.callees(of: subject, options: RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: true))
         #expect(withHelpers.references.count >= result.references.count)
@@ -90,6 +93,19 @@ struct CrossReferenceQueryTests {
         await #expect(throws: RuntimeCrossReferenceError.functionNotFound(imagePath: Self.libobjcPath, address: 1)) {
             try await query.callees(of: .function(imagePath: Self.libobjcPath, address: 1), options: RuntimeCrossReferenceQueryOptions())
         }
+    }
+
+    @Test("A function of an image outside the shared cache — this test bundle — is found by the path dyld loaded it from")
+    func imagesOutsideTheCacheGoByTheirLoadedPath() async throws {
+        var information = Dl_info()
+        #expect(dladdr(#dsohandle, &information) != 0)
+        let path = String(cString: try #require(information.dli_fname))
+        let analyzer = try #require(CrossReferenceAnalyzer())
+        let testBundle = try #require(analyzer.images.firstIndex { $0.ptr == #dsohandle })
+        let function = try #require(analyzer.functions(inImageAt: testBundle).first { $0.size >= 64 })
+        let result = try await Self.makeQuery().callees(of: .function(imagePath: path, address: function.location.address), options: RuntimeCrossReferenceQueryOptions())
+        #expect(!result.references.isEmpty)
+        #expect(result.references.allSatisfy { $0.referencingFunction.imagePath == path })
     }
 
     // MARK: - Callers
@@ -192,35 +208,6 @@ struct CrossReferenceQueryTests {
         #expect(last.scannedImageCount < last.totalImageCount)
     }
 
-    /// Finds a reference from another shared cache image than `imagePath`
-    /// among what a scan of every image reports, and stops the scan as soon
-    /// as one arrives. Not from this test process's own binaries: they lie
-    /// outside the cache, keep their undefined symbols as any binary does, and
-    /// a prefilter by imports finds them.
-    private static func firstReference(
-        fromAnotherCacheImageThan imagePath: String,
-        of scan: @escaping @Sendable (@escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void) async throws -> RuntimeCrossReferenceQueryResult
-    ) async -> RuntimeCrossReference? {
-        let (outsideReferences, continuation) = AsyncStream<RuntimeCrossReference>.makeStream()
-        let task = Task {
-            defer { continuation.finish() }
-            _ = try await scan { progress in
-                for reference in progress.references where reference.referencingFunction.imagePath != imagePath
-                    && (reference.referencingFunction.imagePath.hasPrefix("/System/") || reference.referencingFunction.imagePath.hasPrefix("/usr/lib/")) {
-                    continuation.yield(reference)
-                }
-            }
-        }
-        var found: RuntimeCrossReference?
-        for await reference in outsideReferences {
-            found = reference
-            break
-        }
-        task.cancel()
-        _ = await task.result
-        return found
-    }
-
     @Test("A Swift function's callers are looked for in every image linking its own")
     func swiftFunctionCandidatesFollowTheLinkage() throws {
         // The macOS 27.2 cache keeps no Swift symbol among most of its images'
@@ -264,14 +251,43 @@ struct CrossReferenceQueryTests {
         #expect(result.references.allSatisfy { $0.kind == .typeReference && $0.target == .type(name: "Text", object: text) })
     }
 
-    @Test("References to a Swift type in other images are found, though no image imports it by name")
-    func typeReferencesAcrossImages() async throws {
+    @Test("A Swift type's references are looked for in every image linking its own")
+    func typeCandidatesFollowTheLinkage() throws {
+        // Few shared cache images keep a Swift symbol among their undefined
+        // ones; a prefilter by imports would keep those and drop the rest.
         let url = RuntimeObject(name: "10Foundation3URLV", displayName: "URL", kind: .swift(.type(.struct)), imagePath: Self.foundationPath, children: [])
-        let query = Self.makeQuery()
-        let outside = await Self.firstReference(fromAnotherCacheImageThan: Self.foundationPath) { reportProgress in
-            try await query.typeReferences(to: url, in: .allImages, options: RuntimeCrossReferenceQueryOptions(), reportProgress: reportProgress)
+        let type = try Self.makeQuery().resolveType(url, with: Self.analyzer)
+        let everyImage = Self.analyzer.imagePaths.indices
+        let candidates = Set(type.candidateImages(among: everyImage, analyzer: Self.analyzer))
+        let foundation = try #require(CrossReferenceQuery.imageIndex(forPath: Self.foundationPath, in: Self.analyzer))
+        #expect(Set(Self.analyzer.imageIndices(linkingImageAt: foundation, among: everyImage)).isSubset(of: candidates))
+    }
+
+    @Test("A Swift type's references are found in an image that imports nothing for it")
+    func typeReferencesWithoutAnImport() async throws {
+        // SharedWithYou calls `URL`'s metadata accessor through a GOT stub the
+        // cache builder bound, and keeps no undefined symbol for it.
+        let sharedWithYou = "/System/Library/Frameworks/SharedWithYou.framework/Versions/A/SharedWithYou"
+        let url = RuntimeObject(name: "10Foundation3URLV", displayName: "URL", kind: .swift(.type(.struct)), imagePath: Self.foundationPath, children: [])
+        let result = try await Self.makeQuery().typeReferences(to: url, in: .image(path: sharedWithYou), options: RuntimeCrossReferenceQueryOptions(), reportProgress: { _ in })
+        #expect(!result.references.isEmpty)
+        #expect(result.references.allSatisfy { $0.referencingFunction.imagePath == sharedWithYou && $0.target == .type(name: "URL", object: url) })
+    }
+
+    @Test("A type reference carries the type, not its nested types")
+    func typeReferencesCarryNoChildren() async throws {
+        let formatStyle = RuntimeObject(name: "10Foundation3URLV11FormatStyleV", displayName: "URL.FormatStyle", kind: .swift(.type(.struct)), imagePath: Self.foundationPath, children: [])
+        let url = RuntimeObject(name: "10Foundation3URLV", displayName: "URL", kind: .swift(.type(.struct)), imagePath: Self.foundationPath, children: [formatStyle])
+        let result = try await Self.makeQuery().typeReferences(to: url, in: .image(path: Self.foundationPath), options: RuntimeCrossReferenceQueryOptions(), reportProgress: { _ in })
+        #expect(!result.references.isEmpty)
+        for reference in result.references {
+            guard case .type(_, let object?) = reference.target else {
+                Issue.record("Unexpected target \(reference.target)")
+                continue
+            }
+            #expect(object == url)
+            #expect(object.children.isEmpty)
         }
-        #expect(outside?.target == .type(name: "URL", object: url))
     }
 
     @Test("A protocol is no type whose references are found")
@@ -284,32 +300,76 @@ struct CrossReferenceQueryTests {
 
     @Test("A repeated type query reuses the scan")
     func typeScansAreReused() async throws {
-        let session = CrossReferenceSession()
+        let session = Self.makeSteadySession()
         let query = Self.makeQuery(session: session)
         let window = RuntimeObject(name: "NSWindow", displayName: "NSWindow", kind: .objc(.type(.class)), imagePath: Self.appKitPath, children: [])
-        let first = try await query.typeReferences(to: window, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let firstRecorder = ProgressRecorder()
+        let first = try await query.typeReferences(to: window, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { firstRecorder.record($0) }
+        // A report per image scanned: the scan covered more than one.
+        #expect(firstRecorder.reports.count > 1)
         let recorder = ProgressRecorder()
-        let second = try await query.typeReferences(to: window, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
+        let second = try await query.typeReferences(to: window, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
         #expect(second == first)
+        // One report, for every image found among the earlier scans.
         #expect(recorder.reports.count == 1)
     }
 
     // MARK: - Session
 
+    /// A session whose images never change: another test in the process may
+    /// load an image outside the cache (the Objective-C runtime loads
+    /// `libobjc-trampolines.dylib` on first use), which would start a new
+    /// generation and drop every scan these tests count on.
+    private static func makeSteadySession(scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget) -> CrossReferenceSession {
+        CrossReferenceSession(scanByteBudget: scanByteBudget, imagesOutsideSharedCache: { [] })
+    }
+
     @Test("A repeated query reuses the scan instead of scanning again")
     func scansAreReusedWithinTheSession() async throws {
-        let session = CrossReferenceSession()
+        let session = Self.makeSteadySession()
         let query = Self.makeQuery(session: session)
-        let first = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let firstRecorder = ProgressRecorder()
+        let first = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .allImages, options: RuntimeCrossReferenceQueryOptions()) {
+            firstRecorder.record($0)
+        }
         #expect(session.keptScanByteCount > 0)
+        // A report per image scanned: the scan covered more than one.
+        #expect(firstRecorder.reports.count > 1)
 
         let recorder = ProgressRecorder()
-        let second = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) {
+        let second = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .allImages, options: RuntimeCrossReferenceQueryOptions()) {
             recorder.record($0)
         }
         #expect(second == first)
-        // One report, for the image found among the earlier scans.
+        // One report, for every image found among the earlier scans.
         #expect(recorder.reports.count == 1)
+    }
+
+    @Test("A scan found larger than the budget is not recorded again, and pushes nothing out a second time")
+    func oversizedScansAreNotRecordedAgain() async throws {
+        // About 440 sends in about a hundred images, and a dozen in AppKit.
+        let large = RuntimeCrossReferenceSubject.selector("makeKeyAndOrderFront:")
+        let small = RuntimeCrossReferenceSubject.selector("_makeKeyRegardlessOfVisibility")
+        // How much each scan takes, with room for both.
+        let measuring = Self.makeSteadySession()
+        _ = try await Self.makeQuery(session: measuring).callers(of: large, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let largeByteCount = measuring.keptScanByteCount
+        _ = try await Self.makeQuery(session: measuring).callers(of: small, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let smallByteCount = measuring.keptScanByteCount - largeByteCount
+        try #require(smallByteCount > 0 && smallByteCount < largeByteCount / 2)
+
+        // A budget the large scan passes partway through.
+        let session = Self.makeSteadySession(scanByteBudget: largeByteCount / 2)
+        let query = Self.makeQuery(session: session)
+        _ = try await query.callers(of: large, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        // Nothing of it is left behind.
+        #expect(session.keptScanByteCount == 0)
+
+        _ = try await query.callers(of: small, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        #expect(session.keptScanByteCount == smallByteCount)
+        // Asked again, the large scan does not grow past the small one again.
+        _ = try await query.callers(of: large, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        #expect(session.keptScanByteCount == smallByteCount)
     }
 
     @Test("A scan larger than the session's budget is not kept")

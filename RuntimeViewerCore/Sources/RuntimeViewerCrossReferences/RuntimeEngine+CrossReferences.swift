@@ -15,8 +15,10 @@ extension RuntimeEngine {
     /// Who references `subject` within `scope` — its callers.
     ///
     /// The images that cannot reference the subject are filtered out first —
-    /// by the symbol they import, or by the selectors they reference — and the
-    /// rest are scanned in the engine's process. `reportProgress` hears after
+    /// by the names they import (a C or Objective-C function's, or one
+    /// another image re-exports it under), by the images they link (a Swift
+    /// function's), or by the selectors they reference — and the rest are
+    /// scanned in the engine's process. `reportProgress` hears after
     /// each image with what it held, so a caller that gives up early keeps
     /// those; cancelling the caller stops the scan where it runs.
     public func callers(

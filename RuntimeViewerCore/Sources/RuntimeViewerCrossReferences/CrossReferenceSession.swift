@@ -17,11 +17,18 @@ import CrossReferenceAnalysis
 /// session — a retry after a time limit, or a call hierarchy node expanded
 /// twice.
 final class CrossReferenceSession: Sendable {
-    /// The process's session.
+    /// The process's session. Not behind `@Dependency`, as project singletons
+    /// otherwise are: `RuntimeViewerCore` does not depend on swift-dependencies,
+    /// nothing outside this file reaches it, and tests hand a query a session
+    /// of their own (`CrossReferenceQuery.init(engine:session:)`).
     fileprivate static let shared = CrossReferenceSession()
 
     /// Bytes of scan results kept between queries. A scan larger than this —
-    /// the callers of `init` — is not kept, and every query for it scans again.
+    /// the callers of `init` — is not kept, and every query for it scans
+    /// again; once one is found too large, the session stops recording it
+    /// until the process's images change, so that it does not push out the
+    /// other scans again on its way past the budget each time it is asked
+    /// for.
     static let defaultScanByteBudget = 64 << 20
 
     /// Images whose function tables an analyzer may hold before it is replaced
@@ -31,10 +38,20 @@ final class CrossReferenceSession: Sendable {
     static let functionTableImageLimit = 64
 
     private let scanByteBudget: Int
+    /// The header address of every image loaded outside the shared cache —
+    /// what decides whether an analyzer is still current. The process's
+    /// own list, unless a test needs one that does not change under it: the
+    /// Objective-C runtime loads `libobjc-trampolines.dylib`, which is not in
+    /// the cache, the first time anything in the process needs it.
+    private let imagesOutsideSharedCache: @Sendable () -> [UInt]
     private let state = Mutex(State())
 
-    init(scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget) {
+    init(
+        scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget,
+        imagesOutsideSharedCache: @escaping @Sendable () -> [UInt] = CrossReferenceSession.processImagesOutsideSharedCache
+    ) {
         self.scanByteBudget = scanByteBudget
+        self.imagesOutsideSharedCache = imagesOutsideSharedCache
     }
 
     // MARK: - Analyzer
@@ -47,7 +64,7 @@ final class CrossReferenceSession: Sendable {
     /// analyzer replaces it, its image indices may differ, and the scans
     /// filed under the old generation are dropped.
     func currentAnalyzer() throws -> (analyzer: CrossReferenceAnalyzer, generation: Int) {
-        let imagesOutsideSharedCache = Self.imagesOutsideSharedCache()
+        let imagesOutsideSharedCache = self.imagesOutsideSharedCache()
         return try state.withLock { state in
             if let analyzer = state.analyzer, state.imagesOutsideSharedCache == imagesOutsideSharedCache {
                 return (analyzer, state.generation)
@@ -60,6 +77,7 @@ final class CrossReferenceSession: Sendable {
             state.imagesWithFunctionTables = []
             state.generation += 1
             state.scans = [:]
+            state.oversizedScanKeys = []
             state.scanByteCount = 0
             return (analyzer, state.generation)
         }
@@ -83,8 +101,8 @@ final class CrossReferenceSession: Sendable {
     }
 
     /// The header address of every image loaded outside the shared cache, in
-    /// dyld's order — what decides whether an analyzer is still current.
-    private static func imagesOutsideSharedCache() -> [UInt] {
+    /// dyld's order.
+    static func processImagesOutsideSharedCache() -> [UInt] {
         var headers: [UInt] = []
         for imageIndex in 0 ..< _dyld_image_count() {
             guard let header = _dyld_get_image_header(imageIndex) else { continue }
@@ -113,15 +131,18 @@ final class CrossReferenceSession: Sendable {
     func record(_ references: [CodeReference], for key: CrossReferenceScanKey, inImageAt imageIndex: Int, generation: Int) {
         let byteCount = references.count * MemoryLayout<CodeReference>.stride + MemoryLayout<Int>.stride * 4
         state.withLock { state in
-            guard state.generation == generation else { return }
+            guard state.generation == generation, !state.oversizedScanKeys.contains(key) else { return }
             state.useCounter += 1
             var scan = state.scans[key] ?? Scan()
             guard scan.referencesByImage[imageIndex] == nil else { return }
             guard scan.byteCount + byteCount <= scanByteBudget else {
                 // Larger than everything this session may keep: never kept,
-                // and what was kept of it so far goes too.
+                // what was kept of it so far goes too, and nothing more of it
+                // is recorded — the images still to come would start it over
+                // and leave part of it behind.
                 state.scanByteCount -= scan.byteCount
                 state.scans[key] = nil
+                state.oversizedScanKeys.insert(key)
                 return
             }
             scan.referencesByImage[imageIndex] = references
@@ -158,6 +179,8 @@ final class CrossReferenceSession: Sendable {
         var imagesWithFunctionTables: Set<Int> = []
         var generation = 0
         var scans: [CrossReferenceScanKey: Scan] = [:]
+        /// Scans found larger than the budget, which are not recorded again.
+        var oversizedScanKeys: Set<CrossReferenceScanKey> = []
         var scanByteCount = 0
         var useCounter: UInt64 = 0
     }

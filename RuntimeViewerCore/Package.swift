@@ -288,7 +288,6 @@ let package = Package(
             name: "RuntimeViewerCrossReferences",
             dependencies: [
                 "RuntimeViewerCore",
-                "RuntimeViewerCommunication",
                 .product(name: "CrossReferenceAnalysis", package: "MachOSwiftSection"),
                 .product(name: "Demangling", package: "swift-demangling"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),

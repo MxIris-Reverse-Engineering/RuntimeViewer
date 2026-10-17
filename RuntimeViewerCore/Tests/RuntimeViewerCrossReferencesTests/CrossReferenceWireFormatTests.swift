@@ -56,6 +56,12 @@ struct CrossReferenceWireFormatTests {
     @Test("Every subject survives a round trip", arguments: [
         RuntimeCrossReferenceSubject.function(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x1_8000_1000),
         .selector("makeKeyAndOrderFront:"),
+        .member(RuntimeMemberReference(
+            object: RuntimeObject(name: "NSObject", displayName: "NSObject", kind: .objc(.type(.class)), imagePath: "/usr/lib/libobjc.A.dylib", children: []),
+            name: "description",
+            kind: .objcMethod,
+            isStatic: false
+        )),
     ])
     func subjectRoundTrip(_ subject: RuntimeCrossReferenceSubject) throws {
         #expect(try roundTrip(subject) == subject)
@@ -98,20 +104,21 @@ struct CrossReferenceWireFormatTests {
         #expect(try roundTrip(result) == result)
     }
 
-    @Test("Errors keep their meaning across a round trip of their description")
+    @Test("Every error says what went wrong, with what it was about")
     func errorsDescribeThemselves() {
         // A handler's thrown error reaches the host as its description only, so
-        // every case must say what went wrong on its own.
-        let errors: [RuntimeCrossReferenceError] = [
-            .unsupportedArchitecture,
-            .imageNotFound(path: "/nowhere"),
-            .functionNotFound(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x10),
-            .memberNotFound(objectName: "NSObject", memberName: "nothing"),
-            .selectorHasNoCallees("count"),
-            .typeNotFound(objectName: "NSCopying"),
+        // every case must say what went wrong on its own, and name its subject.
+        let errors: [(error: RuntimeCrossReferenceError, mentions: [String])] = [
+            (.unsupportedArchitecture, ["arm64"]),
+            (.imageNotFound(path: "/nowhere"), ["/nowhere"]),
+            (.functionNotFound(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x10), ["/usr/lib/libobjc.A.dylib", "0x10"]),
+            (.memberNotFound(objectName: "NSObject", memberName: "nothing"), ["NSObject", "nothing"]),
+            (.selectorHasNoCallees("count"), ["count"]),
+            (.typeNotFound(objectName: "NSCopying"), ["NSCopying"]),
         ]
-        for error in errors {
-            #expect(error.errorDescription?.isEmpty == false)
+        for (error, mentions) in errors {
+            let description = error.errorDescription ?? ""
+            #expect(mentions.allSatisfy(description.contains), "\(description)")
         }
     }
 
