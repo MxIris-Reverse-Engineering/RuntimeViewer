@@ -94,6 +94,9 @@ final class MainMenuController {
             builder.item(for: .Edit.Find.find)?.action = #selector(NSResponder.performTextFinderAction(_:))
             builder.insertItems(after: .Edit.Find.find) {
                 findInIndexedImagesItem()
+                findCallHierarchyItem()
+                findCalleesItem()
+                findTypeReferencesItem()
             }
         }
     }
@@ -108,6 +111,35 @@ final class MainMenuController {
             modifiers: [.shift, .command],
         )
         .image(SFSymbols(systemName: .magnifyingglass).nsImage)
+    }
+
+    /// Xcode's Find Call Hierarchy, shortcut included (`Xcode.IDEKit.CmdDefinition.CallHierarchy`):
+    /// the callers of the member at the content pane's insertion point.
+    private func findCallHierarchyItem() -> NSMenuItem {
+        NSMenuItem(
+            "Find Call Hierarchy",
+            action: #selector(MainWindowController.findCallHierarchy(_:)),
+            keyEquivalent: "H",
+            modifiers: [.control, .shift, .command],
+        )
+    }
+
+    /// What the member at the insertion point calls. Xcode has no such command, so no shortcut.
+    private func findCalleesItem() -> NSMenuItem {
+        NSMenuItem(
+            "Find Callees",
+            action: #selector(MainWindowController.findCallees(_:)),
+            keyEquivalent: "",
+        )
+    }
+
+    /// The functions that reference the type on screen. Xcode has no such command either.
+    private func findTypeReferencesItem() -> NSMenuItem {
+        NSMenuItem(
+            "Find Type References",
+            action: #selector(MainWindowController.findTypeReferences(_:)),
+            keyEquivalent: "",
+        )
     }
 
     // MARK: - View

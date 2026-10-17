@@ -88,7 +88,7 @@ public enum FindCrossReferenceRoot: Hashable, Sendable, Codable {
 
     /// The types Type References finds references to; see
     /// `RuntimeEngine.typeReferences(to:in:options:reportProgress:)`.
-    static func isReferenceableType(_ object: RuntimeObject) -> Bool {
+    public static func isReferenceableType(_ object: RuntimeObject) -> Bool {
         switch object.kind {
         case .objc(.type(.class)), .swift(.type(.struct)), .swift(.type(.enum)), .swift(.type(.class)):
             true
@@ -103,6 +103,35 @@ public enum FindCrossReferenceRoot: Hashable, Sendable, Codable {
     static let memberKindsWithCode: Set<RuntimeMemberKind> = [
         .objcMethod, .objcProperty, .swiftFunction, .swiftVariable, .swiftSubscript, .swiftInitializer,
     ]
+}
+
+/// Find Call Hierarchy, Find Callees or Find Type References asked for from
+/// outside the Find page — the content pane, the Inspector, the main menu.
+public struct FindCrossReferenceRequest: Hashable, Sendable {
+    public let mode: FindMode
+    public let root: FindCrossReferenceRoot
+
+    public init(mode: FindMode, root: FindCrossReferenceRoot) {
+        self.mode = mode
+        self.root = root
+    }
+
+    /// The commands a member offers: its callers and its callees, when it has
+    /// code.
+    public static func requests(for member: RuntimeMemberReference) -> [FindCrossReferenceRequest] {
+        guard FindCrossReferenceRoot.memberKindsWithCode.contains(member.kind) else { return [] }
+        return [.callHierarchy, .callees].map { FindCrossReferenceRequest(mode: $0, root: .member(member, declaration: nil)) }
+    }
+
+    /// The command a type offers: its references, when it is a type they are
+    /// found for.
+    public static func requests(for object: RuntimeObject) -> [FindCrossReferenceRequest] {
+        guard FindCrossReferenceRoot.isReferenceableType(object) else { return [] }
+        return [FindCrossReferenceRequest(mode: .typeReferences, root: .type(object))]
+    }
+
+    /// `Find Call Hierarchy`, `Find Callees`, `Find Type References`.
+    public var title: String { "Find \(mode.title)" }
 }
 
 /// One row a cross-reference search found below another: a function, a callee
@@ -309,5 +338,75 @@ extension FindResultNode {
         case .crossReferenceRoot, .crossReference: true
         case .object, .textMatch, .member, .relationship: false
         }
+    }
+}
+
+extension DocumentState {
+    /// What Find Call Hierarchy, Find Callees or Find Type References in the
+    /// main menu acts on: the member at the content pane's insertion point,
+    /// or the type on screen; `nil` disables the command.
+    public func crossReferenceRequest(_ mode: FindMode) -> FindCrossReferenceRequest? {
+        switch mode.crossReferenceDirection {
+        case .callers?, .callees?:
+            guard let cursorMember, cursorMember.object == selectedRuntimeObject else { return nil }
+            return FindCrossReferenceRequest.requests(for: cursorMember).first { $0.mode == mode }
+        case .typeReferences?:
+            guard let selectedRuntimeObject else { return nil }
+            return FindCrossReferenceRequest.requests(for: selectedRuntimeObject).first
+        case nil:
+            return nil
+        }
+    }
+}
+
+/// Where a click on a cross-reference row goes — in the Find navigator and in
+/// the Inspector's References tab alike.
+@MainActor
+enum FindCrossReferenceNavigation {
+    /// Opens `object` in place or in a new tab, flashing `highlight` once it
+    /// is on screen.
+    static func open(_ object: RuntimeObject, highlighting highlight: ContentHighlightRequest?, inNewTab: Bool, in documentState: DocumentState) {
+        switch (inNewTab, highlight) {
+        case (false, nil):
+            documentState.selectionRouter.trigger(.push(object))
+        case (false, let highlight?):
+            documentState.selectionRouter.trigger(.pushHighlighting(object, highlight))
+        case (true, nil):
+            documentState.selectionRouter.trigger(.openInNewTab(object))
+        case (true, let highlight?):
+            documentState.selectionRouter.trigger(.openInNewTabHighlighting(object, highlight))
+        }
+    }
+
+    /// Goes to the member's declaration. A row that found a function knows its
+    /// member but not where the interface declares it; the corpus of its image
+    /// knows, and the click waits for it — the task returned, which the next
+    /// click cancels. Without a corpus the click reaches the type, as a member
+    /// search's row with no line does.
+    static func open(_ member: RuntimeMemberReference, declaration: RuntimeMemberDeclaration?, inNewTab: Bool, in documentState: DocumentState, generationOptions: RuntimeObjectInterface.GenerationOptions) -> Task<Void, Never>? {
+        if let declaration, declaration.lineNumber != nil {
+            open(member.object, highlighting: highlight(for: member, declaration: declaration), inNewTab: inNewTab, in: documentState)
+            return nil
+        }
+        let engine = documentState.runtimeEngine
+        return Task { [weak documentState] in
+            let declaration = try? await FindCrossReferenceRootResolver.declaration(of: member, engine: engine, generationOptions: generationOptions)
+            guard let documentState, !Task.isCancelled else { return }
+            open(member.object, highlighting: declaration.flatMap { highlight(for: member, declaration: $0) }, inNewTab: inNewTab, in: documentState)
+        }
+    }
+
+    /// The member's declaration, flashed as a member search's row flashes it.
+    static func highlight(for member: RuntimeMemberReference, declaration: RuntimeMemberDeclaration) -> ContentHighlightRequest? {
+        guard let lineNumber = declaration.lineNumber else { return nil }
+        let match = RuntimeMemberMatch(object: member.object, member: declaration, matchRangeInName: RuntimeTextRange(location: 0, length: (declaration.name as NSString).length))
+        return ContentHighlightRequest(
+            lineNumber: lineNumber,
+            lineText: declaration.declarationText,
+            matchRangeInLine: FindResultNode.nameRange(of: match).map { RuntimeTextRange(location: $0.location, length: $0.length) },
+            query: declaration.name,
+            matchMode: .matchingWord,
+            isCaseSensitive: true
+        )
     }
 }

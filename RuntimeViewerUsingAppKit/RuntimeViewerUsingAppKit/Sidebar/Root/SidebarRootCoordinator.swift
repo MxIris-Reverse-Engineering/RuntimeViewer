@@ -54,6 +54,8 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
                     completion?()
                 }
             )
+        case .findResults:
+            return .select(index: 2)
         case .findScopeChooser:
             let viewController = FindScopeChooserViewController<SidebarRootRoute>()
             let viewModel = FindScopeChooserViewModel<SidebarRootRoute>(documentState: documentState, router: self)

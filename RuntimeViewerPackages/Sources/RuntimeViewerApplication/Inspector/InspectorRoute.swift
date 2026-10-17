@@ -24,6 +24,8 @@ public enum InspectorRuntimeObjectRoute: Routable {
     case classHierarchy
     case relationships
     case specialization
+    /// The References tab: callers, callees and type references.
+    case references
     /// Forwarded up to `InspectorCoordinator` so it can re-trigger
     /// `InspectorRoute.requestSpecializationSheet` on itself, which
     /// `MainCoordinator` already listens for.

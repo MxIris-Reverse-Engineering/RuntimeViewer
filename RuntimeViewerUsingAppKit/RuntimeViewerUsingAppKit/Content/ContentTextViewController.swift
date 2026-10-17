@@ -3,6 +3,7 @@ import AppKitPlus
 import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerApplication
+import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 
 final class ContentTextViewController: BaseViewController<ContentTextViewModel>, NSTextViewDelegate {
@@ -42,6 +43,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     private let jumpToDefinitionRelay = PublishRelay<RuntimeObject>()
 
     private let openInNewTabRelay = PublishRelay<RuntimeObject>()
+
+    private let crossReferenceRequestedRelay = PublishRelay<FindCrossReferenceRequest>()
+
+    /// The member declared on the insertion point's line, each time the point moves.
+    private let cursorMemberChangedRelay = PublishRelay<RuntimeMemberReference?>()
 
     private var isPressedCommand: Bool = false
 
@@ -91,7 +97,9 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         let input = ContentTextViewModel.Input(
             // ⌘-click jumps in place; ⌘⇧-click and ⌥⌘-click open in a new tab (Safari semantics).
             runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedOpenInNewTabModifier != true }, jumpToDefinitionRelay.asSignal()).merge(),
-            runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedOpenInNewTabModifier == true }, openInNewTabRelay.asSignal()).merge()
+            runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedOpenInNewTabModifier == true }, openInNewTabRelay.asSignal()).merge(),
+            crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
+            cursorMemberChanged: cursorMemberChangedRelay.asSignal().distinctUntilChanged()
         )
         let output = viewModel.transform(input)
 
@@ -171,9 +179,47 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             openInNewTabMenuItem.action = #selector(openInNewTabAction(_:))
             newMenuItems.append(openInNewTabMenuItem)
         }
+        // Find Call Hierarchy and the other cross-reference commands: for the type a name links
+        // to, and for the member the clicked line declares.
+        let attributes = view.attributedString().attributes(at: charIndex, effectiveRange: nil)
+        var requests: [FindCrossReferenceRequest] = []
+        if let member = attributes[.runtimeViewerDeclaredMember] as? RuntimeMemberReference {
+            requests += FindCrossReferenceRequest.requests(for: member)
+        }
+        if let runtimeObject = attributes[.link] as? RuntimeObject {
+            requests += FindCrossReferenceRequest.requests(for: runtimeObject)
+        }
+        if !requests.isEmpty {
+            if !newMenuItems.isEmpty {
+                newMenuItems.append(.separator())
+            }
+            newMenuItems += requests.map { request in
+                NSMenuItem(title: request.title, action: #selector(crossReferenceAction(_:)), keyEquivalent: "").then {
+                    $0.target = self
+                    $0.representedObject = request
+                }
+            }
+        }
         newMenuItems.append(contentsOf: menu.items.filter { $0.action?.isStandardAction ?? false })
         menu.items = newMenuItems
         return menu
+    }
+
+    @objc private func crossReferenceAction(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? FindCrossReferenceRequest else { return }
+        crossReferenceRequestedRelay.accept(request)
+    }
+
+    /// The insertion point moved: the member its line declares, if any, is the one the Inspector's
+    /// References tab and Find ▸ Find Call Hierarchy follow.
+    func textViewDidChangeSelection(_ notification: Notification) {
+        let selectedRange = textView.selectedRange()
+        let length = textView.textStorage?.length ?? 0
+        guard selectedRange.location < length else {
+            cursorMemberChangedRelay.accept(nil)
+            return
+        }
+        cursorMemberChangedRelay.accept(textView.attributedString().attribute(.runtimeViewerDeclaredMember, at: selectedRange.location, effectiveRange: nil) as? RuntimeMemberReference)
     }
 
     @objc private func jumpToDefinitionAction(_ sender: RuntimeObjectMenuItem) {

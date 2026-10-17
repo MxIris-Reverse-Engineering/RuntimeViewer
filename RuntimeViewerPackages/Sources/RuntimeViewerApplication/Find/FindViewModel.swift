@@ -318,9 +318,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     /// itself goes through the session alone and is not recorded.
     private func run(_ query: FindQuery) {
         session.run(query)
-        guard !query.isEmpty else { return }
-        let key = recentQueriesKey
-        appDefaults.findRecentQueriesByScope[key] = FindRecentQueries.recording(query, in: appDefaults.findRecentQueriesByScope[key] ?? [])
+        session.recordAsRecent(query)
     }
 
     /// Where the recent queries of the document's source are kept: the key its bookmarks are under.
@@ -399,26 +397,13 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         memberDeclarationLookupTask?.cancel()
         memberDeclarationLookupTask = nil
         if case let (member, declaration)? = Self.crossReferenceMember(of: node) {
-            navigate(to: member, declaration: declaration, inNewTab: inNewTab)
+            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: declaration, inNewTab: inNewTab, in: documentState, generationOptions: appDefaults.options)
             return
         }
         // The query the rows answer, not the one the mode path and the
         // toggles may have been edited into since.
         let highlight = Self.highlight(for: node, query: session.results.query ?? session.query)
-        open(object, highlighting: highlight, inNewTab: inNewTab)
-    }
-
-    private func open(_ object: RuntimeObject, highlighting highlight: ContentHighlightRequest?, inNewTab: Bool) {
-        switch (inNewTab, highlight) {
-        case (false, nil):
-            documentState.selectionRouter.trigger(.push(object))
-        case (false, let highlight?):
-            documentState.selectionRouter.trigger(.pushHighlighting(object, highlight))
-        case (true, nil):
-            documentState.selectionRouter.trigger(.openInNewTab(object))
-        case (true, let highlight?):
-            documentState.selectionRouter.trigger(.openInNewTabHighlighting(object, highlight))
-        }
+        FindCrossReferenceNavigation.open(object, highlighting: highlight, inNewTab: inNewTab, in: documentState)
     }
 
     /// The member a cross-reference row goes to, with its declaration when the
@@ -436,38 +421,6 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         case .object, .textMatch, .member, .relationship, .crossReferenceRoot(.type, _):
             return nil
         }
-    }
-
-    /// Goes to the member's declaration. A row that found a function knows
-    /// its member but not where the interface declares it; the corpus of its
-    /// image knows, and the click waits for it. Without a corpus the click
-    /// reaches the type, as a member search's row with no line does.
-    private func navigate(to member: RuntimeMemberReference, declaration: RuntimeMemberDeclaration?, inNewTab: Bool) {
-        if let declaration, declaration.lineNumber != nil {
-            open(member.object, highlighting: Self.highlight(for: member, declaration: declaration), inNewTab: inNewTab)
-            return
-        }
-        let engine = documentState.runtimeEngine
-        let generationOptions = appDefaults.options
-        memberDeclarationLookupTask = Task { [weak self] in
-            let declaration = try? await FindCrossReferenceRootResolver.declaration(of: member, engine: engine, generationOptions: generationOptions)
-            guard let self, !Task.isCancelled else { return }
-            open(member.object, highlighting: declaration.flatMap { Self.highlight(for: member, declaration: $0) }, inNewTab: inNewTab)
-        }
-    }
-
-    /// The member's declaration, flashed as a member search's row flashes it.
-    private static func highlight(for member: RuntimeMemberReference, declaration: RuntimeMemberDeclaration) -> ContentHighlightRequest? {
-        guard let lineNumber = declaration.lineNumber else { return nil }
-        let match = RuntimeMemberMatch(object: member.object, member: declaration, matchRangeInName: RuntimeTextRange(location: 0, length: (declaration.name as NSString).length))
-        return ContentHighlightRequest(
-            lineNumber: lineNumber,
-            lineText: declaration.declarationText,
-            matchRangeInLine: FindResultNode.nameRange(of: match).map { RuntimeTextRange(location: $0.location, length: $0.length) },
-            query: declaration.name,
-            matchMode: .matchingWord,
-            isCaseSensitive: true
-        )
     }
 
     /// Where in the object's interface a hit or member sits, for the content

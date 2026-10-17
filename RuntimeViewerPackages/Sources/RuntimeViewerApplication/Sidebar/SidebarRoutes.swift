@@ -19,6 +19,11 @@ public enum SidebarRoute: Routable {
     /// and put the keyboard focus in its search field (Edit ▸ Find ▸ Find in
     /// Indexed Images). macOS only.
     case showFind
+    /// Show the Find navigator tab of whichever sidebar level is on screen,
+    /// the focus left where it is: a cross-reference command ran from outside
+    /// the page, as Xcode's Find Call Hierarchy shows its results without
+    /// focusing the query field. macOS only.
+    case showFindResults
     /// Show the Report navigator tab of whichever sidebar level is on
     /// screen (View ▸ Show Report Navigator). macOS only.
     case showReports
@@ -33,6 +38,8 @@ public enum SidebarRootRoute: Routable {
     case bookmarks
     /// The Find navigator tab, with the focus moved into its search field.
     case find
+    /// The Find navigator tab, the focus left where it is.
+    case findResults
     /// The Find navigator's scope chooser, as a sheet on the document window.
     case findScopeChooser
     /// Closes the Find navigator's scope chooser.
@@ -48,6 +55,8 @@ public enum SidebarRuntimeObjectRoute: Routable {
     case bookmarks
     /// The Find navigator tab, with the focus moved into its search field.
     case find
+    /// The Find navigator tab, the focus left where it is.
+    case findResults
     /// The Find navigator's scope chooser, as a sheet on the document window.
     case findScopeChooser
     /// Closes the Find navigator's scope chooser.

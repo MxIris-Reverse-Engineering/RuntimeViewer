@@ -51,6 +51,12 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
             }
             guard let rootCoordinator else { return .none() }
             return .route(on: rootCoordinator, to: .find)
+        case .showFindResults:
+            if let runtimeObjectCoordinator {
+                return .route(on: runtimeObjectCoordinator, to: .findResults)
+            }
+            guard let rootCoordinator else { return .none() }
+            return .route(on: rootCoordinator, to: .findResults)
         case .showReports:
             // Both levels carry a Report navigator tab, bound to the same
             // coordinators, so either shows the same reports.

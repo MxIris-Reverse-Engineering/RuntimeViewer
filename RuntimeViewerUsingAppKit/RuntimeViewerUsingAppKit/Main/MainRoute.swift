@@ -27,6 +27,9 @@ public enum MainRoute: Routable {
     /// Edit ▸ Find ▸ Find in Indexed Images…: show the sidebar, switch it to
     /// the Find navigator and focus the search field.
     case find
+    /// A cross-reference command ran from outside the Find navigator: show
+    /// the sidebar and switch it to the navigator, without moving the focus.
+    case showFindResults
     /// View ▸ Show Report Navigator: show the sidebar and switch it to the
     /// Report navigator.
     case reports

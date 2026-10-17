@@ -3,6 +3,7 @@ import Combine
 import Dependencies
 import Observation
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 #if canImport(UIKit)
 import UIKit
@@ -145,6 +146,21 @@ public final class DocumentState {
     /// externally: mutated only via `selectionRouter`.
     @RxObserved
     public fileprivate(set) var selectedRuntimeObject: RuntimeObject?
+
+    /// The member whose declaration the content pane's insertion point is on,
+    /// or `nil` when the point is on no member's line. The Inspector's
+    /// References tab follows it, and Find Call Hierarchy in the main menu acts
+    /// on it, as Xcode's acts on the symbol at the insertion point. Set by the
+    /// content pane, which reads which line declares which member
+    /// (`RuntimeObjectInterface.declaredMembersByLineNumber()`); a member of
+    /// another object than the one on screen does not count.
+    @RxObserved
+    public private(set) var cursorMember: RuntimeMemberReference?
+
+    public func updateCursorMember(_ member: RuntimeMemberReference?) {
+        guard member != cursorMember else { return }
+        cursorMember = member
+    }
 
     /// Content-pane tabs. Tabs and the navigation timeline are independent
     /// mechanisms: a tab is a display slot holding one `object`, while the

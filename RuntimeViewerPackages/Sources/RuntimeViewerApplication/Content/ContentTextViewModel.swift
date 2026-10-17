@@ -10,6 +10,7 @@ import UIKit
 import os
 import Semantic
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
@@ -58,7 +59,8 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         public let semanticString: FrozenSemanticString
 
         /// The same content with the theme's colors and fonts applied, plus the `.link`
-        /// attributes that carry jump targets.
+        /// attributes that carry jump targets and the `.runtimeViewerDeclaredMember` attributes
+        /// that say which member a line declares.
         public let attributedString: NSAttributedString
     }
 
@@ -270,8 +272,37 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         else { return nil }
         return RenderedInterface(
             semanticString: interfacePair.interfaceString,
-            attributedString: attributedString
+            attributedString: markingDeclaredMembers(in: attributedString, of: interfacePair)
         )
+    }
+
+    /// `attributedString` with every line that declares a member with code
+    /// carrying it as `.runtimeViewerDeclaredMember`, which the right-click
+    /// menu and the insertion point read off a character as the `.link`
+    /// attribute names a type. Which line declares what is read the way the
+    /// Find corpus locates members on their lines.
+    nonisolated static func markingDeclaredMembers(
+        in attributedString: NSAttributedString,
+        of interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)
+    ) -> NSAttributedString {
+        let interface = RuntimeObjectInterface(object: interfacePair.runtimeObject, interfaceString: interfacePair.interfaceString)
+        let membersByLineNumber = interface.declaredMembersByLineNumber()
+            .filter { FindCrossReferenceRoot.memberKindsWithCode.contains($0.value.kind) }
+        guard !membersByLineNumber.isEmpty else { return attributedString }
+        let markedString = NSMutableAttributedString(attributedString: attributedString)
+        let text = attributedString.string as NSString
+        var lineNumber = 1
+        var lineStart = 0
+        while lineStart < text.length {
+            let lineRange = text.lineRange(for: NSRange(location: lineStart, length: 0))
+            if let declaredMember = membersByLineNumber[lineNumber] {
+                let member = RuntimeMemberReference(object: interfacePair.runtimeObject, name: declaredMember.name, kind: declaredMember.kind, isStatic: declaredMember.isStatic)
+                markedString.addAttribute(.runtimeViewerDeclaredMember, value: member, range: lineRange)
+            }
+            lineNumber += 1
+            lineStart = NSMaxRange(lineRange)
+        }
+        return markedString
     }
 
     /// Builds the display-ready attributed string for a fetched interface.
@@ -297,6 +328,14 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// Resolved the same way as `runtimeObjectClicked` but routed to
         /// `.openInNewTab` instead of an in-place `.push`.
         public let runtimeObjectOpenedInNewTab: Signal<RuntimeObject>
+        /// Find Call Hierarchy, Find Callees or Find Type References chosen in
+        /// the right-click menu.
+        @Init(default: Signal<FindCrossReferenceRequest>.empty())
+        public let crossReferenceRequested: Signal<FindCrossReferenceRequest>
+        /// The member declared on the insertion point's line as it moves, or
+        /// `nil` off every member's line.
+        @Init(default: Signal<RuntimeMemberReference?>.empty())
+        public let cursorMemberChanged: Signal<RuntimeMemberReference?>
     }
 
     public struct Output {
@@ -360,6 +399,20 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             }
             .disposed(by: rx.disposeBag)
 
+        input.crossReferenceRequested.emitOnNext { [weak self] request in
+            guard let self else { return }
+            documentState.findSession.runCrossReferenceCommand(request)
+        }
+        .disposed(by: rx.disposeBag)
+
+        // Only a member of the object on screen: a late event from the text of
+        // the object before must not stand for this one.
+        input.cursorMemberChanged.emitOnNext { [weak self] member in
+            guard let self else { return }
+            documentState.updateCursorMember(member?.object == runtimeObject ? member : nil)
+        }
+        .disposed(by: rx.disposeBag)
+
         return Output(
             renderedInterface: $renderedInterface.asDriver().compactMap { $0 },
             attributedString: $attributedString.asDriver().compactMap { $0 },
@@ -373,3 +426,9 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 }
 
 extension NSAttributedString: @unchecked @retroactive Sendable {}
+
+extension NSAttributedString.Key {
+    /// The `RuntimeMemberReference` a line of the content pane's text declares,
+    /// over the whole line; see `ContentTextViewModel.markingDeclaredMembers(in:of:)`.
+    public static let runtimeViewerDeclaredMember = NSAttributedString.Key("RuntimeViewerDeclaredMember")
+}

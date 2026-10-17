@@ -367,6 +367,23 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.find)
     }
 
+    @objc func findCallHierarchy(_ sender: Any?) {
+        runCrossReferenceCommand(.callHierarchy)
+    }
+
+    @objc func findCallees(_ sender: Any?) {
+        runCrossReferenceCommand(.callees)
+    }
+
+    @objc func findTypeReferences(_ sender: Any?) {
+        runCrossReferenceCommand(.typeReferences)
+    }
+
+    private func runCrossReferenceCommand(_ mode: FindMode) {
+        guard let request = documentState.crossReferenceRequest(mode) else { return }
+        documentState.findSession.runCrossReferenceCommand(request)
+    }
+
     // MARK: - Report Actions
 
     @objc func showReportNavigator(_ sender: Any?) {
@@ -383,6 +400,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             return documentState.runtimeEngine.imageNodes.count >= 2
         case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
             return documentState.tabs.count > 1
+        case #selector(findCallHierarchy(_:)):
+            return documentState.crossReferenceRequest(.callHierarchy) != nil
+        case #selector(findCallees(_:)):
+            return documentState.crossReferenceRequest(.callees) != nil
+        case #selector(findTypeReferences(_:)):
+            return documentState.crossReferenceRequest(.typeReferences) != nil
         default:
             return super.responds(to: aSelector)
         }

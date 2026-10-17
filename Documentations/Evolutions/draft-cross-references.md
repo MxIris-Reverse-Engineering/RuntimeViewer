@@ -695,7 +695,7 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 3. **`RuntimeViewerCrossReferences` 模块**：线上类型与命令；在 `AGENTS.md`「Injection commands」那张表列出的全部入口调用 `install()`，并把这条义务写进 `AGENTS.md`；本库扫描与会话缓存；跨库按需扫描（预筛、并发、进度、取消）。**已完成（2026-10-16）**，`typeReferences` 随 MachOSwiftSection 第二批于 2026-10-17 补上，记录见「第 3 步的落地记录」与「第 3 步续：类型引用」。
 4. **CLI 与 MCP**：三个子命令、三个工具，agent 插件的 skill 与版本号，以及 `Guides/CommandLineInterface.md`。**顺序已调整（2026-10-17）**：放到第 5、6 步之后，界面做完、没有问题再做。
 5. **Find 导航页的三种模式**：逆向 Xcode 27 的 Call Hierarchy 来对齐界面；结果树、范围控件、精度标记、运行时调用开关；按 `RuntimeViewerApplicationTests` 的规则写 ViewModel 契约测试。**已完成（2026-10-17）**，记录见「第 5 步的落地记录」。
-6. **内容区右键与 Inspector 的 References 标签**：成员按行对齐、两条文本路径的菜单、光标所在成员、标签本身及其 ViewModel 测试。
+6. **内容区右键与 Inspector 的 References 标签**：成员按行对齐、两条文本路径的菜单、光标所在成员、标签本身及其 ViewModel 测试。**已完成（2026-10-17）**，记录见「第 6 步的落地记录」。
 
 原设计的第 5 步「全量索引」随存盘索引一起删去。
 
@@ -789,6 +789,24 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 
 **测试**：`FindCrossReferenceTreeTests`（分组、排序、加载与递归、名字解析，不需要引擎）、`FindViewModelCrossReferenceTests`（在共享测试引擎上，范围限定在 Foundation：三种模式、逐层展开、运行时调用开关、键入的词找根、右键命令、点击跳转、多镜像范围），以及 `RuntimeViewerCrossReferencesTests` 新增的两个引擎测试。
 
+## 第 6 步的落地记录（2026-10-17）
+
+**成员按行对齐**：Core 新增 `RuntimeObjectInterface.declaredMembersByLineNumber()`，用 Find 语料对齐成员时的同一套读行规则（`RuntimeMemberDeclarationLocator`）反过来读：每行声明的是哪个成员。只读这个接口自己语言的键（一行 ObjC 文字在两种语言下都能读出键）；一行有几个键时取函数、方法、属性，不取参数名；行首括号深度大于 1 的行属于嵌套类型，不算这个对象的；以 `case` 开头的是枚举 case，没有代码。内容区渲染时把有代码的成员以 `.runtimeViewerDeclaredMember` 属性标在整行上，和类型名用 `.link` 带 `RuntimeObject` 是同一个做法，两条文本路径都从属性读。
+
+**入口**：
+
+- 内容区右键：成员所在的行多出「Find Call Hierarchy」「Find Callees」，类型名多出「Find Type References」；`NSTextView` 与 SourceEditor 两条路径都有。
+- 主菜单 Edit ▸ Find：「Find Call Hierarchy」（⌃⇧⌘H，照 Xcode 的 `Xcode.IDEKit.CmdDefinition.CallHierarchy`）、「Find Callees」「Find Type References」（Xcode 没有，不设快捷键）。前两项作用于光标所在的成员，第三项作用于当前显示的类型；对不上时置灰。
+- 这几处命令都照 Xcode 的 Find Call Hierarchy：切到 Find 导航页、范围回到默认、填入名字立即查询、不把焦点移进查询框，并记进最近查询。
+
+**光标所在成员**：`DocumentState.cursorMember`，由内容区在选区变化时更新，只认当前显示对象的成员。Inspector 的 References 标签与主菜单命令都跟随它。
+
+**Inspector 的 References 标签**：ObjC 类、Swift 结构体、枚举、类显示这个标签。三段：调用者、被调（不含运行时辅助调用）、类型引用，各列一层，一段最多 200 行；光标不在成员上时只显示类型引用，并提示把光标放到方法或属性上。行可点击跳到成员的声明；段头的按钮把同一条查询交给 Find 导航页展开成树。每段各有一个状态值与一条管线，按各自的主题取消旧查询：光标换到另一个成员只重查调用，类型引用不动。
+
+**还没做的**：SourceEditor 路径不跟随光标——桥接层没有选区变化的回调，要按 SourceEditor 模块的规矩（先有 dump、再改存根）另做；这条路径上右键菜单照常可用。嵌套类型里的成员在外层类型的内容里不提供命令（它们属于嵌套类型，不是这个对象的），要用就打开嵌套类型本身。
+
+**测试**：`RuntimeDeclaredMemberTests`（Core，按行读成员的规则）、`ContentCrossReferenceTests`（成员属性、右键命令、光标成员、主菜单命令的目标）、`InspectorReferencesViewModelTests`（共享测试引擎，范围限定在 Foundation）。
+
 ## 审查与修复（2026-10-17）
 
 第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
@@ -847,3 +865,6 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 | 2026-10-17 | 第 5 步照 Xcode 27.2 的 Call Hierarchy 做：按需加载、根自动展开、递归标记、按标题排序、无汇总行、禁用过滤框、Xcode 的占位文字 | 逆向结果见「第 5 步的落地记录」与 `/Volumes/RE/Xcode/27.2/README.md`；用户要求「做得和 Xcode 一样」靠逆向而不是照截图 |
 | 2026-10-17 | 与 Xcode 的六处不同（一个调用者一行、范围生效、Loading 行与进度、根多时不自动展开、一次一层、不预取） | 理由逐条见「第 5 步的落地记录」的表 |
 | 2026-10-17 | 多镜像范围改为逐个镜像查询；引擎按 dyld 解析框架符号链接路径；ObjC 方法的调用者与被调带上所属成员 | 落地测试抓出的三个缺陷，各带修复前失败的测试 |
+| 2026-10-17 | 第 6 步：成员按行对齐用 Core 的反向读行接口，以 `.runtimeViewerDeclaredMember` 属性标在内容文本上 | 和类型名的 `.link` 同一个做法，两条文本路径共用；读行规则与 Find 语料定位成员的是同一套，不另写一份 |
+| 2026-10-17 | 主菜单只给 Find Call Hierarchy 设快捷键 ⌃⇧⌘H | 照 Xcode 的按键绑定；Callees 与 Type References 在 Xcode 里没有对应命令 |
+| 2026-10-17 | Inspector 的 References 标签只给 ObjC 类与 Swift 结构体、枚举、类；SourceEditor 路径暂不跟随光标 | 这些类型的成员有代码、引用也找得到；SourceEditor 的桥接层没有选区回调，要另按该模块的规矩做 |

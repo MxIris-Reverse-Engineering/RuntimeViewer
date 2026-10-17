@@ -84,7 +84,7 @@ public final class FindSession {
 
     /// The summary bar for a source whose RuntimeViewer predates Find's
     /// commands, worded as the Report navigator words it.
-    static let unsupportedBySourceSummary = "Not supported by this source"
+    nonisolated static let unsupportedBySourceSummary = "Not supported by this source"
 
     /// What the summary bar adds when the engine folded the hits of
     /// Objective-C protocol copies that read exactly like one already shown —
@@ -120,6 +120,15 @@ public final class FindSession {
     /// Fired when a page should take the keyboard focus into its search
     /// field — Edit ▸ Find ▸ Find in Indexed Images.
     public let focusSearchFieldRelay = PublishRelay<Void>()
+
+    /// Asks the window to show the Find navigator, its results on screen and
+    /// its query field left alone: a cross-reference command ran from outside
+    /// the page. See `runCrossReferenceCommand(_:)`.
+    public var showResultsRequested: Signal<Void> {
+        showResultsRelay.asSignal()
+    }
+
+    private let showResultsRelay = PublishRelay<Void>()
 
     /// Whether Callees lists the calls to retains, releases and the other
     /// runtime helpers. The filter bar's toggle; off, as most callees lists
@@ -342,6 +351,28 @@ public final class FindSession {
     /// Runs the query in force again.
     public func rerun() {
         run(query)
+    }
+
+    /// Find Call Hierarchy, Find Callees or Find Type References from outside
+    /// the Find page — the content pane, the Inspector, the main menu. The
+    /// query runs at once and is recorded among the recent queries, and the
+    /// window is asked to show the navigator without focusing its query field,
+    /// as Xcode's Find Call Hierarchy does
+    /// (`-[IDEFindNavigatorCommands initiateCallHierarchyQueryWithSymbol:inWorkspaceTabController:]`).
+    public func runCrossReferenceCommand(_ request: FindCrossReferenceRequest) {
+        let commandQuery = query.crossReferenceQuery(request.mode, for: request.root)
+        run(commandQuery)
+        recordAsRecent(commandQuery)
+        showResultsRelay.accept(())
+    }
+
+    /// Records `query` among the recent queries of the document's source, as a
+    /// query the user ran (`-[IDEFindNavigatorQueryParametersController
+    /// initiateQuery]`). A search that runs again by itself is not recorded.
+    func recordAsRecent(_ query: FindQuery) {
+        guard !query.isEmpty, let documentState else { return }
+        let key = documentState.runtimeEngine.bookmarkScope.bookmarkKey
+        appDefaults.findRecentQueriesByScope[key] = FindRecentQueries.recording(query, in: appDefaults.findRecentQueriesByScope[key] ?? [])
     }
 
     /// A text or member search on screen answers for the options it ran
@@ -875,7 +906,8 @@ public final class FindSession {
             let options = RuntimeCrossReferenceQueryOptions(resultLimit: remainingLimit)
             // A scope of one image reports nothing in between; one of several
             // reports each image as it is done instead.
-            let scopeProgress: @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void = scopes.count == 1 ? reportProgress : { _ in }
+            let silentProgress: @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void = { _ in }
+            let scopeProgress = scopes.count == 1 ? reportProgress : silentProgress
             let result: RuntimeCrossReferenceQueryResult
             switch request {
             case .calls(let subject):
@@ -978,7 +1010,7 @@ public final class FindSession {
     }
 
     /// What a row whose level could not be loaded says.
-    static func crossReferenceFailureMessage(for error: any Swift.Error) -> String {
+    nonisolated static func crossReferenceFailureMessage(for error: any Swift.Error) -> String {
         if let requestError = error as? RuntimeNetworkRequestError, requestError.isUnknownCommand {
             return unsupportedBySourceSummary
         }
