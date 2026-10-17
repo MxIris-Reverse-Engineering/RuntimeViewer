@@ -27,4 +27,20 @@ extension RuntimeEngine {
     ) async throws -> RuntimeCrossReferenceQueryResult {
         try await dispatch(RuntimeCrossReferences.CallersCommand(subject: subject, scope: scope, options: options), onProgress: reportProgress)
     }
+
+    /// Which functions reference the type `object` within `scope`: an
+    /// Objective-C class, or a Swift struct, enum or class.
+    ///
+    /// A reference is an instruction that takes the class or the type's
+    /// metadata — by address, through a GOT slot, by calling its metadata
+    /// accessor — or instantiates a mangled name that names the type. Scanned
+    /// and reported like ``callers(of:in:options:reportProgress:)``.
+    public func typeReferences(
+        to object: RuntimeObject,
+        in scope: RuntimeCrossReferenceScope = .allImages,
+        options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
+        reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
+    ) async throws -> RuntimeCrossReferenceQueryResult {
+        try await dispatch(RuntimeCrossReferences.TypeReferencesCommand(object: object, scope: scope, options: options), onProgress: reportProgress)
+    }
 }

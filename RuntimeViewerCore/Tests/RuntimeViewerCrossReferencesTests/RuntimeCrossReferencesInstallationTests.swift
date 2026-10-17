@@ -10,7 +10,7 @@ import RuntimeViewerCommunication
 /// peer that looks to a host like a build too old to have these commands.
 @Suite("RuntimeCrossReferences installation")
 struct RuntimeCrossReferencesInstallationTests {
-    @Test("install() puts both cross-reference commands on a new connection")
+    @Test("install() puts every cross-reference command on a new connection")
     func installAddsEveryCrossReferenceCommand() {
         RuntimeCrossReferences.install()
         // Twice on purpose: the app and the XPC services it embeds each call
@@ -21,7 +21,7 @@ struct RuntimeCrossReferencesInstallationTests {
         RuntimeEngine.registerSharedHandlers(on: connection, engine: RuntimeEngine(source: .local))
 
         let installedNames = connection.installedNames
-        for commandName: RuntimeEngine.CommandName in [.crossReferenceCallees, .crossReferenceCallers] {
+        for commandName: RuntimeEngine.CommandName in [.crossReferenceCallees, .crossReferenceCallers, .crossReferenceTypeReferences] {
             #expect(installedNames.contains(commandName.commandName))
         }
         #expect(Set(installedNames).count == installedNames.count)

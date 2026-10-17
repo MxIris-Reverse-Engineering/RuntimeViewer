@@ -192,6 +192,108 @@ struct CrossReferenceQueryTests {
         #expect(last.scannedImageCount < last.totalImageCount)
     }
 
+    /// Finds a reference from another shared cache image than `imagePath`
+    /// among what a scan of every image reports, and stops the scan as soon
+    /// as one arrives. Not from this test process's own binaries: they lie
+    /// outside the cache, keep their undefined symbols as any binary does, and
+    /// a prefilter by imports finds them.
+    private static func firstReference(
+        fromAnotherCacheImageThan imagePath: String,
+        of scan: @escaping @Sendable (@escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void) async throws -> RuntimeCrossReferenceQueryResult
+    ) async -> RuntimeCrossReference? {
+        let (outsideReferences, continuation) = AsyncStream<RuntimeCrossReference>.makeStream()
+        let task = Task {
+            defer { continuation.finish() }
+            _ = try await scan { progress in
+                for reference in progress.references where reference.referencingFunction.imagePath != imagePath
+                    && (reference.referencingFunction.imagePath.hasPrefix("/System/") || reference.referencingFunction.imagePath.hasPrefix("/usr/lib/")) {
+                    continuation.yield(reference)
+                }
+            }
+        }
+        var found: RuntimeCrossReference?
+        for await reference in outsideReferences {
+            found = reference
+            break
+        }
+        task.cancel()
+        _ = await task.result
+        return found
+    }
+
+    @Test("A Swift function's callers are looked for in every image linking its own")
+    func swiftFunctionCandidatesFollowTheLinkage() throws {
+        // The macOS 27.2 cache keeps no Swift symbol among most of its images'
+        // undefined symbols: a prefilter by imports kept a few images that do
+        // and dropped every caller in the rest — MachOSwiftSection's
+        // `swiftFunctionPrefilterKeepsEveryCaller` samples which.
+        let symbol = "_$s10Foundation3URLV4pathSSvg"
+        let address = try Self.address(of: symbol, inImageAt: Self.foundationPath)
+        let foundation = try #require(CrossReferenceQuery.imageIndex(forPath: Self.foundationPath, in: Self.analyzer))
+        let function = try #require(Self.analyzer.function(containing: CodeLocation(imageIndex: foundation, address: address)))
+        let subject = CrossReferenceQuery.ResolvedSubject(functions: [.init(function: function, member: nil)])
+        let candidates = Set(try Self.makeQuery().candidateImages(for: subject, in: .allImages, analyzer: Self.analyzer))
+        let everyImage = Self.analyzer.imagePaths.indices
+        let linkers = Set(Self.analyzer.imageIndices(linkingImageAt: foundation, among: everyImage))
+        #expect(linkers.isSubset(of: candidates))
+        #expect(candidates.count > Self.analyzer.imageIndices(importing: symbol, among: everyImage).count)
+    }
+
+    // MARK: - Type references
+
+    private static let swiftUICorePath = "/System/Library/Frameworks/SwiftUICore.framework/Versions/A/SwiftUICore"
+
+    @Test("References to an Objective-C class in its own image: exact, and pointing at the class")
+    func typeReferencesOfAnObjectiveCClass() async throws {
+        let window = RuntimeObject(name: "NSWindow", displayName: "NSWindow", kind: .objc(.type(.class)), imagePath: Self.appKitPath, children: [])
+        let engine = RuntimeEngine(source: .local, engineID: "test-cross-reference-type-references")
+        let result = try await engine.typeReferences(to: window, in: .image(path: Self.appKitPath))
+        #expect(result.isComplete)
+        #expect(!result.references.isEmpty)
+        #expect(result.references.allSatisfy { $0.kind == .typeReference && $0.precision == .exact })
+        #expect(result.references.allSatisfy { $0.target == .type(name: "NSWindow", object: window) })
+        #expect(result.references.allSatisfy { $0.referencingFunction.imagePath == Self.appKitPath })
+    }
+
+    @Test("References to a Swift type, which Runtime Viewer names by the key the analysis uses")
+    func typeReferencesOfASwiftType() async throws {
+        let text = RuntimeObject(name: "7SwiftUI4TextV", displayName: "Text", kind: .swift(.type(.struct)), imagePath: Self.swiftUICorePath, children: [])
+        let result = try await Self.makeQuery().typeReferences(to: text, in: .image(path: Self.swiftUICorePath), options: RuntimeCrossReferenceQueryOptions(), reportProgress: { _ in })
+        #expect(result.isComplete)
+        #expect(!result.references.isEmpty)
+        #expect(result.references.allSatisfy { $0.kind == .typeReference && $0.target == .type(name: "Text", object: text) })
+    }
+
+    @Test("References to a Swift type in other images are found, though no image imports it by name")
+    func typeReferencesAcrossImages() async throws {
+        let url = RuntimeObject(name: "10Foundation3URLV", displayName: "URL", kind: .swift(.type(.struct)), imagePath: Self.foundationPath, children: [])
+        let query = Self.makeQuery()
+        let outside = await Self.firstReference(fromAnotherCacheImageThan: Self.foundationPath) { reportProgress in
+            try await query.typeReferences(to: url, in: .allImages, options: RuntimeCrossReferenceQueryOptions(), reportProgress: reportProgress)
+        }
+        #expect(outside?.target == .type(name: "URL", object: url))
+    }
+
+    @Test("A protocol is no type whose references are found")
+    func typeReferencesNeedAType() async throws {
+        let copying = RuntimeObject(name: "NSCopying", displayName: "NSCopying", kind: .objc(.type(.protocol)), imagePath: "/usr/lib/libobjc.A.dylib", children: [])
+        await #expect(throws: RuntimeCrossReferenceError.typeNotFound(objectName: "NSCopying")) {
+            try await Self.makeQuery().typeReferences(to: copying, in: .allImages, options: RuntimeCrossReferenceQueryOptions(), reportProgress: { _ in })
+        }
+    }
+
+    @Test("A repeated type query reuses the scan")
+    func typeScansAreReused() async throws {
+        let session = CrossReferenceSession()
+        let query = Self.makeQuery(session: session)
+        let window = RuntimeObject(name: "NSWindow", displayName: "NSWindow", kind: .objc(.type(.class)), imagePath: Self.appKitPath, children: [])
+        let first = try await query.typeReferences(to: window, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let recorder = ProgressRecorder()
+        let second = try await query.typeReferences(to: window, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
+        #expect(second == first)
+        #expect(recorder.reports.count == 1)
+    }
+
     // MARK: - Session
 
     @Test("A repeated query reuses the scan instead of scanning again")

@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-10-16
-- **最后更新**: 2026-10-16
+- **最后更新**: 2026-10-17
 - **所属愿景**: 无（CLI 与 MCP 部分沿用[《无头 RuntimeViewer》](../Visions/HeadlessRuntimeViewer.md)「GUI、命令行与 MCP 三个前端共用同一套命令词汇」的取向，但不推进该愿景的步骤）
 - **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案 `draft-cross-reference-analysis`（在 MachOSwiftSection 仓库，分支 `feature/cross-reference-analysis`）
 - **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）
@@ -518,26 +518,26 @@ extension RuntimeEngine {
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult
 
-    /// Which functions reference the type `object` within `scope`. Not yet: arrives with
-    /// MachOSwiftSection's second batch, which reads type references (see below).
+    /// Which functions reference the type `object` within `scope`: an Objective-C class,
+    /// or a Swift struct, enum or class.
     public func typeReferences(
         to object: RuntimeObject,
-        in scope: RuntimeCrossReferenceScope,
-        options: RuntimeCrossReferenceQueryOptions,
-        reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)?
+        in scope: RuntimeCrossReferenceScope = .allImages,
+        options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
+        reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult
 }
 
 extension RuntimeEngine.CommandName {
     static let crossReferenceCallees = Self("crossReferenceCallees")
     static let crossReferenceCallers = Self("crossReferenceCallers")
-    // With the type references: crossReferenceTypeReferences
+    static let crossReferenceTypeReferences = Self("crossReferenceTypeReferences")
 }
 ```
 
 - 线上名字保留 Core 的命名空间前缀（`RuntimeViewerInjection` 的 `RuntimeInjection+CommandNames.swift` 讲了原因：拼出来的完整字符串就是线上契约）。
-- `callers`（以及将来的 `typeReferences`）是 `RuntimeEngineProgressCommand`，并把 `cancelsAcrossConnections` 设为 `true`：调用方一取消，请求就从提供服务的那一端撤回。
-- **第 3 步只落地了 `callees` 与 `callers`。** MachOSwiftSection 第一批的扫描器还不产生类型引用（`typeMetadataAccessor`、`mangledTypeName`、`objectiveCClass` 三种目标有声明、没人产出），先上一个只认得 Swift 元数据访问器调用的 `typeReferences`，等第二批补齐时它的结果含义会变，所以这个命令和第二批一起来。
+- `callers` 与 `typeReferences` 是 `RuntimeEngineProgressCommand`，并把 `cancelsAcrossConnections` 设为 `true`：调用方一取消，请求就从提供服务的那一端撤回。
+- `typeReferences` 随 MachOSwiftSection 第二批落地（第 3 步时库还不产生类型引用）。一处类型引用是取类对象或类型元数据的指令（直接取址、经 GOT 槽、调用元数据访问器），或按 mangled 名字实例化、名字里提到这个类型的调用；结果的种类都是 `typeReference`，目标是 `.type(name:object:)`，带着查询的那个对象。只认 ObjC 类与 Swift 的结构体、枚举、类；协议与别的对象报 `typeNotFound`。
 - 旧引擎（没有这个扩展的载荷、旧版 App 的对端）对这些命令没有处理器，派发会失败；前端统一显示「这个引擎不支持交叉引用（需要更新载荷或 App）」，与注入能力查询的处理方式一致。
 
 ### 6. 查询路径
@@ -552,10 +552,10 @@ extension RuntimeEngine.CommandName {
 
 **谁调了它**（本库与跨库同一条路，一律按需扫描，不做存盘索引）：
 
-1. 预筛：函数 → 它自己的镜像，加上导入了它任一个符号名（含代码合并留下的别名）的镜像；ObjC 方法另加引用了它 selector 的镜像（`__objc_selrefs`）；selector → 引用了它的镜像。类型的预筛随类型引用一起做。实测按 selector 筛，中位数只剩 1 个镜像，第 99 百分位 15 个，最多 2,758 个（`init`）。预筛「不漏」由 MachOSwiftSection 的抽样测试保证：在预筛丢掉的镜像里每 16 个扫 1 个，不许有一处引用。
+1. 预筛：函数 → 它自己的镜像，加上 C 与 ObjC 名字（含代码合并留下的别名）的导入者；Swift 名字按链接关系——macOS 27.2 的缓存 4,113 个镜像只有 245 个在符号表里留着 Swift 的未定义符号，按导入筛会丢掉其余镜像里的调用者，所以凡是链接了函数所在镜像（直接，或经再导出）的镜像都算。ObjC 方法另加引用了它 selector 的镜像（`__objc_selrefs`）；selector → 引用了它的镜像。类型 → 类的定义镜像加类或元类地址上任一符号的导入者（Swift 类再加链接者），Swift 类型 → 链接了定义镜像的镜像（标准库与导入的类型，名字里会直接拼出来，凡是 Swift 镜像都算）。实测按 selector 筛，中位数只剩 1 个镜像，第 99 百分位 15 个，最多 2,758 个（`init`）。预筛「不漏」由 MachOSwiftSection 的抽样测试保证：在预筛丢掉的镜像里每 16 个扫 1 个，不许有一处引用。
 2. 有界并发地扫描候选镜像，每个镜像只留命中这个 subject 的引用（`references(to:inImageAt:)`），不建整镜像的反向表——库第一批实测一张 AppKit 的整表约 100 MB，并发建整表的峰值会让分配器留下上 GB 的脏页。并发数取处理器核数减一，给进程里其他工作留一个协作线程。每扫完一个镜像报一次进度，进度里带着这个镜像的结果；调用方中途放弃时，手里已经有这些。
 3. 取消与时限：调用方取消即撤回（`cancelsAcrossConnections`），扫描在下一个镜像前停下并抛出取消。`resultLimit` 到了就停，结果标 `isComplete == false`。MCP 的 30 秒与 CLI 的 `--timeout` 由前端实现：到时取消，用进度里已收到的结果。
-4. 会话内的扫描缓存：按「查询键 → 各镜像的命中」存，64 MB 预算，按最近使用淘汰。同一个主体再查一次（重试、调用层级的同一节点展开两次），已扫过的镜像直接用，只扫剩下的。单个主体的结果超出预算（`init` 的调用者）就不缓存，每次重扫——这是不做存盘索引的代价。
+4. 会话内的扫描缓存：按「扫描键 → 各镜像的命中」存（调用者按查询键，类型按类对象或描述符的位置——同名的类可能分属 macOS 与 Mac Catalyst 两个变体），64 MB 预算，按最近使用淘汰。同一个主体再查一次（重试、调用层级的同一节点展开两次），已扫过的镜像直接用，只扫剩下的。单个主体的结果超出预算（`init` 的调用者）就不缓存，每次重扫——这是不做存盘索引的代价。
 
 **ObjC 发送的精度**（第 4 节规则的落地）：查某个方法的调用者时，selector 相同的发送逐条判断。接收者是发送方法自己的 `self` 时，发送方法是类方法则接收者是类对象、否则是实例；类对象够不到实例方法（根类 `NSObject`、`NSProxy` 的实例方法除外，按名字认），实例够不到类方法，这两种排除。类名与目标方法相同记「确定」，不同记「按 selector」（可能是子类，不查类层级）；接收者未知记「按 selector」；super 发送不知道父类，记「按 selector」。代码合并把多个方法并成一个函数时，按其中任何一个能够到就算。直接按 selector 查时，每处发送都是「确定」。
 
@@ -688,7 +688,7 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 
 1. **核实前提**（已完成，结论见「前期调研 › 落地第一步的核实」）：在 App 进程里读取一个未加载缓存镜像的 `__text` 与符号表；测量 Capstone 与手写解码在 AppKit / SwiftUICore 上的吞吐，估算全量扫描的耗时与规模；对照编译器源码核实 arm64e 鉴别常量能否反查到声明；核实 iOS 真机与 Simulator 上本地符号放在哪里。任何一条结论推翻了设计，就回到本提案修改，并重新确认。
 2. **MachOSwiftSection 的库提案与 `CrossReferenceAnalysis`**：函数表与命名、单函数的引用提取、两种桩布局（镜像自带的桩与全缓存共用的桩）与 selector 解析、类型引用、鉴别常量反查、运行时辅助调用分类、预筛。批量扫描用手写解码，写 fixture 测试，并以 Capstone 的结果和 `dyld_info` / IDA 抽样作对照。然后发版。
-3. **`RuntimeViewerCrossReferences` 模块**：线上类型与命令；在 `AGENTS.md`「Injection commands」那张表列出的全部入口调用 `install()`，并把这条义务写进 `AGENTS.md`；本库扫描与会话缓存；跨库按需扫描（预筛、并发、进度、取消）。**已完成（2026-10-16）**，`typeReferences` 除外（随 MachOSwiftSection 第二批），记录见「第 3 步的落地记录」。
+3. **`RuntimeViewerCrossReferences` 模块**：线上类型与命令；在 `AGENTS.md`「Injection commands」那张表列出的全部入口调用 `install()`，并把这条义务写进 `AGENTS.md`；本库扫描与会话缓存；跨库按需扫描（预筛、并发、进度、取消）。**已完成（2026-10-16）**，`typeReferences` 随 MachOSwiftSection 第二批于 2026-10-17 补上，记录见「第 3 步的落地记录」与「第 3 步续：类型引用」。
 4. **CLI 与 MCP**：三个子命令、三个工具，agent 插件的 skill 与版本号，以及 `Guides/CommandLineInterface.md`。
 5. **Find 导航页的三种模式**：逆向 Xcode 27 的 Call Hierarchy 来对齐界面；结果树、范围控件、精度标记、运行时调用开关；按 `RuntimeViewerApplicationTests` 的规则写 ViewModel 契约测试。
 6. **内容区右键与 Inspector 的 References 标签**：成员按行对齐、两条文本路径的菜单、光标所在成员、标签本身及其 ViewModel 测试。
@@ -730,6 +730,29 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 
 **留给后面的**：给调用者起名时，有命中的镜像要再建一次函数表（扫描时建的那张已经丢了），查 `init` 这种上千个镜像都有命中的主体，每个镜像都多建一遍（多花多少没有测）。可以让 MachOSwiftSection 的过滤扫描顺带交出命中函数的 `CodeFunction`，随第二批一起做。
 
+## 第 3 步续：类型引用（2026-10-17）
+
+MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，并接入第二批的其余变化。
+
+**落地内容。**
+
+- 新命令 `crossReferenceTypeReferences`（`TypeReferencesCommand`，报进度、跨连接取消）与 `RuntimeEngine.typeReferences(to:in:options:reportProgress:)`，新错误 `typeNotFound(objectName:)`。对象怎么换成库里的类型：ObjC 类按运行时名字在它的镜像里找类对象（`objectiveCClassLocations(named:inImageAt:)`）；Swift 的结构体、枚举、类按对象的 `name` 找描述符——RuntimeViewer 给 Swift 类型对象的名字就是库的 key（类型的 mangling），SwiftData 的 193 个 Swift 类型全部按名字找到。
+- 调用者与类型引用共用一条扫描路径（`scan(_:for:…)`：先报会话里已扫过的镜像，再并发扫其余的，到上限就停）。会话缓存的键改为 `CrossReferenceScanKey`：调用者按查询键，类型按类对象或描述符的位置。
+- 被调视图里出现类型引用：取类对象、Swift 类型的访问器或元数据、按名字实例化——一个名字提到几个类型就各报一条（`[SwiftUI.Text]` 报 `Swift.Array` 与 `SwiftUI.Text`）。类型显示成 RuntimeViewer 打印的样子，Swift 类的运行时名字 `_TtC7SwiftUI13PinnedBarView` 显示为 `SwiftUI.PinnedBarView`。
+- 第二批给符号表没有名字的函数起了名（导出表、ObjC 方法表、Swift 元数据）。元数据重建的名字照符号的方式 demangle 显示，`symbolName` 为空——它不来自符号表。
+- 第二批开始给出类字面量接收者（含 Swift 经 `objc_opt_self` 的），`ObjectiveCSendMatching` 早已按类字面量处理，所以按方法查调用者时，发给类字面量的发送不再一律「按 selector」：类对象够不到的实例方法排除，类名相同记「确定」。
+- MachOSwiftSection 钉到功能分支的 `c2cefa9c`（第二批四个提交，加一个更正注释与文档里数字的提交），五份锁文件仍然只有这一条 pin 变了。
+
+**接入时发现的缺陷：第 3 步的调用者预筛会漏掉 Swift 函数的跨库调用者。** MachOSwiftSection 写类型预筛的正确性测试时发现，macOS 27.2 的缓存里 4,113 个镜像只有 245 个在符号表里留着 Swift 的未定义符号，其余的经缓存构建器绑好的 GOT 桩调用 Swift 函数，却不留导入记录。第 3 步按「导入了它的符号」找跨库调用者，对 Swift 函数只会扫按名字导入它的少数镜像——`URL.path` 只有 44 个——其余调用它的镜像全被跳过。改为 MachOSwiftSection 新增的 `imageIndices(callingFunctionAt:symbolNames:among:)`：C 与 ObjC 名字仍按导入，Swift 名字按链接关系。回归测试 `swiftFunctionCandidatesFollowTheLinkage` 要求候选集包含每一个链接了 Foundation 的镜像，旧做法下失败。先写的那个行为测试（扫全部镜像、找到一处 Foundation 之外的调用者）在旧做法下也能通过——确实有少数镜像按名字导入——分辨不出，删掉了。这个问题是第 3 步引入的，`main` 上没有这个功能。
+
+**验证**（JHs-Mac-Studio-Ultra，macOS 27.2，Xcode 27.2；依赖全部走远端，MachOSwiftSection 为 `c2cefa9c`）：
+
+- `RuntimeViewerCrossReferencesTests` 4 个套件 40 个测试通过。新增的 7 个：类型引用请求的往返编码，Swift 函数的候选集跟着链接关系，ObjC 类在本镜像里的类型引用（`NSWindow`），Swift 类型的类型引用（`SwiftUI.Text`），跨镜像的类型引用（`URL` 在 Foundation 之外的缓存镜像里被找到），协议报 `typeNotFound`，以及类型扫描在会话里复用；原有的显示名、安装、错误描述测试补上了类型显示名、新命令与新错误。
+- MachOSwiftSection：`CrossReferenceAnalysisTests` 45 个、`SwiftThunkAnalysisTests` 82 个测试通过。
+- CLI 包 `swift build` 通过；macOS App（`RuntimeViewer-Debug.xcworkspace`、`RuntimeViewer macOS`、Debug）与 iOS App（`RuntimeViewer iOS`，通用 iOS Simulator 目标）构建通过，警告都是第 3 步已有的那几种，没有一条来自交叉引用。
+- Tuist：`install` 后 `check` 通过（工程接线、本地包 target 清单、锁文件、trait 设置都与原生工程一致）。
+- 没有验证：经 XPC 或 TCP 的真实跨进程查询（与第 3 步相同，命令注册由安装测试覆盖）；Mac Catalyst 引擎上的查询；注入载荷与越狱版的构建。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -764,3 +787,6 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 | 2026-10-16 | 第 3 步：并发数为核数减一 | 扫描是同步计算，占满协作线程池会让同进程的其他请求干等 |
 | 2026-10-16 | 第 3 步：ObjC 精度不查类层级，根类按名字认 | 被查的类常在没加载的镜像里，运行时问不到；接收者类不同只降为「按 selector」，不排除 |
 | 2026-10-16 | 第 3 步完成（`typeReferences` 除外） | 记录见「第 3 步的落地记录」；接入时发现并修好 MachOSwiftSection 第一批漏认缓存内传统发送的缺陷（`8eea8cb7`） |
+| 2026-10-17 | `typeReferences` 落地：ObjC 类按运行时名字、Swift 结构体 / 枚举 / 类按对象名字（即库的 key）换成库里的类型；协议等报 `typeNotFound` | MachOSwiftSection 第二批产出类型引用；RuntimeViewer 的 Swift 类型对象名就是 key（SwiftData 193 个全部找到） |
+| 2026-10-17 | 调用者预筛对 Swift 名字改按链接关系（`imageIndices(callingFunctionAt:symbolNames:among:)`） | 缓存 4,113 个镜像只有 245 个留着 Swift 未定义符号，第 3 步按导入筛会漏掉其余镜像里的调用者；回归测试按候选集断言，行为测试分辨不出 |
+| 2026-10-17 | 会话缓存的键改为扫描键，类型按类对象或描述符的位置 | 同名的类可能分属 macOS 与 Mac Catalyst 两个变体，按名字会混用结果 |

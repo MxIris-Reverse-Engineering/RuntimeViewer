@@ -16,4 +16,8 @@ extension RuntimeEngine.CommandName {
     /// of a scope. Reports progress, with each image's findings, and is
     /// withdrawn from the serving process when its caller is cancelled.
     static let crossReferenceCallers = Self("crossReferenceCallers")
+
+    /// Which functions reference a type, across the images of a scope.
+    /// Reports progress like the callers, and is withdrawn the same way.
+    static let crossReferenceTypeReferences = Self("crossReferenceTypeReferences")
 }

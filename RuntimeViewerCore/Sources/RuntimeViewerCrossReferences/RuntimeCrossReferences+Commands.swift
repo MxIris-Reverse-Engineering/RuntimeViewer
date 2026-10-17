@@ -38,4 +38,27 @@ extension RuntimeCrossReferences {
             try await CrossReferenceQuery(engine: engine).callers(of: subject, in: scope, options: options, reportProgress: reportProgress)
         }
     }
+
+    /// Which functions reference a type.
+    struct TypeReferencesCommand: RuntimeEngineProgressCommand {
+        typealias Response = RuntimeCrossReferenceQueryResult
+        typealias Progress = RuntimeCrossReferenceQueryProgress
+
+        let object: RuntimeObject
+        let scope: RuntimeCrossReferenceScope
+        let options: RuntimeCrossReferenceQueryOptions
+
+        static var commandName: String { RuntimeEngine.CommandName.crossReferenceTypeReferences.commandName }
+
+        /// New with this module, like the callers: every peer that serves it
+        /// also knows `cancelRequest`.
+        static var cancelsAcrossConnections: Bool { true }
+
+        func perform(
+            on engine: RuntimeEngine,
+            reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
+        ) async throws -> RuntimeCrossReferenceQueryResult {
+            try await CrossReferenceQuery(engine: engine).typeReferences(to: object, in: scope, options: options, reportProgress: reportProgress)
+        }
+    }
 }

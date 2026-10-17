@@ -83,6 +83,8 @@ public enum RuntimeCrossReferenceTarget: Hashable, Codable, Sendable {
     case importedSymbol(name: String)
     /// A message, and the receiver's class when the analysis knows it.
     case selector(name: String, receiverClassName: String?)
+    /// A type: as Runtime Viewer prints it, and the object it is when the
+    /// query knows it — a type references query always does.
     case type(name: String, object: RuntimeObject?)
     /// A call through a register, with the evidence the instruction gives.
     case indirect(tableOffset: Int64?, pointerAuthenticationConstant: UInt16?)
@@ -189,6 +191,10 @@ public enum RuntimeCrossReferenceError: Error, LocalizedError, Sendable, Equatab
     case memberNotFound(objectName: String, memberName: String)
     /// A selector is a message, not code: it has senders but no callees.
     case selectorHasNoCallees(String)
+    /// Type references are found for Objective-C classes and for Swift
+    /// structs, enums and classes; the object is none of these, or its image
+    /// does not define it.
+    case typeNotFound(objectName: String)
 
     public var errorDescription: String? {
         switch self {
@@ -202,6 +208,8 @@ public enum RuntimeCrossReferenceError: Error, LocalizedError, Sendable, Equatab
             "\(objectName) has no member \(memberName) with code — or its image is not loaded in the engine."
         case .selectorHasNoCallees(let selector):
             "\(selector) is a selector: it has senders, but no code of its own to call anything."
+        case .typeNotFound(let objectName):
+            "\(objectName) is not an Objective-C class or a Swift struct, enum or class its image defines, so its references cannot be found."
         }
     }
 }

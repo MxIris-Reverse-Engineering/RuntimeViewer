@@ -6,10 +6,11 @@ import CrossReferenceAnalysis
 /// Answers the cross-reference commands in the process that serves the
 /// engine, against that process's images.
 ///
-/// Callees decode one function. Callers are found by an on-demand scan: the
-/// images that cannot reference the subject are filtered out first — by the
-/// symbols they import and the selectors they reference — and the rest are
-/// scanned concurrently, keeping only the references to the subject.
+/// Callees decode one function. Callers and a type's references are found by
+/// an on-demand scan: the images that cannot reference the subject are
+/// filtered out first — by the symbols they import, the images they link and
+/// the selectors they reference — and the rest are scanned concurrently,
+/// keeping only the references to the subject.
 struct CrossReferenceQuery {
     let engine: RuntimeEngine
     let session: CrossReferenceSession
@@ -40,15 +41,14 @@ struct CrossReferenceQuery {
             })
             for reference in madeReferences {
                 if reference.isRuntimeHelperCall, !options.includesRuntimeHelperCalls { continue }
-                guard let converted = calleeReference(
+                let converted = calleeReferences(
                     reference,
                     referencingFunction: referencingFunction,
                     sendingMethods: sendingMethods,
                     analyzer: analyzer,
                     builder: &builder
-                ) else { continue }
-                if !Self.receiverMatches(converted, options: options) { continue }
-                references.append(converted)
+                )
+                references.append(contentsOf: converted.filter { Self.receiverMatches($0, options: options) })
             }
             session.noteFunctionTables(ofImagesAt: targetImageIndices.union([subjectFunction.function.location.imageIndex]), generation: generation)
         }
@@ -59,70 +59,57 @@ struct CrossReferenceQuery {
         return RuntimeCrossReferenceQueryResult(references: references, isComplete: true)
     }
 
-    private func calleeReference(
+    /// What the wire makes of one reference: one, or one per type for a
+    /// mangled name, which names several — `[SwiftUI.Text]` uses `Array` and
+    /// `Text`.
+    private func calleeReferences(
         _ reference: CodeReference,
         referencingFunction: RuntimeFunctionReference,
         sendingMethods: [ObjectiveCMethodName],
         analyzer: CrossReferenceAnalyzer,
         builder: inout FunctionReferenceBuilder
-    ) -> RuntimeCrossReference? {
+    ) -> [RuntimeCrossReference] {
+        func make(_ kind: RuntimeCrossReferenceKind, _ target: RuntimeCrossReferenceTarget, _ precision: RuntimeCrossReferencePrecision) -> RuntimeCrossReference {
+            RuntimeCrossReference(
+                referencingFunction: referencingFunction,
+                instructionAddress: reference.instructionAddress,
+                kind: kind,
+                target: target,
+                precision: precision,
+                isRuntimeHelperCall: reference.isRuntimeHelperCall
+            )
+        }
         let branchKind: RuntimeCrossReferenceKind = reference.kind == .tailCall ? .tailCall : .call
-        let kind: RuntimeCrossReferenceKind
-        let target: RuntimeCrossReferenceTarget
-        let precision: RuntimeCrossReferencePrecision
         switch reference.target {
         case .function(let location):
-            kind = branchKind
-            precision = .exact
             if let function = analyzer.function(containing: location), function.location == location {
-                target = .function(builder.reference(for: function))
-            } else {
-                target = .function(builder.unnamedReference(at: location))
+                return [make(branchKind, .function(builder.reference(for: function)), .exact)]
             }
+            return [make(branchKind, .function(builder.unnamedReference(at: location)), .exact)]
         case .importedSymbol(let name):
-            kind = branchKind
-            precision = .exact
-            target = .importedSymbol(name: name)
+            return [make(branchKind, .importedSymbol(name: name), .exact)]
         case .messageSend(let selector, let receiver):
-            kind = .messageSend
             let receiverClassName = ObjectiveCSendMatching.receiverClassName(of: receiver, isSuperSend: false, from: sendingMethods)
-            precision = receiverClassName == nil ? .matchedBySelector : .exact
-            target = .selector(name: selector, receiverClassName: receiverClassName)
-        case .superMessageSend(let selector):
-            kind = .superMessageSend
-            precision = .exact
-            target = .selector(name: selector, receiverClassName: nil)
-        case .typeMetadataAccessor(let symbolName):
-            kind = .typeReference
-            precision = .exact
-            target = .type(name: CrossReferenceNaming.displayName(forSymbol: symbolName), object: nil)
-        case .mangledTypeName(let mangledName):
-            kind = .typeReference
-            precision = .exact
-            target = .type(name: CrossReferenceNaming.displayName(forSymbol: mangledName), object: nil)
-        case .objectiveCClass(let name):
-            kind = .typeReference
-            precision = .exact
-            target = .type(name: name, object: nil)
+            return [make(.messageSend, .selector(name: selector, receiverClassName: receiverClassName), receiverClassName == nil ? .matchedBySelector : .exact)]
+        case .superMessageSend(let selector, _):
+            return [make(.superMessageSend, .selector(name: selector, receiverClassName: nil), .exact)]
+        case .objectiveCClass(let name, _):
+            return [make(.typeReference, .type(name: CrossReferenceNaming.displayName(forClassName: name), object: nil), .exact)]
+        case .swiftType(let descriptor):
+            guard let key = analyzer.swiftTypeIdentity(ofDescriptorAt: descriptor)?.key else { return [] }
+            return [make(.typeReference, .type(name: CrossReferenceNaming.displayName(forTypeKey: key), object: nil), .exact)]
+        case .swiftTypeName(let name):
+            var seenKeys = Set<String>()
+            return analyzer.swiftTypeKeys(in: name).filter { seenKeys.insert($0).inserted }.map { key in
+                make(.typeReference, .type(name: CrossReferenceNaming.displayName(forTypeKey: key), object: nil), .exact)
+            }
         case .indirect(let evidence):
-            kind = .indirectCall
             // No candidates are listed yet: the target is one of the
             // functions the evidence could lead to.
-            precision = .candidate
-            target = .indirect(tableOffset: evidence.tableOffset, pointerAuthenticationConstant: evidence.pointerAuthenticationConstant)
+            return [make(.indirectCall, .indirect(tableOffset: evidence.tableOffset, pointerAuthenticationConstant: evidence.pointerAuthenticationConstant), .candidate)]
         case .unrecognized(let address):
-            kind = branchKind
-            precision = .exact
-            target = .unrecognizedCode(address: address)
+            return [make(branchKind, .unrecognizedCode(address: address), .exact)]
         }
-        return RuntimeCrossReference(
-            referencingFunction: referencingFunction,
-            instructionAddress: reference.instructionAddress,
-            kind: kind,
-            target: target,
-            precision: precision,
-            isRuntimeHelperCall: reference.isRuntimeHelperCall
-        )
     }
 
     // MARK: - Callers
@@ -146,19 +133,189 @@ struct CrossReferenceQuery {
             subjectFunctionsByLocation[subjectFunction.function.location] = builder.reference(for: subjectFunction.function, member: subjectFunction.member)
         }
         let matcher = CallerMatcher(subject: resolvedSubject, subjectFunctionsByLocation: subjectFunctionsByLocation, options: options)
+        let (result, cachedImageCount) = try await scan(
+            candidates,
+            for: .references(keys),
+            generation: generation,
+            resultLimit: options.resultLimit,
+            reportProgress: reportProgress,
+            find: { analyzer.references(to: keys, inImageAt: $0) },
+            convert: { matcher.callerReferences(from: $0, analyzer: analyzer) }
+        )
+        CrossReferenceQueryLog.answered(
+            "Callers",
+            candidateCount: candidates.count,
+            cachedCount: cachedImageCount,
+            referenceCount: result.references.count,
+            isComplete: result.isComplete,
+            elapsed: Date().timeIntervalSince(startTime)
+        )
+        return result
+    }
 
-        var collector = CallerCollector(totalImageCount: candidates.count, resultLimit: options.resultLimit)
+    /// The images a scope asks about that can reference the subject.
+    func candidateImages(for subject: ResolvedSubject, in scope: RuntimeCrossReferenceScope, analyzer: CrossReferenceAnalyzer) throws -> [Int] {
+        switch scope {
+        case .image(let path):
+            guard let imageIndex = Self.imageIndex(forPath: path, in: analyzer) else {
+                throw RuntimeCrossReferenceError.imageNotFound(path: path)
+            }
+            return [imageIndex]
+        case .allImages:
+            let allImages = analyzer.imagePaths.indices
+            var candidates = Set<Int>()
+            for subjectFunction in subject.functions {
+                // A function its own image can always reach; another image
+                // through a C or Objective-C name it imports, or — for a
+                // Swift name, which no shared cache image keeps among its
+                // imports — by linking the function's image.
+                candidates.formUnion(analyzer.imageIndices(
+                    callingFunctionAt: subjectFunction.function.location,
+                    symbolNames: subjectFunction.symbolNames,
+                    among: allImages
+                ))
+            }
+            for selector in subject.selectors {
+                candidates.formUnion(analyzer.imageIndices(referencingSelector: selector, among: allImages))
+            }
+            return candidates.sorted()
+        }
+    }
+
+    // MARK: - Type references
+
+    func typeReferences(
+        to object: RuntimeObject,
+        in scope: RuntimeCrossReferenceScope,
+        options: RuntimeCrossReferenceQueryOptions,
+        reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
+    ) async throws -> RuntimeCrossReferenceQueryResult {
+        let startTime = Date()
+        let (analyzer, generation) = try session.currentAnalyzer()
+        let type = try resolveType(object, with: analyzer)
+        let candidates: [Int]
+        switch scope {
+        case .image(let path):
+            guard let imageIndex = Self.imageIndex(forPath: path, in: analyzer) else {
+                throw RuntimeCrossReferenceError.imageNotFound(path: path)
+            }
+            candidates = [imageIndex]
+        case .allImages:
+            candidates = type.candidateImages(among: analyzer.imagePaths.indices, analyzer: analyzer)
+        }
+        let target = RuntimeCrossReferenceTarget.type(name: object.displayName, object: object)
+        let (result, cachedImageCount) = try await scan(
+            candidates,
+            for: type.scanKey,
+            generation: generation,
+            resultLimit: options.resultLimit,
+            reportProgress: reportProgress,
+            find: { type.references(inImageAt: $0, analyzer: analyzer) },
+            convert: { TypeReferenceConversion.references(from: $0, to: target, analyzer: analyzer) }
+        )
+        CrossReferenceQueryLog.answered(
+            "Type references",
+            candidateCount: candidates.count,
+            cachedCount: cachedImageCount,
+            referenceCount: result.references.count,
+            isComplete: result.isComplete,
+            elapsed: Date().timeIntervalSince(startTime)
+        )
+        return result
+    }
+
+    /// A type a query asks about, as the analysis tells its references.
+    struct ResolvedType: Sendable {
+        enum Identity: Sendable {
+            /// A class, by where its class object lies: a name alone can be
+            /// defined by the macOS and the Mac Catalyst variant of a
+            /// framework alike.
+            case objectiveCClass(name: String, location: CodeLocation)
+            /// A Swift struct, enum or class — a class also as the
+            /// Objective-C class it is.
+            case swiftType(SwiftTypeIdentity)
+        }
+
+        let identity: Identity
+
+        var scanKey: CrossReferenceScanKey {
+            switch identity {
+            case .objectiveCClass(_, let location):
+                return .objectiveCClass(location)
+            case .swiftType(let identity):
+                return .swiftType(identity.descriptorLocation)
+            }
+        }
+
+        func references(inImageAt imageIndex: Int, analyzer: CrossReferenceAnalyzer) -> [CodeReference] {
+            switch identity {
+            case .objectiveCClass(let name, let location):
+                return analyzer.references(to: [.objectiveCClass(name)], inImageAt: imageIndex).filter {
+                    if case .objectiveCClass(_, location) = $0.target { return true }
+                    return false
+                }
+            case .swiftType(let identity):
+                return analyzer.references(toSwiftType: identity, inImageAt: imageIndex)
+            }
+        }
+
+        func candidateImages(among candidates: some Sequence<Int>, analyzer: CrossReferenceAnalyzer) -> [Int] {
+            switch identity {
+            case .objectiveCClass(_, let location):
+                return analyzer.imageIndices(referencingObjectiveCClassAt: location, among: candidates)
+            case .swiftType(let identity):
+                return analyzer.imageIndices(referencingSwiftType: identity, among: candidates)
+            }
+        }
+    }
+
+    /// The type `object` is: an Objective-C class by its runtime name, a
+    /// Swift type by its mangling — the name Runtime Viewer gives both — in
+    /// the image that defines it.
+    private func resolveType(_ object: RuntimeObject, with analyzer: CrossReferenceAnalyzer) throws -> ResolvedType {
+        guard let imageIndex = Self.imageIndex(forPath: object.imagePath, in: analyzer) else {
+            throw RuntimeCrossReferenceError.imageNotFound(path: object.imagePath)
+        }
+        let notFound = RuntimeCrossReferenceError.typeNotFound(objectName: object.displayName)
+        switch object.kind {
+        case .objc(.type(.class)):
+            guard let location = analyzer.objectiveCClassLocations(named: object.name, inImageAt: imageIndex).first else { throw notFound }
+            return ResolvedType(identity: .objectiveCClass(name: object.name, location: location))
+        case .swift(.type(.struct)), .swift(.type(.enum)), .swift(.type(.class)):
+            guard let location = analyzer.swiftTypeDescriptorLocations(withKey: object.name, inImageAt: imageIndex).first,
+                  let identity = analyzer.swiftTypeIdentity(ofDescriptorAt: location)
+            else { throw notFound }
+            return ResolvedType(identity: .swiftType(identity))
+        default:
+            throw notFound
+        }
+    }
+
+    // MARK: - Scanning
+
+    /// Scans `candidates` for what `find` keeps, and gathers what `convert`
+    /// makes of it: the images an earlier scan for `scanKey` covered first,
+    /// from the session, then the rest concurrently, reporting after each
+    /// image and stopping at the limit.
+    private func scan(
+        _ candidates: [Int],
+        for scanKey: CrossReferenceScanKey,
+        generation: Int,
+        resultLimit: Int?,
+        reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void,
+        find: @escaping @Sendable (Int) -> [CodeReference],
+        convert: @escaping @Sendable ([CodeReference]) -> [RuntimeCrossReference]
+    ) async throws -> (result: RuntimeCrossReferenceQueryResult, cachedImageCount: Int) {
+        var collector = ReferenceCollector(totalImageCount: candidates.count, resultLimit: resultLimit)
 
         // What earlier scans for the same subject found is reported first, in
         // one event.
-        let scanned = session.scannedReferences(for: keys, generation: generation)
+        let scanned = session.scannedReferences(for: scanKey, generation: generation)
         let remainingCandidates = candidates.filter { scanned[$0] == nil }
         let cachedImageIndices = candidates.filter { scanned[$0] != nil }
         if !cachedImageIndices.isEmpty {
-            var cachedReferences: [(imageIndex: Int, references: [RuntimeCrossReference])] = []
-            for imageIndex in cachedImageIndices {
-                let found = scanned[imageIndex] ?? []
-                cachedReferences.append((imageIndex, matcher.callerReferences(from: found, analyzer: analyzer)))
+            let cachedReferences = cachedImageIndices.map { imageIndex in
+                (imageIndex: imageIndex, references: convert(scanned[imageIndex] ?? []))
             }
             let report = collector.add(cachedReferences)
             await reportProgress(report)
@@ -175,15 +332,15 @@ struct CrossReferenceQuery {
                     guard let imageIndex = nextCandidate.next() else { return }
                     group.addTask {
                         try Task.checkCancellation()
-                        let found = analyzer.references(to: keys, inImageAt: imageIndex)
-                        return (imageIndex, found, matcher.callerReferences(from: found, analyzer: analyzer))
+                        let found = find(imageIndex)
+                        return (imageIndex, found, convert(found))
                     }
                 }
                 for _ in 0 ..< width { addNextScan() }
                 while let scan = try await group.next() {
                     try Task.checkCancellation()
                     let (imageIndex, found, converted) = scan
-                    session.record(found, for: keys, inImageAt: imageIndex, generation: generation)
+                    session.record(found, for: scanKey, inImageAt: imageIndex, generation: generation)
                     let report = collector.add([(imageIndex, converted)])
                     await reportProgress(report)
                     if collector.isFull {
@@ -194,42 +351,7 @@ struct CrossReferenceQuery {
                 }
             }
         }
-
-        let result = collector.result
-        CrossReferenceQueryLog.callersAnswered(
-            candidateCount: candidates.count,
-            cachedCount: cachedImageIndices.count,
-            referenceCount: result.references.count,
-            isComplete: result.isComplete,
-            elapsed: Date().timeIntervalSince(startTime)
-        )
-        return result
-    }
-
-    /// The images a scope asks about that can reference the subject.
-    private func candidateImages(for subject: ResolvedSubject, in scope: RuntimeCrossReferenceScope, analyzer: CrossReferenceAnalyzer) throws -> [Int] {
-        switch scope {
-        case .image(let path):
-            guard let imageIndex = Self.imageIndex(forPath: path, in: analyzer) else {
-                throw RuntimeCrossReferenceError.imageNotFound(path: path)
-            }
-            return [imageIndex]
-        case .allImages:
-            let allImages = analyzer.imagePaths.indices
-            var candidates = Set<Int>()
-            for subjectFunction in subject.functions {
-                // A function its own image can always reach; another image
-                // only through a symbol it imports.
-                candidates.insert(subjectFunction.function.location.imageIndex)
-                for symbolName in subjectFunction.symbolNames {
-                    candidates.formUnion(analyzer.imageIndices(importing: symbolName, among: allImages))
-                }
-            }
-            for selector in subject.selectors {
-                candidates.formUnion(analyzer.imageIndices(referencingSelector: selector, among: allImages))
-            }
-            return candidates.sorted()
-        }
+        return (collector.result, cachedImageIndices.count)
     }
 
     // MARK: - Subjects
@@ -410,12 +532,12 @@ private struct CallerMatcher: Sendable {
             kind = .messageSend
             precision = sendPrecision
             target = .selector(name: selector, receiverClassName: ObjectiveCSendMatching.receiverClassName(of: receiver, isSuperSend: false, from: sendingMethods))
-        case .superMessageSend(let selector):
+        case .superMessageSend(let selector, _):
             guard let sendPrecision = matchPrecision(ofSend: selector, receiver: .unknown, isSuperSend: true, sendingMethods: sendingMethods) else { return nil }
             kind = .superMessageSend
             precision = sendPrecision
             target = .selector(name: selector, receiverClassName: nil)
-        case .typeMetadataAccessor, .mangledTypeName, .objectiveCClass, .indirect, .unrecognized:
+        case .objectiveCClass, .swiftType, .swiftTypeName, .indirect, .unrecognized:
             // Never filed under a caller key.
             return nil
         }
@@ -448,9 +570,8 @@ private struct CallerMatcher: Sendable {
     }
 }
 
-/// Gathers a callers query's references as images finish, and stops at the
-/// limit.
-private struct CallerCollector {
+/// Gathers a scan's references as images finish, and stops at the limit.
+private struct ReferenceCollector {
     let totalImageCount: Int
     let resultLimit: Int?
     private var chunks: [(imageIndex: Int, references: [RuntimeCrossReference])] = []
@@ -489,6 +610,35 @@ private struct CallerCollector {
             chunk.references.sorted { $0.instructionAddress < $1.instructionAddress }
         }
         return RuntimeCrossReferenceQueryResult(references: references, isComplete: !isFull && scannedImageCount == totalImageCount)
+    }
+}
+
+// MARK: - Type references
+
+/// Turns what a type references scan kept into references to the type.
+private enum TypeReferenceConversion {
+    static func references(from references: [CodeReference], to target: RuntimeCrossReferenceTarget, analyzer: CrossReferenceAnalyzer) -> [RuntimeCrossReference] {
+        guard !references.isEmpty else { return [] }
+        let referencingFunctions = analyzer.functions(containing: references.map(\.function))
+        var builder = FunctionReferenceBuilder(imagePaths: analyzer.imagePaths)
+        var referencingReferences: [CodeLocation: RuntimeFunctionReference] = [:]
+        return references.map { reference in
+            let referencingReference: RuntimeFunctionReference
+            if let known = referencingReferences[reference.function] {
+                referencingReference = known
+            } else {
+                referencingReference = referencingFunctions[reference.function].map { builder.reference(for: $0) } ?? builder.unnamedReference(at: reference.function)
+                referencingReferences[reference.function] = referencingReference
+            }
+            return RuntimeCrossReference(
+                referencingFunction: referencingReference,
+                instructionAddress: reference.instructionAddress,
+                kind: .typeReference,
+                target: target,
+                precision: .exact,
+                isRuntimeHelperCall: reference.isRuntimeHelperCall
+            )
+        }
     }
 }
 
@@ -539,7 +689,7 @@ enum MemberAddressMatching {
 
 @Loggable(.private)
 private enum CrossReferenceQueryLog {
-    static func callersAnswered(candidateCount: Int, cachedCount: Int, referenceCount: Int, isComplete: Bool, elapsed: TimeInterval) {
-        #log(.debug, "Callers query scanned \(candidateCount, privacy: .public) candidate images (\(cachedCount, privacy: .public) from earlier scans), found \(referenceCount, privacy: .public) references\(isComplete ? "" : " before stopping at the limit", privacy: .public) in \(Int(elapsed * 1000), privacy: .public) ms")
+    static func answered(_ query: String, candidateCount: Int, cachedCount: Int, referenceCount: Int, isComplete: Bool, elapsed: TimeInterval) {
+        #log(.debug, "\(query, privacy: .public) query scanned \(candidateCount, privacy: .public) candidate images (\(cachedCount, privacy: .public) from earlier scans), found \(referenceCount, privacy: .public) references\(isComplete ? "" : " before stopping at the limit", privacy: .public) in \(Int(elapsed * 1000), privacy: .public) ms")
     }
 }

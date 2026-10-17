@@ -155,5 +155,10 @@ struct CrossReferenceMatchingTests {
         #expect(CrossReferenceNaming.displayName(forSymbol: "_CFRelease") == "CFRelease")
         #expect(CrossReferenceNaming.displayName(forSymbol: "_$s7SwiftUI9ViewGraphC13updateOutputs2atyAA4TimeV_tF") == "SwiftUI.ViewGraph.updateOutputs(at:)")
         #expect(CrossReferenceNaming.displayName(forSymbol: "_$sNotAMangledName") == "$sNotAMangledName")
+        // A type's key, and a Swift class's runtime name, print as the type.
+        #expect(CrossReferenceNaming.displayName(forTypeKey: "7SwiftUI4TextV") == "SwiftUI.Text")
+        #expect(CrossReferenceNaming.displayName(forTypeKey: "10Foundation3URLV") == "Foundation.URL")
+        #expect(CrossReferenceNaming.displayName(forClassName: "_TtC7SwiftUI13PinnedBarView") == "SwiftUI.PinnedBarView")
+        #expect(CrossReferenceNaming.displayName(forClassName: "NSWindow") == "NSWindow")
     }
 }

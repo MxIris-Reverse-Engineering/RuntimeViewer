@@ -13,6 +13,7 @@ struct CrossReferenceWireFormatTests {
         let prefix = "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine."
         #expect(RuntimeEngine.CommandName.crossReferenceCallees.commandName == prefix + "crossReferenceCallees")
         #expect(RuntimeEngine.CommandName.crossReferenceCallers.commandName == prefix + "crossReferenceCallers")
+        #expect(RuntimeEngine.CommandName.crossReferenceTypeReferences.commandName == prefix + "crossReferenceTypeReferences")
     }
 
     @Test("Request types name their own command")
@@ -22,6 +23,21 @@ struct CrossReferenceWireFormatTests {
         // Cancelling a caller must stop a scan of thousands of images where it
         // runs, not only where it was asked.
         #expect(RuntimeCrossReferences.CallersCommand.cancelsAcrossConnections)
+        #expect(RuntimeCrossReferences.TypeReferencesCommand.commandName == RuntimeEngine.CommandName.crossReferenceTypeReferences.commandName)
+        #expect(RuntimeCrossReferences.TypeReferencesCommand.cancelsAcrossConnections)
+    }
+
+    @Test("A type references request survives a round trip")
+    func typeReferencesRequestRoundTrip() throws {
+        let command = RuntimeCrossReferences.TypeReferencesCommand(
+            object: RuntimeObject(name: "10Foundation3URLV", displayName: "URL", kind: .swift(.type(.struct)), imagePath: "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation", children: []),
+            scope: .image(path: "/System/Library/Frameworks/SharedWithYou.framework/Versions/A/SharedWithYou"),
+            options: RuntimeCrossReferenceQueryOptions(resultLimit: 50)
+        )
+        let decoded = try JSONDecoder().decode(RuntimeCrossReferences.TypeReferencesCommand.self, from: JSONEncoder().encode(command))
+        #expect(decoded.object == command.object)
+        #expect(decoded.scope == command.scope)
+        #expect(decoded.options == command.options)
     }
 
     @Test("A callers request survives a round trip")
@@ -62,6 +78,7 @@ struct CrossReferenceWireFormatTests {
             .selector(name: "orderWindow:relativeTo:", receiverClassName: "NSWindow"),
             .selector(name: "count", receiverClassName: nil),
             .type(name: "NSWindow", object: nil),
+            .type(name: "URL", object: RuntimeObject(name: "10Foundation3URLV", displayName: "URL", kind: .swift(.type(.struct)), imagePath: "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation", children: [])),
             .indirect(tableOffset: 0x30, pointerAuthenticationConstant: 0x60F0),
             .unrecognizedCode(address: 0x1234),
         ]
@@ -91,6 +108,7 @@ struct CrossReferenceWireFormatTests {
             .functionNotFound(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x10),
             .memberNotFound(objectName: "NSObject", memberName: "nothing"),
             .selectorHasNoCallees("count"),
+            .typeNotFound(objectName: "NSCopying"),
         ]
         for error in errors {
             #expect(error.errorDescription?.isEmpty == false)

@@ -97,45 +97,45 @@ final class CrossReferenceSession: Sendable {
 
     // MARK: - Scans
 
-    /// What earlier scans for `keys` found, by image — an image scanned with
+    /// What earlier scans for `key` found, by image — an image scanned with
     /// nothing found maps to an empty array.
-    func scannedReferences(for keys: Set<CodeReferenceTable.Key>, generation: Int) -> [Int: [CodeReference]] {
+    func scannedReferences(for key: CrossReferenceScanKey, generation: Int) -> [Int: [CodeReference]] {
         state.withLock { state in
-            guard state.generation == generation, var scan = state.scans[keys] else { return [:] }
+            guard state.generation == generation, var scan = state.scans[key] else { return [:] }
             state.useCounter += 1
             scan.lastUse = state.useCounter
-            state.scans[keys] = scan
+            state.scans[key] = scan
             return scan.referencesByImage
         }
     }
 
-    /// Files what a scan for `keys` found in one image.
-    func record(_ references: [CodeReference], for keys: Set<CodeReferenceTable.Key>, inImageAt imageIndex: Int, generation: Int) {
+    /// Files what a scan for `key` found in one image.
+    func record(_ references: [CodeReference], for key: CrossReferenceScanKey, inImageAt imageIndex: Int, generation: Int) {
         let byteCount = references.count * MemoryLayout<CodeReference>.stride + MemoryLayout<Int>.stride * 4
         state.withLock { state in
             guard state.generation == generation else { return }
             state.useCounter += 1
-            var scan = state.scans[keys] ?? Scan()
+            var scan = state.scans[key] ?? Scan()
             guard scan.referencesByImage[imageIndex] == nil else { return }
             guard scan.byteCount + byteCount <= scanByteBudget else {
                 // Larger than everything this session may keep: never kept,
                 // and what was kept of it so far goes too.
                 state.scanByteCount -= scan.byteCount
-                state.scans[keys] = nil
+                state.scans[key] = nil
                 return
             }
             scan.referencesByImage[imageIndex] = references
             scan.byteCount += byteCount
             scan.lastUse = state.useCounter
-            state.scans[keys] = scan
+            state.scans[key] = scan
             state.scanByteCount += byteCount
-            evictLeastRecentlyUsedScans(from: &state, keeping: keys)
+            evictLeastRecentlyUsedScans(from: &state, keeping: key)
         }
     }
 
-    private func evictLeastRecentlyUsedScans(from state: inout State, keeping keptKeys: Set<CodeReferenceTable.Key>) {
+    private func evictLeastRecentlyUsedScans(from state: inout State, keeping keptKey: CrossReferenceScanKey) {
         while state.scanByteCount > scanByteBudget {
-            guard let oldest = state.scans.filter({ $0.key != keptKeys }).min(by: { $0.value.lastUse < $1.value.lastUse }) else { return }
+            guard let oldest = state.scans.filter({ $0.key != keptKey }).min(by: { $0.value.lastUse < $1.value.lastUse }) else { return }
             state.scanByteCount -= oldest.value.byteCount
             state.scans[oldest.key] = nil
         }
@@ -157,10 +157,22 @@ final class CrossReferenceSession: Sendable {
         var imagesOutsideSharedCache: [UInt] = []
         var imagesWithFunctionTables: Set<Int> = []
         var generation = 0
-        var scans: [Set<CodeReferenceTable.Key>: Scan] = [:]
+        var scans: [CrossReferenceScanKey: Scan] = [:]
         var scanByteCount = 0
         var useCounter: UInt64 = 0
     }
+}
+
+/// What a scan looked for: the key its findings are kept under.
+enum CrossReferenceScanKey: Hashable, Sendable {
+    /// The references filed under any of these keys: a callers query.
+    case references(Set<CodeReferenceTable.Key>)
+    /// The references to the class whose object lies at this location. Not
+    /// the class's name: the macOS and the Mac Catalyst variant of a
+    /// framework define classes of the same name.
+    case objectiveCClass(CodeLocation)
+    /// The references to the Swift type whose descriptor lies here.
+    case swiftType(CodeLocation)
 }
 
 extension CrossReferenceQuery {

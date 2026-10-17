@@ -1,6 +1,7 @@
 import RuntimeViewerCore
 
-/// Cross references — what a function calls, who calls it — read from the
+/// Cross references — what a function calls, who calls it, which functions
+/// use a type — read from the
 /// arm64 machine code of the images an engine's process maps, as a
 /// RuntimeEngine command extension.
 ///
@@ -22,6 +23,7 @@ public enum RuntimeCrossReferences {
         RuntimeEngine.addCommandExtension(named: commandExtensionName) { registrar in
             registrar.register(CalleesCommand.self)
             registrar.registerProgress(CallersCommand.self)
+            registrar.registerProgress(TypeReferencesCommand.self)
         }
     }
 

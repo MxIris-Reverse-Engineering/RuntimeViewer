@@ -454,10 +454,10 @@ The project uses three Swift Package Manager packages:
   visionOS. **Every process that serves an engine and links this module must call
   `RuntimeInjection.install()` once at its entry point**, including the ones that cannot inject;
   see *Injection commands* below
-- `RuntimeViewerCrossReferences` — cross references (callers and callees) read from arm64 machine
-  code, as a RuntimeEngine command extension over MachOSwiftSection's `CrossReferenceAnalysis`:
-  the wire types (`RuntimeCrossReferenceSubject`, `RuntimeCrossReference`, …), the two commands
-  and the engine-side on-demand scan. Same obligation as the injection module:
+- `RuntimeViewerCrossReferences` — cross references (callers, callees and type references) read
+  from arm64 machine code, as a RuntimeEngine command extension over MachOSwiftSection's
+  `CrossReferenceAnalysis`: the wire types (`RuntimeCrossReferenceSubject`, `RuntimeCrossReference`,
+  …), the three commands and the engine-side on-demand scan. Same obligation as the injection module:
   `RuntimeCrossReferences.install()` once at every serving process's entry point; see
   *Injection commands* below. Background: `Documentations/Evolutions/draft-cross-references.md`
 - `RuntimeViewerCoreObjC` — Objective-C interop utilities (internal target)
@@ -734,8 +734,9 @@ one — only the jailbroken iOS variant does; macOS injects through the privileg
 instead. Passing `nil` never clears a service already recorded, so the order of two calls in one
 process does not matter.
 
-**The cross-reference commands follow the same rule.** `crossReferenceCallees` and
-`crossReferenceCallers` live in `RuntimeViewerCrossReferences`, and every place in the table above
+**The cross-reference commands follow the same rule.** `crossReferenceCallees`,
+`crossReferenceCallers` and `crossReferenceTypeReferences` live in `RuntimeViewerCrossReferences`,
+and every place in the table above
 calls `RuntimeCrossReferences.install()` right after `RuntimeInjection.install()` — the iOS apps in
 their `AppDelegate`, right after `InjectionServiceRegistrar.registerIfAvailable()`. Skipping it
 fails the same silent way: the engine has no handler, and a host cannot tell it from an older
