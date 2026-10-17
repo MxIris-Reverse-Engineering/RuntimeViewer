@@ -11,7 +11,7 @@
 
 ## 摘要
 
-给 RuntimeViewer 加上从机器码里读出来的交叉引用：选中一个方法，能看到它**调了谁**（被调）、**谁调了它**（调用者，范围是整个系统共享缓存），以及**哪些方法用到了某个类型**（类型引用）。函数的名字只取自符号表，以及 ObjC 方法表、Swift 类型描述能叫出名字的方法，不为脱了符号的代码推测名字；没有名字的函数照样扫描，作为调用者时显示成「无符号函数 0x…」。只支持 arm64 / arm64e。分析逻辑放进 MachOSwiftSection 的一个新 target，RuntimeViewer 新增一个命令扩展模块去调用它，三个前端共用：GUI（Find 导航页加 Call Hierarchy / Callees / Type References 三种模式，内容区的方法名上右键发起查询，Inspector 新增跟随光标的 References 标签）、CLI（`callers` / `callees` / `references`）和 MCP（`Callers` / `Callees` / `TypeReferences`）。查调用者一律按需扫描：先用导入表和 selector 引用筛出可能相关的库，只扫这些库，扫过的库在会话内缓存结果；实测扫完整个共享缓存也只要 1–4 秒，所以不做存盘的全量索引。精度如实标注：ObjC 以 selector 为准，能确定接收者类时标出类；Swift 的虚方法、协议方法给出候选目标，闭包调用只标出签名形态。
+给 RuntimeViewer 加上从机器码里读出来的交叉引用：选中一个方法，能看到它**调了谁**（被调）、**谁调了它**（调用者，范围是整个系统共享缓存），以及**哪些方法用到了某个类型**（类型引用）。函数的名字只取自符号表，以及 ObjC 方法表、Swift 类型描述能叫出名字的方法，不为脱了符号的代码推测名字；没有名字的函数照样扫描，作为调用者时显示成「无符号函数 0x…」。只支持 arm64 / arm64e。分析逻辑放进 MachOSwiftSection 的一个新 target，RuntimeViewer 新增一个命令扩展模块去调用它，三个前端共用：GUI（Find 导航页加 Call Hierarchy / Callees / Type References 三种模式，内容区的方法名上右键发起查询，Inspector 新增跟随光标的 References 标签）、CLI（`callers` / `callees` / `references`）和 MCP（`Callers` / `Callees` / `TypeReferences`）。查调用者一律按需扫描：先按导入的名字（C 与 ObjC 函数，含别的库改名再导出的名字）、链接关系（Swift 函数与类型）和 selector 引用筛出可能相关的库，只扫这些库，扫过的库在会话内缓存结果；实测扫完整个共享缓存也只要 1–4 秒，所以不做存盘的全量索引。精度如实标注：ObjC 以 selector 为准，能确定接收者类时标出类；Swift 的虚方法、协议方法给出候选目标，闭包调用只标出签名形态。
 
 ## 动机
 
@@ -215,10 +215,10 @@ SwiftUICore 里的两种典型形态：
 
 一句话概括：**MachOSwiftSection 负责从一个镜像里读出「函数表（能叫出名字的带上名字）」和「每个函数引用了什么」，RuntimeViewer 负责查询、会话缓存和三个前端。**
 
-1. **函数**：边界取自 `LC_FUNCTION_STARTS`。名字取自符号表里位于代码段的符号、ObjC 类与分类方法表里的实现（`-[类 selector]`），以及 Swift 类型描述、虚表、协议遵循里能找到实现地址的方法；同一地址上的多个名字合并为一个函数。没有名字的函数照样扫描，显示为「无符号函数 0x…」，不推测名字。
+1. **函数**：边界取自 `LC_FUNCTION_STARTS`。名字取自符号表里位于代码段的符号、导出表、ObjC 类与分类方法表里的实现（`-[类 selector]`），以及 Swift 类型描述、虚表、协议遵循里能找到实现地址的方法；同一地址上的多个名字合并为一个函数。没有名字的函数照样扫描，显示为「无符号函数 0x…」，不推测名字。
 2. **引用**：逐条解码每个函数的 arm64 指令，认出直接调用与尾调用、selector 桩与传统的 `objc_msgSend`、super 发送、经桩的跨库调用（镜像自带的桩，或 macOS 27 / iOS 27 起全缓存共用的桩）、类型引用（Swift 元数据访问器、按 mangled 名字实例化类型、ObjC 类引用）以及间接调用。
 3. **精度**：ObjC 以 selector 为准，接收者是 `self`、类字面量（`[NSWindow alloc]`）或 super 时标出类并允许按类过滤，否则标为「接收者未知」；Swift 的虚表与见证表调用按鉴别常量和表内偏移反查根声明，展开成候选目标并标为「候选」，闭包调用只标出签名形态；value witness、retain / release、outlined 值操作等运行时辅助调用默认隐藏。
-4. **查询**：查「调了谁」只解码这一个函数；查「谁调了它」和「哪些方法用到某个类型」时，本库直接扫，跨库则先按导入表与 selector 引用筛库，再并发扫候选库；扫过的库在会话内缓存反向表。不做存盘的全量索引。
+4. **查询**：查「调了谁」只解码这一个函数；查「谁调了它」和「哪些方法用到某个类型」时，本库直接扫，跨库则先筛库——C 与 ObjC 名字按导入（含别的库改名再导出的名字），Swift 函数与类型按链接关系，发送按 selector 引用，类按类对象上的符号——再并发扫候选库；扫过的库在会话内缓存命中。不做存盘的全量索引。
 5. **前端**：Find 导航页的三种新模式、内容区右键、Inspector 的 References 标签；CLI 三个子命令；MCP 三个工具。
 6. **范围**：跨库指整个共享缓存，加上目标进程里已加载的非系统库。每个引擎在自己的进程里扫它映射的那份缓存，所有平台走同一条路径。只支持 arm64 / arm64e。
 
@@ -345,6 +345,8 @@ public enum CrossReferenceAnalysis {
 
 ### 3. 解码与分类
 
+（以 MachOSwiftSection 的模块参考 `Documentations/Internal/Modules/CrossReferenceAnalysis.md` 为准，下表随第二批改写过。）
+
 对每个函数（有名字的和没名字的），从起点解码到下一个函数的起点；`LC_DATA_IN_CODE` 标出的数据区跳过。解码是手写的：只认下表中的几类指令，其余指令只用来让寄存器跟踪器作废被写的寄存器（沿用 `ThunkRegisterTracker` 的做法：只记录能确定的地址与立即数，推不出来的就记为未知，绝不猜测）。实测它比 Capstone 快 25–50 倍；Capstone 只在测试里作对照。
 
 | 指令 | 产生什么 |
@@ -366,12 +368,12 @@ public enum CrossReferenceAnalysis {
 | 全缓存共用的 selector 桩（macOS 27、iOS 27：`adrp x1; add x1; b <objc_msgSend 副本>`） | `messageSend`：`x1` 就是 selector 字符串，以字符串地址为键 |
 | `objc_msgSend`（传统写法） | `messageSend`：selector 取调用前 `x1` 里装入的 selector 引用 |
 | `objc_msgSendSuper2` | `superMessageSend`：类取自 `__objc_superrefs` |
-| 本镜像的 `__stubs` / `__auth_stubs` | `importedSymbol`：桩的间接符号序号给出名字，再与它取指针的槽位交叉核对 |
+| 本镜像的 `__stubs` / `__auth_stubs` | 读出桩取指针的槽位：dyld 加载时已经绑定，槽里就是真正的目标（`address`）；槽读不出时才退回桩的间接符号给出的名字（`importedSymbol`）。macOS / iOS 26 及更早的缓存把桩改写成直接跳转，这一种目前按名字报（MachOSwiftSection 审查记录 2026-10-17 第 A7 条） |
 | 全缓存共用的 GOT 桩（`adrp x17; add x17; ldr x16, [x17]; braa x16, x17`） | `address`：读出槽位里绑定的指针、去掉指针认证位，就是真正的目标 |
 | 本镜像里的函数 | `address` |
 | 别的缓存镜像（26 及更早，缓存构建器绕过了桩） | `address`：按缓存镜像的地址区间找到所在镜像，再到它的函数表里查 |
-| `$s…Ma` 元数据访问器 | `typeMetadataAccessor` |
-| `__swift_instantiateConcreteTypeFromMangledName(V2)`、`swift_getTypeByMangledName*` | `mangledTypeName`：名字取自 `x0` 指向的缓存变量 |
+| 类型的元数据访问器（`__swift5_types` 列出的描述符 +12 处指向它） | 调用照常报，另报一处类型引用（`.swiftType(descriptor:)`）；没有描述符的访问器（泛型实例、存在类型）按符号名报 |
+| `__swift_instantiateConcreteTypeFromMangledName(V2)`、`swift_getTypeByMangledName*` | 类型引用（`.swiftTypeName(.mangledName)`）：V2 的名字取自 `x1` 指向的 `{偏移, 长度}` 记录；旧形态的缓存变量一经实例化就只剩元数据，不报 |
 | 以上都不是 | 无法识别的目标，只显示地址 |
 
 运行时辅助调用的名单由库维护，包括 `objc_retain*`、`objc_release*`、`objc_autorelease*`、`objc_storeStrong`、`objc_*Weak*`、`swift_retain*`、`swift_release*`、`swift_bridgeObject*`、`swift_unknownObject*`、`swift_beginAccess` / `swift_endAccess`、outlined copy / destroy 这类 `WO*` 后缀的函数、`__swift_destroy_boxed_opaque_existential_*` 等，以及经 value witness table 的调用。结果里只打标记，过滤交给前端。
@@ -497,6 +499,8 @@ public enum RuntimeCrossReferenceError: Error, LocalizedError, Sendable, Equatab
     case functionNotFound(imagePath: String, address: UInt64)
     case memberNotFound(objectName: String, memberName: String)
     case selectorHasNoCallees(String)
+    /// 类型引用的对象不是 ObjC 类或 Swift 的结构体、枚举、类，或者它的镜像不定义它。
+    case typeNotFound(objectName: String)
 }
 ```
 
@@ -689,7 +693,7 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 1. **核实前提**（已完成，结论见「前期调研 › 落地第一步的核实」）：在 App 进程里读取一个未加载缓存镜像的 `__text` 与符号表；测量 Capstone 与手写解码在 AppKit / SwiftUICore 上的吞吐，估算全量扫描的耗时与规模；对照编译器源码核实 arm64e 鉴别常量能否反查到声明；核实 iOS 真机与 Simulator 上本地符号放在哪里。任何一条结论推翻了设计，就回到本提案修改，并重新确认。
 2. **MachOSwiftSection 的库提案与 `CrossReferenceAnalysis`**：函数表与命名、单函数的引用提取、两种桩布局（镜像自带的桩与全缓存共用的桩）与 selector 解析、类型引用、鉴别常量反查、运行时辅助调用分类、预筛。批量扫描用手写解码，写 fixture 测试，并以 Capstone 的结果和 `dyld_info` / IDA 抽样作对照。然后发版。
 3. **`RuntimeViewerCrossReferences` 模块**：线上类型与命令；在 `AGENTS.md`「Injection commands」那张表列出的全部入口调用 `install()`，并把这条义务写进 `AGENTS.md`；本库扫描与会话缓存；跨库按需扫描（预筛、并发、进度、取消）。**已完成（2026-10-16）**，`typeReferences` 随 MachOSwiftSection 第二批于 2026-10-17 补上，记录见「第 3 步的落地记录」与「第 3 步续：类型引用」。
-4. **CLI 与 MCP**：三个子命令、三个工具，agent 插件的 skill 与版本号，以及 `Guides/CommandLineInterface.md`。
+4. **CLI 与 MCP**：三个子命令、三个工具，agent 插件的 skill 与版本号，以及 `Guides/CommandLineInterface.md`。**顺序已调整（2026-10-17）**：放到第 5、6 步之后，界面做完、没有问题再做。
 5. **Find 导航页的三种模式**：逆向 Xcode 27 的 Call Hierarchy 来对齐界面；结果树、范围控件、精度标记、运行时调用开关；按 `RuntimeViewerApplicationTests` 的规则写 ViewModel 契约测试。
 6. **内容区右键与 Inspector 的 References 标签**：成员按行对齐、两条文本路径的菜单、光标所在成员、标签本身及其 ViewModel 测试。
 
@@ -753,6 +757,21 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 - Tuist：`install` 后 `check` 通过（工程接线、本地包 target 清单、锁文件、trait 设置都与原生工程一致）。
 - 没有验证：经 XPC 或 TCP 的真实跨进程查询（与第 3 步相同，命令注册由安装测试覆盖）；Mac Catalyst 引擎上的查询；注入载荷与越狱版的构建。
 
+## 审查与修复（2026-10-17）
+
+第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
+
+**本仓库修了的**（每条都先写了修复前失败的测试）：
+
+- 类型引用的目标对象去掉子节点，免得每条结果都把嵌套类型与特化整棵编码一遍（XR.C2）。
+- 会话记住超出预算的扫描，同一代里不再记录，免得它每被问一次就把别的缓存挤掉一次、再留下半截（XR.C3）。
+- 新 target 去掉没用到的 `RuntimeViewerCommunication` 依赖；会话单例注释说明为何不走 `@Dependency`（XR.C12）。
+- 测试：两个「复用缓存」的测试改为跨全部镜像，第一次报多次、第二次只报一次（XR.D1）；类型的候选集按链接关系断言，另查一个不导入 `URL` 的镜像（XR.D4）；被调测试换成具体的接收者期望、错误描述检查带着主体、补上 `.member` 的往返编码与缓存外镜像的查询（XR.C13、XR.C1）。
+
+**随 MachOSwiftSection 的修复得到的**（钉到 `0f1de10d`，五份锁文件只有这一条 pin 变了）：缓存外的镜像（注入的 App 自己的主程序、框架、插件）能按 dyld 的加载路径查到、结果里的路径也是加载路径（XR.C1）；被别的库改名再导出的 C 函数与类，跨库查调用者不再漏掉按新名字导入的镜像——缓存里有 1,438 条这样的再导出，AppKit 按 CoreGraphics 的名字调用了 273 个 SkyLight 函数；类型查询解开的名字不再留在进程级缓存里（XR.C6）；寄存器跟踪补上漏作废的写入。
+
+**判为不修或误报的**：XR.C4、C5、C7、C8、C9、C11、B6，理由与复审条件见审查记录。循环头与跳转表落点保留 `x19`–`x28`（库那边的 A5）量过：现行做法错 0.02%–0.04% 的引用，精确修法多花 35%–60% 的扫描时间，修不修待定。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -790,3 +809,5 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 | 2026-10-17 | `typeReferences` 落地：ObjC 类按运行时名字、Swift 结构体 / 枚举 / 类按对象名字（即库的 key）换成库里的类型；协议等报 `typeNotFound` | MachOSwiftSection 第二批产出类型引用；RuntimeViewer 的 Swift 类型对象名就是 key（SwiftData 193 个全部找到） |
 | 2026-10-17 | 调用者预筛对 Swift 名字改按链接关系（`imageIndices(callingFunctionAt:symbolNames:among:)`） | 缓存 4,113 个镜像只有 245 个留着 Swift 未定义符号，第 3 步按导入筛会漏掉其余镜像里的调用者；回归测试按候选集断言，行为测试分辨不出 |
 | 2026-10-17 | 会话缓存的键改为扫描键，类型按类对象或描述符的位置 | 同名的类可能分属 macOS 与 Mac Catalyst 两个变体，按名字会混用结果 |
+| 2026-10-17 | 审查后修复 XR.C2、C3、C12、D1、D4、C13；MachOSwiftSection 钉到 `0f1de10d`（缓存外镜像的路径、改名再导出、瞬时 demangle、寄存器写入） | 用户批准「先按你推荐的路径修」；逐条见 2026-10-17 交叉引用审查记录 |
+| 2026-10-17 | 落地顺序调整：修完审查问题后先做第 5、6 步（界面），第 4 步（CLI 与 MCP）放最后 | 用户原话：「修完接UI，MCP和CLI放最后，没问题再做」 |
