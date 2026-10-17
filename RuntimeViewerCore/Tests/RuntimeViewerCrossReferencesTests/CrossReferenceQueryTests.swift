@@ -327,6 +327,16 @@ struct CrossReferenceQueryTests {
         }
     }
 
+    @Test("An internal Swift type's references are looked for in its own image alone")
+    func internalSwiftTypesScanTheirOwnImage() async throws {
+        // AppKit exports no symbol of this struct: no other image can reach it.
+        let suggestion = RuntimeObject(name: "6AppKit23NSSmartNamingSuggestionV", displayName: "AppKit.NSSmartNamingSuggestion", kind: .swift(.type(.struct)), imagePath: Self.appKitPath, children: [])
+        let recorder = ProgressRecorder()
+        _ = try await Self.makeQuery().typeReferences(to: suggestion, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
+        #expect(!recorder.reports.isEmpty)
+        #expect(recorder.reports.allSatisfy { $0.totalImageCount == 1 })
+    }
+
     @Test("A protocol is no type whose references are found")
     func typeReferencesNeedAType() async throws {
         let copying = RuntimeObject(name: "NSCopying", displayName: "NSCopying", kind: .objc(.type(.protocol)), imagePath: "/usr/lib/libobjc.A.dylib", children: [])
