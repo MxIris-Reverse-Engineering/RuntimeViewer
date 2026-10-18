@@ -42,7 +42,8 @@ extension Settings {
 
         /// Resident budget for prepared cross references, in megabytes. Past
         /// it the images queried least recently are dropped, and read again
-        /// when a query needs them. AppKit's take about 21 MB.
+        /// when a query needs them. AppKit's take about 35 MB: 21 for its
+        /// references, 14 for the names its results are shown with.
         @Default(256)
         public var crossReferenceResidentByteLimitMegabytes: Int
 

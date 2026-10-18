@@ -16,8 +16,10 @@ struct CrossReferencePreparationTests {
 
     /// A session whose images never change, so that nothing starts a new
     /// generation under a test; as many scans at once as the machine has cores.
-    private static func makeSession() -> CrossReferenceSession {
-        CrossReferenceSession(maximumConcurrentScans: ProcessInfo.processInfo.activeProcessorCount, imagesOutsideSharedCache: { [] })
+    /// It reads the prefilters' tables only when a test asks: seconds of a
+    /// core each.
+    private static func makeSession(preparesPrefilters: Bool = false) -> CrossReferenceSession {
+        CrossReferenceSession(maximumConcurrentScans: ProcessInfo.processInfo.activeProcessorCount, preparesPrefilters: preparesPrefilters, imagesOutsideSharedCache: { [] })
     }
 
     private static func makeQuery(session: CrossReferenceSession, indexedImagePaths: [String]) -> CrossReferenceQuery {
@@ -84,14 +86,92 @@ struct CrossReferencePreparationTests {
         #expect(session.preparedImageIndices.count == 2)
         #expect(session.preparedByteCount == libobjc.byteCount + foundation.byteCount)
 
-        // Room for Foundation alone: libobjc, used less recently, goes.
+        // Room for Foundation alone: libobjc, used less recently, goes, and
+        // the analyzer lets go of the names read for it.
+        let (analyzer, _) = try session.currentAnalyzer()
+        let libobjcIndex = try #require(analyzer.imageIndex(forPath: Self.libobjcPath))
+        let foundationIndex = try #require(analyzer.imageIndex(forPath: Self.foundationPath))
+        #expect(analyzer.approximateByteCount(ofImageDataAt: libobjcIndex) > 0)
         session.setPreparedByteLimit(foundation.byteCount)
-        #expect(session.preparedImageIndices.count == 1)
+        #expect(session.preparedImageIndices == [foundationIndex])
         #expect(session.preparedByteCount == foundation.byteCount)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: libobjcIndex) == 0)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: foundationIndex) > 0)
 
         session.setPreparedByteLimit(0)
         #expect(session.preparedImageIndices.isEmpty)
         #expect(session.preparedByteCount == 0)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: foundationIndex) == 0)
+    }
+
+    @Test("Preparing an image reads the names its answers are shown with, says so, and counts them against the limit")
+    func preparationReadsNamesAndCountsThem() async throws {
+        let recorder = PreparationProgressRecorder()
+        let session = Self.makeSession()
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
+        let roomy = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+        let preparation = try await query.prepare(imageAt: Self.libobjcPath, options: roomy) { recorder.record($0) }
+        let (analyzer, _) = try session.currentAnalyzer()
+        let libobjc = try #require(analyzer.imageIndex(forPath: Self.libobjcPath))
+        let namingByteCount = analyzer.approximateByteCount(ofImageDataAt: libobjc)
+        #expect(namingByteCount > 0)
+        #expect(preparation.byteCount > namingByteCount)
+        // The last report: every function scanned, the names being read.
+        let deadline = Date().addingTimeInterval(10)
+        while !recorder.reports.contains(where: \.isReadingNames), Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        let firstReadingNamesReport = recorder.reports.first(where: \.isReadingNames)
+        let readingNames = try #require(firstReadingNamesReport)
+        #expect(readingNames.functionCount > 0)
+        #expect(readingNames.scannedFunctionCount == readingNames.functionCount)
+        #expect(readingNames.isAhead(of: RuntimeCrossReferencePreparationProgress(scannedFunctionCount: readingNames.functionCount, functionCount: readingNames.functionCount)))
+
+        // A limit with room for the references but not their names keeps
+        // nothing.
+        let indexOnly = preparation.byteCount - namingByteCount
+        let tightSession = Self.makeSession()
+        let tightQuery = Self.makeQuery(session: tightSession, indexedImagePaths: [Self.libobjcPath])
+        _ = try await tightQuery.prepare(imageAt: Self.libobjcPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: indexOnly)) { _ in }
+        #expect(tightSession.preparedImageIndices.isEmpty)
+    }
+
+    @Test("Past the function table limit, the analyzer lets go of other images' names but keeps the prepared images'")
+    func preparedNamesOutliveTheFunctionTableLimit() async throws {
+        let session = Self.makeSession()
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
+        _ = try await query.prepare(imageAt: Self.libobjcPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)) { _ in }
+        let (analyzer, generation) = try session.currentAnalyzer()
+        let libobjc = try #require(analyzer.imageIndex(forPath: Self.libobjcPath))
+        let foundation = try #require(analyzer.imageIndex(forPath: Self.foundationPath))
+        let preparedByteCount = analyzer.approximateByteCount(ofImageDataAt: libobjc)
+        // A callee named in Foundation kept its table.
+        analyzer.keepFunctionTable(ofImageAt: foundation)
+        session.noteFunctionTables(ofImagesAt: [foundation], generation: generation)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: foundation) > 0)
+
+        let otherImages = analyzer.images.indices.filter { $0 != libobjc && $0 != foundation }.prefix(CrossReferenceSession.functionTableImageLimit)
+        session.noteFunctionTables(ofImagesAt: otherImages, generation: generation)
+        let (analyzerAfter, generationAfter) = try session.currentAnalyzer()
+        #expect(analyzerAfter === analyzer)
+        #expect(generationAfter == generation)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: libobjc) == preparedByteCount)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: foundation) == 0)
+        #expect(session.preparedImageIndices == [libobjc])
+    }
+
+    @Test("The first preparation reads the prefilters' tables behind it")
+    func firstPreparationReadsThePrefilters() async throws {
+        let session = Self.makeSession(preparesPrefilters: true)
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
+        let options = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+        _ = try await query.prepare(imageAt: Self.libobjcPath, options: options) { _ in }
+        let (_, generation) = try session.currentAnalyzer()
+        let deadline = Date().addingTimeInterval(120)
+        while session.preparedPrefilterGeneration != generation, Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        #expect(session.preparedPrefilterGeneration == generation)
     }
 
     @Test("An image that is not indexed is not prepared")

@@ -31,10 +31,11 @@ final class CrossReferenceSession: Sendable {
     /// for.
     static let defaultScanByteBudget = 64 << 20
 
-    /// Images whose function tables an analyzer may hold before it is replaced
-    /// by a fresh one. Naming a callee keeps its image's table; a table runs
-    /// from kilobytes to a few megabytes, and a long session names functions
-    /// in hundreds of images.
+    /// Images whose function tables the analyzer may hold, besides the
+    /// prepared ones, before the session releases what it keeps for them.
+    /// Naming a callee keeps its image's table; a table runs from kilobytes to
+    /// a few megabytes, and a long session names functions in hundreds of
+    /// images.
     static let functionTableImageLimit = 64
 
     /// How many images the process scans at once until a query brings another
@@ -54,14 +55,20 @@ final class CrossReferenceSession: Sendable {
     /// Objective-C runtime loads `libobjc-trampolines.dylib`, which is not in
     /// the cache, the first time anything in the process needs it.
     private let imagesOutsideSharedCache: @Sendable () -> [UInt]
+    /// Whether the first preparation of a generation reads the prefilters'
+    /// tables behind it: seconds of a core in a debug build, which a test
+    /// that does not look at them leaves out.
+    private let preparesPrefilters: Bool
     private let state = Mutex(State())
 
     init(
         scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget,
         maximumConcurrentScans: Int = CrossReferenceSession.defaultMaximumConcurrentScans,
+        preparesPrefilters: Bool = true,
         imagesOutsideSharedCache: @escaping @Sendable () -> [UInt] = { CrossReferenceSession.processImagesOutsideSharedCache() }
     ) {
         self.scanByteBudget = scanByteBudget
+        self.preparesPrefilters = preparesPrefilters
         self.imagesOutsideSharedCache = imagesOutsideSharedCache
         scanQueue = OperationQueue()
         scanQueue.name = "com.RuntimeViewer.CrossReferences.scan"
@@ -94,27 +101,49 @@ final class CrossReferenceSession: Sendable {
             state.scans = [:]
             state.oversizedScanKeys = []
             state.scanByteCount = 0
-            state.preparedIndexes = [:]
+            state.preparedImages = [:]
             state.preparedByteCount = 0
             return (analyzer, state.generation)
         }
     }
 
     /// Records that a query had the analyzer name functions in
-    /// `imageIndices`, which keeps their function tables; past
-    /// ``functionTableImageLimit`` the analyzer is replaced by one over the
-    /// same images, which drops them. The image indices stay the same, so the
-    /// scans stay valid.
+    /// `imageIndices`, which keeps their function tables. Past
+    /// ``functionTableImageLimit`` images besides the prepared ones, the
+    /// analyzer releases what it keeps for every image but the prepared ones
+    /// and those being prepared: the names read for those are what lets the
+    /// first query about them answer at once.
+    ///
+    /// Replacing the analyzer instead would drop the prepared images' names
+    /// with the rest, and the next query about one of them would read them
+    /// again.
     func noteFunctionTables(ofImagesAt imageIndices: some Sequence<Int>, generation: Int) {
         state.withLock { state in
-            guard state.generation == generation else { return }
+            guard state.generation == generation, let analyzer = state.analyzer else { return }
             state.imagesWithFunctionTables.formUnion(imageIndices)
-            guard state.imagesWithFunctionTables.count > Self.functionTableImageLimit,
-                  let freshAnalyzer = CrossReferenceAnalyzer()
-            else { return }
-            state.analyzer = freshAnalyzer
-            state.imagesWithFunctionTables = []
+            let preparedImages = Self.preparedOrPreparingImageIndices(in: state)
+            guard state.imagesWithFunctionTables.subtracting(preparedImages).count > Self.functionTableImageLimit else { return }
+            analyzer.releaseImageData(exceptForImagesAt: preparedImages)
+            state.imagesWithFunctionTables.formIntersection(preparedImages)
         }
+    }
+
+    /// The images with an index kept, or a preparation queued or under way,
+    /// in the current generation.
+    private static func preparedOrPreparingImageIndices(in state: State) -> Set<Int> {
+        var imageIndices = Set(state.preparedImages.keys)
+        for key in state.preparations.keys where key.generation == state.generation {
+            imageIndices.insert(key.imageIndex)
+        }
+        return imageIndices
+    }
+
+    /// Releases what the analyzer keeps for images whose prepared index was
+    /// just dropped; what it keeps for the others stays.
+    private static func releaseImageData(ofEvictedImagesAt evictedImageIndices: [Int], in state: inout State) {
+        guard !evictedImageIndices.isEmpty, let analyzer = state.analyzer else { return }
+        state.imagesWithFunctionTables.subtract(evictedImageIndices)
+        analyzer.releaseImageData(exceptForImagesAt: state.imagesWithFunctionTables.union(preparedOrPreparingImageIndices(in: state)))
     }
 
     /// The header address of every image loaded outside the shared cache, in
@@ -235,14 +264,14 @@ final class CrossReferenceSession: Sendable {
         return references
     }
 
-    // MARK: - Prepared indexes
+    // MARK: - Prepared images
 
-    /// Bytes of prepared indexes kept until a request brings another limit:
-    /// the Find corpus's default, about a dozen frameworks of AppKit's size.
+    /// Bytes of prepared images kept until a request brings another limit:
+    /// the Find corpus's default, about seven frameworks of AppKit's size.
     static let defaultPreparedByteLimit = 256 << 20
 
-    /// The image's prepared index: the one kept, the one being prepared, or
-    /// one `build` prepares now on the session's queue. Every requester of an
+    /// The image prepared: the one kept, the one being prepared, or one
+    /// `build` prepares now on the session's queue. Every requester of an
     /// image shares one preparation; a prioritized one — a query waiting —
     /// moves it ahead of the preparations waiting, and the queries' own scans
     /// go ahead of every preparation that is not prioritized.
@@ -251,25 +280,27 @@ final class CrossReferenceSession: Sendable {
     /// every requester has left is stopped: not started if it has not
     /// started, given up between two progress reports if it has.
     ///
-    /// The index is kept within the byte limit, least recently used dropped
-    /// first; one larger than the limit is returned and not kept.
-    func preparedIndex(
+    /// The image is kept within the byte limit, its index and the names the
+    /// analyzer read for it counted together, least recently used dropped
+    /// first — the analyzer releasing the names of one dropped. One larger
+    /// than the limit is returned and not kept.
+    func preparedImage(
         ofImageAt imageIndex: Int,
         generation: Int,
         isPrioritized: Bool,
         reportProgress: (@Sendable (RuntimeCrossReferencePreparationProgress) async -> Void)? = nil,
-        build: @escaping @Sendable (_ shouldContinue: @escaping (_ scannedFunctionCount: Int, _ functionCount: Int) -> Bool) -> CodeReferenceIndex?
-    ) async throws -> CodeReferenceIndex {
-        if let ready = state.withLock({ Self.takeReadyIndex(ofImageAt: imageIndex, generation: generation, from: &$0) }) {
+        build: @escaping @Sendable (_ shouldContinue: @escaping (RuntimeCrossReferencePreparationProgress) -> Bool) -> CrossReferencePreparedImage?
+    ) async throws -> CrossReferencePreparedImage {
+        if let ready = state.withLock({ Self.takeReadyImage(ofImageAt: imageIndex, generation: generation, from: &$0) }) {
             return ready
         }
         let key = PreparationKey(imageIndex: imageIndex, generation: generation)
         let waiterIdentifier = UUID()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                let immediateResult = state.withLock { state -> Result<CodeReferenceIndex, any Error>? in
+                let immediateResult = state.withLock { state -> Result<CrossReferencePreparedImage, any Error>? in
                     if Task.isCancelled { return .failure(CancellationError()) }
-                    if let ready = Self.takeReadyIndex(ofImageAt: imageIndex, generation: generation, from: &state) { return .success(ready) }
+                    if let ready = Self.takeReadyImage(ofImageAt: imageIndex, generation: generation, from: &state) { return .success(ready) }
                     if var preparation = state.preparations[key] {
                         preparation.waiters[waiterIdentifier] = continuation
                         preparation.progressHandlers[waiterIdentifier] = reportProgress
@@ -289,7 +320,7 @@ final class CrossReferenceSession: Sendable {
                 if let immediateResult { continuation.resume(with: immediateResult) }
             }
         } onCancel: {
-            let continuation = state.withLock { state -> CheckedContinuation<CodeReferenceIndex, any Error>? in
+            let continuation = state.withLock { state -> CheckedContinuation<CrossReferencePreparedImage, any Error>? in
                 guard var preparation = state.preparations[key], let continuation = preparation.waiters.removeValue(forKey: waiterIdentifier) else { return nil }
                 preparation.progressHandlers[waiterIdentifier] = nil
                 if preparation.waiters.isEmpty { preparation.isAbandoned = true }
@@ -303,7 +334,7 @@ final class CrossReferenceSession: Sendable {
     private func makePreparationOperation(
         for key: PreparationKey,
         isPrioritized: Bool,
-        build: @escaping @Sendable (_ shouldContinue: @escaping (Int, Int) -> Bool) -> CodeReferenceIndex?
+        build: @escaping @Sendable (_ shouldContinue: @escaping (RuntimeCrossReferencePreparationProgress) -> Bool) -> CrossReferencePreparedImage?
     ) -> Operation {
         let operation = BlockOperation { [weak self] in
             self?.runPreparation(for: key, build: build)
@@ -312,7 +343,7 @@ final class CrossReferenceSession: Sendable {
         return operation
     }
 
-    private func runPreparation(for key: PreparationKey, build: @escaping @Sendable (_ shouldContinue: @escaping (Int, Int) -> Bool) -> CodeReferenceIndex?) {
+    private func runPreparation(for key: PreparationKey, build: @escaping @Sendable (_ shouldContinue: @escaping (RuntimeCrossReferencePreparationProgress) -> Bool) -> CrossReferencePreparedImage?) {
         let shouldStart = state.withLock { state -> Bool in
             guard let preparation = state.preparations[key] else { return false }
             if preparation.isAbandoned {
@@ -324,12 +355,11 @@ final class CrossReferenceSession: Sendable {
         }
         guard shouldStart else { return }
 
-        let index = build { [self] scannedFunctionCount, functionCount in
+        let prepared = build { [self] progress in
             let (handlers, isAbandoned) = state.withLock { state in
                 (state.preparations[key].map { Array($0.progressHandlers.values) } ?? [], state.preparations[key]?.isAbandoned ?? true)
             }
             if !handlers.isEmpty {
-                let progress = RuntimeCrossReferencePreparationProgress(scannedFunctionCount: scannedFunctionCount, functionCount: functionCount)
                 Task {
                     for handler in handlers {
                         await handler(progress)
@@ -340,13 +370,13 @@ final class CrossReferenceSession: Sendable {
         }
 
         enum Completion {
-            case answer([CheckedContinuation<CodeReferenceIndex, any Error>], CodeReferenceIndex)
+            case answer([CheckedContinuation<CrossReferencePreparedImage, any Error>], CrossReferencePreparedImage)
             case restart(isPrioritized: Bool)
             case none
         }
         let completion = state.withLock { state -> Completion in
             guard let preparation = state.preparations[key] else { return .none }
-            guard let index else {
+            guard let prepared else {
                 // Stopped because every requester had left; one may have come
                 // back meanwhile.
                 guard !preparation.waiters.isEmpty else {
@@ -357,14 +387,14 @@ final class CrossReferenceSession: Sendable {
             }
             state.preparations[key] = nil
             if state.generation == key.generation {
-                keep(index, from: &state)
+                keep(prepared, ofImageAt: key.imageIndex, from: &state)
             }
-            return .answer(Array(preparation.waiters.values), index)
+            return .answer(Array(preparation.waiters.values), prepared)
         }
         switch completion {
-        case .answer(let continuations, let index):
+        case .answer(let continuations, let prepared):
             for continuation in continuations {
-                continuation.resume(returning: index)
+                continuation.resume(returning: prepared)
             }
         case .restart(let isPrioritized):
             let operation = makePreparationOperation(for: key, isPrioritized: isPrioritized, build: build)
@@ -378,50 +408,81 @@ final class CrossReferenceSession: Sendable {
         }
     }
 
-    /// The image's kept index, marked as just used.
-    private static func takeReadyIndex(ofImageAt imageIndex: Int, generation: Int, from state: inout State) -> CodeReferenceIndex? {
-        guard state.generation == generation, var prepared = state.preparedIndexes[imageIndex] else { return nil }
+    /// The image kept, marked as just used.
+    private static func takeReadyImage(ofImageAt imageIndex: Int, generation: Int, from state: inout State) -> CrossReferencePreparedImage? {
+        guard state.generation == generation, var kept = state.preparedImages[imageIndex] else { return nil }
         state.useCounter += 1
-        prepared.lastUse = state.useCounter
-        state.preparedIndexes[imageIndex] = prepared
-        return prepared.index
+        kept.lastUse = state.useCounter
+        state.preparedImages[imageIndex] = kept
+        return kept.prepared
     }
 
-    private func keep(_ index: CodeReferenceIndex, from state: inout State) {
-        let byteCount = index.approximateByteCount
-        guard byteCount <= state.preparedByteLimit else { return }
-        if let replaced = state.preparedIndexes[index.imageIndex] {
-            state.preparedByteCount -= replaced.index.approximateByteCount
+    /// Keeps the image within the byte limit. One larger than the limit is
+    /// not kept; the names read for it go the way of any image's a query
+    /// named functions in (``noteFunctionTables(ofImagesAt:generation:)``).
+    private func keep(_ prepared: CrossReferencePreparedImage, ofImageAt imageIndex: Int, from state: inout State) {
+        guard prepared.byteCount <= state.preparedByteLimit else { return }
+        if let replaced = state.preparedImages[imageIndex] {
+            state.preparedByteCount -= replaced.prepared.byteCount
         }
         state.useCounter += 1
-        state.preparedIndexes[index.imageIndex] = PreparedIndex(index: index, lastUse: state.useCounter)
-        state.preparedByteCount += byteCount
-        Self.evictLeastRecentlyUsedIndexes(from: &state, keeping: index.imageIndex)
+        state.preparedImages[imageIndex] = KeptPreparedImage(prepared: prepared, lastUse: state.useCounter)
+        state.preparedByteCount += prepared.byteCount
+        Self.evictLeastRecentlyUsedImages(from: &state, keeping: imageIndex)
     }
 
-    private static func evictLeastRecentlyUsedIndexes(from state: inout State, keeping keptImageIndex: Int?) {
+    private static func evictLeastRecentlyUsedImages(from state: inout State, keeping keptImageIndex: Int?) {
+        var evictedImageIndices: [Int] = []
         while state.preparedByteCount > state.preparedByteLimit {
-            guard let oldest = state.preparedIndexes.filter({ $0.key != keptImageIndex }).min(by: { $0.value.lastUse < $1.value.lastUse }) else { return }
-            state.preparedByteCount -= oldest.value.index.approximateByteCount
-            state.preparedIndexes[oldest.key] = nil
+            guard let oldest = state.preparedImages.filter({ $0.key != keptImageIndex }).min(by: { $0.value.lastUse < $1.value.lastUse }) else { break }
+            state.preparedByteCount -= oldest.value.prepared.byteCount
+            state.preparedImages[oldest.key] = nil
+            evictedImageIndices.append(oldest.key)
         }
+        releaseImageData(ofEvictedImagesAt: evictedImageIndices, in: &state)
     }
 
-    /// Sets the most bytes of prepared indexes kept, dropping the least
+    /// Sets the most bytes of prepared images kept, dropping the least
     /// recently used past it; zero drops every one.
     func setPreparedByteLimit(_ byteLimit: Int) {
         state.withLock { state in
             state.preparedByteLimit = max(0, byteLimit)
-            Self.evictLeastRecentlyUsedIndexes(from: &state, keeping: nil)
+            Self.evictLeastRecentlyUsedImages(from: &state, keeping: nil)
         }
     }
 
-    /// The images with a prepared index kept now; for tests.
-    var preparedImageIndices: Set<Int> {
-        state.withLock { Set($0.preparedIndexes.keys) }
+    /// Reads, once a generation, what the prefilters of a query across the
+    /// indexed images read the first time — every image's load commands and
+    /// export trie — in the background, behind the preparations queued
+    /// before it, on one of the queue's threads. A query that needs it
+    /// meanwhile waits for it rather than reading it again.
+    func preparePrefiltersIfNeeded(with analyzer: CrossReferenceAnalyzer, generation: Int) {
+        guard preparesPrefilters else { return }
+        let shouldPrepare = state.withLock { state -> Bool in
+            guard state.generation == generation, state.prefilterPreparationGeneration != generation else { return false }
+            state.prefilterPreparationGeneration = generation
+            return true
+        }
+        guard shouldPrepare else { return }
+        let operation = BlockOperation { [weak self] in
+            analyzer.preparePrefilters()
+            self?.state.withLock { $0.preparedPrefilterGeneration = generation }
+        }
+        operation.queuePriority = .low
+        scanQueue.addOperation(operation)
     }
 
-    /// The bytes of prepared indexes kept now; for tests.
+    /// The generation whose prefilters are read; for tests.
+    var preparedPrefilterGeneration: Int? {
+        state.withLock { $0.preparedPrefilterGeneration }
+    }
+
+    /// The images with a prepared image kept now; for tests.
+    var preparedImageIndices: Set<Int> {
+        state.withLock { Set($0.preparedImages.keys) }
+    }
+
+    /// The bytes of prepared images kept now; for tests.
     var preparedByteCount: Int {
         state.withLock { $0.preparedByteCount }
     }
@@ -445,14 +506,14 @@ final class CrossReferenceSession: Sendable {
     /// A preparation queued or under way, and who waits for it.
     private struct Preparation {
         var operation: Operation
-        var waiters: [UUID: CheckedContinuation<CodeReferenceIndex, any Error>] = [:]
+        var waiters: [UUID: CheckedContinuation<CrossReferencePreparedImage, any Error>] = [:]
         var progressHandlers: [UUID: @Sendable (RuntimeCrossReferencePreparationProgress) async -> Void] = [:]
         /// Every requester left: the operation stops instead of building.
         var isAbandoned = false
     }
 
-    private struct PreparedIndex {
-        let index: CodeReferenceIndex
+    private struct KeptPreparedImage {
+        let prepared: CrossReferencePreparedImage
         var lastUse: UInt64
     }
 
@@ -482,12 +543,30 @@ final class CrossReferenceSession: Sendable {
         var startedScanCount = 0
         /// The scans running now, which a query asking for the same waits for.
         var inFlightScans: [InFlightScan: Task<[CodeReference], Never>] = [:]
-        /// The prepared indexes kept, by image, in the current generation.
-        var preparedIndexes: [Int: PreparedIndex] = [:]
+        /// The prepared images kept, by image, in the current generation.
+        var preparedImages: [Int: KeptPreparedImage] = [:]
         var preparedByteCount = 0
         var preparedByteLimit = CrossReferenceSession.defaultPreparedByteLimit
         var preparations: [PreparationKey: Preparation] = [:]
         var startedPreparationCount = 0
+        /// The generation whose prefilters were asked to be read, and the one
+        /// whose prefilters are.
+        var prefilterPreparationGeneration: Int?
+        var preparedPrefilterGeneration: Int?
+    }
+}
+
+/// An image's prepared cross references, as the session keeps them: its
+/// index, and the memory of what the analyzer keeps to name what the index
+/// answers with — the image's function table and the names read for it —
+/// which the byte limit counts along with the index: about two thirds again
+/// for AppKit.
+struct CrossReferencePreparedImage: Sendable {
+    let index: CodeReferenceIndex
+    let namingByteCount: Int
+
+    var byteCount: Int {
+        index.approximateByteCount + namingByteCount
     }
 }
 

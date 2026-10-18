@@ -347,9 +347,12 @@ struct CrossReferenceQuery {
 
     // MARK: - Preparation
 
-    /// Prepares the image's index ahead of the queries that will read it —
-    /// or finds it kept, or joins the preparation under way — and keeps it
-    /// within `options.residentByteLimit`. The image must be indexed.
+    /// Prepares the image ahead of the queries that will read it — or finds
+    /// it kept, or joins the preparation under way — and keeps it within
+    /// `options.residentByteLimit`. The image must be indexed.
+    ///
+    /// The first preparation of the process's images also reads, behind the
+    /// others, what a query across the indexed images filters them with.
     func prepare(
         imageAt path: String,
         options: RuntimeCrossReferencePreparationOptions,
@@ -361,15 +364,39 @@ struct CrossReferenceQuery {
         session.setPreparedByteLimit(options.residentByteLimit)
         let (analyzer, generation) = try session.currentAnalyzer()
         let imageIndex = try Self.indexedImageIndex(forPath: path, among: try await indexedImageIndices(in: analyzer), in: analyzer)
-        let index = try await session.preparedIndex(ofImageAt: imageIndex, generation: generation, isPrioritized: options.isPrioritized, reportProgress: reportProgress) { shouldContinue in
-            analyzer.referenceIndex(ofImageAt: imageIndex, reportingProgress: shouldContinue)
+        let prepared = try await session.preparedImage(ofImageAt: imageIndex, generation: generation, isPrioritized: options.isPrioritized, reportProgress: reportProgress) { shouldContinue in
+            Self.prepareImage(at: imageIndex, with: analyzer, shouldContinue: shouldContinue)
         }
-        // Building the index kept the image's function table.
+        // Preparing the image kept its function table.
         session.noteFunctionTables(ofImagesAt: [imageIndex], generation: generation)
-        return RuntimeCrossReferencePreparation(referenceCount: index.referenceCount, byteCount: index.approximateByteCount)
+        session.preparePrefiltersIfNeeded(with: analyzer, generation: generation)
+        return RuntimeCrossReferencePreparation(referenceCount: prepared.index.referenceCount, byteCount: prepared.byteCount)
     }
 
-    /// Sets the most bytes of prepared indexes the session keeps; zero drops
+    /// Scans the image into an index, then reads the names a query shows
+    /// what the index answers with — its functions', classes' and types' —
+    /// telling `shouldContinue` how far it has come; `nil` when told to stop.
+    ///
+    /// The names are read here rather than by the first query that needs
+    /// them, which they kept waiting: AppKit's take 0.3 s in a debug build.
+    static func prepareImage(
+        at imageIndex: Int,
+        with analyzer: CrossReferenceAnalyzer,
+        shouldContinue: @escaping (RuntimeCrossReferencePreparationProgress) -> Bool
+    ) -> CrossReferencePreparedImage? {
+        var functionCount = 0
+        let index = analyzer.referenceIndex(ofImageAt: imageIndex) { scannedFunctionCount, reportedFunctionCount in
+            functionCount = reportedFunctionCount
+            return shouldContinue(RuntimeCrossReferencePreparationProgress(scannedFunctionCount: scannedFunctionCount, functionCount: reportedFunctionCount))
+        }
+        guard let index,
+              shouldContinue(RuntimeCrossReferencePreparationProgress(scannedFunctionCount: functionCount, functionCount: functionCount, isReadingNames: true))
+        else { return nil }
+        analyzer.prepareNames(inImageAt: imageIndex)
+        return CrossReferencePreparedImage(index: index, namingByteCount: analyzer.approximateByteCount(ofImageDataAt: imageIndex))
+    }
+
+    /// Sets the most bytes of prepared images the session keeps; zero drops
     /// them all.
     func setPreparedByteLimit(_ byteLimit: Int) {
         session.setPreparedByteLimit(byteLimit)
@@ -429,13 +456,14 @@ struct CrossReferenceQuery {
                     group.addTask { [session] in
                         try Task.checkCancellation()
                         if usesPreparedIndexes {
-                            let index = try await session.preparedIndex(ofImageAt: imageIndex, generation: generation, isPrioritized: true) { shouldContinue in
-                                analyzer.referenceIndex(ofImageAt: imageIndex, reportingProgress: shouldContinue)
+                            let prepared = try await session.preparedImage(ofImageAt: imageIndex, generation: generation, isPrioritized: true) { shouldContinue in
+                                Self.prepareImage(at: imageIndex, with: analyzer, shouldContinue: shouldContinue)
                             }
                             // Naming what the index answers needs the image's
-                            // function table, which a replaced analyzer dropped.
+                            // function table, kept with the image — unless the
+                            // image was too large to keep.
                             analyzer.keepFunctionTable(ofImageAt: imageIndex)
-                            let found = findInIndex(index)
+                            let found = findInIndex(prepared.index)
                             return (imageIndex, found, convert(found))
                         }
                         let found = await session.sharedScan(of: scanKey, inImageAt: imageIndex, generation: generation) {

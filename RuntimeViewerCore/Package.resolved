@@ -1,5 +1,5 @@
 {
-  "originHash" : "22503b5d9df7d9be771472140f81f6734e1f681de74b9fcdf24699dd536a00bf",
+  "originHash" : "654a96ea454fb7399810460660a629c0d6f29343397ed4d911e14f0d544953a1",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -97,7 +97,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "feature/cross-reference-analysis",
-        "revision" : "3ca49d4d9cfab711bd0e3f318130ef47c98e66d0"
+        "revision" : "251ed15b589fd410be5a19a2b0b46e6bce14cf39"
       }
     },
     {

@@ -431,7 +431,7 @@ extension CrossReferencePreparationCoordinator {
         private var reportsByImagePath: [String: Report] = [:]
 
         /// The furthest each request has reported, kept across flushes.
-        private var furthestScannedFunctionCountsByRequest: [UInt64: Int] = [:]
+        private var furthestProgressByRequest: [UInt64: RuntimeCrossReferencePreparationProgress] = [:]
 
         private var hasScheduledFlush = false
 
@@ -440,10 +440,10 @@ extension CrossReferencePreparationCoordinator {
         func record(_ progress: RuntimeCrossReferencePreparationProgress, for imagePath: String, requestIdentifier: UInt64) -> Bool {
             lock.lock()
             defer { lock.unlock() }
-            if let furthest = furthestScannedFunctionCountsByRequest[requestIdentifier], furthest > progress.scannedFunctionCount {
+            if let furthest = furthestProgressByRequest[requestIdentifier], furthest.isAhead(of: progress) {
                 return false
             }
-            furthestScannedFunctionCountsByRequest[requestIdentifier] = progress.scannedFunctionCount
+            furthestProgressByRequest[requestIdentifier] = progress
             reportsByImagePath[imagePath] = Report(requestIdentifier: requestIdentifier, progress: progress)
             guard !hasScheduledFlush else { return false }
             hasScheduledFlush = true

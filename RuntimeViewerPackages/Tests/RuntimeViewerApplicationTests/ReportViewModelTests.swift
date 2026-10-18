@@ -4,6 +4,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCommunication
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import Testing
 @testable import RuntimeViewerApplication
@@ -164,6 +165,17 @@ struct ReportViewModelTests {
         }
         #expect(Self.node(.turnedOff(.crossReferences), in: turnedOff) == nil)
         await engine.stop()
+    }
+
+    @Test("a preparing image's row reads how far its scan has come, then that its names are being read")
+    func preparingRowsTellTheScanFromTheNames() {
+        let row = ReportCellViewModel(identifier: .crossReferencePreparation(imagePath: TestImages.libobjc))
+        ReportOutline.configure(row, forCrossReferencesOf: TestImages.libobjc, state: .preparing(RuntimeCrossReferencePreparationProgress(scannedFunctionCount: 512, functionCount: 2048)), isFollowed: true)
+        #expect(row.appearance.detail == "25% · 512 of 2048 functions")
+        ReportOutline.configure(row, forCrossReferencesOf: TestImages.libobjc, state: .preparing(RuntimeCrossReferencePreparationProgress(scannedFunctionCount: 2048, functionCount: 2048, isReadingNames: true)), isFollowed: true)
+        #expect(row.appearance.detail == "Reading names")
+        #expect(row.appearance.status == .running)
+        #expect(row.isCancellable)
     }
 
     // MARK: - Actions

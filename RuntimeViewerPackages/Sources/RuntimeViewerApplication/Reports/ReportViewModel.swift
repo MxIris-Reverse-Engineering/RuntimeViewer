@@ -484,9 +484,13 @@ enum ReportOutline {
         let status: ReportRowStatus
         switch state {
         case .preparing(let progress):
-            detail = progress.functionCount > 0
-                ? "\(progress.scannedFunctionCount * 100 / progress.functionCount)% · \(progress.scannedFunctionCount) of \(progress.functionCount) functions"
-                : "Starting"
+            if progress.isReadingNames {
+                detail = "Reading names"
+            } else if progress.functionCount > 0 {
+                detail = "\(progress.scannedFunctionCount * 100 / progress.functionCount)% · \(progress.scannedFunctionCount) of \(progress.functionCount) functions"
+            } else {
+                detail = "Starting"
+            }
             status = .running
         case .pending, .prepared, .failed:
             detail = "Waiting"

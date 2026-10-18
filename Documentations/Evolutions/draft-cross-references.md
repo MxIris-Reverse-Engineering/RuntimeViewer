@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-10-16
-- **最后更新**: 2026-10-18
+- **最后更新**: 2026-10-19
 - **所属愿景**: 无（CLI 与 MCP 部分沿用[《无头 RuntimeViewer》](../Visions/HeadlessRuntimeViewer.md)「GUI、命令行与 MCP 三个前端共用同一套命令词汇」的取向，但不推进该愿景的步骤）
 - **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案 `draft-cross-reference-analysis`（在 MachOSwiftSection 仓库，分支 `feature/cross-reference-analysis`）
 - **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）
@@ -899,6 +899,43 @@ Debug 构建里扫描器仍比 Release 慢几十倍，单扫 AppKit 仍要几秒
 
 **测试**：库 `CodeReferenceIndexTests` 6 个（Foundation 整表的每个键与索引逐条相同；AppKit 多个键一起查与过滤扫描逐条相同；`URL`、`JSONEncoder`、`Array` 从索引查与按类型扫描相同；大小不到整表一半；建表留住函数表；进度与停止）。引擎 `CrossReferencePreparationTests` 8 个（查表与现扫的结果相同；准备好之后再查什么都不扫；后台准备与查询共用一次准备；上限与淘汰、0 全丢；未索引的不建；唯一的请求取消后准备停下、什么都不留；引擎路径准备、拒绝、查表与现扫相同；线上格式）。App：`CrossReferencePreparationCoordinatorTests` 5 个（已索引的被准备并记入历史；后来索引的也准备；开关关撤回、再开重新准备；取消记为 cancelled；关着什么都不请求），`ReportViewModelTests.preparedCrossReferencesUnderTheirKind`（这一类排最后；关掉后没有 Turned off 行），`FindViewModelCrossReferenceTests.preparedLevelsListWhatScansList`（开着准备时调用层级一层的行与现扫相同）。库的交叉引用测试 66 个、引擎 61 个、App 570 个与设置 33 个都通过，macOS App 目标编译通过；没有在界面上实际点过。
 
+## 第一次显示也秒出（2026-10-18）
+
+上一节落地后用户试用：「现在就第一次显示的时候要加载一下，然后点击其他类型都是很快的秒出」，问是不是把初始化都挪到了第一次打开。不是：引用表从文档打开、镜像索引完就在后台建。第一次还要等，是查询还要现读几样只读一次、之后留着的东西。当时的解释给了三条——给结果起名的名字数据、Find 跨已索引镜像预筛用的两张表、刚启动时表还没建完——提议把前两条挪进后台；用户回复「第3点我能接受，本该如此」并批准开工。
+
+**实测**（Debug，28 核，第一次查询现读的东西；当时向用户估的「名字数据 Debug 下好几秒、每个大镜像一两 MB」是错的，以这张表为准）：
+
+| 现读的 | 谁会碰到 | 用时 | 留下的 |
+|---|---|---|---|
+| 补充名字的三个来源（导出表、ObjC 方法表、Swift 元数据） | 第一次给某镜像的结果起名：Inspector 与 Find 都会 | AppKit 0.29 s | 12 MiB |
+| 每个 Swift 类型的 key | 第一次按 key 找某镜像里没有符号的类型（缓存里的内部类型都是） | AppKit 0.69 s、SwiftUICore 0.44 s | 3.3 MiB |
+| 整个导出表的名字集合 | Find 第一次判断某镜像导出了某 Swift 类型没有 | SwiftUICore 0.09 s | 6 MiB |
+| 改名再导出表 | Find 第一次跨已索引镜像查 C 函数、ObjC 方法或类 | 3.4 s，占满全部 28 核 | 1 MiB |
+| 链接关系 | 同上，及 Swift 函数与类型 | 0.06 s | 1 MiB |
+
+**库（MachOSwiftSection `251ed15b`，五份锁文件钉到它）**：能不读的改成不读——按 key 找类型只给描述符名字相同的类型算 key（约 1 毫秒），判断导出与否在导出表里按名字查三个符号，两处都对 Foundation 与 AppKit 的全部类型核对过结果不变；免不了的交给宿主提前读——`prepareNames(inImageAt:)`（三个来源、类名、类型符号）与 `preparePrefilters()`（链接关系与改名再导出表，只用调用线程：单线程 3.9 秒，28 核并行也要 3.4 秒，并行几乎不快）。另有 `approximateByteCount(ofImageDataAt:)` 估算一个镜像留着多少（与 malloc 实测差一成以内），`releaseImageData(exceptForImagesAt:)` 放掉指定镜像以外的。
+
+**引擎**：
+- 准备一个镜像在扫完之后接着读名字，进度多报一次「读名字」（`RuntimeCrossReferencePreparationProgress.isReadingNames`）；查询当场准备时也一样。
+- 名字计入 Resident Limit：AppKit 从 21 MiB 记成 35 MiB（引用 21、名字连同函数表 14）。不计的话上限少算四成；用户常驻的五个镜像加起来仍在默认 256 MB 以内。
+- 每一代的第一次准备完成后，在会话队列里排一个低优先级的任务读预筛表，只占 Max Concurrent Scans 里的一个；读的时候来了 Find 的查询，等它读完，不再并行读一遍。
+- 起过名的镜像（预先准备的除外）超过 64 个时，只让分析器放掉预先准备之外的；此前是整个换掉分析器，预先读好的名字跟着丢了，浏览一阵被调之后第一次显示又会慢。准备好的镜像被淘汰（上限、关掉开关）时，它的名字一起放掉。
+
+**App**：Report 里准备中的行在读名字时显示「Reading names」；进度乱序到达时按「先扫描、后读名字」取最远的一次。
+
+**效果**（Debug，引擎进程内直接查，AppKit 准备好之后，Inspector 那种只查本镜像的查询；每种做法单独一个进程）：
+
+| | 准备 AppKit | 第一次查 `NSWindow` 的类型引用 | 接着查 `NSView` | 再查 `NSWindow` | `makeKeyAndOrderFront:` 的调用者 |
+|---|---|---|---|---|---|
+| 改之前（准备只建表） | 5.8 s | 291 ms | 81 ms | 22 ms | 13 ms |
+| 改之后 | 6.4 s | 21 ms | 57 ms | 20 ms | 13 ms |
+
+Find 跨已索引镜像的第一次查询，另外省掉改名再导出表的 3.4 秒（后台读好之后）。界面上的感受（含连接往返与 Inspector 自己的加载）没有实测。
+
+**仍然要等的**：刚启动、要查的镜像还没准备完（用户认为本该如此）；Callees 的目标在没索引的镜像里时，第一次给那个镜像的函数起名要现读它的导出表；预筛里按导入名比对、按类对象上的符号找别名，每次查询都现读，没有改。
+
+**测试**：库 `PreparedImageDataTests` 5 个（预读之后三个来源、类名、类型符号都已读好，名字与不预读相同；估算随留着的东西增减；放掉只留指定镜像；预筛表一边预读一边被要，只建一次；单线程与并行读导出表结果相同），`SwiftTypeReferenceTests` 新增两个各跑 Foundation 与 AppKit（同名筛选的查找与比全部 key 相同；按名字查导出表与读整张表相同）。引擎 `CrossReferencePreparationTests` 新增 3 个、改 1 个：准备在最后报「读名字」、名字计入上限（上限只够引用、不够名字时不留）；超过函数表上限后分析器不换、预先准备的名字还在、别的镜像的放掉；第一次准备在后台读好预筛表；淘汰时连名字一起放掉。
+
 ## 审查与修复（2026-10-17）
 
 第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
@@ -970,3 +1007,8 @@ Debug 构建里扫描器仍比 Release 慢几十倍，单扫 AppKit 仍要几秒
 | 2026-10-18 | 实现中自定：`ViewModelTestEnvironment` 里 Keep Cross References Ready 默认关 | 开着时每个在引擎上打开文档的测试都会在后台准备镜像，计入活动与 Report 行，别的测试数这些；讲它的测试自己打开 |
 | 2026-10-18 | 实现中自定：被淘汰的镜像不在后台补建，由下一次查到它的查询当场建 | 后台补建会和查询抢上限，反复淘汰再补建；查询当场建与现扫的代价相当 |
 | 2026-10-18 | 结果行的单行标题把截断写进富文本的段落样式；标题标签不可选中 | 用户试用时 Inspector 的行只显示「-」、点一下才显示。富文本不认标签的 `lineBreakMode`；与侧栏等其他列表的做法一致。用户回复「改」 |
+| 2026-10-18 | 准备一个镜像时连同给结果起名的名字一起读好，每一代第一次准备后在后台读好 Find 预筛用的两张表 | 用户问第一次显示为何还要等，批准把起名数据与预筛表挪进后台；刚启动表没建完时要等，用户认为本该如此（「第3点我能接受，本该如此」） |
+| 2026-10-18 | 实现中自定：按 key 找类型、判断类型导出与否改成不现读整张表，而不是挪进后台 | 实测这两样第一次分别要 0.7 秒与 0.1 秒、留 3–6 MiB；按名字先筛、在导出表里按名字查，第一次就只要约 1 毫秒、什么都不留，比提前读更省 |
+| 2026-10-18 | 实现中自定：预筛表在后台只用一个线程读 | Debug 下单线程 3.9 秒、28 核并行 3.4 秒，并行几乎不快；后台占满所有核违背用户定的 Max Concurrent Scans |
+| 2026-10-18 | 实现中自定：读好的名字计入 Resident Limit | 名字连同函数表，AppKit 与 Foundation 约为引用表的七成（AppKit 14 MiB 对 21 MiB），SwiftUICore 与 libswiftCore 比引用表还大；不计则上限少算一半上下；用户常驻的五个镜像仍在默认上限以内 |
+| 2026-10-18 | 实现中自定：起过名的镜像超过 64 个时，只放掉预先准备之外的镜像，不再整个换掉分析器 | 换分析器会把预先读好的名字一起扔掉，浏览一阵被调之后第一次显示又会慢 |
