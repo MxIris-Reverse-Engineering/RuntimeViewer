@@ -7,7 +7,7 @@ import MemberwiseInit
 
 /// The Inspector's References tab: who calls the member at the content pane's insertion point, what
 /// it calls, and which functions use the type on screen — one level of each, in the object's own
-/// image, and Show in Find Navigator for the whole tree across every image.
+/// image, and Show in Find Navigator for the whole tree across every indexed image.
 ///
 /// The member follows `DocumentState.cursorMember` while it is a member of the object on screen
 /// with code of its own; off every member's line, the tab shows the type's references alone. Each
@@ -193,9 +193,10 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
                 guard let request else { return .just(.unavailable) }
                 guard let self else { return .empty() }
                 let engine = documentState.runtimeEngine
+                let maximumConcurrentScans = settings.search.maximumConcurrentCrossReferenceScans
                 return Observable<SectionResult>.async {
                     do {
-                        return .loaded(try await Self.rows(for: request, in: section, engine: engine))
+                        return .loaded(try await Self.rows(for: request, in: section, maximumConcurrentScans: maximumConcurrentScans, engine: engine))
                     } catch {
                         return .failed(FindSession.crossReferenceFailureMessage(for: error))
                     }
@@ -227,8 +228,8 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     /// One level of the section, in the subject's own image, as the Find navigator groups it: one
     /// row per caller or callee, the runtime helper calls left out; for the type, its referencing
     /// functions, by title.
-    private nonisolated static func rows(for request: FindCrossReferenceTree.LoadRequest, in section: Section, engine: RuntimeEngine) async throws -> [FindCrossReferenceRow] {
-        let options = RuntimeCrossReferenceQueryOptions(resultLimit: referenceLimit)
+    private nonisolated static func rows(for request: FindCrossReferenceTree.LoadRequest, in section: Section, maximumConcurrentScans: Int, engine: RuntimeEngine) async throws -> [FindCrossReferenceRow] {
+        let options = RuntimeCrossReferenceQueryOptions(resultLimit: referenceLimit, maximumConcurrentScans: maximumConcurrentScans)
         switch (section, request) {
         case (.callers, .calls(.member(let member))):
             let result = try await engine.callers(of: .member(member), in: .image(path: member.object.imagePath), options: options)

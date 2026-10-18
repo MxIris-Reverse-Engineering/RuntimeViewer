@@ -37,7 +37,17 @@ final class CrossReferenceSession: Sendable {
     /// in hundreds of images.
     static let functionTableImageLimit = 64
 
+    /// How many images the process scans at once until a query brings another
+    /// count: as many as background indexing builds at once by default.
+    static let defaultMaximumConcurrentScans = 4
+
     private let scanByteBudget: Int
+    /// Where every image scan runs, whichever query asked for it: at most
+    /// ``maximumConcurrentScans`` at a time, at utility priority, and on
+    /// threads of its own. A scan decodes a whole image without suspending;
+    /// on the Swift concurrency pool it would hold a thread the engine's other
+    /// work in this process — the sidebar, the content pane — is waiting for.
+    private let scanQueue: OperationQueue
     /// The header address of every image loaded outside the shared cache —
     /// what decides whether an analyzer is still current. The process's
     /// own list, unless a test needs one that does not change under it: the
@@ -48,10 +58,15 @@ final class CrossReferenceSession: Sendable {
 
     init(
         scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget,
+        maximumConcurrentScans: Int = CrossReferenceSession.defaultMaximumConcurrentScans,
         imagesOutsideSharedCache: @escaping @Sendable () -> [UInt] = { CrossReferenceSession.processImagesOutsideSharedCache() }
     ) {
         self.scanByteBudget = scanByteBudget
         self.imagesOutsideSharedCache = imagesOutsideSharedCache
+        scanQueue = OperationQueue()
+        scanQueue.name = "com.RuntimeViewer.CrossReferences.scan"
+        scanQueue.qualityOfService = .utility
+        scanQueue.maxConcurrentOperationCount = max(1, maximumConcurrentScans)
     }
 
     // MARK: - Analyzer
@@ -172,11 +187,23 @@ final class CrossReferenceSession: Sendable {
         state.withLock { $0.startedScanCount }
     }
 
+    /// How many image scans run at once.
+    var maximumConcurrentScans: Int {
+        scanQueue.maxConcurrentOperationCount
+    }
+
+    /// Sets how many image scans run at once. Scans already running finish;
+    /// the count decides which of the waiting ones start.
+    func setMaximumConcurrentScans(_ count: Int) {
+        scanQueue.maxConcurrentOperationCount = max(1, count)
+    }
+
     /// What scanning the image at `imageIndex` for `key` finds — scanned by
-    /// `scan`, unless another query is scanning the same image for the same key
-    /// now, whose result this one waits for and shares. Two parts of one
-    /// window ask about one subject at once — the Find navigator and the
-    /// Inspector — and each image is scanned once for both.
+    /// `scan` on the session's queue, unless another query is scanning the
+    /// same image for the same key now, whose result this one waits for and
+    /// shares. Two parts of one window ask about one subject at once — the
+    /// Find navigator and the Inspector — and each image is scanned once for
+    /// both.
     ///
     /// The scan runs to its end once started, as a scan of one image always
     /// has; what cancelling a query stops is the images it has not started.
@@ -187,7 +214,13 @@ final class CrossReferenceSession: Sendable {
                 return task
             }
             state.startedScanCount += 1
-            let task = Task { scan() }
+            let task = Task { [scanQueue] in
+                await withCheckedContinuation { continuation in
+                    scanQueue.addOperation {
+                        continuation.resume(returning: scan())
+                    }
+                }
+            }
             state.inFlightScans[scanIdentity] = task
             return task
         }

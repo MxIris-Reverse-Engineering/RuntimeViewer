@@ -44,8 +44,8 @@ struct CrossReferenceWireFormatTests {
     func callersRequestRoundTrip() throws {
         let command = RuntimeCrossReferences.CallersCommand(
             subject: .function(imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", address: 0x1_8AE3_35C0),
-            scope: .allImages,
-            options: RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: true, receiverClassName: "NSWindow", resultLimit: 200)
+            scope: .indexedImages,
+            options: RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: true, receiverClassName: "NSWindow", resultLimit: 200, maximumConcurrentScans: 6)
         )
         let decoded = try JSONDecoder().decode(RuntimeCrossReferences.CallersCommand.self, from: JSONEncoder().encode(command))
         #expect(decoded.subject == command.subject)

@@ -8,17 +8,23 @@ import CrossReferenceAnalysis
 /// engine, against that process's images.
 ///
 /// Callees decode one function. Callers and a type's references are found by
-/// an on-demand scan: the images that cannot reference the subject are
-/// filtered out first — by the symbols they import, the images they link and
-/// the selectors they reference — and the rest are scanned concurrently,
-/// keeping only the references to the subject.
+/// an on-demand scan of the images the engine has indexed: those that cannot
+/// reference the subject are filtered out first — by the symbols they import,
+/// the images they link and the selectors they reference — and the rest are
+/// scanned a few at a time on the session's queue, keeping only the
+/// references to the subject. No other image's code is read.
 struct CrossReferenceQuery {
     let engine: RuntimeEngine
     let session: CrossReferenceSession
+    /// The paths of the images the engine has indexed.
+    let indexedImagePaths: @Sendable () async throws -> [String]
 
-    init(engine: RuntimeEngine, session: CrossReferenceSession) {
+    /// `indexedImagePaths` stands in for the engine's own list, which is what
+    /// the commands read.
+    init(engine: RuntimeEngine, session: CrossReferenceSession, indexedImagePaths: (@Sendable () async throws -> [String])? = nil) {
         self.engine = engine
         self.session = session
+        self.indexedImagePaths = indexedImagePaths ?? { try await engine.indexedImagePathList() }
     }
 
     // MARK: - Callees
@@ -123,11 +129,12 @@ struct CrossReferenceQuery {
     ) async throws -> RuntimeCrossReferenceQueryResult {
         let startTime = Date()
         let (analyzer, generation) = try session.currentAnalyzer()
+        let indexedImages = try await indexedImageIndices(in: analyzer)
         let resolvedSubject = try await resolve(subject, with: analyzer)
         // Finding the subject kept its image's function table.
         session.noteFunctionTables(ofImagesAt: resolvedSubject.functions.map(\.function.location.imageIndex), generation: generation)
         let keys = resolvedSubject.callerKeys
-        let candidates = try candidateImages(for: resolvedSubject, in: scope, analyzer: analyzer)
+        let candidates = try candidateImages(for: resolvedSubject, in: scope, among: indexedImages, analyzer: analyzer)
         var builder = FunctionReferenceBuilder(analyzer: analyzer)
         var subjectFunctionsByLocation: [CodeLocation: RuntimeFunctionReference] = [:]
         for subjectFunction in resolvedSubject.functions where subjectFunctionsByLocation[subjectFunction.function.location] == nil {
@@ -138,7 +145,7 @@ struct CrossReferenceQuery {
             candidates,
             for: .references(keys),
             generation: generation,
-            resultLimit: options.resultLimit,
+            options: options,
             reportProgress: reportProgress,
             find: { analyzer.references(to: keys, inImageAt: $0) },
             convert: { matcher.callerReferences(from: $0, analyzer: analyzer) }
@@ -154,16 +161,14 @@ struct CrossReferenceQuery {
         return result
     }
 
-    /// The images a scope asks about that can reference the subject.
-    func candidateImages(for subject: ResolvedSubject, in scope: RuntimeCrossReferenceScope, analyzer: CrossReferenceAnalyzer) throws -> [Int] {
+    /// The images a scope asks about that can reference the subject, among
+    /// the indexed ones.
+    func candidateImages(for subject: ResolvedSubject, in scope: RuntimeCrossReferenceScope, among indexedImages: Set<Int>, analyzer: CrossReferenceAnalyzer) throws -> [Int] {
         switch scope {
         case .image(let path):
-            guard let imageIndex = Self.imageIndex(forPath: path, in: analyzer) else {
-                throw RuntimeCrossReferenceError.imageNotFound(path: path)
-            }
-            return [imageIndex]
-        case .allImages:
-            let allImages = analyzer.imagePaths.indices
+            return [try Self.indexedImageIndex(forPath: path, among: indexedImages, in: analyzer)]
+        case .indexedImages:
+            let indexedImages = indexedImages.sorted()
             var candidates = Set<Int>()
             for subjectFunction in subject.functions {
                 // A function its own image can always reach; another image
@@ -173,14 +178,32 @@ struct CrossReferenceQuery {
                 candidates.formUnion(analyzer.imageIndices(
                     callingFunctionAt: subjectFunction.function.location,
                     symbolNames: subjectFunction.symbolNames,
-                    among: allImages
+                    among: indexedImages
                 ))
             }
             for selector in subject.selectors {
-                candidates.formUnion(analyzer.imageIndices(referencingSelector: selector, among: allImages))
+                candidates.formUnion(analyzer.imageIndices(referencingSelector: selector, among: indexedImages))
             }
             return candidates.sorted()
         }
+    }
+
+    /// The analyzer's indices of the images the engine has indexed — the only
+    /// images a scan reads.
+    private func indexedImageIndices(in analyzer: CrossReferenceAnalyzer) async throws -> Set<Int> {
+        Set(try await indexedImagePaths().compactMap { Self.imageIndex(forPath: $0, in: analyzer) })
+    }
+
+    /// The analyzer's index for the image a scope names, which the engine
+    /// must have indexed.
+    static func indexedImageIndex(forPath path: String, among indexedImages: Set<Int>, in analyzer: CrossReferenceAnalyzer) throws -> Int {
+        guard let imageIndex = imageIndex(forPath: path, in: analyzer) else {
+            throw RuntimeCrossReferenceError.imageNotFound(path: path)
+        }
+        guard indexedImages.contains(imageIndex) else {
+            throw RuntimeCrossReferenceError.imageNotIndexed(path: path)
+        }
+        return imageIndex
     }
 
     // MARK: - Type references
@@ -193,16 +216,14 @@ struct CrossReferenceQuery {
     ) async throws -> RuntimeCrossReferenceQueryResult {
         let startTime = Date()
         let (analyzer, generation) = try session.currentAnalyzer()
+        let indexedImages = try await indexedImageIndices(in: analyzer)
         let type = try resolveType(object, with: analyzer)
         let candidates: [Int]
         switch scope {
         case .image(let path):
-            guard let imageIndex = Self.imageIndex(forPath: path, in: analyzer) else {
-                throw RuntimeCrossReferenceError.imageNotFound(path: path)
-            }
-            candidates = [imageIndex]
-        case .allImages:
-            candidates = type.candidateImages(among: analyzer.imagePaths.indices, analyzer: analyzer)
+            candidates = [try Self.indexedImageIndex(forPath: path, among: indexedImages, in: analyzer)]
+        case .indexedImages:
+            candidates = type.candidateImages(among: indexedImages.sorted(), analyzer: analyzer)
         }
         // Who the type is, without its children — nested types and
         // specializations, which a reference to it does not need and would
@@ -221,7 +242,7 @@ struct CrossReferenceQuery {
             candidates,
             for: type.scanKey,
             generation: generation,
-            resultLimit: options.resultLimit,
+            options: options,
             reportProgress: reportProgress,
             find: { type.references(inImageAt: $0, analyzer: analyzer) },
             convert: { TypeReferenceConversion.references(from: $0, to: target, analyzer: analyzer) }
@@ -308,18 +329,21 @@ struct CrossReferenceQuery {
 
     /// Scans `candidates` for what `find` keeps, and gathers what `convert`
     /// makes of it: the images an earlier scan for `scanKey` covered first,
-    /// from the session, then the rest concurrently, reporting after each
-    /// image and stopping at the limit.
+    /// from the session, then the rest on the session's queue, reporting
+    /// after each image and stopping at the limit.
     private func scan(
         _ candidates: [Int],
         for scanKey: CrossReferenceScanKey,
         generation: Int,
-        resultLimit: Int?,
+        options: RuntimeCrossReferenceQueryOptions,
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void,
         find: @escaping @Sendable (Int) -> [CodeReference],
         convert: @escaping @Sendable ([CodeReference]) -> [RuntimeCrossReference]
     ) async throws -> (result: RuntimeCrossReferenceQueryResult, cachedImageCount: Int) {
-        var collector = ReferenceCollector(totalImageCount: candidates.count, resultLimit: resultLimit)
+        if let maximumConcurrentScans = options.maximumConcurrentScans {
+            session.setMaximumConcurrentScans(maximumConcurrentScans)
+        }
+        var collector = ReferenceCollector(totalImageCount: candidates.count, resultLimit: options.resultLimit)
 
         // What earlier scans for the same subject found is reported first, in
         // one event.
@@ -335,10 +359,9 @@ struct CrossReferenceQuery {
         }
 
         if !collector.isFull, !remainingCandidates.isEmpty {
-            // One cooperative thread is left to the rest of the process: each
-            // child scans synchronously, for up to a tenth of a second on the
-            // largest images.
-            let width = max(1, ProcessInfo.processInfo.activeProcessorCount - 1)
+            // As many images handed to the session's queue as it scans at
+            // once: a cancelled query leaves no more than that to finish.
+            let width = session.maximumConcurrentScans
             try await withThrowingTaskGroup(of: (Int, [CodeReference], [RuntimeCrossReference]).self) { group in
                 var nextCandidate = remainingCandidates.makeIterator()
                 func addNextScan() {

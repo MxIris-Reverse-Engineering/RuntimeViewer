@@ -12,18 +12,22 @@ extension RuntimeEngine {
         try await dispatch(RuntimeCrossReferences.CalleesCommand(subject: subject, options: options))
     }
 
-    /// Who references `subject` within `scope` — its callers.
+    /// Who references `subject` within `scope` — its callers — among the
+    /// images the engine has indexed; an image named that is not indexed is
+    /// an error.
     ///
     /// The images that cannot reference the subject are filtered out first —
     /// by the names they import (a C or Objective-C function's, or one
     /// another image re-exports it under), by the images they link (a Swift
     /// function's), or by the selectors they reference — and the rest are
-    /// scanned in the engine's process. `reportProgress` hears after
-    /// each image with what it held, so a caller that gives up early keeps
-    /// those; cancelling the caller stops the scan where it runs.
+    /// scanned in the engine's process, as many at a time as
+    /// ``RuntimeCrossReferenceQueryOptions/maximumConcurrentScans`` allows.
+    /// `reportProgress` hears after each image with what it held, so a
+    /// caller that gives up early keeps those; cancelling the caller stops the
+    /// scan where it runs.
     public func callers(
         of subject: RuntimeCrossReferenceSubject,
-        in scope: RuntimeCrossReferenceScope = .allImages,
+        in scope: RuntimeCrossReferenceScope = .indexedImages,
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult {
@@ -39,7 +43,7 @@ extension RuntimeEngine {
     /// and reported like ``callers(of:in:options:reportProgress:)``.
     public func typeReferences(
         to object: RuntimeObject,
-        in scope: RuntimeCrossReferenceScope = .allImages,
+        in scope: RuntimeCrossReferenceScope = .indexedImages,
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult {

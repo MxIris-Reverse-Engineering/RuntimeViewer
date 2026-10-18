@@ -128,10 +128,14 @@ public enum RuntimeCrossReferenceSubject: Hashable, Codable, Sendable {
     case selector(String)
 }
 
+/// The images a query reads. Only images the engine has indexed — both their
+/// Objective-C and their Swift section built: the ones opened in the sidebar
+/// and the ones background indexing read — are ever scanned.
 public enum RuntimeCrossReferenceScope: Hashable, Codable, Sendable {
+    /// One image, which the engine must have indexed.
     case image(path: String)
-    /// The whole dyld shared cache plus every image loaded outside it.
-    case allImages
+    /// Every image the engine has indexed.
+    case indexedImages
 }
 
 public struct RuntimeCrossReferenceQueryOptions: Hashable, Codable, Sendable {
@@ -146,11 +150,17 @@ public struct RuntimeCrossReferenceQueryOptions: Hashable, Codable, Sendable {
     /// across images stops as soon as it has them, so which ones come back
     /// depends on which images finished first.
     public var resultLimit: Int?
+    /// How many images the engine's process scans at the same time, each
+    /// keeping a core busy, across every query it runs. The process keeps the
+    /// count the latest query brought; `nil` leaves it as it is — four, until
+    /// a query sets another. The app sends its Max Concurrent Scans setting.
+    public var maximumConcurrentScans: Int?
 
-    public init(includesRuntimeHelperCalls: Bool = false, receiverClassName: String? = nil, resultLimit: Int? = nil) {
+    public init(includesRuntimeHelperCalls: Bool = false, receiverClassName: String? = nil, resultLimit: Int? = nil, maximumConcurrentScans: Int? = nil) {
         self.includesRuntimeHelperCalls = includesRuntimeHelperCalls
         self.receiverClassName = receiverClassName
         self.resultLimit = resultLimit
+        self.maximumConcurrentScans = maximumConcurrentScans
     }
 }
 
@@ -187,6 +197,9 @@ public enum RuntimeCrossReferenceError: Error, LocalizedError, Sendable, Equatab
     /// The process serving the engine does not run arm64 code.
     case unsupportedArchitecture
     case imageNotFound(path: String)
+    /// The scope names an image the engine has not indexed, whose code a
+    /// query does not read.
+    case imageNotIndexed(path: String)
     case functionNotFound(imagePath: String, address: UInt64)
     case memberNotFound(objectName: String, memberName: String)
     /// A selector is a message, not code: it has senders but no callees.
@@ -202,6 +215,8 @@ public enum RuntimeCrossReferenceError: Error, LocalizedError, Sendable, Equatab
             "Cross references read arm64 and arm64e machine code; the process serving this engine runs neither."
         case .imageNotFound(let path):
             "No image at \(path) is loaded or in the shared cache of the process serving this engine."
+        case .imageNotIndexed(let path):
+            "\((path as NSString).lastPathComponent) is not indexed. Cross references read indexed images only: load it first."
         case .functionNotFound(let imagePath, let address):
             "No function holds 0x\(String(address, radix: 16)) in \(imagePath)."
         case .memberNotFound(let objectName, let memberName):

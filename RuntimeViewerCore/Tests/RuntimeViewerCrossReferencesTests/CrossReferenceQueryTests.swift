@@ -29,8 +29,19 @@ struct CrossReferenceQueryTests {
         return function.location.address
     }
 
-    private static func makeQuery(session: CrossReferenceSession = CrossReferenceSession()) -> CrossReferenceQuery {
-        CrossReferenceQuery(engine: RuntimeEngine(source: .local, engineID: "test-cross-reference-queries"), session: session)
+    /// As many scans at once as the machine has cores: these tests are about
+    /// what a query finds, and a few at a time would only slow them down.
+    /// `scansRunAFewAtATimeOffTheThreadPool` covers the limit.
+    private static let testMaximumConcurrentScans = ProcessInfo.processInfo.activeProcessorCount
+
+    /// A query reading `indexedImagePaths` as the images its engine has
+    /// indexed — by default every image this process had when the tests
+    /// started.
+    private static func makeQuery(
+        session: CrossReferenceSession = CrossReferenceSession(maximumConcurrentScans: testMaximumConcurrentScans),
+        indexedImagePaths: [String] = analyzer.imagePaths
+    ) -> CrossReferenceQuery {
+        CrossReferenceQuery(engine: RuntimeEngine(source: .local, engineID: "test-cross-reference-queries"), session: session) { indexedImagePaths }
     }
 
     /// Collects a query's progress reports.
@@ -149,9 +160,8 @@ struct CrossReferenceQueryTests {
 
     @Test("Callers of a selector in one image are exactly its sends, and the reports add up to the result")
     func callersOfASelectorInOneImage() async throws {
-        let engine = RuntimeEngine(source: .local, engineID: "test-cross-reference-callers")
         let recorder = ProgressRecorder()
-        let result = try await engine.callers(of: .selector("orderWindow:relativeTo:"), in: .image(path: Self.appKitPath)) { progress in
+        let result = try await Self.makeQuery().callers(of: .selector("orderWindow:relativeTo:"), in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { progress in
             recorder.record(progress)
         }
         #expect(result.isComplete)
@@ -194,12 +204,12 @@ struct CrossReferenceQueryTests {
         }
     }
 
-    @Test("Callers across all images are prefiltered: a selector few images send scans few images")
-    func callersAcrossAllImagesArePrefiltered() async throws {
+    @Test("Callers across the indexed images are prefiltered: a selector few images send scans few images")
+    func callersAcrossIndexedImagesArePrefiltered() async throws {
         let recorder = ProgressRecorder()
         let result = try await Self.makeQuery().callers(
             of: .selector("orderWindow:relativeTo:"),
-            in: .allImages,
+            in: .indexedImages,
             options: RuntimeCrossReferenceQueryOptions(),
             reportProgress: { recorder.record($0) }
         )
@@ -210,12 +220,39 @@ struct CrossReferenceQueryTests {
         #expect(result.references.contains { $0.referencingFunction.imagePath == Self.appKitPath })
     }
 
+    @Test("A query across the indexed images scans those alone, however many other images could reference the subject")
+    func indexedImagesBoundTheScan() async throws {
+        // About a hundred images send it; only AppKit is indexed.
+        let recorder = ProgressRecorder()
+        let result = try await Self.makeQuery(indexedImagePaths: [Self.appKitPath]).callers(
+            of: .selector("makeKeyAndOrderFront:"),
+            in: .indexedImages,
+            options: RuntimeCrossReferenceQueryOptions()
+        ) { recorder.record($0) }
+        #expect(!result.references.isEmpty)
+        #expect(result.references.allSatisfy { $0.referencingFunction.imagePath == Self.appKitPath })
+        #expect(!recorder.reports.isEmpty)
+        #expect(recorder.reports.allSatisfy { $0.totalImageCount == 1 })
+    }
+
+    @Test("An image that is not indexed is refused, not scanned")
+    func imagesNotIndexedAreRefused() async throws {
+        let query = Self.makeQuery(indexedImagePaths: [Self.appKitPath])
+        await #expect(throws: RuntimeCrossReferenceError.imageNotIndexed(path: Self.foundationPath)) {
+            try await query.callers(of: .selector("appendString:"), in: .image(path: Self.foundationPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        }
+        let window = RuntimeObject(name: "NSWindow", displayName: "NSWindow", kind: .objc(.type(.class)), imagePath: Self.appKitPath, children: [])
+        await #expect(throws: RuntimeCrossReferenceError.imageNotIndexed(path: Self.foundationPath)) {
+            try await query.typeReferences(to: window, in: .image(path: Self.foundationPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        }
+    }
+
     @Test("A limit stops the scan with exactly that many references")
     func limitStopsTheScan() async throws {
         let recorder = ProgressRecorder()
         let result = try await Self.makeQuery().callers(
             of: .selector("init"),
-            in: .allImages,
+            in: .indexedImages,
             options: RuntimeCrossReferenceQueryOptions(resultLimit: 100),
             reportProgress: { recorder.record($0) }
         )
@@ -226,13 +263,13 @@ struct CrossReferenceQueryTests {
         #expect(last.scannedImageCount < last.totalImageCount)
     }
 
-    @Test("Cancelling the caller stops a whole-cache scan")
+    @Test("Cancelling the caller stops a scan of thousands of images")
     func cancellationStopsTheScan() async throws {
         let query = Self.makeQuery()
         let recorder = ProgressRecorder()
         let (firstReport, firstReportContinuation) = AsyncStream<Void>.makeStream()
         let task = Task {
-            try await query.callers(of: .selector("init"), in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { progress in
+            try await query.callers(of: .selector("init"), in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) { progress in
                 recorder.record(progress)
                 firstReportContinuation.yield()
             }
@@ -256,7 +293,7 @@ struct CrossReferenceQueryTests {
         let foundation = try #require(CrossReferenceQuery.imageIndex(forPath: Self.foundationPath, in: Self.analyzer))
         let function = try #require(Self.analyzer.function(containing: CodeLocation(imageIndex: foundation, address: address)))
         let subject = CrossReferenceQuery.ResolvedSubject(functions: [.init(function: function, member: nil)])
-        let candidates = Set(try Self.makeQuery().candidateImages(for: subject, in: .allImages, analyzer: Self.analyzer))
+        let candidates = Set(try Self.makeQuery().candidateImages(for: subject, in: .indexedImages, among: Set(Self.analyzer.imagePaths.indices), analyzer: Self.analyzer))
         let everyImage = Self.analyzer.imagePaths.indices
         let linkers = Set(Self.analyzer.imageIndices(linkingImageAt: foundation, among: everyImage))
         #expect(linkers.isSubset(of: candidates))
@@ -270,8 +307,7 @@ struct CrossReferenceQueryTests {
     @Test("References to an Objective-C class in its own image: exact, and pointing at the class")
     func typeReferencesOfAnObjectiveCClass() async throws {
         let window = RuntimeObject(name: "NSWindow", displayName: "NSWindow", kind: .objc(.type(.class)), imagePath: Self.appKitPath, children: [])
-        let engine = RuntimeEngine(source: .local, engineID: "test-cross-reference-type-references")
-        let result = try await engine.typeReferences(to: window, in: .image(path: Self.appKitPath))
+        let result = try await Self.makeQuery().typeReferences(to: window, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions(), reportProgress: { _ in })
         #expect(result.isComplete)
         #expect(!result.references.isEmpty)
         #expect(result.references.allSatisfy { $0.kind == .typeReference && $0.precision == .exact })
@@ -332,7 +368,7 @@ struct CrossReferenceQueryTests {
         // AppKit exports no symbol of this struct: no other image can reach it.
         let suggestion = RuntimeObject(name: "6AppKit23NSSmartNamingSuggestionV", displayName: "AppKit.NSSmartNamingSuggestion", kind: .swift(.type(.struct)), imagePath: Self.appKitPath, children: [])
         let recorder = ProgressRecorder()
-        _ = try await Self.makeQuery().typeReferences(to: suggestion, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
+        _ = try await Self.makeQuery().typeReferences(to: suggestion, in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
         #expect(!recorder.reports.isEmpty)
         #expect(recorder.reports.allSatisfy { $0.totalImageCount == 1 })
     }
@@ -341,7 +377,7 @@ struct CrossReferenceQueryTests {
     func typeReferencesNeedAType() async throws {
         let copying = RuntimeObject(name: "NSCopying", displayName: "NSCopying", kind: .objc(.type(.protocol)), imagePath: "/usr/lib/libobjc.A.dylib", children: [])
         await #expect(throws: RuntimeCrossReferenceError.typeNotFound(objectName: "NSCopying")) {
-            try await Self.makeQuery().typeReferences(to: copying, in: .allImages, options: RuntimeCrossReferenceQueryOptions(), reportProgress: { _ in })
+            try await Self.makeQuery().typeReferences(to: copying, in: .indexedImages, options: RuntimeCrossReferenceQueryOptions(), reportProgress: { _ in })
         }
     }
 
@@ -351,11 +387,11 @@ struct CrossReferenceQueryTests {
         let query = Self.makeQuery(session: session)
         let window = RuntimeObject(name: "NSWindow", displayName: "NSWindow", kind: .objc(.type(.class)), imagePath: Self.appKitPath, children: [])
         let firstRecorder = ProgressRecorder()
-        let first = try await query.typeReferences(to: window, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { firstRecorder.record($0) }
+        let first = try await query.typeReferences(to: window, in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) { firstRecorder.record($0) }
         // A report per image scanned: the scan covered more than one.
         #expect(firstRecorder.reports.count > 1)
         let recorder = ProgressRecorder()
-        let second = try await query.typeReferences(to: window, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
+        let second = try await query.typeReferences(to: window, in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) { recorder.record($0) }
         #expect(second == first)
         // One report, for every image found among the earlier scans.
         #expect(recorder.reports.count == 1)
@@ -367,8 +403,89 @@ struct CrossReferenceQueryTests {
     /// load an image outside the cache (the Objective-C runtime loads
     /// `libobjc-trampolines.dylib` on first use), which would start a new
     /// generation and drop every scan these tests count on.
-    private static func makeSteadySession(scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget) -> CrossReferenceSession {
-        CrossReferenceSession(scanByteBudget: scanByteBudget, imagesOutsideSharedCache: { [] })
+    private static func makeSteadySession(
+        scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget,
+        maximumConcurrentScans: Int = testMaximumConcurrentScans
+    ) -> CrossReferenceSession {
+        CrossReferenceSession(scanByteBudget: scanByteBudget, maximumConcurrentScans: maximumConcurrentScans, imagesOutsideSharedCache: { [] })
+    }
+
+    /// Watches scans run: how many at once at most, at which priorities, and
+    /// whether any ran on a thread of the Swift concurrency pool.
+    private final class ScanObserver: @unchecked Sendable {
+        private let lock = NSLock()
+        private var runningCount = 0
+        private var observedMaximumRunningCount = 0
+        private var observedQualityOfServiceClasses: Set<UInt32> = []
+        private var observedSwiftConcurrencyThread = false
+
+        var maximumRunningCount: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return observedMaximumRunningCount
+        }
+
+        var qualityOfServiceClasses: Set<UInt32> {
+            lock.lock()
+            defer { lock.unlock() }
+            return observedQualityOfServiceClasses
+        }
+
+        var ranOnSwiftConcurrencyThread: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return observedSwiftConcurrencyThread
+        }
+
+        func scanDidStart() {
+            let qualityOfServiceClass = qos_class_self().rawValue
+            // The pool's threads drain dispatch's `com.apple.root.…-qos.cooperative` queues.
+            let isSwiftConcurrencyThread = String(cString: __dispatch_queue_get_label(nil)).hasSuffix(".cooperative")
+            lock.lock()
+            defer { lock.unlock() }
+            runningCount += 1
+            observedMaximumRunningCount = max(observedMaximumRunningCount, runningCount)
+            observedQualityOfServiceClasses.insert(qualityOfServiceClass)
+            observedSwiftConcurrencyThread = observedSwiftConcurrencyThread || isSwiftConcurrencyThread
+        }
+
+        func scanDidEnd() {
+            lock.lock()
+            defer { lock.unlock() }
+            runningCount -= 1
+        }
+    }
+
+    @Test("Image scans run a few at a time, at utility priority, off the Swift concurrency threads")
+    func scansRunAFewAtATimeOffTheThreadPool() async {
+        let session = Self.makeSteadySession(maximumConcurrentScans: 3)
+        let observer = ScanObserver()
+        await withTaskGroup(of: Void.self) { group in
+            for imageIndex in 0 ..< 9 {
+                group.addTask {
+                    _ = await session.sharedScan(of: .swiftType(CodeLocation(imageIndex: imageIndex, address: 0)), inImageAt: imageIndex, generation: 0) {
+                        observer.scanDidStart()
+                        Thread.sleep(forTimeInterval: 0.2)
+                        observer.scanDidEnd()
+                        return []
+                    }
+                }
+            }
+        }
+        // At most three: on a busy machine dispatch may start fewer utility threads at once.
+        #expect(observer.maximumRunningCount <= 3)
+        #expect(observer.qualityOfServiceClasses == [QOS_CLASS_UTILITY.rawValue])
+        #expect(!observer.ranOnSwiftConcurrencyThread)
+    }
+
+    @Test("A query's options set how many images the process scans at once; a query without leaves it")
+    func optionsSetHowManyImagesAreScannedAtOnce() async throws {
+        let session = Self.makeSteadySession(maximumConcurrentScans: 4)
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
+        _ = try await query.callers(of: .selector("description"), in: .indexedImages, options: RuntimeCrossReferenceQueryOptions(resultLimit: 1, maximumConcurrentScans: 2)) { _ in }
+        #expect(session.maximumConcurrentScans == 2)
+        _ = try await query.callers(of: .selector("description"), in: .indexedImages, options: RuntimeCrossReferenceQueryOptions(resultLimit: 1)) { _ in }
+        #expect(session.maximumConcurrentScans == 2)
     }
 
     @Test("A repeated query reuses the scan instead of scanning again")
@@ -376,7 +493,7 @@ struct CrossReferenceQueryTests {
         let session = Self.makeSteadySession()
         let query = Self.makeQuery(session: session)
         let firstRecorder = ProgressRecorder()
-        let first = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .allImages, options: RuntimeCrossReferenceQueryOptions()) {
+        let first = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) {
             firstRecorder.record($0)
         }
         #expect(session.keptScanByteCount > 0)
@@ -384,7 +501,7 @@ struct CrossReferenceQueryTests {
         #expect(firstRecorder.reports.count > 1)
 
         let recorder = ProgressRecorder()
-        let second = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .allImages, options: RuntimeCrossReferenceQueryOptions()) {
+        let second = try await query.callers(of: .selector("orderWindow:relativeTo:"), in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) {
             recorder.record($0)
         }
         #expect(second == first)
@@ -413,7 +530,7 @@ struct CrossReferenceQueryTests {
         let small = RuntimeCrossReferenceSubject.selector("_makeKeyRegardlessOfVisibility")
         // How much each scan takes, with room for both.
         let measuring = Self.makeSteadySession()
-        _ = try await Self.makeQuery(session: measuring).callers(of: large, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        _ = try await Self.makeQuery(session: measuring).callers(of: large, in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
         let largeByteCount = measuring.keptScanByteCount
         _ = try await Self.makeQuery(session: measuring).callers(of: small, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
         let smallByteCount = measuring.keptScanByteCount - largeByteCount
@@ -422,14 +539,14 @@ struct CrossReferenceQueryTests {
         // A budget the large scan passes partway through.
         let session = Self.makeSteadySession(scanByteBudget: largeByteCount / 2)
         let query = Self.makeQuery(session: session)
-        _ = try await query.callers(of: large, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        _ = try await query.callers(of: large, in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
         // Nothing of it is left behind.
         #expect(session.keptScanByteCount == 0)
 
         _ = try await query.callers(of: small, in: .image(path: Self.appKitPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
         #expect(session.keptScanByteCount == smallByteCount)
         // Asked again, the large scan does not grow past the small one again.
-        _ = try await query.callers(of: large, in: .allImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        _ = try await query.callers(of: large, in: .indexedImages, options: RuntimeCrossReferenceQueryOptions()) { _ in }
         #expect(session.keptScanByteCount == smallByteCount)
     }
 
@@ -477,6 +594,26 @@ struct CrossReferenceQueryTests {
             every caller: \(result.references.prefix(20).map { "\($0.referencingFunction.displayName ?? "0x" + String($0.referencingFunction.address, radix: 16)) \($0.precision)" })
             """
         )
+    }
+
+    @Test("A query on an engine reads the images that engine has indexed, and refuses one it has not")
+    func queriesReadTheirEnginesIndexedImages() async throws {
+        let (engine, _) = try await Self.makeObjCEngine()
+        let indexedImagePaths = Set(try await engine.indexedImagePathList())
+        try #require(indexedImagePaths.contains(Self.libobjcPath))
+        try #require(!indexedImagePaths.contains(Self.foundationPath))
+
+        // `-[NSObject debugDescription]` sends it, and so does nearly every image: the limit
+        // stops a scan that reads them all at once rather than minutes later.
+        let recorder = ProgressRecorder()
+        let result = try await engine.callers(of: .selector("description"), in: .indexedImages, options: RuntimeCrossReferenceQueryOptions(resultLimit: 1000)) { recorder.record($0) }
+        #expect(!result.references.isEmpty)
+        #expect(result.references.allSatisfy { indexedImagePaths.contains($0.referencingFunction.imagePath) })
+        #expect(recorder.reports.allSatisfy { $0.totalImageCount <= indexedImagePaths.count })
+
+        await #expect(throws: RuntimeCrossReferenceError.imageNotIndexed(path: Self.foundationPath)) {
+            try await engine.callers(of: .selector("description"), in: .image(path: Self.foundationPath))
+        }
     }
 
     @Test("Storage has no code: an ivar is not a subject")

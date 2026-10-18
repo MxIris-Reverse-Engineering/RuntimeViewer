@@ -7,7 +7,7 @@ import SnapKit
 
 /// The Inspector's References tab: who calls the member at the content pane's insertion point,
 /// what it calls, and which functions use the type on screen — a section each, one level deep and in
-/// the object's own image, with Show in Find Navigator for the whole tree across every image. The
+/// the object's own image, with Show in Find Navigator for the whole tree across every indexed image. The
 /// sections stack in a page that scrolls; each list grows to fit its rows up to a cap and scrolls
 /// inside it past that.
 final class InspectorReferencesViewController: BaseEffectViewController<InspectorReferencesViewModel> {
@@ -94,7 +94,7 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
         scopeLabel.do {
             $0.font = .systemFont(ofSize: 11)
             $0.textColor = .secondaryLabelColor
-            $0.toolTip = "Show in Find Navigator searches every image"
+            $0.toolTip = "Show in Find Navigator searches every indexed image"
         }
 
         hintLabel.do {

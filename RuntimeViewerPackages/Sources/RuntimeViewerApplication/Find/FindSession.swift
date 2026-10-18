@@ -4,6 +4,7 @@ import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
+import RuntimeViewerSettings
 
 /// The Find navigator's state for one document: the query in force, the
 /// results it produced, and the search running to produce them.
@@ -39,10 +40,11 @@ import RuntimeViewerArchitectures
 /// Call Hierarchy, Callees and Type References show a tree that loads a
 /// level each time a row is first expanded (`FindCrossReferenceTree`): the
 /// search finds the roots, the roots it opens load at once, and every other
-/// level waits for its row. One level loads at a time — each is a scan that
-/// already keeps every core but one busy — in the order the rows were
-/// expanded. Their scope limits where callers and references are looked
-/// for; Callees reads the one function a row stands for.
+/// level waits for its row. One level loads at a time, in the order the rows
+/// were expanded: each is a scan of the indexed images in scope, as many at
+/// once as the Max Concurrent Scans setting allows. Their scope limits where
+/// callers and references are looked for — never past the indexed images —
+/// and Callees reads the one function a row stands for.
 @MainActor
 @Loggable(.private)
 public final class FindSession {
@@ -173,6 +175,9 @@ public final class FindSession {
     @Dependency(\.appDefaults)
     private var appDefaults
 
+    @Dependency(\.settings)
+    private var settings
+
     /// The cross-reference tree on screen; `nil` for any other search.
     private var crossReferenceTree: FindCrossReferenceTree?
 
@@ -192,7 +197,7 @@ public final class FindSession {
     private var crossReferenceLoadProgress: (scannedImageCount: Int, totalImageCount: Int)?
 
     /// The images the scope of the tree on screen stood for when it ran; `nil`
-    /// for every image.
+    /// for every indexed image.
     private var crossReferenceScopeImagePaths: Set<String>?
 
     /// The roots' term searched indexed images whose corpus is not built.
@@ -883,10 +888,11 @@ public final class FindSession {
             crossReferenceLoadProgress = nil
             crossReferenceTree?.setLoadState(.loading, of: identifier)
             let scopes = crossReferenceScopes()
+            let maximumConcurrentScans = settings.search.maximumConcurrentCrossReferenceScans
             crossReferenceLoadTask = Task { [weak self] in
                 let outcome: Result<RuntimeCrossReferenceQueryResult, any Swift.Error>
                 do {
-                    outcome = .success(try await Self.loadLevel(request, direction: direction, scopes: scopes, engine: engine) { [weak self] progress in
+                    outcome = .success(try await Self.loadLevel(request, direction: direction, scopes: scopes, maximumConcurrentScans: maximumConcurrentScans, engine: engine) { [weak self] progress in
                         await self?.crossReferenceLevelDidProgress(progress, from: run)
                     })
                 } catch {
@@ -902,11 +908,13 @@ public final class FindSession {
 
     /// One level: a row's callers, its callees with the runtime helper calls
     /// among them, or the functions referencing a type — over each of
-    /// `scopes` in turn, each image of a scope naming several asked for alone.
+    /// `scopes` in turn, each image of a scope naming several asked for alone,
+    /// and at most `maximumConcurrentScans` images scanned at once.
     private nonisolated static func loadLevel(
         _ request: FindCrossReferenceTree.LoadRequest,
         direction: FindCrossReferenceDirection,
         scopes: [RuntimeCrossReferenceScope],
+        maximumConcurrentScans: Int,
         engine: RuntimeEngine,
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
     ) async throws -> RuntimeCrossReferenceQueryResult {
@@ -921,7 +929,7 @@ public final class FindSession {
                 isComplete = false
                 break
             }
-            let options = RuntimeCrossReferenceQueryOptions(resultLimit: remainingLimit)
+            let options = RuntimeCrossReferenceQueryOptions(resultLimit: remainingLimit, maximumConcurrentScans: maximumConcurrentScans)
             // A scope of one image reports nothing in between; one of several
             // reports each image as it is done instead.
             let silentProgress: @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void = { _ in }
@@ -978,14 +986,14 @@ public final class FindSession {
         updateCrossReferenceSearchingState()
     }
 
-    /// The engine's scopes for the tree's levels: every image, or each image
-    /// the scope names, which the engine scans one at a time or all together.
-    /// Each image is asked for by its own path, which the process serving the
-    /// engine resolves; the results name images as that process does, which
-    /// the paths of a scope may spell otherwise.
+    /// The engine's scopes for the tree's levels: every indexed image, or each
+    /// image the scope names, which the engine scans one at a time or all
+    /// together. Each image is asked for by its own path, which the process
+    /// serving the engine resolves; the results name images as that process
+    /// does, which the paths of a scope may spell otherwise.
     private func crossReferenceScopes() -> [RuntimeCrossReferenceScope] {
         guard let scopeImagePaths = crossReferenceScopeImagePaths.map(canonicalImagePaths) else {
-            return [.allImages]
+            return [.indexedImages]
         }
         return scopeImagePaths.sorted().map { .image(path: $0) }
     }
