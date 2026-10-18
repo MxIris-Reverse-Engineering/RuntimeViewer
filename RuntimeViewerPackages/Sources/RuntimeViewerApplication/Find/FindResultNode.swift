@@ -217,21 +217,36 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
     }
 
     #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    /// A one-line title in one colour.
     private static func plainTitle(_ text: String, color: NSColor) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: FindResultCellStyle.titleFont, .foregroundColor: color])
+        NSAttributedString(string: text, attributes: [
+            .font: FindResultCellStyle.titleFont,
+            .foregroundColor: color,
+            .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
+        ])
     }
 
     /// `Name  image` — the type's name, then the image it is in, the way a
-    /// file row shows its group.
+    /// file row shows its group — on one line.
     private static func titleWithSubtitle(_ title: String, subtitle: String) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: title, attributes: [.font: FindResultCellStyle.titleFont, .foregroundColor: FindResultCellStyle.titleColor])
+        let result = NSMutableAttributedString(string: title, attributes: [
+            .font: FindResultCellStyle.titleFont,
+            .foregroundColor: FindResultCellStyle.titleColor,
+            .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
+        ])
         if !subtitle.isEmpty {
-            result.append(NSAttributedString(string: FindResultCellStyle.subtitleSeparator + subtitle, attributes: [.font: FindResultCellStyle.subtitleFont, .foregroundColor: FindResultCellStyle.subtitleColor]))
+            result.append(NSAttributedString(string: FindResultCellStyle.subtitleSeparator + subtitle, attributes: [
+                .font: FindResultCellStyle.subtitleFont,
+                .foregroundColor: FindResultCellStyle.subtitleColor,
+                .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
+            ]))
         }
         return result
     }
 
-    /// The line with the hit set apart in the emphasis font and colour.
+    /// The line with the hit set apart in the emphasis font and colour. It
+    /// keeps the default paragraph style, which wraps by word: a hit's line
+    /// may take a second line (`FindResultCellAppearance.allowsWrapping`).
     private static func emphasized(_ text: String, range: NSRange?) -> NSAttributedString {
         let result = NSMutableAttributedString(string: text, attributes: [.font: FindResultCellStyle.hitLineFont, .foregroundColor: FindResultCellStyle.hitLineColor])
         if let range, range.location >= 0, NSMaxRange(range) <= result.length {

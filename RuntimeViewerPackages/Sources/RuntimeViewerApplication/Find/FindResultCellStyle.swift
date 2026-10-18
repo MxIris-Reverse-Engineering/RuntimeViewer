@@ -132,6 +132,16 @@ public enum FindResultCellStyle {
     /// An unresolved relationship node's name, set in `titleFont`.
     static let unresolvedTitleColor: NSColor = .secondaryLabelColor
 
+    /// One line, cut at its end with an ellipsis. A title is an attributed string, which AppKit
+    /// breaks by its own paragraph style: the label's `lineBreakMode` applies to plain strings
+    /// alone (`NSCell.wraps`). Without it a title too long for its row wrapped by word, and the
+    /// row drew its first line only — `-` for an Objective-C method.
+    static let titleParagraphStyle: NSParagraphStyle = {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+        return paragraphStyle
+    }()
+
     // MARK: - Hit Rows
 
     /// A hit's line, or a member's declaration, outside the hit itself.

@@ -41,6 +41,9 @@ final class FindResultCellView: TableCellView {
         }
 
         titleLabel.do {
+            // A wrapping label is selectable; a row's title is not text to select. Selectable,
+            // a click turned it into the field editor, which drew the title anew on one line.
+            $0.isSelectable = false
             $0.alignment = .left
             $0.maximumNumberOfLines = 1
             $0.lineBreakMode = .byTruncatingTail

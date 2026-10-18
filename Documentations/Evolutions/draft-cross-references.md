@@ -840,6 +840,8 @@ Debug 构建里扫描器没有优化、比 Release 慢一个数量级以上，�
 
 Debug 构建里扫描器仍比 Release 慢几十倍，单扫 AppKit 仍要几秒，但只占一个核。
 
+**同一轮修的显示问题**：Inspector 的 Type References 里，ObjC 方法的行只显示「-」，长的 Swift 名字只显示前半截、没有省略号，点一下才显示全文。结果行（Find 导航页与 Inspector 共用 `FindResultCellView`）的标题是富文本，AppKit 按富文本自己的段落样式折行，标签上设的 `lineBreakMode = .byTruncatingTail` 只管纯文本（`NSCell.wraps` 的文档）；标题没带段落样式，就按词折行，单行标签只画出第一行，`-[…` 在「-」后就能断。侧栏、Inspector 的关系与特化标签都把截断写进了富文本，只有 Find 结果行漏了。改为单行标题带 `.byTruncatingTail` 的段落样式（命中行仍可折成两行）；标题标签不再可选中——`Label(wrappingLabelWithString:)` 建出来是可选中的，一点就换成字段编辑器重画，这就是「点一下才显示」。测试 `FindResultNodeTests.longTitlesTruncateOnOneLine` 按 Inspector 的宽度画一行 ObjC 方法的标题：修复前只画到 7.5 点（一个「-」），修复后排到行尾。「有时整行是空的」没有复现，看修复后是否还出现。
+
 ## 审查与修复（2026-10-17）
 
 第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
@@ -905,3 +907,4 @@ Debug 构建里扫描器仍比 Release 慢几十倍，单扫 AppKit 仍要几秒
 | 2026-10-17 | 会话共享进行中的扫描（`sharedScan`）；展开行时下一层延到主线程下一轮再启动 | Find 与 Inspector 同时查同一主题各扫一遍；展开时同步发布引起 RxSwift 重入警告。各带修复前失败的测试 |
 | 2026-10-18 | 交叉引用只扫引擎已索引的镜像：范围 `.allImages` 改名 `.indexedImages`，指定未索引的镜像报 `imageNotIndexed`；Callees 不受影响 | 用户原话：「分析只在已经索引的image里面进行，其他没加载索引的不分析」。取代 2026-10-16 第二轮的「跨库范围：整个共享缓存 + 已加载的非系统库」。Find 的范围本来就叫 Indexed Images |
 | 2026-10-18 | 同时扫几个镜像改由设置 Max Concurrent Scans 决定（1 到核数，默认 4），经查询选项带到服务进程、全进程共用；扫描移到会话自己的 utility 队列，不占协作线程池 | 用户原话：「具体用多少核让用户可以决定，跟后台索引一样，设置里面可以改」。取代 2026-10-16 的「第 3 步：并发数为核数减一」：那条要给同进程的其他请求留线程，可留下的只有一个协作线程 |
+| 2026-10-18 | 结果行的单行标题把截断写进富文本的段落样式；标题标签不可选中 | 用户试用时 Inspector 的行只显示「-」、点一下才显示。富文本不认标签的 `lineBreakMode`；与侧栏等其他列表的做法一致。用户回复「改」 |
