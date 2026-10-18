@@ -31,6 +31,17 @@ struct SearchSettingsView: View {
             }
 
             Section {
+                Toggle("Keep Cross References Ready", isOn: $search.isCrossReferencePreparationEnabled)
+
+                Stepper(
+                    "Resident Limit (MB)",
+                    value: $search.crossReferenceResidentByteLimitMegabytes.asDouble,
+                    in: 32...4096,
+                    step: 32,
+                    format: .number.precision(.fractionLength(0))
+                )
+                .disabled(!search.isCrossReferencePreparationEnabled)
+
                 Stepper(
                     "Max Concurrent Scans",
                     value: $search.maximumConcurrentCrossReferenceScans.asDouble,
@@ -40,7 +51,7 @@ struct SearchSettingsView: View {
             } header: {
                 Text("Cross References")
             } footer: {
-                Text("Call Hierarchy and Type References, in the Find navigator and the Inspector, read the machine code of indexed images only. Max Concurrent Scans limits how many images they read at the same time, each keeping a core busy: higher values finish sooner, lower ones leave more of the Mac to everything else.")
+                Text("Call Hierarchy and Type References, in the Find navigator and the Inspector, read the machine code of indexed images only. Kept ready, each indexed image is read once in the background — the Report navigator shows how far — and queries answer from what was read; past the resident limit, the images queried least recently are dropped and read again when a query needs them. Max Concurrent Scans limits how many images are read at the same time, each keeping a core busy: higher values finish sooner, lower ones leave more of the Mac to everything else.")
             }
         }
     }

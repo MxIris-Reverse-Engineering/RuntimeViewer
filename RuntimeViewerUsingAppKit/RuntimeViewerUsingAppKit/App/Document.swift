@@ -26,9 +26,12 @@ final class Document: NSDocument {
         // with what the engine indexes, and this document's Find session
         // follows it.
         _ = documentState.findCorpusCoordinator
-        // Keeps the app out of App Nap while either coordinator has work in
-        // progress, so the local-runtime service doing it keeps its priority
-        // when the user switches to another app.
+        // And the engine's cross-reference preparation, which reads every
+        // indexed image's cross references ahead of the queries.
+        _ = documentState.crossReferencePreparationCoordinator
+        // Keeps the app out of App Nap while any of the coordinators has work
+        // in progress, so the local-runtime service doing it keeps its
+        // priority when the user switches to another app.
         _ = documentState.backgroundWorkProcessActivity
     }
 

@@ -7,12 +7,14 @@ import CrossReferenceAnalysis
 /// Answers the cross-reference commands in the process that serves the
 /// engine, against that process's images.
 ///
-/// Callees decode one function. Callers and a type's references are found by
-/// an on-demand scan of the images the engine has indexed: those that cannot
-/// reference the subject are filtered out first — by the symbols they import,
-/// the images they link and the selectors they reference — and the rest are
-/// scanned a few at a time on the session's queue, keeping only the
-/// references to the subject. No other image's code is read.
+/// Callees decode one function. Callers and a type's references are found in
+/// the images the engine has indexed: those that cannot reference the subject
+/// are filtered out first — by the symbols they import, the images they link
+/// and the selectors they reference — and the rest are read a few at a time
+/// on the session's queue. Each is either scanned for the subject alone or,
+/// when the options ask for it, read from the image's prepared index, which
+/// is prepared now if it is not ready (`prepare(imageAt:options:reportProgress:)`
+/// prepares one ahead of the queries). No other image's code is read.
 struct CrossReferenceQuery {
     let engine: RuntimeEngine
     let session: CrossReferenceSession
@@ -145,9 +147,11 @@ struct CrossReferenceQuery {
             candidates,
             for: .references(keys),
             generation: generation,
+            analyzer: analyzer,
             options: options,
             reportProgress: reportProgress,
             find: { analyzer.references(to: keys, inImageAt: $0) },
+            findInIndex: { $0.references(to: keys) },
             convert: { matcher.callerReferences(from: $0, analyzer: analyzer) }
         )
         CrossReferenceQueryLog.answered(
@@ -242,9 +246,11 @@ struct CrossReferenceQuery {
             candidates,
             for: type.scanKey,
             generation: generation,
+            analyzer: analyzer,
             options: options,
             reportProgress: reportProgress,
             find: { type.references(inImageAt: $0, analyzer: analyzer) },
+            findInIndex: { type.references(in: $0, analyzer: analyzer) },
             convert: { TypeReferenceConversion.references(from: $0, to: target, analyzer: analyzer) }
         )
         CrossReferenceQueryLog.answered(
@@ -293,6 +299,20 @@ struct CrossReferenceQuery {
             }
         }
 
+        /// What ``references(inImageAt:analyzer:)`` finds, read from the
+        /// image's prepared index.
+        func references(in index: CodeReferenceIndex, analyzer: CrossReferenceAnalyzer) -> [CodeReference] {
+            switch identity {
+            case .objectiveCClass(let name, let location):
+                return index.references(to: [.objectiveCClass(name)]).filter {
+                    if case .objectiveCClass(_, location) = $0.target { return true }
+                    return false
+                }
+            case .swiftType(let identity):
+                return analyzer.references(toSwiftType: identity, in: index)
+            }
+        }
+
         func candidateImages(among candidates: some Sequence<Int>, analyzer: CrossReferenceAnalyzer) -> [Int] {
             switch identity {
             case .objectiveCClass(_, let location):
@@ -325,29 +345,69 @@ struct CrossReferenceQuery {
         }
     }
 
+    // MARK: - Preparation
+
+    /// Prepares the image's index ahead of the queries that will read it —
+    /// or finds it kept, or joins the preparation under way — and keeps it
+    /// within `options.residentByteLimit`. The image must be indexed.
+    func prepare(
+        imageAt path: String,
+        options: RuntimeCrossReferencePreparationOptions,
+        reportProgress: @escaping @Sendable (RuntimeCrossReferencePreparationProgress) async -> Void
+    ) async throws -> RuntimeCrossReferencePreparation {
+        if let maximumConcurrentScans = options.maximumConcurrentScans {
+            session.setMaximumConcurrentScans(maximumConcurrentScans)
+        }
+        session.setPreparedByteLimit(options.residentByteLimit)
+        let (analyzer, generation) = try session.currentAnalyzer()
+        let imageIndex = try Self.indexedImageIndex(forPath: path, among: try await indexedImageIndices(in: analyzer), in: analyzer)
+        let index = try await session.preparedIndex(ofImageAt: imageIndex, generation: generation, isPrioritized: options.isPrioritized, reportProgress: reportProgress) { shouldContinue in
+            analyzer.referenceIndex(ofImageAt: imageIndex, reportingProgress: shouldContinue)
+        }
+        // Building the index kept the image's function table.
+        session.noteFunctionTables(ofImagesAt: [imageIndex], generation: generation)
+        return RuntimeCrossReferencePreparation(referenceCount: index.referenceCount, byteCount: index.approximateByteCount)
+    }
+
+    /// Sets the most bytes of prepared indexes the session keeps; zero drops
+    /// them all.
+    func setPreparedByteLimit(_ byteLimit: Int) {
+        session.setPreparedByteLimit(byteLimit)
+    }
+
     // MARK: - Scanning
 
-    /// Scans `candidates` for what `find` keeps, and gathers what `convert`
-    /// makes of it: the images an earlier scan for `scanKey` covered first,
-    /// from the session, then the rest on the session's queue, reporting
-    /// after each image and stopping at the limit.
+    /// Reads `candidates` for what `find` keeps, and gathers what `convert`
+    /// makes of it, reporting after each image and stopping at the limit.
+    ///
+    /// When the options ask for prepared indexes, each image is read from its
+    /// index — `findInIndex` — prepared now, ahead of those waiting, when it
+    /// is not ready. Otherwise the images an earlier scan for `scanKey`
+    /// covered come first, from the session, and the rest are scanned on the
+    /// session's queue.
     private func scan(
         _ candidates: [Int],
         for scanKey: CrossReferenceScanKey,
         generation: Int,
+        analyzer: CrossReferenceAnalyzer,
         options: RuntimeCrossReferenceQueryOptions,
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void,
         find: @escaping @Sendable (Int) -> [CodeReference],
+        findInIndex: @escaping @Sendable (CodeReferenceIndex) -> [CodeReference],
         convert: @escaping @Sendable ([CodeReference]) -> [RuntimeCrossReference]
     ) async throws -> (result: RuntimeCrossReferenceQueryResult, cachedImageCount: Int) {
         if let maximumConcurrentScans = options.maximumConcurrentScans {
             session.setMaximumConcurrentScans(maximumConcurrentScans)
         }
+        let usesPreparedIndexes = options.preparedIndexByteLimit != nil
+        if let preparedIndexByteLimit = options.preparedIndexByteLimit {
+            session.setPreparedByteLimit(preparedIndexByteLimit)
+        }
         var collector = ReferenceCollector(totalImageCount: candidates.count, resultLimit: options.resultLimit)
 
         // What earlier scans for the same subject found is reported first, in
-        // one event.
-        let scanned = session.scannedReferences(for: scanKey, generation: generation)
+        // one event. Prepared indexes answer every subject and need none of it.
+        let scanned = usesPreparedIndexes ? [:] : session.scannedReferences(for: scanKey, generation: generation)
         let remainingCandidates = candidates.filter { scanned[$0] == nil }
         let cachedImageIndices = candidates.filter { scanned[$0] != nil }
         if !cachedImageIndices.isEmpty {
@@ -368,6 +428,16 @@ struct CrossReferenceQuery {
                     guard let imageIndex = nextCandidate.next() else { return }
                     group.addTask { [session] in
                         try Task.checkCancellation()
+                        if usesPreparedIndexes {
+                            let index = try await session.preparedIndex(ofImageAt: imageIndex, generation: generation, isPrioritized: true) { shouldContinue in
+                                analyzer.referenceIndex(ofImageAt: imageIndex, reportingProgress: shouldContinue)
+                            }
+                            // Naming what the index answers needs the image's
+                            // function table, which a replaced analyzer dropped.
+                            analyzer.keepFunctionTable(ofImageAt: imageIndex)
+                            let found = findInIndex(index)
+                            return (imageIndex, found, convert(found))
+                        }
                         let found = await session.sharedScan(of: scanKey, inImageAt: imageIndex, generation: generation) {
                             find(imageIndex)
                         }
@@ -378,7 +448,11 @@ struct CrossReferenceQuery {
                 while let scan = try await group.next() {
                     try Task.checkCancellation()
                     let (imageIndex, found, converted) = scan
-                    session.record(found, for: scanKey, inImageAt: imageIndex, generation: generation)
+                    if usesPreparedIndexes {
+                        session.noteFunctionTables(ofImagesAt: [imageIndex], generation: generation)
+                    } else {
+                        session.record(found, for: scanKey, inImageAt: imageIndex, generation: generation)
+                    }
                     let report = collector.add([(imageIndex, converted)])
                     await reportProgress(report)
                     if collector.isFull {

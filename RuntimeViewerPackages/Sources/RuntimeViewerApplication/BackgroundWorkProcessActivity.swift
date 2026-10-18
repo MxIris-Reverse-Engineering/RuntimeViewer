@@ -22,7 +22,7 @@ import RuntimeViewerArchitectures
 public final class BackgroundWorkProcessActivity {
     static let options: ProcessInfo.ActivityOptions = .userInitiatedAllowingIdleSystemSleep
 
-    static let reason = "Indexing images and building their searchable interfaces"
+    static let reason = "Indexing images, building their searchable interfaces and preparing their cross references"
 
     private let scheduler: any ProcessActivityScheduling
 

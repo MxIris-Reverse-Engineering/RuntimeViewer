@@ -49,4 +49,38 @@ extension RuntimeEngine {
     ) async throws -> RuntimeCrossReferenceQueryResult {
         try await dispatch(RuntimeCrossReferences.TypeReferencesCommand(object: object, scope: scope, options: options), onProgress: reportProgress)
     }
+
+    /// Prepares the cross references of an image the engine has indexed,
+    /// ahead of the queries that will read them: the engine's process scans
+    /// the image once and keeps what callers and type queries read, so that
+    /// a query naming ``RuntimeCrossReferenceQueryOptions/preparedIndexByteLimit``
+    /// answers from it without scanning. An image already prepared, or being
+    /// prepared for a query, is not prepared again.
+    ///
+    /// `reportProgress` hears how many of the image's functions are scanned
+    /// as the scan goes. Throws `CancellationError` when cancelled — which
+    /// stops the preparation where it runs, unless a query waits for it — and
+    /// ``RuntimeCrossReferenceError/imageNotIndexed(path:)`` for an image the
+    /// engine has not indexed.
+    public func prepareCrossReferences(
+        forImageAt imagePath: String,
+        options: RuntimeCrossReferencePreparationOptions,
+        reportProgress: (@Sendable (RuntimeCrossReferencePreparationProgress) async -> Void)? = nil
+    ) async throws -> RuntimeCrossReferencePreparation {
+        switch try await dispatch(RuntimeCrossReferences.PrepareCommand(imagePath: imagePath, options: options), onProgress: reportProgress) {
+        case .prepared(let preparation):
+            return preparation
+        case .cancelled:
+            throw CancellationError()
+        case .imageNotIndexed:
+            throw RuntimeCrossReferenceError.imageNotIndexed(path: imagePath)
+        }
+    }
+
+    /// Sets the most bytes of prepared cross references the engine's process
+    /// keeps, dropping the images queried least recently past it; zero drops
+    /// them all.
+    public func setPreparedCrossReferenceByteLimit(_ byteLimit: Int) async throws {
+        _ = try await dispatch(RuntimeCrossReferences.SetPreparedByteLimitCommand(byteLimit: byteLimit))
+    }
 }

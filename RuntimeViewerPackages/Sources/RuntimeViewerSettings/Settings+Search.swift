@@ -33,10 +33,34 @@ extension Settings {
         @Default(4)
         public var maximumConcurrentCrossReferenceScans: Int
 
+        /// Keep Cross References Ready: whether the engine's process reads the
+        /// cross references of every indexed image ahead of the queries, which
+        /// then answer from what it read instead of scanning. Off drops what it
+        /// read, and queries scan again.
+        @Default(true)
+        public var isCrossReferencePreparationEnabled: Bool
+
+        /// Resident budget for prepared cross references, in megabytes. Past
+        /// it the images queried least recently are dropped, and read again
+        /// when a query needs them. AppKit's take about 21 MB.
+        @Default(256)
+        public var crossReferenceResidentByteLimitMegabytes: Int
+
         public static let `default` = Self()
 
         public var residentByteLimit: Int {
             max(0, residentByteLimitMegabytes) * 1024 * 1024
+        }
+
+        public var crossReferenceResidentByteLimit: Int {
+            max(0, crossReferenceResidentByteLimitMegabytes) * 1024 * 1024
+        }
+
+        /// What a cross-reference query sends as its prepared index byte limit:
+        /// the resident budget while Keep Cross References Ready is on, and
+        /// none — scan instead — while it is off.
+        public var preparedCrossReferenceByteLimit: Int? {
+            isCrossReferencePreparationEnabled ? crossReferenceResidentByteLimit : nil
         }
     }
 }

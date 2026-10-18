@@ -76,8 +76,8 @@ final class CrossReferenceSession: Sendable {
     ///
     /// An analyzer is a snapshot: images loaded outside the shared cache
     /// after it was made are not in it. When those have changed, a new
-    /// analyzer replaces it, its image indices may differ, and the scans
-    /// filed under the old generation are dropped.
+    /// analyzer replaces it, its image indices may differ, and the scans and
+    /// prepared indexes filed under the old generation are dropped.
     func currentAnalyzer() throws -> (analyzer: CrossReferenceAnalyzer, generation: Int) {
         let imagesOutsideSharedCache = self.imagesOutsideSharedCache()
         return try state.withLock { state in
@@ -94,6 +94,8 @@ final class CrossReferenceSession: Sendable {
             state.scans = [:]
             state.oversizedScanKeys = []
             state.scanByteCount = 0
+            state.preparedIndexes = [:]
+            state.preparedByteCount = 0
             return (analyzer, state.generation)
         }
     }
@@ -233,6 +235,227 @@ final class CrossReferenceSession: Sendable {
         return references
     }
 
+    // MARK: - Prepared indexes
+
+    /// Bytes of prepared indexes kept until a request brings another limit:
+    /// the Find corpus's default, about a dozen frameworks of AppKit's size.
+    static let defaultPreparedByteLimit = 256 << 20
+
+    /// The image's prepared index: the one kept, the one being prepared, or
+    /// one `build` prepares now on the session's queue. Every requester of an
+    /// image shares one preparation; a prioritized one — a query waiting —
+    /// moves it ahead of the preparations waiting, and the queries' own scans
+    /// go ahead of every preparation that is not prioritized.
+    ///
+    /// A requester that is cancelled stops waiting at once. A preparation
+    /// every requester has left is stopped: not started if it has not
+    /// started, given up between two progress reports if it has.
+    ///
+    /// The index is kept within the byte limit, least recently used dropped
+    /// first; one larger than the limit is returned and not kept.
+    func preparedIndex(
+        ofImageAt imageIndex: Int,
+        generation: Int,
+        isPrioritized: Bool,
+        reportProgress: (@Sendable (RuntimeCrossReferencePreparationProgress) async -> Void)? = nil,
+        build: @escaping @Sendable (_ shouldContinue: @escaping (_ scannedFunctionCount: Int, _ functionCount: Int) -> Bool) -> CodeReferenceIndex?
+    ) async throws -> CodeReferenceIndex {
+        if let ready = state.withLock({ Self.takeReadyIndex(ofImageAt: imageIndex, generation: generation, from: &$0) }) {
+            return ready
+        }
+        let key = PreparationKey(imageIndex: imageIndex, generation: generation)
+        let waiterIdentifier = UUID()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let immediateResult = state.withLock { state -> Result<CodeReferenceIndex, any Error>? in
+                    if Task.isCancelled { return .failure(CancellationError()) }
+                    if let ready = Self.takeReadyIndex(ofImageAt: imageIndex, generation: generation, from: &state) { return .success(ready) }
+                    if var preparation = state.preparations[key] {
+                        preparation.waiters[waiterIdentifier] = continuation
+                        preparation.progressHandlers[waiterIdentifier] = reportProgress
+                        preparation.isAbandoned = false
+                        if isPrioritized { preparation.operation.queuePriority = .veryHigh }
+                        state.preparations[key] = preparation
+                    } else {
+                        let operation = makePreparationOperation(for: key, isPrioritized: isPrioritized, build: build)
+                        var preparation = Preparation(operation: operation)
+                        preparation.waiters[waiterIdentifier] = continuation
+                        preparation.progressHandlers[waiterIdentifier] = reportProgress
+                        state.preparations[key] = preparation
+                        scanQueue.addOperation(operation)
+                    }
+                    return nil
+                }
+                if let immediateResult { continuation.resume(with: immediateResult) }
+            }
+        } onCancel: {
+            let continuation = state.withLock { state -> CheckedContinuation<CodeReferenceIndex, any Error>? in
+                guard var preparation = state.preparations[key], let continuation = preparation.waiters.removeValue(forKey: waiterIdentifier) else { return nil }
+                preparation.progressHandlers[waiterIdentifier] = nil
+                if preparation.waiters.isEmpty { preparation.isAbandoned = true }
+                state.preparations[key] = preparation
+                return continuation
+            }
+            continuation?.resume(throwing: CancellationError())
+        }
+    }
+
+    private func makePreparationOperation(
+        for key: PreparationKey,
+        isPrioritized: Bool,
+        build: @escaping @Sendable (_ shouldContinue: @escaping (Int, Int) -> Bool) -> CodeReferenceIndex?
+    ) -> Operation {
+        let operation = BlockOperation { [weak self] in
+            self?.runPreparation(for: key, build: build)
+        }
+        operation.queuePriority = isPrioritized ? .veryHigh : .low
+        return operation
+    }
+
+    private func runPreparation(for key: PreparationKey, build: @escaping @Sendable (_ shouldContinue: @escaping (Int, Int) -> Bool) -> CodeReferenceIndex?) {
+        let shouldStart = state.withLock { state -> Bool in
+            guard let preparation = state.preparations[key] else { return false }
+            if preparation.isAbandoned {
+                state.preparations[key] = nil
+                return false
+            }
+            state.startedPreparationCount += 1
+            return true
+        }
+        guard shouldStart else { return }
+
+        let index = build { [self] scannedFunctionCount, functionCount in
+            let (handlers, isAbandoned) = state.withLock { state in
+                (state.preparations[key].map { Array($0.progressHandlers.values) } ?? [], state.preparations[key]?.isAbandoned ?? true)
+            }
+            if !handlers.isEmpty {
+                let progress = RuntimeCrossReferencePreparationProgress(scannedFunctionCount: scannedFunctionCount, functionCount: functionCount)
+                Task {
+                    for handler in handlers {
+                        await handler(progress)
+                    }
+                }
+            }
+            return !isAbandoned
+        }
+
+        enum Completion {
+            case answer([CheckedContinuation<CodeReferenceIndex, any Error>], CodeReferenceIndex)
+            case restart(isPrioritized: Bool)
+            case none
+        }
+        let completion = state.withLock { state -> Completion in
+            guard let preparation = state.preparations[key] else { return .none }
+            guard let index else {
+                // Stopped because every requester had left; one may have come
+                // back meanwhile.
+                guard !preparation.waiters.isEmpty else {
+                    state.preparations[key] = nil
+                    return .none
+                }
+                return .restart(isPrioritized: preparation.operation.queuePriority == .veryHigh)
+            }
+            state.preparations[key] = nil
+            if state.generation == key.generation {
+                keep(index, from: &state)
+            }
+            return .answer(Array(preparation.waiters.values), index)
+        }
+        switch completion {
+        case .answer(let continuations, let index):
+            for continuation in continuations {
+                continuation.resume(returning: index)
+            }
+        case .restart(let isPrioritized):
+            let operation = makePreparationOperation(for: key, isPrioritized: isPrioritized, build: build)
+            state.withLock { state in
+                state.preparations[key]?.operation = operation
+                state.preparations[key]?.isAbandoned = false
+            }
+            scanQueue.addOperation(operation)
+        case .none:
+            break
+        }
+    }
+
+    /// The image's kept index, marked as just used.
+    private static func takeReadyIndex(ofImageAt imageIndex: Int, generation: Int, from state: inout State) -> CodeReferenceIndex? {
+        guard state.generation == generation, var prepared = state.preparedIndexes[imageIndex] else { return nil }
+        state.useCounter += 1
+        prepared.lastUse = state.useCounter
+        state.preparedIndexes[imageIndex] = prepared
+        return prepared.index
+    }
+
+    private func keep(_ index: CodeReferenceIndex, from state: inout State) {
+        let byteCount = index.approximateByteCount
+        guard byteCount <= state.preparedByteLimit else { return }
+        if let replaced = state.preparedIndexes[index.imageIndex] {
+            state.preparedByteCount -= replaced.index.approximateByteCount
+        }
+        state.useCounter += 1
+        state.preparedIndexes[index.imageIndex] = PreparedIndex(index: index, lastUse: state.useCounter)
+        state.preparedByteCount += byteCount
+        Self.evictLeastRecentlyUsedIndexes(from: &state, keeping: index.imageIndex)
+    }
+
+    private static func evictLeastRecentlyUsedIndexes(from state: inout State, keeping keptImageIndex: Int?) {
+        while state.preparedByteCount > state.preparedByteLimit {
+            guard let oldest = state.preparedIndexes.filter({ $0.key != keptImageIndex }).min(by: { $0.value.lastUse < $1.value.lastUse }) else { return }
+            state.preparedByteCount -= oldest.value.index.approximateByteCount
+            state.preparedIndexes[oldest.key] = nil
+        }
+    }
+
+    /// Sets the most bytes of prepared indexes kept, dropping the least
+    /// recently used past it; zero drops every one.
+    func setPreparedByteLimit(_ byteLimit: Int) {
+        state.withLock { state in
+            state.preparedByteLimit = max(0, byteLimit)
+            Self.evictLeastRecentlyUsedIndexes(from: &state, keeping: nil)
+        }
+    }
+
+    /// The images with a prepared index kept now; for tests.
+    var preparedImageIndices: Set<Int> {
+        state.withLock { Set($0.preparedIndexes.keys) }
+    }
+
+    /// The bytes of prepared indexes kept now; for tests.
+    var preparedByteCount: Int {
+        state.withLock { $0.preparedByteCount }
+    }
+
+    /// How many preparations started building; for tests.
+    var startedPreparationCount: Int {
+        state.withLock { $0.startedPreparationCount }
+    }
+
+    /// Whether a preparation is queued or under way; for tests.
+    var hasPreparationsUnderWay: Bool {
+        state.withLock { !$0.preparations.isEmpty }
+    }
+
+    /// One image's preparation, in one generation.
+    private struct PreparationKey: Hashable {
+        let imageIndex: Int
+        let generation: Int
+    }
+
+    /// A preparation queued or under way, and who waits for it.
+    private struct Preparation {
+        var operation: Operation
+        var waiters: [UUID: CheckedContinuation<CodeReferenceIndex, any Error>] = [:]
+        var progressHandlers: [UUID: @Sendable (RuntimeCrossReferencePreparationProgress) async -> Void] = [:]
+        /// Every requester left: the operation stops instead of building.
+        var isAbandoned = false
+    }
+
+    private struct PreparedIndex {
+        let index: CodeReferenceIndex
+        var lastUse: UInt64
+    }
+
     /// One image's scan for one key, in one generation.
     private struct InFlightScan: Hashable {
         let key: CrossReferenceScanKey
@@ -259,6 +482,12 @@ final class CrossReferenceSession: Sendable {
         var startedScanCount = 0
         /// The scans running now, which a query asking for the same waits for.
         var inFlightScans: [InFlightScan: Task<[CodeReference], Never>] = [:]
+        /// The prepared indexes kept, by image, in the current generation.
+        var preparedIndexes: [Int: PreparedIndex] = [:]
+        var preparedByteCount = 0
+        var preparedByteLimit = CrossReferenceSession.defaultPreparedByteLimit
+        var preparations: [PreparationKey: Preparation] = [:]
+        var startedPreparationCount = 0
     }
 }
 

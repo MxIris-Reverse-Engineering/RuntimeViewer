@@ -20,4 +20,13 @@ extension RuntimeEngine.CommandName {
     /// Which functions reference a type, across the images of a scope.
     /// Reports progress like the callers, and is withdrawn the same way.
     static let crossReferenceTypeReferences = Self("crossReferenceTypeReferences")
+
+    /// Prepares an indexed image's cross references ahead of the queries
+    /// that will read them. Reports the functions scanned, and is withdrawn
+    /// like the callers.
+    static let crossReferencePrepare = Self("crossReferencePrepare")
+
+    /// Sets the most bytes of prepared cross references the serving process
+    /// keeps; zero drops them all.
+    static let crossReferenceSetPreparedByteLimit = Self("crossReferenceSetPreparedByteLimit")
 }

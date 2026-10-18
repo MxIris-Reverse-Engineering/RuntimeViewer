@@ -889,10 +889,18 @@ public final class FindSession {
             crossReferenceTree?.setLoadState(.loading, of: identifier)
             let scopes = crossReferenceScopes()
             let maximumConcurrentScans = settings.search.maximumConcurrentCrossReferenceScans
+            let preparedIndexByteLimit = settings.search.preparedCrossReferenceByteLimit
             crossReferenceLoadTask = Task { [weak self] in
                 let outcome: Result<RuntimeCrossReferenceQueryResult, any Swift.Error>
                 do {
-                    outcome = .success(try await Self.loadLevel(request, direction: direction, scopes: scopes, maximumConcurrentScans: maximumConcurrentScans, engine: engine) { [weak self] progress in
+                    outcome = .success(try await Self.loadLevel(
+                        request,
+                        direction: direction,
+                        scopes: scopes,
+                        maximumConcurrentScans: maximumConcurrentScans,
+                        preparedIndexByteLimit: preparedIndexByteLimit,
+                        engine: engine
+                    ) { [weak self] progress in
                         await self?.crossReferenceLevelDidProgress(progress, from: run)
                     })
                 } catch {
@@ -909,12 +917,14 @@ public final class FindSession {
     /// One level: a row's callers, its callees with the runtime helper calls
     /// among them, or the functions referencing a type — over each of
     /// `scopes` in turn, each image of a scope naming several asked for alone,
-    /// and at most `maximumConcurrentScans` images scanned at once.
+    /// at most `maximumConcurrentScans` images read at once — from their
+    /// prepared cross references while `preparedIndexByteLimit` is set.
     private nonisolated static func loadLevel(
         _ request: FindCrossReferenceTree.LoadRequest,
         direction: FindCrossReferenceDirection,
         scopes: [RuntimeCrossReferenceScope],
         maximumConcurrentScans: Int,
+        preparedIndexByteLimit: Int?,
         engine: RuntimeEngine,
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
     ) async throws -> RuntimeCrossReferenceQueryResult {
@@ -929,7 +939,7 @@ public final class FindSession {
                 isComplete = false
                 break
             }
-            let options = RuntimeCrossReferenceQueryOptions(resultLimit: remainingLimit, maximumConcurrentScans: maximumConcurrentScans)
+            let options = RuntimeCrossReferenceQueryOptions(resultLimit: remainingLimit, maximumConcurrentScans: maximumConcurrentScans, preparedIndexByteLimit: preparedIndexByteLimit)
             // A scope of one image reports nothing in between; one of several
             // reports each image as it is done instead.
             let silentProgress: @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void = { _ in }

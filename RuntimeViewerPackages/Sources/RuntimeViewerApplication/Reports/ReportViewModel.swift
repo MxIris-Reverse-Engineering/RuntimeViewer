@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
 import MemberwiseInit
@@ -8,15 +9,16 @@ import MemberwiseInit
 import RuntimeViewerSettings
 #endif
 
-/// The Report navigator page: the background indexer's batches and the Find navigator's corpus
-/// builds, as Xcode's Report navigator lists builds and runs — one outline, each kind of work a
-/// first-level row, the newest work first, a spinner on whatever is still running.
+/// The Report navigator page: the background indexer's batches, the Find navigator's corpus
+/// builds and the cross references prepared ahead of its queries, as Xcode's Report navigator
+/// lists builds and runs — one outline, each kind of work a first-level row, the newest work
+/// first, a spinner on whatever is still running.
 ///
 /// Generic over the sidebar level's route because the page is a tab of both levels; both read the
-/// `RuntimeBackgroundIndexingCoordinator` and `FindCorpusCoordinator` of the engine the document is
-/// on, so the two pages always agree — and so does every window on that engine, since the engine's
-/// documents share both (`RuntimeEngineBackgroundWork`). Only windows on different engines show
-/// different Reports.
+/// `RuntimeBackgroundIndexingCoordinator`, `FindCorpusCoordinator` and
+/// `CrossReferencePreparationCoordinator` of the engine the document is on, so the two pages
+/// always agree — and so does every window on that engine, since the engine's documents share them
+/// (`RuntimeEngineBackgroundWork`). Only windows on different engines show different Reports.
 public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
     @MemberwiseInit(.public)
     public struct Input {
@@ -69,6 +71,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
     @RxObserved
     private var isCorpusEnabled: Bool = true
 
+    @RxObserved
+    private var isCrossReferencePreparationEnabled: Bool = true
+
     /// The filter bar's text and clock toggle as last reported, kept here instead of being combined
     /// straight from the input: the filter field's `rx.stringValue` reports only what is typed into
     /// it, so an untouched field says nothing at all, and an outline waiting on it stays empty.
@@ -93,6 +98,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         let treeBuilder = treeBuilder
         let isIndexingEnabled = $isIndexingEnabled.asObservable()
         let isCorpusEnabled = $isCorpusEnabled.asObservable()
+        let isCrossReferencePreparationEnabled = $isCrossReferencePreparationEnabled.asObservable()
         let isVisible = input.isVisible.asObservable().distinctUntilChanged()
         // The coordinators of the engine the document is on, again after every move to another
         // engine: `.switchEngine` moves the document onto the new engine's before it assigns the
@@ -100,7 +106,11 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         let coordinators = documentState.$runtimeEngine.asObservable()
             .map { _ in
                 MainActor.assumeIsolated {
-                    (indexing: documentState.backgroundIndexingCoordinator, corpus: documentState.findCorpusCoordinator)
+                    (
+                        indexing: documentState.backgroundIndexingCoordinator,
+                        corpus: documentState.findCorpusCoordinator,
+                        crossReferences: documentState.crossReferencePreparationCoordinator
+                    )
                 }
             }
             .share(replay: 1)
@@ -144,8 +154,28 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                         )
                     }
                 }
-                return Observable.combineLatest(indexingCategory, corpusCategory) { indexingCategory, corpusCategory in
-                    [indexingCategory, corpusCategory].compactMap { $0 }
+                let crossReferencePreparationCoordinator = coordinators.crossReferences
+                let crossReferenceCategory = Observable.combineLatest(
+                    crossReferencePreparationCoordinator.$preparationStatesByImagePath.asObservable(),
+                    crossReferencePreparationCoordinator.$followedImagePaths.asObservable(),
+                    crossReferencePreparationCoordinator.$finishedPreparations.asObservable(),
+                    crossReferencePreparationCoordinator.$isUnsupportedByEngine.asObservable(),
+                    isCrossReferencePreparationEnabled
+                )
+                .observe(on: MainScheduler.instance)
+                .map { states, followedImagePaths, finishedPreparations, isUnsupportedByEngine, isEnabled in
+                    MainActor.assumeIsolated {
+                        treeBuilder.crossReferenceCategory(
+                            states: states,
+                            followedImagePaths: followedImagePaths,
+                            finishedPreparations: finishedPreparations,
+                            isUnsupportedByEngine: isUnsupportedByEngine,
+                            isEnabled: isEnabled
+                        )
+                    }
+                }
+                return Observable.combineLatest(indexingCategory, corpusCategory, crossReferenceCategory) { indexingCategory, corpusCategory, crossReferenceCategory in
+                    [indexingCategory, corpusCategory, crossReferenceCategory].compactMap { $0 }
                 }
             }
             .bind(to: $allNodes)
@@ -167,7 +197,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 documentState.backgroundIndexingCoordinator.cancelBatch(batchID)
             case .corpusBuild(let imagePath):
                 documentState.findCorpusCoordinator.cancelBuild(of: imagePath)
-            case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild:
+            case .crossReferencePreparation(let imagePath):
+                documentState.crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
+            case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .finishedCrossReferencePreparation:
                 break
             }
         }
@@ -181,12 +213,17 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             for imagePath in corpusCoordinator.followedImagePaths {
                 corpusCoordinator.cancelBuild(of: imagePath)
             }
+            let crossReferencePreparationCoordinator = documentState.crossReferencePreparationCoordinator
+            for imagePath in crossReferencePreparationCoordinator.followedImagePaths {
+                crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
+            }
         }
         .disposed(by: rx.disposeBag)
 
         input.clearHistory.emitOnNext {
             documentState.backgroundIndexingCoordinator.clearHistory()
             documentState.findCorpusCoordinator.clearFinishedBuilds()
+            documentState.crossReferencePreparationCoordinator.clearFinishedPreparations()
         }
         .disposed(by: rx.disposeBag)
 
@@ -243,8 +280,12 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             hasCancellableWork: $allNodes.asDriver().map { nodes in nodes.contains(where: ReportOutline.isCancellable) }.distinctUntilChanged(),
             hasHistory: coordinators
                 .flatMapLatest { coordinators in
-                    Observable.combineLatest(coordinators.indexing.historyObservable, coordinators.corpus.$finishedBuilds.asObservable()) { history, finishedBuilds in
-                        !history.isEmpty || !finishedBuilds.isEmpty
+                    Observable.combineLatest(
+                        coordinators.indexing.historyObservable,
+                        coordinators.corpus.$finishedBuilds.asObservable(),
+                        coordinators.crossReferences.$finishedPreparations.asObservable()
+                    ) { history, finishedBuilds, finishedPreparations in
+                        !history.isEmpty || !finishedBuilds.isEmpty || !finishedPreparations.isEmpty
                     }
                 }
                 .asDriver(onErrorJustReturn: false)
@@ -264,13 +305,14 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
     // MARK: - Settings
 
-    /// The two switches the outline shows a "Turned off in Settings" row for.
+    /// The switches the outline shows a "Turned off in Settings" row for.
     private struct FeatureSwitches: Equatable {
         let isIndexingEnabled: Bool
         let isCorpusEnabled: Bool
+        let isCrossReferencePreparationEnabled: Bool
     }
 
-    /// Follows the two switches for as long as the page lives: the first value arrives while
+    /// Follows the switches for as long as the page lives: the first value arrives while
     /// subscribing, every change after it on the main queue.
     private func bootstrapSettingsObservation() {
         #if canImport(RuntimeViewerSettings)
@@ -282,7 +324,11 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 // Main-actor state read from `tracking`'s synchronous first access, as
                 // `ContentTextViewModel` reads the transformer.
                 MainActor.assumeIsolated {
-                    FeatureSwitches(isIndexingEnabled: trackedSettings.indexing.isEnabled, isCorpusEnabled: trackedSettings.search.isCorpusEnabled)
+                    FeatureSwitches(
+                        isIndexingEnabled: trackedSettings.indexing.isEnabled,
+                        isCorpusEnabled: trackedSettings.search.isCorpusEnabled,
+                        isCrossReferencePreparationEnabled: trackedSettings.search.isCrossReferencePreparationEnabled
+                    )
                 }
             }
             .distinctUntilChanged()
@@ -294,6 +340,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                     }
                     if self.isCorpusEnabled != featureSwitches.isCorpusEnabled {
                         self.isCorpusEnabled = featureSwitches.isCorpusEnabled
+                    }
+                    if self.isCrossReferencePreparationEnabled != featureSwitches.isCrossReferencePreparationEnabled {
+                        self.isCrossReferencePreparationEnabled = featureSwitches.isCrossReferencePreparationEnabled
                     }
                 }
             }
@@ -428,6 +477,55 @@ enum ReportOutline {
         cellViewModel.update(icon: icon(forImagePath: finishedBuild.imagePath), title: FindScope.imageName(of: finishedBuild.imagePath), detail: detail, status: status, toolTip: toolTip)
     }
 
+    /// An image whose cross references are queued or being prepared. `isFollowed`: the engine's
+    /// preparation coordinator asked for it, so Cancel withdraws it.
+    static func configure(_ cellViewModel: ReportCellViewModel, forCrossReferencesOf imagePath: String, state: CrossReferencePreparationState, isFollowed: Bool) {
+        let detail: String
+        let status: ReportRowStatus
+        switch state {
+        case .preparing(let progress):
+            detail = progress.functionCount > 0
+                ? "\(progress.scannedFunctionCount * 100 / progress.functionCount)% · \(progress.scannedFunctionCount) of \(progress.functionCount) functions"
+                : "Starting"
+            status = .running
+        case .pending, .prepared, .failed:
+            detail = "Waiting"
+            status = .none
+        }
+        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: imagePath, isCancellable: isFollowed, isInProgress: true)
+    }
+
+    /// The Cross References category's one row while the engine's process cannot prepare cross
+    /// references — a RuntimeViewer older than the preparation on the other end. Queries still
+    /// scan there.
+    static func configureUnsupportedCrossReferenceRow(_ cellViewModel: ReportCellViewModel) {
+        cellViewModel.update(
+            icon: unsupportedIcon,
+            title: "Not supported by this source",
+            toolTip: "The RuntimeViewer this source runs is older than prepared cross references. Call Hierarchy and Type References scan its images on each query instead."
+        )
+    }
+
+    static func configure(_ cellViewModel: ReportCellViewModel, for finishedPreparation: CrossReferenceFinishedPreparation) {
+        let time = timeText(finishedPreparation.finishedAt)
+        let detail: String
+        let status: ReportRowStatus
+        var toolTip = finishedPreparation.imagePath
+        switch finishedPreparation.outcome {
+        case .prepared(let preparation):
+            detail = time
+            status = .none
+            toolTip += "\n\(preparation.referenceCount) references, \(ByteCountFormatter.string(fromByteCount: Int64(preparation.byteCount), countStyle: .memory))"
+        case .failed(let message):
+            detail = "Failed · \(time)"
+            status = .failed(message: message)
+        case .cancelled:
+            detail = "Cancelled · \(time)"
+            status = .none
+        }
+        cellViewModel.update(icon: icon(forImagePath: finishedPreparation.imagePath), title: FindScope.imageName(of: finishedPreparation.imagePath), detail: detail, status: status, toolTip: toolTip)
+    }
+
     // MARK: - Filtering
 
     /// The filter bar: a row stays when its title contains the filter string, or when one of its
@@ -492,11 +590,18 @@ enum ReportOutline {
         return false
     }
 
+    static func isPreparing(_ state: CrossReferencePreparationState) -> Bool {
+        if case .preparing = state { return true }
+        return false
+    }
+
     // MARK: - Text and icons
 
     static let indexingIcon: NSUIImage = SFSymbols(systemName: .squareStack3dDownRight).nsuiImgae
 
     static let corpusIcon: NSUIImage = SFSymbols(systemName: .magnifyingglass).nsuiImgae
+
+    static let crossReferenceIcon: NSUIImage = SFSymbols(systemName: .arrowTriangleBranch).nsuiImgae
 
     static let turnedOffIcon: NSUIImage = SFSymbols(systemName: .powerCircle).nsuiImgae
 

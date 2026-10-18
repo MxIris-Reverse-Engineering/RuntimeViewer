@@ -511,7 +511,8 @@ The project uses three Swift Package Manager packages:
   App Nap donates nothing: about thirty seconds after the user switches away, work the app is
   waiting on slows down four- to tenfold. So long-running work the app waits on has to keep the app
   out of App Nap. `BackgroundWorkProcessActivity` holds a user-initiated activity while
-  `DocumentState.reportActivity` is true (indexing batches, corpus builds); new work of that kind
+  `DocumentState.reportActivity` is true (indexing batches, corpus builds, cross-reference
+  preparations); new work of that kind
   reports through that signal or holds an activity of its own. Background:
   `Documentations/Evolutions/0037-local-runtime-xpc-service.md`; the transport:
   `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
@@ -548,11 +549,12 @@ The project uses three Swift Package Manager packages:
 
 - **Document-Based App**: NSDocument architecture; each document creates its own `DocumentState` instance
 - **Engine work is shared by the documents on the engine**: each engine has one background indexing
-  coordinator and one Find corpus coordinator, held by every document on it
-  (`RuntimeEngineBackgroundWork`, handed out per engine by `RuntimeEngineBackgroundWorkRegistry`), so
-  the windows on one engine show one Report — the same running work, the same history — and only
-  windows on different engines show different ones. `DocumentState.backgroundIndexingCoordinator` /
-  `findCorpusCoordinator` return the coordinators of the engine the document is on, and anything that
+  coordinator, one Find corpus coordinator and one cross-reference preparation coordinator, held by
+  every document on it (`RuntimeEngineBackgroundWork`, handed out per engine by
+  `RuntimeEngineBackgroundWorkRegistry`), so the windows on one engine show one Report — the same
+  running work, the same history — and only windows on different engines show different ones.
+  `DocumentState.backgroundIndexingCoordinator` / `findCorpusCoordinator` /
+  `crossReferencePreparationCoordinator` return the coordinators of the engine the document is on, and anything that
   binds to them follows `$runtimeEngine`: `.switchEngine` moves the document onto the new engine's
   work before it assigns the engine. A document that closes or moves away only leaves — nothing is
   cancelled while another document is on the engine — and the last one leaving cancels the engine's

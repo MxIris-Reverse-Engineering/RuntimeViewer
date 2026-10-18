@@ -325,6 +325,27 @@ struct FindViewModelCrossReferenceTests {
         #expect(expandedNodes.first?.children.first { $0.identifier == caller.identifier }?.children.allSatisfy { $0.identifier.hasPrefix(caller.identifier + "/") } == true)
     }
 
+    @Test("with Keep Cross References Ready on, a level reads the prepared cross references and lists what a scan lists")
+    func preparedLevelsListWhatScansList() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let member = try await Self.appendString(on: engine)
+        let query = Self.query(.callHierarchy, for: .member(member, declaration: nil))
+
+        func loadedCallerTitles(isPreparing: Bool) async throws -> [String] {
+            let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+            environment.settings.search.isCrossReferencePreparationEnabled = isPreparing
+            let (viewModel, output) = makeViewModel(in: environment)
+            defer { withExtendedLifetime(viewModel) {} }
+            recentQuerySelectedRelay.accept(query)
+            let nodes = try await nextValue(from: output.nodes, timeout: 120) { Self.loadedLevel(of: $0)?.isEmpty == false }
+            return try #require(Self.loadedLevel(of: nodes)).compactMap { Self.row(of: $0)?.title }
+        }
+        let scanned = try await loadedCallerTitles(isPreparing: false)
+        let prepared = try await loadedCallerTitles(isPreparing: true)
+        #expect(!prepared.isEmpty)
+        #expect(prepared == scanned)
+    }
+
     @Test("expanding a row starts its level on the main actor's next turn, never inside the expansion")
     func expansionNeverPublishesWhileThePageApplies() async throws {
         let engine = try await TestRuntimeEngine.shared()

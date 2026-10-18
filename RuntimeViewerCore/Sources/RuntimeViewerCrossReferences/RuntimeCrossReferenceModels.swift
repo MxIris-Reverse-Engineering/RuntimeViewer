@@ -155,13 +155,80 @@ public struct RuntimeCrossReferenceQueryOptions: Hashable, Codable, Sendable {
     /// count the latest query brought; `nil` leaves it as it is — four, until
     /// a query sets another. The app sends its Max Concurrent Scans setting.
     public var maximumConcurrentScans: Int?
+    /// When set, every image the query reads is answered from its prepared
+    /// cross references (``RuntimeEngine/prepareCrossReferences(forImageAt:options:reportProgress:)``)
+    /// — prepared now, ahead of those queued, for an image that has none —
+    /// and the engine's process keeps at most this many bytes of them. `nil`
+    /// scans each image for the query alone, as a query always did. The app
+    /// sends its Resident Limit while Keep Cross References Ready is on.
+    public var preparedIndexByteLimit: Int?
 
-    public init(includesRuntimeHelperCalls: Bool = false, receiverClassName: String? = nil, resultLimit: Int? = nil, maximumConcurrentScans: Int? = nil) {
+    public init(
+        includesRuntimeHelperCalls: Bool = false,
+        receiverClassName: String? = nil,
+        resultLimit: Int? = nil,
+        maximumConcurrentScans: Int? = nil,
+        preparedIndexByteLimit: Int? = nil
+    ) {
         self.includesRuntimeHelperCalls = includesRuntimeHelperCalls
         self.receiverClassName = receiverClassName
         self.resultLimit = resultLimit
         self.maximumConcurrentScans = maximumConcurrentScans
+        self.preparedIndexByteLimit = preparedIndexByteLimit
     }
+}
+
+/// How an image's cross references are prepared ahead of the queries that will
+/// read them.
+public struct RuntimeCrossReferencePreparationOptions: Hashable, Codable, Sendable {
+    /// The most bytes of prepared cross references the engine's process
+    /// keeps; past it, the images queried least recently are dropped, and
+    /// prepared again when a query needs them.
+    public var residentByteLimit: Int
+    /// As ``RuntimeCrossReferenceQueryOptions/maximumConcurrentScans``.
+    public var maximumConcurrentScans: Int?
+    /// Ahead of the preparations waiting: an image a document shows.
+    public var isPrioritized: Bool
+
+    public init(residentByteLimit: Int, maximumConcurrentScans: Int? = nil, isPrioritized: Bool = false) {
+        self.residentByteLimit = residentByteLimit
+        self.maximumConcurrentScans = maximumConcurrentScans
+        self.isPrioritized = isPrioritized
+    }
+}
+
+/// How far an image's preparation has come: its functions scanned so far.
+public struct RuntimeCrossReferencePreparationProgress: Hashable, Codable, Sendable {
+    public let scannedFunctionCount: Int
+    public let functionCount: Int
+
+    public init(scannedFunctionCount: Int, functionCount: Int) {
+        self.scannedFunctionCount = scannedFunctionCount
+        self.functionCount = functionCount
+    }
+}
+
+/// An image's prepared cross references.
+public struct RuntimeCrossReferencePreparation: Hashable, Codable, Sendable {
+    /// The references kept: the calls, sends, imported names and type
+    /// references a query reads.
+    public let referenceCount: Int
+    /// The memory they hold.
+    public let byteCount: Int
+
+    public init(referenceCount: Int, byteCount: Int) {
+        self.referenceCount = referenceCount
+        self.byteCount = byteCount
+    }
+}
+
+/// What a preparation request came to: a value, not a thrown error, so that
+/// a cancellation or an image that is not indexed survives the trip to a host
+/// in another process as what it is.
+enum RuntimeCrossReferencePreparationOutcome: Codable, Sendable {
+    case prepared(RuntimeCrossReferencePreparation)
+    case cancelled
+    case imageNotIndexed
 }
 
 /// How far a scan across images has come, with what it found since the last
