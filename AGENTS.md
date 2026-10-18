@@ -5,164 +5,76 @@ This file provides guidance to coding agents when working with code in this repo
 
 Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspecting Objective-C and Swift runtime interfaces. It serves as a modern alternative to RuntimeBrowser with features like Swift interface support, type-defined jumps, Xcode-style syntax highlighting, code injection capabilities, and MCP (Model Context Protocol) integration for LLM clients.
 
+## Where the Rules Live
+
+This file holds what nearly every task needs. A rule that matters only for one part of the tree lives in
+an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the directory it governs.
+**Read the file covering what you change before changing it:**
+
+| File | Covers |
+|------|--------|
+| `RuntimeViewerUsingAppKit/AGENTS.md` | The macOS app's UI layer — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and routes, AppKit views, the sidebar's floating bars, diagnosing flicker — and `AppDelegate` with the lifecycle controllers. It also governs the ViewModels and routes in `RuntimeViewerApplication` and the views in `RuntimeViewerUI` |
+| `RuntimeViewerPackages/Sources/AGENTS.md` | Points the UI code in `RuntimeViewerApplication` and `RuntimeViewerUI` to the file above |
+| `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings and bookmarks; engines in tests |
+| `Stubs/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
+| `Configurations/AGENTS.md` | Per-target build settings: the embedded non-macOS products, the jailbroken variant's payload, service names, adding a configuration |
+| `Resources/AGENTS.md` | The app icons |
+
+Put a new rule in the narrowest directory it governs — but **never put an `AGENTS.md` or `CLAUDE.md` in an
+Xcode synchronized folder or a SwiftPM target's directory**; use the nearest directory above. Every target
+folder under `RuntimeViewerUsingAppKit/` and `RuntimeViewerServer/` is synchronized with its target, so a
+file put there becomes a bundle resource of the target (two with the same name fail the build with
+"Multiple commands produce"), and SwiftPM warns about any file it has no rule for in `Sources/<Target>/`
+or `Tests/<Target>/`. Keep this file well under 64 KiB: the Codex configuration used with this repository
+reads only that much of it (`project_doc_max_bytes`) and drops the rest without a word, and Claude Code
+warns once all instruction files together pass 150,000 characters.
+
+<important if="you need to build, test, run, archive or release this project, or update its package pins">
+
 ## Build Commands
 
 **Workspace preference**: Before running any `xcodebuild` / `swift build` / `swift test`, check whether `../MxIris-Reverse-Engineering.xcworkspace` (sibling of this repo) exists. If it does, **use that workspace** via `xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme <scheme> ...` — it wires this repo together with local checkouts of MachOKit / MachOObjCSection / MachOSwiftSection / swift-capstone / swift-demangling / swift-semantic-string / swift-syntax that may contain in-progress fixes not yet published upstream. Building against the remote SPM resolution can hit stale errors (e.g. the MachOSwiftSection `@Mutex` macro expansion bug) that the workspace's local checkout already fixes. Only fall back to the standalone commands below when the workspace is absent.
 
-**Embedded non-macOS products**: the app embeds three products that are not
-macOS — the Mac Catalyst service, the Mac Catalyst helper and the iOS Simulator
-injection payload. **All three are ordinary target dependencies of the app.**
-Building `RuntimeViewer macOS` — in the GUI, through `RunScript.sh` or through
-`ArchiveScript.sh` — builds them in the app's configuration, and the app's copy
-phases embed the built products. Nothing is built separately or staged.
+**Workspaces**: `RuntimeViewer-Debug.xcworkspace` (used by `RunScript.sh`)
+already wires the local sibling checkouts of MachOKit / MachOObjCSection /
+MachOSwiftSection / swift-demangling / swift-semantic-string plus the
+precompiled swift-syntax, so Debug builds pick up in-progress fixes in those
+repos without touching remote SPM pins. `RuntimeViewer-Distribution.xcworkspace`
+serves release archives.
 
-| Product | Target | Platform settings | Built into | Embedded by, at |
-|---------|--------|-------------------|------------|-----------------|
-| Catalyst service | `RuntimeViewerCatalystService` | `SDKROOT = macosx`, `SDK_VARIANT = iosmac` | `<configuration>-maccatalyst/` | `Embed XPC Services`, `Contents/XPCServices/` |
-| Catalyst helper | `RuntimeViewerCatalystHelper` | `SDKROOT = macosx`, `SDK_VARIANT = iosmac` | `<configuration>-maccatalyst/` | `Embed Catalyst Helpers`, `Contents/Applications/` |
-| Simulator payload | `RuntimeViewerSimulatorServer` (in `RuntimeViewerServer.xcodeproj`) | `SDKROOT = iphonesimulator` | `<configuration>-iphonesimulator/` | `Embed RuntimeViewerMobileServer Framework`, `Contents/Resources/` |
+**Embedded non-macOS products**: the app embeds three products that are not macOS — the Mac Catalyst
+service (`RuntimeViewerCatalystService`), the Mac Catalyst helper (`RuntimeViewerCatalystHelper`) and the
+iOS Simulator injection payload (`RuntimeViewerSimulatorServer`, in `RuntimeViewerServer.xcodeproj`).
+**All three are ordinary target dependencies of the app**: building `RuntimeViewer macOS` — in the GUI,
+through `RunScript.sh` or through `ArchiveScript.sh` — builds them in the app's configuration, and the
+app's copy phases embed the built products. Nothing is built separately or staged, and a payload that
+fails to build fails the app's build. This works only because each of those targets pins its own
+platform; how, and which settings must not be touched: `Configurations/AGENTS.md`.
 
-**This works only because each of those targets pins its own platform.** Swift
-Build builds a dependency for the platform named by its own `SDKROOT` /
-`SDK_VARIANT`; only `SDKROOT = auto` takes the app's. Leave these settings alone:
-the usual Catalyst spelling, `SDKROOT = iphoneos` with
-`SUPPORTS_MACCATALYST = YES`, turns into Catalyst only when the run destination
-is Mac Catalyst, and under the app's macOS destination it builds an `iphoneos`
-product instead. They live in the targets' xcconfig files,
-`Configurations/RuntimeViewerCatalystService/Shared.xcconfig`,
-`Configurations/RuntimeViewerCatalystHelper/Shared.xcconfig` and
-`Configurations/RuntimeViewerSimulatorServer/Shared.xcconfig` — Xcode's build
-settings editor does not show `SDK_VARIANT` at all — and every configuration of
-the three targets gets them from there, along with:
-
-- `SKIP_INSTALL = YES`, so archiving the app does not also install the service,
-  the helper or the payload as a product of its own — that would make the archive
-  a generic one, which `-exportArchive` refuses. Exporting the app re-signs them
-  for Developer ID along with everything else.
-- On the helper, `RUNTIME_VIEWER_SERVICE_NAME`, per configuration (`com.mxiris…`
-  for Release, `dev.mxiris…` for Debug, `dev.arm64e.mxiris…` for Debug-arm64e).
-  It must match the app's: the helper reaches its host through the helper daemon
-  of that name, and a helper on another daemon never finds the host's endpoint,
-  so the Catalyst engine loads forever. The name is written once per
-  configuration, in `Configurations/ServiceName/<configuration>.xcconfig`, which
-  the app, the helper and the daemon target (whose `PRODUCT_NAME` it is) all
-  include, and building both in one configuration keeps them in step — **a new
-  configuration needs a file of its own there, included by all three**.
-  Background: `Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
-  The service needs no such name: launchd finds it by bundle identifier inside
-  the app, never through the daemon. A new configuration gives it a bundle
-  identifier, in a `Configurations/RuntimeViewerCatalystService/<configuration>.xcconfig`
-  of its own, and sets `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER` in the
-  app's xcconfig to match, the way the local-runtime service is done.
-
-Xcode's build settings editor shows the payload target's Base SDK as
-"iphonesimulator (SDK not found)". That is the editor only: its Base SDK pop-up
-offers no simulator SDK, while the build resolves `iphonesimulator` normally.
-Leave it — picking any SDK in that pop-up overwrites `SDKROOT`, and the payload
-then builds for the wrong platform without an error.
-
-`RuntimeViewerCatalystHelperPlugin`, the code both Catalyst shells load, is a
-plain macOS bundle: it builds into `<configuration>/`, and the app's
-`Embed Catalyst Plugin` phase copies it into `Contents/PlugIns/`. **The app ships
-one copy, not one per shell** — the plugin is about 44 MB in Release, the
-service and the helper are kilobytes — and `AppKitBridge` finds it two levels
-up from either shell's own bundle (`Contents/XPCServices/…` and
-`Contents/Applications/…` both sit below `Contents`). Its run path
-`@loader_path/../../../../Frameworks` is the app's `Frameworks`, which is where
-`libswiftCompatibilitySpan.dylib` comes from on a system whose `/usr/lib/swift`
-lacks it; the app's copy covers macOS and Mac Catalyst alike, so the Catalyst
-processes load it too. Moving the plugin, or a shell, changes those paths.
-
-**Running the app from Xcode needs one Xcode default per machine.** While Xcode debugs the app it
-also attaches to the app's embedded XPC services and hands them the app's injected libraries,
-including the macOS view-debugger library, which cannot load in a Mac Catalyst process (dyld:
-`Symbol not found: _OBJC_CLASS_$_ABPeoplePickerView`). The Catalyst service dies before `main`, the
-debugger keeps the process, and "My Mac (Mac Catalyst)" never appears — with no error, since the app's
-`hello` is simply never answered. Xcode does pick the Catalyst variant of that library per launch session
-from the binary's Mach-O platform, but the services reuse the app session's choice, and no setting
-reaches a single service. Set
-`defaults write com.apple.dt.Xcode DBGViewDebuggerInsertDylibOnDemand -bool YES` instead: Xcode stops
-inserting the view debugger at launch and loads it when a view hierarchy is captured, so Debug View
-Hierarchy keeps working. The README's Troubleshooting section says the same for contributors.
-Background, with the decompiled evidence:
-`Documentations/ResolvedIssues/2026-10-14-xcode-view-debugger-stops-catalyst-service.md`.
-
-**The simulator payload has a target of its own.** `RuntimeViewerSimulatorServer`
-compiles the same synchronized `RuntimeViewerServer/` folder and links the same
-packages as `RuntimeViewerMobileServer`, which stays `SDKROOT = auto` because
-`BuildRuntimeViewerServerXCFramework.sh` builds every other platform from it and
-the jailbroken variant depends on it. Its `PRODUCT_NAME` is
-`RuntimeViewerMobileServer`, the bundle name `PayloadPlatform` looks for;
-`RuntimeInjectClient` reaches the binary through `Bundle.executableURL`, so the
-binary's own name does not matter. The payload is copied, never linked — a macOS
-app cannot link a simulator binary — and lands in `Contents/Resources/` because
-`RuntimeInjectClient` finds it with `Bundle.main.url(forResource:withExtension:)`,
-which looks nowhere else. A payload that fails to build now fails the app's
-build too; the old scripts carried on without it.
-
-The old staging paths, `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app`
-and `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework`, are still
-gitignored for checkouts that predate the change; nothing reads or writes them.
-A build phase that built both from inside the app's build was tried and
-withdrawn before this; see evolution 0015. `Experiments/CatalystXPCServiceProbe`
-reproduces both recipes in a minimal project, and also showed that a Mac Catalyst
-XPC service embedded in a macOS app launches and works, which is what
-`RuntimeViewerCatalystService` is built on; its README records what was
-measured.
-
-**The jailbroken iOS variant embeds the payload from `RuntimeViewerMobileServer`
-directly.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so the
-`SDKROOT = auto` target resolves to iOS for it: it carries a plain
-`PBXTargetDependency` on `RuntimeViewerMobileServer` plus an
-`Embed RuntimeViewerMobileServer Framework` copy phase. Three things that are
-specific to it:
-
-- The payload lands in `Frameworks/`, not `Contents/Resources/` — an iOS bundle
-  is flat, so `url(forResource:withExtension:)` would not find it. The variant's
-  `InjectionServiceRegistrar` goes through `Bundle.main.privateFrameworksURL`.
-- `ARCHS[sdk=iphoneos*] = arm64 arm64e` on the payload target, because iOS
-  system processes are arm64e while every third-party app is arm64; one slice
-  reaches half the targets. The condition keeps the simulator and Catalyst
-  slices as they were, and the `Distribution` configuration — the one
-  `BuildRuntimeViewerServerXCFramework.sh` uses — is deliberately left alone, so
-  the published XCFramework is unaffected. Debug also needs
-  `ONLY_ACTIVE_ARCH[sdk=iphoneos*] = NO`, or a build onto a connected device
-  silently drops the arm64 slice.
-- **What gets injected is a staged directory, not a lone Mach-O.** The payload
-  links `@rpath/libswiftCompatibilitySpan.dylib`, a back-deployment shim Xcode
-  embeds beside it; `/usr/lib/swift` is its first run-path entry, and iOS 26.5
-  happens to ship that shim while iOS 27 no longer does. So
-  `RuntimePayloadStaging` copies the app's embedded libraries into a `Frameworks`
-  directory beside the staged payload, which is what the payload's own
-  `@loader_path/Frameworks` entry resolves. macOS never had to deal with this —
-  macOS 27 still ships the shim in `/usr/lib/swift`.
-- **Signing and packaging are not Xcode's job here.** No provisioning profile
-  grants the variant's five entitlements, so the target sets
-  `CODE_SIGNING_ALLOWED = NO` and the product comes out unsigned;
-  `BuildJailbrokenIPAScript.sh` pseudo-signs every Mach-O in it and packages the
-  `.ipa`. A build installed by Xcode carries none of the five and can neither
-  list processes nor inject into one. The signing is done by `vphone-cli sign`
-  or by `ldid`, whichever is installed (`--signer` overrides): the first is a
-  wrapper that writes byte for byte what `ldid -S -M -K -I` writes, so they are
-  interchangeable here, and which one a machine has differs.
+**Running the app from Xcode needs one Xcode default per machine**:
+`defaults write com.apple.dt.Xcode DBGViewDebuggerInsertDylibOnDemand -bool YES`. Without it Xcode also
+hands the app's macOS view-debugger library to the embedded Mac Catalyst service, which dies before
+`main` (dyld: `Symbol not found: _OBJC_CLASS_$_ABPeoplePickerView`), and "My Mac (Mac Catalyst)" never
+appears — with no error. Debug View Hierarchy keeps working: Xcode then loads the library when a
+hierarchy is captured. The README's Troubleshooting section says the same for contributors. Background,
+with the decompiled evidence: `Documentations/ResolvedIssues/2026-10-14-xcode-view-debugger-stops-catalyst-service.md`.
 
 ```bash
-# Debug build + launch (configuration "Debug-arm64e", workspace
-# RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; builds the
-# main app, which builds the Catalyst helper and the simulator payload as
-# dependencies). This is the only
-# working path for Debug-arm64e — the Xcode GUI fails to compile under
-# iOSPackagesShouldBuildARM64e=true. Product: RuntimeViewer-Debug-arm64e.app
-# under /Volumes/DerivedData/RuntimeViewer/Debug-arm64e when that volume
-# exists (project-relative DerivedData otherwise).
+# Debug build + launch: configuration "Debug-arm64e", RuntimeViewer-Debug.xcworkspace, scheme
+# "RuntimeViewer macOS" (builds the Catalyst products and the simulator payload as dependencies).
+# The only working path for Debug-arm64e — the Xcode GUI fails to compile under
+# iOSPackagesShouldBuildARM64e=true. Product: RuntimeViewer-Debug-arm64e.app under
+# /Volumes/DerivedData/RuntimeViewer/Debug-arm64e when that volume exists (project-relative
+# DerivedData otherwise).
 ./RunScript.sh
 ./RunScript.sh --no-launch         # build only
 ./RunScript.sh --update-packages   # refresh SPM pins before building
 ./RunScript.sh --dry-run           # print commands without running
 
-# Release build (archives the main app with the Catalyst helper embedded, notarizes, and optionally
-# generates appcast + uploads GitHub Release). Uses scheme "RuntimeViewer macOS".
-# Omit the distribution flags for a local signed zip only.
+# Release build: archives the app (scheme "RuntimeViewer macOS"), notarizes, and optionally generates
+# the appcast and uploads a GitHub Release. Omit the distribution flags for a local signed zip only.
+# The version is MARKETING_VERSION in Configurations/Version.xcconfig, the one place a release bumps;
+# the script checks --version-tag against it.
 ./ArchiveScript.sh
 # Cut a full release (appcast + GitHub Release + commit docs/appcast.xml):
 ./ArchiveScript.sh --update-appcast --upload-to-github --commit-push --version-tag vX.Y.Z
@@ -170,18 +82,14 @@ specific to it:
 # Build RuntimeViewerServer XCFramework (all platforms)
 ./BuildRuntimeViewerServerXCFramework.sh
 
-# Build the jailbroken iOS variant and package it as an installable .ipa, signed
-# with the five entitlements it needs (scheme "RuntimeViewer iOS Jailbroken").
-# Goes through RuntimeViewer-Debug.xcworkspace, NOT RuntimeViewer.xcworkspace:
-# the variant is arm64e and only the Debug and Distribution workspaces set
-# iOSPackagesShouldBuildARM64e, so through the plain workspace every package
-# product comes out arm64-only and the payload fails to link. The script checks
-# for that setting up front rather than letting a cold build discover it.
-# Output: Products/Jailbroken/RuntimeViewerJailbroken.ipa. The script reads the
-# entitlements back off the packaged .ipa and fails when one is missing. Install
-# it with something that honours the entitlements already on the binary — vphoned
-# preserves them, a jailbreak installer grants them; Xcode re-signs and loses all
-# five. Defaults to Debug, the configuration verified on a device.
+# Build the jailbroken iOS variant (scheme "RuntimeViewer iOS Jailbroken") and package it as
+# Products/Jailbroken/RuntimeViewerJailbroken.ipa, signed with the five entitlements it needs; the
+# script reads them back off the .ipa and fails when one is missing. Goes through
+# RuntimeViewer-Debug.xcworkspace, NOT RuntimeViewer.xcworkspace: only the Debug and Distribution
+# workspaces set iOSPackagesShouldBuildARM64e, and without it the arm64e payload fails to link.
+# Install it with something that keeps the entitlements on the binary (vphoned preserves them, a
+# jailbreak installer grants them); Xcode re-signs and loses all five. Defaults to Debug, the
+# configuration verified on a device.
 ./BuildJailbrokenIPAScript.sh
 ./BuildJailbrokenIPAScript.sh --configuration Release
 ./BuildJailbrokenIPAScript.sh --signer ldid  # vphone-cli | ldid | auto (default)
@@ -198,48 +106,31 @@ specific to it:
 ./UpdatePackagesScript.sh --dry-run                  # print what would run
 ```
 
-**Updating package pins**: `UpdatePackagesScript.sh` first fetches every SwiftPM git
-mirror involved — the global cache, its own DerivedData, `RunScript.sh`'s and
-`ArchiveScript.sh`'s, and Xcode's for these workspaces. Then, per workspace, it drops
-`Package.resolved` **and** `SourcePackages/workspace-state.json` (with only the lock
-file gone, SwiftPM replays the pins recorded in the state file, so nothing updates) and
-resolves with `xcodebuild -resolvePackageDependencies` in its own DerivedData,
-`/Volumes/DerivedData/RuntimeViewer/PackageUpdate`. It forces `USING_LOCAL_DEPENDENCIES`
-off, because local checkouts drop out of a lock file. A failed or interrupted resolution
-puts the previous `Package.resolved` back. It ends by listing the version changes and the
-changed lock files under version control; review and commit those — the Distribution one
-is what release archives resolve against.
+**Updating package pins**: `UpdatePackagesScript.sh` fetches every SwiftPM git mirror involved first, then
+per workspace drops `Package.resolved` **and** `SourcePackages/workspace-state.json` (with only the lock
+file gone, SwiftPM replays the pins recorded in the state file, so nothing updates) and resolves with
+`xcodebuild -resolvePackageDependencies` in its own DerivedData, `/Volumes/DerivedData/RuntimeViewer/PackageUpdate`,
+with `USING_LOCAL_DEPENDENCIES` forced off, because local checkouts drop out of a lock file. A failed or interrupted resolution puts the previous `Package.resolved` back. It ends by
+listing the version changes and the changed lock files under version control; review and commit those —
+the Distribution one is what release archives resolve against.
 
-**From Xcode**: right-click `RuntimeViewerPackages` in the Project navigator and choose
-**UpdatePackages**. That command plugin only runs `UpdatePackagesScript.sh` (arguments typed
-into its sheet, such as `--workspace Debug`, are passed on), and it needs Xcode's command-plugin
-sandbox switched off once:
-`defaults write com.apple.dt.Xcode IDEPackageSupportDisableManifestSandbox -bool YES`,
-then restart Xcode. The sandbox lets a plugin write nothing but its own work directory, while the
-script writes the workspaces' `Package.resolved` and Xcode's own package mirrors, so there is no
-sandboxed version of this command. Despite its name, that key is the one Xcode's SwiftPM reads for
-command plugins: a single flag decides both the manifest sandbox and the plugin runners' sandbox, so
-**every** `Package.swift` and every command plugin in every project runs unsandboxed from then on.
-`IDEPackageSupportDisablePluginExecutionSandbox` does not help here — it covers build-tool plugins
-only (measured, and traced in `/Volumes/RE/Xcode/27.0/README.md`). With the sandbox on, the command
-changes nothing and says what to do. The plugin is a target of `RuntimeViewerPackages`
-(`Plugins/UpdatePackages`) that nothing depends on, and it finds the script one level above the package.
-
-**Workspaces**: `RuntimeViewer-Debug.xcworkspace` (used by `RunScript.sh`)
-already wires the local sibling checkouts of MachOKit / MachOObjCSection /
-MachOSwiftSection / swift-demangling / swift-semantic-string plus the
-precompiled swift-syntax, so Debug builds pick up in-progress fixes in those
-repos without touching remote SPM pins. `RuntimeViewer-Distribution.xcworkspace`
-serves release archives.
+**From Xcode**: right-click `RuntimeViewerPackages` in the Project navigator and choose **UpdatePackages**,
+a command plugin (`RuntimeViewerPackages/Plugins/UpdatePackages`, a target nothing depends on) that only
+runs `UpdatePackagesScript.sh` and passes on the arguments typed into its sheet (such as
+`--workspace Debug`); the plugin finds the script one level above the package. It needs Xcode's sandbox
+switched off once — `defaults write com.apple.dt.Xcode IDEPackageSupportDisableManifestSandbox -bool YES`,
+then restart Xcode — because the script writes outside the plugin's work directory. That one key decides
+both the manifest sandbox and the command plugins' sandbox, so **every** `Package.swift` and every command
+plugin in every project runs unsandboxed from then on; `IDEPackageSupportDisablePluginExecutionSandbox`
+covers build-tool plugins only (traced in `/Volumes/RE/Xcode/27.0/README.md`). With the sandbox on, the
+command changes nothing and says what to do.
 
 **Release archives keep Xcode 27's new package PIF builder off.** `ArchiveScript.sh` passes
-`-IDEEnableNewPackagePIFBuilder=NO` to every `xcodebuild` that resolves or builds the package
-graph. With the new builder every package builds `arm64 arm64e arm64e.x1` only — it drops x86_64
-instead of adding arm64e to the default architectures — and the universal
-`RuntimeViewerCatalystHelperPlugin` stops compiling with `Unable to resolve module dependency`.
-The builder is otherwise picked by a per-machine Xcode default, which is why one Mac archived
-cleanly and another failed on the same commit. A manual release archive outside the script needs
-the same flag. Background:
+`-IDEEnableNewPackagePIFBuilder=NO` to every `xcodebuild` that resolves or builds the package graph, and a
+manual release archive outside the script needs the same flag. With the new builder every package builds
+`arm64 arm64e arm64e.x1` only — x86_64 is dropped — and the universal `RuntimeViewerCatalystHelperPlugin`
+fails with `Unable to resolve module dependency`; which builder runs is otherwise a per-machine Xcode
+default, so one Mac archives cleanly and another fails on the same commit. Background:
 `Documentations/ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md`.
 
 **Build Schemes**:
@@ -248,30 +139,40 @@ the same flag. Background:
   it as a dependency, so this scheme is only for working on the helper. It no longer builds the
   plugin, which belongs to the app now; the Catalyst service has no scheme of its own
 - `RuntimeViewerUsingAppKit` — plain Debug builds of the AppKit app target
-- `RuntimeViewerCommandLineTool` — the copy of `runtime-viewer-cli` embedded in the app bundle.
-  The target is named after the scheme, not after its product (`PRODUCT_NAME` is pinned to
-  `runtime-viewer-cli`): the workspace also contains the SwiftPM package's executable product of
-  that name, and two schemes called `runtime-viewer-cli` make `xcodebuild -scheme` pick one
-  silently. The app target depends on it, so building the app builds it too.
+- `RuntimeViewerCommandLineTool` — the copy of `runtime-viewer-cli` embedded in the app bundle; the app
+  target depends on it, so building the app builds it too. It is named after the scheme, not after its
+  product (`PRODUCT_NAME` is pinned to `runtime-viewer-cli`): the workspace also contains the SwiftPM
+  package's executable product of that name, and two schemes called `runtime-viewer-cli` make
+  `xcodebuild -scheme` pick one silently
+
+### Testing
+
+Package tests use swift-testing and run per package, through `queued-build`, with an agent-private
+scratch path:
+
+```bash
+cd RuntimeViewerPackages
+queued-build swift build --build-tests --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages
+queued-build swift test --skip-build --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages --filter RuntimeViewerApplicationTests
+```
+
+How the suites stay off the user's real settings and bookmarks, and how they get an engine:
+`RuntimeViewerPackages/Tests/AGENTS.md`.
+
+</important>
+
+<important if="you are changing build settings, a target, a configuration, a package dependency or its version floor, or anything else in the Xcode projects">
 
 ## Build Settings and the Tuist Development Workspace
 
 **Build settings live in xcconfig files, not in the project files.** Every target of
 `RuntimeViewerUsingAppKit.xcodeproj` (except the old `com.JH.RuntimeViewerService`), the
 project level, and `RuntimeViewerServer` / `RuntimeViewerSimulatorServer` in
-`RuntimeViewerServer.xcodeproj` set nothing in their project files; their settings are in
-`Configurations/<target>/` (`Shared.xcconfig` plus a file per configuration that has values of its
-own), the daemon's in `Configurations/LaunchDaemon/`, the AppKit project level's in
-`Configurations/RuntimeViewerUsingAppKitProject/`. Two values are written once for everyone:
-
-- `Configurations/Version.xcconfig` — `MARKETING_VERSION`, the one place a release bumps (the
-  `ArchiveScript.sh` check against `--version-tag` reads it back);
-- `Configurations/ServiceName/<configuration>.xcconfig` — `RUNTIME_VIEWER_SERVICE_NAME`, see
-  *Embedded non-macOS products*.
-
-Edit those files, never Xcode's build settings editor or a target's General tab: both write a
-target-level value into the project file, which outranks the xcconfig and which the Tuist project
-below does not see. `./TuistScript.sh check` reports any such value.
+`RuntimeViewerServer.xcodeproj` set nothing in their project files; their settings are under
+`Configurations/`, whose layout and per-target rules are in `Configurations/AGENTS.md`. Edit those files,
+never Xcode's build settings editor or a target's General tab: both write a target-level value into the
+project file, which outranks the xcconfig and which the Tuist project below does not see.
+`./TuistScript.sh check` reports any such value.
 
 **`RuntimeViewer-Tuist.xcworkspace` is a second, development-only way to build the macOS app.**
 Tuist generates it from `Tuist.swift`, `Workspace.swift`, `Tuist/Package.swift` and
@@ -288,14 +189,11 @@ open RuntimeViewer-Tuist.xcworkspace
 ./TuistScript.sh check            # before committing a change to the native projects
 ```
 
-Rules that keep the two in step:
-
 - **A commit that changes the native projects' targets, dependencies, embedded products or
-  settings updates the Tuist description in the same commit**, and `./TuistScript.sh check` passes
-  before it is committed. `check` compares the projects' settings wiring, the local packages'
-  target lists with `Tuist.swift` and `Tuist/ProjectDescriptionHelpers/LocalPackages.swift`, the
-  two lock files, and the trait-conditioned settings Tuist drops; `check --build` also builds both
-  workspaces and compares the two apps.
+  settings updates the Tuist description in the same commit** — a local package's target list
+  included, which `Tuist.swift` and `Tuist/ProjectDescriptionHelpers/LocalPackages.swift` repeat — and
+  `./TuistScript.sh check` passes before it is committed; `check --build` also builds both workspaces
+  and compares the two apps.
 - **`Tuist/Package.resolved` is not committed** (it is ignored). `./TuistScript.sh install` starts
   it from the Debug workspace's lock file every time, so it pins what the native lock files pin, and
   `UpdatePackagesScript.sh` runs that install after updating the Debug workspace. Install with the
@@ -304,113 +202,36 @@ Rules that keep the two in step:
   Catalyst plugin are built first by the scheme's fixed order, not as dependencies.
 
 Agents run `TuistScript.sh` with `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent>/Tuist`
-and through `queued-build`. Usage, the Tuist workarounds behind the oddities in the manifests, and
-the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
+and through `queued-build`. What `check` compares, the Tuist workarounds behind the oddities in the
+manifests, and the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
 Background: `Documentations/Evolutions/0053-tuist-coexistence.md`.
+
+**Dependency floors**: UIFoundation is declared `from: "0.39.0"` with its `Settings` trait on (which
+exposes `UIFoundationSettings` and `UIFoundationSettingsUI`). `0.39.0` is the first release with the
+scroll pocket calls (`NSScrollView.box.registerScrollPocketContainer(_:on:)`, `setScrollPocketStyle(_:on:)`,
+`NSView.barScrollPocketElementStyle` and the `_scrollPocketElementStyle` declaration, `AppleInternal`
+trait) that `NavigatorScrollViewLayout` and the navigator bars use; the older features the app relies
+on — `NSTableView.box.estimatesRowHeights`, `Label` mirroring `attributedStringValue` into its tooltip,
+the synchronous `SettingsStore.save()`, `SettingsConfiguration`, `MainMenu` — all arrived before it.
+`0.39.0` needs FrameworkToolbox `0.15.0` or later, which is why `RuntimeViewerCore` takes
+FrameworkToolbox `from: "0.15.0"` instead of the exact pin it had; the comment there says what to check
+when FrameworkToolbox moves.
+
+</important>
+
+<important if="you are touching an app icon, an .icon document, the icon build settings, or ArchiveScript.sh's icon check">
 
 ## App Icon
 
-Four Icon Composer documents sit under `Resources/`, all four in the app target's Resources build
-phase. Two axes pick the one that ships, and both reach `ASSETCATALOG_COMPILER_APPICON_NAME`
-through `RUNTIME_VIEWER_APP_ICON_NAME` in the app's Debug / Release xcconfigs:
+The app has four Icon Composer documents under `Resources/` — `AppIcon.icon`, `AppIconBeta.icon` and
+their generated `Xcode26` variants — and the Mac Catalyst helper has a pair of its own in
+`RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/`. **Read `Resources/AGENTS.md` before changing any
+of them, or the build settings that pick one**: a target-level value silently pins a single icon, `actool`
+fails without an error, and Icon Composer's SVG pipeline ignores `stroke`.
 
-- **Channel** — `AppIcon` versus `AppIconBeta`, the latter being the former plus a BETA badge
-  lifted from Xcode's own icon. `ArchiveScript.sh` overrides `RUNTIME_VIEWER_APP_ICON_BASE_NAME`
-  with `AppIconBeta` when the release channel is `beta` (inferred from a `-beta` / `-RC` /
-  `-alpha` version tag); everything else — local Debug builds included — gets `AppIcon`. The
-  indirection exists because a plain `ASSETCATALOG_COMPILER_APPICON_NAME=` override on the
-  `xcodebuild` command line reaches every target in the scheme, including
-  `RuntimeViewerCatalystHelper`, whose icon is its own `CatalystHelperIcon` document and has no beta
-  variant.
-- **Toolchain** — the originals versus their `Xcode26` variants. **Xcode 26's actool cannot open
-  an Icon Composer 27 document at all**: a top-level `"features"` key makes it fail with
-  `Could not open "…"` and write no output whatsoever — no icns, no `Assets.car`, no partial
-  `Info.plist`. A build under Xcode 26 therefore gets `AppIconXcode26.icon` /
-  `AppIconBetaXcode26.icon`, selected by
-  `RUNTIME_VIEWER_APP_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`, which is undefined for 2700 and
-  later — so every Xcode after 26 gets the originals.
+</important>
 
-**The assignment lives in `Configurations/RuntimeViewerUsingAppKit/Shared.xcconfig`, and the target
-must not set `ASSETCATALOG_COMPILER_APPICON_NAME` itself.** A target-level value in the project file
-outranks every xcconfig, so a literal there pins one icon for both channels and both toolchains.
-5d16aad6 put `AppIcon` back at the target level exactly like that, and from then until the
-2026-09-23 fix no variant and no beta badge was ever picked. The App Icon field in the target's
-General tab edits that target-level setting, so leave it alone.
-
-**Edit the originals, then regenerate the pair in the same commit.** `AppIcon.icon` and
-`AppIconBeta.icon` are the Icon Composer 27 documents to open and edit; `AppIconXcode26.icon` and
-`AppIconBetaXcode26.icon` come out of
-`swift Resources/AppIconTools/GenerateXcode26IconDocuments.swift`, run from the repository root.
-The same script produces the Catalyst helper's pair, below. Background: evolution 0020.
-
-**The Catalyst helper has an icon of its own: the app's, plus a CATALYST badge.**
-`CatalystHelperIcon.icon` and its generated `CatalystHelperIconXcode26.icon` live in
-`RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/`, which is a synchronized folder of the helper
-target, so they are its resources without any file reference in the project — and never the app's.
-The toolchain rule lives in the helper's own xcconfig, `Configurations/RuntimeViewerCatalystHelper/Shared.xcconfig`:
-`ASSETCATALOG_COMPILER_APPICON_NAME` expands
-`RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`. It has no beta variant. Its
-three lower groups and their assets are copies of `AppIcon.icon`'s, so an edit to the shared layers
-goes into `AppIcon.icon`, `AppIconBeta.icon` and `CatalystHelperIcon.icon` alike, then the variants
-are regenerated. The badge's two layers come out of
-`swift Resources/AppIconTools/GenerateCatalystBadgeLayers.swift <the .icon's Assets directory>`;
-its group settings are the BETA badge's. Background: `Documentations/Evolutions/0028-catalyst-helper-icon.md`.
-
-**`actool` fails silently here.** Ask for an app icon that is not among its inputs and it exits 0
-with an *empty* partial `Info.plist`: no error, no icon, a shipped app with a blank tile. That is
-why `ArchiveScript.sh` re-reads `CFBundleIconName` out of the exported bundle — the app's and the
-embedded Catalyst helper's — and fails the run when either does not match the name the channel and
-the toolchain imply. That check restates the build settings' rule in shell on purpose: two
-independent derivations, so getting either one wrong fails the archive instead of shipping the
-wrong icon.
-
-**Preview with `ictool`, not by building.** Icon Composer ships a command-line renderer that
-exports any appearance of a document straight to PNG, whatever the system appearance is set to:
-`"/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool" X.icon --export-image --output-file out.png --platform macOS --rendition Dark --width 512 --height 512 --scale 1`
-(`Default` for light). It also renders an old revision restored with `git show`, which is how to
-compare before and after. `Resources/AppIcon.png`, the README's icon, is the dark rendition as the
-system composites it: the 824-point body at (100, 100) on a 1024 canvas, over a drop shadow
-`ictool` does not draw. The shadow depends only on the outline, so re-export it by compositing an
-824-pixel `ictool` Dark render over the existing file at +100+100 — measured against the system's
-own rendering, that differs in under half a percent of the body's pixels, all on the rim.
-
-**The badge borrows Xcode's shapes, not its colours.** Both SVGs come from Xcode's own `.icon`,
-but the pale glass lozenge was replaced by the disc's near-black with a white wordmark, so the
-badge follows the same dark-plate-carrying-white-content pairing as the rest of the icon instead
-of putting a second blue on a blue background. Two consequences worth knowing before touching
-that group: Xcode's wordmark layer uses the `multiply` blend mode, which renders white as
-*nothing at all* — the whole group is on `normal` now — and Xcode's second lozenge pass, which
-existed only to lift the pale glass in dark appearance, was deleted rather than left at zero
-opacity.
-
-Five things to know before editing any of them:
-
-- **Never use `stroke` in these SVG assets.** Icon Composer's SVG pipeline through Icon Composer
-  1.6 ignores `stroke` and fills the shape instead, so a `fill="none"` ring renders as a solid
-  disc. `DiscOutline.svg` and `Magnifier.svg` were stroked until 2026-09-21 and covered the whole
-  foreground on macOS 26 while looking perfectly correct in Icon Composer 27. Convert strokes to
-  filled outlines — and remember a `round` line cap extends the line by half the stroke width at
-  each end, which the outline has to reproduce.
-  `Documentations/ResolvedIssues/2026-09-21-icon-strokes-rendered-as-fills.md`
-- **Four visible groups is a hard ceiling** — `actool` rejects a fifth with
-  `Too many visible groups`. `AppIconBeta.icon` and `CatalystHelperIcon.icon` already use all
-  four, so adding a layer group means merging two existing ones first.
-- **An SVG layer's viewBox units and a bitmap layer's pixels are the same unit.** Every layer
-  here uses an 824-unit viewBox at `scale: 1.3`, which is what the original 824-pixel bitmap
-  foreground occupied.
-- **The dark-appearance background gradient is not yours to set.** A `dark` entry under the
-  top-level `fill` is ignored — verified by compiling one with deliberately absurd colours and
-  finding the system's own grey pair in the output. Per-layer `fill-specializations` do work, and
-  are how the disc, outline, magnifier and code listing adapt.
-- **A vector layer with no `dark` fill gets recoloured, not left alone.** Without a `dark` entry the
-  dark appearance tints the layer with the background's hue — the white code listing came out
-  blue. A layer meant to stay white in dark appearance needs its `dark` entry set to white.
-  `Documentations/ResolvedIssues/2026-09-28-icon-code-listing-too-thin.md`
-
-`Resources/AppIconTools/GenerateCodeListingLayer.swift` regenerates the code-listing layer, which
-is a few hundred glyph outlines and cannot be hand-edited. Its header records the metrics the
-layer was fitted to — the face's weight included, which the line width alone cannot pin down
-(every weight of a monospaced face is equally wide) and was once got wrong because of it.
+<important if="you are committing, creating or merging a branch, opening a pull request, or deciding where a change belongs">
 
 ## Branching Model
 
@@ -436,6 +257,8 @@ layer was fitted to — the face's weight included, which the line width alone c
   requires an unreleased dependency version, goes to that feeder branch — with
   the corresponding `exact:` pin bump landing in the same batch once the
   dependency ships.
+
+</important>
 
 ## Architecture
 
@@ -489,38 +312,31 @@ The project uses three Swift Package Manager packages:
   `RuntimeViewerLocalRuntimeServiceBundleIdentifier`, so the app's `.local` forwards to it, while the
   service itself, the standalone CLI host, the Catalyst helper and service and the tests (no key) stay in
   process — launchd only finds an embedded service inside the calling process's own bundle, so the
-  bundle is the configuration; nothing is set before first use. The "Load Frameworks…" picker goes
-  through `engine.loadImage(at:)`, not `Bundle.load`. A service crash costs the loaded images, not
-  the app: the connection reattaches on its own, the engine only sees `.disconnected` then
-  `.connected`, documents walk back to the image list and the app posts a notification. **All
-  XPC-service code lives in a few named places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
+  bundle is the configuration. The "Load Frameworks…" picker goes through `engine.loadImage(at:)`, not
+  `Bundle.load`. A service crash costs the loaded images, not the app: the connection reattaches on its
+  own and the engine only sees `.disconnected` then `.connected`. **All XPC-service code lives in a few
+  named places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
   (transport, `hello`, reattach) plus the two `.xpcService` branches of `RuntimeCommunicator`;
   `RuntimeViewerCore/LocalRuntimeService/` (this service's `Info.plist` key and credential, and the
   service-side host both services run); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift`
   (the Catalyst service's key and credential); and the two service entry points. `RuntimeEngine` and
   `RuntimeEngineManager` know nothing about XPC — they hand an opaque credential on — keep it that
-  way. **The service runs at the priority of the requests waiting on it.** launchd
-  starts it as an adaptive job, which sits in the Darwin background band — priority 4, efficiency
-  cores only — whenever no request from an app that donates importance is outstanding, and an app in
-  App Nap donates nothing: about thirty seconds after the user switches away, work the app is
-  waiting on slows down four- to tenfold. So long-running work the app waits on has to keep the app
-  out of App Nap. `BackgroundWorkProcessActivity` holds a user-initiated activity while
-  `DocumentState.reportActivity` is true (indexing batches, corpus builds); new work of that kind
-  reports through that signal or holds an activity of its own. Background:
-  `Documentations/Evolutions/0037-local-runtime-xpc-service.md`; the transport:
-  `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
+  way. **The service runs at the priority of the requests waiting on it**, and an app in App Nap
+  donates none: about thirty seconds after the user switches away, work the app is waiting on slows
+  down four- to tenfold. So long-running work the app waits on has to keep the app out of App Nap:
+  `BackgroundWorkProcessActivity` holds a user-initiated activity while `DocumentState.reportActivity`
+  is true (indexing batches, corpus builds), and new work of that kind reports through that signal or
+  holds an activity of its own. Background: `Documentations/Evolutions/0037-local-runtime-xpc-service.md`;
+  the transport: `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
   `Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`
 - `RuntimeViewerCatalystService` — the Mac Catalyst XPC service the app's "My Mac (Mac Catalyst)"
-  engine runs in, embedded at `Contents/XPCServices/`. Like the local-runtime service, the process's
-  own `Info.plist` picks the path: the app's names it under `RuntimeViewerCatalystServiceBundleIdentifier`
-  (`MacCatalystRuntimeService` in `RuntimeViewerCatalystExtensions`), so the app's `.macCatalystClient`
-  engine connects to it directly — no helper daemon, no handshake polling, and a crash is a
-  reattach, not a lost engine, because the manager does not observe that engine any more than it
-  observes `.local`. A process without the key — the standalone CLI host — keeps launching
-  `RuntimeViewerCatalystHelper`. Being an XPC service, it also runs at the priority of the requests
-  waiting on it, exactly as the local-runtime service above does — the helper app, an application of
-  its own, never did — so the same App Nap rule covers work on the Catalyst engine. The service has
-  no "restarted" notification yet. Background: `Documentations/Evolutions/0051-catalyst-xpc-service.md`
+  engine runs in, embedded at `Contents/XPCServices/`. The app's `Info.plist` names it under
+  `RuntimeViewerCatalystServiceBundleIdentifier` (`MacCatalystRuntimeService` in
+  `RuntimeViewerCatalystExtensions`), so the app's `.macCatalystClient` engine connects to it directly —
+  no helper daemon, no handshake polling — and a crash is a reattach, not a lost engine. A process
+  without the key — the standalone CLI host — keeps launching `RuntimeViewerCatalystHelper`. The App Nap
+  rule above covers work on this engine too. The service has no "restarted" notification yet.
+  Background: `Documentations/Evolutions/0051-catalyst-xpc-service.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
   only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
@@ -531,11 +347,11 @@ The project uses three Swift Package Manager packages:
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
   entitlements carry `disable-library-validation`, and its deployment target has to track the app's
   (15.0) — Xcode fills in the current SDK version, which would make the embedded tool refuse to
-  launch on systems the app itself supports. It also sets `SKIP_INSTALL = YES`: a command-line tool
-  otherwise installs itself into the archive's `usr/local/bin`, the archive stops being an app
-  archive, and the Developer ID export fails with `expected one {} but found developer-id`. The
-  same goes for any new target that produces its own product; `ArchiveScript.sh` fails right after
-  archiving and names the stray files
+  launch on systems the app itself supports. **Any target that produces a product of its own sets
+  `SKIP_INSTALL = YES`**: otherwise it installs itself into the archive (this tool into `usr/local/bin`),
+  the archive stops being an app archive, and the Developer ID export fails with
+  `expected one {} but found developer-id`; `ArchiveScript.sh` fails right after archiving and names the
+  stray files
 - `RuntimeViewerUsingUIKit` — iOS variant (secondary)
 
 ### Key Architectural Patterns
@@ -544,15 +360,15 @@ The project uses three Swift Package Manager packages:
 - **Engine work is shared by the documents on the engine**: each engine has one background indexing
   coordinator and one Find corpus coordinator, held by every document on it
   (`RuntimeEngineBackgroundWork`, handed out per engine by `RuntimeEngineBackgroundWorkRegistry`), so
-  the windows on one engine show one Report — the same running work, the same history — and only
-  windows on different engines show different ones. `DocumentState.backgroundIndexingCoordinator` /
-  `findCorpusCoordinator` return the coordinators of the engine the document is on, and anything that
-  binds to them follows `$runtimeEngine`: `.switchEngine` moves the document onto the new engine's
-  work before it assigns the engine. A document that closes or moves away only leaves — nothing is
-  cancelled while another document is on the engine — and the last one leaving cancels the engine's
-  work and drops its Report. Cancel, Cancel All and Clear History speak for every window on the
-  engine. Never give a document indexing or corpus state of its own again. A root already indexed
-  starts no batch at all. Background: `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
+  the windows on one engine show one Report — the same running work, the same history.
+  `DocumentState.backgroundIndexingCoordinator` / `findCorpusCoordinator` return the coordinators of the
+  engine the document is on, and anything that binds to them follows `$runtimeEngine`: `.switchEngine`
+  moves the document onto the new engine's work before it assigns the engine. A document that closes or
+  moves away only leaves — nothing is cancelled while another document is on the engine — and the last
+  one leaving cancels the engine's work and drops its Report; Cancel, Cancel All and Clear History speak
+  for every window on the engine. **Never give a document indexing or corpus state of its own again.** A
+  root already indexed starts no batch at all. Background:
+  `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
@@ -583,109 +399,72 @@ LLM Client
 - Bridge starts automatically in `AppDelegate.applicationDidFinishLaunching`
 - MCP server entry: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/main.swift`
 
-### UI Technology Stack
-
-- **AppKit**: All UI components except Settings
-- **SwiftUI**: Settings pages only; the window, sidebar, navigation, forms, bindings, and persistence come from UIFoundation's Settings products
+<important if="you are adding, reading or changing a setting, or touching the settings window or its SwiftUI pages">
 
 ### Settings Integration
 
-- `RuntimeViewerSettings.Settings` remains an `@Observable final class`. On macOS it conforms to
-  `PersistentSettings` and owns the application's only `SettingsStore`.
-- Existing service code continues to use `@Dependency(\.settings)` through
-  `SettingsAccess`; every dynamic-member read and write reaches the current object in that same
-  store. Capturing `SettingsAccess` remains valid when `load()` replaces the model.
-- `Settings.accessPersistedValues()` must read every encoded top-level property. UIFoundation's
-  store tracks that method to schedule persistence, while business observers retain top-level
-  property granularity (`theme` changes do not wake `transformer` listeners). Update this method
-  whenever a persisted property is added — an omission fails quietly, because the property is still
-  encoded whenever *another* property triggers a write, so only a session that changes nothing else
-  loses the edit. `SettingsPersistenceTests` enforces this: one test changes each property on its
-  own and asserts it reaches storage, another compares the covered list against the encoded
-  payload's top-level keys, so a new property fails the suite until both places know about it.
-- `SettingsLifecycleController` owns both ends of the lifecycle. Loading is not a side effect of
-  resolving `@Dependency(\.settings)` — call `load()` at launch before anything reads a value — and
-  quitting goes through `applicationShouldTerminate`, which calls the synchronous
-  `flushSynchronously()` and returns `.terminateNow` so the write outruns the store's one-second
-  auto-save debounce. Never reply `.terminateLater` with the flush in a main-actor task: the reply
-  is then a main-queue job, and when `terminate(_:)` is itself invoked from a main-queue block (the
-  helper-reinstall relaunch does exactly that) AppKit's nested wait-for-reply run loop cannot drain
-  the main queue — the app deadlocks and can only be force-quit.
+- `RuntimeViewerSettings.Settings` is an `@Observable final class`. On macOS it conforms to
+  `PersistentSettings` and owns the application's only `SettingsStore`. Code reads and writes it through
+  `@Dependency(\.settings)` (`SettingsAccess`), which always reaches the current object in that store, so
+  a captured `SettingsAccess` stays valid when `load()` replaces the model.
+- **`Settings.accessPersistedValues()` must read every encoded top-level property** — update it whenever
+  a persisted property is added. UIFoundation's store tracks that method to schedule persistence, while
+  business observers keep top-level granularity (`theme` changes do not wake `transformer` listeners). An
+  omission fails quietly: the property is still encoded whenever *another* property triggers a write, so
+  only a session that changes nothing else loses the edit. `SettingsPersistenceTests` changes each
+  property on its own and compares the covered list against the encoded payload's top-level keys, so a
+  new property fails the suite until both places know about it.
+- `SettingsLifecycleController` owns both ends of the lifecycle: call `load()` at launch before anything
+  reads a value (resolving `@Dependency(\.settings)` does not load), and quit through
+  `applicationShouldTerminate`, which calls the synchronous `flushSynchronously()` and returns
+  `.terminateNow` so the write outruns the store's one-second auto-save debounce. **Never reply
+  `.terminateLater` with the flush in a main-actor task**: when `terminate(_:)` is invoked from a
+  main-queue block, as the helper-reinstall relaunch does, the app deadlocks — the controller's doc
+  comment says why.
 - SwiftUI pages use the local `AppSettings` typealias, which specializes
-  `UIFoundationSettings.AppSettings` for RuntimeViewer's schema.
+  `UIFoundationSettings.AppSettings` for RuntimeViewer's schema. The settings window passes
+  `sidebarIconSize: 15` through the top-level `SettingsConfiguration` (the pre-migration glyph size) and
+  restores its own frame: do not add a `center()` call, which would discard the position the user chose.
 - Keep the persisted location compatible with existing releases:
   `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json`.
-- The UIFoundation dependency enables the `Settings` trait, exposes both
-  `UIFoundationSettings` and `UIFoundationSettingsUI`, and requires version
-  `0.17.0` or later for Settings. `0.16.0` carries the observable reference-model
-  store but *not* `SettingsConfiguration`, which landed after that tag; `0.17.0`
-  is the first release with both, plus the window frame restoration below. The
-  declared floor is `0.39.0`, the first release with the scroll pocket calls
-  (`NSScrollView.box.registerScrollPocketContainer(_:on:)`, `setScrollPocketStyle(_:on:)`,
-  `NSView.barScrollPocketElementStyle` and the `_scrollPocketElementStyle` declaration,
-  `AppleInternal` trait) that `NavigatorScrollViewLayout` and the navigator bars use — see
-  *Navigator pages run under their bars*. `0.39.0` needs FrameworkToolbox `0.15.0` or later,
-  which is why `RuntimeViewerCore` takes FrameworkToolbox `from: "0.15.0"` instead of the
-  exact pin it had; the comment there says what to check when FrameworkToolbox moves. Before
-  it, `0.37.0` was the first release with `NSTableView.box.estimatesRowHeights`
-  (`AppleInternal` trait), which `StatefulOutlineView` uses to keep AppKit's row
-  height estimation off — see the `StatefulOutlineView` notes under *Diagnosing UI
-  Flicker*. Before that, `0.36.1` was the first release whose `Label` mirrors
-  `attributedStringValue` into its tooltip: `RuntimeObjectCellView` feeds its
-  labels attributed strings and relies on that for the title and subtitle
-  tooltips instead of setting them by hand. Settings alone would need `0.22.0`,
-  which is where the synchronous `SettingsStore.save()` overload — the one
-  `flushSynchronously()` needs at termination — arrived (`0.20.0` brought
-  `MainMenu`, the main menu builder `MainMenuController` uses).
-- UIFoundation's Settings API is macOS-only, so `SettingsAccess` keeps an
-  in-memory `Settings` on the other platforms and its `load()` /
-  `flushSynchronously()` are no-ops there. That costs nothing today because nothing off macOS *writes* a
-  setting — the SwiftUI pages are the only writers and they are macOS-only, so
-  a file would only ever have held defaults. Adding a settings UI to another
-  platform means giving it real storage first, or the edits will vanish
-  silently.
-- The settings window passes `sidebarIconSize: 15` through
-  the top-level `SettingsConfiguration`. This matches the pre-migration glyph size: the old
-  20-point icon frame applied 2.5 points of padding on each side.
-- The window restores its own frame; do not add a `center()` call. UIFoundation
-  centres it only when there is nothing stored to restore, and registering the
-  autosave name is itself what applies a stored frame — so centring afterwards
-  silently discards the position the user chose.
-- Settings › Developer is the home for switches that exist to exercise the app while
-  developing it. The page is registered under `#if DEBUG` only; its branch,
-  `Settings.developer`, is persisted like any other (so it is in `accessPersistedValues()` and
-  in `SettingsPersistenceTests`' coverage list). `Settings.Developer.isEnabled` is a master
-  switch over every option on the page: consumers read an `effective…` property that already
-  returns the inert value while the switch is off — never the raw option — so turning the
-  switch off disables everything without losing the configured values. Add new options the
-  same way. The first is `contentLoadingDelay`, which `ContentTextViewModel`'s default interface
-  provider waits out ahead of the interface cache so the content loading plate can be brought
-  up on demand.
+- UIFoundation's Settings API is macOS-only, so `SettingsAccess` keeps an in-memory `Settings` on the
+  other platforms and its `load()` / `flushSynchronously()` are no-ops there — harmless only because
+  nothing off macOS writes a setting. Adding a settings UI to another platform means giving it real
+  storage first, or the edits will vanish silently.
+- Settings › Developer is the home for switches that exist to exercise the app while developing it. The
+  page is registered under `#if DEBUG` only; its branch, `Settings.developer`, is persisted like any
+  other (so it is in `accessPersistedValues()` and in `SettingsPersistenceTests`' coverage list).
+  `Settings.Developer.isEnabled` is a master switch: consumers read an `effective…` property that already
+  returns the inert value while the switch is off — never the raw option — so turning it off disables
+  everything without losing the configured values. Add new options the same way. The first is
+  `contentLoadingDelay`, which `ContentTextViewModel`'s default interface provider waits out ahead of the
+  interface cache so the content loading plate can be brought up on demand.
+
+</important>
 
 ## Development Guidelines
 
 When adding new features, you **MUST** follow these rules:
 
-1. **UI Framework**: Use AppKit for all new UI components (except Settings-related features which use SwiftUI)
-2. **Architecture**: Follow MVVM-C pattern
-   - **Model**: Data structures and business logic
-   - **View**: AppKit views (NSView, NSViewController)
-   - **ViewModel**: RxSwift-based, handles UI state and logic
-   - **Coordinator**: Manages navigation and flow
+1. **UI Framework**: AppKit for all UI. SwiftUI only in the Settings pages, whose window, sidebar,
+   navigation, forms, bindings and persistence come from UIFoundation's Settings products
+2. **Architecture**: MVVM-C — AppKit views and ViewControllers, RxSwift ViewModels, Coordinators for
+   navigation; every ViewController has a ViewModel. The rules are in `RuntimeViewerUsingAppKit/AGENTS.md`
 3. **Reactive**: Use RxSwift for data binding and event handling
-4. **No SwiftUI** in non-Settings areas — keep the codebase consistent
-5. **Swift Language Mode**: All packages use `swiftLanguageModes: [.v5]`
-6. **Singletons go through `@Dependency`**：每个项目 singleton 都声明为 `fileprivate static let shared`，并通过 `extension DependencyValues` 中的 `@DependencyEntry` 暴露。调用方统一使用 `@Dependency(\.xxx)`；禁止 `public static let shared`，也禁止在定义文件外调用 `Foo.shared.bar()`。详见 Code Style 下的 **Singletons & Dependency Injection**。
-7. **AppDelegate stays thin**: AppDelegate is a dispatch shell, not a service container. Every non-trivial lifecycle responsibility (appearance, debug menu, update checking, version probes, etc.) lives in its own `@MainActor` controller class under `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via `@Dependency` per rule #6. See **AppDelegate Convention** under Code Style.
-8. **Single-object interface fetches go through the document's interface cache**: fetch one object's interface via `documentState.interfaceCache.interface(for:options:)` with `ViewModel.currentMergedGenerationOptions` as the options — never bare `appDefaults.options` and never `runtimeEngine.interface(...)` directly — so cache keys line up with the content pane and exported text matches what it displays. Bulk consumers (interface export, MCP tools) deliberately bypass the cache and call the engine directly; do not route them through it. See `Documentations/Plans/2026-08-04-navigation-interface-cache.md`.
-9. **A RuntimeEngine command that is not Core's own goes in its own module, not into Core**:
+4. **Swift Language Mode**: All packages use `swiftLanguageModes: [.v5]`
+5. **Singletons go through `@Dependency`** — see *Singletons & Dependency Injection* under Code Style
+6. **AppDelegate stays thin**: every non-trivial lifecycle responsibility is its own `@MainActor`
+   controller class in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`;
+   `RuntimeViewerUsingAppKit/AGENTS.md` says what AppDelegate may and may not contain
+7. **Single-object interface fetches go through the document's interface cache**: fetch one object's interface via `documentState.interfaceCache.interface(for:options:)` with `ViewModel.currentMergedGenerationOptions` as the options — never bare `appDefaults.options` and never `runtimeEngine.interface(...)` directly — so cache keys line up with the content pane and exported text matches what it displays. Bulk consumers (interface export, MCP tools) deliberately bypass the cache and call the engine directly; do not route them through it. See `Documentations/Plans/2026-08-04-navigation-interface-cache.md`.
+8. **A RuntimeEngine command that is not Core's own goes in its own module, not into Core**:
    declare its short name in `extension RuntimeEngine.CommandName` (keeping Core's namespace
    prefix, which is the wire contract), declare the `RuntimeEngineCommand` conformers under that
    module's own namespace, and install them from
    `RuntimeEngine.addCommandExtension(named:install:)`. Nothing
    in `RuntimeViewerCore` changes. `RuntimeViewerInjection` is the reference implementation; see
    *Injection commands* below for the one obligation this puts on every process.
-10. **A new `RuntimeObject.Properties` flag gets a row in the sidebar's Filter Scope**: declare it as
+9. **A new `RuntimeObject.Properties` flag gets a row in the sidebar's Filter Scope**: declare it as
    a new case of `RuntimeObject.Properties.Flag` with the next bit position — the positions are wire
    format, so never renumber or reuse one — and build its static from that case, never from
    `init(rawValue:)`. `RuntimeObjectScope.Property.init(filtering:)` switches over `Flag`
@@ -730,98 +509,23 @@ process does not matter.
 
 ## SourceEditor Module
 
+<important if="you are touching the SourceEditor module: RuntimeViewerSourceEditorBridge, Stubs/, SourceEditorLoader, ContentSourceEditorViewController or SourceEditorThemeConversion">
+
 Everything that drives Xcode's private `SourceEditor` framework family: the
 `RuntimeViewerSourceEditorBridge` bundle target, `Stubs/`, `SourceEditorLoader`,
 `ContentSourceEditorViewController`, and `SourceEditorThemeConversion`.
 
-### Hard precondition: no dump, no binaries, no work
+**Hard precondition: no dump, no binaries, no work.** Before touching this module, confirm the reference
+material is on disk: RuntimeViewer's own dump of the frameworks at `/Volumes/RE/SourceEditor/Xcode/<version>/`
+— one directory per framework holding **both** `ObjCHeaders/` and `SwiftInterfaces/`, of the Xcode
+version being targeted — and the framework binaries under
+`/Applications/Xcode.app/Contents/SharedFrameworks/`. **If it is not there, stop and ask for it — say
+what is missing and what question it was going to answer. Do not proceed on inference**, and never infer
+behavior from a symbol's or protocol's name, from what the equivalent AppKit class does, or from what
+would make sense. What the dump must contain and why nothing else substitutes, how to establish a fact,
+how to change the stubs and where findings go: `Stubs/AGENTS.md` — read it before the first change.
 
-**Before touching this module, confirm the reference material is on disk. If it is not, stop and
-ask for it — say what is missing and what question it was going to answer. Do not proceed on
-inference.** This is not a preference. Every wrong answer this module has produced came from
-reasoning about what the framework "must" do instead of reading what it does.
-
-What has to be present:
-
-1. **A RuntimeViewer dump of the frameworks** — `/Volumes/RE/SourceEditor/Xcode/<version>/`,
-   one directory per framework, each holding **both** `ObjCHeaders/` and `SwiftInterfaces/`.
-
-   **It has to be RuntimeViewer's own export, and both directories have to be there.** A dump
-   from any other tool does not substitute, and neither does reading the binary with `nm` /
-   `otool` / `class-dump`: what makes this module tractable is exactly what those do not print —
-   protocol requirements carried *with their witness-table offsets* (a gap in the sequence tells
-   you a requirement is missing from your stub), enum cases *in declaration order* (a resilient
-   enum's case indices come from it), a class's real superclass and specifically whether it is
-   rooted at `NSObject` (getting this wrong crashes at deallocation, nowhere near the cause),
-   struct field layouts, and the address of every method — which turns decompilation into a
-   lookup instead of a search. `Stubs/README.md` says the same thing from the stub-authoring
-   side, and says it because deriving these facts from the symbol table took an afternoon and
-   got some of them wrong.
-
-   One of the two directories missing counts as no dump: the Swift surface and the
-   Objective-C surface answer different questions, and this module needs both — the framework's
-   own types come from `SwiftInterfaces/`, while what it inherits from and which `@objc` methods
-   its classes really carry come from `ObjCHeaders/`.
-
-   The dump also has to be of the Xcode version being targeted; see below.
-2. **The framework binaries** — `/Applications/Xcode.app/Contents/SharedFrameworks/<Name>.framework/Versions/A/<Name>`
-   — for decompilation and for runtime probes.
-3. **The framework resources**, whenever the question touches parsing, tokenization or theming:
-   `SourceModel.framework/Resources/LanguageSpecifications/` holds the `.xclangspec` grammars
-   (plain text, readable directly) and `Built-in Syntax Types.xcsynspec`, which is where the
-   theme's syntax keys and their hierarchy are defined.
-
-The dump's Xcode version must match the Xcode the code will run against. Addresses move between
-versions, and so do interfaces.
-
-### Never infer behavior from
-
-- a symbol's name, or a protocol's name — `SourceEditorViewMissingKeyBindings` sounds like a
-  category of implementations and is in fact a protocol the framework declares and never
-  implements;
-- what the equivalent AppKit class does — `NSTextView` implements `delete:`, `cut:` and
-  `copy:`; `NSResponder` and `NSView` implement none of them, and neither does `SourceEditorView`;
-- what would "make sense" for the framework to do.
-
-### How to establish a fact, cheapest first
-
-1. **The framework's own resources.** Grammar and theme questions are answered outright by
-   `*.xclangspec` / `*.xcsynspec`. Read those before anything else.
-2. **The dump.** Signatures, layouts, requirement order, method addresses.
-3. **Decompilation** via the `idalib` MCP, opening the framework binary directly. This is how
-   you answer "does it call my hook, and under what condition" — the dump gives you the address,
-   so go straight to it.
-4. **A runtime probe.** The last word on "does this class actually respond to that selector".
-   Load the frameworks the way the app does and ask the Objective-C runtime:
-
-   ```swift
-   // Same four frameworks and same fixed-point loop as SourceEditorLoader: their install names
-   // are @rpath-relative and they depend on each other, so one that fails a pass succeeds a later one.
-   let names = ["SourceEditor", "SourceModel", "SourceModelSupport", "_CodeCompletionFoundation"]
-   // dlopen(path, RTLD_LAZY | RTLD_GLOBAL) each, repeating until a pass makes no progress
-   let viewClass = NSClassFromString("_TtC12SourceEditor16SourceEditorView")
-   class_getInstanceMethod(viewClass, Selector(("delete:")))   // nil ⇒ not implemented
-   ```
-
-Behavioral claims that reach the user or a document must name their evidence: the file and rule
-for a grammar fact, the symbol and address for a decompiled one, the probe's output for a
-runtime one.
-
-### Writing the stub interfaces
-
-`Stubs/README.md` is the procedure, and it is not optional reading — it covers `final` versus
-plainly-declared members, protocol requirement order, and the superclass rule that crashes only
-at deallocation when you get it wrong. Adding API means: edit the `.swiftinterface`, run
-`Generate.sh --full`, link the bridge, write its new undefined symbols back into
-`UsedSymbols.txt`, then re-run `Generate.sh` **without** `--full`. Check `git diff --stat`
-before committing — the full `.tbd` files are 1.1 MB and must never land.
-
-### Where the findings live
-
-Framework behavior that cost effort to establish goes into the decision log of
-`Documentations/Evolutions/0009-content-editor-engine-selection.md`, or into a
-`Documentations/ResolvedIssues/` note when it was a bug hunt. Include the evidence, not just the
-conclusion — the next task on this module starts by reading them.
+</important>
 
 ## Code Style
 
@@ -840,847 +544,34 @@ conclusion — the next task on this module starts by reading them.
 
 ### Singletons & Dependency Injection
 
-**每个项目 singleton 都必须隐藏在 `@Dependency` 后面，没有例外。** 禁止在定义文件外直接调用 `XxxService.shared.foo()`；`shared` 使用 `fileprivate`，由编译器强制保证这一边界。
-
-**标准写法**（以下为本项目最常见的 `@MainActor` singleton）：
-
-```swift
-import Dependencies
-import DependenciesMacros
-
-@MainActor
-public final class MyService {
-    fileprivate static let shared = MyService()
-
-    @Dependency(\.someUpstream) private var someUpstream
-
-    private init() {}
-
-    public func start() { /* ... */ }
-    public func stop()  { /* ... */ }
-}
-
-// MARK: - Dependencies
-
-extension DependencyValues {
-    @DependencyEntry(liveValue: MainActor.assumeIsolated { MyService.shared })
-    public var myService: MyService
-}
-```
-
-`@DependencyEntry` 生成的 key 是 `nonisolated`。因此，`@MainActor` singleton 的 `liveValue` 必须像上例一样使用 `MainActor.assumeIsolated`；这类依赖只允许在既有的 main-actor 调用路径中首次解析。非 `@MainActor` singleton 直接使用 `@DependencyEntry(liveValue: MyService.shared)`，不再手写 `DependencyKey`。
-
-**非隔离的类型（普通 class、actor、`nonisolated` 成员）不要用存储属性 `@Dependency` 持有这类依赖。** 存储属性在哪个线程被读，就在哪个线程解析；只要那是进程里第一次读，`MainActor.assumeIsolated` 就会让进程中止。而「别处已经先在主线程取过」只是启动顺序的巧合，换个顺序就崩——`15ed432a` 修过 `\.settings` 的一处，2026-10-14 又在 `RuntimeInjectClient` / `RuntimeHelperClient` 上崩了一次（`Documentations/ResolvedIssues/2026-10-14-helper-service-manager-resolved-off-main-actor.md`）。改成 `@MainActor` 的计算属性、在 getter 里声明 `@Dependency`（参照 `RuntimeInjectClient.helperServiceManager`）：每个读都先跳到主线程，新调用点漏了 `await` 编译不过；跳转留在同一个任务里，`withDependencies` 的覆盖照常生效。
-
-**调用方**始终通过 `@Dependency` 使用：
-
-```swift
-final class MyConsumer {
-    @Dependency(\.myService) private var myService
-
-    func doWork() { myService.start() }
-}
-```
-
-**规则**：
-- `static let shared` **始终**使用 `fileprivate`，绝不使用 `public` 或无修饰的 `static let`。同文件中的 macro expansion 可以访问它，其他文件不能。
-- 必须使用 `@DependencyEntry` 生成 key 与 accessor；不要再手写 `DependencyKey` enum 和 `get` / `set`。
-- `@DependencyEntry(liveValue:)` 指定运行时实现；通常只写属性类型，让 `DependencyKey` 的默认 test behavior 保持不变。仅当确实需要默认 test value 时才添加 initializer；`previewValue:` 也只在需要独立 preview 实现时添加。
-- key path 名称应与类型匹配并以小写开头：`MyService` → `\.myService`，`HelperServiceManager` → `\.helperServiceManager`。
-- `DependencyValues` 属性的访问级别与实际使用范围一致：跨 module 使用 `public`，否则使用 `package` 或 internal。
-
-**有限例外**：
-- 如果 enclosing type 已经是 `private` / `fileprivate`（例如 file-scoped helper `EmptyRouteTransitionContext`），`shared` 已天然限制在文件内，保留 `static let shared`；额外添加 `fileprivate` 会触发 redundant-modifier warning。
-- Apple SDK singleton（`NSApplication.shared`、`NSWorkspace.shared`、`NSDocumentController.shared`、`UserDefaults.standard`、`FileManager.default` 等）不属于项目 singleton，可直接使用，无需包装。
-
-**禁止写法**——出现以下任一情况时，改用上面的标准模式：
-- `public static let shared = Foo()` in a project type
-- `Foo.shared.bar()` at a call site outside `Foo.swift`
-- 手写 `DependencyKey` enum 与 `DependencyValues` accessor boilerplate
-- Importing a module purely to reach `Foo.shared` instead of going through `@Dependency(\.foo)`
-
-### AppDelegate Convention
-
-**AppDelegate is a dispatch shell, not a service container.** Treat it like a router that translates app lifecycle into one-line calls on injected services.
-
-**Allowed in AppDelegate** (and nothing else):
-- Lifecycle hooks (`applicationDidFinishLaunching`, `applicationWillTerminate`, `applicationSupportsSecureRestorableState`, `applicationShouldTerminateAfterLastWindowClosed`, `application(_:open:)`, …)
-- `@Dependency(\.xxx)` declarations for the controllers/services it dispatches to
-- `@objc` action methods that immediately delegate to a router or injected service (one line each). The app has no nib, so these are menu actions reached through the responder chain, not Interface Builder connections
-- One-line `start()` / `install()` / `stop()` / `checkOnLaunch()` calls on injected services
-- Compile-time flag toggles like `runtimeViewerIsARM64EVariant = true` and one-shot fixes like `NSToolbarItemViewerOverflowFix.install()`
-- The `@main` `static func main()`: pre-main one-shot fixes, then set the delegate, assign `MainMenuController`'s menu, and `run()` — nothing else (see below)
-
-**Forbidden in AppDelegate**:
-- `@objc` action handlers with bodies (extract to a controller's `@objc` method)
-- `Task { … }` blocks doing work (push the work into a service method)
-- `NSMenu` / `NSMenuItem` construction (the main menu is `MainMenuController`'s; anything added to it afterwards goes in a `XxxMenuController.install()`)
-- `NSAlert` / `NSSavePanel` / `NSOpenPanel` flows (extract to the responsible controller)
-- `observe { … }` / `withObservationTracking { … }` blocks (extract to a controller that owns the `ObserveToken`)
-- Singleton bootstrapping logic, version checks, file I/O, log export — all belong to dedicated controllers
-
-**The pattern** — every new lifecycle responsibility is a new `@MainActor` controller class in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via the Singletons & Dependency Injection pattern above. Current examples:
-- `AppearanceController` — observes `settings.general.appearance` and updates `NSApp.appearance`
-- `DebugMenuController` — installs the Debug menu and owns the Export Logs flow
-- `HelperServiceVersionChecker` — runs the helper version probe and presents reinstall alerts
-- `UpdaterService` — owns the Sparkle updater lifecycle
-- `MainMenuController` — assembles the main menu in code (the replacement for `MainMenu.xib`)
-- `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`
-- `CommandLineHostController` — makes the running app the CLI host: asks a standalone host to leave on launch, serves the socket, removes its files on quit
-
-**One-shot fixes that must beat the main menu** go in `AppDelegate.main()` (`AppDelegate` carries `@main` and supplies its own `static func main()`), before `NSApplication.mainMenu` is assigned — not in a lifecycle callback, which runs too late. `SystemAutoFillMenuSuppression` is the standing example: the default it registers is read, and then cached for the process, the first time AppKit customizes the main menu. A fix that lands there must say in a comment why, or the next reader will move it and it will silently stop working.
-
-AppDelegate then reduces to:
-
-```swift
-@MainActor
-@main
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    fileprivate static let shared = AppDelegate()
-
-    @Dependency(\.appearanceController)         private var appearanceController
-    @Dependency(\.debugMenuController)          private var debugMenuController
-    @Dependency(\.helperServiceVersionChecker)  private var helperServiceVersionChecker
-    @Dependency(\.mcpService)                   private var mcpService
-    @Dependency(\.updaterService)               private var updaterService
-
-    static func main() {
-        SystemAutoFillMenuSuppression.install()
-        let application = autoreleasepool {
-            @Dependency(\.mainMenuController) var mainMenuController
-
-            let application = NSApplication.shared
-            application.delegate = AppDelegate.shared
-            application.setActivationPolicy(.regular)
-            application.mainMenu = mainMenuController.makeMainMenu()
-            return application
-        }
-        application.run()
-    }
-
-    func applicationDidFinishLaunching(_ note: Notification) {
-        NSToolbarItemViewerOverflowFix.install()
-        appearanceController.start()
-        debugMenuController.install()
-        mcpService.start(for: AppMCPBridgeDocumentProvider())
-        updaterService.start()
-        helperServiceVersionChecker.checkOnLaunch()
-    }
-
-    func applicationWillTerminate(_ note: Notification) {
-        updaterService.stop()
-        mcpService.stop()
-    }
-}
-```
-
-If a lifecycle responsibility doesn't fit one of these one-liners, **make it a new controller before touching AppDelegate**.
-
-### MVVM-C Completeness
-
-**Every ViewController MUST have a corresponding ViewModel.** Never put business logic (service calls, state management, pasteboard operations) directly in the ViewController. The ViewController only handles:
-- View setup and layout
-- Firing relay events from `@objc` actions
-- Binding ViewModel outputs to UI in `setupBindings(for:)`
-
-### ViewController Base Class Selection
-
-- **`BaseViewController<VM>`**: Default choice. Built on UIFoundation's `LayerBackedViewController<LayerBackedView>` — AppKitPlus's `NSLayerBackedViewController` underneath, because the `AppKitPlus` trait is on — and carries the ViewModel plumbing plus `containerView`, loading indicator (`CommonLoadingView`) and skeleton support. Two views, two jobs: the superclass's `contentView` is the root view itself, a UIFoundation `LayerBackedView`; `containerView` is the plain view inside it that applies `contentInsets` (and the safe area when `containerViewUsingSafeArea` is on) and stays under the loading indicator, so pane content goes there — content added straight to `contentView` / `view` gets neither. Background: `Documentations/Evolutions/0024-layer-backed-view-controller-adoption.md`. AppKitPlus's navigation stack takes plain `NSViewController`s, so nothing has to inherit a navigation-specific base. `CommonLoadingView` is the system spinner (`NSProgressIndicator`, spinning) over frosted glass before macOS 26 and over nothing from macOS 26 on; it covers the whole view and centres the spinner in the safe area. A pane that should be covered while it loads sets `commonLoadingView.backgroundColor`, which replaces the glass — the two content panes set the editor's background, which makes it an opaque plate over the minimap, the gutter and the strip under the toolbar. `delayedLoading` drives `isRunning` directly and is the only thing that changes it, so a pane rebound to a new ViewModel keeps its spinner until that ViewModel reports; do not seed it with a default. Background: `Documentations/Evolutions/0023-content-loading-overlay.md`
-- **`BaseEffectViewController<VM>`**: Use when a visual effect background is needed (inherits `BaseViewController`). Before macOS 26 that background is an `NSVisualEffectView`; from macOS 26 it is a plain `NSView`, because the split view wraps the item in an `NSGlassEffectView` that no colour or material matches, so the page stays transparent and sits on that glass directly. The opaque backdrop the sidebar's push / pop needs is inserted under both sliding pages for the transition's duration by `NavigationTransitionBackdropController` (the sidebar navigation controller's delegate): UIFoundation's `GlassEffectReplicaView` on macOS 27+, a glass that copies the enclosing glass and shares its backdrop group, and `windowBackgroundColor` on macOS 26. Do not give pages a resident background of their own; see `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`
-
-### UI Component Selection
-
-**Always check for project wrapper types first** (from RuntimeViewerUI / UIFoundation). When a wrapper type cannot satisfy a specific need (e.g., `PushButton` has a fixed `.push` bezelStyle), fall back to the raw AppKit class (e.g., `NSButton()` for `.accessoryBarAction` bezelStyle).
-
-**Private nested types for specialized views**: When a ViewController needs a custom view for a specific purpose, define it as a private nested type with namespace:
-```swift
-extension MyViewController {
-    private class HeaderView: NSView { ... }
-}
-```
-
-### ViewModel Conventions
-
-**Base class**: All ViewModels inherit `ViewModel<Route>`, which provides `documentState`, `router`, `appDefaults`, `errorRelay`, `_commonLoading`.
-
-**State properties** — use `@RxObserved` (NOT `BehaviorRelay`):
-```swift
-@RxObserved private(set) var currentPage: Page = .configuration
-@RxObserved private(set) var nodes: [CellViewModel] = []
-```
-- Exposed as Driver/Signal via `$property.asDriver()` or `$property.asSignal()`
-- Mutate by direct assignment: `currentPage = .progress`
-- **Read the property for its current value; touch `$property` only to subscribe or bind.** `@RxObserved` creates its `BehaviorRelay` on the first `$property` access (proposal *`@RxObserved` 惰性创建 relay*), so a `$property.value` in a bulk path — a filter pass, type-select, an export loop — materializes one relay plus an `NSRecursiveLock` per row and silently undoes the saving. `SidebarFilterRelayMaterializationTests` guards the sidebar paths; keep new bulk paths on `wrappedValue`.
-
-**Input/Output transform pattern**:
-```swift
-@MemberwiseInit(.public)
-struct Input {
-    let cancelClick: Signal<Void>
-    let searchString: Signal<String>
-}
-
-struct Output {
-    let nodes: Driver<[CellViewModel]>        // State → Driver
-    let requestSelection: Signal<Void>         // One-shot events → Signal
-}
-
-func transform(_ input: Input) -> Output {
-    input.cancelClick.emitOnNext { [weak self] in
-        guard let self else { return }
-        router.trigger(.dismiss)
-    }
-    .disposed(by: rx.disposeBag)
-
-    return Output(
-        nodes: $nodes.asDriver(),
-        requestSelection: requestSelectionRelay.asSignal()
-    )
-}
-```
-
-**One-shot events from ViewModel** — use `PublishRelay`:
-```swift
-private let requestDirectorySelectionRelay = PublishRelay<Void>()
-```
-
-**Dependency injection**: `@Dependency(\.appDefaults) var appDefaults`
-
-**Async content — one state enum, never `isLoading` + `content` side by side.** When a pane's content comes from an `async` engine call, model loading and content as a *single* `@RxObserved` value:
-
-```swift
-public enum HierarchyState { case loading, loaded(String) }
-
-$runtimeObject
-    .flatMapLatest { runtimeObject in
-        Observable<HierarchyState>.async { .loaded(try await ...) }
-            .withLoadingPlaceholder(
-                .loading,
-                appearsAfter: LoadingPlaceholderTiming.appearsAfter,
-                staysAtLeast: LoadingPlaceholderTiming.staysAtLeast
-            )
-    }
-    .observeOnMainScheduler()
-    .bind(to: $hierarchyState)
-```
-
-Two independent drivers let the view observe "not loading" together with the *previous* object's content — a visible flash. One enum makes that state unrepresentable. `flatMapLatest` also drops the in-flight call when the selection moves on; a bare `Task { }` does not, so a slow result can land on top of a newer one.
-
-**Never emit the loading state with a bare `startWith`.** Use `withLoadingPlaceholder(_:appearsAfter:staysAtLeast:)` (RuntimeViewerArchitectures) with the shared `LoadingPlaceholderTiming` values, so the placeholder does not become the flicker it was meant to hide: work faster than `appearsAfter` shows no placeholder at all, and a placeholder that does appear stays up for `staysAtLeast` instead of blinking for a frame. Engine calls that hit a warm cache return in single-digit milliseconds, so this is the common case, not the edge case.
-
-Build the pipeline in `init` and return `$state.asDriver()` from `transform`, the way `ContentTextViewModel` does. Values that build AppKit objects (cell ViewModels, `NSImage`, `NSAttributedString`) are mapped **after** `observeOnMainScheduler()`; only plain model data crosses back from the background.
-
-**Reusable panes: keep the ViewModel, swap the object.** A pane that shows a series of objects (Inspector tabs, Content text) must not build a fresh ViewModel and call `setupBindings(for:)` per object. `setupBindings` resets `rx.disposeBag`, which tears down `tableView.rx.items` and installs a *new* RxAppKit adapter starting from an empty item list — the table blanks on the spot. Instead give the ViewModel an `update(for:)` that assigns the new object to an `@RxObserved` property the pipeline is already keyed on, and have the coordinator hold the ViewModel:
-
-```swift
-public func update(for runtimeObject: RuntimeObject) {
-    guard self.runtimeObject != runtimeObject else { return }
-    self.runtimeObject = runtimeObject
-}
-```
-
-The identity guard matters: re-entering the same object (a `.back` route from a tab close or a history cursor move) must not refetch, or the loading placeholder flashes over content that is already correct.
-
-**`==` on `RuntimeObject` is identity only** — `(imagePath, name, kind)`, the same triple as `RuntimeObjectKey`; `displayName`, `children` and `properties` do not take part (Evolution 0021). That is the right guard for a pane that *fetches* by the object, and the wrong one for a pane that *renders the object's own fields*: the Inspector's Specialization tab lists `runtimeObject.children`, so it guards with `hasSameContent(as:)`, or a type that has grown a specialization never shows it. Ask which one a new pane is before copying the guard above. The same applies to anything that stores the form of a type it was last given — the navigation timeline and the active tab replace an entry whose content differs even when `==` holds. And never decide *which* type an object is from its `displayName`: one type prints under more than one name (a nested protocol is listed by its short name in the sidebar and by its qualified name after a jump).
-
-### ViewController Conventions
-
-**Base classes**: `BaseViewController<VM>` (default) or `BaseEffectViewController<VM>` (visual effect background).
-
-**UI events** — prefer RxAppKit / RxCocoa `rx.*` accessors over hand-rolled `PublishRelay` + `@objc` action plumbing. Wire control events straight into `Input`:
-
-```swift
-let input = MyViewModel.Input(
-    cancelClicked: cancelButton.rx.click.asSignal(),
-    exportClicked: exportButton.rx.click.asSignal(),
-    searchString: searchField.rx.stringValue.asSignal(onErrorJustReturn: "")
-)
-```
-
-Common rx accessors to know:
-- `NSButton`: `rx.click`, `rx.state`, `rx.title`, `rx.isEnabled`
-- `NSSearchField` / `NSTextField`: `rx.stringValue`, `rx.text`
-- `NSTableView`: `rx.itemClicked()`, `rx.itemSelected()`, `rx.modelSelected()`, `rx.items`, `rx.setDelegate(_:)`
-- `NSOutlineView`: `rx.modelDoubleClicked()`, `rx.modelSelected()`, `rx.nodes`, `rx.reorderableNodes`
-- `NSView`: `rx.isHidden` and friends
-
-`PublishRelay<T>` is reserved for events that **cannot** be expressed as a control accessor:
-- Aggregating clicks from dynamically rebuilt child views (e.g., per-row buttons in a form — see `SpecializationViewController.requestTypePickerClickedRelay`).
-- One-shot events emitted by the ViewModel itself (returned to the controller via `Output`).
-
-**Avoid**: `private let xxxRelay = PublishRelay<Void>()` + `@objc func xxxClicked()` + `xxxButton.target = self; xxxButton.action = #selector(...)` for a single, statically-known control. Replace it with `xxxButton.rx.click.asSignal()`.
-
-**setupBindings pattern**:
-```swift
-override func setupBindings(for viewModel: MyViewModel) {
-    super.setupBindings(for: viewModel)
-    let input = MyViewModel.Input(cancelClick: cancelRelay.asSignal(), ...)
-    let output = viewModel.transform(input)
-
-    output.nodes.drive(outlineView.rx.nodes) { ... }.disposed(by: rx.disposeBag)
-
-    output.currentPage.driveOnNext { [weak self] page in
-        guard let self else { return }
-        showPage(page)
-    }
-    .disposed(by: rx.disposeBag)
-}
-```
-
-### UI Components
-
-**Always use project wrapper types** (from RuntimeViewerUI / UIFoundation), NOT raw AppKit classes:
-
-| Use | Instead of |
-|-----|-----------|
-| `Label()` / `Label("text")` | `NSTextField(labelWithString:)` |
-| `PushButton()` | `NSButton()` |
-| `ImageView()` | `NSImageView()` |
-| `VStackView(alignment:spacing:) { ... }` | `NSStackView(orientation: .vertical)` |
-| `HStackView(spacing:) { ... }` | `NSStackView(orientation: .horizontal)` |
-| `ScrollView()` | `NSScrollView()` |
-| `NSPopUpPathControl()` (AppKitPlus) | `NSPathControl()` for an Xcode-style path of menus (`Find ▸ Text ▸ Containing`) |
-| `NSFilterSearchField()` (AppKitPlus) | `NSSearchField()` above a list it filters — the field of a page's filter bar, a picker's filter field |
-| `NSFindPatternSearchField()` (AppKitPlus) | `NSSearchField()` for a query that takes find patterns (Digits, Any Word Characters…) among its text — the Find page's query field. Read `findPatternComponents`, never `stringValue`, which holds U+FFFC for each token |
-| `NavigatorFilterControlBar()` (RuntimeViewerUI, an AppKitPlus `NSFilterControlBar`) | an `HStackView` of buttons and a search field at the bottom of a sidebar page |
-| `final class XxxView: LayerBackedView` | `final class XxxView: NSView` (when it needs `cornerRadius` / border / `backgroundColor` / shadow) |
-
-**Filter fields, filter bars and pop-up paths come from AppKitPlus.** `NSFilterSearchField`, `NSFilterControlBar` and `NSPopUpPathControl` are ports of Xcode's own `DVTSearchField`, `DVTFilterControlBar` and `DVTPathControl`; RuntimeViewer keeps no copies of its own any more — UIFoundation's `FilterSearchField` went with its `FilterUI` trait, and the old `PopUpPathControl` and `ItemPopUpButton` were deleted. Background: `Documentations/Evolutions/0032-appkitplus-filter-and-path-controls.md`. Things to know:
-
-- The bar at the bottom of a sidebar page is a `NavigatorFilterControlBar` (RuntimeViewerUI): AppKitPlus's `NSFilterControlBar`, taken for a bar by the list's scroll pocket — a plain `NSFilterControlBar` there loses that without a sign; see *Navigator pages run under their bars*. Give it the page's field as `filterField`, put the buttons beside the field in it as `NSFilterControlBarItem`s, and pin it to the edges: its intrinsic height carries the margins around the field. Set `controlSize` on the bar, never on its field: the bar sets the field's size whenever it takes the field or changes size.
-- An item with a menu pops the menu up as a pull-down `NSPopUpButton` does, which is what Xcode's bar has: below the item, or above it when the window is at the bottom of the screen. **Item 0 of the menu is the pull-down's face and is never listed**, so a menu starts with an empty item, or its first entry goes missing; the item shows its own `image`, not item 0's. `ChoiceFilterControlBarItem` (RuntimeViewerUI) is the one for a choice of one case or none, such as the filter mode, and puts the face in itself. An item without a menu sends its action from its button on the bar, and that button is the view to show a popover from. An item has no tint: to show it as active, swap in a symbol coloured with the accent colour, which the bar keeps from AppKitPlus 0.10.1 on.
-- Add a filter toggle with `addFilterButton(with:alternateImage:toolTip:accessibilityLabel:)` and leave its frame alone: the field lays its buttons out itself, and a constraint on one breaks that.
-- Setting a field's `controlSize` also sets its `font`, to that size's system font, as Xcode does — in a bar, setting the bar's does. A field that needs another font sets it afterwards.
-- Work in progress shows as the field's own `progress`, never as a spinner laid over the field.
-- `NSPopUpPathControl` selects the chosen item before it tells its delegate. The Find page's mode path is the view model's to decide, so `FindModePathControlAdapter` puts the view model's path back in `popUpPathControl(_:didSelect:)` and only reports the choice. A path that an owner decides needs the same, or the control shows the bare chosen item for a moment.
-- The Find page's query field is an `NSFindPatternSearchField`, whose content is a `FindQueryTerm`. A term with find patterns goes to the engine as a regular expression bounded by the engine's own identifier boundaries (`RuntimeTextPattern.regularExpression(_:boundedAs:)`), never ICU's `\b`, so a match style means the same with patterns and without; patterns can be inserted in Text mode alone (`allowsPatternInsertion`). Its magnifying glass's menu — Insert Pattern and the recent queries, kept per source in `AppDefaults.findRecentQueriesByScope` — is built by `FindQueryFieldMenuAdapter`, the field's delegate. Background: `Documentations/Evolutions/0050-find-patterns-and-recent-queries.md`.
-
-**Layer-backed views** — any custom AppKit view that needs layer-level visuals (rounded corners, border, background color, shadow) MUST inherit `UIFoundationAppKit.LayerBackedView`, never raw `NSView` with hand-rolled `wantsLayer = true` + `layer?.cornerRadius / layer?.borderColor / layer?.backgroundColor = ....cgColor`. The base class already sets `wantsLayer + layerContentsRedrawPolicy = .onSetNeedsDisplay` and centralizes everything in `updateLayer()`, so:
-
-- Assign the exposed `NSColor?` properties directly — `backgroundColor = NSColor(light:dark:)`, `borderColor = ...` — **without** `.cgColor`. Dynamic colors re-resolve on appearance change automatically; you do NOT need to override `viewDidChangeEffectiveAppearance`.
-- One-time setup goes in `override func setup()` (called by `commonInit`); first-layout work goes in `override func firstLayout()`. Don't repeat `wantsLayer = true` in `init`.
-- Available properties: `cornerRadius`, `borderWidth`, `borderColor`, `borderPositions`, `borderLocation`, `borderInsets`, `backgroundColor`, `shadowColor`, `shadowOpacity`, `shadowOffset`, `shadowRadius`, `shadowPath`.
-- **Gotcha — a plain `NSView` has no `backgroundColor` of ours.** AppKitPlus gives every `NSView` a `backgroundColor` through an Objective-C category whose header is internal, so the app reaches it by key-value coding as `view._backgroundColor` (`NavigationTransitionBackdropController.swift`). Keep that bridge under a different name: while it was an `NSView` extension called `backgroundColor`, an unqualified `backgroundColor` inside a `LayerBackedView` subclass resolved to it instead of to the layer renderer's own property, and the background never showed. Use `_backgroundColor` only on plain views such as `BaseViewController.containerView`; a `LayerBackedView` — `BaseViewController`'s root `contentView` included — takes plain `backgroundColor`, and its renderer rewrites the layer's background on every `updateLayer`, so a colour set on it by key-value coding does not stay.
-- **Gotcha — `borderPositions` defaults to `[]`, so the border won't render** even with non-zero `borderWidth` + non-nil `borderColor`. To draw a full rounded border you MUST set `borderPositions = .all`:
-  ```swift
-  cornerRadius = 8
-  borderWidth = 1
-  borderColor = NSColor(light: ..., dark: ...)
-  borderPositions = .all   // ← otherwise the previous 3 lines are ignored
-  ```
-
-**Loading placeholders** — use `SkeletonPlaceholderView` (RuntimeViewerUI), driven by the state enum from **ViewModel Conventions** above:
-
-```swift
-private let skeletonPlaceholderView = SkeletonPlaceholderView.runtimeObjectList()   // or .classHierarchy()
-
-case .loading:
-    skeletonPlaceholderView.isPresentingPlaceholder = true
-    scrollView.isHidden = true
-case .loaded(let rows):
-    skeletonPlaceholderView.isPresentingPlaceholder = false
-    scrollView.isHidden = rows.isEmpty
-```
-
-- It **replaces** content, it does not overlay it: while it is presented the call site MUST hide the real subviews, otherwise the previous object's data shows through the gaps between bars. Hiding alone is not always enough — a hidden `NSView` still contributes its size to Auto Layout, so also clear stale text (or put the two in an `NSStackView`, which detaches hidden arranged subviews).
-- `isPresentingPlaceholder` owns both `isHidden` and the pulse animation; never set `isHidden` directly.
-- Add a preset (`classHierarchy` / `runtimeObjectList`) rather than composing `Row`/`Bar` at the call site. Use `Bar.Width.points` when the host container hugs its content (there is no width to take a fraction of), `.fraction` when the container's width is externally fixed.
-- Do **not** use `NSView.showSkeleton(using:)` for this. That one is a translucent shimmer *overlay* — stale content remains visible underneath and its 0.35s fade-in itself reads as a flash.
-
-**View initialization** — `.then {}` returns the configured object (for assignment):
-```swift
-let titleLabel = Label("Export").then {
-    $0.font = .systemFont(ofSize: 18, weight: .semibold)
-}
-```
-
-**View configuration** — `.do {}` mutates in place (for already-declared properties):
-```swift
-configRadioButton.do {
-    $0.setButtonType(.radio)
-    $0.title = "Single File"
-    $0.state = .on
-}
-```
-
-**Adding subviews** — use `hierarchy {}` result builder (NOT `addSubview`):
-```swift
-container.hierarchy {
-    contentStack
-    buttonStack
-}
-```
-
-**Stack views** — use result builder initializer:
-```swift
-let contentStack = VStackView(alignment: .leading, spacing: 16) {
-    headerStack
-    imageNameStack
-    formatStack
-}
-
-let buttonStack = HStackView(spacing: 8) {
-    cancelButton
-    exportButton
-}
-```
-
-### Layout
-
-**All layout uses SnapKit** — constraints grouped together after `hierarchy {}`:
-```swift
-container.hierarchy {
-    contentStack
-    buttonStack
-}
-
-contentStack.snp.makeConstraints { make in
-    make.top.leading.trailing.equalToSuperview().inset(20)
-}
-
-buttonStack.snp.makeConstraints { make in
-    make.trailing.bottom.equalToSuperview().inset(20)
-}
-```
-
-### Navigator pages run under their bars (macOS 26 and later)
-
-The sidebar is laid out the way Xcode lays out its navigator area: a page's list runs the whole height of the
-sidebar — under the toolbar, under the tab switcher's segmented control and under the filter bar — and those bars
-float over it. The list keeps its content clear of them through safe area, not through constraints, and AppKit draws
-the scroll edge effect (the blur where content scrolls under a bar, which AppKit calls a scroll pocket) over that same
-safe area. Before macOS 26 the pages stay stacked.
-
-- `TabViewController.pageLayout` picks the layout per switcher: `.underSegmentedControl` for the sidebar's two
-  (`SidebarRootTabViewController`, `SidebarRuntimeObjectTabViewController`), `.belowSegmentedControl` — the default —
-  for the inspector's, which Xcode stacks too. Under `.underSegmentedControl` the tab view fills the view, the bar
-  holding the segmented control is drawn over it, and a `FloatingBarSafeAreaLayout` (RuntimeViewerUI) writes the bar's
-  height (28 at `.large`) into `tabView.additionalSafeAreaInsets.top` whenever the bar's frame changes. **Never from
-  the switcher's `viewDidLayout`**: AppKit calls it before it lays out anything below the controller's view's direct
-  subviews, so the bar — one level further down — still has the frame of the pass before, none at all on the first; a
-  page pushed onto the sidebar may get no second pass, and its list then starts under the bar. `TabSwitcherBarSafeAreaTests`
-  covers it; background: `Documentations/ResolvedIssues/2026-10-15-sidebar-list-starts-under-the-tab-switcher-bar.md`.
-- **Every page of every switcher starts its content 8 points below the segmented control**
-  (`TabViewController.pageTopSpacing`, which is `NavigatorScrollViewLayout.topContentInsetBeyondSafeArea`, so every
-  such gap follows that one value). A page stacked below the control — every page before macOS 26, the inspector's on
-  every system — gets the gap from the switcher and starts its own content at its top edge, with no top margin of its
-  own: the inspector's headers and the Class page's disclosure title sit at the page's top. A page running under the
-  bar gets it from its list's content inset, and the Find page's query area from a constraint on `pageTopSpacing`.
-- A page shown in a sidebar switcher lets its list's scroll view reach all four edges of the page and hands the list
-  to a `NavigatorScrollViewLayout` (RuntimeViewerUI), never a container inset or a constraint to a bar. The four page
-  base classes (`SidebarRootViewController`, `SidebarRuntimeObjectViewController`, `FindViewController`,
-  `ReportViewController`) keep `BaseViewController`'s `contentInsets`, which are zero, for this reason. A scroll view
-  that stops below the titlebar is not registered with the window, so it gets no top pocket, and its rows are cut off
-  at the bar instead of scrolling under it.
-- `NavigatorScrollViewLayout` takes the views that float over the list's edges: the filter bar as
-  `bottomOverlayViews`, the Find page's query area and summary row as `topOverlayViews`. It turns the depth they cover
-  into the scroll view's own `additionalSafeAreaInsets` and sets the clip view's `contentInsets` to the safe area plus
-  8 points at the top, as Xcode does; it follows the safe area and the views' frames by itself. Add the scroll view
-  before those views, so that they draw and take clicks above it; hide the 1-point separators from macOS 26 — the edge
-  effect replaces them; centre empty-state text and placeholders in the safe area (`scrollView.safeAreaLayoutGuide`),
-  not in the scroll view.
-- Keep the scroll view's own `automaticallyAdjustsContentInsets` on, and leave the clip view's insets, its
-  `automaticallyAdjustsContentInsets` and the scroll view's `additionalSafeAreaInsets` to the layout. AppKit sizes the
-  bottom scroll pocket by the scroll view's own bottom content inset, not the clip view's (measured on macOS 27.2), so
-  a scroll view whose automatic insets are off gets no bottom edge effect even though its rows still clear the bar.
-- The views floating over the list are registered with its scroll view as containers of their edge's scroll pocket,
-  as Xcode registers its bars (`-[NSScrollView registerPocketContainer:onEdge:]`, through UIFoundation's
-  `NSScrollView.box`), and they answer AppKit's `_scrollPocketElementStyle` with 2, the value Xcode's bars answer: the
-  filter bar is a `NavigatorFilterControlBar`, and the Find page's query area and summary row and the tab switcher's bar
-  are `ScrollPocketBarView`s (both RuntimeViewerUI). A plain `NSFilterControlBar` or `NSView` in their place still gets
-  the edge effect, only not as a bar, and nothing shows that anything is missing. `NavigatorScrollViewLayout` makes
-  every pocket call — it registers the overlays, keeps both edges always shown (`alwaysShownPocketEdges = 3`) and, on
-  macOS 26 only, sets style 2 on both edges as Xcode does there — so nothing else touches a page's scroll view.
-- The tab switcher's bar belongs to `TabViewController`, not to the page, and reaches the list through
-  `NavigatorTabPage`: the switcher sets `tabSwitcherOverlayViews` to the bar on the page on screen and back to none on
-  the page before, at the end of every path that changes the selection — its tab view has no delegate, so nothing
-  reports a selection — and the page passes them to its layout as `inheritedTopOverlayViews`, which are registered but
-  add no safe area: the bar's height already arrives through `tabView.additionalSafeAreaInsets`. One scroll view holds
-  the bar at a time. A new page class shown in a sidebar switcher adopts `NavigatorTabPage` and keeps the value until
-  it makes its layout, because `NSTabViewItem(viewController:)` loads a page's view only when it is first shown. The
-  inspector's switcher does none of this. Background, with the reverse-engineered addresses:
-  `Documentations/Evolutions/0052-xcode-navigator-overlay-bars.md`.
-
-### Diagnosing UI Flicker
-
-**Measure the frames before changing anything.** Flicker is a one-to-three-frame artifact; reading the code and reasoning about what "should" happen has repeatedly produced confident, wrong answers here. Ask for a screen recording, export **every** frame with `AVAssetReader` (time-point sampling is too coarse and misses the artifact outright), then pixel-diff consecutive frames and report changed-pixel count plus the y-range of the changed rows. Which pixels changed on which frame is the thing inference cannot give you.
-
-Two causes account for every flicker found so far — check them first:
-
-- **A highlight goes grey and then comes back.** `NSTableRowView.isEmphasized` is false whenever the owning table view is not the first responder, which draws the selection in the inactive grey. A click that moves focus into a click-to-navigate list greys out the selection in whatever view the user is actually watching, for focus the app hands straight back. Build lists whose only interaction is "click a row to go somewhere" (the Inspector's Relationships / Specializations panes) with `SelfSizingTableView.scrollableNavigationListTableView()`, which sets `refusesFirstResponder` alongside the `selectionHighlightStyle = .none` that suppresses the list's *own* highlight — see the navigation-list notes under *NSTableView / NSOutlineView Rx Data Source*. Mouse clicks, row selection and `itemClicked` all keep working.
-- **A scroll result and a selection/content result land on different frames.** `NSOutlineView` materializes a row view only as the row scrolls into view, and applies the emphasized selection style after that. **Always scroll a row into view before selecting it** — never the reverse — and force the layout that the raw clip-view scroll would otherwise defer. `SidebarRuntimeObjectViewController.selectRowBringingIntoView(_:)` is the reference implementation; route new call sites through it rather than pairing `selectRowIndexes` with `scrollRowToVisible` by hand.
-
-Full write-up, including the frame table that pinned it down: `Documentations/ResolvedIssues/2026-08-05-sidebar-selection-highlight-flicker.md`.
-
-**A selection that stays grey in a key window, and a context menu that will not open, is not flicker.** It means focus is parked on a plain container *above* the list. While an ancestor container is first responder, a right-click on a cell's text does not open the table's menu, and on macOS 27 a left click no longer moves focus into the table either: macOS 27 handles table clicks with gesture recognizers, whatever SDK the app links against, and they take focus only for Sidecar touches. macOS 26 hides all of it, because there `-[NSTableView mouseDown:]` takes focus on every click — so reproduce on macOS 27, and do not read anything into re-stamping the binary's SDK. AppKitPlus's navigation controller hands the first responder to the page's `preferredFirstResponder` at the end of every push, pop and `set`, so a page that holds a list overrides it to return the list, only while it is in the window — `TabViewController` forwards it to the tab on screen. Reproduce this with a real navigation, not by making the outline first responder first: that skips the very state that triggers it. Write-up: `Documentations/ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md`.
-
-**`StatefulOutlineView` overrides `mouseDown(with:)` on purpose — keep it.** The body is only `super`; the override exists so that AppKit installs none of its table gesture recognizers and the outline stays on macOS 26's tracking loop. On macOS 27 those recognizers handle every table's mouse input, whatever SDK the app links against, and their drag handler moves the selection with the pointer only when `allowsMultipleSelection` is on: in the single-selection sidebar lists, pressing a row and dragging left the selection where the drag began while the list autoscrolled under the pointer. The tracking loop also takes focus on every click, as on macOS 26, so the left-click half of the paragraph above no longer applies to these two lists; keep the `preferredFirstResponder` handover anyway, for keyboard focus straight after a navigation and for the right-click case. AppKit logs an error for each such outline, "Gesture recognizer support has been disabled because NSTableView subclass … overrides either mouseDown: or mouseDragged:" — expected. Nothing tests this: the recognizers are private and macOS 27.2 renamed them, so a test over their names reports Apple's renames rather than a regression here. Write-up: `Documentations/ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md`.
-
-**`StatefulOutlineView` turns AppKit's row height estimation off in its `delegate` setter — keep it there.** A source list outline with group rows has rows of different heights, so AppKit places the rows it has not measured at an estimated position, and `-[NSOutlineView setDelegate:]` turns that estimation back on at every change of delegate — including the nil-then-proxy resets RxCocoa's delegate proxy performs on its own. While it is on, a reload (every filter keystroke) or an expansion after a jump far down the object list leaves part of the visible rows at the old estimate, and the next scroll draws rows over them. The switch is UIFoundation's `box.estimatesRowHeights` (`AppleInternal` trait), and the setter is the one safe place for it: switching discards the row geometry without reloading or moving the row views already on screen, so switching a list that shows estimated rows misplaces them until the next `reloadData()`. Do not move it to `setupBindings` or anywhere after rows are shown. `StatefulOutlineViewRowGeometryTests` fails if the estimation comes back; its expansion cases need a fresh list per position, because a sweep over one list measures the rows that would go wrong. Write-up: `Documentations/ResolvedIssues/2026-09-27-sidebar-rows-drawn-over-each-other.md`.
+**每个项目 singleton 都必须隐藏在 `@Dependency` 后面，没有例外。** 标准写法见
+`RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppearanceController.swift`。
+
+- `static let shared` **始终**使用 `fileprivate`（同文件中的 macro expansion 可以访问它，其他文件不能），绝不使用 `public` 或无修饰的 `static let`。禁止在定义文件外调用 `Foo.shared.bar()`，也不为了够到 `Foo.shared` 而 import 一个 module。
+- 用 `extension DependencyValues` 里的 `@DependencyEntry` 生成 key 与 accessor，不要手写 `DependencyKey` enum 与 `get` / `set`。生成的 key 是 `nonisolated`，所以 `@MainActor` singleton 写 `@DependencyEntry(liveValue: MainActor.assumeIsolated { MyService.shared })`，且只允许在既有的 main-actor 调用路径中首次解析；非 `@MainActor` singleton 直接写 `@DependencyEntry(liveValue: MyService.shared)`。通常只写属性类型，让默认 test behavior 保持不变；确实需要时才加默认 test value 或 `previewValue:`。
+- key path 与类型同名、首字母小写（`MyService` → `\.myService`，`HelperServiceManager` → `\.helperServiceManager`）；`DependencyValues` 属性的访问级别与实际使用范围一致：跨 module 用 `public`，否则用 `package` 或 internal。调用方一律 `@Dependency(\.myService) private var myService`。
+- **非隔离的类型（普通 class、actor、`nonisolated` 成员）不要用存储属性 `@Dependency` 持有 `@MainActor` 依赖。** 存储属性在哪个线程被读，就在哪个线程解析；只要那是进程里第一次读，`MainActor.assumeIsolated` 就会让进程中止，而「别处已经先在主线程取过」只是启动顺序的巧合——`15ed432a` 修过 `\.settings` 的一处，2026-10-14 又在 `RuntimeInjectClient` / `RuntimeHelperClient` 上崩了一次（`Documentations/ResolvedIssues/2026-10-14-helper-service-manager-resolved-off-main-actor.md`）。改成 `@MainActor` 的计算属性、在 getter 里声明 `@Dependency`（参照 `RuntimeInjectClient.helperServiceManager`）：每个读都先跳到主线程，新调用点漏了 `await` 编译不过；跳转留在同一个任务里，`withDependencies` 的覆盖照常生效。
+- 有限例外：enclosing type 已经是 `private` / `fileprivate`（例如 file-scoped helper `EmptyRouteTransitionContext`）时保留 `static let shared`，额外加 `fileprivate` 会触发 redundant-modifier warning；Apple SDK singleton（`NSApplication.shared`、`NSWorkspace.shared`、`NSDocumentController.shared`、`UserDefaults.standard`、`FileManager.default` 等）不属于项目 singleton，直接使用。
 
 ### RxSwift Subscription Style
 
-**Always use trailing-closure variants** (NOT `.emit(onNext:)` / `.drive(onNext:)` / `.subscribe(onNext:)` label syntax):
-
-| Use (trailing closure) | Instead of (label syntax) |
-|------------------------|--------------------------|
-| `.emitOnNext { }` | `.emit(onNext: { })` |
-| `.emitOnNextMainActor { }` | — |
-| `.driveOnNext { }` | `.drive(onNext: { })` |
-| `.driveOnNextMainActor { }` | — |
-| `.subscribeOnNext { }` | `.subscribe(onNext: { })` |
-| `.subscribeOnNextMainActor { }` | — |
-
-```swift
-// Signal
-input.cancelClick.emitOnNext { [weak self] in
-    guard let self else { return }
-    router.trigger(.dismiss)
-}
-.disposed(by: rx.disposeBag)
-
-// Driver
-output.currentPage.driveOnNext { [weak self] page in
-    guard let self else { return }
-    showPage(page)
-}
-.disposed(by: rx.disposeBag)
-
-// Observable
-source.subscribeOnNext { [weak self] value in
-    guard let self else { return }
-    handleValue(value)
-}
-.disposed(by: rx.disposeBag)
-```
-
-For direct binding without closure logic, `.drive()` / `.bind(to:)` are fine:
-```swift
-output.imageName.drive(label.rx.stringValue).disposed(by: rx.disposeBag)
-```
-
-### NSTableView / NSOutlineView Rx Data Source
-
-When a table or outline displays Rx-driven data, **always** use the `rx.items` / `rx.nodes` adapter. Never hand-roll an `NSTableViewDataSource` / `NSOutlineViewDataSource` (or pair `target` / `action` with manual cell-reuse code) for data already produced by an Rx pipeline.
-
-**1. Table creation** — use the `scrollableTableView()` factory from UIFoundation:
-```swift
-private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
-```
-For multi-column tables, use `NSTableView.scrollableTableView()` and add columns yourself. `SingleColumnTableView` already installs the default column.
-
-**Navigation lists** — when a list's only interaction is "click a row to go somewhere" (the Inspector's Relationships and Specializations panes), build it with `SelfSizingTableView.scrollableNavigationListTableView()` instead. It applies two settings that fix **different** flickers, and both are load-bearing:
-
-- `refusesFirstResponder = true` leaves keyboard focus where it was. `NSTableRowView.isEmphasized` is false whenever the owning table view is not first responder, so a click that takes focus — only for the app to hand it straight back — repaints the selection of the view the user is actually watching (the sidebar) in the inactive grey.
-- `selectionHighlightStyle = .none` removes *this* list's own highlight. Refusing first responder blocks focus, not selection: AppKit still selects the clicked row and paints it in the unemphasized grey for the frame before the navigation replaces the list.
-
-Assign `selectionHighlightStyle` **after** `style` — setting `NSTableView.style` resets it, so the reverse order silently does nothing.
-
-Reach for the factory only where nothing reads the selection. `itemClicked()` reports `clickedRow` and is unaffected, but `itemSelected()` / `modelSelected()` / `selectedRow` are: a picker popover whose highlight marks the current candidate (`SpecializationTypePickerViewController`), or a list whose selection *is* the state (`SidebarRootViewController`), must keep its own highlight.
-
-**2. Items / nodes binding** — drive `tableView.rx.items` (or `outlineView.rx.nodes`) with the model driver and a cell-builder closure:
-```swift
-output.candidates
-    .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, candidate: Candidate) -> NSView? in
-        let cellView = tableView.box.makeView(ofClass: CandidateCellView.self)
-        cellView.configure(with: candidate)
-        return cellView
-    }
-    .disposed(by: rx.disposeBag)
-
-output.nodes
-    .drive(outlineView.rx.nodes) { (outlineView: NSOutlineView, _: NSTableColumn?, node: NodeViewModel) -> NSView? in
-        let cellView = outlineView.box.makeView(ofClass: NodeCellView.self)
-        cellView.bind(to: node)
-        return cellView
-    }
-    .disposed(by: rx.disposeBag)
-```
-
-**3. Cell reuse** — use `tableView.box.makeView(ofClass:)` / `outlineView.box.makeView(ofClass:)` (UIFoundationToolbox). It handles identifier registration, recycling, and fresh instantiation transparently. **Never** write `tableView.makeView(withIdentifier:owner:) as? NSTableCellView` casts:
-```swift
-// ✅ Good
-let cellView = tableView.box.makeView(ofClass: CandidateCellView.self)
-
-// ❌ Bad
-let cellView: NSTableCellView
-if let recycled = tableView.makeView(withIdentifier: identifier, owner: nil) as? NSTableCellView {
-    cellView = recycled
-} else {
-    cellView = NSTableCellView()
-    cellView.identifier = identifier
-    // … manual subview wiring …
-}
-```
-Pass a custom builder when the cell needs non-default initialization: `outlineView.box.makeView(ofClass: SidebarRuntimeObjectCellView.self) { .init(forOpenQuickly: false) }`.
-
-**4. Cell view definition** — declare cell views as `fileprivate final class` nested inside a controller extension, inheriting `TableCellView` (UIFoundationAppKit) so `setup()` and the auto-set identifier come for free. Use `bind(to:)` with reactive bindings (`rx.disposeBag = DisposeBag()` first to drop the previous row's bindings). Reserve `configure(with:)` only for purely-static cells with no `@RxObserved` properties on the cell ViewModel:
-```swift
-extension MyViewController {
-    fileprivate final class CandidateCellView: TableCellView {
-        private let iconImageView = ImageView()
-
-        private let nameLabel = Label()
-
-        override func setup() {
-            super.setup()
-
-            hierarchy {
-                iconImageView
-                nameLabel
-            }
-            iconImageView.snp.makeConstraints { make in
-                make.leading.equalToSuperview().inset(4)
-                make.centerY.equalToSuperview()
-                make.size.equalTo(16)
-            }
-            nameLabel.snp.makeConstraints { make in
-                make.leading.equalTo(iconImageView.snp.trailing).offset(4)
-                make.trailing.equalToSuperview().inset(4)
-                make.centerY.equalToSuperview()
-            }
-            nameLabel.maximumNumberOfLines = 1
-        }
-
-        func bind(to viewModel: CandidateCellViewModel) {
-            rx.disposeBag = DisposeBag()
-
-            viewModel.$appearance.asDriver().driveOnNext { [weak self] appearance in
-                guard let self else { return }
-                iconImageView.image = appearance.icon
-                nameLabel.attributedStringValue = appearance.name
-            }
-            .disposed(by: rx.disposeBag)
-        }
-    }
-}
-```
-
-**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, and hold the underlying model as a stored `let`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
-
-**Everything a row shows goes into one `Appearance` struct behind a single `@RxObserved` — never one `@RxObserved` per icon, label or status.** A cell ViewModel exists once per row, and these lists run to thousands of rows. An `@RxObserved` costs only its value and an empty reference until its `$property` is touched, but `bind(to:)` touches every one it binds: each becomes a `BehaviorRelay` — a `BehaviorSubject` with an `NSRecursiveLock` of its own — that lives as long as the cell ViewModel, and each `asDriver()` adds a share-replay operator with another lock for as long as the row is on screen. Five properties per row means five of each; folding the sidebar's five into one took the process from about 125,000 locks to 42,000 after scrolling through every object in SwiftUI (`Documentations/Evolutions/0005-cellvm-appearance-single-observed.md`). `SidebarRootCellViewModel` and `ReportCellViewModel` are the references.
-
-- **Publish once per change.** Build the new struct and assign it once, and only when it differs (`Equatable`). The macro generates a plain getter and setter, so `appearance.title = …` field by field sends one event per statement.
-- **The cell binds `$appearance` once** and applies it in one place. When the appearance changes many times a second (a row showing progress), set each part only when it differs, as `ReportCellView` does.
-- **State nothing displays stays a plain property.** A flag only the filter reads (`ReportCellViewModel.isInProgress`) has no observer to serve.
-- **A cell ViewModel subscribes to nothing in `init`.** A row that observes shared state itself — a selection set, a progress stream — builds its relay and its subscription for every row, on screen or not. The parent ViewModel keeps its rows and pushes the change into them through an `update(…)`, the way the batch export picker does: `BatchExportingImageSelectionViewModel` hands every new selection to `BatchExportingImageTree.updateSelection(_:)`, which recomputes the checkbox of each row shown and assigns a row's one `@RxObserved`, `selection`, only when it changed.
-
-```swift
-public final class CandidateCellViewModel: NSObject, @unchecked Sendable {
-    public struct Appearance: Equatable {
-        public var icon: NSUIImage?
-        public var name: NSAttributedString
-    }
-
-    public let candidate: Candidate
-
-    @RxObserved
-    public private(set) var appearance: Appearance
-
-    public init(candidate: Candidate) {
-        self.candidate = candidate
-        self.appearance = Appearance(
-            icon: candidate.icon,
-            name: NSAttributedString {
-                AText(candidate.displayName)
-                    .foregroundColor(.labelColor)
-                    .font(.systemFont(ofSize: 13))
-                    .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
-            }
-        )
-        super.init()
-    }
-
-    func update(icon: NSUIImage?, name: NSAttributedString) {
-        let newAppearance = Appearance(icon: icon, name: name)
-        if appearance != newAppearance {
-            appearance = newAppearance
-        }
-    }
-}
-```
-
-**6. Differentiable conformance** — every model used by `rx.items` / `rx.nodes` must conform to `Differentiable` (DifferenceKit). Conform the **cell ViewModel**, not the raw domain type — never write `extension RuntimeObject: @retroactive Differentiable {}` on a core type, since retroactive conformances on shared models risk collisions across modules. Pick `differenceIdentifier` so it stays stable across rebuilds (typically the underlying domain object or its id), and gate the conformance behind `#if canImport(AppKit) && !targetEnvironment(macCatalyst)` like Sidebar does:
-```swift
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-extension XxxCellViewModel: Differentiable {
-    public var differenceIdentifier: RuntimeObject { runtimeObject }
-    public func isContentEqual(to source: XxxCellViewModel) -> Bool {
-        runtimeObject == source.runtimeObject
-    }
-}
-#endif
-```
-For cell ViewModels that own no extra state beyond the underlying `Hashable` domain object, an empty `extension XxxCellViewModel: Differentiable {}` is acceptable — DifferenceKit synthesizes `differenceIdentifier = self` / `isContentEqual = ==` from `Hashable + Equatable`.
-
-**Value-type outline trees** (a `struct` node that carries its `children`, such as `ReportNode`) follow RxAppKit's contract since 0.6.0: `==` and `hash(into:)` use the identifier alone, and `isContentEqual(to:)` compares the whole subtree recursively. The reload adapter (`rx.nodes(options: [])`) asks `isContentEqual` of the first level only and reloads nothing when every root answers yes, so a shallow answer swallows every change below it; and `NSOutlineView` keeps a row expanded across `reloadData()` only when the new item is `==` to the old one, so a synthesized whole-subtree `==` collapses every row whose subtree changed. When the rows' cells are bound to cell ViewModels kept across rebuilds, compare those by identity in `isContentEqual` too, so a row that got a new cell ViewModel is reloaded and its cell rebinds. `ReportOutlineBindingTests` pins all three on a real outline.
-
-**7. Click / selection events** — derive from `tableView.rx.itemClicked()` / `tableView.rx.modelSelected()` / `outlineView.rx.modelDoubleClicked()` instead of `target` + `@objc` plumbing:
-```swift
-let rowClicked: Signal<Candidate> = tableView.rx
-    .itemClicked()
-    .compactMap { [weak tableView] index -> Candidate? in
-        guard let tableView,
-              index.row >= 0,
-              index.row < tableView.numberOfRows
-        else { return nil }
-        return try? tableView.rx.model(at: index.row)
-    }
-    .asSignal(onErrorSignalWith: .empty())
-```
-
-**8. Optional delegate methods** — when you need optional `NSTableViewDelegate` / `NSOutlineViewDelegate` callbacks (`shouldSelectRow`, persistence helpers, etc.), forward them via `tableView.rx.setDelegate(self)` / `outlineView.rx.setDelegate(delegate)` and implement those methods in an extension. The `rx.items` / `rx.nodes` adapter owns the data source and required-method delegate proxy and forwards optional methods through to the delegate you set.
-
-**9. Lazy Cell ViewModel for large data sets** — for data sets where eager per-row `cellViewModel` allocation dominates main-thread time (N >= ~1k rows, popovers/pickers over global type/symbol indexes, etc.), drive `rx.items` / `rx.nodes` with `DifferentiableBox<Model>` (from `RuntimeViewerArchitectures`) instead of a `[XxxCellViewModel]`, and construct the cellViewModel lazily inside the cell builder closure. The wrapper is a value-type box that adapts any `Hashable` domain model to DifferenceKit's `Differentiable` protocol so the driver array carries cheap identity elements rather than fully-built cellViewModels.
-
-**Eligibility decision tree** — pick lazy mode iff **all three** are true; otherwise stay on the eager 1:1 cellViewModel pattern above:
-
-1. The cellViewModel's state is *fully determined at init time* from the model alone — no `@RxObserved` properties that mutate after init, no Rx pipelines fed by external sources, no `Task { … }` async loading inside the cellVM.
-2. The data set is large enough that eager construction is visible in Instruments (typically N >= 1k, confirmed by a signpost baseline).
-3. There is no per-row UI state that cannot be derived from the model (expanded/collapsed flag, multi-select checkmark, drag-preview metadata). If you need such state, build a local `struct` conforming to `Differentiable` directly — do NOT add mutable fields onto `DifferentiableBox`.
-
-**Two different things get called "lazy" here, and the eligibility tree above governs only the first:**
-
-- **Stateless lazy (`DifferentiableBox`)** — the driver array carries identity boxes and the cellViewModel is rebuilt inside the cell builder on *every* render, so nothing survives between renders. That is why the three conditions are absolute: a cellViewModel with post-init `@RxObserved` mutation or an Rx subscription would silently lose it. The `SpecializationTypePicker` popover is the canonical case (10k+ candidates when a generic parameter has no constraint).
-- **Lazily materialized behind a warm cache** — the driver array still carries fully-built cellViewModels, but each is constructed on first match and kept in a map for the rest of the session, so subscription identity and post-init state survive. Open Quickly uses this to avoid building a cellViewModel per row of a 14k-object image; see `SidebarRuntimeObjectListViewModel.openQuicklyCellViewModel(at:)`.
-
-`SidebarRuntimeObjectCellViewModel` owns filter-aware attributed names, so it fails the eligibility tree and must never take the first form — but it is the type Open Quickly materializes lazily in the second form, precisely because the cache means it is never *re*constructed. Inspector cellViewModels (`InspectorSwiftSpecializationCellViewModel`, `InspectorRelationshipsCellViewModel`) stay eager on both counts: their row counts are low enough that neither form pays for itself.
-
-Reach for either form only once eager 1:1 construction is measurably hurting — both trade a memo, and the invalidation it needs, for the allocation they save.
-
-```swift
-// ViewModel — driver element is a value-type identity box, not the cellViewModel
-typealias CandidateBox = DifferentiableBox<RuntimeSpecializationRequest.Candidate>
-
-@RxObserved
-public private(set) var filteredRows: [CandidateBox] = []
-
-public init(candidates: [RuntimeSpecializationRequest.Candidate], ...) {
-    self.allRows = candidates.sorted().map(CandidateBox.init)
-    super.init(...)
-    self.filteredRows = allRows
-}
-
-// ViewController — cellViewModel built lazily, only for cells the table renders
-output.filteredRows
-    .drive(tableView.rx.items) { (tableView, _, _, row: CandidateBox) -> NSView? in
-        let cellView = tableView.box.makeView(ofClass: SomeCellView.self)
-        let cellViewModel = SpecializationTypePickerCellViewModel(candidate: row.model)
-        cellView.bind(to: cellViewModel)
-        return cellView
-    }
-    .disposed(by: rx.disposeBag)
-```
-
-`DifferentiableBox<Model>.differenceIdentifier == model`, so DifferenceKit treats two boxes as the same row iff their underlying models are `==`. Pick `Model`'s `Equatable` carefully — equality fields should be a stable domain primary key, not include presentation-only data, otherwise the diff will spuriously trigger updates. `DifferentiableBox` itself is fully `Hashable` even on UIKit / Catalyst; the `Differentiable` conformance is gated behind `#if canImport(AppKit) && !targetEnvironment(macCatalyst)`.
-
-**10. Row tags, and a popover anchored at one** — `RuntimeObjectCellView` puts its icons first and any tags last: `RuntimeObjectCellAppearance.tags` (`RuntimeObjectCellTag`) is published with the rest of the row, and each tag is a `TagButton` (RuntimeViewerUI) at the row's trailing edge; the title truncates before a tag does. What holds the tags there is the tag stack view's own hugging priority (`.box.hugging(h:)`, set above the text stack's default `.defaultLow`): a stack view has no intrinsic size, so `.box.contentHugging` does nothing for it, and with both stacks at the default Auto Layout widened either one — most rows showed the tag right after the title. A tag that is not clickable takes no part in hit-testing, so the click goes to the row (Open Quickly's tags). A clickable tag reports through the cell's `tagClicked`; the list's cell provider pairs it with the row it bound and hands that to the view model as data. A popover about the row is anchored the way the specialization type picker's is: the route carries the row, and the coordinator asks the view controller for the tag (`anchorView(forTag:of:)`), so no view travels through a view model's `Input` or a route. The tags are `Local`, then `Private`. `Private` shows for an object whose `privateDeclarations` is not empty, and its popover shows each discriminator with the source file the engine recovers for it (`RuntimeEngine.privateDeclarationSourceFiles(forDiscriminators:inImage:)`). `Local`, never clickable, shows for a type declared in a function or closure body (`RuntimeObject.Properties.isLocalType`; `isPositionNamedLocalType` when the binary names no function for it). **The logic behind both lives in MachOSwiftSection; RuntimeViewer only shows what it gets.** Which private declarations a name reads (`DemanglingNode.privateDeclarations`), the name a local type is listed under (`DefinitionName.localTypeDisplayName`), whether a type is local (`localTypeNaming`), and the source-file search with its generated list of known file names (`PrivateDiscriminatorSourceFileIndex`, in the `SwiftPrivateDiscriminators` product) are all MachOSwiftSection's; the engine holds one index per image and answers the command. Do not parse a printed name for any of it, and do not reimplement a rule here — change it there. Background: `Documentations/Evolutions/0031-private-discriminator-tag.md` and MachOSwiftSection's evolution 0063 (`0063-private-declarations.md`).
+**Always use the trailing-closure variants** — `.emitOnNext { }`, `.driveOnNext { }`,
+`.subscribeOnNext { }` and their `…MainActor` forms (`.emitOnNextMainActor { }`, …) — never the label
+syntax `.emit(onNext:)` / `.drive(onNext:)` / `.subscribe(onNext:)`. For direct binding without closure
+logic, `.drive()` / `.bind(to:)` are fine: `output.imageName.drive(label.rx.stringValue)`.
 
 ### Closures & Self Capture
 
-**Always** use `guard let self else { return }` (NOT `strongSelf`, NOT `if let self`):
-```swift
-output.result.driveOnNext { [weak self] value in
-    guard let self else { return }
-    handleResult(value)
-}
-.disposed(by: rx.disposeBag)
-```
-
-**Never `[unowned self]` in any closure that can outlive the ViewModel** — which in practice means every Rx operator closure and every async closure. `Observable.async` / async `flatMapLatest` run their body inside a `Task`; disposal only *cooperatively* cancels that Task, so the closure can still execute after `deinit` and the unowned load aborts in `swift_abortRetainUnowned`. ViewModels are torn down constantly (every selection rebind, tab switch, tab close), so this is a crash in normal navigation, not an edge case. Choose by what the closure body needs:
-
-- Body only needs document-scoped services → capture the properties, not `self`:
-  ```swift
-  .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] object, options in
-      Observable.async {
-          try await documentState.runtimeEngine.interface(for: object, options: options)
-      }
-      .trackActivity(_commonLoading)
-  }
-  ```
-- Body genuinely needs `self` (e.g. `#log`, which expands to `Self.logger`) → `[weak self]` + `guard let self` with an early-return value.
-
-### Coordinator Conventions
-
-**Route enums** — use `@AssociatedValue` and `@CaseCheckable` macros:
-```swift
-@AssociatedValue(.public)
-@CaseCheckable(.public)
-public enum MyRoute: Routable {
-    case root
-    case detail(RuntimeObject)
-    case dismiss
-}
-```
-
-**Routes carry no views** — a route's associated values never include an AppKit or UIKit type: no
-`NSView` / `NSButton` sender, no `NSWindow`, `NSEvent` or `NSMenu`. The same goes for a ViewModel's
-`Input`, which is where such a value would come from: a button press is a `Signal<Void>`, never a
-`Signal<NSView>`. A popover that needs an anchor gets it in the coordinator's `prepareTransition`,
-which asks the view layer, and returns `.none()` when the anchor is not on screen. Three shapes exist:
-
-- A fixed control the coordinator can reach — `MainCoordinator.popoverAnchorView(of:)` takes the
-  toolbar item's button for the Generation Options and MCP status popovers.
-- A control the view controller holds — the controller exposes it, as
-  `SidebarRuntimeObjectViewController.filterScopeAnchorView` does for the scope popover.
-  `NSFilterControlBarItem` hands out its button only as the sender of its action, so that controller
-  keeps the button from the last press.
-- A row — the route carries the row and the controller looks up the view in it; see *Row tags* under
-  *NSTableView / NSOutlineView Rx Data Source*.
-
-Background: `Documentations/Evolutions/0048-routes-carry-no-views.md`.
-
-**ViewController creation** — always in Coordinator's `prepareTransition`, not in ViewController:
-```swift
-override func prepareTransition(for route: MainRoute) -> MainTransition {
-    case .exportInterfaces:
-        let viewController = ExportingViewController()
-        let viewModel = ExportingViewModel(documentState: documentState, router: self)
-        viewController.setupBindings(for: viewModel)
-        return .presentOnRoot(viewController, mode: .asSheet)
-}
-```
-
-**Delegate pattern** — nested protocol inside Coordinator, implemented by parent Coordinator:
-```swift
-// In child
-protocol Delegate: AnyObject {
-    func sidebarCoordinator(_ coordinator: SidebarCoordinator, completeTransition route: SidebarRoute)
-}
-weak var delegate: Delegate?
-
-// In parent
-extension MainCoordinator: SidebarCoordinator.Delegate {
-    func sidebarCoordinator(_ coordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
-        switch route { ... }
-    }
-}
-```
-
-### MARK Groups
-
-Organize ViewController code with `// MARK: -` sections:
-```
-// MARK: - Relays
-// MARK: - Configuration Page  (or other UI sections)
-// MARK: - Lifecycle
-// MARK: - Actions
-// MARK: - Page Management
-// MARK: - Bindings
-```
-
-### Error Handling
-
-Use base class `errorRelay` — ViewController base class auto-presents alerts:
-```swift
-// In ViewModel
-errorRelay.accept(error)
-
-// In async context
-do { ... } catch {
-    await MainActor.run { self.errorRelay.accept(error) }
-}
-```
+- **Always** use `guard let self else { return }` after `[weak self]` (NOT `strongSelf`, NOT `if let self`).
+- **Never `[unowned self]` in any closure that can outlive the ViewModel** — which in practice means
+  every Rx operator closure and every async closure. `Observable.async` / async `flatMapLatest` run their
+  body inside a `Task`; disposal only *cooperatively* cancels that Task, so the closure can still execute
+  after `deinit` and the unowned load aborts in `swift_abortRetainUnowned`. ViewModels are torn down
+  constantly (every selection rebind, tab switch, tab close), so this is a crash in normal navigation,
+  not an edge case. When the body only needs document-scoped services, capture the properties, not
+  `self` (`[documentState = self.documentState, _commonLoading = self._commonLoading]`); when it
+  genuinely needs `self` (e.g. `#log`, which expands to `Self.logger`), use `[weak self]` +
+  `guard let self` with an early-return value.
 
 ### Platform Requirements
 
@@ -1689,29 +580,11 @@ do { ... } catch {
 - RuntimeViewerPackages: macOS 15+, iOS 18+, macCatalyst 18+, tvOS 18+, visionOS 2+
 - RuntimeViewerMCP: macOS 15+
 
-## Testing
-
-Package tests use swift-testing and run per package with an agent-private scratch path:
-
-```bash
-cd RuntimeViewerPackages
-swift build --build-tests --scratch-path /tmp/<agent>/SwiftPM/RuntimeViewerPackages
-swift test --skip-build --scratch-path /tmp/<agent>/SwiftPM/RuntimeViewerPackages --filter RuntimeViewerApplicationTests
-```
-
-Rules for `RuntimeViewerApplicationTests` (every ViewModel in `RuntimeViewerApplication` has a contract suite there, next to the defect-specific regression suites):
-
-- **Build ViewModels inside `ViewModelTestEnvironment.make { }`.** It overrides `appDefaults`, `settings` and `resolvedThemeStream` with test-owned instances. `AppDefaults` is file-backed under a path the running app shares (`~/Library/Application Support/AppStorage`, not bundle-scoped, and the app is not sandboxed), so a test that resolves `AppDefaults.shared` reads and writes the user's real bookmark files. The key's `testValue` is an isolated temporary-directory instance for that reason, and `withLiveDependencyContext` pins the same — never point either back at `.shared`. A suite that writes its own live-context helper has to pin `\.appDefaults` as well: `ContentTextPipelineTests` shadowed the shared helper with one that did not, and reached `.shared` until PR121.18. An isolated instance also keeps its Generation Options, filter mode and migration flags in a user defaults namespace of its own (`UserDefaultsNamespace`), so tests neither hear each other's option changes nor write the test process's standard defaults, and need no lock around them. `settings` is `SettingsAccess.preview` (in-memory); the live one auto-saves over the user's `RuntimeViewer-Debug/settings.json`.
-- **Engine-backed behaviour uses a real in-process `RuntimeEngine`**, the same way RuntimeViewerCore's tests do: `TestRuntimeEngine.shared()` (a dedicated engine with libobjc + Foundation loaded once per process; never call `loadImage` on it) or `TestRuntimeEngine.makeConnected(...)` for tests that change engine state. ViewModels bound to it through `.switchEngine` do not need `withSharedLocalEngineLock`; that lock is for tests coupled to `RuntimeEngine.local`. Anchor assertions on stable symbols (`NSObject`, `NSString`, `NSMutableString`).
-- **Keep the ViewModel alive until the assertion** (`defer { withExtendedLifetime(viewModel) {} }`): `transform` handlers capture `[weak self]`, so a dropped ViewModel silently does nothing.
-- **Await Rx through the helpers**: `nextValue(from:where:)` for the first matching element, `values(from:during:)` to prove nothing was emitted. Navigation is asserted on `DocumentState` (`selectedRuntimeObject`, `tabs`) or on a `MockRouter`.
-
-Design notes and the per-ViewModel coverage table: `Documentations/Evolutions/0016-application-viewmodel-tests.md`.
-
 ## Documentation
 
-- Design documents and implementation plans: `Documentations/Plans/`
-- Evolution proposals: `Documentations/Evolutions/`
+- Index of every document: `Documentations/README.md`; a new or renamed document gets its row there
+- Evolution proposals: `Documentations/Evolutions/`; bug write-ups: `Documentations/ResolvedIssues/`
+- Design documents and implementation plans from before the proposal system: `Documentations/Plans/`
 
 ## Key Source Locations
 
@@ -1727,41 +600,3 @@ Design notes and the per-ViewModel coverage table: `Documentations/Evolutions/00
 - MCP server: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/`
 - MCP bridge: `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/`
 - Command-line tool: `RuntimeViewerCommandLine/Sources/RuntimeViewerCommandLineInterface/` (usage guide: `Documentations/Guides/CommandLineInterface.md`)
-
-## MCP Tool Preferences
-
-When MCP servers are available, **MUST** prefer them over shell commands and built-in tools:
-
-### Xcode MCP (Project Operations)
-Prefer Xcode MCP tools for all Xcode project-level operations:
-- **File reading**: Use `XcodeRead` instead of `Read` / `cat` for files in the Xcode project
-- **File writing**: Use `XcodeWrite` instead of `Write` for creating/overwriting files in the project
-- **File editing**: Use `XcodeUpdate` instead of `Edit` / `sed` for modifying files in the project
-- **File searching**: Use `XcodeGrep` instead of `Grep` / `grep` for searching in project files
-- **File discovery**: Use `XcodeGlob` / `XcodeLS` instead of `Glob` / `ls` for browsing project structure
-- **File management**: Use `XcodeMakeDir`, `XcodeMV`, `XcodeRM` for directory/file operations
-- **Build**: Use `BuildProject` for building the project through Xcode
-- **Tests**: Use `GetTestList`, `RunSomeTests`, `RunAllTests` for test operations
-- **Diagnostics**: Use `XcodeRefreshCodeIssuesInFile`, `XcodeListNavigatorIssues` for checking issues
-- **Preview**: Use `RenderPreview` for SwiftUI preview rendering
-- **Snippets**: Use `ExecuteSnippet` for running code snippets in project context
-- **Documentation**: Use `DocumentationSearch` for searching Apple Developer Documentation
-
-### Priority Order
-1. **Xcode MCP** — for project file operations, in-editor builds, diagnostics, and previews
-2. **Built-in tools** — fallback when MCP tools are unavailable or not applicable
-
-## External Dependencies
-
-Core reverse engineering powered by:
-- [UIFoundation](https://github.com/Mx-Iris/UIFoundation) — main menu, shared Settings store, bindings, window, forms, and navigation
-- [MachOKit](https://github.com/MxIris-Reverse-Engineering/MachOKit) — Mach-O binary parsing
-- [MachOObjCSection](https://github.com/MxIris-Reverse-Engineering/MachOObjCSection) — ObjC runtime introspection
-- [MachOSwiftSection](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection) — Swift interface extraction
-- [MachInjector](https://github.com/MxIris-Reverse-Engineering/MachInjector) — Code injection (requires SIP disabled)
-
-Key libraries:
-- [RxSwift](https://github.com/ReactiveX/RxSwift) ecosystem (RxSwift, RxCocoa, RxCombine, RxSwiftPlus, RxAppKit)
-- [CocoaCoordinator](https://github.com/Mx-Iris/CocoaCoordinator) (macOS) / [XCoordinator](https://github.com/MxIris-Library-Forks/XCoordinator) (iOS)
-- [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) — Dependency injection
-- [swift-navigation](https://github.com/MxIris-Library-Forks/swift-navigation) — Navigation and observation

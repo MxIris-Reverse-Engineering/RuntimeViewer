@@ -83,8 +83,9 @@ final class SpecializationTypePickerViewController: BaseViewController<Specializ
         // Lazy cellViewModel: built inside the cell builder closure so
         // popover open does not pay 10k×~50µs construction cost when an
         // unconstrained generic parameter brings in the full image type
-        // universe. See CLAUDE.md §9 "Lazy Cell ViewModel for large data
-        // sets" and `Documentations/Plans/specialization-typepicker-perf-r2.md`.
+        // universe. See "Lazy cell ViewModels for large data sets" in
+        // RuntimeViewerUsingAppKit/AGENTS.md and
+        // `Documentations/Plans/specialization-typepicker-perf-r2.md`.
         output.filteredRows
             .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, row: CandidateBox) -> NSView? in
                 let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<SpecializationTypePickerCellViewModel>.self) { .init(contentInsets: .init(top: 4, left: 4, bottom: 4, right: 4)) }

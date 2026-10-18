@@ -83,7 +83,8 @@ extension RuntimeSpecializationRequest.Candidate.Kind {
 // owned by `CandidateBox` (= `DifferentiableBox<RuntimeSpecializationRequest.Candidate>`),
 // not by this cellViewModel. The cellViewModel is constructed lazily inside
 // the table's `rx.items` builder closure per render and never participates
-// in the DifferenceKit diff. See CLAUDE.md §9 for the rationale.
+// in the DifferenceKit diff. See "Lazy cell ViewModels for large data sets"
+// in RuntimeViewerUsingAppKit/AGENTS.md for the rationale.
 extension SpecializationTypePickerCellViewModel: RuntimeObjectCellDisplayable {
     public var appearanceDriver: Driver<RuntimeObjectCellAppearance> { $appearance.asDriver() }
 }
