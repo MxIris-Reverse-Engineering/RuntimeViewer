@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-10-16
-- **最后更新**: 2026-10-17
+- **最后更新**: 2026-10-18
 - **所属愿景**: 无（CLI 与 MCP 部分沿用[《无头 RuntimeViewer》](../Visions/HeadlessRuntimeViewer.md)「GUI、命令行与 MCP 三个前端共用同一套命令词汇」的取向，但不推进该愿景的步骤）
 - **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案 `draft-cross-reference-analysis`（在 MachOSwiftSection 仓库，分支 `feature/cross-reference-analysis`）
 - **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）
@@ -11,7 +11,7 @@
 
 ## 摘要
 
-给 RuntimeViewer 加上从机器码里读出来的交叉引用：选中一个方法，能看到它**调了谁**（被调）、**谁调了它**（调用者，范围是整个系统共享缓存），以及**哪些方法用到了某个类型**（类型引用）。函数的名字只取自符号表，以及 ObjC 方法表、Swift 类型描述能叫出名字的方法，不为脱了符号的代码推测名字；没有名字的函数照样扫描，作为调用者时显示成「无符号函数 0x…」。只支持 arm64 / arm64e。分析逻辑放进 MachOSwiftSection 的一个新 target，RuntimeViewer 新增一个命令扩展模块去调用它，三个前端共用：GUI（Find 导航页加 Call Hierarchy / Callees / Type References 三种模式，内容区的方法名上右键发起查询，Inspector 新增跟随光标的 References 标签）、CLI（`callers` / `callees` / `references`）和 MCP（`Callers` / `Callees` / `TypeReferences`）。查调用者一律按需扫描：先按导入的名字（C 与 ObjC 函数，含别的库改名再导出的名字）、链接关系（Swift 函数与类型）和 selector 引用筛出可能相关的库，只扫这些库，扫过的库在会话内缓存结果；实测扫完整个共享缓存也只要 1–4 秒，所以不做存盘的全量索引。精度如实标注：ObjC 以 selector 为准，能确定接收者类时标出类；Swift 的虚方法、协议方法给出候选目标，闭包调用只标出签名形态。
+给 RuntimeViewer 加上从机器码里读出来的交叉引用：选中一个方法，能看到它**调了谁**（被调）、**谁调了它**（调用者，范围是引擎已索引的镜像），以及**哪些方法用到了某个类型**（类型引用）。函数的名字只取自符号表，以及 ObjC 方法表、Swift 类型描述能叫出名字的方法，不为脱了符号的代码推测名字；没有名字的函数照样扫描，作为调用者时显示成「无符号函数 0x…」。只支持 arm64 / arm64e。分析逻辑放进 MachOSwiftSection 的一个新 target，RuntimeViewer 新增一个命令扩展模块去调用它，三个前端共用：GUI（Find 导航页加 Call Hierarchy / Callees / Type References 三种模式，内容区的方法名上右键发起查询，Inspector 新增跟随光标的 References 标签）、CLI（`callers` / `callees` / `references`）和 MCP（`Callers` / `Callees` / `TypeReferences`）。查调用者一律按需扫描：先按导入的名字（C 与 ObjC 函数，含别的库改名再导出的名字）、链接关系（Swift 函数与类型）和 selector 引用筛出可能相关的库，只扫这些库，扫过的库在会话内缓存结果；实测扫完整个共享缓存也只要 1–4 秒，所以不做存盘的全量索引。精度如实标注：ObjC 以 selector 为准，能确定接收者类时标出类；Swift 的虚方法、协议方法给出候选目标，闭包调用只标出签名形态。
 
 ## 动机
 
@@ -218,9 +218,9 @@ SwiftUICore 里的两种典型形态：
 1. **函数**：边界取自 `LC_FUNCTION_STARTS`。名字取自符号表里位于代码段的符号、导出表、ObjC 类与分类方法表里的实现（`-[类 selector]`），以及 Swift 类型描述、虚表、协议遵循里能找到实现地址的方法；同一地址上的多个名字合并为一个函数。没有名字的函数照样扫描，显示为「无符号函数 0x…」，不推测名字。
 2. **引用**：逐条解码每个函数的 arm64 指令，认出直接调用与尾调用、selector 桩与传统的 `objc_msgSend`、super 发送、经桩的跨库调用（镜像自带的桩，或 macOS 27 / iOS 27 起全缓存共用的桩）、类型引用（Swift 元数据访问器、按 mangled 名字实例化类型、ObjC 类引用）以及间接调用。
 3. **精度**：ObjC 以 selector 为准，接收者是 `self`、类字面量（`[NSWindow alloc]`）或 super 时标出类并允许按类过滤，否则标为「接收者未知」；Swift 的虚表与见证表调用按鉴别常量和表内偏移反查根声明，展开成候选目标并标为「候选」，闭包调用只标出签名形态；value witness、retain / release、outlined 值操作等运行时辅助调用默认隐藏。
-4. **查询**：查「调了谁」只解码这一个函数；查「谁调了它」和「哪些方法用到某个类型」时，本库直接扫，跨库则先筛库——C 与 ObjC 名字按导入（含别的库改名再导出的名字），Swift 函数与类型按链接关系，发送按 selector 引用，类按类对象上的符号——再并发扫候选库；扫过的库在会话内缓存命中。不做存盘的全量索引。
+4. **查询**：查「调了谁」只解码这一个函数；查「谁调了它」和「哪些方法用到某个类型」时，本库直接扫，跨库则先筛库——C 与 ObjC 名字按导入（含别的库改名再导出的名字），Swift 函数与类型按链接关系，发送按 selector 引用，类按类对象上的符号——再扫候选库，同时扫几个由设置 Max Concurrent Scans 决定（默认 4）；扫过的库在会话内缓存命中。不做存盘的全量索引。
 5. **前端**：Find 导航页的三种新模式、内容区右键、Inspector 的 References 标签；CLI 三个子命令；MCP 三个工具。
-6. **范围**：跨库指整个共享缓存，加上目标进程里已加载的非系统库。每个引擎在自己的进程里扫它映射的那份缓存，所有平台走同一条路径。只支持 arm64 / arm64e。
+6. **范围**：只读引擎已索引的镜像——两种 section 都建好了的，即侧栏打开过的与后台索引读过的；没索引的镜像一律不扫，指定的镜像没索引时报错（2026-10-18 起；原为整个共享缓存加已加载的非系统库，见决策日志）。每个引擎在自己的进程里扫它映射的镜像，所有平台走同一条路径。只支持 arm64 / arm64e。
 
 ### 非目标
 
@@ -466,10 +466,12 @@ public enum RuntimeCrossReferenceSubject: Hashable, Codable, Sendable {
     case selector(String)
 }
 
+/// Only images the engine has indexed — both sections built — are ever scanned.
 public enum RuntimeCrossReferenceScope: Hashable, Codable, Sendable {
+    /// One image, which the engine must have indexed.
     case image(path: String)
-    /// The whole dyld shared cache plus every loaded image outside it.
-    case allImages
+    /// Every image the engine has indexed.
+    case indexedImages
 }
 
 public struct RuntimeCrossReferenceQueryOptions: Hashable, Codable, Sendable {
@@ -477,6 +479,9 @@ public struct RuntimeCrossReferenceQueryOptions: Hashable, Codable, Sendable {
     /// Keeps only sends whose receiver is known to be this class, or is unknown.
     public var receiverClassName: String?
     public var resultLimit: Int?
+    /// How many images the engine's process scans at once, across every query; the latest
+    /// query's count stays, `nil` leaves it (four until one sets it).
+    public var maximumConcurrentScans: Int?
 }
 
 /// Carries what the images finished since the last report held: over a whole query the
@@ -496,6 +501,8 @@ public struct RuntimeCrossReferenceQueryResult: Hashable, Codable, Sendable {
 public enum RuntimeCrossReferenceError: Error, LocalizedError, Sendable, Equatable {
     case unsupportedArchitecture
     case imageNotFound(path: String)
+    /// 范围指定的镜像没有索引，查询不读它的代码。
+    case imageNotIndexed(path: String)
     case functionNotFound(imagePath: String, address: UInt64)
     case memberNotFound(objectName: String, memberName: String)
     case selectorHasNoCallees(String)
@@ -514,10 +521,10 @@ extension RuntimeEngine {
         options: RuntimeCrossReferenceQueryOptions
     ) async throws -> RuntimeCrossReferenceQueryResult
 
-    /// Who references `subject` within `scope`.
+    /// Who references `subject` within `scope`, among the images the engine has indexed.
     public func callers(
         of subject: RuntimeCrossReferenceSubject,
-        in scope: RuntimeCrossReferenceScope = .allImages,
+        in scope: RuntimeCrossReferenceScope = .indexedImages,
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult
@@ -526,7 +533,7 @@ extension RuntimeEngine {
     /// or a Swift struct, enum or class.
     public func typeReferences(
         to object: RuntimeObject,
-        in scope: RuntimeCrossReferenceScope = .allImages,
+        in scope: RuntimeCrossReferenceScope = .indexedImages,
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult
@@ -556,8 +563,9 @@ extension RuntimeEngine.CommandName {
 
 **谁调了它**（本库与跨库同一条路，一律按需扫描，不做存盘索引）：
 
+0. 只在引擎已索引的镜像里找（`indexedImagePathList()`，与文本搜索判定的是同一批镜像）：范围是 `.indexedImages` 时候选从这批里挑，指定的单个镜像不在其中就报 `imageNotIndexed`。预筛读的链接关系与导出表仍看全部镜像——改名再导出某个符号的库可能没索引——但那只读头部信息，每个分析器读一次；解码代码只对已索引的镜像做。
 1. 预筛：函数 → 它自己的镜像，加上 C 与 ObjC 名字（含代码合并留下的别名）的导入者；Swift 名字按链接关系——macOS 27.2 的缓存 4,113 个镜像只有 245 个在符号表里留着 Swift 的未定义符号，按导入筛会丢掉其余镜像里的调用者，所以凡是链接了函数所在镜像（直接，或经再导出）的镜像都算。ObjC 方法另加引用了它 selector 的镜像（`__objc_selrefs`）；selector → 引用了它的镜像。类型 → 类的定义镜像加类或元类地址上任一符号的导入者（Swift 类再加链接者），Swift 类型 → 链接了定义镜像的镜像（标准库与导入的类型，名字里会直接拼出来，凡是 Swift 镜像都算）。实测按 selector 筛，中位数只剩 1 个镜像，第 99 百分位 15 个，最多 2,758 个（`init`）。预筛「不漏」由 MachOSwiftSection 的抽样测试保证：在预筛丢掉的镜像里每 16 个扫 1 个，不许有一处引用。
-2. 有界并发地扫描候选镜像，每个镜像只留命中这个 subject 的引用（`references(to:inImageAt:)`），不建整镜像的反向表——库第一批实测一张 AppKit 的整表约 100 MB，并发建整表的峰值会让分配器留下上 GB 的脏页。并发数取处理器核数减一，给进程里其他工作留一个协作线程。每扫完一个镜像报一次进度，进度里带着这个镜像的结果；调用方中途放弃时，手里已经有这些。
+2. 有界并发地扫描候选镜像，每个镜像只留命中这个 subject 的引用（`references(to:inImageAt:)`），不建整镜像的反向表——库第一批实测一张 AppKit 的整表约 100 MB，并发建整表的峰值会让分配器留下上 GB 的脏页。同时扫几个镜像由查询选项 `maximumConcurrentScans` 决定，整个进程共用这一个上限、以最近一次查询带来的为准；App 传设置 › Search › Cross References 的 Max Concurrent Scans（默认 4，可调到核数，与后台索引的 Max Concurrent Tasks 一样）。扫描在会话自己的 utility 优先级队列上跑，不占 Swift 协作线程池：扫一个镜像是不让出的同步计算，占着协作线程会让同进程的侧栏、内容区请求干等（原为核数减一个任务、跑在协作线程池上，见「第二次试用后的修改」）。每扫完一个镜像报一次进度，进度里带着这个镜像的结果；调用方中途放弃时，手里已经有这些。
 3. 取消与时限：调用方取消即撤回（`cancelsAcrossConnections`），扫描在下一个镜像前停下并抛出取消。`resultLimit` 到了就停，结果标 `isComplete == false`。MCP 的 30 秒与 CLI 的 `--timeout` 由前端实现：到时取消，用进度里已收到的结果。
 4. 会话内的扫描缓存：按「扫描键 → 各镜像的命中」存（调用者按查询键，类型按类对象或描述符的位置——同名的类可能分属 macOS 与 Mac Catalyst 两个变体），64 MB 预算，按最近使用淘汰。同一个主体再查一次（重试、调用层级的同一节点展开两次），已扫过的镜像直接用，只扫剩下的。单个主体的结果超出预算（`init` 的调用者）就不缓存，每次重扫——这是不做存盘索引的代价。
 
@@ -577,7 +585,8 @@ extension RuntimeEngine.CommandName {
 | `callees` | Callees | 方法 | 被调树：同样逐层展开 |
 | `typeReferences` | Type References | 类型名 | 引用该类型的函数，按库、按类型分组 |
 
-- 查询框的写法与 CLI 的目标写法相同（见第 8 节）。范围控件对这三种模式生效，默认查全部镜像，可以缩小到当前镜像。
+- 查询框的写法与 CLI 的目标写法相同（见第 8 节）。范围控件对这三种模式生效，默认查全部已索引的镜像（范围按钮写的就是 In Indexed Images），可以缩小到当前镜像或挑选的镜像。
+- 设置 › Search 新增 Cross References 一节：Max Concurrent Scans，同时扫几个镜像（1 到核数，默认 4），Find 与 Inspector 的查询都带上它。
 - 每行显示函数名（无符号函数显示「无符号函数 0x…」）、所在镜像、调用点数量和精度标记（「按 selector」「候选」）；底部过滤栏加一个「显示运行时调用」开关。
 - 结果能对应到某个类型成员时，点击沿用 Find 现成的成员高亮（`ContentHighlightRequest`），跳到声明行；对应不到的行（C 函数、无符号函数）只显示，不跳转。
 - `FindResultNode.Content` 新增 `case crossReference(function: RuntimeFunctionReference, references: [RuntimeCrossReference])`，子节点按需加载。
@@ -605,7 +614,7 @@ runtime-viewer-cli references NSWindow --limit 200 --json
 ```
 
 - **目标写法**：ObjC 写成 `-[类 selector]` 或 `+[类 selector]`；Swift 写可读名（与 `members` 输出的写法相同）；也可以写符号名（mangled 或 C 符号）；或者写 `0x` 开头的地址，这时必须配合 `--image`。加 `--selector` 时，参数被当作 selector，查它的所有发送者。
-- **选项**：`--image`、`--scope image` 或 `--scope all`（`callers` 与 `references` 默认 `all`）、`--receiver <类>`、`--include-runtime`、`--limit <n>`；全局的 `--source`、`--json`、`--timeout` 照常可用。
+- **选项**：`--image`、`--scope image` 或 `--scope indexed`（`callers` 与 `references` 默认 `indexed`：只查 host 已索引的镜像，没索引的要先 `load`）、`--receiver <类>`、`--include-runtime`、`--limit <n>`；全局的 `--source`、`--json`、`--timeout` 照常可用。（2026-10-18 范围改为只读已索引镜像，原写法 `--scope all` 随之改名；第 4 步动工时再定。）
 - 在终端里于 stderr 显示镜像进度，Ctrl-C 取消；超时或取消时输出已有结果并注明不完整，退出码沿用现有约定。
 - 同一个提交里更新 `AgentPlugins/runtime-viewer/` 的 skill，并把两个插件清单的 `version` 加一（`AGENTS.md` 第 478 行），同时更新 [`Guides/CommandLineInterface.md`](../Guides/CommandLineInterface.md)。
 
@@ -624,6 +633,7 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 - 引擎是 x86_64：报 `unsupportedArchitecture`；GUI 里三种模式和 References 标签置灰，并说明原因。
 - 引擎没有这个扩展（旧载荷、旧版对端）：见第 5 节。
 - 目标找不到：沿用 `members` 的「类型 / 成员不存在」错误。selector 没有任何发送者时返回空结果，不算错误。
+- 指定的镜像没有索引：报 `imageNotIndexed`（「AppKit is not indexed. Cross references read indexed images only: load it first.」），不扫。
 
 ## 替代方案考量
 
@@ -666,13 +676,13 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 ### 可发现性
 
 - 入口在三处常用的位置：Find 的模式路径、内容区右键、Inspector 标签；菜单命令和快捷键照 Xcode。
-- 默认开启，没有开关：平时不占用资源，只在查询时扫描。
+- 默认开启，没有开关：平时不占用资源，只在查询时扫描已索引的镜像；同时扫几个镜像在设置 › Search 里调。
 - CLI 的 `--help` 与 agent 插件的 skill 同批更新；装了插件的 agent 在插件版本号变化后会拿到新的用法。
 
 ### 数据与配置兼容
 
 - 不写任何文件：扫描结果只缓存在引擎进程的内存里，按字节预算淘汰。
-- 不改动设置、书签或任何已有文件，无需迁移。
+- 设置新增一项 `search.maximumConcurrentCrossReferenceScans`（默认 4），挂在已有的 `search` 下；旧的设置文件没有这一项时取默认值，无需迁移。不改动书签或任何已有文件。
 - 线上协议只新增命令；旧载荷与旧对端收到这些命令时派发失败，前端提示需要更新，不影响其他功能。
 
 ### 平台与最低版本
@@ -818,6 +828,18 @@ MachOSwiftSection 第二批落地后补上第 3 步推迟的 `typeReferences`，
 
 Debug 构建里扫描器没有优化、比 Release 慢一个数量级以上，这一条不修。
 
+## 第二次试用后的修改（2026-10-18）
+
+用户换上 MachOSwiftSection `e470f193` 再试（Debug，从 Xcode 跑）：「目前太慢了，而且占用CPU太多了，直接100%啥也干不了」，并定下「分析只在已经索引的image里面进行，其他没加载索引的不分析」，随后补充「具体用多少核让用户可以决定，跟后台索引一样，设置里面可以改」。排查记在[同一篇排查记录](../ResolvedIssues/2026-10-17-cross-reference-queries-slow-and-cpu-bound.md)的「第二轮」。改了三处：
+
+- **只扫已索引的镜像**：范围 `.allImages` 改名 `.indexedImages`，候选只从引擎已索引的镜像里挑（`indexedImagePathList()`，与文本搜索判定的是同一批）；指定的镜像没索引报 `imageNotIndexed`。Find 的范围按钮本来就写着 In Indexed Images，交叉引用却按整个缓存扫，现在两者一致。Callees 不变：只解码一个函数，被调目标在未索引的镜像里也照样列出名字。
+- **扫描不占 Swift 协作线程池**：改在会话自己的 `OperationQueue` 上跑，utility 优先级，整个进程同时最多 N 个。此前每次查询开「核数减一」个任务，每个都在协作线程上不让出地解码一整个镜像：本地运行时服务的 28 个协作线程被占掉 27 个，同进程的侧栏、内容区请求排不上队。
+- **N 由设置决定**：设置 › Search › Cross References 的 Max Concurrent Scans（1 到核数，默认 4，与后台索引的默认并发数相同），经查询选项 `maximumConcurrentScans` 带到服务进程，以最近一次查询带来的为准。
+
+**测试**：新增五个，都在旧行为下确认过失败（临时把三处改回去跑，跑完恢复）——`indexedImagesBoundTheScan`（只索引 AppKit 时查 `makeKeyAndOrderFront:` 只扫 1 个镜像，旧行为扫到了 AppKit 以外）、`imagesNotIndexedAreRefused`、`queriesReadTheirEnginesIndexedImages`（真引擎只索引 libobjc：结果都在已索引镜像里，查 Foundation 报错）、`scansRunAFewAtATimeOffTheThreadPool`（上限 3 时 9 个扫描同时最多 3 个、utility 优先级、不在协作线程上；旧行为 9 个同时跑、default 优先级、在协作线程上）、`optionsSetHowManyImagesAreScannedAtOnce`。原有测试把全部镜像当作已索引（`makeQuery` 的默认值），宽度取核数以免拖慢；两个原先经引擎查 AppKit 的测试改走查询本身，因为新建的引擎没索引 AppKit。
+
+Debug 构建里扫描器仍比 Release 慢几十倍，单扫 AppKit 仍要几秒，但只占一个核。
+
 ## 审查与修复（2026-10-17）
 
 第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
@@ -881,3 +903,5 @@ Debug 构建里扫描器没有优化、比 Release 慢一个数量级以上，�
 | 2026-10-17 | Inspector 的 References 标签只给 ObjC 类与 Swift 结构体、枚举、类；SourceEditor 路径暂不跟随光标 | 这些类型的成员有代码、引用也找得到；SourceEditor 的桥接层没有选区回调，要另按该模块的规矩做 |
 | 2026-10-17 | Inspector 的 References 标签只查对象所在的镜像，且只在可见时查 | 用户试用时 Inspector 每换一个对象就发起一次全部镜像的扫描，看不见时也查；用户选「只查对象所在的镜像」，全部镜像交给 Find |
 | 2026-10-17 | 会话共享进行中的扫描（`sharedScan`）；展开行时下一层延到主线程下一轮再启动 | Find 与 Inspector 同时查同一主题各扫一遍；展开时同步发布引起 RxSwift 重入警告。各带修复前失败的测试 |
+| 2026-10-18 | 交叉引用只扫引擎已索引的镜像：范围 `.allImages` 改名 `.indexedImages`，指定未索引的镜像报 `imageNotIndexed`；Callees 不受影响 | 用户原话：「分析只在已经索引的image里面进行，其他没加载索引的不分析」。取代 2026-10-16 第二轮的「跨库范围：整个共享缓存 + 已加载的非系统库」。Find 的范围本来就叫 Indexed Images |
+| 2026-10-18 | 同时扫几个镜像改由设置 Max Concurrent Scans 决定（1 到核数，默认 4），经查询选项带到服务进程、全进程共用；扫描移到会话自己的 utility 队列，不占协作线程池 | 用户原话：「具体用多少核让用户可以决定，跟后台索引一样，设置里面可以改」。取代 2026-10-16 的「第 3 步：并发数为核数减一」：那条要给同进程的其他请求留线程，可留下的只有一个协作线程 |
