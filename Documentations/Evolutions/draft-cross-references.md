@@ -482,6 +482,27 @@ public struct RuntimeCrossReferenceQueryOptions: Hashable, Codable, Sendable {
     /// How many images the engine's process scans at once, across every query; the latest
     /// query's count stays, `nil` leaves it (four until one sets it).
     public var maximumConcurrentScans: Int?
+    /// Set: every image is read from its prepared index (prepared now if it has none), and the
+    /// process keeps at most this many bytes of them. `nil`: each image is scanned for the query.
+    public var preparedIndexByteLimit: Int?
+}
+
+/// `prepareCrossReferences`: the resident limit, the scan width, and whether to go ahead of
+/// the preparations waiting.
+public struct RuntimeCrossReferencePreparationOptions: Hashable, Codable, Sendable {
+    public var residentByteLimit: Int
+    public var maximumConcurrentScans: Int?
+    public var isPrioritized: Bool
+}
+
+public struct RuntimeCrossReferencePreparationProgress: Hashable, Codable, Sendable {
+    public let scannedFunctionCount: Int
+    public let functionCount: Int
+}
+
+public struct RuntimeCrossReferencePreparation: Hashable, Codable, Sendable {
+    public let referenceCount: Int
+    public let byteCount: Int
 }
 
 /// Carries what the images finished since the last report held: over a whole query the
@@ -537,12 +558,24 @@ extension RuntimeEngine {
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult
+
+    /// Reads an indexed image's cross references ahead of the queries and keeps them (2026-10-18).
+    public func prepareCrossReferences(
+        forImageAt imagePath: String,
+        options: RuntimeCrossReferencePreparationOptions,
+        reportProgress: (@Sendable (RuntimeCrossReferencePreparationProgress) async -> Void)? = nil
+    ) async throws -> RuntimeCrossReferencePreparation
+
+    /// Zero drops every prepared image.
+    public func setPreparedCrossReferenceByteLimit(_ byteLimit: Int) async throws
 }
 
 extension RuntimeEngine.CommandName {
     static let crossReferenceCallees = Self("crossReferenceCallees")
     static let crossReferenceCallers = Self("crossReferenceCallers")
     static let crossReferenceTypeReferences = Self("crossReferenceTypeReferences")
+    static let crossReferencePrepare = Self("crossReferencePrepare")
+    static let crossReferenceSetPreparedByteLimit = Self("crossReferenceSetPreparedByteLimit")
 }
 ```
 
@@ -565,7 +598,7 @@ extension RuntimeEngine.CommandName {
 
 0. 只在引擎已索引的镜像里找（`indexedImagePathList()`，与文本搜索判定的是同一批镜像）：范围是 `.indexedImages` 时候选从这批里挑，指定的单个镜像不在其中就报 `imageNotIndexed`。预筛读的链接关系与导出表仍看全部镜像——改名再导出某个符号的库可能没索引——但那只读头部信息，每个分析器读一次；解码代码只对已索引的镜像做。
 1. 预筛：函数 → 它自己的镜像，加上 C 与 ObjC 名字（含代码合并留下的别名）的导入者；Swift 名字按链接关系——macOS 27.2 的缓存 4,113 个镜像只有 245 个在符号表里留着 Swift 的未定义符号，按导入筛会丢掉其余镜像里的调用者，所以凡是链接了函数所在镜像（直接，或经再导出）的镜像都算。ObjC 方法另加引用了它 selector 的镜像（`__objc_selrefs`）；selector → 引用了它的镜像。类型 → 类的定义镜像加类或元类地址上任一符号的导入者（Swift 类再加链接者），Swift 类型 → 链接了定义镜像的镜像（标准库与导入的类型，名字里会直接拼出来，凡是 Swift 镜像都算）。实测按 selector 筛，中位数只剩 1 个镜像，第 99 百分位 15 个，最多 2,758 个（`init`）。预筛「不漏」由 MachOSwiftSection 的抽样测试保证：在预筛丢掉的镜像里每 16 个扫 1 个，不许有一处引用。
-2. 有界并发地扫描候选镜像，每个镜像只留命中这个 subject 的引用（`references(to:inImageAt:)`），不建整镜像的反向表——库第一批实测一张 AppKit 的整表约 100 MB，并发建整表的峰值会让分配器留下上 GB 的脏页。同时扫几个镜像由查询选项 `maximumConcurrentScans` 决定，整个进程共用这一个上限、以最近一次查询带来的为准；App 传设置 › Search › Cross References 的 Max Concurrent Scans（默认 4，可调到核数，与后台索引的 Max Concurrent Tasks 一样）。扫描在会话自己的 utility 优先级队列上跑，不占 Swift 协作线程池：扫一个镜像是不让出的同步计算，占着协作线程会让同进程的侧栏、内容区请求干等（原为核数减一个任务、跑在协作线程池上，见「第二次试用后的修改」）。每扫完一个镜像报一次进度，进度里带着这个镜像的结果；调用方中途放弃时，手里已经有这些。
+2. 有界并发地扫描候选镜像，每个镜像只留命中这个 subject 的引用（`references(to:inImageAt:)`），不建整镜像的反向表——库第一批实测一张 AppKit 的整表约 100 MB，并发建整表的峰值会让分配器留下上 GB 的脏页。同时扫几个镜像由查询选项 `maximumConcurrentScans` 决定，整个进程共用这一个上限、以最近一次查询带来的为准；App 传设置 › Search › Cross References 的 Max Concurrent Scans（默认 4，可调到核数，与后台索引的 Max Concurrent Tasks 一样）。扫描在会话自己的 utility 优先级队列上跑，不占 Swift 协作线程池：扫一个镜像是不让出的同步计算，占着协作线程会让同进程的侧栏、内容区请求干等（原为核数减一个任务、跑在协作线程池上，见「第二次试用后的修改」）。设置 Keep Cross References Ready 开着时（默认），查询带上 `preparedIndexByteLimit`，每个候选镜像都从预先准备好的紧凑表里读，表没准备好就当场准备、排在队首，不另外现扫（见「预先准备引用表」）。每扫完一个镜像报一次进度，进度里带着这个镜像的结果；调用方中途放弃时，手里已经有这些。
 3. 取消与时限：调用方取消即撤回（`cancelsAcrossConnections`），扫描在下一个镜像前停下并抛出取消。`resultLimit` 到了就停，结果标 `isComplete == false`。MCP 的 30 秒与 CLI 的 `--timeout` 由前端实现：到时取消，用进度里已收到的结果。
 4. 会话内的扫描缓存：按「扫描键 → 各镜像的命中」存（调用者按查询键，类型按类对象或描述符的位置——同名的类可能分属 macOS 与 Mac Catalyst 两个变体），64 MB 预算，按最近使用淘汰。同一个主体再查一次（重试、调用层级的同一节点展开两次），已扫过的镜像直接用，只扫剩下的。单个主体的结果超出预算（`init` 的调用者）就不缓存，每次重扫——这是不做存盘索引的代价。
 
@@ -586,7 +619,8 @@ extension RuntimeEngine.CommandName {
 | `typeReferences` | Type References | 类型名 | 引用该类型的函数，按库、按类型分组 |
 
 - 查询框的写法与 CLI 的目标写法相同（见第 8 节）。范围控件对这三种模式生效，默认查全部已索引的镜像（范围按钮写的就是 In Indexed Images），可以缩小到当前镜像或挑选的镜像。
-- 设置 › Search 新增 Cross References 一节：Max Concurrent Scans，同时扫几个镜像（1 到核数，默认 4），Find 与 Inspector 的查询都带上它。
+- 设置 › Search 新增 Cross References 一节：Keep Cross References Ready（默认开，后台为每个已索引的镜像准备引用表）、Resident Limit（默认 256 MB）、Max Concurrent Scans（同时读几个镜像，1 到核数，默认 4），Find 与 Inspector 的查询都带上它们。
+- Report 导航页新增 Cross References 一类：正在准备、在等的镜像（可取消）与结束的历史。
 - 每行显示函数名（无符号函数显示「无符号函数 0x…」）、所在镜像、调用点数量和精度标记（「按 selector」「候选」）；底部过滤栏加一个「显示运行时调用」开关。
 - 结果能对应到某个类型成员时，点击沿用 Find 现成的成员高亮（`ContentHighlightRequest`），跳到声明行；对应不到的行（C 函数、无符号函数）只显示，不跳转。
 - `FindResultNode.Content` 新增 `case crossReference(function: RuntimeFunctionReference, references: [RuntimeCrossReference])`，子节点按需加载。
@@ -676,13 +710,13 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 ### 可发现性
 
 - 入口在三处常用的位置：Find 的模式路径、内容区右键、Inspector 标签；菜单命令和快捷键照 Xcode。
-- 默认开启，没有开关：平时不占用资源，只在查询时扫描已索引的镜像；同时扫几个镜像在设置 › Search 里调。
+- 默认开启：已索引的镜像在后台准备好引用表（进度见 Report 导航页），查询直接读表；在设置 › Search 里可以关掉准备（查询改为现扫）、调内存上限与同时读几个镜像。
 - CLI 的 `--help` 与 agent 插件的 skill 同批更新；装了插件的 agent 在插件版本号变化后会拿到新的用法。
 
 ### 数据与配置兼容
 
-- 不写任何文件：扫描结果只缓存在引擎进程的内存里，按字节预算淘汰。
-- 设置新增一项 `search.maximumConcurrentCrossReferenceScans`（默认 4），挂在已有的 `search` 下；旧的设置文件没有这一项时取默认值，无需迁移。不改动书签或任何已有文件。
+- 不写任何文件：准备好的引用表与扫描结果只在引擎进程的内存里，按字节预算淘汰。常驻的五个镜像约 50 MiB。
+- 设置新增三项，挂在已有的 `search` 下：`maximumConcurrentCrossReferenceScans`（默认 4）、`isCrossReferencePreparationEnabled`（默认开）、`crossReferenceResidentByteLimitMegabytes`（默认 256）；旧的设置文件没有它们时取默认值，无需迁移。不改动书签或任何已有文件。
 - 线上协议只新增命令；旧载荷与旧对端收到这些命令时派发失败，前端提示需要更新，不影响其他功能。
 
 ### 平台与最低版本
@@ -842,6 +876,29 @@ Debug 构建里扫描器仍比 Release 慢几十倍，单扫 AppKit 仍要几秒
 
 **同一轮修的显示问题**：Inspector 的 Type References 里，ObjC 方法的行只显示「-」，长的 Swift 名字只显示前半截、没有省略号，点一下才显示全文。结果行（Find 导航页与 Inspector 共用 `FindResultCellView`）的标题是富文本，AppKit 按富文本自己的段落样式折行，标签上设的 `lineBreakMode = .byTruncatingTail` 只管纯文本（`NSCell.wraps` 的文档）；标题没带段落样式，就按词折行，单行标签只画出第一行，`-[…` 在「-」后就能断。侧栏、Inspector 的关系与特化标签都把截断写进了富文本，只有 Find 结果行漏了。改为单行标题带 `.byTruncatingTail` 的段落样式（命中行仍可折成两行）；标题标签不再可选中——`Label(wrappingLabelWithString:)` 建出来是可选中的，一点就换成字段编辑器重画，这就是「点一下才显示」。测试 `FindResultNodeTests.longTitlesTruncateOnOneLine` 按 Inspector 的宽度画一行 ObjC 方法的标题：修复前只画到 7.5 点（一个「-」），修复后排到行尾。「有时整行是空的」没有复现，看修复后是否还出现。
 
+## 预先准备引用表（2026-10-18）
+
+上面几处改完，用户回复「不卡了，就是每次获取都太慢了，能像后台索引和搜索语料一样提前准备好吗」，并在两个问题里选了「紧凑表」「只放内存」。这一条修订 2026-10-16 的「不做存盘的全量索引，只按需扫描」：仍不存盘、仍不扫未索引的镜像，但已索引镜像的引用表预先建好、留在内存里。
+
+**库（MachOSwiftSection `3ca49d4d`，五份锁文件钉到它）**：新增 `CodeReferenceIndex`，一个镜像的引用按「引用了什么」分组存放。选择子、导入名、类名每个只存一份；引用所在的函数与指令存成相对 `__text` 起点的 32 位偏移（一条 16 字节）；只留查调用者与查类型引用会读的引用（调用与尾调用、发送、导入名、类与 Swift 类型引用），间接调用和落在所有镜像之外的跳转不留。`referenceIndex(ofImageAt:)` 扫一遍建表，并留住镜像的函数表（给结果起名要用）；从表里读，`references(to:)` 与 `references(toSwiftType:in:)` 回答的和现扫的 `references(to:inImageAt:)`、`references(toSwiftType:inImageAt:)` 逐条相同，顺序也相同。macOS 27.2 实测（含名字的堆存储）：
+
+| 镜像 | 紧凑表 | 库原有的整表 | Debug 下建表 |
+|---|---|---|---|
+| AppKit | 21 MiB（85.6 万条） | 67 MiB（87.5 万条） | 5.9 秒 |
+| Foundation | 9 MiB | 34 MiB | 3.6 秒 |
+| SwiftUICore | 9 MiB | 35 MiB | 3.5 秒 |
+| libswiftCore | 1 MiB | 7 MiB | 1.0 秒 |
+
+用户常驻索引的五个镜像加起来约 50 MiB，默认上限 256 MiB 放得下；Release 下建表比 Debug 快 20–50 倍。
+
+**引擎（`RuntimeViewerCrossReferences`）**：会话按镜像存放准备好的表，有内存上限、按最近一次使用淘汰，一张大于上限的表照样回答、不留，换代时全部作废。建表与现扫共用会话那条 utility 队列与 Max Concurrent Scans；队列里，后台准备排在查询自己的现扫之后，查询等着的准备排在最前。同一个镜像不管谁要，只建一次：后到的等先开始的那次，查询等着它时把它提到最前。一个请求被取消立刻不再等；所有请求都走了，还没开始的就不开始，开始了的在下一次进度报告（每 2,048 个函数一次）时放弃。新命令 `prepareCrossReferences`（带进度、可跨连接取消，未索引的镜像回 `imageNotIndexed`）与 `setPreparedCrossReferenceByteLimit`（0 即全部丢掉）。查询选项新增 `preparedIndexByteLimit`：有值时候选镜像一律查表——表在建就等它，没有就当场建——不再另外现扫；没有值时照旧现扫，会话里按主题的扫描缓存也只在这时用。进度是各自送出的，可能晚于结果、也可能乱序，App 只取最远的那次。
+
+**App**：`CrossReferencePreparationCoordinator`，每个引擎一个，与搜索语料的协调器并列挂在 `RuntimeEngineBackgroundWork` 上、同一引擎的窗口共用，文档打开时与另两个协调器一起建好，换引擎时跟着换。它在开始时请求引擎已索引的每个镜像，之后每索引一个就请求一个；开关打开时全部请求一遍，关掉时撤回所有请求并让引擎把上限设为 0；上限改了就告诉引擎；引擎重连后重来；被淘汰的镜像不再后台补建，下一次查到它时由查询当场建。Report 导航页新增「Cross References」类别：在准备的（「42% · 30,000 of 71,000 functions」，可取消）、在等的，以及结束的历史（提示里写引用条数与大小）；准备期间计入 `reportActivity`，不让 App Nap 拖慢服务。设置 › Search › Cross References：Keep Cross References Ready（默认开）、Resident Limit（默认 256 MB，32–4096）、Max Concurrent Scans；Find 与 Inspector 开着时把上限作为 `preparedIndexByteLimit` 带进每次查询。
+
+**和设计不同的两处**（决策日志有记录）：开关关掉时 Report 里这一类不显示「Turned off in Settings」——关掉后查询照样能用（现扫），没有后台工作要报告，和关掉就查不到东西的索引、语料不同；`ViewModelTestEnvironment` 里这个开关默认关，开着会让每个打开文档的测试都在后台准备镜像，影响别的测试数的活动与 Report 行，讲它的测试自己打开。
+
+**测试**：库 `CodeReferenceIndexTests` 6 个（Foundation 整表的每个键与索引逐条相同；AppKit 多个键一起查与过滤扫描逐条相同；`URL`、`JSONEncoder`、`Array` 从索引查与按类型扫描相同；大小不到整表一半；建表留住函数表；进度与停止）。引擎 `CrossReferencePreparationTests` 8 个（查表与现扫的结果相同；准备好之后再查什么都不扫；后台准备与查询共用一次准备；上限与淘汰、0 全丢；未索引的不建；唯一的请求取消后准备停下、什么都不留；引擎路径准备、拒绝、查表与现扫相同；线上格式）。App：`CrossReferencePreparationCoordinatorTests` 5 个（已索引的被准备并记入历史；后来索引的也准备；开关关撤回、再开重新准备；取消记为 cancelled；关着什么都不请求），`ReportViewModelTests.preparedCrossReferencesUnderTheirKind`（这一类排最后；关掉后没有 Turned off 行），`FindViewModelCrossReferenceTests.preparedLevelsListWhatScansList`（开着准备时调用层级一层的行与现扫相同）。库的交叉引用测试 66 个、引擎 61 个、App 570 个与设置 33 个都通过，macOS App 目标编译通过；没有在界面上实际点过。
+
 ## 审查与修复（2026-10-17）
 
 第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
@@ -907,4 +964,9 @@ Debug 构建里扫描器仍比 Release 慢几十倍，单扫 AppKit 仍要几秒
 | 2026-10-17 | 会话共享进行中的扫描（`sharedScan`）；展开行时下一层延到主线程下一轮再启动 | Find 与 Inspector 同时查同一主题各扫一遍；展开时同步发布引起 RxSwift 重入警告。各带修复前失败的测试 |
 | 2026-10-18 | 交叉引用只扫引擎已索引的镜像：范围 `.allImages` 改名 `.indexedImages`，指定未索引的镜像报 `imageNotIndexed`；Callees 不受影响 | 用户原话：「分析只在已经索引的image里面进行，其他没加载索引的不分析」。取代 2026-10-16 第二轮的「跨库范围：整个共享缓存 + 已加载的非系统库」。Find 的范围本来就叫 Indexed Images |
 | 2026-10-18 | 同时扫几个镜像改由设置 Max Concurrent Scans 决定（1 到核数，默认 4），经查询选项带到服务进程、全进程共用；扫描移到会话自己的 utility 队列，不占协作线程池 | 用户原话：「具体用多少核让用户可以决定，跟后台索引一样，设置里面可以改」。取代 2026-10-16 的「第 3 步：并发数为核数减一」：那条要给同进程的其他请求留线程，可留下的只有一个协作线程 |
+| 2026-10-18 | 已索引镜像的引用表预先在后台建好、只放内存；用库里新做的紧凑表；查询查表，表没建好就提到队首建好再答 | 用户原话：「能像后台索引和搜索语料一样提前准备好吗」，选「紧凑表」「只放内存」。否：库现成的整表（一条引用约 80 字节，常驻的五个镜像估算 300–400 MB）；存到磁盘（要处理格式、失效与清理）。修订 2026-10-16「不做存盘的全量索引，只按需扫描」 |
+| 2026-10-18 | 预先准备的默认假设 | 镜像一索引就排队建表、并发数沿用 Max Concurrent Scans、低优先级；进度进 Report 导航页；设置开关默认开、上限默认 256 MB、超出按最近使用淘汰；开关关掉回到现扫。提问前列给用户，用户没有异议 |
+| 2026-10-18 | 实现中自定：关掉准备时 Report 里 Cross References 一类不显示「Turned off in Settings」 | 关掉后查询照样能用（现扫），没有后台工作要报告；索引与语料关掉会让功能失效，所以才需要那一行 |
+| 2026-10-18 | 实现中自定：`ViewModelTestEnvironment` 里 Keep Cross References Ready 默认关 | 开着时每个在引擎上打开文档的测试都会在后台准备镜像，计入活动与 Report 行，别的测试数这些；讲它的测试自己打开 |
+| 2026-10-18 | 实现中自定：被淘汰的镜像不在后台补建，由下一次查到它的查询当场建 | 后台补建会和查询抢上限，反复淘汰再补建；查询当场建与现扫的代价相当 |
 | 2026-10-18 | 结果行的单行标题把截断写进富文本的段落样式；标题标签不可选中 | 用户试用时 Inspector 的行只显示「-」、点一下才显示。富文本不认标签的 `lineBreakMode`；与侧栏等其他列表的做法一致。用户回复「改」 |
