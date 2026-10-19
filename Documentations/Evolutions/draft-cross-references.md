@@ -70,7 +70,21 @@ SwiftUICore 的 `__auth_stubs` 有 35,120 字节，共 2,195 个 16 字节的桩
 | AppKit | 166,824 | 4,090 | 4,993 | 12,637 |
 | SwiftUICore | 140,368 | 46,108 | 3,682 | 5,609 |
 
-（数据来自 `dyld_info -load_commands` 的 `LC_DYSYMTAB`。）`/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld/` 下没有单独的 `.symbols` 文件，本地符号就在每个镜像自己的 `LC_SYMTAB` 里，而 MachOKit 的 `MachOImage.symbols64` 读的正是它（`MachOKit/Sources/MachOKit/MachOImage.swift:215-225`）。所以**在 macOS 上，进程内的 RuntimeViewer 能看到系统库几乎全部函数的名字**；`dyld_info -lookup_va` 也能把 0x184AE3608 叫成 `_NSWindowWakeDeferredIfNeeded` 这种不导出的 C 函数。
+（数据来自 `dyld_info -load_commands` 的 `LC_DYSYMTAB`。）`/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld/` 下没有单独的 `.symbols` 文件，本地符号就在每个镜像自己的 `LC_SYMTAB` 里，而 MachOKit 的 `MachOImage.symbols64` 读的正是它（`MachOKit/Sources/MachOKit/MachOImage.swift:215-225`）。所以在 macOS 上，镜像里留着的本地符号进程内都读得到；`dyld_info -lookup_va` 也能把 0x184AE3608 叫成 `_NSWindowWakeDeferredIfNeeded` 这种不导出的 C 函数。（原句是「进程内的 RuntimeViewer 能看到系统库几乎全部函数的名字」，见下面的更正。）
+
+**2026-10-19 更正：本地符号在，不等于每个函数都有名字。** 上面只数了符号条数，没有按函数起点核对。按函数起点核对（`dyld_info -function_starts` 对没有确切符号的起点打印「前一个符号+偏移」，这样的起点算无名），macOS 26.7 整个缓存 1308 万个函数起点里 37.8% 没有符号，各镜像差别很大：
+
+| 镜像 | 无名起点 | | 镜像 | 无名起点 |
+|---|---|---|---|---|
+| Foundation | 0% | | Charts | 91% |
+| libswiftCore | 4% | | SwiftData | 83% |
+| SwiftUICore | 6% | | `_MapKit_SwiftUI` | 81% |
+| SwiftUI | 10% | | WidgetKit | 74% |
+| AppKit | 13% | | AppIntents | 54% |
+
+过半无名的镜像有 677 个，大量是用 Swift 写的框架，也有 libLLVM 这类 C++ 库。无名起点没有一个是导出的：剥掉的全是内部代码。符号剥掉之后，ObjC 方法还能从方法列表叫出名字，Swift 只有元数据访问函数、一次性初始化函数和类的虚表方法能从元数据叫出名字；结构体和枚举的方法、协议见证、值见证、闭包、特化都没有任何记录。所以在剥了符号的 Swift 框架里，一个类型的引用大多显示成 Unnamed function。
+
+还能从元数据补回、不必猜的（估算）：名字齐全的 Swift 镜像（SwiftUICore、SwiftUI、libswiftCore、Combine）里，协议见证占全部函数的 11–18%，值见证占 4–13%，两者都能从见证表确定是谁的哪一项。剥了符号的镜像里另有 13–16% 的无名函数只是一条跳转（SwiftData 696、WidgetKit 1,444、Charts 1,504 个），但九成以上跳向的目标本身也无名，按目标起名补不回多少；它们多半是合并后的协议见证，见证表会直接指向它们。闭包、特化、结构体和枚举的方法补不回来。
 
 iOS 真机把本地符号放在单独的 `.symbols` 文件里，不映射进进程，`DyldCacheLoaded.localSymbolsInfo`（`DyldCacheLoaded.swift:183-191`）在那里是空的。落地第一步读离线缓存核实：真机缓存里的本地符号条目和地址都还在，名字全是 `<redacted>`，真名只在不映射的 `.symbols` 文件里；Simulator 与 macOS 一样能读到名字。因此「靠元数据能叫出名字的方法也算」这条决定，对真机和第三方 App 的发布版意义最大。
 
@@ -1043,3 +1057,4 @@ Find 跨已索引镜像的第一次查询，另外省掉改名再导出表的 3.
 | 2026-10-19 | 共享缓存外多加载一个镜像不再换分析器；查询要用到新加载的镜像时才换，并带着准备好的表、扫描结果和进行中的准备，名字与预筛表在新分析器里后台重读；分析器认识的镜像被卸载才整个重来 | 用户反馈第一次显示类型引用仍要等。lldb 挂在用户的 Debug 包上实测：常驻镜像准备完之后，服务进程生成接口时加载了 `libobjc-trampolines.dylib`，下一次查询便换代、作废全部准备好的表。给出「只加载不换」与「换时带过去」两项，用户回复「可以，都做」 |
 | 2026-10-19 | 实现中自定：一条路径不对应任何镜像时，进程每加载一批新镜像，分析器为它换一次 | 要精确判断「找不到的路径是不是新加载的镜像」，测试就得在进程里真的加载一个缓存外镜像，没有稳妥可加载的；换的时候准备好的表照样保留，代价只是名字与预筛表在后台重读 |
 | 2026-10-19 | Inspector 的 References 标签：行小一号（11pt 字、14pt 图标、行高 20pt），Find 导航页不变；去掉每段 240pt 的上限，几段分 Inspector 的高度——放得下的段只占所需，放不下的平分剩余、各自滚动，铺到 Inspector 底部；窗口矮到每段连 80pt 的列表（三四行）都放不下时整页滚动 | 用户确认秒开后提出「这里字体小一点，另外列表要占满整个inspector」。字号取这一页其余文字的 11pt、图标随字缩到 14pt、多段时的分法与窗口太矮时整页滚动，都是方案里写明的，用户回复「可以，改」；每段最少留 80pt 是实现中沿用导航列表原有的下限 |
+| 2026-10-19 | 更正前期调研「进程里能看到多少符号」：macOS 26.7 缓存 37.8% 的函数起点没有符号，Swift 新框架多被剥，并记下靠元数据能补回的估算 | 用户问为什么 Swift 类型的引用多是无名函数；原句「几乎全部函数都有名字」只数了符号条数。用户同意更正 |
