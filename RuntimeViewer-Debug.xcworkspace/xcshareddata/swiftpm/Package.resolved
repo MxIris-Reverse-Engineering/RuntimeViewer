@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "fc1f0f65766fd0955e1bc5f5ff00d37399d82051",
-        "version" : "0.15.0"
+        "revision" : "0d8a1d35808e6180600d94941887d53dc5cbd803",
+        "version" : "0.17.0"
       }
     },
     {
@@ -32,8 +32,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/capstone",
       "state" : {
-        "revision" : "81d9ca83416426a5cd05fcd95c6fba3ef5492e27",
-        "version" : "6.0.100"
+        "revision" : "87df94a0f31c0bb07b7513d6c923927b5d81d790",
+        "version" : "6.0.101"
       }
     },
     {
@@ -122,8 +122,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
-        "revision" : "8648fe649c5d62be38721110f835821906e9242a",
-        "version" : "8.13.0"
+        "revision" : "3feb743b5c92c2b443614d10a00e605212a2b4b1",
+        "version" : "8.14.0"
       }
     },
     {
@@ -410,8 +410,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-capstone",
       "state" : {
-        "revision" : "8ef4766f2526aac7faf80379f3cc5dbdb4d321a2",
-        "version" : "6.0.1"
+        "revision" : "ff60d3a504ef78fa335e09a65d8e0ca985207732",
+        "version" : "6.1.0"
       }
     },
     {
