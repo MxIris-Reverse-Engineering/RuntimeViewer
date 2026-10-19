@@ -2,8 +2,9 @@ import Foundation
 import MetaCodable
 
 extension Settings {
-    /// The Find navigator's corpus: whether interfaces are kept searchable at
-    /// all, and how much of them may stay resident.
+    /// The Find navigator's corpus — whether interfaces are kept searchable at
+    /// all, and how much of them may stay resident — and how many images its
+    /// cross-reference modes scan at once.
     ///
     /// The corpus is the text of every indexed image's interfaces, printed
     /// once per image in the engine's process (proposal `0029-find-navigator`
@@ -24,10 +25,43 @@ extension Settings {
         @Default(256)
         public var residentByteLimitMegabytes: Int
 
+        /// How many images Call Hierarchy and Type References — in the Find
+        /// navigator and the Inspector's References tab — scan at the same
+        /// time, in the process that serves the engine (Settings UI clamps to
+        /// 1...processorCount). Each keeps a core busy decoding an image's
+        /// code; only indexed images are scanned.
+        @Default(4)
+        public var maximumConcurrentCrossReferenceScans: Int
+
+        /// Keep Cross References Ready: whether the engine's process reads the
+        /// cross references of every indexed image ahead of the queries, which
+        /// then answer from what it read instead of scanning. Off drops what it
+        /// read, and queries scan again.
+        @Default(true)
+        public var isCrossReferencePreparationEnabled: Bool
+
+        /// Resident budget for prepared cross references, in megabytes. Past
+        /// it the images queried least recently are dropped, and read again
+        /// when a query needs them. AppKit's take about 35 MB: 21 for its
+        /// references, 14 for the names its results are shown with.
+        @Default(256)
+        public var crossReferenceResidentByteLimitMegabytes: Int
+
         public static let `default` = Self()
 
         public var residentByteLimit: Int {
             max(0, residentByteLimitMegabytes) * 1024 * 1024
+        }
+
+        public var crossReferenceResidentByteLimit: Int {
+            max(0, crossReferenceResidentByteLimitMegabytes) * 1024 * 1024
+        }
+
+        /// What a cross-reference query sends as its prepared index byte limit:
+        /// the resident budget while Keep Cross References Ready is on, and
+        /// none — scan instead — while it is off.
+        public var preparedCrossReferenceByteLimit: Int? {
+            isCrossReferencePreparationEnabled ? crossReferenceResidentByteLimit : nil
         }
     }
 }

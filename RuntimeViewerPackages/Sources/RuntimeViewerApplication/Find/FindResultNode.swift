@@ -5,6 +5,7 @@ import RxAppKit
 
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
@@ -23,7 +24,8 @@ public struct FindResultCellAppearance: Equatable {
 }
 
 /// One row of the Find navigator's outline: a type with its hits underneath,
-/// a hit, a member, or a node of a relationship tree.
+/// a hit, a member, a node of a relationship tree, or a row of a
+/// cross-reference tree.
 ///
 /// A class (an `NSObject`) because `NSOutlineView` takes objects as items.
 /// Two nodes with the same `identifier` are equal, whichever instances they
@@ -43,6 +45,11 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         /// A node of a relationship tree. `object` is `nil` for a type no
         /// indexed image defines; the row then shows `name` and goes nowhere.
         case relationship(name: String, object: RuntimeObject?)
+        /// What a cross-reference search starts from; what it found loads
+        /// below it.
+        case crossReferenceRoot(FindCrossReferenceRoot, direction: FindCrossReferenceDirection)
+        /// A row a cross-reference search found below another.
+        case crossReference(FindCrossReferenceRow)
     }
 
     public let content: Content
@@ -66,6 +73,10 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
             return match.object
         case .relationship(_, let object):
             return object
+        case .crossReferenceRoot(let root, _):
+            return root.navigationTarget
+        case .crossReference(let row):
+            return row.navigationTarget
         }
     }
 
@@ -82,6 +93,8 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         case .textMatch(let match): match.lineText
         case .member(let match): match.member.declarationText
         case .relationship(let name, _): name
+        case .crossReferenceRoot(let root, _): root.title
+        case .crossReference(let row): row.title
         }
     }
 
@@ -91,7 +104,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
     }
 
     public convenience init(content: Content, children: [FindResultNode] = [], identifier: String) {
-        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeAppearance(for: content))
+        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeNavigatorAppearance(for: content))
     }
 
     /// `node` with other children — what the filter bar keeps of a row — sharing its appearance,
@@ -135,6 +148,18 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         FindResultNode(content: .member(match), identifier: "member|\(match.object.kind)|\(match.object.name)|\(match.object.imagePath)|\(match.member.kind.rawValue)|\(match.member.name)|\(index)")
     }
 
+    /// A root of a cross-reference tree, with the rows loaded below it.
+    static func crossReferenceRoot(_ root: FindCrossReferenceRoot, direction: FindCrossReferenceDirection, identifier: String, children: [FindResultNode]) -> FindResultNode {
+        FindResultNode(content: .crossReferenceRoot(root, direction: direction), children: children, identifier: identifier)
+    }
+
+    /// A row of a cross-reference tree. Its identifier is its path from the
+    /// root, so a row keeps its place, its expansion and its selection when
+    /// the rows above it load more.
+    static func crossReference(_ row: FindCrossReferenceRow, identifier: String, children: [FindResultNode]) -> FindResultNode {
+        FindResultNode(content: .crossReference(row), children: children, identifier: identifier)
+    }
+
     public static func relationship(_ node: RuntimeRelationshipNode, path: String) -> FindResultNode {
         let identifier = path + "/" + (node.object.map { "\($0.kind)|\($0.name)" } ?? node.name)
         return FindResultNode(
@@ -146,13 +171,25 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     // MARK: - Appearance
 
-    private static func makeAppearance(for content: Content) -> FindResultCellAppearance {
-        var appearance = FindResultCellAppearance()
+    /// The row as the Find navigator draws it. Nothing draws one off AppKit.
+    private static func makeNavigatorAppearance(for content: Content) -> FindResultCellAppearance {
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        return makeAppearance(for: content, metrics: .navigator)
+        #else
+        return FindResultCellAppearance()
+        #endif
+    }
+
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    /// A row showing `content`, at `metrics`' sizes: the Find navigator's, or
+    /// the Inspector's References tab's, which lists cross-reference rows a
+    /// size down.
+    static func makeAppearance(for content: Content, metrics: FindResultCellStyle.Metrics) -> FindResultCellAppearance {
+        var appearance = FindResultCellAppearance()
         switch content {
         case .object(let object):
-            appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
-            appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
+            appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: metrics.iconSize)
+            appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
         case .textMatch(let match):
             appearance.icon = FindResultCellStyle.matchIcon
             appearance.iconAlpha = FindResultCellStyle.matchIconAlpha
@@ -165,35 +202,61 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
             appearance.allowsWrapping = true
         case .relationship(let name, let object):
             if let object {
-                appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
-                appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
+                appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: metrics.iconSize)
+                appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
             } else {
                 appearance.icon = FindResultCellStyle.unresolvedIcon
                 appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
-                appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor)
+                appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
                 appearance.isSecondary = true
             }
+        case .crossReferenceRoot(let root, _):
+            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: root, metrics: metrics)
+            appearance.title = titleWithSubtitle(root.title, subtitle: FindScope.imageName(of: root.imagePath), metrics: metrics)
+        case .crossReference(let row):
+            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: row, metrics: metrics)
+            switch row.item {
+            case .loading, .failure:
+                appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
+                appearance.title = plainTitle(row.title, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
+                appearance.isSecondary = true
+            case .function, .target, .image, .unnamedFunctions:
+                appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle, metrics: metrics)
+            }
         }
-        #endif
         return appearance
     }
 
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-    private static func plainTitle(_ text: String, color: NSColor) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: FindResultCellStyle.titleFont, .foregroundColor: color])
+    /// A one-line title in one colour.
+    private static func plainTitle(_ text: String, color: NSColor, metrics: FindResultCellStyle.Metrics) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .font: metrics.titleFont,
+            .foregroundColor: color,
+            .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
+        ])
     }
 
     /// `Name  image` — the type's name, then the image it is in, the way a
-    /// file row shows its group.
-    private static func titleWithSubtitle(_ title: String, subtitle: String) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: title, attributes: [.font: FindResultCellStyle.titleFont, .foregroundColor: FindResultCellStyle.titleColor])
+    /// file row shows its group — on one line.
+    private static func titleWithSubtitle(_ title: String, subtitle: String, metrics: FindResultCellStyle.Metrics) -> NSAttributedString {
+        let result = NSMutableAttributedString(string: title, attributes: [
+            .font: metrics.titleFont,
+            .foregroundColor: FindResultCellStyle.titleColor,
+            .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
+        ])
         if !subtitle.isEmpty {
-            result.append(NSAttributedString(string: FindResultCellStyle.subtitleSeparator + subtitle, attributes: [.font: FindResultCellStyle.subtitleFont, .foregroundColor: FindResultCellStyle.subtitleColor]))
+            result.append(NSAttributedString(string: FindResultCellStyle.subtitleSeparator + subtitle, attributes: [
+                .font: metrics.subtitleFont,
+                .foregroundColor: FindResultCellStyle.subtitleColor,
+                .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
+            ]))
         }
         return result
     }
 
-    /// The line with the hit set apart in the emphasis font and colour.
+    /// The line with the hit set apart in the emphasis font and colour. It
+    /// keeps the default paragraph style, which wraps by word: a hit's line
+    /// may take a second line (`FindResultCellAppearance.allowsWrapping`).
     private static func emphasized(_ text: String, range: NSRange?) -> NSAttributedString {
         let result = NSMutableAttributedString(string: text, attributes: [.font: FindResultCellStyle.hitLineFont, .foregroundColor: FindResultCellStyle.hitLineColor])
         if let range, range.location >= 0, NSMaxRange(range) <= result.length {

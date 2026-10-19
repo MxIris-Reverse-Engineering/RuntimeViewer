@@ -222,3 +222,18 @@ when picking up follow-up work.
   `12e1227b` (not compiled) and an example reproduction test, and the head of
   the file lists the decisions still open and the order to land the fixes in.
   As each entry is fixed, its diff is replaced by the fix commit.
+- [2026-10-17-cross-references-review-findings.md](2026-10-17-cross-references-review-findings.md) —
+  review of `feature/cross-references` (the cross references proposal, steps
+  1–3) together with MachOSwiftSection's `feature/cross-reference-analysis`,
+  IDs `XR.<finding>`. Fixed with a failing-first test each: type references
+  carrying the queried object's whole subtree (`XR.C2`), an oversized scan
+  pushing every other scan out of the session again on each query
+  (`XR.C3`), and four tests that could not fail or could not tell what they
+  claimed (`XR.D1`, `XR.D4`, `XR.C13`). Through the MachOSwiftSection pin:
+  images outside the shared cache — an injected app's own executable,
+  frameworks and plug-ins — answered `imageNotFound` (`XR.C1`), and C
+  functions another library re-exports under a new name lost nearly all
+  their cross-image callers. `XR.C4`, `C5`, `C7`, `C8`, `C11` are recorded as
+  not fixed with their reopen conditions; `XR.C9` and `XR.B6` are **false
+  positives**. The library's own findings live in its
+  `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`.

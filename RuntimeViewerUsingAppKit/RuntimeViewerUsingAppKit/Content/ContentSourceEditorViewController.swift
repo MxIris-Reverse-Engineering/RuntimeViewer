@@ -1,5 +1,6 @@
 import AppKit
 import RuntimeViewerApplication
+import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerSettings
@@ -33,6 +34,10 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     private let jumpToDefinitionRelay = PublishRelay<RuntimeObject>()
 
     private let openInNewTabRelay = PublishRelay<RuntimeObject>()
+
+    /// Find Call Hierarchy and the other cross-reference commands chosen in the right-click menu.
+    /// The insertion point is not followed here: the bridge reports no selection changes.
+    private let crossReferenceRequestedRelay = PublishRelay<FindCrossReferenceRequest>()
 
     /// `viewDidChangeEffectiveAppearance` is an `NSView` callback, not an `NSViewController`
     /// one, so the appearance switch has to be observed rather than overridden.
@@ -105,7 +110,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
         let input = ContentTextViewModel.Input(
             runtimeObjectClicked: jumpToDefinitionRelay.asSignal(),
-            runtimeObjectOpenedInNewTab: openInNewTabRelay.asSignal()
+            runtimeObjectOpenedInNewTab: openInNewTabRelay.asSignal(),
+            crossReferenceRequested: crossReferenceRequestedRelay.asSignal()
         )
         let output = viewModel.transform(input)
 
@@ -228,17 +234,51 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
     }
 
     func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem] {
-        guard let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location) else { return [] }
+        var menuItems: [NSMenuItem] = []
+        let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location)
+        if let runtimeObject {
+            let jumpToDefinitionMenuItem = RuntimeObjectMenuItem(title: "Jump to Definition", symbolName: .arrowTurnDownRight, runtimeObject: runtimeObject)
+            jumpToDefinitionMenuItem.target = self
+            jumpToDefinitionMenuItem.action = #selector(jumpToDefinitionAction(_:))
 
-        let jumpToDefinitionMenuItem = RuntimeObjectMenuItem(title: "Jump to Definition", symbolName: .arrowTurnDownRight, runtimeObject: runtimeObject)
-        jumpToDefinitionMenuItem.target = self
-        jumpToDefinitionMenuItem.action = #selector(jumpToDefinitionAction(_:))
+            let openInNewTabMenuItem = RuntimeObjectMenuItem(title: "Open in New Tab", symbolName: .plusSquareOnSquare, runtimeObject: runtimeObject)
+            openInNewTabMenuItem.target = self
+            openInNewTabMenuItem.action = #selector(openInNewTabAction(_:))
 
-        let openInNewTabMenuItem = RuntimeObjectMenuItem(title: "Open in New Tab", symbolName: .plusSquareOnSquare, runtimeObject: runtimeObject)
-        openInNewTabMenuItem.target = self
-        openInNewTabMenuItem.action = #selector(openInNewTabAction(_:))
+            menuItems = [jumpToDefinitionMenuItem, openInNewTabMenuItem]
+        }
 
-        return [jumpToDefinitionMenuItem, openInNewTabMenuItem]
+        // As the NSTextView path: the member the token's line declares, and the type a name links to.
+        var requests: [FindCrossReferenceRequest] = []
+        if let member = declaredMember(atCharacterIndex: characterRange.location) {
+            requests += FindCrossReferenceRequest.requests(for: member)
+        }
+        if let runtimeObject {
+            requests += FindCrossReferenceRequest.requests(for: runtimeObject)
+        }
+        if !requests.isEmpty, !menuItems.isEmpty {
+            menuItems.append(.separator())
+        }
+        menuItems += requests.map { request in
+            NSMenuItem(title: request.title, action: #selector(crossReferenceAction(_:)), keyEquivalent: "").then {
+                $0.target = self
+                $0.representedObject = request
+            }
+        }
+        return menuItems
+    }
+
+    /// The member the line holding `characterIndex` declares, if it declares one with code.
+    private func declaredMember(atCharacterIndex characterIndex: Int) -> RuntimeMemberReference? {
+        guard let displayedAttributedString,
+              characterIndex < displayedAttributedString.length
+        else { return nil }
+        return displayedAttributedString.attribute(.runtimeViewerDeclaredMember, at: characterIndex, effectiveRange: nil) as? RuntimeMemberReference
+    }
+
+    @objc private func crossReferenceAction(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? FindCrossReferenceRequest else { return }
+        crossReferenceRequestedRelay.accept(request)
     }
 
     /// The jump target the generator recorded for the token starting at `characterIndex`, if

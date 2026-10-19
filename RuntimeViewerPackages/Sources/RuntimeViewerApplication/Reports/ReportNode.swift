@@ -4,13 +4,15 @@ import RuntimeViewerCore
 // the iOS family, and both declare `OutlineNodeType`.
 import RuntimeViewerArchitectures
 
-/// The two kinds of work the Report navigator lists, each the first level of its outline — the
-/// part Xcode's own Report navigator gives to a scheme or a package.
+/// The kinds of work the Report navigator lists, each the first level of its outline — the part
+/// Xcode's own Report navigator gives to a scheme or a package.
 public enum ReportCategory: Hashable, Sendable, CaseIterable {
     /// Batches of the background indexer, each with its images.
     case backgroundIndexing
     /// The corpora that make indexed images searchable by the Find navigator.
     case searchableInterfaces
+    /// The cross references prepared ahead of Call Hierarchy and Type References.
+    case crossReferences
 }
 
 /// What a row of the Report navigator stands for. Stable across updates, so a row keeps its cell,
@@ -28,6 +30,10 @@ public enum ReportNodeIdentifier: Hashable, Sendable {
     case corpusBuild(imagePath: String)
     /// A corpus build that ended, one row per ending.
     case finishedCorpusBuild(UUID)
+    /// An image's cross references queued or being prepared, by image.
+    case crossReferencePreparation(imagePath: String)
+    /// A cross-reference preparation that ended, one row per ending.
+    case finishedCrossReferencePreparation(UUID)
 }
 
 extension ReportNodeIdentifier {
@@ -40,6 +46,8 @@ extension ReportNodeIdentifier {
             .backgroundIndexing
         case .corpusBuild, .finishedCorpusBuild:
             .searchableInterfaces
+        case .crossReferencePreparation, .finishedCrossReferencePreparation:
+            .crossReferences
         }
     }
 }

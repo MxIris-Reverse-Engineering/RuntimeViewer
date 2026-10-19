@@ -15,6 +15,7 @@ public enum LocalPackages {
         "RuntimeViewerCore",
         "RuntimeViewerCommunication",
         "RuntimeViewerInjection",
+        "RuntimeViewerCrossReferences",
         "RuntimeViewerUtilities",
         // RuntimeViewerPackages
         "RuntimeViewerArchitectures",
@@ -75,6 +76,7 @@ public enum LocalPackages {
             "RuntimeViewerCoreTests",
             "RuntimeViewerCommunicationTests",
             "RuntimeViewerInjectionTests",
+            "RuntimeViewerCrossReferencesTests",
         ]),
         ("RuntimeViewerPackages", [
             "RuntimeViewerArchitecturesTests",

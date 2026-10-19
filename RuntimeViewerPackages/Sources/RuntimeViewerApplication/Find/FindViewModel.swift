@@ -1,8 +1,21 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 import MemberwiseInit
+
+/// Find Call Hierarchy, Find Callees or Find Type References chosen on a
+/// result row.
+public struct FindCrossReferenceCommand {
+    public let node: FindResultNode
+    public let mode: FindMode
+
+    public init(node: FindResultNode, mode: FindMode) {
+        self.node = node
+        self.mode = mode
+    }
+}
 
 /// One Find navigator page. Generic over the sidebar level's route because
 /// the page is a tab of both sidebar levels; the state lives in the
@@ -39,6 +52,10 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         /// The rows the user selected — by click, arrow key or type-select — never a selection
         /// the outline put back after its rows changed.
         public let resultsSelected: Signal<[FindResultNode]>
+        /// A cross-reference command chosen in a row's context menu.
+        public let crossReferenceCommandSelected: Signal<FindCrossReferenceCommand>
+        /// The filter bar's Show Runtime Calls toggle, as clicked.
+        public let runtimeHelperCallsToggled: Signal<Bool>
     }
 
     public struct Output {
@@ -68,6 +85,15 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let summary: Driver<String?>
         public let isSearching: Driver<Bool>
         public let focusSearchField: Signal<Void>
+        /// Whether the bottom filter applies to the results on screen: not to a
+        /// tree that loads its rows as they are expanded, as Xcode disables it
+        /// then (`-[IDEFindNavigator enableFilter]`).
+        public let isFilterEnabled: Driver<Bool>
+        /// Whether the scope button applies to the mode: not to Callees.
+        public let isScopeEnabled: Driver<Bool>
+        /// Whether the filter bar offers Show Runtime Calls: in Callees.
+        public let isRuntimeHelperCallsToggleShown: Driver<Bool>
+        public let showsRuntimeHelperCalls: Driver<Bool>
     }
 
     private let session: FindSession
@@ -85,6 +111,10 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
 
     /// The row the last navigation from this page went to, by identifier.
     private var lastNavigatedResultIdentifier: String?
+
+    /// Looks up where the member a cross-reference row stands for is declared,
+    /// to go there; replaced by the next click.
+    private var memberDeclarationLookupTask: Task<Void, Never>?
 
     public override init(documentState: DocumentState, router: any Router<Route>) {
         self.session = documentState.findSession
@@ -116,6 +146,11 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         input.searchCommitted.emitOnNext { [weak self] term in
             guard let self else { return }
             var query = session.query
+            // A command's root stays only while the field still names it; an
+            // edited term is matched against names instead.
+            if let root = query.crossReferenceRoot, term.hasPatterns || term.plainText != root.title {
+                query.crossReferenceRoot = nil
+            }
             query.term = term
             run(query)
         }
@@ -161,12 +196,30 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         input.resultCollapsed.emitOnNext { [weak self] node in
             guard let self else { return }
             collapsedResultIdentifiers.insert(node.identifier)
+            if node.isCrossReferenceRow {
+                session.crossReferenceRowDidCollapse(node.identifier)
+            }
         }
         .disposed(by: rx.disposeBag)
 
+        // A cross-reference row loads its level the first time it is expanded.
         input.resultExpanded.emitOnNext { [weak self] node in
             guard let self else { return }
             collapsedResultIdentifiers.remove(node.identifier)
+            if node.isCrossReferenceRow {
+                session.crossReferenceRowDidExpand(node.identifier)
+            }
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.crossReferenceCommandSelected.emitOnNext { [weak self] command in
+            guard let self, let root = command.node.crossReferenceRoot else { return }
+            run(session.query.crossReferenceQuery(command.mode, for: root))
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.runtimeHelperCallsToggled.emitOnNext { [session] showsRuntimeHelperCalls in
+            session.setShowsRuntimeHelperCalls(showsRuntimeHelperCalls)
         }
         .disposed(by: rx.disposeBag)
 
@@ -189,17 +242,30 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             }
             .disposed(by: rx.disposeBag)
 
+        // A tree that loads its rows as they are expanded is never filtered: the
+        // filter is off for it, as in Xcode.
         let filteredResults = Driver.combineLatest(session.$results.asDriver(), $filterString.asDriver()) { results, filterString in
-            (nodes: Self.filtered(results.nodes, by: filterString), isRelationshipTree: results.query?.mode.relationship != nil)
+            let loadsChildrenLazily = results.query?.mode.loadsChildrenLazily == true
+            return (
+                nodes: loadsChildrenLazily ? results.nodes : Self.filtered(results.nodes, by: filterString),
+                isRelationshipTree: results.query?.mode.relationship != nil,
+                loadsChildrenLazily: loadsChildrenLazily
+            )
         }
         let nodes = filteredResults.map(\.nodes)
         let presentation = filteredResults.map { [weak self] filteredResults -> FindResultsPresentation in
             guard let self else {
                 return FindResultsPresentation(nodes: filteredResults.nodes, nodesToExpand: [], nodesToSelect: [])
             }
+            // A cross-reference tree shows expanded what was expanded — the
+            // roots it opened, the rows the user opened — not every row with
+            // children: each of its rows has one until its level loads.
+            let nodesToExpand = filteredResults.loadsChildrenLazily
+                ? FindResultsOutline.nodes(in: filteredResults.nodes, identifiedBy: session.crossReferenceExpandedIdentifiers)
+                : FindResultsOutline.nodesToExpand(in: filteredResults.nodes, collapsedIdentifiers: collapsedResultIdentifiers, isRelationshipTree: filteredResults.isRelationshipTree)
             return FindResultsPresentation(
                 nodes: filteredResults.nodes,
-                nodesToExpand: FindResultsOutline.nodesToExpand(in: filteredResults.nodes, collapsedIdentifiers: collapsedResultIdentifiers, isRelationshipTree: filteredResults.isRelationshipTree),
+                nodesToExpand: nodesToExpand,
                 nodesToSelect: FindResultsOutline.nodes(in: filteredResults.nodes, identifiedBy: selectedResultIdentifiers)
             )
         }
@@ -237,7 +303,11 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             presentation: presentation,
             summary: session.$summary.asDriver(),
             isSearching: session.$isSearching.asDriver(),
-            focusSearchField: session.focusSearchFieldRelay.asSignal()
+            focusSearchField: session.focusSearchFieldRelay.asSignal(),
+            isFilterEnabled: session.$results.asDriver().map { $0.query?.mode.loadsChildrenLazily != true }.distinctUntilChanged(),
+            isScopeEnabled: session.$query.asDriver().map(\.mode.usesScope).distinctUntilChanged(),
+            isRuntimeHelperCallsToggleShown: session.$query.asDriver().map { $0.mode == .callees }.distinctUntilChanged(),
+            showsRuntimeHelperCalls: session.$showsRuntimeHelperCalls.asDriver()
         )
     }
 
@@ -248,9 +318,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     /// itself goes through the session alone and is not recorded.
     private func run(_ query: FindQuery) {
         session.run(query)
-        guard !query.isEmpty else { return }
-        let key = recentQueriesKey
-        appDefaults.findRecentQueriesByScope[key] = FindRecentQueries.recording(query, in: appDefaults.findRecentQueriesByScope[key] ?? [])
+        session.recordAsRecent(query)
     }
 
     /// Where the recent queries of the document's source are kept: the key its bookmarks are under.
@@ -326,18 +394,32 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     private func navigate(to node: FindResultNode, inNewTab: Bool) {
         guard let object = node.navigationTarget else { return }
         lastNavigatedResultIdentifier = node.identifier
+        memberDeclarationLookupTask?.cancel()
+        memberDeclarationLookupTask = nil
+        if case let (member, declaration)? = Self.crossReferenceMember(of: node) {
+            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: declaration, inNewTab: inNewTab, in: documentState, generationOptions: appDefaults.options)
+            return
+        }
         // The query the rows answer, not the one the mode path and the
         // toggles may have been edited into since.
         let highlight = Self.highlight(for: node, query: session.results.query ?? session.query)
-        switch (inNewTab, highlight) {
-        case (false, nil):
-            documentState.selectionRouter.trigger(.push(object))
-        case (false, let highlight?):
-            documentState.selectionRouter.trigger(.pushHighlighting(object, highlight))
-        case (true, nil):
-            documentState.selectionRouter.trigger(.openInNewTab(object))
-        case (true, let highlight?):
-            documentState.selectionRouter.trigger(.openInNewTabHighlighting(object, highlight))
+        FindCrossReferenceNavigation.open(object, highlighting: highlight, inNewTab: inNewTab, in: documentState)
+    }
+
+    /// The member a cross-reference row goes to, with its declaration when the
+    /// row knows it: a root found by its name, or a function that implements
+    /// a member.
+    private static func crossReferenceMember(of node: FindResultNode) -> (RuntimeMemberReference, RuntimeMemberDeclaration?)? {
+        switch node.content {
+        case .crossReferenceRoot(.member(let member, let declaration), _):
+            return (member, declaration)
+        case .crossReferenceRoot(.function(let function), _):
+            return function.member.map { ($0, nil) }
+        case .crossReference(let row):
+            guard case .function(let function) = row.item else { return nil }
+            return function.member.map { ($0, nil) }
+        case .object, .textMatch, .member, .relationship, .crossReferenceRoot(.type, _):
+            return nil
         }
     }
 
@@ -368,7 +450,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
                 matchMode: .matchingWord,
                 isCaseSensitive: true
             )
-        case .object, .relationship:
+        case .object, .relationship, .crossReferenceRoot, .crossReference:
             return nil
         }
     }

@@ -2,7 +2,9 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
+import RuntimeViewerSettings
 
 /// The Find navigator's state for one document: the query in force, the
 /// results it produced, and the search running to produce them.
@@ -34,6 +36,15 @@ import RuntimeViewerArchitectures
 /// chooser. A corpus built later outside the scope is not read, the summary
 /// bar speaks of the corpora in scope only, and the images in scope still
 /// waiting for theirs go to the front of the queue.
+///
+/// Call Hierarchy, Callees and Type References show a tree that loads a
+/// level each time a row is first expanded (`FindCrossReferenceTree`): the
+/// search finds the roots, the roots it opens load at once, and every other
+/// level waits for its row. One level loads at a time, in the order the rows
+/// were expanded: each is a scan of the indexed images in scope, as many at
+/// once as the Max Concurrent Scans setting allows. Their scope limits where
+/// callers and references are looked for — never past the indexed images —
+/// and Callees reads the one function a row stands for.
 @MainActor
 @Loggable(.private)
 public final class FindSession {
@@ -67,7 +78,7 @@ public final class FindSession {
 
     /// The most hits or members a search collects, across every image it
     /// reads; the count goes on past it.
-    static let resultLimit = 1000
+    nonisolated static let resultLimit = 1000
 
     /// What the summary bar adds when the engine stopped a regular
     /// expression that spent the search's time budget backtracking.
@@ -75,7 +86,7 @@ public final class FindSession {
 
     /// The summary bar for a source whose RuntimeViewer predates Find's
     /// commands, worded as the Report navigator words it.
-    static let unsupportedBySourceSummary = "Not supported by this source"
+    nonisolated static let unsupportedBySourceSummary = "Not supported by this source"
 
     /// What the summary bar adds when the engine folded the hits of
     /// Objective-C protocol copies that read exactly like one already shown —
@@ -111,6 +122,21 @@ public final class FindSession {
     /// Fired when a page should take the keyboard focus into its search
     /// field — Edit ▸ Find ▸ Find in Indexed Images.
     public let focusSearchFieldRelay = PublishRelay<Void>()
+
+    /// Asks the window to show the Find navigator, its results on screen and
+    /// its query field left alone: a cross-reference command ran from outside
+    /// the page. See `runCrossReferenceCommand(_:)`.
+    public var showResultsRequested: Signal<Void> {
+        showResultsRelay.asSignal()
+    }
+
+    private let showResultsRelay = PublishRelay<Void>()
+
+    /// Whether Callees lists the calls to retains, releases and the other
+    /// runtime helpers. The filter bar's toggle; off, as most callees lists
+    /// would otherwise be mostly those.
+    @RxObserved
+    public private(set) var showsRuntimeHelperCalls: Bool = false
 
     /// The engine call under way, if any; see `SearchRun`.
     private var currentRun: SearchRun?
@@ -148,6 +174,41 @@ public final class FindSession {
 
     @Dependency(\.appDefaults)
     private var appDefaults
+
+    @Dependency(\.settings)
+    private var settings
+
+    /// The cross-reference tree on screen; `nil` for any other search.
+    private var crossReferenceTree: FindCrossReferenceTree?
+
+    /// What each expandable row of `crossReferenceTree` loads, as of the rows
+    /// last published.
+    private var crossReferenceLoadRequests: [String: FindCrossReferenceTree.LoadRequest] = [:]
+
+    /// The rows waiting for their level, in the order they were expanded.
+    private var crossReferenceLoadQueue: [String] = []
+
+    /// The level loading now, and its task; see `SearchRun`.
+    private var crossReferenceLoadRun: SearchRun?
+
+    private var crossReferenceLoadTask: Task<Void, Never>?
+
+    /// How far the level loading now has come, for the summary bar.
+    private var crossReferenceLoadProgress: (scannedImageCount: Int, totalImageCount: Int)?
+
+    /// The images the scope of the tree on screen stood for when it ran; `nil`
+    /// for every indexed image.
+    private var crossReferenceScopeImagePaths: Set<String>?
+
+    /// The roots' term searched indexed images whose corpus is not built.
+    private var crossReferenceUnbuiltImageCount = 0
+
+    /// Levels that stopped at `crossReferenceResultLimit`.
+    private var truncatedCrossReferenceLevelCount = 0
+
+    /// The most references one level brings back. `init` alone is called from
+    /// hundreds of thousands of places.
+    nonisolated static let crossReferenceResultLimit = 10000
 
     /// Replaced when the document closes, which ends every subscription.
     private var disposeBag = DisposeBag()
@@ -189,6 +250,7 @@ public final class FindSession {
 
     deinit {
         searchTask?.cancel()
+        crossReferenceLoadTask?.cancel()
     }
 
     /// The document is closing. The search under way is cancelled, and nothing
@@ -271,12 +333,16 @@ public final class FindSession {
             isSearching = false
             return
         }
-        let scopeImagePaths = imagePaths(of: query.scope)
+        let scopeImagePaths = query.mode.usesScope ? imagePaths(of: query.scope) : nil
         if scopeImagePaths?.isEmpty == true {
             isSearching = false
             var nothingToSearch = Results()
             nothingToSearch.summary = "No current image"
             setResults(nothingToSearch)
+            return
+        }
+        if query.mode.crossReferenceDirection != nil {
+            startCrossReferenceSearch(query, scopeImagePaths: scopeImagePaths)
             return
         }
         prioritizeCorpora(of: scopeImagePaths)
@@ -290,6 +356,28 @@ public final class FindSession {
     /// Runs the query in force again.
     public func rerun() {
         run(query)
+    }
+
+    /// Find Call Hierarchy, Find Callees or Find Type References from outside
+    /// the Find page — the content pane, the Inspector, the main menu. The
+    /// query runs at once and is recorded among the recent queries, and the
+    /// window is asked to show the navigator without focusing its query field,
+    /// as Xcode's Find Call Hierarchy does
+    /// (`-[IDEFindNavigatorCommands initiateCallHierarchyQueryWithSymbol:inWorkspaceTabController:]`).
+    public func runCrossReferenceCommand(_ request: FindCrossReferenceRequest) {
+        let commandQuery = query.crossReferenceQuery(request.mode, for: request.root)
+        run(commandQuery)
+        recordAsRecent(commandQuery)
+        showResultsRelay.accept(())
+    }
+
+    /// Records `query` among the recent queries of the document's source, as a
+    /// query the user ran (`-[IDEFindNavigatorQueryParametersController
+    /// initiateQuery]`). A search that runs again by itself is not recorded.
+    func recordAsRecent(_ query: FindQuery) {
+        guard !query.isEmpty, let documentState else { return }
+        let key = documentState.runtimeEngine.bookmarkScope.bookmarkKey
+        appDefaults.findRecentQueriesByScope[key] = FindRecentQueries.recording(query, in: appDefaults.findRecentQueriesByScope[key] ?? [])
     }
 
     /// A text or member search on screen answers for the options it ran
@@ -312,6 +400,11 @@ public final class FindSession {
     /// Empties the results and everything the search on screen gathered.
     private func resetResults() {
         shownSearch = nil
+        crossReferenceTree = nil
+        crossReferenceLoadRequests = [:]
+        crossReferenceScopeImagePaths = nil
+        crossReferenceUnbuiltImageCount = 0
+        truncatedCrossReferenceLevelCount = 0
         imagePathsBuiltDuringSearch = []
         textMatchGroups = MatchGroups<RuntimeInterfaceSearchMatch>()
         memberMatchGroups = MatchGroups<RuntimeMemberMatch>()
@@ -475,7 +568,9 @@ public final class FindSession {
                 generationOptions: generationOptions,
                 imagePaths: imagePaths
             ))
-        case .members:
+        case .members, .callHierarchy, .callees, .typeReferences:
+            // The cross-reference modes never come this way — `start(_:)` hands
+            // them to `startCrossReferenceSearch` — and would only list members.
             let searchText = query.memberSearchText
             return .members(RuntimeMemberSearchQuery(
                 text: searchText.text,
@@ -536,11 +631,17 @@ public final class FindSession {
     }
 
     /// Stops the engine call under way and stops listening to it: whatever it
-    /// still delivers is dropped.
+    /// still delivers is dropped. A cross-reference level loading stops with
+    /// it, and so do the ones waiting.
     private func cancelCurrentRun() {
         searchTask?.cancel()
         searchTask = nil
         currentRun = nil
+        crossReferenceLoadTask?.cancel()
+        crossReferenceLoadTask = nil
+        crossReferenceLoadRun = nil
+        crossReferenceLoadQueue = []
+        crossReferenceLoadProgress = nil
     }
 
     /// The trees a relationship search answered with, one per matching type.
@@ -650,6 +751,308 @@ public final class FindSession {
         }
         updated.summary = text
         return updated
+    }
+
+    // MARK: - Cross References
+
+    /// Starts a Call Hierarchy, Callees or Type References search: the root a
+    /// command named, or the ones the term finds, then the levels of the roots
+    /// that open as they arrive.
+    private func startCrossReferenceSearch(_ query: FindQuery, scopeImagePaths: Set<String>?) {
+        crossReferenceScopeImagePaths = scopeImagePaths
+        if let root = query.crossReferenceRoot {
+            showCrossReferenceRoots([root], for: query)
+            return
+        }
+        // The session outlived its document: there is nothing to search.
+        guard let engine = documentState?.runtimeEngine else {
+            isSearching = false
+            return
+        }
+        let run = SearchRun()
+        currentRun = run
+        isSearching = true
+        let generationOptions = appDefaults.options
+        // As `startSearch`: the task holds the run, never the session.
+        searchTask = Task { [weak self] in
+            let outcome: Result<FindCrossReferenceRootResolver.Resolution, any Swift.Error>
+            do {
+                outcome = .success(try await FindCrossReferenceRootResolver.resolve(query, engine: engine, generationOptions: generationOptions))
+            } catch {
+                outcome = .failure(error)
+            }
+            guard let self else { return }
+            crossReferenceRootsDidResolve(run, outcome: outcome, for: query)
+        }
+    }
+
+    private func crossReferenceRootsDidResolve(_ run: SearchRun, outcome: Result<FindCrossReferenceRootResolver.Resolution, any Swift.Error>, for query: FindQuery) {
+        guard run === currentRun else { return }
+        currentRun = nil
+        searchTask = nil
+        switch outcome {
+        case .success(let resolution):
+            crossReferenceUnbuiltImageCount = resolution.unbuiltImageCount
+            showCrossReferenceRoots(resolution.roots, for: query)
+        case .failure(is CancellationError):
+            isSearching = false
+        case .failure(let error):
+            #log(.error, "Find failed: \(error, privacy: .public)")
+            isSearching = false
+            var failed = Results()
+            failed.summary = Self.failureSummary(for: error)
+            setResults(failed)
+        }
+    }
+
+    /// Shows the roots, and loads the levels of the ones that open.
+    private func showCrossReferenceRoots(_ roots: [FindCrossReferenceRoot], for query: FindQuery) {
+        guard let direction = query.mode.crossReferenceDirection else { return }
+        let tree = FindCrossReferenceTree(direction: direction, roots: roots)
+        crossReferenceTree = tree
+        // The rows first, for the load requests the queue is checked against;
+        // then the first level, and the rows once more with it loading.
+        publishCrossReferenceTree()
+        for identifier in roots.indices.map(tree.rootIdentifier(at:)) where tree.expandedIdentifiers.contains(identifier) {
+            enqueueCrossReferenceLevel(of: identifier)
+        }
+        if startNextCrossReferenceLevel() {
+            publishCrossReferenceTree()
+        }
+        updateCrossReferenceSearchingState()
+    }
+
+    /// The rows of the cross-reference tree on screen that show expanded: the
+    /// roots it opened, and the rows the user expanded and has not collapsed.
+    public var crossReferenceExpandedIdentifiers: Set<String> {
+        crossReferenceTree?.expandedIdentifiers ?? []
+    }
+
+    /// A row of the cross-reference tree was expanded — by the user, or by the
+    /// page putting an expansion back. Its level loads, unless it has.
+    ///
+    /// The load starts on the main actor's next turn, never inside this call:
+    /// the page puts expansions back while it applies the rows the session
+    /// last published, and publishing again from in there would deliver new
+    /// rows to the page in the middle of applying the old ones — RxSwift's
+    /// "Reentrancy anomaly", seen when a finished level let the next one start
+    /// as the page re-expanded its rows.
+    public func crossReferenceRowDidExpand(_ identifier: String) {
+        guard crossReferenceTree != nil else { return }
+        crossReferenceTree?.expand(identifier)
+        enqueueCrossReferenceLevel(of: identifier)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if startNextCrossReferenceLevel() {
+                publishCrossReferenceTree()
+            }
+            updateCrossReferenceSearchingState()
+        }
+    }
+
+    public func crossReferenceRowDidCollapse(_ identifier: String) {
+        crossReferenceTree?.collapse(identifier)
+    }
+
+    /// The filter bar's Show Runtime Calls toggle.
+    public func setShowsRuntimeHelperCalls(_ showsRuntimeHelperCalls: Bool) {
+        guard showsRuntimeHelperCalls != self.showsRuntimeHelperCalls else { return }
+        self.showsRuntimeHelperCalls = showsRuntimeHelperCalls
+        if crossReferenceTree?.direction == .callees {
+            publishCrossReferenceTree()
+        }
+    }
+
+    private func enqueueCrossReferenceLevel(of identifier: String) {
+        guard let crossReferenceTree,
+              crossReferenceTree.loadState(of: identifier) == nil,
+              crossReferenceLoadRequests[identifier] != nil,
+              !crossReferenceLoadQueue.contains(identifier)
+        else { return }
+        crossReferenceLoadQueue.append(identifier)
+    }
+
+    /// Starts the next level waiting, unless one is loading, and says whether
+    /// it started one. It publishes nothing: the caller publishes the rows
+    /// once, with whatever else it changed.
+    private func startNextCrossReferenceLevel() -> Bool {
+        guard crossReferenceLoadRun == nil,
+              let engine = documentState?.runtimeEngine,
+              let direction = crossReferenceTree?.direction
+        else { return false }
+        while !crossReferenceLoadQueue.isEmpty {
+            let identifier = crossReferenceLoadQueue.removeFirst()
+            guard crossReferenceTree?.loadState(of: identifier) == nil, let request = crossReferenceLoadRequests[identifier] else { continue }
+            let run = SearchRun()
+            crossReferenceLoadRun = run
+            crossReferenceLoadProgress = nil
+            crossReferenceTree?.setLoadState(.loading, of: identifier)
+            let scopes = crossReferenceScopes()
+            let maximumConcurrentScans = settings.search.maximumConcurrentCrossReferenceScans
+            let preparedIndexByteLimit = settings.search.preparedCrossReferenceByteLimit
+            crossReferenceLoadTask = Task { [weak self] in
+                let outcome: Result<RuntimeCrossReferenceQueryResult, any Swift.Error>
+                do {
+                    outcome = .success(try await Self.loadLevel(
+                        request,
+                        direction: direction,
+                        scopes: scopes,
+                        maximumConcurrentScans: maximumConcurrentScans,
+                        preparedIndexByteLimit: preparedIndexByteLimit,
+                        engine: engine
+                    ) { [weak self] progress in
+                        await self?.crossReferenceLevelDidProgress(progress, from: run)
+                    })
+                } catch {
+                    outcome = .failure(error)
+                }
+                guard let self else { return }
+                crossReferenceLevelDidLoad(identifier, outcome: outcome, from: run)
+            }
+            return true
+        }
+        return false
+    }
+
+    /// One level: a row's callers, its callees with the runtime helper calls
+    /// among them, or the functions referencing a type — over each of
+    /// `scopes` in turn, each image of a scope naming several asked for alone,
+    /// at most `maximumConcurrentScans` images read at once — from their
+    /// prepared cross references while `preparedIndexByteLimit` is set.
+    private nonisolated static func loadLevel(
+        _ request: FindCrossReferenceTree.LoadRequest,
+        direction: FindCrossReferenceDirection,
+        scopes: [RuntimeCrossReferenceScope],
+        maximumConcurrentScans: Int,
+        preparedIndexByteLimit: Int?,
+        engine: RuntimeEngine,
+        reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
+    ) async throws -> RuntimeCrossReferenceQueryResult {
+        if case .calls(let subject) = request, direction == .callees {
+            return try await engine.callees(of: subject, options: RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: true, resultLimit: crossReferenceResultLimit))
+        }
+        var references: [RuntimeCrossReference] = []
+        var isComplete = true
+        for (index, scope) in scopes.enumerated() {
+            let remainingLimit = crossReferenceResultLimit - references.count
+            guard remainingLimit > 0 else {
+                isComplete = false
+                break
+            }
+            let options = RuntimeCrossReferenceQueryOptions(resultLimit: remainingLimit, maximumConcurrentScans: maximumConcurrentScans, preparedIndexByteLimit: preparedIndexByteLimit)
+            // A scope of one image reports nothing in between; one of several
+            // reports each image as it is done instead.
+            let silentProgress: @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void = { _ in }
+            let scopeProgress = scopes.count == 1 ? reportProgress : silentProgress
+            let result: RuntimeCrossReferenceQueryResult
+            switch request {
+            case .calls(let subject):
+                result = try await engine.callers(of: subject, in: scope, options: options, reportProgress: scopeProgress)
+            case .typeReferences(let object):
+                result = try await engine.typeReferences(to: object, in: scope, options: options, reportProgress: scopeProgress)
+            }
+            references.append(contentsOf: result.references)
+            isComplete = isComplete && result.isComplete
+            if scopes.count > 1 {
+                await reportProgress(RuntimeCrossReferenceQueryProgress(scannedImageCount: index + 1, totalImageCount: scopes.count, references: []))
+            }
+        }
+        return RuntimeCrossReferenceQueryResult(references: references, isComplete: isComplete)
+    }
+
+    private func crossReferenceLevelDidProgress(_ progress: RuntimeCrossReferenceQueryProgress, from run: SearchRun) {
+        guard run === crossReferenceLoadRun else { return }
+        crossReferenceLoadProgress = (progress.scannedImageCount, progress.totalImageCount)
+        var updatedResults = results
+        updatedResults.summary = crossReferenceSummary()
+        guard updatedResults.summary != results.summary else { return }
+        setResults(updatedResults)
+    }
+
+    private func crossReferenceLevelDidLoad(_ identifier: String, outcome: Result<RuntimeCrossReferenceQueryResult, any Swift.Error>, from run: SearchRun) {
+        guard run === crossReferenceLoadRun, var tree = crossReferenceTree else { return }
+        crossReferenceLoadRun = nil
+        crossReferenceLoadTask = nil
+        crossReferenceLoadProgress = nil
+        switch outcome {
+        case .success(let result):
+            if !result.isComplete {
+                truncatedCrossReferenceLevelCount += 1
+            }
+            tree.setLoadState(.loaded(FindCrossReferenceTree.rows(for: result.references, direction: tree.direction)), of: identifier)
+        case .failure(is CancellationError):
+            // Cancelled on the engine's side: the row loads again when it is
+            // expanded again.
+            tree.clearLoadState(of: identifier)
+        case .failure(let error):
+            #log(.error, "Cross references failed: \(error, privacy: .public)")
+            tree.setLoadState(.failed(Self.crossReferenceFailureMessage(for: error)), of: identifier)
+        }
+        crossReferenceTree = tree
+        // The next level starts before the rows are published, so one update
+        // carries both: the page re-expands rows as it applies it.
+        _ = startNextCrossReferenceLevel()
+        publishCrossReferenceTree()
+        updateCrossReferenceSearchingState()
+    }
+
+    /// The engine's scopes for the tree's levels: every indexed image, or each
+    /// image the scope names, which the engine scans one at a time or all
+    /// together. Each image is asked for by its own path, which the process
+    /// serving the engine resolves; the results name images as that process
+    /// does, which the paths of a scope may spell otherwise.
+    private func crossReferenceScopes() -> [RuntimeCrossReferenceScope] {
+        guard let scopeImagePaths = crossReferenceScopeImagePaths.map(canonicalImagePaths) else {
+            return [.indexedImages]
+        }
+        return scopeImagePaths.sorted().map { .image(path: $0) }
+    }
+
+    private func updateCrossReferenceSearchingState() {
+        isSearching = currentRun != nil || crossReferenceLoadRun != nil || !crossReferenceLoadQueue.isEmpty
+    }
+
+    /// Publishes the tree's rows and what the summary bar says of them.
+    private func publishCrossReferenceTree() {
+        guard let crossReferenceTree else { return }
+        let built = crossReferenceTree.build(showsRuntimeHelperCalls: showsRuntimeHelperCalls)
+        crossReferenceLoadRequests = built.loadRequests
+        var treeResults = Results()
+        treeResults.nodes = built.nodes
+        treeResults.summary = crossReferenceSummary()
+        setResults(treeResults)
+    }
+
+    /// Nothing while there are rows and nothing loads — Xcode's call hierarchy
+    /// has no summary row (`-[IDEBatchFindCallHierarchyQuery
+    /// publishesMatchCount]` is NO); how far a level's scan has come while one
+    /// loads; and Xcode's words when the term found nothing
+    /// (`-emptyResultSetPlaceholderForSpecification:term:scope:`).
+    private func crossReferenceSummary() -> String? {
+        guard let crossReferenceTree else { return nil }
+        if crossReferenceTree.roots.isEmpty {
+            let resultKind = crossReferenceTree.direction == .typeReferences ? "Type" : "Call"
+            var text = "No \(resultKind) Results for “\(committedQuery?.term.plainText ?? "")”"
+            if crossReferenceUnbuiltImageCount > 0 {
+                text += " · \(crossReferenceUnbuiltImageCount) \(crossReferenceUnbuiltImageCount == 1 ? "image" : "images") not yet searchable"
+            }
+            return text
+        }
+        if let progress = crossReferenceLoadProgress, progress.totalImageCount > 0 {
+            return "Scanning \(progress.scannedImageCount) of \(progress.totalImageCount) \(progress.totalImageCount == 1 ? "image" : "images")"
+        }
+        if truncatedCrossReferenceLevelCount > 0 {
+            return "Some rows show only their first \(Self.crossReferenceResultLimit) references"
+        }
+        return nil
+    }
+
+    /// What a row whose level could not be loaded says.
+    nonisolated static func crossReferenceFailureMessage(for error: any Swift.Error) -> String {
+        if let requestError = error as? RuntimeNetworkRequestError, requestError.isUnknownCommand {
+            return unsupportedBySourceSummary
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Summary

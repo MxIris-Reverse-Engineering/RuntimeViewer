@@ -31,6 +31,8 @@ struct FindViewModelTests {
     private let resultCollapsedRelay = PublishRelay<FindResultNode>()
     private let resultExpandedRelay = PublishRelay<FindResultNode>()
     private let resultsSelectedRelay = PublishRelay<[FindResultNode]>()
+    private let crossReferenceCommandSelectedRelay = PublishRelay<FindCrossReferenceCommand>()
+    private let runtimeHelperCallsToggledRelay = PublishRelay<Bool>()
 
     private static func makeEnvironmentWithCorpus() async throws -> ViewModelTestEnvironment {
         let engine = try await TestRuntimeEngine.shared()
@@ -92,7 +94,7 @@ struct FindViewModelTests {
         #expect(path.map(\.isAccented) == [false, false, false])
         #expect(path[0].menuChoices.isEmpty)
         #expect(path[1].choice == .mode(.text))
-        #expect(path[1].menuChoices.map(\.title) == ["Text", "Regular Expression", "Ancestor Types", "Descendent Types", "Conforming Types", "Members"])
+        #expect(path[1].menuChoices.map(\.title) == ["Text", "Regular Expression", "Ancestor Types", "Descendent Types", "Conforming Types", "Members", "Call Hierarchy", "Callees", "Type References"])
         #expect(path[2].choice == .textMatchStyle(.containing))
         #expect(path[2].menuChoices.map(\.title) == ["Containing", "Matching Word", "Starting With", "Ending With"])
     }
@@ -903,7 +905,9 @@ struct FindViewModelTests {
             resultOpenedInNewTab: resultOpenedInNewTabRelay.asSignal(),
             resultCollapsed: resultCollapsedRelay.asSignal(),
             resultExpanded: resultExpandedRelay.asSignal(),
-            resultsSelected: resultsSelectedRelay.asSignal()
+            resultsSelected: resultsSelectedRelay.asSignal(),
+            crossReferenceCommandSelected: crossReferenceCommandSelectedRelay.asSignal(),
+            runtimeHelperCallsToggled: runtimeHelperCallsToggledRelay.asSignal()
         ))
         return (viewModel, output)
     }

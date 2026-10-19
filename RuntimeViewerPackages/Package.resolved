@@ -1,5 +1,5 @@
 {
-  "originHash" : "a2c6fba1d564380974603ca18b33683edbead36b794eca0cb1c98dbbf8c72fb4",
+  "originHash" : "c4ce668fff2bf6dbc8e2f15c72a4a2bfe1b5649ef3bb23e0419c2385bb6fdfed",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/capstone",
       "state" : {
-        "revision" : "81d9ca83416426a5cd05fcd95c6fba3ef5492e27",
-        "version" : "6.0.100"
+        "revision" : "87df94a0f31c0bb07b7513d6c923927b5d81d790",
+        "version" : "6.0.101"
       }
     },
     {
@@ -178,7 +178,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "dfd37d95500518d46ffba885c7ea0c45f1ea1b97"
+        "revision" : "c5fe5756cd2a95afe08ac6a59ddab0a3ae629fb0"
       }
     },
     {
@@ -366,8 +366,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-capstone",
       "state" : {
-        "revision" : "8ef4766f2526aac7faf80379f3cc5dbdb4d321a2",
-        "version" : "6.0.1"
+        "revision" : "9f892f09452e92f3d5943a7a656299d24ec19c63",
+        "version" : "7.0.0"
       }
     },
     {

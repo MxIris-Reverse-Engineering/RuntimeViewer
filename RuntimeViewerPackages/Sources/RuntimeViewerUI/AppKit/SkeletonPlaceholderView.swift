@@ -83,6 +83,16 @@ public final class SkeletonPlaceholderView: NSView {
         }
     }
 
+    /// How tall the placeholder is with its rows the full spacing apart: the room a layout that
+    /// sizes its parts itself makes for it.
+    public var contentHeight: CGFloat {
+        let rowHeights = rows.map { row in
+            let barsHeight = row.bars.reduce(0) { $0 + $1.height } + Metrics.spacingBetweenBars * CGFloat(max(row.bars.count - 1, 0))
+            return max(row.iconLength ?? 0, barsHeight)
+        }
+        return rowHeights.reduce(0, +) + Metrics.spacingBetweenRows * CGFloat(max(rows.count - 1, 0))
+    }
+
     /// Shows the placeholder and runs its pulse, or hides it and stops the
     /// pulse. A hidden placeholder keeps no animation running, so tabs that
     /// are not loading cost nothing.

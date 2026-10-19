@@ -22,6 +22,9 @@ final class ReportTreeBuilder {
     /// Ended corpus builds' rows by entry. An entry never changes once recorded.
     private var finishedCorpusBuildNodes: [UUID: ReportNode] = [:]
 
+    /// Ended cross-reference preparations' rows by entry, likewise.
+    private var finishedCrossReferencePreparationNodes: [UUID: ReportNode] = [:]
+
     /// Nodes built since the builder was made — the regression seam for the reuse above, as
     /// `StatefulOutlineView.expansionAutosavePersistCount` is one for its coalescing.
     private(set) var builtNodeCount = 0
@@ -123,6 +126,63 @@ final class ReportTreeBuilder {
             }
         }
         dropCellViewModels(of: .searchableInterfaces, except: usedIdentifiers)
+        return categoryNode
+    }
+
+    /// The Cross References category, or `nil` when it has nothing to show: a row saying the
+    /// engine's process cannot prepare them, the images queued or being prepared, then the ended
+    /// preparations. Turned off, it has no row saying so, unlike the other kinds: queries scan
+    /// instead, so nothing stops working and there is no background work to report.
+    func crossReferenceCategory(
+        states: [String: CrossReferencePreparationState],
+        followedImagePaths: Set<String>,
+        finishedPreparations: [CrossReferenceFinishedPreparation],
+        isUnsupportedByEngine: Bool,
+        isEnabled: Bool
+    ) -> ReportNode? {
+        var usedIdentifiers: Set<ReportNodeIdentifier> = []
+        var children: [ReportNode] = []
+        if isEnabled, isUnsupportedByEngine {
+            children.append(makeNode(.unsupportedByEngine(.crossReferences), usedIdentifiers: &usedIdentifiers) {
+                ReportOutline.configureUnsupportedCrossReferenceRow($0)
+            })
+        }
+        // The images being prepared first, then the waiting ones by name.
+        let activePreparations = states.filter(\.value.isActive).sorted { leftEntry, rightEntry in
+            let leftIsPreparing = ReportOutline.isPreparing(leftEntry.value)
+            let rightIsPreparing = ReportOutline.isPreparing(rightEntry.value)
+            if leftIsPreparing != rightIsPreparing {
+                return leftIsPreparing
+            }
+            return FindScope.imageName(of: leftEntry.key) < FindScope.imageName(of: rightEntry.key)
+        }
+        for (imagePath, state) in activePreparations {
+            children.append(makeNode(.crossReferencePreparation(imagePath: imagePath), usedIdentifiers: &usedIdentifiers) {
+                ReportOutline.configure($0, forCrossReferencesOf: imagePath, state: state, isFollowed: followedImagePaths.contains(imagePath))
+            })
+        }
+        var finishedPreparationIdentifiers: Set<UUID> = []
+        for finishedPreparation in finishedPreparations {
+            finishedPreparationIdentifiers.insert(finishedPreparation.id)
+            if let cachedNode = finishedCrossReferencePreparationNodes[finishedPreparation.id] {
+                children.append(cachedNode)
+            } else {
+                let node = makeNode(.finishedCrossReferencePreparation(finishedPreparation.id), usedIdentifiers: &usedIdentifiers) {
+                    ReportOutline.configure($0, for: finishedPreparation)
+                }
+                finishedCrossReferencePreparationNodes[finishedPreparation.id] = node
+                children.append(node)
+            }
+        }
+        finishedCrossReferencePreparationNodes = finishedCrossReferencePreparationNodes.filter { finishedPreparationIdentifiers.contains($0.key) }
+
+        var categoryNode: ReportNode?
+        if !children.isEmpty {
+            categoryNode = makeNode(.category(.crossReferences), children: children, usedIdentifiers: &usedIdentifiers) {
+                $0.update(icon: ReportOutline.crossReferenceIcon, title: "Cross References")
+            }
+        }
+        dropCellViewModels(of: .crossReferences, except: usedIdentifiers)
         return categoryNode
     }
 

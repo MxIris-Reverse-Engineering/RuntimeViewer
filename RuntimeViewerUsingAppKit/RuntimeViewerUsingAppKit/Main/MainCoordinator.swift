@@ -58,6 +58,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             documentState.routeSignal
                 .emit(with: self) { $0.fanOut($1) }
                 .disposed(by: routeDisposeBag)
+            documentState.findSession.showResultsRequested
+                .emit(with: self) { coordinator, _ in coordinator.trigger(.showFindResults) }
+                .disposed(by: routeDisposeBag)
 
             return .multiple(
                 .show(rootWindowController.splitViewController),
@@ -128,6 +131,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             return .multiple(
                 .expand(itemAt: 0),
                 .trigger(.showFind, on: sidebarCoordinator)
+            )
+        case .showFindResults:
+            return .multiple(
+                .expand(itemAt: 0),
+                .trigger(.showFindResults, on: sidebarCoordinator)
             )
         case .reports:
             return .multiple(

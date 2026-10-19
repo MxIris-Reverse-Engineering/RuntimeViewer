@@ -75,6 +75,54 @@ enum RuntimeMemberDeclarationLocator {
         }
     }
 
+    /// The member each line of `interface` declares, by 1-based line number:
+    /// the lines `locate` aligns members with, read the other way. Only the
+    /// keys of the interface's own language are read (`isSwift`), as a line
+    /// reads under both; a line declaring several takes the one a member of
+    /// its kind would claim first — the function over its argument names, the
+    /// method over its parameters. A line inside a nested type's braces
+    /// declares that type's member, not this object's, and is left out.
+    static func declaredMembersByLine(in interface: FrozenSemanticString, isSwift: Bool) -> [Int: RuntimeDeclaredMember] {
+        var walk = DeclarationWalk(text: interface.text, excludedUTF8Ranges: [])
+        interface.enumerateSpans { spanText, type, _ in
+            walk.read(spanText, of: type)
+        }
+        let lineNumbersByKey = walk.finish()
+        var keysByLineNumber: [Int: [DeclarationKey]] = [:]
+        for (key, lineNumbers) in lineNumbersByKey where key.kind.isSwift == isSwift {
+            for lineNumber in lineNumbers {
+                keysByLineNumber[lineNumber, default: []].append(key)
+            }
+        }
+        var membersByLineNumber: [Int: RuntimeDeclaredMember] = [:]
+        for (lineNumber, keys) in keysByLineNumber {
+            let primaryKey = keys.min { left, right in
+                left.kind.claimPriority != right.kind.claimPriority
+                    ? left.kind.claimPriority > right.kind.claimPriority
+                    : left.name < right.name
+            }
+            guard walk.startBraceDepthByLineNumber[lineNumber, default: 0] <= 1, let key = primaryKey else { continue }
+            membersByLineNumber[lineNumber] = declaredMember(for: key, isEnumCase: walk.enumCaseLineNumbers.contains(lineNumber))
+        }
+        return membersByLineNumber
+    }
+
+    /// The member `key` stands for. A Swift field, variable and enum case
+    /// read alike; a line starting with `case` is the enum case.
+    private static func declaredMember(for key: DeclarationKey, isEnumCase: Bool) -> RuntimeDeclaredMember {
+        let kind: RuntimeMemberKind
+        switch key.kind {
+        case .objectiveCProperty: kind = .objcProperty
+        case .objectiveCInstanceVariable: kind = .objcIvar
+        case .objectiveCMethod: kind = .objcMethod
+        case .swiftNamedValue: kind = isEnumCase ? .swiftEnumCase : .swiftVariable
+        case .swiftFunction: kind = .swiftFunction
+        case .swiftInitializer: kind = .swiftInitializer
+        case .swiftSubscript: kind = .swiftSubscript
+        }
+        return RuntimeDeclaredMember(name: key.name, kind: kind, isStatic: key.isStatic)
+    }
+
     // MARK: - Keys
 
     /// What a member is declared as, the way a line spells it.
@@ -89,6 +137,23 @@ enum RuntimeMemberDeclarationLocator {
             case swiftFunction
             case swiftInitializer
             case swiftSubscript
+
+            var isSwift: Bool {
+                switch self {
+                case .objectiveCProperty, .objectiveCInstanceVariable, .objectiveCMethod: false
+                case .swiftNamedValue, .swiftFunction, .swiftInitializer, .swiftSubscript: true
+                }
+            }
+
+            /// Which of a line's keys it declares: a name the line spells is
+            /// a parameter of the function or method it declares.
+            var claimPriority: Int {
+                switch self {
+                case .objectiveCMethod, .objectiveCProperty, .swiftFunction, .swiftInitializer, .swiftSubscript: 2
+                case .swiftNamedValue: 1
+                case .objectiveCInstanceVariable: 0
+                }
+            }
         }
 
         let kind: Kind
@@ -143,6 +208,8 @@ enum RuntimeMemberDeclarationLocator {
         static let initializer = DeclarationKeywords(rawValue: 1 << 5)
         /// `subscript`.
         static let `subscript` = DeclarationKeywords(rawValue: 1 << 6)
+        /// `case`: a Swift enum case, which has no code of its own.
+        static let enumCase = DeclarationKeywords(rawValue: 1 << 7)
 
         init(rawValue: UInt8) {
             self.rawValue = rawValue
@@ -158,6 +225,7 @@ enum RuntimeMemberDeclarationLocator {
             case "func": self = .function
             case "init": self = .initializer
             case "subscript": self = .subscript
+            case "case": self = .enumCase
             default: self = []
             }
         }
@@ -223,6 +291,17 @@ enum RuntimeMemberDeclarationLocator {
         private var isAwaitingFunctionBaseName = false
 
         private var lineNumbersByKey: [DeclarationKey: [Int]] = [:]
+
+        /// The braces open where the line the walk is on starts.
+        private var lineStartBraceDepth = 0
+
+        /// The braces open where each line declaring a key starts, by 1-based
+        /// line number: an object's own members are at depth 1 at most, a
+        /// nested type's deeper.
+        private(set) var startBraceDepthByLineNumber: [Int: Int] = [:]
+
+        /// The 1-based lines whose keywords include `case`.
+        private(set) var enumCaseLineNumbers: Set<Int> = []
 
         init(text: String, excludedUTF8Ranges: [Range<Int>]) {
             self.text = text
@@ -333,6 +412,9 @@ enum RuntimeMemberDeclarationLocator {
             defer {
                 line = LineEvidence()
                 lineIndex += 1
+                // A line's spans have all been read: the depth now is the
+                // next line's to start at.
+                lineStartBraceDepth = braceDepth
             }
             let lineStartOffset = lineTable.lineStartOffsets[lineIndex]
             while excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].upperBound <= lineStartOffset {
@@ -341,8 +423,15 @@ enum RuntimeMemberDeclarationLocator {
             if excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].contains(lineStartOffset) {
                 return
             }
-            for key in declarationKeys(of: line, firstByte: firstNonBlankByte(ofLine: lineIndex)) {
+            let keys = declarationKeys(of: line, firstByte: firstNonBlankByte(ofLine: lineIndex))
+            for key in keys {
                 lineNumbersByKey[key, default: []].append(lineIndex + 1)
+            }
+            if !keys.isEmpty {
+                startBraceDepthByLineNumber[lineIndex + 1] = lineStartBraceDepth
+                if line.keywords.contains(.enumCase) {
+                    enumCaseLineNumbers.insert(lineIndex + 1)
+                }
             }
         }
 
@@ -400,5 +489,39 @@ enum RuntimeMemberDeclarationLocator {
             }
             return keys
         }
+    }
+}
+
+/// A member a line of an interface declares, as the line spells it: what the
+/// content pane offers Find Call Hierarchy and the other cross-reference
+/// commands for. Read off the line alone, so it says no more than the line
+/// does: a Swift field and variable read alike and come back as a variable,
+/// and an initializer is never static.
+public struct RuntimeDeclaredMember: Hashable, Sendable {
+    /// As `RuntimeMemberDeclaration.name` spells it: a whole selector, a Swift
+    /// function's base name, `init`, `subscript`.
+    public let name: String
+    public let kind: RuntimeMemberKind
+    public let isStatic: Bool
+
+    public init(name: String, kind: RuntimeMemberKind, isStatic: Bool) {
+        self.name = name
+        self.kind = kind
+        self.isStatic = isStatic
+    }
+}
+
+extension RuntimeObjectInterface {
+    /// The member each line declares, by 1-based line number, read the way
+    /// the Find corpus locates members on their lines
+    /// (`RuntimeMemberDeclarationLocator`). A member of a nested type printed
+    /// inside this one is left out: it is not this object's.
+    public func declaredMembersByLineNumber() -> [Int: RuntimeDeclaredMember] {
+        let isSwift: Bool
+        switch object.kind {
+        case .swift: isSwift = true
+        case .objc, .c: isSwift = false
+        }
+        return RuntimeMemberDeclarationLocator.declaredMembersByLine(in: interfaceString, isSwift: isSwift)
     }
 }

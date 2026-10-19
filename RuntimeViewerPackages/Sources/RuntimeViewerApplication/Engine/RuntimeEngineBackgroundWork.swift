@@ -3,8 +3,8 @@ import RuntimeViewerCore
 import Dependencies
 import DependenciesMacros
 
-/// One engine's background work — its background indexing and its interface corpus — shared by
-/// every document on the engine.
+/// One engine's background work — its background indexing, its interface corpus and its prepared
+/// cross references — shared by every document on the engine.
 ///
 /// The documents on an engine always shared its indexing manager and its corpus store, but each
 /// kept coordinators of its own: each dispatched the Always Index rows and asked for every corpus
@@ -31,6 +31,8 @@ final class RuntimeEngineBackgroundWork {
     private var indexingCoordinatorStorage: RuntimeBackgroundIndexingCoordinator?
 
     private var corpusCoordinatorStorage: FindCorpusCoordinator?
+
+    private var crossReferencePreparationCoordinatorStorage: CrossReferencePreparationCoordinator?
 
     fileprivate init(engine: RuntimeEngine) {
         self.engine = engine
@@ -71,13 +73,28 @@ final class RuntimeEngineBackgroundWork {
         return corpusCoordinator
     }
 
-    /// The last document left: both coordinators stop, cancelling what they still have running,
-    /// and ask the engine for nothing again.
+    /// The engine's prepared cross references. Brought into being on first use, like
+    /// `indexingCoordinator`.
+    var crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator {
+        if let crossReferencePreparationCoordinatorStorage {
+            return crossReferencePreparationCoordinatorStorage
+        }
+        let crossReferencePreparationCoordinator = CrossReferencePreparationCoordinator(engine: engine)
+        if isClosed {
+            crossReferencePreparationCoordinator.close()
+        }
+        crossReferencePreparationCoordinatorStorage = crossReferencePreparationCoordinator
+        return crossReferencePreparationCoordinator
+    }
+
+    /// The last document left: every coordinator stops, cancelling what it still has running,
+    /// and asks the engine for nothing again.
     fileprivate func close() {
         guard !isClosed else { return }
         isClosed = true
         indexingCoordinatorStorage?.close()
         corpusCoordinatorStorage?.close()
+        crossReferencePreparationCoordinatorStorage?.close()
     }
 }
 

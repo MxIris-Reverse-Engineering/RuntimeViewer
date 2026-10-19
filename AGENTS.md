@@ -277,6 +277,12 @@ The project uses three Swift Package Manager packages:
   visionOS. **Every process that serves an engine and links this module must call
   `RuntimeInjection.install()` once at its entry point**, including the ones that cannot inject;
   see *Injection commands* below
+- `RuntimeViewerCrossReferences` — cross references (callers, callees and type references) read
+  from arm64 machine code, as a RuntimeEngine command extension over MachOSwiftSection's
+  `CrossReferenceAnalysis`: the wire types (`RuntimeCrossReferenceSubject`, `RuntimeCrossReference`,
+  …), the three commands and the engine-side on-demand scan. Same obligation as the injection module:
+  `RuntimeCrossReferences.install()` once at every serving process's entry point; see
+  *Injection commands* below. Background: `Documentations/Evolutions/0056-cross-references.md`
 - `RuntimeViewerCoreObjC` — Objective-C interop utilities (internal target)
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
@@ -325,9 +331,10 @@ The project uses three Swift Package Manager packages:
   donates none: about thirty seconds after the user switches away, work the app is waiting on slows
   down four- to tenfold. So long-running work the app waits on has to keep the app out of App Nap:
   `BackgroundWorkProcessActivity` holds a user-initiated activity while `DocumentState.reportActivity`
-  is true (indexing batches, corpus builds), and new work of that kind reports through that signal or
-  holds an activity of its own. Background: `Documentations/Evolutions/0037-local-runtime-xpc-service.md`;
-  the transport: `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
+  is true (indexing batches, corpus builds, cross-reference preparations), and new work of that kind
+  reports through that signal or holds an activity of its own. Background:
+  `Documentations/Evolutions/0037-local-runtime-xpc-service.md`; the transport:
+  `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
   `Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`
 - `RuntimeViewerCatalystService` — the Mac Catalyst XPC service the app's "My Mac (Mac Catalyst)"
   engine runs in, embedded at `Contents/XPCServices/`. The app's `Info.plist` names it under
@@ -358,10 +365,11 @@ The project uses three Swift Package Manager packages:
 
 - **Document-Based App**: NSDocument architecture; each document creates its own `DocumentState` instance
 - **Engine work is shared by the documents on the engine**: each engine has one background indexing
-  coordinator and one Find corpus coordinator, held by every document on it
-  (`RuntimeEngineBackgroundWork`, handed out per engine by `RuntimeEngineBackgroundWorkRegistry`), so
-  the windows on one engine show one Report — the same running work, the same history.
-  `DocumentState.backgroundIndexingCoordinator` / `findCorpusCoordinator` return the coordinators of the
+  coordinator, one Find corpus coordinator and one cross-reference preparation coordinator, held by
+  every document on it (`RuntimeEngineBackgroundWork`, handed out per engine by
+  `RuntimeEngineBackgroundWorkRegistry`), so the windows on one engine show one Report — the same
+  running work, the same history. `DocumentState.backgroundIndexingCoordinator` /
+  `findCorpusCoordinator` / `crossReferencePreparationCoordinator` return the coordinators of the
   engine the document is on, and anything that binds to them follows `$runtimeEngine`: `.switchEngine`
   moves the document onto the new engine's work before it assigns the engine. A document that closes or
   moves away only leaves — nothing is cancelled while another document is on the engine — and the last
@@ -506,6 +514,17 @@ duplicate wire name; those two log lines are the only trail this failure leaves.
 one — only the jailbroken iOS variant does; macOS injects through the privileged helper daemon
 instead. Passing `nil` never clears a service already recorded, so the order of two calls in one
 process does not matter.
+
+**The cross-reference commands follow the same rule.** `crossReferenceCallees`,
+`crossReferenceCallers` and `crossReferenceTypeReferences` live in `RuntimeViewerCrossReferences`,
+and every place in the table above
+calls `RuntimeCrossReferences.install()` right after `RuntimeInjection.install()` — the iOS apps in
+their `AppDelegate`, right after `InjectionServiceRegistrar.registerIfAvailable()`. Skipping it
+fails the same silent way: the engine has no handler, and a host cannot tell it from an older
+peer. A new process that serves an engine links both modules and makes both calls. The commands
+run in the process that serves the engine, because the scan reads that process's own images and
+the shared cache it maps: the local-runtime service answers for "My Mac", an injected payload for
+the process it was injected into.
 
 ## SourceEditor Module
 

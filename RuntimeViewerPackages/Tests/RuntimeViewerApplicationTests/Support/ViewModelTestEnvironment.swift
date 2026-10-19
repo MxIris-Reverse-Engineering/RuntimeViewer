@@ -13,7 +13,11 @@ import RuntimeViewerArchitectures
 ///
 /// `settings` is `SettingsAccess.preview`, an in-memory store: the live one is
 /// backed by the developer's own `RuntimeViewer-Debug/settings.json`, and a
-/// write from a test would auto-save over it.
+/// write from a test would auto-save over it. Keep Cross References Ready
+/// starts off there, unlike in the app: on, every document a test opens on an
+/// engine would set the engine's process preparing its indexed images in the
+/// background, holding the activity and the Report rows other tests count.
+/// The tests about it turn it on.
 @MainActor
 struct ViewModelTestEnvironment {
     let appDefaults: AppDefaults
@@ -24,6 +28,7 @@ struct ViewModelTestEnvironment {
     init(runtimeEngine: RuntimeEngine? = nil) {
         let appDefaults = AppDefaults.isolated()
         let settings = SettingsAccess.preview
+        settings.search.isCrossReferencePreparationEnabled = false
         self.appDefaults = appDefaults
         self.settings = settings
         self.resolvedThemeStream = withDependencies {

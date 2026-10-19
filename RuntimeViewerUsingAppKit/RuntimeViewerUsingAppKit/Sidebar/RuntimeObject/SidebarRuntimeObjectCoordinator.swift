@@ -70,6 +70,8 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
                     completion?()
                 }
             )
+        case .findResults:
+            return .select(index: 2)
         case .findScopeChooser:
             let viewController = FindScopeChooserViewController<SidebarRuntimeObjectRoute>()
             let viewModel = FindScopeChooserViewModel<SidebarRuntimeObjectRoute>(documentState: documentState, router: self)

@@ -15,6 +15,7 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
         case classHierarchy
         case relationships
         case specialization
+        case references
     }
 
     protocol Delegate: AnyObject {
@@ -62,10 +63,12 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
     private lazy var classViewController = InspectorClassViewController()
     private lazy var relationshipsViewController = InspectorRelationshipsViewController()
     private lazy var specializationViewController = InspectorSwiftSpecializationViewController()
+    private lazy var referencesViewController = InspectorReferencesViewController()
 
     private var classViewModel: InspectorClassViewModel?
     private var relationshipsViewModel: InspectorRelationshipsViewModel?
     private var specializationViewModel: InspectorSwiftSpecializationViewModel?
+    private var referencesViewModel: InspectorReferencesViewModel?
 
     init(documentState: DocumentState) {
         self.documentState = documentState
@@ -121,6 +124,9 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
         case .specialization:
             guard let index = tabConfiguration.specializationIndex else { return .none() }
             return .select(index: index)
+        case .references:
+            guard let index = tabConfiguration.index(for: .references) else { return .none() }
+            return .select(index: index)
         case .requestSpecializationSheet(let object):
             delegate?.inspectorRuntimeObjectCoordinator(self, didRequestSpecializationSheetFor: object)
             return .none()
@@ -160,6 +166,15 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
                 specializationViewModel = viewModel
             }
         }
+        if tabConfiguration.needsReferences {
+            if let referencesViewModel {
+                referencesViewModel.update(for: runtimeObject)
+            } else {
+                let viewModel = InspectorReferencesViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+                referencesViewController.setupBindings(for: viewModel)
+                referencesViewModel = viewModel
+            }
+        }
     }
 
     private func makeTabViewItems() -> [TabViewItem] {
@@ -192,6 +207,15 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
                 )
             )
         }
+        if tabConfiguration.needsReferences {
+            tabViewItems.append(
+                TabViewItem(
+                    normalSymbol: .init(systemName: .arrowTriangleBranch),
+                    selectedSymbol: .init(systemName: .arrowTriangleBranch),
+                    viewController: referencesViewController
+                )
+            )
+        }
         return tabViewItems
     }
 }
@@ -207,10 +231,12 @@ extension InspectorRuntimeObjectCoordinator {
         let needsClassHierarchy: Bool
         let needsRelationships: Bool
         let needsSpecialization: Bool
+        /// The References tab: for a type whose members have code and whose references are found.
+        var needsReferences = false
 
         static let empty = Self(needsClassHierarchy: false, needsRelationships: false, needsSpecialization: false)
 
-        var hasAnyTab: Bool { needsClassHierarchy || needsRelationships || needsSpecialization }
+        var hasAnyTab: Bool { needsClassHierarchy || needsRelationships || needsSpecialization || needsReferences }
 
         var classHierarchyIndex: Int? {
             needsClassHierarchy ? 0 : nil
@@ -234,19 +260,33 @@ extension InspectorRuntimeObjectCoordinator {
             case .classHierarchy: return classHierarchyIndex
             case .relationships: return relationshipsIndex
             case .specialization: return specializationIndex
+            case .references: return orderedTabKinds.firstIndex(of: .references)
             }
         }
 
-        func tabKind(at index: Int) -> TabKind? {
+        /// The tabs in the order they are shown.
+        var orderedTabKinds: [TabKind] {
             var orderedTabKinds: [TabKind] = []
             if needsClassHierarchy { orderedTabKinds.append(.classHierarchy) }
             if needsRelationships { orderedTabKinds.append(.relationships) }
             if needsSpecialization { orderedTabKinds.append(.specialization) }
+            if needsReferences { orderedTabKinds.append(.references) }
+            return orderedTabKinds
+        }
+
+        func tabKind(at index: Int) -> TabKind? {
+            let orderedTabKinds = orderedTabKinds
             guard index >= 0, index < orderedTabKinds.count else { return nil }
             return orderedTabKinds[index]
         }
 
         static func compute(for runtimeObject: RuntimeObject) -> TabConfiguration {
+            var configuration = computeWithoutReferences(for: runtimeObject)
+            configuration.needsReferences = FindCrossReferenceRoot.isReferenceableType(runtimeObject)
+            return configuration
+        }
+
+        private static func computeWithoutReferences(for runtimeObject: RuntimeObject) -> TabConfiguration {
             let needsRelationships: Bool
             switch runtimeObject.kind {
             case .objc(.type(.class)), .objc(.type(.protocol)),

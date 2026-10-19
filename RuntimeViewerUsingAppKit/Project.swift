@@ -186,6 +186,7 @@ let project = Project(
                 .external(name: "RuntimeViewerMCPBridge"),
                 .external(name: "RuntimeViewerCommandLineInterface"),
                 .external(name: "RuntimeViewerInjection"),
+                .external(name: "RuntimeViewerCrossReferences"),
                 .external(name: "RuntimeViewerUtilities"),
                 .external(name: "Sparkle"),
                 // Release builds exclude it, through EXCLUDED_SOURCE_FILE_NAMES in the app's
@@ -262,6 +263,7 @@ let project = Project(
                 .external(name: "RuntimeViewerCommunication"),
                 .external(name: "RuntimeViewerCatalystExtensions"),
                 .external(name: "RuntimeViewerInjection"),
+                .external(name: "RuntimeViewerCrossReferences"),
             ],
             settings: targetSettings(
                 directory: "RuntimeViewerCatalystHelperPlugin",
@@ -295,6 +297,7 @@ let project = Project(
             dependencies: [
                 .external(name: "RuntimeViewerCore"),
                 .external(name: "RuntimeViewerInjection"),
+                .external(name: "RuntimeViewerCrossReferences"),
                 .external(name: "RuntimeViewerUtilities"),
             ],
             settings: targetSettings(
@@ -317,6 +320,7 @@ let project = Project(
             dependencies: [
                 .external(name: "RuntimeViewerCore"),
                 .external(name: "RuntimeViewerInjection"),
+                .external(name: "RuntimeViewerCrossReferences"),
                 .external(name: "RuntimeViewerUtilities"),
             ],
             settings: targetSettings(directory: "RuntimeViewerServer")
@@ -353,6 +357,7 @@ let project = Project(
                 .external(name: "RuntimeViewerCore"),
                 .external(name: "RuntimeViewerCommunication"),
                 .external(name: "RuntimeViewerInjection"),
+                .external(name: "RuntimeViewerCrossReferences"),
             ],
             settings: targetSettings(directory: "RuntimeViewerLocalRuntimeService")
         ),
@@ -369,6 +374,7 @@ let project = Project(
             dependencies: [
                 .external(name: "RuntimeViewerCommandLineInterface"),
                 .external(name: "RuntimeViewerInjection"),
+                .external(name: "RuntimeViewerCrossReferences"),
             ],
             settings: targetSettings(directory: "RuntimeViewerCommandLineTool", configurationsWithOwnFile: [])
         ),

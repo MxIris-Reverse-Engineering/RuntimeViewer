@@ -4,6 +4,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCommunication
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import Testing
 @testable import RuntimeViewerApplication
@@ -133,6 +134,48 @@ struct ReportViewModelTests {
         let nodes = try await nextValue(from: page.output.nodes) { !$0.isEmpty }
         #expect(nodes.map(\.identifier) == [.category(.backgroundIndexing), .category(.searchableInterfaces)])
         await engine.stop()
+    }
+
+    @Test("prepared cross references show under their own kind of work, last; turned off, the kind has no row")
+    func preparedCrossReferencesUnderTheirKind() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.crossReferences", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = false
+        environment.settings.search.isCrossReferencePreparationEnabled = true
+        let page = environment.make { Page(documentState: environment.documentState) }
+        defer { withExtendedLifetime(page) {} }
+
+        let nodes = try await nextValue(from: page.output.nodes, timeout: 60) { nodes in
+            Self.node(.category(.crossReferences), in: nodes)?.children.contains { child in
+                guard case .finishedCrossReferencePreparation = child.identifier else { return false }
+                return child.cellViewModel.appearance.title == "libobjc.A.dylib"
+            } == true
+        }
+        let category = try #require(Self.node(.category(.crossReferences), in: nodes))
+        #expect(category.cellViewModel.appearance.title == "Cross References")
+        #expect(nodes.last?.identifier == .category(.crossReferences))
+
+        // Turned off, queries scan instead: no row says so, and only the history stays.
+        environment.settings.search.isCrossReferencePreparationEnabled = false
+        let turnedOff = try await nextValue(from: page.output.nodes) { nodes in
+            Self.node(.category(.crossReferences), in: nodes)?.children.allSatisfy { child in
+                if case .finishedCrossReferencePreparation = child.identifier { return true }
+                return false
+            } == true
+        }
+        #expect(Self.node(.turnedOff(.crossReferences), in: turnedOff) == nil)
+        await engine.stop()
+    }
+
+    @Test("a preparing image's row reads how far its scan has come, then that its names are being read")
+    func preparingRowsTellTheScanFromTheNames() {
+        let row = ReportCellViewModel(identifier: .crossReferencePreparation(imagePath: TestImages.libobjc))
+        ReportOutline.configure(row, forCrossReferencesOf: TestImages.libobjc, state: .preparing(RuntimeCrossReferencePreparationProgress(scannedFunctionCount: 512, functionCount: 2048)), isFollowed: true)
+        #expect(row.appearance.detail == "25% · 512 of 2048 functions")
+        ReportOutline.configure(row, forCrossReferencesOf: TestImages.libobjc, state: .preparing(RuntimeCrossReferencePreparationProgress(scannedFunctionCount: 2048, functionCount: 2048, isReadingNames: true)), isFollowed: true)
+        #expect(row.appearance.detail == "Reading names")
+        #expect(row.appearance.status == .running)
+        #expect(row.isCancellable)
     }
 
     // MARK: - Actions

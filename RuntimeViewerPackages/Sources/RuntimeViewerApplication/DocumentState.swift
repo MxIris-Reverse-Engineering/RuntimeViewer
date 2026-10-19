@@ -3,6 +3,7 @@ import Combine
 import Dependencies
 import Observation
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 #if canImport(UIKit)
 import UIKit
@@ -146,6 +147,21 @@ public final class DocumentState {
     @RxObserved
     public fileprivate(set) var selectedRuntimeObject: RuntimeObject?
 
+    /// The member whose declaration the content pane's insertion point is on,
+    /// or `nil` when the point is on no member's line. The Inspector's
+    /// References tab follows it, and Find Call Hierarchy in the main menu acts
+    /// on it, as Xcode's acts on the symbol at the insertion point. Set by the
+    /// content pane, which reads which line declares which member
+    /// (`RuntimeObjectInterface.declaredMembersByLineNumber()`); a member of
+    /// another object than the one on screen does not count.
+    @RxObserved
+    public private(set) var cursorMember: RuntimeMemberReference?
+
+    public func updateCursorMember(_ member: RuntimeMemberReference?) {
+        guard member != cursorMember else { return }
+        cursorMember = member
+    }
+
     /// Content-pane tabs. Tabs and the navigation timeline are independent
     /// mechanisms: a tab is a display slot holding one `object`, while the
     /// timeline records viewing order across all of them. The active tab's
@@ -234,6 +250,10 @@ public final class DocumentState {
     /// engine it moves to gets one too.
     private var needsInterfaceCorpus = false
 
+    /// The document has needed its engine's prepared cross references: the
+    /// engine it moves to gets its preparation started too.
+    private var needsCrossReferencePreparation = false
+
     /// `documentWillClose()` has run.
     private var isClosed = false
 
@@ -296,6 +316,18 @@ public final class DocumentState {
         return backgroundWork.corpusCoordinator
     }
 
+    /// Keeps the engine's prepared cross references in step with what the
+    /// engine indexes, shared with every document on the engine like
+    /// `backgroundIndexingCoordinator`, and touched on the same Document
+    /// lifecycle hook.
+    public var crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator {
+        let backgroundWork = joinedBackgroundWork()
+        if !isClosed {
+            needsCrossReferencePreparation = true
+        }
+        return backgroundWork.crossReferencePreparationCoordinator
+    }
+
     /// The work of the engine the document is on, joined if the document does
     /// not hold it yet. A document that closed without ever holding it gets
     /// work closed from the start: it asks the engine for nothing.
@@ -339,6 +371,9 @@ public final class DocumentState {
         backgroundWork = joinedBackgroundWork
         if needsInterfaceCorpus {
             followInterfaceCorpus(of: joinedBackgroundWork)
+        }
+        if needsCrossReferencePreparation {
+            _ = joinedBackgroundWork.crossReferencePreparationCoordinator
         }
         if needsBackgroundIndexing {
             joinedBackgroundWork.indexingCoordinator.documentDidOpen()
@@ -407,9 +442,10 @@ public final class DocumentState {
         backgroundWorkProcessActivityStorage?.documentWillClose()
     }
 
-    /// Whether the Report navigator has work in progress: an indexing batch, or a corpus queued or
-    /// being printed, on the engine the document is on. Worked out once here, so both sidebar
-    /// levels mark their Report navigator tab from the same answer.
+    /// Whether the Report navigator has work in progress: an indexing batch, a corpus queued or
+    /// being printed, or cross references queued or being prepared, on the engine the document is
+    /// on. Worked out once here, so both sidebar levels mark their Report navigator tab from the
+    /// same answer.
     public var reportActivity: Driver<Bool> {
         $runtimeEngine.asDriver()
             .flatMapLatest { [weak self] _ -> Driver<Bool> in
@@ -417,9 +453,10 @@ public final class DocumentState {
                 return MainActor.assumeIsolated {
                     Driver.combineLatest(
                         self.backgroundIndexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
-                        self.findCorpusCoordinator.hasActiveBuild
-                    ) { hasActiveBatch, hasActiveBuild in
-                        hasActiveBatch || hasActiveBuild
+                        self.findCorpusCoordinator.hasActiveBuild,
+                        self.crossReferencePreparationCoordinator.hasActivePreparation
+                    ) { hasActiveBatch, hasActiveBuild, hasActivePreparation in
+                        hasActiveBatch || hasActiveBuild || hasActivePreparation
                     }
                 }
             }
