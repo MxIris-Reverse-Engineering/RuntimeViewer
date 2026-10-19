@@ -399,10 +399,9 @@ struct CrossReferenceQueryTests {
 
     // MARK: - Session
 
-    /// A session whose images never change: another test in the process may
-    /// load an image outside the cache (the Objective-C runtime loads
-    /// `libobjc-trampolines.dylib` on first use), which would start a new
-    /// generation and drop every scan these tests count on.
+    /// A session whose images never change, so that nothing another test in
+    /// the process loads or unloads outside the cache decides anything about
+    /// the scans these tests count on.
     private static func makeSteadySession(
         scanByteBudget: Int = CrossReferenceSession.defaultScanByteBudget,
         maximumConcurrentScans: Int = testMaximumConcurrentScans

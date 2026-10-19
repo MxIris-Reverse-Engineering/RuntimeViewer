@@ -49,11 +49,10 @@ final class CrossReferenceSession: Sendable {
     /// on the Swift concurrency pool it would hold a thread the engine's other
     /// work in this process — the sidebar, the content pane — is waiting for.
     private let scanQueue: OperationQueue
-    /// The header address of every image loaded outside the shared cache —
-    /// what decides whether an analyzer is still current. The process's
-    /// own list, unless a test needs one that does not change under it: the
-    /// Objective-C runtime loads `libobjc-trampolines.dylib`, which is not in
-    /// the cache, the first time anything in the process needs it.
+    /// The header address of every image loaded outside the shared cache, in
+    /// dyld's order — what decides whether the analyzer still numbers the
+    /// process's images as they are (``currentAnalyzer()``). The process's own
+    /// list, unless a test loads and unloads images of its own.
     private let imagesOutsideSharedCache: @Sendable () -> [UInt]
     /// Whether the first preparation of a generation reads the prefilters'
     /// tables behind it: seconds of a core in a debug build, which a test
@@ -78,33 +77,132 @@ final class CrossReferenceSession: Sendable {
 
     // MARK: - Analyzer
 
-    /// The analyzer for the process's images as they are now, and the
-    /// generation scans are filed under.
+    /// The analyzer for the process's images, and the generation scans are
+    /// filed under.
     ///
     /// An analyzer is a snapshot: images loaded outside the shared cache
-    /// after it was made are not in it. When those have changed, a new
-    /// analyzer replaces it, its image indices may differ, and the scans and
-    /// prepared indexes filed under the old generation are dropped.
+    /// after it was made are not in it. It stays while images are only
+    /// loaded — the shared cache's images come first and never move, and dyld
+    /// lists what it loads after the rest, so every image the analyzer
+    /// numbers keeps its number — and what was prepared and scanned with it
+    /// stays too. The process loads such images without anyone asking: the
+    /// Objective-C runtime loads `libobjc-trampolines.dylib` the first time a
+    /// method is made from a block, which a class's `+initialize` does when
+    /// generating an interface runs a type's metadata accessor — in the
+    /// engine's process, minutes after the indexed images were prepared.
+    /// Replacing the analyzer for that would drop every prepared image, and
+    /// the next query would wait for its image to be prepared again. A query
+    /// about an image loaded since renews the analyzer instead
+    /// (``analyzerIncludingImagesLoaded(since:)``).
+    ///
+    /// An image the analyzer numbers being unloaded is another matter: its
+    /// memory is gone and the images after it move up, so a new analyzer
+    /// starts over, and everything filed under the old one is dropped.
     func currentAnalyzer() throws -> (analyzer: CrossReferenceAnalyzer, generation: Int) {
         let imagesOutsideSharedCache = self.imagesOutsideSharedCache()
         return try state.withLock { state in
-            if let analyzer = state.analyzer, state.imagesOutsideSharedCache == imagesOutsideSharedCache {
+            if let analyzer = state.analyzer, imagesOutsideSharedCache.starts(with: state.imagesOutsideSharedCache) {
                 return (analyzer, state.generation)
             }
-            guard let analyzer = CrossReferenceAnalyzer() else {
+            return try Self.startOver(with: imagesOutsideSharedCache, in: &state)
+        }
+    }
+
+    /// An analyzer that also numbers the images loaded outside the shared
+    /// cache since the analyzer of `generation` was made — the current one
+    /// when another query has made it meanwhile — or `nil` when none was
+    /// loaded since: for a query asking about an image that analyzer does not
+    /// number, such as an app's own framework the engine indexed after
+    /// loading it.
+    ///
+    /// The images the old analyzer numbers keep their numbers, so what was
+    /// prepared and scanned with it stays. The names the old analyzer read
+    /// for the prepared images go with it: the new one reads them again on
+    /// the session's queue, ahead of the preparations waiting, and the
+    /// prefilters' tables behind them.
+    func analyzerIncludingImagesLoaded(since generation: Int) throws -> (analyzer: CrossReferenceAnalyzer, generation: Int)? {
+        let imagesOutsideSharedCache = self.imagesOutsideSharedCache()
+        let renewal = try state.withLock { state -> AnalyzerRenewal? in
+            guard let analyzer = state.analyzer else { return nil }
+            guard state.generation == generation else {
+                return .madeMeanwhile(analyzer, generation: state.generation)
+            }
+            guard imagesOutsideSharedCache.starts(with: state.imagesOutsideSharedCache) else {
+                let (startedOver, startedOverGeneration) = try Self.startOver(with: imagesOutsideSharedCache, in: &state)
+                return .madeMeanwhile(startedOver, generation: startedOverGeneration)
+            }
+            guard imagesOutsideSharedCache.count > state.imagesOutsideSharedCache.count else { return nil }
+            guard let renewed = CrossReferenceAnalyzer() else {
                 throw RuntimeCrossReferenceError.unsupportedArchitecture
             }
-            state.analyzer = analyzer
+            let loadedImageCount = imagesOutsideSharedCache.count - state.imagesOutsideSharedCache.count
+            state.analyzer = renewed
             state.imagesOutsideSharedCache = imagesOutsideSharedCache
+            // The function tables kept are the old analyzer's.
             state.imagesWithFunctionTables = []
             state.generation += 1
-            state.scans = [:]
-            state.oversizedScanKeys = []
-            state.scanByteCount = 0
-            state.preparedImages = [:]
-            state.preparedByteCount = 0
-            return (analyzer, state.generation)
+            return .renewed(
+                renewed,
+                generation: state.generation,
+                loadedImageCount: loadedImageCount,
+                preparedImageIndices: Array(state.preparedImages.keys),
+                readsPrefilters: state.prefilterPreparationGeneration != nil
+            )
         }
+        switch renewal {
+        case nil:
+            return nil
+        case .madeMeanwhile(let analyzer, let generation):
+            return (analyzer, generation)
+        case .renewed(let analyzer, let generation, let loadedImageCount, let preparedImageIndices, let readsPrefilters):
+            CrossReferenceSessionLog.renewedAnalyzer(generation: generation, loadedImageCount: loadedImageCount, keptPreparedImageCount: preparedImageIndices.count)
+            readNames(ofImagesAt: preparedImageIndices, with: analyzer, generation: generation)
+            if readsPrefilters {
+                preparePrefiltersIfNeeded(with: analyzer, generation: generation)
+            }
+            return (analyzer, generation)
+        }
+    }
+
+    private enum AnalyzerRenewal {
+        /// Another query made the current analyzer since the one asked about.
+        case madeMeanwhile(CrossReferenceAnalyzer, generation: Int)
+        case renewed(CrossReferenceAnalyzer, generation: Int, loadedImageCount: Int, preparedImageIndices: [Int], readsPrefilters: Bool)
+    }
+
+    /// Makes the first analyzer, or replaces one an image it numbers left,
+    /// and drops everything filed under the old numbering: the scans, the
+    /// prepared images, and — with the old analyzer — the names read for them.
+    private static func startOver(with imagesOutsideSharedCache: [UInt], in state: inout State) throws -> (analyzer: CrossReferenceAnalyzer, generation: Int) {
+        guard let analyzer = CrossReferenceAnalyzer() else {
+            throw RuntimeCrossReferenceError.unsupportedArchitecture
+        }
+        let isFirst = state.analyzer == nil
+        let droppedPreparedImageCount = state.preparedImages.count
+        state.analyzer = analyzer
+        state.imagesOutsideSharedCache = imagesOutsideSharedCache
+        state.imagesWithFunctionTables = []
+        state.generation += 1
+        state.numberingGeneration = state.generation
+        state.scans = [:]
+        state.oversizedScanKeys = []
+        state.scanByteCount = 0
+        state.preparedImages = [:]
+        state.preparedByteCount = 0
+        if isFirst {
+            CrossReferenceSessionLog.madeAnalyzer(generation: state.generation, imageCountOutsideSharedCache: imagesOutsideSharedCache.count)
+        } else {
+            CrossReferenceSessionLog.startedOver(generation: state.generation, droppedPreparedImageCount: droppedPreparedImageCount)
+        }
+        return (analyzer, state.generation)
+    }
+
+    /// The numbering the analyzer of `generation` gave the images: the
+    /// current one for a generation since it began, under which prepared
+    /// images and scans are filed; an older generation's own, under which
+    /// nothing is kept any more.
+    private static func numbering(ofGeneration generation: Int, in state: State) -> Int {
+        generation >= state.numberingGeneration ? state.numberingGeneration : generation
     }
 
     /// Records that a query had the analyzer name functions in
@@ -129,10 +227,10 @@ final class CrossReferenceSession: Sendable {
     }
 
     /// The images with an index kept, or a preparation queued or under way,
-    /// in the current generation.
+    /// under the current numbering.
     private static func preparedOrPreparingImageIndices(in state: State) -> Set<Int> {
         var imageIndices = Set(state.preparedImages.keys)
-        for key in state.preparations.keys where key.generation == state.generation {
+        for key in state.preparations.keys where key.numbering == state.numberingGeneration {
             imageIndices.insert(key.imageIndex)
         }
         return imageIndices
@@ -162,10 +260,11 @@ final class CrossReferenceSession: Sendable {
     // MARK: - Scans
 
     /// What earlier scans for `key` found, by image — an image scanned with
-    /// nothing found maps to an empty array.
+    /// nothing found maps to an empty array. Scans with an analyzer renewed
+    /// since count: they number the images alike.
     func scannedReferences(for key: CrossReferenceScanKey, generation: Int) -> [Int: [CodeReference]] {
         state.withLock { state in
-            guard state.generation == generation, var scan = state.scans[key] else { return [:] }
+            guard generation >= state.numberingGeneration, var scan = state.scans[key] else { return [:] }
             state.useCounter += 1
             scan.lastUse = state.useCounter
             state.scans[key] = scan
@@ -177,7 +276,7 @@ final class CrossReferenceSession: Sendable {
     func record(_ references: [CodeReference], for key: CrossReferenceScanKey, inImageAt imageIndex: Int, generation: Int) {
         let byteCount = references.count * MemoryLayout<CodeReference>.stride + MemoryLayout<Int>.stride * 4
         state.withLock { state in
-            guard state.generation == generation, !state.oversizedScanKeys.contains(key) else { return }
+            guard generation >= state.numberingGeneration, !state.oversizedScanKeys.contains(key) else { return }
             state.useCounter += 1
             var scan = state.scans[key] ?? Scan()
             guard scan.referencesByImage[imageIndex] == nil else { return }
@@ -284,6 +383,9 @@ final class CrossReferenceSession: Sendable {
     /// analyzer read for it counted together, least recently used dropped
     /// first — the analyzer releasing the names of one dropped. One larger
     /// than the limit is returned and not kept.
+    ///
+    /// An image prepared with an analyzer renewed since is kept all the same,
+    /// and the renewed analyzer reads its names.
     func preparedImage(
         ofImageAt imageIndex: Int,
         generation: Int,
@@ -294,7 +396,7 @@ final class CrossReferenceSession: Sendable {
         if let ready = state.withLock({ Self.takeReadyImage(ofImageAt: imageIndex, generation: generation, from: &$0) }) {
             return ready
         }
-        let key = PreparationKey(imageIndex: imageIndex, generation: generation)
+        let key = state.withLock { PreparationKey(imageIndex: imageIndex, numbering: Self.numbering(ofGeneration: generation, in: $0)) }
         let waiterIdentifier = UUID()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -309,7 +411,7 @@ final class CrossReferenceSession: Sendable {
                         state.preparations[key] = preparation
                     } else {
                         let operation = makePreparationOperation(for: key, isPrioritized: isPrioritized, build: build)
-                        var preparation = Preparation(operation: operation)
+                        var preparation = Preparation(operation: operation, buildGeneration: generation)
                         preparation.waiters[waiterIdentifier] = continuation
                         preparation.progressHandlers[waiterIdentifier] = reportProgress
                         state.preparations[key] = preparation
@@ -370,7 +472,7 @@ final class CrossReferenceSession: Sendable {
         }
 
         enum Completion {
-            case answer([CheckedContinuation<CrossReferencePreparedImage, any Error>], CrossReferencePreparedImage)
+            case answer([CheckedContinuation<CrossReferencePreparedImage, any Error>], CrossReferencePreparedImage, namesToRead: (analyzer: CrossReferenceAnalyzer, generation: Int)?)
             case restart(isPrioritized: Bool)
             case none
         }
@@ -386,13 +488,22 @@ final class CrossReferenceSession: Sendable {
                 return .restart(isPrioritized: preparation.operation.queuePriority == .veryHigh)
             }
             state.preparations[key] = nil
-            if state.generation == key.generation {
+            var namesToRead: (analyzer: CrossReferenceAnalyzer, generation: Int)?
+            if key.numbering == state.numberingGeneration {
                 keep(prepared, ofImageAt: key.imageIndex, from: &state)
+                // Read with an analyzer renewed since, which holds the names
+                // it read: the current one reads them too.
+                if preparation.buildGeneration != state.generation, state.preparedImages[key.imageIndex] != nil, let analyzer = state.analyzer {
+                    namesToRead = (analyzer, state.generation)
+                }
             }
-            return .answer(Array(preparation.waiters.values), prepared)
+            return .answer(Array(preparation.waiters.values), prepared, namesToRead: namesToRead)
         }
         switch completion {
-        case .answer(let continuations, let prepared):
+        case .answer(let continuations, let prepared, let namesToRead):
+            if let namesToRead {
+                readNames(ofImagesAt: [key.imageIndex], with: namesToRead.analyzer, generation: namesToRead.generation)
+            }
             for continuation in continuations {
                 continuation.resume(returning: prepared)
             }
@@ -408,9 +519,10 @@ final class CrossReferenceSession: Sendable {
         }
     }
 
-    /// The image kept, marked as just used.
+    /// The image kept, marked as just used — for an analyzer that numbers the
+    /// images as the one that prepared it did.
     private static func takeReadyImage(ofImageAt imageIndex: Int, generation: Int, from state: inout State) -> CrossReferencePreparedImage? {
-        guard state.generation == generation, var kept = state.preparedImages[imageIndex] else { return nil }
+        guard generation >= state.numberingGeneration, var kept = state.preparedImages[imageIndex] else { return nil }
         state.useCounter += 1
         kept.lastUse = state.useCounter
         state.preparedImages[imageIndex] = kept
@@ -472,6 +584,23 @@ final class CrossReferenceSession: Sendable {
         scanQueue.addOperation(operation)
     }
 
+    /// Has `analyzer` read the names of prepared images that an analyzer
+    /// since renewed read them for, on the session's queue ahead of the
+    /// preparations waiting, so that the first query naming what their
+    /// indexes answer does not read them itself: AppKit's take 0.3 s in a
+    /// debug build. An image dropped meanwhile, or an analyzer renewed again,
+    /// reads nothing.
+    private func readNames(ofImagesAt imageIndices: [Int], with analyzer: CrossReferenceAnalyzer, generation: Int) {
+        for imageIndex in imageIndices {
+            let operation = BlockOperation { [weak self] in
+                guard let self, state.withLock({ $0.generation == generation && $0.preparedImages[imageIndex] != nil }) else { return }
+                analyzer.prepareNames(inImageAt: imageIndex)
+            }
+            operation.queuePriority = .high
+            scanQueue.addOperation(operation)
+        }
+    }
+
     /// The generation whose prefilters are read; for tests.
     var preparedPrefilterGeneration: Int? {
         state.withLock { $0.preparedPrefilterGeneration }
@@ -497,15 +626,20 @@ final class CrossReferenceSession: Sendable {
         state.withLock { !$0.preparations.isEmpty }
     }
 
-    /// One image's preparation, in one generation.
+    /// One image's preparation, under one numbering of the images: the
+    /// analyzers of every generation since a numbering began share it.
     private struct PreparationKey: Hashable {
         let imageIndex: Int
-        let generation: Int
+        /// The generation the numbering began with (`State.numberingGeneration`).
+        let numbering: Int
     }
 
     /// A preparation queued or under way, and who waits for it.
     private struct Preparation {
         var operation: Operation
+        /// The generation of the analyzer the preparation reads the image
+        /// with, which keeps the names it reads.
+        let buildGeneration: Int
         var waiters: [UUID: CheckedContinuation<CrossReferencePreparedImage, any Error>] = [:]
         var progressHandlers: [UUID: @Sendable (RuntimeCrossReferencePreparationProgress) async -> Void] = [:]
         /// Every requester left: the operation stops instead of building.
@@ -532,9 +666,18 @@ final class CrossReferenceSession: Sendable {
 
     private struct State {
         var analyzer: CrossReferenceAnalyzer?
+        /// The images outside the shared cache the analyzer numbers, in
+        /// dyld's order.
         var imagesOutsideSharedCache: [UInt] = []
         var imagesWithFunctionTables: Set<Int> = []
+        /// Counts the analyzers made; each has its own function tables and
+        /// names.
         var generation = 0
+        /// The generation the analyzer's numbering of the images began with.
+        /// An analyzer renewed for images loaded since keeps the numbering,
+        /// so what was prepared or scanned with any analyzer since this
+        /// generation still holds; starting over begins a new one.
+        var numberingGeneration = 0
         var scans: [CrossReferenceScanKey: Scan] = [:]
         /// Scans found larger than the budget, which are not recorded again.
         var oversizedScanKeys: Set<CrossReferenceScanKey> = []
@@ -543,7 +686,7 @@ final class CrossReferenceSession: Sendable {
         var startedScanCount = 0
         /// The scans running now, which a query asking for the same waits for.
         var inFlightScans: [InFlightScan: Task<[CodeReference], Never>] = [:]
-        /// The prepared images kept, by image, in the current generation.
+        /// The prepared images kept, by image, under the current numbering.
         var preparedImages: [Int: KeptPreparedImage] = [:]
         var preparedByteCount = 0
         var preparedByteLimit = CrossReferenceSession.defaultPreparedByteLimit
@@ -586,5 +729,22 @@ extension CrossReferenceQuery {
     /// A query against the process's session — what the commands run.
     init(engine: RuntimeEngine) {
         self.init(engine: engine, session: .shared)
+    }
+}
+
+// MARK: - Logging
+
+@Loggable(.private)
+private enum CrossReferenceSessionLog {
+    static func madeAnalyzer(generation: Int, imageCountOutsideSharedCache: Int) {
+        #log(.info, "Made the cross-reference analyzer (generation \(generation, privacy: .public)) with \(imageCountOutsideSharedCache, privacy: .public) images outside the shared cache")
+    }
+
+    static func startedOver(generation: Int, droppedPreparedImageCount: Int) {
+        #log(.info, "An image the cross-reference analyzer numbers was unloaded: started over (generation \(generation, privacy: .public)), dropping \(droppedPreparedImageCount, privacy: .public) prepared images")
+    }
+
+    static func renewedAnalyzer(generation: Int, loadedImageCount: Int, keptPreparedImageCount: Int) {
+        #log(.info, "A query asked about an image loaded since: renewed the cross-reference analyzer (generation \(generation, privacy: .public)) for \(loadedImageCount, privacy: .public) images loaded outside the shared cache, keeping \(keptPreparedImageCount, privacy: .public) prepared images")
     }
 }

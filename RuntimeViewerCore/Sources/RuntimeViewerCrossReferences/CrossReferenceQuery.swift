@@ -35,7 +35,7 @@ struct CrossReferenceQuery {
         if case .selector(let selector) = subject {
             throw RuntimeCrossReferenceError.selectorHasNoCallees(selector)
         }
-        let (analyzer, generation) = try session.currentAnalyzer()
+        let (analyzer, generation, _) = try currentAnalyzer(resolving: [subject.imagePath].compactMap { $0 })
         let resolvedSubject = try await resolve(subject, with: analyzer)
         var builder = FunctionReferenceBuilder(analyzer: analyzer)
         var references: [RuntimeCrossReference] = []
@@ -130,8 +130,9 @@ struct CrossReferenceQuery {
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
     ) async throws -> RuntimeCrossReferenceQueryResult {
         let startTime = Date()
-        let (analyzer, generation) = try session.currentAnalyzer()
-        let indexedImages = try await indexedImageIndices(in: analyzer)
+        let indexedPaths = try await indexedImagePaths()
+        let (analyzer, generation, imageIndices) = try currentAnalyzer(resolving: indexedPaths + [subject.imagePath].compactMap { $0 })
+        let indexedImages = Set(indexedPaths.compactMap { imageIndices[$0] })
         let resolvedSubject = try await resolve(subject, with: analyzer)
         // Finding the subject kept its image's function table.
         session.noteFunctionTables(ofImagesAt: resolvedSubject.functions.map(\.function.location.imageIndex), generation: generation)
@@ -192,10 +193,36 @@ struct CrossReferenceQuery {
         }
     }
 
-    /// The analyzer's indices of the images the engine has indexed — the only
-    /// images a scan reads.
-    private func indexedImageIndices(in analyzer: CrossReferenceAnalyzer) async throws -> Set<Int> {
-        Set(try await indexedImagePaths().compactMap { Self.imageIndex(forPath: $0, in: analyzer) })
+    /// The session's analyzer, and the index it gives each of `imagePaths`
+    /// that it numbers — renewed first when one of them is an image the
+    /// process loaded after the analyzer was made
+    /// (``CrossReferenceSession/analyzerIncludingImagesLoaded(since:)``).
+    ///
+    /// Images loaded since that no query asks about leave the analyzer, and
+    /// what was prepared with it, as they are
+    /// (``CrossReferenceSession/currentAnalyzer()``). A path the analyzer
+    /// does not find renews it only when images were loaded since, once for
+    /// all of them — also a path no image answers to, which the renewed
+    /// analyzer does not find either; what was prepared survives a renewal.
+    private func currentAnalyzer(resolving imagePaths: [String]) throws -> (analyzer: CrossReferenceAnalyzer, generation: Int, imageIndices: [String: Int]) {
+        var (analyzer, generation) = try session.currentAnalyzer()
+        var imageIndices = Self.imageIndices(forPaths: imagePaths, in: analyzer)
+        if imageIndices.count < Set(imagePaths).count, let renewed = try session.analyzerIncludingImagesLoaded(since: generation) {
+            (analyzer, generation) = renewed
+            imageIndices = Self.imageIndices(forPaths: imagePaths, in: analyzer)
+        }
+        return (analyzer, generation, imageIndices)
+    }
+
+    /// The analyzer's index for each of `paths` it numbers.
+    static func imageIndices(forPaths paths: [String], in analyzer: CrossReferenceAnalyzer) -> [String: Int] {
+        var imageIndices: [String: Int] = [:]
+        for path in Set(paths) {
+            if let imageIndex = imageIndex(forPath: path, in: analyzer) {
+                imageIndices[path] = imageIndex
+            }
+        }
+        return imageIndices
     }
 
     /// The analyzer's index for the image a scope names, which the engine
@@ -219,8 +246,9 @@ struct CrossReferenceQuery {
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
     ) async throws -> RuntimeCrossReferenceQueryResult {
         let startTime = Date()
-        let (analyzer, generation) = try session.currentAnalyzer()
-        let indexedImages = try await indexedImageIndices(in: analyzer)
+        let indexedPaths = try await indexedImagePaths()
+        let (analyzer, generation, imageIndices) = try currentAnalyzer(resolving: indexedPaths + [object.imagePath])
+        let indexedImages = Set(indexedPaths.compactMap { imageIndices[$0] })
         let type = try resolveType(object, with: analyzer)
         let candidates: [Int]
         switch scope {
@@ -362,8 +390,9 @@ struct CrossReferenceQuery {
             session.setMaximumConcurrentScans(maximumConcurrentScans)
         }
         session.setPreparedByteLimit(options.residentByteLimit)
-        let (analyzer, generation) = try session.currentAnalyzer()
-        let imageIndex = try Self.indexedImageIndex(forPath: path, among: try await indexedImageIndices(in: analyzer), in: analyzer)
+        let indexedPaths = try await indexedImagePaths()
+        let (analyzer, generation, imageIndices) = try currentAnalyzer(resolving: indexedPaths + [path])
+        let imageIndex = try Self.indexedImageIndex(forPath: path, among: Set(indexedPaths.compactMap { imageIndices[$0] }), in: analyzer)
         let prepared = try await session.preparedImage(ofImageAt: imageIndex, generation: generation, isPrioritized: options.isPrioritized, reportProgress: reportProgress) { shouldContinue in
             Self.prepareImage(at: imageIndex, with: analyzer, shouldContinue: shouldContinue)
         }
@@ -847,6 +876,21 @@ enum MemberAddressMatching {
 
     private static func split(_ kind: String) -> (isStatic: Bool, rest: Substring) {
         kind.hasPrefix("static ") ? (true, kind.dropFirst("static ".count)) : (false, Substring(kind))
+    }
+}
+
+extension RuntimeCrossReferenceSubject {
+    /// The image the subject's code is in; none for a selector, which any
+    /// image may send.
+    fileprivate var imagePath: String? {
+        switch self {
+        case .function(let imagePath, _):
+            imagePath
+        case .member(let member):
+            member.object.imagePath
+        case .selector:
+            nil
+        }
     }
 }
 

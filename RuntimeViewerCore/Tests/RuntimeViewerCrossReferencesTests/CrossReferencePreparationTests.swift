@@ -14,13 +14,26 @@ struct CrossReferencePreparationTests {
     private static let foundationPath = "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation"
     private static let libobjcPath = "/usr/lib/libobjc.A.dylib"
 
-    /// A session whose images never change, so that nothing starts a new
-    /// generation under a test; as many scans at once as the machine has cores.
-    /// It reads the prefilters' tables only when a test asks: seconds of a
-    /// core each.
+    /// A session whose images never change, so that nothing the process loads
+    /// or unloads meanwhile decides a test's analyzer; as many scans at once
+    /// as the machine has cores. It reads the prefilters' tables only when a
+    /// test asks: seconds of a core each.
     private static func makeSession(preparesPrefilters: Bool = false) -> CrossReferenceSession {
         CrossReferenceSession(maximumConcurrentScans: ProcessInfo.processInfo.activeProcessorCount, preparesPrefilters: preparesPrefilters, imagesOutsideSharedCache: { [] })
     }
+
+    /// A session that sees the images loaded outside the shared cache that
+    /// `processImages` lists, which a test changes as the process would.
+    private static func makeSession(seeing processImages: ProcessImageList) -> CrossReferenceSession {
+        CrossReferenceSession(maximumConcurrentScans: ProcessInfo.processInfo.activeProcessorCount, preparesPrefilters: false, imagesOutsideSharedCache: { processImages.headers })
+    }
+
+    private static let roomyPreparationOptions = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+
+    /// An image indexed after the analyzer was made, loaded from outside the
+    /// shared cache as an app's own framework is: one the analyzer does not
+    /// number.
+    private static let imageLoadedLaterPath = "/Applications/Loaded Later.app/Contents/Frameworks/LoadedLater.framework/Versions/A/LoadedLater"
 
     private static func makeQuery(session: CrossReferenceSession, indexedImagePaths: [String]) -> CrossReferenceQuery {
         CrossReferenceQuery(engine: RuntimeEngine(source: .local, engineID: "test-cross-reference-preparation"), session: session) { indexedImagePaths }
@@ -233,6 +246,126 @@ struct CrossReferencePreparationTests {
         #expect(prepared == scanned)
     }
 
+    // MARK: - Images loaded and unloaded
+
+    @Test("An image loaded outside the shared cache after the preparation keeps the analyzer, and with it the prepared images and their names")
+    func imagesLoadedLaterKeepThePreparedImages() async throws {
+        let processImages = ProcessImageList([])
+        let session = Self.makeSession(seeing: processImages)
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.foundationPath])
+        _ = try await query.prepare(imageAt: Self.foundationPath, options: Self.roomyPreparationOptions) { _ in }
+        let (analyzer, generation) = try session.currentAnalyzer()
+        let foundation = try #require(analyzer.imageIndex(forPath: Self.foundationPath))
+        let namingByteCount = analyzer.approximateByteCount(ofImageDataAt: foundation)
+        #expect(namingByteCount > 0)
+
+        // What generating an interface did in the engine's process, after the
+        // indexed images were prepared: a class's `+initialize` made a method
+        // from a block, and the Objective-C runtime loaded
+        // `libobjc-trampolines.dylib`, which is not in the cache.
+        processImages.load(0x7_0000_0000)
+        let url = RuntimeObject(name: "10Foundation3URLV", displayName: "URL", kind: .swift(.type(.struct)), imagePath: Self.foundationPath, children: [])
+        let result = try await query.typeReferences(to: url, in: .image(path: Self.foundationPath), options: Self.preparedOptions) { _ in }
+        #expect(!result.references.isEmpty)
+        // Answered from the index prepared ahead, not one prepared again.
+        #expect(session.startedPreparationCount == 1)
+        #expect(session.preparedImageIndices == [foundation])
+        let (analyzerAfter, generationAfter) = try session.currentAnalyzer()
+        #expect(analyzerAfter === analyzer)
+        #expect(generationAfter == generation)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: foundation) >= namingByteCount)
+    }
+
+    @Test("An image loaded later that a query asks about renews the analyzer, which keeps what was prepared and reads its names again")
+    func imagesAskedAboutRenewTheAnalyzer() async throws {
+        let processImages = ProcessImageList([])
+        let session = Self.makeSession(seeing: processImages)
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath, Self.imageLoadedLaterPath])
+        _ = try await query.prepare(imageAt: Self.libobjcPath, options: Self.roomyPreparationOptions) { _ in }
+        let callers = try await query.callers(of: .selector("description"), in: .image(path: Self.libobjcPath), options: Self.preparedOptions) { _ in }
+        #expect(!callers.references.isEmpty)
+        let (analyzer, generation) = try session.currentAnalyzer()
+        let libobjc = try #require(analyzer.imageIndex(forPath: Self.libobjcPath))
+
+        // The indexed image the analyzer lacks is loaded now. A preparation
+        // request — the app makes one for every image the engine reports
+        // indexed — renews the analyzer; libobjc, asked for again, is found
+        // prepared, and nothing is named.
+        processImages.load(0x7_0000_0000)
+        _ = try await query.prepare(imageAt: Self.libobjcPath, options: Self.roomyPreparationOptions) { _ in }
+        let (renewed, renewedGeneration) = try session.currentAnalyzer()
+        #expect(renewed !== analyzer)
+        #expect(renewedGeneration == generation + 1)
+        #expect(session.startedPreparationCount == 1)
+        #expect(session.preparedImageIndices == [libobjc])
+
+        // The renewed analyzer reads the prepared image's names on the
+        // session's queue, before any query names what the index answers.
+        let deadline = Date().addingTimeInterval(60)
+        while renewed.approximateByteCount(ofImageDataAt: libobjc) == 0, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(renewed.approximateByteCount(ofImageDataAt: libobjc) > 0)
+
+        // Nothing loaded since: the next query keeps the renewed analyzer and
+        // answers as before.
+        let callersAfter = try await query.callers(of: .selector("description"), in: .image(path: Self.libobjcPath), options: Self.preparedOptions) { _ in }
+        #expect(callersAfter == callers)
+        #expect(try session.currentAnalyzer().generation == renewedGeneration)
+        #expect(session.startedPreparationCount == 1)
+    }
+
+    @Test("An image the analyzer numbers being unloaded starts over: a new analyzer, and nothing prepared with the old one")
+    func imagesUnloadedStartOver() async throws {
+        let processImages = ProcessImageList([0x7_0000_0000, 0x7_0001_0000])
+        let session = Self.makeSession(seeing: processImages)
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
+        _ = try await query.prepare(imageAt: Self.libobjcPath, options: Self.roomyPreparationOptions) { _ in }
+        let (analyzer, generation) = try session.currentAnalyzer()
+
+        // Its memory is gone, and the images after it moved up.
+        processImages.unload(0x7_0000_0000)
+        let callers = try await query.callers(of: .selector("description"), in: .image(path: Self.libobjcPath), options: Self.preparedOptions) { _ in }
+        #expect(!callers.references.isEmpty)
+        let (analyzerAfter, generationAfter) = try session.currentAnalyzer()
+        #expect(analyzerAfter !== analyzer)
+        #expect(generationAfter == generation + 1)
+        // The query prepared the image again, with the new analyzer.
+        #expect(session.startedPreparationCount == 2)
+    }
+
+    @Test("A preparation under way when the analyzer is renewed is kept, and the renewed analyzer reads its names")
+    func preparationsOutliveARenewal() async throws {
+        let processImages = ProcessImageList([])
+        let session = Self.makeSession(seeing: processImages)
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.appKitPath, Self.libobjcPath, Self.imageLoadedLaterPath])
+        let (firstReport, firstReportContinuation) = AsyncStream<Void>.makeStream()
+        let preparation = Task {
+            try await query.prepare(imageAt: Self.appKitPath, options: Self.roomyPreparationOptions) { _ in
+                firstReportContinuation.yield()
+            }
+        }
+        for await _ in firstReport { break }
+        let (_, generation) = try session.currentAnalyzer()
+
+        // While AppKit is scanned, a query renews the analyzer for the indexed
+        // image loaded since.
+        processImages.load(0x7_0000_0000)
+        _ = try await query.callers(of: .selector("description"), in: .image(path: Self.libobjcPath), options: RuntimeCrossReferenceQueryOptions()) { _ in }
+        let (renewed, renewedGeneration) = try session.currentAnalyzer()
+        #expect(renewedGeneration == generation + 1)
+
+        _ = try await preparation.value
+        let appKit = try #require(renewed.imageIndex(forPath: Self.appKitPath))
+        #expect(session.preparedImageIndices == [appKit])
+        #expect(session.startedPreparationCount == 1)
+        let deadline = Date().addingTimeInterval(60)
+        while renewed.approximateByteCount(ofImageDataAt: appKit) == 0, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(renewed.approximateByteCount(ofImageDataAt: appKit) > 0)
+    }
+
     @Test("A preparation request survives a round trip, and so does every outcome")
     func preparationWireFormat() throws {
         let command = RuntimeCrossReferences.PrepareCommand(
@@ -250,6 +383,38 @@ struct CrossReferencePreparationTests {
         }
         let options = RuntimeCrossReferenceQueryOptions(resultLimit: 10, maximumConcurrentScans: 2, preparedIndexByteLimit: 1 << 20)
         #expect(try JSONDecoder().decode(RuntimeCrossReferenceQueryOptions.self, from: JSONEncoder().encode(options)) == options)
+    }
+
+    /// The header addresses of the images loaded outside the shared cache, in
+    /// dyld's order, as a session asks for them: what a test loads and
+    /// unloads. The analyzer is made from the process's own images; only the
+    /// session's decisions follow this list.
+    private final class ProcessImageList: @unchecked Sendable {
+        private let lock = NSLock()
+        private var loadedHeaders: [UInt]
+
+        init(_ headers: [UInt]) {
+            loadedHeaders = headers
+        }
+
+        var headers: [UInt] {
+            lock.lock()
+            defer { lock.unlock() }
+            return loadedHeaders
+        }
+
+        /// dyld adds an image it loads after the others.
+        func load(_ header: UInt) {
+            lock.lock()
+            defer { lock.unlock() }
+            loadedHeaders.append(header)
+        }
+
+        func unload(_ header: UInt) {
+            lock.lock()
+            defer { lock.unlock() }
+            loadedHeaders.removeAll { $0 == header }
+        }
     }
 
     /// Collects a preparation's progress reports.
