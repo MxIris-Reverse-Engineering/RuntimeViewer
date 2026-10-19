@@ -1,12 +1,12 @@
-# Draft - 交叉引用：调用层级、被调与类型引用
+# 0056 - 交叉引用：调用层级、被调与类型引用
 
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-10-16
 - **最后更新**: 2026-10-19
 - **所属愿景**: 无（CLI 与 MCP 部分沿用[《无头 RuntimeViewer》](../Visions/HeadlessRuntimeViewer.md)「GUI、命令行与 MCP 三个前端共用同一套命令词汇」的取向，但不推进该愿景的步骤）
-- **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案 `draft-cross-reference-analysis`（在 MachOSwiftSection 仓库，分支 `feature/cross-reference-analysis`）
-- **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）
+- **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案 [0072-cross-reference-analysis](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection/blob/next/Documentations/Evolutions/0072-cross-reference-analysis.md)（MachOSwiftSection 的 `next`，2026-10-19 合入）
+- **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）；引擎与界面（落地步骤第 1–3、5、6 步）2026-10-19 合入 `next`，第 4 步在同一分支上继续
 - **配套文档**: 待定 —— 落地时判断：CLI / MCP 的目标写法与精度标注是否需要使用指南；两种桩布局、鉴别常量反查这些解析规则是否需要实现说明
 
 ## 摘要
@@ -1070,3 +1070,4 @@ Find 跨已索引镜像的第一次查询，另外省掉改名再导出表的 3.
 | 2026-10-19 | 更正前期调研「进程里能看到多少符号」：macOS 26.7 缓存 37.8% 的函数起点没有符号，Swift 新框架多被剥，并记下靠元数据能补回的估算 | 用户问为什么 Swift 类型的引用多是无名函数；原句「几乎全部函数都有名字」只数了符号条数。用户同意更正 |
 | 2026-10-19 | 函数图标按语言上色（Swift 蓝、C/C++ 绿、ObjC 橙、无名灰）；每层的无名函数收进最后一行「Unnamed Functions」，默认折叠，Find 导航页与 Inspector 都这样 | 用户提出；方案列给用户后回复「可以，改」 |
 | 2026-10-19 | 实现中自定：Inspector 每段只记住一个展开过的主题，不另外在换主题时清掉 | 换到别的主题时那个主题本来就是折叠的；切回刚展开过的主题仍是展开，只要期间没在这一段展开别的。为此再写一条换主题时清状态的订阅，得在 Rx 管线中途改状态，不值得 |
+| 2026-10-19 | 引擎与界面（落地步骤第 1–3、5、6 步）合入 next，取号 0056；状态保持 In Progress，第 4 步 CLI 与 MCP 在本分支继续 | 用户收尾时选「先合引擎和 GUI 进 next」：本提案写明从第 3 步起每一步都可以单独合入。MachOSwiftSection 的库提案先以 0072 合入它的 next（合并时把三个对照 Capstone 的测试移植到 swift-capstone 7，用户同意），Core 改回钉 MachOSwiftSection 的 next。配套专题文章与新术语这两项判断，留到第 4 步完成、状态改为 Implemented 时做 |

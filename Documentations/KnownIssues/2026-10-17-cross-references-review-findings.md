@@ -1,6 +1,6 @@
 # 交叉引用审查记录 — 2026-10-17
 
-审查对象：`feature/cross-references`（提案 [draft-cross-references](../Evolutions/draft-cross-references.md) 的第 1–3 步，head `7e9b011a`，分叉点 `bd05a280`）连同它依赖的 MachOSwiftSection `feature/cross-reference-analysis`（`c2cefa9c`）。MachOSwiftSection 那一半的条目、修法与测试记在它自己的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`，判为不修的登记在它的 `ReviewAdjudications.md` A62–A67。
+审查对象：`feature/cross-references`（提案 [0056-cross-references](../Evolutions/0056-cross-references.md) 的第 1–3 步，head `7e9b011a`，分叉点 `bd05a280`）连同它依赖的 MachOSwiftSection `feature/cross-reference-analysis`（`c2cefa9c`）。MachOSwiftSection 那一半的条目、修法与测试记在它自己的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`，判为不修的登记在它的 `ReviewAdjudications.md` A62–A67。
 
 **经过**
 1. 四个子代理按模块并行通读（只读），交回 47 条候选，去重后 43 条（两个仓库合计）。每条由本人回到代码复核，能造复现的造复现，按四问汇报。

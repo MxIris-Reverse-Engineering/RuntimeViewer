@@ -459,7 +459,7 @@ The project uses three Swift Package Manager packages:
   `CrossReferenceAnalysis`: the wire types (`RuntimeCrossReferenceSubject`, `RuntimeCrossReference`,
   …), the three commands and the engine-side on-demand scan. Same obligation as the injection module:
   `RuntimeCrossReferences.install()` once at every serving process's entry point; see
-  *Injection commands* below. Background: `Documentations/Evolutions/draft-cross-references.md`
+  *Injection commands* below. Background: `Documentations/Evolutions/0056-cross-references.md`
 - `RuntimeViewerCoreObjC` — Objective-C interop utilities (internal target)
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):

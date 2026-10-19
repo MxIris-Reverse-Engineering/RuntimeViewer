@@ -3,7 +3,7 @@
 **调查日期：** 2026-10-17
 **修复落地：** 本日，`feature/cross-references`（未合入 `next`）与 MachOSwiftSection `feature/cross-reference-analysis` @ `e470f193`
 **Severity：** High —— 结果最终是对的，但在 Debug 构建里一次查询要几分钟，期间除一个之外的所有核心满载；在侧栏里点来点去，Inspector 会对每个经过的对象再起一次这样的扫描
-**触发场景：** 交叉引用功能（提案 `draft-cross-references` 第 5、6 步）落地后第一次试用：在 Debug 构建（从 Xcode 运行）里打开 AppKit 的 Swift 结构体 `NSSmartNamingSuggestion`，Find 导航页的 Type References 与 Inspector 的 References 标签同时在查它的引用
+**触发场景：** 交叉引用功能（提案 `0056-cross-references` 第 5、6 步）落地后第一次试用：在 Debug 构建（从 Xcode 运行）里打开 AppKit 的 Swift 结构体 `NSSmartNamingSuggestion`，Find 导航页的 Type References 与 Inspector 的 References 标签同时在查它的引用
 
 ---
 
