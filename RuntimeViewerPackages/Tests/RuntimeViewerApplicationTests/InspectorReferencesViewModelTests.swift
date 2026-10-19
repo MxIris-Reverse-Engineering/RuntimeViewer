@@ -29,7 +29,7 @@ struct InspectorReferencesViewModelTests {
     }
 
     private static func loadedRows(_ state: InspectorReferencesViewModel.SectionState) -> [InspectorReferenceCellViewModel]? {
-        if case .loaded(let rows, _) = state { return rows }
+        if case .loaded(let rows, _, _) = state { return rows }
         return nil
     }
 
@@ -139,5 +139,60 @@ struct InspectorReferencesViewModelTests {
         defer { withExtendedLifetime(viewModel) {} }
 
         #expect(Self.isUnavailable(try await nextValue(from: output.typeReferences)))
+    }
+}
+
+/// How a loaded section of the References tab lists the functions nothing names: below one last
+/// row, collapsed until a click expands it for the section's subject. Built from rows the engine
+/// could have sent: the shared test engine's Foundation names every function it holds.
+@Suite("InspectorReferencesViewModel unnamed functions")
+@MainActor
+struct InspectorReferencesUnnamedFunctionsTests {
+    private static let image = "/System/Library/Frameworks/Sample.framework/Versions/A/Sample"
+    private static let thing = RuntimeObject(name: "SampleThing", displayName: "SampleThing", kind: .objc(.type(.class)), imagePath: image, children: [])
+    private static let request = FindCrossReferenceTree.LoadRequest.typeReferences(thing)
+
+    /// `alpha` and two functions nothing names, each using the type once.
+    private static func loadedRows() -> [FindCrossReferenceTree.LoadedRow] {
+        let type = RuntimeCrossReferenceTarget.type(name: "SampleThing", object: nil)
+        let functions: [(name: String?, address: UInt64)] = [("alpha", 0x2000), (nil, 0x3000), (nil, 0x4000)]
+        let references = functions.map { name, address in
+            let function = RuntimeFunctionReference(imagePath: image, address: address, displayName: name, symbolName: name, member: nil, foldedSymbolCount: 0)
+            return RuntimeCrossReference(referencingFunction: function, instructionAddress: address + 4, kind: .typeReference, target: type, precision: .exact, isRuntimeHelperCall: false)
+        }
+        // One image, as the tab asks for: its functions, those nothing names gathered last.
+        return FindCrossReferenceTree.rows(for: references, direction: .typeReferences).flatMap(\.children)
+    }
+
+    /// The section as listed, or `nil` when it is not loaded.
+    private static func listing(showsUnnamedFunctions: Bool) -> (rows: [InspectorReferenceCellViewModel], listedCount: Int, totalCount: Int)? {
+        let state = InspectorReferencesViewModel.sectionState(listing: loadedRows(), in: .typeReferences, for: request, showsUnnamedFunctions: showsUnnamedFunctions)
+        guard case .loaded(let rows, let listedCount, let totalCount) = state else { return nil }
+        return (rows, listedCount, totalCount)
+    }
+
+    @Test("collapsed, the functions nothing names are one last row that counts them")
+    func collapsedListsOneRow() throws {
+        let listing = try #require(Self.listing(showsUnnamedFunctions: false))
+
+        #expect(listing.rows.map(\.row.title) == ["alpha", "Unnamed Functions"])
+        #expect(listing.listedCount == 3)
+        #expect(listing.totalCount == 3)
+        let gatheringRow = try #require(listing.rows.last)
+        #expect(gatheringRow.unnamedFunctionsGroup == .init(section: .typeReferences, request: Self.request, isExpanded: false))
+        #expect(gatheringRow.appearance.icon === FindResultCellStyle.disclosureIcon(isExpanded: false))
+        #expect(listing.rows.first?.unnamedFunctionsGroup == nil, "a function's row goes where a function goes")
+    }
+
+    @Test("expanded, the functions follow their row, and the row points down")
+    func expandedListsTheFunctions() throws {
+        let listing = try #require(Self.listing(showsUnnamedFunctions: true))
+
+        #expect(listing.rows.map(\.row.title) == ["alpha", "Unnamed Functions", "Unnamed function 0x3000", "Unnamed function 0x4000"])
+        #expect(listing.listedCount == 3)
+        let gatheringRow = listing.rows[1]
+        #expect(gatheringRow.unnamedFunctionsGroup?.isExpanded == true)
+        #expect(gatheringRow.appearance.icon === FindResultCellStyle.disclosureIcon(isExpanded: true))
+        #expect(Set(listing.rows.map(\.identifier)).count == listing.rows.count, "every row has an identifier of its own")
     }
 }

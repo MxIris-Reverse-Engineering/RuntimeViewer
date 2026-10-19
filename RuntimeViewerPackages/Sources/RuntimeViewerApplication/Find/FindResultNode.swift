@@ -220,7 +220,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
                 appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
                 appearance.title = plainTitle(row.title, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
                 appearance.isSecondary = true
-            case .function, .target, .image:
+            case .function, .target, .image, .unnamedFunctions:
                 appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle, metrics: metrics)
             }
         }

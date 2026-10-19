@@ -11,12 +11,15 @@ import RuntimeViewerCrossReferences
 /// (`-userIsAttemptingToViewFaultedChildrenOfItem:`), a row that loads nothing
 /// loses its triangle, the roots open as they arrive, a call that comes back
 /// to a function higher up its own branch is marked and loads nothing more,
-/// and every level is sorted by title (`-compareText:`). Two things differ.
+/// and every level is sorted by title (`-compareText:`). Three things differ.
 /// A caller is one row however many times it calls — Xcode lists each call
 /// site, but a call site here is an instruction address with no source line
-/// to tell two apart, so the row counts them instead. And until its level
-/// arrives an expanded row shows a row saying so: a scan of the shared cache
-/// takes seconds, where Xcode's index answers at once.
+/// to tell two apart, so the row counts them instead. Until its level arrives
+/// an expanded row shows a row saying so: a scan of the shared cache takes
+/// seconds, where Xcode's index answers at once. And the functions nothing
+/// names go below one row at the end of their level, collapsed: Xcode's
+/// index has a name for everything, while an image stripped of its local
+/// symbols leaves most of its functions without one.
 ///
 /// A value: `FindSession` keeps one per search and builds the outline's rows
 /// from it each time something loads.
@@ -185,6 +188,8 @@ struct FindCrossReferenceTree {
             }
         case .image(let path):
             "image|\(path)"
+        case .unnamedFunctions:
+            "~unnamed"
         case .loading:
             "~loading"
         case .failure:
@@ -195,13 +200,15 @@ struct FindCrossReferenceTree {
     // MARK: - Grouping
 
     /// A level of the tree out of what the engine found: one row per caller,
-    /// per callee, or per image with its functions under it.
+    /// per callee, or per image with its functions under it — in each, the
+    /// functions nothing names gathered last (`gatheringUnnamedFunctions`).
     static func rows(for references: [RuntimeCrossReference], direction: FindCrossReferenceDirection) -> [LoadedRow] {
         switch direction {
         case .callers:
-            return grouped(references, by: \.referencingFunction)
+            let callerRows = grouped(references, by: \.referencingFunction)
                 .map { function, references in LoadedRow(row: row(for: .function(function), references: references, direction: direction)) }
                 .sorted(by: titleOrder)
+            return gatheringUnnamedFunctions(callerRows, direction: direction)
         case .callees:
             // In the order the function makes them, as its body reads.
             var order: [String] = []
@@ -221,10 +228,11 @@ struct FindCrossReferenceTree {
                 }
                 referencesByKey[key, default: []].append(reference)
             }
-            return order.compactMap { key in
+            let calleeRows = order.compactMap { key -> LoadedRow? in
                 guard let item = itemsByKey[key], let references = referencesByKey[key] else { return nil }
                 return LoadedRow(row: row(for: item, references: references, direction: direction))
             }
+            return gatheringUnnamedFunctions(calleeRows, direction: direction)
         case .typeReferences:
             let referencesByImage = Dictionary(grouping: references, by: \.referencingFunction.imagePath)
             return referencesByImage
@@ -234,11 +242,35 @@ struct FindCrossReferenceTree {
                         .sorted(by: titleOrder)
                     return LoadedRow(
                         row: FindCrossReferenceRow(item: .image(path: imagePath), direction: direction, referenceCount: references.count, precision: surestPrecision(of: references)),
-                        children: functionRows
+                        children: gatheringUnnamedFunctions(functionRows, direction: direction)
                     )
                 }
                 .sorted(by: titleOrder)
         }
+    }
+
+    /// `rows` with the functions nothing names taken out, in their order, and
+    /// gathered below one row at the end, which shows collapsed until it is
+    /// expanded; `rows` itself when there are none. Each of them still loads
+    /// its own level.
+    static func gatheringUnnamedFunctions(_ rows: [LoadedRow], direction: FindCrossReferenceDirection) -> [LoadedRow] {
+        var namedRows: [LoadedRow] = []
+        var unnamedRows: [LoadedRow] = []
+        for loadedRow in rows {
+            if case .function(let function) = loadedRow.row.item, function.displayName == nil {
+                unnamedRows.append(loadedRow)
+            } else {
+                namedRows.append(loadedRow)
+            }
+        }
+        guard !unnamedRows.isEmpty else { return rows }
+        let gatheringRow = FindCrossReferenceRow(
+            item: .unnamedFunctions(count: unnamedRows.count),
+            direction: direction,
+            referenceCount: unnamedRows.reduce(0) { $0 + $1.row.referenceCount },
+            precision: surestPrecision(among: Set(unnamedRows.compactMap(\.row.precision)))
+        )
+        return namedRows + [LoadedRow(row: gatheringRow, children: unnamedRows)]
     }
 
     private static func row(for item: FindCrossReferenceRow.Item, references: [RuntimeCrossReference], direction: FindCrossReferenceDirection) -> FindCrossReferenceRow {
@@ -267,7 +299,10 @@ struct FindCrossReferenceTree {
 
     /// Exact when any one is: the row then certainly stands for the subject.
     static func surestPrecision(of references: [RuntimeCrossReference]) -> RuntimeCrossReferencePrecision? {
-        let precisions = Set(references.map(\.precision))
+        surestPrecision(among: Set(references.map(\.precision)))
+    }
+
+    private static func surestPrecision(among precisions: Set<RuntimeCrossReferencePrecision>) -> RuntimeCrossReferencePrecision? {
         if precisions.contains(.exact) { return .exact }
         if precisions.contains(.matchedBySelector) { return .matchedBySelector }
         if precisions.contains(.candidate) { return .candidate }

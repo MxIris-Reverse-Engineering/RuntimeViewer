@@ -24,9 +24,10 @@ public struct RuntimeMemberReference: Hashable, Codable, Sendable {
 
 /// A function the analysis scanned, named or not.
 ///
-/// Half the functions in a dyld shared cache carry no symbol; they are
-/// functions all the same, with `displayName` and `symbolName` both `nil`, and
-/// a front end shows them by address and image.
+/// More than a third of the functions in macOS 26.7's dyld shared cache carry
+/// no symbol — nine in ten in some Swift frameworks; they are functions all the
+/// same, with `displayName` and `symbolName` both `nil`, and a front end shows
+/// them by address and image.
 public struct RuntimeFunctionReference: Hashable, Codable, Sendable {
     public let imagePath: String
     /// The unslid address of the first instruction — what `dyld_info` and a
@@ -52,6 +53,44 @@ public struct RuntimeFunctionReference: Hashable, Codable, Sendable {
         self.symbolName = symbolName
         self.member = member
         self.foldedSymbolCount = foldedSymbolCount
+    }
+
+    /// The language the function is written in, or `nil` for one nothing
+    /// names. A member says so outright and a symbol by its spelling; a name
+    /// with neither is one Swift metadata gave, since the Objective-C method
+    /// lists name a method together with its member.
+    public var language: RuntimeFunctionLanguage? {
+        if let member {
+            return member.kind.isObjC ? .objectiveC : .swift
+        }
+        if let symbolName {
+            return RuntimeFunctionLanguage(symbol: symbolName)
+        }
+        guard let displayName else { return nil }
+        return displayName.hasPrefix("-[") || displayName.hasPrefix("+[") ? .objectiveC : .swift
+    }
+}
+
+/// The language a function is written in, as far as its name tells.
+public enum RuntimeFunctionLanguage: Hashable, Sendable {
+    case swift
+    case objectiveC
+    /// Neither of the others: C, C++, a block.
+    case cOrCPlusPlus
+
+    /// The language a symbol's spelling gives away: `_$s…` and the older
+    /// Swift manglings are Swift, `-[Class selector]` and `+[…]` are
+    /// Objective-C methods, and the rest — `_CFRelease`, `__ZN…`, a block — is
+    /// C or C++.
+    public init(symbol: String) {
+        let name = symbol.hasPrefix("_") ? symbol.dropFirst() : Substring(symbol)
+        if name.hasPrefix("$s") || name.hasPrefix("$S") || name.hasPrefix("$e") || name.hasPrefix("_T0") {
+            self = .swift
+        } else if symbol.hasPrefix("-[") || symbol.hasPrefix("+[") {
+            self = .objectiveC
+        } else {
+            self = .cOrCPlusPlus
+        }
     }
 }
 

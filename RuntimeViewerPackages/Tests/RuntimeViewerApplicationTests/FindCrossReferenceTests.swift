@@ -3,6 +3,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
+import RuntimeViewerUI
 import Testing
 @testable import RuntimeViewerApplication
 
@@ -86,6 +87,116 @@ struct FindCrossReferenceTreeTests {
         #expect(loadedRows[0].children.map(\.row.title) == ["useSample"])
         #expect(loadedRows[0].children[0].row.referenceCount == 2)
         #expect(loadedRows[0].children[0].row.expandableFunction == nil, "a referencing function is where Type References stops")
+    }
+
+    // MARK: - Unnamed functions
+
+    @Test("callers nothing names go below one last row, after the named ones in title order")
+    func unnamedCallersAreGatheredLast() throws {
+        let beta = Self.function("beta", address: 0x3000)
+        let alpha = Self.function("alpha", address: 0x2000)
+        let firstUnnamed = Self.function(nil, address: 0x4000)
+        let secondUnnamed = Self.function(nil, address: 0x5000)
+        let references = [
+            Self.reference(from: secondUnnamed, to: .function(Self.subject), at: 0x5004),
+            Self.reference(from: beta, to: .function(Self.subject), at: 0x3004),
+            Self.reference(from: firstUnnamed, to: .function(Self.subject), at: 0x4004),
+            Self.reference(from: firstUnnamed, to: .function(Self.subject), at: 0x4008),
+            Self.reference(from: alpha, to: .function(Self.subject), at: 0x2004),
+        ]
+
+        let loadedRows = FindCrossReferenceTree.rows(for: references, direction: .callers)
+
+        #expect(loadedRows.map(\.row.title) == ["alpha", "beta", "Unnamed Functions"])
+        let gatheringRow = try #require(loadedRows.last)
+        #expect(gatheringRow.row.item == .unnamedFunctions(count: 2))
+        #expect(gatheringRow.row.subtitle == "2 functions · 3 calls")
+        #expect(gatheringRow.children.map(\.row.item) == [.function(firstUnnamed), .function(secondUnnamed)])
+        #expect(gatheringRow.row.navigationTarget == nil)
+    }
+
+    @Test("callees nothing names go below one last row, the others keeping the order they are made in")
+    func unnamedCalleesAreGatheredLast() {
+        let zeta = Self.function("zeta", address: 0x5000)
+        let unnamed = Self.function(nil, address: 0x6000)
+        let alpha = Self.function("alpha", address: 0x4000)
+        let references = [
+            Self.reference(from: Self.subject, to: .function(zeta), at: 0x1004),
+            Self.reference(from: Self.subject, to: .function(unnamed), at: 0x1008),
+            Self.reference(from: Self.subject, to: .function(alpha), at: 0x100C),
+        ]
+
+        let rows = FindCrossReferenceTree.rows(for: references, direction: .callees).map(\.row)
+
+        #expect(rows.map(\.title) == ["zeta", "alpha", "Unnamed Functions"])
+    }
+
+    @Test("under each image of a type's references, the functions nothing names go below one last row")
+    func unnamedTypeReferencesAreGatheredUnderTheirImage() {
+        let named = Self.function("useSample", address: 0x2000)
+        let unnamed = Self.function(nil, address: 0x3000)
+        let type = RuntimeCrossReferenceTarget.type(name: "Thing", object: nil)
+
+        let loadedRows = FindCrossReferenceTree.rows(for: [
+            Self.reference(from: unnamed, to: type, at: 0x3004),
+            Self.reference(from: named, to: type, at: 0x2004),
+        ], direction: .typeReferences)
+
+        #expect(loadedRows.map(\.row.title) == ["Sample"])
+        #expect(loadedRows[0].children.map(\.row.title) == ["useSample", "Unnamed Functions"])
+        #expect(loadedRows[0].children[1].children.map(\.row.item) == [.function(unnamed)])
+    }
+
+    @Test("the row gathering them shows collapsed, and each function below it still loads its own callers")
+    func gatheredFunctionsShowCollapsedAndStillLoad() throws {
+        let unnamed = Self.function(nil, address: 0x4000)
+        var tree = FindCrossReferenceTree(direction: .callers, roots: [.function(Self.subject)])
+        let rootIdentifier = tree.rootIdentifier(at: 0)
+        tree.setLoadState(.loaded(FindCrossReferenceTree.rows(for: [
+            Self.reference(from: unnamed, to: .function(Self.subject), at: 0x4004),
+        ], direction: .callers)), of: rootIdentifier)
+
+        let built = tree.build(showsRuntimeHelperCalls: false)
+
+        let gatheringNode = try #require(built.nodes.first?.children.first)
+        #expect(gatheringNode.identifier == rootIdentifier + "/~unnamed")
+        // The tree shows expanded what it opened — its roots — and what the user opened.
+        #expect(!tree.expandedIdentifiers.contains(gatheringNode.identifier))
+        #expect(built.loadRequests[gatheringNode.identifier] == nil, "its functions came with the level")
+        let unnamedNode = try #require(gatheringNode.children.first)
+        #expect(built.loadRequests[unnamedNode.identifier] == .calls(.function(imagePath: Self.image, address: 0x4000)))
+    }
+
+    // MARK: - Icons
+
+    @Test("a function's icon takes the colour of its language: Swift blue, C and C++ green, Objective-C orange, none grey")
+    func functionIconsTakeTheirLanguagesColours() {
+        let size = FindResultCellStyle.Metrics.navigator.iconSize
+        func icon(of item: FindCrossReferenceRow.Item) -> NSImage? {
+            FindResultNode.crossReference(FindCrossReferenceRow(item: item, direction: .callers), identifier: "row", children: []).appearance.icon
+        }
+        func badge(_ text: String, _ color: IDEIconColor) -> NSImage {
+            RuntimeObjectIcon.icon(text: text, color: color, size: size)
+        }
+        let thing = RuntimeObject(name: "SampleThing", displayName: "SampleThing", kind: .objc(.type(.class)), imagePath: Self.image, children: [])
+        let swiftSymbol = RuntimeFunctionReference(imagePath: Self.image, address: 0x2000, displayName: "Sample.Thing.run()", symbolName: "_$s6Sample5ThingV3runyyF", member: nil, foldedSymbolCount: 0)
+        // Rebuilt from Swift metadata: no symbol.
+        let swiftMetadataName = RuntimeFunctionReference(imagePath: Self.image, address: 0x2100, displayName: "type metadata accessor for Sample.Thing", symbolName: nil, member: nil, foldedSymbolCount: 0)
+        let objectiveCMethod = RuntimeFunctionReference(
+            imagePath: Self.image, address: 0x2200, displayName: "-[SampleThing run]", symbolName: "-[SampleThing run]",
+            member: RuntimeMemberReference(object: thing, name: "run", kind: .objcMethod, isStatic: false), foldedSymbolCount: 0
+        )
+
+        #expect(icon(of: .function(swiftSymbol)) === badge("f", .blue))
+        #expect(icon(of: .function(swiftMetadataName)) === badge("f", .blue))
+        #expect(icon(of: .function(Self.function("_sample_run", address: 0x2300))) === badge("f", .green))
+        #expect(icon(of: .function(Self.function("__ZN6Sample3runEv", address: 0x2400))) === badge("f", .green))
+        #expect(icon(of: .function(objectiveCMethod)) === badge("M", .orange))
+        #expect(icon(of: .function(Self.function(nil, address: 0x2500))) === badge("f", .gray))
+        // A callee another image exports, by its symbol.
+        #expect(icon(of: .target(.importedSymbol(name: "_$sSS5countSivg"))) === badge("f", .blue))
+        #expect(icon(of: .target(.importedSymbol(name: "_strlen"))) === badge("f", .green))
+        #expect(icon(of: .unnamedFunctions(count: 3)) === badge("f", .gray))
     }
 
     // MARK: - Loading

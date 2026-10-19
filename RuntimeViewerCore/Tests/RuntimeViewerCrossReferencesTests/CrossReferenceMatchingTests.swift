@@ -161,4 +161,37 @@ struct CrossReferenceMatchingTests {
         #expect(CrossReferenceNaming.displayName(forClassName: "_TtC7SwiftUI13PinnedBarView") == "SwiftUI.PinnedBarView")
         #expect(CrossReferenceNaming.displayName(forClassName: "NSWindow") == "NSWindow")
     }
+
+    // MARK: - Languages
+
+    /// What the front ends colour a function's icon by.
+    @Test("A symbol's spelling tells Swift, an Objective-C method, and C or C++ apart")
+    func symbolLanguages() {
+        #expect(RuntimeFunctionLanguage(symbol: "_$s7SwiftUI9ViewGraphC13updateOutputs2atyAA4TimeV_tF") == .swift)
+        #expect(RuntimeFunctionLanguage(symbol: "$s7SwiftUI4TextVMa") == .swift)
+        #expect(RuntimeFunctionLanguage(symbol: "__T07SwiftUI4TextVMa") == .swift)
+        #expect(RuntimeFunctionLanguage(symbol: "-[NSWindow makeKeyAndOrderFront:]") == .objectiveC)
+        #expect(RuntimeFunctionLanguage(symbol: "+[NSColor redColor]") == .objectiveC)
+        #expect(RuntimeFunctionLanguage(symbol: "_CFRelease") == .cOrCPlusPlus)
+        #expect(RuntimeFunctionLanguage(symbol: "__ZN3WTF6String6numberEi") == .cOrCPlusPlus)
+        // A block in an Objective-C method is C: the method is only in its name.
+        #expect(RuntimeFunctionLanguage(symbol: "___34-[NSWindow _doOrderWindow]_block_invoke") == .cOrCPlusPlus)
+    }
+
+    @Test("A function's language comes from its member, then its symbol; a name without either is Swift metadata's, and no name tells nothing")
+    func functionLanguages() {
+        let image = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
+        let window = RuntimeObject(name: "NSWindow", displayName: "NSWindow", kind: .objc(.type(.class)), imagePath: image, children: [])
+        let method = RuntimeMemberReference(object: window, name: "makeKeyAndOrderFront:", kind: .objcMethod, isStatic: false)
+        func function(displayName: String?, symbolName: String?, member: RuntimeMemberReference? = nil) -> RuntimeFunctionReference {
+            RuntimeFunctionReference(imagePath: image, address: 0x1000, displayName: displayName, symbolName: symbolName, member: member, foldedSymbolCount: 0)
+        }
+
+        // Named by the Objective-C method lists: no symbol, but the member.
+        #expect(function(displayName: "-[NSWindow makeKeyAndOrderFront:]", symbolName: nil, member: method).language == .objectiveC)
+        #expect(function(displayName: "CFRelease", symbolName: "_CFRelease").language == .cOrCPlusPlus)
+        // Rebuilt from Swift metadata: no symbol, no member.
+        #expect(function(displayName: "type metadata accessor for AppKit.NSSmartNamingSuggestion", symbolName: nil).language == .swift)
+        #expect(function(displayName: nil, symbolName: nil).language == nil)
+    }
 }

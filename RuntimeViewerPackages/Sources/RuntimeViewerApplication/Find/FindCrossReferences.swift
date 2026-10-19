@@ -146,6 +146,10 @@ public struct FindCrossReferenceRow: Hashable, Sendable {
         case target(RuntimeCrossReferenceTarget)
         /// The image a type's references below come from.
         case image(path: String)
+        /// The functions nothing names, gathered below one row at the end of
+        /// their level, which shows collapsed: in an image stripped of its
+        /// local symbols they outnumber the rest.
+        case unnamedFunctions(count: Int)
         /// Children being loaded, or not loaded yet.
         case loading
         /// Why the children could not be loaded.
@@ -188,6 +192,7 @@ public struct FindCrossReferenceRow: Hashable, Sendable {
         case .function(let function): FindCrossReferenceNaming.title(of: function)
         case .target(let target): FindCrossReferenceNaming.title(of: target)
         case .image(let path): FindScope.imageName(of: path)
+        case .unnamedFunctions: "Unnamed Functions"
         case .loading: "Loading…"
         case .failure(let message): message
         }
@@ -195,12 +200,14 @@ public struct FindCrossReferenceRow: Hashable, Sendable {
 
     /// `AppKit · 3 calls · by selector`: where the row's function is, how many
     /// instructions it stands for when more than one, and how sure they are
-    /// when not exact.
+    /// when not exact. The row gathering unnamed functions counts them first.
     public var subtitle: String {
         var parts: [String] = []
         switch item {
         case .function(let function):
             parts.append(FindScope.imageName(of: function.imagePath))
+        case .unnamedFunctions(let count):
+            parts.append(count == 1 ? "1 function" : "\(count) functions")
         case .target, .image, .loading, .failure:
             break
         }
@@ -231,8 +238,15 @@ public struct FindCrossReferenceRow: Hashable, Sendable {
         switch item {
         case .function(let function): function.member?.object
         case .target(.type(_, let object)): object
-        case .target, .image, .loading, .failure: nil
+        case .target, .image, .unnamedFunctions, .loading, .failure: nil
         }
+    }
+
+    /// Whether it is the row the unnamed functions of its level are gathered
+    /// below.
+    var gathersUnnamedFunctions: Bool {
+        if case .unnamedFunctions = item { return true }
+        return false
     }
 }
 
@@ -258,7 +272,8 @@ public enum FindCrossReferenceNaming {
         function.displayName ?? unnamedFunctionTitle(address: function.address)
     }
 
-    /// A function nothing names: half the functions in a shared cache.
+    /// A function nothing names: more than a third of the functions in
+    /// macOS 26.7's shared cache, nine in ten in some Swift frameworks.
     public static func unnamedFunctionTitle(address: UInt64) -> String {
         "Unnamed function 0x\(hexadecimal(address))"
     }
@@ -309,7 +324,7 @@ extension FindResultNode {
                 return .function(function)
             case .target(.type(_, let object?)) where FindCrossReferenceRoot.isReferenceableType(object):
                 return .type(object)
-            case .target, .image, .loading, .failure:
+            case .target, .image, .unnamedFunctions, .loading, .failure:
                 return nil
             }
         case .member(let match):

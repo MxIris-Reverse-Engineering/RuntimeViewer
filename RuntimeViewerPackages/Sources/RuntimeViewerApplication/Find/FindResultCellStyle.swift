@@ -90,8 +90,8 @@ public enum FindResultCellStyle {
             return functionBadge(for: function, size: size)
         case .target(.selector):
             return badge("M", color: .orange, size: size)
-        case .target(.importedSymbol):
-            return badge("f", color: .gray, size: size)
+        case .target(.importedSymbol(let name)):
+            return languageBadge(for: RuntimeFunctionLanguage(symbol: name), size: size)
         case .target(.type(_, let object?)):
             return RuntimeObjectIcon.icon(for: object.kind, size: size)
         case .target(.type(_, nil)):
@@ -103,6 +103,8 @@ public enum FindResultCellStyle {
         case .image(let path):
             // As the Report navigator draws an image.
             return path.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon
+        case .unnamedFunctions:
+            return languageBadge(for: nil, size: size)
         case .loading:
             return loadingIcon
         case .failure:
@@ -125,14 +127,36 @@ public enum FindResultCellStyle {
         }
     }
 
-    /// A member's badge, `f` in green for a named function of no type, and
-    /// in grey for one nothing names.
+    /// A member's badge; otherwise the badge of the language its name tells.
     private static func functionBadge(for function: RuntimeFunctionReference, size: CGFloat) -> NSImage? {
         if let member = function.member {
             return memberBadge(for: member, size: size)
         }
-        return badge("f", color: function.displayName == nil ? .gray : .green, size: size)
+        return languageBadge(for: function.language, size: size)
     }
+
+    /// A function's badge by its language, in the colours the member badges
+    /// use: `f` in blue for Swift, `M` in orange for an Objective-C method, `f`
+    /// in green for C and C++, and in grey for a function nothing names.
+    private static func languageBadge(for language: RuntimeFunctionLanguage?, size: CGFloat) -> NSImage? {
+        switch language {
+        case .swift?: badge("f", color: .blue, size: size)
+        case .objectiveC?: badge("M", color: .orange, size: size)
+        case .cOrCPlusPlus?: badge("f", color: .green, size: size)
+        case nil: badge("f", color: .gray, size: size)
+        }
+    }
+
+    /// The disclosure the Inspector's References tab draws on the row
+    /// gathering a section's unnamed functions, which has no outline to draw
+    /// one: pointing right while the row is collapsed, down while expanded.
+    static func disclosureIcon(isExpanded: Bool) -> NSImage? {
+        isExpanded ? expandedDisclosureIcon : collapsedDisclosureIcon
+    }
+
+    private static let collapsedDisclosureIcon: NSImage? = SFSymbols(systemName: .chevronRight, pointSize: 10, weight: .semibold).nsImage
+
+    private static let expandedDisclosureIcon: NSImage? = SFSymbols(systemName: .chevronDown, pointSize: 10, weight: .semibold).nsImage
 
     private static func badge(_ text: String, color: IDEIconColor, size: CGFloat) -> NSImage? {
         RuntimeObjectIcon.icon(text: text, color: color, size: size)

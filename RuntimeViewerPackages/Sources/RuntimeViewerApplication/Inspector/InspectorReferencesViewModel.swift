@@ -50,17 +50,18 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
         /// whose references are not found for the references.
         case unavailable
         case loading
-        /// The first `rows` of `totalCount`.
-        case loaded(rows: [InspectorReferenceCellViewModel], totalCount: Int)
+        /// The rows as listed — the functions with names, then the row gathering the unnamed ones
+        /// and, while it is expanded, those — standing for `listedCount` of `totalCount` functions.
+        case loaded(rows: [InspectorReferenceCellViewModel], listedCount: Int, totalCount: Int)
         case failed(String)
     }
 
-    /// `SectionState` as it leaves the background fetch: the rows are built on the main
-    /// scheduler, where their icons can be.
+    /// `SectionState` as it leaves the background fetch, with the subject it answers: the rows are
+    /// built on the main scheduler, where their icons can be.
     private enum SectionResult {
         case unavailable
         case loading
-        case loaded([FindCrossReferenceRow])
+        case loaded(FindCrossReferenceTree.LoadRequest, [FindCrossReferenceTree.LoadedRow])
         case failed(String)
     }
 
@@ -89,6 +90,11 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
 
     @RxObserved
     public private(set) var typeReferencesState: SectionState = .unavailable
+
+    /// Each section's subject whose unnamed functions are listed. A click on the row gathering them
+    /// expands them for that subject alone, so the section's next subject starts collapsed.
+    @RxObserved
+    private var expandedUnnamedFunctions: [Section: FindCrossReferenceTree.LoadRequest] = [:]
 
     @MemberwiseInit(.public)
     public struct Input {
@@ -149,7 +155,11 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     public func transform(_ input: Input) -> Output {
         input.rowClicked.emitOnNext { [weak self] cellViewModel in
             guard let self else { return }
-            open(cellViewModel.row)
+            if let unnamedFunctionsGroup = cellViewModel.unnamedFunctionsGroup {
+                toggle(unnamedFunctionsGroup)
+            } else {
+                open(cellViewModel.row)
+            }
         }
         .disposed(by: rx.disposeBag)
 
@@ -181,11 +191,12 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     // MARK: - Loading
 
     /// One section's pipeline: each subject is asked for once, the newest replacing the one in
-    /// flight, behind the shared loading placeholder.
+    /// flight, behind the shared loading placeholder. Expanding or collapsing the unnamed functions
+    /// lists the rows again without asking anything.
     private func sectionStates(_ section: Section, from subjects: Observable<FindCrossReferenceTree.LoadRequest?>) -> Observable<SectionState> {
         // A subject is asked for once the tab is on screen, and only once:
         // hiding and showing the tab again asks nothing more.
-        Observable.combineLatest(subjects.distinctUntilChanged(), $isVisible.asObservable())
+        let results = Observable.combineLatest(subjects.distinctUntilChanged(), $isVisible.asObservable())
             .filter { _, isVisible in isVisible }
             .map { request, _ in request }
             .distinctUntilChanged()
@@ -200,7 +211,7 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
                 )
                 return Observable<SectionResult>.async {
                     do {
-                        return .loaded(try await Self.rows(for: request, in: section, options: options, engine: engine))
+                        return .loaded(request, try await Self.rows(for: request, in: section, options: options, engine: engine))
                     } catch {
                         return .failed(FindSession.crossReferenceFailureMessage(for: error))
                     }
@@ -212,39 +223,73 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
                 )
             }
             .observeOnMainScheduler()
-            .map { result -> SectionState in
-                switch result {
-                case .unavailable:
-                    return .unavailable
-                case .loading:
-                    return .loading
-                case .failed(let message):
-                    return .failed(message)
-                case .loaded(let rows):
-                    let cellViewModels = rows.prefix(Self.rowLimit).map { row in
-                        InspectorReferenceCellViewModel(row: row, identifier: "inspector|\(section)|" + FindCrossReferenceTree.key(of: row.item))
-                    }
-                    return .loaded(rows: Array(cellViewModels), totalCount: rows.count)
+        let expandedRequest = $expandedUnnamedFunctions.asObservable()
+            .map { $0[section] }
+            .distinctUntilChanged()
+        return Observable.combineLatest(results, expandedRequest) { result, expandedRequest -> SectionState in
+            switch result {
+            case .unavailable:
+                return .unavailable
+            case .loading:
+                return .loading
+            case .failed(let message):
+                return .failed(message)
+            case .loaded(let request, let loadedRows):
+                return Self.sectionState(listing: loadedRows, in: section, for: request, showsUnnamedFunctions: expandedRequest == request)
+            }
+        }
+    }
+
+    /// A loaded section as listed: the functions with names, up to `rowLimit`, then the row the
+    /// unnamed ones are gathered below — collapsed unless `showsUnnamedFunctions` — and while it is
+    /// expanded those, up to `rowLimit` again. Every function counts toward the total, listed or not.
+    static func sectionState(listing loadedRows: [FindCrossReferenceTree.LoadedRow], in section: Section, for request: FindCrossReferenceTree.LoadRequest, showsUnnamedFunctions: Bool) -> SectionState {
+        let identifierPrefix = "inspector|\(section)|"
+        let namedRows = loadedRows.filter { !$0.row.gathersUnnamedFunctions }.map(\.row)
+        var cellViewModels = namedRows.prefix(rowLimit).map { row in
+            InspectorReferenceCellViewModel(row: row, identifier: identifierPrefix + FindCrossReferenceTree.key(of: row.item))
+        }
+        var listedCount = cellViewModels.count
+        var totalCount = namedRows.count
+        if let gatheringRow = loadedRows.first(where: \.row.gathersUnnamedFunctions) {
+            let unnamedRows = gatheringRow.children.map(\.row)
+            let listedUnnamedRows = unnamedRows.prefix(rowLimit)
+            listedCount += listedUnnamedRows.count
+            totalCount += unnamedRows.count
+            cellViewModels.append(InspectorReferenceCellViewModel(
+                row: gatheringRow.row,
+                identifier: identifierPrefix + FindCrossReferenceTree.key(of: gatheringRow.row.item),
+                unnamedFunctionsGroup: InspectorReferenceCellViewModel.UnnamedFunctionsGroup(section: section, request: request, isExpanded: showsUnnamedFunctions)
+            ))
+            if showsUnnamedFunctions {
+                cellViewModels += listedUnnamedRows.map { row in
+                    InspectorReferenceCellViewModel(row: row, identifier: identifierPrefix + FindCrossReferenceTree.key(of: row.item))
                 }
             }
+        }
+        return .loaded(rows: cellViewModels, listedCount: listedCount, totalCount: totalCount)
     }
 
     /// One level of the section, in the subject's own image, as the Find navigator groups it: one
     /// row per caller or callee, the runtime helper calls left out; for the type, its referencing
-    /// functions, by title.
-    private nonisolated static func rows(for request: FindCrossReferenceTree.LoadRequest, in section: Section, options: RuntimeCrossReferenceQueryOptions, engine: RuntimeEngine) async throws -> [FindCrossReferenceRow] {
+    /// functions, by title. In each, the functions nothing names are gathered last.
+    private nonisolated static func rows(for request: FindCrossReferenceTree.LoadRequest, in section: Section, options: RuntimeCrossReferenceQueryOptions, engine: RuntimeEngine) async throws -> [FindCrossReferenceTree.LoadedRow] {
         switch (section, request) {
         case (.callers, .calls(.member(let member))):
             let result = try await engine.callers(of: .member(member), in: .image(path: member.object.imagePath), options: options)
-            return FindCrossReferenceTree.rows(for: result.references, direction: .callers).map(\.row)
+            return FindCrossReferenceTree.rows(for: result.references, direction: .callers)
         case (.callees, .calls(let subject)):
             let result = try await engine.callees(of: subject, options: options)
-            return FindCrossReferenceTree.rows(for: result.references, direction: .callees).map(\.row).filter { !$0.isRuntimeHelperCall }
+            return FindCrossReferenceTree.rows(for: result.references, direction: .callees).filter { !$0.row.isRuntimeHelperCall }
         case (.typeReferences, .typeReferences(let object)):
             let result = try await engine.typeReferences(to: object, in: .image(path: object.imagePath), options: options)
-            return FindCrossReferenceTree.rows(for: result.references, direction: .typeReferences)
-                .flatMap { $0.children.map(\.row) }
-                .sorted { ($0.title as NSString).compare($1.title) == .orderedAscending }
+            // The functions below each image, taken out of their images' rows and of the rows
+            // gathering the unnamed ones, then ordered and gathered again as one list.
+            let functionRows = FindCrossReferenceTree.rows(for: result.references, direction: .typeReferences)
+                .flatMap(\.children)
+                .flatMap { $0.row.gathersUnnamedFunctions ? $0.children : [$0] }
+                .sorted { ($0.row.title as NSString).compare($1.row.title) == .orderedAscending }
+            return FindCrossReferenceTree.gatheringUnnamedFunctions(functionRows, direction: .typeReferences)
         default:
             return []
         }
@@ -263,9 +308,14 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
             memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: nil, inNewTab: false, in: documentState, generationOptions: appDefaults.options)
         case .target(.type(_, let object?)):
             FindCrossReferenceNavigation.open(object, highlighting: nil, inNewTab: false, in: documentState)
-        case .target, .image, .loading, .failure:
+        case .target, .image, .unnamedFunctions, .loading, .failure:
             break
         }
+    }
+
+    /// Expands the unnamed functions the row gathers, or collapses them.
+    private func toggle(_ unnamedFunctionsGroup: InspectorReferenceCellViewModel.UnnamedFunctionsGroup) {
+        expandedUnnamedFunctions[unnamedFunctionsGroup.section] = unnamedFunctionsGroup.isExpanded ? nil : unnamedFunctionsGroup.request
     }
 
     /// What Show in Find Navigator runs for a section.
@@ -280,22 +330,39 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     }
 }
 
-/// One row of a section of the Inspector's References tab: a caller, a callee, or a function using
-/// the type. Fixed once made — a section's new answer brings new rows — so its appearance is a plain
-/// value: a Find navigator row of the same function, a size down (`FindResultCellStyle.Metrics.inspector`),
+/// One row of a section of the Inspector's References tab: a caller, a callee, a function using
+/// the type, or the row the unnamed ones are gathered below. Fixed once made — a section's new
+/// answer, or the unnamed functions expanding, brings new rows — so its appearance is a plain value:
+/// a Find navigator row of the same function, a size down (`FindResultCellStyle.Metrics.inspector`),
 /// as the rest of the tab is set in the small system font.
 public final class InspectorReferenceCellViewModel: NSObject, @unchecked Sendable {
+    /// What the row gathering a section's unnamed functions toggles, and which way it points.
+    struct UnnamedFunctionsGroup: Equatable {
+        let section: InspectorReferencesViewModel.Section
+        let request: FindCrossReferenceTree.LoadRequest
+        let isExpanded: Bool
+    }
+
     public let row: FindCrossReferenceRow
 
     public let appearance: FindResultCellAppearance
 
     let identifier: String
 
-    init(row: FindCrossReferenceRow, identifier: String) {
+    /// Set on the row gathering the unnamed functions, which a click expands or collapses.
+    let unnamedFunctionsGroup: UnnamedFunctionsGroup?
+
+    init(row: FindCrossReferenceRow, identifier: String, unnamedFunctionsGroup: UnnamedFunctionsGroup? = nil) {
         self.row = row
         self.identifier = identifier
+        self.unnamedFunctionsGroup = unnamedFunctionsGroup
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        self.appearance = FindResultNode.makeAppearance(for: .crossReference(row), metrics: .inspector)
+        var appearance = FindResultNode.makeAppearance(for: .crossReference(row), metrics: .inspector)
+        // A list has no disclosure triangle to show the row expands; the icon shows it instead.
+        if let unnamedFunctionsGroup {
+            appearance.icon = FindResultCellStyle.disclosureIcon(isExpanded: unnamedFunctionsGroup.isExpanded)
+        }
+        self.appearance = appearance
         #else
         self.appearance = FindResultCellAppearance()
         #endif
@@ -308,7 +375,7 @@ extension InspectorReferenceCellViewModel: Differentiable {
     public var differenceIdentifier: String { identifier }
 
     public func isContentEqual(to source: InspectorReferenceCellViewModel) -> Bool {
-        row == source.row
+        row == source.row && unnamedFunctionsGroup == source.unnamedFunctionsGroup
     }
 }
 #endif

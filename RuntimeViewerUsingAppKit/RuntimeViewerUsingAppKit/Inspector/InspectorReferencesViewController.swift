@@ -229,9 +229,10 @@ extension InspectorReferencesViewController {
 // MARK: - Section View
 
 extension InspectorReferencesViewController {
-    /// One section: its title and count, Show in Find Navigator, and a list one level deep — or, while
-    /// there is none, the loading placeholder or a message. `SectionsView` gives it its height from
-    /// `heightDemand(forWidth:)`; the list fills what the title leaves and scrolls past that.
+    /// One section: its title and count, Show in Find Navigator, and a list one level deep, the
+    /// functions nothing names gathered below its last row — or, while there is none, the loading
+    /// placeholder or a message. `SectionsView` gives it its height from `heightDemand(forWidth:)`;
+    /// the list fills what the title leaves and scrolls past that.
     private final class SectionView: NSView {
         let section: InspectorReferencesViewModel.Section
 
@@ -406,11 +407,11 @@ extension InspectorReferencesViewController {
                 statusLabel.stringValue = ""
                 scrollView.isHidden = true
                 skeletonPlaceholderView.isPresentingPlaceholder = true
-            case .loaded(let rows, let totalCount):
+            case .loaded(let rows, let listedCount, let totalCount):
                 isHidden = false
                 skeletonPlaceholderView.isPresentingPlaceholder = false
                 rowsRelay.accept(rows)
-                countLabel.stringValue = rows.count < totalCount ? "\(rows.count) of \(totalCount)" : "\(totalCount)"
+                countLabel.stringValue = listedCount < totalCount ? "\(listedCount) of \(totalCount)" : "\(totalCount)"
                 scrollView.isHidden = rows.isEmpty
                 statusLabel.stringValue = rows.isEmpty ? "None found" : ""
             case .failed(let message):
