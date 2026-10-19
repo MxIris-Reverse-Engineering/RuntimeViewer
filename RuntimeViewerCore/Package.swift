@@ -121,11 +121,9 @@ let package = Package(
                 path: "../../MachOSwiftSection",
                 isRelative: true,
             ),
-            // The cross references feature branch, until MachOSwiftSection
-            // releases `CrossReferenceAnalysis`; then back to the release pin.
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                branch: "feature/cross-reference-analysis"
+                branch: "next"
             ),
         ),
         .package(

@@ -194,8 +194,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "branch" : "feature/cross-reference-analysis",
-        "revision" : "251ed15b589fd410be5a19a2b0b46e6bce14cf39"
+        "branch" : "next",
+        "revision" : "c5fe5756cd2a95afe08ac6a59ddab0a3ae629fb0"
       }
     },
     {
@@ -410,8 +410,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-capstone",
       "state" : {
-        "revision" : "ff60d3a504ef78fa335e09a65d8e0ca985207732",
-        "version" : "6.1.0"
+        "revision" : "9f892f09452e92f3d5943a7a656299d24ec19c63",
+        "version" : "7.0.0"
       }
     },
     {
