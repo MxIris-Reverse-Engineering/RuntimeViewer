@@ -7,9 +7,11 @@ import SnapKit
 
 /// The Inspector's References tab: who calls the member at the content pane's insertion point,
 /// what it calls, and which functions use the type on screen — a section each, one level deep and in
-/// the object's own image, with Show in Find Navigator for the whole tree across every indexed image. The
-/// sections stack in a page that scrolls; each list grows to fit its rows up to a cap and scrolls
-/// inside it past that.
+/// the object's own image, with Show in Find Navigator for the whole tree across every indexed image.
+/// The sections share the Inspector's height below the title (`StackedHeightSharing`): a list whose
+/// rows fit takes just that, and the lists that do not split the rest down to the Inspector's bottom,
+/// each scrolling inside its share. The page itself scrolls only when the Inspector is too short for
+/// every list's first few rows.
 final class InspectorReferencesViewController: BaseEffectViewController<InspectorReferencesViewModel> {
     private let headerLabel = Label()
 
@@ -25,17 +27,17 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
 
     private let typeReferencesSectionView = SectionView(section: .typeReferences)
 
+    private lazy var sectionsView = SectionsView(sectionViews: [callersSectionView, calleesSectionView, typeReferencesSectionView])
+
     private let pageScrollView = ScrollView()
 
-    private lazy var pageStackView = VStackView(alignment: .leading, spacing: 16) {
+    /// The title and the hint, above the sections.
+    private lazy var topStackView = VStackView(alignment: .leading, spacing: 16) {
         VStackView(alignment: .leading, spacing: 2) {
             headerLabel
             scopeLabel
         }
         hintLabel
-        callersSectionView
-        calleesSectionView
-        typeReferencesSectionView
     }
 
     override var containerViewUsingSafeArea: Bool { true }
@@ -45,7 +47,8 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
 
         let documentView = FlippedView()
         documentView.hierarchy {
-            pageStackView
+            topStackView
+            sectionsView
         }
         pageScrollView.documentView = documentView
         containerView.hierarchy {
@@ -57,22 +60,28 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
             make.edges.equalTo(view.safeAreaLayoutGuide)
         }
 
+        // As tall as the Inspector, which the sections share; taller only when even their smallest
+        // heights do not fit, and the page scrolls then.
         documentView.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
             make.width.equalTo(pageScrollView.contentView)
+            make.height.greaterThanOrEqualTo(pageScrollView.contentView)
+            make.height.equalTo(pageScrollView.contentView).priority(.low)
         }
 
-        pageStackView.snp.makeConstraints { make in
+        topStackView.snp.makeConstraints { make in
             make.top.equalToSuperview()
+            make.leading.trailing.equalToSuperview().inset(8)
+        }
+
+        sectionsView.snp.makeConstraints { make in
+            make.top.equalTo(topStackView.snp.bottom).offset(16)
             make.leading.trailing.equalToSuperview().inset(8)
             make.bottom.equalToSuperview().inset(8)
         }
 
-        for sectionView in [callersSectionView, calleesSectionView, typeReferencesSectionView] {
-            sectionView.snp.makeConstraints { make in
-                make.leading.trailing.equalToSuperview()
-            }
-        }
+        // The title and the hint keep their own height; the sections take the rest.
+        topStackView.setHuggingPriority(.defaultHigh, for: .vertical)
 
         pageScrollView.do {
             $0.drawsBackground = false
@@ -139,19 +148,108 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
     }
 }
 
+// MARK: - Sections View
+
+extension InspectorReferencesViewController {
+    /// The sections, one under another, sharing the height the title and the hint leave them
+    /// (`StackedHeightSharing`). It lays them out itself: how tall one is depends on what the others
+    /// list. Never shorter than every section at its smallest, so the page scrolls instead.
+    private final class SectionsView: NSView {
+        private let sectionViews: [SectionView]
+
+        private static let spacing: CGFloat = 16
+
+        override var isFlipped: Bool { true }
+
+        init(sectionViews: [SectionView]) {
+            self.sectionViews = sectionViews
+            super.init(frame: .zero)
+
+            for sectionView in sectionViews {
+                addSubview(sectionView)
+                sectionView.contentDidChange = { [weak self] in
+                    guard let self else { return }
+                    invalidateIntrinsicContentSize()
+                    needsLayout = true
+                }
+            }
+
+            // Stretched to whatever the page leaves, never squeezed below the sections' smallest heights.
+            setContentHuggingPriority(.init(1), for: .vertical)
+            setContentCompressionResistancePriority(.required, for: .vertical)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override var intrinsicContentSize: NSSize {
+            // A message's height depends on the width, which the first layout pass has yet to set.
+            guard bounds.width > 0 else {
+                return NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+            }
+            let demands = visibleSectionViews.map { $0.heightDemand(forWidth: bounds.width) }
+            return NSSize(width: NSView.noIntrinsicMetric, height: StackedHeightSharing.minimumHeight(of: demands, spacing: Self.spacing))
+        }
+
+        override func setFrameSize(_ newSize: NSSize) {
+            let widthChanged = newSize.width != frame.width
+            super.setFrameSize(newSize)
+            // A message wraps onto more lines in a narrower section.
+            if widthChanged {
+                invalidateIntrinsicContentSize()
+            }
+        }
+
+        override func layout() {
+            super.layout()
+
+            let visibleSectionViews = self.visibleSectionViews
+            let heights = StackedHeightSharing.heights(
+                for: visibleSectionViews.map { $0.heightDemand(forWidth: bounds.width) },
+                spacing: Self.spacing,
+                in: bounds.height
+            )
+            var top: CGFloat = 0
+            for (sectionView, height) in zip(visibleSectionViews, heights) {
+                let bottom = top + height
+                // On whole points, so that no edge falls between two pixels.
+                sectionView.frame = NSRect(x: 0, y: top.rounded(), width: bounds.width, height: bottom.rounded() - top.rounded())
+                top = bottom + Self.spacing
+            }
+        }
+
+        private var visibleSectionViews: [SectionView] {
+            sectionViews.filter { !$0.isHidden }
+        }
+    }
+}
+
 // MARK: - Section View
 
 extension InspectorReferencesViewController {
-    /// One section: its title and count, Show in Find Navigator, and a list one level deep that
-    /// grows to fit its rows up to `maximumListHeight`.
+    /// One section: its title and count, Show in Find Navigator, and a list one level deep — or, while
+    /// there is none, the loading placeholder or a message. `SectionsView` gives it its height from
+    /// `heightDemand(forWidth:)`; the list fills what the title leaves and scrolls past that.
     private final class SectionView: NSView {
         let section: InspectorReferencesViewModel.Section
+
+        /// Called after the section shows something else, so that the sections are laid out again.
+        var contentDidChange: (() -> Void)?
 
         private let titleLabel = Label()
 
         private let countLabel = Label()
 
         let showInFindNavigatorButton = NSButton()
+
+        private lazy var titleRow = HStackView(spacing: 6) {
+            titleLabel
+            countLabel
+            NSView()
+            showInFindNavigatorButton
+        }
 
         private let (scrollView, tableView) = SelfSizingTableView.scrollableNavigationListTableView()
 
@@ -161,8 +259,15 @@ extension InspectorReferencesViewController {
 
         private let rowsRelay = BehaviorRelay<[InspectorReferenceCellViewModel]>(value: [])
 
-        /// The list's cap: past it the rows scroll inside the section.
-        private static let maximumListHeight: CGFloat = 240
+        /// How far a list is cut down before the page scrolls instead: three or four rows, the floor
+        /// a navigation list has anyway (`scrollableNavigationListTableView()`).
+        private static let minimumListHeight: CGFloat = 80
+
+        /// Between the title and the list or the message.
+        private static let contentSpacing: CGFloat = 6
+
+        /// Between the title and the loading placeholder.
+        private static let placeholderSpacing: CGFloat = 8
 
         /// A row clicked, as the model it shows.
         var rowClicked: Signal<InspectorReferenceCellViewModel> {
@@ -178,12 +283,6 @@ extension InspectorReferencesViewController {
             self.section = section
             super.init(frame: .zero)
 
-            let titleRow = HStackView(spacing: 6) {
-                titleLabel
-                countLabel
-                NSView()
-                showInFindNavigatorButton
-            }
             hierarchy {
                 titleRow
                 scrollView
@@ -196,23 +295,21 @@ extension InspectorReferencesViewController {
             }
 
             scrollView.snp.makeConstraints { make in
-                make.top.equalTo(titleRow.snp.bottom).offset(6)
+                make.top.equalTo(titleRow.snp.bottom).offset(Self.contentSpacing)
                 make.leading.trailing.bottom.equalToSuperview()
             }
 
             statusLabel.snp.makeConstraints { make in
-                make.top.equalTo(titleRow.snp.bottom).offset(6)
+                make.top.equalTo(titleRow.snp.bottom).offset(Self.contentSpacing)
                 make.leading.trailing.equalToSuperview()
                 make.bottom.lessThanOrEqualToSuperview()
             }
 
             skeletonPlaceholderView.snp.makeConstraints { make in
-                make.top.equalTo(titleRow.snp.bottom).offset(8)
+                make.top.equalTo(titleRow.snp.bottom).offset(Self.placeholderSpacing)
                 make.leading.trailing.equalToSuperview()
                 make.bottom.lessThanOrEqualToSuperview().priority(.high)
             }
-
-            scrollView.maximumContentSize = NSSize(width: NSView.noIntrinsicMetric, height: Self.maximumListHeight)
 
             titleLabel.do {
                 $0.stringValue = section.title
@@ -242,12 +339,18 @@ extension InspectorReferencesViewController {
 
             tableView.do {
                 $0.intercellSpacing = .init(width: 0, height: 2)
+                // The rows never wrap, so they are all one height, and the list knows exactly how
+                // tall its rows are before any is drawn.
+                $0.usesAutomaticRowHeights = false
+                $0.rowHeight = FindResultCellView.singleLineRowHeight(for: .inspector)
             }
 
             rowsRelay
                 .asDriver()
                 .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorReferenceCellViewModel) -> NSView? in
-                    let cellView = tableView.box.makeView(ofClass: FindResultCellView.self)
+                    let cellView = tableView.box.makeView(ofClass: FindResultCellView.self) {
+                        FindResultCellView(metrics: .inspector)
+                    }
                     cellView.configure(with: cellViewModel.appearance)
                     return cellView
                 }
@@ -265,6 +368,31 @@ extension InspectorReferencesViewController {
                 apply(state)
             }
             .disposed(by: disposeBag)
+        }
+
+        /// What the section asks of the height at `width`: its title, then everything it lists. A list
+        /// gives up all but `minimumListHeight` and scrolls; the loading placeholder and a message are
+        /// never cut. Measured from the parts' own sizes, not by a layout pass: the sections ask for
+        /// it while they are being laid out.
+        func heightDemand(forWidth width: CGFloat) -> StackedHeightSharing.Demand {
+            // The row is as tall as its tallest control.
+            let titleControls: [NSView] = [titleLabel, countLabel, showInFindNavigatorButton]
+            let titleHeight = titleControls.map(\.intrinsicContentSize.height).max() ?? 0
+            if skeletonPlaceholderView.isPresentingPlaceholder {
+                let height = titleHeight + Self.placeholderSpacing + skeletonPlaceholderView.contentHeight
+                return StackedHeightSharing.Demand(minimum: height, preferred: height)
+            }
+            if !scrollView.isHidden {
+                let listHeight = tableView.intrinsicContentSize.height
+                return StackedHeightSharing.Demand(
+                    minimum: titleHeight + Self.contentSpacing + min(listHeight, Self.minimumListHeight),
+                    preferred: titleHeight + Self.contentSpacing + listHeight
+                )
+            }
+            let messageBounds = NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)
+            let messageHeight = statusLabel.cell?.cellSize(forBounds: messageBounds).height ?? 0
+            let height = titleHeight + Self.contentSpacing + messageHeight
+            return StackedHeightSharing.Demand(minimum: height, preferred: height)
         }
 
         private func apply(_ state: InspectorReferencesViewModel.SectionState) {
@@ -293,6 +421,7 @@ extension InspectorReferencesViewController {
                 scrollView.isHidden = true
                 statusLabel.stringValue = message
             }
+            contentDidChange?()
         }
     }
 

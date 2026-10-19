@@ -104,7 +104,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
     }
 
     public convenience init(content: Content, children: [FindResultNode] = [], identifier: String) {
-        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeAppearance(for: content))
+        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeNavigatorAppearance(for: content))
     }
 
     /// `node` with other children — what the filter bar keeps of a row — sharing its appearance,
@@ -171,13 +171,25 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     // MARK: - Appearance
 
-    private static func makeAppearance(for content: Content) -> FindResultCellAppearance {
-        var appearance = FindResultCellAppearance()
+    /// The row as the Find navigator draws it. Nothing draws one off AppKit.
+    private static func makeNavigatorAppearance(for content: Content) -> FindResultCellAppearance {
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        return makeAppearance(for: content, metrics: .navigator)
+        #else
+        return FindResultCellAppearance()
+        #endif
+    }
+
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    /// A row showing `content`, at `metrics`' sizes: the Find navigator's, or
+    /// the Inspector's References tab's, which lists cross-reference rows a
+    /// size down.
+    static func makeAppearance(for content: Content, metrics: FindResultCellStyle.Metrics) -> FindResultCellAppearance {
+        var appearance = FindResultCellAppearance()
         switch content {
         case .object(let object):
-            appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
-            appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
+            appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: metrics.iconSize)
+            appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
         case .textMatch(let match):
             appearance.icon = FindResultCellStyle.matchIcon
             appearance.iconAlpha = FindResultCellStyle.matchIconAlpha
@@ -190,37 +202,35 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
             appearance.allowsWrapping = true
         case .relationship(let name, let object):
             if let object {
-                appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
-                appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
+                appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: metrics.iconSize)
+                appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
             } else {
                 appearance.icon = FindResultCellStyle.unresolvedIcon
                 appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
-                appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor)
+                appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
                 appearance.isSecondary = true
             }
         case .crossReferenceRoot(let root, _):
-            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: root)
-            appearance.title = titleWithSubtitle(root.title, subtitle: FindScope.imageName(of: root.imagePath))
+            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: root, metrics: metrics)
+            appearance.title = titleWithSubtitle(root.title, subtitle: FindScope.imageName(of: root.imagePath), metrics: metrics)
         case .crossReference(let row):
-            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: row)
+            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: row, metrics: metrics)
             switch row.item {
             case .loading, .failure:
                 appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
-                appearance.title = plainTitle(row.title, color: FindResultCellStyle.unresolvedTitleColor)
+                appearance.title = plainTitle(row.title, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
                 appearance.isSecondary = true
             case .function, .target, .image:
-                appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle)
+                appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle, metrics: metrics)
             }
         }
-        #endif
         return appearance
     }
 
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
     /// A one-line title in one colour.
-    private static func plainTitle(_ text: String, color: NSColor) -> NSAttributedString {
+    private static func plainTitle(_ text: String, color: NSColor, metrics: FindResultCellStyle.Metrics) -> NSAttributedString {
         NSAttributedString(string: text, attributes: [
-            .font: FindResultCellStyle.titleFont,
+            .font: metrics.titleFont,
             .foregroundColor: color,
             .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
         ])
@@ -228,15 +238,15 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     /// `Name  image` — the type's name, then the image it is in, the way a
     /// file row shows its group — on one line.
-    private static func titleWithSubtitle(_ title: String, subtitle: String) -> NSAttributedString {
+    private static func titleWithSubtitle(_ title: String, subtitle: String, metrics: FindResultCellStyle.Metrics) -> NSAttributedString {
         let result = NSMutableAttributedString(string: title, attributes: [
-            .font: FindResultCellStyle.titleFont,
+            .font: metrics.titleFont,
             .foregroundColor: FindResultCellStyle.titleColor,
             .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
         ])
         if !subtitle.isEmpty {
             result.append(NSAttributedString(string: FindResultCellStyle.subtitleSeparator + subtitle, attributes: [
-                .font: FindResultCellStyle.subtitleFont,
+                .font: metrics.subtitleFont,
                 .foregroundColor: FindResultCellStyle.subtitleColor,
                 .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
             ]))

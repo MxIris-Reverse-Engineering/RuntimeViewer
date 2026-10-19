@@ -282,7 +282,8 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
 
 /// One row of a section of the Inspector's References tab: a caller, a callee, or a function using
 /// the type. Fixed once made — a section's new answer brings new rows — so its appearance is a plain
-/// value, the one a Find navigator row of the same function has.
+/// value: a Find navigator row of the same function, a size down (`FindResultCellStyle.Metrics.inspector`),
+/// as the rest of the tab is set in the small system font.
 public final class InspectorReferenceCellViewModel: NSObject, @unchecked Sendable {
     public let row: FindCrossReferenceRow
 
@@ -293,7 +294,11 @@ public final class InspectorReferenceCellViewModel: NSObject, @unchecked Sendabl
     init(row: FindCrossReferenceRow, identifier: String) {
         self.row = row
         self.identifier = identifier
-        self.appearance = FindResultNode.crossReference(row, identifier: identifier, children: []).appearance
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        self.appearance = FindResultNode.makeAppearance(for: .crossReference(row), metrics: .inspector)
+        #else
+        self.appearance = FindResultCellAppearance()
+        #endif
         super.init()
     }
 }

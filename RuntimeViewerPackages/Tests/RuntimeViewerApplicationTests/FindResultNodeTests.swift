@@ -159,6 +159,41 @@ struct FindResultNodeTests {
         #expect(drawnWidth > 200)
     }
 
+    /// The Inspector's References tab lists the same rows beside text of its own set in the small
+    /// system font, so it draws them a size down; the Find navigator keeps Xcode's sizes.
+    @Test("the Inspector draws a cross-reference row a size down, and the Find navigator keeps its size")
+    func inspectorRowsAreASizeDown() {
+        let function = RuntimeFunctionReference(
+            imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+            address: 0x1_8B49_DB50,
+            displayName: "-[NSWindow _windowNumber]",
+            symbolName: "-[NSWindow _windowNumber]",
+            member: nil,
+            foldedSymbolCount: 0
+        )
+        // Two references, so the title has a subtitle, `AppKit · 2 references`, in the second font.
+        let row = FindCrossReferenceRow(item: .function(function), direction: .typeReferences, referenceCount: 2, precision: .exact)
+
+        let navigatorAppearance = FindResultNode.crossReference(row, identifier: "row", children: []).appearance
+        let inspectorAppearance = InspectorReferenceCellViewModel(row: row, identifier: "row").appearance
+
+        #expect(Self.fontSizes(in: navigatorAppearance.title) == [13])
+        #expect(Self.fontSizes(in: inspectorAppearance.title) == [NSFont.smallSystemFontSize])
+        #expect(navigatorAppearance.icon?.size == NSSize(width: 16, height: 16))
+        #expect(inspectorAppearance.icon?.size == NSSize(width: 14, height: 14))
+    }
+
+    /// Every point size the title is set in.
+    private static func fontSizes(in title: NSAttributedString) -> Set<CGFloat> {
+        var pointSizes: Set<CGFloat> = []
+        title.enumerateAttribute(.font, in: NSRange(location: 0, length: title.length)) { font, _, _ in
+            if let font = font as? NSFont {
+                pointSizes.insert(font.pointSize)
+            }
+        }
+        return pointSizes
+    }
+
     /// How far right a view draws, in points: the trailing edge of its last column with ink.
     private static func drawnWidth(of view: NSView) throws -> CGFloat {
         let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))

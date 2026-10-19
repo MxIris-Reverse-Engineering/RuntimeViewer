@@ -952,6 +952,18 @@ Find 跨已索引镜像的第一次查询，另外省掉改名再导出表的 3.
 
 **真实 App**：用户当天用重新编过的 App 确认，准备完之后第一次打开类型引用直接出结果（「现在准备好是秒开了」）；没有量具体耗时。
 
+## Inspector 的 References 标签改版（2026-10-19）
+
+上一节在真实 App 里确认之后，用户对标签本身提了两点：「这里字体小一点，另外列表要占满整个inspector」。原先每段的行沿用 Find 导航页的样式（13pt 字、16pt 图标），比这一页其余 11pt 的字大一号；每段列表最高 240pt，整页再套一层滚动，只有一段时列表也停在半截。方案列给用户后批准「可以，改」。
+
+**行**：Inspector 的行小一号——11pt 字（小号系统字，与这一页的「In AppKit」、提示、段标题同号）、14pt 图标（与一行字同高，不缩的话图标比字大一圈、上下也对不齐），行高固定为 20pt。`FindResultCellStyle.Metrics` 收着两套尺寸：`.navigator` 是 Find 导航页原来的，`.inspector` 是这一套；`InspectorReferenceCellViewModel` 用后者生成外观，`FindResultCellView` 按传入的尺寸摆图标。Find 导航页的行不变。
+
+**布局**：去掉每段 240pt 的上限，几段一起分 Inspector 在标题与提示以下的高度，计算在 RuntimeViewerUI 的 `StackedHeightSharing`：每段至少拿到它的最小值、至多拿到它要的全部；没拿全的几段一样高。于是行少、放得下的段只占它要的高度，放不下的几段平分剩下的、各自在列表里滚，一直铺到 Inspector 底部；只有一段时（光标不在成员上），它就从段标题铺到底。每段的最小值是标题加上 80pt 的列表（三四行）；加载占位和提示消息不压缩。窗口矮到连这些最小值都放不下时，整页才滚动。各段的高度由一个自己摆放子视图的容器（`SectionsView`）按各段报出的需求算出，不靠 Auto Layout 的优先级去凑。需求从各部分自身的尺寸算（行高固定，所以列表多高事先就知道），不在布局过程中再跑一遍布局；为此 `SkeletonPlaceholderView` 新增 `contentHeight`。
+
+**测试**：`StackedHeightSharingTests` 8 个（都放得下；一段放不下就铺满剩余；几段放不下时平分；不能压缩的段保持高度；平分不到最小值的段保持最小值；太矮时都给最小值、整页超出；要的少于最小值按最小值；空）、`SkeletonPlaceholderHeightTests`（`contentHeight` 与 Auto Layout 排出的高度相同，1 行与 5 行）、`FindResultNodeTests.inspectorRowsAreASizeDown`（Inspector 的行 11pt 字、14pt 图标，Find 导航页的仍是 13pt、16pt）。连同原有的 `FindResultNode`、`Find member rows`、`InspectorReferencesViewModel` 一起跑，五个套件 28 个测试通过（Xcode 27.0，`swift test` 退出码 0）。App 里改的两个文件，连同同样创建这种行的 `FindViewController`，用包测试编出的模块做了类型检查，通过。
+
+**真实 App**：用户在重新编过的 App 里看过，「基本没啥问题了」。
+
 ## 审查与修复（2026-10-17）
 
 第 3 步续落地后，对本分支与 MachOSwiftSection 的 `feature/cross-reference-analysis` 一起做了一轮审查。本仓库的条目、裁决与测试记在 [2026-10-17 交叉引用审查记录](../KnownIssues/2026-10-17-cross-references-review-findings.md)；库那边的记在 MachOSwiftSection 的 `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`。
@@ -1030,3 +1042,4 @@ Find 跨已索引镜像的第一次查询，另外省掉改名再导出表的 3.
 | 2026-10-18 | 实现中自定：起过名的镜像超过 64 个时，只放掉预先准备之外的镜像，不再整个换掉分析器 | 换分析器会把预先读好的名字一起扔掉，浏览一阵被调之后第一次显示又会慢 |
 | 2026-10-19 | 共享缓存外多加载一个镜像不再换分析器；查询要用到新加载的镜像时才换，并带着准备好的表、扫描结果和进行中的准备，名字与预筛表在新分析器里后台重读；分析器认识的镜像被卸载才整个重来 | 用户反馈第一次显示类型引用仍要等。lldb 挂在用户的 Debug 包上实测：常驻镜像准备完之后，服务进程生成接口时加载了 `libobjc-trampolines.dylib`，下一次查询便换代、作废全部准备好的表。给出「只加载不换」与「换时带过去」两项，用户回复「可以，都做」 |
 | 2026-10-19 | 实现中自定：一条路径不对应任何镜像时，进程每加载一批新镜像，分析器为它换一次 | 要精确判断「找不到的路径是不是新加载的镜像」，测试就得在进程里真的加载一个缓存外镜像，没有稳妥可加载的；换的时候准备好的表照样保留，代价只是名字与预筛表在后台重读 |
+| 2026-10-19 | Inspector 的 References 标签：行小一号（11pt 字、14pt 图标、行高 20pt），Find 导航页不变；去掉每段 240pt 的上限，几段分 Inspector 的高度——放得下的段只占所需，放不下的平分剩余、各自滚动，铺到 Inspector 底部；窗口矮到每段连 80pt 的列表（三四行）都放不下时整页滚动 | 用户确认秒开后提出「这里字体小一点，另外列表要占满整个inspector」。字号取这一页其余文字的 11pt、图标随字缩到 14pt、多段时的分法与窗口太矮时整页滚动，都是方案里写明的，用户回复「可以，改」；每段最少留 80pt 是实现中沿用导航列表原有的下限 |
