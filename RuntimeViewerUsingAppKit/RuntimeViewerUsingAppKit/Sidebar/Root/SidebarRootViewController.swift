@@ -16,7 +16,8 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
     private let filterControlBar = NavigatorFilterControlBar()
 
-    private let bottomSeparatorView = NSBox()
+    /// The line between the list and the filter bar; `nil` from macOS 26, where the rows fade out under the bar instead.
+    private let bottomSeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
 
     /// Runs the list under the tab switcher's bar and the filter bar from macOS 26 on. Made in
     /// `viewDidLoad`.
@@ -44,21 +45,23 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
         containerView.hierarchy {
             scrollView
-            bottomSeparatorView
+            if let bottomSeparatorView {
+                bottomSeparatorView
+            }
             filterControlBar
         }
 
         scrollView.snp.makeConstraints { make in
             make.top.left.right.equalToSuperview()
-            if #available(macOS 26.0, *) {
+            if let bottomSeparatorView {
+                make.bottom.equalTo(bottomSeparatorView.snp.top)
+            } else {
                 // Under the filter bar as well, which floats over the list's bottom edge.
                 make.bottom.equalToSuperview()
-            } else {
-                make.bottom.equalTo(bottomSeparatorView.snp.top)
             }
         }
 
-        bottomSeparatorView.snp.makeConstraints { make in
+        bottomSeparatorView?.snp.makeConstraints { make in
             make.left.right.equalToSuperview()
             make.bottom.equalTo(filterControlBar.snp.top)
             make.height.equalTo(1)
@@ -71,14 +74,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
                 make.bottom.equalTo(view.layoutGuide(for: .safeArea()))
             } else {
                 make.bottom.equalToSuperview()
-            }
-        }
-
-        bottomSeparatorView.do {
-            $0.boxType = .separator
-            // From macOS 26 the rows fade out under the bar instead, as in Xcode.
-            if #available(macOS 26.0, *) {
-                $0.isHidden = true
             }
         }
 

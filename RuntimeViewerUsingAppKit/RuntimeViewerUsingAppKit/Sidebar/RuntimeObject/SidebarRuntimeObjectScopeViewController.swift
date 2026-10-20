@@ -37,7 +37,7 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
 
     // MARK: - Property section
 
-    private let propertySeparator = NSBox()
+    private let propertySeparator = HorizontalSeparatorView()
     private let propertyHeaderLabel = Label("Properties")
     private let propertyRows = RuntimeObjectScope.Property.allCases.map { PropertyRow(property: $0) }
     private lazy var propertyStack = VStackView(distribution: .fill, alignment: .fill, spacing: 6) {
@@ -71,7 +71,7 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
 
         let contentStack = VStackView(distribution: .fill, alignment: .fill, spacing: 14) {
             headerRow
-            NSBox().then { $0.boxType = .separator }
+            HorizontalSeparatorView()
                 .box
                 .size(height: 1)
             kindStack
@@ -121,7 +121,6 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
     }
 
     private func configurePropertySection() {
-        propertySeparator.boxType = .separator
         propertyHeaderLabel.do {
             $0.font = .systemFont(ofSize: 11, weight: .medium)
             $0.textColor = .secondaryLabelColor

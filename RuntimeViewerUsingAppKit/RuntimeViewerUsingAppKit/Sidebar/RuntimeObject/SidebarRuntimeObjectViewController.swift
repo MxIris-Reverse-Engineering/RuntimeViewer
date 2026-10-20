@@ -463,7 +463,9 @@ extension SidebarRuntimeObjectViewController {
 
         let emptyLabel = Label()
 
-        let bottomSeparatorView = NSBox()
+        /// The line between the list and the filter bar; `nil` from macOS 26, where the rows fade out under the bar
+        /// instead.
+        let bottomSeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
 
         let filterModeItem = ChoiceFilterControlBarItem<FilterMode>(
             image: .symbol(systemName: .line3HorizontalDecrease),
@@ -517,17 +519,19 @@ extension SidebarRuntimeObjectViewController {
             hierarchy {
                 scrollView
                 emptyLabel
-                bottomSeparatorView
+                if let bottomSeparatorView {
+                    bottomSeparatorView
+                }
                 filterControlBar
             }
 
             scrollView.snp.makeConstraints { make in
                 make.top.left.right.equalToSuperview()
-                if #available(macOS 26.0, *) {
+                if let bottomSeparatorView {
+                    make.bottom.equalTo(bottomSeparatorView.snp.top)
+                } else {
                     // Under the filter bar as well, which floats over the list's bottom edge.
                     make.bottom.equalToSuperview()
-                } else {
-                    make.bottom.equalTo(bottomSeparatorView.snp.top)
                 }
             }
 
@@ -538,10 +542,10 @@ extension SidebarRuntimeObjectViewController {
                 make.top.greaterThanOrEqualTo(safeAreaLayoutGuide).offset(16).priority(.high)
                 make.left.greaterThanOrEqualTo(16).priority(.high)
                 make.right.lessThanOrEqualTo(-16).priority(.high)
-                make.bottom.lessThanOrEqualTo(bottomSeparatorView.snp.top).offset(-16).priority(.high)
+                make.bottom.lessThanOrEqualTo(bottomSeparatorView?.snp.top ?? filterControlBar.snp.top).offset(-16).priority(.high)
             }
 
-            bottomSeparatorView.snp.makeConstraints { make in
+            bottomSeparatorView?.snp.makeConstraints { make in
                 make.left.right.equalToSuperview()
                 make.height.equalTo(1)
                 make.bottom.equalTo(filterControlBar.snp.top)
@@ -561,14 +565,6 @@ extension SidebarRuntimeObjectViewController {
             scrollView.do {
                 $0.autohidesScrollers = true
                 $0.hidesVisualEffectView = true
-            }
-
-            bottomSeparatorView.do {
-                $0.boxType = .separator
-                // From macOS 26 the rows fade out under the bar instead, as in Xcode.
-                if #available(macOS 26.0, *) {
-                    $0.isHidden = true
-                }
             }
 
             filterModeItem.do {

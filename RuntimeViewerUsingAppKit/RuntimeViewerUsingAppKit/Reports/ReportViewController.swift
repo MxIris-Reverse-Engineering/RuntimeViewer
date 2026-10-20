@@ -34,7 +34,8 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     // MARK: - Filter Bar
 
-    private let bottomSeparatorView = NSBox()
+    /// The line between the list and the filter bar; `nil` from macOS 26, where the rows fade out under the bar instead.
+    private let bottomSeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
 
     /// Built once; its items are enabled from the view model's output, since the bar shows the menu as it is.
     private let actionsMenu = NSMenu()
@@ -93,17 +94,19 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         containerView.hierarchy {
             scrollView
             emptyLabel
-            bottomSeparatorView
+            if let bottomSeparatorView {
+                bottomSeparatorView
+            }
             filterControlBar
         }
 
         scrollView.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
-            if #available(macOS 26.0, *) {
+            if let bottomSeparatorView {
+                make.bottom.equalTo(bottomSeparatorView.snp.top)
+            } else {
                 // Under the filter bar as well, which floats over the list's bottom edge.
                 make.bottom.equalToSuperview()
-            } else {
-                make.bottom.equalTo(bottomSeparatorView.snp.top)
             }
         }
 
@@ -114,7 +117,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             make.trailing.lessThanOrEqualToSuperview().offset(-16)
         }
 
-        bottomSeparatorView.snp.makeConstraints { make in
+        bottomSeparatorView?.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
             make.height.equalTo(1)
             make.bottom.equalTo(filterControlBar.snp.top)
@@ -123,14 +126,6 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
         // The bar's intrinsic height carries the margins around the field.
         filterControlBar.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
-        }
-
-        bottomSeparatorView.do {
-            $0.boxType = .separator
-            // From macOS 26 the rows fade out under the bar instead, as in Xcode.
-            if #available(macOS 26.0, *) {
-                $0.isHidden = true
-            }
         }
 
         navigatorScrollViewLayout = NavigatorScrollViewLayout(scrollView: scrollView, bottomOverlayViews: [filterControlBar])

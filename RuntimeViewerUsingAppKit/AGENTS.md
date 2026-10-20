@@ -167,7 +167,16 @@ bezelStyle), fall back to the raw AppKit class (`NSButton()` for `.accessoryBarA
 | `NSFilterSearchField()` (AppKitPlus) | `NSSearchField()` above a list it filters — the field of a page's filter bar, a picker's filter field |
 | `NSFindPatternSearchField()` (AppKitPlus) | `NSSearchField()` for a query that takes find patterns (Digits, Any Word Characters…) among its text — the Find page's query field. Read `findPatternComponents`, never `stringValue`, which holds U+FFFC for each token |
 | `NavigatorFilterControlBar()` (RuntimeViewerUI, an AppKitPlus `NSFilterControlBar`) | an `HStackView` of buttons and a search field at the bottom of a sidebar page |
+| `HorizontalSeparatorView()` (RuntimeViewerUI) | an `NSBox` with `boxType = .separator` for a horizontal line |
 | `final class XxxView: LayerBackedView` | `final class XxxView: NSView` (when it needs `cornerRadius` / border / `backgroundColor` / shadow) |
+
+**Never lay a plain separator box across a pane.** An `NSBox` separator decides for itself whether it is
+horizontal or vertical, and one first asked for its size while its pane has no width takes itself for a
+vertical line: the layout engine keeps `width == 1` at a hugging priority of 750 for it, and nothing ever
+invalidates that. Pinned to both edges of the sidebar's first page, which launch lays out before the split
+view has given the sidebar any width, it held the sidebar at its minimum width against every divider drag.
+`HorizontalSeparatorView` reports no intrinsic width at all. Background:
+`Documentations/ResolvedIssues/2026-10-20-sidebar-divider-locked-by-a-separator.md`.
 
 **Building views**: `.then {}` returns the configured object, for assignment
 (`let titleLabel = Label("Export").then { $0.font = .systemFont(ofSize: 18, weight: .semibold) }`);
@@ -557,9 +566,11 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   (`-[NSScrollView registerPocketContainer:onEdge:]`, through UIFoundation's `NSScrollView.box`), keeps
   both edges always shown (`alwaysShownPocketEdges = 3`) and, on macOS 26 only, sets style 2 on both edges
   as Xcode does there — so nothing else touches a page's scroll view. Add the scroll view before those
-  views, so that they draw and take clicks above it; hide the 1-point separators from macOS 26 — the edge
-  effect replaces them; centre empty-state text and placeholders in the safe area
-  (`scrollView.safeAreaLayoutGuide`), not in the scroll view.
+  views, so that they draw and take clicks above it; leave the 1-point separators out from macOS 26 — the
+  edge effect replaces them — by making them with `HorizontalSeparatorView.makeForStackedNavigatorLayout()`,
+  which returns `nil` there: never keep one hidden, since a hidden view still takes part in Auto Layout
+  (*Never lay a plain separator box across a pane*, under *Views*); centre empty-state text and placeholders
+  in the safe area (`scrollView.safeAreaLayoutGuide`), not in the scroll view.
 - Keep the scroll view's own `automaticallyAdjustsContentInsets` on, and leave the clip view's insets, its
   `automaticallyAdjustsContentInsets` and the scroll view's `additionalSafeAreaInsets` to the layout. AppKit
   sizes the bottom scroll pocket by the scroll view's own bottom content inset, not the clip view's

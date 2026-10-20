@@ -56,7 +56,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let summaryLabel = Label()
 
-    private let summarySeparatorView = Box()
+    /// The line below the summary; `nil` from macOS 26, where the results fade out under the summary instead.
+    private let summarySeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
 
     private var summaryHeightConstraint: Constraint?
 
@@ -64,7 +65,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
 
-    private let resultsTopSeparatorView = Box()
+    /// The line above the results; `nil` from macOS 26, where they run under the views above them instead.
+    private let resultsTopSeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
 
     /// The rows' context menu, rebuilt from the clicked row each time it opens. A click on empty
     /// space, or on a row that goes nowhere, gets no items, so AppKit shows no menu at all.
@@ -72,7 +74,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     // MARK: - Filter Bar
 
-    private let filterSeparatorView = Box()
+    /// The line between the results and the filter bar; `nil` from macOS 26, where the results fade out under the bar
+    /// instead.
+    private let filterSeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
 
     private let filterSearchField = NSFilterSearchField()
 
@@ -133,10 +137,16 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             }
             summaryView.hierarchy {
                 summaryLabel
-                summarySeparatorView
+                if let summarySeparatorView {
+                    summarySeparatorView
+                }
             }
-            resultsTopSeparatorView
-            filterSeparatorView
+            if let resultsTopSeparatorView {
+                resultsTopSeparatorView
+            }
+            if let filterSeparatorView {
+                filterSeparatorView
+            }
             filterControlBar
         }
 
@@ -201,28 +211,29 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             make.height.equalTo(14)
         }
 
-        summarySeparatorView.snp.makeConstraints { make in
+        summarySeparatorView?.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
             make.height.equalTo(1)
         }
 
-        resultsTopSeparatorView.snp.makeConstraints { make in
+        resultsTopSeparatorView?.snp.makeConstraints { make in
             make.top.equalTo(summaryView.snp.bottom)
             make.leading.trailing.equalToSuperview()
             make.height.equalTo(1)
         }
 
+        // The separators exist in the stacked layout only, before macOS 26.
         scrollView.snp.makeConstraints { make in
-            if #available(macOS 26.0, *) {
-                make.edges.equalToSuperview()
-            } else {
+            if let resultsTopSeparatorView, let filterSeparatorView {
                 make.top.equalTo(resultsTopSeparatorView.snp.bottom)
                 make.leading.trailing.equalToSuperview()
                 make.bottom.equalTo(filterSeparatorView.snp.top)
+            } else {
+                make.edges.equalToSuperview()
             }
         }
 
-        filterSeparatorView.snp.makeConstraints { make in
+        filterSeparatorView?.snp.makeConstraints { make in
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(filterControlBar.snp.top)
             make.height.equalTo(1)
@@ -291,15 +302,6 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             $0.maximumNumberOfLines = 1
             $0.lineBreakMode = .byTruncatingTail
             $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        }
-
-        for separatorView in [summarySeparatorView, resultsTopSeparatorView, filterSeparatorView] {
-            separatorView.boxType = .separator
-            // From macOS 26 the results fade out under the views above and below them instead, as in
-            // Xcode, which also stops drawing its border there on macOS 27.
-            if #available(macOS 26.0, *) {
-                separatorView.isHidden = true
-            }
         }
 
         navigatorScrollViewLayout = NavigatorScrollViewLayout(

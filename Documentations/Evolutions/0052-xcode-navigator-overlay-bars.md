@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-10-14
-- **最后更新**: 2026-10-15
+- **最后更新**: 2026-10-20
 - **所属愿景**: 无
 - **配套文档**: 给贡献者的规则在 `AGENTS.md` 的「Navigator pages run under their bars (macOS 26 and later)」一节。逆向证据与全部地址在本机资料卷 `/Volumes/RE/Xcode/27.2/README.md` 的「Navigator chooser and scroll pockets (2026-10-14)」一节（IDEKit 27.2 的头文件、Swift dump 与 IDA 库在同目录 `IDEKit/`，AppKit 27.0 的库是 `/Volumes/DyldSharedCaches/macOS/27.0/AppKit-20261014.i64`）
 
@@ -103,3 +103,4 @@
 | 2026-10-15 | 栏高改由 `FloatingBarSafeAreaLayout`（RuntimeViewerUI）跟随栏的 frame 写入 tab view 的 safe area，不再在 `viewDidLayout` 里读 | 目视验收发现推进来的对象列表页第一行压在栏下。`viewDidLayout` 执行时 AppKit 只排好了根视图的直接子视图，栏的 frame 是上一轮的，第一轮为 0；推进来的页面只排一次版，这 28 点就一直没加上。见 [ResolvedIssues/2026-10-15-sidebar-list-starts-under-the-tab-switcher-bar.md](../ResolvedIssues/2026-10-15-sidebar-list-starts-under-the-tab-switcher-bar.md)；方案一节里「`viewDidLayout` 里把栏的实际高度写进…」是原先的做法，保留原文 |
 | 2026-10-15 | 每个 tab 切换器的每个页面，内容都从分段控件下方 8 点开始，统一取 `TabViewController.pageTopSpacing`（即 `NavigatorScrollViewLayout.topContentInsetBeyondSafeArea`）。堆叠的页面（macOS 26 之前的全部页面、所有系统上的 Inspector）由切换器留出这 8 点，页面自己不再留上边距；macOS 26 起跑在栏下的侧栏页面，列表靠内容边距，Find 的查询区靠约束 | 用户目视后先要求「Find 这里要 10 的 spacing」；看到各页不一致（侧栏列表 8，Find 与 macOS 26 之前的页面 10，Inspector 8 到 25 不等）后要求「全部统一一下，都改成8」。8 是 Xcode 导航区列表的值。结果列表的安全区由 `NavigatorScrollViewLayout` 按查询区与 summary 行的实际位置算，自动跟着移动。方案一节里「查询区钉在 `containerView` 的安全区顶边」是原先的做法，保留原文 |
 | 2026-10-15 | 接着统一：Find 查询区第一行的「Aa」按钮与模式路径同在行顶；Inspector 的 Class 页标题与内容的左右边距、标题与内容之间的间距都从 15 改为 8，与另外两页的标题及其下的列表一致；四个侧栏页面类删掉 macOS 26 起把 `contentInsets` 归零的覆写 | 用户：「这3个也改一下」，随后对 Class 页标题与内容之间的 15 点说「改」。Xcode 里路径与「Aa」都在 y = 3（[0029](0029-find-navigator.md) 的实测），此前路径已移到行顶、按钮还在 3，差了 3 点。`BaseViewController.contentInsets` 的默认值已从顶部 10 点改为 0，那四处覆写在两种系统上都不再改变任何东西；方案一节里「`contentInsets` 归零」一句是当时的做法，保留原文 |
+| 2026-10-20 | 1 点分隔线从 macOS 26 起不再加进视图层级（`HorizontalSeparatorView.makeForStackedNavigatorLayout()` 在那里返回 `nil`），之前的堆叠布局改用不报告固有宽度的 `HorizontalSeparatorView`（RuntimeViewerUI），筛选范围弹窗的两条也换成它 | 用户反馈启动后侧栏分隔线拖不动、切一次 tab 才好。镜像目录页那条被隐藏的 `NSBox` 分隔线，在启动的第一轮约束更新里被 AppKit 判成竖线，布局引擎里留下 `width == 1`、抱紧优先级 750 的约束，把侧栏钉在最小宽度，拖动分隔线压不过它。隐藏不是触发条件，但隐藏的视图照样参与布局。见 [ResolvedIssues/2026-10-20-sidebar-divider-locked-by-a-separator.md](../ResolvedIssues/2026-10-20-sidebar-divider-locked-by-a-separator.md)；方案一节里「1 点分隔线隐藏」是当时的做法，保留原文 |
