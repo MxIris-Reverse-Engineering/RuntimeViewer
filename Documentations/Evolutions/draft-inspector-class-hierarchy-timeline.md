@@ -89,7 +89,11 @@ Hierarchy                         Hide
    `InspectorClassViewController.HierarchyTimelineRowView` 在 `drawBackground(in:)` 里画，竖线 1.5pt、对齐设备
    像素，箭头 7×5pt，离图标 3pt；行间距 16pt（Relationships 页是 10pt）。App 没有测试 target，这一步只做了
    类型检查，画出来的样子要在 App 里看。
-4. **验证**：Core 与 Packages 的全量测试、App 构建。
+4. **验证**：Core 与 Packages 的全量测试、App 构建。**已完成（2026-10-20，macOS 26.7、Xcode 27.0）**：App 用 Debug
+   workspace 以 Debug-arm64e 构建通过；Core 全量约 850 个测试有 3 个失败，Packages 全量 594 个有 2 个失败，全是
+   这台机器上已知的旧问题——两个按 macOS 27 写的用例（`NSSmartNamingSuggestion`、Relationships 快照缺
+   `_DefaultScopeRegistration`），以及三个满载时偶发的用例（后台索引批次取消、侧栏点击镜像切换文档、Always
+   Index 按 Engine 停派发）。三个偶发用例单独重跑都通过；用户的 Debug 设置与书签文件在测试前后 SHA 不变。
 
 每一步都能单独构建、单独验证。第 2 步同时改 ViewModel 和视图，因为状态类型一变，旧视图就编不过。
 
@@ -107,3 +111,4 @@ Hierarchy                         Hide
 | 2026-10-20 | Relationships 与层级的对象行共用 `RuntimeObjectCellAppearance.inspectorRow(for:)` | 两处要的是同一种行，原先构造代码只在 Relationships 的 cell ViewModel 里，抽出来避免复制一份 |
 | 2026-10-20 | 折叠时内容同时隐藏，不只把高度压成 0 | 加载占位压不扁，不隐藏会在标题下方继续画出来 |
 | 2026-10-20 | 每一级至少 30pt 高，即名字下面带镜像名的那种行的高度 | 只有名字的一级本来只有一行字高，箭头会短一截；旧对端回退时除第一行外全是这种行，整条时间线会变得局促 |
+| 2026-10-20 | 实现完成，待合并 | 四个落地步骤都已完成。文档：提案、`RuntimeViewerUsingAppKit/AGENTS.md`（加载占位预设）与 0016 的覆盖表随代码更新；不另写使用指南或实现说明（只是界面变化，做法提案已写清），没有新术语。界面效果尚未在 App 里看过 |
