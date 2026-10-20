@@ -278,7 +278,7 @@ struct RuntimeObjectIdentityCallSiteTests {
             )
         }
         defer { withExtendedLifetime(viewModel) {} }
-        let output = viewModel.transform(.init())
+        let output = viewModel.transform(.init(selectHierarchyLevelClicked: .empty()))
         _ = try await nextValue(from: output.hierarchyState) { state in
             if case .loaded = state { return true }
             return false
@@ -304,7 +304,7 @@ struct RuntimeObjectIdentityCallSiteTests {
             )
         }
         defer { withExtendedLifetime(viewModel) {} }
-        let output = viewModel.transform(.init())
+        let output = viewModel.transform(.init(selectHierarchyLevelClicked: .empty()))
         _ = try await nextValue(from: output.hierarchyState) { state in
             if case .loaded = state { return true }
             return false

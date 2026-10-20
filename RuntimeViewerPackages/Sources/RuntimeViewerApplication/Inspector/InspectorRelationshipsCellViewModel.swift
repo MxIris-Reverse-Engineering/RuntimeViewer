@@ -20,40 +20,7 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
 
     public init(runtimeObject: RuntimeObject) {
         self.runtimeObject = runtimeObject
-
-        let iconSize: CGFloat = 20
-        var composedAppearance = RuntimeObjectCellAppearance(
-            primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
-            primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
-            secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
-            secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
-            title: NSAttributedString {
-                AText(runtimeObject.displayName)
-                    .foregroundColor(.labelColor)
-                    .font(.systemFont(ofSize: 12))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
-        )
-        if runtimeObject.properties.contains(.isGeneric) {
-            composedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
-            composedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForGeneric
-        }
-        if runtimeObject.properties.contains(.isSpecialized) {
-            composedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
-            composedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForSpecialized
-        }
-        let imageName = runtimeObject.imageName
-        if !imageName.isEmpty {
-            composedAppearance.subtitle = NSAttributedString {
-                AText(imageName)
-                    .foregroundColor(.secondaryLabelColor)
-                    .font(.systemFont(ofSize: 10))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
-        }
-        self.appearance = composedAppearance
+        self.appearance = .inspectorRow(for: runtimeObject)
         super.init()
     }
 }

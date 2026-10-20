@@ -68,7 +68,7 @@
 |-----------|----------|------------|
 | `ViewModel<Route>` 基类（借 `ContentPlaceholderViewModel` / `InspectorPlaceholderViewModel`） | `ViewModelBaseTests` | 协作者保持；`currentMergedGenerationOptions` 合并存储选项与 transformer 设置；`commonLoading` 跟随活动；`delayedLoading` 只报告超过 100ms 的加载，且不会早于 100ms |
 | `ContentTextViewModel` | `ContentTextViewModelTests` | 渲染接口（`renderedInterface` 与 `attributedString` 一致）与镜像名；选中名跟随文档；点击链接 push；⌘⇧ 点击开新 tab；无法解析时报 `runtimeObjectNotFound`；Settings › Developer 的内容加载延迟连缓存命中的接口也拖住 |
-| `InspectorClassViewModel` | `InspectorClassViewModelTests` | 继承链逐行；`update(for:)` 换对象 / 同对象不重取；未索引镜像给空层级 |
+| `InspectorClassViewModel` | `InspectorClassViewModelTests` | 先列被查看的类、再由近到远列父类，每一级都是真实对象；`update(for:)` 换对象 / 同对象不重取；未索引镜像的对象只列自己；没有镜像定义的父类只有名字；不认识父类链命令的旧对端退回名字列表；点父类 push，点被查看的类或只有名字的一级不跳转 |
 | `InspectorRelationshipsViewModel` | `InspectorRelationshipsViewModelTests` | 按 kind 的标题与空提示；NSObject 子类含 NSString；点击 push；`update(for:)` 立即换标题并重载 |
 | `InspectorSwiftSpecializationViewModel` | `InspectorSwiftSpecializationViewModelTests` | 只列特化子项；添加特化触发路由；选择 push；`update(for:)` |
 | `InspectorRuntimeNodeViewModel` | `InspectorRuntimeNodeViewModelTests` | 持有节点（该类目前没有其他行为） |

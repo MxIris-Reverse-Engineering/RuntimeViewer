@@ -98,11 +98,10 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
 
     private func setupContentViewConstraints(for disclosureState: NSControl.StateValue) {
         contentView.snp.remakeConstraints { make in
-            // 8 points below the title and in line with it, as the lists below the headers of the
-            // inspector's other pages.
+            // 8 points below the title and edge to edge, as the lists below the headers of the
+            // inspector's other pages: a list's inset style leaves its own margin.
             make.top.equalTo(headerView.snp.bottom).offset(8)
-            make.left.equalToSuperview().inset(8)
-            make.right.lessThanOrEqualToSuperview().inset(8)
+            make.leading.trailing.equalToSuperview()
             make.bottom.equalToSuperview().inset(15)
             switch disclosureState {
             case .on:
@@ -111,5 +110,8 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
                 break
             }
         }
+        // Hidden as well as flattened: content that cannot shrink with it, such as a loading
+        // placeholder, would otherwise draw on below the title.
+        contentView.isHidden = disclosureState == .on
     }
 }

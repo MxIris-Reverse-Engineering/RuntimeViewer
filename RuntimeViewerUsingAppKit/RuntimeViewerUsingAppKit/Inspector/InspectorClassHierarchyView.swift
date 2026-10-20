@@ -9,60 +9,64 @@ final class InspectorClassHierarchyView: InspectorDisclosureView<InspectorClassH
         title = "Hierarchy"
     }
 
+    /// The list of levels, for the view controller to bind its rows to.
+    var tableView: NSTableView {
+        contentView.tableView
+    }
+
     func apply(_ hierarchyState: InspectorClassViewModel.HierarchyState) {
         contentView.apply(hierarchyState)
     }
 }
 
-/// Content area of the Hierarchy disclosure: the hierarchy text and the
-/// loading placeholder that stands in for it, never both at once.
+/// Content area of the Hierarchy disclosure: the list of levels, one
+/// `RuntimeObjectCellView` row each, and the loading placeholder that stands
+/// in for it, never both at once.
 ///
-/// The two live in a stack view rather than overlapping, because a hidden
-/// `NSView` still contributes its size to Auto Layout while a hidden
-/// *arranged* subview is detached from the layout entirely — which is what
-/// lets the disclosure area size itself to whichever of the two is showing.
+/// The list runs edge to edge, as the Relationships page's does: its inset
+/// style leaves the margin, so the icons of the two pages line up. The
+/// placeholder takes the Relationships page's place too, 8 points in and 12
+/// below the title. The list is hidden while the placeholder shows, rows and
+/// all, and keeps the area's height for that time; a placeholder taller than
+/// the last list runs on below it rather than resize the page.
 final class InspectorClassHierarchyContentView: XiblessView {
-    private let hierarchyLabel = Label()
+    private let scrollView: SelfSizingScrollView
 
-    private let skeletonPlaceholderView = SkeletonPlaceholderView.classHierarchy()
+    let tableView: SelfSizingTableView
 
-    private lazy var contentStackView = VStackView(alignment: .leading, spacing: 0) {
-        hierarchyLabel
-        skeletonPlaceholderView
-    }
+    private let skeletonPlaceholderView = SkeletonPlaceholderView.runtimeObjectList()
 
     override init(frame frameRect: CGRect) {
+        (scrollView, tableView) = SelfSizingTableView.scrollableNavigationListTableView()
         super.init(frame: frameRect)
 
         hierarchy {
-            contentStackView
+            scrollView
+            skeletonPlaceholderView
         }
 
-        contentStackView.snp.makeConstraints { make in
+        scrollView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
 
-        hierarchyLabel.do {
-            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            $0.textColor = .controlTextColor
-            $0.font = .systemFont(ofSize: 12, weight: .regular)
+        skeletonPlaceholderView.snp.makeConstraints { make in
+            make.top.equalToSuperview().inset(4)
+            make.leading.trailing.equalToSuperview().inset(8)
+        }
+
+        tableView.do {
+            $0.intercellSpacing = .init(width: 0, height: 10)
         }
     }
 
     func apply(_ hierarchyState: InspectorClassViewModel.HierarchyState) {
         switch hierarchyState {
         case .loading:
-            // Clearing the text matters as much as hiding the label: the label
-            // is reused across objects, so leaving the previous object's
-            // hierarchy in place would flash it back on screen for a frame
-            // when the placeholder goes away.
-            hierarchyLabel.stringValue = ""
-            hierarchyLabel.isHidden = true
             skeletonPlaceholderView.isPresentingPlaceholder = true
-        case .loaded(let hierarchy):
-            hierarchyLabel.stringValue = hierarchy
-            hierarchyLabel.isHidden = false
+            scrollView.isHidden = true
+        case .loaded:
             skeletonPlaceholderView.isPresentingPlaceholder = false
+            scrollView.isHidden = false
         }
     }
 }
