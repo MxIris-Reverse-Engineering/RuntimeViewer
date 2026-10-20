@@ -148,6 +148,7 @@ extension RuntimeEngine {
         registrar.register(InterfaceCommand.self)
         registrar.register(HierarchyCommand.self)
         registrar.register(SuperclassChainCommand.self)
+        registrar.register(RefinedProtocolTreeCommand.self)
         registrar.register(RelationshipsCommand.self)
         registrar.register(CounterpartCommand.self)
         registrar.register(MemberAddressesCommand.self)

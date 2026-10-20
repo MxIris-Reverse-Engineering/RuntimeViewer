@@ -148,6 +148,14 @@ extension RuntimeEngine {
         }
     }
 
+    struct RefinedProtocolTreeCommand: RuntimeEngineCommand {
+        let object: RuntimeObject
+        static var commandName: String { CommandName.runtimeObjectRefinedProtocolTree.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> [RuntimeRelationshipNode] {
+            try await engine._refinedProtocolTree(for: object)
+        }
+    }
+
     struct RelationshipsCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         static var commandName: String { CommandName.runtimeRelationshipsForObject.commandName }

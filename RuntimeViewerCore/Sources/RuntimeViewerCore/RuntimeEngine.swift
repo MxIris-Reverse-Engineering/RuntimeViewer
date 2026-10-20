@@ -1266,6 +1266,20 @@ extension RuntimeEngine {
         try await typeRelationshipsResolver.superclassChain(of: object)
     }
 
+    /// The protocols `object` refines, each with the protocols it refines in
+    /// turn underneath: what the Inspector's hierarchy lists below a protocol,
+    /// the tree the Find navigator's Ancestor Types shows for it, Objective-C
+    /// and Swift alike. A protocol no indexed image defines is a node with its
+    /// name only. Indexes nothing to answer; empty for anything that is not a
+    /// protocol. A peer older than this command has no handler for it.
+    public func refinedProtocolTree(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        try await dispatch(RefinedProtocolTreeCommand(object: object))
+    }
+
+    func _refinedProtocolTree(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        try await typeRelationshipsResolver.refinedProtocolTree(of: object)
+    }
+
     /// Cross-image relationships for an inspectable target: every direct
     /// subclass (for classes) or conforming type (for protocols), unioned
     /// across all indexed images.

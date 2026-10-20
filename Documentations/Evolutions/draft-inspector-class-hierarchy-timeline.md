@@ -1,4 +1,4 @@
-# Draft - Inspector 类层级改为时间线式的对象列表
+# Draft - Inspector 的类与协议层级：时间线式的对象列表与继承树
 
 - **状态**: In Progress
 - **创建日期**: 2026-10-20
@@ -26,6 +26,17 @@ Hierarchy
   [?]  NSObject           ← 定义它的镜像没被索引：问号图标、灰色名字、不可点
 ```
 
+协议也有同样的 Hierarchy 页（实现中追加的范围）。一个协议可以继承多个协议，所以用 Outline 显示：被查看的
+协议是根，下面是它继承的协议，每个再展开它自己继承的，与 Find 导航器的 Ancestor Types 是同一棵树。
+
+```
+Hierarchy
+▾ [Pr] NSURLSessionDataDelegate
+  ▾ [Pr] NSURLSessionTaskDelegate
+    ▾ [Pr] NSURLSessionDelegate
+        [Pr] NSObject
+```
+
 ## 方案
 
 **引擎（RuntimeViewerCore）**
@@ -46,8 +57,9 @@ Hierarchy
 
 **App**
 
-- `InspectorClassViewModel` 的状态改为 `.loaded([InspectorClassHierarchyCellViewModel])`：第一行是
-  被查看的对象本身，后面是父类链的每一级。新增的 cell ViewModel 与 `InspectorRelationshipsCellViewModel`
+- `InspectorClassViewModel`（后改名 `InspectorHierarchyViewModel`，见「协议层级」）的状态改为
+  `.loaded([InspectorHierarchyCellViewModel])`：第一行是被查看的对象本身，后面是父类链的每一级。新增的
+  cell ViewModel（最初叫 `InspectorClassHierarchyCellViewModel`）与 `InspectorRelationshipsCellViewModel`
   同款，只有一个 `Appearance`：20pt 图标、12pt 类名、10pt 镜像名；两者的对象行由同一个
   `RuntimeObjectCellAppearance.inspectorRow(for:)` 构造。未解析的一级照 Find 导航器的样式显示：
   问号、灰色类名、没有镜像名；问号是与其他级同尺寸的灰色徽标。
@@ -64,6 +76,20 @@ Hierarchy
   缩进 8pt）。`classHierarchy` 预设没有人用了，删掉它，并同步 `RuntimeViewerUsingAppKit/AGENTS.md` 里
   提到它的那句。原来的折叠区视图（`InspectorClassHierarchyView`、`InspectorDisclosureView`）只有这一页在用，
   一并删掉。
+
+**协议层级（实现中追加）**
+
+- 引擎：`RuntimeTypeRelationshipsResolver.refinedProtocolTree(of:)` 直接用 Ancestor Types 的协议遍历
+  （`ancestorNodes(of:path:)`）：ObjC 协议、Swift 协议都行，Swift 协议继承的 ObjC 协议也在树里；同一个协议从
+  几条路径到达就出现在几处，与 Xcode、Find 导航器一致。新 Core 命令 `runtimeObjectRefinedProtocolTree`，对外是
+  `RuntimeEngine.refinedProtocolTree(for:) -> [RuntimeRelationshipNode]`。旧版本对端不认识它时，页面只显示协议本身。
+- Inspector：协议也有 Hierarchy 页，排在第一位，与类的 Hierarchy 页是同一个页签（切换类与协议时用户选中的页签
+  保持不变）。页面结构同 Class 页：「Hierarchy」页面标题、下方是自适应高度的 Outline（`SelfSizingOutlineView`），
+  根是被查看的协议，全部展开；行仍用 `RuntimeObjectCellView`，与 Class、Relationships 页的行一致。点一行跳到那个
+  协议，只有名字的行和根点了不跳转。
+- 两页共用一个 ViewModel（`InspectorClassViewModel` 改名为 `InspectorHierarchyViewModel`，按对象种类取父类链
+  或协议树）和一个 cell ViewModel（`InspectorClassHierarchyCellViewModel` 改名为 `InspectorHierarchyCellViewModel`，
+  多了 `children` 和按路径生成的标识，可作 Outline 节点）。
 
 **测试**
 
@@ -99,6 +125,13 @@ Hierarchy
    这台机器上已知的旧问题——两个按 macOS 27 写的用例（`NSSmartNamingSuggestion`、Relationships 快照缺
    `_DefaultScopeRegistration`），以及三个满载时偶发的用例（后台索引批次取消、侧栏点击镜像切换文档、Always
    Index 按 Engine 停派发）。三个偶发用例单独重跑都通过；用户的 Debug 设置与书签文件在测试前后 SHA 不变。
+5. **协议层级·引擎**（追加）：`refinedProtocolTree(of:)`、Core 命令 `runtimeObjectRefinedProtocolTree` 与
+   `RuntimeEngine.refinedProtocolTree(for:)`，以及 Core 测试。**已完成（2026-10-20）**：Core 测试并入
+   `RuntimeInspectorHierarchyTests`（原 `RuntimeSuperclassChainTests`，与父类链共用一个已索引 AppKit 的引擎），
+   覆盖 ObjC 协议的两层树、Swift 协议里未索引的标准库协议只有名字、类没有协议树，以及经 socket 与 XPC 调用。
+6. **协议层级·界面**（追加）：ViewModel 与 cell ViewModel 改名并支持协议树，新的 `InspectorProtocolViewController`
+   （Outline），Inspector 的页签配置；以及 Application 测试。
+7. **验证**（追加）：Core 与 Packages 的全量测试、App 构建。
 
 每一步都能单独构建、单独验证。第 2 步同时改 ViewModel 和视图，因为状态类型一变，旧视图就编不过。
 
@@ -120,3 +153,6 @@ Hierarchy
 | 2026-10-20 | 去掉折叠区与 Hide/Show，「Hierarchy」改成与 Relationships、References、Specialization 页一致的页面标题 | 用户看过实现后要求标题的字号、颜色与位置和其他 Inspector 页对齐，也不需要折叠；页面结构照 Relationships 页，两个折叠区视图随之删除，「折叠时隐藏内容」那条决定一并作废 |
 | 2026-10-20 | 父类链遇到未索引的一级不再停下：再往上的各级用最后一个已索引类的 ObjC 类数据里记的名字接着列，能解析的照常是对象，未索引的只有名字、点了不跳转 | 用户决定。旧的文字版靠运行时元数据能列到根类，而后台索引默认关闭，看自家 App 的类时父类所在的框架常常没被索引，停在那里会比原来少几级；类数据本来就记着整条链，接着列不需要索引任何镜像 |
 | 2026-10-20 | Swift 类的父类是导入的 ObjC 类、又没被索引时，那一级用它的 ObjC 运行时名（如 `CALayer`） | 与再往上从 ObjC 类数据里接出来的名字写法一致；Swift 表里打印出的名字在这种情况下不比运行时名更好读 |
+| 2026-10-20 | 范围追加：协议也加 Hierarchy 页，用 Outline 显示继承树 | 用户要求。协议可以继承多个协议，层级是一棵树而不是一条链；Find 导航器的 Ancestor Types 已经能对协议建这棵树，引擎直接复用 |
+| 2026-10-20 | 协议树的行用 `RuntimeObjectCellView`（两行：名字与镜像），不用 Find 导航器的单行结果行 | 与同在 Inspector 里的 Class、Relationships 页的行保持一致；复用的是 Find 的协议遍历和 Outline 的绑定方式 |
+| 2026-10-20 | 类与协议共用一个 Hierarchy 页签和一个 ViewModel，视图各一个 | 两页的取数、加载占位、点击跳转、旧对端回退完全相同，只有取哪种层级和怎么画不同；同一个页签让用户在类与协议之间切换时停在原来的页签上 |

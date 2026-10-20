@@ -38,8 +38,9 @@ import SwiftDeclaration
 /// theirs when any of them carries a copy; the type asked about is looked up
 /// everywhere regardless.
 ///
-/// The Inspector's class hierarchy is answered here too: the superclass levels
-/// of Ancestor Types, as one flat chain (`superclassChain(of:)`).
+/// The Inspector's hierarchies are answered here too: a class's superclass
+/// levels of Ancestor Types as one flat chain (`superclassChain(of:)`), and a
+/// protocol's Ancestor Types tree itself (`refinedProtocolTree(of:)`).
 @Loggable(.private)
 actor RuntimeTypeRelationshipsResolver {
     static let maximumDepth = 64
@@ -396,6 +397,27 @@ actor RuntimeTypeRelationshipsResolver {
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? qualifiedName, object: object, children: children))
         }
         return nodes
+    }
+
+    // MARK: - Refined Protocol Tree
+
+    /// The protocols `object` refines, each with the protocols it refines in
+    /// turn underneath: the Inspector's protocol hierarchy below the protocol
+    /// itself, which is the tree Ancestor Types shows for it — Objective-C and
+    /// Swift protocols alike, a protocol reached along two paths under both.
+    /// Empty for anything that is not a protocol.
+    ///
+    /// Throws `CancellationError` when the task asking is cancelled, rather
+    /// than hand out the tree as far as it got.
+    func refinedProtocolTree(of object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        switch object.kind {
+        case .objc(.type(.protocol)), .swift(.type(.protocol)):
+            let nodes = await ancestorNodes(of: object, path: RelationshipWalkPath(root: identity(of: object)))
+            try Task.checkCancellation()
+            return nodes
+        default:
+            return []
+        }
     }
 
     // MARK: - Superclass Chain

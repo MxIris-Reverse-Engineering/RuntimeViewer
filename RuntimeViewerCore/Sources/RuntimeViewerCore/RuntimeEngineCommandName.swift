@@ -73,6 +73,9 @@ extension RuntimeEngine.CommandName {
     /// The superclasses as runtime objects, for the Inspector's class
     /// hierarchy; see `RuntimeEngine.superclassChain(for:)`.
     static let runtimeObjectSuperclassChain = Self("runtimeObjectSuperclassChain")
+    /// The protocols a protocol refines, as a tree, for the Inspector's
+    /// protocol hierarchy; see `RuntimeEngine.refinedProtocolTree(for:)`.
+    static let runtimeObjectRefinedProtocolTree = Self("runtimeObjectRefinedProtocolTree")
     static let runtimeRelationshipsForObject = Self("runtimeRelationshipsForObject")
     static let runtimeCounterpartForObject = Self("runtimeCounterpartForObject")
     static let runtimeObjectInfo = Self("runtimeObjectInfo")

@@ -1,15 +1,17 @@
 import Testing
 @testable import RuntimeViewerCore
 
-/// The Inspector's class hierarchy: a class's superclasses as runtime objects,
+/// The Inspector's hierarchies: a class's superclasses as runtime objects,
 /// nearest first, found across images and across the language boundary the
-/// way Ancestor Types finds its superclass levels.
+/// way Ancestor Types finds its superclass levels; and the tree of protocols a
+/// protocol refines, which is Ancestor Types' own.
 ///
 /// Anchored on AppKit's `NSButton: NSControl: NSView: NSResponder` and its
-/// Swift class `NSScrollPocket: NSView` (macOS 26.7 and 27.0), both ending at
-/// libobjc's `NSObject`.
-@Suite("Superclass chain", .serialized)
-struct RuntimeSuperclassChainTests {
+/// Swift class `NSScrollPocket: NSView`, both ending at libobjc's `NSObject`,
+/// and on its protocols `NSTableViewDelegate <NSControlTextEditingDelegate>`
+/// and the Swift `MenuItemBase` (macOS 26.7 and 27.0).
+@Suite("Inspector hierarchy", .serialized)
+struct RuntimeInspectorHierarchyTests {
     private static let appKitPath = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
 
     private static let libobjcPath = "/usr/lib/libobjc.A.dylib"
@@ -21,7 +23,7 @@ struct RuntimeSuperclassChainTests {
     }
 
     private static func makeEngine(_ label: String, loading imagePaths: [String]) async throws -> RuntimeEngine {
-        let engine = RuntimeEngine(source: .local, engineID: "test-superclass-chain-" + label)
+        let engine = RuntimeEngine(source: .local, engineID: "test-inspector-hierarchy-" + label)
         try await engine.connect()
         for imagePath in imagePaths {
             try await engine.loadImage(at: imagePath)
@@ -133,6 +135,51 @@ struct RuntimeSuperclassChainTests {
         #expect(try await engine.superclassChain(for: object).isEmpty)
     }
 
+    // MARK: - Refined Protocol Tree
+
+    private static func objcProtocol(named name: String, in imagePath: String, of engine: RuntimeEngine) async throws -> RuntimeObject {
+        let objects = try await engine.objects(in: imagePath)
+        return try #require(objects.first { $0.name == name && $0.kind == .objc(.type(.protocol)) }, "\(name) not found in \(imagePath)")
+    }
+
+    @Test("an Objective-C protocol lists the protocols it refines, each with the ones it refines underneath")
+    func objcProtocolListsItsRefinedProtocols() async throws {
+        let engine = try await Self.indexedEngine.value
+        let tableViewDelegate = try await Self.objcProtocol(named: "NSTableViewDelegate", in: Self.appKitPath, of: engine)
+
+        let tree = try await engine.refinedProtocolTree(for: tableViewDelegate)
+
+        #expect(tree.map(\.name) == ["NSControlTextEditingDelegate"])
+        let textEditingDelegate = try #require(tree.first)
+        #expect(textEditingDelegate.object?.kind == .objc(.type(.protocol)))
+        #expect(textEditingDelegate.children.map(\.name) == ["NSObject"])
+        #expect(textEditingDelegate.children.first?.object?.kind == .objc(.type(.protocol)))
+    }
+
+    /// `MenuItemBase: XPCCodable, Decodable, Encodable, Identifiable`: the
+    /// first is AppKit's own, the rest are the standard library's, which the
+    /// engine has not indexed.
+    @Test("a Swift protocol lists the protocols it refines, those no indexed image defines by name")
+    func swiftProtocolListsItsRefinedProtocols() async throws {
+        let engine = try await Self.indexedEngine.value
+        let swiftProtocols = Self.everyObject(of: try await engine.objects(in: Self.appKitPath)).filter { $0.kind == .swift(.type(.protocol)) }
+        let menuItemBase = try #require(swiftProtocols.first { $0.displayName == "AppKit.MenuItemBase" }, "AppKit no longer has MenuItemBase")
+
+        let tree = try await engine.refinedProtocolTree(for: menuItemBase)
+
+        #expect(Set(tree.map(\.name)) == ["AppKit.XPCCodable", "Swift.Decodable", "Swift.Encodable", "Swift.Identifiable"])
+        #expect(tree.first { $0.name == "AppKit.XPCCodable" }?.object?.kind == .swift(.type(.protocol)))
+        #expect(tree.filter { $0.name.hasPrefix("Swift.") }.allSatisfy { $0.object == nil })
+    }
+
+    @Test("anything but a protocol has no refined protocol tree")
+    func classHasNoRefinedProtocolTree() async throws {
+        let engine = try await Self.indexedEngine.value
+        let button = try await Self.objcClass(named: "NSButton", in: Self.appKitPath, of: engine)
+
+        #expect(try await engine.refinedProtocolTree(for: button).isEmpty)
+    }
+
     #if canImport(Network) && os(macOS)
     @Test("a caller reaches the chain through a connection", arguments: RemoteEnginePair.Transport.allCases)
     func chainCrossesAConnection(transport: RemoteEnginePair.Transport) async throws {
@@ -146,6 +193,20 @@ struct RuntimeSuperclassChainTests {
 
         #expect(!localChain.isEmpty)
         #expect(forwardedChain == localChain)
+    }
+
+    @Test("a caller reaches the refined protocol tree through a connection", arguments: RemoteEnginePair.Transport.allCases)
+    func refinedProtocolTreeCrossesAConnection(transport: RemoteEnginePair.Transport) async throws {
+        let serving = try await Self.indexedEngine.value
+        let tableViewDelegate = try await Self.objcProtocol(named: "NSTableViewDelegate", in: Self.appKitPath, of: serving)
+        let localTree = try await serving.refinedProtocolTree(for: tableViewDelegate)
+        let pair = try await RemoteEnginePair.make(transport, label: "refined-protocol-tree.\(transport)", serving: serving)
+
+        let forwardedTree = try await pair.client.refinedProtocolTree(for: tableViewDelegate)
+        await pair.stop()
+
+        #expect(!localTree.isEmpty)
+        #expect(forwardedTree == localTree)
     }
     #endif
 }
