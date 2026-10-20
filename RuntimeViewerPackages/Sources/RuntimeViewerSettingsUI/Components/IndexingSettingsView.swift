@@ -57,10 +57,15 @@ struct IndexingSettingsView: View {
 }
 
 /// Editor section for `Settings.Indexing.custom`. Renders the custom toggle,
-/// each entry as an editable row (enable switch, identifier field, engine
-/// menu, labeled Recursive switch, delete button), plus a trailing Add
-/// button. The list is order-preserving — duplicate / blank entries are
-/// accepted and only filtered at the resolution step in the coordinator.
+/// each entry as an editable row (enable switch, identifier field, labeled
+/// Recursive switch, delete button, and under the field a labeled engine
+/// menu), plus a trailing Add button. The list is order-preserving —
+/// duplicate / blank entries are accepted and only filtered at the
+/// resolution step in the coordinator.
+///
+/// The engine menu has a line of its own because an engine's name has no
+/// length limit — an attached process is shown by its process name — and on
+/// the field's line a long name squeezed the field.
 private struct AlwaysIndexSection: View {
     @Binding var isEnabled: Bool
     @Binding var entries: [RuntimeViewerSettings.Settings.Indexing.AlwaysIndexEntry]
@@ -81,71 +86,79 @@ private struct AlwaysIndexSection: View {
 
             ForEach(entries.indices, id: \.self) { index in
                 let entryEnabled = entries.indices.contains(index) ? entries[index].isEnabled : false
-                HStack {
-                    Toggle(
-                        "Index This Image",
-                        isOn: Binding(
-                            get: { entries.indices.contains(index) ? entries[index].isEnabled : false },
-                            set: { newValue in
-                                guard entries.indices.contains(index) else { return }
-                                entries[index].isEnabled = newValue
-                            }
+                VStack(alignment: .identifierFieldLeading, spacing: 6) {
+                    HStack {
+                        Toggle(
+                            "Index This Image",
+                            isOn: Binding(
+                                get: { entries.indices.contains(index) ? entries[index].isEnabled : false },
+                                set: { newValue in
+                                    guard entries.indices.contains(index) else { return }
+                                    entries[index].isEnabled = newValue
+                                }
+                            )
                         )
-                    )
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-                    .help("Index this image. When off, the entry is kept in the list but skipped; a batch already running finishes naturally.")
-                    TextField(
-                        "imagePath or imageName",
-                        text: Binding(
-                            get: { entries.indices.contains(index) ? entries[index].identifier : "" },
-                            set: { newValue in
-                                guard entries.indices.contains(index) else { return }
-                                entries[index].identifier = newValue
-                            }
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                        .help("Index this image. When off, the entry is kept in the list but skipped; a batch already running finishes naturally.")
+                        TextField(
+                            "imagePath or imageName",
+                            text: Binding(
+                                get: { entries.indices.contains(index) ? entries[index].identifier : "" },
+                                set: { newValue in
+                                    guard entries.indices.contains(index) else { return }
+                                    entries[index].identifier = newValue
+                                }
+                            )
                         )
-                    )
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(entryFieldsDisabled || !entryEnabled)
-                    AlwaysIndexEngineMenu(
-                        entry: Binding(
-                            get: { entries.indices.contains(index) ? entries[index] : .default },
-                            set: { newValue in
-                                guard entries.indices.contains(index) else { return }
-                                entries[index] = newValue
-                            }
-                        ),
-                        connectedEngineSections: connectedEngineSections
-                    )
-                    .disabled(entryFieldsDisabled || !entryEnabled)
-                    Text("Recursive")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Toggle(
-                        "Recursive",
-                        isOn: Binding(
-                            get: { entries.indices.contains(index) ? entries[index].followDependencies : false },
-                            set: { newValue in
-                                guard entries.indices.contains(index) else { return }
-                                entries[index].followDependencies = newValue
-                            }
-                        )
-                    )
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-                    .help("Recursively index the image's dependency closure using the Heuristic Discovery depth above. When off, only the image itself is indexed.")
-                    .disabled(entryFieldsDisabled || !entryEnabled)
-                    Button {
-                        guard entries.indices.contains(index) else { return }
-                        entries.remove(at: index)
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(entryFieldsDisabled || !entryEnabled)
+                        .alignmentGuide(.identifierFieldLeading) { dimensions in dimensions[.leading] }
+                        Text("Recursive")
+                            .font(.callout)
                             .foregroundStyle(.secondary)
+                        Toggle(
+                            "Recursive",
+                            isOn: Binding(
+                                get: { entries.indices.contains(index) ? entries[index].followDependencies : false },
+                                set: { newValue in
+                                    guard entries.indices.contains(index) else { return }
+                                    entries[index].followDependencies = newValue
+                                }
+                            )
+                        )
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                        .help("Recursively index the image's dependency closure using the Heuristic Discovery depth above. When off, only the image itself is indexed.")
+                        .disabled(entryFieldsDisabled || !entryEnabled)
+                        Button {
+                            guard entries.indices.contains(index) else { return }
+                            entries.remove(at: index)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
                     }
-                    .buttonStyle(.borderless)
+                    HStack(spacing: 6) {
+                        Text("Indexed on")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        AlwaysIndexEngineMenu(
+                            entry: Binding(
+                                get: { entries.indices.contains(index) ? entries[index] : .default },
+                                set: { newValue in
+                                    guard entries.indices.contains(index) else { return }
+                                    entries[index] = newValue
+                                }
+                            ),
+                            connectedEngineSections: connectedEngineSections
+                        )
+                        .disabled(entryFieldsDisabled || !entryEnabled)
+                    }
                 }
                 .disabled(entryFieldsDisabled)
             }
@@ -159,12 +172,24 @@ private struct AlwaysIndexSection: View {
         } header: {
             Text("Always Index")
         } footer: {
-            Text("Images listed here are indexed in the background whenever a document opens, the runtime engine changes, or this list changes. Each entry may be a full path (starting with \"/\") or just the image's file name (matched against loaded images by last path component). Entries that don't match any loaded image are silently skipped. The leading switch enables or disables the row without deleting it — a disabled row is skipped, and a batch already running finishes naturally. The engine menu picks the runtime engines the row is indexed on: All Engines, which includes engines connected later, or only the engines checked, which are remembered while they are not connected. A process attached on this Mac is matched by its name, so the choice still holds after it relaunches. Taking an engine off a row works like disabling the row on that engine. The Recursive switch additionally indexes the image's full dependency closure using the Heuristic Discovery depth above; when off, only the image itself is indexed.")
+            Text("Images listed here are indexed in the background whenever a document opens, the runtime engine changes, or this list changes. Each entry may be a full path (starting with \"/\") or just the image's file name (matched against loaded images by last path component). Entries that don't match any loaded image are silently skipped. The leading switch enables or disables the row without deleting it — a disabled row is skipped, and a batch already running finishes naturally. The Indexed on menu under each image picks the runtime engines the row is indexed on: All Engines, which includes engines connected later, or only the engines checked, which are remembered while they are not connected. A process attached on this Mac is matched by its name, so the choice still holds after it relaunches. Taking an engine off a row works like disabling the row on that engine. The Recursive switch additionally indexes the image's full dependency closure using the Heuristic Discovery depth above; when off, only the image itself is indexed.")
         }
         .onReceive(runtimeEngineManager.$runtimeEngineSections) { sections in
             connectedEngineSections = sections.map(EngineMenuSection.init(section:))
         }
     }
+}
+
+extension HorizontalAlignment {
+    private enum IdentifierFieldLeading: AlignmentID {
+        static func defaultValue(in context: ViewDimensions) -> CGFloat {
+            context[.leading]
+        }
+    }
+
+    /// The leading edge of an always-index row's identifier field, which the
+    /// engine menu's line below it starts at.
+    fileprivate static let identifierFieldLeading = HorizontalAlignment(IdentifierFieldLeading.self)
 }
 
 /// One host's engines in an always-index row's engine menu.

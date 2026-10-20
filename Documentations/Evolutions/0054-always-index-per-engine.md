@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-10-15
-- **最后更新**: 2026-10-15
+- **最后更新**: 2026-10-20
 
 ## 摘要
 
@@ -33,7 +33,7 @@ Settings › Indexing 的 Always Index 清单原先是全局的。文档打开�
 
 **设置页**（`AlwaysIndexSection`）
 
-- 每行在输入框后加一个 Engine 多选菜单：顶部是「All Engines」，下面按主机分组列出 Engine，和工具栏的 Engine 切换菜单一样。菜单标签显示 `All Engines`、单个 Engine 名、`N Engines` 或 `No Engines`。
+- 每行在输入框下方另起一行，加一个标着「Indexed on」的 Engine 多选菜单：顶部是「All Engines」，下面按主机分组列出 Engine，和工具栏的 Engine 切换菜单一样。菜单标签显示 `All Engines`、单个 Engine 名、`N Engines` 或 `No Engines`。
 - 菜单里列出两类 Engine：
   - 当前已连上的，订阅 `RuntimeEngineManager.$runtimeEngineSections`（工具栏用的同一份列表）。同一主机分组内同键的 Engine 只列一次。为此 `RuntimeViewerSettingsUI` 新增对 `RuntimeViewerEngineManagement` 的依赖，只在 macOS 上。
   - 这一行限定了、但现在没连上的，列在最后的「Not Connected」组，显示「名字 — 主机名」。All Engines 状态下不列，因为那时记着的选择不生效。
@@ -80,3 +80,4 @@ Settings › Indexing 的 Always Index 清单原先是全局的。文档打开�
 | 2026-10-15 | 「Not Connected」只在这一行限定了 Engine 时列出 | All Engines 状态下记着的旧选择不生效，列出来会让人以为它们有作用。限定状态下列出的都是勾着的，取消勾选就忘掉 |
 | 2026-10-15 | 同键的 Engine 只在同一主机分组内合并，不跨分组合并 | 跨分组合并会让另一台 Mac 的分组里少掉它的 My Mac，看起来像那台 Mac 没有本地 Engine |
 | 2026-10-15 | 状态 → Implemented | RuntimeViewerPackages 全套测试通过；`RuntimeViewer macOS` 用 Debug workspace 编译通过。协调器的新测试经三种改坏法验证会变红：去掉 Engine 过滤、派发时不按 Engine 过滤、任何编辑都重新派发。设置页的菜单只编译过，没在 App 里目视验证。配套文档：不写使用指南，设置页 footer 已说明用法；不写实现说明，方案一节与代码注释已覆盖。术语表新增「Engine 键」 |
+| 2026-10-20 | Engine 菜单挪到输入框下方，单独一行，前面标「Indexed on」 | 菜单原先跟在输入框后面、宽度随标题变化，`My Mac (Mac Catalyst)` 这类长名字会把输入框挤窄。Engine 名没有长度上限（本机 Attach 的进程显示进程名），同一行里只能二选一：截断名字，或者挤窄输入框。用户对比了六种布局的 demo（定宽截断、定宽折两行、表头加定宽、单独一行等）后选定单独一行：名字永不截断，各行输入框等宽，代价是每个条目高度翻倍 |
