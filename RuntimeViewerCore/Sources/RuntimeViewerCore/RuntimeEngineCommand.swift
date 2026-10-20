@@ -147,6 +147,7 @@ extension RuntimeEngine {
         registrar.registerProgress(ObjectsInImageCommand.self)
         registrar.register(InterfaceCommand.self)
         registrar.register(HierarchyCommand.self)
+        registrar.register(SuperclassChainCommand.self)
         registrar.register(RelationshipsCommand.self)
         registrar.register(CounterpartCommand.self)
         registrar.register(MemberAddressesCommand.self)

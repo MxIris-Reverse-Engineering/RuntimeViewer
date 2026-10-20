@@ -1,6 +1,6 @@
 # Draft - Inspector 类层级改为时间线式的对象列表
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-10-20
 - **最后更新**: 2026-10-20
 - **实现分支 / PR**: `feature/inspector-class-hierarchy-timeline`（从 `next` 切，并回 `next`）
@@ -75,7 +75,8 @@ Hierarchy                         Hide
 ## 落地步骤
 
 1. **引擎**：`RuntimeTypeRelationshipsResolver.superclassChain(of:)`、Core 命令 `runtimeObjectSuperclassChain` 与
-   `RuntimeEngine.superclassChain(for:)`，以及 Core 测试。
+   `RuntimeEngine.superclassChain(for:)`，以及 Core 测试。**已完成（2026-10-20）**：`RuntimeSuperclassChainTests`
+   覆盖 ObjC 链、Swift 类接 ObjC 父类、未索引的 `NSObject`、根类，以及经 socket 与 XPC 两种连接调用这条命令。
 2. **对象行**：cell ViewModel、`InspectorClassViewModel` 的新状态与对旧对端的回退、点击跳转；Hierarchy 折叠区换成
    `RuntimeObjectCellView` 的表格，加载占位换成 `runtimeObjectList`，删掉 `classHierarchy` 预设并同步
    `RuntimeViewerUsingAppKit/AGENTS.md`，折叠区内容不再左右缩进；以及 Application 测试。

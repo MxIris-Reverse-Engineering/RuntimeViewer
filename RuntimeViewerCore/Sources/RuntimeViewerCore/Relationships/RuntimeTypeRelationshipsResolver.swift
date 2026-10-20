@@ -37,6 +37,9 @@ import SwiftDeclaration
 /// those images' types and the nodes leading to them, a protocol counting as
 /// theirs when any of them carries a copy; the type asked about is looked up
 /// everywhere regardless.
+///
+/// The Inspector's class hierarchy is answered here too: the superclass levels
+/// of Ancestor Types, as one flat chain (`superclassChain(of:)`).
 @Loggable(.private)
 actor RuntimeTypeRelationshipsResolver {
     static let maximumDepth = 64
@@ -393,6 +396,82 @@ actor RuntimeTypeRelationshipsResolver {
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? qualifiedName, object: object, children: children))
         }
         return nodes
+    }
+
+    // MARK: - Superclass Chain
+
+    /// `object`'s superclasses, nearest first, one node each and none with
+    /// children: the Inspector's class hierarchy below the class itself. Each
+    /// level is found the way Ancestor Types finds its superclass levels,
+    /// across images and across the language boundary, without the protocols.
+    /// A superclass no indexed image defines is still a level, unresolved, and
+    /// the chain ends there: nothing indexed says what its own superclass is.
+    /// Empty for a root class and for anything that is not a class.
+    ///
+    /// Throws `CancellationError` when the task asking is cancelled, rather
+    /// than hand out the chain as far as it got.
+    func superclassChain(of object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        var chain: [RuntimeRelationshipNode] = []
+        var path = RelationshipWalkPath(root: identity(of: object))
+        var currentClass = object
+        walk: while let superclass = await superclass(of: currentClass) {
+            switch superclass {
+            case .resolved(let superclassObject):
+                guard let superclassIdentity = identity(of: superclassObject),
+                      let superclassPath = path.descending(into: superclassIdentity)
+                else { break walk }
+                chain.append(RuntimeRelationshipNode(object: superclassObject))
+                path = superclassPath
+                currentClass = superclassObject
+            case .unresolved(let name):
+                chain.append(RuntimeRelationshipNode(name: name, object: nil, children: []))
+                break walk
+            }
+        }
+        try Task.checkCancellation()
+        return chain
+    }
+
+    /// A class's superclass as one step of the chain finds it.
+    private enum Superclass {
+        /// The superclass, from the indexed image that defines it.
+        case resolved(RuntimeObject)
+        /// A superclass no indexed image defines, by the name its subclass
+        /// records for it.
+        case unresolved(name: String)
+    }
+
+    /// The superclass of an Objective-C class by the name its class data
+    /// records, and of a Swift class by its mangled name, or — for one no
+    /// Swift image defines — by the Objective-C name the indexer recorded for
+    /// an imported class, as `objcClassAncestorNodes(named:path:)` and
+    /// `swiftTypeAncestorNodes(of:path:)` look them up. `nil` for a root class
+    /// and for anything that is not a class.
+    private func superclass(of object: RuntimeObject) async -> Superclass? {
+        switch object.kind {
+        case .objc(.type(.class)):
+            guard let (group, _) = objcSectionFactory.indexer.classGroupAcrossImages(forName: object.name),
+                  let superclassName = group.info.first?.superClassName,
+                  !superclassName.isEmpty
+            else { return nil }
+            if let superclass = await materializeObjCClass(named: superclassName) {
+                return .resolved(superclass)
+            }
+            return .unresolved(name: superclassName)
+        case .swift(.type(.class)):
+            let indexer = swiftSectionFactory.indexer
+            guard let superclassMangledName = indexer.superclassMangledName(forMangledTypeName: object.name) else { return nil }
+            if let superclass = await materializeSwiftType(mangledName: superclassMangledName) {
+                return .resolved(superclass)
+            }
+            if let objcClassName = indexer.superclassObjCClassName(forMangledTypeName: object.name),
+               let objcSuperclass = await materializeObjCClass(named: objcClassName) {
+                return .resolved(objcSuperclass)
+            }
+            return .unresolved(name: indexer.superclassDisplayName(forMangledTypeName: object.name) ?? superclassMangledName)
+        default:
+            return nil
+        }
     }
 
     // MARK: - Descendants
