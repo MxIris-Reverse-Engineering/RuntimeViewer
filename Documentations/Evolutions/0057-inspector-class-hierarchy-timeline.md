@@ -1,9 +1,10 @@
-# Draft - Inspector 的类与协议层级：时间线式的对象列表与继承树
+# 0057 - Inspector 的类与协议层级：时间线式的对象列表与继承树
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-20
 - **最后更新**: 2026-10-20
 - **实现分支 / PR**: `feature/inspector-class-hierarchy-timeline`（从 `next` 切，并回 `next`）
+- **配套文档**: 无（理由见决策日志 2026-10-20 的 Implemented 一行）
 
 ## 摘要
 
@@ -165,3 +166,4 @@ Hierarchy
 | 2026-10-20 | 范围追加：协议也加 Hierarchy 页，用 Outline 显示继承树 | 用户要求。协议可以继承多个协议，层级是一棵树而不是一条链；Find 导航器的 Ancestor Types 已经能对协议建这棵树，引擎直接复用 |
 | 2026-10-20 | 协议树的行用 `RuntimeObjectCellView`（两行：名字与镜像），不用 Find 导航器的单行结果行 | 与同在 Inspector 里的 Class、Relationships 页的行保持一致；复用的是 Find 的协议遍历和 Outline 的绑定方式 |
 | 2026-10-20 | 类与协议共用一个 Hierarchy 页签和一个 ViewModel，视图各一个 | 两页的取数、加载占位、点击跳转、旧对端回退完全相同，只有取哪种层级和怎么画不同；同一个页签让用户在类与协议之间切换时停在原来的页签上 |
+| 2026-10-20 | Implemented，编号 0057：随本次合并进入 `next` | 用户在 App 里看过之后以 `/finish-feature` 收尾。七个落地步骤全部完成；偏离原方案之处都已在上面各行记下（标题与 Hide/Show、接着列未索引的父类、追加协议层级）。编号取各远端分支上已有的最大号 0056 加一。没做完的项：无。配套文档：不另写使用指南或实现说明——这是 Inspector 里的界面变化，用法一看便知，做法与取舍都在本提案里；代码侧的约定只改了 `RuntimeViewerUsingAppKit/AGENTS.md` 里加载占位预设那两句。没有新术语要登记进 `Glossary.md`。最终代码上的全量测试只有本机已知的旧失败；三个满载偶发的用例在加入协议层级之后没有再单独重跑 |
