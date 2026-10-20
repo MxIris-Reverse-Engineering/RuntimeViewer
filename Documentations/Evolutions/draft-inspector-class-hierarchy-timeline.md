@@ -32,8 +32,11 @@ Hierarchy
 
 - `RuntimeTypeRelationshipsResolver` 加一个只走父类链的扁平遍历 `superclassChain(of:)`。跨镜像、
   跨 ObjC / Swift 的解析与 materialize 规则照搬 Find 导航器的 Ancestor Types：不为此新建 section；
-  定义某一级的镜像没被索引时，那一级只有名字（`object == nil`），遍历也停在那里。它不收协议，
-  按「最近的父类在前」排成一列，同样有环检测和深度上限。
+  定义某一级的镜像没被索引时，那一级只有名字（`object == nil`）。再往上的各级取自最后一个已索引的类
+  自己的 ObjC 类数据：它沿父类指针一路记到根类，不管父类所在的镜像有没有被索引（继承 NSObject 的
+  Swift 类看它 ObjC 的那一面）。这些级在已索引的镜像里找得到的照常解析成对象，找不到的只有名字；
+  名字是 Swift 类的 ObjC 运行时名（`_TtC…`）时解码成 Swift 的写法。没有 ObjC 那一面的纯 Swift 类
+  记不下更多，就停在未解析的那一级。它不收协议，按「最近的父类在前」排成一列，同样有环检测和深度上限。
 - 新增 Core 命令 `runtimeObjectSuperclassChain`，对外是
   `RuntimeEngine.superclassChain(for:) -> [RuntimeRelationshipNode]`，登记进
   `registerBuiltInHandlers`。线上只是多一条命令；旧的 `runtimeObjectHierarchy` 不动，命令行工具仍用它。
@@ -115,3 +118,5 @@ Hierarchy
 | 2026-10-20 | 每一级至少 30pt 高，即名字下面带镜像名的那种行的高度 | 只有名字的一级本来只有一行字高，箭头会短一截；旧对端回退时除第一行外全是这种行，整条时间线会变得局促 |
 | 2026-10-20 | 实现完成，待合并 | 四个落地步骤都已完成。文档：提案、`RuntimeViewerUsingAppKit/AGENTS.md`（加载占位预设）与 0016 的覆盖表随代码更新；不另写使用指南或实现说明（只是界面变化，做法提案已写清），没有新术语。界面效果尚未在 App 里看过 |
 | 2026-10-20 | 去掉折叠区与 Hide/Show，「Hierarchy」改成与 Relationships、References、Specialization 页一致的页面标题 | 用户看过实现后要求标题的字号、颜色与位置和其他 Inspector 页对齐，也不需要折叠；页面结构照 Relationships 页，两个折叠区视图随之删除，「折叠时隐藏内容」那条决定一并作废 |
+| 2026-10-20 | 父类链遇到未索引的一级不再停下：再往上的各级用最后一个已索引类的 ObjC 类数据里记的名字接着列，能解析的照常是对象，未索引的只有名字、点了不跳转 | 用户决定。旧的文字版靠运行时元数据能列到根类，而后台索引默认关闭，看自家 App 的类时父类所在的框架常常没被索引，停在那里会比原来少几级；类数据本来就记着整条链，接着列不需要索引任何镜像 |
+| 2026-10-20 | Swift 类的父类是导入的 ObjC 类、又没被索引时，那一级用它的 ObjC 运行时名（如 `CALayer`） | 与再往上从 ObjC 类数据里接出来的名字写法一致；Swift 表里打印出的名字在这种情况下不比运行时名更好读 |

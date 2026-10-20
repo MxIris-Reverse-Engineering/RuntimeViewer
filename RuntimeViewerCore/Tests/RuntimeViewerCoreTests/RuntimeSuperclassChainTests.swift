@@ -1,5 +1,5 @@
 import Testing
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 
 /// The Inspector's class hierarchy: a class's superclasses as runtime objects,
 /// nearest first, found across images and across the language boundary the
@@ -69,6 +69,47 @@ struct RuntimeSuperclassChainTests {
         let chain = try await engine.superclassChain(for: scrollPocket)
 
         #expect(chain.map(\.object) == expectedSuperclasses, "\(chain.map(\.name))")
+    }
+
+    /// `NSPersistentUIKeyedUnarchiver: NSKeyedUnarchiver: NSCoder: NSObject`
+    /// (macOS 26.7 and 27.0): the two in the middle are Foundation's, which
+    /// the engine has not indexed, and NSObject is libobjc's, which it has.
+    @Test("the levels above a superclass no indexed image defines come from the class's own metadata, each resolved where it can be")
+    func levelsAboveAnUnindexedSuperclassComeFromTheMetadata() async throws {
+        let engine = try await Self.indexedEngine.value
+        let unarchiver = try await Self.objcClass(named: "NSPersistentUIKeyedUnarchiver", in: Self.appKitPath, of: engine)
+        let object = try await Self.objcClass(named: "NSObject", in: Self.libobjcPath, of: engine)
+
+        let chain = try await engine.superclassChain(for: unarchiver)
+
+        #expect(chain.map(\.name) == ["NSKeyedUnarchiver", "NSCoder", "NSObject"])
+        #expect(chain.map(\.object) == [nil, nil, object])
+    }
+
+    /// `AppKit._MultiShadowLayer: CALayer` (macOS 26.7 and 27.0): CALayer is
+    /// QuartzCore's, which the engine has not indexed.
+    @Test("a Swift class's levels above a superclass no indexed image defines come from its Objective-C face")
+    func swiftClassLevelsAboveAnUnindexedSuperclassComeFromItsObjCFace() async throws {
+        let engine = try await Self.indexedEngine.value
+        let swiftClasses = Self.everyObject(of: try await engine.objects(in: Self.appKitPath)).filter { $0.kind == .swift(.type(.class)) }
+        let shadowLayer = try #require(swiftClasses.first { $0.displayName == "AppKit._MultiShadowLayer" }, "AppKit no longer has _MultiShadowLayer")
+        let object = try await Self.objcClass(named: "NSObject", in: Self.libobjcPath, of: engine)
+
+        let chain = try await engine.superclassChain(for: shadowLayer)
+
+        #expect(chain.map(\.name) == ["CALayer", "NSObject"])
+        #expect(chain.map(\.object) == [nil, object])
+    }
+
+    @Test(
+        "a level known only by its Objective-C runtime name shows a Swift class's name demangled, any other as it is",
+        arguments: [
+            ("_TtC6AppKit17_MultiShadowLayer", "AppKit._MultiShadowLayer"),
+            ("NSKeyedUnarchiver", "NSKeyedUnarchiver"),
+        ]
+    )
+    func objcRuntimeNameIsShownDemangled(_ argument: (runtimeName: String, displayName: String)) {
+        #expect(RuntimeTypeRelationshipsResolver.displayName(ofObjCClassNamed: argument.runtimeName) == argument.displayName)
     }
 
     @Test("a superclass no indexed image defines keeps its name, unresolved")
