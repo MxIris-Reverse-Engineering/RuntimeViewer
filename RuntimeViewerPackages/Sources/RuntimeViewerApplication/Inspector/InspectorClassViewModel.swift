@@ -64,6 +64,9 @@ public final class InspectorClassViewModel: ViewModel<InspectorRuntimeObjectRout
                     do {
                         let superclasses = try await Self.superclassChain(of: runtimeObject, on: documentState.runtimeEngine)
                         return .loaded(runtimeObject, superclasses: superclasses)
+                    } catch is CancellationError {
+                        // The selection moved on, and nothing shows this.
+                        return .loaded(runtimeObject, superclasses: [])
                     } catch {
                         #log(.error, "Failed to fetch class hierarchy for runtime object: \("\(runtimeObject)", privacy: .public) with error: \(error, privacy: .public)")
                         return .loaded(runtimeObject, superclasses: [])
