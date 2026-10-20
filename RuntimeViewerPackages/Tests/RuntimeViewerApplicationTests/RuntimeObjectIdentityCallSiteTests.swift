@@ -271,7 +271,7 @@ struct RuntimeObjectIdentityCallSiteTests {
     func classPaneDoesNotRefetchOnPropertiesDifference() async throws {
         let environment = ViewModelTestEnvironment()
         let viewModel = environment.make {
-            InspectorClassViewModel(
+            InspectorHierarchyViewModel(
                 runtimeObject: Self.authoritative,
                 documentState: environment.documentState,
                 router: inspectorRouter
@@ -297,7 +297,7 @@ struct RuntimeObjectIdentityCallSiteTests {
     func classPaneDoesNotRefetchOnIdenticalObject() async throws {
         let environment = ViewModelTestEnvironment()
         let viewModel = environment.make {
-            InspectorClassViewModel(
+            InspectorHierarchyViewModel(
                 runtimeObject: Self.authoritative,
                 documentState: environment.documentState,
                 router: inspectorRouter

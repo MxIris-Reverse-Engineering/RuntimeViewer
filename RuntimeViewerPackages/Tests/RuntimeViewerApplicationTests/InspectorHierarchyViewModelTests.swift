@@ -3,11 +3,13 @@ import RuntimeViewerArchitectures
 import Testing
 @testable import RuntimeViewerApplication
 
-@Suite("InspectorClassViewModel")
+@Suite("InspectorHierarchyViewModel")
 @MainActor
-struct InspectorClassViewModelTests {
+struct InspectorHierarchyViewModelTests {
     private let router = MockRouter<InspectorRuntimeObjectRoute>()
-    private let selectHierarchyLevelRelay = PublishRelay<InspectorClassHierarchyCellViewModel>()
+    private let selectHierarchyLevelRelay = PublishRelay<InspectorHierarchyCellViewModel>()
+
+    // MARK: - Classes
 
     @Test("lists the inspected class, then its superclasses nearest first, each as the object it is")
     func listsTheClassThenItsSuperclasses() async throws {
@@ -22,6 +24,7 @@ struct InspectorClassViewModelTests {
         let rows = try await loadedRows(from: output.hierarchyState)
 
         #expect(rows.map(\.runtimeObject) == [mutableString, string, object], "\(rows.map(\.name))")
+        #expect(rows.allSatisfy { $0.children.isEmpty })
     }
 
     @Test("update(for:) replaces the hierarchy with the new object's")
@@ -70,7 +73,8 @@ struct InspectorClassViewModelTests {
 
     @Test("a superclass no indexed image defines is a level known by its name alone")
     func unresolvedSuperclassIsListedByName() {
-        let level = InspectorClassHierarchyCellViewModel(level: RuntimeRelationshipNode(name: "NSObject", object: nil, children: []))
+        let unresolvedLevel = RuntimeRelationshipNode(name: "NSObject", object: nil, children: [])
+        let level = InspectorHierarchyCellViewModel(level: unresolvedLevel, identifier: InspectorHierarchyCellViewModel.identifier(of: unresolvedLevel, at: 1))
 
         #expect(level.runtimeObject == nil)
         #expect(level.name == "NSObject")
@@ -81,7 +85,7 @@ struct InspectorClassViewModelTests {
     #if canImport(Network)
     @Test("a peer older than the superclass chain lists the names it has, every superclass unresolved")
     func olderPeerListsItsNames() async throws {
-        let peer = try await ScriptedPeer.make(label: "InspectorClassViewModelTests.olderPeer")
+        let peer = try await ScriptedPeer.make(label: "InspectorHierarchyViewModelTests.olderPeer")
         // What a release before the superclass chain answers: the names, the
         // class itself first, and no handler for the chain.
         peer.serve(.runtimeObjectHierarchy) { () async throws -> [String] in ["NSMutableString", "NSString", "NSObject"] }
@@ -124,10 +128,70 @@ struct InspectorClassViewModelTests {
         let inspectedClassRow = try #require(try await loadedRows(from: output.hierarchyState).first)
 
         selectHierarchyLevelRelay.accept(inspectedClassRow)
-        selectHierarchyLevelRelay.accept(InspectorClassHierarchyCellViewModel(unresolvedName: "NSObject"))
+        selectHierarchyLevelRelay.accept(InspectorHierarchyCellViewModel(unresolvedName: "NSObject", identifier: "/1:unresolved|NSObject"))
         try await settleMainQueue()
 
         #expect(environment.documentState.selectedRuntimeObject == nil)
+        #expect(router.triggeredRoutes.isEmpty)
+    }
+
+    // MARK: - Protocols
+
+    /// `NSURLSessionDataDelegate <NSURLSessionTaskDelegate>`,
+    /// `NSURLSessionTaskDelegate <NSURLSessionDelegate>` and
+    /// `NSURLSessionDelegate <NSObject>`, all carried by Foundation.
+    @Test("a protocol is the one root, with the protocols it refines under it, and theirs under them")
+    func protocolIsTheRootOfItsRefinedProtocols() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let dataDelegate = try await engine.runtimeObject(named: "NSURLSessionDataDelegate", kind: .objc(.type(.protocol)), in: TestImages.foundation)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(for: dataDelegate, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        let rows = try await loadedRows(from: output.hierarchyState)
+
+        let root = try #require(rows.first)
+        #expect(rows.count == 1)
+        #expect(root.runtimeObject == dataDelegate)
+        let taskDelegate = try #require(root.children.first)
+        #expect(root.children.map(\.name) == ["NSURLSessionTaskDelegate"])
+        #expect(taskDelegate.runtimeObject?.kind == .objc(.type(.protocol)))
+        let sessionDelegate = try #require(taskDelegate.children.first)
+        #expect(taskDelegate.children.map(\.name) == ["NSURLSessionDelegate"])
+        #expect(sessionDelegate.children.map(\.name) == ["NSObject"])
+        #expect(Set([root, taskDelegate, sessionDelegate].map(\.identifier)).count == 3)
+    }
+
+    #if canImport(Network)
+    @Test("a peer older than the refined protocol tree lists the protocol alone")
+    func olderPeerListsTheProtocolAlone() async throws {
+        let peer = try await ScriptedPeer.make(label: "InspectorHierarchyViewModelTests.olderPeerProtocol")
+        let dataDelegate = Fixtures.runtimeObject(name: "NSURLSessionDataDelegate", kind: .objc(.type(.protocol)), imagePath: TestImages.foundation)
+        let environment = ViewModelTestEnvironment(runtimeEngine: peer.client)
+        let (viewModel, output) = makeViewModel(for: dataDelegate, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        let rows = try await loadedRows(from: output.hierarchyState)
+        await peer.stop()
+
+        #expect(rows.map(\.runtimeObject) == [dataDelegate])
+        #expect(rows.first?.children.isEmpty == true)
+    }
+    #endif
+
+    @Test("clicking a refined protocol pushes it onto the document timeline")
+    func clickingRefinedProtocolPushesIt() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let dataDelegate = try await engine.runtimeObject(named: "NSURLSessionDataDelegate", kind: .objc(.type(.protocol)), in: TestImages.foundation)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(for: dataDelegate, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let refinedProtocolRow = try #require(try await loadedRows(from: output.hierarchyState).first?.children.first)
+
+        selectHierarchyLevelRelay.accept(refinedProtocolRow)
+        try await settleMainQueue()
+
+        #expect(environment.documentState.selectedRuntimeObject == refinedProtocolRow.runtimeObject)
         #expect(router.triggeredRoutes.isEmpty)
     }
 
@@ -136,18 +200,18 @@ struct InspectorClassViewModelTests {
     private func makeViewModel(
         for runtimeObject: RuntimeObject,
         in environment: ViewModelTestEnvironment
-    ) -> (InspectorClassViewModel, InspectorClassViewModel.Output) {
+    ) -> (InspectorHierarchyViewModel, InspectorHierarchyViewModel.Output) {
         let viewModel = environment.make {
-            InspectorClassViewModel(runtimeObject: runtimeObject, documentState: environment.documentState, router: router)
+            InspectorHierarchyViewModel(runtimeObject: runtimeObject, documentState: environment.documentState, router: router)
         }
         let output = viewModel.transform(.init(selectHierarchyLevelClicked: selectHierarchyLevelRelay.asSignal()))
         return (viewModel, output)
     }
 
     private func loadedRows(
-        from state: Driver<InspectorClassViewModel.HierarchyState>,
-        where predicate: @escaping ([InspectorClassHierarchyCellViewModel]) -> Bool = { _ in true }
-    ) async throws -> [InspectorClassHierarchyCellViewModel] {
+        from state: Driver<InspectorHierarchyViewModel.HierarchyState>,
+        where predicate: @escaping ([InspectorHierarchyCellViewModel]) -> Bool = { _ in true }
+    ) async throws -> [InspectorHierarchyCellViewModel] {
         let loaded = try await nextValue(from: state, timeout: 60) { state in
             if case .loaded(let rows) = state { return predicate(rows) }
             return false

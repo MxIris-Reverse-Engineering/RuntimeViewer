@@ -130,7 +130,12 @@ Hierarchy
    `RuntimeInspectorHierarchyTests`（原 `RuntimeSuperclassChainTests`，与父类链共用一个已索引 AppKit 的引擎），
    覆盖 ObjC 协议的两层树、Swift 协议里未索引的标准库协议只有名字、类没有协议树，以及经 socket 与 XPC 调用。
 6. **协议层级·界面**（追加）：ViewModel 与 cell ViewModel 改名并支持协议树，新的 `InspectorProtocolViewController`
-   （Outline），Inspector 的页签配置；以及 Application 测试。
+   （Outline），Inspector 的页签配置；以及 Application 测试。**已完成（2026-10-20）**：cell ViewModel 多了 `children`
+   与按路径生成的 `identifier`，相等按标识（同一个协议出现在几处就是几个节点），遵循 `OutlineNodeType`；协议页用
+   `SelfSizingOutlineView` 包在 `SelfSizingScrollView` 里，配置同导航列表（不抢焦点、不画选中、inset 样式），每次
+   加载完全部展开；页签配置用 `TabConfiguration.Hierarchy`（`.superclasses` / `.refinedProtocols`）区分两页，
+   `TabKind.classHierarchy` 与路由 `.classHierarchy` 改名 `.hierarchy`。`InspectorHierarchyViewModelTests` 加了协议树
+   三层嵌套、旧对端只列协议本身、点继承的协议跳转。App 增量构建通过，协议页没在 App 里看过。
 7. **验证**（追加）：Core 与 Packages 的全量测试、App 构建。
 
 每一步都能单独构建、单独验证。第 2 步同时改 ViewModel 和视图，因为状态类型一变，旧视图就编不过。

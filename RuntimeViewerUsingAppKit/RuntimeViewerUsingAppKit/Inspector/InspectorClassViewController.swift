@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class InspectorClassViewController: BaseEffectViewController<InspectorClassViewModel> {
+final class InspectorClassViewController: BaseEffectViewController<InspectorHierarchyViewModel> {
     /// Every level is at least as tall as one with an image under its name,
     /// so the arrows to and from a level known by name only are as long as
     /// the others.
@@ -64,12 +64,12 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorClas
         }
     }
 
-    override func setupBindings(for viewModel: InspectorClassViewModel) {
+    override func setupBindings(for viewModel: InspectorHierarchyViewModel) {
         super.setupBindings(for: viewModel)
 
-        let selectHierarchyLevel: Signal<InspectorClassHierarchyCellViewModel> = tableView.rx
+        let selectHierarchyLevel: Signal<InspectorHierarchyCellViewModel> = tableView.rx
             .itemClicked()
-            .compactMap { [weak tableView] index -> InspectorClassHierarchyCellViewModel? in
+            .compactMap { [weak tableView] index -> InspectorHierarchyCellViewModel? in
                 guard let tableView,
                       index.row >= 0,
                       index.row < tableView.numberOfRows
@@ -78,7 +78,7 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorClas
             }
             .asSignal(onErrorSignalWith: .empty())
 
-        let input = InspectorClassViewModel.Input(
+        let input = InspectorHierarchyViewModel.Input(
             selectHierarchyLevelClicked: selectHierarchyLevel
         )
         let output = viewModel.transform(input)
@@ -88,13 +88,13 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorClas
         // placeholder is taken down. `compactMap` drops the `.loading` state
         // entirely: the stale levels stay in the (hidden) table rather than
         // being reloaded away and reloaded back.
-        let levels = output.hierarchyState.compactMap { hierarchyState -> [InspectorClassHierarchyCellViewModel]? in
+        let levels = output.hierarchyState.compactMap { hierarchyState -> [InspectorHierarchyCellViewModel]? in
             guard case .loaded(let levels) = hierarchyState else { return nil }
             return levels
         }
         tableView.rx.items(levels.asObservable())(
-            { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorClassHierarchyCellViewModel) -> NSView? in
-                let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<InspectorClassHierarchyCellViewModel>.self) {
+            { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorHierarchyCellViewModel) -> NSView? in
+                let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<InspectorHierarchyCellViewModel>.self) {
                     .init(contentInsets: .init(top: 0, left: 4, bottom: 0, right: 4), minimumHeight: InspectorClassViewController.levelMinimumHeight)
                 }
                 cellView.bind(to: cellViewModel)
@@ -153,7 +153,7 @@ extension InspectorClassViewController {
             super.drawBackground(in: dirtyRect)
 
             guard let tableView = superview as? NSTableView,
-                  let cellView = view(atColumn: 0) as? RuntimeObjectCellView<InspectorClassHierarchyCellViewModel>
+                  let cellView = view(atColumn: 0) as? RuntimeObjectCellView<InspectorHierarchyCellViewModel>
             else { return }
             let row = tableView.row(for: self)
             guard row >= 0 else { return }
