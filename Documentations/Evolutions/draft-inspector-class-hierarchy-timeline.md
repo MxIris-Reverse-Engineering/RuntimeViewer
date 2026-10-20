@@ -95,8 +95,10 @@ Hierarchy
 
 - Core：AppKit 的 ObjC 类（`NSButton` → `NSControl` → `NSView` → `NSResponder` → `NSObject`）和接 ObjC
   父类的 Swift 类（`NSScrollPocket: NSView`）各测一条，验证顺序、解析出的对象，以及未索引的那一级
-  保留了名字。
-- Application：ViewModel 生成 cell ViewModel 的顺序与第一行；对端不支持新命令时的回退。
+  保留了名字；未索引的中间级之后接着列（`NSPersistentUIKeyedUnarchiver`、`AppKit._MultiShadowLayer`）。
+  协议树测 ObjC 协议（`NSTableViewDelegate` 的两层）与 Swift 协议（`AppKit.MenuItemBase`，标准库协议未索引）。
+- Application：ViewModel 生成 cell ViewModel 的顺序与第一行；对端不支持新命令时的回退；协议是唯一的根、
+  继承的协议逐层挂在下面（`NSURLSessionDataDelegate` 的三层）。
 
 **没有询问就采用的假设**
 
@@ -136,7 +138,9 @@ Hierarchy
    加载完全部展开；页签配置用 `TabConfiguration.Hierarchy`（`.superclasses` / `.refinedProtocols`）区分两页，
    `TabKind.classHierarchy` 与路由 `.classHierarchy` 改名 `.hierarchy`。`InspectorHierarchyViewModelTests` 加了协议树
    三层嵌套、旧对端只列协议本身、点继承的协议跳转。App 增量构建通过，协议页没在 App 里看过。
-7. **验证**（追加）：Core 与 Packages 的全量测试、App 构建。
+7. **验证**（追加）：Core 与 Packages 的全量测试、App 构建。**已完成（2026-10-20）**：App 增量构建通过；最终
+   代码上 Core 全量 3 个失败、Packages 全量 597 个里 2 个失败，与第 4 步是同一批已知问题；用户的 Debug 设置与
+   书签文件 SHA 不变。三个满载偶发的用例这次没有再单独重跑：机器负载太高，用户要求先停下、自己在 App 里看。
 
 每一步都能单独构建、单独验证。第 2 步同时改 ViewModel 和视图，因为状态类型一变，旧视图就编不过。
 
