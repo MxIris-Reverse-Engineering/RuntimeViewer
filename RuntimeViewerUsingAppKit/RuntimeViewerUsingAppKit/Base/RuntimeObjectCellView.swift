@@ -199,6 +199,13 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
     func tagView(for identifier: RuntimeObjectCellTag.Identifier) -> NSView? {
         zip(tagButtons, appliedTags).first { _, tag in tag.identifier == identifier }?.0
     }
+
+    /// The primary icon's frame in the cell's own coordinates, for a row view
+    /// that draws beside it: the Class page's hierarchy runs its timeline
+    /// through the middle of each level's icon.
+    var primaryIconFrame: NSRect {
+        convert(primaryIconImageView.bounds, from: primaryIconImageView)
+    }
 }
 
 extension ToolTipStyle {

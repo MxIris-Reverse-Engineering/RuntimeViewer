@@ -271,14 +271,14 @@ struct RuntimeObjectIdentityCallSiteTests {
     func classPaneDoesNotRefetchOnPropertiesDifference() async throws {
         let environment = ViewModelTestEnvironment()
         let viewModel = environment.make {
-            InspectorClassViewModel(
+            InspectorHierarchyViewModel(
                 runtimeObject: Self.authoritative,
                 documentState: environment.documentState,
                 router: inspectorRouter
             )
         }
         defer { withExtendedLifetime(viewModel) {} }
-        let output = viewModel.transform(.init())
+        let output = viewModel.transform(.init(selectHierarchyLevelClicked: .empty()))
         _ = try await nextValue(from: output.hierarchyState) { state in
             if case .loaded = state { return true }
             return false
@@ -297,14 +297,14 @@ struct RuntimeObjectIdentityCallSiteTests {
     func classPaneDoesNotRefetchOnIdenticalObject() async throws {
         let environment = ViewModelTestEnvironment()
         let viewModel = environment.make {
-            InspectorClassViewModel(
+            InspectorHierarchyViewModel(
                 runtimeObject: Self.authoritative,
                 documentState: environment.documentState,
                 router: inspectorRouter
             )
         }
         defer { withExtendedLifetime(viewModel) {} }
-        let output = viewModel.transform(.init())
+        let output = viewModel.transform(.init(selectHierarchyLevelClicked: .empty()))
         _ = try await nextValue(from: output.hierarchyState) { state in
             if case .loaded = state { return true }
             return false

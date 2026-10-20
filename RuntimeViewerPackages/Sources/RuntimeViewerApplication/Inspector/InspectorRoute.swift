@@ -21,7 +21,8 @@ public enum InspectorRoute: Routable {
 @CaseCheckable(.public)
 public enum InspectorRuntimeObjectRoute: Routable {
     case initial
-    case classHierarchy
+    /// The Hierarchy tab: a class's superclasses, or the protocols a protocol refines.
+    case hierarchy
     case relationships
     case specialization
     /// The References tab: callers, callees and type references.

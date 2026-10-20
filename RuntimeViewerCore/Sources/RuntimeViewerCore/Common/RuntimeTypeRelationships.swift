@@ -50,7 +50,8 @@ public struct RuntimeTypeRelationshipsQuery: Hashable, Codable, Sendable {
     }
 }
 
-/// One node of a relationship tree.
+/// One node of a relationship tree, or, without children, one level of a
+/// superclass chain (`RuntimeEngine.superclassChain(for:)`).
 ///
 /// `object` is `nil` for a type no indexed image defines — a superclass in a
 /// framework that was never indexed, a protocol only known by name from a

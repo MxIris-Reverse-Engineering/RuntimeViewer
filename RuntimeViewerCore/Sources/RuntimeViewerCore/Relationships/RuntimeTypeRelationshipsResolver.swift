@@ -37,6 +37,10 @@ import SwiftDeclaration
 /// those images' types and the nodes leading to them, a protocol counting as
 /// theirs when any of them carries a copy; the type asked about is looked up
 /// everywhere regardless.
+///
+/// The Inspector's hierarchies are answered here too: a class's superclass
+/// levels of Ancestor Types as one flat chain (`superclassChain(of:)`), and a
+/// protocol's Ancestor Types tree itself (`refinedProtocolTree(of:)`).
 @Loggable(.private)
 actor RuntimeTypeRelationshipsResolver {
     static let maximumDepth = 64
@@ -393,6 +397,173 @@ actor RuntimeTypeRelationshipsResolver {
             nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? qualifiedName, object: object, children: children))
         }
         return nodes
+    }
+
+    // MARK: - Refined Protocol Tree
+
+    /// The protocols `object` refines, each with the protocols it refines in
+    /// turn underneath: the Inspector's protocol hierarchy below the protocol
+    /// itself, which is the tree Ancestor Types shows for it — Objective-C and
+    /// Swift protocols alike, a protocol reached along two paths under both.
+    /// Empty for anything that is not a protocol.
+    ///
+    /// Throws `CancellationError` when the task asking is cancelled, rather
+    /// than hand out the tree as far as it got.
+    func refinedProtocolTree(of object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        switch object.kind {
+        case .objc(.type(.protocol)), .swift(.type(.protocol)):
+            let nodes = await ancestorNodes(of: object, path: RelationshipWalkPath(root: identity(of: object)))
+            try Task.checkCancellation()
+            return nodes
+        default:
+            return []
+        }
+    }
+
+    // MARK: - Superclass Chain
+
+    /// `object`'s superclasses, nearest first, one node each and none with
+    /// children: the Inspector's class hierarchy below the class itself. Each
+    /// level is found the way Ancestor Types finds its superclass levels,
+    /// across images and across the language boundary, without the protocols.
+    /// A superclass no indexed image defines is still a level, unresolved, and
+    /// the levels above it come from the metadata of the last class that is
+    /// indexed (`levels(aboveUnresolvedSuperclassOf:path:)`). Empty for a root
+    /// class and for anything that is not a class.
+    ///
+    /// Throws `CancellationError` when the task asking is cancelled, rather
+    /// than hand out the chain as far as it got.
+    func superclassChain(of object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        var chain: [RuntimeRelationshipNode] = []
+        var path = RelationshipWalkPath(root: identity(of: object))
+        var currentClass = object
+        walk: while let superclass = await superclass(of: currentClass) {
+            switch superclass {
+            case .resolved(let superclassObject):
+                guard let superclassIdentity = identity(of: superclassObject),
+                      let superclassPath = path.descending(into: superclassIdentity)
+                else { break walk }
+                chain.append(RuntimeRelationshipNode(object: superclassObject))
+                path = superclassPath
+                currentClass = superclassObject
+            case .unresolved(let name):
+                chain.append(RuntimeRelationshipNode(name: name, object: nil, children: []))
+                chain += await levels(aboveUnresolvedSuperclassOf: currentClass, path: path)
+                break walk
+            }
+        }
+        try Task.checkCancellation()
+        return chain
+    }
+
+    /// The levels above the superclass of `subclass` that no indexed image
+    /// defines, as `subclass`'s own Objective-C class data records them: each
+    /// class's data points at its superclass in whichever image defines it,
+    /// indexed or not, all the way to the root. A Swift class registered with
+    /// the Objective-C runtime carries that chain on its Objective-C face; one
+    /// that is not records nothing past its own superclass. A level an indexed
+    /// image defines is the class from there, any other its name alone.
+    private func levels(aboveUnresolvedSuperclassOf subclass: RuntimeObject, path: RelationshipWalkPath) async -> [RuntimeRelationshipNode] {
+        guard let recordedClassNames = await objcClassChainNames(of: subclass) else { return [] }
+        var levels: [RuntimeRelationshipNode] = []
+        var path = path
+        // The subclass itself, then the unresolved superclass the walk listed.
+        for className in recordedClassNames.dropFirst(2) {
+            // Swift's own root class, which a Swift class without an
+            // Objective-C superclass records; Swift does not count it as one.
+            if className == Self.swiftRootClassName { break }
+            if let levelObject = await materializeObjCClass(named: className) {
+                guard let levelIdentity = identity(of: levelObject),
+                      let levelPath = path.descending(into: levelIdentity)
+                else { break }
+                levels.append(RuntimeRelationshipNode(object: levelObject))
+                path = levelPath
+            } else {
+                guard let levelPath = path.descending(into: .objcClass(name: className)) else { break }
+                levels.append(RuntimeRelationshipNode(name: Self.displayName(ofObjCClassNamed: className), object: nil, children: []))
+                path = levelPath
+            }
+        }
+        return levels
+    }
+
+    /// The runtime names `object`'s Objective-C class data records for it and
+    /// its superclasses, the class first and the root last; `nil` for a class
+    /// with no Objective-C face, and for anything that is not a class.
+    private func objcClassChainNames(of object: RuntimeObject) async -> [String]? {
+        let objcClassName: String?
+        switch object.kind {
+        case .objc(.type(.class)):
+            objcClassName = object.name
+        case .swift(.type(.class)):
+            objcClassName = await swiftSectionFactory.existingSection(for: object.imagePath)?.objcClassName(forCounterpartOf: object)
+        default:
+            objcClassName = nil
+        }
+        guard let objcClassName,
+              let (group, _) = objcSectionFactory.indexer.classGroupAcrossImages(forName: objcClassName)
+        else { return nil }
+        return group.info.map(\.name)
+    }
+
+    /// The Objective-C runtime name of Swift's root class, `Swift._SwiftObject`.
+    private static let swiftRootClassName = "_TtCs12_SwiftObject"
+
+    /// How a level known only by its Objective-C runtime name is shown: a
+    /// Swift class's mangled runtime name (`_TtC6AppKit14NSScrollPocket`)
+    /// demangled and printed the way the Swift tables print a superclass, any
+    /// other name as it is.
+    static func displayName(ofObjCClassNamed className: String) -> String {
+        guard className.hasPrefix("_Tt"),
+              let node = try? demangleAsNodeTransient(className)
+        else { return className }
+        return node.print(using: .interfaceTypeBuilderOnly)
+    }
+
+    /// A class's superclass as one step of the chain finds it.
+    private enum Superclass {
+        /// The superclass, from the indexed image that defines it.
+        case resolved(RuntimeObject)
+        /// A superclass no indexed image defines, by the name its subclass
+        /// records for it.
+        case unresolved(name: String)
+    }
+
+    /// The superclass of an Objective-C class by the name its class data
+    /// records, and of a Swift class by its mangled name, or — for one no
+    /// Swift image defines — by the Objective-C name the indexer recorded for
+    /// an imported class, as `objcClassAncestorNodes(named:path:)` and
+    /// `swiftTypeAncestorNodes(of:path:)` look them up. `nil` for a root class
+    /// and for anything that is not a class.
+    private func superclass(of object: RuntimeObject) async -> Superclass? {
+        switch object.kind {
+        case .objc(.type(.class)):
+            guard let (group, _) = objcSectionFactory.indexer.classGroupAcrossImages(forName: object.name),
+                  let superclassName = group.info.first?.superClassName,
+                  !superclassName.isEmpty
+            else { return nil }
+            if let superclass = await materializeObjCClass(named: superclassName) {
+                return .resolved(superclass)
+            }
+            return .unresolved(name: Self.displayName(ofObjCClassNamed: superclassName))
+        case .swift(.type(.class)):
+            let indexer = swiftSectionFactory.indexer
+            guard let superclassMangledName = indexer.superclassMangledName(forMangledTypeName: object.name) else { return nil }
+            if let superclass = await materializeSwiftType(mangledName: superclassMangledName) {
+                return .resolved(superclass)
+            }
+            // An imported Objective-C class goes by its runtime name, resolved
+            // or not.
+            if let objcClassName = indexer.superclassObjCClassName(forMangledTypeName: object.name) {
+                if let objcSuperclass = await materializeObjCClass(named: objcClassName) {
+                    return .resolved(objcSuperclass)
+                }
+                return .unresolved(name: objcClassName)
+            }
+            return .unresolved(name: indexer.superclassDisplayName(forMangledTypeName: object.name) ?? superclassMangledName)
+        default:
+            return nil
+        }
     }
 
     // MARK: - Descendants

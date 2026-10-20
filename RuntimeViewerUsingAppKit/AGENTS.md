@@ -256,8 +256,8 @@ centralizes everything in `updateLayer()`, so:
 
 ### Loading placeholders
 
-Use `SkeletonPlaceholderView` (RuntimeViewerUI) — `SkeletonPlaceholderView.runtimeObjectList()` or
-`.classHierarchy()` — driven by the state enum from *ViewModels*: on `.loading` set
+Use `SkeletonPlaceholderView` (RuntimeViewerUI) — `SkeletonPlaceholderView.runtimeObjectList()` for a
+list of `RuntimeObjectCellView` rows — driven by the state enum from *ViewModels*: on `.loading` set
 `isPresentingPlaceholder = true` and hide the real content; on `.loaded` set it back to `false` and show
 the content (hidden when it is empty).
 
@@ -266,9 +266,9 @@ the content (hidden when it is empty).
   always enough — a hidden `NSView` still contributes its size to Auto Layout, so also clear stale text
   (or put the two in an `NSStackView`, which detaches hidden arranged subviews).
 - `isPresentingPlaceholder` owns both `isHidden` and the pulse animation; never set `isHidden` directly.
-- Add a preset (`classHierarchy` / `runtimeObjectList`) rather than composing `Row`/`Bar` at the call
-  site. Use `Bar.Width.points` when the host container hugs its content (there is no width to take a
-  fraction of), `.fraction` when the container's width is externally fixed.
+- Add a preset (like `runtimeObjectList`) rather than composing `Row`/`Bar` at the call site. Use
+  `Bar.Width.points` when the host container hugs its content (there is no width to take a fraction of),
+  `.fraction` when the container's width is externally fixed.
 - Do **not** use `NSView.showSkeleton(using:)` for this. That one is a translucent shimmer *overlay* —
   stale content remains visible underneath and its 0.35s fade-in itself reads as a flash.
 

@@ -1248,6 +1248,38 @@ extension RuntimeEngine {
         }
     }
 
+    /// `object`'s superclasses as runtime objects, nearest first: what the
+    /// Inspector's class hierarchy lists below the class itself. Each level is
+    /// found the way the Find navigator's Ancestor Types finds its superclass
+    /// levels, across every indexed image and across the language boundary; a
+    /// level no indexed image defines carries its name only and ends the chain.
+    /// Indexes nothing to answer.
+    ///
+    /// A peer older than this command has no handler for it — over a socket it
+    /// answers with `RuntimeNetworkRequestError.isUnknownCommand` — and only
+    /// the names `hierarchy(for:)` returns to offer.
+    public func superclassChain(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        try await dispatch(SuperclassChainCommand(object: object))
+    }
+
+    func _superclassChain(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        try await typeRelationshipsResolver.superclassChain(of: object)
+    }
+
+    /// The protocols `object` refines, each with the protocols it refines in
+    /// turn underneath: what the Inspector's hierarchy lists below a protocol,
+    /// the tree the Find navigator's Ancestor Types shows for it, Objective-C
+    /// and Swift alike. A protocol no indexed image defines is a node with its
+    /// name only. Indexes nothing to answer; empty for anything that is not a
+    /// protocol. A peer older than this command has no handler for it.
+    public func refinedProtocolTree(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        try await dispatch(RefinedProtocolTreeCommand(object: object))
+    }
+
+    func _refinedProtocolTree(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
+        try await typeRelationshipsResolver.refinedProtocolTree(of: object)
+    }
+
     /// Cross-image relationships for an inspectable target: every direct
     /// subclass (for classes) or conforming type (for protocols), unioned
     /// across all indexed images.

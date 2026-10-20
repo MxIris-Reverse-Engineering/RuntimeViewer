@@ -43,8 +43,8 @@ public final class SkeletonPlaceholderView: NSView {
     /// One placeholder line: an optional leading icon square plus one or more
     /// bars stacked to its trailing side.
     public struct Row: Hashable, Sendable {
-        /// Extra leading offset, used to draw stepped shapes such as a class
-        /// hierarchy.
+        /// Extra leading offset: where a row's icon or first bar starts, and
+        /// what draws a stepped shape when it grows from row to row.
         public var leadingInset: CGFloat
 
         /// Side length of the square drawn before the bars, or `nil` for a
@@ -241,23 +241,6 @@ extension SkeletonPlaceholderView {
 
     private static func widthMultiplier(at index: Int) -> CGFloat {
         widthPattern[index % widthPattern.count]
-    }
-
-    /// Placeholder for the class-hierarchy text: one bar per level, each
-    /// stepped a little further in.
-    ///
-    /// The bars are sized in points because the disclosure area that hosts
-    /// them hugs its content — there is no container width to take a fraction
-    /// of.
-    public static func classHierarchy(levelCount: Int = 5) -> SkeletonPlaceholderView {
-        let widestBar: CGFloat = 190
-        let rows = (0 ..< levelCount).map { levelIndex in
-            Row(
-                leadingInset: CGFloat(levelIndex) * 10,
-                bars: [Bar(width: .points(widestBar * widthMultiplier(at: levelIndex)), height: 11)]
-            )
-        }
-        return SkeletonPlaceholderView(rows: rows)
     }
 
     /// Placeholder for a list of `RuntimeObjectCellView` rows: leading icon,

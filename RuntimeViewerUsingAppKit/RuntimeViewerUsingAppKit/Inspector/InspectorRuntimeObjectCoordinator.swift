@@ -12,7 +12,9 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
     /// switches even when the new object's `TabConfiguration` produces a
     /// different ordering or omits some tabs entirely.
     enum TabKind {
-        case classHierarchy
+        /// A class's superclasses or the protocols a protocol refines: one
+        /// tab, so the user's choice of it holds between classes and protocols.
+        case hierarchy
         case relationships
         case specialization
         case references
@@ -61,11 +63,13 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
     // carries its own loading placeholder.
 
     private lazy var classViewController = InspectorClassViewController()
+    private lazy var protocolViewController = InspectorProtocolViewController()
     private lazy var relationshipsViewController = InspectorRelationshipsViewController()
     private lazy var specializationViewController = InspectorSwiftSpecializationViewController()
     private lazy var referencesViewController = InspectorReferencesViewController()
 
-    private var classViewModel: InspectorClassViewModel?
+    private var classViewModel: InspectorHierarchyViewModel?
+    private var protocolViewModel: InspectorHierarchyViewModel?
     private var relationshipsViewModel: InspectorRelationshipsViewModel?
     private var specializationViewModel: InspectorSwiftSpecializationViewModel?
     private var referencesViewModel: InspectorReferencesViewModel?
@@ -115,8 +119,8 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
             let items = makeTabViewItems()
             let initialIndex = preferredTabKind.flatMap { tabConfiguration.index(for: $0) } ?? 0
             return .set(items, initialIndex: initialIndex)
-        case .classHierarchy:
-            guard let index = tabConfiguration.classHierarchyIndex else { return .none() }
+        case .hierarchy:
+            guard let index = tabConfiguration.hierarchyIndex else { return .none() }
             return .select(index: index)
         case .relationships:
             guard let index = tabConfiguration.relationshipsIndex else { return .none() }
@@ -139,14 +143,25 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
     /// catch up the next time they are needed, because `update(for:)` is
     /// driven by the object and not by a subscription.
     private func updateTabViewControllers(for runtimeObject: RuntimeObject) {
-        if tabConfiguration.needsClassHierarchy {
+        switch tabConfiguration.hierarchy {
+        case .superclasses:
             if let classViewModel {
                 classViewModel.update(for: runtimeObject)
             } else {
-                let viewModel = InspectorClassViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+                let viewModel = InspectorHierarchyViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
                 classViewController.setupBindings(for: viewModel)
                 classViewModel = viewModel
             }
+        case .refinedProtocols:
+            if let protocolViewModel {
+                protocolViewModel.update(for: runtimeObject)
+            } else {
+                let viewModel = InspectorHierarchyViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+                protocolViewController.setupBindings(for: viewModel)
+                protocolViewModel = viewModel
+            }
+        case nil:
+            break
         }
         if tabConfiguration.needsRelationships {
             if let relationshipsViewModel {
@@ -180,12 +195,16 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
     private func makeTabViewItems() -> [TabViewItem] {
         guard runtimeObject != nil else { return [] }
         var tabViewItems: [TabViewItem] = []
-        if tabConfiguration.needsClassHierarchy {
+        if let hierarchy = tabConfiguration.hierarchy {
+            let hierarchyViewController: NSViewController = switch hierarchy {
+            case .superclasses: classViewController
+            case .refinedProtocols: protocolViewController
+            }
             tabViewItems.append(
                 TabViewItem(
                     normalSymbol: .init(systemName: .squareStack3dUp),
                     selectedSymbol: .init(systemName: .squareStack3dUpFill),
-                    viewController: classViewController
+                    viewController: hierarchyViewController
                 )
             )
         }
@@ -228,36 +247,46 @@ extension InspectorRuntimeObjectCoordinator {
 
 extension InspectorRuntimeObjectCoordinator {
     private struct TabConfiguration: Equatable {
-        let needsClassHierarchy: Bool
+        /// What the Hierarchy tab shows. Two pages, one tab: a class and a
+        /// protocol configure the tab with different view controllers, so the
+        /// two configurations differ and switching between them rebuilds it.
+        enum Hierarchy: Equatable {
+            /// A class's chain of superclasses.
+            case superclasses
+            /// The tree of the protocols a protocol refines.
+            case refinedProtocols
+        }
+
+        let hierarchy: Hierarchy?
         let needsRelationships: Bool
         let needsSpecialization: Bool
         /// The References tab: for a type whose members have code and whose references are found.
         var needsReferences = false
 
-        static let empty = Self(needsClassHierarchy: false, needsRelationships: false, needsSpecialization: false)
+        static let empty = Self(hierarchy: nil, needsRelationships: false, needsSpecialization: false)
 
-        var hasAnyTab: Bool { needsClassHierarchy || needsRelationships || needsSpecialization || needsReferences }
+        var hasAnyTab: Bool { hierarchy != nil || needsRelationships || needsSpecialization || needsReferences }
 
-        var classHierarchyIndex: Int? {
-            needsClassHierarchy ? 0 : nil
+        var hierarchyIndex: Int? {
+            hierarchy != nil ? 0 : nil
         }
 
         var relationshipsIndex: Int? {
             guard needsRelationships else { return nil }
-            return needsClassHierarchy ? 1 : 0
+            return hierarchy != nil ? 1 : 0
         }
 
         var specializationIndex: Int? {
             guard needsSpecialization else { return nil }
             var index = 0
-            if needsClassHierarchy { index += 1 }
+            if hierarchy != nil { index += 1 }
             if needsRelationships { index += 1 }
             return index
         }
 
         func index(for tabKind: TabKind) -> Int? {
             switch tabKind {
-            case .classHierarchy: return classHierarchyIndex
+            case .hierarchy: return hierarchyIndex
             case .relationships: return relationshipsIndex
             case .specialization: return specializationIndex
             case .references: return orderedTabKinds.firstIndex(of: .references)
@@ -267,7 +296,7 @@ extension InspectorRuntimeObjectCoordinator {
         /// The tabs in the order they are shown.
         var orderedTabKinds: [TabKind] {
             var orderedTabKinds: [TabKind] = []
-            if needsClassHierarchy { orderedTabKinds.append(.classHierarchy) }
+            if hierarchy != nil { orderedTabKinds.append(.hierarchy) }
             if needsRelationships { orderedTabKinds.append(.relationships) }
             if needsSpecialization { orderedTabKinds.append(.specialization) }
             if needsReferences { orderedTabKinds.append(.references) }
@@ -297,25 +326,28 @@ extension InspectorRuntimeObjectCoordinator {
             }
             switch runtimeObject.kind {
             case .objc(.type(.class)):
-                return .init(needsClassHierarchy: true, needsRelationships: needsRelationships, needsSpecialization: false)
+                return .init(hierarchy: .superclasses, needsRelationships: needsRelationships, needsSpecialization: false)
             case .objc(.type(.protocol)):
-                return .init(needsClassHierarchy: false, needsRelationships: needsRelationships, needsSpecialization: false)
-            case .swift(.type):
-                let isClass: Bool
-                if case .swift(.type(.class)) = runtimeObject.kind {
-                    isClass = true
-                } else {
-                    isClass = false
+                return .init(hierarchy: .refinedProtocols, needsRelationships: needsRelationships, needsSpecialization: false)
+            case .swift(.type(let kind)):
+                let hierarchy: Hierarchy?
+                switch kind {
+                case .class:
+                    hierarchy = .superclasses
+                case .protocol:
+                    hierarchy = .refinedProtocols
+                default:
+                    hierarchy = nil
                 }
                 let isGeneric = runtimeObject.properties.contains(.isGeneric)
                 let isSpecialized = runtimeObject.properties.contains(.isSpecialized)
                 return .init(
-                    needsClassHierarchy: isClass,
+                    hierarchy: hierarchy,
                     needsRelationships: needsRelationships,
                     needsSpecialization: isGeneric && !isSpecialized
                 )
             default:
-                return .init(needsClassHierarchy: false, needsRelationships: false, needsSpecialization: false)
+                return .init(hierarchy: nil, needsRelationships: false, needsSpecialization: false)
             }
         }
     }
