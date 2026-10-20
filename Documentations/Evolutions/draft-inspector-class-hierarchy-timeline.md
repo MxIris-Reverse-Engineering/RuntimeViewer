@@ -85,7 +85,10 @@ Hierarchy                         Hide
    `RuntimeViewerUsingAppKit/AGENTS.md`，折叠区内容不再左右缩进；以及 Application 测试。**已完成（2026-10-20）**：
    `InspectorClassViewModelTests` 覆盖行的顺序与对象、未索引镜像的对象、只有名字的一级、旧对端（`ScriptedPeer`
    只答旧命令）与点击；App 侧只做了改动文件的类型检查，完整构建留到第 4 步。
-3. **时间线**：自定义 `NSTableRowView` 画竖线与箭头，行间距随之加大。
+3. **时间线**：自定义 `NSTableRowView` 画竖线与箭头，行间距随之加大。**已完成（2026-10-20）**：行视图
+   `InspectorClassViewController.HierarchyTimelineRowView` 在 `drawBackground(in:)` 里画，竖线 1.5pt、对齐设备
+   像素，箭头 7×5pt，离图标 3pt；行间距 16pt（Relationships 页是 10pt）。App 没有测试 target，这一步只做了
+   类型检查，画出来的样子要在 App 里看。
 4. **验证**：Core 与 Packages 的全量测试、App 构建。
 
 每一步都能单独构建、单独验证。第 2 步同时改 ViewModel 和视图，因为状态类型一变，旧视图就编不过。
@@ -103,3 +106,4 @@ Hierarchy                         Hide
 | 2026-10-20 | 未解析的一级用灰色「?」徽标（`RuntimeObjectIcon` 的 IDE 风格徽标），不用 Find 导航器的 SF Symbol 问号 | 行里其他级都是 20pt 的徽标，同尺寸同形状的灰色徽标让时间线的竖线对准、观感一致；`RuntimeObjectCellView` 会把 SF Symbol 染成强调色，用它还得给 cell 加着色参数 |
 | 2026-10-20 | Relationships 与层级的对象行共用 `RuntimeObjectCellAppearance.inspectorRow(for:)` | 两处要的是同一种行，原先构造代码只在 Relationships 的 cell ViewModel 里，抽出来避免复制一份 |
 | 2026-10-20 | 折叠时内容同时隐藏，不只把高度压成 0 | 加载占位压不扁，不隐藏会在标题下方继续画出来 |
+| 2026-10-20 | 每一级至少 30pt 高，即名字下面带镜像名的那种行的高度 | 只有名字的一级本来只有一行字高，箭头会短一截；旧对端回退时除第一行外全是这种行，整条时间线会变得局促 |

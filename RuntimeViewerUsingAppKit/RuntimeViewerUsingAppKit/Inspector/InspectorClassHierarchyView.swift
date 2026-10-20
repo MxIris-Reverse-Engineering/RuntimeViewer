@@ -55,7 +55,9 @@ final class InspectorClassHierarchyContentView: XiblessView {
         }
 
         tableView.do {
-            $0.intercellSpacing = .init(width: 0, height: 10)
+            // More than the Relationships page's 10: the rows draw the arrows
+            // between the levels in it.
+            $0.intercellSpacing = .init(width: 0, height: 16)
         }
     }
 
