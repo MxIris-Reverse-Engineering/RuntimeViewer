@@ -9,27 +9,63 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorClas
     /// the others.
     private static let levelMinimumHeight: CGFloat = 30
 
-    private let classHierarchyView = InspectorClassHierarchyView()
+    private let headerLabel = Label()
+
+    private let (scrollView, tableView) = SelfSizingTableView.scrollableNavigationListTableView()
+
+    private let skeletonPlaceholderView = SkeletonPlaceholderView.runtimeObjectList()
+
+    override var containerViewUsingSafeArea: Bool { true }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         containerView.hierarchy {
-            classHierarchyView
+            headerLabel
+            scrollView
+            skeletonPlaceholderView
+        }
+
+        // At the page's top edge: the tab switcher leaves the gap above the page (`TabViewController.pageTopSpacing`).
+        headerLabel.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide)
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
         }
 
         // As tall as its levels, and no taller than the pane: past that the
         // list scrolls.
-        classHierarchyView.snp.makeConstraints { make in
-            make.top.leading.trailing.equalTo(containerView.safeAreaLayoutGuide)
-            make.bottom.lessThanOrEqualTo(containerView.safeAreaLayoutGuide)
+        scrollView.snp.makeConstraints { make in
+            make.top.equalTo(headerLabel.snp.bottom).offset(8)
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
+            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide)
+        }
+
+        skeletonPlaceholderView.snp.makeConstraints { make in
+            make.top.equalTo(headerLabel.snp.bottom).offset(12)
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
+            // Preference, not requirement: in a pane too short for the whole
+            // placeholder it is better to let it run past the bottom edge than
+            // to break a required constraint.
+            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide).priority(.high)
+        }
+
+        tableView.do {
+            // More than the other pages' 10: the rows draw the arrows between
+            // the levels in it.
+            $0.intercellSpacing = .init(width: 0, height: 16)
+        }
+
+        headerLabel.do {
+            $0.font = .systemFont(ofSize: 13, weight: .semibold)
+            $0.textColor = .labelColor
+            $0.stringValue = "Hierarchy"
+            $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
     }
 
     override func setupBindings(for viewModel: InspectorClassViewModel) {
         super.setupBindings(for: viewModel)
-
-        let tableView = classHierarchyView.tableView
 
         let selectHierarchyLevel: Signal<InspectorClassHierarchyCellViewModel> = tableView.rx
             .itemClicked()
@@ -70,9 +106,18 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorClas
         )
         .disposed(by: rx.disposeBag)
 
+        // The placeholder replaces the list rather than overlaying it, so the
+        // previous object's levels never show through between its bars.
         output.hierarchyState.driveOnNext { [weak self] hierarchyState in
             guard let self else { return }
-            classHierarchyView.apply(hierarchyState)
+            switch hierarchyState {
+            case .loading:
+                skeletonPlaceholderView.isPresentingPlaceholder = true
+                scrollView.isHidden = true
+            case .loaded:
+                skeletonPlaceholderView.isPresentingPlaceholder = false
+                scrollView.isHidden = false
+            }
         }
         .disposed(by: rx.disposeBag)
     }

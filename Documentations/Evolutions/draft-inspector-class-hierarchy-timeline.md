@@ -13,7 +13,7 @@ ObjC 还是 Swift、在哪个镜像，也点不了。改成和 Relationships 页
 连成一条时间线；点一行跳到那个类。
 
 ```
-Hierarchy                         Hide
+Hierarchy
   [C]  NSButton
    │   AppKit
    ▼
@@ -50,15 +50,17 @@ Hierarchy                         Hide
   问号、灰色类名、没有镜像名；问号是与其他级同尺寸的灰色徽标。
 - 点击：行有对象、且不是当前对象时，执行 `selectionRouter.trigger(.push(object))`，与 Relationships
   一致；未解析的行点了没有反应。
-- 视图：Hierarchy 折叠区里放一个 `SelfSizingTableView.scrollableNavigationListTableView()`
-  （与 Relationships 同款：不抢焦点、不画选中），cell 用 `RuntimeObjectCellView`。时间线由一个自定义的
+- 视图：页面结构与 Relationships、References、Specialization 页一致——顶部是「Hierarchy」页面标题
+  （13pt semibold、`labelColor`，贴安全区顶部、左右缩进 8pt），下方 8pt 处是一个
+  `SelfSizingTableView.scrollableNavigationListTableView()`（与 Relationships 同款：不抢焦点、不画选中），
+  左右贴边、由表格的 inset 样式留白，cell 用 `RuntimeObjectCellView`。不再有折叠区和 Hide/Show。时间线由一个自定义的
   `NSTableRowView` 来画：每一行在图标上方画「进来」的那段，末端是指向这一级的箭头；图标下方画「出去」
   的那段。第一行没有进来的那段，最后一行没有出去的那段。线的 x 取 cell 里图标的实际中线，颜色用
   `tertiaryLabelColor`，随深浅色变化。行间距加大，留出画箭头的空间。
-- 加载占位换成 `SkeletonPlaceholderView.runtimeObjectList`。`classHierarchy` 预设没有人用了，删掉它，
-  并同步 `RuntimeViewerUsingAppKit/AGENTS.md` 里提到它的那句。
-- 折叠区内容左右不再缩进 8pt，留白交给表格的 inset 样式，图标与 Relationships 页的行对齐。折叠时内容
-  同时隐藏。
+- 加载占位换成 `SkeletonPlaceholderView.runtimeObjectList`，位置同 Relationships 页（标题下 12pt、左右
+  缩进 8pt）。`classHierarchy` 预设没有人用了，删掉它，并同步 `RuntimeViewerUsingAppKit/AGENTS.md` 里
+  提到它的那句。原来的折叠区视图（`InspectorClassHierarchyView`、`InspectorDisclosureView`）只有这一页在用，
+  一并删掉。
 
 **测试**
 
@@ -73,7 +75,7 @@ Hierarchy                         Hide
   指向子类），只需反转数组和箭头方向。
 - 不为这一页去临时索引未索引的镜像。这与 Ancestor Types 一致，也避免选中一个类就触发 Foundation、
   AppKit 这类大镜像的索引。
-- 「Hierarchy」标题与 Hide/Show 保留。
+- 原先假设「Hierarchy」标题与 Hide/Show 保留；用户看过实现后改为去掉 Hide/Show、标题与其他页对齐（见决策日志）。
 
 ## 落地步骤
 
@@ -112,3 +114,4 @@ Hierarchy                         Hide
 | 2026-10-20 | 折叠时内容同时隐藏，不只把高度压成 0 | 加载占位压不扁，不隐藏会在标题下方继续画出来 |
 | 2026-10-20 | 每一级至少 30pt 高，即名字下面带镜像名的那种行的高度 | 只有名字的一级本来只有一行字高，箭头会短一截；旧对端回退时除第一行外全是这种行，整条时间线会变得局促 |
 | 2026-10-20 | 实现完成，待合并 | 四个落地步骤都已完成。文档：提案、`RuntimeViewerUsingAppKit/AGENTS.md`（加载占位预设）与 0016 的覆盖表随代码更新；不另写使用指南或实现说明（只是界面变化，做法提案已写清），没有新术语。界面效果尚未在 App 里看过 |
+| 2026-10-20 | 去掉折叠区与 Hide/Show，「Hierarchy」改成与 Relationships、References、Specialization 页一致的页面标题 | 用户看过实现后要求标题的字号、颜色与位置和其他 Inspector 页对齐，也不需要折叠；页面结构照 Relationships 页，两个折叠区视图随之删除，「折叠时隐藏内容」那条决定一并作废 |
