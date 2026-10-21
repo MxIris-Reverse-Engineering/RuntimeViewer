@@ -217,8 +217,9 @@ public final class FindCorpusCoordinator {
     }
 
     /// Brought into being by `RuntimeEngineBackgroundWork` for its engine. A
-    /// document's Find session follows it through `DocumentState`, which
-    /// also tells it which image the document's sidebar shows.
+    /// document's Find session follows it through the document's
+    /// `RuntimeEngineSession`, and `DocumentState` tells it which image the
+    /// document's sidebar shows.
     init(engine: RuntimeEngine) {
         self.engine = engine
         #if canImport(RuntimeViewerSettings)
@@ -365,6 +366,12 @@ public final class FindCorpusCoordinator {
     /// another engine, or closed.
     func setOnScreenImagePath(_ imagePath: String?, ofDocument document: ObjectIdentifier) {
         onScreenImagePathsByDocument[document] = imagePath
+    }
+
+    /// The image the sidebar of `document` lists, as the last
+    /// `setOnScreenImagePath(_:ofDocument:)` left it. Test seam.
+    func onScreenImagePath(ofDocument document: ObjectIdentifier) -> String? {
+        onScreenImagePathsByDocument[document]
     }
 
     /// Empties `finishedBuilds`. The corpora listed so far stay off it: a

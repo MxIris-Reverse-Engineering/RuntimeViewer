@@ -283,9 +283,9 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         // The source's own list: another source's scopes name images this one may not have.
         let recentQueries = Driver.combineLatest(
             appDefaults.$findRecentQueriesByScope.asDriver(onErrorJustReturn: [:]),
-            documentState.$runtimeEngine.asDriver()
-        ) { recentQueriesByScope, runtimeEngine in
-            recentQueriesByScope[runtimeEngine.bookmarkScope.bookmarkKey] ?? []
+            documentState.$runtimeEngineSession.asDriver()
+        ) { recentQueriesByScope, runtimeEngineSession in
+            recentQueriesByScope[runtimeEngineSession.engine.bookmarkScope.bookmarkKey] ?? []
         }
         .distinctUntilChanged()
 

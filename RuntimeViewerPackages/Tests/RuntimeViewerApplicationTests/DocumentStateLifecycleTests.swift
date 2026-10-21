@@ -7,9 +7,9 @@ import Testing
 /// How a document joins its engine's background work, and what closing it
 /// does to the members `DocumentState` brings into being (PR121.09).
 ///
-/// A document joins only by starting its background work: reading a
-/// coordinator used to join as a side effect, so whatever read one first
-/// decided when the document joined. `DocumentState` can outlive its window,
+/// A document joins only by starting its background work, which puts a
+/// session holding the work in place: reading a coordinator used to join as a
+/// side effect, so whatever read one first decided when the document joined. `DocumentState` can outlive its window,
 /// and with it the Find session and the corpus coordinator it holds, so their
 /// `deinit` is no place to let go of work. Closing has to stop what exists —
 /// and only that: bringing a member into being in order to close it starts
@@ -30,36 +30,22 @@ struct DocumentStateLifecycleTests {
 
     // MARK: - Starting the background work
 
-    /// On an engine of its own: the closed coordinators an unstarted document
-    /// hands out are not the engine's, but closing the indexing one still
-    /// cancels the batches of the engine it was made for.
-    @Test("a document that has not started its background work reads its coordinators without joining the engine's work")
-    func readingTheCoordinatorsJoinsNothing() async throws {
+    @Test("a document holds none of its engine's background work until it starts, and then the work the engine's registry holds")
+    func startingJoinsTheEnginesWork() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "DocumentStateLifecycleTests.unstarted")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let documentState = environment.documentState
+        let unstartedSession = documentState.runtimeEngineSession
 
-        let unstartedCoordinators = environment.make {
-            (
-                indexing: documentState.backgroundIndexingCoordinator,
-                corpus: documentState.findCorpusCoordinator,
-                crossReferences: documentState.crossReferencePreparationCoordinator
-            )
-        }
-        defer { withExtendedLifetime(unstartedCoordinators) {} }
+        #expect(unstartedSession.backgroundWork == nil, "a document that has not started holds work")
+        #expect(environment.backgroundWorkRegistry.backgroundWork(on: engine) == nil)
 
-        #expect(environment.backgroundWorkRegistry.backgroundWork(on: engine) == nil, "reading a coordinator joined the engine's background work")
-        #expect(!documentState.hasCreatedFindSession, "reading a coordinator hooked a Find session to it")
-        #expect(documentState.backgroundIndexingCoordinator === unstartedCoordinators.indexing, "every read hands out other coordinators")
-
-        // Started, the document hands out the coordinators of the work it joined.
         environment.startBackgroundWork()
 
         let backgroundWork = try #require(environment.backgroundWorkRegistry.backgroundWork(on: engine), "starting joined nothing")
-        #expect(documentState.backgroundIndexingCoordinator === backgroundWork.indexingCoordinator)
-        #expect(documentState.findCorpusCoordinator === backgroundWork.corpusCoordinator)
-        #expect(documentState.crossReferencePreparationCoordinator === backgroundWork.crossReferencePreparationCoordinator)
-        #expect(documentState.backgroundIndexingCoordinator !== unstartedCoordinators.indexing)
+        #expect(documentState.runtimeEngineSession !== unstartedSession, "starting put no new session in place")
+        #expect(documentState.runtimeEngineSession.backgroundWork === backgroundWork)
+        #expect(documentState.runtimeEngine === engine)
         environment.make { documentState.documentWillClose() }
         await engine.stop()
     }

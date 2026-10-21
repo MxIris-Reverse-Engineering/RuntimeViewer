@@ -100,17 +100,19 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         let isCorpusEnabled = $isCorpusEnabled.asObservable()
         let isCrossReferencePreparationEnabled = $isCrossReferencePreparationEnabled.asObservable()
         let isVisible = input.isVisible.asObservable().distinctUntilChanged()
-        // The coordinators of the engine the document is on, again after every move to another
-        // engine: `.switchEngine` moves the document onto the new engine's before it assigns the
-        // engine.
-        let coordinators = documentState.$runtimeEngine.asObservable()
-            .map { _ in
+        // The coordinators of the engine's work the document holds, again with every session it
+        // puts in place — starting its background work, moving to another engine — and `nil`
+        // while it holds none: the page then shows an empty Report.
+        let coordinators = documentState.$runtimeEngineSession.asObservable()
+            .map { runtimeEngineSession in
                 MainActor.assumeIsolated {
-                    (
-                        indexing: documentState.backgroundIndexingCoordinator,
-                        corpus: documentState.findCorpusCoordinator,
-                        crossReferences: documentState.crossReferencePreparationCoordinator
-                    )
+                    runtimeEngineSession.backgroundWork.map { backgroundWork in
+                        (
+                            indexing: backgroundWork.indexingCoordinator,
+                            corpus: backgroundWork.corpusCoordinator,
+                            crossReferences: backgroundWork.crossReferencePreparationCoordinator
+                        )
+                    }
                 }
             }
             .share(replay: 1)
@@ -120,6 +122,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 // A page nobody sees builds nothing. Coming on screen replays the latest of every
                 // input, so the tree is current before the page is drawn.
                 guard isVisible else { return .empty() }
+                guard let coordinators else { return .just([]) }
                 let indexingCoordinator = coordinators.indexing
                 let corpusCoordinator = coordinators.corpus
                 // Each kind is rebuilt from its own inputs only: a corpus build's progress leaves
@@ -185,20 +188,22 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             .filter { isVisible, _ in isVisible }
             .subscribeOnNext { _, coordinators in
                 MainActor.assumeIsolated {
-                    coordinators.corpus.refreshCoverage()
+                    coordinators?.corpus.refreshCoverage()
                 }
             }
             .disposed(by: rx.disposeBag)
 
-        // The commands go to the engine's coordinators, so every window on the engine sees them.
+        // The commands go to the coordinators of the engine's work, so every window on the engine
+        // sees them; a document holding none has nothing to command.
         input.cancel.emitOnNext { node in
+            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
             switch node.identifier {
             case .indexingBatch(let batchID):
-                documentState.backgroundIndexingCoordinator.cancelBatch(batchID)
+                backgroundWork.indexingCoordinator.cancelBatch(batchID)
             case .corpusBuild(let imagePath):
-                documentState.findCorpusCoordinator.cancelBuild(of: imagePath)
+                backgroundWork.corpusCoordinator.cancelBuild(of: imagePath)
             case .crossReferencePreparation(let imagePath):
-                documentState.crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
+                backgroundWork.crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
             case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .finishedCrossReferencePreparation:
                 break
             }
@@ -206,14 +211,15 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         .disposed(by: rx.disposeBag)
 
         input.cancelAll.emitOnNext {
-            documentState.backgroundIndexingCoordinator.cancelAllBatches()
+            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
+            backgroundWork.indexingCoordinator.cancelAllBatches()
             // What the engine's documents asked for; a build another connection asked for is not
             // this page's to stop.
-            let corpusCoordinator = documentState.findCorpusCoordinator
+            let corpusCoordinator = backgroundWork.corpusCoordinator
             for imagePath in corpusCoordinator.followedImagePaths {
                 corpusCoordinator.cancelBuild(of: imagePath)
             }
-            let crossReferencePreparationCoordinator = documentState.crossReferencePreparationCoordinator
+            let crossReferencePreparationCoordinator = backgroundWork.crossReferencePreparationCoordinator
             for imagePath in crossReferencePreparationCoordinator.followedImagePaths {
                 crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
             }
@@ -221,9 +227,10 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         .disposed(by: rx.disposeBag)
 
         input.clearHistory.emitOnNext {
-            documentState.backgroundIndexingCoordinator.clearHistory()
-            documentState.findCorpusCoordinator.clearFinishedBuilds()
-            documentState.crossReferencePreparationCoordinator.clearFinishedPreparations()
+            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
+            backgroundWork.indexingCoordinator.clearHistory()
+            backgroundWork.corpusCoordinator.clearFinishedBuilds()
+            backgroundWork.crossReferencePreparationCoordinator.clearFinishedPreparations()
         }
         .disposed(by: rx.disposeBag)
 
@@ -279,8 +286,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             isEmpty: $allNodes.asDriver().map(\.isEmpty).distinctUntilChanged(),
             hasCancellableWork: $allNodes.asDriver().map { nodes in nodes.contains(where: ReportOutline.isCancellable) }.distinctUntilChanged(),
             hasHistory: coordinators
-                .flatMapLatest { coordinators in
-                    Observable.combineLatest(
+                .flatMapLatest { coordinators -> Observable<Bool> in
+                    guard let coordinators else { return .just(false) }
+                    return Observable.combineLatest(
                         coordinators.indexing.historyObservable,
                         coordinators.corpus.$finishedBuilds.asObservable(),
                         coordinators.crossReferences.$finishedPreparations.asObservable()

@@ -167,7 +167,7 @@ struct BackgroundWorkProcessActivityTests {
         environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(peer.client)) }
 
         try await waitUntil(timeout: 30) { scheduler.heldActivityCount == 1 }
-        #expect(registry.backgroundWork(on: peer.client)?.processActivity?.isHoldingActivity == true, "the activity held is not the work of the engine the document moved to")
+        #expect(registry.backgroundWork(on: peer.client)?.processActivity.isHoldingActivity == true, "the activity held is not the work of the engine the document moved to")
         environment.make { environment.documentState.documentWillClose() }
         #expect(scheduler.heldActivityCount == 0)
         await heldLoads.release()

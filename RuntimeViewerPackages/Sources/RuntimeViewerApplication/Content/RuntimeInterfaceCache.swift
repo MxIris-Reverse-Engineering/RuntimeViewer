@@ -17,11 +17,12 @@ import RuntimeViewerArchitectures
 ///   the one that was asked about: a link click resolves a synthetic target
 ///   into the defining section's authoritative `RuntimeObject`, and it is
 ///   that object the navigation and the destination view model then use.
-/// - Any `dataChangePublisher` event and any engine swap flushes the whole
-///   cache. Both are rare, and a conservative full flush can never serve a
-///   stale interface after the runtime data set changed (image loads and
-///   reloads broadcast `.fullReload`; injection lands as either a reload
-///   or an engine swap).
+/// - Any `dataChangePublisher` event and any session the document puts in
+///   place — another engine, the same engine starting over on a new process —
+///   flushes the whole cache. Both are rare, and a conservative full flush
+///   can never serve a stale interface after the runtime data set changed
+///   (image loads and reloads broadcast `.fullReload`; injection lands as
+///   either a reload or an engine swap).
 /// - `nil` results and errors are never cached: a "not found" can become
 ///   found once another image loads, and dead-link re-fetches are cheap.
 /// - Bulk consumers (interface export, MCP) deliberately bypass this cache
@@ -117,19 +118,21 @@ public final class RuntimeInterfaceCache {
             return try await documentState.runtimeEngine.interface(for: object, options: options)
         }
 
-        // Engine swap → flush; every data-change event on the current
-        // engine → flush. `flatMapLatest` unsubscribes from the previous
-        // engine's publisher the moment a swap lands.
-        let engineSwapped = documentState.$runtimeEngine
+        // A session put in place → flush: another engine, the same one
+        // starting over, the document starting its background work; every
+        // data-change event on the current engine → flush. `flatMapLatest`
+        // unsubscribes from the previous engine's publisher the moment a new
+        // session lands.
+        let sessionPutInPlace = documentState.$runtimeEngineSession
             .asObservable()
             .skip(1)
             .map { _ in () }
-        let engineDataChanged = documentState.$runtimeEngine
+        let engineDataChanged = documentState.$runtimeEngineSession
             .asObservable()
-            .flatMapLatest { engine in
-                engine.dataChangePublisher.asObservable().map { _ in () }
+            .flatMapLatest { runtimeEngineSession in
+                runtimeEngineSession.engine.dataChangePublisher.asObservable().map { _ in () }
             }
-        Observable.merge(engineSwapped, engineDataChanged)
+        Observable.merge(sessionPutInPlace, engineDataChanged)
             .subscribeOnNextMainActor { [weak self] in
                 guard let self else { return }
                 invalidateAll()

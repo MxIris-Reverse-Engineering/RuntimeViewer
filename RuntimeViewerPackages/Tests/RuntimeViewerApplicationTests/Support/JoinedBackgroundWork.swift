@@ -20,6 +20,6 @@ extension DocumentState {
     }
 
     private func joinedBackgroundWork(sourceLocation: SourceLocation) throws -> RuntimeEngineBackgroundWork {
-        try #require(backgroundWork, "the document has not started its background work", sourceLocation: sourceLocation)
+        try #require(runtimeEngineSession.backgroundWork, "the document has not started its background work", sourceLocation: sourceLocation)
     }
 }

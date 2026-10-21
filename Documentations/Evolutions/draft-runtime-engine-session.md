@@ -78,7 +78,7 @@
 - `DocumentState.reportActivity` 改为跟随 `$runtimeEngine`，取已加入工作的 `isWorkInProgress`，没有工作时为假。删掉 `DocumentState` 上的 `backgroundWorkProcessActivity`、`processActivityScheduler`、`hasCreatedBackgroundWorkProcessActivity`。
 - 补三条用例：同一 Engine 上开两个文档、关掉一个，activity 仍然持有；最后一个离开才结束；文档切到另一个 Engine 后，新 Engine 有工作时持有 activity。最后这条钉住 `ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md` 修过的场景。
 
-**第 4 步：引入 `RuntimeEngineSession`，删掉命令式的成员管理。**
+**第 4 步：引入 `RuntimeEngineSession`，删掉命令式的成员管理。**（已完成）
 - 按上文终态加入 `runtimeEngineSession`，`runtimeEngine` 改为转发。
 - `$runtimeEngine` 的 7 个跟随者改为跟随 `$runtimeEngineSession`：`RuntimeInterfaceCache` 两处、`FindViewModel`、`ReportViewModel`、`MainViewModel` 两处，以及 `DocumentState.reportActivity` 自己。
 - 直接读 getter 的地方改读当前 session 的工作，没有工作时按上文「没有工作时」处理：
@@ -190,3 +190,12 @@
 | 2026-10-21 | 第 3 步：`DocumentStateLifecycleTests` 删掉三处「没建出 activity」的断言 | activity 已不属于文档；「什么都没建」由 registry 里没有这个 Engine 的工作来断言 |
 | 2026-10-21 | 第 3 步完成：`RuntimeViewerApplicationTests` 603 条中仍只有「taking its engine off a row…」在满载下超时，两条新的 App Nap 用例通过 | 同第 1 步，与改动无关 |
 | 2026-10-21 | 变异检查 1–4 全部变红：1 由「未启动读协调器不会加入」抓到，2 由「只调启动就开始索引」抓到（Always Index 一套也会红），3 由「两个文档关一个仍持有」抓到，4 由「切到另一个 Engine 后仍持有」抓到 | 3 和 4 各自只影响自己那条用例，放在同一次构建里验；其余每项单独构建、单独验 |
+| 2026-10-21 | 第 4 步：`RuntimeEngineSession.engine` 声明为 `public nonisolated let` | `RuntimeEngine` 是 actor，本身可跨隔离传递；App target 与 `RuntimeInterfaceCache` 在非隔离的闭包里读它，不必再包一层 `MainActor.assumeIsolated` |
+| 2026-10-21 | 第 4 步：`leave()` 靠一个私有的 `hasLeft` 标志只生效一次，这是 session 里唯一的可变状态，对外不可见 | 文档离开某份工作后，若又回到同一个仍在运行的工作，旧 session 再被调一次 `leave()` 就会删掉新 session 的成员身份；registry 的成员守卫挡不住这种情况 |
+| 2026-10-21 | 第 4 步：侧栏 image 的 `combineLatest` 与 FindSession 跟随 session 都用同步投递（`subscribeOnNext` / `driveOnNext` 加 `MainActor.assumeIsolated`），不用 `…MainActor` 系列 | 后者每次都隔一个主线程回合才执行：侧栏那条可能在 `leave()` 清掉登记之后，又把旧 image 写回离开的那份工作；FindSession 也要在切换的同一回合跟上新协调器 |
+| 2026-10-21 | 第 4 步：同一 Engine 重置的再赋值放进 `putSessionInPlaceAgain()`，先取到局部变量再赋回 | 对属性自赋值会触发编译告警；单独一个方法也让路由里两条分支读起来对称 |
+| 2026-10-21 | 第 4 步：工作的构造顺序沿用旧行为，先建索引协调器并调 `documentDidOpen()`，再建语料与交叉引用协调器 | 三个协调器改为 `let` 后都在构造器里建出，顺序照旧，免得改动派发与语料请求的先后 |
+| 2026-10-21 | 第 4 步：`RuntimeBackgroundIndexingCoordinator` 的私有计数器 `session` 改名 `connectionGeneration`，相关注释改说「这一次连接」 | 与新类型撞名、含义相反；它在 Engine 背后的进程重启或协调器关闭时前进，正是「连接换代」 |
+| 2026-10-21 | 第 4 步：`DocumentStateLifecycleTests` 里「未启动读协调器不会加入」改为「启动前 session 不持有工作，启动后持有 registry 里那份」 | 协调器 getter 已删，变异 1 针对的路径不复存在；这条改为钉住启动换 session 这件事 |
+| 2026-10-21 | 第 4 步完成：`RuntimeViewerApplicationTests` 608 条中仍只有「taking its engine off a row…」在满载下超时，`RuntimeEngineSessionTests` 的 5 条新用例通过 | 同第 1 步，与改动无关 |
+| 2026-10-21 | 变异检查 5–9 全部变红：5 由「先绑定再启动」抓到，6 由「切换后发出的第一个值」抓到（发了两次，第一个不带工作），7 由计数 fetcher 抓到，8 由侧栏 image 测试缝抓到，9 由「切换后 FindSession 跟随新语料」抓到 | 6–9 各自只影响自己那条用例，放在同一次构建里验；5 单独验。变异 10 是 0055 已验过的现有用例，没有重做 |

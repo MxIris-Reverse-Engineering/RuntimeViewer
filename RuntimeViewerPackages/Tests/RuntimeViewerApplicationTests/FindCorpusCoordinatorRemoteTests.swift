@@ -83,7 +83,7 @@ struct FindCorpusCoordinatorRemoteTests {
 
         try await fixture.serving.loadImage(at: TestImages.libobjc)
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true))
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { !$0 }
         #expect(session.results.unbuiltImagePaths.contains(TestImages.libobjc), "the search read an image nobody asked to make searchable")

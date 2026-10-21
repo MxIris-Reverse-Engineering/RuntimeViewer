@@ -409,7 +409,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         // synchronous: it is the common case, it already has a working answer, and a
         // control that flickers from enabled to disabled while a probe runs is worse than
         // one that was never enabled.
-        let attachAvailability: Driver<AttachAvailability> = documentState.$runtimeEngine.asDriver()
+        let attachAvailability: Driver<AttachAvailability> = documentState.$runtimeEngineSession.asDriver().map(\.engine)
             .flatMapLatest { [weak self] runtimeEngine -> Driver<AttachAvailability> in
                 guard let self else { return .empty() }
                 if runtimeEngine.injectionTargetsRunOnThisMachine {
@@ -508,7 +508,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             // window even though it clears `currentImageNode` to the same
             // `nil` it may already hold.
             windowTitle: Driver.combineLatest(
-                documentState.$runtimeEngine.asDriver(),
+                documentState.$runtimeEngineSession.asDriver().map(\.engine),
                 currentImageName
             ).map { runtimeEngine, imageName in
                 guard let imageName else { return runtimeEngine.source.description }

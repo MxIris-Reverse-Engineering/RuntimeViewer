@@ -65,9 +65,9 @@ struct ViewModelTestEnvironment {
 
     /// Starts the document's background work as `Document.makeWindowControllers`
     /// does, inside the environment's dependencies so the coordinators it
-    /// brings into being read the test's settings. Call it before binding
-    /// anything that reads the coordinators, as the app does: what binds
-    /// earlier keeps the closed coordinators an unstarted document hands out.
+    /// brings into being read the test's settings. What is bound before it
+    /// finds the work once it runs, as everything follows the session it puts
+    /// in place.
     func startBackgroundWork() {
         make { documentState.startBackgroundWork() }
     }

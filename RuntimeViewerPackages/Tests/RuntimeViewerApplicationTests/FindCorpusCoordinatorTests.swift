@@ -72,7 +72,7 @@ struct FindCorpusCoordinatorTests {
         let coverage = try await waitForCoverage(of: engine, timeout: 20) { $0.statesByImagePath[TestImages.libobjc]?.isBuilt == true }
         #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt == true, "the corpus of the image the indexer finished was never built")
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject"))
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
         #expect(!session.results.nodes.isEmpty)
@@ -237,7 +237,7 @@ struct FindCorpusCoordinatorTests {
         // What the resident budget does: no event, no notice.
         try await engine.evictInterfaceCorpus(for: TestImages.libobjc)
 
-        documentState.findSession.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true, scope: .images([TestImages.libobjc])))
+        environment.make { documentState.findSession }.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true, scope: .images([TestImages.libobjc])))
 
         let coverage = try await waitForCoverage(of: engine, timeout: 30) { $0.statesByImagePath[TestImages.libobjc]?.isBuilt == true }
         #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt == true, "the evicted corpus was never asked for again")

@@ -102,9 +102,17 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
     }
 
     public func transform(_ input: Input) -> Output {
+        // The build states of the corpus coordinator of the engine's work the document holds;
+        // none while it holds none.
+        let buildStates = documentState.$runtimeEngineSession.asObservable()
+            .flatMapLatest { runtimeEngineSession -> Observable<[String: RuntimeInterfaceCorpusBuildState]> in
+                MainActor.assumeIsolated {
+                    runtimeEngineSession.backgroundWork?.corpusCoordinator.$buildStatesByImagePath.asObservable() ?? .just([:])
+                }
+            }
         Observable.combineLatest(
             $indexedImagePaths.asObservable(),
-            documentState.findCorpusCoordinator.$buildStatesByImagePath.asObservable()
+            buildStates
         )
         .observe(on: MainScheduler.instance)
         .subscribeOnNext { [weak self] indexedImagePaths, buildStates in
