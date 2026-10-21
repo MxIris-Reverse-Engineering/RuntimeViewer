@@ -55,9 +55,9 @@ struct FindCorpusCoordinatorTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        // In the order `Document.makeWindowControllers` creates them.
-        let indexingCoordinator = environment.make { documentState.backgroundIndexingCoordinator }
-        let corpusCoordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let indexingCoordinator = try documentState.joinedIndexingCoordinator()
+        let corpusCoordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime((indexingCoordinator, corpusCoordinator)) {} }
 
         // An "always index" entry that does not follow its dependencies is a
@@ -72,7 +72,7 @@ struct FindCorpusCoordinatorTests {
         let coverage = try await waitForCoverage(of: engine, timeout: 20) { $0.statesByImagePath[TestImages.libobjc]?.isBuilt == true }
         #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt == true, "the corpus of the image the indexer finished was never built")
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject"))
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
         #expect(!session.results.nodes.isEmpty)
@@ -229,14 +229,15 @@ struct FindCorpusCoordinatorTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
         // What the resident budget does: no event, no notice.
         try await engine.evictInterfaceCorpus(for: TestImages.libobjc)
 
-        documentState.findSession.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true, scope: .images([TestImages.libobjc])))
+        environment.make { documentState.findSession }.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true, scope: .images([TestImages.libobjc])))
 
         let coverage = try await waitForCoverage(of: engine, timeout: 30) { $0.statesByImagePath[TestImages.libobjc]?.isBuilt == true }
         #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt == true, "the evicted corpus was never asked for again")

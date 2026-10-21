@@ -237,3 +237,17 @@ when picking up follow-up work.
   not fixed with their reopen conditions; `XR.C9` and `XR.B6` are **false
   positives**. The library's own findings live in its
   `Roadmaps/2026-10-17-cross-reference-analysis-review-findings.md`.
+- [2026-10-21-pr125-review-findings.md](2026-10-21-pr125-review-findings.md) —
+  `/code-review xhigh` on PR #125 (`chore/runtime-engine-session`, the
+  RuntimeEngineSession proposal) @ `8cd5d2b5`, IDs `PR125.<N>`. Nine
+  findings, none of them a serious correctness bug. Fixed with a failing-first
+  test: the App Nap activity taken again by a report still on its way when the
+  engine's work closed (`PR125.1`, there since the activity was introduced),
+  and a test that slept 300 ms for the engine's first reload (`PR125.2`); two
+  stale documentation passages fixed (`PR125.8`, `PR125.9`) and a misleading
+  "immutable" reworded (`PR125.6`). `PR125.3`, `4`, `5`, `7` are recorded as
+  not fixed with their reasons. Fixed in the same batch at the user's request:
+  an engine coming back while a document had something open fired
+  `.switchEngine` behind `MainCoordinator`'s back and failed its assertion, a
+  crash in Debug builds (`PR125.10`, there since the local runtime moved into
+  its XPC service).

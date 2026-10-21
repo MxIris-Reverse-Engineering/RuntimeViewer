@@ -32,7 +32,8 @@ struct FindCorpusCoordinatorOlderPeerTests {
         try await engine.connect()
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
-        let coordinator = environment.make { environment.documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
 
         coordinator.requestBuild(of: TestImages.libobjc)
@@ -57,7 +58,7 @@ struct FindCorpusCoordinatorOlderPeerTests {
         // coordinator, which asks it as usual.
         let otherEngine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorOlderPeerTests.other")
         environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(otherEngine)) }
-        let otherCoordinator = environment.make { environment.documentState.findCorpusCoordinator }
+        let otherCoordinator = try environment.documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(otherCoordinator) {} }
         #expect(otherCoordinator !== coordinator)
         #expect(otherCoordinator.isCorpusUnsupportedByEngine == false)

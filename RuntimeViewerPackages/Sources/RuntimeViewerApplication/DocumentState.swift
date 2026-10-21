@@ -15,21 +15,30 @@ public final class DocumentState {
     ///   passes its manager's "My Mac" engine; the default is the in-process
     ///   engine, for tests and for platforms without an engine manager.
     public init(runtimeEngine: RuntimeEngine = .local) {
-        self.runtimeEngine = runtimeEngine
+        self.runtimeEngineSession = RuntimeEngineSession(engine: runtimeEngine)
         observeReadiness(of: runtimeEngine)
+        followSidebarImage()
     }
 
-    /// The runtime engine backing this Document. Read-only externally:
-    /// mutated only via the `.switchEngine` route. `MainCoordinator` is
-    /// responsible for issuing that route from its `.main` handler — the
-    /// trigger also atomically clears `currentImageNode` and
-    /// `selectionStack` so consumers never observe a half-switched state.
+    /// The engine backing this Document and the document's hold on the
+    /// engine's background work, as one value: whatever follows it finds the
+    /// engine and the work that goes with it together. Read-only externally.
     ///
-    /// The route moves the document onto the new engine's background work
-    /// before it assigns the engine, so whatever follows `$runtimeEngine`
-    /// finds the new engine's coordinators; see `backgroundIndexingCoordinator`.
+    /// A new session is put in place when the document starts its background
+    /// work (`startBackgroundWork()`) and when the `.switchEngine` route moves
+    /// it to another engine; the same engine starting over with something
+    /// open puts the same session in place again, and closing puts nothing in
+    /// place. `MainCoordinator` is responsible for issuing that route from its
+    /// `.main` handler — the trigger also atomically clears `currentImageNode`
+    /// and `selectionStack` so consumers never observe a half-switched state.
     @RxObserved
-    public fileprivate(set) var runtimeEngine: RuntimeEngine
+    public fileprivate(set) var runtimeEngineSession: RuntimeEngineSession
+
+    /// The runtime engine backing this Document: `runtimeEngineSession`'s.
+    /// Follow `$runtimeEngineSession` to hear it change.
+    public var runtimeEngine: RuntimeEngine {
+        runtimeEngineSession.engine
+    }
 
     /// Subscription to the current engine's readiness; see ``observeReadiness(of:)``.
     private var engineReadinessSubscription: AnyCancellable?
@@ -46,13 +55,28 @@ public final class DocumentState {
     /// learned from the process behind the engine is stale by then: its
     /// corpora, the searches run on it, the builds it was running.
     ///
-    /// `$runtimeEngine` does not cover the second case: nothing is assigned
-    /// when nothing is open.
+    /// `$runtimeEngineSession` does not cover the second case: nothing is put
+    /// in place when nothing is open.
     public var runtimeEngineDidReset: Signal<RuntimeEngine> {
         runtimeEngineDidResetRelay.asSignal()
     }
 
     fileprivate let runtimeEngineDidResetRelay = PublishRelay<RuntimeEngine>()
+
+    /// Fires with the document's engine when it came back — the process
+    /// behind it is new — while the document had something open: the window
+    /// is to start the document over on it, the way choosing the engine again
+    /// does. On macOS that is `MainRoute.main`, which stops listening to the
+    /// document's routes, issues `.switchEngine` onto the engine and builds
+    /// new panes. The document does not issue the route itself: reaching the
+    /// panes about to be replaced, it is the broken contract
+    /// `MainCoordinator.fanOut` asserts on. With nothing open there is nothing
+    /// to start over from, and only `runtimeEngineDidReset` fires.
+    public var startOverRequested: Signal<RuntimeEngine> {
+        startOverRequestedRelay.asSignal()
+    }
+
+    private let startOverRequestedRelay = PublishRelay<RuntimeEngine>()
 
     /// The sidebar at the image list and nothing on the timeline: an engine
     /// coming back has nothing to walk the document back from.
@@ -60,16 +84,19 @@ public final class DocumentState {
         currentImageNode == nil && selectionStack.isEmpty
     }
 
-    /// Walks the document back to the image list when its engine stops being
-    /// ready and then becomes ready again.
+    /// Watches the engine for coming back — it stops being ready and then
+    /// becomes ready again — after which the document walks back to the
+    /// image list.
     ///
-    /// That edge is the local-runtime XPC service having been relaunched:
+    /// That edge is the local-runtime XPC service having been relaunched —
+    /// after a crash, or after the system reclaimed it while it sat idle:
     /// the engine object survives, but the process behind it is new and holds
     /// none of the images this document was browsing, so every request from
     /// where the user stands would fail. The `.switchEngine` route onto the
-    /// same engine is the existing "start over on this engine" reset. With
-    /// nothing open it would be a no-op, so the edge then only announces the
-    /// reset (`runtimeEngineDidReset`) — the engine's very first connection
+    /// same engine is the existing "start over on this engine" reset, and the
+    /// window issues it when asked (`startOverRequested`). With nothing open
+    /// it would be a no-op, so the edge then only announces the reset
+    /// (`runtimeEngineDidReset`) — the engine's very first connection
     /// included, which is no different from a reset as far as anything that
     /// asked the engine before is concerned.
     ///
@@ -96,7 +123,7 @@ public final class DocumentState {
         if hasNothingOpen {
             runtimeEngineDidResetRelay.accept(engine)
         } else {
-            selectionRouter.trigger(.switchEngine(engine))
+            startOverRequestedRelay.accept(engine)
         }
     }
 
@@ -232,28 +259,6 @@ public final class DocumentState {
     @Dependency(\.runtimeEngineBackgroundWorkRegistry)
     private var backgroundWorkRegistry
 
-    /// The background work of the engine the document is on — its indexing
-    /// coordinator and its corpus coordinator — which every document on the
-    /// engine shares, so the documents on one engine show one Report. Joined
-    /// when the document first needs either coordinator, then carried onto
-    /// each engine the document moves to; `nil` until then. Once the document
-    /// has closed, the work it left, so a late reader finds the coordinators
-    /// it read before rather than joining the engine again.
-    private var backgroundWork: RuntimeEngineBackgroundWork?
-
-    /// The document has needed its engine's background indexing: the engine it
-    /// moves to gets its own started too, as opening started this one's.
-    private var needsBackgroundIndexing = false
-
-    /// The document has needed its engine's interface corpus: its Find session
-    /// and its sidebar's image follow that engine's corpus coordinator, and the
-    /// engine it moves to gets one too.
-    private var needsInterfaceCorpus = false
-
-    /// The document has needed its engine's prepared cross references: the
-    /// engine it moves to gets its preparation started too.
-    private var needsCrossReferencePreparation = false
-
     /// `documentWillClose()` has run.
     private var isClosed = false
 
@@ -262,31 +267,73 @@ public final class DocumentState {
         ObjectIdentifier(self)
     }
 
-    /// The background indexing of the engine the document is on, shared with
-    /// every document on the engine (`RuntimeEngineBackgroundWork`): they all
-    /// show its batches and its history, and Cancel or Clear History in any of
-    /// them speaks for all of them.
+    private let disposeBag = DisposeBag()
+
+    /// Joins the background work of the engine the document is on — the
+    /// engine's background indexing, its interface corpus and its prepared
+    /// cross references, shared with every document on the engine
+    /// (`RuntimeEngineBackgroundWork`), which keeps the app out of App Nap while
+    /// any of it is in progress. The first document on an engine starts the
+    /// engine's indexing; the document's Find session follows the engine's
+    /// corpus coordinator, which hears which image the document's sidebar
+    /// shows.
     ///
-    /// Brought into being on first use — `makeWindowControllers` touches it —
-    /// and kept by the engine for as long as a document is on it, even when
-    /// the feature is disabled at open time, so it can react to settings
-    /// off→on toggles. Deferring the creation is an init-deferral mechanism,
-    /// not a gating-by-enablement. The document reads the engine's coordinator
-    /// afresh after every move to another engine; `$runtimeEngine` says when.
-    public var backgroundIndexingCoordinator: RuntimeBackgroundIndexingCoordinator {
-        let backgroundWork = joinedBackgroundWork()
-        if !isClosed {
-            needsBackgroundIndexing = true
+    /// The only way in. It puts a new session in place, holding the work, so
+    /// whatever followed `$runtimeEngineSession` before — a page bound early,
+    /// the Find session — finds the work from then on.
+    /// `Document.makeWindowControllers` calls this first all the same. Calling
+    /// it again, or once the document has closed, does nothing.
+    public func startBackgroundWork() {
+        guard runtimeEngineSession.backgroundWork == nil, !isClosed else { return }
+        runtimeEngineSession = RuntimeEngineSession(joining: runtimeEngine, as: backgroundWorkMember, through: backgroundWorkRegistry)
+    }
+
+    /// Puts a session on `engine` in place of the current one — holding
+    /// `engine`'s background work if the document started its own — and then
+    /// lets the current one go: whatever follows the session never finds the
+    /// new engine without its work, and the old engine's work closes once its
+    /// last document has left. `.switchEngine` calls this for another engine.
+    fileprivate func moveSession(to engine: RuntimeEngine) {
+        let previousSession = runtimeEngineSession
+        runtimeEngineSession = if previousSession.backgroundWork != nil, !isClosed {
+            RuntimeEngineSession(joining: engine, as: backgroundWorkMember, through: backgroundWorkRegistry)
+        } else {
+            RuntimeEngineSession(engine: engine)
         }
-        return backgroundWork.indexingCoordinator
+        previousSession.leave()
+    }
+
+    /// The same engine starting over with something open: the session stays,
+    /// put in place again so whatever follows it starts over too — the
+    /// interface cache empties. `.switchEngine` calls this for the engine the
+    /// document is on.
+    fileprivate func putSessionInPlaceAgain() {
+        let currentSession = runtimeEngineSession
+        runtimeEngineSession = currentSession
+    }
+
+    /// Tells the corpus coordinator of the work the document holds which image
+    /// its sidebar lists, whenever the session or the image changes; with no
+    /// work held, nothing. A session the document leaves withdraws the image
+    /// itself (`RuntimeEngineSession.leave()`), and a closed document tells
+    /// nothing.
+    private func followSidebarImage() {
+        Observable.combineLatest($runtimeEngineSession.asObservable(), $currentImageNode.asObservable())
+            .subscribeOnNext { [weak self] session, currentImageNode in
+                MainActor.assumeIsolated {
+                    guard let self, !self.isClosed else { return }
+                    session.backgroundWork?.corpusCoordinator.setOnScreenImagePath(currentImageNode?.path, ofDocument: self.backgroundWorkMember)
+                }
+            }
+            .disposed(by: disposeBag)
     }
 
     /// Per-Document interface cache. Content navigation (push, tab switch,
     /// back/forward) rebinds `ContentTextViewModel` and used to re-fetch
     /// the interface over XPC on every rebind; routing single-object
     /// fetches through this cache makes revisits render from memory. See
-    /// `RuntimeInterfaceCache` for the invalidation contract (engine swaps
-    /// and `dataChangePublisher` events flush it).
+    /// `RuntimeInterfaceCache` for the invalidation contract (every session
+    /// put in place and every `dataChangePublisher` event flush it).
     public private(set) lazy var interfaceCache = RuntimeInterfaceCache(documentState: self)
 
     /// The Find navigator's query and results, shared by the page in each
@@ -302,162 +349,44 @@ public final class DocumentState {
 
     private var findSessionStorage: FindSession?
 
-    /// Keeps the engine's interface corpus in step with what the engine
-    /// indexes, shared with every document on the engine like
-    /// `backgroundIndexingCoordinator`, and touched on the same Document
-    /// lifecycle hook. The document's Find session follows it, and it hears
-    /// which image the document's sidebar shows.
-    public var findCorpusCoordinator: FindCorpusCoordinator {
-        let backgroundWork = joinedBackgroundWork()
-        if !needsInterfaceCorpus, !isClosed {
-            needsInterfaceCorpus = true
-            followInterfaceCorpus(of: backgroundWork)
-        }
-        return backgroundWork.corpusCoordinator
-    }
-
-    /// Keeps the engine's prepared cross references in step with what the
-    /// engine indexes, shared with every document on the engine like
-    /// `backgroundIndexingCoordinator`, and touched on the same Document
-    /// lifecycle hook.
-    public var crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator {
-        let backgroundWork = joinedBackgroundWork()
-        if !isClosed {
-            needsCrossReferencePreparation = true
-        }
-        return backgroundWork.crossReferencePreparationCoordinator
-    }
-
-    /// The work of the engine the document is on, joined if the document does
-    /// not hold it yet. A document that closed without ever holding it gets
-    /// work closed from the start: it asks the engine for nothing.
-    private func joinedBackgroundWork() -> RuntimeEngineBackgroundWork {
-        if let backgroundWork {
-            return backgroundWork
-        }
-        let joinedBackgroundWork = isClosed
-            ? RuntimeEngineBackgroundWork.closed(on: runtimeEngine)
-            : backgroundWorkRegistry.join(runtimeEngine, as: backgroundWorkMember)
-        backgroundWork = joinedBackgroundWork
-        return joinedBackgroundWork
-    }
-
-    /// Hooks the document's Find session, and its sidebar's image, to
-    /// `backgroundWork`'s corpus coordinator.
-    private func followInterfaceCorpus(of backgroundWork: RuntimeEngineBackgroundWork) {
-        let corpusCoordinator = backgroundWork.corpusCoordinator
-        findSession.follow(corpusCoordinator)
-        corpusCoordinator.setOnScreenImagePath(currentImageNode?.path, ofDocument: backgroundWorkMember)
-    }
-
-    /// Lets go of the background work the document holds: the last document
-    /// on its engine letting go closes it, cancelling what it still runs.
-    private func leaveBackgroundWork(_ backgroundWork: RuntimeEngineBackgroundWork) {
-        if needsInterfaceCorpus {
-            backgroundWork.corpusCoordinator.setOnScreenImagePath(nil, ofDocument: backgroundWorkMember)
-        }
-        backgroundWorkRegistry.leave(backgroundWork, as: backgroundWorkMember)
-    }
-
-    /// Carries the document's hold on background work to `engine`, the engine
-    /// `.switchEngine` is putting in place: the old engine's work is left —
-    /// and closed when the document was the last one on it — and the new
-    /// engine's is joined, with what the document needed of the old one. A
-    /// document that never needed any joins the new engine's on first use.
-    fileprivate func moveBackgroundWork(to engine: RuntimeEngine) {
-        guard let previousBackgroundWork = backgroundWork, !isClosed else { return }
-        leaveBackgroundWork(previousBackgroundWork)
-        let joinedBackgroundWork = backgroundWorkRegistry.join(engine, as: backgroundWorkMember)
-        backgroundWork = joinedBackgroundWork
-        if needsInterfaceCorpus {
-            followInterfaceCorpus(of: joinedBackgroundWork)
-        }
-        if needsCrossReferencePreparation {
-            _ = joinedBackgroundWork.crossReferencePreparationCoordinator
-        }
-        if needsBackgroundIndexing {
-            joinedBackgroundWork.indexingCoordinator.documentDidOpen()
-        }
-    }
-
-    /// Tells the engine's corpus coordinator which image the sidebar lists
-    /// now; the routes that change `currentImageNode` call it.
-    fileprivate func currentImageNodeDidChange() {
-        guard needsInterfaceCorpus, !isClosed, let backgroundWork else { return }
-        backgroundWork.corpusCoordinator.setOnScreenImagePath(currentImageNode?.path, ofDocument: backgroundWorkMember)
-    }
-
     /// Whether `findSession` has been brought into being. Test seam.
     var hasCreatedFindSession: Bool {
         findSessionStorage != nil
     }
 
-    /// Keeps the app out of App Nap while `reportActivity` says this document has work in
-    /// progress. Like the coordinators it watches, touched on the first Document lifecycle hook
-    /// so it exists for the document's whole life.
-    public var backgroundWorkProcessActivity: BackgroundWorkProcessActivity {
-        if let backgroundWorkProcessActivityStorage {
-            return backgroundWorkProcessActivityStorage
-        }
-        let backgroundWorkProcessActivity = BackgroundWorkProcessActivity(isWorkInProgress: reportActivity, scheduler: processActivityScheduler)
-        backgroundWorkProcessActivityStorage = backgroundWorkProcessActivity
-        return backgroundWorkProcessActivity
-    }
-
-    private var backgroundWorkProcessActivityStorage: BackgroundWorkProcessActivity?
-
-    /// What `backgroundWorkProcessActivity` begins and ends its activity with, read when it is
-    /// brought into being. Test seam.
-    var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
-
-    /// Whether the document has needed `findCorpusCoordinator`. Test seam.
-    var hasCreatedFindCorpusCoordinator: Bool {
-        needsInterfaceCorpus
-    }
-
-    /// Whether `backgroundWorkProcessActivity` has been brought into being. Test seam.
-    var hasCreatedBackgroundWorkProcessActivity: Bool {
-        backgroundWorkProcessActivityStorage != nil
-    }
-
     /// The document is closing; `Document.close()` calls this and nothing
     /// else. The document lets go of its engine's background work — the last
     /// document on the engine letting go stops it, cancelling the indexing
-    /// batches and corpus builds still under way and dropping its Report;
-    /// with other documents on the engine, it runs on for them — and each
-    /// member of its own that exists lets go of its work — the search under
-    /// way, the activity held for them — and stops reacting to anything. A
-    /// member never brought into being stays that way: creating it now would
-    /// only start the observation and the requests closing is meant to stop.
+    /// batches and corpus builds still under way, dropping its Report and
+    /// letting go of the activity that kept the app out of App Nap; with other
+    /// documents on the engine, it runs on for them — and each member of its
+    /// own that exists lets go of its work — the search under way — and stops
+    /// reacting to anything. A member never brought into being stays that way:
+    /// creating it now would only start the observation and the requests
+    /// closing is meant to stop. The session stays in place, so a late reader
+    /// finds the work the document left, closed or running for the documents
+    /// still on the engine.
     ///
     /// Needed because this object can outlive its window, and with it every
     /// member it holds, so their `deinit` is no place to let go of work.
     public func documentWillClose() {
         guard !isClosed else { return }
         isClosed = true
-        if let backgroundWork {
-            leaveBackgroundWork(backgroundWork)
-        }
+        runtimeEngineSession.leave()
         findSessionStorage?.documentWillClose()
-        backgroundWorkProcessActivityStorage?.documentWillClose()
     }
 
     /// Whether the Report navigator has work in progress: an indexing batch, a corpus queued or
     /// being printed, or cross references queued or being prepared, on the engine the document is
-    /// on. Worked out once here, so both sidebar levels mark their Report navigator tab from the
-    /// same answer.
+    /// on. The engine's work works it out once for every document on it
+    /// (`RuntimeEngineBackgroundWork.isWorkInProgress`), so both sidebar levels of every window on
+    /// the engine mark their Report navigator tab from the same answer. False while the document
+    /// holds none of its engine's work.
     public var reportActivity: Driver<Bool> {
-        $runtimeEngine.asDriver()
-            .flatMapLatest { [weak self] _ -> Driver<Bool> in
-                guard let self else { return .just(false) }
-                return MainActor.assumeIsolated {
-                    Driver.combineLatest(
-                        self.backgroundIndexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
-                        self.findCorpusCoordinator.hasActiveBuild,
-                        self.crossReferencePreparationCoordinator.hasActivePreparation
-                    ) { hasActiveBatch, hasActiveBuild, hasActivePreparation in
-                        hasActiveBatch || hasActiveBuild || hasActivePreparation
-                    }
+        $runtimeEngineSession.asDriver()
+            .flatMapLatest { session -> Driver<Bool> in
+                MainActor.assumeIsolated {
+                    session.backgroundWork?.isWorkInProgress ?? .just(false)
                 }
             }
             .distinctUntilChanged()
@@ -497,13 +426,11 @@ private final class SelectionRouter: Router {
             if documentState.runtimeEngine === engine, documentState.hasNothingOpen { return }
             if documentState.runtimeEngine !== engine {
                 documentState.observeReadiness(of: engine)
-                // Before the engine is assigned, so whatever follows
-                // `$runtimeEngine` finds the new engine's coordinators.
-                documentState.moveBackgroundWork(to: engine)
+                documentState.moveSession(to: engine)
+            } else {
+                documentState.putSessionInPlaceAgain()
             }
-            documentState.runtimeEngine = engine
             documentState.currentImageNode = nil
-            documentState.currentImageNodeDidChange()
             resetHistory()
             // Engine switch resets the whole document: collapse back to a
             // single empty tab.
@@ -512,7 +439,6 @@ private final class SelectionRouter: Router {
         case .switchImage(let node):
             if documentState.currentImageNode == node, documentState.selectionStack.isEmpty { return }
             documentState.currentImageNode = node
-            documentState.currentImageNodeDidChange()
             resetHistory()
             // Tabs hold objects belonging to the current image; switching the
             // inspected image is a fresh browsing context, so collapse back to

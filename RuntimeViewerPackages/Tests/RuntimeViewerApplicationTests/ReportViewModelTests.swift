@@ -52,6 +52,7 @@ struct ReportViewModelTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.tree", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
 
@@ -78,6 +79,7 @@ struct ReportViewModelTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.indexing.isEnabled = false
         environment.settings.search.isCorpusEnabled = false
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
 
@@ -96,6 +98,7 @@ struct ReportViewModelTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.progress", loading: [TestImages.libobjc, TestImages.foundation])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
         let buildIdentifier = ReportNodeIdentifier.corpusBuild(imagePath: TestImages.foundation)
@@ -124,6 +127,7 @@ struct ReportViewModelTests {
         environment.settings.indexing.isEnabled = false
         environment.settings.search.isCorpusEnabled = false
         let visibility = BehaviorRelay<Bool>(value: false)
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState, isVisible: visibility.asDriver()) }
         defer { withExtendedLifetime(page) {} }
 
@@ -142,6 +146,7 @@ struct ReportViewModelTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = false
         environment.settings.search.isCrossReferencePreparationEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
 
@@ -185,6 +190,7 @@ struct ReportViewModelTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.cancel", loading: [TestImages.libobjc, TestImages.foundation])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
         let buildIdentifier = ReportNodeIdentifier.corpusBuild(imagePath: TestImages.foundation)
@@ -205,9 +211,12 @@ struct ReportViewModelTests {
     func clearHistoryEmptiesBothKinds() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.clearHistory", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
-        // Both on, so neither kind of work shows a row saying it is turned off.
+        // Both on, so neither kind of work shows a row saying it is turned off; heuristic
+        // discovery off, so starting the document dispatches no batch of its own.
         environment.settings.indexing.isEnabled = true
+        environment.settings.indexing.heuristic.isEnabled = false
         environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
 
@@ -233,6 +242,7 @@ struct ReportViewModelTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.activity", loading: [TestImages.libobjc, TestImages.foundation])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
         let activity = environment.documentState.reportActivity
@@ -255,6 +265,7 @@ struct ReportViewModelTests {
         environment.settings.search.isCorpusEnabled = false
         let appRouter = MockRouter<AppRoute>()
         let doubleClickRelay = PublishRelay<ReportNode>()
+        environment.startBackgroundWork()
         let page = withDependencies {
             $0.appRouter = appRouter
         } operation: {
@@ -284,9 +295,10 @@ struct ReportViewModelTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.unfollowedBuild")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
-        let coordinator = environment.documentState.findCorpusCoordinator
+        let coordinator = try environment.documentState.joinedCorpusCoordinator()
         // What the coordinator does as it starts has to be over first, or its own coverage answer
         // lands on the state set below.
         try await waitUntil(timeout: 20) { !coordinator.hasWorkUnderWay }
@@ -332,10 +344,11 @@ struct ReportViewModelTests {
         try await engine.connect()
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
 
-        environment.documentState.findCorpusCoordinator.requestBuild(of: TestImages.libobjc)
+        try environment.documentState.joinedCorpusCoordinator().requestBuild(of: TestImages.libobjc)
 
         let nodes = try await nextValue(from: page.output.nodes, timeout: 10) { Self.node(.unsupportedByEngine(.searchableInterfaces), in: $0) != nil }
         let corpusCategory = try #require(Self.node(.category(.searchableInterfaces), in: nodes))
@@ -360,6 +373,7 @@ struct ReportViewModelTests {
         // only what is typed into it, so an untouched field says nothing at all — nor does a clock
         // toggle nobody has clicked.
         let filterSearchField = NSFilterSearchField()
+        environment.startBackgroundWork()
         let page = environment.make {
             Page(
                 documentState: environment.documentState,
@@ -468,6 +482,7 @@ struct ReportViewModelTests {
         environment.settings.indexing.isEnabled = false
         environment.settings.search.isCorpusEnabled = false
         let filterRelay = PublishRelay<String>()
+        environment.startBackgroundWork()
         let page = environment.make { Page(documentState: environment.documentState, filterString: filterRelay.asDriver(onErrorJustReturn: "")) }
         defer { withExtendedLifetime(page) {} }
         _ = try await nextValue(from: page.output.nodes) { !$0.isEmpty }

@@ -224,7 +224,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         input.selectedNode.emitOnNextMainActor { [weak self] viewModel in
             guard let self else { return }
             guard viewModel.node.isLeaf else { return }
-            documentState.backgroundIndexingCoordinator.prioritize(imagePath: viewModel.node.path)
+            documentState.runtimeEngineSession.backgroundWork?.indexingCoordinator.prioritize(imagePath: viewModel.node.path)
         }
         .disposed(by: rx.disposeBag)
 

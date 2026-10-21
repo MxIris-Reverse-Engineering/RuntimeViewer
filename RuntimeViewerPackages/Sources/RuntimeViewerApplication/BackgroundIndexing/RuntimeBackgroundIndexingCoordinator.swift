@@ -17,10 +17,11 @@ import RuntimeViewerSettings
 /// hear every batch the engine's manager runs, and there used to be a coordinator per document:
 /// each dispatched the Always Index rows again, and each kept a history of its own, begun when it
 /// opened, so two windows on one engine showed two different Reports. Brought into being with the
-/// engine's work when the first document needs it, and closed when the last one leaves.
+/// engine's work when the first document on the engine starts its background work, and closed when
+/// the last one leaves.
 @MainActor
 public final class RuntimeBackgroundIndexingCoordinator {
-    /// Soft cap on `historyRelay` size. A long-running session that triggers
+    /// Soft cap on `historyRelay` size. A long run that triggers
     /// many always-index retries would otherwise grow history without bound;
     /// once this cap is exceeded we drop the oldest entries from the tail
     /// (history is inserted at index 0, so the tail is the oldest). The user
@@ -33,11 +34,12 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// The last document on the engine left; see `close()`.
     private var isClosed = false
 
-    /// Moves on each time what the coordinator dispatched stops counting: the
-    /// engine coming back with a new process behind it, the coordinator
-    /// closing. A dispatch that comes back under an older value was made for a
-    /// process, or a coordinator, that is gone; see `isCurrent(_:)`.
-    private var session = 0
+    /// Counts the coordinator's connections to the process behind the engine,
+    /// moving on each time what it dispatched stops counting: the engine
+    /// coming back with a new process behind it, the coordinator closing. A
+    /// dispatch that comes back under an older value was made for a process,
+    /// or a coordinator, that is gone; see `isCurrent(_:)`.
+    private var connectionGeneration = 0
 
     private let batchesRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
     private let historyRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
@@ -66,7 +68,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// resolve every imageName-only identifier to nil. Once the server's
     /// fullReload broadcast lands and the client's `imageList` is set, this
     /// pump retries. `dispatchedAlwaysIndexIdentifiers` gates re-entry so
-    /// the pump idles for rows already dispatched this engine session, and a
+    /// the pump idles for rows already dispatched on this connection, and a
     /// retry waits for the passes still dispatching
     /// (`alwaysIndexPassesUnderWay`): every batch's end reloads the engine,
     /// so without both, one pass's batches ending would set off pass after
@@ -94,15 +96,15 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// another engine's choice on a row — is not taken for one that does.
     private var lastKnownAlwaysIndexDispatches: [AlwaysIndexDispatch] = []
     /// Identifiers from `custom.entries` that have successfully resolved
-    /// to a path and had `startBatch` dispatched at least once during the
-    /// current engine session — whether that started a batch, joined one,
+    /// to a path and had `startBatch` dispatched at least once on the current
+    /// connection — whether that started a batch, joined one,
     /// or found the image indexed already. Used by `startAlwaysIndexBatches`
     /// to skip no-op re-entry triggered by the reload pump. Reset when the
     /// engine comes back with a new process, on master off→on, custom off→on,
     /// and a change to what the entries ask of this engine, so genuinely new
     /// work re-runs.
     private var dispatchedAlwaysIndexIdentifiers: Set<String> = []
-    /// Always-index passes of the current engine session still dispatching.
+    /// Always-index passes of the current connection still dispatching.
     /// A pass's rows enter `dispatchedAlwaysIndexIdentifiers` only as each
     /// dispatch comes back, so a pass started meanwhile would dispatch them
     /// a second time; the reload pump waits for these instead.
@@ -181,7 +183,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
     func close() {
         guard !isClosed else { return }
         isClosed = true
-        session += 1
+        connectionGeneration += 1
         eventPumpTask?.cancel()
         reloadDataPumpTask?.cancel()
         eventPumpTask = nil
@@ -196,10 +198,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
         }
     }
 
-    /// Whether `session` is still the coordinator's: it has not closed, and
-    /// the engine has not come back with a new process since.
-    private func isCurrent(_ session: Int) -> Bool {
-        !isClosed && self.session == session
+    /// Whether `connectionGeneration` is still the coordinator's: it has not
+    /// closed, and the engine has not come back with a new process since.
+    private func isCurrent(_ connectionGeneration: Int) -> Bool {
+        !isClosed && self.connectionGeneration == connectionGeneration
     }
 
     // MARK: - Event pump (AsyncStream → Relay)
@@ -288,15 +290,16 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
 #if canImport(RuntimeViewerSettings)
 extension RuntimeBackgroundIndexingCoordinator {
-    /// A document opened on the engine. The first one starts the engine's
+    /// A document opened on the engine: the first one starts the engine's
     /// background indexing — the main executable and the Always Index rows, as
     /// Settings has them — and from then on the engine reloading, Settings
     /// changing and the engine coming back carry it on, whichever windows are
-    /// open. Every later document finds it started: the rows were dispatched
-    /// for the engine, not for a window, and each window dispatching them
-    /// again is what filled every Report on the engine with batches of 0
-    /// images.
-    public func documentDidOpen() {
+    /// open. `RuntimeEngineBackgroundWork` calls this once, as the first
+    /// document joins it; the later documents find it started. The rows were
+    /// dispatched for the engine, not for a window, and each window
+    /// dispatching them again is what filled every Report on the engine with
+    /// batches of 0 images.
+    func documentDidOpen() {
         guard !isClosed, !hasStarted else { return }
         hasStarted = true
         dispatchForOpening()
@@ -348,16 +351,16 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// again on the new one. The history stays: it reads as what was indexed
     /// on the engine, as it did across a document's resets.
     private func engineDidReset() {
-        session += 1
+        connectionGeneration += 1
         alwaysIndexPassesUnderWay = 0
         isAlwaysIndexRetryPending = false
         dispatchedAlwaysIndexIdentifiers.removeAll()
-        Task { [weak self, engine, session] in
+        Task { [weak self, engine, connectionGeneration] in
             // Before anything is dispatched again: a batch of the old process
             // still under way would otherwise be handed back for its root,
             // and end cancelled with the row counted as dispatched.
             await engine.backgroundIndexingManager.cancelAllBatches()
-            guard let self, self.isCurrent(session), self.hasStarted else { return }
+            guard let self, self.isCurrent(connectionGeneration), self.hasStarted else { return }
             self.dispatchForOpening()
         }
     }
@@ -372,11 +375,11 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// enablement before invoking — this method does not re-check.
     private func startMainExecutableBatch(reason: RuntimeIndexingBatchReason) {
         // The class is `@MainActor`, so this Task inherits main-actor isolation.
-        // `session` is captured at task creation: a batch set up for a process
-        // that has gone, or after the last document left, must not be taken
-        // for one of the current session.
-        Task { [weak self, engine, session] in
-            guard let self, self.isCurrent(session) else { return }
+        // `connectionGeneration` is captured at task creation: a batch set up
+        // for a process that has gone, or after the last document left, must
+        // not be taken for one of the current connection.
+        Task { [weak self, engine, connectionGeneration] in
+            guard let self, self.isCurrent(connectionGeneration) else { return }
             let indexing = self.settings.indexing
             // Re-check both gates after the Task hop because the settings
             // observation may have flipped a toggle between the caller's check
@@ -386,21 +389,21 @@ extension RuntimeBackgroundIndexingCoordinator {
             // sources may fail; on launch we silently skip the batch in that
             // case rather than surface the error to the user.
             guard let root = try? await engine.mainExecutablePath(),
-                  !root.isEmpty, self.isCurrent(session) else { return }
+                  !root.isEmpty, self.isCurrent(connectionGeneration) else { return }
             let batchIdentifier = await engine.backgroundIndexingManager.startBatch(
                 rootImagePath: root,
                 depth: indexing.heuristic.depth,
                 maxConcurrency: indexing.maxConcurrency,
                 reason: reason)
-            self.batchDidStart(batchIdentifier, in: session)
+            self.batchDidStart(batchIdentifier, in: connectionGeneration)
         }
     }
 
-    /// A batch a dispatch of `session` started has come back. The last
-    /// document left while it was being set up — after the close had
+    /// A batch a dispatch of `connectionGeneration` started has come back.
+    /// The last document left while it was being set up — after the close had
     /// cancelled every batch on the engine — and nobody is left to show it
     /// either.
-    private func batchDidStart(_ batchIdentifier: RuntimeIndexingBatchID?, in session: Int) {
+    private func batchDidStart(_ batchIdentifier: RuntimeIndexingBatchID?, in connectionGeneration: Int) {
         guard isClosed, let batchIdentifier else { return }
         Task { [engine] in
             await engine.backgroundIndexingManager.cancelBatch(batchIdentifier)
@@ -454,8 +457,8 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// responsible for checking master / custom enablement before invoking.
     private func startAlwaysIndexBatches() {
         guard !isClosed else { return }
-        // Gate: only process entries we haven't dispatched yet this
-        // session. The reload pump re-enters here after every fullReload,
+        // Gate: only process entries we haven't dispatched yet on this
+        // connection. The reload pump re-enters here after every fullReload,
         // including the ones the engine's own batches cause as they end;
         // without this filter every end would dispatch every row again.
         let pendingDispatches = alwaysIndexDispatches(of: settings.indexing.custom.entries).filter {
@@ -463,10 +466,10 @@ extension RuntimeBackgroundIndexingCoordinator {
         }
         guard !pendingDispatches.isEmpty else { return }
         alwaysIndexPassesUnderWay += 1
-        Task { [weak self, engine, session] in
+        Task { [weak self, engine, connectionGeneration] in
             guard let self else { return }
-            await self.dispatchAlwaysIndexEntries(pendingDispatches, on: engine, in: session)
-            self.alwaysIndexPassDidEnd(in: session)
+            await self.dispatchAlwaysIndexEntries(pendingDispatches, on: engine, in: connectionGeneration)
+            self.alwaysIndexPassDidEnd(in: connectionGeneration)
         }
     }
 
@@ -474,9 +477,9 @@ extension RuntimeBackgroundIndexingCoordinator {
     private func dispatchAlwaysIndexEntries(
         _ dispatches: [AlwaysIndexDispatch],
         on engine: RuntimeEngine,
-        in session: Int
+        in connectionGeneration: Int
     ) async {
-        guard isCurrent(session) else { return }
+        guard isCurrent(connectionGeneration) else { return }
         let indexing = settings.indexing
         // Re-check both gates after the Task hop (mirrors
         // `startMainExecutableBatch`).
@@ -489,7 +492,7 @@ extension RuntimeBackgroundIndexingCoordinator {
         // the gate leaves unresolved identifiers eligible for
         // retry until they finally match a path in `imageList`.
         let imageList = await engine.imageList
-        guard isCurrent(session) else { return }
+        guard isCurrent(connectionGeneration) else { return }
         for dispatch in dispatches {
             guard let resolvedPath = resolveAlwaysIndexIdentifier(dispatch.identifier, in: imageList) else { continue }
             let effectiveDepth = dispatch.followDependencies ? indexing.heuristic.depth : 0
@@ -500,8 +503,8 @@ extension RuntimeBackgroundIndexingCoordinator {
                 depth: effectiveDepth,
                 maxConcurrency: indexing.maxConcurrency,
                 reason: .alwaysIndex(identifier: dispatch.identifier))
-            guard isCurrent(session) else {
-                batchDidStart(batchIdentifier, in: session)
+            guard isCurrent(connectionGeneration) else {
+                batchDidStart(batchIdentifier, in: connectionGeneration)
                 return
             }
             dispatchedAlwaysIndexIdentifiers.insert(dispatch.identifier)
@@ -510,10 +513,10 @@ extension RuntimeBackgroundIndexingCoordinator {
 
     /// A pass is over. Once none is under way, the retry an engine reload
     /// asked for meanwhile runs.
-    private func alwaysIndexPassDidEnd(in session: Int) {
-        // A pass of a session that is over: the engine coming back, or the
+    private func alwaysIndexPassDidEnd(in connectionGeneration: Int) {
+        // A pass of a connection that is over: the engine coming back, or the
         // close, reset the count.
-        guard isCurrent(session) else { return }
+        guard isCurrent(connectionGeneration) else { return }
         alwaysIndexPassesUnderWay -= 1
         guard alwaysIndexPassesUnderWay == 0, isAlwaysIndexRetryPending else { return }
         isAlwaysIndexRetryPending = false

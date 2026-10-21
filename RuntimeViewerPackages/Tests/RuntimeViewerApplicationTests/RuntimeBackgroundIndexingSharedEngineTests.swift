@@ -41,9 +41,9 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
             if change == .fullReload(isReloadImageNodes: false) { reloadCounter.increment() }
         }
         defer { reloadSubscription.cancel() }
-        let firstCoordinator = firstEnvironment.make { firstEnvironment.documentState.backgroundIndexingCoordinator }
+        firstEnvironment.startBackgroundWork()
+        let firstCoordinator = try firstEnvironment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((firstEnvironment, firstCoordinator)) {} }
-        firstEnvironment.make { firstCoordinator.documentDidOpen() }
         let indexedBatch = try await Self.endedBatch(of: Self.libobjc, in: firstCoordinator)
         // A batch's end reaches the history before the reload that follows it.
         try await waitUntil { reloadCounter.count >= 1 }
@@ -51,9 +51,9 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
         let reloadCountBeforeSecondDocument = reloadCounter.count
 
         // Opened as `Document.makeWindowControllers` opens it.
-        let secondCoordinator = secondEnvironment.make { secondEnvironment.documentState.backgroundIndexingCoordinator }
+        secondEnvironment.startBackgroundWork()
+        let secondCoordinator = try secondEnvironment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((secondEnvironment, secondCoordinator)) {} }
-        secondEnvironment.make { secondCoordinator.documentDidOpen() }
         // Time for whatever the second document would set off: a pass over its rows, the reload
         // after a batch's end.
         try await Task.sleep(for: .seconds(1))
@@ -86,13 +86,13 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
         let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: peer.client)
         Self.enableAlwaysIndex(in: firstEnvironment, rows: [row])
         Self.enableAlwaysIndex(in: secondEnvironment, rows: [row])
-        let firstCoordinator = firstEnvironment.make { firstEnvironment.documentState.backgroundIndexingCoordinator }
+        firstEnvironment.startBackgroundWork()
+        let firstCoordinator = try firstEnvironment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((firstEnvironment, firstCoordinator)) {} }
-        firstEnvironment.make { firstCoordinator.documentDidOpen() }
         let batch = try await Self.runningBatch(of: row, in: firstCoordinator)
-        let secondCoordinator = secondEnvironment.make { secondEnvironment.documentState.backgroundIndexingCoordinator }
+        secondEnvironment.startBackgroundWork()
+        let secondCoordinator = try secondEnvironment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((secondEnvironment, secondCoordinator)) {} }
-        secondEnvironment.make { secondCoordinator.documentDidOpen() }
 
         switch leaving {
         case .closes:
@@ -127,9 +127,9 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
         let row = Self.imageName(of: Self.sharedImagePath)
         let environment = ViewModelTestEnvironment(runtimeEngine: peer.client)
         Self.enableAlwaysIndex(in: environment, rows: [row])
-        let firstCoordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let firstCoordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, firstCoordinator)) {} }
-        environment.make { firstCoordinator.documentDidOpen() }
         let cancelledBatch = try await Self.runningBatch(of: row, in: firstCoordinator)
 
         environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(otherEngine)) }
@@ -137,7 +137,7 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
             await peer.client.backgroundIndexingManager.currentBatches().contains { $0.id == cancelledBatch.id && $0.isCancelled }
         }
         environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(peer.client)) }
-        let returnedCoordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        let returnedCoordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime(returnedCoordinator) {} }
         // Coming back dispatches the row again, a batch of its own beside the one ending.
         try await Self.poll {
@@ -173,9 +173,9 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "RuntimeBackgroundIndexingSharedEngineTests.engineBack")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableAlwaysIndex(in: environment, rows: [Self.libobjc])
-        let coordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, coordinator)) {} }
-        environment.make { coordinator.documentDidOpen() }
         let firstBatch = try await Self.endedBatch(of: Self.libobjc, in: coordinator)
         #expect(environment.documentState.currentImageNode == nil)
 
@@ -209,9 +209,9 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
         try await Self.publishImageList([Self.firstQueriedImagePath, Self.secondQueriedImagePath], from: peer)
         let environment = ViewModelTestEnvironment(runtimeEngine: peer.client)
         Self.enableAlwaysIndex(in: environment, rows: [Self.imageName(of: Self.firstQueriedImagePath), Self.imageName(of: Self.secondQueriedImagePath)])
-        let coordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, coordinator)) {} }
-        environment.make { coordinator.documentDidOpen() }
         try await Self.poll { await heldQuestions.arrivedCount >= 1 }
 
         // The engine reloads while the pass waits on its first row.

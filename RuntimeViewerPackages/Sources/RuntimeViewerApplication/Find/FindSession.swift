@@ -166,10 +166,9 @@ public final class FindSession {
     private var corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState] = [:]
 
     /// The coordinator `follow(_:)` hooked the session to — the corpus
-    /// coordinator of the engine the document is on, which every document on
-    /// the engine shares; it moves the images in scope to the front of its
-    /// queue. `nil` until it exists, and the session never brings it into
-    /// being itself.
+    /// coordinator of the engine's work the document holds, which every
+    /// document on the engine shares; it moves the images in scope to the
+    /// front of its queue. `nil` while the document holds none.
     private weak var corpusCoordinator: FindCorpusCoordinator?
 
     @Dependency(\.appDefaults)
@@ -246,6 +245,17 @@ public final class FindSession {
                 }
             }
             .disposed(by: disposeBag)
+        // The corpus coordinator of the work each session the document puts in
+        // place holds: from the moment the document starts its background work,
+        // and again after every move to another engine.
+        documentState.$runtimeEngineSession.asDriver()
+            .driveOnNext { [weak self] runtimeEngineSession in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    self.follow(runtimeEngineSession.backgroundWork?.corpusCoordinator)
+                }
+            }
+            .disposed(by: disposeBag)
     }
 
     deinit {
@@ -266,17 +276,22 @@ public final class FindSession {
         corpusCoordinatorDisposeBag = DisposeBag()
     }
 
-    /// Hooks the session to the corpus coordinator of the document's engine.
-    /// `DocumentState` calls this once the document needs that coordinator,
-    /// and again with the next engine's each time the document moves to
-    /// another engine: its build states feed the summary bar, and each corpus
-    /// it reports built is read by the search in force. Once every corpus is
+    /// Hooks the session to the corpus coordinator of the document's engine,
+    /// or with `nil` to none, letting go of the build states it showed. The
+    /// session follows `DocumentState.$runtimeEngineSession` from `init`: the
+    /// coordinator's build states feed the summary bar, and each corpus it
+    /// reports built is read by the search in force. Once every corpus is
     /// dropped to be printed with a new transformer, that search runs again:
     /// the images rebuilt are ones it has already read.
-    func follow(_ corpusCoordinator: FindCorpusCoordinator) {
+    func follow(_ corpusCoordinator: FindCorpusCoordinator?) {
         guard self.corpusCoordinator !== corpusCoordinator else { return }
         self.corpusCoordinator = corpusCoordinator
         corpusCoordinatorDisposeBag = DisposeBag()
+        guard let corpusCoordinator else {
+            corpusBuildStates = [:]
+            updateSummary()
+            return
+        }
         corpusCoordinator.$buildStatesByImagePath.asDriver()
             .driveOnNextMainActor { [weak self] states in
                 guard let self else { return }

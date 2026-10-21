@@ -20,8 +20,10 @@ struct RuntimeBackgroundIndexingReloadTests {
         // Off, so neither coordinator starts batches of its own on opening.
         firstEnvironment.settings.indexing.isEnabled = false
         secondEnvironment.settings.indexing.isEnabled = false
-        let firstCoordinator = firstEnvironment.make { firstEnvironment.documentState.backgroundIndexingCoordinator }
-        let secondCoordinator = secondEnvironment.make { secondEnvironment.documentState.backgroundIndexingCoordinator }
+        firstEnvironment.startBackgroundWork()
+        let firstCoordinator = try firstEnvironment.documentState.joinedIndexingCoordinator()
+        secondEnvironment.startBackgroundWork()
+        let secondCoordinator = try secondEnvironment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((firstCoordinator, secondCoordinator)) {} }
         let reloadCounter = ReloadCounter()
         let subscription = engine.reloadDataPublisher.sink { _ in reloadCounter.increment() }

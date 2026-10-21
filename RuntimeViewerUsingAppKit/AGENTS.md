@@ -456,6 +456,11 @@ MachOSwiftSection's evolution 0063 (`0063-private-declarations.md`).
   (`func sidebarCoordinator(_ coordinator: SidebarCoordinator, completeTransition route: SidebarRoute)`),
   held as `weak var delegate: Delegate?` and implemented by the parent
   (`extension MainCoordinator: SidebarCoordinator.Delegate`).
+- **Only `MainCoordinator`'s `.main` route issues `.switchEngine`**: it stops listening to the
+  document's routes first and builds new panes after. A `.switchEngine` that reaches the fan-out lands
+  on the panes about to be replaced, and `fanOut` fails an assertion — a crash in a Debug build. Anything
+  else that has to start the document over asks the window to, the way an engine coming back does
+  through `DocumentState.startOverRequested`.
 
 **Routes carry no views** — a route's associated values never include an AppKit or UIKit type: no
 `NSView` / `NSButton` sender, no `NSWindow`, `NSEvent` or `NSMenu`. The same goes for a ViewModel's

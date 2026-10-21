@@ -330,9 +330,10 @@ The project uses three Swift Package Manager packages:
   way. **The service runs at the priority of the requests waiting on it**, and an app in App Nap
   donates none: about thirty seconds after the user switches away, work the app is waiting on slows
   down four- to tenfold. So long-running work the app waits on has to keep the app out of App Nap:
-  `BackgroundWorkProcessActivity` holds a user-initiated activity while `DocumentState.reportActivity`
-  is true (indexing batches, corpus builds, cross-reference preparations), and new work of that kind
-  reports through that signal or holds an activity of its own. Background:
+  each engine's background work holds a `BackgroundWorkProcessActivity`, a user-initiated activity
+  held while `RuntimeEngineBackgroundWork.isWorkInProgress` is true (indexing batches, corpus builds,
+  cross-reference preparations), and new work of that kind reports through that signal or holds an
+  activity of its own. Background:
   `Documentations/Evolutions/0037-local-runtime-xpc-service.md`; the transport:
   `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
   `Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`
@@ -368,15 +369,21 @@ The project uses three Swift Package Manager packages:
   coordinator, one Find corpus coordinator and one cross-reference preparation coordinator, held by
   every document on it (`RuntimeEngineBackgroundWork`, handed out per engine by
   `RuntimeEngineBackgroundWorkRegistry`), so the windows on one engine show one Report — the same
-  running work, the same history. `DocumentState.backgroundIndexingCoordinator` /
-  `findCorpusCoordinator` / `crossReferencePreparationCoordinator` return the coordinators of the
-  engine the document is on, and anything that binds to them follows `$runtimeEngine`: `.switchEngine`
-  moves the document onto the new engine's work before it assigns the engine. A document that closes or
-  moves away only leaves — nothing is cancelled while another document is on the engine — and the last
-  one leaving cancels the engine's work and drops its Report; Cancel, Cancel All and Clear History speak
-  for every window on the engine. **Never give a document indexing or corpus state of its own again.** A
-  root already indexed starts no batch at all. Background:
-  `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
+  running work, the same history; the work also says once for all of them whether anything is in
+  progress, and holds the App Nap activity. A document holds its part through
+  `DocumentState.runtimeEngineSession`, a `RuntimeEngineSession` whose engine and work never change:
+  **follow `$runtimeEngineSession` and take the work from the session it delivers** — never pair the
+  engine with work read some other way, the ordering trap the session exists to remove.
+  `runtimeEngine` only forwards `runtimeEngineSession.engine`. A document joins only through
+  `startBackgroundWork()`, which `Document.makeWindowControllers` calls first; a new session is put in
+  place then and when `.switchEngine` moves the document to another engine, the same one again when its
+  engine starts over with something open, and a session without work (`backgroundWork == nil`) means
+  show nothing and command nothing. A document that closes or moves away only leaves — nothing is
+  cancelled while another document is on the engine — and the last one leaving cancels the engine's work
+  and drops its Report; Cancel, Cancel All and Clear History speak for every window on the engine.
+  **Never give a document indexing or corpus state of its own again.** A root already indexed starts no
+  batch at all. Background: `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
+  `Documentations/Evolutions/0058-runtime-engine-session.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow

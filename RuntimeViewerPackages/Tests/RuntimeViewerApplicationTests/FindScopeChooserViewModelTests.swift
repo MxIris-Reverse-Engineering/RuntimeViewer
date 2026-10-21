@@ -11,8 +11,9 @@ import Testing
 /// only closes it; nothing selected, nothing to apply; the filter field
 /// narrows the list by name; each row says where its image's corpus stands.
 ///
-/// Every case runs on a private engine: the chooser reads the document's
-/// corpus coordinator, which asks its engine for corpora as soon as it exists.
+/// Every case runs on a private engine, on a document that has started its
+/// background work as the app starts it: the chooser reads the engine's corpus
+/// coordinator, which comes into being then.
 @Suite("FindScopeChooserViewModel", .serialized)
 @MainActor
 struct FindScopeChooserViewModelTests {
@@ -276,10 +277,12 @@ struct FindScopeChooserViewModelTests {
         await engine.stop()
     }
 
-    /// Binds inside the environment's dependencies: `transform` reads the
-    /// document's corpus coordinator, which comes into being on first use.
+    /// Binds on a document that has started its background work, as every
+    /// document in the app has by the time its scope chooser opens: `transform`
+    /// reads the document's corpus coordinator.
     private func makeViewModel(in environment: ViewModelTestEnvironment) -> (FindScopeChooserViewModel<SidebarRootRoute>, FindScopeChooserViewModel<SidebarRootRoute>.Output) {
-        environment.make {
+        environment.startBackgroundWork()
+        return environment.make {
             let viewModel = FindScopeChooserViewModel<SidebarRootRoute>(documentState: environment.documentState, router: router)
             let output = viewModel.transform(.init(
                 filterString: filterStringRelay.asDriver(onErrorJustReturn: ""),

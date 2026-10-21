@@ -29,6 +29,7 @@ struct ReportSharedByEngineTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportSharedByEngineTests.indexingHistory")
         let firstEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableIndexingOnly(in: firstEnvironment)
+        firstEnvironment.startBackgroundWork()
         let firstPage = firstEnvironment.make { ReportPage(documentState: firstEnvironment.documentState) }
         defer { withExtendedLifetime(firstPage) {} }
         let batchIdentifier = try #require(await engine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual))
@@ -38,6 +39,7 @@ struct ReportSharedByEngineTests {
 
         let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableIndexingOnly(in: secondEnvironment)
+        secondEnvironment.startBackgroundWork()
         let secondPage = secondEnvironment.make { ReportPage(documentState: secondEnvironment.documentState) }
         defer { withExtendedLifetime(secondPage) {} }
 
@@ -51,6 +53,7 @@ struct ReportSharedByEngineTests {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportSharedByEngineTests.corpusBuilds", loading: [TestImages.libobjc])
         let firstEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableCorporaOnly(in: firstEnvironment)
+        firstEnvironment.startBackgroundWork()
         let firstPage = firstEnvironment.make { ReportPage(documentState: firstEnvironment.documentState) }
         defer { withExtendedLifetime(firstPage) {} }
         let firstRows = try await Self.settledRows(of: firstPage) { rows in
@@ -59,6 +62,7 @@ struct ReportSharedByEngineTests {
 
         let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableCorporaOnly(in: secondEnvironment)
+        secondEnvironment.startBackgroundWork()
         let secondPage = secondEnvironment.make { ReportPage(documentState: secondEnvironment.documentState) }
         defer { withExtendedLifetime(secondPage) {} }
 
@@ -76,7 +80,9 @@ struct ReportSharedByEngineTests {
         let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableIndexingOnly(in: firstEnvironment)
         Self.enableIndexingOnly(in: secondEnvironment)
+        firstEnvironment.startBackgroundWork()
         let firstPage = firstEnvironment.make { ReportPage(documentState: firstEnvironment.documentState) }
+        secondEnvironment.startBackgroundWork()
         let secondPage = secondEnvironment.make { ReportPage(documentState: secondEnvironment.documentState) }
         defer { withExtendedLifetime((firstPage, secondPage)) {} }
         let batchIdentifier = try #require(await engine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual))
@@ -100,7 +106,9 @@ struct ReportSharedByEngineTests {
         let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableCorporaOnly(in: firstEnvironment)
         Self.enableCorporaOnly(in: secondEnvironment)
+        firstEnvironment.startBackgroundWork()
         let firstPage = firstEnvironment.make { ReportPage(documentState: firstEnvironment.documentState) }
+        secondEnvironment.startBackgroundWork()
         let secondPage = secondEnvironment.make { ReportPage(documentState: secondEnvironment.documentState) }
         defer { withExtendedLifetime((firstPage, secondPage)) {} }
         let buildIdentifier = ReportNodeIdentifier.corpusBuild(imagePath: TestImages.foundation)
@@ -130,7 +138,9 @@ struct ReportSharedByEngineTests {
         let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: secondEngine)
         Self.enableIndexingOnly(in: firstEnvironment)
         Self.enableIndexingOnly(in: secondEnvironment)
+        firstEnvironment.startBackgroundWork()
         let firstPage = firstEnvironment.make { ReportPage(documentState: firstEnvironment.documentState) }
+        secondEnvironment.startBackgroundWork()
         let secondPage = secondEnvironment.make { ReportPage(documentState: secondEnvironment.documentState) }
         defer { withExtendedLifetime((firstPage, secondPage)) {} }
         let firstBatchIdentifier = try #require(await firstEngine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual))
@@ -152,6 +162,7 @@ struct ReportSharedByEngineTests {
         let otherEngine = try await TestRuntimeEngine.makeConnected(engineID: "ReportSharedByEngineTests.lastWindow.other")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableIndexingOnly(in: environment)
+        environment.startBackgroundWork()
         let page = environment.make { ReportPage(documentState: environment.documentState) }
         defer { withExtendedLifetime(page) {} }
         let batchIdentifier = try #require(await engine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual))
@@ -195,9 +206,9 @@ struct ReportSharedByEngineTests {
         environment.settings.indexing.heuristic.isEnabled = false
         environment.settings.indexing.custom.isEnabled = true
         environment.settings.indexing.custom.entries = [Settings.Indexing.AlwaysIndexEntry(identifier: row)]
-        let coordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, coordinator)) {} }
-        environment.make { coordinator.documentDidOpen() }
         try await Self.poll(timeout: 30) { await heldLoads.arrivedCount >= 1 }
         let batch = try #require(await peer.client.backgroundIndexingManager.currentBatches().first { $0.reason == .alwaysIndex(identifier: row) })
 

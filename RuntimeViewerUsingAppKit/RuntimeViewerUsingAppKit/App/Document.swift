@@ -17,22 +17,13 @@ final class Document: NSDocument {
     override class var autosavesInPlace: Bool { false }
 
     override func makeWindowControllers() {
+        // First, before any page binds: the engine's background work — its
+        // indexing, its interface corpus and its prepared cross references,
+        // shared with every document on the engine — which the pages show and
+        // this document's Find session follows, and the activity that keeps
+        // the app out of App Nap while any of it is in progress.
+        documentState.startBackgroundWork()
         addWindowController(mainCoordinator.windowController)
-        // The engine's background indexing, shared with every document on the
-        // engine: the first document opened on it starts it.
-        documentState.backgroundIndexingCoordinator.documentDidOpen()
-        // Joined here, like the indexing coordinator: the engine's corpus
-        // coordinator, shared the same way, keeps its interface corpus in step
-        // with what the engine indexes, and this document's Find session
-        // follows it.
-        _ = documentState.findCorpusCoordinator
-        // And the engine's cross-reference preparation, which reads every
-        // indexed image's cross references ahead of the queries.
-        _ = documentState.crossReferencePreparationCoordinator
-        // Keeps the app out of App Nap while any of the coordinators has work
-        // in progress, so the local-runtime service doing it keeps its
-        // priority when the user switches to another app.
-        _ = documentState.backgroundWorkProcessActivity
     }
 
     override func close() {

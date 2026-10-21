@@ -1,19 +1,21 @@
 import Foundation
 import RuntimeViewerArchitectures
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 import Testing
 @testable import RuntimeViewerApplication
 @testable import RuntimeViewerSettings
 
-/// The activity a document holds while it has background work in progress
-/// (`Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`).
+/// The activity an engine's background work holds while any of it is in
+/// progress (`Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`).
 ///
 /// The work runs in the local-runtime XPC service, which runs at full speed
 /// only while the app waiting on it donates importance, and an app in App Nap
 /// donates none. So the app holds a user-initiated activity — one, however
 /// often the work is reported — exactly while work is in progress, and ends
-/// that same activity when the work ends, when the document closes, or when
-/// the activity's owner goes away.
+/// that same activity when the work ends, when the engine's work closes as
+/// its last document leaves, or when the activity's owner goes away. One
+/// activity per engine's work: each document on the engine used to hold one
+/// of its own, following the same answer.
 @Suite("Background work process activity", .serialized)
 @MainActor
 struct BackgroundWorkProcessActivityTests {
@@ -48,7 +50,7 @@ struct BackgroundWorkProcessActivityTests {
         #expect(scheduler.heldActivityCount == 1)
     }
 
-    @Test("closing the document ends the activity, and work reported afterwards takes none")
+    @Test("closing ends the activity, and work reported afterwards takes none")
     func closingEndsTheActivity() async throws {
         let scheduler = RecordingProcessActivityScheduler()
         let isWorkInProgress = BehaviorRelay(value: true)
@@ -57,14 +59,32 @@ struct BackgroundWorkProcessActivityTests {
         try await settleMainQueue()
         #expect(scheduler.heldActivityCount == 1)
 
-        processActivity.documentWillClose()
+        processActivity.close()
 
-        #expect(scheduler.endedActivityIdentifiers == scheduler.begunActivityIdentifiers, "closing the document left the activity held")
+        #expect(scheduler.endedActivityIdentifiers == scheduler.begunActivityIdentifiers, "closing left the activity held")
         isWorkInProgress.accept(false)
         isWorkInProgress.accept(true)
         try await settleMainQueue()
-        #expect(scheduler.begunActivityIdentifiers.count == 1, "a closed document took an activity again")
+        #expect(scheduler.begunActivityIdentifiers.count == 1, "a closed activity was taken again")
         #expect(!processActivity.isHoldingActivity)
+    }
+
+    /// A report reaches the activity a main-actor turn after it is made, so one can still be on
+    /// its way when the work closes — work starting in the turn its last document leaves.
+    @Test("work reported in the turn the activity closes takes no activity once the report arrives")
+    func reportOnItsWayWhenClosingTakesNoActivity() async throws {
+        let scheduler = RecordingProcessActivityScheduler()
+        let isWorkInProgress = BehaviorRelay(value: false)
+        let processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress.asDriver(), scheduler: scheduler)
+        defer { withExtendedLifetime(processActivity) {} }
+        try await settleMainQueue()
+
+        isWorkInProgress.accept(true)
+        processActivity.close()
+        try await settleMainQueue()
+
+        #expect(!processActivity.isHoldingActivity, "the report on its way when the work closed took the activity again")
+        #expect(scheduler.heldActivityCount == 0)
     }
 
     @Test("an activity still held when its owner goes away is ended with it")
@@ -82,21 +102,19 @@ struct BackgroundWorkProcessActivityTests {
         #expect(scheduler.heldActivityCount == 0, "the owner went away and its activity stayed held")
     }
 
-    /// What the app does: the document's own activity, brought into being
-    /// with the coordinators, against a corpus build on a real engine.
-    @Test("a corpus build keeps the document's activity held until every build has ended")
+    /// What the app does: the activity of the engine's work, brought into
+    /// being with the coordinators as the document starts its background work,
+    /// against a corpus build on a real engine.
+    @Test("a corpus build keeps the engine's activity held until every build has ended")
     func corpusBuildHoldsTheActivity() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "BackgroundWorkProcessActivityTests.corpus", loading: [TestImages.libobjc, TestImages.foundation])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
         let scheduler = RecordingProcessActivityScheduler()
-        documentState.processActivityScheduler = scheduler
-        // In the order `Document.makeWindowControllers` brings them into being.
-        let indexingCoordinator = environment.make { documentState.backgroundIndexingCoordinator }
-        let corpusCoordinator = environment.make { documentState.findCorpusCoordinator }
-        let processActivity = environment.make { documentState.backgroundWorkProcessActivity }
-        defer { withExtendedLifetime((indexingCoordinator, corpusCoordinator, processActivity)) {} }
+        environment.backgroundWorkRegistry.processActivityScheduler = scheduler
+        environment.startBackgroundWork()
+        let processActivity = try #require(environment.backgroundWorkRegistry.backgroundWork(on: engine)?.processActivity)
 
         // Foundation takes seconds to print, so the work is still under way
         // when this resumes.
@@ -113,6 +131,96 @@ struct BackgroundWorkProcessActivityTests {
         environment.make { documentState.documentWillClose() }
         await engine.stop()
     }
+
+    #if canImport(Network)
+    // MARK: - One activity per engine
+
+    /// An image only the scripted engines list; nothing loads it in this process.
+    private static let scriptedImagePath = "/Scripted/libActivity.dylib"
+
+    @Test("with two documents on an engine whose work is in progress, the activity stays held until the last of them leaves")
+    func activityOutlastsAllButTheLastDocument() async throws {
+        let (peer, heldLoads) = try await Self.makePeerHoldingLoads(label: "BackgroundWorkProcessActivityTests.twoDocuments")
+        let firstEnvironment = ViewModelTestEnvironment(runtimeEngine: peer.client)
+        let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: peer.client)
+        Self.enableAlwaysIndex(in: firstEnvironment)
+        Self.enableAlwaysIndex(in: secondEnvironment)
+        let scheduler = RecordingProcessActivityScheduler()
+        firstEnvironment.backgroundWorkRegistry.processActivityScheduler = scheduler
+        firstEnvironment.startBackgroundWork()
+        secondEnvironment.startBackgroundWork()
+        // The batch for the scripted image waits on its load, so the work stays in progress.
+        try await waitUntil(timeout: 30) { scheduler.heldActivityCount == 1 }
+
+        firstEnvironment.make { firstEnvironment.documentState.documentWillClose() }
+        try await settleMainQueue()
+
+        #expect(scheduler.heldActivityCount == 1, "a document left while another stays on the engine, and the activity went with it")
+        #expect(scheduler.begunActivityIdentifiers.count == 1)
+
+        secondEnvironment.make { secondEnvironment.documentState.documentWillClose() }
+
+        #expect(scheduler.heldActivityCount == 0, "the last document left the engine and its activity stayed held")
+        await heldLoads.release()
+        await peer.stop()
+    }
+
+    /// The case the App Nap fix was about, on a document that moved: the
+    /// engine it moves to has work in progress, and that work holds the
+    /// activity.
+    @Test("a document moved to an engine whose work is in progress holds that engine's activity")
+    func activityFollowsTheDocumentToAnotherEngine() async throws {
+        let idleEngine = try await TestRuntimeEngine.makeConnected(engineID: "BackgroundWorkProcessActivityTests.moved.idle")
+        let (peer, heldLoads) = try await Self.makePeerHoldingLoads(label: "BackgroundWorkProcessActivityTests.moved.busy")
+        let environment = ViewModelTestEnvironment(runtimeEngine: idleEngine)
+        // The idle engine does not list the scripted image, so its work has nothing to do.
+        Self.enableAlwaysIndex(in: environment)
+        let scheduler = RecordingProcessActivityScheduler()
+        let registry = environment.backgroundWorkRegistry
+        registry.processActivityScheduler = scheduler
+        environment.startBackgroundWork()
+        try await settleMainQueue()
+        #expect(scheduler.heldActivityCount == 0, "an engine with nothing to do holds an activity")
+
+        environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(peer.client)) }
+
+        try await waitUntil(timeout: 30) { scheduler.heldActivityCount == 1 }
+        #expect(registry.backgroundWork(on: peer.client)?.processActivity.isHoldingActivity == true, "the activity held is not the work of the engine the document moved to")
+        environment.make { environment.documentState.documentWillClose() }
+        #expect(scheduler.heldActivityCount == 0)
+        await heldLoads.release()
+        await peer.stop()
+        await idleEngine.stop()
+    }
+
+    /// Turns on Always Index alone, with a row for the scripted image on every engine: heuristic
+    /// discovery stays off, so the only batches are the row's.
+    private static func enableAlwaysIndex(in environment: ViewModelTestEnvironment) {
+        environment.settings.indexing.isEnabled = true
+        environment.settings.indexing.heuristic.isEnabled = false
+        environment.settings.indexing.custom.isEnabled = true
+        environment.settings.indexing.custom.entries = [Settings.Indexing.AlwaysIndexEntry(identifier: (scriptedImagePath as NSString).lastPathComponent)]
+    }
+
+    /// A scripted engine listing the scripted image, not indexed, whose every background load
+    /// waits for the test to release it: a batch for the image stays under way until then.
+    private static func makePeerHoldingLoads(label: String) async throws -> (ScriptedPeer, HeldRequests) {
+        let peer = try await ScriptedPeer.make(label: label)
+        let heldLoads = HeldRequests()
+        peer.serve(.isImageIndexed) { false }
+        peer.serve(.loadImageForBackgroundIndexing) { () async -> RuntimeEngineEmpty in
+            await heldLoads.hold()
+            return RuntimeEngineEmpty()
+        }
+        try await peer.connection.sendMessage(name: .imageList, request: [scriptedImagePath])
+        let deadline = ContinuousClock.now + .seconds(10)
+        while await peer.client.imageList != [scriptedImagePath] {
+            guard ContinuousClock.now < deadline else { throw AwaitTimeout(seconds: 10) }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return (peer, heldLoads)
+    }
+    #endif
 }
 
 /// Records what `BackgroundWorkProcessActivity` asks of `ProcessInfo`, holding

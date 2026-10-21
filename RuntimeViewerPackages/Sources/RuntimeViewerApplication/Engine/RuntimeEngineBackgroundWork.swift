@@ -1,5 +1,6 @@
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerArchitectures
 import Dependencies
 import DependenciesMacros
 
@@ -12,89 +13,77 @@ import DependenciesMacros
 /// showed two different Reports, and Cancel or Clear History in one of them left the other as it
 /// was. With one indexing coordinator and one corpus coordinator per engine, the windows on it
 /// show the same Report and what one of them does reaches all of them; only windows on different
-/// engines show different Reports.
+/// engines show different Reports. What is in progress is worked out once here, for all of them,
+/// and so is the activity that keeps the app out of App Nap meanwhile.
 ///
-/// Brought into being when the first document needs either coordinator on the engine, and closed
-/// when the last one leaves it — closing, or moving to another engine: its running work is
-/// cancelled and its history goes with it, as when a single window closes. The next document on
-/// the engine starts afresh. See `RuntimeEngineBackgroundWorkRegistry`.
+/// Brought into being when the first document on the engine starts its background work
+/// (`DocumentState.startBackgroundWork()`), and closed when the last one leaves it — closing, or
+/// moving to another engine: its running work is cancelled and its history goes with it, as when
+/// a single window closes. The next document on the engine starts afresh. A document holds it
+/// through its `RuntimeEngineSession`; see `RuntimeEngineBackgroundWorkRegistry`.
 @MainActor
 final class RuntimeEngineBackgroundWork {
     let engine: RuntimeEngine
 
+    /// The engine's background indexing, kept with its feature turned off too, so it can start
+    /// once the feature is turned on.
+    let indexingCoordinator: RuntimeBackgroundIndexingCoordinator
+
+    /// The engine's interface corpus, kept like `indexingCoordinator`.
+    let corpusCoordinator: FindCorpusCoordinator
+
+    /// The engine's prepared cross references, kept like `indexingCoordinator`.
+    let crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator
+
+    /// Whether any of the work is in progress — an indexing batch, a corpus queued or being
+    /// printed, cross references queued or being prepared — for every document on the engine: what
+    /// their Report navigator tabs mark, and what `processActivity` follows.
+    let isWorkInProgress: Driver<Bool>
+
+    /// Keeps the app out of App Nap while `isWorkInProgress` says so.
+    let processActivity: BackgroundWorkProcessActivity
+
     /// The documents that hold the work, by identity.
     fileprivate var memberIdentifiers: Set<ObjectIdentifier> = []
 
-    /// The last document left, or the work was never anyone's; see `close()`.
+    /// The last document left; see `close()`.
     private(set) var isClosed = false
 
-    private var indexingCoordinatorStorage: RuntimeBackgroundIndexingCoordinator?
-
-    private var corpusCoordinatorStorage: FindCorpusCoordinator?
-
-    private var crossReferencePreparationCoordinatorStorage: CrossReferencePreparationCoordinator?
-
-    fileprivate init(engine: RuntimeEngine) {
-        self.engine = engine
-    }
-
-    /// Work for a document that closed without ever holding its engine's: whatever it hands out is
-    /// closed from the start, so reading it asks the engine for nothing.
-    static func closed(on engine: RuntimeEngine) -> RuntimeEngineBackgroundWork {
-        let backgroundWork = RuntimeEngineBackgroundWork(engine: engine)
-        backgroundWork.close()
-        return backgroundWork
-    }
-
-    /// The engine's background indexing. Brought into being on first use, so a document that
-    /// never needs it — a test's — starts none.
-    var indexingCoordinator: RuntimeBackgroundIndexingCoordinator {
-        if let indexingCoordinatorStorage {
-            return indexingCoordinatorStorage
-        }
+    /// Work for the first document joining `engine`: its three coordinators come into being with
+    /// it, the engine's background indexing starts, as a document opening on the engine starts it,
+    /// and the activity that keeps the app out of App Nap begins following the work. The documents
+    /// joining later find it all under way. `processActivityScheduler` is what the activity begins
+    /// and ends activities with.
+    fileprivate init(engine: RuntimeEngine, processActivityScheduler: any ProcessActivityScheduling) {
         let indexingCoordinator = RuntimeBackgroundIndexingCoordinator(engine: engine)
-        if isClosed {
-            indexingCoordinator.close()
-        }
-        indexingCoordinatorStorage = indexingCoordinator
-        return indexingCoordinator
-    }
-
-    /// The engine's interface corpus. Brought into being on first use, like `indexingCoordinator`.
-    var corpusCoordinator: FindCorpusCoordinator {
-        if let corpusCoordinatorStorage {
-            return corpusCoordinatorStorage
-        }
+        indexingCoordinator.documentDidOpen()
         let corpusCoordinator = FindCorpusCoordinator(engine: engine)
-        if isClosed {
-            corpusCoordinator.close()
-        }
-        corpusCoordinatorStorage = corpusCoordinator
-        return corpusCoordinator
-    }
-
-    /// The engine's prepared cross references. Brought into being on first use, like
-    /// `indexingCoordinator`.
-    var crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator {
-        if let crossReferencePreparationCoordinatorStorage {
-            return crossReferencePreparationCoordinatorStorage
-        }
         let crossReferencePreparationCoordinator = CrossReferencePreparationCoordinator(engine: engine)
-        if isClosed {
-            crossReferencePreparationCoordinator.close()
+        let isWorkInProgress = Driver.combineLatest(
+            indexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
+            corpusCoordinator.hasActiveBuild,
+            crossReferencePreparationCoordinator.hasActivePreparation
+        ) { hasActiveBatch, hasActiveBuild, hasActivePreparation in
+            hasActiveBatch || hasActiveBuild || hasActivePreparation
         }
-        crossReferencePreparationCoordinatorStorage = crossReferencePreparationCoordinator
-        return crossReferencePreparationCoordinator
+        .distinctUntilChanged()
+        self.engine = engine
+        self.indexingCoordinator = indexingCoordinator
+        self.corpusCoordinator = corpusCoordinator
+        self.crossReferencePreparationCoordinator = crossReferencePreparationCoordinator
+        self.isWorkInProgress = isWorkInProgress
+        processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress, scheduler: processActivityScheduler)
     }
 
     /// The last document left: every coordinator stops, cancelling what it still has running,
-    /// and asks the engine for nothing again.
+    /// and asks the engine for nothing again; the activity is let go.
     fileprivate func close() {
         guard !isClosed else { return }
         isClosed = true
-        indexingCoordinatorStorage?.close()
-        corpusCoordinatorStorage?.close()
-        crossReferencePreparationCoordinatorStorage?.close()
+        indexingCoordinator.close()
+        corpusCoordinator.close()
+        crossReferencePreparationCoordinator.close()
+        processActivity.close()
     }
 }
 
@@ -108,13 +97,17 @@ final class RuntimeEngineBackgroundWorkRegistry {
     /// read after its engine could have been freed.
     private var backgroundWorkByEngine: [ObjectIdentifier: RuntimeEngineBackgroundWork] = [:]
 
+    /// What the activity of each work brought into being from now on begins and ends its
+    /// activities with. Test seam: every test has a registry of its own.
+    var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
+
     fileprivate init() {}
 
-    /// `member` holds `engine`'s background work from now on, brought into being if no document
-    /// on the engine holds it.
+    /// `member` holds `engine`'s background work from now on, brought into being — and started —
+    /// if no document on the engine holds it.
     func join(_ engine: RuntimeEngine, as member: ObjectIdentifier) -> RuntimeEngineBackgroundWork {
         let engineIdentifier = ObjectIdentifier(engine)
-        let backgroundWork = backgroundWorkByEngine[engineIdentifier] ?? RuntimeEngineBackgroundWork(engine: engine)
+        let backgroundWork = backgroundWorkByEngine[engineIdentifier] ?? RuntimeEngineBackgroundWork(engine: engine, processActivityScheduler: processActivityScheduler)
         backgroundWorkByEngine[engineIdentifier] = backgroundWork
         backgroundWork.memberIdentifiers.insert(member)
         return backgroundWork

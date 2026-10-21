@@ -74,7 +74,8 @@ struct FindCorpusCoordinatorRemoteTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         // The coordinator's catch-up over the images indexed when it started
         // has nothing to find, and is over before the image gets indexed.
@@ -82,7 +83,7 @@ struct FindCorpusCoordinatorRemoteTests {
 
         try await fixture.serving.loadImage(at: TestImages.libobjc)
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true))
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 30) { !$0 }
         #expect(session.results.unbuiltImagePaths.contains(TestImages.libobjc), "the search read an image nobody asked to make searchable")

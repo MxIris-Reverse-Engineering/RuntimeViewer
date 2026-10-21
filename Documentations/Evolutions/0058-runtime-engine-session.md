@@ -1,0 +1,212 @@
+# 0058 - DocumentState 瘦身：Engine 与它的共享后台工作合成 RuntimeEngineSession
+
+- **状态**: Implemented
+- **创建日期**: 2026-10-20
+- **最后更新**: 2026-10-21
+- **实现分支 / PR**: `chore/runtime-engine-session`（从 `next` 切，并回 `next`），PR #125
+- **审查**: 两轮，每轮四位审查者。[第一轮](../Reviews/2026-10-20-draft-runtime-engine-session-review.md)合并后 1 🔴、12 🟡；[第二轮](../Reviews/2026-10-20-draft-runtime-engine-session-review-round-2.md)合并后 2 🔴、6 🟡。两轮的问题均已在本版处理。实现的代码审查见 [KnownIssues/2026-10-21-pr125-review-findings.md](../KnownIssues/2026-10-21-pr125-review-findings.md)
+
+## 摘要
+
+`DocumentState` 有 738 行，其中第 232–464 行在维护「这个文档在它所在 Engine 的共享后台工作里占一份」。提案 [0055](0055-engine-scoped-background-work.md) 之后，每个 Engine 只有一份后台索引、Find 语料与交叉引用预建。这一块是随功能一层层叠出来的命令式状态机，有三个问题：
+
+- **getter 带副作用。** 读一下 `backgroundIndexingCoordinator`、`findCorpusCoordinator` 或 `crossReferencePreparationCoordinator`，就会加入 registry，并把三个 `needs…` 标志之一置上。`Document.makeWindowControllers` 靠一句 `documentState.backgroundIndexingCoordinator.documentDidOpen()` 加三句 `_ = documentState.xxx` 来「启动」这些工作。
+- **有时序约束。** `.switchEngine` 必须先把文档搬到新 Engine 的后台工作上，再给 `runtimeEngine` 赋值，否则跟随 `$runtimeEngine` 的 `ReportViewModel` 和 `reportActivity` 会读到旧 Engine 的协调器。
+- **按 Engine 的东西在每个文档上各算一份。** `reportActivity` 与防 App Nap 的 `BackgroundWorkProcessActivity`，对同一 Engine 上的所有文档结果都相同，却每个文档各算、各持一份。
+
+改法：把 Engine 和这个文档在它上面的后台工作合成一个不可变的值 `RuntimeEngineSession`，消费者只跟随这个值；后台工作只能经一次显式的 `startBackgroundWork()` 加入；按 Engine 的汇总挪到 `RuntimeEngineBackgroundWork` 上。分四步落地，每一步需要的东西都在前一步里备好。App 里用户看到的行为不变。
+
+## 方案
+
+### 终态：`RuntimeEngineSession`
+
+`@MainActor public final class`，放在 `RuntimeViewerApplication/Engine/`，所有属性都不可变：
+
+- `public let engine: RuntimeEngine`
+- `let backgroundWork: RuntimeEngineBackgroundWork?`（internal）：这个文档在该 Engine 上加入的后台工作；文档还没启动后台工作时为 `nil`。
+- `func leave()`（internal）：先把本文档在这份工作的语料协调器上登记的侧栏 image 清成 `nil`，再离开 registry；最后一个离开的文档关闭这份工作，与 0055 相同。重复调用无效果。
+
+一个 session 对应「某个 Engine，加上本文档在它上面的成员身份」。Engine 或成员身份一变，`DocumentState` 就建一个新 session；同一 Engine 的重置沿用原 session，只重新赋值一次；关闭只调 `leave()`。建 session 时，registry 与成员身份由 `DocumentState` 传进去，session 自己不持有 `@Dependency`。加入与离开都是显式的，不随任何订阅的生灭而变化。模块外只看得到 `engine`，`RuntimeEngineBackgroundWork` 仍只在模块内可见（0055 的决定不变）。
+
+`DocumentState` 上是 `@RxObserved public fileprivate(set) var runtimeEngineSession`：写它的是同一文件里的 `SelectionRouter`，所以用 `fileprivate(set)`。`runtimeEngine` 改为只读转发 `runtimeEngineSession.engine`，`DocumentState` 之外读它的地方（源码 39 处、测试 27 处）不用改。
+
+**`$runtimeEngineSession` 在哪些时刻发事件：**
+
+| 时刻 | 做法 | 发不发 |
+|------|------|--------|
+| `DocumentState.init` | 建一个未加入的 session | 初值 |
+| `startBackgroundWork()` | 为当前 Engine 建一个已加入的 session，赋值 | 发一次 |
+| `.switchEngine` 到另一个 Engine | 建新 session（已启动则加入新 Engine），赋值，再让旧 session `leave()` | 发一次 |
+| 有内容打开时，同一 Engine 重置：`handleReadinessChange` → `startOverRequested` → 窗口的 `.main(engine)`，或在工具栏里重选当前来源 → `.main(engine)`；两条都由 `.main` 发 `.switchEngine` | 把原 session 再赋值一次，不离开也不重新加入 | 发一次；`RuntimeInterfaceCache` 靠这次清缓存（RxSwiftPlus 0.2.5 的 setter 无条件 `accept`，已核实） |
+| 什么都没打开时，同一 Engine 重置 | 不赋值，仍只发 `runtimeEngineDidReset` | 不发，与现在相同 |
+| `documentWillClose()` | 调 `leave()`，不赋值 | 不发 |
+
+三点说明：
+
+- **关闭后的读者。** 读到的仍是关闭前那份工作：要么已经关闭，要么还在为别的文档运行。这与现在一致。关闭之后，没有路径会再去操作它：取消命令只来自 Report 页的输入，MCP 与 CLI 都不触发路由。从未启动就关闭的文档读到 `nil`。
+- **启动时机。** `Document.makeWindowControllers` 把 `startBackgroundWork()` 放在第一句，赶在 `addWindowController` 之前，所以启动发出的那次事件，页面一侧还没有订阅者，只有 `DocumentState.init` 里那条 `combineLatest` 收到。即便顺序反过来，订阅者也会收到这次事件并拿到工作，正确性不依赖顺序。重复调用 `startBackgroundWork()`、或在关闭之后调用，都不起作用。
+- **没有工作时。** Report 页显示空的 Report，活动标记不亮；`ReportViewModel` 的 Cancel、Cancel All、Clear History，`SidebarRootViewModel` 的 `prioritize`，都什么也不做。
+
+### 落地步骤
+
+不另起提案，分四步落地，每步单独 commit。每步结束时都要满足两条：`RuntimeViewerApplicationTests` 全绿，`RuntimeViewer macOS` scheme 编译通过（第 1 步改了 `Document.swift`，第 4 步改了 `MainViewModel.swift`，这两处包测试编译不到）。
+
+在第 4 步之前，现有的两条约束仍然有效：启动必须早于订阅者，以及先搬工作、再赋值 Engine。App 里已经满足这两条：启动在第一句，搬工作仍由 `moveBackgroundWork` 负责。测试里，凡是要用后台工作的用例，都把启动放在最前面。这两条约束在第 4 步一起消除。
+
+**第 1 步：只能显式启动。**（已完成）
+- 新增 `public func startBackgroundWork()`：加入当前 Engine 的工作，建出三个协调器，调 `indexingCoordinator.documentDidOpen()`，让 FindSession 跟随语料协调器，建出 App Nap activity。`Document.makeWindowControllers` 把它放在第一句，删掉原来那四句。
+- 三个协调器 getter 不再加入工作，只读已加入的那份；还没启动时，返回一份按当前 Engine 缓存的、已关闭的工作（现有的 `RuntimeEngineBackgroundWork.closed(on:)`），它什么都不向 Engine 要。于是**漏调启动的用例拿到的是关闭的协调器，在这一步就会变红**。
+- 三个 `needs…` 标志合成一个 `hasStartedBackgroundWork`。`moveBackgroundWork` 只在已启动时才搬：离开旧工作，加入新工作，再把启动做过的那几件事做一遍。`hasCreatedFindCorpusCoordinator` 删除。
+- `FindScopeChooserViewModel` 的路径规范化改用 `runtimeEngine.canonicalImagePath`。原来的 `corpusCoordinator.canonicalImagePath` 本来就只是转发给它，行为不变。
+- 测试侧：
+  - `ViewModelTestEnvironment` 默认关掉语料构建（`settings.search.isCorpusEnabled = false`），做法与它关交叉引用预建相同，并改写它的文档注释。测语料的套件自己打开（多数已经显式打开；`FindScopeChooserViewModelTests`、`ReportViewModelTests` 里依赖默认值的几个用例要逐个核对）。
+  - `ViewModelTestEnvironment` 加一个 `startBackgroundWork()`，在 `make {}` 里调用文档的启动。
+  - 测试目标里加一个 `DocumentState` 扩展，取三个协调器：只读已加入的工作，签名是 `throws`（用 `try #require`），漏调启动时只让这一条用例失败，不会让整个测试进程崩溃。此后测试一律经它取协调器。
+  - 这几个套件改为先调启动、再经扩展取协调器：`ReportViewModelTests`、`ReportSharedByEngineTests`、`FindScopeChooserViewModelTests`、`FindSessionCorpusTests`、`FindCorpusCoordinatorTests`、`FindCorpusCoordinatorRemoteTests`、`FindCorpusCoordinatorOlderPeerTests`、`FindGenerationOptionsTests`、`DocumentStateLifecycleTests`、`RuntimeBackgroundIndexingAlwaysIndexEngineTests`、`RuntimeBackgroundIndexingSharedEngineTests`、`RuntimeBackgroundIndexingReloadTests`、`BackgroundWorkProcessActivityTests`。这份名单按「文档要参与后台工作」整理；有遗漏的话，这一步就会红。
+  - 删掉测试里 14 处显式的 `documentDidOpen()`，启动已经调过它。
+  - `DocumentStateLifecycleTests` 里关于惰性加入的断言，改成「没启动的文档读 getter 不会加入」，用 registry 现有的测试缝 `backgroundWork(on:)` 断言。
+
+**第 2 步：协调器随工作一并创建。**（已完成）
+- `RuntimeEngineBackgroundWork` 经 `registry.join` 创建时，建好三个协调器，并调一次 `indexingCoordinator.documentDidOpen()`。它有 `hasStarted` 守卫，每个 Engine 只生效一次。设置关着时照样创建协调器，以便响应设置从关到开（`DocumentState.swift:270–274` 的要求不变）。
+- `startBackgroundWork()` 和 `moveBackgroundWork` 都不再自己建协调器、不再调 `documentDidOpen()`，加入即可。所以第 4 步删掉 `moveBackgroundWork` 时，切换后启动新 Engine 索引的那件事已经由工作的创建负责了。
+- `closed(on:)` 建出的已关闭工作仍按需建出已关闭的协调器，直到第 4 步把它删掉。
+- 补两条用例：开着索引，只调启动、不调 `documentDidOpen()`，就应出现批次；打开时索引关着，之后打开，照样开始索引。
+
+**第 3 步：按 Engine 汇总活动，App Nap activity 改为每个 Engine 一份。**（已完成）
+- `RuntimeEngineBackgroundWork` 在创建时组合 `isWorkInProgress`：索引批次、语料构建、交叉引用预建，任一在跑即为真。协调器在第 2 步之后已经存在，可以直接组合，不再需要 `flatMapLatest` 加 `MainActor.assumeIsolated`。
+- 它同时建出 `BackgroundWorkProcessActivity` 并持有，在 `close()` 里结束。activity 原来的 `documentWillClose()` 改名为 `close()`。scheduler 由 registry 在创建工作时传入：registry 新增 `processActivityScheduler` 属性，默认是 `ProcessInfo.processInfo`。registry 本来就是每个测试一份的依赖，测试改它即可。
+- `DocumentState.reportActivity` 改为跟随 `$runtimeEngine`，取已加入工作的 `isWorkInProgress`，没有工作时为假。删掉 `DocumentState` 上的 `backgroundWorkProcessActivity`、`processActivityScheduler`、`hasCreatedBackgroundWorkProcessActivity`。
+- 补三条用例：同一 Engine 上开两个文档、关掉一个，activity 仍然持有；最后一个离开才结束；文档切到另一个 Engine 后，新 Engine 有工作时持有 activity。最后这条钉住 `ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md` 修过的场景。
+
+**第 4 步：引入 `RuntimeEngineSession`，删掉命令式的成员管理。**（已完成）
+- 按上文终态加入 `runtimeEngineSession`，`runtimeEngine` 改为转发。
+- `$runtimeEngine` 的 7 个跟随者改为跟随 `$runtimeEngineSession`：`RuntimeInterfaceCache` 两处、`FindViewModel`、`ReportViewModel`、`MainViewModel` 两处，以及 `DocumentState.reportActivity` 自己。
+- 直接读 getter 的地方改读当前 session 的工作，没有工作时按上文「没有工作时」处理：
+  - `SidebarRootViewModel.swift:227` 的 `prioritize`
+  - `FindScopeChooserViewModel` 的构建状态订阅
+  - `ReportViewModel` 的 Cancel、Cancel All、Clear History
+- `FindSession` 在 `init` 里用 `[weak self]` 跟随 `$runtimeEngineSession`，取当前工作的语料协调器。`follow(_:)` 改收可选参数：`nil` 时断开，并清空语料构建状态。
+- 侧栏当前 image 改由 `DocumentState.init` 里一条 `combineLatest($runtimeEngineSession, $currentImageNode)` 交给当前工作的语料协调器，没有工作时什么都不做；`SelectionRouter` 不再调 `currentImageNodeDidChange()`。离开时的清理由 `leave()` 负责。
+- 删除：三个协调器 getter、`hasStartedBackgroundWork`（由 session 有无工作代替）、`joinedBackgroundWork` / `leaveBackgroundWork` / `moveBackgroundWork` / `followInterfaceCorpus` / `currentImageNodeDidChange`、`RuntimeEngineBackgroundWork.closed(on:)`，以及它里面为已关闭工作保留的惰性分支，三个协调器改为 `let`。
+- 保留：`isClosed`（让启动与切换在关闭后不再加入工作）、`hasCreatedFindSession`。成员身份仍用 `ObjectIdentifier(self)`。
+- 测试侧：
+  - 测试扩展改为从 session 取协调器，签名不变。
+  - FindSession 不再由启动顺带建出，以下首次读取改为 `environment.make { documentState.findSession }`：`FindSessionCorpusTests.swift:23/61/94/123/187/228`、`FindCorpusCoordinatorTests.swift:75, 239`、`FindCorpusCoordinatorRemoteTests.swift:85`。不然它会在 `make {}` 外取到进程共享的 `AppDefaults.testFallback`。
+  - `FindCorpusCoordinator` 加一个 internal 测试缝：按文档读它登记的侧栏 image。
+
+### 测试与变异检查
+
+**要钉住的行为**（括号里是该用例出现的步骤）：
+- 同一 Engine 的窗口看同一份 Report；最后一个离开的文档取消工作、清空 Report；切走再回来，Report 换成那个 Engine 的（现有，第 1 步迁移）。
+- 没启动的文档读 getter 不会加入；启动前就关闭的文档什么都不建；重复启动、关闭后启动都不起作用（第 1 步）。
+- 只调启动就开始索引；设置先关后开也照样开始索引（第 2 步）。
+- App Nap：两个文档关一个仍持有、最后一个离开才结束、切到另一个 Engine 后仍持有，以及语料构建期间持有（第 3 步；最后一条为现有用例，改由 registry 注入 scheduler）。
+- **先绑定再启动**：先建好 Report 页与 FindSession，再调启动，两者都拿到这个 Engine 的协调器（第 4 步）。
+- **切换后**：在切换之前就订阅 `$runtimeEngineSession`，并记录每次发出的值；断言切换后**发出的第一个值**就带着新 Engine 的工作，而且只发一次（第 4 步）。
+- 有内容打开时同一 Engine 重置：先 `.switchImage`，再直接 `trigger(.switchEngine(同一个 Engine))`；用带计数 fetcher 的 `RuntimeInterfaceCache(documentState:fetcher:)` 断言重新取了数。不用 `stop()` / `connect()` 驱动，因为重连本身就会经 `dataChangePublisher` 清缓存，抓不到变异 3（第 4 步）。
+- 离开旧 Engine 后，经 `FindCorpusCoordinator` 的测试缝断言本文档登记的侧栏 image 已清空（第 4 步）。
+- 切换后，FindSession 跟随新 Engine 的语料协调器（第 4 步）。
+
+**变异检查**：每一项都要让至少一条测试变红，做法同 0055。
+
+| # | 变异 | 由哪条用例抓到 | 步骤 |
+|---|------|----------------|------|
+| 1 | getter 读一下仍会加入工作 | 没启动的文档读 getter 不会加入 | 1 |
+| 2 | 工作创建时不调 `documentDidOpen()` | 只调启动就开始索引 | 2 |
+| 3 | 任一文档离开就结束 activity | 两个文档关一个仍持有 | 3 |
+| 4 | 切换后新 Engine 的工作不持有 activity | 切到另一个 Engine 后仍持有 | 3 |
+| 5 | 启动时原地加入、不赋新 session | 先绑定再启动 | 4 |
+| 6 | 切换时先赋一个未加入的 session，再加入 | 切换后发出的第一个值 | 4 |
+| 7 | 同一 Engine 重置时不重新赋值 | 计数 fetcher 断言重新取数 | 4 |
+| 8 | `leave()` 不清侧栏 image | 侧栏 image 测试缝 | 4 |
+| 9 | FindSession 不跟随新 session | 切换后 FindSession 跟随新语料 | 4 |
+| 10 | 最后一个离开时不关闭工作 | `ReportSharedByEngineTests` 的 `lastWindowLeaving*` | 现有 |
+
+**App 级手动验证**（每步编译之后）：开两个 My Mac 窗口，各自的 Report 一致；把其中一个切到 Mac Catalyst，Report 随之切换，另一个窗口不受影响；在工具栏里重选当前来源，触发同一 Engine 重置，内容复位、没有崩溃。这条路径走 `.main(engine)`，会先清空 `routeDisposeBag`，所以不会撞上下文那个既有缺陷，现在就能验证。
+
+### 同批更新的文档与代码注释
+
+- 根 `AGENTS.md`：「Engine work is shared by the documents on the engine」一段（它描述的正是被删掉的 getter 与时序约束），以及 App Nap 一段。
+- `Documentations/CommunicationAndEngineArchitecture.md:333`：App Nap activity 改由每个 Engine 的工作持有。
+- `Documentations/Glossary.md`：改写现有的「Engine 的后台工作」词条（三件事，由文档显式启动时建立，持有 App Nap activity）；新增 `RuntimeEngineSession`，写明它在同一 Engine 的进程重启时保留不换。
+- 代码注释与命名：`RuntimeBackgroundIndexingCoordinator.swift` 里「engine session」一词指 Engine 背后进程的一段生命周期，与新类型撞名、含义相反。第 69、98、105 行的注释，以及私有计数器 `session`（第 40 行）和 `isCurrent(_ session:)`（第 201 行），一并改成表示「这一次连接」的说法，例如 `connectionGeneration`。
+
+### 没有询问就采用的假设
+
+- 三种后台工作一起启动，不再单独启动。App 里每个文档本来就三种都用；测试不想要哪一种，就用设置关掉。
+- 对没启动过后台工作的文档（只有测试会这样），这是一处行为改变：现在读一次 getter 就会加入工作，改完之后不会。iOS 不受影响：它给 `selectedNode` 传的是 `.never()`，从来不读这些 getter。
+- App Nap activity 由每个文档一份改为每个 Engine 一份，效果相同：activity 作用于整个进程，而有工作的 Engine 上必然有文档。
+
+### 参照 Xcode：借鉴了什么，哪些不能类比
+
+依据：逆向 Xcode 27.2 beta 27B5028f 的 IDEKit / IDEFoundation，以及 27.0 的 DVTFoundation（`DVTInvalidation`），均经反编译核对。
+
+- **借鉴**：
+  - 服务是上下文对象自己的属性（`IDEWorkspace._index`），文档上不另存一份要和上下文对齐的字段。
+  - 消费者在事件到达时重读当前服务（`IDEIndexerActivityReporter` 比较 `notification.object == workspace.index`）。
+  - 共享对象的计数（`IDEContainer`）与拆除（父对象按固定顺序 `invalidate` 子对象）是显式的。
+  - 活动汇总每个工作区算一次，每个窗口各自展示。
+- **不能类比**：
+  - Xcode 的工作区一生不换，没有「切换 Engine」这样整体换上下文的操作。它在运行目标变化时更换索引，靠的是 KVO 观察、合并到下一轮 runloop 再拆旧建新，也就是说服务的更换是观察推导出来的，并不是显式的。
+  - 它的 App Nap token 挂在 `IDEWorkspaceDocument` 上，只在加载期间持有，加载完成（finishedLoading）就结束，不能拿来支持「每个 Engine 一份」。
+
+### 不在本提案内
+
+- 导航一侧可向 Xcode 借鉴的三点另案处理：tab 去留抽成纯函数（Xcode 的 `tabActionAfterNavigation`）；时间线 `selectionStack` 设上限；需要等待的跳转（等语料找出声明位置）在执行前确认 Engine 没换。
+- **既有缺陷，后来改在本 PR 一并修掉**：有内容打开时，Engine 经 `handleReadinessChange` 重置原本直接走 `.switchEngine`，而这时 `MainCoordinator` 对 `routeSignal` 的订阅还在，`MainCoordinator.fanOut` 会撞上 `assertionFailure`。Debug 构建会崩；Release 构建里侧栏和内容区不复位，`DocumentState` 却已经清空。这个缺陷自 3d2ae6dc（提案 0037）起就存在。本提案的同 Engine 重置设计不依赖它怎么修。修法：`DocumentState` 改发 `startOverRequested`，由窗口走 `.main(engine)`，见决策日志。
+
+### 后续项
+
+- **界面上的手动验证**：两个 My Mac 窗口的 Report 一致、切到 Mac Catalyst、在工具栏里重选当前来源、本地运行时 service 被杀之后文档退回镜像列表而不崩溃（Debug 构建里 `killall RuntimeViewerLocalRuntimeService`）。都要在界面上操作，留给用户。
+- **service 闲置时会被系统回收**：内存一紧，内核就以 `JETSAM_REASON_MEMORY_IDLE_EXIT` 杀掉闲置的 XPC service，文档只能退回镜像列表、重新加载镜像。是否让 service 在持有已加载镜像期间不算闲置，属于 service 生命周期的改动，另案决定。
+- **过时的 `#if canImport(RuntimeViewerSettings)`**：`RuntimeBackgroundIndexingCoordinator`、`FindCorpusCoordinator`、`ReportViewModel` 里的这几处恒为真，可单独清理（代码审查 PR125.4）。
+
+## 决策日志
+
+| 日期 | 决定 | 理由 |
+|------|------|------|
+| 2026-10-20 | Created as Draft | `DocumentState` 臃肿，主要来自后台工作成员身份这一块：getter 带副作用、三个 `needs…` 标志、先搬工作再赋值 Engine 的时序约束，每加一种后台工作就再叠一层 |
+| 2026-10-20 | 不只是把这块原样搬进一个新类 | 搬家不改状态机，复杂度原样还在；改建模才能真正删掉代码 |
+| 2026-10-20 | 不用 `flatMapLatest` + `Observable.using` 从 `$runtimeEngine` 推导成员身份 | 推导出来的工作仍是与 Engine 并列、需要对齐的第二个值，时序问题只是换了位置。（初稿还以「Xcode 的加入与离开都是显式的」为理由，审查指出 Xcode 更换服务恰恰是靠观察推导的，这条理由已撤回） |
+| 2026-10-20 | Engine 与后台工作合成一个值，类型名定为 `RuntimeEngineSession` | 消费者只跟随一个值，时序约束从结构上消失。类型名由用户指定，与 `RuntimeEngine` 系列命名一致 |
+| 2026-10-20 | 活动汇总与 App Nap activity 挪到 `RuntimeEngineBackgroundWork` | 同一 Engine 上每个文档算出的结果相同 |
+| 2026-10-20 | 导航一侧的三点借鉴不并入本提案 | 与这次瘦身互不依赖，分开评审、分开落地 |
+| 2026-10-20 | 按第一轮审查修订（用户批准修改）：session 定为不可变的 `@MainActor final class`，并写明每个时刻发不发事件；启动时赋一个新 session | 四位审查者都指出，订阅者在启动之前就已存在，而初稿没写工作怎么交到它们手上。不可变加上「状态变了就换新实例」，让每个时刻发不发事件都只有一种答案 |
+| 2026-10-20 | `leave()` 负责清掉本文档登记的侧栏 image | 初稿漏掉了这一步，旧 Engine 会一直优先构建一个已经没人在看的 image |
+| 2026-10-20 | 关闭时不再把工作置空，迟到的读者读到它离开的那份工作 | 保持现有语义，关闭也不必发事件；只有从未启动的文档才读到 `nil`，`closed(on:)` 因此可删 |
+| 2026-10-20 | 删掉「测试变慢就退回惰性创建」的退路 | 惰性创建加上并入的 `documentDidOpen()`，等于把带副作用的 getter 放回下一层 |
+| 2026-10-20 | 「同一 Engine 重置撞断言」登记为既有缺陷，另行修复 | 用户决定稍后处理；它在本提案之前就存在，修法与本提案无关 |
+| 2026-10-21 | 按第二轮审查重排落地步骤：只能显式启动 → 协调器随工作一并创建 → 活动汇总与 App Nap → 引入 session | 原先的顺序里，第 3 步删掉 `moveBackgroundWork` 后没人给新 Engine 调 `documentDidOpen()`；第 2 步取不到「当前工作」，也定不了 activity 何时建。重排后，每一步需要的东西都在前一步里 |
+| 2026-10-21 | 第 1 步就让 getter 不再加入工作，未启动时返回已关闭的工作 | 这样漏调启动的用例在第 1 步就会变红，测试从第 1 步起就是回归护栏；原先读旧 getter 的做法，要到第 3 步才暴露漏迁的套件 |
+| 2026-10-21 | 测试环境默认关掉语料构建，测语料的套件自己打开 | 第 1 步的启动就会建出语料协调器；与 `ViewModelTestEnvironment` 关交叉引用预建的做法一致，不必逐个套件去关 |
+| 2026-10-21 | 不采用「两个独立值」的替代方案（`runtimeEngine` 原样保留，另加一个可观察的 `backgroundWork`），仍用 `RuntimeEngineSession` | 用户选定。两个独立的值会留下交叉读取的隐患：跟随其中一个的消费者若顺手同步读另一个，读到新值还是旧值取决于赋值顺序，只能靠约定防范，而这正是本次重构要消除的那一类问题。代价是 App target 改两处、多一个公开类型 |
+| 2026-10-21 | 第 1–3 步保留「启动早于订阅者」「先搬工作再赋值 Engine」两条过渡约束，第 4 步一并消除 | 前三步还没有 session，这两条约束无法提前消除；App 已经满足它们（启动在第一句，搬工作仍由 `moveBackgroundWork` 负责），测试按同样的顺序来写 |
+| 2026-10-21 | 状态改为 Accepted，在 `chore/runtime-engine-session` 上开始实现 | 用户批准 |
+| 2026-10-21 | 第 1 步：`hasStartedBackgroundWork` 写成计算属性 `backgroundWork != nil`，不另存标志 | 启动与切换都会给 `backgroundWork` 赋值，之后不再清空，二者始终一致；另存一个标志，就又多了一个要和它对齐的状态 |
+| 2026-10-21 | 第 1 步：测试扩展做成三个带 `sourceLocation` 默认参数的 throwing 方法（`joinedIndexingCoordinator()` 等），读 `DocumentState` 在模块内可读的 `backgroundWork` | 漏调启动时，记下的失败指向调用处，而不是扩展所在的文件；第 4 步改读 session，签名不变 |
+| 2026-10-21 | 第 1 步：未启动时交出的已关闭工作并非「什么都不向 Engine 要」：它的协调器创建时仍会发几个只读请求，索引协调器关闭时还会取消该 Engine 的全部批次。不为过渡期另改协调器 | App 里启动是 `makeWindowControllers` 的第一句，没有路径会在启动前读协调器；测试里只有「未启动不加入」那条用例会读，且用的是自己的 Engine。`closed(on:)` 在第 4 步整个删掉 |
+| 2026-10-21 | 第 1 步：`backgroundWorkProcessActivity` 由 public 改为 internal | `Document.swift` 不再读它，模块外已经没有读者；第 3 步整个删掉 |
+| 2026-10-21 | 第 1 步：`ReportViewModelTests` 的 Clear History 用例关掉 heuristic 索引 | 它打开了后台索引，而启动会调 `documentDidOpen()`；heuristic 默认开着，会多出一个为测试进程主程序建的批次，连带它依赖的 image 与语料，拖长等待 |
+| 2026-10-21 | 第 1 步完成：`RuntimeViewerApplicationTests` 599 条中只有「taking its engine off a row…」一条在满载下撞 120 秒超时，单独重跑 28 秒通过 | 这条在这台 macOS 26.7 机器上满载时本来就会超时，与本次改动无关 |
+| 2026-10-21 | 第 2 步：开始的工作由 `registry.join` 经 `RuntimeEngineBackgroundWork(startingOn:)` 建出，它读一遍三个惰性 getter 再调 `documentDidOpen()`；指定构造器保持惰性，留给 `closed(on:)` | 第 4 步删掉 `closed(on:)` 时，三个协调器改为 `let`、在指定构造器里建出，这个过渡写法随之消失 |
+| 2026-10-21 | 第 2 步：`RuntimeBackgroundIndexingCoordinator.documentDidOpen()` 由 public 改为 internal | 只剩工作创建时调用它，测试与 App 都不再调 |
+| 2026-10-21 | 第 2 步完成：`RuntimeViewerApplicationTests` 601 条中仍只有「taking its engine off a row…」在满载下超时，两条新用例通过 | 同第 1 步，与改动无关 |
+| 2026-10-21 | 第 3 步：`isWorkInProgress` 与 `processActivity` 暂写成 `private(set) var`，由开始工作的便利构造器赋值；已关闭的工作是 `.just(false)` 与 `nil` | 指定构造器还要留给 `closed(on:)` 惰性地建协调器，便利构造器里只能事后赋值；第 4 步删掉 `closed(on:)` 后都改为 `let` |
+| 2026-10-21 | 第 3 步：两条新的 App Nap 用例用 `ScriptedPeer` 卡住后台加载，让 Always Index 批次一直在跑 | 何时有活在跑完全由测试控制，不依赖 Foundation 语料构建要多久；也不必开语料 |
+| 2026-10-21 | 第 3 步：`DocumentStateLifecycleTests` 删掉三处「没建出 activity」的断言 | activity 已不属于文档；「什么都没建」由 registry 里没有这个 Engine 的工作来断言 |
+| 2026-10-21 | 第 3 步完成：`RuntimeViewerApplicationTests` 603 条中仍只有「taking its engine off a row…」在满载下超时，两条新的 App Nap 用例通过 | 同第 1 步，与改动无关 |
+| 2026-10-21 | 变异检查 1–4 全部变红：1 由「未启动读协调器不会加入」抓到，2 由「只调启动就开始索引」抓到（Always Index 一套也会红），3 由「两个文档关一个仍持有」抓到，4 由「切到另一个 Engine 后仍持有」抓到 | 3 和 4 各自只影响自己那条用例，放在同一次构建里验；其余每项单独构建、单独验 |
+| 2026-10-21 | 第 4 步：`RuntimeEngineSession.engine` 声明为 `public nonisolated let` | `RuntimeEngine` 是 actor，本身可跨隔离传递；App target 与 `RuntimeInterfaceCache` 在非隔离的闭包里读它，不必再包一层 `MainActor.assumeIsolated` |
+| 2026-10-21 | 第 4 步：`leave()` 靠一个私有的 `hasLeft` 标志只生效一次，这是 session 里唯一的可变状态，对外不可见 | 文档离开某份工作后，若又回到同一个仍在运行的工作，旧 session 再被调一次 `leave()` 就会删掉新 session 的成员身份；registry 的成员守卫挡不住这种情况 |
+| 2026-10-21 | 第 4 步：侧栏 image 的 `combineLatest` 与 FindSession 跟随 session 都用同步投递（`subscribeOnNext` / `driveOnNext` 加 `MainActor.assumeIsolated`），不用 `…MainActor` 系列 | 后者每次都隔一个主线程回合才执行：侧栏那条可能在 `leave()` 清掉登记之后，又把旧 image 写回离开的那份工作；FindSession 也要在切换的同一回合跟上新协调器 |
+| 2026-10-21 | 第 4 步：同一 Engine 重置的再赋值放进 `putSessionInPlaceAgain()`，先取到局部变量再赋回 | 对属性自赋值会触发编译告警；单独一个方法也让路由里两条分支读起来对称 |
+| 2026-10-21 | 第 4 步：工作的构造顺序沿用旧行为，先建索引协调器并调 `documentDidOpen()`，再建语料与交叉引用协调器 | 三个协调器改为 `let` 后都在构造器里建出，顺序照旧，免得改动派发与语料请求的先后 |
+| 2026-10-21 | 第 4 步：`RuntimeBackgroundIndexingCoordinator` 的私有计数器 `session` 改名 `connectionGeneration`，相关注释改说「这一次连接」 | 与新类型撞名、含义相反；它在 Engine 背后的进程重启或协调器关闭时前进，正是「连接换代」 |
+| 2026-10-21 | 第 4 步：`DocumentStateLifecycleTests` 里「未启动读协调器不会加入」改为「启动前 session 不持有工作，启动后持有 registry 里那份」 | 协调器 getter 已删，变异 1 针对的路径不复存在；这条改为钉住启动换 session 这件事 |
+| 2026-10-21 | 第 4 步完成：`RuntimeViewerApplicationTests` 608 条中仍只有「taking its engine off a row…」在满载下超时，`RuntimeEngineSessionTests` 的 5 条新用例通过 | 同第 1 步，与改动无关 |
+| 2026-10-21 | 变异检查 5–9 全部变红：5 由「先绑定再启动」抓到，6 由「切换后发出的第一个值」抓到（发了两次，第一个不带工作），7 由计数 fetcher 抓到，8 由侧栏 image 测试缝抓到，9 由「切换后 FindSession 跟随新语料」抓到 | 6–9 各自只影响自己那条用例，放在同一次构建里验；5 单独验。变异 10 是 0055 已验过的现有用例，没有重做 |
+| 2026-10-21 | 实现完成，待合并：四步都已提交并推送到 `chore/runtime-engine-session`；第 1、4 步之后 `RuntimeViewer macOS`（Debug-arm64e）都编译通过 | App 级手动验证（两个 My Mac 窗口、切到 Mac Catalyst、在工具栏里重选当前来源）要在界面上操作，留给用户 |
+| 2026-10-21 | 代码审查（`/code-review xhigh`）交回 9 条：修 App Nap activity 在工作关闭后仍可能被路上的报告重新拿起、一条测试靠睡 300 毫秒等首次刷新，以及两处过时的文档与一处措辞；其余 4 条不修 | 逐条按四问复核，裁决与理由记在 [KnownIssues/2026-10-21-pr125-review-findings.md](../KnownIssues/2026-10-21-pr125-review-findings.md)；要修的两条代码问题都先写了修复前失败的测试 |
+| 2026-10-21 | 「同一 Engine 重置撞断言」改在本 PR 修：Engine 回来时文档有内容打开，`DocumentState` 不再自己发 `.switchEngine`，只发 `startOverRequested`；`MainCoordinator` 在 `.main` 里订阅它，转成 `.main(engine)`，与在工具栏里重选当前来源同一条路径 | 用户要求同批修掉。`.switchEngine` 只由 `.main` 发出是 `MainCoordinator` 已有的契约：`.main` 先断开对路由的订阅、再发路由、再换上新窗格。不改 `fanOut` 去接住这条路由：那样旧窗格会先看到状态被清空、再被换掉，正是 `.main` 先断订阅要避免的。没有窗口的地方（包测试、iOS）不再自己复位；iOS 的本地引擎在进程内，不会重启 |
+| 2026-10-21 | 审查修复与断言修复完成：两条新用例修复前失败、修复后通过；去掉同 Engine 重置的再赋值后，改为确定等待的那条用例变红；`RuntimeViewerApplicationTests` 610 条中仍只有「taking its engine off a row…」在满载下超时，单独重跑 28 秒通过；`RuntimeViewer macOS`（Debug-arm64e）编译通过，`MainCoordinator.swift` 无诊断 | 这条超时同第 1 步，与改动无关。App 用 Xcode 27.2 编：会话中途 Xcode 27.0 已从本机移除，包测试是在那之前用 27.0 跑的 |
+| 2026-10-21 | 状态改为 Implemented，落地编号 0058，合进 `next` | 用户要求收尾。与方案的出入：同批修掉了原登记为另行修复的「同一 Engine 重置撞断言」，并按代码审查修了 App Nap activity 与一条测试。配套文档：不另写使用指南或实现说明——要遵守的约定（跟随 `$runtimeEngineSession` 取工作、只由 `.main` 发 `.switchEngine`）已写进根目录与 App 层的 `AGENTS.md`，非显而易见的决定都在本决策日志里。术语：`RuntimeEngineSession` 已在术语表，这次改正了其中「不可变值」的说法；`startOverRequested` 是接口名，不收进术语表。未做的项见「后续项」 |

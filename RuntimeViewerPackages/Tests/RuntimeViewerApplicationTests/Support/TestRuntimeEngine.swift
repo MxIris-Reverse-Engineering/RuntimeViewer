@@ -1,6 +1,8 @@
+import Combine
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
+import RxSwift
 
 /// Images every macOS test process already has mapped, so loading them is cheap
 /// and `isImageLoaded` is true from the start.
@@ -47,6 +49,26 @@ enum TestRuntimeEngine {
         for imagePath in imagePaths {
             try await engine.loadImage(at: imagePath)
         }
+        return engine
+    }
+
+    /// A private local engine, connected, whose first connection has finished reloading its data.
+    ///
+    /// That reload goes out from a task `connect()` does not wait for, so it can still land after
+    /// `connect()` returns — and empty an interface cache, or reset whatever else follows the
+    /// engine's data, all on its own. Subscribed before connecting, it cannot be missed.
+    static func makeConnectedWithItsFirstReloadOver(engineID: String) async throws -> RuntimeEngine {
+        RuntimeCrossReferences.install()
+        let engine = RuntimeEngine(source: .local, engineID: engineID)
+        let firstReload = ReplaySubject<Void>.create(bufferSize: 1)
+        let reloadSubscription = engine.dataChangePublisher.sink { change in
+            if change == .fullReload(isReloadImageNodes: true) {
+                firstReload.onNext(())
+            }
+        }
+        defer { reloadSubscription.cancel() }
+        try await engine.connect()
+        _ = try await nextValue(from: firstReload)
         return engine
     }
 

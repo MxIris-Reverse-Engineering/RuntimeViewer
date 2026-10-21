@@ -16,11 +16,12 @@ struct FindSessionCorpusTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject"))
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
         #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
@@ -54,11 +55,12 @@ struct FindSessionCorpusTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject", scope: .images([TestImages.libobjc])))
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
 
@@ -87,11 +89,12 @@ struct FindSessionCorpusTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true))
         _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
         #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
@@ -116,11 +119,12 @@ struct FindSessionCorpusTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         #expect(coordinator.buildStatesByImagePath[TestImages.libobjc] == nil)
 
-        documentState.findSession.update { $0.scope = .images([TestImages.libobjc]) }
+        environment.make { documentState.findSession }.update { $0.scope = .images([TestImages.libobjc]) }
 
         #expect(coordinator.buildStatesByImagePath[TestImages.libobjc] != nil)
         await engine.stop()
@@ -173,7 +177,8 @@ struct FindSessionCorpusTests {
         // ones this test merges in.
         environment.settings.search.isCorpusEnabled = false
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         // The coverage the coordinator fetches as it starts, then Foundation
         // being built, as a simulator engine reports it.
@@ -184,7 +189,7 @@ struct FindSessionCorpusTests {
             residentByteLimit: 0
         ))
 
-        let session = documentState.findSession
+        let session = environment.make { documentState.findSession }
         session.run(FindQuery(mode: .text, text: "NSObject", isCaseSensitive: true, scope: .images([TestImages.libobjc, TestImages.foundation])))
 
         let summary = try await nextValue(from: session.$summary.asDriver(), timeout: 20) { $0?.contains("being made searchable") == true }
@@ -200,7 +205,8 @@ struct FindSessionCorpusTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         // What the coordinator does as it starts — ask for the indexed images
         // and request each, fetch the coverage — has to be over before the
@@ -225,7 +231,7 @@ struct FindSessionCorpusTests {
         // The session hears of the states one main-actor turn later.
         try await settleMainQueue()
 
-        documentState.findSession.update { $0.scope = .images([TestImages.libobjc]) }
+        environment.make { documentState.findSession }.update { $0.scope = .images([TestImages.libobjc]) }
 
         // A request for it would come back unindexed from this in-process
         // engine and take the built state with it.
