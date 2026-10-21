@@ -29,10 +29,9 @@ struct RuntimeBackgroundIndexingAlwaysIndexEngineTests {
             Self.entry(Self.libdispatch, limitedTo: [otherEngine]),
             Self.entry(Self.libobjc, limitedTo: [Settings.Indexing.EngineReference(engine: engine)]),
         ])
-        let coordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, coordinator)) {} }
-
-        environment.make { coordinator.documentDidOpen() }
 
         try await Self.waitForAlwaysIndexBatch(Self.libobjc, in: coordinator)
         #expect(try await Self.alwaysIndexBatches(Self.libdispatch, in: coordinator).isEmpty)
@@ -48,12 +47,11 @@ struct RuntimeBackgroundIndexingAlwaysIndexEngineTests {
         // A row as persisted before rows could name engines.
         Self.enableAlwaysIndex(in: firstEnvironment, entries: [Settings.Indexing.AlwaysIndexEntry(identifier: Self.libobjc)])
         Self.enableAlwaysIndex(in: secondEnvironment, entries: [Settings.Indexing.AlwaysIndexEntry(identifier: Self.libobjc)])
-        let firstCoordinator = firstEnvironment.make { firstEnvironment.documentState.backgroundIndexingCoordinator }
-        let secondCoordinator = secondEnvironment.make { secondEnvironment.documentState.backgroundIndexingCoordinator }
+        firstEnvironment.startBackgroundWork()
+        let firstCoordinator = try firstEnvironment.documentState.joinedIndexingCoordinator()
+        secondEnvironment.startBackgroundWork()
+        let secondCoordinator = try secondEnvironment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((firstEnvironment, secondEnvironment, firstCoordinator, secondCoordinator)) {} }
-
-        firstEnvironment.make { firstCoordinator.documentDidOpen() }
-        secondEnvironment.make { secondCoordinator.documentDidOpen() }
 
         try await Self.waitForAlwaysIndexBatch(Self.libobjc, in: firstCoordinator)
         try await Self.waitForAlwaysIndexBatch(Self.libobjc, in: secondCoordinator)
@@ -68,9 +66,9 @@ struct RuntimeBackgroundIndexingAlwaysIndexEngineTests {
         let otherEngine = Self.otherEngineReference(deviceID: "DEVICE-B")
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         Self.enableAlwaysIndex(in: environment, entries: [Self.entry(Self.libobjc, limitedTo: [thisEngine])])
-        let coordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, coordinator)) {} }
-        environment.make { coordinator.documentDidOpen() }
         try await Self.waitForAlwaysIndexBatch(Self.libobjc, in: coordinator)
 
         // The libobjc row gains the other engine; the new libdispatch row marks the end of the
@@ -96,9 +94,9 @@ struct RuntimeBackgroundIndexingAlwaysIndexEngineTests {
         // Foundation takes seconds to index on a fresh engine, so its batch is still running when
         // the row changes.
         Self.enableAlwaysIndex(in: environment, entries: [Self.entry(Self.foundation, limitedTo: [thisEngine])])
-        let coordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, coordinator)) {} }
-        environment.make { coordinator.documentDidOpen() }
         let runningBatch = try #require(
             try await nextValue(from: coordinator.batchesObservable, timeout: 60) { batches in
                 batches.contains { $0.reason == .alwaysIndex(identifier: Self.foundation) }
@@ -140,15 +138,15 @@ struct RuntimeBackgroundIndexingAlwaysIndexEngineTests {
             Self.entry(Self.libdispatch, limitedTo: [Settings.Indexing.EngineReference(engine: firstEngine)]),
             Self.entry(Self.libobjc, limitedTo: [Settings.Indexing.EngineReference(engine: secondEngine)]),
         ])
-        let coordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime((environment, coordinator)) {} }
-        environment.make { coordinator.documentDidOpen() }
         try await Self.waitForAlwaysIndexBatch(Self.libdispatch, in: coordinator)
         #expect(try await Self.alwaysIndexBatches(Self.libobjc, in: coordinator).isEmpty)
 
         environment.make { environment.documentState.selectionRouter.trigger(.switchEngine(secondEngine)) }
         // The second engine's own coordinator: what the document shows follows its engine.
-        let secondCoordinator = environment.make { environment.documentState.backgroundIndexingCoordinator }
+        let secondCoordinator = try environment.documentState.joinedIndexingCoordinator()
         defer { withExtendedLifetime(secondCoordinator) {} }
 
         try await Self.waitForAlwaysIndexBatch(Self.libobjc, in: secondCoordinator)

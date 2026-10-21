@@ -55,9 +55,9 @@ struct FindCorpusCoordinatorTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        // In the order `Document.makeWindowControllers` creates them.
-        let indexingCoordinator = environment.make { documentState.backgroundIndexingCoordinator }
-        let corpusCoordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let indexingCoordinator = try documentState.joinedIndexingCoordinator()
+        let corpusCoordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime((indexingCoordinator, corpusCoordinator)) {} }
 
         // An "always index" entry that does not follow its dependencies is a
@@ -229,7 +229,8 @@ struct FindCorpusCoordinatorTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
 

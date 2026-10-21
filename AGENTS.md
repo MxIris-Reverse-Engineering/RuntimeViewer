@@ -368,7 +368,10 @@ The project uses three Swift Package Manager packages:
   coordinator, one Find corpus coordinator and one cross-reference preparation coordinator, held by
   every document on it (`RuntimeEngineBackgroundWork`, handed out per engine by
   `RuntimeEngineBackgroundWorkRegistry`), so the windows on one engine show one Report — the same
-  running work, the same history. `DocumentState.backgroundIndexingCoordinator` /
+  running work, the same history. A document joins its engine's work only through
+  `DocumentState.startBackgroundWork()`, which `Document.makeWindowControllers` calls before any page
+  binds; reading a coordinator joins nothing, and until then hands out a closed one. A new place that
+  opens a document starts it the same way, first. `DocumentState.backgroundIndexingCoordinator` /
   `findCorpusCoordinator` / `crossReferencePreparationCoordinator` return the coordinators of the
   engine the document is on, and anything that binds to them follows `$runtimeEngine`: `.switchEngine`
   moves the document onto the new engine's work before it assigns the engine. A document that closes or

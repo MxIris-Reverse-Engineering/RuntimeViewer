@@ -93,8 +93,8 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
 
     public override init(documentState: DocumentState, router: any Router<Route>) {
         self.session = documentState.findSession
-        let corpusCoordinator = documentState.findCorpusCoordinator
-        let scopeImagePaths = Set(Self.imagePaths(of: documentState.findSession.query.scope, currentImagePath: documentState.currentImageNode?.path).map { corpusCoordinator.canonicalImagePath($0) })
+        let runtimeEngine = documentState.runtimeEngine
+        let scopeImagePaths = Set(Self.imagePaths(of: documentState.findSession.query.scope, currentImagePath: documentState.currentImageNode?.path).map { runtimeEngine.canonicalImagePath($0) })
         self.scopeImagePaths = scopeImagePaths
         self.selectedImagePaths = scopeImagePaths
         super.init(documentState: documentState, router: router)

@@ -74,7 +74,8 @@ struct FindCorpusCoordinatorRemoteTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
         defer { withExtendedLifetime(coordinator) {} }
         // The coordinator's catch-up over the images indexed when it started
         // has nothing to find, and is over before the image gets indexed.

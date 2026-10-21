@@ -17,7 +17,8 @@ import RuntimeViewerSettings
 /// hear every batch the engine's manager runs, and there used to be a coordinator per document:
 /// each dispatched the Always Index rows again, and each kept a history of its own, begun when it
 /// opened, so two windows on one engine showed two different Reports. Brought into being with the
-/// engine's work when the first document needs it, and closed when the last one leaves.
+/// engine's work when the first document on the engine starts its background work, and closed when
+/// the last one leaves.
 @MainActor
 public final class RuntimeBackgroundIndexingCoordinator {
     /// Soft cap on `historyRelay` size. A long-running session that triggers

@@ -92,10 +92,11 @@ struct BackgroundWorkProcessActivityTests {
         let documentState = environment.documentState
         let scheduler = RecordingProcessActivityScheduler()
         documentState.processActivityScheduler = scheduler
-        // In the order `Document.makeWindowControllers` brings them into being.
-        let indexingCoordinator = environment.make { documentState.backgroundIndexingCoordinator }
-        let corpusCoordinator = environment.make { documentState.findCorpusCoordinator }
-        let processActivity = environment.make { documentState.backgroundWorkProcessActivity }
+        // As `Document.makeWindowControllers` starts it: the coordinators and the activity.
+        environment.startBackgroundWork()
+        let indexingCoordinator = try documentState.joinedIndexingCoordinator()
+        let corpusCoordinator = try documentState.joinedCorpusCoordinator()
+        let processActivity = documentState.backgroundWorkProcessActivity
         defer { withExtendedLifetime((indexingCoordinator, corpusCoordinator, processActivity)) {} }
 
         // Foundation takes seconds to print, so the work is still under way

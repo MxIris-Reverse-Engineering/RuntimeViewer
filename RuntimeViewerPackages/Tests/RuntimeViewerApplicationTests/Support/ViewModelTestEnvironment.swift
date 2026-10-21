@@ -13,11 +13,13 @@ import RuntimeViewerArchitectures
 ///
 /// `settings` is `SettingsAccess.preview`, an in-memory store: the live one is
 /// backed by the developer's own `RuntimeViewer-Debug/settings.json`, and a
-/// write from a test would auto-save over it. Keep Cross References Ready
-/// starts off there, unlike in the app: on, every document a test opens on an
-/// engine would set the engine's process preparing its indexed images in the
-/// background, holding the activity and the Report rows other tests count.
-/// The tests about it turn it on.
+/// write from a test would auto-save over it. Keep Interfaces Searchable and
+/// Keep Cross References Ready start off there, unlike in the app: on, every
+/// document a test starts on an engine would set the engine's process
+/// building the corpora of its indexed images — Foundation's takes seconds —
+/// and preparing their cross references in the background, holding the
+/// activity and the Report rows other tests count, and competing with the
+/// indexing they time. The tests about them turn them on.
 @MainActor
 struct ViewModelTestEnvironment {
     let appDefaults: AppDefaults
@@ -28,6 +30,7 @@ struct ViewModelTestEnvironment {
     init(runtimeEngine: RuntimeEngine? = nil) {
         let appDefaults = AppDefaults.isolated()
         let settings = SettingsAccess.preview
+        settings.search.isCorpusEnabled = false
         settings.search.isCrossReferencePreparationEnabled = false
         self.appDefaults = appDefaults
         self.settings = settings
@@ -51,6 +54,22 @@ struct ViewModelTestEnvironment {
             },
             operation: build
         )
+    }
+
+    /// Where the document's background work comes from: the test's own
+    /// registry, which every document a test opens shares.
+    var backgroundWorkRegistry: RuntimeEngineBackgroundWorkRegistry {
+        @Dependency(\.runtimeEngineBackgroundWorkRegistry) var backgroundWorkRegistry
+        return backgroundWorkRegistry
+    }
+
+    /// Starts the document's background work as `Document.makeWindowControllers`
+    /// does, inside the environment's dependencies so the coordinators it
+    /// brings into being read the test's settings. Call it before binding
+    /// anything that reads the coordinators, as the app does: what binds
+    /// earlier keeps the closed coordinators an unstarted document hands out.
+    func startBackgroundWork() {
+        make { documentState.startBackgroundWork() }
     }
 }
 

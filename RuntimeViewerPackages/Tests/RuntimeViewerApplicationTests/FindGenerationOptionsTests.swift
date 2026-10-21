@@ -23,7 +23,9 @@ struct FindGenerationOptionsTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.search.isCorpusEnabled = true
         let documentState = environment.documentState
-        let (coordinator, session) = environment.make { (documentState.findCorpusCoordinator, documentState.findSession) }
+        environment.startBackgroundWork()
+        let coordinator = try documentState.joinedCorpusCoordinator()
+        let session = environment.make { documentState.findSession }
         defer { withExtendedLifetime(coordinator) {} }
 
         let built = try await waitForCoverage(of: engine, timeout: 300) { $0.statesByImagePath[TestImages.foundation]?.isBuilt == true }

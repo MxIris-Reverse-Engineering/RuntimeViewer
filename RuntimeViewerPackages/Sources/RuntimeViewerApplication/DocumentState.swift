@@ -232,27 +232,26 @@ public final class DocumentState {
     @Dependency(\.runtimeEngineBackgroundWorkRegistry)
     private var backgroundWorkRegistry
 
-    /// The background work of the engine the document is on — its indexing
-    /// coordinator and its corpus coordinator — which every document on the
+    /// The background work of the engine the document is on — its indexing,
+    /// corpus and cross-reference coordinators — which every document on the
     /// engine shares, so the documents on one engine show one Report. Joined
-    /// when the document first needs either coordinator, then carried onto
-    /// each engine the document moves to; `nil` until then. Once the document
-    /// has closed, the work it left, so a late reader finds the coordinators
-    /// it read before rather than joining the engine again.
-    private var backgroundWork: RuntimeEngineBackgroundWork?
+    /// by `startBackgroundWork()`, then carried onto each engine the document
+    /// moves to; `nil` until then. Once the document has closed, the work it
+    /// left, so a late reader finds the coordinators it read before rather
+    /// than joining the engine again. Readable in the module for the tests.
+    private(set) var backgroundWork: RuntimeEngineBackgroundWork?
 
-    /// The document has needed its engine's background indexing: the engine it
-    /// moves to gets its own started too, as opening started this one's.
-    private var needsBackgroundIndexing = false
+    /// Where the coordinators below come from while the document has not
+    /// started its background work: work on the document's engine, closed from
+    /// the start, so it dispatches, builds and prepares nothing. Kept until the
+    /// engine changes, so every read on one engine hands out the same
+    /// coordinators.
+    private var unstartedBackgroundWork: RuntimeEngineBackgroundWork?
 
-    /// The document has needed its engine's interface corpus: its Find session
-    /// and its sidebar's image follow that engine's corpus coordinator, and the
-    /// engine it moves to gets one too.
-    private var needsInterfaceCorpus = false
-
-    /// The document has needed its engine's prepared cross references: the
-    /// engine it moves to gets its preparation started too.
-    private var needsCrossReferencePreparation = false
+    /// `startBackgroundWork()` has run, before the document closed.
+    private var hasStartedBackgroundWork: Bool {
+        backgroundWork != nil
+    }
 
     /// `documentWillClose()` has run.
     private var isClosed = false
@@ -262,23 +261,38 @@ public final class DocumentState {
         ObjectIdentifier(self)
     }
 
+    /// Joins the background work of the engine the document is on — the
+    /// engine's background indexing, its interface corpus and its prepared
+    /// cross references, shared with every document on the engine — and keeps
+    /// the app out of App Nap while any of it is in progress. The first
+    /// document on an engine starts the engine's indexing; the document's Find
+    /// session and its sidebar's image follow the engine's corpus coordinator.
+    ///
+    /// The only way in: reading the coordinators below joins nothing.
+    /// `Document.makeWindowControllers` calls this first, before any page binds
+    /// to them, as whatever binds earlier keeps the closed coordinators handed
+    /// out until then. Calling it again, or once the document has closed, does
+    /// nothing.
+    public func startBackgroundWork() {
+        guard !hasStartedBackgroundWork, !isClosed else { return }
+        joinBackgroundWork(on: runtimeEngine)
+        _ = backgroundWorkProcessActivity
+    }
+
     /// The background indexing of the engine the document is on, shared with
     /// every document on the engine (`RuntimeEngineBackgroundWork`): they all
     /// show its batches and its history, and Cancel or Clear History in any of
     /// them speaks for all of them.
     ///
-    /// Brought into being on first use — `makeWindowControllers` touches it —
-    /// and kept by the engine for as long as a document is on it, even when
-    /// the feature is disabled at open time, so it can react to settings
-    /// off→on toggles. Deferring the creation is an init-deferral mechanism,
-    /// not a gating-by-enablement. The document reads the engine's coordinator
-    /// afresh after every move to another engine; `$runtimeEngine` says when.
+    /// Brought into being when the first document on the engine starts its
+    /// background work, and kept by the engine for as long as a document is on
+    /// it, even when the feature is disabled at open time, so it can react to
+    /// settings off→on toggles. Before the document starts, the closed
+    /// coordinator of work nobody joined. The document reads the engine's
+    /// coordinator afresh after every move to another engine; `$runtimeEngine`
+    /// says when.
     public var backgroundIndexingCoordinator: RuntimeBackgroundIndexingCoordinator {
-        let backgroundWork = joinedBackgroundWork()
-        if !isClosed {
-            needsBackgroundIndexing = true
-        }
-        return backgroundWork.indexingCoordinator
+        currentBackgroundWork.indexingCoordinator
     }
 
     /// Per-Document interface cache. Content navigation (push, tab switch,
@@ -304,42 +318,43 @@ public final class DocumentState {
 
     /// Keeps the engine's interface corpus in step with what the engine
     /// indexes, shared with every document on the engine like
-    /// `backgroundIndexingCoordinator`, and touched on the same Document
-    /// lifecycle hook. The document's Find session follows it, and it hears
-    /// which image the document's sidebar shows.
+    /// `backgroundIndexingCoordinator`. The document's Find session follows
+    /// it, and it hears which image the document's sidebar shows.
     public var findCorpusCoordinator: FindCorpusCoordinator {
-        let backgroundWork = joinedBackgroundWork()
-        if !needsInterfaceCorpus, !isClosed {
-            needsInterfaceCorpus = true
-            followInterfaceCorpus(of: backgroundWork)
-        }
-        return backgroundWork.corpusCoordinator
+        currentBackgroundWork.corpusCoordinator
     }
 
     /// Keeps the engine's prepared cross references in step with what the
     /// engine indexes, shared with every document on the engine like
-    /// `backgroundIndexingCoordinator`, and touched on the same Document
-    /// lifecycle hook.
+    /// `backgroundIndexingCoordinator`.
     public var crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator {
-        let backgroundWork = joinedBackgroundWork()
-        if !isClosed {
-            needsCrossReferencePreparation = true
-        }
-        return backgroundWork.crossReferencePreparationCoordinator
+        currentBackgroundWork.crossReferencePreparationCoordinator
     }
 
-    /// The work of the engine the document is on, joined if the document does
-    /// not hold it yet. A document that closed without ever holding it gets
-    /// work closed from the start: it asks the engine for nothing.
-    private func joinedBackgroundWork() -> RuntimeEngineBackgroundWork {
+    /// The work the coordinators come from: the work the document joined, or,
+    /// before it started, work on its engine that nobody joined.
+    private var currentBackgroundWork: RuntimeEngineBackgroundWork {
         if let backgroundWork {
             return backgroundWork
         }
-        let joinedBackgroundWork = isClosed
-            ? RuntimeEngineBackgroundWork.closed(on: runtimeEngine)
-            : backgroundWorkRegistry.join(runtimeEngine, as: backgroundWorkMember)
+        if let unstartedBackgroundWork, unstartedBackgroundWork.engine === runtimeEngine {
+            return unstartedBackgroundWork
+        }
+        let closedBackgroundWork = RuntimeEngineBackgroundWork.closed(on: runtimeEngine)
+        unstartedBackgroundWork = closedBackgroundWork
+        return closedBackgroundWork
+    }
+
+    /// Joins `engine`'s background work and does on it what starting does:
+    /// the engine's indexing starts unless another document on it started it,
+    /// the Find session and the sidebar's image follow its corpus coordinator,
+    /// and its cross references get prepared.
+    private func joinBackgroundWork(on engine: RuntimeEngine) {
+        let joinedBackgroundWork = backgroundWorkRegistry.join(engine, as: backgroundWorkMember)
         backgroundWork = joinedBackgroundWork
-        return joinedBackgroundWork
+        joinedBackgroundWork.indexingCoordinator.documentDidOpen()
+        followInterfaceCorpus(of: joinedBackgroundWork)
+        _ = joinedBackgroundWork.crossReferencePreparationCoordinator
     }
 
     /// Hooks the document's Find session, and its sidebar's image, to
@@ -350,40 +365,29 @@ public final class DocumentState {
         corpusCoordinator.setOnScreenImagePath(currentImageNode?.path, ofDocument: backgroundWorkMember)
     }
 
-    /// Lets go of the background work the document holds: the last document
-    /// on its engine letting go closes it, cancelling what it still runs.
+    /// Lets go of the background work the document holds, withdrawing the
+    /// image its sidebar showed there first: the last document on its engine
+    /// letting go closes it, cancelling what it still runs.
     private func leaveBackgroundWork(_ backgroundWork: RuntimeEngineBackgroundWork) {
-        if needsInterfaceCorpus {
-            backgroundWork.corpusCoordinator.setOnScreenImagePath(nil, ofDocument: backgroundWorkMember)
-        }
+        backgroundWork.corpusCoordinator.setOnScreenImagePath(nil, ofDocument: backgroundWorkMember)
         backgroundWorkRegistry.leave(backgroundWork, as: backgroundWorkMember)
     }
 
-    /// Carries the document's hold on background work to `engine`, the engine
+    /// Carries the document's background work to `engine`, the engine
     /// `.switchEngine` is putting in place: the old engine's work is left —
     /// and closed when the document was the last one on it — and the new
-    /// engine's is joined, with what the document needed of the old one. A
-    /// document that never needed any joins the new engine's on first use.
+    /// engine's is joined, with what starting does on it. A document that has
+    /// not started its background work joins nothing.
     fileprivate func moveBackgroundWork(to engine: RuntimeEngine) {
-        guard let previousBackgroundWork = backgroundWork, !isClosed else { return }
+        guard !isClosed, let previousBackgroundWork = backgroundWork else { return }
         leaveBackgroundWork(previousBackgroundWork)
-        let joinedBackgroundWork = backgroundWorkRegistry.join(engine, as: backgroundWorkMember)
-        backgroundWork = joinedBackgroundWork
-        if needsInterfaceCorpus {
-            followInterfaceCorpus(of: joinedBackgroundWork)
-        }
-        if needsCrossReferencePreparation {
-            _ = joinedBackgroundWork.crossReferencePreparationCoordinator
-        }
-        if needsBackgroundIndexing {
-            joinedBackgroundWork.indexingCoordinator.documentDidOpen()
-        }
+        joinBackgroundWork(on: engine)
     }
 
     /// Tells the engine's corpus coordinator which image the sidebar lists
     /// now; the routes that change `currentImageNode` call it.
     fileprivate func currentImageNodeDidChange() {
-        guard needsInterfaceCorpus, !isClosed, let backgroundWork else { return }
+        guard !isClosed, let backgroundWork else { return }
         backgroundWork.corpusCoordinator.setOnScreenImagePath(currentImageNode?.path, ofDocument: backgroundWorkMember)
     }
 
@@ -392,10 +396,11 @@ public final class DocumentState {
         findSessionStorage != nil
     }
 
-    /// Keeps the app out of App Nap while `reportActivity` says this document has work in
-    /// progress. Like the coordinators it watches, touched on the first Document lifecycle hook
-    /// so it exists for the document's whole life.
-    public var backgroundWorkProcessActivity: BackgroundWorkProcessActivity {
+    /// Keeps the app out of App Nap while `reportActivity` says the engine the
+    /// document is on has work in progress. Brought into being by
+    /// `startBackgroundWork()`, so it exists for the rest of the document's
+    /// life.
+    var backgroundWorkProcessActivity: BackgroundWorkProcessActivity {
         if let backgroundWorkProcessActivityStorage {
             return backgroundWorkProcessActivityStorage
         }
@@ -409,11 +414,6 @@ public final class DocumentState {
     /// What `backgroundWorkProcessActivity` begins and ends its activity with, read when it is
     /// brought into being. Test seam.
     var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
-
-    /// Whether the document has needed `findCorpusCoordinator`. Test seam.
-    var hasCreatedFindCorpusCoordinator: Bool {
-        needsInterfaceCorpus
-    }
 
     /// Whether `backgroundWorkProcessActivity` has been brought into being. Test seam.
     var hasCreatedBackgroundWorkProcessActivity: Bool {

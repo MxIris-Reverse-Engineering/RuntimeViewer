@@ -1,6 +1,6 @@
 # Draft - DocumentState 瘦身：Engine 与它的共享后台工作合成 RuntimeEngineSession
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-10-20
 - **最后更新**: 2026-10-21
 - **实现分支 / PR**: `chore/runtime-engine-session`（从 `next` 切，并回 `next`）
@@ -53,7 +53,7 @@
 
 在第 4 步之前，现有的两条约束仍然有效：启动必须早于订阅者，以及先搬工作、再赋值 Engine。App 里已经满足这两条：启动在第一句，搬工作仍由 `moveBackgroundWork` 负责。测试里，凡是要用后台工作的用例，都把启动放在最前面。这两条约束在第 4 步一起消除。
 
-**第 1 步：只能显式启动。**
+**第 1 步：只能显式启动。**（已完成）
 - 新增 `public func startBackgroundWork()`：加入当前 Engine 的工作，建出三个协调器，调 `indexingCoordinator.documentDidOpen()`，让 FindSession 跟随语料协调器，建出 App Nap activity。`Document.makeWindowControllers` 把它放在第一句，删掉原来那四句。
 - 三个协调器 getter 不再加入工作，只读已加入的那份；还没启动时，返回一份按当前 Engine 缓存的、已关闭的工作（现有的 `RuntimeEngineBackgroundWork.closed(on:)`），它什么都不向 Engine 要。于是**漏调启动的用例拿到的是关闭的协调器，在这一步就会变红**。
 - 三个 `needs…` 标志合成一个 `hasStartedBackgroundWork`。`moveBackgroundWork` 只在已启动时才搬：离开旧工作，加入新工作，再把启动做过的那几件事做一遍。`hasCreatedFindCorpusCoordinator` 删除。
@@ -176,3 +176,9 @@
 | 2026-10-21 | 不采用「两个独立值」的替代方案（`runtimeEngine` 原样保留，另加一个可观察的 `backgroundWork`），仍用 `RuntimeEngineSession` | 用户选定。两个独立的值会留下交叉读取的隐患：跟随其中一个的消费者若顺手同步读另一个，读到新值还是旧值取决于赋值顺序，只能靠约定防范，而这正是本次重构要消除的那一类问题。代价是 App target 改两处、多一个公开类型 |
 | 2026-10-21 | 第 1–3 步保留「启动早于订阅者」「先搬工作再赋值 Engine」两条过渡约束，第 4 步一并消除 | 前三步还没有 session，这两条约束无法提前消除；App 已经满足它们（启动在第一句，搬工作仍由 `moveBackgroundWork` 负责），测试按同样的顺序来写 |
 | 2026-10-21 | 状态改为 Accepted，在 `chore/runtime-engine-session` 上开始实现 | 用户批准 |
+| 2026-10-21 | 第 1 步：`hasStartedBackgroundWork` 写成计算属性 `backgroundWork != nil`，不另存标志 | 启动与切换都会给 `backgroundWork` 赋值，之后不再清空，二者始终一致；另存一个标志，就又多了一个要和它对齐的状态 |
+| 2026-10-21 | 第 1 步：测试扩展做成三个带 `sourceLocation` 默认参数的 throwing 方法（`joinedIndexingCoordinator()` 等），读 `DocumentState` 在模块内可读的 `backgroundWork` | 漏调启动时，记下的失败指向调用处，而不是扩展所在的文件；第 4 步改读 session，签名不变 |
+| 2026-10-21 | 第 1 步：未启动时交出的已关闭工作并非「什么都不向 Engine 要」：它的协调器创建时仍会发几个只读请求，索引协调器关闭时还会取消该 Engine 的全部批次。不为过渡期另改协调器 | App 里启动是 `makeWindowControllers` 的第一句，没有路径会在启动前读协调器；测试里只有「未启动不加入」那条用例会读，且用的是自己的 Engine。`closed(on:)` 在第 4 步整个删掉 |
+| 2026-10-21 | 第 1 步：`backgroundWorkProcessActivity` 由 public 改为 internal | `Document.swift` 不再读它，模块外已经没有读者；第 3 步整个删掉 |
+| 2026-10-21 | 第 1 步：`ReportViewModelTests` 的 Clear History 用例关掉 heuristic 索引 | 它打开了后台索引，而启动会调 `documentDidOpen()`；heuristic 默认开着，会多出一个为测试进程主程序建的批次，连带它依赖的 image 与语料，拖长等待 |
+| 2026-10-21 | 第 1 步完成：`RuntimeViewerApplicationTests` 599 条中只有「taking its engine off a row…」一条在满载下撞 120 秒超时，单独重跑 28 秒通过 | 这条在这台 macOS 26.7 机器上满载时本来就会超时，与本次改动无关 |

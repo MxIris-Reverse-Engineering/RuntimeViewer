@@ -267,8 +267,8 @@ public final class FindSession {
     }
 
     /// Hooks the session to the corpus coordinator of the document's engine.
-    /// `DocumentState` calls this once the document needs that coordinator,
-    /// and again with the next engine's each time the document moves to
+    /// `DocumentState` calls this once the document starts its background
+    /// work, and again with the next engine's each time the document moves to
     /// another engine: its build states feed the summary bar, and each corpus
     /// it reports built is read by the search in force. Once every corpus is
     /// dropped to be printed with a new transformer, that search runs again:

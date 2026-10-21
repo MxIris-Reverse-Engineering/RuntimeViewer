@@ -14,10 +14,11 @@ import DependenciesMacros
 /// show the same Report and what one of them does reaches all of them; only windows on different
 /// engines show different Reports.
 ///
-/// Brought into being when the first document needs either coordinator on the engine, and closed
-/// when the last one leaves it — closing, or moving to another engine: its running work is
-/// cancelled and its history goes with it, as when a single window closes. The next document on
-/// the engine starts afresh. See `RuntimeEngineBackgroundWorkRegistry`.
+/// Brought into being when the first document on the engine starts its background work
+/// (`DocumentState.startBackgroundWork()`), and closed when the last one leaves it — closing, or
+/// moving to another engine: its running work is cancelled and its history goes with it, as when
+/// a single window closes. The next document on the engine starts afresh. See
+/// `RuntimeEngineBackgroundWorkRegistry`.
 @MainActor
 final class RuntimeEngineBackgroundWork {
     let engine: RuntimeEngine
@@ -38,16 +39,17 @@ final class RuntimeEngineBackgroundWork {
         self.engine = engine
     }
 
-    /// Work for a document that closed without ever holding its engine's: whatever it hands out is
-    /// closed from the start, so reading it asks the engine for nothing.
+    /// Work nobody joined, for a document that has not started its background work: whatever it
+    /// hands out is closed from the start, so it dispatches, builds and prepares nothing.
     static func closed(on engine: RuntimeEngine) -> RuntimeEngineBackgroundWork {
         let backgroundWork = RuntimeEngineBackgroundWork(engine: engine)
         backgroundWork.close()
         return backgroundWork
     }
 
-    /// The engine's background indexing. Brought into being on first use, so a document that
-    /// never needs it — a test's — starts none.
+    /// The engine's background indexing. Brought into being on first use: a document starting
+    /// its background work reads all three coordinators, and work handed out closed makes only
+    /// the ones read of it.
     var indexingCoordinator: RuntimeBackgroundIndexingCoordinator {
         if let indexingCoordinatorStorage {
             return indexingCoordinatorStorage
