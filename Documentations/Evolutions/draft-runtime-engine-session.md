@@ -1,8 +1,9 @@
 # Draft - DocumentState 瘦身：Engine 与它的共享后台工作合成 RuntimeEngineSession
 
-- **状态**: Draft
+- **状态**: Accepted
 - **创建日期**: 2026-10-20
 - **最后更新**: 2026-10-21
+- **实现分支 / PR**: `chore/runtime-engine-session`（从 `next` 切，并回 `next`）
 - **审查**: 两轮，每轮四位审查者。[第一轮](../Reviews/2026-10-20-draft-runtime-engine-session-review.md)合并后 1 🔴、12 🟡；[第二轮](../Reviews/2026-10-20-draft-runtime-engine-session-review-round-2.md)合并后 2 🔴、6 🟡。两轮的问题均已在本版处理
 
 ## 摘要
@@ -174,3 +175,4 @@
 | 2026-10-21 | 测试环境默认关掉语料构建，测语料的套件自己打开 | 第 1 步的启动就会建出语料协调器；与 `ViewModelTestEnvironment` 关交叉引用预建的做法一致，不必逐个套件去关 |
 | 2026-10-21 | 不采用「两个独立值」的替代方案（`runtimeEngine` 原样保留，另加一个可观察的 `backgroundWork`），仍用 `RuntimeEngineSession` | 用户选定。两个独立的值会留下交叉读取的隐患：跟随其中一个的消费者若顺手同步读另一个，读到新值还是旧值取决于赋值顺序，只能靠约定防范，而这正是本次重构要消除的那一类问题。代价是 App target 改两处、多一个公开类型 |
 | 2026-10-21 | 第 1–3 步保留「启动早于订阅者」「先搬工作再赋值 Engine」两条过渡约束，第 4 步一并消除 | 前三步还没有 session，这两条约束无法提前消除；App 已经满足它们（启动在第一句，搬工作仍由 `moveBackgroundWork` 负责），测试按同样的顺序来写 |
+| 2026-10-21 | 状态改为 Accepted，在 `chore/runtime-engine-session` 上开始实现 | 用户批准 |
