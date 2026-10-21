@@ -72,9 +72,9 @@ struct RuntimeEngineSessionTests {
     /// was put in place again.
     @Test("the same engine starting over while something is open keeps the session and puts it in place again, so the interface cache starts over")
     func sameEngineStartingOverPutsTheSessionInPlaceAgain() async throws {
-        let engine = try await TestRuntimeEngine.makeConnected(engineID: "RuntimeEngineSessionTests.sameEngine")
-        // The engine's first connection reloads its data once; that reload has to be over first.
-        try await Task.sleep(for: .milliseconds(300))
+        // The engine's first connection reloads its data once: over before the cache exists, or
+        // it would empty the cache itself and hide whether the session was put in place again.
+        let engine = try await TestRuntimeEngine.makeConnectedWithItsFirstReloadOver(engineID: "RuntimeEngineSessionTests.sameEngine")
         let documentState = DocumentState(runtimeEngine: engine)
         let fetchCounter = FetchCounter()
         let interfaceCache = RuntimeInterfaceCache(documentState: documentState) { object, _ in
