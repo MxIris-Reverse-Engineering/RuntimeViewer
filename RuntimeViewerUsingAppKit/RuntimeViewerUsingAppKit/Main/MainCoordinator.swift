@@ -61,6 +61,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             documentState.findSession.showResultsRequested
                 .emit(with: self) { coordinator, _ in coordinator.trigger(.showFindResults) }
                 .disposed(by: routeDisposeBag)
+            // The engine came back while the document had something open: start over on it
+            // the way choosing it again does, so the reset reaches no pane about to be replaced.
+            documentState.startOverRequested
+                .emit(with: self) { coordinator, runtimeEngine in coordinator.trigger(.main(runtimeEngine)) }
+                .disposed(by: routeDisposeBag)
 
             return .multiple(
                 .show(rootWindowController.splitViewController),
@@ -187,6 +192,8 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // before triggering. Reaching this branch means a contract
             // violation — log once, take no action (the handler is the
             // only path that can correctly rebuild the sub-coordinators).
+            // An engine coming back asks for `.main` through
+            // `DocumentState.startOverRequested` rather than issuing it.
             assertionFailure(".switchEngine fired with an active route subscriber; engine switches must go through MainRoute.main")
         case .selectAtRoot(let object):
             contentCoordinator.contextTrigger(.root(object))

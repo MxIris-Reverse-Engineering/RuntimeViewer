@@ -63,22 +63,40 @@ public final class DocumentState {
 
     fileprivate let runtimeEngineDidResetRelay = PublishRelay<RuntimeEngine>()
 
+    /// Fires with the document's engine when it came back — the process
+    /// behind it is new — while the document had something open: the window
+    /// is to start the document over on it, the way choosing the engine again
+    /// does. On macOS that is `MainRoute.main`, which stops listening to the
+    /// document's routes, issues `.switchEngine` onto the engine and builds
+    /// new panes. The document does not issue the route itself: reaching the
+    /// panes about to be replaced, it is the broken contract
+    /// `MainCoordinator.fanOut` asserts on. With nothing open there is nothing
+    /// to start over from, and only `runtimeEngineDidReset` fires.
+    public var startOverRequested: Signal<RuntimeEngine> {
+        startOverRequestedRelay.asSignal()
+    }
+
+    private let startOverRequestedRelay = PublishRelay<RuntimeEngine>()
+
     /// The sidebar at the image list and nothing on the timeline: an engine
     /// coming back has nothing to walk the document back from.
     fileprivate var hasNothingOpen: Bool {
         currentImageNode == nil && selectionStack.isEmpty
     }
 
-    /// Walks the document back to the image list when its engine stops being
-    /// ready and then becomes ready again.
+    /// Watches the engine for coming back — it stops being ready and then
+    /// becomes ready again — after which the document walks back to the
+    /// image list.
     ///
-    /// That edge is the local-runtime XPC service having been relaunched:
+    /// That edge is the local-runtime XPC service having been relaunched —
+    /// after a crash, or after the system reclaimed it while it sat idle:
     /// the engine object survives, but the process behind it is new and holds
     /// none of the images this document was browsing, so every request from
     /// where the user stands would fail. The `.switchEngine` route onto the
-    /// same engine is the existing "start over on this engine" reset. With
-    /// nothing open it would be a no-op, so the edge then only announces the
-    /// reset (`runtimeEngineDidReset`) — the engine's very first connection
+    /// same engine is the existing "start over on this engine" reset, and the
+    /// window issues it when asked (`startOverRequested`). With nothing open
+    /// it would be a no-op, so the edge then only announces the reset
+    /// (`runtimeEngineDidReset`) — the engine's very first connection
     /// included, which is no different from a reset as far as anything that
     /// asked the engine before is concerned.
     ///
@@ -105,7 +123,7 @@ public final class DocumentState {
         if hasNothingOpen {
             runtimeEngineDidResetRelay.accept(engine)
         } else {
-            selectionRouter.trigger(.switchEngine(engine))
+            startOverRequestedRelay.accept(engine)
         }
     }
 
