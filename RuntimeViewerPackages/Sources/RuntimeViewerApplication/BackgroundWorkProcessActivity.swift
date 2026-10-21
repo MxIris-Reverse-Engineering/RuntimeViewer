@@ -34,6 +34,10 @@ public final class BackgroundWorkProcessActivity {
 
     private var disposeBag = DisposeBag()
 
+    /// `close()` has run. Each report reaches the activity a main-actor turn after it is made, so
+    /// one can still arrive after the close; this is what turns it away.
+    private var isClosed = false
+
     /// Whether an activity is held. Test seam.
     var isHoldingActivity: Bool {
         activity != nil
@@ -43,7 +47,7 @@ public final class BackgroundWorkProcessActivity {
         self.scheduler = scheduler
         isWorkInProgress
             .driveOnNextMainActor { [weak self] isWorkInProgress in
-                guard let self else { return }
+                guard let self, !isClosed else { return }
                 update(isWorkInProgress: isWorkInProgress)
             }
             .disposed(by: disposeBag)
@@ -56,9 +60,10 @@ public final class BackgroundWorkProcessActivity {
     }
 
     /// The engine's work closed, its last document gone: the activity is let go, and no later
-    /// report takes it again. The documents that left can still hold the work, so `deinit` is too
-    /// late to count on.
+    /// report takes it again — not even one made before the close and still on its way. The
+    /// documents that left can still hold the work, so `deinit` is too late to count on.
     func close() {
+        isClosed = true
         disposeBag = DisposeBag()
         update(isWorkInProgress: false)
     }

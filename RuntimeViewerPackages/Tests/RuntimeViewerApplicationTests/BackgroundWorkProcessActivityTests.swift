@@ -69,6 +69,24 @@ struct BackgroundWorkProcessActivityTests {
         #expect(!processActivity.isHoldingActivity)
     }
 
+    /// A report reaches the activity a main-actor turn after it is made, so one can still be on
+    /// its way when the work closes — work starting in the turn its last document leaves.
+    @Test("work reported in the turn the activity closes takes no activity once the report arrives")
+    func reportOnItsWayWhenClosingTakesNoActivity() async throws {
+        let scheduler = RecordingProcessActivityScheduler()
+        let isWorkInProgress = BehaviorRelay(value: false)
+        let processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress.asDriver(), scheduler: scheduler)
+        defer { withExtendedLifetime(processActivity) {} }
+        try await settleMainQueue()
+
+        isWorkInProgress.accept(true)
+        processActivity.close()
+        try await settleMainQueue()
+
+        #expect(!processActivity.isHoldingActivity, "the report on its way when the work closed took the activity again")
+        #expect(scheduler.heldActivityCount == 0)
+    }
+
     @Test("an activity still held when its owner goes away is ended with it")
     func releasingTheOwnerEndsTheActivity() async throws {
         let scheduler = RecordingProcessActivityScheduler()
