@@ -383,7 +383,7 @@ The project uses three Swift Package Manager packages:
   and drops its Report; Cancel, Cancel All and Clear History speak for every window on the engine.
   **Never give a document indexing or corpus state of its own again.** A root already indexed starts no
   batch at all. Background: `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
-  `Documentations/Evolutions/draft-runtime-engine-session.md`,
+  `Documentations/Evolutions/0058-runtime-engine-session.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow

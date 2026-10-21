@@ -1,6 +1,6 @@
 # PR #125 代码审查记录 — 2026-10-21
 
-审查对象：PR #125（`chore/runtime-engine-session` → `next`，提案 [draft-runtime-engine-session](../Evolutions/draft-runtime-engine-session.md) 的四步实现），head `8cd5d2b5`，基线 `next` `9c1b3402`。
+审查对象：PR #125（`chore/runtime-engine-session` → `next`，提案 [0058-runtime-engine-session](../Evolutions/0058-runtime-engine-session.md) 的四步实现），head `8cd5d2b5`，基线 `next` `9c1b3402`。
 
 **经过**
 1. `/code-review xhigh` 交回 9 条发现，没有高危的正确性问题。每条都回到代码复核，按四问作答：能否复现、基线上有没有、值不值得修、以前修过没有。

@@ -1,9 +1,9 @@
-# Draft - DocumentState 瘦身：Engine 与它的共享后台工作合成 RuntimeEngineSession
+# 0058 - DocumentState 瘦身：Engine 与它的共享后台工作合成 RuntimeEngineSession
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-20
 - **最后更新**: 2026-10-21
-- **实现分支 / PR**: `chore/runtime-engine-session`（从 `next` 切，并回 `next`）
+- **实现分支 / PR**: `chore/runtime-engine-session`（从 `next` 切，并回 `next`），PR #125
 - **审查**: 两轮，每轮四位审查者。[第一轮](../Reviews/2026-10-20-draft-runtime-engine-session-review.md)合并后 1 🔴、12 🟡；[第二轮](../Reviews/2026-10-20-draft-runtime-engine-session-review-round-2.md)合并后 2 🔴、6 🟡。两轮的问题均已在本版处理。实现的代码审查见 [KnownIssues/2026-10-21-pr125-review-findings.md](../KnownIssues/2026-10-21-pr125-review-findings.md)
 
 ## 摘要
@@ -155,6 +155,12 @@
 - 导航一侧可向 Xcode 借鉴的三点另案处理：tab 去留抽成纯函数（Xcode 的 `tabActionAfterNavigation`）；时间线 `selectionStack` 设上限；需要等待的跳转（等语料找出声明位置）在执行前确认 Engine 没换。
 - **既有缺陷，后来改在本 PR 一并修掉**：有内容打开时，Engine 经 `handleReadinessChange` 重置原本直接走 `.switchEngine`，而这时 `MainCoordinator` 对 `routeSignal` 的订阅还在，`MainCoordinator.fanOut` 会撞上 `assertionFailure`。Debug 构建会崩；Release 构建里侧栏和内容区不复位，`DocumentState` 却已经清空。这个缺陷自 3d2ae6dc（提案 0037）起就存在。本提案的同 Engine 重置设计不依赖它怎么修。修法：`DocumentState` 改发 `startOverRequested`，由窗口走 `.main(engine)`，见决策日志。
 
+### 后续项
+
+- **界面上的手动验证**：两个 My Mac 窗口的 Report 一致、切到 Mac Catalyst、在工具栏里重选当前来源、本地运行时 service 被杀之后文档退回镜像列表而不崩溃（Debug 构建里 `killall RuntimeViewerLocalRuntimeService`）。都要在界面上操作，留给用户。
+- **service 闲置时会被系统回收**：内存一紧，内核就以 `JETSAM_REASON_MEMORY_IDLE_EXIT` 杀掉闲置的 XPC service，文档只能退回镜像列表、重新加载镜像。是否让 service 在持有已加载镜像期间不算闲置，属于 service 生命周期的改动，另案决定。
+- **过时的 `#if canImport(RuntimeViewerSettings)`**：`RuntimeBackgroundIndexingCoordinator`、`FindCorpusCoordinator`、`ReportViewModel` 里的这几处恒为真，可单独清理（代码审查 PR125.4）。
+
 ## 决策日志
 
 | 日期 | 决定 | 理由 |
@@ -203,3 +209,4 @@
 | 2026-10-21 | 代码审查（`/code-review xhigh`）交回 9 条：修 App Nap activity 在工作关闭后仍可能被路上的报告重新拿起、一条测试靠睡 300 毫秒等首次刷新，以及两处过时的文档与一处措辞；其余 4 条不修 | 逐条按四问复核，裁决与理由记在 [KnownIssues/2026-10-21-pr125-review-findings.md](../KnownIssues/2026-10-21-pr125-review-findings.md)；要修的两条代码问题都先写了修复前失败的测试 |
 | 2026-10-21 | 「同一 Engine 重置撞断言」改在本 PR 修：Engine 回来时文档有内容打开，`DocumentState` 不再自己发 `.switchEngine`，只发 `startOverRequested`；`MainCoordinator` 在 `.main` 里订阅它，转成 `.main(engine)`，与在工具栏里重选当前来源同一条路径 | 用户要求同批修掉。`.switchEngine` 只由 `.main` 发出是 `MainCoordinator` 已有的契约：`.main` 先断开对路由的订阅、再发路由、再换上新窗格。不改 `fanOut` 去接住这条路由：那样旧窗格会先看到状态被清空、再被换掉，正是 `.main` 先断订阅要避免的。没有窗口的地方（包测试、iOS）不再自己复位；iOS 的本地引擎在进程内，不会重启 |
 | 2026-10-21 | 审查修复与断言修复完成：两条新用例修复前失败、修复后通过；去掉同 Engine 重置的再赋值后，改为确定等待的那条用例变红；`RuntimeViewerApplicationTests` 610 条中仍只有「taking its engine off a row…」在满载下超时，单独重跑 28 秒通过；`RuntimeViewer macOS`（Debug-arm64e）编译通过，`MainCoordinator.swift` 无诊断 | 这条超时同第 1 步，与改动无关。App 用 Xcode 27.2 编：会话中途 Xcode 27.0 已从本机移除，包测试是在那之前用 27.0 跑的 |
+| 2026-10-21 | 状态改为 Implemented，落地编号 0058，合进 `next` | 用户要求收尾。与方案的出入：同批修掉了原登记为另行修复的「同一 Engine 重置撞断言」，并按代码审查修了 App Nap activity 与一条测试。配套文档：不另写使用指南或实现说明——要遵守的约定（跟随 `$runtimeEngineSession` 取工作、只由 `.main` 发 `.switchEngine`）已写进根目录与 App 层的 `AGENTS.md`，非显而易见的决定都在本决策日志里。术语：`RuntimeEngineSession` 已在术语表，这次改正了其中「不可变值」的说法；`startOverRequested` 是接口名，不收进术语表。未做的项见「后续项」 |
