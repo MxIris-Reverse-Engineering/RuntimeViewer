@@ -330,9 +330,10 @@ The project uses three Swift Package Manager packages:
   way. **The service runs at the priority of the requests waiting on it**, and an app in App Nap
   donates none: about thirty seconds after the user switches away, work the app is waiting on slows
   down four- to tenfold. So long-running work the app waits on has to keep the app out of App Nap:
-  `BackgroundWorkProcessActivity` holds a user-initiated activity while `DocumentState.reportActivity`
-  is true (indexing batches, corpus builds, cross-reference preparations), and new work of that kind
-  reports through that signal or holds an activity of its own. Background:
+  each engine's background work holds a `BackgroundWorkProcessActivity`, a user-initiated activity
+  held while `RuntimeEngineBackgroundWork.isWorkInProgress` is true (indexing batches, corpus builds,
+  cross-reference preparations), and new work of that kind reports through that signal or holds an
+  activity of its own. Background:
   `Documentations/Evolutions/0037-local-runtime-xpc-service.md`; the transport:
   `Documentations/CommunicationAndEngineArchitecture.md` §3.6; the priority:
   `Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`

@@ -72,7 +72,7 @@
 - `closed(on:)` 建出的已关闭工作仍按需建出已关闭的协调器，直到第 4 步把它删掉。
 - 补两条用例：开着索引，只调启动、不调 `documentDidOpen()`，就应出现批次；打开时索引关着，之后打开，照样开始索引。
 
-**第 3 步：按 Engine 汇总活动，App Nap activity 改为每个 Engine 一份。**
+**第 3 步：按 Engine 汇总活动，App Nap activity 改为每个 Engine 一份。**（已完成）
 - `RuntimeEngineBackgroundWork` 在创建时组合 `isWorkInProgress`：索引批次、语料构建、交叉引用预建，任一在跑即为真。协调器在第 2 步之后已经存在，可以直接组合，不再需要 `flatMapLatest` 加 `MainActor.assumeIsolated`。
 - 它同时建出 `BackgroundWorkProcessActivity` 并持有，在 `close()` 里结束。activity 原来的 `documentWillClose()` 改名为 `close()`。scheduler 由 registry 在创建工作时传入：registry 新增 `processActivityScheduler` 属性，默认是 `ProcessInfo.processInfo`。registry 本来就是每个测试一份的依赖，测试改它即可。
 - `DocumentState.reportActivity` 改为跟随 `$runtimeEngine`，取已加入工作的 `isWorkInProgress`，没有工作时为假。删掉 `DocumentState` 上的 `backgroundWorkProcessActivity`、`processActivityScheduler`、`hasCreatedBackgroundWorkProcessActivity`。
@@ -185,3 +185,8 @@
 | 2026-10-21 | 第 2 步：开始的工作由 `registry.join` 经 `RuntimeEngineBackgroundWork(startingOn:)` 建出，它读一遍三个惰性 getter 再调 `documentDidOpen()`；指定构造器保持惰性，留给 `closed(on:)` | 第 4 步删掉 `closed(on:)` 时，三个协调器改为 `let`、在指定构造器里建出，这个过渡写法随之消失 |
 | 2026-10-21 | 第 2 步：`RuntimeBackgroundIndexingCoordinator.documentDidOpen()` 由 public 改为 internal | 只剩工作创建时调用它，测试与 App 都不再调 |
 | 2026-10-21 | 第 2 步完成：`RuntimeViewerApplicationTests` 601 条中仍只有「taking its engine off a row…」在满载下超时，两条新用例通过 | 同第 1 步，与改动无关 |
+| 2026-10-21 | 第 3 步：`isWorkInProgress` 与 `processActivity` 暂写成 `private(set) var`，由开始工作的便利构造器赋值；已关闭的工作是 `.just(false)` 与 `nil` | 指定构造器还要留给 `closed(on:)` 惰性地建协调器，便利构造器里只能事后赋值；第 4 步删掉 `closed(on:)` 后都改为 `let` |
+| 2026-10-21 | 第 3 步：两条新的 App Nap 用例用 `ScriptedPeer` 卡住后台加载，让 Always Index 批次一直在跑 | 何时有活在跑完全由测试控制，不依赖 Foundation 语料构建要多久；也不必开语料 |
+| 2026-10-21 | 第 3 步：`DocumentStateLifecycleTests` 删掉三处「没建出 activity」的断言 | activity 已不属于文档；「什么都没建」由 registry 里没有这个 Engine 的工作来断言 |
+| 2026-10-21 | 第 3 步完成：`RuntimeViewerApplicationTests` 603 条中仍只有「taking its engine off a row…」在满载下超时，两条新的 App Nap 用例通过 | 同第 1 步，与改动无关 |
+| 2026-10-21 | 变异检查 1–4 全部变红：1 由「未启动读协调器不会加入」抓到，2 由「只调启动就开始索引」抓到（Always Index 一套也会红），3 由「两个文档关一个仍持有」抓到，4 由「切到另一个 Engine 后仍持有」抓到 | 3 和 4 各自只影响自己那条用例，放在同一次构建里验；其余每项单独构建、单独验 |

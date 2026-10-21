@@ -263,7 +263,7 @@ public final class DocumentState {
 
     /// Joins the background work of the engine the document is on — the
     /// engine's background indexing, its interface corpus and its prepared
-    /// cross references, shared with every document on the engine — and keeps
+    /// cross references, shared with every document on the engine, which keeps
     /// the app out of App Nap while any of it is in progress. The first
     /// document on an engine starts the engine's indexing; the document's Find
     /// session and its sidebar's image follow the engine's corpus coordinator.
@@ -276,7 +276,6 @@ public final class DocumentState {
     public func startBackgroundWork() {
         guard !hasStartedBackgroundWork, !isClosed else { return }
         joinBackgroundWork(on: runtimeEngine)
-        _ = backgroundWorkProcessActivity
     }
 
     /// The background indexing of the engine the document is on, shared with
@@ -394,39 +393,16 @@ public final class DocumentState {
         findSessionStorage != nil
     }
 
-    /// Keeps the app out of App Nap while `reportActivity` says the engine the
-    /// document is on has work in progress. Brought into being by
-    /// `startBackgroundWork()`, so it exists for the rest of the document's
-    /// life.
-    var backgroundWorkProcessActivity: BackgroundWorkProcessActivity {
-        if let backgroundWorkProcessActivityStorage {
-            return backgroundWorkProcessActivityStorage
-        }
-        let backgroundWorkProcessActivity = BackgroundWorkProcessActivity(isWorkInProgress: reportActivity, scheduler: processActivityScheduler)
-        backgroundWorkProcessActivityStorage = backgroundWorkProcessActivity
-        return backgroundWorkProcessActivity
-    }
-
-    private var backgroundWorkProcessActivityStorage: BackgroundWorkProcessActivity?
-
-    /// What `backgroundWorkProcessActivity` begins and ends its activity with, read when it is
-    /// brought into being. Test seam.
-    var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
-
-    /// Whether `backgroundWorkProcessActivity` has been brought into being. Test seam.
-    var hasCreatedBackgroundWorkProcessActivity: Bool {
-        backgroundWorkProcessActivityStorage != nil
-    }
-
     /// The document is closing; `Document.close()` calls this and nothing
     /// else. The document lets go of its engine's background work — the last
     /// document on the engine letting go stops it, cancelling the indexing
-    /// batches and corpus builds still under way and dropping its Report;
-    /// with other documents on the engine, it runs on for them — and each
-    /// member of its own that exists lets go of its work — the search under
-    /// way, the activity held for them — and stops reacting to anything. A
-    /// member never brought into being stays that way: creating it now would
-    /// only start the observation and the requests closing is meant to stop.
+    /// batches and corpus builds still under way, dropping its Report and
+    /// letting go of the activity that kept the app out of App Nap; with other
+    /// documents on the engine, it runs on for them — and each member of its
+    /// own that exists lets go of its work — the search under way — and stops
+    /// reacting to anything. A member never brought into being stays that way:
+    /// creating it now would only start the observation and the requests
+    /// closing is meant to stop.
     ///
     /// Needed because this object can outlive its window, and with it every
     /// member it holds, so their `deinit` is no place to let go of work.
@@ -437,25 +413,20 @@ public final class DocumentState {
             leaveBackgroundWork(backgroundWork)
         }
         findSessionStorage?.documentWillClose()
-        backgroundWorkProcessActivityStorage?.documentWillClose()
     }
 
     /// Whether the Report navigator has work in progress: an indexing batch, a corpus queued or
     /// being printed, or cross references queued or being prepared, on the engine the document is
-    /// on. Worked out once here, so both sidebar levels mark their Report navigator tab from the
-    /// same answer.
+    /// on. The engine's work works it out once for every document on it
+    /// (`RuntimeEngineBackgroundWork.isWorkInProgress`), so both sidebar levels of every window on
+    /// the engine mark their Report navigator tab from the same answer. False while the document
+    /// has not started its background work.
     public var reportActivity: Driver<Bool> {
         $runtimeEngine.asDriver()
             .flatMapLatest { [weak self] _ -> Driver<Bool> in
                 guard let self else { return .just(false) }
                 return MainActor.assumeIsolated {
-                    Driver.combineLatest(
-                        self.backgroundIndexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
-                        self.findCorpusCoordinator.hasActiveBuild,
-                        self.crossReferencePreparationCoordinator.hasActivePreparation
-                    ) { hasActiveBatch, hasActiveBuild, hasActivePreparation in
-                        hasActiveBatch || hasActiveBuild || hasActivePreparation
-                    }
+                    self.backgroundWork?.isWorkInProgress ?? .just(false)
                 }
             }
             .distinctUntilChanged()

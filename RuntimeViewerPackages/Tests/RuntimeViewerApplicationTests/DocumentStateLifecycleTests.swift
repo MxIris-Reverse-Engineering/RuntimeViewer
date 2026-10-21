@@ -26,7 +26,6 @@ struct DocumentStateLifecycleTests {
 
         #expect(!documentState.hasCreatedFindSession, "closing the document created a Find session")
         #expect(environment.backgroundWorkRegistry.backgroundWork(on: documentState.runtimeEngine) == nil, "closing the document joined its engine's background work")
-        #expect(!documentState.hasCreatedBackgroundWorkProcessActivity, "closing the document created its background work activity")
     }
 
     // MARK: - Starting the background work
@@ -51,7 +50,6 @@ struct DocumentStateLifecycleTests {
 
         #expect(environment.backgroundWorkRegistry.backgroundWork(on: engine) == nil, "reading a coordinator joined the engine's background work")
         #expect(!documentState.hasCreatedFindSession, "reading a coordinator hooked a Find session to it")
-        #expect(!documentState.hasCreatedBackgroundWorkProcessActivity, "reading a coordinator brought the background work activity into being")
         #expect(documentState.backgroundIndexingCoordinator === unstartedCoordinators.indexing, "every read hands out other coordinators")
 
         // Started, the document hands out the coordinators of the work it joined.
@@ -89,7 +87,6 @@ struct DocumentStateLifecycleTests {
 
         #expect(registry.backgroundWork(on: engine) == nil, "a closed document joined its engine's background work")
         #expect(!closedEnvironment.documentState.hasCreatedFindSession)
-        #expect(!closedEnvironment.documentState.hasCreatedBackgroundWorkProcessActivity)
         await engine.stop()
     }
 

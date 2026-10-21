@@ -2,8 +2,10 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerArchitectures
 
-/// Keeps the app out of App Nap while a document has background work in progress: an indexing
-/// batch, or a corpus queued or being printed — `DocumentState.reportActivity`.
+/// Keeps the app out of App Nap while an engine's background work is in progress: an indexing
+/// batch, a corpus queued or being printed, cross references queued or being prepared —
+/// `RuntimeEngineBackgroundWork.isWorkInProgress`. One per engine's work, which holds it for as
+/// long as a document is on the engine.
 ///
 /// That work runs in the local-runtime XPC service — or, for a Mac Catalyst document, the Mac
 /// Catalyst service — which launchd starts as an adaptive job: it runs at full speed while a
@@ -13,8 +15,9 @@ import RuntimeViewerArchitectures
 /// request the app had waiting stopped boosting the service, and SwiftUI's corpus took 187
 /// seconds to print instead of 18. Holding a user-initiated activity keeps the app out of App Nap
 /// for as long as the work lasts, and with it the boost its waiting requests give the service.
-/// The activity is let go as soon as the work ends, so an idle document naps as before; idle
-/// system sleep stays allowed, as nothing here is worth keeping the Mac awake for.
+/// The activity is let go as soon as the work ends, so an idle app naps as before; idle system
+/// sleep stays allowed, as nothing here is worth keeping the Mac awake for. The activity covers
+/// the whole process, so one per engine with work is as good as one per document on it.
 ///
 /// Background: `Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`.
 @MainActor
@@ -52,9 +55,10 @@ public final class BackgroundWorkProcessActivity {
         }
     }
 
-    /// The document is closing: the activity is let go, and no later report takes it again.
-    /// `DocumentState` can outlive its window, so `deinit` is too late to count on.
-    func documentWillClose() {
+    /// The engine's work closed, its last document gone: the activity is let go, and no later
+    /// report takes it again. The documents that left can still hold the work, so `deinit` is too
+    /// late to count on.
+    func close() {
         disposeBag = DisposeBag()
         update(isWorkInProgress: false)
     }
