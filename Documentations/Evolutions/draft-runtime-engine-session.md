@@ -199,3 +199,4 @@
 | 2026-10-21 | 第 4 步：`DocumentStateLifecycleTests` 里「未启动读协调器不会加入」改为「启动前 session 不持有工作，启动后持有 registry 里那份」 | 协调器 getter 已删，变异 1 针对的路径不复存在；这条改为钉住启动换 session 这件事 |
 | 2026-10-21 | 第 4 步完成：`RuntimeViewerApplicationTests` 608 条中仍只有「taking its engine off a row…」在满载下超时，`RuntimeEngineSessionTests` 的 5 条新用例通过 | 同第 1 步，与改动无关 |
 | 2026-10-21 | 变异检查 5–9 全部变红：5 由「先绑定再启动」抓到，6 由「切换后发出的第一个值」抓到（发了两次，第一个不带工作），7 由计数 fetcher 抓到，8 由侧栏 image 测试缝抓到，9 由「切换后 FindSession 跟随新语料」抓到 | 6–9 各自只影响自己那条用例，放在同一次构建里验；5 单独验。变异 10 是 0055 已验过的现有用例，没有重做 |
+| 2026-10-21 | 实现完成，待合并：四步都已提交并推送到 `chore/runtime-engine-session`；第 1、4 步之后 `RuntimeViewer macOS`（Debug-arm64e）都编译通过 | App 级手动验证（两个 My Mac 窗口、切到 Mac Catalyst、在工具栏里重选当前来源）要在界面上操作，留给用户 |
