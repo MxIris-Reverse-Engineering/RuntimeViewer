@@ -4,11 +4,13 @@ import RuntimeViewerCore
 /// value: whatever follows it finds the engine and the work that goes with the engine together, so
 /// no consumer can see one of them change without the other.
 ///
-/// Immutable. The document puts a new session in place (`DocumentState.runtimeEngineSession`)
+/// Its engine and the work it holds never change; all it keeps track of is whether it has let go
+/// (`leave()`). The document puts a new session in place (`DocumentState.runtimeEngineSession`)
 /// whenever the engine or the hold changes — it starts its background work, it moves to another
 /// engine — and puts the same session in place again when its engine starts over on a new
-/// process. Closing only lets go (`leave()`): a reader that comes late finds the work it left,
-/// closed or still running for the other documents on the engine.
+/// process, which is why a session is an object and not a value. Closing only lets go: a reader
+/// that comes late finds the work it left, closed or still running for the other documents on
+/// the engine.
 ///
 /// The work itself is the engine's, shared by every document on it (`RuntimeEngineBackgroundWork`);
 /// outside this module a session is only its engine.

@@ -371,7 +371,7 @@ The project uses three Swift Package Manager packages:
   `RuntimeEngineBackgroundWorkRegistry`), so the windows on one engine show one Report — the same
   running work, the same history; the work also says once for all of them whether anything is in
   progress, and holds the App Nap activity. A document holds its part through
-  `DocumentState.runtimeEngineSession`, an immutable `RuntimeEngineSession` of the engine and the work:
+  `DocumentState.runtimeEngineSession`, a `RuntimeEngineSession` whose engine and work never change:
   **follow `$runtimeEngineSession` and take the work from the session it delivers** — never pair the
   engine with work read some other way, the ordering trap the session exists to remove.
   `runtimeEngine` only forwards `runtimeEngineSession.engine`. A document joins only through

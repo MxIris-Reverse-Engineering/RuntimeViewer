@@ -4,8 +4,8 @@ import Testing
 /// The coordinators of the background work a document joined with
 /// `startBackgroundWork()` — how every test reaches them. Asked of a document
 /// that has not started, they fail the test they are asked in, not the whole
-/// run: such a document hands out closed coordinators, which do nothing a test
-/// could wait for.
+/// run: such a document holds no work at all (`runtimeEngineSession.backgroundWork`
+/// is `nil`).
 extension DocumentState {
     func joinedIndexingCoordinator(sourceLocation: SourceLocation = #_sourceLocation) throws -> RuntimeBackgroundIndexingCoordinator {
         try joinedBackgroundWork(sourceLocation: sourceLocation).indexingCoordinator

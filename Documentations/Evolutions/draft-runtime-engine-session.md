@@ -4,7 +4,7 @@
 - **创建日期**: 2026-10-20
 - **最后更新**: 2026-10-21
 - **实现分支 / PR**: `chore/runtime-engine-session`（从 `next` 切，并回 `next`）
-- **审查**: 两轮，每轮四位审查者。[第一轮](../Reviews/2026-10-20-draft-runtime-engine-session-review.md)合并后 1 🔴、12 🟡；[第二轮](../Reviews/2026-10-20-draft-runtime-engine-session-review-round-2.md)合并后 2 🔴、6 🟡。两轮的问题均已在本版处理
+- **审查**: 两轮，每轮四位审查者。[第一轮](../Reviews/2026-10-20-draft-runtime-engine-session-review.md)合并后 1 🔴、12 🟡；[第二轮](../Reviews/2026-10-20-draft-runtime-engine-session-review-round-2.md)合并后 2 🔴、6 🟡。两轮的问题均已在本版处理。实现的代码审查见 [KnownIssues/2026-10-21-pr125-review-findings.md](../KnownIssues/2026-10-21-pr125-review-findings.md)
 
 ## 摘要
 
@@ -37,7 +37,7 @@
 | `DocumentState.init` | 建一个未加入的 session | 初值 |
 | `startBackgroundWork()` | 为当前 Engine 建一个已加入的 session，赋值 | 发一次 |
 | `.switchEngine` 到另一个 Engine | 建新 session（已启动则加入新 Engine），赋值，再让旧 session `leave()` | 发一次 |
-| 有内容打开时，同一 Engine 重置：`handleReadinessChange` → `.switchEngine`，或在工具栏里重选当前来源 → `.main(engine)` | 把原 session 再赋值一次，不离开也不重新加入 | 发一次；`RuntimeInterfaceCache` 靠这次清缓存（RxSwiftPlus 0.2.5 的 setter 无条件 `accept`，已核实） |
+| 有内容打开时，同一 Engine 重置：`handleReadinessChange` → `startOverRequested` → 窗口的 `.main(engine)`，或在工具栏里重选当前来源 → `.main(engine)`；两条都由 `.main` 发 `.switchEngine` | 把原 session 再赋值一次，不离开也不重新加入 | 发一次；`RuntimeInterfaceCache` 靠这次清缓存（RxSwiftPlus 0.2.5 的 setter 无条件 `accept`，已核实） |
 | 什么都没打开时，同一 Engine 重置 | 不赋值，仍只发 `runtimeEngineDidReset` | 不发，与现在相同 |
 | `documentWillClose()` | 调 `leave()`，不赋值 | 不发 |
 
@@ -153,7 +153,7 @@
 ### 不在本提案内
 
 - 导航一侧可向 Xcode 借鉴的三点另案处理：tab 去留抽成纯函数（Xcode 的 `tabActionAfterNavigation`）；时间线 `selectionStack` 设上限；需要等待的跳转（等语料找出声明位置）在执行前确认 Engine 没换。
-- **既有缺陷，另行修复**：有内容打开时，Engine 经 `handleReadinessChange` 重置会走 `.switchEngine`，而这时 `MainCoordinator` 对 `routeSignal` 的订阅还在，`fanOut` 会撞上 `assertionFailure`（`MainCoordinator.swift:184–190`）。Debug 构建会崩；Release 构建里侧栏和内容区不复位，`DocumentState` 却已经清空。这个缺陷自 3d2ae6dc（提案 0037）起就存在。本提案的同 Engine 重置设计不依赖它怎么修。
+- **既有缺陷，后来改在本 PR 一并修掉**：有内容打开时，Engine 经 `handleReadinessChange` 重置原本直接走 `.switchEngine`，而这时 `MainCoordinator` 对 `routeSignal` 的订阅还在，`MainCoordinator.fanOut` 会撞上 `assertionFailure`。Debug 构建会崩；Release 构建里侧栏和内容区不复位，`DocumentState` 却已经清空。这个缺陷自 3d2ae6dc（提案 0037）起就存在。本提案的同 Engine 重置设计不依赖它怎么修。修法：`DocumentState` 改发 `startOverRequested`，由窗口走 `.main(engine)`，见决策日志。
 
 ## 决策日志
 
@@ -200,3 +200,6 @@
 | 2026-10-21 | 第 4 步完成：`RuntimeViewerApplicationTests` 608 条中仍只有「taking its engine off a row…」在满载下超时，`RuntimeEngineSessionTests` 的 5 条新用例通过 | 同第 1 步，与改动无关 |
 | 2026-10-21 | 变异检查 5–9 全部变红：5 由「先绑定再启动」抓到，6 由「切换后发出的第一个值」抓到（发了两次，第一个不带工作），7 由计数 fetcher 抓到，8 由侧栏 image 测试缝抓到，9 由「切换后 FindSession 跟随新语料」抓到 | 6–9 各自只影响自己那条用例，放在同一次构建里验；5 单独验。变异 10 是 0055 已验过的现有用例，没有重做 |
 | 2026-10-21 | 实现完成，待合并：四步都已提交并推送到 `chore/runtime-engine-session`；第 1、4 步之后 `RuntimeViewer macOS`（Debug-arm64e）都编译通过 | App 级手动验证（两个 My Mac 窗口、切到 Mac Catalyst、在工具栏里重选当前来源）要在界面上操作，留给用户 |
+| 2026-10-21 | 代码审查（`/code-review xhigh`）交回 9 条：修 App Nap activity 在工作关闭后仍可能被路上的报告重新拿起、一条测试靠睡 300 毫秒等首次刷新，以及两处过时的文档与一处措辞；其余 4 条不修 | 逐条按四问复核，裁决与理由记在 [KnownIssues/2026-10-21-pr125-review-findings.md](../KnownIssues/2026-10-21-pr125-review-findings.md)；要修的两条代码问题都先写了修复前失败的测试 |
+| 2026-10-21 | 「同一 Engine 重置撞断言」改在本 PR 修：Engine 回来时文档有内容打开，`DocumentState` 不再自己发 `.switchEngine`，只发 `startOverRequested`；`MainCoordinator` 在 `.main` 里订阅它，转成 `.main(engine)`，与在工具栏里重选当前来源同一条路径 | 用户要求同批修掉。`.switchEngine` 只由 `.main` 发出是 `MainCoordinator` 已有的契约：`.main` 先断开对路由的订阅、再发路由、再换上新窗格。不改 `fanOut` 去接住这条路由：那样旧窗格会先看到状态被清空、再被换掉，正是 `.main` 先断订阅要避免的。没有窗口的地方（包测试、iOS）不再自己复位；iOS 的本地引擎在进程内，不会重启 |
+| 2026-10-21 | 审查修复与断言修复完成：两条新用例修复前失败、修复后通过；去掉同 Engine 重置的再赋值后，改为确定等待的那条用例变红；`RuntimeViewerApplicationTests` 610 条中仍只有「taking its engine off a row…」在满载下超时，单独重跑 28 秒通过 | 这条超时同第 1 步，与改动无关 |
