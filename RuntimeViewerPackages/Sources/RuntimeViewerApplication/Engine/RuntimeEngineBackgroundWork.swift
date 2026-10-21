@@ -39,6 +39,17 @@ final class RuntimeEngineBackgroundWork {
         self.engine = engine
     }
 
+    /// Work for the first document joining `engine`: its three coordinators come into being with
+    /// it — with their features turned off too, so each can start once its feature is turned on —
+    /// and the engine's background indexing starts, as a document opening on the engine starts it.
+    /// The documents joining later find it all under way.
+    fileprivate convenience init(startingOn engine: RuntimeEngine) {
+        self.init(engine: engine)
+        indexingCoordinator.documentDidOpen()
+        _ = corpusCoordinator
+        _ = crossReferencePreparationCoordinator
+    }
+
     /// Work nobody joined, for a document that has not started its background work: whatever it
     /// hands out is closed from the start, so it dispatches, builds and prepares nothing.
     static func closed(on engine: RuntimeEngine) -> RuntimeEngineBackgroundWork {
@@ -47,9 +58,8 @@ final class RuntimeEngineBackgroundWork {
         return backgroundWork
     }
 
-    /// The engine's background indexing. Brought into being on first use: a document starting
-    /// its background work reads all three coordinators, and work handed out closed makes only
-    /// the ones read of it.
+    /// The engine's background indexing. Brought into being with work a document joins; work
+    /// handed out closed makes it, closed, when it is first read.
     var indexingCoordinator: RuntimeBackgroundIndexingCoordinator {
         if let indexingCoordinatorStorage {
             return indexingCoordinatorStorage
@@ -62,7 +72,7 @@ final class RuntimeEngineBackgroundWork {
         return indexingCoordinator
     }
 
-    /// The engine's interface corpus. Brought into being on first use, like `indexingCoordinator`.
+    /// The engine's interface corpus. Brought into being like `indexingCoordinator`.
     var corpusCoordinator: FindCorpusCoordinator {
         if let corpusCoordinatorStorage {
             return corpusCoordinatorStorage
@@ -75,8 +85,7 @@ final class RuntimeEngineBackgroundWork {
         return corpusCoordinator
     }
 
-    /// The engine's prepared cross references. Brought into being on first use, like
-    /// `indexingCoordinator`.
+    /// The engine's prepared cross references. Brought into being like `indexingCoordinator`.
     var crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator {
         if let crossReferencePreparationCoordinatorStorage {
             return crossReferencePreparationCoordinatorStorage
@@ -112,11 +121,11 @@ final class RuntimeEngineBackgroundWorkRegistry {
 
     fileprivate init() {}
 
-    /// `member` holds `engine`'s background work from now on, brought into being if no document
-    /// on the engine holds it.
+    /// `member` holds `engine`'s background work from now on, brought into being — and started —
+    /// if no document on the engine holds it.
     func join(_ engine: RuntimeEngine, as member: ObjectIdentifier) -> RuntimeEngineBackgroundWork {
         let engineIdentifier = ObjectIdentifier(engine)
-        let backgroundWork = backgroundWorkByEngine[engineIdentifier] ?? RuntimeEngineBackgroundWork(engine: engine)
+        let backgroundWork = backgroundWorkByEngine[engineIdentifier] ?? RuntimeEngineBackgroundWork(startingOn: engine)
         backgroundWorkByEngine[engineIdentifier] = backgroundWork
         backgroundWork.memberIdentifiers.insert(member)
         return backgroundWork

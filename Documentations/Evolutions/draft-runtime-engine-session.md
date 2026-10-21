@@ -66,7 +66,7 @@
   - 删掉测试里 14 处显式的 `documentDidOpen()`，启动已经调过它。
   - `DocumentStateLifecycleTests` 里关于惰性加入的断言，改成「没启动的文档读 getter 不会加入」，用 registry 现有的测试缝 `backgroundWork(on:)` 断言。
 
-**第 2 步：协调器随工作一并创建。**
+**第 2 步：协调器随工作一并创建。**（已完成）
 - `RuntimeEngineBackgroundWork` 经 `registry.join` 创建时，建好三个协调器，并调一次 `indexingCoordinator.documentDidOpen()`。它有 `hasStarted` 守卫，每个 Engine 只生效一次。设置关着时照样创建协调器，以便响应设置从关到开（`DocumentState.swift:270–274` 的要求不变）。
 - `startBackgroundWork()` 和 `moveBackgroundWork` 都不再自己建协调器、不再调 `documentDidOpen()`，加入即可。所以第 4 步删掉 `moveBackgroundWork` 时，切换后启动新 Engine 索引的那件事已经由工作的创建负责了。
 - `closed(on:)` 建出的已关闭工作仍按需建出已关闭的协调器，直到第 4 步把它删掉。
@@ -182,3 +182,6 @@
 | 2026-10-21 | 第 1 步：`backgroundWorkProcessActivity` 由 public 改为 internal | `Document.swift` 不再读它，模块外已经没有读者；第 3 步整个删掉 |
 | 2026-10-21 | 第 1 步：`ReportViewModelTests` 的 Clear History 用例关掉 heuristic 索引 | 它打开了后台索引，而启动会调 `documentDidOpen()`；heuristic 默认开着，会多出一个为测试进程主程序建的批次，连带它依赖的 image 与语料，拖长等待 |
 | 2026-10-21 | 第 1 步完成：`RuntimeViewerApplicationTests` 599 条中只有「taking its engine off a row…」一条在满载下撞 120 秒超时，单独重跑 28 秒通过 | 这条在这台 macOS 26.7 机器上满载时本来就会超时，与本次改动无关 |
+| 2026-10-21 | 第 2 步：开始的工作由 `registry.join` 经 `RuntimeEngineBackgroundWork(startingOn:)` 建出，它读一遍三个惰性 getter 再调 `documentDidOpen()`；指定构造器保持惰性，留给 `closed(on:)` | 第 4 步删掉 `closed(on:)` 时，三个协调器改为 `let`、在指定构造器里建出，这个过渡写法随之消失 |
+| 2026-10-21 | 第 2 步：`RuntimeBackgroundIndexingCoordinator.documentDidOpen()` 由 public 改为 internal | 只剩工作创建时调用它，测试与 App 都不再调 |
+| 2026-10-21 | 第 2 步完成：`RuntimeViewerApplicationTests` 601 条中仍只有「taking its engine off a row…」在满载下超时，两条新用例通过 | 同第 1 步，与改动无关 |

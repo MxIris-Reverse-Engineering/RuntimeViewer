@@ -289,15 +289,16 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
 #if canImport(RuntimeViewerSettings)
 extension RuntimeBackgroundIndexingCoordinator {
-    /// A document opened on the engine. The first one starts the engine's
+    /// A document opened on the engine: the first one starts the engine's
     /// background indexing — the main executable and the Always Index rows, as
     /// Settings has them — and from then on the engine reloading, Settings
     /// changing and the engine coming back carry it on, whichever windows are
-    /// open. Every later document finds it started: the rows were dispatched
-    /// for the engine, not for a window, and each window dispatching them
-    /// again is what filled every Report on the engine with batches of 0
-    /// images.
-    public func documentDidOpen() {
+    /// open. `RuntimeEngineBackgroundWork` calls this once, as the first
+    /// document joins it; the later documents find it started. The rows were
+    /// dispatched for the engine, not for a window, and each window
+    /// dispatching them again is what filled every Report on the engine with
+    /// batches of 0 images.
+    func documentDidOpen() {
         guard !isClosed, !hasStarted else { return }
         hasStarted = true
         dispatchForOpening()

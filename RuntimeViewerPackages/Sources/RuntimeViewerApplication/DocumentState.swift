@@ -345,16 +345,14 @@ public final class DocumentState {
         return closedBackgroundWork
     }
 
-    /// Joins `engine`'s background work and does on it what starting does:
-    /// the engine's indexing starts unless another document on it started it,
-    /// the Find session and the sidebar's image follow its corpus coordinator,
-    /// and its cross references get prepared.
+    /// Joins `engine`'s background work — brought into being with its
+    /// coordinators, the engine's indexing started, when no document is on the
+    /// engine — and hooks the Find session and the sidebar's image to its corpus
+    /// coordinator.
     private func joinBackgroundWork(on engine: RuntimeEngine) {
         let joinedBackgroundWork = backgroundWorkRegistry.join(engine, as: backgroundWorkMember)
         backgroundWork = joinedBackgroundWork
-        joinedBackgroundWork.indexingCoordinator.documentDidOpen()
         followInterfaceCorpus(of: joinedBackgroundWork)
-        _ = joinedBackgroundWork.crossReferencePreparationCoordinator
     }
 
     /// Hooks the document's Find session, and its sidebar's image, to
@@ -376,8 +374,8 @@ public final class DocumentState {
     /// Carries the document's background work to `engine`, the engine
     /// `.switchEngine` is putting in place: the old engine's work is left —
     /// and closed when the document was the last one on it — and the new
-    /// engine's is joined, with what starting does on it. A document that has
-    /// not started its background work joins nothing.
+    /// engine's is joined, started if the document is the first on it. A
+    /// document that has not started its background work joins nothing.
     fileprivate func moveBackgroundWork(to engine: RuntimeEngine) {
         guard !isClosed, let previousBackgroundWork = backgroundWork else { return }
         leaveBackgroundWork(previousBackgroundWork)
