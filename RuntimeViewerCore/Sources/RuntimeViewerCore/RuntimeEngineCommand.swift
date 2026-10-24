@@ -159,6 +159,7 @@ extension RuntimeEngine {
         registrar.register(SpecializeCommand.self)
         registrar.registerProgress(BuildInterfaceCorpusCommand.self)
         registrar.register(PrioritizeInterfaceCorpusCommand.self)
+        registrar.registerProgress(RestoreInterfaceCorporaCommand.self)
         registrar.registerProgress(SearchInterfacesCommand.self)
         registrar.registerProgress(SearchMembersCommand.self)
         registrar.registerProgress(TypeRelationshipsCommand.self)

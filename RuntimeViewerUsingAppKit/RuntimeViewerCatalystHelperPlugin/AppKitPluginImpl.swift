@@ -79,6 +79,10 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
         // Before the engine is built, for the reason given in `launch()`.
         RuntimeInjection.install()
         RuntimeCrossReferences.install()
+        // The service keeps derived data for the Mac Catalyst engine, as the
+        // local-runtime service does for "My Mac"; the helper application,
+        // which serves the standalone command-line host, does not.
+        RuntimeDerivedData.enableInThisProcess()
 
         // Nothing in the service is a UIKit application, so it starts without
         // UIKit and the hundreds of images behind it, and its image list would

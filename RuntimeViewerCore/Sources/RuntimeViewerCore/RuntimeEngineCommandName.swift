@@ -112,6 +112,8 @@ extension RuntimeEngine.CommandName {
     /// The Find navigator's commands; see `RuntimeEngine+Search.swift`.
     static let buildInterfaceCorpus = Self("buildInterfaceCorpus")
     static let prioritizeInterfaceCorpus = Self("prioritizeInterfaceCorpus")
+    /// Reads stored corpora without printing; see `RuntimeEngine.restoreInterfaceCorpora(for:transformer:)`.
+    static let restoreInterfaceCorpora = Self("restoreInterfaceCorpora")
     static let searchInterfaces = Self("searchInterfaces")
     static let searchMembers = Self("searchMembers")
     static let typeRelationships = Self("typeRelationships")

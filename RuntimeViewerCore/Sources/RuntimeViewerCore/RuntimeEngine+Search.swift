@@ -50,6 +50,22 @@ extension RuntimeEngine {
         _ = try await dispatch(PrioritizeInterfaceCorpusCommand(imagePath: imagePath))
     }
 
+    /// Loads into the corpus store whatever corpora the derived data holds
+    /// for `imagePaths` under `transformer`, without indexing anything —
+    /// what makes images searchable at launch before their sections are
+    /// built (proposal `draft-derived-data`). Images without stored corpora
+    /// are left alone; an image whose corpus is being printed is left to the
+    /// printer. An engine whose serving process keeps no derived data
+    /// restores nothing, and a peer that predates the command throws, which
+    /// a caller takes for nothing restored. Cancelling the calling task
+    /// withdraws the request, in the serving process too.
+    public func restoreInterfaceCorpora(
+        for imagePaths: [String],
+        transformer: Transformer.Configuration
+    ) async throws -> RuntimeInterfaceCorpusRestoreResult {
+        try await dispatch(RestoreInterfaceCorporaCommand(imagePaths: imagePaths, transformer: transformer))
+    }
+
     /// Text search over every built corpus. Matches arrive through
     /// `onProgress` one image at a time, up to `query.resultLimit` of them;
     /// the summary's total keeps counting past that. Cancelling the calling
@@ -142,6 +158,20 @@ extension RuntimeEngine {
 
     func _prioritizeInterfaceCorpus(for imagePath: String) async {
         await interfaceCorpusStore.prioritize(imagePath: DyldUtilities.patchImagePathForDyld(imagePath))
+    }
+
+    /// Reads, never prints: unlike `_buildInterfaceCorpus`, an image need
+    /// not be indexed.
+    func _restoreInterfaceCorpora(for imagePaths: [String], transformer: Transformer.Configuration) async -> RuntimeInterfaceCorpusRestoreResult {
+        let restoredImages = await interfaceCorpusStore.restore(imagePaths: imagePaths.map(DyldUtilities.patchImagePathForDyld), transformer: transformer)
+        return RuntimeInterfaceCorpusRestoreResult(restoredImagesByImagePath: restoredImages)
+    }
+
+    /// Gives the corpus store `store` as its derived data — a test's own, in
+    /// a temporary directory — or none for `nil`. Before the engine builds or
+    /// restores anything: what the store already holds stays.
+    func useDerivedDataStore(_ store: RuntimeDerivedDataStore?) async {
+        await interfaceCorpusStore.useDerivedData(store)
     }
 
     func _searchInterfaces(
@@ -271,6 +301,21 @@ extension RuntimeEngine {
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             await engine._prioritizeInterfaceCorpus(for: imagePath)
             return RuntimeEngineEmpty()
+        }
+    }
+
+    /// A progress command that reports no progress, like
+    /// `TypeRelationshipsCommand`: only so its caller can withdraw it from
+    /// the serving process.
+    struct RestoreInterfaceCorporaCommand: RuntimeEngineProgressCommand {
+        typealias Response = RuntimeInterfaceCorpusRestoreResult
+        typealias Progress = RuntimeEngineEmpty
+        let imagePaths: [String]
+        let transformer: Transformer.Configuration
+        static var commandName: String { CommandName.restoreInterfaceCorpora.commandName }
+        static var cancelsAcrossConnections: Bool { true }
+        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeEngineEmpty) async -> Void) async throws -> RuntimeInterfaceCorpusRestoreResult {
+            await engine._restoreInterfaceCorpora(for: imagePaths, transformer: transformer)
         }
     }
 

@@ -501,16 +501,18 @@ public actor RuntimeDerivedDataStore {
 |---|---|---|
 | `summary` | `RuntimeInterfaceCorpusBuildSummary` 与完整的 Transformer 设置 | 二进制 plist（现有 `Codable`） |
 | `objects` | 每条的 `RuntimeObject` | 二进制 plist（现有 `Codable`） |
-| `members` | 每条的 `[RuntimeMemberDeclaration]` | 二进制 plist（现有 `Codable`），读回太慢时改为定长列 |
+| `memberNames` | 全部成员的名字 | 长度前缀的 UTF-8，LZFSE |
 | `text` | 全部条目的接口文本首尾相接 | UTF-8，LZFSE |
 | `spanLengths` / `spanTypeCodes` / `spanIdentifierIndices` | 全部条目的 span 三列 | `UInt16` / `UInt8` / `UInt32` 数组，LZFSE |
 | `identifiers` | 全部条目的标识符表 | 长度前缀的 UTF-8，LZFSE |
 | `regions` | 可见性区间三列 | `UInt32` 数组，LZFSE |
 | `conditions` | 可见性条件（选项名与开关的析取范式） | 长度前缀编码 |
 | `nestedRanges` | 嵌套定义区间 | `Int64` 对数组 |
-| `entries` | 每条在上面各段里的起止下标 | `UInt32` 数组 |
+| `entries` | 每条在上面各段里的终止下标（七列：文本字节、span、标识符、区间、条件、嵌套区间、成员），起点是上一条的终点 | `UInt32` 数组 |
+| `memberAttributes` | 每个成员的种类（在 `RuntimeMemberKind.allCases` 里的下标）与是否静态（最高位） | `UInt8` 数组 |
+| `memberLineNumbers` | 每个成员所在的行，0 表示没有 | `UInt32` 数组，LZFSE |
 
-- 成员段先沿用 `Codable`，在第 2 步的计时测试里量读取用时，超出成功标准就改成定长列。
+- 成员段起初用二进制 plist；第 2 步的计时测试里，AppKit 的读回用了 0.6 秒，其中一半在解它，所以改成了上面三列（见「第 2 步的落地记录」）。成员的 `declarationText` 在语料里就是名字本身，不另存。
 - `memberDeclarationLineRanges` 照现有做法在初始化时现算，不存。
 
 ### 引擎与语料仓库
@@ -701,9 +703,9 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
    - 开启、系统身份、生产者身份（含 `digest(of:)`）、位置、容器读写、读回校验、读取标记、Transformer 摘要、清理与删除（`RuntimeDerivedDataMaintenance`）。
    - 对应测试，加上新的 `RuntimeViewerCore/Tests/AGENTS.md`。
    - 这一步之后，能单独构建、单独测试。
-2. **Core：语料快照与语料仓库接入。**
+2. **Core：语料快照与语料仓库接入。** **已完成（2026-10-24）**，记录见「第 2 步的落地记录」。
    - 读取阶段、出队再查、构建末尾写盘、`restoreInterfaceCorpora`、覆盖情况的新字段与手写解码、引擎的 internal 注入点、两个服务入口的 `enableInThisProcess()`，加上对应测试。
-   - 加一个计时测试，用 Release 配置（`swift test -c release`）对 Foundation 与 SwiftUI 的语料各做一次写盘与读取，记下用时。它只用来决定成员段要不要改成定长列，验收以第 5 步为准。
+   - 加一个计时测试，用 Release 配置（`swift test -c release`）对 Foundation 与 SwiftUI 的语料各做一次写盘与读取，记下用时。它只用来决定成员段要不要改成定长列，验收以第 5 步为准。实际也量了 AppKit。
 3. **Packages：App 侧逻辑。**
    - 语料协调器的提前读取、与构建同样的处理、Report 用的记录；内容区的前台加载；Inspector 的重取；Call Hierarchy 根的前台加载；Report 新组。
    - `RuntimeViewerSettings` 里的 `DerivedDataClient`、设置页一节。
@@ -749,6 +751,36 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 - 名字解析不出来的系统目录也会被清理；读取时离上次刷新超过一天也会刷新使用时间。
 - 存储的 `imageDirectory(forImageAt:)` 是 `nonisolated`；三种身份与位置都有公开的初始化方法，供 App 侧与测试直接构造。
 - 源码与测试的目录叫 `DerivedDataStorage`，不叫设计里的 `DerivedData`：Core 包的 `.gitignore` 忽略一切名为 `DerivedData/` 的目录（Xcode 的构建产物目录），同名的源码目录会被 git 悄悄漏掉。
+
+## 第 2 步的落地记录（2026-10-24）
+
+**落地内容。**
+
+- `Search/RuntimeInterfaceCorpusSnapshot.swift`：语料与容器之间的编码与读回。读回逐条校验，校验过的条目才构造；全部构造完再做一次完整遍历与两次投影。
+- `RuntimeInterfaceCorpusStore`：`Build` 多了读取阶段（`.reading`）和只等读取结果的订阅者（`restore` 的请求）；打印完先放进仓库、写盘、再结算；`restore(imagePaths:transformer:)`；覆盖情况带上 `restoredImagesByImagePath`。测试接缝有两个：`readStoredCorpus` 可替换，用来把一次读取卡在半途；`isQueued(imagePath:)` 用来判断一个构建是否已在排队打印。
+- `RuntimeEngine`：`restoreInterfaceCorpora(for:transformer:)` 与命令 `restoreInterfaceCorpora`；语料仓库默认取进程的派生数据；测试注入点 `useDerivedDataStore(_:)`。
+- 线上类型：`RuntimeInterfaceCorpusRestoredImage`、`RuntimeInterfaceCorpusRestoreResult`，覆盖情况的新字段与手写解码。
+- 两个服务入口调用 `RuntimeDerivedData.enableInThisProcess()`。根 `AGENTS.md` 的「Derived data」一节和 `RuntimeViewerCore/Tests/AGENTS.md` 的第二条规则在这一步就写了，没有等到第 6 步，因为入口的调用在这一步落地。
+
+测试：快照的往返（含多字节文本、可见性区间与嵌套区间的样本）与 21 种篡改；语料仓库与派生数据的 14 个测试（构建路径命中、写盘先于结算、换 Transformer、共享缓存以外不读写、含进程内地址不写、恢复不打印、恢复把排队的构建移出队列并在读不到时放回原位、正在打印的不读、读取途中取消/淘汰/全部淘汰/换 Transformer、恢复的请求被放弃、构建并入恢复的读取、覆盖情况里的已读取列表、旧 JSON 解码）；真实镜像的三组（libobjc 与 Foundation 逐条往返、另一个引擎读回后搜索结果逐条相同、没有派生数据时什么都不读）。相关的既有测试 86 个照常通过。
+
+**计时**（Release，本机 Mac Studio，`RUNTIMEVIEWER_DERIVED_DATA_TIMING=1 swift test -c release -Xswiftc -enable-testing --filter RuntimeInterfaceCorpusDerivedDataEngineTests`；读回用时取自 `RestoredImage.duration`，从开始读取到放进仓库）：
+
+| 镜像 | 对象数 | 内存里的语料 | 建 section | 打印并写盘 | 文件大小 | 读回（成员段为 plist 时） | 读回（成员段为定长列后） |
+|---|---|---|---|---|---|---|---|
+| Foundation | 2,558 | 18.3 MB | 3.5 秒 | 1.2 秒 | 1.8 MB | 0.25 秒 | 0.16 秒 |
+| SwiftUI | 7,416 | 34.7 MB | 6.7 秒 | 4.5 秒 | 4.0 MB | 0.48 秒 | 0.32 秒 |
+| AppKit | 4,991 | 40.8 MB | 5.7 秒 | 2.5 秒 | 4.4 MB | 0.60 秒 | 0.28 秒 |
+
+AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016 秒，对象的 plist 0.069 秒，成员的 plist 0.312 秒，读后遍历与投影 0.148 秒。改为定长列之后，三者都在 0.5 秒以内，压缩后的文件约为内存里语料的十分之一。
+
+**与设计的出入**（详细设计已按实现改写）：
+
+- 成员段改为定长列，理由见上。
+- `restoreInterfaceCorpora` 是不报进度的进度命令（与 `TypeRelationshipsCommand` 一样），只为让调用方能从服务进程撤回请求。
+- 恢复请求遇到内存里是另一套 Transformer 的语料时，和 `build` 一样先淘汰它，再读当前设置的那一份。
+- 读取在 `userInitiated` 优先级的独立任务里进行，不占打印的那一个槽位。
+- 「先全部通过，才构造任何对象」落实为逐条：每一条在它自己的各列都校验过之后才构造，会 trap 的初始化方法从不接触未校验的数据。
 
 ## 决策日志
 
@@ -802,3 +834,4 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 | 2026-10-24 | 用户批准，开始实现 | 由 agent 提出、用户可推翻的几个取值（14 天、读取标记与临时文件的一天、3 秒 / 0.5 秒 / 200 MB 的成功标准、第二期闸门的 2 秒参考线、第二期另立提案）先按提案执行，实现中遇到问题再定。实现分支是 `feature/derived-data`。 |
 | 2026-10-24 | 开始实现，状态改为 In Progress | 第 1 步随这一行一起提交。 |
 | 2026-10-24 | 生产者身份里的映像只带名字，不带完整路径 | 设计里写的是「每个映像带上它的路径」。被隔离的 App 若没被挪进「应用程序」文件夹，系统每次都会从一个新的随机位置运行它（App Translocation），带路径的摘要每次启动都不同，派生数据就永远读不到，还会每次留下一个新的生产者目录。名字取 install name，没有的（服务的可执行文件、插件）取文件名；代码是否相同由 LC_UUID 决定。 |
+| 2026-10-24 | 语料的成员段改为定长列 | 计时测试（Release）里 AppKit 的读回用了 0.60 秒，超过「单个镜像 ≤ 0.5 秒」，其中成员的二进制 plist 占 0.31 秒。改成名字、属性、行号三列后，AppKit 0.28 秒、SwiftUI 0.32 秒、Foundation 0.16 秒。这是提案事先定好的处理（成员段「读回太慢时改为定长列」），不改变方案。 |

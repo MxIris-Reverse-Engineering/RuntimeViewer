@@ -284,12 +284,62 @@ public struct RuntimeInterfaceCorpusCoverage: Hashable, Codable, Sendable {
     public let statesByImagePath: [String: RuntimeInterfaceCorpusBuildState]
     public let residentByteCount: Int
     public let residentByteLimit: Int
+    /// The built images whose corpus was read from derived data rather than
+    /// printed, each with what reading it took — every one is also `.built`
+    /// in `statesByImagePath`. An entry goes when its corpus does: evicted,
+    /// or replaced by a print. A peer that keeps no derived data, or predates
+    /// it, sends none.
+    public let restoredImagesByImagePath: [String: RuntimeInterfaceCorpusRestoredImage]
 
-    public init(statesByImagePath: [String: RuntimeInterfaceCorpusBuildState], residentByteCount: Int, residentByteLimit: Int) {
+    public init(
+        statesByImagePath: [String: RuntimeInterfaceCorpusBuildState],
+        residentByteCount: Int,
+        residentByteLimit: Int,
+        restoredImagesByImagePath: [String: RuntimeInterfaceCorpusRestoredImage] = [:]
+    ) {
         self.statesByImagePath = statesByImagePath
         self.residentByteCount = residentByteCount
         self.residentByteLimit = residentByteLimit
+        self.restoredImagesByImagePath = restoredImagesByImagePath
+    }
+
+    /// Written out so that a peer which predates `restoredImagesByImagePath`
+    /// still decodes: the synthesized decoder throws `keyNotFound` for it.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        statesByImagePath = try container.decode([String: RuntimeInterfaceCorpusBuildState].self, forKey: .statesByImagePath)
+        residentByteCount = try container.decode(Int.self, forKey: .residentByteCount)
+        residentByteLimit = try container.decode(Int.self, forKey: .residentByteLimit)
+        restoredImagesByImagePath = try container.decodeIfPresent([String: RuntimeInterfaceCorpusRestoredImage].self, forKey: .restoredImagesByImagePath) ?? [:]
     }
 
     public static let empty = RuntimeInterfaceCorpusCoverage(statesByImagePath: [:], residentByteCount: 0, residentByteLimit: 0)
+}
+
+/// One image whose corpus came from derived data rather than from the
+/// printer.
+public struct RuntimeInterfaceCorpusRestoredImage: Hashable, Codable, Sendable {
+    public var summary: RuntimeInterfaceCorpusBuildSummary
+    /// Seconds from the read's start to the corpus being in the store:
+    /// waiting for a turn to read, the file, its checks and the walk through
+    /// what was read.
+    public var duration: Double
+
+    public init(summary: RuntimeInterfaceCorpusBuildSummary, duration: Double) {
+        self.summary = summary
+        self.duration = duration
+    }
+}
+
+/// What `RuntimeEngine.restoreInterfaceCorpora(for:transformer:)` read.
+public struct RuntimeInterfaceCorpusRestoreResult: Hashable, Codable, Sendable {
+    /// Keyed by the path as the serving process keeps it
+    /// (`RuntimeEngine.canonicalImagePath(_:)`).
+    public var restoredImagesByImagePath: [String: RuntimeInterfaceCorpusRestoredImage]
+
+    public init(restoredImagesByImagePath: [String: RuntimeInterfaceCorpusRestoredImage]) {
+        self.restoredImagesByImagePath = restoredImagesByImagePath
+    }
+
+    public static let empty = RuntimeInterfaceCorpusRestoreResult(restoredImagesByImagePath: [:])
 }

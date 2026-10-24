@@ -534,6 +534,30 @@ run in the process that serves the engine, because the scan reads that process's
 the shared cache it maps: the local-runtime service answers for "My Mac", an injected payload for
 the process it was injected into.
 
+## Derived data
+
+The Find corpora of the shared cache's images are kept on disk under
+`~/Library/Caches/<app bundle identifier>/DerivedData`, filed by system (platform, version, build, shared cache
+UUID) and by producer (the in-memory `LC_UUID`s of the image holding RuntimeViewerCore and of its dependencies
+outside the shared cache), so a launch on the same system with the same code reads a corpus instead of printing
+it again. Code: `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/`; proposal:
+`Documentations/Evolutions/draft-derived-data.md`.
+
+- **Only the two service processes read, write and clean it up.** `RuntimeViewerLocalRuntimeService/main.swift`
+  and `AppKitPluginImpl.runService()` call `RuntimeDerivedData.enableInThisProcess()` before any engine exists.
+  Every other process leaves it off — the app itself (its Bonjour server engine answers commands in process), the
+  command-line host, the Catalyst helper application, an injected payload, a test — and the app only measures
+  and deletes it (`RuntimeDerivedDataMaintenance`). Leaving the call out fails quietly: that process just goes
+  without derived data.
+- **Only images of the dyld shared cache**, whose contents the system identity names; a store does nothing for
+  any other image.
+- **A new kind of derived data goes through `RuntimeDerivedDataStore`**, with a `RuntimeDerivedDataKind` and a
+  variant naming everything else its contents depend on (for the corpus: the Transformer digest and the member
+  order), and its reader checks whatever a later reader would trap on before making a value of it, as
+  `RuntimeInterfaceCorpusSnapshot` does. A library's own cache takes its directory from
+  `imageDirectory(forImageAt:)`.
+- **No test reaches the real location**: `RuntimeViewerCore/Tests/AGENTS.md`.
+
 ## SourceEditor Module
 
 <important if="you are touching the SourceEditor module: RuntimeViewerSourceEditorBridge, Stubs/, SourceEditorLoader, ContentSourceEditorViewController or SourceEditorThemeConversion">
