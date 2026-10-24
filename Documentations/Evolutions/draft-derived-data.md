@@ -1,12 +1,12 @@
 # Draft - 派生数据：按系统版本把 Find 语料存盘，为索引缓存铺路
 
-- **状态**: Draft
+- **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-10-21
-- **最后更新**: 2026-10-21
+- **最后更新**: 2026-10-24
 - **所属愿景**: 无
 - **关联提案**: [0002](0002-background-indexing.md)（后台索引）、[0023](0023-content-loading-overlay.md)（内容区加载遮罩）、[0027](0027-background-indexing-yields-to-foreground.md)（后台索引给前台让路）、[0029](0029-find-navigator.md)（Find navigator 与文本语料）、[0030](0030-report-navigator.md)（Report navigator）、[0037](0037-local-runtime-xpc-service.md)（本地引擎搬进 XPC service）、[0051](0051-catalyst-xpc-service.md)（Catalyst XPC service）、[0054](0054-always-index-per-engine.md)（Always Index 按 Engine 区分）、[0055](0055-engine-scoped-background-work.md)（后台工作按 Engine 共享）、[0056](0056-cross-references.md)（交叉引用）、[0058](0058-runtime-engine-session.md)（RuntimeEngineSession）
-- **实现分支 / PR**: 待定
+- **实现分支 / PR**: `feature/derived-data`
 - **审查**: 两轮对抗审查，每轮四位审查者，分别侧重缓存键与失效、架构集成、性能论断与证据、范围与验收。[第一轮](../Reviews/2026-10-21-draft-derived-data-review.md)针对初稿，合并后 4 🔴、12 🟡；[第二轮](../Reviews/2026-10-21-draft-derived-data-review-round-2.md)针对第一次修订稿，合并后 1 🔴、17 🟡。两轮的问题均已在本版处理，处理方式见决策日志
 - **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
 
@@ -754,3 +754,4 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 | 2026-10-21 | 摘要与「代价」改正 CPU 的说法 | 第一次修订稿说 section 与交叉引用是启动时 CPU 的大头。实测相反：AppKit（Debug 探针）建 section 约 28 秒 CPU、打印语料约 40 秒 CPU，SwiftUI（Release）打印语料约 22 秒 CPU；交叉引用表在 Release 下只要零点几秒。现在写明第一期省下的语料打印至少与建 section 相当，Release 下的比例没有直接测过。 |
 | 2026-10-21 | 上游测量移出本提案的落地步骤 | 第一次修订稿把 App 进程内的测量既列为上游那条线的第一步，又列为本提案第 1 步，本提案能否在没做测量时收尾就有两种读法。现在它只属于上游那条线；本提案第 6 步做完即收尾。 |
 | 2026-10-21 | 测试补上注入点与漏掉的用例 | 生产者摘要经 `digest(of:)` 测；Packages 测试经引擎的 internal 注入点拿到临时目录里的存储；补上读取途中取消与淘汰、旧 JSON 解码、提前读取的范围、读到的镜像扩展正在显示的搜索、Inspector 重取等用例。 |
+| 2026-10-24 | 用户批准，开始实现 | 由 agent 提出、用户可推翻的几个取值（14 天、读取标记与临时文件的一天、3 秒 / 0.5 秒 / 200 MB 的成功标准、第二期闸门的 2 秒参考线、第二期另立提案）先按提案执行，实现中遇到问题再定。实现分支是 `feature/derived-data`。 |
