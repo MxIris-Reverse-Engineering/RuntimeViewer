@@ -1,6 +1,6 @@
 # Draft - 派生数据：按系统版本把 Find 语料存盘，为索引缓存铺路
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-10-21
 - **最后更新**: 2026-10-24
@@ -219,7 +219,7 @@
 - **位置**：`~/Library/Caches/<App 的 bundle id>/DerivedData/`。Caches 本来就是放可以重新生成的数据的地方，也不进 Time Machine 备份。位置固定，不提供修改。
 - **分层**：
   1. **系统目录**：平台（macOS / Mac Catalyst）+ 系统版本 + build + dyld 共享缓存 UUID。
-  2. **生产者目录**：产出数据的代码。它的身份是「含有 RuntimeViewerCore 代码的那个映像」加上它在本进程里加载的全部非共享缓存依赖，用这些映像在内存里的 LC_UUID 算摘要：本地 service 是它的可执行文件，Catalyst service 是插件。之后经「Load Frameworks…」载入的东西不算在内。不读磁盘，所以 App 在运行时被原地重编，也不会给旧代码的产物贴上新摘要。
+  2. **生产者目录**：产出数据的代码。它的身份是「含有 RuntimeViewerCore 代码的那个映像」加上它在本进程里加载的全部非共享缓存依赖，用这些映像在内存里的 LC_UUID 算摘要：本地 service 是它的可执行文件，Catalyst service 是插件。之后经「Load Frameworks…」载入的东西不算在内。不读磁盘，所以 App 在运行时被原地重编，也不会给旧代码的产物贴上新摘要。每个映像带上它的名字（install name，没有就用文件名），不带完整路径：系统可能每次都从一个新的随机位置运行被隔离的 App（App Translocation），代码却是同一份。
   3. **镜像**，最后是**数据种类与变体**，比如语料按 Transformer 设置与成员排序方式分变体。
 - **谁读写**：
   - **只有两个服务进程读写**：App 内嵌的本地 service 与 Catalyst service，由它们的入口处各调用一次 `RuntimeDerivedData.enableInThisProcess()` 显式开启。App 进程（包括其中的 Bonjour 服务端引擎）、命令行宿主、Catalyst helper App、注入的载荷、测试都不启用；测试显式注入临时目录。
@@ -332,7 +332,7 @@
 
 ### 开启、身份与位置
 
-放在 `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedData/`：
+放在 `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/`：
 
 ```swift
 public enum RuntimeDerivedData {
@@ -359,28 +359,46 @@ public struct RuntimeDerivedDataSystemIdentity: Hashable, Sendable {
     /// `DyldCacheLoaded.current?.mainCacheHeader.uuid`.
     public let sharedCacheUUID: UUID
 
+    /// Keeps only letters, digits and dots in the version and the build, so
+    /// a directory name always splits back into its four parts.
+    public init(platform: Platform, operatingSystemVersion: String, operatingSystemBuild: String, sharedCacheUUID: UUID)
+
     /// "<platform>-<version>-<build>-<shared cache UUID>".
     public var directoryName: String { get }
 
     /// This process's system; `nil` when the process maps no shared cache.
+    /// The platform is asked of the process at run time
+    /// (`ProcessInfo.isMacCatalystApp`): the Mac Catalyst service runs Core
+    /// from a plug-in built for macOS.
     public static func current() -> RuntimeDerivedDataSystemIdentity?
+
+    /// The build a directory name carries — what the cleanup reads.
+    static func operatingSystemBuild(ofDirectoryNamed directoryName: String) -> String?
 }
 
 /// The code that produced a piece of derived data: a SHA-256 digest over
 /// the in-memory LC_UUID of the image that holds RuntimeViewerCore's code
-/// and of every image it depends on that is loaded and outside the shared
-/// cache, each with its path, sorted by path. Read from the loaded headers,
-/// never from disk, so a process whose bundle was rebuilt in place keeps
-/// the identity of the code it is running. Images loaded later through
-/// Load Frameworks… are not dependencies and do not count.
+/// and of every image it depends on, directly or not, that is loaded and
+/// outside the shared cache, each with its name — its install name, or the
+/// file name of an image that has none — never the whole path. Read from
+/// the loaded headers, never from disk, so a process whose bundle was
+/// rebuilt in place keeps the identity of the code it is running. Images
+/// loaded later through Load Frameworks… are not dependencies and do not
+/// count.
 public struct RuntimeDerivedDataProducerIdentity: Hashable, Sendable {
     public let digest: String
+    public init(digest: String)
 
-    /// `nil` when the image holding RuntimeViewerCore cannot be found.
+    /// The first sixteen digits: the producer directory's name.
+    public var directoryName: String { get }
+
+    /// `nil` when the image holding RuntimeViewerCore cannot be read, or an
+    /// image that counts carries no LC_UUID.
     public static func currentProcess() -> RuntimeDerivedDataProducerIdentity?
 
-    /// The digest of an explicit list — the seam the identity tests use.
-    static func digest(of images: [(path: String, uuid: UUID)]) -> String
+    /// The digest of an explicit list, in any order — the seam the identity
+    /// tests use.
+    static func digest(of images: [(name: String, uuid: UUID)]) -> String
 }
 
 /// `~/Library/Caches/<bundle identifier>/DerivedData` of the RuntimeViewer
@@ -388,6 +406,7 @@ public struct RuntimeDerivedDataProducerIdentity: Hashable, Sendable {
 public struct RuntimeDerivedDataLocation: Hashable, Sendable {
     public let applicationURL: URL
     public let rootURL: URL
+    public init(applicationURL: URL, rootURL: URL)
 
     /// The `.app` enclosing `bundle` — the bundle itself, or an XPC service
     /// under `Contents/XPCServices` — when its `Info.plist` names
@@ -429,18 +448,20 @@ public actor RuntimeDerivedDataStore {
 
     /// The directory of the image at `imagePath` — the seam for caches of
     /// other libraries; `nil` for an image outside the shared cache.
-    public func imageDirectory(forImageAt imagePath: String) -> URL?
+    /// `nonisolated`: a pure function of the identities.
+    public nonisolated func imageDirectory(forImageAt imagePath: String) -> URL?
 }
 ```
 
 - **读取并行**：校验、解压与解码都在仓库外进行，最多同时 4 个，不在 actor 上排队。
-- **同一镜像只读一次**：同一个进程里对同一镜像的并发读取合并为一次（按镜像的在途表），构建路径与提前读取共用这张表。
+- **同一镜像只读一次**：同一个进程里对同一个文件的并发读取合并为一次（按文件的在途表），构建路径与提前读取共用这张表。
+- **整个读进内存，不映射**：映射着的文件若被别的进程截短，下次碰到那一页就是 SIGBUS。文件只有几 MB 到几十 MB，多一次拷贝无所谓。
 
 容器文件（扩展名 `.rvdd`，小端）：
 
-- **头部**：魔数 `RVDD`、格式版本（`UInt32`）、种类、变体、镜像路径、系统目录名、生产者摘要。读回时逐项和期望值比对，以防文件被挪错位置。
-- **分段目录**：每段记编号、偏移、长度、解压后长度、压缩方式（不压缩 / LZFSE）、校验和（SHA-256 前 8 字节，用 CryptoKit）。
-- **数据段**：大块按原始的定长数组写入，每段单独压缩；读回时逐段校验、解压。
+- **头部**：魔数 `RVDD`、格式版本（`UInt32`）、头部长度、种类、变体、镜像路径、系统目录名、生产者摘要。读回时逐项和期望值比对，以防文件被挪错位置。
+- **分段目录**：每段记编号、偏移、长度、解压后长度、压缩方式（不压缩 / LZFSE）、校验和（SHA-256 前 8 字节，用 CryptoKit）。分段目录之后是从魔数到分段目录末尾的校验和，头部本身坏了也能认出来。
+- **数据段**：大块按原始的定长数组写入，每段单独压缩，压缩后不比原来小的照原样存；读回时逐段校验、解压。压缩与解压都用系统 Compression 库的整块接口，解压的目标缓冲区按记录的长度多给一个字节，所以解出来比记录的多也能认出来，不会先把它整个解开。
 - **任何一步失败都按「没有缓存」处理**：删掉这个文件，走原来的建法，不弹错误。
 - **格式不做跨版本兼容**：生产者一变整个目录都用不上，版本号只是用来防止读错。
 
@@ -459,15 +480,16 @@ public actor RuntimeDerivedDataStore {
 
 **读取标记**：防止坏文件让服务崩溃循环。
 
-- **何时建、何时删**：读一个容器之前，先在旁边建标记文件 `<文件名>.reading`，内容是本进程的 PID 与启动时间。校验、解码之后，还要对每条语料做一次完整遍历（逐个 span），再按「选项全开」与「选项全关」各投影一次；这些都通过了才删标记。这样，遍历和投影里会 trap 的路径在标记还在时就已经走过一遍。
+- **何时建、何时删**：读一个容器之前，先在旁边建标记文件 `<文件名>.reading`，内容是本进程的 PID 与启动时间（一行文本，启动时间取 `kinfo_proc` 的 `p_starttime`，精确到微秒）。校验、解码之后，还要对每条语料做一次完整遍历（逐个 span），再按「选项全开」与「选项全关」各投影一次；这些都通过了才删标记。这样，遍历和投影里会 trap 的路径在标记还在时就已经走过一遍。
 - **遇到别人的标记**：
   - 标记里的进程还活着（PID 与启动时间都对得上），说明别的进程正在读，本进程把这次当作没有缓存，不删文件。
+  - 标记正是本进程自己的、而本进程此刻并没有在读这个文件（在途表里没有它），说明上次读完没删掉标记，删掉标记照常读。
   - 标记里的进程已经不在了，说明上次读到一半崩了，就把容器和标记一起删掉，不再解码。
 - **代价**：服务在读取途中被正常杀掉（例如 App 退出），下次也会删掉一个好文件，那个镜像重打一次。这是派生数据，可以接受。
 - **清理时成对处理**：标记从不单独删除；要删就和它旁边的容器一起删。
 
 **Transformer 摘要**：
-- 先把配置化成规范形式：`replacements` 按 `Pattern.rawValue` 排序，写成有序的 (键, 值) 列表，其余字段按固定顺序写出；对这个规范形式算 SHA-256，作为变体名的一部分。
+- 先把配置化成规范形式：`replacements` 按 `Pattern.rawValue` 排序，写成有序的 (键, 值) 列表，其余字段按固定顺序写出；对这个规范形式算 SHA-256，取前 16 位十六进制作为变体名的一部分（`Transformer.Configuration.derivedDataDigest`）。实际做法是把去掉 `replacements` 的配置用 `JSONEncoder` 加 `.sortedKeys` 编码，再接上排好序的 (键, 值) 列表的编码。日后若再加一个以这类枚举为键的字典，摘要会重新变得不稳定；代价是读不到缓存，不会读错，因为下一条的比对还在。
 - 容器里同时存下完整的配置，读回时再用 `==` 比对一次。
 - 测试覆盖：把同样内容、不同数组顺序的两份设置 JSON 各自解码，算出的摘要相同。用户自己的 Debug 与 Release 两份设置就是现成的样本。
 
@@ -565,8 +587,8 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 
 由开启了派生数据的服务进程，在第一次用到派生数据时做一次（utility 优先级）：
 
-1. **先刷新自己**：更新本生产者目录的 `LastUsed`。之后每次写盘、以及运行中每隔 24 小时，再各刷新一次，所以连续运行的实例不会被当成没人用。
-2. **系统目录**：从目录名解析出 build，不等于当前 build 的，整个删掉。build 相同、共享缓存 UUID 不同的（比如另一种架构的缓存）保留。
+1. **先刷新自己**：更新本生产者目录的 `LastUsed`。之后每次写盘、以及运行中每隔 24 小时，再各刷新一次；读取时离上次刷新超过一天也刷新一次。所以连续运行的实例不会被当成没人用。
+2. **系统目录**：从目录名解析出 build，不等于当前 build 的，整个删掉；名字解析不出来的目录也删掉，但当前系统目录无论如何都不删。build 相同、共享缓存 UUID 或平台不同的（比如另一种架构的缓存，或 Mac Catalyst 那一份）保留。
 3. **生产者目录**：除了自己的，`LastUsed` 超过 14 天没更新的，删掉。同一 bundle id 的多份构建不会互删；同时运行的实例每天都会刷新，也不会被删。
 4. **残留**：
    - `DerivedData.deleting-*` 删掉。
@@ -586,7 +608,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 - **Core：键与身份**：
   - 改动生产者摘要、Transformer 设置、系统身份中的任何一项，都读不到。
   - Transformer 摘要：同样内容、不同数组顺序的两份设置 JSON 解码后摘要相同；以用户的 Debug 与 Release 设置为样本。
-  - 生产者摘要经 `digest(of:)` 测：同一组（路径, UUID）结果稳定，换掉其中一个 UUID 就变，顺序不同结果相同。
+  - 生产者摘要经 `digest(of:)` 测：同一组（名字, UUID）结果稳定，换掉其中一个 UUID 就变，顺序不同结果相同。
   - 在临时目录里搭一个假的 `.app` 结构，测 `enclosingApplication(of:)` 的推导：App 本身与 `Contents/XPCServices` 下的 service 得到同一个位置；`Info.plist` 没有那个键的 App、不在 App 包里的位置，得到 `nil`。
   - 没有调用 `enableInThisProcess()` 的进程里，引擎拿不到存储。
 - **Core：语料仓库**：
@@ -675,7 +697,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 
 ## 落地步骤
 
-1. **Core：派生数据基础。**
+1. **Core：派生数据基础。** **已完成（2026-10-24）**，记录见「第 1 步的落地记录」。
    - 开启、系统身份、生产者身份（含 `digest(of:)`）、位置、容器读写、读回校验、读取标记、Transformer 摘要、清理与删除（`RuntimeDerivedDataMaintenance`）。
    - 对应测试，加上新的 `RuntimeViewerCore/Tests/AGENTS.md`。
    - 这一步之后，能单独构建、单独测试。
@@ -704,6 +726,29 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 
 - **要不要配套专题文章**：有「从 API 签名看不出来的调用方契约」就写使用指南；有「下次维护会踩、代码本身看不出来的决策」就写实现说明（例如为什么生产者身份要读内存里的映像、为什么清理按最近使用时间、读取标记为什么要等遍历过才删）。写了就登记到头部的「配套文档」。
 - **有没有引入新术语**：有就同批次登记进 `Documentations/Glossary.md`。
+
+## 第 1 步的落地记录（2026-10-24）
+
+**落地内容。** `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/` 下十个文件：
+
+- `RuntimeDerivedData`：开启开关与进程级的存储（`fileprivate static let`），同文件里给 `RuntimeEngine` 一个取用入口 `processDerivedDataStore`，照 `CrossReferenceSession` 的做法。
+- 三种身份：`RuntimeDerivedDataSystemIdentity`、`RuntimeDerivedDataProducerIdentity`、`RuntimeDerivedDataLocation`。
+- `RuntimeDerivedDataContainer`（文件格式、`Builder`、读回时的全部容器级校验）与 `RuntimeDerivedDataKind`。
+- `RuntimeDerivedDataReadingMarker`：读取标记，以及「标记里的进程还在不在」。
+- `RuntimeDerivedDataStore`：目录布局、读写、在途表、读取标记的处理、使用时间的刷新、首次使用时的清理。
+- `RuntimeDerivedDataMaintenance`：清理规则、占用大小、整体删除。
+- `Transformer+DerivedDataDigest`：Transformer 摘要。`RuntimeDerivedDataDigest`：SHA-256 的两种用法（十六进制摘要、8 字节校验和）。
+
+测试在 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/DerivedDataStorage/`，四组共 43 个，全部用临时目录：容器的往返、每一种截断与逐字节翻转、头部任一项对不上、解压长度不符；三种身份与 Transformer 摘要（以用户 Debug 与 Release 设置里的 C 类型替换为样本）；存储的布局、换系统或生产者读不到、挪错位置的文件被删、坏文件被删、读取标记的三种情形、并发读合并为一次、写盘刷新使用时间；清理的各条规则与整体删除。新增 `RuntimeViewerCore/Tests/AGENTS.md`（及 `CLAUDE.md` 符号链接），登记进根 `AGENTS.md` 的表。
+
+**与设计的出入**（详细设计已按实现改写）：
+
+- 生产者身份里每个映像带的是名字，不是完整路径，理由见决策日志。
+- 容器多了一个头部校验和，覆盖从魔数到分段目录末尾；压缩与解压用 Compression 库的整块接口，解压按记录的长度限定缓冲区。
+- 文件整个读进内存，不映射。
+- 名字解析不出来的系统目录也会被清理；读取时离上次刷新超过一天也会刷新使用时间。
+- 存储的 `imageDirectory(forImageAt:)` 是 `nonisolated`；三种身份与位置都有公开的初始化方法，供 App 侧与测试直接构造。
+- 源码与测试的目录叫 `DerivedDataStorage`，不叫设计里的 `DerivedData`：Core 包的 `.gitignore` 忽略一切名为 `DerivedData/` 的目录（Xcode 的构建产物目录），同名的源码目录会被 git 悄悄漏掉。
 
 ## 决策日志
 
@@ -755,3 +800,5 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 | 2026-10-21 | 上游测量移出本提案的落地步骤 | 第一次修订稿把 App 进程内的测量既列为上游那条线的第一步，又列为本提案第 1 步，本提案能否在没做测量时收尾就有两种读法。现在它只属于上游那条线；本提案第 6 步做完即收尾。 |
 | 2026-10-21 | 测试补上注入点与漏掉的用例 | 生产者摘要经 `digest(of:)` 测；Packages 测试经引擎的 internal 注入点拿到临时目录里的存储；补上读取途中取消与淘汰、旧 JSON 解码、提前读取的范围、读到的镜像扩展正在显示的搜索、Inspector 重取等用例。 |
 | 2026-10-24 | 用户批准，开始实现 | 由 agent 提出、用户可推翻的几个取值（14 天、读取标记与临时文件的一天、3 秒 / 0.5 秒 / 200 MB 的成功标准、第二期闸门的 2 秒参考线、第二期另立提案）先按提案执行，实现中遇到问题再定。实现分支是 `feature/derived-data`。 |
+| 2026-10-24 | 开始实现，状态改为 In Progress | 第 1 步随这一行一起提交。 |
+| 2026-10-24 | 生产者身份里的映像只带名字，不带完整路径 | 设计里写的是「每个映像带上它的路径」。被隔离的 App 若没被挪进「应用程序」文件夹，系统每次都会从一个新的随机位置运行它（App Translocation），带路径的摘要每次启动都不同，派生数据就永远读不到，还会每次留下一个新的生产者目录。名字取 install name，没有的（服务的可执行文件、插件）取文件名；代码是否相同由 LC_UUID 决定。 |
