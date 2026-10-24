@@ -8,7 +8,7 @@
 - **关联提案**: [0002](0002-background-indexing.md)（后台索引）、[0023](0023-content-loading-overlay.md)（内容区加载遮罩）、[0027](0027-background-indexing-yields-to-foreground.md)（后台索引给前台让路）、[0029](0029-find-navigator.md)（Find navigator 与文本语料）、[0030](0030-report-navigator.md)（Report navigator）、[0037](0037-local-runtime-xpc-service.md)（本地引擎搬进 XPC service）、[0051](0051-catalyst-xpc-service.md)（Catalyst XPC service）、[0054](0054-always-index-per-engine.md)（Always Index 按 Engine 区分）、[0055](0055-engine-scoped-background-work.md)（后台工作按 Engine 共享）、[0056](0056-cross-references.md)（交叉引用）、[0058](0058-runtime-engine-session.md)（RuntimeEngineSession）
 - **实现分支 / PR**: `feature/derived-data`
 - **审查**: 两轮对抗审查，每轮四位审查者，分别侧重缓存键与失效、架构集成、性能论断与证据、范围与验收。[第一轮](../Reviews/2026-10-21-draft-derived-data-review.md)针对初稿，合并后 4 🔴、12 🟡；[第二轮](../Reviews/2026-10-21-draft-derived-data-review-round-2.md)针对第一次修订稿，合并后 1 🔴、17 🟡。两轮的问题均已在本版处理，处理方式见决策日志
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 实现说明 [`DerivedData.md`](../DerivedData.md)（只有两个服务进程读写、生产者身份为什么读内存里的映像、清理为什么按最近使用、读取标记为什么等遍历完才删、有语料不等于镜像已加载、新增一种派生数据的步骤）；不另写使用指南
 
 ## 摘要
 
@@ -713,7 +713,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
    - 对应测试。
 4. **App：`RuntimeDerivedDataController`、应用菜单命令、AppDelegate 的一条依赖与一个菜单动作。** **已完成（2026-10-24）**，记录见「第 4 步的落地记录」。
 5. **按「成功标准」验收。** Release 构建，两个 Engine 分别测，两次启动，把实测数字记进决策日志；达不到的由用户决定调整方案还是接受。**Core 层的测量已完成（2026-10-24）；App 层的验收待用户做**，记录见「第 5 步的落地记录」。
-6. **文档。**
+6. **文档。** **已完成（2026-10-24）**：下面三项，外加实现说明 [`DerivedData.md`](../DerivedData.md) 与 README 的「Derived Data」一节。
    - 根 `AGENTS.md` 增加一段：派生数据只由开启了它的两个服务进程读写与自动清理，App 只做统计与手动删除；开启的两处入口；新增一种派生数据要走 `RuntimeDerivedDataStore` 并带上种类与变体；只管共享缓存镜像。
    - `RuntimeViewerPackages/Tests/AGENTS.md` 的规则扩展（见「测试」）。
    - 术语表登记「派生数据」「系统身份」「生产者身份」「读取标记」。
@@ -882,3 +882,5 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 | 2026-10-24 | 正在读取的语料算作进行中的工作 | 读取期间 App 在等服务进程；不算进去，App 可能在读取途中进入 App Nap，服务进程跟着降到后台档。Report 的活动标记因此在启动时会短暂转一下。 |
 | 2026-10-24 | AppDelegate 多一行 `runtimeDerivedDataController.install()` | 设置页在 App 启动后随时可能打开，`DerivedDataClient` 必须在那之前接到控制器上；照 `UpdaterService.start()` 的先例，在 `applicationDidFinishLaunching` 里一行调用。 |
 | 2026-10-24 | 第 5 步先做 Core 层的 Release 测量，App 层的验收留给用户 | 实测：My Mac 的五个 Always Index 镜像一起读回 0.411 秒，单个最慢 0.411 秒（SwiftUICore），五个共 13 MiB，三项都在目标以内。App 层的验收要启动 App 并在界面里切换 Engine，属于交互式操作，不在实现授权里；Mac Catalyst 的两个镜像也只能在 App 里量。 |
+| 2026-10-24 | 写一篇实现说明 `Documentations/DerivedData.md`，不另写使用指南 | 有好几条维护时会踩、代码里看不出来的决定：生产者身份为什么读内存里的映像、带名字不带路径，清理为什么按最近使用，读取标记为什么等遍历完才删，有语料不等于镜像已加载。调用方要守的规矩只有「新增一种派生数据怎么做」这一条，写进实现说明的一节和根 `AGENTS.md` 就够，不值得单独成篇。 |
+| 2026-10-24 | 术语表登记「派生数据」「系统身份」「生产者身份」「读取标记」；README 加「Derived Data」一节 | 这四个词是本提案引入的；派生数据会在用户的 Caches 目录里占空间，又有设置项和菜单命令，属于用户看得到的行为。 |

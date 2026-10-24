@@ -120,6 +120,10 @@ Runtime Viewer discovers other instances on the local network via Bonjour. On iO
 
 Closing the last window leaves Runtime Viewer running, and clicking its Dock icon opens a new window. To have the app quit together with its last window instead, enable **Settings → General → Quit After Closing Last Window**.
 
+### Derived Data
+
+The searchable interfaces Find prints for the system's own images are kept on disk, under `~/Library/Caches/<bundle identifier>/DerivedData`, much as Xcode keeps its DerivedData. The next launch on the same macOS build reads them back instead of printing them again, so the images on the **Always Index** list are searchable right after launch, before they are indexed. What is kept belongs to one macOS build and one build of Runtime Viewer: a macOS update or another Runtime Viewer build starts over, and data nothing has used for 14 days is removed on its own. **Settings → Indexing → Derived Data** shows where it is and how much space it takes; **Runtime Viewer → Delete Derived Data…** removes it.
+
 ### Updates
 
 Runtime Viewer uses [Sparkle](https://sparkle-project.org/) for automatic updates.
