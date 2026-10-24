@@ -515,6 +515,7 @@ shape it has.
 - `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`
 - `CommandLineHostController` — makes the running app the CLI host: asks a standalone host to leave on launch, serves the socket, removes its files on quit
 - `SettingsLifecycleController` — loads the settings at launch and flushes them at termination (root `AGENTS.md`, *Settings Integration*)
+- `RuntimeDerivedDataController` — the app's side of derived data: gives the Indexing settings page its `DerivedDataClient` (location, size, Show in Finder, delete) and asks before the application menu's Delete Derived Data… deletes it (root `AGENTS.md`, *Derived data*)
 
 **One-shot fixes that must beat the main menu** go in `AppDelegate.main()` (`AppDelegate` carries `@main`
 and supplies its own `static func main()`), before `NSApplication.mainMenu` is assigned — not in a

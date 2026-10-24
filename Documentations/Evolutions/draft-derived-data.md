@@ -581,7 +581,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
   - `RuntimeViewerSettings` 里声明 `DerivedDataClient`，用 `@DependencyEntry` 生成 `\.derivedDataClient`，提供位置、占用大小、删除、在 Finder 中显示四个操作，照 `UpdaterClient` 的做法。
   - 删除与统计的实际逻辑放在 Core 的 `RuntimeDerivedDataMaintenance` 里，与服务进程的自动清理共用，是纯文件系统操作，能在 Core 的测试里用临时目录测。
   - App 层新增 `@MainActor` 的控制器 `RuntimeDerivedDataController`（`RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`），作为 `DerivedDataClient` 的实际实现，并负责菜单动作的确认对话框。
-  - AppDelegate 只多一条 `@Dependency(\.runtimeDerivedDataController)` 声明，和一个一行转交的 `@objc` 菜单动作。
+  - AppDelegate 多一条 `@Dependency(\.runtimeDerivedDataController)` 声明、`applicationDidFinishLaunching` 里一行 `runtimeDerivedDataController.install()`（把设置页的客户端接到控制器上），和一个一行转交的 `@objc` 菜单动作。
 - **设置页**：`IndexingSettingsView` 底部新增「Derived Data」一节，经 `@Dependency(\.derivedDataClient)` 取用。说明文字讲清存了什么、什么时候作废、删除的后果。
 - **菜单**：`MainMenuController.applicationMenuItem()` 在 Simulator App Installer… 之后插入「Delete Derived Data…」。
 
@@ -711,7 +711,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
    - `RuntimeViewerSettings` 里的 `DerivedDataClient`、设置页一节。
    - 两处 `#signpostInterval` 埋点与汇总日志。
    - 对应测试。
-4. **App：`RuntimeDerivedDataController`、应用菜单命令、AppDelegate 的一条依赖与一个菜单动作。**
+4. **App：`RuntimeDerivedDataController`、应用菜单命令、AppDelegate 的一条依赖与一个菜单动作。** **已完成（2026-10-24）**，记录见「第 4 步的落地记录」。
 5. **按「成功标准」验收。** Release 构建，两个 Engine 分别测，两次启动，把实测数字记进决策日志；达不到的由用户决定调整方案还是接受。
 6. **文档。**
    - 根 `AGENTS.md` 增加一段：派生数据只由开启了它的两个服务进程读写与自动清理，App 只做统计与手动删除；开启的两处入口；新增一种派生数据要走 `RuntimeDerivedDataStore` 并带上种类与变体；只管共享缓存镜像。
@@ -801,6 +801,12 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 - 正在读取的镜像算作进行中的工作，Report 的活动标记与 App Nap 的处理都跟着它。
 - Call Hierarchy 前台加载时，Find 的摘要栏显示「Loading <镜像名>」。
 
+## 第 4 步的落地记录（2026-10-24）
+
+**落地内容。** `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/RuntimeDerivedDataController.swift`：`@MainActor` 的控制器，经 `@DependencyEntry` 取用；`install()` 把 `DerivedDataClient` 的位置与三个动作接到自己身上；统计占用大小在后台线程做；「Show in Finder」在目录还不存在时打开离它最近的已存在的上级目录；删除前用 `NSAlert` 确认（删除按钮标为破坏性操作），删完重新统计。`MainMenuController` 在 Simulator App Installer… 后面加了「Delete Derived Data…」，不设快捷键。`AppDelegate` 多了依赖声明、启动时一行 `install()` 与一行转交的菜单动作。`RuntimeViewerUsingAppKit/AGENTS.md` 的生命周期控制器清单加上了它。
+
+**与设计的出入**：设计里说 AppDelegate「只多一条依赖声明和一个菜单动作」，实际多了一行 `install()`：设置页随时可能打开，客户端得在启动时就接到控制器上，否则设置页拿到的是不做事的默认实例。根 `AGENTS.md` 允许 AppDelegate 里有这种一行的 `install()` 调用。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -856,3 +862,4 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 | 2026-10-24 | 语料的成员段改为定长列 | 计时测试（Release）里 AppKit 的读回用了 0.60 秒，超过「单个镜像 ≤ 0.5 秒」，其中成员的二进制 plist 占 0.31 秒。改成名字、属性、行号三列后，AppKit 0.28 秒、SwiftUI 0.32 秒、Foundation 0.16 秒。这是提案事先定好的处理（成员段「读回太慢时改为定长列」），不改变方案。 |
 | 2026-10-24 | 前台加载在镜像没加载时先 `loadImage(at:)` | 设计里写的是和侧栏一样调 `objectsWithProgress(in:)`。但服务进程读语料时不加载镜像，读回的 AppKit 在服务进程里可能从没加载过，这时 `objectsWithProgress(in:)` 拿不到映像，必须像侧栏的 Load 按钮那样先加载。内容区与 Call Hierarchy 共用 `indexImageIfNeeded(at:)`。 |
 | 2026-10-24 | 正在读取的语料算作进行中的工作 | 读取期间 App 在等服务进程；不算进去，App 可能在读取途中进入 App Nap，服务进程跟着降到后台档。Report 的活动标记因此在启动时会短暂转一下。 |
+| 2026-10-24 | AppDelegate 多一行 `runtimeDerivedDataController.install()` | 设置页在 App 启动后随时可能打开，`DerivedDataClient` 必须在那之前接到控制器上；照 `UpdaterService.start()` 的先例，在 `applicationDidFinishLaunching` 里一行调用。 |

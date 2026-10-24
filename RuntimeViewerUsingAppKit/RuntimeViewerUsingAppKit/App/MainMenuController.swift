@@ -29,6 +29,7 @@ final class MainMenuController {
             builder.item(for: .Application.settings)?.action = #selector(AppDelegate.showSettings(_:))
             builder.insertItems(after: .Application.settings) {
                 simulatorAppInstallerItem()
+                deleteDerivedDataItem()
             }
         }
     }
@@ -40,6 +41,16 @@ final class MainMenuController {
             keyEquivalent: "I",
         )
         .image(SFSymbols(systemName: .iphoneAndArrowForwardInward).nsImage)
+    }
+
+    /// Asks before it deletes, so it has no key equivalent.
+    private func deleteDerivedDataItem() -> NSMenuItem {
+        NSMenuItem(
+            "Delete Derived Data…",
+            action: #selector(AppDelegate.deleteDerivedData(_:)),
+            keyEquivalent: "",
+        )
+        .image(SFSymbols(systemName: .trash).nsImage)
     }
 
     // MARK: - File
