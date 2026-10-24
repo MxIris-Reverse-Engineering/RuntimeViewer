@@ -712,7 +712,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
    - 两处 `#signpostInterval` 埋点与汇总日志。
    - 对应测试。
 4. **App：`RuntimeDerivedDataController`、应用菜单命令、AppDelegate 的一条依赖与一个菜单动作。** **已完成（2026-10-24）**，记录见「第 4 步的落地记录」。
-5. **按「成功标准」验收。** Release 构建，两个 Engine 分别测，两次启动，把实测数字记进决策日志；达不到的由用户决定调整方案还是接受。
+5. **按「成功标准」验收。** Release 构建，两个 Engine 分别测，两次启动，把实测数字记进决策日志；达不到的由用户决定调整方案还是接受。**Core 层的测量已完成（2026-10-24）；App 层的验收待用户做**，记录见「第 5 步的落地记录」。
 6. **文档。**
    - 根 `AGENTS.md` 增加一段：派生数据只由开启了它的两个服务进程读写与自动清理，App 只做统计与手动删除；开启的两处入口；新增一种派生数据要走 `RuntimeDerivedDataStore` 并带上种类与变体；只管共享缓存镜像。
    - `RuntimeViewerPackages/Tests/AGENTS.md` 的规则扩展（见「测试」）。
@@ -807,6 +807,24 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 
 **与设计的出入**：设计里说 AppDelegate「只多一条依赖声明和一个菜单动作」，实际多了一行 `install()`：设置页随时可能打开，客户端得在启动时就接到控制器上，否则设置页拿到的是不做事的默认实例。根 `AGENTS.md` 允许 AppDelegate 里有这种一行的 `install()` 调用。
 
+## 第 5 步的落地记录（2026-10-24）
+
+**已做：Core 层的 Release 测量。** `RuntimeInterfaceCorpusDerivedDataEngineTests` 新增一个默认不跑的测试
+「Reading My Mac's five Always Index corpora at once」：在一个引擎上打印并写好 My Mac 的五个 Always Index 镜像，再让一个什么都没索引的新引擎一次读回五个（`restoreInterfaceCorpora`，与启动时的提前读取同一条命令），计总用时、各镜像用时与磁盘占用。连同原有的计时测试，用 Release 配置跑（`RUNTIMEVIEWER_DERIVED_DATA_TIMING=1 swift test -c release -Xswiftc -enable-testing --filter RuntimeInterfaceCorpusDerivedDataEngineTests`），5 个测试全部通过，退出码 0。
+
+| 项目 | 目标 | 实测 |
+|---|---|---|
+| 五个镜像一起读回的总用时（引擎内，不含 App 侧的派发与 IPC） | 每个 Engine ≤ 3 秒 | 0.411 秒 |
+| 单个镜像读取用时 | ≤ 0.5 秒 | 五个同时读：SwiftUICore 0.411、SwiftUI 0.409、AppKit 0.338、Foundation 0.182、libswiftCore 0.044 秒；单独读：AppKit 0.299、SwiftUI 0.333、Foundation 0.162 秒 |
+| 磁盘占用 | 七个镜像 ≤ 200 MB | My Mac 的五个共 13 MiB |
+
+**未做：App 层的验收。** 成功标准要求用 Release 构建的 App、在两个 Engine 上各开一个文档、启动两次后读 Report 与日志。这要启动 App 并在界面里把文档切到 My Mac (Mac Catalyst)，属于交互式操作，不在本次实现的授权里，留给用户。Mac Catalyst 的两个镜像（UIKitCore、UIKitMacHelper）只能在 Mac Catalyst 进程里加载，测试进程量不了，也只能在 App 里量。做法：
+
+1. 用 Release 构建并启动 App，打开两个文档，一个在 My Mac、一个在 My Mac (Mac Catalyst)，等 Report 里这七个镜像的语料构建全部完成。
+2. 退出 App。第二次启动之前先在终端里开着日志：`log stream --level info --predicate 'subsystem == "FindCorpusCoordinator" OR subsystem == "RuntimeInterfaceCorpusStore"'`（这几行是 info 级别，默认不落盘，事后用 `log show` 多半看不到），再启动 App，两个文档照样各在一个 Engine 上。
+3. 读日志：每个 Engine 一行「Read N of M corpora from derived data in X s: …」，X 是从提前读取开始到全部可搜，后面列出每个镜像的用时；服务进程里每个镜像另有一行「Read the corpus of … from derived data」。
+4. 看 Report：这些镜像应当都在「Restored from Derived Data」下，构建历史里没有新打印的语料。磁盘占用看 Settings › Indexing › Derived Data。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -863,3 +881,4 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 | 2026-10-24 | 前台加载在镜像没加载时先 `loadImage(at:)` | 设计里写的是和侧栏一样调 `objectsWithProgress(in:)`。但服务进程读语料时不加载镜像，读回的 AppKit 在服务进程里可能从没加载过，这时 `objectsWithProgress(in:)` 拿不到映像，必须像侧栏的 Load 按钮那样先加载。内容区与 Call Hierarchy 共用 `indexImageIfNeeded(at:)`。 |
 | 2026-10-24 | 正在读取的语料算作进行中的工作 | 读取期间 App 在等服务进程；不算进去，App 可能在读取途中进入 App Nap，服务进程跟着降到后台档。Report 的活动标记因此在启动时会短暂转一下。 |
 | 2026-10-24 | AppDelegate 多一行 `runtimeDerivedDataController.install()` | 设置页在 App 启动后随时可能打开，`DerivedDataClient` 必须在那之前接到控制器上；照 `UpdaterService.start()` 的先例，在 `applicationDidFinishLaunching` 里一行调用。 |
+| 2026-10-24 | 第 5 步先做 Core 层的 Release 测量，App 层的验收留给用户 | 实测：My Mac 的五个 Always Index 镜像一起读回 0.411 秒，单个最慢 0.411 秒（SwiftUICore），五个共 13 MiB，三项都在目标以内。App 层的验收要启动 App 并在界面里切换 Engine，属于交互式操作，不在实现授权里；Mac Catalyst 的两个镜像也只能在 App 里量。 |

@@ -11,6 +11,8 @@ struct RuntimeInterfaceCorpusDerivedDataEngineTests {
     private static let foundationPath = "/System/Library/Frameworks/Foundation.framework/Foundation"
     private static let swiftUIPath = "/System/Library/Frameworks/SwiftUI.framework/SwiftUI"
     private static let appKitPath = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
+    private static let swiftUICorePath = "/System/Library/Frameworks/SwiftUICore.framework/Versions/A/SwiftUICore"
+    private static let swiftCorePath = "/usr/lib/swift/libswiftCore.dylib"
 
     private static func makeEngine(_ label: String, loading imagePaths: [String]) async throws -> RuntimeEngine {
         let engine = RuntimeEngine(source: .local, engineID: "test-derived-data-" + label)
@@ -156,6 +158,45 @@ struct RuntimeInterfaceCorpusDerivedDataEngineTests {
         let reportText = report.joined(separator: "\n")
         print("Derived data timing:\n" + reportText)
         try reportText.write(to: directory.url.deletingLastPathComponent().appendingPathComponent("RuntimeViewerDerivedDataTiming.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// The acceptance measurement of landing step 5 that runs without the
+    /// app: the five images the user keeps on "My Mac"'s Always Index list,
+    /// printed and written once, then read back by a fresh engine all at once,
+    /// as the early read does at launch — the whole read timed, each image's
+    /// own time reported, and what the five take on disk. Opt in, in a
+    /// release build, as `timing()`; the Mac Catalyst engine's two images
+    /// only load in a Mac Catalyst process and are left to the app.
+    @Test(
+        "Reading My Mac's five Always Index corpora at once",
+        .enabled(if: ProcessInfo.processInfo.environment["RUNTIMEVIEWER_DERIVED_DATA_TIMING"] == "1"),
+        .timeLimit(.minutes(30))
+    )
+    func alwaysIndexRestore() async throws {
+        let imagePaths = [Self.appKitPath, Self.swiftUICorePath, Self.swiftCorePath, Self.foundationPath, Self.swiftUIPath]
+        let directory = try DerivedDataTestDirectory()
+        let derivedData = DerivedDataTestIdentities.store(in: directory)
+        let printing = try await Self.makeEngine("always-index-printing", loading: [Self.libobjcPath])
+        await printing.useDerivedDataStore(derivedData)
+        for imagePath in imagePaths {
+            try await printing.loadImage(at: imagePath)
+            _ = try await printing.buildInterfaceCorpus(for: imagePath, transformer: .default)
+        }
+        await printing.stop()
+
+        let restoring = try await Self.makeEngine("always-index-restoring", loading: [])
+        await restoring.useDerivedDataStore(derivedData)
+        let start = Date()
+        let result = try await restoring.restoreInterfaceCorpora(for: imagePaths, transformer: .default)
+        let total = Date().timeIntervalSince(start)
+        #expect(Set(result.restoredImagesByImagePath.keys) == Set(imagePaths))
+        let byteCount = RuntimeDerivedDataMaintenance.allocatedByteCount(at: directory.location())
+        let perImage = imagePaths.map { imagePath in
+            "\(URL(fileURLWithPath: imagePath).lastPathComponent) \(result.restoredImagesByImagePath[imagePath].map { Self.seconds($0.duration) } ?? "nothing")"
+        }
+        let report = "My Mac's Always Index: read \(result.restoredImagesByImagePath.count) of \(imagePaths.count) at once in \(Self.seconds(total)) (\(perImage.joined(separator: ", "))), \(byteCount / 1024 / 1024) MiB on disk"
+        print(report)
+        try report.write(to: directory.url.deletingLastPathComponent().appendingPathComponent("RuntimeViewerDerivedDataAlwaysIndex.txt"), atomically: true, encoding: .utf8)
     }
 
     /// What reading the image's stored corpus takes for a fresh engine, as
