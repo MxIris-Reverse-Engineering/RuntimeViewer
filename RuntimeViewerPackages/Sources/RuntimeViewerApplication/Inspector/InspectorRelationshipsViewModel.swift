@@ -64,6 +64,14 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
         // such guard, so a slow cross-image union could land on top of a newer
         // object's results.
         $runtimeObject
+            .flatMapLatest { runtimeObject -> Observable<RuntimeObject> in
+                // Asked again once the object's image is indexed: an object a
+                // Find hit reached through a corpus read from derived data has
+                // no sections until then, and its relationships with them.
+                let runtimeEngine = MainActor.assumeIsolated { documentState.runtimeEngine }
+                return Observable.just(runtimeObject)
+                    .concat(runtimeEngine.imageIndexedLater(runtimeObject.imagePath).map { runtimeObject })
+            }
             .flatMapLatest { [weak self] runtimeObject -> Observable<RelationshipsResult> in
                 guard let self else { return .empty() }
                 return Observable<RelationshipsResult>.async { [weak self] in

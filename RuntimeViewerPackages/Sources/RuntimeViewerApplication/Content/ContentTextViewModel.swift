@@ -99,10 +99,23 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         self.theme = ResolvedTheme.fallback
         let interfaceCache = documentState.interfaceCache
         let contentLoadingDelay = Self.contentLoadingDelay()
-        self.interfaceProvider = interfaceProvider ?? { [interfaceCache] runtimeObject, options in
+        self.interfaceProvider = interfaceProvider ?? { [interfaceCache, weak documentState] runtimeObject, options in
             if contentLoadingDelay > 0 {
                 try await Task.sleep(for: .seconds(contentLoadingDelay))
             }
+            if let interface = try await interfaceCache.interface(for: runtimeObject, options: options) {
+                return interface
+            }
+            // A Find hit can be in an image whose sections are not built: its
+            // corpus came from derived data (proposal `draft-derived-data`).
+            // The image is indexed the way the sidebar opens one — joining a
+            // background build of it under way — and the interface asked for
+            // again, all under the pane's loading overlay; a load that fails
+            // is a fetch that failed.
+            guard !runtimeObject.imagePath.isEmpty, let runtimeEngine = await documentState?.runtimeEngine,
+                  try await !runtimeEngine.isImageIndexed(path: runtimeObject.imagePath)
+            else { return nil }
+            try await runtimeEngine.indexImageIfNeeded(at: runtimeObject.imagePath)
             return try await interfaceCache.interface(for: runtimeObject, options: options)
         }
         super.init(documentState: documentState, router: router)

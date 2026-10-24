@@ -30,6 +30,10 @@ public enum ReportNodeIdentifier: Hashable, Sendable {
     case corpusBuild(imagePath: String)
     /// A corpus build that ended, one row per ending.
     case finishedCorpusBuild(UUID)
+    /// The group of the corpora read from derived data instead of printed.
+    case restoredCorpora
+    /// A corpus read from derived data, by image.
+    case restoredCorpus(imagePath: String)
     /// An image's cross references queued or being prepared, by image.
     case crossReferencePreparation(imagePath: String)
     /// A cross-reference preparation that ended, one row per ending.
@@ -44,7 +48,7 @@ extension ReportNodeIdentifier {
             category
         case .indexingBatch, .indexingItem:
             .backgroundIndexing
-        case .corpusBuild, .finishedCorpusBuild:
+        case .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus:
             .searchableInterfaces
         case .crossReferencePreparation, .finishedCrossReferencePreparation:
             .crossReferences

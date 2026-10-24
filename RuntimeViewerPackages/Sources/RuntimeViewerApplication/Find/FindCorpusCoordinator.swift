@@ -47,8 +47,16 @@ import RuntimeViewerSettings
 /// that ended. The Report navigator lists both; the Find navigator's summary
 /// reads the first, and widens the search in force to each corpus
 /// `corpusBuilt` reports.
+///
+/// With derived data in the engine's process (proposal `draft-derived-data`),
+/// the Always Index images are read from it as their batches are dispatched
+/// — `restoreCorpora(of:)`, before any of them is indexed — and every other
+/// request reads first and prints only what it does not find, which the
+/// engine's store decides on its own. What was read is listed apart from the
+/// builds, in `restoredImagesByImagePath`.
 @MainActor
 @Loggable(.private)
+@Signpostable(.private)
 public final class FindCorpusCoordinator {
     /// Most finished builds kept, newest first — the cap of the indexing
     /// coordinator's history.
@@ -74,6 +82,13 @@ public final class FindCorpusCoordinator {
     private struct BuildRequest {
         let identifier: UInt64
         let task: Task<Void, Never>
+    }
+
+    /// A read of stored corpora the coordinator holds open, and the images
+    /// it reads.
+    private struct RestoreRequest {
+        let task: Task<Void, Never>
+        let imagePaths: Set<String>
     }
 
     private let engine: RuntimeEngine
@@ -108,6 +123,15 @@ public final class FindCorpusCoordinator {
 
     private var nextBuildRequestIdentifier: UInt64 = 0
 
+    /// The reads of stored corpora under way, by identifier.
+    private var restoreRequests: [UInt64: RestoreRequest] = [:]
+
+    private var nextRestoreRequestIdentifier: UInt64 = 0
+
+    /// The engine's indexing events, followed for the Always Index batches
+    /// that start: their images still to index are read first.
+    private var alwaysIndexBatchSubscriptionTask: Task<Void, Never>?
+
     private var transformerRebuildTask: Task<Void, Never>?
 
     /// Images the coordinator asked to build of the engine's process, so a
@@ -137,7 +161,7 @@ public final class FindCorpusCoordinator {
     /// test that sets states itself waits for this to be `false` first, or
     /// the coordinator's own work, landing later, writes over them.
     var hasWorkUnderWay: Bool {
-        !buildRequests.isEmpty || indexedImageFetchesUnderWay > 0 || coverageRefreshTask != nil || isCoverageRefreshPending
+        !buildRequests.isEmpty || !restoreRequests.isEmpty || indexedImageFetchesUnderWay > 0 || coverageRefreshTask != nil || isCoverageRefreshPending
     }
 
     private let progressStaging = ProgressStaging()
@@ -195,6 +219,27 @@ public final class FindCorpusCoordinator {
     /// engine, so a corpus rebuilt after an eviction is listed again.
     private var imagePathsListedInHistory: Set<String> = []
 
+    /// The images whose corpus the engine's process read from derived data
+    /// rather than printed, each with what reading it took — the Report
+    /// navigator's Restored from Derived Data group. Read by the coordinator's
+    /// own restores, or learned from the engine's coverage, which also says
+    /// when a corpus read that way is gone: evicted, or printed again. Clear
+    /// History empties it; the engine starting over, the switch going off and
+    /// a transformer change too, as their corpora go.
+    @RxObserved
+    public private(set) var restoredImagesByImagePath: [String: RuntimeInterfaceCorpusRestoredImage] = [:]
+
+    /// Every image that has had a place in `restoredImagesByImagePath`, kept
+    /// through `clearFinishedBuilds()` for the reason `imagePathsListedInHistory`
+    /// is. An image leaves once the engine no longer counts its corpus as
+    /// read from derived data.
+    private var imagePathsListedAsRestored: Set<String> = []
+
+    /// The images a restore is reading. A restore under way is work in
+    /// progress, like a build: the app waits on the engine's process for it.
+    @RxObserved
+    private(set) var restoringImagePaths: Set<String> = []
+
     /// An image's path, each time a request of the coordinator ends with the
     /// image's corpus built.
     public var corpusBuilt: Signal<String> {
@@ -209,11 +254,13 @@ public final class FindCorpusCoordinator {
         corporaRebuiltRelay.asSignal()
     }
 
-    /// Whether an image is waiting for its corpus or being printed.
+    /// Whether an image is waiting for its corpus, being printed, or being
+    /// read from derived data.
     public var hasActiveBuild: Driver<Bool> {
-        $buildStatesByImagePath.asDriver()
-            .map { states in states.values.contains(where: \.isActive) }
-            .distinctUntilChanged()
+        Driver.combineLatest($buildStatesByImagePath.asDriver(), $restoringImagePaths.asDriver()) { states, restoringImagePaths in
+            states.values.contains(where: \.isActive) || !restoringImagePaths.isEmpty
+        }
+        .distinctUntilChanged()
     }
 
     /// Brought into being by `RuntimeEngineBackgroundWork` for its engine. A
@@ -233,7 +280,11 @@ public final class FindCorpusCoordinator {
         transformerRebuildTask?.cancel()
         coverageRefreshTask?.cancel()
         unfollowedBuildRefreshTask?.cancel()
+        alwaysIndexBatchSubscriptionTask?.cancel()
         for request in buildRequests.values {
+            request.task.cancel()
+        }
+        for request in restoreRequests.values {
             request.task.cancel()
         }
     }
@@ -333,6 +384,111 @@ public final class FindCorpusCoordinator {
         }
     }
 
+    /// Reads, from the derived data of the engine's process, the corpora of
+    /// those of `requestedImagePaths` not built or being read — the Always
+    /// Index images, as their batches are dispatched — so a search finds them
+    /// before they are indexed. An image read is handled as a build that
+    /// finished: built, reported through `corpusBuilt`, asked for again when
+    /// the transformer changes; it is listed in `restoredImagesByImagePath`
+    /// rather than among the builds. An engine whose process keeps no derived
+    /// data, or predates the command, reads nothing, and an image nothing is
+    /// stored for is left to the build its indexing will ask for. Paths may be
+    /// spelled either way; see `canonicalImagePath(_:)`.
+    func restoreCorpora(of requestedImagePaths: [String]) {
+        guard isEnabled, !isClosed, !isCorpusUnsupportedByEngine else { return }
+        let imagePaths = Set(requestedImagePaths.map(canonicalImagePath)).filter { imagePath in
+            buildStatesByImagePath[imagePath]?.isBuilt != true && !restoringImagePaths.contains(imagePath)
+        }
+        guard !imagePaths.isEmpty else { return }
+        nextRestoreRequestIdentifier += 1
+        let identifier = nextRestoreRequestIdentifier
+        let engine = engine
+        let transformer = currentTransformer
+        restoringImagePaths.formUnion(imagePaths)
+        let task = Task { [weak self] in
+            let start = Date()
+            let result = await Self.restoreInterfaceCorpora(of: imagePaths.sorted(), transformer: transformer, on: engine)
+            // After the await: the coordinator is not kept alive while the corpora are read.
+            guard let self else { return }
+            finishRestoreRequest(identifier, result: result, duration: Date().timeIntervalSince(start))
+        }
+        restoreRequests[identifier] = RestoreRequest(task: task, imagePaths: imagePaths)
+    }
+
+    /// The engine's restore, measured from the request to its answer —
+    /// every image of the request in the store or found missing.
+    private nonisolated static func restoreInterfaceCorpora(
+        of imagePaths: [String],
+        transformer: Transformer.Configuration,
+        on engine: RuntimeEngine
+    ) async -> RuntimeInterfaceCorpusRestoreResult? {
+        await #signpostInterval("Restore corpora from derived data") {
+            try? await engine.restoreInterfaceCorpora(for: imagePaths, transformer: transformer)
+        }
+    }
+
+    private func finishRestoreRequest(_ identifier: UInt64, result: RuntimeInterfaceCorpusRestoreResult?, duration: TimeInterval) {
+        // A restore withdrawn — the coordinator closing, the engine coming
+        // back, the switch going off, a transformer change — has nothing left
+        // to report here.
+        guard let request = restoreRequests.removeValue(forKey: identifier) else { return }
+        restoringImagePaths.subtract(request.imagePaths)
+        let restoredImages = result?.restoredImagesByImagePath ?? [:]
+        var states = buildStatesByImagePath
+        for (imagePath, restoredImage) in restoredImages {
+            requestedImagePaths.insert(imagePath)
+            if buildRequests[imagePath] == nil {
+                states[imagePath] = .built(restoredImage.summary)
+            }
+        }
+        if states != buildStatesByImagePath {
+            buildStatesByImagePath = states
+        }
+        recordRestoredImages(restoredImages)
+        for imagePath in restoredImages.keys.sorted() {
+            corpusBuiltRelay.accept(imagePath)
+        }
+        let readings = restoredImages
+            .sorted { $0.key < $1.key }
+            .map { "\(FindScope.imageName(of: $0.key)) \(String(format: "%.3f", $0.value.duration)) s" }
+            .joined(separator: ", ")
+        #log(.info, "Read \(restoredImages.count, privacy: .public) of \(request.imagePaths.count, privacy: .public) corpora from derived data in \(String(format: "%.3f", duration), privacy: .public) s: \(readings, privacy: .public)")
+        if !restoredImages.isEmpty {
+            refreshCoverage()
+        }
+    }
+
+    private func recordRestoredImages(_ restoredImages: [String: RuntimeInterfaceCorpusRestoredImage]) {
+        guard !restoredImages.isEmpty else { return }
+        var listedImages = restoredImagesByImagePath
+        for (imagePath, restoredImage) in restoredImages {
+            listedImages[imagePath] = restoredImage
+            imagePathsListedAsRestored.insert(imagePath)
+        }
+        restoredImagesByImagePath = listedImages
+    }
+
+    /// Withdraws every restore under way; what each was reading is left to
+    /// the builds.
+    private func withdrawEveryRestore() {
+        for request in restoreRequests.values {
+            request.task.cancel()
+        }
+        restoreRequests.removeAll()
+        if !restoringImagePaths.isEmpty {
+            restoringImagePaths = []
+        }
+    }
+
+    /// Forgets every corpus read from derived data: they went with the
+    /// engine's process, the switch, or the transformer.
+    private func forgetRestoredImages() {
+        imagePathsListedAsRestored.removeAll()
+        if !restoredImagesByImagePath.isEmpty {
+            restoredImagesByImagePath = [:]
+        }
+    }
+
     /// Withdraws the request for `imagePath` — the Report navigator's Cancel,
     /// in whichever window on the engine. A build another connection asked
     /// for goes on for it, and the withdrawal is not sticky: the next trigger
@@ -359,6 +515,7 @@ public final class FindCorpusCoordinator {
         stopPumps()
         engineReadinessSubscription = nil
         withdrawEveryBuild()
+        withdrawEveryRestore()
     }
 
     /// The image the sidebar of `document` lists, as the sidebar spells it,
@@ -374,10 +531,14 @@ public final class FindCorpusCoordinator {
         onScreenImagePathsByDocument[document]
     }
 
-    /// Empties `finishedBuilds`. The corpora listed so far stay off it: a
-    /// later coverage snapshot does not bring them back.
+    /// Empties `finishedBuilds` and `restoredImagesByImagePath`. The corpora
+    /// listed so far stay off them: a later coverage snapshot does not bring
+    /// them back.
     public func clearFinishedBuilds() {
         finishedBuilds = []
+        if !restoredImagesByImagePath.isEmpty {
+            restoredImagesByImagePath = [:]
+        }
     }
 
     /// Asks the engine where every corpus stands and folds the answer in —
@@ -495,6 +656,8 @@ public final class FindCorpusCoordinator {
 
     private func dropEveryCorpus(on engine: RuntimeEngine) {
         withdrawEveryBuild()
+        withdrawEveryRestore()
+        forgetRestoredImages()
         buildStatesByImagePath = [:]
         Task {
             try? await engine.evictInterfaceCorpus(for: nil)
@@ -533,10 +696,15 @@ public final class FindCorpusCoordinator {
         switch result {
         case .success(let summary):
             buildStatesByImagePath[imagePath] = .built(summary)
-            // A corpus that was already there comes back without a single
-            // progress report; it is not a build the coordinator saw.
+            // A corpus that was already there — or that the engine read from
+            // derived data — comes back without a single progress report; it
+            // is not a build the coordinator saw.
             if hasReportedProgress {
                 recordFinishedBuild(FindCorpusFinishedBuild(imagePath: imagePath, outcome: .built(summary), finishedAt: Date()))
+                if restoredImagesByImagePath[imagePath] != nil {
+                    restoredImagesByImagePath[imagePath] = nil
+                }
+                imagePathsListedAsRestored.remove(imagePath)
             }
             corpusBuiltRelay.accept(imagePath)
             refreshCoverage()
@@ -598,11 +766,14 @@ public final class FindCorpusCoordinator {
         }
         scheduleCoverageRefreshWhileOthersBuild()
 
+        mergeRestoredImages(of: coverage)
+
         imagePathsListedInHistory.formIntersection(coverage.statesByImagePath.keys)
         let recordedImagePaths = Set(finishedBuilds.map(\.imagePath))
         let learnedBuilds = coverage.statesByImagePath
             .filter { imagePath, _ in
                 buildRequests[imagePath] == nil
+                    && coverage.restoredImagesByImagePath[imagePath] == nil
                     && !recordedImagePaths.contains(imagePath)
                     && !imagePathsListedInHistory.contains(imagePath)
             }
@@ -625,6 +796,23 @@ public final class FindCorpusCoordinator {
         finishedBuilds = Array((finishedBuilds + learnedBuilds).prefix(Self.maximumFinishedBuildCount))
     }
 
+    /// The corpora the engine says it read from derived data: one it no
+    /// longer counts so — evicted, printed again — leaves the group, and one
+    /// the coordinator never listed joins it. A corpus read that way is no
+    /// build learned from elsewhere.
+    private func mergeRestoredImages(of coverage: RuntimeInterfaceCorpusCoverage) {
+        let coverageRestoredImages = coverage.restoredImagesByImagePath
+        imagePathsListedAsRestored.formIntersection(coverageRestoredImages.keys)
+        var listedImages = restoredImagesByImagePath.filter { coverageRestoredImages[$0.key] != nil }
+        for (imagePath, restoredImage) in coverageRestoredImages where !imagePathsListedAsRestored.contains(imagePath) {
+            listedImages[imagePath] = restoredImage
+            imagePathsListedAsRestored.insert(imagePath)
+        }
+        if listedImages != restoredImagesByImagePath {
+            restoredImagesByImagePath = listedImages
+        }
+    }
+
     // MARK: - Pumps
 
     private func startPumps() {
@@ -643,6 +831,7 @@ public final class FindCorpusCoordinator {
                     self.imageDidIndex(at: imagePath)
                 }
             }
+        followAlwaysIndexBatches()
         requestBuildOfIndexedImages()
         // What the engine's process has built or is building already: before
         // the coordinator started, or for another connection.
@@ -654,9 +843,35 @@ public final class FindCorpusCoordinator {
 
     private func stopPumps() {
         imageIndexedSubscription = nil
+        alwaysIndexBatchSubscriptionTask?.cancel()
+        alwaysIndexBatchSubscriptionTask = nil
         transformerRebuildTask?.cancel()
         transformerRebuildTask = nil
         cancelCoverageRefresh()
+    }
+
+    /// Every Always Index batch that starts has its images still waiting to
+    /// be indexed read from derived data first: the dependencies of a row that
+    /// follows them, which the rows' own paths, handed over as they are
+    /// dispatched, do not include. The events are read off the main actor —
+    /// the indexer sends one per image started and finished — and only an
+    /// Always Index batch's start comes back to it.
+    private func followAlwaysIndexBatches() {
+        let engine = engine
+        alwaysIndexBatchSubscriptionTask = Task.detached { [weak self] in
+            for await event in await engine.backgroundIndexingManager.events {
+                guard case .batchStarted(let batch) = event, batch.reason.category == .alwaysIndex else { continue }
+                let imagePaths = batch.items.compactMap { item -> String? in
+                    guard case .pending = item.state else { return nil }
+                    return item.resolvedPath
+                }
+                guard !imagePaths.isEmpty else { continue }
+                await MainActor.run { [weak self] in
+                    guard let self, !self.isClosed else { return }
+                    self.restoreCorpora(of: imagePaths)
+                }
+            }
+        }
     }
 
     /// An image the engine reports indexed. One with a request open is left
@@ -707,6 +922,8 @@ public final class FindCorpusCoordinator {
     private func engineDidReset() {
         stopPumps()
         withdrawEveryBuild()
+        withdrawEveryRestore()
+        forgetRestoredImages()
         isCorpusUnsupportedByEngine = false
         _ = progressStaging.drain()
         buildStatesByImagePath = [:]
@@ -781,6 +998,8 @@ public final class FindCorpusCoordinator {
             guard !Task.isCancelled, let self, !self.isClosed else { return }
             let imagePaths = self.requestedImagePaths
             self.withdrawEveryBuild()
+            self.withdrawEveryRestore()
+            self.forgetRestoredImages()
             try? await engine.evictInterfaceCorpus(for: nil)
             guard !Task.isCancelled, !self.isClosed else { return }
             self.buildStatesByImagePath = [:]

@@ -52,6 +52,44 @@ struct IndexingSettingsView: View {
                 entries: $indexing.custom.entries,
                 masterEnabled: indexing.isEnabled
             )
+
+            DerivedDataSection()
+        }
+    }
+}
+
+/// Where the derived data is, what it takes, and the two things to do with
+/// it — see `DerivedDataClient`. Measured each time the page appears.
+private struct DerivedDataSection: View {
+    @Dependency(\.derivedDataClient) private var derivedDataClient
+
+    var body: some View {
+        Section {
+            LabeledContent("Location") {
+                Text(derivedDataClient.location.map { ($0.path as NSString).abbreviatingWithTildeInPath } ?? "Unavailable")
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(derivedDataClient.location?.path ?? "")
+            }
+            LabeledContent("Size", value: derivedDataClient.allocatedByteCount.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "Calculating…")
+            HStack {
+                Spacer()
+                Button("Show in Finder") {
+                    derivedDataClient.showInFinder()
+                }
+                Button("Delete Derived Data…") {
+                    derivedDataClient.delete()
+                }
+            }
+            .disabled(derivedDataClient.location == nil)
+        } header: {
+            Text("Derived Data")
+        } footer: {
+            Text("The searchable interfaces of the system's own images are kept on disk once printed, and read back instead of printed again on the next launch — at launch already for the Always Index images, before they are indexed. What is kept belongs to this system version and this build of Runtime Viewer: a system update or another build starts over, and what nothing has used for 14 days is removed. Deleting removes everything kept; nothing already searchable is lost, but the interfaces are printed again the next time they are needed.")
+        }
+        .onAppear {
+            derivedDataClient.refresh()
         }
     }
 }

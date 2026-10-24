@@ -142,16 +142,18 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                     corpusCoordinator.$buildStatesByImagePath.asObservable(),
                     corpusCoordinator.$followedImagePaths.asObservable(),
                     corpusCoordinator.$finishedBuilds.asObservable(),
+                    corpusCoordinator.$restoredImagesByImagePath.asObservable(),
                     corpusCoordinator.$isCorpusUnsupportedByEngine.asObservable(),
                     isCorpusEnabled
                 )
                 .observe(on: MainScheduler.instance)
-                .map { states, followedImagePaths, finishedBuilds, isCorpusUnsupportedByEngine, isCorpusEnabled in
+                .map { states, followedImagePaths, finishedBuilds, restoredImages, isCorpusUnsupportedByEngine, isCorpusEnabled in
                     MainActor.assumeIsolated {
                         treeBuilder.corpusCategory(
                             states: states,
                             followedImagePaths: followedImagePaths,
                             finishedBuilds: finishedBuilds,
+                            restoredImages: restoredImages,
                             isUnsupportedByEngine: isCorpusUnsupportedByEngine,
                             isEnabled: isCorpusEnabled
                         )
@@ -204,7 +206,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 backgroundWork.corpusCoordinator.cancelBuild(of: imagePath)
             case .crossReferencePreparation(let imagePath):
                 backgroundWork.crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
-            case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .finishedCrossReferencePreparation:
+            case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .finishedCrossReferencePreparation:
                 break
             }
         }
@@ -291,9 +293,10 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                     return Observable.combineLatest(
                         coordinators.indexing.historyObservable,
                         coordinators.corpus.$finishedBuilds.asObservable(),
+                        coordinators.corpus.$restoredImagesByImagePath.asObservable(),
                         coordinators.crossReferences.$finishedPreparations.asObservable()
-                    ) { history, finishedBuilds, finishedPreparations in
-                        !history.isEmpty || !finishedBuilds.isEmpty || !finishedPreparations.isEmpty
+                    ) { history, finishedBuilds, restoredImages, finishedPreparations in
+                        !history.isEmpty || !finishedBuilds.isEmpty || !restoredImages.isEmpty || !finishedPreparations.isEmpty
                     }
                 }
                 .asDriver(onErrorJustReturn: false)
@@ -485,6 +488,28 @@ enum ReportOutline {
         cellViewModel.update(icon: icon(forImagePath: finishedBuild.imagePath), title: FindScope.imageName(of: finishedBuild.imagePath), detail: detail, status: status, toolTip: toolTip)
     }
 
+    /// The group of the corpora read from derived data instead of printed — at launch, the Always
+    /// Index images, searchable before their batches index them.
+    static func configureRestoredCorporaRow(_ cellViewModel: ReportCellViewModel, imageCount: Int) {
+        cellViewModel.update(
+            icon: restoredCorporaIcon,
+            title: "Restored from Derived Data",
+            detail: "\(imageCount) \(imageCount == 1 ? "image" : "images")",
+            toolTip: "Read from the derived data kept for this system and this build of RuntimeViewer, instead of printed again"
+        )
+    }
+
+    /// An image whose corpus was read from derived data: its size and what reading it took.
+    static func configure(_ cellViewModel: ReportCellViewModel, forCorpusOf imagePath: String, restoredAs restoredImage: RuntimeInterfaceCorpusRestoredImage) {
+        let byteCount = ByteCountFormatter.string(fromByteCount: Int64(restoredImage.summary.byteCount), countStyle: .memory)
+        let duration = String(format: "%.2f s", restoredImage.duration)
+        var toolTip = "\(imagePath)\n\(restoredImage.summary.objectCount) objects, \(byteCount), read in \(duration)"
+        if restoredImage.summary.skippedCount > 0 {
+            toolTip += "\n\(restoredImage.summary.skippedCount) skipped when it was printed"
+        }
+        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: "\(byteCount) · \(duration)", toolTip: toolTip)
+    }
+
     /// An image whose cross references are queued or being prepared. `isFollowed`: the engine's
     /// preparation coordinator asked for it, so Cancel withdraws it.
     static func configure(_ cellViewModel: ReportCellViewModel, forCrossReferencesOf imagePath: String, state: CrossReferencePreparationState, isFollowed: Bool) {
@@ -618,6 +643,8 @@ enum ReportOutline {
     static let turnedOffIcon: NSUIImage = SFSymbols(systemName: .powerCircle).nsuiImgae
 
     static let unsupportedIcon: NSUIImage = SFSymbols(systemName: .exclamationmarkCircle).nsuiImgae
+
+    static let restoredCorporaIcon: NSUIImage = SFSymbols(systemName: .archivebox).nsuiImgae
 
     static func icon(forImagePath imagePath: String) -> NSUIImage {
         imagePath.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon

@@ -218,6 +218,7 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///   images that are not indexed yet. A read is part of its build: whatever
 ///   cancels, evicts or replaces the build drops what the read brings back.
 @Loggable(.private)
+@Signpostable(.private)
 actor RuntimeInterfaceCorpusStore {
     typealias BuildProgressHandler = @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void
 
@@ -760,8 +761,10 @@ actor RuntimeInterfaceCorpusStore {
     /// The corpus `derivedData` holds for the image under `transformer`,
     /// checked and walked through; see `RuntimeInterfaceCorpusSnapshot`.
     static func readStoredCorpus(from derivedData: RuntimeDerivedDataStore, imagePath: String, transformer: Transformer.Configuration) async -> ImageCorpus? {
-        await derivedData.read(.interfaceCorpus, variant: RuntimeInterfaceCorpusSnapshot.variant(for: transformer), forImageAt: imagePath) { container in
-            try RuntimeInterfaceCorpusSnapshot.corpus(from: container, transformer: transformer)
+        await #signpostInterval("Read corpus from derived data") {
+            await derivedData.read(.interfaceCorpus, variant: RuntimeInterfaceCorpusSnapshot.variant(for: transformer), forImageAt: imagePath) { container in
+                try RuntimeInterfaceCorpusSnapshot.corpus(from: container, transformer: transformer)
+            }
         }
     }
 

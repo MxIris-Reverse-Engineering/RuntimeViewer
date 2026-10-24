@@ -70,12 +70,13 @@ final class ReportTreeBuilder {
     }
 
     /// The Searchable Interfaces category, or `nil` when it has nothing to show: a row saying the
-    /// feature is turned off or unsupported, the corpora queued or being printed, then the ended
-    /// builds.
+    /// feature is turned off or unsupported, the corpora queued or being printed, the group of the
+    /// corpora read from derived data, then the ended builds.
     func corpusCategory(
         states: [String: RuntimeInterfaceCorpusBuildState],
         followedImagePaths: Set<String>,
         finishedBuilds: [FindCorpusFinishedBuild],
+        restoredImages: [String: RuntimeInterfaceCorpusRestoredImage],
         isUnsupportedByEngine: Bool,
         isEnabled: Bool
     ) -> ReportNode? {
@@ -102,6 +103,19 @@ final class ReportTreeBuilder {
         for (imagePath, state) in activeBuilds {
             children.append(makeNode(.corpusBuild(imagePath: imagePath), usedIdentifiers: &usedIdentifiers) {
                 ReportOutline.configure($0, forCorpusOf: imagePath, state: state, isFollowed: followedImagePaths.contains(imagePath))
+            })
+        }
+        // One row per image, by name, under a group of their own: they were read, not built.
+        if !restoredImages.isEmpty {
+            let restoredRows = restoredImages
+                .sorted { FindScope.imageName(of: $0.key) < FindScope.imageName(of: $1.key) }
+                .map { imagePath, restoredImage in
+                    makeNode(.restoredCorpus(imagePath: imagePath), usedIdentifiers: &usedIdentifiers) {
+                        ReportOutline.configure($0, forCorpusOf: imagePath, restoredAs: restoredImage)
+                    }
+                }
+            children.append(makeNode(.restoredCorpora, children: restoredRows, usedIdentifiers: &usedIdentifiers) {
+                ReportOutline.configureRestoredCorporaRow($0, imageCount: restoredRows.count)
             })
         }
         var finishedBuildIdentifiers: Set<UUID> = []

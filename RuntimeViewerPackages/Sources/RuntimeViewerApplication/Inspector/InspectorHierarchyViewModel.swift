@@ -58,6 +58,13 @@ public final class InspectorHierarchyViewModel: ViewModel<InspectorRuntimeObject
         // `flatMapLatest` also drops the in-flight fetch when the selection
         // moves on, so a slow result can no longer land on top of a newer one.
         $runtimeObject
+            .flatMapLatest { runtimeObject -> Observable<RuntimeObject> in
+                // Asked again once the object's image is indexed, as the
+                // relationships are; see `InspectorRelationshipsViewModel`.
+                let runtimeEngine = MainActor.assumeIsolated { documentState.runtimeEngine }
+                return Observable.just(runtimeObject)
+                    .concat(runtimeEngine.imageIndexedLater(runtimeObject.imagePath).map { runtimeObject })
+            }
             .flatMapLatest { runtimeObject -> Observable<HierarchyResult> in
                 // Captures the document-scoped engine (`documentState` is the
                 // initializer's parameter here) instead of `self`: the async

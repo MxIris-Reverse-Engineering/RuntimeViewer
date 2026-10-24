@@ -241,7 +241,7 @@
      - 启发式批次里的其他镜像不提前读，等它们被索引时走构建路径。
    - 「Keep Interfaces Searchable」关着时两条路径都不走，也不写盘。
    - **后台索引关着时**（默认就是关的）：没有提前读取。手动打开一个镜像后，它的语料不再重打，section 建好就能搜。
-3. **还没有 section 的镜像**：读出的语料让这种状态第一次成为可能，下面几处入口改为先前台加载这个镜像。前台加载和在侧栏里打开它走同一条路（`objectsWithProgress(in:)`），会和正在进行的后台构建合并成一次（`RuntimeSectionBuild`）。
+3. **还没有 section 的镜像**：读出的语料让这种状态第一次成为可能，下面几处入口改为先前台加载这个镜像。前台加载和在侧栏里打开它走同一条路（`RuntimeEngine.indexImageIfNeeded(at:)`：服务进程已经加载了这个镜像就 `objectsWithProgress(in:)`，没加载就像侧栏的 Load 那样 `loadImage(at:)`），会和正在进行的后台构建合并成一次（`RuntimeSectionBuild`）。读取语料并不加载镜像，所以服务进程里可能根本没加载过它，比如 AppKit。
    - **内容区**：接口为 `nil`、且对象所在镜像还没有 section 时，在同一个取接口的任务里先前台加载、再重取，期间显示内容区现有的加载遮罩（[0023](0023-content-loading-overlay.md)）；加载失败按取接口失败处理。ObjC 类与协议照旧走现有的「按类名现建 ObjC section」那条路。
    - **Inspector**：关系与层级在当前对象所在的镜像发出 `imageDidIndex` 时重取一次。
    - **Call Hierarchy 与 Callees**：选中的根如果所在镜像还没有 section，先前台加载它再查询，否则找调用者时会漏掉同一镜像里的调用者。
@@ -569,9 +569,9 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
   - **Report 用的记录**：读到的镜像，以及覆盖情况里 `restoredImagesByImagePath` 中的镜像，记进新的 `restoredImagesByImagePath`。另有一个照 `imagePathsListedInHistory` 写的 `imagePathsListedAsRestored`，让 Clear History 清掉的条目不在下一次刷新时回来。`mergeCoverage` 跳过已读取的镜像，不把它们当作别处建好的构建。
   - **何时去掉**：覆盖情况里某个镜像不再是 built，或者不再在 `restoredImagesByImagePath` 里（被淘汰或被重新打印），就从这一组去掉；Engine 从头来过时清空。
   - Transformer 改了之后照旧整体重建；新的变体写盘时，同一镜像旧变体的文件被删掉。
-- **内容区**：`ContentTextViewModel` 的接口来源，在接口为 `nil`、且对象所在镜像还没有 section（`isImageIndexed(path:)` 为假）时，在同一个 `Observable.async` 里调 `objectsWithProgress(in:)` 前台加载、再取一次接口，由现有的 `trackActivity(_commonLoading)` 覆盖，这样加载遮罩仍是唯一的加载状态，符合「一个状态枚举」的规则。前台加载失败，按取接口失败处理。
-- **Inspector**：`InspectorRelationshipsViewModel` 与层级的 ViewModel 在 `$runtimeObject` 之外，再跟随引擎的 `imageDidIndexPublisher`；当前对象所在的镜像建好时重取一次。
-- **Call Hierarchy 与 Callees**：Find 在用根查询之前，如果根所在的镜像还没有 section，先前台加载它（同一条路），并在 Find 的进度里显示。
+- **内容区**：`ContentTextViewModel` 的接口来源，在接口为 `nil`、且对象所在镜像还没有 section（`isImageIndexed(path:)` 为假）时，在同一个 `Observable.async` 里调 `indexImageIfNeeded(at:)` 前台加载、再取一次接口，由现有的 `trackActivity(_commonLoading)` 覆盖，这样加载遮罩仍是唯一的加载状态，符合「一个状态枚举」的规则。前台加载失败，按取接口失败处理。
+- **Inspector**：`InspectorRelationshipsViewModel` 与层级的 ViewModel 在 `$runtimeObject` 之外，再跟随 `RuntimeEngine.imageIndexedLater(_:)`：当前对象所在的镜像这时还没建好，就在它建好时重取一次；已经建好的，不重取。它先订阅引擎的 `imageDidIndexPublisher`、再问 `isImageIndexed`，所以两者之间建好的也不会漏掉。
+- **Call Hierarchy 与 Callees**：Find 在用根查询之前，如果根所在的镜像还没有 section，先前台加载它（同一条路），Find 的摘要栏这时显示「Loading <镜像名>」。
 - **Report**：
   - `ReportNodeIdentifier` 新增 `restoredCorpora` 与 `restoredCorpus(imagePath:)` 两个 case。
   - 要一起改的地方：`ReportNode.swift` 里 `category` 的穷举 switch，`ReportViewModel` 取消逻辑里的穷举 switch，`ReportTreeBuilder.corpusCategory` 的签名与 `ReportTreeBuilderTests` 里的调用。
@@ -706,7 +706,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 2. **Core：语料快照与语料仓库接入。** **已完成（2026-10-24）**，记录见「第 2 步的落地记录」。
    - 读取阶段、出队再查、构建末尾写盘、`restoreInterfaceCorpora`、覆盖情况的新字段与手写解码、引擎的 internal 注入点、两个服务入口的 `enableInThisProcess()`，加上对应测试。
    - 加一个计时测试，用 Release 配置（`swift test -c release`）对 Foundation 与 SwiftUI 的语料各做一次写盘与读取，记下用时。它只用来决定成员段要不要改成定长列，验收以第 5 步为准。实际也量了 AppKit。
-3. **Packages：App 侧逻辑。**
+3. **Packages：App 侧逻辑。** **已完成（2026-10-24）**，记录见「第 3 步的落地记录」。
    - 语料协调器的提前读取、与构建同样的处理、Report 用的记录；内容区的前台加载；Inspector 的重取；Call Hierarchy 根的前台加载；Report 新组。
    - `RuntimeViewerSettings` 里的 `DerivedDataClient`、设置页一节。
    - 两处 `#signpostInterval` 埋点与汇总日志。
@@ -782,6 +782,25 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 - 读取在 `userInitiated` 优先级的独立任务里进行，不占打印的那一个槽位。
 - 「先全部通过，才构造任何对象」落实为逐条：每一条在它自己的各列都校验过之后才构造，会 trap 的初始化方法从不接触未校验的数据。
 
+## 第 3 步的落地记录（2026-10-24）
+
+**落地内容。**
+
+- `FindCorpusCoordinator`：`restoreCorpora(of:)`；读到的镜像置为 built、发 `corpusBuilt`、记进 `requestedImagePaths`；`restoredImagesByImagePath` 与 `imagePathsListedAsRestored`；`mergeCoverage` 不再把读回的语料当作别处建好的构建；订阅后台索引的事件，Always Index 批次开始时读出其中 `.pending` 的条目；Clear History、Engine 从头来过、关掉开关、改 Transformer 时撤回读取并清空这一组；正在读取的镜像也算进行中的工作（`hasActiveBuild`），App 在等服务进程，不能进 App Nap。
+- `RuntimeBackgroundIndexingCoordinator`：每一轮派发 Always Index 各行时，先把解析出的镜像路径发出去（`alwaysIndexImagePathsResolved`），包括已经索引过、不会开批次的那些；`RuntimeEngineBackgroundWork` 把它接到语料协调器，并把 `documentDidOpen()` 挪到接好之后。
+- 前台加载：`RuntimeEngine.indexImageIfNeeded(at:)`，内容区与 Call Hierarchy / Callees 共用；`RuntimeEngine.imageIndexedLater(_:)` 供 Inspector 的两个 ViewModel 在镜像建好时重取。
+- Report：`ReportNodeIdentifier` 的 `restoredCorpora`、`restoredCorpus(imagePath:)`；Searchable Interfaces 下排在进行中的构建之后、结束的构建之前，组的细节栏写镜像数，每行写语料大小与读取用时，组默认收起；Clear History 可用的条件里加上这一组。
+- 设置：`RuntimeViewerSettings` 的 `DerivedDataClient`（位置、占用大小、`refresh`、`showInFinder`、`delete`）与 `\.derivedDataClient`；Settings › Indexing 底部的「Derived Data」一节，页面出现时重新统计。
+- 埋点：App 侧在语料协调器的每次读取请求外面包一个 `#signpostInterval`（「Restore corpora from derived data」），服务侧在每个镜像的读取外面包一个（「Read corpus from derived data」）；协调器每次读取结束打一行汇总，列出每个镜像的读取用时。
+
+测试：`DerivedDataRestoreTests` 11 个（直接读取、Always Index 派发时读取且之后的索引不再打印、批次开始时读取、手动打开走构建路径读取、Clear History 后刷新不回来、改 Transformer 后重打、没有派生数据、对端不支持这条命令时照常构建、内容区前台加载 Swift 对象、Inspector 在镜像建好后重取、Report 的分组）；`FindCrossReferenceTests` 加 1 个（根所在镜像没有 section 时先建好再查，摘要栏显示「Loading Foundation」）；`ReportTreeBuilderTests` 跟着签名改。新增 `Support/DerivedDataFixture.swift`，`RuntimeViewerPackages/Tests/AGENTS.md` 加上派生数据的规则。和这次改动相关的既有测试 205 个照常通过。
+
+**与设计的出入**（详细设计已按实现改写）：
+
+- 前台加载不只是 `objectsWithProgress(in:)`：服务进程读语料时并不加载镜像，所以镜像没加载时要先 `loadImage(at:)`，和侧栏的 Load 一样。
+- 正在读取的镜像算作进行中的工作，Report 的活动标记与 App Nap 的处理都跟着它。
+- Call Hierarchy 前台加载时，Find 的摘要栏显示「Loading <镜像名>」。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -835,3 +854,5 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 | 2026-10-24 | 开始实现，状态改为 In Progress | 第 1 步随这一行一起提交。 |
 | 2026-10-24 | 生产者身份里的映像只带名字，不带完整路径 | 设计里写的是「每个映像带上它的路径」。被隔离的 App 若没被挪进「应用程序」文件夹，系统每次都会从一个新的随机位置运行它（App Translocation），带路径的摘要每次启动都不同，派生数据就永远读不到，还会每次留下一个新的生产者目录。名字取 install name，没有的（服务的可执行文件、插件）取文件名；代码是否相同由 LC_UUID 决定。 |
 | 2026-10-24 | 语料的成员段改为定长列 | 计时测试（Release）里 AppKit 的读回用了 0.60 秒，超过「单个镜像 ≤ 0.5 秒」，其中成员的二进制 plist 占 0.31 秒。改成名字、属性、行号三列后，AppKit 0.28 秒、SwiftUI 0.32 秒、Foundation 0.16 秒。这是提案事先定好的处理（成员段「读回太慢时改为定长列」），不改变方案。 |
+| 2026-10-24 | 前台加载在镜像没加载时先 `loadImage(at:)` | 设计里写的是和侧栏一样调 `objectsWithProgress(in:)`。但服务进程读语料时不加载镜像，读回的 AppKit 在服务进程里可能从没加载过，这时 `objectsWithProgress(in:)` 拿不到映像，必须像侧栏的 Load 按钮那样先加载。内容区与 Call Hierarchy 共用 `indexImageIfNeeded(at:)`。 |
+| 2026-10-24 | 正在读取的语料算作进行中的工作 | 读取期间 App 在等服务进程；不算进去，App 可能在读取途中进入 App Nap，服务进程跟着降到后台档。Report 的活动标记因此在启动时会短暂转一下。 |
