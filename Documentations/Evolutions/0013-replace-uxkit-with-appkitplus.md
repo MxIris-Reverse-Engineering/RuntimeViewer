@@ -1,9 +1,9 @@
 # 0013 - 用 AppKitPlus 取代 UXKit
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **日期**: 2026-08-18
-- **最后更新**: 2026-08-18
+- **最后更新**: 2026-10-26
 - **取代**: [0012](0012-replace-uxkit-navigation-with-uifoundation.md)（在 `feature/uifoundation-navigation` 分支上，状态 In Progress）
 
 ## 摘要
@@ -292,5 +292,6 @@ UXKit 时代不会撞，是因为 `backgroundColor` 挂在 `UXView` 这个子类
 
 | 日期 | 事件 | 说明 |
 |---|---|---|
+| 2026-10-26 | In Progress → Implemented | 落地步骤 1–11 早已完成并随多个 beta 发布；代码里只剩说明来历的注释还提到 UXKit，`USING_SYSTEM_UXKIT` 已删。步骤 12（实机走一遍导航）已被日常使用覆盖；步骤 13（用 `sample` 复测性能）是可选项，不再单独做。被取代的 0012 所在的 `feature/uifoundation-navigation` 分支已删除，0012 从未进入 `next`。整理在途事项时经用户批准更正。配套文档：不另写。术语：无新增。 |
 | 2026-08-18 | Accepted → In Progress | 落地步骤 1–9 已完成，编译与实机验证进行中。 |
 | 2026-08-18 | Created as Draft | 用户指定改用 AppKitPlus。同日确认 0012 转 `Superseded`，基类命名定为 `BaseViewController` / `BaseEffectViewController` / `BaseNavigationController`。 |

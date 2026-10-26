@@ -1,9 +1,9 @@
 # 0003 - 泛型类型特化
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **日期**: 2026-05-08
-- **最后更新**: 2026-10-11
+- **最后更新**: 2026-10-26
 
 ## 摘要
 
@@ -856,3 +856,4 @@ UsingAppKit 的新 .swift 文件加入 Xcode project 通过 `xcodeproj` MCP 完�
 | 2026-05-09 | 已特化版本列表行点击 → 改 documentState.selectedRuntimeObject(联动 Sidebar) | 全局联动一致;复用现有 selectedRuntimeObject 通道 |
 | 2026-05-09 | 状态 Draft → In Progress | 上游 API ready,RuntimeViewer 侧开始实施 |
 | 2026-10-11 | specializer 不再按镜像 lazy 持有,改为每次请求现建;conformance provider 由聚合索引器共享(`RuntimeSwiftInterfaceIndexer.conformanceProvider`),每加入或移除一个镜像换一份 | provider 第一次用到时遍历所有已索引镜像里的类,建出约束为类的参数的子类表,之后不再更新。按镜像 lazy 持有时,之后索引进来的镜像(包括后台索引)里的子类进不了候选;嵌套特化每次请求都新建 provider,每次重建这张表。移除镜像(`removeSubIndexer`)时也要换,否则这张表会继续给出已移除镜像里的类,并让它们的类型名一直留在内存里。复现测试 `RuntimeSpecializationClassBoundCandidatesTests`(Foundation 的 `NSObject.KeyValueObservingPublisher`,之后加载 CoreData) |
+| 2026-10-26 | In Progress → Implemented | 特化工作流早已落地（`427fd0cb` 起，2026-05），此后只有修复（如上一行），状态一直没改。个别文件名与提案所列不同（实际是 `InspectorSwiftSpecializationViewController`、`SpecializationTypePickerViewModel` 等），功能齐全；不支持远程来源是第一版有意划定的范围。整理在途事项时经用户批准更正。配套文档：不另写。术语：无新增。 |

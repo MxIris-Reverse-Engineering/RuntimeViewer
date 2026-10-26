@@ -1,7 +1,7 @@
 # 愿景：自建代码视图引擎
 
 - **状态**: Active
-- **最后更新**: 2026-08-15
+- **最后更新**: 2026-10-26
 - **相关提案**: [0009](../Evolutions/0009-content-editor-engine-selection.md)、[0010](../Evolutions/0010-interface-snapshot-export.md)
 
 愿景**不做具体决定**，它划定一个方向的边界与取舍原则，让后续每个提案不必重新论证一遍。
@@ -201,8 +201,8 @@ var columnShiftEffects: [Int: [Int: (shift: …, padding: CGFloat, text: NSAttri
 
 | 提案 | 状态 | 它推进了愿景的哪一部分 |
 |------|------|------------------------|
-| [0009](../Evolutions/0009-content-editor-engine-selection.md) | Accepted | 参照物与退路：接入 SourceEditor，并沉淀了对它架构与行为的实测认识 |
-| [0010](../Evolutions/0010-interface-snapshot-export.md) | Draft | 导出成图片。方案 A（自己排版）本身就是「不依赖框架」这一方向的第一次实践 |
+| [0009](../Evolutions/0009-content-editor-engine-selection.md) | Implemented | 参照物与退路：接入 SourceEditor，并沉淀了对它架构与行为的实测认识 |
+| [0010](../Evolutions/0010-interface-snapshot-export.md) | Withdrawn（2026-10-26，从未开始实现） | 导出成图片。方案 A（自己排版）本身就是「不依赖框架」这一方向的第一次实践；要做时重新立项 |
 
 ---
 

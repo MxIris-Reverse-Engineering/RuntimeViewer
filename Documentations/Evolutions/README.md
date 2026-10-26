@@ -13,19 +13,20 @@
 
 | # | 标题 | 状态 | 摘要 |
 |---|------|------|------|
-| [0000](0000-bonjour-reliability.md) | Bonjour Connection Reliability Improvements | 未标注 | Bonjour 发现与连接的可靠性修复：设备间歇性失败、连接丢失后不重试、iOS 先启动时 macOS 发现不到。 |
-| [0001](0001-ida-compatible-objc-export.md) | IDA Compatible ObjC Export Mode | 未标注 | 新增「IDA 兼容」ObjC 头文件导出模式，产出三份互补文件，最大化导入 IDA Pro 9.3+ 后的信息保真度。 |
-| [0002](0002-background-indexing.md) | 后台索引 | Accepted | 针对目标进程已加载镜像的依赖闭包，主动解析 ObjC 与 Swift 元数据。由每个 `RuntimeEngine` 持有的 actor `RuntimeBackgroundIndexingManager` 驱动，Settings 可配置，Toolbar 弹出框展示进度。 |
-| [0003](0003-generic-type-specialization.md) | 泛型类型特化 | In Progress | 用户在 Inspector 的 Specialization tab 为泛型类型选定具体类型组合，特化结果作为 sidebar 子节点呈现，泛型参数被替换且 metadata 字段填上真实数值。 |
-| [0004](0004-differentiable-box-lazy-cellvm.md) | DifferentiableBox 与 Lazy Cell ViewModel 渲染范式 | Draft | 在 `RuntimeViewerArchitectures` 引入 `DifferentiableBox<Model>`，把任意 `Hashable` 领域模型适配为 DifferenceKit 的 `Differentiable`，使表格与大纲视图的 Rx 数据源走「轻量身份元素 + cell 级惰性 ViewModel」。 |
+| [0000](0000-bonjour-reliability.md) | Bonjour Connection Reliability Improvements | Implemented | Bonjour 发现与连接的可靠性修复：设备间歇性失败、连接丢失后不重试、iOS 先启动时 macOS 发现不到。 |
+| [0001](0001-ida-compatible-objc-export.md) | IDA Compatible ObjC Export Mode | Withdrawn | 新增「IDA 兼容」ObjC 头文件导出模式，产出三份互补文件，最大化导入 IDA Pro 9.3+ 后的信息保真度。2026-10-26 撤回：从未开始实现。 |
+| [0002](0002-background-indexing.md) | 后台索引 | Implemented | 针对目标进程已加载镜像的依赖闭包，主动解析 ObjC 与 Swift 元数据。由每个 `RuntimeEngine` 持有的 actor `RuntimeBackgroundIndexingManager` 驱动，Settings 可配置，Toolbar 弹出框展示进度。 |
+| [0003](0003-generic-type-specialization.md) | 泛型类型特化 | Implemented | 用户在 Inspector 的 Specialization tab 为泛型类型选定具体类型组合，特化结果作为 sidebar 子节点呈现，泛型参数被替换且 metadata 字段填上真实数值。 |
+| [0004](0004-differentiable-box-lazy-cellvm.md) | DifferentiableBox 与 Lazy Cell ViewModel 渲染范式 | Implemented | 在 `RuntimeViewerArchitectures` 引入 `DifferentiableBox<Model>`，把任意 `Hashable` 领域模型适配为 DifferenceKit 的 `Differentiable`，使表格与大纲视图的 Rx 数据源走「轻量身份元素 + cell 级惰性 ViewModel」。 |
+| [0005](0005-cellvm-appearance-single-observed.md) | 高基数 Cell ViewModel 的 Appearance 单流化 | Implemented | 高基数、长寿命的 cell ViewModel 上原先有五个分立的外观属性，每个都要一套订阅；合并为单个 `appearance` 结构体属性后每行只剩一套。首批用于侧栏的对象行与镜像列表行。 |
 | [0006](0006-mcp-transport-bind-failure-teardown.md) | MCP Transport 绑定失败的资源回收与状态如实化 | Implemented | 绑定失败改为显式 `start()` 判定：失败即回收 transport（线程 56→0）、`serverState` 如实 `.stopped`、端口文件带所有权守卫不误删他人文件。残余 5.57 MiB 为上游 SwiftMCP adapter↔engine 引用环，与线程数硬编码一并列为上游跟进项。 |
 | [0007](0007-objc-relationship-index-returns-to-application.md) | ObjC 关系索引归还应用侧 | 部分被 0008 取代 | MachOObjCSection 0003 的下游适配：渲染与解析层搬进库（**保留**），关系表改由应用从 `ObjCIndexingEvent` 事件流重建（**已被 0008 取代**）。 |
 | [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Implemented | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
-| [0009](0009-content-editor-engine-selection.md) | 内容视图编辑器选型：继续 NSTextView 还是改用 Xcode SourceEditor | Accepted | 采纳方案 B：运行时 `dlopen` Xcode 私有 `SourceEditor` 框架，编辑器代码隔离在可选加载的 bridge bundle 内，`ContentSourceEditorViewController` 与现有 `NSTextView` 实现绑定同一 ViewModel 以便随时降级。当前为 opt-in 开关，语法高亮暂为词法级、主题转换未做。 |
-| [0010](0010-interface-snapshot-export.md) | 把接口导出成图片 | Draft | 把当前接口渲染成带主题配色的 PNG。需拍板渲染路径：自己排版生成侧已有的 `NSAttributedString`（不依赖 Xcode），还是借 `SourceEditorView` 的截图 API（所见即所得，但底层是已知不可靠的 `cacheDisplay`）。 |
+| [0009](0009-content-editor-engine-selection.md) | 内容视图编辑器选型：继续 NSTextView 还是改用 Xcode SourceEditor | Implemented | 采纳方案 B：运行时 `dlopen` Xcode 私有 `SourceEditor` 框架，编辑器代码隔离在可选加载的 bridge bundle 内，`ContentSourceEditorViewController` 与现有 `NSTextView` 实现绑定同一 ViewModel 以便随时降级。以 opt-in 开关随 beta 发布；系统符号与工程符号分色拆为暂缓的后续项。 |
+| [0010](0010-interface-snapshot-export.md) | 把接口导出成图片 | Withdrawn | 把当前接口渲染成带主题配色的 PNG。需拍板渲染路径：自己排版生成侧已有的 `NSAttributedString`（不依赖 Xcode），还是借 `SourceEditorView` 的截图 API（所见即所得，但底层是已知不可靠的 `cacheDisplay`）。2026-10-26 撤回：从未开始实现。 |
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
-| [0013](0013-replace-uxkit-with-appkitplus.md) | 用 AppKitPlus 取代 UXKit | In Progress | 导航容器从 Apple 私有的 `UXKit.framework` 换成 AppKitPlus 的 `NSNavigationController`（port 自 OpenUXKit，接口同名同义），三个 `UX` 前缀基类改名为 `Base*` 并直接继承 `NSViewController` / `NSNavigationController`，删除 `OpenUXKit`、`UXKitCoordinator` 依赖与 `USING_SYSTEM_UXKIT` 开关。取代 `feature/uifoundation-navigation` 上的 0012。 |
-| [0014](0014-inject-ios-simulator-process.md) | 支持注入 iOS Simulator 进程 | In Progress | 注入器把自身地址空间的符号地址喂给目标进程，打崩了三个 SpringBoard。先加平台守卫止血，再把符号解析改为针对目标进程，让 dlopen 路径支持 iOS Simulator 目标。原以 `0013` 起草，与本分支的 `0013` 撞号，合流时改为 `0014`。 |
+| [0013](0013-replace-uxkit-with-appkitplus.md) | 用 AppKitPlus 取代 UXKit | Implemented | 导航容器从 Apple 私有的 `UXKit.framework` 换成 AppKitPlus 的 `NSNavigationController`（port 自 OpenUXKit，接口同名同义），三个 `UX` 前缀基类改名为 `Base*` 并直接继承 `NSViewController` / `NSNavigationController`，删除 `OpenUXKit`、`UXKitCoordinator` 依赖与 `USING_SYSTEM_UXKIT` 开关。取代 `feature/uifoundation-navigation` 上的 0012。 |
+| [0014](0014-inject-ios-simulator-process.md) | 支持注入 iOS Simulator 进程 | Implemented | 注入器把自身地址空间的符号地址喂给目标进程，打崩了三个 SpringBoard。先加平台守卫止血，再把符号解析改为针对目标进程，让 dlopen 路径支持 iOS Simulator 目标。原以 `0013` 起草，与本分支的 `0013` 撞号，合流时改为 `0014`。 |
 | [0015](0015-build-embedded-products-in-app-phase.md) | 让主 App 的构建阶段自己产出嵌入的 iOS-family 产物 | Withdrawn | 曾给主 App 加构建阶段，用 `env -i` + 独立 DerivedData 的嵌套 xcodebuild 产出 Catalyst helper 与 iOS Simulator 载荷。2026-08-30 撤回并删除该阶段：独立 DerivedData 让新旧判断永不命中，一次 Release 构建从 86 秒涨到 554 秒；且 helper 那一半从未生效——嵌入阶段取的是 `SRCROOT` 下的 `PBXFileReference`，不是它写入的 `BUILT_PRODUCTS_DIR`。GUI 缺载荷即不嵌入，要连载荷一起测就跑 RunScript.sh。 |
 | [0016](0016-application-viewmodel-tests.md) | RuntimeViewerApplication ViewModel 测试覆盖 | Implemented | 为 `RuntimeViewerApplication` 的每个 ViewModel 补一份按公共契约覆盖的 swift-testing 套件，引擎相关用例用专用的进程内 `RuntimeEngine`；加两处 internal 测试缝，并修掉 `AppDefaults` 测试默认值读写用户真实书签文件的问题。 |
 | [0017](0017-observed-lazy-relay.md) | `@Observed` 惰性创建 relay | Implemented | 上游 RxSwiftPlus 改 `@Observed`：值先放在带 `os_unfair_lock` 的小盒子里，首次访问 `$property` 才建 `BehaviorRelay`。没被订阅的属性不再背一整套 relay 加 `NSRecursiveLock`，13k 镜像行与未滚到的对象行受益；`$property` 类型不变，99 处用法零改动。0005「替代方案 B」的后续。 |
@@ -67,27 +68,36 @@
 | [0053](0053-tuist-coexistence.md) | Tuist 与原生工程共存：日常开发的缓存加速通道 | Implemented | 原生工程旁边加一套 Tuist 描述，生成独立的 `RuntimeViewer-Tuist.xcworkspace` 专供开发：85 个第三方依赖走 Tuist 二进制缓存，四个本地包写进 `Tuist/Package.swift`（各自的 `Package.swift` 仍是唯一定义）并始终保持源码；发版、CI 与现有脚本只走原生工程。两边共用 xcconfig / Info.plist / 同步文件夹，原生工程把 target 层设置搬进 xcconfig（`-showBuildSettings` 零差异验收）；改原生结构的提交同批更新 Tuist 描述，`TuistScript.sh check` 手动核对。探针证实完整 macOS App 可表达，但要绕开 Tuist 的几处限制：插件改声明为 framework、模拟器载荷与插件由 scheme 手动顺序构建、daemon 改脚本拷贝、补回被丢的 trait 宏、UIFoundation 包改静态库以免撞上 AppKit 转导出的同名私有框架。合入 `next` 时补上其后新增的 Catalyst XPC service、改由 App 嵌入的插件与 LookInsideServer；Debug 两边产物逐项一致，Tuist 版的 Release 构建未实测。 |
 | [0054](0054-always-index-per-engine.md) | Always Index 按 Engine 区分 | Implemented | Always Index 清单原先对每个 Engine 都生效，My Mac、Catalyst、Attach 的进程、设备各索引一遍（注入进程的索引在目标进程里跑）。改为每个条目用多选菜单选「All Engines」或具体几个 Engine，协调器只派发适用于自己 Engine 的条目。Engine 按 `RuntimeBookmarkScope` 认；本机 Attach 的进程身份里带 pid，改按进程名认。现有条目解码为 All Engines，行为不变；总开关、并发数与 Heuristic Discovery 仍是全局设置。 |
 | [0055](0055-engine-scoped-background-work.md) | 后台工作按 Engine 共享：同一 Engine 的文档看同一份 Report | Implemented | Report 的索引历史与语料行原先每个文档各记一份，同一 Engine 的两个窗口看到的不一样。后台索引协调器与语料协调器改为每个 Engine 一个、由这个 Engine 上的文档共用：同一 Engine 的窗口 Report 完全相同，Cancel / Clear History 对所有窗口生效，派发按 Engine 只做一次；最后一个文档离开 Engine 时取消在跑的活、清空 Report。 |
-| [0056](0056-cross-references.md) | 交叉引用：调用层级、被调与类型引用 | In Progress | 从 arm64 机器码里读出函数调了谁、谁调了它（范围是整个共享缓存加已加载的非系统库）、哪些方法用到了某个类型；名字只取自符号表与元数据，没有名字的函数照样扫描、显示地址。分析逻辑放进 MachOSwiftSection 的新 target，RuntimeViewer 加一个命令扩展模块；三个前端共用：Find 导航页三种新模式、内容区右键、跟随光标的 Inspector References 标签，CLI `callers` / `callees` / `references`，MCP 三个工具。跨库查询先筛库再按需扫描——C 与 ObjC 名字按导入（含别的库改名再导出的名字），Swift 函数与类型按链接关系，发送按 selector 引用（实测扫完整个缓存 1–4 秒，不做存盘索引）；macOS 27 起的全缓存共用桩与更早的镜像自带桩都认。ObjC 按 selector 匹配，Swift 虚方法与协议方法给出候选；只支持 arm64 / arm64e。进度：落地第 1–3 步完成，引擎模块 `RuntimeViewerCrossReferences` 能回答调用者、被调与类型引用；2026-10-17 审查后的修复已落地；第 5 步完成，Find 导航页有了 Call Hierarchy、Callees、Type References 三种模式（照 Xcode 27.2 逆向对齐）。第 6 步完成，内容区右键、主菜单 Find Call Hierarchy（⌃⇧⌘H）与 Inspector 的 References 标签可用。剩下第 4 步：命令行与 MCP。 |
+| [0056](0056-cross-references.md) | 交叉引用：调用层级、被调与类型引用 | Implemented（第 4 步暂缓） | 从 arm64 机器码里读出函数调了谁、谁调了它（范围是整个共享缓存加已加载的非系统库）、哪些方法用到了某个类型；名字只取自符号表与元数据，没有名字的函数照样扫描、显示地址。分析逻辑放进 MachOSwiftSection 的新 target，RuntimeViewer 加一个命令扩展模块；界面一侧的入口：Find 导航页三种新模式、内容区右键、跟随光标的 Inspector References 标签；CLI `callers` / `callees` / `references` 与 MCP 三个工具拆为暂缓的后续项。跨库查询先筛库再按需扫描——C 与 ObjC 名字按导入（含别的库改名再导出的名字），Swift 函数与类型按链接关系，发送按 selector 引用（实测扫完整个缓存 1–4 秒，不做存盘索引）；macOS 27 起的全缓存共用桩与更早的镜像自带桩都认。ObjC 按 selector 匹配，Swift 虚方法与协议方法给出候选；只支持 arm64 / arm64e。引擎模块 `RuntimeViewerCrossReferences` 与界面一侧（落地第 1–3、5、6 步）2026-10-19 合入 `next`：Find 导航页的 Call Hierarchy、Callees、Type References 照 Xcode 27.2 逆向对齐，主菜单 Find Call Hierarchy（⌃⇧⌘H）。 |
 | [0057](0057-inspector-class-hierarchy-timeline.md) | Inspector 的类与协议层级：时间线式的对象列表与继承树 | Implemented | Class 页的 Hierarchy 从一段换行拼接的类名，改成和 Relationships 页一样的对象行（语言图标、类名、所在镜像），相邻两级之间画带箭头的竖线连成时间线，点一行跳到那个类；父类所在的镜像没被索引时，用类数据里记的名字接着列到根类。协议也有 Hierarchy 页，用 Outline 显示它继承的协议树。两者复用 Find 导航器 Ancestor Types 的跨镜像、跨语言解析，各新增一条 Core 命令；没被索引的那一级只显示名字、点了不跳转。标题与其他 Inspector 页对齐，不再能折叠。 |
 | [0058](0058-runtime-engine-session.md) | DocumentState 瘦身：Engine 与它的共享后台工作合成 RuntimeEngineSession | Implemented | `DocumentState` 里维护后台工作成员身份的约 230 行是命令式状态机：getter 带副作用、三个 `needs…` 标志、切 Engine 时必须先搬工作再赋值。改为把 Engine 与文档在它上面的后台工作合成一个 `RuntimeEngineSession`（二者放进去就不再改变），状态每变一次就换一个新 session、只赋值一次；后台工作由显式的 `startBackgroundWork()` 启动；活动汇总与 App Nap activity 挪到每个 Engine 一份。分四步落地：只能显式启动 → 协调器随工作一并创建 → 活动汇总与 App Nap → 引入 session，第 1 步起测试就是回归护栏。提案经两轮、每轮四位审查者审查，实现又经一轮代码审查。同批修掉一个既有缺陷：Engine 背后的进程重启（包括 service 闲置时被系统回收）时文档有内容打开，Debug 构建撞断言崩溃、Release 构建窗格不复位；改为由窗口走 `.main` 从头来过。除此之外用户可见行为不变。 |
-| [draft](draft-command-line-interface-app-embedding.md) | `runtime-viewer-cli` 嵌入 App 包与设置页 | In Progress | 愿景第四步。Xcode command-line tool target 随 App 签名公证（`next` 上已落地，位置改为 `Contents/Applications/`）；Settings 新增「Command Line Tool」页做 `/usr/local/bin` 符号链接与「允许命令行访问」开关（只在 `feature/command-line-interface-app-embedding` 上，未合入）。 |
+| [0059](0059-command-line-interface-app-embedding.md) | `runtime-viewer-cli` 嵌入 App 包与设置页 | Implemented（设置页暂缓） | 愿景《无头 RuntimeViewer》第四步。Xcode command-line tool target 嵌在 `Contents/Applications/`，随 App 签名公证，自 v3.0.0-beta.5 起随 App 发布。Settings 的「Command Line Tool」页（`/usr/local/bin` 符号链接与「允许命令行访问」开关）拆为暂缓的后续项。 |
 | [draft](draft-derived-data.md) | 派生数据：按系统版本把 Find 语料存盘，为索引缓存铺路 | Accepted | 每次启动都要重建 section、重打 Find 语料、重备交叉引用表，可这些结果只取决于系统镜像与 App 自身的代码。引入类似 Xcode DerivedData 的目录 `~/Library/Caches/<bundle id>/DerivedData`，按「平台 + 系统版本 / build + 共享缓存 UUID」与「含 RuntimeViewerCore 的映像及其依赖的 UUID」分开存放，只管共享缓存里的系统镜像，只由两个内嵌 service 显式开启后读写。第一期只做 Find 语料：读取是构建的第一个阶段（建语料前先查盘），Always Index 的镜像在后台索引一派发就提前读取，写盘是构建的结尾；读回逐项校验，读取标记等遍历过才删；还没有 section 的镜像在点开结果、查调用层级时先前台加载；服务进程按 build 与 14 天未用清理，设置页与应用菜单可手动删除。省下的语料打印 CPU 至少与建 section 相当；section 照旧重建，上游索引缓存（先在 App 进程里测量）与第二期（不建 section 直接浏览）各自另立提案。经两轮对抗审查（4 🔴 12 🟡，1 🔴 17 🟡），均已修进提案。 |
 
-> 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
+> 0000 采用早期格式，正文没有状态字段，按「旧文档原地不动」的约定不回填；表里的 Implemented
+> 是 2026-10-26 对照代码核实的（修复在 `RuntimeNetworkConnection.swift`）。0001 也是早期格式，
+> 但正文有英文的 Status 字段，撤回时照常更新了它。
 
-> **编号占用提醒**：`0007` 曾在两条 feature 分支上各被用过一次，2026-08-16 合流时已解决——
-> `feature/objc-rendering-and-indexing` 的 `0007-objc-relationship-index-returns-to-application.md`
-> 保留 `0007`，`feature/uifoundation-settings-adoption` 的那篇改号为 `0011`。
-> 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
-> `0012` 在 `feature/uifoundation-navigation`
-> （`0012-replace-uxkit-navigation-with-uifoundation.md`，已被本分支的 0013 取代）。
-> **新提案从 `0024` 起编号**，不要只看本分支已有的文件挑下一个空号。
->
-> **`0013` 是第二次撞号，2026-08-29 合流时已解决**——`feature/inject-ios-simulator-process`
-> 与 `next` 上的 `0013-replace-uxkit-with-appkitplus.md` 同号，两者互不知情。按前一次 `0007`
-> 的先例，先入 `next` 的 `0013-replace-uxkit-with-appkitplus.md` 保号，后到的
-> `0013-inject-ios-simulator-process.md` 改号为 `0014`。本条与
-> `0033-runtime-bookmark-scope` 无关——那篇按 skill 的规定落地时才分配编号，2026-10-12 收尾时编为 `0033`。
+> **编号在落地时分配。** 草案叫 `draft-<slug>.md`，不预留编号；实现合进 `next` 的那个 commit
+> 里，取远端 `next` 与 `main` 上已有的最大编号加一，把文件改名为 `NNNN-<slug>.md`，同时改标题行
+> 和仓库里所有指向它的链接。两条分支在同一时刻落地、取到同一个号时，先进 `next` 的保号，后到的
+> 改号。早年创建时就编号，撞过两次：`0007`（2026-08-16 合流，另一篇改为 `0011`）与 `0013`
+> （2026-08-29 合流，后到的改为 `0014`）。`0012` 所在的分支已删除，它从未进入 `next`，被 0013
+> 取代。
+
+## 暂缓的后续项
+
+已落地提案里拆出来、暂时不做的剩余部分。要做其中一项时，按提案流程新起一份提案，并从这里删掉
+对应的行。
+
+| 后续项 | 出处 | 规模 | 说明 |
+|--------|------|------|------|
+| 交叉引用的命令行与 MCP 入口 | [0056](0056-cross-references.md) 落地第 4 步 | 中 | `runtime-viewer-cli` 的 `callers` / `callees` / `references` 三个子命令与 MCP 的三个工具；同批更新 agent 插件与 `Guides/CommandLineInterface.md` |
+| 命令行工具的安装设置页 | [0059](0059-command-line-interface-app-embedding.md) | 中 | Settings 的「Command Line Tool」页、`/usr/local/bin` 符号链接安装器与「允许命令行访问」开关。旧实现在本地分支 `feature/command-line-interface-app-embedding`（`c8b8f039`，落后 `next` 454 个 commit），要在新分支上参照它重做 |
+| 嵌入的 CLI 在 Debug-arm64e 构建里可能连错 helper daemon | [0059](0059-command-line-interface-app-embedding.md) 决策日志 2026-10-12 | 待查 | 疑点，未复现：那条旧分支在嵌入入口里打开了 `runtimeViewerIsARM64EVariant`，`next` 上没有这一行 |
+| SourceEditor 里系统符号与工程符号分色 | [0009](0009-content-editor-engine-selection.md)「未完成」B | 小到中 | 主题模型 `Settings.Theme.Preset` 要先加一档（例如 `systemTypeName`） |
+| Attach to Process 事先置灰不可注入的模拟器进程 | [0014](0014-inject-ios-simulator-process.md) | 小 | 现在是点了才报错 |
+| 模拟器注入的两项手动验证 | [0014](0014-inject-ios-simulator-process.md) | 小 | 断开后重新注入；注入用户自己安装的 App |
 
 ## 与 `Plans/` 的关系
 

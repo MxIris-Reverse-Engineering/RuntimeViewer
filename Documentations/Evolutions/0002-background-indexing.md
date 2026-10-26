@@ -1,9 +1,9 @@
 # 0002 - 后台索引
 
-- **状态**: Accepted
+- **状态**: Implemented
 - **作者**: JH
 - **日期**: 2026-04-24
-- **最后更新**: 2026-10-16
+- **最后更新**: 2026-10-26
 
 ## 摘要
 
@@ -862,3 +862,4 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift
 | 2026-10-15 | **Always Index 按 Engine 区分**：`AlwaysIndexEntry` 新增 `appliesToAllEngines`（默认 true）与 `engines`；协调器先把条目投影到自己的 Engine 再派发、再比较前后变化，只改别的 Engine 的选择不会在本 Engine 上重新派发；设置页每行加 Engine 多选菜单（[0054-always-index-per-engine](0054-always-index-per-engine.md)） | 用户反馈：清单原先对每个 Engine 都生效，同一个镜像在 My Mac、Mac Catalyst、Attach 的进程、设备上各索引一遍。旧的持久化数据解码为对所有 Engine 生效，行为不变。Always Index 的派发语义以该提案为准 |
 | 2026-10-16 | **同一 Engine 上的文档共享批次**：`startBatch` 在依赖遍历为空（根镜像已索引）时不开批次、返回 `nil`；批次记下请求方（`RuntimeIndexingRequester`，每个文档、每个 Engine 会话一个），新增 `withdraw(_:)`，没有请求方持有时才取消；已取消、最后一次加载还没回来的批次不再被新请求合并；协调器关闭时撤回并停止响应一切，切走时撤回而不是 `cancelAllBatches()`，只把旧 Engine 上不再继续跑的批次归档为已取消；reload 泵在有派发进行中时只记一笔、等这轮结束再补（[ResolvedIssues/2026-10-16](../ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md)） | 用户反馈：同一个 Engine 再新建一个文档，原窗口 Report 里的批次「变成 0 Images」。新文档把每条 Always Index 重新派发一遍，已索引的镜像照样开批次，每个窗口都看到这些空批次，每个结束时还 reload 整个 Engine；派发途中的 reload 又起重叠的派发，5 条变成 10 个空批次。同类的还有两处：关闭第二个文档会取消合并给它的、第一个文档的批次；切走会取消旧 Engine 上所有文档的批次（修订 2026-04-28 与 2026-08-03 的 swap 决策中「取消旧 manager 上的批次」一项）。Report 里的 Cancel / Cancel All 与设置开关仍直接取消：它们本就作用于所有文档 |
 | 2026-10-16 | **协调器改为每个 Engine 一个，同一 Engine 的文档共用**（`RuntimeEngineBackgroundWork`，取代上一行的「请求方」）：派发按 Engine 只做一次，后开的文档什么也不派发；文档离开只是退出，Engine 上还有别的文档就什么都不取消，最后一个离开才取消全部批次、丢掉历史；Engine 背后换了进程由协调器自己从就绪状态得知、重新派发；请求方与 `withdraw(_:)` 删除，切 Engine 时归档已取消批次的那一套删除，「已索引不开批次」「已取消的批次不再复用」「派发途中的 reload 等这一轮结束再补」保留（[后台工作按 Engine 共享](0055-engine-scoped-background-work.md)） | 用户：「Report那里不管开多少个文档都是一样的，因为Engine都是共享一份」「开不同的Engine才不同，一样的Engine显示一样」。请求方只修了取消，历史仍是每个文档各记一份：后开的窗口历史是空的，Clear History 只清自己，切过 Engine 的窗口还留着上一个 Engine 的记录。用户选定最后一个文档离开时「停掉并清空」，只开一个窗口时行为不变 |
+| 2026-10-26 | Accepted → Implemented | 功能早已落地（`RuntimeBackgroundIndexingManager`、`RuntimeBackgroundIndexingCoordinator`），之后又经 0027、0030、0054、0055 多次演进，状态却一直停在 Accepted。整理在途事项时对照代码核实，经用户批准更正。配套文档：不另写，后续各提案与 `ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md` 已记下维护时会踩的决策。术语：「后台索引」「Always Index」是界面上可见的功能名，不收进术语表。 |

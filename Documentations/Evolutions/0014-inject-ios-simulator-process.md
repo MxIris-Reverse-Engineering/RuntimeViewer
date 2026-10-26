@@ -1,13 +1,13 @@
 # 0014 - 支持注入 iOS Simulator 进程
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-08-18
-- **最后更新**: 2026-08-22
+- **最后更新**: 2026-10-26
 - **所属愿景**: 无
 - **关联提案**: 无
-- **实现分支 / PR**: `feature/inject-ios-simulator-process`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/inject-ios-simulator-process`（已合入 `next`，分支已删除）
+- **配套文档**: 无，2026-10-26 判定不另写，见决策日志
 
 ## 摘要
 
@@ -773,3 +773,4 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-23 | 落地步骤 7 完成，并顺带覆盖步骤 3 的宿主侧一半 | 新增 `InjectionTargetPlatformProbe`（读目标 `LC_BUILD_VERSION`，不用可执行文件路径判断 —— RuntimeRoot 前缀只认得出系统 daemon，用户自己装的 app 跑在设备 data 容器里没有这个标记）与 `PayloadPlatform`（这份构建有哪些 slice）。两者刻意分开：前者描述目标**是什么**，后者描述我们**能给什么**，缺口处就是显式拒绝的位置 —— tvOS / watchOS / visionOS 模拟器是完全可读的目标但没有对应 slice，现在如实报错，而不是把最近的 slice 交给 dyld 去拒（那正是上一次打崩进程的路径）。daemon 侧的守卫仍未做。 |
 | 2026-08-23 | 落地步骤 4 复核：联调路径已通，但构建脚本仍缺开关 | 提案原文称 MachInjector 的 local path 指向的目录不存在、因此吃远程 pin。复核发现该目录现已存在（git 干净、tag `0.5.0`），`USING_LOCAL_DEPENDENCIES=1` 下 `swift package show-dependencies` 确认 RuntimeViewer → swift-helper-service → MachInjector 整条链解析到本地路径，步骤 4 的阻塞已消失。**但 `RunScript.sh` / `ArchiveScript.sh` 都不传该环境变量**，实机 daemon 仍会吃远程 pin，改本地 MachInjector 不生效 —— 验证注入器改动前需先给脚本加开关（或构建时手动带上）。 |
 | 2026-08-24 | 审查裁决：Bonjour 服务名改回可读形状，进程级唯一性只留在 TXT | 身份改造把广播名做成了 `{deviceID}-{pid}`，理由是「实例名必须全局唯一」。审查发现这条理由**只对 mDNS 自身成立**，而代价落在别处：**旧宿主把 `endpoint.name` 同时当显示名和持久化键用** —— 它经 `RuntimeSource.description` 流进 `NSOutlineView` 的 `autosaveName` / `identifier`（`SidebarRootViewController:122/140`、`SidebarRuntimeObjectViewController:263/264`），于是对端每启动一次，旧宿主的 `UserDefaults` 里就多一套展开状态与列宽，永不回收；用户看到的也从设备名变成原始 UUID。iOS 端有外部用户，混版是常态。改为 `「设备名 (进程名)」`：**新宿主本来就只认 TXT 的 `rv-device-id` + `rv-proc-pid`**（`RuntimeNetworkEndpoint.uniqueKey`），不依赖名字唯一，所以「同一模拟器里多个注入进程」这个核心场景不受影响 —— 它们进程名本就不同。残留代价：同设备两个**同名**进程会撞 mDNS 名，系统自动加后缀，新宿主无感、旧宿主显示后缀。顺带把 UDID 移出了广播名（TXT 的 `rv-device-id` 不变，隐私问题整体另案，见 KnownIssues `PR106.14`）。 |
+| 2026-10-26 | In Progress → Implemented | 注入模拟器进程早已合进 `next` 并随 App 发布（`RuntimeProcessAttacher` 的模拟器路径、嵌入的 `RuntimeViewerSimulatorServer`），2026-08-23 端到端注入 SpringBoard 成功。剩下三项拆为暂缓的后续项，记在提案索引：断开后重新注入、注入用户自己安装的 App 两项手动验证，以及 Attach to Process 列表事先把不可注入的进程置灰（现在是点了才报错）。整理在途事项时经用户批准更正。配套文档：不另写。术语：无新增。 |
