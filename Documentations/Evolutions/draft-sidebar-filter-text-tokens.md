@@ -1,6 +1,6 @@
 # Draft - 侧边栏过滤框换成 Xcode 导航区的文字 token 框
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-10-26
 - **最后更新**: 2026-10-26
 - **所属愿景**: 无
@@ -105,7 +105,8 @@ ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里。
 
 **落地步骤**（每步构建与相关测试通过后单独提交）：
 
-1. 过滤条件模型 `NavigatorTextFilter`：解析、比较、组合，以及它们的测试。
+1. 过滤条件模型 `NavigatorTextFilter`：解析、比较、组合，以及它们的测试。**已完成（2026-10-26）**：
+   `RuntimeViewerApplication/NavigatorTextFilter.swift`，`NavigatorTextFilterTests` 13 个测试（含参数化的 31 个用例）通过。
 2. 四类 ViewModel 改收 `NavigatorTextFilter`，四条管线按新规则匹配。macOS 现有的 `NSFilterSearchField` 与 iOS 的搜索栏先把文字
    包成只有 `typedText` 的过滤条件，150 ms 的合并延迟随之挪到 iOS 的 ViewController。更新现有测试，补上新规则的测试。
 3. 等 AppKitPlus 0.18.0 发布：依赖下限抬到 0.18.0（锁文件只改这一条）；写 macOS 接入层 `NavigatorTextFilterFieldAdapter`
