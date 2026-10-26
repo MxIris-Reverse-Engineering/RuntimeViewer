@@ -67,10 +67,11 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
 
 服务进程每次启动、每次重连都会读派生数据。一个能让读取代码崩溃的文件，会让「My Mac」反复崩溃，所以有三道关：
 
-1. **容器校验**（`RuntimeDerivedDataContainer`）：头部校验和；每段一个 8 字节 SHA-256 校验和；LZFSE 解压时，
-   缓冲区限定在记录的长度内；头部里的种类、变体、镜像路径、系统目录名与生产者摘要必须和期望的一致，所以放错
-   地方的文件也会被拒。文件**整个读进内存，不做 mmap**：映射着的文件一旦被另一个进程截短，碰到下一页就是 SIGBUS。
-   校验失败的文件当场删掉。
+1. **容器校验**（`RuntimeDerivedDataContainer`）：头部校验和；每段一个 8 字节 SHA-256 校验和；记录的解压长度
+   不超过 1 GiB（`maximumDecodedSectionByteCount`，AppKit 全部分段解压后才 31 MiB），LZFSE 解压时缓冲区限定在
+   这个长度内——长度来自文件，分配之前必须先查，`Int.max` 曾让缓冲区大小溢出而崩溃；头部里的种类、变体、镜像
+   路径、系统目录名与生产者摘要必须和期望的一致，所以放错地方的文件也会被拒。文件**整个读进内存，不做 mmap**：
+   映射着的文件一旦被另一个进程截短，碰到下一页就是 SIGBUS。校验失败的文件当场删掉。
 2. **快照校验**（`RuntimeInterfaceCorpusSnapshot.corpus(from:transformer:)`）：凡是读者会 trap 的条件，都在构造
    那个值之前先查：`FrozenSemanticString` 解码器的规则、区域与文本和 span 边界的关系、条件下标、选项名
    （`VisibilityCondition.Requirement.init` 带前置条件）、嵌套区间。
@@ -101,21 +102,34 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
   （根 `AGENTS.md` 的 *The service runs at the priority of the requests waiting on it*，以及
   `ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`）。
 - `restore(imagePaths:transformer:)` 只读不打印，给还没索引的镜像用：Always Index 的镜像在批次派发时就读回，
-  启动后马上可搜。
+  启动后马上可搜。构建请求对没建索引的镜像走不到读盘那一步，引擎直接回「没建索引」，所以协调器记下请它读回过的
+  镜像（`FindCorpusCoordinator` 的 `requestedRestoreImagePaths`）：语料开关重新打开时把它们再读一次；改
+  Transformer 后的重建照旧发构建请求，被拒的改为读回。
+- 读回中的镜像在仓库里也是一个构建，覆盖情况把它报成 `.pending`；协调器并入覆盖情况时跳过正在读回的镜像，
+  否则 Report 会把它们列进排队中。
 
 **最容易踩的一条：有语料不等于镜像已加载，更不等于已索引。** 读回语料的服务进程不一定加载了那个镜像，更没有建
 它的 section。所以凡是要用 section 的地方，都必须先走 `RuntimeEngine.indexImageIfNeeded(at:)`：镜像没加载就
-`loadImage`，加载了就只建索引。只调 `objectsWithProgress` 不够。目前有三处：
+`loadImage`，加载了就只建索引。只调 `objectsWithProgress` 不够。目前有这几处：
 
-- 内容区：接口取到 `nil`、且镜像没索引时，先前台加载，再取一次接口。
-- Inspector：跟随 `imageIndexedLater(_:)`，镜像建好后重取。
-- Call Hierarchy 与 Callees：用根查询之前先加载根所在的镜像，摘要栏显示「Loading <镜像名>」。
+- 内容区（`ContentTextViewModel.interface(of:fetchingWith:runtimeEngine:)`）：接口取到 `nil` 时先前台加载，
+  再取一次接口。不论镜像是否已经建好都再取：后台索引可能恰好在第一次取与检查之间建完，而内容区不会自己再取。
+- Inspector 的 Hierarchy、Relationships、References 三个页签：跟随 `imageIndexedLater(_:)`，镜像建好后重取；
+  页签本身不主动建索引。
+- Call Hierarchy、Callees 与 Type References：查询之前先加载根所在的镜像（`LoadRequest.imagePath`），摘要栏
+  显示「Loading <镜像名>」。交叉引用只扫已建索引的镜像，不先加载就漏掉根所在镜像里的调用者或引用。
+
+新加一个用到 section 的消费者，要照这几处之一处理。把它们集中到一处的办法评估过，行不通：放进引擎会推翻交叉
+引用只扫已建索引镜像的性能规矩，在打开搜索结果时统一建索引，各处仍要在建好后重取（`KnownIssues` 里的
+[PR126.11](KnownIssues/2026-10-26-pr126-review-findings.md)）。
 
 一次读取也算进行中的工作：Report 页签显示活动标记，`BackgroundWorkProcessActivity` 让 App 不进 App Nap。
 
 ## 七、新增一种派生数据
 
-1. 给 `RuntimeDerivedDataKind` 加一个 case。它的 raw value 是文件名的一部分，定了就不能改。
+1. 给 `RuntimeDerivedDataKind` 加一个静态常量。它的 raw value 是文件名的一部分，定了就不能改，而且只能用 ASCII
+   字母和数字（`init(rawValue:)` 里有前置条件）：文件名是 `<种类>-<变体>.rvdd`，写一种数据时按「种类名-」前缀
+   删掉这个种类的其他变体，而变体自己带连字符，种类名里要是也有，它的文件就会被当成别的种类的变体删掉。
 2. 定一个**变体**字符串，写进系统与生产者以外、影响内容的一切输入。语料的变体是 Transformer 摘要
    （`Transformer.Configuration.derivedDataDigest`，按 pattern 排好的 C 类型替换另外追加，因为字典编码出来的
    顺序因进程而异）加上成员的排序方式。

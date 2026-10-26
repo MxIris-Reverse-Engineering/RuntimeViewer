@@ -3,11 +3,11 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-10-21
-- **最后更新**: 2026-10-24
+- **最后更新**: 2026-10-26
 - **所属愿景**: 无
 - **关联提案**: [0002](0002-background-indexing.md)（后台索引）、[0023](0023-content-loading-overlay.md)（内容区加载遮罩）、[0027](0027-background-indexing-yields-to-foreground.md)（后台索引给前台让路）、[0029](0029-find-navigator.md)（Find navigator 与文本语料）、[0030](0030-report-navigator.md)（Report navigator）、[0037](0037-local-runtime-xpc-service.md)（本地引擎搬进 XPC service）、[0051](0051-catalyst-xpc-service.md)（Catalyst XPC service）、[0054](0054-always-index-per-engine.md)（Always Index 按 Engine 区分）、[0055](0055-engine-scoped-background-work.md)（后台工作按 Engine 共享）、[0056](0056-cross-references.md)（交叉引用）、[0058](0058-runtime-engine-session.md)（RuntimeEngineSession）
-- **实现分支 / PR**: `feature/derived-data`
-- **审查**: 两轮对抗审查，每轮四位审查者，分别侧重缓存键与失效、架构集成、性能论断与证据、范围与验收。[第一轮](../Reviews/2026-10-21-draft-derived-data-review.md)针对初稿，合并后 4 🔴、12 🟡；[第二轮](../Reviews/2026-10-21-draft-derived-data-review-round-2.md)针对第一次修订稿，合并后 1 🔴、17 🟡。两轮的问题均已在本版处理，处理方式见决策日志
+- **实现分支 / PR**: `feature/derived-data`，PR #126（待合并）
+- **审查**: 两轮对抗审查，每轮四位审查者，分别侧重缓存键与失效、架构集成、性能论断与证据、范围与验收。[第一轮](../Reviews/2026-10-21-draft-derived-data-review.md)针对初稿，合并后 4 🔴、12 🟡；[第二轮](../Reviews/2026-10-21-draft-derived-data-review-round-2.md)针对第一次修订稿，合并后 1 🔴、17 🟡。两轮的问题均已在本版处理，处理方式见决策日志。实现的代码审查（PR #126：`/code-review xhigh` 15 条，加 Codex 自动审查 1 条）逐条按四问核实，裁决与修复见 [KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md)
 - **配套文档**: 实现说明 [`DerivedData.md`](../DerivedData.md)（只有两个服务进程读写、生产者身份为什么读内存里的映像、清理为什么按最近使用、读取标记为什么等遍历完才删、有语料不等于镜像已加载、新增一种派生数据的步骤）；不另写使用指南
 
 ## 摘要
@@ -825,6 +825,26 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 3. 读日志：每个 Engine 一行「Read N of M corpora from derived data in X s: …」，X 是从提前读取开始到全部可搜，后面列出每个镜像的用时；服务进程里每个镜像另有一行「Read the corpus of … from derived data」。
 4. 看 Report：这些镜像应当都在「Restored from Derived Data」下，构建历史里没有新打印的语料。磁盘占用看 Settings › Indexing › Derived Data。
 
+## 代码审查后的修复（2026-10-26）
+
+PR #126 的代码审查共 17 条（审查 15 条、Codex 1 条、复核中找到的同类 1 条），逐条裁决记在
+[KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md)，ID 为 `PR126.<N>`。没有会崩溃的问题；
+在本分支上修了 11 条，其余 6 条不修或误报，理由同记在那里。修的行为问题都先写了修复前失败的测试。
+
+- **搜得到、没建索引的镜像，补上漏掉的两个入口**：Find Type References 与 Call Hierarchy、Callees 一样，先为根
+  所在的镜像建索引（PR126.1）；Inspector 的 References 页签与另外两个页签一样，镜像建好后重取（PR126.17）。
+- **内容区**：第一次取到空接口后，不论镜像是否已经建好都再取一次，免得后台索引恰好在两步之间建完时一直空白
+  （PR126.16）。
+- **语料协调器**：记下请它读回过的镜像，语料开关重新打开时再读一次，改 Transformer 后被引擎以「没建索引」拒绝的
+  构建改为读回（PR126.2）；并入覆盖情况时跳过正在读回的镜像，Report 不再把它们列成排队中（PR126.4）。读回放在
+  拒绝之后，不与构建请求同时发出，理由见 KnownIssues 的 PR126.2。
+- **容器与存储**：解压长度上限 1 GiB（PR126.6）；种类名只许 ASCII 字母与数字（PR126.7）；并发读测试改为数出
+  等待的读者再放行（PR126.13）。
+- **其余**：打印队列的注释（PR126.5）、缩写（PR126.14，连同全库既有的 13 处）、两个方法改为 `private`（PR126.15）。
+
+实现说明 [`DerivedData.md`](../DerivedData.md) 同步更新：第四节写明解压长度的上限，第六节的入口清单补上 Type
+References 与 References 页签、写明重新读回与并入覆盖情况的规则，第七节写明种类名的规则。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -885,3 +905,6 @@ AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016
 | 2026-10-24 | 写一篇实现说明 `Documentations/DerivedData.md`，不另写使用指南 | 有好几条维护时会踩、代码里看不出来的决定：生产者身份为什么读内存里的映像、带名字不带路径，清理为什么按最近使用，读取标记为什么等遍历完才删，有语料不等于镜像已加载。调用方要守的规矩只有「新增一种派生数据怎么做」这一条，写进实现说明的一节和根 `AGENTS.md` 就够，不值得单独成篇。 |
 | 2026-10-24 | 术语表登记「派生数据」「系统身份」「生产者身份」「读取标记」；README 加「Derived Data」一节 | 这四个词是本提案引入的；派生数据会在用户的 Caches 目录里占空间，又有设置项和菜单命令，属于用户看得到的行为。 |
 | 2026-10-24 | 实现完成，待合并 | 第 1–6 步都已落地；第 5 步的 App 层验收（两个 Engine、两次启动、读 Report 与日志）留给用户，做法见「第 5 步的落地记录」。完整验证：App 的 Debug-arm64e 构建通过；Core 全量测试（跳过 `RuntimeBackgroundIndexingManagerTests`）主套件 554 个、另一套件 238 个全过，后台索引管理器套件单独跑 27 个全过；Packages 全量退出码 0，主套件 622 个全过。Core 全量里交叉引用预建套件有 2 个测试失败，都是等后台工作的 60 / 120 秒时限到点：当时另一个会话的测试正占用 20 多个核，负载约 28。本分支没有改交叉引用模块与它的测试，这个套件单独重跑 15 个全过，判定为负载造成，不是本次引入。 |
+| 2026-10-26 | 实现的代码审查：修 11 条，其余 6 条不修或误报 | PR #126 的审查交回 15 条，Codex 的自动审查另有 1 条，复核中又找到 1 处同类，逐条按四问裁决，见 [KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md) 与上面「代码审查后的修复」一节。用户批准先在本分支修完再合并。为复现内容区的竞态，取接口的逻辑抽成内部静态函数 `ContentTextViewModel.interface(of:fetchingWith:runtimeEngine:)`，这个新的测试接口经用户批准。 |
+| 2026-10-26 | 改 Transformer 后的读回放在构建被拒之后 | 第一版修法在安排重建时与构建请求同时发起读回。读回若先于构建的拒绝返回，读回的结算会把镜像留给在途的构建，构建随后被拒，镜像就被记成没有语料。现在只在构建因没建索引被引擎拒绝时才改为读回，两者不会同时在途。 |
+| 2026-10-26 | 修复后的完整验证，以及与 next 的对照 | 在公司的 Mac Studio（10 核，macOS 26.7，Xcode 27.2）上：App 的 Debug-arm64e 构建通过，Debug workspace 的锁文件没被改写；MCP 95 个全过；Core 全量（跳过 `RuntimeBackgroundIndexingManagerTests`）900 个红 3 个，管理器套件单独 27 个全过；Packages 全量 827 个红 2 个。五个红灯里，两个在这台机器上必红（`CrossReferenceQueryTests.internalSwiftTypesScanTheirOwnImage` 与 `RelationshipsEquivalenceSnapshotTests`）：测试按 macOS 27 写，用到的类型 26.7 没有。另外三个是等待时限在满载下到点，单独重跑都通过：`RuntimeBackgroundIndexingAlwaysIndexEngineTests.removingEngineStopsFutureDispatchesOnly`（时限 120 秒，单独 28 秒，与 2026-10-16 记下的一样）、`CrossReferencePreparationTests.imagesAskedAboutRenewTheAnalyzer`（60 秒，单独 3 秒）、`RuntimeObjectIdentityCallSiteTests.specializationPaneRebuildsTheSameRowsOnPropertiesDifference`（2 秒，单独 0.15 秒）；后两个所测的代码本分支没有改。PR 描述里承诺的对照：next 在同一台机器上的 Core 全量 831 个，只红那两个必红的；交叉引用那组 70 个测试两边完全相同，本分支多红的一个单独重跑通过，判定为两次运行时的负载不同，不是本分支引入。 |
