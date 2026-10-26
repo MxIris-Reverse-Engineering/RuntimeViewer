@@ -191,8 +191,11 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     // MARK: - Loading
 
     /// One section's pipeline: each subject is asked for once, the newest replacing the one in
-    /// flight, behind the shared loading placeholder. Expanding or collapsing the unnamed functions
-    /// lists the rows again without asking anything.
+    /// flight, behind the shared loading placeholder — and once more when its image is indexed, as
+    /// the other tabs are (`InspectorRelationshipsViewModel`): an object a Find hit reached
+    /// through a corpus read from derived data has no sections until then, and the engine answers
+    /// that its image is not indexed. Expanding or collapsing the unnamed functions lists the rows
+    /// again without asking anything.
     private func sectionStates(_ section: Section, from subjects: Observable<FindCrossReferenceTree.LoadRequest?>) -> Observable<SectionState> {
         // A subject is asked for once the tab is on screen, and only once:
         // hiding and showing the tab again asks nothing more.
@@ -209,18 +212,23 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
                     maximumConcurrentScans: settings.search.maximumConcurrentCrossReferenceScans,
                     preparedIndexByteLimit: settings.search.preparedCrossReferenceByteLimit
                 )
-                return Observable<SectionResult>.async {
-                    do {
-                        return .loaded(request, try await Self.rows(for: request, in: section, options: options, engine: engine))
-                    } catch {
-                        return .failed(FindSession.crossReferenceFailureMessage(for: error))
+                let asks = request.imagePath.map { imagePath in
+                    Observable.just(()).concat(engine.imageIndexedLater(imagePath))
+                } ?? .just(())
+                return asks.flatMapLatest { _ in
+                    Observable<SectionResult>.async {
+                        do {
+                            return .loaded(request, try await Self.rows(for: request, in: section, options: options, engine: engine))
+                        } catch {
+                            return .failed(FindSession.crossReferenceFailureMessage(for: error))
+                        }
                     }
+                    .withLoadingPlaceholder(
+                        .loading,
+                        appearsAfter: LoadingPlaceholderTiming.appearsAfter,
+                        staysAtLeast: LoadingPlaceholderTiming.staysAtLeast
+                    )
                 }
-                .withLoadingPlaceholder(
-                    .loading,
-                    appearsAfter: LoadingPlaceholderTiming.appearsAfter,
-                    staysAtLeast: LoadingPlaceholderTiming.staysAtLeast
-                )
             }
             .observeOnMainScheduler()
         let expandedRequest = $expandedUnnamedFunctions.asObservable()

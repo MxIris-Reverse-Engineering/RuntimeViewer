@@ -138,6 +138,13 @@ public final class FindCorpusCoordinator {
     /// transformer change knows what to rebuild.
     private var requestedImagePaths: Set<String> = []
 
+    /// Images the coordinator was asked to read from the derived data of the
+    /// engine's process (`restoreCorpora(of:)`), so the switch going back on
+    /// and a transformer change know what to read again: a build request
+    /// cannot bring back one that is not indexed, which the engine refuses
+    /// before it reads anything.
+    private var requestedRestoreImagePaths: Set<String> = []
+
     /// The coverage refresh in flight, if any. One at a time: a call made
     /// while it runs only sets `isCoverageRefreshPending`.
     private var coverageRefreshTask: Task<Void, Never>?
@@ -388,15 +395,20 @@ public final class FindCorpusCoordinator {
     /// those of `requestedImagePaths` not built or being read — the Always
     /// Index images, as their batches are dispatched — so a search finds them
     /// before they are indexed. An image read is handled as a build that
-    /// finished: built, reported through `corpusBuilt`, asked for again when
-    /// the transformer changes; it is listed in `restoredImagesByImagePath`
-    /// rather than among the builds. An engine whose process keeps no derived
-    /// data, or predates the command, reads nothing, and an image nothing is
-    /// stored for is left to the build its indexing will ask for. Paths may be
-    /// spelled either way; see `canonicalImagePath(_:)`.
+    /// finished: built, reported through `corpusBuilt`; it is listed in
+    /// `restoredImagesByImagePath` rather than among the builds. Every image
+    /// asked for, while the switch was off too, is read again when the switch
+    /// goes back on, and when a transformer change asks for its build and the
+    /// engine refuses it as not indexed. An engine whose process keeps no
+    /// derived data, or predates the command, reads nothing, and an image
+    /// nothing is stored for is left to the build its indexing will ask for.
+    /// Paths may be spelled either way; see `canonicalImagePath(_:)`.
     func restoreCorpora(of requestedImagePaths: [String]) {
-        guard isEnabled, !isClosed, !isCorpusUnsupportedByEngine else { return }
-        let imagePaths = Set(requestedImagePaths.map(canonicalImagePath)).filter { imagePath in
+        guard !isClosed else { return }
+        let canonicalImagePaths = Set(requestedImagePaths.map(canonicalImagePath))
+        requestedRestoreImagePaths.formUnion(canonicalImagePaths)
+        guard isEnabled, !isCorpusUnsupportedByEngine else { return }
+        let imagePaths = canonicalImagePaths.filter { imagePath in
             buildStatesByImagePath[imagePath]?.isBuilt != true && !restoringImagePaths.contains(imagePath)
         }
         guard !imagePaths.isEmpty else { return }
@@ -714,8 +726,15 @@ public final class FindCorpusCoordinator {
             buildStatesByImagePath[imagePath] = nil
         case .failure(is RuntimeInterfaceCorpusBuildError):
             // Not indexed yet: nothing to print, and nothing went wrong. The
-            // image is asked for again once the engine reports it indexed.
+            // image is asked for again once the engine reports it indexed —
+            // and, if it is one to read from derived data, read now: the
+            // engine refuses the build before it reads anything, and a
+            // transformer change asks for a build of every image, the ones
+            // read included.
             buildStatesByImagePath[imagePath] = nil
+            if requestedRestoreImagePaths.contains(imagePath) {
+                restoreCorpora(of: [imagePath])
+            }
         case .failure(let error) where RuntimeConnectionError.isLostConnection(error):
             // Not a failed build: the connection went away under it — the
             // service exited, the peer closed its socket. Once the engine is
@@ -750,15 +769,17 @@ public final class FindCorpusCoordinator {
     }
 
     /// Folds the engine's coverage into what the coordinator shows. An image
-    /// it holds a request for keeps the state its request reports; every
-    /// other image takes the engine's word — a corpus built before the
-    /// coordinator started or for another connection, one being built for
-    /// another connection, or one evicted since, which would otherwise stay
-    /// built here forever. Corpora that ended without the coordinator seeing
-    /// them go to the end of the history, in path order.
+    /// it holds a request for keeps the state its request reports, and so
+    /// does an image it is reading from derived data, which the engine counts
+    /// as a build waiting for the printer; every other image takes the
+    /// engine's word — a corpus built before the coordinator started or for
+    /// another connection, one being built for another connection, or one
+    /// evicted since, which would otherwise stay built here forever. Corpora
+    /// that ended without the coordinator seeing them go to the end of the
+    /// history, in path order.
     func mergeCoverage(_ coverage: RuntimeInterfaceCorpusCoverage) {
         var states = buildStatesByImagePath
-        for imagePath in Set(states.keys).union(coverage.statesByImagePath.keys) where buildRequests[imagePath] == nil {
+        for imagePath in Set(states.keys).union(coverage.statesByImagePath.keys) where buildRequests[imagePath] == nil && !restoringImagePaths.contains(imagePath) {
             states[imagePath] = coverage.statesByImagePath[imagePath]
         }
         if states != buildStatesByImagePath {
@@ -928,6 +949,7 @@ public final class FindCorpusCoordinator {
         _ = progressStaging.drain()
         buildStatesByImagePath = [:]
         requestedImagePaths.removeAll()
+        requestedRestoreImagePaths.removeAll()
         startPumps()
     }
 
@@ -962,6 +984,9 @@ public final class FindCorpusCoordinator {
             lastKnownIsEnabled = isEnabledNow
             if isEnabledNow {
                 requestBuildOfIndexedImages()
+                // The images read before are not all indexed, and those that
+                // are not have nothing to print from.
+                restoreCorpora(of: Array(requestedRestoreImagePaths))
             } else {
                 dropEveryCorpus(on: engine)
             }
@@ -990,6 +1015,10 @@ public final class FindCorpusCoordinator {
 
     /// Every corpus was printed with the old transformer; after the edits
     /// settle, drop them all and rebuild the ones the coordinator asked for.
+    /// The ones read from derived data are among them: those not indexed are
+    /// refused and read again instead (`finishBuildRequest`), which finds
+    /// nothing after an edit — derived data keeps one variant per image —
+    /// but the old variant once the edit is taken back.
     private func scheduleTransformerRebuild() {
         transformerRebuildTask?.cancel()
         let engine = engine

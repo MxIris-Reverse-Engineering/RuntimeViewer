@@ -195,9 +195,9 @@ public final class FindSession {
     /// How far the level loading now has come, for the summary bar.
     private var crossReferenceLoadProgress: (scannedImageCount: Int, totalImageCount: Int)?
 
-    /// The image the level loading now loads before it asks for the calls:
-    /// a root's, its sections not built because its corpus came from derived
-    /// data. For the summary bar.
+    /// The image the level loading now loads before it asks for the calls or
+    /// the references: a root's, its sections not built because its corpus
+    /// came from derived data. For the summary bar.
     private var crossReferenceLoadingImagePath: String?
 
     /// The images the scope of the tree on screen stood for when it ran; `nil`
@@ -945,12 +945,13 @@ public final class FindSession {
     /// at most `maximumConcurrentScans` images read at once — from their
     /// prepared cross references while `preparedIndexByteLimit` is set.
     ///
-    /// The calls of a member or function whose image has no sections — a
-    /// root a term found in a corpus read from derived data — are asked for
-    /// once the image is indexed the way the sidebar opens one
+    /// The calls of a member or function, or the references to a type, whose
+    /// image has no sections — a root a term found in a corpus read from
+    /// derived data, or a type opened from one — are asked for once the image
+    /// is indexed the way the sidebar opens one
     /// (`RuntimeEngine.indexImageIfNeeded(at:)`), its path handed to
     /// `reportImageLoading` meanwhile: the engine scans indexed images only,
-    /// and would miss the callers in the root's own image.
+    /// and would miss the callers or the references in the root's own image.
     private nonisolated static func loadLevel(
         _ request: FindCrossReferenceTree.LoadRequest,
         direction: FindCrossReferenceDirection,
@@ -961,7 +962,7 @@ public final class FindSession {
         reportImageLoading: @escaping @Sendable (String?) async -> Void,
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
     ) async throws -> RuntimeCrossReferenceQueryResult {
-        if case .calls(let subject) = request, let imagePath = subject.imagePath, try await !engine.isImageIndexed(path: imagePath) {
+        if let imagePath = request.imagePath, try await !engine.isImageIndexed(path: imagePath) {
             await reportImageLoading(imagePath)
             try await engine.indexImageIfNeeded(at: imagePath)
             await reportImageLoading(nil)

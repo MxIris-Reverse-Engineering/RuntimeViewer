@@ -1,5 +1,6 @@
 import Foundation
 @testable import RuntimeViewerCore
+import Synchronization
 import Testing
 @testable import RuntimeViewerApplication
 @testable import RuntimeViewerSettings
@@ -166,6 +167,82 @@ struct DerivedDataRestoreTests {
         await engine.stop()
     }
 
+    /// An image read but not indexed has nothing to print from: asking for
+    /// its build again, all the switch going back on did, left it out of
+    /// search (PR126.2).
+    @Test("turning the corpus switch off and on reads again the images read before, unindexed as they are")
+    func switchOffAndOnReadsAgain() async throws {
+        let fixture = try DerivedDataFixture()
+        let environment = ViewModelTestEnvironment()
+        environment.settings.search.isCorpusEnabled = true
+        let engine = try await Self.makeReaderEngine("switch", fixture: fixture, environmentTransformer: environment.settings.transformer)
+        let coordinator = environment.make { FindCorpusCoordinator(engine: engine) }
+        defer { withExtendedLifetime(coordinator) {} }
+        coordinator.restoreCorpora(of: [TestImages.libobjc])
+        _ = try await nextValue(from: coordinator.$restoredImagesByImagePath.asDriver(), timeout: 30, where: Self.isLibobjcRead)
+        try await waitUntil(timeout: 30) { !coordinator.hasWorkUnderWay }
+
+        environment.settings.search.isCorpusEnabled = false
+        try await waitUntil(timeout: 30) { coordinator.buildStatesByImagePath.isEmpty && coordinator.restoredImagesByImagePath.isEmpty }
+        environment.settings.search.isCorpusEnabled = true
+
+        _ = try await nextValue(from: coordinator.$restoredImagesByImagePath.asDriver(), timeout: 30, where: Self.isLibobjcRead)
+        #expect(coordinator.buildStatesByImagePath[TestImages.libobjc]?.isBuilt == true)
+        #expect(try await !engine.isImageIndexed(path: TestImages.libobjc))
+        await engine.stop()
+    }
+
+    /// Derived data keeps one variant per image, so under the edited
+    /// transformer there is nothing to read; back under the old one there is
+    /// again (PR126.2).
+    @Test("a transformer edit taken back reads again the images read before, unindexed as they are")
+    func transformerEditTakenBackReadsAgain() async throws {
+        let fixture = try DerivedDataFixture()
+        let environment = ViewModelTestEnvironment()
+        environment.settings.search.isCorpusEnabled = true
+        let engine = try await Self.makeReaderEngine("transformer-back", fixture: fixture, environmentTransformer: environment.settings.transformer)
+        let coordinator = environment.make { FindCorpusCoordinator(engine: engine) }
+        defer { withExtendedLifetime(coordinator) {} }
+        coordinator.restoreCorpora(of: [TestImages.libobjc])
+        _ = try await nextValue(from: coordinator.$restoredImagesByImagePath.asDriver(), timeout: 30, where: Self.isLibobjcRead)
+        try await waitUntil(timeout: 30) { !coordinator.hasWorkUnderWay }
+
+        let editRebuild = Task { try await nextValue(from: coordinator.corporaRebuilt, timeout: 30) }
+        environment.settings.transformer.objc.cType.isEnabled.toggle()
+        try await editRebuild.value
+        try await waitUntil(timeout: 30) { !coordinator.hasWorkUnderWay }
+        #expect(coordinator.buildStatesByImagePath[TestImages.libobjc] == nil, "nothing is stored under the edited transformer")
+
+        let takeBackRebuild = Task { try await nextValue(from: coordinator.corporaRebuilt, timeout: 30) }
+        environment.settings.transformer.objc.cType.isEnabled.toggle()
+        try await takeBackRebuild.value
+
+        _ = try await nextValue(from: coordinator.$restoredImagesByImagePath.asDriver(), timeout: 30, where: Self.isLibobjcRead)
+        #expect(coordinator.buildStatesByImagePath[TestImages.libobjc]?.isBuilt == true)
+        await engine.stop()
+    }
+
+    /// The engine's store counts a read under way as a build waiting for the
+    /// printer, which the Report listed among the queued corpora (PR126.4).
+    @Test("a coverage taken while an image is read does not list the image as queued")
+    func coverageWhileReadingListsNothingQueued() async throws {
+        let fixture = try DerivedDataFixture()
+        let environment = ViewModelTestEnvironment()
+        environment.settings.search.isCorpusEnabled = true
+        let engine = try await Self.makeReaderEngine("coverage-while-reading", fixture: fixture, environmentTransformer: environment.settings.transformer)
+        let coordinator = environment.make { FindCorpusCoordinator(engine: engine) }
+        defer { withExtendedLifetime(coordinator) {} }
+
+        coordinator.restoreCorpora(of: [TestImages.libobjc])
+        #expect(coordinator.restoringImagePaths == [TestImages.libobjc])
+        coordinator.mergeCoverage(RuntimeInterfaceCorpusCoverage(statesByImagePath: [TestImages.libobjc: .pending], residentByteCount: 0, residentByteLimit: 0))
+
+        #expect(coordinator.buildStatesByImagePath[TestImages.libobjc] == nil, "listed among the queued corpora while it is read")
+        _ = try await nextValue(from: coordinator.$restoredImagesByImagePath.asDriver(), timeout: 30, where: Self.isLibobjcRead)
+        #expect(coordinator.buildStatesByImagePath[TestImages.libobjc]?.isBuilt == true)
+        await engine.stop()
+    }
+
     @Test("an engine whose process keeps no derived data reads nothing")
     func noDerivedData() async throws {
         let environment = ViewModelTestEnvironment()
@@ -254,6 +331,53 @@ struct DerivedDataRestoreTests {
         guard case .loaded(let rows) = state else { return }
         #expect(rows.map(\.runtimeObject.name).contains("NSMutableString"))
         await engine.stop()
+    }
+
+    /// The tab said the image was not indexed and stayed so, the image built
+    /// meanwhile, until the object was chosen again (PR126.17).
+    @Test("the Inspector's references are asked for again once the object's image is indexed")
+    func inspectorReferencesRefetchOnceIndexed() async throws {
+        let mutableString = try await TestRuntimeEngine.shared().runtimeObject(named: "NSMutableString", kind: .objc(.type(.class)), in: TestImages.foundation)
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "DerivedDataRestoreTests.inspectorReferences", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let viewModel = environment.make {
+            InspectorReferencesViewModel(runtimeObject: mutableString, documentState: environment.documentState, router: MockRouter<InspectorRuntimeObjectRoute>())
+        }
+        defer { withExtendedLifetime(viewModel) {} }
+        let output = viewModel.transform(.init(rowClicked: .empty(), showInFindNavigatorClicked: .empty(), isVisible: .just(true)))
+        _ = try await nextValue(from: output.typeReferences, timeout: 30) { state in
+            if case .failed = state { return true }
+            return false
+        }
+
+        try await engine.loadImage(at: TestImages.foundation)
+
+        _ = try await nextValue(from: output.typeReferences, timeout: 120) { state in
+            if case .loaded(let rows, _, _) = state { return !rows.isEmpty }
+            return false
+        }
+        await engine.stop()
+    }
+
+    /// The pane does not ask again by itself: an interface that came back
+    /// `nil` because background indexing finished the image a moment later
+    /// left it blank (PR126.16).
+    @Test("an interface that comes back nil from an image indexed by the time it is checked is asked for again")
+    func contentInterfaceAskedForAgain() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let nsString = try await engine.runtimeObject(named: "NSString", kind: .objc(.type(.class)), in: TestImages.foundation)
+        #expect(try await engine.isImageIndexed(path: TestImages.foundation))
+        let askCount = Mutex(0)
+
+        let interface = try await ContentTextViewModel.interface(of: nsString, fetchingWith: {
+            let ask = askCount.withLock { count in
+                count += 1
+                return count
+            }
+            return ask == 1 ? nil : RuntimeObjectInterface(object: nsString, interfaceString: "@interface NSString : NSObject\n@end")
+        }, runtimeEngine: { engine })
+
+        #expect(interface != nil)
     }
 
     // MARK: - Report

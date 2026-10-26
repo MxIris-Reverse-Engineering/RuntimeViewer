@@ -103,20 +103,11 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             if contentLoadingDelay > 0 {
                 try await Task.sleep(for: .seconds(contentLoadingDelay))
             }
-            if let interface = try await interfaceCache.interface(for: runtimeObject, options: options) {
-                return interface
-            }
-            // A Find hit can be in an image whose sections are not built: its
-            // corpus came from derived data (proposal `draft-derived-data`).
-            // The image is indexed the way the sidebar opens one — joining a
-            // background build of it under way — and the interface asked for
-            // again, all under the pane's loading overlay; a load that fails
-            // is a fetch that failed.
-            guard !runtimeObject.imagePath.isEmpty, let runtimeEngine = await documentState?.runtimeEngine,
-                  try await !runtimeEngine.isImageIndexed(path: runtimeObject.imagePath)
-            else { return nil }
-            try await runtimeEngine.indexImageIfNeeded(at: runtimeObject.imagePath)
-            return try await interfaceCache.interface(for: runtimeObject, options: options)
+            return try await ContentTextViewModel.interface(
+                of: runtimeObject,
+                fetchingWith: { try await interfaceCache.interface(for: runtimeObject, options: options) },
+                runtimeEngine: { await documentState?.runtimeEngine }
+            )
         }
         super.init(documentState: documentState, router: router)
 
@@ -269,6 +260,29 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         #else
         return 0
         #endif
+    }
+
+    /// The interface `fetchInterface` gives for `runtimeObject`, or — when it gives none — the one
+    /// it gives once the object's image is indexed. A Find hit can be in an image whose sections are
+    /// not built: its corpus came from derived data (proposal `draft-derived-data`). The image is
+    /// indexed the way the sidebar opens one — joining a background build of it under way — and the
+    /// interface asked for again, all under the pane's loading overlay; a load that fails is a fetch
+    /// that failed. `runtimeEngine` is asked only then.
+    ///
+    /// The interface is asked for again even when the image turns out to be indexed already:
+    /// background indexing can finish it between the first ask and the check, and the pane does
+    /// not ask again by itself — it would stay blank until the user navigates away and back.
+    nonisolated static func interface(
+        of runtimeObject: RuntimeObject,
+        fetchingWith fetchInterface: () async throws -> RuntimeObjectInterface?,
+        runtimeEngine: () async -> RuntimeEngine?
+    ) async throws -> RuntimeObjectInterface? {
+        if let interface = try await fetchInterface() {
+            return interface
+        }
+        guard !runtimeObject.imagePath.isEmpty, let runtimeEngine = await runtimeEngine() else { return nil }
+        try await runtimeEngine.indexImageIfNeeded(at: runtimeObject.imagePath)
+        return try await fetchInterface()
     }
 
     /// Builds both forms of a fetched interface in one pass, so the semantic runs and the

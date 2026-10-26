@@ -30,6 +30,15 @@ struct FindCrossReferenceTree {
         case calls(RuntimeCrossReferenceSubject)
         /// The functions referencing a type.
         case typeReferences(RuntimeObject)
+
+        /// The image the subject is in, whose sections the engine reads to
+        /// answer; `nil` for a selector, which every image may send.
+        var imagePath: String? {
+            switch self {
+            case .calls(let subject): subject.imagePath
+            case .typeReferences(let object): object.imagePath
+            }
+        }
     }
 
     /// Where a row's children stand.
