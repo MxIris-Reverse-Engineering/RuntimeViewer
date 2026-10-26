@@ -235,28 +235,28 @@ fails without an error, and Icon Composer's SVG pipeline ignores `stroke`.
 
 ## Branching Model
 
-- **`main`** — the release branch. Protected by a "changes must be made through
-  a pull request" rule; never push to it directly unless the user explicitly
-  asks (a direct push then relies on their admin bypass). Everything on main
-  must compile against the **released** remote SPM pins — verify with
-  `RuntimeViewer-Distribution.xcworkspace`, not the Debug workspace, whose
-  local checkouts mask pin mismatches.
-- **`next`** — the integration branch **for testing the latest features only**.
-  `main` and feature branches merge *into* next so the combined state can be
-  built and tested against the local sibling checkouts; **next is never merged
-  into main**. Direct commits on next are limited to docs/glue (e.g. an index
-  row whose target file lives on a feature branch).
-- **Delivery** — work reaches main as small, focused branches submitted as pull
-  requests and reviewed. Long-lived feeder branches (e.g. a performance line, a
-  library-migration line) accumulate related work and are split into PR-sized
-  branches at delivery time; they are never merged to main wholesale.
-- **Commit placement** — before committing, decide where a change belongs: a
-  change that compiles against the released pins and whose files do not diverge
-  from main goes to main (via PR, or a direct push only on explicit user
-  instruction); a change built on top of a feeder branch's work, or one that
-  requires an unreleased dependency version, goes to that feeder branch — with
-  the corresponding `exact:` pin bump landing in the same batch once the
-  dependency ships.
+- **`next`** — the development and release branch. Work starts on a short-lived
+  feature branch cut from next and merges back into next when it is done; a pull
+  request into next is optional. Documentation and small fixes may be committed
+  to next directly. Releases are tagged on next (`vX.Y.Z`, pre-releases
+  `vX.Y.Z-beta.N`); a pushed tag runs the `.github/workflows/release.yml` of the
+  tagged commit, and a manual dispatch must pass `--ref next` or it runs main's
+  older copy.
+- **`main`** — carries the Sparkle feed and nothing else. GitHub Pages serves
+  `docs/appcast.xml` from main's `/docs`, and the release workflow lands each
+  release's appcast there through a pull request (main's ruleset rejects direct
+  pushes). Its code is the 2.x line (last tag `v2.1.2`) and takes no other
+  change: never branch from main, never deliver a change to it, never merge next
+  into it. How a local release gets its appcast onto main:
+  `Documentations/SparkleRelease.md`.
+- **After every release, merge main into next.** A release appends its entry to
+  the `docs/appcast.xml` of the commit it builds — next's copy — and the result
+  replaces main's, so a next that lacks the previous release's appcast commit
+  silently drops that entry from the live feed.
+- **Before tagging**, build `RuntimeViewer-Distribution.xcworkspace`, not the
+  Debug workspace: releases resolve that workspace's own committed
+  `Package.resolved` (`ArchiveScript.sh` refreshes it only with
+  `--update-packages`, which the release workflow never passes).
 
 </important>
 
