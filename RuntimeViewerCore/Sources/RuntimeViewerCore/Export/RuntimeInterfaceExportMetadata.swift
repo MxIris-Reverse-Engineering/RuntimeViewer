@@ -389,15 +389,15 @@ extension RuntimeInterfaceExportMetadata.DumpOptionsInfo {
 
 private extension RuntimeInterfaceExportMetadata.RuntimeViewerInfo {
     static var current: Self {
-        let info = Bundle.main.infoDictionary ?? [:]
+        let informationDictionary = Bundle.main.infoDictionary ?? [:]
         return .init(
-            name: Self.normalized(info["CFBundleName"], fallback: "RuntimeViewer"),
-            bundleIdentifier: Self.normalized(info["CFBundleIdentifier"]),
-            version: Self.normalized(info["CFBundleShortVersionString"]),
-            build: Self.normalized(info["CFBundleVersion"]),
-            gitCommit: Self.normalized(info["RuntimeViewerGitCommit"]),
-            gitBranch: Self.normalized(info["RuntimeViewerGitBranch"]),
-            buildDate: Self.normalized(info["RuntimeViewerBuildDate"])
+            name: Self.normalized(informationDictionary["CFBundleName"], fallback: "RuntimeViewer"),
+            bundleIdentifier: Self.normalized(informationDictionary["CFBundleIdentifier"]),
+            version: Self.normalized(informationDictionary["CFBundleShortVersionString"]),
+            build: Self.normalized(informationDictionary["CFBundleVersion"]),
+            gitCommit: Self.normalized(informationDictionary["RuntimeViewerGitCommit"]),
+            gitBranch: Self.normalized(informationDictionary["RuntimeViewerGitBranch"]),
+            buildDate: Self.normalized(informationDictionary["RuntimeViewerBuildDate"])
         )
     }
 

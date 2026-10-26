@@ -1289,8 +1289,8 @@ extension RuntimeSwiftSection {
         var sameTypeTargets: [String] = []
         for requirement in parameter.requirements {
             switch requirement {
-            case .protocol(let info):
-                conformanceTokens.append(info.protocolName.name)
+            case .protocol(let protocolRequirement):
+                conformanceTokens.append(protocolRequirement.protocolName.name)
             case .layout(let kind):
                 switch kind {
                 case .class:

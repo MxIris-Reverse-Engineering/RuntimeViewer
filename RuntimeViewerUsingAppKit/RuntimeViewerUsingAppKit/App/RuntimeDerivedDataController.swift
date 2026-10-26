@@ -47,7 +47,7 @@ final class RuntimeDerivedDataController {
 
     /// Measures what the location takes, off the main actor, for the client to
     /// show; the size reads as unknown meanwhile.
-    func measure() {
+    private func measure() {
         guard let location else { return }
         measurementTask?.cancel()
         derivedDataClient.setAllocatedByteCount(nil)
@@ -62,7 +62,7 @@ final class RuntimeDerivedDataController {
 
     /// Reveals the location in the Finder, or the nearest folder above it that
     /// exists: nothing is written until a service first stores a corpus.
-    func showInFinder() {
+    private func showInFinder() {
         guard let location else { return }
         let fileManager = FileManager.default
         if fileManager.fileExists(atPath: location.rootURL.path) {

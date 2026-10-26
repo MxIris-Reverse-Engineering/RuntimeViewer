@@ -13,13 +13,13 @@ struct MCPRuntimeTypeInfoTests {
             imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
             children: []
         )
-        let info = MCPRuntimeTypeInfo(from: object)
+        let typeInformation = MCPRuntimeTypeInfo(from: object)
 
-        #expect(info.name == object.name)
-        #expect(info.displayName == object.displayName)
-        #expect(info.kind == object.kind.description)
-        #expect(info.imagePath == object.imagePath)
-        #expect(info.imageName == object.imageName)
+        #expect(typeInformation.name == object.name)
+        #expect(typeInformation.displayName == object.displayName)
+        #expect(typeInformation.kind == object.kind.description)
+        #expect(typeInformation.imagePath == object.imagePath)
+        #expect(typeInformation.imageName == object.imageName)
     }
 
     @Test("init from RuntimeObject preserves imageName derivation")
@@ -31,9 +31,9 @@ struct MCPRuntimeTypeInfoTests {
             imagePath: "/usr/lib/libobjc.A.dylib",
             children: []
         )
-        let info = MCPRuntimeTypeInfo(from: object)
+        let typeInformation = MCPRuntimeTypeInfo(from: object)
         // imageName should be the last path component without extension
-        #expect(info.imageName == "libobjc.A")
+        #expect(typeInformation.imageName == "libobjc.A")
     }
 
     @Test("kind description for various RuntimeObjectKinds", arguments: [
@@ -56,24 +56,24 @@ struct MCPRuntimeTypeInfoTests {
             imagePath: "/test/path",
             children: []
         )
-        let info = MCPRuntimeTypeInfo(from: object)
-        #expect(info.kind == expectedDescription)
+        let typeInformation = MCPRuntimeTypeInfo(from: object)
+        #expect(typeInformation.kind == expectedDescription)
     }
 
     @Test("direct initializer sets all fields")
     func directInit() {
-        let info = MCPRuntimeTypeInfo(
+        let typeInformation = MCPRuntimeTypeInfo(
             name: "MyClass",
             displayName: "MyClass",
             kind: "Swift Class",
             imagePath: "/path/to/image",
             imageName: "image"
         )
-        #expect(info.name == "MyClass")
-        #expect(info.displayName == "MyClass")
-        #expect(info.kind == "Swift Class")
-        #expect(info.imagePath == "/path/to/image")
-        #expect(info.imageName == "image")
+        #expect(typeInformation.name == "MyClass")
+        #expect(typeInformation.displayName == "MyClass")
+        #expect(typeInformation.kind == "Swift Class")
+        #expect(typeInformation.imagePath == "/path/to/image")
+        #expect(typeInformation.imageName == "image")
     }
 }
 
@@ -87,26 +87,26 @@ struct MCPMemberAddressInfoTests {
             symbolName: "$s6UIKit14UIViewControllerC11viewDidLoadyyF",
             address: "0x00007FF8123ABC"
         )
-        let info = MCPMemberAddressInfo(from: member)
+        let memberAddressInformation = MCPMemberAddressInfo(from: member)
 
-        #expect(info.name == member.name)
-        #expect(info.kind == member.kind)
-        #expect(info.symbolName == member.symbolName)
-        #expect(info.address == member.address)
+        #expect(memberAddressInformation.name == member.name)
+        #expect(memberAddressInformation.kind == member.kind)
+        #expect(memberAddressInformation.symbolName == member.symbolName)
+        #expect(memberAddressInformation.address == member.address)
     }
 
     @Test("direct initializer sets all fields")
     func directInit() {
-        let info = MCPMemberAddressInfo(
+        let memberAddressInformation = MCPMemberAddressInfo(
             name: "init()",
             kind: "initializer",
             symbolName: "$s4Main7MyClassCACycfc",
             address: "0x100001234"
         )
-        #expect(info.name == "init()")
-        #expect(info.kind == "initializer")
-        #expect(info.symbolName == "$s4Main7MyClassCACycfc")
-        #expect(info.address == "0x100001234")
+        #expect(memberAddressInformation.name == "init()")
+        #expect(memberAddressInformation.kind == "initializer")
+        #expect(memberAddressInformation.symbolName == "$s4Main7MyClassCACycfc")
+        #expect(memberAddressInformation.address == "0x100001234")
     }
 }
 
@@ -114,7 +114,7 @@ struct MCPMemberAddressInfoTests {
 struct MCPWindowInfoTests {
     @Test("initializer sets all fields including nil optionals")
     func initWithNils() {
-        let info = MCPWindowInfo(
+        let windowInformation = MCPWindowInfo(
             identifier: "win-1",
             displayName: nil,
             isKeyWindow: false,
@@ -122,15 +122,15 @@ struct MCPWindowInfoTests {
             selectedTypeImagePath: nil,
             selectedTypeImageName: nil
         )
-        #expect(info.identifier == "win-1")
-        #expect(info.displayName == nil)
-        #expect(info.isKeyWindow == false)
-        #expect(info.selectedTypeName == nil)
+        #expect(windowInformation.identifier == "win-1")
+        #expect(windowInformation.displayName == nil)
+        #expect(windowInformation.isKeyWindow == false)
+        #expect(windowInformation.selectedTypeName == nil)
     }
 
     @Test("initializer sets all non-nil fields")
     func initWithValues() {
-        let info = MCPWindowInfo(
+        let windowInformation = MCPWindowInfo(
             identifier: "win-2",
             displayName: "My Document",
             isKeyWindow: true,
@@ -138,12 +138,12 @@ struct MCPWindowInfoTests {
             selectedTypeImagePath: "/usr/lib/libobjc.A.dylib",
             selectedTypeImageName: "libobjc.A"
         )
-        #expect(info.identifier == "win-2")
-        #expect(info.displayName == "My Document")
-        #expect(info.isKeyWindow == true)
-        #expect(info.selectedTypeName == "NSObject")
-        #expect(info.selectedTypeImagePath == "/usr/lib/libobjc.A.dylib")
-        #expect(info.selectedTypeImageName == "libobjc.A")
+        #expect(windowInformation.identifier == "win-2")
+        #expect(windowInformation.displayName == "My Document")
+        #expect(windowInformation.isKeyWindow == true)
+        #expect(windowInformation.selectedTypeName == "NSObject")
+        #expect(windowInformation.selectedTypeImagePath == "/usr/lib/libobjc.A.dylib")
+        #expect(windowInformation.selectedTypeImageName == "libobjc.A")
     }
 }
 

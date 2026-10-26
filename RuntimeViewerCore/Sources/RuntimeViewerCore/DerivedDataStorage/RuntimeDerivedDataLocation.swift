@@ -54,10 +54,10 @@ public struct RuntimeDerivedDataLocation: Hashable, Sendable {
             applicationURL = contentsDirectoryURL.deletingLastPathComponent()
         }
         guard applicationURL.pathExtension == "app",
-              let infoData = try? Data(contentsOf: applicationURL.appendingPathComponent("Contents/Info.plist")),
-              let info = try? PropertyListSerialization.propertyList(from: infoData, format: nil) as? [String: Any],
-              let serviceBundleIdentifier = info[LocalRuntimeService.bundleIdentifierInfoDictionaryKey] as? String, !serviceBundleIdentifier.isEmpty,
-              let bundleIdentifier = info["CFBundleIdentifier"] as? String, !bundleIdentifier.isEmpty,
+              let informationPropertyListData = try? Data(contentsOf: applicationURL.appendingPathComponent("Contents/Info.plist")),
+              let informationPropertyList = try? PropertyListSerialization.propertyList(from: informationPropertyListData, format: nil) as? [String: Any],
+              let serviceBundleIdentifier = informationPropertyList[LocalRuntimeService.bundleIdentifierInfoDictionaryKey] as? String, !serviceBundleIdentifier.isEmpty,
+              let bundleIdentifier = informationPropertyList["CFBundleIdentifier"] as? String, !bundleIdentifier.isEmpty,
               !bundleIdentifier.contains("/")
         else { return nil }
         return RuntimeDerivedDataLocation(
