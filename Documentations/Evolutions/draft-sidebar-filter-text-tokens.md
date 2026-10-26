@@ -130,7 +130,12 @@ Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandL
    - 最近过滤存在 `AppDefaults.navigatorFilterFieldStates`。为此给 `Data` 补上宽松解码，`ResilientFileStorageTests` 加了一例。
    - 六处过滤框换成 token 框，删掉 `clearedSearchStringRelay`。150 ms 的延迟改由两个 iOS 页面经 `coalescingKeystrokes()` 套用。
    - 相关的 10 个套件、122 个测试通过，macOS 与 iOS 两个 App 都编译通过。没有启动 App 做界面核对。
-4. 文档：`RuntimeViewerUsingAppKit/AGENTS.md`；提案收尾。
+4. 文档：`RuntimeViewerUsingAppKit/AGENTS.md`；提案收尾。**已完成（2026-10-27）**：
+   - `RuntimeViewerUsingAppKit/AGENTS.md` 的视图对照表与过滤框一节写明：侧边栏页面用 token 框加接入层，选择器里的仍是
+     `NSFilterSearchField`。
+   - 根 `AGENTS.md` 的依赖下限一段补上 AppKitPlus 0.18.0 的原因，随第 3 步提交。
+   - README 的 Filter Engine 一条补上 token 的写法；提案索引与文档索引同步更新。
+   - 完整验证：`RuntimeViewerApplicationTests` 102 个套件、647 个测试全部通过，退出码 0；macOS 与 iOS 两个 App 编译通过。
 
 没有询问就采用的假设：
 
@@ -166,3 +171,4 @@ Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandL
 | 2026-10-27 | 150 ms 的延迟写成 `RuntimeViewerApplication` 里的 `coalescingKeystrokes()`，两个 iOS 页面共用 | 原来那段「必须用 `delay`、不能用 `debounce`」的说明只需留一处；放在包里，iOS 工程也不用新增文件 |
 | 2026-10-27 | 受跟踪的锁文件是四份，不是方案原写的三个 workspace | 普通 workspace 的锁文件不进 git；`RuntimeViewerPackages` 与 `RuntimeViewerCommandLine` 两个包各有一份，照以往抬 AppKitPlus 下限时的做法一起改 |
 | 2026-10-27 | 给 `Data` 补上 `LenientlyDecodable` | `ResilientFileStorage` 要求值能宽松解码。读不出来的一份状态只丢它自己的键，不影响别的页面种类 |
+| 2026-10-27 | 实现完成，待合并 | 四个落地步骤都已提交到 `feature/sidebar-filter-text-tokens`，合并与编号留给用户看过之后。不另写使用指南或实现说明：怎么用写在 `RuntimeViewerUsingAppKit/AGENTS.md` 与接入层的文档注释里，维护者会踩的两处（Clear Recents 不通知 delegate、存储的变化通知可能过时）写在代码注释与本提案里。没有新术语。没有启动 App 做界面核对 |

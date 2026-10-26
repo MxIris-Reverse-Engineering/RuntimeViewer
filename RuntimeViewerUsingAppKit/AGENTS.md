@@ -164,7 +164,8 @@ bezelStyle), fall back to the raw AppKit class (`NSButton()` for `.accessoryBarA
 | `HStackView(spacing:) { ... }` | `NSStackView(orientation: .horizontal)` |
 | `ScrollView()` | `NSScrollView()` |
 | `NSPopUpPathControl()` (AppKitPlus) | `NSPathControl()` for an Xcode-style path of menus (`Find ▸ Text ▸ Containing`) |
-| `NSFilterSearchField()` (AppKitPlus) | `NSSearchField()` above a list it filters — the field of a page's filter bar, a picker's filter field |
+| `NSFilterTokenField()` (AppKitPlus) set up by a `NavigatorTextFilterFieldAdapter` | a search field in a sidebar page's filter bar — Xcode's navigator text tokens |
+| `NSFilterSearchField()` (AppKitPlus) | `NSSearchField()` above a list a picker filters — the Find scope chooser, the specialization type picker, the batch export image list |
 | `NSFindPatternSearchField()` (AppKitPlus) | `NSSearchField()` for a query that takes find patterns (Digits, Any Word Characters…) among its text — the Find page's query field. Read `findPatternComponents`, never `stringValue`, which holds U+FFFC for each token |
 | `NavigatorFilterControlBar()` (RuntimeViewerUI, an AppKitPlus `NSFilterControlBar`) | an `HStackView` of buttons and a search field at the bottom of a sidebar page |
 | `HorizontalSeparatorView()` (RuntimeViewerUI) | an `NSBox` with `boxType = .separator` for a horizontal line |
@@ -188,10 +189,21 @@ constraints grouped together after `hierarchy {}`.
 
 ### Filter fields, filter bars and pop-up paths come from AppKitPlus
 
-`NSFilterSearchField`, `NSFilterControlBar` and `NSPopUpPathControl` are ports of Xcode's own
-`DVTSearchField`, `DVTFilterControlBar` and `DVTPathControl`; RuntimeViewer keeps no copies of its own any
-more (UIFoundation's `FilterSearchField` went with its `FilterUI` trait; the old `PopUpPathControl` and
-`ItemPopUpButton` were deleted). Background: `Documentations/Evolutions/0032-appkitplus-filter-and-path-controls.md`.
+`NSFilterSearchField`, `NSFilterTokenField`, `NSFilterControlBar` and `NSPopUpPathControl` are ports of
+Xcode's own `DVTSearchField`, `DVTFilterTokenField`, `DVTFilterControlBar` and `DVTPathControl`; RuntimeViewer
+keeps no copies of its own any more (UIFoundation's `FilterSearchField` went with its `FilterUI` trait; the
+old `PopUpPathControl` and `ItemPopUpButton` were deleted). Background:
+`Documentations/Evolutions/0032-appkitplus-filter-and-path-controls.md`.
+
+- A sidebar page's filter field — both image list pages, both object list pages, the Find results, the
+  Report — is an `NSFilterTokenField` set up by `NavigatorTextFilterFieldAdapter` (RuntimeViewerApplication),
+  with Xcode's navigator text tokens: `loo`, `!loo`, `loo*`, `*loo`, wildcard patterns. Its tokens and the
+  text still being typed all have to hold; the adapter reports them as a `NavigatorTextFilter`, and the
+  page's view model tests each row's own name against it (`NavigatorTextFilter.Matcher`). Give the adapter
+  the page's `RecentFiltersGroup`, which picks the list of recent filters it keeps in
+  `AppDefaults.navigatorFilterFieldStates`. A view model that clears its filter has the view controller
+  call the adapter's `clear()`, and the field reports the empty filter itself. A picker's filter field
+  stays an `NSFilterSearchField`. Background: `Documentations/Evolutions/draft-sidebar-filter-text-tokens.md`.
 
 - The bar at the bottom of a sidebar page is a `NavigatorFilterControlBar` (RuntimeViewerUI): AppKitPlus's
   `NSFilterControlBar`, taken for a bar by the list's scroll pocket — a plain `NSFilterControlBar` there
