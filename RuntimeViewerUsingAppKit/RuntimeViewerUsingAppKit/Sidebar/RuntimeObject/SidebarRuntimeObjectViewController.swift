@@ -226,13 +226,14 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
-            searchString: .combineLatestFirstResult(
+            filter: Driver<String>.combineLatestFirstResult(
                 Driver.merge(
                     imageLoadedView.filterSearchField.rx.stringValue.asDriver(),
                     clearedSearchStringRelay.asDriver(onErrorDriveWith: .empty()),
                 ),
                 filterModeDidChange.asDriver(),
-            ),
+            )
+            .map { NavigatorTextFilter(typedText: $0) },
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
             runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
             runtimeObjectTagClicked: tagClickedRelay.asSignal(),

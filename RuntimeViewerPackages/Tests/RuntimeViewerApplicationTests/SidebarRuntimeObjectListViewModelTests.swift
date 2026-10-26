@@ -203,7 +203,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         try await cleared
         let lookup = try await revealed
         #expect(lookup.cell.runtimeObject == nsObject)
-        #expect(harness.viewModel.searchString.isEmpty)
+        #expect(harness.viewModel.filter.isEmpty)
         #expect(harness.viewModel.isFiltering == false)
         #expect(harness.viewModel.filteredNodes.contains { $0.runtimeObject == nsObject })
     }
@@ -277,7 +277,7 @@ struct SidebarRuntimeObjectListViewModelTests {
 
         try await failed
         #expect(try await revealedCells.isEmpty)
-        #expect(harness.viewModel.searchString == "NSObject")
+        #expect(harness.viewModel.filter.typedText == "NSObject")
         #expect(harness.viewModel.isFiltering)
     }
 
@@ -338,7 +338,7 @@ struct SidebarRuntimeObjectListViewModelTests {
                 runtimeObjectClicked: runtimeObjectClickedRelay.asSignal(),
                 runtimeObjectOpenedInNewTab: runtimeObjectOpenedInNewTabRelay.asSignal(),
                 loadImageClicked: .empty(),
-                searchString: searchStringRelay.asDriver(),
+                filter: searchStringRelay.asDriver().map { NavigatorTextFilter(typedText: $0) },
                 isSearchCaseSensitive: .just(false)
             )
         )

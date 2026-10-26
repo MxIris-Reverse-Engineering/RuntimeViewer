@@ -450,7 +450,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in FindQueryTerm(components: searchField.findPatternComponents) },
             recentQuerySelected: searchFieldMenuAdapter.recentQuerySelected,
             clearRecentQueriesSelected: searchFieldMenuAdapter.clearRecentQueriesSelected,
-            filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
+            filter: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: "").map { NavigatorTextFilter(typedText: $0) },
             resultClicked: resultClicked,
             resultOpenedInNewTab: .merge(resultOpenedFromMenu, resultOpenedWithOption),
             resultCollapsed: resultCollapsed,

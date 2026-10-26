@@ -352,7 +352,7 @@ struct SidebarFilterPerformanceBaselineTests {
             runtimeObjectClicked: .never(),
             runtimeObjectOpenedInNewTab: .never(),
             loadImageClicked: .never(),
-            searchString: searchStringRelay.asDriver(onErrorJustReturn: ""),
+            filter: searchStringRelay.asDriver(onErrorJustReturn: "").map { NavigatorTextFilter(typedText: $0) },
             isSearchCaseSensitive: .just(false)
         )
         _ = viewModel.transform(input)

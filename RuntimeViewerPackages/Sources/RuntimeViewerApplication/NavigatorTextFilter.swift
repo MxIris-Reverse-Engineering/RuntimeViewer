@@ -171,6 +171,9 @@ extension NavigatorTextFilter {
 
     /// Terms made ready to test many names.
     public struct Matcher: Sendable {
+        /// No term: every name passes.
+        public static let empty = Matcher(terms: [])
+
         /// The terms, in the filter's order.
         public let compiledTerms: [CompiledTerm]
 

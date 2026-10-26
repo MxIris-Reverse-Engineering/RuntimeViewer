@@ -102,7 +102,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         let input = ViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
-            searchString: filterSearchField.rx.stringValue.asSignal()
+            filter: filterSearchField.rx.stringValue.asSignal().map { NavigatorTextFilter(typedText: $0) }
         )
 
         let output = viewModel.transform(input)

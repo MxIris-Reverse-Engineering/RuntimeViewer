@@ -232,7 +232,7 @@ struct SidebarRuntimeObjectViewModelTests {
                 runtimeObjectClicked: .empty(),
                 runtimeObjectOpenedInNewTab: .empty(),
                 loadImageClicked: loadImageRelay.asSignal(),
-                searchString: .just(""),
+                filter: .just(.empty),
                 isSearchCaseSensitive: .just(false),
                 runtimeObjectCounterpartRequested: counterpartRequested,
                 runtimeObjectTagClicked: tagClicked,

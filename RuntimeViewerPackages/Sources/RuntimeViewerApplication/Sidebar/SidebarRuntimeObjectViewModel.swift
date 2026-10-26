@@ -16,7 +16,8 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     }
 
     @RxObserved public private(set) var loadState: RuntimeImageLoadState = .unknown
-    @RxObserved public private(set) var searchString: String = ""
+    /// The filter field's tokens and typed text (`NavigatorTextFilter`).
+    @RxObserved public private(set) var filter: NavigatorTextFilter = .empty
     @RxObserved public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
     @RxObserved public private(set) var filteredNodes: [SidebarRuntimeObjectCellViewModel] = []
     @RxObserved public private(set) var isFiltering: Bool = false
@@ -188,7 +189,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// pass `.empty()`).
         public let runtimeObjectOpenedInNewTab: Signal<SidebarRuntimeObjectCellViewModel>
         public let loadImageClicked: Signal<Void>
-        public let searchString: Driver<String>
+        /// The filter field's content. A platform without tokens passes its
+        /// search text as `NavigatorTextFilter(typedText:)`.
+        public let filter: Driver<NavigatorTextFilter>
         /// The "Match Case" toggle: `true` == case sensitive. Callers with
         /// no such control pass `.just(false)` for the case-insensitive
         /// default.
@@ -233,11 +236,11 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
         public let reloadRow: Signal<SidebarRuntimeObjectCellViewModel>
-        /// The view model dropped its search text and scope on its own (a
-        /// reveal whose row they hid). The search field's text is the view's,
-        /// so the view has to empty it — and feed the empty string back through
-        /// `Input.searchString`, whose `combineLatest` would otherwise replay the
-        /// old text the next time the filter mode changes.
+        /// The view model dropped its filter and scope on its own (a reveal
+        /// whose row they hid). The filter field's content is the view's, so
+        /// the view has to empty it — and feed the empty filter back through
+        /// `Input.filter`, whose `combineLatest` would otherwise replay the old
+        /// filter the next time the filter mode changes.
         public let filterCleared: Signal<Void>
     }
 
@@ -270,20 +273,20 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         // `.just(...).debounce(500ms)` never delayed anything. The window
         // can be short because the matching itself runs off-main and stale
         // passes are cancelled.
-        Driver.combineLatest(input.searchString, input.isSearchCaseSensitive)
-            .flatMapLatest { searchString, isSearchCaseSensitive -> Driver<(String, Bool)> in
-                if searchString.isEmpty {
-                    return .just((searchString, isSearchCaseSensitive))
+        Driver.combineLatest(input.filter, input.isSearchCaseSensitive)
+            .flatMapLatest { filter, isSearchCaseSensitive -> Driver<(NavigatorTextFilter, Bool)> in
+                if filter.isEmpty {
+                    return .just((filter, isSearchCaseSensitive))
                 } else {
-                    return .just((searchString, isSearchCaseSensitive))
+                    return .just((filter, isSearchCaseSensitive))
                         .delay(.milliseconds(150))
                 }
             }
-            .driveOnNextMainActor { [weak self] searchString, isSearchCaseSensitive in
+            .driveOnNextMainActor { [weak self] filter, isSearchCaseSensitive in
                 guard let self else { return }
-                guard (self.searchString != searchString) || (self.isSearchCaseSensitive != isSearchCaseSensitive) else { return }
+                guard (self.filter != filter) || (self.isSearchCaseSensitive != isSearchCaseSensitive) else { return }
 
-                self.searchString = searchString
+                self.filter = filter
                 self.isSearchCaseSensitive = isSearchCaseSensitive
                 scheduleRefilter()
             }
@@ -506,7 +509,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         await MainActor.run {
             self.loadState = .loaded
             self.loadingProgress = 1.0
-            self.searchString = ""
+            self.filter = .empty
             if isSorted {
                 self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
             } else {
@@ -555,20 +558,31 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         // way every other search field spells it; `FilterContext` states the
         // opposite polarity. This is the one place the two meet, so the
         // negation lives here rather than at each call site.
+        //
+        // The filter's tokens always test each object's own name the way
+        // Xcode's navigators compare (`NavigatorTextFilter`). The typed text
+        // does the same unless a Filter Mode is chosen: Fuzzy Search and
+        // Ifrit keep matching it against the name tree, ranking and
+        // highlighting as before.
+        let filterMode = appDefaults.filterMode
         let context = FilterContext(
-            query: searchString,
+            query: filterMode == nil ? "" : filter.typedText,
             isCaseInsensitive: !isSearchCaseSensitive,
-            mode: appDefaults.filterMode
+            mode: filterMode
+        )
+        let nameMatcher = NavigatorTextFilter.Matcher(
+            terms: filterMode == nil ? filter.allTerms : filter.terms,
+            isCaseSensitive: isSearchCaseSensitive
         )
         let activeScope = scope
 
-        // Drive `isFiltering` off the union of text + scope. This flag
-        // controls the outline view's beginFiltering / endFiltering
+        // Drive `isFiltering` off the union of text + terms + scope. This
+        // flag controls the outline view's beginFiltering / endFiltering
         // auto-expand path, so scoping (without a text query) still
         // surfaces matching descendants automatically. Must be set
         // *before* `filteredNodes` is reassigned so `didChangeFiltering`
         // (`withLatestFrom($isFiltering)`) sees the new value.
-        let shouldFilter = !context.query.isEmpty || activeScope.isActive
+        let shouldFilter = !context.query.isEmpty || !nameMatcher.isEmpty || activeScope.isActive
         if shouldFilter != isFiltering {
             isFiltering = shouldFilter
         }
@@ -587,28 +601,32 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             return
         }
 
-        let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: nodes, scope: activeScope)
+        let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(
+            of: nodes,
+            scope: activeScope,
+            includesHaystacks: !context.query.isEmpty
+        )
 
         currentFilterTask = Task { @MainActor [weak self] in
-            let verdictForest = await Self.computeVerdictsOffMain(for: snapshotForest, context: context)
+            let verdictForest = await Self.computeVerdictsOffMain(for: snapshotForest, context: context, nameMatcher: nameMatcher)
             guard !Task.isCancelled, let self else { return }
             guard self.currentFilterGeneration == generation else { return }
-            if let filtered = SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: self.nodes, context: context, scope: activeScope) {
+            if let filtered = SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: self.nodes, context: context, scope: activeScope, nameMatcher: nameMatcher) {
                 self.filteredNodes = filtered
             }
             self.currentFilterTask = nil
         }
     }
 
-    /// Drops the search text and the scope, so every object is listed again.
+    /// Drops the filter and the scope, so every object is listed again.
     ///
-    /// The list is unfiltered by the time this returns: with neither a query
-    /// nor an active scope, `scheduleRefilter()` takes its synchronous fast
-    /// path. The search field's own text is emptied by the view through
+    /// The list is unfiltered by the time this returns: with no filter and
+    /// no active scope, `scheduleRefilter()` takes its synchronous fast path.
+    /// The filter field's own content is emptied by the view through
     /// `Output.filterCleared`.
     @MainActor
     func clearFilter() {
-        searchString = ""
+        filter = .empty
         // Only an active scope needs resetting. Assigning one also reaches the
         // `$scope` subscription, which refilters once more a main-actor turn
         // later — harmless, but pointless when nothing was scoped.
@@ -624,9 +642,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     /// thread while the caller awaits.
     private nonisolated static func computeVerdictsOffMain(
         for snapshotForest: [SidebarRuntimeObjectFilterPipeline.SnapshotNode],
-        context: FilterContext
+        context: FilterContext,
+        nameMatcher: NavigatorTextFilter.Matcher
     ) async -> SidebarRuntimeObjectFilterPipeline.ForestVerdict {
-        SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context)
+        SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context, nameMatcher: nameMatcher)
     }
 
     /// Splice a newly specialized child into the existing sidebar tree without

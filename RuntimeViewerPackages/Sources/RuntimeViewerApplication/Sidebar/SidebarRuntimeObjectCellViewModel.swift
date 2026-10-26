@@ -166,45 +166,58 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     /// the splice path.
     var scope: RuntimeObjectScope = .init()
 
-    /// Re-derives `_filteredChildren` from the stored scope + filter
-    /// context. Only invoked for cell-local mutations (children rebuilt
-    /// after a specialization splice); bulk filtering goes through the
-    /// pipeline's `applyFilterOutcome` instead.
+    /// The text filter's terms that test each object's own name, applied
+    /// with the scope. Stored for `applyLocalFilter()` like the scope.
+    var nameMatcher: NavigatorTextFilter.Matcher = .empty
+
+    /// Re-derives `_filteredChildren` from the stored scope, name terms and
+    /// filter context. Only invoked for cell-local mutations (children
+    /// rebuilt after a specialization splice); bulk filtering goes through
+    /// the pipeline's `applyFilterOutcome` instead.
     private func applyLocalFilter() {
-        let scopeFiltered: [SidebarRuntimeObjectCellViewModel]
-        if scope.isActive {
-            scopeFiltered = _children.filter { $0.matchesScopeRecursively(scope) }
+        let structurallyFiltered: [SidebarRuntimeObjectCellViewModel]
+        if scope.isActive || !nameMatcher.isEmpty {
+            structurallyFiltered = _children.filter { $0.matchesRecursively(scope: scope, nameMatcher: nameMatcher) }
         } else {
-            scopeFiltered = _children
+            structurallyFiltered = _children
         }
-        _filteredChildren = FilterEngine.filter(context: filterContextStorage, items: scopeFiltered)
+        _filteredChildren = FilterEngine.filter(context: filterContextStorage, items: structurallyFiltered)
     }
 
     /// Returns `true` if this cell or any of its descendants pass `scope`.
-    /// Walks the cell-viewmodel tree (`_children`) rather than the value-
-    /// type runtime-object tree so it always sees splices applied by
-    /// `appendRuntimeObjectChildPreservingCurrentDescendants(_:)` even
-    /// when the ancestor's stored `runtimeObject` is stale.
     func matchesScopeRecursively(_ scope: RuntimeObjectScope) -> Bool {
-        if scope.passes(runtimeObject) { return true }
+        matchesRecursively(scope: scope, nameMatcher: .empty)
+    }
+
+    /// Returns `true` if this cell or any of its descendants passes `scope`
+    /// and has a name that satisfies `nameMatcher`. Walks the cell-viewmodel
+    /// tree (`_children`) rather than the value-type runtime-object tree so it
+    /// always sees splices applied by
+    /// `appendRuntimeObjectChildPreservingCurrentDescendants(_:)` even when
+    /// the ancestor's stored `runtimeObject` is stale.
+    func matchesRecursively(scope: RuntimeObjectScope, nameMatcher: NavigatorTextFilter.Matcher) -> Bool {
+        if scope.passes(runtimeObject), nameMatcher.matches(runtimeObject.displayName) { return true }
         for child in _children {
-            if child.matchesScopeRecursively(scope) { return true }
+            if child.matchesRecursively(scope: scope, nameMatcher: nameMatcher) { return true }
         }
         return false
     }
 
     /// Single entry point for the filter pipeline's main-actor apply step:
-    /// synchronizes the stored context/scope WITHOUT re-triggering the
-    /// local cascade (the pipeline already computed every level), installs
-    /// the pre-ordered filtered children, and updates the highlight.
+    /// synchronizes the stored context, scope and name terms WITHOUT
+    /// re-triggering the local cascade (the pipeline already computed every
+    /// level), installs the pre-ordered filtered children, and updates the
+    /// highlight.
     func applyFilterOutcome(
         context: FilterContext,
         scope: RuntimeObjectScope,
+        nameMatcher: NavigatorTextFilter.Matcher,
         result: FuzzyFilterResult?,
         filteredChildren: [SidebarRuntimeObjectCellViewModel]
     ) {
         filterContextStorage = context
         self.scope = scope
+        self.nameMatcher = nameMatcher
         _filteredChildren = filteredChildren
         filterResult = result
     }

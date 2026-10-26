@@ -224,7 +224,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             clearHistory: clearHistoryRelay.asSignal(),
             openSettings: openSettingsRelay.asSignal(),
             doubleClickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
-            filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
+            filter: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: "").map { NavigatorTextFilter(typedText: $0) },
             showsOnlyInProgress: showsOnlyInProgressButton.rx.state.asDriver().map { $0 == .on }.startWith(false)
         )
         let output = viewModel.transform(input)

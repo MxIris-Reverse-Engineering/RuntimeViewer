@@ -108,9 +108,14 @@ ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里。
 1. 过滤条件模型 `NavigatorTextFilter`：解析、比较、组合，以及它们的测试。**已完成（2026-10-26）**：
    `RuntimeViewerApplication/NavigatorTextFilter.swift`，`NavigatorTextFilterTests` 13 个测试（含参数化的 31 个用例）通过。
 2. 四类 ViewModel 改收 `NavigatorTextFilter`，四条管线按新规则匹配。macOS 现有的 `NSFilterSearchField` 与 iOS 的搜索栏先把文字
-   包成只有 `typedText` 的过滤条件，150 ms 的合并延迟随之挪到 iOS 的 ViewController。更新现有测试，补上新规则的测试。
+   包成只有 `typedText` 的过滤条件。更新现有测试，补上新规则的测试。**已完成（2026-10-26）**：四类 ViewModel 的输入与状态
+   统一叫 `filter`；对象列表的管线让 Filter Scope 与全部条件落在同一个对象上（见决策日志），镜像列表的管线按路径判断，Find 与
+   Report 逐行比对。新增 `SidebarRuntimeObjectTextFilterTests`，镜像列表、Find、Report 的现有套件各补了多条件的用例。
+   `RuntimeViewerApplicationTests` 635 个测试里 634 个通过；没过的那一个是 `RuntimeBackgroundIndexingAlwaysIndexEngineTests`
+   在整套并行时的 120 秒超时，这个套件单独重跑全部通过，与本改动无关。macOS 与 iOS 两个 App 都编译通过。
 3. 等 AppKitPlus 0.18.0 发布：依赖下限抬到 0.18.0（锁文件只改这一条）；写 macOS 接入层 `NavigatorTextFilterFieldAdapter`
-   （含最近过滤的保存）与它的测试；六处过滤框换成 token 框，删掉 `clearedSearchStringRelay`。
+   （含最近过滤的保存）与它的测试；六处过滤框换成 token 框，删掉 `clearedSearchStringRelay`；150 ms 的合并延迟挪到 iOS 的
+   ViewController。
 4. 文档：`RuntimeViewerUsingAppKit/AGENTS.md`；提案收尾。
 
 没有询问就采用的假设：
@@ -137,3 +142,5 @@ ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里。
 | 2026-10-26 | 先补 AppKitPlus 再接入 | AppKitPlus 0.17.0 画不出 `loo ⋯` / `⋯ loo`，Begins With / Ends With 的 token 会和 Contains 长得一样；通配符 token 会带菜单；双击还原会丢掉比较方式。用户选择先补齐、发布 0.18.0，而不是先接入、以后再补 |
 | 2026-10-26 | 方案拆成四个落地步骤；第 1、2 步不等 AppKitPlus 发版 | 模型、管线与 ViewModel 不用 AppKitPlus 的新接口，现有过滤框先把文字包成过滤条件就能编译、能测；只有接入层和界面替换需要 0.18.0 |
 | 2026-10-26 | 用户批准，开始实现 | 在 `feature/sidebar-filter-text-tokens` 上实现，先做第 1、2 步 |
+| 2026-10-26 | 对象列表上，Filter Scope 与文字条件要落在同一个对象上 | 原先 Filter Scope 按子树、输入的文字按「自身加所有后代的名字」各判各的，一个结构体会因为它嵌套的类名字对上而留下，那个类本身却又被 Filter Scope 藏起来；现在一个对象要同时通过 Filter Scope 与全部条件，它或某个后代通过才保留，与 Xcode 逐个条目判断一致 |
+| 2026-10-26 | 150 ms 的合并延迟在第 2 步仍留在 ViewModel，挪到第 3 步 | 第 2 步时 macOS 的过滤框还是搜索框，每次按键都会报告；等换成 token 框、由它停顿 0.2 秒再报告时再拿掉，第 2 步的输入节奏不变 |

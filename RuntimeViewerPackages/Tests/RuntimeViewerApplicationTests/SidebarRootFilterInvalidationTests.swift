@@ -156,7 +156,7 @@ extension SidebarRootFilterInvalidationTests {
                     SidebarRootViewModel.Input(
                         clickedNode: .never(),
                         selectedNode: .never(),
-                        searchString: searchStringRelay.asSignal()
+                        filter: searchStringRelay.asSignal().map { NavigatorTextFilter(typedText: $0) }
                     )
                 )
             }

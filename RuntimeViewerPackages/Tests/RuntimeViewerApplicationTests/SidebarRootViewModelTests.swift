@@ -110,7 +110,7 @@ struct SidebarRootViewModelTests {
             .init(
                 clickedNode: clickedNodeRelay.asSignal(),
                 selectedNode: .empty(),
-                searchString: searchStringRelay.asSignal()
+                filter: searchStringRelay.asSignal().map { NavigatorTextFilter(typedText: $0) }
             )
         )
         return (viewModel, output)
