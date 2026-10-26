@@ -124,6 +124,23 @@ struct RuntimeDerivedDataStoreTests {
         #expect(await store.read(otherKind, variant: "A", forImageAt: Self.imagePath, decode: Self.text(of:)) == "other kind")
     }
 
+    #if os(macOS)
+    /// A file is `<kind>-<variant>.rvdd`, and a variant has hyphens of its own:
+    /// a kind named `InterfaceCorpus-Members` would have its files taken for
+    /// variants of `InterfaceCorpus`, and deleted whenever one of those is
+    /// written (PR126.7).
+    @Test("A kind is named with ASCII letters and digits alone")
+    func kindNames() async {
+        #expect(RuntimeDerivedDataKind.interfaceCorpus.rawValue == "InterfaceCorpus")
+        await #expect(processExitsWith: .failure) {
+            _ = RuntimeDerivedDataKind(rawValue: "InterfaceCorpus-Members")
+        }
+        await #expect(processExitsWith: .failure) {
+            _ = RuntimeDerivedDataKind(rawValue: "")
+        }
+    }
+    #endif
+
     @Test("A file that fails its checks is deleted")
     func damagedFile() async throws {
         let directory = try DerivedDataTestDirectory()
@@ -210,26 +227,40 @@ struct RuntimeDerivedDataStoreTests {
         #expect(!RuntimeDerivedDataReadingMarker.isProcessRunning(.init(processIdentifier: 0, processStartTime: 0)))
     }
 
+    /// The decode is held until every reader has joined the read, however
+    /// late its task is scheduled: one reader comes 0.3 seconds late, as one
+    /// does under a loaded machine, which the test used to take for a second
+    /// read (PR126.13).
     @Test("Reads of one file at the same time decode it once")
     func concurrentReadsJoin() async throws {
         let directory = try DerivedDataTestDirectory()
         let store = DerivedDataTestIdentities.store(in: directory)
         await store.store(Self.builder("hello"), as: Self.kind, variant: "A", forImageAt: Self.imagePath)
+        let readerCount = 8
 
         let decodeCalls = DerivedDataCallCounter()
+        let decodeMayFinish = DispatchSemaphore(value: 0)
         let values = await withTaskGroup(of: String?.self) { group in
-            for _ in 0 ..< 8 {
+            for readerIndex in 0 ..< readerCount {
                 group.addTask {
-                    await store.read(Self.kind, variant: "A", forImageAt: Self.imagePath) { container in
+                    if readerIndex == readerCount - 1 {
+                        try? await Task.sleep(for: .milliseconds(300))
+                    }
+                    return await store.read(Self.kind, variant: "A", forImageAt: Self.imagePath) { container in
                         decodeCalls.increment()
-                        Thread.sleep(forTimeInterval: 0.2)
+                        decodeMayFinish.wait()
                         return try Self.text(of: container)
                     }
                 }
             }
+            let deadline = ContinuousClock.now + .seconds(30)
+            while await store.readerCount(of: Self.kind, variant: "A", forImageAt: Self.imagePath) < readerCount, ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+            decodeMayFinish.signal()
             return await group.reduce(into: [String?]()) { $0.append($1) }
         }
-        #expect(values == Array(repeating: "hello", count: 8))
+        #expect(values == Array(repeating: "hello", count: readerCount))
         #expect(decodeCalls.value == 1)
     }
 

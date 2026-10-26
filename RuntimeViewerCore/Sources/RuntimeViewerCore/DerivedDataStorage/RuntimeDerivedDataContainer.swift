@@ -3,10 +3,20 @@ import Compression
 
 /// What derived data names a kind of stored data by: the first part of its
 /// file name, and part of what a container's header must match.
+///
+/// ASCII letters and digits only. A file is `<kind>-<variant>.rvdd`, and
+/// writing a kind deletes the image's files whose names begin with
+/// `<kind>-` — its other variants, which have hyphens of their own. A kind
+/// with a hyphen in its name would have its files taken for variants of the
+/// kind it starts with, and deleted whenever that kind is written.
 public struct RuntimeDerivedDataKind: Hashable, Sendable, RawRepresentable {
     public let rawValue: String
 
     public init(rawValue: String) {
+        precondition(
+            !rawValue.isEmpty && rawValue.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) },
+            "a derived data kind is named with ASCII letters and digits alone: \(rawValue)"
+        )
         self.rawValue = rawValue
     }
 
@@ -126,6 +136,13 @@ public struct RuntimeDerivedDataContainer: Sendable {
     /// allocate a table of millions of entries.
     static let maximumSectionCount = 64
 
+    /// The most a section may decode to — some thirty times what AppKit's
+    /// corpus decodes to in all its sections. The decoded length comes from
+    /// the file and sizes the buffer a section decodes into, so it is checked
+    /// before anything is allocated: `Int.max` once overflowed that size and
+    /// trapped. A section a writer made larger only fails to read back.
+    static let maximumDecodedSectionByteCount = 1 << 30
+
     private let sectionsByIdentifier: [SectionIdentifier: Data]
 
     /// The decoded bytes of section `identifier`.
@@ -213,7 +230,7 @@ public struct RuntimeDerivedDataContainer: Sendable {
                   offset >= UInt64(headerByteCount + 8),
                   storedByteCount <= UInt64(data.count),
                   offset <= UInt64(data.count) - storedByteCount,
-                  decodedByteCount <= UInt64(Int.max)
+                  decodedByteCount <= UInt64(Self.maximumDecodedSectionByteCount)
             else { throw Error.damagedSection(identifier.rawValue) }
             let storedBytes = data[(data.startIndex + Int(offset)) ..< (data.startIndex + Int(offset + storedByteCount))]
             guard RuntimeDerivedDataDigest.checksum(of: storedBytes) == checksum else { throw Error.damagedSection(identifier.rawValue) }

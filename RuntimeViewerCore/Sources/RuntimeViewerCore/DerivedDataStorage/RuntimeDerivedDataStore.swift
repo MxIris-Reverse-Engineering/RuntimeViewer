@@ -62,6 +62,10 @@ public actor RuntimeDerivedDataStore {
 
     private var readsInFlight: [URL: Task<(any Sendable)?, Never>] = [:]
 
+    /// How many reads wait on each read of a file under way, the one that
+    /// started it among them.
+    private var readerCountsByContainerURL: [URL: Int] = [:]
+
     private let fileManager = FileManager()
 
     public init(location: RuntimeDerivedDataLocation, system: RuntimeDerivedDataSystemIdentity, producer: RuntimeDerivedDataProducerIdentity) {
@@ -163,6 +167,11 @@ public actor RuntimeDerivedDataStore {
     ) async -> Value? {
         guard let containerURL = containerURL(kind, variant: variant, forImageAt: imagePath) else { return nil }
         prepareIfNeeded()
+        readerCountsByContainerURL[containerURL, default: 0] += 1
+        defer {
+            let remainingReaderCount = (readerCountsByContainerURL[containerURL] ?? 1) - 1
+            readerCountsByContainerURL[containerURL] = remainingReaderCount > 0 ? remainingReaderCount : nil
+        }
         if let readInFlight = readsInFlight[containerURL] {
             return await readInFlight.value.flatMap { $0 as? Value }
         }
@@ -175,6 +184,13 @@ public actor RuntimeDerivedDataStore {
         let value = await read.value
         readsInFlight[containerURL] = nil
         return value.flatMap { $0 as? Value }
+    }
+
+    /// How many reads of `kind` and `variant` of the image at `imagePath` are
+    /// waiting on the read of its file under way, the one that started it
+    /// among them — what a test checks before it lets that read finish.
+    func readerCount(of kind: RuntimeDerivedDataKind, variant: String, forImageAt imagePath: String) -> Int {
+        containerURL(kind, variant: variant, forImageAt: imagePath).flatMap { readerCountsByContainerURL[$0] } ?? 0
     }
 
     private func performRead<Value: Sendable>(

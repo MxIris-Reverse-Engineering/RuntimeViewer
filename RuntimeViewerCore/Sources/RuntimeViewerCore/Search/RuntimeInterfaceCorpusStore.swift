@@ -328,7 +328,10 @@ actor RuntimeInterfaceCorpusStore {
 
     private var builds: [String: Build] = [:]
 
-    /// Images waiting for the single build slot, in request order.
+    /// Images waiting for the single build slot, in the order they joined the
+    /// queue. A build that reads derived data first joins when its read finds
+    /// nothing (`finishRead`), so builds asked for together are printed in
+    /// the order their reads end rather than in the order they were asked for.
     private var pendingImagePaths: [String] = []
 
     private var runningBuild: RunningBuild?

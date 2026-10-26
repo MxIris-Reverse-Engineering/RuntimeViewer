@@ -30,6 +30,27 @@ struct RuntimeDerivedDataContainerTests {
         return RuntimeDerivedDataContainer.encoded(builder, header: header)
     }
 
+    /// `encodedFile()` with the text section's decoded length replaced by
+    /// `decodedByteCount` and the header checksum made right again — what a
+    /// writer with a bug, or a crafted file, would leave.
+    private static func encodedFile(claimingDecodedByteCount decodedByteCount: UInt64) -> Data {
+        var file = encodedFile()
+        let headerByteCount = Int(UInt32(littleEndian: file[8 ..< 12].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }))
+        // The magic, the format version and the header's length; the five
+        // length-prefixed strings; the section count. The text section's
+        // entry comes first: identifier, compression, offset, stored length,
+        // then the decoded length.
+        var decodedByteCountOffset = 12
+        for string in [header.kind, header.variant, header.imagePath, header.systemDirectoryName, header.producerDigest] {
+            decodedByteCountOffset += 4 + string.utf8.count
+        }
+        decodedByteCountOffset += 4 + 4 + 1 + 8 + 8
+        withUnsafeBytes(of: decodedByteCount.littleEndian) { file.replaceSubrange(decodedByteCountOffset ..< decodedByteCountOffset + 8, with: $0) }
+        let headerChecksum = RuntimeDerivedDataDigest.checksum(of: file.prefix(headerByteCount))
+        withUnsafeBytes(of: headerChecksum.littleEndian) { file.replaceSubrange(headerByteCount ..< headerByteCount + 8, with: $0) }
+        return file
+    }
+
     @Test("Sections come back as they went in, compressed or not")
     func roundTrip() throws {
         let file = Self.encodedFile()
@@ -100,6 +121,16 @@ struct RuntimeDerivedDataContainerTests {
     func notAContainer() {
         #expect(throws: RuntimeDerivedDataContainer.Error.notAContainer) {
             _ = try RuntimeDerivedDataContainer(decoding: Data("plain text, nothing more".utf8), expecting: Self.header)
+        }
+    }
+
+    /// The decoded length is the file's word, checked before a buffer is
+    /// allocated for it: `Int.max` used to overflow the buffer's size and
+    /// trap, a service reading the file going down with it (PR126.6).
+    @Test("A decoded length larger than any section is an error, not a trap", arguments: [UInt64(Int.max), 1 << 40, (1 << 30) + 1])
+    func oversizedDecodedLength(decodedByteCount: UInt64) {
+        #expect(throws: RuntimeDerivedDataContainer.Error.damagedSection(Self.textSection.rawValue)) {
+            _ = try RuntimeDerivedDataContainer(decoding: Self.encodedFile(claimingDecodedByteCount: decodedByteCount), expecting: Self.header)
         }
     }
 
