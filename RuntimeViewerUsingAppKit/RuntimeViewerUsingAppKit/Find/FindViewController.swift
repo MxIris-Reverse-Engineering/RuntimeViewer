@@ -78,7 +78,10 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
     /// instead.
     private let filterSeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
 
-    private let filterSearchField = NSFilterSearchField()
+    private let filterField = NSFilterTokenField()
+
+    /// Configures `filterField` and reports its filter, with recent filters of its own.
+    private lazy var filterFieldAdapter = NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: .findResults)
 
     private let filterControlBar = NavigatorFilterControlBar()
 
@@ -338,14 +341,13 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
         // The bar sets the field's control size, which sets its font, so the field's own settings come after it.
         filterControlBar.do {
-            $0.filterField = filterSearchField
+            $0.filterField = filterField
             $0.controlSize = .large
         }
 
-        filterSearchField.do {
+        filterField.do {
             $0.placeholderString = "Filter"
             $0.toolTip = "Show results with matching text"
-            $0.sendsWholeSearchString = false
         }
 
         setSummary(nil)
@@ -450,7 +452,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in FindQueryTerm(components: searchField.findPatternComponents) },
             recentQuerySelected: searchFieldMenuAdapter.recentQuerySelected,
             clearRecentQueriesSelected: searchFieldMenuAdapter.clearRecentQueriesSelected,
-            filter: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: "").map { NavigatorTextFilter(typedText: $0) },
+            filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
             resultClicked: resultClicked,
             resultOpenedInNewTab: .merge(resultOpenedFromMenu, resultOpenedWithOption),
             resultCollapsed: resultCollapsed,
@@ -565,11 +567,11 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         }
         .disposed(by: rx.disposeBag)
 
-        // Off for a tree that loads its rows as they are expanded, as Xcode's is; the text stays,
-        // and applies again to the next search that can be filtered.
+        // Off for a tree that loads its rows as they are expanded, as Xcode's is; the filter
+        // stays, and applies again to the next search that can be filtered.
         output.isFilterEnabled.driveOnNext { [weak self] isFilterEnabled in
             guard let self else { return }
-            filterSearchField.isEnabled = isFilterEnabled
+            filterField.isEnabled = isFilterEnabled
         }
         .disposed(by: rx.disposeBag)
 

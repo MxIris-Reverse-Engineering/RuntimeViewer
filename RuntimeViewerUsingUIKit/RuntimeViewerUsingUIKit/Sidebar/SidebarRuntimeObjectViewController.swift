@@ -62,7 +62,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageNotLoadedView.loadImageButton.rx.tap.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.tap.asSignal()
             ).merge(),
-            filter: imageLoadedView.searchBar.rx.text.asDriver().filterNil().map { NavigatorTextFilter(typedText: $0) },
+            filter: imageLoadedView.searchBar.rx.text.asDriver().filterNil().map { NavigatorTextFilter(typedText: $0) }.coalescingKeystrokes(),
             // No Match Case control on iOS, so pin it off: case-insensitive
             // search, the platform default. This constant has to flip with
             // any change to the flag's polarity — it was missed the last

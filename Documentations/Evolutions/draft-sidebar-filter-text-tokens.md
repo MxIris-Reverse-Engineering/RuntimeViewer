@@ -2,11 +2,11 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-10-26
-- **最后更新**: 2026-10-26
+- **最后更新**: 2026-10-27
 - **所属愿景**: 无
 - **实现分支 / PR**: `feature/sidebar-filter-text-tokens`（worktree `.worktrees/RuntimeViewer-SidebarFilterTextTokens`）
-- **依赖**: AppKitPlus 的草案《`NSFilterTokenField` 补齐 Xcode 导航区的文字 token》（AppKitPlus 仓库
-  `Documentations/Evolutions/draft-filter-token-field-text-tokens.md`）发布的 0.18.0
+- **依赖**: AppKitPlus 提案 0062《`NSFilterTokenField` 补齐 Xcode 导航区的文字 token》（AppKitPlus 仓库
+  `Documentations/Evolutions/0062-filter-token-field-text-tokens.md`），已随 AppKitPlus 0.18.0 发布
 
 ## 摘要
 
@@ -58,12 +58,18 @@ Begins With、Ends With 和 Like（通配符）。
 - **报告与清空**：过滤一有变化，就交出一个 `NavigatorTextFilter`。ViewModel 自己清空过滤时（在侧栏中显示一个被过滤掉的对象），
   由接入层清空字段。
 - **最近过滤**：按页面种类各存一份，共四份：镜像列表（目录页与书签页共用）、对象列表（列表页与书签页共用）、Find 结果、Report。
-  跨启动保存在 `AppDefaults`，与 Find 的最近查询放在同一处。当前的过滤条件不恢复。
+  跨启动保存在 `AppDefaults`，与 Find 的最近查询放在同一处。当前的过滤条件不恢复。具体做法：
+  - 存的是字段的 `encodedState`，放在 `AppDefaults.navigatorFilterFieldStates`，按页面种类分键。字段只能经它读写最近过滤。
+  - 页面建好时读回，随即清空字段。存下时正在用的那个过滤因此进入最近过滤，和换掉一个过滤时一样。
+  - token 一变就存。另外任何菜单动作之后也存一次，因为字段菜单里的 Clear Recents 不通知 delegate。
+  - 同组的另一个页面存了新列表时，字段为空、也没在编辑的页面会接过来；有过滤的页面留着自己的列表，等下次建页面时再读。
+    同组几个页面都改过时，以最后存的为准。
 
 **ViewModel**。四类页面的过滤输入从字符串改成 `NavigatorTextFilter`，涉及 `SidebarRootViewModel.Input.searchString`、
 `SidebarRuntimeObjectViewModel.Input.searchString`、`FindViewModel.Input.filterString`、`ReportViewModel.Input.filterString`。
 iOS 的两个页面把搜索栏的文字包成只有 `typedText` 的过滤条件。macOS 的过滤框在停止输入 0.2 秒后才报告文字，所以两个侧边栏
-ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里。
+ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里，写成 `RuntimeViewerApplication` 里的
+`coalescingKeystrokes()`，两个 iOS 页面共用。
 
 **各页的匹配**。每个条件都只比对一行自己的名字，再按各页现有的树规则决定显示哪些行：
 
@@ -83,8 +89,10 @@ ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里。
 - 结果树按需加载时，Find 页照旧禁用过滤框。
 - 工具提示不变；Find 页顶部的查询框不在本次范围内。
 - 删掉对象列表里的 `clearedSearchStringRelay`：它原本用来在清空文字后补发空串；现在设置 `filterTokens` 本身就会通知 delegate。
+- Find 页给搜索框设的 `sendsWholeSearchString` 是搜索框才有的属性，随之去掉；token 框本来就等输入停顿 0.2 秒再报告。
 
-**依赖**。`RuntimeViewerPackages` 对 AppKitPlus-Release 的下限从 0.13.0 抬到 0.18.0。三个 workspace 的锁文件只改这一条 pin。
+**依赖**。`RuntimeViewerPackages` 对 AppKitPlus-Release 的下限从 0.13.0 抬到 0.18.0。受跟踪的四份锁文件只改这一条 pin：Debug 与
+Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandLine`。普通 workspace 的锁文件不进 git。
 
 **测试**（`RuntimeViewerApplicationTests`）：
 
@@ -115,7 +123,13 @@ ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里。
    在整套并行时的 120 秒超时，这个套件单独重跑全部通过，与本改动无关。macOS 与 iOS 两个 App 都编译通过。
 3. 等 AppKitPlus 0.18.0 发布：依赖下限抬到 0.18.0（锁文件只改这一条）；写 macOS 接入层 `NavigatorTextFilterFieldAdapter`
    （含最近过滤的保存）与它的测试；六处过滤框换成 token 框，删掉 `clearedSearchStringRelay`；150 ms 的合并延迟挪到 iOS 的
-   ViewController。
+   ViewController。**已完成（2026-10-27）**：
+   - AppKitPlus 0.18.0 已发布。下限抬到 0.18.0，四份受跟踪的锁文件只改这一条 pin。
+   - 接入层 `NavigatorTextFilterFieldAdapter` 写在 `RuntimeViewerApplication` 里只在 AppKit 下编译的部分，配
+     `NavigatorTextFilterFieldAdapterTests` 11 个测试。
+   - 最近过滤存在 `AppDefaults.navigatorFilterFieldStates`。为此给 `Data` 补上宽松解码，`ResilientFileStorageTests` 加了一例。
+   - 六处过滤框换成 token 框，删掉 `clearedSearchStringRelay`。150 ms 的延迟改由两个 iOS 页面经 `coalescingKeystrokes()` 套用。
+   - 相关的 10 个套件、122 个测试通过，macOS 与 iOS 两个 App 都编译通过。没有启动 App 做界面核对。
 4. 文档：`RuntimeViewerUsingAppKit/AGENTS.md`；提案收尾。
 
 没有询问就采用的假设：
@@ -144,3 +158,11 @@ ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里。
 | 2026-10-26 | 用户批准，开始实现 | 在 `feature/sidebar-filter-text-tokens` 上实现，先做第 1、2 步 |
 | 2026-10-26 | 对象列表上，Filter Scope 与文字条件要落在同一个对象上 | 原先 Filter Scope 按子树、输入的文字按「自身加所有后代的名字」各判各的，一个结构体会因为它嵌套的类名字对上而留下，那个类本身却又被 Filter Scope 藏起来；现在一个对象要同时通过 Filter Scope 与全部条件，它或某个后代通过才保留，与 Xcode 逐个条目判断一致 |
 | 2026-10-26 | 150 ms 的合并延迟在第 2 步仍留在 ViewModel，挪到第 3 步 | 第 2 步时 macOS 的过滤框还是搜索框，每次按键都会报告；等换成 token 框、由它停顿 0.2 秒再报告时再拿掉，第 2 步的输入节奏不变 |
+| 2026-10-27 | AppKitPlus 的提案编为 0062，发布 0.18.0，开始第 3 步 | 用户审过 AppKitPlus 的实现后决定直接发版 |
+| 2026-10-27 | 最近过滤存字段的 `encodedState`，读回后清空字段 | 字段只能经 `encodedState` 与 `restoreState(from:)` 读写最近过滤。读回会连当前过滤一起带回，清空字段正好让它进入最近过滤，当前过滤也就不恢复，与方案一致 |
+| 2026-10-27 | 任何菜单动作之后补存一次 | 字段菜单里的 Clear Recents 只清列表，不通知 delegate。只在 token 变化时存的话，清掉的列表会在下次建页面时回来。以后 AppKitPlus 若在最近过滤变化时通知 delegate，这一条就可以去掉 |
+| 2026-10-27 | 同组的另一个页面存了新列表时，只有字段为空、也没在编辑的页面接手 | 接手要先恢复再清空字段，会冲掉正在用的过滤。目录页与书签页、列表页与书签页是同时开着的，这样多数时候它们看到的是同一份列表 |
+| 2026-10-27 | 收到存储的变化通知后重新读一次，不用通知里带的值 | 存储先写入、后在自己的队列上发通知，通知可能晚于页面自己的下一次保存；拿旧值去比，空着的页面会把自己存过的旧状态当成别处的接过来 |
+| 2026-10-27 | 150 ms 的延迟写成 `RuntimeViewerApplication` 里的 `coalescingKeystrokes()`，两个 iOS 页面共用 | 原来那段「必须用 `delay`、不能用 `debounce`」的说明只需留一处；放在包里，iOS 工程也不用新增文件 |
+| 2026-10-27 | 受跟踪的锁文件是四份，不是方案原写的三个 workspace | 普通 workspace 的锁文件不进 git；`RuntimeViewerPackages` 与 `RuntimeViewerCommandLine` 两个包各有一份，照以往抬 AppKitPlus 下限时的做法一起改 |
+| 2026-10-27 | 给 `Data` 补上 `LenientlyDecodable` | `ResilientFileStorage` 要求值能宽松解码。读不出来的一份状态只丢它自己的键，不影响别的页面种类 |

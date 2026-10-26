@@ -231,21 +231,10 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        // Keystroke coalescing: non-empty queries wait 150 ms (cancelled by
-        // the next keystroke via `flatMapLatest`), clearing applies
-        // immediately. NOTE: this must be `delay`, not `debounce` — on a
-        // single-element `.just` sequence, `debounce` flushes the pending
-        // element the moment the source completes, so the previous
-        // `.just(...).debounce(500ms)` never delayed anything.
+        // Applied as it arrives: the fields coalesce typing themselves — the
+        // macOS token field reports it after a 0.2-second pause, and the iOS
+        // search bar goes through `coalescingKeystrokes()`.
         input.filter
-            .flatMapLatest { filter -> Signal<NavigatorTextFilter> in
-                if filter.isEmpty {
-                    return .just(filter)
-                } else {
-                    return .just(filter)
-                        .delay(.milliseconds(150))
-                }
-            }
             .emitOnNextMainActor { [weak self] filter in
                 guard let self else { return }
                 scheduleRootRefilter(filter: filter)

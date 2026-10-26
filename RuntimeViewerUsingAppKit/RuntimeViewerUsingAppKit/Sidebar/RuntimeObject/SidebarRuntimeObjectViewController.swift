@@ -50,10 +50,9 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     /// action. The anchor of the scope popover — see `filterScopeAnchorView`.
     private weak var filterScopeButton: NSButton?
 
-    /// The empty string, sent when the view model clears its filter on its
-    /// own. Setting the search field's `stringValue` does not reach
-    /// `rx.stringValue`, so the cleared text is fed into the search input here.
-    private let clearedSearchStringRelay = PublishRelay<String>()
+    /// Configures the filter bar's token field and reports its filter. The
+    /// list and bookmark pages share one list of recent filters.
+    private lazy var filterFieldAdapter = NavigatorTextFilterFieldAdapter(filterField: imageLoadedView.filterField, recentFiltersGroup: .runtimeObjectList)
 
     @Dependency(\.appDefaults)
     private var appDefaults
@@ -226,14 +225,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
-            filter: Driver<String>.combineLatestFirstResult(
-                Driver.merge(
-                    imageLoadedView.filterSearchField.rx.stringValue.asDriver(),
-                    clearedSearchStringRelay.asDriver(onErrorDriveWith: .empty()),
-                ),
+            filter: Driver<NavigatorTextFilter>.combineLatestFirstResult(
+                filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
                 filterModeDidChange.asDriver(),
-            )
-            .map { NavigatorTextFilter(typedText: $0) },
+            ),
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
             runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
             runtimeObjectTagClicked: tagClickedRelay.asSignal(),
@@ -300,10 +295,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
 
+        // Emptying the field reports the empty filter, as every change of its
+        // tokens does.
         output.filterCleared.emitOnNext { [weak self] in
             guard let self else { return }
-            imageLoadedView.filterSearchField.stringValue = ""
-            clearedSearchStringRelay.accept("")
+            filterFieldAdapter.clear()
         }
         .disposed(by: rx.disposeBag)
 
@@ -477,7 +473,8 @@ extension SidebarRuntimeObjectViewController {
         /// shown from.
         let filterScopeItem = NSFilterControlBarItem(image: .symbol(systemName: .sliderHorizontal3), target: nil, action: nil)
 
-        let filterSearchField = NSFilterSearchField()
+        /// Xcode's navigator text tokens; configured by the view controller's `NavigatorTextFilterFieldAdapter`.
+        let filterField = NSFilterTokenField()
 
         let filterControlBar = NavigatorFilterControlBar()
 
@@ -510,7 +507,7 @@ extension SidebarRuntimeObjectViewController {
             // highlighted, so switching it off made the search stricter —
             // backwards from the icon everyone recognizes. Leaving it
             // unselected keeps the effective default (ignore case).
-            matchCaseButton = filterSearchField.addFilterButton(
+            matchCaseButton = filterField.addFilterButton(
                 with: .symbol(systemName: .textformat),
                 alternateImage: nil,
                 toolTip: "Match Case",
@@ -580,7 +577,7 @@ extension SidebarRuntimeObjectViewController {
 
             // The bar sizes the field and the items together; it sets the field's control size, so the size goes here.
             filterControlBar.do {
-                $0.filterField = filterSearchField
+                $0.filterField = filterField
                 $0.leadingItems = [NSFilterControlBarItemGroup(subitems: [filterModeItem, filterScopeItem])]
                 $0.controlSize = .large
             }

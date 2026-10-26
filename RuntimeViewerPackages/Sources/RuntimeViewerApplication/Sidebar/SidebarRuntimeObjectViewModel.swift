@@ -265,23 +265,11 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     public func transform(_ input: Input) -> Output {
 //        input.isSearchCaseSensitive.drive($isSearchCaseSensitive).disposed(by: rx.disposeBag)
 
-        // Keystroke coalescing: non-empty queries wait 150 ms (cancelled by
-        // the next keystroke via `flatMapLatest`), clearing applies
-        // immediately. NOTE: this must be `delay`, not `debounce` — on a
-        // single-element `.just` sequence, `debounce` flushes the pending
-        // element the moment the source completes, so the previous
-        // `.just(...).debounce(500ms)` never delayed anything. The window
-        // can be short because the matching itself runs off-main and stale
-        // passes are cancelled.
+        // Applied as it arrives: the fields coalesce typing themselves — the
+        // macOS token field reports it after a 0.2-second pause, and the iOS
+        // search bar goes through `coalescingKeystrokes()`. The matching runs
+        // off-main and a stale pass is cancelled.
         Driver.combineLatest(input.filter, input.isSearchCaseSensitive)
-            .flatMapLatest { filter, isSearchCaseSensitive -> Driver<(NavigatorTextFilter, Bool)> in
-                if filter.isEmpty {
-                    return .just((filter, isSearchCaseSensitive))
-                } else {
-                    return .just((filter, isSearchCaseSensitive))
-                        .delay(.milliseconds(150))
-                }
-            }
             .driveOnNextMainActor { [weak self] filter, isSearchCaseSensitive in
                 guard let self else { return }
                 guard (self.filter != filter) || (self.isSearchCaseSensitive != isSearchCaseSensitive) else { return }

@@ -175,6 +175,29 @@ struct ResilientFileStorageTests {
             #expect(quarantineFiles(in: directoryURL).isEmpty)
         }
     }
+
+    /// The sidebar's filter fields keep their states as opaque blobs, which `JSONEncoder` writes as Base64 strings.
+    @Test("A blob comes back, and a key whose value is not Base64 costs only that key")
+    func blobsRoundTripAndBadOnesCostTheirKey() throws {
+        try withTemporaryDirectory { directoryURL in
+            let blob = Data([0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x00, 0xFF])
+            let storage = ResilientFileStorage<[String: Data]>(wrappedValue: [:], "states", directoryURL: directoryURL)
+            storage.setSynchronously(["imageList": blob])
+            let reader = ResilientFileStorage<[String: Data]>(wrappedValue: [:], "states", directoryURL: directoryURL)
+            #expect(reader.wrappedValue == ["imageList": blob])
+
+            try write(
+                """
+                {"imageList": "\(blob.base64EncodedString())", "report": "not Base64!", "findResults": 42}
+                """,
+                named: "states.json",
+                in: directoryURL
+            )
+            let lenientReader = ResilientFileStorage<[String: Data]>(wrappedValue: [:], "states", directoryURL: directoryURL)
+            #expect(lenientReader.wrappedValue == ["imageList": blob])
+            #expect(quarantineFiles(in: directoryURL).isEmpty)
+        }
+    }
 }
 
 #endif

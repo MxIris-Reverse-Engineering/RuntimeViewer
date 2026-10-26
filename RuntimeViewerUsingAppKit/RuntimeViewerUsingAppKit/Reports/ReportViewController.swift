@@ -46,7 +46,10 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     private lazy var actionsItem = NSFilterControlBarItem(image: SFSymbols(systemName: .ellipsisCircle).nsuiImgae, menu: actionsMenu)
 
-    private let filterSearchField = NSFilterSearchField()
+    private let filterField = NSFilterTokenField()
+
+    /// Configures `filterField` and reports its filter, with recent filters of its own.
+    private lazy var filterFieldAdapter = NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: .report)
 
     private var showsOnlyInProgressButton: NSButton!
 
@@ -84,7 +87,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        showsOnlyInProgressButton = filterSearchField.addFilterButton(
+        showsOnlyInProgressButton = filterField.addFilterButton(
             with: .symbol(systemName: .clock),
             alternateImage: .symbol(systemName: .clockFill),
             toolTip: "Show only reports in progress",
@@ -199,11 +202,11 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             $0.toolTip = "Report Actions"
         }
 
-        filterSearchField.toolTip = "Show reports with matching name"
+        filterField.toolTip = "Show reports with matching name"
 
         // The bar sizes the field and the item together; it sets the field's control size, so the size goes here.
         filterControlBar.do {
-            $0.filterField = filterSearchField
+            $0.filterField = filterField
             $0.leadingItems = [actionsItem]
             $0.controlSize = .large
         }
@@ -224,7 +227,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             clearHistory: clearHistoryRelay.asSignal(),
             openSettings: openSettingsRelay.asSignal(),
             doubleClickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
-            filter: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: "").map { NavigatorTextFilter(typedText: $0) },
+            filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
             showsOnlyInProgress: showsOnlyInProgressButton.rx.state.asDriver().map { $0 == .on }.startWith(false)
         )
         let output = viewModel.transform(input)

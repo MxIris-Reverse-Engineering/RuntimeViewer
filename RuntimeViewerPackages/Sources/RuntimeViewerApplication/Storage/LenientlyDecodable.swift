@@ -54,6 +54,15 @@ extension Dictionary: LenientlyDecodable where Key == String, Value: LenientlyDe
     }
 }
 
+/// One opaque blob — the saved state of a filter field — kept whole or dropped
+/// whole: under a dictionary, a blob that does not decode costs its own key and
+/// nothing more. `JSONEncoder` writes it as a Base64 string.
+extension Data: LenientlyDecodable {
+    public static func decodedLeniently(from jsonObject: Any, diagnostics: inout [String]) -> Data? {
+        try? JSONDecoder.decodeFromJSONObject(Data.self, jsonObject)
+    }
+}
+
 extension JSONDecoder {
     /// Decodes one already-parsed JSON value.
     ///
