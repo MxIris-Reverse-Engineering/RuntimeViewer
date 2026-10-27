@@ -152,7 +152,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// The images the engine's Always Index rows resolve to, as each pass
     /// dispatches them: what the engine's corpus coordinator reads from
     /// derived data before the batches index them (proposal
-    /// `draft-derived-data`). `RuntimeEngineBackgroundWork` connects the two.
+    /// `derived-data`). `RuntimeEngineBackgroundWork` connects the two.
     var alwaysIndexImagePathsResolved: Observable<[String]> {
         alwaysIndexImagePathsResolvedRelay.asObservable()
     }

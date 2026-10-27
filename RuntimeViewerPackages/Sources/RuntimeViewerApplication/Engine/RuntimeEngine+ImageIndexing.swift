@@ -7,7 +7,7 @@ extension RuntimeEngine {
     /// it first when the engine's process has not, as the sidebar's Load does
     /// — unless it is indexed already; a build of it under way is joined.
     /// For an object a Find hit reached through a corpus read from derived
-    /// data (proposal `draft-derived-data`): the corpus is searchable before
+    /// data (proposal `derived-data`): the corpus is searchable before
     /// the image has sections, and the image need not even be loaded in the
     /// serving process, which reads a corpus without loading anything.
     nonisolated func indexImageIfNeeded(at imagePath: String) async throws {
@@ -23,7 +23,7 @@ extension RuntimeEngine {
     /// without emitting when the image is indexed already — the moment a pane
     /// showing an object of an image without sections has more to show. Such
     /// an object reaches a pane through a Find hit whose corpus came from
-    /// derived data (proposal `draft-derived-data`).
+    /// derived data (proposal `derived-data`).
     ///
     /// The engine's reports are followed before the question is asked, so an
     /// image indexed in between is not missed. A question that fails is taken

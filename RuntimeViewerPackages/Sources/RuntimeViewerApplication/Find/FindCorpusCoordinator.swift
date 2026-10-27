@@ -48,7 +48,7 @@ import RuntimeViewerSettings
 /// reads the first, and widens the search in force to each corpus
 /// `corpusBuilt` reports.
 ///
-/// With derived data in the engine's process (proposal `draft-derived-data`),
+/// With derived data in the engine's process (proposal `derived-data`),
 /// the Always Index images are read from it as their batches are dispatched
 /// — `restoreCorpora(of:)`, before any of them is indexed — and every other
 /// request reads first and prints only what it does not find, which the

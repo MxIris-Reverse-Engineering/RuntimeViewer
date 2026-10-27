@@ -208,7 +208,7 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 /// - **Resident budget.** When the total exceeds `residentByteLimit` the
 ///   least recently searched images are evicted whole, back to unbuilt,
 ///   never the image that just finished.
-/// - **Derived data first, then the printer** (proposal `draft-derived-data`).
+/// - **Derived data first, then the printer** (proposal `derived-data`).
 ///   With a derived data store, a build begins by reading the corpus stored
 ///   for its image and transformer, off this actor; only a build that reads
 ///   nothing queues for the printer. A printed corpus goes into the store at

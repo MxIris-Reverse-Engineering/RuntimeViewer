@@ -9,7 +9,7 @@ import Observation
 /// previews and tests the default instance shows no location and does
 /// nothing, so the page renders without the app layer present. Derived data
 /// itself is written by the app's services only (proposal
-/// `draft-derived-data`); this is the app's side.
+/// `derived-data`); this is the app's side.
 @Observable
 @MainActor
 public final class DerivedDataClient {

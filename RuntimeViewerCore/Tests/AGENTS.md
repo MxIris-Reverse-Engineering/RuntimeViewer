@@ -14,4 +14,4 @@ How to build and run these suites: the root `AGENTS.md`, *Testing*.
   read and write the real location. An engine under test gets a store of its own through
   `RuntimeEngine.useDerivedDataStore(_:)`, a corpus store through its `derivedData:` parameter.
 
-Background: `Documentations/Evolutions/draft-derived-data.md`.
+Background: `Documentations/Evolutions/0061-derived-data.md`.

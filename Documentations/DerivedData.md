@@ -4,7 +4,7 @@
 或 `RuntimeInterfaceCorpusStore` 里的读取阶段之前先看这篇；新增一种派生数据之前必须看。下面每一条都是代码里
 看不出来、而「显然做法」会出错的地方。
 
-对应提案：[派生数据](Evolutions/draft-derived-data.md)。术语见[术语表](Glossary.md)的「派生数据」「系统身份」
+对应提案：[派生数据](Evolutions/0061-derived-data.md)。术语见[术语表](Glossary.md)的「派生数据」「系统身份」
 「生产者身份」「读取标记」。
 
 ---

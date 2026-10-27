@@ -53,7 +53,7 @@ extension RuntimeEngine {
     /// Loads into the corpus store whatever corpora the derived data holds
     /// for `imagePaths` under `transformer`, without indexing anything —
     /// what makes images searchable at launch before their sections are
-    /// built (proposal `draft-derived-data`). Images without stored corpora
+    /// built (proposal `derived-data`). Images without stored corpora
     /// are left alone; an image whose corpus is being printed is left to the
     /// printer. An engine whose serving process keeps no derived data
     /// restores nothing, and a peer that predates the command throws, which

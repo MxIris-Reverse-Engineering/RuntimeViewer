@@ -1,12 +1,12 @@
-# Draft - 派生数据：按系统版本把 Find 语料存盘，为索引缓存铺路
+# 0061 - 派生数据：按系统版本把 Find 语料存盘，为索引缓存铺路
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-21
-- **最后更新**: 2026-10-26
+- **最后更新**: 2026-10-27
 - **所属愿景**: 无
 - **关联提案**: [0002](0002-background-indexing.md)（后台索引）、[0023](0023-content-loading-overlay.md)（内容区加载遮罩）、[0027](0027-background-indexing-yields-to-foreground.md)（后台索引给前台让路）、[0029](0029-find-navigator.md)（Find navigator 与文本语料）、[0030](0030-report-navigator.md)（Report navigator）、[0037](0037-local-runtime-xpc-service.md)（本地引擎搬进 XPC service）、[0051](0051-catalyst-xpc-service.md)（Catalyst XPC service）、[0054](0054-always-index-per-engine.md)（Always Index 按 Engine 区分）、[0055](0055-engine-scoped-background-work.md)（后台工作按 Engine 共享）、[0056](0056-cross-references.md)（交叉引用）、[0058](0058-runtime-engine-session.md)（RuntimeEngineSession）
-- **实现分支 / PR**: `feature/derived-data`，PR #126（待合并）
+- **实现分支 / PR**: `feature/derived-data`（从 `next` 切，并回 `next`），PR #126
 - **审查**: 两轮对抗审查，每轮四位审查者，分别侧重缓存键与失效、架构集成、性能论断与证据、范围与验收。[第一轮](../Reviews/2026-10-21-draft-derived-data-review.md)针对初稿，合并后 4 🔴、12 🟡；[第二轮](../Reviews/2026-10-21-draft-derived-data-review-round-2.md)针对第一次修订稿，合并后 1 🔴、17 🟡。两轮的问题均已在本版处理，处理方式见决策日志。实现的代码审查（PR #126：`/code-review xhigh` 15 条，加 Codex 自动审查 1 条）逐条按四问核实，裁决与修复见 [KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md)
 - **配套文档**: 实现说明 [`DerivedData.md`](../DerivedData.md)（只有两个服务进程读写、生产者身份为什么读内存里的映像、清理为什么按最近使用、读取标记为什么等遍历完才删、有语料不等于镜像已加载、新增一种派生数据的步骤）；不另写使用指南
 
@@ -908,3 +908,4 @@ References 与 References 页签、写明重新读回与并入覆盖情况的规
 | 2026-10-26 | 实现的代码审查：修 11 条，其余 6 条不修或误报 | PR #126 的审查交回 15 条，Codex 的自动审查另有 1 条，复核中又找到 1 处同类，逐条按四问裁决，见 [KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md) 与上面「代码审查后的修复」一节。用户批准先在本分支修完再合并。为复现内容区的竞态，取接口的逻辑抽成内部静态函数 `ContentTextViewModel.interface(of:fetchingWith:runtimeEngine:)`，这个新的测试接口经用户批准。 |
 | 2026-10-26 | 改 Transformer 后的读回放在构建被拒之后 | 第一版修法在安排重建时与构建请求同时发起读回。读回若先于构建的拒绝返回，读回的结算会把镜像留给在途的构建，构建随后被拒，镜像就被记成没有语料。现在只在构建因没建索引被引擎拒绝时才改为读回，两者不会同时在途。 |
 | 2026-10-26 | 修复后的完整验证，以及与 next 的对照 | 在公司的 Mac Studio（10 核，macOS 26.7，Xcode 27.2）上：App 的 Debug-arm64e 构建通过，Debug workspace 的锁文件没被改写；MCP 95 个全过；Core 全量（跳过 `RuntimeBackgroundIndexingManagerTests`）900 个红 3 个，管理器套件单独 27 个全过；Packages 全量 827 个红 2 个。五个红灯里，两个在这台机器上必红（`CrossReferenceQueryTests.internalSwiftTypesScanTheirOwnImage` 与 `RelationshipsEquivalenceSnapshotTests`）：测试按 macOS 27 写，用到的类型 26.7 没有。另外三个是等待时限在满载下到点，单独重跑都通过：`RuntimeBackgroundIndexingAlwaysIndexEngineTests.removingEngineStopsFutureDispatchesOnly`（时限 120 秒，单独 28 秒，与 2026-10-16 记下的一样）、`CrossReferencePreparationTests.imagesAskedAboutRenewTheAnalyzer`（60 秒，单独 3 秒）、`RuntimeObjectIdentityCallSiteTests.specializationPaneRebuildsTheSameRowsOnPropertiesDifference`（2 秒，单独 0.15 秒）；后两个所测的代码本分支没有改。PR 描述里承诺的对照：next 在同一台机器上的 Core 全量 831 个，只红那两个必红的；交叉引用那组 70 个测试两边完全相同，本分支多红的一个单独重跑通过，判定为两次运行时的负载不同，不是本分支引入。 |
+| 2026-10-27 | 合并进 `next`，编为 0061，状态改 Implemented | 第 1–6 步都已完成。第 5 步在 App 里的验收仍留给用户，与「本提案之外的后续」两项（上游索引加速、第二期）一起记入提案索引的「暂缓的后续项」。合并前先把 `next`（带着侧边栏过滤框 0060）合进本分支，只有提案索引与审查记录索引两处冲突，两边的条目都保留；在合并后的代码上重新验证，结果见下一行。实现说明与术语在 2026-10-24 已经判断并完成，这次不再增加。代码注释里引用本提案的地方改为只写 slug `derived-data`，以后不随编号变 |

@@ -264,7 +264,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
     /// The interface `fetchInterface` gives for `runtimeObject`, or — when it gives none — the one
     /// it gives once the object's image is indexed. A Find hit can be in an image whose sections are
-    /// not built: its corpus came from derived data (proposal `draft-derived-data`). The image is
+    /// not built: its corpus came from derived data (proposal `derived-data`). The image is
     /// indexed the way the sidebar opens one — joining a background build of it under way — and the
     /// interface asked for again, all under the pane's loading overlay; a load that fails is a fetch
     /// that failed. `runtimeEngine` is asked only then.

@@ -4,7 +4,7 @@ import FoundationToolbox
 /// Derived data: what a process serving an engine works out from the images
 /// of the dyld shared cache with its own code, kept on disk so that the same
 /// code on the same system does not work it out again on the next launch —
-/// what Xcode's DerivedData is to a build. The proposal `draft-derived-data`
+/// what Xcode's DerivedData is to a build. The proposal `derived-data`
 /// is the contract; `RuntimeDerivedDataStore` is where it lives.
 ///
 /// **Off unless a process turns it on.** The two processes that serve the

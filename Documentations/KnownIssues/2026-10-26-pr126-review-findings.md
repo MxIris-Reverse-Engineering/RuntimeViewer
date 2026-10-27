@@ -1,6 +1,6 @@
 # PR #126 代码审查记录 — 2026-10-26
 
-审查对象：PR #126（`feature/derived-data` → `next`，提案 [派生数据](../Evolutions/draft-derived-data.md)的实现），head `19fbf018`，基线 `next` `0c086cd7`。
+审查对象：PR #126（`feature/derived-data` → `next`，提案 [派生数据](../Evolutions/0061-derived-data.md)的实现），head `19fbf018`，基线 `next` `0c086cd7`。
 
 **经过**
 1. `/code-review xhigh` 交回 15 条发现，没有会崩溃的正确性问题；GitHub 上 Codex 的自动审查另有一条（内容区的竞态）。

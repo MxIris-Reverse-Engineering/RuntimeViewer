@@ -4,7 +4,7 @@ import RuntimeViewerCore
 import RuntimeViewerSettings
 import DependenciesMacros
 
-/// The app's side of derived data (proposal `draft-derived-data`): where the
+/// The app's side of derived data (proposal `derived-data`): where the
 /// app's services keep it, what it takes on disk, and deleting it — for the
 /// Indexing settings page, through `DerivedDataClient`, and for the
 /// application menu's Delete Derived Data….
