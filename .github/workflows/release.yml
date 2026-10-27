@@ -39,9 +39,10 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      # Matches the Xcode the project is developed against (27.0, build 27A266a), which is
-      # also the only one on the xcode-27 image.
-      XCODE_VERSION: '27.0'
+      # Matches the Xcode the project is developed against (27.2, build 27B48), so a local
+      # ArchiveScript.sh rehearsal builds with the same Xcode as this job. The xcode-27 image
+      # carries 27.0, 27.1 (its default) and 27.2.
+      XCODE_VERSION: '27.2'
 
     steps:
       - name: Checkout
