@@ -26,15 +26,45 @@ struct NavigatorTextFilterFieldAdapterTests {
 
     private func makePage(
         group: RecentFiltersGroup = .runtimeObjectList,
+        endsTokensAtCommas: Bool = true,
         appDefaults: AppDefaults
     ) -> (filterField: NSFilterTokenField, adapter: NavigatorTextFilterFieldAdapter) {
         let filterField = NSFilterTokenField(frame: NSRect(x: 0, y: 0, width: 240, height: 22))
         let adapter = withDependencies {
             $0.appDefaults = appDefaults
         } operation: {
-            NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: group)
+            NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: group, endsTokensAtCommas: endsTokensAtCommas)
         }
         return (filterField, adapter)
+    }
+
+    /// A window of its own for `filterField`, off screen, so that the field can be edited. Order it out at the end.
+    private func makeWindow(holding filterField: NSFilterTokenField) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: -6000, y: -6000, width: 300, height: 40),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView?.addSubview(filterField)
+        window.orderFrontRegardless()
+        return window
+    }
+
+    /// Makes the field its window's first responder, as a click into it does, and answers its field editor.
+    private func beginEditing(_ filterField: NSFilterTokenField) throws -> NSTextView {
+        filterField.window?.makeFirstResponder(filterField)
+        return try #require(filterField.currentEditor() as? NSTextView)
+    }
+
+    /// Types `text` at the end of the field editor one character at a time, as a keyboard does.
+    private func type(_ text: String, into fieldEditor: NSTextView) {
+        for character in text {
+            let endOfText = NSRange(location: (fieldEditor.string as NSString).length, length: 0)
+            fieldEditor.selectedRange = endOfText
+            fieldEditor.insertText(String(character), replacementRange: endOfText)
+        }
     }
 
     private func tokens(_ terms: Term...) -> [NSFilterToken] {
@@ -109,6 +139,8 @@ struct NavigatorTextFilterFieldAdapterTests {
         Term(comparison: .endsWith, value: "loo"),
         Term(comparison: .like, value: "lib*Co?e"),
         Term(comparison: .contains, value: "big view"),
+        // `!foo*` and then Contains from the token's menu.
+        Term(comparison: .contains, value: "!foo"),
     ])
     func editingStringsParseBack(term: Term) throws {
         let (filterField, adapter) = makePage(appDefaults: .isolated())
@@ -128,6 +160,37 @@ struct NavigatorTextFilterFieldAdapterTests {
         #expect(NavigatorTextFilterFieldAdapter.term(for: NSFilterToken(type: kindType, comparisonType: isNot, value: "error")) == Term(comparison: .doesNotContain, value: "error"))
         #expect(NavigatorTextFilterFieldAdapter.term(for: NSFilterToken(type: kindType, comparisonType: isEqual, value: "error")) == Term(comparison: .contains, value: "error"))
         #expect(NavigatorTextFilterFieldAdapter.term(for: NSFilterToken(type: kindType, comparisonType: nil, value: "error")) == Term(comparison: .contains, value: "error"))
+    }
+
+    @Test("a comma ends a token in a field of names, and stays in the text in a field of code until Return")
+    func commasEndTokensOnlyInFieldsOfNames() async throws {
+        let (namesFilterField, namesAdapter) = makePage(appDefaults: .isolated())
+        let namesWindow = makeWindow(holding: namesFilterField)
+        let (codeFilterField, codeAdapter) = makePage(group: .findResults, endsTokensAtCommas: false, appDefaults: .isolated())
+        let codeWindow = makeWindow(holding: codeFilterField)
+        defer {
+            withExtendedLifetime((namesAdapter, codeAdapter)) {}
+            namesWindow.orderOut(nil)
+            codeWindow.orderOut(nil)
+        }
+
+        type("String,", into: try beginEditing(namesFilterField))
+        let namesTokenized = await pollUntil(timeout: .seconds(5)) {
+            namesFilterField.filterTokens.map(NavigatorTextFilterFieldAdapter.term(for:)) == [Term(comparison: .contains, value: "String")]
+        }
+        #expect(namesTokenized, "tokens: \(namesFilterField.filterTokens.map(\.value))")
+
+        let codeFieldEditor = try beginEditing(codeFilterField)
+        type("String,", into: codeFieldEditor)
+        let codeKeptTheComma = await pollUntil(timeout: .seconds(5)) { codeFilterField.editingString == "String," }
+        #expect(codeKeptTheComma, "text: \(codeFilterField.editingString), tokens: \(codeFilterField.filterTokens.map(\.value))")
+        #expect(codeFilterField.filterTokens.isEmpty)
+
+        codeFieldEditor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        let codeTokenized = await pollUntil(timeout: .seconds(5)) {
+            codeFilterField.filterTokens.map(NavigatorTextFilterFieldAdapter.term(for:)) == [Term(comparison: .contains, value: "String,")]
+        }
+        #expect(codeTokenized, "tokens: \(codeFilterField.filterTokens.map(\.value))")
     }
 
     // MARK: - Reporting
@@ -201,6 +264,30 @@ struct NavigatorTextFilterFieldAdapterTests {
         }
         let savedRecentFilters = try recentFilters(in: savedState(in: appDefaults))
         #expect(saved, "saved: \(savedRecentFilters)")
+    }
+
+    /// Every menu action makes every page save, and saving reads the field's whole value while the user may be typing.
+    /// AppKitPlus keeps its own reads of that value from reporting while it adds tokens; reading it here leaves the text
+    /// being typed as it is, so the save needs no such care (known issue PR127.1, a false positive).
+    @Test("a menu action while the field is being edited leaves the text being typed as it is")
+    func menuActionWhileEditingLeavesTheTypedText() async throws {
+        let (filterField, adapter) = makePage(appDefaults: .isolated())
+        let window = makeWindow(holding: filterField)
+        defer {
+            withExtendedLifetime(adapter) {}
+            window.orderOut(nil)
+        }
+        let fieldEditor = try beginEditing(filterField)
+        type("NSVi", into: fieldEditor)
+
+        NotificationCenter.default.post(name: NSMenu.didSendActionNotification, object: NSMenu())
+
+        // A page hears the menu action a main-actor turn later, so the test watches for a second — past the field's
+        // 0.2-second typing pause too.
+        let touchedTheText = await pollUntil(timeout: .seconds(1)) {
+            !filterField.filterTokens.isEmpty || fieldEditor.string != "NSVi"
+        }
+        #expect(!touchedTheText, "tokens: \(filterField.filterTokens.map(\.value)), text: \(fieldEditor.string.debugDescription)")
     }
 
     @Test("an empty page takes up the recent filters another page of its group saves")

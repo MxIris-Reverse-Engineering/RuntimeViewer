@@ -80,8 +80,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let filterField = NSFilterTokenField()
 
-    /// Configures `filterField` and reports its filter, with recent filters of its own.
-    private lazy var filterFieldAdapter = NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: .findResults)
+    /// Configures `filterField` and reports its filter, with recent filters of its own. The results are lines of code,
+    /// so a comma stays in the text instead of ending a token.
+    private lazy var filterFieldAdapter = NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: .findResults, endsTokensAtCommas: false)
 
     private let filterControlBar = NavigatorFilterControlBar()
 

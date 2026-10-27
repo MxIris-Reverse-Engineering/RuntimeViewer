@@ -10,7 +10,8 @@ import RuntimeViewerArchitectures
 ///
 /// Text turns into tokens when the user ends it with Return, Tab or a comma, or pastes it, by the rules of
 /// `NavigatorTextFilter.terms(parsing:)`: `loo` is Contains, `!loo` Does Not Contain, `loo*` Begins With, `*loo` Ends
-/// With, and text with any other `*`, `?` or `\` a wildcard pattern. A token's key switches between the first four and
+/// With, and text with any other `*`, `?` or `\` a wildcard pattern. A field that filters code rather than names leaves
+/// out the comma (`endsTokensAtCommas`), since code is full of them. A token's key switches between the first four and
 /// the value shows which one it is — `≠ loo`, `loo ⋯`, `⋯ loo` — while a pattern has no menu. Double-clicking a token
 /// gives back text that parses into the same token. The tokens and the text not yet turned into tokens all have to hold:
 /// the field never offers ANY or ALL, and it completes nothing.
@@ -85,11 +86,17 @@ public final class NavigatorTextFilterFieldAdapter: NSObject, NSFilterTokenField
         NavigatorTextFilter(terms: filterField.filterTokens.map(Self.term(for:)), typedText: filterField.editingString)
     }
 
-    public init(filterField: NSFilterTokenField, recentFiltersGroup: RecentFiltersGroup) {
+    /// `endsTokensAtCommas`: whether a typed comma ends a token, as in Xcode's navigators. Pass `false` for a field that
+    /// filters code, such as the Find results' lines, where a comma is part of the text; Return, Tab and a paste still
+    /// make tokens.
+    public init(filterField: NSFilterTokenField, recentFiltersGroup: RecentFiltersGroup, endsTokensAtCommas: Bool = true) {
         self.filterField = filterField
         self.recentFiltersGroup = recentFiltersGroup
         super.init()
 
+        if !endsTokensAtCommas {
+            filterField.tokenizingCharacterSet = CharacterSet()
+        }
         filterField.tokenTypes = [Self.textTokenType]
         filterField.defaultTokenType = Self.textTokenType
         filterField.comparisonTypes = [
