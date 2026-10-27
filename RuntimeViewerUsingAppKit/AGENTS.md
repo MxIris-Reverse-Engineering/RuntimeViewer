@@ -201,9 +201,14 @@ old `PopUpPathControl` and `ItemPopUpButton` were deleted). Background:
   text still being typed all have to hold; the adapter reports them as a `NavigatorTextFilter`, and the
   page's view model tests each row's own name against it (`NavigatorTextFilter.Matcher`). Give the adapter
   the page's `RecentFiltersGroup`, which picks the list of recent filters it keeps in
-  `AppDefaults.navigatorFilterFieldStates`. A view model that clears its filter has the view controller
-  call the adapter's `clear()`, and the field reports the empty filter itself. A picker's filter field
-  stays an `NSFilterSearchField`. Background: `Documentations/Evolutions/draft-sidebar-filter-text-tokens.md`.
+  `AppDefaults.navigatorFilterFieldStates`. A field that filters code rather than names — the Find results —
+  also passes `endsTokensAtCommas: false`, so that a comma stays in the text. A view model that clears its
+  filter has the view controller call the adapter's `clear()`, and the field reports the empty filter itself.
+  A picker's filter field stays an `NSFilterSearchField`. Background:
+  `Documentations/Evolutions/draft-sidebar-filter-text-tokens.md`.
+- Match names in a filter without the user's language: `NavigatorTextFilter.Matcher`, or `range(of:options:)`
+  with no locale — never `localizedStandardContains`, `localizedCaseInsensitiveContains` or `locale: .current`.
+  Turkish case rules pair I with ı, so `uiview` would miss `UIView` (known issue PR127.5).
 
 - The bar at the bottom of a sidebar page is a `NavigatorFilterControlBar` (RuntimeViewerUI): AppKitPlus's
   `NSFilterControlBar`, taken for a bar by the list's scroll pocket — a plain `NSFilterControlBar` there

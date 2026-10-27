@@ -34,11 +34,13 @@ Begins With、Ends With 和 Like（通配符）。
   - 不含 `*`、`?`、`\` 的段是 Contains；
   - `*x` 是 Ends With，`x*` 是 Begins With（x 里没有别的特殊字符时）；
   - 其余含特殊字符的段是 Like，值原样保留；
-  - 另加一个 Xcode 没有的写法：`!x` 表示 Does Not Contain（理由见假设）。
+  - 另加一个 Xcode 没有的写法：`!x` 表示 Does Not Contain（理由见假设）；`\!x` 表示 Contains `!x`，用来查以 `!` 开头的文字。
 
-  正在输入的文字按同一套规则解析。
+  正在输入的文字按同一套规则解析，只有一处例外：单独一个 `*`（值为空的 Ends With）在输入途中不参与过滤，回车变成 token 后
+  才与 Xcode 一样什么都匹配不到。
 - **匹配**照 Xcode 27.0 DVTFoundation 的 `_predicateForTextExpression:`：
-  - Contains 同时忽略大小写和变音符号（`localizedStandardContains`），Does Not Contain 是它的反面；
+  - Contains 同时忽略大小写和变音符号，Does Not Contain 是它的反面。Xcode 用的 `localizedStandardContains` 会跟随系统语言，
+    这里不跟随（见决策日志）；
   - Begins With、Ends With 忽略大小写，但区分变音符号；
   - Like 是忽略大小写的通配符匹配，值的两端各补一个 `*`。
 
@@ -53,8 +55,9 @@ Begins With、Ends With 和 Like（通配符）。
     列表；Like 不进列表，所以 Like token 没有菜单；
   - 不显示 ALL / ANY（`operatorDisplayMode = .never`）；
   - 打开最近过滤，不提供补全。
-- **文字与 token 互转**：`tokensForString:` 用上面的解析器，把回车、Tab、逗号与粘贴得到的文字变成 token。
-  `editingStringForToken:` 给出能解析回同一个 token 的文字：`loo`、`loo*`、`*loo`、`!loo`；Like 原样给出；值里的空格写成 `\ `。
+- **文字与 token 互转**：`tokensForString:` 用上面的解析器，把回车、Tab、逗号与粘贴得到的文字变成 token。Find 结果的过滤框
+  过滤的是代码，逗号不切 token（`endsTokensAtCommas: false`）。`editingStringForToken:` 给出能解析回同一个 token 的文字：
+  `loo`、`loo*`、`*loo`、`!loo`，以 `!` 开头的 Contains 值写成 `\!loo`；Like 原样给出；值里的空格写成 `\ `。
 - **报告与清空**：过滤一有变化，就交出一个 `NavigatorTextFilter`。ViewModel 自己清空过滤时（在侧栏中显示一个被过滤掉的对象），
   由接入层清空字段。
 - **最近过滤**：按页面种类各存一份，共四份：镜像列表（目录页与书签页共用）、对象列表（列表页与书签页共用）、Find 结果、Report。
@@ -74,8 +77,9 @@ ViewModel 里那段 150 ms 的合并延迟挪到 iOS 的 ViewController 里，�
 **各页的匹配**。每个条件都只比对一行自己的名字，再按各页现有的树规则决定显示哪些行：
 
 - **对象列表**：一个对象「自身通过」，指它通过 Filter Scope、且名字满足所有条件。它自身或任一后代通过，它就显示，这与 Filter
-  Scope 现在的保留规则相同。Filter Mode 选了 Fuzzy 或 Ifrit 时，正在输入的文字照旧按名字树做模糊匹配、排序和加粗；token 仍按
-  上面的比较方式匹配。
+  Scope 现在的保留规则相同。Filter Mode 选了 Fuzzy 或 Ifrit 时，正在输入的文字里的普通片段照旧按名字树做模糊匹配、排序和加粗；
+  带写法的片段（`!x`、`x*`、`*x`、通配符）与 token 一样按上面的比较方式匹配。切换 Filter Mode 立即重新过滤；列表重新加载
+  （例如每批后台索引之后）时过滤条件保留。
 - **镜像列表**：按路径判断。对 Contains、Begins With、Ends With、Like，路径上任一节点（镜像自己或它所在的某一级目录）的名字满足
   即可；对 Does Not Contain，路径上每个节点都必须不包含。一个目录在它下面有镜像通过时显示。只有一个 Contains 条件时，效果与现在
   一样：名字匹配的目录显示整棵子树。
@@ -136,6 +140,20 @@ Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandL
    - 根 `AGENTS.md` 的依赖下限一段补上 AppKitPlus 0.18.0 的原因，随第 3 步提交。
    - README 的 Filter Engine 一条补上 token 的写法；提案索引与文档索引同步更新。
    - 完整验证：`RuntimeViewerApplicationTests` 102 个套件、647 个测试全部通过，退出码 0；macOS 与 iOS 两个 App 编译通过。
+5. 代码审查的修复。**已完成（2026-10-27）**：`/code-review xhigh` 交回 15 条，逐条裁决记在
+   [KnownIssues/2026-10-27-pr127-review-findings.md](../KnownIssues/2026-10-27-pr127-review-findings.md)。修了七条，每条先写了
+   修复前失败的测试：
+   - 比较不再跟随系统语言（PR127.5），特化类型选择器同类的一处一并改；
+   - 对象列表重新加载时保留过滤条件（PR127.9）；
+   - 切换 Filter Mode 立即重新过滤（PR127.2）；
+   - Filter Mode 下，正在输入的文字里带写法的片段按 token 的比较方式匹配（PR127.3）；
+   - `\!x` 写法，让以 `!` 开头的 Contains 值能编辑往返（PR127.4）；
+   - 输入途中单独一个 `*` 不参与过滤（PR127.7）；
+   - Find 结果的过滤框不按逗号切 token（PR127.8）。
+
+   另去掉了管线里 `nameMatcher` 的默认值（PR127.13）。PR127.1 经测试判为误报，没有改代码。验证：`RuntimeViewerApplicationTests`
+   102 个套件、654 个测试中只有 `RuntimeBackgroundIndexingAlwaysIndexEngineTests` 的一条在整套并行时撞上 120 秒超时，这个套件
+   单独重跑全部通过；macOS App 编译通过。
 
 没有询问就采用的假设：
 
@@ -143,7 +161,7 @@ Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandL
 - **多段输入**（`foo bar`）回车后变成两个 token，过滤效果相同。Xcode 会合成一个「foo AND bar」的复合 token，菜单是 AND / OR；
   AppKitPlus 没有复合 token。
 - **加一个 `!x` 写法**表示 Does Not Contain。Xcode 没有这个写法：双击它的 Does Not Contain token 只还原成 `x`，再回车就悄悄变成
-  Contains。名字里不会出现 `!`，这个写法不会误伤。
+  Contains。名字里不会出现 `!`，这个写法不会误伤名字；Find 结果过滤的是代码，以 `!` 开头的文字（`!=`）写成 `\!=`。
 - **命中片段不加粗**，只有对象列表的 Fuzzy / Ifrit 模式照旧加粗。Xcode 会加粗，但做这件事要改四类页面的单元格，还要为成千上万行
   的列表重新测性能，另立提案。
 - **最近过滤跨启动保存，当前过滤不恢复**。Xcode 按 workspace 保存并恢复整个过滤状态，RuntimeViewer 的窗口没有对应的持久身份，
@@ -172,3 +190,13 @@ Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandL
 | 2026-10-27 | 受跟踪的锁文件是四份，不是方案原写的三个 workspace | 普通 workspace 的锁文件不进 git；`RuntimeViewerPackages` 与 `RuntimeViewerCommandLine` 两个包各有一份，照以往抬 AppKitPlus 下限时的做法一起改 |
 | 2026-10-27 | 给 `Data` 补上 `LenientlyDecodable` | `ResilientFileStorage` 要求值能宽松解码。读不出来的一份状态只丢它自己的键，不影响别的页面种类 |
 | 2026-10-27 | 实现完成，待合并 | 四个落地步骤都已提交到 `feature/sidebar-filter-text-tokens`，合并与编号留给用户看过之后。不另写使用指南或实现说明：怎么用写在 `RuntimeViewerUsingAppKit/AGENTS.md` 与接入层的文档注释里，维护者会踩的两处（Clear Recents 不通知 delegate、存储的变化通知可能过时）写在代码注释与本提案里。没有新术语。没有启动 App 做界面核对 |
+| 2026-10-27 | 代码审查的 15 条逐条裁决，用户批准修其中七条，加第 5 步 | 裁决与理由记在 `KnownIssues/2026-10-27-pr127-review-findings.md`。PR127.6、10、12、14、15 不修；PR127.11 以后单独做 |
+| 2026-10-27 | 比较不跟随系统语言，不照搬 Xcode 的 `localizedStandardContains` | 代码里的名字不是用户语言的词。土耳其语把 I 配 ı、İ 配 i，跟随语言时输入 `uiview` 找不到 `UIView`，子进程测试复现过 |
+| 2026-10-27 | 输入途中单独一个 `*` 不参与过滤，回车生成的 token 仍与 Xcode 一样匹配不到任何东西 | 用户选定。token 仍与 Xcode 一致，只有输入途中不同：列表不会在打出 `*` 的那一下变空，Find 结果里过滤 `NSString *` 也不会一直为空 |
+| 2026-10-27 | Find 结果的过滤框不按逗号切 token，名字列表照旧 | 用户选定。Find 结果过滤的是代码，参数列表全是逗号；名字里几乎没有逗号，保持 Xcode 的行为 |
+| 2026-10-27 | 加 `\!x` 写法表示 Contains `!x` | 以 `!` 开头的 Contains 值原先编辑往返后会变成 Does Not Contain；Find 结果过滤代码，`!=` 这类文字也需要一个写法 |
+| 2026-10-27 | Filter Mode 下，正在输入的文字里带写法的片段按 token 的比较方式匹配，普通片段仍做模糊匹配 | 原先整段输入交给模糊匹配，`!Private`、`NS*` 停顿后列表变空，回车成 token 后又有结果，输入时看到的与回车后对不上 |
+| 2026-10-27 | Filter Mode 的变化由对象列表的 view model 自己监听，视图不再重发过滤条件 | 重发的过滤条件与上次相同，被 view model 的相等判断挡掉，自 2026-02 起切换模式就不会重新过滤 |
+| 2026-10-27 | 对象列表重新加载时保留过滤条件 | 引擎在每批后台索引之后重新加载，原先会清空条件而框里的 token 还在 |
+| 2026-10-27 | 不加「编辑中不保存」 | 审查担心打字途中的菜单动作会把正在输入的文字变成 token；测试证实不会，只多一次无害的保存。加这一条还得配「编辑结束时再存」才不丢 Clear Recents，不值得 |
+| 2026-10-27 | AppKitPlus 读写最近过滤的接口以后单独做 | 用户选定。做了之后可以删掉全局菜单监听与「恢复再清空」的读入方式，PR127.6、PR127.10 随之解决 |
