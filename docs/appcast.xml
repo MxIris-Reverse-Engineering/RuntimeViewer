@@ -12,6 +12,15 @@
         <language>en</language>
         <item>
             <title>3.0.0</title>
+            <pubDate>Tue, 27 Oct 2026 18:08:22 +0000</pubDate>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>20261027.17.04</sparkle:version>
+            <sparkle:shortVersionString>3.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/v3.0.0-beta.8/RuntimeViewer-macOS.zip" length="130256608" type="application/octet-stream" sparkle:edSignature="y9PqQy+1SFC82EHYuU6Of2S6OJJtvWcusuN9IaX9PPKanWwfi8IXZ19ksz9yFvAgR8vxmb6qDprpLUB9SsdcDg=="/>
+        </item>
+        <item>
+            <title>3.0.0</title>
             <pubDate>Fri, 16 Oct 2026 13:51:51 +0000</pubDate>
             <sparkle:channel>beta</sparkle:channel>
             <sparkle:version>20261016.12.58</sparkle:version>
@@ -27,15 +36,6 @@
             <sparkle:shortVersionString>3.0.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/v3.0.0-beta.6/RuntimeViewer-macOS.zip" length="116541701" type="application/octet-stream" sparkle:edSignature="/htgpZh9kPSRmOYe8S+d+P/tY99kjrAcFEdRWbTKUev8diqHKYL3Tmpfc9sQieaFPjkDdKs39SNxcJAQ7UzQAQ=="/>
-        </item>
-        <item>
-            <title>3.0.0</title>
-            <pubDate>Sun, 06 Sep 2026 00:44:20 +0000</pubDate>
-            <sparkle:channel>beta</sparkle:channel>
-            <sparkle:version>20260905.23.45</sparkle:version>
-            <sparkle:shortVersionString>3.0.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/v3.0.0-beta.4/RuntimeViewer-macOS.zip" length="78288302" type="application/octet-stream" sparkle:edSignature="w38x3D6sHI2CAYlrcVYCk8GUW0/P25aaiDlefSTvt1EoqSsOo1k1Tu51Nuia3sdr7zl+fd2u3QR5vElFmqiDCQ=="/>
         </item>
         <item>
             <title>2.1.2</title>
