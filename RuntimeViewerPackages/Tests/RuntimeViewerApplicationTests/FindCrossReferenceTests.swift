@@ -686,7 +686,7 @@ struct FindViewModelCrossReferenceTests {
             searchCommitted: searchCommittedRelay.asSignal(),
             recentQuerySelected: recentQuerySelectedRelay.asSignal(),
             clearRecentQueriesSelected: .empty(),
-            filterString: filterStringRelay.asDriver(),
+            filter: filterStringRelay.asDriver().map { NavigatorTextFilter(typedText: $0) },
             resultClicked: resultClickedRelay.asSignal(),
             resultOpenedInNewTab: .empty(),
             resultCollapsed: resultCollapsedRelay.asSignal(),

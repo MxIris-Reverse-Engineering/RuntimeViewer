@@ -1,13 +1,13 @@
 # 0056 - 交叉引用：调用层级、被调与类型引用
 
-- **状态**: In Progress
+- **状态**: Implemented（落地步骤第 4 步拆为暂缓的后续项）
 - **作者**: JH
 - **创建日期**: 2026-10-16
-- **最后更新**: 2026-10-19
+- **最后更新**: 2026-10-26
 - **所属愿景**: 无（CLI 与 MCP 部分沿用[《无头 RuntimeViewer》](../Visions/HeadlessRuntimeViewer.md)「GUI、命令行与 MCP 三个前端共用同一套命令词汇」的取向，但不推进该愿景的步骤）
 - **关联提案**: [0029-find-navigator](0029-find-navigator.md)（Find 导航页、成员定位与高亮）、[0047-open-command-registry-and-injection-module](0047-open-command-registry-and-injection-module.md)（命令扩展范式）、[0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（本地运行时 service）、[0055-engine-scoped-background-work](0055-engine-scoped-background-work.md)（按 Engine 共享的后台工作与 Report）；MachOSwiftSection 侧的库提案 [0072-cross-reference-analysis](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection/blob/next/Documentations/Evolutions/0072-cross-reference-analysis.md)（MachOSwiftSection 的 `next`，2026-10-19 合入）
-- **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）；引擎与界面（落地步骤第 1–3、5、6 步）2026-10-19 合入 `next`，第 4 步在同一分支上继续
-- **配套文档**: 待定 —— 落地时判断：CLI / MCP 的目标写法与精度标注是否需要使用指南；两种桩布局、鉴别常量反查这些解析规则是否需要实现说明
+- **实现分支 / PR**: `feature/cross-references`（worktree `.worktrees/RuntimeViewer-CrossReferences`）；引擎与界面（落地步骤第 1–3、5、6 步）2026-10-19 合入 `next`；分支与 worktree 已删除，第 4 步拆为暂缓的后续项
+- **配套文档**: 无。CLI / MCP 的使用指南随拆出的第 4 步一起判断；解析规则不在本仓库另写实现说明，见决策日志 2026-10-26
 
 ## 摘要
 
@@ -1071,3 +1071,4 @@ Find 跨已索引镜像的第一次查询，另外省掉改名再导出表的 3.
 | 2026-10-19 | 函数图标按语言上色（Swift 蓝、C/C++ 绿、ObjC 橙、无名灰）；每层的无名函数收进最后一行「Unnamed Functions」，默认折叠，Find 导航页与 Inspector 都这样 | 用户提出；方案列给用户后回复「可以，改」 |
 | 2026-10-19 | 实现中自定：Inspector 每段只记住一个展开过的主题，不另外在换主题时清掉 | 换到别的主题时那个主题本来就是折叠的；切回刚展开过的主题仍是展开，只要期间没在这一段展开别的。为此再写一条换主题时清状态的订阅，得在 Rx 管线中途改状态，不值得 |
 | 2026-10-19 | 引擎与界面（落地步骤第 1–3、5、6 步）合入 next，取号 0056；状态保持 In Progress，第 4 步 CLI 与 MCP 在本分支继续 | 用户收尾时选「先合引擎和 GUI 进 next」：本提案写明从第 3 步起每一步都可以单独合入。MachOSwiftSection 的库提案先以 0072 合入它的 next（合并时把三个对照 Capstone 的测试移植到 swift-capstone 7，用户同意），Core 改回钉 MachOSwiftSection 的 next。配套专题文章与新术语这两项判断，留到第 4 步完成、状态改为 Implemented 时做 |
+| 2026-10-26 | In Progress → Implemented，第 4 步拆为暂缓的后续项 | 整理在途事项时经用户批准：界面一侧（第 1–3、5、6 步）已在 `next` 上完整可用，第 4 步（命令行的 `callers` / `callees` / `references`、MCP 的三个工具，以及 agent 插件与 `Guides/CommandLineInterface.md` 的更新）暂时不做，记在提案索引的「暂缓的后续项」，要做时另起提案。上一行留下的两项判断在此做出：配套文档方面，桩布局与鉴别常量反查这些解析规则在 MachOSwiftSection 一侧（它的 0072），本仓库不另写实现说明，CLI / MCP 的使用指南随第 4 步一起判断；术语方面无新增，Call Hierarchy、Callees、Type References 是界面上直接可见的名字。 |

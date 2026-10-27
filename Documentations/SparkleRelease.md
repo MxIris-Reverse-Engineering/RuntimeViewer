@@ -100,6 +100,12 @@ CI watches `.github/workflows/release.yml`; it decodes the
 `--ed-key-file` to `ArchiveScript.sh`. Tag pushes always create/upload the
 GitHub Release and commit the updated `docs/appcast.xml` back to `main`.
 
+**After the appcast pull request has merged, merge `main` into `next`**
+(`git fetch origin && git switch next && git merge origin/main`). Releases are
+tagged on `next`: the next release appends its entry to `next`'s copy of
+`docs/appcast.xml`, and that file then replaces `main`'s, so a `next` that lacks
+the previous release's appcast commit drops that release from the live feed.
+
 Things that bite when dispatching by hand:
 
 - **`gh workflow run` uses the workflow file from `--ref`, which defaults to

@@ -65,7 +65,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UIKitViewContr
     override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
-        let input = ViewModel.Input(clickedNode: collectionView.rx.modelSelected(SidebarRootCellViewModel.self).asSignal(), selectedNode: .never(), searchString: searchBar.rx.text.asSignalOnErrorJustComplete().filterNil())
+        let input = ViewModel.Input(clickedNode: collectionView.rx.modelSelected(SidebarRootCellViewModel.self).asSignal(), selectedNode: .never(), filter: searchBar.rx.text.asSignalOnErrorJustComplete().filterNil().map { NavigatorTextFilter(typedText: $0) }.coalescingKeystrokes())
 
         let output = viewModel.transform(input)
 

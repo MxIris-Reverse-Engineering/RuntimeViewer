@@ -1,9 +1,9 @@
 # 0004 - DifferentiableBox 与 Lazy Cell ViewModel 渲染范式
 
-- **状态**: Draft
+- **状态**: Implemented
 - **作者**: JH
 - **日期**: 2026-05-18
-- **最后更新**: 2026-05-18
+- **最后更新**: 2026-10-26
 - **关联**: `Documentations/Plans/specialization-typepicker-perf-r2.md`(本提案的首个落地场景)
 
 ## 摘要
@@ -303,3 +303,11 @@ extension DiffableRow {
 3. **Step 3 (可选,跨 evolution)**: 若有第二个模块按 lazy 模式使用 `DifferentiableBox`,在该模块的 PR 描述中引用本提案,让 reviewer 复核适用边界条件
 
 提案通过 = Step 1 + Step 2 全部 ship + 关联 plan 的 AC 全部满足;状态从 Draft 转为 Accepted。
+
+## 决策日志
+
+本文原先没有决策日志，这一节从 2026-10-26 的状态变更起记。
+
+| 日期 | 决定 | 理由 |
+|------|------|------|
+| 2026-10-26 | Draft → Implemented | Step 1、Step 2 早已完成：`RuntimeViewerArchitectures/DifferentiableBox.swift` 与 `DifferentiableBoxTests`，Specialization 模块用上了 `CandidateBox`，适用边界写进了 `RuntimeViewerUsingAppKit/AGENTS.md`。按上一节的约定此时应转为 Accepted，而实现已经完成，整理在途事项时经用户批准直接更正为 Implemented。配套文档：不另写，规则已在 AGENTS.md。术语：无新增。 |

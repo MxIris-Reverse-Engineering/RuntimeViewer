@@ -28,9 +28,9 @@ struct SidebarFilterRelayMaterializationTests {
         for context in contexts {
             for scope in [RuntimeObjectScope(), RuntimeObjectScope(propertyStates: [.generic: .only])] {
                 let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: cells, scope: scope)
-                let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context)
+                let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context, nameMatcher: .empty)
                 _ = try #require(
-                    SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: cells, context: context, scope: scope)
+                    SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: cells, context: context, scope: scope, nameMatcher: .empty)
                 )
             }
         }
@@ -61,7 +61,7 @@ struct SidebarFilterRelayMaterializationTests {
 
         for query in ["Generated1", "Generated"] {
             let snapshotForest = SidebarRootFilterPipeline.snapshot(of: cells)
-            let verdictForest = SidebarRootFilterPipeline.verdicts(for: snapshotForest, query: query)
+            let verdictForest = SidebarRootFilterPipeline.verdicts(for: snapshotForest, matcher: NavigatorTextFilter(typedText: query).makeMatcher())
             _ = try #require(SidebarRootFilterPipeline.apply(verdictForest, to: cells))
         }
         SidebarRootFilterPipeline.resetToUnfiltered(cells)

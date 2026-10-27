@@ -39,7 +39,7 @@ struct SidebarRootFilterPipelineTests {
             let cells = [SidebarRootCellViewModel(node: rootImageNode)]
 
             let snapshotForest = SidebarRootFilterPipeline.snapshot(of: cells)
-            let forestVerdict = SidebarRootFilterPipeline.verdicts(for: snapshotForest, query: query)
+            let forestVerdict = SidebarRootFilterPipeline.verdicts(for: snapshotForest, matcher: NavigatorTextFilter(typedText: query).makeMatcher())
             let filteredCells = try #require(
                 SidebarRootFilterPipeline.apply(forestVerdict, to: cells)
             )
@@ -55,6 +55,45 @@ struct SidebarRootFilterPipelineTests {
         }
     }
 
+    // MARK: - Text filter terms along an image's path
+
+    /// The images (leaves) left after filtering the fixture tree with `filter`.
+    private func leafNamesAfterFiltering(with filter: NavigatorTextFilter) throws -> Set<String> {
+        let rootImageNode = RuntimeImageNode.rootNode(for: Self.fixtureImagePaths, name: "Dyld Shared Cache")
+        let cells = [SidebarRootCellViewModel(node: rootImageNode)]
+        let forestVerdict = SidebarRootFilterPipeline.verdicts(
+            for: SidebarRootFilterPipeline.snapshot(of: cells),
+            matcher: filter.makeMatcher()
+        )
+        let filteredCells = try #require(SidebarRootFilterPipeline.apply(forestVerdict, to: cells))
+        return leafNodeNames(of: filteredCells)
+    }
+
+    @Test("Does Not Contain hides a directory together with everything under it")
+    func exclusionHidesAWholeDirectory() throws {
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(typedText: "!Private")) == [
+            "AppKit", "Foundation", "SwiftUI", "libNeedleHelper.dylib", "libswiftCore.dylib",
+        ])
+    }
+
+    @Test("every term must hold, each satisfied anywhere along the image's path")
+    func everyTermHoldsAlongThePath() throws {
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(typedText: "Needle !Private")) == ["libNeedleHelper.dylib"])
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(typedText: "Frameworks Swift")) == ["SwiftUI"])
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(
+            terms: [.init(comparison: .doesNotContain, value: "Private")],
+            typedText: "Needle"
+        )) == ["libNeedleHelper.dylib"])
+    }
+
+    @Test("Begins With, Ends With and Like test each name on the path")
+    func prefixSuffixAndPatternsTestEachName() throws {
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(typedText: "Need*")) == ["NeedleKit"])
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(typedText: "*.dylib")) == ["libNeedleHelper.dylib", "libswiftCore.dylib"])
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(typedText: "*Kit")) == ["AppKit", "NeedleKit"])
+        #expect(try leafNamesAfterFiltering(with: NavigatorTextFilter(typedText: "lib*Core")) == ["libswiftCore.dylib"])
+    }
+
     @Test("empty-query reset restores the full tree")
     func emptyQueryResetRestoresFullTree() throws {
         let rootImageNode = RuntimeImageNode.rootNode(for: Self.fixtureImagePaths, name: "Dyld Shared Cache")
@@ -62,7 +101,7 @@ struct SidebarRootFilterPipelineTests {
         let fullForest = displayedNameForest(of: cells)
 
         let snapshotForest = SidebarRootFilterPipeline.snapshot(of: cells)
-        let forestVerdict = SidebarRootFilterPipeline.verdicts(for: snapshotForest, query: "needle")
+        let forestVerdict = SidebarRootFilterPipeline.verdicts(for: snapshotForest, matcher: NavigatorTextFilter(typedText: "needle").makeMatcher())
         _ = try #require(SidebarRootFilterPipeline.apply(forestVerdict, to: cells))
         #expect(displayedNameForest(of: cells) != fullForest)
 
@@ -92,7 +131,7 @@ struct SidebarRootFilterPipelineTests {
         let input = SidebarRootViewModel.Input(
             clickedNode: .never(),
             selectedNode: .never(),
-            searchString: searchStringRelay.asSignal()
+            filter: searchStringRelay.asSignal().map { NavigatorTextFilter(typedText: $0) }
         )
         _ = viewModel.transform(input)
 

@@ -118,8 +118,10 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
         guard !trimmed.isEmpty else {
             return allRows
         }
+        // Not `localizedCaseInsensitiveContains`: type names are not words of the user's language, and Turkish case
+        // rules would make `uiview` miss `UIView`.
         return allRows.filter { row in
-            row.model.displayName.localizedCaseInsensitiveContains(trimmed)
+            row.model.displayName.range(of: trimmed, options: .caseInsensitive) != nil
         }
     }
 }

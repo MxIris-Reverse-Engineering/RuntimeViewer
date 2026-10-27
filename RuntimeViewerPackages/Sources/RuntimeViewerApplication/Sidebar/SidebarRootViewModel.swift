@@ -137,17 +137,18 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     }
 
     /// Root filter pass: snapshot the cell tree on the main actor,
-    /// compute verdicts (aggregate-name construction + matching) on the
+    /// compute verdicts (matching every name along each image's path) on the
     /// global executor, then apply on the main actor iff still current.
     /// The legacy path ran the whole cascade synchronously on the main
     /// thread per (never actually delayed) keystroke.
     @MainActor
-    private func scheduleRootRefilter(query: String) {
+    private func scheduleRootRefilter(filter: NavigatorTextFilter) {
         currentRootFilterTask?.cancel()
         currentRootFilterGeneration &+= 1
         let generation = currentRootFilterGeneration
+        let matcher = filter.makeMatcher()
 
-        if query.isEmpty {
+        if matcher.isEmpty {
             currentRootFilterTask = nil
             if isFiltering {
                 isFiltering = false
@@ -164,7 +165,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         let cells = nodes
         let snapshotForest = SidebarRootFilterPipeline.snapshot(of: cells)
         currentRootFilterTask = Task { @MainActor [weak self] in
-            let forestVerdict = await Self.computeVerdictsOffMain(for: snapshotForest, query: query)
+            let forestVerdict = await Self.computeVerdictsOffMain(for: snapshotForest, matcher: matcher)
             guard !Task.isCancelled, let self else { return }
             guard self.currentRootFilterGeneration == generation else { return }
             guard let filteredCells = SidebarRootFilterPipeline.apply(forestVerdict, to: cells) else { return }
@@ -174,20 +175,22 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     }
 
     /// Hop for the verdict computation: `nonisolated async` runs on the
-    /// global concurrent executor, keeping the recursive aggregate-name
-    /// construction and ICU `contains` matching off the main thread.
+    /// global concurrent executor, keeping the recursive name matching off
+    /// the main thread.
     private nonisolated static func computeVerdictsOffMain(
         for forest: [SidebarRootFilterPipeline.SnapshotNode],
-        query: String
+        matcher: NavigatorTextFilter.Matcher
     ) async -> SidebarRootFilterPipeline.ForestVerdict {
-        SidebarRootFilterPipeline.verdicts(for: forest, query: query)
+        SidebarRootFilterPipeline.verdicts(for: forest, matcher: matcher)
     }
 
     @MemberwiseInit(.public)
     public struct Input {
         public let clickedNode: Signal<SidebarRootCellViewModel>
         public let selectedNode: Signal<SidebarRootCellViewModel>
-        public let searchString: Signal<String>
+        /// The filter field's content. A platform without tokens passes its
+        /// search text as `NavigatorTextFilter(typedText:)`.
+        public let filter: Signal<NavigatorTextFilter>
     }
 
     @MemberwiseInit(.public)
@@ -228,24 +231,13 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        // Keystroke coalescing: non-empty queries wait 150 ms (cancelled by
-        // the next keystroke via `flatMapLatest`), clearing applies
-        // immediately. NOTE: this must be `delay`, not `debounce` — on a
-        // single-element `.just` sequence, `debounce` flushes the pending
-        // element the moment the source completes, so the previous
-        // `.just(...).debounce(500ms)` never delayed anything.
-        input.searchString
-            .flatMapLatest { filter -> Signal<String> in
-                if filter.isEmpty {
-                    return .just(filter)
-                } else {
-                    return .just(filter)
-                        .delay(.milliseconds(150))
-                }
-            }
-            .emitOnNextMainActor { [weak self] query in
+        // Applied as it arrives: the fields coalesce typing themselves — the
+        // macOS token field reports it after a 0.2-second pause, and the iOS
+        // search bar goes through `coalescingKeystrokes()`.
+        input.filter
+            .emitOnNextMainActor { [weak self] filter in
                 guard let self else { return }
-                scheduleRootRefilter(query: query)
+                scheduleRootRefilter(filter: filter)
             }.disposed(by: rx.disposeBag)
 
         return Output(

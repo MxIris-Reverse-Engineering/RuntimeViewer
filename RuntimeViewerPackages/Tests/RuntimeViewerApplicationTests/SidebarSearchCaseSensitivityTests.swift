@@ -139,7 +139,7 @@ struct SidebarSearchCaseSensitivityTests {
             runtimeObjectClicked: .never(),
             runtimeObjectOpenedInNewTab: .never(),
             loadImageClicked: .never(),
-            searchString: searchString.asDriver(onErrorJustReturn: ""),
+            filter: searchString.asDriver(onErrorJustReturn: "").map { NavigatorTextFilter(typedText: $0) },
             isSearchCaseSensitive: isSearchCaseSensitive
         )
     }

@@ -33,9 +33,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         /// A row double-clicked. A feature's "Turned off in Settings" row opens Settings, where it
         /// is turned back on; the other rows open nothing.
         public let doubleClickedNode: Signal<ReportNode>
-        /// The filter bar, as typed: rows whose title contains it, with their ancestors. Need not
-        /// start with a value — until it reports one the outline is unfiltered.
-        public let filterString: Driver<String>
+        /// The filter bar's content: rows whose title satisfies every term of it, with their
+        /// ancestors. Need not start with a value — until it reports one the outline is unfiltered.
+        public let filter: Driver<NavigatorTextFilter>
         /// The filter bar's clock toggle: only the work in progress. Off until it reports otherwise.
         public let showsOnlyInProgress: Driver<Bool>
     }
@@ -74,11 +74,11 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
     @RxObserved
     private var isCrossReferencePreparationEnabled: Bool = true
 
-    /// The filter bar's text and clock toggle as last reported, kept here instead of being combined
-    /// straight from the input: the filter field's `rx.stringValue` reports only what is typed into
-    /// it, so an untouched field says nothing at all, and an outline waiting on it stays empty.
+    /// The filter bar's content and clock toggle as last reported, kept here instead of being
+    /// combined straight from the input: the filter field reports only what the user does with it,
+    /// so an untouched field says nothing at all, and an outline waiting on it stays empty.
     @RxObserved
-    private var filterString: String = ""
+    private var filter: NavigatorTextFilter = .empty
 
     @RxObserved
     private var showsOnlyInProgress: Bool = false
@@ -253,24 +253,24 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         .disposed(by: rx.disposeBag)
         #endif
 
-        input.filterString.driveOnNext { [weak self] filterString in
+        input.filter.driveOnNext { [weak self] filter in
             guard let self else { return }
-            announceFilteringChange(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
-            self.filterString = filterString
+            announceFilteringChange(filter: filter, showsOnlyInProgress: showsOnlyInProgress)
+            self.filter = filter
         }
         .disposed(by: rx.disposeBag)
 
         input.showsOnlyInProgress.driveOnNext { [weak self] showsOnlyInProgress in
             guard let self else { return }
-            announceFilteringChange(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
+            announceFilteringChange(filter: filter, showsOnlyInProgress: showsOnlyInProgress)
             self.showsOnlyInProgress = showsOnlyInProgress
         }
         .disposed(by: rx.disposeBag)
 
-        let filteredOutline = Driver.combineLatest($allNodes.asDriver(), $filterString.asDriver(), $showsOnlyInProgress.asDriver()) { nodes, filterString, showsOnlyInProgress in
+        let filteredOutline = Driver.combineLatest($allNodes.asDriver(), $filter.asDriver(), $showsOnlyInProgress.asDriver()) { nodes, filter, showsOnlyInProgress in
             (
-                nodes: ReportOutline.filtered(nodes, by: filterString, showsOnlyInProgress: showsOnlyInProgress),
-                isFiltering: ReportOutline.isFiltering(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
+                nodes: ReportOutline.filtered(nodes, by: filter, showsOnlyInProgress: showsOnlyInProgress),
+                isFiltering: ReportOutline.isFiltering(filter: filter, showsOnlyInProgress: showsOnlyInProgress)
             )
         }
         let nodes = filteredOutline.map(\.nodes)
@@ -306,9 +306,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
     /// Tells the page the filter bar starts or stops narrowing the outline, before the narrowed
     /// tree reaches it.
-    private func announceFilteringChange(filterString newFilterString: String, showsOnlyInProgress newShowsOnlyInProgress: Bool) {
-        let wasFiltering = ReportOutline.isFiltering(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress)
-        let isFiltering = ReportOutline.isFiltering(filterString: newFilterString, showsOnlyInProgress: newShowsOnlyInProgress)
+    private func announceFilteringChange(filter newFilter: NavigatorTextFilter, showsOnlyInProgress newShowsOnlyInProgress: Bool) {
+        let wasFiltering = ReportOutline.isFiltering(filter: filter, showsOnlyInProgress: showsOnlyInProgress)
+        let isFiltering = ReportOutline.isFiltering(filter: newFilter, showsOnlyInProgress: newShowsOnlyInProgress)
         if isFiltering != wasFiltering {
             filteringChangedRelay.accept(isFiltering)
         }
@@ -565,14 +565,15 @@ enum ReportOutline {
 
     // MARK: - Filtering
 
-    /// The filter bar: a row stays when its title contains the filter string, or when one of its
-    /// descendants does; the clock toggle keeps only the work in progress the same way.
-    static func filtered(_ nodes: [ReportNode], by filterString: String, showsOnlyInProgress: Bool) -> [ReportNode] {
-        guard isFiltering(filterString: filterString, showsOnlyInProgress: showsOnlyInProgress) else { return nodes }
-        let needle = filterString.trimmingCharacters(in: .whitespaces)
+    /// The filter bar: a row stays when its title satisfies every term of the filter
+    /// (`NavigatorTextFilter`), or when one of its descendants does; the clock toggle keeps only
+    /// the work in progress the same way.
+    static func filtered(_ nodes: [ReportNode], by filter: NavigatorTextFilter, showsOnlyInProgress: Bool) -> [ReportNode] {
+        guard isFiltering(filter: filter, showsOnlyInProgress: showsOnlyInProgress) else { return nodes }
+        let matcher = filter.makeMatcher()
         func keep(_ node: ReportNode) -> ReportNode? {
             let children = node.children.compactMap(keep)
-            let matchesText = needle.isEmpty || node.cellViewModel.appearance.title.range(of: needle, options: .caseInsensitive) != nil
+            let matchesText = matcher.matches(node.cellViewModel.appearance.title)
             let matchesProgress = !showsOnlyInProgress || node.cellViewModel.isInProgress
             if !children.isEmpty || (matchesText && matchesProgress && !isCategory(node)) {
                 return ReportNode(identifier: node.identifier, cellViewModel: node.cellViewModel, children: children)
@@ -583,8 +584,8 @@ enum ReportOutline {
     }
 
     /// Whether the filter bar narrows the outline at all.
-    static func isFiltering(filterString: String, showsOnlyInProgress: Bool) -> Bool {
-        !filterString.trimmingCharacters(in: .whitespaces).isEmpty || showsOnlyInProgress
+    static func isFiltering(filter: NavigatorTextFilter, showsOnlyInProgress: Bool) -> Bool {
+        !filter.isEmpty || showsOnlyInProgress
     }
 
     // MARK: - Expansion

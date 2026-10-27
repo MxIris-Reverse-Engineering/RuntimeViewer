@@ -41,8 +41,8 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let recentQuerySelected: Signal<FindQuery>
         /// Clear Recents chosen from the search field's menu.
         public let clearRecentQueriesSelected: Signal<Void>
-        /// The bottom filter bar, as typed.
-        public let filterString: Driver<String>
+        /// The bottom filter bar's content: its tokens and typed text.
+        public let filter: Driver<NavigatorTextFilter>
         /// The row the user chose, to open in place.
         public let resultClicked: Signal<FindResultNode>
         public let resultOpenedInNewTab: Signal<FindResultNode>
@@ -99,7 +99,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     private let session: FindSession
 
     @RxObserved
-    private var filterString: String = ""
+    private var filter: NavigatorTextFilter = .empty
 
     /// Rows the user collapsed during the search on screen, by identifier; every other row with
     /// children shows expanded. Read when the rows change, never observed.
@@ -170,9 +170,9 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         }
         .disposed(by: rx.disposeBag)
 
-        input.filterString.driveOnNext { [weak self] filterString in
+        input.filter.driveOnNext { [weak self] filter in
             guard let self else { return }
-            self.filterString = filterString
+            self.filter = filter
         }
         .disposed(by: rx.disposeBag)
 
@@ -244,10 +244,10 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
 
         // A tree that loads its rows as they are expanded is never filtered: the
         // filter is off for it, as in Xcode.
-        let filteredResults = Driver.combineLatest(session.$results.asDriver(), $filterString.asDriver()) { results, filterString in
+        let filteredResults = Driver.combineLatest(session.$results.asDriver(), $filter.asDriver()) { results, filter in
             let loadsChildrenLazily = results.query?.mode.loadsChildrenLazily == true
             return (
-                nodes: loadsChildrenLazily ? results.nodes : Self.filtered(results.nodes, by: filterString),
+                nodes: loadsChildrenLazily ? results.nodes : Self.filtered(results.nodes, by: filter),
                 isRelationshipTree: results.query?.mode.relationship != nil,
                 loadsChildrenLazily: loadsChildrenLazily
             )
@@ -341,7 +341,7 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             // The rows on screen, after the filter bar, as Xcode's
             // `-[IDEFindNavigatorQueryParametersController documentURLsForSubsearch]`
             // reads `allVisibleResults`.
-            let imagePaths = Self.imagePaths(in: Self.filtered(session.results.nodes, by: filterString))
+            let imagePaths = Self.imagePaths(in: Self.filtered(session.results.nodes, by: filter))
             guard !imagePaths.isEmpty else { return }
             session.update { $0.scope = .images(imagePaths) }
         case .customScopes:
@@ -458,22 +458,24 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
     // MARK: - Filtering
 
     /// The bottom filter bar: a type row stays when its own text or any of
-    /// its descendants matches, with only the matching descendants kept.
-    static func filtered(_ nodes: [FindResultNode], by filterString: String) -> [FindResultNode] {
-        let needle = filterString.trimmingCharacters(in: .whitespaces)
-        guard !needle.isEmpty else { return nodes }
-        return nodes.compactMap { filtered($0, by: needle) }
+    /// its descendants matches, with only the matching descendants kept. A row
+    /// matches when its text satisfies every term of the filter
+    /// (`NavigatorTextFilter`) — the tokens' and the typed text's.
+    static func filtered(_ nodes: [FindResultNode], by filter: NavigatorTextFilter) -> [FindResultNode] {
+        let matcher = filter.makeMatcher()
+        guard !matcher.isEmpty else { return nodes }
+        return nodes.compactMap { filtered($0, by: matcher) }
     }
 
     /// Rows the filter does not change are returned as they are — the same instances, which the
     /// outline's diff takes as unchanged at a glance — and a row it keeps in part is copied with
     /// the appearance it already has. A keystroke builds nothing it does not have to.
-    private static func filtered(_ node: FindResultNode, by needle: String) -> FindResultNode? {
-        let matchesItself = node.filterableText.range(of: needle, options: [.caseInsensitive]) != nil
+    private static func filtered(_ node: FindResultNode, by matcher: NavigatorTextFilter.Matcher) -> FindResultNode? {
+        let matchesItself = matcher.matches(node.filterableText)
         if matchesItself, node.children.isEmpty {
             return node
         }
-        let children = node.children.compactMap { filtered($0, by: needle) }
+        let children = node.children.compactMap { filtered($0, by: matcher) }
         if matchesItself, children.isEmpty {
             return node
         }

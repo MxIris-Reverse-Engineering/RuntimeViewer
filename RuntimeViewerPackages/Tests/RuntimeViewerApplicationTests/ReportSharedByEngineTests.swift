@@ -335,7 +335,7 @@ private final class ReportPage {
             clearHistory: clearHistoryRelay.asSignal(),
             openSettings: .empty(),
             doubleClickedNode: .empty(),
-            filterString: .just(""),
+            filter: .just(.empty),
             showsOnlyInProgress: .just(false)
         ))
         output.nodes.driveOnNext { [weak self] nodes in

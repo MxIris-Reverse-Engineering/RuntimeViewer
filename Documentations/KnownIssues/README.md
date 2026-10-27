@@ -267,3 +267,21 @@ when picking up follow-up work.
   sleep (`PR126.13`); plus a comment, abbreviations across the codebase and two
   access levels (`PR126.5`, `14`, `15`). `PR126.3`, `8`, `9`, `11`, `12` are
   recorded as not fixed and `PR126.10` as a false positive, with their reasons.
+- [2026-10-27-pr127-review-findings.md](2026-10-27-pr127-review-findings.md) —
+  `/code-review xhigh` on PR #127 (`feature/sidebar-filter-text-tokens`, the
+  sidebar filter text tokens proposal) @ `744395d1`, IDs `PR127.<N>`. Fifteen
+  findings, none blocking. Fixed with a failing-first test each: comparisons
+  that followed the user's language, so a Mac in Turkish missed `UIView` for
+  `uiview` (`PR127.5`, confirmed in a child process; the specialization type
+  picker had the same flaw since May); the object list dropping its filter on
+  every reload — after each batch of background indexing — while the field
+  kept showing it (`PR127.9`, there since the first object list); a Filter
+  Mode change that never filtered again (`PR127.2`, broken since February by
+  an equality guard); typed token syntax fuzzy-matched under a Filter Mode
+  (`PR127.3`); a Contains value starting with `!` inverting when edited
+  (`PR127.4`); a lone `*` emptying the list mid-typing (`PR127.7`); and commas
+  ending tokens in the Find results, which filter code (`PR127.8`). `PR127.1`
+  — text being typed turned into a token by a menu action — is a **false
+  positive**, shown by a test that now pins it. `PR127.6`, `10`, `12`, `14`,
+  `15` are recorded as not fixed; `PR127.11`, an AppKitPlus API for recent
+  filters, is deferred to a change of its own.

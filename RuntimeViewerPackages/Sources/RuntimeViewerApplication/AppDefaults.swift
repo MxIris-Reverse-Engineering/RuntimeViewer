@@ -77,10 +77,12 @@ public final class AppDefaults: @unchecked Sendable {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directoryURL: storageDirectoryURL)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directoryURL: storageDirectoryURL)
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directoryURL: storageDirectoryURL)
+            _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directoryURL: storageDirectoryURL)
         } else {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directory: .applicationSupportDirectory)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directory: .applicationSupportDirectory)
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directory: .applicationSupportDirectory)
+            _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directory: .applicationSupportDirectory)
         }
 
         // Not a bookmark concern, but it belongs to the same one-time rekeying
@@ -147,6 +149,13 @@ public final class AppDefaults: @unchecked Sendable {
     /// See `FindRecentQueries`.
     @ResilientFileStorage
     public var findRecentQueriesByScope: [String: [FindQuery]]
+
+    /// The sidebar pages' filter fields as `NSFilterTokenField.encodedState`
+    /// saves them, kept for their recent filters, keyed by
+    /// `NavigatorTextFilterFieldAdapter.RecentFiltersGroup`. See
+    /// `NavigatorTextFilterFieldAdapter`.
+    @ResilientFileStorage
+    public var navigatorFilterFieldStates: [String: Data]
 }
 
 // MARK: - Bookmark migrations

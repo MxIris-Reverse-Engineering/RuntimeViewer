@@ -42,7 +42,7 @@
 - **Auto-Update** – Sparkle-powered updates with daily checks, manual **Check for Updates…**, EdDSA-signed archives, and an opt-in beta channel for RC / beta builds
 - **Framework Support** – Browse `macOS` frameworks, `iOSSupport` frameworks, and load custom Mach-O binaries or frameworks
 - **Determinate Loading Progress** – Phase-based progress feedback while indexing Swift and Objective-C sections
-- **Filter Engine** – Fuzzy search across runtime classes, protocols, and members
+- **Filter Engine** – Fuzzy search across runtime classes, protocols, and members. The sidebar's filter fields take Xcode's navigator tokens — `NS*` begins with, `*View` ends with, `!Private` excludes, `*` and `?` match as wildcards — and remember recent filters
 - **Bookmarks** – Reorderable, persisted bookmarks for runtime objects
 
 ## Getting Started

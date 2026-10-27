@@ -12,7 +12,11 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
     let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
 
-    private let filterSearchField = NSFilterSearchField()
+    private let filterField = NSFilterTokenField()
+
+    /// Configures `filterField` and reports its filter. The directory and bookmark pages share one list of recent
+    /// filters.
+    private lazy var filterFieldAdapter = NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: .imageList)
 
     private let filterControlBar = NavigatorFilterControlBar()
 
@@ -82,7 +86,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
         // The bar sets the field's control size, which sets its font, so the field's own settings come after it.
         filterControlBar.do {
-            $0.filterField = filterSearchField
+            $0.filterField = filterField
             $0.controlSize = .large
         }
 
@@ -102,7 +106,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         let input = ViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
-            searchString: filterSearchField.rx.stringValue.asSignal()
+            filter: filterFieldAdapter.filter
         )
 
         let output = viewModel.transform(input)

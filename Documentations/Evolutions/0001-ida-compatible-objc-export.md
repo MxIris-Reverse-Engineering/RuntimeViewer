@@ -1,8 +1,8 @@
 # 0001 - IDA Compatible ObjC Export Mode
 
-- **Status**: Draft
+- **Status**: Withdrawn
 - **Date**: 2026-03-06
-- **Last Updated**: 2026-03-06
+- **Last Updated**: 2026-10-26
 - **Author**: JH
 
 ## Summary
@@ -216,3 +216,4 @@ Ship a Python script that parses RuntimeViewer's comment format and applies type
 | Date | Decision | Details |
 |------|----------|---------|
 | 2026-03-06 | Created as Draft | Add IDA Compatible export mode with ivar layout structs, clean headers, and IMP mapping file |
+| 2026-10-26 | Draft → Withdrawn | 起草后从未开始实现，代码里没有任何相关部分（`idaCompatible`、`ida_map` 都搜不到）。整理在途事项时经用户批准撤回；以后想做时重新立项，本文可作起点。 |

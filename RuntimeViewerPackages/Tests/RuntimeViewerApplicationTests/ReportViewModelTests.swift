@@ -39,7 +39,7 @@ struct ReportViewModelTests {
                 clearHistory: clearHistoryRelay.asSignal(),
                 openSettings: .empty(),
                 doubleClickedNode: doubleClickedNode,
-                filterString: filterString,
+                filter: filterString.map { NavigatorTextFilter(typedText: $0) },
                 showsOnlyInProgress: showsOnlyInProgress
             ))
         }
@@ -397,10 +397,24 @@ struct ReportViewModelTests {
         let batchRow = Self.row(.indexingBatch(RuntimeIndexingBatchID()), title: "Manual Indexing")
         let indexingCategory = Self.row(.category(.backgroundIndexing), title: "Background Indexing", children: [batchRow])
 
-        let filtered = ReportOutline.filtered([indexingCategory, corpusCategory], by: "found", showsOnlyInProgress: false)
+        let filtered = ReportOutline.filtered([indexingCategory, corpusCategory], by: NavigatorTextFilter(typedText: "found"), showsOnlyInProgress: false)
 
         #expect(filtered.map(\.identifier) == [corpusCategory.identifier])
         #expect(filtered.first?.children.map(\.identifier) == [foundationRow.identifier])
+    }
+
+    @Test("every term of the filter applies to a row's title, Does Not Contain and Ends With included")
+    func filterTermsApplyToEachTitle() {
+        let foundationRow = Self.row(.finishedCorpusBuild(UUID()), title: "Foundation")
+        let essentialsRow = Self.row(.finishedCorpusBuild(UUID()), title: "FoundationEssentials")
+        let libobjcRow = Self.row(.finishedCorpusBuild(UUID()), title: "libobjc.A.dylib")
+        let corpusCategory = Self.row(.category(.searchableInterfaces), title: "Searchable Interfaces", children: [foundationRow, essentialsRow, libobjcRow])
+
+        let excluding = ReportOutline.filtered([corpusCategory], by: NavigatorTextFilter(typedText: "found !essentials"), showsOnlyInProgress: false)
+        #expect(excluding.first?.children.map(\.identifier) == [foundationRow.identifier])
+
+        let suffixed = ReportOutline.filtered([corpusCategory], by: NavigatorTextFilter(terms: [.init(comparison: .endsWith, value: ".dylib")]), showsOnlyInProgress: false)
+        #expect(suffixed.first?.children.map(\.identifier) == [libobjcRow.identifier])
     }
 
     @Test("the clock keeps only the work in progress, queued work included")
@@ -412,7 +426,7 @@ struct ReportViewModelTests {
         let finishedBatchRow = Self.row(.indexingBatch(RuntimeIndexingBatchID()), title: "Manual Indexing")
         let indexingCategory = Self.row(.category(.backgroundIndexing), title: "Background Indexing", children: [finishedBatchRow])
 
-        let filtered = ReportOutline.filtered([indexingCategory, corpusCategory], by: "", showsOnlyInProgress: true)
+        let filtered = ReportOutline.filtered([indexingCategory, corpusCategory], by: .empty, showsOnlyInProgress: true)
 
         #expect(filtered.map(\.identifier) == [corpusCategory.identifier])
         #expect(filtered.first?.children.map(\.identifier) == [buildingRow.identifier, queuedRow.identifier])
