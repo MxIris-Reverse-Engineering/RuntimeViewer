@@ -22,9 +22,9 @@ struct SidebarRuntimeObjectTextFilterTests {
         Fixtures.runtimeObject(name: "Unrelated"),
     ]
 
-    /// The tree a filter pass leaves, as indented names, built the way `SidebarRuntimeObjectViewModel.scheduleRefilter()`
-    /// builds its pass: without a Filter Mode the typed text joins the terms; with one it stays a fuzzy query and only the
-    /// tokens' terms test names.
+    /// The tree a filter pass leaves, as indented names, built from the same inputs
+    /// `SidebarRuntimeObjectViewModel.scheduleRefilter()` builds its pass from
+    /// (`SidebarRuntimeObjectFilterPipeline.passInputs(for:filterMode:isCaseSensitive:)`).
     private func filteredTree(
         _ filter: NavigatorTextFilter,
         filterMode: FilterMode? = nil,
@@ -32,8 +32,7 @@ struct SidebarRuntimeObjectTextFilterTests {
         scope: RuntimeObjectScope = .init()
     ) throws -> [String] {
         let cells = Self.fixtureRuntimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
-        let context = FilterContext(query: filterMode == nil ? "" : filter.typedText, isCaseInsensitive: !isCaseSensitive, mode: filterMode)
-        let nameMatcher = NavigatorTextFilter.Matcher(terms: filterMode == nil ? filter.allTerms : filter.terms, isCaseSensitive: isCaseSensitive)
+        let (context, nameMatcher) = SidebarRuntimeObjectFilterPipeline.passInputs(for: filter, filterMode: filterMode, isCaseSensitive: isCaseSensitive)
         let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: cells, scope: scope, includesHaystacks: !context.query.isEmpty)
         let forestVerdict = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context, nameMatcher: nameMatcher)
         let filteredCells = try #require(
@@ -143,6 +142,117 @@ struct SidebarRuntimeObjectTextFilterTests {
             }
             #expect(cleared)
             #expect(!viewModel.isFiltering)
+        }
+    }
+
+    /// A fixture view model built in `environment`, loaded, and transformed with `filterRelay` as its filter field.
+    private func makeLoadedViewModel(
+        in environment: ViewModelTestEnvironment,
+        filterRelay: PublishRelay<NavigatorTextFilter>
+    ) async throws -> TextFilterFixtureSidebarViewModel {
+        let imageNode = try await makeLoadedImageNode()
+        let viewModel = environment.make {
+            TextFilterFixtureSidebarViewModel(
+                seededRuntimeObjects: Self.fixtureRuntimeObjects,
+                imageNode: imageNode,
+                documentState: environment.documentState,
+                router: MockRouter<SidebarRuntimeObjectRoute>()
+            )
+        }
+        let loaded = try await pollUntil(timeout: .seconds(30)) { viewModel.loadState == .loaded }
+        #expect(loaded, "seeded reload never reached .loaded; state=\(viewModel.loadState)")
+        _ = viewModel.transform(.init(
+            runtimeObjectClicked: .never(),
+            runtimeObjectOpenedInNewTab: .never(),
+            loadImageClicked: .never(),
+            filter: filterRelay.asDriver(onErrorJustReturn: .empty),
+            isSearchCaseSensitive: .just(false)
+        ))
+        return viewModel
+    }
+
+    private func names(of cells: [SidebarRuntimeObjectCellViewModel]) -> [String] {
+        cells.map(\.runtimeObject.displayName)
+    }
+
+    @Test("changing the Filter Mode filters the list again by the text being typed")
+    func changingTheFilterModeFiltersAgain() async throws {
+        try await withSharedLocalEngineLock {
+            let environment = ViewModelTestEnvironment()
+            let filterRelay = PublishRelay<NavigatorTextFilter>()
+            let viewModel = try await makeLoadedViewModel(in: environment, filterRelay: filterRelay)
+            defer { withExtendedLifetime(viewModel) {} }
+
+            // No name contains these letters in a row; NSViewLayer has them in order, which is what Fuzzy Search asks.
+            filterRelay.accept(NavigatorTextFilter(typedText: "NSVwLyr"))
+            let nothingContainsIt = try await pollUntil(timeout: .seconds(10)) {
+                viewModel.isFiltering && viewModel.filteredNodes.isEmpty
+            }
+            #expect(nothingContainsIt, "got \(names(of: viewModel.filteredNodes))")
+
+            environment.appDefaults.filterMode = .fuzzySearch
+            let fuzzyFindsIt = try await pollUntil(timeout: .seconds(10)) {
+                names(of: viewModel.filteredNodes).contains("NSView")
+            }
+            #expect(fuzzyFindsIt, "got \(names(of: viewModel.filteredNodes))")
+        }
+    }
+
+    @Test("with a Filter Mode, typed text in token syntax filters the way its tokens will")
+    func filterModeAppliesTokenSyntaxInTypedText() async throws {
+        try await withSharedLocalEngineLock {
+            let environment = ViewModelTestEnvironment()
+            environment.appDefaults.filterMode = .fuzzySearch
+            let filterRelay = PublishRelay<NavigatorTextFilter>()
+            let viewModel = try await makeLoadedViewModel(in: environment, filterRelay: filterRelay)
+            defer { withExtendedLifetime(viewModel) {} }
+
+            filterRelay.accept(NavigatorTextFilter(typedText: "NS* !Window"))
+            let comparedLikeTokens = try await pollUntil(timeout: .seconds(10)) {
+                names(of: viewModel.filteredNodes) == ["NSView", "NSViewController"]
+            }
+            #expect(comparedLikeTokens, "got \(names(of: viewModel.filteredNodes))")
+
+            // Plain text next to them is still a fuzzy query.
+            filterRelay.accept(NavigatorTextFilter(typedText: "NSVwLyr !Controller"))
+            let fuzzyAndCompared = try await pollUntil(timeout: .seconds(10)) {
+                names(of: viewModel.filteredNodes) == ["NSView"]
+            }
+            #expect(fuzzyAndCompared, "got \(names(of: viewModel.filteredNodes))")
+        }
+    }
+
+    @Test("the filter stays in force when the list loads again, as it does after every batch of background indexing")
+    func filterSurvivesAReload() async throws {
+        try await withSharedLocalEngineLock {
+            let environment = ViewModelTestEnvironment()
+            let filterRelay = PublishRelay<NavigatorTextFilter>()
+            let viewModel = try await makeLoadedViewModel(in: environment, filterRelay: filterRelay)
+            defer { withExtendedLifetime(viewModel) {} }
+
+            let filter = NavigatorTextFilter(terms: [Term(comparison: .beginsWith, value: "NS")], typedText: "!Window")
+            filterRelay.accept(filter)
+            let filtered = try await pollUntil(timeout: .seconds(10)) {
+                names(of: viewModel.filteredNodes) == ["NSView", "NSViewController"]
+            }
+            #expect(filtered, "got \(names(of: viewModel.filteredNodes))")
+
+            let nodesBeforeReload = viewModel.nodes
+            viewModel.scheduleReload()
+            // A reload makes new cells; wait until the list on show is made of them.
+            let showsReloadedCells = try await pollUntil(timeout: .seconds(30)) {
+                let reloadedNodes = viewModel.nodes
+                guard let firstReloadedNode = reloadedNodes.first,
+                      !nodesBeforeReload.contains(where: { $0 === firstReloadedNode })
+                else { return false }
+                return !viewModel.filteredNodes.isEmpty && viewModel.filteredNodes.allSatisfy { filteredNode in
+                    reloadedNodes.contains { $0 === filteredNode }
+                }
+            }
+            #expect(showsReloadedCells)
+            #expect(names(of: viewModel.filteredNodes) == ["NSView", "NSViewController"])
+            #expect(viewModel.filter == filter)
+            #expect(viewModel.isFiltering)
         }
     }
 }

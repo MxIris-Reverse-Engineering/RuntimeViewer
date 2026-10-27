@@ -32,8 +32,6 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     let imageUnknownView = ImageUnknownView()
 
-    private let filterModeDidChange = BehaviorRelay<Void>(value: ())
-
     private let openInNewTabRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
@@ -141,10 +139,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         imageLoadedView.filterModeItem.do {
             $0.selectedChoice = appDefaults.filterMode
+            // The view model filters again when the mode changes.
             $0.selectionChanged = { [weak self] filterMode in
                 guard let self else { return }
                 appDefaults.filterMode = filterMode
-                filterModeDidChange.accept()
             }
         }
 
@@ -225,10 +223,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
-            filter: Driver<NavigatorTextFilter>.combineLatestFirstResult(
-                filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
-                filterModeDidChange.asDriver(),
-            ),
+            filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
             runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
             runtimeObjectTagClicked: tagClickedRelay.asSignal(),
@@ -701,47 +696,5 @@ extension NSTabViewItem {
         let vc = NSViewController()
         vc.view = view
         self.viewController = vc
-    }
-}
-
-
-public extension SharedSequence {
-
-    static func combineLatestFirstResult<
-        FirstSharedSequence: SharedSequenceConvertibleType,
-        SecondSharedSequence: SharedSequenceConvertibleType
-    >(
-        _ firstSharedSequence: FirstSharedSequence,
-        _ secondSharedSequence: SecondSharedSequence
-    ) -> SharedSequence<SharingStrategy, Element>
-    where
-        FirstSharedSequence.SharingStrategy == SharingStrategy,
-        SecondSharedSequence.SharingStrategy == SharingStrategy,
-        FirstSharedSequence.Element == Element
-    {
-        combineLatest(
-            firstSharedSequence,
-            secondSharedSequence,
-            resultSelector: { firstElement, _ in firstElement }
-        )
-    }
-
-    static func combineLatestSecondResult<
-        FirstSharedSequence: SharedSequenceConvertibleType,
-        SecondSharedSequence: SharedSequenceConvertibleType
-    >(
-        _ firstSharedSequence: FirstSharedSequence,
-        _ secondSharedSequence: SecondSharedSequence
-    ) -> SharedSequence<SharingStrategy, Element>
-    where
-        FirstSharedSequence.SharingStrategy == SharingStrategy,
-        SecondSharedSequence.SharingStrategy == SharingStrategy,
-        SecondSharedSequence.Element == Element
-    {
-        combineLatest(
-            firstSharedSequence,
-            secondSharedSequence,
-            resultSelector: { _, secondElement in secondElement }
-        )
     }
 }

@@ -240,7 +240,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// whose row they hid). The filter field's content is the view's, so
         /// the view has to empty it — and feed the empty filter back through
         /// `Input.filter`, whose `combineLatest` would otherwise replay the old
-        /// filter the next time the filter mode changes.
+        /// filter the next time Match Case changes.
         public let filterCleared: Signal<Void>
     }
 
@@ -276,6 +276,20 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
                 self.filter = filter
                 self.isSearchCaseSensitive = isSearchCaseSensitive
+                scheduleRefilter()
+            }
+            .disposed(by: rx.disposeBag)
+
+        // The Filter Mode decides how the typed text is matched, so a new one
+        // filters again. It was once replayed through `Input.filter` instead,
+        // which the equality guard above swallowed. `$filterMode` sends the
+        // current mode twice on subscription.
+        appDefaults.$filterMode
+            .distinctUntilChanged()
+            .skip(1)
+            .asSignal(onErrorSignalWith: .empty())
+            .emitOnNextMainActor { [weak self] _ in
+                guard let self else { return }
                 scheduleRefilter()
             }
             .disposed(by: rx.disposeBag)
@@ -497,7 +511,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         await MainActor.run {
             self.loadState = .loaded
             self.loadingProgress = 1.0
-            self.filter = .empty
+            // The filter stays, and `scheduleRefilter()` below applies it to
+            // the new list: the engine reloads after every batch of background
+            // indexing, while the user may be filtering, and the field still
+            // shows the filter.
             if isSorted {
                 self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
             } else {
@@ -542,24 +559,11 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         currentFilterGeneration &+= 1
         let generation = currentFilterGeneration
 
-        // The UI-facing flag is "Match Case" (on == case sensitive), the
-        // way every other search field spells it; `FilterContext` states the
-        // opposite polarity. This is the one place the two meet, so the
-        // negation lives here rather than at each call site.
-        //
-        // The filter's tokens always test each object's own name the way
-        // Xcode's navigators compare (`NavigatorTextFilter`). The typed text
-        // does the same unless a Filter Mode is chosen: Fuzzy Search and
-        // Ifrit keep matching it against the name tree, ranking and
-        // highlighting as before.
-        let filterMode = appDefaults.filterMode
-        let context = FilterContext(
-            query: filterMode == nil ? "" : filter.typedText,
-            isCaseInsensitive: !isSearchCaseSensitive,
-            mode: filterMode
-        )
-        let nameMatcher = NavigatorTextFilter.Matcher(
-            terms: filterMode == nil ? filter.allTerms : filter.terms,
+        // The fuzzy query of a Filter Mode and the terms names are compared
+        // with, Match Case included.
+        let (context, nameMatcher) = SidebarRuntimeObjectFilterPipeline.passInputs(
+            for: filter,
+            filterMode: appDefaults.filterMode,
             isCaseSensitive: isSearchCaseSensitive
         )
         let activeScope = scope

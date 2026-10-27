@@ -6,15 +6,16 @@ import Foundation
 /// part never blocks the main thread:
 ///
 /// 1. `snapshot(of:scope:includesHaystacks:)` (main actor) — captures each
-///    node's name, scope verdict and, when the typed text is fuzzy matched,
+///    node's name, scope verdict and, when the pass has a fuzzy query,
 ///    haystack string into an immutable value tree. Cheap: the haystacks are
 ///    cached on the cell view models.
 /// 2. `verdicts(for:context:nameMatcher:)` (any thread) — pure recursion
 ///    mirroring the legacy synchronous semantics level by level: each node
 ///    is kept when it, or a descendant, passes the scope and the text
 ///    filter's terms on its own name; the survivors are then matched against
-///    the typed text via `FilterEngine.match`, preserving each mode's display
-///    order (fuzzy score order, contains input order).
+///    the fuzzy query (`passInputs(for:filterMode:isCaseSensitive:)`) via
+///    `FilterEngine.match`, preserving each mode's display order (fuzzy score
+///    order, contains input order).
 /// 3. `apply(_:to:context:scope:nameMatcher:)` (main actor) — walks the live
 ///    cell tree aligned with the verdict tree and installs each node's
 ///    outcome. Guarded didSets on the cells make untouched rows free, so the
@@ -47,6 +48,37 @@ enum SidebarRuntimeObjectFilterPipeline {
         var topVerdicts: [VerdictNode]
 
         static let empty = ForestVerdict(orderedFilteredTopIndices: [], topVerdicts: [])
+    }
+
+    // MARK: - Pass inputs
+
+    /// What one pass filters with: the fuzzy query a Filter Mode runs, and the
+    /// terms each object's own name is compared with.
+    ///
+    /// Without a Filter Mode every term — the tokens' and the typed text's —
+    /// tests names. With one, the typed text's plain fragments stay a fuzzy
+    /// query, matched against the name tree, ranked and highlighted as before;
+    /// its fragments in token syntax (`!x`, `x*`, `*x`, a pattern) are compared
+    /// as their tokens will be once the user presses Return, and so are the
+    /// tokens.
+    ///
+    /// `isCaseSensitive` is the sidebar's Match Case, the polarity every search
+    /// field shows; `FilterContext` states the opposite, and this is the one
+    /// place the two meet.
+    static func passInputs(
+        for filter: NavigatorTextFilter,
+        filterMode: FilterMode?,
+        isCaseSensitive: Bool
+    ) -> (context: FilterContext, nameMatcher: NavigatorTextFilter.Matcher) {
+        let typedTerms = filter.typedTerms
+        let fuzzyQueryTerms = filterMode == nil ? [] : typedTerms.filter { $0.comparison == .contains }
+        let comparedTerms = filterMode == nil ? filter.allTerms : filter.terms + typedTerms.filter { $0.comparison != .contains }
+        let context = FilterContext(
+            query: fuzzyQueryTerms.map(\.value).joined(separator: " "),
+            isCaseInsensitive: !isCaseSensitive,
+            mode: filterMode
+        )
+        return (context, NavigatorTextFilter.Matcher(terms: comparedTerms, isCaseSensitive: isCaseSensitive))
     }
 
     // MARK: - Snapshot (main actor)
