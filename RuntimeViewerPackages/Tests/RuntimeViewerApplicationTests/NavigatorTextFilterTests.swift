@@ -29,6 +29,7 @@ struct NavigatorTextFilterTests {
             ("!loo", [Term(comparison: .doesNotContain, value: "loo")]),
             ("!", [Term(comparison: .contains, value: "!")]),
             ("!lo*", [Term(comparison: .beginsWith, value: "!lo")]),
+            ("\\!loo", [Term(comparison: .contains, value: "!loo")]),
             ("NS* !Private", [Term(comparison: .beginsWith, value: "NS"), Term(comparison: .doesNotContain, value: "Private")]),
         ] as [(String, [Term])]
     )
@@ -48,6 +49,7 @@ struct NavigatorTextFilterTests {
             Term(comparison: .contains, value: "loo"),
             Term(comparison: .contains, value: "foo bar"),
             Term(comparison: .contains, value: "!"),
+            Term(comparison: .contains, value: "!loo"),
             Term(comparison: .doesNotContain, value: "loo"),
             Term(comparison: .doesNotContain, value: "foo bar"),
             Term(comparison: .beginsWith, value: "loo"),
@@ -70,6 +72,7 @@ struct NavigatorTextFilterTests {
         #expect(NavigatorTextFilter.editingString(for: Term(comparison: .endsWith, value: "loo")) == "*loo")
         #expect(NavigatorTextFilter.editingString(for: Term(comparison: .doesNotContain, value: "loo")) == "!loo")
         #expect(NavigatorTextFilter.editingString(for: Term(comparison: .contains, value: "foo bar")) == "foo\\ bar")
+        #expect(NavigatorTextFilter.editingString(for: Term(comparison: .contains, value: "!loo")) == "\\!loo")
     }
 
     @Test("every condition is the tokens' terms followed by the typed text's")
@@ -84,17 +87,47 @@ struct NavigatorTextFilterTests {
         #expect(NavigatorTextFilter.empty.isEmpty)
     }
 
+    @Test("a lone * still being typed filters nothing, while a token made of it still matches no name")
+    func loneAsteriskBeingTypedFiltersNothing() {
+        let typing = NavigatorTextFilter(typedText: "*")
+        #expect(typing.isEmpty)
+        #expect(typing.makeMatcher().matches("NSObject"))
+        // Find results hold code: the * of an Objective-C pointer is typed after a space.
+        #expect(NavigatorTextFilter(typedText: "NSString *").allTerms == [Term(comparison: .contains, value: "NSString")])
+
+        let token = NavigatorTextFilter(terms: [Term(comparison: .endsWith, value: "")])
+        #expect(!token.isEmpty)
+        #expect(!token.makeMatcher().matches("NSObject"))
+    }
+
     // MARK: - Comparisons
 
     private func matches(_ comparison: NavigatorTextFilter.Comparison, _ value: String, _ name: String, isCaseSensitive: Bool = false) -> Bool {
         NavigatorTextFilter.CompiledTerm(term: Term(comparison: comparison, value: value), isCaseSensitive: isCaseSensitive).matches(name)
     }
 
-    @Test("Contains ignores case and diacritics, as localizedStandardContains does")
+    @Test("Contains ignores case and diacritics")
     func containsIgnoresCaseAndDiacritics() {
         #expect(matches(.contains, "view", "NSViewController"))
         #expect(matches(.contains, "cafe", "CaféMenu"))
         #expect(!matches(.contains, "window", "NSViewController"))
+    }
+
+    /// Turkish pairs I with ı and İ with i, so comparing by the user's language would make `uiview` miss `UIView`.
+    /// Names in code are not words of the user's language. The language is changed in a process of its own, before
+    /// anything there has read it; the exit status says what happened: 1 is the miss, 2 a language that did not change.
+    @Test("comparisons ignore case the same way whatever the user's language")
+    func comparisonsDoNotFollowTheUsersLanguage() async {
+        await #expect(processExitsWith: .success) {
+            UserDefaults.standard.setVolatileDomain(["AppleLanguages": ["tr-TR"], "AppleLocale": "tr_TR"], forName: UserDefaults.argumentDomain)
+            guard Locale.current.language.languageCode?.identifier == "tr" else { exit(2) }
+            let matcher = NavigatorTextFilter(terms: [
+                NavigatorTextFilter.Term(comparison: .contains, value: "uiview"),
+                NavigatorTextFilter.Term(comparison: .beginsWith, value: "uiv"),
+                NavigatorTextFilter.Term(comparison: .endsWith, value: "IEW"),
+            ]).makeMatcher()
+            exit(matcher.matches("UIView") ? EXIT_SUCCESS : EXIT_FAILURE)
+        }
     }
 
     @Test("Does Not Contain is the opposite of Contains")

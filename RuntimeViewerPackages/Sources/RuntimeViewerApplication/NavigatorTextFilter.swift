@@ -9,9 +9,9 @@ import Foundation
 /// passes when its name satisfies every term, the terms the typed text parses into included: the tokens and the typed
 /// text always combine with AND, as in Xcode's navigators, which never offer ANY.
 ///
-/// Typed text parses the way Xcode parses it (`terms(parsing:)`), with one addition: `!x` stands for Does Not Contain.
-/// Xcode offers that comparison only from a token's menu, and turns such a token back into a plain `x` when it is
-/// edited, which silently makes it Contains.
+/// Typed text parses the way Xcode parses it (`terms(parsing:)`), with one addition: `!x` stands for Does Not Contain,
+/// and `\!x` for Contains `!x`. Xcode offers that comparison only from a token's menu, and turns such a token back into
+/// a plain `x` when it is edited, which silently makes it Contains.
 public struct NavigatorTextFilter: Hashable, Sendable {
     /// How a term compares a name with its value: Xcode's text comparisons, without Equals, which no typed text
     /// produces.
@@ -56,9 +56,11 @@ public struct NavigatorTextFilter: Hashable, Sendable {
     /// No token and no text.
     public static let empty = NavigatorTextFilter()
 
-    /// The terms the typed text stands for.
+    /// The terms the typed text stands for. A term with no value is left out: it can only be a lone `*`, which as a
+    /// token is Ends With nothing and matches no name, and which the user may be about to type a value after — so the
+    /// list does not empty at the first keystroke of `*View`, or at the `*` of `NSString *` in Find results.
     public var typedTerms: [Term] {
-        Self.terms(parsing: typedText)
+        Self.terms(parsing: typedText).filter { !$0.value.isEmpty }
     }
 
     /// Every condition: the tokens' terms, then the typed text's.
@@ -85,21 +87,26 @@ extension NavigatorTextFilter {
     ///   are dropped.
     /// - A fragment without `*`, `?` or `\` is Contains.
     /// - `*x` is Ends With `x`, and `x*` is Begins With `x`, when `x` has none of the three. A lone `*` is Ends With
-    ///   nothing, which matches no name — as in Xcode.
+    ///   nothing, which matches no name — as in Xcode. While it is still being typed it filters nothing
+    ///   (`typedTerms`).
     /// - Any other fragment with one of the three is Like, the fragment as it is.
     /// - `!x`, `x` being plain text, is Does Not Contain `x`. Xcode has no typed form for it; a lone `!` stays
     ///   Contains `!`.
+    /// - `\!x`, `x` being plain text, is Contains `!x`: the way to look for a `!` at the start, which `!x` would take
+    ///   for Does Not Contain.
     public static func terms(parsing text: String) -> [Term] {
         fragments(of: text).map { term(forFragment: $0) }
     }
 
     /// The text that `terms(parsing:)` turns back into `term` — what its token reads as when it is edited, read aloud
-    /// or copied as text. A space in the value is written `\ `.
+    /// or copied as text. A space in the value is written `\ `, and a Contains value that starts with `!` is written
+    /// `\!…`, since `!…` is Does Not Contain.
     public static func editingString(for term: Term) -> String {
         let value = term.value.replacingOccurrences(of: " ", with: "\\ ")
         switch term.comparison {
-        case .contains,
-             .like:
+        case .contains:
+            return term.value.count > 1 && term.value.hasPrefix("!") ? "\\" + value : value
+        case .like:
             return value
         case .doesNotContain:
             return "!" + value
@@ -139,10 +146,13 @@ extension NavigatorTextFilter {
         return fragments
     }
 
-    /// The comparison of one fragment — the block Xcode's `_comparisonTypeFor` runs — plus the `!x` form.
+    /// The comparison of one fragment — the block Xcode's `_comparisonTypeFor` runs — plus the `!x` and `\!x` forms.
     static func term(forFragment fragment: String) -> Term {
         func isPlainText(_ text: Substring) -> Bool {
             !text.contains { specialCharacters.contains($0) }
+        }
+        if fragment.hasPrefix("\\!"), isPlainText(fragment.dropFirst(2)) {
+            return Term(comparison: .contains, value: String(fragment.dropFirst()))
         }
         if isPlainText(fragment[...]) {
             if fragment.count > 1, fragment.first == "!" {
@@ -198,9 +208,12 @@ extension NavigatorTextFilter {
     public struct CompiledTerm: Sendable {
         public let term: Term
 
-        /// The options Xcode compares with (`_predicateForTextExpression:` in DVTFoundation): `localizedStandardContains`
-        /// — case and diacritics ignored — for Contains and Does Not Contain; for Begins With and Ends With an anchored
-        /// search that ignores case only (options 9 and 13).
+        /// The options Xcode compares with (`_predicateForTextExpression:` in DVTFoundation): case and diacritics ignored
+        /// for Contains and Does Not Contain; for Begins With and Ends With an anchored search that ignores case only
+        /// (options 9 and 13).
+        ///
+        /// Unlike Xcode's `localizedStandardContains`, no comparison follows the user's language: names in code are not
+        /// words of it, and Turkish, which pairs I with ı and İ with i, would make `uiview` miss `UIView`.
         private let compareOptions: String.CompareOptions
 
         /// A Like pattern as a regular expression that may match anywhere in a name, Xcode's `like[c]` against the
@@ -243,9 +256,9 @@ extension NavigatorTextFilter {
             case .contains,
                  .beginsWith,
                  .endsWith:
-                return name.range(of: term.value, options: compareOptions, locale: .current) != nil
+                return name.range(of: term.value, options: compareOptions) != nil
             case .doesNotContain:
-                return name.range(of: term.value, options: compareOptions, locale: .current) == nil
+                return name.range(of: term.value, options: compareOptions) == nil
             case .like:
                 guard let likeExpression else { return false }
                 return likeExpression.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
