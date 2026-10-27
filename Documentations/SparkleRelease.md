@@ -80,6 +80,10 @@ for a local dry-run that only produces the signed, notarized zip under
 - `--skip-notarization` — skip the Apple notarization round-trip (dry-run only;
   must NOT be used for the actual release).
 - `--skip-open-finder` — don't open Finder to the output on success.
+- `--derived-data <dir>` — build in a DerivedData of your own instead of the
+  shared `/Volumes/DerivedData/RuntimeViewer/Archive` (`./DerivedData` when
+  that volume is absent), so a rehearsal does not share a build with another
+  run of the script.
 - `--ed-key-file <path>` — sign with an explicit PEM instead of the login
   Keychain; used by CI.
 

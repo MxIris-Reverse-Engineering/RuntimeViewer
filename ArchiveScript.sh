@@ -7,6 +7,7 @@
 #                      [--configuration Release|Debug] \
 #                      [--release-notes Changelogs/vX.Y.Z.md] \
 #                      [--update-packages] [--local-deps] \
+#                      [--derived-data <dir>] \
 #                      [--update-appcast] [--upload-to-github] [--commit-push]
 #   ./ArchiveScript.sh --help
 #
@@ -15,7 +16,9 @@
 # configuration is Release; pass --configuration Debug (or any other
 # configuration name defined in the workspace) for local validation. Pass
 # --update-packages to refresh SwiftPM pins before archiving. Pass
-# --local-deps to build against local dependency checkouts.
+# --local-deps to build against local dependency checkouts. Pass
+# --derived-data to build in a DerivedData of your own instead of the
+# script's shared one.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -26,6 +29,17 @@ WORKSPACE="RuntimeViewer-Distribution.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 CONFIGURATION="Release"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
+
+# DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
+# SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
+# tree (otherwise git clients like Fork index them). Falls back to a
+# project-relative path when the volume is absent (e.g. CI). Override with
+# --derived-data.
+if [[ -d "/Volumes/DerivedData" ]]; then
+    DERIVED_DATA="/Volumes/DerivedData/RuntimeViewer/Archive"
+else
+    DERIVED_DATA="$PROJECT_DIR/DerivedData"
+fi
 
 VERSION_TAG=""
 CHANNEL=""
@@ -95,6 +109,7 @@ while [[ $# -gt 0 ]]; do
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
         --local-deps) LOCAL_DEPENDENCIES=true; shift;;
+        --derived-data) DERIVED_DATA="$2"; shift 2;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
         --version-tag) VERSION_TAG="$2"; shift 2;;
@@ -114,7 +129,7 @@ while [[ $# -gt 0 ]]; do
         --notary-api-key) NOTARY_API_KEY="$2"; shift 2;;
         --notary-key-id) NOTARY_KEY_ID="$2"; shift 2;;
         --notary-issuer-id) NOTARY_ISSUER_ID="$2"; shift 2;;
-        -h|--help) sed -n '2,18p' "$0" | sed 's/^# *//'; exit 0;;
+        -h|--help) sed -n '2,21p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -140,7 +155,7 @@ if ! $SKIP_NOTARIZATION; then
     fi
 fi
 
-log "workspace=$WORKSPACE scheme=$SCHEME configuration=$CONFIGURATION build=$BUILD_NUMBER"
+log "workspace=$WORKSPACE scheme=$SCHEME configuration=$CONFIGURATION build=$BUILD_NUMBER derived_data=$DERIVED_DATA"
 log "version_tag=${VERSION_TAG:-<none>} channel=${CHANNEL:-<none>}"
 log "update_packages=$UPDATE_PACKAGES update_appcast=$UPDATE_APPCAST upload_to_github=$UPLOAD_TO_GITHUB commit_push=$COMMIT_PUSH"
 
@@ -164,15 +179,6 @@ fi
 
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs}"
 
-# DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
-# SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
-# tree (otherwise git clients like Fork index them). Falls back to a
-# project-relative path when the volume is absent (e.g. CI).
-if [[ -d "/Volumes/DerivedData" ]]; then
-    DERIVED_DATA="/Volumes/DerivedData/RuntimeViewer/Archive"
-else
-    DERIVED_DATA="$PROJECT_DIR/DerivedData"
-fi
 XCODEBUILD_LOG_INDEX=0
 
 mkdir -p "$BUILD_PATH" "$LOG_DIR"
