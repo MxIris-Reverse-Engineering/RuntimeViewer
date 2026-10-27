@@ -105,6 +105,18 @@ public enum FindCrossReferenceRoot: Hashable, Sendable, Codable {
     ]
 }
 
+extension RuntimeCrossReferenceSubject {
+    /// The image the subject's code is in; `nil` for a selector, which every
+    /// image may send.
+    var imagePath: String? {
+        switch self {
+        case .member(let member): member.object.imagePath
+        case .function(let imagePath, _): imagePath
+        case .selector: nil
+        }
+    }
+}
+
 /// Find Call Hierarchy, Find Callees or Find Type References asked for from
 /// outside the Find page — the content pane, the Inspector, the main menu.
 public struct FindCrossReferenceRequest: Hashable, Sendable {

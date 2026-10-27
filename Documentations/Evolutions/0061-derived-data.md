@@ -1,14 +1,14 @@
-# Draft - 派生数据：按系统版本把 Find 语料存盘，为索引缓存铺路
+# 0061 - 派生数据：按系统版本把 Find 语料存盘，为索引缓存铺路
 
-- **状态**: Accepted
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-21
-- **最后更新**: 2026-10-24
+- **最后更新**: 2026-10-27
 - **所属愿景**: 无
 - **关联提案**: [0002](0002-background-indexing.md)（后台索引）、[0023](0023-content-loading-overlay.md)（内容区加载遮罩）、[0027](0027-background-indexing-yields-to-foreground.md)（后台索引给前台让路）、[0029](0029-find-navigator.md)（Find navigator 与文本语料）、[0030](0030-report-navigator.md)（Report navigator）、[0037](0037-local-runtime-xpc-service.md)（本地引擎搬进 XPC service）、[0051](0051-catalyst-xpc-service.md)（Catalyst XPC service）、[0054](0054-always-index-per-engine.md)（Always Index 按 Engine 区分）、[0055](0055-engine-scoped-background-work.md)（后台工作按 Engine 共享）、[0056](0056-cross-references.md)（交叉引用）、[0058](0058-runtime-engine-session.md)（RuntimeEngineSession）
-- **实现分支 / PR**: `feature/derived-data`
-- **审查**: 两轮对抗审查，每轮四位审查者，分别侧重缓存键与失效、架构集成、性能论断与证据、范围与验收。[第一轮](../Reviews/2026-10-21-draft-derived-data-review.md)针对初稿，合并后 4 🔴、12 🟡；[第二轮](../Reviews/2026-10-21-draft-derived-data-review-round-2.md)针对第一次修订稿，合并后 1 🔴、17 🟡。两轮的问题均已在本版处理，处理方式见决策日志
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/derived-data`（从 `next` 切，并回 `next`），PR #126
+- **审查**: 两轮对抗审查，每轮四位审查者，分别侧重缓存键与失效、架构集成、性能论断与证据、范围与验收。[第一轮](../Reviews/2026-10-21-draft-derived-data-review.md)针对初稿，合并后 4 🔴、12 🟡；[第二轮](../Reviews/2026-10-21-draft-derived-data-review-round-2.md)针对第一次修订稿，合并后 1 🔴、17 🟡。两轮的问题均已在本版处理，处理方式见决策日志。实现的代码审查（PR #126：`/code-review xhigh` 15 条，加 Codex 自动审查 1 条）逐条按四问核实，裁决与修复见 [KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md)
+- **配套文档**: 实现说明 [`DerivedData.md`](../DerivedData.md)（只有两个服务进程读写、生产者身份为什么读内存里的映像、清理为什么按最近使用、读取标记为什么等遍历完才删、有语料不等于镜像已加载、新增一种派生数据的步骤）；不另写使用指南
 
 ## 摘要
 
@@ -219,7 +219,7 @@
 - **位置**：`~/Library/Caches/<App 的 bundle id>/DerivedData/`。Caches 本来就是放可以重新生成的数据的地方，也不进 Time Machine 备份。位置固定，不提供修改。
 - **分层**：
   1. **系统目录**：平台（macOS / Mac Catalyst）+ 系统版本 + build + dyld 共享缓存 UUID。
-  2. **生产者目录**：产出数据的代码。它的身份是「含有 RuntimeViewerCore 代码的那个映像」加上它在本进程里加载的全部非共享缓存依赖，用这些映像在内存里的 LC_UUID 算摘要：本地 service 是它的可执行文件，Catalyst service 是插件。之后经「Load Frameworks…」载入的东西不算在内。不读磁盘，所以 App 在运行时被原地重编，也不会给旧代码的产物贴上新摘要。
+  2. **生产者目录**：产出数据的代码。它的身份是「含有 RuntimeViewerCore 代码的那个映像」加上它在本进程里加载的全部非共享缓存依赖，用这些映像在内存里的 LC_UUID 算摘要：本地 service 是它的可执行文件，Catalyst service 是插件。之后经「Load Frameworks…」载入的东西不算在内。不读磁盘，所以 App 在运行时被原地重编，也不会给旧代码的产物贴上新摘要。每个映像带上它的名字（install name，没有就用文件名），不带完整路径：系统可能每次都从一个新的随机位置运行被隔离的 App（App Translocation），代码却是同一份。
   3. **镜像**，最后是**数据种类与变体**，比如语料按 Transformer 设置与成员排序方式分变体。
 - **谁读写**：
   - **只有两个服务进程读写**：App 内嵌的本地 service 与 Catalyst service，由它们的入口处各调用一次 `RuntimeDerivedData.enableInThisProcess()` 显式开启。App 进程（包括其中的 Bonjour 服务端引擎）、命令行宿主、Catalyst helper App、注入的载荷、测试都不启用；测试显式注入临时目录。
@@ -241,7 +241,7 @@
      - 启发式批次里的其他镜像不提前读，等它们被索引时走构建路径。
    - 「Keep Interfaces Searchable」关着时两条路径都不走，也不写盘。
    - **后台索引关着时**（默认就是关的）：没有提前读取。手动打开一个镜像后，它的语料不再重打，section 建好就能搜。
-3. **还没有 section 的镜像**：读出的语料让这种状态第一次成为可能，下面几处入口改为先前台加载这个镜像。前台加载和在侧栏里打开它走同一条路（`objectsWithProgress(in:)`），会和正在进行的后台构建合并成一次（`RuntimeSectionBuild`）。
+3. **还没有 section 的镜像**：读出的语料让这种状态第一次成为可能，下面几处入口改为先前台加载这个镜像。前台加载和在侧栏里打开它走同一条路（`RuntimeEngine.indexImageIfNeeded(at:)`：服务进程已经加载了这个镜像就 `objectsWithProgress(in:)`，没加载就像侧栏的 Load 那样 `loadImage(at:)`），会和正在进行的后台构建合并成一次（`RuntimeSectionBuild`）。读取语料并不加载镜像，所以服务进程里可能根本没加载过它，比如 AppKit。
    - **内容区**：接口为 `nil`、且对象所在镜像还没有 section 时，在同一个取接口的任务里先前台加载、再重取，期间显示内容区现有的加载遮罩（[0023](0023-content-loading-overlay.md)）；加载失败按取接口失败处理。ObjC 类与协议照旧走现有的「按类名现建 ObjC section」那条路。
    - **Inspector**：关系与层级在当前对象所在的镜像发出 `imageDidIndex` 时重取一次。
    - **Call Hierarchy 与 Callees**：选中的根如果所在镜像还没有 section，先前台加载它再查询，否则找调用者时会漏掉同一镜像里的调用者。
@@ -332,7 +332,7 @@
 
 ### 开启、身份与位置
 
-放在 `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedData/`：
+放在 `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/`：
 
 ```swift
 public enum RuntimeDerivedData {
@@ -359,28 +359,46 @@ public struct RuntimeDerivedDataSystemIdentity: Hashable, Sendable {
     /// `DyldCacheLoaded.current?.mainCacheHeader.uuid`.
     public let sharedCacheUUID: UUID
 
+    /// Keeps only letters, digits and dots in the version and the build, so
+    /// a directory name always splits back into its four parts.
+    public init(platform: Platform, operatingSystemVersion: String, operatingSystemBuild: String, sharedCacheUUID: UUID)
+
     /// "<platform>-<version>-<build>-<shared cache UUID>".
     public var directoryName: String { get }
 
     /// This process's system; `nil` when the process maps no shared cache.
+    /// The platform is asked of the process at run time
+    /// (`ProcessInfo.isMacCatalystApp`): the Mac Catalyst service runs Core
+    /// from a plug-in built for macOS.
     public static func current() -> RuntimeDerivedDataSystemIdentity?
+
+    /// The build a directory name carries — what the cleanup reads.
+    static func operatingSystemBuild(ofDirectoryNamed directoryName: String) -> String?
 }
 
 /// The code that produced a piece of derived data: a SHA-256 digest over
 /// the in-memory LC_UUID of the image that holds RuntimeViewerCore's code
-/// and of every image it depends on that is loaded and outside the shared
-/// cache, each with its path, sorted by path. Read from the loaded headers,
-/// never from disk, so a process whose bundle was rebuilt in place keeps
-/// the identity of the code it is running. Images loaded later through
-/// Load Frameworks… are not dependencies and do not count.
+/// and of every image it depends on, directly or not, that is loaded and
+/// outside the shared cache, each with its name — its install name, or the
+/// file name of an image that has none — never the whole path. Read from
+/// the loaded headers, never from disk, so a process whose bundle was
+/// rebuilt in place keeps the identity of the code it is running. Images
+/// loaded later through Load Frameworks… are not dependencies and do not
+/// count.
 public struct RuntimeDerivedDataProducerIdentity: Hashable, Sendable {
     public let digest: String
+    public init(digest: String)
 
-    /// `nil` when the image holding RuntimeViewerCore cannot be found.
+    /// The first sixteen digits: the producer directory's name.
+    public var directoryName: String { get }
+
+    /// `nil` when the image holding RuntimeViewerCore cannot be read, or an
+    /// image that counts carries no LC_UUID.
     public static func currentProcess() -> RuntimeDerivedDataProducerIdentity?
 
-    /// The digest of an explicit list — the seam the identity tests use.
-    static func digest(of images: [(path: String, uuid: UUID)]) -> String
+    /// The digest of an explicit list, in any order — the seam the identity
+    /// tests use.
+    static func digest(of images: [(name: String, uuid: UUID)]) -> String
 }
 
 /// `~/Library/Caches/<bundle identifier>/DerivedData` of the RuntimeViewer
@@ -388,6 +406,7 @@ public struct RuntimeDerivedDataProducerIdentity: Hashable, Sendable {
 public struct RuntimeDerivedDataLocation: Hashable, Sendable {
     public let applicationURL: URL
     public let rootURL: URL
+    public init(applicationURL: URL, rootURL: URL)
 
     /// The `.app` enclosing `bundle` — the bundle itself, or an XPC service
     /// under `Contents/XPCServices` — when its `Info.plist` names
@@ -429,18 +448,20 @@ public actor RuntimeDerivedDataStore {
 
     /// The directory of the image at `imagePath` — the seam for caches of
     /// other libraries; `nil` for an image outside the shared cache.
-    public func imageDirectory(forImageAt imagePath: String) -> URL?
+    /// `nonisolated`: a pure function of the identities.
+    public nonisolated func imageDirectory(forImageAt imagePath: String) -> URL?
 }
 ```
 
 - **读取并行**：校验、解压与解码都在仓库外进行，最多同时 4 个，不在 actor 上排队。
-- **同一镜像只读一次**：同一个进程里对同一镜像的并发读取合并为一次（按镜像的在途表），构建路径与提前读取共用这张表。
+- **同一镜像只读一次**：同一个进程里对同一个文件的并发读取合并为一次（按文件的在途表），构建路径与提前读取共用这张表。
+- **整个读进内存，不映射**：映射着的文件若被别的进程截短，下次碰到那一页就是 SIGBUS。文件只有几 MB 到几十 MB，多一次拷贝无所谓。
 
 容器文件（扩展名 `.rvdd`，小端）：
 
-- **头部**：魔数 `RVDD`、格式版本（`UInt32`）、种类、变体、镜像路径、系统目录名、生产者摘要。读回时逐项和期望值比对，以防文件被挪错位置。
-- **分段目录**：每段记编号、偏移、长度、解压后长度、压缩方式（不压缩 / LZFSE）、校验和（SHA-256 前 8 字节，用 CryptoKit）。
-- **数据段**：大块按原始的定长数组写入，每段单独压缩；读回时逐段校验、解压。
+- **头部**：魔数 `RVDD`、格式版本（`UInt32`）、头部长度、种类、变体、镜像路径、系统目录名、生产者摘要。读回时逐项和期望值比对，以防文件被挪错位置。
+- **分段目录**：每段记编号、偏移、长度、解压后长度、压缩方式（不压缩 / LZFSE）、校验和（SHA-256 前 8 字节，用 CryptoKit）。分段目录之后是从魔数到分段目录末尾的校验和，头部本身坏了也能认出来。
+- **数据段**：大块按原始的定长数组写入，每段单独压缩，压缩后不比原来小的照原样存；读回时逐段校验、解压。压缩与解压都用系统 Compression 库的整块接口，解压的目标缓冲区按记录的长度多给一个字节，所以解出来比记录的多也能认出来，不会先把它整个解开。
 - **任何一步失败都按「没有缓存」处理**：删掉这个文件，走原来的建法，不弹错误。
 - **格式不做跨版本兼容**：生产者一变整个目录都用不上，版本号只是用来防止读错。
 
@@ -459,15 +480,16 @@ public actor RuntimeDerivedDataStore {
 
 **读取标记**：防止坏文件让服务崩溃循环。
 
-- **何时建、何时删**：读一个容器之前，先在旁边建标记文件 `<文件名>.reading`，内容是本进程的 PID 与启动时间。校验、解码之后，还要对每条语料做一次完整遍历（逐个 span），再按「选项全开」与「选项全关」各投影一次；这些都通过了才删标记。这样，遍历和投影里会 trap 的路径在标记还在时就已经走过一遍。
+- **何时建、何时删**：读一个容器之前，先在旁边建标记文件 `<文件名>.reading`，内容是本进程的 PID 与启动时间（一行文本，启动时间取 `kinfo_proc` 的 `p_starttime`，精确到微秒）。校验、解码之后，还要对每条语料做一次完整遍历（逐个 span），再按「选项全开」与「选项全关」各投影一次；这些都通过了才删标记。这样，遍历和投影里会 trap 的路径在标记还在时就已经走过一遍。
 - **遇到别人的标记**：
   - 标记里的进程还活着（PID 与启动时间都对得上），说明别的进程正在读，本进程把这次当作没有缓存，不删文件。
+  - 标记正是本进程自己的、而本进程此刻并没有在读这个文件（在途表里没有它），说明上次读完没删掉标记，删掉标记照常读。
   - 标记里的进程已经不在了，说明上次读到一半崩了，就把容器和标记一起删掉，不再解码。
 - **代价**：服务在读取途中被正常杀掉（例如 App 退出），下次也会删掉一个好文件，那个镜像重打一次。这是派生数据，可以接受。
 - **清理时成对处理**：标记从不单独删除；要删就和它旁边的容器一起删。
 
 **Transformer 摘要**：
-- 先把配置化成规范形式：`replacements` 按 `Pattern.rawValue` 排序，写成有序的 (键, 值) 列表，其余字段按固定顺序写出；对这个规范形式算 SHA-256，作为变体名的一部分。
+- 先把配置化成规范形式：`replacements` 按 `Pattern.rawValue` 排序，写成有序的 (键, 值) 列表，其余字段按固定顺序写出；对这个规范形式算 SHA-256，取前 16 位十六进制作为变体名的一部分（`Transformer.Configuration.derivedDataDigest`）。实际做法是把去掉 `replacements` 的配置用 `JSONEncoder` 加 `.sortedKeys` 编码，再接上排好序的 (键, 值) 列表的编码。日后若再加一个以这类枚举为键的字典，摘要会重新变得不稳定；代价是读不到缓存，不会读错，因为下一条的比对还在。
 - 容器里同时存下完整的配置，读回时再用 `==` 比对一次。
 - 测试覆盖：把同样内容、不同数组顺序的两份设置 JSON 各自解码，算出的摘要相同。用户自己的 Debug 与 Release 两份设置就是现成的样本。
 
@@ -479,16 +501,18 @@ public actor RuntimeDerivedDataStore {
 |---|---|---|
 | `summary` | `RuntimeInterfaceCorpusBuildSummary` 与完整的 Transformer 设置 | 二进制 plist（现有 `Codable`） |
 | `objects` | 每条的 `RuntimeObject` | 二进制 plist（现有 `Codable`） |
-| `members` | 每条的 `[RuntimeMemberDeclaration]` | 二进制 plist（现有 `Codable`），读回太慢时改为定长列 |
+| `memberNames` | 全部成员的名字 | 长度前缀的 UTF-8，LZFSE |
 | `text` | 全部条目的接口文本首尾相接 | UTF-8，LZFSE |
 | `spanLengths` / `spanTypeCodes` / `spanIdentifierIndices` | 全部条目的 span 三列 | `UInt16` / `UInt8` / `UInt32` 数组，LZFSE |
 | `identifiers` | 全部条目的标识符表 | 长度前缀的 UTF-8，LZFSE |
 | `regions` | 可见性区间三列 | `UInt32` 数组，LZFSE |
 | `conditions` | 可见性条件（选项名与开关的析取范式） | 长度前缀编码 |
 | `nestedRanges` | 嵌套定义区间 | `Int64` 对数组 |
-| `entries` | 每条在上面各段里的起止下标 | `UInt32` 数组 |
+| `entries` | 每条在上面各段里的终止下标（七列：文本字节、span、标识符、区间、条件、嵌套区间、成员），起点是上一条的终点 | `UInt32` 数组 |
+| `memberAttributes` | 每个成员的种类（在 `RuntimeMemberKind.allCases` 里的下标）与是否静态（最高位） | `UInt8` 数组 |
+| `memberLineNumbers` | 每个成员所在的行，0 表示没有 | `UInt32` 数组，LZFSE |
 
-- 成员段先沿用 `Codable`，在第 2 步的计时测试里量读取用时，超出成功标准就改成定长列。
+- 成员段起初用二进制 plist；第 2 步的计时测试里，AppKit 的读回用了 0.6 秒，其中一半在解它，所以改成了上面三列（见「第 2 步的落地记录」）。成员的 `declarationText` 在语料里就是名字本身，不另存。
 - `memberDeclarationLineRanges` 照现有做法在初始化时现算，不存。
 
 ### 引擎与语料仓库
@@ -545,9 +569,9 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
   - **Report 用的记录**：读到的镜像，以及覆盖情况里 `restoredImagesByImagePath` 中的镜像，记进新的 `restoredImagesByImagePath`。另有一个照 `imagePathsListedInHistory` 写的 `imagePathsListedAsRestored`，让 Clear History 清掉的条目不在下一次刷新时回来。`mergeCoverage` 跳过已读取的镜像，不把它们当作别处建好的构建。
   - **何时去掉**：覆盖情况里某个镜像不再是 built，或者不再在 `restoredImagesByImagePath` 里（被淘汰或被重新打印），就从这一组去掉；Engine 从头来过时清空。
   - Transformer 改了之后照旧整体重建；新的变体写盘时，同一镜像旧变体的文件被删掉。
-- **内容区**：`ContentTextViewModel` 的接口来源，在接口为 `nil`、且对象所在镜像还没有 section（`isImageIndexed(path:)` 为假）时，在同一个 `Observable.async` 里调 `objectsWithProgress(in:)` 前台加载、再取一次接口，由现有的 `trackActivity(_commonLoading)` 覆盖，这样加载遮罩仍是唯一的加载状态，符合「一个状态枚举」的规则。前台加载失败，按取接口失败处理。
-- **Inspector**：`InspectorRelationshipsViewModel` 与层级的 ViewModel 在 `$runtimeObject` 之外，再跟随引擎的 `imageDidIndexPublisher`；当前对象所在的镜像建好时重取一次。
-- **Call Hierarchy 与 Callees**：Find 在用根查询之前，如果根所在的镜像还没有 section，先前台加载它（同一条路），并在 Find 的进度里显示。
+- **内容区**：`ContentTextViewModel` 的接口来源，在接口为 `nil`、且对象所在镜像还没有 section（`isImageIndexed(path:)` 为假）时，在同一个 `Observable.async` 里调 `indexImageIfNeeded(at:)` 前台加载、再取一次接口，由现有的 `trackActivity(_commonLoading)` 覆盖，这样加载遮罩仍是唯一的加载状态，符合「一个状态枚举」的规则。前台加载失败，按取接口失败处理。
+- **Inspector**：`InspectorRelationshipsViewModel` 与层级的 ViewModel 在 `$runtimeObject` 之外，再跟随 `RuntimeEngine.imageIndexedLater(_:)`：当前对象所在的镜像这时还没建好，就在它建好时重取一次；已经建好的，不重取。它先订阅引擎的 `imageDidIndexPublisher`、再问 `isImageIndexed`，所以两者之间建好的也不会漏掉。
+- **Call Hierarchy 与 Callees**：Find 在用根查询之前，如果根所在的镜像还没有 section，先前台加载它（同一条路），Find 的摘要栏这时显示「Loading <镜像名>」。
 - **Report**：
   - `ReportNodeIdentifier` 新增 `restoredCorpora` 与 `restoredCorpus(imagePath:)` 两个 case。
   - 要一起改的地方：`ReportNode.swift` 里 `category` 的穷举 switch，`ReportViewModel` 取消逻辑里的穷举 switch，`ReportTreeBuilder.corpusCategory` 的签名与 `ReportTreeBuilderTests` 里的调用。
@@ -557,7 +581,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
   - `RuntimeViewerSettings` 里声明 `DerivedDataClient`，用 `@DependencyEntry` 生成 `\.derivedDataClient`，提供位置、占用大小、删除、在 Finder 中显示四个操作，照 `UpdaterClient` 的做法。
   - 删除与统计的实际逻辑放在 Core 的 `RuntimeDerivedDataMaintenance` 里，与服务进程的自动清理共用，是纯文件系统操作，能在 Core 的测试里用临时目录测。
   - App 层新增 `@MainActor` 的控制器 `RuntimeDerivedDataController`（`RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`），作为 `DerivedDataClient` 的实际实现，并负责菜单动作的确认对话框。
-  - AppDelegate 只多一条 `@Dependency(\.runtimeDerivedDataController)` 声明，和一个一行转交的 `@objc` 菜单动作。
+  - AppDelegate 多一条 `@Dependency(\.runtimeDerivedDataController)` 声明、`applicationDidFinishLaunching` 里一行 `runtimeDerivedDataController.install()`（把设置页的客户端接到控制器上），和一个一行转交的 `@objc` 菜单动作。
 - **设置页**：`IndexingSettingsView` 底部新增「Derived Data」一节，经 `@Dependency(\.derivedDataClient)` 取用。说明文字讲清存了什么、什么时候作废、删除的后果。
 - **菜单**：`MainMenuController.applicationMenuItem()` 在 Simulator App Installer… 之后插入「Delete Derived Data…」。
 
@@ -565,8 +589,8 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 
 由开启了派生数据的服务进程，在第一次用到派生数据时做一次（utility 优先级）：
 
-1. **先刷新自己**：更新本生产者目录的 `LastUsed`。之后每次写盘、以及运行中每隔 24 小时，再各刷新一次，所以连续运行的实例不会被当成没人用。
-2. **系统目录**：从目录名解析出 build，不等于当前 build 的，整个删掉。build 相同、共享缓存 UUID 不同的（比如另一种架构的缓存）保留。
+1. **先刷新自己**：更新本生产者目录的 `LastUsed`。之后每次写盘、以及运行中每隔 24 小时，再各刷新一次；读取时离上次刷新超过一天也刷新一次。所以连续运行的实例不会被当成没人用。
+2. **系统目录**：从目录名解析出 build，不等于当前 build 的，整个删掉；名字解析不出来的目录也删掉，但当前系统目录无论如何都不删。build 相同、共享缓存 UUID 或平台不同的（比如另一种架构的缓存，或 Mac Catalyst 那一份）保留。
 3. **生产者目录**：除了自己的，`LastUsed` 超过 14 天没更新的，删掉。同一 bundle id 的多份构建不会互删；同时运行的实例每天都会刷新，也不会被删。
 4. **残留**：
    - `DerivedData.deleting-*` 删掉。
@@ -586,7 +610,7 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 - **Core：键与身份**：
   - 改动生产者摘要、Transformer 设置、系统身份中的任何一项，都读不到。
   - Transformer 摘要：同样内容、不同数组顺序的两份设置 JSON 解码后摘要相同；以用户的 Debug 与 Release 设置为样本。
-  - 生产者摘要经 `digest(of:)` 测：同一组（路径, UUID）结果稳定，换掉其中一个 UUID 就变，顺序不同结果相同。
+  - 生产者摘要经 `digest(of:)` 测：同一组（名字, UUID）结果稳定，换掉其中一个 UUID 就变，顺序不同结果相同。
   - 在临时目录里搭一个假的 `.app` 结构，测 `enclosingApplication(of:)` 的推导：App 本身与 `Contents/XPCServices` 下的 service 得到同一个位置；`Info.plist` 没有那个键的 App、不在 App 包里的位置，得到 `nil`。
   - 没有调用 `enableInThisProcess()` 的进程里，引擎拿不到存储。
 - **Core：语料仓库**：
@@ -675,21 +699,21 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 
 ## 落地步骤
 
-1. **Core：派生数据基础。**
+1. **Core：派生数据基础。** **已完成（2026-10-24）**，记录见「第 1 步的落地记录」。
    - 开启、系统身份、生产者身份（含 `digest(of:)`）、位置、容器读写、读回校验、读取标记、Transformer 摘要、清理与删除（`RuntimeDerivedDataMaintenance`）。
    - 对应测试，加上新的 `RuntimeViewerCore/Tests/AGENTS.md`。
    - 这一步之后，能单独构建、单独测试。
-2. **Core：语料快照与语料仓库接入。**
+2. **Core：语料快照与语料仓库接入。** **已完成（2026-10-24）**，记录见「第 2 步的落地记录」。
    - 读取阶段、出队再查、构建末尾写盘、`restoreInterfaceCorpora`、覆盖情况的新字段与手写解码、引擎的 internal 注入点、两个服务入口的 `enableInThisProcess()`，加上对应测试。
-   - 加一个计时测试，用 Release 配置（`swift test -c release`）对 Foundation 与 SwiftUI 的语料各做一次写盘与读取，记下用时。它只用来决定成员段要不要改成定长列，验收以第 5 步为准。
-3. **Packages：App 侧逻辑。**
+   - 加一个计时测试，用 Release 配置（`swift test -c release`）对 Foundation 与 SwiftUI 的语料各做一次写盘与读取，记下用时。它只用来决定成员段要不要改成定长列，验收以第 5 步为准。实际也量了 AppKit。
+3. **Packages：App 侧逻辑。** **已完成（2026-10-24）**，记录见「第 3 步的落地记录」。
    - 语料协调器的提前读取、与构建同样的处理、Report 用的记录；内容区的前台加载；Inspector 的重取；Call Hierarchy 根的前台加载；Report 新组。
    - `RuntimeViewerSettings` 里的 `DerivedDataClient`、设置页一节。
    - 两处 `#signpostInterval` 埋点与汇总日志。
    - 对应测试。
-4. **App：`RuntimeDerivedDataController`、应用菜单命令、AppDelegate 的一条依赖与一个菜单动作。**
-5. **按「成功标准」验收。** Release 构建，两个 Engine 分别测，两次启动，把实测数字记进决策日志；达不到的由用户决定调整方案还是接受。
-6. **文档。**
+4. **App：`RuntimeDerivedDataController`、应用菜单命令、AppDelegate 的一条依赖与一个菜单动作。** **已完成（2026-10-24）**，记录见「第 4 步的落地记录」。
+5. **按「成功标准」验收。** Release 构建，两个 Engine 分别测，两次启动，把实测数字记进决策日志；达不到的由用户决定调整方案还是接受。**Core 层的测量已完成（2026-10-24）；App 层的验收待用户做**，记录见「第 5 步的落地记录」。
+6. **文档。** **已完成（2026-10-24）**：下面三项，外加实现说明 [`DerivedData.md`](../DerivedData.md) 与 README 的「Derived Data」一节。
    - 根 `AGENTS.md` 增加一段：派生数据只由开启了它的两个服务进程读写与自动清理，App 只做统计与手动删除；开启的两处入口；新增一种派生数据要走 `RuntimeDerivedDataStore` 并带上种类与变体；只管共享缓存镜像。
    - `RuntimeViewerPackages/Tests/AGENTS.md` 的规则扩展（见「测试」）。
    - 术语表登记「派生数据」「系统身份」「生产者身份」「读取标记」。
@@ -704,6 +728,122 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 
 - **要不要配套专题文章**：有「从 API 签名看不出来的调用方契约」就写使用指南；有「下次维护会踩、代码本身看不出来的决策」就写实现说明（例如为什么生产者身份要读内存里的映像、为什么清理按最近使用时间、读取标记为什么要等遍历过才删）。写了就登记到头部的「配套文档」。
 - **有没有引入新术语**：有就同批次登记进 `Documentations/Glossary.md`。
+
+## 第 1 步的落地记录（2026-10-24）
+
+**落地内容。** `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/` 下十个文件：
+
+- `RuntimeDerivedData`：开启开关与进程级的存储（`fileprivate static let`），同文件里给 `RuntimeEngine` 一个取用入口 `processDerivedDataStore`，照 `CrossReferenceSession` 的做法。
+- 三种身份：`RuntimeDerivedDataSystemIdentity`、`RuntimeDerivedDataProducerIdentity`、`RuntimeDerivedDataLocation`。
+- `RuntimeDerivedDataContainer`（文件格式、`Builder`、读回时的全部容器级校验）与 `RuntimeDerivedDataKind`。
+- `RuntimeDerivedDataReadingMarker`：读取标记，以及「标记里的进程还在不在」。
+- `RuntimeDerivedDataStore`：目录布局、读写、在途表、读取标记的处理、使用时间的刷新、首次使用时的清理。
+- `RuntimeDerivedDataMaintenance`：清理规则、占用大小、整体删除。
+- `Transformer+DerivedDataDigest`：Transformer 摘要。`RuntimeDerivedDataDigest`：SHA-256 的两种用法（十六进制摘要、8 字节校验和）。
+
+测试在 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/DerivedDataStorage/`，四组共 43 个，全部用临时目录：容器的往返、每一种截断与逐字节翻转、头部任一项对不上、解压长度不符；三种身份与 Transformer 摘要（以用户 Debug 与 Release 设置里的 C 类型替换为样本）；存储的布局、换系统或生产者读不到、挪错位置的文件被删、坏文件被删、读取标记的三种情形、并发读合并为一次、写盘刷新使用时间；清理的各条规则与整体删除。新增 `RuntimeViewerCore/Tests/AGENTS.md`（及 `CLAUDE.md` 符号链接），登记进根 `AGENTS.md` 的表。
+
+**与设计的出入**（详细设计已按实现改写）：
+
+- 生产者身份里每个映像带的是名字，不是完整路径，理由见决策日志。
+- 容器多了一个头部校验和，覆盖从魔数到分段目录末尾；压缩与解压用 Compression 库的整块接口，解压按记录的长度限定缓冲区。
+- 文件整个读进内存，不映射。
+- 名字解析不出来的系统目录也会被清理；读取时离上次刷新超过一天也会刷新使用时间。
+- 存储的 `imageDirectory(forImageAt:)` 是 `nonisolated`；三种身份与位置都有公开的初始化方法，供 App 侧与测试直接构造。
+- 源码与测试的目录叫 `DerivedDataStorage`，不叫设计里的 `DerivedData`：Core 包的 `.gitignore` 忽略一切名为 `DerivedData/` 的目录（Xcode 的构建产物目录），同名的源码目录会被 git 悄悄漏掉。
+
+## 第 2 步的落地记录（2026-10-24）
+
+**落地内容。**
+
+- `Search/RuntimeInterfaceCorpusSnapshot.swift`：语料与容器之间的编码与读回。读回逐条校验，校验过的条目才构造；全部构造完再做一次完整遍历与两次投影。
+- `RuntimeInterfaceCorpusStore`：`Build` 多了读取阶段（`.reading`）和只等读取结果的订阅者（`restore` 的请求）；打印完先放进仓库、写盘、再结算；`restore(imagePaths:transformer:)`；覆盖情况带上 `restoredImagesByImagePath`。测试接缝有两个：`readStoredCorpus` 可替换，用来把一次读取卡在半途；`isQueued(imagePath:)` 用来判断一个构建是否已在排队打印。
+- `RuntimeEngine`：`restoreInterfaceCorpora(for:transformer:)` 与命令 `restoreInterfaceCorpora`；语料仓库默认取进程的派生数据；测试注入点 `useDerivedDataStore(_:)`。
+- 线上类型：`RuntimeInterfaceCorpusRestoredImage`、`RuntimeInterfaceCorpusRestoreResult`，覆盖情况的新字段与手写解码。
+- 两个服务入口调用 `RuntimeDerivedData.enableInThisProcess()`。根 `AGENTS.md` 的「Derived data」一节和 `RuntimeViewerCore/Tests/AGENTS.md` 的第二条规则在这一步就写了，没有等到第 6 步，因为入口的调用在这一步落地。
+
+测试：快照的往返（含多字节文本、可见性区间与嵌套区间的样本）与 21 种篡改；语料仓库与派生数据的 14 个测试（构建路径命中、写盘先于结算、换 Transformer、共享缓存以外不读写、含进程内地址不写、恢复不打印、恢复把排队的构建移出队列并在读不到时放回原位、正在打印的不读、读取途中取消/淘汰/全部淘汰/换 Transformer、恢复的请求被放弃、构建并入恢复的读取、覆盖情况里的已读取列表、旧 JSON 解码）；真实镜像的三组（libobjc 与 Foundation 逐条往返、另一个引擎读回后搜索结果逐条相同、没有派生数据时什么都不读）。相关的既有测试 86 个照常通过。
+
+**计时**（Release，本机 Mac Studio，`RUNTIMEVIEWER_DERIVED_DATA_TIMING=1 swift test -c release -Xswiftc -enable-testing --filter RuntimeInterfaceCorpusDerivedDataEngineTests`；读回用时取自 `RestoredImage.duration`，从开始读取到放进仓库）：
+
+| 镜像 | 对象数 | 内存里的语料 | 建 section | 打印并写盘 | 文件大小 | 读回（成员段为 plist 时） | 读回（成员段为定长列后） |
+|---|---|---|---|---|---|---|---|
+| Foundation | 2,558 | 18.3 MB | 3.5 秒 | 1.2 秒 | 1.8 MB | 0.25 秒 | 0.16 秒 |
+| SwiftUI | 7,416 | 34.7 MB | 6.7 秒 | 4.5 秒 | 4.0 MB | 0.48 秒 | 0.32 秒 |
+| AppKit | 4,991 | 40.8 MB | 5.7 秒 | 2.5 秒 | 4.4 MB | 0.60 秒 | 0.28 秒 |
+
+AppKit 在成员段为 plist 时的读回拆开看：容器校验与解压 0.016 秒，对象的 plist 0.069 秒，成员的 plist 0.312 秒，读后遍历与投影 0.148 秒。改为定长列之后，三者都在 0.5 秒以内，压缩后的文件约为内存里语料的十分之一。
+
+**与设计的出入**（详细设计已按实现改写）：
+
+- 成员段改为定长列，理由见上。
+- `restoreInterfaceCorpora` 是不报进度的进度命令（与 `TypeRelationshipsCommand` 一样），只为让调用方能从服务进程撤回请求。
+- 恢复请求遇到内存里是另一套 Transformer 的语料时，和 `build` 一样先淘汰它，再读当前设置的那一份。
+- 读取在 `userInitiated` 优先级的独立任务里进行，不占打印的那一个槽位。
+- 「先全部通过，才构造任何对象」落实为逐条：每一条在它自己的各列都校验过之后才构造，会 trap 的初始化方法从不接触未校验的数据。
+
+## 第 3 步的落地记录（2026-10-24）
+
+**落地内容。**
+
+- `FindCorpusCoordinator`：`restoreCorpora(of:)`；读到的镜像置为 built、发 `corpusBuilt`、记进 `requestedImagePaths`；`restoredImagesByImagePath` 与 `imagePathsListedAsRestored`；`mergeCoverage` 不再把读回的语料当作别处建好的构建；订阅后台索引的事件，Always Index 批次开始时读出其中 `.pending` 的条目；Clear History、Engine 从头来过、关掉开关、改 Transformer 时撤回读取并清空这一组；正在读取的镜像也算进行中的工作（`hasActiveBuild`），App 在等服务进程，不能进 App Nap。
+- `RuntimeBackgroundIndexingCoordinator`：每一轮派发 Always Index 各行时，先把解析出的镜像路径发出去（`alwaysIndexImagePathsResolved`），包括已经索引过、不会开批次的那些；`RuntimeEngineBackgroundWork` 把它接到语料协调器，并把 `documentDidOpen()` 挪到接好之后。
+- 前台加载：`RuntimeEngine.indexImageIfNeeded(at:)`，内容区与 Call Hierarchy / Callees 共用；`RuntimeEngine.imageIndexedLater(_:)` 供 Inspector 的两个 ViewModel 在镜像建好时重取。
+- Report：`ReportNodeIdentifier` 的 `restoredCorpora`、`restoredCorpus(imagePath:)`；Searchable Interfaces 下排在进行中的构建之后、结束的构建之前，组的细节栏写镜像数，每行写语料大小与读取用时，组默认收起；Clear History 可用的条件里加上这一组。
+- 设置：`RuntimeViewerSettings` 的 `DerivedDataClient`（位置、占用大小、`refresh`、`showInFinder`、`delete`）与 `\.derivedDataClient`；Settings › Indexing 底部的「Derived Data」一节，页面出现时重新统计。
+- 埋点：App 侧在语料协调器的每次读取请求外面包一个 `#signpostInterval`（「Restore corpora from derived data」），服务侧在每个镜像的读取外面包一个（「Read corpus from derived data」）；协调器每次读取结束打一行汇总，列出每个镜像的读取用时。
+
+测试：`DerivedDataRestoreTests` 11 个（直接读取、Always Index 派发时读取且之后的索引不再打印、批次开始时读取、手动打开走构建路径读取、Clear History 后刷新不回来、改 Transformer 后重打、没有派生数据、对端不支持这条命令时照常构建、内容区前台加载 Swift 对象、Inspector 在镜像建好后重取、Report 的分组）；`FindCrossReferenceTests` 加 1 个（根所在镜像没有 section 时先建好再查，摘要栏显示「Loading Foundation」）；`ReportTreeBuilderTests` 跟着签名改。新增 `Support/DerivedDataFixture.swift`，`RuntimeViewerPackages/Tests/AGENTS.md` 加上派生数据的规则。和这次改动相关的既有测试 205 个照常通过。
+
+**与设计的出入**（详细设计已按实现改写）：
+
+- 前台加载不只是 `objectsWithProgress(in:)`：服务进程读语料时并不加载镜像，所以镜像没加载时要先 `loadImage(at:)`，和侧栏的 Load 一样。
+- 正在读取的镜像算作进行中的工作，Report 的活动标记与 App Nap 的处理都跟着它。
+- Call Hierarchy 前台加载时，Find 的摘要栏显示「Loading <镜像名>」。
+
+## 第 4 步的落地记录（2026-10-24）
+
+**落地内容。** `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/RuntimeDerivedDataController.swift`：`@MainActor` 的控制器，经 `@DependencyEntry` 取用；`install()` 把 `DerivedDataClient` 的位置与三个动作接到自己身上；统计占用大小在后台线程做；「Show in Finder」在目录还不存在时打开离它最近的已存在的上级目录；删除前用 `NSAlert` 确认（删除按钮标为破坏性操作），删完重新统计。`MainMenuController` 在 Simulator App Installer… 后面加了「Delete Derived Data…」，不设快捷键。`AppDelegate` 多了依赖声明、启动时一行 `install()` 与一行转交的菜单动作。`RuntimeViewerUsingAppKit/AGENTS.md` 的生命周期控制器清单加上了它。
+
+**与设计的出入**：设计里说 AppDelegate「只多一条依赖声明和一个菜单动作」，实际多了一行 `install()`：设置页随时可能打开，客户端得在启动时就接到控制器上，否则设置页拿到的是不做事的默认实例。根 `AGENTS.md` 允许 AppDelegate 里有这种一行的 `install()` 调用。
+
+## 第 5 步的落地记录（2026-10-24）
+
+**已做：Core 层的 Release 测量。** `RuntimeInterfaceCorpusDerivedDataEngineTests` 新增一个默认不跑的测试
+「Reading My Mac's five Always Index corpora at once」：在一个引擎上打印并写好 My Mac 的五个 Always Index 镜像，再让一个什么都没索引的新引擎一次读回五个（`restoreInterfaceCorpora`，与启动时的提前读取同一条命令），计总用时、各镜像用时与磁盘占用。连同原有的计时测试，用 Release 配置跑（`RUNTIMEVIEWER_DERIVED_DATA_TIMING=1 swift test -c release -Xswiftc -enable-testing --filter RuntimeInterfaceCorpusDerivedDataEngineTests`），5 个测试全部通过，退出码 0。
+
+| 项目 | 目标 | 实测 |
+|---|---|---|
+| 五个镜像一起读回的总用时（引擎内，不含 App 侧的派发与 IPC） | 每个 Engine ≤ 3 秒 | 0.411 秒 |
+| 单个镜像读取用时 | ≤ 0.5 秒 | 五个同时读：SwiftUICore 0.411、SwiftUI 0.409、AppKit 0.338、Foundation 0.182、libswiftCore 0.044 秒；单独读：AppKit 0.299、SwiftUI 0.333、Foundation 0.162 秒 |
+| 磁盘占用 | 七个镜像 ≤ 200 MB | My Mac 的五个共 13 MiB |
+
+**未做：App 层的验收。** 成功标准要求用 Release 构建的 App、在两个 Engine 上各开一个文档、启动两次后读 Report 与日志。这要启动 App 并在界面里把文档切到 My Mac (Mac Catalyst)，属于交互式操作，不在本次实现的授权里，留给用户。Mac Catalyst 的两个镜像（UIKitCore、UIKitMacHelper）只能在 Mac Catalyst 进程里加载，测试进程量不了，也只能在 App 里量。做法：
+
+1. 用 Release 构建并启动 App，打开两个文档，一个在 My Mac、一个在 My Mac (Mac Catalyst)，等 Report 里这七个镜像的语料构建全部完成。
+2. 退出 App。第二次启动之前先在终端里开着日志：`log stream --level info --predicate 'subsystem == "FindCorpusCoordinator" OR subsystem == "RuntimeInterfaceCorpusStore"'`（这几行是 info 级别，默认不落盘，事后用 `log show` 多半看不到），再启动 App，两个文档照样各在一个 Engine 上。
+3. 读日志：每个 Engine 一行「Read N of M corpora from derived data in X s: …」，X 是从提前读取开始到全部可搜，后面列出每个镜像的用时；服务进程里每个镜像另有一行「Read the corpus of … from derived data」。
+4. 看 Report：这些镜像应当都在「Restored from Derived Data」下，构建历史里没有新打印的语料。磁盘占用看 Settings › Indexing › Derived Data。
+
+## 代码审查后的修复（2026-10-26）
+
+PR #126 的代码审查共 17 条（审查 15 条、Codex 1 条、复核中找到的同类 1 条），逐条裁决记在
+[KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md)，ID 为 `PR126.<N>`。没有会崩溃的问题；
+在本分支上修了 11 条，其余 6 条不修或误报，理由同记在那里。修的行为问题都先写了修复前失败的测试。
+
+- **搜得到、没建索引的镜像，补上漏掉的两个入口**：Find Type References 与 Call Hierarchy、Callees 一样，先为根
+  所在的镜像建索引（PR126.1）；Inspector 的 References 页签与另外两个页签一样，镜像建好后重取（PR126.17）。
+- **内容区**：第一次取到空接口后，不论镜像是否已经建好都再取一次，免得后台索引恰好在两步之间建完时一直空白
+  （PR126.16）。
+- **语料协调器**：记下请它读回过的镜像，语料开关重新打开时再读一次，改 Transformer 后被引擎以「没建索引」拒绝的
+  构建改为读回（PR126.2）；并入覆盖情况时跳过正在读回的镜像，Report 不再把它们列成排队中（PR126.4）。读回放在
+  拒绝之后，不与构建请求同时发出，理由见 KnownIssues 的 PR126.2。
+- **容器与存储**：解压长度上限 1 GiB（PR126.6）；种类名只许 ASCII 字母与数字（PR126.7）；并发读测试改为数出
+  等待的读者再放行（PR126.13）。
+- **其余**：打印队列的注释（PR126.5）、缩写（PR126.14，连同全库既有的 13 处）、两个方法改为 `private`（PR126.15）。
+
+实现说明 [`DerivedData.md`](../DerivedData.md) 同步更新：第四节写明解压长度的上限，第六节的入口清单补上 Type
+References 与 References 页签、写明重新读回与并入覆盖情况的规则，第七节写明种类名的规则。
 
 ## 决策日志
 
@@ -755,3 +895,18 @@ public struct RuntimeInterfaceCorpusRestoreResult: Codable, Sendable {
 | 2026-10-21 | 上游测量移出本提案的落地步骤 | 第一次修订稿把 App 进程内的测量既列为上游那条线的第一步，又列为本提案第 1 步，本提案能否在没做测量时收尾就有两种读法。现在它只属于上游那条线；本提案第 6 步做完即收尾。 |
 | 2026-10-21 | 测试补上注入点与漏掉的用例 | 生产者摘要经 `digest(of:)` 测；Packages 测试经引擎的 internal 注入点拿到临时目录里的存储；补上读取途中取消与淘汰、旧 JSON 解码、提前读取的范围、读到的镜像扩展正在显示的搜索、Inspector 重取等用例。 |
 | 2026-10-24 | 用户批准，开始实现 | 由 agent 提出、用户可推翻的几个取值（14 天、读取标记与临时文件的一天、3 秒 / 0.5 秒 / 200 MB 的成功标准、第二期闸门的 2 秒参考线、第二期另立提案）先按提案执行，实现中遇到问题再定。实现分支是 `feature/derived-data`。 |
+| 2026-10-24 | 开始实现，状态改为 In Progress | 第 1 步随这一行一起提交。 |
+| 2026-10-24 | 生产者身份里的映像只带名字，不带完整路径 | 设计里写的是「每个映像带上它的路径」。被隔离的 App 若没被挪进「应用程序」文件夹，系统每次都会从一个新的随机位置运行它（App Translocation），带路径的摘要每次启动都不同，派生数据就永远读不到，还会每次留下一个新的生产者目录。名字取 install name，没有的（服务的可执行文件、插件）取文件名；代码是否相同由 LC_UUID 决定。 |
+| 2026-10-24 | 语料的成员段改为定长列 | 计时测试（Release）里 AppKit 的读回用了 0.60 秒，超过「单个镜像 ≤ 0.5 秒」，其中成员的二进制 plist 占 0.31 秒。改成名字、属性、行号三列后，AppKit 0.28 秒、SwiftUI 0.32 秒、Foundation 0.16 秒。这是提案事先定好的处理（成员段「读回太慢时改为定长列」），不改变方案。 |
+| 2026-10-24 | 前台加载在镜像没加载时先 `loadImage(at:)` | 设计里写的是和侧栏一样调 `objectsWithProgress(in:)`。但服务进程读语料时不加载镜像，读回的 AppKit 在服务进程里可能从没加载过，这时 `objectsWithProgress(in:)` 拿不到映像，必须像侧栏的 Load 按钮那样先加载。内容区与 Call Hierarchy 共用 `indexImageIfNeeded(at:)`。 |
+| 2026-10-24 | 正在读取的语料算作进行中的工作 | 读取期间 App 在等服务进程；不算进去，App 可能在读取途中进入 App Nap，服务进程跟着降到后台档。Report 的活动标记因此在启动时会短暂转一下。 |
+| 2026-10-24 | AppDelegate 多一行 `runtimeDerivedDataController.install()` | 设置页在 App 启动后随时可能打开，`DerivedDataClient` 必须在那之前接到控制器上；照 `UpdaterService.start()` 的先例，在 `applicationDidFinishLaunching` 里一行调用。 |
+| 2026-10-24 | 第 5 步先做 Core 层的 Release 测量，App 层的验收留给用户 | 实测：My Mac 的五个 Always Index 镜像一起读回 0.411 秒，单个最慢 0.411 秒（SwiftUICore），五个共 13 MiB，三项都在目标以内。App 层的验收要启动 App 并在界面里切换 Engine，属于交互式操作，不在实现授权里；Mac Catalyst 的两个镜像也只能在 App 里量。 |
+| 2026-10-24 | 写一篇实现说明 `Documentations/DerivedData.md`，不另写使用指南 | 有好几条维护时会踩、代码里看不出来的决定：生产者身份为什么读内存里的映像、带名字不带路径，清理为什么按最近使用，读取标记为什么等遍历完才删，有语料不等于镜像已加载。调用方要守的规矩只有「新增一种派生数据怎么做」这一条，写进实现说明的一节和根 `AGENTS.md` 就够，不值得单独成篇。 |
+| 2026-10-24 | 术语表登记「派生数据」「系统身份」「生产者身份」「读取标记」；README 加「Derived Data」一节 | 这四个词是本提案引入的；派生数据会在用户的 Caches 目录里占空间，又有设置项和菜单命令，属于用户看得到的行为。 |
+| 2026-10-24 | 实现完成，待合并 | 第 1–6 步都已落地；第 5 步的 App 层验收（两个 Engine、两次启动、读 Report 与日志）留给用户，做法见「第 5 步的落地记录」。完整验证：App 的 Debug-arm64e 构建通过；Core 全量测试（跳过 `RuntimeBackgroundIndexingManagerTests`）主套件 554 个、另一套件 238 个全过，后台索引管理器套件单独跑 27 个全过；Packages 全量退出码 0，主套件 622 个全过。Core 全量里交叉引用预建套件有 2 个测试失败，都是等后台工作的 60 / 120 秒时限到点：当时另一个会话的测试正占用 20 多个核，负载约 28。本分支没有改交叉引用模块与它的测试，这个套件单独重跑 15 个全过，判定为负载造成，不是本次引入。 |
+| 2026-10-26 | 实现的代码审查：修 11 条，其余 6 条不修或误报 | PR #126 的审查交回 15 条，Codex 的自动审查另有 1 条，复核中又找到 1 处同类，逐条按四问裁决，见 [KnownIssues](../KnownIssues/2026-10-26-pr126-review-findings.md) 与上面「代码审查后的修复」一节。用户批准先在本分支修完再合并。为复现内容区的竞态，取接口的逻辑抽成内部静态函数 `ContentTextViewModel.interface(of:fetchingWith:runtimeEngine:)`，这个新的测试接口经用户批准。 |
+| 2026-10-26 | 改 Transformer 后的读回放在构建被拒之后 | 第一版修法在安排重建时与构建请求同时发起读回。读回若先于构建的拒绝返回，读回的结算会把镜像留给在途的构建，构建随后被拒，镜像就被记成没有语料。现在只在构建因没建索引被引擎拒绝时才改为读回，两者不会同时在途。 |
+| 2026-10-26 | 修复后的完整验证，以及与 next 的对照 | 在公司的 Mac Studio（10 核，macOS 26.7，Xcode 27.2）上：App 的 Debug-arm64e 构建通过，Debug workspace 的锁文件没被改写；MCP 95 个全过；Core 全量（跳过 `RuntimeBackgroundIndexingManagerTests`）900 个红 3 个，管理器套件单独 27 个全过；Packages 全量 827 个红 2 个。五个红灯里，两个在这台机器上必红（`CrossReferenceQueryTests.internalSwiftTypesScanTheirOwnImage` 与 `RelationshipsEquivalenceSnapshotTests`）：测试按 macOS 27 写，用到的类型 26.7 没有。另外三个是等待时限在满载下到点，单独重跑都通过：`RuntimeBackgroundIndexingAlwaysIndexEngineTests.removingEngineStopsFutureDispatchesOnly`（时限 120 秒，单独 28 秒，与 2026-10-16 记下的一样）、`CrossReferencePreparationTests.imagesAskedAboutRenewTheAnalyzer`（60 秒，单独 3 秒）、`RuntimeObjectIdentityCallSiteTests.specializationPaneRebuildsTheSameRowsOnPropertiesDifference`（2 秒，单独 0.15 秒）；后两个所测的代码本分支没有改。PR 描述里承诺的对照：next 在同一台机器上的 Core 全量 831 个，只红那两个必红的；交叉引用那组 70 个测试两边完全相同，本分支多红的一个单独重跑通过，判定为两次运行时的负载不同，不是本分支引入。 |
+| 2026-10-27 | 合并进 `next`，编为 0061，状态改 Implemented | 第 1–6 步都已完成。第 5 步在 App 里的验收仍留给用户，与「本提案之外的后续」两项（上游索引加速、第二期）一起记入提案索引的「暂缓的后续项」。合并前先把 `next`（带着侧边栏过滤框 0060）合进本分支，只有提案索引与审查记录索引两处冲突，两边的条目都保留；在合并后的代码上重新验证，结果见下一行。实现说明与术语在 2026-10-24 已经判断并完成，这次不再增加。代码注释里引用本提案的地方改为只写 slug `derived-data`，以后不随编号变 |
+| 2026-10-27 | 合并后的验证 | 在 Mac Studio Ultra（28 核，macOS 27.2，Xcode 27.2）上验证合并后的代码。App 的 Debug-arm64e 构建：经 ssh 拿不到钥匙串，签名一步报 `errSecInternalComponent`；关掉签名重编通过，编译与链接全部成功。Packages 全量 871 个测试只红 1 个：`RuntimeBackgroundIndexingAlwaysIndexEngineTests` 的「taking its engine off a row stops dispatching it there and lets a running batch finish」在整套并行时撞上 120 秒超时。`next` 在同一台机器上同样超时，不是本分支引入。MCP 95 个全过。Core 包自 2026-10-26 的验证之后只改了注释，`next` 这段时间也没有改 Core，没有重跑 |

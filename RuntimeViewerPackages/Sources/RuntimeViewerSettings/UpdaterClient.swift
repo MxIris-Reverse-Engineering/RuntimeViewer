@@ -49,9 +49,9 @@ public final class UpdaterClient {
     // Nonisolated so it can be invoked from default-argument context (which
     // evaluates outside the class's MainActor isolation).
     public nonisolated static func defaultVersionDisplay() -> String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
-        let build = info?["CFBundleVersion"] as? String ?? "—"
-        return "\(short) (\(build))"
+        let informationDictionary = Bundle.main.infoDictionary
+        let shortVersionString = informationDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = informationDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "\(shortVersionString) (\(build))"
     }
 }

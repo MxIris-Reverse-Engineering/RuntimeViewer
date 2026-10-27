@@ -195,6 +195,11 @@ public final class FindSession {
     /// How far the level loading now has come, for the summary bar.
     private var crossReferenceLoadProgress: (scannedImageCount: Int, totalImageCount: Int)?
 
+    /// The image the level loading now loads before it asks for the calls or
+    /// the references: a root's, its sections not built because its corpus
+    /// came from derived data. For the summary bar.
+    private var crossReferenceLoadingImagePath: String?
+
     /// The images the scope of the tree on screen stood for when it ran; `nil`
     /// for every indexed image.
     private var crossReferenceScopeImagePaths: Set<String>?
@@ -657,6 +662,7 @@ public final class FindSession {
         crossReferenceLoadRun = nil
         crossReferenceLoadQueue = []
         crossReferenceLoadProgress = nil
+        crossReferenceLoadingImagePath = nil
     }
 
     /// The trees a relationship search answered with, one per matching type.
@@ -901,6 +907,7 @@ public final class FindSession {
             let run = SearchRun()
             crossReferenceLoadRun = run
             crossReferenceLoadProgress = nil
+            crossReferenceLoadingImagePath = nil
             crossReferenceTree?.setLoadState(.loading, of: identifier)
             let scopes = crossReferenceScopes()
             let maximumConcurrentScans = settings.search.maximumConcurrentCrossReferenceScans
@@ -914,7 +921,10 @@ public final class FindSession {
                         scopes: scopes,
                         maximumConcurrentScans: maximumConcurrentScans,
                         preparedIndexByteLimit: preparedIndexByteLimit,
-                        engine: engine
+                        engine: engine,
+                        reportImageLoading: { [weak self] imagePath in
+                            await self?.crossReferenceLevelLoadsImage(imagePath, from: run)
+                        }
                     ) { [weak self] progress in
                         await self?.crossReferenceLevelDidProgress(progress, from: run)
                     })
@@ -934,6 +944,14 @@ public final class FindSession {
     /// `scopes` in turn, each image of a scope naming several asked for alone,
     /// at most `maximumConcurrentScans` images read at once — from their
     /// prepared cross references while `preparedIndexByteLimit` is set.
+    ///
+    /// The calls of a member or function, or the references to a type, whose
+    /// image has no sections — a root a term found in a corpus read from
+    /// derived data, or a type opened from one — are asked for once the image
+    /// is indexed the way the sidebar opens one
+    /// (`RuntimeEngine.indexImageIfNeeded(at:)`), its path handed to
+    /// `reportImageLoading` meanwhile: the engine scans indexed images only,
+    /// and would miss the callers or the references in the root's own image.
     private nonisolated static func loadLevel(
         _ request: FindCrossReferenceTree.LoadRequest,
         direction: FindCrossReferenceDirection,
@@ -941,8 +959,14 @@ public final class FindSession {
         maximumConcurrentScans: Int,
         preparedIndexByteLimit: Int?,
         engine: RuntimeEngine,
+        reportImageLoading: @escaping @Sendable (String?) async -> Void,
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
     ) async throws -> RuntimeCrossReferenceQueryResult {
+        if let imagePath = request.imagePath, try await !engine.isImageIndexed(path: imagePath) {
+            await reportImageLoading(imagePath)
+            try await engine.indexImageIfNeeded(at: imagePath)
+            await reportImageLoading(nil)
+        }
         if case .calls(let subject) = request, direction == .callees {
             return try await engine.callees(of: subject, options: RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: true, resultLimit: crossReferenceResultLimit))
         }
@@ -975,6 +999,15 @@ public final class FindSession {
         return RuntimeCrossReferenceQueryResult(references: references, isComplete: isComplete)
     }
 
+    private func crossReferenceLevelLoadsImage(_ imagePath: String?, from run: SearchRun) {
+        guard run === crossReferenceLoadRun else { return }
+        crossReferenceLoadingImagePath = imagePath
+        var updatedResults = results
+        updatedResults.summary = crossReferenceSummary()
+        guard updatedResults.summary != results.summary else { return }
+        setResults(updatedResults)
+    }
+
     private func crossReferenceLevelDidProgress(_ progress: RuntimeCrossReferenceQueryProgress, from run: SearchRun) {
         guard run === crossReferenceLoadRun else { return }
         crossReferenceLoadProgress = (progress.scannedImageCount, progress.totalImageCount)
@@ -989,6 +1022,7 @@ public final class FindSession {
         crossReferenceLoadRun = nil
         crossReferenceLoadTask = nil
         crossReferenceLoadProgress = nil
+        crossReferenceLoadingImagePath = nil
         switch outcome {
         case .success(let result):
             if !result.isComplete {
@@ -1052,6 +1086,9 @@ public final class FindSession {
                 text += " · \(crossReferenceUnbuiltImageCount) \(crossReferenceUnbuiltImageCount == 1 ? "image" : "images") not yet searchable"
             }
             return text
+        }
+        if let crossReferenceLoadingImagePath {
+            return "Loading \(FindScope.imageName(of: crossReferenceLoadingImagePath))"
         }
         if let progress = crossReferenceLoadProgress, progress.totalImageCount > 0 {
             return "Scanning \(progress.scannedImageCount) of \(progress.totalImageCount) \(progress.totalImageCount == 1 ? "image" : "images")"

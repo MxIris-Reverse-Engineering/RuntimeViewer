@@ -18,11 +18,11 @@ struct ReportTreeBuilderTests {
             FindCorpusFinishedBuild(imagePath: "/usr/lib/libobjc.A.dylib", outcome: .cancelled, finishedAt: Date())
         }
         _ = builder.indexingCategory(batches: [], history: (0 ..< 100).map { _ in Self.finishedBatch(imageCount: 50) }, isEnabled: true)
-        _ = builder.corpusCategory(states: [imagePath: .building(.init(built: 0, total: 100))], followedImagePaths: [imagePath], finishedBuilds: finishedBuilds, isUnsupportedByEngine: false, isEnabled: true)
+        _ = builder.corpusCategory(states: [imagePath: .building(.init(built: 0, total: 100))], followedImagePaths: [imagePath], finishedBuilds: finishedBuilds, restoredImages: [:], isUnsupportedByEngine: false, isEnabled: true)
         let builtNodeCountAfterFirstBuild = builder.builtNodeCount
 
         for builtCount in 1 ... 60 {
-            _ = builder.corpusCategory(states: [imagePath: .building(.init(built: builtCount, total: 100))], followedImagePaths: [imagePath], finishedBuilds: finishedBuilds, isUnsupportedByEngine: false, isEnabled: true)
+            _ = builder.corpusCategory(states: [imagePath: .building(.init(built: builtCount, total: 100))], followedImagePaths: [imagePath], finishedBuilds: finishedBuilds, restoredImages: [:], isUnsupportedByEngine: false, isEnabled: true)
         }
 
         #expect(builder.builtNodeCount - builtNodeCountAfterFirstBuild == 60 * 2)
@@ -81,7 +81,7 @@ struct ReportTreeBuilderTests {
         var batch = Self.finishedBatch(imageCount: 1)
         batch.isFinished = false
         let runningBatch = try #require(builder.indexingCategory(batches: [batch], history: [], isEnabled: true)?.children.first)
-        _ = builder.corpusCategory(states: [imagePath: .pending], followedImagePaths: [imagePath], finishedBuilds: [], isUnsupportedByEngine: false, isEnabled: true)
+        _ = builder.corpusCategory(states: [imagePath: .pending], followedImagePaths: [imagePath], finishedBuilds: [], restoredImages: [:], isUnsupportedByEngine: false, isEnabled: true)
 
         let laterBatch = try #require(builder.indexingCategory(batches: [batch], history: [], isEnabled: true)?.children.first)
 

@@ -503,6 +503,50 @@ struct FindViewModelCrossReferenceTests {
         #expect(calleesWithHelpers.count >= callees.count)
     }
 
+    /// A root a term found in a corpus read from derived data can be in an image
+    /// the engine has not indexed; the engine scans indexed images only.
+    @Test("a root in an image without sections has its image indexed before its calls are asked for")
+    func rootInAnUnindexedImageIsIndexedFirst() async throws {
+        let member = try await Self.appendString(on: try await TestRuntimeEngine.shared())
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCrossReferenceTests.unindexedRoot")
+        #expect(try await !engine.isImageIndexed(path: TestImages.foundation))
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let loadingSummary = Task { try await nextValue(from: output.summary, timeout: 60) { $0 == "Loading Foundation" } }
+
+        recentQuerySelectedRelay.accept(Self.query(.callees, for: .member(member, declaration: nil)))
+
+        #expect(try await loadingSummary.value == "Loading Foundation")
+        let callees = try #require(Self.loadedLevel(of: try await nextValue(from: output.nodes, timeout: 120) { Self.loadedLevel(of: $0)?.isEmpty == false }))
+        #expect(!callees.isEmpty)
+        #expect(try await engine.isImageIndexed(path: TestImages.foundation))
+        #expect(try await nextValue(from: output.summary) == nil, "the summary goes back to none once the image is loaded")
+        await engine.stop()
+    }
+
+    /// The same for Find Type References: a type opened from a corpus read from
+    /// derived data is in an image the engine has not indexed, and its own image
+    /// holds most of its references (PR126.1).
+    @Test("a type in an image without sections has its image indexed before its references are asked for")
+    func typeInAnUnindexedImageIsIndexedFirst() async throws {
+        let mutableString = try await TestRuntimeEngine.shared().runtimeObject(named: "NSMutableString", kind: .objc(.type(.class)), in: TestImages.foundation)
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCrossReferenceTests.unindexedTypeReferencesRoot")
+        #expect(try await !engine.isImageIndexed(path: TestImages.foundation))
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let loadingSummary = Task { try await nextValue(from: output.summary, timeout: 60) { $0 == "Loading Foundation" } }
+
+        recentQuerySelectedRelay.accept(Self.query(.typeReferences, for: .type(mutableString)))
+
+        #expect(try await loadingSummary.value == "Loading Foundation")
+        let images = try #require(Self.loadedLevel(of: try await nextValue(from: output.nodes, timeout: 120) { Self.loadedLevel(of: $0)?.isEmpty == false }))
+        #expect(images.first?.children.isEmpty == false, "the functions of Foundation using the type")
+        #expect(try await engine.isImageIndexed(path: TestImages.foundation))
+        await engine.stop()
+    }
+
     @Test("Type References groups the functions using a type under their image")
     func typeReferencesGroupUnderTheImage() async throws {
         let engine = try await TestRuntimeEngine.shared()

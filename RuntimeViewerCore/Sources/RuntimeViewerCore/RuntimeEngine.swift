@@ -273,8 +273,10 @@ public actor RuntimeEngine {
 
     /// Every searchable interface of this engine's images, built on demand
     /// by the Find navigator; `lazy` for the same reason as
-    /// `backgroundIndexingManager`.
-    private(set) lazy var interfaceCorpusStore: RuntimeInterfaceCorpusStore = .init(builder: self)
+    /// `backgroundIndexingManager`. It reads and writes the process's derived
+    /// data when the process turned it on — see `RuntimeDerivedData` — and a
+    /// test gives it a store of its own through `useDerivedDataStore(_:)`.
+    private(set) lazy var interfaceCorpusStore: RuntimeInterfaceCorpusStore = .init(builder: self, derivedData: Self.processDerivedDataStore)
 
     public init(
         source: RuntimeSource,

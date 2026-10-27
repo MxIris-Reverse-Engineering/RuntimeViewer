@@ -251,6 +251,22 @@ when picking up follow-up work.
   `.switchEngine` behind `MainCoordinator`'s back and failed its assertion, a
   crash in Debug builds (`PR125.10`, there since the local runtime moved into
   its XPC service).
+- [2026-10-26-pr126-review-findings.md](2026-10-26-pr126-review-findings.md) —
+  `/code-review xhigh` pass on PR #126 (`feature/derived-data`, the derived
+  data proposal) @ `19fbf018`, IDs `PR126.<N>`: fifteen findings, plus one from
+  Codex's automatic review (`PR126.16`) and one same-kind instance found while
+  verifying (`PR126.17`). None is a crash. Fixed on the branch with a
+  failing-first test: Find Type References and the Inspector's References tab
+  missing an image that is searchable from derived data but not indexed yet
+  (`PR126.1`, `PR126.17`), the content pane left blank when indexing finished
+  between its two asks (`PR126.16`), images read back that a transformer change
+  or the corpus switch going off and on dropped from search (`PR126.2`), images
+  being read listed as queued in the Report (`PR126.4`), a decoded length of
+  `Int.max` that trapped the reader (`PR126.6`), kind names that could be read
+  as another kind's variants (`PR126.7`), and a test that relied on a 0.2 s
+  sleep (`PR126.13`); plus a comment, abbreviations across the codebase and two
+  access levels (`PR126.5`, `14`, `15`). `PR126.3`, `8`, `9`, `11`, `12` are
+  recorded as not fixed and `PR126.10` as a false positive, with their reasons.
 - [2026-10-27-pr127-review-findings.md](2026-10-27-pr127-review-findings.md) —
   `/code-review xhigh` on PR #127 (`feature/sidebar-filter-text-tokens`, the
   sidebar filter text tokens proposal) @ `744395d1`, IDs `PR127.<N>`. Fifteen

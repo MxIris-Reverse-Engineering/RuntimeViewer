@@ -24,6 +24,10 @@ RuntimeInjection.install()
 // The cross-reference commands, for the same reason. A callers query scans the
 // images mapped into this process, which is where the app's "My Mac" engine runs.
 RuntimeCrossReferences.install()
+// Derived data — the Find corpora of the shared cache's images, kept on disk
+// under the app's caches — is read and written only by the processes that
+// serve the app's engines, so it is turned on here, before the engine exists.
+RuntimeDerivedData.enableInThisProcess()
 
 let engine = RuntimeEngine(source: .local, engineID: "local-runtime-service.\(ProcessInfo.processInfo.processIdentifier)")
 

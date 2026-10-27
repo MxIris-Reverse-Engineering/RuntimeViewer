@@ -48,6 +48,11 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// it, and nothing reads it any more.
     private let hasActiveBatchRelay = BehaviorRelay<Bool>(value: false)
 
+    /// The images the Always Index rows resolve to, each time a pass
+    /// dispatches them — before their batches start, and including the rows
+    /// whose image is indexed already, which start none.
+    private let alwaysIndexImagePathsResolvedRelay = PublishRelay<[String]>()
+
     /// Authoritative staging state for in-flight batches plus the dirty flags
     /// the flush path consumes. Lives behind an `NSLock` rather than on the
     /// main actor so that the worker→coordinator AsyncStream pump can apply
@@ -142,6 +147,14 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     public var historyObservable: Observable<[RuntimeIndexingBatch]> {
         historyRelay.asObservable()
+    }
+
+    /// The images the engine's Always Index rows resolve to, as each pass
+    /// dispatches them: what the engine's corpus coordinator reads from
+    /// derived data before the batches index them (proposal
+    /// `derived-data`). `RuntimeEngineBackgroundWork` connects the two.
+    var alwaysIndexImagePathsResolved: Observable<[String]> {
+        alwaysIndexImagePathsResolvedRelay.asObservable()
     }
 
     // MARK: - Public command surface
@@ -493,6 +506,10 @@ extension RuntimeBackgroundIndexingCoordinator {
         // retry until they finally match a path in `imageList`.
         let imageList = await engine.imageList
         guard isCurrent(connectionGeneration) else { return }
+        let resolvedImagePaths = dispatches.compactMap { resolveAlwaysIndexIdentifier($0.identifier, in: imageList) }
+        if !resolvedImagePaths.isEmpty {
+            alwaysIndexImagePathsResolvedRelay.accept(resolvedImagePaths)
+        }
         for dispatch in dispatches {
             guard let resolvedPath = resolveAlwaysIndexIdentifier(dispatch.identifier, in: imageList) else { continue }
             let effectiveDepth = dispatch.followDependencies ? indexing.heuristic.depth : 0

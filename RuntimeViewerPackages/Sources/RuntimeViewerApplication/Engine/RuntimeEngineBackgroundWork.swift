@@ -43,6 +43,8 @@ final class RuntimeEngineBackgroundWork {
     /// Keeps the app out of App Nap while `isWorkInProgress` says so.
     let processActivity: BackgroundWorkProcessActivity
 
+    private let disposeBag = DisposeBag()
+
     /// The documents that hold the work, by identity.
     fileprivate var memberIdentifiers: Set<ObjectIdentifier> = []
 
@@ -56,7 +58,6 @@ final class RuntimeEngineBackgroundWork {
     /// and ends activities with.
     fileprivate init(engine: RuntimeEngine, processActivityScheduler: any ProcessActivityScheduling) {
         let indexingCoordinator = RuntimeBackgroundIndexingCoordinator(engine: engine)
-        indexingCoordinator.documentDidOpen()
         let corpusCoordinator = FindCorpusCoordinator(engine: engine)
         let crossReferencePreparationCoordinator = CrossReferencePreparationCoordinator(engine: engine)
         let isWorkInProgress = Driver.combineLatest(
@@ -73,6 +74,16 @@ final class RuntimeEngineBackgroundWork {
         self.crossReferencePreparationCoordinator = crossReferencePreparationCoordinator
         self.isWorkInProgress = isWorkInProgress
         processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress, scheduler: processActivityScheduler)
+        // The Always Index images are read from derived data as their rows
+        // are dispatched, searchable before the batches index them — so the
+        // corpus coordinator listens before the indexing starts.
+        indexingCoordinator.alwaysIndexImagePathsResolved
+            .subscribeOnNextMainActor { [weak corpusCoordinator] imagePaths in
+                guard let corpusCoordinator else { return }
+                corpusCoordinator.restoreCorpora(of: imagePaths)
+            }
+            .disposed(by: disposeBag)
+        indexingCoordinator.documentDidOpen()
     }
 
     /// The last document left: every coordinator stops, cancelling what it still has running,

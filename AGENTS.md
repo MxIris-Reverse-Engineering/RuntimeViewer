@@ -15,7 +15,8 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 |------|--------|
 | `RuntimeViewerUsingAppKit/AGENTS.md` | The macOS app's UI layer — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and routes, AppKit views, the sidebar's floating bars, diagnosing flicker — and `AppDelegate` with the lifecycle controllers. It also governs the ViewModels and routes in `RuntimeViewerApplication` and the views in `RuntimeViewerUI` |
 | `RuntimeViewerPackages/Sources/AGENTS.md` | Points the UI code in `RuntimeViewerApplication` and `RuntimeViewerUI` to the file above |
-| `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings and bookmarks; engines in tests |
+| `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
+| `RuntimeViewerCore/Tests/AGENTS.md` | Keeping Core tests off the user's real derived data |
 | `Stubs/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
 | `Configurations/AGENTS.md` | Per-target build settings: the embedded non-macOS products, the jailbroken variant's payload, service names, adding a configuration |
 | `Resources/AGENTS.md` | The app icons |
@@ -534,6 +535,31 @@ peer. A new process that serves an engine links both modules and makes both call
 run in the process that serves the engine, because the scan reads that process's own images and
 the shared cache it maps: the local-runtime service answers for "My Mac", an injected payload for
 the process it was injected into.
+
+## Derived data
+
+The Find corpora of the shared cache's images are kept on disk under
+`~/Library/Caches/<app bundle identifier>/DerivedData`, filed by system (platform, version, build, shared cache
+UUID) and by producer (the in-memory `LC_UUID`s of the image holding RuntimeViewerCore and of its dependencies
+outside the shared cache), so a launch on the same system with the same code reads a corpus instead of printing
+it again. Code: `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/`; proposal:
+`Documentations/Evolutions/0061-derived-data.md`; **read `Documentations/DerivedData.md` before changing that
+code or the corpus store's read phase** — it says why each part has the shape it has.
+
+- **Only the two service processes read, write and clean it up.** `RuntimeViewerLocalRuntimeService/main.swift`
+  and `AppKitPluginImpl.runService()` call `RuntimeDerivedData.enableInThisProcess()` before any engine exists.
+  Every other process leaves it off — the app itself (its Bonjour server engine answers commands in process), the
+  command-line host, the Catalyst helper application, an injected payload, a test — and the app only measures
+  and deletes it (`RuntimeDerivedDataMaintenance`). Leaving the call out fails quietly: that process just goes
+  without derived data.
+- **Only images of the dyld shared cache**, whose contents the system identity names; a store does nothing for
+  any other image.
+- **A new kind of derived data goes through `RuntimeDerivedDataStore`**, with a `RuntimeDerivedDataKind` and a
+  variant naming everything else its contents depend on (for the corpus: the Transformer digest and the member
+  order), and its reader checks whatever a later reader would trap on before making a value of it, as
+  `RuntimeInterfaceCorpusSnapshot` does. A library's own cache takes its directory from
+  `imageDirectory(forImageAt:)`.
+- **No test reaches the real location**: `RuntimeViewerCore/Tests/AGENTS.md`.
 
 ## SourceEditor Module
 

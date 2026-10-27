@@ -50,9 +50,9 @@ public actor RuntimeEngineProxyServer {
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] starting...")
         let connection = try await communicator.connect(to: source, waitForConnection: false)
         self.connection = connection
-        if let info = connection.connectionInfo {
-            host = info.host
-            port = info.port
+        if let connectionInformation = connection.connectionInfo {
+            host = connectionInformation.host
+            port = connectionInformation.port
         }
         let proxyHost = self.host
         let proxyPort = self.port

@@ -212,9 +212,9 @@ package enum DyldUtilities {
     }
 
     package func imagePath(for ptr: UnsafeRawPointer) -> String? {
-        var info: Dl_info = .init()
-        dladdr(ptr, &info)
-        guard let imagePath = info.dli_fname.map({ String(cString: $0) }) else { return nil }
+        var symbolInformation: Dl_info = .init()
+        dladdr(ptr, &symbolInformation)
+        guard let imagePath = symbolInformation.dli_fname.map({ String(cString: $0) }) else { return nil }
         return imagePath
     }
     
