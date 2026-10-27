@@ -1,7 +1,7 @@
 # PR #127 代码审查记录 — 2026-10-27
 
 审查对象：PR #127（`feature/sidebar-filter-text-tokens` → `next`，提案
-[draft-sidebar-filter-text-tokens](../Evolutions/draft-sidebar-filter-text-tokens.md) 的四步实现：侧栏六处过滤框换成 Xcode
+[0060-sidebar-filter-text-tokens](../Evolutions/0060-sidebar-filter-text-tokens.md) 的四步实现：侧栏六处过滤框换成 Xcode
 导航区那种文字 token 框），head `744395d1`，基线 `next` `4a052583`。
 
 **经过**

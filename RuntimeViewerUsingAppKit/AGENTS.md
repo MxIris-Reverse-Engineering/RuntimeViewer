@@ -205,7 +205,7 @@ old `PopUpPathControl` and `ItemPopUpButton` were deleted). Background:
   also passes `endsTokensAtCommas: false`, so that a comma stays in the text. A view model that clears its
   filter has the view controller call the adapter's `clear()`, and the field reports the empty filter itself.
   A picker's filter field stays an `NSFilterSearchField`. Background:
-  `Documentations/Evolutions/draft-sidebar-filter-text-tokens.md`.
+  `Documentations/Evolutions/0060-sidebar-filter-text-tokens.md`.
 - Match names in a filter without the user's language: `NavigatorTextFilter.Matcher`, or `range(of:options:)`
   with no locale — never `localizedStandardContains`, `localizedCaseInsensitiveContains` or `locale: .current`.
   Turkish case rules pair I with ı, so `uiview` would miss `UIView` (known issue PR127.5).

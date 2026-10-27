@@ -1,10 +1,12 @@
-# Draft - 侧边栏过滤框换成 Xcode 导航区的文字 token 框
+# 0060 - 侧边栏过滤框换成 Xcode 导航区的文字 token 框
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-26
 - **最后更新**: 2026-10-27
 - **所属愿景**: 无
-- **实现分支 / PR**: `feature/sidebar-filter-text-tokens`（worktree `.worktrees/RuntimeViewer-SidebarFilterTextTokens`）
+- **实现分支 / PR**: `feature/sidebar-filter-text-tokens`（从 `next` 切，并回 `next`），PR #127
+- **审查**: 实现的代码审查见 [KnownIssues/2026-10-27-pr127-review-findings.md](../KnownIssues/2026-10-27-pr127-review-findings.md)
+- **配套文档**: 无（理由见决策日志 2026-10-27 的「实现完成，待合并」一行）
 - **依赖**: AppKitPlus 提案 0062《`NSFilterTokenField` 补齐 Xcode 导航区的文字 token》（AppKitPlus 仓库
   `Documentations/Evolutions/0062-filter-token-field-text-tokens.md`），已随 AppKitPlus 0.18.0 发布
 
@@ -151,9 +153,11 @@ Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandL
    - 输入途中单独一个 `*` 不参与过滤（PR127.7）；
    - Find 结果的过滤框不按逗号切 token（PR127.8）。
 
-   另去掉了管线里 `nameMatcher` 的默认值（PR127.13）。PR127.1 经测试判为误报，没有改代码。验证：`RuntimeViewerApplicationTests`
-   102 个套件、654 个测试中只有 `RuntimeBackgroundIndexingAlwaysIndexEngineTests` 的一条在整套并行时撞上 120 秒超时，这个套件
-   单独重跑全部通过；macOS App 编译通过。
+   另去掉了管线里 `nameMatcher` 的默认值（PR127.13）。PR127.1 经测试判为误报，没有改代码。验证：最终代码的
+   `RuntimeViewerApplicationTests`（102 个套件、654 个测试）在本机与 28 核的 Mac Studio Ultra 上各跑过，都只有
+   `RuntimeBackgroundIndexingAlwaysIndexEngineTests` 的「taking its engine off a row stops dispatching it there and lets a running
+   batch finish」在整套并行时撞上 120 秒超时（单独跑 27 秒通过）；`next`（`4a052583`）在 Ultra 上跑同一批测试，这一条同样超时，
+   是基线上已有的问题。macOS App 编译通过。
 
 没有询问就采用的假设：
 
@@ -200,3 +204,4 @@ Distribution 两个 workspace、`RuntimeViewerPackages`、`RuntimeViewerCommandL
 | 2026-10-27 | 对象列表重新加载时保留过滤条件 | 引擎在每批后台索引之后重新加载，原先会清空条件而框里的 token 还在 |
 | 2026-10-27 | 不加「编辑中不保存」 | 审查担心打字途中的菜单动作会把正在输入的文字变成 token；测试证实不会，只多一次无害的保存。加这一条还得配「编辑结束时再存」才不丢 Clear Recents，不值得 |
 | 2026-10-27 | AppKitPlus 读写最近过滤的接口以后单独做 | 用户选定。做了之后可以删掉全局菜单监听与「恢复再清空」的读入方式，PR127.6、PR127.10 随之解决 |
+| 2026-10-27 | 合并进 `next`，编为 0060，状态改 Implemented | 五个落地步骤全部完成；与最初方案不同的地方都记在上面 2026-10-27 审查之后的各行。仍不另写使用指南或实现说明，也没有新术语，理由同「实现完成，待合并」一行。没做的三项记入提案索引的「暂缓的后续项」：AppKitPlus 读写最近过滤的接口、命中片段加粗、启动 App 核对六处过滤框的界面 |
