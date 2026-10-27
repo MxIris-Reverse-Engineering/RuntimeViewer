@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "605af662048e567311ebfcaab64bedeed8369935",
-        "version" : "0.18.0"
+        "revision" : "70a2305ba1be432591746fc6732b22a4e578536a",
+        "version" : "0.19.0"
       }
     },
     {
@@ -149,8 +149,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/LookInsideApp/LookInside-Release",
       "state" : {
-        "revision" : "125b9ebb6025afc5bd54051e7711741bf553b236",
-        "version" : "1.0.1"
+        "revision" : "0200cee2351cc8ba807ed15ed88af5e5766ac86b",
+        "version" : "1.1.1"
       }
     },
     {
@@ -168,7 +168,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
         "branch" : "next",
-        "revision" : "ecae5d19ab6d8771d589e6c45677e4ba86acd352"
+        "revision" : "ea5d7214e3335b9871ea73d36cec7b2c10d3dcc4"
       }
     },
     {
@@ -176,8 +176,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "39bdf745ad729c798395beb4dca12587ea5686c9",
-        "version" : "1.2.0"
+        "revision" : "568a6e8fa6e6bcb984f11d8ccd3e7fced6777924",
+        "version" : "1.3.0"
       }
     },
     {
@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "a6d91652fec7f78172906190ce1af12544afe05c"
+        "revision" : "e40982fee6dae0cf0c8b9e96894822de42e14204"
       }
     },
     {
@@ -195,7 +195,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "c5fe5756cd2a95afe08ac6a59ddab0a3ae629fb0"
+        "revision" : "d500d686723351fde33998ae76599e4923282a84"
       }
     },
     {
@@ -203,8 +203,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyLab/MetaCodable",
       "state" : {
-        "revision" : "3d4bfeb949c0f31ef80fdc3af8f77c5b35ecaea4",
-        "version" : "1.6.1"
+        "revision" : "1ae475b0c1ee78035fd0ad157770935476a76eca",
+        "version" : "1.6.2"
       }
     },
     {
@@ -311,8 +311,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/SFSymbols",
       "state" : {
-        "revision" : "373b919278adc197759ebcc2018956cacff1cc57",
-        "version" : "0.3.0"
+        "revision" : "d41c076aacc034c19bfd9570f86c928a07d3a069",
+        "version" : "0.4.0"
       }
     },
     {
@@ -338,8 +338,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sparkle-project/Sparkle",
       "state" : {
-        "revision" : "eef1a539a373c1f1a320624b1130fc5de7b2e100",
-        "version" : "2.10.0"
+        "revision" : "ab7d71291238df6e0492143b120c9b696a35f603",
+        "version" : "2.10.1"
       }
     },
     {
@@ -428,8 +428,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-certificates.git",
       "state" : {
-        "revision" : "ff86b924ead66f853b8baf91f3c41926a8f36177",
-        "version" : "1.21.0"
+        "revision" : "84f03fafeca28c19f5fc4b528df3d22ce8896bd7",
+        "version" : "1.21.1"
       }
     },
     {
@@ -446,8 +446,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",
       "state" : {
-        "revision" : "35a1edcb8ebd2bfe251d587f0b69e62af28f508c",
-        "version" : "1.7.3"
+        "revision" : "f96b909e1a9e469620bc5037c1e24e00153f376f",
+        "version" : "1.7.5"
       }
     },
     {
@@ -483,7 +483,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
         "branch" : "next",
-        "revision" : "230d3fd3c90251190a04cebf7a77c2617ae167b6"
+        "revision" : "3ae19331bb3da4b022c9246580980a534e310316"
       }
     },
     {
@@ -572,8 +572,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "4038b6a4f74a1426f47eb1dd5b4bb5628a15d597",
-        "version" : "1.16.1"
+        "revision" : "c9c6bb9d275ec0d95c3ad16391f3f045dc623104",
+        "version" : "1.16.2"
       }
     },
     {
@@ -617,8 +617,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-nio-extras.git",
       "state" : {
-        "revision" : "41449336c8ecfadac6b4b5be75f9c3c306e61ced",
-        "version" : "1.35.1"
+        "revision" : "8e1249b29f92574e05e0d91637f239e378a9a95b",
+        "version" : "1.35.2"
       }
     },
     {
@@ -653,8 +653,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump",
       "state" : {
-        "revision" : "641d257d60385b231a608ab8c4ecdf31348c779e",
-        "version" : "0.8.101"
+        "revision" : "255c8cca86479b093f7a1b083c73bfb82a111382",
+        "version" : "0.8.102"
       }
     },
     {
@@ -743,8 +743,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "2f1e2876c8cfcb1123204a0470d76053b25ce9ad",
-        "version" : "0.39.0"
+        "revision" : "8d31c5135deef0c5b0fb243c318d3908a6e496e9",
+        "version" : "0.41.0"
       }
     },
     {
