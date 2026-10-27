@@ -159,7 +159,7 @@ struct SidebarRuntimeObjectTextFilterTests {
                 router: MockRouter<SidebarRuntimeObjectRoute>()
             )
         }
-        let loaded = try await pollUntil(timeout: .seconds(30)) { viewModel.loadState == .loaded }
+        let loaded = await pollUntil(timeout: .seconds(30)) { viewModel.loadState == .loaded }
         #expect(loaded, "seeded reload never reached .loaded; state=\(viewModel.loadState)")
         _ = viewModel.transform(.init(
             runtimeObjectClicked: .never(),
@@ -185,13 +185,13 @@ struct SidebarRuntimeObjectTextFilterTests {
 
             // No name contains these letters in a row; NSViewLayer has them in order, which is what Fuzzy Search asks.
             filterRelay.accept(NavigatorTextFilter(typedText: "NSVwLyr"))
-            let nothingContainsIt = try await pollUntil(timeout: .seconds(10)) {
+            let nothingContainsIt = await pollUntil(timeout: .seconds(10)) {
                 viewModel.isFiltering && viewModel.filteredNodes.isEmpty
             }
             #expect(nothingContainsIt, "got \(names(of: viewModel.filteredNodes))")
 
             environment.appDefaults.filterMode = .fuzzySearch
-            let fuzzyFindsIt = try await pollUntil(timeout: .seconds(10)) {
+            let fuzzyFindsIt = await pollUntil(timeout: .seconds(10)) {
                 names(of: viewModel.filteredNodes).contains("NSView")
             }
             #expect(fuzzyFindsIt, "got \(names(of: viewModel.filteredNodes))")
@@ -208,14 +208,14 @@ struct SidebarRuntimeObjectTextFilterTests {
             defer { withExtendedLifetime(viewModel) {} }
 
             filterRelay.accept(NavigatorTextFilter(typedText: "NS* !Window"))
-            let comparedLikeTokens = try await pollUntil(timeout: .seconds(10)) {
+            let comparedLikeTokens = await pollUntil(timeout: .seconds(10)) {
                 names(of: viewModel.filteredNodes) == ["NSView", "NSViewController"]
             }
             #expect(comparedLikeTokens, "got \(names(of: viewModel.filteredNodes))")
 
             // Plain text next to them is still a fuzzy query.
             filterRelay.accept(NavigatorTextFilter(typedText: "NSVwLyr !Controller"))
-            let fuzzyAndCompared = try await pollUntil(timeout: .seconds(10)) {
+            let fuzzyAndCompared = await pollUntil(timeout: .seconds(10)) {
                 names(of: viewModel.filteredNodes) == ["NSView"]
             }
             #expect(fuzzyAndCompared, "got \(names(of: viewModel.filteredNodes))")
@@ -232,7 +232,7 @@ struct SidebarRuntimeObjectTextFilterTests {
 
             let filter = NavigatorTextFilter(terms: [Term(comparison: .beginsWith, value: "NS")], typedText: "!Window")
             filterRelay.accept(filter)
-            let filtered = try await pollUntil(timeout: .seconds(10)) {
+            let filtered = await pollUntil(timeout: .seconds(10)) {
                 names(of: viewModel.filteredNodes) == ["NSView", "NSViewController"]
             }
             #expect(filtered, "got \(names(of: viewModel.filteredNodes))")
@@ -240,7 +240,7 @@ struct SidebarRuntimeObjectTextFilterTests {
             let nodesBeforeReload = viewModel.nodes
             viewModel.scheduleReload()
             // A reload makes new cells; wait until the list on show is made of them.
-            let showsReloadedCells = try await pollUntil(timeout: .seconds(30)) {
+            let showsReloadedCells = await pollUntil(timeout: .seconds(30)) {
                 let reloadedNodes = viewModel.nodes
                 guard let firstReloadedNode = reloadedNodes.first,
                       !nodesBeforeReload.contains(where: { $0 === firstReloadedNode })
