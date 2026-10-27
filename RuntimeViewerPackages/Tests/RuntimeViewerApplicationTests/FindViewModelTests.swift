@@ -900,7 +900,7 @@ struct FindViewModelTests {
             searchCommitted: searchCommittedRelay.asSignal(),
             recentQuerySelected: recentQuerySelectedRelay.asSignal(),
             clearRecentQueriesSelected: clearRecentQueriesSelectedRelay.asSignal(),
-            filterString: filterStringRelay.asDriver(),
+            filter: filterStringRelay.asDriver().map { NavigatorTextFilter(typedText: $0) },
             resultClicked: resultClickedRelay.asSignal(),
             resultOpenedInNewTab: resultOpenedInNewTabRelay.asSignal(),
             resultCollapsed: resultCollapsedRelay.asSignal(),

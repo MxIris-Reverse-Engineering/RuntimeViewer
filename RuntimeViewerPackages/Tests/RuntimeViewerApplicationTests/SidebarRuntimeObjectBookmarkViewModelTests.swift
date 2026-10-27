@@ -85,7 +85,7 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
                 runtimeObjectClicked: .empty(),
                 runtimeObjectOpenedInNewTab: .empty(),
                 loadImageClicked: .empty(),
-                searchString: .just(""),
+                filter: .just(.empty),
                 isSearchCaseSensitive: .just(false)
             )
         )

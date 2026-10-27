@@ -242,9 +242,9 @@ struct SidebarFilterPerformanceBaselineTests {
 
                 // Pipeline path (what the view model runs).
                 let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: pipelineCells, scope: activeScope)
-                let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context)
+                let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context, nameMatcher: .empty)
                 let pipelineFiltered = try #require(
-                    SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: pipelineCells, context: context, scope: activeScope)
+                    SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: pipelineCells, context: context, scope: activeScope, nameMatcher: .empty)
                 )
 
                 // Reference path: the legacy per-level cascade semantics via
@@ -253,7 +253,7 @@ struct SidebarFilterPerformanceBaselineTests {
                     applyScopeToTreeForReference(cell, scope: activeScope)
                 }
                 let scopedCascadeCells = activeScope.isActive
-                    ? cascadeCells.filter { $0.matchesScopeRecursively(activeScope) }
+                    ? cascadeCells.filter { $0.matchesRecursively(scope: activeScope, nameMatcher: .empty) }
                     : cascadeCells
                 let cascadeFiltered = FilterEngine.filter(context: context, items: scopedCascadeCells)
 
@@ -352,22 +352,22 @@ struct SidebarFilterPerformanceBaselineTests {
             runtimeObjectClicked: .never(),
             runtimeObjectOpenedInNewTab: .never(),
             loadImageClicked: .never(),
-            searchString: searchStringRelay.asDriver(onErrorJustReturn: ""),
+            filter: searchStringRelay.asDriver(onErrorJustReturn: "").map { NavigatorTextFilter(typedText: $0) },
             isSearchCaseSensitive: .just(false)
         )
         _ = viewModel.transform(input)
 
-        // One keystroke through the real pipeline. The measured time
-        // includes the 150 ms coalescing delay, the off-main match, and
-        // the poll granularity.
+        // One filter through the real pipeline: the off-main match and the
+        // poll granularity. The view model no longer waits for typing to
+        // pause; the fields do that before they report.
         let expectedNeedleCount = Self.flatListCount / 100
         let searchStart = reloadClock.now
         searchStringRelay.accept("Needle")
         let searchApplied = try await pollUntil(timeout: .seconds(10)) {
             viewModel.filteredNodes.count == expectedNeedleCount
         }
-        print("[baseline] end-to-end 'Needle' search (includes 150 ms coalescing delay): \(millisecondsDescription(of: reloadClock.now - searchStart))")
-        #expect(searchApplied, "debounced search never produced \(expectedNeedleCount) filtered nodes")
+        print("[baseline] end-to-end 'Needle' search: \(millisecondsDescription(of: reloadClock.now - searchStart))")
+        #expect(searchApplied, "the search never produced \(expectedNeedleCount) filtered nodes")
 
         // Clearing the search must restore the full list (fast path).
         searchStringRelay.accept("")

@@ -165,7 +165,7 @@ private final class ReportPage {
             clearHistory: .empty(),
             openSettings: .empty(),
             doubleClickedNode: .empty(),
-            filterString: .just(""),
+            filter: .just(.empty),
             showsOnlyInProgress: .just(false)
         )).nodes
     }

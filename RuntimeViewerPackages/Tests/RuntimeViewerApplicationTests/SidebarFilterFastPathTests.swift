@@ -26,9 +26,9 @@ struct SidebarFilterFastPathTests {
 
         // Legacy fast path: full snapshot -> empty-context verdicts -> apply.
         let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: [pipelineTree], scope: inactiveScope)
-        let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: emptyContext)
+        let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: emptyContext, nameMatcher: .empty)
         let applied = SidebarRuntimeObjectFilterPipeline.apply(
-            verdictForest, to: [pipelineTree], context: emptyContext, scope: inactiveScope
+            verdictForest, to: [pipelineTree], context: emptyContext, scope: inactiveScope, nameMatcher: .empty
         )
         #expect(applied?.map(\.runtimeObject) == [pipelineTree.runtimeObject])
 
@@ -44,9 +44,9 @@ struct SidebarFilterFastPathTests {
         let filteringContext = FilterContext(query: "Second", isCaseInsensitive: true, mode: nil)
 
         let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: [tree], scope: inactiveScope)
-        let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: filteringContext)
+        let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: filteringContext, nameMatcher: .empty)
         _ = SidebarRuntimeObjectFilterPipeline.apply(
-            verdictForest, to: [tree], context: filteringContext, scope: inactiveScope
+            verdictForest, to: [tree], context: filteringContext, scope: inactiveScope, nameMatcher: .empty
         )
         #expect(tree.children.count == 1, "the filtering pass must prune to the single matching child")
         #expect(tree.children.first?.runtimeObject.displayName == "Module.Root.Second")

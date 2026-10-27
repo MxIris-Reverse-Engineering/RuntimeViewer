@@ -97,7 +97,7 @@ struct SidebarRootBookmarkViewModelTests {
             SidebarRootBookmarkViewModel(documentState: environment.documentState, router: router)
         }
         let baseOutput = viewModel.transform(
-            SidebarRootViewModel.Input(clickedNode: .empty(), selectedNode: .empty(), searchString: searchStringRelay.asSignal())
+            SidebarRootViewModel.Input(clickedNode: .empty(), selectedNode: .empty(), filter: searchStringRelay.asSignal().map { NavigatorTextFilter(typedText: $0) })
         )
         let output = viewModel.transform(
             SidebarRootBookmarkViewModel.Input(moveBookmark: moveBookmarkRelay.asSignal(), removeBookmark: removeBookmarkRelay.asSignal())

@@ -93,7 +93,7 @@ struct FindResultNodeTests {
         // Both hits read "- (void)sample;".
         let alpha = FindResultFixtures.type("Alpha", hitCount: 2)
 
-        let kept = try #require(FindViewModel<SidebarRootRoute>.filtered([alpha], by: "sample").first)
+        let kept = try #require(FindViewModel<SidebarRootRoute>.filtered([alpha], by: NavigatorTextFilter(typedText: "sample")).first)
 
         #expect(kept === alpha)
         #expect(kept.children.first === alpha.children.first)
@@ -106,7 +106,7 @@ struct FindResultNodeTests {
             FindResultFixtures.hit(in: "Alpha", lineNumber: 2, lineText: "- (void)second;"),
         ])
 
-        let copy = try #require(FindViewModel<SidebarRootRoute>.filtered([type], by: "second").first)
+        let copy = try #require(FindViewModel<SidebarRootRoute>.filtered([type], by: NavigatorTextFilter(typedText: "second")).first)
 
         #expect(copy !== type)
         #expect(copy.identifier == type.identifier)
@@ -115,9 +115,26 @@ struct FindResultNodeTests {
         #expect(copy.appearance.title === type.appearance.title)
     }
 
+    @Test("every term of the filter applies to each row: an excluded word drops its hits, a suffix picks one")
+    func filterTermsApplyToEachRow() throws {
+        let type = FindResultFixtures.type(FindResultFixtures.object(named: "Alpha"), hits: [
+            FindResultFixtures.hit(in: "Alpha", lineNumber: 1, lineText: "- (void)first;"),
+            FindResultFixtures.hit(in: "Alpha", lineNumber: 2, lineText: "- (void)second;"),
+            FindResultFixtures.hit(in: "Alpha", lineNumber: 3, lineText: "- (void)secondary;"),
+        ])
+
+        let excluding = try #require(FindViewModel<SidebarRootRoute>.filtered([type], by: NavigatorTextFilter(typedText: "second !secondary")).first)
+        #expect(excluding.children.count == 1)
+        #expect(excluding.children.first === type.children[1])
+
+        let suffixed = try #require(FindViewModel<SidebarRootRoute>.filtered([type], by: NavigatorTextFilter(typedText: "*second;")).first)
+        #expect(suffixed.children.count == 1)
+        #expect(suffixed.children.first === type.children[1])
+    }
+
     @Test("a row neither matching nor holding a match is dropped")
     func filterDropsWhatDoesNotMatch() {
-        #expect(FindViewModel<SidebarRootRoute>.filtered([FindResultFixtures.type("Alpha", hitCount: 1)], by: "absent").isEmpty)
+        #expect(FindViewModel<SidebarRootRoute>.filtered([FindResultFixtures.type("Alpha", hitCount: 1)], by: NavigatorTextFilter(typedText: "absent")).isEmpty)
     }
 
     @Test("a rebuilt tree that shows the same is the same content")

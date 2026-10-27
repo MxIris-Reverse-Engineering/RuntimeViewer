@@ -1,21 +1,24 @@
 import Foundation
 
-/// Off-main text filtering for the root sidebar's image tree.
+/// Off-main filtering for the root sidebar's image tree.
 ///
 /// Mirrors `SidebarRuntimeObjectFilterPipeline`'s three-step shape
-/// (snapshot on main → verdicts anywhere → apply on main) but replicates
-/// the root sidebar's own legacy semantics, which differ from the
-/// runtime-object tree's:
+/// (snapshot on main → verdicts anywhere → apply on main), with the image
+/// tree's own semantics: an image — a leaf — is shown when the names along its
+/// path satisfy the filter (`NavigatorTextFilter`), and a directory is shown
+/// when an image under it is.
 ///
-/// - matching is a plain `localizedCaseInsensitiveContains` against a
-///   node's aggregate name (its own name plus every descendant's),
-/// - a node whose OWN name matches shows its entire subtree unfiltered,
-/// - otherwise its children are filtered recursively by their aggregates.
+/// - A term a name can satisfy — Contains, Begins With, Ends With, Like —
+///   holds for an image when any name on its path does: the image's own, or
+///   one of its directories'. A directory whose name matches therefore shows
+///   everything under it, which is the legacy rule of the plain text query.
+/// - Does Not Contain holds only while no name on the path contains its
+///   value, so it hides a whole directory with everything under it.
+/// - Every term must hold, as in Xcode's navigators.
 ///
-/// Aggregate names are computed inside the verdict step (post-order, one
-/// pass over the value tree) rather than read off the cells, so even the
-/// first query after an image-list rebuild pays no recursive string
-/// concatenation on the main thread.
+/// With a single Contains term this is the legacy cascade: a node shows when
+/// its own name or a descendant's matches, and a node whose own name matches
+/// shows its whole subtree.
 ///
 /// Alignment contract: the cell tree must not change shape between
 /// `snapshot` and `apply`. `SidebarRootViewModel` enforces this with a
@@ -28,9 +31,7 @@ enum SidebarRootFilterPipeline {
     }
 
     struct VerdictNode {
-        /// Indices into `children` that survive the filter, in input
-        /// order. When the node's own name matches, this is ALL indices —
-        /// the legacy cascade cleared the filter below a matching node.
+        /// Indices into `children` that survive the filter, in input order.
         var filteredChildIndices: [Int]
         var children: [VerdictNode]
     }
@@ -40,6 +41,14 @@ enum SidebarRootFilterPipeline {
         var topVerdicts: [VerdictNode]
 
         static let empty = ForestVerdict(filteredTopIndices: [], topVerdicts: [])
+    }
+
+    /// What the names from the root down to a node have settled.
+    private struct PathState {
+        /// For each term a name can satisfy, whether one on the path does.
+        var satisfiedInclusions: [Bool]
+        /// Whether a name on the path contains a Does Not Contain value.
+        var isExcluded: Bool
     }
 
     // MARK: - Snapshot (main actor)
@@ -53,70 +62,79 @@ enum SidebarRootFilterPipeline {
 
     // MARK: - Verdicts (any thread, cancellable)
 
-    /// Computes the full verdict forest for a non-empty `query` (the
-    /// empty query takes the synchronous `resetToUnfiltered` fast path
-    /// instead). Checks for cooperative cancellation between top-level
-    /// nodes; a cancelled run returns `.empty`, which callers must
-    /// discard (they already do via their generation guard).
-    static func verdicts(for forest: [SnapshotNode], query: String) -> ForestVerdict {
-        // Contract tripwire: an empty query would clear the whole tree
-        // (`localizedCaseInsensitiveContains("")` is false for every
-        // haystack). The sole caller's empty-query fast path upholds this
-        // today; a second call site is where it would silently break.
-        assert(!query.isEmpty, "empty queries take the resetToUnfiltered fast path, never verdicts(for:query:)")
+    /// Computes the full verdict forest for a filter with at least one term
+    /// (an empty one takes the synchronous `resetToUnfiltered` fast path
+    /// instead). Checks for cooperative cancellation between top-level nodes;
+    /// a cancelled run returns `.empty`, which callers must discard (they
+    /// already do via their generation guard).
+    static func verdicts(for forest: [SnapshotNode], matcher: NavigatorTextFilter.Matcher) -> ForestVerdict {
+        // Contract tripwire: an empty filter passes everything, which the
+        // fast path installs without building verdicts. The sole caller
+        // upholds this today; a second call site is where it would silently
+        // cost a full pass.
+        assert(!matcher.isEmpty, "an empty filter takes the resetToUnfiltered fast path, never verdicts(for:matcher:)")
+        let inclusionTerms = matcher.compiledTerms.filter { !$0.isExclusion }
+        let exclusionTerms = matcher.compiledTerms.filter(\.isExclusion)
+        let rootPathState = PathState(satisfiedInclusions: Array(repeating: false, count: inclusionTerms.count), isExcluded: false)
         var topVerdicts: [VerdictNode] = []
         topVerdicts.reserveCapacity(forest.count)
-        var topAggregates: [String] = []
-        topAggregates.reserveCapacity(forest.count)
-        for node in forest {
+        var filteredTopIndices: [Int] = []
+        for (nodeIndex, node) in forest.enumerated() {
             guard !Task.isCancelled else { return .empty }
-            let (verdict, aggregate) = verdictNode(for: node, query: query)
+            let (verdict, hasPassingImage) = verdictNode(
+                for: node,
+                inclusionTerms: inclusionTerms,
+                exclusionTerms: exclusionTerms,
+                inheritedPathState: rootPathState
+            )
             topVerdicts.append(verdict)
-            topAggregates.append(aggregate)
-        }
-        let filteredTopIndices = forest.indices.filter {
-            topAggregates[$0].localizedCaseInsensitiveContains(query)
+            if hasPassingImage {
+                filteredTopIndices.append(nodeIndex)
+            }
         }
         return ForestVerdict(filteredTopIndices: filteredTopIndices, topVerdicts: topVerdicts)
     }
 
-    /// Post-order recursion computing each node's verdict and its
-    /// aggregate name ("name childAggregate1 childAggregate2 …") in the
-    /// same pass.
-    private static func verdictNode(for node: SnapshotNode, query: String) -> (verdict: VerdictNode, aggregate: String) {
-        var childVerdicts: [VerdictNode] = []
-        childVerdicts.reserveCapacity(node.children.count)
-        var childAggregates: [String] = []
-        childAggregates.reserveCapacity(node.children.count)
-        for child in node.children {
-            let (childVerdict, childAggregate) = verdictNode(for: child, query: query)
-            childVerdicts.append(childVerdict)
-            childAggregates.append(childAggregate)
+    /// The node's verdict, and whether an image at or under it passes. Below an
+    /// excluded name nothing can pass, so the names there are not tested — the
+    /// verdicts are still built, because `apply` walks every cell.
+    private static func verdictNode(
+        for node: SnapshotNode,
+        inclusionTerms: [NavigatorTextFilter.CompiledTerm],
+        exclusionTerms: [NavigatorTextFilter.CompiledTerm],
+        inheritedPathState: PathState
+    ) -> (verdict: VerdictNode, hasPassingImage: Bool) {
+        var pathState = inheritedPathState
+        if !pathState.isExcluded {
+            pathState.isExcluded = exclusionTerms.contains { !$0.matches(node.name) }
         }
-
-        let aggregate = childAggregates.isEmpty
-            ? node.name
-            : "\(node.name) \(childAggregates.joined(separator: " "))"
-
-        let filteredChildIndices: [Int]
-        if node.name.localizedCaseInsensitiveContains(query) {
-            filteredChildIndices = Array(node.children.indices)
-            unfilterSubtree(&childVerdicts)
-        } else {
-            filteredChildIndices = node.children.indices.filter {
-                childAggregates[$0].localizedCaseInsensitiveContains(query)
+        if !pathState.isExcluded {
+            for termIndex in inclusionTerms.indices where !pathState.satisfiedInclusions[termIndex] {
+                pathState.satisfiedInclusions[termIndex] = inclusionTerms[termIndex].matches(node.name)
             }
         }
-        return (VerdictNode(filteredChildIndices: filteredChildIndices, children: childVerdicts), aggregate)
-    }
 
-    /// Rewrites a verdict subtree to "show everything" — used below a
-    /// node whose own name matched the query.
-    private static func unfilterSubtree(_ verdicts: inout [VerdictNode]) {
-        for verdictIndex in verdicts.indices {
-            verdicts[verdictIndex].filteredChildIndices = Array(verdicts[verdictIndex].children.indices)
-            unfilterSubtree(&verdicts[verdictIndex].children)
+        guard !node.children.isEmpty else {
+            let passes = !pathState.isExcluded && !pathState.satisfiedInclusions.contains(false)
+            return (VerdictNode(filteredChildIndices: [], children: []), passes)
         }
+
+        var childVerdicts: [VerdictNode] = []
+        childVerdicts.reserveCapacity(node.children.count)
+        var filteredChildIndices: [Int] = []
+        for (childIndex, child) in node.children.enumerated() {
+            let (childVerdict, childHasPassingImage) = verdictNode(
+                for: child,
+                inclusionTerms: inclusionTerms,
+                exclusionTerms: exclusionTerms,
+                inheritedPathState: pathState
+            )
+            childVerdicts.append(childVerdict)
+            if childHasPassingImage {
+                filteredChildIndices.append(childIndex)
+            }
+        }
+        return (VerdictNode(filteredChildIndices: filteredChildIndices, children: childVerdicts), !filteredChildIndices.isEmpty)
     }
 
     // MARK: - Apply (main actor)
@@ -146,9 +164,9 @@ enum SidebarRootFilterPipeline {
         return true
     }
 
-    /// Synchronous reset for the empty-query fast path: every node shows
+    /// Synchronous reset for the empty-filter fast path: every node shows
     /// its full child list again. Pointer writes only — no string work —
-    /// so clearing the search never flashes a stale tree.
+    /// so clearing the filter never flashes a stale tree.
     @MainActor
     static func resetToUnfiltered(_ cells: [SidebarRootCellViewModel]) {
         for cell in cells {

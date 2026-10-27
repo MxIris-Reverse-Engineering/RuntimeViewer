@@ -215,7 +215,9 @@ on — `NSTableView.box.estimatesRowHeights`, `Label` mirroring `attributedStrin
 the synchronous `SettingsStore.save()`, `SettingsConfiguration`, `MainMenu` — all arrived before it.
 `0.39.0` needs FrameworkToolbox `0.15.0` or later, which is why `RuntimeViewerCore` takes
 FrameworkToolbox `from: "0.15.0"` instead of the exact pin it had; the comment there says what to check
-when FrameworkToolbox moves.
+when FrameworkToolbox moves. AppKitPlus-Release is declared `from: "0.18.0"`, the first release with what
+the sidebar's text-token filter fields need: a comparison type's `valuePrefix` / `valueSuffix`, no menu for
+a token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)`.
 
 </important>
 
