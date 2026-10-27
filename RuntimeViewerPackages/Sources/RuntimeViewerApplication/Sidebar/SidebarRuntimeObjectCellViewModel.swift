@@ -184,11 +184,6 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         _filteredChildren = FilterEngine.filter(context: filterContextStorage, items: structurallyFiltered)
     }
 
-    /// Returns `true` if this cell or any of its descendants pass `scope`.
-    func matchesScopeRecursively(_ scope: RuntimeObjectScope) -> Bool {
-        matchesRecursively(scope: scope, nameMatcher: .empty)
-    }
-
     /// Returns `true` if this cell or any of its descendants passes `scope`
     /// and has a name that satisfies `nameMatcher`. Walks the cell-viewmodel
     /// tree (`_children`) rather than the value-type runtime-object tree so it

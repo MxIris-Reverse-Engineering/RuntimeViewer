@@ -126,7 +126,7 @@ struct SidebarRuntimeObjectCellViewModelTests {
         #expect(manualLeaf.stableID != derivedLeaf.stableID)
     }
 
-    @Test("matchesScopeRecursively accepts a parent whose only match lives in a descendant")
+    @Test("matchesRecursively accepts a parent whose only match lives in a descendant")
     func scopeMatchesThroughDescendants() throws {
         let innerProtocol = object(name: "Outer.Inner.P", displayName: "Outer.Inner.P", kind: .swift(.type(.protocol)))
         let inner = object(name: "Outer.Inner", displayName: "Outer.Inner", kind: .swift(.type(.class)), children: [innerProtocol])
@@ -136,8 +136,8 @@ struct SidebarRuntimeObjectCellViewModelTests {
         var protocolsOnly = RuntimeObjectScope()
         protocolsOnly.includedKinds = [.swift(.type(.protocol))]
 
-        #expect(outerViewModel.matchesScopeRecursively(protocolsOnly))
-        #expect(makeCell(for: siblingClass).matchesScopeRecursively(protocolsOnly) == false)
+        #expect(outerViewModel.matchesRecursively(scope: protocolsOnly, nameMatcher: .empty))
+        #expect(makeCell(for: siblingClass).matchesRecursively(scope: protocolsOnly, nameMatcher: .empty) == false)
     }
 
     @Test("a text filter context keeps only the children whose subtree names contain the query")

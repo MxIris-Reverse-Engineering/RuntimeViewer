@@ -242,9 +242,9 @@ struct SidebarFilterPerformanceBaselineTests {
 
                 // Pipeline path (what the view model runs).
                 let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: pipelineCells, scope: activeScope)
-                let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context)
+                let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context, nameMatcher: .empty)
                 let pipelineFiltered = try #require(
-                    SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: pipelineCells, context: context, scope: activeScope)
+                    SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: pipelineCells, context: context, scope: activeScope, nameMatcher: .empty)
                 )
 
                 // Reference path: the legacy per-level cascade semantics via
@@ -253,7 +253,7 @@ struct SidebarFilterPerformanceBaselineTests {
                     applyScopeToTreeForReference(cell, scope: activeScope)
                 }
                 let scopedCascadeCells = activeScope.isActive
-                    ? cascadeCells.filter { $0.matchesScopeRecursively(activeScope) }
+                    ? cascadeCells.filter { $0.matchesRecursively(scope: activeScope, nameMatcher: .empty) }
                     : cascadeCells
                 let cascadeFiltered = FilterEngine.filter(context: context, items: scopedCascadeCells)
 

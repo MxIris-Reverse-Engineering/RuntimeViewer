@@ -111,7 +111,7 @@ enum SidebarRuntimeObjectFilterPipeline {
     static func verdicts(
         for forest: [SnapshotNode],
         context: FilterContext,
-        nameMatcher: NavigatorTextFilter.Matcher = .empty
+        nameMatcher: NavigatorTextFilter.Matcher
     ) -> ForestVerdict {
         var topVerdicts: [VerdictNode] = []
         topVerdicts.reserveCapacity(forest.count)
@@ -233,7 +233,7 @@ enum SidebarRuntimeObjectFilterPipeline {
         to cells: [SidebarRuntimeObjectCellViewModel],
         context: FilterContext,
         scope: RuntimeObjectScope,
-        nameMatcher: NavigatorTextFilter.Matcher = .empty
+        nameMatcher: NavigatorTextFilter.Matcher
     ) -> [SidebarRuntimeObjectCellViewModel]? {
         guard applyNodes(verdicts: forestVerdict.topVerdicts, to: cells, context: context, scope: scope, nameMatcher: nameMatcher) else {
             return nil
