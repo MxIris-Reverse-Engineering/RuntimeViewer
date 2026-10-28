@@ -373,7 +373,8 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - **分发（`beginDispatch`）**：帧按到达顺序逐个处理。命中某个 pending 的是回复，当场交给等待的请求；没命中的帧里，错误信封和已放弃请求的回复直接丢弃（见下）；其余按命令名查 handler：不回复的处理器（推送）排在串行尾链 `orderedHandlerTail` 上按发送顺序执行，要回复的处理器并发执行，慢处理器不挡后面的请求。
 - **回复屏障**：对端为一个请求推送的东西（进度、Find 的命中批次）和排在它前面的状态同步，都写在回复之前；推送却在尾链上排队，回复当场交付。所以回复交付时连带记下当时的尾链，`sendRequest` 等这条链跑完再返回：回复之前推来的东西，在调用方继续之前都已处理完，与 XPC 一样（XPC 上每条推送都是一次往返）。没有屏障时，请求一返回，引擎就在 `dispatch` 的 `defer` 里删掉进度路由，还排在尾链上的推送随之丢掉，Find 会缺最后几批结果（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.12）。屏障只在接收端，不改线格式，对旧对端同样有效。从尾链上的处理器发出的请求不等屏障——屏障等的正是它自己；标记是 `@TaskLocal isRunningOnOrderedHandlerTail`，处理器派生的 `Task` 会继承。唯一会死锁的写法：处理器等待一段在自己任务树之外（`Task.detached`、dispatch queue、回调）向同一连接发请求的工作。
 - **迟到的回复不回应**：请求超时后从 `pendingRequests` 删掉，nonce 记进最多 256 条的「已放弃」列表，之后到达的同 nonce 帧直接丢弃；错误信封只可能是回复，没人等就丢，绝不交给处理器。以前迟到的回复会被当成一条新请求：发起方没有这条命令的处理器，回一个同 nonce 的错误信封；对端有这条命令的处理器，把错误信封当请求再执行一遍、再回复……两端往返不止，直到断开（同上，PR121.31）。旧对端仍会对我们的迟到回复回一次错误信封，新端不再回应，循环在第一圈断开。以后任何「不等回复就提前返回」的路径都要调用 `rememberAbandonedRequest(nonce:)`。
-- 处理器注册表 `messageHandlers`、received 流 `SharedAsyncSequence` 均用 `Mutex` 保护，`AsyncSemaphore` 序列化发送。
+- 处理器注册表 `messageHandlers` 与 dispatch 流的 continuation 均用 `Mutex` 保护，`AsyncSemaphore` 序列化发送。
+- **channel 不留消息**：收到的帧只交给 dispatch 流（`beginDispatch` 之后才有）和 `onMessageReceived`，交出去就不再持有。以前另有一条无界缓冲、套在 `shared()` 里的接收流，读者改走 `beginDispatch` 之后没人读它，连接收到的每条消息都留到 channel 释放（`ResolvedIssues/2026-10-28-message-channel-kept-every-received-message.md`）。再加给外部读的流，要保证一定有读者，或者给缓冲设上限。
 
 ### 4.3 `RuntimeRequest` / `RuntimeResponse`（`RuntimeRequestResponse.swift`）
 

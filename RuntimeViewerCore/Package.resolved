@@ -1,5 +1,5 @@
 {
-  "originHash" : "26d7751e69eda41efc30cc38fbbec11a29f1effd385284338e0f8a61494808ad",
+  "originHash" : "27efdf1638f5d5eed6acdc12364360eccd9d14c8ef53f0c8dbe549d7ded6920a",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "f358e1ccf6761b9d1d53136022a65c601cdc4da3",
         "version" : "0.15.0"
-      }
-    },
-    {
-      "identity" : "asynchrone",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/Asynchrone",
-      "state" : {
-        "revision" : "b2e5d13c9741de58a62dbc40aefa9653c33c83ce",
-        "version" : "0.23.0-fork.1"
       }
     },
     {
