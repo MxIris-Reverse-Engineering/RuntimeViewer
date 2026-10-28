@@ -46,6 +46,9 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 - 新位 `RuntimeObject.Properties.Flag.isObjCProtocol = 8`：MSS 把声明与本镜像的 ObjC 协议记录配上了
   （`objcRuntimeName != nil`）就带上。它是 `isSwiftProtocol` 的 Swift 面，与 `isObjCClass` 之于 `isSwiftClass`
   相同。用 `@objc(另一个名字)` 改了名、配不上记录的协议照样列出，只是不带这一位、没有跳转。
+- 点击跳转：别处接口里点到这些协议的名字，要落到新条目上。同一镜像里的点击按条目自己的键找到（类声明头部点它
+  采纳的协议就是这种）；跨镜像的点击走工厂的「mangled 名 → 协议」表，所以 `RuntimeSwiftInterfaceIndexer` 的
+  `protocolNameByMangledName` 与 section 的 `protocolCandidateIDMapping()` 都收录这些协议。
 
 **类对 ObjC 协议的遵循**
 
@@ -78,6 +81,9 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 
 - 文本搜索自动覆盖新条目（语料按 `printedDefinitions(for:)` 打印）。Members 模式收录要求（名字取自要求的 Swift
   声明 node）与默认实现；成员地址只来自默认实现，要求没有符号。
+- Type Relationships：一个这样的协议只算一个候选，以它的 ObjC 条目为代表（`RuntimeTypeRelationshipsResolver` 的
+  `representative(of:)`），因为它的采纳者与继承关系只记在 ObjC 元数据里；不合并的话，同一个协议会多出一个关系树为空
+  的 Swift 候选。类正好相反，以 Swift 条目为代表。
 
 **兼容**
 
@@ -92,6 +98,10 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
   跳到 ObjC 一侧。
 - CLI 与 MCP 的接口面不变：新条目对它们就是普通的 Swift 协议，打印走同一条 engine 路径；agent 插件不用改。
 - MSS 自己登记的后续项（ABI 快照与 diff 收录这两类事实）。
+- 跨镜像点击跳到 install name 为 `@rpath/…` 的镜像（Xcode 的 DVT 框架、App 内嵌的框架）里的类型或协议会落空：工厂
+  表记的 `MachOImage.imagePath` 是 `LC_ID_DYLIB` 里的 install name，与登记 section 用的真实路径对不上，测试 bundle
+  这种没有 install name 的镜像则是空串。这是跳转代码原有的问题，类型同样受影响，与本提案无关，落地时记为暂缓的
+  后续项。
 
 **测试**
 
@@ -112,10 +122,10 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 
 1. ✅ **抬 pin**：两条 pin、五份锁文件。Core 与 Packages 现有测试全过、App（Debug-arm64e）编译通过，先确认上游的
    变化本身没有弄坏什么。
-2. **Swift 列表与打印**：列出 `objcProtocolDefinitions` 并打印，protocol extension 并入协议条目，category 遵循的
-   条目，Find 的成员与成员地址；Core 测试。
-3. **两面**：`isObjCProtocol`、counterpart 的两个新种类与配对表（含副本的跨镜像查找）、Filter Scope 新行、角标与
-   tooltip、菜单标题；Core 与 Packages 测试，App 编译。
+2. ✅ **Swift 列表与打印**：列出 `objcProtocolDefinitions` 并打印，protocol extension 并入协议条目，category 遵循的
+   条目，Find 的成员与成员地址，点击跳转；Core 测试。
+3. **两面**：`isObjCProtocol`、counterpart 的两个新种类与配对表（含副本的跨镜像查找）、Type Relationships 的代表、
+   Filter Scope 新行、角标与 tooltip、菜单标题；Core 与 Packages 测试，App 编译。
 4. **收尾**：文档，按提案核对实际做出来的东西，完整验证。App 里的验收留给用户：DVTFoundation 的 Swift 列表列出
    11 个协议，`DVTIconReference` 的头部带 `DVTResourceReference, NSCopying`，两面互相跳转；
    `NFAImageDownloadObserver` 的副本在 DVTNFASupport 已索引时跳到那边。
@@ -131,3 +141,7 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 | 2026-10-28 | 状态 Draft → Accepted | 用户批准，开始实现 |
 | 2026-10-29 | 状态 Accepted → In Progress；三个包的锁文件另对齐 MachOKit、MachOKitExtensions、swift-objc-dump（偏离方案「只动两条 pin」） | 只抬两条时三个包都编不过：新版 MachOObjCSection 要 MachOKit 0.55.100 的 `LocatedValue`，而包的锁文件还钉 0.54.101——根包对 MachOKit 也钉 `branch: "next"`，它的版本下限照样被盖过、不报错。三条都对齐到两个 workspace 已钉的版本，不引入新版本 |
 | 2026-10-29 | 第 1 步完成 | 验证（Ultra，macOS 27.2，Xcode 27.2）：App（Debug-arm64e，Debug workspace，全新产物目录加 `-disableAutomaticPackageResolution`）编译通过，实际用的正是 MSS `07ed8467`、MachOObjCSection `7b564795`、MachOKit `ea5d7214`，workspace 锁文件编译前后 SHA 不变。Core 的 Core 565、Communication 239、Injection 36 例与单独跑的后台索引套件 27 例全过；CrossReferences 70 例中 `CrossReferencePreparationTests` 两例失败，单独重跑这个套件 15 例全过——机器负载 50–120，是已知的负载下才挂的两例。Packages 676 例中 6 例在等待超时（后台索引、交叉引用、Inspector References、语料构建的 5 个套件），单独重跑这些套件 55 例全过。CommandLine 121 例全过。中途外置 DerivedData 卷所在的容器写满、构建报 `errno=28`，经用户同意删了 claude 名下 7 天没动过的构建产物后继续 |
+| 2026-10-29 | 点击跳转补进方案：两张「mangled 名 → 协议」表都收录这些协议 | 类声明头部现在会打出采纳的协议，接口里的协议名点了要能落到新条目；方案原来没写。测试照内容区真实的点法（当前对象的镜像加 mangled 名，见 `FrozenSemanticString+ThemeProfile`）断言落到条目上 |
+| 2026-10-29 | 跨镜像跳到 `@rpath` 镜像落空的原有问题不在本分支修，记为后续项 | 写跳转测试时发现：工厂表按 `MachOImage.imagePath`（即 install name）找 section，测试 bundle 没有 install name、Xcode 的框架是 `@rpath/…`，都对不上登记用的真实路径；类型的跳转同样受影响，与本提案无关 |
+| 2026-10-29 | Type Relationships 里这类协议以 ObjC 条目为代表，放在第 3 步 | 方案原来没写，属于避免新条目带来的回归：不合并就多出一个关系树为空的重复候选。判断要用到第 3 步的 `isObjCProtocol` 与配对表 |
+| 2026-10-29 | 第 2 步完成；测试放在新套件 `SwiftDeclaredObjCProtocolListTests`，夹具与它同文件 | 新套件 11 个测试：列出 4 个协议（含配不上记录的改名协议）、接口与要求、扩展成员并进协议且只打印一次、类声明带 `NSCopying`、category 遵循单独成条与并进已有 conformance 条目、Find 的成员、成员地址、同一镜像里的点击跳转。验证：Core 的 Core 576 例（多出的 11 例即新套件）、Communication 239、Injection 36 例全过；CrossReferences 仍是第 1 步就挂的那两例，与单独跑的后台索引套件一起重跑，15 例与 27 例全过 |
