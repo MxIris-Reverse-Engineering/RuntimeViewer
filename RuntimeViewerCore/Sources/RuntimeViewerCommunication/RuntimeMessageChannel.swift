@@ -1,7 +1,6 @@
 import Foundation
 import FoundationToolbox
 import Semaphore
-import Asynchrone
 
 // MARK: - RuntimeMessageHandler
 
@@ -148,26 +147,11 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     private let receivingData = Mutex<ReceiveBuffer>(ReceiveBuffer())
 
-    /// Stream for received messages.
-    private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
-
-    /// Continuation for yielding received messages.
-    private let receivedDataContinuation = Mutex<AsyncThrowingStream<Data, Error>.Continuation?>(nil)
-
     /// Semaphore for serializing send operations.
     private let sendSemaphore = AsyncSemaphore(value: 1)
 
     init() {
-        setupStreams()
         #log(.debug, "RuntimeMessageChannel initialized with id: \(self.id, privacy: .public)")
-    }
-
-    // MARK: - Stream Setup
-
-    private func setupStreams() {
-        let (stream, continuation) = AsyncThrowingStream<Data, Error>.makeStream()
-        self.receivedDataStream = stream.shared()
-        self.receivedDataContinuation.withLock { $0 = continuation }
     }
 
     // MARK: - Handler Registration
@@ -281,22 +265,21 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
             remainingBufferSize = state.data.count
         }
 
-        let hasContinuation = receivedDataContinuation.withLock { $0 != nil }
+        let isDispatching = dispatchContinuation.withLock { $0 != nil }
         if extractedMessages.isEmpty {
-            #log(.debug, "[MessageChannel] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
+            #log(.debug, "[MessageChannel] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, dispatching=\(isDispatching, privacy: .public))")
         }
         for messageData in extractedMessages {
-            #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
-            _ = receivedDataContinuation.withLock { $0?.yield(messageData) }
+            #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, dispatching=\(isDispatching, privacy: .public))")
             _ = dispatchContinuation.withLock { $0?.yield(messageData) }
             onMessageReceived?(messageData)
         }
     }
 
-    /// Finishes the received data stream and resumes any in-flight pending requests with an error.
+    /// Finishes the dispatch stream and resumes any in-flight pending requests with an error.
     ///
     /// When the underlying transport closes or errors out, we must not only terminate the
-    /// received-data stream but also unblock every caller currently awaiting a response via
+    /// dispatch stream but also unblock every caller currently awaiting a response via
     /// `sendRequest`. Otherwise the `withCheckedThrowingContinuation` registered in `pendingRequests`
     /// is never resumed and the calling task hangs indefinitely.
     func finishReceiving(throwing error: (any Error)? = nil) {
@@ -305,19 +288,11 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         } else {
             #log(.info, "finishReceiving: stream closed normally")
         }
-        receivedDataContinuation.withLock { continuation in
-            if let error {
-                continuation?.finish(throwing: error)
-            } else {
-                continuation?.finish()
-            }
-            continuation = nil
-        }
 
-        // Finish the dispatch stream too. Any frames yielded before this call
-        // (e.g. a final message that arrived coalesced with the FIN) are still
-        // delivered to the dispatch consumer first — `AsyncStream` drains its
-        // buffer ahead of the terminal event.
+        // Any frames yielded before this call (e.g. a final message that
+        // arrived coalesced with the FIN) are still delivered to the dispatch
+        // consumer first — `AsyncStream` drains its buffer ahead of the
+        // terminal event.
         dispatchContinuation.withLock { continuation in
             continuation?.finish()
             continuation = nil
@@ -493,32 +468,6 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         try await writer(dataToSend)
     }
 
-    /// Waits for and returns the next received message.
-    func receiveData() async throws -> Data {
-        guard let receivedDataStream else {
-            #log(.error, "Attempted to receive data but channel is not connected")
-            throw RuntimeMessageChannelError.notConnected
-        }
-
-        for try await data in receivedDataStream {
-            if let error = try? JSONDecoder().decode(RuntimeNetworkRequestError.self, from: data) {
-                #log(.default, "Received error response: \(String(describing: error), privacy: .public)")
-                throw error
-            } else {
-                #log(.debug, "Received \(data.count, privacy: .public) bytes")
-                return data
-            }
-        }
-
-        #log(.error, "Receive failed - stream ended unexpectedly")
-        throw RuntimeMessageChannelError.receiveFailed
-    }
-
-    /// Returns an async sequence of received messages.
-    func receivedMessages() -> SharedAsyncSequence<AsyncThrowingStream<Data, Error>>? {
-        receivedDataStream
-    }
-
     // MARK: - Dispatch
 
     /// Serial tail for fire-and-forget handler execution. Each enqueued unit of
@@ -531,12 +480,11 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Long-lived task draining the dedicated dispatch stream below.
     private let dispatchTask = Mutex<Task<Void, Never>?>(nil)
 
-    /// Continuation feeding `beginDispatch`'s consumer. A dedicated, unbounded,
-    /// non-`shared` `AsyncStream` is used (rather than `receivedDataStream`) so
-    /// that frames yielded just before `finishReceiving()` are still delivered:
-    /// `AsyncStream` guarantees buffered elements drain before the terminal
-    /// event. That is what stops "peer sent its final message, then closed" from
-    /// dropping that last message.
+    /// Continuation feeding `beginDispatch`'s consumer, through a plain,
+    /// unbounded `AsyncStream`. Frames yielded just before `finishReceiving()`
+    /// are still delivered: `AsyncStream` guarantees buffered elements drain
+    /// before the terminal event. That is what stops "peer sent its final
+    /// message, then closed" from dropping that last message.
     private let dispatchContinuation = Mutex<AsyncStream<Data>.Continuation?>(nil)
 
     /// Drives the receive → dispatch pipeline for a connection. Centralizes the

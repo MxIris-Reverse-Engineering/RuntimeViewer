@@ -19,15 +19,6 @@
       }
     },
     {
-      "identity" : "asynchrone",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/Asynchrone",
-      "state" : {
-        "revision" : "b2e5d13c9741de58a62dbc40aefa9653c33c83ce",
-        "version" : "0.23.0-fork.1"
-      }
-    },
-    {
       "identity" : "capstone",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/capstone",

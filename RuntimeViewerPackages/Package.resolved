@@ -1,5 +1,5 @@
 {
-  "originHash" : "c4ce668fff2bf6dbc8e2f15c72a4a2bfe1b5649ef3bb23e0419c2385bb6fdfed",
+  "originHash" : "f23d3ec5b1d667bb73b221b83ecb6a31b5c8d200863efa1388311c2c6c1512bd",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "f358e1ccf6761b9d1d53136022a65c601cdc4da3",
         "version" : "0.15.0"
-      }
-    },
-    {
-      "identity" : "asynchrone",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/Asynchrone",
-      "state" : {
-        "revision" : "b2e5d13c9741de58a62dbc40aefa9653c33c83ce",
-        "version" : "0.23.0-fork.1"
       }
     },
     {

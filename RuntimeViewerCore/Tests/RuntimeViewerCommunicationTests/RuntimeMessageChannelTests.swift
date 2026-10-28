@@ -651,6 +651,56 @@ struct RuntimeNetworkConnectionStackOverflowReproducer {
     }
 }
 
+// MARK: - Received Message Retention Regression
+
+#if os(macOS)
+/// A channel used to hand every message it received to a second stream as well,
+/// one that nothing had read since the transports moved to
+/// `beginDispatch(rawWriter:)`. That stream buffered without bound and, wrapped
+/// in Asynchrone's `shared()`, only began to drain once an iterator was made, so
+/// every message stayed in memory until the channel was released (issue #128).
+///
+/// A kept message shows in the bytes malloc has handed out and not taken back.
+/// The physical footprint misses most of it: Foundation copies a large message's
+/// whole pages with `vm_copy` as the channel buffers and extracts it, and a page
+/// copied that way counts toward the footprint only once something touches it,
+/// which nothing does to a message no one reads.
+///
+/// The case runs in a process of its own (an exit test), so that what other
+/// suites allocate does not move the reading. An expectation that fails in that
+/// process is reported here, with the growth it measured.
+@Suite("RuntimeMessageChannel Received Message Retention")
+struct RuntimeMessageChannelReceivedMessageRetentionTests {
+
+    @Test("A channel does not keep the messages it received")
+    func testReceivedMessagesAreNotKept() async {
+        await #expect(processExitsWith: .success) {
+            let messageByteCount = 8 * 1024 * 1024
+            let channel = RuntimeMessageChannel()
+            let allocatedByteCountBefore = allocatedByteCount()
+            for _ in 0 ..< 32 {
+                // A buffer of its own for every message, so that no two
+                // messages can share storage.
+                var framedMessage = Data(count: messageByteCount)
+                framedMessage.append(RuntimeMessageChannel.endMarkerData)
+                channel.appendReceivedData(framedMessage)
+            }
+            let allocatedByteCountGrowth = allocatedByteCount() - allocatedByteCountBefore
+            withExtendedLifetime(channel) {}
+            #expect(allocatedByteCountGrowth < messageByteCount)
+        }
+    }
+}
+
+/// The bytes malloc has handed out in this process and not taken back, over
+/// all of its zones.
+private func allocatedByteCount() -> Int {
+    var statistics = malloc_statistics_t()
+    malloc_zone_statistics(nil, &statistics)
+    return statistics.size_in_use
+}
+#endif
+
 // MARK: - RuntimeStdioError Tests
 
 @Suite("RuntimeStdioError")

@@ -147,10 +147,6 @@ let package = Package(
             ),
         ),
         .package(
-            url: "https://github.com/MxIris-Library-Forks/Asynchrone",
-            from: "0.23.0-fork.1",
-        ),
-        .package(
             url: "https://github.com/MxIris-Library-Forks/Semaphore",
             from: "0.1.1",
         ),
@@ -258,7 +254,6 @@ let package = Package(
                 .product(name: "InjectionServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "Version", package: "Version"),
