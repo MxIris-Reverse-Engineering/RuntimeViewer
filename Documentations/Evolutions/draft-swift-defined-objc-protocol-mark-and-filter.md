@@ -5,6 +5,7 @@
 - **最后更新**: 2026-10-28
 - **所属愿景**: 无
 - **实现分支 / PR**: `feature/swift-defined-objc-protocol-mark-and-filter`（从 `next` 切，并回 `next`）
+- **配套文档**: 无（理由见决策日志「实现完成，待合并」一行）
 
 ## 摘要
 
@@ -45,10 +46,11 @@ clang 生成的副本。
 
 - `RuntimeObject.Properties.Flag` 新增 `isSwiftProtocol = 7`（下一个位；位是线上格式），静态成员由这个 case 构造，
   文档注释写明上面的含义与局限。
-- `RuntimeObjCSection` 建 section 时按上面的判据遍历一遍本镜像的 `__objc_protolist`，存下 Swift 定义的协议名；
-  `allObjects()` 与 `makeRuntimeObject(forProtocolName:)` 都查这一组名字给 ObjC 协议带上它，保证侧栏与关系行
-  一致。判据写成一个只吃「名字 + flags」的纯函数，方便单测。只用 MachOObjCSection 现有的
-  `ObjCProtocolProtocol.flags`，上游不改。
+- 判据在 Core 的新文件 `SwiftDefinedObjCProtocols.swift`：`names(of:)` 只吃「运行时名 + flags」的记录，方便单测；
+  `names(in:)` 把一个 `MachOImage` 的 `__objc_protolist` 全部读成这样的记录交给它。
+- `RuntimeObjCSection` 第一次用到时（与 `objcImplementationClassNames` 一样是 lazy）用它算出一组 Swift 定义的
+  协议名；`allObjects()` 与 `makeRuntimeObject(forProtocolName:)` 都查这一组名字给 ObjC 协议带上它，保证侧栏与
+  关系行一致。只用 MachOObjCSection 现有的 `ObjCProtocolProtocol.flags`，上游不改。
 - 旧版本的 engine 不会发这一位：新 App 连上去，只是协议没有角标、不受新行过滤，不出错。
 
 **角标**
@@ -61,7 +63,8 @@ clang 生成的副本。
 
 - `RuntimeObjectScope.Property` 新增 `swiftDefined`，按 `isSwiftClass` 与 `isSwiftProtocol` 过滤，排在
   `bridgedSwiftClass` 之后。标题「Defined in Swift」，tooltip「Objective-C classes and protocols defined in
-  Swift」。设为 Exclude 就把 ObjC 列表里 Swift 定义的类与协议去掉，Swift 列表不受影响；设为 Only 则只看它们。
+  Swift; their Swift entries are not included」。设为 Exclude 就把 ObjC 列表里 Swift 定义的类与协议去掉，Swift
+  列表不受影响；设为 Only 则只看它们。
 - `Bridged Swift Class` 一行不变，仍同时选中一个桥接类的两面（提案 0049 的决定）。于是 `isSwiftClass` 同属两行：
   `Property.init(filtering:)` 改为返回一组行的 `Property.rows(filtering:)`，仍是对 `Flag` 的穷尽 switch，
   「新加的位没有行就编译不过」的保证不变；各行的 `flags` 照旧由它反推。
@@ -70,10 +73,11 @@ clang 生成的副本。
 
 **测试**
 
-- Core：判据的纯函数用合成的记录测——带位的改名协议、不带位的 `_TtP` 副本、普通 ObjC 协议、同名两份且只有一份
-  带位（两种顺序都测）；再在当前系统里选一个带 Swift `@objc` 协议的镜像（落地时用 `swift-section objc` 选定），
-  断言它的协议带 `isSwiftProtocol`、`NSCopying` 不带，`makeRuntimeObject(forProtocolName:)` 与 `allObjects()`
-  给出同样的位。
+- Core（`SwiftDefinedObjCProtocolTests`）：判据用手写的记录测——带位的改名协议、置了运行时高位的 Swift 记录、
+  不带位的 `_TtP` 副本、各种 flags 下的普通 ObjC 协议、同名两份且只有一份带位（两种顺序都测）；再用测试 bundle
+  自己声明的两个 `@objc` 协议（一个改过名、一个保留 `_TtP…_` 运行时名）断言 `allObjects()` 与
+  `makeRuntimeObject(forProtocolName:)` 都给它们带上 `isSwiftProtocol`，Foundation 的 `NSCopying` 不带。
+  `RuntimeObjectTests` 钉住新位的值 128。
 - Packages：`RuntimeObjectScopeTests` 的映射断言改为「每一位至少属于一行」，补 `swiftDefined` 的位；新用例断言
   `swiftDefined` 设为 Exclude 时去掉带 `isSwiftClass` / `isSwiftProtocol` 的对象、保留只带 `isObjCClass` 的 Swift 类；
   角标选择补 `.swiftProtocol` 的用例。
@@ -99,7 +103,7 @@ Swift 面加对应的位并改 tooltip。
    测试、Packages 的 `RuntimeObjectScopeTests`、App 编译。
 3. ✅ **角标**：`RuntimeObjectIcon` 加 `.swiftProtocol`（Swift 的 `P`，tooltip「Defined in Swift」）。验证：Packages
    测试与编译。
-4. **收尾**：根 `AGENTS.md` 第 9 条改写；按提案核对实际做出来的东西；完整验证（Core 与 Packages 的相关套件、App
+4. ✅ **收尾**：根 `AGENTS.md` 第 9 条改写；按提案核对实际做出来的东西；完整验证（Core 与 Packages 的相关套件、App
    编译）。
 
 ## 决策日志
@@ -117,3 +121,4 @@ Swift 面加对应的位并改 tooltip。
 | 2026-10-28 | 状态 Accepted → In Progress；第 1 步完成 | 映射改为 `rows(filtering:)`，`RuntimeObjectScopeTests` 30 例全过（新增「每一位至少属于一行」，Only / Exclude 两组改为按「位 × 行」各 7 例）；`AGENTS.md` 第 9 条里的旧名随这一步改掉，免得它在两步之间指向不存在的接口 |
 | 2026-10-28 | 第 2 步完成；判据放在新文件 `SwiftDefinedObjCProtocols.swift`（Core），集成测试用测试 bundle 自己声明的两个协议 | 改名的那个只有标志位能认出，正好验证主判据走的是真实的 Swift 记录，而且不依赖系统版本；ObjC 协议用 Foundation 的 `NSCopying`。两个协议的运行时名在测试里直接写出：`NSStringFromProtocol` 返回 ObjC 运行时解码后的名字（`RuntimeViewerCoreTests.MangledSwiftObjCProtocolFixture`），不是记录里的 `_TtP…_`，第一次按它查找因此落空。`RuntimeObjectTests` 补上新位的 128。验证：Core 三个套件 50 例、Packages 的 `RuntimeObjectScopeTests` 31 例全过，App（Debug-arm64e）编译通过 |
 | 2026-10-28 | 第 3 步完成；角标排在 `isSwiftClass` 之后、`isObjCClass` 之前 | 三者不会出现在同一种对象上（协议位只在 ObjC 协议上），顺序只是让选择仍集中在 `secondaryBadge(for:)` 一处。验证：Packages 的图标、Filter Scope 与两个用到角标的 cell ViewModel 套件共 61 例全过 |
+| 2026-10-28 | 实现完成，待合并；第 4 步把方案一节改成实际做出来的样子（判据所在的文件、lazy 计算、tooltip 的最终措辞、Core 测试的取材） | 收尾验证（Xcode 27.2，macOS 26.7）：Core 涉及 ObjC 对象与关系的 8 个套件 93 例、Packages 涉及侧栏、Inspector、角标与 Filter Scope 的 7 个套件 89 例，退出码均为 0；App（Debug-arm64e）在第 2 步编译通过，第 3 步只动了 Packages 里的 `RuntimeObjectIcon`、接口未变，没有再编一次。没有启动 App 看过角标与新行。文档判断：不需要使用指南或实现说明——功能没有接口之外的契约，读代码的人会踩的两点（为什么读全部记录、为什么还要看名字）写在 `SwiftDefinedObjCProtocols` 的文档注释与本提案里；术语表不加词；README 与命令行 agent 插件不受影响（命令行与 MCP 不输出这些位）。Swift 面接入 MachOSwiftSection 的 `@objc` 协议定义，留作落地时登记的暂缓后续项 |
