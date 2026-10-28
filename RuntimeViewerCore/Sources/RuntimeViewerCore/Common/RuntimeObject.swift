@@ -15,7 +15,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// `init(rawValue:)` directly.
         ///
         /// Every flag is also something the sidebar's Filter Scope can filter
-        /// by: `RuntimeObjectScope.Property.init(filtering:)` in
+        /// by: `RuntimeObjectScope.Property.rows(filtering:)` in
         /// RuntimeViewerApplication switches over this enum exhaustively, so a
         /// new case does not build until the Filter Scope has a row for it.
         public enum Flag: Int, CaseIterable, Sendable {

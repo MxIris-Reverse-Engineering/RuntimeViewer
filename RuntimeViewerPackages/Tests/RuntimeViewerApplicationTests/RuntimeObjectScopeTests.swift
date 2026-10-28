@@ -101,20 +101,31 @@ struct RuntimeObjectScopeTests {
         #expect(!property.flags.isEmpty)
     }
 
-    @Test("Only on the row of a flag admits objects carrying the flag and nothing else", arguments: RuntimeObject.Properties.Flag.allCases)
-    func onlyAdmitsObjectsCarryingTheFlag(flag: RuntimeObject.Properties.Flag) {
+    @Test("every flag belongs to at least one row", arguments: RuntimeObject.Properties.Flag.allCases)
+    func everyFlagBelongsToSomeRow(flag: RuntimeObject.Properties.Flag) {
+        #expect(!RuntimeObjectScope.Property.rows(filtering: flag).isEmpty)
+    }
+
+    /// Every row of every flag, one case each.
+    private static let rowsOfEveryFlag: [(RuntimeObject.Properties.Flag, RuntimeObjectScope.Property)] =
+        RuntimeObject.Properties.Flag.allCases.flatMap { flag in
+            RuntimeObjectScope.Property.rows(filtering: flag).map { (flag, $0) }
+        }
+
+    @Test("Only on a row of a flag admits objects carrying the flag and nothing else", arguments: RuntimeObjectScopeTests.rowsOfEveryFlag)
+    func onlyAdmitsObjectsCarryingTheFlag(flag: RuntimeObject.Properties.Flag, property: RuntimeObjectScope.Property) {
         var scope = RuntimeObjectScope()
-        scope[RuntimeObjectScope.Property(filtering: flag)] = .only
+        scope[property] = .only
 
         #expect(scope.isActive)
         #expect(scope.passes(object(properties: RuntimeObject.Properties(flag))))
         #expect(!scope.passes(object(properties: [])))
     }
 
-    @Test("Exclude on the row of a flag rejects objects carrying the flag", arguments: RuntimeObject.Properties.Flag.allCases)
-    func excludeRejectsObjectsCarryingTheFlag(flag: RuntimeObject.Properties.Flag) {
+    @Test("Exclude on a row of a flag rejects objects carrying the flag", arguments: RuntimeObjectScopeTests.rowsOfEveryFlag)
+    func excludeRejectsObjectsCarryingTheFlag(flag: RuntimeObject.Properties.Flag, property: RuntimeObjectScope.Property) {
         var scope = RuntimeObjectScope()
-        scope[RuntimeObjectScope.Property(filtering: flag)] = .exclude
+        scope[property] = .exclude
 
         #expect(scope.isActive)
         #expect(!scope.passes(object(properties: RuntimeObject.Properties(flag))))

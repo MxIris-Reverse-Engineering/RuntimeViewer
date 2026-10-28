@@ -485,10 +485,11 @@ When adding new features, you **MUST** follow these rules:
 9. **A new `RuntimeObject.Properties` flag gets a row in the sidebar's Filter Scope**: declare it as
    a new case of `RuntimeObject.Properties.Flag` with the next bit position — the positions are wire
    format, so never renumber or reuse one — and build its static from that case, never from
-   `init(rawValue:)`. `RuntimeObjectScope.Property.init(filtering:)` switches over `Flag`
+   `init(rawValue:)`. `RuntimeObjectScope.Property.rows(filtering:)` switches over `Flag`
    exhaustively, so the build fails until the flag has a row: a new `Property` case, with its title
    and tooltip in `SidebarRuntimeObjectScopeViewController`, or an existing case when the flag is
-   another face of the same thing (`isSwiftClass` and `isObjCClass` share `bridgedSwiftClass`).
+   another face of the same thing (`isSwiftClass` and `isObjCClass` share `bridgedSwiftClass`). A
+   flag belongs to at least one row, and to more than one when two rows overlap.
    Background: `Documentations/Evolutions/0049-scope-filter-all-object-properties.md`.
 
 ## Injection commands

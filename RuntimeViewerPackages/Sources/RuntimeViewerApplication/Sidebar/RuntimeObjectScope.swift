@@ -28,26 +28,27 @@ public struct RuntimeObjectScope: Hashable, Sendable {
         case localType
         case positionNamedLocalType
 
-        /// The row that filters by `flag`. Exhaustive on purpose: a flag added
+        /// The rows that filter by `flag`. Exhaustive on purpose: a flag added
         /// to `RuntimeObject.Properties.Flag` does not build until it has a
         /// row here — a new case, or an existing one when it is another face
-        /// of the same thing.
-        public init(filtering flag: RuntimeObject.Properties.Flag) {
+        /// of the same thing. A flag belongs to at least one row, and to more
+        /// than one when two rows overlap.
+        public static func rows(filtering flag: RuntimeObject.Properties.Flag) -> [Property] {
             switch flag {
-            case .isGeneric: self = .generic
-            case .isSpecialized: self = .specialized
-            case .isObjCImplementation: self = .objcImplementation
+            case .isGeneric: return [.generic]
+            case .isSpecialized: return [.specialized]
+            case .isObjCImplementation: return [.objcImplementation]
             // One bridged class is listed twice, and each entry carries its
             // own flag: the Objective-C class `isSwiftClass`, the Swift class
             // `isObjCClass`. One row selects both.
-            case .isSwiftClass, .isObjCClass: self = .bridgedSwiftClass
-            case .isLocalType: self = .localType
-            case .isPositionNamedLocalType: self = .positionNamedLocalType
+            case .isSwiftClass, .isObjCClass: return [.bridgedSwiftClass]
+            case .isLocalType: return [.localType]
+            case .isPositionNamedLocalType: return [.positionNamedLocalType]
             }
         }
 
         /// The flags this row filters by — read back from
-        /// `init(filtering:)`, so the two can never disagree.
+        /// `rows(filtering:)`, so the two can never disagree.
         public var flags: RuntimeObject.Properties {
             Self.flagsByProperty[self, default: []]
         }
@@ -55,7 +56,9 @@ public struct RuntimeObjectScope: Hashable, Sendable {
         private static let flagsByProperty: [Property: RuntimeObject.Properties] = {
             var flagsByProperty: [Property: RuntimeObject.Properties] = [:]
             for flag in RuntimeObject.Properties.Flag.allCases {
-                flagsByProperty[Property(filtering: flag), default: []].insert(RuntimeObject.Properties(flag))
+                for property in rows(filtering: flag) {
+                    flagsByProperty[property, default: []].insert(RuntimeObject.Properties(flag))
+                }
             }
             return flagsByProperty
         }()

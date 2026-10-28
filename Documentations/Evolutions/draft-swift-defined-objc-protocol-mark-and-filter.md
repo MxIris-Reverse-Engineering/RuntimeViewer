@@ -1,6 +1,6 @@
 # Draft - ObjC 列表标出 Swift 定义的协议，并能过滤掉 Swift 定义的类与协议
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-10-28
 - **最后更新**: 2026-10-28
 - **所属愿景**: 无
@@ -89,9 +89,10 @@ Swift 面加对应的位并改 tooltip。
 
 每一步单独构建通过、相关测试通过后提交。
 
-1. **Filter Scope 的映射改成「一个位可属多行」**：`Property.init(filtering:)` 换成返回一组行的
+1. ✅ **Filter Scope 的映射改成「一个位可属多行」**：`Property.init(filtering:)` 换成返回一组行的
    `Property.rows(filtering:)`，仍对 `Flag` 穷尽 switch；`flagsByProperty` 与 `RuntimeObjectScopeTests` 随之改，
-   行为不变。验证：Packages 的 `RuntimeObjectScopeTests`。
+   行为不变。验证：Packages 的 `RuntimeObjectScopeTests`。根 `AGENTS.md` 第 9 条与 `Flag` 的文档注释里对
+   `init(filtering:)` 的引用随这一步改掉，并补上「一个位可以属于多行」。
 2. **新位与新行**：Core 加 `Flag.isSwiftProtocol = 7`、静态成员、判据纯函数，`RuntimeObjCSection` 建 section 时
    算出 Swift 定义的协议名，`allObjects()` 与 `makeRuntimeObject(forProtocolName:)` 带上位；Packages 加
    `swiftDefined` 行（`isSwiftClass`、`isSwiftProtocol`），App 的 Filter Scope 补标题与 tooltip。验证：Core 的新
@@ -113,3 +114,4 @@ Swift 面加对应的位并改 tooltip。
 | 2026-10-28 | 同名记录任一份带位即算，不读 indexer 留下的那份 | Swift 与 clang 的记录符号名不同，同一镜像里两份并存，而 `ObjCInterfaceIndexer` 按名字只留最后一份，只看它会让结果取决于链接顺序 |
 | 2026-10-28 | 补上「落地步骤」一节，拆成四步 | 精简提案原本没有落地步骤；按能各自构建通过拆分，第 1 步先把映射改成一个位可属多行、行为不变，新位与新行放在第 2 步一起落，否则加了位而没有行就编译不过 |
 | 2026-10-28 | 状态 Draft → Accepted | 用户批准，开始实现 |
+| 2026-10-28 | 状态 Accepted → In Progress；第 1 步完成 | 映射改为 `rows(filtering:)`，`RuntimeObjectScopeTests` 30 例全过（新增「每一位至少属于一行」，Only / Exclude 两组改为按「位 × 行」各 7 例）；`AGENTS.md` 第 9 条里的旧名随这一步改掉，免得它在两步之间指向不存在的接口 |
