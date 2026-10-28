@@ -1,8 +1,8 @@
 # Draft - Swift 列表列出 Swift 定义的 `@objc` 协议，并接上 ObjC 协议遵循
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-10-28
-- **最后更新**: 2026-10-28
+- **最后更新**: 2026-10-29
 - **实现分支 / PR**: `feature/swift-declared-objc-protocols-in-swift-list`（从 `next` 切，并回 `next`）
 - **关联提案**: [0062](0062-swift-defined-objc-protocol-mark-and-filter.md)（ObjC 一侧的标记与过滤；本提案是它登记的暂缓后续项）；MachOSwiftSection 的 0079 `swift-declared-objc-protocols`（还原这些协议与遵循的上游实现）
 
@@ -24,8 +24,11 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 - MachOObjCSection 一起抬到它 `next` 上的 `7b56479`（0.8.202 之后只多一个文档提交）：MSS 自 `cfccd785` 起要求
   `0.8.202..<0.9.0`，而 RuntimeViewer 对它钉的是 `branch: "next"`，根包的分支要求会盖过这个下限且不报错，不抬就
   一直停在 0.8.201（workspace）/ 0.8.200（三个包）。
-- 只动这两条 pin，五份锁文件同改；其它 pin 不动，不跑 `UpdatePackagesScript.sh`——它把所有分支依赖一起推到最新，
-  会混进无关的变化。`RuntimeViewerServer.xcodeproj` 自带的那份锁文件已落后多个版本（MSS `6ab2cd30`、
+- 两个 workspace 的锁文件只改这两条 revision。三个包的锁文件本来就落后于 workspace，新版本还要拖上三条，都对齐到
+  workspace 已钉的版本、不引入新版本：MachOKit 0.54.101 → 0.55.100（`ea5d7214`，新版 MachOObjCSection 用到它
+  SPI `Support` 里的 `LocatedValue`）、MachOKitExtensions 1.2.0 → 1.3.0、swift-objc-dump 0.8.101 → 0.8.102，后两条
+  是 SwiftPM 按新版本的下限自己带上的。其它 pin 不动，不跑 `UpdatePackagesScript.sh`——它把所有分支依赖一起推到
+  最新，会混进无关的变化。`RuntimeViewerServer.xcodeproj` 自带的那份锁文件已落后多个版本（MSS `6ab2cd30`、
   MachOObjCSection 0.8.105），App 经 workspace 构建、读的是 workspace 的锁文件，它不动。
 
 **Swift 列表**
@@ -107,7 +110,7 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 
 每一步单独构建通过、相关测试通过后提交。
 
-1. **抬 pin**：两条 pin、五份锁文件。Core 与 Packages 现有测试全过、App（Debug-arm64e）编译通过，先确认上游的
+1. ✅ **抬 pin**：两条 pin、五份锁文件。Core 与 Packages 现有测试全过、App（Debug-arm64e）编译通过，先确认上游的
    变化本身没有弄坏什么。
 2. **Swift 列表与打印**：列出 `objcProtocolDefinitions` 并打印，protocol extension 并入协议条目，category 遵循的
    条目，Find 的成员与成员地址；Core 测试。
@@ -126,3 +129,5 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 | 2026-10-28 | 沿用 `.swift(.type(.protocol))`，加位而不加种类 | 与 Swift 类的 `isObjCClass` 同构；新种类要改线上格式、图标与按种类的过滤，CLI 的类型过滤也得跟着改 |
 | 2026-10-28 | 副本的跳转跨镜像查找 | 0062 决定副本也带 `isSwiftProtocol`；只在本镜像里找，副本的跳转必然落空，「Also Listed as a Swift Protocol」也就不成立 |
 | 2026-10-28 | 状态 Draft → Accepted | 用户批准，开始实现 |
+| 2026-10-29 | 状态 Accepted → In Progress；三个包的锁文件另对齐 MachOKit、MachOKitExtensions、swift-objc-dump（偏离方案「只动两条 pin」） | 只抬两条时三个包都编不过：新版 MachOObjCSection 要 MachOKit 0.55.100 的 `LocatedValue`，而包的锁文件还钉 0.54.101——根包对 MachOKit 也钉 `branch: "next"`，它的版本下限照样被盖过、不报错。三条都对齐到两个 workspace 已钉的版本，不引入新版本 |
+| 2026-10-29 | 第 1 步完成 | 验证（Ultra，macOS 27.2，Xcode 27.2）：App（Debug-arm64e，Debug workspace，全新产物目录加 `-disableAutomaticPackageResolution`）编译通过，实际用的正是 MSS `07ed8467`、MachOObjCSection `7b564795`、MachOKit `ea5d7214`，workspace 锁文件编译前后 SHA 不变。Core 的 Core 565、Communication 239、Injection 36 例与单独跑的后台索引套件 27 例全过；CrossReferences 70 例中 `CrossReferencePreparationTests` 两例失败，单独重跑这个套件 15 例全过——机器负载 50–120，是已知的负载下才挂的两例。Packages 676 例中 6 例在等待超时（后台索引、交叉引用、Inspector References、语料构建的 5 个套件），单独重跑这些套件 55 例全过。CommandLine 121 例全过。中途外置 DerivedData 卷所在的容器写满、构建报 `errno=28`，经用户同意删了 claude 名下 7 天没动过的构建产物后继续 |
