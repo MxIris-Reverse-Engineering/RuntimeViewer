@@ -493,7 +493,7 @@ When adding new features, you **MUST** follow these rules:
    also in `swiftDefined`, which takes the Objective-C entries of Swift-defined classes and
    protocols and leaves their Swift entries alone.
    Background: `Documentations/Evolutions/0049-scope-filter-all-object-properties.md`, and for
-   `swiftDefined` the proposal `draft-swift-defined-objc-protocol-mark-and-filter`.
+   `swiftDefined` `Documentations/Evolutions/0062-swift-defined-objc-protocol-mark-and-filter.md`.
 
 ## Injection commands
 

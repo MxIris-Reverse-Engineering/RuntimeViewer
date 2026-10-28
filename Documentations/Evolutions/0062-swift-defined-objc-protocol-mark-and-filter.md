@@ -1,6 +1,6 @@
-# Draft - ObjC 列表标出 Swift 定义的协议，并能过滤掉 Swift 定义的类与协议
+# 0062 - ObjC 列表标出 Swift 定义的协议，并能过滤掉 Swift 定义的类与协议
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-28
 - **最后更新**: 2026-10-28
 - **所属愿景**: 无
@@ -122,3 +122,4 @@ Swift 面加对应的位并改 tooltip。
 | 2026-10-28 | 第 2 步完成；判据放在新文件 `SwiftDefinedObjCProtocols.swift`（Core），集成测试用测试 bundle 自己声明的两个协议 | 改名的那个只有标志位能认出，正好验证主判据走的是真实的 Swift 记录，而且不依赖系统版本；ObjC 协议用 Foundation 的 `NSCopying`。两个协议的运行时名在测试里直接写出：`NSStringFromProtocol` 返回 ObjC 运行时解码后的名字（`RuntimeViewerCoreTests.MangledSwiftObjCProtocolFixture`），不是记录里的 `_TtP…_`，第一次按它查找因此落空。`RuntimeObjectTests` 补上新位的 128。验证：Core 三个套件 50 例、Packages 的 `RuntimeObjectScopeTests` 31 例全过，App（Debug-arm64e）编译通过 |
 | 2026-10-28 | 第 3 步完成；角标排在 `isSwiftClass` 之后、`isObjCClass` 之前 | 三者不会出现在同一种对象上（协议位只在 ObjC 协议上），顺序只是让选择仍集中在 `secondaryBadge(for:)` 一处。验证：Packages 的图标、Filter Scope 与两个用到角标的 cell ViewModel 套件共 61 例全过 |
 | 2026-10-28 | 实现完成，待合并；第 4 步把方案一节改成实际做出来的样子（判据所在的文件、lazy 计算、tooltip 的最终措辞、Core 测试的取材） | 收尾验证（Xcode 27.2，macOS 26.7）：Core 涉及 ObjC 对象与关系的 8 个套件 93 例、Packages 涉及侧栏、Inspector、角标与 Filter Scope 的 7 个套件 89 例，退出码均为 0；App（Debug-arm64e）在第 2 步编译通过，第 3 步只动了 Packages 里的 `RuntimeObjectIcon`、接口未变，没有再编一次。没有启动 App 看过角标与新行。文档判断：不需要使用指南或实现说明——功能没有接口之外的契约，读代码的人会踩的两点（为什么读全部记录、为什么还要看名字）写在 `SwiftDefinedObjCProtocols` 的文档注释与本提案里；术语表不加词；README 与命令行 agent 插件不受影响（命令行与 MCP 不输出这些位）。Swift 面接入 MachOSwiftSection 的 `@objc` 协议定义，留作落地时登记的暂缓后续项 |
+| 2026-10-28 | 状态 In Progress → Implemented，编号 0062 | 用户在本地 `next` 上测试后要求收尾。四个实现提交已快进进 `next`，本提交只改文档。验证沿用实现收尾时那一次（最终代码上 Core 93 例、Packages 89 例，退出码 0；App 在第 2 步编译通过）。不需要使用指南或实现说明、术语表不加词，理由见上一行。没做的部分记为提案索引里的暂缓后续项：Swift 一侧列出这类协议，等 MachOSwiftSection 输出 Swift 定义的 `@objc` 协议发版后接入，届时给 Swift 面加位、把角标提示改成「也列在 Swift 一侧」 |
