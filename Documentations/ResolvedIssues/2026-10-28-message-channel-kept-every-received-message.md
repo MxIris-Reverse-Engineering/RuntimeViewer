@@ -1,7 +1,7 @@
 # 2026-10-28 连接收到的每条消息都留在内存里，直到连接释放
 
 **调查日期：** 2026-10-28
-**修复落地：** 本日，分支 `fix/message-channel-retains-received-messages`（issue [#128](https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/issues/128)）
+**修复落地：** 本日，`next`（issue [#128](https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/issues/128)）
 **Severity：** Medium —— 不崩、不报错，内存随连接收到的流量只增不减，连接释放才还回去
 **触发场景：** 任何经 `RuntimeMessageChannel` 收消息的连接：Bonjour 远程设备（`RuntimeNetworkConnection`）、本地 socket 与注入进程用的 TCP（`RuntimeLocalSocketConnection`）、直连 TCP（`RuntimeDirectTCPConnection`），以及 `RuntimeStdioConnection`。本机的 My Mac 与 Mac Catalyst 引擎走 XPC，不经过这个类
 
