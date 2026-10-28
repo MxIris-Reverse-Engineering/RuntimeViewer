@@ -119,16 +119,16 @@ public enum RuntimeObjectIcon {
     }
 
     /// The badge that sits beside `icon(for: object.kind)`: the other face of a
-    /// class both lists show, so the choice is made here, once, rather than at
-    /// each call site. A bridged class's two faces badge each other — the
-    /// Objective-C entry gets a blue Swift `C` (`isSwiftClass`), the Swift
-    /// entry an orange Objective-C `C` (`isObjCClass`). An `@objc
+    /// class or protocol both lists show, so the choice is made here, once,
+    /// rather than at each call site. A bridged class's two faces badge each
+    /// other — the Objective-C entry gets a blue Swift `C` (`isSwiftClass`),
+    /// the Swift entry an orange Objective-C `C` (`isObjCClass`). An `@objc
     /// @implementation` pair carries the pink `C` on both faces, the class and
     /// its extension. On the Objective-C side the first two are mutually
     /// exclusive — the Swift bit of a class data pointer is either set or clear.
-    /// An Objective-C protocol defined in Swift gets a Swift `P`
-    /// (`isSwiftProtocol`); the Swift list does not show it yet, so the badge
-    /// says where it was written rather than pointing at another entry.
+    /// An `@objc` protocol declared in Swift is badged the way a bridged class
+    /// is: a blue Swift `P` on its Objective-C entry (`isSwiftProtocol`), a
+    /// purple Objective-C `P` on its Swift entry (`isObjCProtocol`).
     public static func secondaryIcon(for object: RuntimeObject, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage? {
         switch secondaryBadge(for: object) {
         case .objcImplementation:
@@ -139,6 +139,8 @@ public enum RuntimeObjectIcon {
             return icon(for: .swift(.type(.protocol)), size: size, style: style)
         case .objcClass:
             return icon(for: .objc(.type(.class)), size: size, style: style)
+        case .objcProtocol:
+            return icon(for: .objc(.type(.protocol)), size: size, style: style)
         case nil:
             return nil
         }
@@ -156,9 +158,11 @@ public enum RuntimeObjectIcon {
         case .swiftClass:
             return "Also Listed as a Swift Class"
         case .swiftProtocol:
-            return "Defined in Swift"
+            return "Also Listed as a Swift Protocol"
         case .objcClass:
             return "Also Listed as an Objective-C Class"
+        case .objcProtocol:
+            return "Also Listed as an Objective-C Protocol"
         case nil:
             return nil
         }
@@ -169,6 +173,7 @@ public enum RuntimeObjectIcon {
         case swiftClass
         case swiftProtocol
         case objcClass
+        case objcProtocol
     }
 
     /// The one place that orders the flags, so the icon and its tooltip can
@@ -188,6 +193,9 @@ public enum RuntimeObjectIcon {
         }
         if object.properties.contains(.isObjCClass) {
             return .objcClass
+        }
+        if object.properties.contains(.isObjCProtocol) {
+            return .objcProtocol
         }
         return nil
     }

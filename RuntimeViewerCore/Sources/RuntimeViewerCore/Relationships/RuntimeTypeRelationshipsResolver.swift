@@ -233,6 +233,11 @@ actor RuntimeTypeRelationshipsResolver {
     /// Objective-C runtime — the face the sidebar, the Inspector and every
     /// node of the walk show. A class with no Swift face to pair it with
     /// keeps its Objective-C one, as `materializeObjCClass(named:)` does.
+    ///
+    /// An `@objc` protocol declared in Swift goes the other way: its adopters
+    /// and the protocols it inherits are recorded in Objective-C metadata only,
+    /// so its Objective-C face stands for it, chosen among that protocol's
+    /// copies like any other.
     private func representative(of object: RuntimeObject, objcProtocolCopiesByName: [String: [RuntimeObject]], imagePaths scopeImagePaths: Set<String>?) async -> RuntimeObject {
         switch object.kind {
         case .objc(.type(.protocol)):
@@ -244,6 +249,12 @@ actor RuntimeTypeRelationshipsResolver {
                   let swiftFace = await swiftSection.makeRuntimeObject(forObjCRuntimeClassName: object.name)
             else { return object }
             return swiftFace
+        case .swift(.type(.protocol)) where object.properties.contains(.isObjCProtocol):
+            guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath),
+                  let protocolName = await swiftSection.objcProtocolName(forCounterpartOf: object),
+                  let objcFace = await objcSectionFactory.existingSection(for: object.imagePath)?.makeRuntimeObject(forProtocolName: protocolName)
+            else { return object }
+            return await representative(of: objcFace, objcProtocolCopiesByName: objcProtocolCopiesByName, imagePaths: scopeImagePaths)
         default:
             return object
         }

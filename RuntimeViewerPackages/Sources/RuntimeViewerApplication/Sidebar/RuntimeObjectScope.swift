@@ -25,6 +25,7 @@ public struct RuntimeObjectScope: Hashable, Sendable {
         case specialized
         case objcImplementation
         case bridgedSwiftClass
+        case bridgedSwiftProtocol
         case swiftDefined
         case localType
         case positionNamedLocalType
@@ -47,7 +48,12 @@ public struct RuntimeObjectScope: Hashable, Sendable {
             // Swift entries alone.
             case .isSwiftClass: return [.bridgedSwiftClass, .swiftDefined]
             case .isObjCClass: return [.bridgedSwiftClass]
-            case .isSwiftProtocol: return [.swiftDefined]
+            // The same for an `@objc` protocol declared in Swift: the
+            // Objective-C entry `isSwiftProtocol`, the Swift entry
+            // `isObjCProtocol`, one row for both, and the Objective-C entry in
+            // `swiftDefined` too.
+            case .isSwiftProtocol: return [.bridgedSwiftProtocol, .swiftDefined]
+            case .isObjCProtocol: return [.bridgedSwiftProtocol]
             case .isLocalType: return [.localType]
             case .isPositionNamedLocalType: return [.positionNamedLocalType]
             }

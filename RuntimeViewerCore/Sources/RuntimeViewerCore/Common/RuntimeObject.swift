@@ -27,6 +27,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             case isLocalType = 5
             case isPositionNamedLocalType = 6
             case isSwiftProtocol = 7
+            case isObjCProtocol = 8
         }
 
         public let rawValue: Int
@@ -79,10 +80,18 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// Marks an Objective-C protocol that was defined in Swift — possibly
         /// in another module, since a Swift image that only uses a protocol
         /// carries a copy of its record too. The protocol counterpart of
-        /// `isSwiftClass`, except that the Swift list does not show the
-        /// protocol yet. How a protocol is recognized, and the one kind it
-        /// misses: `SwiftDefinedObjCProtocols`.
+        /// `isSwiftClass`: the Swift list shows the protocol as well, in the
+        /// image that declares it, which for such a copy is another image.
+        /// How a protocol is recognized, and the one kind it misses:
+        /// `SwiftDefinedObjCProtocols`.
         public static let isSwiftProtocol = Self(.isSwiftProtocol)
+
+        /// The Swift face of `isSwiftProtocol`: an `@objc` protocol this image
+        /// declares in Swift, whose declaration MachOSwiftSection paired with
+        /// the image's Objective-C record of it, so the Objective-C protocol
+        /// list carries it too. One renamed with `@objc(Name)` to a name other
+        /// than its Swift name pairs with no record and never gets it.
+        public static let isObjCProtocol = Self(.isObjCProtocol)
     }
 
     public let name: String

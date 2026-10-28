@@ -89,6 +89,7 @@ struct RuntimeObjectScopeTests {
         (.specialized, .isSpecialized),
         (.objcImplementation, .isObjCImplementation),
         (.bridgedSwiftClass, [.isSwiftClass, .isObjCClass]),
+        (.bridgedSwiftProtocol, [.isSwiftProtocol, .isObjCProtocol]),
         (.swiftDefined, [.isSwiftClass, .isSwiftProtocol]),
         (.localType, .isLocalType),
         (.positionNamedLocalType, .isPositionNamedLocalType),
@@ -162,6 +163,18 @@ struct RuntimeObjectScopeTests {
         #expect(!scope.passes(object(kind: .objc(.type(.class)))))
     }
 
+    @Test("the bridged protocol row selects both entries of an @objc protocol declared in Swift, and nothing else")
+    func bridgedProtocolRowSelectsBothEntries() {
+        var scope = RuntimeObjectScope()
+        scope[.bridgedSwiftProtocol] = .only
+
+        #expect(scope.passes(object(kind: .objc(.type(.protocol)), properties: [.isSwiftProtocol])))
+        #expect(scope.passes(object(kind: .swift(.type(.protocol)), properties: [.isObjCProtocol])))
+        #expect(!scope.passes(object(kind: .objc(.type(.protocol)))))
+        #expect(!scope.passes(object(kind: .swift(.type(.protocol)))))
+        #expect(!scope.passes(object(kind: .objc(.type(.class)), properties: [.isSwiftClass])))
+    }
+
     @Test("Defined in Swift on Exclude drops the Objective-C entries of Swift classes and protocols and keeps their Swift entries")
     func swiftDefinedExcludeKeepsTheSwiftEntries() {
         var scope = RuntimeObjectScope()
@@ -170,6 +183,7 @@ struct RuntimeObjectScopeTests {
         #expect(!scope.passes(object(kind: .objc(.type(.class)), properties: [.isSwiftClass])))
         #expect(!scope.passes(object(kind: .objc(.type(.protocol)), properties: [.isSwiftProtocol])))
         #expect(scope.passes(object(kind: .swift(.type(.class)), properties: [.isObjCClass])))
+        #expect(scope.passes(object(kind: .swift(.type(.protocol)), properties: [.isObjCProtocol])))
         #expect(scope.passes(object(kind: .objc(.type(.protocol)))))
         #expect(scope.passes(object(kind: .objc(.type(.class)), properties: [.isObjCImplementation])))
     }

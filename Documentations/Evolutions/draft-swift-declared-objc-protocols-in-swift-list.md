@@ -124,7 +124,7 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
    变化本身没有弄坏什么。
 2. ✅ **Swift 列表与打印**：列出 `objcProtocolDefinitions` 并打印，protocol extension 并入协议条目，category 遵循的
    条目，Find 的成员与成员地址，点击跳转；Core 测试。
-3. **两面**：`isObjCProtocol`、counterpart 的两个新种类与配对表（含副本的跨镜像查找）、Type Relationships 的代表、
+3. ✅ **两面**：`isObjCProtocol`、counterpart 的两个新种类与配对表（含副本的跨镜像查找）、Type Relationships 的代表、
    Filter Scope 新行、角标与 tooltip、菜单标题；Core 与 Packages 测试，App 编译。
 4. **收尾**：文档，按提案核对实际做出来的东西，完整验证。App 里的验收留给用户：DVTFoundation 的 Swift 列表列出
    11 个协议，`DVTIconReference` 的头部带 `DVTResourceReference, NSCopying`，两面互相跳转；
@@ -145,3 +145,4 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 | 2026-10-29 | 跨镜像跳到 `@rpath` 镜像落空的原有问题不在本分支修，记为后续项 | 写跳转测试时发现：工厂表按 `MachOImage.imagePath`（即 install name）找 section，测试 bundle 没有 install name、Xcode 的框架是 `@rpath/…`，都对不上登记用的真实路径；类型的跳转同样受影响，与本提案无关 |
 | 2026-10-29 | Type Relationships 里这类协议以 ObjC 条目为代表，放在第 3 步 | 方案原来没写，属于避免新条目带来的回归：不合并就多出一个关系树为空的重复候选。判断要用到第 3 步的 `isObjCProtocol` 与配对表 |
 | 2026-10-29 | 第 2 步完成；测试放在新套件 `SwiftDeclaredObjCProtocolListTests`，夹具与它同文件 | 新套件 11 个测试：列出 4 个协议（含配不上记录的改名协议）、接口与要求、扩展成员并进协议且只打印一次、类声明带 `NSCopying`、category 遵循单独成条与并进已有 conformance 条目、Find 的成员、成员地址、同一镜像里的点击跳转。验证：Core 的 Core 576 例（多出的 11 例即新套件）、Communication 239、Injection 36 例全过；CrossReferences 仍是第 1 步就挂的那两例，与单独跑的后台索引套件一起重跑，15 例与 27 例全过 |
+| 2026-10-29 | 第 3 步完成；副本的跨镜像表由工厂按 section 登记时的路径建，不用 `MachOImage.imagePath` | 用登记路径作键，正好绕开上面那个 install name 对不上的原有问题。新套件补 5 个测试：配上记录的两个协议带 `isObjCProtocol`、配不上的不带，两个方向的跳转（`_TtP…_` 名与 `@objc(X) protocol X` 两种），配不上记录的协议从 ObjC 一侧跳转得到 nil，Type Relationships 只剩一个候选且是 ObjC 条目；副本的跨镜像跳转没有稳定的锚点（测试进程里没有第二个声明 `@objc` 协议的 Swift 镜像），留给 App 里的验收。验证：Core 的新套件、0062 的套件、`RuntimeObjectTests`、`RuntimeObjectCounterpartTests`、`RuntimeTypeRelationshipsProtocolCopyTests` 共 80 例全过；Packages 的 Application 679 例全过，EngineManagement 里 `InjectedDeviceEngineTests` 两例在全量里报 `ECONNREFUSED`，单独重跑三次各 12 例、整个测试目标 50 例全过；App（Debug-arm64e）编译通过，锁文件 SHA 不变 |

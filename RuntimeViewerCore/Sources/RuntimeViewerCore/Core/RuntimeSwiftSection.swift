@@ -162,6 +162,20 @@ actor RuntimeSwiftSection {
         var mangledTypeNameByObjCClassName: [String: String] = [:]
     }
 
+    /// Every `@objc` protocol this image declares in Swift that
+    /// MachOSwiftSection paired with the image's Objective-C record of it,
+    /// with the record's runtime name, both ways round. One table answers the
+    /// `isObjCProtocol` mark and the jump between a protocol's two faces.
+    ///
+    /// Lazy, but `allObjects()` reads it while `init` runs — after
+    /// `indexer.prepare()`, which lists the protocols.
+    private lazy var objcProtocolPairs: ObjCProtocolPairs = makeObjCProtocolPairs()
+
+    private struct ObjCProtocolPairs {
+        var objcProtocolNameByMangledProtocolName: [String: String] = [:]
+        var mangledProtocolNameByObjCProtocolName: [String: String] = [:]
+    }
+
     private enum InterfaceDefinitionName {
         case rootType(SwiftDeclaration.TypeName)
         case childType(SwiftDeclaration.TypeName)
@@ -305,12 +319,14 @@ actor RuntimeSwiftSection {
     /// extension of its parent, which reads the same wherever it is listed.
     private func makeRuntimeObject(for objcProtocolDefinition: ObjCProtocolDefinition) throws -> RuntimeObject {
         let protocolName = objcProtocolDefinition.protocolName
+        let mangledName = try mangleAsString(protocolName.node)
         let runtimeObject = RuntimeObject(
-            name: try mangleAsString(protocolName.node),
+            name: mangledName,
             displayName: protocolName.name,
             kind: protocolName.runtimeObjectKind,
             imagePath: imagePath,
             children: [],
+            properties: objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol],
             privateDeclarations: protocolName.privateDeclarations
         )
         interfaceDefinitionNameByObject[runtimeObject.key] = .objcProtocol(protocolName)
@@ -797,6 +813,7 @@ extension RuntimeSwiftSection {
             kind: protocolName.runtimeObjectKind,
             imagePath: imagePath,
             children: [],
+            properties: objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol],
             privateDeclarations: protocolName.privateDeclarations,
         )
     }
@@ -864,6 +881,47 @@ extension RuntimeSwiftSection {
         default:
             return nil
         }
+    }
+
+    /// The `@objc` protocol on the Swift side that an Objective-C protocol of
+    /// this image is the other face of, found by the protocol's runtime name,
+    /// as `allObjects()` listed it. `nil` for a protocol this image does not
+    /// declare in Swift — one written in Objective-C, or the copy an image
+    /// holds of another module's.
+    func makeRuntimeObject(forObjCRuntimeProtocolName protocolName: String) -> RuntimeObject? {
+        guard let mangledProtocolName = objcProtocolPairs.mangledProtocolNameByObjCProtocolName[protocolName] else { return nil }
+        return makeRuntimeObject(forMangledProtocolName: mangledProtocolName)
+    }
+
+    /// The runtime name of the Objective-C protocol `object`, an `@objc`
+    /// protocol on the Swift side, is the other face of. `nil` for anything
+    /// else.
+    func objcProtocolName(forCounterpartOf object: RuntimeObject) -> String? {
+        guard case .swift(.type(.protocol)) = object.kind else { return nil }
+        return objcProtocolPairs.objcProtocolNameByMangledProtocolName[object.name]
+    }
+
+    /// The runtime names `objcProtocolPairs` holds, for the factory's table of
+    /// the images that declare them.
+    fileprivate func objcProtocolRuntimeNames() -> [String] {
+        Array(objcProtocolPairs.mangledProtocolNameByObjCProtocolName.keys)
+    }
+
+    /// Pairs every `@objc` protocol this image declares in Swift with the
+    /// Objective-C protocol record MachOSwiftSection matched its declaration
+    /// to, by the runtime name the record carries. A protocol renamed with
+    /// `@objc(Name)` to a name other than its Swift name matches no record and
+    /// is left out.
+    private func makeObjCProtocolPairs() -> ObjCProtocolPairs {
+        var objcProtocolPairs = ObjCProtocolPairs()
+        for (protocolName, definition) in indexer.objcProtocolDefinitions {
+            guard let objcProtocolName = definition.objcRuntimeName,
+                  let mangledProtocolName = try? mangleAsString(protocolName.node)
+            else { continue }
+            objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledProtocolName] = objcProtocolName
+            objcProtocolPairs.mangledProtocolNameByObjCProtocolName[objcProtocolName] = mangledProtocolName
+        }
+        return objcProtocolPairs
     }
 
     /// Pairs every Swift class this image registers with the Objective-C
@@ -1745,6 +1803,14 @@ actor RuntimeSwiftSectionFactory {
     /// first-write-wins, per-image-eviction lifecycle as the type table.
     private var indexedProtocolByCandidateID: [String: IndexedProtocolEntry] = [:]
 
+    /// The runtime name of an Objective-C protocol → the image that declares
+    /// it as an `@objc` protocol in Swift, populated as each section
+    /// registers, keyed like `sections`. The copy another image holds of such
+    /// a protocol finds its Swift face through it
+    /// (`RuntimeEngine.counterpart(for:)`). First write wins, and an image's
+    /// entries leave with its section, as in the candidate tables.
+    private var declaringImagePathByObjCProtocolName: [String: String] = [:]
+
     init() {
         let machO = MachOImage.current()
         self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: machO.imagePath, configuration: RuntimeSwiftSection.indexConfiguration)
@@ -1779,6 +1845,12 @@ actor RuntimeSwiftSectionFactory {
     /// Returns `nil` when the protocol's defining image is not indexed.
     func indexedProtocol(forCandidateID candidateID: String) -> IndexedProtocolEntry? {
         indexedProtocolByCandidateID[candidateID]
+    }
+
+    /// The image that declares the `@objc` protocol an Objective-C protocol
+    /// record of `runtimeName` belongs to, among the images indexed right now.
+    func imagePath(declaringObjCProtocolNamed runtimeName: String) -> String? {
+        declaringImagePathByObjCProtocolName[runtimeName]
     }
 
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
@@ -1821,6 +1893,9 @@ actor RuntimeSwiftSectionFactory {
         sectionBuilds[imagePath] = nil
         await section.setupForFactory(self)
         await registerCandidateIDs(from: section)
+        for runtimeName in await section.objcProtocolRuntimeNames() where declaringImagePathByObjCProtocolName[runtimeName] == nil {
+            declaringImagePathByObjCProtocolName[runtimeName] = imagePath
+        }
         #log(.debug, "Swift section created and cached")
     }
 
@@ -1846,6 +1921,9 @@ actor RuntimeSwiftSectionFactory {
         indexedProtocolByCandidateID = indexedProtocolByCandidateID.filter { _, value in
             value.machO.imagePath != imagePath
         }
+        declaringImagePathByObjCProtocolName = declaringImagePathByObjCProtocolName.filter { _, declaringImagePath in
+            declaringImagePath != imagePath
+        }
     }
 
     func removeAllSections() {
@@ -1855,6 +1933,7 @@ actor RuntimeSwiftSectionFactory {
         sections.removeAll()
         indexedTypeByCandidateID.removeAll()
         indexedProtocolByCandidateID.removeAll()
+        declaringImagePathByObjCProtocolName.removeAll()
     }
 
     private func registerCandidateIDs(from section: RuntimeSwiftSection) async {

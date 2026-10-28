@@ -214,7 +214,72 @@ struct SwiftDeclaredObjCProtocolListTests {
         #expect(interface.object == entry)
     }
 
+    // MARK: - The two faces
+
+    @Test("a protocol paired with its Objective-C record is marked as listed there too", arguments: [
+        "MangledSwiftObjCProtocolFixture",
+        "SwiftDeclaredObjCProtocolSameNameFixture",
+    ])
+    func pairedProtocolIsMarked(protocolName: String) async throws {
+        let (_, objects) = try await Self.sharedBundle.value
+        let entry = try #require(Self.protocolEntry(named: protocolName, in: objects))
+
+        #expect(entry.properties.contains(.isObjCProtocol))
+    }
+
+    @Test("a protocol renamed to another name pairs with no record and is not marked")
+    func unpairedProtocolIsNotMarked() async throws {
+        let (_, objects) = try await Self.sharedBundle.value
+        let entry = try #require(Self.protocolEntry(named: "RenamedSwiftObjCProtocolFixture", in: objects))
+
+        #expect(!entry.properties.contains(.isObjCProtocol))
+    }
+
+    @Test("an @objc protocol's two entries jump to each other", arguments: [
+        ("MangledSwiftObjCProtocolFixture", "_TtP22RuntimeViewerCoreTests31MangledSwiftObjCProtocolFixture_"),
+        ("SwiftDeclaredObjCProtocolSameNameFixture", "SwiftDeclaredObjCProtocolSameNameFixture"),
+    ])
+    func twoEntriesJumpToEachOther(protocolName: String, runtimeName: String) async throws {
+        let (engine, objects) = try await Self.sharedBundle.value
+        let swiftEntry = try #require(Self.protocolEntry(named: protocolName, in: objects))
+        let objcEntry = try #require(try await Self.objcProtocolEntry(named: runtimeName))
+        #expect(objcEntry.counterpartKind == .swiftProtocol)
+        #expect(swiftEntry.counterpartKind == .objcProtocol)
+
+        let swiftFace = try #require(try await engine.counterpart(for: objcEntry), "\(runtimeName) found no Swift face")
+        #expect(swiftFace == swiftEntry)
+        #expect(swiftFace.properties.contains(.isObjCProtocol))
+        #expect(try await engine.counterpart(for: swiftEntry) == objcEntry)
+    }
+
+    /// The Objective-C entry is marked from its record alone, so it offers the
+    /// jump; the engine has no Swift face to give for a declaration that pairs
+    /// with no record.
+    @Test("the Objective-C entry of a protocol no declaration pairs with finds no Swift face")
+    func unpairedObjCEntryFindsNoSwiftFace() async throws {
+        let (engine, _) = try await Self.sharedBundle.value
+        let objcEntry = try #require(try await Self.objcProtocolEntry(named: "RuntimeViewerCoreTestsRenamedSwiftProtocol"))
+        #expect(objcEntry.counterpartKind == .swiftProtocol)
+
+        #expect(try await engine.counterpart(for: objcEntry) == nil)
+    }
+
+    @Test("an @objc protocol is one Type Relationships candidate, under its Objective-C entry")
+    func protocolIsOneRelationshipCandidate() async throws {
+        let (engine, _) = try await Self.sharedBundle.value
+        let objcEntry = try #require(try await Self.objcProtocolEntry(named: "_TtP22RuntimeViewerCoreTests31MangledSwiftObjCProtocolFixture_"))
+
+        let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: "MangledSwiftObjCProtocolFixture", matchMode: .matchingWord, relationship: .ancestors, isCaseSensitive: true))
+        #expect(trees.map(\.root) == [objcEntry], "\(trees.map { "\($0.root.kind) \($0.root.displayName)" })")
+    }
+
     // MARK: - Helpers
+
+    /// This bundle's Objective-C entry for the protocol record `runtimeName`.
+    private static func objcProtocolEntry(named runtimeName: String) async throws -> RuntimeObject? {
+        let (engine, _) = try await sharedBundle.value
+        return try await engine.objects(in: testBundlePath).first { $0.kind == .objc(.type(.protocol)) && $0.name == runtimeName }
+    }
 
     private static func protocolEntry(named protocolName: String, in objects: [RuntimeObject]) -> RuntimeObject? {
         objects.first { $0.kind == .swift(.type(.protocol)) && ($0.displayName == protocolName || $0.displayName.hasSuffix(".\(protocolName)")) }
