@@ -126,12 +126,17 @@ public enum RuntimeObjectIcon {
     /// @implementation` pair carries the pink `C` on both faces, the class and
     /// its extension. On the Objective-C side the first two are mutually
     /// exclusive — the Swift bit of a class data pointer is either set or clear.
+    /// An Objective-C protocol defined in Swift gets a Swift `P`
+    /// (`isSwiftProtocol`); the Swift list does not show it yet, so the badge
+    /// says where it was written rather than pointing at another entry.
     public static func secondaryIcon(for object: RuntimeObject, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage? {
         switch secondaryBadge(for: object) {
         case .objcImplementation:
             return iconForObjCImplementation(size: size, style: style)
         case .swiftClass:
             return icon(for: .swift(.type(.class)), size: size, style: style)
+        case .swiftProtocol:
+            return icon(for: .swift(.type(.protocol)), size: size, style: style)
         case .objcClass:
             return icon(for: .objc(.type(.class)), size: size, style: style)
         case nil:
@@ -150,6 +155,8 @@ public enum RuntimeObjectIcon {
                 : "Implements an Objective-C Class (@objc @implementation)"
         case .swiftClass:
             return "Also Listed as a Swift Class"
+        case .swiftProtocol:
+            return "Defined in Swift"
         case .objcClass:
             return "Also Listed as an Objective-C Class"
         case nil:
@@ -160,6 +167,7 @@ public enum RuntimeObjectIcon {
     private enum SecondaryBadge {
         case objcImplementation
         case swiftClass
+        case swiftProtocol
         case objcClass
     }
 
@@ -174,6 +182,9 @@ public enum RuntimeObjectIcon {
         }
         if object.properties.contains(.isSwiftClass) {
             return .swiftClass
+        }
+        if object.properties.contains(.isSwiftProtocol) {
+            return .swiftProtocol
         }
         if object.properties.contains(.isObjCClass) {
             return .objcClass

@@ -10,8 +10,9 @@ import Testing
 /// `@objc @implementation` (that bit is clear) gets the pink one. The Swift
 /// faces answer in kind: a Swift class registered with the Objective-C runtime
 /// gets the orange Objective-C `C`, an `@objc @implementation` extension the
-/// same pink. `RuntimeObjectIcon.secondaryIcon(for:)` is the single place that
-/// chooses, so this pins the choice rather than each call site.
+/// same pink. An Objective-C protocol defined in Swift gets a Swift `P`.
+/// `RuntimeObjectIcon.secondaryIcon(for:)` is the single place that chooses,
+/// so this pins the choice rather than each call site.
 ///
 /// Identity comparison is exact: `RuntimeObjectIcon` memoizes on
 /// (text, color, style, size), so two calls that agree on all four return the
@@ -82,6 +83,20 @@ struct RuntimeObjectIconTests {
         #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
     }
 
+    @Test("an Objective-C protocol defined in Swift gets the Swift protocol badge")
+    func swiftDefinedProtocolGetsSwiftBadge() {
+        let object = Fixtures.runtimeObject(kind: .objc(.type(.protocol)), properties: [.isSwiftProtocol])
+
+        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.icon(for: .swift(.type(.protocol))))
+    }
+
+    @Test("a protocol written in Objective-C gets no badge")
+    func plainObjCProtocolGetsNothing() {
+        let object = Fixtures.runtimeObject(kind: .objc(.type(.protocol)))
+
+        #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
+    }
+
     // MARK: - Tooltips
 
     /// The glyph alone cannot tell every kind apart — an Objective-C and a
@@ -101,6 +116,7 @@ struct RuntimeObjectIconTests {
             (RuntimeObjectKind.swift(.extension(.class)), RuntimeObject.Properties.isObjCImplementation, "Implements an Objective-C Class (@objc @implementation)"),
             (RuntimeObjectKind.objc(.type(.class)), RuntimeObject.Properties.isSwiftClass, "Also Listed as a Swift Class"),
             (RuntimeObjectKind.swift(.type(.class)), RuntimeObject.Properties.isObjCClass, "Also Listed as an Objective-C Class"),
+            (RuntimeObjectKind.objc(.type(.protocol)), RuntimeObject.Properties.isSwiftProtocol, "Defined in Swift"),
         ]
     )
     func secondaryTooltipExplainsTheBadge(kind: RuntimeObjectKind, properties: RuntimeObject.Properties, expectedTooltip: String) {
