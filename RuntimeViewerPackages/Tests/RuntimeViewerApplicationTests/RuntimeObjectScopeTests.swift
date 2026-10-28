@@ -89,6 +89,7 @@ struct RuntimeObjectScopeTests {
         (.specialized, .isSpecialized),
         (.objcImplementation, .isObjCImplementation),
         (.bridgedSwiftClass, [.isSwiftClass, .isObjCClass]),
+        (.swiftDefined, [.isSwiftClass, .isSwiftProtocol]),
         (.localType, .isLocalType),
         (.positionNamedLocalType, .isPositionNamedLocalType),
     ] as [(RuntimeObjectScope.Property, RuntimeObject.Properties)])
@@ -159,6 +160,18 @@ struct RuntimeObjectScopeTests {
         #expect(scope.passes(object(kind: .swift(.type(.class)), properties: [.isObjCClass])))
         #expect(!scope.passes(object(kind: .objc(.type(.class)), properties: [.isObjCImplementation])))
         #expect(!scope.passes(object(kind: .objc(.type(.class)))))
+    }
+
+    @Test("Defined in Swift on Exclude drops the Objective-C entries of Swift classes and protocols and keeps their Swift entries")
+    func swiftDefinedExcludeKeepsTheSwiftEntries() {
+        var scope = RuntimeObjectScope()
+        scope[.swiftDefined] = .exclude
+
+        #expect(!scope.passes(object(kind: .objc(.type(.class)), properties: [.isSwiftClass])))
+        #expect(!scope.passes(object(kind: .objc(.type(.protocol)), properties: [.isSwiftProtocol])))
+        #expect(scope.passes(object(kind: .swift(.type(.class)), properties: [.isObjCClass])))
+        #expect(scope.passes(object(kind: .objc(.type(.protocol)))))
+        #expect(scope.passes(object(kind: .objc(.type(.class)), properties: [.isObjCImplementation])))
     }
 
     @Test("Local Only with Position-Named Exclude keeps the local types whose function is named")

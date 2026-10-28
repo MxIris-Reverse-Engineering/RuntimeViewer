@@ -68,6 +68,12 @@ actor RuntimeObjCSection {
         ObjCImplementationClasses.all(in: machO).map(\.className)
     )
 
+    /// Runtime names of the protocols this image lists that were defined in
+    /// Swift. Both of this section's protocol factories read the answer from
+    /// here, for the same reason as `objcImplementationClassNames`, and it is
+    /// lazy for the same reason: it costs a pass over the protocol list.
+    private lazy var swiftDefinedProtocolNames: Set<String> = SwiftDefinedObjCProtocols.names(in: machO)
+
     init(imagePath: String, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
         guard let machO = DyldUtilities.machOImage(forPath: imagePath) else {
@@ -123,7 +129,14 @@ actor RuntimeObjCSection {
         }
 
         for proto in objcIndexer.protocolNames {
-            results.append(.init(name: proto, displayName: proto, kind: .objc(.type(.protocol)), imagePath: imagePath, children: []))
+            results.append(.init(
+                name: proto,
+                displayName: proto,
+                kind: .objc(.type(.protocol)),
+                imagePath: imagePath,
+                children: [],
+                properties: properties(forProtocolNamed: proto)
+            ))
         }
 
         for category in objcIndexer.categoryNames {
@@ -398,6 +411,7 @@ actor RuntimeObjCSection {
 
     /// Materialize an Objective-C protocol `RuntimeObject`. Used by the
     /// engine to surface the *target* of an ObjC-protocol-conformers query.
+    /// Mirrors the shape `allObjects()` emits, `.isSwiftProtocol` included.
     func makeRuntimeObject(forProtocolName protocolName: String) -> RuntimeObject? {
         guard objcIndexer.protocolGroup(forName: protocolName) != nil else { return nil }
         return RuntimeObject(
@@ -405,8 +419,13 @@ actor RuntimeObjCSection {
             displayName: protocolName,
             kind: .objc(.type(.protocol)),
             imagePath: imagePath,
-            children: []
+            children: [],
+            properties: properties(forProtocolNamed: protocolName)
         )
+    }
+
+    private func properties(forProtocolNamed protocolName: String) -> RuntimeObject.Properties {
+        swiftDefinedProtocolNames.contains(protocolName) ? [.isSwiftProtocol] : []
     }
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {

@@ -489,8 +489,11 @@ When adding new features, you **MUST** follow these rules:
    exhaustively, so the build fails until the flag has a row: a new `Property` case, with its title
    and tooltip in `SidebarRuntimeObjectScopeViewController`, or an existing case when the flag is
    another face of the same thing (`isSwiftClass` and `isObjCClass` share `bridgedSwiftClass`). A
-   flag belongs to at least one row, and to more than one when two rows overlap.
-   Background: `Documentations/Evolutions/0049-scope-filter-all-object-properties.md`.
+   flag belongs to at least one row, and to more than one when two rows overlap: `isSwiftClass` is
+   also in `swiftDefined`, which takes the Objective-C entries of Swift-defined classes and
+   protocols and leaves their Swift entries alone.
+   Background: `Documentations/Evolutions/0049-scope-filter-all-object-properties.md`, and for
+   `swiftDefined` the proposal `draft-swift-defined-objc-protocol-mark-and-filter`.
 
 ## Injection commands
 

@@ -26,6 +26,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             case isObjCClass = 4
             case isLocalType = 5
             case isPositionNamedLocalType = 6
+            case isSwiftProtocol = 7
         }
 
         public let rawValue: Int
@@ -74,6 +75,14 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// does not name, so it is named by the address of the anonymous
         /// context wrapping it: `TableDataSource.(Visitor in $1a2b3c)`.
         public static let isPositionNamedLocalType = Self(.isPositionNamedLocalType)
+
+        /// Marks an Objective-C protocol that was defined in Swift — possibly
+        /// in another module, since a Swift image that only uses a protocol
+        /// carries a copy of its record too. The protocol counterpart of
+        /// `isSwiftClass`, except that the Swift list does not show the
+        /// protocol yet. How a protocol is recognized, and the one kind it
+        /// misses: `SwiftDefinedObjCProtocols`.
+        public static let isSwiftProtocol = Self(.isSwiftProtocol)
     }
 
     public let name: String

@@ -568,6 +568,7 @@ extension RuntimeObjectScope.Property {
         case .specialized: return "Specialized"
         case .objcImplementation: return "@objc @implementation"
         case .bridgedSwiftClass: return "Bridged Swift Class"
+        case .swiftDefined: return "Defined in Swift"
         case .localType: return "Local"
         case .positionNamedLocalType: return "Position-Named Local"
         }
@@ -584,6 +585,8 @@ extension RuntimeObjectScope.Property {
             return "Objective-C classes implemented in Swift through @objc @implementation, and the Swift extensions implementing them"
         case .bridgedSwiftClass:
             return "Swift classes the Objective-C runtime also lists, both as Objective-C classes and as Swift classes"
+        case .swiftDefined:
+            return "Objective-C classes and protocols defined in Swift; their Swift entries are not included"
         case .localType:
             return "Swift types declared in a function or closure"
         case .positionNamedLocalType:
