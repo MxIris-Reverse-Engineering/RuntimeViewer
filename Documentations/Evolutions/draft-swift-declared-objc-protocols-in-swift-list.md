@@ -68,8 +68,9 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
   「Jump to Swift Protocol」/「Jump to Objective-C Protocol」。配对表在 Swift section 里由 `objcProtocolDefinitions`
   建（运行时名 ↔ mangled name），与类的 `objcClassPairs` 同一做法。
 - 副本：本镜像只是引用别的模块的 Swift `@objc` 协议时，ObjC 列表里也有它的记录、也带 `isSwiftProtocol`（0062 的
-  决定），可本镜像的 Swift 列表没有它。从这种条目跳转时先找本镜像，找不到再按运行时名到其它已索引镜像的 Swift
-  section 里找，于是定义它的镜像已索引时能跳过去；都找不到就照旧提示「No counterpart was found」。
+  决定），可本镜像的 Swift 列表没有它。从这种条目跳转时先找本镜像，找不到再查 Swift section 工厂的一张「运行时名 →
+  声明它的镜像」表（各 section 登记时写入、移除时删掉，键用登记时的路径），于是定义它的镜像已索引时能跳过去；都找
+  不到就照旧提示「No counterpart was found」。
 
 **Filter Scope**
 
@@ -105,16 +106,19 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 
 **测试**
 
-- Core：测试 bundle 里 0062 留下的两个 `@objc` 协议——`MangledSwiftObjCProtocolFixture`（运行时名 `_TtP…_`，
-  配得上）与 `RenamedSwiftObjCProtocolFixture`（改成另一个名字，配不上）——断言 Swift 列表列出两者、只有前者带
-  `isObjCProtocol`、接口含 `@objc protocol`，以及两个方向的跳转。再补四个夹具：`@objc(X) protocol X` 式的改名
-  （配得上）、带 protocol extension 成员的协议（并进协议条目，不再单独列出）、采纳 `NSCopying` 的类（头部带上）、
-  给 Foundation 的类加 `@objc` 协议遵循的 extension（新的 conformance 条目）。
+- Core（新套件 `SwiftDeclaredObjCProtocolListTests`，夹具与它同文件）：测试 bundle 里 0062 留下的两个 `@objc`
+  协议——`MangledSwiftObjCProtocolFixture`（运行时名 `_TtP…_`，配得上）与 `RenamedSwiftObjCProtocolFixture`
+  （改成另一个名字，配不上）——断言 Swift 列表列出两者、只有前者带 `isObjCProtocol`、接口含 `@objc protocol`，以及
+  两个方向的跳转。再补五个夹具：`@objc(X) protocol X` 式的改名（配得上）、带 protocol extension 成员的协议（并进
+  协议条目、只打印一次，不再单独列出）、采纳 `NSCopying` 的类（头部带上）、给 Foundation 的类加 `@objc` 协议遵循的
+  extension（新的 conformance 条目），以及同一个 extension 里同时遵循一个 Swift 协议的（并进已有的 conformance
+  条目）。另有 Find 的成员、成员地址、点击跳转与 Type Relationships 的候选。`RuntimeObjectTests` 钉住新位的 256，
+  `RuntimeObjectCounterpartTests` 补两个新种类的推导。
 - Packages：`RuntimeObjectScopeTests`（新位有行，新行选中两面）、角标与 tooltip、`counterpartKind` 的推导。
 
 **文档**：本提案；`isSwiftProtocol` 文档注释里「Swift 列表还不列」一句，以及 `RuntimeObjectCounterpartKind` 与
-`counterpart(for:)` 注释里只说「class」的地方，随代码改；落地时删掉提案索引「暂缓的后续项」里 0062 那一行。草案
-《左栏改名》也要改几个 `Sidebar*` 文件，谁后落地谁按对方改。
+`counterpart(for:)` 注释里只说「class」的地方，随代码改；落地时删掉提案索引「暂缓的后续项」里 0062 那一行，并添上
+跨镜像跳到 `@rpath` 镜像落空的那一项。草案《左栏改名》也要改几个 `Sidebar*` 文件，谁后落地谁按对方改。
 
 ### 落地步骤
 
@@ -126,7 +130,7 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
    条目，Find 的成员与成员地址，点击跳转；Core 测试。
 3. ✅ **两面**：`isObjCProtocol`、counterpart 的两个新种类与配对表（含副本的跨镜像查找）、Type Relationships 的代表、
    Filter Scope 新行、角标与 tooltip、菜单标题；Core 与 Packages 测试，App 编译。
-4. **收尾**：文档，按提案核对实际做出来的东西，完整验证。App 里的验收留给用户：DVTFoundation 的 Swift 列表列出
+4. ✅ **收尾**：文档，按提案核对实际做出来的东西，完整验证。App 里的验收留给用户：DVTFoundation 的 Swift 列表列出
    11 个协议，`DVTIconReference` 的头部带 `DVTResourceReference, NSCopying`，两面互相跳转；
    `NFAImageDownloadObserver` 的副本在 DVTNFASupport 已索引时跳到那边。
 
@@ -146,3 +150,4 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 | 2026-10-29 | Type Relationships 里这类协议以 ObjC 条目为代表，放在第 3 步 | 方案原来没写，属于避免新条目带来的回归：不合并就多出一个关系树为空的重复候选。判断要用到第 3 步的 `isObjCProtocol` 与配对表 |
 | 2026-10-29 | 第 2 步完成；测试放在新套件 `SwiftDeclaredObjCProtocolListTests`，夹具与它同文件 | 新套件 11 个测试：列出 4 个协议（含配不上记录的改名协议）、接口与要求、扩展成员并进协议且只打印一次、类声明带 `NSCopying`、category 遵循单独成条与并进已有 conformance 条目、Find 的成员、成员地址、同一镜像里的点击跳转。验证：Core 的 Core 576 例（多出的 11 例即新套件）、Communication 239、Injection 36 例全过；CrossReferences 仍是第 1 步就挂的那两例，与单独跑的后台索引套件一起重跑，15 例与 27 例全过 |
 | 2026-10-29 | 第 3 步完成；副本的跨镜像表由工厂按 section 登记时的路径建，不用 `MachOImage.imagePath` | 用登记路径作键，正好绕开上面那个 install name 对不上的原有问题。新套件补 5 个测试：配上记录的两个协议带 `isObjCProtocol`、配不上的不带，两个方向的跳转（`_TtP…_` 名与 `@objc(X) protocol X` 两种），配不上记录的协议从 ObjC 一侧跳转得到 nil，Type Relationships 只剩一个候选且是 ObjC 条目；副本的跨镜像跳转没有稳定的锚点（测试进程里没有第二个声明 `@objc` 协议的 Swift 镜像），留给 App 里的验收。验证：Core 的新套件、0062 的套件、`RuntimeObjectTests`、`RuntimeObjectCounterpartTests`、`RuntimeTypeRelationshipsProtocolCopyTests` 共 80 例全过；Packages 的 Application 679 例全过，EngineManagement 里 `InjectedDeviceEngineTests` 两例在全量里报 `ECONNREFUSED`，单独重跑三次各 12 例、整个测试目标 50 例全过；App（Debug-arm64e）编译通过，锁文件 SHA 不变 |
+| 2026-10-29 | 第 4 步完成：方案一节按实际做出来的核对过（副本的跨镜像查找写成工厂的登记表，夹具补到五个）；实现完成，待用户在 App 里验收后收尾 | 验证（Ultra，macOS 27.2，Xcode 27.2，最终提交 `8253a2b8`）：Core 的 Core 581、Communication 239、Injection 36 例与单独跑的后台索引套件 27 例全过；CrossReferences 70 例中仍是 `CrossReferencePreparationTests` 那两例失败（`:187`、`:308`，断言预备的代数），当时负载 24–33。本分支没有改动交叉引用的代码，上午负载 6–16 时单独重跑这个套件 15 例全过。CommandLine 编译通过，121 例全过 |
