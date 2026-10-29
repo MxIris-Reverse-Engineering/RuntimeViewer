@@ -52,6 +52,18 @@ extension DateComponentsFormatter: SwiftOnlyConformanceFixture, SwiftDeclaredObj
     func besideSwiftConformanceRequirementFixture() {}
 }
 
+/// Declared `private`, so its mangled name carries this file's private
+/// discriminator. A class adopts it, as one adopts each of AppKit's private
+/// `@objc` protocols.
+@objc
+private protocol SwiftDeclaredObjCProtocolPrivateFixture {
+    func privateRequirementFixture()
+}
+
+private final class SwiftDeclaredObjCProtocolPrivateAdopterFixture: NSObject, SwiftDeclaredObjCProtocolPrivateFixture {
+    func privateRequirementFixture() {}
+}
+
 /// The `@objc` protocols a Swift image declares, listed and printed on the
 /// Swift side from MachOSwiftSection's `objcProtocolDefinitions`, and the
 /// Objective-C protocols the image's classes adopt, printed where Swift
@@ -135,6 +147,16 @@ struct SwiftDeclaredObjCProtocolListTests {
 
         #expect(interface.contains("protocol RenamedSwiftObjCProtocolFixture"))
         #expect(interface.contains("No Objective-C protocol record pairs with this declaration"))
+    }
+
+    /// The discriminator in a private protocol's mangled name stays out of
+    /// its declaration, as it does for a private Swift protocol's.
+    @Test("a private @objc protocol prints its name without the private discriminator")
+    func privateProtocolPrintsItsBareName() async throws {
+        let interface = try await Self.interfaceText(ofProtocolNamed: "SwiftDeclaredObjCProtocolPrivateFixture")
+
+        #expect(interface.contains("@objc protocol SwiftDeclaredObjCProtocolPrivateFixture {"), "\(interface)")
+        #expect(!interface.contains("SwiftDeclaredObjCProtocolPrivateFixture in _"), "\(interface)")
     }
 
     @Test("a class's declaration names the Objective-C protocols it adopts")
