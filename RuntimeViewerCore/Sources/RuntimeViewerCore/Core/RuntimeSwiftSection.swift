@@ -143,9 +143,37 @@ actor RuntimeSwiftSection {
 
     private var objcImplementationClassNameByExtensionMangledName: [String: String] = [:]
 
+    /// The Objective-C protocols this image's extensions of other modules'
+    /// classes adopt, filed under the extended class's extension name: the
+    /// key its conformance extensions are filed under too, so an entry
+    /// prints both. The compiler records these in categories, and no
+    /// conformance record names them, because an Objective-C protocol has no
+    /// witness table.
+    private lazy var objcCategoryConformancesByExtensionName: OrderedDictionary<SwiftDeclaration.ExtensionName, [ObjCCategoryConformance]> = {
+        var conformancesByExtensionName: OrderedDictionary<SwiftDeclaration.ExtensionName, [ObjCCategoryConformance]> = [:]
+        for conformance in indexer.objcCategoryConformances {
+            conformancesByExtensionName[conformance.extendedTypeName.extensionName, default: []].append(conformance)
+        }
+        return conformancesByExtensionName
+    }()
+
     private struct ObjCClassPairs {
         var objcClassNameByMangledTypeName: [String: String] = [:]
         var mangledTypeNameByObjCClassName: [String: String] = [:]
+    }
+
+    /// Every `@objc` protocol this image declares in Swift that
+    /// MachOSwiftSection paired with the image's Objective-C record of it,
+    /// with the record's runtime name, both ways round. One table answers the
+    /// `isObjCProtocol` mark and the jump between a protocol's two faces.
+    ///
+    /// Lazy, but `allObjects()` reads it while `init` runs — after
+    /// `indexer.prepare()`, which lists the protocols.
+    private lazy var objcProtocolPairs: ObjCProtocolPairs = makeObjCProtocolPairs()
+
+    private struct ObjCProtocolPairs {
+        var objcProtocolNameByMangledProtocolName: [String: String] = [:]
+        var mangledProtocolNameByObjCProtocolName: [String: String] = [:]
     }
 
     private enum InterfaceDefinitionName {
@@ -172,6 +200,10 @@ actor RuntimeSwiftSection {
         case derivedSpecializedType(SwiftDeclaration.TypeName)
         case rootProtocol(SwiftDeclaration.ProtocolName)
         case childProtocol(SwiftDeclaration.ProtocolName)
+        /// An `@objc` protocol declared in Swift. The compiler gives it no
+        /// protocol descriptor, so it is no `ProtocolDefinition`:
+        /// MachOSwiftSection lists it in `objcProtocolDefinitions`.
+        case objcProtocol(SwiftDeclaration.ProtocolName)
         case typeExtension(SwiftDeclaration.ExtensionName)
         case protocolExtension(SwiftDeclaration.ExtensionName)
         case typeAliasExtension(SwiftDeclaration.ExtensionName)
@@ -224,11 +256,21 @@ actor RuntimeSwiftSection {
         #log(.debug, "Getting all Swift objects")
         let rootTypeName = try indexer.rootTypeDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
         let rootProtocolName = try indexer.rootProtocolDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
+        let objcProtocolName = try indexer.objcProtocolDefinitions.values.map { try makeRuntimeObject(for: $0) }
+        // An `@objc` protocol's extensions print with it, as a Swift
+        // protocol's do: MachOSwiftSection attaches them to its definition.
+        let objcProtocolExtensionNames = Set(indexer.objcProtocolDefinitions.keys.map(\.extensionName))
         let typeExtensionName = try indexer.typeExtensionDefinitions.filter { $0.key.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
-        let protocolExtensionName = try indexer.protocolExtensionDefinitions.filter { $0.key.protocolName.map { indexer.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
+        let protocolExtensionName = try indexer.protocolExtensionDefinitions.filter { ($0.key.protocolName.map { indexer.allProtocolDefinitions[$0] == nil } ?? false) && !objcProtocolExtensionNames.contains($0.key) }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
         let typeAliasExtensionName = try indexer.typeAliasExtensionDefinitions.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
         let conformanceExtensionName = try indexer.conformanceExtensionDefinitions.filter { $0.key.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
-        let allObjects = rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
+        // A class whose only conformances here are Objective-C ones gets an
+        // entry of its own; one with conformance extensions prints them in
+        // that entry (`printedDefinitions(for:)`).
+        let objcCategoryConformanceName = try objcCategoryConformancesByExtensionName.keys.filter { extensionName in
+            indexer.conformanceExtensionDefinitions[extensionName] == nil && (extensionName.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? true)
+        }.map { try makeRuntimeObject(for: [], extensionName: $0, kind: $0.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0)) }
+        let allObjects = rootTypeName + rootProtocolName + objcProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName + objcCategoryConformanceName
         #log(.debug, "Found \(allObjects.count, privacy: .public) Swift objects: \(rootTypeName.count, privacy: .public) types, \(rootProtocolName.count, privacy: .public) protocols, \(typeExtensionName.count, privacy: .public) type extensions")
         allObjectsCache = allObjects
         return allObjects
@@ -269,6 +311,26 @@ actor RuntimeSwiftSection {
             interfaceDefinitionNameByObject[runtimeObjectName.key] = .rootProtocol(protocolDefintion.protocolName)
         }
         return runtimeObjectName
+    }
+
+    /// An `@objc` protocol declared in Swift, listed with the image's Swift
+    /// protocols and under the same rule for its name. One declared in a type
+    /// is listed at the top level: MachOSwiftSection prints it in an
+    /// extension of its parent, which reads the same wherever it is listed.
+    private func makeRuntimeObject(for objcProtocolDefinition: ObjCProtocolDefinition) throws -> RuntimeObject {
+        let protocolName = objcProtocolDefinition.protocolName
+        let mangledName = try mangleAsString(protocolName.node)
+        let runtimeObject = RuntimeObject(
+            name: mangledName,
+            displayName: protocolName.name,
+            kind: protocolName.runtimeObjectKind,
+            imagePath: imagePath,
+            children: [],
+            properties: objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol],
+            privateDeclarations: protocolName.privateDeclarations
+        )
+        interfaceDefinitionNameByObject[runtimeObject.key] = .objcProtocol(protocolName)
+        return runtimeObject
     }
 
     private func makeRuntimeObject(
@@ -373,6 +435,10 @@ extension RuntimeSwiftSection {
         case type(TypeDefinition)
         case `protocol`(ProtocolDefinition)
         case `extension`(ExtensionDefinition)
+        /// Printed with its default implementations after it.
+        case objcProtocol(ObjCProtocolDefinition)
+        /// `extension Class: P {}`, from a category of this image.
+        case objcCategoryConformance(ObjCCategoryConformance)
     }
 
     /// The definitions an object's interface is printed from, in the order
@@ -409,11 +475,13 @@ extension RuntimeSwiftSection {
             return [.type(typeDefinition)]
                 + (indexer.typeExtensionDefinitions[rootTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
                 + (indexer.conformanceExtensionDefinitions[rootTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
+                + objcCategoryConformances(filedUnder: rootTypeName.extensionName)
         case .childType(let childTypeName):
             guard let typeDefinition = indexer.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObject }
             return [.type(typeDefinition)]
                 + (indexer.typeExtensionDefinitions[childTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
                 + (indexer.conformanceExtensionDefinitions[childTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
+                + objcCategoryConformances(filedUnder: childTypeName.extensionName)
         case .rootProtocol(let rootProtocolName):
             guard let definition = indexer.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObject }
             return [.protocol(definition)]
@@ -424,6 +492,9 @@ extension RuntimeSwiftSection {
             return [.protocol(definition)]
                 + defaultImplementationExtensionsLeftToPrint(of: definition)
                 + unattachedProtocolExtensions(of: childProtocolName)
+        case .objcProtocol(let objcProtocolName):
+            guard let definition = indexer.objcProtocolDefinitions[objcProtocolName] else { throw Error.invalidRuntimeObject }
+            return [.objcProtocol(definition)]
         case .typeExtension(let typeExtensionName):
             guard let definitions = indexer.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObject }
             return definitions.map(PrintedDefinition.extension)
@@ -434,9 +505,17 @@ extension RuntimeSwiftSection {
             guard let definitions = indexer.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObject }
             return definitions.map(PrintedDefinition.extension)
         case .conformance(let conformanceExtensionName):
-            guard let definitions = indexer.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObject }
-            return definitions.map(PrintedDefinition.extension)
+            let definitions = (indexer.conformanceExtensionDefinitions[conformanceExtensionName] ?? []).map(PrintedDefinition.extension)
+                + objcCategoryConformances(filedUnder: conformanceExtensionName)
+            guard !definitions.isEmpty else { throw Error.invalidRuntimeObject }
+            return definitions
         }
+    }
+
+    /// The Objective-C protocols this image's categories adopt for the class
+    /// `extensionName` names; see `objcCategoryConformancesByExtensionName`.
+    private func objcCategoryConformances(filedUnder extensionName: SwiftDeclaration.ExtensionName) -> [PrintedDefinition] {
+        (objcCategoryConformancesByExtensionName[extensionName] ?? []).map(PrintedDefinition.objcCategoryConformance)
     }
 
     /// The protocol's default implementations, unless the printer prints them
@@ -495,6 +574,10 @@ extension RuntimeSwiftSection {
             try await printer.printProtocolDefinition(protocolDefinition)
         case .extension(let extensionDefinition):
             try await printer.printExtensionDefinition(extensionDefinition)
+        case .objcProtocol(let objcProtocolDefinition):
+            try await printer.printObjCProtocolDefinition(objcProtocolDefinition)
+        case .objcCategoryConformance(let objcCategoryConformance):
+            try await printer.printObjCCategoryConformance(objcCategoryConformance)
         }
     }
 }
@@ -659,6 +742,9 @@ extension RuntimeSwiftSection {
             if let protocolDefinition = indexer.allProtocolDefinitions[protocolName] {
                 collect(from: protocolDefinition)
             }
+        case .objcProtocol(let protocolName):
+            // Its requirements have no symbols; its default implementations do.
+            indexer.objcProtocolDefinitions[protocolName]?.defaultImplementationExtensions.forEach { collect(from: $0) }
         case .typeExtension(let extName):
             indexer.typeExtensionDefinitions[extName]?.forEach { collect(from: $0) }
         case .protocolExtension(let extName):
@@ -727,6 +813,7 @@ extension RuntimeSwiftSection {
             kind: protocolName.runtimeObjectKind,
             imagePath: imagePath,
             children: [],
+            properties: objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol],
             privateDeclarations: protocolName.privateDeclarations,
         )
     }
@@ -751,7 +838,9 @@ extension RuntimeSwiftSection {
     /// nominal-type candidate consumed by generic specialization.
     fileprivate func protocolCandidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedProtocolEntry] {
         var result: [String: RuntimeSwiftSectionFactory.IndexedProtocolEntry] = [:]
-        for (protocolName, _) in indexer.allProtocolDefinitions {
+        // `@objc` protocols declared in Swift too, so a jump to one resolves.
+        let protocolNames = Array(indexer.allProtocolDefinitions.keys) + Array(indexer.objcProtocolDefinitions.keys)
+        for protocolName in protocolNames {
             guard let mangled = try? mangleAsString(protocolName.node) else { continue }
             result[mangled] = (protocolName, machO)
         }
@@ -792,6 +881,47 @@ extension RuntimeSwiftSection {
         default:
             return nil
         }
+    }
+
+    /// The `@objc` protocol on the Swift side that an Objective-C protocol of
+    /// this image is the other face of, found by the protocol's runtime name,
+    /// as `allObjects()` listed it. `nil` for a protocol this image does not
+    /// declare in Swift — one written in Objective-C, or the copy an image
+    /// holds of another module's.
+    func makeRuntimeObject(forObjCRuntimeProtocolName protocolName: String) -> RuntimeObject? {
+        guard let mangledProtocolName = objcProtocolPairs.mangledProtocolNameByObjCProtocolName[protocolName] else { return nil }
+        return makeRuntimeObject(forMangledProtocolName: mangledProtocolName)
+    }
+
+    /// The runtime name of the Objective-C protocol `object`, an `@objc`
+    /// protocol on the Swift side, is the other face of. `nil` for anything
+    /// else.
+    func objcProtocolName(forCounterpartOf object: RuntimeObject) -> String? {
+        guard case .swift(.type(.protocol)) = object.kind else { return nil }
+        return objcProtocolPairs.objcProtocolNameByMangledProtocolName[object.name]
+    }
+
+    /// The runtime names `objcProtocolPairs` holds, for the factory's table of
+    /// the images that declare them.
+    fileprivate func objcProtocolRuntimeNames() -> [String] {
+        Array(objcProtocolPairs.mangledProtocolNameByObjCProtocolName.keys)
+    }
+
+    /// Pairs every `@objc` protocol this image declares in Swift with the
+    /// Objective-C protocol record MachOSwiftSection matched its declaration
+    /// to, by the runtime name the record carries. A protocol renamed with
+    /// `@objc(Name)` to a name other than its Swift name matches no record and
+    /// is left out.
+    private func makeObjCProtocolPairs() -> ObjCProtocolPairs {
+        var objcProtocolPairs = ObjCProtocolPairs()
+        for (protocolName, definition) in indexer.objcProtocolDefinitions {
+            guard let objcProtocolName = definition.objcRuntimeName,
+                  let mangledProtocolName = try? mangleAsString(protocolName.node)
+            else { continue }
+            objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledProtocolName] = objcProtocolName
+            objcProtocolPairs.mangledProtocolNameByObjCProtocolName[objcProtocolName] = mangledProtocolName
+        }
+        return objcProtocolPairs
     }
 
     /// Pairs every Swift class this image registers with the Objective-C
@@ -1673,6 +1803,14 @@ actor RuntimeSwiftSectionFactory {
     /// first-write-wins, per-image-eviction lifecycle as the type table.
     private var indexedProtocolByCandidateID: [String: IndexedProtocolEntry] = [:]
 
+    /// The runtime name of an Objective-C protocol → the image that declares
+    /// it as an `@objc` protocol in Swift, populated as each section
+    /// registers, keyed like `sections`. The copy another image holds of such
+    /// a protocol finds its Swift face through it
+    /// (`RuntimeEngine.counterpart(for:)`). First write wins, and an image's
+    /// entries leave with its section, as in the candidate tables.
+    private var declaringImagePathByObjCProtocolName: [String: String] = [:]
+
     init() {
         let machO = MachOImage.current()
         self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: machO.imagePath, configuration: RuntimeSwiftSection.indexConfiguration)
@@ -1707,6 +1845,12 @@ actor RuntimeSwiftSectionFactory {
     /// Returns `nil` when the protocol's defining image is not indexed.
     func indexedProtocol(forCandidateID candidateID: String) -> IndexedProtocolEntry? {
         indexedProtocolByCandidateID[candidateID]
+    }
+
+    /// The image that declares the `@objc` protocol an Objective-C protocol
+    /// record of `runtimeName` belongs to, among the images indexed right now.
+    func imagePath(declaringObjCProtocolNamed runtimeName: String) -> String? {
+        declaringImagePathByObjCProtocolName[runtimeName]
     }
 
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
@@ -1749,6 +1893,9 @@ actor RuntimeSwiftSectionFactory {
         sectionBuilds[imagePath] = nil
         await section.setupForFactory(self)
         await registerCandidateIDs(from: section)
+        for runtimeName in await section.objcProtocolRuntimeNames() where declaringImagePathByObjCProtocolName[runtimeName] == nil {
+            declaringImagePathByObjCProtocolName[runtimeName] = imagePath
+        }
         #log(.debug, "Swift section created and cached")
     }
 
@@ -1774,6 +1921,9 @@ actor RuntimeSwiftSectionFactory {
         indexedProtocolByCandidateID = indexedProtocolByCandidateID.filter { _, value in
             value.machO.imagePath != imagePath
         }
+        declaringImagePathByObjCProtocolName = declaringImagePathByObjCProtocolName.filter { _, declaringImagePath in
+            declaringImagePath != imagePath
+        }
     }
 
     func removeAllSections() {
@@ -1783,6 +1933,7 @@ actor RuntimeSwiftSectionFactory {
         sections.removeAll()
         indexedTypeByCandidateID.removeAll()
         indexedProtocolByCandidateID.removeAll()
+        declaringImagePathByObjCProtocolName.removeAll()
     }
 
     private func registerCandidateIDs(from section: RuntimeSwiftSection) async {
@@ -1967,9 +2118,46 @@ extension RuntimeSwiftSection {
             case .extension(let extensionDefinition):
                 guard !listedDefaultImplementationExtensions.contains(ObjectIdentifier(extensionDefinition)) else { continue }
                 members += Self.memberDeclarations(of: extensionDefinition)
+            case .objcProtocol(let objcProtocolDefinition):
+                members += objcProtocolDefinition.requirements.map(Self.memberDeclaration(of:))
+                for extensionDefinition in objcProtocolDefinition.defaultImplementationExtensions {
+                    listedDefaultImplementationExtensions.insert(ObjectIdentifier(extensionDefinition))
+                    members += Self.memberDeclarations(of: extensionDefinition)
+                }
+            case .objcCategoryConformance:
+                // `extension Class: P {}` declares no members.
+                continue
             }
         }
         return members
+    }
+
+    /// A requirement of an `@objc` protocol under the name the interface
+    /// prints it with — its Swift declaration's, not its selector. The
+    /// requirements are read when the protocol is printed, which the corpus
+    /// does before it lists members.
+    private static func memberDeclaration(of requirement: ObjCProtocolRequirementDefinition) -> RuntimeMemberDeclaration {
+        switch requirement.kind {
+        case .initializer:
+            return RuntimeMemberDeclaration(name: "init", kind: .swiftInitializer, isStatic: true, declarationText: "init", lineNumber: nil)
+        case .subscript:
+            return RuntimeMemberDeclaration(name: "subscript", kind: .swiftSubscript, isStatic: requirement.isClassMember, declarationText: "subscript", lineNumber: nil)
+        case .method:
+            let name = declaredName(of: requirement)
+            return RuntimeMemberDeclaration(name: name, kind: .swiftFunction, isStatic: requirement.isClassMember, declarationText: name, lineNumber: nil)
+        case .property:
+            let name = declaredName(of: requirement)
+            return RuntimeMemberDeclaration(name: name, kind: .swiftVariable, isStatic: requirement.isClassMember, declarationText: name, lineNumber: nil)
+        }
+    }
+
+    /// The identifier of a method's or property's declaration —
+    /// `Global > Function` or `Global > (Static >) Getter > Variable`, whose
+    /// first child is the context the identifier follows. The selector stands
+    /// in should the node ever carry none.
+    private static func declaredName(of requirement: ObjCProtocolRequirementDefinition) -> String {
+        let declarationNode = requirement.node.materialize().first(of: .function, .variable)
+        return declarationNode?.children.first { $0.kind == .identifier }?.text ?? requirement.selector
     }
 
     private static func memberDeclarations(of definition: some Definition) -> [RuntimeMemberDeclaration] {

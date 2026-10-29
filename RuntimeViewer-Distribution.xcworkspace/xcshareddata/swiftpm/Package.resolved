@@ -177,7 +177,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "e40982fee6dae0cf0c8b9e96894822de42e14204"
+        "revision" : "7b564795a940346500ca72b7e0ec7f0a7d5f1bc3"
       }
     },
     {
@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "d500d686723351fde33998ae76599e4923282a84"
+        "revision" : "07ed84678ee6af74feb7a393e72fffa69315d47f"
       }
     },
     {

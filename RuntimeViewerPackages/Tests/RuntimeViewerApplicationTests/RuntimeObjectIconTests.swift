@@ -97,6 +97,20 @@ struct RuntimeObjectIconTests {
         #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
     }
 
+    @Test("the Swift entry of an @objc protocol gets the Objective-C protocol badge")
+    func objcProtocolSwiftEntryGetsObjCBadge() {
+        let object = Fixtures.runtimeObject(kind: .swift(.type(.protocol)), properties: [.isObjCProtocol])
+
+        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.icon(for: .objc(.type(.protocol))))
+    }
+
+    @Test("a plain Swift protocol gets no badge")
+    func plainSwiftProtocolGetsNothing() {
+        let object = Fixtures.runtimeObject(kind: .swift(.type(.protocol)))
+
+        #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
+    }
+
     // MARK: - Tooltips
 
     /// The glyph alone cannot tell every kind apart — an Objective-C and a
@@ -116,7 +130,8 @@ struct RuntimeObjectIconTests {
             (RuntimeObjectKind.swift(.extension(.class)), RuntimeObject.Properties.isObjCImplementation, "Implements an Objective-C Class (@objc @implementation)"),
             (RuntimeObjectKind.objc(.type(.class)), RuntimeObject.Properties.isSwiftClass, "Also Listed as a Swift Class"),
             (RuntimeObjectKind.swift(.type(.class)), RuntimeObject.Properties.isObjCClass, "Also Listed as an Objective-C Class"),
-            (RuntimeObjectKind.objc(.type(.protocol)), RuntimeObject.Properties.isSwiftProtocol, "Defined in Swift"),
+            (RuntimeObjectKind.objc(.type(.protocol)), RuntimeObject.Properties.isSwiftProtocol, "Also Listed as a Swift Protocol"),
+            (RuntimeObjectKind.swift(.type(.protocol)), RuntimeObject.Properties.isObjCProtocol, "Also Listed as an Objective-C Protocol"),
         ]
     )
     func secondaryTooltipExplainsTheBadge(kind: RuntimeObjectKind, properties: RuntimeObject.Properties, expectedTooltip: String) {

@@ -61,7 +61,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
         "branch" : "next",
-        "revision" : "ecae5d19ab6d8771d589e6c45677e4ba86acd352"
+        "revision" : "ea5d7214e3335b9871ea73d36cec7b2c10d3dcc4"
       }
     },
     {
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "39bdf745ad729c798395beb4dca12587ea5686c9",
-        "version" : "1.2.0"
+        "revision" : "568a6e8fa6e6bcb984f11d8ccd3e7fced6777924",
+        "version" : "1.3.0"
       }
     },
     {
@@ -79,7 +79,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "a6d91652fec7f78172906190ce1af12544afe05c"
+        "revision" : "7b564795a940346500ca72b7e0ec7f0a7d5f1bc3"
       }
     },
     {
@@ -88,7 +88,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "c5fe5756cd2a95afe08ac6a59ddab0a3ae629fb0"
+        "revision" : "07ed84678ee6af74feb7a393e72fffa69315d47f"
       }
     },
     {
@@ -312,8 +312,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump",
       "state" : {
-        "revision" : "641d257d60385b231a608ab8c4ecdf31348c779e",
-        "version" : "0.8.101"
+        "revision" : "255c8cca86479b093f7a1b083c73bfb82a111382",
+        "version" : "0.8.102"
       }
     },
     {

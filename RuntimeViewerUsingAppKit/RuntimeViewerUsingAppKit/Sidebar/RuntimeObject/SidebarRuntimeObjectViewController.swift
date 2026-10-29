@@ -388,6 +388,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             return "Jump to Swift Implementation"
         case .objcClass:
             return "Jump to Objective-C Class"
+        case .swiftProtocol:
+            return "Jump to Swift Protocol"
+        case .objcProtocol:
+            return "Jump to Objective-C Protocol"
         }
     }
 }

@@ -133,6 +133,11 @@ struct RuntimeObjectCounterpartTests {
         #expect(object(.swift(.extension(.class)), [.isObjCImplementation]).counterpartKind == .objcClass)
         #expect(object(.swift(.extension(.class)), []).counterpartKind == nil)
         #expect(object(.swift(.type(.struct)), [.isObjCClass]).counterpartKind == nil)
+        #expect(object(.objc(.type(.protocol)), [.isSwiftProtocol]).counterpartKind == .swiftProtocol)
+        #expect(object(.objc(.type(.protocol)), []).counterpartKind == nil)
+        #expect(object(.swift(.type(.protocol)), [.isObjCProtocol]).counterpartKind == .objcProtocol)
+        #expect(object(.swift(.type(.protocol)), []).counterpartKind == nil)
+        #expect(object(.swift(.type(.class)), [.isObjCProtocol]).counterpartKind == nil)
     }
 
     // MARK: - Helpers

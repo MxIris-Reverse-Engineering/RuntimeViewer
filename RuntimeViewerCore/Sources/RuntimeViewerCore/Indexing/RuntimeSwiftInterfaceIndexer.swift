@@ -277,6 +277,13 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
                 refiningProtocolsTable[refined.qualifiedName, default: []].append(reference)
             }
         }
+        // An `@objc` protocol declared in Swift has no protocol descriptor, so
+        // the refinement tables have nothing to say about it; it is filed by
+        // name only, so that a jump to it lands on its entry.
+        for protocolName in upstream.objcProtocolDefinitions.keys {
+            guard let key = try? await mangleAsString(protocolName.node) else { continue }
+            protocolNameTable[key] = protocolName
+        }
         for (typeName, typeDefinition) in upstream.allTypeDefinitions {
             // Record `mangledName -> TypeName` for every type, regardless of
             // whether it is a class. `RuntimeSwiftSection.makeRuntimeObject`

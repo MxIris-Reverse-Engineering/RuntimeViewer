@@ -1298,14 +1298,18 @@ extension RuntimeEngine {
         await relationshipsResolver.relationships(for: object)
     }
 
-    /// The other face of a class both lists show: the Swift class of a bridged
-    /// Objective-C class, the extension implementing an `@objc @implementation`
-    /// class, or the Objective-C class of either Swift face — whichever
+    /// The other face of a class or protocol both lists show: the Swift class
+    /// of a bridged Objective-C class, the extension implementing an
+    /// `@objc @implementation` class, the Objective-C class of either Swift
+    /// face, the `@objc` protocol of an Objective-C protocol defined in Swift,
+    /// or the Objective-C protocol of that `@objc` protocol — whichever
     /// `object.counterpartKind` names. `nil` when the object has no other face,
-    /// or its image cannot find it.
+    /// or no indexed image holds it.
     ///
     /// The answer is keyed like the sidebar's own entry for it, so pushing it
-    /// selects that row. Both faces live in the object's own image.
+    /// selects that row. Both faces live in the object's own image, but for
+    /// the copy an image holds of another module's Swift protocol, whose Swift
+    /// face is in the image that declares it.
     public func counterpart(for object: RuntimeObject) async throws -> RuntimeObject? {
         try await dispatch(CounterpartCommand(object: object))
     }
@@ -1324,6 +1328,19 @@ extension RuntimeEngine {
                   let objcSection = await objcSectionFactory.existingSection(for: object.imagePath)
             else { return nil }
             return await objcSection.makeRuntimeObject(forClassName: className)
+        case .swiftProtocol:
+            if let swiftFace = await swiftSection.makeRuntimeObject(forObjCRuntimeProtocolName: object.name) {
+                return swiftFace
+            }
+            guard let declaringImagePath = await swiftSectionFactory.imagePath(declaringObjCProtocolNamed: object.name),
+                  let declaringSection = await swiftSectionFactory.existingSection(for: declaringImagePath)
+            else { return nil }
+            return await declaringSection.makeRuntimeObject(forObjCRuntimeProtocolName: object.name)
+        case .objcProtocol:
+            guard let protocolName = await swiftSection.objcProtocolName(forCounterpartOf: object),
+                  let objcSection = await objcSectionFactory.existingSection(for: object.imagePath)
+            else { return nil }
+            return await objcSection.makeRuntimeObject(forProtocolName: protocolName)
         }
     }
 
