@@ -30,6 +30,9 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
   是 SwiftPM 按新版本的下限自己带上的。其它 pin 不动，不跑 `UpdatePackagesScript.sh`——它把所有分支依赖一起推到
   最新，会混进无关的变化。`RuntimeViewerServer.xcodeproj` 自带的那份锁文件已落后多个版本（MSS `6ab2cd30`、
   MachOObjCSection 0.8.105），App 经 workspace 构建、读的是 workspace 的锁文件，它不动。
+- App 里验收之后又抬了一次：MSS 到它 `next` 上的 `ec3a8d1b`，私有 `@objc` 协议的声明从此打裸名（见决策日志）。MSS
+  自 `ad5bc459` 起要求 MachOObjCSection `0.8.204..<0.9.0`，于是 MachOObjCSection 跟着抬到 `5c8dfb3`（0.8.204 之后
+  只多一个文档提交）。五份锁文件都只改这两条 revision。
 
 **Swift 列表**
 
@@ -39,7 +42,7 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
   `extension 父类型 { … }` 里。
 - 接口用 `SwiftDeclarationPrinter.printObjCProtocolDefinition(_:)` 打印：`@objc protocol` 头部（改过名的带
   `@objc(运行时名)`）、要求（Swift 签名取自本镜像里实现它的类，没有实现者的照 ClangImporter 的规则从 selector
-  推出，再用 `@objc(selector)` 钉住），随后是默认实现。
+  推出，再用 `@objc(selector)` 钉住），随后是默认实现。私有协议与私有 Swift 协议一样只打裸名，不带私有鉴别器。
 - 这些协议的 protocol extension 以前单独列成「Swift Protocol Extension」条目。MSS 现在把它们挂到协议上当默认实现，
   所以 `allObjects()` 不再单独列它们，内容并进协议条目，与普通 Swift 协议的做法一致。指向旧条目的书签从此找不到
   对象，不做迁移：这种条目少，旧条目里也只有扩展成员、没有协议本身。
@@ -109,10 +112,11 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 - Core（新套件 `SwiftDeclaredObjCProtocolListTests`，夹具与它同文件）：测试 bundle 里 0062 留下的两个 `@objc`
   协议——`MangledSwiftObjCProtocolFixture`（运行时名 `_TtP…_`，配得上）与 `RenamedSwiftObjCProtocolFixture`
   （改成另一个名字，配不上）——断言 Swift 列表列出两者、只有前者带 `isObjCProtocol`、接口含 `@objc protocol`，以及
-  两个方向的跳转。再补五个夹具：`@objc(X) protocol X` 式的改名（配得上）、带 protocol extension 成员的协议（并进
+  两个方向的跳转。再补六个夹具：`@objc(X) protocol X` 式的改名（配得上）、带 protocol extension 成员的协议（并进
   协议条目、只打印一次，不再单独列出）、采纳 `NSCopying` 的类（头部带上）、给 Foundation 的类加 `@objc` 协议遵循的
-  extension（新的 conformance 条目），以及同一个 extension 里同时遵循一个 Swift 协议的（并进已有的 conformance
-  条目）。另有 Find 的成员、成员地址、点击跳转与 Type Relationships 的候选。`RuntimeObjectTests` 钉住新位的 256，
+  extension（新的 conformance 条目）、同一个 extension 里同时遵循一个 Swift 协议的（并进已有的 conformance
+  条目），以及由 private 类采纳的 private 协议（声明打裸名，不带私有鉴别器）。另有 Find 的成员、成员地址、点击跳转与
+  Type Relationships 的候选。`RuntimeObjectTests` 钉住新位的 256，
   `RuntimeObjectCounterpartTests` 补两个新种类的推导。
 - Packages：`RuntimeObjectScopeTests`（新位有行，新行选中两面）、角标与 tooltip、`counterpartKind` 的推导。
 
@@ -132,7 +136,8 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
    Filter Scope 新行、角标与 tooltip、菜单标题；Core 与 Packages 测试，App 编译。
 4. ✅ **收尾**：文档，按提案核对实际做出来的东西，完整验证。App 里的验收留给用户：DVTFoundation 的 Swift 列表列出
    11 个协议，`DVTIconReference` 的头部带 `DVTResourceReference, NSCopying`，两面互相跳转；
-   `NFAImageDownloadObserver` 的副本在 DVTNFASupport 已索引时跳到那边。
+   `NFAImageDownloadObserver` 的副本在 DVTNFASupport 已索引时跳到那边；私有协议（如 AppKit 的
+   `TextShadowViewControllerDelegate`）的声明不带私有鉴别器。
 
 ## 决策日志
 
@@ -151,3 +156,4 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 | 2026-10-29 | 第 2 步完成；测试放在新套件 `SwiftDeclaredObjCProtocolListTests`，夹具与它同文件 | 新套件 11 个测试：列出 4 个协议（含配不上记录的改名协议）、接口与要求、扩展成员并进协议且只打印一次、类声明带 `NSCopying`、category 遵循单独成条与并进已有 conformance 条目、Find 的成员、成员地址、同一镜像里的点击跳转。验证：Core 的 Core 576 例（多出的 11 例即新套件）、Communication 239、Injection 36 例全过；CrossReferences 仍是第 1 步就挂的那两例，与单独跑的后台索引套件一起重跑，15 例与 27 例全过 |
 | 2026-10-29 | 第 3 步完成；副本的跨镜像表由工厂按 section 登记时的路径建，不用 `MachOImage.imagePath` | 用登记路径作键，正好绕开上面那个 install name 对不上的原有问题。新套件补 5 个测试：配上记录的两个协议带 `isObjCProtocol`、配不上的不带，两个方向的跳转（`_TtP…_` 名与 `@objc(X) protocol X` 两种），配不上记录的协议从 ObjC 一侧跳转得到 nil，Type Relationships 只剩一个候选且是 ObjC 条目；副本的跨镜像跳转没有稳定的锚点（测试进程里没有第二个声明 `@objc` 协议的 Swift 镜像），留给 App 里的验收。验证：Core 的新套件、0062 的套件、`RuntimeObjectTests`、`RuntimeObjectCounterpartTests`、`RuntimeTypeRelationshipsProtocolCopyTests` 共 80 例全过；Packages 的 Application 679 例全过，EngineManagement 里 `InjectedDeviceEngineTests` 两例在全量里报 `ECONNREFUSED`，单独重跑三次各 12 例、整个测试目标 50 例全过；App（Debug-arm64e）编译通过，锁文件 SHA 不变 |
 | 2026-10-29 | 第 4 步完成：方案一节按实际做出来的核对过（副本的跨镜像查找写成工厂的登记表，夹具补到五个）；实现完成，待用户在 App 里验收后收尾 | 验证（Ultra，macOS 27.2，Xcode 27.2，最终提交 `8253a2b8`）：Core 的 Core 581、Communication 239、Injection 36 例与单独跑的后台索引套件 27 例全过；CrossReferences 70 例中仍是 `CrossReferencePreparationTests` 那两例失败（`:187`、`:308`，断言预备的代数），当时负载 24–33。本分支没有改动交叉引用的代码，上午负载 6–16 时单独重跑这个套件 15 例全过。CommandLine 编译通过，121 例全过 |
+| 2026-10-29 | App 里验收发现私有 `@objc` 协议的声明带私有鉴别器（AppKit 的 `TextShadowViewControllerDelegate` 打成 `@objc protocol (TextShadowViewControllerDelegate in _05EA0EB8…)`），用户要求不显示；修在 MSS，RV 补回归测试并再抬 pin | 普通 Swift 协议在正常打印路径上只打裸名，只有 ABI diff 才显示鉴别器；MSS 0079 给 `@objc` 协议写的声明头部（`objcProtocolLeafName`）与 dump 的名字（`SwiftDeclaredObjCProtocol.dumpedName`）却无条件显示，它的夹具里也没有私有协议。RV 只调用这个打印器、没有开关可关，也不在 RV 里改打印出的文字。MSS 会话把两处都改成打裸名、补了测试，合进它的 `next`（`ec3a8d1b`）。RV 加了由 private 类采纳的 private 夹具与测试，在旧 pin 上失败、新 pin 上通过；pin 抬到 `ec3a8d1b`，MachOObjCSection 按 MSS 新的下限抬到 `5c8dfb3`（0.8.204）。验证（Ultra，macOS 27.2，Xcode 27.2，提交 `68f319bd`，全程只用锁文件里的版本，锁文件未变）：Core 的 `RuntimeViewerCoreTests` 609 例中只有 `RuntimeBackgroundIndexingManagerTests` 的批次取消一例在负载 15–25 下失败，这个套件单独重跑 27 例全过；App（Debug-arm64e，全新产物目录）、Packages 与 CommandLine 编译通过 |
