@@ -298,10 +298,13 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
               interface.object.kind.isSwift,
               options.swiftInterfaceOptions.printExportedDeclarationsOnly
         else { return interface.interfaceString }
+        // Says what the option did, not that nothing here is exported: a type
+        // the image does not export is left out whole, an exported type nested
+        // in it included.
         return SemanticString {
-            Comment("\(interface.object.imageName) exports none of what \(interface.object.displayName) declares.")
+            Comment("\(interface.object.displayName) prints nothing while Print Exported Declarations Only is on.")
             BreakLine()
-            Comment("Turn off Print Exported Declarations Only in Generation Options to show it.")
+            Comment("Turn it off in Generation Options to show what \(interface.object.imageName) does not export.")
         }
         .frozen()
     }

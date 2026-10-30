@@ -289,8 +289,8 @@ struct ContentTextPipelineTests {
         exportedOnlyOptions.swiftInterfaceOptions.printExportedDeclarationsOnly = true
 
         let note = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: exportedOnlyOptions).string
-        #expect(note.contains("TestFramework exports none of what TestFramework.ContentPipelineFixture declares."), "\(note)")
-        #expect(note.contains("Turn off Print Exported Declarations Only"), "\(note)")
+        #expect(note.contains("TestFramework.ContentPipelineFixture prints nothing while Print Exported Declarations Only is on."), "\(note)")
+        #expect(note.contains("show what TestFramework does not export"), "\(note)")
 
         let emptyWithTheOptionOff = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: RuntimeObjectInterface.GenerationOptions())
         let emptyObjectiveC = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: objcObject, interfaceString: ""), options: exportedOnlyOptions)
