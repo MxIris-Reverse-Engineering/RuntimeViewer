@@ -243,9 +243,9 @@ struct SwiftExportedDeclarationsTests {
     /// The fixtures' corpus entries, printed the way a corpus build prints
     /// them — each top-level fixture with the objects nested in it — and
     /// assembled the same way. Built for the fixtures alone: the bundle links
-    /// its dependencies statically, and a corpus of all of it prints a
-    /// declaration MachOSwiftSection's opaque type resolver asserts on in a
-    /// Debug build (`FoundationToolbox.KeychainStorage.publisher`).
+    /// its dependencies statically, so a corpus of all of it prints thousands
+    /// of objects — over a minute in a Debug build — and ties these tests to
+    /// how every declaration in those dependencies prints.
     private static func fixtureCorpusEntries() async throws -> [RuntimeInterfaceCorpusEntry] {
         let (engine, objects) = try await sharedBundle.value
         let section = try #require(await engine.swiftSectionFactory.existingSection(for: testBundlePath))
