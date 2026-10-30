@@ -1,8 +1,10 @@
 # Draft - 只看导出的 Swift 声明：侧栏的 Not Exported 属性与生成选项开关
 
-- **状态**: Draft
+- **状态**: Accepted
 - **创建日期**: 2026-10-30
-- **最后更新**: 2026-10-30
+- **最后更新**: 2026-10-31
+- **所属愿景**: 无
+- **实现分支 / PR**: `feature/exported-declarations-filter`（从 `next` 切，并回 `next`）
 - **关联提案**: MachOSwiftSection 的 `draft-exported-only-marking-mode`（Find 依赖它；它也修正 C 导入类型的导出裁决）
 
 ## 摘要
@@ -27,3 +29,4 @@
 | 2026-10-30 | 侧栏属性与生成选项做成两个独立控件 | 侧栏能藏的只有类型与协议，成员只有打印器能删；每个属性位都要对应 Filter Scope 的一行，是本仓库的既有约定。 |
 | 2026-10-30 | 标志取「未导出」方向，只在明确未导出时打上 | 与上游「不靠猜删东西」一致：判断不了的对象在 Exclude 下保留，Only 顺带能列出全部未导出的类型。 |
 | 2026-10-30 | 这次只做 Swift 对象 | 范围按用户确认；ObjC 方法没有导出符号可判。 |
+| 2026-10-31 | 用户批准，开始实现 | 上游 `draft-exported-only-marking-mode` 已实现，在 MachOSwiftSection 本地的 `next`（`ad95cacd`）上、尚未推到 origin：本仓库先用本地依赖（`USING_LOCAL_DEPENDENCIES=1`）构建，上游推送后再抬 pin。 |
