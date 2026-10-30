@@ -61,6 +61,12 @@ struct SwiftExportedDeclarationsTests {
         return (engine, objects.filter(\.kind.isSwift))
     }
 
+    private static func options(exportedOnly: Bool) -> RuntimeObjectInterface.GenerationOptions {
+        var options = RuntimeObjectInterface.GenerationOptions()
+        options.swiftInterfaceOptions.printExportedDeclarationsOnly = exportedOnly
+        return options
+    }
+
     // MARK: - The sidebar's flag
 
     @Test("a type or protocol the bundle does not export is marked Not Exported, and one it exports is not", arguments: [
@@ -104,6 +110,25 @@ struct SwiftExportedDeclarationsTests {
         #expect(!objcProtocolEntries.isEmpty)
         for entry in extensionEntries + objcProtocolEntries + [privateObjCProtocol] {
             #expect(!entry.properties.contains(.isNotExported), "\(entry.kind) \(entry.displayName)")
+        }
+    }
+
+    // MARK: - Print Exported Declarations Only
+
+    @Test("an exported type keeps what the image exports and loses the rest")
+    func exportedTypeLosesWhatIsNotExported() async throws {
+        let (engine, objects) = try await Self.sharedBundle.value
+        let entry = try #require(Self.entry(named: "ExportedDeclarationsPublicFixture", kind: .swift(.type(.struct)), in: objects))
+
+        let everything = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: false))).interfaceString.string
+        let exportedOnly = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: true))).interfaceString.string
+
+        for name in ["publicMemberFixture", "privateMemberFixture", "ExportedDeclarationsNestedFixture", "privateExtensionMemberFixture"] {
+            #expect(everything.contains(name), "\(name) is missing with the option off:\n\(everything)")
+        }
+        #expect(exportedOnly.contains("publicMemberFixture"), "\(exportedOnly)")
+        for name in ["privateMemberFixture", "ExportedDeclarationsNestedFixture", "privateExtensionMemberFixture"] {
+            #expect(!exportedOnly.contains(name), "\(name) is printed with the option on:\n\(exportedOnly)")
         }
     }
 

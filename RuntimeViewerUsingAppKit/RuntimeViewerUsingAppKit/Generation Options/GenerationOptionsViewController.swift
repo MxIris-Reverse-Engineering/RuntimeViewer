@@ -58,6 +58,7 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
             .checkbox(title: "Synthesize Opaque Type", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
             .checkbox(title: "Infers ObjC Overrides From Selector Names", keyPath: \.swiftInterfaceOptions.infersObjCOverridesFromSelectorNames),
+            .checkbox(title: "Print Exported Declarations Only", keyPath: \.swiftInterfaceOptions.printExportedDeclarationsOnly),
             .enumOption(title: "Member Sort Order", labels: ["By Category", "By Offset"], keyPath: \.swiftInterfaceOptions.memberSortOrder),
         ]),
     ]

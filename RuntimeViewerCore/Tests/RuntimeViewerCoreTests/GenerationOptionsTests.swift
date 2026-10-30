@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-import RuntimeViewerCore
+@testable import RuntimeViewerCore
 
 @Suite("ObjCGenerationOptions")
 struct ObjCGenerationOptionsTests {
@@ -77,6 +77,34 @@ struct SwiftGenerationOptionsTests {
         #expect(options.printEnumLayout == false)
         #expect(options.synthesizeOpaqueType == false)
         #expect(options.memberSortOrder == .byCategory)
+        #expect(options.printExportedDeclarationsOnly == false)
+    }
+
+    /// Generation Options are kept in the user's defaults; one saved by a
+    /// release without the option has no key for it.
+    @Test("options saved before Print Exported Declarations Only existed decode with it off")
+    func optionsSavedBeforeExportedOnlyDecodeWithItOff() throws {
+        let savedSwiftOptions = Data(#"{"printStrippedSymbolicItem":false,"printFieldOffset":true,"memberSortOrder":"byOffset"}"#.utf8)
+        let decodedSwiftOptions = try JSONDecoder().decode(SwiftGenerationOptions.self, from: savedSwiftOptions)
+        #expect(decodedSwiftOptions.printExportedDeclarationsOnly == false)
+        #expect(decodedSwiftOptions.printFieldOffset == true)
+        #expect(decodedSwiftOptions.memberSortOrder == .byOffset)
+
+        let savedOptions = Data(#"{"swiftInterfaceOptions":{"printFieldOffset":true}}"#.utf8)
+        let decodedOptions = try JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: savedOptions)
+        #expect(decodedOptions.swiftInterfaceOptions.printExportedDeclarationsOnly == false)
+        #expect(decodedOptions.swiftInterfaceOptions.printFieldOffset == true)
+    }
+
+    /// The one mapping the content pane's printer is configured with is the
+    /// one Find reads the corpus under (`RuntimeInterfaceVisibility`).
+    @Test("Print Exported Declarations Only switches the printer's option of the same name")
+    func exportedOnlyReachesThePrinter() {
+        var options = RuntimeObjectInterface.GenerationOptions()
+        #expect(!RuntimeInterfaceVisibility(options).isOptionEnabled("swift.printExportedDeclarationsOnly"))
+
+        options.swiftInterfaceOptions.printExportedDeclarationsOnly = true
+        #expect(RuntimeInterfaceVisibility(options).isOptionEnabled("swift.printExportedDeclarationsOnly"))
     }
 
     @Test("custom initialization")
@@ -159,6 +187,9 @@ struct GenerationOptionsTests {
         #expect(mcp.swiftInterfaceOptions.printTypeLayout == true)
         #expect(mcp.swiftInterfaceOptions.printEnumLayout == true)
         #expect(mcp.swiftInterfaceOptions.synthesizeOpaqueType == true)
+
+        // Every Swift declaration, exported or not
+        #expect(mcp.swiftInterfaceOptions.printExportedDeclarationsOnly == false)
     }
 
     @Test("default initialization uses default sub-options")

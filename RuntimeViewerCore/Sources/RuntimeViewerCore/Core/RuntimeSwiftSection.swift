@@ -58,6 +58,14 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
     @Default(false)
     public var infersObjCOverridesFromSelectorNames: Bool
 
+    /// Leave out what the image does not export: the types, protocols and
+    /// extensions MachOSwiftSection rules not exported, with everything in
+    /// them, and the members of the others that are not exported.
+    /// Declarations it cannot judge are kept. An object left with nothing
+    /// prints as empty. Off in settings saved before it existed.
+    @Default(false)
+    public var printExportedDeclarationsOnly: Bool
+
     public static let `default` = Self()
 }
 
@@ -241,6 +249,7 @@ actor RuntimeSwiftSection {
         // relationship reverse tables — that work now lives in
         // `RuntimeSwiftInterfaceIndexer`, not inline here.
         try await indexer.prepare(progressContinuation: progressContinuation)
+        Self.installExportFilterScope(on: printer, from: indexer)
         _ = try await allObjects()
         #log(.info, "Swift section initialized successfully")
     }
@@ -417,6 +426,18 @@ actor RuntimeSwiftSection {
 
     fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory) {
         factory.indexer.addSubIndexer(indexer)
+    }
+
+    /// Tells `printer` which of this image's types and protocols are not
+    /// exported, the one thing the exported-only filter cannot work out for
+    /// an extension by itself: whether its target, or the protocol it conforms
+    /// to, is one of them. `SwiftInterfaceBuilder.printRoot()` installs it;
+    /// RuntimeViewer prints definition by definition, so each of its printers
+    /// gets it here. Without it the filter keeps every extension, and a marked
+    /// print marks none. Once per printer: the indexer's configuration, and so
+    /// its tables, are fixed for its lifetime (`indexConfiguration`).
+    private static func installExportFilterScope(on printer: SwiftDeclarationPrinter<MachOImage>, from indexer: RuntimeSwiftInterfaceIndexer) {
+        printer.installExportFilterScope(types: indexer.allTypeDefinitions.values, protocols: indexer.allProtocolDefinitions.values)
     }
 }
 
@@ -1537,6 +1558,7 @@ extension SwiftDeclarationPrintConfiguration {
         printTypeLayout = options.printTypeLayout
         printEnumLayout = options.printEnumLayout
         infersObjCOverridesFromSelectorNames = options.infersObjCOverridesFromSelectorNames
+        printExportedDeclarationsOnly = options.printExportedDeclarationsOnly
     }
 }
 
@@ -2098,6 +2120,7 @@ extension RuntimeSwiftSection {
         configuration.memberSortOrder = .byCategory
         printer.updateConfiguration(configuration)
         printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
+        Self.installExportFilterScope(on: printer, from: indexer)
         corpusPrinter = printer
         corpusPrinterTransformer = transformer
         return printer
