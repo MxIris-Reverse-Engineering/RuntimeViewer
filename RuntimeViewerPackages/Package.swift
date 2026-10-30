@@ -256,10 +256,29 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.3.2",
+                from: "0.4.0",
             ),
         ),
-        
+
+        // HelperPeer and the injected-endpoint registry, which swift-helper-service
+        // 0.4.0 moved out to this package under the same module names. The local
+        // candidates mirror swift-helper-service's, for the reason given in
+        // RuntimeViewerCore's manifest.
+        .package(
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-injection-peer"),
+                isRelative: true,
+            ),
+            .package(
+                path: "../../swift-injection-peer",
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/swift-injection-peer",
+                from: "0.1.0",
+            ),
+        ),
+
         // Reached directly rather than through swift-helper-service, whose
         // products this package gates to AppKit platforms: on iOS there is no
         // helper daemon to go through, so the app links the injector itself.
@@ -469,7 +488,7 @@ let package = Package(
                 .product(name: "ApplicationsServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "FilesServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "InjectionServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "InjectedEndpointRegistryServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectedEndpointRegistryServiceImplementation", package: "swift-injection-peer", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 
@@ -489,7 +508,7 @@ let package = Package(
                 .product(name: "ApplicationsServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "FilesServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "InjectionServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-injection-peer", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 

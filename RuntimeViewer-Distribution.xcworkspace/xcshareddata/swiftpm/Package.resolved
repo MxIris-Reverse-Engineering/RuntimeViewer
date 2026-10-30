@@ -509,8 +509,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "7ba43efcaaf1f483f7bcddc60096534573c56254",
-        "version" : "0.3.3"
+        "revision" : "19d75629dc754c3f9e724aa248943ba8cf616193",
+        "version" : "0.4.0"
       }
     },
     {
@@ -538,6 +538,15 @@
       "state" : {
         "revision" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-injection-peer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/swift-injection-peer",
+      "state" : {
+        "revision" : "1b9d51574768becaf4d294d12d063cdef12949ba",
+        "version" : "0.1.0"
       }
     },
     {

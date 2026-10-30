@@ -121,8 +121,9 @@ public let RuntimeViewerServiceVersion: String = "1.8.0"
 /// constraint is what lets the inherited `associatedtype Response: Codable & Sendable`
 /// from `HelperCommunication.Request` be satisfied.
 ///
-/// Business request types (now defined in swift-helper-service) gain `RuntimeRequest`
-/// conformance retroactively — see `Requests+RuntimeRequest.swift`.
+/// Business request types (now defined in swift-helper-service, the endpoint registry's in
+/// swift-injection-peer) gain `RuntimeRequest` conformance retroactively — see
+/// `RuntimeRequests.swift`.
 public protocol RuntimeRequest: HelperCommunication.Request where Response: RuntimeResponse {}
 
 #else

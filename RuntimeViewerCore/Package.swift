@@ -176,7 +176,27 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.3.3",
+                from: "0.4.0",
+            ),
+        ),
+        // HelperPeer and the injected-endpoint registry, which swift-helper-service
+        // 0.4.0 moved out to this package under the same module names. The local
+        // candidates mirror swift-helper-service's: this package's own manifest
+        // takes swift-helper-service from its sibling checkout when local
+        // dependencies are on, and SwiftPM rejects one package identity reached
+        // through both a path and a URL.
+        .package(
+            local: .package(
+                path: "../../../../Personal/Library/macOS/swift-injection-peer",
+                isRelative: true,
+            ),
+            .package(
+                path: "../../swift-injection-peer",
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/swift-injection-peer",
+                from: "0.1.0",
             ),
         ),
         // Direct dependency for the XPC-service connection pair. Already
@@ -184,7 +204,7 @@ let package = Package(
         // requirement, so no new version enters the graph.
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-            from: "0.5.104",
+            from: "0.5.105",
         ),
         .package(
             url: "https://github.com/gohanlon/swift-memberwise-init-macro",
@@ -247,12 +267,12 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerUtilities",
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperPeer", package: "swift-injection-peer", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "ApplicationsServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "FilesServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "InjectionServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-injection-peer", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

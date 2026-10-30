@@ -14,10 +14,11 @@ extension FetchAllInjectedEndpointsRequest.Response: RuntimeResponse {}
 
 // MARK: - Request conformances
 //
-// Business request types live in swift-helper-service so the helper binary can
-// implement them; here we conform them to RuntimeViewer's own `RuntimeRequest`
-// protocol so the existing `RuntimeConnection` / `RuntimeMessageChannel` generic
-// surface keeps working without changes.
+// Business request types live in swift-helper-service, and the endpoint
+// registry's in swift-injection-peer, so the helper binary can implement them;
+// here we conform them to RuntimeViewer's own `RuntimeRequest` protocol so the
+// existing `RuntimeConnection` / `RuntimeMessageChannel` generic surface keeps
+// working without changes.
 
 extension OpenApplicationRequest: RuntimeRequest {}
 
