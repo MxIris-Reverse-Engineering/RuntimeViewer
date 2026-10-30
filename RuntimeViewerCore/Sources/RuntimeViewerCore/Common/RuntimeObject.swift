@@ -28,6 +28,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             case isPositionNamedLocalType = 6
             case isSwiftProtocol = 7
             case isObjCProtocol = 8
+            case isNotExported = 9
         }
 
         public let rawValue: Int
@@ -92,6 +93,18 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// list carries it too. One renamed with `@objc(Name)` to a name other
         /// than its Swift name pairs with no record and never gets it.
         public static let isObjCProtocol = Self(.isObjCProtocol)
+
+        /// Marks a Swift type or protocol whose image provably does not export
+        /// it: MachOSwiftSection rules the descriptor symbol out of the image's
+        /// export trie (`ExportStatus.isDefinitelyNotExported`). Its members
+        /// and nested types are then not exported either. Only that verdict
+        /// sets it — never a guess — so an object without it may be exported
+        /// or merely unjudged: an image without export information, an `@objc`
+        /// protocol declared in Swift, a type imported from C, and every
+        /// extension and conformance entry. A specialized type takes the
+        /// value of the generic type it specializes. Engines of builds from
+        /// before this flag never set it.
+        public static let isNotExported = Self(.isNotExported)
     }
 
     public let name: String

@@ -572,6 +572,7 @@ extension RuntimeObjectScope.Property {
         case .swiftDefined: return "Defined in Swift"
         case .localType: return "Local"
         case .positionNamedLocalType: return "Position-Named Local"
+        case .notExported: return "Not Exported"
         }
     }
 
@@ -594,6 +595,8 @@ extension RuntimeObjectScope.Property {
             return "Swift types declared in a function or closure"
         case .positionNamedLocalType:
             return "Local types whose function or closure the binary does not name; their names carry the address of the anonymous context around them"
+        case .notExported:
+            return "Swift types and protocols their image does not export; extensions, and declarations whose export cannot be judged, are not included"
         }
     }
 }

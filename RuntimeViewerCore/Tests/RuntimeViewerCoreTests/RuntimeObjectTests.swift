@@ -275,6 +275,7 @@ struct RuntimeObjectTests {
         (.isPositionNamedLocalType, 64),
         (.isSwiftProtocol, 128),
         (.isObjCProtocol, 256),
+        (.isNotExported, 512),
     ] as [(RuntimeObject.Properties, Int)])
     func flagKeepsItsShippedBit(flag: RuntimeObject.Properties, shippedRawValue: Int) {
         #expect(flag.rawValue == shippedRawValue)

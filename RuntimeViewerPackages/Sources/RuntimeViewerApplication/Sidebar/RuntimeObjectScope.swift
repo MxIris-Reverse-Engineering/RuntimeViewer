@@ -29,6 +29,7 @@ public struct RuntimeObjectScope: Hashable, Sendable {
         case swiftDefined
         case localType
         case positionNamedLocalType
+        case notExported
 
         /// The rows that filter by `flag`. Exhaustive on purpose: a flag added
         /// to `RuntimeObject.Properties.Flag` does not build until it has a
@@ -56,6 +57,10 @@ public struct RuntimeObjectScope: Hashable, Sendable {
             case .isObjCProtocol: return [.bridgedSwiftProtocol]
             case .isLocalType: return [.localType]
             case .isPositionNamedLocalType: return [.positionNamedLocalType]
+            // Set only on a verdict, so Exclude keeps every object that could
+            // not be judged and Only lists every type the image provably does
+            // not export.
+            case .isNotExported: return [.notExported]
             }
         }
 

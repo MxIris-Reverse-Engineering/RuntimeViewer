@@ -93,6 +93,7 @@ struct RuntimeObjectScopeTests {
         (.swiftDefined, [.isSwiftClass, .isSwiftProtocol]),
         (.localType, .isLocalType),
         (.positionNamedLocalType, .isPositionNamedLocalType),
+        (.notExported, .isNotExported),
     ] as [(RuntimeObjectScope.Property, RuntimeObject.Properties)])
     func rowFiltersByItsFlags(property: RuntimeObjectScope.Property, expectedFlags: RuntimeObject.Properties) {
         #expect(property.flags == expectedFlags)
@@ -186,6 +187,37 @@ struct RuntimeObjectScopeTests {
         #expect(scope.passes(object(kind: .swift(.type(.protocol)), properties: [.isObjCProtocol])))
         #expect(scope.passes(object(kind: .objc(.type(.protocol)))))
         #expect(scope.passes(object(kind: .objc(.type(.class)), properties: [.isObjCImplementation])))
+    }
+
+    /// The flag is set only on a verdict, so an object without it may be
+    /// exported or merely unjudged — an extension, a conformance, an `@objc`
+    /// protocol declared in Swift, a type imported from C, or anything an
+    /// engine from before the flag listed.
+    @Test("Not Exported on Exclude keeps every object without a verdict, and on Only lists the unexported types and protocols")
+    func notExportedKeepsUnjudgedObjects() {
+        var excludingScope = RuntimeObjectScope()
+        excludingScope[.notExported] = .exclude
+        var onlyScope = RuntimeObjectScope()
+        onlyScope[.notExported] = .only
+
+        let unexportedType = object(kind: .swift(.type(.struct)), properties: [.isNotExported])
+        let unexportedProtocol = object(kind: .swift(.type(.protocol)), properties: [.isNotExported])
+        let unjudgedObjects = [
+            object(kind: .swift(.type(.struct))),
+            object(kind: .swift(.extension(.struct))),
+            object(kind: .swift(.conformance(.class))),
+            object(kind: .swift(.type(.protocol)), properties: [.isObjCProtocol]),
+            object(kind: .objc(.type(.class))),
+        ]
+
+        #expect(!excludingScope.passes(unexportedType))
+        #expect(!excludingScope.passes(unexportedProtocol))
+        #expect(onlyScope.passes(unexportedType))
+        #expect(onlyScope.passes(unexportedProtocol))
+        for unjudgedObject in unjudgedObjects {
+            #expect(excludingScope.passes(unjudgedObject), "\(unjudgedObject.kind)")
+            #expect(!onlyScope.passes(unjudgedObject), "\(unjudgedObject.kind)")
+        }
     }
 
     @Test("Local Only with Position-Named Exclude keeps the local types whose function is named")

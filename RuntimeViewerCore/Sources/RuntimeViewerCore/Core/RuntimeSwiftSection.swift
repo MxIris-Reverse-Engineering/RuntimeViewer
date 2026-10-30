@@ -302,12 +302,13 @@ actor RuntimeSwiftSection {
 
     private func makeRuntimeObject(for protocolDefintion: ProtocolDefinition, isChild: Bool) throws -> RuntimeObject {
         let mangledName = try mangleAsString(protocolDefintion.protocolName.node)
+        let properties = protocolDefintion.exportStatus.runtimeObjectProperties
         let runtimeObjectName: RuntimeObject
         if isChild {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [], privateDeclarations: protocolDefintion.protocolName.privateDeclarations)
+            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [], properties: properties, privateDeclarations: protocolDefintion.protocolName.privateDeclarations)
             interfaceDefinitionNameByObject[runtimeObjectName.key] = .childProtocol(protocolDefintion.protocolName)
         } else {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [], privateDeclarations: protocolDefintion.protocolName.privateDeclarations)
+            runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [], properties: properties, privateDeclarations: protocolDefintion.protocolName.privateDeclarations)
             interfaceDefinitionNameByObject[runtimeObjectName.key] = .rootProtocol(protocolDefintion.protocolName)
         }
         return runtimeObjectName
@@ -379,6 +380,9 @@ actor RuntimeSwiftSection {
             properties.insert(.isObjCClass)
         }
         properties.formUnion(typeDefinition.typeName.localTypeProperties)
+        // A specialized definition carries the status of the generic type it
+        // specializes, whose descriptor it shares.
+        properties.formUnion(typeDefinition.exportStatus.runtimeObjectProperties)
         let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.runtimeObjectDisplayName
 
         let runtimeObject = RuntimeObject(
@@ -783,6 +787,7 @@ extension RuntimeSwiftSection {
             properties.insert(.isObjCClass)
         }
         properties.formUnion(typeName.localTypeProperties)
+        properties.formUnion(typeDefinition.exportStatus.runtimeObjectProperties)
         let displayName = isSpecialized
             ? typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric))
             : typeName.runtimeObjectDisplayName
@@ -807,13 +812,19 @@ extension RuntimeSwiftSection {
     /// registration regardless of whether it was a root or nested protocol.
     func makeRuntimeObject(forMangledProtocolName mangledName: String) -> RuntimeObject? {
         guard let protocolName = indexer.protocolName(forMangledName: mangledName) else { return nil }
+        var properties: RuntimeObject.Properties = objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol]
+        // An `@objc` protocol declared in Swift has no `ProtocolDefinition`,
+        // and no symbol to be judged by.
+        if let protocolDefinition = indexer.allProtocolDefinitions[protocolName] {
+            properties.formUnion(protocolDefinition.exportStatus.runtimeObjectProperties)
+        }
         return RuntimeObject(
             name: mangledName,
             displayName: protocolName.name,
             kind: protocolName.runtimeObjectKind,
             imagePath: imagePath,
             children: [],
-            properties: objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol],
+            properties: properties,
             privateDeclarations: protocolName.privateDeclarations,
         )
     }
@@ -1692,6 +1703,15 @@ extension SwiftDeclaration.DefinitionName {
     /// function's whole signature; every other name as `name` prints it.
     fileprivate var runtimeObjectDisplayName: String {
         localTypeDisplayName ?? name
+    }
+}
+
+extension ExportStatus {
+    /// `isNotExported` on MachOSwiftSection's one verdict filtering may act
+    /// on — the descriptor symbol is provably not in the export trie — and
+    /// nothing on every other status, which is no verdict.
+    fileprivate var runtimeObjectProperties: RuntimeObject.Properties {
+        isDefinitelyNotExported ? .isNotExported : []
     }
 }
 
