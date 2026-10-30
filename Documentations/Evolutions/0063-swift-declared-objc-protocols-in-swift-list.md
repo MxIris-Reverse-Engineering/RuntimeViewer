@@ -1,9 +1,11 @@
-# Draft - Swift 列表列出 Swift 定义的 `@objc` 协议，并接上 ObjC 协议遵循
+# 0063 - Swift 列表列出 Swift 定义的 `@objc` 协议，并接上 ObjC 协议遵循
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-28
-- **最后更新**: 2026-10-29
+- **最后更新**: 2026-10-30
+- **所属愿景**: 无
 - **实现分支 / PR**: `feature/swift-declared-objc-protocols-in-swift-list`（从 `next` 切，并回 `next`）
+- **配套文档**: 无（理由见决策日志「状态 In Progress → Implemented」一行）
 - **关联提案**: [0062](0062-swift-defined-objc-protocol-mark-and-filter.md)（ObjC 一侧的标记与过滤；本提案是它登记的暂缓后续项）；MachOSwiftSection 的 0079 `swift-declared-objc-protocols`（还原这些协议与遵循的上游实现）
 
 ## 摘要
@@ -157,3 +159,4 @@ Swift 接口里也全部丢失。MachOSwiftSection（下称 MSS）的提案 0079
 | 2026-10-29 | 第 3 步完成；副本的跨镜像表由工厂按 section 登记时的路径建，不用 `MachOImage.imagePath` | 用登记路径作键，正好绕开上面那个 install name 对不上的原有问题。新套件补 5 个测试：配上记录的两个协议带 `isObjCProtocol`、配不上的不带，两个方向的跳转（`_TtP…_` 名与 `@objc(X) protocol X` 两种），配不上记录的协议从 ObjC 一侧跳转得到 nil，Type Relationships 只剩一个候选且是 ObjC 条目；副本的跨镜像跳转没有稳定的锚点（测试进程里没有第二个声明 `@objc` 协议的 Swift 镜像），留给 App 里的验收。验证：Core 的新套件、0062 的套件、`RuntimeObjectTests`、`RuntimeObjectCounterpartTests`、`RuntimeTypeRelationshipsProtocolCopyTests` 共 80 例全过；Packages 的 Application 679 例全过，EngineManagement 里 `InjectedDeviceEngineTests` 两例在全量里报 `ECONNREFUSED`，单独重跑三次各 12 例、整个测试目标 50 例全过；App（Debug-arm64e）编译通过，锁文件 SHA 不变 |
 | 2026-10-29 | 第 4 步完成：方案一节按实际做出来的核对过（副本的跨镜像查找写成工厂的登记表，夹具补到五个）；实现完成，待用户在 App 里验收后收尾 | 验证（Ultra，macOS 27.2，Xcode 27.2，最终提交 `8253a2b8`）：Core 的 Core 581、Communication 239、Injection 36 例与单独跑的后台索引套件 27 例全过；CrossReferences 70 例中仍是 `CrossReferencePreparationTests` 那两例失败（`:187`、`:308`，断言预备的代数），当时负载 24–33。本分支没有改动交叉引用的代码，上午负载 6–16 时单独重跑这个套件 15 例全过。CommandLine 编译通过，121 例全过 |
 | 2026-10-29 | App 里验收发现私有 `@objc` 协议的声明带私有鉴别器（AppKit 的 `TextShadowViewControllerDelegate` 打成 `@objc protocol (TextShadowViewControllerDelegate in _05EA0EB8…)`），用户要求不显示；修在 MSS，RV 补回归测试并再抬 pin | 普通 Swift 协议在正常打印路径上只打裸名，只有 ABI diff 才显示鉴别器；MSS 0079 给 `@objc` 协议写的声明头部（`objcProtocolLeafName`）与 dump 的名字（`SwiftDeclaredObjCProtocol.dumpedName`）却无条件显示，它的夹具里也没有私有协议。RV 只调用这个打印器、没有开关可关，也不在 RV 里改打印出的文字。MSS 会话把两处都改成打裸名、补了测试，合进它的 `next`（`ec3a8d1b`）。RV 加了由 private 类采纳的 private 夹具与测试，在旧 pin 上失败、新 pin 上通过；pin 抬到 `ec3a8d1b`，MachOObjCSection 按 MSS 新的下限抬到 `5c8dfb3`（0.8.204）。验证（Ultra，macOS 27.2，Xcode 27.2，提交 `68f319bd`，全程只用锁文件里的版本，锁文件未变）：Core 的 `RuntimeViewerCoreTests` 609 例中只有 `RuntimeBackgroundIndexingManagerTests` 的批次取消一例在负载 15–25 下失败，这个套件单独重跑 27 例全过；App（Debug-arm64e，全新产物目录）、Packages 与 CommandLine 编译通过 |
+| 2026-10-30 | 状态 In Progress → Implemented，编号 0063 | App 里的验收由用户做过（发现的私有鉴别器问题见上一行，已修），用户随后要求收尾。实现提交已在本地两次合进 `next`（`4890d8f0`、`c215ca7f`），合并结果与功能分支末端是同一棵树，本提交只改文档。偏离方案之处都记在上面各行：三个包的锁文件另对齐三条依赖、点击跳转补进两张表、Type Relationships 以 ObjC 条目为代表、验收后再抬一次 pin。验证（Ultra，macOS 27.2，Xcode 27.2，最终代码 `64fd8c3c`，锁文件未变）：Packages 878 例、CommandLine 121 例全过；Core 的 Injection 36、Communication 239 例全过，失败的三处都是负载下才挂的时序测试——CrossReferences 70 例中 `CrossReferencePreparationTests` 两例（`:187` 是等预筛表的 120 秒轮询超时，另一例 `:308`），`RuntimeViewerCoreTests` 609 例中后台索引的批次取消一例（`RuntimeBackgroundIndexingManagerTests.swift:441`），当时负载约 7–23。两个套件单独重跑 15 例与 27 例全过。改动前的 `next`（`be492926`）同样方式跑全量，挂的是 `:308`、`:441` 与同套件的 `cancelAllCancelsEveryBatch`（`:459`）；`:187` 这次没挂，单独跑时它两边耗时相当（基线 24 秒，本分支 26–31 秒）。App（Debug-arm64e）在 `68f319bd` 上编译通过，之后只改过文档。文档判断：不需要使用指南或实现说明——新行为都在界面上（列表条目、角标、跳转、Filter Scope 一行），读代码的人会踩的两点（Type Relationships 为什么以 ObjC 条目为代表、副本的跨镜像表为什么按登记路径作键）写在 `representative(of:)` 与 `declaringImagePathByObjCProtocolName` 的文档注释和本提案里；术语表不加词，「两面」「副本」在方案里就地解释过；AGENTS.md 的 Filter Scope 规则补上协议这一对并链到本提案；命令行 agent 插件不改（理由见「不做」）。没做的部分：跨镜像点击跳到 `@rpath` 镜像落空记为提案索引里的暂缓后续项；索引里 0062 登记的「Swift 列表显示 Swift 定义的 ObjC 协议」一项即本提案，已删去。草案《左栏改名》尚未落地，按「文档」一节的约定由它按本提案改 `Sidebar*` 文件 |
