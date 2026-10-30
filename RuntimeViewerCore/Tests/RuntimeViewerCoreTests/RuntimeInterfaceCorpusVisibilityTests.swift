@@ -35,7 +35,9 @@ struct RuntimeInterfaceCorpusVisibilityTests {
     }
 
     /// Nothing extra; everything; what the user reported with (every strip
-    /// and every detail on); and a mix that pulls the two halves apart.
+    /// and every detail on); a mix that pulls the two halves apart; and the
+    /// defaults and everything with only exported Swift declarations, which
+    /// leaves whole definitions out and so the blank lines between them.
     private static let optionSets: [(label: String, options: RuntimeObjectInterface.GenerationOptions)] = {
         let everythingOn = SwiftGenerationOptions(
             printStrippedSymbolicItem: true,
@@ -63,11 +65,17 @@ struct RuntimeInterfaceCorpusVisibilityTests {
             memberSortOrder: .byCategory,
             infersObjCOverridesFromSelectorNames: true
         )
+        var exportedOnly = SwiftGenerationOptions()
+        exportedOnly.printExportedDeclarationsOnly = true
+        var everythingOnExportedOnly = everythingOn
+        everythingOnExportedOnly.printExportedDeclarationsOnly = true
         return [
             ("defaults", RuntimeObjectInterface.GenerationOptions()),
             ("everything shown", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: false, commenting: true), swiftInterfaceOptions: everythingOn)),
             ("strips and details on", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: true, commenting: true), swiftInterfaceOptions: everythingOn)),
             ("mixed", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: true, commenting: false), swiftInterfaceOptions: mixed)),
+            ("exported only", RuntimeObjectInterface.GenerationOptions(swiftInterfaceOptions: exportedOnly)),
+            ("everything shown, exported only", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: false, commenting: true), swiftInterfaceOptions: everythingOnExportedOnly)),
         ]
     }()
 

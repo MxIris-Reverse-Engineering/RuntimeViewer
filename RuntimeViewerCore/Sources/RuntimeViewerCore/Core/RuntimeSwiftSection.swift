@@ -2058,7 +2058,9 @@ extension RuntimeSwiftSection {
     /// a protocol's default implementations. One whose definition cannot be
     /// taken out is printed on its own: it failed to print inside its parent,
     /// or a hand-written transformer did not indent by the level it was given.
-    /// Either way an interface comes out exactly as the content pane prints it.
+    /// So is one the exported-only filter keeps inside an object it leaves out
+    /// (`objectsKeptInsideUnexportedObjects(below:)`). Either way an interface
+    /// comes out exactly as the content pane prints it.
     ///
     /// The members are read off the definitions those prints indexed: Swift
     /// definitions index their members lazily, and the only public trigger is
@@ -2071,6 +2073,7 @@ extension RuntimeSwiftSection {
     nonisolated func corpusPrints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
         guard let root = family.first else { return [] }
         let inputs = await corpusPrintingInputs(for: family, transformer: transformer.swift)
+        let objectsPrintedOnTheirOwn = Self.objectsKeptInsideUnexportedObjects(below: root)
         var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
         outcomes.reserveCapacity(family.count)
         var rootPrint: (marked: FrozenSemanticString, regionsByObject: [RuntimeObjectKey: DefinitionRegionTable.Region])?
@@ -2087,6 +2090,7 @@ extension RuntimeSwiftSection {
             do {
                 let marked: FrozenSemanticString
                 if index > 0,
+                   !objectsPrintedOnTheirOwn.contains(object.key),
                    let rootPrint,
                    let region = rootPrint.regionsByObject[object.key],
                    let ownDefinition = RuntimeInterfaceCorpusNesting.ownDefinition(in: rootPrint.marked, region: region) {
@@ -2116,6 +2120,29 @@ extension RuntimeSwiftSection {
             }
         }
         return outcomes
+    }
+
+    /// The objects nested in `root` that are not marked `isNotExported` but
+    /// lie inside an object that is. A type nested in a type its image does
+    /// not export can itself be exported — Foundation's
+    /// `LocalePreferences.ICUSymbolsAndStrings` is — and in the marked print
+    /// of the type around it, it sits in that type's region, visible only
+    /// while the exported-only filter is off; printed on its own it has no
+    /// such region. Its definition taken out of that print would hide it from
+    /// a search the content pane shows it to.
+    private static func objectsKeptInsideUnexportedObjects(below root: RuntimeObject) -> Set<RuntimeObjectKey> {
+        var keptObjects: Set<RuntimeObjectKey> = []
+        func visit(_ object: RuntimeObject, isInsideUnexportedObject: Bool) {
+            let isNotExported = object.properties.contains(.isNotExported)
+            if isInsideUnexportedObject, !isNotExported {
+                keptObjects.insert(object.key)
+            }
+            for child in object.children {
+                visit(child, isInsideUnexportedObject: isInsideUnexportedObject || isNotExported)
+            }
+        }
+        visit(root, isInsideUnexportedObject: false)
+        return keptObjects
     }
 
     /// What a family's corpus prints take from the section's state: each

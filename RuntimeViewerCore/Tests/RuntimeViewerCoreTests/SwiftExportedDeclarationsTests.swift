@@ -199,6 +199,67 @@ struct SwiftExportedDeclarationsTests {
         #expect(!failedObjectNames.contains { $0.contains("ExportedDeclarationsPrivate") }, "\(failedObjectNames)")
     }
 
+    // MARK: - Find
+
+    /// The corpus is printed once with everything marked, and a search reads
+    /// each entry under the options it carries: its text through the
+    /// projection, a member through the projection of its line — what
+    /// `searchInterfaces` and `searchMembers` do. So a member the option
+    /// leaves out is found only while the option is off.
+    @Test("Find finds what the option leaves out only while it is off")
+    func findFollowsTheOption() async throws {
+        let entries = try await Self.fixtureCorpusEntries()
+        let entry = try #require(entries.first { $0.object.kind == .swift(.type(.struct)) && $0.object.displayName.hasSuffix(".ExportedDeclarationsPublicFixture") })
+        let memberIndex = try #require(entry.members.firstIndex { $0.name.hasPrefix("privateMemberFixture") }, "\(entry.members.map(\.name))")
+
+        for exportedOnly in [false, true] {
+            let visibility = RuntimeInterfaceVisibility(Self.options(exportedOnly: exportedOnly))
+            let projection = try #require(entry.projection(under: visibility), "the entry has no visibility regions")
+            let member = entry.member(at: memberIndex, in: projection, projectedLineTable: RuntimeInterfaceLineTable(projection.text.text))
+
+            #expect(projection.text.string.contains("privateMemberFixture") != exportedOnly, "exported only: \(exportedOnly)\n\(projection.text.string)")
+            #expect((member != nil) != exportedOnly, "exported only: \(exportedOnly)")
+        }
+    }
+
+    /// What the corpus visibility suite checks for libobjc and Foundation,
+    /// for this bundle's fixtures with the option on: a projected corpus entry
+    /// reads as the interface the content pane prints, blank lines included.
+    @Test("a projected corpus entry reads as the content pane's interface with the option on")
+    func projectionMatchesTheDisplayedInterface() async throws {
+        let (engine, _) = try await Self.sharedBundle.value
+        let entries = try await Self.fixtureCorpusEntries()
+        let options = Self.options(exportedOnly: true)
+        let visibility = RuntimeInterfaceVisibility(options)
+
+        #expect(entries.count >= 5, "\(entries.map(\.object.displayName))")
+        for entry in entries {
+            let displayed = try #require(try await engine.interface(for: entry.object, options: options)).interfaceString
+            let projected = entry.projection(under: visibility)?.text ?? entry.interface
+            #expect(projected.string == displayed.string, "\(entry.object.displayName):\n\(projected.string)\n--- displayed ---\n\(displayed.string)")
+        }
+    }
+
+    /// The fixtures' corpus entries, printed the way a corpus build prints
+    /// them — each top-level fixture with the objects nested in it — and
+    /// assembled the same way. Built for the fixtures alone: the bundle links
+    /// its dependencies statically, and a corpus of all of it prints a
+    /// declaration MachOSwiftSection's opaque type resolver asserts on in a
+    /// Debug build (`FoundationToolbox.KeychainStorage.publisher`).
+    private static func fixtureCorpusEntries() async throws -> [RuntimeInterfaceCorpusEntry] {
+        let (engine, objects) = try await sharedBundle.value
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: testBundlePath))
+        var prints: [RuntimeInterfaceCorpusPrint] = []
+        for root in objects where root.displayName.contains("ExportedDeclarations") {
+            for outcome in try await section.corpusPrints(of: root.corpusFamily, transformer: .default) {
+                if case .printed(let corpusPrint) = outcome {
+                    prints.append(corpusPrint)
+                }
+            }
+        }
+        return RuntimeInterfaceCorpusAssembly.entries(from: prints)
+    }
+
     // MARK: - Helpers
 
     private static func entry(named name: String, kind: RuntimeObjectKind, in objects: [RuntimeObject]) -> RuntimeObject? {
