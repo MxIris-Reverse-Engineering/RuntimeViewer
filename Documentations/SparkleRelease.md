@@ -50,7 +50,29 @@ git diff --stat "$LAST_BUMP"..HEAD -- \
     RuntimeViewerServer
 ```
 
-Ignore `Package.resolved` churn in that output; judge on source files.
+Ignore `Package.resolved` churn in that output; judge on source files. The
+daemon's own dependencies are the exception: it links swift-helper-service (the
+server and its services), swift-injection-peer (the injected-endpoint
+registry), MachInjector and SwiftyXPC, so a new version of any of them changes
+the daemon even when no source file above moved, and that diff does not show
+it. Compare their pins in the Distribution workspace, which is what release
+archives resolve; any difference between the two lists is a daemon change:
+
+```bash
+for revision in "$LAST_BUMP" HEAD; do
+    echo "== $revision"
+    git show "${revision}:RuntimeViewer-Distribution.xcworkspace/xcshareddata/swiftpm/Package.resolved" \
+        | grep -A5 -E '"identity" : "(swift-helper-service|swift-injection-peer|machinjector|swiftyxpc)"' \
+        | grep -E '"(identity|version|revision)"'
+done
+```
+
+`1.9.0` is a bump this check would have asked for three times over. SwiftyXPC
+went from 0.5.104 to 0.5.105 in `v3.0.0-beta.5` and MachInjector from 0.5.1 to
+0.6.1 in `v3.0.0-beta.7`, both shipped with the constant still at `1.8.0`; then
+swift-helper-service 0.4.0 made the daemon check a payload's architecture and
+signature before injecting, in a commit whose daemon-side source changes were
+comments only.
 
 Getting this wrong fails silently in the worst direction: the release notes
 describe a daemon-side fix, the build genuinely contains it, and no installed
