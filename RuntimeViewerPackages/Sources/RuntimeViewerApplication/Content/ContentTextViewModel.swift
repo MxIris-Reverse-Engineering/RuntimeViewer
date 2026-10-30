@@ -177,7 +177,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                     let fetchInterval = contentTextSignposter.beginInterval("content.interfaceFetch", id: contentTextSignposter.makeSignpostID())
                     defer { contentTextSignposter.endInterval("content.interfaceFetch", fetchInterval) }
                     return try await resolvedInterfaceProvider(runtimeObject, mergedOptions).map {
-                        (interfaceString: $0.interfaceString, runtimeObject: runtimeObject)
+                        (interfaceString: Self.displayedInterfaceString(of: $0, options: mergedOptions), runtimeObject: runtimeObject)
                     }
                 }
                 .trackActivity(_commonLoading)
@@ -283,6 +283,27 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         guard !runtimeObject.imagePath.isEmpty, let runtimeEngine = await runtimeEngine() else { return nil }
         try await runtimeEngine.indexImageIfNeeded(at: runtimeObject.imagePath)
         return try await fetchInterface()
+    }
+
+    /// The interface the pane shows for a fetched one: the same, except a Swift object that Print
+    /// Exported Declarations Only leaves empty — a type its image does not export, reached through
+    /// a link or listed while the sidebar does not exclude it — which says why instead of showing
+    /// nothing. The engine itself prints such an object as empty, which is what batch export
+    /// skips.
+    nonisolated static func displayedInterfaceString(
+        of interface: RuntimeObjectInterface,
+        options: RuntimeObjectInterface.GenerationOptions
+    ) -> FrozenSemanticString {
+        guard interface.interfaceString.isEmpty,
+              interface.object.kind.isSwift,
+              options.swiftInterfaceOptions.printExportedDeclarationsOnly
+        else { return interface.interfaceString }
+        return SemanticString {
+            Comment("\(interface.object.imageName) exports none of what \(interface.object.displayName) declares.")
+            BreakLine()
+            Comment("Turn off Print Exported Declarations Only in Generation Options to show it.")
+        }
+        .frozen()
     }
 
     /// Builds both forms of a fetched interface in one pass, so the semantic runs and the

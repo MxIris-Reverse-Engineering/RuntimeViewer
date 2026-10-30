@@ -1460,6 +1460,13 @@ extension RuntimeEngine {
                 guard let runtimeInterface = try await interface(for: object, options: configuration.generationOptions) else {
                     throw RuntimeExportError.interfaceGenerationFailed(object)
                 }
+                // Printed as empty: everything in it is left out by Print
+                // Exported Declarations Only. Exported as nothing rather than
+                // as an empty file, and counted neither way.
+                guard !runtimeInterface.interfaceString.isEmpty else {
+                    reporter.send(.objectCompleted(object, runtimeInterface.interfaceString))
+                    continue
+                }
                 let item = RuntimeInterfaceExportItem(
                     object: object,
                     plainText: runtimeInterface.interfaceString.string,

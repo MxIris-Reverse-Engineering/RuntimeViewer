@@ -32,6 +32,14 @@ public protocol ExportedDeclarationsPublicProtocolFixture {
     func publicRequirementFixture()
 }
 
+/// The private type's conformance to the public protocol. Its extension has no
+/// symbol of its own to judge, so it goes with the type only because the
+/// printer knows the type is not exported — the export filter scope the Swift
+/// section installs.
+extension ExportedDeclarationsPrivateFixture: ExportedDeclarationsPublicProtocolFixture {
+    func publicRequirementFixture() {}
+}
+
 private protocol ExportedDeclarationsPrivateProtocolFixture {
     func privateRequirementFixture()
 }
@@ -115,7 +123,7 @@ struct SwiftExportedDeclarationsTests {
 
     // MARK: - Print Exported Declarations Only
 
-    @Test("an exported type keeps what the image exports and loses the rest")
+    @Test("an exported type keeps what the image exports and loses the rest, an emptied extension leaving no blank lines")
     func exportedTypeLosesWhatIsNotExported() async throws {
         let (engine, objects) = try await Self.sharedBundle.value
         let entry = try #require(Self.entry(named: "ExportedDeclarationsPublicFixture", kind: .swift(.type(.struct)), in: objects))
@@ -130,6 +138,65 @@ struct SwiftExportedDeclarationsTests {
         for name in ["privateMemberFixture", "ExportedDeclarationsNestedFixture", "privateExtensionMemberFixture"] {
             #expect(!exportedOnly.contains(name), "\(name) is printed with the option on:\n\(exportedOnly)")
         }
+        #expect(!exportedOnly.contains("\n\n\n"), "\(exportedOnly)")
+        #expect(!exportedOnly.hasSuffix("\n"), "\(exportedOnly)")
+    }
+
+    /// What each prints with the option off: the struct's member and its
+    /// conformance's extension, and the protocol's declaration — a private
+    /// protocol's requirement has no symbol to name it by.
+    @Test("a type or protocol the image does not export prints nothing at all", arguments: [
+        ("ExportedDeclarationsPrivateFixture", RuntimeObjectKind.swift(.type(.struct)), ["memberOfPrivateFixture", "ExportedDeclarationsPrivateFixture: RuntimeViewerCoreTests.ExportedDeclarationsPublicProtocolFixture {}"]),
+        ("ExportedDeclarationsPrivateProtocolFixture", .swift(.type(.protocol)), ["protocol ExportedDeclarationsPrivateProtocolFixture"]),
+    ])
+    func unexportedDeclarationPrintsNothing(name: String, kind: RuntimeObjectKind, textsPrintedWithTheOptionOff: [String]) async throws {
+        let (engine, objects) = try await Self.sharedBundle.value
+        let entry = try #require(Self.entry(named: name, kind: kind, in: objects))
+
+        let everything = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: false))).interfaceString
+        let exportedOnly = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: true))).interfaceString
+
+        for text in textsPrintedWithTheOptionOff {
+            #expect(everything.string.contains(text), "\(everything.string)")
+        }
+        #expect(exportedOnly.isEmpty, "\(exportedOnly.string)")
+    }
+
+    @Test("a batch export with the option on writes no file for what prints nothing")
+    func batchExportSkipsWhatPrintsNothing() async throws {
+        let (engine, _) = try await Self.sharedBundle.value
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SwiftExportedDeclarationsTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let configuration = RuntimeInterfaceExportConfiguration(
+            imagePath: Self.testBundlePath,
+            imageName: "RuntimeViewerCoreTests",
+            directory: directory,
+            objcFormat: .directory,
+            swiftFormat: .directory,
+            generationOptions: Self.options(exportedOnly: true),
+            includeMetadata: false
+        )
+        let reporter = RuntimeInterfaceExportReporter()
+
+        try await engine.exportInterfaces(with: configuration, reporter: reporter)
+        var failedObjectNames: [String] = []
+        for await event in reporter.events {
+            if case .objectFailed(let object, _) = event {
+                failedObjectNames.append(object.displayName)
+            }
+        }
+
+        // File names are display names, which carry the module name.
+        let swiftDirectory = directory.appendingPathComponent("SwiftInterfaces", isDirectory: true)
+        let fileNames = try FileManager.default.contentsOfDirectory(atPath: swiftDirectory.path)
+        #expect(fileNames.contains { $0.hasSuffix(".ExportedDeclarationsPublicFixture.swiftinterface") }, "\(fileNames.filter { $0.contains("ExportedDeclarations") })")
+        #expect(!fileNames.contains { $0.contains("ExportedDeclarationsPrivate") }, "\(fileNames.filter { $0.contains("ExportedDeclarations") })")
+        for fileName in fileNames {
+            let contents = try String(contentsOf: swiftDirectory.appendingPathComponent(fileName), encoding: .utf8)
+            #expect(!contents.isEmpty, "\(fileName) is empty")
+        }
+        // Left out, not failed.
+        #expect(!failedObjectNames.contains { $0.contains("ExportedDeclarationsPrivate") }, "\(failedObjectNames)")
     }
 
     // MARK: - Helpers

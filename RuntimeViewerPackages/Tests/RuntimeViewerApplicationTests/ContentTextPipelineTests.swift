@@ -276,6 +276,49 @@ struct ContentTextPipelineTests {
         #expect(ContentTextViewModel.renderAttributedString(for: nil, theme: theme) == nil)
     }
 
+    // MARK: - An interface Print Exported Declarations Only empties
+
+    /// The engine prints a Swift object that Print Exported Declarations Only
+    /// leaves nothing of as empty — batch export skips it on that — and the
+    /// pane says why in its place. Anything else empty stays empty.
+    @Test("only an empty Swift interface with Print Exported Declarations Only on is replaced by a note")
+    func onlyAnEmptiedSwiftInterfaceIsReplaced() {
+        let swiftObject = makeRuntimeObject()
+        let objcObject = RuntimeObject(name: "ContentPipelineFixture", displayName: "ContentPipelineFixture", kind: .objc(.type(.class)), imagePath: swiftObject.imagePath, children: [])
+        var exportedOnlyOptions = RuntimeObjectInterface.GenerationOptions()
+        exportedOnlyOptions.swiftInterfaceOptions.printExportedDeclarationsOnly = true
+
+        let note = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: exportedOnlyOptions).string
+        #expect(note.contains("TestFramework exports none of what TestFramework.ContentPipelineFixture declares."), "\(note)")
+        #expect(note.contains("Turn off Print Exported Declarations Only"), "\(note)")
+
+        let emptyWithTheOptionOff = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: RuntimeObjectInterface.GenerationOptions())
+        let emptyObjectiveC = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: objcObject, interfaceString: ""), options: exportedOnlyOptions)
+        let printed = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: "class ContentPipelineFixture {}"), options: exportedOnlyOptions)
+        #expect(emptyWithTheOptionOff.isEmpty)
+        #expect(emptyObjectiveC.isEmpty)
+        #expect(printed.string == "class ContentPipelineFixture {}")
+    }
+
+    @Test("the pane shows the note for an interface fetched empty with the option on")
+    func paneShowsTheNoteForAnEmptiedInterface() async throws {
+        let appDefaults = AppDefaults.isolated()
+        appDefaults.options.swiftInterfaceOptions.printExportedDeclarationsOnly = true
+        let (viewModel, mockRouter) = makeViewModel(
+            runtimeObject: makeRuntimeObject(),
+            appDefaults: appDefaults,
+            interfaceProvider: { runtimeObject, _ in
+                RuntimeObjectInterface(object: runtimeObject, interfaceString: "")
+            }
+        )
+
+        let rendered = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.attributedString?.string.contains("Print Exported Declarations Only") == true
+        }
+        #expect(rendered, "the note never reached the pane: \(viewModel.attributedString?.string ?? "nil")")
+        withExtendedLifetime(mockRouter) {}
+    }
+
     // MARK: - The live context keeps the app's own defaults out of reach
 
     /// The live context the pipeline needs resolves every key it does not

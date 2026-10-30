@@ -463,7 +463,10 @@ extension RuntimeSwiftSection {
         /// Printed with its default implementations after it.
         case objcProtocol(ObjCProtocolDefinition)
         /// `extension Class: P {}`, from a category of this image.
-        case objcCategoryConformance(ObjCCategoryConformance)
+        /// `extendsUnexportedType` when the class is a type of this image
+        /// that is not exported: the exported-only filter leaves the
+        /// conformance out with it.
+        case objcCategoryConformance(ObjCCategoryConformance, extendsUnexportedType: Bool)
     }
 
     /// The definitions an object's interface is printed from, in the order
@@ -540,7 +543,9 @@ extension RuntimeSwiftSection {
     /// The Objective-C protocols this image's categories adopt for the class
     /// `extensionName` names; see `objcCategoryConformancesByExtensionName`.
     private func objcCategoryConformances(filedUnder extensionName: SwiftDeclaration.ExtensionName) -> [PrintedDefinition] {
-        (objcCategoryConformancesByExtensionName[extensionName] ?? []).map(PrintedDefinition.objcCategoryConformance)
+        (objcCategoryConformancesByExtensionName[extensionName] ?? []).map { conformance in
+            .objcCategoryConformance(conformance, extendsUnexportedType: indexer.allTypeDefinitions[conformance.extendedTypeName]?.exportStatus.isDefinitelyNotExported == true)
+        }
     }
 
     /// The protocol's default implementations, unless the printer prints them
@@ -581,14 +586,23 @@ extension RuntimeSwiftSection {
     /// so it runs off the actor: the printer is `Sendable` and the section's
     /// own state is not needed past the definition list.
     private static func printInterface(of definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
-        var result: SemanticString = ""
-        for (index, definition) in definitions.enumerated() {
-            if index > 0 {
-                result.append(.doubleBreakLine)
-            }
-            result.append(try await printDefinition(definition, using: printer))
+        var definitionPrints: [SemanticString] = []
+        definitionPrints.reserveCapacity(definitions.count)
+        for definition in definitions {
+            definitionPrints.append(try await printDefinition(definition, using: printer))
         }
-        return result
+        return joinedDefinitionPrints(definitionPrints)
+    }
+
+    /// Definitions printed one after another, a blank line between two. A
+    /// definition that printed nothing — one the exported-only filter left
+    /// out — takes no blank line, so an object whose every definition is left
+    /// out prints as empty. In a marked print each blank line is visible only
+    /// when a definition on either side of it is (`Joined`), so the corpus,
+    /// projected under some options, reads as the content pane prints under
+    /// them, blank lines included.
+    private static func joinedDefinitionPrints(_ definitionPrints: [SemanticString]) -> SemanticString {
+        definitionPrints.joined(separator: SemanticString.doubleBreakLine)
     }
 
     private static func printDefinition(_ definition: PrintedDefinition, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
@@ -601,9 +615,24 @@ extension RuntimeSwiftSection {
             try await printer.printExtensionDefinition(extensionDefinition)
         case .objcProtocol(let objcProtocolDefinition):
             try await printer.printObjCProtocolDefinition(objcProtocolDefinition)
-        case .objcCategoryConformance(let objcCategoryConformance):
-            try await printer.printObjCCategoryConformance(objcCategoryConformance)
+        case .objcCategoryConformance(let objcCategoryConformance, let extendsUnexportedType):
+            try await printObjCCategoryConformance(objcCategoryConformance, extendsUnexportedType: extendsUnexportedType, using: printer)
         }
+    }
+
+    /// A category conformance as `SwiftInterfaceBuilder.printRoot()` prints
+    /// one, which the printer's own export filter never sees: one on a class
+    /// that is not exported is left out while `printExportedDeclarationsOnly`
+    /// is on, or, when marking, visible only while it is off.
+    private static func printObjCCategoryConformance(_ conformance: ObjCCategoryConformance, extendsUnexportedType: Bool, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+        let configuration = printer.configuration
+        guard extendsUnexportedType, configuration.printExportedDeclarationsOnly || configuration.marksOptionalContent else {
+            return try await printer.printObjCCategoryConformance(conformance)
+        }
+        guard configuration.marksOptionalContent else { return "" }
+        var markedConformance = try await printer.printObjCCategoryConformance(conformance)
+        markedConformance.markAtoms(from: 0, visibleUnder: .disabled(SwiftVisibilityOption.printExportedDeclarationsOnly.rawValue))
+        return markedConformance
     }
 }
 
@@ -2061,12 +2090,11 @@ extension RuntimeSwiftSection {
                    let rootPrint,
                    let region = rootPrint.regionsByObject[object.key],
                    let ownDefinition = RuntimeInterfaceCorpusNesting.ownDefinition(in: rootPrint.marked, region: region) {
-                    var interface = SemanticString(components: ownDefinition.components)
+                    var definitionPrints = [SemanticString(components: ownDefinition.components)]
                     for definition in definitions.dropFirst() {
-                        interface.append(.doubleBreakLine)
-                        interface.append(try await Self.printDefinition(definition, using: inputs.printer))
+                        definitionPrints.append(try await Self.printDefinition(definition, using: inputs.printer))
                     }
-                    marked = interface.frozen()
+                    marked = Self.joinedDefinitionPrints(definitionPrints).frozen()
                 } else {
                     marked = try await Self.printInterface(of: definitions, using: inputs.printer).frozen()
                 }
