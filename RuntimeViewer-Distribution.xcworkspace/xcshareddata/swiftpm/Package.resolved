@@ -140,8 +140,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/LookInsideApp/LookInside-Release",
       "state" : {
-        "revision" : "0200cee2351cc8ba807ed15ed88af5e5766ac86b",
-        "version" : "1.1.1"
+        "revision" : "0ae927598d9ebbbe2d967889ba2cd0784e217848",
+        "version" : "1.1.2"
       }
     },
     {
@@ -177,7 +177,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "5c8dfb3ccd7550b554d20f22fa5794bb0f32dbf0"
+        "revision" : "ac2e4a091f113acfb4cd761bb2f866584315116d"
       }
     },
     {
@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "ec3a8d1b1c0be4a9a7495c06e82ca9a73273ae77"
+        "revision" : "e4b5595c582b24c0d82415b7bb2864c28f8992b8"
       }
     },
     {
@@ -743,8 +743,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "8d31c5135deef0c5b0fb243c318d3908a6e496e9",
-        "version" : "0.41.0"
+        "revision" : "ddfd0f4300e69e4780ed5f04021098aa745cec68",
+        "version" : "0.42.0"
       }
     },
     {
