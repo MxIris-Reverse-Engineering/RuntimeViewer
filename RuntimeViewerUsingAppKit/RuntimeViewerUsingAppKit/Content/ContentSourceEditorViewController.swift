@@ -56,6 +56,13 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// type-level landmarks by it, the way the sidebar colours Objective-C and Swift apart.
     private var displayedLanguageIdentifier: String?
 
+    /// What the editor shows, kept so that turning comment tags on or off can hand the same
+    /// source over again with or without its decorations.
+    private var displayedRenderedInterface: ContentTextViewModel.RenderedInterface?
+
+    /// Whether the source in the editor was handed over with its comment decorations.
+    private var displayedSourceShowsCommentTags = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -72,6 +79,13 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         displayOptionsObserveToken = SwiftNavigation.observe { [weak self] in
             guard let self else { return }
             bridge.applyDisplayOptions(from: settings.editor)
+            // Comment tags are not a display option of the editor but a part of the source it is
+            // given, so turning them on or off hands the source over again — only when that
+            // changes what it gets.
+            if settings.editor.showsCommentTags != displayedSourceShowsCommentTags,
+               displayedRenderedInterface?.commentDecorations != nil {
+                showDisplayedSource()
+            }
         }
 
         containerView.hierarchy {
@@ -119,19 +133,9 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             .driveOnNext { [weak self] renderedInterface, runtimeObject in
                 guard let self else { return }
                 displayedAttributedString = renderedInterface.attributedString
-
-                // The parse the editor makes of this text cannot tell what an identifier is;
-                // these runs can, so they are handed over to correct it.
-                let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: renderedInterface.semanticString)
-                let languageIdentifier = Self.languageIdentifier(for: runtimeObject.kind)
-                displayedLanguageIdentifier = languageIdentifier
-                bridge?.setSource(
-                    renderedInterface.attributedString.string,
-                    languageIdentifier: languageIdentifier,
-                    semanticRanges: semanticRanges,
-                    semanticNodeTypeNames: nodeTypeNames,
-                    commentDecorations: nil
-                )
+                displayedRenderedInterface = renderedInterface
+                displayedLanguageIdentifier = Self.languageIdentifier(for: runtimeObject.kind)
+                showDisplayedSource()
             }
             .disposed(by: rx.disposeBag)
 
@@ -157,6 +161,28 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         .disposed(by: rx.disposeBag)
     }
 
+    /// Hands the editor the source last rendered, with its comment decorations while comment tags
+    /// are on.
+    private func showDisplayedSource() {
+        guard let bridge, let renderedInterface = displayedRenderedInterface, let languageIdentifier = displayedLanguageIdentifier else { return }
+
+        // The parse the editor makes of this text cannot tell what an identifier is;
+        // these runs can, so they are handed over to correct it.
+        let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: renderedInterface.semanticString)
+        let showsCommentTags = settings.editor.showsCommentTags
+        let commentDecorations = showsCommentTags
+            ? renderedInterface.commentDecorations.flatMap { $0.isEmpty ? nil : SourceEditorCommentDecorations($0) }
+            : nil
+        displayedSourceShowsCommentTags = showsCommentTags
+        bridge.setSource(
+            renderedInterface.attributedString.string,
+            languageIdentifier: languageIdentifier,
+            semanticRanges: semanticRanges,
+            semanticNodeTypeNames: nodeTypeNames,
+            commentDecorations: commentDecorations
+        )
+    }
+
     /// Renders the app's configured theme into `.xccolortheme` form, using the framework's own
     /// theme as the base so the many keys `ThemeProfile` has no opinion about stay valid.
     ///
@@ -176,6 +202,21 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         // as the text, which is what makes a number line up with the row it labels.
         let lineNumberFont = currentTheme?.font(for: .standard) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
         bridge.applyTheme(name: baseThemeName, dictionary: dictionary, fontSizeModifier: 0, lineNumberFont: lineNumberFont)
+
+        // Tags take their colours from the comment they replace: a wash of the comment colour
+        // behind it, the comment colour for what a fact is, the theme's number colour for the
+        // fact itself. Dark backgrounds need a stronger wash to show the same contrast.
+        let commentColor = currentTheme?.color(for: .comment) ?? .secondaryLabelColor
+        bridge.applyCommentTagColors(
+            fillColor: commentColor.withAlphaComponent(isDark ? 0.18 : 0.11),
+            warningFillColor: NSColor.systemOrange.withAlphaComponent(isDark ? 0.28 : 0.18),
+            noteFillColor: commentColor.withAlphaComponent(isDark ? 0.09 : 0.06),
+            labelColor: commentColor,
+            valueColor: currentTheme?.color(for: .numeric) ?? .labelColor,
+            typeColor: currentTheme?.color(for: .type(.class, .name)) ?? .labelColor,
+            nameColor: currentTheme?.color(for: .standard) ?? .labelColor,
+            disclosureColor: commentColor
+        )
 
         // The theme covers the text area; these cover everything around it — the area past
         // the end of the document, and the container behind the editor.

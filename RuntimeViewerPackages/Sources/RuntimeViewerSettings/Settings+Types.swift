@@ -98,6 +98,12 @@ extension Settings {
         @Default(true)
         public var showsMarkSeparators: Bool
 
+        /// Draws generated comments — addresses, offsets, layouts — as tags, and lets field
+        /// layouts and enum case layouts collapse. On by default: it is what makes long
+        /// interfaces readable, and it changes nothing about the text that is copied or found.
+        @Default(true)
+        public var showsCommentTags: Bool
+
         public static let `default` = Self()
     }
 

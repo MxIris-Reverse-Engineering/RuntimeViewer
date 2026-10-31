@@ -48,10 +48,22 @@ MachOSwiftSection、MachOObjCSection 各有一篇配套改动，已交给三个�
 
 ### 三、App：把注释表变成「装饰」
 
-- `ContentTextViewModel` 的 `RenderedInterface` 多带一份装饰描述，在渲染流水线的后台调度器上由注释
-  表算出：UTF-8 换算成 UTF-16 范围；每个标签的可见段与要藏的段；大纲节点所在的行与子树末行；每个
-  case 说明块的折叠范围；默认收起的范围。逻辑放在 `RuntimeViewerApplication`，用 fixture 打印出的
-  表做单元测试。
+- `ContentTextViewModel` 的 `RenderedInterface` 多带一份装饰描述（`InterfaceCommentDecorations`），在
+  渲染流水线的后台调度器上由注释表算出，逻辑放在 `RuntimeViewerApplication`。规则按段的角色定：
+  - **藏**：开头的 `//`、`/*` 和它后面一个空格（续行多出来的对齐空格留着，case 块的各行因此仍缩在
+    头行下面），结尾的 ` */` 整个藏；separator 里的语法标点（`:`、括号、`,`、`;`、反引号、`—`、`#`）
+    藏掉，剩下的若全是空白只留一个空格。`=`、`..<` 这类有意思的符号留着。
+  - **着色**：label、key、qualifier 用标签名的颜色，value 用数值色，type、name 各用自己的颜色，正文
+    保持注释色；treePrefix 画成透明，留给展开三角。
+  - **标签**：一般一条注释一行一个标签，正文不进标签（整行只有正文时除外）；Type Layout、枚举摘要、
+    stripped requirement 在每个 key 处另起一个标签；case 头行在 name 和 key 处另起；字段树的行只给
+    value 打标签；字节行的标签到第一个 value 为止，后面的二进制不进；note 与认不出的种类整行一个 note
+    标签。段里含 `.error` 语义（解析不出的地址）的标签改成 warning；`fieldOffsetUnknown`、
+    `ivarOffsetUnknown`、`exportStatus` 本身就是 warning。
+  - **收起**：有子节点的 `fieldOffset` / `fieldLayoutNode`，三角画在 treePrefix 末尾的 `├── ` 那格，
+    根行没有前缀就画在注释符号前的两格缩进里；`enumLayoutCase` 收起到它的头行，三角在头行的缩进里。
+    都是默认收起。
+  - Print Exported Declarations Only 时 App 自己写的两行提示，也由 App 给出注释表（两条 note）。
 - `ContentSourceEditorViewController` 把装饰交给 bridge。`SourceEditorBridging` 只传 `NSValue`、
   `NSNumber`、`NSString` 的数组：这份文件同时编进 App 与 bundle，在里面定义类会在 Objective-C 运行
   时里出现两份同名类。
@@ -133,9 +145,17 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
    展开外层后内层仍收着）、点三角收放、换回同一份 source 时恢复用户留下的折叠而不是默认值、不带装饰时
    一切照旧、2000 个默认收起的行设源加排版共 0.225 秒。`Stubs/VerifyAcrossXcodes.sh` 加了带装饰的
    `setSource` 和 `applyCommentTagColors`，在 27.2 与 26.6 上都跑通。
-3. **App 侧。** RuntimeViewerCore 定义注释表的线上模型（`RuntimeObjectInterface` 的可选字段，补线上
-   兼容测试）；RuntimeViewerApplication 由它算出装饰描述（测试用手写的表）；
-   `ContentSourceEditorViewController` 接上；Settings › Editor 加 Comment Tags 开关。
+3. **App 侧。**（已完成）RuntimeViewerCore 新增 `RuntimeInterfaceCommentStructure`：注释的 kind、
+   UTF-8 范围与外层注释，段的角色、UTF-8 范围与所属注释，kind 与 role 都是生产方的字符串（附已知
+   清单的静态常量）。按列编码，kind 与 role 去重成表；解码时检查各列等长、索引不越界、范围不溢出。
+   `RuntimeObjectInterface` 加可选的 `commentStructure`，旧对端的回复里没有这个键就是 nil。
+   RuntimeViewerApplication 新增 `InterfaceCommentDecorations`（规则见「方案 · 三」）；
+   `ContentTextViewModel` 的取数一半带上注释表，渲染一半在后台算出装饰放进 `RenderedInterface`。
+   `ContentSourceEditorViewController` 在 Comment Tags 开着时把装饰交给 bridge、开关变化时重新下发同一
+   份 source，并在每次套主题时下发标签配色；Settings › Editor 新增 Comment Tags
+   （`Settings.Editor.showsCommentTags`，默认开）。测试：`InterfaceCommentDecorationsTests` 8 个、
+   `RuntimeInterfaceCommentStructureTests` 5 个，内容管线、设置持久化、跨版本 interface 请求的既有
+   套件照常通过。注释表此时还没有来源，引擎要到第 4 步才会填它。
 4. **接上上游。** 依赖上游三篇落地：内部生成选项、打开打印器开关、引擎分离后填进线上模型、抬 pin、
    用 fixture 做端到端测试；最终的 kind / role 清单补进「方案 · 一」。
 5. **收尾。** `Stubs/VerifyAcrossXcodes.sh` 补调新接口；0009 的决策日志记一行指向本提案；实机截图
@@ -156,3 +176,4 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-10-31 | 第 4 步依赖上游三篇，先做 1–3、5 | 上游的 API 还没定稿；App 侧的线上模型由 RuntimeViewer 自己定义，第 4 步只写把上游的表换算进来的那一层。功能分支从本地 `next` 切出，它比远端多 7 个「只看导出的 Swift 声明」的提交（已在远端功能分支上），两条线都改了内容面板，叠在上面可以少一次冲突。 |
 | 2026-10-31 | 第 1 步完成，状态改 In Progress | 行为测试的结论见「落地步骤 · 1」。bridge 测试 bundle 的基线本来就有 2 个失败（`SourceEditorScrollerTests`）：8f3414e0 有意关掉了滚动条自动隐藏，测试没跟着改，与本提案无关，不在这条分支上修。 |
 | 2026-10-31 | 第 2 步完成 | 实现中定下的几处：圆角底用自己的 `CAShapeLayer`，不用框架的高亮图层（理由见「方案 · 四」）；树形前缀不隐藏而是画成透明，三角画在它 `├── ` 那一格，根行与 case 头行的三角画在注释符号前的缩进里，这样有子节点和没有子节点的行对得齐；`FoldStateCache` 的键加上「是否带装饰」，同一份文本开关标签前后各记各的折叠；换 source 时先清空旧装饰再展开旧折叠，新装饰等新数据源就位后才装上，避免框架按旧文本排版时拿到新文本的列号；默认收起先折内层再折外层；按住 ⌥ 点三角整棵展开或收起。没能在 26.6 上跑行为测试：27.2 编出的测试包用的 swift-testing 符号 26.6 没有，混用两版框架又会让进程里出现两份 SourceEditor 而崩溃；26.6 的覆盖靠 `VerifyAcrossXcodes.sh` 跑通带装饰的整个接口。 |
+| 2026-10-31 | 第 3 步完成 | 注释表的线上模型由 RuntimeViewer 自己定义，按列编码：一个大框架的 interface 有上万个段，每段一个带键的对象会比它描述的文本还大，`FrozenSemanticString` 出于同样的理由也是按列编码。开头的注释符号只藏 `//` 与它后面一个空格，续行的对齐空格留着，否则 case 块的各行会和头行挤在同一列。`=` 不藏（`@synthesize width = _width`、字节行的 `offset 0x08 = 0x01` 靠它读懂），只藏语法标点。 |
