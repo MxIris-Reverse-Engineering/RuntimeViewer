@@ -1,8 +1,8 @@
-# Draft - SourceEditor 内容面板：注释画成标签，字段偏移树与枚举布局可折叠
+# 0064 - SourceEditor 内容面板：注释画成标签，字段偏移树与枚举布局可折叠
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-31
-- **最后更新**: 2026-10-31
+- **最后更新**: 2026-11-01
 - **所属愿景**: [自建代码视图引擎](../Visions/CodeViewEngine.md)
 - **关联提案**: [0009](0009-content-editor-engine-selection.md)（接入 SourceEditor）；上游三篇见「方案 · 一」
 - **实现分支 / PR**: `feature/source-editor-comment-annotations`（worktree `.worktrees/RuntimeViewer-SourceEditorCommentAnnotations`）
@@ -195,7 +195,7 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
    （`Settings.Editor.showsCommentTags`，默认开）。测试：`InterfaceCommentDecorationsTests` 8 个、
    `RuntimeInterfaceCommentStructureTests` 5 个，内容管线、设置持久化、跨版本 interface 请求的既有
    套件照常通过。注释表此时还没有来源，引擎要到第 4 步才会填它。
-4. **接上上游。**（代码已完成，抬 pin 待上游落地）内部生成选项、两个打印器的开关、引擎分离后填进
+4. **接上上游。**（已完成）内部生成选项、两个打印器的开关、引擎分离后填进
    线上模型，以及内容面板按 SourceEditor 与标签开关请求它，都已写好；最终的 kind / role 清单已补进
    「方案 · 一」。对着三个上游的分支验证通过（swift-semantic-string 的 `next`、MachOSwiftSection 的
    `feature/comment-structure`、MachOObjCSection 的 `feature/objc-comment-structure-marking`）：
@@ -205,9 +205,11 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
      该出的 kind 都出现了。`GenerationOptionsTests` 补一条：不带这个键的旧请求按 false 解码。
    - Packages 新增 `InterfaceCommentDecorationsEngineTests` 4 个：在引擎给的真实注释表上，隐藏、
      着色和标签都不出注释，每条注释的符号都藏了，字段树与 case 块都能收起、从行尾折起。
-   - 剩下抬 pin：三方进各自的 `next` 后一次抬齐五个锁文件。**在那之前，这条分支用默认的远程依赖编
-     不过**，它用到的三个上游接口在现在钉的版本里都还没有。
-5. **收尾。**（部分完成）`Stubs/VerifyAcrossXcodes.sh` 已补调新接口（随第 2 步）；0009 的决策日志已
+   - 三方都进了各自的 `next` 之后（2026-11-01），五个锁文件（Core、Packages、CommandLine、Debug 与
+     Distribution 两个 workspace）里的三条 pin 一次抬齐：MachOSwiftSection `1dcc0c08`、MachOObjCSection
+     `774b2baf`、swift-semantic-string `f14caa48`（含 0.6.0），其余 pin 不动。之后用默认的远程依赖、全新
+     的构建目录重跑了全量验证。
+5. **收尾。**（已完成）`Stubs/VerifyAcrossXcodes.sh` 已补调新接口（随第 2 步）；0009 的决策日志已
    记一行指向本提案。用户实机看过后，样式改成带细边的胶囊、按类别分色（从四个候选里挑的，见决策
    日志），并修掉了编辑器折行时标签把整行画上底色的问题；`CommentDecorationTests` 新增 4 个测试（折行
    的标签逐行画、标签名随标签类别取色、只有描边宽度大于 0 才描边、留白一变就重排），
@@ -237,3 +239,5 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-10-31 | 折到下一行的标签逐行画 | 用户实机发现，编辑器开着自动换行时，被折到下一行的标签会把整行都画上底色。原因是一个标签的几个选区矩形被合成了一个外框，而选区在折行处会一直伸到视图边缘。改为同一行内照旧取选区矩形，一旦跨行就逐列量、按行分组，每行一个胶囊，行首行尾的空格不算。复现测试 `aTagTheEditorWrapsIsDrawnRowByRow` 修复前是红的：两个标签只画出两个图层，高度分别是 11 和 24。 |
 | 2026-10-31 | 复制出去的是注释原文，已实测 | 用户关心复制与导出能不能拿到注释的原样。导出本来就不经过编辑器：保存 interface、批量导出、CLI 与 MCP 写的都是 `interfaceString`，它与不要注释表时逐字节相同（`RuntimeInterfaceCommentStructureEngineTests`）。复制原先只有反编译的依据，现在用 `CommentDecorationTests.aCopyIsTheSourceAsPrinted` 实测：全选后经编辑器的 `writeSelection(to:types:)` 写进测试自己的剪贴板（不碰用户的），纯文本是原文，`//`、冒号、树形前缀都在，收起的行也完整复制出来，富文本的文字与纯文本相同；唯一多出的是全选带上的文末换行，那是编辑器本来的行为。胶囊是画在图层上的，复制带不走。 |
 | 2026-10-31 | 三角上用箭头指针，点下去有反馈 | 用户的两个小要求：鼠标停在展开三角上时，指针要是普通箭头，不要文字输入的 I-beam；点击要有效果。指针用框架现成的 `CursorRectOverrideProvider`（反编译确认它的矩形是 `SourceEditorView` 坐标、加在 I-beam 之后，且滚动时框架不会替它更新，所以由装饰控制器在滚动和三角移位时自己作废），stub 补了这个协议、`CursorRectOverride` 与 `SourceEditorView` 的三个方法，`UsedSymbols.txt` 多了 7 个符号，26.6 与 27.2 都导出。点击效果选了与 macOS 大纲视图一致的三角转动，再加一个很淡的圆形按下效果，两者都很短，不挡操作。测试：`theTrianglesTakeTheArrowPointer` 把编辑器加的光标矩形读回来（临时替换它类上的 `addCursorRect(_:cursor:)`，AppKit 没有读回的接口），确认每个三角都盖着箭头；`clickingATriangleTurnsItAndShowsThePress` 确认点下去三角转到展开的角度、转动有动画、背后有一个在淡出的图层。 |
+| 2026-11-01 | 三个上游都进了各自的 `next`，抬 pin | MachOSwiftSection 的注释结构标记以 0084 落地（`1dcc0c08`），swift-semantic-string 发布 0.6.0（`next` 上 `f14caa48`），MachOObjCSection 的标记合进 `next` 并推送（`774b2baf`）。五个锁文件只改这三条 pin，其余不动；包的 edit 模式与临时 workspace 撤掉，改用默认的远程依赖、全新构建目录重跑全量验证：Core、Packages、命令行工具与 App 都编过，Distribution 的锁文件解析通过；全量测试只有满载下的几个计时类测试失败（交叉引用预先准备 2 个、批次取消 1 个、加载指示 100 ms 宽限 1 个），单独重跑全过，bridge 测试只剩基线就有的 2 个滚动条测试。 |
+| 2026-11-01 | 实现完成，落地编号 0064 | 落地前先把 `next` 合进功能分支，带进另一会话的「只看导出的 ObjC 声明」；`ContentTextViewModel` 的冲突按 `next` 的 Swift / ObjC 两侧判断改了 `showsExportedOnlyNote`，ObjC 对象被那个选项清空时的说明也画成说明标签。不另写使用指南或实现说明：用户可见的只有 Settings › Editor 的 Comment Tags 开关，设置页已有说明，机制与反编译依据都在本提案里；术语表新增「注释标签」与「注释结构」两条。 |

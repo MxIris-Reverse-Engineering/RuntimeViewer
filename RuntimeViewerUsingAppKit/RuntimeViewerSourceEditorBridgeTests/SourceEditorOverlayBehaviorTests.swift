@@ -8,7 +8,7 @@ import Testing
 ///
 /// Every test registers providers of its own on the bridge's editor, so what it measures is the
 /// framework, not the bridge. They are the evidence the proposal
-/// `draft-source-editor-comment-annotations` cites: when one fails on a new Xcode, whatever the
+/// `source-editor-comment-annotations` cites: when one fails on a new Xcode, whatever the
 /// decorations build on that behaviour needs another look.
 @Suite("SourceEditorOverlayBehavior", .serialized)
 @MainActor
