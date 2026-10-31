@@ -158,8 +158,8 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
    套件照常通过。注释表此时还没有来源，引擎要到第 4 步才会填它。
 4. **接上上游。** 依赖上游三篇落地：内部生成选项、打开打印器开关、引擎分离后填进线上模型、抬 pin、
    用 fixture 做端到端测试；最终的 kind / role 清单补进「方案 · 一」。
-5. **收尾。** `Stubs/VerifyAcrossXcodes.sh` 补调新接口；0009 的决策日志记一行指向本提案；实机截图
-   核对颜色与观感。
+5. **收尾。**（部分完成）`Stubs/VerifyAcrossXcodes.sh` 已补调新接口（随第 2 步）；0009 的决策日志已
+   记一行指向本提案。实机截图核对颜色与观感要等第 4 步：在那之前引擎不发注释表，面板上看不到任何装饰。
 
 ## 决策日志
 
@@ -177,3 +177,4 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-10-31 | 第 1 步完成，状态改 In Progress | 行为测试的结论见「落地步骤 · 1」。bridge 测试 bundle 的基线本来就有 2 个失败（`SourceEditorScrollerTests`）：8f3414e0 有意关掉了滚动条自动隐藏，测试没跟着改，与本提案无关，不在这条分支上修。 |
 | 2026-10-31 | 第 2 步完成 | 实现中定下的几处：圆角底用自己的 `CAShapeLayer`，不用框架的高亮图层（理由见「方案 · 四」）；树形前缀不隐藏而是画成透明，三角画在它 `├── ` 那一格，根行与 case 头行的三角画在注释符号前的缩进里，这样有子节点和没有子节点的行对得齐；`FoldStateCache` 的键加上「是否带装饰」，同一份文本开关标签前后各记各的折叠；换 source 时先清空旧装饰再展开旧折叠，新装饰等新数据源就位后才装上，避免框架按旧文本排版时拿到新文本的列号；默认收起先折内层再折外层；按住 ⌥ 点三角整棵展开或收起。没能在 26.6 上跑行为测试：27.2 编出的测试包用的 swift-testing 符号 26.6 没有，混用两版框架又会让进程里出现两份 SourceEditor 而崩溃；26.6 的覆盖靠 `VerifyAcrossXcodes.sh` 跑通带装饰的整个接口。 |
 | 2026-10-31 | 第 3 步完成 | 注释表的线上模型由 RuntimeViewer 自己定义，按列编码：一个大框架的 interface 有上万个段，每段一个带键的对象会比它描述的文本还大，`FrozenSemanticString` 出于同样的理由也是按列编码。开头的注释符号只藏 `//` 与它后面一个空格，续行的对齐空格留着，否则 case 块的各行会和头行挤在同一列。`=` 不藏（`@synthesize width = _width`、字节行的 `offset 0x08 = 0x01` 靠它读懂），只藏语法标点。 |
+| 2026-10-31 | 停在第 4 步，等上游 | 上游三篇的草案都已写好、等用户在各自的会话里批准：swift-semantic-string 的 `separatingAnnotationRegions()`（`docs/AnnotationRegions.md`），MachOSwiftSection 的 `marksCommentStructure`（`draft-comment-structure.md`），MachOObjCSection 的 `marksCommentStructure`（`draft-objc-comment-structure-marking.md`）。三方已对齐：区域范围裁掉首尾空白、相邻同 kind 分得开、开关打开时分离后的文本逐字节相同；kind 与 role 的最终清单即本提案「方案 · 一」与 `RuntimeInterfaceCommentStructure` 里的常量，ObjC 多了 `ivarOffsetUnknown`，Swift 多了 `typeLayoutElement`、`conditionalWitness`、`conditionalWitnessBranch`、`strippedSymbolicRequirement`，去掉了 interface 路径不输出的 `spareBits`、`deletedMethodSlot`、`ambiguousAttribution`。 |
