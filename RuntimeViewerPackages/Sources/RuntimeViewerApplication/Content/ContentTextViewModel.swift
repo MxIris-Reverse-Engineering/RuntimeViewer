@@ -128,6 +128,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let resolvedInterfaceProvider = self.interfaceProvider
 
         let transformerObservable: Observable<Transformer.Configuration>
+        let marksCommentStructureObservable: Observable<Bool>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         // Resolve the dependency once. `Observable.tracking` re-arms on a
         // main-queue hop where the dependency context is no longer available.
@@ -143,8 +144,18 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 }
             }
             .share(replay: 1, scope: .whileConnected)
+        // Merged the way `currentMergedGenerationOptions` merges it, so a link
+        // click warms the cache entry this fetch then hits.
+        marksCommentStructureObservable = Observable<Bool>
+            .tracking {
+                MainActor.assumeIsolated {
+                    trackedSettings.editor.drawsCommentTags
+                }
+            }
+            .share(replay: 1, scope: .whileConnected)
         #else
         transformerObservable = .just(.init())
+        marksCommentStructureObservable = .just(false)
         #endif
 
         let themeObservable: Observable<ThemeProfile>
@@ -180,11 +191,13 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .combineLatest(
                 $runtimeObject,
                 appDefaults.$options.distinctUntilChanged(),
-                transformerObservable.distinctUntilChanged()
+                transformerObservable.distinctUntilChanged(),
+                marksCommentStructureObservable.distinctUntilChanged()
             )
-            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer -> Observable<FetchedInterface?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer, marksCommentStructure -> Observable<FetchedInterface?> in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
+                mergedOptions.marksCommentStructure = marksCommentStructure
                 return Observable.async {
                     let fetchInterval = contentTextSignposter.beginInterval("content.interfaceFetch", id: contentTextSignposter.makeSignpostID())
                     defer { contentTextSignposter.endInterval("content.interfaceFetch", fetchInterval) }

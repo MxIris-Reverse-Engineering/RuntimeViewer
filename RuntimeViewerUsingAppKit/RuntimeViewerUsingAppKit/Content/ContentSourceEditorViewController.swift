@@ -56,12 +56,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// type-level landmarks by it, the way the sidebar colours Objective-C and Swift apart.
     private var displayedLanguageIdentifier: String?
 
-    /// What the editor shows, kept so that turning comment tags on or off can hand the same
-    /// source over again with or without its decorations.
+    /// What the editor shows.
     private var displayedRenderedInterface: ContentTextViewModel.RenderedInterface?
-
-    /// Whether the source in the editor was handed over with its comment decorations.
-    private var displayedSourceShowsCommentTags = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -78,14 +74,10 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
         displayOptionsObserveToken = SwiftNavigation.observe { [weak self] in
             guard let self else { return }
+            // Comment tags are not among them: they are a part of the source, which the view
+            // model fetches again, with or without the comment structure, when they are turned
+            // on or off.
             bridge.applyDisplayOptions(from: settings.editor)
-            // Comment tags are not a display option of the editor but a part of the source it is
-            // given, so turning them on or off hands the source over again — only when that
-            // changes what it gets.
-            if settings.editor.showsCommentTags != displayedSourceShowsCommentTags,
-               displayedRenderedInterface?.commentDecorations != nil {
-                showDisplayedSource()
-            }
         }
 
         containerView.hierarchy {
@@ -162,18 +154,17 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     }
 
     /// Hands the editor the source last rendered, with its comment decorations while comment tags
-    /// are on.
+    /// are on — checked here too, since a fetch made before they were turned off can still
+    /// arrive with them.
     private func showDisplayedSource() {
         guard let bridge, let renderedInterface = displayedRenderedInterface, let languageIdentifier = displayedLanguageIdentifier else { return }
 
         // The parse the editor makes of this text cannot tell what an identifier is;
         // these runs can, so they are handed over to correct it.
         let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: renderedInterface.semanticString)
-        let showsCommentTags = settings.editor.showsCommentTags
-        let commentDecorations = showsCommentTags
+        let commentDecorations = settings.editor.showsCommentTags
             ? renderedInterface.commentDecorations.flatMap { $0.isEmpty ? nil : SourceEditorCommentDecorations($0) }
             : nil
-        displayedSourceShowsCommentTags = showsCommentTags
         bridge.setSource(
             renderedInterface.attributedString.string,
             languageIdentifier: languageIdentifier,

@@ -448,8 +448,14 @@ extension RuntimeSwiftSection {
             #log(.debug, "Using cached interface")
             return interface
         }
+        // Read before printing, as the configuration the print starts with.
+        let marksCommentStructure = printer.configuration.marksCommentStructure
         let newInterfaceString = try await printInterface(for: object, using: printer)
-        let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
+        let newInterface = if marksCommentStructure {
+            RuntimeObjectInterface(object: object, markedInterfaceString: newInterfaceString.frozen())
+        } else {
+            RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
+        }
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
         return newInterface
@@ -1506,7 +1512,13 @@ extension RuntimeSwiftSection {
 }
 
 extension RuntimeSwiftSection {
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration) async throws {
+    /// Configures the display printer for the next `interface(for:)`. With
+    /// `marksCommentStructure` on, it also marks what each comment is, which
+    /// `interface(for:)` then separates into the interface's comment
+    /// structure; the text is the same either way. A change of either clears
+    /// the interface cache, so an interface with a structure and one without
+    /// never stand in for each other.
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool) async throws {
         #log(.debug, "Updating Swift section configuration")
 
         let oldPrintConfiguration = printer.configuration
@@ -1514,12 +1526,13 @@ extension RuntimeSwiftSection {
         let transformerChanged = transformer != lastTransformerConfiguration
         lastTransformerConfiguration = transformer
 
-        let newPrintConfiguration = buildPrintConfiguration(
+        var newPrintConfiguration = buildPrintConfiguration(
             from: options,
             oldConfiguration: oldPrintConfiguration,
             transformer: transformer,
             transformerChanged: transformerChanged,
         )
+        newPrintConfiguration.marksCommentStructure = marksCommentStructure
         printer.updateConfiguration(newPrintConfiguration)
 
         if options.resolvesOpaqueTypes {

@@ -61,12 +61,25 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
         var mergedOptions = appDefaults.options
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         mergedOptions.transformer = settings.transformer
+        mergedOptions.marksCommentStructure = settings.editor.drawsCommentTags
         #else
         mergedOptions.transformer = .init()
         #endif
         return mergedOptions
     }
 }
+
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+extension Settings.Editor {
+    /// Whether the content pane draws comments as tags, and so asks the
+    /// engine what each comment is: only Xcode's editor does, and only while
+    /// Comment Tags is on. Asked for even when the editor then fails to load —
+    /// the text is the same, only the structure goes unused.
+    var drawsCommentTags: Bool {
+        usesSourceEditor && showsCommentTags
+    }
+}
+#endif
 
 @MainActor
 open class CellViewModel: NSObject {}

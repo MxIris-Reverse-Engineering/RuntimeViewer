@@ -147,7 +147,10 @@ actor RuntimeObjCSection {
         return results
     }
 
-    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration) async throws -> RuntimeObjectInterface {
+    /// With `marksCommentStructure` on, the builder also marks what each
+    /// comment is, and the interface carries the structure separated from
+    /// the print; the text is the same either way.
+    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration, marksCommentStructure: Bool) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
 
@@ -158,7 +161,7 @@ actor RuntimeObjCSection {
         // `ObjCInterfaceBuilder` consumes the library's indexer, so it takes
         // `upstream` rather than the wrapper. Mirrors `RuntimeSwiftSection`
         // handing `indexer.upstream` to `GenericSpecializer`.
-        let builder = ObjCInterfaceBuilder(indexer: objcIndexer.upstream, machO: machO)
+        let builder = ObjCInterfaceBuilder(indexer: objcIndexer.upstream, machO: machO, marksCommentStructure: marksCommentStructure)
         let (cTypeReplacements, ivarOffsetCommentBuilder) = Self.builderInputs(for: transformer)
 
         let interfaceString: SemanticString?
@@ -203,6 +206,9 @@ actor RuntimeObjCSection {
         }
 
         if let interfaceString {
+            if marksCommentStructure {
+                return .init(object: name, markedInterfaceString: interfaceString.frozen())
+            }
             return .init(object: name, interfaceString: interfaceString)
         }
 

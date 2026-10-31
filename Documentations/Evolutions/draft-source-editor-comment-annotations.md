@@ -27,24 +27,49 @@ MachOSwiftSection、MachOObjCSection 各有一篇配套改动，已交给三个�
   原子的 identifier 上，文本一个字节不变；冻结后分离出干净文本和一张表（UTF-8 范围、kind、属性、
   深度、外层区域）。相邻的同 kind 区域要能分开，与另外两种区域按任意顺序嵌套共存。
 - **MachOSwiftSection、MachOObjCSection**：打印配置各加一个默认关的开关，开着时给每条注释包上区域，
-  标出种类和段的角色。种类的起点清单：memberAddress、vtableOffset、pwtOffset、fieldOffset、
-  fieldOffsetUnknown、fieldLayoutNode、typeLayout、enumLayoutSummary、enumLayoutCase（及其
-  Header / Encoding / Note / FixedBytes / Byte 子区域）、spareBits、exportStatus、deletedMethodSlot、
-  ambiguousAttribution、privateDeclarationSource、protocolExtensionDefault；ObjC 的 impAddress、
-  ivarOffset、propertySynthesis、propertyDynamic、typeNote；其余说明性注释为 note。段的角色：
-  marker、label、qualifier、separator、key、value、name、type、treePrefix、text。
+  标出种类和段的角色。
 - 字段偏移树的每个节点区域覆盖它自己和全部后代的行，嵌套即树；枚举逐 case 的多行注释按行拆开。
-- 最终的 kind / role 清单以两个生产方回报的为准，上游三篇的链接与清单在它们落地后补进本节。
+
+上游三篇（2026-10-31 都已实现，见决策日志里各自的状态）：
+
+| 仓库 | 提案 | 给出的接口 |
+|------|------|------------|
+| swift-semantic-string | `docs/AnnotationRegions.md` | `AnnotationRegion` / `AnnotationSegment` 两种组件；`FrozenSemanticString.separatingAnnotationRegions()` 返回干净文本和 `AnnotationRegionTable` |
+| MachOSwiftSection | `draft-comment-structure.md` | `SwiftDeclarationPrintConfiguration.marksCommentStructure` |
+| MachOObjCSection | `draft-objc-comment-structure-marking.md` | `ObjCInterfaceBuilder(indexer:machO:marksCommentStructure:)` |
+
+最终的清单，即 `RuntimeInterfaceCommentStructure` 里的常量：
+
+- **Swift 的 kind**：memberAddress、vtableOffset、pwtOffset、fieldOffset、fieldOffsetUnknown、
+  fieldLayoutNode、typeLayout、typeLayoutElement、enumLayoutSummary、enumLayoutCase 及其 Header /
+  Encoding / Note / FixedBytes / Byte 子区域、exportStatus、protocolExtensionDefault、
+  privateDeclarationSource、conditionalWitness、conditionalWitnessBranch、strippedSymbolicRequirement。
+- **ObjC 的 kind**：impAddress、ivarOffset、ivarOffsetUnknown、propertySynthesis、propertyDynamic、
+  typeNote。
+- 其余说明性注释都是 swift-semantic-string 自带的 **note**。
+- **段的角色**：marker、label、qualifier、separator、key、value、name、type、treePrefix、text。
+- 区域的范围裁掉首尾空白；`fieldOffset` 包住整棵树，每个 `fieldLayoutNode` 包住它自己和全部后代的行；
+  相邻的同 kind 区域各是各的；续行的对齐空格算在 marker 里。用户装了 Transformer 模板的注释整条只有
+  一个 text 段，枚举 case 块只剩 `enumLayoutCase` 一层。
 
 ### 二、Core：引擎负责分离，表随 interface 一起走
 
-- 内容面板请求 interface 时多带一个内部生成选项：不出现在 Generation Options 弹窗里，只在
-  SourceEditor 与标签开关都打开时为真。`RuntimeSwiftSection` / `RuntimeObjCSection` 据此打开打印器
-  的开关。
-- 引擎打印后立即分离。`RuntimeObjectInterface` 多一个可选字段带上注释表，`interfaceString` 本身与
-  今天逐字节相同，所以导出、Find、CLI、MCP 和 `NSTextView` 面板都看不到任何区别。对端是旧版本、
-  不认识这个字段时为 nil，面板退回今天的样子；`RuntimeObjectInterfaceWireCompatibilityTests` 补一条。
-- 这个选项进了 interface cache 的键，两种面板各自缓存，互不影响。
+- 内容面板请求 interface 时多带一个内部生成选项 `GenerationOptions.marksCommentStructure`：不出现在
+  Generation Options 弹窗里，只在 SourceEditor 与标签开关都打开时为真（`Settings.Editor.drawsCommentTags`）。
+  它放在外层的 `GenerationOptions`，不进 Swift / ObjC 两组选项：一个开关管两种语言，用户设的那两组和
+  Find 读语料用的映射（`applySwitches(of:)`）都不受影响。存下来的值永远是默认的 false，MCP 与 CLI
+  也不打开它。
+- `RuntimeSwiftSection` 把它写进打印配置；配置一变 section 自己的 interface 缓存就清空，和其余选项
+  一样，带注释表和不带的不会互相顶替。`RuntimeObjCSection` 交给 `ObjCInterfaceBuilder`。Find 语料
+  用的另一台打印器不打开它。
+- 引擎打印后立即分离（`RuntimeObjectInterface(object:markedInterfaceString:)`）：上游的表按名字换算
+  成 `RuntimeInterfaceCommentStructure`，不属于任何区域的段丢掉。`interfaceString` 本身与今天逐字节
+  相同，所以导出、Find、CLI、MCP 和 `NSTextView` 面板都看不到任何区别。对端是旧版本、不认识这个
+  选项或字段时为 nil，面板退回今天的样子。
+- 这个选项进了 interface cache 的键，两种面板各自缓存，互不影响。`currentMergedGenerationOptions`
+  与内容面板的取数一半按同一个判断设它，点链接时预热的缓存项正好是跳过去后要取的那一项。打开或关掉
+  标签时取数重来一遍，`ContentSourceEditorViewController` 不再自己重发同一份 source；它在下发前仍按
+  开关把关，开关刚关、关之前发出的请求才回来时不会把装饰带上去。
 
 ### 三、App：把注释表变成「装饰」
 
@@ -156,10 +181,21 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
    （`Settings.Editor.showsCommentTags`，默认开）。测试：`InterfaceCommentDecorationsTests` 8 个、
    `RuntimeInterfaceCommentStructureTests` 5 个，内容管线、设置持久化、跨版本 interface 请求的既有
    套件照常通过。注释表此时还没有来源，引擎要到第 4 步才会填它。
-4. **接上上游。** 依赖上游三篇落地：内部生成选项、打开打印器开关、引擎分离后填进线上模型、抬 pin、
-   用 fixture 做端到端测试；最终的 kind / role 清单补进「方案 · 一」。
+4. **接上上游。**（代码已完成，抬 pin 待上游落地）内部生成选项、两个打印器的开关、引擎分离后填进
+   线上模型，以及内容面板按 SourceEditor 与标签开关请求它，都已写好；最终的 kind / role 清单已补进
+   「方案 · 一」。对着三个上游的分支验证通过（swift-semantic-string 的 `next`、MachOSwiftSection 的
+   `feature/comment-structure`、MachOObjCSection 的 `feature/objc-comment-structure-marking`）：
+   - Core 新增 `RuntimeInterfaceCommentStructureEngineTests` 5 个：用测试包里的 Swift fixture 和
+     libobjc 的 `NSObject` 打印，要了注释表的文本、span 与 identifier 和不要时完全相同；文本里的每条
+     注释都落在表里某条注释内、且从注释符号开始；范围层层嵌套；kind 与 role 都在已知清单里，各选项
+     该出的 kind 都出现了。`GenerationOptionsTests` 补一条：不带这个键的旧请求按 false 解码。
+   - Packages 新增 `InterfaceCommentDecorationsEngineTests` 4 个：在引擎给的真实注释表上，隐藏、
+     着色和标签都不出注释，每条注释的符号都藏了，字段树与 case 块都能收起、从行尾折起。
+   - 剩下抬 pin：三方进各自的 `next` 后一次抬齐五个锁文件。**在那之前，这条分支用默认的远程依赖编
+     不过**，它用到的三个上游接口在现在钉的版本里都还没有。
 5. **收尾。**（部分完成）`Stubs/VerifyAcrossXcodes.sh` 已补调新接口（随第 2 步）；0009 的决策日志已
-   记一行指向本提案。实机截图核对颜色与观感要等第 4 步：在那之前引擎不发注释表，面板上看不到任何装饰。
+   记一行指向本提案。实机截图核对颜色与观感待用户看过：第 4 步的代码已能对着三个上游的分支编出 App，
+   引擎会发注释表了，面板上能看到装饰。
 
 ## 决策日志
 
@@ -178,3 +214,6 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-10-31 | 第 2 步完成 | 实现中定下的几处：圆角底用自己的 `CAShapeLayer`，不用框架的高亮图层（理由见「方案 · 四」）；树形前缀不隐藏而是画成透明，三角画在它 `├── ` 那一格，根行与 case 头行的三角画在注释符号前的缩进里，这样有子节点和没有子节点的行对得齐；`FoldStateCache` 的键加上「是否带装饰」，同一份文本开关标签前后各记各的折叠；换 source 时先清空旧装饰再展开旧折叠，新装饰等新数据源就位后才装上，避免框架按旧文本排版时拿到新文本的列号；默认收起先折内层再折外层；按住 ⌥ 点三角整棵展开或收起。没能在 26.6 上跑行为测试：27.2 编出的测试包用的 swift-testing 符号 26.6 没有，混用两版框架又会让进程里出现两份 SourceEditor 而崩溃；26.6 的覆盖靠 `VerifyAcrossXcodes.sh` 跑通带装饰的整个接口。 |
 | 2026-10-31 | 第 3 步完成 | 注释表的线上模型由 RuntimeViewer 自己定义，按列编码：一个大框架的 interface 有上万个段，每段一个带键的对象会比它描述的文本还大，`FrozenSemanticString` 出于同样的理由也是按列编码。开头的注释符号只藏 `//` 与它后面一个空格，续行的对齐空格留着，否则 case 块的各行会和头行挤在同一列。`=` 不藏（`@synthesize width = _width`、字节行的 `offset 0x08 = 0x01` 靠它读懂），只藏语法标点。 |
 | 2026-10-31 | 停在第 4 步，等上游 | 上游三篇的草案都已写好、等用户在各自的会话里批准：swift-semantic-string 的 `separatingAnnotationRegions()`（`docs/AnnotationRegions.md`），MachOSwiftSection 的 `marksCommentStructure`（`draft-comment-structure.md`），MachOObjCSection 的 `marksCommentStructure`（`draft-objc-comment-structure-marking.md`）。三方已对齐：区域范围裁掉首尾空白、相邻同 kind 分得开、开关打开时分离后的文本逐字节相同；kind 与 role 的最终清单即本提案「方案 · 一」与 `RuntimeInterfaceCommentStructure` 里的常量，ObjC 多了 `ivarOffsetUnknown`，Swift 多了 `typeLayoutElement`、`conditionalWitness`、`conditionalWitnessBranch`、`strippedSymbolicRequirement`，去掉了 interface 路径不输出的 `spareBits`、`deletedMethodSlot`、`ambiguousAttribution`。 |
+| 2026-10-31 | 第 4 步的代码先对着上游的分支写好，抬 pin 留到三方都进各自的 `next` | 三个上游当天都已实现：swift-semantic-string 已推到它的 `next`（2698750），还没发版；MachOSwiftSection 推了功能分支 `feature/comment-structure`，并在本地合进 `next`、未推送；MachOObjCSection 推了功能分支 `feature/objc-comment-structure-marking`，要等 swift-semantic-string 发版才合进它的 `next`。现在就抬 pin，五个锁文件要改两遍、验证也要跑两轮，所以只写代码、用三个上游的分支验证。代价是抬 pin 之前这条分支用默认的远程依赖编不过。 |
+| 2026-10-31 | 这个选项放在外层 `GenerationOptions`，Swift 一侧随打印配置一起比较 | 一个开关管两种语言，用户的两组选项、Find 读语料用的映射都不用动。Swift section 的 interface 缓存本来就在打印配置变了时清空，带注释表和不带的不会互相顶替，不必另立一份缓存。 |
+| 2026-10-31 | 打开或关掉标签改由重新取数驱动，VC 不再自己重发 source | 请求带上了这个选项，开关一变内容面板本来就会重新取数；VC 再重发一次，关掉标签时会连着两次 `setSource` 同样的文本。VC 下发前仍按开关把关，关掉之前发出、关掉之后才回来的请求不会把装饰带上去。 |

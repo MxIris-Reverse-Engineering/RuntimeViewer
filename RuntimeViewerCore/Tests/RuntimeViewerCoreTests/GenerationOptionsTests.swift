@@ -198,6 +198,24 @@ struct GenerationOptionsTests {
         #expect(options.objcHeaderOptions == .default)
         #expect(options.swiftInterfaceOptions == .default)
         #expect(options.transformer == .default)
+        #expect(options.marksCommentStructure == false)
+        #expect(RuntimeObjectInterface.GenerationOptions.mcp.marksCommentStructure == false)
+    }
+
+    /// The options a peer that predates the comment structure sends with its
+    /// interface requests, and the ones saved before it existed.
+    @Test("options without the comment structure key decode with it off, and a request for it says so")
+    func optionsWithoutCommentStructureDecodeWithItOff() throws {
+        let olderOptions = Data(#"{"swiftInterfaceOptions":{"printFieldOffset":true}}"#.utf8)
+        let decodedOptions = try JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: olderOptions)
+        #expect(decodedOptions.marksCommentStructure == false)
+
+        var requestingOptions = RuntimeObjectInterface.GenerationOptions()
+        requestingOptions.marksCommentStructure = true
+        let encodedRequest = try JSONEncoder().encode(requestingOptions)
+        let decodedRequest = try JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: encodedRequest)
+        #expect(decodedRequest.marksCommentStructure == true)
+        #expect(decodedRequest != RuntimeObjectInterface.GenerationOptions(), "two requests that differ only in it must not share an interface cache entry")
     }
 
     @Test("Codable round-trip")
