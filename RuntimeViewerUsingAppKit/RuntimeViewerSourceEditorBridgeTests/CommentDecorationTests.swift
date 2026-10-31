@@ -76,6 +76,32 @@ struct CommentDecorationTests {
         #expect(heights.allSatisfy { $0 - rowHeight < 1 }, "shape heights \(heights)")
     }
 
+    // MARK: - Copying
+
+    /// What a copy writes is the source, not what the editor draws: the markers and punctuation
+    /// the decorations hide come back, and so do the rows a fold hides, so a copied comment is a
+    /// comment again — as plain text and as rich text alike. Written to a pasteboard of the
+    /// test's own, never the one the user copies with.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded), arguments: [false, true])
+    func aCopyIsTheSourceAsPrinted(startingCollapsed: Bool) throws {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: startingCollapsed))
+        harness.layout()
+
+        #expect(NSApplication.shared.sendAction(#selector(NSText.selectAll(_:)), to: harness.editorView, from: nil))
+        let requestor = try #require(harness.editorView as? NSServicesMenuRequestor)
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("RuntimeViewerSourceEditorBridgeTests.\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        #expect(requestor.writeSelection?(to: pasteboard, types: [.string, .rtf]) == true)
+
+        // Selecting all takes in the line break the editor ends its text with.
+        let plainText = try #require(pasteboard.string(forType: .string))
+        #expect(plainText == Self.fieldLayoutSource + "\n")
+        let richTextData = try #require(pasteboard.data(forType: .rtf))
+        let richText = try #require(NSAttributedString(rtf: richTextData, documentAttributes: nil))
+        #expect(richText.string == plainText)
+    }
+
     // MARK: - Appearance
 
     @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
