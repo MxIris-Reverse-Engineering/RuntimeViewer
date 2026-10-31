@@ -61,27 +61,10 @@ protocol SourceEditorBridging: NSObjectProtocol {
         commentDecorations: SourceEditorBridgingCommentDecorations?
     )
 
-    /// The colours comment tags are drawn with. Called with the theme, and again whenever it or
-    /// the appearance changes; until the first call tags are drawn in fallbacks derived from the
-    /// label colours.
-    ///
-    /// - Parameters:
-    ///   - fillColor: behind a ``SourceEditorBridgingCommentTagStyle/standard`` tag.
-    ///   - warningFillColor: behind a ``SourceEditorBridgingCommentTagStyle/warning`` tag.
-    ///   - noteFillColor: behind a ``SourceEditorBridgingCommentTagStyle/note`` tag.
-    ///   - labelColor, valueColor, typeColor, nameColor: the text of the runs of each
-    ///     ``SourceEditorBridgingCommentRunStyle``.
-    ///   - disclosureColor: the triangles that collapse and expand a row.
-    func applyCommentTagColors(
-        fillColor: NSColor,
-        warningFillColor: NSColor,
-        noteFillColor: NSColor,
-        labelColor: NSColor,
-        valueColor: NSColor,
-        typeColor: NSColor,
-        nameColor: NSColor,
-        disclosureColor: NSColor
-    )
+    /// How comment tags are drawn. Called with the theme, and again whenever it or the
+    /// appearance changes; until the first call tags are drawn in fallbacks derived from the
+    /// label colours. A change of padding lays the decorated text out again.
+    func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance)
 
     /// The editor view's own background, which is what shows past the end of the document.
     /// Set alongside the theme, whose background key covers the text area.
@@ -235,11 +218,51 @@ protocol SourceEditorBridgingCommentDecorations: NSObjectProtocol {
     var collapsibleStartsCollapsed: [NSNumber] { get }
 }
 
-/// What a tag's fill says about it.
+/// How comment tags are drawn, worked out by the app from its theme. A protocol for the same
+/// reason as ``SourceEditorBridgingCommentDecorations``; the bridge reads it once per call to
+/// ``SourceEditorBridging/applyCommentTagAppearance(_:)`` and keeps what it read.
+@objc(RuntimeViewerSourceEditorBridgingCommentTagAppearance)
+protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
+    /// Behind a tag of `style`.
+    func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor
+
+    /// Around a tag of `style`, inside its edge; nil draws none.
+    func strokeColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor?
+
+    /// What a fact is — a ``SourceEditorBridgingCommentRunStyle/label`` run — in a tag of `style`.
+    func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor
+
+    /// The text of the other ``SourceEditorBridgingCommentRunStyle``s.
+    var valueColor: NSColor { get }
+    var typeColor: NSColor { get }
+    var nameColor: NSColor { get }
+
+    /// The triangles that collapse and expand a row.
+    var disclosureColor: NSColor { get }
+
+    /// Of a tag's corners; half the tag's height or more draws a capsule.
+    var cornerRadius: CGFloat { get }
+
+    /// Of the line around a tag, drawn inside its edge.
+    var strokeWidth: CGFloat { get }
+
+    /// Between a tag's text and its edge, on each side.
+    var horizontalPadding: CGFloat { get }
+}
+
+/// What a tag says, which picks its colours.
 @objc(RuntimeViewerSourceEditorBridgingCommentTagStyle)
-enum SourceEditorBridgingCommentTagStyle: Int {
-    /// Addresses, offsets, layouts — the facts most comments state.
-    case standard
+enum SourceEditorBridgingCommentTagStyle: Int, CaseIterable {
+    /// Where code is: a member's address, an `IMP`.
+    case address
+    /// Where something sits in a value or a table: field and ivar offsets, vtable and protocol
+    /// witness table slots.
+    case offset
+    /// How a type is laid out: size and alignment, an enum's cases and tag bytes.
+    case layout
+    /// What else is known about a declaration: `@synthesize`, `@dynamic`, a default
+    /// implementation, where a private declaration comes from.
+    case declaration
     /// Something the reader should notice: an offset that could not be worked out, a member
     /// the image does not export, an address that does not resolve.
     case warning

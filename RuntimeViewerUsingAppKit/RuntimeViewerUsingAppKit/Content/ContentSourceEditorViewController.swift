@@ -194,20 +194,12 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         let lineNumberFont = currentTheme?.font(for: .standard) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
         bridge.applyTheme(name: baseThemeName, dictionary: dictionary, fontSizeModifier: 0, lineNumberFont: lineNumberFont)
 
-        // Tags take their colours from the comment they replace: a wash of the comment colour
-        // behind it, the comment colour for what a fact is, the theme's number colour for the
-        // fact itself. Dark backgrounds need a stronger wash to show the same contrast.
-        let commentColor = currentTheme?.color(for: .comment) ?? .secondaryLabelColor
-        bridge.applyCommentTagColors(
-            fillColor: commentColor.withAlphaComponent(isDark ? 0.18 : 0.11),
-            warningFillColor: NSColor.systemOrange.withAlphaComponent(isDark ? 0.28 : 0.18),
-            noteFillColor: commentColor.withAlphaComponent(isDark ? 0.09 : 0.06),
-            labelColor: commentColor,
-            valueColor: currentTheme?.color(for: .numeric) ?? .labelColor,
+        bridge.applyCommentTagAppearance(SourceEditorCommentTagAppearance(
+            commentColor: currentTheme?.color(for: .comment) ?? .secondaryLabelColor,
             typeColor: currentTheme?.color(for: .type(.class, .name)) ?? .labelColor,
-            nameColor: currentTheme?.color(for: .standard) ?? .labelColor,
-            disclosureColor: commentColor
-        )
+            textColor: currentTheme?.color(for: .standard) ?? .labelColor,
+            isDark: isDark
+        ))
 
         // The theme covers the text area; these cover everything around it — the area past
         // the end of the document, and the container behind the editor.

@@ -78,6 +78,17 @@ final class SourceEditorTestHarness {
     /// How many lines the text last passed to `setSource(_:commentDecorations:)` has.
     private(set) var lineCount = 0
 
+    /// Narrows or widens the window the editor fills: how far a line runs before the editor
+    /// wraps it.
+    func resize(width: CGFloat) {
+        window.setContentSize(NSSize(width: width, height: window.contentLayoutRect.height))
+    }
+
+    /// Hands the bridge the tag appearance, as the content pane does with each theme.
+    func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance) {
+        bridge.applyCommentTagAppearance(appearance)
+    }
+
     func setSource(_ source: String, commentDecorations: SourceEditorBridgingCommentDecorations? = nil) {
         lineCount = source.components(separatedBy: "\n").count
         bridge.setSource(

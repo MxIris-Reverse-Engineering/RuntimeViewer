@@ -178,6 +178,37 @@ struct InterfaceCommentDecorationsTests {
         #expect(decorations.tags.map(\.style) == [.warning])
     }
 
+    /// A tag's style says what kind of fact it shows, which picks its colours: addresses,
+    /// offsets, layouts and what else is known about a declaration each have their own.
+    @Test func eachTagTakesTheStyleOfWhatItShows() {
+        let (decorations, text) = Self.swiftFixture()
+        let swiftStyles = Dictionary(decorations.tags.map { ($0.range, $0.style) }, uniquingKeysWith: { first, _ in first })
+        #expect(swiftStyles[text.range(of: "Address: 0x135DC", onLine: 1)] == .address)
+        #expect(swiftStyles[text.range(of: "size: 16", onLine: 2)] == .layout)
+        #expect(swiftStyles[text.range(of: "0x8", onLine: 4)] == .offset)
+        #expect(swiftStyles[text.range(of: "thin", onLine: 9)] == .layout)
+        #expect(swiftStyles[text.range(of: "Enum Layout", onLine: 8)] == .note)
+
+        let objcText = """
+        @property (copy) NSString *name; // @synthesize name = _name
+        - (void)probe; // IMP: 0x4550
+            Class isa; // offset: 0
+        """
+        let fixture = Fixture(text: objcText)
+        let synthesis = fixture.comment(.propertySynthesis, lines: 0 ... 0)
+        fixture.segments(in: synthesis, onLine: 0, [(.marker, "// "), (.label, "@synthesize"), (.separator, " "), (.name, "name"), (.separator, " = "), (.value, "_name")])
+        let implementation = fixture.comment(.impAddress, lines: 1 ... 1)
+        fixture.segments(in: implementation, onLine: 1, [(.marker, "// "), (.label, "IMP"), (.separator, ": "), (.value, "0x4550")])
+        let ivarOffset = fixture.comment(.ivarOffset, lines: 2 ... 2)
+        fixture.segments(in: ivarOffset, onLine: 2, [(.marker, "// "), (.label, "offset"), (.separator, ": "), (.value, "0")])
+        let objcDecorations = InterfaceCommentDecorations(structure: fixture.structure, interfaceString: SemanticString { Standard(objcText) }.frozen())
+
+        let objcStyles = Dictionary(objcDecorations.tags.map { ($0.range, $0.style) }, uniquingKeysWith: { first, _ in first })
+        #expect(objcStyles[fixture.range(of: "@synthesize name = _name", onLine: 0)] == .declaration)
+        #expect(objcStyles[fixture.range(of: "IMP: 0x4550", onLine: 1)] == .address)
+        #expect(objcStyles[fixture.range(of: "offset: 0", onLine: 2)] == .offset)
+    }
+
     // MARK: - Collapsing
 
     @Test func layoutRowsWithRowsBelowThemAndCaseHeadersCollapse() {

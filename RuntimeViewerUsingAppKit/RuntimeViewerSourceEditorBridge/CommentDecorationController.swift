@@ -18,14 +18,6 @@ import SourceEditor
 /// that text is in place, and `clear()` before anything lays out the previous text again: a column
 /// range past the end of a line is a `fatalError` in the framework, not a no-op.
 final class CommentDecorationController {
-    /// Space between a tag's text and its edge, on each side. The text is shifted by this much at
-    /// the tag's first column and again after its last, so a tag never touches its neighbours.
-    private static let tagPadding: CGFloat = 4
-
-    /// The radius Xcode draws its own tokens with — `SourceEditorRangeHighlightLayer`'s default
-    /// (`init()`, 27.2 @ 0x254528).
-    private static let tagCornerRadius: CGFloat = 4
-
     /// How far a tag stays inside its line's height, so tags on neighbouring lines do not touch.
     private static let tagVerticalInset: CGFloat = 1
 
@@ -35,7 +27,12 @@ final class CommentDecorationController {
     /// Both are replaced whole on the main thread, so a reader always sees one consistent value.
     private let stateLock = NSLock()
     private var unlockedTables = Tables.empty
-    private var unlockedColors = Colors.fallback
+    private var unlockedTagAppearance = TagAppearance.fallback
+
+    /// What the tables were built from, kept to build them again when the padding changes: the
+    /// padding is a column shift, baked into the tables.
+    private var loadedDecorations: SourceEditorBridgingCommentDecorations?
+    private var loadedSource: String?
 
     private var tagLayers: [CAShapeLayer] = []
 
@@ -55,10 +52,10 @@ final class CommentDecorationController {
         return unlockedTables
     }
 
-    private var colors: Colors {
+    private var tagAppearance: TagAppearance {
         stateLock.lock()
         defer { stateLock.unlock() }
-        return unlockedColors
+        return unlockedTagAppearance
     }
 
     private func replaceTables(with tables: Tables) {
@@ -71,6 +68,8 @@ final class CommentDecorationController {
 
     /// Forgets the current decorations. Called before the editor can lay out a different text.
     func clear() {
+        loadedDecorations = nil
+        loadedSource = nil
         guard !tables.isEmpty else { return }
         replaceTables(with: .empty)
         disclosureTargets = []
@@ -80,7 +79,9 @@ final class CommentDecorationController {
 
     /// Takes on the decorations of `source`, which the editor's data source must already hold.
     func load(_ decorations: SourceEditorBridgingCommentDecorations?, source: String) {
-        let newTables = decorations.map { Tables(decorations: $0, source: source, tagPadding: Self.tagPadding) } ?? .empty
+        loadedDecorations = decorations
+        loadedSource = decorations == nil ? nil : source
+        let newTables = decorations.map { Tables(decorations: $0, source: source, tagPadding: tagAppearance.horizontalPadding) } ?? .empty
         replaceTables(with: newTables)
         disclosureTargets = []
         guard let sourceEditorView else { return }
@@ -102,14 +103,19 @@ final class CommentDecorationController {
         }
     }
 
-    // MARK: - Colours
+    // MARK: - Appearance
 
-    func applyColors(_ colors: Colors) {
+    func applyTagAppearance(_ newTagAppearance: TagAppearance) {
+        let paddingChanged = newTagAppearance.horizontalPadding != tagAppearance.horizontalPadding
         stateLock.lock()
-        unlockedColors = colors
+        unlockedTagAppearance = newTagAppearance
         stateLock.unlock()
+        if paddingChanged, let loadedDecorations, let loadedSource {
+            replaceTables(with: Tables(decorations: loadedDecorations, source: loadedSource, tagPadding: newTagAppearance.horizontalPadding))
+            disclosureTargets = []
+        }
         guard !tables.isEmpty, let sourceEditorView else { return }
-        // Run colours are attribute overrides, asked only while a line layer is built.
+        // Run colours and shifts are asked only while a line layer is built.
         sourceEditorView.layoutManager.invalidateAllLayout()
     }
 
@@ -152,7 +158,7 @@ final class CommentDecorationController {
 
     private func drawDecorations(in contentView: SourceEditorContentView) {
         let tables = tables
-        let colors = colors
+        let tagAppearance = tagAppearance
         guard !tables.isEmpty,
               let sourceEditorView,
               let visibleRange = sourceEditorView.layoutManager.sourceRangeForVisibleLinesIn(rect: contentView.layoutBounds, inContentView: contentView)
@@ -168,7 +174,7 @@ final class CommentDecorationController {
         defer { CATransaction.commit() }
 
         let underlayLayer = contentView.underlayLayer
-        let appearance = sourceEditorView.effectiveAppearance
+        let effectiveAppearance = sourceEditorView.effectiveAppearance
         var tagCount = 0
         var disclosureCount = 0
         var targets: [(frame: CGRect, rowIndex: Int)] = []
@@ -184,19 +190,23 @@ final class CommentDecorationController {
             }
 
             for tag in tables.tagsByLine[line] ?? [] {
-                guard let textFrame = Self.frame(ofColumns: tag.columns, onLine: line, in: contentView) else { continue }
-                let layer = Self.layer(at: tagCount, in: &tagLayers, under: underlayLayer)
-                tagCount += 1
-                let frame = textFrame.insetBy(dx: -Self.tagPadding, dy: Self.tagVerticalInset)
-                layer.frame = frame
-                layer.path = CGPath(
-                    roundedRect: CGRect(origin: .zero, size: frame.size),
-                    cornerWidth: min(Self.tagCornerRadius, frame.height / 2),
-                    cornerHeight: min(Self.tagCornerRadius, frame.height / 2),
-                    transform: nil
-                )
-                layer.fillColor = Self.cgColor(colors.fill(for: tag.style), in: appearance)
-                layer.isHidden = false
+                for textFrame in Self.rowFrames(of: tag, onLine: line, in: contentView) {
+                    let layer = Self.layer(at: tagCount, in: &tagLayers, under: underlayLayer)
+                    tagCount += 1
+                    let frame = textFrame.insetBy(dx: -tagAppearance.horizontalPadding, dy: Self.tagVerticalInset)
+                    layer.frame = frame
+                    // A stroke is centred on the path, so the path runs half a stroke inside the
+                    // frame to keep the line within the tag.
+                    let strokeColor = tagAppearance.stroke(for: tag.style)
+                    let strokeInset = strokeColor == nil ? 0 : tagAppearance.strokeWidth / 2
+                    let pathRect = CGRect(origin: .zero, size: frame.size).insetBy(dx: strokeInset, dy: strokeInset)
+                    let radius = max(min(tagAppearance.cornerRadius - strokeInset, pathRect.height / 2, pathRect.width / 2), 0)
+                    layer.path = CGPath(roundedRect: pathRect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+                    layer.fillColor = Self.cgColor(tagAppearance.fill(for: tag.style), in: effectiveAppearance)
+                    layer.strokeColor = strokeColor.map { Self.cgColor($0, in: effectiveAppearance) }
+                    layer.lineWidth = strokeColor == nil ? 0 : tagAppearance.strokeWidth
+                    layer.isHidden = false
+                }
             }
 
             for rowIndex in tables.rowIndicesByLine[line] ?? [] {
@@ -208,7 +218,7 @@ final class CommentDecorationController {
                 let frame = CGRect(x: cellFrame.midX - side / 2, y: cellFrame.midY - side / 2, width: side, height: side)
                 layer.frame = frame
                 layer.path = Self.disclosurePath(side: side, isCollapsed: isCollapsed(row), isFlipped: contentView.isFlipped)
-                layer.fillColor = Self.cgColor(colors.disclosure, in: appearance)
+                layer.fillColor = Self.cgColor(tagAppearance.disclosure, in: effectiveAppearance)
                 layer.isHidden = false
                 // The whole cell takes the click, not only the triangle's few points.
                 targets.append((cellFrame, rowIndex))
@@ -218,6 +228,41 @@ final class CommentDecorationController {
         disclosureTargets = targets
         hideLayers(from: tagCount, in: tagLayers)
         hideLayers(from: disclosureCount, in: disclosureLayers)
+    }
+
+    /// A tag's extent on screen, one rect per row the editor draws it on, in the content view's
+    /// coordinates.
+    ///
+    /// While the tag stays on one row, the rects a selection of it would be drawn with are the
+    /// answer. Once the editor wraps the line inside the tag, a selection reaches the edge of the
+    /// view where each row breaks, and one rect around all of it covered the whole line. So each
+    /// column is measured on its own instead and the columns are grouped by row, leaving out
+    /// spaces, which would otherwise widen a row where it breaks.
+    private static func rowFrames(of tag: Tag, onLine line: Int, in contentView: SourceEditorContentView) -> [CGRect] {
+        let rects = drawnRects(ofColumns: tag.columns, onLine: line, in: contentView)
+        guard let first = rects.first else { return [] }
+        if rects.allSatisfy({ abs($0.midY - first.midY) < 1 }) {
+            return [rects.dropFirst().reduce(first) { $0.union($1) }]
+        }
+        var rowFrames: [CGRect] = []
+        for column in tag.columns where !tag.spaceColumns.contains(column) {
+            guard let rect = drawnRects(ofColumns: column ..< column + 1, onLine: line, in: contentView).first else { continue }
+            if let lastFrame = rowFrames.last, abs(lastFrame.midY - rect.midY) < 1 {
+                rowFrames[rowFrames.count - 1] = lastFrame.union(rect)
+            } else {
+                rowFrames.append(rect)
+            }
+        }
+        return rowFrames
+    }
+
+    /// The rects a selection of the columns would be drawn with — one per run of drawn columns
+    /// on each row — which already account for hidden columns and shifts.
+    private static func drawnRects(ofColumns columns: Range<Int>, onLine line: Int, in contentView: SourceEditorContentView) -> [CGRect] {
+        let range = SourceEditorPosition(line: line, col: columns.lowerBound) ..< SourceEditorPosition(line: line, col: columns.upperBound)
+        return contentView.selectionRects(for: range, coalesceInteriorRects: false, includeLineSpacing: false)
+            .map(\.rect)
+            .filter { $0.width > 0 && $0.height > 0 }
     }
 
     /// The columns' extent on screen, in the content view's coordinates — the rects a selection
@@ -303,9 +348,9 @@ extension CommentDecorationController: HiddenTextOverrideProvider, ColumnShiftOv
 
     func textAttributeOverridesForLine(_ line: Int, in layoutManager: SourceEditorLayoutManager) -> [SourceEditorTextAttributeOverride] {
         guard let runs = tables.runsByLine[line] else { return [] }
-        let colors = colors
+        let tagAppearance = tagAppearance
         return runs.map { run in
-            SourceEditorTextAttributeOverride(range: run.columns, attr: [.foregroundColor: colors.text(for: run.style)])
+            SourceEditorTextAttributeOverride(range: run.columns, attr: [.foregroundColor: tagAppearance.textColor(for: run)])
         }
     }
 }
@@ -339,38 +384,47 @@ extension CommentDecorationController: SourceEditorViewEventConsumer {
 // MARK: - Tables
 
 extension CommentDecorationController {
-    struct Colors {
-        var fill: NSColor
-        var warningFill: NSColor
-        var noteFill: NSColor
-        var label: NSColor
+    /// What the app's ``SourceEditorBridgingCommentTagAppearance`` said, read once: the layout
+    /// hooks run while lines are built and must not call back into the app.
+    struct TagAppearance {
+        var fills: [SourceEditorBridgingCommentTagStyle: NSColor]
+        var strokes: [SourceEditorBridgingCommentTagStyle: NSColor]
+        var labels: [SourceEditorBridgingCommentTagStyle: NSColor]
         var value: NSColor
         var type: NSColor
         var name: NSColor
         var disclosure: NSColor
+        var cornerRadius: CGFloat
+        var strokeWidth: CGFloat
+        var horizontalPadding: CGFloat
 
-        static let fallback = Colors(
-            fill: .quaternaryLabelColor,
-            warningFill: .systemOrange.withAlphaComponent(0.2),
-            noteFill: .quaternaryLabelColor.withAlphaComponent(0.5),
-            label: .secondaryLabelColor,
+        static let fallback = TagAppearance(
+            fills: Dictionary(uniqueKeysWithValues: SourceEditorBridgingCommentTagStyle.allCases.map { style in
+                (style, style == .warning ? NSColor.systemOrange.withAlphaComponent(0.2) : NSColor.quaternaryLabelColor)
+            }),
+            strokes: [:],
+            labels: [:],
             value: .labelColor,
             type: .labelColor,
             name: .labelColor,
-            disclosure: .secondaryLabelColor
+            disclosure: .secondaryLabelColor,
+            cornerRadius: 4,
+            strokeWidth: 0,
+            horizontalPadding: 4
         )
 
         func fill(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
-            switch style {
-            case .standard: fill
-            case .warning: warningFill
-            case .note: noteFill
-            }
+            fills[style] ?? .quaternaryLabelColor
         }
 
-        func text(for style: SourceEditorBridgingCommentRunStyle) -> NSColor {
-            switch style {
-            case .label: label
+        func stroke(for style: SourceEditorBridgingCommentTagStyle) -> NSColor? {
+            strokeWidth > 0 ? strokes[style] : nil
+        }
+
+        /// A label takes the colour of the tag it lies in; one outside every tag, the note's.
+        func textColor(for run: Run) -> NSColor {
+            switch run.style {
+            case .label: labels[run.tagStyle ?? .note] ?? labels[.note] ?? .secondaryLabelColor
             case .value: value
             case .type: type
             case .name: name
@@ -382,11 +436,15 @@ extension CommentDecorationController {
     struct Tag {
         let columns: Range<Int>
         let style: SourceEditorBridgingCommentTagStyle
+        /// The columns that hold a space or a tab, for measuring a tag the editor wraps.
+        let spaceColumns: [Int]
     }
 
     struct Run {
         let columns: Range<Int>
         let style: SourceEditorBridgingCommentRunStyle
+        /// The style of the tag the run lies in, if any.
+        let tagStyle: SourceEditorBridgingCommentTagStyle?
     }
 
     struct Row {
@@ -454,27 +512,21 @@ extension CommentDecorationController {
                 visibleColumnsByLine[line] = Self.complement(of: hiddenColumns, withinLineOfLength: lines.length(ofLine: line))
             }
 
-            var runsByLine: [Int: [Run]] = [:]
-            let runStyles = decorations.runStyles
-            if runStyles.count == decorations.runRanges.count {
-                for (range, styleValue) in zip(decorations.runRanges.map(\.rangeValue), runStyles) {
-                    guard let style = SourceEditorBridgingCommentRunStyle(rawValue: styleValue.intValue),
-                          let (line, columns) = lines.lineAndColumns(of: range)
-                    else { continue }
-                    runsByLine[line, default: []].append(Run(columns: columns, style: style))
-                }
-            }
-
             var tagsByLine: [Int: [Tag]] = [:]
             var shiftsByLine: [Int: [Int: CGFloat]] = [:]
             let tagStyles = decorations.tagStyles
             if tagStyles.count == decorations.tagRanges.count {
+                let textUnits = Array(source.utf16)
                 for (range, styleValue) in zip(decorations.tagRanges.map(\.rangeValue), tagStyles) {
                     guard let style = SourceEditorBridgingCommentTagStyle(rawValue: styleValue.intValue),
                           let (line, columns) = lines.lineAndColumns(of: range),
                           !columns.isEmpty
                     else { continue }
-                    tagsByLine[line, default: []].append(Tag(columns: columns, style: style))
+                    let spaceColumns = (0 ..< range.length).compactMap { index -> Int? in
+                        let unit = textUnits[range.location + index]
+                        return unit == 0x20 || unit == 0x09 ? columns.lowerBound + index : nil
+                    }
+                    tagsByLine[line, default: []].append(Tag(columns: columns, style: style, spaceColumns: spaceColumns))
 
                     // Room for the padding on both sides. A shift on a hidden column might never be
                     // applied, so each goes on the first column at or after it that is drawn.
@@ -486,6 +538,18 @@ extension CommentDecorationController {
                     if let end = Self.firstDrawnColumn(atOrAfter: columns.upperBound, visibleColumns: visibleColumns, lineLength: lineLength) {
                         shiftsByLine[line, default: [:]][end, default: 0] += tagPadding
                     }
+                }
+            }
+
+            var runsByLine: [Int: [Run]] = [:]
+            let runStyles = decorations.runStyles
+            if runStyles.count == decorations.runRanges.count {
+                for (range, styleValue) in zip(decorations.runRanges.map(\.rangeValue), runStyles) {
+                    guard let style = SourceEditorBridgingCommentRunStyle(rawValue: styleValue.intValue),
+                          let (line, columns) = lines.lineAndColumns(of: range)
+                    else { continue }
+                    let enclosingTag = tagsByLine[line]?.first { $0.columns.lowerBound <= columns.lowerBound && columns.upperBound <= $0.columns.upperBound }
+                    runsByLine[line, default: []].append(Run(columns: columns, style: style, tagStyle: enclosingTag?.style))
                 }
             }
 
@@ -625,5 +689,30 @@ extension CommentDecorationController {
             let upper = SourceEditorPosition(line: upperLine, col: NSMaxRange(range) - lineStarts[upperLine])
             return lower ..< upper
         }
+    }
+}
+
+extension CommentDecorationController.TagAppearance {
+    init(_ appearance: SourceEditorBridgingCommentTagAppearance) {
+        var fills: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
+        var strokes: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
+        var labels: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
+        for style in SourceEditorBridgingCommentTagStyle.allCases {
+            fills[style] = appearance.fillColor(for: style)
+            strokes[style] = appearance.strokeColor(for: style)
+            labels[style] = appearance.labelColor(for: style)
+        }
+        self.init(
+            fills: fills,
+            strokes: strokes,
+            labels: labels,
+            value: appearance.valueColor,
+            type: appearance.typeColor,
+            name: appearance.nameColor,
+            disclosure: appearance.disclosureColor,
+            cornerRadius: appearance.cornerRadius,
+            strokeWidth: appearance.strokeWidth,
+            horizontalPadding: appearance.horizontalPadding
+        )
     }
 }

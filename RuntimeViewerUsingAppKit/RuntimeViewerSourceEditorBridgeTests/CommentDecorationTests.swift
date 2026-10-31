@@ -26,6 +26,15 @@ struct CommentDecorationTests {
     }
     """
 
+    /// Line 2's tag is far wider than a narrow editor.
+    private static let wrappingSource = """
+    struct Probe {
+        // Address: 0x135DC
+        // Type Layout: (size: 16, stride: 16, alignment: 8, extraInhabitantCount: 0)
+        let value: Int
+    }
+    """
+
     // MARK: - Rendering
 
     @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
@@ -47,6 +56,74 @@ struct CommentDecorationTests {
         let shown = Self.shownShapeLayers(in: harness)
         // One tag (the root), and a triangle for each of the two rows that collapse.
         #expect(shown.count == 3, "\(shown.count) shape layers shown in the underlay layer")
+    }
+
+    /// The editor wraps a line longer than its width, and a tag wraps with it. Each row the tag
+    /// lands on gets a shape of its own, one row high: a single shape around all of them covered
+    /// the whole line.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aTagTheEditorWrapsIsDrawnRowByRow() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.resize(width: 320)
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
+        harness.layout()
+
+        let shapes = Self.shownShapeLayers(in: harness)
+        // The address tag fits on its row; the type layout tag is far wider than the view.
+        #expect(shapes.count >= 3, "\(shapes.count) shape layers shown in the underlay layer")
+        let heights = shapes.map(\.frame.height)
+        let rowHeight = try #require(heights.min())
+        #expect(heights.allSatisfy { $0 - rowHeight < 1 }, "shape heights \(heights)")
+    }
+
+    // MARK: - Appearance
+
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aLabelTakesTheColourOfItsTagsStyle() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(labelColors: [.address: .systemBlue, .layout: .systemPurple]))
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations(labellingThem: true))
+        harness.layout()
+
+        let addressLine = try #require(harness.editorView.layoutManager.lineLayerForVisibleLine(1)).attributedString
+        let layoutLine = try #require(harness.editorView.layoutManager.lineLayerForVisibleLine(2)).attributedString
+        #expect(Self.foregroundColor(of: "Address", in: addressLine) == .systemBlue)
+        #expect(Self.foregroundColor(of: "Type Layout", in: layoutLine) == .systemPurple)
+    }
+
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aTagIsOutlinedOnlyWhileTheStrokeHasAWidth() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(strokeWidth: 1))
+        harness.layout()
+        let outlined = Self.shownShapeLayers(in: harness)
+        #expect(!outlined.isEmpty && outlined.allSatisfy { $0.lineWidth == 1 && $0.strokeColor != nil })
+
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(strokeWidth: 0))
+        harness.layout()
+        let plain = Self.shownShapeLayers(in: harness)
+        #expect(!plain.isEmpty && plain.allSatisfy { $0.lineWidth == 0 && $0.strokeColor == nil })
+    }
+
+    /// The padding is a column shift baked into the tables, so a new one has to rebuild them
+    /// for the text that is already shown.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aChangeOfPaddingWidensTheTagsOfTheTextShown() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(horizontalPadding: 4))
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
+        harness.layout()
+        let narrowWidths = Self.shownShapeLayers(in: harness).map(\.frame.width).sorted()
+
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(horizontalPadding: 6))
+        harness.layout()
+        let wideWidths = Self.shownShapeLayers(in: harness).map(\.frame.width).sorted()
+
+        #expect(narrowWidths.count == 2 && wideWidths.count == 2, "\(narrowWidths) → \(wideWidths)")
+        for (narrowWidth, wideWidth) in zip(narrowWidths, wideWidths) {
+            #expect(abs(wideWidth - narrowWidth - 4) < 0.5, "\(narrowWidth) → \(wideWidth)")
+        }
     }
 
     // MARK: - Collapsing
@@ -186,7 +263,31 @@ struct CommentDecorationTests {
         return builder.build()
     }
 
+    /// The markers hidden, and a tag over each comment, the second one a single long tag; with
+    /// `labellingThem`, the first words of each a label run.
+    private static func wrappingDecorations(labellingThem: Bool = false) -> SourceEditorBridgingCommentDecorations {
+        let builder = DecorationsBuilder()
+        builder.source = wrappingSource
+        for line in 1 ... 2 {
+            builder.hide("// ", onLine: line)
+        }
+        builder.tag("Address: 0x135DC", onLine: 1)
+        builder.tag("Type Layout: (size: 16, stride: 16, alignment: 8, extraInhabitantCount: 0)", onLine: 2, style: .layout)
+        if labellingThem {
+            builder.run("Address", onLine: 1, style: .label)
+            builder.run("Type Layout", onLine: 2, style: .label)
+        }
+        return builder.build()
+    }
+
     // MARK: - Helpers
+
+    /// The colour the editor draws the first occurrence of `text` in, on a rendered line.
+    private static func foregroundColor(of text: String, in renderedLine: NSAttributedString) -> NSColor? {
+        let range = (renderedLine.string as NSString).range(of: text)
+        guard range.location != NSNotFound else { return nil }
+        return renderedLine.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor
+    }
 
     private static func shownShapeLayers(in harness: SourceEditorTestHarness) -> [CAShapeLayer] {
         (harness.editorView.contentView.underlayLayer.sublayers ?? [])
@@ -245,7 +346,7 @@ private final class DecorationsBuilder {
         hiddenRanges.append(NSValue(range: range(of: text, onLine: line)))
     }
 
-    func tag(_ text: String, onLine line: Int, style: SourceEditorBridgingCommentTagStyle = .standard) {
+    func tag(_ text: String, onLine line: Int, style: SourceEditorBridgingCommentTagStyle = .address) {
         tagRanges.append(NSValue(range: range(of: text, onLine: line)))
         tagStyles.append(NSNumber(value: style.rawValue))
     }
@@ -321,5 +422,36 @@ private final class TestCommentDecorations: NSObject, SourceEditorBridgingCommen
         self.collapsibleDisclosureRanges = collapsibleDisclosureRanges
         self.collapsibleFoldRanges = collapsibleFoldRanges
         self.collapsibleStartsCollapsed = collapsibleStartsCollapsed
+    }
+}
+
+/// A tag appearance with plain fills, so a test sets only what it looks at.
+private final class TestCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
+    let valueColor = NSColor.textColor
+    let typeColor = NSColor.textColor
+    let nameColor = NSColor.textColor
+    let disclosureColor = NSColor.secondaryLabelColor
+    let cornerRadius: CGFloat = 100
+    let strokeWidth: CGFloat
+    let horizontalPadding: CGFloat
+
+    private let labelColors: [SourceEditorBridgingCommentTagStyle: NSColor]
+
+    init(labelColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:], strokeWidth: CGFloat = 0, horizontalPadding: CGFloat = 4) {
+        self.labelColors = labelColors
+        self.strokeWidth = strokeWidth
+        self.horizontalPadding = horizontalPadding
+    }
+
+    func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
+        .quaternaryLabelColor
+    }
+
+    func strokeColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor? {
+        .tertiaryLabelColor
+    }
+
+    func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
+        labelColors[style] ?? .secondaryLabelColor
     }
 }

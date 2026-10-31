@@ -175,26 +175,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         }
     }
 
-    func applyCommentTagColors(
-        fillColor: NSColor,
-        warningFillColor: NSColor,
-        noteFillColor: NSColor,
-        labelColor: NSColor,
-        valueColor: NSColor,
-        typeColor: NSColor,
-        nameColor: NSColor,
-        disclosureColor: NSColor
-    ) {
-        commentDecorationController.applyColors(CommentDecorationController.Colors(
-            fill: fillColor,
-            warningFill: warningFillColor,
-            noteFill: noteFillColor,
-            label: labelColor,
-            value: valueColor,
-            type: typeColor,
-            name: nameColor,
-            disclosure: disclosureColor
-        ))
+    func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance) {
+        commentDecorationController.applyTagAppearance(CommentDecorationController.TagAppearance(appearance))
     }
 
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont) {

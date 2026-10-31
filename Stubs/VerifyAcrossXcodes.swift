@@ -78,6 +78,29 @@ final class ProbeCommentDecorations: NSObject, SourceEditorBridgingCommentDecora
     }
 }
 
+/// A tag appearance with a stroke, so the probe reaches the outline as well as the fill.
+final class ProbeCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
+    let valueColor = NSColor.labelColor
+    let typeColor = NSColor.systemPurple
+    let nameColor = NSColor.labelColor
+    let disclosureColor = NSColor.secondaryLabelColor
+    let cornerRadius: CGFloat = 100
+    let strokeWidth: CGFloat = 1
+    let horizontalPadding: CGFloat = 6
+
+    func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
+        style == .warning ? .systemOrange : .quaternaryLabelColor
+    }
+
+    func strokeColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor? {
+        .tertiaryLabelColor
+    }
+
+    func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
+        .secondaryLabelColor
+    }
+}
+
 func report(_ message: String) { print("OK   \(message)") }
 
 func fail(_ message: String) -> Never {
@@ -216,7 +239,7 @@ let nodeMarker = NSRange(location: nodeLineRange.location + 4, length: 3)
 let rootTag = NSRange(location: rootMarker.location + 3, length: "Field offset: 0x8".utf16.count)
 let probeDecorations = ProbeCommentDecorations(
     tagRanges: [NSValue(range: rootTag)],
-    tagStyles: [NSNumber(value: SourceEditorBridgingCommentTagStyle.standard.rawValue)],
+    tagStyles: [NSNumber(value: SourceEditorBridgingCommentTagStyle.offset.rawValue)],
     runRanges: [
         NSValue(range: NSRange(location: rootTag.location, length: "Field offset".utf16.count)),
         NSValue(range: NSRange(location: NSMaxRange(rootTag) - 3, length: 3)),
@@ -245,17 +268,8 @@ bridge.setSource(
 )
 report("setSource swift with comment decorations")
 
-bridge.applyCommentTagColors(
-    fillColor: .quaternaryLabelColor,
-    warningFillColor: .systemOrange,
-    noteFillColor: .quinaryLabel,
-    labelColor: .secondaryLabelColor,
-    valueColor: .systemBlue,
-    typeColor: .systemPurple,
-    nameColor: .labelColor,
-    disclosureColor: .secondaryLabelColor
-)
-report("applyCommentTagColors")
+bridge.applyCommentTagAppearance(ProbeCommentTagAppearance())
+report("applyCommentTagAppearance")
 
 editorView.layoutSubtreeIfNeeded()
 editorView.display()
