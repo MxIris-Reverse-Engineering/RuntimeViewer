@@ -8,6 +8,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import QuartzCore
 import Swift
 import _Concurrency
 import _StringProcessing
@@ -214,12 +215,91 @@ extension SourceEditor.TextAttributeOverrideProvider {
   public func pasteboardTextAttributeOverridesForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [SourceEditor.SourceEditorTextAttributeOverride]
 }
 
+// Leaves columns out of a line's rendering without touching the text — what the framework's own
+// `ANSIEscapeSequenceTextAttributeOverrideProvider` hides escape codes with. Two requirements,
+// PWT 0x10 and 0x18 in the 27.2 dump, both without a default.
+//
+// `SourceEditorLayoutManager.visibleColumnRanges(for:)` (27.2 @ 0x2278FC) intersects every
+// provider's non-nil answer, and `processedLineRenderData` (0x22F8C4) concatenates the columns
+// that survive into a new string — so hidden columns close up instead of leaving a gap. It is
+// asked only while a line layer is built (`makeLineLayer`, 0x22F3D4): a change shows once the
+// line's layer is evicted. **An empty array means "hide nothing"**, the same as nil; hiding a
+// whole line takes `[0 ..< 0]`, and the line keeps its height either way. Copying still reads the
+// unhidden line data (`SourceEditorView.attributedString(for:context:)`, 0x39E24C).
+public protocol HiddenTextOverrideProvider : SourceEditor.LayoutOverrideProvider {
+  func visibleColumnRanges(for line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [Swift.Range<Swift.Int>]?
+  // Read only by the placeholder visualization (27.2 @ 0x21C848); nil is the answer for text
+  // that is not a placeholder.
+  func hiddenTextRange(enclosing position: SourceEditor.SourceEditorPosition, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> Swift.Range<SourceEditor.SourceEditorPosition>?
+}
+
+// Moves the text of a line from a column on by a number of points: how `FoldedRegionDisplay`
+// makes room for its "…" token (`columnShiftEffectsForLine`, 27.2 @ 0xD0758). One requirement,
+// PWT 0x10. `columnShiftsForLine(lineIdentifier:)` (0x231700) turns each entry into a relative
+// shift, and `CoreTextLineLayout.layout` (0xEF74) cuts the line into fragments at those columns.
+public protocol ColumnShiftOverrideProvider : SourceEditor.LayoutOverrideProvider {
+  func columnShiftEffectsForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [Swift.Int : CoreGraphics.CGFloat]
+}
+
+// Six layout hooks, PWT 0x8 to 0x30, every one with a default in the extension below (all six at
+// 0x68F0, an empty function). `SourceEditorLayoutManager.layoutContentView(_:)` (27.2 @ 0x21B7E8)
+// calls `willLayoutInContentView` and `didLayoutInContentView` once per layout pass and
+// `didLayoutLineLayer` once per laid-out line in that pass — every pass, not only when a line
+// layer is rebuilt. The framework's own `RangeHighlightLayoutVisualization` draws its tokens from
+// `didLayoutInContentView` (0x8AC34) into `SourceEditorContentView.underlayLayer`.
+public protocol LayoutVisualization : AnyObject {
+  func willMoveToLayoutManager(_ layoutManager: SourceEditor.SourceEditorLayoutManager?)
+  func didMoveToLayoutManager(_ layoutManager: SourceEditor.SourceEditorLayoutManager?)
+  func willLayoutInContentView(_ contentView: SourceEditor.SourceEditorContentView)
+  func didLayoutLineLayer(_ lineLayer: SourceEditor.SourceEditorLineLayer, forLine line: Swift.Int, in contentView: SourceEditor.SourceEditorContentView, frameChanged: Swift.Bool)
+  func didLayoutInContentView(_ contentView: SourceEditor.SourceEditorContentView)
+  func layoutManagerDidInvalidateAllLayout(_ layoutManager: SourceEditor.SourceEditorLayoutManager)
+}
+
+extension SourceEditor.LayoutVisualization {
+  public func willMoveToLayoutManager(_ layoutManager: SourceEditor.SourceEditorLayoutManager?)
+  public func didMoveToLayoutManager(_ layoutManager: SourceEditor.SourceEditorLayoutManager?)
+  public func willLayoutInContentView(_ contentView: SourceEditor.SourceEditorContentView)
+  public func didLayoutLineLayer(_ lineLayer: SourceEditor.SourceEditorLineLayer, forLine line: Swift.Int, in contentView: SourceEditor.SourceEditorContentView, frameChanged: Swift.Bool)
+  public func didLayoutInContentView(_ contentView: SourceEditor.SourceEditorContentView)
+  public func layoutManagerDidInvalidateAllLayout(_ layoutManager: SourceEditor.SourceEditorLayoutManager)
+}
+
+// One line's layer. A `CALayer` subclass, so NSObject-rooted (`AuditClasses.sh`: OBJC).
+@_hasMissingDesignatedInitializers @objc public class SourceEditorLineLayer : QuartzCore.CALayer {
+  // `final`: a stored `let`, direct symbol only. The line as rendered — what hidden columns and
+  // attribute overrides turned it into — which is what the bridge tests read back.
+  public final var attributedString: Foundation.NSAttributedString {
+    get
+  }
+  @objc deinit
+}
+
+// A native Swift class (`AuditClasses.sh`: native). `rect` is a stored `let`, so `final`.
+@_hasMissingDesignatedInitializers public class SourceEditorTextSelectionRect {
+  public final var rect: CoreGraphics.CGRect {
+    get
+  }
+  deinit
+}
+
 // A native Swift class, not an NSObject subclass — the framework exports no ObjC class symbol
 // for it. Declaring the wrong superclass here compiles and then dispatches into garbage.
 @_hasMissingDesignatedInitializers public class SourceEditorLayoutManager {
-  // `final`: direct symbols only.
+  // `final`: direct symbols only, like every member below (`AuditMembers.sh`).
   public final func addLayoutOverrideProvider(_ provider: SourceEditor.LayoutOverrideProvider)
   public final func removeLayoutOverrideProvider(_ provider: SourceEditor.LayoutOverrideProvider)
+  public final func addLayoutVisualization(_ visualization: SourceEditor.LayoutVisualization)
+  public final func removeLayoutVisualization(_ visualization: SourceEditor.LayoutVisualization)
+  // The positions of the lines laid out inside `rect`, in the content view's coordinates — what
+  // `RangeHighlightLayoutVisualization` bounds its work by, with `layoutBounds` as the rect.
+  public final func sourceRangeForVisibleLinesIn(rect: CoreGraphics.CGRect, inContentView contentView: SourceEditor.SourceEditorContentView) -> Swift.Range<SourceEditor.SourceEditorPosition>?
+  // Drops the line layers, so that hidden columns, column shifts and attribute overrides are
+  // asked again; `relayout: true` schedules the pass that rebuilds them.
+  public final func evictLineLayersForLineRange(_ lineRange: Swift.Range<Swift.Int>, relayout: Swift.Bool)
+  public final func invalidateAllLayout()
+  // nil for a line that is not laid out. Used by the bridge tests.
+  public final func lineLayerForVisibleLine(_ line: Swift.Int) -> SourceEditor.SourceEditorLineLayer?
   deinit
 }
 
@@ -260,12 +340,20 @@ extension SourceEditor.TextAttributeOverrideProvider {
     get
   }
   public func restore(from state: [Swift.AnyHashable : Any])
-  // The next two are used only by RuntimeViewerSourceEditorBridgeTests, which has to make a
-  // fold and then look at whether one is still there. Nothing in the bridge calls them; they
-  // are here because both targets link the one stub. Dispatch thunks, like everything else on
-  // this class.
+  // `fold(lineRanges:)` is used only by RuntimeViewerSourceEditorBridgeTests. It folds from
+  // column 0 of the first line, so the first line's own text goes too; the bridge folds by
+  // position instead. Dispatch thunks, like everything else on this class.
   public func fold(lineRanges: [Swift.Range<Swift.Int>], animate: Swift.Bool, completion: (() -> ())?)
   public func foldedRanges(containing line: Swift.Int) -> [Swift.Range<SourceEditor.SourceEditorPosition>]
+  // Any range folds, not only one the language service reports: `fold(ranges:)` (27.2 @ 0xDA140)
+  // checks the range against the document and skips one an existing fold already covers, and
+  // never consults `foldableRanges`. The folded text is replaced by `FoldedRegionDisplay`'s "…"
+  // token at the range's start (`makeEllipsisLayer`, 0xD0454), which a double click unfolds.
+  // Folds made here round-trip through `stateDictionaryForSaving` / `restore(from:)`.
+  public func fold(_ range: Swift.Range<SourceEditor.SourceEditorPosition>, animate: Swift.Bool, completion: (() -> ())?)
+  // `restoreNestedFolds: true` puts back the folds that were inside the range when it was folded.
+  public func unfold(_ range: Swift.Range<SourceEditor.SourceEditorPosition>, restoreNestedFolds: Swift.Bool, animate: Swift.Bool)
+  public func foldedRange(enclosing position: SourceEditor.SourceEditorPosition) -> Swift.Range<SourceEditor.SourceEditorPosition>?
   deinit
 }
 
@@ -363,6 +451,20 @@ extension SourceEditor.ScrollPlacement : Swift.Hashable {
     get
     set
   }
+  // `final`: stored `let`s and computed finals, direct symbols only (`AuditMembers.sh`).
+  //
+  // The content view's layer has three sublayers (`init(frame:)`, 27.2 @ 0x412360): this one at
+  // z −2, the line layers' `contentLayer` at z −1 and an `overlayLayer` at z 0. Anything added
+  // here is drawn behind the text, in the content view's own coordinates.
+  public final var underlayLayer: QuartzCore.CALayer {
+    get
+  }
+  public final var layoutBounds: CoreGraphics.CGRect {
+    get
+  }
+  // The rects a selection of `range` would be drawn with, in this view's coordinates — what
+  // `RangeHighlightLayoutVisualization.didLayoutInContentView` (0x8AC34) positions its layers by.
+  public final func selectionRects(for range: Swift.Range<SourceEditor.SourceEditorPosition>, coalesceInteriorRects: Swift.Bool, includeLineSpacing: Swift.Bool) -> [SourceEditor.SourceEditorTextSelectionRect]
   @objc deinit
 }
 

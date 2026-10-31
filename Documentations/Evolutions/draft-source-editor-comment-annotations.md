@@ -1,6 +1,6 @@
 # Draft - SourceEditor 内容面板：注释画成标签，字段偏移树与枚举布局可折叠
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-10-31
 - **最后更新**: 2026-10-31
 - **所属愿景**: [自建代码视图引擎](../Visions/CodeViewEngine.md)
@@ -109,12 +109,19 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 
 每一步单独构建通过、测试通过后提交。
 
-1. **Stub 与框架行为测试。** `Stubs/` 补上要用的声明：`HiddenTextOverrideProvider`、
+1. **Stub 与框架行为测试。**（已完成）`Stubs/` 补上要用的声明：`HiddenTextOverrideProvider`、
    `ColumnShiftOverrideProvider`、`LayoutVisualization`，`SourceEditorLayoutManager` 的注册、驱逐与
    可见范围方法，`SourceEditorContentView` 的 `underlayLayer`、`layoutBounds`、`selectionRects`，
-   `SourceEditorRangeHighlightLayer` 与 `SourceEditorRangeHighlight`，`FoldingController` 的按范围折叠
-   与展开；照 `Stubs/README.md` 重算 `.tbd`。bridge 测试 bundle 里先写测试，把反编译没定下来的几件事
-   钉住：隐藏列收拢后的列位置与命中、同一行多个位移是否叠加、折叠任意注释行。
+   `SourceEditorLineLayer`、`SourceEditorTextSelectionRect`，`FoldingController` 的按范围折叠与展开；
+   照 `Stubs/README.md` 重算 `.tbd`。bridge 测试 bundle 新增 `SourceEditorOverlayBehaviorTests`，在
+   Xcode 27.2 上钉住了反编译没定下来的几件事，8 个测试全部通过：
+   - 隐藏的列收拢；回答 `[]` 等于整行照常显示，`[0..<0]` 才是全藏。
+   - 属性覆盖与列位移都按**原文的列号**计，隐藏了前面的列也不用换算。
+   - 同一行的多个位移叠加：第 3 列 20 点、第 10 列 10 点，第 12 列共移 30 点。
+   - 任意一段 `//` 行都能折，从首行行末折起首行保持原样；先折内层再折外层，展开外层时带
+     `restoreNestedFolds: true` 内层仍是折着的。
+   - 顺带踩到的：`evictLineLayersForLineRange` 的范围越过文档末行是 `fatalError`
+     （`SourceEditorDataSource`：「Invalid line 3 of 3」），不是空操作。
 2. **Bridge 装饰控制器。** `CommentDecorationController`：隐藏列、位移、分色、圆角底、点 ▸ 收放、
    默认收起，以及它与 `FoldStateCache`、换 source 时先展开全部折叠的配合；`SourceEditorBridging`
    新增传装饰的入口。测试覆盖每一项。
@@ -139,3 +146,4 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-10-31 | 用户批准，开始实现 | 状态改 Accepted，补上落地步骤。 |
 | 2026-10-31 | 反编译没定下来的行为改用 bridge 测试 bundle 里的测试确认，不另写探针脚本 | 测试同样能回答这些问题，而且作为回归测试一直留着；离屏驱动 bridge 的测试 0009 已证明可行。 |
 | 2026-10-31 | 第 4 步依赖上游三篇，先做 1–3、5 | 上游的 API 还没定稿；App 侧的线上模型由 RuntimeViewer 自己定义，第 4 步只写把上游的表换算进来的那一层。功能分支从本地 `next` 切出，它比远端多 7 个「只看导出的 Swift 声明」的提交（已在远端功能分支上），两条线都改了内容面板，叠在上面可以少一次冲突。 |
+| 2026-10-31 | 第 1 步完成，状态改 In Progress | 行为测试的结论见「落地步骤 · 1」。bridge 测试 bundle 的基线本来就有 2 个失败（`SourceEditorScrollerTests`）：8f3414e0 有意关掉了滚动条自动隐藏，测试没跟着改，与本提案无关，不在这条分支上修。 |

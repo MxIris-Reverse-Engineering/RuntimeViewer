@@ -27,6 +27,10 @@ final class SourceEditorTestHarness {
     private let bridge: SourceEditorBridging
     private let window: NSWindow
 
+    /// The editor view the bridge built, for the tests that register their own layout providers
+    /// on its layout manager or measure its content view.
+    let editorView: SourceEditorView
+
     /// The view's folding controller, which is where the state under test lives.
     let foldingController: FoldingController
 
@@ -55,6 +59,7 @@ final class SourceEditorTestHarness {
         guard let editorView = bridge.editorView as? SourceEditorView else {
             throw HarnessError.editorViewUnexpectedType(type(of: bridge.editorView))
         }
+        self.editorView = editorView
         self.foldingController = editorView.foldingController
         self.scrollView = editorView.scrollView
 
@@ -70,7 +75,11 @@ final class SourceEditorTestHarness {
         window.orderFront(nil)
     }
 
+    /// How many lines the text last passed to `setSource(_:)` has.
+    private(set) var lineCount = 0
+
     func setSource(_ source: String) {
+        lineCount = source.components(separatedBy: "\n").count
         bridge.setSource(source, languageIdentifier: "swift", semanticRanges: [], semanticNodeTypeNames: [])
     }
 
