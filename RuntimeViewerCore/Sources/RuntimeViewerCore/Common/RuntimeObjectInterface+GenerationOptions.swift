@@ -25,8 +25,8 @@ extension RuntimeObjectInterface {
         public var marksCommentStructure: Bool
 
         /// Options tuned for MCP usage: all strip options disabled, all add options enabled,
-        /// all Swift detail options enabled, and every Swift declaration printed, exported
-        /// or not. Provides maximum information to LLM clients.
+        /// all Swift detail options enabled, and every declaration printed, exported or not.
+        /// Provides maximum information to LLM clients.
         public static let mcp = GenerationOptions(
             objcHeaderOptions: ObjCGenerationOptions(
                 stripProtocolConformance: false,
@@ -38,7 +38,8 @@ extension RuntimeObjectInterface {
                 addIvarOffsetComments: true,
                 addPropertyAttributesComments: true,
                 addMethodIMPAddressComments: true,
-                addPropertyAccessorAddressComments: true
+                addPropertyAccessorAddressComments: true,
+                printExportedDeclarationsOnly: false
             ),
             swiftInterfaceOptions: SwiftGenerationOptions(
                 printStrippedSymbolicItem: true,

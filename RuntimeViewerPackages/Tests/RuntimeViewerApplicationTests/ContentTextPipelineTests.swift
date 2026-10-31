@@ -278,25 +278,39 @@ struct ContentTextPipelineTests {
 
     // MARK: - An interface Print Exported Declarations Only empties
 
-    /// The engine prints a Swift object that Print Exported Declarations Only
+    /// The engine prints an object that Print Exported Declarations Only
     /// leaves nothing of as empty — batch export skips it on that — and the
-    /// pane says why in its place. Anything else empty stays empty.
-    @Test("only an empty Swift interface with Print Exported Declarations Only on is replaced by a note")
-    func onlyAnEmptiedSwiftInterfaceIsReplaced() {
+    /// pane says why in its place. The option that counts is the one of the
+    /// side of Generation Options printing the object; anything else empty
+    /// stays empty.
+    @Test("only an empty interface whose side has Print Exported Declarations Only on is replaced by a note")
+    func onlyAnEmptiedInterfaceIsReplaced() {
         let swiftObject = makeRuntimeObject()
-        let objcObject = RuntimeObject(name: "ContentPipelineFixture", displayName: "ContentPipelineFixture", kind: .objc(.type(.class)), imagePath: swiftObject.imagePath, children: [])
-        var exportedOnlyOptions = RuntimeObjectInterface.GenerationOptions()
-        exportedOnlyOptions.swiftInterfaceOptions.printExportedDeclarationsOnly = true
+        let objcClass = RuntimeObject(name: "ContentPipelineFixture", displayName: "ContentPipelineFixture", kind: .objc(.type(.class)), imagePath: swiftObject.imagePath, children: [])
+        let objcCategory = RuntimeObject(name: "ContentPipelineFixture(Additions)", displayName: "ContentPipelineFixture(Additions)", kind: .objc(.category(.class)), imagePath: swiftObject.imagePath, children: [])
+        let cStruct = RuntimeObject(name: "ContentPipelineStruct", displayName: "ContentPipelineStruct", kind: .c(.struct), imagePath: swiftObject.imagePath, children: [])
+        var swiftExportedOnlyOptions = RuntimeObjectInterface.GenerationOptions()
+        swiftExportedOnlyOptions.swiftInterfaceOptions.printExportedDeclarationsOnly = true
+        var objcExportedOnlyOptions = RuntimeObjectInterface.GenerationOptions()
+        objcExportedOnlyOptions.objcHeaderOptions.printExportedDeclarationsOnly = true
 
-        let note = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: exportedOnlyOptions).string
+        let note = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: swiftExportedOnlyOptions).string
         #expect(note.contains("TestFramework.ContentPipelineFixture prints nothing while Print Exported Declarations Only is on."), "\(note)")
         #expect(note.contains("show what TestFramework does not export"), "\(note)")
+        for objcObject in [objcClass, objcCategory] {
+            let objcNote = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: objcObject, interfaceString: ""), options: objcExportedOnlyOptions).string
+            #expect(objcNote.contains("\(objcObject.displayName) prints nothing while Print Exported Declarations Only is on."), "\(objcNote)")
+        }
 
-        let emptyWithTheOptionOff = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: RuntimeObjectInterface.GenerationOptions())
-        let emptyObjectiveC = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: objcObject, interfaceString: ""), options: exportedOnlyOptions)
-        let printed = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: "class ContentPipelineFixture {}"), options: exportedOnlyOptions)
-        #expect(emptyWithTheOptionOff.isEmpty)
-        #expect(emptyObjectiveC.isEmpty)
+        let emptyWithTheOptionsOff = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: RuntimeObjectInterface.GenerationOptions())
+        let swiftUnderTheObjectiveCOption = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: ""), options: objcExportedOnlyOptions)
+        let objectiveCUnderTheSwiftOption = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: objcClass, interfaceString: ""), options: swiftExportedOnlyOptions)
+        let emptyCStruct = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: cStruct, interfaceString: ""), options: objcExportedOnlyOptions)
+        let printed = ContentTextViewModel.displayedInterfaceString(of: RuntimeObjectInterface(object: swiftObject, interfaceString: "class ContentPipelineFixture {}"), options: swiftExportedOnlyOptions)
+        #expect(emptyWithTheOptionsOff.isEmpty)
+        #expect(swiftUnderTheObjectiveCOption.isEmpty)
+        #expect(objectiveCUnderTheSwiftOption.isEmpty)
+        #expect(emptyCStruct.isEmpty)
         #expect(printed.string == "class ContentPipelineFixture {}")
     }
 

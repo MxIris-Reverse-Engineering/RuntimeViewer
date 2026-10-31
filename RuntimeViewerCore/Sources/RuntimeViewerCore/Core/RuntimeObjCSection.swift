@@ -410,9 +410,21 @@ actor RuntimeObjCSection {
     /// class data pointer, an `@objc @implementation` one has it clear. So a
     /// class that is already `isSwiftStable` is never looked up in the
     /// `@implementation` index.
+    ///
+    /// `isNotExported` comes from MachOObjCSection's verdict on the class
+    /// object, the same for a bridged Swift class, whose Swift face the Swift
+    /// section marks from its own descriptor verdict.
     private func properties(forClassNamed className: String, isSwiftStable: Bool) -> RuntimeObject.Properties {
-        if isSwiftStable { return [.isSwiftClass] }
-        return objcImplementationClassNames.contains(className) ? [.isObjCImplementation] : []
+        var properties: RuntimeObject.Properties
+        if isSwiftStable {
+            properties = [.isSwiftClass]
+        } else {
+            properties = objcImplementationClassNames.contains(className) ? [.isObjCImplementation] : []
+        }
+        if objcIndexer.isClassDefinitelyNotExported(named: className) {
+            properties.insert(.isNotExported)
+        }
+        return properties
     }
 
     /// Materialize an Objective-C protocol `RuntimeObject`. Used by the

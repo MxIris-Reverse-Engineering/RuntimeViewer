@@ -46,6 +46,7 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Add Property Attributes Comments", keyPath: \.objcHeaderOptions.addPropertyAttributesComments),
             .checkbox(title: "Add Property Accessor Address Comments", keyPath: \.objcHeaderOptions.addPropertyAccessorAddressComments),
             .checkbox(title: "Add Method IMP Address Comments", keyPath: \.objcHeaderOptions.addMethodIMPAddressComments),
+            .checkbox(title: "Print Exported Declarations Only", keyPath: \.objcHeaderOptions.printExportedDeclarationsOnly),
         ]),
         Section(title: "Swift", items: [
             .checkbox(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),

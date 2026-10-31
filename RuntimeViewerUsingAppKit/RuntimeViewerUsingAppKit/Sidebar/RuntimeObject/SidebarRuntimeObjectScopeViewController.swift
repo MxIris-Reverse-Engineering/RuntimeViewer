@@ -596,7 +596,7 @@ extension RuntimeObjectScope.Property {
         case .positionNamedLocalType:
             return "Local types whose function or closure the binary does not name; their names carry the address of the anonymous context around them"
         case .notExported:
-            return "Swift types and protocols their image does not export; extensions, and declarations whose export cannot be judged, are not included"
+            return "Swift types and protocols, and Objective-C classes, their image does not export; extensions, categories, and declarations whose export cannot be judged, are not included"
         }
     }
 }

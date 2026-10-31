@@ -310,11 +310,13 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return try await fetchInterface()
     }
 
-    /// The interface the pane shows for a fetched one: the same, except a Swift object that Print
-    /// Exported Declarations Only leaves empty — a type its image does not export, reached through
-    /// a link or listed while the sidebar does not exclude it — which says why instead of showing
-    /// nothing. The engine itself prints such an object as empty, which is what batch export
-    /// skips.
+    /// The interface the pane shows for a fetched one: the same, except an object that Print
+    /// Exported Declarations Only leaves empty — a Swift type or an Objective-C class its image
+    /// does not export, or a category on such a class, reached through a link or listed while the
+    /// sidebar does not exclude it — which says why instead of showing nothing. The engine itself
+    /// prints such an object as empty, which is what batch export skips. The option is the one of
+    /// the side of Generation Options that prints the object; C structs and unions it never
+    /// empties.
     nonisolated static func displayedInterfaceString(
         of interface: RuntimeObjectInterface,
         options: RuntimeObjectInterface.GenerationOptions
@@ -331,13 +333,17 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         .frozen()
     }
 
+    /// Whether Print Exported Declarations Only left the interface empty, on the side of Generation
+    /// Options that prints the object.
     private nonisolated static func showsExportedOnlyNote(
         for interface: RuntimeObjectInterface,
         options: RuntimeObjectInterface.GenerationOptions
     ) -> Bool {
-        interface.interfaceString.isEmpty
-            && interface.object.kind.isSwift
-            && options.swiftInterfaceOptions.printExportedDeclarationsOnly
+        let kind = interface.object.kind
+        let printsExportedDeclarationsOnly = kind.isSwift
+            ? options.swiftInterfaceOptions.printExportedDeclarationsOnly
+            : kind.isObjC && options.objcHeaderOptions.printExportedDeclarationsOnly
+        return interface.interfaceString.isEmpty && printsExportedDeclarationsOnly
     }
 
     /// What the pane shows for a fetched interface, with the structure of its comments: the

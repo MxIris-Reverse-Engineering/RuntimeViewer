@@ -17,6 +17,7 @@ struct ObjCGenerationOptionsTests {
         #expect(options.addPropertyAttributesComments == false)
         #expect(options.addMethodIMPAddressComments == false)
         #expect(options.addPropertyAccessorAddressComments == false)
+        #expect(options.printExportedDeclarationsOnly == false)
     }
 
     @Test("custom initialization sets all fields")
@@ -59,6 +60,35 @@ struct ObjCGenerationOptionsTests {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(ObjCGenerationOptions.self, from: data)
         #expect(decoded == original)
+    }
+
+    /// Generation Options are kept in the user's defaults; one saved by a
+    /// release without the option has no key for it.
+    @Test("options saved before Print Exported Declarations Only existed decode with it off")
+    func optionsSavedBeforeExportedOnlyDecodeWithItOff() throws {
+        let savedObjCOptions = Data(#"{"stripOverrides":true,"addIvarOffsetComments":true}"#.utf8)
+        let decodedObjCOptions = try JSONDecoder().decode(ObjCGenerationOptions.self, from: savedObjCOptions)
+        #expect(decodedObjCOptions.printExportedDeclarationsOnly == false)
+        #expect(decodedObjCOptions.stripOverrides == true)
+        #expect(decodedObjCOptions.addIvarOffsetComments == true)
+
+        let savedOptions = Data(#"{"objcHeaderOptions":{"stripOverrides":true}}"#.utf8)
+        let decodedOptions = try JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: savedOptions)
+        #expect(decodedOptions.objcHeaderOptions.printExportedDeclarationsOnly == false)
+        #expect(decodedOptions.objcHeaderOptions.stripOverrides == true)
+    }
+
+    /// The options the content pane prints with are the ones Find reads the
+    /// corpus under (`RuntimeInterfaceVisibility`), by the option name the
+    /// marked rendering conditions its regions on.
+    @Test("Print Exported Declarations Only switches the marked rendering's option of the same name")
+    func exportedOnlyReachesTheMarkedRendering() {
+        var options = RuntimeObjectInterface.GenerationOptions()
+        #expect(!RuntimeInterfaceVisibility(options).isOptionEnabled("objc.printExportedDeclarationsOnly"))
+
+        options.objcHeaderOptions.printExportedDeclarationsOnly = true
+        #expect(RuntimeInterfaceVisibility(options).isOptionEnabled("objc.printExportedDeclarationsOnly"))
+        #expect(!RuntimeInterfaceVisibility(options).isOptionEnabled("swift.printExportedDeclarationsOnly"))
     }
 }
 
@@ -188,7 +218,8 @@ struct GenerationOptionsTests {
         #expect(mcp.swiftInterfaceOptions.printEnumLayout == true)
         #expect(mcp.swiftInterfaceOptions.synthesizeOpaqueType == true)
 
-        // Every Swift declaration, exported or not
+        // Every declaration, exported or not
+        #expect(mcp.objcHeaderOptions.printExportedDeclarationsOnly == false)
         #expect(mcp.swiftInterfaceOptions.printExportedDeclarationsOnly == false)
     }
 

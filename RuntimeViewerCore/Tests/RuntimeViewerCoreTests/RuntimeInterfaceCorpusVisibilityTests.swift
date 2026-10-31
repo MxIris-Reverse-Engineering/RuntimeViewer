@@ -19,7 +19,7 @@ struct RuntimeInterfaceCorpusVisibilityTests {
         static let libobjcPath = "/usr/lib/libobjc.A.dylib"
     }
 
-    private static func objcOptions(stripping: Bool, commenting: Bool) -> ObjCGenerationOptions {
+    private static func objcOptions(stripping: Bool, commenting: Bool, exportedOnly: Bool = false) -> ObjCGenerationOptions {
         ObjCGenerationOptions(
             stripProtocolConformance: stripping,
             stripOverrides: stripping,
@@ -30,14 +30,16 @@ struct RuntimeInterfaceCorpusVisibilityTests {
             addIvarOffsetComments: commenting,
             addPropertyAttributesComments: commenting,
             addMethodIMPAddressComments: commenting,
-            addPropertyAccessorAddressComments: commenting
+            addPropertyAccessorAddressComments: commenting,
+            printExportedDeclarationsOnly: exportedOnly
         )
     }
 
     /// Nothing extra; everything; what the user reported with (every strip
     /// and every detail on); a mix that pulls the two halves apart; and the
-    /// defaults and everything with only exported Swift declarations, which
-    /// leaves whole definitions out and so the blank lines between them.
+    /// defaults and everything with only exported declarations, which leaves
+    /// whole definitions out and so the blank lines between them, and empties
+    /// the Objective-C classes an image does not export.
     private static let optionSets: [(label: String, options: RuntimeObjectInterface.GenerationOptions)] = {
         let everythingOn = SwiftGenerationOptions(
             printStrippedSymbolicItem: true,
@@ -74,8 +76,8 @@ struct RuntimeInterfaceCorpusVisibilityTests {
             ("everything shown", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: false, commenting: true), swiftInterfaceOptions: everythingOn)),
             ("strips and details on", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: true, commenting: true), swiftInterfaceOptions: everythingOn)),
             ("mixed", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: true, commenting: false), swiftInterfaceOptions: mixed)),
-            ("exported only", RuntimeObjectInterface.GenerationOptions(swiftInterfaceOptions: exportedOnly)),
-            ("everything shown, exported only", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: false, commenting: true), swiftInterfaceOptions: everythingOnExportedOnly)),
+            ("exported only", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: false, commenting: false, exportedOnly: true), swiftInterfaceOptions: exportedOnly)),
+            ("everything shown, exported only", RuntimeObjectInterface.GenerationOptions(objcHeaderOptions: objcOptions(stripping: false, commenting: true, exportedOnly: true), swiftInterfaceOptions: everythingOnExportedOnly)),
         ]
     }()
 
@@ -89,6 +91,9 @@ struct RuntimeInterfaceCorpusVisibilityTests {
 
         var mismatches: [String] = []
         var comparedCount = 0
+        // An Objective-C class the sidebar marks Not Exported prints nothing
+        // with only exported declarations, in the corpus as in the pane.
+        var unexportedClassCount = 0
         for imagePath in [Anchors.libobjcPath, Anchors.foundationPath] {
             _ = try await engine.buildInterfaceCorpus(for: imagePath, transformer: .default)
             let entries = try #require(await engine.interfaceCorpusStore.corpus(for: imagePath)?.entries)
@@ -111,12 +116,21 @@ struct RuntimeInterfaceCorpusVisibilityTests {
                     } else if projected != displayed {
                         mismatches.append("\(entry.object.name) (\(entry.object.kind)) under \(label): same text, different spans or identifiers")
                     }
+                    if options.objcHeaderOptions.printExportedDeclarationsOnly,
+                       entry.object.kind == .objc(.type(.class)),
+                       entry.object.properties.contains(.isNotExported) {
+                        unexportedClassCount += 1
+                        if !displayed.isEmpty {
+                            mismatches.append("\(entry.object.name) is marked Not Exported but prints under \(label):\n\(displayed.string)")
+                        }
+                    }
                     if mismatches.count >= 5 { break }
                 }
                 if mismatches.count >= 5 { break }
             }
         }
         #expect(comparedCount > 1000)
+        #expect(unexportedClassCount > 0)
         #expect(mismatches.isEmpty, "\(mismatches.joined(separator: "\n\n"))")
     }
 }

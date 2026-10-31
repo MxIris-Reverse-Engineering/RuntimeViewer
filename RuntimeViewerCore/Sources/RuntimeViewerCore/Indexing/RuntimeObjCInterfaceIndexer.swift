@@ -273,6 +273,18 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
         upstream.categoryGroup(forName: uniqueName)
     }
 
+    /// Whether this image provably does not export the class named
+    /// `className`: no exported symbol publishes its class object, as
+    /// `prepare()` read it. `false` is no evidence either way — the class may
+    /// be exported, be another image's, have been supplied by a host with no
+    /// class object to judge, or sit in an image with no export information.
+    /// A `Bool` rather than the upstream `ObjCExportStatus?`: this definite
+    /// negative is the one answer RuntimeViewer acts on, and the type lives in
+    /// `ObjCMetadataSource`, a product this target does not depend on.
+    func isClassDefinitelyNotExported(named className: String) -> Bool {
+        upstream.exportStatus(ofClassNamed: className)?.isDefinitelyNotExported ?? false
+    }
+
     // MARK: - Relationship Query
 
     /// Direct subclasses of `className` — this indexer's own image plus every

@@ -94,16 +94,23 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// than its Swift name pairs with no record and never gets it.
         public static let isObjCProtocol = Self(.isObjCProtocol)
 
-        /// Marks a Swift type or protocol whose image provably does not export
-        /// it: MachOSwiftSection rules the descriptor symbol out of the image's
-        /// export trie (`ExportStatus.isDefinitelyNotExported`). Its members
-        /// and nested types are then not exported either. Only that verdict
-        /// sets it — never a guess — so an object without it may be exported
-        /// or merely unjudged: an image without export information, an `@objc`
-        /// protocol declared in Swift, a type imported from C, and every
-        /// extension and conformance entry. A specialized type takes the
-        /// value of the generic type it specializes. Engines of builds from
-        /// before this flag never set it.
+        /// Marks a Swift type or protocol, or an Objective-C class, whose image
+        /// provably does not export it. For a Swift type or protocol,
+        /// MachOSwiftSection rules the descriptor symbol out of the image's
+        /// export trie (`ExportStatus.isDefinitelyNotExported`), and its
+        /// members and nested types are then not exported either. For an
+        /// Objective-C class, MachOObjCSection finds no exported symbol on its
+        /// class object (`ObjCExportStatus.isDefinitelyNotExported`), which
+        /// marks a bridged Swift class's Objective-C entry as its descriptor
+        /// verdict marks its Swift one. Only those verdicts set it — never a
+        /// guess — so an object without it may be exported or merely
+        /// unjudged: an image without export information, an `@objc` protocol
+        /// declared in Swift, a type imported from C, an Objective-C protocol
+        /// or category, and every extension and conformance entry. A
+        /// specialized type takes the value of the generic type it
+        /// specializes. Engines of builds from before this flag never set it,
+        /// and engines from before the Objective-C verdict never set it on an
+        /// Objective-C class.
         public static let isNotExported = Self(.isNotExported)
     }
 
