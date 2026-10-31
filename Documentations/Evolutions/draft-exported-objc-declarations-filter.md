@@ -15,9 +15,9 @@
 
 1. ✅ **侧栏标志。** 上游判定类对象明确未导出时，`RuntimeObjCSection.properties(forClassNamed:isSwiftStable:)` 加上 `.isNotExported`；结论由 indexer 在 `prepare()` 里算好，经包装类型的 `RuntimeObjCInterfaceIndexer.isClassDefinitelyNotExported(named:)` 读出。上游返回 `nil`（别的镜像的类、宿主补充的类）或镜像没有导出信息时不打。协议与类别不打。Swift 类在 ObjC 列表里的条目（`_TtC…`）照上游的判断打：测试 bundle 里有 204 个这样的类，标记与它们在 Swift 列表里的那一面逐个一致。Filter Scope 不加行，`notExported` 一行的 tooltip 改成连 ObjC 类一起说。
 2. ✅ **生成选项。** 开关是上游的 `ObjCGenerationOptions.printExportedDeclarationsOnly`，旧设置解码为关。Generation Options 的 ObjC 一节加同名勾选框，MCP 的 `.mcp` 预设显式写成关闭。上游的 `isVisibilityOptionEnabled` 已认得 `objc.printExportedDeclarationsOnly`，Find 的 `RuntimeInterfaceVisibility` 不用改。
-3. **打印为空。** 开着开关时，未导出的类、挂在本镜像未导出类上的类别打印为空串。内容区的占位说明从 Swift 对象扩到 ObjC 对象，条件改成看对象所属那一侧的开关。批量导出跳过空串，本来就不分语言。
-4. **Find。** 开关打开时，上游标记模式的投影恰好为空串（上游有测试钉住），语料照旧把空投影当作不存在。实现时验证：ivar 被去掉后，文本搜索、成员搜索与内容区一致。
-5. **测试。** Core 用测试 bundle 里 public / private 的 `NSObject` 子类当 fixture，断言标志、开关开与关时的打印、打印为空、批量导出跳过，以及 Find 的投影。再在 Foundation 上断言：有被标记的 ObjC 类，且它们开着开关时都打印为空。Packages 的 `ContentTextPipelineTests` 覆盖 ObjC 的占位说明，`GenerationOptionsTests` 覆盖旧设置解码与 `.mcp` 预设。
+3. ✅ **打印为空。** 开着开关时，未导出的类、挂在本镜像未导出类上的类别打印为空串。内容区的占位说明从 Swift 对象扩到 ObjC 对象：条件改成看对象所属那一侧的开关，C 的 struct 与 union 不受影响。批量导出跳过空串，本来就不分语言。
+4. ✅ **Find。** 不用改代码：开关打开时，上游的标记模式把未导出的类整段、未导出的 ivar 那一行标成只在开关关闭时可见，投影与内容区一致，语料照旧把空投影当作不存在。fixture 上开关开与关时投影与内容区逐字一致，私有 ivar 只在开关关闭时被成员搜索找到。
+5. ✅ **测试。** Core 新增 `ObjCExportedDeclarationsTests`，fixture 是测试 bundle 里 public / private 的 `NSObject` 子类与纯 Swift 类，断言标志、开关开与关时的打印（私有 ivar 去掉、`init` 保留）、打印为空、批量导出跳过，以及 Find 的投影与成员；另一条遍历测试 bundle 里出现在 ObjC 列表的全部 204 个 Swift 类，断言两个列表的标记一致。语料可见性套件的两组「只看导出」选项把 ObjC 的开关也打开，在 libobjc 与 Foundation 上比对投影与内容区，并断言被标记的 ObjC 类开着开关时打印为空。`GenerationOptionsTests` 覆盖旧设置解码、`.mcp` 预设与 Find 的选项名，`ContentTextPipelineTests` 覆盖 ObjC 的占位说明。
 6. ✅ **抬 MachOObjCSection 的 pin。** 五份锁文件抬到上游推到 origin 的 `next`（`e6dbf343`）。
 
 没有询问就采用的假设：
@@ -37,3 +37,5 @@
 | 2026-10-31 | 用户批准，开始实现 | 上游在 MachOObjCSection 本地的 `next`（`c401651`）上、尚未推到 origin。包测试在远程依赖下用 `swift package edit` 只把 MachOObjCSection 换成这个提交，App 用临时 workspace 只让它顶替远程包，其余依赖都照锁文件；上游推送后再抬 pin。不用本地依赖模式：MachOSwiftSection 的本地 `next` 此时还带着另一项没推送的改动，会混进验证。 |
 | 2026-10-31 | 第 6 步提前做：先把 MachOObjCSection 的 pin 抬到 `e6dbf343`，全程用远程依赖构建 | 开工后不久，上游推到了 origin（`e6dbf343`，提案落地为 0018），代码与 `c401651` 相同，之后只多了文档提交，上一行说的 edit 模式与临时 workspace 都不再需要。五份锁文件只改这一条；在全新构建目录里，Core 与 Packages 带测试编过，锁文件没被改写。 |
 | 2026-10-31 | 包装类型上的查询返回 `Bool`，不转发上游的 `ObjCExportStatus?` | 侧栏只认「明确未导出」这一个答案；`ObjCExportStatus` 在 `ObjCMetadataSource`，RuntimeViewerCore 没有依赖这个 product，为一个类型名改清单不值得。 |
+| 2026-10-31 | 挂在未导出类上的类别不在本仓库测 | 链接器把同镜像的类别并进了类，测试 bundle 与系统框架里都没有这种类别，只有不合并类别的镜像里才有；这一支由上游 MachOObjCSection 的测试覆盖。 |
+| 2026-10-31 | Foundation 的实测并进语料可见性套件，不另开测试 | 那个套件本来就在 libobjc 与 Foundation 上逐条比对投影与内容区。把它两组「只看导出」选项的 ObjC 开关打开，不多加载镜像就覆盖了 ObjC 的类、类别与 ivar；再加一条断言，把「被标记」与「打印为空」连起来。 |

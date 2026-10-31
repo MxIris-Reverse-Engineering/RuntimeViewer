@@ -51,6 +51,12 @@ struct ObjCExportedDeclarationsTests {
         return (engine, objects)
     }
 
+    private static func options(exportedOnly: Bool) -> RuntimeObjectInterface.GenerationOptions {
+        var options = RuntimeObjectInterface.GenerationOptions()
+        options.objcHeaderOptions.printExportedDeclarationsOnly = exportedOnly
+        return options
+    }
+
     // MARK: - The sidebar's flag
 
     @Test("a class the bundle does not export is marked Not Exported in the Objective-C list, and one it exports is not", arguments: [
@@ -109,6 +115,139 @@ struct ObjCExportedDeclarationsTests {
         #expect(comparedCount >= 4, "only \(comparedCount) of \(swiftClassEntries.count) Swift classes have a Swift entry")
         #expect(markedCount >= 2 && markedCount < comparedCount, "\(markedCount) of \(comparedCount) marked")
         #expect(disagreements.isEmpty, "\(disagreements.count) of \(comparedCount) disagree: \(disagreements)")
+    }
+
+    // MARK: - Print Exported Declarations Only
+
+    /// A method has no symbol of its own to judge, so `init` stays; an ivar
+    /// goes when no exported symbol publishes its offset variable, which this
+    /// bundle does for the public property only.
+    @Test("an exported class keeps the ivars the image exports and loses the rest")
+    func exportedClassLosesTheIvarsNotExported() async throws {
+        let (engine, objects) = try await Self.sharedBundle.value
+        let entry = try #require(Self.objcClass(named: "ObjCExportPublicFixture", in: objects))
+
+        let everything = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: false))).interfaceString.string
+        let exportedOnly = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: true))).interfaceString.string
+
+        for text in ["publicIvarFixture", "privateIvarFixture", "- (id)init;"] {
+            #expect(everything.contains(text), "\(text) is missing with the option off:\n\(everything)")
+        }
+        for text in ["publicIvarFixture", "- (id)init;"] {
+            #expect(exportedOnly.contains(text), "\(text) is missing with the option on:\n\(exportedOnly)")
+        }
+        #expect(!exportedOnly.contains("privateIvarFixture"), "\(exportedOnly)")
+    }
+
+    @Test("a class the image does not export prints nothing at all", arguments: [
+        "ObjCExportPrivateFixture",
+        "ObjCExportPrivateSwiftRootFixture",
+    ])
+    func unexportedClassPrintsNothing(name: String) async throws {
+        let (engine, objects) = try await Self.sharedBundle.value
+        let entry = try #require(Self.objcClass(named: name, in: objects))
+
+        let everything = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: false))).interfaceString
+        let exportedOnly = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: true))).interfaceString
+
+        #expect(everything.string.contains("@interface"), "\(everything.string)")
+        #expect(exportedOnly.isEmpty, "\(exportedOnly.string)")
+    }
+
+    @Test("a batch export with the option on writes no header for what prints nothing")
+    func batchExportSkipsWhatPrintsNothing() async throws {
+        let (engine, _) = try await Self.sharedBundle.value
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ObjCExportedDeclarationsTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let configuration = RuntimeInterfaceExportConfiguration(
+            imagePath: Self.testBundlePath,
+            imageName: "RuntimeViewerCoreTests",
+            directory: directory,
+            objcFormat: .directory,
+            swiftFormat: .directory,
+            generationOptions: Self.options(exportedOnly: true),
+            includeMetadata: false
+        )
+        let reporter = RuntimeInterfaceExportReporter()
+
+        try await engine.exportInterfaces(with: configuration, reporter: reporter)
+        var failedObjectNames: [String] = []
+        for await event in reporter.events {
+            if case .objectFailed(let object, _) = event {
+                failedObjectNames.append(object.name)
+            }
+        }
+
+        // A Swift class's header is named after its mangled Objective-C name.
+        let objcDirectory = directory.appendingPathComponent("ObjCHeaders", isDirectory: true)
+        let fileNames = try FileManager.default.contentsOfDirectory(atPath: objcDirectory.path)
+        let fixtureFileNames = fileNames.filter { $0.contains("ObjCExport") }
+        #expect(fixtureFileNames.contains { $0.hasSuffix("ObjCExportPublicFixture.h") }, "\(fixtureFileNames)")
+        #expect(fixtureFileNames.contains { $0.hasSuffix("ObjCExportPublicSwiftRootFixture.h") }, "\(fixtureFileNames)")
+        #expect(!fixtureFileNames.contains { $0.contains("ObjCExportPrivate") }, "\(fixtureFileNames)")
+        for fileName in fixtureFileNames {
+            let contents = try String(contentsOf: objcDirectory.appendingPathComponent(fileName), encoding: .utf8)
+            #expect(!contents.isEmpty, "\(fileName) is empty")
+        }
+        // Left out, not failed.
+        #expect(!failedObjectNames.contains { $0.contains("ObjCExportPrivate") }, "\(failedObjectNames)")
+    }
+
+    // MARK: - Find
+
+    /// The corpus is printed once with everything marked, and a search reads
+    /// each entry under the options it carries: its text through the
+    /// projection, a member through the projection of its line — what
+    /// `searchInterfaces` and `searchMembers` do. So an ivar the option leaves
+    /// out is found only while the option is off.
+    @Test("Find finds an ivar the option leaves out only while it is off")
+    func findFollowsTheOption() async throws {
+        let entries = try await Self.fixtureCorpusEntries()
+        let entry = try #require(entries.first { $0.object.name.hasSuffix("ObjCExportPublicFixture") })
+        let memberIndex = try #require(entry.members.firstIndex { $0.name == "privateIvarFixture" }, "\(entry.members.map(\.name))")
+
+        for exportedOnly in [false, true] {
+            let visibility = RuntimeInterfaceVisibility(Self.options(exportedOnly: exportedOnly))
+            let projection = try #require(entry.projection(under: visibility), "the entry has no visibility regions")
+            let member = entry.member(at: memberIndex, in: projection, projectedLineTable: RuntimeInterfaceLineTable(projection.text.text))
+
+            #expect(projection.text.string.contains("privateIvarFixture") != exportedOnly, "exported only: \(exportedOnly)\n\(projection.text.string)")
+            #expect((member != nil) != exportedOnly, "exported only: \(exportedOnly)")
+        }
+    }
+
+    /// What the corpus visibility suite checks for libobjc and Foundation,
+    /// for this bundle's fixtures, with the option off and on: a projected
+    /// corpus entry reads as the interface the content pane prints — nothing
+    /// at all for a class the image does not export.
+    @Test("a projected corpus entry reads as the content pane's interface", arguments: [false, true])
+    func projectionMatchesTheDisplayedInterface(exportedOnly: Bool) async throws {
+        let (engine, _) = try await Self.sharedBundle.value
+        let entries = try await Self.fixtureCorpusEntries()
+        let options = Self.options(exportedOnly: exportedOnly)
+        let visibility = RuntimeInterfaceVisibility(options)
+
+        #expect(entries.count == 4, "\(entries.map(\.object.name))")
+        for entry in entries {
+            let displayed = try #require(try await engine.interface(for: entry.object, options: options)).interfaceString
+            let projected = entry.projection(under: visibility)?.text ?? entry.interface
+            #expect(projected.string == displayed.string, "\(entry.object.name):\n\(projected.string)\n--- displayed ---\n\(displayed.string)")
+        }
+    }
+
+    /// The fixtures' corpus entries, printed and assembled the way a corpus
+    /// build does — for the fixtures alone, as `SwiftExportedDeclarationsTests`
+    /// does for its own.
+    private static func fixtureCorpusEntries() async throws -> [RuntimeInterfaceCorpusEntry] {
+        let (engine, objects) = try await sharedBundle.value
+        let section = try #require(await engine.objcSectionFactory.existingSection(for: testBundlePath))
+        var prints: [RuntimeInterfaceCorpusPrint] = []
+        for object in objects where object.kind == .objc(.type(.class)) && object.name.contains("ObjCExport") {
+            if let corpusPrint = try await section.corpusPrint(for: object, transformer: .default) {
+                prints.append(corpusPrint)
+            }
+        }
+        return RuntimeInterfaceCorpusAssembly.entries(from: prints)
     }
 
     // MARK: - Helpers

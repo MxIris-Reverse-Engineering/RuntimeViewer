@@ -285,19 +285,22 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return try await fetchInterface()
     }
 
-    /// The interface the pane shows for a fetched one: the same, except a Swift object that Print
-    /// Exported Declarations Only leaves empty — a type its image does not export, reached through
-    /// a link or listed while the sidebar does not exclude it — which says why instead of showing
-    /// nothing. The engine itself prints such an object as empty, which is what batch export
-    /// skips.
+    /// The interface the pane shows for a fetched one: the same, except an object that Print
+    /// Exported Declarations Only leaves empty — a Swift type or an Objective-C class its image
+    /// does not export, or a category on such a class, reached through a link or listed while the
+    /// sidebar does not exclude it — which says why instead of showing nothing. The engine itself
+    /// prints such an object as empty, which is what batch export skips. The option is the one of
+    /// the side of Generation Options that prints the object; C structs and unions it never
+    /// empties.
     nonisolated static func displayedInterfaceString(
         of interface: RuntimeObjectInterface,
         options: RuntimeObjectInterface.GenerationOptions
     ) -> FrozenSemanticString {
-        guard interface.interfaceString.isEmpty,
-              interface.object.kind.isSwift,
-              options.swiftInterfaceOptions.printExportedDeclarationsOnly
-        else { return interface.interfaceString }
+        let kind = interface.object.kind
+        let printsExportedDeclarationsOnly = kind.isSwift
+            ? options.swiftInterfaceOptions.printExportedDeclarationsOnly
+            : kind.isObjC && options.objcHeaderOptions.printExportedDeclarationsOnly
+        guard interface.interfaceString.isEmpty, printsExportedDeclarationsOnly else { return interface.interfaceString }
         // Says what the option did, not that nothing here is exported: a type
         // the image does not export is left out whole, an exported type nested
         // in it included.
