@@ -13,7 +13,7 @@
 
 ## 方案
 
-1. **侧栏标志。** `objcIndexer.upstream.exportStatus(ofClassNamed:)` 为 `.notExported` 时，`RuntimeObjCSection.properties(forClassNamed:isSwiftStable:)` 加上 `.isNotExported`。返回 `nil`（别的镜像的类、宿主补充的类）或 `.imageHasNoExportInformation` 时不打。协议与类别不打。Swift 类在 ObjC 列表里的条目（`_TtC…`）照上游的判断打：上游逐个核对过，它与 MachOSwiftSection 对同一个类的判断一致。Filter Scope 不加行，`notExported` 一行的 tooltip 改成连 ObjC 类一起说。
+1. ✅ **侧栏标志。** 上游判定类对象明确未导出时，`RuntimeObjCSection.properties(forClassNamed:isSwiftStable:)` 加上 `.isNotExported`；结论由 indexer 在 `prepare()` 里算好，经包装类型的 `RuntimeObjCInterfaceIndexer.isClassDefinitelyNotExported(named:)` 读出。上游返回 `nil`（别的镜像的类、宿主补充的类）或镜像没有导出信息时不打。协议与类别不打。Swift 类在 ObjC 列表里的条目（`_TtC…`）照上游的判断打：测试 bundle 里有 204 个这样的类，标记与它们在 Swift 列表里的那一面逐个一致。Filter Scope 不加行，`notExported` 一行的 tooltip 改成连 ObjC 类一起说。
 2. **生成选项。** 开关是上游的 `ObjCGenerationOptions.printExportedDeclarationsOnly`，旧设置解码为关。Generation Options 的 ObjC 一节加同名勾选框，MCP 的 `.mcp` 预设显式写成关闭。上游的 `isVisibilityOptionEnabled` 已认得 `objc.printExportedDeclarationsOnly`，Find 的 `RuntimeInterfaceVisibility` 不用改。
 3. **打印为空。** 开着开关时，未导出的类、挂在本镜像未导出类上的类别打印为空串。内容区的占位说明从 Swift 对象扩到 ObjC 对象，条件改成看对象所属那一侧的开关。批量导出跳过空串，本来就不分语言。
 4. **Find。** 开关打开时，上游标记模式的投影恰好为空串（上游有测试钉住），语料照旧把空投影当作不存在。实现时验证：ivar 被去掉后，文本搜索、成员搜索与内容区一致。
@@ -36,3 +36,4 @@
 | 2026-10-31 | Created as Draft | 用户要「只看导出的声明」也覆盖 ObjC。上游交给 MachOObjCSection 的会话实现，已合进它本地的 `next`（`c401651`），尚未推到 origin。 |
 | 2026-10-31 | 用户批准，开始实现 | 上游在 MachOObjCSection 本地的 `next`（`c401651`）上、尚未推到 origin。包测试在远程依赖下用 `swift package edit` 只把 MachOObjCSection 换成这个提交，App 用临时 workspace 只让它顶替远程包，其余依赖都照锁文件；上游推送后再抬 pin。不用本地依赖模式：MachOSwiftSection 的本地 `next` 此时还带着另一项没推送的改动，会混进验证。 |
 | 2026-10-31 | 第 6 步提前做：先把 MachOObjCSection 的 pin 抬到 `e6dbf343`，全程用远程依赖构建 | 开工后不久，上游推到了 origin（`e6dbf343`，提案落地为 0018），代码与 `c401651` 相同，之后只多了文档提交，上一行说的 edit 模式与临时 workspace 都不再需要。五份锁文件只改这一条；在全新构建目录里，Core 与 Packages 带测试编过，锁文件没被改写。 |
+| 2026-10-31 | 包装类型上的查询返回 `Bool`，不转发上游的 `ObjCExportStatus?` | 侧栏只认「明确未导出」这一个答案；`ObjCExportStatus` 在 `ObjCMetadataSource`，RuntimeViewerCore 没有依赖这个 product，为一个类型名改清单不值得。 |
