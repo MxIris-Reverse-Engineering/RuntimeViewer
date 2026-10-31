@@ -67,7 +67,7 @@ SourceEditor UUID `6E5DBC54-96DD-3101-A63E-CDCE9E3B0572`）的反编译，地址
 | 藏起 `// `、`/* */`、标点和树形前缀 | `HiddenTextOverrideProvider` | `processedLineRenderData`（0x22F8C4）把可见列拼成新串，所以隐藏的列收拢、不留空；只在建行图层（`makeLineLayer`，0x22F3D4）时求值，变化要驱逐行图层才生效；所有回答都是 `[]` 等于整行照常显示，要全藏得回答 `[0..<0]`；复制走未隐藏的行数据（`attributedString(for:context:)`，0x39E24C），复制出的是原文 |
 | 标签内边距、大纲缩进 | `ColumnShiftOverrideProvider` | `columnShiftsForLine`（0x231700）把 `[列: 点数]` 变成相对位移，`CoreTextLineLayout.layout`（0xEF74）在这些列把文本切成片段；折叠的「…」就靠它让位（`FoldedRegionDisplay.columnShiftEffectsForLine`，0xD0758） |
 | 标签名、数值分色 | `TextAttributeOverrideProvider` | 属性原样 `addAttributes:range:`（0x22B5F8）交给 CoreText；列范围越过行长直接 `fatalError`（0009 已记） |
-| 圆角底 | 自己的一个 `LayoutVisualization`；图层用 `SourceEditorRangeHighlightLayer`，放进 `contentView.underlayLayer`，矩形取 `contentView.selectionRects(for:coalesceInteriorRects:includeLineSpacing:)` | 三个钩子在每个布局 pass 都会回调（`layoutContentView`，0x21B7E8）；框架自己的 `RangeHighlightLayoutVisualization` 就是这样画的（0x8A13C / 0x8AC34）。图层的形状与圆角没有导出的 setter，只能用默认的 `.token` 与 4pt 圆角（`init()`，0x254528）；要别的形状就自己画 `CAShapeLayer` |
+| 圆角底与展开三角 | 自己的一个 `LayoutVisualization`；图层是自己的 `CAShapeLayer`，放进 `contentView.underlayLayer`，矩形取 `contentView.selectionRects(for:coalesceInteriorRects:includeLineSpacing:)` | 三个钩子在每个布局 pass 都会回调（`layoutContentView`，0x21B7E8）；框架自己的 `RangeHighlightLayoutVisualization` 就是这样画的（0x8A13C / 0x8AC34）。没用框架的 `SourceEditorRangeHighlightLayer`：它的形状与圆角没有导出的 setter（`init()`，0x254528），自己画同样的 4pt 圆角矩形更简单，stub 也少一个类 |
 | 收起大纲节点和 case 说明块 | `FoldingController.fold(_:animate:completion:)` / `unfold(_:restoreNestedFolds:animate:)` | 任意范围都能折，`fold(ranges:)`（0xDA140）不查 `foldableRanges`；`fold(lineRanges:)` 会把首行一起藏掉，所以从「节点行的行末」折到「子树末行的行末」；被折那行的行尾必定出现「…」块（`makeEllipsisLayer`，0xD0454；单击选中、双击展开），没找到关掉它的开关；`stateDictionaryForSaving` / `restore(from:)`（0xDD7A4 / 0xDDC08）会带上这些折叠，现有的 `FoldStateCache` 照常记住 |
 | 点 ▸ 展开、收起 | `SourceEditorViewEventConsumer` | `mouseDown(with:)`（0x328208）先逐个问 consumer，命中即止；`positionAtPoint`（0x434E8C） |
 
@@ -80,7 +80,8 @@ SourceEditor UUID `6E5DBC54-96DD-3101-A63E-CDCE9E3B0572`）的反编译，地址
 - 上面用到的接口在 26.6 与 27.2 都已导出（两版的 `nm -gU` 对照过），`Stubs/` 补的声明以 27.2 的导出
   为准，照 `Stubs/README.md` 的流程重算 `.tbd`。
 - 顺带发现：bridge 里 `applyTextLeadingMargin` 的注释说 `SourceEditorLayoutManager.invalidateAllLayout()`
-  没有可链接的导出符号，实际 26.6 与 27.2 都导出了它。与本提案无关，另行处理。
+  没有可链接的导出符号，实际 26.6 与 27.2 都导出了它（装饰控制器就用它）。注释已随第 2 步更正，那段
+  代码的行为不变。
 
 ### 五、设置
 
@@ -122,9 +123,16 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
      `restoreNestedFolds: true` 内层仍是折着的。
    - 顺带踩到的：`evictLineLayersForLineRange` 的范围越过文档末行是 `fatalError`
      （`SourceEditorDataSource`：「Invalid line 3 of 3」），不是空操作。
-2. **Bridge 装饰控制器。** `CommentDecorationController`：隐藏列、位移、分色、圆角底、点 ▸ 收放、
-   默认收起，以及它与 `FoldStateCache`、换 source 时先展开全部折叠的配合；`SourceEditorBridging`
-   新增传装饰的入口。测试覆盖每一项。
+2. **Bridge 装饰控制器。**（已完成）`CommentDecorationController`：隐藏列、位移、分色、圆角底、点 ▸
+   收放、默认收起，以及它与 `FoldStateCache`、换 source 时先展开全部折叠的配合；`SourceEditorBridging`
+   的 `setSource` 多了 `commentDecorations:` 参数，另加 `applyCommentTagColors(...)`。装饰描述是一个
+   `@objc` 协议（`SourceEditorBridgingCommentDecorations`），全是 UTF-16 范围的平行数组：标签与样式、
+   着色段与样式（label / value / type / name / concealed）、隐藏范围、可收起的行（三角画在哪几列、
+   收起时藏到哪、是否默认收起）。藏什么、怎么上色由 App 决定，bridge 只照做。
+   `CommentDecorationTests` 7 个测试：隐藏标记与冒号后的渲染、标签与三角的图层、默认收起（内层先折、
+   展开外层后内层仍收着）、点三角收放、换回同一份 source 时恢复用户留下的折叠而不是默认值、不带装饰时
+   一切照旧、2000 个默认收起的行设源加排版共 0.225 秒。`Stubs/VerifyAcrossXcodes.sh` 加了带装饰的
+   `setSource` 和 `applyCommentTagColors`，在 27.2 与 26.6 上都跑通。
 3. **App 侧。** RuntimeViewerCore 定义注释表的线上模型（`RuntimeObjectInterface` 的可选字段，补线上
    兼容测试）；RuntimeViewerApplication 由它算出装饰描述（测试用手写的表）；
    `ContentSourceEditorViewController` 接上；Settings › Editor 加 Comment Tags 开关。
@@ -147,3 +155,4 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-10-31 | 反编译没定下来的行为改用 bridge 测试 bundle 里的测试确认，不另写探针脚本 | 测试同样能回答这些问题，而且作为回归测试一直留着；离屏驱动 bridge 的测试 0009 已证明可行。 |
 | 2026-10-31 | 第 4 步依赖上游三篇，先做 1–3、5 | 上游的 API 还没定稿；App 侧的线上模型由 RuntimeViewer 自己定义，第 4 步只写把上游的表换算进来的那一层。功能分支从本地 `next` 切出，它比远端多 7 个「只看导出的 Swift 声明」的提交（已在远端功能分支上），两条线都改了内容面板，叠在上面可以少一次冲突。 |
 | 2026-10-31 | 第 1 步完成，状态改 In Progress | 行为测试的结论见「落地步骤 · 1」。bridge 测试 bundle 的基线本来就有 2 个失败（`SourceEditorScrollerTests`）：8f3414e0 有意关掉了滚动条自动隐藏，测试没跟着改，与本提案无关，不在这条分支上修。 |
+| 2026-10-31 | 第 2 步完成 | 实现中定下的几处：圆角底用自己的 `CAShapeLayer`，不用框架的高亮图层（理由见「方案 · 四」）；树形前缀不隐藏而是画成透明，三角画在它 `├── ` 那一格，根行与 case 头行的三角画在注释符号前的缩进里，这样有子节点和没有子节点的行对得齐；`FoldStateCache` 的键加上「是否带装饰」，同一份文本开关标签前后各记各的折叠；换 source 时先清空旧装饰再展开旧折叠，新装饰等新数据源就位后才装上，避免框架按旧文本排版时拿到新文本的列号；默认收起先折内层再折外层；按住 ⌥ 点三角整棵展开或收起。没能在 26.6 上跑行为测试：27.2 编出的测试包用的 swift-testing 符号 26.6 没有，混用两版框架又会让进程里出现两份 SourceEditor 而崩溃；26.6 的覆盖靠 `VerifyAcrossXcodes.sh` 跑通带装饰的整个接口。 |

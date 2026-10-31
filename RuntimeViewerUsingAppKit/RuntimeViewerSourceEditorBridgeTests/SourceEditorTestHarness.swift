@@ -75,12 +75,18 @@ final class SourceEditorTestHarness {
         window.orderFront(nil)
     }
 
-    /// How many lines the text last passed to `setSource(_:)` has.
+    /// How many lines the text last passed to `setSource(_:commentDecorations:)` has.
     private(set) var lineCount = 0
 
-    func setSource(_ source: String) {
+    func setSource(_ source: String, commentDecorations: SourceEditorBridgingCommentDecorations? = nil) {
         lineCount = source.components(separatedBy: "\n").count
-        bridge.setSource(source, languageIdentifier: "swift", semanticRanges: [], semanticNodeTypeNames: [])
+        bridge.setSource(
+            source,
+            languageIdentifier: "swift",
+            semanticRanges: [],
+            semanticNodeTypeNames: [],
+            commentDecorations: commentDecorations
+        )
     }
 
     /// Forces the layout the crash happens inside.

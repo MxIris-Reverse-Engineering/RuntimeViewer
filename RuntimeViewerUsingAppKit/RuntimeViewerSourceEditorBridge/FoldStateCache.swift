@@ -28,9 +28,15 @@ struct FoldStateCache {
         private let sourceHash: Int
         private let characterCount: Int
 
-        init(source: String) {
+        /// Whether the text was shown with comment decorations. The same text folds differently
+        /// with and without them — the decorations add collapsible rows — so turning comment tags
+        /// on or off must not bring back the folds made the other way.
+        private let isDecorated: Bool
+
+        init(source: String, isDecorated: Bool) {
             sourceHash = source.hashValue
             characterCount = source.count
+            self.isDecorated = isDecorated
         }
     }
 

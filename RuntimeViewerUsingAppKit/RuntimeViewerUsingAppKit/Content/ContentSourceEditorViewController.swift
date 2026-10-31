@@ -129,7 +129,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
                     renderedInterface.attributedString.string,
                     languageIdentifier: languageIdentifier,
                     semanticRanges: semanticRanges,
-                    semanticNodeTypeNames: nodeTypeNames
+                    semanticNodeTypeNames: nodeTypeNames,
+                    commentDecorations: nil
                 )
             }
             .disposed(by: rx.disposeBag)

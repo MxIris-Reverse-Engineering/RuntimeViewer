@@ -13,6 +13,10 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     private let semanticNodeTypeAdjuster = SemanticNodeTypeAdjuster()
 
+    /// Draws the generated comments as tags and collapses their outlines. Lazy only because it
+    /// needs the view; it is created and registered in `init`.
+    private lazy var commentDecorationController = CommentDecorationController(sourceEditorView: sourceEditorView)
+
     /// A gutter has to exist before there are any line numbers to show — the view ships
     /// without one — and it also draws the active-line emphasis, so it stays installed
     /// whether or not the numbers are wanted.
@@ -81,6 +85,12 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         commandClickNavigator.bridge = self
         sourceEditorView.addEventConsumer(commandClickNavigator)
 
+        // Registered once and kept: with no decorations loaded every answer it gives is empty.
+        // `addLayoutOverrideProvider` files a provider under each protocol it conforms to.
+        sourceEditorView.layoutManager.addLayoutOverrideProvider(commentDecorationController)
+        sourceEditorView.layoutManager.addLayoutVisualization(commentDecorationController)
+        sourceEditorView.addEventConsumer(commentDecorationController)
+
         // Held weakly by the view, and the view is owned by this object, so this does not
         // retain-cycle and does not need clearing.
         sourceEditorView.contextualMenuItemProvider = self
@@ -95,7 +105,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         _ source: String,
         languageIdentifier: String,
         semanticRanges: [NSValue],
-        semanticNodeTypeNames: [String]
+        semanticNodeTypeNames: [String],
+        commentDecorations: SourceEditorBridgingCommentDecorations?
     ) {
         let language: SourceEditorLanguage? =
             switch languageIdentifier {
@@ -139,20 +150,51 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         if let displayedSourceKey {
             foldStates.store(sourceEditorView.foldingController.stateDictionaryForSaving, for: displayedSourceKey)
         }
+        // **The old decorations go before the unfold**, which lays the old text out again: they
+        // are columns of the text they came with, and a column past the end of a line is a
+        // `fatalError` in the framework. The new ones come in only once their text is in place.
+        commentDecorationController.clear()
         sourceEditorView.foldingController.unfoldAll(animate: false)
 
         sourceEditorView.dataSource = dataSource
+        commentDecorationController.load(commentDecorations, source: source)
 
         // Straight after the assignment, with no layout in between: `restore(from:)` reads line
         // and column numbers, not the parse, so it does not need one (measured). It also guards
         // itself — a state whose `documentLength` disagrees with the new text is discarded
         // whole, and a position outside that text is dropped rather than folded — but the key
         // is what makes it *correct*, not just safe.
-        let sourceKey = FoldStateCache.Key(source: source)
+        //
+        // A source shown for the first time starts with its decorated rows collapsed instead.
+        let sourceKey = FoldStateCache.Key(source: source, isDecorated: commentDecorations != nil)
         displayedSourceKey = sourceKey
         if let savedState = foldStates.state(for: sourceKey) as? [AnyHashable: Any] {
             sourceEditorView.foldingController.restore(from: savedState)
+        } else {
+            commentDecorationController.collapseRowsThatStartCollapsed()
         }
+    }
+
+    func applyCommentTagColors(
+        fillColor: NSColor,
+        warningFillColor: NSColor,
+        noteFillColor: NSColor,
+        labelColor: NSColor,
+        valueColor: NSColor,
+        typeColor: NSColor,
+        nameColor: NSColor,
+        disclosureColor: NSColor
+    ) {
+        commentDecorationController.applyColors(CommentDecorationController.Colors(
+            fill: fillColor,
+            warningFill: warningFillColor,
+            noteFill: noteFillColor,
+            label: labelColor,
+            value: valueColor,
+            type: typeColor,
+            name: nameColor,
+            disclosure: disclosureColor
+        ))
     }
 
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont) {
@@ -210,7 +252,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     /// **Assigning this does not schedule a relayout.** The laid-out lines keep their old
     /// origins until something else invalidates them — a `setSource`, or the theme assignment
     /// this is called just ahead of. `SourceEditorLayoutManager.invalidateAllLayout()` would do
-    /// it directly but has no exported symbol to link against.
+    /// it directly; it is exported (26.6 and 27.2 alike) and the comment decorations call it,
+    /// but the theme assignment already covers this path.
     private func applyTextLeadingMargin(forPointSize pointSize: CGFloat) {
         let leadingMargin = (pointSize * 0.5).rounded()
         guard sourceEditorView.contentView.contentMargins.left != leadingMargin else { return }

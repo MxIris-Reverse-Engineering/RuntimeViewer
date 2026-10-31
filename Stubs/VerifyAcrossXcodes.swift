@@ -46,6 +46,38 @@ final class InertBridgeDelegate: NSObject, SourceEditorBridgingNavigationDelegat
     }
 }
 
+/// The decorations the probe hands the bridge, built field by field.
+final class ProbeCommentDecorations: NSObject, SourceEditorBridgingCommentDecorations {
+    let tagRanges: [NSValue]
+    let tagStyles: [NSNumber]
+    let runRanges: [NSValue]
+    let runStyles: [NSNumber]
+    let hiddenRanges: [NSValue]
+    let collapsibleDisclosureRanges: [NSValue]
+    let collapsibleFoldRanges: [NSValue]
+    let collapsibleStartsCollapsed: [NSNumber]
+
+    init(
+        tagRanges: [NSValue],
+        tagStyles: [NSNumber],
+        runRanges: [NSValue],
+        runStyles: [NSNumber],
+        hiddenRanges: [NSValue],
+        collapsibleDisclosureRanges: [NSValue],
+        collapsibleFoldRanges: [NSValue],
+        collapsibleStartsCollapsed: [NSNumber]
+    ) {
+        self.tagRanges = tagRanges
+        self.tagStyles = tagStyles
+        self.runRanges = runRanges
+        self.runStyles = runStyles
+        self.hiddenRanges = hiddenRanges
+        self.collapsibleDisclosureRanges = collapsibleDisclosureRanges
+        self.collapsibleFoldRanges = collapsibleFoldRanges
+        self.collapsibleStartsCollapsed = collapsibleStartsCollapsed
+    }
+}
+
 func report(_ message: String) { print("OK   \(message)") }
 
 func fail(_ message: String) -> Never {
@@ -160,23 +192,70 @@ bridge.setSource(
     objectiveCSource,
     languageIdentifier: "objc",
     semanticRanges: [NSValue(range: NSRange(objectiveCSource.range(of: "NSString")!, in: objectiveCSource))],
-    semanticNodeTypeNames: ["xcode.syntax.identifier.class"]
+    semanticNodeTypeNames: ["xcode.syntax.identifier.class"],
+    commentDecorations: nil
 )
 report("setSource objc")
 
+// A field-offset comment with one tree row, decorated the way the app decorates one: markers and
+// the colon hidden, the tree prefix concealed, a tag over the root, and the root collapsible and
+// starting collapsed — which reaches the hidden-text, column-shift, attribute and folding paths.
 let swiftSource = """
 // MARK: - Probe
 public final class ProbeType: NSObject {
+    // Field offset: 0x8
+    // └── origin (__C.CGPoint): 0x8
     public var probeValue: String { "value" }
 }
 """
+let probeSource = swiftSource as NSString
+let rootLineRange = probeSource.range(of: "    // Field offset: 0x8")
+let nodeLineRange = probeSource.range(of: "    // └── origin (__C.CGPoint): 0x8")
+let rootMarker = NSRange(location: rootLineRange.location + 4, length: 3)
+let nodeMarker = NSRange(location: nodeLineRange.location + 4, length: 3)
+let rootTag = NSRange(location: rootMarker.location + 3, length: "Field offset: 0x8".utf16.count)
+let probeDecorations = ProbeCommentDecorations(
+    tagRanges: [NSValue(range: rootTag)],
+    tagStyles: [NSNumber(value: SourceEditorBridgingCommentTagStyle.standard.rawValue)],
+    runRanges: [
+        NSValue(range: NSRange(location: rootTag.location, length: "Field offset".utf16.count)),
+        NSValue(range: NSRange(location: NSMaxRange(rootTag) - 3, length: 3)),
+        NSValue(range: NSRange(location: NSMaxRange(nodeMarker), length: "└── ".utf16.count)),
+    ],
+    runStyles: [
+        NSNumber(value: SourceEditorBridgingCommentRunStyle.label.rawValue),
+        NSNumber(value: SourceEditorBridgingCommentRunStyle.value.rawValue),
+        NSNumber(value: SourceEditorBridgingCommentRunStyle.concealed.rawValue),
+    ],
+    hiddenRanges: [
+        NSValue(range: rootMarker),
+        NSValue(range: NSRange(location: rootTag.location + "Field offset".utf16.count, length: 1)),
+        NSValue(range: nodeMarker),
+    ],
+    collapsibleDisclosureRanges: [NSValue(range: NSRange(location: rootLineRange.location + 2, length: 2))],
+    collapsibleFoldRanges: [NSValue(range: NSRange(location: NSMaxRange(rootLineRange), length: NSMaxRange(nodeLineRange) - NSMaxRange(rootLineRange)))],
+    collapsibleStartsCollapsed: [true]
+)
 bridge.setSource(
     swiftSource,
     languageIdentifier: "swift",
     semanticRanges: [NSValue(range: NSRange(swiftSource.range(of: "ProbeType")!, in: swiftSource))],
-    semanticNodeTypeNames: ["xcode.syntax.identifier.class"]
+    semanticNodeTypeNames: ["xcode.syntax.identifier.class"],
+    commentDecorations: probeDecorations
 )
-report("setSource swift")
+report("setSource swift with comment decorations")
+
+bridge.applyCommentTagColors(
+    fillColor: .quaternaryLabelColor,
+    warningFillColor: .systemOrange,
+    noteFillColor: .quinaryLabel,
+    labelColor: .secondaryLabelColor,
+    valueColor: .systemBlue,
+    typeColor: .systemPurple,
+    nameColor: .labelColor,
+    disclosureColor: .secondaryLabelColor
+)
+report("applyCommentTagColors")
 
 editorView.layoutSubtreeIfNeeded()
 editorView.display()
