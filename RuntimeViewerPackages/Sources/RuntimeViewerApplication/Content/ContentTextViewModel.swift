@@ -62,6 +62,18 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// attributes that carry jump targets and the `.runtimeViewerDeclaredMember` attributes
         /// that say which member a line declares.
         public let attributedString: NSAttributedString
+
+        /// How the SourceEditor pane draws the comments of this text; nil when the engine sent no
+        /// comment structure with it. The `NSTextView` pane does not read it.
+        public let commentDecorations: InterfaceCommentDecorations?
+    }
+
+    /// What the fetch half hands the render half: the text to show, the object it belongs to, and
+    /// the structure of its comments when the engine sent one.
+    struct FetchedInterface: Sendable {
+        let interfaceString: FrozenSemanticString
+        let runtimeObject: RuntimeObject
+        let commentStructure: RuntimeInterfaceCommentStructure?
     }
 
     @RxObserved
@@ -116,6 +128,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let resolvedInterfaceProvider = self.interfaceProvider
 
         let transformerObservable: Observable<Transformer.Configuration>
+        let marksCommentStructureObservable: Observable<Bool>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         // Resolve the dependency once. `Observable.tracking` re-arms on a
         // main-queue hop where the dependency context is no longer available.
@@ -131,8 +144,18 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 }
             }
             .share(replay: 1, scope: .whileConnected)
+        // Merged the way `currentMergedGenerationOptions` merges it, so a link
+        // click warms the cache entry this fetch then hits.
+        marksCommentStructureObservable = Observable<Bool>
+            .tracking {
+                MainActor.assumeIsolated {
+                    trackedSettings.editor.drawsCommentTags
+                }
+            }
+            .share(replay: 1, scope: .whileConnected)
         #else
         transformerObservable = .just(.init())
+        marksCommentStructureObservable = .just(false)
         #endif
 
         let themeObservable: Observable<ThemeProfile>
@@ -168,16 +191,18 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .combineLatest(
                 $runtimeObject,
                 appDefaults.$options.distinctUntilChanged(),
-                transformerObservable.distinctUntilChanged()
+                transformerObservable.distinctUntilChanged(),
+                marksCommentStructureObservable.distinctUntilChanged()
             )
-            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer -> Observable<(interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer, marksCommentStructure -> Observable<FetchedInterface?> in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
+                mergedOptions.marksCommentStructure = marksCommentStructure
                 return Observable.async {
                     let fetchInterval = contentTextSignposter.beginInterval("content.interfaceFetch", id: contentTextSignposter.makeSignpostID())
                     defer { contentTextSignposter.endInterval("content.interfaceFetch", fetchInterval) }
                     return try await resolvedInterfaceProvider(runtimeObject, mergedOptions).map {
-                        (interfaceString: Self.displayedInterfaceString(of: $0, options: mergedOptions), runtimeObject: runtimeObject)
+                        Self.displayedInterface(of: $0, runtimeObject: runtimeObject, options: mergedOptions)
                     }
                 }
                 .trackActivity(_commonLoading)
@@ -203,7 +228,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let renderScheduler = ConcurrentDispatchQueueScheduler(qos: .userInitiated)
         Observable
             .combineLatest(interfaceStream, themeObservable)
-            .flatMapLatest { [_commonLoading = self._commonLoading] interfacePair, theme -> Observable<RenderedInterface?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] fetchedInterface, theme -> Observable<RenderedInterface?> in
                 // Tracked so the indicator covers click → new text on
                 // screen: with a warm interface cache the fetch half is
                 // near-instant, and theme / font-size changes skip it
@@ -214,7 +239,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 // decrements.
                 Observable.just(())
                     .observe(on: renderScheduler)
-                    .map { Self.renderInterface(for: interfacePair, theme: theme) }
+                    .map { Self.renderInterface(for: fetchedInterface, theme: theme) }
                     .trackActivity(_commonLoading)
             }
             .observeOnMainScheduler()
@@ -296,11 +321,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         of interface: RuntimeObjectInterface,
         options: RuntimeObjectInterface.GenerationOptions
     ) -> FrozenSemanticString {
-        let kind = interface.object.kind
-        let printsExportedDeclarationsOnly = kind.isSwift
-            ? options.swiftInterfaceOptions.printExportedDeclarationsOnly
-            : kind.isObjC && options.objcHeaderOptions.printExportedDeclarationsOnly
-        guard interface.interfaceString.isEmpty, printsExportedDeclarationsOnly else { return interface.interfaceString }
+        guard showsExportedOnlyNote(for: interface, options: options) else { return interface.interfaceString }
         // Says what the option did, not that nothing here is exported: a type
         // the image does not export is left out whole, an exported type nested
         // in it included.
@@ -312,21 +333,70 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         .frozen()
     }
 
+    /// Whether Print Exported Declarations Only left the interface empty, on the side of Generation
+    /// Options that prints the object.
+    private nonisolated static func showsExportedOnlyNote(
+        for interface: RuntimeObjectInterface,
+        options: RuntimeObjectInterface.GenerationOptions
+    ) -> Bool {
+        let kind = interface.object.kind
+        let printsExportedDeclarationsOnly = kind.isSwift
+            ? options.swiftInterfaceOptions.printExportedDeclarationsOnly
+            : kind.isObjC && options.objcHeaderOptions.printExportedDeclarationsOnly
+        return interface.interfaceString.isEmpty && printsExportedDeclarationsOnly
+    }
+
+    /// What the pane shows for a fetched interface, with the structure of its comments: the
+    /// engine's, or — for the note `displayedInterfaceString(of:options:)` puts in place of an
+    /// empty interface — one written here, so that the note is drawn like every other comment.
+    nonisolated static func displayedInterface(
+        of interface: RuntimeObjectInterface,
+        runtimeObject: RuntimeObject,
+        options: RuntimeObjectInterface.GenerationOptions
+    ) -> FetchedInterface {
+        let interfaceString = displayedInterfaceString(of: interface, options: options)
+        let commentStructure = showsExportedOnlyNote(for: interface, options: options)
+            ? noteCommentStructure(of: interfaceString)
+            : interface.commentStructure
+        return FetchedInterface(interfaceString: interfaceString, runtimeObject: runtimeObject, commentStructure: commentStructure)
+    }
+
+    /// Each `// ` line of `text` as a note: the marker, then the prose.
+    private nonisolated static func noteCommentStructure(of text: FrozenSemanticString) -> RuntimeInterfaceCommentStructure {
+        var comments: [RuntimeInterfaceCommentStructure.Comment] = []
+        var segments: [RuntimeInterfaceCommentStructure.Segment] = []
+        var lineStart = 0
+        for line in text.string.split(separator: "\n", omittingEmptySubsequences: false) {
+            let lineLength = line.utf8.count
+            defer { lineStart += lineLength + 1 }
+            guard line.hasPrefix("// "), lineLength > 3 else { continue }
+            let commentIndex = comments.count
+            comments.append(.init(kind: .note, utf8Range: lineStart ..< lineStart + lineLength, enclosingCommentIndex: nil))
+            segments.append(.init(role: .marker, utf8Range: lineStart ..< lineStart + 3, commentIndex: commentIndex))
+            segments.append(.init(role: .text, utf8Range: lineStart + 3 ..< lineStart + lineLength, commentIndex: commentIndex))
+        }
+        return RuntimeInterfaceCommentStructure(comments: comments, segments: segments)
+    }
+
     /// Builds both forms of a fetched interface in one pass, so the semantic runs and the
     /// attributed text a consumer receives always describe the same generation.
     ///
     /// `nonisolated` for the same reason as ``renderAttributedString(for:theme:)``, which it
     /// delegates the theming pass to: this runs on the render half's background scheduler.
     nonisolated static func renderInterface(
-        for interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?,
+        for fetchedInterface: FetchedInterface?,
         theme: ThemeProfile
     ) -> RenderedInterface? {
-        guard let interfacePair,
-              let attributedString = renderAttributedString(for: interfacePair, theme: theme)
-        else { return nil }
+        guard let fetchedInterface else { return nil }
+        let interfacePair = (interfaceString: fetchedInterface.interfaceString, runtimeObject: fetchedInterface.runtimeObject)
+        guard let attributedString = renderAttributedString(for: interfacePair, theme: theme) else { return nil }
+        let commentDecorations = fetchedInterface.commentStructure.map {
+            InterfaceCommentDecorations(structure: $0, interfaceString: fetchedInterface.interfaceString)
+        }
         return RenderedInterface(
             semanticString: interfacePair.interfaceString,
-            attributedString: markingDeclaredMembers(in: attributedString, of: interfacePair)
+            attributedString: markingDeclaredMembers(in: attributedString, of: interfacePair),
+            commentDecorations: commentDecorations
         )
     }
 

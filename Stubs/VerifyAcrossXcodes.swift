@@ -46,6 +46,61 @@ final class InertBridgeDelegate: NSObject, SourceEditorBridgingNavigationDelegat
     }
 }
 
+/// The decorations the probe hands the bridge, built field by field.
+final class ProbeCommentDecorations: NSObject, SourceEditorBridgingCommentDecorations {
+    let tagRanges: [NSValue]
+    let tagStyles: [NSNumber]
+    let runRanges: [NSValue]
+    let runStyles: [NSNumber]
+    let hiddenRanges: [NSValue]
+    let collapsibleDisclosureRanges: [NSValue]
+    let collapsibleFoldRanges: [NSValue]
+    let collapsibleStartsCollapsed: [NSNumber]
+
+    init(
+        tagRanges: [NSValue],
+        tagStyles: [NSNumber],
+        runRanges: [NSValue],
+        runStyles: [NSNumber],
+        hiddenRanges: [NSValue],
+        collapsibleDisclosureRanges: [NSValue],
+        collapsibleFoldRanges: [NSValue],
+        collapsibleStartsCollapsed: [NSNumber]
+    ) {
+        self.tagRanges = tagRanges
+        self.tagStyles = tagStyles
+        self.runRanges = runRanges
+        self.runStyles = runStyles
+        self.hiddenRanges = hiddenRanges
+        self.collapsibleDisclosureRanges = collapsibleDisclosureRanges
+        self.collapsibleFoldRanges = collapsibleFoldRanges
+        self.collapsibleStartsCollapsed = collapsibleStartsCollapsed
+    }
+}
+
+/// A tag appearance with a stroke, so the probe reaches the outline as well as the fill.
+final class ProbeCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
+    let valueColor = NSColor.labelColor
+    let typeColor = NSColor.systemPurple
+    let nameColor = NSColor.labelColor
+    let disclosureColor = NSColor.secondaryLabelColor
+    let cornerRadius: CGFloat = 100
+    let strokeWidth: CGFloat = 1
+    let horizontalPadding: CGFloat = 6
+
+    func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
+        style == .warning ? .systemOrange : .quaternaryLabelColor
+    }
+
+    func strokeColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor? {
+        .tertiaryLabelColor
+    }
+
+    func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
+        .secondaryLabelColor
+    }
+}
+
 func report(_ message: String) { print("OK   \(message)") }
 
 func fail(_ message: String) -> Never {
@@ -160,27 +215,70 @@ bridge.setSource(
     objectiveCSource,
     languageIdentifier: "objc",
     semanticRanges: [NSValue(range: NSRange(objectiveCSource.range(of: "NSString")!, in: objectiveCSource))],
-    semanticNodeTypeNames: ["xcode.syntax.identifier.class"]
+    semanticNodeTypeNames: ["xcode.syntax.identifier.class"],
+    commentDecorations: nil
 )
 report("setSource objc")
 
+// A field-offset comment with one tree row, decorated the way the app decorates one: markers and
+// the colon hidden, the tree prefix concealed, a tag over the root, and the root collapsible and
+// starting collapsed — which reaches the hidden-text, column-shift, attribute and folding paths.
 let swiftSource = """
 // MARK: - Probe
 public final class ProbeType: NSObject {
+    // Field offset: 0x8
+    // └── origin (__C.CGPoint): 0x8
     public var probeValue: String { "value" }
 }
 """
+let probeSource = swiftSource as NSString
+let rootLineRange = probeSource.range(of: "    // Field offset: 0x8")
+let nodeLineRange = probeSource.range(of: "    // └── origin (__C.CGPoint): 0x8")
+let rootMarker = NSRange(location: rootLineRange.location + 4, length: 3)
+let nodeMarker = NSRange(location: nodeLineRange.location + 4, length: 3)
+let rootTag = NSRange(location: rootMarker.location + 3, length: "Field offset: 0x8".utf16.count)
+let probeDecorations = ProbeCommentDecorations(
+    tagRanges: [NSValue(range: rootTag)],
+    tagStyles: [NSNumber(value: SourceEditorBridgingCommentTagStyle.offset.rawValue)],
+    runRanges: [
+        NSValue(range: NSRange(location: rootTag.location, length: "Field offset".utf16.count)),
+        NSValue(range: NSRange(location: NSMaxRange(rootTag) - 3, length: 3)),
+        NSValue(range: NSRange(location: NSMaxRange(nodeMarker), length: "└── ".utf16.count)),
+    ],
+    runStyles: [
+        NSNumber(value: SourceEditorBridgingCommentRunStyle.label.rawValue),
+        NSNumber(value: SourceEditorBridgingCommentRunStyle.value.rawValue),
+        NSNumber(value: SourceEditorBridgingCommentRunStyle.concealed.rawValue),
+    ],
+    hiddenRanges: [
+        NSValue(range: rootMarker),
+        NSValue(range: NSRange(location: rootTag.location + "Field offset".utf16.count, length: 1)),
+        NSValue(range: nodeMarker),
+    ],
+    collapsibleDisclosureRanges: [NSValue(range: NSRange(location: rootLineRange.location + 2, length: 2))],
+    collapsibleFoldRanges: [NSValue(range: NSRange(location: NSMaxRange(rootLineRange), length: NSMaxRange(nodeLineRange) - NSMaxRange(rootLineRange)))],
+    collapsibleStartsCollapsed: [true]
+)
 bridge.setSource(
     swiftSource,
     languageIdentifier: "swift",
     semanticRanges: [NSValue(range: NSRange(swiftSource.range(of: "ProbeType")!, in: swiftSource))],
-    semanticNodeTypeNames: ["xcode.syntax.identifier.class"]
+    semanticNodeTypeNames: ["xcode.syntax.identifier.class"],
+    commentDecorations: probeDecorations
 )
-report("setSource swift")
+report("setSource swift with comment decorations")
+
+bridge.applyCommentTagAppearance(ProbeCommentTagAppearance())
+report("applyCommentTagAppearance")
 
 editorView.layoutSubtreeIfNeeded()
 editorView.display()
 report("layout + display")
+
+// The editor asks the bridge for the arrow over the collapsible root's triangle, which reaches
+// `CursorRectOverrideProvider` and `CursorRectOverride.init(cursor:rect:)`.
+editorView.resetCursorRects()
+report("resetCursorRects")
 
 // The Find navigator's reveal: a position lookup in the data source, a selection with a scroll
 // placement — `ScrollPlacement` is a resilient enum, so its case travels as an index taken from

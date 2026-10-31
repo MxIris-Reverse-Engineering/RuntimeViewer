@@ -16,13 +16,20 @@ public struct RuntimeObjectInterface: Codable, Sendable {
     /// to everyone else — see `RuntimeObjectInterfaceResponse`.
     public let interfaceString: FrozenSemanticString
 
-    public init(object: RuntimeObject, interfaceString: SemanticString) {
+    /// What each comment of `interfaceString` is and how it divides, when the request asked for it;
+    /// nil otherwise, and always nil from a peer that predates it, which leaves the key out of its
+    /// reply. The text itself is the same either way.
+    public let commentStructure: RuntimeInterfaceCommentStructure?
+
+    public init(object: RuntimeObject, interfaceString: SemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil) {
         self.object = object
         self.interfaceString = interfaceString.frozen()
+        self.commentStructure = commentStructure
     }
 
-    public init(object: RuntimeObject, interfaceString: FrozenSemanticString) {
+    public init(object: RuntimeObject, interfaceString: FrozenSemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil) {
         self.object = object
         self.interfaceString = interfaceString
+        self.commentStructure = commentStructure
     }
 }

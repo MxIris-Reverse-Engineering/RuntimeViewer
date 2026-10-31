@@ -748,7 +748,7 @@ public actor RuntimeEngine {
         switch name.kind {
         case .swift:
             if let swiftSection = await swiftSectionFactory.existingSection(for: name.imagePath) {
-                try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
+                try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
                 if let interface = try? await swiftSection.interface(for: name) {
                     return interface
                 }
@@ -762,16 +762,16 @@ public actor RuntimeEngine {
              .objc:
             let objcSection = await objcSectionFactory.existingSection(for: name.imagePath)
             let objcTransformer = options.transformer.objc
-            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer) {
+            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure) {
                 return interface
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
                     switch kind {
                     case .class:
-                        return try? await objcSectionFactory.section(for: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
+                        return try? await objcSectionFactory.section(for: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
                     case .protocol:
-                        return try? await objcSectionFactory.section(for: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
+                        return try? await objcSectionFactory.section(for: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
                     }
                 default:
                     rawInterface = nil
@@ -803,7 +803,7 @@ public actor RuntimeEngine {
         if let matched = await swiftSectionFactory.indexedType(forCandidateID: mangledName),
            let section = await swiftSectionFactory.existingSection(for: matched.entry.machO.imagePath),
            let object = await section.makeRuntimeObject(forMangledTypeName: mangledName) {
-            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
+            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
             if let interface = try? await section.interface(for: object) {
                 return interface
             }
@@ -812,7 +812,7 @@ public actor RuntimeEngine {
         if let matched = await swiftSectionFactory.indexedProtocol(forCandidateID: mangledName),
            let section = await swiftSectionFactory.existingSection(for: matched.machO.imagePath),
            let object = await section.makeRuntimeObject(forMangledProtocolName: mangledName) {
-            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
+            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
             if let interface = try? await section.interface(for: object) {
                 return interface
             }
@@ -823,9 +823,9 @@ public actor RuntimeEngine {
             let objcTransformer = options.transformer.objc
             switch objcReference.kind {
             case .objc(.type(.class)):
-                return try? await objcSectionFactory.section(for: .class(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer)
+                return try? await objcSectionFactory.section(for: .class(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
             case .objc(.type(.protocol)):
-                return try? await objcSectionFactory.section(for: .protocol(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer)
+                return try? await objcSectionFactory.section(for: .protocol(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
             default:
                 return nil
             }

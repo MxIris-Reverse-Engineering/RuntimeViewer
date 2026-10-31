@@ -27,6 +27,10 @@ final class SourceEditorTestHarness {
     private let bridge: SourceEditorBridging
     private let window: NSWindow
 
+    /// The editor view the bridge built, for the tests that register their own layout providers
+    /// on its layout manager or measure its content view.
+    let editorView: SourceEditorView
+
     /// The view's folding controller, which is where the state under test lives.
     let foldingController: FoldingController
 
@@ -55,6 +59,7 @@ final class SourceEditorTestHarness {
         guard let editorView = bridge.editorView as? SourceEditorView else {
             throw HarnessError.editorViewUnexpectedType(type(of: bridge.editorView))
         }
+        self.editorView = editorView
         self.foldingController = editorView.foldingController
         self.scrollView = editorView.scrollView
 
@@ -70,8 +75,29 @@ final class SourceEditorTestHarness {
         window.orderFront(nil)
     }
 
-    func setSource(_ source: String) {
-        bridge.setSource(source, languageIdentifier: "swift", semanticRanges: [], semanticNodeTypeNames: [])
+    /// How many lines the text last passed to `setSource(_:commentDecorations:)` has.
+    private(set) var lineCount = 0
+
+    /// Narrows or widens the window the editor fills: how far a line runs before the editor
+    /// wraps it.
+    func resize(width: CGFloat) {
+        window.setContentSize(NSSize(width: width, height: window.contentLayoutRect.height))
+    }
+
+    /// Hands the bridge the tag appearance, as the content pane does with each theme.
+    func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance) {
+        bridge.applyCommentTagAppearance(appearance)
+    }
+
+    func setSource(_ source: String, commentDecorations: SourceEditorBridgingCommentDecorations? = nil) {
+        lineCount = source.components(separatedBy: "\n").count
+        bridge.setSource(
+            source,
+            languageIdentifier: "swift",
+            semanticRanges: [],
+            semanticNodeTypeNames: [],
+            commentDecorations: commentDecorations
+        )
     }
 
     /// Forces the layout the crash happens inside.

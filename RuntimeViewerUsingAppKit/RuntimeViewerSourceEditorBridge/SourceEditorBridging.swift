@@ -49,12 +49,22 @@ protocol SourceEditorBridging: NSObjectProtocol {
     ///     syntax keys — `"xcode.syntax.identifier.class"` and friends. Passed as names rather
     ///     than numbers because the numeric ids are assigned in registration order and are not
     ///     stable between versions.
+    ///   - commentDecorations: how to draw the generated comments of `source` as tags and which
+    ///     of them collapse, or nil to show the comments as plain text. Passed with the source
+    ///     rather than separately because the decorations are columns of this very text: the
+    ///     editor must never lay out one text with the other's decorations.
     func setSource(
         _ source: String,
         languageIdentifier: String,
         semanticRanges: [NSValue],
-        semanticNodeTypeNames: [String]
+        semanticNodeTypeNames: [String],
+        commentDecorations: SourceEditorBridgingCommentDecorations?
     )
+
+    /// How comment tags are drawn. Called with the theme, and again whenever it or the
+    /// appearance changes; until the first call tags are drawn in fallbacks derived from the
+    /// label colours. A change of padding lays the decorated text out again.
+    func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance)
 
     /// The editor view's own background, which is what shows past the end of the document.
     /// Set alongside the theme, whose background key covers the text area.
@@ -165,6 +175,114 @@ protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtocol {
         minimapIconForLandmarkOfKind kind: SourceEditorBridgingLandmarkKind,
         pointSize: CGFloat
     ) -> NSImage?
+}
+
+/// How the generated comments of one source are drawn, as plain columns of that source.
+///
+/// **Every range is a UTF-16 range into the source it was passed with**, like `semanticRanges`.
+/// The arrays are parallel where their names pair up (`tagRanges` with `tagStyles`, and so on);
+/// a pair whose counts disagree is ignored whole rather than guessed at.
+///
+/// What to hide and what to colour is decided app-side, where it can be tested without Xcode's
+/// frameworks; the bridge only carries it out. A protocol rather than a class because this file
+/// is compiled into both targets, and a class declared here would exist twice in the
+/// Objective-C runtime under one name.
+@objc(RuntimeViewerSourceEditorBridgingCommentDecorations)
+protocol SourceEditorBridgingCommentDecorations: NSObjectProtocol {
+    /// One rounded tag behind each range. A range must not cross a line break.
+    var tagRanges: [NSValue] { get }
+
+    /// A ``SourceEditorBridgingCommentTagStyle`` raw value per tag.
+    var tagStyles: [NSNumber] { get }
+
+    /// Runs of tag text drawn in a colour of their own.
+    var runRanges: [NSValue] { get }
+
+    /// A ``SourceEditorBridgingCommentRunStyle`` raw value per run.
+    var runStyles: [NSNumber] { get }
+
+    /// Text left out of the rendering — comment markers and punctuation. The text closes up
+    /// over it; it is still there for copying and finding.
+    var hiddenRanges: [NSValue] { get }
+
+    /// For each row that collapses, where its disclosure triangle is drawn: over the columns of
+    /// this range, which should show nothing of their own (indentation, or a tree prefix drawn
+    /// with ``SourceEditorBridgingCommentRunStyle/concealed``).
+    var collapsibleDisclosureRanges: [NSValue] { get }
+
+    /// For each row that collapses, the text hidden while it is collapsed: from the end of the
+    /// row's own line to the end of its last descendant line.
+    var collapsibleFoldRanges: [NSValue] { get }
+
+    /// For each row that collapses, whether it starts collapsed the first time a source is shown.
+    var collapsibleStartsCollapsed: [NSNumber] { get }
+}
+
+/// How comment tags are drawn, worked out by the app from its theme. A protocol for the same
+/// reason as ``SourceEditorBridgingCommentDecorations``; the bridge reads it once per call to
+/// ``SourceEditorBridging/applyCommentTagAppearance(_:)`` and keeps what it read.
+@objc(RuntimeViewerSourceEditorBridgingCommentTagAppearance)
+protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
+    /// Behind a tag of `style`.
+    func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor
+
+    /// Around a tag of `style`, inside its edge; nil draws none.
+    func strokeColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor?
+
+    /// What a fact is — a ``SourceEditorBridgingCommentRunStyle/label`` run — in a tag of `style`.
+    func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor
+
+    /// The text of the other ``SourceEditorBridgingCommentRunStyle``s.
+    var valueColor: NSColor { get }
+    var typeColor: NSColor { get }
+    var nameColor: NSColor { get }
+
+    /// The triangles that collapse and expand a row.
+    var disclosureColor: NSColor { get }
+
+    /// Of a tag's corners; half the tag's height or more draws a capsule.
+    var cornerRadius: CGFloat { get }
+
+    /// Of the line around a tag, drawn inside its edge.
+    var strokeWidth: CGFloat { get }
+
+    /// Between a tag's text and its edge, on each side.
+    var horizontalPadding: CGFloat { get }
+}
+
+/// What a tag says, which picks its colours.
+@objc(RuntimeViewerSourceEditorBridgingCommentTagStyle)
+enum SourceEditorBridgingCommentTagStyle: Int, CaseIterable {
+    /// Where code is: a member's address, an `IMP`.
+    case address
+    /// Where something sits in a value or a table: field and ivar offsets, vtable and protocol
+    /// witness table slots.
+    case offset
+    /// How a type is laid out: size and alignment, an enum's cases and tag bytes.
+    case layout
+    /// What else is known about a declaration: `@synthesize`, `@dynamic`, a default
+    /// implementation, where a private declaration comes from.
+    case declaration
+    /// Something the reader should notice: an offset that could not be worked out, a member
+    /// the image does not export, an address that does not resolve.
+    case warning
+    /// A sentence of explanation rather than a fact.
+    case note
+}
+
+/// The colour a run of tag text is drawn in.
+@objc(RuntimeViewerSourceEditorBridgingCommentRunStyle)
+enum SourceEditorBridgingCommentRunStyle: Int {
+    /// What a fact is: `Address`, `size`, `getter IMP`.
+    case label
+    /// The fact itself: `0x135DC`, `16`.
+    case value
+    /// A type name inside a comment.
+    case type
+    /// A field or case name inside a comment.
+    case name
+    /// Kept for its width but not drawn — a tree prefix whose columns hold a disclosure triangle.
+    case concealed
 }
 
 /// What a landmark is, as far as choosing an icon goes.
