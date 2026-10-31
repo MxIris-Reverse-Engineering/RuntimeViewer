@@ -14,7 +14,7 @@
 ## 方案
 
 1. ✅ **侧栏标志。** 上游判定类对象明确未导出时，`RuntimeObjCSection.properties(forClassNamed:isSwiftStable:)` 加上 `.isNotExported`；结论由 indexer 在 `prepare()` 里算好，经包装类型的 `RuntimeObjCInterfaceIndexer.isClassDefinitelyNotExported(named:)` 读出。上游返回 `nil`（别的镜像的类、宿主补充的类）或镜像没有导出信息时不打。协议与类别不打。Swift 类在 ObjC 列表里的条目（`_TtC…`）照上游的判断打：测试 bundle 里有 204 个这样的类，标记与它们在 Swift 列表里的那一面逐个一致。Filter Scope 不加行，`notExported` 一行的 tooltip 改成连 ObjC 类一起说。
-2. **生成选项。** 开关是上游的 `ObjCGenerationOptions.printExportedDeclarationsOnly`，旧设置解码为关。Generation Options 的 ObjC 一节加同名勾选框，MCP 的 `.mcp` 预设显式写成关闭。上游的 `isVisibilityOptionEnabled` 已认得 `objc.printExportedDeclarationsOnly`，Find 的 `RuntimeInterfaceVisibility` 不用改。
+2. ✅ **生成选项。** 开关是上游的 `ObjCGenerationOptions.printExportedDeclarationsOnly`，旧设置解码为关。Generation Options 的 ObjC 一节加同名勾选框，MCP 的 `.mcp` 预设显式写成关闭。上游的 `isVisibilityOptionEnabled` 已认得 `objc.printExportedDeclarationsOnly`，Find 的 `RuntimeInterfaceVisibility` 不用改。
 3. **打印为空。** 开着开关时，未导出的类、挂在本镜像未导出类上的类别打印为空串。内容区的占位说明从 Swift 对象扩到 ObjC 对象，条件改成看对象所属那一侧的开关。批量导出跳过空串，本来就不分语言。
 4. **Find。** 开关打开时，上游标记模式的投影恰好为空串（上游有测试钉住），语料照旧把空投影当作不存在。实现时验证：ivar 被去掉后，文本搜索、成员搜索与内容区一致。
 5. **测试。** Core 用测试 bundle 里 public / private 的 `NSObject` 子类当 fixture，断言标志、开关开与关时的打印、打印为空、批量导出跳过，以及 Find 的投影。再在 Foundation 上断言：有被标记的 ObjC 类，且它们开着开关时都打印为空。Packages 的 `ContentTextPipelineTests` 覆盖 ObjC 的占位说明，`GenerationOptionsTests` 覆盖旧设置解码与 `.mcp` 预设。
