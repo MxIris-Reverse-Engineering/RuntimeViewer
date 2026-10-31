@@ -17,8 +17,18 @@ import Semantic
 /// them. Labels, keys and qualifiers take the label colour, values the value colour, types and
 /// names their own; prose keeps the comment colour.
 public struct InterfaceCommentDecorations: Sendable, Equatable {
-    public enum TagStyle: Sendable, Equatable {
-        case standard
+    /// What a tag says, which picks its colours.
+    public enum TagStyle: Sendable, Equatable, CaseIterable {
+        /// Where code is: a member's address, an `IMP`.
+        case address
+        /// Where something sits in a value or a table: field and ivar offsets, vtable and
+        /// protocol witness table slots.
+        case offset
+        /// How a type is laid out: size and alignment, an enum's cases and tag bytes.
+        case layout
+        /// What else is known about a declaration: `@synthesize`, `@dynamic`, a default
+        /// implementation, where a private declaration comes from.
+        case declaration
         /// An offset that could not be worked out, a member the image does not export, an
         /// address that does not resolve.
         case warning
@@ -164,20 +174,23 @@ public struct InterfaceCommentDecorations: Sendable, Equatable {
         .fieldOffsetUnknown, .ivarOffsetUnknown, .exportStatus,
     ]
 
-    /// Every kind a tag is drawn for in the standard style; the rest are notes.
-    private static let standardKinds: Set<RuntimeInterfaceCommentStructure.Kind> = [
-        .memberAddress, .vtableOffset, .pwtOffset, .fieldOffset, .fieldLayoutNode, .typeLayout,
-        .typeLayoutElement, .enumLayoutSummary, .enumLayoutCaseHeader, .enumLayoutCaseEncoding,
-        .enumLayoutCaseNote, .enumLayoutCaseFixedBytes, .enumLayoutCaseByte, .protocolExtensionDefault,
-        .privateDeclarationSource, .conditionalWitness, .conditionalWitnessBranch,
-        .strippedSymbolicRequirement, .impAddress, .ivarOffset, .propertySynthesis, .propertyDynamic,
-        .typeNote,
+    /// The kinds of each style but warnings and notes; a kind in none of them is a note.
+    private static let kindsByTagStyle: [(style: TagStyle, kinds: Set<RuntimeInterfaceCommentStructure.Kind>)] = [
+        (.address, [.memberAddress, .impAddress]),
+        (.offset, [.vtableOffset, .pwtOffset, .fieldOffset, .fieldLayoutNode, .ivarOffset]),
+        (.layout, [
+            .typeLayout, .typeLayoutElement, .enumLayoutSummary, .enumLayoutCaseHeader, .enumLayoutCaseEncoding,
+            .enumLayoutCaseNote, .enumLayoutCaseFixedBytes, .enumLayoutCaseByte,
+        ]),
+        (.declaration, [
+            .protocolExtensionDefault, .privateDeclarationSource, .conditionalWitness, .conditionalWitnessBranch,
+            .strippedSymbolicRequirement, .propertySynthesis, .propertyDynamic, .typeNote,
+        ]),
     ]
 
     private static func tagStyle(of kind: RuntimeInterfaceCommentStructure.Kind) -> TagStyle {
         if warningKinds.contains(kind) { return .warning }
-        if standardKinds.contains(kind) { return .standard }
-        return .note
+        return kindsByTagStyle.first { $0.kinds.contains(kind) }?.style ?? .note
     }
 
     /// The kinds that list several facts, each of which gets a tag of its own.

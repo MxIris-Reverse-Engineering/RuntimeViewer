@@ -26,7 +26,10 @@ final class SourceEditorCommentDecorations: NSObject, SourceEditorBridgingCommen
 
     private static func bridgedStyle(of style: InterfaceCommentDecorations.TagStyle) -> SourceEditorBridgingCommentTagStyle {
         switch style {
-        case .standard: .standard
+        case .address: .address
+        case .offset: .offset
+        case .layout: .layout
+        case .declaration: .declaration
         case .warning: .warning
         case .note: .note
         }

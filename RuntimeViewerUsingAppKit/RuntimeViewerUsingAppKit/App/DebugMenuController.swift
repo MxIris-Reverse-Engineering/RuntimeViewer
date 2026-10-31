@@ -25,6 +25,8 @@ final class DebugMenuController: NSObject {
         let exportLogsItem = NSMenuItem(title: "Export Logs…", action: #selector(exportLogs), keyEquivalent: "")
         exportLogsItem.target = self
         debugMenu.addItem(exportLogsItem)
+        debugMenu.addItem(.separator())
+        debugMenu.addItem(CommentTagStylePrototype.makeMenuItem())
 
         let debugMenuItem = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
         debugMenuItem.submenu = debugMenu
