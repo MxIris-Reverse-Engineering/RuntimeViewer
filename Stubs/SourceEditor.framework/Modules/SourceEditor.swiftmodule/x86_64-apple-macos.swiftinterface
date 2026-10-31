@@ -241,6 +241,22 @@ public protocol ColumnShiftOverrideProvider : SourceEditor.LayoutOverrideProvide
   func columnShiftEffectsForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [Swift.Int : CoreGraphics.CGFloat]
 }
 
+// A cursor over part of the editor in place of the I-beam. A struct, so only direct symbols.
+public struct CursorRectOverride {
+  public init(cursor: AppKit.NSCursor, rect: CoreGraphics.CGRect)
+}
+
+// Asked by `SourceEditorView.resetCursorRects()` (27.2 @ 0x441A90): it first adds the I-beam over
+// `contentRectForCursor()` — a fixed rect in the view's own coordinates (0x4220BC: its bounds and
+// visible rect less the content margins and the scroll view's insets) — then asks every provider
+// and adds each answer with `addCursorRect(_:cursor:)` on the view itself, so the rects are in
+// `SourceEditorView` coordinates and win over the I-beam. Nothing moves them when the content
+// scrolls: a provider whose rects follow the text has to call `invalidateCursorRects()`. One
+// requirement, PWT 0x10.
+public protocol CursorRectOverrideProvider : SourceEditor.LayoutOverrideProvider {
+  func cursorRectsForContentRect(_ contentRect: CoreGraphics.CGRect, in sourceEditorView: SourceEditor.SourceEditorView) -> [SourceEditor.CursorRectOverride]
+}
+
 // Six layout hooks, PWT 0x8 to 0x30, every one with a default in the extension below (all six at
 // 0x68F0, an empty function). `SourceEditorLayoutManager.layoutContentView(_:)` (27.2 @ 0x21B7E8)
 // calls `willLayoutInContentView` and `didLayoutInContentView` once per layout pass and
@@ -542,6 +558,11 @@ extension SourceEditor.ScrollPlacement : Swift.Hashable {
   }
   public func addEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
   public func removeEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
+  // Sorted in by priority, then `window.invalidateCursorRects(for: self)` (27.2 @ 0x421E64) —
+  // which is all `invalidateCursorRects()` does (0x422084).
+  public func addCursorRectOverrideProvider(_ provider: SourceEditor.CursorRectOverrideProvider)
+  public func removeCursorRectOverrideProvider(_ provider: SourceEditor.CursorRectOverrideProvider)
+  public func invalidateCursorRects()
   // Weak in the framework too. The view's own `contextualMenuEventConsumer` is what opens the
   // menu; this is only asked what to put in it.
   weak public var contextualMenuItemProvider: SourceEditor.SourceEditorViewContextualMenuItemProvider? {

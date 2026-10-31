@@ -39,11 +39,34 @@ final class CommentDecorationController {
     private var disclosureLayers: [CAShapeLayer] = []
 
     /// Where the triangles were drawn in the last layout pass, in the content view's coordinates,
-    /// with the row each one toggles.
-    private var disclosureTargets: [(frame: CGRect, rowIndex: Int)] = []
+    /// with the row each one toggles and the layer in `disclosureLayers` it was drawn with.
+    private var disclosureTargets: [DisclosureTarget] = [] {
+        didSet {
+            // The arrow over each triangle has to follow it (see `cursorRectsForContentRect`).
+            if disclosureTargets.map(\.frame) != oldValue.map(\.frame) {
+                sourceEditorView?.invalidateCursorRects()
+            }
+        }
+    }
+
+    private var scrollObserver: NSObjectProtocol?
 
     init(sourceEditorView: SourceEditorView) {
         self.sourceEditorView = sourceEditorView
+        // The arrows are cursor rects of the editor view, which stays put while the text
+        // scrolls under it; nothing else moves them along.
+        let clipView = sourceEditorView.scrollView.contentView
+        clipView.postsBoundsChangedNotifications = true
+        scrollObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: clipView, queue: .main) { [weak self] _ in
+            guard let self, !disclosureTargets.isEmpty else { return }
+            self.sourceEditorView?.invalidateCursorRects()
+        }
+    }
+
+    deinit {
+        if let scrollObserver {
+            NotificationCenter.default.removeObserver(scrollObserver)
+        }
     }
 
     private var tables: Tables {
@@ -177,7 +200,7 @@ final class CommentDecorationController {
         let effectiveAppearance = sourceEditorView.effectiveAppearance
         var tagCount = 0
         var disclosureCount = 0
-        var targets: [(frame: CGRect, rowIndex: Int)] = []
+        var targets: [DisclosureTarget] = []
 
         let lastLine = min(visibleRange.upperBound.line, tables.lineCount - 1)
         var line = max(visibleRange.lowerBound.line, 0)
@@ -212,16 +235,20 @@ final class CommentDecorationController {
             for rowIndex in tables.rowIndicesByLine[line] ?? [] {
                 let row = tables.rows[rowIndex]
                 guard let cellFrame = Self.frame(ofColumns: row.disclosureColumns, onLine: line, in: contentView) else { continue }
-                let layer = Self.layer(at: disclosureCount, in: &disclosureLayers, under: underlayLayer)
+                let layerIndex = disclosureCount
+                let layer = Self.layer(at: layerIndex, in: &disclosureLayers, under: underlayLayer)
                 disclosureCount += 1
                 let side = min(cellFrame.height * 0.5, max(cellFrame.width - 2, 6))
-                let frame = CGRect(x: cellFrame.midX - side / 2, y: cellFrame.midY - side / 2, width: side, height: side)
-                layer.frame = frame
-                layer.path = Self.disclosurePath(side: side, isCollapsed: isCollapsed(row), isFlipped: contentView.isFlipped)
+                // Turned rather than redrawn, so a click can animate the turn. Bounds and
+                // position, not frame, which is undefined under a transform.
+                layer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+                layer.position = CGPoint(x: cellFrame.midX, y: cellFrame.midY)
+                layer.path = Self.disclosurePath(side: side)
+                layer.setAffineTransform(CGAffineTransform(rotationAngle: Self.disclosureAngle(isCollapsed: isCollapsed(row), isFlipped: contentView.isFlipped)))
                 layer.fillColor = Self.cgColor(tagAppearance.disclosure, in: effectiveAppearance)
                 layer.isHidden = false
                 // The whole cell takes the click, not only the triangle's few points.
-                targets.append((cellFrame, rowIndex))
+                targets.append(DisclosureTarget(frame: cellFrame, rowIndex: rowIndex, layerIndex: layerIndex))
             }
         }
 
@@ -301,23 +328,67 @@ final class CommentDecorationController {
         CATransaction.commit()
     }
 
-    /// ▸ when collapsed, ▾ when expanded, filling a square of `side` points.
-    private static func disclosurePath(side: CGFloat, isCollapsed: Bool, isFlipped: Bool) -> CGPath {
+    /// ▸, filling a square of `side` points; `disclosureAngle` turns it to ▾.
+    private static func disclosurePath(side: CGFloat) -> CGPath {
         let path = CGMutablePath()
-        if isCollapsed {
-            path.move(to: CGPoint(x: side * 0.25, y: 0))
-            path.addLine(to: CGPoint(x: side * 0.85, y: side / 2))
-            path.addLine(to: CGPoint(x: side * 0.25, y: side))
-        } else {
-            // Pointing down, which is towards larger y in a flipped view.
-            let topY = isFlipped ? side * 0.25 : side * 0.75
-            let bottomY = isFlipped ? side * 0.85 : side * 0.15
-            path.move(to: CGPoint(x: 0, y: topY))
-            path.addLine(to: CGPoint(x: side, y: topY))
-            path.addLine(to: CGPoint(x: side / 2, y: bottomY))
-        }
+        path.move(to: CGPoint(x: side * 0.25, y: 0))
+        path.addLine(to: CGPoint(x: side * 0.85, y: side / 2))
+        path.addLine(to: CGPoint(x: side * 0.25, y: side))
         path.closeSubpath()
         return path
+    }
+
+    /// The turn from ▸ that shows a row's state: none when collapsed, a quarter turn clockwise
+    /// when expanded — towards larger y in a flipped view, smaller y otherwise.
+    private static func disclosureAngle(isCollapsed: Bool, isFlipped: Bool) -> CGFloat {
+        isCollapsed ? 0 : (isFlipped ? .pi / 2 : -.pi / 2)
+    }
+
+    // MARK: - Click Feedback
+
+    /// How long a triangle takes to turn, and the press behind it to fade.
+    private static let disclosureTurnDuration: CFTimeInterval = 0.18
+    private static let disclosurePressFadeDuration: CFTimeInterval = 0.3
+
+    /// Shows a click on a triangle: a round press behind it that fades, and the triangle turning
+    /// to its new state. The layout pass the fold sets off draws the same end state again with
+    /// actions disabled, which leaves an animation already running alone. The row keeps its
+    /// layer through it: a fold only adds or removes rows below the row clicked.
+    private func showClick(on target: DisclosureTarget, turningFromCollapsed wasCollapsed: Bool) {
+        guard let sourceEditorView, disclosureLayers.indices.contains(target.layerIndex) else { return }
+        let contentView = sourceEditorView.contentView
+        let disclosureLayer = disclosureLayers[target.layerIndex]
+        let tagAppearance = tagAppearance
+
+        let pressLayer = CAShapeLayer()
+        let diameter = min(target.frame.height, target.frame.width)
+        pressLayer.frame = CGRect(x: target.frame.midX - diameter / 2, y: target.frame.midY - diameter / 2, width: diameter, height: diameter)
+        pressLayer.path = CGPath(ellipseIn: pressLayer.bounds, transform: nil)
+        pressLayer.fillColor = Self.cgColor(tagAppearance.disclosure.withAlphaComponent(0.22), in: sourceEditorView.effectiveAppearance)
+        pressLayer.opacity = 0
+        contentView.underlayLayer.insertSublayer(pressLayer, below: disclosureLayer)
+
+        CATransaction.begin()
+        CATransaction.setCompletionBlock {
+            pressLayer.removeFromSuperlayer()
+        }
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        fade.duration = Self.disclosurePressFadeDuration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        pressLayer.add(fade, forKey: "fade")
+
+        let toAngle = Self.disclosureAngle(isCollapsed: !wasCollapsed, isFlipped: contentView.isFlipped)
+        let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+        turn.fromValue = Self.disclosureAngle(isCollapsed: wasCollapsed, isFlipped: contentView.isFlipped)
+        turn.toValue = toAngle
+        turn.duration = Self.disclosureTurnDuration
+        turn.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        disclosureLayer.add(turn, forKey: "turn")
+        CATransaction.setDisableActions(true)
+        disclosureLayer.setAffineTransform(CGAffineTransform(rotationAngle: toAngle))
+        CATransaction.commit()
     }
 
     private static func cgColor(_ color: NSColor, in appearance: NSAppearance) -> CGColor {
@@ -376,8 +447,26 @@ extension CommentDecorationController: SourceEditorViewEventConsumer {
         guard event.type == .leftMouseDown, !event.modifierFlags.contains(.command), !disclosureTargets.isEmpty else { return false }
         let point = sourceEditorView.contentView.convert(event.locationInWindow, from: nil)
         guard let target = disclosureTargets.first(where: { $0.frame.contains(point) }) else { return false }
+        let rows = tables.rows
+        let wasCollapsed = rows.indices.contains(target.rowIndex) && isCollapsed(rows[target.rowIndex])
+        showClick(on: target, turningFromCollapsed: wasCollapsed)
         toggle(rowAt: target.rowIndex, includingDescendants: event.modifierFlags.contains(.option))
         return true
+    }
+}
+
+// MARK: - Cursor
+
+extension CommentDecorationController: CursorRectOverrideProvider {
+    /// The arrow over every triangle on screen: a click there toggles a row, so the pointer should
+    /// not look as if it would place the insertion point. The editor adds these after its I-beam,
+    /// in its own coordinates.
+    func cursorRectsForContentRect(_ contentRect: CGRect, in sourceEditorView: SourceEditorView) -> [CursorRectOverride] {
+        let contentView = sourceEditorView.contentView
+        return disclosureTargets.compactMap { target in
+            let rect = sourceEditorView.convert(target.frame, from: contentView).intersection(contentRect)
+            return rect.isNull || rect.isEmpty ? nil : CursorRectOverride(cursor: .arrow, rect: rect)
+        }
     }
 }
 
@@ -445,6 +534,15 @@ extension CommentDecorationController {
         let style: SourceEditorBridgingCommentRunStyle
         /// The style of the tag the run lies in, if any.
         let tagStyle: SourceEditorBridgingCommentTagStyle?
+    }
+
+    /// A triangle as drawn in a layout pass.
+    struct DisclosureTarget {
+        /// The cell the triangle sits in, which takes the click, in the content view's
+        /// coordinates.
+        let frame: CGRect
+        let rowIndex: Int
+        let layerIndex: Int
     }
 
     struct Row {

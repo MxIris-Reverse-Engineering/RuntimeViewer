@@ -90,6 +90,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         sourceEditorView.layoutManager.addLayoutOverrideProvider(commentDecorationController)
         sourceEditorView.layoutManager.addLayoutVisualization(commentDecorationController)
         sourceEditorView.addEventConsumer(commentDecorationController)
+        // Cursor rects are the view's, not the layout manager's.
+        sourceEditorView.addCursorRectOverrideProvider(commentDecorationController)
 
         // Held weakly by the view, and the view is owned by this object, so this does not
         // retain-cycle and does not need clearing.

@@ -76,6 +76,49 @@ struct CommentDecorationTests {
         #expect(heights.allSatisfy { $0 - rowHeight < 1 }, "shape heights \(heights)")
     }
 
+    // MARK: - Triangles
+
+    /// Over a triangle the pointer is the arrow, not the I-beam: a click there toggles a row. The
+    /// editor adds its I-beam and then what each provider answers, all on itself, so the arrows
+    /// are read back where it adds them.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func theTrianglesTakeTheArrowPointer() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: false))
+        harness.layout()
+
+        let added = CursorRectRecorder.cursorRects(addedBy: harness.editorView) {
+            harness.editorView.resetCursorRects()
+        }
+        let arrowRects = added.filter { $0.cursor === NSCursor.arrow }.map(\.rect)
+        let triangleCenters = Self.shownTriangleLayers(in: harness).map {
+            harness.editorView.convert($0.position, from: harness.editorView.contentView)
+        }
+        #expect(triangleCenters.count == 2)
+        #expect(arrowRects.count == triangleCenters.count, "\(arrowRects)")
+        for center in triangleCenters {
+            #expect(arrowRects.contains { $0.contains(center) }, "no arrow over the triangle at \(center): \(arrowRects)")
+        }
+    }
+
+    /// A click turns the triangle a quarter, animated, and leaves a round press behind it that
+    /// fades away.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func clickingATriangleTurnsItAndShowsThePress() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: true))
+        harness.layout()
+        let triangle = try #require(Self.shownTriangleLayers(in: harness).min { $0.position.x < $1.position.x })
+        #expect(triangle.affineTransform().isIdentity, "a collapsed row's triangle points right")
+
+        Self.click(at: triangle.position, in: harness)
+
+        #expect(!triangle.affineTransform().isIdentity, "an expanded row's triangle is turned to point down")
+        #expect(Self.hasAnimation(on: "transform.rotation.z", in: triangle), "the turn is animated")
+        let pressLayers = (harness.editorView.contentView.underlayLayer.sublayers ?? []).filter { Self.hasAnimation(on: "opacity", in: $0) }
+        #expect(pressLayers.count == 1, "\(pressLayers.count) fading layers")
+    }
+
     // MARK: - Copying
 
     /// What a copy writes is the source, not what the editor draws: the markers and punctuation
@@ -321,6 +364,15 @@ struct CommentDecorationTests {
             .filter { !$0.isHidden && $0.path != nil }
     }
 
+    /// The triangles among them: the only square shapes, a few points across.
+    private static func shownTriangleLayers(in harness: SourceEditorTestHarness) -> [CAShapeLayer] {
+        shownShapeLayers(in: harness).filter { $0.bounds.width == $0.bounds.height && $0.bounds.width < 12 }
+    }
+
+    private static func hasAnimation(on keyPath: String, in layer: CALayer) -> Bool {
+        (layer.animationKeys() ?? []).contains { (layer.animation(forKey: $0) as? CABasicAnimation)?.keyPath == keyPath }
+    }
+
     /// A left click at `point` in the content view, sent the way AppKit sends one.
     private static func click(at point: CGPoint, in harness: SourceEditorTestHarness) {
         let contentView = harness.editorView.contentView
@@ -479,5 +531,30 @@ private final class TestCommentTagAppearance: NSObject, SourceEditorBridgingComm
 
     func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
         labelColors[style] ?? .secondaryLabelColor
+    }
+}
+
+/// Reads back the cursor rects a view adds, which AppKit offers no way to do: for the length of
+/// `body`, the view's class answers `addCursorRect(_:cursor:)` by noting the rect and then adding
+/// it as `NSView` would. The class is left answering it exactly as `NSView` does.
+private enum CursorRectRecorder {
+    static func cursorRects(addedBy view: NSView, during body: () -> Void) -> [(rect: CGRect, cursor: NSCursor)] {
+        let selector = #selector(NSView.addCursorRect(_:cursor:))
+        guard let inheritedMethod = class_getInstanceMethod(NSView.self, selector) else { return [] }
+        let inheritedImplementation = method_getImplementation(inheritedMethod)
+        typealias AddCursorRect = @convention(c) (NSView, Selector, NSRect, NSCursor) -> Void
+        let addAsNSViewDoes = unsafeBitCast(inheritedImplementation, to: AddCursorRect.self)
+
+        var added: [(rect: CGRect, cursor: NSCursor)] = []
+        let recording: @convention(block) (NSView, NSRect, NSCursor) -> Void = { receiver, rect, cursor in
+            added.append((rect, cursor))
+            addAsNSViewDoes(receiver, selector, rect, cursor)
+        }
+        let viewClass: AnyClass = type(of: view)
+        let typeEncoding = method_getTypeEncoding(inheritedMethod)
+        let previousImplementation = class_replaceMethod(viewClass, selector, imp_implementationWithBlock(recording), typeEncoding)
+        defer { class_replaceMethod(viewClass, selector, previousImplementation ?? inheritedImplementation, typeEncoding) }
+        body()
+        return added
     }
 }

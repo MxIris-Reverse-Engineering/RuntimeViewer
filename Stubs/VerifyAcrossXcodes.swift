@@ -275,6 +275,11 @@ editorView.layoutSubtreeIfNeeded()
 editorView.display()
 report("layout + display")
 
+// The editor asks the bridge for the arrow over the collapsible root's triangle, which reaches
+// `CursorRectOverrideProvider` and `CursorRectOverride.init(cursor:rect:)`.
+editorView.resetCursorRects()
+report("resetCursorRects")
+
 // The Find navigator's reveal: a position lookup in the data source, a selection with a scroll
 // placement — `ScrollPlacement` is a resilient enum, so its case travels as an index taken from
 // declaration order — and the callout. The run loop turns after each call so whatever they leave
