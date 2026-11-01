@@ -61,9 +61,10 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     /// interface's text, span table and identifiers, its region table, its
     /// members with their names and line ranges, its nested blocks, and what
     /// its object holds — each allocation with its header and malloc's
-    /// rounding (`allocatedByteCount`). Counted by element, these left out
-    /// about a tenth of what evicting Foundation's corpus frees, and the
-    /// visibility conditions a fifth more before the corpus shared them.
+    /// rounding (`allocatedByteCount`). Counted by element alone, as it used
+    /// to be, the estimate fell a tenth short of what evicting Foundation's
+    /// corpus frees — a fifth before the corpus stored its visibility
+    /// conditions once.
     ///
     /// Not the entry itself, which the corpus's array of entries holds, nor
     /// its visibility conditions, which the corpus stores once for all its

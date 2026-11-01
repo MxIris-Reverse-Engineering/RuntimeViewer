@@ -21,12 +21,13 @@
 | App | 163 MB | — | — | — |
 
 1. **可见性条件只存一份。** 每个语料条目的 `VisibilityRegionTable.conditions` 各存一份 `[VisibilityCondition]`，每个条件又是 `[[Requirement]]`，每个 `Requirement` 带一个选项名 `String`。可这些条件只由二十来个生成选项组成，不同的条件远少于条目数。Catalyst 引擎里这些副本约 30 MB（44 万次分配），My Mac 引擎约 20 MB。改为每个镜像的语料建一个条件池，相等的条件与条件列表换成池里那一份，共享存储。条目只在两处构造——`RuntimeInterfaceCorpusAssembly`（打印）与 `RuntimeInterfaceCorpusSnapshot`（从派生数据读回），两处都经过这个池。派生数据的文件格式不变。
-2. **最后一个窗口离开时释放。** 最后一个文档离开引擎时，`RuntimeEngineBackgroundWork.close()` 现在只撤销构建与预建请求，数据留在引擎进程里。改为同时：
-   - 驱逐这个引擎的全部语料（`evictInterfaceCorpus(for: nil)`）；
-   - 把交叉引用的驻留上限置 0（`setPreparedCrossReferenceByteLimit(0)`），和关掉 Keep Cross References Ready 走同一条路，预建表与函数表随之放掉；
-   - 驱逐完在引擎进程里调一次 `malloc_zone_pressure_relief`，让空出的页还给系统（实测确认是否需要）。
+2. **最后一个窗口离开时释放。** 最后一个文档离开引擎时，`RuntimeEngineBackgroundWork.close()` 原来只撤销构建与预建请求，数据留在引擎进程里。改为关掉三个协调器之后，再让引擎进程：
+   - 驱逐这个引擎的全部语料（`FindCorpusCoordinator.releaseEngineCorpora()`，即 `evictInterfaceCorpus(for: nil)`）；
+   - 把交叉引用的驻留上限置 0（`CrossReferencePreparationCoordinator.releaseEnginePreparations()`，即 `setPreparedCrossReferenceByteLimit(0)`），和关掉 Keep Cross References Ready 走同一条路，预建表和为它们读的名字随之放掉。
 
-   下一个文档加入时，现有的启动流程会恢复上限，并请求已索引镜像的语料与预建：共享缓存里的镜像从派生数据读回语料，交叉引用在后台重建。释放还没做完就有文档加入时，迟到的驱逐可能清掉新工作刚请求的语料、迟到的上限 0 会盖掉刚恢复的上限。所以 `RuntimeEngineBackgroundWorkRegistry` 记下进行中的释放；同一引擎的新工作照常启动，等这次释放结束，两个协调器再走一遍「引擎重来」的现有路径（`engineDidReset()`：撤回请求、清空状态、重新请求全部已索引镜像并重新下发上限）。被驱逐取消的构建在 App 一侧只是悄悄复位，不会在 Report 里留下「已取消」。
+   不另调 `malloc_zone_pressure_relief`：探针实测它一个字节也还不回来（见决策日志）。
+
+   下一个文档加入时，现有的启动流程会恢复上限，并请求已索引镜像的语料与预建：共享缓存里的镜像从派生数据读回语料，交叉引用在后台重建。释放还没做完就有文档加入时，迟到的驱逐可能清掉新工作刚请求的语料、迟到的上限 0 会盖掉刚恢复的上限。所以 `RuntimeEngineBackgroundWorkRegistry` 记下进行中的释放；同一引擎的新工作照常启动，等这次释放结束，两个协调器再走一遍「引擎重来」的现有路径（`startOver()` 调 `engineDidReset()`：撤回请求、清空状态、重新请求全部已索引镜像并重新下发上限）。被驱逐取消的构建在 App 一侧只是悄悄复位，不会在 Report 里留下「已取消」。
 3. **预算按实际算。** 语料条目的 `byteCount` 不算条件，字符串与数组的分配开销也只算了一部分，它的注释里就写着驱逐 Foundation 的语料实际释放的比估算多约五分之一。改为把条件池按镜像算一次，每次分配都算上 32 字节的头部和 malloc 的取整（按元素数与 `malloc_good_size` 算，不按容量，所以打印出的与从派生数据读回的同一份语料估算相同），再加上条目数组本身，并用测试钉住：给 Foundation 建语料，估算与驱逐前后 `malloc_zone_statistics` 量出的在用字节数之差相差不超过 10%（测量单独占一个 exit test 进程）。交叉引用的 `CrossReferencePreparedImage.byteCount` 用同样的测试核对：少了一成多，而它由 MachOSwiftSection 的 CrossReferenceAnalysis 算出，修它要改上游，见决策日志。
 
 **没有询问就采用的假设**
@@ -44,12 +45,12 @@
 **落地步骤**（每步单独能编译、相关测试通过，各提交一次）
 1. [x] 条件池：新增 `RuntimeInterfaceVisibilityConditionPool`，`RuntimeInterfaceCorpusAssembly` 与 `RuntimeInterfaceCorpusSnapshot` 构造条目时经过它，镜像语料的字节数加上池的字节数。测试：打印出的与从派生数据读回的语料里，相等的条件共享存储。
 2. [x] 估算按实际算：语料条目的 `byteCount` 按实际分配计算；exit test 给 Foundation 建语料，量驱逐前后 malloc 在用字节数之差，与估算相差不超过 10%。交叉引用的 `CrossReferencePreparedImage.byteCount` 用同样的办法核对，超出的部分在上游，测试里记为已知问题。
-3. [ ] 关窗释放：`RuntimeEngineBackgroundWork.close()` 让引擎进程驱逐语料、把交叉引用上限置 0，registry 记下进行中的释放并在它结束后让同一引擎的新工作重新请求；先用探针确认要不要 `malloc_zone_pressure_relief`。测试：最后一个文档离开时引擎收到这两条命令；释放被扣住时新文档加入，放行后上限按设置重新下发、语料重新请求。
+3. [x] 关窗释放：`RuntimeEngineBackgroundWork.close()` 让引擎进程驱逐语料、把交叉引用上限置 0，registry 记下进行中的释放并在它结束后让同一引擎的新工作重新请求；先用探针确认要不要 `malloc_zone_pressure_relief`。测试：最后一个文档离开时引擎收到这两条命令；释放被扣住时新文档加入，放行后上限按设置重新下发、语料重新请求。
 4. [ ] 文档与实测：同批更新下文列出的文档；按上面的配置重测内存。
 
 **验收**
 - 三项各有测试，改代码之前先确认它是红的：条件池里相等的条件共享存储；最后一个文档离开时引擎收到驱逐与上限置 0，下一个文档加入后恢复，快速离开再加入时语料不会被迟到的驱逐清掉；两项估算的误差不超过 10%。
-- 按上面的配置重测：Catalyst 引擎进程的堆少约 30 MB、My Mac 引擎进程少约 20 MB；关掉一个引擎上的全部窗口后，Catalyst 引擎进程降约 400 MB、My Mac 引擎进程降约 300 MB；重开窗口后 Find 与交叉引用照常可用。
+- 按上面的配置重测：Catalyst 引擎进程的堆少约 30 MB、My Mac 引擎进程少约 20 MB；关掉一个引擎上的全部窗口后，该引擎进程 malloc 在用的内存降掉语料与交叉引用表那部分（Catalyst 约 400 MB、My Mac 约 300 MB），footprint 当场只降一部分，其余是 malloc 留着复用的空闲块；重开窗口后 Find 与交叉引用照常可用。
 - 同批更新文档：`AGENTS.md` 里讲 Engine 后台工作的那段，以及 `Glossary.md` 的「Engine 的后台工作」条目，都要写上最后一个文档离开时会释放引擎进程里的语料与交叉引用表。
 
 ## 决策日志
@@ -61,3 +62,5 @@
 | 2026-11-01 | 释放与再加入的先后改为「新工作照常启动，释放结束后再走一遍引擎重来的路径」，不让新工作等释放完再启动 | 文档会直接调用协调器（Find 的搜索、Always Index 的提前读取），要让新工作等着，就得拦住每一个请求入口；`engineDidReset()` 本来就会撤回请求并重新请求全部已索引镜像，重复请求无害，被驱逐取消的构建也不会在 Report 里留下记录。只有释放还没做完时加入的工作才多走这一遍。 |
 | 2026-11-01 | 估算按元素数与 `malloc_good_size` 算，不按数组容量 | 按容量算的话，打印出的语料（追加时容量会多出来）与从派生数据读回的同一份语料（容量正好）估算不同，派生数据的几组测试要求两者的摘要相同。实测给 Foundation 建语料：原来的估算加上条件池是 19.8 MB，驱逐释放 22.1 MB，少 10.3%；改后估算 23.0 MB，多 4.5%。 |
 | 2026-11-01 | 交叉引用的估算偏低一成多，留给上游，不在本提案里修；测试用 `withKnownIssue` 记下差距 | Foundation 的预建表估算 17.6 MB，置 0 后释放 19.9 MB，少 11.7%。这个数由 MachOSwiftSection 的 `CodeReferenceIndex.approximateByteCount` 与分析器的 `approximateByteCount(ofImageDataAt:)` 算出，它们按元素数算、不含分配头部与取整；RuntimeViewer 只是相加，要修就得改另一个仓库，超出了「只改 RuntimeViewer 自己的代码」。测试保留，上游修好后已知问题不再出现，测试会提醒去掉包装。 |
+| 2026-11-01 | 释放后不调 `malloc_zone_pressure_relief`；验收改看 malloc 在用字节，footprint 只作参考 | 探针在进程内给 Foundation 与 AppKit 建语料（估算 69 MB）：驱逐后 malloc 在用字节从 148.9 MB 降到 85.1 MB，footprint 只从 196.0 MB 降到 165.3 MB，5 秒后不变；再调 `malloc_zone_pressure_relief(nil, 0)`，它报告还回 0 字节，footprint 仍是 165.2 MB。空出的块散在仍有活对象的页里，这个调用还不回来；它们留给进程以后的分配复用，系统内存紧张时才回收。 |
+| 2026-11-01 | 释放由两个协调器各出一半（`releaseEngineCorpora()`、`releaseEnginePreparations()`），后台工作把两者合成一个任务交给 registry；重来用新的 `startOver()` 调各自已有的 `engineDidReset()` | 每个协调器只发自己那条命令，后台工作不必知道交叉引用模块的命令；重来的路径与引擎换了新进程时完全相同。 |

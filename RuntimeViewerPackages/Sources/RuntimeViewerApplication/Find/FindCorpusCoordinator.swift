@@ -530,6 +530,28 @@ public final class FindCorpusCoordinator {
         withdrawEveryRestore()
     }
 
+    /// Has the engine's process drop every corpus it keeps, which `close()`
+    /// leaves there: the last document has left the engine, and the next one's
+    /// coordinator reads them back from derived data or prints them again.
+    /// `RuntimeEngineBackgroundWork` calls this once it has closed the
+    /// coordinator.
+    func releaseEngineCorpora() -> Task<Void, Never> {
+        let engine = engine
+        return Task {
+            try? await engine.evictInterfaceCorpus(for: nil)
+        }
+    }
+
+    /// Starts over, as when a new process comes up behind the engine: the
+    /// engine's process dropped its corpora while this coordinator was
+    /// starting, so what it asked for meanwhile may have gone with them — a
+    /// build the eviction cancelled resets without a word. See
+    /// `RuntimeEngineBackgroundWorkRegistry`.
+    func startOver() {
+        guard !isClosed else { return }
+        engineDidReset()
+    }
+
     /// The image the sidebar of `document` lists, as the sidebar spells it,
     /// or `nil` once it lists none — the document went to the image list, to
     /// another engine, or closed.

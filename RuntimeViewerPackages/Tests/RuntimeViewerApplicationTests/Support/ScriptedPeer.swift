@@ -46,6 +46,15 @@ struct ScriptedPeer {
         }
     }
 
+    /// Answers every `command` request with what `handler` returns for it,
+    /// the request read as `Request` — a type of the test's own with the
+    /// command's fields.
+    func serve<Request: Codable, Response: Codable>(_ command: RuntimeEngine.CommandName, reading requestType: Request.Type, with handler: @escaping @Sendable (Request) async throws -> Response) {
+        connection.setMessageHandler(name: command.commandName) { (request: Request) async throws -> Response in
+            try await handler(request)
+        }
+    }
+
     func stop() async {
         await client.stop()
         connection.stop()
