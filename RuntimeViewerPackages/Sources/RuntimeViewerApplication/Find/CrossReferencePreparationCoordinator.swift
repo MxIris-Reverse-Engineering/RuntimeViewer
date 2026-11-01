@@ -230,28 +230,6 @@ public final class CrossReferencePreparationCoordinator {
         withdrawEveryPreparation()
     }
 
-    /// Has the engine's process drop every prepared image, which `close()`
-    /// leaves there, as Keep Cross References Ready turning off does — the
-    /// limit goes to zero, and the names read for the images go with them: the
-    /// last document has left the engine, and the next one's coordinator
-    /// prepares them again. `RuntimeEngineBackgroundWork` calls this once it
-    /// has closed the coordinator.
-    func releaseEnginePreparations() -> Task<Void, Never> {
-        let engine = engine
-        return Task {
-            try? await engine.setPreparedCrossReferenceByteLimit(0)
-        }
-    }
-
-    /// Starts over, as when a new process comes up behind the engine: the
-    /// engine's process dropped its prepared images while this coordinator was
-    /// starting, and a zero limit arriving after the one it set would keep
-    /// nothing prepared from then on. See `RuntimeEngineBackgroundWorkRegistry`.
-    func startOver() {
-        guard !isClosed else { return }
-        engineDidReset()
-    }
-
     private func withdrawEveryPreparation() {
         for request in preparationRequests.values {
             request.task.cancel()

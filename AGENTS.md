@@ -384,15 +384,9 @@ The project uses three Swift Package Manager packages:
   show nothing and command nothing. A document that closes or moves away only leaves — nothing is
   cancelled while another document is on the engine — and the last one leaving cancels the engine's work
   and drops its Report; Cancel, Cancel All and Clear History speak for every window on the engine.
-  The last one leaving also has the engine's process drop every Find corpus and prepared cross
-  reference it kept (the sections stay); the next document asks for them again, and one that joins
-  while that release is under way starts its coordinators over once it is done
-  (`RuntimeEngineBackgroundWorkRegistry`), because a late eviction or a late zero limit would undo
-  what it asked for. **Never give a document indexing or corpus state of its own again.** A root
-  already indexed starts no batch at all. Background:
-  `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
+  **Never give a document indexing or corpus state of its own again.** A root already indexed starts no
+  batch at all. Background: `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
   `Documentations/Evolutions/0058-runtime-engine-session.md`,
-  `Documentations/Evolutions/draft-engine-resident-memory.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
