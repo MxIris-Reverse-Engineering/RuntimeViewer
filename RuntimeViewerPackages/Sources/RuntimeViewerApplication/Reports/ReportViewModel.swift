@@ -604,6 +604,10 @@ enum ReportOutline {
             detail = time
             status = .none
             toolTip += "\n\(preparation.referenceCount) references, \(ByteCountFormatter.string(fromByteCount: Int64(preparation.byteCount), countStyle: .memory))"
+        case .notKept(let preparation):
+            detail = "Not Kept · \(time)"
+            status = .none
+            toolTip += "\n\(ByteCountFormatter.string(fromByteCount: Int64(preparation.byteCount), countStyle: .memory)) did not fit in what the resident limit had left, so it was not kept and the other images were left to the queries that need them."
         case .failed(let message):
             detail = "Failed · \(time)"
             status = .failed(message: message)

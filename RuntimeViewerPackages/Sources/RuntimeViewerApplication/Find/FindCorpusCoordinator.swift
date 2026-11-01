@@ -684,13 +684,15 @@ public final class FindCorpusCoordinator {
     }
 
     /// The Report navigator's Eject on Searchable Interfaces: the engine's
-    /// process drops every corpus it keeps, with the builds and reads under
-    /// way, and nothing is printed or read again until something asks — a
-    /// search, which reads back from derived data or prints what it needs,
-    /// or an image indexed from now on. The coordinator forgets what it asked
-    /// for, so a search over every image asks for them all again; the
-    /// history stays. Nothing ejects on its own (proposal
-    /// `engine-resident-memory`).
+    /// process frees the memory its corpora take, with the builds and reads
+    /// under way. A corpus its derived data holds stays searchable — the
+    /// next search that needs it reads it back (proposal
+    /// `on-demand-corpora-and-cross-references`) — and every other one goes
+    /// until something asks for it again: a search, or an image indexed
+    /// from now on. The coordinator forgets what it asked for, so a search
+    /// over every image asks for those again; what is built comes back with
+    /// the coverage, and the history stays. Nothing ejects on its own
+    /// (proposal `engine-resident-memory`).
     public func ejectCorpora() {
         guard isEnabled, !isClosed else { return }
         withdrawEveryBuild()
@@ -702,8 +704,9 @@ public final class FindCorpusCoordinator {
         residentByteCount = 0
         let engine = engine
         Task { [weak self] in
-            try? await engine.evictInterfaceCorpus(for: nil)
-            // After the eviction, so the size shown is the engine's own.
+            try? await engine.evictResidentInterfaceCorpora()
+            // After the eviction, so the size shown and the images still
+            // built are the engine's own.
             guard let self else { return }
             refreshCoverage()
         }

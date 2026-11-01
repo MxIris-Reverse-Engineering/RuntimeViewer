@@ -21,6 +21,21 @@ struct CrossReferencePreparationCoordinatorTests {
         state?.isPrepared == true
     }
 
+    /// The image's latest preparation that ended at `date` or later: kept, or read and not kept.
+    /// Either is the coordinator asking and the engine preparing. Which one it is depends on the
+    /// room left in the one session of this process, which the suites running at the same time
+    /// prepare their own images in: the coordinator's preparations evict nothing for an image
+    /// (proposal `on-demand-corpora-and-cross-references`).
+    private static func preparation(of imagePath: String, in coordinator: CrossReferencePreparationCoordinator, since date: Date = .distantPast) -> RuntimeCrossReferencePreparation? {
+        guard let finishedPreparation = coordinator.finishedPreparations.first(where: { $0.imagePath == imagePath }), finishedPreparation.finishedAt >= date else { return nil }
+        switch finishedPreparation.outcome {
+        case .prepared(let preparation), .notKept(let preparation):
+            return preparation
+        case .failed, .cancelled:
+            return nil
+        }
+    }
+
     @Test("every image the engine has indexed is prepared, and listed as prepared")
     func indexedImagesArePrepared() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "CrossReferencePreparationCoordinatorTests.indexed", loading: [TestImages.libobjc])
@@ -28,16 +43,10 @@ struct CrossReferencePreparationCoordinatorTests {
         let coordinator = makeCoordinator(on: engine, in: environment)
         defer { withExtendedLifetime(coordinator) {} }
 
-        let states = try await nextValue(from: coordinator.$preparationStatesByImagePath.asDriver(), timeout: 60) { Self.isPrepared($0[TestImages.libobjc]) }
-        guard case .prepared(let preparation)? = states[TestImages.libobjc] else {
-            Issue.record("libobjc is not prepared: \(states)")
-            return
-        }
+        try await waitUntil(timeout: 60) { Self.preparation(of: TestImages.libobjc, in: coordinator) != nil }
+        let preparation = try #require(Self.preparation(of: TestImages.libobjc, in: coordinator))
         #expect(preparation.referenceCount > 0)
-        #expect(coordinator.finishedPreparations.contains { finishedPreparation in
-            if case .prepared = finishedPreparation.outcome { return finishedPreparation.imagePath == TestImages.libobjc }
-            return false
-        })
+        #expect(Self.isPrepared(coordinator.preparationStatesByImagePath[TestImages.libobjc]) == preparation.isKept)
         await engine.stop()
     }
 
@@ -51,8 +60,7 @@ struct CrossReferencePreparationCoordinatorTests {
 
         try await engine.loadImage(at: TestImages.libobjc)
 
-        let states = try await nextValue(from: coordinator.$preparationStatesByImagePath.asDriver(), timeout: 60) { Self.isPrepared($0[TestImages.libobjc]) }
-        #expect(Self.isPrepared(states[TestImages.libobjc]))
+        try await waitUntil(timeout: 60) { Self.preparation(of: TestImages.libobjc, in: coordinator) != nil }
         await engine.stop()
     }
 
@@ -62,16 +70,16 @@ struct CrossReferencePreparationCoordinatorTests {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let coordinator = makeCoordinator(on: engine, in: environment)
         defer { withExtendedLifetime(coordinator) {} }
-        _ = try await nextValue(from: coordinator.$preparationStatesByImagePath.asDriver(), timeout: 60) { Self.isPrepared($0[TestImages.libobjc]) }
+        try await waitUntil(timeout: 60) { Self.preparation(of: TestImages.libobjc, in: coordinator) != nil }
 
         environment.settings.search.isCrossReferencePreparationEnabled = false
         let dropped = try await nextValue(from: coordinator.$preparationStatesByImagePath.asDriver()) { $0.isEmpty }
         #expect(dropped.isEmpty)
         #expect(coordinator.followedImagePaths.isEmpty)
 
+        let turnedOnAt = Date()
         environment.settings.search.isCrossReferencePreparationEnabled = true
-        let preparedAgain = try await nextValue(from: coordinator.$preparationStatesByImagePath.asDriver(), timeout: 60) { Self.isPrepared($0[TestImages.libobjc]) }
-        #expect(Self.isPrepared(preparedAgain[TestImages.libobjc]))
+        try await waitUntil(timeout: 60) { Self.preparation(of: TestImages.libobjc, in: coordinator, since: turnedOnAt) != nil }
         await engine.stop()
     }
 

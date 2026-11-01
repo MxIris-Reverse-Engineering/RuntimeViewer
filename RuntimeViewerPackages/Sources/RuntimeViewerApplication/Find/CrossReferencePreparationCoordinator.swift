@@ -23,11 +23,19 @@ import RuntimeViewerSettings
 /// 2. every image indexed before the coordinator started listening, once;
 /// 3. Keep Cross References Ready turning on, for every indexed image.
 ///
+/// The preparations fill the resident limit and evict nothing for it
+/// (proposal `on-demand-corpora-and-cross-references`): the images indexed
+/// at once are asked for in the order of the Always Index rows, the others
+/// after them, and the first image that comes back not kept — it did not
+/// fit in the room left — stops them. The requests still open are withdrawn,
+/// and none is made until something makes room: the limit changing, Eject,
+/// the switch going back on, a new process behind the engine. Every image
+/// not prepared, and one dropped past the limit, is prepared by the first
+/// query that needs it.
+///
 /// Turning it off withdraws every request and drops every prepared image; a
 /// query then scans as it did before. The engine coming back with a new
-/// process behind it starts the coordinator over. An image dropped past the
-/// resident limit is not asked for again: the next query that needs it
-/// prepares it.
+/// process behind it starts the coordinator over.
 ///
 /// `preparationStatesByImagePath` takes every image it asked for from queued
 /// to prepared or failed, progress published at most once a frame, and
@@ -93,6 +101,15 @@ public final class CrossReferencePreparationCoordinator {
 
     private var lastKnownResidentByteLimit = 0
 
+    /// A preparation came back not kept: the resident limit is full, and no
+    /// image is asked for until something makes room.
+    private(set) var isResidentLimitFull = false
+
+    /// Where each Always Index image comes among the rows, as the indexing
+    /// coordinator resolves them: the images indexed at once are asked for in
+    /// this order, ahead of the others.
+    private var alwaysIndexPositions: [String: Int] = [:]
+
     /// The images the coordinator asked for, from `.pending` to `.prepared`
     /// or `.failed`. An absent image is not prepared, or not followed.
     @RxObserved
@@ -157,7 +174,8 @@ public final class CrossReferencePreparationCoordinator {
     private var preparationOptions: RuntimeCrossReferencePreparationOptions {
         RuntimeCrossReferencePreparationOptions(
             residentByteLimit: settings.search.crossReferenceResidentByteLimit,
-            maximumConcurrentScans: settings.search.maximumConcurrentCrossReferenceScans
+            maximumConcurrentScans: settings.search.maximumConcurrentCrossReferenceScans,
+            evictsNothing: true
         )
     }
 
@@ -172,9 +190,10 @@ public final class CrossReferencePreparationCoordinator {
     // MARK: - Triggers
 
     /// Asks the engine to prepare `requestedImagePath`'s cross references. An
-    /// image with a request open, or prepared already, is not asked for again.
+    /// image with a request open, or prepared already, is not asked for again,
+    /// and nothing is while the resident limit is full.
     public func requestPreparation(of requestedImagePath: String) {
-        guard isEnabled, !isClosed, !isUnsupportedByEngine else { return }
+        guard isEnabled, !isClosed, !isUnsupportedByEngine, !isResidentLimitFull else { return }
         let imagePath = canonicalImagePath(requestedImagePath)
         guard preparationRequests[imagePath] == nil, preparationStatesByImagePath[imagePath]?.isPrepared != true else { return }
         nextRequestIdentifier += 1
@@ -201,9 +220,10 @@ public final class CrossReferencePreparationCoordinator {
     }
 
     /// Every image the engine has indexed, asked for in one go — the switch
-    /// turning on, or a fresh engine.
+    /// turning on, a fresh engine, room made — the Always Index ones first,
+    /// in the order of their rows.
     public func requestPreparationOfIndexedImages() {
-        guard isEnabled, !isClosed, !isUnsupportedByEngine else { return }
+        guard isEnabled, !isClosed, !isUnsupportedByEngine, !isResidentLimitFull else { return }
         let engine = engine
         indexedImageFetchesUnderWay += 1
         Task { [weak self] in
@@ -211,8 +231,33 @@ public final class CrossReferencePreparationCoordinator {
             guard let self else { return }
             indexedImageFetchesUnderWay -= 1
             guard let imagePaths, !isClosed else { return }
-            for imagePath in imagePaths {
+            for imagePath in preparationOrder(of: imagePaths) {
                 requestPreparation(of: imagePath)
+            }
+        }
+    }
+
+    /// Records the images the Always Index rows resolve to, as a pass
+    /// dispatches them; an image already placed keeps its place.
+    func noteAlwaysIndexImagePaths(_ imagePaths: [String]) {
+        for imagePath in imagePaths.map(canonicalImagePath) where alwaysIndexPositions[imagePath] == nil {
+            alwaysIndexPositions[imagePath] = alwaysIndexPositions.count
+        }
+    }
+
+    /// `imagePaths`, canonical, the Always Index images first in the order
+    /// of their rows, then the others by path.
+    func preparationOrder(of imagePaths: [String]) -> [String] {
+        imagePaths.map(canonicalImagePath).sorted { lhs, rhs in
+            switch (alwaysIndexPositions[lhs], alwaysIndexPositions[rhs]) {
+            case (let lhsPosition?, let rhsPosition?):
+                lhsPosition < rhsPosition
+            case (.some, .none):
+                true
+            case (.none, .some):
+                false
+            case (.none, .none):
+                lhs < rhs
             }
         }
     }
@@ -245,6 +290,7 @@ public final class CrossReferencePreparationCoordinator {
         withdrawEveryPreparation()
         preparationStatesByImagePath = [:]
         preparedByteCount = 0
+        isResidentLimitFull = false
         let engine = engine
         let byteLimit = isEnabled ? settings.search.crossReferenceResidentByteLimit : 0
         Task { [weak self] in
@@ -335,6 +381,11 @@ public final class CrossReferencePreparationCoordinator {
         guard preparationRequests[imagePath]?.identifier == identifier else { return }
         preparationRequests[imagePath] = nil
         switch result {
+        case .success(let preparation) where !preparation.isKept:
+            preparationStatesByImagePath[imagePath] = nil
+            recordFinishedPreparation(CrossReferenceFinishedPreparation(imagePath: imagePath, outcome: .notKept(preparation), finishedAt: Date()))
+            residentLimitDidFill()
+            refreshPreparedByteCount()
         case .success(let preparation):
             preparationStatesByImagePath[imagePath] = .prepared(preparation)
             recordFinishedPreparation(CrossReferenceFinishedPreparation(imagePath: imagePath, outcome: .prepared(preparation), finishedAt: Date()))
@@ -361,6 +412,16 @@ public final class CrossReferencePreparationCoordinator {
             preparationStatesByImagePath[imagePath] = .failed(message: message)
             recordFinishedPreparation(CrossReferenceFinishedPreparation(imagePath: imagePath, outcome: .failed(message: message), finishedAt: Date()))
         }
+    }
+
+    /// The first image that did not fit: the requests still open are
+    /// withdrawn — what they read would not be kept either — and none is made
+    /// until something makes room.
+    private func residentLimitDidFill() {
+        guard !isResidentLimitFull else { return }
+        isResidentLimitFull = true
+        #log(.info, "The resident limit of prepared cross references is full; the images not prepared are left to the queries that need them")
+        withdrawEveryPreparation()
     }
 
     private func recordFinishedPreparation(_ finishedPreparation: CrossReferenceFinishedPreparation) {
@@ -422,6 +483,7 @@ public final class CrossReferencePreparationCoordinator {
         withdrawEveryPreparation()
         cancelPreparedByteCountRefresh()
         isUnsupportedByEngine = false
+        isResidentLimitFull = false
         preparationStatesByImagePath = [:]
         preparedByteCount = nil
         startPumps()
@@ -455,6 +517,7 @@ public final class CrossReferencePreparationCoordinator {
         if isEnabledNow != lastKnownIsEnabled {
             lastKnownIsEnabled = isEnabledNow
             lastKnownResidentByteLimit = residentByteLimit
+            isResidentLimitFull = false
             if isEnabledNow {
                 applyResidentByteLimit()
                 requestPreparationOfIndexedImages()
@@ -468,6 +531,12 @@ public final class CrossReferencePreparationCoordinator {
         if residentByteLimit != lastKnownResidentByteLimit {
             lastKnownResidentByteLimit = residentByteLimit
             applyResidentByteLimit()
+            // Another limit may leave room: the images not prepared are asked
+            // for again, and the first that does not fit stops them again.
+            if isResidentLimitFull {
+                isResidentLimitFull = false
+                requestPreparationOfIndexedImages()
+            }
         }
     }
 
