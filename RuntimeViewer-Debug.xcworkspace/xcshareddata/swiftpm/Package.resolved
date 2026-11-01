@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "70a2305ba1be432591746fc6732b22a4e578536a",
-        "version" : "0.19.0"
+        "revision" : "74033ee18ab37575610c11568652b54bad762958",
+        "version" : "0.20.0"
       }
     },
     {
@@ -482,8 +482,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "b476cc5761057d8d857de063fe7ac8daecf5c06b",
-        "version" : "1.17.1"
+        "revision" : "2f83b70a6fbf45795dd40ccaa907bad3c8d93fe1",
+        "version" : "1.17.2"
       }
     },
     {
