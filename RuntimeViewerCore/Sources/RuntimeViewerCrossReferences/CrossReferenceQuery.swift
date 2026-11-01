@@ -431,6 +431,12 @@ struct CrossReferenceQuery {
         session.setPreparedByteLimit(byteLimit)
     }
 
+    /// The bytes of prepared images the session keeps now, as their
+    /// preparations estimated them: what a zero limit frees.
+    var preparedByteCount: Int {
+        session.preparedByteCount
+    }
+
     // MARK: - Scanning
 
     /// Reads `candidates` for what `find` keeps, and gathers what `convert`

@@ -113,6 +113,20 @@ public final class CrossReferencePreparationCoordinator {
     @RxObserved
     public private(set) var followedImagePaths: Set<String> = []
 
+    /// What the engine's process keeps of prepared cross references, as their
+    /// preparations estimated them — every image prepared, whoever asked: the
+    /// size the Report navigator shows beside Cross References, and what
+    /// `ejectPreparations()` frees. Asked of the engine as the coordinator
+    /// starts, after each preparation and each eject, and whenever the Report
+    /// navigator appears; `nil` before the first answer, and for a peer older
+    /// than the question.
+    @RxObserved
+    public private(set) var preparedByteCount: Int?
+
+    private var preparedByteCountRefreshTask: Task<Void, Never>?
+
+    private var isPreparedByteCountRefreshPending = false
+
     /// Whether an image is waiting or being prepared.
     public var hasActivePreparation: Driver<Bool> {
         $preparationStatesByImagePath.asDriver()
@@ -219,6 +233,52 @@ public final class CrossReferencePreparationCoordinator {
         finishedPreparations = []
     }
 
+    /// The Report navigator's Eject on Cross References: the engine's process
+    /// drops every prepared image, with the names read for it, and its limit
+    /// goes back to what Settings say, so what a query prepares from then on
+    /// is kept again. Requests under way are withdrawn, and nothing is asked
+    /// for again until something asks — a query, an image indexed from now
+    /// on. The history stays. Nothing ejects on its own (proposal
+    /// `engine-resident-memory`).
+    public func ejectPreparations() {
+        guard !isClosed else { return }
+        withdrawEveryPreparation()
+        preparationStatesByImagePath = [:]
+        preparedByteCount = 0
+        let engine = engine
+        let byteLimit = isEnabled ? settings.search.crossReferenceResidentByteLimit : 0
+        Task { [weak self] in
+            try? await engine.setPreparedCrossReferenceByteLimit(0)
+            try? await engine.setPreparedCrossReferenceByteLimit(byteLimit)
+            guard let self else { return }
+            refreshPreparedByteCount()
+        }
+    }
+
+    /// Asks the engine's process what it keeps of prepared cross references
+    /// (`preparedByteCount`). One round trip at a time: calls made while one
+    /// is in flight coalesce into a single one after it.
+    public func refreshPreparedByteCount() {
+        guard !isClosed else { return }
+        guard preparedByteCountRefreshTask == nil else {
+            isPreparedByteCountRefreshPending = true
+            return
+        }
+        let engine = engine
+        preparedByteCountRefreshTask = Task { [weak self] in
+            let byteCount = try? await engine.preparedCrossReferenceByteCount()
+            guard let self, !Task.isCancelled else { return }
+            preparedByteCountRefreshTask = nil
+            if preparedByteCount != byteCount {
+                preparedByteCount = byteCount
+            }
+            if isPreparedByteCountRefreshPending {
+                isPreparedByteCountRefreshPending = false
+                refreshPreparedByteCount()
+            }
+        }
+    }
+
     /// The last document on the engine left — closed, or moved to another
     /// engine: every request is withdrawn and nothing asks for a preparation
     /// again. `RuntimeEngineBackgroundWork` calls this.
@@ -228,6 +288,13 @@ public final class CrossReferencePreparationCoordinator {
         stopPumps()
         engineReadinessSubscription = nil
         withdrawEveryPreparation()
+        cancelPreparedByteCountRefresh()
+    }
+
+    private func cancelPreparedByteCountRefresh() {
+        preparedByteCountRefreshTask?.cancel()
+        preparedByteCountRefreshTask = nil
+        isPreparedByteCountRefreshPending = false
     }
 
     private func withdrawEveryPreparation() {
@@ -271,6 +338,7 @@ public final class CrossReferencePreparationCoordinator {
         case .success(let preparation):
             preparationStatesByImagePath[imagePath] = .prepared(preparation)
             recordFinishedPreparation(CrossReferenceFinishedPreparation(imagePath: imagePath, outcome: .prepared(preparation), finishedAt: Date()))
+            refreshPreparedByteCount()
         case .failure(is CancellationError):
             preparationStatesByImagePath[imagePath] = nil
         case .failure(RuntimeCrossReferenceError.imageNotIndexed):
@@ -352,8 +420,10 @@ public final class CrossReferencePreparationCoordinator {
     private func engineDidReset() {
         stopPumps()
         withdrawEveryPreparation()
+        cancelPreparedByteCountRefresh()
         isUnsupportedByEngine = false
         preparationStatesByImagePath = [:]
+        preparedByteCount = nil
         startPumps()
     }
 
@@ -402,12 +472,15 @@ public final class CrossReferencePreparationCoordinator {
     }
 
     /// The engine's process keeps the limit while preparation is on, and
-    /// nothing while it is off.
+    /// nothing while it is off. A lower limit drops images, so the size is
+    /// asked for again once the engine has the limit.
     private func applyResidentByteLimit() {
         let engine = engine
         let byteLimit = isEnabled ? settings.search.crossReferenceResidentByteLimit : 0
-        Task {
+        Task { [weak self] in
             try? await engine.setPreparedCrossReferenceByteLimit(byteLimit)
+            guard let self else { return }
+            refreshPreparedByteCount()
         }
     }
 }

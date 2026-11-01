@@ -38,6 +38,10 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         public let filter: Driver<NavigatorTextFilter>
         /// The filter bar's clock toggle: only the work in progress. Off until it reports otherwise.
         public let showsOnlyInProgress: Driver<Bool>
+        /// A row's Eject button: the Searchable Interfaces or Cross References row, whose results
+        /// the engine's process then drops.
+        @Init(default: Signal<ReportNode>.empty())
+        public let eject: Signal<ReportNode>
     }
 
     public struct Output {
@@ -138,16 +142,24 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                         treeBuilder.indexingCategory(batches: batches, history: history, isEnabled: isIndexingEnabled)
                     }
                 }
+                // What the engine's process keeps for each kind, while the kind is on: the size its
+                // row shows and ejects. Only a change rebuilds the tree — the first answer is often
+                // the zero there was before it.
+                let corpusKeptByteCount = Observable.combineLatest(isCorpusEnabled, corpusCoordinator.$residentByteCount.asObservable()) { isEnabled, residentByteCount in
+                    isEnabled ? residentByteCount ?? 0 : 0
+                }
+                .distinctUntilChanged()
                 let corpusCategory = Observable.combineLatest(
                     corpusCoordinator.$buildStatesByImagePath.asObservable(),
                     corpusCoordinator.$followedImagePaths.asObservable(),
                     corpusCoordinator.$finishedBuilds.asObservable(),
                     corpusCoordinator.$restoredImagesByImagePath.asObservable(),
                     corpusCoordinator.$isCorpusUnsupportedByEngine.asObservable(),
-                    isCorpusEnabled
+                    isCorpusEnabled,
+                    corpusKeptByteCount
                 )
                 .observe(on: MainScheduler.instance)
-                .map { states, followedImagePaths, finishedBuilds, restoredImages, isCorpusUnsupportedByEngine, isCorpusEnabled in
+                .map { states, followedImagePaths, finishedBuilds, restoredImages, isCorpusUnsupportedByEngine, isCorpusEnabled, keptByteCount in
                     MainActor.assumeIsolated {
                         treeBuilder.corpusCategory(
                             states: states,
@@ -155,27 +167,35 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                             finishedBuilds: finishedBuilds,
                             restoredImages: restoredImages,
                             isUnsupportedByEngine: isCorpusUnsupportedByEngine,
-                            isEnabled: isCorpusEnabled
+                            isEnabled: isCorpusEnabled,
+                            keptByteCount: keptByteCount
                         )
                     }
                 }
                 let crossReferencePreparationCoordinator = coordinators.crossReferences
+                // Turned off, the engine's process keeps nothing prepared: its limit is zero.
+                let crossReferenceKeptByteCount = Observable.combineLatest(isCrossReferencePreparationEnabled, crossReferencePreparationCoordinator.$preparedByteCount.asObservable()) { isEnabled, preparedByteCount in
+                    isEnabled ? preparedByteCount ?? 0 : 0
+                }
+                .distinctUntilChanged()
                 let crossReferenceCategory = Observable.combineLatest(
                     crossReferencePreparationCoordinator.$preparationStatesByImagePath.asObservable(),
                     crossReferencePreparationCoordinator.$followedImagePaths.asObservable(),
                     crossReferencePreparationCoordinator.$finishedPreparations.asObservable(),
                     crossReferencePreparationCoordinator.$isUnsupportedByEngine.asObservable(),
-                    isCrossReferencePreparationEnabled
+                    isCrossReferencePreparationEnabled,
+                    crossReferenceKeptByteCount
                 )
                 .observe(on: MainScheduler.instance)
-                .map { states, followedImagePaths, finishedPreparations, isUnsupportedByEngine, isEnabled in
+                .map { states, followedImagePaths, finishedPreparations, isUnsupportedByEngine, isEnabled, keptByteCount in
                     MainActor.assumeIsolated {
                         treeBuilder.crossReferenceCategory(
                             states: states,
                             followedImagePaths: followedImagePaths,
                             finishedPreparations: finishedPreparations,
                             isUnsupportedByEngine: isUnsupportedByEngine,
-                            isEnabled: isEnabled
+                            isEnabled: isEnabled,
+                            keptByteCount: keptByteCount
                         )
                     }
                 }
@@ -191,6 +211,8 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             .subscribeOnNext { _, coordinators in
                 MainActor.assumeIsolated {
                     coordinators?.corpus.refreshCoverage()
+                    // A query prepares images too, and the limit drops them, without a word.
+                    coordinators?.crossReferences.refreshPreparedByteCount()
                 }
             }
             .disposed(by: rx.disposeBag)
@@ -224,6 +246,21 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             let crossReferencePreparationCoordinator = backgroundWork.crossReferencePreparationCoordinator
             for imagePath in crossReferencePreparationCoordinator.followedImagePaths {
                 crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
+            }
+        }
+        .disposed(by: rx.disposeBag)
+
+        // Every window on the engine shares what the engine's process keeps, so an eject in one
+        // empties the row in all of them.
+        input.eject.emitOnNext { node in
+            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
+            switch node.identifier {
+            case .category(.searchableInterfaces):
+                backgroundWork.corpusCoordinator.ejectCorpora()
+            case .category(.crossReferences):
+                backgroundWork.crossReferencePreparationCoordinator.ejectPreparations()
+            case .category(.backgroundIndexing), .turnedOff, .unsupportedByEngine, .indexingBatch, .indexingItem, .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .crossReferencePreparation, .finishedCrossReferencePreparation:
+                break
             }
         }
         .disposed(by: rx.disposeBag)
@@ -486,6 +523,20 @@ enum ReportOutline {
             status = .none
         }
         cellViewModel.update(icon: icon(forImagePath: finishedBuild.imagePath), title: FindScope.imageName(of: finishedBuild.imagePath), detail: detail, status: status, toolTip: toolTip)
+    }
+
+    /// A kind of work's own row: its title and, while the engine's process keeps something for it,
+    /// how much, beside the title, with an Eject button that has the process drop it — as Finder
+    /// shows a volume (proposal `engine-resident-memory`).
+    static func configureCategoryRow(_ cellViewModel: ReportCellViewModel, icon: NSUIImage?, title: String, keptByteCount: Int) {
+        let isKeepingAnything = keptByteCount > 0
+        cellViewModel.update(
+            icon: icon,
+            title: title,
+            detail: isKeepingAnything ? ByteCountFormatter.string(fromByteCount: Int64(keptByteCount), countStyle: .memory) : "",
+            toolTip: isKeepingAnything ? "What the engine's process keeps for \(title) now. Eject frees it; a search or a query that needs it again brings it back." : nil,
+            isEjectable: isKeepingAnything
+        )
     }
 
     /// The group of the corpora read from derived data instead of printed — at launch, the Always

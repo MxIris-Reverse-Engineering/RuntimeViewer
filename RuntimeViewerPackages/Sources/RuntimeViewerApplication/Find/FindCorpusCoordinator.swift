@@ -197,6 +197,13 @@ public final class FindCorpusCoordinator {
     @RxObserved
     public private(set) var buildStatesByImagePath: [String: RuntimeInterfaceCorpusBuildState] = [:]
 
+    /// What the engine's corpora take in its process, as the store counts
+    /// them: the size the Report navigator shows beside Searchable
+    /// Interfaces, and what `ejectCorpora()` frees. As fresh as the last
+    /// coverage refresh; `nil` before the first one answers.
+    @RxObserved
+    public private(set) var residentByteCount: Int?
+
     /// The engine's process does not know the corpus commands: a peer older
     /// than the Find navigator, or one a relay forwards to. Nothing is asked
     /// of it until the engine is swapped, and the Report navigator and the
@@ -676,6 +683,32 @@ public final class FindCorpusCoordinator {
         }
     }
 
+    /// The Report navigator's Eject on Searchable Interfaces: the engine's
+    /// process drops every corpus it keeps, with the builds and reads under
+    /// way, and nothing is printed or read again until something asks — a
+    /// search, which reads back from derived data or prints what it needs,
+    /// or an image indexed from now on. The coordinator forgets what it asked
+    /// for, so a search over every image asks for them all again; the
+    /// history stays. Nothing ejects on its own (proposal
+    /// `engine-resident-memory`).
+    public func ejectCorpora() {
+        guard isEnabled, !isClosed else { return }
+        withdrawEveryBuild()
+        withdrawEveryRestore()
+        forgetRestoredImages()
+        buildStatesByImagePath = [:]
+        requestedImagePaths.removeAll()
+        requestedRestoreImagePaths.removeAll()
+        residentByteCount = 0
+        let engine = engine
+        Task { [weak self] in
+            try? await engine.evictInterfaceCorpus(for: nil)
+            // After the eviction, so the size shown is the engine's own.
+            guard let self else { return }
+            refreshCoverage()
+        }
+    }
+
     // MARK: - Build state
 
     /// Called from the engine's thread with each progress report; publishes
@@ -778,6 +811,9 @@ public final class FindCorpusCoordinator {
     /// that ended without the coordinator seeing them go to the end of the
     /// history, in path order.
     func mergeCoverage(_ coverage: RuntimeInterfaceCorpusCoverage) {
+        if residentByteCount != coverage.residentByteCount {
+            residentByteCount = coverage.residentByteCount
+        }
         var states = buildStatesByImagePath
         for imagePath in Set(states.keys).union(coverage.statesByImagePath.keys) where buildRequests[imagePath] == nil && !restoringImagePaths.contains(imagePath) {
             states[imagePath] = coverage.statesByImagePath[imagePath]

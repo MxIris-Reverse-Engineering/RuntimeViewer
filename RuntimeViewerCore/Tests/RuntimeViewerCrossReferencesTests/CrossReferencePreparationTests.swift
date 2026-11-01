@@ -89,6 +89,21 @@ struct CrossReferencePreparationTests {
         #expect(session.preparedImageIndices.count == 1)
     }
 
+    /// What the Report navigator shows beside Cross References, and what
+    /// ejecting them frees (proposal `engine-resident-memory`).
+    @Test("The prepared byte count is what the kept images take, and nothing once a zero limit drops them")
+    func preparedByteCountFollowsTheKeptImages() async throws {
+        let session = Self.makeSession()
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
+        #expect(query.preparedByteCount == 0)
+
+        let libobjc = try await query.prepare(imageAt: Self.libobjcPath, options: Self.roomyPreparationOptions) { _ in }
+        #expect(query.preparedByteCount == libobjc.byteCount)
+
+        query.setPreparedByteLimit(0)
+        #expect(query.preparedByteCount == 0)
+    }
+
     @Test("Prepared indexes stay within the byte limit, the least recently used dropped first; zero drops them all")
     func preparedIndexesStayWithinTheLimit() async throws {
         let session = Self.makeSession()

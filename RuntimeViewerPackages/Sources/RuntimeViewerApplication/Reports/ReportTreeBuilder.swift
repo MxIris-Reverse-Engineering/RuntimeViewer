@@ -71,14 +71,17 @@ final class ReportTreeBuilder {
 
     /// The Searchable Interfaces category, or `nil` when it has nothing to show: a row saying the
     /// feature is turned off or unsupported, the corpora queued or being printed, the group of the
-    /// corpora read from derived data, then the ended builds.
+    /// corpora read from derived data, then the ended builds. The category row itself shows what
+    /// the corpora take in the engine's process and ejects them (`keptByteCount`, zero while the
+    /// kind is off), and is there whenever they take anything.
     func corpusCategory(
         states: [String: RuntimeInterfaceCorpusBuildState],
         followedImagePaths: Set<String>,
         finishedBuilds: [FindCorpusFinishedBuild],
         restoredImages: [String: RuntimeInterfaceCorpusRestoredImage],
         isUnsupportedByEngine: Bool,
-        isEnabled: Bool
+        isEnabled: Bool,
+        keptByteCount: Int = 0
     ) -> ReportNode? {
         var usedIdentifiers: Set<ReportNodeIdentifier> = []
         var children: [ReportNode] = []
@@ -134,9 +137,9 @@ final class ReportTreeBuilder {
         finishedCorpusBuildNodes = finishedCorpusBuildNodes.filter { finishedBuildIdentifiers.contains($0.key) }
 
         var categoryNode: ReportNode?
-        if !children.isEmpty {
+        if !children.isEmpty || keptByteCount > 0 {
             categoryNode = makeNode(.category(.searchableInterfaces), children: children, usedIdentifiers: &usedIdentifiers) {
-                $0.update(icon: ReportOutline.corpusIcon, title: "Searchable Interfaces")
+                ReportOutline.configureCategoryRow($0, icon: ReportOutline.corpusIcon, title: "Searchable Interfaces", keptByteCount: keptByteCount)
             }
         }
         dropCellViewModels(of: .searchableInterfaces, except: usedIdentifiers)
@@ -146,13 +149,17 @@ final class ReportTreeBuilder {
     /// The Cross References category, or `nil` when it has nothing to show: a row saying the
     /// engine's process cannot prepare them, the images queued or being prepared, then the ended
     /// preparations. Turned off, it has no row saying so, unlike the other kinds: queries scan
-    /// instead, so nothing stops working and there is no background work to report.
+    /// instead, so nothing stops working and there is no background work to report. The category
+    /// row itself shows what the prepared images take in the engine's process and ejects them
+    /// (`keptByteCount`, zero while the kind is off), and is there whenever they take anything —
+    /// prepared by a query too.
     func crossReferenceCategory(
         states: [String: CrossReferencePreparationState],
         followedImagePaths: Set<String>,
         finishedPreparations: [CrossReferenceFinishedPreparation],
         isUnsupportedByEngine: Bool,
-        isEnabled: Bool
+        isEnabled: Bool,
+        keptByteCount: Int = 0
     ) -> ReportNode? {
         var usedIdentifiers: Set<ReportNodeIdentifier> = []
         var children: [ReportNode] = []
@@ -191,9 +198,9 @@ final class ReportTreeBuilder {
         finishedCrossReferencePreparationNodes = finishedCrossReferencePreparationNodes.filter { finishedPreparationIdentifiers.contains($0.key) }
 
         var categoryNode: ReportNode?
-        if !children.isEmpty {
+        if !children.isEmpty || keptByteCount > 0 {
             categoryNode = makeNode(.category(.crossReferences), children: children, usedIdentifiers: &usedIdentifiers) {
-                $0.update(icon: ReportOutline.crossReferenceIcon, title: "Cross References")
+                ReportOutline.configureCategoryRow($0, icon: ReportOutline.crossReferenceIcon, title: "Cross References", keptByteCount: keptByteCount)
             }
         }
         dropCellViewModels(of: .crossReferences, except: usedIdentifiers)

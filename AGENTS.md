@@ -385,8 +385,14 @@ The project uses three Swift Package Manager packages:
   cancelled while another document is on the engine — and the last one leaving cancels the engine's work
   and drops its Report; Cancel, Cancel All and Clear History speak for every window on the engine.
   **Never give a document indexing or corpus state of its own again.** A root already indexed starts no
-  batch at all. Background: `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
+  batch at all. **What the engine's process keeps — the Find corpora, the prepared cross references — is
+  never dropped on its own**, not even when the last window leaves (that was tried and reverted: a window
+  reopened at once rebuilt everything). The Report navigator's Searchable Interfaces and Cross
+  References rows show its size and eject it (`ejectCorpora()`, `ejectPreparations()`), and it comes
+  back when a search or a query needs it. Background:
+  `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
   `Documentations/Evolutions/0058-runtime-engine-session.md`,
+  `Documentations/Evolutions/draft-engine-resident-memory.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
