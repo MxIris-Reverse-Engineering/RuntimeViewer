@@ -46,7 +46,7 @@
 1. [x] 条件池：新增 `RuntimeInterfaceVisibilityConditionPool`，`RuntimeInterfaceCorpusAssembly` 与 `RuntimeInterfaceCorpusSnapshot` 构造条目时经过它，镜像语料的字节数加上池的字节数。测试：打印出的与从派生数据读回的语料里，相等的条件共享存储。
 2. [x] 估算按实际算：语料条目的 `byteCount` 按实际分配计算；exit test 给 Foundation 建语料，量驱逐前后 malloc 在用字节数之差，与估算相差不超过 10%。交叉引用的 `CrossReferencePreparedImage.byteCount` 用同样的办法核对，超出的部分在上游，测试里记为已知问题。
 3. [x] 关窗释放：`RuntimeEngineBackgroundWork.close()` 让引擎进程驱逐语料、把交叉引用上限置 0，registry 记下进行中的释放并在它结束后让同一引擎的新工作重新请求；先用探针确认要不要 `malloc_zone_pressure_relief`。测试：最后一个文档离开时引擎收到这两条命令；释放被扣住时新文档加入，放行后上限按设置重新下发、语料重新请求。
-4. [ ] 文档与实测：同批更新下文列出的文档；按上面的配置重测内存。
+4. [ ] 文档与实测：同批更新下文列出的文档（已做）；按上面的配置重测内存（待做：要用新代码重启 Debug 版再量）。
 
 **验收**
 - 三项各有测试，改代码之前先确认它是红的：条件池里相等的条件共享存储；最后一个文档离开时引擎收到驱逐与上限置 0，下一个文档加入后恢复，快速离开再加入时语料不会被迟到的驱逐清掉；两项估算的误差不超过 10%。
@@ -64,3 +64,4 @@
 | 2026-11-01 | 交叉引用的估算偏低一成多，留给上游，不在本提案里修；测试用 `withKnownIssue` 记下差距 | Foundation 的预建表估算 17.6 MB，置 0 后释放 19.9 MB，少 11.7%。这个数由 MachOSwiftSection 的 `CodeReferenceIndex.approximateByteCount` 与分析器的 `approximateByteCount(ofImageDataAt:)` 算出，它们按元素数算、不含分配头部与取整；RuntimeViewer 只是相加，要修就得改另一个仓库，超出了「只改 RuntimeViewer 自己的代码」。测试保留，上游修好后已知问题不再出现，测试会提醒去掉包装。 |
 | 2026-11-01 | 释放后不调 `malloc_zone_pressure_relief`；验收改看 malloc 在用字节，footprint 只作参考 | 探针在进程内给 Foundation 与 AppKit 建语料（估算 69 MB）：驱逐后 malloc 在用字节从 148.9 MB 降到 85.1 MB，footprint 只从 196.0 MB 降到 165.3 MB，5 秒后不变；再调 `malloc_zone_pressure_relief(nil, 0)`，它报告还回 0 字节，footprint 仍是 165.2 MB。空出的块散在仍有活对象的页里，这个调用还不回来；它们留给进程以后的分配复用，系统内存紧张时才回收。 |
 | 2026-11-01 | 释放由两个协调器各出一半（`releaseEngineCorpora()`、`releaseEnginePreparations()`），后台工作把两者合成一个任务交给 registry；重来用新的 `startOver()` 调各自已有的 `engineDidReset()` | 每个协调器只发自己那条命令，后台工作不必知道交叉引用模块的命令；重来的路径与引擎换了新进程时完全相同。 |
+| 2026-11-01 | 实现完成，待用户看过后收尾 | 三步各有测试，改代码前都确认过是红的；第三步另做了变异检查（去掉释放后的重来，再加入的测试变红）。RuntimeViewerApplicationTests 全量 697 个只有「Call Hierarchy opens its root and loads its callers…」一条在满载下等待超时，单独跑通过，next 上同一批也挂在这一条（另多一条计时测试）。文档：`AGENTS.md` 讲 Engine 后台工作的段落与 `Glossary.md` 的「Engine 的后台工作」已同步；不另写使用指南或实现说明——没有调用方要守的新契约，先后顺序的理由写在代码注释与 `AGENTS.md` 里；没有新术语。没做的：用新代码在 App 里实测，要重启 Debug 版。 |
