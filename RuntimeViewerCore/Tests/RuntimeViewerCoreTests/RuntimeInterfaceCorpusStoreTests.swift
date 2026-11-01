@@ -937,6 +937,76 @@ struct RuntimeInterfaceCorpusStoreTests {
         #expect(entry.displayedMember(at: 2).lineNumber == 3)
     }
 
+    /// Every entry kept the visibility conditions of its interface to itself,
+    /// though the conditions are combinations of a couple of dozen Generation
+    /// Options and the entries of an image repeat the same few: about 30 MB of
+    /// an engine indexing UIKitCore, AppKit and six other frameworks (proposal
+    /// `engine-resident-memory`). Each object here is printed with a list of
+    /// conditions of its own, equal to the others'.
+    @Test("entries with equal visibility conditions share one stored list of them")
+    func equalConditionListsAreStoredOnce() async throws {
+        let objectNames = ["First", "Second", "Third"]
+        let fixture = makeStore { builder in
+            builder.objectNamesByImagePath[Self.imageC] = objectNames
+            for objectName in objectNames {
+                Self.printWithHiddenComment(objectName, under: [.enabled("test.comments")], in: builder)
+            }
+        }
+        defer { withExtendedLifetime(fixture) {} }
+
+        _ = try await fixture.store.build(imagePath: Self.imageC, transformer: .default)
+
+        let entries = try #require(await fixture.store.corpus(for: Self.imageC)?.entries)
+        try #require(entries.count == objectNames.count)
+        #expect(sharesStorage(entries[0].visibilityRegions.conditions, entries[1].visibilityRegions.conditions))
+        #expect(sharesStorage(entries[0].visibilityRegions.conditions, entries[2].visibilityRegions.conditions))
+    }
+
+    @Test("a visibility condition in lists that differ is stored once")
+    func conditionInDifferentListsIsStoredOnce() async throws {
+        let fixture = makeStore { builder in
+            builder.objectNamesByImagePath[Self.imageC] = ["First", "Second"]
+            Self.printWithHiddenComment("First", under: [.enabled("test.comments")], in: builder)
+            Self.printWithHiddenComment("Second", under: [.enabled("test.comments"), .disabled("test.addresses")], in: builder)
+        }
+        defer { withExtendedLifetime(fixture) {} }
+
+        _ = try await fixture.store.build(imagePath: Self.imageC, transformer: .default)
+
+        let entries = try #require(await fixture.store.corpus(for: Self.imageC)?.entries)
+        try #require(entries.count == 2)
+        let firstConditions = entries[0].visibilityRegions.conditions
+        let secondConditions = entries[1].visibilityRegions.conditions
+        try #require(firstConditions.first == secondConditions.first)
+        #expect(sharesStorage(firstConditions[0].alternatives, secondConditions[0].alternatives))
+    }
+
+    /// Scripts `objectName` to print `var <name>: Int` followed by one hidden
+    /// comment per condition in `conditions`, each region under its own. The
+    /// table is made anew for every object, so nothing in it shares storage
+    /// with another object's until the store makes it.
+    private static func printWithHiddenComment(_ objectName: String, under conditions: [VisibilityCondition], in builder: ScriptedBuilder) {
+        let visibleText = "var \(objectName.lowercased()): Int"
+        var text = visibleText
+        var regions: [VisibilityRegionTable.Region] = []
+        for conditionIndex in conditions.indices {
+            let comment = " // note \(conditionIndex)"
+            regions.append(VisibilityRegionTable.Region(utf8Offset: UInt32(text.utf8.count), utf8Length: UInt32(comment.utf8.count), conditionIndex: UInt32(conditionIndex)))
+            text += comment
+        }
+        // Rebuilt from their parts, so no two objects' conditions share
+        // storage before the store sees them.
+        let freshConditions = conditions.map { condition in
+            VisibilityCondition(alternatives: condition.alternatives.map { alternative in
+                alternative.map { requirement in
+                    VisibilityCondition.Requirement(option: requirement.option, isEnabled: requirement.isEnabled)
+                }
+            })
+        }
+        builder.interfaceTextByObjectName[objectName] = text
+        builder.visibilityRegionsByObjectName[objectName] = VisibilityRegionTable(regions: regions, conditions: freshConditions)
+    }
+
     @Test("evicting drops the corpus and its failure record")
     func eviction() async throws {
         let fixture = makeStore()

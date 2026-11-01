@@ -391,13 +391,7 @@ enum RuntimeInterfaceCorpusSnapshot {
 
         walkThrough(entries)
 
-        let byteCount = entries.reduce(0) { $0 + $1.byteCount }
-        return RuntimeInterfaceCorpusStore.ImageCorpus(
-            entries: entries,
-            summary: RuntimeInterfaceCorpusBuildSummary(objectCount: entries.count, skippedCount: summary.summary.skippedCount, byteCount: byteCount),
-            transformer: transformer,
-            lastSearchedAt: Date()
-        )
+        return RuntimeInterfaceCorpusStore.ImageCorpus(sharingVisibilityConditionsOf: entries, skippedCount: summary.summary.skippedCount, transformer: transformer)
     }
 
     /// Every read of the corpus that walks a text, once: each entry's spans,

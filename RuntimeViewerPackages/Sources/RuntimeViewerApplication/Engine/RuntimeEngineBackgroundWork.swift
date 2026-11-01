@@ -19,8 +19,10 @@ import DependenciesMacros
 /// Brought into being when the first document on the engine starts its background work
 /// (`DocumentState.startBackgroundWork()`), and closed when the last one leaves it — closing, or
 /// moving to another engine: its running work is cancelled and its history goes with it, as when
-/// a single window closes. The next document on the engine starts afresh. A document holds it
-/// through its `RuntimeEngineSession`; see `RuntimeEngineBackgroundWorkRegistry`.
+/// a single window closes, and the engine's process drops the corpora and the prepared cross
+/// references it kept for the documents. The next document on the engine starts afresh, and asks
+/// for them again. A document holds it through its `RuntimeEngineSession`; see
+/// `RuntimeEngineBackgroundWorkRegistry`.
 @MainActor
 final class RuntimeEngineBackgroundWork {
     let engine: RuntimeEngine
@@ -87,14 +89,34 @@ final class RuntimeEngineBackgroundWork {
     }
 
     /// The last document left: every coordinator stops, cancelling what it still has running,
-    /// and asks the engine for nothing again; the activity is let go.
-    fileprivate func close() {
-        guard !isClosed else { return }
+    /// and asks the engine for nothing again; the activity is let go. The engine's process is
+    /// asked to drop every corpus and every prepared cross reference it kept for the work —
+    /// several hundred megabytes for an engine with a few large frameworks indexed, which used to
+    /// stay until the app quit (proposal `engine-resident-memory`). Its sections stay, so the next
+    /// document finds the images indexed. Returns that release, `nil` for work closed already.
+    fileprivate func close() -> Task<Void, Never>? {
+        guard !isClosed else { return nil }
         isClosed = true
         indexingCoordinator.close()
         corpusCoordinator.close()
         crossReferencePreparationCoordinator.close()
         processActivity.close()
+        let corpusRelease = corpusCoordinator.releaseEngineCorpora()
+        let preparationRelease = crossReferencePreparationCoordinator.releaseEnginePreparations()
+        return Task {
+            await corpusRelease.value
+            await preparationRelease.value
+        }
+    }
+
+    /// The release of the work closed before it on the engine was under way as this work came
+    /// into being, and is done: what the work asked for meanwhile may have gone with it — a build
+    /// the eviction cancelled, the limit it set before the zero one arrived — so the corpus and
+    /// cross-reference coordinators start over, as when a new process comes up behind the engine.
+    fileprivate func engineDataReleaseDidFinish() {
+        guard !isClosed else { return }
+        corpusCoordinator.startOver()
+        crossReferencePreparationCoordinator.startOver()
     }
 }
 
@@ -108,6 +130,13 @@ final class RuntimeEngineBackgroundWorkRegistry {
     /// read after its engine could have been freed.
     private var backgroundWorkByEngine: [ObjectIdentifier: RuntimeEngineBackgroundWork] = [:]
 
+    /// The releases still under way, by engine identity: what the engine's process drops as the
+    /// last document leaves (`RuntimeEngineBackgroundWork.close()`). Work brought into being on the
+    /// engine meanwhile starts at once and starts over once the release is done, since a late
+    /// eviction or a late zero limit undoes what it asked for. A release holds its engine until it
+    /// is done, and its entry goes then, so an identifier here never outlives its engine either.
+    private var engineDataReleaseByEngine: [ObjectIdentifier: Task<Void, Never>] = [:]
+
     /// What the activity of each work brought into being from now on begins and ends its
     /// activities with. Test seam: every test has a registry of its own.
     var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
@@ -118,20 +147,44 @@ final class RuntimeEngineBackgroundWorkRegistry {
     /// if no document on the engine holds it.
     func join(_ engine: RuntimeEngine, as member: ObjectIdentifier) -> RuntimeEngineBackgroundWork {
         let engineIdentifier = ObjectIdentifier(engine)
-        let backgroundWork = backgroundWorkByEngine[engineIdentifier] ?? RuntimeEngineBackgroundWork(engine: engine, processActivityScheduler: processActivityScheduler)
-        backgroundWorkByEngine[engineIdentifier] = backgroundWork
+        let backgroundWork: RuntimeEngineBackgroundWork
+        if let joinedBackgroundWork = backgroundWorkByEngine[engineIdentifier] {
+            backgroundWork = joinedBackgroundWork
+        } else {
+            backgroundWork = RuntimeEngineBackgroundWork(engine: engine, processActivityScheduler: processActivityScheduler)
+            backgroundWorkByEngine[engineIdentifier] = backgroundWork
+            if let engineDataRelease = engineDataReleaseByEngine[engineIdentifier] {
+                Task { [weak backgroundWork] in
+                    await engineDataRelease.value
+                    backgroundWork?.engineDataReleaseDidFinish()
+                }
+            }
+        }
         backgroundWork.memberIdentifiers.insert(member)
         return backgroundWork
     }
 
-    /// `member` lets go of `backgroundWork`. The last one letting go closes it, and the next
-    /// document on the engine gets work of its own.
+    /// `member` lets go of `backgroundWork`. The last one letting go closes it — the engine's
+    /// process drops what it kept for the work — and the next document on the engine gets work of
+    /// its own.
     func leave(_ backgroundWork: RuntimeEngineBackgroundWork, as member: ObjectIdentifier) {
         guard backgroundWork.memberIdentifiers.remove(member) != nil, backgroundWork.memberIdentifiers.isEmpty else { return }
-        backgroundWork.close()
         let engineIdentifier = ObjectIdentifier(backgroundWork.engine)
+        if let engineDataRelease = backgroundWork.close() {
+            followEngineDataRelease(engineDataRelease, on: engineIdentifier)
+        }
         if backgroundWorkByEngine[engineIdentifier] === backgroundWork {
             backgroundWorkByEngine[engineIdentifier] = nil
+        }
+    }
+
+    /// Keeps `engineDataRelease` for the work the engine gets next, until it is done.
+    private func followEngineDataRelease(_ engineDataRelease: Task<Void, Never>, on engineIdentifier: ObjectIdentifier) {
+        engineDataReleaseByEngine[engineIdentifier] = engineDataRelease
+        Task { [weak self] in
+            await engineDataRelease.value
+            guard let self, engineDataReleaseByEngine[engineIdentifier] == engineDataRelease else { return }
+            engineDataReleaseByEngine[engineIdentifier] = nil
         }
     }
 
