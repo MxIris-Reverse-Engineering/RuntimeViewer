@@ -73,6 +73,11 @@ struct CrossReferencePreparationCoordinatorTests {
         try await waitUntil(timeout: 60) { Self.preparation(of: TestImages.libobjc, in: coordinator) != nil }
 
         environment.settings.search.isCrossReferencePreparationEnabled = false
+        // The coordinator hears of the change on the main actor, later. Without waiting for it, a
+        // first round that ended not kept — its states already empty — lets the switch go back on
+        // before the coordinator heard it go off, the two changes reach it as one, and it sees the
+        // switch on as it was.
+        try await settleMainQueue()
         let dropped = try await nextValue(from: coordinator.$preparationStatesByImagePath.asDriver()) { $0.isEmpty }
         #expect(dropped.isEmpty)
         #expect(coordinator.followedImagePaths.isEmpty)
