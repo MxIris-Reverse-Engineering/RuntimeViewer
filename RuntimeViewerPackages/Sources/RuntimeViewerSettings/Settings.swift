@@ -130,6 +130,7 @@ public final class SettingsAccess {
             #log(.debug, "Failed to load settings, using defaults. (\(error, privacy: .public))")
         }
         migrateLegacyThemeProfileIfNeeded()
+        migrateResidentLimitDefaultsIfNeeded()
         #endif
     }
 
@@ -162,6 +163,29 @@ public final class SettingsAccess {
     }
 
     #if os(macOS)
+    /// Brings the two resident limits to the defaults of
+    /// `Settings.Search.currentResidentLimitDefaultsRevision`, once: a limit
+    /// still at the old default of 256 MB is taken for one the user never
+    /// changed and moved to 64 MB (proposal
+    /// `on-demand-corpora-and-cross-references`); any other value stays. The
+    /// revision is stored with the limits, so a file that has been through
+    /// this is left alone, and a limit set back to 256 afterwards stays.
+    private func migrateResidentLimitDefaultsIfNeeded() {
+        let currentRevision = Settings.Search.currentResidentLimitDefaultsRevision
+        guard store.value.search.residentLimitDefaultsRevision < currentRevision else { return }
+        var search = store.value.search
+        let defaults = Settings.Search.default
+        if search.residentByteLimitMegabytes == Settings.Search.legacyResidentLimitMegabytes {
+            search.residentByteLimitMegabytes = defaults.residentByteLimitMegabytes
+        }
+        if search.crossReferenceResidentByteLimitMegabytes == Settings.Search.legacyResidentLimitMegabytes {
+            search.crossReferenceResidentByteLimitMegabytes = defaults.crossReferenceResidentByteLimitMegabytes
+        }
+        search.residentLimitDefaultsRevision = currentRevision
+        store.value.search = search
+        #log(.info, "Brought the resident limits to revision \(currentRevision, privacy: .public) of their defaults: \(search.residentByteLimitMegabytes, privacy: .public) MB for interfaces, \(search.crossReferenceResidentByteLimitMegabytes, privacy: .public) MB for cross references")
+    }
+
     /// One-shot migration from the pre-data-driven theme storage. Earlier
     /// builds persisted `XcodePresentationTheme` under the UserDefaults key
     /// `themeProfile`, which carried the user's customized font size. Pulls

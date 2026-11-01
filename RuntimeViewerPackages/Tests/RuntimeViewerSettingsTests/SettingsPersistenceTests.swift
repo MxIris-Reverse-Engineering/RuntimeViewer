@@ -90,8 +90,8 @@ private let persistedProperties: [PersistedProperty] = [
     ),
     PersistedProperty(
         encodedKey: "search",
-        apply: { $0.search.residentByteLimitMegabytes = 64 },
-        matches: { $0.search.residentByteLimitMegabytes == 64 }
+        apply: { $0.search.residentByteLimitMegabytes = 96 },
+        matches: { $0.search.residentByteLimitMegabytes == 96 }
     ),
     PersistedProperty(
         encodedKey: "update",

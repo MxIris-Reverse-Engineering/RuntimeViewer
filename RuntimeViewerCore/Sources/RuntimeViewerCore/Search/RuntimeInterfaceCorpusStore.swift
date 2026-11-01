@@ -214,24 +214,35 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///   user's own templates, which no mark can anticipate, so an entry set
 ///   records the configuration it was printed with; asking for the image
 ///   with a different one evicts and rebuilds.
-/// - **Resident budget.** When the total exceeds `residentByteLimit` the
-///   least recently searched images are evicted whole, back to unbuilt,
-///   never the image that just finished.
+/// - **Resident budget** (proposal `on-demand-corpora-and-cross-references`).
+///   Only `residentByteLimit` of corpora stay in memory. A corpus derived
+///   data holds is built whether or not it is in memory: a search reads the
+///   ones that are not back from disk, one image at a time, and keeps one if
+///   it fits once the corpora searched before it are evicted, least recently
+///   searched first. Builds and restores only fill the room left, in the
+///   order they finish, and evict nothing. A corpus derived data cannot hold
+///   — an image outside the shared cache, a print with this process's
+///   addresses — is kept whatever it takes, the stored ones evicted first;
+///   one evicted all the same goes back to unbuilt.
 /// - **Derived data first, then the printer** (proposal `derived-data`).
-///   With a derived data store, a build begins by reading the corpus stored
-///   for its image and transformer, off this actor; only a build that reads
-///   nothing queues for the printer. A printed corpus goes into the store at
-///   once — it is searchable from then on — and is written as derived data
-///   before its build settles, so a finished build is a written one.
-///   `restore(imagePaths:transformer:)` reads without ever printing, for
-///   images that are not indexed yet. A read is part of its build: whatever
-///   cancels, evicts or replaces the build drops what the read brings back.
+///   With a derived data store, a build begins by reading the summary stored
+///   for its image and transformer, off this actor, and the corpus itself
+///   only when it fits in the room left; only a build that reads nothing
+///   queues for the printer. A printed corpus goes into the store at once —
+///   it is searchable from then on — and is written as derived data before
+///   its build settles, so a finished build is a written one; it stays in
+///   memory only if it fits. `restore(imagePaths:transformer:)` reads
+///   without ever printing, for images that are not indexed yet. A read is
+///   part of its build: whatever cancels, evicts or replaces the build drops
+///   what the read brings back.
 @Loggable(.private)
 @Signpostable(.private)
 actor RuntimeInterfaceCorpusStore {
     typealias BuildProgressHandler = @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void
 
-    static let defaultResidentByteLimit = 256 * 1024 * 1024
+    /// What stays in memory by default; the rest is read back from derived
+    /// data when a search needs it.
+    static let defaultResidentByteLimit = 64 * 1024 * 1024
 
     /// How many objects are printed between two progress reports.
     static let progressReportStride = 8
@@ -255,6 +266,21 @@ actor RuntimeInterfaceCorpusStore {
         let summary: RuntimeInterfaceCorpusBuildSummary
         let transformer: Transformer.Configuration
         var lastSearchedAt: Date
+    }
+
+    /// What derived data holds for an image: the configuration its corpus
+    /// was printed with, and what the corpus holds.
+    struct StoredCorpus: Sendable {
+        let transformer: Transformer.Configuration
+        let summary: RuntimeInterfaceCorpusBuildSummary
+    }
+
+    /// What a build's read of derived data brought back.
+    private enum StoredRead {
+        /// The corpus itself, read whole: it fitted in the room left.
+        case corpus(ImageCorpus)
+        /// Only what the corpus holds: it would not have fitted.
+        case summary(RuntimeInterfaceCorpusBuildSummary)
     }
 
     private struct Subscriber {
@@ -306,7 +332,8 @@ actor RuntimeInterfaceCorpusStore {
     }
 
     private enum BuildOutcome {
-        case built(ImageCorpus)
+        /// `isStored`: written as derived data, so a search can read it back.
+        case built(ImageCorpus, isStored: Bool)
         case failed(any Swift.Error)
         case cancelled
     }
@@ -324,11 +351,20 @@ actor RuntimeInterfaceCorpusStore {
 
     private let printingWidth: Int
 
+    /// The corpora in memory.
     private var corpora: [String: ImageCorpus] = [:]
 
-    /// The corpora of `corpora` that were read from derived data rather than
-    /// printed, and what reading each took. An entry goes when its corpus
-    /// does — evicted, or replaced by a print.
+    /// The images whose corpus derived data holds — read from it, or printed
+    /// and written — each under the configuration it was printed with. They
+    /// are built whether or not their corpus is in `corpora`: a search reads
+    /// back the ones that are not. An entry goes when the image is evicted —
+    /// `evict(imagePath:)`, `evictAll()`, a build under another
+    /// configuration — or when reading it back fails.
+    private var storedCorpora: [String: StoredCorpus] = [:]
+
+    /// The built images whose corpus came from derived data rather than
+    /// from the printer, and what reading it took. An entry goes when the
+    /// image stops being built, or is printed again.
     private var restoredImages: [String: RuntimeInterfaceCorpusRestoredImage] = [:]
 
     /// Where corpora are read from before they are printed, and written to
@@ -360,6 +396,11 @@ actor RuntimeInterfaceCorpusStore {
     /// there.
     private let readStoredCorpus: @Sendable (RuntimeDerivedDataStore, String, Transformer.Configuration) async -> ImageCorpus?
 
+    /// Reads the summary of an image's stored corpus —
+    /// `readStoredSummary(from:imagePath:transformer:)` — the first step of
+    /// every read; replaceable for the same reason.
+    private let readStoredSummary: @Sendable (RuntimeDerivedDataStore, String, Transformer.Configuration) async -> RuntimeInterfaceCorpusBuildSummary?
+
     private let regularExpressionTimeLimit: TimeInterval
 
     init(
@@ -371,6 +412,9 @@ actor RuntimeInterfaceCorpusStore {
         assembleEntries: @escaping @Sendable ([RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] = { prints in RuntimeInterfaceCorpusAssembly.entries(from: prints) },
         readStoredCorpus: @escaping @Sendable (RuntimeDerivedDataStore, String, Transformer.Configuration) async -> ImageCorpus? = { derivedData, imagePath, transformer in
             await RuntimeInterfaceCorpusStore.readStoredCorpus(from: derivedData, imagePath: imagePath, transformer: transformer)
+        },
+        readStoredSummary: @escaping @Sendable (RuntimeDerivedDataStore, String, Transformer.Configuration) async -> RuntimeInterfaceCorpusBuildSummary? = { derivedData, imagePath, transformer in
+            await RuntimeInterfaceCorpusStore.readStoredSummary(from: derivedData, imagePath: imagePath, transformer: transformer)
         }
     ) {
         self.builder = builder
@@ -380,6 +424,7 @@ actor RuntimeInterfaceCorpusStore {
         self.regularExpressionTimeLimit = regularExpressionTimeLimit
         self.assembleEntries = assembleEntries
         self.readStoredCorpus = readStoredCorpus
+        self.readStoredSummary = readStoredSummary
     }
 
     /// Reads and writes `store` from now on — how a test gives an engine
@@ -394,12 +439,29 @@ actor RuntimeInterfaceCorpusStore {
         corpora.values.reduce(0) { $0 + $1.summary.byteCount }
     }
 
-    var builtImagePaths: Set<String> {
+    /// The images whose corpus is in memory.
+    var residentImagePaths: Set<String> {
         Set(corpora.keys)
     }
 
+    /// The images whose corpus derived data holds, in memory or not.
+    var storedImagePaths: Set<String> {
+        Set(storedCorpora.keys)
+    }
+
+    /// The image's corpus, if it is in memory.
     func corpus(for imagePath: String) -> ImageCorpus? {
         corpora[imagePath]
+    }
+
+    /// Searchable: its corpus in memory, or held by derived data.
+    private func isBuilt(_ imagePath: String) -> Bool {
+        corpora[imagePath] != nil || storedCorpora[imagePath] != nil
+    }
+
+    /// What the budget has left.
+    private var roomLeft: Int {
+        max(0, residentByteLimit - residentByteCount)
     }
 
     /// How many requests wait on the image's build — what a test checks
@@ -417,9 +479,12 @@ actor RuntimeInterfaceCorpusStore {
 
     /// Every image the store knows about. An image it holds nothing for —
     /// never asked for, evicted, cancelled — is absent from the map, not
-    /// reported as pending.
+    /// reported as pending. A stored corpus out of memory is built.
     func coverage() -> RuntimeInterfaceCorpusCoverage {
         var states: [String: RuntimeInterfaceCorpusBuildState] = [:]
+        for (imagePath, storedCorpus) in storedCorpora {
+            states[imagePath] = .built(storedCorpus.summary)
+        }
         for (imagePath, corpus) in corpora {
             states[imagePath] = .built(corpus.summary)
         }
@@ -433,14 +498,14 @@ actor RuntimeInterfaceCorpusStore {
             statesByImagePath: states,
             residentByteCount: residentByteCount,
             residentByteLimit: residentByteLimit,
-            restoredImagesByImagePath: restoredImages.filter { corpora[$0.key] != nil }
+            restoredImagesByImagePath: restoredImages.filter { isBuilt($0.key) }
         )
     }
 
     /// What reading the image's corpus from derived data took, when its
     /// corpus in the store came from there.
     func restoredImage(for imagePath: String) -> RuntimeInterfaceCorpusRestoredImage? {
-        corpora[imagePath] == nil ? nil : restoredImages[imagePath]
+        isBuilt(imagePath) ? restoredImages[imagePath] : nil
     }
 
     // MARK: - Building
@@ -462,6 +527,12 @@ actor RuntimeInterfaceCorpusStore {
                 return corpus.summary
             }
             #log(.info, "Corpus for \(imagePath, privacy: .public) was printed with another transformer; rebuilding")
+            evict(imagePath: imagePath)
+        } else if let storedCorpus = storedCorpora[imagePath] {
+            if storedCorpus.transformer == transformer {
+                return storedCorpus.summary
+            }
+            #log(.info, "The stored corpus of \(imagePath, privacy: .public) was printed with another transformer; rebuilding")
             evict(imagePath: imagePath)
         }
         if let build = builds[imagePath], build.transformer != transformer {
@@ -577,9 +648,9 @@ actor RuntimeInterfaceCorpusStore {
         }
         // A corpus of the build's configuration may have reached the store
         // while the build waited; nothing is printed for it then.
-        if let corpus = corpora[imagePath], corpus.transformer == build.transformer {
+        if let summary = builtSummary(of: imagePath, transformer: build.transformer) {
             builds[imagePath] = nil
-            build.subscribers.forEach { $0.continuation.resume(returning: corpus.summary) }
+            build.subscribers.forEach { $0.continuation.resume(returning: summary) }
             pump()
             return
         }
@@ -591,6 +662,18 @@ actor RuntimeInterfaceCorpusStore {
         }
         runningBuild = RunningBuild(buildIdentifier: buildIdentifier, task: task)
         #log(.info, "Building corpus for \(imagePath, privacy: .public)")
+    }
+
+    /// The summary of the image's corpus under `transformer`, in memory or
+    /// stored.
+    private func builtSummary(of imagePath: String, transformer: Transformer.Configuration) -> RuntimeInterfaceCorpusBuildSummary? {
+        if let corpus = corpora[imagePath], corpus.transformer == transformer {
+            return corpus.summary
+        }
+        if let storedCorpus = storedCorpora[imagePath], storedCorpus.transformer == transformer {
+            return storedCorpus.summary
+        }
+        return nil
     }
 
     /// The build itself. Actor-isolated, but every heavy step happens in a
@@ -659,10 +742,11 @@ actor RuntimeInterfaceCorpusStore {
             // while the app waits on the build, the serving process works at
             // the app's priority, not at the background one it falls to when
             // nothing is asked of it.
+            var isStored = false
             if installPrintedCorpus(corpus, imagePath: imagePath, buildIdentifier: buildIdentifier) {
-                await storeAsDerivedData(corpus, imagePath: imagePath)
+                isStored = await storeAsDerivedData(corpus, imagePath: imagePath)
             }
-            outcome = .built(corpus)
+            outcome = .built(corpus, isStored: isStored)
         } catch is CancellationError {
             outcome = .cancelled
             #log(.info, "Cancelled the corpus build of \(imagePath, privacy: .public)")
@@ -732,12 +816,20 @@ actor RuntimeInterfaceCorpusStore {
         }
         builds[imagePath] = nil
         switch outcome {
-        case .built(let corpus):
-            corpora[imagePath] = corpus
+        case .built(let corpus, let isStored):
             restoredImages[imagePath] = nil
             failureMessages[imagePath] = nil
+            if isStored {
+                // On disk now: it stays in memory only if it fits.
+                storedCorpora[imagePath] = StoredCorpus(transformer: corpus.transformer, summary: corpus.summary)
+                admitIfRoom(corpus, imagePath: imagePath)
+            } else {
+                // Nowhere else to find it: kept, others evicted for it.
+                storedCorpora[imagePath] = nil
+                corpora[imagePath] = corpus
+                enforceResidentLimit(protecting: imagePath)
+            }
             build.subscribers.forEach { $0.continuation.resume(returning: corpus.summary) }
-            enforceResidentLimit(protecting: imagePath)
         case .failed(let error):
             failureMessages[imagePath] = "\(error)"
             build.subscribers.forEach { $0.continuation.resume(throwing: error) }
@@ -754,17 +846,43 @@ actor RuntimeInterfaceCorpusStore {
         derivedData?.imageDirectory(forImageAt: imagePath) != nil
     }
 
-    /// Reads, off this actor, the corpus stored for the image under
-    /// `transformer`, then settles build `buildIdentifier` with it — or, when
-    /// nothing is read, queues the build for the printer, or ends it when
-    /// only restores were waiting.
+    /// Reads, off this actor, the summary stored for the image under
+    /// `transformer`, then — when the corpus fits in the room left — the
+    /// corpus itself, and settles build `buildIdentifier` with what it read;
+    /// when nothing is stored, queues the build for the printer, or ends it
+    /// when only restores were waiting.
     private func startRead(imagePath: String, buildIdentifier: UInt64, transformer: Transformer.Configuration) {
         guard let derivedData else { return }
-        let readStoredCorpus = readStoredCorpus
+        let readStoredSummary = readStoredSummary
         let startTime = DispatchTime.now().uptimeNanoseconds
         Task.detached(priority: .userInitiated) { [weak self] in
+            let summary = await readStoredSummary(derivedData, imagePath, transformer)
+            await self?.continueRead(imagePath: imagePath, buildIdentifier: buildIdentifier, transformer: transformer, summary: summary, startTime: startTime)
+        }
+    }
+
+    /// The summary is in. A corpus that fits in the room left is read whole,
+    /// so the first search finds it in memory; one that does not is built
+    /// all the same — a search reads it back.
+    private func continueRead(imagePath: String, buildIdentifier: UInt64, transformer: Transformer.Configuration, summary: RuntimeInterfaceCorpusBuildSummary?, startTime: UInt64) {
+        guard let build = builds[imagePath], build.identifier == buildIdentifier, case .reading = build.phase else {
+            #log(.info, "Dropping what the read of the stored corpus of \(imagePath, privacy: .public) brought back: its build was given up")
+            return
+        }
+        guard let summary, let derivedData else {
+            finishRead(imagePath: imagePath, buildIdentifier: buildIdentifier, read: nil, startTime: startTime)
+            return
+        }
+        guard summary.byteCount <= roomLeft else {
+            finishRead(imagePath: imagePath, buildIdentifier: buildIdentifier, read: .summary(summary), startTime: startTime)
+            return
+        }
+        let readStoredCorpus = readStoredCorpus
+        Task.detached(priority: .userInitiated) { [weak self] in
+            // A corpus whose summary read but whose body does not is not
+            // stored after all: the file is gone, and the build prints.
             let corpus = await readStoredCorpus(derivedData, imagePath, transformer)
-            await self?.finishRead(imagePath: imagePath, buildIdentifier: buildIdentifier, corpus: corpus, startTime: startTime)
+            await self?.finishRead(imagePath: imagePath, buildIdentifier: buildIdentifier, read: corpus.map(StoredRead.corpus), startTime: startTime)
         }
     }
 
@@ -778,23 +896,45 @@ actor RuntimeInterfaceCorpusStore {
         }
     }
 
-    private func finishRead(imagePath: String, buildIdentifier: UInt64, corpus: ImageCorpus?, startTime: UInt64) {
+    /// What the corpus `derivedData` holds for the image under `transformer`
+    /// holds, read from its summary section alone.
+    static func readStoredSummary(from derivedData: RuntimeDerivedDataStore, imagePath: String, transformer: Transformer.Configuration) async -> RuntimeInterfaceCorpusBuildSummary? {
+        await derivedData.read(
+            .interfaceCorpus,
+            variant: RuntimeInterfaceCorpusSnapshot.variant(for: transformer),
+            forImageAt: imagePath,
+            sections: RuntimeInterfaceCorpusSnapshot.summarySectionIdentifiers
+        ) { container in
+            try RuntimeInterfaceCorpusSnapshot.summary(from: container, transformer: transformer)
+        }
+    }
+
+    private func finishRead(imagePath: String, buildIdentifier: UInt64, read: StoredRead?, startTime: UInt64) {
         guard var build = builds[imagePath], build.identifier == buildIdentifier, case .reading = build.phase else {
             #log(.info, "Dropping what the read of the stored corpus of \(imagePath, privacy: .public) brought back: its build was given up")
             return
         }
-        if var corpus {
+        if let read {
             builds[imagePath] = nil
-            corpus.lastSearchedAt = Date()
             let duration = Double(DispatchTime.now().uptimeNanoseconds - startTime) / 1_000_000_000
-            let restoredImage = RuntimeInterfaceCorpusRestoredImage(summary: corpus.summary, duration: duration)
-            corpora[imagePath] = corpus
+            let summary: RuntimeInterfaceCorpusBuildSummary
+            switch read {
+            case .corpus(var corpus):
+                corpus.lastSearchedAt = Date()
+                summary = corpus.summary
+                storedCorpora[imagePath] = StoredCorpus(transformer: corpus.transformer, summary: summary)
+                let isResident = admitIfRoom(corpus, imagePath: imagePath)
+                #log(.info, "Read the corpus of \(imagePath, privacy: .public) from derived data: \(corpus.entries.count, privacy: .public) objects, \(summary.byteCount, privacy: .public) bytes, in \(duration, privacy: .public) s\(isResident ? "" : "; no room left for it", privacy: .public)")
+            case .summary(let storedSummary):
+                summary = storedSummary
+                storedCorpora[imagePath] = StoredCorpus(transformer: build.transformer, summary: summary)
+                #log(.info, "The corpus of \(imagePath, privacy: .public) is in derived data: \(summary.objectCount, privacy: .public) objects, \(summary.byteCount, privacy: .public) bytes, left there for want of room")
+            }
+            let restoredImage = RuntimeInterfaceCorpusRestoredImage(summary: summary, duration: duration)
             restoredImages[imagePath] = restoredImage
             failureMessages[imagePath] = nil
-            build.subscribers.forEach { $0.continuation.resume(returning: corpus.summary) }
+            build.subscribers.forEach { $0.continuation.resume(returning: summary) }
             build.restoreSubscribers.forEach { $0.continuation.resume(returning: restoredImage) }
-            enforceResidentLimit(protecting: imagePath)
-            #log(.info, "Read the corpus of \(imagePath, privacy: .public) from derived data: \(corpus.entries.count, privacy: .public) objects, \(corpus.summary.byteCount, privacy: .public) bytes, in \(duration, privacy: .public) s")
             return
         }
         let restoreSubscribers = build.restoreSubscribers
@@ -812,23 +952,25 @@ actor RuntimeInterfaceCorpusStore {
     }
 
     /// A printed corpus into the store while its build is still the
-    /// image's: searchable now, settled once it is written. `false` for a
+    /// image's: searchable now, settled once it is written. It may stand
+    /// over the budget until then, evicting nothing: whether it stays is
+    /// decided once it is known to be on disk (`finishBuild`). `false` for a
     /// build given up meanwhile, whose corpus is neither kept nor written.
     private func installPrintedCorpus(_ corpus: ImageCorpus, imagePath: String, buildIdentifier: UInt64) -> Bool {
         guard builds[imagePath]?.identifier == buildIdentifier else { return false }
         corpora[imagePath] = corpus
         restoredImages[imagePath] = nil
         failureMessages[imagePath] = nil
-        enforceResidentLimit(protecting: imagePath)
         return true
     }
 
     /// Writes `corpus` as the image's derived data, unless it printed
     /// addresses of this process, which the next launch would not find.
-    private func storeAsDerivedData(_ corpus: ImageCorpus, imagePath: String) async {
-        guard let derivedData, canRead(imagePath: imagePath) else { return }
-        guard let builder = await Self.containerBuilder(for: corpus, imagePath: imagePath) else { return }
-        await derivedData.store(builder, as: .interfaceCorpus, variant: RuntimeInterfaceCorpusSnapshot.variant(for: corpus.transformer), forImageAt: imagePath)
+    /// Returns whether it is on disk.
+    private func storeAsDerivedData(_ corpus: ImageCorpus, imagePath: String) async -> Bool {
+        guard let derivedData, canRead(imagePath: imagePath) else { return false }
+        guard let builder = await Self.containerBuilder(for: corpus, imagePath: imagePath) else { return false }
+        return await derivedData.store(builder, as: .interfaceCorpus, variant: RuntimeInterfaceCorpusSnapshot.variant(for: corpus.transformer), forImageAt: imagePath)
     }
 
     @concurrent
@@ -845,12 +987,14 @@ actor RuntimeInterfaceCorpusStore {
         }
     }
 
-    /// Reads, for each of `imagePaths`, the corpus derived data holds for it
-    /// under `transformer`, without printing — the image need not be
-    /// indexed. What is read is in the store at once, exactly as if built.
-    /// Returns the images read, each with what reading it took; an image
-    /// already in the store under `transformer` is among them if it was
-    /// read too.
+    /// Reads, for each of `imagePaths` in turn, the corpus derived data holds
+    /// for it under `transformer`, without printing — the image need not be
+    /// indexed. What is read is built at once, exactly as if by a build: the
+    /// corpora that fit in the room left are read whole and stay in memory,
+    /// in the order asked for, and once the budget is full only what each
+    /// holds is read — a search reads them back. Returns the images read,
+    /// each with what reading it took; an image already built from derived
+    /// data under `transformer` is among them.
     ///
     /// An image whose build is printing is left to it; one whose build waits
     /// for the printer is read first, and goes back to its place in the
@@ -858,24 +1002,24 @@ actor RuntimeInterfaceCorpusStore {
     /// withdraws the request, and a read only it was waiting for.
     func restore(imagePaths: [String], transformer: Transformer.Configuration) async -> [String: RuntimeInterfaceCorpusRestoredImage] {
         guard derivedData != nil else { return [:] }
-        return await withTaskGroup(of: (String, RuntimeInterfaceCorpusRestoredImage?).self) { group in
-            for imagePath in Set(imagePaths) {
-                group.addTask {
-                    (imagePath, await self.restore(imagePath: imagePath, transformer: transformer))
-                }
-            }
-            var restoredImages: [String: RuntimeInterfaceCorpusRestoredImage] = [:]
-            for await (imagePath, restoredImage) in group {
-                restoredImages[imagePath] = restoredImage
-            }
-            return restoredImages
+        var restoredImagesByImagePath: [String: RuntimeInterfaceCorpusRestoredImage] = [:]
+        var askedImagePaths: Set<String> = []
+        for imagePath in imagePaths where askedImagePaths.insert(imagePath).inserted {
+            guard !Task.isCancelled else { break }
+            restoredImagesByImagePath[imagePath] = await restore(imagePath: imagePath, transformer: transformer)
         }
+        return restoredImagesByImagePath
     }
 
     private func restore(imagePath: String, transformer: Transformer.Configuration) async -> RuntimeInterfaceCorpusRestoredImage? {
         guard canRead(imagePath: imagePath) else { return nil }
         if let corpus = corpora[imagePath] {
             if corpus.transformer == transformer {
+                return restoredImages[imagePath]
+            }
+            evict(imagePath: imagePath)
+        } else if let storedCorpus = storedCorpora[imagePath] {
+            if storedCorpus.transformer == transformer {
                 return restoredImages[imagePath]
             }
             evict(imagePath: imagePath)
@@ -914,17 +1058,38 @@ actor RuntimeInterfaceCorpusStore {
 
     // MARK: - Eviction
 
+    /// Forgets the image's corpus, in memory and stored — a search no longer
+    /// reads it back — and cancels its build.
     func evict(imagePath: String) {
         corpora[imagePath] = nil
+        storedCorpora[imagePath] = nil
         restoredImages[imagePath] = nil
         failureMessages[imagePath] = nil
         cancelBuild(imagePath: imagePath)
     }
 
+    /// `evict(imagePath:)` for every image.
     func evictAll() {
         corpora.removeAll()
+        storedCorpora.removeAll()
         restoredImages.removeAll()
         failureMessages.removeAll()
+        cancelEveryBuild()
+    }
+
+    /// Frees the memory the corpora take — the Report navigator's Eject.
+    /// The corpora derived data holds stay built, read back by the next
+    /// search that needs them; every other one is dropped. Every build and
+    /// read under way is cancelled, as by `evictAll()`.
+    func evictResidentCorpora() {
+        for imagePath in corpora.keys where storedCorpora[imagePath] == nil {
+            restoredImages[imagePath] = nil
+        }
+        corpora.removeAll()
+        cancelEveryBuild()
+    }
+
+    private func cancelEveryBuild() {
         for imagePath in Array(builds.keys) {
             cancelBuild(imagePath: imagePath)
         }
@@ -935,25 +1100,84 @@ actor RuntimeInterfaceCorpusStore {
         enforceResidentLimit(protecting: nil)
     }
 
+    /// Evicts until the corpora in memory fit the budget: first the ones
+    /// derived data holds, which stay built, then the others, which go back
+    /// to unbuilt — each group least recently searched first, and never
+    /// `protectedImagePath`.
     private func enforceResidentLimit(protecting protectedImagePath: String?) {
         while residentByteCount > residentByteLimit {
             let candidates = corpora.filter { $0.key != protectedImagePath }
-            guard let oldest = candidates.min(by: { $0.value.lastSearchedAt < $1.value.lastSearchedAt }) else { return }
+            let storedCandidates = candidates.filter { storedCorpora[$0.key] != nil }
+            let pool = storedCandidates.isEmpty ? candidates : storedCandidates
+            guard let oldest = pool.min(by: { $0.value.lastSearchedAt < $1.value.lastSearchedAt }) else { return }
             #log(.info, "Evicting the corpus of \(oldest.key, privacy: .public) (\(oldest.value.summary.byteCount, privacy: .public) bytes) to stay under \(self.residentByteLimit, privacy: .public) bytes")
             corpora[oldest.key] = nil
-            restoredImages[oldest.key] = nil
+            if storedCorpora[oldest.key] == nil {
+                restoredImages[oldest.key] = nil
+            }
         }
+    }
+
+    /// Keeps `corpus` in memory if it fits in the room the budget has left,
+    /// evicting nothing — how builds and restores fill the budget, in the
+    /// order they finish: which corpora stay beyond that is for searches to
+    /// decide. One that does not fit is taken out of memory if it was there.
+    @discardableResult
+    private func admitIfRoom(_ corpus: ImageCorpus, imagePath: String) -> Bool {
+        let othersByteCount = residentByteCount - (corpora[imagePath]?.summary.byteCount ?? 0)
+        guard othersByteCount + corpus.summary.byteCount <= residentByteLimit else {
+            corpora[imagePath] = nil
+            return false
+        }
+        corpora[imagePath] = corpus
+        return true
+    }
+
+    /// Keeps a corpus a search read back if it fits once the stored corpora
+    /// last searched before that search began are evicted, least recently
+    /// searched first. Never evicts a corpus the same search reads — they
+    /// are as recent — nor one that cannot be read back. One that would not
+    /// fit even then is left on disk.
+    private func admitSearched(_ corpus: ImageCorpus, imagePath: String, searchedAt: Date) {
+        let byteCount = corpus.summary.byteCount
+        var room = residentByteLimit - residentByteCount
+        var evictedImagePaths: [String] = []
+        if room < byteCount {
+            let candidates = corpora
+                .filter { storedCorpora[$0.key] != nil && $0.value.lastSearchedAt < searchedAt }
+                .sorted { $0.value.lastSearchedAt < $1.value.lastSearchedAt }
+            for (candidateImagePath, candidate) in candidates where room < byteCount {
+                evictedImagePaths.append(candidateImagePath)
+                room += candidate.summary.byteCount
+            }
+            guard room >= byteCount else { return }
+        }
+        for evictedImagePath in evictedImagePaths {
+            #log(.info, "Evicting the corpus of \(evictedImagePath, privacy: .public) for \(imagePath, privacy: .public), searched since")
+            corpora[evictedImagePath] = nil
+        }
+        var keptCorpus = corpus
+        keptCorpus.lastSearchedAt = searchedAt
+        corpora[imagePath] = keptCorpus
     }
 
     // MARK: - Searching
 
-    /// One corpus as a search reads it, taken on this actor so the scan can
-    /// run off it. The entries are values: a corpus evicted while the scan
-    /// runs stays readable — and resident, over the budget — until the scan
-    /// is done with it.
-    private struct SearchedCorpus: Sendable {
-        let imagePath: String
-        let entries: [RuntimeInterfaceCorpusEntry]
+    /// One image as a search reads it, taken on this actor so the scan can
+    /// run off it: its corpus in memory, or the configuration its stored
+    /// corpus is read back under when the scan reaches it. The entries are
+    /// values: a corpus evicted while the scan runs stays readable — and
+    /// resident, over the budget — until the scan is done with it.
+    private enum SearchSource: Sendable {
+        case resident(imagePath: String, entries: [RuntimeInterfaceCorpusEntry])
+        case stored(imagePath: String, transformer: Transformer.Configuration)
+
+        var imagePath: String {
+            switch self {
+            case .resident(let imagePath, _), .stored(let imagePath, _):
+                imagePath
+            }
+        }
     }
 
     /// What the scan of one search came to.
@@ -967,7 +1191,9 @@ actor RuntimeInterfaceCorpusStore {
     }
 
     /// Runs `query` over every built corpus, pushing matches to `onProgress`
-    /// one image at a time, and returns the summary. Matches are collected up
+    /// one image at a time, and returns the summary. A stored corpus out of
+    /// memory is read back when the scan reaches it, one at a time. Matches
+    /// are collected up
     /// to `query.resultLimit`; the count goes on past it. The scan runs off
     /// this actor, so whatever the pattern costs, the store keeps answering;
     /// a regular expression that spends the search's budget stops it, with
@@ -981,10 +1207,14 @@ actor RuntimeInterfaceCorpusStore {
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(query)
         let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
+        let searchedAt = Date()
         let scan = try await Self.scan(
-            corporaToSearch(within: query.imagePaths),
+            sourcesToSearch(within: query.imagePaths, searchedAt: searchedAt),
             resultLimit: query.resultLimit,
             regularExpressionTimeLimit: regularExpressionTimeLimit,
+            readBack: { imagePath, transformer in
+                await self.readBack(imagePath: imagePath, transformer: transformer, searchedAt: searchedAt)
+            },
             onProgress: onProgress
         ) { entry, budget, isCollecting, reportsHits, collect in
             // Most entries have no hit at all; under options that hide
@@ -1025,10 +1255,14 @@ actor RuntimeInterfaceCorpusStore {
         let pattern = query.text.isEmpty ? nil : try RuntimeInterfaceTextMatcher.Pattern(text: query.text, matchMode: query.matchMode, isCaseSensitive: query.isCaseSensitive)
         let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
         let kinds = query.kinds
+        let searchedAt = Date()
         let scan = try await Self.scan(
-            corporaToSearch(within: query.imagePaths),
+            sourcesToSearch(within: query.imagePaths, searchedAt: searchedAt),
             resultLimit: query.resultLimit,
             regularExpressionTimeLimit: regularExpressionTimeLimit,
+            readBack: { imagePath, transformer in
+                await self.readBack(imagePath: imagePath, transformer: transformer, searchedAt: searchedAt)
+            },
             onProgress: onProgress
         ) { entry, budget, isCollectingAtStart, reportsHits, collect in
             guard let pattern else { return 0 }
@@ -1070,26 +1304,61 @@ actor RuntimeInterfaceCorpusStore {
         return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
     }
 
-    /// The built corpora a search reads, in path order — all of them, or
-    /// those of `scope` when the query names some — marked searched now.
-    private func corporaToSearch(within scope: Set<String>?) -> [SearchedCorpus] {
-        let now = Date()
-        var imagePaths = corpora.keys.sorted()
+    /// The built images a search reads, in path order — all of them, or
+    /// those of `scope` when the query names some — the ones in memory
+    /// marked searched at `searchedAt`.
+    private func sourcesToSearch(within scope: Set<String>?, searchedAt: Date) -> [SearchSource] {
+        var imagePaths = Set(corpora.keys).union(storedCorpora.keys).sorted()
         if let scope {
             imagePaths = imagePaths.filter(scope.contains)
         }
         return imagePaths.compactMap { imagePath in
-            guard let corpus = corpora[imagePath] else { return nil }
-            corpora[imagePath]?.lastSearchedAt = now
-            return SearchedCorpus(imagePath: imagePath, entries: corpus.entries)
+            if let corpus = corpora[imagePath] {
+                corpora[imagePath]?.lastSearchedAt = searchedAt
+                return .resident(imagePath: imagePath, entries: corpus.entries)
+            }
+            guard let storedCorpus = storedCorpora[imagePath] else { return nil }
+            return .stored(imagePath: imagePath, transformer: storedCorpus.transformer)
         }
     }
 
-    /// Reads `corpora` entry by entry, off this actor: the text and member
-    /// searches differ only in `matchEntry`, which hands each match of an
-    /// entry to its last argument — `false` back means the result limit is
-    /// reached and nothing more is taken — and returns how many matches the
-    /// entry has. Its third argument says whether anything is still taken
+    /// The entries of a stored corpus the scan of a search has reached, read
+    /// off this actor and kept in memory if `admitSearched` finds room. `nil`
+    /// when its file is gone or fails its checks: the image is no longer
+    /// built, and its failure says why.
+    private func readBack(imagePath: String, transformer: Transformer.Configuration, searchedAt: Date) async -> [RuntimeInterfaceCorpusEntry]? {
+        // In memory by now — read back for another search, or built.
+        if let corpus = corpora[imagePath], corpus.transformer == transformer {
+            corpora[imagePath]?.lastSearchedAt = searchedAt
+            return corpus.entries
+        }
+        guard let derivedData else { return nil }
+        let corpus = await readStoredCorpus(derivedData, imagePath, transformer)
+        // Still the image's stored corpus, still out of memory: evicted or
+        // rebuilt meanwhile, it is not the store's to keep or forget.
+        let isStillStored = storedCorpora[imagePath]?.transformer == transformer && corpora[imagePath] == nil
+        guard let corpus else {
+            if isStillStored {
+                #log(.error, "Could not read back the stored corpus of \(imagePath, privacy: .public); it is no longer searchable")
+                storedCorpora[imagePath] = nil
+                restoredImages[imagePath] = nil
+                failureMessages[imagePath] = "Its stored corpus could not be read back from derived data."
+            }
+            return nil
+        }
+        if isStillStored {
+            admitSearched(corpus, imagePath: imagePath, searchedAt: searchedAt)
+        }
+        return corpus.entries
+    }
+
+    /// Reads `sources` entry by entry, off this actor, a stored corpus read
+    /// back through `readBack` when the scan reaches it — an image it cannot
+    /// read is passed over, and is not among the images scanned. The text
+    /// and member searches differ only in `matchEntry`, which hands each
+    /// match of an entry to its last argument — `false` back means the result
+    /// limit is reached and nothing more is taken — and returns how many
+    /// matches the entry has. Its third argument says whether anything is still taken
     /// when the entry starts; past the limit an entry is only counted, which
     /// needs much less work. One regular expression budget serves the whole
     /// search.
@@ -1112,22 +1381,34 @@ actor RuntimeInterfaceCorpusStore {
     /// out, and `stopReason` says why nothing follows.
     @concurrent
     private static func scan<Match: Sendable>(
-        _ corpora: [SearchedCorpus],
+        _ sources: [SearchSource],
         resultLimit: Int,
         regularExpressionTimeLimit: TimeInterval,
+        readBack: @Sendable (_ imagePath: String, _ transformer: Transformer.Configuration) async -> [RuntimeInterfaceCorpusEntry]?,
         onProgress: @Sendable ([Match]) async -> Void,
         matchEntry: @Sendable (_ entry: RuntimeInterfaceCorpusEntry, _ budget: inout RuntimeInterfaceTextMatcher.RegularExpressionBudget, _ isCollecting: Bool, _ reportsHits: (_ shownText: String) -> Bool, _ collect: (Match) -> Bool) throws -> Int
     ) async throws -> SearchScan {
         var scan = SearchScan()
         var budget = RuntimeInterfaceTextMatcher.RegularExpressionBudget(timeLimit: regularExpressionTimeLimit)
         var repeatedProtocolCopies = RuntimeInterfaceRepeatedProtocolCopies()
-        for corpus in corpora {
+        for source in sources {
             try Task.checkCancellation()
-            scan.scannedImagePaths.append(corpus.imagePath)
+            let entries: [RuntimeInterfaceCorpusEntry]
+            switch source {
+            case .resident(_, let residentEntries):
+                entries = residentEntries
+            case .stored(let imagePath, let transformer):
+                // Read one image at a time: what is not kept goes once its
+                // scan is done, before the next is read.
+                guard let readEntries = await readBack(imagePath, transformer) else { continue }
+                try Task.checkCancellation()
+                entries = readEntries
+            }
+            scan.scannedImagePaths.append(source.imagePath)
             var batch: [Match] = []
             var collectedCount = scan.collectedCount
             do {
-                for entry in corpus.entries {
+                for entry in entries {
                     try Task.checkCancellation()
                     scan.scannedObjectCount += 1
                     var isRepeatedCopy = false
@@ -1186,6 +1467,6 @@ actor RuntimeInterfaceCorpusStore {
     /// those it was asked to cover: all of them, or those of `scope`.
     private func unbuiltImagePaths(among indexedImagePaths: Set<String>, within scope: Set<String>?) -> [String] {
         let coveredImagePaths = scope.map(indexedImagePaths.intersection) ?? indexedImagePaths
-        return coveredImagePaths.subtracting(corpora.keys).sorted()
+        return coveredImagePaths.filter { !isBuilt($0) }.sorted()
     }
 }

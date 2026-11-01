@@ -393,13 +393,16 @@ struct CrossReferenceQuery {
         let indexedPaths = try await indexedImagePaths()
         let (analyzer, generation, imageIndices) = try currentAnalyzer(resolving: indexedPaths + [path])
         let imageIndex = try Self.indexedImageIndex(forPath: path, among: Set(indexedPaths.compactMap { imageIndices[$0] }), in: analyzer)
-        let prepared = try await session.preparedImage(ofImageAt: imageIndex, generation: generation, isPrioritized: options.isPrioritized, reportProgress: reportProgress) { shouldContinue in
+        let result = try await session.preparedImage(ofImageAt: imageIndex, generation: generation, isPrioritized: options.isPrioritized, evictsNothing: options.evictsNothing, reportProgress: reportProgress) { shouldContinue in
             Self.prepareImage(at: imageIndex, with: analyzer, shouldContinue: shouldContinue)
         }
-        // Preparing the image kept its function table.
-        session.noteFunctionTables(ofImagesAt: [imageIndex], generation: generation)
+        // Preparing the image kept its function table — unless it was read
+        // ahead and not kept, and the session released what it read.
+        if result.isKept || !options.evictsNothing {
+            session.noteFunctionTables(ofImagesAt: [imageIndex], generation: generation)
+        }
         session.preparePrefiltersIfNeeded(with: analyzer, generation: generation)
-        return RuntimeCrossReferencePreparation(referenceCount: prepared.index.referenceCount, byteCount: prepared.byteCount)
+        return RuntimeCrossReferencePreparation(referenceCount: result.prepared.index.referenceCount, byteCount: result.prepared.byteCount, isKept: result.isKept)
     }
 
     /// Scans the image into an index, then reads the names a query shows
@@ -493,7 +496,7 @@ struct CrossReferenceQuery {
                         if usesPreparedIndexes {
                             let prepared = try await session.preparedImage(ofImageAt: imageIndex, generation: generation, isPrioritized: true) { shouldContinue in
                                 Self.prepareImage(at: imageIndex, with: analyzer, shouldContinue: shouldContinue)
-                            }
+                            }.prepared
                             // Naming what the index answers needs the image's
                             // function table, kept with the image — unless the
                             // image was too large to keep.

@@ -28,7 +28,10 @@ struct CrossReferencePreparationTests {
         CrossReferenceSession(maximumConcurrentScans: ProcessInfo.processInfo.activeProcessorCount, preparesPrefilters: false, imagesOutsideSharedCache: { processImages.headers })
     }
 
-    private static let roomyPreparationOptions = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+    /// Room for every image these tests prepare, whatever the app's default.
+    private static let roomyByteLimit = 1 << 30
+
+    private static let roomyPreparationOptions = RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)
 
     /// An image indexed after the analyzer was made, loaded from outside the
     /// shared cache as an app's own framework is: one the analyzer does not
@@ -39,7 +42,7 @@ struct CrossReferencePreparationTests {
         CrossReferenceQuery(engine: RuntimeEngine(source: .local, engineID: "test-cross-reference-preparation"), session: session) { indexedImagePaths }
     }
 
-    private static let preparedOptions = RuntimeCrossReferenceQueryOptions(preparedIndexByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+    private static let preparedOptions = RuntimeCrossReferenceQueryOptions(preparedIndexByteLimit: Self.roomyByteLimit)
 
     @Test("A query reading prepared indexes answers what a query scanning answers")
     func preparedQueriesAnswerLikeScans() async throws {
@@ -62,7 +65,7 @@ struct CrossReferencePreparationTests {
     func preparedImagesAreNotScannedAgain() async throws {
         let session = Self.makeSession()
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.appKitPath])
-        let preparation = try await query.prepare(imageAt: Self.appKitPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)) { _ in }
+        let preparation = try await query.prepare(imageAt: Self.appKitPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)) { _ in }
         #expect(preparation.referenceCount > 0)
         #expect(preparation.byteCount > 0)
         #expect(session.startedPreparationCount == 1)
@@ -79,7 +82,7 @@ struct CrossReferencePreparationTests {
     func requestersShareOnePreparation() async throws {
         let session = Self.makeSession()
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.appKitPath])
-        let options = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+        let options = RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)
         async let background = query.prepare(imageAt: Self.appKitPath, options: options) { _ in }
         async let callers = query.callers(of: .selector("orderWindow:relativeTo:"), in: .image(path: Self.appKitPath), options: Self.preparedOptions) { _ in }
         let (preparation, result) = try await (background, callers)
@@ -104,11 +107,50 @@ struct CrossReferencePreparationTests {
         #expect(query.preparedByteCount == 0)
     }
 
+    @Test("A preparation that evicts nothing is kept only within the room left, says so, and lets go of what it read")
+    func preparationThatEvictsNothingFillsTheRoomLeft() async throws {
+        let session = Self.makeSession()
+        let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath, Self.foundationPath])
+        let libobjc = try await query.prepare(imageAt: Self.libobjcPath, options: Self.roomyPreparationOptions) { _ in }
+        #expect(libobjc.isKept)
+
+        // Room for libobjc and a byte more: Foundation does not fit, and
+        // libobjc stays.
+        let tight = RuntimeCrossReferencePreparationOptions(residentByteLimit: libobjc.byteCount + 1, evictsNothing: true)
+        let foundation = try await query.prepare(imageAt: Self.foundationPath, options: tight) { _ in }
+        #expect(!foundation.isKept)
+        let (analyzer, _) = try session.currentAnalyzer()
+        let libobjcIndex = try #require(analyzer.imageIndex(forPath: Self.libobjcPath))
+        let foundationIndex = try #require(analyzer.imageIndex(forPath: Self.foundationPath))
+        #expect(session.preparedImageIndices == [libobjcIndex])
+        #expect(session.preparedByteCount == libobjc.byteCount)
+        #expect(analyzer.approximateByteCount(ofImageDataAt: foundationIndex) == 0, "what was read for Foundation is let go")
+
+        // Asked for the way a query asks, Foundation is kept and libobjc goes.
+        let roomForFoundation = RuntimeCrossReferencePreparationOptions(residentByteLimit: foundation.byteCount + libobjc.byteCount / 2)
+        let kept = try await query.prepare(imageAt: Self.foundationPath, options: roomForFoundation) { _ in }
+        #expect(kept.isKept)
+        #expect(session.preparedImageIndices == [foundationIndex])
+    }
+
+    @Test("Options and a result from a peer that predates filling the room left decode, as keeping as before and kept")
+    func olderPeersDecode() throws {
+        let options = try JSONDecoder().decode(RuntimeCrossReferencePreparationOptions.self, from: Data(#"{"residentByteLimit":1024,"isPrioritized":true}"#.utf8))
+        #expect(options == RuntimeCrossReferencePreparationOptions(residentByteLimit: 1024, isPrioritized: true))
+        let preparation = try JSONDecoder().decode(RuntimeCrossReferencePreparation.self, from: Data(#"{"referenceCount":3,"byteCount":512}"#.utf8))
+        #expect(preparation == RuntimeCrossReferencePreparation(referenceCount: 3, byteCount: 512, isKept: true))
+
+        let evictingNothing = RuntimeCrossReferencePreparationOptions(residentByteLimit: 1, evictsNothing: true)
+        #expect(try JSONDecoder().decode(RuntimeCrossReferencePreparationOptions.self, from: JSONEncoder().encode(evictingNothing)) == evictingNothing)
+        let notKept = RuntimeCrossReferencePreparation(referenceCount: 1, byteCount: 2, isKept: false)
+        #expect(try JSONDecoder().decode(RuntimeCrossReferencePreparation.self, from: JSONEncoder().encode(notKept)) == notKept)
+    }
+
     @Test("Prepared indexes stay within the byte limit, the least recently used dropped first; zero drops them all")
     func preparedIndexesStayWithinTheLimit() async throws {
         let session = Self.makeSession()
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath, Self.foundationPath])
-        let roomy = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+        let roomy = RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)
         let libobjc = try await query.prepare(imageAt: Self.libobjcPath, options: roomy) { _ in }
         let foundation = try await query.prepare(imageAt: Self.foundationPath, options: roomy) { _ in }
         #expect(session.preparedImageIndices.count == 2)
@@ -137,7 +179,7 @@ struct CrossReferencePreparationTests {
         let recorder = PreparationProgressRecorder()
         let session = Self.makeSession()
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
-        let roomy = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+        let roomy = RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)
         let preparation = try await query.prepare(imageAt: Self.libobjcPath, options: roomy) { recorder.record($0) }
         let (analyzer, _) = try session.currentAnalyzer()
         let libobjc = try #require(analyzer.imageIndex(forPath: Self.libobjcPath))
@@ -168,7 +210,7 @@ struct CrossReferencePreparationTests {
     func preparedNamesOutliveTheFunctionTableLimit() async throws {
         let session = Self.makeSession()
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
-        _ = try await query.prepare(imageAt: Self.libobjcPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)) { _ in }
+        _ = try await query.prepare(imageAt: Self.libobjcPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)) { _ in }
         let (analyzer, generation) = try session.currentAnalyzer()
         let libobjc = try #require(analyzer.imageIndex(forPath: Self.libobjcPath))
         let foundation = try #require(analyzer.imageIndex(forPath: Self.foundationPath))
@@ -192,7 +234,7 @@ struct CrossReferencePreparationTests {
     func firstPreparationReadsThePrefilters() async throws {
         let session = Self.makeSession(preparesPrefilters: true)
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
-        let options = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+        let options = RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)
         _ = try await query.prepare(imageAt: Self.libobjcPath, options: options) { _ in }
         let (_, generation) = try session.currentAnalyzer()
         let deadline = Date().addingTimeInterval(120)
@@ -207,7 +249,7 @@ struct CrossReferencePreparationTests {
         let session = Self.makeSession()
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.libobjcPath])
         await #expect(throws: RuntimeCrossReferenceError.imageNotIndexed(path: Self.foundationPath)) {
-            try await query.prepare(imageAt: Self.foundationPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)) { _ in }
+            try await query.prepare(imageAt: Self.foundationPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)) { _ in }
         }
         #expect(session.startedPreparationCount == 0)
     }
@@ -218,7 +260,7 @@ struct CrossReferencePreparationTests {
         let query = Self.makeQuery(session: session, indexedImagePaths: [Self.appKitPath])
         let (firstReport, firstReportContinuation) = AsyncStream<Void>.makeStream()
         let task = Task {
-            try await query.prepare(imageAt: Self.appKitPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)) { _ in
+            try await query.prepare(imageAt: Self.appKitPath, options: RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)) { _ in
                 firstReportContinuation.yield()
             }
         }
@@ -239,7 +281,7 @@ struct CrossReferencePreparationTests {
         let engine = RuntimeEngine(source: .local, engineID: "test-cross-reference-preparation-engine")
         try await engine.connect()
         try await engine.loadImage(at: Self.libobjcPath)
-        let options = RuntimeCrossReferencePreparationOptions(residentByteLimit: CrossReferenceSession.defaultPreparedByteLimit)
+        let options = RuntimeCrossReferencePreparationOptions(residentByteLimit: Self.roomyByteLimit)
         let recorder = PreparationProgressRecorder()
         let preparation = try await engine.prepareCrossReferences(forImageAt: Self.libobjcPath, options: options) { recorder.record($0) }
         #expect(preparation.referenceCount > 0)

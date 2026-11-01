@@ -366,8 +366,17 @@ final class CrossReferenceSession: Sendable {
     // MARK: - Prepared images
 
     /// Bytes of prepared images kept until a request brings another limit:
-    /// the Find corpus's default, about seven frameworks of AppKit's size.
-    static let defaultPreparedByteLimit = 256 << 20
+    /// the Find corpus's default, about two frameworks of AppKit's size.
+    static let defaultPreparedByteLimit = 64 << 20
+
+    /// What a preparation came to for one requester.
+    struct PreparationResult: Sendable {
+        let prepared: CrossReferencePreparedImage
+        /// Whether the session keeps the image. One larger than the limit is
+        /// not kept, and neither is one that does not fit in the room left
+        /// when every requester asked to evict nothing for it.
+        let isKept: Bool
+    }
 
     /// The image prepared: the one kept, the one being prepared, or one
     /// `build` prepares now on the session's queue. Every requester of an
@@ -384,34 +393,42 @@ final class CrossReferenceSession: Sendable {
     /// first — the analyzer releasing the names of one dropped. One larger
     /// than the limit is returned and not kept.
     ///
+    /// With `evictsNothing` — Keep Cross References Ready filling the limit
+    /// ahead of the queries — an image that does not fit in the room left is
+    /// returned and not kept either, and what the analyzer read for it is
+    /// released at once. A preparation is shared: one requester that does
+    /// not ask for it, a query waiting, keeps the image as above.
+    ///
     /// An image prepared with an analyzer renewed since is kept all the same,
     /// and the renewed analyzer reads its names.
     func preparedImage(
         ofImageAt imageIndex: Int,
         generation: Int,
         isPrioritized: Bool,
+        evictsNothing: Bool = false,
         reportProgress: (@Sendable (RuntimeCrossReferencePreparationProgress) async -> Void)? = nil,
         build: @escaping @Sendable (_ shouldContinue: @escaping (RuntimeCrossReferencePreparationProgress) -> Bool) -> CrossReferencePreparedImage?
-    ) async throws -> CrossReferencePreparedImage {
+    ) async throws -> PreparationResult {
         if let ready = state.withLock({ Self.takeReadyImage(ofImageAt: imageIndex, generation: generation, from: &$0) }) {
-            return ready
+            return PreparationResult(prepared: ready, isKept: true)
         }
         let key = state.withLock { PreparationKey(imageIndex: imageIndex, numbering: Self.numbering(ofGeneration: generation, in: $0)) }
         let waiterIdentifier = UUID()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                let immediateResult = state.withLock { state -> Result<CrossReferencePreparedImage, any Error>? in
+                let immediateResult = state.withLock { state -> Result<PreparationResult, any Error>? in
                     if Task.isCancelled { return .failure(CancellationError()) }
-                    if let ready = Self.takeReadyImage(ofImageAt: imageIndex, generation: generation, from: &state) { return .success(ready) }
+                    if let ready = Self.takeReadyImage(ofImageAt: imageIndex, generation: generation, from: &state) { return .success(PreparationResult(prepared: ready, isKept: true)) }
                     if var preparation = state.preparations[key] {
                         preparation.waiters[waiterIdentifier] = continuation
                         preparation.progressHandlers[waiterIdentifier] = reportProgress
                         preparation.isAbandoned = false
                         if isPrioritized { preparation.operation.queuePriority = .veryHigh }
+                        if !evictsNothing { preparation.evictsNothing = false }
                         state.preparations[key] = preparation
                     } else {
                         let operation = makePreparationOperation(for: key, isPrioritized: isPrioritized, build: build)
-                        var preparation = Preparation(operation: operation, buildGeneration: generation)
+                        var preparation = Preparation(operation: operation, buildGeneration: generation, evictsNothing: evictsNothing)
                         preparation.waiters[waiterIdentifier] = continuation
                         preparation.progressHandlers[waiterIdentifier] = reportProgress
                         state.preparations[key] = preparation
@@ -422,7 +439,7 @@ final class CrossReferenceSession: Sendable {
                 if let immediateResult { continuation.resume(with: immediateResult) }
             }
         } onCancel: {
-            let continuation = state.withLock { state -> CheckedContinuation<CrossReferencePreparedImage, any Error>? in
+            let continuation = state.withLock { state -> CheckedContinuation<PreparationResult, any Error>? in
                 guard var preparation = state.preparations[key], let continuation = preparation.waiters.removeValue(forKey: waiterIdentifier) else { return nil }
                 preparation.progressHandlers[waiterIdentifier] = nil
                 if preparation.waiters.isEmpty { preparation.isAbandoned = true }
@@ -472,7 +489,7 @@ final class CrossReferenceSession: Sendable {
         }
 
         enum Completion {
-            case answer([CheckedContinuation<CrossReferencePreparedImage, any Error>], CrossReferencePreparedImage, namesToRead: (analyzer: CrossReferenceAnalyzer, generation: Int)?)
+            case answer([CheckedContinuation<PreparationResult, any Error>], PreparationResult, namesToRead: (analyzer: CrossReferenceAnalyzer, generation: Int)?)
             case restart(isPrioritized: Bool)
             case none
         }
@@ -489,23 +506,31 @@ final class CrossReferenceSession: Sendable {
             }
             state.preparations[key] = nil
             var namesToRead: (analyzer: CrossReferenceAnalyzer, generation: Int)?
+            var isKept = false
             if key.numbering == state.numberingGeneration {
-                keep(prepared, ofImageAt: key.imageIndex, from: &state)
+                isKept = keep(prepared, ofImageAt: key.imageIndex, evictsNothing: preparation.evictsNothing, from: &state)
+                if !isKept, preparation.evictsNothing {
+                    // Read ahead of any query and not kept: no query names
+                    // what it answers, so what the analyzer read for it goes
+                    // now rather than with the function tables of the images
+                    // queries named.
+                    Self.releaseImageData(ofEvictedImagesAt: [key.imageIndex], in: &state)
+                }
                 // Read with an analyzer renewed since, which holds the names
                 // it read: the current one reads them too.
-                if preparation.buildGeneration != state.generation, state.preparedImages[key.imageIndex] != nil, let analyzer = state.analyzer {
+                if preparation.buildGeneration != state.generation, isKept, let analyzer = state.analyzer {
                     namesToRead = (analyzer, state.generation)
                 }
             }
-            return .answer(Array(preparation.waiters.values), prepared, namesToRead: namesToRead)
+            return .answer(Array(preparation.waiters.values), PreparationResult(prepared: prepared, isKept: isKept), namesToRead: namesToRead)
         }
         switch completion {
-        case .answer(let continuations, let prepared, let namesToRead):
+        case .answer(let continuations, let result, let namesToRead):
             if let namesToRead {
                 readNames(ofImagesAt: [key.imageIndex], with: namesToRead.analyzer, generation: namesToRead.generation)
             }
             for continuation in continuations {
-                continuation.resume(returning: prepared)
+                continuation.resume(returning: result)
             }
         case .restart(let isPrioritized):
             let operation = makePreparationOperation(for: key, isPrioritized: isPrioritized, build: build)
@@ -529,18 +554,23 @@ final class CrossReferenceSession: Sendable {
         return kept.prepared
     }
 
-    /// Keeps the image within the byte limit. One larger than the limit is
-    /// not kept; the names read for it go the way of any image's a query
-    /// named functions in (``noteFunctionTables(ofImagesAt:generation:)``).
-    private func keep(_ prepared: CrossReferencePreparedImage, ofImageAt imageIndex: Int, from state: inout State) {
-        guard prepared.byteCount <= state.preparedByteLimit else { return }
-        if let replaced = state.preparedImages[imageIndex] {
-            state.preparedByteCount -= replaced.prepared.byteCount
+    /// Keeps the image within the byte limit, and says whether it did. One
+    /// larger than the limit is not kept; the names read for it go the way of
+    /// any image's a query named functions in
+    /// (``noteFunctionTables(ofImagesAt:generation:)``). With `evictsNothing`,
+    /// neither is one that does not fit in the room left.
+    private func keep(_ prepared: CrossReferencePreparedImage, ofImageAt imageIndex: Int, evictsNothing: Bool, from state: inout State) -> Bool {
+        guard prepared.byteCount <= state.preparedByteLimit else { return false }
+        let replacedByteCount = state.preparedImages[imageIndex]?.prepared.byteCount ?? 0
+        if evictsNothing, state.preparedByteCount - replacedByteCount + prepared.byteCount > state.preparedByteLimit {
+            return false
         }
+        state.preparedByteCount -= replacedByteCount
         state.useCounter += 1
         state.preparedImages[imageIndex] = KeptPreparedImage(prepared: prepared, lastUse: state.useCounter)
         state.preparedByteCount += prepared.byteCount
         Self.evictLeastRecentlyUsedImages(from: &state, keeping: imageIndex)
+        return true
     }
 
     private static func evictLeastRecentlyUsedImages(from state: inout State, keeping keptImageIndex: Int?) {
@@ -640,7 +670,9 @@ final class CrossReferenceSession: Sendable {
         /// The generation of the analyzer the preparation reads the image
         /// with, which keeps the names it reads.
         let buildGeneration: Int
-        var waiters: [UUID: CheckedContinuation<CrossReferencePreparedImage, any Error>] = [:]
+        /// Every requester asked to evict nothing for the image.
+        var evictsNothing: Bool
+        var waiters: [UUID: CheckedContinuation<PreparationResult, any Error>] = [:]
         var progressHandlers: [UUID: @Sendable (RuntimeCrossReferencePreparationProgress) async -> Void] = [:]
         /// Every requester left: the operation stops instead of building.
         var isAbandoned = false

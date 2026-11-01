@@ -11,8 +11,10 @@ import Testing
 /// The Report navigator's Searchable Interfaces and Cross References rows show what the engine's
 /// process keeps for them, and eject it, as Finder ejects a volume: the Find corpora, or the
 /// prepared cross references, are dropped from the engine's process and come back only when
-/// something needs them. Nothing drops them on its own — closing the last window on an engine
-/// did, and reopening one then rebuilt everything (proposal `engine-resident-memory`).
+/// something needs them — a corpus its derived data holds stays searchable, read back by the next
+/// search (proposal `on-demand-corpora-and-cross-references`). Nothing drops them on its own —
+/// closing the last window on an engine did, and reopening one then rebuilt everything (proposal
+/// `engine-resident-memory`).
 @Suite("Ejecting an engine's corpora and cross references", .serialized)
 @MainActor
 struct EngineDataEjectTests {
@@ -23,7 +25,7 @@ struct EngineDataEjectTests {
     /// The limit the test settings keep prepared cross references within: the default.
     private nonisolated static let preparedByteLimit = Settings.Search.default.crossReferenceResidentByteLimit
 
-    @Test("ejecting Searchable Interfaces drops the engine's corpora, which stay unbuilt until something asks")
+    @Test("ejecting Searchable Interfaces drops the corpora of an engine without derived data, which stay unbuilt until something asks")
     func ejectingSearchableInterfacesDropsTheCorpora() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "EngineDataEjectTests.corpora", loading: [TestImages.libobjc])
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
@@ -42,6 +44,30 @@ struct EngineDataEjectTests {
         let coverage = try await engine.interfaceCorpusCoverage()
         #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt != true, "the corpus came back without anything asking for it")
         try await waitUntil { page.node(.category(.searchableInterfaces))?.cellViewModel.appearance.showsEjectButton != true }
+        await engine.stop()
+    }
+
+    @Test("ejecting Searchable Interfaces frees the memory of a corpus derived data holds, which stays built and is read back by a search")
+    func ejectingKeepsStoredCorporaSearchable() async throws {
+        let fixture = try DerivedDataFixture()
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "EngineDataEjectTests.storedCorpora", loading: [TestImages.libobjc])
+        await engine.useDerivedDataStore(fixture.store)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.indexing.isEnabled = false
+        environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
+        let page = environment.make { EjectingReportPage(documentState: environment.documentState) }
+        defer { withExtendedLifetime(page) {} }
+        let categoryNode = try await page.node(.category(.searchableInterfaces), within: 60) { $0.cellViewModel.appearance.showsEjectButton }
+
+        page.ejectRelay.accept(categoryNode)
+
+        try await Self.poll { (try? await engine.interfaceCorpusCoverage())?.residentByteCount == 0 }
+        let coverage = try await engine.interfaceCorpusCoverage()
+        #expect(coverage.statesByImagePath[TestImages.libobjc]?.isBuilt == true, "derived data holds it")
+        var matches: [RuntimeInterfaceSearchMatch] = []
+        _ = try await engine.searchInterfaces(RuntimeInterfaceSearchQuery(text: "NSObject", matchMode: .matchingWord, isCaseSensitive: true)) { matches += $0 }
+        #expect(!matches.isEmpty, "read back for the search")
         await engine.stop()
     }
 

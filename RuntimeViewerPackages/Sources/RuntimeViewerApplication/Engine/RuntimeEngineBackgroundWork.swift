@@ -76,11 +76,12 @@ final class RuntimeEngineBackgroundWork {
         processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress, scheduler: processActivityScheduler)
         // The Always Index images are read from derived data as their rows
         // are dispatched, searchable before the batches index them — so the
-        // corpus coordinator listens before the indexing starts.
+        // corpus coordinator listens before the indexing starts. Their order
+        // is the order cross references are prepared in.
         indexingCoordinator.alwaysIndexImagePathsResolved
-            .subscribeOnNextMainActor { [weak corpusCoordinator] imagePaths in
-                guard let corpusCoordinator else { return }
-                corpusCoordinator.restoreCorpora(of: imagePaths)
+            .subscribeOnNextMainActor { [weak corpusCoordinator, weak crossReferencePreparationCoordinator] imagePaths in
+                corpusCoordinator?.restoreCorpora(of: imagePaths)
+                crossReferencePreparationCoordinator?.noteAlwaysIndexImagePaths(imagePaths)
             }
             .disposed(by: disposeBag)
         indexingCoordinator.documentDidOpen()

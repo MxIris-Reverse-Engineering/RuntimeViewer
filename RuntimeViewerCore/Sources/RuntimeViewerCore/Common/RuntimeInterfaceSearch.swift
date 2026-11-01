@@ -253,6 +253,9 @@ public enum RuntimeInterfaceCorpusBuildError: Swift.Error, Hashable, Sendable, L
 
 /// Where one image's corpus stands.
 ///
+/// `built` means searchable: its corpus in memory, or held by the serving
+/// process's derived data, which a search reads back.
+///
 /// There is no "unbuilt" case: an image absent from the coverage map is one
 /// the store holds nothing for — never asked for, evicted, or cancelled
 /// before it finished. Cancellation deliberately leaves no `failed` behind;
@@ -282,13 +285,15 @@ public enum RuntimeInterfaceCorpusBuildState: Hashable, Codable, Sendable {
 /// the resident budget.
 public struct RuntimeInterfaceCorpusCoverage: Hashable, Codable, Sendable {
     public let statesByImagePath: [String: RuntimeInterfaceCorpusBuildState]
+    /// What the corpora in memory take; a corpus held only by derived data
+    /// counts for nothing.
     public let residentByteCount: Int
     public let residentByteLimit: Int
     /// The built images whose corpus was read from derived data rather than
     /// printed, each with what reading it took — every one is also `.built`
-    /// in `statesByImagePath`. An entry goes when its corpus does: evicted,
-    /// or replaced by a print. A peer that keeps no derived data, or predates
-    /// it, sends none.
+    /// in `statesByImagePath`, in memory or not. An entry goes when the image
+    /// stops being built, or is printed again. A peer that keeps no derived
+    /// data, or predates it, sends none.
     public let restoredImagesByImagePath: [String: RuntimeInterfaceCorpusRestoredImage]
 
     public init(
@@ -322,7 +327,8 @@ public struct RuntimeInterfaceCorpusRestoredImage: Hashable, Codable, Sendable {
     public var summary: RuntimeInterfaceCorpusBuildSummary
     /// Seconds from the read's start to the corpus being in the store:
     /// waiting for a turn to read, the file, its checks and the walk through
-    /// what was read.
+    /// what was read. Only the summary is read for a corpus that does not
+    /// fit in the room left, so its duration is that read's.
     public var duration: Double
 
     public init(summary: RuntimeInterfaceCorpusBuildSummary, duration: Double) {

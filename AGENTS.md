@@ -389,10 +389,15 @@ The project uses three Swift Package Manager packages:
   never dropped on its own**, not even when the last window leaves (that was tried and reverted: a window
   reopened at once rebuilt everything). The Report navigator's Searchable Interfaces and Cross
   References rows show its size and eject it (`ejectCorpora()`, `ejectPreparations()`), and it comes
-  back when a search or a query needs it. Background:
+  back when a search or a query needs it. Only a bounded part of it stays in memory (Settings › Search,
+  64 MB each by default): a corpus its derived data holds is built whether it is in memory or not, and
+  a search reads the missing ones back one image at a time; Keep Cross References Ready prepares images,
+  the Always Index ones first, until its limit is full, evicting nothing, and leaves the rest to the
+  queries that need them. Background:
   `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
   `Documentations/Evolutions/0058-runtime-engine-session.md`,
   `Documentations/Evolutions/draft-engine-resident-memory.md`,
+  `Documentations/Evolutions/draft-on-demand-corpora-and-cross-references.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow

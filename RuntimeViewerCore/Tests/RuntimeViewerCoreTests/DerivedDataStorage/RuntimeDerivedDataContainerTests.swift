@@ -64,6 +64,23 @@ struct RuntimeDerivedDataContainerTests {
         }
     }
 
+    @Test("A read of some sections checks and decodes those alone")
+    func readingSomeSections() throws {
+        var file = Self.encodedFile()
+        // The raw section is stored last but for the empty one: its last
+        // byte is the file's.
+        file[file.index(before: file.endIndex)] ^= 0xFF
+        #expect(throws: RuntimeDerivedDataContainer.Error.damagedSection(Self.rawSection.rawValue)) {
+            try RuntimeDerivedDataContainer(decoding: file, expecting: Self.header)
+        }
+
+        let container = try RuntimeDerivedDataContainer(decoding: file, expecting: Self.header, sections: [Self.textSection])
+        #expect(try container.section(Self.textSection) == Self.compressibleText)
+        #expect(throws: RuntimeDerivedDataContainer.Error.missingSection(Self.rawSection.rawValue)) {
+            try container.section(Self.rawSection)
+        }
+    }
+
     @Test("A slice of a larger buffer decodes like the bytes on their own")
     func decodingFromASlice() throws {
         let padded = Data([0xAA, 0xBB, 0xCC]) + Self.encodedFile()

@@ -228,11 +228,36 @@ public struct RuntimeCrossReferencePreparationOptions: Hashable, Codable, Sendab
     public var maximumConcurrentScans: Int?
     /// Ahead of the preparations waiting: an image a document shows.
     public var isPrioritized: Bool
+    /// Keep the image only if it fits in the room left, dropping nothing for
+    /// it: Keep Cross References Ready filling the limit ahead of the queries
+    /// (proposal `on-demand-corpora-and-cross-references`).
+    /// ``RuntimeCrossReferencePreparation/isKept`` says how it went. A peer
+    /// that predates it keeps the image as any other, dropping the images
+    /// queried least recently.
+    public var evictsNothing: Bool
 
-    public init(residentByteLimit: Int, maximumConcurrentScans: Int? = nil, isPrioritized: Bool = false) {
+    public init(residentByteLimit: Int, maximumConcurrentScans: Int? = nil, isPrioritized: Bool = false, evictsNothing: Bool = false) {
         self.residentByteLimit = residentByteLimit
         self.maximumConcurrentScans = maximumConcurrentScans
         self.isPrioritized = isPrioritized
+        self.evictsNothing = evictsNothing
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case residentByteLimit
+        case maximumConcurrentScans
+        case isPrioritized
+        case evictsNothing
+    }
+
+    /// Written out so that options from a peer that predates `evictsNothing`
+    /// still decode: the synthesized decoder throws `keyNotFound` for it.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        residentByteLimit = try container.decode(Int.self, forKey: .residentByteLimit)
+        maximumConcurrentScans = try container.decodeIfPresent(Int.self, forKey: .maximumConcurrentScans)
+        isPrioritized = try container.decode(Bool.self, forKey: .isPrioritized)
+        evictsNothing = try container.decodeIfPresent(Bool.self, forKey: .evictsNothing) ?? false
     }
 }
 
@@ -266,10 +291,30 @@ public struct RuntimeCrossReferencePreparation: Hashable, Codable, Sendable {
     public let referenceCount: Int
     /// The memory they hold, with the names read for them.
     public let byteCount: Int
+    /// Whether the engine's process keeps them. Not for an image larger than
+    /// the limit, nor for one prepared with
+    /// ``RuntimeCrossReferencePreparationOptions/evictsNothing`` that did not
+    /// fit in the room left; a query prepares it again when it needs it. A
+    /// peer that predates it says nothing, which reads as kept.
+    public let isKept: Bool
 
-    public init(referenceCount: Int, byteCount: Int) {
+    public init(referenceCount: Int, byteCount: Int, isKept: Bool = true) {
         self.referenceCount = referenceCount
         self.byteCount = byteCount
+        self.isKept = isKept
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case referenceCount
+        case byteCount
+        case isKept
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        referenceCount = try container.decode(Int.self, forKey: .referenceCount)
+        byteCount = try container.decode(Int.self, forKey: .byteCount)
+        isKept = try container.decodeIfPresent(Bool.self, forKey: .isKept) ?? true
     }
 }
 

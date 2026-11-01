@@ -30,6 +30,10 @@ public enum CrossReferencePreparationState: Hashable, Sendable {
 public struct CrossReferenceFinishedPreparation: Hashable, Sendable, Identifiable {
     public enum Outcome: Hashable, Sendable {
         case prepared(RuntimeCrossReferencePreparation)
+        /// Prepared, but it did not fit in the room the resident limit had
+        /// left, so the engine's process did not keep it, and the
+        /// preparations stopped: a query prepares it again when it needs it.
+        case notKept(RuntimeCrossReferencePreparation)
         case failed(message: String)
         /// The user withdrew the request. A query still waiting for the
         /// image keeps its preparation going.
