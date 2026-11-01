@@ -27,7 +27,7 @@ struct SearchSettingsView: View {
             } header: {
                 Text("Find Navigator")
             } footer: {
-                Text("Text and member searches read a corpus: the interface of every object in an indexed image, printed once with every annotation on and your transformer settings. It is built when an image is indexed or opened, in the process that owns the image, and dropped when the image is unloaded. Past the resident limit, the images searched least recently are dropped and rebuilt on demand. Ancestor, Descendant and Conforming Types need no corpus.")
+                Text("Text and member searches read a corpus: the interface of every object in an indexed image, printed once with every annotation on and your transformer settings. It is built when an image is indexed or opened, in the process that owns the image, kept on disk for the next launch, and dropped when the image is unloaded. The images searched most recently stay in memory up to the resident limit; the others are read back from disk when a search needs them. Ancestor, Descendant and Conforming Types need no corpus.")
             }
 
             Section {
@@ -51,7 +51,7 @@ struct SearchSettingsView: View {
             } header: {
                 Text("Cross References")
             } footer: {
-                Text("Call Hierarchy and Type References, in the Find navigator and the Inspector, read the machine code of indexed images only. Kept ready, each indexed image is read once in the background — the Report navigator shows how far — and queries answer from what was read; past the resident limit, the images queried least recently are dropped and read again when a query needs them. Max Concurrent Scans limits how many images are read at the same time, each keeping a core busy: higher values finish sooner, lower ones leave more of the Mac to everything else.")
+                Text("Call Hierarchy and Type References, in the Find navigator and the Inspector, read the machine code of indexed images only. Kept ready, indexed images are read in the background, Always Index images first, until the resident limit is full — the Report navigator shows how far — and queries answer from what was read. A query reads any other image it needs, and the images queried least recently are dropped to stay within the limit. Max Concurrent Scans limits how many images are read at the same time, each keeping a core busy: higher values finish sooner, lower ones leave more of the Mac to everything else.")
             }
         }
     }

@@ -18,11 +18,15 @@ extension Settings {
         @Default(true)
         public var isCorpusEnabled: Bool
 
-        /// Resident budget for the corpora of one engine, in megabytes. Past
-        /// it, the images searched least recently are dropped whole and
+        /// Resident budget for the corpora of one engine, in megabytes: the
+        /// corpora searched most recently stay in memory up to it. Past it, a
+        /// corpus the engine's derived data holds stays on disk and is read
+        /// back when a search needs it; any other is dropped whole and
         /// rebuilt when next asked for. AppKit and SwiftUI together are about
-        /// 60 MB; 256 MB holds roughly eight frameworks of SwiftUI's size.
-        @Default(256)
+        /// 60 MB in memory. 256 until proposal
+        /// `on-demand-corpora-and-cross-references`; see
+        /// `residentLimitDefaultsRevision`.
+        @Default(64)
         public var residentByteLimitMegabytes: Int
 
         /// How many images Call Hierarchy and Type References — in the Find
@@ -40,12 +44,29 @@ extension Settings {
         @Default(true)
         public var isCrossReferencePreparationEnabled: Bool
 
-        /// Resident budget for prepared cross references, in megabytes. Past
-        /// it the images queried least recently are dropped, and read again
-        /// when a query needs them. AppKit's take about 35 MB: 21 for its
-        /// references, 14 for the names its results are shown with.
-        @Default(256)
+        /// Resident budget for prepared cross references, in megabytes. Keep
+        /// Cross References Ready prepares indexed images, the Always Index
+        /// ones first, until it is full; past it a query prepares the image
+        /// it needs, and the images queried least recently are dropped. AppKit's
+        /// take about 35 MB: 21 for its references, 14 for the names its
+        /// results are shown with. 256 until proposal
+        /// `on-demand-corpora-and-cross-references`.
+        @Default(64)
         public var crossReferenceResidentByteLimitMegabytes: Int
+
+        /// Which change of the two resident limits' defaults this file has
+        /// been brought to. 0 for a file written before the defaults went from
+        /// 256 to 64 MB, whose limits still at 256 were never changed by the
+        /// user; `SettingsAccess.load()` moves those to 64 once and records
+        /// `currentResidentLimitDefaultsRevision`, so a limit set to 256 later
+        /// stays.
+        @Default(0)
+        public var residentLimitDefaultsRevision: Int
+
+        public static let currentResidentLimitDefaultsRevision = 1
+
+        /// What both resident limits defaulted to before revision 1.
+        public static let legacyResidentLimitMegabytes = 256
 
         public static let `default` = Self()
 
