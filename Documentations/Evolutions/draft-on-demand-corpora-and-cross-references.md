@@ -66,4 +66,5 @@
 | 2026-11-01 | 读回失败的镜像记一条失败 | 文件可能被设置里的「删除派生数据」删掉；记成失败，Report 能看到原因，再次请求即重建。 |
 | 2026-11-01 | 交叉引用用请求选项 `evictsNothing` 与结果 `isKept`，第一个没留下的镜像就停 | 预建出来之前不知道多大，只能建完再判断；停下时撤回还开着的请求，浪费最多是同时在扫的那几个。没留下的镜像当场释放分析器为它读的名字，否则它们要等 64 个镜像的函数表攒满才放。 |
 | 2026-11-01 | 设置迁移的状态存在设置文件里（`residentLimitDefaultsRevision`），不用 UserDefaults 标记 | 状态和它管的值在同一个文件里，换文件、重置设置都一致；主题迁移用 UserDefaults 是因为旧数据本来就在那里。 |
-| 2026-11-01 | 协调器的集成测试接受「预建了但没留下」 | 测试进程里只有一个交叉引用会话，同时运行的测试套件也在里面预建；不挤掉别人之后，能不能留下取决于它们留下的空间。确定性的行为由脚本化对端的 `CrossReferencePreparationFillTests` 测。 |
+| 2026-11-01 | 协调器的集成测试接受「预建了但没留下」 | 测试进程里只有一个交叉引用会话，同时运行的测试套件也在里面预建；不挤掉别人之后，能不能留下取决于它们留下的空间。确定性的行为由脚本化对端的 `CrossReferencePreparationFillTests` 测。开关测试关掉后要先等协调器处理完再打开：第一轮没留下时状态表本来就空，不等的话两次改动合成一次通知，协调器看到的还是「开」（全量测试里复现过，把上限设为 0 可以稳定复现）。 |
+| 2026-11-01 | 实现完成，待用户看过后收尾 | Core 与 Packages 全量测试通过，只剩已知的满载偶发（单独跑都过）：Core 的 `imagesAskedAboutRenewTheAnalyzer`、`firstPreparationReadsThePrefilters`、`cancelBatchStopsPendingItemsAndEmitsCancelledEvent`，Packages 的「Call Hierarchy opens its root…」。App（Debug-arm64 的 `RuntimeViewer macOS`）编过。三处关键逻辑做了变异检查，对应测试都会变红。文档已同步 `AGENTS.md`、`DerivedData.md`、术语表与两份索引；不需要另写使用指南或实现说明——契约都在 `DerivedData.md` 与提案里。剩第 5 步的实测：按 2026-11-01 的配置重测两个引擎进程。 |
