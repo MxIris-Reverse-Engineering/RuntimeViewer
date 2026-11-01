@@ -13,7 +13,9 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     /// through `visibilityRegions` under the options it was given.
     let interface: FrozenSemanticString
 
-    let visibilityRegions: VisibilityRegionTable
+    /// Its conditions are the copies the image's corpus stores once for all
+    /// its entries — see `RuntimeInterfaceVisibilityConditionPool`.
+    private(set) var visibilityRegions: VisibilityRegionTable
 
     /// The members its structures list, located, but without their
     /// declaration lines: each `declarationText` is the member's name,
@@ -79,6 +81,12 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     private static func allocatedByteCount(of string: String) -> Int {
         let utf8Count = string.utf8.count
         return utf8Count <= 15 ? 0 : utf8Count + 32
+    }
+
+    /// Takes `visibilityRegions` back with its conditions swapped for the
+    /// copies `pool` stores, which the image's other entries share.
+    mutating func shareVisibilityConditions(in pool: inout RuntimeInterfaceVisibilityConditionPool) {
+        visibilityRegions = pool.sharedTable(for: visibilityRegions)
     }
 
     /// The interface as it reads under `visibility`: `interface` itself when
@@ -644,11 +652,8 @@ actor RuntimeInterfaceCorpusStore {
             // Saves an assembly nobody will take. A cancellation that comes
             // during the assembly is caught by `finishBuild`.
             try Task.checkCancellation()
-            let entries = await assemble(printsByObjectIndex.compactMap { $0 })
-            let byteCount = entries.reduce(0) { $0 + $1.byteCount }
-            let summary = RuntimeInterfaceCorpusBuildSummary(objectCount: entries.count, skippedCount: skippedCount, byteCount: byteCount)
-            let corpus = ImageCorpus(entries: entries, summary: summary, transformer: transformer, lastSearchedAt: Date())
-            #log(.info, "Built corpus for \(imagePath, privacy: .public): \(entries.count, privacy: .public) objects, \(byteCount, privacy: .public) bytes, \(skippedCount, privacy: .public) skipped, in \(Date().timeIntervalSince(start), privacy: .public) s")
+            let corpus = await assembleCorpus(of: printsByObjectIndex.compactMap { $0 }, skippedCount: skippedCount, transformer: transformer)
+            #log(.info, "Built corpus for \(imagePath, privacy: .public): \(corpus.entries.count, privacy: .public) objects, \(corpus.summary.byteCount, privacy: .public) bytes, \(skippedCount, privacy: .public) skipped, in \(Date().timeIntervalSince(start), privacy: .public) s")
             // Searchable from here on, and written before the build settles:
             // while the app waits on the build, the serving process works at
             // the app's priority, not at the background one it falls to when
@@ -688,11 +693,12 @@ actor RuntimeInterfaceCorpusStore {
         return families
     }
 
-    /// The image's entries out of its prints. `nonisolated` so the pass —
-    /// a walk over every interface of the image — runs off this actor, which
-    /// stays free to answer searches and coverage meanwhile.
-    private nonisolated func assemble(_ prints: [RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] {
-        await assembleEntries(prints)
+    /// The image's corpus out of its prints, the visibility conditions its
+    /// entries repeat stored once. `nonisolated` so the pass — a walk over
+    /// every interface of the image — runs off this actor, which stays free
+    /// to answer searches and coverage meanwhile.
+    private nonisolated func assembleCorpus(of prints: [RuntimeInterfaceCorpusPrint], skippedCount: Int, transformer: Transformer.Configuration) async -> ImageCorpus {
+        ImageCorpus(sharingVisibilityConditionsOf: await assembleEntries(prints), skippedCount: skippedCount, transformer: transformer)
     }
 
     /// Reaches only the subscribers of build `buildIdentifier`: a cancelled

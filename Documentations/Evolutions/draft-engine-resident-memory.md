@@ -1,6 +1,6 @@
 # Draft - 降低引擎进程的常驻内存
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-01
 - **最后更新**: 2026-11-01
 - **所属愿景**: 无
@@ -42,7 +42,7 @@
 - App 进程的峰值到过 579 MB，来自某次临时分配，来由没查，另行排查。
 
 **落地步骤**（每步单独能编译、相关测试通过，各提交一次）
-1. [ ] 条件池：新增 `RuntimeInterfaceVisibilityConditionPool`，`RuntimeInterfaceCorpusAssembly` 与 `RuntimeInterfaceCorpusSnapshot` 构造条目时经过它，镜像语料的字节数加上池的字节数。测试：打印出的与从派生数据读回的语料里，相等的条件共享存储。
+1. [x] 条件池：新增 `RuntimeInterfaceVisibilityConditionPool`，`RuntimeInterfaceCorpusAssembly` 与 `RuntimeInterfaceCorpusSnapshot` 构造条目时经过它，镜像语料的字节数加上池的字节数。测试：打印出的与从派生数据读回的语料里，相等的条件共享存储。
 2. [ ] 估算按实际算：语料条目的 `byteCount` 按实际分配计算；exit test 给 Foundation 建语料，量驱逐前后 malloc 在用字节数之差，与估算相差不超过 10%。交叉引用的 `CrossReferencePreparedImage.byteCount` 用同样的办法核对，超出就修。
 3. [ ] 关窗释放：`RuntimeEngineBackgroundWork.close()` 让引擎进程驱逐语料、把交叉引用上限置 0，registry 记下进行中的释放并在它结束后让同一引擎的新工作重新请求；先用探针确认要不要 `malloc_zone_pressure_relief`。测试：最后一个文档离开时引擎收到这两条命令；释放被扣住时新文档加入，放行后上限按设置重新下发、语料重新请求。
 4. [ ] 文档与实测：同批更新下文列出的文档；按上面的配置重测内存。

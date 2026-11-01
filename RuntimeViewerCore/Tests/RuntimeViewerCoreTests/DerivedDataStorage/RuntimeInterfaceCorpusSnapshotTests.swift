@@ -66,13 +66,9 @@ struct RuntimeInterfaceCorpusSnapshotTests {
             interface: FrozenSemanticString(text: "", spans: [], identifierTable: []),
             members: []
         )
-        let entries = [first, second, empty]
-        return RuntimeInterfaceCorpusStore.ImageCorpus(
-            entries: entries,
-            summary: RuntimeInterfaceCorpusBuildSummary(objectCount: entries.count, skippedCount: 2, byteCount: entries.reduce(0) { $0 + $1.byteCount }),
-            transformer: .default,
-            lastSearchedAt: Date()
-        )
+        // Made the way the store makes a corpus, so its summary counts the
+        // conditions as a corpus read back does.
+        return RuntimeInterfaceCorpusStore.ImageCorpus(sharingVisibilityConditionsOf: [first, second, empty], skippedCount: 2, transformer: .default)
     }
 
     private static func sections(of corpus: RuntimeInterfaceCorpusStore.ImageCorpus) throws -> [Section: Data] {
@@ -121,6 +117,42 @@ struct RuntimeInterfaceCorpusSnapshotTests {
         Self.expectSameEntries(restored.entries, corpus.entries)
         #expect(restored.summary == corpus.summary)
         #expect(restored.transformer == corpus.transformer)
+    }
+
+    /// The read makes every entry's visibility conditions anew, so a corpus
+    /// read from derived data kept one copy of them for each entry that has
+    /// any (proposal `engine-resident-memory`).
+    @Test("A corpus read back shares the equal visibility conditions of its entries")
+    func readBackSharesEqualConditions() throws {
+        let entries = ["First", "Second"].map { name in
+            let printed = SemanticString {
+                Keyword("var")
+                Standard(" ")
+                Variable(name.lowercased())
+                Standard(": Int")
+                VisibilityRegion(.enabled("test.comments")) {
+                    Comment(" // note")
+                }
+            }.frozen()
+            let (interface, visibilityRegions) = printed.separatingVisibilityRegions()
+            return RuntimeInterfaceCorpusEntry(
+                object: RuntimeObject(name: name, displayName: name, kind: .swift(.type(.struct)), imagePath: Self.imagePath, children: []),
+                interface: interface,
+                visibilityRegions: visibilityRegions,
+                members: []
+            )
+        }
+        let corpus = RuntimeInterfaceCorpusStore.ImageCorpus(
+            entries: entries,
+            summary: RuntimeInterfaceCorpusBuildSummary(objectCount: entries.count, skippedCount: 0, byteCount: 0),
+            transformer: .default,
+            lastSearchedAt: Date()
+        )
+
+        let restored = try Self.readCorpus(from: try Self.sections(of: corpus))
+
+        try #require(restored.entries.count == entries.count)
+        #expect(sharesStorage(restored.entries[0].visibilityRegions.conditions, restored.entries[1].visibilityRegions.conditions))
     }
 
     @Test("A corpus printed with another transformer is not read")
