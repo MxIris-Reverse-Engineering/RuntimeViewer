@@ -97,12 +97,20 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
 
 - 一次构建先进入**读取阶段**（`Build.Phase.reading`），在仓库的 actor 之外读；读不到才进打印队列。取消、淘汰或
   换 Transformer 都会作废这次构建，读回来的东西随之丢弃（靠构建标识判断）。
+- 读取**先只读摘要段**（`read(_:variant:forImageAt:sections:decode:)`，容器只校验、解压要的段），语料放得进内存
+  上限剩下的空间才整份读；放不下的只记下摘要。派生数据里存着的语料**不在内存里也算建好**（仓库的
+  `storedCorpora`），搜索读到它时当场整份读回、一次一个镜像，搜完放得下才留下（提案
+  `on-demand-corpora-and-cross-references`）。所以读取不只发生在启动与构建时，每次搜索都可能读。
+- 同一个文件同时只有一次读取：读同样的段的请求合用这次读取，读别的段的等它读完。读取标记表示「这个进程正在读
+  这个文件」，两次读取并行的话，后一次会把前一次的标记当成上次残留删掉，那一次崩溃就不会让文件被删。
+- 运行中派生数据被删掉（设置里的删除），不在内存里的语料下一次搜索读不回来：这个镜像不再算建好，并记一条失败，
+  Report 里看得到，再次请求就重新打印。
 - 打印完的语料**先放进仓库**（从这一刻起就能搜），**再写盘，最后才结束构建**。顺序不能反过来：App 在等这次构建
   的回复时，服务进程继承 App 请求的优先级；回复一发出，剩下的工作就落回服务进程自己的后台优先级，写盘会被拖慢
   （根 `AGENTS.md` 的 *The service runs at the priority of the requests waiting on it*，以及
   `ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`）。
 - `restore(imagePaths:transformer:)` 只读不打印，给还没索引的镜像用：Always Index 的镜像在批次派发时就读回，
-  启动后马上可搜。构建请求对没建索引的镜像走不到读盘那一步，引擎直接回「没建索引」，所以协调器记下请它读回过的
+  启动后马上可搜。按给定的顺序一个一个读，放得下的整份读进内存，装满之后只读摘要。构建请求对没建索引的镜像走不到读盘那一步，引擎直接回「没建索引」，所以协调器记下请它读回过的
   镜像（`FindCorpusCoordinator` 的 `requestedRestoreImagePaths`）：语料开关重新打开时把它们再读一次；改
   Transformer 后的重建照旧发构建请求，被拒的改为读回。
 - 读回中的镜像在仓库里也是一个构建，覆盖情况把它报成 `.pending`；协调器并入覆盖情况时跳过正在读回的镜像，
@@ -133,8 +141,9 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
 2. 定一个**变体**字符串，写进系统与生产者以外、影响内容的一切输入。语料的变体是 Transformer 摘要
    （`Transformer.Configuration.derivedDataDigest`，按 pattern 排好的 C 类型替换另外追加，因为字典编码出来的
    顺序因进程而异）加上成员的排序方式。
-3. 用 `RuntimeDerivedDataContainer.Builder` 编码，经 `RuntimeDerivedDataStore.read(_:variant:forImageAt:decode:)`
-   读回。在 `decode` 里做完全部会 trap 的检查，并在返回之前把值完整用一遍，好让读取标记罩住它。
+3. 用 `RuntimeDerivedDataContainer.Builder` 编码，经 `RuntimeDerivedDataStore.read(_:variant:forImageAt:sections:decode:)`
+   读回。在 `decode` 里做完全部会 trap 的检查，并在返回之前把值完整用一遍，好让读取标记罩住它。只要其中一小部分
+   （例如摘要）时传 `sections:`，其余的段不校验也不解压。
 4. 只为共享缓存里的镜像存，内容里不得有本进程特有的值（地址、PID、时间）。
 5. 某个库要放自己的缓存，从 `imageDirectory(forImageAt:)` 取目录。
 6. 测试只用临时目录里的存储：Core 测试用 `DerivedDataTestIdentities.store(in:)`，Packages 测试用
