@@ -57,30 +57,30 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
         }
     }
 
-    /// Resident bytes, estimated: the text once, the span table, the
-    /// interned identifiers, the region table, the members with their line
-    /// ranges and names, the nested blocks and the object. An estimate in
-    /// the right order of magnitude, not to the byte: allocation headers and
-    /// rounding are left out — evicting Foundation's corpus frees about a
-    /// fifth more than its entries count.
+    /// Resident bytes, estimated from what the entry allocates — its
+    /// interface's text, span table and identifiers, its region table, its
+    /// members with their names and line ranges, its nested blocks, and what
+    /// its object holds — each allocation with its header and malloc's
+    /// rounding (`allocatedByteCount`). Counted by element, these left out
+    /// about a tenth of what evicting Foundation's corpus frees, and the
+    /// visibility conditions a fifth more before the corpus shared them.
+    ///
+    /// Not the entry itself, which the corpus's array of entries holds, nor
+    /// its visibility conditions, which the corpus stores once for all its
+    /// entries; `ImageCorpus.init(sharingVisibilityConditionsOf:…)` counts
+    /// both. A member's `declarationText` shares its name's buffer.
     var byteCount: Int {
-        interface.text.utf8.count
-            + interface.spans.count * MemoryLayout<FrozenSemanticString.Span>.stride
-            + interface.identifierTable.reduce(0) { $0 + $1.utf8.count }
-            + visibilityRegions.regions.count * MemoryLayout<VisibilityRegionTable.Region>.stride
-            + members.count * (MemoryLayout<RuntimeMemberDeclaration>.stride + MemoryLayout<Range<Int>?>.stride)
-            + members.reduce(0) { total, member in total + Self.allocatedByteCount(of: member.name) }
-            + nestedDefinitionRanges.count * MemoryLayout<Range<Int>>.stride
-            + MemoryLayout<RuntimeObject>.stride
-            + Self.allocatedByteCount(of: object.name)
-            + Self.allocatedByteCount(of: object.displayName)
-    }
-
-    /// What a string allocates: nothing up to 15 UTF-8 bytes, which Swift
-    /// stores inline, and above that its bytes plus the allocation's header.
-    private static func allocatedByteCount(of string: String) -> Int {
-        let utf8Count = string.utf8.count
-        return utf8Count <= 15 ? 0 : utf8Count + 32
+        interface.text.allocatedByteCount
+            + interface.spans.allocatedByteCount
+            + interface.identifierTable.reduce(interface.identifierTable.allocatedByteCount) { total, identifier in total + identifier.allocatedByteCount }
+            + visibilityRegions.regions.allocatedByteCount
+            + members.reduce(members.allocatedByteCount) { total, member in total + member.name.allocatedByteCount }
+            + memberDeclarationLineRanges.allocatedByteCount
+            + nestedDefinitionRanges.allocatedByteCount
+            + object.name.allocatedByteCount
+            + object.displayName.allocatedByteCount
+            + object.children.allocatedByteCount
+            + object.privateDeclarations.allocatedByteCount
     }
 
     /// Takes `visibilityRegions` back with its conditions swapped for the
