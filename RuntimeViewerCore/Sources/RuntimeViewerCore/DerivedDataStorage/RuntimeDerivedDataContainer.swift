@@ -192,8 +192,11 @@ public struct RuntimeDerivedDataContainer: Sendable {
 
     /// Checks `data` from end to end — header, table, checksums, decoded
     /// lengths — and decompresses every section, throwing at the first
-    /// thing that is not as it should be.
-    init(decoding data: Data, expecting expectedHeader: Header) throws {
+    /// thing that is not as it should be. With `sectionIdentifiers`, only
+    /// those sections are checked against their checksums and decompressed;
+    /// the table still is in full, and asking another section of the
+    /// container throws `missingSection`.
+    init(decoding data: Data, expecting expectedHeader: Header, sections sectionIdentifiers: Set<SectionIdentifier>? = nil) throws {
         var reader = RuntimeDerivedDataByteReader(data)
         guard data.count >= Self.magic.count, data.prefix(Self.magic.count) == Self.magic else { throw Error.notAContainer }
         reader.offset = Self.magic.count
@@ -219,6 +222,7 @@ public struct RuntimeDerivedDataContainer: Sendable {
         guard sectionCount <= Self.maximumSectionCount else { throw Error.damagedHeader }
 
         var sectionsByIdentifier: [SectionIdentifier: Data] = [:]
+        var tableIdentifiers: Set<SectionIdentifier> = []
         for _ in 0 ..< sectionCount {
             let identifier = SectionIdentifier(rawValue: try reader.readUInt32())
             guard let compression = Compression(rawValue: try reader.readUInt8()) else { throw Error.damagedSection(identifier.rawValue) }
@@ -226,12 +230,17 @@ public struct RuntimeDerivedDataContainer: Sendable {
             let storedByteCount = try reader.readUInt64()
             let decodedByteCount = try reader.readUInt64()
             let checksum = try reader.readUInt64()
-            guard sectionsByIdentifier[identifier] == nil,
+            guard tableIdentifiers.insert(identifier).inserted,
                   offset >= UInt64(headerByteCount + 8),
                   storedByteCount <= UInt64(data.count),
                   offset <= UInt64(data.count) - storedByteCount,
                   decodedByteCount <= UInt64(Self.maximumDecodedSectionByteCount)
             else { throw Error.damagedSection(identifier.rawValue) }
+            // A section not asked for is passed over once its table entry
+            // is read and checked: the rest of the table follows it.
+            if let sectionIdentifiers, !sectionIdentifiers.contains(identifier) {
+                continue
+            }
             let storedBytes = data[(data.startIndex + Int(offset)) ..< (data.startIndex + Int(offset + storedByteCount))]
             guard RuntimeDerivedDataDigest.checksum(of: storedBytes) == checksum else { throw Error.damagedSection(identifier.rawValue) }
             switch compression {

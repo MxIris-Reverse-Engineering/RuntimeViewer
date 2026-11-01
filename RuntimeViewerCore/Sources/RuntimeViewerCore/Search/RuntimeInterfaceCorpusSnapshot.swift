@@ -217,6 +217,25 @@ enum RuntimeInterfaceCorpusSnapshot {
 
     // MARK: - Reading
 
+    /// The sections `summary(from:transformer:)` reads.
+    static let summarySectionIdentifiers: Set<RuntimeDerivedDataContainer.SectionIdentifier> = [Section.summary.identifier]
+
+    /// What the stored corpus holds, read from its summary section alone —
+    /// how the store learns that an image is searchable without paying for
+    /// its corpus. Throws for a corpus printed with another configuration
+    /// than `transformer`, or a summary that cannot be one: the rest of the
+    /// file is checked when the corpus itself is read.
+    static func summary(from container: RuntimeDerivedDataContainer, transformer: Transformer.Configuration) throws -> RuntimeInterfaceCorpusBuildSummary {
+        let summary = try PropertyListDecoder().decode(Summary.self, from: container.section(Section.summary.identifier))
+        guard summary.transformer == transformer else { throw Error.otherTransformer }
+        guard summary.entryCount >= 0,
+              summary.summary.objectCount == summary.entryCount,
+              summary.summary.skippedCount >= 0,
+              summary.summary.byteCount >= 0
+        else { throw Error.inconsistent("the summary contradicts itself") }
+        return summary.summary
+    }
+
     /// The corpus in `container`, checked, built, and walked through. Throws
     /// for anything inconsistent, or for a corpus printed with another
     /// configuration than `transformer`.

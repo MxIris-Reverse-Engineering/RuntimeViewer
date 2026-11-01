@@ -264,6 +264,42 @@ struct RuntimeDerivedDataStoreTests {
         #expect(decodeCalls.value == 1)
     }
 
+    /// A read of a corpus's summary and a read of the whole corpus decode
+    /// different values out of one file; joining one to the other would
+    /// hand the second a value of the wrong type, which reads as nothing.
+    @Test("A read of other sections waits for the read of the file under way, and decodes its own")
+    func readsOfOtherSectionsWait() async throws {
+        let directory = try DerivedDataTestDirectory()
+        let store = DerivedDataTestIdentities.store(in: directory)
+        var builder = Self.builder("hello")
+        let otherSection = RuntimeDerivedDataContainer.SectionIdentifier(rawValue: 2)
+        builder.append(Data("world".utf8), as: otherSection)
+        await store.store(builder, as: Self.kind, variant: "A", forImageAt: Self.imagePath)
+
+        let wholeDecodeMayFinish = DispatchSemaphore(value: 0)
+        let wholeRead = Task {
+            await store.read(Self.kind, variant: "A", forImageAt: Self.imagePath) { container in
+                wholeDecodeMayFinish.wait()
+                return try Self.text(of: container) + String(decoding: try container.section(otherSection), as: UTF8.self)
+            }
+        }
+        let deadline = ContinuousClock.now + .seconds(30)
+        while await store.readerCount(of: Self.kind, variant: "A", forImageAt: Self.imagePath) < 1, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let partialRead = Task {
+            await store.read(Self.kind, variant: "A", forImageAt: Self.imagePath, sections: [Self.section]) { container in
+                try container.section(Self.section).count
+            }
+        }
+        while await store.readerCount(of: Self.kind, variant: "A", forImageAt: Self.imagePath) < 2, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        wholeDecodeMayFinish.signal()
+        #expect(await wholeRead.value == "helloworld")
+        #expect(await partialRead.value == 5)
+    }
+
     @Test("Every write refreshes LastUsed")
     func writesRefreshLastUsed() async throws {
         let directory = try DerivedDataTestDirectory()

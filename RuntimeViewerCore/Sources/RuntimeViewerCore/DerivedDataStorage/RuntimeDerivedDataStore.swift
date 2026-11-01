@@ -60,7 +60,19 @@ public actor RuntimeDerivedDataStore {
 
     private var usageRefreshTask: Task<Void, Never>?
 
-    private var readsInFlight: [URL: Task<(any Sendable)?, Never>] = [:]
+    /// A read of a file under way: which of its sections it reads, `nil`
+    /// for all of them, and the task that reads them.
+    private struct ReadInFlight {
+        let identifier: UInt64
+        let sectionIdentifiers: Set<RuntimeDerivedDataContainer.SectionIdentifier>?
+        let task: Task<(any Sendable)?, Never>
+    }
+
+    /// At most one read per file, so the reading marker beside it is always
+    /// the one read's: a read of other sections waits for it to end.
+    private var readsInFlight: [URL: ReadInFlight] = [:]
+
+    private var nextReadIdentifier: UInt64 = 0
 
     /// How many reads wait on each read of a file under way, the one that
     /// started it among them.
@@ -159,10 +171,16 @@ public actor RuntimeDerivedDataStore {
     /// while the reading marker is in place, so a trap in there leaves the
     /// file to be deleted unread next time. Throwing from it deletes the
     /// file now.
+    ///
+    /// With `sections`, only those are checked and decompressed, and only
+    /// they are in the container `decode` gets — a small part read without
+    /// paying for the rest. Reads of one file asking for the same sections
+    /// share one read; a read asking for others waits for it to end.
     public func read<Value: Sendable>(
         _ kind: RuntimeDerivedDataKind,
         variant: String,
         forImageAt imagePath: String,
+        sections: Set<RuntimeDerivedDataContainer.SectionIdentifier>? = nil,
         decode: @escaping @Sendable (RuntimeDerivedDataContainer) throws -> Value
     ) async -> Value? {
         guard let containerURL = containerURL(kind, variant: variant, forImageAt: imagePath) else { return nil }
@@ -172,18 +190,31 @@ public actor RuntimeDerivedDataStore {
             let remainingReaderCount = (readerCountsByContainerURL[containerURL] ?? 1) - 1
             readerCountsByContainerURL[containerURL] = remainingReaderCount > 0 ? remainingReaderCount : nil
         }
-        if let readInFlight = readsInFlight[containerURL] {
-            return await readInFlight.value.flatMap { $0 as? Value }
+        while let readInFlight = readsInFlight[containerURL] {
+            if readInFlight.sectionIdentifiers == sections {
+                return await readInFlight.task.value.flatMap { $0 as? Value }
+            }
+            _ = await readInFlight.task.value
         }
         let expectedHeader = header(kind, variant: variant, imagePath: imagePath)
+        nextReadIdentifier += 1
+        let identifier = nextReadIdentifier
         let read = Task<(any Sendable)?, Never> {
-            guard let value = await self.performRead(containerURL: containerURL, expectedHeader: expectedHeader, decode: decode) else { return nil }
+            let value = await self.performRead(containerURL: containerURL, expectedHeader: expectedHeader, sections: sections, decode: decode)
+            // Before the value goes out, so a read waiting for this one to
+            // end finds the file free once it has it.
+            self.readDidEnd(at: containerURL, identifier: identifier)
+            guard let value else { return nil }
             return value
         }
-        readsInFlight[containerURL] = read
-        let value = await read.value
-        readsInFlight[containerURL] = nil
-        return value.flatMap { $0 as? Value }
+        readsInFlight[containerURL] = ReadInFlight(identifier: identifier, sectionIdentifiers: sections, task: read)
+        return await read.value.flatMap { $0 as? Value }
+    }
+
+    private func readDidEnd(at containerURL: URL, identifier: UInt64) {
+        if readsInFlight[containerURL]?.identifier == identifier {
+            readsInFlight[containerURL] = nil
+        }
     }
 
     /// How many reads of `kind` and `variant` of the image at `imagePath` are
@@ -196,6 +227,7 @@ public actor RuntimeDerivedDataStore {
     private func performRead<Value: Sendable>(
         containerURL: URL,
         expectedHeader: RuntimeDerivedDataContainer.Header,
+        sections: Set<RuntimeDerivedDataContainer.SectionIdentifier>?,
         decode: @escaping @Sendable (RuntimeDerivedDataContainer) throws -> Value
     ) async -> Value? {
         let markerURL = RuntimeDerivedDataReadingMarker.url(forContainerAt: containerURL)
@@ -221,7 +253,7 @@ public actor RuntimeDerivedDataStore {
             return nil
         }
         refreshUsageIfDue()
-        let outcome = await Self.readContainer(at: containerURL, expectedHeader: expectedHeader, semaphore: readSemaphore, decode: decode)
+        let outcome = await Self.readContainer(at: containerURL, expectedHeader: expectedHeader, sections: sections, semaphore: readSemaphore, decode: decode)
         switch outcome {
         case .success(let value):
             try? fileManager.removeItem(at: markerURL)
@@ -238,6 +270,7 @@ public actor RuntimeDerivedDataStore {
     private static func readContainer<Value: Sendable>(
         at containerURL: URL,
         expectedHeader: RuntimeDerivedDataContainer.Header,
+        sections: Set<RuntimeDerivedDataContainer.SectionIdentifier>?,
         semaphore: AsyncSemaphore,
         decode: @Sendable (RuntimeDerivedDataContainer) throws -> Value
     ) async -> Result<Value, any Swift.Error> {
@@ -247,7 +280,7 @@ public actor RuntimeDerivedDataStore {
             // Read whole rather than mapped: a mapped file that another
             // process truncated would raise SIGBUS on the next page touched.
             let data = try Data(contentsOf: containerURL)
-            let container = try RuntimeDerivedDataContainer(decoding: data, expecting: expectedHeader)
+            let container = try RuntimeDerivedDataContainer(decoding: data, expecting: expectedHeader, sections: sections)
             return .success(try decode(container))
         } catch {
             return .failure(error)
@@ -261,10 +294,12 @@ public actor RuntimeDerivedDataStore {
     /// into it, after which the image's other variants of `kind` are
     /// deleted. Does nothing for an image outside the shared cache. Failures
     /// are logged and dropped — derived data is only ever an optimization.
-    public func store(_ builder: RuntimeDerivedDataContainer.Builder, as kind: RuntimeDerivedDataKind, variant: String, forImageAt imagePath: String) async {
+    /// Returns whether the container is in place.
+    @discardableResult
+    public func store(_ builder: RuntimeDerivedDataContainer.Builder, as kind: RuntimeDerivedDataKind, variant: String, forImageAt imagePath: String) async -> Bool {
         guard let imageDirectoryURL = imageDirectory(forImageAt: imagePath),
               let containerURL = containerURL(kind, variant: variant, forImageAt: imagePath)
-        else { return }
+        else { return false }
         prepareIfNeeded()
         let data = await Self.encodedContainer(builder, header: header(kind, variant: variant, imagePath: imagePath))
         let temporaryURL = imageDirectoryURL.appendingPathComponent(".\(containerURL.lastPathComponent).\(RuntimeDerivedDataMaintenance.temporaryFileMarker)\(UUID().uuidString)", isDirectory: false)
@@ -278,7 +313,7 @@ public actor RuntimeDerivedDataStore {
         } catch {
             try? fileManager.removeItem(at: temporaryURL)
             #log(.error, "Could not write \(containerURL.path, privacy: .public): \(error, privacy: .public)")
-            return
+            return false
         }
         // A marker a dead read left beside the old file would make the next
         // read delete this one.
@@ -289,6 +324,7 @@ public actor RuntimeDerivedDataStore {
         removeOtherVariants(of: kind, keeping: containerURL, in: imageDirectoryURL)
         refreshUsage()
         #log(.info, "Stored \(kind.rawValue, privacy: .public) of \(imagePath, privacy: .public): \(data.count, privacy: .public) bytes, \(builder.decodedByteCount, privacy: .public) decoded")
+        return true
     }
 
     @concurrent

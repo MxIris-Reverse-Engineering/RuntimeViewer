@@ -32,10 +32,14 @@ struct RuntimeInterfaceCorpusDerivedDataTests {
         let directory: DerivedDataTestDirectory
     }
 
+    /// `readGate` holds every read of derived data — the summary a build or
+    /// restore reads first, and the corpus — until it opens.
     private static func makeFixture(
         directory: DerivedDataTestDirectory? = nil,
         derivedData: RuntimeDerivedDataStore? = nil,
         readGate: Gate? = nil,
+        residentByteLimit: Int = RuntimeInterfaceCorpusStore.defaultResidentByteLimit,
+        corpusReads: ReadCounter? = nil,
         _ configure: (ScriptedBuilder) -> Void = { _ in }
     ) throws -> Fixture {
         let directory = try directory ?? DerivedDataTestDirectory()
@@ -43,13 +47,55 @@ struct RuntimeInterfaceCorpusDerivedDataTests {
         let builder = ScriptedBuilder()
         builder.objectNamesByImagePath = [imageA: ["Alpha", "Beta"], imageB: ["Gamma"]]
         configure(builder)
-        let store = RuntimeInterfaceCorpusStore(builder: builder, derivedData: derivedData, printingWidth: 1, readStoredCorpus: { derivedData, imagePath, transformer in
-            if let readGate {
-                await readGate.wait()
+        let store = RuntimeInterfaceCorpusStore(
+            builder: builder,
+            derivedData: derivedData,
+            residentByteLimit: residentByteLimit,
+            printingWidth: 1,
+            readStoredCorpus: { derivedData, imagePath, transformer in
+                if let readGate {
+                    await readGate.wait()
+                }
+                corpusReads?.begin(imagePath)
+                defer { corpusReads?.end() }
+                return await RuntimeInterfaceCorpusStore.readStoredCorpus(from: derivedData, imagePath: imagePath, transformer: transformer)
+            },
+            readStoredSummary: { derivedData, imagePath, transformer in
+                if let readGate {
+                    await readGate.wait()
+                }
+                return await RuntimeInterfaceCorpusStore.readStoredSummary(from: derivedData, imagePath: imagePath, transformer: transformer)
             }
-            return await RuntimeInterfaceCorpusStore.readStoredCorpus(from: derivedData, imagePath: imagePath, transformer: transformer)
-        })
+        )
         return Fixture(store: store, builder: builder, derivedData: derivedData, directory: directory)
+    }
+
+    /// Counts the corpora read whole, and the most read at once.
+    final class ReadCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var inFlightCount = 0
+        private var readImagePathsStorage: [String] = []
+        private var maximumInFlightCountStorage = 0
+
+        var readImagePaths: [String] {
+            lock.withLock { readImagePathsStorage }
+        }
+
+        var maximumInFlightCount: Int {
+            lock.withLock { maximumInFlightCountStorage }
+        }
+
+        func begin(_ imagePath: String) {
+            lock.withLock {
+                readImagePathsStorage.append(imagePath)
+                inFlightCount += 1
+                maximumInFlightCountStorage = max(maximumInFlightCountStorage, inFlightCount)
+            }
+        }
+
+        func end() {
+            lock.withLock { inFlightCount -= 1 }
+        }
     }
 
     private static func containerExists(_ fixture: Fixture, imagePath: String, transformer: Transformer.Configuration = .default) throws -> Bool {
@@ -306,6 +352,148 @@ struct RuntimeInterfaceCorpusDerivedDataTests {
         #expect(await restore.value.isEmpty)
         _ = try await build.value
         #expect(fixture.builder.printedObjectNames == ["Alpha", "Beta"])
+    }
+
+    // MARK: - Reading back on demand
+
+    /// Prints A and B into `writer`'s derived data; returns what each holds.
+    private static func writeBoth(into writer: Fixture) async throws -> (RuntimeInterfaceCorpusBuildSummary, RuntimeInterfaceCorpusBuildSummary) {
+        let summaryA = try await writer.store.build(imagePath: imageA, transformer: .default)
+        let summaryB = try await writer.store.build(imagePath: imageB, transformer: .default)
+        return (summaryA, summaryB)
+    }
+
+    /// The objects a text search for `member` reports, in the order they
+    /// arrive, and its summary.
+    private static func searchForMember(
+        in store: RuntimeInterfaceCorpusStore,
+        imagePaths: Set<String>? = nil,
+        indexedImagePaths: Set<String> = []
+    ) async throws -> (objectNames: [String], summary: RuntimeInterfaceSearchSummary) {
+        var matches: [RuntimeInterfaceSearchMatch] = []
+        let summary = try await store.searchInterfaces(RuntimeInterfaceSearchQuery(text: "member", imagePaths: imagePaths), indexedImagePaths: indexedImagePaths) { batch in
+            matches += batch
+        }
+        return (matches.map(\.object.name), summary)
+    }
+
+    @Test("A stored corpus that does not fit is built from its summary alone, and a search reads it back, one image at a time")
+    func searchReadsBackWhatDoesNotFit() async throws {
+        let writer = try Self.makeFixture()
+        defer { withExtendedLifetime(writer) {} }
+        let (summaryA, summaryB) = try await Self.writeBoth(into: writer)
+
+        let corpusReads = ReadCounter()
+        let reader = try Self.makeFixture(directory: writer.directory, derivedData: writer.derivedData, residentByteLimit: 0, corpusReads: corpusReads)
+        defer { withExtendedLifetime(reader) {} }
+        #expect(try await reader.store.build(imagePath: Self.imageA, transformer: .default) == summaryA)
+        #expect(try await reader.store.build(imagePath: Self.imageB, transformer: .default) == summaryB)
+        #expect(corpusReads.readImagePaths.isEmpty, "only the summaries were read")
+        #expect(await reader.store.residentImagePaths.isEmpty)
+        #expect(await reader.store.coverage().statesByImagePath == [Self.imageA: .built(summaryA), Self.imageB: .built(summaryB)])
+
+        let (objectNames, summary) = try await Self.searchForMember(in: reader.store, indexedImagePaths: [Self.imageA, Self.imageB])
+        #expect(objectNames == ["Alpha", "Beta", "Gamma"])
+        #expect(summary.scannedImagePaths == [Self.imageA, Self.imageB])
+        #expect(summary.unbuiltIndexedImagePaths.isEmpty)
+        #expect(corpusReads.readImagePaths == [Self.imageA, Self.imageB])
+        #expect(corpusReads.maximumInFlightCount == 1)
+        #expect(await reader.store.residentImagePaths.isEmpty, "no room to keep either")
+        #expect(reader.builder.printedObjectNames.isEmpty)
+    }
+
+    @Test("A printed corpus that does not fit is written and left on disk, built")
+    func printedCorpusThatDoesNotFitStaysOnDisk() async throws {
+        let fixture = try Self.makeFixture(residentByteLimit: 0)
+        defer { withExtendedLifetime(fixture) {} }
+        let summary = try await fixture.store.build(imagePath: Self.imageA, transformer: .default)
+        #expect(try Self.containerExists(fixture, imagePath: Self.imageA))
+        #expect(await fixture.store.residentImagePaths.isEmpty)
+        #expect(await fixture.store.coverage().statesByImagePath == [Self.imageA: .built(summary)])
+        #expect(try await Self.searchForMember(in: fixture.store).objectNames == ["Alpha", "Beta"])
+        #expect(fixture.builder.printedObjectNames == ["Alpha", "Beta"], "read back, not printed again")
+    }
+
+    @Test("Restores fill the budget in the order asked and evict nothing; the rest are read for their summary alone", arguments: [true, false])
+    func restoresFillTheBudgetInOrder(aFirst: Bool) async throws {
+        let writer = try Self.makeFixture()
+        defer { withExtendedLifetime(writer) {} }
+        let (summaryA, summaryB) = try await Self.writeBoth(into: writer)
+        let order = aFirst ? [Self.imageA, Self.imageB] : [Self.imageB, Self.imageA]
+
+        let corpusReads = ReadCounter()
+        let reader = try Self.makeFixture(directory: writer.directory, derivedData: writer.derivedData, residentByteLimit: max(summaryA.byteCount, summaryB.byteCount), corpusReads: corpusReads)
+        defer { withExtendedLifetime(reader) {} }
+        let restored = await reader.store.restore(imagePaths: order, transformer: .default)
+        #expect(restored.mapValues(\.summary) == [Self.imageA: summaryA, Self.imageB: summaryB])
+        #expect(await reader.store.residentImagePaths == [order[0]])
+        #expect(corpusReads.readImagePaths == [order[0]])
+        #expect(await reader.store.storedImagePaths == [Self.imageA, Self.imageB])
+    }
+
+    @Test("A corpus read back for a search stays if evicting corpora searched before makes room, never one the same search reads")
+    func searchKeepsTheMostRecentlySearched() async throws {
+        let writer = try Self.makeFixture()
+        defer { withExtendedLifetime(writer) {} }
+        let (summaryA, summaryB) = try await Self.writeBoth(into: writer)
+        let reader = try Self.makeFixture(directory: writer.directory, derivedData: writer.derivedData, residentByteLimit: max(summaryA.byteCount, summaryB.byteCount))
+        defer { withExtendedLifetime(reader) {} }
+        _ = await reader.store.restore(imagePaths: [Self.imageA, Self.imageB], transformer: .default)
+        #expect(await reader.store.residentImagePaths == [Self.imageA])
+
+        // B searched alone is more recent than A, which goes.
+        #expect(try await Self.searchForMember(in: reader.store, imagePaths: [Self.imageB]).objectNames == ["Gamma"])
+        #expect(await reader.store.residentImagePaths == [Self.imageB])
+
+        // A search of both reads A back but keeps B, which it searched too.
+        #expect(try await Self.searchForMember(in: reader.store).objectNames == ["Alpha", "Beta", "Gamma"])
+        #expect(await reader.store.residentImagePaths == [Self.imageB])
+    }
+
+    @Test("Freeing the memory the corpora take keeps the stored ones built and searchable, and drops the others")
+    func evictingResidentCorporaKeepsStoredOnes() async throws {
+        let directory = try DerivedDataTestDirectory()
+        let derivedData = DerivedDataTestIdentities.store(in: directory, isSharedCacheImage: { $0 == Self.imageA })
+        let fixture = try Self.makeFixture(directory: directory, derivedData: derivedData)
+        defer { withExtendedLifetime(fixture) {} }
+        let summaryA = try await fixture.store.build(imagePath: Self.imageA, transformer: .default)
+        _ = try await fixture.store.build(imagePath: Self.imageB, transformer: .default)
+        #expect(await fixture.store.residentImagePaths == [Self.imageA, Self.imageB])
+
+        await fixture.store.evictResidentCorpora()
+        #expect(await fixture.store.residentByteCount == 0)
+        #expect(await fixture.store.coverage().statesByImagePath == [Self.imageA: .built(summaryA)], "B, outside derived data, is gone")
+        #expect(try await Self.searchForMember(in: fixture.store).objectNames == ["Alpha", "Beta"])
+        #expect(fixture.builder.printedObjectNames == ["Alpha", "Beta", "Gamma"], "nothing printed again")
+    }
+
+    @Test("A corpus derived data cannot hold is kept over the budget, the stored ones evicted for it first")
+    func unstoredCorpusEvictsStoredOnesFirst() async throws {
+        let directory = try DerivedDataTestDirectory()
+        let derivedData = DerivedDataTestIdentities.store(in: directory, isSharedCacheImage: { $0 == Self.imageA })
+        let fixture = try Self.makeFixture(directory: directory, derivedData: derivedData)
+        defer { withExtendedLifetime(fixture) {} }
+        let summaryA = try await fixture.store.build(imagePath: Self.imageA, transformer: .default)
+        await fixture.store.setResidentByteLimit(summaryA.byteCount)
+        let summaryB = try await fixture.store.build(imagePath: Self.imageB, transformer: .default)
+        #expect(await fixture.store.residentImagePaths == [Self.imageB])
+        #expect(await fixture.store.coverage().statesByImagePath == [Self.imageA: .built(summaryA), Self.imageB: .built(summaryB)], "A stays built, on disk")
+    }
+
+    @Test("A stored corpus whose file is gone stops being built once a search fails to read it back")
+    func readBackOfAMissingFileUnbuildsTheImage() async throws {
+        let fixture = try Self.makeFixture(residentByteLimit: 0)
+        defer { withExtendedLifetime(fixture) {} }
+        _ = try await fixture.store.build(imagePath: Self.imageA, transformer: .default)
+        let containerURL = try #require(fixture.derivedData.containerURL(.interfaceCorpus, variant: RuntimeInterfaceCorpusSnapshot.variant(for: .default), forImageAt: Self.imageA))
+        try FileManager.default.removeItem(at: containerURL)
+
+        let (objectNames, summary) = try await Self.searchForMember(in: fixture.store, indexedImagePaths: [Self.imageA])
+        #expect(objectNames.isEmpty)
+        #expect(summary.scannedImagePaths.isEmpty)
+        #expect(summary.unbuiltIndexedImagePaths == [Self.imageA])
+        let state = await fixture.store.coverage().statesByImagePath[Self.imageA]
+        #expect(state?.isBuilt == false && state?.isActive == false, "failed, so the Report says why: \(String(describing: state))")
     }
 
     // MARK: - Coverage

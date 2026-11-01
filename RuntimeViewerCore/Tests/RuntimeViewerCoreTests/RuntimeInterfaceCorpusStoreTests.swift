@@ -828,7 +828,7 @@ struct RuntimeInterfaceCorpusStoreTests {
         let byteCountA = await store.residentByteCount
         await store.setResidentByteLimit(byteCountA + 1)
         _ = try await store.build(imagePath: Self.imageB, transformer: .default)
-        #expect(await store.builtImagePaths == [Self.imageB])
+        #expect(await store.residentImagePaths == [Self.imageB])
     }
 
     @Test("collection stops at the limit while the count goes on")
@@ -1015,9 +1015,9 @@ struct RuntimeInterfaceCorpusStoreTests {
         _ = try await store.build(imagePath: Self.imageA, transformer: .default)
         _ = try await store.build(imagePath: Self.imageB, transformer: .default)
         await store.evict(imagePath: Self.imageA)
-        #expect(await store.builtImagePaths == [Self.imageB])
+        #expect(await store.residentImagePaths == [Self.imageB])
         await store.evictAll()
-        #expect(await store.builtImagePaths.isEmpty)
+        #expect(await store.residentImagePaths.isEmpty)
         #expect(await store.residentByteCount == 0)
     }
 }

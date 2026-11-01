@@ -113,10 +113,21 @@ extension RuntimeEngine {
         try await dispatch(IndexedImagePathsCommand())
     }
 
-    /// Drops one image's corpus, or every corpus when `imagePath` is `nil`.
-    /// A build under way for it is cancelled.
+    /// Drops one image's corpus, or every corpus when `imagePath` is `nil` —
+    /// the one in memory and the one derived data holds alike, which a search
+    /// no longer reads back until the image is asked for again. A build under
+    /// way for it is cancelled.
     public func evictInterfaceCorpus(for imagePath: String?) async throws {
-        _ = try await dispatch(EvictInterfaceCorpusCommand(imagePath: imagePath))
+        _ = try await dispatch(EvictInterfaceCorpusCommand(imagePath: imagePath, keepsStoredCorpora: nil))
+    }
+
+    /// Frees the memory every corpus takes in the serving process — the
+    /// Report navigator's Eject — and cancels the builds under way. A corpus
+    /// derived data holds stays searchable: the next search that needs it
+    /// reads it back. A peer that predates this drops every corpus instead,
+    /// as `evictInterfaceCorpus(for: nil)` does.
+    public func evictResidentInterfaceCorpora() async throws {
+        _ = try await dispatch(EvictInterfaceCorpusCommand(imagePath: nil, keepsStoredCorpora: true))
     }
 
     /// Sets the resident budget of the corpus store; corpora least recently
@@ -202,9 +213,11 @@ extension RuntimeEngine {
         await interfaceCorpusStore.coverage()
     }
 
-    func _evictInterfaceCorpus(for imagePath: String?) async {
+    func _evictInterfaceCorpus(for imagePath: String?, keepsStoredCorpora: Bool) async {
         if let imagePath {
             await interfaceCorpusStore.evict(imagePath: DyldUtilities.patchImagePathForDyld(imagePath))
+        } else if keepsStoredCorpora {
+            await interfaceCorpusStore.evictResidentCorpora()
         } else {
             await interfaceCorpusStore.evictAll()
         }
@@ -373,11 +386,14 @@ extension RuntimeEngine {
         }
     }
 
+    /// `keepsStoredCorpora` is optional so that the command decodes from a
+    /// peer that predates it, and one that predates it ignores it.
     struct EvictInterfaceCorpusCommand: RuntimeEngineCommand {
         let imagePath: String?
+        let keepsStoredCorpora: Bool?
         static var commandName: String { CommandName.evictInterfaceCorpus.commandName }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
-            await engine._evictInterfaceCorpus(for: imagePath)
+            await engine._evictInterfaceCorpus(for: imagePath, keepsStoredCorpora: keepsStoredCorpora ?? false)
             return RuntimeEngineEmpty()
         }
     }
