@@ -5,7 +5,8 @@ import AppKit
 /// colour. Worked out from the theme each time it is applied; notes take the comment colour.
 ///
 /// Chosen by the user from four candidates compared on real interfaces (the prototype is on the
-/// `prototype/comment-tag-styles` branch); `draft-source-editor-comment-annotations` records why.
+/// `prototype/comment-tag-styles` branch); the proposal `source-editor-comment-annotations`
+/// records why.
 final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
     let valueColor: NSColor
     let typeColor: NSColor
