@@ -102,4 +102,13 @@ extension RuntimeCrossReferences {
             return RuntimeEngineEmpty()
         }
     }
+
+    /// How many bytes of prepared cross references the process keeps now.
+    struct PreparedByteCountCommand: RuntimeEngineCommand {
+        static var commandName: String { RuntimeEngine.CommandName.crossReferencePreparedByteCount.commandName }
+
+        func perform(on engine: RuntimeEngine) async throws -> Int {
+            CrossReferenceQuery(engine: engine).preparedByteCount
+        }
+    }
 }

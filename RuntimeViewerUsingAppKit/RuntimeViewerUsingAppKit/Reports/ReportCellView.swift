@@ -8,7 +8,9 @@ import SnapKit
 /// A row of the Report navigator, laid out like Xcode's `DVTTableCellViewOneLine` in its Report
 /// navigator: a 16-point icon at the leading edge, the title 19 points in, the secondary text right
 /// after the title, and a 16-point status mark at the trailing edge — the small spinner while the
-/// work runs (`IDELogNavigatorStatusView`), an issue mark once it failed.
+/// work runs (`IDELogNavigatorStatusView`), an issue mark once it failed. The row of a kind of work
+/// whose results the engine's process keeps has an Eject button in that place instead, as Finder's
+/// sidebar has for a volume.
 final class ReportCellView: TableCellView {
     private let iconImageView = ImageView()
 
@@ -20,7 +22,18 @@ final class ReportCellView: TableCellView {
 
     private let issueImageView = ImageView()
 
+    /// A plain `NSButton`: an image-only borderless button, which `PushButton`'s fixed bezel is not.
+    private let ejectButton = NSButton()
+
     private static let issueImage = SFSymbols(systemName: .xmarkOctagonFill).nsuiImgae
+
+    private static let ejectImage = SFSymbols(systemName: .ejectFill).nsuiImage
+
+    /// The row's Eject button pressed. The list's view controller pairs it with the row it bound
+    /// this cell to.
+    var ejectClicked: Signal<Void> {
+        ejectButton.rx.click.asSignal()
+    }
 
     /// What the cell shows now; `nil` until the first appearance after a bind. A running row's
     /// detail changes many times a second while its icon, title, tooltip and status stay as they
@@ -37,6 +50,10 @@ final class ReportCellView: TableCellView {
             detailLabel
             progressIndicator
             issueImageView
+            // Last: a stopped spinner is not drawn but still takes part in hit-testing, and AppKit
+            // hit-tests the subviews last to first, so the button has to come after it for a
+            // click to reach it on macOS 27.
+            ejectButton
         }
 
         iconImageView.snp.makeConstraints { make in
@@ -63,6 +80,10 @@ final class ReportCellView: TableCellView {
         }
 
         issueImageView.snp.makeConstraints { make in
+            make.edges.equalTo(progressIndicator)
+        }
+
+        ejectButton.snp.makeConstraints { make in
             make.edges.equalTo(progressIndicator)
         }
 
@@ -103,6 +124,19 @@ final class ReportCellView: TableCellView {
             $0.contentTintColor = .systemRed
             $0.isHidden = true
         }
+
+        ejectButton.do {
+            $0.image = Self.ejectImage
+            $0.imagePosition = .imageOnly
+            $0.imageScaling = .scaleProportionallyDown
+            $0.bezelStyle = .regularSquare
+            $0.isBordered = false
+            $0.contentTintColor = .secondaryLabelColor
+            $0.toolTip = "Eject: the engine's process frees this memory"
+            $0.setAccessibilityLabel("Eject")
+            // Hidden, not just undrawn, so that it takes no part in hit-testing on other rows.
+            $0.isHidden = true
+        }
     }
 
     func bind(to cellViewModel: ReportCellViewModel) {
@@ -139,6 +173,9 @@ final class ReportCellView: TableCellView {
         }
         if differs(\.status) {
             show(appearance.status)
+        }
+        if differs(\.showsEjectButton) {
+            ejectButton.isHidden = !appearance.showsEjectButton
         }
     }
 

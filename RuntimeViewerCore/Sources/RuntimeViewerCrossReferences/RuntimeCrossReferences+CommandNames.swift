@@ -29,4 +29,9 @@ extension RuntimeEngine.CommandName {
     /// Sets the most bytes of prepared cross references the serving process
     /// keeps; zero drops them all.
     static let crossReferenceSetPreparedByteLimit = Self("crossReferenceSetPreparedByteLimit")
+
+    /// How many bytes of prepared cross references the serving process keeps
+    /// now: what a zero limit frees. A peer older than it has no handler, and
+    /// the app then shows no size.
+    static let crossReferencePreparedByteCount = Self("crossReferencePreparedByteCount")
 }

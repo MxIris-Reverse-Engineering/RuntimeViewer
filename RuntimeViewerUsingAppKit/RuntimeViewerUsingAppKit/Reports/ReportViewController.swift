@@ -26,6 +26,10 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     private let openSettingsRelay = PublishRelay<Void>()
 
+    /// The Eject buttons belong to cells the outline recycles, so their clicks are gathered here,
+    /// each paired with the row its cell was bound to.
+    private let ejectRelay = PublishRelay<ReportNode>()
+
     // MARK: - Outline
 
     private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
@@ -228,13 +232,20 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
             openSettings: openSettingsRelay.asSignal(),
             doubleClickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
-            showsOnlyInProgress: showsOnlyInProgressButton.rx.state.asDriver().map { $0 == .on }.startWith(false)
+            showsOnlyInProgress: showsOnlyInProgressButton.rx.state.asDriver().map { $0 == .on }.startWith(false),
+            eject: ejectRelay.asSignal()
         )
         let output = viewModel.transform(input)
 
-        output.nodes.drive(outlineView.rx.nodes(options: []))({ (outlineView: NSOutlineView, _: NSTableColumn?, node: ReportNode) -> NSView? in
+        output.nodes.drive(outlineView.rx.nodes(options: []))({ [ejectRelay] (outlineView: NSOutlineView, _: NSTableColumn?, node: ReportNode) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: ReportCellView.self)
             cellView.bind(to: node.cellViewModel)
+            // `bind(to:)` empties the cell's dispose bag, so a reused cell stops reporting for
+            // the row it showed before.
+            cellView.ejectClicked
+                .map { node }
+                .emit(to: ejectRelay)
+                .disposed(by: cellView.rx.disposeBag)
             return cellView
         }, { outlineView, _ -> NSTableRowView? in
             if #available(macOS 26.0, *) {

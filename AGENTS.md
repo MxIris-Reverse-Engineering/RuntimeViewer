@@ -384,12 +384,12 @@ The project uses three Swift Package Manager packages:
   show nothing and command nothing. A document that closes or moves away only leaves — nothing is
   cancelled while another document is on the engine — and the last one leaving cancels the engine's work
   and drops its Report; Cancel, Cancel All and Clear History speak for every window on the engine.
-  The last one leaving also has the engine's process drop every Find corpus and prepared cross
-  reference it kept (the sections stay); the next document asks for them again, and one that joins
-  while that release is under way starts its coordinators over once it is done
-  (`RuntimeEngineBackgroundWorkRegistry`), because a late eviction or a late zero limit would undo
-  what it asked for. **Never give a document indexing or corpus state of its own again.** A root
-  already indexed starts no batch at all. Background:
+  **Never give a document indexing or corpus state of its own again.** A root already indexed starts no
+  batch at all. **What the engine's process keeps — the Find corpora, the prepared cross references — is
+  never dropped on its own**, not even when the last window leaves (that was tried and reverted: a window
+  reopened at once rebuilt everything). The Report navigator's Searchable Interfaces and Cross
+  References rows show its size and eject it (`ejectCorpora()`, `ejectPreparations()`), and it comes
+  back when a search or a query needs it. Background:
   `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
   `Documentations/Evolutions/0058-runtime-engine-session.md`,
   `Documentations/Evolutions/draft-engine-resident-memory.md`,

@@ -26,6 +26,11 @@ public final class ReportCellViewModel: NSObject, @unchecked Sendable {
         public var status: ReportRowStatus = .none
 
         public var toolTip: String?
+
+        /// An Eject button at the trailing edge, as Finder gives a volume: the row of a kind of
+        /// work whose results the engine's process keeps, which the user can have it drop. The
+        /// status mark takes the same place, and the rows that have one never eject.
+        public var showsEjectButton = false
     }
 
     @RxObserved
@@ -45,8 +50,8 @@ public final class ReportCellViewModel: NSObject, @unchecked Sendable {
 
     /// Sets what the row shows. The appearance is published in one assignment and only when it
     /// changed, so the cell's binding fires once per real change.
-    func update(icon: NSUIImage?, title: String, detail: String = "", status: ReportRowStatus = .none, toolTip: String? = nil, isCancellable: Bool = false, isInProgress: Bool = false) {
-        let newAppearance = Appearance(icon: icon, title: title, detail: detail, status: status, toolTip: toolTip)
+    func update(icon: NSUIImage?, title: String, detail: String = "", status: ReportRowStatus = .none, toolTip: String? = nil, isCancellable: Bool = false, isInProgress: Bool = false, isEjectable: Bool = false) {
+        let newAppearance = Appearance(icon: icon, title: title, detail: detail, status: status, toolTip: toolTip, showsEjectButton: isEjectable)
         if appearance != newAppearance {
             appearance = newAppearance
         }

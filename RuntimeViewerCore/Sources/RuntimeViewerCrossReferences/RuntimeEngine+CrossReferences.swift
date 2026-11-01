@@ -83,4 +83,11 @@ extension RuntimeEngine {
     public func setPreparedCrossReferenceByteLimit(_ byteLimit: Int) async throws {
         _ = try await dispatch(RuntimeCrossReferences.SetPreparedByteLimitCommand(byteLimit: byteLimit))
     }
+
+    /// How many bytes of prepared cross references the engine's process keeps
+    /// now — what a zero limit frees — as their preparations estimated them.
+    /// Throws for a peer older than the command.
+    public func preparedCrossReferenceByteCount() async throws -> Int {
+        try await dispatch(RuntimeCrossReferences.PreparedByteCountCommand())
+    }
 }

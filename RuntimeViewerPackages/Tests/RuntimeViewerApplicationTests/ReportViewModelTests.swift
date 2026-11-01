@@ -233,7 +233,14 @@ struct ReportViewModelTests {
         try await settleMainQueue()
 
         let remaining = try await nextValue(from: page.output.nodes)
-        #expect(remaining.isEmpty, "left after Clear History: \(Self.everyNode(in: remaining).map { "\($0.identifier) \($0.cellViewModel.appearance.title) \($0.cellViewModel.appearance.detail)" })")
+        // The corpora are still in the engine's process, so Searchable Interfaces stays as a row
+        // of its own, with their size and Eject; nothing of the history is left under any kind.
+        let isEmptyCategoryRow: (ReportNode) -> Bool = { node in
+            guard case .category = node.identifier else { return false }
+            return node.children.isEmpty
+        }
+        let leftOver = Self.everyNode(in: remaining).filter { !isEmptyCategoryRow($0) }
+        #expect(leftOver.isEmpty, "left after Clear History: \(leftOver.map { "\($0.identifier) \($0.cellViewModel.appearance.title) \($0.cellViewModel.appearance.detail)" })")
         await engine.stop()
     }
 
