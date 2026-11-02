@@ -23,7 +23,7 @@ extension RuntimeEngine {
     struct MainExecutablePathCommand: RuntimeEngineCommand {
         static var commandName: String { CommandName.mainExecutablePath.commandName }
         func perform(on engine: RuntimeEngine) async throws -> String {
-            DyldUtilities.mainExecutablePath()
+            engine.imageCatalog.mainExecutablePath()
         }
     }
 

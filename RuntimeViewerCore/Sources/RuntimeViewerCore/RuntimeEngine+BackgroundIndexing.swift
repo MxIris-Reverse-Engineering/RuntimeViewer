@@ -8,7 +8,7 @@ extension RuntimeEngine {
     }
 
     func _isImageIndexed(path: String) async -> Bool {
-        let normalized = DyldUtilities.patchImagePathForDyld(path)
+        let normalized = imageCatalog.canonicalImagePath(path)
         let hasObjC = await objcSectionFactory.hasCachedSection(for: normalized)
         let hasSwift = await swiftSectionFactory.hasCachedSection(for: normalized)
         return hasObjC && hasSwift
@@ -59,9 +59,9 @@ extension RuntimeEngine {
     /// description. Section caching below is idempotent on already-loaded
     /// images so the rest of the indexing pipeline still runs.
     func _loadImageForBackgroundIndexing(at path: String) async throws {
-        let canonical = DyldUtilities.patchImagePathForDyld(path)
+        let canonical = imageCatalog.canonicalImagePath(path)
         if !imageList.contains(canonical) {
-            try DyldUtilities.loadImage(at: canonical)
+            try imageCatalog.prepareImage(at: canonical)
         }
         _ = try await objcSectionFactory.section(for: canonical)
         _ = try await swiftSectionFactory.section(for: canonical)
@@ -117,79 +117,28 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
 
 // MARK: - Local implementations of the BFS metadata methods
 
+/// The local arm of each answers from the engine's image catalog: what dyld
+/// loaded into this process, or the images of an offline file. The walk and
+/// the dependency rules themselves are the catalog's; see
+/// `RuntimeImageCatalog.dependencyEntries(ofImageAt:ancestorRpaths:mainExecutablePath:)`.
 extension RuntimeEngine {
     func _canOpenImage(at path: String) -> Bool {
-        DyldUtilities.machOImage(forPath: path) != nil
+        imageCatalog.canOpenImage(at: path)
     }
 
     func _rpaths(for path: String) -> [String] {
-        guard let image = DyldUtilities.machOImage(forPath: path) else {
-            return []
-        }
-        return image.rpaths
+        imageCatalog.rpaths(ofImageAt: path)
     }
 
     func _dependencies(for path: String,
                        ancestorRpaths: [String],
                        mainExecutablePath: String)
         -> [RuntimeDependencyEntry] {
-        guard let image = DyldUtilities.machOImage(forPath: path) else {
-            return []
-        }
-        let resolver = DylibPathResolver()
-        // dyld searches the union of every loader's LC_RPATH walking up the
-        // chain to the main executable plus the image's own LC_RPATH. The BFS
-        // accumulates ancestors into `ancestorRpaths`; appending self-rpaths
-        // matches dyld's lookup order (loaders first, then self).
-        let mergedRpaths = ancestorRpaths + image.rpaths
-        return image.dependencies
-            .filter { $0.type != .lazyLoad }
-            .compactMap { dependency in
-                let installName = dependency.dylib.name
-                let resolvedPath = resolver.resolve(
-                    installName: installName,
-                    imagePath: path,
-                    rpaths: mergedRpaths,
-                    mainExecutablePath: mainExecutablePath,
-                )
-                // Two link modes where dyld is allowed to never produce a
-                // loaded image at BFS time:
-                //
-                //  • LC_LOAD_WEAK_DYLIB — dyld silently skips when the target
-                //    isn't loadable. Two manifestations: (1) install name
-                //    doesn't resolve to anything on disk (e.g. Xcode omits
-                //    the embed for newer deployment targets); (2) install
-                //    name resolves to an embedded copy but dyld uses the
-                //    shared-cache version instead (e.g. Xcode embeds
-                //    `libswiftCompatibilitySpan.dylib` whose install name is
-                //    `/usr/lib/swift/...`; on hosts where the shared cache
-                //    already ships it, the bundle copy is never loaded as a
-                //    separate image).
-                //
-                //  • DYLIB_USE_DELAYED_INIT — dyld postpones loading until
-                //    the first symbol access (e.g. Foundation's delay-init
-                //    edge to `/usr/lib/libcmark-gfm.dylib`). At BFS time the
-                //    image is on disk / in the shared cache but not yet
-                //    registered, so `machOImage(forPath:)` returns nil.
-                //
-                // In both cases `expandDependencyGraph`'s `canOpenImage`
-                // check would mark the node `.failed("cannot open MachOImage")`,
-                // flooding the popover with red ✗ rows for misses the runtime
-                // explicitly tolerates. Drop them from the dependency list
-                // instead.
-                let isShadowable = dependency.type == .weakLoad
-                    || dependency.useFlags.contains(.delayed_init)
-                if isShadowable {
-                    if resolvedPath == nil {
-                        return nil
-                    }
-                    if let resolvedPath,
-                       DyldUtilities.machOImage(forPath: resolvedPath) == nil {
-                        return nil
-                    }
-                }
-                return RuntimeDependencyEntry(installName: installName, resolvedPath: resolvedPath)
-            }
+        imageCatalog.dependencyEntries(
+            ofImageAt: path,
+            ancestorRpaths: ancestorRpaths,
+            mainExecutablePath: mainExecutablePath,
+        )
     }
 }
 

@@ -80,19 +80,19 @@ struct RuntimeSwiftRefinedProtocol: Hashable, Sendable {
 /// aggregate, which holds every per-image indexer, spans all loaded images.
 /// Mirrors `RuntimeObjCInterfaceIndexer`.
 ///
-/// `@unchecked Sendable`: the `MachOImage` and `SwiftDeclaration.TypeName`
+/// `@unchecked Sendable`: the Mach-O reader and `SwiftDeclaration.TypeName`
 /// values held here are not themselves `Sendable`, but `machO` / `upstream`
 /// are immutable `let`s and the reverse tables plus `subIndexers` are all
 /// `@Mutex`-guarded — mirroring `RuntimeObjCInterfaceIndexer`.
 @dynamicMemberLookup
-final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
+final class RuntimeSwiftInterfaceIndexer<MachO: RuntimeIndexableMachO>: @unchecked Sendable {
 
     // MARK: - Indexed Image
 
     /// The Mach-O image this indexer parses. Bound at `init`, never
     /// reassigned — mirrors `RuntimeObjCInterfaceIndexer`, which likewise
-    /// binds its `MachOImage` at construction.
-    private let machO: MachOImage
+    /// binds its image at construction.
+    private let machO: MachO
 
     /// The dyld-canonical path this indexer's image is cached under — the key
     /// `RuntimeSwiftSectionFactory.sections` uses, and therefore the one every
@@ -106,7 +106,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// `RuntimeSwiftSection` drives interface generation, member-address
     /// lookup and generic specialization directly off its full API; this
     /// wrapper only *adds* the relationship layer, it does not hide `upstream`.
-    let upstream: SwiftDeclarationIndexer<MachOImage>
+    let upstream: SwiftDeclarationIndexer<MachO>
 
     /// Transparent read-through to `upstream`: any property this wrapper does
     /// not declare itself resolves against `SwiftDeclarationIndexer`, so
@@ -115,7 +115,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// …) without spelling out `.upstream`. Methods are not key-path-
     /// expressible, so the upstream methods the codebase needs are exposed as
     /// explicit wrapper methods (see `updateConfiguration`, `addSubIndexer`).
-    subscript<Value>(dynamicMember keyPath: KeyPath<SwiftDeclarationIndexer<MachOImage>, Value>) -> Value {
+    subscript<Value>(dynamicMember keyPath: KeyPath<SwiftDeclarationIndexer<MachO>, Value>) -> Value {
         upstream[keyPath: keyPath]
     }
 
@@ -198,7 +198,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// dropped by `addSubIndexer` and `removeSubIndexer`. Only the aggregate's
     /// is ever read.
     @Mutex
-    private var currentConformanceProvider: IndexerConformanceProvider<MachOImage>? = nil
+    private var currentConformanceProvider: IndexerConformanceProvider<MachO>? = nil
 
     // MARK: - Init
 
@@ -217,7 +217,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// `configuration` is fixed for the indexer's lifetime. Callers pass
     /// `RuntimeSwiftSection.indexConfiguration`; the indexer has no say in it.
     init(
-        machO: MachOImage,
+        machO: MachO,
         imagePath: String,
         configuration: SwiftDeclarationIndexConfiguration,
         eventHandlers: [SwiftIndexEvents.Handler] = []
@@ -709,7 +709,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// indexed class again each time — and replaced once an image is added or
     /// removed: a provider kept for good left the new image's subclasses out of
     /// the candidates.
-    var conformanceProvider: IndexerConformanceProvider<MachOImage> {
+    var conformanceProvider: IndexerConformanceProvider<MachO> {
         _currentConformanceProvider.withLock { currentConformanceProvider in
             if let currentConformanceProvider {
                 return currentConformanceProvider

@@ -1,3 +1,4 @@
+import MachOKit
 import Foundation
 import Testing
 @testable import RuntimeViewerCore
@@ -248,7 +249,7 @@ struct SwiftExportedDeclarationsTests {
     /// how every declaration in those dependencies prints.
     private static func fixtureCorpusEntries() async throws -> [RuntimeInterfaceCorpusEntry] {
         let (engine, objects) = try await sharedBundle.value
-        let section = try #require(await engine.swiftSectionFactory.existingSection(for: testBundlePath))
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: testBundlePath) as? RuntimeSwiftSection<MachOImage>)
         var prints: [RuntimeInterfaceCorpusPrint] = []
         for root in objects where root.displayName.contains("ExportedDeclarations") {
             for outcome in try await section.corpusPrints(of: root.corpusFamily, transformer: .default) {

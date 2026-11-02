@@ -42,21 +42,21 @@ import SwiftDeclaration
 /// levels of Ancestor Types as one flat chain (`superclassChain(of:)`), and a
 /// protocol's Ancestor Types tree itself (`refinedProtocolTree(of:)`).
 @Loggable(.private)
-actor RuntimeTypeRelationshipsResolver {
-    static let maximumDepth = 64
+actor RuntimeTypeRelationshipsResolver<MachO: RuntimeIndexableMachO>: RuntimeTypeRelationshipsResolving {
+    static var maximumDepth: Int { 64 }
 
-    private let objcSectionFactory: RuntimeObjCSectionFactory
+    private let objcSectionFactory: RuntimeObjCSectionFactory<MachO>
 
-    private let swiftSectionFactory: RuntimeSwiftSectionFactory
+    private let swiftSectionFactory: RuntimeSwiftSectionFactory<MachO>
 
-    private let relationshipsResolver: RuntimeRelationshipsResolver
+    private let relationshipsResolver: RuntimeRelationshipsResolver<MachO>
 
     private let regularExpressionTimeLimit: TimeInterval
 
     init(
-        objcSectionFactory: RuntimeObjCSectionFactory,
-        swiftSectionFactory: RuntimeSwiftSectionFactory,
-        relationshipsResolver: RuntimeRelationshipsResolver,
+        objcSectionFactory: RuntimeObjCSectionFactory<MachO>,
+        swiftSectionFactory: RuntimeSwiftSectionFactory<MachO>,
+        relationshipsResolver: RuntimeRelationshipsResolver<MachO>,
         regularExpressionTimeLimit: TimeInterval = RuntimeInterfaceTextMatcher.RegularExpressionBudget.defaultTimeLimit
     ) {
         self.objcSectionFactory = objcSectionFactory
@@ -518,7 +518,7 @@ actor RuntimeTypeRelationshipsResolver {
     }
 
     /// The Objective-C runtime name of Swift's root class, `Swift._SwiftObject`.
-    private static let swiftRootClassName = "_TtCs12_SwiftObject"
+    private static var swiftRootClassName: String { "_TtCs12_SwiftObject" }
 
     /// How a level known only by its Objective-C runtime name is shown: a
     /// Swift class's mangled runtime name (`_TtC6AppKit14NSScrollPocket`)

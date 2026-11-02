@@ -1,3 +1,4 @@
+import MachOKit
 import Foundation
 import Testing
 @testable import RuntimeViewerCore
@@ -29,7 +30,7 @@ struct RuntimeObjCImplementationClassTests {
     /// The section reads the image out of *this* process (`MachOImage`), so
     /// AppKit has to be mapped before it can be asked anything — the test
     /// bundle does not link it.
-    private func appKitSection() async throws -> RuntimeObjCSection {
+    private func appKitSection() async throws -> RuntimeObjCSection<MachOImage> {
         try #require(dlopen(Self.appKitPath, RTLD_LAZY) != nil, "AppKit could not be loaded into the test process")
         let factory = RuntimeObjCSectionFactory()
         return try await factory.section(for: Self.appKitPath).section

@@ -138,7 +138,7 @@ struct RuntimeObjCProtocolReference: Hashable, Sendable {
 /// `@unchecked Sendable`: `upstream` and `relationshipTables` are immutable
 /// `let`s that guard their own state, and `subIndexers` is `@Mutex`-guarded.
 @dynamicMemberLookup
-final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
+final class RuntimeObjCInterfaceIndexer<MachO: RuntimeIndexableMachO>: @unchecked Sendable {
 
     // MARK: - Upstream Indexer
 
@@ -150,7 +150,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     ///
     /// Built in `init` and never reassigned — see the type's docs for why that
     /// matters here specifically.
-    let upstream: ObjCInterfaceIndexer<MachOImage>
+    let upstream: ObjCInterfaceIndexer<MachO>
 
     /// Transparent read-through to `upstream`: any property this wrapper does
     /// not declare itself resolves against `ObjCInterfaceIndexer`, so
@@ -159,7 +159,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// without spelling out `.upstream`. Methods are not key-path-expressible,
     /// so the upstream methods the codebase needs are exposed as explicit
     /// wrapper methods below. Mirrors `RuntimeSwiftInterfaceIndexer`.
-    subscript<Value>(dynamicMember keyPath: KeyPath<ObjCInterfaceIndexer<MachOImage>, Value>) -> Value {
+    subscript<Value>(dynamicMember keyPath: KeyPath<ObjCInterfaceIndexer<MachO>, Value>) -> Value {
         upstream[keyPath: keyPath]
     }
 
@@ -208,7 +208,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// The handler captures `relationshipTables` — never `self` — so it is
     /// fully formed before `upstream` exists and carries no retain cycle back
     /// into this object.
-    init(machO: MachOImage, imagePath: String, progressContinuation: LoadingEventContinuation? = nil) {
+    init(machO: MachO, imagePath: String, progressContinuation: LoadingEventContinuation? = nil) {
         let relationshipTables = RuntimeObjCRelationshipTables()
         self.relationshipTables = relationshipTables
         self.imagePath = imagePath
@@ -261,15 +261,15 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// `@dynamicMemberLookup` forwards property *reads* only, so the upstream
     /// methods the codebase needs are wrapped explicitly. Mirrors
     /// `RuntimeSwiftInterfaceIndexer.updateConfiguration`.
-    func classGroup(forName name: String) -> ObjCInterfaceIndexer<MachOImage>.ObjCClassGroup? {
+    func classGroup(forName name: String) -> ObjCInterfaceIndexer<MachO>.ObjCClassGroup? {
         upstream.classGroup(forName: name)
     }
 
-    func protocolGroup(forName name: String) -> ObjCInterfaceIndexer<MachOImage>.ObjCProtocolGroup? {
+    func protocolGroup(forName name: String) -> ObjCInterfaceIndexer<MachO>.ObjCProtocolGroup? {
         upstream.protocolGroup(forName: name)
     }
 
-    func categoryGroup(forName uniqueName: String) -> ObjCInterfaceIndexer<MachOImage>.ObjCCategoryGroup? {
+    func categoryGroup(forName uniqueName: String) -> ObjCInterfaceIndexer<MachO>.ObjCCategoryGroup? {
         upstream.categoryGroup(forName: uniqueName)
     }
 
@@ -338,7 +338,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// The class group for `name` from whichever image in this aggregate
     /// declares the class, with that image's path — this indexer's own image
     /// first, then each sub-indexer in registration order.
-    func classGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachOImage>.ObjCClassGroup, imagePath: String)? {
+    func classGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachO>.ObjCClassGroup, imagePath: String)? {
         if let group = upstream.classGroup(forName: name) {
             return (group, imagePath)
         }
@@ -351,7 +351,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     }
 
     /// `classGroupAcrossImages(forName:)` for protocols.
-    func protocolGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachOImage>.ObjCProtocolGroup, imagePath: String)? {
+    func protocolGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachO>.ObjCProtocolGroup, imagePath: String)? {
         if let group = upstream.protocolGroup(forName: name) {
             return (group, imagePath)
         }

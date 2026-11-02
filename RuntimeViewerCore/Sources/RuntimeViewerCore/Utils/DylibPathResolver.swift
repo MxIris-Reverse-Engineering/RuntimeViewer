@@ -5,8 +5,18 @@ import FoundationToolbox
 struct DylibPathResolver {
     private let fileManager: FileManager
 
-    init(fileManager: FileManager = .default) {
+    /// Whether a path that names no file on disk is an image of the dyld
+    /// shared cache the images being resolved come from: this process's cache
+    /// for images dyld loaded, the cache an offline file is paired with for
+    /// one read from disk.
+    private let isSharedCacheImage: @Sendable (String) -> Bool
+
+    init(
+        fileManager: FileManager = .default,
+        isSharedCacheImage: @escaping @Sendable (String) -> Bool = { DyldUtilities.isInDyldSharedCache($0) }
+    ) {
         self.fileManager = fileManager
+        self.isSharedCacheImage = isSharedCacheImage
     }
 
     /// Resolves a dylib install name to a concrete filesystem path.
@@ -66,7 +76,7 @@ struct DylibPathResolver {
     /// so a pure `FileManager.fileExists` check rejects them as unresolved.
     private func pathExists(_ path: String) -> Bool {
         if fileManager.fileExists(atPath: path) { return true }
-        if DyldUtilities.isInDyldSharedCache(path) { return true }
+        if isSharedCacheImage(path) { return true }
         return false
     }
 

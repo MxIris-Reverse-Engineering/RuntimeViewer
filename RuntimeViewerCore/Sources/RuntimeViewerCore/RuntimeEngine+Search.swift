@@ -157,7 +157,7 @@ extension RuntimeEngine {
         isPrioritized: Bool,
         reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void
     ) async throws -> RuntimeInterfaceCorpusBuildOutcome {
-        let canonical = DyldUtilities.patchImagePathForDyld(imagePath)
+        let canonical = imageCatalog.canonicalImagePath(imagePath)
         guard await _isImageIndexed(path: canonical) else { return .imageNotIndexed }
         do {
             let summary = try await interfaceCorpusStore.build(imagePath: canonical, transformer: transformer, isPrioritized: isPrioritized, onProgress: reportProgress)
@@ -168,13 +168,13 @@ extension RuntimeEngine {
     }
 
     func _prioritizeInterfaceCorpus(for imagePath: String) async {
-        await interfaceCorpusStore.prioritize(imagePath: DyldUtilities.patchImagePathForDyld(imagePath))
+        await interfaceCorpusStore.prioritize(imagePath: imageCatalog.canonicalImagePath(imagePath))
     }
 
     /// Reads, never prints: unlike `_buildInterfaceCorpus`, an image need
     /// not be indexed.
     func _restoreInterfaceCorpora(for imagePaths: [String], transformer: Transformer.Configuration) async -> RuntimeInterfaceCorpusRestoreResult {
-        let restoredImages = await interfaceCorpusStore.restore(imagePaths: imagePaths.map(DyldUtilities.patchImagePathForDyld), transformer: transformer)
+        let restoredImages = await interfaceCorpusStore.restore(imagePaths: imagePaths.map(imageCatalog.canonicalImagePath), transformer: transformer)
         return RuntimeInterfaceCorpusRestoreResult(restoredImagesByImagePath: restoredImages)
     }
 
@@ -190,7 +190,7 @@ extension RuntimeEngine {
         reportProgress: @escaping @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
         var query = query
-        query.imagePaths = query.imagePaths.map { Set($0.map(DyldUtilities.patchImagePathForDyld)) }
+        query.imagePaths = query.imagePaths.map { Set($0.map(imageCatalog.canonicalImagePath)) }
         return try await interfaceCorpusStore.searchInterfaces(query, indexedImagePaths: await indexedImagePaths(), onProgress: reportProgress)
     }
 
@@ -199,13 +199,13 @@ extension RuntimeEngine {
         reportProgress: @escaping @Sendable ([RuntimeMemberMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
         var query = query
-        query.imagePaths = query.imagePaths.map { Set($0.map(DyldUtilities.patchImagePathForDyld)) }
+        query.imagePaths = query.imagePaths.map { Set($0.map(imageCatalog.canonicalImagePath)) }
         return try await interfaceCorpusStore.searchMembers(query, indexedImagePaths: await indexedImagePaths(), onProgress: reportProgress)
     }
 
     func _typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
         var query = query
-        query.imagePaths = query.imagePaths.map { Set($0.map(DyldUtilities.patchImagePathForDyld)) }
+        query.imagePaths = query.imagePaths.map { Set($0.map(imageCatalog.canonicalImagePath)) }
         return try await typeRelationshipsResolver.trees(for: query)
     }
 
@@ -215,7 +215,7 @@ extension RuntimeEngine {
 
     func _evictInterfaceCorpus(for imagePath: String?, keepsStoredCorpora: Bool) async {
         if let imagePath {
-            await interfaceCorpusStore.evict(imagePath: DyldUtilities.patchImagePathForDyld(imagePath))
+            await interfaceCorpusStore.evict(imagePath: imageCatalog.canonicalImagePath(imagePath))
         } else if keepsStoredCorpora {
             await interfaceCorpusStore.evictResidentCorpora()
         } else {

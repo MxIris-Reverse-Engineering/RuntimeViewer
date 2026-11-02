@@ -1,9 +1,9 @@
 # Draft - 离线模式：打开磁盘上的 Mach-O 文件、bundle 与 dyld shared cache
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-02
-- **最后更新**: 2026-11-02
+- **最后更新**: 2026-11-03
 - **所属愿景**: 无
 - **关联提案**: [0037](0037-local-runtime-xpc-service.md)（本地运行时 XPC service：离线 service 沿用它的 service host、凭证与重连做法）、[0051](0051-catalyst-xpc-service.md)（第二个内嵌 service 的先例）、[0003](0003-generic-type-specialization.md)（泛型特化的 UI 流程；离线走 MachOSwiftSection 0069 的静态特化）、[0033](0033-runtime-bookmark-scope.md)（新来源要有自己的书签身份）、[0054](0054-always-index-per-engine.md) / [0055](0055-engine-scoped-background-work.md) / [0058](0058-runtime-engine-session.md)（每个引擎一份后台工作；「最后一个文档离开」是停放离线进程的钩子）、[0056](0056-cross-references.md)（交叉引用只能在进程内做，离线不支持）、[0061](0061-derived-data.md)（派生数据：离线 cache 的语料要按该 cache 的身份存，并躲开本机的清理规则）
 - **实现分支 / PR**: `feature/offline-mode`（worktree `.worktrees/RuntimeViewer-OfflineMode`），从 `next` 切出
@@ -452,3 +452,8 @@ extension RuntimeEngineManager {
 | 2026-11-02 | 写方案时自定的几条 | 停放前等 30 秒；Dock 拖放不接 dyld cache（不声明 `public.data`）；停放条目留到 App 退出、第一版不能从菜单移除；面板不进入包内容；离线引擎菜单组名「Offline Files」；配对的选择规则（同平台、版本不低于 SDK 的最小者）；App 进程只读文件头与 cache 头。理由见「未询问自定的假设」。 |
 | 2026-11-02 | 技术路线 | 新 service target 而不复用本地运行时 service（语料撞车）；多实例用一次性实例 + bootstrap（WebKit 的现行做法），须第 0 步实测；Core 只把 section 一簇泛型化、引擎经非泛型协议持有；配对 cache 是配置不是身份；离线 service 不链接注入与交叉引用两个模块。 |
 | 2026-11-02 | Draft → Accepted | 用户批准，开始实现。 |
+| 2026-11-03 | Accepted → In Progress | 功能分支 `feature/offline-mode` 开工。 |
+| 2026-11-03 | 第 0 步挪到第 3 步之后 | 第 0 步的多实例实验是自己写的程序，按全局规则要先给用户看过才能运行；第 2、3 步（Core 泛型化与进程内的文件引擎）不依赖它，先做，做到第 0 步时一并请用户过目。 |
+| 2026-11-03 | 引擎持有四个协议类型的属性，不另立 `RuntimeImageIndexing` | 详细设计 §2 原拟一个总协议。实现时让 `objcSectionFactory`、`swiftSectionFactory`、`relationshipsResolver`、`typeRelationshipsResolver` 保留原名、类型换成 `any RuntimeObjCSectionProviding` 等四个协议（工厂协议以关联类型声明自己的 section，经 `any` 调用时自动擦除成 section 协议），引擎里的调用点几乎不用改；五样东西由 `RuntimeImageIndex` 按同一种读取方式成套建出，另加 `imageCatalog`。 |
+| 2026-11-03 | `RuntimeIndexableMachO` 多两项要求 | MachOObjCSection 读 ObjC 协议记录的名字、MachOSwiftSection 建私有鉴别器的源文件索引，都是按 `MachOImage` / `MachOFile` 分开的具体重载，泛型代码调不到；协议里加 `objcProtocolRecords(in:)` 与 `makePrivateDiscriminatorSourceFileIndex(indexer:)`。Core target 补上 `ObjCMetadataSource` 产品依赖（协议的约束在这个模块里）。 |
+| 2026-11-03 | Swift 工厂的跨镜像表记下 section 自己的键 | 「mangled 名 → 定义它的镜像」两张表原来拿 `MachOImage.imagePath` 去找 section；离线时单个文件的 `imagePath` 是 install name，找不到。改成两张表各记注册它的 section 的键，引擎经 `imagePath(definingTypeWithCandidateID:)` / `imagePath(definingProtocolWithCandidateID:)` 取。这顺带修掉了提案索引「暂缓的后续项」里的「跨镜像点击跳到 `@rpath` 镜像落空」（同一个原因），收尾时从那张表里划掉。 |

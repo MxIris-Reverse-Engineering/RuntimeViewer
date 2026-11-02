@@ -1,3 +1,4 @@
+import MachOKit
 import Foundation
 import Testing
 @testable import RuntimeViewerCore
@@ -352,10 +353,10 @@ struct RuntimeInterfaceSearchTests {
         let engine = RuntimeEngine(source: .local, engineID: "test-search-relationships-budget")
         try await engine.connect()
         try await engine.loadImage(at: Anchors.libobjcPath)
-        let resolver = RuntimeTypeRelationshipsResolver(
-            objcSectionFactory: await engine.objcSectionFactory,
-            swiftSectionFactory: await engine.swiftSectionFactory,
-            relationshipsResolver: await engine.relationshipsResolver,
+        let resolver = try RuntimeTypeRelationshipsResolver<MachOImage>(
+            objcSectionFactory: #require(await engine.objcSectionFactory as? RuntimeObjCSectionFactory<MachOImage>),
+            swiftSectionFactory: #require(await engine.swiftSectionFactory as? RuntimeSwiftSectionFactory<MachOImage>),
+            relationshipsResolver: #require(await engine.relationshipsResolver as? RuntimeRelationshipsResolver<MachOImage>),
             regularExpressionTimeLimit: 0
         )
         let query = RuntimeTypeRelationshipsQuery(text: "^NSObj", matchMode: .regularExpression, relationship: .ancestors)

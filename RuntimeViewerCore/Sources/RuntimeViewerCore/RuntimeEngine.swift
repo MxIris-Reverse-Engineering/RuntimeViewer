@@ -227,17 +227,22 @@ public actor RuntimeEngine {
     /// a reconnect.
     private let inboundRequests = RuntimeEngineInboundRequests()
 
-    let objcSectionFactory: RuntimeObjCSectionFactory
+    /// Where this engine's images come from when it serves them itself: the
+    /// images dyld loaded into this process. A forwarding engine has one too,
+    /// and never consults it.
+    nonisolated let imageCatalog: any RuntimeImageCatalog
 
-    let swiftSectionFactory: RuntimeSwiftSectionFactory
+    let objcSectionFactory: any RuntimeObjCSectionProviding
+
+    let swiftSectionFactory: any RuntimeSwiftSectionProviding
 
     /// Cross-image relationship resolver. Owns the `relationships(for:)`
     /// computation so this engine file carries only the dispatch wrapper.
-    let relationshipsResolver: RuntimeRelationshipsResolver
+    let relationshipsResolver: any RuntimeRelationshipsResolving
 
     /// The Find navigator's relationship trees (ancestors, descendants,
     /// conformers), built over the same section factories.
-    let typeRelationshipsResolver: RuntimeTypeRelationshipsResolver
+    let typeRelationshipsResolver: any RuntimeTypeRelationshipsResolving
 
     private let communicator = RuntimeCommunicator()
 
@@ -289,6 +294,28 @@ public actor RuntimeEngine {
         pushesRuntimeData: Bool = true,
         bookmarkScope: RuntimeBookmarkScope? = nil,
     ) {
+        self.init(
+            source: source,
+            engineID: engineID,
+            hostInfo: hostInfo,
+            originChain: originChain,
+            pushesRuntimeData: pushesRuntimeData,
+            bookmarkScope: bookmarkScope,
+            imageIndex: .process(),
+        )
+    }
+
+    /// The designated initializer: every other one picks where the engine's
+    /// images come from and delegates here.
+    init(
+        source: RuntimeSource,
+        engineID: String,
+        hostInfo: RuntimeHostInfo,
+        originChain: [String],
+        pushesRuntimeData: Bool,
+        bookmarkScope: RuntimeBookmarkScope?,
+        imageIndex: RuntimeImageIndex,
+    ) {
         self.engineID = engineID
         self.source = source
         // Deriving from `source` covers every kind that already names itself
@@ -299,14 +326,11 @@ public actor RuntimeEngine {
         self.hostInfo = hostInfo
         self.originChain = originChain
         self.pushesRuntimeData = pushesRuntimeData
-        self.objcSectionFactory = .init()
-        self.swiftSectionFactory = .init()
-        self.relationshipsResolver = .init(objcSectionFactory: objcSectionFactory, swiftSectionFactory: swiftSectionFactory)
-        self.typeRelationshipsResolver = .init(
-            objcSectionFactory: objcSectionFactory,
-            swiftSectionFactory: swiftSectionFactory,
-            relationshipsResolver: relationshipsResolver,
-        )
+        self.imageCatalog = imageIndex.catalog
+        self.objcSectionFactory = imageIndex.objcSectionFactory
+        self.swiftSectionFactory = imageIndex.swiftSectionFactory
+        self.relationshipsResolver = imageIndex.relationshipsResolver
+        self.typeRelationshipsResolver = imageIndex.typeRelationshipsResolver
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
@@ -657,10 +681,10 @@ public actor RuntimeEngine {
     /// dyld state. Only meaningful where the images live.
     func reloadLocalData(isReloadImageNodes: Bool) {
         #log(.info, "Reloading data, isReloadImageNodes=\(isReloadImageNodes, privacy: .public)")
-        imageList = DyldUtilities.inspectableImageNames()
+        imageList = imageCatalog.imagePaths()
         #log(.debug, "Loaded \(self.imageList.count, privacy: .public) images")
         if isReloadImageNodes {
-            setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
+            setImageNodes(imageCatalog.rootNodes())
             #log(.debug, "Reloaded image nodes")
         }
         broadcast(.fullReload(isReloadImageNodes: isReloadImageNodes))
@@ -697,11 +721,11 @@ public actor RuntimeEngine {
 
     private func observeRuntime() async {
         #log(.info, "Starting runtime observation")
-        imageList = DyldUtilities.inspectableImageNames()
+        imageList = imageCatalog.imagePaths()
         #log(.debug, "Initial image list contains \(self.imageList.count, privacy: .public) images")
 
         await Task.detached {
-            await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
+            await self.setImageNodes(self.imageCatalog.rootNodes())
         }.value
         #log(.debug, "Image nodes initialized")
 
@@ -730,7 +754,7 @@ public actor RuntimeEngine {
 
     func _objects(in image: String) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects in image: \(image, privacy: .public)")
-        let image = DyldUtilities.patchImagePathForDyld(image)
+        let image = imageCatalog.canonicalImagePath(image)
         let (isObjCSectionExisted, objcSection) = try await objcSectionFactory.section(for: image)
         let objcObjects = try await objcSection.allObjects()
         let (isSwiftSectionExisted, swiftSection) = try await swiftSectionFactory.section(for: image)
@@ -800,8 +824,8 @@ public actor RuntimeEngine {
     /// `nil` when no indexed image defines the reference — the UI then shows
     /// its "not found" HUD.
     private func resolveSwiftReferenceInterface(mangledName: String, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        if let matched = await swiftSectionFactory.indexedType(forCandidateID: mangledName),
-           let section = await swiftSectionFactory.existingSection(for: matched.entry.machO.imagePath),
+        if let definingImagePath = await swiftSectionFactory.imagePath(definingTypeWithCandidateID: mangledName),
+           let section = await swiftSectionFactory.existingSection(for: definingImagePath),
            let object = await section.makeRuntimeObject(forMangledTypeName: mangledName) {
             try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
             if let interface = try? await section.interface(for: object) {
@@ -809,8 +833,8 @@ public actor RuntimeEngine {
             }
         }
 
-        if let matched = await swiftSectionFactory.indexedProtocol(forCandidateID: mangledName),
-           let section = await swiftSectionFactory.existingSection(for: matched.machO.imagePath),
+        if let definingImagePath = await swiftSectionFactory.imagePath(definingProtocolWithCandidateID: mangledName),
+           let section = await swiftSectionFactory.existingSection(for: definingImagePath),
            let object = await section.makeRuntimeObject(forMangledProtocolName: mangledName) {
             try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
             if let interface = try? await section.interface(for: object) {
@@ -1060,7 +1084,7 @@ extension RuntimeEngine {
     }
 
     func _isImageLoaded(path: String) -> Bool {
-        imageList.contains(DyldUtilities.patchImagePathForDyld(path))
+        imageList.contains(imageCatalog.canonicalImagePath(path))
     }
 
     public func loadImage(at path: String) async throws {
@@ -1100,8 +1124,8 @@ extension RuntimeEngine {
     /// report their indexing phases through it while they build a section
     /// that is not cached yet.
     func _loadImage(at path: String, progressContinuation: LoadingEventContinuation? = nil) async throws {
-        let canonical = DyldUtilities.patchImagePathForDyld(path)
-        try DyldUtilities.loadImage(at: canonical)
+        let canonical = imageCatalog.canonicalImagePath(path)
+        try imageCatalog.prepareImage(at: canonical)
         _ = try await objcSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
         _ = try await swiftSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
         reloadLocalData(isReloadImageNodes: false)
@@ -1223,7 +1247,7 @@ extension RuntimeEngine {
         continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
     ) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects with progress in image: \(image, privacy: .public)")
-        let image = DyldUtilities.patchImagePathForDyld(image)
+        let image = imageCatalog.canonicalImagePath(image)
         let (isObjCSectionExisted, objcSection) = try await objcSectionFactory.section(for: image, progressContinuation: continuation)
         let objcObjects = try await objcSection.allObjects()
         let (isSwiftSectionExisted, swiftSection) = try await swiftSectionFactory.section(for: image, progressContinuation: continuation)

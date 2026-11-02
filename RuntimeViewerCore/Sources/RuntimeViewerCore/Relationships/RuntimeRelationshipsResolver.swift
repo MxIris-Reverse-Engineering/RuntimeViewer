@@ -13,12 +13,12 @@ import OrderedCollections
 /// and owns the cross-image union. `RuntimeEngine.relationships(for:)` keeps
 /// only the thin local/remote dispatch wrapper and delegates the actual work
 /// here, so the engine file carries no relationship logic of its own.
-actor RuntimeRelationshipsResolver {
-    private let objcSectionFactory: RuntimeObjCSectionFactory
+actor RuntimeRelationshipsResolver<MachO: RuntimeIndexableMachO>: RuntimeRelationshipsResolving {
+    private let objcSectionFactory: RuntimeObjCSectionFactory<MachO>
 
-    private let swiftSectionFactory: RuntimeSwiftSectionFactory
+    private let swiftSectionFactory: RuntimeSwiftSectionFactory<MachO>
 
-    init(objcSectionFactory: RuntimeObjCSectionFactory, swiftSectionFactory: RuntimeSwiftSectionFactory) {
+    init(objcSectionFactory: RuntimeObjCSectionFactory<MachO>, swiftSectionFactory: RuntimeSwiftSectionFactory<MachO>) {
         self.objcSectionFactory = objcSectionFactory
         self.swiftSectionFactory = swiftSectionFactory
     }

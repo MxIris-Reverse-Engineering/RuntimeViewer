@@ -21,17 +21,17 @@ import ObjCInterface
 typealias LoadingEventContinuation = AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
 
 @Loggable(.private)
-actor RuntimeObjCSection {
+actor RuntimeObjCSection<MachO: RuntimeIndexableMachO>: RuntimeObjCSectioning {
     enum Error: Swift.Error {
-        case invalidMachOImage
+        case imageNotFound
         case invalidRuntimeObject
     }
 
-    let imagePath: String
+    nonisolated let imagePath: String
 
-    private let machO: MachOImage
+    private let machO: MachO
 
-    private let factory: RuntimeObjCSectionFactory
+    private let factory: RuntimeObjCSectionFactory<MachO>
 
     /// Per-image Objective-C interface index: the parsed data store for this
     /// image (classes, protocols, categories, C struct/union definitions) plus
@@ -48,7 +48,7 @@ actor RuntimeObjCSection {
     /// `nonisolated let` so `RuntimeRelationshipsResolver` can read its query
     /// methods without an actor hop — `RuntimeObjCInterfaceIndexer` is
     /// `Sendable` and protects its own state with its own locks.
-    nonisolated let objcIndexer: RuntimeObjCInterfaceIndexer
+    nonisolated let objcIndexer: RuntimeObjCInterfaceIndexer<MachO>
 
     /// Bare names of the classes this image implements through SE-0436's
     /// `@objc @implementation extension`. Such a class is a PURE Objective-C
@@ -74,31 +74,18 @@ actor RuntimeObjCSection {
     /// lazy for the same reason: it costs a pass over the protocol list.
     private lazy var swiftDefinedProtocolNames: Set<String> = SwiftDefinedObjCProtocols.names(in: machO)
 
-    init(imagePath: String, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
+    /// `imagePath` is the key the factory caches the section under, which the
+    /// image itself cannot be asked for: a file's `imagePath` is its install
+    /// name, and dyld's spelling of a loaded image's can differ from the
+    /// canonical one.
+    init(imagePath: String, machO: MachO, factory: RuntimeObjCSectionFactory<MachO>, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
-        guard let machO = DyldUtilities.machOImage(forPath: imagePath) else {
-            #log(.error, "Failed to create MachOImage for: \(imagePath, privacy: .public)")
-            throw Error.invalidMachOImage
-        }
         self.machO = machO
         self.imagePath = imagePath
         self.factory = factory
         self.objcIndexer = RuntimeObjCInterfaceIndexer(
             machO: machO,
             imagePath: imagePath,
-            progressContinuation: progressContinuation
-        )
-        try await objcIndexer.prepare()
-    }
-
-    init(machO: MachOImage, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
-        #log(.info, "Initializing ObjC section from MachO: \(machO.imagePath, privacy: .public)")
-        self.machO = machO
-        self.imagePath = machO.imagePath
-        self.factory = factory
-        self.objcIndexer = RuntimeObjCInterfaceIndexer(
-            machO: machO,
-            imagePath: machO.imagePath,
             progressContinuation: progressContinuation
         )
         try await objcIndexer.prepare()
@@ -461,7 +448,7 @@ actor RuntimeObjCSection {
 }
 
 @Loggable(.private)
-actor RuntimeObjCSectionFactory {
+actor RuntimeObjCSectionFactory<MachO: RuntimeIndexableMachO>: RuntimeObjCSectionProviding {
     /// Cross-image aggregate: every per-image indexer registers here, so a
     /// single relationship query spans all loaded images.
     ///
@@ -473,24 +460,29 @@ actor RuntimeObjCSectionFactory {
     /// `RuntimeSwiftSectionFactory.indexer`.
     ///
     /// Never `prepare()`d: it parses no image of its own and exists purely to
-    /// fan queries out across `subIndexers`. `.current()` is a placeholder image
-    /// for the same reason it is on the Swift side.
-    let indexer: RuntimeObjCInterfaceIndexer
+    /// fan queries out across `subIndexers`. Its image is a placeholder for the
+    /// same reason it is on the Swift side.
+    let indexer: RuntimeObjCInterfaceIndexer<MachO>
 
-    /// Per-image sections, keyed by the dyld-canonical image path.
-    private var sections: [String: RuntimeObjCSection] = [:]
+    /// Where the images behind the sections come from.
+    let catalog: any RuntimeImageCatalog<MachO>
+
+    /// Per-image sections, keyed by the catalog's canonical image path.
+    private var sections: [String: RuntimeObjCSection<MachO>] = [:]
 
     /// Builds under way, keyed like `sections`. A request for an image that is
     /// being built waits for that build instead of starting a second one; see
     /// `RuntimeSectionBuild`.
-    private var sectionBuilds: [String: RuntimeSectionBuild<RuntimeObjCSection>] = [:]
+    private var sectionBuilds: [String: RuntimeSectionBuild<RuntimeObjCSection<MachO>>] = [:]
 
-    init() {
-        let machO = MachOImage.current()
-        self.indexer = RuntimeObjCInterfaceIndexer(machO: machO, imagePath: machO.imagePath)
+    /// `placeholderImage` stands behind the aggregate indexer, which parses no
+    /// image of its own; any image of the catalog will do.
+    init(catalog: any RuntimeImageCatalog<MachO>, placeholderImage: MachO) {
+        self.catalog = catalog
+        self.indexer = RuntimeObjCInterfaceIndexer(machO: placeholderImage, imagePath: "")
     }
 
-    func existingSection(for imagePath: String) -> RuntimeObjCSection? {
+    func existingSection(for imagePath: String) -> RuntimeObjCSection<MachO>? {
         sections[imagePath]
     }
 
@@ -507,33 +499,37 @@ actor RuntimeObjCSectionFactory {
         Set(sections.keys)
     }
 
-    func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
+    func section(for imagePath: String, progressContinuation: LoadingEventContinuation?) async throws -> (isExisted: Bool, section: RuntimeObjCSection<MachO>) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
             return (true, section)
         }
+        let catalog = catalog
         let section = try await sectionBuild(for: imagePath) { factory, relayContinuation in
-            try await RuntimeObjCSection(imagePath: imagePath, factory: factory, progressContinuation: relayContinuation)
+            guard let machO = catalog.machO(forImagePath: imagePath) else {
+                throw RuntimeObjCSection<MachO>.Error.imageNotFound
+            }
+            return try await RuntimeObjCSection(imagePath: imagePath, machO: machO, factory: factory, progressContinuation: relayContinuation)
         }
         .section(forwardingProgressTo: progressContinuation)
         return (false, section)
     }
 
-    func section(for name: RuntimeObjCName) async throws -> RuntimeObjCSection? {
+    func section(for name: RuntimeObjCName) async throws -> RuntimeObjCSection<MachO>? {
         #log(.debug, "Looking up ObjC section for name: \(String(describing: name), privacy: .public)")
         do {
-            guard let machO = MachOImage.image(forName: name) else {
-                #log(.debug, "No MachO image found for name")
+            guard let (imagePath, machO) = await catalog.image(definingObjCType: name) else {
+                #log(.debug, "No image found for name")
                 return nil
             }
 
-            if let existObjCSection = sections[machO.imagePath] {
+            if let existObjCSection = sections[imagePath] {
                 #log(.debug, "Using cached ObjC section")
                 return existObjCSection
             }
 
-            return try await sectionBuild(for: machO.imagePath) { factory, relayContinuation in
-                try await RuntimeObjCSection(machO: machO, factory: factory, progressContinuation: relayContinuation)
+            return try await sectionBuild(for: imagePath) { factory, relayContinuation in
+                try await RuntimeObjCSection(imagePath: imagePath, machO: machO, factory: factory, progressContinuation: relayContinuation)
             }
             .section(forwardingProgressTo: nil)
         } catch {
@@ -550,14 +546,14 @@ actor RuntimeObjCSectionFactory {
     /// behind, and the next request starts afresh.
     private func sectionBuild(
         for imagePath: String,
-        makingSectionWith makeSection: @escaping @Sendable (RuntimeObjCSectionFactory, LoadingEventContinuation) async throws -> RuntimeObjCSection
-    ) -> RuntimeSectionBuild<RuntimeObjCSection> {
+        makingSectionWith makeSection: @escaping @Sendable (RuntimeObjCSectionFactory<MachO>, LoadingEventContinuation) async throws -> RuntimeObjCSection<MachO>
+    ) -> RuntimeSectionBuild<RuntimeObjCSection<MachO>> {
         if let sectionBuild = sectionBuilds[imagePath] {
             #log(.debug, "Joining the ObjC section build under way for: \(imagePath, privacy: .public)")
             return sectionBuild
         }
         #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
-        let sectionBuild = RuntimeSectionBuild<RuntimeObjCSection> { [self] relayContinuation in
+        let sectionBuild = RuntimeSectionBuild<RuntimeObjCSection<MachO>> { [self] relayContinuation in
             do {
                 let section = try await makeSection(self, relayContinuation)
                 await registerBuiltSection(section, for: imagePath)
@@ -571,7 +567,7 @@ actor RuntimeObjCSectionFactory {
         return sectionBuild
     }
 
-    private func registerBuiltSection(_ section: RuntimeObjCSection, for imagePath: String) {
+    private func registerBuiltSection(_ section: RuntimeObjCSection<MachO>, for imagePath: String) {
         sections[imagePath] = section
         indexer.addSubIndexer(section.objcIndexer)
         sectionBuilds[imagePath] = nil
@@ -600,6 +596,13 @@ actor RuntimeObjCSectionFactory {
             indexer.removeSubIndexer(section.objcIndexer)
         }
         sections.removeAll()
+    }
+}
+
+extension RuntimeObjCSectionFactory where MachO == MachOImage {
+    /// The factory over the images dyld loaded into this process.
+    init() {
+        self.init(catalog: RuntimeProcessImageCatalog(), placeholderImage: .current())
     }
 }
 

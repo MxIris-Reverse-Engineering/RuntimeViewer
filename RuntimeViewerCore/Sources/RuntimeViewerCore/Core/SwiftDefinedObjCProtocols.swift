@@ -38,15 +38,8 @@ enum SwiftDefinedObjCProtocols {
     }
 
     /// The runtime names of the Swift-defined protocols `machO` lists.
-    static func names(in machO: MachOImage) -> Set<String> {
-        var records: [(name: String, flags: UInt32)] = []
-        for objcProtocol in machO.objc.protocols64 ?? [] {
-            records.append((name: objcProtocol.mangledName(in: machO), flags: objcProtocol.flags))
-        }
-        for objcProtocol in machO.objc.protocols32 ?? [] {
-            records.append((name: objcProtocol.mangledName(in: machO), flags: objcProtocol.flags))
-        }
-        return names(of: records)
+    static func names<MachO: RuntimeIndexableMachO>(in machO: MachO) -> Set<String> {
+        names(of: MachO.objcProtocolRecords(in: machO))
     }
 
     private static func isSwiftDefined(name: String, flags: UInt32) -> Bool {

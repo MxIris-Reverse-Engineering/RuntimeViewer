@@ -1,4 +1,5 @@
 import Testing
+import MachOKit
 @testable import RuntimeViewerCore
 
 /// The Inspector's hierarchies: a class's superclasses as runtime objects,
@@ -111,7 +112,7 @@ struct RuntimeInspectorHierarchyTests {
         ]
     )
     func objcRuntimeNameIsShownDemangled(_ argument: (runtimeName: String, displayName: String)) {
-        #expect(RuntimeTypeRelationshipsResolver.displayName(ofObjCClassNamed: argument.runtimeName) == argument.displayName)
+        #expect(RuntimeTypeRelationshipsResolver<MachOImage>.displayName(ofObjCClassNamed: argument.runtimeName) == argument.displayName)
     }
 
     @Test("a superclass no indexed image defines keeps its name, unresolved")

@@ -175,7 +175,7 @@ struct RuntimeInterfaceCorpusNestingTests {
         let engine = try await Self.foundationEngine.value
         let entries = try await Self.foundationEntries()
         let firstSwiftEntry = try #require(entries.first { $0.object.kind.isSwift })
-        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstSwiftEntry.object.imagePath))
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstSwiftEntry.object.imagePath) as? RuntimeSwiftSection<MachOImage>)
         var checkedCount = 0
         var missing: [String] = []
         for entry in entries where entry.object.kind == .swift(.type(.protocol)) {
@@ -241,7 +241,7 @@ struct RuntimeInterfaceCorpusNestingTests {
         let nestedKeys = Set(entries.flatMap { $0.object.children.map(\.key) })
         let nestedEntries = entries.filter { nestedKeys.contains($0.object.key) }
         let firstNestedEntry = try #require(nestedEntries.first)
-        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstNestedEntry.object.imagePath))
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstNestedEntry.object.imagePath) as? RuntimeSwiftSection<MachOImage>)
         var different: [String] = []
         for entry in nestedEntries {
             let outcomes = try await section.corpusPrints(of: [entry.object], transformer: .default)
@@ -294,7 +294,7 @@ struct RuntimeInterfaceCorpusNestingTests {
     ) async throws {
         let entries = try #require(await engine.interfaceCorpusStore.corpus(for: imagePath)?.entries)
         let firstSwiftEntry = try #require(entries.first { $0.object.kind.isSwift })
-        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstSwiftEntry.object.imagePath))
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstSwiftEntry.object.imagePath) as? RuntimeSwiftSection<MachOImage>)
         let machO = try #require(DyldUtilities.machOImage(forPath: imagePath))
         let printer = SwiftDeclarationPrinter<MachOImage>(configuration: .init(), eventHandlers: [], in: machO)
         for entry in entries where entry.object.kind == .swift(.type(.protocol)) {

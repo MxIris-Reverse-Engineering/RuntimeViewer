@@ -70,17 +70,17 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
 }
 
 @Loggable(.private)
-actor RuntimeSwiftSection {
+actor RuntimeSwiftSection<MachO: RuntimeIndexableMachO>: RuntimeSwiftSectioning {
     enum Error: Swift.Error {
-        case invalidMachOImage
+        case imageNotFound
         case invalidRuntimeObject
     }
 
-    let imagePath: String
+    nonisolated let imagePath: String
 
-    private let machO: MachOImage
+    private let machO: MachO
 
-    private let factory: RuntimeSwiftSectionFactory
+    private let factory: RuntimeSwiftSectionFactory<MachO>
 
     /// The index configuration of every Swift indexer RuntimeViewer creates —
     /// each section's own and the factory's aggregate.
@@ -90,7 +90,7 @@ actor RuntimeSwiftSection {
     /// found, so changing what it indexes afterwards strands them. Applying a
     /// different configuration at interface time once emptied the map, and every
     /// Swift object then failed with `invalidRuntimeObject`.
-    static let indexConfiguration = SwiftDeclarationIndexConfiguration(showCImportedTypes: true)
+    static var indexConfiguration: SwiftDeclarationIndexConfiguration { SwiftDeclarationIndexConfiguration(showCImportedTypes: true) }
 
     /// Per-image Swift interface index — the Swift counterpart of
     /// `RuntimeObjCSection.objcIndexer`. Interface generation reads
@@ -101,7 +101,7 @@ actor RuntimeSwiftSection {
     /// `nonisolated let` so `RuntimeRelationshipsResolver` can call its query
     /// methods without an actor hop — `RuntimeSwiftInterfaceIndexer` is
     /// `Sendable` and guards its own state.
-    nonisolated let indexer: RuntimeSwiftInterfaceIndexer
+    nonisolated let indexer: RuntimeSwiftInterfaceIndexer<MachO>
 
     /// The source files of this image's private discriminators, recovered from
     /// candidates the image's own names make and remembered per discriminator.
@@ -109,7 +109,7 @@ actor RuntimeSwiftSection {
     /// the index guards its own state.
     private nonisolated let privateDiscriminatorSourceFileIndex: PrivateDiscriminatorSourceFileIndex
 
-    private let printer: SwiftDeclarationPrinter<MachOImage>
+    private let printer: SwiftDeclarationPrinter<MachO>
 
     /// The printer the corpus is built with: marking optional content (so
     /// one print serves every combination of the Generation Options) with
@@ -118,7 +118,7 @@ actor RuntimeSwiftSection {
     /// mid-way and the display path may reconfigure `printer` in between —
     /// and because this one never touches `interfaceByObject`. Rebuilt when
     /// the transformer changes; see `corpusPrinter(for:)`.
-    private var corpusPrinter: SwiftDeclarationPrinter<MachOImage>?
+    private var corpusPrinter: SwiftDeclarationPrinter<MachO>?
 
     private var corpusPrinterTransformer: Transformer.SwiftConfiguration?
 
@@ -229,12 +229,10 @@ actor RuntimeSwiftSection {
         }
     }
 
-    init(imagePath: String, factory: RuntimeSwiftSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
+    /// `imagePath` is the key the factory caches the section under; see
+    /// `RuntimeObjCSection.init`.
+    init(imagePath: String, machO: MachO, factory: RuntimeSwiftSectionFactory<MachO>, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing Swift section for image: \(imagePath, privacy: .public)")
-        guard let machO = DyldUtilities.machOImage(forPath: imagePath) else {
-            #log(.error, "Failed to create MachOImage for: \(imagePath, privacy: .public)")
-            throw Error.invalidMachOImage
-        }
         self.factory = factory
         self.imagePath = imagePath
         self.machO = machO
@@ -243,7 +241,7 @@ actor RuntimeSwiftSection {
         let indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: imagePath, configuration: Self.indexConfiguration, eventHandlers: eventHandlers)
         self.indexer = indexer
         // Reads the indexer's names on its first request, long after `prepare()`.
-        self.privateDiscriminatorSourceFileIndex = PrivateDiscriminatorSourceFileIndex(indexer: indexer.upstream)
+        self.privateDiscriminatorSourceFileIndex = MachO.makePrivateDiscriminatorSourceFileIndex(indexer: indexer.upstream)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         // `prepare()` runs the upstream extraction and then builds the
         // relationship reverse tables — that work now lives in
@@ -424,7 +422,7 @@ actor RuntimeSwiftSection {
         return runtimeObject
     }
 
-    fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory) {
+    fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory<MachO>) {
         factory.indexer.addSubIndexer(indexer)
     }
 
@@ -436,7 +434,7 @@ actor RuntimeSwiftSection {
     /// gets it here. Without it the filter keeps every extension, and a marked
     /// print marks none. Once per printer: the indexer's configuration, and so
     /// its tables, are fixed for its lifetime (`indexConfiguration`).
-    private static func installExportFilterScope(on printer: SwiftDeclarationPrinter<MachOImage>, from indexer: RuntimeSwiftInterfaceIndexer) {
+    private static func installExportFilterScope(on printer: SwiftDeclarationPrinter<MachO>, from indexer: RuntimeSwiftInterfaceIndexer<MachO>) {
         printer.installExportFilterScope(types: indexer.allTypeDefinitions.values, protocols: indexer.allProtocolDefinitions.values)
     }
 }
@@ -584,14 +582,14 @@ extension RuntimeSwiftSection {
     /// configured from the user's generation options, and the corpus one,
     /// marking optional content and nested definitions — and they must print
     /// the same definitions.
-    private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+    private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachO>) async throws -> SemanticString {
         try await Self.printInterface(of: printedDefinitions(for: object), using: printer)
     }
 
     /// `printInterface(for:using:)` once the definitions are known. Static,
     /// so it runs off the actor: the printer is `Sendable` and the section's
     /// own state is not needed past the definition list.
-    private static func printInterface(of definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+    private static func printInterface(of definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachO>) async throws -> SemanticString {
         var definitionPrints: [SemanticString] = []
         definitionPrints.reserveCapacity(definitions.count)
         for definition in definitions {
@@ -611,7 +609,7 @@ extension RuntimeSwiftSection {
         definitionPrints.joined(separator: SemanticString.doubleBreakLine)
     }
 
-    private static func printDefinition(_ definition: PrintedDefinition, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+    private static func printDefinition(_ definition: PrintedDefinition, using printer: SwiftDeclarationPrinter<MachO>) async throws -> SemanticString {
         switch definition {
         case .type(let typeDefinition):
             try await printer.printTypeDefinition(typeDefinition)
@@ -630,7 +628,7 @@ extension RuntimeSwiftSection {
     /// one, which the printer's own export filter never sees: one on a class
     /// that is not exported is left out while `printExportedDeclarationsOnly`
     /// is on, or, when marking, visible only while it is off.
-    private static func printObjCCategoryConformance(_ conformance: ObjCCategoryConformance, extendsUnexportedType: Bool, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+    private static func printObjCCategoryConformance(_ conformance: ObjCCategoryConformance, extendsUnexportedType: Bool, using printer: SwiftDeclarationPrinter<MachO>) async throws -> SemanticString {
         let configuration = printer.configuration
         guard extendsUnexportedType, configuration.printExportedDeclarationsOnly || configuration.marksOptionalContent else {
             return try await printer.printObjCCategoryConformance(conformance)
@@ -653,7 +651,7 @@ extension RuntimeSwiftSection {
             #log(.debug, "No class hierarchy found")
             return []
         }
-        let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: classDescriptor)
+        let hierarchy = try MachO.classHierarchy(of: classDescriptor, mangledTypeName: object.name, in: machO, across: factory.indexer)
         #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
         return hierarchy
     }
@@ -891,11 +889,11 @@ extension RuntimeSwiftSection {
     /// first-write-wins semantics. Mangling is inherently throwing — we
     /// silently skip nodes that fail to mangle, matching the prior loop's
     /// `try?` behaviour.
-    fileprivate func candidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] {
-        var result: [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] = [:]
+    fileprivate func candidateIDMapping() -> [String: RuntimeSwiftSectionFactory<MachO>.IndexedTypeEntry] {
+        var result: [String: RuntimeSwiftSectionFactory<MachO>.IndexedTypeEntry] = [:]
         for (typeName, typeDefinition) in indexer.allTypeDefinitions {
             guard let mangled = try? mangleAsString(typeName.node) else { continue }
-            result[mangled] = (typeName, MachOIndexedValue(machO: machO, value: typeDefinition))
+            result[mangled] = (typeName, MachOIndexedValue(machO: machO, value: typeDefinition), imagePath)
         }
         return result
     }
@@ -903,13 +901,13 @@ extension RuntimeSwiftSection {
     /// Protocol counterpart of `candidateIDMapping()`. Kept in a separate
     /// table so a protocol mangled name never collides with (or masks) a
     /// nominal-type candidate consumed by generic specialization.
-    fileprivate func protocolCandidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedProtocolEntry] {
-        var result: [String: RuntimeSwiftSectionFactory.IndexedProtocolEntry] = [:]
+    fileprivate func protocolCandidateIDMapping() -> [String: RuntimeSwiftSectionFactory<MachO>.IndexedProtocolEntry] {
+        var result: [String: RuntimeSwiftSectionFactory<MachO>.IndexedProtocolEntry] = [:]
         // `@objc` protocols declared in Swift too, so a jump to one resolves.
         let protocolNames = Array(indexer.allProtocolDefinitions.keys) + Array(indexer.objcProtocolDefinitions.keys)
         for protocolName in protocolNames {
             guard let mangled = try? mangleAsString(protocolName.node) else { continue }
-            result[mangled] = (protocolName, machO)
+            result[mangled] = (protocolName, machO, imagePath)
         }
         return result
     }
@@ -1011,7 +1009,7 @@ extension RuntimeSwiftSection {
         var objcClassNameByDescriptorOffset: [Int: String] = [:]
         for objcClass in machO.objc.classes64 ?? [] where objcClass.isSwiftStable {
             guard let classDescriptor = try? ClassMetadataObjCInterop.resolve(at: objcClass.offset, in: machO.context).descriptor(in: machO.context),
-                  let className = Self.runtimeName(of: objcClass, in: machO)
+                  let className = MachO.objcRuntimeName(of: objcClass, in: machO)
             else { continue }
             objcClassNameByDescriptorOffset[classDescriptor.offset] = className
         }
@@ -1027,21 +1025,6 @@ extension RuntimeSwiftSection {
         }
         return objcClassPairs
     }
-
-    /// The name in the class's `class_ro_t`. Once the runtime has realized a
-    /// class — as it has most classes of an image in use — its data pointer
-    /// leads to `class_rw_t` instead, which holds the read-only data either
-    /// directly or through its extension.
-    private static func runtimeName(of objcClass: ObjCClass64, in machO: MachOImage) -> String? {
-        if let readOnlyData = objcClass.classROData(in: machO) {
-            return readOnlyData.name(in: machO)
-        }
-        guard let readWriteData = objcClass.classRWData(in: machO) else { return nil }
-        if let readOnlyData = readWriteData.classROData(in: machO) {
-            return readOnlyData.name(in: machO)
-        }
-        return readWriteData.ext(in: machO)?.classROData(in: machO)?.name(in: machO)
-    }
 }
 
 extension RuntimeSwiftSection {
@@ -1056,8 +1039,8 @@ extension RuntimeSwiftSection {
     /// (see `RuntimeSwiftInterfaceIndexer.conformanceProvider`). The hierarchy
     /// is the one thing worth keeping, and the shared provider keeps it; the
     /// specializer itself caches nothing.
-    private func makeSpecializer(for machO: MachOImage) -> GenericSpecializer<MachOImage> {
-        let specializer = GenericSpecializer<MachOImage>(
+    private func makeSpecializer(for machO: MachO) -> GenericSpecializer<MachO> {
+        let specializer = GenericSpecializer<MachO>(
             machO: machO,
             conformanceProvider: factory.indexer.conformanceProvider,
             indexer: factory.indexer.upstream
@@ -1071,7 +1054,7 @@ extension RuntimeSwiftSection {
             let typeDefinition = try requireGenericTypeDefinition(for: object)
             let upstreamRequest = try makeSpecializer(for: machO).makeRequest(for: typeDefinition.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
-        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+        } catch let error as GenericSpecializer<MachO>.SpecializerError {
             throw Self.translate(error)
         }
     }
@@ -1104,10 +1087,10 @@ extension RuntimeSwiftSection {
         do {
             let upstreamRequest = try candidateSpecializer.makeRequest(for: matched.entry.value.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
-        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+        } catch let error as GenericSpecializer<MachO>.SpecializerError {
             throw Self.translate(error)
         } catch {
-            #log(.error, "Inner specialization request failed for candidate \(matched.typeName.name, privacy: .public) (image: \(matched.entry.machO.imagePath, privacy: .public)) requested via section \(imagePath, privacy: .public): \(error, privacy: .public)")
+            #log(.error, "Inner specialization request failed for candidate \(matched.typeName.name, privacy: .public) (image: \(matched.imagePath, privacy: .public)) requested via section \(imagePath, privacy: .public): \(error, privacy: .public)")
             throw error
         }
     }
@@ -1123,12 +1106,6 @@ extension RuntimeSwiftSection {
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
         try Task.checkCancellation()
         let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
-        let result: SpecializationResult
-        do {
-            result = try specializer.specialize(upstreamRequest, with: upstreamSelection)
-        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
-            throw Self.translate(error)
-        }
         // Collect concrete argument typeNodes in declaration order so the
         // upstream `specialize(...)` rewrites the new TypeDefinition's typeName
         // from `Type → Structure(Box)` to `Type → BoundGenericStructure(Type → Structure(Box), TypeList(Type → Structure(Int), …))`.
@@ -1137,14 +1114,20 @@ extension RuntimeSwiftSection {
         let typeArgumentNodes: [Node] = upstreamRequest.parameters.compactMap { parameter in
             resolved.nodesByParameter[parameter.name]
         }
-        let specializedDefinition = try await baseTypeDefinition.specialize(
-            with: result,
-            typeArgumentNodes: typeArgumentNodes.count == upstreamRequest.parameters.count ? typeArgumentNodes : nil,
-            derivingNestedSpecializationsWith: specializer,
-            selection: upstreamSelection,
-            typeArgumentNodesByParameter: resolved.nodesByParameter,
-            in: machO,
-        )
+        let specializedDefinition: TypeDefinition
+        do {
+            specializedDefinition = try await MachO.specialize(
+                baseTypeDefinition,
+                request: upstreamRequest,
+                selection: upstreamSelection,
+                typeArgumentNodes: typeArgumentNodes.count == upstreamRequest.parameters.count ? typeArgumentNodes : nil,
+                typeArgumentNodesByParameter: resolved.nodesByParameter,
+                using: specializer,
+                in: machO,
+            )
+        } catch let error as GenericSpecializer<MachO>.SpecializerError {
+            throw Self.translate(error)
+        }
         // After the lone suspension point — bail out before mutating section
         // caches if the caller (UI sheet, MCP request) was cancelled while the
         // upstream specialize was running. The specialized TypeDefinition is
@@ -1182,7 +1165,7 @@ extension RuntimeSwiftSection {
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
         try Task.checkCancellation()
         let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
-        let upstreamValidation = specializer.runtimePreflight(selection: upstreamSelection, for: upstreamRequest)
+        let upstreamValidation = MachO.preflight(upstreamSelection, for: upstreamRequest, using: specializer)
         return Self.translate(upstreamValidation)
     }
 
@@ -1332,7 +1315,7 @@ extension RuntimeSwiftSection {
     /// stack on the engine side. Breaches surface as the same
     /// `boundGenericInnerFailed` diagnostic the upstream uses, with the
     /// outer-most parameter name attached so the UI can localize.
-    private static let maxSpecializationDepth = 16
+    private static var maxSpecializationDepth: Int { 16 }
 
     private func resolveUpstreamArguments(
         _ runtimeArguments: [String: RuntimeSpecializationSelection.Argument],
@@ -1390,7 +1373,7 @@ extension RuntimeSwiftSection {
             let innerRequest: SpecializationRequest
             do {
                 innerRequest = try innerSpecializer.makeRequest(for: innerEntry.value.typeContextDescriptorWrapper)
-            } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+            } catch let error as GenericSpecializer<MachO>.SpecializerError {
                 throw Self.translate(error)
             }
             let innerResolved = try resolveUpstreamArguments(
@@ -1454,7 +1437,7 @@ extension RuntimeSwiftSection {
     /// Translate an upstream `SpecializerError` to a wire-safe
     /// `RuntimeEngine.EngineError` so remote clients (which no longer link
     /// `@_spi(Support) SwiftInterface`) can pattern-match on engine cases.
-    private static func translate(_ error: GenericSpecializer<MachOImage>.SpecializerError) -> Swift.Error {
+    private static func translate(_ error: GenericSpecializer<MachO>.SpecializerError) -> Swift.Error {
         switch error {
         case .notGenericType:
             return RuntimeEngine.EngineError.typeNotGeneric
@@ -1841,34 +1824,45 @@ extension SemanticString {
 }
 
 @Loggable(.private)
-actor RuntimeSwiftSectionFactory {
-    /// Pair of (originating typeName, indexed entry) produced by
+actor RuntimeSwiftSectionFactory<MachO: RuntimeIndexableMachO>: RuntimeSwiftSectionProviding {
+    /// The originating typeName, the indexed entry and the key of the section
+    /// that registered it, produced by
     /// `RuntimeSwiftSection.candidateIDMapping()`. The typeName is preserved
     /// so the eventual `EngineError.unindexedCandidate` (and any internal
     /// logging) can surface a human-readable name even when the lookup is
     /// driven by the opaque mangled candidate ID.
+    ///
+    /// `imagePath` is how a jump finds the defining section. The entry's image
+    /// cannot be asked: a file names itself by its install name, which is not
+    /// the path its sections are keyed by, and neither is an `@rpath` name
+    /// dyld reports for an image it loaded.
     typealias IndexedTypeEntry = (
         typeName: SwiftDeclaration.TypeName,
-        entry: MachOIndexedValue<MachOImage, TypeDefinition>,
+        entry: MachOIndexedValue<MachO, TypeDefinition>,
+        imagePath: String,
     )
 
-    /// Pair of (originating protocolName, defining image) produced by
-    /// `RuntimeSwiftSection.protocolCandidateIDMapping()`. Only the image is
-    /// needed to locate the defining section on a jump; `protocolName` is
-    /// kept symmetric with `IndexedTypeEntry` for diagnostics.
+    /// The originating protocolName, the defining image and its section's
+    /// key, produced by `RuntimeSwiftSection.protocolCandidateIDMapping()`.
+    /// `protocolName` is kept symmetric with `IndexedTypeEntry` for
+    /// diagnostics.
     typealias IndexedProtocolEntry = (
         protocolName: SwiftDeclaration.ProtocolName,
-        machO: MachOImage,
+        machO: MachO,
+        imagePath: String,
     )
 
-    let indexer: RuntimeSwiftInterfaceIndexer
+    let indexer: RuntimeSwiftInterfaceIndexer<MachO>
 
-    private var sections: [String: RuntimeSwiftSection] = [:]
+    /// Where the images behind the sections come from.
+    let catalog: any RuntimeImageCatalog<MachO>
+
+    private var sections: [String: RuntimeSwiftSection<MachO>] = [:]
 
     /// Builds under way, keyed like `sections`. A request for an image that is
     /// being built waits for that build instead of starting a second one; see
     /// `RuntimeSectionBuild`.
-    private var sectionBuilds: [String: RuntimeSectionBuild<RuntimeSwiftSection>] = [:]
+    private var sectionBuilds: [String: RuntimeSectionBuild<RuntimeSwiftSection<MachO>>] = [:]
 
     /// Cross-image mangled candidate ID → indexed type, populated as each
     /// section registers. Replaces the prior O(n) walk over
@@ -1895,12 +1889,14 @@ actor RuntimeSwiftSectionFactory {
     /// entries leave with its section, as in the candidate tables.
     private var declaringImagePathByObjCProtocolName: [String: String] = [:]
 
-    init() {
-        let machO = MachOImage.current()
-        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: machO.imagePath, configuration: RuntimeSwiftSection.indexConfiguration)
+    /// `placeholderImage` stands behind the aggregate indexer, which parses no
+    /// image of its own; any image of the catalog will do.
+    init(catalog: any RuntimeImageCatalog<MachO>, placeholderImage: MachO) {
+        self.catalog = catalog
+        self.indexer = RuntimeSwiftInterfaceIndexer(machO: placeholderImage, imagePath: "", configuration: RuntimeSwiftSection<MachO>.indexConfiguration)
     }
 
-    func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
+    func existingSection(for imagePath: String) -> RuntimeSwiftSection<MachO>? {
         sections[imagePath]
     }
 
@@ -1937,7 +1933,15 @@ actor RuntimeSwiftSectionFactory {
         declaringImagePathByObjCProtocolName[runtimeName]
     }
 
-    func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
+    func imagePath(definingTypeWithCandidateID candidateID: String) -> String? {
+        indexedTypeByCandidateID[candidateID]?.imagePath
+    }
+
+    func imagePath(definingProtocolWithCandidateID candidateID: String) -> String? {
+        indexedProtocolByCandidateID[candidateID]?.imagePath
+    }
+
+    func section(for imagePath: String, progressContinuation: LoadingEventContinuation?) async throws -> (isExisted: Bool, section: RuntimeSwiftSection<MachO>) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
             return (true, section)
@@ -1952,15 +1956,20 @@ actor RuntimeSwiftSectionFactory {
     /// IDs recorded — from inside the build, before any waiter is released. A
     /// build that fails leaves nothing behind, and the next request starts
     /// afresh.
-    private func sectionBuild(for imagePath: String) -> RuntimeSectionBuild<RuntimeSwiftSection> {
+    private func sectionBuild(for imagePath: String) -> RuntimeSectionBuild<RuntimeSwiftSection<MachO>> {
         if let sectionBuild = sectionBuilds[imagePath] {
             #log(.debug, "Joining the Swift section build under way for: \(imagePath, privacy: .public)")
             return sectionBuild
         }
         #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
-        let sectionBuild = RuntimeSectionBuild<RuntimeSwiftSection> { [self] relayContinuation in
+        let catalog = catalog
+        let sectionBuild = RuntimeSectionBuild<RuntimeSwiftSection<MachO>> { [self] relayContinuation in
             do {
-                let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self, progressContinuation: relayContinuation)
+                guard let machO = catalog.machO(forImagePath: imagePath) else {
+                    #log(.error, "No image to build a Swift section for: \(imagePath, privacy: .public)")
+                    throw RuntimeSwiftSection<MachO>.Error.imageNotFound
+                }
+                let section = try await RuntimeSwiftSection(imagePath: imagePath, machO: machO, factory: self, progressContinuation: relayContinuation)
                 await registerBuiltSection(section, for: imagePath)
                 return section
             } catch {
@@ -1972,7 +1981,7 @@ actor RuntimeSwiftSectionFactory {
         return sectionBuild
     }
 
-    private func registerBuiltSection(_ section: RuntimeSwiftSection, for imagePath: String) async {
+    private func registerBuiltSection(_ section: RuntimeSwiftSection<MachO>, for imagePath: String) async {
         sections[imagePath] = section
         sectionBuilds[imagePath] = nil
         await section.setupForFactory(self)
@@ -2000,10 +2009,10 @@ actor RuntimeSwiftSectionFactory {
         // Drop any mangledID entries originating from this image so a
         // subsequent `addSubIndexer`-driven re-register can repopulate them.
         indexedTypeByCandidateID = indexedTypeByCandidateID.filter { _, value in
-            value.entry.machO.imagePath != imagePath
+            value.imagePath != imagePath
         }
         indexedProtocolByCandidateID = indexedProtocolByCandidateID.filter { _, value in
-            value.machO.imagePath != imagePath
+            value.imagePath != imagePath
         }
         declaringImagePathByObjCProtocolName = declaringImagePathByObjCProtocolName.filter { _, declaringImagePath in
             declaringImagePath != imagePath
@@ -2020,7 +2029,7 @@ actor RuntimeSwiftSectionFactory {
         declaringImagePathByObjCProtocolName.removeAll()
     }
 
-    private func registerCandidateIDs(from section: RuntimeSwiftSection) async {
+    private func registerCandidateIDs(from section: RuntimeSwiftSection<MachO>) async {
         let mapping = await section.candidateIDMapping()
         for (id, value) in mapping {
             if indexedTypeByCandidateID[id] == nil {
@@ -2033,6 +2042,13 @@ actor RuntimeSwiftSectionFactory {
                 indexedProtocolByCandidateID[id] = value
             }
         }
+    }
+}
+
+extension RuntimeSwiftSectionFactory where MachO == MachOImage {
+    /// The factory over the images dyld loaded into this process.
+    init() {
+        self.init(catalog: RuntimeProcessImageCatalog(), placeholderImage: .current())
     }
 }
 
@@ -2160,7 +2176,7 @@ extension RuntimeSwiftSection {
 
     /// What a family's corpus prints take from the section's state: each
     /// object's definitions, or why it has none, and the printer.
-    private func corpusPrintingInputs(for family: [RuntimeObject], transformer: Transformer.SwiftConfiguration) -> (definitions: [Result<[PrintedDefinition], any Swift.Error>], printer: SwiftDeclarationPrinter<MachOImage>) {
+    private func corpusPrintingInputs(for family: [RuntimeObject], transformer: Transformer.SwiftConfiguration) -> (definitions: [Result<[PrintedDefinition], any Swift.Error>], printer: SwiftDeclarationPrinter<MachO>) {
         (family.map { object in Result { try printedDefinitions(for: object) } }, corpusPrinter(for: transformer))
     }
 
@@ -2172,11 +2188,11 @@ extension RuntimeSwiftSection {
     /// marked, and a search with `synthesizeOpaqueType` off projects them
     /// away. The member order is the fixed by-category one — a reordering is
     /// not something a region can express.
-    private func corpusPrinter(for transformer: Transformer.SwiftConfiguration) -> SwiftDeclarationPrinter<MachOImage> {
+    private func corpusPrinter(for transformer: Transformer.SwiftConfiguration) -> SwiftDeclarationPrinter<MachO> {
         if let corpusPrinter, corpusPrinterTransformer == transformer {
             return corpusPrinter
         }
-        let printer = SwiftDeclarationPrinter<MachOImage>(configuration: .init(), eventHandlers: [], in: machO)
+        let printer = SwiftDeclarationPrinter<MachO>(configuration: .init(), eventHandlers: [], in: machO)
         var configuration = buildPrintConfiguration(
             from: RuntimeObjectInterface.GenerationOptions.mcp.swiftInterfaceOptions,
             oldConfiguration: printer.configuration,

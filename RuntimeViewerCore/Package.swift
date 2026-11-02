@@ -240,6 +240,7 @@ let package = Package(
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "ObjCDeclarationRendering", package: "MachOObjCSection"),
                 .product(name: "ObjCIndexing", package: "MachOObjCSection"),
+                .product(name: "ObjCMetadataSource", package: "MachOObjCSection"),
                 .product(name: "ObjCInterface", package: "MachOObjCSection"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
                 .product(name: "Demangling", package: "swift-demangling"),
