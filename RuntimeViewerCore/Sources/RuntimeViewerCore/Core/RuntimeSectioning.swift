@@ -1,7 +1,7 @@
 import Foundation
 
 // The sections, their factories and the relationship resolvers are generic
-// over the way an image is read (`RuntimeIndexableMachO`). `RuntimeEngine` is
+// over the way an image is read (`RuntimeImageReading`). `RuntimeEngine` is
 // not: it holds them through the protocols below, which name only
 // RuntimeViewer's own types. Each factory protocol says what section it hands
 // out as an associated type, so a call through `any` gets that section back

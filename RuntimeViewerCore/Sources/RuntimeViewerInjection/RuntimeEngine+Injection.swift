@@ -77,6 +77,10 @@ extension RuntimeEngine {
             return hostInfo.metadata.isSimulator
         case .directTCP, .injectedTCP:
             return false
+        // A file on disk has no processes; `injectionAvailability()` answers
+        // that it cannot inject without asking.
+        case .file:
+            return false
         }
     }
 }
@@ -96,6 +100,9 @@ extension RuntimeEngine {
     /// ``RuntimeInjection/install(service:)`` is indistinguishable from both —
     /// which is the one cost of installing these commands from outside Core.
     public func injectionAvailability() async -> RuntimeInjectionAvailability {
+        if case .file = source {
+            return .unsupported(reason: "An offline file has no processes to inject into.")
+        }
         do {
             return try await dispatch(RuntimeInjection.InjectionCapabilityCommand())
         } catch {

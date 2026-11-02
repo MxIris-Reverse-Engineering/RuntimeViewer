@@ -1,5 +1,6 @@
 import Foundation
 import MachOKit
+import MachODependencies
 
 /// The images dyld loaded into this process — what every engine read before
 /// offline files: the local runtime, the Mac Catalyst runtime, an injected
@@ -8,7 +9,7 @@ import MachOKit
 /// Stateless: each answer is read off dyld when asked, so images loaded later
 /// are listed by the next `imagePaths()`.
 struct RuntimeProcessImageCatalog: RuntimeImageCatalog {
-    typealias MachO = MachOImage
+    typealias Reading = RuntimeLoadedImageReading
 
     func imagePaths() -> [String] {
         DyldUtilities.inspectableImageNames()
@@ -45,5 +46,9 @@ struct RuntimeProcessImageCatalog: RuntimeImageCatalog {
 
     func isSharedCacheImage(_ path: String) -> Bool {
         DyldUtilities.isInDyldSharedCache(path)
+    }
+
+    var dependencySearchPaths: [DependencySearchPath] {
+        [.systemDyldSharedCache]
     }
 }

@@ -92,7 +92,8 @@ extension RuntimeEngine {
             role.isClient
         case .local,
              .remote,
-             .injectedTCP:
+             .injectedTCP,
+             .file:
             false
         }
     }

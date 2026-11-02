@@ -73,6 +73,11 @@ extension RuntimeBookmarkScope {
         /// carries no bundle identifier, so two same-named processes on one
         /// device do share a scope. That is an accepted cost, not an oversight.
         case bonjour(deviceID: String, processName: String, role: RuntimeSource.Role)
+
+        /// An offline file, by its standardized path: the same file opened
+        /// again — on another launch, paired with another cache — is the same
+        /// scope, and the same file at another path is another one.
+        case file(path: String)
     }
 }
 
@@ -86,6 +91,7 @@ extension RuntimeBookmarkScope.Identity {
         case injectedTCP
         case directTCP
         case bonjour
+        case file
     }
 
     public var kind: Kind {
@@ -96,12 +102,13 @@ extension RuntimeBookmarkScope.Identity {
         case .injectedTCP: .injectedTCP
         case .directTCP: .directTCP
         case .bonjour: .bonjour
+        case .file: .file
         }
     }
 
     public var role: RuntimeSource.Role? {
         switch self {
-        case .local: nil
+        case .local, .file: nil
         case .remote(_, let role), .localSocket(_, let role), .injectedTCP(_, let role): role
         case .directTCP(_, _, let role), .bonjour(_, _, let role): role
         }
@@ -139,6 +146,7 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
     ///   pure digits and cannot be mistaken for one.
     /// - `.remote` / `.localSocket` / `.injectedTCP` → the identifier, whole,
     ///   swallowing.
+    /// - `.file` → the path, whole, swallowing; a path may contain colons.
     /// - `.local` → empty.
     public var rawValue: String {
         let separator = String(Self.segmentSeparator)
@@ -162,6 +170,8 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
             return "\(port)\(Self.segmentSeparator)\(host ?? "")"
         case .bonjour(let deviceID, let processName, _):
             return "\(deviceID)\(Self.segmentSeparator)\(processName)"
+        case .file(let path):
+            return path
         }
     }
 
@@ -215,6 +225,10 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
             )
             guard parts.count == 2, !parts[0].isEmpty else { return nil }
             self = .bonjour(deviceID: String(parts[0]), processName: String(parts[1]), role: role)
+
+        case .file:
+            guard roleToken.isEmpty, !remainder.isEmpty else { return nil }
+            self = .file(path: remainder)
         }
     }
 
@@ -385,6 +399,9 @@ extension RuntimeBookmarkScope {
             // common case, where the peer does publish a process name and the
             // engine is named with it alone.
             return .identified(.bonjour(deviceID: deviceID, processName: name, role: role))
+
+        case .file(_, let url):
+            return .identified(.file(path: url.path))
         }
     }
 

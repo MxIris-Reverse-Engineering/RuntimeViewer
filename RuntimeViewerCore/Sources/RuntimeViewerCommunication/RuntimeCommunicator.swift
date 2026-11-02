@@ -88,6 +88,20 @@ public final class RuntimeCommunicator {
             #log(.error, "Local connection is not supported")
             throw RuntimeCommunicatorError.localConnectionNotSupported
 
+        case .file:
+            #if os(macOS)
+            // Like `.local`, an identity: the file is read in-process, or by
+            // the process of its own the credential names.
+            if case .xpcService(let target) = credential {
+                #log(.debug, "Creating XPC service client connection for an offline file: \(String(describing: target), privacy: .public)")
+                let connection = try await RuntimeXPCServiceClientConnection(target: target, modifier: modifier)
+                #log(.info, "XPC service client connection established")
+                return connection
+            }
+            #endif
+            #log(.error, "An offline file has no connection without a credential")
+            throw RuntimeCommunicatorError.localConnectionNotSupported
+
         case .remote(_, let identifier, let role):
             #if os(macOS)
             if role.isServer {

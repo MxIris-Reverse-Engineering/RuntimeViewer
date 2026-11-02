@@ -199,7 +199,7 @@ struct SwiftDeclaredObjCProtocolListTests {
     func findListsRequirementsAndDefaultImplementations() async throws {
         let (engine, objects) = try await Self.sharedBundle.value
         let entry = try #require(Self.protocolEntry(named: "SwiftDeclaredObjCProtocolExtendedFixture", in: objects))
-        let section = try #require(await engine.swiftSectionFactory.existingSection(for: entry.imagePath) as? RuntimeSwiftSection<MachOImage>)
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: entry.imagePath) as? RuntimeSwiftSection<RuntimeLoadedImageReading>)
 
         let outcomes = try await section.corpusPrints(of: [entry], transformer: .default)
         guard case .printed(let corpusPrint) = try #require(outcomes.first) else {
@@ -215,7 +215,7 @@ struct SwiftDeclaredObjCProtocolListTests {
     func onlyDefaultImplementationsHaveAddresses() async throws {
         let (engine, objects) = try await Self.sharedBundle.value
         let entry = try #require(Self.protocolEntry(named: "SwiftDeclaredObjCProtocolExtendedFixture", in: objects))
-        let section = try #require(await engine.swiftSectionFactory.existingSection(for: entry.imagePath) as? RuntimeSwiftSection<MachOImage>)
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: entry.imagePath) as? RuntimeSwiftSection<RuntimeLoadedImageReading>)
 
         let addressedNames = try await section.memberAddresses(for: entry, memberName: nil).map(\.name)
         #expect(addressedNames.contains { $0.hasPrefix("extensionMemberOfObjCProtocolFixture") }, "\(addressedNames)")

@@ -138,7 +138,8 @@ struct RuntimeObjCProtocolReference: Hashable, Sendable {
 /// `@unchecked Sendable`: `upstream` and `relationshipTables` are immutable
 /// `let`s that guard their own state, and `subIndexers` is `@Mutex`-guarded.
 @dynamicMemberLookup
-final class RuntimeObjCInterfaceIndexer<MachO: RuntimeIndexableMachO>: @unchecked Sendable {
+final class RuntimeObjCInterfaceIndexer<Reading: RuntimeImageReading>: @unchecked Sendable {
+    typealias MachO = Reading.MachO
 
     // MARK: - Upstream Indexer
 

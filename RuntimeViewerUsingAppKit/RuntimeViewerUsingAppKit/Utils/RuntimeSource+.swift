@@ -27,6 +27,8 @@ extension RuntimeSource: MainMenuItemRepresentable {
             // injected device process a symbol of its own is a UI decision
             // this transport change has no business making.
             return .symbol(systemName: .network)
+        case .file:
+            return .symbol(systemName: .doc)
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import MachOKit
+import MachODependencies
 
 /// Where an engine's images come from, and how one of them is found by path.
 ///
@@ -11,8 +12,10 @@ import MachOKit
 /// path, and background indexing asks it how an image's dependencies resolve.
 /// An engine that forwards its requests to another process has a catalog too,
 /// but never consults it.
-protocol RuntimeImageCatalog<MachO>: Sendable {
-    associatedtype MachO: RuntimeIndexableMachO
+protocol RuntimeImageCatalog<Reading>: Sendable {
+    associatedtype Reading: RuntimeImageReading
+
+    typealias MachO = Reading.MachO
 
     /// Every image an engine over this catalog lists — each of which
     /// `machO(forImagePath:)` can produce.
@@ -42,6 +45,12 @@ protocol RuntimeImageCatalog<MachO>: Sendable {
     /// Whether `path`, which names no file on disk, is an image of the dyld
     /// shared cache this catalog's images come from.
     func isSharedCacheImage(_ path: String) -> Bool
+
+    /// Where MachOSwiftSection looks for the images an image links when it
+    /// reads one from a file: the Swift indexer's dependency closure and the
+    /// static field layout. Images read from this process need none — the
+    /// runtime resolves them — and keep the library's default.
+    var dependencySearchPaths: [DependencySearchPath] { get }
 }
 
 // MARK: - Dependencies

@@ -22,8 +22,8 @@ struct RuntimeImageIndex: Sendable {
     /// `placeholderImage` stands behind the factories' aggregate indexers,
     /// which parse no image of their own.
     init<Catalog: RuntimeImageCatalog>(catalog: Catalog, placeholderImage: Catalog.MachO) {
-        let objcSectionFactory = RuntimeObjCSectionFactory<Catalog.MachO>(catalog: catalog, placeholderImage: placeholderImage)
-        let swiftSectionFactory = RuntimeSwiftSectionFactory<Catalog.MachO>(catalog: catalog, placeholderImage: placeholderImage)
+        let objcSectionFactory = RuntimeObjCSectionFactory<Catalog.Reading>(catalog: catalog, placeholderImage: placeholderImage)
+        let swiftSectionFactory = RuntimeSwiftSectionFactory<Catalog.Reading>(catalog: catalog, placeholderImage: placeholderImage)
         let relationshipsResolver = RuntimeRelationshipsResolver(objcSectionFactory: objcSectionFactory, swiftSectionFactory: swiftSectionFactory)
         self.catalog = catalog
         self.objcSectionFactory = objcSectionFactory

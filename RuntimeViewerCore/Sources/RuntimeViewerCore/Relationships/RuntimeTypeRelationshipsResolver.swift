@@ -42,21 +42,22 @@ import SwiftDeclaration
 /// levels of Ancestor Types as one flat chain (`superclassChain(of:)`), and a
 /// protocol's Ancestor Types tree itself (`refinedProtocolTree(of:)`).
 @Loggable(.private)
-actor RuntimeTypeRelationshipsResolver<MachO: RuntimeIndexableMachO>: RuntimeTypeRelationshipsResolving {
+actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTypeRelationshipsResolving {
+    typealias MachO = Reading.MachO
     static var maximumDepth: Int { 64 }
 
-    private let objcSectionFactory: RuntimeObjCSectionFactory<MachO>
+    private let objcSectionFactory: RuntimeObjCSectionFactory<Reading>
 
-    private let swiftSectionFactory: RuntimeSwiftSectionFactory<MachO>
+    private let swiftSectionFactory: RuntimeSwiftSectionFactory<Reading>
 
-    private let relationshipsResolver: RuntimeRelationshipsResolver<MachO>
+    private let relationshipsResolver: RuntimeRelationshipsResolver<Reading>
 
     private let regularExpressionTimeLimit: TimeInterval
 
     init(
-        objcSectionFactory: RuntimeObjCSectionFactory<MachO>,
-        swiftSectionFactory: RuntimeSwiftSectionFactory<MachO>,
-        relationshipsResolver: RuntimeRelationshipsResolver<MachO>,
+        objcSectionFactory: RuntimeObjCSectionFactory<Reading>,
+        swiftSectionFactory: RuntimeSwiftSectionFactory<Reading>,
+        relationshipsResolver: RuntimeRelationshipsResolver<Reading>,
         regularExpressionTimeLimit: TimeInterval = RuntimeInterfaceTextMatcher.RegularExpressionBudget.defaultTimeLimit
     ) {
         self.objcSectionFactory = objcSectionFactory

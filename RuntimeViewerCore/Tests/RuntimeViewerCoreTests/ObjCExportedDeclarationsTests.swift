@@ -241,7 +241,7 @@ struct ObjCExportedDeclarationsTests {
     /// does for its own.
     private static func fixtureCorpusEntries() async throws -> [RuntimeInterfaceCorpusEntry] {
         let (engine, objects) = try await sharedBundle.value
-        let section = try #require(await engine.objcSectionFactory.existingSection(for: testBundlePath) as? RuntimeObjCSection<MachOImage>)
+        let section = try #require(await engine.objcSectionFactory.existingSection(for: testBundlePath) as? RuntimeObjCSection<RuntimeLoadedImageReading>)
         var prints: [RuntimeInterfaceCorpusPrint] = []
         for object in objects where object.kind == .objc(.type(.class)) && object.name.contains("ObjCExport") {
             if let corpusPrint = try await section.corpusPrint(for: object, transformer: .default) {

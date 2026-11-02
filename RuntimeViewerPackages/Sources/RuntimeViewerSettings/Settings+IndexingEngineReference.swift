@@ -48,7 +48,7 @@ extension RuntimeBookmarkScope.Identity {
         switch self {
         case .remote(let identifier, _), .localSocket(let identifier, _):
             return Int32(identifier) != nil
-        case .local, .injectedTCP, .directTCP, .bonjour:
+        case .local, .injectedTCP, .directTCP, .bonjour, .file:
             return false
         }
     }

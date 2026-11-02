@@ -75,7 +75,7 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 1. **新来源**：`RuntimeSource.file(name:url:)`——身份只有文件的规范化 URL（`name` 只用于显示，和其它 case 一样不参与相等）。配对哪个 cache、胖文件取哪个切片都是**配置**，不进身份：换配对 cache 不会让书签、侧栏状态、Always Index 列表另起一份。
 2. **描述打开的东西**：Core 新增值类型 `RuntimeOfflineFile`——URL、内容种类（Mach-O 带切片 / bundle / dyld cache）、依赖 cache（本机的、某个 cache 文件、或没有）。它是 App → service 的启动参数、service 里引擎的构造参数、管理器里停放条目的配置。
 3. **每个文件一个进程**：新的内嵌 XPC service `RuntimeViewerOfflineService.xpc`，`_MultipleInstances`。App 侧引擎带一个 `.xpcService(.dedicatedInstance(bundleIdentifier:launchPayload:))` 凭证连接，连接层给每次启动生成实例 UUID、把 `RuntimeOfflineFile` 编码后作为 bootstrap；service 读出它、建进程内的文件引擎、复用 `RuntimeLocalRuntimeServiceHost` 提供服务，peer 断开即退出。XPC 的细节只在连接层与 service 入口两处（与 0037 定下的「XPC 逻辑不进 Engine、改动要聚合」一致）。
-4. **Core 泛型化**：section、indexer 包装、工厂、关系解析器对 Mach-O 读取方式泛型；两种读取方式的差异（特化、Swift 父类链、ObjC 类名、`dlopen`）集中在一个内部协议的两份实现里；引擎持有一个非泛型协议 `RuntimeImageIndexing`，本地臂的逻辑基本不挪窝。镜像从哪来由「镜像目录」决定：`RuntimeProcessImageCatalog`（就是今天的 dyld 逻辑）与 `RuntimeFileImageCatalog`（文件 / bundle / cache + 配对 cache）。
+4. **Core 泛型化**：section、indexer 包装、工厂、关系解析器对 Mach-O 读取方式泛型；两种读取方式的差异（特化、Swift 父类链、ObjC 类名、`dlopen`）集中在一个内部协议的两份实现里（读取方式策略 `RuntimeImageReading`）；引擎经几个非泛型协议持有它们，本地臂的逻辑基本不挪窝。镜像从哪来由「镜像目录」决定：`RuntimeProcessImageCatalog`（就是今天的 dyld 逻辑）与 `RuntimeFileImageCatalog`（文件 / bundle / cache + 配对 cache）。
 5. **打开**：App 新增 `NSDocumentController` 子类拦截打开，`Info.plist` 声明 Mach-O 可执行文件、动态库与 bundle 为 Viewer 类型。选中的文件先判种类（读文件头 / bundle 结构），定配对 cache，交给管理器取得（或新建、或唤醒）对应引擎，再开一个直接落在该引擎上的新窗口，并记入 Open Recent。
 6. **引擎菜单**：离线引擎用专属的 `hostInfo`（`hostID` 固定，`hostName` 为「Offline Files」），单列一组；组末两项「Open File…」与「Dependency Cache ▸」（后者作用于当前窗口所在的离线引擎）。图标取文件自身的 Finder 图标（`.app` 就是 App 图标）。
 7. **停放与唤醒**：后台工作注册表在「第一个文档加入」「最后一个文档离开」时发事件；App 侧的 `OfflineFileController` 收到「离开」后等 30 秒，仍无文档就让管理器停放该引擎（引擎 `stop()`，连接取消，service 退出），条目仍在菜单里；用户再选它、或经 Open / Open Recent 再开它，管理器先唤醒（同一个引擎对象再 `connect`，新实例、同一份 `RuntimeOfflineFile`）再切换。
@@ -171,104 +171,81 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
 
 `displayName`：bundle 用 bundle 名（`Foo.app`），Mach-O 用文件名，cache 用「平台 版本 (架构)」，如「iOS 27.0 dyld cache (arm64e)」。
 
-### 2. Core：按 Mach-O 读取方式泛型化
+### 2. Core：按读取方式泛型化
 
 ```swift
-// RuntimeViewerCore/Core/RuntimeIndexableMachO.swift (internal)
-/// The two ways an engine reads an image: from dyld's mapping in this process, or from a file.
-/// Everything that differs between them is a requirement here, so the generic code never
-/// asks which one it has.
-protocol RuntimeIndexableMachO: MachOSwiftSectionRepresentableWithCache, ObjCMetadataSource,
-                                MachOFieldLayoutRenderable, Sendable {
-    /// The superclass names of a Swift class, nearest first.
-    static func classHierarchy(of descriptor: ClassDescriptor, in machO: Self,
-                               indexer: SwiftDeclarationIndexer<Self>) throws -> [String]
-    /// The name in an Objective-C class's read-only data.
-    static func runtimeName(of objcClass: ObjCClass64, in machO: Self) -> String?
-    /// Checks a selection and specializes the type it names, appending the result.
-    static func specialize(_ typeDefinition: TypeDefinition, request: SpecializationRequest,
-                           selection: SpecializationSelection, specializer: GenericSpecializer<Self>,
-                           in machO: Self) async throws -> TypeDefinition
+// RuntimeViewerCore/Core/RuntimeImageReading.swift (internal)
+/// A way an engine reads an image. Everything that differs between reading what dyld
+/// loaded and reading a file is a requirement here, so the generic code never asks which
+/// one it holds.
+protocol RuntimeImageReading: Sendable {
+    associatedtype MachO: MachOFieldLayoutRenderable, ObjCMetadataSource, Sendable
+
+    static func classHierarchy(of classDescriptor: ClassDescriptor, mangledTypeName: String,
+                               in machO: MachO, across aggregate: RuntimeSwiftInterfaceIndexer<Self>) throws -> [String]
+    static func objcRuntimeName(of objcClass: ObjCClass64, in machO: MachO) -> String?
+    static func objcProtocolRecords(in machO: MachO) -> [(name: String, flags: UInt32)]
+    static func makePrivateDiscriminatorSourceFileIndex(indexer: SwiftDeclarationIndexer<MachO>) -> PrivateDiscriminatorSourceFileIndex
     static func preflight(_ selection: SpecializationSelection, for request: SpecializationRequest,
-                          specializer: GenericSpecializer<Self>) -> SpecializationValidation
+                          using specializer: GenericSpecializer<MachO>) -> SpecializationValidation
+    static func specialize(_ typeDefinition: TypeDefinition, request: SpecializationRequest,
+                           selection: SpecializationSelection, typeArgumentNodes: [Node]?,
+                           typeArgumentNodesByParameter: [String: Node],
+                           using specializer: GenericSpecializer<MachO>, in machO: MachO) async throws -> TypeDefinition
 }
 
-extension MachOImage: RuntimeIndexableMachO { /* today's runtime code, moved here */ }
-extension MachOFile: RuntimeIndexableMachO { /* static paths from MachOSwiftSection 0069 */ }
+enum RuntimeLoadedImageReading: RuntimeImageReading { typealias MachO = MachOImage /* today's runtime code */ }
+enum RuntimeFileImageReading: RuntimeImageReading { typealias MachO = MachOFile /* static paths, MachOSwiftSection 0069 */ }
 ```
 
-- **变成泛型的类型**：`RuntimeObjCSection<MachO>`、`RuntimeSwiftSection<MachO>`、`RuntimeObjCInterfaceIndexer<MachO>`、`RuntimeSwiftInterfaceIndexer<MachO>`、两个工厂、`RuntimeRelationshipsResolver<MachO>`、`RuntimeTypeRelationshipsResolver<MachO>`；`SwiftDefinedObjCProtocols.names(in:)` 改收 `some RuntimeIndexableMachO`。section 不再自己找镜像，`init` 收 `(imagePath:machO:configuration:)`，镜像由目录给。
-- **每个引擎一份索引配置**：`RuntimeSwiftSection.indexConfiguration` 不再是静态常量。目录给出依赖搜索路径，section 据此设 `SwiftDeclarationIndexConfiguration.dependencySearchPaths` 与打印器的 `staticLayoutDependencyResolution`（`.dependencyClosure(searchPaths:)`）；进程内的镜像两者都用不上，保持默认。
-- **聚合 indexer 的占位镜像**：进程内照旧 `MachOImage.current()`；文件引擎用根文件的 `MachOFile`。`SwiftDeclarationIndexer` 的 `deinit` 只在某个镜像的最后一个活着的 indexer 走时才清共享缓存，和活着的 section 共用同一个镜像不会误清。
-- **引擎看到的是非泛型协议**：
-
-```swift
-// RuntimeViewerCore/Core/RuntimeImageIndexing.swift (internal)
-/// An engine's parsed images, over one way of reading them. The engine's local arm talks to
-/// this instead of to the section factories, so `RuntimeEngine` itself stays non-generic.
-protocol RuntimeImageIndexing: Sendable {
-    var catalog: any RuntimeImageCatalog { get }
-    func objcSection(for imagePath: String, progressContinuation: LoadingEventContinuation?) async throws -> (isExisted: Bool, section: any RuntimeObjCSectioning)
-    func swiftSection(for imagePath: String, progressContinuation: LoadingEventContinuation?) async throws -> (isExisted: Bool, section: any RuntimeSwiftSectioning)
-    func existingObjCSection(for imagePath: String) async -> (any RuntimeObjCSectioning)?
-    func existingSwiftSection(for imagePath: String) async -> (any RuntimeSwiftSectioning)?
-    func objcSection(definingObjCType name: RuntimeObjCName) async -> (any RuntimeObjCSectioning)?
-    var relationships: any RuntimeRelationshipsResolving { get }
-    var typeRelationships: any RuntimeTypeRelationshipsResolving { get }
-    func removeAllSections() async
-    // … the remaining factory queries the engine uses today (indexedType, indexedProtocol, cachedImagePaths)
-}
-
-final class RuntimeImageIndex<MachO: RuntimeIndexableMachO>: RuntimeImageIndexing { … }
-```
-
-`RuntimeObjCSectioning` / `RuntimeSwiftSectioning` 列出引擎与解析器今天在 section 上调用的方法，返回的已经都是 RuntimeViewer 自己的类型（`RuntimeObject`、`RuntimeObjectInterface`、`RuntimeMemberAddress`……）。`RuntimeEngine` 的 `objcSectionFactory` / `swiftSectionFactory` / `relationshipsResolver` / `typeRelationshipsResolver` 四个存储属性换成一个 `imageIndex: any RuntimeImageIndexing`，本地臂里的调用改为经它；`RuntimeEngine.swift:804,813` 那两处镜像路径改问目录。
-
-- **第一步不改行为**：先只把进程内这条路泛型化（`RuntimeImageIndex<MachOImage>` + `RuntimeProcessImageCatalog`），全部现有测试照旧通过，再加文件这条路。
+- **为什么是策略类型**：要求让 `MachOImage` / `MachOFile` 自己遵循做不到——`MachOFile` 是非 final 的 class，满足不了在别的泛型里写 `Self` 的要求（`GenericSpecializer<Self>` 之类）。两个枚举各带一个关联类型 `MachO`，差异全在它们的静态方法里。
+- **变成泛型的类型**：`RuntimeObjCSection<Reading>`、`RuntimeSwiftSection<Reading>`、`RuntimeObjCInterfaceIndexer<Reading>`、`RuntimeSwiftInterfaceIndexer<Reading>`、两个工厂、`RuntimeRelationshipsResolver<Reading>`、`RuntimeTypeRelationshipsResolver<Reading>`，每个类型体内 `typealias MachO = Reading.MachO`，原有代码几乎不用改。section 不再自己找镜像，`init(imagePath:machO:factory:progressContinuation:)` 收工厂从目录取来的镜像。
+- **每个工厂一份索引配置**：`RuntimeSwiftSection.indexConfiguration(dependencySearchPaths:)` 按目录给出的依赖搜索路径设 `SwiftDeclarationIndexConfiguration.dependencySearchPaths`；打印器的 `staticLayoutDependencyResolution` 也取 `.dependencyClosure(searchPaths:)`。进程内的镜像两者都用不上，路径与上游默认相同。
+- **聚合 indexer 的占位镜像**：进程内照旧 `MachOImage.current()`；文件引擎用目录里第一个镜像。`SwiftDeclarationIndexer` 的 `deinit` 只在某个镜像的最后一个活着的 indexer 走时才清共享缓存，和活着的 section 共用同一个镜像不会误清。
+- **跨镜像表记 section 的键**：Swift 工厂「mangled 名 → 定义它的镜像」两张表记下注册它的 section 的键，不再拿镜像自己的 `imagePath`（文件的是 install name）；引擎经 `imagePath(definingTypeWithCandidateID:)` / `imagePath(definingProtocolWithCandidateID:)` 取。
+- **引擎看到的是非泛型协议**：`RuntimeObjCSectioning` / `RuntimeSwiftSectioning` 列出引擎与语料构建在 section 上调用的方法；`RuntimeObjCSectionProviding` / `RuntimeSwiftSectionProviding` 用关联类型声明自己的 section，经 `any` 调用时自动擦除成 section 协议；另有 `RuntimeRelationshipsResolving`、`RuntimeTypeRelationshipsResolving`。`RuntimeEngine` 的四个属性保留原名，类型换成这几个协议；`RuntimeImageIndex` 按同一种读取方式把目录、两个工厂、两个解析器成套建出来，交给引擎的指定构造器。
 
 ### 3. Core：镜像目录
 
 ```swift
 // RuntimeViewerCore/Catalog/RuntimeImageCatalog.swift (internal)
-protocol RuntimeImageCatalog: Sendable {
-    associatedtype MachO: RuntimeIndexableMachO
-    /// Every image an engine over this catalog lists, all of which it can parse.
-    var imagePaths: [String] { get }
-    /// The sidebar's root nodes.
+protocol RuntimeImageCatalog<Reading>: Sendable {
+    associatedtype Reading: RuntimeImageReading
+    typealias MachO = Reading.MachO
+
+    func imagePaths() -> [String]
     func rootNodes() -> [RuntimeImageNode]
-    func machO(forImagePath imagePath: String) -> MachO?
     func canonicalImagePath(_ imagePath: String) -> String
-    /// What `loadImage(at:)` does before the sections are built: `dlopen` in a process,
-    /// nothing for a file.
+    func machO(forImagePath imagePath: String) -> MachO?
+    /// `dlopen` in a process, nothing for a file.
     func prepareImage(at imagePath: String) throws
-    func dependencies(ofImageAt imagePath: String) -> [RuntimeDependencyEntry]
-    func rpaths(ofImageAt imagePath: String) -> [String]
-    var mainExecutablePath: String { get }
+    func image(definingObjCType name: RuntimeObjCName) async -> (imagePath: String, machO: MachO)?
+    func mainExecutablePath() -> String
+    func isSharedCacheImage(_ path: String) -> Bool
     var dependencySearchPaths: [DependencySearchPath] { get }
-    /// The image that defines an Objective-C class or protocol nothing indexed so far does.
-    func imagePath(definingObjCType name: RuntimeObjCName) async -> String?
 }
+// canOpenImage(at:), rpaths(ofImageAt:) and dependencyEntries(ofImageAt:ancestorRpaths:mainExecutablePath:)
+// are an extension: background indexing's old dependency rules, for either way of reading.
 ```
 
-- **`RuntimeProcessImageCatalog`**：今天 `DyldUtilities` 的那些静态函数，原样搬进来；`imagePath(definingObjCType:)` 仍是 `NSClassFromString`。
-- **`RuntimeFileImageCatalog`**，按 `RuntimeOfflineFile.Content`：
+- **`RuntimeProcessImageCatalog`**：今天 `DyldUtilities` 的那些静态函数原样搬进来；按名字找 ObjC 类型仍是 `NSClassFromString`。
+- **`RuntimeFileImageCatalog`**，按 `RuntimeOfflineFile.Content`，构造时打开全部镜像：
   - **Mach-O**：`File.loadFromFile(url:)`，胖文件取 `Slice` 指定的切片；镜像键是磁盘路径。
-  - **bundle**：遍历包内普通文件，按魔数收下所有 Mach-O（主程序、`Frameworks`、`PlugIns`、`XPCServices`、`Library/LoginItems`、`Helpers`……），跳过 `_CodeSignature` 与资源；主程序取 `Bundle(url:).executableURL`。包内每个文件都进 `dependencySearchPaths`（`.machOFile`），`@rpath` / `@loader_path` / `@executable_path` 由现有的 `DylibPathResolver` 在磁盘上展开。
-  - **dyld cache**：`FullDyldCache(url:)`，镜像键是 install name，`machOFile(by: .path(_:))` 取镜像；`dependencySearchPaths` 只有它自己（上游对 cache 里的镜像本来就先搜它所在的 cache）。
-  - **配对 cache**：再开一个 `FullDyldCache`（本机的用 `FullDyldCache.host` 读磁盘上的 cache 文件，而不是进程里映射的那份），它的镜像作为第二个根节点，也能被解析；`dependencySearchPaths` 末尾加上 `.systemDyldSharedCache` 或 `.dyldSharedCache(path:)`。绝对 install name 的依赖先在包里找，再去配对的 cache 里找。
-  - **ObjC 类名查镜像**：先查聚合 indexer（已解析的镜像）；查不到再查一张按需建立的「ObjC 类 / 协议名 → 镜像」表——只读各镜像 `__objc_classlist` / `__objc_protolist` 里的名字，不建 section，第一次需要时在后台建好、常驻进程。建表代价在落地第 2 步实测（前期调研 §6 第 4 条）；一份 iOS cache 超过约 3 秒就改为只查已解析镜像，并把这一降级写进决策日志。
-- **引擎的本地臂**：`observeRuntime()` / `reloadLocalData` 的镜像清单与根节点、`_isImageLoaded`、`_loadImage`、后台索引的 `_canOpenImage` / `_rpaths` / `_dependencies` / `loadImageForBackgroundIndexing`、`mainExecutablePath` 全部改问目录；`DyldUtilities` 只剩进程目录在用。
+  - **bundle**：遍历包内普通文件（跳过符号链接，框架的 `Versions/Current` 否则会重复），按魔数收下所有 Mach-O，主程序取 `Bundle(url:).executableURL` 排第一。包内每个文件都进 `dependencySearchPaths`（`.machOFile`），`@rpath` / `@loader_path` / `@executable_path` 由现有的 `DylibPathResolver` 在磁盘上展开。
+  - **dyld cache**：`FullDyldCache(url:)` 的 `machOFiles()` 遍历一次，镜像键是 install name；`dependencySearchPaths` 只有它自己。
+  - **配对 cache**：本机的用 `FullDyldCache.host`（读磁盘上的 cache 文件，不是进程里映射的那份），别的用 `FullDyldCache(url:)`；它的镜像是第二个根节点，也能被解析；`dependencySearchPaths` 末尾加上 `.systemDyldSharedCache` 或 `.dyldSharedCache(path:)`。`DylibPathResolver` 判断「不在磁盘上的路径是不是 cache 镜像」改问目录。
+  - **按名字找 ObjC 类**：在各镜像的导出 trie 里查 `_OBJC_CLASS_$_<类名>`，先查文件自己的镜像、再查 cache，结果按类名记住。ObjC 协议没有导出符号，离线只在已解析的镜像里找得到。
+- **引擎的本地臂**：`observeRuntime()` / `reloadLocalData` 的镜像清单与根节点、`_isImageLoaded`、`_loadImage`、后台索引的 `_canOpenImage` / `_rpaths` / `_dependencies` / `loadImageForBackgroundIndexing`、`mainExecutablePath`、Find 与关系查询里的路径规范化全部改问目录；`DyldUtilities` 只剩进程目录在用。
 
 ```swift
-// RuntimeViewerCore/RuntimeEngine.swift
+// RuntimeViewerCore/Offline/RuntimeEngine+Offline.swift
 extension RuntimeEngine {
     /// An engine that reads `file` in this process — what the offline service runs. Its
-    /// source is `file.source`; `connect()` without a credential starts it.
-    public convenience init(reading file: RuntimeOfflineFile, engineID: String = UUID().uuidString) throws
+    /// source is `file.source`; `connect()` without a credential starts it. Throws
+    /// `RuntimeOfflineFileError` when the file or its paired cache cannot be opened.
+    public init(reading file: RuntimeOfflineFile, engineID: String = UUID().uuidString) throws
 }
 ```
-
-（`RuntimeEngine` 是 actor，实际写成指定构造器；目录在构造时打开，打不开就抛错。）
 
 ### 4. 通信层：每个文件一个 service 实例
 
@@ -418,8 +395,8 @@ extension RuntimeEngineManager {
 
 0. **验证多实例 XPC**（前期调研 §6 第 1–3 条）：在丢弃分支上用一个只回显 bootstrap 的临时 service（不进仓库）实测——两个连接得到两个进程、`xpc_copy_bootstrap` 拿到数据、取消连接后进程退出、`kill -9` 后连接报什么、换新 UUID 重连。结论写回本提案；不可用就改走「自起子进程」并记进决策日志。
 1. **SwiftyXPC**：fork 里加带实例的连接类型与读取 bootstrap 的接口，发 0.5.106；RuntimeViewer 抬下限，三个 workspace 的锁文件经 `UpdatePackagesScript.sh` 更新。
-2. **Core 泛型化，行为不变**：`RuntimeIndexableMachO`、泛型的 section / indexer / 工厂 / 解析器、`RuntimeImageIndexing`、`RuntimeProcessImageCatalog`；引擎改经 `imageIndex`。验收：`RuntimeViewerCore` 全量测试与基线一致（满载下 IPC 类测试成批超时是已知现象，对照基线判断）。
-3. **文件目录与文件引擎（进程内）**：`RuntimeOfflineFile`、`RuntimeFileImageCatalog`（Mach-O / 胖文件 / bundle / cache / 配对 cache）、`MachOFile` 一侧的特化与父类链、ObjC 类名表（顺带实测建表代价）、`RuntimeEngine(reading:)`。测试见 §10。
+2. **Core 泛型化，行为不变**：读取方式协议、泛型的 section / indexer / 工厂 / 解析器、给引擎用的非泛型协议与 `RuntimeImageIndex`、`RuntimeProcessImageCatalog`；引擎改经目录与这些协议。验收：`RuntimeViewerCore` 全量测试与基线一致（满载下 IPC 类测试成批超时是已知现象，对照基线判断）。
+3. **文件目录与文件引擎（进程内）**：`RuntimeOfflineFile`、`RuntimeFileImageCatalog`（Mach-O / 胖文件 / bundle / cache / 配对 cache）、`RuntimeFileImageReading`（特化、父类链、ObjC 名字）、按导出符号找 ObjC 类、`RuntimeEngine(reading:)`、`RuntimeSource.file`。测试见 §10。
 4. **来源与传输**：`RuntimeSource.file` 及十二处 `switch`、`RuntimeBookmarkScope`、`.dedicatedInstance` 目标与重连、`RuntimeOfflineService`；引擎停止后再连接的测试。
 5. **离线 service target**：目录、`Info.plist`、entitlements、xcconfig、bundle ID、App 的 `Info.plist` 键、目标依赖与嵌入阶段、Tuist 描述（`./TuistScript.sh check` 通过）、根 `AGENTS.md` 的进程表。验收：`./RunScript.sh --no-launch` 后 `Contents/XPCServices/RuntimeViewerOfflineService.xpc` 存在，`codesign -dv` 显示 hardened runtime 与 entitlements，`Info.plist` 带 `_MultipleInstances`。
 6. **引擎管理**：离线组、`runtimeEngine(reading:)`、停放 / 唤醒、CLI 快照过滤与 `SourceKind`。测试见 §10。
@@ -427,6 +404,16 @@ extension RuntimeEngineManager {
 8. **派生数据**：cache 身份、`Platform` 补全、离线进程的镜像判断、清理规则跳过 `Offline-` 目录。动手前读 `Documentations/DerivedData.md`。
 9. **人工验收**（用户）：§10 的人工验收清单。
 10. **文档**：根 `AGENTS.md`（Application Targets 加离线 service；XPC 代码的位置列表加上它的入口；进程义务表；派生数据一节）、`CommunicationAndEngineArchitecture.md`（多实例连接）、`DerivedData.md`（离线身份与清理）、`Glossary.md`（离线文件、依赖 cache、停放）、`README.md` 的功能介绍、两份索引；本提案推进状态并补决策日志。
+
+### 进度
+
+| 步骤 | 状态 | 证据 |
+|------|------|------|
+| 0 验证多实例 XPC | 未做 | 实验程序已写好（仓库外），等用户过目后运行 |
+| 1 SwiftyXPC | 未做 | 等第 0 步的结论定接口 |
+| 2 Core 泛型化 | 完成 | Core 全量与基线对照：基线就有的满载失败（交叉引用预先准备、后台索引批次取消、事件订阅三个之中的两个）照旧，无新增失败；新增的跳转回归测试在旧查找逻辑上红、修复后绿 |
+| 3 文件目录与文件引擎 | 完成 | `OfflineFileEngineTests` 9 例通过：薄 / 胖 / 非 Mach-O / bundle 的判定，离线与进程内引擎对同一镜像列出的对象一致、打印一致，离线泛型特化，依赖解析进配对 cache，cache 引擎按导出符号找到 `NSObject` 所在的 libobjc。Core 全量 663 项只有基线就有的两个满载失败；Packages 全量 701 项挂 1 个交叉引用的等待超时（174 秒），单独跑该套件 11 项全过；CLI 121 项全过；Debug 设置文件前后校验和不变。App 目标未编，第 5 步加 service target 时一起编 |
+| 4–10 | 未做 | |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -457,3 +444,8 @@ extension RuntimeEngineManager {
 | 2026-11-03 | 引擎持有四个协议类型的属性，不另立 `RuntimeImageIndexing` | 详细设计 §2 原拟一个总协议。实现时让 `objcSectionFactory`、`swiftSectionFactory`、`relationshipsResolver`、`typeRelationshipsResolver` 保留原名、类型换成 `any RuntimeObjCSectionProviding` 等四个协议（工厂协议以关联类型声明自己的 section，经 `any` 调用时自动擦除成 section 协议），引擎里的调用点几乎不用改；五样东西由 `RuntimeImageIndex` 按同一种读取方式成套建出，另加 `imageCatalog`。 |
 | 2026-11-03 | `RuntimeIndexableMachO` 多两项要求 | MachOObjCSection 读 ObjC 协议记录的名字、MachOSwiftSection 建私有鉴别器的源文件索引，都是按 `MachOImage` / `MachOFile` 分开的具体重载，泛型代码调不到；协议里加 `objcProtocolRecords(in:)` 与 `makePrivateDiscriminatorSourceFileIndex(indexer:)`。Core target 补上 `ObjCMetadataSource` 产品依赖（协议的约束在这个模块里）。 |
 | 2026-11-03 | Swift 工厂的跨镜像表记下 section 自己的键 | 「mangled 名 → 定义它的镜像」两张表原来拿 `MachOImage.imagePath` 去找 section；离线时单个文件的 `imagePath` 是 install name，找不到。改成两张表各记注册它的 section 的键，引擎经 `imagePath(definingTypeWithCandidateID:)` / `imagePath(definingProtocolWithCandidateID:)` 取。这顺带修掉了提案索引「暂缓的后续项」里的「跨镜像点击跳到 `@rpath` 镜像落空」（同一个原因），收尾时从那张表里划掉。 |
+| 2026-11-03 | `RuntimeSource.file` 提前到第 3 步 | 进程内的文件引擎（`RuntimeEngine(reading:)`）构造时就要有来源，第 3 步的测试离不开它；`RuntimeSource` 自身六处、`RuntimeCommunicator`、路径规范化、注入能力与 `RuntimeBookmarkScope`（新增 `Identity.file(path:)`）随之同批改完。App 与 CLI 两侧的 switch 仍在第 4、6 步。 |
+| 2026-11-03 | CLI 的排除与两处 App / 设置的 switch 也在第 3 步做 | 新 case 一进 Core，CLI 的 `SourceKind(source:)`、设置里的 `carriesProcessIdentifier` 与 App 的来源图标三处穷举 switch 就编不过，每一步都要整个仓库可构建，所以提前做：`SourceKind.init?(source:)` 对 `.file` 返回 `nil`，`SourceInfo.init?(engine:)` 随之可失败，CLI 的快照把离线引擎从各分组里滤掉（即第 6 步「CLI 不暴露」的全部改动）；`.file` 不带进程号；来源菜单的图标先用文档符号，第 7 步做引擎菜单时再定。 |
+| 2026-11-03 | 离线按名字找 ObjC 类走导出符号，协议只看已解析的镜像 | 详细设计 §3 原拟按需建「名字 → 镜像」表。实现时改查各镜像导出 trie 里的 `_OBJC_CLASS_$_<类名>`：别的镜像引用一个类正是经这个导出符号，查一次是几次 trie 节点读取，整份 cache 查一遍也远比解析全部 classlist 便宜，所以不必建表、也不用实测建表代价。ObjC 协议没有导出符号，离线时只能在已解析的镜像里找到——跳到一个尚未解析的镜像里的协议会找不到，记为已知降级。 |
+| 2026-11-03 | 读取方式改为策略类型 `RuntimeImageReading` | 第 2 步按提案让 `MachOImage` / `MachOFile` 直接遵循 `RuntimeIndexableMachO`；第 3 步加 `MachOFile` 时编译不过：它是非 final 的 class，满足不了在别的泛型里写 `Self` 的要求（`GenericSpecializer<Self>`、`SwiftDeclarationIndexer<Self>`）。改成两个枚举 `RuntimeLoadedImageReading` / `RuntimeFileImageReading` 实现同一协议，各带关联类型 `MachO`；泛型类型改为对策略泛型、体内 `typealias MachO = Reading.MachO`，方法体不用动。详细设计 §2、§3 已改成实际的样子。 |
+| 2026-11-03 | 离线的 Swift 父类链停在第一个 ObjC 父类 | `RuntimeEngine.hierarchy(for:)` 在进程内实例化 metadata 一路走到 `NSObject`；离线时只能读各镜像索引时记下的父类名，走到第一个 ObjC 父类（记它的运行时名字）或尚未索引的镜像里的 Swift 类为止。Inspector 的父类时间线走的是 `superclassChain`，不受影响。 |

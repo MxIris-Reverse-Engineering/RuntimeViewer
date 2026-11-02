@@ -70,7 +70,10 @@ public protocol SourceCatalog: Sendable {
 // MARK: - Deriving source descriptions from engines
 
 extension SourceKind {
-    public init(source: RuntimeSource) {
+    /// The kind `source` is listed as, or `nil` for a source the command-line
+    /// tool does not serve: an offline file, which only the app opens and
+    /// whose engine the catalog leaves out.
+    public init?(source: RuntimeSource) {
         switch source {
         case .local:
             self = .local
@@ -84,6 +87,8 @@ extension SourceKind {
             self = .bonjour
         case .directTCP:
             self = .mirrored
+        case .file:
+            return nil
         }
     }
 }
@@ -103,7 +108,7 @@ extension SourceSelector {
                 return .attachedProcess(processIdentifier: processIdentifier)
             }
             return .engine(identifier: engine.engineID)
-        case .bonjour, .mirrored, .injectedDevice:
+        case .bonjour, .mirrored, .injectedDevice, nil:
             // By engine identifier, not by pid. The pid is the device's, and
             // `pid:<n>` means a process on this Mac — resolving one to the
             // other would attach to whatever happens to hold that pid here.
@@ -113,11 +118,14 @@ extension SourceSelector {
 }
 
 extension SourceInfo {
-    public init(engine: RuntimeEngine) {
+    /// `nil` for an engine on a source the command-line tool does not serve;
+    /// see `SourceKind.init(source:)`.
+    public init?(engine: RuntimeEngine) {
+        guard let kind = SourceKind(source: engine.source) else { return nil }
         self.init(
             engineIdentifier: engine.engineID,
             displayName: engine.source.description,
-            kind: SourceKind(source: engine.source),
+            kind: kind,
             selector: .selector(for: engine),
             stableIdentity: engine.bookmarkScope.identityRawValue,
             isConnected: engine.state.isReady
@@ -131,7 +139,7 @@ extension SourcesResult {
             SourceHost(
                 hostIdentifier: section.hostIdentifier,
                 hostName: section.hostName,
-                sources: section.engines.map(SourceInfo.init)
+                sources: section.engines.compactMap(SourceInfo.init(engine:))
             )
         })
     }
@@ -162,8 +170,13 @@ public final class RuntimeEngineManagerCatalog: SourceCatalog {
             attachedEngines: engineManager.attachedRuntimeEngines,
             bonjourEngines: engineManager.bonjourRuntimeEngines,
             mirroredEngines: engineManager.mirroredEngines.values.elements,
-            sections: engineManager.runtimeEngineSections.map { section in
-                SourceCatalogSection(hostIdentifier: section.hostID, hostName: section.hostName, engines: section.engines)
+            // Offline files are the app's own: the command-line tool neither
+            // lists nor reaches them (the offline mode proposal's first
+            // release leaves them out).
+            sections: engineManager.runtimeEngineSections.compactMap { section in
+                let engines = section.engines.filter { SourceKind(source: $0.source) != nil }
+                guard !engines.isEmpty else { return nil }
+                return SourceCatalogSection(hostIdentifier: section.hostID, hostName: section.hostName, engines: engines)
             },
             catalystHelperFailure: catalystHelperFailure
         )

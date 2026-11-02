@@ -307,7 +307,9 @@ public final class EngineManagerSourceResolver: SourceResolving {
         case .missing(let failure):
             throw failure
         }
-        let kind = SourceKind(source: engine.source)
+        guard let kind = SourceKind(source: engine.source) else {
+            throw CommandFailure(code: .invalidArgument, message: "'\(selector)' is not a source the command-line tool serves.")
+        }
         switch kind {
         case .attachedXPC, .attachedSocket, .bonjour, .injectedDevice:
             break

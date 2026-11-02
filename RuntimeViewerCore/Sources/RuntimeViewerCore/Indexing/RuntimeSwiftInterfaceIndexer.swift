@@ -85,7 +85,8 @@ struct RuntimeSwiftRefinedProtocol: Hashable, Sendable {
 /// are immutable `let`s and the reverse tables plus `subIndexers` are all
 /// `@Mutex`-guarded — mirroring `RuntimeObjCInterfaceIndexer`.
 @dynamicMemberLookup
-final class RuntimeSwiftInterfaceIndexer<MachO: RuntimeIndexableMachO>: @unchecked Sendable {
+final class RuntimeSwiftInterfaceIndexer<Reading: RuntimeImageReading>: @unchecked Sendable {
+    typealias MachO = Reading.MachO
 
     // MARK: - Indexed Image
 

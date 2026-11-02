@@ -37,10 +37,6 @@ enum SwiftDefinedObjCProtocols {
         return names
     }
 
-    /// The runtime names of the Swift-defined protocols `machO` lists.
-    static func names<MachO: RuntimeIndexableMachO>(in machO: MachO) -> Set<String> {
-        names(of: MachO.objcProtocolRecords(in: machO))
-    }
 
     private static func isSwiftDefined(name: String, flags: UInt32) -> Bool {
         flags & isSwiftFlag != 0 || isLegacySwiftProtocolName(name)

@@ -112,7 +112,7 @@ struct RuntimeInspectorHierarchyTests {
         ]
     )
     func objcRuntimeNameIsShownDemangled(_ argument: (runtimeName: String, displayName: String)) {
-        #expect(RuntimeTypeRelationshipsResolver<MachOImage>.displayName(ofObjCClassNamed: argument.runtimeName) == argument.displayName)
+        #expect(RuntimeTypeRelationshipsResolver<RuntimeLoadedImageReading>.displayName(ofObjCClassNamed: argument.runtimeName) == argument.displayName)
     }
 
     @Test("a superclass no indexed image defines keeps its name, unresolved")

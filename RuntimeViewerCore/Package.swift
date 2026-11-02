@@ -250,6 +250,7 @@ let package = Package(
                 .product(name: "SwiftDeclaration", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclarationRendering", package: "MachOSwiftSection"),
                 .product(name: "SwiftIndexing", package: "MachOSwiftSection"),
+                .product(name: "MachODependencies", package: "MachOSwiftSection"),
                 .product(name: "SwiftPrinting", package: "MachOSwiftSection"),
                 .product(name: "SwiftSpecialization", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),

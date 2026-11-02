@@ -84,8 +84,8 @@ public actor LocalSourceResolver: SourceResolving {
     public func listSources() async -> SourcesResult {
         let source: SourceInfo
         let hostIdentifier: String
-        if let engine {
-            source = SourceInfo(engine: engine)
+        if let engine, let engineSource = SourceInfo(engine: engine) {
+            source = engineSource
             hostIdentifier = engine.hostInfo.hostID
         } else {
             // Not started yet: describe what the first command will bring up

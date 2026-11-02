@@ -249,7 +249,7 @@ struct SwiftExportedDeclarationsTests {
     /// how every declaration in those dependencies prints.
     private static func fixtureCorpusEntries() async throws -> [RuntimeInterfaceCorpusEntry] {
         let (engine, objects) = try await sharedBundle.value
-        let section = try #require(await engine.swiftSectionFactory.existingSection(for: testBundlePath) as? RuntimeSwiftSection<MachOImage>)
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: testBundlePath) as? RuntimeSwiftSection<RuntimeLoadedImageReading>)
         var prints: [RuntimeInterfaceCorpusPrint] = []
         for root in objects where root.displayName.contains("ExportedDeclarations") {
             for outcome in try await section.corpusPrints(of: root.corpusFamily, transformer: .default) {

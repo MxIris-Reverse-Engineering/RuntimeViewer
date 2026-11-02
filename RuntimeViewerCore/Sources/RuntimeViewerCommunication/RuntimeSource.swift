@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 extension RuntimeSource {
     /// The business role in the communication.
@@ -147,6 +147,20 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
     ///   - role: Whether this endpoint is business client or business server.
     case injectedTCP(name: String, host: String, port: UInt16, identifier: Identifier, role: Role)
 
+    /// A Mach-O file, a bundle or a dyld shared cache on disk, read without
+    /// running it — offline mode.
+    ///
+    /// The identity is `url` alone, standardized when the file is opened;
+    /// `name` is what menus show, and like every other case's it takes no part
+    /// in equality. Where the file's dependencies come from and which slice of
+    /// a fat file is read are configuration, not identity, and travel to the
+    /// process reading it in its launch payload instead.
+    ///
+    /// No transport and no role: an engine on this source reads the file in its
+    /// own process, or — in the app — forwards to the process that does, which
+    /// a credential names.
+    case file(name: String, url: URL)
+
     public var description: String {
         switch self {
         case .local: return "My Mac"
@@ -155,6 +169,7 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
         case .localSocket(let name, _, _): return name
         case .directTCP(let name, _, _, _): return name
         case .injectedTCP(let name, _, _, _, _): return name
+        case .file(let name, _): return name
         }
     }
 
@@ -167,7 +182,7 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
 
     public var remoteRole: Role? {
         switch self {
-        case .local: return nil
+        case .local, .file: return nil
         case .remote(_, _, let role),
              .bonjour(_, _, let role),
              .localSocket(_, _, let role),
@@ -203,6 +218,8 @@ extension RuntimeSource: Equatable {
             return leftHost == rightHost && leftPort == rightPort && leftRole == rightRole
         case (.injectedTCP(_, let leftHost, let leftPort, let leftIdentifier, let leftRole), .injectedTCP(_, let rightHost, let rightPort, let rightIdentifier, let rightRole)):
             return leftHost == rightHost && leftPort == rightPort && leftIdentifier == rightIdentifier && leftRole == rightRole
+        case (.file(_, let leftURL), .file(_, let rightURL)):
+            return leftURL == rightURL
         default:
             return false
         }
@@ -237,6 +254,9 @@ extension RuntimeSource: Hashable {
             hasher.combine(port)
             hasher.combine(identifier)
             hasher.combine(role)
+        case .file(_, let url):
+            hasher.combine(6)
+            hasher.combine(url)
         }
     }
 }
@@ -263,7 +283,10 @@ extension RuntimeSource {
         switch self {
         case .local, .remote, .bonjour, .localSocket, .directTCP:
             return true
-        case .injectedTCP:
+        // `file` for the same reason, and because a file is opened by the app
+        // that shows it: another Mac has no use for the engine, and reading the
+        // file there would need the file.
+        case .injectedTCP, .file:
             return false
         }
     }
@@ -289,6 +312,8 @@ extension RuntimeSource {
             // client returns the bare identifier because a caller parses a pid
             // back out of it. Nothing parses this one — it is a claim token.
             return role.isClient ? "injectedTCP.\(claimToken.rawValue)" : "injectedTCPServer.\(claimToken.rawValue)"
+        case .file(_, let url):
+            return "file.\(url.path)"
         }
     }
 }

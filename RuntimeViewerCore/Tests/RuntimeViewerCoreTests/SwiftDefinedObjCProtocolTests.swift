@@ -78,7 +78,7 @@ struct SwiftDefinedObjCProtocolTests {
     // MARK: - Reaching RuntimeObject
 
     /// The section of this test bundle, where the two fixtures are declared.
-    private func testBundleSection() async throws -> RuntimeObjCSection<MachOImage> {
+    private func testBundleSection() async throws -> RuntimeObjCSection<RuntimeLoadedImageReading> {
         var information = Dl_info()
         try #require(dladdr(#dsohandle, &information) != 0)
         let path = String(cString: try #require(information.dli_fname))
