@@ -123,13 +123,19 @@ struct CommentDecorationTests {
 
     /// What a copy writes is the source, not what the editor draws: the markers and punctuation
     /// the decorations hide come back, and so do the rows a fold hides, so a copied comment is a
-    /// comment again — as plain text and as rich text alike. Written to a pasteboard of the
-    /// test's own, never the one the user copies with.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded), arguments: [false, true])
-    func aCopyIsTheSourceAsPrinted(startingCollapsed: Bool) throws {
+    /// comment again — as plain text and as rich text alike. A raised line copies as it was
+    /// printed too: its carrier is a space of the source. Written to a pasteboard of the test's
+    /// own, never the one the user copies with.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded), arguments: [false, true], [false, true])
+    func aCopyIsTheSourceAsPrinted(startingCollapsed: Bool, raisingTagLines: Bool) throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: startingCollapsed))
         harness.layout()
+        if raisingTagLines {
+            let commentFont = try Self.renderedFont(of: "Field offset", onLine: 1, in: harness)
+            harness.applyCommentTagAppearance(TestCommentTagAppearance(tagLineSpacing: 4, commentFont: commentFont))
+            harness.layout()
+        }
 
         #expect(NSApplication.shared.sendAction(#selector(NSText.selectAll(_:)), to: harness.editorView, from: nil))
         let requestor = try #require(harness.editorView as? NSServicesMenuRequestor)
@@ -192,6 +198,100 @@ struct CommentDecorationTests {
         #expect(narrowWidths.count == 2 && wideWidths.count == 2, "\(narrowWidths) → \(wideWidths)")
         for (narrowWidth, wideWidth) in zip(narrowWidths, wideWidths) {
             #expect(abs(wideWidth - narrowWidth - 4) < 0.5, "\(narrowWidth) → \(wideWidth)")
+        }
+    }
+
+    // MARK: - Raised Lines
+
+    /// A line that holds tags is taller than its text by the spacing, and the lines below it move
+    /// down by as much; a code line keeps its height. Without spacing the lines are as they were.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aLineThatHoldsTagsIsTallerByTheSpacing() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
+        harness.layout()
+        let commentFont = try Self.renderedFont(of: "Address", onLine: 1, in: harness)
+        let plainRows = try (0 ... 4).map { try Self.rowFrame(ofLine: $0, in: harness) }
+
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(tagLineSpacing: 4, commentFont: commentFont))
+        harness.layout()
+        let raisedRows = try (0 ... 4).map { try Self.rowFrame(ofLine: $0, in: harness) }
+
+        for line in [0, 3, 4] {
+            #expect(abs(raisedRows[line].height - plainRows[line].height) < 0.5, "code line \(line): \(plainRows[line]) → \(raisedRows[line])")
+        }
+        for line in [1, 2] {
+            #expect(abs(raisedRows[line].height - plainRows[line].height - 4) < 0.5, "tag line \(line): \(plainRows[line]) → \(raisedRows[line])")
+        }
+        let plainDrop = abs(plainRows[3].midY - plainRows[0].midY)
+        let raisedDrop = abs(raisedRows[3].midY - raisedRows[0].midY)
+        #expect(abs(raisedDrop - plainDrop - 8) < 0.5, "the line under both tag lines moved \(raisedDrop - plainDrop), not 8")
+
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(tagLineSpacing: 0, commentFont: commentFont))
+        harness.layout()
+        let restoredRows = try (0 ... 4).map { try Self.rowFrame(ofLine: $0, in: harness) }
+        for (restoredRow, plainRow) in zip(restoredRows, plainRows) {
+            #expect(abs(restoredRow.height - plainRow.height) < 0.5 && abs(restoredRow.minY - plainRow.minY) < 0.5, "\(plainRow) → \(restoredRow)")
+        }
+    }
+
+    /// The spacing goes around a tag, not into it: on a raised line a tag is as tall and as wide
+    /// as on a plain one, sits in the middle of its line, and keeps the spacing from the tag on
+    /// the next line.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aTagOnARaisedLineKeepsTheSizeAndPlaceOfItsText() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
+        harness.layout()
+        let commentFont = try Self.renderedFont(of: "Address", onLine: 1, in: harness)
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(commentFont: commentFont))
+        harness.layout()
+        let plainTags = Self.shownShapeLayers(in: harness).map(\.frame).sorted { $0.midY < $1.midY }
+
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(tagLineSpacing: 4, commentFont: commentFont))
+        harness.layout()
+        let raisedTags = Self.shownShapeLayers(in: harness).map(\.frame).sorted { $0.midY < $1.midY }
+        let raisedRows = try [1, 2].map { try Self.rowFrame(ofLine: $0, in: harness) }
+
+        try #require(plainTags.count == 2 && raisedTags.count == 2, "\(plainTags) → \(raisedTags)")
+        for (plainTag, raisedTag) in zip(plainTags, raisedTags) {
+            #expect(abs(raisedTag.height - plainTag.height) < 0.5 && abs(raisedTag.width - plainTag.width) < 0.5, "\(plainTag) → \(raisedTag)")
+            #expect(abs(raisedTag.minX - plainTag.minX) < 0.5, "the raise took width: \(plainTag) → \(raisedTag)")
+            let row = try #require(raisedRows.first { $0.minY <= raisedTag.midY && raisedTag.midY <= $0.maxY }, "no row under \(raisedTag)")
+            #expect(abs(raisedTag.midY - row.midY) < 0.5, "\(raisedTag) is off the middle of its row \(row)")
+        }
+        let plainGap = plainTags[1].minY - plainTags[0].maxY
+        let raisedGap = raisedTags[1].minY - raisedTags[0].maxY
+        #expect(abs(raisedGap - plainGap - 4) < 0.5, "the gap between the tags went from \(plainGap) to \(raisedGap)")
+    }
+
+    /// A line number stays level with its text when its line is raised. The gutter centres each
+    /// number on the first row of its line — 26.6's `SourceEditorGutterMarginContentView.layoutLineNumberForLine(_:with:)`
+    /// (0x1D069C) places it at the middle of `layoutFrameForFirstFragmentOfVisibleLine(_:includeLineSpacing:)`
+    /// (closure at 0x1D7B28) — and the raise is carried at the start of the line and splits evenly
+    /// around the text, so the middle of the row is still the middle of the text.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aRaisedLineKeepsItsNumberLevelWithItsText() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.showLineNumbers()
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
+        harness.layout()
+        let commentFont = try Self.renderedFont(of: "Address", onLine: 1, in: harness)
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(tagLineSpacing: 4, commentFont: commentFont))
+        harness.layout()
+
+        // As plain views: AppKit's own properties read through a SourceEditor class call its
+        // metadata accessor, which the stubs the tests link do not export.
+        let editorView: NSView = harness.editorView
+        let contentView: NSView = harness.editorView.contentView
+        let rootLayer = try #require(editorView.layer, "the editor view has no layer")
+        let contentLayer = try #require(contentView.layer, "the content view has no layer")
+        let numberLayers = Self.lineNumberLayers(in: harness.editorView)
+        try #require(numberLayers.count >= 5, "\(numberLayers.count) line number layers")
+        let numberMidYs = numberLayers.map { $0.convert($0.bounds, to: rootLayer).midY }
+        for line in 0 ... 4 {
+            let rowMidY = contentLayer.convert(try Self.rowFrame(ofLine: line, in: harness), to: rootLayer).midY
+            #expect(numberMidYs.contains { abs($0 - rowMidY) <= 1 }, "no number level with line \(line) at \(rowMidY): \(numberMidYs.sorted())")
         }
     }
 
@@ -351,11 +451,41 @@ struct CommentDecorationTests {
 
     // MARK: - Helpers
 
+    /// The font the editor draws the first occurrence of `text` in, on a rendered line — what a
+    /// raise has to be measured against.
+    private static func renderedFont(of text: String, onLine line: Int, in harness: SourceEditorTestHarness) throws -> NSFont {
+        let renderedLine = try #require(harness.editorView.layoutManager.lineLayerForVisibleLine(line)).attributedString
+        let range = (renderedLine.string as NSString).range(of: text)
+        try #require(range.location != NSNotFound, "\(text.debugDescription) is not in \(renderedLine.string.debugDescription)")
+        return try #require(renderedLine.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)
+    }
+
+    /// A line's row as a selection of its first column covers it, in the content view's
+    /// coordinates. Every line of the fixtures starts with a drawn column.
+    private static func rowFrame(ofLine line: Int, in harness: SourceEditorTestHarness) throws -> CGRect {
+        let range = SourceEditorPosition(line: line, col: 0) ..< SourceEditorPosition(line: line, col: 1)
+        let rects = harness.editorView.contentView.selectionRects(for: range, coalesceInteriorRects: true, includeLineSpacing: false)
+        return try #require(rects.first?.rect, "no selection rect on line \(line)")
+    }
+
     /// The colour the editor draws the first occurrence of `text` in, on a rendered line.
     private static func foregroundColor(of text: String, in renderedLine: NSAttributedString) -> NSColor? {
         let range = (renderedLine.string as NSString).range(of: text)
         guard range.location != NSNotFound else { return nil }
         return renderedLine.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor
+    }
+
+    /// The layers the gutter draws its numbers in: the text layers under its margin content view.
+    private static func lineNumberLayers(in editorView: NSView) -> [CALayer] {
+        func gutterContentViews(in view: NSView) -> [NSView] {
+            let own = String(describing: type(of: view)).contains("GutterMarginContentView") ? [view] : []
+            return own + view.subviews.flatMap(gutterContentViews(in:))
+        }
+        func textLayers(in layer: CALayer) -> [CALayer] {
+            let own = !layer.isHidden && String(describing: type(of: layer)).contains("TextLayer") ? [layer] : []
+            return own + (layer.sublayers ?? []).flatMap(textLayers(in:))
+        }
+        return gutterContentViews(in: editorView).compactMap(\.layer).flatMap(textLayers(in:))
     }
 
     private static func shownShapeLayers(in harness: SourceEditorTestHarness) -> [CAShapeLayer] {
@@ -503,7 +633,8 @@ private final class TestCommentDecorations: NSObject, SourceEditorBridgingCommen
     }
 }
 
-/// A tag appearance with plain fills, so a test sets only what it looks at.
+/// A tag appearance with plain fills, so a test sets only what it looks at. No line is raised
+/// unless a test asks for it, and then against the font the editor actually draws comments in.
 private final class TestCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
     let valueColor = NSColor.textColor
     let typeColor = NSColor.textColor
@@ -512,13 +643,23 @@ private final class TestCommentTagAppearance: NSObject, SourceEditorBridgingComm
     let cornerRadius: CGFloat = 100
     let strokeWidth: CGFloat
     let horizontalPadding: CGFloat
+    let tagLineSpacing: CGFloat
+    let commentFont: NSFont
 
     private let labelColors: [SourceEditorBridgingCommentTagStyle: NSColor]
 
-    init(labelColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:], strokeWidth: CGFloat = 0, horizontalPadding: CGFloat = 4) {
+    init(
+        labelColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:],
+        strokeWidth: CGFloat = 0,
+        horizontalPadding: CGFloat = 4,
+        tagLineSpacing: CGFloat = 0,
+        commentFont: NSFont = .monospacedSystemFont(ofSize: 12, weight: .regular)
+    ) {
         self.labelColors = labelColors
         self.strokeWidth = strokeWidth
         self.horizontalPadding = horizontalPadding
+        self.tagLineSpacing = tagLineSpacing
+        self.commentFont = commentFont
     }
 
     func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {

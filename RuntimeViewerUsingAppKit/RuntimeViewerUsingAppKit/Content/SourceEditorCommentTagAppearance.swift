@@ -21,11 +21,19 @@ final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingComm
     /// Wider than a rounded rectangle needs, so the text keeps clear of the round ends.
     let horizontalPadding: CGFloat = 6
 
+    /// Two points above and two below every line that holds tags. Without it a tag filled its
+    /// line all but a point each way, so the tags of a stored property's two comment lines read
+    /// as one block and pressed against the code above and below.
+    let tagLineSpacing: CGFloat = 4
+
+    let commentFont: NSFont
+
     private let fillColors: [SourceEditorBridgingCommentTagStyle: NSColor]
     private let strokeColors: [SourceEditorBridgingCommentTagStyle: NSColor]
     private let labelColors: [SourceEditorBridgingCommentTagStyle: NSColor]
 
-    init(commentColor: NSColor, typeColor: NSColor, textColor: NSColor, isDark: Bool) {
+    init(commentColor: NSColor, commentFont: NSFont, typeColor: NSColor, textColor: NSColor, isDark: Bool) {
+        self.commentFont = commentFont
         var fillColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
         var strokeColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
         var labelColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]

@@ -89,6 +89,19 @@ final class SourceEditorTestHarness {
         bridge.applyCommentTagAppearance(appearance)
     }
 
+    /// Turns the gutter's line numbers on, the way the content pane does when Settings shows them.
+    func showLineNumbers() {
+        bridge.applyDisplayOptions(
+            showsLineNumbers: true,
+            showsFoldingRibbon: false,
+            showsStickyHeaders: false,
+            showsMinimap: false,
+            showsScopeGuides: false,
+            showsInvisibles: false,
+            showsMarkSeparators: false
+        )
+    }
+
     func setSource(_ source: String, commentDecorations: SourceEditorBridgingCommentDecorations? = nil) {
         lineCount = source.components(separatedBy: "\n").count
         bridge.setSource(

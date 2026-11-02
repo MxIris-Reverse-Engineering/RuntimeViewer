@@ -63,7 +63,8 @@ protocol SourceEditorBridging: NSObjectProtocol {
 
     /// How comment tags are drawn. Called with the theme, and again whenever it or the
     /// appearance changes; until the first call tags are drawn in fallbacks derived from the
-    /// label colours. A change of padding lays the decorated text out again.
+    /// label colours. A change of padding, line spacing or comment font lays the decorated text
+    /// out again.
     func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance)
 
     /// The editor view's own background, which is what shows past the end of the document.
@@ -248,6 +249,16 @@ protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
 
     /// Between a tag's text and its edge, on each side.
     var horizontalPadding: CGFloat { get }
+
+    /// How much taller a line that holds tags is than the lines around it, half above its text
+    /// and half below, so that the tags on neighbouring lines, and the code next to them, keep
+    /// apart. Zero leaves every line as tall as the text makes it.
+    var tagLineSpacing: CGFloat { get }
+
+    /// The font the editor draws comments in. A raised line is measured against it: the line is
+    /// as tall as this font's text plus ``tagLineSpacing``, and a tag is drawn as tall as the
+    /// text, not as the line.
+    var commentFont: NSFont { get }
 }
 
 /// What a tag says, which picks its colours.

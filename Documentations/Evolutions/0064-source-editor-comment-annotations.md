@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-10-31
-- **最后更新**: 2026-11-01
+- **最后更新**: 2026-11-02
 - **所属愿景**: [自建代码视图引擎](../Visions/CodeViewEngine.md)
 - **关联提案**: [0009](0009-content-editor-engine-selection.md)（接入 SourceEditor）；上游三篇见「方案 · 一」
 - **实现分支 / PR**: `feature/source-editor-comment-annotations`（worktree `.worktrees/RuntimeViewer-SourceEditorCommentAnnotations`）
@@ -111,6 +111,7 @@ SourceEditor UUID `6E5DBC54-96DD-3101-A63E-CDCE9E3B0572`）的反编译，地址
 | 胶囊底与展开三角 | 自己的一个 `LayoutVisualization`；图层是自己的 `CAShapeLayer`，放进 `contentView.underlayLayer`，矩形取 `contentView.selectionRects(for:coalesceInteriorRects:includeLineSpacing:)` | 三个钩子在每个布局 pass 都会回调（`layoutContentView`，0x21B7E8）；框架自己的 `RangeHighlightLayoutVisualization` 就是这样画的（0x8A13C / 0x8AC34）。没用框架的 `SourceEditorRangeHighlightLayer`：它的形状与圆角没有导出的 setter（`init()`，0x254528），自己画更简单，圆角、描边也能随意定，stub 也少一个类 |
 | 收起大纲节点和 case 说明块 | `FoldingController.fold(_:animate:completion:)` / `unfold(_:restoreNestedFolds:animate:)` | 任意范围都能折，`fold(ranges:)`（0xDA140）不查 `foldableRanges`；`fold(lineRanges:)` 会把首行一起藏掉，所以从「节点行的行末」折到「子树末行的行末」；被折那行的行尾必定出现「…」块（`makeEllipsisLayer`，0xD0454；单击选中、双击展开），没找到关掉它的开关；`stateDictionaryForSaving` / `restore(from:)`（0xDD7A4 / 0xDDC08）会带上这些折叠，现有的 `FoldStateCache` 照常记住 |
 | 点 ▸ 展开、收起 | `SourceEditorViewEventConsumer` | `mouseDown(with:)`（0x328208）先逐个问 consumer，命中即止；`positionAtPoint`（0x434E8C）。点下去时三角转四分之一圈（0.18 秒），背后一个圆形按下效果淡出（0.3 秒）；三角因此只画一个 ▸，展开时靠旋转变成 ▾ |
+| 带标签的行加高，空出的高度上下各一半 | `HiddenTextOverrideProvider` 把注释符号后那个原本藏起的空格放回来，`TextAttributeOverrideProvider` 给它挂一个不占宽度、上伸与下伸都比注释字体多出一半间距的 CoreText run delegate，颜色设为透明 | 这一行的依据是 26.6（UUID `CBBA3D3B-632D-38EC-9BCD-545B1176BA82`）的反编译加 27.2 上的测试。框架没有加高某一行的接口：`setLineExpansionEffectForLine(_:height:)`（0x6B4A4）只把高度记下再请求排版，只在 `layoutContentForLine` 里读（0x750C4），而且只有比行本身矮时才生效——把行截短，不到 0.5 就藏起，是插入行的展开动画用的。行高由 `CoreTextLineLayout.layout(boundsWidth:minLineHeight:)` 用 `CTLineGetTypographicBounds` 量出（0xF878），所以一个更高的零宽字符就能撑高整行，文字落在上伸与下伸之间；行高取上伸加下伸之和上取整。27.2 上由 `SourceEditorOverlayBehaviorTests` 的 `aTallerZeroWidthRunRaisesItsLineAroundItsText` 与 `aLineIsAsTallAsItsFontsAscentPlusDescentRoundedUp` 实测 |
 | 三角上的指针是箭头 | `CursorRectOverrideProvider`，用 `SourceEditorView.addCursorRectOverrideProvider(_:)` 注册 | `resetCursorRects()`（0x441A90）先在 `contentRectForCursor()` 上铺 I-beam，再逐个问 provider，把回答在视图自己身上 `addCursorRect(_:cursor:)`，所以矩形用 `SourceEditorView` 的坐标、盖过 I-beam；`contentRectForCursor()`（0x4220BC）是视图自身的固定区域，滚动时没人更新这些矩形，所以文字一滚动、三角一移位就调 `invalidateCursorRects()`（0x422084，即 `window.invalidateCursorRects(for:)`） |
 
 - **不用 `SourceEditorRangeHighlightController.highlight`**：每个高亮都注册一个 visualization 和一个
@@ -124,6 +125,16 @@ SourceEditor UUID `6E5DBC54-96DD-3101-A63E-CDCE9E3B0572`）的反编译，地址
   每类一个固定色相（地址蓝、偏移绿、布局紫、声明信息琥珀、警告橙红），填充浅色 7.5%、深色 11%，
   细边 30% / 36%，标签名用同色相深一档（深色外观里浅一档）；说明取主题的注释色；数值用正文色压到
   78% / 82%，主题的数字色在标签里太抢眼。留白是列位移，烤在排版表里，变了就按已载入的装饰重建。
+- 带标签的行比文字高 4 pt，上下各 2 pt（`tagLineSpacing`），胶囊和三角仍按文字的高度画，空出的高度
+  落在胶囊外面。撑高的做法见上表：每一行注释的注释符号后都有一个原本藏起的空格，放回来挂上零宽的
+  run delegate。它的上伸与下伸取 App 传来的注释字体（`commentFont`，主题给注释的字体）的原值，各加
+  半个间距，不先取整：编辑器把上伸加下伸的和整个上取整当作行高（11 pt 的 SF Mono 是 10.63 + 2.32，
+  行高 13），先各自取整会让每一行多出 1 pt，第一版就这样多了。胶囊的高度按同样的和上取整来算。
+  行号不用另管：框架把行号竖直居中在每一行第一段的中线上（26.6 的
+  `SourceEditorGutterMarginContentView.layoutLineNumberForLine(_:with:)`，0x1D069C，量的是
+  `layoutFrameForFirstFragmentOfVisibleLine(_:includeLineSpacing:)`），撑高的字符就在行首，加出的
+  高度又平分在文字上下，行号仍与文字齐平。要不要放回那个空格也烤在排版表里，间距从无到有、从有到无
+  时重建；间距的大小或字体变了只换 run delegate，重排即可。还没收到 App 的外观时不加高。
 - 编辑器折行时，一个标签可能落在几行上。同一行内照旧取选区矩形；一旦跨行，选区在折行处会一直伸到
   视图边缘，所以改为逐列量、按行分组，每行画一个胶囊，行首行尾的空格不算。
 - 上面用到的接口在 26.6 与 27.2 都已导出（两版的 `nm -gU` 对照过），`Stubs/` 补的声明以 27.2 的导出
@@ -241,3 +252,4 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-10-31 | 三角上用箭头指针，点下去有反馈 | 用户的两个小要求：鼠标停在展开三角上时，指针要是普通箭头，不要文字输入的 I-beam；点击要有效果。指针用框架现成的 `CursorRectOverrideProvider`（反编译确认它的矩形是 `SourceEditorView` 坐标、加在 I-beam 之后，且滚动时框架不会替它更新，所以由装饰控制器在滚动和三角移位时自己作废），stub 补了这个协议、`CursorRectOverride` 与 `SourceEditorView` 的三个方法，`UsedSymbols.txt` 多了 7 个符号，26.6 与 27.2 都导出。点击效果选了与 macOS 大纲视图一致的三角转动，再加一个很淡的圆形按下效果，两者都很短，不挡操作。测试：`theTrianglesTakeTheArrowPointer` 把编辑器加的光标矩形读回来（临时替换它类上的 `addCursorRect(_:cursor:)`，AppKit 没有读回的接口），确认每个三角都盖着箭头；`clickingATriangleTurnsItAndShowsThePress` 确认点下去三角转到展开的角度、转动有动画、背后有一个在淡出的图层。 |
 | 2026-11-01 | 三个上游都进了各自的 `next`，抬 pin | MachOSwiftSection 的注释结构标记以 0084 落地（`1dcc0c08`），swift-semantic-string 发布 0.6.0（`next` 上 `f14caa48`），MachOObjCSection 的标记合进 `next` 并推送（`774b2baf`）。五个锁文件只改这三条 pin，其余不动；包的 edit 模式与临时 workspace 撤掉，改用默认的远程依赖、全新构建目录重跑全量验证：Core、Packages、命令行工具与 App 都编过，Distribution 的锁文件解析通过；全量测试只有满载下的几个计时类测试失败（交叉引用预先准备 2 个、批次取消 1 个、加载指示 100 ms 宽限 1 个），单独重跑全过，bridge 测试只剩基线就有的 2 个滚动条测试。 |
 | 2026-11-01 | 实现完成，落地编号 0064 | 落地前先把 `next` 合进功能分支，带进另一会话的「只看导出的 ObjC 声明」；`ContentTextViewModel` 的冲突按 `next` 的 Swift / ObjC 两侧判断改了 `showsExportedOnlyNote`，ObjC 对象被那个选项清空时的说明也画成说明标签。不另写使用指南或实现说明：用户可见的只有 Settings › Editor 的 Comment Tags 开关，设置页已有说明，机制与反编译依据都在本提案里；术语表新增「注释标签」与「注释结构」两条。 |
+| 2026-11-02 | 带标签的行加高 4 pt，上下各 2 pt，胶囊大小不变 | 用户实机看了觉得标签叠得太密、干扰正文。原因是胶囊只比整行矮 2 pt：存储属性上方的「字段偏移」与「Type Layout」两行标签几乎连成一块，也贴着上下的代码；而 13 pt 字号的一行只有 16 pt，字本身就占约 12 pt，同样字号下胶囊再缩就压到字。给了三个方向：只加高标签行、所有行加大行距、标签字号调小一号，用户选只加高标签行，代码行不变。原想用框架的 `setLineExpansionEffectForLine(_:height:)`，反编译发现它只能把行压矮，改用零宽 run delegate 撑高（依据见「方案 · 四」的表）。第一版把字体的上伸与下伸各自上取整再交给 run delegate，测出每行多高了 1 pt：编辑器是把两者之和整个上取整，改成传原值后正好高出间距。测试：`SourceEditorOverlayBehaviorTests` 新增 2 个，钉住零宽 run delegate 撑高整行、文字居中、不占宽度，以及行高等于字体上伸加下伸之和上取整（12 到 18 pt 五个字号）；`CommentDecorationTests` 新增 3 个，覆盖带标签的行高出间距、下面的行跟着下移、去掉间距后复原，胶囊的大小与横向位置不变、居中、相邻两行标签的间隔多出 4 pt，以及加高的行行号仍与文字齐平；复制测试补了加高的情形，复制出的仍是原文。`Stubs/VerifyAcrossXcodes.swift` 的探针外观带上 4 pt 间距，26.6 与 27.2 都走一遍加高的排版。 |
