@@ -280,8 +280,12 @@ struct CommentDecorationTests {
         harness.applyCommentTagAppearance(TestCommentTagAppearance(tagLineSpacing: 4, commentFont: commentFont))
         harness.layout()
 
-        let rootLayer = try #require(harness.editorView.layer, "the editor view has no layer")
-        let contentLayer = try #require(harness.editorView.contentView.layer, "the content view has no layer")
+        // As plain views: AppKit's own properties read through a SourceEditor class call its
+        // metadata accessor, which the stubs the tests link do not export.
+        let editorView: NSView = harness.editorView
+        let contentView: NSView = harness.editorView.contentView
+        let rootLayer = try #require(editorView.layer, "the editor view has no layer")
+        let contentLayer = try #require(contentView.layer, "the content view has no layer")
         let numberLayers = Self.lineNumberLayers(in: harness.editorView)
         try #require(numberLayers.count >= 5, "\(numberLayers.count) line number layers")
         let numberMidYs = numberLayers.map { $0.convert($0.bounds, to: rootLayer).midY }
