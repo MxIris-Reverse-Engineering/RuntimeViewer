@@ -51,7 +51,7 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 ### 4. 进程与传输
 
 - **「My Mac」已在进程外**：App 的 `RuntimeEngine.local` 带着 `.xpcService(.bundleIdentifier(…))` 凭证连内嵌的 `RuntimeViewerLocalRuntimeService`（`RuntimeEngine.swift:57-63,347-358`）；service 侧是 `RuntimeLocalRuntimeServiceHost`：先建好进程内引擎、登记命令表，再激活监听（`LocalRuntimeService/RuntimeLocalRuntimeServiceHost.swift`）。监听方只有一个 peer 槽位，后来的连接顶替先来的。
-- **普通 XPC service 默认每个 App 只有一个进程**。要「每个文件一个进程」，Apple 自己的做法是 WebKit：service 的 `Info.plist` 在 `XPCService` 里设 `_MultipleInstances = true`（另有 `ServiceType = Application`、`JoinExistingSession = true`、`_ProcessType = App`，`/Volumes/AppleOSS/WebKit/Source/WebKit/WebProcess/EntryPoint/Cocoa/XPCService/WebContentService/Info-OSX.plist:43-52`），App 每次启动一个进程前 `uuid_generate`、`xpc_connection_set_oneshot_instance(connection, uuid)`，再用 `xpc_connection_set_bootstrap` 把启动参数交给新进程（`/Volumes/AppleOSS/distribution-macOS/WebKit/Source/WebKit/UIProcess/Launcher/cocoa/ProcessLauncherCocoa.mm:271-282`），service 侧用 `xpc_copy_bootstrap()` 读。本机 `libxpc` 导出 `_xpc_connection_set_instance`、`_xpc_connection_set_oneshot_instance`、`_xpc_connection_set_bootstrap`、`_xpc_copy_bootstrap`（`dyld_info -exports` 实测）。这些都是私有接口。
+- **普通 XPC service 默认每个 App 只有一个进程**。要「每个文件一个进程」，Apple 自己的做法是 WebKit：service 的 `Info.plist` 在 `XPCService` 里设 `_MultipleInstances = true`（另有 `ServiceType = Application`、`JoinExistingSession = true`、`_ProcessType = App`，`/Volumes/AppleOSS/WebKit/Source/WebKit/WebProcess/EntryPoint/Cocoa/XPCService/WebContentService/Info-OSX.plist:43-52`），App 每次启动一个进程前 `uuid_generate`、`xpc_connection_set_oneshot_instance(connection, uuid)`，再用 `xpc_connection_set_bootstrap` 把启动参数交给新进程（`/Volumes/AppleOSS/distribution-macOS/WebKit/Source/WebKit/UIProcess/Launcher/cocoa/ProcessLauncherCocoa.mm:271-282`），service 侧用 `xpc_copy_bootstrap()` 读。本机 `libxpc` 导出 `_xpc_connection_set_instance`、`_xpc_connection_set_oneshot_instance`、`_xpc_connection_set_bootstrap`、`_xpc_copy_bootstrap`（`dyld_info -exports` 实测）。这些都是私有接口。第 0 步实测：一次性实例可用，按实例传数据的 bootstrap 不可靠（§6）。
 - **SwiftyXPC 没有接口可用**：项目用的是用户自己的 fork（`MxIris-macOS-Library-Forks/SwiftyXPC` 0.5.105，本地 `/Volumes/Repositories/Private/Fork/Library/SwiftyXPC`）。它创建连接用 `xpc_connection_create(bundleID, nil)`，接收现成 `xpc_connection_t` 的构造器是 `internal`（`Sources/SwiftyXPC/XPCConnection.swift:99-125`），在创建与 `activate()` 之间没有钩子。这个 fork 已经用 `@_silgen_name` 手声明过一个 libxpc 私有函数（`xpc_connection_get_audit_token`），照样补上实例与 bootstrap 是小改动。
 - **复用本地运行时 service 的二进制不行**：它启动即建 `.local` 引擎；更要紧的是派生数据的「生产者」身份由镜像的 `LC_UUID` 算出（`RuntimeDerivedDataProducerIdentity.swift:15-74`），同一个二进制给本机 cache 打出的 `MachOImage` 语料与 `MachOFile` 语料会落进同一目录、互相删掉对方（`RuntimeDerivedDataStore.swift` 的 `removeOtherVariants` 每种数据每个镜像只留一个变体）。单独的 service target 自带不同的生产者身份。
 
@@ -63,18 +63,20 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 - **功能开关**：Attach to Process 经 `injectionTargetsRunOnThisMachine`（`RuntimeEngine+Injection.swift:72-80`，穷举 switch）；Load Frameworks… 没有任何开关（`MainViewModel.swift:244-258`）；交叉引用与 Find 语料在对端回答「未知命令」时把自己标为「此引擎不支持」，Report 显示对应行（`CrossReferencePreparationCoordinator.swift:404-408`、`FindCorpusCoordinator.swift:781-788`、`ReportTreeBuilder.swift:166`）。
 - **新 `RuntimeSource` case 的波及面**：`RuntimeSource` 自身六处、`RuntimeCommunicator.swift:75`、`RuntimeEngine+ImagePathCanonicalization.swift:88`、`RuntimeEngine+Injection.swift:73`、`RuntimeBookmarkScope.swift:356`（连同它的 `Identity` / `Kind` 与 `Settings+IndexingEngineReference.swift:49`）、CLI 的 `SourceCatalog.swift:74`、App 的 `Utils/RuntimeSource+.swift:13`，约十二处穷举 `switch`。`isRemote` 没有正式代码调用方。新 case 必须先**不可镜像**（`RuntimeSource.swift:262-269`），否则旧版本对端解码整张引擎列表失败。
 
-### 6. 待验证（推测，落地第 0 步先证实）
+### 6. 待验证（第 0 步已实测）
 
-1. **一次性实例 + bootstrap 在我们的 service 上可用**：`_MultipleInstances` 的内嵌 service 每次 `set_oneshot_instance` 都起一个新进程，`xpc_copy_bootstrap()` 在 service 的 `main` 里拿得到 App 给的数据；Developer ID 签名、hardened runtime、非沙盒下照常工作。
-2. **进程在 App 取消连接后退出**：service 侧在唯一的 peer 断开时自行 `exit(0)` 即可；还要确认 launchd 不会因为一次性实例退出而记为崩溃、反复拉起。
-3. **崩溃后的重连**：一次性实例退出后 launchd 不会重拉它，所以 client 连接的重连要换成「新 UUID + 同一份 bootstrap」重建连接（推测，需实测 `XPC_ERROR_CONNECTION_INTERRUPTED` 与 `INVALID` 在这里各在什么时候出现）。
-4. **「名字 → 镜像」表的代价**：只读每个镜像的 ObjC class / protocol 列表的名字建表，一份 iOS cache 要多久、多大（§3 的方案取决于它）。
+实验：一个最小 App 加内嵌的 `_MultipleInstances` service（`ServiceType = Application`，没有别的键），ad-hoc 签名、hardened runtime，2026-11-03 在 macOS 27.2 上运行；程序不进仓库，在 `/Volumes/DerivedData/Agents.noindex/claude/Experiments/OfflineModeXPCProbe/`。
+
+1. **一次性实例可用，bootstrap 不可靠**：两个连接各用新 UUID `set_oneshot_instance`，得到两个进程。但两个连接先后 `set_bootstrap`、之后才发第一条消息时，两个实例读到的都是后设的那一份：bootstrap 看来按 service 保存，实例启动时取当时的最新值，而实例要到第一条消息才启动。WebKit 也只把各进程相同的数据（`_CFBundleSetupXPCBootstrap`）放进 bootstrap，进程自己的数据放在连接后发的第一条消息里（`ProcessLauncherCocoa.mm:280-282,312,462`）。所以文件改由第一个 `hello` 带过去（详细设计 §4）。Developer ID 签名下的表现由第 5 步与人工验收确认。
+2. **进程在 App 取消连接后退出**：取消连接后 service 收到 peer 错误、自行 `exit(0)`，2 秒内进程消失；App 退出时实例随之退出，没有残留；没有观察到 launchd 重拉。
+3. **崩溃后的重连**：`kill -9` 实例后，连接先报 `XPC_ERROR_CONNECTION_INTERRUPTED`、紧接着报 `XPC_ERROR_CONNECTION_INVALID`，之后发的消息都回 `INVALID`，实例不会被重拉；换新 UUID 新建连接即得到新进程。所以重连要换一条新的 XPC 连接，不能像本地运行时 service 那样在原连接上补 `hello`。
+4. **「名字 → 镜像」表的代价**：不再需要。按名字找 ObjC 类改为查导出符号（决策日志 2026-11-03）。
 
 ## 提议方案
 
 1. **新来源**：`RuntimeSource.file(name:url:)`——身份只有文件的规范化 URL（`name` 只用于显示，和其它 case 一样不参与相等）。配对哪个 cache、胖文件取哪个切片都是**配置**，不进身份：换配对 cache 不会让书签、侧栏状态、Always Index 列表另起一份。
 2. **描述打开的东西**：Core 新增值类型 `RuntimeOfflineFile`——URL、内容种类（Mach-O 带切片 / bundle / dyld cache）、依赖 cache（本机的、某个 cache 文件、或没有）。它是 App → service 的启动参数、service 里引擎的构造参数、管理器里停放条目的配置。
-3. **每个文件一个进程**：新的内嵌 XPC service `RuntimeViewerOfflineService.xpc`，`_MultipleInstances`。App 侧引擎带一个 `.xpcService(.dedicatedInstance(bundleIdentifier:launchPayload:))` 凭证连接，连接层给每次启动生成实例 UUID、把 `RuntimeOfflineFile` 编码后作为 bootstrap；service 读出它、建进程内的文件引擎、复用 `RuntimeLocalRuntimeServiceHost` 提供服务，peer 断开即退出。XPC 的细节只在连接层与 service 入口两处（与 0037 定下的「XPC 逻辑不进 Engine、改动要聚合」一致）。
+3. **每个文件一个进程**：新的内嵌 XPC service `RuntimeViewerOfflineService.xpc`，`_MultipleInstances`。App 侧引擎带一个 `.xpcService(.dedicatedInstance(bundleIdentifier:launchPayload:))` 凭证连接，连接层给每次启动生成实例 UUID，`RuntimeOfflineFile` 编码后随第一个 `hello` 交给新实例；service 在回复这个 `hello` 之前建好进程内的文件引擎、经 `RuntimeLocalRuntimeServiceHost` 登记命令，peer 断开即退出。XPC 的细节只在连接层与 service 入口两处（与 0037 定下的「XPC 逻辑不进 Engine、改动要聚合」一致）。
 4. **Core 泛型化**：section、indexer 包装、工厂、关系解析器对 Mach-O 读取方式泛型；两种读取方式的差异（特化、Swift 父类链、ObjC 类名、`dlopen`）集中在一个内部协议的两份实现里（读取方式策略 `RuntimeImageReading`）；引擎经几个非泛型协议持有它们，本地臂的逻辑基本不挪窝。镜像从哪来由「镜像目录」决定：`RuntimeProcessImageCatalog`（就是今天的 dyld 逻辑）与 `RuntimeFileImageCatalog`（文件 / bundle / cache + 配对 cache）。
 5. **打开**：App 新增 `NSDocumentController` 子类拦截打开，`Info.plist` 声明 Mach-O 可执行文件、动态库与 bundle 为 Viewer 类型。选中的文件先判种类（读文件头 / bundle 结构），定配对 cache，交给管理器取得（或新建、或唤醒）对应引擎，再开一个直接落在该引擎上的新窗口，并记入 Open Recent。
 6. **引擎菜单**：离线引擎用专属的 `hostInfo`（`hostID` 固定，`hostName` 为「Offline Files」），单列一组；组末两项「Open File…」与「Dependency Cache ▸」（后者作用于当前窗口所在的离线引擎）。图标取文件自身的 Finder 图标（`.app` 就是 App 图标）。
@@ -253,30 +255,33 @@ extension RuntimeEngine {
 // RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift
 public enum RuntimeXPCServiceTarget: Sendable {
     case bundleIdentifier(String)
-    /// A process of its own for this connection: launchd starts a new instance of the embedded
-    /// service and hands it `launchPayload`, which the service reads with
-    /// `RuntimeXPCServiceListenerConnection.launchPayload`. The service declares
-    /// `_MultipleInstances`. Reattaching after the instance went away starts another instance
-    /// with the same payload.
+    /// A process of its own for this connection: launchd starts a new instance of the
+    /// embedded service, which declares `_MultipleInstances`, and the connection's first
+    /// `hello` hands it `launchPayload`. An instance that went away is never relaunched;
+    /// reattaching starts another one with the same payload.
     case dedicatedInstance(bundleIdentifier: String, launchPayload: Data)
     case anonymousListener(RuntimeXPCServiceEndpoint)
 }
 
 extension RuntimeXPCServiceListenerConnection {
-    /// The payload the app handed this instance when it started it; `nil` for a service
-    /// started any other way.
-    public static var launchPayload: Data? { get }
+    /// Runs `handler` with the payload of the first `hello` that carries one, before that
+    /// `hello` is answered: what the service must know before it can serve. A throwing
+    /// handler fails the `hello`. Handlers installed meanwhile reach the client already
+    /// attached, so the engine's command table can be registered here.
+    public func setLaunchHandler(_ handler: @escaping @Sendable (Data) async throws -> Void)
 }
 ```
 
-- client 连接为 `.dedicatedInstance` 每次建连生成 UUID，在 `activate()` 之前调 `set_oneshot_instance` 与 `set_bootstrap`（经 SwiftyXPC 新增的接口）。中断后的重连不再在同一条 XPC 连接上补 `hello`，而是用同一份 payload 新起一个实例；具体以第 0 步实测为准。
-- **SwiftyXPC（用户的 fork）**：`XPCConnection.ConnectionType` 加一种「带实例的 service 连接」，带 UUID 与 bootstrap；`XPCListener` 加读取 bootstrap 的静态属性。发 0.5.106，RuntimeViewer 把下限抬到它。私有函数照 fork 里 `xpc_connection_get_audit_token` 的写法用 `@_silgen_name` 声明。
+- **client**：`.dedicatedInstance` 每次建连生成 UUID，`activate()` 之前经 SwiftyXPC 新增的接口调 `set_oneshot_instance`；`hello` 带上 payload。实例退出后连接先报 `INTERRUPTED` 再报 `INVALID`（前期调研 §6），所以重连是换一条新连接（新 UUID）再说 `hello`：连接记下 owner 装过的处理器，在新连接激活前重装。重连的节奏照旧（1、2、4 秒，之后下一条消息再试一次），`stop()` 才是终点。
+- **listener**：`setLaunchHandler` 在第一个带 payload 的 `hello` 上跑一次，跑完才回复，跑失败就让这个 `hello` 失败。之后再来的 `hello` 只回复、不再跑：一个实例只服务一个文件。
+- **SwiftyXPC（用户的 fork）**：`XPCConnection.ConnectionType` 加「带实例的内嵌 service 连接」（bundle ID 加实例 UUID），私有函数照 fork 里 `xpc_connection_get_audit_token` 的写法用 `@_silgen_name` 声明；监听方改为在收到消息时查自己当前的处理器，而不是在接入连接时复制一份，于是激活后登记的处理器对已接入的连接也生效（连接自己登记的处理器优先）。这是增量行为：激活前登记的处理器，结果与今天相同。
+- **都能在进程内测**：匿名监听加一个只给测试用的入口，让 client 带 payload 连上它，「payload 随 `hello` 到达、launch handler 里登记的命令立刻可用、换新连接时重装处理器」都在一个进程里跑；只有一次性实例本身要真实的内嵌 service，归第 5 步与人工验收。
 - 引擎对此一无所知：它只看到连接的 `.connecting` / `.connected` / `.disconnected`。
 
 ### 5. 离线 service target
 
-- **`RuntimeViewerOfflineService`**（`RuntimeViewerUsingAppKit/RuntimeViewerOfflineService/`）：`main.swift`、`Info.plist`（`XPCService`：`ServiceType = Application`、`_MultipleInstances = true`；其余键照 WebKit 第 0 步验证后取舍）、entitlements（`disable-library-validation`，不开沙盒——要读任意路径的文件）。`Configurations/RuntimeViewerOfflineService/` 下 Shared 与三个配置的 xcconfig（`SKIP_INSTALL = YES`、hardened runtime、`MACOSX_DEPLOYMENT_TARGET = 15.0`、各配置的 bundle ID），`CodeSigning.xcconfig` 三个变量，App 的 `Info.plist` 加 `RuntimeViewerOfflineServiceBundleIdentifier`，App target 依赖它并在「Embed XPC Services」阶段嵌入。Tuist 描述（`RuntimeViewerUsingAppKit/Project.swift`）同一个 commit 加上，`./TuistScript.sh check` 通过。
-- **`main.swift`**：读 `RuntimeXPCServiceListenerConnection.launchPayload`，解出 `RuntimeOfflineFile`；读不出就退出。若读的是 cache（打开的或配对的），按它的身份打开派生数据（§9）。建 `RuntimeEngine(reading:)`，交给 `RuntimeLocalRuntimeServiceHost`（它本来就是「把一个进程内引擎挂到 service 监听上」，文档注释改成不限于 `.local`），`start()` 后 `activate()`；监听方的 peer 断开即 `exit(0)`。
+- **`RuntimeViewerOfflineService`**（`RuntimeViewerUsingAppKit/RuntimeViewerOfflineService/`）：`main.swift`、`Info.plist`（`XPCService`：`ServiceType = Application`、`_MultipleInstances = true`，第 0 步只设这两个就可用）、entitlements（`disable-library-validation`，不开沙盒——要读任意路径的文件）。`Configurations/RuntimeViewerOfflineService/` 下 Shared 与三个配置的 xcconfig（`SKIP_INSTALL = YES`、hardened runtime、`MACOSX_DEPLOYMENT_TARGET = 15.0`、各配置的 bundle ID），`CodeSigning.xcconfig` 三个变量，App 的 `Info.plist` 加 `RuntimeViewerOfflineServiceBundleIdentifier`，App target 依赖它并在「Embed XPC Services」阶段嵌入。Tuist 描述（`RuntimeViewerUsingAppKit/Project.swift`）同一个 commit 加上，`./TuistScript.sh check` 通过。
+- **`main.swift`**：建监听、装 launch handler，然后直接 `activate()`。launch handler 解出 `RuntimeOfflineFile`（解不出就抛错：`hello` 失败、进程退出）；若读的是 cache（打开的或配对的），按它的身份打开派生数据（§9）；建 `RuntimeEngine(reading:)`，交给 `RuntimeLocalRuntimeServiceHost`（它本来就是「把一个进程内引擎挂到 service 监听上」，文档注释改成不限于 `.local`）并 `start()`。监听方的 peer 断开即 `exit(0)`。
 - **进程义务**：不链接 `RuntimeViewerInjection` 与 `RuntimeViewerCrossReferences`，所以没有两个 `install()`——这是根 `AGENTS.md`「linked it ⇒ call it」表格里的第一个有意不链接的进程，表格加一行说明为什么。
 - **`RuntimeOfflineService`**（`RuntimeViewerCore/Offline/`，仿 `LocalRuntimeService`）：`Info.plist` 键名、从进程 bundle 读出 bundle ID、为某个 `RuntimeOfflineFile` 造凭证（编码 payload）。
 
@@ -335,7 +340,7 @@ extension RuntimeEngineManager {
   - 离线泛型特化：测试 bundle 里一个泛型类型走 request → `staticPreflight` → specialize，结果出现在子节点。
   - 目录：bundle 遍历（`.xctest` 本身就是 bundle）、胖文件取片（系统里现成的 universal 二进制）、`RuntimeOfflineFile(contentsOf:)` 对非 Mach-O 文件抛错。
   - 引擎停止后再连接：匿名监听器上的 client 引擎 `stop()` 后 `connect(credential:)`，再次收到镜像清单。
-- **通信层**：`.dedicatedInstance` 的实例与 bootstrap 只有真实的内嵌 service 才能测，单元测试只覆盖 payload 编解码与重连状态机；真实验证在第 0 步与人工验收。
+- **通信层**：用匿名监听在进程内测 payload 随 `hello` 到达、launch handler 只跑一次且失败时 `hello` 失败、launch handler 里登记的命令立刻可用、重连换新连接并重装处理器；一次性实例本身只有真实的内嵌 service 能测，归第 5 步与人工验收。SwiftyXPC 一侧测监听方激活后登记的处理器对已接入的连接生效。
 - **Packages**：`SettingsPersistenceTests` 加 `offline`；管理器的离线组（单列一组、不进 CLI 快照、停放后仍列出、唤醒复用同一对象）；`DocumentState(runtimeEngine:)` 起步即在该引擎上。
 - **人工验收**（用户在真实 App 里做）：打开一个第三方 `.app`、一个 iOS cache、一个胖二进制；切走窗口 30 秒后 Activity Monitor 里该进程消失、再选回来能用；`kill -9` 离线进程后窗口回根、其它窗口不受影响；打开一个截断的 Mach-O 只影响它自己。
 
@@ -385,7 +390,7 @@ extension RuntimeEngineManager {
 ### 发布
 
 - 新内嵌 XPC service，签名与公证方式与另外两个 service 相同（hardened runtime、`disable-library-validation`、非沙盒）。
-- 用到 libxpc 的私有函数（实例与 bootstrap）。App 走 Developer ID 分发，不受 App Store 审核限制；系统更新改动这些接口的风险由第 0 步的探测和发布前的手测兜住，坏了就退回「自起子进程」的方案。
+- 用到 libxpc 的一个私有函数（一次性实例）。App 走 Developer ID 分发，不受 App Store 审核限制；系统更新改动这些接口的风险由第 0 步的探测和发布前的手测兜住，坏了就退回「自起子进程」的方案。
 - Sparkle 更新流程不变；`ArchiveScript.sh` 的产物多一个 `.xpc`，归档后检查列表要加上它。
 - 没有新的隐私清单条目或权限弹窗：读的是用户自己选的文件，App 本来就不在沙盒里。
 
@@ -394,10 +399,10 @@ extension RuntimeEngineManager {
 每一步单独可构建、可验证。
 
 0. **验证多实例 XPC**（前期调研 §6 第 1–3 条）：在丢弃分支上用一个只回显 bootstrap 的临时 service（不进仓库）实测——两个连接得到两个进程、`xpc_copy_bootstrap` 拿到数据、取消连接后进程退出、`kill -9` 后连接报什么、换新 UUID 重连。结论写回本提案；不可用就改走「自起子进程」并记进决策日志。
-1. **SwiftyXPC**：fork 里加带实例的连接类型与读取 bootstrap 的接口，发 0.5.106；RuntimeViewer 抬下限，三个 workspace 的锁文件经 `UpdatePackagesScript.sh` 更新。
+1. **SwiftyXPC**：fork 里加带实例的连接类型，监听方改为收到消息时查当前的处理器；发 0.5.106，RuntimeViewer 抬下限，只改各锁文件里 SwiftyXPC 这一条（`UpdatePackagesScript.sh` 会连带升级别的依赖，不用它）。
 2. **Core 泛型化，行为不变**：读取方式协议、泛型的 section / indexer / 工厂 / 解析器、给引擎用的非泛型协议与 `RuntimeImageIndex`、`RuntimeProcessImageCatalog`；引擎改经目录与这些协议。验收：`RuntimeViewerCore` 全量测试与基线一致（满载下 IPC 类测试成批超时是已知现象，对照基线判断）。
 3. **文件目录与文件引擎（进程内）**：`RuntimeOfflineFile`、`RuntimeFileImageCatalog`（Mach-O / 胖文件 / bundle / cache / 配对 cache）、`RuntimeFileImageReading`（特化、父类链、ObjC 名字）、按导出符号找 ObjC 类、`RuntimeEngine(reading:)`、`RuntimeSource.file`。测试见 §10。
-4. **来源与传输**：`RuntimeSource.file` 及十二处 `switch`、`RuntimeBookmarkScope`、`.dedicatedInstance` 目标与重连、`RuntimeOfflineService`；引擎停止后再连接的测试。
+4. **传输**：`.dedicatedInstance` 目标、`hello` 带 payload 与 launch handler、换新连接的重连与处理器重装、`RuntimeOfflineService`；引擎停止后再连接的测试。`RuntimeSource.file`、各处 `switch` 与 `RuntimeBookmarkScope` 已在第 3 步做完。
 5. **离线 service target**：目录、`Info.plist`、entitlements、xcconfig、bundle ID、App 的 `Info.plist` 键、目标依赖与嵌入阶段、Tuist 描述（`./TuistScript.sh check` 通过）、根 `AGENTS.md` 的进程表。验收：`./RunScript.sh --no-launch` 后 `Contents/XPCServices/RuntimeViewerOfflineService.xpc` 存在，`codesign -dv` 显示 hardened runtime 与 entitlements，`Info.plist` 带 `_MultipleInstances`。
 6. **引擎管理**：离线组、`runtimeEngine(reading:)`、停放 / 唤醒、CLI 快照过滤与 `SourceKind`。测试见 §10。
 7. **应用层与设置**：`DocumentController`、`OfflineFileController`、`Info.plist` 文档类型、`DocumentState(runtimeEngine:)` 与初始路由、引擎菜单两项与图标、注册表的占用事件、功能开关、`Settings.offline` 与 Settings › Offline 页。
@@ -409,15 +414,15 @@ extension RuntimeEngineManager {
 
 | 步骤 | 状态 | 证据 |
 |------|------|------|
-| 0 验证多实例 XPC | 未做 | 实验程序已写好（仓库外），等用户过目后运行 |
-| 1 SwiftyXPC | 未做 | 等第 0 步的结论定接口 |
+| 0 验证多实例 XPC | 完成 | 用户过目后运行：一次性实例可用；取消连接与 App 退出后实例都退出；`kill -9` 后连接先 `INTERRUPTED` 再 `INVALID`、不重拉，新 UUID 能重起；bootstrap 不按实例保存，改由 `hello` 传文件（前期调研 §6） |
+| 1 SwiftyXPC | 未做 | 接口按第 0 步的结论定（详细设计 §4） |
 | 2 Core 泛型化 | 完成 | Core 全量与基线对照：基线就有的满载失败（交叉引用预先准备、后台索引批次取消、事件订阅三个之中的两个）照旧，无新增失败；新增的跳转回归测试在旧查找逻辑上红、修复后绿 |
 | 3 文件目录与文件引擎 | 完成 | `OfflineFileEngineTests` 9 例通过：薄 / 胖 / 非 Mach-O / bundle 的判定，离线与进程内引擎对同一镜像列出的对象一致、打印一致，离线泛型特化，依赖解析进配对 cache，cache 引擎按导出符号找到 `NSObject` 所在的 libobjc。Core 全量 663 项只有基线就有的两个满载失败；Packages 全量 701 项挂 1 个交叉引用的等待超时（174 秒），单独跑该套件 11 项全过；CLI 121 项全过；Debug 设置文件前后校验和不变。App 目标未编，第 5 步加 service target 时一起编 |
 | 4–10 | 未做 | |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
-- **要不要配套专题文章** —— 预计要一篇使用指南（`Guides/OfflineMode.md`）：能打开什么、配对 cache 怎么定、哪些功能不可用、停放是什么；以及一篇实现说明或架构文档的一节：多实例 XPC 的约束（一次性实例不重拉、bootstrap 在 `main` 里读、peer 断开即退出）。
+- **要不要配套专题文章** —— 预计要一篇使用指南（`Guides/OfflineMode.md`）：能打开什么、配对 cache 怎么定、哪些功能不可用、停放是什么；以及一篇实现说明或架构文档的一节：多实例 XPC 的约束（一次性实例不重拉、重连要换新连接、bootstrap 不按实例保存所以文件随 `hello` 传、peer 断开即退出）。
 - **有没有引入新术语** —— 「离线文件」「依赖 cache（配对 cache）」「停放」要进 `Documentations/Glossary.md`。
 
 ## 决策日志
@@ -445,7 +450,8 @@ extension RuntimeEngineManager {
 | 2026-11-03 | `RuntimeIndexableMachO` 多两项要求 | MachOObjCSection 读 ObjC 协议记录的名字、MachOSwiftSection 建私有鉴别器的源文件索引，都是按 `MachOImage` / `MachOFile` 分开的具体重载，泛型代码调不到；协议里加 `objcProtocolRecords(in:)` 与 `makePrivateDiscriminatorSourceFileIndex(indexer:)`。Core target 补上 `ObjCMetadataSource` 产品依赖（协议的约束在这个模块里）。 |
 | 2026-11-03 | Swift 工厂的跨镜像表记下 section 自己的键 | 「mangled 名 → 定义它的镜像」两张表原来拿 `MachOImage.imagePath` 去找 section；离线时单个文件的 `imagePath` 是 install name，找不到。改成两张表各记注册它的 section 的键，引擎经 `imagePath(definingTypeWithCandidateID:)` / `imagePath(definingProtocolWithCandidateID:)` 取。这顺带修掉了提案索引「暂缓的后续项」里的「跨镜像点击跳到 `@rpath` 镜像落空」（同一个原因），收尾时从那张表里划掉。 |
 | 2026-11-03 | `RuntimeSource.file` 提前到第 3 步 | 进程内的文件引擎（`RuntimeEngine(reading:)`）构造时就要有来源，第 3 步的测试离不开它；`RuntimeSource` 自身六处、`RuntimeCommunicator`、路径规范化、注入能力与 `RuntimeBookmarkScope`（新增 `Identity.file(path:)`）随之同批改完。App 与 CLI 两侧的 switch 仍在第 4、6 步。 |
-| 2026-11-03 | CLI 的排除与两处 App / 设置的 switch 也在第 3 步做 | 新 case 一进 Core，CLI 的 `SourceKind(source:)`、设置里的 `carriesProcessIdentifier` 与 App 的来源图标三处穷举 switch 就编不过，每一步都要整个仓库可构建，所以提前做：`SourceKind.init?(source:)` 对 `.file` 返回 `nil`，`SourceInfo.init?(engine:)` 随之可失败，CLI 的快照把离线引擎从各分组里滤掉（即第 6 步「CLI 不暴露」的全部改动）；`.file` 不带进程号；来源菜单的图标先用文档符号，第 7 步做引擎菜单时再定。 |
 | 2026-11-03 | 离线按名字找 ObjC 类走导出符号，协议只看已解析的镜像 | 详细设计 §3 原拟按需建「名字 → 镜像」表。实现时改查各镜像导出 trie 里的 `_OBJC_CLASS_$_<类名>`：别的镜像引用一个类正是经这个导出符号，查一次是几次 trie 节点读取，整份 cache 查一遍也远比解析全部 classlist 便宜，所以不必建表、也不用实测建表代价。ObjC 协议没有导出符号，离线时只能在已解析的镜像里找到——跳到一个尚未解析的镜像里的协议会找不到，记为已知降级。 |
 | 2026-11-03 | 读取方式改为策略类型 `RuntimeImageReading` | 第 2 步按提案让 `MachOImage` / `MachOFile` 直接遵循 `RuntimeIndexableMachO`；第 3 步加 `MachOFile` 时编译不过：它是非 final 的 class，满足不了在别的泛型里写 `Self` 的要求（`GenericSpecializer<Self>`、`SwiftDeclarationIndexer<Self>`）。改成两个枚举 `RuntimeLoadedImageReading` / `RuntimeFileImageReading` 实现同一协议，各带关联类型 `MachO`；泛型类型改为对策略泛型、体内 `typealias MachO = Reading.MachO`，方法体不用动。详细设计 §2、§3 已改成实际的样子。 |
 | 2026-11-03 | 离线的 Swift 父类链停在第一个 ObjC 父类 | `RuntimeEngine.hierarchy(for:)` 在进程内实例化 metadata 一路走到 `NSObject`；离线时只能读各镜像索引时记下的父类名，走到第一个 ObjC 父类（记它的运行时名字）或尚未索引的镜像里的 Swift 类为止。Inspector 的父类时间线走的是 `superclassChain`，不受影响。 |
+| 2026-11-03 | CLI 的排除与两处 App / 设置的 switch 也在第 3 步做 | 新 case 一进 Core，CLI 的 `SourceKind(source:)`、设置里的 `carriesProcessIdentifier` 与 App 的来源图标三处穷举 switch 就编不过，每一步都要整个仓库可构建，所以提前做：`SourceKind.init?(source:)` 对 `.file` 返回 `nil`，`SourceInfo.init?(engine:)` 随之可失败，CLI 的快照把离线引擎从各分组里滤掉（即第 6 步「CLI 不暴露」的全部改动）；`.file` 不带进程号；来源菜单的图标先用文档符号，第 7 步做引擎菜单时再定。 |
+| 2026-11-03 | 第 0 步结论：多实例可用，文件改随第一个 `hello` 传 | 实验见前期调研 §6。bootstrap 会串到别的实例上；要靠它，就得让 App 串行启动实例、再加校验，还要依赖一个没有文档的行为。改为 `hello` 带 payload、service 在回复前建引擎：只用一个私有函数（一次性实例），全部逻辑都能用进程内的匿名监听测试。代价是 SwiftyXPC 要让监听方激活后登记的处理器对已接入的连接生效（增量行为），以及重连换新连接时重装处理器。详细设计 §4、§5 与落地步骤 1、4 已改。 |
