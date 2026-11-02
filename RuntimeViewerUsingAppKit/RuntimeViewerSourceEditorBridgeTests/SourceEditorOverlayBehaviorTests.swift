@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import SourceEditor
 import Testing
 
@@ -143,6 +144,68 @@ struct SourceEditorOverlayBehaviorTests {
         )
     }
 
+    // MARK: - Line Height
+
+    /// What raises a line that holds tags: a run that takes no width but reaches further above
+    /// and below the baseline than the font does. 26.6's `CoreTextLineLayout.layout(boundsWidth:minLineHeight:)`
+    /// measures each line with `CTLineGetTypographicBounds` (0xF878), so the line grows by what
+    /// the run adds, the next line moves down by as much, the text keeps its columns, and the
+    /// baseline goes where the run's ascent puts it — with equal halves, the text sits in the
+    /// middle.
+    ///
+    /// The editor itself offers no taller line: `setLineExpansionEffectForLine(_:height:)` is read
+    /// only in `layoutContentForLine` (26.6, 0x750C4) and only for a height under the line's
+    /// own, which it cuts the line down to — the animation that reveals inserted lines.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    func aTallerZeroWidthRunRaisesItsLineAroundItsText() throws {
+        let harness = try Self.harness(showing: Self.addressSource)
+        // `//` hidden and the space after it drawn: the space is what carries the run.
+        let hider = ColumnHider()
+        hider.visibleColumnsByLine[0] = [2 ..< 19]
+        harness.editorView.layoutManager.addLayoutOverrideProvider(hider)
+        Self.rebuildLines(in: harness)
+        let font = try Self.font(of: "Address", onLine: 0, in: harness)
+        let plain = try Self.measureFirstLine(in: harness)
+
+        let spacing: CGFloat = 6
+        let runDelegate = try #require(ZeroWidthRunDelegate.make(ascent: font.ascender + spacing / 2, descent: -font.descender + spacing / 2))
+        let raiser = AttributeColorer()
+        raiser.overridesByLine[0] = [
+            SourceEditorTextAttributeOverride(range: 2 ..< 3, attr: [NSAttributedString.Key(kCTRunDelegateAttributeName as String): runDelegate]),
+        ]
+        harness.editorView.layoutManager.addLayoutOverrideProvider(raiser)
+        Self.rebuildLines(in: harness)
+        let raised = try Self.measureFirstLine(in: harness)
+
+        #expect(abs(raised.row.height - plain.row.height - spacing) < 0.5, "row \(plain.row) → \(raised.row)")
+        #expect(abs(raised.distanceToNextRow - plain.distanceToNextRow - spacing) < 0.5, "next row \(plain.distanceToNextRow) → \(raised.distanceToNextRow) points away")
+        let plainCarrierMinX = try #require(plain.carrierMinX, "no selection rect for the space before it carried the run")
+        #expect(abs(raised.addressMinX - plainCarrierMinX) < 0.5, "`Address` starts at \(raised.addressMinX), the space started at \(plainCarrierMinX)")
+        #expect(abs(raised.ink.top - plain.ink.top - spacing / 2) < 0.75, "ink \(plain.ink) → \(raised.ink)")
+        #expect(abs(raised.ink.bottom - plain.ink.bottom - spacing / 2) < 0.75, "ink \(plain.ink) → \(raised.ink)")
+    }
+
+    /// How tall the editor makes a line: its font's ascent plus descent, rounded up as a whole —
+    /// not the two rounded up one by one, which comes out a point taller for most sizes of SF
+    /// Mono. A tag on a raised line is drawn that tall, so the bridge has to round the same way.
+    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded), arguments: [CGFloat(12), 13, 14, 16, 18])
+    func aLineIsAsTallAsItsFontsAscentPlusDescentRoundedUp(pointSize: CGFloat) throws {
+        let harness = try Self.harness(showing: Self.addressSource)
+        let font = NSFont.monospacedSystemFont(ofSize: pointSize, weight: .regular)
+        let sizer = AttributeColorer()
+        sizer.overridesByLine[0] = [SourceEditorTextAttributeOverride(range: 0 ..< 19, attr: [.font: font])]
+        harness.editorView.layoutManager.addLayoutOverrideProvider(sizer)
+        Self.rebuildLines(in: harness)
+
+        let range = SourceEditorPosition(line: 0, col: 0) ..< SourceEditorPosition(line: 0, col: 19)
+        let rects = harness.editorView.contentView.selectionRects(for: range, coalesceInteriorRects: true, includeLineSpacing: false)
+        let row = try #require(rects.first?.rect, "no selection rect for line 0")
+        #expect(
+            row.height == ceil(font.ascender - font.descender),
+            "a \(pointSize)-point line is \(row.height) tall; its font reaches \(font.ascender) above and \(-font.descender) below"
+        )
+    }
+
     // MARK: - Folding
 
     /// Folding a run of `//` lines, which no language service reports as foldable, and keeping the
@@ -208,6 +271,76 @@ struct SourceEditorOverlayBehaviorTests {
         try #require(harness.editorView.layoutManager.lineLayerForVisibleLine(line), "line \(line) has no layer").attributedString
     }
 
+    private static func font(of text: String, onLine line: Int, in harness: SourceEditorTestHarness) throws -> NSFont {
+        let rendered = try renderedLine(line, in: harness)
+        let range = (rendered.string as NSString).range(of: text)
+        try #require(range.location != NSNotFound, "\(text.debugDescription) is not in \(rendered.string.debugDescription)")
+        return try #require(rendered.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)
+    }
+
+    private struct FirstLineMeasurement {
+        /// Line 0's row, as a selection of its `Address` covers it.
+        let row: CGRect
+        /// From the top of line 0's row to the top of line 1's.
+        let distanceToNextRow: CGFloat
+        /// Where the space at column 2 starts.
+        let carrierMinX: CGFloat?
+        let addressMinX: CGFloat
+        /// How far line 0's drawn text stays from the top and the bottom of its layer.
+        let ink: (top: CGFloat, bottom: CGFloat)
+    }
+
+    /// `addressSource`'s first line, with `//` hidden: where its row and its text are.
+    private static func measureFirstLine(in harness: SourceEditorTestHarness) throws -> FirstLineMeasurement {
+        let contentView = harness.editorView.contentView
+        func rect(line: Int, columns: Range<Int>) throws -> CGRect {
+            let range = SourceEditorPosition(line: line, col: columns.lowerBound) ..< SourceEditorPosition(line: line, col: columns.upperBound)
+            let rects = contentView.selectionRects(for: range, coalesceInteriorRects: true, includeLineSpacing: false).map(\.rect)
+            return try #require(rects.first, "no selection rect for columns \(columns) of line \(line)")
+        }
+        let row = try rect(line: 0, columns: 3 ..< 10)
+        let nextRow = try rect(line: 1, columns: 0 ..< 3)
+        let lineLayer = try #require(harness.editorView.layoutManager.lineLayerForVisibleLine(0), "line 0 has no layer")
+        let ink = try #require(inkMargins(of: lineLayer), "nothing drawn in line 0's layer \(lineLayer)")
+        return FirstLineMeasurement(
+            row: row,
+            distanceToNextRow: contentView.isFlipped ? nextRow.minY - row.minY : row.maxY - nextRow.maxY,
+            carrierMinX: (try? rect(line: 0, columns: 2 ..< 3))?.minX,
+            addressMinX: row.minX,
+            ink: ink
+        )
+    }
+
+    /// How far what a layer draws stays from its top and its bottom edge, in points: the rows of
+    /// a rendering of it that differ from its first pixel. Which edge is which does not matter to
+    /// a comparison of two renderings of the same line.
+    private static func inkMargins(of layer: CALayer) -> (top: CGFloat, bottom: CGFloat)? {
+        let scale: CGFloat = 4
+        let width = Int((layer.bounds.width * scale).rounded(.up))
+        let height = Int((layer.bounds.height * scale).rounded(.up))
+        guard width > 0, height > 0,
+              let context = CGContext(
+                  data: nil,
+                  width: width,
+                  height: height,
+                  bitsPerComponent: 8,
+                  bytesPerRow: width * 4,
+                  space: CGColorSpaceCreateDeviceRGB(),
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              )
+        else { return nil }
+        context.scaleBy(x: scale, y: scale)
+        layer.render(in: context)
+        guard let pixels = context.data?.assumingMemoryBound(to: UInt32.self) else { return nil }
+        let background = pixels[0]
+        var inkRows: [Int] = []
+        for row in 0 ..< height where (0 ..< width).contains(where: { pixels[row * width + $0] != background }) {
+            inkRows.append(row)
+        }
+        guard let firstRow = inkRows.first, let lastRow = inkRows.last else { return nil }
+        return (CGFloat(firstRow) / scale, CGFloat(height - 1 - lastRow) / scale)
+    }
+
     /// The left edge of each column's selection rect, in the content view's coordinates.
     private static func columnOrigins(_ columns: [Int], onLine line: Int, in harness: SourceEditorTestHarness) throws -> [Int: CGFloat] {
         var origins: [Int: CGFloat] = [:]
@@ -256,6 +389,36 @@ private final class ColumnShifter: ColumnShiftOverrideProvider {
 
     func columnShiftEffectsForLine(_ line: Int, in layoutManager: SourceEditorLayoutManager) -> [Int: CGFloat] {
         shiftsByLine[line] ?? [:]
+    }
+}
+
+/// A CoreText run delegate that takes no width, with the ascent and descent it is made with.
+private enum ZeroWidthRunDelegate {
+    private struct Metrics {
+        let ascent: CGFloat
+        let descent: CGFloat
+    }
+
+    static func make(ascent: CGFloat, descent: CGFloat) -> CTRunDelegate? {
+        let metrics = UnsafeMutablePointer<Metrics>.allocate(capacity: 1)
+        metrics.initialize(to: Metrics(ascent: ascent, descent: descent))
+        var callbacks = CTRunDelegateCallbacks(
+            version: kCTRunDelegateVersion1,
+            dealloc: { reference in
+                let metrics = reference.assumingMemoryBound(to: Metrics.self)
+                metrics.deinitialize(count: 1)
+                metrics.deallocate()
+            },
+            getAscent: { reference in reference.assumingMemoryBound(to: Metrics.self).pointee.ascent },
+            getDescent: { reference in reference.assumingMemoryBound(to: Metrics.self).pointee.descent },
+            getWidth: { _ in 0 }
+        )
+        guard let runDelegate = CTRunDelegateCreate(&callbacks, metrics) else {
+            metrics.deinitialize(count: 1)
+            metrics.deallocate()
+            return nil
+        }
+        return runDelegate
     }
 }
 

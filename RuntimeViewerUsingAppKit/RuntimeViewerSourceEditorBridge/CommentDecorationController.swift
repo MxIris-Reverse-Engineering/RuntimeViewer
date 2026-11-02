@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import QuartzCore
 import SourceEditor
 
@@ -10,15 +11,25 @@ import SourceEditor
 /// The text is never changed: everything here is laid over it, which is also why copying and
 /// finding keep working on the comments as they were printed.
 ///
+/// A line that holds tags is made taller than the others by the appearance's line spacing, so
+/// that tags on neighbouring lines, and the code next to them, keep apart. The editor has no
+/// hook for a line's height — `setLineExpansionEffectForLine(_:height:)` only ever makes a line
+/// shorter, for the animation that reveals inserted lines — but it measures every line with
+/// CoreText, so one hidden space of the line is drawn again with no width, no colour and a run
+/// delegate that reaches above and below the comment font by half the spacing each (see
+/// ``LineRaise``).
+///
 /// What each of the framework's hooks does with an answer was settled by
 /// `SourceEditorOverlayBehaviorTests`: hidden columns close up, attribute overrides and column
-/// shifts both count source columns, and shifts on one line add up.
+/// shifts both count source columns, shifts on one line add up, and a taller zero-width run
+/// raises its line around the text.
 ///
 /// **The tables describe one text.** `load(_:source:)` must run only after the data source of
 /// that text is in place, and `clear()` before anything lays out the previous text again: a column
 /// range past the end of a line is a `fatalError` in the framework, not a no-op.
 final class CommentDecorationController {
-    /// How far a tag stays inside its line's height, so tags on neighbouring lines do not touch.
+    /// How far a tag stays inside the height of its text, so that it does not touch the text of
+    /// the lines next to it even when no line is raised.
     private static let tagVerticalInset: CGFloat = 1
 
     private weak var sourceEditorView: SourceEditorView?
@@ -104,7 +115,10 @@ final class CommentDecorationController {
     func load(_ decorations: SourceEditorBridgingCommentDecorations?, source: String) {
         loadedDecorations = decorations
         loadedSource = decorations == nil ? nil : source
-        let newTables = decorations.map { Tables(decorations: $0, source: source, tagPadding: tagAppearance.horizontalPadding) } ?? .empty
+        let tagAppearance = tagAppearance
+        let newTables = decorations.map {
+            Tables(decorations: $0, source: source, tagPadding: tagAppearance.horizontalPadding, raisesTagLines: tagAppearance.lineRaise != nil)
+        } ?? .empty
         replaceTables(with: newTables)
         disclosureTargets = []
         guard let sourceEditorView else { return }
@@ -129,16 +143,34 @@ final class CommentDecorationController {
     // MARK: - Appearance
 
     func applyTagAppearance(_ newTagAppearance: TagAppearance) {
-        let paddingChanged = newTagAppearance.horizontalPadding != tagAppearance.horizontalPadding
+        let oldTagAppearance = tagAppearance
+        // The padding is a column shift and a raised line's carrier a column drawn again, both
+        // baked into the tables; the carrier's run delegate is not, so a new spacing or font
+        // only needs the lines built again.
+        let tablesChanged = newTagAppearance.horizontalPadding != oldTagAppearance.horizontalPadding
+            || (newTagAppearance.lineRaise == nil) != (oldTagAppearance.lineRaise == nil)
+        var newTables: Tables?
+        if tablesChanged, let loadedDecorations, let loadedSource {
+            newTables = Tables(
+                decorations: loadedDecorations,
+                source: loadedSource,
+                tagPadding: newTagAppearance.horizontalPadding,
+                raisesTagLines: newTagAppearance.lineRaise != nil
+            )
+        }
+        // Both at once: a line built between the two would draw a carrier column at a space's
+        // width, or raise a line with a carrier that is still hidden.
         stateLock.lock()
         unlockedTagAppearance = newTagAppearance
+        if let newTables {
+            unlockedTables = newTables
+        }
         stateLock.unlock()
-        if paddingChanged, let loadedDecorations, let loadedSource {
-            replaceTables(with: Tables(decorations: loadedDecorations, source: loadedSource, tagPadding: newTagAppearance.horizontalPadding))
+        if newTables != nil {
             disclosureTargets = []
         }
         guard !tables.isEmpty, let sourceEditorView else { return }
-        // Run colours and shifts are asked only while a line layer is built.
+        // Run colours, shifts and carriers are asked only while a line layer is built.
         sourceEditorView.layoutManager.invalidateAllLayout()
     }
 
@@ -198,6 +230,7 @@ final class CommentDecorationController {
 
         let underlayLayer = contentView.underlayLayer
         let effectiveAppearance = sourceEditorView.effectiveAppearance
+        let textHeight = tagAppearance.lineRaise?.textHeight
         var tagCount = 0
         var disclosureCount = 0
         var targets: [DisclosureTarget] = []
@@ -216,7 +249,7 @@ final class CommentDecorationController {
                 for textFrame in Self.rowFrames(of: tag, onLine: line, in: contentView) {
                     let layer = Self.layer(at: tagCount, in: &tagLayers, under: underlayLayer)
                     tagCount += 1
-                    let frame = textFrame.insetBy(dx: -tagAppearance.horizontalPadding, dy: Self.tagVerticalInset)
+                    let frame = Self.tagFrame(around: textFrame, padding: tagAppearance.horizontalPadding, textHeight: textHeight)
                     layer.frame = frame
                     // A stroke is centred on the path, so the path runs half a stroke inside the
                     // frame to keep the line within the tag.
@@ -238,7 +271,8 @@ final class CommentDecorationController {
                 let layerIndex = disclosureCount
                 let layer = Self.layer(at: layerIndex, in: &disclosureLayers, under: underlayLayer)
                 disclosureCount += 1
-                let side = min(cellFrame.height * 0.5, max(cellFrame.width - 2, 6))
+                // Sized by the text, not by a raised row: the cell is taller by the spacing.
+                let side = min(min(cellFrame.height, textHeight ?? cellFrame.height) * 0.5, max(cellFrame.width - 2, 6))
                 // Turned rather than redrawn, so a click can animate the turn. Bounds and
                 // position, not frame, which is undefined under a transform.
                 layer.bounds = CGRect(x: 0, y: 0, width: side, height: side)
@@ -255,6 +289,21 @@ final class CommentDecorationController {
         disclosureTargets = targets
         hideLayers(from: tagCount, in: tagLayers)
         hideLayers(from: disclosureCount, in: disclosureLayers)
+    }
+
+    /// The tag drawn around one row of its text: wider than the text by the padding on each side,
+    /// and as tall as the text less ``tagVerticalInset`` above and below, centred on the row. A
+    /// selection covers the whole row, which on a raised line is taller than the text by the
+    /// line spacing; the raise splits that evenly around the text, so the spacing stays outside
+    /// the tag. Without a raise the text fills the row and the tag is the row, inset.
+    private static func tagFrame(around textFrame: CGRect, padding: CGFloat, textHeight: CGFloat?) -> CGRect {
+        let height = min(textFrame.height, textHeight ?? textFrame.height) - 2 * tagVerticalInset
+        return CGRect(
+            x: textFrame.minX - padding,
+            y: textFrame.midY - height / 2,
+            width: textFrame.width + 2 * padding,
+            height: max(height, 0)
+        )
     }
 
     /// A tag's extent on screen, one rect per row the editor draws it on, in the content view's
@@ -418,11 +467,15 @@ extension CommentDecorationController: HiddenTextOverrideProvider, ColumnShiftOv
     }
 
     func textAttributeOverridesForLine(_ line: Int, in layoutManager: SourceEditorLayoutManager) -> [SourceEditorTextAttributeOverride] {
-        guard let runs = tables.runsByLine[line] else { return [] }
+        let tables = tables
         let tagAppearance = tagAppearance
-        return runs.map { run in
+        var overrides = (tables.runsByLine[line] ?? []).map { run in
             SourceEditorTextAttributeOverride(range: run.columns, attr: [.foregroundColor: tagAppearance.textColor(for: run)])
         }
+        if let carrierColumn = tables.carrierColumnByLine[line], let lineRaise = tagAppearance.lineRaise {
+            overrides.append(SourceEditorTextAttributeOverride(range: carrierColumn ..< carrierColumn + 1, attr: lineRaise.carrierAttributes))
+        }
+        return overrides
     }
 }
 
@@ -486,7 +539,11 @@ extension CommentDecorationController {
         var cornerRadius: CGFloat
         var strokeWidth: CGFloat
         var horizontalPadding: CGFloat
+        /// What raises the lines that hold tags; nil leaves them as tall as their text.
+        var lineRaise: LineRaise?
 
+        /// Until the app's first appearance arrives no line is raised: the comment font is not
+        /// known yet, and a raise measured against another font would not centre the text.
         static let fallback = TagAppearance(
             fills: Dictionary(uniqueKeysWithValues: SourceEditorBridgingCommentTagStyle.allCases.map { style in
                 (style, style == .warning ? NSColor.systemOrange.withAlphaComponent(0.2) : NSColor.quaternaryLabelColor)
@@ -499,7 +556,8 @@ extension CommentDecorationController {
             disclosure: .secondaryLabelColor,
             cornerRadius: 4,
             strokeWidth: 0,
-            horizontalPadding: 4
+            horizontalPadding: 4,
+            lineRaise: nil
         )
 
         func fill(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
@@ -562,6 +620,9 @@ extension CommentDecorationController {
         let shiftsByLine: [Int: [Int: CGFloat]]
         let runsByLine: [Int: [Run]]
         let tagsByLine: [Int: [Tag]]
+        /// For each line that holds tags and is raised, the column that carries the raise: a
+        /// space the decorations hide, drawn again with no width (see ``LineRaise``).
+        let carrierColumnByLine: [Int: Int]
         let rows: [Row]
         let rowIndicesByLine: [Int: [Int]]
 
@@ -573,6 +634,7 @@ extension CommentDecorationController {
             shiftsByLine: [:],
             runsByLine: [:],
             tagsByLine: [:],
+            carrierColumnByLine: [:],
             rows: [],
             rowIndicesByLine: [:]
         )
@@ -583,6 +645,7 @@ extension CommentDecorationController {
             shiftsByLine: [Int: [Int: CGFloat]],
             runsByLine: [Int: [Run]],
             tagsByLine: [Int: [Tag]],
+            carrierColumnByLine: [Int: Int],
             rows: [Row],
             rowIndicesByLine: [Int: [Int]]
         ) {
@@ -591,49 +654,70 @@ extension CommentDecorationController {
             self.shiftsByLine = shiftsByLine
             self.runsByLine = runsByLine
             self.tagsByLine = tagsByLine
+            self.carrierColumnByLine = carrierColumnByLine
             self.rows = rows
             self.rowIndicesByLine = rowIndicesByLine
         }
 
-        init(decorations: SourceEditorBridgingCommentDecorations, source: String, tagPadding: CGFloat) {
+        /// - Parameter raisesTagLines: whether each line that holds tags gets a carrier column for
+        ///   a ``LineRaise``. Only with a raise to carry: the carrier is drawn, and without the
+        ///   raise's run delegate it would be a space wide.
+        init(decorations: SourceEditorBridgingCommentDecorations, source: String, tagPadding: CGFloat, raisesTagLines: Bool) {
             let lines = LineTable(source: source)
+            let textUnits = Array(source.utf16)
 
-            // Hidden columns, per line, merged and sorted; the answer to the editor is what is
-            // left of the line around them.
             var hiddenColumnsByLine: [Int: [Range<Int>]] = [:]
             for range in decorations.hiddenRanges.map(\.rangeValue) {
                 guard let (line, columns) = lines.lineAndColumns(of: range) else { continue }
                 hiddenColumnsByLine[line, default: []].append(columns)
             }
-            var visibleColumnsByLine: [Int: [Range<Int>]] = [:]
-            for (line, hiddenColumns) in hiddenColumnsByLine {
-                visibleColumnsByLine[line] = Self.complement(of: hiddenColumns, withinLineOfLength: lines.length(ofLine: line))
-            }
 
             var tagsByLine: [Int: [Tag]] = [:]
-            var shiftsByLine: [Int: [Int: CGFloat]] = [:]
             let tagStyles = decorations.tagStyles
             if tagStyles.count == decorations.tagRanges.count {
-                let textUnits = Array(source.utf16)
                 for (range, styleValue) in zip(decorations.tagRanges.map(\.rangeValue), tagStyles) {
                     guard let style = SourceEditorBridgingCommentTagStyle(rawValue: styleValue.intValue),
                           let (line, columns) = lines.lineAndColumns(of: range),
                           !columns.isEmpty
                     else { continue }
                     let spaceColumns = (0 ..< range.length).compactMap { index -> Int? in
-                        let unit = textUnits[range.location + index]
-                        return unit == 0x20 || unit == 0x09 ? columns.lowerBound + index : nil
+                        Self.isSpace(textUnits[range.location + index]) ? columns.lowerBound + index : nil
                     }
                     tagsByLine[line, default: []].append(Tag(columns: columns, style: style, spaceColumns: spaceColumns))
+                }
+            }
 
-                    // Room for the padding on both sides. A shift on a hidden column might never be
-                    // applied, so each goes on the first column at or after it that is drawn.
-                    let visibleColumns = visibleColumnsByLine[line]
-                    let lineLength = lines.length(ofLine: line)
-                    if let start = Self.firstDrawnColumn(atOrAfter: columns.lowerBound, visibleColumns: visibleColumns, lineLength: lineLength) {
+            // The carrier of each raised line: its first hidden space — the one after the comment
+            // marker, on every line the generator prints. Drawn again, so it leaves the hidden
+            // columns before the editor is told what is left of the line.
+            var carrierColumnByLine: [Int: Int] = [:]
+            if raisesTagLines {
+                for line in tagsByLine.keys {
+                    guard let hiddenColumns = hiddenColumnsByLine[line],
+                          let carrierColumn = Self.firstSpaceColumn(in: hiddenColumns, startingAt: lines.start(ofLine: line), textUnits: textUnits)
+                    else { continue }
+                    carrierColumnByLine[line] = carrierColumn
+                    hiddenColumnsByLine[line] = Self.removing(carrierColumn, from: hiddenColumns)
+                }
+            }
+
+            // What is left of each line around its hidden columns is the answer to the editor.
+            var visibleColumnsByLine: [Int: [Range<Int>]] = [:]
+            for (line, hiddenColumns) in hiddenColumnsByLine {
+                visibleColumnsByLine[line] = Self.complement(of: hiddenColumns, withinLineOfLength: lines.length(ofLine: line))
+            }
+
+            // Room for each tag's padding on both sides. A shift on a hidden column might never
+            // be applied, so each goes on the first column at or after it that is drawn.
+            var shiftsByLine: [Int: [Int: CGFloat]] = [:]
+            for (line, tags) in tagsByLine {
+                let visibleColumns = visibleColumnsByLine[line]
+                let lineLength = lines.length(ofLine: line)
+                for tag in tags {
+                    if let start = Self.firstDrawnColumn(atOrAfter: tag.columns.lowerBound, visibleColumns: visibleColumns, lineLength: lineLength) {
                         shiftsByLine[line, default: [:]][start, default: 0] += tagPadding
                     }
-                    if let end = Self.firstDrawnColumn(atOrAfter: columns.upperBound, visibleColumns: visibleColumns, lineLength: lineLength) {
+                    if let end = Self.firstDrawnColumn(atOrAfter: tag.columns.upperBound, visibleColumns: visibleColumns, lineLength: lineLength) {
                         shiftsByLine[line, default: [:]][end, default: 0] += tagPadding
                     }
                 }
@@ -689,9 +773,33 @@ extension CommentDecorationController {
                 shiftsByLine: shiftsByLine,
                 runsByLine: runsByLine,
                 tagsByLine: tagsByLine,
+                carrierColumnByLine: carrierColumnByLine,
                 rows: rows,
                 rowIndicesByLine: rowIndicesByLine
             )
+        }
+
+        private static func isSpace(_ unit: UInt16) -> Bool {
+            unit == 0x20 || unit == 0x09
+        }
+
+        /// The first column among `hiddenColumns` that holds a space or a tab, on the line that
+        /// starts at UTF-16 offset `lineStart`; nil when every hidden column draws something.
+        static func firstSpaceColumn(in hiddenColumns: [Range<Int>], startingAt lineStart: Int, textUnits: [UInt16]) -> Int? {
+            for columns in hiddenColumns.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+                for column in columns where isSpace(textUnits[lineStart + column]) {
+                    return column
+                }
+            }
+            return nil
+        }
+
+        /// `columns` without `column`: a range that holds it splits around it.
+        static func removing(_ column: Int, from columns: [Range<Int>]) -> [Range<Int>] {
+            columns.flatMap { range -> [Range<Int>] in
+                guard range.contains(column) else { return [range] }
+                return [range.lowerBound ..< column, column + 1 ..< range.upperBound].filter { !$0.isEmpty }
+            }
         }
 
         /// What is left of a line of `length` columns once `hiddenColumns` are taken out. Never
@@ -745,6 +853,11 @@ extension CommentDecorationController {
         }
 
         var lineCount: Int { lineStarts.count }
+
+        /// The UTF-16 offset the line starts at.
+        func start(ofLine line: Int) -> Int {
+            lineStarts[line]
+        }
 
         /// The line's length without its line break.
         func length(ofLine line: Int) -> Int {
@@ -810,7 +923,82 @@ extension CommentDecorationController.TagAppearance {
             disclosure: appearance.disclosureColor,
             cornerRadius: appearance.cornerRadius,
             strokeWidth: appearance.strokeWidth,
-            horizontalPadding: appearance.horizontalPadding
+            horizontalPadding: appearance.horizontalPadding,
+            lineRaise: CommentDecorationController.LineRaise(commentFont: appearance.commentFont, spacing: appearance.tagLineSpacing)
         )
+    }
+}
+
+// MARK: - Raising Lines
+
+extension CommentDecorationController {
+    /// What makes a line that holds tags taller than the lines around it.
+    ///
+    /// The editor has no per-line height to set, but it measures each line from CoreText: 26.6's
+    /// `CoreTextLineLayout.layout(boundsWidth:minLineHeight:)` takes a line's ascent and descent
+    /// from `CTLineGetTypographicBounds` (0xF878). So one column of the line — a hidden space,
+    /// drawn again — carries a run delegate that takes no width and reaches above and below the
+    /// baseline by the comment font's ascent and descent plus half the spacing each. The line
+    /// grows by the spacing, and its text sits halfway: half the spacing above, half below.
+    ///
+    /// The metrics go in unrounded. The editor rounds a line's ascent plus descent up as a
+    /// whole — a line of 11-point SF Mono, 10.63 above and 2.32 below, is 13 points — so
+    /// rounding the two up separately here made every raised line a point taller than asked.
+    /// `SourceEditorOverlayBehaviorTests` pins both on the Xcode the tests run under.
+    final class LineRaise {
+        /// What the carrier column is drawn with: the run delegate, and no colour, so that
+        /// nothing drawn for the space shows.
+        let carrierAttributes: [NSAttributedString.Key: Any]
+
+        /// How tall a line of the comment font is without a raise — its ascent plus descent,
+        /// rounded up as the editor rounds them — which is how tall a tag stays on a raised line.
+        let textHeight: CGFloat
+
+        init?(commentFont: NSFont, spacing: CGFloat) {
+            guard spacing > 0 else { return nil }
+            let ascent = commentFont.ascender
+            let descent = -commentFont.descender
+            guard let runDelegate = Self.makeZeroWidthRunDelegate(ascent: ascent + spacing / 2, descent: descent + spacing / 2) else { return nil }
+            carrierAttributes = [
+                NSAttributedString.Key(kCTRunDelegateAttributeName as String): runDelegate,
+                .foregroundColor: NSColor.clear,
+            ]
+            textHeight = ceil(ascent + descent)
+        }
+
+        private struct RunMetrics {
+            let ascent: CGFloat
+            let descent: CGFloat
+        }
+
+        /// A run delegate that reports `ascent` and `descent` and no width. The metrics live in a
+        /// block of their own that the delegate frees when CoreText lets go of it.
+        private static func makeZeroWidthRunDelegate(ascent: CGFloat, descent: CGFloat) -> CTRunDelegate? {
+            let metrics = UnsafeMutablePointer<RunMetrics>.allocate(capacity: 1)
+            metrics.initialize(to: RunMetrics(ascent: ascent, descent: descent))
+            var callbacks = CTRunDelegateCallbacks(
+                version: kCTRunDelegateVersion1,
+                dealloc: { reference in
+                    let metrics = reference.assumingMemoryBound(to: RunMetrics.self)
+                    metrics.deinitialize(count: 1)
+                    metrics.deallocate()
+                },
+                getAscent: { reference in
+                    reference.assumingMemoryBound(to: RunMetrics.self).pointee.ascent
+                },
+                getDescent: { reference in
+                    reference.assumingMemoryBound(to: RunMetrics.self).pointee.descent
+                },
+                getWidth: { _ in
+                    0
+                }
+            )
+            guard let runDelegate = CTRunDelegateCreate(&callbacks, metrics) else {
+                metrics.deinitialize(count: 1)
+                metrics.deallocate()
+                return nil
+            }
+            return runDelegate
+        }
     }
 }

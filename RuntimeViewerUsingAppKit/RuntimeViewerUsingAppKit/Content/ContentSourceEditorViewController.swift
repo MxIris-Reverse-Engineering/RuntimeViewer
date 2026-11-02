@@ -196,6 +196,9 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
         bridge.applyCommentTagAppearance(SourceEditorCommentTagAppearance(
             commentColor: currentTheme?.color(for: .comment) ?? .secondaryLabelColor,
+            // What the theme dictionary above gives the comment keys, so a raised tag line is
+            // measured against the font its text is drawn in.
+            commentFont: currentTheme?.font(for: .comment) ?? lineNumberFont,
             typeColor: currentTheme?.color(for: .type(.class, .name)) ?? .labelColor,
             textColor: currentTheme?.color(for: .standard) ?? .labelColor,
             isDark: isDark

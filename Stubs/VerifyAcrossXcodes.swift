@@ -78,7 +78,8 @@ final class ProbeCommentDecorations: NSObject, SourceEditorBridgingCommentDecora
     }
 }
 
-/// A tag appearance with a stroke, so the probe reaches the outline as well as the fill.
+/// A tag appearance with a stroke and a line spacing, so the probe reaches the outline as well as
+/// the fill, and lays out lines raised by a run delegate.
 final class ProbeCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
     let valueColor = NSColor.labelColor
     let typeColor = NSColor.systemPurple
@@ -87,6 +88,8 @@ final class ProbeCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagA
     let cornerRadius: CGFloat = 100
     let strokeWidth: CGFloat = 1
     let horizontalPadding: CGFloat = 6
+    let tagLineSpacing: CGFloat = 4
+    let commentFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
     func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
         style == .warning ? .systemOrange : .quaternaryLabelColor
