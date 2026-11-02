@@ -1,14 +1,14 @@
-# Draft - 语料与交叉引用表只常驻用得着的部分
+# 0066 - 语料与交叉引用表只常驻用得着的部分
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-01
-- **最后更新**: 2026-11-01
+- **最后更新**: 2026-11-02
 - **所属愿景**: 无
 - **实现分支 / PR**: `feature/on-demand-corpora-and-cross-references`（从 `feature/engine-resident-memory` 切出：那条分支还没合进 `next`，本提案叠在它上面）
 
 ## 摘要
 
-[降低引擎进程的常驻内存](draft-engine-resident-memory.md)之后，两个引擎进程里 Find 语料与交叉引用表仍占约一半：Mac Catalyst 引擎 215 MB 与 201 MB，My Mac 引擎 142 MB 与 127 MB（2026-11-01，Debug 版）。两者都是「每个已索引镜像一份、全部常驻」，而语料在磁盘上的派生数据只有内存里的十分之一，读回一份在 Release 版里只要 0.16～0.32 秒。本提案改成只常驻用得着的部分：语料只留最近搜过的、默认 64 MB，派生数据里存着的语料不在内存里也算建好，搜索时从派生数据读回来搜；交叉引用表默认 64 MB，按 Always Index 的顺序预建到装满为止，其余镜像在第一次查询时现扫，最近用过的留下。
+[降低引擎进程的常驻内存](0065-engine-resident-memory.md)之后，两个引擎进程里 Find 语料与交叉引用表仍占约一半：Mac Catalyst 引擎 215 MB 与 201 MB，My Mac 引擎 142 MB 与 127 MB（2026-11-01，Debug 版）。两者都是「每个已索引镜像一份、全部常驻」，而语料在磁盘上的派生数据只有内存里的十分之一，读回一份在 Release 版里只要 0.16～0.32 秒。本提案改成只常驻用得着的部分：语料只留最近搜过的、默认 64 MB，派生数据里存着的语料不在内存里也算建好，搜索时从派生数据读回来搜；交叉引用表默认 64 MB，按 Always Index 的顺序预建到装满为止，其余镜像在第一次查询时现扫，最近用过的留下。
 
 ## 方案
 
@@ -47,7 +47,7 @@
 2. [x] 语料：启动时按顺序读到装满为止；读回失败记失败；推出只清内存（测试同上，以及 `EngineDataEjectTests` 新增一条）。
 3. [x] 交叉引用：`evictsNothing` 与 `isKept`（线上兼容测试）、协调器按 Always Index 的顺序预建到装满为止、Report 的「Not Kept」（测试：`CrossReferencePreparationTests` 两条、`CrossReferencePreparationFillTests`）。
 4. [x] 设置：两个默认值改为 64 MB、旧默认值迁移、Settings 页的说明同步（测试：`SettingsResidentLimitMigrationTests`）。
-5. [ ] 文档与实测：`AGENTS.md`、`Documentations/DerivedData.md`、术语表已同步；按 2026-11-01 的配置重测两个引擎进程，等用户跑 Debug 版。
+5. [x] 文档：`AGENTS.md`、`Documentations/DerivedData.md`、术语表与两份索引已同步。按 2026-11-01 的配置重测两个引擎进程没做，列在提案索引的「暂缓的后续项」。
 
 ## 决策日志
 
@@ -68,3 +68,4 @@
 | 2026-11-01 | 设置迁移的状态存在设置文件里（`residentLimitDefaultsRevision`），不用 UserDefaults 标记 | 状态和它管的值在同一个文件里，换文件、重置设置都一致；主题迁移用 UserDefaults 是因为旧数据本来就在那里。 |
 | 2026-11-01 | 协调器的集成测试接受「预建了但没留下」 | 测试进程里只有一个交叉引用会话，同时运行的测试套件也在里面预建；不挤掉别人之后，能不能留下取决于它们留下的空间。确定性的行为由脚本化对端的 `CrossReferencePreparationFillTests` 测。开关测试关掉后要先等协调器处理完再打开：第一轮没留下时状态表本来就空，不等的话两次改动合成一次通知，协调器看到的还是「开」（全量测试里复现过，把上限设为 0 可以稳定复现）。 |
 | 2026-11-01 | 实现完成，待用户看过后收尾 | Core 与 Packages 全量测试通过，只剩已知的满载偶发（单独跑都过）：Core 的 `imagesAskedAboutRenewTheAnalyzer`、`firstPreparationReadsThePrefilters`、`cancelBatchStopsPendingItemsAndEmitsCancelledEvent`，Packages 的「Call Hierarchy opens its root…」。App（Debug-arm64 的 `RuntimeViewer macOS`）编过。三处关键逻辑做了变异检查，对应测试都会变红。文档已同步 `AGENTS.md`、`DerivedData.md`、术语表与两份索引；不需要另写使用指南或实现说明——契约都在 `DerivedData.md` 与提案里。剩第 5 步的实测：按 2026-11-01 的配置重测两个引擎进程。 |
+| 2026-11-02 | 落地：合进 `next` 并推送，状态改为 Implemented | 用户看过效果后收尾。没做的：按 2026-11-01 的配置重测两个引擎进程，以及「不做」里留待实测再定的搜索时预读下一个镜像，两项都列进提案索引的「暂缓的后续项」。不另写使用指南或实现说明的判断不变；新术语「读回（read back）」「预建到装满为止」已登记。 |

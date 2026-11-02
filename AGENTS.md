@@ -396,8 +396,8 @@ The project uses three Swift Package Manager packages:
   queries that need them. Background:
   `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
   `Documentations/Evolutions/0058-runtime-engine-session.md`,
-  `Documentations/Evolutions/draft-engine-resident-memory.md`,
-  `Documentations/Evolutions/draft-on-demand-corpora-and-cross-references.md`,
+  `Documentations/Evolutions/0065-engine-resident-memory.md`,
+  `Documentations/Evolutions/0066-on-demand-corpora-and-cross-references.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
