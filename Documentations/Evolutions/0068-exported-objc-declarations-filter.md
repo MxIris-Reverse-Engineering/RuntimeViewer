@@ -1,11 +1,11 @@
-# Draft - 只看导出的 ObjC 声明：ObjC 类的 Not Exported 标志与生成选项开关
+# 0068 - 只看导出的 ObjC 声明：ObjC 类的 Not Exported 标志与生成选项开关
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-31
-- **最后更新**: 2026-10-31
+- **最后更新**: 2026-11-02
 - **所属愿景**: 无
 - **实现分支 / PR**: `feature/exported-objc-declarations-filter`（从本地 `next` 切，它已快进合入 `feature/exported-declarations-filter`，要用那里加的标志位、Filter Scope 行与占位说明；并回 `next`）
-- **关联提案**: [draft-exported-declarations-filter](draft-exported-declarations-filter.md)（Swift 一侧，它把 ObjC 列为「不做」）；MachOObjCSection 的 0018 `objc-exported-declarations-only`（上游：按地址判断导出，打印器的开关与标记模式）
+- **关联提案**: [0067](0067-exported-declarations-filter.md)（Swift 一侧，它把 ObjC 列为「不做」）；MachOObjCSection 的 0018 `objc-exported-declarations-only`（上游：按地址判断导出，打印器的开关与标记模式）
 
 ## 摘要
 
@@ -40,3 +40,4 @@
 | 2026-10-31 | 挂在未导出类上的类别不在本仓库测 | 链接器把同镜像的类别并进了类，测试 bundle 与系统框架里都没有这种类别，只有不合并类别的镜像里才有；这一支由上游 MachOObjCSection 的测试覆盖。 |
 | 2026-10-31 | Foundation 的实测并进语料可见性套件，不另开测试 | 那个套件本来就在 libobjc 与 Foundation 上逐条比对投影与内容区。把它两组「只看导出」选项的 ObjC 开关打开，不多加载镜像就覆盖了 ObjC 的类、类别与 ivar；再加一条断言，把「被标记」与「打印为空」连起来。 |
 | 2026-10-31 | 实现完成，待用户看过后收尾 | 第 1–6 步已完成并推送功能分支。验证在 JH's Mac Studio Ultra（Xcode 27.2）上，用远程依赖、照抬过的锁文件：Packages 全量 682 个全过；Core 全量里 Communication 239、Injection 36 全过，Core 629 个中后台索引的 1 个、CrossReferences 70 个中 1 个在全量满载（负载约 30，别的会话在编译）时失败，两个套件单独重跑全过（已知现象）；CommandLine 与 App（Debug workspace，`-disableAutomaticPackageResolution`）编译通过，改过的文件没有新警告，锁文件没被改写。另用一次性探针在 SwiftUI 上比对两个列表的标记：出现在 ObjC 列表的 346 个 Swift 类都有 Swift 一侧的条目，两边标记的是同样的 321 个。文档：本提案就是完整记录；Generation Options 与 Filter Scope 没有使用指南，勾选框标题与 tooltip 已说明用途，不另写指南或实现说明；没有新术语。 |
+| 2026-11-02 | 落地：编号 0068，状态改为 Implemented | 实现 2026-10-31 已合进 `next` 并推送，用户批准收尾；Swift 一侧先进 `next`，编号排在它的 [0067](0067-exported-declarations-filter.md) 之后。第 1–6 步与方案一致，没有没做完的项，「不做」的两项照旧。agent 的验证只有测试与编译，没有启动 App 看过。不另写使用指南或实现说明的判断不变；术语改判同 0067 的同日一行，术语表新增「未导出（not exported）」一条，含 ObjC 类与 ivar 的判断方式。 |

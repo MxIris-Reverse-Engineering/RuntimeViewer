@@ -1,11 +1,11 @@
-# Draft - 只看导出的 Swift 声明：侧栏的 Not Exported 属性与生成选项开关
+# 0067 - 只看导出的 Swift 声明：侧栏的 Not Exported 属性与生成选项开关
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-10-30
-- **最后更新**: 2026-10-31
+- **最后更新**: 2026-11-02
 - **所属愿景**: 无
 - **实现分支 / PR**: `feature/exported-declarations-filter`（从 `next` 切，并回 `next`）
-- **关联提案**: MachOSwiftSection 的 0083 `exported-only-marking-mode`（Find 依赖它；它也修正 C 导入类型的导出裁决）
+- **关联提案**: [0068](0068-exported-objc-declarations-filter.md)（ObjC 一侧，在本提案之后另案补上）；MachOSwiftSection 的 0083 `exported-only-marking-mode`（Find 依赖它；它也修正 C 导入类型的导出裁决）
 
 ## 摘要
 
@@ -40,3 +40,4 @@
 | 2026-10-31 | 上游修好这个断言后，Find 的测试仍只给 fixture 建语料 | MachOSwiftSection 修好了 opaque type 的层数计算（`fix/opaque-parameter-depth`，`26553ea2`；合进本地 `next` 为 `d20ba205`，尚未推送）。对着它临时换回给整个测试 bundle 建语料的写法实测：4,210 个对象在 Debug 构建下 78 秒建完，不再断言；真实的 `searchInterfaces` / `searchMembers` 只在开关关闭时找到未导出的成员；开着开关时，全部 3,996 个 Swift 条目的投影与内容区逐字一致。仍只给 fixture 建：整个 bundle 的语料让这个套件每跑一次多花一分多钟，还让它受制于依赖里每个声明能否正常打印，上一行的崩溃就是这样让整个测试进程崩掉的。 |
 | 2026-10-31 | MachOSwiftSection 的 pin 抬到 origin 上 `next` 的 `f8ca72e1`，三份包级锁文件的 MachOObjCSection 同抬到 `ac2e4a09` | 上游把 `next` 推到了 origin（`f8ca72e1`），代码就是上一行验过的 `d20ba205`，之后只多了文档提交；上游提案随之落地为 0083。两条都是 branch pin，根包的分支要求会盖过上游的版本下限、不报错，所以锁文件手工改：五份锁文件都改 MachOSwiftSection 这一条；MachOSwiftSection 自 `e4b5595c` 起要求 MachOObjCSection 0.8.205，Core、Packages、CommandLine 三份锁文件钉的 `5c8dfb3c` 只到 0.8.204，同抬到两个 workspace 已经钉着的 `ac2e4a09`。其余 pin 不动。以远程依赖、全新构建目录验证：Core、Packages、CommandLine 的 `swift build` 与 App（Debug workspace，`-disableAutomaticPackageResolution`）都编过，六份锁文件没被改写；本提案相关的套件（Core 9 个套件 86 个测试、Packages 2 个套件 41 个测试）全过。 |
 | 2026-10-31 | 实现完成，待用户看过后收尾 | 第 1–5 步已完成并推送功能分支。验证在 JH's Mac Studio Ultra（Xcode 27.2）上、以本地依赖对着 MachOSwiftSection 本地的 `next`（`ad95cacd`；之后的 `3323c163` 只改了文档注释与测试）：Core 全量里 Core 592、Communication 239、Injection 36、后台索引 27 全过，CrossReferences 70 个中 1 个只在全量满载时超时、单独重跑该套件 15 个全过（已知现象）；Packages 全量全过；App（`RuntimeViewer macOS`，Debug）编译通过，改过的文件没有新警告。上游修好 opaque type 的层数计算后，又对着 `d20ba205` 重跑了全量：Core 592、Communication 239、Injection 36、后台索引 27 全过；CrossReferences 70 个中 2 个、Packages 682 个中 1–3 个是等待超时，当时别的会话在编译、负载 22–75，所在套件单独重跑全过；修复前后各编一份、轮流计时 Foundation 的建语料测试（修复前 77 / 42 秒，修复后 40 / 40 秒），变慢来自负载，不是这个修复。App 没有重编：这次上游只改了 MachOSwiftSection 内部，App 的 target 不直接用它。MachOSwiftSection 的 pin 已抬到 `f8ca72e1`（见上一行），这条分支用远程依赖就能构建。文档：本提案就是完整记录；Generation Options 与 Filter Scope 没有使用指南，勾选框标题与 tooltip 已说明用途，不另写指南或实现说明；没有新术语。 |
+| 2026-11-02 | 落地：编号 0067，状态改为 Implemented | 实现 2026-10-31 已合进 `next` 并推送，用户批准收尾。第 1–5 步与方案一致，没有没做完的项；「不做」的两项里，ObjC 一侧已由 [0068](0068-exported-objc-declarations-filter.md) 另案补上，`runtime-viewer-cli` 与 MCP 工具的参数仍不做。agent 的验证只有测试与编译，没有启动 App 看过勾选框、Filter Scope 一行与占位说明。不另写使用指南或实现说明的判断不变。术语改判：本仓库里「导出」原本指把 interface 批量写成文件，本提案又用它指符号在镜像的导出表里，两者常在同一句里出现（批量导出要跳过未导出而打印为空的对象），容易混淆，术语表因此新增「未导出（not exported）」一条。 |
