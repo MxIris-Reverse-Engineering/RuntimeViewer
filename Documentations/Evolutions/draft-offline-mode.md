@@ -421,7 +421,8 @@ extension RuntimeEngineManager {
 | 4 传输 | 完成 | `.dedicatedInstance`、`hello` 带载荷、launch handler、换新连接的重连与处理器重装、`RuntimeOfflineService` / `RuntimeOfflineServiceHost`、引擎对 `.file` 带凭证转发。新测试：传输 5 项（载荷随第一个 `hello` 到达且 launch handler 只跑一次、launch 失败让连接失败、实例退出后换新连接且处理器仍应答、被拒绝的 `hello` 每次换新实例、内嵌 service 的 client 不换连接），离线 service host 5 项（载荷往返、`.file` 引擎转发并收到镜像清单、请求到达 service 侧引擎、读不了的文件让连接失败、停止后再连接）；原有 XPC 传输与本地 service host 的 17 项照旧通过 |
 | 5 离线 service target | 完成 | `./RunScript.sh --no-launch`（隔离构建目录）成功；产物里 `Contents/XPCServices/RuntimeViewerOfflineService.xpc` 存在，hardened runtime、团队签名、entitlements 为空，`Info.plist` 带 `_MultipleInstances = true`，App 的 `RuntimeViewerOfflineServiceBundleIdentifier` 是 `dev.JH.RuntimeViewerOfflineService.arm64e`；`./TuistScript.sh check` 通过。新测试：监听方的「客户端离开」只认连接关闭（未知消息不算），`.file` 引擎对交叉引用命令自己回答「未知命令」；传输与离线 host 共 23 项、交叉引用 33 项通过。真实 service 实例的端到端运行归第 9 步人工验收 |
 | 6 引擎管理 | 完成 | 离线组、`runtimeEngine(reading:)`、停放 / 唤醒、`RuntimeHostInfo.offlineFiles`；CLI 的过滤与 `SourceKind` 在第 3 步已做。新测试：管理器 6 项（自成一组且转发、同一文件返回同一引擎、停放后仍列出且唤醒是同一对象并起新实例、改配对后在新实例里读到 cache 的镜像、没有 service 时报错且不列出、终止后忘掉），CLI 1 项（离线文件不是 CLI 的来源）；CLI 全量 122 项通过 |
-| 7–10 | 未做 | |
+| 7 应用层 | 进行中 | 设置分支 `Settings.offline`（登记的 cache 与自动挑选）、Settings › Offline Files 页、Core 的 `RuntimeDyldSharedCacheSummary` 已完成：设置测试 39 项通过（新增自动挑选 5 项、持久化覆盖表加 `offline`），Debug 设置文件前后校验和不变 |
+| 8–10 | 未做 | |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 

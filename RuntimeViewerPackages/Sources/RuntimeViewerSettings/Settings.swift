@@ -40,6 +40,9 @@ public final class Settings {
     @Default(Developer.default)
     public var developer: Developer = .init()
 
+    @Default(Offline.default)
+    public var offline: Offline = .init()
+
     internal init() {}
 
     #if os(macOS)
@@ -78,6 +81,7 @@ extension Settings: PersistentSettings {
         _ = update
         _ = theme
         _ = developer
+        _ = offline
     }
 }
 #endif

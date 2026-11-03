@@ -108,6 +108,15 @@ private let persistedProperties: [PersistedProperty] = [
         apply: { $0.developer.contentLoadingDelay = 2 },
         matches: { $0.developer.contentLoadingDelay == 2 }
     ),
+    PersistedProperty(
+        encodedKey: "offline",
+        apply: {
+            $0.offline.dependencyCaches = [
+                Settings.Offline.DependencyCache(path: "/tmp/dyld_shared_cache_arm64e", platformName: "iOS", version: "27.0", architecture: "arm64e", uuid: "00000000-0000-0000-0000-000000000000"),
+            ]
+        },
+        matches: { $0.offline.dependencyCaches.map(\.path) == ["/tmp/dyld_shared_cache_arm64e"] }
+    ),
 ]
 
 @MainActor
