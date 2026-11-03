@@ -96,7 +96,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 
 1. **UIFoundation 的封装**（已完成）：在 `AppleInternal` trait 下给 `NSToolbar` 加 `.box.preferredCenteredItemWidthRatio`，配测试、逆向报告、指南与 UIFoundation 自己的提案。快进合进 `main`，发 `0.43.0`。
 2. **活动模型**（已完成）：`RuntimeViewerApplication/Activity/`。三类工作按轮次汇成活动，挑选（用户发起优先、后台 4 秒、至少 3 秒）、每秒一次的节流、文字分段都在这里，每个窗口的 `ToolbarActivityPresenter` 给出活动状态。配单元测试。
-3. **macOS 26 / 15 的中间胶囊**：`RuntimeViewerUI` 里做进度环、按段截断的文字、胶囊视图与工具栏项。抬 UIFoundation 的 pin；`MainWindowController` 在 macOS 27 以下装上胶囊，点击打开 Report 导航。配测试。
+3. **macOS 26 / 15 的中间胶囊**（已完成）：`RuntimeViewerUI` 里做进度环、按段截断的文字、胶囊视图与工具栏项。抬 UIFoundation 的 pin；`MainWindowController` 在 macOS 27 以下装上胶囊，点击打开 Report 导航。配测试。
 4. **macOS 27 的标题区**：先补逆向 Xcode 工程图标的画法，再做收拢形状的自绘 layer、进度环与完成序列，以及 `TitleToolbarItem` 的图标槽、字体和悬停时的活动文字。配测试。
 5. **收尾**：用 Debug workspace 完整构建 App，跑各包测试；`AGENTS.md` 与本提案按实际做出的结果更新。
 

@@ -128,6 +128,8 @@ final class MainViewModel: ViewModel<MainRoute> {
 //        let installHelperClick: Signal<Void>
         let attachToProcessClick: Signal<Void>
         let mcpStatusClick: Signal<Void>
+        /// A click on the toolbar's activity display: the Report navigator lists the work in detail.
+        let activityClick: Signal<Void>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
         let tabSelected: Signal<Int>
@@ -168,7 +170,12 @@ final class MainViewModel: ViewModel<MainRoute> {
         let requestRestartConfirmation: Signal<Void>
         let tabBarSnapshot: Driver<TabBarSnapshot>
         let isTabBarHidden: Driver<Bool>
+        /// What the toolbar's activity display shows: the capsule below macOS 27, the window
+        /// title's progress ring from macOS 27.
+        let activity: Driver<ToolbarActivityState>
     }
+
+    private lazy var toolbarActivityPresenter = ToolbarActivityPresenter(documentState: documentState)
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
@@ -358,6 +365,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         input.generationOptionsClick.emit(with: self) { owner, _ in owner.router.trigger(.generationOptions) }.disposed(by: rx.disposeBag)
 
         input.mcpStatusClick.emit(with: self) { owner, _ in owner.router.trigger(.mcpStatus) }.disposed(by: rx.disposeBag)
+
+        input.activityClick.emit(with: self) { owner, _ in owner.router.trigger(.reports) }.disposed(by: rx.disposeBag)
 
         let selectedRuntimeObjectObservable: Observable<RuntimeObject?> =
             documentState.$selectedRuntimeObject.asObservable()
@@ -627,7 +636,8 @@ final class MainViewModel: ViewModel<MainRoute> {
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),
             tabBarSnapshot: tabBarSnapshot,
-            isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged()
+            isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged(),
+            activity: toolbarActivityPresenter.state
         )
     }
 }

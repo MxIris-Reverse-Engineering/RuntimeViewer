@@ -103,6 +103,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.click.asSignal(),
+            activityClick: toolbarController.activityItem.activityView.rx.controlEvent.asSignal(),
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal(),
             tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
@@ -141,6 +142,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         output.toolbarSubtitle.driveOnNext { [weak self] subtitle in
             guard let self else { return }
             toolbarController.titleItem.displaySubtitle = subtitle
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.activity.driveOnNext { [weak self] state in
+            guard let self else { return }
+            if MainToolbarController.showsActivityCapsule {
+                toolbarController.activityItem.activityView.apply(state, animated: true)
+            }
         }
         .disposed(by: rx.disposeBag)
 
