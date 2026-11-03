@@ -96,6 +96,22 @@ struct OfflineFileEngineTests {
         #expect(engine.imageNodes.map(\.name) == [file.displayName])
     }
 
+    // MARK: - The handle on a file another process reads
+
+    /// What the app holds while the offline service reads the file: a window
+    /// is open on it before its connection exists, and must never be answered
+    /// from the app's own images in the meantime.
+    @Test("an engine made for a file it does not read forwards from the start, answering nothing from this process")
+    func engineForAFileReadElsewhereForwardsFromTheStart() async throws {
+        let file = try RuntimeOfflineFile(contentsOf: URL(fileURLWithPath: Self.testBundleBinaryPath))
+        let engine = RuntimeEngine(source: file.source, engineID: "OfflineFileEngineTests.handle")
+
+        #expect(await engine.forwardsRequests)
+        await #expect(throws: (any Error).self) {
+            _ = try await engine.objects(in: Self.testBundleBinaryPath)
+        }
+    }
+
     // MARK: - Reading the same image both ways
 
     @Test("the offline engine lists what the in-process engine lists for the same image")

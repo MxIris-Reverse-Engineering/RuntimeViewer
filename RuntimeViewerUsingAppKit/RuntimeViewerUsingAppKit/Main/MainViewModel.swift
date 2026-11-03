@@ -396,17 +396,21 @@ final class MainViewModel: ViewModel<MainRoute> {
             guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
                 $0.engineID == identifier
             }) else { return }
-            guard owner.runtimeEngineManager.isOfflineEngineSuspended(engine) else {
+            guard owner.runtimeEngineManager.isOfflineEngineSuspended(engine),
+                  let file = owner.runtimeEngineManager.offlineFile(of: engine)
+            else {
                 owner.switchToEngine(engine)
                 return
             }
-            // Its process was let go while no window was on it: a new instance
-            // reads the file again before the window moves there.
+            // Its process was let go while no window was on it: the window
+            // moves there at once, saying it is reading, while a new instance
+            // reads the file again.
             Task { @MainActor [weak owner] in
                 guard let owner else { return }
                 do {
-                    try await owner.runtimeEngineManager.resumeOfflineEngine(engine)
+                    let engine = try await owner.runtimeEngineManager.startReading(file)
                     owner.switchToEngine(engine)
+                    try await owner.runtimeEngineManager.waitUntilFileIsRead(by: engine)
                 } catch {
                     owner.errorRelay.accept(error)
                 }

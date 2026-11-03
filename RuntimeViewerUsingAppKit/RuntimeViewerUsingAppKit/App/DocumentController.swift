@@ -37,13 +37,14 @@ final class DocumentController: NSDocumentController {
         }
         Task {
             do {
+                // Returns as soon as the window is up; the file is read in the
+                // background, and joins Open Recent once it has been.
                 let document = try await offlineFileController.openDocument(forFileAt: url, display: displayDocument)
-                noteNewRecentDocumentURL(url)
                 completionHandler(document, false, nil)
             } catch {
                 // The controller presents it: "… is not a Mach-O file, a
-                // bundle or a dyld shared cache", or why the service could
-                // not read it.
+                // bundle or a dyld shared cache". Why the service could not
+                // read a file the window it opened says itself.
                 completionHandler(nil, false, error)
             }
         }

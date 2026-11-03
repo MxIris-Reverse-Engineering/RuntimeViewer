@@ -289,16 +289,23 @@ extension RuntimeXPCServiceListenerConnection {
 
 ```swift
 extension RuntimeEngineManager {
-    /// The engine reading `file`: the one already listed for its URL — woken if it was
-    /// suspended, restarted if `file` asks for another dependency cache — or a new one.
+    /// Starts reading `file` and returns, at once, the engine that reads it, listed: the one
+    /// already listed for its URL — woken if it was suspended, restarted if `file` asks for
+    /// another dependency cache — or a new one. The file is read in the background.
+    public func startReading(_ file: RuntimeOfflineFile) async throws -> RuntimeEngine
+    /// Waits until the engine's process has read its file; throws why it could not.
+    public func waitUntilFileIsRead(by engine: RuntimeEngine) async throws
+    /// `startReading(_:)`, then `waitUntilFileIsRead(by:)`.
     public func runtimeEngine(reading file: RuntimeOfflineFile) async throws -> RuntimeEngine
     /// Lets the engine's process exit. The engine stays listed; `resumeOfflineEngine(_:)`
-    /// or `runtimeEngine(reading:)` brings it back.
-    public func suspendOfflineEngine(_ engine: RuntimeEngine)
+    /// or `startReading(_:)` brings it back.
+    public func suspendOfflineEngine(_ engine: RuntimeEngine) async
     public func resumeOfflineEngine(_ engine: RuntimeEngine) async throws
     public func offlineFile(of engine: RuntimeEngine) -> RuntimeOfflineFile?
 }
 ```
+
+- **先登记、后读**：`startReading(_:)` 立刻登记引擎并返回，service 实例在后台读文件；窗口因此能在读完之前打开。`.file` 来源经普通构造器建出的引擎从创建起就转发（`RuntimeEngine` 的构造器按来源决定），所以读完之前窗口发出的请求一律失败，不会被 App 进程自己的镜像回答。第一次就读不了的引擎从列表撤下（它从没显示过任何东西），停放后重读失败的引擎再次停放、留在列表里。同一引擎上的读与停按先后排队，停放不会插进一次读的中途。
 
 - 第五组 `@Published offlineRuntimeEngines`，进 `runtimeEngines`、去重的本地组判断、`terminateRuntimeEngine` 的移除；不进 `startSharingEngines` 的组合——离线引擎不可镜像，也不该为它起代理服务器。每个离线引擎记着它的 `RuntimeOfflineFile`。
 - 离线引擎的 `hostInfo` 是固定的 `RuntimeHostInfo(hostID: "offline-files", hostName: "Offline Files")`，所以 `rebuildSections()` 自然把它们单列一组。
@@ -308,11 +315,11 @@ extension RuntimeEngineManager {
 
 ### 7. 应用层
 
-- **`DocumentController`**（`NSDocumentController` 子类，`AppDelegate.main()` 里在任何文档之前实例化，使它成为 shared；注释写明为什么必须在那里）：重写 `beginOpenPanel` 一类入口配置面板（允许任意文件与包，不浏览包内容），重写 `openDocument(withContentsOf:display:completionHandler:)`：URL 交给 `OfflineFileController`，成功后 `noteNewRecentDocumentURL`，把新建的 `Document` 交还完成回调；不是离线文件的 URL 走原路。Dock 拖放与 Open Recent 都走这里。
-- **`OfflineFileController`**（App target 的 `@MainActor` 控制器，`@Dependency(\.offlineFileController)`）：`RuntimeOfflineFile(contentsOf:)` 判种类；按 §8 定配对 cache；向管理器要引擎；`Document(runtimeEngine:)` 开窗口；订阅后台工作注册表的占用事件做停放（30 秒）；提供「Dependency Cache ▸」菜单的内容与动作。打不开的文件弹错误（「不是 Mach-O 文件、bundle 或 dyld shared cache」，带具体原因）。
+- **`DocumentController`**（`NSDocumentController` 子类，`AppDelegate.main()` 里在任何文档之前实例化，使它成为 shared；注释写明为什么必须在那里）：重写 `beginOpenPanel` 一类入口配置面板（允许任意文件与包，不浏览包内容），重写 `openDocument(withContentsOf:display:completionHandler:)`：URL 交给 `OfflineFileController`，窗口一出现就把新建的 `Document` 交还完成回调；不是离线文件的 URL 走原路。Dock 拖放与 Open Recent 都走这里。
+- **`OfflineFileController`**（App target 的 `@MainActor` 控制器，`@Dependency(\.offlineFileController)`）：在主线程之外用 `RuntimeOfflineFile(contentsOf:)` 判种类；按 §8 定配对 cache；向管理器 `startReading(_:)` 要引擎；`Document(runtimeEngine:)` 立刻开窗口，内容区在读取期间显示转圈与「Reading “…”…」（`ContentPlaceholderViewModel`，沿用共用的加载占位时机，读得快就不出现）；读完后文件才进最近打开，读失败就在窗口上弹提示（不能读的原因），用户点 OK 后关窗；订阅后台工作注册表的占用事件做停放（30 秒）；提供「Dependency Cache ▸」菜单的内容与动作。认不出的文件在开窗口之前就报错（「不是 Mach-O 文件、bundle 或 dyld shared cache」，带具体原因）。
 - **`Info.plist`**：`CFBundleDocumentTypes` 加一项 Viewer、`LSHandlerRank = Alternate`，`LSItemContentTypes` 为 `public.unix-executable`、`com.apple.mach-o-dylib`、`com.apple.mach-o-binary`、`com.apple.bundle`、`com.apple.application-bundle`、`com.apple.framework`（具体 UTI 以实测 Finder 给出的为准）。
 - **从指定引擎起步的文档**：`DocumentState(runtimeEngine:)`、`MainCoordinator(documentState:)` 的初始路由取文档的引擎，不再写死 `.local`；`Document()` 的默认仍是 `.local`。
-- **引擎菜单**（`MainWindowController.swift:213-260`、`MainViewModel.swift:368-375`）：选中已停放的离线引擎时先 `resumeOfflineEngine` 再 `.main(engine)`；离线组末尾的「Open File…」「Dependency Cache ▸」两项。图标：`Utils/RuntimeSource+.swift` 的 `icon` 对 `.file` 返回 `NSWorkspace.shared.icon(forFile:)`。
+- **引擎菜单**（`MainWindowController.swift:213-260`、`MainViewModel.swift:368-375`）：选中已停放的离线引擎时 `startReading(_:)` 让它重读，窗口立刻 `.main(engine)` 切过去、读取期间同样显示「Reading…」；离线组末尾的「Open File…」「Dependency Cache ▸」两项。图标：`Utils/RuntimeSource+.swift` 的 `icon` 对 `.file` 返回 `NSWorkspace.shared.icon(forFile:)`。
 - **后台工作注册表**（`RuntimeEngineBackgroundWork.swift:105-143`）：加一个发布者，在某个引擎的第一个成员加入、最后一个成员离开时各发一次。只有离线引擎的控制器订阅它。
 - **功能开关**：`RuntimeEngine+Injection` 对 `.file` 直接回答不支持（`injectionTargetsRunOnThisMachine` 为 `false`，`injectionAvailability()` 不问对端）；Load Frameworks… 在离线引擎上禁用；交叉引用与「Keep Cross References Ready」靠对端没有这几条命令，落到现成的「此引擎不支持」，Report 显示该行。
 
@@ -423,7 +430,7 @@ extension RuntimeEngineManager {
 | 6 引擎管理 | 完成 | 离线组、`runtimeEngine(reading:)`、停放 / 唤醒、`RuntimeHostInfo.offlineFiles`；CLI 的过滤与 `SourceKind` 在第 3 步已做。新测试：管理器 6 项（自成一组且转发、同一文件返回同一引擎、停放后仍列出且唤醒是同一对象并起新实例、改配对后在新实例里读到 cache 的镜像、没有 service 时报错且不列出、终止后忘掉），CLI 1 项（离线文件不是 CLI 的来源）；CLI 全量 122 项通过 |
 | 7 应用层 | 完成 | 设置分支与设置页、`RuntimeDyldSharedCacheSummary`；后台工作注册表的占用事件与 `RuntimeOfflineEngineParking`（30 秒后停放）；`Document(runtimeEngine:)` 与 `MainCoordinator` 从文档的引擎起步；`DocumentController`、`OfflineFileController`、`Info.plist` 的 Viewer 文档类型；引擎菜单（选中停放的引擎先唤醒、离线组末尾的 Open File… 与 Dependency Cache 子菜单、文件自己的图标）；离线引擎上 Load Frameworks… 禁用。设置测试 39 项、停放 3 项、后台工作相关 15 项通过，Debug 设置文件前后校验和不变；`./RunScript.sh --no-launch` 构建成功，产物的 `CFBundleDocumentTypes` 带新类型。界面与打开流程没有自动化测试，归第 9 步人工验收 |
 | 8 派生数据 | 完成 | 离线身份 `Offline-<平台>-<版本>-<UUID>`、离线 service 的开关与按 cache 建的存储、本机清理跳过 `Offline-` 目录。新测试 4 项（离线 cache 的目录不被清理、离线身份的目录名且解析不出 build、文件的 cache 镜像归谁、默认关闭）；派生数据与离线 host 相关 46 项通过 |
-| 9 人工验收 | 待用户 | 详细设计 §10 的「人工验收」：第三方 `.app`、iOS cache、胖二进制；切走 30 秒后进程消失、选回来能用；`kill -9` 离线进程后窗口回根、别的窗口不受影响；截断的 Mach-O 只影响它自己 |
+| 9 人工验收 | 进行中 | 详细设计 §10 的「人工验收」：第三方 `.app`、iOS cache、胖二进制；切走 30 秒后进程消失、选回来能用；`kill -9` 离线进程后窗口回根、别的窗口不受影响；截断的 Mach-O 只影响它自己。用户首轮验收报了两个问题：打开 dyld cache 时迟迟不出窗口（已修，见决策日志 11-03「打开文件立刻出窗口」）；离线生成 Swift 接口很慢 |
 | 10 文档 | 完成 | 使用指南 `Guides/OfflineMode.md`；术语表六条（离线文件、依赖 cache、停放、专属实例、镜像目录、读取方式）；README 两处；`CommunicationAndEngineArchitecture.md` §3.6 / §7.1、`DerivedData.md`、根与 App 层 `AGENTS.md` 已随各步更新；提案索引的后续项表划掉「跨镜像点击跳到 `@rpath` 镜像落空」（第 2 步修好），加上三条本提案的后续项 |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -478,3 +485,4 @@ extension RuntimeEngineManager {
 | 2026-11-03 | `Platform` 补了 iOS 等平台，系统目录名照旧只认 macOS 与 Mac Catalyst | 已有测试把「`iOS-…` 不是系统目录」写成了契约（清理会删认不出的目录）。加了平台后解析时只认这台 Mac 自己跑的平台，离线目录靠 `Offline-` 前缀另认。 |
 | 2026-11-03 | 收尾判断：配套文档与新术语 | 写了使用指南 `Guides/OfflineMode.md`（能打开什么、配对、停放、不支持的功能、派生数据）；多实例 XPC 的约束不另写实现说明，放进架构文档 §3.6，那里本来就讲 XPC service 的传输。新术语六条进 `Glossary.md`。 |
 | 2026-11-03 | 实现完成，待用户验收后收尾 | 第 0–8、10 步完成并推送到 `feature/offline-mode`；第 9 步的人工验收由用户在真实 App 里做，之后用 finish-feature 落地编号、改 Implemented。 |
+| 2026-11-03 | 打开文件立刻出窗口，文件在后台读 | 首轮验收：打开 dyld cache 后很久才出窗口，看着像卡死。原因是管理器要等离线 service 把整份 cache 读完、连接建好才登记引擎，App 才建窗口，期间没有任何反馈；识别文件头那一步也在主线程上。用户要的行为：立刻出窗口并显示加载中，不占主线程，读失败弹提示、点确认后关窗。实现：管理器拆出 `startReading(_:)`（先登记、后台连接）与 `waitUntilFileIsRead(by:)`；`.file` 来源经普通构造器建出的引擎从创建起就转发，窗口在读完之前发出的请求一律失败，不会被 App 进程自己的镜像回答；内容区占位在读取期间显示转圈与「Reading “…”…」；读失败时在窗口上弹提示，点 OK 后关窗，第一次就读失败的引擎从菜单撤下，重读失败的引擎再次停放；文件读成功才进 Open Recent；切回停放的引擎也立刻切窗口；同一引擎上的读与停排队执行。 |

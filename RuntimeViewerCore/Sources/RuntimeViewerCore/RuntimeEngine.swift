@@ -267,8 +267,9 @@ public actor RuntimeEngine {
 
     /// `connect(credential:)` was given a credential for the `.local` or a
     /// `.file` source: this engine's work happens in another process, and
-    /// `connection` leads there.
-    private var forwardsToServiceProcess = false
+    /// `connection` leads there. Set from the start for a `.file` engine that
+    /// reads its file elsewhere, before it has a connection.
+    private var forwardsToServiceProcess: Bool
 
     /// Whether a credential moves `source`'s work into another process. Only
     /// `.local` and `.file` are identities rather than transports; every
@@ -296,6 +297,16 @@ public actor RuntimeEngine {
     /// test gives it a store of its own through `useDerivedDataStore(_:)`.
     private(set) lazy var interfaceCorpusStore: RuntimeInterfaceCorpusStore = .init(builder: self, derivedData: Self.processDerivedDataStore)
 
+    /// An engine for `source` whose images, when it reads any itself, are
+    /// this process's own.
+    ///
+    /// A `.file` source is the exception: an engine made here for one reads
+    /// nothing in this process — it is the handle on a file another process
+    /// reads, which `init(reading:engineID:hostInfo:)` makes the engine for —
+    /// so it forwards every request from the start. Until
+    /// `connect(credential:)` reaches that process, a request fails rather
+    /// than being answered from this process's images: the app shows a window
+    /// on such an engine while the file is still being read.
     public init(
         source: RuntimeSource,
         engineID: String = UUID().uuidString,
@@ -307,6 +318,7 @@ public actor RuntimeEngine {
         pushesRuntimeData: Bool = true,
         bookmarkScope: RuntimeBookmarkScope? = nil,
     ) {
+        let readsAFileElsewhere = if case .file = source { true } else { false }
         self.init(
             source: source,
             engineID: engineID,
@@ -315,11 +327,14 @@ public actor RuntimeEngine {
             pushesRuntimeData: pushesRuntimeData,
             bookmarkScope: bookmarkScope,
             imageIndex: .process(),
+            forwardsToServiceProcess: readsAFileElsewhere,
         )
     }
 
     /// The designated initializer: every other one picks where the engine's
-    /// images come from and delegates here.
+    /// images come from and delegates here. `forwardsToServiceProcess`
+    /// starts the engine forwarding before any connection exists; see
+    /// `init(source:engineID:hostInfo:originChain:pushesRuntimeData:bookmarkScope:)`.
     init(
         source: RuntimeSource,
         engineID: String,
@@ -328,9 +343,11 @@ public actor RuntimeEngine {
         pushesRuntimeData: Bool,
         bookmarkScope: RuntimeBookmarkScope?,
         imageIndex: RuntimeImageIndex,
+        forwardsToServiceProcess: Bool = false,
     ) {
         self.engineID = engineID
         self.source = source
+        self.forwardsToServiceProcess = forwardsToServiceProcess
         // Deriving from `source` covers every kind that already names itself
         // stably. It cannot cover a Bonjour *client*, whose identifier is
         // `{deviceID}-{processIdentifier}` at best and a bare service name at

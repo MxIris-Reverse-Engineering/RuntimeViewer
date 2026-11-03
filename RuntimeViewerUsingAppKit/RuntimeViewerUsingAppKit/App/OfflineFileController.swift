@@ -42,29 +42,70 @@ final class OfflineFileController {
     }
 
     /// A new document on the engine reading the file at `url`, added to the
-    /// document controller and, when `display` is set, shown.
+    /// document controller and, when `display` is set, shown at once — while
+    /// an instance of the offline service is still reading the file, which a
+    /// dyld shared cache keeps busy for a while; the window says so until it
+    /// has. Throws, before any window opens, when `url` is no file offline
+    /// mode reads. When the instance cannot read it, the window says why and
+    /// closes once the user has acknowledged it, and Open Recent does not
+    /// list the file.
     func openDocument(forFileAt url: URL, display: Bool) async throws -> Document {
-        let engine = try await runtimeEngine(forFileAt: url)
+        let file = try await fileToRead(at: url)
+        let engine = try await runtimeEngineManager.startReading(file)
         let document = Document(runtimeEngine: engine)
         NSDocumentController.shared.addDocument(document)
         if display {
             document.makeWindowControllers()
             document.showWindows()
         }
-        #log(.info, "Opened \(url.lastPathComponent, privacy: .public) offline")
+        Task { [weak self] in
+            await self?.finishOpening(document, readBy: engine, from: url, named: file.displayName)
+        }
         return document
     }
 
-    /// The engine reading the file at `url`: the listed one, with the cache
-    /// the user paired it with, or a new one paired with the default cache.
-    func runtimeEngine(forFileAt url: URL) async throws -> RuntimeEngine {
-        var file = try RuntimeOfflineFile(contentsOf: url)
+    /// The file at `url` as offline mode reads it: the listed one, with the
+    /// cache the user paired it with, or a new one paired with the default
+    /// cache. What is at `url` is inspected off the main thread — a header
+    /// read, but of a file that can be anywhere, a slow volume included.
+    private func fileToRead(at url: URL) async throws -> RuntimeOfflineFile {
+        var file = try await Task.detached(priority: .userInitiated) {
+            try RuntimeOfflineFile(contentsOf: url)
+        }.value
         if let listedFile = listedFile(withSource: file.source) {
             file = listedFile
         } else {
             file.dependencyCache = settings.offline.defaultDependencyCache(for: file)
         }
-        return try await runtimeEngineManager.runtimeEngine(reading: file)
+        return file
+    }
+
+    /// Waits for `engine` to have read its file. Then the file joins Open
+    /// Recent; or, when it could not be read, `document`'s window says why
+    /// and closes once the user has acknowledged it.
+    private func finishOpening(_ document: Document, readBy engine: RuntimeEngine, from url: URL, named displayName: String) async {
+        do {
+            try await runtimeEngineManager.waitUntilFileIsRead(by: engine)
+            NSDocumentController.shared.noteNewRecentDocumentURL(url)
+            #log(.info, "Opened \(url.lastPathComponent, privacy: .public) offline")
+        } catch {
+            #log(.error, "Could not open \(url.lastPathComponent, privacy: .public) offline: \(error.localizedDescription, privacy: .public)")
+            // Closed while the file was being read: nobody is waiting to hear.
+            guard NSDocumentController.shared.documents.contains(where: { $0 === document }) else { return }
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "“\(displayName)” could not be read."
+            alert.informativeText = error.localizedDescription
+            alert.addButton(withTitle: "OK")
+            guard let window = document.windowForSheet else {
+                alert.runModal()
+                document.close()
+                return
+            }
+            alert.beginSheetModal(for: window) { _ in
+                document.close()
+            }
+        }
     }
 
     // MARK: - Dependency cache
@@ -95,9 +136,10 @@ final class OfflineFileController {
         return choices
     }
 
-    /// Reads `engine`'s file again, paired with `dependencyCache`. The engine
-    /// stays the same object, so every window on it stays; its new instance
-    /// lists the images anew.
+    /// Reads `engine`'s file again, paired with `dependencyCache`, and waits
+    /// until it has. The engine stays the same object, so every window on it
+    /// stays, saying it is reading meanwhile; its new instance lists the
+    /// images anew.
     func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeOfflineFile.DependencyCache?) async throws {
         guard var file = runtimeEngineManager.offlineFile(of: engine), file.dependencyCache != dependencyCache else { return }
         file.dependencyCache = dependencyCache

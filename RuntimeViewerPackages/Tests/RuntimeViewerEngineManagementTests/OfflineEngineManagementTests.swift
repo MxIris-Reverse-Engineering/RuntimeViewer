@@ -105,6 +105,70 @@ struct OfflineEngineManagementTests {
         #expect(await pollUntil { await engine.imageList.count > 1 }, "the paired cache's images did not arrive")
     }
 
+    @Test("A file's engine is listed at once, forwarding, before its instance has read the file")
+    func engineIsListedBeforeItsFileIsRead() async throws {
+        let instances = OfflineServiceInstances(startsHosts: false)
+        let manager = Self.makeManager(serving: instances)
+        defer { Task { await instances.stopAll() } }
+        let file = try Self.file()
+
+        let engine = try await manager.startReading(file)
+
+        #expect(manager.offlineRuntimeEngines.map(\.engineID) == [engine.engineID])
+        #expect(manager.runtimeEngineSections.contains { $0.hostID == RuntimeHostInfo.offlineFiles.hostID })
+        #expect(manager.offlineFile(of: engine) == file)
+        #expect(!engine.state.isReady)
+        #expect(await engine.forwardsRequests)
+        #expect(try await manager.startReading(file) === engine, "a second open should wait for the same read")
+
+        instances.startHosts()
+        try await manager.waitUntilFileIsRead(by: engine)
+
+        #expect(engine.state == .connected)
+        #expect(instances.count == 1)
+        #expect(await pollUntil { await engine.imageList == [Self.filePath] })
+    }
+
+    @Test("A new engine whose file cannot be read is taken off the list again, and waiting for it says why")
+    func unreadableFileIsTakenOffTheList() async throws {
+        let instances = OfflineServiceInstances()
+        let manager = Self.makeManager(serving: instances)
+        defer { Task { await instances.stopAll() } }
+        let missingFile = RuntimeOfflineFile(
+            url: URL(fileURLWithPath: "/nonexistent/OfflineEngineManagementTests"),
+            content: .machO(slice: nil),
+            platform: nil,
+            displayName: "OfflineEngineManagementTests"
+        )
+
+        let engine = try await manager.startReading(missingFile)
+        #expect(manager.offlineRuntimeEngines.contains { $0 === engine })
+
+        await #expect(throws: (any Error).self) {
+            try await manager.waitUntilFileIsRead(by: engine)
+        }
+        #expect(manager.offlineRuntimeEngines.isEmpty)
+        #expect(manager.offlineFile(of: engine) == nil)
+        #expect(!manager.runtimeEngineSections.contains { $0.hostID == RuntimeHostInfo.offlineFiles.hostID })
+        #expect(engine.state == .disconnected(error: nil))
+    }
+
+    @Test("Suspending an engine whose file is still being read waits for the read, and leaves it stopped")
+    func suspendingWaitsForTheReadUnderWay() async throws {
+        let instances = OfflineServiceInstances(startsHosts: false)
+        let manager = Self.makeManager(serving: instances)
+        defer { Task { await instances.stopAll() } }
+        let engine = try await manager.startReading(try Self.file())
+
+        let suspension = Task { await manager.suspendOfflineEngine(engine) }
+        instances.startHosts()
+        await suspension.value
+
+        #expect(manager.isOfflineEngineSuspended(engine))
+        #expect(engine.state == .disconnected(error: nil))
+        #expect(manager.offlineRuntimeEngines.contains { $0 === engine })
+    }
+
     @Test("A process without an offline service cannot read files offline, and lists nothing")
     func withoutAServiceNothingIsListed() async throws {
         let manager = RuntimeEngineManager(configuration: .application, startupHandler: { _ in })
@@ -134,19 +198,41 @@ struct OfflineEngineManagementTests {
 }
 
 /// Stands in for the offline service: every credential it hands out leads to
-/// a new instance, a `RuntimeOfflineServiceHost` of its own.
+/// a new instance, a `RuntimeOfflineServiceHost` of its own. Made with
+/// `startsHosts: false`, an instance accepts nothing — and so reads nothing —
+/// until `startHosts()`, which holds a read under way for as long as a test
+/// needs it.
 @MainActor
 private final class OfflineServiceInstances {
     private var hosts: [RuntimeOfflineServiceHost] = []
+
+    private var waitingHosts: [RuntimeOfflineServiceHost] = []
+
+    private let startsHosts: Bool
+
+    init(startsHosts: Bool = true) {
+        self.startsHosts = startsHosts
+    }
 
     var count: Int { hosts.count }
 
     func credential(for file: RuntimeOfflineFile) throws -> RuntimeConnectionCredential? {
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
         let host = RuntimeOfflineServiceHost(connection: listener)
-        host.activate()
+        if startsHosts {
+            host.activate()
+        } else {
+            waitingHosts.append(host)
+        }
         hosts.append(host)
         return .xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeOfflineService.launchPayload(for: file))))
+    }
+
+    func startHosts() {
+        for host in waitingHosts {
+            host.activate()
+        }
+        waitingHosts.removeAll()
     }
 
     func stopAll() async {

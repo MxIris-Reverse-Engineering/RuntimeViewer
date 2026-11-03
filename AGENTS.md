@@ -364,8 +364,11 @@ The project uses three Swift Package Manager packages:
   (`setClientDepartureHandler(_:)`; a message it has no handler for is no departure). launchd never
   relaunches an instance, so a client whose instance went away reattaches behind a new connection. It
   links neither `RuntimeViewerInjection` nor `RuntimeViewerCrossReferences` (see *Injection commands*)
-  and carries no entitlement exception: it reads files as data and never loads one. Background:
-  `Documentations/Evolutions/draft-offline-mode.md`
+  and carries no entitlement exception: it reads files as data and never loads one. The app opens a
+  file's window before the instance has read it (`RuntimeEngineManager.startReading(_:)`), which is safe
+  only because a `.file` engine made with `RuntimeEngine.init(source:…)` forwards from the moment it
+  exists: until its connection is up a request fails instead of being answered from the app's own
+  images. Background: `Documentations/Evolutions/draft-offline-mode.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
   only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
