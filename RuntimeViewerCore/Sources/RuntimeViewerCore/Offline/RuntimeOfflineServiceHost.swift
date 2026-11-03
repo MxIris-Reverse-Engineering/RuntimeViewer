@@ -56,6 +56,10 @@ public final class RuntimeOfflineServiceHost: @unchecked Sendable {
     private func launch(with payload: Data) async throws {
         let file = try RuntimeOfflineService.file(fromLaunchPayload: payload)
         let engine = try RuntimeEngine(reading: file, engineID: "offline-service.\(ProcessInfo.processInfo.processIdentifier)")
+        let catalog = engine.imageCatalog
+        if let derivedDataStore = RuntimeDerivedData.offlineStore(for: file, isSharedCacheImage: { catalog.isSharedCacheImage($0) }) {
+            await engine.useDerivedDataStore(derivedDataStore)
+        }
         let serviceHost = RuntimeLocalRuntimeServiceHost(engine: engine, connection: connection)
         try await serviceHost.start()
         self.serviceHost = serviceHost

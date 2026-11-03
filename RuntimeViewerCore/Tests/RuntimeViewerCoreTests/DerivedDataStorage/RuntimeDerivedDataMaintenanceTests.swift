@@ -76,6 +76,18 @@ struct RuntimeDerivedDataMaintenanceTests {
         #expect(!layout.exists(foreignURL))
     }
 
+    @Test("An offline cache's directory stays, whatever its age: only Delete Derived Data removes it")
+    func offlineCacheDirectoriesStay() throws {
+        let layout = Layout(directory: try DerivedDataTestDirectory())
+        let offlineURL = layout.rootURL.appendingPathComponent("Offline-iOS-27.0-\(UUID().uuidString)", isDirectory: true)
+        let producerURL = try layout.producer(named: DerivedDataTestIdentities.producer.directoryName, in: offlineURL, lastUse: Date(timeIntervalSinceNow: -60 * Self.day))
+
+        layout.cleanUp()
+
+        #expect(layout.exists(offlineURL))
+        #expect(layout.exists(producerURL))
+    }
+
     @Test("A producer unused for 14 days goes; this process's own and a recently used one stay")
     func producerDirectories() throws {
         let layout = Layout(directory: try DerivedDataTestDirectory())

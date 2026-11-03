@@ -422,7 +422,8 @@ extension RuntimeEngineManager {
 | 5 离线 service target | 完成 | `./RunScript.sh --no-launch`（隔离构建目录）成功；产物里 `Contents/XPCServices/RuntimeViewerOfflineService.xpc` 存在，hardened runtime、团队签名、entitlements 为空，`Info.plist` 带 `_MultipleInstances = true`，App 的 `RuntimeViewerOfflineServiceBundleIdentifier` 是 `dev.JH.RuntimeViewerOfflineService.arm64e`；`./TuistScript.sh check` 通过。新测试：监听方的「客户端离开」只认连接关闭（未知消息不算），`.file` 引擎对交叉引用命令自己回答「未知命令」；传输与离线 host 共 23 项、交叉引用 33 项通过。真实 service 实例的端到端运行归第 9 步人工验收 |
 | 6 引擎管理 | 完成 | 离线组、`runtimeEngine(reading:)`、停放 / 唤醒、`RuntimeHostInfo.offlineFiles`；CLI 的过滤与 `SourceKind` 在第 3 步已做。新测试：管理器 6 项（自成一组且转发、同一文件返回同一引擎、停放后仍列出且唤醒是同一对象并起新实例、改配对后在新实例里读到 cache 的镜像、没有 service 时报错且不列出、终止后忘掉），CLI 1 项（离线文件不是 CLI 的来源）；CLI 全量 122 项通过 |
 | 7 应用层 | 完成 | 设置分支与设置页、`RuntimeDyldSharedCacheSummary`；后台工作注册表的占用事件与 `RuntimeOfflineEngineParking`（30 秒后停放）；`Document(runtimeEngine:)` 与 `MainCoordinator` 从文档的引擎起步；`DocumentController`、`OfflineFileController`、`Info.plist` 的 Viewer 文档类型；引擎菜单（选中停放的引擎先唤醒、离线组末尾的 Open File… 与 Dependency Cache 子菜单、文件自己的图标）；离线引擎上 Load Frameworks… 禁用。设置测试 39 项、停放 3 项、后台工作相关 15 项通过，Debug 设置文件前后校验和不变；`./RunScript.sh --no-launch` 构建成功，产物的 `CFBundleDocumentTypes` 带新类型。界面与打开流程没有自动化测试，归第 9 步人工验收 |
-| 8–10 | 未做 | |
+| 8 派生数据 | 完成 | 离线身份 `Offline-<平台>-<版本>-<UUID>`、离线 service 的开关与按 cache 建的存储、本机清理跳过 `Offline-` 目录。新测试 4 项（离线 cache 的目录不被清理、离线身份的目录名且解析不出 build、文件的 cache 镜像归谁、默认关闭）；派生数据与离线 host 相关 46 项通过 |
+| 9–10 | 未做 | |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -472,3 +473,5 @@ extension RuntimeEngineManager {
 | 2026-11-03 | dyld cache 主文件拖到 Dock 也会打开 | 提案「写方案时自定的几条」说 Dock 拖放不接 dyld cache。实测 `mdls`：带执行权限的 cache 主文件被标成 `public.unix-executable`，正好落在声明的 Viewer 类型里；打开流程本来就认 cache，所以不另加限制。子缓存与符号文件没有这类类型，只能从 File › Open… 选（会被换成主文件）。 |
 | 2026-11-03 | 离线文档不设 `fileURL`，每次打开都是新窗口 | 设了 `fileURL`，NSDocument 会把窗口当成那个文件的编辑器（标题代理图标、文件变动时提示还原、自动保存的判断），而本文档不读不写文件。同一个文件再开一次复用的是引擎（同一个 service 实例），窗口另开一个；最近打开靠 `noteNewRecentDocumentURL(_:)` 记下。 |
 | 2026-11-03 | 「Manage in Settings…」只打开设置窗口 | 设置窗口还没有跳到指定页的入口；第一版先打开窗口，由用户点 Offline Files 页。 |
+| 2026-11-03 | 离线 service 用自己的派生数据开关 | 详细设计 §9 没说开关。离线 service 若调 `enableInThisProcess()`，进程级存储会取本机身份、用本机 dyld 判断共享缓存镜像，iOS cache 的镜像（路径与本机的同名）就会按本机身份存进本机目录。改为 `enableForOfflineEngineInThisProcess()` 加 `offlineStore(for:isSharedCacheImage:)`：由离线 host 按引擎读的 cache 建存储交给引擎，镜像归属由引擎的目录回答；存储不清理（`cleansUpOnFirstUse: false`），以免按「build 不同」删掉本机的系统目录。 |
+| 2026-11-03 | `Platform` 补了 iOS 等平台，系统目录名照旧只认 macOS 与 Mac Catalyst | 已有测试把「`iOS-…` 不是系统目录」写成了契约（清理会删认不出的目录）。加了平台后解析时只认这台 Mac 自己跑的平台，离线目录靠 `Offline-` 前缀另认。 |

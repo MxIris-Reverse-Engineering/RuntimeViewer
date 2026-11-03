@@ -594,7 +594,12 @@ code or the corpus store's read phase** — it says why each part has the shape 
   Every other process leaves it off — the app itself (its Bonjour server engine answers commands in process), the
   command-line host, the Catalyst helper application, an injected payload, a test — and the app only measures
   and deletes it (`RuntimeDerivedDataMaintenance`). Leaving the call out fails quietly: that process just goes
-  without derived data.
+  without derived data. **The offline service is the third**, with a switch of its own,
+  `RuntimeDerivedData.enableForOfflineEngineInThisProcess()`: its engine reads a cache from disk, so its store
+  (`RuntimeDerivedData.offlineStore(for:isSharedCacheImage:)`) is keyed by that cache — an `Offline-<platform>-<version>-<UUID>`
+  system directory, or this Mac's when the file is paired with this Mac's cache — keeps only that cache's images
+  as the engine's catalog names them, and never cleans up. The two local services' cleanup skips `Offline-`
+  directories; only Delete Derived Data removes them.
 - **Only images of the dyld shared cache**, whose contents the system identity names; a store does nothing for
   any other image.
 - **A new kind of derived data goes through `RuntimeDerivedDataStore`**, with a `RuntimeDerivedDataKind` and a

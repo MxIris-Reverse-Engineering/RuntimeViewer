@@ -29,6 +29,11 @@ do {
     exit(EXIT_FAILURE)
 }
 
+// Derived data — the Find corpora of the cache images this instance reads —
+// kept under the identity of the dyld shared cache they come from, not this
+// Mac's; see `RuntimeDerivedData.offlineStore(for:isSharedCacheImage:)`.
+RuntimeDerivedData.enableForOfflineEngineInThisProcess()
+
 let host = RuntimeOfflineServiceHost(connection: listener)
 
 // Nobody else can ever reach this instance — launchd starts a new one for

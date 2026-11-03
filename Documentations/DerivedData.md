@@ -25,6 +25,13 @@
 - **测试**：绝不调它，而是用 `RuntimeEngine.useDerivedDataStore(_:)` 给引擎一个临时目录里的存储
   （`RuntimeViewerCore/Tests/AGENTS.md`、`RuntimeViewerPackages/Tests/AGENTS.md`）。
 
+**离线 service 是第三个**，开关另有一个：`RuntimeDerivedData.enableForOfflineEngineInThisProcess()`。它的引擎读的是
+磁盘上的 cache，这台 Mac 的身份与本进程映射的 cache 都说明不了那些镜像，所以它不用进程级的存储，而是由
+`RuntimeOfflineServiceHost` 在收到文件后经 `RuntimeDerivedData.offlineStore(for:isSharedCacheImage:)` 建一个交给引擎：
+身份取它读 cache 镜像的那份 cache——打开的就是 cache 时是它自己，配对本机 cache 时是本机的身份，配对登记的 cache
+时是那份——「哪些镜像是共享缓存里的」由引擎的镜像目录回答；单独读的文件没有 cache 镜像，也就没有派生数据。
+用错开关（调 `enableInThisProcess()`）会让 iOS cache 的镜像按本机身份存进本机目录，因为本机 dyld 也认得那些路径。
+
 **漏调不会出错**，那个进程只是没有派生数据。所以它不像命令扩展的 `install()` 那样是「链接了就必须调」的义务，
 新进程不需要跟着加。
 
@@ -60,6 +67,11 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
   24 小时都会刷新；读取时离上次刷新超过一天，也刷新一次。所以连续运行的实例永远不会被当成没人用。
 - **残留**：`DerivedData.deleting-*` 删掉；临时文件，以及进程已经不在的读取标记（连同它旁边的容器），超过一天
   的删掉。
+
+- **离线 cache 的目录**（`Offline-<平台>-<版本>-<UUID>`）：整个跳过。cache 头里没有 build，系统更新也不会让它失效；
+  只有「删除派生数据」删它们（按最近使用时间清理留作后续）。离线 service 自己的存储从不清理：它的目录要么是本机
+  的（由本机两个 service 照上面的规则清理，离线 service 的生产者与别的生产者一样按 14 天算），要么是离线的。
+  解析系统目录名时只认这台 Mac 自己跑的平台（macOS、Mac Catalyst），`iOS-…` 这种名字照旧当作认不出、删掉。
 
 规则只看名字与时间，且从不删自己的目录，所以几个进程同时清理也不会冲突。不设大小上限，占用大小显示在设置页里。
 

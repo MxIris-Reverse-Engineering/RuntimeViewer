@@ -6,10 +6,29 @@ import MachOKit
 /// `directoryName` is the name of the directory that data is kept under, so
 /// a system update — a new build, a new shared cache — finds nothing stored.
 public struct RuntimeDerivedDataSystemIdentity: Hashable, Sendable {
+    /// Raw values match `RuntimeOfflineFile.Platform.name`.
     public enum Platform: String, Hashable, Sendable, CaseIterable {
         case macOS
         case macCatalyst
+        case iOS
+        case iOSSimulator
+        case tvOS
+        case tvOSSimulator
+        case watchOS
+        case watchOSSimulator
+        case visionOS
+        case visionOSSimulator
+        case driverKit
+
+        /// Whether this Mac's own processes run on it: the platforms of a
+        /// system directory, as opposed to an offline cache's.
+        var isThisMacsOwn: Bool {
+            self == .macOS || self == .macCatalyst
+        }
     }
+
+    /// What every offline cache's directory name begins with.
+    public static let offlineDirectoryNamePrefix = "Offline-"
 
     /// The platform of the process: a Mac Catalyst process reads the same
     /// shared cache through other images, `/System/iOSSupport` among them.
@@ -25,16 +44,49 @@ public struct RuntimeDerivedDataSystemIdentity: Hashable, Sendable {
     /// `DyldCacheLoaded.current?.mainCacheHeader.uuid`.
     public let sharedCacheUUID: UUID
 
+    /// Whether this is a dyld shared cache read from disk by the offline
+    /// service rather than the one this Mac runs: a cache header carries no
+    /// build, so its UUID tells it apart, and its directory is no system
+    /// update's to clean up.
+    public let isOfflineCache: Bool
+
     public init(platform: Platform, operatingSystemVersion: String, operatingSystemBuild: String, sharedCacheUUID: UUID) {
+        self.init(platform: platform, operatingSystemVersion: operatingSystemVersion, operatingSystemBuild: operatingSystemBuild, sharedCacheUUID: sharedCacheUUID, isOfflineCache: false)
+    }
+
+    private init(platform: Platform, operatingSystemVersion: String, operatingSystemBuild: String, sharedCacheUUID: UUID, isOfflineCache: Bool) {
         self.platform = platform
         self.operatingSystemVersion = Self.directoryNameComponent(operatingSystemVersion)
         self.operatingSystemBuild = Self.directoryNameComponent(operatingSystemBuild)
         self.sharedCacheUUID = sharedCacheUUID
+        self.isOfflineCache = isOfflineCache
     }
 
-    /// "<platform>-<version>-<build>-<shared cache UUID>".
+    /// The identity of a dyld shared cache read from disk, from its header;
+    /// `nil` for a platform derived data does not name.
+    public static func offlineCache(_ summary: RuntimeDyldSharedCacheSummary) -> RuntimeDerivedDataSystemIdentity? {
+        guard let platformName = summary.platform?.name, let platform = Platform(rawValue: platformName) else { return nil }
+        return RuntimeDerivedDataSystemIdentity(
+            platform: platform,
+            operatingSystemVersion: summary.platform?.version ?? "",
+            operatingSystemBuild: "",
+            sharedCacheUUID: summary.uuid,
+            isOfflineCache: true
+        )
+    }
+
+    /// "<platform>-<version>-<build>-<shared cache UUID>", or for an offline
+    /// cache "Offline-<platform>-<version>-<shared cache UUID>".
     public var directoryName: String {
-        "\(platform.rawValue)-\(operatingSystemVersion)-\(operatingSystemBuild)-\(sharedCacheUUID.uuidString)"
+        if isOfflineCache {
+            return "\(Self.offlineDirectoryNamePrefix)\(platform.rawValue)-\(operatingSystemVersion)-\(sharedCacheUUID.uuidString)"
+        }
+        return "\(platform.rawValue)-\(operatingSystemVersion)-\(operatingSystemBuild)-\(sharedCacheUUID.uuidString)"
+    }
+
+    /// Whether a system directory's name is an offline cache's.
+    static func isOfflineCacheDirectory(named directoryName: String) -> Bool {
+        directoryName.hasPrefix(offlineDirectoryNamePrefix)
     }
 
     /// This process's system; `nil` when the process maps no shared cache,
@@ -69,7 +121,7 @@ public struct RuntimeDerivedDataSystemIdentity: Hashable, Sendable {
         let components = directoryName.split(separator: "-", omittingEmptySubsequences: false)
         // The UUID string itself holds four hyphens.
         guard components.count == 8,
-              Platform(rawValue: String(components[0])) != nil,
+              Platform(rawValue: String(components[0]))?.isThisMacsOwn == true,
               UUID(uuidString: components[3...].joined(separator: "-")) != nil,
               !components[2].isEmpty
         else { return nil }

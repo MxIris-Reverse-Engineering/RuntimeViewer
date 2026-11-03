@@ -34,6 +34,54 @@ public enum RuntimeDerivedData {
 
     private static let isEnabled = Mutex(false)
 
+    /// Turns derived data on for the offline engine this process serves —
+    /// called once, at the offline service's entry point. Unlike
+    /// `enableInThisProcess()` it gives the process no store of its own:
+    /// `offlineStore(for:isSharedCacheImage:)` makes one from the cache the
+    /// engine reads, since this Mac's identity and this process's mapped
+    /// cache say nothing about a cache read from disk.
+    public static func enableForOfflineEngineInThisProcess() {
+        isEnabledForOfflineEngine.withLock { $0 = true }
+    }
+
+    private static let isEnabledForOfflineEngine = Mutex(false)
+
+    /// The derived data of an engine reading `file`, kept under the identity
+    /// of the dyld shared cache it reads its cache images from: the file
+    /// itself when it is a cache, this Mac's when it is paired with this
+    /// Mac's, the registered cache's otherwise. Only that cache's images are
+    /// kept (`isSharedCacheImage`), and the store never cleans up — its
+    /// directory is either this Mac's, which the local services clean up, or
+    /// an offline cache's, which only Delete Derived Data removes.
+    ///
+    /// `nil` unless the offline service turned it on, outside a RuntimeViewer
+    /// application, for a file read alone, or when the cache cannot be read.
+    static func offlineStore(for file: RuntimeOfflineFile, isSharedCacheImage: @escaping @Sendable (String) -> Bool) -> RuntimeDerivedDataStore? {
+        guard isEnabledForOfflineEngine.withLock({ $0 }),
+              let location = RuntimeDerivedDataLocation.enclosingApplication(of: .main),
+              let system = systemIdentity(forCacheImagesOf: file),
+              let producer = RuntimeDerivedDataProducerIdentity.currentProcess()
+        else { return nil }
+        #log(.info, "Offline derived data at \(location.rootURL.path, privacy: .public), system \(system.directoryName, privacy: .public), producer \(producer.directoryName, privacy: .public)")
+        return RuntimeDerivedDataStore(location: location, system: system, producer: producer, isSharedCacheImage: isSharedCacheImage, cleansUpOnFirstUse: false)
+    }
+
+    /// Whose cache images an engine reading `file` reads; `nil` for a file
+    /// read alone, or a cache that cannot be read.
+    static func systemIdentity(forCacheImagesOf file: RuntimeOfflineFile) -> RuntimeDerivedDataSystemIdentity? {
+        if case .dyldSharedCache = file.content {
+            return (try? RuntimeDyldSharedCacheSummary(contentsOf: file.url)).flatMap(RuntimeDerivedDataSystemIdentity.offlineCache)
+        }
+        switch file.dependencyCache {
+        case nil:
+            return nil
+        case .systemDyldSharedCache:
+            return RuntimeDerivedDataSystemIdentity.current()
+        case .dyldSharedCache(let url):
+            return (try? RuntimeDyldSharedCacheSummary(contentsOf: url)).flatMap(RuntimeDerivedDataSystemIdentity.offlineCache)
+        }
+    }
+
     /// The process's store: made the first time an enabled process asks,
     /// from the application around its bundle, its system and its code —
     /// `nil` when any of the three cannot be told, which leaves the process
