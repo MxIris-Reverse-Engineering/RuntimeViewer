@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Dependencies
@@ -113,15 +114,23 @@ final class RuntimeEngineBackgroundWorkRegistry {
     /// activities with. Test seam: every test has a registry of its own.
     var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
 
+    /// An engine's first document joining, or its last one leaving — what lets an offline engine's
+    /// process go while nobody is on it (`RuntimeOfflineEngineParking`).
+    let occupancyChanges = PassthroughSubject<RuntimeEngineOccupancyChange, Never>()
+
     fileprivate init() {}
 
     /// `member` holds `engine`'s background work from now on, brought into being — and started —
     /// if no document on the engine holds it.
     func join(_ engine: RuntimeEngine, as member: ObjectIdentifier) -> RuntimeEngineBackgroundWork {
         let engineIdentifier = ObjectIdentifier(engine)
+        let isFirstMember = backgroundWorkByEngine[engineIdentifier] == nil
         let backgroundWork = backgroundWorkByEngine[engineIdentifier] ?? RuntimeEngineBackgroundWork(engine: engine, processActivityScheduler: processActivityScheduler)
         backgroundWorkByEngine[engineIdentifier] = backgroundWork
         backgroundWork.memberIdentifiers.insert(member)
+        if isFirstMember {
+            occupancyChanges.send(.occupied(engine))
+        }
         return backgroundWork
     }
 
@@ -133,6 +142,7 @@ final class RuntimeEngineBackgroundWorkRegistry {
         let engineIdentifier = ObjectIdentifier(backgroundWork.engine)
         if backgroundWorkByEngine[engineIdentifier] === backgroundWork {
             backgroundWorkByEngine[engineIdentifier] = nil
+            occupancyChanges.send(.vacated(backgroundWork.engine))
         }
     }
 
@@ -140,6 +150,14 @@ final class RuntimeEngineBackgroundWorkRegistry {
     func backgroundWork(on engine: RuntimeEngine) -> RuntimeEngineBackgroundWork? {
         backgroundWorkByEngine[ObjectIdentifier(engine)]
     }
+}
+
+/// See `RuntimeEngineBackgroundWorkRegistry.occupancyChanges`.
+enum RuntimeEngineOccupancyChange {
+    /// The first document joined the engine.
+    case occupied(RuntimeEngine)
+    /// The last document on the engine left it.
+    case vacated(RuntimeEngine)
 }
 
 // MARK: - Dependencies
