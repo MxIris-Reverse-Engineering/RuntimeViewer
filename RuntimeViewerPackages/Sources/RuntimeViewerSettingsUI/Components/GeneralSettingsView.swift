@@ -20,6 +20,18 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Picker("Activity Style", selection: $settings.toolbarActivityStyle) {
+                    ForEach(RuntimeViewerSettings.Settings.ToolbarActivityStyle.allCases, id: \.self) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+            } header: {
+                Text("Toolbar")
+            } footer: {
+                Text("Xcode 26 shows the progress of background work in a capsule in the middle of the toolbar. Xcode 27 shows it in place of the window title's icon and puts the Runtime Source menu in the middle. Automatic follows the Xcode of this system: Xcode 27 from macOS 27.")
+            }
+
+            Section {
                 Toggle("Quit After Closing Last Window", isOn: $settings.terminatesAfterLastWindowClosed)
             } header: {
                 Text("Windows")

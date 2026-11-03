@@ -170,10 +170,13 @@ final class MainViewModel: ViewModel<MainRoute> {
         let requestRestartConfirmation: Signal<Void>
         let tabBarSnapshot: Driver<TabBarSnapshot>
         let isTabBarHidden: Driver<Bool>
-        /// What the toolbar's activity display shows: the capsule below macOS 27, the window
-        /// title's progress ring from macOS 27.
+        /// Where the toolbar shows the activity: the user's setting as it stands on this system,
+        /// never `.automatic`.
+        let activityStyle: Driver<Settings.ToolbarActivityStyle>
+        /// What the toolbar's activity display shows, in the capsule or in the window title's
+        /// progress ring as `activityStyle` says.
         let activity: Driver<ToolbarActivityState>
-        /// The title's icon from macOS 27, which the progress ring takes the place of.
+        /// The title's icon in Xcode 27's style, which the progress ring takes the place of.
         let toolbarIcon: Driver<NSImage?>
     }
 
@@ -584,6 +587,18 @@ final class MainViewModel: ViewModel<MainRoute> {
             )
         }
 
+        // Resolved once: `Observable.tracking` re-arms on a main-queue hop, where the dependency
+        // context is gone.
+        let trackedSettings = settings
+        let activityStyle = Observable<Settings.ToolbarActivityStyle>
+            .tracking {
+                MainActor.assumeIsolated {
+                    trackedSettings.general.toolbarActivityStyle.resolved
+                }
+            }
+            .distinctUntilChanged()
+            .asDriver(onErrorDriveWith: .empty())
+
         return Output(
             // combineLatest rather than reading `runtimeEngine` inside the
             // image-node subscription: an engine switch has to retitle the
@@ -649,6 +664,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),
             tabBarSnapshot: tabBarSnapshot,
             isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged(),
+            activityStyle: activityStyle,
             activity: toolbarActivityPresenter.state,
             toolbarIcon: documentState.$currentImageNode.asDriver().map { Self.toolbarIcon(for: $0) }
         )
