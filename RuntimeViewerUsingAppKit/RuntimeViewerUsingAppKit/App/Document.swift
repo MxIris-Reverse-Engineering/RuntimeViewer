@@ -1,5 +1,6 @@
 import AppKit
 import RuntimeViewerApplication
+import RuntimeViewerCore
 
 final class Document: NSDocument {
     private static var nextDocumentNumber = 1
@@ -10,9 +11,29 @@ final class Document: NSDocument {
         return id
     }()
     
-    let documentState = DocumentState()
+    let documentState: DocumentState
 
     private lazy var mainCoordinator = MainCoordinator(documentState: documentState)
+
+    /// A document whose window starts on `runtimeEngine`: an offline file's
+    /// engine for a file the user opened, `.local` for a new window.
+    init(runtimeEngine: RuntimeEngine) {
+        documentState = DocumentState(runtimeEngine: runtimeEngine)
+        super.init()
+    }
+
+    /// File › New and every other untitled document start on "My Mac".
+    ///
+    /// Overridden as a convenience initializer on purpose: `init()` is
+    /// NSDocument's only designated initializer, and implementing it keeps
+    /// the class inheriting NSDocument's convenience ones —
+    /// `init(type:)`, `init(contentsOf:ofType:)`,
+    /// `init(for:withContentsOf:ofType:)` — which AppKit calls from
+    /// Objective-C when it opens or restores a document. A subclass that does
+    /// not inherit them traps there instead.
+    override convenience init() {
+        self.init(runtimeEngine: .local)
+    }
 
     override class var autosavesInPlace: Bool { false }
 

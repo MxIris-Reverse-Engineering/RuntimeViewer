@@ -533,6 +533,8 @@ shape it has.
 - `CommandLineHostController` — makes the running app the CLI host: asks a standalone host to leave on launch, serves the socket, removes its files on quit
 - `SettingsLifecycleController` — loads the settings at launch and flushes them at termination (root `AGENTS.md`, *Settings Integration*)
 - `RuntimeDerivedDataController` — the app's side of derived data: gives the Indexing settings page its `DerivedDataClient` (location, size, Show in Finder, delete) and asks before the application menu's Delete Derived Data… deletes it (root `AGENTS.md`, *Derived data*)
+- `OfflineFileController` — opens a Mach-O file, a bundle or a dyld shared cache offline: picks the dependency cache (`Settings.offline`), asks `RuntimeEngineManager.runtimeEngine(reading:)` for the engine and opens a `Document(runtimeEngine:)` on it; builds the engine menu's Dependency Cache submenu and re-pairs from it; `start()` starts `RuntimeOfflineEngineParking`, which lets an offline engine's process go thirty seconds after its last window left
+- `DocumentController` — the app's `NSDocumentController` subclass: hands every file that is not a `.runtimedocument` to `OfflineFileController`, from File › Open…, Open Recent and the Dock alike. The first document controller made becomes the shared one, so `DocumentController.install()` is one of the calls in `AppDelegate.main()`, before window restoration inside `run()` would make a plain one
 
 **One-shot fixes that must beat the main menu** go in `AppDelegate.main()` (`AppDelegate` carries `@main`
 and supplies its own `static func main()`), before `NSApplication.mainMenu` is assigned — not in a

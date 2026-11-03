@@ -33,7 +33,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
     init(documentState: DocumentState) {
         self.documentState = documentState
-        super.init(windowController: .init(documentState: documentState), initialRoute: .main(.local))
+        super.init(windowController: .init(documentState: documentState), initialRoute: .main(documentState.runtimeEngine))
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {

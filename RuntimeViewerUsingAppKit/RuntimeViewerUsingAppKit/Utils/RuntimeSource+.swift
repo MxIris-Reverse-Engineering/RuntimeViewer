@@ -27,8 +27,10 @@ extension RuntimeSource: MainMenuItemRepresentable {
             // injected device process a symbol of its own is a UI decision
             // this transport change has no business making.
             return .symbol(systemName: .network)
-        case .file:
-            return .symbol(systemName: .doc)
+        case .file(_, let url):
+            // The file's own Finder icon: an app's for an app, a framework's
+            // for a framework.
+            return NSWorkspace.shared.icon(forFile: url.path)
         }
     }
 }

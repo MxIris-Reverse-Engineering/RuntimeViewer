@@ -133,6 +133,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         let tabSelected: Signal<Int>
         let tabClosed: Signal<Int>
         let newTabClicked: Signal<Void>
+        /// A choice from the engine menu's Dependency Cache submenu, for the
+        /// offline engine the window is on: `nil` reads the file alone.
+        let dependencyCacheSelected: Signal<RuntimeOfflineFile.DependencyCache?>
     }
 
     struct Output {
@@ -154,6 +157,12 @@ final class MainViewModel: ViewModel<MainRoute> {
         let runtimeEngineSections: Driver<[RuntimeEngineSection]>
         let switchSourceState: Driver<SwitchSourceState>
         let attachAvailability: Driver<AttachAvailability>
+        /// Load Frameworks… loads an image into the engine's process, which an
+        /// offline engine does not have.
+        let isLoadFrameworksEnabled: Driver<Bool>
+        /// The engine menu's Dependency Cache submenu for the engine the window
+        /// is on; empty when it is no offline engine, or reads a cache.
+        let dependencyCacheChoices: Driver<[OfflineFileController.DependencyCacheChoice]>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
@@ -164,6 +173,8 @@ final class MainViewModel: ViewModel<MainRoute> {
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
     @Dependency(\.runtimeEngineIconProvider) private var runtimeEngineIconProvider
+
+    @Dependency(\.offlineFileController) private var offlineFileController
 
     @RxObserved private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
 
@@ -192,8 +203,19 @@ final class MainViewModel: ViewModel<MainRoute> {
         runtimeEngineManager.mirroredEngines.values.contains { $0 === runtimeEngine }
     }
 
+    /// Moves the window to `engine`, which is ready.
+    private func switchToEngine(_ engine: RuntimeEngine) {
+        cachedSelectedEngineName = engine.source.description
+        cachedSelectedEngineImage = resolveEngineIcon(for: engine)
+        router.trigger(.main(engine))
+        selectedEngineIdentifier = engine.engineID
+    }
+
     func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
         switch engine.source {
+        case .file(_, let url):
+            // The file's own: an app's icon for an app, a framework's for a framework.
+            return NSWorkspace.shared.icon(forFile: url.path)
         case .local:
             return Self.machineIcon(for: engine)
         case .remote(_, let identifier, _) where identifier == .macCatalyst:
@@ -232,6 +254,11 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     func transform(_ input: Input) -> Output {
         rx.disposeBag = DisposeBag()
+
+        // The engine the document opened on, which is not "My Mac" for a file
+        // opened offline.
+        selectedEngineIdentifier = documentState.runtimeEngine.engineID
+        cachedSelectedEngineName = documentState.runtimeEngine.source.description
 
         let requestFrameworkSelection = input.loadFrameworksClick.asSignal()
 
@@ -369,11 +396,41 @@ final class MainViewModel: ViewModel<MainRoute> {
             guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
                 $0.engineID == identifier
             }) else { return }
-            owner.cachedSelectedEngineName = engine.source.description
-            owner.cachedSelectedEngineImage = owner.resolveEngineIcon(for: engine)
-            owner.router.trigger(.main(engine))
-            owner.selectedEngineIdentifier = identifier
+            guard owner.runtimeEngineManager.isOfflineEngineSuspended(engine) else {
+                owner.switchToEngine(engine)
+                return
+            }
+            // Its process was let go while no window was on it: a new instance
+            // reads the file again before the window moves there.
+            Task { @MainActor [weak owner] in
+                guard let owner else { return }
+                do {
+                    try await owner.runtimeEngineManager.resumeOfflineEngine(engine)
+                    owner.switchToEngine(engine)
+                } catch {
+                    owner.errorRelay.accept(error)
+                }
+            }
         }.disposed(by: rx.disposeBag)
+
+        input.dependencyCacheSelected.emitOnNext { [weak self] dependencyCache in
+            guard let self else { return }
+            let engine = documentState.runtimeEngine
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    try await offlineFileController.pair(engine, with: dependencyCache)
+                } catch {
+                    errorRelay.accept(error)
+                }
+            }
+        }.disposed(by: rx.disposeBag)
+
+        let runtimeEngineOfDocument = documentState.$runtimeEngineSession.asDriver().map(\.engine)
+        let isLoadFrameworksEnabled = runtimeEngineOfDocument.map { engine -> Bool in
+            if case .file = engine.source { return false }
+            return true
+        }
 
         let sharingServiceData = selectedRuntimeObjectObservable
             .map { [weak self] selected -> [SharingData] in
@@ -558,6 +615,10 @@ final class MainViewModel: ViewModel<MainRoute> {
             runtimeEngineSections: runtimeEngineSections,
             switchSourceState: switchSourceState,
             attachAvailability: attachAvailability,
+            isLoadFrameworksEnabled: isLoadFrameworksEnabled,
+            dependencyCacheChoices: Driver.combineLatest(runtimeEngineOfDocument, runtimeEngineSections) { [weak self] engine, _ in
+                self?.offlineFileController.dependencyCacheChoices(for: engine) ?? []
+            },
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),

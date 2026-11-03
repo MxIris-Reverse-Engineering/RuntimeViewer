@@ -3,6 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
+import RuntimeViewerCore
 import RuntimeViewerCatalystExtensions
 import RxCocoa
 import RxSwift
@@ -39,6 +40,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
     private let frameworksSelectedRelay = PublishRelay<[URL]>()
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
+
+    private let dependencyCacheSelectedRelay = PublishRelay<RuntimeOfflineFile.DependencyCache?>()
+
+    /// The engine the engine menu has selected, so a menu command that is not
+    /// an engine can put the selection back.
+    private var selectedEngineIdentifierInMenu: String?
 
     private let increaseFontSizeRelay = PublishRelay<Void>()
 
@@ -100,9 +107,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             saveLocationSelected: saveLocationSelectedRelay.asSignal(),
             tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
             tabClosed: tabBarAccessoryController.tabClosedRelay.asSignal(),
-            newTabClicked: tabBarAccessoryController.newTabClicked
+            newTabClicked: tabBarAccessoryController.newTabClicked,
+            dependencyCacheSelected: dependencyCacheSelectedRelay.asSignal()
         )
         let output = viewModel.transform(input)
+
+        output.isLoadFrameworksEnabled.drive(toolbarController.loadFrameworksItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
 
         output.tabBarSnapshot.driveOnNext { [weak self] snapshot in
             guard let self else { return }
@@ -210,10 +220,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         .disposed(by: rx.disposeBag)
 
         // Bind menu content + selection from sections and switchSourceState
-        Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState)
-            .driveOnNext { [weak self] sections, state in
+        Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState, output.dependencyCacheChoices)
+            .driveOnNext { [weak self] sections, state, dependencyCacheChoices in
                 guard let self else { return }
                 let popUpButton = toolbarController.switchSourceItem.popUpButton
+                selectedEngineIdentifierInMenu = state.selectedEngineIdentifier
 
                 popUpButton.menu?.removeAllItems()
 
@@ -231,6 +242,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                         menuItem.image?.size = NSSize(width: 20, height: 20)
                         menuItem.representedObject = AnyHashable(engine.engineID)
                         popUpButton.menu?.addItem(menuItem)
+                    }
+
+                    if section.hostID == RuntimeHostInfo.offlineFiles.hostID {
+                        for menuItem in makeOfflineFileMenuItems(dependencyCacheChoices: dependencyCacheChoices) {
+                            popUpButton.menu?.addItem(menuItem)
+                        }
                     }
                 }
 
@@ -410,6 +427,55 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             return super.responds(to: aSelector)
         }
     }
+
+    // MARK: - Offline files in the engine menu
+
+    /// The Offline Files section's last entries: Open File…, and the
+    /// Dependency Cache submenu when the window is on an offline engine that
+    /// reads one.
+    private func makeOfflineFileMenuItems(dependencyCacheChoices: [OfflineFileController.DependencyCacheChoice]) -> [NSMenuItem] {
+        var menuItems: [NSMenuItem] = []
+        let openFileItem = NSMenuItem(title: "Open File…", action: #selector(openOfflineFileFromEngineMenu(_:)), keyEquivalent: "")
+        openFileItem.target = self
+        menuItems.append(openFileItem)
+
+        guard !dependencyCacheChoices.isEmpty else { return menuItems }
+        let submenu = NSMenu(title: "Dependency Cache")
+        for choice in dependencyCacheChoices {
+            let choiceItem = NSMenuItem(title: choice.title, action: #selector(dependencyCacheChosenFromEngineMenu(_:)), keyEquivalent: "")
+            choiceItem.target = self
+            choiceItem.state = choice.isCurrent ? .on : .off
+            choiceItem.representedObject = DependencyCacheMenuChoice(dependencyCache: choice.dependencyCache)
+            submenu.addItem(choiceItem)
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(NSMenuItem(title: "Manage in Settings…", action: #selector(AppDelegate.showSettings(_:)), keyEquivalent: ""))
+        let dependencyCacheItem = NSMenuItem(title: "Dependency Cache", action: nil, keyEquivalent: "")
+        dependencyCacheItem.submenu = submenu
+        menuItems.append(dependencyCacheItem)
+        return menuItems
+    }
+
+    @objc private func openOfflineFileFromEngineMenu(_ sender: NSMenuItem) {
+        restoreEngineMenuSelection()
+        NSDocumentController.shared.openDocument(sender)
+    }
+
+    @objc private func dependencyCacheChosenFromEngineMenu(_ sender: NSMenuItem) {
+        restoreEngineMenuSelection()
+        guard let choice = sender.representedObject as? DependencyCacheMenuChoice else { return }
+        dependencyCacheSelectedRelay.accept(choice.dependencyCache)
+    }
+
+    /// A command in the engine menu is no engine to show: the pop-up goes
+    /// back to the engine it had.
+    private func restoreEngineMenuSelection() {
+        let popUpButton = toolbarController.switchSourceItem.popUpButton
+        guard let selectedEngineIdentifierInMenu,
+              let index = popUpButton.menu?.items.firstIndex(where: { ($0.representedObject as? AnyHashable) == AnyHashable(selectedEngineIdentifierInMenu) })
+        else { return }
+        popUpButton.selectItem(at: index)
+    }
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}
@@ -417,5 +483,15 @@ extension MainWindowController: MainToolbarController.Delegate {}
 extension NSUserInterfaceItemIdentifier {
     static func makeIdentifier<T>(of type: T.Type) -> Self {
         "com.JH.RuntimeViewer.\(T.self).identifier"
+    }
+}
+
+/// The represented object of a Dependency Cache menu item: an optional does
+/// not survive the trip through `Any`.
+private final class DependencyCacheMenuChoice {
+    let dependencyCache: RuntimeOfflineFile.DependencyCache?
+
+    init(dependencyCache: RuntimeOfflineFile.DependencyCache?) {
+        self.dependencyCache = dependencyCache
     }
 }
