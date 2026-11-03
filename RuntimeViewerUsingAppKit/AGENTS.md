@@ -618,16 +618,22 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
 
 </important>
 
-<important if="you are changing the toolbar's activity capsule, the title item's activity ring, or adding a kind of engine background work">
+<important if="you are changing the main window's toolbar items, the toolbar's activity capsule, the title item's activity ring, or adding a kind of engine background work">
 
 ## The Toolbar's Activity Display
 
-The engine's background work shows in the toolbar the way Xcode shows activity: below macOS 27 in a
-capsule in the middle of the toolbar (`ToolbarActivityView`, Xcode 26's Activity View), from macOS 27 as
-a ring in place of the title's icon (`TitleToolbarItem(showsActivity:)` with
-`TitleActivityIndicatorView`, Xcode 27's window title). Specs with addresses:
-`/Volumes/RE/Xcode/26.6/README.md` and `/Volumes/RE/Xcode/27.2-27B52/README.md`; background:
-`Documentations/Evolutions/draft-xcode-activity-progress.md`.
+The engine's background work shows in the toolbar the way Xcode shows activity, in the style the user
+picks under Settings › General (`Settings.General.toolbarActivityStyle`; Automatic is Xcode 27's from
+macOS 27, Xcode 26's before it): Xcode 26's capsule in the middle of the toolbar (`ToolbarActivityView`,
+its Activity View), or Xcode 27's ring in place of the title's icon (`TitleToolbarItem(showsActivity:)`
+with `TitleActivityIndicatorView`), which puts the runtime source picker in the middle instead. Specs
+with addresses: `/Volumes/RE/Xcode/26.6/README.md` and `/Volumes/RE/Xcode/27.2-27B52/README.md`;
+background: `Documentations/Evolutions/draft-xcode-activity-progress.md`.
+
+- **The toolbar's items depend on the style**, so they come from `MainToolbarController`'s
+  `defaultItemIdentifiers` alone, and `apply(activityStyle:)` changes over an open window by setting
+  `NSToolbar.itemIdentifiers`. Each style has its own title item (`.Main.title`, `.Main.activityTitle`);
+  `MainWindowController` feeds both titles and both activity displays, the hidden one without animation.
 
 - Each kind of work is one run at a time, worked out once per engine by
   `RuntimeEngineActivityReporter` (in `RuntimeEngineBackgroundWork`); each window picks what to show and
@@ -640,7 +646,7 @@ a ring in place of the title's icon (`TitleToolbarItem(showsActivity:)` with
   clicks are `NSControl` actions that open the Report navigator.
 - The capsule is 40 % of the toolbar wide through UIFoundation's
   `NSToolbar.box.preferredCenteredItemWidthRatio`, set before the toolbar goes into the window: it lays
-  nothing out by itself.
+  nothing out by itself. The ratio goes back to −1, no preference, while the picker is the centered item.
 
 </important>
 

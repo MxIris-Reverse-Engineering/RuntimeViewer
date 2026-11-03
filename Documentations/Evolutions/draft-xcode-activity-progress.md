@@ -1,4 +1,4 @@
-# Draft - 工具栏照 Xcode 显示后台工作的进度：macOS 26 及以前用中间的活动胶囊，macOS 27 用标题区的进度环
+# Draft - 工具栏照 Xcode 显示后台工作的进度：Xcode 26 式的中间胶囊与 Xcode 27 式的标题区进度环，可在设置里切换
 
 - **状态**: In Progress
 - **创建日期**: 2026-11-03
@@ -10,10 +10,10 @@
 
 后台索引、Find 语料、交叉引用这三类后台工作，现在只能到侧栏的 Report 导航里看进度。本提案照 Xcode 的 Activity View 把进度放进工具栏，只做显示进度的部分，不做 scheme、运行目标和 issue 计数。两版 Xcode 的做法不同，各照一版：
 
-- macOS 26 及以前照 Xcode 26：工具栏正中一个胶囊，里面是状态文字和一个进度环。
-- macOS 27 照 Xcode 27：进度挪到左边的标题区，画在图标位置。活动结束时，进度环收拢成一个圆角方块，再淡出变回图标。
+- Xcode 26 的样式：工具栏正中一个胶囊，里面是状态文字和一个进度环。
+- Xcode 27 的样式：进度挪到左边的标题区，画在图标位置，工具栏正中改放切换引擎的弹出按钮。活动结束时，进度环收拢成一个圆角方块，再淡出变回图标。
 
-两版的规格是逆向 Xcode 拿到的，不是照截图调的。
+用哪种样式在设置 › General 里选，默认 Automatic 按系统：macOS 27 起用 Xcode 27 的样式，以前用 Xcode 26 的。两版的规格是逆向 Xcode 拿到的，不是照截图调的。
 
 ## 方案
 
@@ -65,25 +65,32 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 - **失败与取消**：一轮里有镜像失败就是 Failed，否则有被取消的就是 Cancelled，否则成功；拼写与 Report 导航一致（Cancelled）。
 - 文字的确切措辞在实现时定，上表是样例。
 
-### macOS 26 及以前：中间的活动胶囊
+### Xcode 26 的样式：中间的活动胶囊
 
-- **工具栏项**：新增 `.Main.activity`，放在标题后的两个 flexible space 之间，设为 `centeredItemIdentifiers`，`visibilityPriority` 为 high。
+- **工具栏项**：新增 `.Main.activity`，放在标题后的两个 flexible space 之间，设为 `centeredItemIdentifiers`，`visibilityPriority` 为 high。切换引擎的弹出按钮排在胶囊右边那个 flexible space 之后，与改动前的位置相同。
 - **宽度**：照 Xcode。工具栏宽的 40% 用上面那个私有方法，按「私有 API 归 UIFoundationAppleInternal」的约定封装进 UIFoundation，发版后抬 pin。macOS 15.8 的 dyld cache 里有这个选择子（没有反编译核实），调用前用 `responds(to:)` 判断。
 - **布局**：用 Xcode 没有 scheme 选择器时的版式，文字左对齐、环在右侧；胶囊背景照上面 macOS 26 与 macOS 15 两种。
 - **空闲时**：显示最近一次活动的结果；从没有过活动时显示 `<来源名>: **Ready** │ <时间>`。
 
-### macOS 27：标题区的进度环
+### Xcode 27 的样式：标题区的进度环
 
-- **不再有中间的胶囊**，与 Xcode 27 相同。
+- **中间不再是胶囊**，改放切换引擎的弹出按钮（Runtime Source），设为 `centeredItemIdentifiers`，两侧各一个 flexible space，宽度取它自己的。Xcode 27 在这个位置放 scheme 与运行目标，RV 里与之对应的就是切换引擎。右侧那排按钮的位置不变。
 - **标题区**：`TitleToolbarItem` 在文字左边加一个 18×18 的图标槽，进度环画在这里；完成序列结束时，环变回图标。
 - **图标**：取标题所指的镜像，用它的种类符号（framework、bundle、dylib），照 Xcode 工程图标的画法画成一个单色字形：13 pt、medium、large，按对齐矩形居中在 18×18 的槽里、对齐到像素，整个字形填一种颜色——bundle 用 `systemBrown`（与 Xcode 的 Swift package 图标同色），其余用 `systemBlue`（与 Xcode 的工程图标同色）。没有选中镜像时，用 App 图标。收拢出的强调色方块是进度形状本身，它淡出、字形淡入，最后只剩字形（逆向结论见资料卷「The project icon in the window title」一节）。
 - **第二行**：平时仍显示选中对象的名字，进度只看图标位置的环；鼠标悬停在标题区时，第二行换成活动文字。完成后的结果文字也是悬停时才显示，这一点与 Xcode 对非 scheme 活动的处理相同。
 - **字体、颜色、间距**：一并照 Xcode 27。标题 13 pt 粗体，第二行 11 pt 次要色；窗口不在前台时两行都用三级色；文字列用 plusDarker / plusLighter 混合。
 
+### 在设置里切换样式
+
+- **设置项**：设置 › General 新增 Toolbar 一节，Activity Style 有三个选项：Automatic、Xcode 26、Xcode 27。存为 `Settings.General.toolbarActivityStyle`（`Settings.ToolbarActivityStyle`），旧的设置文件没有这一项，读出来是 Automatic。
+- **Automatic** 按系统选：macOS 27 起是 Xcode 27 的样式，以前是 Xcode 26 的。两种样式在每个支持的系统上都能选，标题区的进度环只用到 macOS 14 起的 API。
+- **立即生效**：已打开的窗口当场换过去。`MainViewModel` 经 `Observable.tracking` 跟着这一项，输出换算过 Automatic 的样式；`MainToolbarController.apply(activityStyle:)` 换居中项与宽度比例，再给 `NSToolbar.itemIdentifiers`（macOS 15 起可写）新的一组项，由 AppKit 对照已有的项做差异，两种样式共有的项原地不动。工具栏还没向 delegate 要过项时只记下样式，等它来要。
+- **标题项有两个**：Xcode 26 样式用原来的 `TitleToolbarItem`（`.Main.title`），Xcode 27 样式用带活动的那个（`.Main.activityTitle`），由工具栏按样式换上。标题、副标题两边都绑；活动状态两边都给，不在工具栏里的那个不做动画，所以换样式时直接显示当前的进度。
+
 ### 代码放在哪
 
 - **模型**：`RuntimeViewerApplication` 新建 `Activity/` 目录，放活动的值类型、每个 Engine 的汇总（`RuntimeEngineActivityReporter`）、挑选（`ActivityReportSelector`）与每个窗口的展示器（`ToolbarActivityPresenter`，含节流）。时间可以注入，测试用 RxSwift 的 `HistoricalScheduler` 推进虚拟时间。显示用的值类型 `ToolbarActivityState` 与文字分段放在 `RuntimeViewerUI`，因为视图在那里，而它在依赖链的下层。
-- **绑定**：`MainViewModel.Output` 加一个活动状态的 `Driver`，由 `MainWindowController` 绑到胶囊或标题区。
+- **绑定**：`MainViewModel.Output` 加活动状态与样式两个 `Driver`，由 `MainWindowController` 绑到胶囊、标题区与工具栏控制器。
 - **视图**：放在 `RuntimeViewerUI`，分三块：
   - 26 的进度环，是 `DVTProgressRing` 的移植；
   - 胶囊内容，含按段优先级截断的文字；
@@ -99,6 +106,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 3. **macOS 26 / 15 的中间胶囊**（已完成）：`RuntimeViewerUI` 里做进度环、按段截断的文字、胶囊视图与工具栏项。抬 UIFoundation 的 pin；`MainWindowController` 在 macOS 27 以下装上胶囊，点击打开 Report 导航。配测试。
 4. **macOS 27 的标题区**（已完成）：先补逆向 Xcode 工程图标的画法，再做收拢形状的自绘 layer、进度环与完成序列，以及 `TitleToolbarItem` 的图标槽、字体和悬停时的活动文字。配测试。
 5. **收尾**（已完成）：用 Debug workspace 完整构建 App，跑各包测试；`AGENTS.md` 与本提案按实际做出的结果更新。
+6. **看过后补的两项**（已完成）：Xcode 27 的样式下切换引擎的弹出按钮居中；两种样式做成设置，已打开的窗口当场切换。配设置的测试。
 
 ### 验证
 
@@ -110,6 +118,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
   - 环的显示值映射；
   - 收拢形状在关键时刻的几何。
 - **实际跑过的**（2026-11-03，JH's Mac Studio Ultra，macOS 27.2，Xcode 27.2）：新增 7 组共 45 个测试（`ActivityRunTrackerTests`、`ActivityReportSelectorTests`、`ToolbarActivityStateTests`、`ToolbarActivityPresenterTests`、`ToolbarActivityViewTests`、`TitleActivityIndicatorTests`，以及原有的 `TitleToolbarItemOverflowTests`）全部通过；`RuntimeViewerPackages` 全量 748 个测试只有 `FindCrossReferenceTests` 的一个用例在满载下等待超时，这组单独跑在本分支与 `next` 上都通过；App 用 Debug workspace 编译通过，锁文件没被改写；`RuntimeViewerCommandLine` 编译通过。
+- **看过后补的两项**（同日同机）：`RuntimeViewerSettingsTests` 的 43 个测试全部通过，含新增的 `SettingsToolbarActivityStyleTests`；App 用 Debug workspace 编译通过，锁文件没被改写。换样式与居中的效果没有在界面上验证。
 - **一次没查明的崩溃**：把改动波及的 10 组既有测试合起来跑，本分支 8 次里测试进程崩过 1 次（信号 11，没有留下崩溃报告），`next` 上 4 次都没崩；单独跑各组都过。新代码里订阅三个协调器的回调一律经 `Task { @MainActor in … }` 回到主线程，没找到会在后台线程碰主线程状态的路径，暂时归为偶发。
 - **目视验收由用户来做**。逆向留下几项只有录屏才能定：Xcode 27 图标槽与文字的间距、方块从强调色变透明是渐变还是跳变、几处默认动画曲线。需要时请用户录一段 Xcode 26 与 27 构建的过程。
 
@@ -138,3 +147,6 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-03 | 标题区几处动画用近似实现，写明在案 | 项目规定 SwiftUI 只用于设置页，标题区用 Core Animation 重做：SwiftUI 的弹簧换成 `CASpringAnimation(perceptualDuration:bounce:)`，用叠加动画模拟 SwiftUI 打断时的平滑衔接；收拢形状的连续圆角用 UIKit 的连续曲线，半径超出它能画的范围时改用圆弧；方块的填充从强调色到透明做成整层淡出；计数与副标题的出现、消失只做淡入淡出，没有 SwiftUI 那一点模糊，副标题行出现时标题上移不做动画；图标槽与文字的间距取 SwiftUI 默认的 8，未与 Xcode 实测比对 |
 | 2026-11-03 | 活动文字只在悬停时进副标题行，标题项的宽度只在悬停期间按 20 点的台阶变宽 | 照批准的「平时不换，悬停才显示」；Xcode 让宽度只增不减、按 20 点取整，是为了每秒刷新的文字不抖动工具栏，悬停期间照做 |
 | 2026-11-03 | 实现完成，待用户看过后收尾 | 五个落地步骤都已完成并推送。全量测试唯一的失败（`FindCrossReferenceTests` 的 Call Hierarchy 用例满载时等待超时）在 `next` 上全量跑同样出现，是基线已有的。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 新增「The Toolbar's Activity Display」一节，根 `AGENTS.md` 的依赖下限改为 UIFoundation 0.43.0，术语表新增「活动」；没有可配置的东西，不写使用指南；实现要点在 `AGENTS.md` 与本提案里，不另写实现说明。目视验收、以及与 Xcode 录屏的逐帧比对留给用户 |
+| 2026-11-03 | Xcode 27 的样式下，切换引擎的弹出按钮放在工具栏正中 | 用户看过后指出它没有居中。Xcode 27 把 scheme 与运行目标放在中间，活动挪进标题区后中间空着，RV 里与之对应的是切换引擎；它右边加一个 flexible space，右侧那排按钮留在原处 |
+| 2026-11-03 | 两种样式做成设置（General › Toolbar › Activity Style），默认 Automatic 按系统 | 用户要求，因为有人偏好 Xcode 26 的样式。每个系统都能选，标题区的进度环只用到 macOS 14 起的 API；改了当场作用于已打开的窗口，用 macOS 15 起可写的 `NSToolbar.itemIdentifiers` 换项 |
+| 2026-11-03 | 标题项做成两个，各管一种样式，不让一个标题项在运行时切换 | `TitleToolbarItem` 带不带活动在初始化时定，布局与宽度测量都按它分支，运行时切换要改这些，还会碰到防止长标题把按钮挤进溢出菜单的那几项设置。两个实例由工具栏按样式换上，绑定两边都接。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 那一节改为两种样式可切换；设置页自带说明，不写使用指南；没有新术语 |

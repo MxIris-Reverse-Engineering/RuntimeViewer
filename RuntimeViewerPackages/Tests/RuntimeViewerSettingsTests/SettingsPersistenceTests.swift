@@ -166,6 +166,7 @@ struct SettingsPersistenceTests {
         #expect(settings.general.appearance == .dark)
         #expect(settings.general.sidebarMaxExpansionDepth == 3)
         #expect(settings.general.terminatesAfterLastWindowClosed == false)
+        #expect(settings.general.toolbarActivityStyle == .automatic)
         #expect(settings.notifications.isEnabled == false)
         #expect(settings.notifications.showOnConnect == false)
         #expect(settings.notifications.showOnDisconnect == true)

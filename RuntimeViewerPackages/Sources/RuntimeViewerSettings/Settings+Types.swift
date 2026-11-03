@@ -13,6 +13,37 @@ extension Settings {
         case dark
     }
 
+    /// Where the toolbar shows the progress of the engine's background work, after the Xcode
+    /// that shows it there.
+    public enum ToolbarActivityStyle: String, Codable, CaseIterable, Sendable {
+        /// The style of the Xcode for this system: ``windowTitle`` from macOS 27, ``capsule``
+        /// before it.
+        case automatic
+        /// Xcode 26's Activity View: a capsule in the middle of the toolbar.
+        case capsule
+        /// Xcode 27's window title: a progress ring in place of the title's icon, with the
+        /// runtime source picker in the middle of the toolbar.
+        case windowTitle
+
+        /// The style this one stands for on this system: itself, unless it is ``automatic``.
+        /// Never ``automatic``.
+        public var resolved: ToolbarActivityStyle {
+            guard self == .automatic else { return self }
+            if #available(macOS 27.0, *) {
+                return .windowTitle
+            }
+            return .capsule
+        }
+
+        public var displayName: String {
+            switch self {
+            case .automatic: "Automatic"
+            case .capsule: "Xcode 26"
+            case .windowTitle: "Xcode 27"
+            }
+        }
+    }
+
     @Codable
     @MemberInit
     public struct General: Sendable {
@@ -34,6 +65,11 @@ extension Settings {
         /// window.
         @Default(false)
         public var terminatesAfterLastWindowClosed: Bool
+
+        /// Where the toolbar shows the progress of the engine's background work. Open windows
+        /// change over as soon as it changes.
+        @Default(Settings.ToolbarActivityStyle.automatic)
+        public var toolbarActivityStyle: Settings.ToolbarActivityStyle
 
         public static let `default` = Self()
     }

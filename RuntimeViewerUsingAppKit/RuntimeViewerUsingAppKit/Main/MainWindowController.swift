@@ -105,7 +105,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.click.asSignal(),
             activityClick: Signal.merge(
                 toolbarController.activityItem.activityView.rx.controlEvent.asSignal(),
-                toolbarController.titleItem.activityIndicator?.rx.controlEvent.asSignal() ?? .empty()
+                toolbarController.activityTitleItem.activityIndicator?.rx.controlEvent.asSignal() ?? .empty()
             ),
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal(),
@@ -138,33 +138,41 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.toolbarTitle.driveOnNext { [weak self] title in
             guard let self else { return }
-            toolbarController.titleItem.displayTitle = title
+            for titleItem in toolbarController.titleItems {
+                titleItem.displayTitle = title
+            }
         }
         .disposed(by: rx.disposeBag)
 
         output.toolbarSubtitle.driveOnNext { [weak self] subtitle in
             guard let self else { return }
-            toolbarController.titleItem.displaySubtitle = subtitle
+            for titleItem in toolbarController.titleItems {
+                titleItem.displaySubtitle = subtitle
+            }
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.activityStyle.driveOnNext { [weak self] activityStyle in
+            guard let self else { return }
+            toolbarController.apply(activityStyle: activityStyle)
         }
         .disposed(by: rx.disposeBag)
 
         output.activity.driveOnNext { [weak self] state in
             guard let self else { return }
-            if MainToolbarController.showsActivityCapsule {
-                toolbarController.activityItem.activityView.apply(state, animated: true)
-            } else {
-                toolbarController.titleItem.applyActivity(state, animated: true)
-            }
+            // Both displays take every state, the one off screen without animating, so a change of
+            // style shows the activity where it stands.
+            let showsActivityCapsule = toolbarController.showsActivityCapsule
+            toolbarController.activityItem.activityView.apply(state, animated: showsActivityCapsule)
+            toolbarController.activityTitleItem.applyActivity(state, animated: !showsActivityCapsule)
         }
         .disposed(by: rx.disposeBag)
 
-        if !MainToolbarController.showsActivityCapsule {
-            output.toolbarIcon.driveOnNext { [weak self] icon in
-                guard let self else { return }
-                toolbarController.titleItem.displayImage = icon
-            }
-            .disposed(by: rx.disposeBag)
+        output.toolbarIcon.driveOnNext { [weak self] icon in
+            guard let self else { return }
+            toolbarController.activityTitleItem.displayImage = icon
         }
+        .disposed(by: rx.disposeBag)
 
         output.sharingServiceData
             .map { items -> [Any] in

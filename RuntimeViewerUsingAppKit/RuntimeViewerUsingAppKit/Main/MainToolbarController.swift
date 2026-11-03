@@ -2,6 +2,7 @@ import AppKit
 import RxAppKit
 import RuntimeViewerUI
 import RuntimeViewerMCPBridge
+import RuntimeViewerSettings
 
 final class MainToolbarController: NSObject, NSToolbarDelegate {
     protocol Delegate: AnyObject {}
@@ -105,7 +106,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    /// The activity capsule in the middle of the toolbar, before macOS 27 — Xcode 26's Activity View,
+    /// The activity capsule in the middle of the toolbar in Xcode 26's style — its Activity View,
     /// which Xcode 27 replaced with the window title's progress ring.
     final class ActivityToolbarItem: NSToolbarItem {
         let activityView = ToolbarActivityView()
@@ -118,15 +119,22 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    /// Below macOS 27 the toolbar shows the activity capsule; from 27 the window title shows the
-    /// activity instead, as in Xcode 27.
-    static var showsActivityCapsule: Bool {
-        if #available(macOS 27.0, *) { false } else { true }
-    }
-
     /// The capsule's share of the toolbar's width — Xcode's `IDEActivityViewProportionalWidthPercentage`
     /// of 40.
     static let activityCapsuleWidthRatio: CGFloat = 0.4
+
+    /// No preference for the centered item's width, the value a toolbar starts with: the runtime source
+    /// picker in the middle keeps its own width.
+    static let noCenteredItemWidthRatio: CGFloat = -1
+
+    /// Whether the activity shows in Xcode 26's capsule in the middle of the toolbar, rather than in
+    /// Xcode 27's window title — the style the user's setting stands for, which `apply(activityStyle:)`
+    /// changes.
+    private(set) var showsActivityCapsule = Settings.ToolbarActivityStyle.automatic.resolved == .capsule
+
+    /// Whether the toolbar has asked for its items. Until it has, a change of style needs nothing
+    /// but the next answer.
+    private var hasProvidedItems = false
 
     class SwitchSourceToolbarItem: NSToolbarItem {
         let popUpButton = NSPopUpButton()
@@ -149,8 +157,16 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let navigationItem = NavigationToolbarItem()
 
-    /// From macOS 27 the title shows the activity, where Xcode 27 shows it: in place of its icon.
-    let titleItem = TitleToolbarItem(itemIdentifier: .Main.title, showsActivity: !MainToolbarController.showsActivityCapsule)
+    /// The title in Xcode 26's style, where the capsule shows the activity.
+    let titleItem = TitleToolbarItem(itemIdentifier: .Main.title)
+
+    /// The title in Xcode 27's style, which shows the activity where Xcode 27 does: in place of its icon.
+    let activityTitleItem = TitleToolbarItem(itemIdentifier: .Main.activityTitle, showsActivity: true)
+
+    /// Both titles, for what each shows in either style.
+    var titleItems: [TitleToolbarItem] {
+        [titleItem, activityTitleItem]
+    }
 
     let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject).then {
         $0.label = "Attach Process"
@@ -193,26 +209,49 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
         toolbar.allowsDisplayModeCustomization = false
-        if Self.showsActivityCapsule {
-            // Set before the toolbar goes into the window: the ratio takes effect at the toolbar's
-            // next layout, and lays nothing out by itself.
-            toolbar.centeredItemIdentifiers = [.Main.activity]
-            toolbar.box.preferredCenteredItemWidthRatio = Self.activityCapsuleWidthRatio
+        // Before the toolbar goes into the window: the capsule's width ratio takes effect at the
+        // toolbar's next layout, and lays nothing out by itself.
+        updateCenteredItem()
+    }
+
+    /// Shows the activity in the style `activityStyle` stands for on this system, changing over the
+    /// items of a toolbar already in a window.
+    func apply(activityStyle: Settings.ToolbarActivityStyle) {
+        let showsActivityCapsule = activityStyle.resolved == .capsule
+        guard showsActivityCapsule != self.showsActivityCapsule else { return }
+        self.showsActivityCapsule = showsActivityCapsule
+        updateCenteredItem()
+        // Diffed by AppKit against the items already there, so the ones both styles have stay put.
+        if hasProvidedItems {
+            toolbar.itemIdentifiers = defaultItemIdentifiers
         }
     }
 
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        let activityIdentifiers: [NSToolbarItem.Identifier] = Self.showsActivityCapsule ? [.Main.activity, .flexibleSpace] : []
+    /// The capsule in the middle, as wide as Xcode 26 makes it; or the runtime source picker at its own
+    /// width, where Xcode 27 puts its scheme and run destination.
+    private func updateCenteredItem() {
+        if showsActivityCapsule {
+            toolbar.centeredItemIdentifiers = [.Main.activity]
+            toolbar.box.preferredCenteredItemWidthRatio = Self.activityCapsuleWidthRatio
+        } else {
+            toolbar.centeredItemIdentifiers = [.Main.switchSource]
+            toolbar.box.preferredCenteredItemWidthRatio = Self.noCenteredItemWidthRatio
+        }
+    }
+
+    /// The centered item stands between two flexible spaces: the capsule, with the runtime source
+    /// picker leading the buttons after it, or in Xcode 27's style the picker itself.
+    private var defaultItemIdentifiers: [NSToolbarItem.Identifier] {
+        let middleIdentifiers: [NSToolbarItem.Identifier] = showsActivityCapsule
+            ? [.Main.title, .flexibleSpace, .Main.activity, .flexibleSpace, .Main.switchSource]
+            : [.Main.activityTitle, .flexibleSpace, .Main.switchSource, .flexibleSpace]
         return [
             .toggleSidebar,
             .Main.sidebarBack,
             .flexibleSpace,
             .sidebarTrackingSeparator,
             .Main.navigation,
-            .Main.title,
-            .flexibleSpace,
-        ] + activityIdentifiers + [
-            .Main.switchSource,
+        ] + middleIdentifiers + [
             .Main.attach,
             .Main.loadFrameworks,
             .Main.generationOptions,
@@ -225,11 +264,17 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         ]
     }
 
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        hasProvidedItems = true
+        return defaultItemIdentifiers
+    }
+
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             .Main.sidebarBack,
             .Main.navigation,
             .Main.title,
+            .Main.activityTitle,
             .flexibleSpace,
             .toggleSidebar,
             .sidebarTrackingSeparator,
@@ -254,6 +299,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return navigationItem
         case .Main.title:
             return titleItem
+        case .Main.activityTitle:
+            return activityTitleItem
         case .Main.share:
             return sharingServicePickerItem
         case .Main.save:
@@ -291,6 +338,7 @@ extension NSToolbarItem.Identifier {
         static let navigationPrevious: NSToolbarItem.Identifier = "navigationPrevious"
         static let navigationNext: NSToolbarItem.Identifier = "navigationNext"
         static let title: NSToolbarItem.Identifier = "title"
+        static let activityTitle: NSToolbarItem.Identifier = "activityTitle"
         static let share: NSToolbarItem.Identifier = "share"
         static let save: NSToolbarItem.Identifier = "save"
         static let switchSource: NSToolbarItem.Identifier = "switchSource"
