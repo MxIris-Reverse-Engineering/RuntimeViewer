@@ -44,6 +44,10 @@ final class RuntimeEngineBackgroundWork {
     /// Keeps the app out of App Nap while `isWorkInProgress` says so.
     let processActivity: BackgroundWorkProcessActivity
 
+    /// The work's runs as activity reports, for the toolbar's activity display of every window on
+    /// the engine.
+    let activityReporter: RuntimeEngineActivityReporter
+
     private let disposeBag = DisposeBag()
 
     /// The documents that hold the work, by identity.
@@ -75,6 +79,11 @@ final class RuntimeEngineBackgroundWork {
         self.crossReferencePreparationCoordinator = crossReferencePreparationCoordinator
         self.isWorkInProgress = isWorkInProgress
         processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress, scheduler: processActivityScheduler)
+        activityReporter = RuntimeEngineActivityReporter(
+            indexingCoordinator: indexingCoordinator,
+            corpusCoordinator: corpusCoordinator,
+            crossReferencePreparationCoordinator: crossReferencePreparationCoordinator
+        )
         // The Always Index images are read from derived data as their rows
         // are dispatched, searchable before the batches index them — so the
         // corpus coordinator listens before the indexing starts. Their order
