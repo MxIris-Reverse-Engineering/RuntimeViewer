@@ -355,6 +355,17 @@ The project uses three Swift Package Manager packages:
   without the key — the standalone CLI host — keeps launching `RuntimeViewerCatalystHelper`. The App Nap
   rule above covers work on this engine too. The service has no "restarted" notification yet.
   Background: `Documentations/Evolutions/0051-catalyst-xpc-service.md`
+- `RuntimeViewerOfflineService` — the XPC service each offline file (a Mach-O file, a bundle or a dyld
+  shared cache read from disk) is read in, embedded at `Contents/XPCServices/`. Its `Info.plist` declares
+  `_MultipleInstances`: an engine reading a file connects with `RuntimeOfflineService.credential(for:)`,
+  `.xpcService(.dedicatedInstance(…))`, which starts an instance of its own, and the connection's first
+  `hello` names the file — `RuntimeOfflineServiceHost` reads it and installs the engine's commands before
+  answering. One instance serves one file to one client and exits when that client closes its connection
+  (`setClientDepartureHandler(_:)`; a message it has no handler for is no departure). launchd never
+  relaunches an instance, so a client whose instance went away reattaches behind a new connection. It
+  links neither `RuntimeViewerInjection` nor `RuntimeViewerCrossReferences` (see *Injection commands*)
+  and carries no entitlement exception: it reads files as data and never loads one. Background:
+  `Documentations/Evolutions/draft-offline-mode.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
   only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
@@ -535,6 +546,14 @@ including the processes that cannot inject anything. The rule has no exceptions 
 | `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
 | iOS / visionOS / jailbroken iOS apps | `InjectionServiceRegistrar.registerIfAvailable()` |
 | Injected payload (`RuntimeViewerServer` / `RuntimeViewerMobileServer`) | `RuntimeViewerServer.main()` |
+
+The offline service (`RuntimeViewerOfflineService`) is the one process that serves an engine without
+linking either module, so it makes neither call. Nothing asks it: an engine reading a file (`.file`
+source) answers the injection capability query and every cross-reference command itself, without
+dispatching (`RuntimeEngine+Injection.swift`, `RuntimeEngine+CrossReferences.swift`) — a file has no
+processes to inject into, and its images are never mapped into a process for the scan to read. Over XPC
+a command the serving process has no handler for is dropped, not answered, so an offline engine that did
+ask would never learn the command is unsupported.
 
 **Forgetting the call is not a compile error.** Handlers are installed as a connection is set up,
 so a process that never registers simply has no handler for the capability query — and a dispatch

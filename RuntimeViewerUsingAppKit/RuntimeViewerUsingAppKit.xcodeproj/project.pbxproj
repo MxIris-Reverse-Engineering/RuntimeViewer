@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E90FF5E20000000000000001 /* RuntimeViewerOfflineService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E90FF5E20000000000000005 /* RuntimeViewerOfflineService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E90FF5E20000000000000002 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E90FF5E2000000000000000D /* RuntimeViewerCore */; };
+		E90FF5E20000000000000003 /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E90FF5E2000000000000000E /* RuntimeViewerCommunication */; };
 		E918631B30611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9186330306120AA00DCEAC1 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9186332306120AA00DCEAC1 /* RuntimeViewerCore */; };
 		E9186331306120AA00DCEAC1 /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */; };
@@ -46,6 +49,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		E90FF5E20000000000000004 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E90FF5E20000000000000009;
+			remoteInfo = RuntimeViewerOfflineService;
+		};
 		E918631830611D0200DCEAC1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
@@ -147,6 +157,7 @@
 			files = (
 				E918631B30611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc in Embed XPC Services */,
 				E9C5E7A10000000000000001 /* RuntimeViewerCatalystService.xpc in Embed XPC Services */,
+				E90FF5E20000000000000001 /* RuntimeViewerOfflineService.xpc in Embed XPC Services */,
 			);
 			name = "Embed XPC Services";
 		};
@@ -224,6 +235,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E90FF5E20000000000000005 /* RuntimeViewerOfflineService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = RuntimeViewerOfflineService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = RuntimeViewerLocalRuntimeService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RuntimeViewer-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerCatalystHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -244,6 +256,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		E90FF5E20000000000000006 /* Exceptions for "RuntimeViewerOfflineService" folder in "RuntimeViewerOfflineService" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = E90FF5E20000000000000009 /* RuntimeViewerOfflineService */;
+		};
 		E918632030611D0200DCEAC1 /* Exceptions for "RuntimeViewerLocalRuntimeService" folder in "RuntimeViewerLocalRuntimeService" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -317,6 +336,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		E90FF5E20000000000000007 /* RuntimeViewerOfflineService */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E90FF5E20000000000000006 /* Exceptions for "RuntimeViewerOfflineService" folder in "RuntimeViewerOfflineService" target */,
+			);
+			path = RuntimeViewerOfflineService;
+			sourceTree = "<group>";
+		};
 		E918631230611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -403,6 +430,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		E90FF5E20000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				E90FF5E20000000000000002 /* RuntimeViewerCore in Frameworks */,
+				E90FF5E20000000000000003 /* RuntimeViewerCommunication in Frameworks */,
+			);
+		};
 		E918630E30611D0200DCEAC1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -505,6 +539,7 @@
 				E9E37D5D2FEE80CF009C409D /* RuntimeViewerService */,
 				E95ED17E0000000000000007 /* RuntimeViewerSourceEditorBridge */,
 				E918631230611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */,
+				E90FF5E20000000000000007 /* RuntimeViewerOfflineService */,
 				E99510EB3052AA7800D3FAB2 /* runtime-viewer-cli */,
 				E9CF000A2FF0010000000001 /* Configurations */,
 				E9432FE32C0D614900362862 /* Products */,
@@ -526,6 +561,7 @@
 				E99510EA3052AA7800D3FAB2 /* runtime-viewer-cli */,
 				E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */,
 				E9C5E7A10000000000000002 /* RuntimeViewerCatalystService.xpc */,
+				E90FF5E20000000000000005 /* RuntimeViewerOfflineService.xpc */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -550,6 +586,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		E90FF5E20000000000000009 /* RuntimeViewerOfflineService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E90FF5E2000000000000000A /* Build configuration list for PBXNativeTarget "RuntimeViewerOfflineService" */;
+			buildPhases = (
+				E90FF5E2000000000000000B /* Sources */,
+				E90FF5E20000000000000008 /* Frameworks */,
+				E90FF5E2000000000000000C /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				E90FF5E20000000000000007 /* RuntimeViewerOfflineService */,
+			);
+			name = RuntimeViewerOfflineService;
+			packageProductDependencies = (
+				E90FF5E2000000000000000D /* RuntimeViewerCore */,
+				E90FF5E2000000000000000E /* RuntimeViewerCommunication */,
+			);
+			productName = RuntimeViewerOfflineService;
+			productReference = E90FF5E20000000000000005 /* RuntimeViewerOfflineService.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
 		E918631030611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E918631F30611D0200DCEAC1 /* Build configuration list for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */;
@@ -600,6 +658,7 @@
 				E95ED17E000000000000000F /* PBXTargetDependency */,
 				E918631930611D0200DCEAC1 /* PBXTargetDependency */,
 				E9C5E7A1000000000000000E /* PBXTargetDependency */,
+				E90FF5E2000000000000000F /* PBXTargetDependency */,
 				E9C9E9D92C2D161000C4AA34 /* PBXTargetDependency */,
 				E9CA7A1A0000000000000002 /* PBXTargetDependency */,
 				E9CA7A1A0000000000000004 /* PBXTargetDependency */,
@@ -796,6 +855,9 @@
 					E918631030611D0200DCEAC1 = {
 						CreatedOnToolsVersion = 26.6;
 					};
+					E90FF5E20000000000000009 = {
+						CreatedOnToolsVersion = 27.2;
+					};
 					E9432FE12C0D614900362862 = {
 						CreatedOnToolsVersion = 15.4;
 						LastSwiftMigration = 2610;
@@ -847,6 +909,7 @@
 				E99510E93052AA7800D3FAB2 /* RuntimeViewerCommandLineTool */,
 				E918631030611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */,
 				E9C5E7A10000000000000010 /* RuntimeViewerCatalystService */,
+				E90FF5E20000000000000009 /* RuntimeViewerOfflineService */,
 			);
 		};
 /* End PBXProject section */
@@ -876,6 +939,11 @@
 /* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
+		E90FF5E2000000000000000C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 		E918630F30611D0200DCEAC1 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -931,6 +999,11 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		E90FF5E2000000000000000B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		E918630D30611D0200DCEAC1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -984,6 +1057,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		E90FF5E2000000000000000F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E90FF5E20000000000000009 /* RuntimeViewerOfflineService */;
+			targetProxy = E90FF5E20000000000000004 /* PBXContainerItemProxy */;
+		};
 		E918631930611D0200DCEAC1 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = E918631030611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */;
@@ -1037,6 +1115,30 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		E90FF5E20000000000000010 /* Debug configuration for PBXNativeTarget "RuntimeViewerOfflineService" */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerOfflineService/Debug.xcconfig;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		E90FF5E20000000000000011 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerOfflineService" */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = "RuntimeViewerOfflineService/Debug-arm64e.xcconfig";
+			buildSettings = {
+			};
+			name = "Debug-arm64e";
+		};
+		E90FF5E20000000000000012 /* Release configuration for PBXNativeTarget "RuntimeViewerOfflineService" */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerOfflineService/Release.xcconfig;
+			buildSettings = {
+			};
+			name = Release;
+		};
 		E918631C30611D0200DCEAC1 /* Debug configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
@@ -1341,6 +1443,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		E90FF5E2000000000000000A /* Build configuration list for PBXNativeTarget "RuntimeViewerOfflineService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E90FF5E20000000000000010 /* Debug configuration for PBXNativeTarget "RuntimeViewerOfflineService" */,
+				E90FF5E20000000000000011 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerOfflineService" */,
+				E90FF5E20000000000000012 /* Release configuration for PBXNativeTarget "RuntimeViewerOfflineService" */,
+			);
+			defaultConfigurationName = Release;
+		};
 		E918631F30611D0200DCEAC1 /* Build configuration list for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1462,6 +1573,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E90FF5E2000000000000000D /* RuntimeViewerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCore;
+		};
+		E90FF5E2000000000000000E /* RuntimeViewerCommunication */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCommunication;
+		};
 		E910124C38FF8B6334251802 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */;

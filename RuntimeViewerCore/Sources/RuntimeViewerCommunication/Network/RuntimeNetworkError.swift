@@ -29,4 +29,11 @@ extension RuntimeNetworkRequestError {
     public var isUnknownCommand: Bool {
         message.hasPrefix(Self.unknownCommandMessagePrefix)
     }
+
+    /// The reply a peer gives to a command it has no handler for — what an
+    /// engine answers on its own for a command its serving process is known
+    /// not to serve, so that every caller reads both alike.
+    public static func unknownCommand(named commandName: String) -> RuntimeNetworkRequestError {
+        RuntimeNetworkRequestError(message: unknownCommandMessagePrefix + commandName)
+    }
 }

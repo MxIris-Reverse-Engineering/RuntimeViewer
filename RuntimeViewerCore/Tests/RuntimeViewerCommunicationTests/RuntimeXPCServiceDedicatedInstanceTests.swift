@@ -108,6 +108,29 @@ struct RuntimeXPCServiceDedicatedInstanceTests {
         #expect(client.connectionReplacementCount == 4)
     }
 
+    @Test("A client closing its connection is a departure; a message the listener has no handler for is not")
+    func clientDepartureIsTheConnectionClosing() async throws {
+        let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
+        let departures = Recorder<Bool>()
+        listener.setClientDepartureHandler { Task { await departures.record(true) } }
+        listener.setMessageHandler(name: "ping") {}
+        listener.activate()
+        let client = try await RuntimeXPCServiceClientConnection(target: .anonymousListener(endpoint))
+        defer { listener.stop() }
+
+        // Dropped without a reply: the listener empties its peer slot, but
+        // the client is still there and its next known message is adopted.
+        _ = try? await client.sendMessage(name: "com.RuntimeViewer.Tests.unknownCommand", request: "x")
+        try await client.sendMessage(name: "ping")
+        try await Task.sleep(nanoseconds: 100_000_000)
+        #expect(await departures.values.isEmpty, "an unknown message was taken for the client leaving")
+
+        client.stop()
+
+        let departed = await pollUntil { await departures.values.count == 1 }
+        #expect(departed, "the listener did not report the client closing its connection")
+    }
+
     @Test("A client of an embedded service keeps its connection when the service comes back")
     func embeddedServiceClientKeepsItsConnection() async throws {
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()

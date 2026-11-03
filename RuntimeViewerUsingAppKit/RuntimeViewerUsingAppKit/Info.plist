@@ -38,6 +38,8 @@
 	<string>$(RUNTIME_VIEWER_GIT_COMMIT)</string>
 	<key>RuntimeViewerLocalRuntimeServiceBundleIdentifier</key>
 	<string>$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_BUNDLE_IDENTIFIER)</string>
+	<key>RuntimeViewerOfflineServiceBundleIdentifier</key>
+	<string>$(RUNTIME_VIEWER_OFFLINE_SERVICE_BUNDLE_IDENTIFIER)</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<true/>
 	<key>SUEnableAutomaticChecks</key>

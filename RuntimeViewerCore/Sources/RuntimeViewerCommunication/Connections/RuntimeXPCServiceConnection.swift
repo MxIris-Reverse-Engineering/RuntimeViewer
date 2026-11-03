@@ -682,6 +682,13 @@ public final class RuntimeXPCServiceListenerConnection: RuntimeXPCServiceConnect
 
     private var peer: XPCConnection?
 
+    /// The connection adopted last, kept after an unknown message emptied
+    /// the peer slot: its closing is the client's departure.
+    private weak var lastAdoptedConnection: XPCConnection?
+
+    /// See `setClientDepartureHandler(_:)`.
+    private var clientDepartureHandler: (@Sendable () -> Void)?
+
     private let launchLock = NSLock()
 
     /// What the first `hello` carrying a payload starts. See
@@ -714,6 +721,17 @@ public final class RuntimeXPCServiceListenerConnection: RuntimeXPCServiceConnect
     /// command table. Set it before `activate()`.
     public func setLaunchHandler(_ handler: @escaping @Sendable (Data) async throws -> Void) {
         launchLock.locked { launchHandler = handler }
+    }
+
+    /// Runs `handler` when the client adopted last closes its connection for
+    /// good — it cancelled the connection, or its process went away. A
+    /// message the listener has no handler for empties the peer slot as well,
+    /// but that is no departure: the client is still there, and its next
+    /// known message is adopted again. Nor is a connection a newer one
+    /// replaced. A dedicated instance's service exits here: nobody else can
+    /// ever reach it.
+    public func setClientDepartureHandler(_ handler: @escaping @Sendable () -> Void) {
+        peerLock.locked { clientDepartureHandler = handler }
     }
 
     private func launchIfNeeded(with payload: Data) async throws {
@@ -791,7 +809,10 @@ public final class RuntimeXPCServiceListenerConnection: RuntimeXPCServiceConnect
     private func adopt(_ connection: XPCConnection) {
         let (isNewPeer, replaced): (Bool, XPCConnection?) = peerLock.locked {
             guard peer !== connection else { return (false, nil) }
-            defer { peer = connection }
+            defer {
+                peer = connection
+                lastAdoptedConnection = connection
+            }
             return (true, peer)
         }
         guard isNewPeer else { return }
@@ -803,10 +824,25 @@ public final class RuntimeXPCServiceListenerConnection: RuntimeXPCServiceConnect
     }
 
     private func handlePeerError(on connection: XPCConnection, _ error: any Error) {
-        let wasPeer = peerLock.locked {
-            guard peer === connection else { return false }
+        let isTransportClosure: Bool
+        switch error as? XPCError {
+        case .connectionInvalid, .connectionInterrupted:
+            isTransportClosure = true
+        default:
+            isTransportClosure = false
+        }
+        let (wasPeer, departureHandler) = peerLock.locked { () -> (Bool, (@Sendable () -> Void)?) in
+            let departed = isTransportClosure && lastAdoptedConnection === connection
+            if departed {
+                lastAdoptedConnection = nil
+            }
+            guard peer === connection else { return (false, departed ? clientDepartureHandler : nil) }
             peer = nil
-            return true
+            return (true, departed ? clientDepartureHandler : nil)
+        }
+        if let departureHandler {
+            #log(.info, "The client closed its connection: \(error.localizedDescription, privacy: .public)")
+            departureHandler()
         }
         guard wasPeer else {
             #log(.debug, "A non-peer connection reported: \(error.localizedDescription, privacy: .public)")

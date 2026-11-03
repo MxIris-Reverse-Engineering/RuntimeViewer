@@ -1,0 +1,25 @@
+#include "../Version.xcconfig"
+
+// The XPC service each offline file is read in, embedded at Contents/XPCServices. Its Info.plist
+// declares _MultipleInstances, and the app starts an instance of its own for every file it opens.
+// Each configuration embeds a service of its own identifier, which the app reads back from its
+// Info.plist (RuntimeViewerOfflineServiceBundleIdentifier) to open the connections.
+CODE_SIGN_ENTITLEMENTS = RuntimeViewerOfflineService/RuntimeViewerOfflineService.entitlements
+CODE_SIGN_STYLE = Manual
+COMBINE_HIDPI_IMAGES = YES
+DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_POINTER_AUTHENTICATION = NO
+GENERATE_INFOPLIST_FILE = YES
+INFOPLIST_FILE = RuntimeViewerOfflineService/Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerOfflineService
+INFOPLIST_KEY_NSHumanReadableCopyright =
+MACOSX_DEPLOYMENT_TARGET = 15.0
+PRODUCT_NAME = $(TARGET_NAME)
+PROVISIONING_PROFILE_SPECIFIER =
+SKIP_INSTALL = YES
+STRING_CATALOG_GENERATE_SYMBOLS = YES
+SWIFT_APPROACHABLE_CONCURRENCY = YES
+SWIFT_EMIT_LOC_STRINGS = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+SWIFT_VERSION = 5.0

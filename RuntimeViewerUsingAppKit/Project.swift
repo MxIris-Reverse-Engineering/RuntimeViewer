@@ -176,11 +176,12 @@ let project = Project(
                 .target(name: "RuntimeViewerCommandLineTool"),
                 .target(name: "com.mxiris.runtimeviewer.service"),
                 .target(name: "RuntimeViewerCatalystHelper"),
-                // Tuist embeds these three itself: the bridge in PlugIns, the two services in
+                // Tuist embeds these four itself: the bridge in PlugIns, the three services in
                 // XPCServices.
                 .target(name: "RuntimeViewerSourceEditorBridge"),
                 .target(name: "RuntimeViewerLocalRuntimeService"),
                 .target(name: "RuntimeViewerCatalystService"),
+                .target(name: "RuntimeViewerOfflineService"),
                 .external(name: "RuntimeViewerApplication"),
                 .external(name: "RuntimeViewerCatalystExtensions"),
                 .external(name: "RuntimeViewerMCPBridge"),
@@ -360,6 +361,24 @@ let project = Project(
                 .external(name: "RuntimeViewerCrossReferences"),
             ],
             settings: targetSettings(directory: "RuntimeViewerLocalRuntimeService")
+        ),
+        // One instance per offline file: its Info.plist declares _MultipleInstances. It links
+        // neither the injection nor the cross-reference module, so it has no install() to call.
+        .target(
+            name: "RuntimeViewerOfflineService",
+            destinations: .macOS,
+            product: .xpc,
+            productName: "RuntimeViewerOfflineService",
+            bundleId: "$(inherited)",
+            infoPlist: nil,
+            buildableFolders: [
+                .folder("RuntimeViewerOfflineService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
+            ],
+            dependencies: [
+                .external(name: "RuntimeViewerCore"),
+                .external(name: "RuntimeViewerCommunication"),
+            ],
+            settings: targetSettings(directory: "RuntimeViewerOfflineService")
         ),
         .target(
             name: "RuntimeViewerCommandLineTool",

@@ -1,4 +1,5 @@
 public import RuntimeViewerCore
+import RuntimeViewerCommunication
 
 extension RuntimeEngine {
     /// What `subject` references — its callees — decoding that function only.
@@ -9,7 +10,8 @@ extension RuntimeEngine {
         of subject: RuntimeCrossReferenceSubject,
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions()
     ) async throws -> RuntimeCrossReferenceQueryResult {
-        try await dispatch(RuntimeCrossReferences.CalleesCommand(subject: subject, options: options))
+        try checkCrossReferencesAreServed(.crossReferenceCallees)
+        return try await dispatch(RuntimeCrossReferences.CalleesCommand(subject: subject, options: options))
     }
 
     /// Who references `subject` within `scope` — its callers — among the
@@ -31,7 +33,8 @@ extension RuntimeEngine {
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult {
-        try await dispatch(RuntimeCrossReferences.CallersCommand(subject: subject, scope: scope, options: options), onProgress: reportProgress)
+        try checkCrossReferencesAreServed(.crossReferenceCallers)
+        return try await dispatch(RuntimeCrossReferences.CallersCommand(subject: subject, scope: scope, options: options), onProgress: reportProgress)
     }
 
     /// Which functions reference the type `object` within `scope`: an
@@ -47,7 +50,8 @@ extension RuntimeEngine {
         options: RuntimeCrossReferenceQueryOptions = RuntimeCrossReferenceQueryOptions(),
         reportProgress: (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferenceQueryResult {
-        try await dispatch(RuntimeCrossReferences.TypeReferencesCommand(object: object, scope: scope, options: options), onProgress: reportProgress)
+        try checkCrossReferencesAreServed(.crossReferenceTypeReferences)
+        return try await dispatch(RuntimeCrossReferences.TypeReferencesCommand(object: object, scope: scope, options: options), onProgress: reportProgress)
     }
 
     /// Prepares the cross references of an image the engine has indexed,
@@ -67,6 +71,7 @@ extension RuntimeEngine {
         options: RuntimeCrossReferencePreparationOptions,
         reportProgress: (@Sendable (RuntimeCrossReferencePreparationProgress) async -> Void)? = nil
     ) async throws -> RuntimeCrossReferencePreparation {
+        try checkCrossReferencesAreServed(.crossReferencePrepare)
         switch try await dispatch(RuntimeCrossReferences.PrepareCommand(imagePath: imagePath, options: options), onProgress: reportProgress) {
         case .prepared(let preparation):
             return preparation
@@ -81,6 +86,7 @@ extension RuntimeEngine {
     /// keeps, dropping the images queried least recently past it; zero drops
     /// them all.
     public func setPreparedCrossReferenceByteLimit(_ byteLimit: Int) async throws {
+        try checkCrossReferencesAreServed(.crossReferenceSetPreparedByteLimit)
         _ = try await dispatch(RuntimeCrossReferences.SetPreparedByteLimitCommand(byteLimit: byteLimit))
     }
 
@@ -88,6 +94,21 @@ extension RuntimeEngine {
     /// now — what a zero limit frees — as their preparations estimated them.
     /// Throws for a peer older than the command.
     public func preparedCrossReferenceByteCount() async throws -> Int {
-        try await dispatch(RuntimeCrossReferences.PreparedByteCountCommand())
+        try checkCrossReferencesAreServed(.crossReferencePreparedByteCount)
+        return try await dispatch(RuntimeCrossReferences.PreparedByteCountCommand())
+    }
+}
+
+extension RuntimeEngine {
+    /// Cross references are read from arm64 code mapped into the process
+    /// serving the engine, and an offline file's images are never mapped into
+    /// one. So an engine reading a file — whether its own process reads it or
+    /// the offline service does, which does not even link this module —
+    /// answers the way a peer without these commands does, without asking:
+    /// every caller already reads that answer as a source that cannot serve
+    /// cross references.
+    fileprivate func checkCrossReferencesAreServed(_ commandName: RuntimeEngine.CommandName) throws {
+        guard case .file = source else { return }
+        throw RuntimeNetworkRequestError.unknownCommand(named: commandName.commandName)
     }
 }

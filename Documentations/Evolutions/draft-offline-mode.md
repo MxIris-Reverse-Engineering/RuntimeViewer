@@ -280,9 +280,9 @@ extension RuntimeXPCServiceListenerConnection {
 
 ### 5. 离线 service target
 
-- **`RuntimeViewerOfflineService`**（`RuntimeViewerUsingAppKit/RuntimeViewerOfflineService/`）：`main.swift`、`Info.plist`（`XPCService`：`ServiceType = Application`、`_MultipleInstances = true`，第 0 步只设这两个就可用）、entitlements（`disable-library-validation`，不开沙盒——要读任意路径的文件）。`Configurations/RuntimeViewerOfflineService/` 下 Shared 与三个配置的 xcconfig（`SKIP_INSTALL = YES`、hardened runtime、`MACOSX_DEPLOYMENT_TARGET = 15.0`、各配置的 bundle ID），`CodeSigning.xcconfig` 三个变量，App 的 `Info.plist` 加 `RuntimeViewerOfflineServiceBundleIdentifier`，App target 依赖它并在「Embed XPC Services」阶段嵌入。Tuist 描述（`RuntimeViewerUsingAppKit/Project.swift`）同一个 commit 加上，`./TuistScript.sh check` 通过。
+- **`RuntimeViewerOfflineService`**（`RuntimeViewerUsingAppKit/RuntimeViewerOfflineService/`）：`main.swift`、`Info.plist`（`XPCService`：`ServiceType = Application`、`_MultipleInstances = true`，第 0 步只设这两个就可用）、entitlements（不带任何例外：只把文件当数据读、不加载任何代码；不开沙盒——要读任意路径的文件）。`Configurations/RuntimeViewerOfflineService/` 下 Shared 与三个配置的 xcconfig（`SKIP_INSTALL = YES`、hardened runtime、`MACOSX_DEPLOYMENT_TARGET = 15.0`、各配置的 bundle ID），`CodeSigning.xcconfig` 三个变量，App 的 `Info.plist` 加 `RuntimeViewerOfflineServiceBundleIdentifier`，App target 依赖它并在「Embed XPC Services」阶段嵌入。Tuist 描述（`RuntimeViewerUsingAppKit/Project.swift`）同一个 commit 加上，`./TuistScript.sh check` 通过。
 - **`main.swift`**：建监听、交给 `RuntimeOfflineServiceHost`，订阅监听方的状态（接入过的 peer 断开即 `exit(0)`），然后 `activate()`。启动逻辑不在入口里，而在 Core 的 `RuntimeOfflineServiceHost`：它的 launch handler 解出 `RuntimeOfflineFile`（解不出就抛错：`hello` 失败、App 的连接带着原因失败）；若读的是 cache（打开的或配对的），按它的身份打开派生数据（§9）；建 `RuntimeEngine(reading:)`，交给 `RuntimeLocalRuntimeServiceHost`（它本来就是「把一个进程内引擎挂到 service 监听上」，文档注释已改成不限于 `.local`）并 `start()`。放在 Core 里，整条路径就能用匿名监听在进程内测。
-- **进程义务**：不链接 `RuntimeViewerInjection` 与 `RuntimeViewerCrossReferences`，所以没有两个 `install()`——这是根 `AGENTS.md`「linked it ⇒ call it」表格里的第一个有意不链接的进程，表格加一行说明为什么。
+- **进程义务**：不链接 `RuntimeViewerInjection` 与 `RuntimeViewerCrossReferences`，所以没有两个 `install()`——这是根 `AGENTS.md`「linked it ⇒ call it」表格里的第一个有意不链接的进程，表格下加一段说明为什么。也没有人问它：`.file` 引擎在引擎侧自己回答注入能力查询（第 3 步）与全部交叉引用命令（回「未知命令」，App 各处现成的「此来源不支持」照常显示），不发出去——XPC 上对端没有处理器的命令会被丢掉而不是回答，问了也得不到「不支持」。退出：监听方的 `setClientDepartureHandler(_:)` 只在 client 连接真正关闭时回调，service 在那里 `exit(0)`；没有处理器的消息也会清空监听方的 peer 槽位，但不算离开。
 - **`RuntimeOfflineService`**（`RuntimeViewerCore/Offline/`，仿 `LocalRuntimeService`）：`Info.plist` 键名、从进程 bundle 读出 bundle ID、为某个 `RuntimeOfflineFile` 造凭证（`.dedicatedInstance`，载荷是 JSON 编码的文件），以及 service 侧把载荷解回文件。
 
 ### 6. 引擎管理（`RuntimeViewerEngineManagement`）
@@ -389,7 +389,7 @@ extension RuntimeEngineManager {
 
 ### 发布
 
-- 新内嵌 XPC service，签名与公证方式与另外两个 service 相同（hardened runtime、`disable-library-validation`、非沙盒）。
+- 新内嵌 XPC service，签名与公证方式与另外两个 service 相同（hardened runtime、非沙盒）；它不带库校验例外，与 Catalyst service 一样。
 - 用到 libxpc 的一个私有函数（一次性实例）。App 走 Developer ID 分发，不受 App Store 审核限制；系统更新改动这些接口的风险由第 0 步的探测和发布前的手测兜住，坏了就退回「自起子进程」的方案。
 - Sparkle 更新流程不变；`ArchiveScript.sh` 的产物多一个 `.xpc`，归档后检查列表要加上它。
 - 没有新的隐私清单条目或权限弹窗：读的是用户自己选的文件，App 本来就不在沙盒里。
@@ -419,7 +419,8 @@ extension RuntimeEngineManager {
 | 2 Core 泛型化 | 完成 | Core 全量与基线对照：基线就有的满载失败（交叉引用预先准备、后台索引批次取消、事件订阅三个之中的两个）照旧，无新增失败；新增的跳转回归测试在旧查找逻辑上红、修复后绿 |
 | 3 文件目录与文件引擎 | 完成 | `OfflineFileEngineTests` 9 例通过：薄 / 胖 / 非 Mach-O / bundle 的判定，离线与进程内引擎对同一镜像列出的对象一致、打印一致，离线泛型特化，依赖解析进配对 cache，cache 引擎按导出符号找到 `NSObject` 所在的 libobjc。Core 全量 663 项只有基线就有的两个满载失败；Packages 全量 701 项挂 1 个交叉引用的等待超时（174 秒），单独跑该套件 11 项全过；CLI 121 项全过；Debug 设置文件前后校验和不变。App 目标未编，第 5 步加 service target 时一起编 |
 | 4 传输 | 完成 | `.dedicatedInstance`、`hello` 带载荷、launch handler、换新连接的重连与处理器重装、`RuntimeOfflineService` / `RuntimeOfflineServiceHost`、引擎对 `.file` 带凭证转发。新测试：传输 5 项（载荷随第一个 `hello` 到达且 launch handler 只跑一次、launch 失败让连接失败、实例退出后换新连接且处理器仍应答、被拒绝的 `hello` 每次换新实例、内嵌 service 的 client 不换连接），离线 service host 5 项（载荷往返、`.file` 引擎转发并收到镜像清单、请求到达 service 侧引擎、读不了的文件让连接失败、停止后再连接）；原有 XPC 传输与本地 service host 的 17 项照旧通过 |
-| 5–10 | 未做 | |
+| 5 离线 service target | 完成 | `./RunScript.sh --no-launch`（隔离构建目录）成功；产物里 `Contents/XPCServices/RuntimeViewerOfflineService.xpc` 存在，hardened runtime、团队签名、entitlements 为空，`Info.plist` 带 `_MultipleInstances = true`，App 的 `RuntimeViewerOfflineServiceBundleIdentifier` 是 `dev.JH.RuntimeViewerOfflineService.arm64e`；`./TuistScript.sh check` 通过。新测试：监听方的「客户端离开」只认连接关闭（未知消息不算），`.file` 引擎对交叉引用命令自己回答「未知命令」；传输与离线 host 共 23 项、交叉引用 33 项通过。真实 service 实例的端到端运行归第 9 步人工验收 |
+| 6–10 | 未做 | |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -459,3 +460,6 @@ extension RuntimeEngineManager {
 | 2026-11-03 | 离线 service 的启动逻辑放进 Core 的 `RuntimeOfflineServiceHost` | 详细设计 §5 原拟写在 service 的 `main.swift` 里。放进 Core，「载荷到达 → 建引擎 → 登记命令 → 回复 `hello`」这条路径就能用匿名监听在进程内测；入口只剩建监听、退出条件与 `activate()`。 |
 | 2026-11-03 | 实例拒绝了载荷，下一次重连就换新实例 | 提案没写。读不了的文件可能稍后恢复（例如卷重新挂上），同一个实例会一直记着失败的结果，所以 `hello` 回 `remoteFailure` 时把连接标记为要换，下一次重连拉起新实例重新读。 |
 | 2026-11-03 | 引擎的 `forwardsToLocalService` 改名 `forwardsToServiceProcess` | `.file` 带凭证时与 `.local` 一样转发；哪些来源由凭证搬进别的进程收在一个穷举 `switch` 里（`credentialMovesWorkOutOfProcess(for:)`），新来源会编译不过、逼着人决定。 |
+| 2026-11-03 | 离线 service 不带库校验例外 | 详细设计 §5 原拟与本地运行时 service 一样带 `disable-library-validation`。那个例外是给 dlopen 用户挑的镜像的；离线 service 只把文件当数据读，加载的只有 App 自己的代码，与 Catalyst service 一样不需要它。产物核对：hardened runtime、团队签名、entitlements 为空。 |
+| 2026-11-03 | 监听方加「客户端离开」回调，service 只在连接真正关闭时退出 | 提案没写退出的判据。监听方在收到没有处理器的消息时也会报 `.disconnected`（已有测试写明的行为），拿它当退出条件，一条不认识的命令就会让 service 退出、App 再拉起新实例重新解析。`setClientDepartureHandler(_:)` 只认 XPC 报的连接关闭，且只认最后认领的那条连接。 |
+| 2026-11-03 | 交叉引用对 `.file` 引擎在引擎侧直接回答「未知命令」，提前到第 5 步 | 提案只说沿用「此引擎不支持」。实测链路：XPC 上没有处理器的命令被丢掉，发送方拿到的是「service 退出」，交叉引用协调器把它当连接中断，不会标成不支持，而 service 那边还会因此重推一遍初始数据。改为六个入口对 `.file` 引擎先抛 `RuntimeNetworkRequestError.unknownCommand(named:)`——与 socket 对端回的完全一样，Find 摘要、Report 行与两个协调器现成的判断都照常生效，App 层不用改。离线 service 不链接这个模块，所以随第 5 步一起做。 |
