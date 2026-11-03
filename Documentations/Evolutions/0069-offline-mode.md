@@ -1,12 +1,12 @@
-# Draft - 离线模式：打开磁盘上的 Mach-O 文件、bundle 与 dyld shared cache
+# 0069 - 离线模式：打开磁盘上的 Mach-O 文件、bundle 与 dyld shared cache
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-02
 - **最后更新**: 2026-11-03
 - **所属愿景**: 无
 - **关联提案**: [0037](0037-local-runtime-xpc-service.md)（本地运行时 XPC service：离线 service 沿用它的 service host、凭证与重连做法）、[0051](0051-catalyst-xpc-service.md)（第二个内嵌 service 的先例）、[0003](0003-generic-type-specialization.md)（泛型特化的 UI 流程；离线走 MachOSwiftSection 0069 的静态特化）、[0033](0033-runtime-bookmark-scope.md)（新来源要有自己的书签身份）、[0054](0054-always-index-per-engine.md) / [0055](0055-engine-scoped-background-work.md) / [0058](0058-runtime-engine-session.md)（每个引擎一份后台工作；「最后一个文档离开」是停放离线进程的钩子）、[0056](0056-cross-references.md)（交叉引用只能在进程内做，离线不支持）、[0061](0061-derived-data.md)（派生数据：离线 cache 的语料要按该 cache 的身份存，并躲开本机的清理规则）
-- **实现分支 / PR**: `feature/offline-mode`（worktree `.worktrees/RuntimeViewer-OfflineMode`），从 `next` 切出
+- **实现分支 / PR**: `feature/offline-mode`（从 `next` 切，并回 `next`）
 - **配套文档**: [使用指南：离线读文件](../Guides/OfflineMode.md)；多实例 XPC 的约束写在 [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §3.6，引擎管理器的离线组在 §7.1，离线 cache 的派生数据在 [`DerivedData.md`](../DerivedData.md)
 
 ## 摘要
@@ -430,7 +430,7 @@ extension RuntimeEngineManager {
 | 6 引擎管理 | 完成 | 离线组、`runtimeEngine(reading:)`、停放 / 唤醒、`RuntimeHostInfo.offlineFiles`；CLI 的过滤与 `SourceKind` 在第 3 步已做。新测试：管理器 6 项（自成一组且转发、同一文件返回同一引擎、停放后仍列出且唤醒是同一对象并起新实例、改配对后在新实例里读到 cache 的镜像、没有 service 时报错且不列出、终止后忘掉），CLI 1 项（离线文件不是 CLI 的来源）；CLI 全量 122 项通过 |
 | 7 应用层 | 完成 | 设置分支与设置页、`RuntimeDyldSharedCacheSummary`；后台工作注册表的占用事件与 `RuntimeOfflineEngineParking`（30 秒后停放）；`Document(runtimeEngine:)` 与 `MainCoordinator` 从文档的引擎起步；`DocumentController`、`OfflineFileController`、`Info.plist` 的 Viewer 文档类型；引擎菜单（选中停放的引擎先唤醒、离线组末尾的 Open File… 与 Dependency Cache 子菜单、文件自己的图标）；离线引擎上 Load Frameworks… 禁用。设置测试 39 项、停放 3 项、后台工作相关 15 项通过，Debug 设置文件前后校验和不变；`./RunScript.sh --no-launch` 构建成功，产物的 `CFBundleDocumentTypes` 带新类型。界面与打开流程没有自动化测试，归第 9 步人工验收 |
 | 8 派生数据 | 完成 | 离线身份 `Offline-<平台>-<版本>-<UUID>`、离线 service 的开关与按 cache 建的存储、本机清理跳过 `Offline-` 目录。新测试 4 项（离线 cache 的目录不被清理、离线身份的目录名且解析不出 build、文件的 cache 镜像归谁、默认关闭）；派生数据与离线 host 相关 46 项通过 |
-| 9 人工验收 | 进行中 | 详细设计 §10 的「人工验收」：第三方 `.app`、iOS cache、胖二进制；切走 30 秒后进程消失、选回来能用；`kill -9` 离线进程后窗口回根、别的窗口不受影响；截断的 Mach-O 只影响它自己。用户首轮验收报了两个问题：打开 dyld cache 时迟迟不出窗口（已修，见决策日志 11-03「打开文件立刻出窗口」）；离线生成 Swift 接口很慢（已修，见决策日志 11-03「离线 Swift 接口慢」） |
+| 9 人工验收 | 完成 | 详细设计 §10 的「人工验收」：第三方 `.app`、iOS cache、胖二进制；切走 30 秒后进程消失、选回来能用；`kill -9` 离线进程后窗口回根、别的窗口不受影响；截断的 Mach-O 只影响它自己。用户首轮验收报了两个问题：打开 dyld cache 时迟迟不出窗口（已修，见决策日志 11-03「打开文件立刻出窗口」）；离线生成 Swift 接口很慢（已修，见决策日志 11-03「离线 Swift 接口慢」）。两处修好后用户复验，确认人工验收通过 |
 | 10 文档 | 完成 | 使用指南 `Guides/OfflineMode.md`；术语表六条（离线文件、依赖 cache、停放、专属实例、镜像目录、读取方式）；README 两处；`CommunicationAndEngineArchitecture.md` §3.6 / §7.1、`DerivedData.md`、根与 App 层 `AGENTS.md` 已随各步更新；提案索引的后续项表划掉「跨镜像点击跳到 `@rpath` 镜像落空」（第 2 步修好），加上三条本提案的后续项 |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -487,3 +487,4 @@ extension RuntimeEngineManager {
 | 2026-11-03 | 实现完成，待用户验收后收尾 | 第 0–8、10 步完成并推送到 `feature/offline-mode`；第 9 步的人工验收由用户在真实 App 里做，之后用 finish-feature 落地编号、改 Implemented。 |
 | 2026-11-03 | 打开文件立刻出窗口，文件在后台读 | 首轮验收：打开 dyld cache 后很久才出窗口，看着像卡死。原因是管理器要等离线 service 把整份 cache 读完、连接建好才登记引擎，App 才建窗口，期间没有任何反馈；识别文件头那一步也在主线程上。用户要的行为：立刻出窗口并显示加载中，不占主线程，读失败弹提示、点确认后关窗。实现：管理器拆出 `startReading(_:)`（先登记、后台连接）与 `waitUntilFileIsRead(by:)`；`.file` 来源经普通构造器建出的引擎从创建起就转发，窗口在读完之前发出的请求一律失败，不会被 App 进程自己的镜像回答；内容区占位在读取期间显示转圈与「Reading “…”…」；读失败时在窗口上弹提示，点 OK 后关窗，第一次就读失败的引擎从菜单撤下，重读失败的引擎再次停放；文件读成功才进 Open Recent；切回停放的引擎也立刻切窗口；同一引擎上的读与停排队执行。 |
 | 2026-11-03 | 离线 Swift 接口慢：静态布局计算器每次都被重建 | 首轮验收：离线生成 Swift 接口很慢，ObjC 快。用户开着字段偏移、类型布局、枚举布局，离线时这些注释靠 MachOSwiftSection 为 `MachOFile` 建的静态布局计算器，建一次要解析这个镜像的整串依赖、把 cache 的三千多个镜像过一遍。引擎在每次生成接口前都更新一次 section 的打印配置，而 MachOSwiftSection 的打印器一收到配置（哪怕相同）就扔掉计算器，于是每个接口都重建一遍；开着「合成不透明类型」时每次更新还会给打印器再挂一个解析器。进程内的引擎不建这个计算器，所以 My Mac 不受影响。用户选择两边一起修：RuntimeViewer 只在打印配置真的变了才交给打印器，解析器只在选项打开时挂一次；MachOSwiftSection 只在布局相关的输入变了才扔计算器，并让各镜像共用 cache 的镜像索引（它的 next 52910902，台账第 120 节；同一个 cache 上第二个定位器的首次查询从 0.27 秒降到 0.006 秒），RuntimeViewer 的五份锁文件随之抬到这个修订，只改这一条。两边都带修前失败、修后通过的测试。 |
+| 2026-11-03 | 落地：编号 0069，状态改为 Implemented | 用户复验后确认第 9 步人工验收通过，批准收尾。实现与验收后的两处修复都已在 11-03 合进 `next` 并推送，这次只补编号、状态与引用。与方案的出入已逐条记在上面各行，只有一处没记：设置页的标题定为 Offline Files（方案里写作 Offline）。没做完的三项——离线 cache 派生数据的按时清理、「Manage in Settings…」直接跳到 Offline Files 页、命令行读文件与离线引擎上的交叉引用——列在提案索引的「暂缓的后续项」。agent 的验证是测试与编译，界面与打开流程由用户在 App 里验收。配套文档与术语的判断同 11-03「收尾判断」一行：使用指南已写，术语六条已登记；验收后的两处修复只改了行为细节，使用指南、架构文档与 `AGENTS.md` 已随修复同步，没有新术语。MachOSwiftSection 一侧的改动没有单独的提案，记在它的台账第 120 节。 |

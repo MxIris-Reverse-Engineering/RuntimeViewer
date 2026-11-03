@@ -368,7 +368,7 @@ The project uses three Swift Package Manager packages:
   file's window before the instance has read it (`RuntimeEngineManager.startReading(_:)`), which is safe
   only because a `.file` engine made with `RuntimeEngine.init(source:…)` forwards from the moment it
   exists: until its connection is up a request fails instead of being answered from the app's own
-  images. Background: `Documentations/Evolutions/draft-offline-mode.md`
+  images. Background: `Documentations/Evolutions/0069-offline-mode.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
   only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
