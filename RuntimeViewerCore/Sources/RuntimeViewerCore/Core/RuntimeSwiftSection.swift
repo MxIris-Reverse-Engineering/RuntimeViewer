@@ -139,6 +139,17 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
 
     private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
 
+    /// Whether `printer` holds the opaque type resolver; see
+    /// `updateConfiguration(using:transformer:marksCommentStructure:)`.
+    private var isOpaqueTypeResolverRegistered = false
+
+    /// How many times `updateConfiguration` has handed `printer` a new
+    /// configuration, and registered the opaque type resolver with it. Read
+    /// by tests: an update that changes nothing does neither.
+    private(set) var printerConfigurationUpdateCount = 0
+
+    private(set) var opaqueTypeResolverRegistrationCount = 0
+
     private var interfaceDefinitionNameByObject: [RuntimeObjectKey: InterfaceDefinitionName] = [:]
 
     /// Every Swift class this image registers with the Objective-C runtime,
@@ -1522,17 +1533,30 @@ extension RuntimeSwiftSection {
             transformerChanged: transformerChanged,
         )
         newPrintConfiguration.marksCommentStructure = marksCommentStructure
-        printer.updateConfiguration(newPrintConfiguration)
 
-        if options.resolvesOpaqueTypes {
-            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
-        } else {
-            printer.removeAllTypeNameResolvers()
-        }
-
+        // The engine updates the section before every interface, nearly
+        // always with what it already has. Handing the printer even an equal
+        // configuration made an offline printer throw away its static layout
+        // calculator, which resolves every image this one depends on — the
+        // whole cost of an offline interface, paid on every one.
         if newPrintConfiguration != oldPrintConfiguration {
+            printer.updateConfiguration(newPrintConfiguration)
+            printerConfigurationUpdateCount += 1
             #log(.debug, "Print configuration changed, clearing interface cache")
             interfaceByObject.removeAll()
+        }
+
+        // The printer keeps every resolver it is given and asks each in turn,
+        // so the opaque type resolver is registered when the option turns on
+        // and dropped when it turns off — never once per update, which
+        // stacked a copy for every interface printed.
+        if options.resolvesOpaqueTypes, !isOpaqueTypeResolverRegistered {
+            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
+            isOpaqueTypeResolverRegistered = true
+            opaqueTypeResolverRegistrationCount += 1
+        } else if !options.resolvesOpaqueTypes, isOpaqueTypeResolverRegistered {
+            printer.removeAllTypeNameResolvers()
+            isOpaqueTypeResolverRegistered = false
         }
     }
 
