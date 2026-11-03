@@ -10,7 +10,14 @@ extension RuntimeEngine {
     ///
     /// Throws `RuntimeOfflineFileError` when the file or its paired cache
     /// cannot be opened.
-    public init(reading file: RuntimeOfflineFile, engineID: String = UUID().uuidString) throws {
+    public init(
+        reading file: RuntimeOfflineFile,
+        engineID: String = UUID().uuidString,
+        hostInfo: RuntimeHostInfo = RuntimeHostInfo(
+            hostID: RuntimeNetworkBonjour.localInstanceID,
+            hostName: RuntimeNetworkBonjour.localHostName,
+        )
+    ) throws {
         let catalog = try RuntimeFileImageCatalog(file: file)
         guard let placeholderPath = catalog.imagePaths().first,
               let placeholderImage = catalog.machO(forImagePath: placeholderPath)
@@ -20,14 +27,17 @@ extension RuntimeEngine {
         self.init(
             source: file.source,
             engineID: engineID,
-            hostInfo: RuntimeHostInfo(
-                hostID: RuntimeNetworkBonjour.localInstanceID,
-                hostName: RuntimeNetworkBonjour.localHostName,
-            ),
+            hostInfo: hostInfo,
             originChain: [RuntimeNetworkBonjour.localInstanceID],
             pushesRuntimeData: true,
             bookmarkScope: nil,
             imageIndex: RuntimeImageIndex(catalog: catalog, placeholderImage: placeholderImage),
         )
     }
+}
+
+extension RuntimeHostInfo {
+    /// The host offline engines are listed under: a section of their own in
+    /// the engine menu, whichever machine's disk the file came from.
+    public static let offlineFiles = RuntimeHostInfo(hostID: "offline-files", hostName: "Offline Files")
 }

@@ -498,14 +498,15 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ## 7. `RuntimeEngineManager` 逐部分详解
 
-### 7.1 五个引擎集合
+### 7.1 六个引擎集合
 
-Manager 把所有引擎按来源分成五组 `@Published`，`runtimeEngines` 计算属性是前四组之和：
+Manager 把所有引擎按来源分成六组 `@Published`，`runtimeEngines` 计算属性是除 `runtimeEngineSections` 之外五组之和：
 
 - **`systemRuntimeEngines`**：`RuntimeEngine.local`（App 里转发给内嵌 XPC service，无头 host 里在进程内，见 §3.6）+ Mac Catalyst client 引擎。`launchSystemRuntimeEngines()` 把前者加进列表（它自己连接）；Catalyst 一半尽力而为，起不来只记日志并发 `catalystHelperUnavailable` 事件，不再连带跳过后面的已注入进程重连。Catalyst 引擎怎么起来由 `MacCatalystLaunching` 决定（测试缝）：`live` 在 App 里（`MacCatalystRuntimeService.embeddedServiceCredential` 非 `nil`）连内嵌的 Catalyst service，`helperApplication` 为 `nil`——连上即算数，不拉 helper、不轮询、不观察，也不订阅 daemon 可用性；在 CLI 独立 host 里经 daemon 拉 helper App，用 `engineList` 探测轮询最多 15 秒等它连回来，断线即出列表，daemon 重装时重启 Catalyst 引擎。
 - **`attachedRuntimeEngines`**：注入到别的 App 得到的引擎——非沙盒走 XPC（`.remote`），沙盒走 localSocket。支持从持久化记录**重连已注入进程**（`reconnectInjectedXPCEngines` 读 Mach Service 注册表；`reconnectInjectedSocketEngines` 读本地 JSON 并 `kill(pid,0)` 探活）。
 - **`bonjourRuntimeEngines`**：Bonjour 发现的对端。默认作为**管理型连接**（只跑引擎清单交换）在 UI 里隐藏；若对端不支持引擎共享（返回 0 个描述符）则升级为 `directBonjourEngines` 直接展示。
 - **`mirroredEngines`**：经由引擎共享协议**镜像**来的远端引擎（`OrderedDictionary<engineID, Engine>`），由 `RuntimeEngineMirrorRegistry` 管理。
+- **`offlineRuntimeEngines`**：读磁盘上文件的引擎，一个文件一个，`hostInfo` 都是 `RuntimeHostInfo.offlineFiles`，所以在菜单里自成一组「Offline Files」。`runtimeEngine(reading:)` 用 `offlineEngineCredential`（测试缝，默认 `RuntimeOfflineService.credential(for:)`）给每个文件起一个离线 service 的专属实例（§3.6）；同一个 URL 再要一次返回列表里那个，配对的 cache 变了就停掉旧实例、在新实例里重读。`suspendOfflineEngine(_:)` 让进程退出、引擎留在列表里（同一个对象），`resumeOfflineEngine(_:)` 或再要一次该文件就重新连上、重新解析。离线引擎不进 `startSharingEngines` 的组合，所以不起代理服务器；`.file` 的 `isMirrorableToPeers` 为 `false`，也不会出现在给对端的描述符里；CLI 的来源快照把它们滤掉。没有内嵌离线 service 的进程（测试、CLI 独立 host）拿到 `nil` 凭证，`runtimeEngine(reading:)` 抛 `RuntimeOfflineEngineError.serviceUnavailable`。
 - **`runtimeEngineSections`**：面向 UI 的最终产物，按 `hostID` 把引擎聚成分组（`rebuildSections()`）。
 
 ### 7.2 Bonjour 发现与连接
