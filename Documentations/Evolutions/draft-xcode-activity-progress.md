@@ -98,7 +98,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 2. **活动模型**（已完成）：`RuntimeViewerApplication/Activity/`。三类工作按轮次汇成活动，挑选（用户发起优先、后台 4 秒、至少 3 秒）、每秒一次的节流、文字分段都在这里，每个窗口的 `ToolbarActivityPresenter` 给出活动状态。配单元测试。
 3. **macOS 26 / 15 的中间胶囊**（已完成）：`RuntimeViewerUI` 里做进度环、按段截断的文字、胶囊视图与工具栏项。抬 UIFoundation 的 pin；`MainWindowController` 在 macOS 27 以下装上胶囊，点击打开 Report 导航。配测试。
 4. **macOS 27 的标题区**（已完成）：先补逆向 Xcode 工程图标的画法，再做收拢形状的自绘 layer、进度环与完成序列，以及 `TitleToolbarItem` 的图标槽、字体和悬停时的活动文字。配测试。
-5. **收尾**：用 Debug workspace 完整构建 App，跑各包测试；`AGENTS.md` 与本提案按实际做出的结果更新。
+5. **收尾**（已完成）：用 Debug workspace 完整构建 App，跑各包测试；`AGENTS.md` 与本提案按实际做出的结果更新。
 
 ### 验证
 
@@ -109,6 +109,8 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
   - 文字按段截断；
   - 环的显示值映射；
   - 收拢形状在关键时刻的几何。
+- **实际跑过的**（2026-11-03，JH's Mac Studio Ultra，macOS 27.2，Xcode 27.2）：新增 7 组共 45 个测试（`ActivityRunTrackerTests`、`ActivityReportSelectorTests`、`ToolbarActivityStateTests`、`ToolbarActivityPresenterTests`、`ToolbarActivityViewTests`、`TitleActivityIndicatorTests`，以及原有的 `TitleToolbarItemOverflowTests`）全部通过；`RuntimeViewerPackages` 全量 748 个测试只有 `FindCrossReferenceTests` 的一个用例在满载下等待超时，这组单独跑在本分支与 `next` 上都通过；App 用 Debug workspace 编译通过，锁文件没被改写；`RuntimeViewerCommandLine` 编译通过。
+- **一次没查明的崩溃**：把改动波及的 10 组既有测试合起来跑，本分支 8 次里测试进程崩过 1 次（信号 11，没有留下崩溃报告），`next` 上 4 次都没崩；单独跑各组都过。新代码里订阅三个协调器的回调一律经 `Task { @MainActor in … }` 回到主线程，没找到会在后台线程碰主线程状态的路径，暂时归为偶发。
 - **目视验收由用户来做**。逆向留下几项只有录屏才能定：Xcode 27 图标槽与文字的间距、方块从强调色变透明是渐变还是跳变、几处默认动画曲线。需要时请用户录一段 Xcode 26 与 27 构建的过程。
 
 ### 没有询问就采用的假设
@@ -135,3 +137,4 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-03 | 标题区图标改为单色字形，不画方块 | 补的逆向表明 Xcode 的工程图标是自定义符号 `doc-project` 填 `systemBlue`，没有底板；收拢出的方块是进度形状本身。批准时选的「常驻当前镜像的种类符号」不变，只是方块那半句的前提不成立，照 Xcode 改；bundle 用棕色，因为 Xcode 给 Swift package 的 `shippingbox` 用棕色 |
 | 2026-11-03 | 标题区几处动画用近似实现，写明在案 | 项目规定 SwiftUI 只用于设置页，标题区用 Core Animation 重做：SwiftUI 的弹簧换成 `CASpringAnimation(perceptualDuration:bounce:)`，用叠加动画模拟 SwiftUI 打断时的平滑衔接；收拢形状的连续圆角用 UIKit 的连续曲线，半径超出它能画的范围时改用圆弧；方块的填充从强调色到透明做成整层淡出；计数与副标题的出现、消失只做淡入淡出，没有 SwiftUI 那一点模糊，副标题行出现时标题上移不做动画；图标槽与文字的间距取 SwiftUI 默认的 8，未与 Xcode 实测比对 |
 | 2026-11-03 | 活动文字只在悬停时进副标题行，标题项的宽度只在悬停期间按 20 点的台阶变宽 | 照批准的「平时不换，悬停才显示」；Xcode 让宽度只增不减、按 20 点取整，是为了每秒刷新的文字不抖动工具栏，悬停期间照做 |
+| 2026-11-03 | 实现完成，待用户看过后收尾 | 五个落地步骤都已完成并推送。全量测试唯一的失败（`FindCrossReferenceTests` 的 Call Hierarchy 用例满载时等待超时）在 `next` 上全量跑同样出现，是基线已有的。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 新增「The Toolbar's Activity Display」一节，根 `AGENTS.md` 的依赖下限改为 UIFoundation 0.43.0，术语表新增「活动」；没有可配置的东西，不写使用指南；实现要点在 `AGENTS.md` 与本提案里，不另写实现说明。目视验收、以及与 Xcode 录屏的逐帧比对留给用户 |
