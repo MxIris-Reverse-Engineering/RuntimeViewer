@@ -7,7 +7,7 @@
 - **所属愿景**: 无
 - **关联提案**: [0037](0037-local-runtime-xpc-service.md)（本地运行时 XPC service：离线 service 沿用它的 service host、凭证与重连做法）、[0051](0051-catalyst-xpc-service.md)（第二个内嵌 service 的先例）、[0003](0003-generic-type-specialization.md)（泛型特化的 UI 流程；离线走 MachOSwiftSection 0069 的静态特化）、[0033](0033-runtime-bookmark-scope.md)（新来源要有自己的书签身份）、[0054](0054-always-index-per-engine.md) / [0055](0055-engine-scoped-background-work.md) / [0058](0058-runtime-engine-session.md)（每个引擎一份后台工作；「最后一个文档离开」是停放离线进程的钩子）、[0056](0056-cross-references.md)（交叉引用只能在进程内做，离线不支持）、[0061](0061-derived-data.md)（派生数据：离线 cache 的语料要按该 cache 的身份存，并躲开本机的清理规则）
 - **实现分支 / PR**: `feature/offline-mode`（worktree `.worktrees/RuntimeViewer-OfflineMode`），从 `next` 切出
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: [使用指南：离线读文件](../Guides/OfflineMode.md)；多实例 XPC 的约束写在 [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §3.6，引擎管理器的离线组在 §7.1，离线 cache 的派生数据在 [`DerivedData.md`](../DerivedData.md)
 
 ## 摘要
 
@@ -423,7 +423,8 @@ extension RuntimeEngineManager {
 | 6 引擎管理 | 完成 | 离线组、`runtimeEngine(reading:)`、停放 / 唤醒、`RuntimeHostInfo.offlineFiles`；CLI 的过滤与 `SourceKind` 在第 3 步已做。新测试：管理器 6 项（自成一组且转发、同一文件返回同一引擎、停放后仍列出且唤醒是同一对象并起新实例、改配对后在新实例里读到 cache 的镜像、没有 service 时报错且不列出、终止后忘掉），CLI 1 项（离线文件不是 CLI 的来源）；CLI 全量 122 项通过 |
 | 7 应用层 | 完成 | 设置分支与设置页、`RuntimeDyldSharedCacheSummary`；后台工作注册表的占用事件与 `RuntimeOfflineEngineParking`（30 秒后停放）；`Document(runtimeEngine:)` 与 `MainCoordinator` 从文档的引擎起步；`DocumentController`、`OfflineFileController`、`Info.plist` 的 Viewer 文档类型；引擎菜单（选中停放的引擎先唤醒、离线组末尾的 Open File… 与 Dependency Cache 子菜单、文件自己的图标）；离线引擎上 Load Frameworks… 禁用。设置测试 39 项、停放 3 项、后台工作相关 15 项通过，Debug 设置文件前后校验和不变；`./RunScript.sh --no-launch` 构建成功，产物的 `CFBundleDocumentTypes` 带新类型。界面与打开流程没有自动化测试，归第 9 步人工验收 |
 | 8 派生数据 | 完成 | 离线身份 `Offline-<平台>-<版本>-<UUID>`、离线 service 的开关与按 cache 建的存储、本机清理跳过 `Offline-` 目录。新测试 4 项（离线 cache 的目录不被清理、离线身份的目录名且解析不出 build、文件的 cache 镜像归谁、默认关闭）；派生数据与离线 host 相关 46 项通过 |
-| 9–10 | 未做 | |
+| 9 人工验收 | 待用户 | 详细设计 §10 的「人工验收」：第三方 `.app`、iOS cache、胖二进制；切走 30 秒后进程消失、选回来能用；`kill -9` 离线进程后窗口回根、别的窗口不受影响；截断的 Mach-O 只影响它自己 |
+| 10 文档 | 完成 | 使用指南 `Guides/OfflineMode.md`；术语表六条（离线文件、依赖 cache、停放、专属实例、镜像目录、读取方式）；README 两处；`CommunicationAndEngineArchitecture.md` §3.6 / §7.1、`DerivedData.md`、根与 App 层 `AGENTS.md` 已随各步更新；提案索引的后续项表划掉「跨镜像点击跳到 `@rpath` 镜像落空」（第 2 步修好），加上三条本提案的后续项 |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -475,3 +476,5 @@ extension RuntimeEngineManager {
 | 2026-11-03 | 「Manage in Settings…」只打开设置窗口 | 设置窗口还没有跳到指定页的入口；第一版先打开窗口，由用户点 Offline Files 页。 |
 | 2026-11-03 | 离线 service 用自己的派生数据开关 | 详细设计 §9 没说开关。离线 service 若调 `enableInThisProcess()`，进程级存储会取本机身份、用本机 dyld 判断共享缓存镜像，iOS cache 的镜像（路径与本机的同名）就会按本机身份存进本机目录。改为 `enableForOfflineEngineInThisProcess()` 加 `offlineStore(for:isSharedCacheImage:)`：由离线 host 按引擎读的 cache 建存储交给引擎，镜像归属由引擎的目录回答；存储不清理（`cleansUpOnFirstUse: false`），以免按「build 不同」删掉本机的系统目录。 |
 | 2026-11-03 | `Platform` 补了 iOS 等平台，系统目录名照旧只认 macOS 与 Mac Catalyst | 已有测试把「`iOS-…` 不是系统目录」写成了契约（清理会删认不出的目录）。加了平台后解析时只认这台 Mac 自己跑的平台，离线目录靠 `Offline-` 前缀另认。 |
+| 2026-11-03 | 收尾判断：配套文档与新术语 | 写了使用指南 `Guides/OfflineMode.md`（能打开什么、配对、停放、不支持的功能、派生数据）；多实例 XPC 的约束不另写实现说明，放进架构文档 §3.6，那里本来就讲 XPC service 的传输。新术语六条进 `Glossary.md`。 |
+| 2026-11-03 | 实现完成，待用户验收后收尾 | 第 0–8、10 步完成并推送到 `feature/offline-mode`；第 9 步的人工验收由用户在真实 App 里做，之后用 finish-feature 落地编号、改 Implemented。 |

@@ -41,6 +41,7 @@
 - **Code Injection** – Inject into x86_64 and arm64e processes (system apps supported via helper service; requires SIP disabled). Injected processes automatically reconnect across app restarts; sandboxed apps are supported over local TCP sockets
 - **Auto-Update** – Sparkle-powered updates with daily checks, manual **Check for Updates…**, EdDSA-signed archives, and an opt-in beta channel for RC / beta builds
 - **Framework Support** – Browse `macOS` frameworks, `iOSSupport` frameworks, and load custom Mach-O binaries or frameworks
+- **Offline Mode** – Open a Mach-O file, an `.app` or `.framework` bundle, or a dyld shared cache — including another platform's — straight from disk with **File → Open…**, without running it. Each file is read in a process of its own and paired with a dyld shared cache for what it links: this Mac's, or one registered in **Settings → Offline Files**
 - **Determinate Loading Progress** – Phase-based progress feedback while indexing Swift and Objective-C sections
 - **Filter Engine** – Fuzzy search across runtime classes, protocols, and members. The sidebar's filter fields take Xcode's navigator tokens — `NS*` begins with, `*View` ends with, `!Private` excludes, `*` and `?` match as wildcards — and remember recent filters
 - **Bookmarks** – Reorderable, persisted bookmarks for runtime objects
@@ -58,6 +59,7 @@ Runtime Viewer does not automatically list every application on your Mac. After 
 - Browse the bundled **Local Runtime** source to inspect the local runtime and framework directory.
 - Use **Attach Process** in the toolbar to explicitly attach to a running process. Process attachment requires System Integrity Protection (SIP) to be disabled; see [Requirements](#requirements) and [Troubleshooting](#troubleshooting).
 - Select another Runtime Viewer instance discovered on your local network. See [Connecting to Other Devices](#connecting-to-other-devices) for Bonjour details.
+- Open a Mach-O file, an app or framework bundle, or a dyld shared cache from disk with **File → Open…** (or drop it on the Dock icon) to read it offline.
 
 ### Helper Service Installation
 

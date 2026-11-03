@@ -114,8 +114,10 @@
 | 派生数据在 App 里的验收 | [0061](0061-derived-data.md) 落地第 5 步 | 小 | 用 Release 构建的 App 在 My Mac 与 My Mac (Mac Catalyst) 上各开一个文档，启动两次，读 Report 与日志，对照「成功标准」。Core 层的读回用时已量过、在目标以内；Mac Catalyst 的两个镜像只能在 App 里量。做法见提案「第 5 步的落地记录」 |
 | 上游的索引加速 | [0061](0061-derived-data.md)「上游的索引加速」 | 大 | 各仓库另立提案。第一步是在 App 进程里分阶段测量建 section 的各项开销，先修能修的，再把贵且稳定的分析存进派生数据 |
 | 派生数据第二期：不等 section 直接浏览 | [0061](0061-derived-data.md)「第二期」 | 大 | 侧栏、内容区与跳转直接读派生数据，section 在后台补建；提案里记了为它定过的几条，作为第二期提案的输入 |
-| 跨镜像点击跳到 `@rpath` 镜像落空 | [0063](0063-swift-declared-objc-protocols-in-swift-list.md)「不做」 | 小 | 接口里点别的镜像的类型或协议时，`RuntimeEngine` 拿 Swift section 工厂「mangled 名 → 定义它的镜像」两张表里的 `MachOImage.imagePath` 去找 section，那是 `LC_ID_DYLIB` 里的 install name，与登记 section 用的真实路径对不上：Xcode 的 DVT 框架、App 内嵌的框架（`@rpath/…`）跳不过去，测试 bundle 这种没有 install name 的镜像是空串；移除 section 时按同一个值清表，这些镜像的条目也清不掉。0063 给副本跳转建的表改用登记路径作键，不受影响，可照它修 |
 | 常驻内存在 App 里的验收 | [0065](0065-engine-resident-memory.md) 落地第 4 步、[0066](0066-on-demand-corpora-and-cross-references.md) 落地第 5 步 | 小 | 用 Debug 版在 My Mac 与 My Mac (Mac Catalyst) 上各开一个文档：点 Report 的两个推出按钮，量两个引擎进程 malloc 在用的内存与 footprint；搜全部镜像，记读回用时与内存峰值。对照 2026-11-01 的基线：Catalyst 的语料 215 MB、交叉引用表 201 MB，My Mac 142 MB、127 MB |
+| 离线 cache 派生数据的按时清理 | [离线模式](draft-offline-mode.md)「派生数据」 | 小 | `Offline-` 系统目录现在只由「删除派生数据」清掉；按最近使用时间清理（像生产者目录的 14 天那样）留作后续 |
+| 「Manage in Settings…」直接跳到 Offline Files 页 | [离线模式](draft-offline-mode.md) 决策日志 2026-11-03 | 小 | 设置窗口还没有跳到指定页的入口，现在只打开窗口 |
+| 命令行直接读文件、离线引擎上的交叉引用 | [离线模式](draft-offline-mode.md)「非目标」 | 中到大 | 第一版不做：CLI 的 `sources` 看不到离线引擎；交叉引用要扫描映射进进程的代码，离线文件没有进程 |
 | 交叉引用的估算偏低约 12% | [0065](0065-engine-resident-memory.md) 落地第 2 步 | 小（上游） | MachOSwiftSection 的 `CodeReferenceIndex.approximateByteCount` 与分析器的 `approximateByteCount(ofImageDataAt:)` 不计分配头与 malloc 的取整。上游修好后去掉 `CrossReferencePreparedByteCountTests` 的 `withKnownIssue` |
 | 搜索时预读下一个镜像 | [0066](0066-on-demand-corpora-and-cross-references.md)「不做」 | 小 | 读回与搜索重叠，搜全部镜像更快，代价是峰值多一个镜像；看了实测的读回用时再定 |
 
