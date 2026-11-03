@@ -82,6 +82,9 @@ public final class FindCorpusCoordinator {
     private struct BuildRequest {
         let identifier: UInt64
         let task: Task<Void, Never>
+        /// Asked for ahead of the queue — for a Find search, or for the image a sidebar shows —
+        /// at its start or since.
+        var isPrioritized: Bool
     }
 
     /// A read of stored corpora the coordinator holds open, and the images
@@ -117,6 +120,10 @@ public final class FindCorpusCoordinator {
             let imagePaths = Set(buildRequests.keys)
             if imagePaths != followedImagePaths {
                 followedImagePaths = imagePaths
+            }
+            let prioritizedImagePaths = Set(buildRequests.lazy.filter { $0.value.isPrioritized }.map { $0.key })
+            if prioritizedImagePaths != self.prioritizedImagePaths {
+                self.prioritizedImagePaths = prioritizedImagePaths
             }
         }
     }
@@ -225,6 +232,12 @@ public final class FindCorpusCoordinator {
     /// coordinator can neither follow its progress nor withdraw it.
     @RxObserved
     public private(set) var followedImagePaths: Set<String> = []
+
+    /// The followed images whose request went ahead of the queue — a Find search waits on them,
+    /// or a sidebar shows them: the corpus builds the toolbar's activity display counts as asked
+    /// for by the user.
+    @RxObserved
+    private(set) var prioritizedImagePaths: Set<String> = []
 
     /// Every image that has had a place in `finishedBuilds`, kept through
     /// `clearFinishedBuilds()`: a coverage snapshot lists only corpora the
@@ -348,6 +361,7 @@ public final class FindCorpusCoordinator {
         let imagePath = canonicalImagePath(requestedImagePath)
         if buildRequests[imagePath] != nil {
             if isPrioritized {
+                buildRequests[imagePath]?.isPrioritized = true
                 let engine = engine
                 Task {
                     try? await engine.prioritizeInterfaceCorpus(for: imagePath)
@@ -378,7 +392,7 @@ public final class FindCorpusCoordinator {
             guard let self else { return }
             finishBuildRequest(identifier, of: imagePath, with: result)
         }
-        buildRequests[imagePath] = BuildRequest(identifier: identifier, task: task)
+        buildRequests[imagePath] = BuildRequest(identifier: identifier, task: task, isPrioritized: isPrioritized)
     }
 
     /// Every image the engine has indexed, queued in one go — the switch

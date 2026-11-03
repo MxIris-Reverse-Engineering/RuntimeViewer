@@ -128,6 +128,8 @@ final class MainViewModel: ViewModel<MainRoute> {
 //        let installHelperClick: Signal<Void>
         let attachToProcessClick: Signal<Void>
         let mcpStatusClick: Signal<Void>
+        /// A click on the toolbar's activity display: the Report navigator lists the work in detail.
+        let activityClick: Signal<Void>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
         let tabSelected: Signal<Int>
@@ -168,7 +170,24 @@ final class MainViewModel: ViewModel<MainRoute> {
         let requestRestartConfirmation: Signal<Void>
         let tabBarSnapshot: Driver<TabBarSnapshot>
         let isTabBarHidden: Driver<Bool>
+        /// What the toolbar's activity display shows: the capsule below macOS 27, the window
+        /// title's progress ring from macOS 27.
+        let activity: Driver<ToolbarActivityState>
+        /// The title's icon from macOS 27, which the progress ring takes the place of.
+        let toolbarIcon: Driver<NSImage?>
     }
+
+    /// The title's icon: the kind of the image the title names, as one glyph in one colour, as
+    /// Xcode 27 draws its project icon — brown for a bundle, after Xcode's package icon, blue
+    /// otherwise — and the app's own icon while no image is open.
+    private static func toolbarIcon(for imageNode: RuntimeImageNode?) -> NSImage? {
+        guard let imageNode else { return NSApp.applicationIconImage }
+        let symbol = imageNode.icon
+        let color: NSColor = symbol === RuntimeImageNode.bundleIcon ? .systemBrown : .systemBlue
+        return TitleDocumentIcon.image(symbol: symbol, color: color)
+    }
+
+    private lazy var toolbarActivityPresenter = ToolbarActivityPresenter(documentState: documentState)
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
@@ -358,6 +377,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         input.generationOptionsClick.emit(with: self) { owner, _ in owner.router.trigger(.generationOptions) }.disposed(by: rx.disposeBag)
 
         input.mcpStatusClick.emit(with: self) { owner, _ in owner.router.trigger(.mcpStatus) }.disposed(by: rx.disposeBag)
+
+        input.activityClick.emit(with: self) { owner, _ in owner.router.trigger(.reports) }.disposed(by: rx.disposeBag)
 
         let selectedRuntimeObjectObservable: Observable<RuntimeObject?> =
             documentState.$selectedRuntimeObject.asObservable()
@@ -627,7 +648,9 @@ final class MainViewModel: ViewModel<MainRoute> {
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),
             tabBarSnapshot: tabBarSnapshot,
-            isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged()
+            isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged(),
+            activity: toolbarActivityPresenter.state,
+            toolbarIcon: documentState.$currentImageNode.asDriver().map { Self.toolbarIcon(for: $0) }
         )
     }
 }

@@ -105,6 +105,29 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
+    /// The activity capsule in the middle of the toolbar, before macOS 27 — Xcode 26's Activity View,
+    /// which Xcode 27 replaced with the window title's progress ring.
+    final class ActivityToolbarItem: NSToolbarItem {
+        let activityView = ToolbarActivityView()
+
+        init() {
+            super.init(itemIdentifier: .Main.activity)
+            view = activityView
+            label = "Activity"
+            visibilityPriority = .high
+        }
+    }
+
+    /// Below macOS 27 the toolbar shows the activity capsule; from 27 the window title shows the
+    /// activity instead, as in Xcode 27.
+    static var showsActivityCapsule: Bool {
+        if #available(macOS 27.0, *) { false } else { true }
+    }
+
+    /// The capsule's share of the toolbar's width — Xcode's `IDEActivityViewProportionalWidthPercentage`
+    /// of 40.
+    static let activityCapsuleWidthRatio: CGFloat = 0.4
+
     class SwitchSourceToolbarItem: NSToolbarItem {
         let popUpButton = NSPopUpButton()
 
@@ -126,7 +149,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let navigationItem = NavigationToolbarItem()
 
-    let titleItem = TitleToolbarItem(itemIdentifier: .Main.title)
+    /// From macOS 27 the title shows the activity, where Xcode 27 shows it: in place of its icon.
+    let titleItem = TitleToolbarItem(itemIdentifier: .Main.title, showsActivity: !MainToolbarController.showsActivityCapsule)
 
     let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject).then {
         $0.label = "Attach Process"
@@ -158,6 +182,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.label = "MCP Status"
     }
 
+    let activityItem = ActivityToolbarItem()
+
     init(delegate: Delegate) {
         self.delegate = delegate
         self.toolbar = NSToolbar()
@@ -167,10 +193,17 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
         toolbar.allowsDisplayModeCustomization = false
+        if Self.showsActivityCapsule {
+            // Set before the toolbar goes into the window: the ratio takes effect at the toolbar's
+            // next layout, and lays nothing out by itself.
+            toolbar.centeredItemIdentifiers = [.Main.activity]
+            toolbar.box.preferredCenteredItemWidthRatio = Self.activityCapsuleWidthRatio
+        }
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [
+        let activityIdentifiers: [NSToolbarItem.Identifier] = Self.showsActivityCapsule ? [.Main.activity, .flexibleSpace] : []
+        return [
             .toggleSidebar,
             .Main.sidebarBack,
             .flexibleSpace,
@@ -178,6 +211,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.navigation,
             .Main.title,
             .flexibleSpace,
+        ] + activityIdentifiers + [
             .Main.switchSource,
             .Main.attach,
             .Main.loadFrameworks,
@@ -208,6 +242,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.loadFrameworks,
             .Main.attach,
             .Main.mcpStatus,
+            .Main.activity,
         ]
     }
 
@@ -235,6 +270,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return attachItem
         case .Main.mcpStatus:
             return mcpStatusItem
+        case .Main.activity:
+            return activityItem
         default:
             return nil
         }
@@ -263,5 +300,6 @@ extension NSToolbarItem.Identifier {
         static let helperStatus: NSToolbarItem.Identifier = "helperStatus"
         static let attach: NSToolbarItem.Identifier = "attach"
         static let mcpStatus: NSToolbarItem.Identifier = "mcpStatus"
+        static let activity: NSToolbarItem.Identifier = "activity"
     }
 }

@@ -14,6 +14,13 @@ import AppKit
 /// widths alone. Each setting below says what breaks without it, and
 /// `TitleToolbarItemOverflowTests` fails if any of them goes. Background:
 /// `Documentations/ResolvedIssues/2026-10-02-long-toolbar-title-pushed-items-into-overflow.md`.
+///
+/// Made with `showsActivity`, the item is Xcode 27's window title (IDEKit 27.2
+/// `IDEActivityWindowTitleView`): an 18-point slot left of the text shows the document's icon, and
+/// the activity's progress in its place (`TitleActivityIndicatorView`); the title is always 13-point
+/// bold; both lines blend with what is behind them and go to the tertiary colour in a window that is
+/// not key; and while the pointer is over the item the subtitle shows the activity's text instead of
+/// its own. Spec: `/Volumes/RE/Xcode/27.2-27B52/README.md`, "Activity progress in the window title".
 public final class TitleToolbarItem: NSToolbarItem {
     /// The labels' horizontal compression resistance: below 200, so that the minimum-width
     /// measurement can squeeze them. At `.defaultLow` (250) the whole text became the item's
@@ -26,11 +33,27 @@ public final class TitleToolbarItem: NSToolbarItem {
     /// title came out as wide as the subtitle "NSControl" with hundreds of points to spare.
     private static let textStackHuggingPriority = NSLayoutConstraint.Priority(198)
 
+    /// Xcode 27's `.padding(.horizontal, 10)` around the icon slot and the text.
+    private static let activityHorizontalPadding: CGFloat = 10
+
+    /// Between the icon slot and the text: the default spacing of a SwiftUI `HStack` between an
+    /// image and text on macOS, which Xcode 27 leaves unset. Not measured against Xcode.
+    private static let activityIconSpacing: CGFloat = 8
+
+    /// While the pointer stays over the item, the activity text widens it in steps of this, and
+    /// never narrows it, so a text that changes every second does not shake the toolbar — Xcode's
+    /// `resizeIncrement` for its title item.
+    private static let activityWidthIncrement: CGFloat = 20
+
     private let imageView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
     private let textStackView = NSStackView()
-    private let containerStackView = NSStackView()
+    private let containerStackView = ContainerStackView()
+
+    /// The window title's activity display, when the item was made with `showsActivity`: it takes
+    /// the image's place. A click on it sends its action.
+    public let activityIndicator: TitleActivityIndicatorView?
 
     /// The narrowest the item gets: its insets and the ellipsis a truncated title ends with.
     ///
@@ -48,6 +71,21 @@ public final class TitleToolbarItem: NSToolbarItem {
     /// below 200, nothing else does: the item would stretch over all the room the other items leave.
     private lazy var maximumWidthConstraint = containerStackView.widthAnchor.constraint(lessThanOrEqualToConstant: 0)
 
+    /// The subtitle the owner sets; the activity text stands in for it while the pointer is over
+    /// an item that shows activity.
+    private var ownSubtitle = ""
+
+    /// The text of the activity on show, for the subtitle while the pointer is over the item.
+    private var activityText: String?
+
+    /// The activity whose text the subtitle shows, so a new one may narrow the item again.
+    private var activityReportIdentifier: UUID?
+
+    private var isPointerInside = false
+
+    /// The widest the item has been while the pointer stays over it; 0 otherwise.
+    private var hoverMaximumWidth: CGFloat = 0
+
     public var displayTitle: String {
         get { titleLabel.stringValue }
         set {
@@ -56,25 +94,28 @@ public final class TitleToolbarItem: NSToolbarItem {
         }
     }
 
+    /// The subtitle as it shows now: the owner's, or the activity's text.
+    var shownSubtitle: String {
+        subtitleLabel.isHidden ? "" : subtitleLabel.stringValue
+    }
+
     public var displaySubtitle: String {
-        get { subtitleLabel.stringValue }
+        get { ownSubtitle }
         set {
-            let hadSubtitle = !subtitleLabel.stringValue.isEmpty
-            let hasSubtitle = !newValue.isEmpty
-            subtitleLabel.stringValue = newValue
-            subtitleLabel.isHidden = newValue.isEmpty
-            if hadSubtitle != hasSubtitle {
-                updateTitleFont()
-            }
-            updateWidthLimits()
+            ownSubtitle = newValue
+            updateSubtitle(animated: false)
         }
     }
 
     public var displayImage: NSImage? {
-        get { imageView.image }
+        get { activityIndicator?.icon ?? imageView.image }
         set {
-            imageView.image = newValue
-            imageView.isHidden = newValue == nil
+            if let activityIndicator {
+                activityIndicator.icon = newValue
+            } else {
+                imageView.image = newValue
+                imageView.isHidden = newValue == nil
+            }
             updateWidthLimits()
         }
     }
@@ -86,7 +127,12 @@ public final class TitleToolbarItem: NSToolbarItem {
         }
     }
 
-    public override init(itemIdentifier: NSToolbarItem.Identifier) {
+    public convenience override init(itemIdentifier: NSToolbarItem.Identifier) {
+        self.init(itemIdentifier: itemIdentifier, showsActivity: false)
+    }
+
+    public init(itemIdentifier: NSToolbarItem.Identifier, showsActivity: Bool) {
+        activityIndicator = showsActivity ? TitleActivityIndicatorView() : nil
         super.init(itemIdentifier: itemIdentifier)
         isNavigational = true
         isBordered = false
@@ -113,22 +159,86 @@ public final class TitleToolbarItem: NSToolbarItem {
         textStackView.spacing = 0
         textStackView.setHuggingPriority(Self.textStackHuggingPriority, for: .horizontal)
 
-        containerStackView.setViews([imageView, textStackView], in: .center)
         containerStackView.orientation = .horizontal
         containerStackView.alignment = .centerY
-        containerStackView.spacing = 10
+
+        if let activityIndicator {
+            // `.subheadline.monospacedDigit()`, middle truncation, as Xcode's subtitle.
+            subtitleLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            subtitleLabel.lineBreakMode = .byTruncatingMiddle
+            textStackView.wantsLayer = true
+            containerStackView.setViews([activityIndicator, textStackView], in: .center)
+            containerStackView.spacing = Self.activityIconSpacing
+            insets = NSEdgeInsets(top: 0, left: Self.activityHorizontalPadding, bottom: 0, right: Self.activityHorizontalPadding)
+            containerStackView.pointerInsideDidChange = { [weak self] isInside in
+                guard let self else { return }
+                isPointerInside = isInside
+                if !isInside {
+                    hoverMaximumWidth = 0
+                }
+                updateSubtitle(animated: true)
+            }
+            containerStackView.windowStateDidChange = { [weak self] in
+                guard let self else { return }
+                updateActivityTextAppearance()
+            }
+        } else {
+            containerStackView.setViews([imageView, textStackView], in: .center)
+            containerStackView.spacing = 10
+        }
         containerStackView.edgeInsets = insets
 
         maximumWidthConstraint.priority = .defaultLow
         NSLayoutConstraint.activate([minimumWidthConstraint, maximumWidthConstraint])
 
         updateTitleFont()
+        updateActivityTextAppearance()
         updateWidthLimits()
 
         view = containerStackView
     }
 
+    /// Shows the activity `state` shows: its progress in the icon slot, and its text for the
+    /// subtitle while the pointer is over the item. Does nothing for an item without activity.
+    public func applyActivity(_ state: ToolbarActivityState, animated: Bool) {
+        guard let activityIndicator else { return }
+        activityIndicator.apply(state, animated: animated)
+        if state.reportIdentifier != activityReportIdentifier {
+            activityReportIdentifier = state.reportIdentifier
+            hoverMaximumWidth = 0
+        }
+        let newActivityText = state.reportIdentifier == nil ? nil : state.segments.plainText(primarySeparator: " \u{2022} ")
+        guard newActivityText != activityText else { return }
+        activityText = newActivityText
+        updateSubtitle(animated: animated)
+    }
+
+    /// The owner's subtitle, or the activity's text while the pointer is over an item showing
+    /// activity — faded in and out as Xcode's subtitle is (it adds a one-point blur too).
+    private func updateSubtitle(animated: Bool) {
+        let shownText = (isPointerInside ? activityText : nil) ?? ownSubtitle
+        let hadSubtitle = !subtitleLabel.isHidden
+        let hasSubtitle = !shownText.isEmpty
+        if animated, subtitleLabel.stringValue != shownText, let layer = textStackView.layer {
+            let transition = CATransition()
+            transition.type = .fade
+            transition.duration = hasSubtitle ? 0.25 : 0.5
+            layer.add(transition, forKey: "subtitle")
+        }
+        subtitleLabel.stringValue = shownText
+        subtitleLabel.isHidden = !hasSubtitle
+        if hadSubtitle != hasSubtitle {
+            updateTitleFont()
+        }
+        updateWidthLimits()
+    }
+
     private func updateTitleFont() {
+        if activityIndicator != nil {
+            // `.body.weight(.bold)`, with or without a subtitle.
+            titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .bold)
+            return
+        }
         let hasSubtitle = !subtitleLabel.isHidden
         if hasSubtitle {
             titleLabel.font = .systemFont(ofSize: 13, weight: .bold)
@@ -137,14 +247,98 @@ public final class TitleToolbarItem: NSToolbarItem {
         }
     }
 
+    /// Xcode 27's text colours — primary and secondary in the key window, tertiary otherwise — and
+    /// its blending, plus-darker in a light appearance and plus-lighter in a dark one, through Core
+    /// Animation's private compositing filters.
+    private func updateActivityTextAppearance() {
+        guard activityIndicator != nil else { return }
+        let isKey = containerStackView.window?.isKeyWindow ?? true
+        titleLabel.textColor = isKey ? .labelColor : .tertiaryLabelColor
+        subtitleLabel.textColor = isKey ? .secondaryLabelColor : .tertiaryLabelColor
+        let isDark = containerStackView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        textStackView.layer?.compositingFilter = isDark ? "plusL" : "plusD"
+    }
+
     private func updateWidthLimits() {
         let ellipsisLabel = NSTextField(labelWithString: "\u{2026}")
         ellipsisLabel.font = titleLabel.font
         let insetsWidth = insets.left + insets.right
-        let imageWidth = imageView.isHidden ? 0 : imageView.intrinsicContentSize.width + containerStackView.spacing
+        let leadingWidth: CGFloat
+        if let activityIndicator {
+            leadingWidth = activityIndicator.intrinsicContentSize.width + containerStackView.spacing
+        } else {
+            leadingWidth = imageView.isHidden ? 0 : imageView.intrinsicContentSize.width + containerStackView.spacing
+        }
         let subtitleWidth = subtitleLabel.isHidden ? 0 : subtitleLabel.intrinsicContentSize.width
-        minimumWidthConstraint.constant = insetsWidth + imageWidth + ellipsisLabel.intrinsicContentSize.width
-        maximumWidthConstraint.constant = insetsWidth + imageWidth + max(titleLabel.intrinsicContentSize.width, subtitleWidth)
+        minimumWidthConstraint.constant = insetsWidth + leadingWidth + ellipsisLabel.intrinsicContentSize.width
+        var maximumWidth = insetsWidth + leadingWidth + max(titleLabel.intrinsicContentSize.width, subtitleWidth)
+        if activityIndicator != nil, isPointerInside, activityText != nil {
+            maximumWidth = max((maximumWidth / Self.activityWidthIncrement).rounded(.up) * Self.activityWidthIncrement, hoverMaximumWidth)
+            hoverMaximumWidth = maximumWidth
+        }
+        maximumWidthConstraint.constant = maximumWidth
+    }
+}
+
+extension TitleToolbarItem {
+    /// The item's view: tells the item where the pointer is and when the window changes.
+    private final class ContainerStackView: NSStackView {
+        var pointerInsideDidChange: ((Bool) -> Void)?
+
+        var windowStateDidChange: (() -> Void)?
+
+        private var trackingArea: NSTrackingArea?
+
+        private var windowObservations: [NSObjectProtocol] = []
+
+        deinit {
+            windowObservations.forEach(NotificationCenter.default.removeObserver)
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            guard pointerInsideDidChange != nil else { return }
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+            }
+            let newTrackingArea = NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+            addTrackingArea(newTrackingArea)
+            trackingArea = newTrackingArea
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            super.mouseEntered(with: event)
+            pointerInsideDidChange?(true)
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            super.mouseExited(with: event)
+            pointerInsideDidChange?(false)
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            windowObservations.forEach(NotificationCenter.default.removeObserver)
+            windowObservations = []
+            guard let newWindow, windowStateDidChange != nil else { return }
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+                windowObservations.append(NotificationCenter.default.addObserver(forName: name, object: newWindow, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.windowStateDidChange?()
+                    }
+                })
+            }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            windowStateDidChange?()
+        }
+
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            windowStateDidChange?()
+        }
     }
 }
 
