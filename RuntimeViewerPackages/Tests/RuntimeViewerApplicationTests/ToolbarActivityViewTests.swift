@@ -82,6 +82,20 @@ struct ToolbarActivityViewTests {
         #expect(activityView.isShowingIndicator)
     }
 
+    @Test("When the run ends the indicator goes, its ring keeping the last value while it fades")
+    func ringKeepsItsLastValueWhileFading() {
+        let activityView = ToolbarActivityView()
+        var runningState = Self.runningState(percent: 40)
+        activityView.apply(runningState, animated: false)
+        runningState.isCompleted = true
+        runningState.progress = nil
+
+        activityView.apply(runningState, animated: true)
+
+        #expect(activityView.isShowingIndicator == false)
+        #expect(activityView.shownRingValue == .determinate(40))
+    }
+
     @Test("The ring spins while the progress is not known, and stops once it is")
     func ringSpinsOnlyWhileIndeterminate() throws {
         let ring = ActivityProgressRing(ringSize: 16)

@@ -59,6 +59,11 @@ public final class ToolbarActivityView: NSControl {
         isIndicatorShown
     }
 
+    /// The ring's value as the indicator draws it, `nil` while it draws the disc.
+    var shownRingValue: ActivityProgressRing.Value? {
+        indicatorView.progressRing.isHidden ? nil : indicatorView.progressRing.value
+    }
+
     private let metrics: Metrics = usesGlassToolbarMetrics ? .glass : .legacy
 
     /// Before macOS 26 only; the glass platter takes its place from 26.
@@ -183,8 +188,11 @@ public final class ToolbarActivityView: NSControl {
         textChoiceWidth = -1
         needsLayout = true
 
-        indicatorView.update(for: newState, animated: canAnimate && !isActivityChange)
         let shouldShowIndicator = Self.showsIndicator(for: newState)
+        // Only while it shows, as Xcode's `updateUI()`: a ring fading out keeps its last value.
+        if shouldShowIndicator {
+            indicatorView.update(for: newState, animated: canAnimate && !isActivityChange)
+        }
         guard shouldShowIndicator != isIndicatorShown else { return }
         isIndicatorShown = shouldShowIndicator
         textTrailingWithIndicatorConstraint?.isActive = shouldShowIndicator

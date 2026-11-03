@@ -103,7 +103,10 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.click.asSignal(),
-            activityClick: toolbarController.activityItem.activityView.rx.controlEvent.asSignal(),
+            activityClick: Signal.merge(
+                toolbarController.activityItem.activityView.rx.controlEvent.asSignal(),
+                toolbarController.titleItem.activityIndicator?.rx.controlEvent.asSignal() ?? .empty()
+            ),
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal(),
             tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
@@ -149,9 +152,19 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             guard let self else { return }
             if MainToolbarController.showsActivityCapsule {
                 toolbarController.activityItem.activityView.apply(state, animated: true)
+            } else {
+                toolbarController.titleItem.applyActivity(state, animated: true)
             }
         }
         .disposed(by: rx.disposeBag)
+
+        if !MainToolbarController.showsActivityCapsule {
+            output.toolbarIcon.driveOnNext { [weak self] icon in
+                guard let self else { return }
+                toolbarController.titleItem.displayImage = icon
+            }
+            .disposed(by: rx.disposeBag)
+        }
 
         output.sharingServiceData
             .map { items -> [Any] in

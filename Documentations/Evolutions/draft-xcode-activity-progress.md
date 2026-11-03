@@ -76,7 +76,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 
 - **不再有中间的胶囊**，与 Xcode 27 相同。
 - **标题区**：`TitleToolbarItem` 在文字左边加一个 18×18 的图标槽，进度环画在这里；完成序列结束时，环变回图标。
-- **图标**：取标题所指的镜像，用它的种类符号（framework、bundle、dylib），画成 Xcode 工程图标那样的强调色圆角方块加白色符号，好让收拢出的方块与图标接得上。没有选中镜像时，用 App 图标。Xcode 工程图标的确切画法（`IconView` / `DVTIcon`）还要在实现时补一次逆向。
+- **图标**：取标题所指的镜像，用它的种类符号（framework、bundle、dylib），照 Xcode 工程图标的画法画成一个单色字形：13 pt、medium、large，按对齐矩形居中在 18×18 的槽里、对齐到像素，整个字形填一种颜色——bundle 用 `systemBrown`（与 Xcode 的 Swift package 图标同色），其余用 `systemBlue`（与 Xcode 的工程图标同色）。没有选中镜像时，用 App 图标。收拢出的强调色方块是进度形状本身，它淡出、字形淡入，最后只剩字形（逆向结论见资料卷「The project icon in the window title」一节）。
 - **第二行**：平时仍显示选中对象的名字，进度只看图标位置的环；鼠标悬停在标题区时，第二行换成活动文字。完成后的结果文字也是悬停时才显示，这一点与 Xcode 对非 scheme 活动的处理相同。
 - **字体、颜色、间距**：一并照 Xcode 27。标题 13 pt 粗体，第二行 11 pt 次要色；窗口不在前台时两行都用三级色；文字列用 plusDarker / plusLighter 混合。
 
@@ -97,7 +97,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 1. **UIFoundation 的封装**（已完成）：在 `AppleInternal` trait 下给 `NSToolbar` 加 `.box.preferredCenteredItemWidthRatio`，配测试、逆向报告、指南与 UIFoundation 自己的提案。快进合进 `main`，发 `0.43.0`。
 2. **活动模型**（已完成）：`RuntimeViewerApplication/Activity/`。三类工作按轮次汇成活动，挑选（用户发起优先、后台 4 秒、至少 3 秒）、每秒一次的节流、文字分段都在这里，每个窗口的 `ToolbarActivityPresenter` 给出活动状态。配单元测试。
 3. **macOS 26 / 15 的中间胶囊**（已完成）：`RuntimeViewerUI` 里做进度环、按段截断的文字、胶囊视图与工具栏项。抬 UIFoundation 的 pin；`MainWindowController` 在 macOS 27 以下装上胶囊，点击打开 Report 导航。配测试。
-4. **macOS 27 的标题区**：先补逆向 Xcode 工程图标的画法，再做收拢形状的自绘 layer、进度环与完成序列，以及 `TitleToolbarItem` 的图标槽、字体和悬停时的活动文字。配测试。
+4. **macOS 27 的标题区**（已完成）：先补逆向 Xcode 工程图标的画法，再做收拢形状的自绘 layer、进度环与完成序列，以及 `TitleToolbarItem` 的图标槽、字体和悬停时的活动文字。配测试。
 5. **收尾**：用 Debug workspace 完整构建 App，跑各包测试；`AGENTS.md` 与本提案按实际做出的结果更新。
 
 ### 验证
@@ -132,3 +132,6 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-03 | 插队请求的语料构建算用户发起，交叉引用全部算后台 | 语料协调器只知道一次请求是不是插队，分不出是 Find 搜索还是侧栏显示的镜像，两者都是用户正看着的东西；交叉引用的按需准备发生在引擎进程里，协调器无从得知。为此语料协调器多记一项「插队请求的镜像」 |
 | 2026-11-03 | 完成文字是 Indexing Succeeded、Searchable Interfaces Built、Cross References Prepared，失败、取消是 Failed、Cancelled | 照 Xcode「名词 + 结果」的形式；Succeeded 只配得上动作名，所以后两类换成 Built、Prepared。Cancelled 与 Report 导航的拼写一致 |
 | 2026-11-03 | 显示用的值类型放进 `RuntimeViewerUI`，胶囊做成 `NSControl` 子类 | 视图在 `RuntimeViewerUI`，它在 `RuntimeViewerApplication` 的下层、也不依赖 RxSwift；点击由 App 一侧经 RxCocoa 的 `rx.controlEvent` 接上 |
+| 2026-11-03 | 标题区图标改为单色字形，不画方块 | 补的逆向表明 Xcode 的工程图标是自定义符号 `doc-project` 填 `systemBlue`，没有底板；收拢出的方块是进度形状本身。批准时选的「常驻当前镜像的种类符号」不变，只是方块那半句的前提不成立，照 Xcode 改；bundle 用棕色，因为 Xcode 给 Swift package 的 `shippingbox` 用棕色 |
+| 2026-11-03 | 标题区几处动画用近似实现，写明在案 | 项目规定 SwiftUI 只用于设置页，标题区用 Core Animation 重做：SwiftUI 的弹簧换成 `CASpringAnimation(perceptualDuration:bounce:)`，用叠加动画模拟 SwiftUI 打断时的平滑衔接；收拢形状的连续圆角用 UIKit 的连续曲线，半径超出它能画的范围时改用圆弧；方块的填充从强调色到透明做成整层淡出；计数与副标题的出现、消失只做淡入淡出，没有 SwiftUI 那一点模糊，副标题行出现时标题上移不做动画；图标槽与文字的间距取 SwiftUI 默认的 8，未与 Xcode 实测比对 |
+| 2026-11-03 | 活动文字只在悬停时进副标题行，标题项的宽度只在悬停期间按 20 点的台阶变宽 | 照批准的「平时不换，悬停才显示」；Xcode 让宽度只增不减、按 20 点取整，是为了每秒刷新的文字不抖动工具栏，悬停期间照做 |

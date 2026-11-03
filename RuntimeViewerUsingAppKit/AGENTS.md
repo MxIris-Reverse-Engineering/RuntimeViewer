@@ -618,6 +618,32 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
 
 </important>
 
+<important if="you are changing the toolbar's activity capsule, the title item's activity ring, or adding a kind of engine background work">
+
+## The Toolbar's Activity Display
+
+The engine's background work shows in the toolbar the way Xcode shows activity: below macOS 27 in a
+capsule in the middle of the toolbar (`ToolbarActivityView`, Xcode 26's Activity View), from macOS 27 as
+a ring in place of the title's icon (`TitleToolbarItem(showsActivity:)` with
+`TitleActivityIndicatorView`, Xcode 27's window title). Specs with addresses:
+`/Volumes/RE/Xcode/26.6/README.md` and `/Volumes/RE/Xcode/27.2-27B52/README.md`; background:
+`Documentations/Evolutions/draft-xcode-activity-progress.md`.
+
+- Each kind of work is one run at a time, worked out once per engine by
+  `RuntimeEngineActivityReporter` (in `RuntimeEngineBackgroundWork`); each window picks what to show and
+  when with `ActivityReportSelector` — Xcode's rules: the user's work at once, other work after 4
+  seconds, 3 seconds on screen at least — and `ToolbarActivityPresenter` shows a new state at most once
+  a second. **A new kind of background work does not show until the reporter follows it**: add a
+  `ReportCategory` case, an `ActivityRunTracker` and its words in `ActivityText`.
+- `ToolbarActivityState` and `ActivityTextSegment` live in `RuntimeViewerUI`, below
+  `RuntimeViewerApplication`, because the views that take them do. The views take no RxSwift; their
+  clicks are `NSControl` actions that open the Report navigator.
+- The capsule is 40 % of the toolbar wide through UIFoundation's
+  `NSToolbar.box.preferredCenteredItemWidthRatio`, set before the toolbar goes into the window: it lays
+  nothing out by itself.
+
+</important>
+
 <important if="you are diagnosing flicker, a selection highlight that turns grey, keyboard focus in a list, or a context menu that will not open">
 
 ## Diagnosing UI Flicker

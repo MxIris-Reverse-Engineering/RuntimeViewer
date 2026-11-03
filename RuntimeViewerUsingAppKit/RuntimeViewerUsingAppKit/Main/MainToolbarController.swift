@@ -149,7 +149,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let navigationItem = NavigationToolbarItem()
 
-    let titleItem = TitleToolbarItem(itemIdentifier: .Main.title)
+    /// From macOS 27 the title shows the activity, where Xcode 27 shows it: in place of its icon.
+    let titleItem = TitleToolbarItem(itemIdentifier: .Main.title, showsActivity: !MainToolbarController.showsActivityCapsule)
 
     let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject).then {
         $0.label = "Attach Process"

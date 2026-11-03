@@ -173,6 +173,18 @@ final class MainViewModel: ViewModel<MainRoute> {
         /// What the toolbar's activity display shows: the capsule below macOS 27, the window
         /// title's progress ring from macOS 27.
         let activity: Driver<ToolbarActivityState>
+        /// The title's icon from macOS 27, which the progress ring takes the place of.
+        let toolbarIcon: Driver<NSImage?>
+    }
+
+    /// The title's icon: the kind of the image the title names, as one glyph in one colour, as
+    /// Xcode 27 draws its project icon — brown for a bundle, after Xcode's package icon, blue
+    /// otherwise — and the app's own icon while no image is open.
+    private static func toolbarIcon(for imageNode: RuntimeImageNode?) -> NSImage? {
+        guard let imageNode else { return NSApp.applicationIconImage }
+        let symbol = imageNode.icon
+        let color: NSColor = symbol === RuntimeImageNode.bundleIcon ? .systemBrown : .systemBlue
+        return TitleDocumentIcon.image(symbol: symbol, color: color)
     }
 
     private lazy var toolbarActivityPresenter = ToolbarActivityPresenter(documentState: documentState)
@@ -637,7 +649,8 @@ final class MainViewModel: ViewModel<MainRoute> {
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),
             tabBarSnapshot: tabBarSnapshot,
             isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged(),
-            activity: toolbarActivityPresenter.state
+            activity: toolbarActivityPresenter.state,
+            toolbarIcon: documentState.$currentImageNode.asDriver().map { Self.toolbarIcon(for: $0) }
         )
     }
 }
