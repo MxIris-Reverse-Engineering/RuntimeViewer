@@ -199,12 +199,14 @@ let package = Package(
                 from: "0.1.0",
             ),
         ),
-        // Direct dependency for the XPC-service connection pair. Already
-        // resolved transitively through swift-helper-service at this very
-        // requirement, so no new version enters the graph.
+        // Direct dependency for the XPC-service connection pair, also
+        // resolved transitively through swift-helper-service. 0.5.106 is the
+        // first release with connections to an instance of an embedded
+        // service of their own, which each offline file runs in, and with
+        // listener handlers that reach connections accepted before them.
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-            from: "0.5.105",
+            from: "0.5.106",
         ),
         .package(
             url: "https://github.com/gohanlon/swift-memberwise-init-macro",

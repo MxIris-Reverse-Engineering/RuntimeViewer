@@ -219,6 +219,10 @@ FrameworkToolbox `from: "0.15.0"` instead of the exact pin it had; the comment t
 when FrameworkToolbox moves. AppKitPlus-Release is declared `from: "0.18.0"`, the first release with what
 the sidebar's text-token filter fields need: a comparison type's `valuePrefix` / `valueSuffix`, no menu for
 a token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)`.
+SwiftyXPC (the `MxIris-macOS-Library-Forks` fork) is declared `from: "0.5.106"`, the first release with
+connections to an instance of an embedded service of their own (`ConnectionType.remoteServiceInstance`, which
+each offline file's process is started with) and with listener handlers that reach connections accepted before
+they were set.
 
 </important>
 
