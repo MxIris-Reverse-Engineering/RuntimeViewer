@@ -329,10 +329,13 @@ The project uses three Swift Package Manager packages:
   `Bundle.load`. A service crash costs the loaded images, not the app: the connection reattaches on its
   own and the engine only sees `.disconnected` then `.connected`. **All XPC-service code lives in a few
   named places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
-  (transport, `hello`, reattach) plus the two `.xpcService` branches of `RuntimeCommunicator`;
-  `RuntimeViewerCore/LocalRuntimeService/` (this service's `Info.plist` key and credential, and the
-  service-side host both services run); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift`
-  (the Catalyst service's key and credential); and the two service entry points. `RuntimeEngine` and
+  (transport, `hello`, reattach, dedicated instances) plus the three `.xpcService` branches of
+  `RuntimeCommunicator`; `RuntimeViewerCore/LocalRuntimeService/` (this service's `Info.plist` key and
+  credential, and the service-side host all three services run);
+  `RuntimeViewerCore/Offline/RuntimeOfflineService.swift` and `RuntimeOfflineServiceHost.swift` (the
+  offline service's key, credential and launch payload, and the host that opens the file the payload
+  names); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift` (the Catalyst service's key and
+  credential); and the service entry points. `RuntimeEngine` and
   `RuntimeEngineManager` know nothing about XPC — they hand an opaque credential on — keep it that
   way. **The service runs at the priority of the requests waiting on it**, and an app in App Nap
   donates none: about thirty seconds after the user switches away, work the app is waiting on slows

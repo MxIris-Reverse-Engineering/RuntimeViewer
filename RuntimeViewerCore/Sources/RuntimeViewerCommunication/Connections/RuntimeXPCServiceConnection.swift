@@ -20,6 +20,15 @@ public enum RuntimeXPCServiceTarget: Sendable {
     /// by launchd from the calling process's bundle.
     case bundleIdentifier(String)
 
+    /// A process of its own for this connection: launchd starts a new
+    /// instance of the embedded service, which declares `_MultipleInstances`
+    /// in its `Info.plist`, and the connection's first `hello` hands the
+    /// instance `launchPayload` — what it has to know before it can serve,
+    /// such as the file an offline engine reads. An instance that went away
+    /// is never relaunched, so reattaching starts another one, with the same
+    /// payload, behind a new connection.
+    case dedicatedInstance(bundleIdentifier: String, launchPayload: Data)
+
     /// An anonymous listener some process opened and handed over its endpoint.
     case anonymousListener(RuntimeXPCServiceEndpoint)
 }
@@ -29,8 +38,20 @@ public enum RuntimeXPCServiceTarget: Sendable {
 public struct RuntimeXPCServiceEndpoint: @unchecked Sendable {
     let underlying: SwiftyXPC.XPCEndpoint
 
-    init(_ underlying: SwiftyXPC.XPCEndpoint) {
+    /// Test seam: a client connecting here behaves as one to a dedicated
+    /// instance — its hellos carry this payload, and it reattaches behind a
+    /// new connection. `nil` for a plain endpoint.
+    let launchPayload: Data?
+
+    init(_ underlying: SwiftyXPC.XPCEndpoint, launchPayload: Data? = nil) {
         self.underlying = underlying
+        self.launchPayload = launchPayload
+    }
+
+    /// Test seam: this endpoint, reached the way a dedicated instance is.
+    /// See ``launchPayload``.
+    func carryingLaunchPayload(_ payload: Data) -> RuntimeXPCServiceEndpoint {
+        RuntimeXPCServiceEndpoint(underlying, launchPayload: payload)
     }
 }
 
@@ -153,10 +174,12 @@ extension NSLock {
 /// install one named handler — and everything typed is derived from those.
 public class RuntimeXPCServiceConnection: RuntimeConnection, @unchecked Sendable {
     /// The transport's own message. A client sends it when it connects and
-    /// again after the service was relaunched; the listener answers it with
-    /// nothing, adopts the sender as its peer and reports `.connected`. It
+    /// again after the service was relaunched; the listener adopts the sender
+    /// as its peer, reports `.connected` and answers it with nothing. It
     /// belongs to this layer, not to the engine: what it establishes is
     /// "this connection has a live service behind it", nothing about images.
+    /// A dedicated instance's `hello` also carries its launch payload, which
+    /// the listener hands its launch handler before answering.
     static let helloMessageName = "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeXPCServiceConnection.hello"
 
     fileprivate let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
@@ -248,18 +271,22 @@ public class RuntimeXPCServiceConnection: RuntimeConnection, @unchecked Sendable
 
 // MARK: - Client
 
-/// The app's end: one `XPCConnection` to the service, kept for the life of
-/// the engine that owns it.
+/// The app's end: one `XPCConnection` to the service at a time, kept for the
+/// life of the engine that owns it.
 ///
-/// The service exiting is not the end of the connection. SwiftyXPC reports
-/// it as `XPCError.connectionInterrupted` and documents the connection as
-/// still live — the next message makes launchd relaunch the service — so
-/// this type reports `.disconnected(error:)` and then reattaches on its own:
-/// a `hello` after 1 s, 2 s and 4 s, and once those are spent, one more
-/// `hello` in front of the next message. The round trip completing is what
-/// marks the relaunched service reachable, so `.connected` follows the
-/// `hello` that gets through. Only `stop()` and `XPCError.connectionInvalid`
-/// are terminal.
+/// The service exiting is not the end of the connection. Behind an embedded
+/// service, SwiftyXPC reports it as `XPCError.connectionInterrupted` and
+/// documents the connection as still live — the next message makes launchd
+/// relaunch the service. A dedicated instance is never relaunched: its
+/// connection reports `XPCError.connectionInvalid` right after the
+/// interruption, so this type puts a new connection, and with it a new
+/// instance, in its place, answering every message the owner installed a
+/// handler for. Either way this type reports `.disconnected(error:)` and then
+/// reattaches on its own: a `hello` after 1 s, 2 s and 4 s, and once those
+/// are spent, one more `hello` in front of the next message. The round trip
+/// completing is what marks the service reachable, so `.connected` follows
+/// the `hello` that gets through. Only `stop()`, and
+/// `XPCError.connectionInvalid` behind an embedded service, are terminal.
 ///
 /// The owner sees none of this beyond `statePublisher`: an engine on this
 /// connection goes `.disconnected` and then `.connected` again, exactly as
@@ -270,16 +297,48 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
     /// Three tries; afterwards the next message tries once more on its own.
     static let defaultReattachDelaysInNanoseconds: [UInt64] = [1_000_000_000, 2_000_000_000, 4_000_000_000]
 
-    private let xpcConnection: XPCConnection
+    /// Where each underlying XPC connection leads.
+    private enum Destination {
+        /// Relaunched by launchd behind the same connection.
+        case service(bundleIdentifier: String)
+        /// A new process for every connection, never relaunched.
+        case serviceInstance(bundleIdentifier: String)
+        case anonymousListener(SwiftyXPC.XPCEndpoint)
+    }
+
+    private let destination: Destination
+
+    /// What every `hello` carries: a dedicated instance's launch payload,
+    /// empty for anything else.
+    private let helloPayload: Data
+
+    /// Whether a service that went away comes back only behind a new
+    /// connection — a dedicated instance — rather than behind this one.
+    private let reattachesBehindNewConnection: Bool
 
     private let lifecycleLock = NSLock()
+
+    /// The connection messages go out on. Replaced once a dedicated
+    /// instance behind it went away.
+    private var xpcConnection: XPCConnection
+
+    /// The instance behind `xpcConnection` is gone for good, or declined its
+    /// payload; the next attach puts a new connection in its place.
+    private var needsNewConnection = false
+
+    /// Every handler the owner installed, so a new connection answers the
+    /// same messages as the one it replaces.
+    private var installedHandlers: [String: @Sendable (Data) async throws -> Data] = [:]
+
+    /// How many connections replaced the first one. Test seam.
+    private var connectionReplacements = 0
 
     /// `stop()` was called; later transport errors are the cancellation
     /// itself and must not be reported as failures.
     private var isCancelled = false
 
-    /// `XPC_ERROR_CONNECTION_INVALID` arrived; nothing sent on this
-    /// connection will ever be answered again.
+    /// `XPC_ERROR_CONNECTION_INVALID` arrived behind an embedded service;
+    /// nothing sent on this connection will ever be answered again.
     private var isInvalid = false
 
     /// The automatic reattach in flight after an interruption, if any. One
@@ -303,22 +362,39 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
         lifecycleLock.locked { reattachTask != nil }
     }
 
+    /// How many connections replaced the first one. Test seam.
+    var connectionReplacementCount: Int {
+        lifecycleLock.locked { connectionReplacements }
+    }
+
+    private var currentConnection: XPCConnection {
+        lifecycleLock.locked { xpcConnection }
+    }
+
     public init(
         target: RuntimeXPCServiceTarget,
         modifier: ((RuntimeXPCServiceClientConnection) async throws -> Void)? = nil
     ) async throws {
         switch target {
         case .bundleIdentifier(let bundleIdentifier):
-            xpcConnection = try XPCConnection(type: .remoteService(bundleID: bundleIdentifier))
+            destination = .service(bundleIdentifier: bundleIdentifier)
+            helloPayload = Data()
+            reattachesBehindNewConnection = false
             #log(.info, "XPC service client created for bundle identifier \(bundleIdentifier, privacy: .public)")
+        case .dedicatedInstance(let bundleIdentifier, let launchPayload):
+            destination = .serviceInstance(bundleIdentifier: bundleIdentifier)
+            helloPayload = launchPayload
+            reattachesBehindNewConnection = true
+            #log(.info, "XPC service client created for a dedicated instance of \(bundleIdentifier, privacy: .public)")
         case .anonymousListener(let endpoint):
-            xpcConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint.underlying))
+            destination = .anonymousListener(endpoint.underlying)
+            helloPayload = endpoint.launchPayload ?? Data()
+            reattachesBehindNewConnection = endpoint.launchPayload != nil
             #log(.info, "XPC service client created for an anonymous listener endpoint")
         }
+        xpcConnection = try Self.makeXPCConnection(to: destination)
         super.init()
-        xpcConnection.errorHandler = { [weak self] _, error in
-            self?.handleTransportError(error)
-        }
+        observeErrors(on: xpcConnection)
         // Handlers first, activation last: SwiftyXPC dispatches inbound
         // messages as soon as the connection is active, and the service
         // pushes its data the moment the hello below reaches it.
@@ -326,22 +402,29 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
         xpcConnection.activate()
         // Activation never confirms the service exists; the hello does — for
         // an embedded service this round trip is the launch itself. A
-        // service that cannot be reached fails the connection here, before
-        // any owner takes it.
-        try await sendHello()
+        // service that cannot be reached, or an instance that cannot start
+        // what its payload names, fails the connection here, before any
+        // owner takes it; the connection is cancelled so no instance is
+        // left running for it.
+        do {
+            try await sendHello()
+        } catch {
+            stop()
+            throw error
+        }
     }
 
     public override func stop() {
-        let (alreadyCancelled, reattachTask) = lifecycleLock.locked { () -> (Bool, Task<Void, Never>?) in
+        let (alreadyCancelled, reattachTask, connection) = lifecycleLock.locked { () -> (Bool, Task<Void, Never>?, XPCConnection) in
             defer {
                 isCancelled = true
                 self.reattachTask = nil
             }
-            return (isCancelled, self.reattachTask)
+            return (isCancelled, self.reattachTask, xpcConnection)
         }
         guard !alreadyCancelled else { return }
         reattachTask?.cancel()
-        xpcConnection.cancel()
+        connection.cancel()
         stateSubject.send(.disconnected(error: nil))
         #log(.info, "XPC service client connection stopped")
     }
@@ -361,10 +444,18 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
 
     /// Reports the interruption a real service exit would, without one: the
     /// state goes `.disconnected` and the reattach schedule starts. Against
-    /// an anonymous listener in the same process the schedule's `hello`
-    /// then simply succeeds.
+    /// an anonymous listener in this process the schedule's `hello` then
+    /// simply succeeds.
     func simulateInterruptionForTesting() {
-        handleTransportError(XPCError.connectionInterrupted)
+        handleTransportError(XPCError.connectionInterrupted, on: currentConnection)
+    }
+
+    /// Reports what a dedicated instance's exit looks like — an
+    /// interruption, then the connection becoming invalid — without one.
+    func simulateInstanceExitForTesting() {
+        let connection = currentConnection
+        handleTransportError(XPCError.connectionInterrupted, on: connection)
+        handleTransportError(XPCError.connectionInvalid, on: connection)
     }
 
     // MARK: Transport
@@ -376,49 +467,138 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
         // reply instead of before it. Saying hello first keeps that order,
         // and is the one on-demand try left once the schedule is spent.
         if !stateSubject.value.isConnected, name != Self.helloMessageName {
-            try await sendHello()
+            try await reattach()
         }
         return try await roundTrip(name: name, payload: payload)
     }
 
     fileprivate override func installHandler(name: String, body: @escaping @Sendable (Data) async throws -> Data) {
-        xpcConnection.setMessageHandler(name: name) { (_: XPCConnection, payload: Data) async throws -> RuntimeXPCServiceReplyFrame in
+        let connection = lifecycleLock.locked { () -> XPCConnection in
+            installedHandlers[name] = body
+            return xpcConnection
+        }
+        Self.install(name: name, body: body, on: connection)
+    }
+
+    private static func install(name: String, body: @escaping @Sendable (Data) async throws -> Data, on connection: XPCConnection) {
+        connection.setMessageHandler(name: name) { (_: XPCConnection, payload: Data) async throws -> RuntimeXPCServiceReplyFrame in
             await RuntimeXPCServiceMessaging.replying { try await body(payload) }
         }
     }
 
+    private static func makeXPCConnection(to destination: Destination) throws -> XPCConnection {
+        switch destination {
+        case .service(let bundleIdentifier):
+            return try XPCConnection(type: .remoteService(bundleID: bundleIdentifier))
+        case .serviceInstance(let bundleIdentifier):
+            return try XPCConnection(type: .remoteServiceInstance(bundleID: bundleIdentifier, instance: UUID().uuid))
+        case .anonymousListener(let endpoint):
+            return try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
+        }
+    }
+
+    private func observeErrors(on connection: XPCConnection) {
+        connection.errorHandler = { [weak self] erroredConnection, error in
+            self?.handleTransportError(error, on: erroredConnection)
+        }
+    }
+
     private func roundTrip(name: String, payload: Data) async throws -> Data {
+        let connection = currentConnection
         let reply: RuntimeXPCServiceReplyFrame
         do {
-            reply = try await xpcConnection.sendMessage(name: name, request: payload)
+            reply = try await connection.sendMessage(name: name, request: payload)
         } catch {
             throw RuntimeXPCServiceConnectionError.mapping(error)
         }
         // A round trip completing is the only proof the service is alive —
         // activation never confirms the service exists, and after an
         // interruption this is what marks the relaunched service reachable.
-        if !stateSubject.value.isConnected, isUsable {
+        // Except a `hello` the service declined: an instance that could not
+        // start what its payload names serves nothing.
+        let provesServiceAlive = name != Self.helloMessageName || reply.failure == nil
+        if provesServiceAlive, !stateSubject.value.isConnected, isUsable, connection === currentConnection {
             stateSubject.send(.connected)
         }
         return try RuntimeXPCServiceMessaging.unwrap(reply)
     }
 
     private func sendHello() async throws {
-        if let failure = lifecycleLock.locked({ helloFailureForTesting }) {
-            throw failure
+        do {
+            if let failure = lifecycleLock.locked({ helloFailureForTesting }) {
+                throw failure
+            }
+            _ = try await roundTrip(name: Self.helloMessageName, payload: helloPayload)
+        } catch let error as RuntimeXPCServiceConnectionError {
+            // An instance that declined its payload stays declined; the next
+            // try starts a fresh one, which reads the payload again — the
+            // file may have come back.
+            if case .remoteFailure = error, reattachesBehindNewConnection {
+                lifecycleLock.locked { needsNewConnection = true }
+            }
+            throw error
         }
-        _ = try await roundTrip(name: Self.helloMessageName, payload: Data())
+    }
+
+    /// Says hello again — behind a new connection first, when the instance
+    /// behind the current one is gone.
+    private func reattach() async throws {
+        try replaceConnectionIfNeeded()
+        try await sendHello()
+    }
+
+    /// Puts a new connection, and so a new instance, in place of one whose
+    /// instance is gone, with every handler the owner installed. The old
+    /// connection is cancelled: an instance that declined its payload exits
+    /// with it, and its last events are dropped as history.
+    private func replaceConnectionIfNeeded() throws {
+        let replacement = try lifecycleLock.locked { () -> (new: XPCConnection, old: XPCConnection)? in
+            guard needsNewConnection, !isCancelled else { return nil }
+            let newConnection = try Self.makeXPCConnection(to: destination)
+            for (name, body) in installedHandlers {
+                Self.install(name: name, body: body, on: newConnection)
+            }
+            let oldConnection = xpcConnection
+            xpcConnection = newConnection
+            needsNewConnection = false
+            connectionReplacements += 1
+            return (newConnection, oldConnection)
+        }
+        guard let replacement else { return }
+        observeErrors(on: replacement.new)
+        replacement.new.activate()
+        replacement.old.cancel()
+        #log(.info, "Started a new service instance behind a new connection")
     }
 
     // MARK: Interruption and reattach
 
-    private func handleTransportError(_ error: any Error) {
-        let isCancelled = lifecycleLock.locked { self.isCancelled }
-        guard !isCancelled else { return }
+    private func handleTransportError(_ error: any Error, on connection: XPCConnection) {
+        let (isCancelled, isCurrent) = lifecycleLock.locked { (self.isCancelled, connection === xpcConnection) }
+        // A replaced connection's last events — the invalidation that follows
+        // an instance's exit, the cancellation of the connection — are history.
+        guard !isCancelled, isCurrent else { return }
         switch error as? XPCError {
         case .connectionInterrupted:
-            #log(.error, "XPC service exited; the connection stays live and reattaches to the relaunched service")
+            #log(.error, "XPC service exited; reattaching")
+            if reattachesBehindNewConnection {
+                lifecycleLock.locked { needsNewConnection = true }
+            }
             stateSubject.send(.disconnected(error: .xpcError(RuntimeXPCServiceConnectionError.serviceExited.localizedDescription)))
+            scheduleReattach()
+        case .connectionInvalid where reattachesBehindNewConnection:
+            // A dedicated instance is never relaunched: its connection turns
+            // invalid right after the interruption, or alone when the
+            // instance could not start. Another instance starts behind a new
+            // connection.
+            let alreadyDetached = lifecycleLock.locked { () -> Bool in
+                defer { needsNewConnection = true }
+                return needsNewConnection
+            }
+            if !alreadyDetached {
+                #log(.error, "Dedicated XPC service instance went away; starting another")
+                stateSubject.send(.disconnected(error: .xpcError(RuntimeXPCServiceConnectionError.serviceExited.localizedDescription)))
+            }
             scheduleReattach()
         case .connectionInvalid:
             #log(.error, "XPC service connection became invalid")
@@ -440,7 +620,7 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
                 for (attemptIndex, delay) in delays.enumerated() {
                     try? await Task.sleep(nanoseconds: delay)
                     guard !Task.isCancelled, let self, self.isUsable else { return }
-                    if await self.attemptHello(attempt: attemptIndex + 1) {
+                    if await self.attemptReattach(attempt: attemptIndex + 1) {
                         return
                     }
                 }
@@ -452,10 +632,10 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
         }
     }
 
-    private func attemptHello(attempt: Int) async -> Bool {
+    private func attemptReattach(attempt: Int) async -> Bool {
         do {
-            try await sendHello()
-            #log(.info, "Reattached to the relaunched XPC service (attempt \(attempt, privacy: .public))")
+            try await reattach()
+            #log(.info, "Reattached to the XPC service (attempt \(attempt, privacy: .public))")
             return true
         } catch {
             #log(.error, "Reattach attempt \(attempt, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
@@ -485,8 +665,13 @@ public final class RuntimeXPCServiceClientConnection: RuntimeXPCServiceConnectio
 /// the listener reports `.connected` at that point, which is the service
 /// host's cue to push its current data.
 ///
-/// SwiftyXPC copies a listener's handlers onto each accepted connection *at
-/// accept time*, so every `setMessageHandler` must precede `activate()`.
+/// An accepted connection looks the listener's handlers up when a message
+/// arrives (SwiftyXPC 0.5.106 and later), so a handler installed after
+/// `activate()` reaches a client already attached. Every handler must still
+/// be in place before the first message that needs it: the local runtime
+/// service installs all of them before it activates, and a service that
+/// learns what to serve from the first `hello` installs them in its launch
+/// handler, before that `hello` is answered — see `setLaunchHandler(_:)`.
 /// `activate()` on an embedded-service listener is `xpc_main` and never
 /// returns; call it last.
 @Loggable(.private)
@@ -497,15 +682,50 @@ public final class RuntimeXPCServiceListenerConnection: RuntimeXPCServiceConnect
 
     private var peer: XPCConnection?
 
+    private let launchLock = NSLock()
+
+    /// What the first `hello` carrying a payload starts. See
+    /// `setLaunchHandler(_:)`.
+    private var launchHandler: (@Sendable (Data) async throws -> Void)?
+
+    /// The launch, once a payload arrived. Every later `hello` waits for the
+    /// same outcome: one instance serves one payload.
+    private var launchTask: Task<Void, any Error>?
+
     private init(listener: SwiftyXPC.XPCListener) {
         self.listener = listener
         super.init()
         listener.errorHandler = { [weak self] connection, error in
             self?.handlePeerError(on: connection, error)
         }
-        // Answering the hello is all it takes: `installHandler` adopts the
-        // sender before the body runs.
-        installHandler(name: Self.helloMessageName) { _ in Data() }
+        // `installHandler` adopts the sender before the body runs; the body
+        // only has to start what a payload asks for.
+        installHandler(name: Self.helloMessageName) { [weak self] payload in
+            try await self?.launchIfNeeded(with: payload)
+            return Data()
+        }
+    }
+
+    /// Runs `handler` with the payload of the first `hello` that carries one,
+    /// before that `hello` is answered: what a dedicated instance must know
+    /// before it can serve. A throwing handler fails that `hello` and every
+    /// later one. Handlers installed meanwhile reach the client already
+    /// attached, so the launch handler is where such a service installs its
+    /// command table. Set it before `activate()`.
+    public func setLaunchHandler(_ handler: @escaping @Sendable (Data) async throws -> Void) {
+        launchLock.locked { launchHandler = handler }
+    }
+
+    private func launchIfNeeded(with payload: Data) async throws {
+        guard !payload.isEmpty else { return }
+        let task = launchLock.locked { () -> Task<Void, any Error>? in
+            if let launchTask { return launchTask }
+            guard let launchHandler else { return nil }
+            let task = Task { try await launchHandler(payload) }
+            launchTask = task
+            return task
+        }
+        try await task?.value
     }
 
     /// The listener of the XPC service this process *is*. Its `activate()` is

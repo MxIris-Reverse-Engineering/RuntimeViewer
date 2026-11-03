@@ -5,16 +5,19 @@ import Combine
 public import FoundationToolbox
 public import RuntimeViewerCommunication
 
-/// The local-runtime XPC service's whole job: an in-process `.local` engine,
-/// served on the service's listener.
+/// An in-process engine served on an XPC service's listener: the local-runtime
+/// service's whole job, with its `.local` engine.
 ///
 /// The service's `main.swift` builds one of these around an engine and a
 /// `RuntimeXPCServiceListenerConnection.embeddedService()`, calls `start()`,
 /// then `activate()`. The Mac Catalyst service does the same from
 /// `RuntimeViewerCatalystHelperPlugin`'s `runService()`: its job is this one,
-/// run in a Catalyst process. Tests build the same type around an anonymous listener
-/// and connect a client engine to its endpoint, so the whole path — hello,
-/// initial data, forwarded requests, pushes — runs inside one process.
+/// run in a Catalyst process. The offline service builds one once the app's
+/// first `hello` named the file, around an engine reading it
+/// (`RuntimeOfflineServiceHost`). Tests build the same type around an
+/// anonymous listener and connect a client engine to its endpoint, so the
+/// whole path — hello, initial data, forwarded requests, pushes — runs inside
+/// one process.
 ///
 /// A client attaching is the listener reporting `.connected`, and that is
 /// when the host pushes the engine's current image list and image nodes.
@@ -39,11 +42,12 @@ public final class RuntimeLocalRuntimeServiceHost {
 
     /// Connects the engine and installs every handler and relay.
     ///
-    /// Everything is wired *before* the listener activates because SwiftyXPC
-    /// copies the handlers onto each connection at accept time; a handler
-    /// registered later is invisible to a client already attached. The relays
-    /// are installed once and stay: the listener keeps one peer slot, and a
-    /// push with nobody attached is simply dropped.
+    /// Everything is wired before a client is answered, because a request
+    /// that reaches the service ahead of its handler fails: the local runtime
+    /// service starts its host before the listener activates, the offline
+    /// service inside its launch handler, before the first `hello` is
+    /// answered. The relays are installed once and stay: the listener keeps
+    /// one peer slot, and a push with nobody attached is simply dropped.
     public func start() async throws {
         if !engine.state.isReady {
             try await engine.connect()

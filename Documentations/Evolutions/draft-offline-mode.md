@@ -281,9 +281,9 @@ extension RuntimeXPCServiceListenerConnection {
 ### 5. 离线 service target
 
 - **`RuntimeViewerOfflineService`**（`RuntimeViewerUsingAppKit/RuntimeViewerOfflineService/`）：`main.swift`、`Info.plist`（`XPCService`：`ServiceType = Application`、`_MultipleInstances = true`，第 0 步只设这两个就可用）、entitlements（`disable-library-validation`，不开沙盒——要读任意路径的文件）。`Configurations/RuntimeViewerOfflineService/` 下 Shared 与三个配置的 xcconfig（`SKIP_INSTALL = YES`、hardened runtime、`MACOSX_DEPLOYMENT_TARGET = 15.0`、各配置的 bundle ID），`CodeSigning.xcconfig` 三个变量，App 的 `Info.plist` 加 `RuntimeViewerOfflineServiceBundleIdentifier`，App target 依赖它并在「Embed XPC Services」阶段嵌入。Tuist 描述（`RuntimeViewerUsingAppKit/Project.swift`）同一个 commit 加上，`./TuistScript.sh check` 通过。
-- **`main.swift`**：建监听、装 launch handler，然后直接 `activate()`。launch handler 解出 `RuntimeOfflineFile`（解不出就抛错：`hello` 失败、进程退出）；若读的是 cache（打开的或配对的），按它的身份打开派生数据（§9）；建 `RuntimeEngine(reading:)`，交给 `RuntimeLocalRuntimeServiceHost`（它本来就是「把一个进程内引擎挂到 service 监听上」，文档注释改成不限于 `.local`）并 `start()`。监听方的 peer 断开即 `exit(0)`。
+- **`main.swift`**：建监听、交给 `RuntimeOfflineServiceHost`，订阅监听方的状态（接入过的 peer 断开即 `exit(0)`），然后 `activate()`。启动逻辑不在入口里，而在 Core 的 `RuntimeOfflineServiceHost`：它的 launch handler 解出 `RuntimeOfflineFile`（解不出就抛错：`hello` 失败、App 的连接带着原因失败）；若读的是 cache（打开的或配对的），按它的身份打开派生数据（§9）；建 `RuntimeEngine(reading:)`，交给 `RuntimeLocalRuntimeServiceHost`（它本来就是「把一个进程内引擎挂到 service 监听上」，文档注释已改成不限于 `.local`）并 `start()`。放在 Core 里，整条路径就能用匿名监听在进程内测。
 - **进程义务**：不链接 `RuntimeViewerInjection` 与 `RuntimeViewerCrossReferences`，所以没有两个 `install()`——这是根 `AGENTS.md`「linked it ⇒ call it」表格里的第一个有意不链接的进程，表格加一行说明为什么。
-- **`RuntimeOfflineService`**（`RuntimeViewerCore/Offline/`，仿 `LocalRuntimeService`）：`Info.plist` 键名、从进程 bundle 读出 bundle ID、为某个 `RuntimeOfflineFile` 造凭证（编码 payload）。
+- **`RuntimeOfflineService`**（`RuntimeViewerCore/Offline/`，仿 `LocalRuntimeService`）：`Info.plist` 键名、从进程 bundle 读出 bundle ID、为某个 `RuntimeOfflineFile` 造凭证（`.dedicatedInstance`，载荷是 JSON 编码的文件），以及 service 侧把载荷解回文件。
 
 ### 6. 引擎管理（`RuntimeViewerEngineManagement`）
 
@@ -418,7 +418,8 @@ extension RuntimeEngineManager {
 | 1 SwiftyXPC | 完成 | fork 发 0.5.106（用户同意发版）：带实例的连接、监听方在收到消息时查处理器；新加的 4 个进程内测试改前 2 个红、改后全绿，依赖 launchctl 的老测试没跑。RuntimeViewer 下限抬到 0.5.106，六份锁文件只改这一条，全新构建目录的远程解析不改写它 |
 | 2 Core 泛型化 | 完成 | Core 全量与基线对照：基线就有的满载失败（交叉引用预先准备、后台索引批次取消、事件订阅三个之中的两个）照旧，无新增失败；新增的跳转回归测试在旧查找逻辑上红、修复后绿 |
 | 3 文件目录与文件引擎 | 完成 | `OfflineFileEngineTests` 9 例通过：薄 / 胖 / 非 Mach-O / bundle 的判定，离线与进程内引擎对同一镜像列出的对象一致、打印一致，离线泛型特化，依赖解析进配对 cache，cache 引擎按导出符号找到 `NSObject` 所在的 libobjc。Core 全量 663 项只有基线就有的两个满载失败；Packages 全量 701 项挂 1 个交叉引用的等待超时（174 秒），单独跑该套件 11 项全过；CLI 121 项全过；Debug 设置文件前后校验和不变。App 目标未编，第 5 步加 service target 时一起编 |
-| 4–10 | 未做 | |
+| 4 传输 | 完成 | `.dedicatedInstance`、`hello` 带载荷、launch handler、换新连接的重连与处理器重装、`RuntimeOfflineService` / `RuntimeOfflineServiceHost`、引擎对 `.file` 带凭证转发。新测试：传输 5 项（载荷随第一个 `hello` 到达且 launch handler 只跑一次、launch 失败让连接失败、实例退出后换新连接且处理器仍应答、被拒绝的 `hello` 每次换新实例、内嵌 service 的 client 不换连接），离线 service host 5 项（载荷往返、`.file` 引擎转发并收到镜像清单、请求到达 service 侧引擎、读不了的文件让连接失败、停止后再连接）；原有 XPC 传输与本地 service host 的 17 项照旧通过 |
+| 5–10 | 未做 | |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -455,3 +456,6 @@ extension RuntimeEngineManager {
 | 2026-11-03 | 离线的 Swift 父类链停在第一个 ObjC 父类 | `RuntimeEngine.hierarchy(for:)` 在进程内实例化 metadata 一路走到 `NSObject`；离线时只能读各镜像索引时记下的父类名，走到第一个 ObjC 父类（记它的运行时名字）或尚未索引的镜像里的 Swift 类为止。Inspector 的父类时间线走的是 `superclassChain`，不受影响。 |
 | 2026-11-03 | CLI 的排除与两处 App / 设置的 switch 也在第 3 步做 | 新 case 一进 Core，CLI 的 `SourceKind(source:)`、设置里的 `carriesProcessIdentifier` 与 App 的来源图标三处穷举 switch 就编不过，每一步都要整个仓库可构建，所以提前做：`SourceKind.init?(source:)` 对 `.file` 返回 `nil`，`SourceInfo.init?(engine:)` 随之可失败，CLI 的快照把离线引擎从各分组里滤掉（即第 6 步「CLI 不暴露」的全部改动）；`.file` 不带进程号；来源菜单的图标先用文档符号，第 7 步做引擎菜单时再定。 |
 | 2026-11-03 | 第 0 步结论：多实例可用，文件改随第一个 `hello` 传 | 实验见前期调研 §6。bootstrap 会串到别的实例上；要靠它，就得让 App 串行启动实例、再加校验，还要依赖一个没有文档的行为。改为 `hello` 带 payload、service 在回复前建引擎：只用一个私有函数（一次性实例），全部逻辑都能用进程内的匿名监听测试。代价是 SwiftyXPC 要让监听方激活后登记的处理器对已接入的连接生效（增量行为），以及重连换新连接时重装处理器。详细设计 §4、§5 与落地步骤 1、4 已改。 |
+| 2026-11-03 | 离线 service 的启动逻辑放进 Core 的 `RuntimeOfflineServiceHost` | 详细设计 §5 原拟写在 service 的 `main.swift` 里。放进 Core，「载荷到达 → 建引擎 → 登记命令 → 回复 `hello`」这条路径就能用匿名监听在进程内测；入口只剩建监听、退出条件与 `activate()`。 |
+| 2026-11-03 | 实例拒绝了载荷，下一次重连就换新实例 | 提案没写。读不了的文件可能稍后恢复（例如卷重新挂上），同一个实例会一直记着失败的结果，所以 `hello` 回 `remoteFailure` 时把连接标记为要换，下一次重连拉起新实例重新读。 |
+| 2026-11-03 | 引擎的 `forwardsToLocalService` 改名 `forwardsToServiceProcess` | `.file` 带凭证时与 `.local` 一样转发；哪些来源由凭证搬进别的进程收在一个穷举 `switch` 里（`credentialMovesWorkOutOfProcess(for:)`），新来源会编译不过、逼着人决定。 |

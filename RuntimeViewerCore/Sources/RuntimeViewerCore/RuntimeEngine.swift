@@ -94,12 +94,13 @@ public actor RuntimeEngine {
     /// Set to `false` for management-only engines (e.g. Bonjour server) that only handle engine list operations.
     public nonisolated let pushesRuntimeData: Bool
 
-    /// Whether requests leave this process: a client of a remote source, or
-    /// the `.local` engine handing its work to the process that runs this
-    /// Mac's runtime. Everything that used to test
+    /// Whether requests leave this process: a client of a remote source, the
+    /// `.local` engine handing its work to the process that runs this Mac's
+    /// runtime, or an offline file's engine handing it to the process that
+    /// reads the file. Everything that used to test
     /// `source.remoteRole?.isClient` tests this instead.
     public var forwardsRequests: Bool {
-        source.remoteRole?.isClient == true || forwardsToLocalService
+        source.remoteRole?.isClient == true || forwardsToServiceProcess
     }
 
     // MARK: - State Management
@@ -264,10 +265,22 @@ public actor RuntimeEngine {
             ?? .unknown(reason: "this engine has no connection")
     }
 
-    /// `connect(credential:)` was given a credential for the `.local`
-    /// source: this engine's work happens in another process, and
+    /// `connect(credential:)` was given a credential for the `.local` or a
+    /// `.file` source: this engine's work happens in another process, and
     /// `connection` leads there.
-    private var forwardsToLocalService = false
+    private var forwardsToServiceProcess = false
+
+    /// Whether a credential moves `source`'s work into another process. Only
+    /// `.local` and `.file` are identities rather than transports; every
+    /// other source names its transport through `remoteRole`.
+    private static func credentialMovesWorkOutOfProcess(for source: RuntimeSource) -> Bool {
+        switch source {
+        case .local, .file:
+            return true
+        case .remote, .bonjour, .localSocket, .directTCP, .injectedTCP:
+            return false
+        }
+    }
 
     /// Coordinator for background indexing batches that load and index images
     /// without blocking the main runtime data flow. `lazy` so it captures
@@ -368,20 +381,21 @@ public actor RuntimeEngine {
             case .client:
                 try await connectAsClient(credential: credential)
             }
-        } else if source == .local, let credential {
-            // `.local` is an identity, not a transport; a credential is the
-            // one thing that gives it a connection — to the process that runs
-            // this Mac's runtime — and from here on this engine is a client
-            // like any other: same handlers, same state observation, same
-            // forwarding in `dispatch`. What comes back over that connection
-            // is the transport's business, including the service being
-            // relaunched: this engine only sees `.disconnected` and then
-            // `.connected` again.
-            forwardsToLocalService = true
+        } else if let credential, Self.credentialMovesWorkOutOfProcess(for: source) {
+            // `.local` and `.file` are identities, not transports; a
+            // credential is the one thing that gives them a connection — to
+            // the process that runs this Mac's runtime, or to the one reading
+            // the file — and from here on this engine is a client like any
+            // other: same handlers, same state observation, same forwarding in
+            // `dispatch`. What comes back over that connection is the
+            // transport's business, including the service being relaunched or
+            // a new instance replacing one that went away: this engine only
+            // sees `.disconnected` and then `.connected` again.
+            forwardsToServiceProcess = true
             stateSubject.send(.connecting)
             try await connectAsClient(credential: credential)
         } else {
-            forwardsToLocalService = false
+            forwardsToServiceProcess = false
             #log(.debug, "No remote role, observing local runtime")
             await observeRuntime()
             stateSubject.send(.localOnly)
