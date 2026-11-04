@@ -3,9 +3,9 @@ import AppKit
 /// Where the app gets its SourceEditor bridges from.
 ///
 /// Compiled in every build, unlike the bridge itself: in one without the reconstructed SourceEditor
-/// frameworks — and in the Intel slice of a universal one, for which they have no slice — this is
-/// all the framework holds, `isAvailable` is `false`, and the app shows interfaces in the built-in
-/// `NSTextView`.
+/// frameworks — and in the Intel slice of a universal one, which has no slice of them and so does not
+/// get them on its search path — this is all the framework holds, `isAvailable` is `false`, and the
+/// app shows interfaces in the built-in `NSTextView`.
 public enum SourceEditorBridgeFactory {
     /// Whether this build of the framework was compiled with SourceEditor.
     public static var isAvailable: Bool {

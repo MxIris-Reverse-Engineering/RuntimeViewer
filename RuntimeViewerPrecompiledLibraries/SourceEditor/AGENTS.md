@@ -23,8 +23,13 @@ root `AGENTS.md` repeats the precondition and points here.
 - The bridge framework and its tests have `Frameworks/` on their framework search path. Where it
   holds the frameworks, the bridge compiles and links them; where it does not, everything under
   `#if canImport(SourceEditor)` compiles out, `SourceEditorBridgeFactory.isAvailable` is `false`, and
-  the app shows interfaces in the built-in `NSTextView`. The releases carry no x86_64 slice, so the
-  Intel half of a universal build compiles out the same way.
+  the app shows interfaces in the built-in `NSTextView`.
+- **The search path covers the arm64 slices only** (`FRAMEWORK_SEARCH_PATHS[arch=arm64*]`), so the
+  Intel half of a universal build compiles out the same way. Do not widen it: the releases carry no
+  x86_64 slice, but every framework has a Clang module map, so an x86_64 compile that can see them
+  still satisfies `canImport(SourceEditor)` and then fails at their generated `-Swift.h` headers
+  ("unsupported Swift architecture"). Debug-arm64e builds arm64 only; only a Release universal build,
+  as `ArchiveScript.sh` makes, compiles that slice and would catch it.
 - **The app must never load the SourceEditor modules.** Their headers declare AppKit's private
   `NSScrollViewDelegate`, and so do UIFoundation's (`UIFoundationAppleInternalObjC`), differently; a
   module that sees both fails to compile. So the app target does not have `Frameworks/` on its search

@@ -9,7 +9,12 @@
 // app, which links this framework, never loads their modules: SourceEditor's headers and
 // UIFoundation's both declare AppKit's private NSScrollViewDelegate, differently, and a module that
 // sees both does not compile.
-FRAMEWORK_SEARCH_PATHS = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
+//
+// The path is set for the arm64 slices only. The frameworks have no x86_64 slice, but each has a Clang
+// module map, so an x86_64 compile that can see them still satisfies canImport(SourceEditor) and then
+// fails building their modules at the generated -Swift.h headers ("unsupported Swift architecture").
+// Without the path, the Intel slice of a universal build compiles out like a build without them.
+FRAMEWORK_SEARCH_PATHS[arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/Frameworks
 // `internal import` keeps a module's dependencies from its clients only when it is built with library
 // evolution: without it, the app's dependency scan asks for the SourceEditor modules and fails
