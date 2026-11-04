@@ -664,6 +664,21 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   is (`RuntimeSourcePicker.Icon.symbol`, made by `DeviceGlyph.symbolImage`), which Xcode 27's style draws
   at its own size as Xcode does; lists keep the squared `DeviceGlyph.image`. Handed the squared one, the
   picker shrinks a wide glyph such as a Mac Studio's to 18 × 10.
+- **A colour a toolbar view draws itself follows the Xcode view it copies.** The toolbar gives its views a
+  vibrant appearance, in which the system's fill and label colours are opaque greys meant to be blended
+  with what is behind them; AppKit blends them for its own labels and controls, never for a layer a view
+  draws. Copy an AppKit view of Xcode's by resolving in the appearance without vibrancy
+  (`NSAppearance.nonVibrantVariant`: `ActivityProgressRing`'s track, the capsule's disc), and a SwiftUI
+  style over a background material by drawing the vibrant colour with `vibrancyCompositingFilter`,
+  plus-lighter or plus-darker (the title ring's track). **A blended layer hangs directly off a view's own
+  layer**: AppKit lets a view's layer pass its sublayers' blending through to what is behind the view,
+  while a plain `CALayer` with sublayers keeps their blending among them (`allowsGroupBlending`, private,
+  on by default), so a blended layer inside one meets an empty backdrop and shows its own grey; nor may
+  the view fade as a group (`allowsGroupOpacity = false`). `allowsVibrancy` is no way out: in macOS 27's
+  toolbar AppKit sets no filter for it. Drawn plainly, the vibrant grey is near black in a dark window.
+  A test of such a layer renders the real layer tree with `CARenderer` (`render(in:)` ignores compositing
+  filters), as `TitleActivityIndicatorTests` does. Background:
+  `Documentations/ResolvedIssues/2026-11-04-toolbar-progress-ring-track-drawn-dark.md`.
 - **With the picker, the capsule lays the text and the picker out by hand**, by Xcode 26's rules: the text
   right-aligned, the picker given what the text leaves past a reserve, narrowed for the rest of the
   activity once the text pushes it, widened on hover and frozen while its popover shows. The rules are
