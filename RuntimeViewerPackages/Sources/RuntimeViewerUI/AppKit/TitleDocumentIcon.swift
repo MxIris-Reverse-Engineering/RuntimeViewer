@@ -16,13 +16,13 @@ public enum TitleDocumentIcon {
     public static let symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium, scale: .large)
 
     /// The slot the icon is laid out in.
-    public static let canvasSize = NSSize(width: TitleActivityIndicatorView.slotSize, height: TitleActivityIndicatorView.slotSize)
+    public static let slotSize = NSSize(width: TitleActivityIndicatorView.slotSize, height: TitleActivityIndicatorView.slotSize)
 
     /// `symbol` at the title's size, filled with `color` and centred in the slot. The image draws
     /// itself for the appearance it is drawn in, so a dynamic colour follows it.
     public static func image(symbol: NSImage, color: NSColor) -> NSImage {
         let configuredSymbol = symbol.withSymbolConfiguration(symbolConfiguration) ?? symbol
-        let image = NSImage(size: canvasSize, flipped: false) { rect in
+        let image = NSImage(size: slotSize, flipped: false) { rect in
             guard let context = NSGraphicsContext.current else { return false }
             let alignmentRect = configuredSymbol.alignmentRect
             let backingScale = context.cgContext.userSpaceToDeviceSpaceTransform.a
