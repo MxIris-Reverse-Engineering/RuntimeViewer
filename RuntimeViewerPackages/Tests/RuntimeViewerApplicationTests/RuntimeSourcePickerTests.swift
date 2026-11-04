@@ -158,10 +158,11 @@ struct RuntimeSourcePickerTests {
         #expect(heightConstraint.constant == 28)
         #expect([maximumWidthConstraint, minimumWidthConstraint, heightConstraint].allSatisfy { $0.priority.rawValue == 999 })
 
-        // A whole number of points, which AppKit keeps as is: a fractional width is rounded to the pixel.
+        // Laid out on its own, the view takes the width its constraints allow: the maximum.
         toolbarView.frame = NSRect(x: 0, y: 0, width: 200, height: 28)
         toolbarView.layoutSubtreeIfNeeded()
-        #expect(toolbarView.picker.frame == NSRect(x: 4, y: 0, width: 192, height: 28))
+        #expect(abs(toolbarView.bounds.width - expectedMaximumWidth) <= 0.5)
+        #expect(toolbarView.picker.frame == NSRect(x: 4, y: 0, width: toolbarView.bounds.width - 8, height: 28))
     }
 
     @Test("A short title still leaves the toolbar view its 87-point minimum as its maximum")
