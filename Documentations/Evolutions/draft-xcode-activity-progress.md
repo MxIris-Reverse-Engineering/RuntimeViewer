@@ -76,7 +76,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 
 - **中间不再是胶囊**，改放切换引擎的弹出按钮（Runtime Source），设为 `centeredItemIdentifiers`，两侧各一个 flexible space，宽度取它自己的。Xcode 27 在这个位置放 scheme 与运行目标，RV 里与之对应的就是切换引擎。右侧那排按钮的位置不变。
 - **标题区**：`TitleToolbarItem` 在文字左边加一个 18×18 的图标槽，进度环画在这里；完成序列结束时，环变回图标。
-- **图标**：取标题所指的镜像，用它的种类符号（framework、bundle、dylib），照 Xcode 工程图标的画法画成一个单色字形：13 pt、medium、large，按对齐矩形居中在 18×18 的槽里、对齐到像素，整个字形填一种颜色——bundle 用 `systemBrown`（与 Xcode 的 Swift package 图标同色），其余用 `systemBlue`（与 Xcode 的工程图标同色）。没有选中镜像时，用 App 图标。收拢出的强调色方块是进度形状本身，它淡出、字形淡入，最后只剩字形（逆向结论见资料卷「The project icon in the window title」一节）。
+- **图标**：取标题所指的镜像，用它的种类符号（framework、bundle、dylib），照 Xcode 工程图标的画法画成一个单色字形：13 pt、medium、large，按对齐矩形居中在 18×18 的槽里、对齐到像素，整个字形填一种颜色——bundle 用 `systemBrown`（与 Xcode 的 Swift package 图标同色），其余用 `systemBlue`（与 Xcode 的工程图标同色）。没有选中镜像时，用 App 自己的符号 `runtimeviewer`（App 图标里的镜片圆环加放大镜，自绘的 SF Symbol），同样画成 `systemBlue` 的单色字形。收拢出的强调色方块是进度形状本身，它淡出、字形淡入，最后只剩字形（逆向结论见资料卷「The project icon in the window title」一节）。
 - **第二行**：平时仍显示选中对象的名字，进度只看图标位置的环；鼠标悬停在标题区时，第二行换成活动文字。完成后的结果文字也是悬停时才显示，这一点与 Xcode 对非 scheme 活动的处理相同。
 - **字体、颜色、间距**：一并照 Xcode 27。标题 13 pt 粗体，第二行 11 pt 次要色；窗口不在前台时两行都用三级色；文字列用 plusDarker / plusLighter 混合。
 
@@ -152,3 +152,4 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-03 | 标题项做成两个，各管一种样式，不让一个标题项在运行时切换 | `TitleToolbarItem` 带不带活动在初始化时定，布局与宽度测量都按它分支，运行时切换要改这些，还会碰到防止长标题把按钮挤进溢出菜单的那几项设置。两个实例由工具栏按样式换上，绑定两边都接。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 那一节改为两种样式可切换；设置页自带说明，不写使用指南；没有新术语 |
 | 2026-11-04 | Xcode 26 样式下切换引擎的按钮改放进活动胶囊左侧，按钮本身换成自绘的 scheme 选择器加导航 popover，由 [`draft-xcode-style-runtime-source-picker`](draft-xcode-style-runtime-source-picker.md) 决定 | 用户看过后指出 Xcode 26 的 scheme 选择器就在活动胶囊里；那份提案逆向了选择器与弹出列表，本提案「切换引擎的弹出按钮排在胶囊右边」那句不再成立 |
 | 2026-11-04 | Activity Style 加第四项 Classic：工具栏回到加活动显示之前的样子，不显示进度 | 用户要能用回原来的工具栏；与来源选择器一起在 [`draft-xcode-style-runtime-source-picker`](draft-xcode-style-runtime-source-picker.md) 里做 |
+| 2026-11-04 | 没有选中镜像时，标题图标从 App 图标的图片改为 App 自己的符号 `runtimeviewer`，照其他字形画成 `systemBlue` 单色 | 用户要求不用 App 图标的图片，改画一个 App 自己的 SF Symbol；这样标题里的图标都是同一种单色字形。符号照 App 图标的镜片圆环加放大镜自绘，三档小号母版（Ultralight / Regular / Black）可插值，尺寸与线粗取系统 `circle` 与 `magnifyingglass.circle` 的实测值，模板写法照 Private Symbols 的夹具；放在 App 的 `Assets.xcassets`，由 `RuntimeViewerSymbols.runtimeViewer` 取用。文档：`Resources/AGENTS.md` 记下它与 App 图标要一起改 |

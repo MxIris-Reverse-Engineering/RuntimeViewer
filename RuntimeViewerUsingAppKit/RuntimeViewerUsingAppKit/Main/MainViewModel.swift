@@ -187,9 +187,12 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     /// The title's icon: the kind of the image the title names, as one glyph in one colour, as
     /// Xcode 27 draws its project icon — brown for a bundle, after Xcode's package icon, blue
-    /// otherwise — and the app's own icon while no image is open.
+    /// otherwise — and while no image is open the app's own symbol, in blue too, rather than a
+    /// picture of the app icon among the glyphs.
     private static func toolbarIcon(for imageNode: RuntimeImageNode?) -> NSImage? {
-        guard let imageNode else { return NSApp.applicationIconImage }
+        guard let imageNode else {
+            return TitleDocumentIcon.image(symbol: SFSymbols(name: RuntimeViewerSymbols.runtimeViewer).nsImage, color: .systemBlue)
+        }
         let symbol = imageNode.icon
         let color: NSColor = symbol === RuntimeImageNode.bundleIcon ? .systemBrown : .systemBlue
         return TitleDocumentIcon.image(symbol: symbol, color: color)
