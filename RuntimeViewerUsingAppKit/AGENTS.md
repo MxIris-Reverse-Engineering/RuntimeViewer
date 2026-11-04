@@ -628,15 +628,20 @@ macOS 27, Xcode 26's before it): Xcode 26's capsule in the middle of the toolbar
 its Activity View), or Xcode 27's ring in place of the title's icon (`TitleToolbarItem(showsActivity:)`
 with `TitleActivityIndicatorView`), which puts the runtime source picker in the middle instead. The
 picker is Xcode's scheme picker: in Xcode 26's style it sits at the capsule's leading edge, in Xcode 27's
-it is the middle item. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` and
+it is the middle item. A third style, Classic, is the toolbar from before RuntimeViewer followed Xcode
+(Automatic never picks it): no activity in the toolbar, nothing centered, and the runtime source as the
+old `NSPopUpButton` before the trailing buttons, whose menu `RuntimeSourceMenuAdapter`
+(RuntimeViewerApplication) fills from the same `RuntimeSourcePickerContent` as the popover and reports
+with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` and
 `/Volumes/RE/Xcode/27.2-27B52/README.md`; background:
 `Documentations/Evolutions/draft-xcode-activity-progress.md` and
 `Documentations/Evolutions/draft-xcode-style-runtime-source-picker.md`.
 
 - **The toolbar's items depend on the style**, so they come from `MainToolbarController`'s
   `defaultItemIdentifiers` alone, and `apply(activityStyle:)` changes over an open window by setting
-  `NSToolbar.itemIdentifiers`. Each style has its own title item (`.Main.title`, `.Main.activityTitle`);
-  `MainWindowController` feeds both titles and both activity displays, the hidden one without animation.
+  `NSToolbar.itemIdentifiers`. Each style has its own title item (`.Main.title`, which Classic shares
+  with Xcode 26's style, and `.Main.activityTitle`); `MainWindowController` feeds both titles and both
+  activity displays, the hidden ones without animation.
 
 - Each kind of work is one run at a time, worked out once per engine by
   `RuntimeEngineActivityReporter` (in `RuntimeEngineBackgroundWork`); each window picks what to show and

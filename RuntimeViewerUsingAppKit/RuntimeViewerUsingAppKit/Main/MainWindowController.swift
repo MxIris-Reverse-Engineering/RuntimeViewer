@@ -44,6 +44,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
     /// The runtime source pickers' list: the popover either picker opens.
     private let runtimeSourcePopoverAdapter = RuntimeSourcePopoverAdapter()
 
+    /// The classic toolbar's runtime source pop-up, filled from the same list.
+    private lazy var runtimeSourceMenuAdapter = RuntimeSourceMenuAdapter(popUpButton: toolbarController.switchSourcePopUpItem.popUpButton)
+
     private let increaseFontSizeRelay = PublishRelay<Void>()
 
     private let decreaseFontSizeRelay = PublishRelay<Void>()
@@ -92,7 +95,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 toolbarController.navigationItem.forwardHistoryMenu.rx.itemSelected(NavigationHistoryItem.self).asSignal()
             ).map(\.item.index),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
-            switchSource: runtimeSourcePopoverAdapter.sourceSelected,
+            switchSource: Signal.merge(runtimeSourcePopoverAdapter.sourceSelected, runtimeSourceMenuAdapter.sourceSelected),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.click.asSignal(),
             increaseFontSize: increaseFontSizeRelay.asSignal(),
             decreaseFontSize: decreaseFontSizeRelay.asSignal(),
@@ -109,7 +112,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
             tabClosed: tabBarAccessoryController.tabClosedRelay.asSignal(),
             newTabClicked: tabBarAccessoryController.newTabClicked,
-            dependencyCacheSelected: runtimeSourcePopoverAdapter.dependencyCacheSelected
+            dependencyCacheSelected: Signal.merge(runtimeSourcePopoverAdapter.dependencyCacheSelected, runtimeSourceMenuAdapter.dependencyCacheSelected)
         )
         let output = viewModel.transform(input)
 
@@ -157,11 +160,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.activity.driveOnNext { [weak self] state in
             guard let self else { return }
-            // Both displays take every state, the one off screen without animating, so a change of
-            // style shows the activity where it stands.
-            let showsActivityCapsule = toolbarController.showsActivityCapsule
-            toolbarController.activityItem.activityView.apply(state, animated: showsActivityCapsule)
-            toolbarController.activityTitleItem.applyActivity(state, animated: !showsActivityCapsule)
+            // Both displays take every state, the ones off screen without animating, so a change of
+            // style shows the activity where it stands. The classic toolbar shows neither.
+            let activityStyle = toolbarController.activityStyle
+            toolbarController.activityItem.activityView.apply(state, animated: activityStyle == .capsule)
+            toolbarController.activityTitleItem.applyActivity(state, animated: activityStyle == .windowTitle)
         }
         .disposed(by: rx.disposeBag)
 
@@ -258,6 +261,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         output.runtimeSourcePickerContent.driveOnNext { [weak self] content in
             guard let self else { return }
             runtimeSourcePopoverAdapter.content = content
+            runtimeSourceMenuAdapter.content = content
         }
         .disposed(by: rx.disposeBag)
 
@@ -271,12 +275,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             .disposed(by: rx.disposeBag)
         }
 
-        runtimeSourcePopoverAdapter.openFileRequested.emitOnNext {
+        Signal.merge(runtimeSourcePopoverAdapter.openFileRequested, runtimeSourceMenuAdapter.openFileRequested).emitOnNext {
             NSDocumentController.shared.openDocument(nil)
         }
         .disposed(by: rx.disposeBag)
 
-        runtimeSourcePopoverAdapter.dependencyCacheSettingsRequested.emitOnNext {
+        Signal.merge(runtimeSourcePopoverAdapter.dependencyCacheSettingsRequested, runtimeSourceMenuAdapter.dependencyCacheSettingsRequested).emitOnNext {
             NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
         }
         .disposed(by: rx.disposeBag)

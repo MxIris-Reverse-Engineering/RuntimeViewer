@@ -9,11 +9,13 @@ struct SettingsToolbarActivityStyleTests {
     func chosenStyleResolvesToItself() {
         #expect(Settings.ToolbarActivityStyle.capsule.resolved == .capsule)
         #expect(Settings.ToolbarActivityStyle.windowTitle.resolved == .windowTitle)
+        #expect(Settings.ToolbarActivityStyle.classic.resolved == .classic)
     }
 
-    @Test("automatic stands for one of the two styles")
-    func automaticResolvesToAStyle() {
-        #expect(Settings.ToolbarActivityStyle.automatic.resolved != .automatic)
+    @Test("automatic stands for one of Xcode's two styles, never the classic toolbar")
+    func automaticResolvesToAnXcodeStyle() {
+        let resolved = Settings.ToolbarActivityStyle.automatic.resolved
+        #expect(resolved == .capsule || resolved == .windowTitle)
     }
 
     @Test("a stored style reads back as itself", arguments: Settings.ToolbarActivityStyle.allCases)
@@ -27,6 +29,6 @@ struct SettingsToolbarActivityStyleTests {
 
     @Test("the names written to the settings file stay the same")
     func storedNamesAreStable() {
-        #expect(Settings.ToolbarActivityStyle.allCases.map(\.rawValue) == ["automatic", "capsule", "windowTitle"])
+        #expect(Settings.ToolbarActivityStyle.allCases.map(\.rawValue) == ["automatic", "capsule", "windowTitle", "classic"])
     }
 }

@@ -14,16 +14,19 @@ extension Settings {
     }
 
     /// Where the toolbar shows the progress of the engine's background work, after the Xcode
-    /// that shows it there.
+    /// that shows it there — or the toolbar from before it followed Xcode.
     public enum ToolbarActivityStyle: String, Codable, CaseIterable, Sendable {
         /// The style of the Xcode for this system: ``windowTitle`` from macOS 27, ``capsule``
-        /// before it.
+        /// before it. Never ``classic``.
         case automatic
         /// Xcode 26's Activity View: a capsule in the middle of the toolbar.
         case capsule
         /// Xcode 27's window title: a progress ring in place of the title's icon, with the
         /// runtime source picker in the middle of the toolbar.
         case windowTitle
+        /// The toolbar RuntimeViewer had before it followed Xcode: no progress in it — the Report
+        /// navigator shows it — and the runtime source as a pop-up menu before the trailing buttons.
+        case classic
 
         /// The style this one stands for on this system: itself, unless it is ``automatic``.
         /// Never ``automatic``.
@@ -40,6 +43,7 @@ extension Settings {
             case .automatic: "Automatic"
             case .capsule: "Xcode 26"
             case .windowTitle: "Xcode 27"
+            case .classic: "Classic"
             }
         }
     }

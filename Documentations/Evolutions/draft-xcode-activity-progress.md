@@ -151,3 +151,4 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-03 | 两种样式做成设置（General › Toolbar › Activity Style），默认 Automatic 按系统 | 用户要求，因为有人偏好 Xcode 26 的样式。每个系统都能选，标题区的进度环只用到 macOS 14 起的 API；改了当场作用于已打开的窗口，用 macOS 15 起可写的 `NSToolbar.itemIdentifiers` 换项 |
 | 2026-11-03 | 标题项做成两个，各管一种样式，不让一个标题项在运行时切换 | `TitleToolbarItem` 带不带活动在初始化时定，布局与宽度测量都按它分支，运行时切换要改这些，还会碰到防止长标题把按钮挤进溢出菜单的那几项设置。两个实例由工具栏按样式换上，绑定两边都接。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 那一节改为两种样式可切换；设置页自带说明，不写使用指南；没有新术语 |
 | 2026-11-04 | Xcode 26 样式下切换引擎的按钮改放进活动胶囊左侧，按钮本身换成自绘的 scheme 选择器加导航 popover，由 [`draft-xcode-style-runtime-source-picker`](draft-xcode-style-runtime-source-picker.md) 决定 | 用户看过后指出 Xcode 26 的 scheme 选择器就在活动胶囊里；那份提案逆向了选择器与弹出列表，本提案「切换引擎的弹出按钮排在胶囊右边」那句不再成立 |
+| 2026-11-04 | Activity Style 加第四项 Classic：工具栏回到加活动显示之前的样子，不显示进度 | 用户要能用回原来的工具栏；与来源选择器一起在 [`draft-xcode-style-runtime-source-picker`](draft-xcode-style-runtime-source-picker.md) 里做 |

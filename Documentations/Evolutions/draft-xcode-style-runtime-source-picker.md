@@ -36,9 +36,11 @@
    - Xcode 26 的样式：胶囊左侧放选择器，宽度规则、悬停展开、文字右对齐都照 Xcode。点在选择器上弹列表，点在胶囊别处照旧打开 Report 导航。工具栏右侧不再有独立的选择器。
    - Xcode 27 的样式：正中那一项的视图换成选择器，最小、最大宽度照 `IDESchemePickerToolbarView`。
    - 两种样式各用一个选择器实例，与两个标题项的做法相同。两个都绑同一份状态，点哪个就从哪个弹出。
+   - 第三种：设置里 Activity Style 的 **Classic**，即工具栏跟 Xcode 之前的样子。工具栏不显示进度，只在 Report 导航里看；来源切换是原来的系统弹出按钮，放在右侧按钮组前面。菜单照原样：按主机分节、带 20 点图标、当前项选中，断开时顶上一行灰的；末尾是 Open File… 与 Dependency Cache 子菜单。菜单由 `RuntimeSourceMenuAdapter` 从同一份 `RuntimeSourcePickerContent` 生成，发出的信号与 popover 适配器相同。Automatic 不会选到它。
 4. **代码放在哪**：
    - `RuntimeViewerUI`：`RuntimeSourcePicker`；Xcode 27 样式的正中项视图 `RuntimeSourcePickerToolbarView`；列表的行 `RuntimeSourcePopoverCellView`；`ToolbarActivityView(showsSourcePicker:)` 管胶囊里的选择器与它的宽度规则。
-   - `RuntimeViewerApplication`：列表内容 `RuntimeSourcePickerContent` 与弹出列表的 `RuntimeSourcePopoverAdapter`。
+   - `RuntimeViewerApplication`：列表内容 `RuntimeSourcePickerContent`、弹出列表的 `RuntimeSourcePopoverAdapter`，以及 Classic 样式下填弹出按钮菜单的 `RuntimeSourceMenuAdapter`。
+   - `RuntimeViewerSettings`：`Settings.ToolbarActivityStyle` 的 `classic`。
    - App：`MainViewModel` 输出 `runtimeSourcePickerContent`，`MainToolbarController.runtimeSourcePickers` 交出两个选择器，`MainWindowController` 绑定它们并接上适配器。原来只为弹出菜单服务的 `RuntimeSource+.swift` 删掉。
 
 ### 落地步骤
@@ -54,6 +56,7 @@
    - 改写 `RuntimeViewerUsingAppKit/AGENTS.md` 的「The Toolbar's Activity Display」一节。
    - 在 [`draft-xcode-activity-progress`](draft-xcode-activity-progress.md) 的决策日志记一行：Xcode 26 样式下选择器的位置改由本提案决定。
    - 用 Debug workspace 完整构建 App，跑各包测试。
+6. **Classic 样式**（已完成）：用户看过后加的一项。`Settings.ToolbarActivityStyle.classic` 与设置页说明，`MainToolbarController` 的第三套排列与弹出按钮项，`RuntimeSourceMenuAdapter` 与它的测试；App 用 Tuist workspace 构建。
 
 ### 没有询问就采用的假设
 
@@ -91,3 +94,4 @@
 | 2026-11-04 | 文档：`RuntimeViewerUsingAppKit/AGENTS.md` 那一节改名为「The Toolbar's Activity Display and Runtime Source Picker」并补上选择器与列表，根 `AGENTS.md` 的依赖下限改为 AppKitPlus 0.19.0，术语表新增「来源选择器」；离线模式使用指南、设置页 Offline Files 的说明和几处代码注释里的「引擎菜单」改为来源选择器的列表；不另写使用指南与实现说明 | 选择器没有调用方要遵守的契约；宽度规则写在 `ToolbarActivityView` 的文档注释里、由测试守着，逆向规格在资料卷，不必另写一份 |
 | 2026-11-04 | 实现完成，待用户看过后收尾 | 验证都在 Ultra（macOS 27.2，Xcode 27.2）上跑。`RuntimeViewerPackages` 从空构建目录编译通过；全量 780 个测试中 4 个失败：两个是测试里拿 CGFloat 跟整数算式比较的写法问题（已改），`FindCrossReferenceTests` 的 Call Hierarchy 满载超时是 `next` 上已有的，`ViewModelBaseTests` 的 100 毫秒计时满载时抖动；相关的 10 组单独重跑，80 个全部通过。App 用 Debug workspace（Debug-arm64e，不签名）编译通过，`RuntimeViewerCommandLine` 编译通过，各处锁文件没被改写。没做界面验证：两种样式下的样子、悬停展开的动画、弹出列表的位置与过滤，留给用户目视 |
 | 2026-11-04 | 推翻前面「图标一律缩进图标框」那一条：Xcode 27 样式下设备图标照 Xcode 画成符号自身大小（标题字号、medium、large 档，合并进 `DeviceGlyph` 给的配色），应用与文件图标仍是 18×18；胶囊里不变。选择器的图标改成 `RuntimeSourcePicker.Icon`（`.image` / `.symbol`），`DeviceGlyph` 新增不补方的 `symbolImage(…)`，视图模型另给选择器一份图标 | 用户看过后嫌正中的图标太小。原因是设备图标先补成正方形再缩进 18 点，Mac Studio 那样的宽图标只剩约 18×10；Xcode 给符号图标原尺寸（DVTKit `-[DVTPathComponentCell _iconSize]`，判断用私有的 `-[NSImage _isSymbolImage]`），所以由调用方声明哪个是符号，不去探测。AppKit 的 `withSymbolConfiguration(_:)` 会整个替换配置，照 Xcode 的 `iconApplyingSymbolConfiguration:` 先 `applying(_:)` 合并再设，否则蓝色屏幕没了 |
+| 2026-11-04 | 设置里的 Activity Style 加第四项 Classic：工具栏回到跟 Xcode 之前的样子，不显示进度，来源切换用回系统弹出按钮与原来的菜单。菜单由新的 `RuntimeSourceMenuAdapter` 从 `RuntimeSourcePickerContent` 生成，不把删掉的旧代码搬回来 | 用户要能用回最原始的样式，确认的范围是整个工具栏回到原样，而不只是换回弹出按钮。菜单与 popover 共用一份内容和同一组信号，`MainWindowController` 只多合并几路信号。与原菜单有一处不同：Open File… 与 Dependency Cache 原先挂在 Offline Files 一节末尾，没有离线文件时不出现；现在总在菜单最后、前面隔一条分隔线，与 popover 的底部一致。Automatic 仍只在 Xcode 26/27 之间选。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 与术语表补上 Classic，设置页的说明改写 |
