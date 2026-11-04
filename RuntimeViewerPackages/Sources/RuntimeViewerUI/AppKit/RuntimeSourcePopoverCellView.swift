@@ -84,12 +84,13 @@ public final class RuntimeSourcePopoverCellView: TableCellView {
         titleField.attributedStringValue
     }
 
-    /// The frames of the checkmark's, the icon's and the title's boxes, after layout.
-    var checkmarkFrame: NSRect { checkmarkView.frame }
+    /// The checkmark's, the icon's and the title's boxes after layout, as the constraints place them:
+    /// their alignment rectangles. A symbol image and a label draw a little outside theirs.
+    var checkmarkFrame: NSRect { checkmarkView.alignmentRect(forFrame: checkmarkView.frame) }
 
-    var iconFrame: NSRect { iconView.frame }
+    var iconFrame: NSRect { iconView.alignmentRect(forFrame: iconView.frame) }
 
-    var titleFrame: NSRect { titleField.frame }
+    var titleFrame: NSRect { titleField.alignmentRect(forFrame: titleField.frame) }
 
     public override func setup() {
         super.setup()

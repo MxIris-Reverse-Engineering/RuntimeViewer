@@ -107,9 +107,10 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     /// The activity capsule in the middle of the toolbar in Xcode 26's style — its Activity View,
-    /// which Xcode 27 replaced with the window title's progress ring.
+    /// which Xcode 27 replaced with the window title's progress ring. It holds the runtime source
+    /// picker at its leading edge, where Xcode 26 holds its scheme picker.
     final class ActivityToolbarItem: NSToolbarItem {
-        let activityView = ToolbarActivityView()
+        let activityView = ToolbarActivityView(showsSourcePicker: true)
 
         init() {
             super.init(itemIdentifier: .Main.activity)
@@ -136,14 +137,20 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     /// but the next answer.
     private var hasProvidedItems = false
 
-    class SwitchSourceToolbarItem: NSToolbarItem {
-        let popUpButton = NSPopUpButton()
+    /// The runtime source picker in the middle of the toolbar in Xcode 27's style, where Xcode 27 puts
+    /// its scheme and run destination; Xcode 26's style shows the picker in the activity capsule
+    /// instead. Xcode wraps the item in a one-item group, which changes nothing that shows.
+    final class SwitchSourceToolbarItem: NSToolbarItem {
+        let pickerView = RuntimeSourcePickerToolbarView()
+
+        var picker: RuntimeSourcePicker {
+            pickerView.picker
+        }
 
         init() {
             super.init(itemIdentifier: .Main.switchSource)
-            view = popUpButton
-            popUpButton.controlSize = .large
-            popUpButton.bezelStyle = .toolbar
+            view = pickerView
+            visibilityPriority = .high
         }
     }
 
@@ -200,6 +207,12 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let activityItem = ActivityToolbarItem()
 
+    /// The runtime source pickers of both styles — the one in the middle of the toolbar and the one in
+    /// the activity capsule — which show the same source and open the same list.
+    var runtimeSourcePickers: [RuntimeSourcePicker] {
+        [switchSourceItem.picker] + (activityItem.activityView.sourcePicker.map { [$0] } ?? [])
+    }
+
     init(delegate: Delegate) {
         self.delegate = delegate
         self.toolbar = NSToolbar()
@@ -239,11 +252,11 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    /// The centered item stands between two flexible spaces: the capsule, with the runtime source
-    /// picker leading the buttons after it, or in Xcode 27's style the picker itself.
+    /// The centered item stands between two flexible spaces: the capsule, which holds the runtime
+    /// source picker as Xcode 26's holds its scheme picker, or in Xcode 27's style the picker itself.
     private var defaultItemIdentifiers: [NSToolbarItem.Identifier] {
         let middleIdentifiers: [NSToolbarItem.Identifier] = showsActivityCapsule
-            ? [.Main.title, .flexibleSpace, .Main.activity, .flexibleSpace, .Main.switchSource]
+            ? [.Main.title, .flexibleSpace, .Main.activity, .flexibleSpace]
             : [.Main.activityTitle, .flexibleSpace, .Main.switchSource, .flexibleSpace]
         return [
             .toggleSidebar,

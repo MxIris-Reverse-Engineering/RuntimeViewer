@@ -41,11 +41,8 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
-    private let dependencyCacheSelectedRelay = PublishRelay<RuntimeOfflineFile.DependencyCache?>()
-
-    /// The engine the engine menu has selected, so a menu command that is not
-    /// an engine can put the selection back.
-    private var selectedEngineIdentifierInMenu: String?
+    /// The runtime source pickers' list: the popover either picker opens.
+    private let runtimeSourcePopoverAdapter = RuntimeSourcePopoverAdapter()
 
     private let increaseFontSizeRelay = PublishRelay<Void>()
 
@@ -95,7 +92,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 toolbarController.navigationItem.forwardHistoryMenu.rx.itemSelected(NavigationHistoryItem.self).asSignal()
             ).map(\.item.index),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
-            switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
+            switchSource: runtimeSourcePopoverAdapter.sourceSelected,
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.click.asSignal(),
             increaseFontSize: increaseFontSizeRelay.asSignal(),
             decreaseFontSize: decreaseFontSizeRelay.asSignal(),
@@ -112,7 +109,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
             tabClosed: tabBarAccessoryController.tabClosedRelay.asSignal(),
             newTabClicked: tabBarAccessoryController.newTabClicked,
-            dependencyCacheSelected: dependencyCacheSelectedRelay.asSignal()
+            dependencyCacheSelected: runtimeSourcePopoverAdapter.dependencyCacheSelected
         )
         let output = viewModel.transform(input)
 
@@ -249,58 +246,40 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         }
         .disposed(by: rx.disposeBag)
 
-        // Bind menu content + selection from sections and switchSourceState
-        Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState, output.dependencyCacheChoices)
-            .driveOnNext { [weak self] sections, state, dependencyCacheChoices in
-                guard let self else { return }
-                let popUpButton = toolbarController.switchSourceItem.popUpButton
-                selectedEngineIdentifierInMenu = state.selectedEngineIdentifier
+        output.switchSourceState.driveOnNext { [weak self] state in
+            guard let self else { return }
+            for picker in toolbarController.runtimeSourcePickers {
+                picker.title = state.title
+                picker.image = state.image
+            }
+        }
+        .disposed(by: rx.disposeBag)
 
-                popUpButton.menu?.removeAllItems()
+        output.runtimeSourcePickerContent.driveOnNext { [weak self] content in
+            guard let self else { return }
+            runtimeSourcePopoverAdapter.content = content
+        }
+        .disposed(by: rx.disposeBag)
 
-                // Build menu from sections
-                for (sectionIndex, section) in sections.enumerated() {
-                    if sectionIndex > 0 {
-                        popUpButton.menu?.addItem(.separator())
-                    }
-                    let header = NSMenuItem.sectionHeader(title: section.hostName)
-                    popUpButton.menu?.addItem(header)
+        // The press opens the list from the picker pressed. Like a menu, the list is the view
+        // layer's; what is chosen in it goes back to the view model as input.
+        for picker in toolbarController.runtimeSourcePickers {
+            picker.rx.controlEvent.asSignal().emitOnNext { [weak self, weak picker] in
+                guard let self, let picker else { return }
+                runtimeSourcePopoverAdapter.showPopover(from: picker)
+            }
+            .disposed(by: rx.disposeBag)
+        }
 
-                    for engine in section.engines {
-                        let menuItem = NSMenuItem(title: engine.source.description, action: nil, keyEquivalent: "")
-                        menuItem.image = self.viewModel?.resolveEngineIcon(for: engine)
-                        menuItem.image?.size = NSSize(width: 20, height: 20)
-                        menuItem.representedObject = AnyHashable(engine.engineID)
-                        popUpButton.menu?.addItem(menuItem)
-                    }
+        runtimeSourcePopoverAdapter.openFileRequested.emitOnNext {
+            NSDocumentController.shared.openDocument(nil)
+        }
+        .disposed(by: rx.disposeBag)
 
-                    if section.hostID == RuntimeHostInfo.offlineFiles.hostID {
-                        for menuItem in makeOfflineFileMenuItems(dependencyCacheChoices: dependencyCacheChoices) {
-                            popUpButton.menu?.addItem(menuItem)
-                        }
-                    }
-                }
-
-                // Update selection based on connection state
-                if state.isDisconnected {
-                    // Insert a disabled placeholder for the disconnected engine
-                    let placeholder = NSMenuItem(title: state.title, action: nil, keyEquivalent: "")
-                    placeholder.image = state.image
-                    placeholder.image?.size = NSSize(width: 20, height: 20)
-                    placeholder.isEnabled = false
-                    popUpButton.menu?.insertItem(placeholder, at: 0)
-                    popUpButton.menu?.insertItem(.separator(), at: 1)
-                    popUpButton.select(placeholder)
-                } else {
-                    // Select the matching engine
-                    let matchingIndex = popUpButton.menu?.items.firstIndex {
-                        ($0.representedObject as? AnyHashable) == AnyHashable(state.selectedEngineIdentifier)
-                    }
-                    if let matchingIndex {
-                        popUpButton.selectItem(at: matchingIndex)
-                    }
-                }
-            }.disposed(by: rx.disposeBag)
+        runtimeSourcePopoverAdapter.dependencyCacheSettingsRequested.emitOnNext {
+            NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+        }
+        .disposed(by: rx.disposeBag)
 
         viewModel.errorRelay
             .asSignal()
@@ -457,55 +436,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             return super.responds(to: aSelector)
         }
     }
-
-    // MARK: - Offline files in the engine menu
-
-    /// The Offline Files section's last entries: Open File…, and the
-    /// Dependency Cache submenu when the window is on an offline engine that
-    /// reads one.
-    private func makeOfflineFileMenuItems(dependencyCacheChoices: [OfflineFileController.DependencyCacheChoice]) -> [NSMenuItem] {
-        var menuItems: [NSMenuItem] = []
-        let openFileItem = NSMenuItem(title: "Open File…", action: #selector(openOfflineFileFromEngineMenu(_:)), keyEquivalent: "")
-        openFileItem.target = self
-        menuItems.append(openFileItem)
-
-        guard !dependencyCacheChoices.isEmpty else { return menuItems }
-        let submenu = NSMenu(title: "Dependency Cache")
-        for choice in dependencyCacheChoices {
-            let choiceItem = NSMenuItem(title: choice.title, action: #selector(dependencyCacheChosenFromEngineMenu(_:)), keyEquivalent: "")
-            choiceItem.target = self
-            choiceItem.state = choice.isCurrent ? .on : .off
-            choiceItem.representedObject = DependencyCacheMenuChoice(dependencyCache: choice.dependencyCache)
-            submenu.addItem(choiceItem)
-        }
-        submenu.addItem(.separator())
-        submenu.addItem(NSMenuItem(title: "Manage in Settings…", action: #selector(AppDelegate.showSettings(_:)), keyEquivalent: ""))
-        let dependencyCacheItem = NSMenuItem(title: "Dependency Cache", action: nil, keyEquivalent: "")
-        dependencyCacheItem.submenu = submenu
-        menuItems.append(dependencyCacheItem)
-        return menuItems
-    }
-
-    @objc private func openOfflineFileFromEngineMenu(_ sender: NSMenuItem) {
-        restoreEngineMenuSelection()
-        NSDocumentController.shared.openDocument(sender)
-    }
-
-    @objc private func dependencyCacheChosenFromEngineMenu(_ sender: NSMenuItem) {
-        restoreEngineMenuSelection()
-        guard let choice = sender.representedObject as? DependencyCacheMenuChoice else { return }
-        dependencyCacheSelectedRelay.accept(choice.dependencyCache)
-    }
-
-    /// A command in the engine menu is no engine to show: the pop-up goes
-    /// back to the engine it had.
-    private func restoreEngineMenuSelection() {
-        let popUpButton = toolbarController.switchSourceItem.popUpButton
-        guard let selectedEngineIdentifierInMenu,
-              let index = popUpButton.menu?.items.firstIndex(where: { ($0.representedObject as? AnyHashable) == AnyHashable(selectedEngineIdentifierInMenu) })
-        else { return }
-        popUpButton.selectItem(at: index)
-    }
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}
@@ -513,15 +443,5 @@ extension MainWindowController: MainToolbarController.Delegate {}
 extension NSUserInterfaceItemIdentifier {
     static func makeIdentifier<T>(of type: T.Type) -> Self {
         "com.JH.RuntimeViewer.\(T.self).identifier"
-    }
-}
-
-/// The represented object of a Dependency Cache menu item: an optional does
-/// not survive the trip through `Any`.
-private final class DependencyCacheMenuChoice {
-    let dependencyCache: RuntimeOfflineFile.DependencyCache?
-
-    init(dependencyCache: RuntimeOfflineFile.DependencyCache?) {
-        self.dependencyCache = dependencyCache
     }
 }
