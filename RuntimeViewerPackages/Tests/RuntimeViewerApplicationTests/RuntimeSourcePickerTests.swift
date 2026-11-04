@@ -69,7 +69,8 @@ struct RuntimeSourcePickerTests {
         #expect(barelyShortLayout.fades == false)
         #expect(shortLayout.fades)
         #expect(wholeLayout.fades == false)
-        #expect(shortLayout.rect.minX == 6 + 18 + 4)
+        let titleOffset: CGFloat = 6 + 18 + 4
+        #expect(shortLayout.rect.minX == titleOffset)
     }
 
     @Test("No title is drawn once the component has 3 points or less for it")
@@ -157,9 +158,10 @@ struct RuntimeSourcePickerTests {
         #expect(heightConstraint.constant == 28)
         #expect([maximumWidthConstraint, minimumWidthConstraint, heightConstraint].allSatisfy { $0.priority.rawValue == 999 })
 
-        toolbarView.frame = NSRect(x: 0, y: 0, width: expectedMaximumWidth, height: 28)
+        // A whole number of points, which AppKit keeps as is: a fractional width is rounded to the pixel.
+        toolbarView.frame = NSRect(x: 0, y: 0, width: 200, height: 28)
         toolbarView.layoutSubtreeIfNeeded()
-        #expect(toolbarView.picker.frame == NSRect(x: 4, y: 0, width: expectedMaximumWidth - 8, height: 28))
+        #expect(toolbarView.picker.frame == NSRect(x: 4, y: 0, width: 192, height: 28))
     }
 
     @Test("A short title still leaves the toolbar view its 87-point minimum as its maximum")
