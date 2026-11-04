@@ -1,29 +1,21 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
+// as the bridge under test is.
+#if arch(arm64) && canImport(SourceEditor)
+
 import AppKit
 import QuartzCore
 import SourceEditor
+@testable import RuntimeViewerSourceEditorBridge
 
-/// Loads the bridge bundle the way the app does and puts its editor view somewhere a layout
-/// pass will actually run.
+/// Builds the bridge the way the content pane does and puts its editor view somewhere a layout
+/// pass will actually run. The test bundle links the bridge framework and the reconstructed
+/// frameworks directly, so nothing here launches the app.
 ///
 /// Driving the bridge rather than a bare `SourceEditorView` is the point: the ordering under
 /// test lives in `SourceEditorBridge.setSource`, and a test that built its own view would pass
 /// no matter what that method does.
 @MainActor
 final class SourceEditorTestHarness {
-    /// Whether Xcode's private frameworks were there to link against at load time.
-    ///
-    /// The test bundle weak-links them (`-weak_framework`), so a machine without Xcode loads
-    /// the bundle fine and simply finds the classes missing — which is a skip, not a failure.
-    /// Reading a class by its mangled Swift name avoids touching a `SourceEditor` type from
-    /// this property, which would fault the missing symbols in before the check could run.
-    ///
-    /// `nonisolated` because `.enabled(if:)` evaluates its condition in a `Sendable` closure,
-    /// which cannot reach a main-actor-isolated property. Asking the Objective-C runtime for a
-    /// class is threadsafe, so there is nothing to isolate.
-    nonisolated static var isFrameworkLoaded: Bool {
-        NSClassFromString("_TtC12SourceEditor16SourceEditorView") != nil
-    }
-
     private let bridge: SourceEditorBridging
     private let window: NSWindow
 
@@ -38,22 +30,7 @@ final class SourceEditorTestHarness {
     let scrollView: NSScrollView
 
     init() throws {
-        let bundleURL = Bundle(for: BundleAnchor.self)
-            .bundleURL
-            .deletingLastPathComponent()
-            .appending(path: "RuntimeViewerSourceEditorBridge.bundle")
-
-        guard let bundle = Bundle(url: bundleURL) else {
-            throw HarnessError.bridgeBundleMissing(bundleURL)
-        }
-        guard bundle.load() else {
-            throw HarnessError.bridgeBundleFailedToLoad(bundleURL)
-        }
-        guard let principalClass = bundle.principalClass as? NSObject.Type,
-              let bridge = principalClass.init() as? SourceEditorBridging
-        else {
-            throw HarnessError.bridgePrincipalClassUnusable(bundle.principalClass)
-        }
+        let bridge = SourceEditorBridge()
         self.bridge = bridge
 
         guard let editorView = bridge.editorView as? SourceEditorView else {
@@ -75,7 +52,7 @@ final class SourceEditorTestHarness {
         window.orderFront(nil)
     }
 
-    /// How many lines the text last passed to `setSource(_:commentDecorations:)` has.
+    /// How many lines the text last passed to `setSource` has.
     private(set) var lineCount = 0
 
     /// Narrows or widens the window the editor fills: how far a line runs before the editor
@@ -102,15 +79,34 @@ final class SourceEditorTestHarness {
         )
     }
 
-    func setSource(_ source: String, commentDecorations: SourceEditorBridgingCommentDecorations? = nil) {
+    /// - Parameters:
+    ///   - semanticRanges: UTF-16 ranges into `source`, as the content pane passes the runs the
+    ///     interface generator recorded.
+    ///   - semanticNodeTypeNames: parallel to `semanticRanges`: the node type each run is retyped to.
+    func setSource(
+        _ source: String,
+        semanticRanges: [NSRange] = [],
+        semanticNodeTypeNames: [String] = [],
+        commentDecorations: SourceEditorBridgingCommentDecorations? = nil
+    ) {
         lineCount = source.components(separatedBy: "\n").count
         bridge.setSource(
             source,
             languageIdentifier: "swift",
-            semanticRanges: [],
-            semanticNodeTypeNames: [],
+            semanticRanges: semanticRanges.map { NSValue(range: $0) },
+            semanticNodeTypeNames: semanticNodeTypeNames,
             commentDecorations: commentDecorations
         )
+    }
+
+    /// The tokens the language service reports on `line`, each with the columns it covers. This
+    /// is the enumeration the editor colours a line from.
+    func syntaxTokens(onLine line: Int) -> [(type: SourceEditorTokenType, columns: Range<Int>)] {
+        var tokens: [(type: SourceEditorTokenType, columns: Range<Int>)] = []
+        editorView.dataSource.languageService.enumerateSyntaxTokensOnLine(line) { tokenType, columns in
+            tokens.append((tokenType, columns))
+        }
+        return tokens
     }
 
     /// Forces the layout the crash happens inside.
@@ -128,25 +124,16 @@ final class SourceEditorTestHarness {
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
     }
 
-    private final class BundleAnchor {}
-
     enum HarnessError: Error, CustomStringConvertible {
-        case bridgeBundleMissing(URL)
-        case bridgeBundleFailedToLoad(URL)
-        case bridgePrincipalClassUnusable(AnyClass?)
         case editorViewUnexpectedType(Any.Type)
 
         var description: String {
             switch self {
-            case .bridgeBundleMissing(let url):
-                "no bridge bundle beside the test bundle at \(url.path)"
-            case .bridgeBundleFailedToLoad(let url):
-                "the bridge bundle at \(url.path) failed to load"
-            case .bridgePrincipalClassUnusable(let principalClass):
-                "the bridge bundle's principal class \(principalClass.map(String.init(describing:)) ?? "<nil>") is not a SourceEditorBridging"
             case .editorViewUnexpectedType(let type):
                 "the bridge handed back a \(type) rather than a SourceEditorView"
             }
         }
     }
 }
+
+#endif

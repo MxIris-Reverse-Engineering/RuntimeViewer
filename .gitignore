@@ -48,6 +48,10 @@ RuntimeViewer-iOS-Simulator.zip
 # `tuist install` caches each local package's evaluated manifest in its .build directory; the other
 # four packages already ignore theirs.
 /RuntimeViewerPrecompiledLibraries/swift-syntax/.build/
+# FetchSourceEditorScript.sh downloads the reconstructed SourceEditor frameworks here, and works in a
+# scratch directory beside them; only PinnedRelease.txt is committed.
+/RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks/
+/RuntimeViewerPrecompiledLibraries/SourceEditor/.Fetch.*/
 /Tuist/.build/
 # `./TuistScript.sh install` starts it from RuntimeViewer-Debug.xcworkspace's lock file every time;
 # the native lock files are the ones to commit.

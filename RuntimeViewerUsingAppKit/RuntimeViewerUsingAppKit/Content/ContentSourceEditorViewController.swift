@@ -4,10 +4,12 @@ import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerSettings
+import RuntimeViewerSourceEditorBridge
 import RuntimeViewerUI
 import Semantic
 
-/// Content pane backed by Xcode's editor instead of `NSTextView`.
+/// Content pane backed by SourceEditor, the reconstruction of Xcode's editor that official builds
+/// carry, instead of `NSTextView`.
 ///
 /// It binds the same `ContentTextViewModel` as `ContentTextViewController`, so the two are
 /// interchangeable and the fallback costs nothing beyond choosing a different class.
@@ -21,11 +23,11 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
     override var shouldDisplayCommonLoading: Bool { true }
 
-    @Dependency(\.sourceEditorLoader) private var sourceEditorLoader
+    @Dependency(\.sourceEditorBridgeProvider) private var sourceEditorBridgeProvider
 
     @Dependency(\.settings) private var settings
 
-    private lazy var bridge: SourceEditorBridging? = sourceEditorLoader.makeBridge()
+    private lazy var bridge: SourceEditorBridging? = sourceEditorBridgeProvider.makeBridge()
 
     /// The string currently handed to the editor. ⌘-click reports a UTF-16 range into this
     /// very string, so the generator's `.link` attribute can be read straight off it.
@@ -183,7 +185,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         guard let bridge else { return }
         let isDark = view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let baseThemeName = isDark ? "Default (Dark)" : "Default (Light)"
-        guard let baseTheme = sourceEditorLoader.builtInThemeDictionary(named: baseThemeName) else { return }
+        guard let baseTheme = sourceEditorBridgeProvider.builtInThemeDictionary(named: baseThemeName) else { return }
 
         let dictionary = currentTheme.flatMap {
             SourceEditorThemeConversion.themeDictionary(from: $0, basedOn: baseTheme)

@@ -1,4 +1,5 @@
 import AppKit
+import RuntimeViewerSourceEditorBridge
 
 /// How the SourceEditor pane draws comment tags: capsules with a faint fill and a hairline in a
 /// hue per kind of fact, the label in a shade of the same hue, and the value in a quietened text

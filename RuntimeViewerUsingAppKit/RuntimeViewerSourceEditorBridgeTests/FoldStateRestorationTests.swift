@@ -1,5 +1,10 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
+// as the bridge under test is.
+#if arch(arm64) && canImport(SourceEditor)
+
 import AppKit
 import SourceEditor
+@testable import RuntimeViewerSourceEditorBridge
 import Testing
 
 /// Covers the half of `SourceEditorBridge.setSource` that puts folds back.
@@ -51,7 +56,7 @@ struct FoldStateRestorationTests {
 
     private static let foldedLineRange = 1 ..< 5
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func foldsComeBackWhenTheSameSourceReturns() throws {
         let harness = try SourceEditorTestHarness()
 
@@ -81,7 +86,7 @@ struct FoldStateRestorationTests {
 
     /// An interface that was never folded must come back unfolded, rather than inheriting
     /// whatever the previous occupant of its cache slot had.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func anUnfoldedSourceStaysUnfolded() throws {
         let harness = try SourceEditorTestHarness()
 
@@ -104,7 +109,7 @@ struct FoldStateRestorationTests {
     ///
     /// Without a content-derived key this is exactly the case that would slip past the
     /// framework's `documentLength` check.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aDifferentSourceOfTheSameLengthGetsItsOwnState() throws {
         try #require(Self.widgetLookalike.count == Self.widgetSource.count)
 
@@ -125,3 +130,5 @@ struct FoldStateRestorationTests {
         )
     }
 }
+
+#endif

@@ -1,4 +1,5 @@
 import RuntimeViewerSettings
+import RuntimeViewerSourceEditorBridge
 
 extension SourceEditorBridging {
     /// Hands every Settings › Editor display toggle over in one call.

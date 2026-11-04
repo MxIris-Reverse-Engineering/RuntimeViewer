@@ -72,11 +72,13 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 extension Settings.Editor {
     /// Whether the content pane draws comments as tags, and so asks the
-    /// engine what each comment is: only Xcode's editor does, and only while
-    /// Comment Tags is on. Asked for even when the editor then fails to load —
-    /// the text is the same, only the structure goes unused.
+    /// engine what each comment is: only SourceEditor does, in a build that
+    /// can run it, and only while Comment Tags is on. Asked for even when the
+    /// editor then fails to load — the text is the same, only the structure
+    /// goes unused.
     var drawsCommentTags: Bool {
-        usesSourceEditor && showsCommentTags
+        guard case .available = SourceEditorFrameworks.availability else { return false }
+        return showsCommentTags
     }
 }
 #endif

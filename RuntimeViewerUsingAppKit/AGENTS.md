@@ -7,8 +7,8 @@ ViewModels, cell ViewModels and routes in `RuntimeViewerPackages/Sources/Runtime
 the views in `RuntimeViewerPackages/Sources/RuntimeViewerUI/` (`RuntimeViewerPackages/Sources/AGENTS.md`
 points here). The other targets in this directory — the Catalyst shells and plugin, the XPC services, the
 command-line tool target — follow these rules only where they have UI code, and the SourceEditor bridge
-and the `Content/SourceEditor…` files are governed by `Stubs/AGENTS.md`, which must be read before
-touching them. The repository-wide rules — naming, access control, singletons, RxSwift subscription
+framework (`RuntimeViewerSourceEditorBridge/`) and the `Content/SourceEditor…` files are governed by
+`RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md`, which must be read before touching them. The repository-wide rules — naming, access control, singletons, RxSwift subscription
 style, closure capture — are in the root `AGENTS.md`.
 
 This file sits here rather than in the target folder because every target folder below this directory

@@ -1,10 +1,12 @@
 #include "../Version.xcconfig"
 
-// The tests link the SourceEditor frameworks weakly, against the stubs in Stubs/, and find the real
-// ones at run time in the SharedFrameworks directory of the Xcode they were built with.
-FRAMEWORK_SEARCH_PATHS = $(SRCROOT)/../Stubs
-LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks $(DEVELOPER_DIR)/../SharedFrameworks
-OTHER_LDFLAGS = -weak_framework SourceEditor -weak_framework SourceModelSupport -weak_framework SourceModel
+// The tests link the bridge framework (`@testable import`) and the reconstructed frameworks directly,
+// from where FetchSourceEditorScript.sh puts them, without running inside the app. Without that
+// download, and on x86_64, the bridge and the tests compile out (#if arch(arm64) &&
+// canImport(SourceEditor)), and the bundle has nothing to run. The search path is set for the arm64
+// slices only, as the bridge's Shared.xcconfig explains.
+FRAMEWORK_SEARCH_PATHS[arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
 
 CODE_SIGN_STYLE = Manual
 DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)

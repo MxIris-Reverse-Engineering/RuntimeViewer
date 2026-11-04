@@ -1,3 +1,8 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
+// official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
+// interfaces in the built-in text view and links none of them.
+#if arch(arm64) && canImport(SourceEditor)
+
 import Foundation
 
 /// Remembers what was folded in each interface the editor has shown, so that leaving a class
@@ -83,3 +88,5 @@ struct FoldStateCache {
         keysInUseOrder.append(key)
     }
 }
+
+#endif

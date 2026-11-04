@@ -1,8 +1,8 @@
 # 愿景：自建代码视图引擎
 
 - **状态**: Active
-- **最后更新**: 2026-11-01
-- **相关提案**: [0009](../Evolutions/0009-content-editor-engine-selection.md)、[0010](../Evolutions/0010-interface-snapshot-export.md)、[0064](../Evolutions/0064-source-editor-comment-annotations.md)
+- **最后更新**: 2026-11-03
+- **相关提案**: [0009](../Evolutions/0009-content-editor-engine-selection.md)、[0010](../Evolutions/0010-interface-snapshot-export.md)、[0064](../Evolutions/0064-source-editor-comment-annotations.md)、[draft-reconstructed-source-editor](../Evolutions/draft-reconstructed-source-editor.md)
 
 愿景**不做具体决定**，它划定一个方向的边界与取舍原则，让后续每个提案不必重新论证一遍。
 
@@ -41,6 +41,8 @@ minimap、选区与高亮、查找、⌘-click 跳转、主题、导出成图片
 | 5MB 装载 | **18.4 ms** | 384.1 ms |
 
 （数据出自 0009 的 spike 实测。）
+
+> **2026-11-03 起**：官方构建改为直接链接照 Xcode 26.6 重建的 SourceEditor（[draft-reconstructed-source-editor](../Evolutions/draft-reconstructed-source-editor.md)），不再从用户安装的 Xcode 加载，也不再有开关；桥接层改成 App 直接链接、直接调用的 framework，手写的 `Stubs/` 已删除；拿不到重建版的外部构建只用 `NSTextView`。上表右列、下面第 1 条和「一、抄架构，不抄 API」里关于 `Stubs/` 的说法写的是此前的状态；这一变化对本愿景方向的影响，还没有重新评估。
 
 代价具体到三条：
 
@@ -204,6 +206,7 @@ var columnShiftEffects: [Int: [Int: (shift: …, padding: CGFloat, text: NSAttri
 | [0009](../Evolutions/0009-content-editor-engine-selection.md) | Implemented | 参照物与退路：接入 SourceEditor，并沉淀了对它架构与行为的实测认识 |
 | [0010](../Evolutions/0010-interface-snapshot-export.md) | Withdrawn（2026-10-26，从未开始实现） | 导出成图片。方案 A（自己排版）本身就是「不依赖框架」这一方向的第一次实践；要做时重新立项 |
 | [0064](../Evolutions/0064-source-editor-comment-annotations.md) | Implemented | 注释标签与可折叠的字段偏移树、枚举布局，先在 SourceEditor 面板上做。注释结构由生成侧直供（取舍三），画法全是叠加效果、文本不改（取舍六）；生成器标出的注释表与引擎无关，自建引擎以后直接复用 |
+| [draft-reconstructed-source-editor](../Evolutions/draft-reconstructed-source-editor.md) | In Progress | 「不能公开发布」「需要装 Xcode」两条限制的另一种解法：官方构建直接链接照 Xcode 26.6 重建的框架、随 App 带上，不再从 Xcode 加载；外部构建只用 `NSTextView` |
 
 ---
 

@@ -81,34 +81,16 @@ extension Settings {
     @Codable
     @MemberInit
     public struct Editor: Sendable {
-        /// Renders interfaces with Xcode's own source editor instead of the built-in
-        /// `NSTextView`, which brings code folding, sticky headers, a minimap, scope guides
-        /// and ⌘-hover underlining, and scrolls large interfaces without dropping frames.
-        ///
-        /// Off by default because it needs Xcode installed. Whenever it cannot be loaded the
-        /// app falls back to `NSTextView` silently — this switch expresses a preference, not
-        /// a guarantee.
-        @Default(false)
-        public var usesSourceEditor: Bool
+        // Which editor shows interfaces is not a setting: a build that carries the reconstructed
+        // SourceEditor frameworks uses them, and any other build uses the built-in `NSTextView`
+        // (see `SourceEditorFrameworks`). The `usesSourceEditor` switch and the
+        // `sourceEditorXcodePath` choice that existed while the frameworks were loaded from Xcode
+        // are gone; a settings file that still has them loads fine, because decoding skips keys
+        // it does not know.
 
-        /// Which Xcode the editor is loaded from, as the path of an `Xcode.app`. Empty means
-        /// automatic, which is the search order ``XcodeSourceEditorLocator/candidateDirectories()``
-        /// applies on its own.
-        ///
-        /// Stored as a path rather than as a version, because a version has to be resolved back
-        /// to a bundle anyway and several copies of one version can be installed at once. An
-        /// entry that no longer exists — a beta the user deleted — falls back to automatic
-        /// rather than turning the editor off; the frameworks are what matter, not the choice.
-        ///
-        /// **Takes effect at the next launch.** A process can only `dlopen` one version of the
-        /// frameworks, so the Settings pane offers to relaunch rather than pretending otherwise.
-        @Default("")
-        public var sourceEditorXcodePath: String
-
-        /// Everything below drives Xcode's editor only. The built-in `NSTextView` has no
-        /// gutter, ribbon or minimap to turn on, so with `usesSourceEditor` off these are
-        /// stored but not read — which is why the Settings pane disables them rather than
-        /// hiding them.
+        /// Everything here drives SourceEditor only. The built-in `NSTextView` has no gutter,
+        /// ribbon or minimap to turn on, so in a build without SourceEditor these are stored but
+        /// not read — which is why the Settings pane disables them rather than hiding them.
         @Default(true)
         public var showsLineNumbers: Bool
 

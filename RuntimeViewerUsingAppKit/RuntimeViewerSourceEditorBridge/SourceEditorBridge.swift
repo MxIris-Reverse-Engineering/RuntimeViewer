@@ -1,10 +1,16 @@
-import AppKit
-import SourceEditor
-import SourceModelSupport
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
+// official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
+// interfaces in the built-in text view and links none of them.
+#if arch(arm64) && canImport(SourceEditor)
 
-/// The only code in the project that references `SourceEditor`. It lives in a loadable
-/// bundle so that the app itself carries no link-time dependency on Xcode's frameworks —
-/// see `SourceEditorBridging` for why that separation is load-bearing.
+import AppKit
+internal import SourceEditor
+internal import SourceModelSupport
+
+/// Drives the reconstructed `SourceEditor` frameworks, which this framework links directly. The app
+/// gets one from `SourceEditorBridgeFactory` and talks to it through `SourceEditorBridging`, both of
+/// which compile in every build; this class exists only where the frameworks are available (the
+/// condition at the top).
 @objc(RuntimeViewerSourceEditorBridge)
 final class SourceEditorBridge: NSObject, SourceEditorBridging {
     private let sourceEditorView = SourceEditorView(frame: .zero)
@@ -62,6 +68,15 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     weak var minimapLandmarkIconProvider: SourceEditorBridgingMinimapLandmarkIconProvider?
 
     var editorView: NSView { sourceEditorView }
+
+    /// One of the `.xccolortheme` files the framework ships in its own resources, such as
+    /// `Default (Dark)`.
+    static func builtInThemeDictionary(named themeName: String) -> NSDictionary? {
+        guard let themeURL = Bundle(for: SourceEditorView.self).url(forResource: themeName, withExtension: "xccolortheme") else {
+            return nil
+        }
+        return NSDictionary(contentsOf: themeURL)
+    }
 
     override init() {
         super.init()
@@ -550,3 +565,5 @@ extension SourceEditorBridge: MinimapLandmarkIconProvider {
         }
     }
 }
+
+#endif

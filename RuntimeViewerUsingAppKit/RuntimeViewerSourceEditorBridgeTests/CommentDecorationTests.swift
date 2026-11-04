@@ -1,6 +1,11 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
+// as the bridge under test is.
+#if arch(arm64) && canImport(SourceEditor)
+
 import AppKit
 import QuartzCore
 import SourceEditor
+@testable import RuntimeViewerSourceEditorBridge
 import Testing
 
 /// Covers `CommentDecorationController` through the bridge: what a decorated comment renders as,
@@ -37,7 +42,7 @@ struct CommentDecorationTests {
 
     // MARK: - Rendering
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aDecoratedCommentRendersWithoutItsMarkerOrColon() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: false))
@@ -47,7 +52,7 @@ struct CommentDecorationTests {
         #expect(rendered.hasPrefix("    Field offset 0x8"), "rendered as \(rendered.debugDescription)")
     }
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func tagsAndTrianglesAreDrawnBehindTheText() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: false))
@@ -61,7 +66,7 @@ struct CommentDecorationTests {
     /// The editor wraps a line longer than its width, and a tag wraps with it. Each row the tag
     /// lands on gets a shape of its own, one row high: a single shape around all of them covered
     /// the whole line.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aTagTheEditorWrapsIsDrawnRowByRow() throws {
         let harness = try SourceEditorTestHarness()
         harness.resize(width: 320)
@@ -81,7 +86,7 @@ struct CommentDecorationTests {
     /// Over a triangle the pointer is the arrow, not the I-beam: a click there toggles a row. The
     /// editor adds its I-beam and then what each provider answers, all on itself, so the arrows
     /// are read back where it adds them.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func theTrianglesTakeTheArrowPointer() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: false))
@@ -103,7 +108,7 @@ struct CommentDecorationTests {
 
     /// A click turns the triangle a quarter, animated, and leaves a round press behind it that
     /// fades away.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func clickingATriangleTurnsItAndShowsThePress() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: true))
@@ -126,7 +131,7 @@ struct CommentDecorationTests {
     /// comment again — as plain text and as rich text alike. A raised line copies as it was
     /// printed too: its carrier is a space of the source. Written to a pasteboard of the test's
     /// own, never the one the user copies with.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded), arguments: [false, true], [false, true])
+    @Test(arguments: [false, true], [false, true])
     func aCopyIsTheSourceAsPrinted(startingCollapsed: Bool, raisingTagLines: Bool) throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: startingCollapsed))
@@ -153,7 +158,7 @@ struct CommentDecorationTests {
 
     // MARK: - Appearance
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aLabelTakesTheColourOfItsTagsStyle() throws {
         let harness = try SourceEditorTestHarness()
         harness.applyCommentTagAppearance(TestCommentTagAppearance(labelColors: [.address: .systemBlue, .layout: .systemPurple]))
@@ -166,7 +171,7 @@ struct CommentDecorationTests {
         #expect(Self.foregroundColor(of: "Type Layout", in: layoutLine) == .systemPurple)
     }
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aTagIsOutlinedOnlyWhileTheStrokeHasAWidth() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
@@ -183,7 +188,7 @@ struct CommentDecorationTests {
 
     /// The padding is a column shift baked into the tables, so a new one has to rebuild them
     /// for the text that is already shown.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aChangeOfPaddingWidensTheTagsOfTheTextShown() throws {
         let harness = try SourceEditorTestHarness()
         harness.applyCommentTagAppearance(TestCommentTagAppearance(horizontalPadding: 4))
@@ -205,7 +210,7 @@ struct CommentDecorationTests {
 
     /// A line that holds tags is taller than its text by the spacing, and the lines below it move
     /// down by as much; a code line keeps its height. Without spacing the lines are as they were.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aLineThatHoldsTagsIsTallerByTheSpacing() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
@@ -238,7 +243,7 @@ struct CommentDecorationTests {
     /// The spacing goes around a tag, not into it: on a raised line a tag is as tall and as wide
     /// as on a plain one, sits in the middle of its line, and keeps the spacing from the tag on
     /// the next line.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aTagOnARaisedLineKeepsTheSizeAndPlaceOfItsText() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations())
@@ -270,7 +275,7 @@ struct CommentDecorationTests {
     /// (0x1D069C) places it at the middle of `layoutFrameForFirstFragmentOfVisibleLine(_:includeLineSpacing:)`
     /// (closure at 0x1D7B28) — and the raise is carried at the start of the line and splits evenly
     /// around the text, so the middle of the row is still the middle of the text.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aRaisedLineKeepsItsNumberLevelWithItsText() throws {
         let harness = try SourceEditorTestHarness()
         harness.showLineNumbers()
@@ -297,7 +302,7 @@ struct CommentDecorationTests {
 
     // MARK: - Collapsing
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func rowsThatStartCollapsedAreCollapsedTheFirstTime() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: true))
@@ -314,7 +319,7 @@ struct CommentDecorationTests {
         #expect(harness.foldingController.foldedRange(enclosing: SourceEditorPosition(line: 3, col: 0)) == Self.originFoldRange)
     }
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func clickingATriangleTogglesItsRow() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: true))
@@ -336,7 +341,7 @@ struct CommentDecorationTests {
     // MARK: - Changing Source
 
     /// A source that comes back gets the folds it was left with, not its defaults again.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aSourceShownAgainKeepsItsFoldsRatherThanItsDefaults() throws {
         let harness = try SourceEditorTestHarness()
         let decorations = Self.fieldLayoutDecorations(startsCollapsed: true)
@@ -354,7 +359,7 @@ struct CommentDecorationTests {
         #expect(harness.foldingController.foldedRange(enclosing: SourceEditorPosition(line: 3, col: 0)) == Self.originFoldRange)
     }
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aPlainSourceShowsNoDecorations() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.fieldLayoutSource, commentDecorations: Self.fieldLayoutDecorations(startsCollapsed: true))
@@ -372,7 +377,7 @@ struct CommentDecorationTests {
 
     /// A text with thousands of rows that start collapsed — the size of a large framework's
     /// interface — must not turn showing it into a pause.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func collapsingThousandsOfRowsStaysQuick() throws {
         let rowCount = 2000
         var source = "struct Probe {\n"
@@ -699,3 +704,5 @@ private enum CursorRectRecorder {
         return added
     }
 }
+
+#endif

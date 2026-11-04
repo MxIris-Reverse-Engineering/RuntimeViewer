@@ -15,6 +15,11 @@
 #   ./RunScript.sh --local-deps             # build against local dependency checkouts
 #   ./RunScript.sh --help
 #
+# Before building it runs FetchSourceEditorScript.sh, which downloads the
+# reconstructed SourceEditor frameworks official builds carry. A machine that
+# cannot download them (no gh, no login, no access to the private release)
+# still builds: the app then shows interfaces in the built-in text view.
+#
 # All distribution-related flags (notarize, appcast, GitHub upload, commit)
 # are intentionally absent — see ArchiveScript.sh for those.
 set -euo pipefail
@@ -94,7 +99,7 @@ while [[ $# -gt 0 ]]; do
         --no-launch) LAUNCH=false; shift;;
         --dry-run) DRY_RUN=true; shift;;
         --local-deps) LOCAL_DEPENDENCIES=true; shift;;
-        -h|--help) sed -n '2,19p' "$0" | sed 's/^# *//'; exit 0;;
+        -h|--help) sed -n '2,24p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -206,6 +211,12 @@ log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
 # step of their own: all are target dependencies of the app, built in the same
 # configuration and copied in by its embed phases. See "Embedded non-macOS
 # products" in AGENTS.md.
+
+# Official builds carry the reconstructed SourceEditor frameworks; the app's
+# Embed SourceEditor Frameworks phase copies in whatever this put in place.
+if ! run "$PROJECT_DIR/FetchSourceEditorScript.sh"; then
+    log "Building without SourceEditor: the app will show interfaces in the built-in text view"
+fi
 
 log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \

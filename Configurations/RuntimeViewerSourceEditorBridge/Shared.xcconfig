@@ -1,22 +1,43 @@
 #include "../Version.xcconfig"
 
-// The only code that links Xcode's private SourceEditor frameworks. It builds against the stub
-// interfaces in Stubs/ (Stubs/README.md) and leaves the frameworks' symbols undefined, to be bound
-// when the app loads the bundle.
-FRAMEWORK_SEARCH_PATHS = $(SRCROOT)/../Stubs
-OTHER_LDFLAGS = -undefined dynamic_lookup
-OTHER_SWIFT_FLAGS = -Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel
+// The framework the app links for SourceEditor. Where FetchSourceEditorScript.sh has put the
+// reconstructed SourceEditor frameworks, it compiles the bridge against them and links them; anywhere
+// else the bridge compiles out (#if arch(arm64) && canImport(SourceEditor)) and the framework carries
+// only the protocols and a factory that reports SourceEditor unavailable.
+//
+// Only this target has them on its search path, and it imports them with `internal import`, so the
+// app, which links this framework, never loads their modules: SourceEditor's headers and
+// UIFoundation's both declare AppKit's private NSScrollViewDelegate, differently, and a module that
+// sees both does not compile.
+//
+// The frameworks have no x86_64 slice, but each has a Clang module map, so an x86_64 compile that can
+// see them satisfies canImport(SourceEditor) and then fails building their modules at the generated
+// -Swift.h headers ("unsupported Swift architecture"). What keeps the Intel slice of a universal build
+// out is the arch(arm64) in every guard: the Copy SourceEditor Frameworks to Products phase puts them
+// in the products directory, which every target searches, so from the second build on an x86_64
+// compile can see them whatever this setting says. The path is still set for the arm64 slices only,
+// so that an x86_64 compile never looks into the download.
+FRAMEWORK_SEARCH_PATHS[arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/Frameworks
+// `internal import` keeps a module's dependencies from its clients only when it is built with library
+// evolution: without it, the app's dependency scan asks for the SourceEditor modules and fails
+// ("Unable to resolve module dependency: 'SourceEditor'").
+BUILD_LIBRARY_FOR_DISTRIBUTION = YES
+
+// The Copy SourceEditor Frameworks to Products phase reads the download, which a build without it
+// does not have and so cannot declare as an input, and writes into the products directory. The app
+// target turns sandboxing off for its own Embed SourceEditor Frameworks phase for the same reason.
+ENABLE_USER_SCRIPT_SANDBOXING = NO
 
 CODE_SIGN_STYLE = Manual
-COMBINE_HIDPI_IMAGES = YES
 DEAD_CODE_STRIPPING = YES
+DEFINES_MODULE = YES
 DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
-ENABLE_HARDENED_RUNTIME = YES
+DYLIB_INSTALL_NAME_BASE = @rpath
 ENABLE_POINTER_AUTHENTICATION = NO
 GENERATE_INFOPLIST_FILE = YES
 INFOPLIST_KEY_NSHumanReadableCopyright =
-INFOPLIST_KEY_NSPrincipalClass = RuntimeViewerSourceEditorBridge
-INSTALL_PATH = $(LOCAL_LIBRARY_DIR)/Bundles
+INSTALL_PATH = $(LOCAL_LIBRARY_DIR)/Frameworks
 MACOSX_DEPLOYMENT_TARGET = 15.0
 ONLY_ACTIVE_ARCH = NO
 PRODUCT_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)
@@ -24,4 +45,3 @@ PRODUCT_NAME = $(TARGET_NAME)
 SKIP_INSTALL = YES
 SWIFT_EMIT_LOC_STRINGS = YES
 SWIFT_VERSION = 5.0
-WRAPPER_EXTENSION = bundle

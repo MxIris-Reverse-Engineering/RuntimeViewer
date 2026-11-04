@@ -1,6 +1,11 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
+// official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
+// interfaces in the built-in text view and links none of them.
+#if arch(arm64) && canImport(SourceEditor)
+
 import AppKit
-import SourceModel
-import SourceModelSupport
+internal import SourceModel
+internal import SourceModelSupport
 
 /// Retypes the parser's nodes from what a lexical scan could work out to what RuntimeViewer
 /// actually knows.
@@ -30,7 +35,8 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
             var ids: [String: Int16] = [:]
             let count = Int(SMSourceNodeTypes.nodeTypesCount())
             for identifier in 0 ..< count {
-                guard let name = SMSourceNodeTypes.nodeTypeName(forId: Int16(identifier)) else { continue }
+                // Declared `+ (id)nodeTypeNameForId:` in the framework's header, so it arrives as `Any`.
+                guard let name = SMSourceNodeTypes.nodeTypeName(forId: Int16(identifier)) as? String else { continue }
                 ids[name] = Int16(identifier)
             }
             return ids
@@ -46,7 +52,7 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
     /// - Parameters:
     ///   - semanticRanges: UTF-16 ranges into the displayed text.
     ///   - nodeTypeNames: parallel to `semanticRanges`. A name the registry does not know is
-    ///     dropped rather than guessed at, so an unfamiliar Xcode simply colors those runs the
+    ///     dropped rather than guessed at, so an unfamiliar framework release simply colors those runs the
     ///     way it would have anyway.
     func load(semanticRanges: [NSRange], nodeTypeNames: [String]) {
         guard semanticRanges.count == nodeTypeNames.count else {
@@ -79,28 +85,14 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
     // render — the default evidently does work the parse depends on. Requirements that come
     // with a default are the framework's business unless there is a reason to take them over.
 
-    /// Xcode 26's signature. The framework runs `StandardIdentifierNodeTypeAdjuster` after this
-    /// one either way, so there is nothing to report back.
+    /// The requirement as the reconstructed framework (Xcode 26.6's) declares it. The framework
+    /// runs `StandardIdentifierNodeTypeAdjuster` after this one either way, so there is nothing
+    /// to report back.
     func adjustNodeType(for item: SMSourceModelItem) {
-        _ = retypeNode(item)
-    }
-
-    /// Xcode 27's signature, whose `Bool` means "handled — do not run the standard identifier
-    /// fallback on this node". Answering `true` only for nodes actually retyped keeps every
-    /// other node on the path it took under Xcode 26.
-    ///
-    /// Both are declared because the protocol requirement changed shape between the two; see
-    /// the stub interface for why one bundle can satisfy both at once.
-    func adjustNodeType(for item: SMSourceModelItem) -> Bool {
-        retypeNode(item)
-    }
-
-    /// - Returns: whether the node's type was replaced.
-    private func retypeNode(_ item: SMSourceModelItem) -> Bool {
-        let itemRange = item.range
-        guard itemRange.length > 0, let identifier = nodeTypeIdentifier(fullyContaining: itemRange) else { return false }
+        // `- (NSRange)range` is a method in the framework's header, not a property.
+        let itemRange = item.range()
+        guard itemRange.length > 0, let identifier = nodeTypeIdentifier(fullyContaining: itemRange) else { return }
         item.setNodeType(identifier)
-        return true
     }
 
     /// A node is retyped only when one semantic run contains **all** of it.
@@ -136,8 +128,8 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
     /// say opposite things: everything under `xcode.syntax.identifier` names a *use* of
     /// something, while `xcode.syntax.declaration.*` names the place it is introduced. The app
     /// side assigns the first to every `.name` semantic and the second to every `.declaration`
-    /// one, so the prefix separates references from declarations without the bundle linking
-    /// anything from the app — which it must not do, for the reasons in `SourceEditorBridging`.
+    /// one, so the prefix separates references from declarations without reaching for the app's
+    /// semantic types.
     private static func isReferenceNodeTypeName(_ name: String) -> Bool {
         name.hasPrefix("xcode.syntax.identifier")
     }
@@ -205,3 +197,5 @@ private final class TypeReferenceRangeRegistry {
         return false
     }
 }
+
+#endif

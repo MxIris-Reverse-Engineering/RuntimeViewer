@@ -1,5 +1,6 @@
 import AppKit
 import RuntimeViewerApplication
+import RuntimeViewerSourceEditorBridge
 import UIFoundation
 
 /// The icon that leads a minimap hover label — the `[M]` in `[M] -copyWithZone:` — drawn by
