@@ -76,7 +76,7 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 
 - **中间不再是胶囊**，改放切换引擎的弹出按钮（Runtime Source），设为 `centeredItemIdentifiers`，两侧各一个 flexible space，宽度取它自己的。Xcode 27 在这个位置放 scheme 与运行目标，RV 里与之对应的就是切换引擎。右侧那排按钮的位置不变。
 - **标题区**：`TitleToolbarItem` 在文字左边加一个 18×18 的图标槽，进度环画在这里；完成序列结束时，环变回图标。
-- **图标**：取标题所指的镜像，用它的种类符号（framework、bundle、dylib），照 Xcode 工程图标的画法画成一个单色字形：13 pt、medium、large，按对齐矩形居中在 18×18 的槽里、对齐到像素，整个字形填一种颜色——bundle 用 `systemBrown`（与 Xcode 的 Swift package 图标同色），其余用 `systemBlue`（与 Xcode 的工程图标同色）。没有选中镜像时，用 App 自己的符号 `runtimeviewer`（照 Xcode 工程图标的样子：同一个圆角方框，里面换成 App 图标的放大镜；自绘的 SF Symbol），同样画成 `systemBlue` 的单色字形。收拢出的强调色方块是进度形状本身，它淡出、字形淡入，最后只剩字形（逆向结论见资料卷「The project icon in the window title」一节）。
+- **图标**：取标题所指的镜像，用它的种类符号（framework、bundle、dylib），照 Xcode 工程图标的画法画成一个单色字形：13 pt、medium、large，按对齐矩形居中在 18×18 的槽里、对齐到像素，比槽大的字形照 Xcode 超出槽位、不裁（Xcode 的工程图标约 19.5 pt），整个字形填一种颜色——bundle 用 `systemBrown`（与 Xcode 的 Swift package 图标同色），其余用 `systemBlue`（与 Xcode 的工程图标同色）。没有选中镜像时，用 App 自己的符号 `runtimeviewer`（照 Xcode 工程图标的样子：同一个圆角方框，里面换成 App 图标的放大镜；自绘的 SF Symbol），同样画成 `systemBlue` 的单色字形。收拢出的强调色方块是进度形状本身，它淡出、字形淡入，最后只剩字形（逆向结论见资料卷「The project icon in the window title」一节）。
 - **第二行**：平时仍显示选中对象的名字，进度只看图标位置的环；鼠标悬停在标题区时，第二行换成活动文字。完成后的结果文字也是悬停时才显示，这一点与 Xcode 对非 scheme 活动的处理相同。
 - **字体、颜色、间距**：一并照 Xcode 27。标题 13 pt 粗体，第二行 11 pt 次要色；窗口不在前台时两行都用三级色；文字列用 plusDarker / plusLighter 混合。
 
@@ -154,3 +154,4 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-04 | Activity Style 加第四项 Classic：工具栏回到加活动显示之前的样子，不显示进度 | 用户要能用回原来的工具栏；与来源选择器一起在 [`draft-xcode-style-runtime-source-picker`](draft-xcode-style-runtime-source-picker.md) 里做 |
 | 2026-11-04 | 没有选中镜像时，标题图标从 App 图标的图片改为 App 自己的符号 `runtimeviewer`，照其他字形画成 `systemBlue` 单色 | 用户要求不用 App 图标的图片，改画一个 App 自己的 SF Symbol；这样标题里的图标都是同一种单色字形。符号照 App 图标的镜片圆环加放大镜自绘，三档小号母版（Ultralight / Regular / Black）可插值，尺寸与线粗取系统 `circle` 与 `magnifyingglass.circle` 的实测值，模板写法照 Private Symbols 的夹具；放在 App 的 `Assets.xcassets`，由 `RuntimeViewerSymbols.runtimeViewer` 取用。文档：`Resources/AGENTS.md` 记下它与 App 图标要一起改 |
 | 2026-11-04 | `runtimeviewer` 改成学 Xcode 工程图标：外圈从镜片圆环换成 `doc-project` 的圆角方框（两圈轮廓原样取自 XCOrganizer 导出的 Xcode 27 模板），里面是 App 图标的放大镜，居中；`doc-project` 里实心的内衬方块和锤子不要 | 用户看过后要求像 Xcode 那样带方框。Xcode 标题里的工程图标是空心方框加锤子，所以只取外框。左右边距改成对称，好让标题把方框居中；`doc-project` 的右边距比左边宽 |
+| 2026-11-04 | 标题图标不再裁到 18 pt 的槽位：`TitleDocumentIcon` 的图以槽位为中心对称放大到装下整个字形，进度环视图按图标原尺寸居中显示（`contentsGravity` 从 `resizeAspect` 改为 `center`），不再缩放 | 用户看到方框版 App 符号在标题里线条发细。原因：方框在标题配置下约 19.2 pt，18 pt 的画布切掉了外缘，方框线只剩一半粗。从用户的截图量得 Xcode 的工程图标是 39×39 像素（2 倍屏 19.5 pt）、方框线 3 像素，可见 Xcode 让它超出槽位；进度环本来就超出槽位 1 pt，容器层不裁边。回归测试：比槽位宽的字形要整个画出来、且对齐框居中 |

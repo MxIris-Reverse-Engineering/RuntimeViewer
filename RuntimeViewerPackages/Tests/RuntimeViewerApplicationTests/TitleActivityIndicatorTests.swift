@@ -78,20 +78,12 @@ struct TitleActivityIndicatorTests {
     func documentIconIsOneFlatColour() throws {
         let symbol = try #require(NSImage(systemSymbolName: "shippingbox", accessibilityDescription: nil))
         let icon = TitleDocumentIcon.image(symbol: symbol, color: NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
-        let bitmap = try #require(NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: 36, pixelsHigh: 36, bitsPerSample: 8, samplesPerPixel: 4,
-            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-        ))
-        bitmap.size = TitleDocumentIcon.canvasSize
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        icon.draw(in: NSRect(origin: .zero, size: TitleDocumentIcon.canvasSize))
-        NSGraphicsContext.restoreGraphicsState()
+        let bitmap = try Self.bitmap(of: icon, scale: 2)
 
         var opaquePixelCount = 0
         var offColourPixelCount = 0
-        for x in 0..<36 {
-            for y in 0..<36 {
+        for x in 0..<bitmap.pixelsWide {
+            for y in 0..<bitmap.pixelsHigh {
                 guard let colour = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB), colour.alphaComponent > 0.99 else { continue }
                 opaquePixelCount += 1
                 if colour.redComponent < 0.95 || colour.greenComponent > 0.05 || colour.blueComponent > 0.05 {
@@ -101,6 +93,62 @@ struct TitleActivityIndicatorTests {
         }
         #expect(opaquePixelCount > 0)
         #expect(offColourPixelCount == 0)
+    }
+
+    /// Xcode's project frame is wider than the 18-point slot at the title's size and overhangs it.
+    /// An icon the size of the slot cut a frame like it at the slot's edges, which left half of the
+    /// frame's stroke and made the whole glyph look thin.
+    @Test("A glyph larger than the slot overhangs it whole, centred on it, instead of being cut at its edges")
+    func documentIconOverhangsTheSlot() throws {
+        let symbol = try #require(NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: nil))
+        let configuredSymbol = try #require(symbol.withSymbolConfiguration(TitleDocumentIcon.symbolConfiguration))
+        let icon = TitleDocumentIcon.image(symbol: symbol, color: .black)
+
+        let glyphBitmap = try Self.bitmap(of: configuredSymbol, scale: 4)
+        let iconBitmap = try Self.bitmap(of: icon, scale: 4)
+        let glyphInk = try #require(Self.inkBounds(of: glyphBitmap, scale: 4))
+        let iconInk = try #require(Self.inkBounds(of: iconBitmap, scale: 4))
+        let slotWidth = TitleDocumentIcon.slotSize.width
+        #expect(glyphInk.width > slotWidth)
+        #expect(abs(iconInk.width - glyphInk.width) <= 0.5)
+        // The glyph's alignment rectangle sits at the icon's centre, which the title puts on the slot's.
+        let glyphInkFromAlignmentCentre = glyphInk.minX - configuredSymbol.alignmentRect.midX
+        let iconInkFromCentre = iconInk.minX - icon.size.width / 2
+        #expect(abs(iconInkFromCentre - glyphInkFromAlignmentCentre) <= 0.5)
+    }
+
+    /// `image` drawn into a bitmap of its own size at `scale` pixels per point.
+    private static func bitmap(of image: NSImage, scale: CGFloat) throws -> NSBitmapImageRep {
+        let bitmap = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int((image.size.width * scale).rounded(.up)),
+            pixelsHigh: Int((image.size.height * scale).rounded(.up)),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        bitmap.size = image.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        image.draw(in: NSRect(origin: .zero, size: image.size))
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap
+    }
+
+    /// The horizontal extent of the opaque pixels, in points; `nil` with none.
+    private static func inkBounds(of bitmap: NSBitmapImageRep, scale: CGFloat) -> (minX: CGFloat, width: CGFloat, midX: CGFloat)? {
+        var minimumX = Int.max
+        var maximumX = -1
+        for x in 0..<bitmap.pixelsWide {
+            for y in 0..<bitmap.pixelsHigh where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.5 {
+                minimumX = min(minimumX, x)
+                maximumX = max(maximumX, x)
+                break
+            }
+        }
+        guard maximumX >= minimumX else { return nil }
+        let minX = CGFloat(minimumX) / scale
+        let width = CGFloat(maximumX - minimumX + 1) / scale
+        return (minX, width, minX + width / 2)
     }
 
     @Test("While the pointer is over the title the subtitle shows the activity, and its own subtitle again after")

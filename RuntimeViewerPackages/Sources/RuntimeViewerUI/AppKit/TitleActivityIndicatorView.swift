@@ -71,7 +71,8 @@ public final class TitleActivityIndicatorView: NSControl {
     static let maximumShownCount = 99
 
     /// What fills the slot when no run is under way, and what the ring turns into: the document's
-    /// icon.
+    /// icon, drawn at its own size and centred on the slot. One larger than the slot overhangs it, as
+    /// Xcode's project frame does; `TitleDocumentIcon` makes them that way.
     public var icon: NSImage? {
         didSet { needsDisplay = true }
     }
@@ -163,10 +164,11 @@ public final class TitleActivityIndicatorView: NSControl {
         shapeLayer.thickness = Self.thickness
         shapeLayer.squareCornerRadiusPercent = Self.roundedSquareRadiusPercent
 
-        // The icon is laid out 18 by 18, fitted, in the ring's frame.
+        // The icon's slot is 18 by 18 in the ring's frame. The icon draws at its own size, centred
+        // on the slot and not scaled down to it: a glyph larger than the slot overhangs it.
         let iconInset = (Self.ringSize - Self.slotSize) / 2
         iconLayer.frame = ringBounds.insetBy(dx: iconInset, dy: iconInset)
-        iconLayer.contentsGravity = .resizeAspect
+        iconLayer.contentsGravity = .center
 
         ringContainerLayer.addSublayer(trackLayer)
         ringContainerLayer.addSublayer(shapeLayer)
