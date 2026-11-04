@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 3300 2200">
+ <!--RuntimeViewer's own symbol: the app icon's lens ring with the magnifier in it. The ring follows the
+      system `circle` and the magnifier `magnifyingglass.circle` (sizes and stroke widths measured at
+      100 points, small scale, on macOS 27.2); the magnifier's place in the ring is the app icon's
+      (Resources/AppIcon.icon: lens radius 0.41 of the ring, centre 0.115 of it up and left, handle at
+      45 degrees). Each master is one path with the same commands in the same order, so that actool can
+      interpolate the weights between them: the ring (outer, then its hole the other way round), the
+      magnifier as one outline (lens and handle merged, so no fill rule is needed), then the lens's hole.
+      The template's layout is the one Private Symbols writes (its fixture.frame).-->
+ <style>.SFSymbolsPreviewWireframe {fill:none;opacity:1.0;stroke:black;stroke-width:0.5}</style>
+ <g id="Notes">
+  <rect height="2200" id="artboard" style="fill:white;opacity:1" width="3300" x="0" y="0"/>
+  <text id="template-version" style="stroke:none;fill:black;font-family:sans-serif;font-size:13;text-anchor:end;" transform="matrix(1 0 0 1 3036 1933)">Template v.3.0</text>
+  <text id="descriptive-name" style="stroke:none;fill:black;font-family:sans-serif;font-size:13;text-anchor:end;" transform="matrix(1 0 0 1 3036 1969)">Generated from runtimeviewer</text>
+ </g>
+ <g id="Guides">
+  <line id="Baseline-S" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="696" y2="696"/>
+  <line id="Capline-S" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="625.541" y2="625.541"/>
+  <line id="Baseline-M" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="1126" y2="1126"/>
+  <line id="Capline-M" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="1055.541" y2="1055.541"/>
+  <line id="Baseline-L" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="1556" y2="1556"/>
+  <line id="Capline-L" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="1485.541" y2="1485.541"/>
+  <line id="right-margin-Black-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="2982.274" x2="2982.274" y1="600.785" y2="720.121"/>
+  <line id="left-margin-Black-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="2884.524" x2="2884.524" y1="600.785" y2="720.121"/>
+  <line id="right-margin-Regular-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="1496.094" x2="1496.094" y1="600.785" y2="720.121"/>
+  <line id="left-margin-Regular-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="1403.594" x2="1403.594" y1="600.785" y2="720.121"/>
+  <line id="right-margin-Ultralight-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="603.836" x2="603.836" y1="600.785" y2="720.121"/>
+  <line id="left-margin-Ultralight-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="515.586" x2="515.586" y1="600.785" y2="720.121"/>
+ </g>
+ <g id="Symbols">
+  <g id="Black-S" transform="matrix(1 0 0 1 2884.524 696)">
+   <path class="SFSymbolsPreviewWireframe" d="M48.875 -77.355C72.14 -77.355 91 -58.494 91 -35.23C91 -11.965 72.14 6.895 48.875 6.895C25.61 6.895 6.75 -11.965 6.75 -35.23C6.75 -58.494 25.61 -77.355 48.875 -77.355ZM48.875 -63.105C33.48 -63.105 21 -50.624 21 -35.23C21 -19.835 33.48 -7.355 48.875 -7.355C64.27 -7.355 76.75 -19.835 76.75 -35.23C76.75 -50.624 64.27 -63.105 48.875 -63.105ZM58.807 -31.132L66.464 -23.474C68.075 -21.863 68.075 -19.251 66.464 -17.64C64.853 -16.029 62.242 -16.029 60.631 -17.64L52.973 -25.298C45.5 -20.775 35.826 -22.544 30.438 -29.419C25.049 -36.294 25.641 -46.11 31.818 -52.286C37.995 -58.463 47.811 -59.056 54.685 -53.667C61.56 -48.278 63.329 -38.605 58.807 -31.132ZM44.031 -49.095C39.048 -49.095 35.009 -45.056 35.009 -40.074C35.009 -35.092 39.048 -31.053 44.031 -31.053C49.013 -31.053 53.052 -35.092 53.052 -40.074C53.052 -45.056 49.013 -49.095 44.031 -49.095Z"/>
+  </g>
+  <g id="Regular-S" transform="matrix(1 0 0 1 1403.594 696)">
+   <path class="SFSymbolsPreviewWireframe" d="M46.25 -74.73C68.065 -74.73 85.75 -57.045 85.75 -35.23C85.75 -13.414 68.065 4.27 46.25 4.27C24.435 4.27 6.75 -13.414 6.75 -35.23C6.75 -57.045 24.435 -74.73 46.25 -74.73ZM46.25 -67.23C28.577 -67.23 14.25 -52.903 14.25 -35.23C14.25 -17.556 28.577 -3.23 46.25 -3.23C63.923 -3.23 78.25 -17.556 78.25 -35.23C78.25 -52.903 63.923 -67.23 46.25 -67.23ZM55.196 -30.809L66.049 -19.956C67.299 -18.706 67.299 -16.68 66.049 -15.431C64.799 -14.181 62.773 -14.181 61.524 -15.431L50.671 -26.283C43.74 -21.678 34.446 -23.075 29.176 -29.514C23.905 -35.953 24.372 -45.339 30.256 -51.224C36.14 -57.108 45.526 -57.575 51.966 -52.304C58.405 -47.033 59.802 -37.74 55.196 -30.809ZM41.707 -49.567C36.298 -49.567 31.912 -45.182 31.912 -39.772C31.912 -34.362 36.298 -29.977 41.707 -29.977C47.117 -29.977 51.502 -34.362 51.502 -39.772C51.502 -45.182 47.117 -49.567 41.707 -49.567Z"/>
+  </g>
+  <g id="Ultralight-S" transform="matrix(1 0 0 1 515.586 696)">
+   <path class="SFSymbolsPreviewWireframe" d="M44.125 -72.605C64.767 -72.605 81.5 -55.871 81.5 -35.23C81.5 -14.588 64.767 2.145 44.125 2.145C23.483 2.145 6.75 -14.588 6.75 -35.23C6.75 -55.871 23.483 -72.605 44.125 -72.605ZM44.125 -70.355C24.726 -70.355 9 -54.629 9 -35.23C9 -15.83 24.726 -0.105 44.125 -0.105C63.524 -0.105 79.25 -15.83 79.25 -35.23C79.25 -54.629 63.524 -70.355 44.125 -70.355ZM51.429 -29.517L63.684 -17.262C64.123 -16.823 64.123 -16.11 63.684 -15.671C63.244 -15.232 62.532 -15.232 62.093 -15.671L49.838 -27.926C43.596 -22.54 34.212 -23.058 28.601 -29.097C22.989 -35.137 23.162 -44.534 28.991 -50.363C34.821 -56.193 44.217 -56.365 50.257 -50.754C56.297 -45.143 56.814 -35.758 51.429 -29.517ZM39.827 -52.601C32.606 -52.601 26.753 -46.748 26.753 -39.528C26.753 -32.307 32.606 -26.454 39.827 -26.454C47.047 -26.454 52.901 -32.307 52.901 -39.528C52.901 -46.748 47.047 -52.601 39.827 -52.601Z"/>
+  </g>
+ </g>
+</svg>
