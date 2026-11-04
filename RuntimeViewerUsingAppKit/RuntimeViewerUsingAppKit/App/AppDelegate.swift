@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.runtimeConnectionNotificationService) private var runtimeConnectionNotificationService
     @Dependency(\.runtimeDerivedDataController) private var runtimeDerivedDataController
     @Dependency(\.settingsLifecycleController) private var settingsLifecycleController
-    @Dependency(\.sourceEditorLoader) private var sourceEditorLoader
+    @Dependency(\.sourceEditorBridgeProvider) private var sourceEditorBridgeProvider
     @Dependency(\.tabMenuController) private var tabMenuController
     @Dependency(\.updaterService) private var updaterService
     @Dependency(\.simulatorInstallerWindowController) private var simulatorInstallerWindowController
@@ -88,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settingsLifecycleController.loadOnLaunch()
         runtimeConnectionNotificationService.start()
-        sourceEditorLoader.startPrewarmingWhenEnabled()
+        sourceEditorBridgeProvider.startPrewarming()
         appearanceController.start()
         debugMenuController.install()
         tabMenuController.install()

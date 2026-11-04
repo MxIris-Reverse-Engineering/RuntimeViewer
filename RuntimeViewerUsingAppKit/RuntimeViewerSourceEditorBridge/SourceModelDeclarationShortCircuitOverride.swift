@@ -1,3 +1,8 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
+// official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
+// interfaces in the built-in text view and links none of them.
+#if canImport(SourceEditor)
+
 import Foundation
 import ObjectiveC
 
@@ -68,3 +73,5 @@ enum SourceModelDeclarationShortCircuitOverride {
         method_setImplementation(method, imp_implementationWithBlock(replacement))
     }()
 }
+
+#endif

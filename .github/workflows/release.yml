@@ -133,6 +133,15 @@ jobs:
           tar -xf /tmp/Sparkle.tar.xz -C "$RUNNER_TEMP/Sparkle"
           echo "$RUNNER_TEMP/Sparkle/bin" >> $GITHUB_PATH
 
+      - name: Fetch SourceEditor frameworks
+        # Official builds carry the reconstructed SourceEditor frameworks, released in the private
+        # repository Mx-Iris/SourceEditor. The job's own token cannot read that repository, so this
+        # step runs with one that can; ArchiveScript.sh then finds the frameworks in place, and stops
+        # when they are not.
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_EDITOR_RELEASES_TOKEN }}
+        run: ./FetchSourceEditorScript.sh
+
       - name: Run ArchiveScript
         env:
           GH_TOKEN: ${{ github.token }}

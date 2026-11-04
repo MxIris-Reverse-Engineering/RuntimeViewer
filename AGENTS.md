@@ -17,7 +17,7 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 | `RuntimeViewerPackages/Sources/AGENTS.md` | Points the UI code in `RuntimeViewerApplication` and `RuntimeViewerUI` to the file above |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
 | `RuntimeViewerCore/Tests/AGENTS.md` | Keeping Core tests off the user's real derived data |
-| `Stubs/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
+| `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
 | `Configurations/AGENTS.md` | Per-target build settings: the embedded non-macOS products, the jailbroken variant's payload, service names, adding a configuration |
 | `Resources/AGENTS.md` | The app icons |
 
@@ -614,21 +614,29 @@ code or the corpus store's read phase** — it says why each part has the shape 
 
 ## SourceEditor Module
 
-<important if="you are touching the SourceEditor module: RuntimeViewerSourceEditorBridge, Stubs/, SourceEditorLoader, ContentSourceEditorViewController or SourceEditorThemeConversion">
+<important if="you are touching the SourceEditor module: the RuntimeViewerSourceEditorBridge framework, RuntimeViewerSourceEditorBridgeTests, SourceEditorBridgeProvider, SourceEditorFrameworks, FetchSourceEditorScript.sh, the Embed SourceEditor Frameworks phase, ContentSourceEditorViewController or SourceEditorThemeConversion">
 
-Everything that drives Xcode's private `SourceEditor` framework family: the
-`RuntimeViewerSourceEditorBridge` bundle target, `Stubs/`, `SourceEditorLoader`,
-`ContentSourceEditorViewController`, and `SourceEditorThemeConversion`.
+Everything that drives the `SourceEditor` framework family: the `RuntimeViewerSourceEditorBridge`
+framework, `RuntimeViewerSourceEditorBridgeTests`, `SourceEditorBridgeProvider`,
+`SourceEditorFrameworks`, `ContentSourceEditorViewController`, and `SourceEditorThemeConversion`.
+The app links the bridge framework and calls it directly; in official builds the bridge links the
+reconstruction released in the private `Mx-Iris/SourceEditor` repository — `FetchSourceEditorScript.sh`
+downloads the release pinned in `RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt`
+and the app's Embed SourceEditor Frameworks phase copies it in. Any other build compiles the bridge
+without it (`#if canImport(SourceEditor)`) and shows interfaces in the built-in `NSTextView`. Nothing
+is loaded at run time, and nothing comes from an installed Xcode.
 
 **Hard precondition: no dump, no binaries, no work.** Before touching this module, confirm the reference
 material is on disk: RuntimeViewer's own dump of the frameworks at `/Volumes/RE/SourceEditor/Xcode/<version>/`
-— one directory per framework holding **both** `ObjCHeaders/` and `SwiftInterfaces/`, of the Xcode
-version being targeted — and the framework binaries under
-`/Applications/Xcode.app/Contents/SharedFrameworks/`. **If it is not there, stop and ask for it — say
+— one directory per framework holding **both** `ObjCHeaders/` and `SwiftInterfaces/`, of Xcode 26.6,
+the version the reconstruction rebuilds — and the framework binaries: the reconstruction in
+`RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks/`, and the Xcode 26.6 originals.
+**If it is not there, stop and ask for it — say
 what is missing and what question it was going to answer. Do not proceed on inference**, and never infer
 behavior from a symbol's or protocol's name, from what the equivalent AppKit class does, or from what
-would make sense. What the dump must contain and why nothing else substitutes, how to establish a fact,
-how to change the stubs and where findings go: `Stubs/AGENTS.md` — read it before the first change.
+would make sense. How the module is built, what the dump must contain and why nothing else substitutes,
+how to establish a fact and where findings go: `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md`
+— read it before the first change.
 
 </important>
 

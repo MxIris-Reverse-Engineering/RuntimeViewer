@@ -105,6 +105,24 @@ let embedLaunchDaemon: TargetScript = .post(
     outputPaths: ["$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchServices/$(RUNTIME_VIEWER_SERVICE_NAME)"]
 )
 
+/// Shared with the native project's build phase of the same name. Copies the reconstructed
+/// SourceEditor frameworks the bridge framework links into the app when FetchSourceEditorScript.sh
+/// has downloaded them; otherwise it only removes copies an earlier build left in the product.
+let embedSourceEditorFrameworks: TargetScript = .post(
+    script: "\"${SRCROOT}/BuildPhases/EmbedSourceEditorFrameworks.sh\"",
+    name: "Embed SourceEditor Frameworks",
+    basedOnDependencyAnalysis: false
+)
+
+/// Shared with the native project's build phase of the same name, on the bridge framework. Puts the
+/// reconstructed frameworks beside the bridge in the products directory, which DYLD_FRAMEWORK_PATH
+/// lists ahead of Xcode's own SharedFrameworks when Xcode runs the tests or the app.
+let copySourceEditorFrameworksToProducts: TargetScript = .post(
+    script: "\"${SRCROOT}/BuildPhases/EmbedSourceEditorFrameworks.sh\" \"${BUILT_PRODUCTS_DIR}\"",
+    name: "Copy SourceEditor Frameworks to Products",
+    basedOnDependencyAnalysis: false
+)
+
 let project = Project(
     name: "RuntimeViewer-Tuist",
     options: .options(
@@ -171,13 +189,14 @@ let project = Project(
             scripts: [
                 generateLaunchDaemonPlist,
                 embedLaunchDaemon,
+                embedSourceEditorFrameworks,
             ],
             dependencies: [
                 .target(name: "RuntimeViewerCommandLineTool"),
                 .target(name: "com.mxiris.runtimeviewer.service"),
                 .target(name: "RuntimeViewerCatalystHelper"),
-                // Tuist embeds these four itself: the bridge in PlugIns, the three services in
-                // XPCServices.
+                // Tuist embeds these four itself: the SourceEditor bridge framework in Frameworks, the
+                // three services in XPCServices.
                 .target(name: "RuntimeViewerSourceEditorBridge"),
                 .target(name: "RuntimeViewerLocalRuntimeService"),
                 .target(name: "RuntimeViewerCatalystService"),
@@ -400,24 +419,20 @@ let project = Project(
         .target(
             name: "RuntimeViewerSourceEditorBridge",
             destinations: .macOS,
-            product: .bundle,
+            product: .framework,
             productName: "RuntimeViewerSourceEditorBridge",
             bundleId: "$(inherited)",
             infoPlist: nil,
             buildableFolders: [
-                .folder(
-                    "RuntimeViewerSourceEditorBridge",
-                    exceptions: .exceptions([
-                        // The protocol the app talks to the bridge through.
-                        .exception(target: "RuntimeViewerUsingAppKit", included: ["SourceEditorBridging.swift"]),
-                        .exception(target: "RuntimeViewerSourceEditorBridgeTests", included: ["SourceEditorBridging.swift"]),
-                    ])
-                ),
+                .folder("RuntimeViewerSourceEditorBridge"),
+            ],
+            scripts: [
+                copySourceEditorFrameworksToProducts,
             ],
             settings: targetSettings(directory: "RuntimeViewerSourceEditorBridge", configurationsWithOwnFile: ["Debug-arm64e"])
         ),
-        // Loads the bridge bundle from beside itself in the products directory. Tuist does not let a
-        // test target depend on a bundle, so the test scheme in Workspace.swift builds the bridge.
+        // Links the bridge framework (`@testable import`) and the reconstructed frameworks directly,
+        // without running inside the app.
         .target(
             name: "RuntimeViewerSourceEditorBridgeTests",
             destinations: .macOS,
@@ -427,6 +442,9 @@ let project = Project(
             infoPlist: nil,
             buildableFolders: [
                 .folder("RuntimeViewerSourceEditorBridgeTests"),
+            ],
+            dependencies: [
+                .target(name: "RuntimeViewerSourceEditorBridge"),
             ],
             settings: targetSettings(directory: "RuntimeViewerSourceEditorBridgeTests", configurationsWithOwnFile: ["Debug-arm64e"])
         ),

@@ -381,6 +381,16 @@ verify_application_archive() {
 # re-signed for Developer ID when the app is exported. See "Embedded non-macOS
 # products" in AGENTS.md.
 
+# Official builds carry the reconstructed SourceEditor frameworks, downloaded
+# from the private Mx-Iris/SourceEditor release pinned in
+# RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt. Without
+# them the app would quietly show interfaces in the built-in text view, so
+# stop here instead. CI downloads them in a step of its own, with a token
+# that can read that repository; this then finds them in place.
+log "Fetching SourceEditor frameworks"
+run "$PROJECT_DIR/FetchSourceEditorScript.sh" \
+    || fail "official builds must carry SourceEditor, and FetchSourceEditorScript.sh could not put the pinned release in place"
+
 log "Archiving main app"
 XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
@@ -420,6 +430,15 @@ if ! $DRY_RUN; then
     [[ "$EXPORTED_CATALYST_HELPER_ICON" == "$EXPECTED_CATALYST_HELPER_ICON" ]] \
         || fail "embedded Catalyst helper icon is '${EXPORTED_CATALYST_HELPER_ICON:-<none>}', expected '$EXPECTED_CATALYST_HELPER_ICON'. Check that RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/${EXPECTED_CATALYST_HELPER_ICON}.icon exists — that folder is synchronized with the helper target."
     log "catalyst_helper_icon ok: $EXPORTED_CATALYST_HELPER_ICON"
+
+    # The embed phase skips the frameworks, with only a note, when they were not
+    # downloaded for the pinned release.
+    while read -r framework_name _; do
+        [[ -n "$framework_name" && "$framework_name" != \#* && "$framework_name" != version ]] || continue
+        [[ -f "$APP_PATH/Contents/Frameworks/$framework_name.framework/Versions/A/$framework_name" ]] \
+            || fail "exported app carries no $framework_name.framework; official builds must carry SourceEditor"
+    done < "$PROJECT_DIR/RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt"
+    log "Verified embedded SourceEditor frameworks"
 fi
 
 # Check the shipped bundle, not the steps that were supposed to fill it. The

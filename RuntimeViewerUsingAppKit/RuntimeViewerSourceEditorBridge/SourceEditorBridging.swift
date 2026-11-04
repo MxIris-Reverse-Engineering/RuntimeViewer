@@ -1,21 +1,15 @@
 import AppKit
 
-/// The contract between RuntimeViewer and the loadable bundle that drives Xcode's private
-/// `SourceEditor` framework.
+/// The surface the app drives SourceEditor through, the public API of this framework.
 ///
-/// **This file is compiled into two targets**: the app and the bundle. It has to be, because
-/// the app must not link — directly or transitively — anything that references `SourceEditor`;
-/// if it did, an installation without Xcode would fail in dyld before `main` runs. The two
-/// sides therefore meet through an `@objc` protocol, which the Objective-C runtime matches by
-/// name across the bundle boundary rather than by shared Swift module.
-///
-/// The consequence worth remembering: **nothing here is checked across the boundary at compile
-/// time.** Changing a method changes it for both sides only because both sides compile the same
-/// file. Keep it that way — do not fork a second copy.
-///
-/// The same arrangement is already used for `AppKitPlugin` / `RuntimeViewerCatalystHelperPlugin`.
+/// The app links this framework and calls it directly; `SourceEditorBridgeFactory` hands out the
+/// bridge. `SourceEditorBridge`, the class behind it, is compiled only where the reconstructed
+/// SourceEditor frameworks are available — official builds on Apple silicon — and links them
+/// directly. This file compiles everywhere, so the app's content view and the code that prepares
+/// themes, comment decorations and landmark icons build in every checkout. The `@objc` shapes date
+/// from when the bridge was a bundle loaded at run time; nothing is loaded dynamically any more.
 @objc(RuntimeViewerSourceEditorBridging)
-protocol SourceEditorBridging: NSObjectProtocol {
+public protocol SourceEditorBridging: NSObjectProtocol {
     init()
 
     /// The editor view, ready to be installed in a view hierarchy.
@@ -142,7 +136,7 @@ protocol SourceEditorBridging: NSObjectProtocol {
 /// generator. Handing the range back and resolving it against the semantic map keeps the
 /// better answer.
 @objc(RuntimeViewerSourceEditorBridgingNavigationDelegate)
-protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
+public protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
     /// - Parameter characterRange: the clicked token's UTF-16 range in the source last passed
     ///   to `setSource(_:languageIdentifier:)`.
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange)
@@ -167,7 +161,7 @@ protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
 /// icon renderer produces and because an image drawn by a handler resolves light and dark at
 /// draw time; the bridge rasterises it against the editor's own appearance and screen scale.
 @objc(RuntimeViewerSourceEditorBridgingMinimapLandmarkIconProvider)
-protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtocol {
+public protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtocol {
     /// - Parameter pointSize: the side of the square the icon is laid out in. Draw for that
     ///   size rather than returning a larger image to be scaled down, or the glyph goes soft.
     /// - Returns: nil for a kind that gets no icon; the label then starts at its left edge.
@@ -189,7 +183,7 @@ protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtocol {
 /// is compiled into both targets, and a class declared here would exist twice in the
 /// Objective-C runtime under one name.
 @objc(RuntimeViewerSourceEditorBridgingCommentDecorations)
-protocol SourceEditorBridgingCommentDecorations: NSObjectProtocol {
+public protocol SourceEditorBridgingCommentDecorations: NSObjectProtocol {
     /// One rounded tag behind each range. A range must not cross a line break.
     var tagRanges: [NSValue] { get }
 
@@ -223,7 +217,7 @@ protocol SourceEditorBridgingCommentDecorations: NSObjectProtocol {
 /// reason as ``SourceEditorBridgingCommentDecorations``; the bridge reads it once per call to
 /// ``SourceEditorBridging/applyCommentTagAppearance(_:)`` and keeps what it read.
 @objc(RuntimeViewerSourceEditorBridgingCommentTagAppearance)
-protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
+public protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
     /// Behind a tag of `style`.
     func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor
 
@@ -263,7 +257,7 @@ protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
 
 /// What a tag says, which picks its colours.
 @objc(RuntimeViewerSourceEditorBridgingCommentTagStyle)
-enum SourceEditorBridgingCommentTagStyle: Int, CaseIterable {
+public enum SourceEditorBridgingCommentTagStyle: Int, CaseIterable {
     /// Where code is: a member's address, an `IMP`.
     case address
     /// Where something sits in a value or a table: field and ivar offsets, vtable and protocol
@@ -283,7 +277,7 @@ enum SourceEditorBridgingCommentTagStyle: Int, CaseIterable {
 
 /// The colour a run of tag text is drawn in.
 @objc(RuntimeViewerSourceEditorBridgingCommentRunStyle)
-enum SourceEditorBridgingCommentRunStyle: Int {
+public enum SourceEditorBridgingCommentRunStyle: Int {
     /// What a fact is: `Address`, `size`, `getter IMP`.
     case label
     /// The fact itself: `0x135DC`, `16`.
@@ -302,7 +296,7 @@ enum SourceEditorBridgingCommentRunStyle: Int {
 /// Xcode draws the two alike, so they are folded here. The kinds that only other languages
 /// produce (Markdown headings, CSS rules, and so on) all fold into `other`.
 @objc(RuntimeViewerSourceEditorBridgingLandmarkKind)
-enum SourceEditorBridgingLandmarkKind: Int {
+public enum SourceEditorBridgingLandmarkKind: Int {
     case mark
     case file
     case actor

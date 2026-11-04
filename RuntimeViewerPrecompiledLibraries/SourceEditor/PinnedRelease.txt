@@ -1,0 +1,15 @@
+# The release of the reconstructed SourceEditor frameworks that official builds of RuntimeViewer
+# carry. They are a rebuild of Xcode 26.6's frameworks of the same names, released as xcframeworks in
+# the private repository github.com/Mx-Iris/SourceEditor.
+#
+# FetchSourceEditorScript.sh downloads this release into Frameworks/ beside this file, and the app's
+# Embed SourceEditor Frameworks build phase copies it into the app. A build without them shows
+# interfaces in the built-in text view.
+#
+# To move to another release, change the version and the four SHA-256 values. Each value is the
+# checksum that release's own Package.swift gives for the framework's zip.
+version 26.6.1
+SourceEditor a636e4ebff85e289d5404c8242c33f9d24e080653ee42cec1e9e56b5e736d4b9
+SourceModel e0e5d4903883f21b2c1a762fb89e4b1768a0a88474f96ab58ca093d63b3b8add
+SourceModelSupport 9c09b4d4f8f7fc8cb45f7412ba1fb515e07aa4ed34f336eec9de930bd3ae9806
+_CodeCompletionFoundation 5dd4bb190daca8f8315c59ffa25645f739f19f2126e7cfeeea9319dd8823cdc7

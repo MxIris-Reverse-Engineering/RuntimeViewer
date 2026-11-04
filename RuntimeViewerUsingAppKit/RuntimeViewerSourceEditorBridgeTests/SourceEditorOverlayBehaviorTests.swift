@@ -1,6 +1,11 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
+// as the bridge under test is.
+#if canImport(SourceEditor)
+
 import AppKit
 import CoreText
 import SourceEditor
+@testable import RuntimeViewerSourceEditorBridge
 import Testing
 
 /// Pins the behaviour of Xcode's layout machinery that the comment decorations are built on —
@@ -30,7 +35,7 @@ struct SourceEditorOverlayBehaviorTests {
 
     // MARK: - Hidden Columns
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func hiddenColumnsCloseUp() throws {
         let harness = try Self.harness(showing: Self.addressSource)
         let hider = ColumnHider()
@@ -44,7 +49,7 @@ struct SourceEditorOverlayBehaviorTests {
 
     /// The trap the decompilation found: an empty answer is read as "hide nothing", not as
     /// "hide everything", and the only way to hide a whole line is an empty range.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func anEmptyAnswerShowsTheWholeLine() throws {
         let harness = try Self.harness(showing: Self.addressSource)
         let hider = ColumnHider()
@@ -68,7 +73,7 @@ struct SourceEditorOverlayBehaviorTests {
 
     /// Whether an override's columns count the source line or what is left of it once columns are
     /// hidden. A decoration hides the marker and colours the word after it, so the two have to agree.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func attributeOverridesCountSourceColumns() throws {
         let harness = try Self.harness(showing: Self.addressSource)
         let hider = ColumnHider()
@@ -91,7 +96,7 @@ struct SourceEditorOverlayBehaviorTests {
 
     // MARK: - Column Shifts
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aColumnShiftMovesTheTextFromItsColumnOn() throws {
         let harness = try Self.harness(showing: Self.addressSource)
         let before = try Self.columnOrigins([1, 5], onLine: 0, in: harness)
@@ -106,7 +111,7 @@ struct SourceEditorOverlayBehaviorTests {
         #expect(abs(after[5]! - before[5]! - 20) < 0.5, "column 5 moved from \(before[5]!) to \(after[5]!), not by 20")
     }
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func columnShiftsOnOneLineAddUp() throws {
         let harness = try Self.harness(showing: Self.addressSource)
         let before = try Self.columnOrigins([5, 12], onLine: 0, in: harness)
@@ -123,7 +128,7 @@ struct SourceEditorOverlayBehaviorTests {
 
     /// With the marker hidden, a shift keyed by the first visible source column has to move that
     /// column — the decorations pad a tag by shifting the column its text starts at.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aColumnShiftCountsSourceColumnsWhenColumnsAreHidden() throws {
         let harness = try Self.harness(showing: Self.addressSource)
         let hider = ColumnHider()
@@ -156,7 +161,7 @@ struct SourceEditorOverlayBehaviorTests {
     /// The editor itself offers no taller line: `setLineExpansionEffectForLine(_:height:)` is read
     /// only in `layoutContentForLine` (26.6, 0x750C4) and only for a height under the line's
     /// own, which it cuts the line down to — the animation that reveals inserted lines.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func aTallerZeroWidthRunRaisesItsLineAroundItsText() throws {
         let harness = try Self.harness(showing: Self.addressSource)
         // `//` hidden and the space after it drawn: the space is what carries the run.
@@ -188,7 +193,7 @@ struct SourceEditorOverlayBehaviorTests {
     /// How tall the editor makes a line: its font's ascent plus descent, rounded up as a whole —
     /// not the two rounded up one by one, which comes out a point taller for most sizes of SF
     /// Mono. A tag on a raised line is drawn that tall, so the bridge has to round the same way.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded), arguments: [CGFloat(12), 13, 14, 16, 18])
+    @Test(arguments: [CGFloat(12), 13, 14, 16, 18])
     func aLineIsAsTallAsItsFontsAscentPlusDescentRoundedUp(pointSize: CGFloat) throws {
         let harness = try Self.harness(showing: Self.addressSource)
         let font = NSFont.monospacedSystemFont(ofSize: pointSize, weight: .regular)
@@ -210,7 +215,7 @@ struct SourceEditorOverlayBehaviorTests {
 
     /// Folding a run of `//` lines, which no language service reports as foldable, and keeping the
     /// first line: the fold starts at the end of line 0 instead of at its first column.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func anyRunOfCommentLinesFolds() throws {
         let harness = try Self.harness(showing: Self.fieldLayoutSource)
         let foldedRange = Self.position(endOf: 0, in: Self.fieldLayoutSource) ..< Self.position(endOf: 3, in: Self.fieldLayoutSource)
@@ -230,7 +235,7 @@ struct SourceEditorOverlayBehaviorTests {
 
     /// What expanding one level of an outline needs: unfold the outer fold and get the inner one
     /// back, still folded.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func unfoldingAnOuterFoldCanKeepTheFoldsInsideIt() throws {
         let harness = try Self.harness(showing: Self.fieldLayoutSource)
         let source = Self.fieldLayoutSource
@@ -431,3 +436,5 @@ private final class AttributeColorer: TextAttributeOverrideProvider {
         overridesByLine[line] ?? []
     }
 }
+
+#endif

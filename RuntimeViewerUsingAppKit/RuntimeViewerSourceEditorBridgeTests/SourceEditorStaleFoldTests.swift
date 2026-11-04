@@ -1,6 +1,11 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
+// as the bridge under test is.
+#if canImport(SourceEditor)
+
 import AppKit
 import QuartzCore
 import SourceEditor
+@testable import RuntimeViewerSourceEditorBridge
 import Testing
 
 /// Pins the ordering in `SourceEditorBridge.setSource` that keeps a fold made in one interface
@@ -61,7 +66,7 @@ struct SourceEditorStaleFoldTests {
 
     /// The readable half. Asserts the state the fix produces rather than waiting for the trap,
     /// so a regression says what broke instead of just taking the runner down.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func swappingTheSourceClearsTheFolds() throws {
         let harness = try SourceEditorTestHarness()
 
@@ -89,7 +94,7 @@ struct SourceEditorStaleFoldTests {
 
     /// The end-to-end reproduction: the same sequence a user performs, driven through the
     /// bridge, ending in the layout pass that traps. Reaching the end is the assertion.
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func layoutSurvivesASwapToShorterTextWhileFolded() throws {
         let harness = try SourceEditorTestHarness()
 
@@ -112,3 +117,5 @@ struct SourceEditorStaleFoldTests {
         #expect(Bool(true), "laid out the shorter source with a fold outstanding")
     }
 }
+
+#endif

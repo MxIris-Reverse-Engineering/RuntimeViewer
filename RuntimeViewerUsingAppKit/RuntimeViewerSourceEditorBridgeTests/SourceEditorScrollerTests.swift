@@ -1,5 +1,10 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
+// as the bridge under test is.
+#if canImport(SourceEditor)
+
 import AppKit
 import Testing
+@testable import RuntimeViewerSourceEditorBridge
 
 /// Pins the scroller setting `SourceEditorBridge.init` makes on the editor's own scroll view.
 ///
@@ -13,14 +18,14 @@ import Testing
 @Suite("SourceEditorScroller", .serialized)
 @MainActor
 struct SourceEditorScrollerTests {
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func scrollersAutohideOnceTheBridgeIsUp() throws {
         let harness = try SourceEditorTestHarness()
 
         #expect(harness.scrollView.autohidesScrollers)
     }
 
-    @Test(.enabled(if: SourceEditorTestHarness.isFrameworkLoaded))
+    @Test
     func autohidingSurvivesASourceSwapAndAScrollerStyleChange() throws {
         let harness = try SourceEditorTestHarness()
 
@@ -32,3 +37,5 @@ struct SourceEditorScrollerTests {
         #expect(harness.scrollView.autohidesScrollers)
     }
 }
+
+#endif

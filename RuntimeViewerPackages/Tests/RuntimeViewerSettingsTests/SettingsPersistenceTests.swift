@@ -61,8 +61,8 @@ private let persistedProperties: [PersistedProperty] = [
     ),
     PersistedProperty(
         encodedKey: "editor",
-        apply: { $0.editor.usesSourceEditor = true },
-        matches: { $0.editor.usesSourceEditor }
+        apply: { $0.editor.showsMinimap = true },
+        matches: { $0.editor.showsMinimap }
     ),
     PersistedProperty(
         encodedKey: "notifications",
@@ -171,6 +171,30 @@ struct SettingsPersistenceTests {
         #expect(settings.notifications.showOnDisconnect == true)
         #expect(settings.mcp.fixedPort == 9277)
         #expect(settings.theme.selectedPresetID == Settings.Theme.builtinXcodePresetID)
+    }
+
+    /// The editor switch and the Xcode choice were removed when SourceEditor started coming with
+    /// the app instead of from Xcode. Settings files written before that still carry both keys.
+    @Test("an editor payload with the removed switch and Xcode choice still loads")
+    func editorPayloadWithRemovedKeysDecodes() throws {
+        let data = Data(
+            """
+            {
+              "editor": {
+                "usesSourceEditor": true,
+                "sourceEditorXcodePath": "/Applications/Xcode-26.6.0.app",
+                "showsMinimap": true,
+                "showsLineNumbers": false
+              }
+            }
+            """.utf8
+        )
+
+        let settings = try JSONDecoder().decode(Settings.self, from: data)
+
+        #expect(settings.editor.showsMinimap == true)
+        #expect(settings.editor.showsLineNumbers == false)
+        #expect(settings.editor.showsFoldingRibbon == true)
     }
 
     @Test("dependency access writes through the UIFoundation store")

@@ -1,6 +1,6 @@
 # 0009 - 内容视图编辑器选型：继续 NSTextView 还是改用 Xcode SourceEditor
 
-- **状态**: Implemented（采纳方案 B）
+- **状态**: Implemented（采纳方案 B）；从用户的 Xcode 加载框架和 opt-in 开关，被 [draft-reconstructed-source-editor](draft-reconstructed-source-editor.md) 取代：官方构建嵌入重建版
 - **作者**: JH
 - **创建日期**: 2026-08-15
 - **最后更新**: 2026-10-26

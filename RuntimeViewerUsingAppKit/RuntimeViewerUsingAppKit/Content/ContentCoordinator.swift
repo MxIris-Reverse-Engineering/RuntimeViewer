@@ -46,12 +46,11 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     private lazy var textViewController: BaseViewController<ContentTextViewModel> = makeTextViewController(kind: desiredEditorKind())
 
-    /// Anything that stops the Xcode-backed editor from loading — the setting being off, no
-    /// Xcode installed, an arm64e build, a missing bridge bundle — resolves to the
-    /// `NSTextView` implementation, which is the shipping behaviour.
+    /// A build compiled without SourceEditor — any build without the reconstructed frameworks,
+    /// and the Intel half of a universal one — uses the `NSTextView` implementation.
     private func desiredEditorKind() -> EditorKind {
-        @Dependency(\.sourceEditorLoader) var sourceEditorLoader
-        guard sourceEditorLoader.isEnabledByUser, sourceEditorLoader.isAvailable else { return .textView }
+        @Dependency(\.sourceEditorBridgeProvider) var sourceEditorBridgeProvider
+        guard sourceEditorBridgeProvider.isAvailable else { return .textView }
         return .sourceEditor
     }
 

@@ -3,13 +3,13 @@ import RuntimeViewerApplication
 import Semantic
 
 /// Renders a RuntimeViewer `ThemeProfile` into the `.xccolortheme` dictionary that
-/// `SourceEditorTheme` consumes, so the Xcode-backed content view uses the colors configured
-/// in Settings rather than the theme Xcode ships.
+/// `SourceEditorTheme` consumes, so the SourceEditor content view uses the colors configured
+/// in Settings rather than the theme the framework ships.
 ///
 /// **It overwrites a copy of the framework's own theme instead of building one from nothing.**
 /// The format has around fifty keys — console colors, markup fonts, scrollbar markers — and
 /// most of them have no counterpart in `ThemeProfile`. Starting from a complete, valid
-/// dictionary means the unmapped keys keep working, and a future Xcode adding a key does not
+/// dictionary means the unmapped keys keep working, and a future release adding a key does not
 /// produce a theme with a hole in it.
 enum SourceEditorThemeConversion {
     /// The app's theme resolves every `SemanticType` to one of seven text styles, so seven

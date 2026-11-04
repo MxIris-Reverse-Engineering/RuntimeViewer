@@ -1,7 +1,12 @@
+// Compiled only where the reconstructed SourceEditor frameworks are on the framework search path:
+// official builds after FetchSourceEditorScript.sh, on Apple silicon. Anywhere else the app shows
+// interfaces in the built-in text view and links none of them.
+#if canImport(SourceEditor)
+
 import AppKit
 import CoreText
 import QuartzCore
-import SourceEditor
+internal import SourceEditor
 
 /// Draws the generated comments as tags and collapses the rows the app marks as collapsible.
 ///
@@ -944,7 +949,7 @@ extension CommentDecorationController {
     /// The metrics go in unrounded. The editor rounds a line's ascent plus descent up as a
     /// whole — a line of 11-point SF Mono, 10.63 above and 2.32 below, is 13 points — so
     /// rounding the two up separately here made every raised line a point taller than asked.
-    /// `SourceEditorOverlayBehaviorTests` pins both on the Xcode the tests run under.
+    /// `SourceEditorOverlayBehaviorTests` pins both on the frameworks the tests link.
     final class LineRaise {
         /// What the carrier column is drawn with: the run delegate, and no colour, so that
         /// nothing drawn for the space shows.
@@ -1002,3 +1007,5 @@ extension CommentDecorationController {
         }
     }
 }
+
+#endif

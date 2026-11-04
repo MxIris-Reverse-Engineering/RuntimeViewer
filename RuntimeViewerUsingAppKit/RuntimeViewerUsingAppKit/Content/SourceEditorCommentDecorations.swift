@@ -1,8 +1,9 @@
 import AppKit
 import RuntimeViewerApplication
+import RuntimeViewerSourceEditorBridge
 
 /// `InterfaceCommentDecorations` in the shape the editor bridge takes: parallel arrays of boxed
-/// ranges and raw values behind an `@objc` protocol, which is all that crosses the bundle boundary.
+/// ranges and raw values behind an `@objc` protocol, the shape `SourceEditorBridging` takes.
 final class SourceEditorCommentDecorations: NSObject, SourceEditorBridgingCommentDecorations {
     let tagRanges: [NSValue]
     let tagStyles: [NSNumber]
