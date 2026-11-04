@@ -3,7 +3,7 @@ import Testing
 @testable import RuntimeViewerApplication
 
 /// One kind of background work followed from run to run: what makes a run, how far it is, and how
-/// it ended — the activity display's raw material (proposal `draft-xcode-activity-progress`).
+/// it ended — the activity display's raw material (proposal `0071-xcode-activity-progress`).
 @Suite("Activity run tracker")
 struct ActivityRunTrackerTests {
     private static let start = Date(timeIntervalSinceReferenceDate: 1000)

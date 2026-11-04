@@ -6,7 +6,7 @@ import Testing
 /// The window title's activity display from macOS 27 — Xcode 27's ring in place of the document's
 /// icon: the shape at the stages of a run's end, how a report's progress becomes the ring, and the
 /// subtitle that shows the activity while the pointer is over the title (proposal
-/// `draft-xcode-activity-progress`; spec in `/Volumes/RE/Xcode/27.2-27B52/README.md`).
+/// `0071-xcode-activity-progress`; spec in `/Volumes/RE/Xcode/27.2-27B52/README.md`).
 @Suite("Title activity indicator")
 @MainActor
 struct TitleActivityIndicatorTests {

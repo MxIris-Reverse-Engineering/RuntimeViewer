@@ -5,7 +5,7 @@ import RuntimeViewerUI
 
 /// What the activity display says about a report: the segments, which of them go first when the
 /// text does not fit, the separators of each style, and the progress (proposal
-/// `draft-xcode-activity-progress`).
+/// `0071-xcode-activity-progress`).
 @Suite("Toolbar activity state")
 struct ToolbarActivityStateTests {
     private static let start = Date(timeIntervalSinceReferenceDate: 1000)

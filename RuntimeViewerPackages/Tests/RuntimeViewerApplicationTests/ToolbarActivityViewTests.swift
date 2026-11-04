@@ -5,7 +5,7 @@ import Testing
 
 /// The toolbar's activity capsule below macOS 27 — Xcode 26's Activity View without its scheme
 /// picker: when its indicator shows, how its text reads, which version of the text fits, and the
-/// ring's spin (proposal `draft-xcode-activity-progress`; spec in `/Volumes/RE/Xcode/26.6/README.md`).
+/// ring's spin (proposal `0071-xcode-activity-progress`; spec in `/Volumes/RE/Xcode/26.6/README.md`).
 @Suite("Toolbar activity view")
 @MainActor
 struct ToolbarActivityViewTests {

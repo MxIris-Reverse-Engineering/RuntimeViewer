@@ -1,8 +1,8 @@
-# Draft - 工具栏照 Xcode 显示后台工作的进度：Xcode 26 式的中间胶囊与 Xcode 27 式的标题区进度环，可在设置里切换
+# 0071 - 工具栏照 Xcode 显示后台工作的进度：Xcode 26 式的中间胶囊与 Xcode 27 式的标题区进度环，可在设置里切换
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-03
-- **最后更新**: 2026-11-03
+- **最后更新**: 2026-11-04
 - **所属愿景**: 无
 - **实现分支 / PR**: `feature/xcode-activity-progress`（从 `next` 切出）；UIFoundation 一侧是 `feature/toolbar-principal-item-width-ratio`，已作为 UIFoundation 提案 0034 随 `0.43.0` 发布
 
@@ -155,3 +155,4 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-04 | 没有选中镜像时，标题图标从 App 图标的图片改为 App 自己的符号 `runtimeviewer`，照其他字形画成 `systemBlue` 单色 | 用户要求不用 App 图标的图片，改画一个 App 自己的 SF Symbol；这样标题里的图标都是同一种单色字形。符号照 App 图标的镜片圆环加放大镜自绘，三档小号母版（Ultralight / Regular / Black）可插值，尺寸与线粗取系统 `circle` 与 `magnifyingglass.circle` 的实测值，模板写法照 Private Symbols 的夹具；放在 App 的 `Assets.xcassets`，由 `RuntimeViewerSymbols.runtimeViewer` 取用。文档：`Resources/AGENTS.md` 记下它与 App 图标要一起改 |
 | 2026-11-04 | `runtimeviewer` 改成学 Xcode 工程图标：外圈从镜片圆环换成 `doc-project` 的圆角方框（两圈轮廓原样取自 XCOrganizer 导出的 Xcode 27 模板），里面是 App 图标的放大镜，居中；`doc-project` 里实心的内衬方块和锤子不要 | 用户看过后要求像 Xcode 那样带方框。Xcode 标题里的工程图标是空心方框加锤子，所以只取外框。左右边距改成对称，好让标题把方框居中；`doc-project` 的右边距比左边宽 |
 | 2026-11-04 | 标题图标不再裁到 18 pt 的槽位：`TitleDocumentIcon` 的图以槽位为中心对称放大到装下整个字形，进度环视图按图标原尺寸居中显示（`contentsGravity` 从 `resizeAspect` 改为 `center`），不再缩放 | 用户看到方框版 App 符号在标题里线条发细。原因：方框在标题配置下约 19.2 pt，18 pt 的画布切掉了外缘，方框线只剩一半粗。从用户的截图量得 Xcode 的工程图标是 39×39 像素（2 倍屏 19.5 pt）、方框线 3 像素，可见 Xcode 让它超出槽位；进度环本来就超出槽位 1 pt，容器层不裁边。回归测试：比槽位宽的字形要整个画出来、且对齐框居中 |
+| 2026-11-04 | 实现完成并落地：编号 0071，状态改 Implemented | 用户看过两种样式后，随 [0070](0070-xcode-style-runtime-source-picker.md) 一起收尾；那之后落在这份提案范围里的改动（Classic 样式、标题里的 App 符号、标题图标超出槽位）各有一行在上。验证沿用 0070 落地时对同一份代码跑的那次：`RuntimeViewerPackages` 全量 793 个测试中只有 `FindCrossReferenceTests` 的 Call Hierarchy 满载超时，单独重跑通过；App 用 Tuist workspace 编译通过。逆向定不下、要录屏才能核对的几项（Xcode 27 图标槽与文字的间距、方块变透明是渐变还是跳变、几处默认动画曲线）没有核对，登记进提案索引的「暂缓的后续项」。文档：不另写使用指南（设置页自带说明）与实现说明；术语表已有「活动」，没有新术语 |

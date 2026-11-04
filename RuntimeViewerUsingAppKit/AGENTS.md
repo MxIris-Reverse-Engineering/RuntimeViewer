@@ -634,7 +634,7 @@ old `NSPopUpButton` before the trailing buttons, whose menu `RuntimeSourceMenuAd
 (RuntimeViewerApplication) fills from the same `RuntimeSourcePickerContent` as the popover and reports
 with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` and
 `/Volumes/RE/Xcode/27.2-27B52/README.md`; background:
-`Documentations/Evolutions/draft-xcode-activity-progress.md` and
+`Documentations/Evolutions/0071-xcode-activity-progress.md` and
 `Documentations/Evolutions/0070-xcode-style-runtime-source-picker.md`.
 
 - **The toolbar's items depend on the style**, so they come from `MainToolbarController`'s

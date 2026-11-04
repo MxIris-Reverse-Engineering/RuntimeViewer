@@ -83,8 +83,8 @@
 | [0068](0068-exported-objc-declarations-filter.md) | 只看导出的 ObjC 声明：ObjC 类的 Not Exported 标志与生成选项开关 | Implemented | 把 0067 补到 ObjC：本镜像明确未导出的 ObjC 类打上同一个 `isNotExported` 位，沿用 Filter Scope 的「Not Exported」一行；ObjC 生成选项新增同名勾选框，开着时内容区、批量导出与 Find 一起去掉未导出的类、挂在这些类上的类别，以及偏移变量未导出的 ivar。判断来自 MachOObjCSection 提案 0018：类看类对象的地址上有没有导出符号，ivar 看偏移变量；方法、属性、协议与类别本身没有导出符号，一律保留。Swift 类在 ObjC 列表里的条目与它在 Swift 列表里的那一面标记一致。 |
 | [0069](0069-offline-mode.md) | 离线模式：打开磁盘上的 Mach-O 文件、bundle 与 dyld shared cache | Implemented | 新的引擎来源 `RuntimeSource.file`：经 File › Open…、Open Recent 或拖到 Dock 打开 Mach-O（含胖文件）、`.app` / `.framework` 与 dyld cache，立刻开新窗口、文件在后台读；引擎菜单单列「Offline Files」一组，任何窗口可切换。每个文件一个进程（新内嵌 XPC service 的多实例：一次性实例，要读的文件随第一个 `hello` 传），所有窗口离开 30 秒后进程退出、条目保留，再选时重新拉起。macOS 文件配本机 dyld cache，其它平台从 Settings › Offline Files 登记的 cache 里按平台挑。Core 把 section / indexer / 工厂 / 关系解析器对 Mach-O 读取方式泛型化，进程内镜像与磁盘文件各一份镜像目录；离线可用接口、侧栏、关系、静态泛型特化、Find 与导出，不支持交叉引用、注入与载入框架；CLI 第一版不暴露。 |
 | [0070](0070-xcode-style-runtime-source-picker.md) | 工具栏的来源选择器做成 Xcode 的 scheme 选择器：自绘按钮加导航 popover，Xcode 26 样式下放进活动胶囊 | Implemented | 切换运行时来源的系统弹出按钮换成自绘按钮（图标加名字，悬停与按下时高亮），点开是 AppKitPlus 的 `NSNavigationPopoverController`：过滤框、按主机分节的来源列表（当前的带勾）、底部固定的 Open File… 与离线引擎的 Dependency Cache。Xcode 26 的样式下选择器放进活动胶囊左侧，文字右对齐、悬停展开照 Xcode；Xcode 27 的样式下在工具栏正中，设备图标照 Xcode 画成符号自身大小。设置里另有 Classic 样式：工具栏回到跟 Xcode 之前的样子，来源切换是原来的系统弹出按钮。画法与尺寸逆向 Xcode 26.6 与 27.2 后照搬；过滤不跟随系统语言。 |
+| [0071](0071-xcode-activity-progress.md) | 工具栏照 Xcode 显示后台工作的进度：Xcode 26 式的中间胶囊与 Xcode 27 式的标题区进度环，可在设置里切换 | Implemented | 后台索引、Find 语料与交叉引用的进度搬进工具栏，规格逆向自两版 Xcode。Xcode 26 的样式：工具栏正中的胶囊，状态文字加进度环，宽为工具栏的 40%。Xcode 27 的样式：进度环画在标题区的图标位置，完成时收拢成圆角方块再变回图标，正中改放来源选择器；没打开镜像时图标是 App 自己的 SF Symbol（Xcode 工程图标式的方框加放大镜），比槽位大的图标照 Xcode 超出槽位。用哪种在设置 › General 里选，默认按系统（macOS 27 起用 Xcode 27 的），已打开的窗口当场切换；另有不显示进度的 Classic 样式（见 0070）。全部用 AppKit 与 Core Animation 实现，40% 的宽度靠一个 AppKit 私有方法，封装进 UIFoundation。 |
 | draft | [框架的命名词云：类型名、属性名与方法名的词频](draft-naming-word-cloud.md) | Draft | 把一个镜像的类型名、属性名与方法名拆词计数，在独立窗口里画成词云。四种口径：类型名的最后一个词（Manager、Service、Session）、类型名的所有词、成员名的所有词、方法名的第一个词（set、did、will）；类名前缀按镜像统计后去掉，虚词去掉，`DataSource`、`IndexPath` 这类复合词按一个词算（有预设，可增删）。界面全部用 AppKit：字体是 SF Mono，颜色表示一个词最有代表性的那一类名字，画布比窗口大得多，拖拽、滚动与缩放浏览。点一个词列出用到它的类型或成员，点一行在主窗口打开。导出 PNG（整张画布）、CSV（词与次数）与 JSON（另带用到它的名字）。类型取自对象列表，成员取自 Find 语料，Core 只多一条 `members(in:shownUnder:)` 命令，拆词与计数在 App 一侧。 |
-| draft | [工具栏照 Xcode 显示后台工作的进度](draft-xcode-activity-progress.md) | In Progress | 后台索引、Find 语料与交叉引用的进度搬进工具栏，规格逆向自两版 Xcode。Xcode 26 的样式：工具栏正中的胶囊，状态文字加进度环，宽为工具栏的 40%。Xcode 27 的样式：进度环画在标题区的图标位置，完成时收拢成圆角方块再变回图标，正中改放切换引擎的按钮。用哪种在设置 › General 里选，默认按系统（macOS 27 起用 Xcode 27 的），已打开的窗口当场切换。全部用 AppKit 与 Core Animation 实现，40% 的宽度靠一个 AppKit 私有方法，封装进 UIFoundation。 |
 
 > 0000 采用早期格式，正文没有状态字段，按「旧文档原地不动」的约定不回填；表里的 Implemented
 > 是 2026-10-26 对照代码核实的（修复在 `RuntimeNetworkConnection.swift`）。0001 也是早期格式，
@@ -124,6 +124,7 @@
 | 搜索时预读下一个镜像 | [0066](0066-on-demand-corpora-and-cross-references.md)「不做」 | 小 | 读回与搜索重叠，搜全部镜像更快，代价是峰值多一个镜像；看了实测的读回用时再定 |
 | 来源列表过滤时保留底部命令 | [0070](0070-xcode-style-runtime-source-picker.md)「后续项」 | 小（上游） | 给 AppKitPlus 的 `NSNavigationPopoverController` 加连同 footer 一起设置过滤结果的接口（对应 Xcode 的 `filteredContent`），发版后 RV 改用；现在过滤期间 Open File… 与 Dependency Cache 会隐去 |
 | 工具栏三种样式在 macOS 15 上的目视 | [0070](0070-xcode-style-runtime-source-picker.md)「后续项」 | 小 | Xcode 26、Xcode 27、Classic 三种样式与弹出列表只在 macOS 26.7 与 27.2 上测过、看过 |
+| 活动显示要录屏才能定的几处细节 | [0071](0071-xcode-activity-progress.md) 决策日志 2026-11-04 | 小 | Xcode 27 图标槽与文字的间距、进度环收拢成的方块变透明是渐变还是跳变、几处默认动画曲线；逆向定不下，要录一段 Xcode 26 与 27 构建的过程对照 |
 
 ## 与 `Plans/` 的关系
 
