@@ -218,9 +218,11 @@ on — `NSTableView.box.estimatesRowHeights`, `Label` mirroring `attributedStrin
 the synchronous `SettingsStore.save()`, `SettingsConfiguration`, `MainMenu` — all arrived before it.
 `0.39.0` needs FrameworkToolbox `0.15.0` or later, which is why `RuntimeViewerCore` takes
 FrameworkToolbox `from: "0.15.0"` instead of the exact pin it had; the comment there says what to check
-when FrameworkToolbox moves. AppKitPlus-Release is declared `from: "0.18.0"`, the first release with what
-the sidebar's text-token filter fields need: a comparison type's `valuePrefix` / `valueSuffix`, no menu for
-a token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)`.
+when FrameworkToolbox moves. AppKitPlus-Release is declared `from: "0.19.0"`: `0.18.0` brought what the
+sidebar's text-token filter fields need — a comparison type's `valuePrefix` / `valueSuffix`, no menu for a
+token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)` —
+and `NSNavigationPopoverController`, which the runtime source picker's list is; `0.19.0` stops a window that
+showed a navigation popover from never being freed, and filters a long list in one quickly.
 SwiftyXPC (the `MxIris-macOS-Library-Forks` fork) is declared `from: "0.5.106"`, the first release with
 connections to an instance of an embedded service of their own (`ConnectionType.remoteServiceInstance`, which
 each offline file's process is started with) and with listener handlers that reach connections accepted before

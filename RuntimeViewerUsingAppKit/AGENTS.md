@@ -533,7 +533,7 @@ shape it has.
 - `CommandLineHostController` — makes the running app the CLI host: asks a standalone host to leave on launch, serves the socket, removes its files on quit
 - `SettingsLifecycleController` — loads the settings at launch and flushes them at termination (root `AGENTS.md`, *Settings Integration*)
 - `RuntimeDerivedDataController` — the app's side of derived data: gives the Indexing settings page its `DerivedDataClient` (location, size, Show in Finder, delete) and asks before the application menu's Delete Derived Data… deletes it (root `AGENTS.md`, *Derived data*)
-- `OfflineFileController` — opens a Mach-O file, a bundle or a dyld shared cache offline: inspects it off the main thread, picks the dependency cache (`Settings.offline`), takes the engine from `RuntimeEngineManager.startReading(_:)` and opens a `Document(runtimeEngine:)` on it at once, while the offline service is still reading the file (the content pane's placeholder says so); once `waitUntilFileIsRead(by:)` returns the file joins Open Recent, and when it throws the window shows why in a sheet and closes after the user's OK. It also builds the engine menu's Dependency Cache submenu and re-pairs from it; `start()` starts `RuntimeOfflineEngineParking`, which lets an offline engine's process go thirty seconds after its last window left
+- `OfflineFileController` — opens a Mach-O file, a bundle or a dyld shared cache offline: inspects it off the main thread, picks the dependency cache (`Settings.offline`), takes the engine from `RuntimeEngineManager.startReading(_:)` and opens a `Document(runtimeEngine:)` on it at once, while the offline service is still reading the file (the content pane's placeholder says so); once `waitUntilFileIsRead(by:)` returns the file joins Open Recent, and when it throws the window shows why in a sheet and closes after the user's OK. It also lists the dependency caches the runtime source picker's Dependency Cache level offers and re-pairs from it; `start()` starts `RuntimeOfflineEngineParking`, which lets an offline engine's process go thirty seconds after its last window left
 - `DocumentController` — the app's `NSDocumentController` subclass: hands every file that is not a `.runtimedocument` to `OfflineFileController`, from File › Open…, Open Recent and the Dock alike. The first document controller made becomes the shared one, so `DocumentController.install()` is one of the calls in `AppDelegate.main()`, before window restoration inside `run()` would make a plain one
 
 **One-shot fixes that must beat the main menu** go in `AppDelegate.main()` (`AppDelegate` carries `@main`
@@ -618,17 +618,20 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
 
 </important>
 
-<important if="you are changing the main window's toolbar items, the toolbar's activity capsule, the title item's activity ring, or adding a kind of engine background work">
+<important if="you are changing the main window's toolbar items, the toolbar's activity capsule, the title item's activity ring, the runtime source picker or its list, or adding a kind of engine background work">
 
-## The Toolbar's Activity Display
+## The Toolbar's Activity Display and Runtime Source Picker
 
 The engine's background work shows in the toolbar the way Xcode shows activity, in the style the user
 picks under Settings › General (`Settings.General.toolbarActivityStyle`; Automatic is Xcode 27's from
 macOS 27, Xcode 26's before it): Xcode 26's capsule in the middle of the toolbar (`ToolbarActivityView`,
 its Activity View), or Xcode 27's ring in place of the title's icon (`TitleToolbarItem(showsActivity:)`
-with `TitleActivityIndicatorView`), which puts the runtime source picker in the middle instead. Specs
-with addresses: `/Volumes/RE/Xcode/26.6/README.md` and `/Volumes/RE/Xcode/27.2-27B52/README.md`;
-background: `Documentations/Evolutions/draft-xcode-activity-progress.md`.
+with `TitleActivityIndicatorView`), which puts the runtime source picker in the middle instead. The
+picker is Xcode's scheme picker: in Xcode 26's style it sits at the capsule's leading edge, in Xcode 27's
+it is the middle item. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` and
+`/Volumes/RE/Xcode/27.2-27B52/README.md`; background:
+`Documentations/Evolutions/draft-xcode-activity-progress.md` and
+`Documentations/Evolutions/draft-xcode-style-runtime-source-picker.md`.
 
 - **The toolbar's items depend on the style**, so they come from `MainToolbarController`'s
   `defaultItemIdentifiers` alone, and `apply(activityStyle:)` changes over an open window by setting
@@ -647,6 +650,24 @@ background: `Documentations/Evolutions/draft-xcode-activity-progress.md`.
 - The capsule is 40 % of the toolbar wide through UIFoundation's
   `NSToolbar.box.preferredCenteredItemWidthRatio`, set before the toolbar goes into the window: it lays
   nothing out by itself. The ratio goes back to −1, no preference, while the picker is the centered item.
+- **Each style has its own `RuntimeSourcePicker`** (RuntimeViewerUI), as each has its own title item:
+  `ToolbarActivityView(showsSourcePicker: true)` holds Xcode 26's, `RuntimeSourcePickerToolbarView` (the
+  middle item's view) Xcode 27's, and `MainToolbarController.runtimeSourcePickers` hands both to
+  `MainWindowController`, which feeds them the same source. The picker is self-drawn — one path component,
+  icon and name, at the metrics of the Xcode it copies — and sends its action on mouse-down, so that the
+  popover follows the press; it takes no RxSwift.
+- **With the picker, the capsule lays the text and the picker out by hand**, by Xcode 26's rules: the text
+  right-aligned, the picker given what the text leaves past a reserve, narrowed for the rest of the
+  activity once the text pushes it, widened on hover and frozen while its popover shows. The rules are
+  the doc comment of `ToolbarActivityView`; `ToolbarActivityViewSourcePickerTests` pins them. Without a
+  picker the text stays left-aligned through constraints.
+- **The list is `RuntimeSourcePopoverAdapter`** (RuntimeViewerApplication): AppKitPlus's
+  `NSNavigationPopoverController`, set up as Xcode's path cell sets up the scheme list, with
+  `RuntimeSourcePopoverCellView` rows. It is the view layer's, like the menu it replaced: no route and no
+  view model of its own. `MainViewModel` works out what it lists (`runtimeSourcePickerContent`) and takes
+  back what is chosen (`switchSource`, `dependencyCacheSelected`); Open File… and Manage in Settings… go
+  to the document controller and the settings window directly. It filters with its own substring match,
+  never the controller's `localizedCaseInsensitiveContains` (see *Filter fields*, the Turkish rule).
 
 </important>
 

@@ -9,7 +9,7 @@ shared cache，像看「My Mac」一样浏览它的 ObjC 与 Swift 接口。设�
 - **能打开**：薄或胖的 Mach-O 文件（胖文件按 arm64e、arm64、x86_64 的顺序取本机优先的切片）；`.app`、
   `.framework` 等包（包里的每个 Mach-O 都列出来，主程序排第一）；dyld shared cache 的主文件（选子缓存或符号文件
   也行，会换成主文件，子缓存自动带上）。
-- **从哪打开**：File › Open…、Open Recent、把文件拖到 Dock 图标上，以及引擎菜单 Offline Files 一组末尾的
+- **从哪打开**：File › Open…、Open Recent、把文件拖到 Dock 图标上，以及工具栏来源选择器弹出列表底部的
   Open File…。每次打开都开一个新窗口；同一个文件再开，新窗口和旧窗口用同一个引擎。
 - **窗口立刻出现**：文件在后台读，读完之前内容区显示转圈和「Reading “…”…」，侧栏是空的；一份 dyld cache
   要读一会儿，单个文件通常一闪而过（读得快就不显示）。读完文件才进 Open Recent。
@@ -23,9 +23,9 @@ shared cache，像看「My Mac」一样浏览它的 ObjC 与 Swift 接口。设�
 - **macOS 与 Mac Catalyst 的文件**：自动配本机的 cache。
 - **别的平台的文件**：从 Settings › Offline Files 登记的 cache 里挑——同平台的（模拟器的文件只配模拟器的
   cache），取版本不低于文件 SDK 版本的最旧一份，都更旧就取最新的；没有同平台的就只读文件本身。
-- **换一份**：窗口在离线引擎上时，引擎菜单 Offline Files 一组末尾的 Dependency Cache 子菜单列出可选的 cache
-  与 None。换了之后文件在新进程里重读，所有在这个引擎上的窗口跟着刷新。
-- 打开的本来就是 dyld cache 时没有配对这一说，子菜单不出现。
+- **换一份**：窗口在离线引擎上时，工具栏来源选择器弹出列表的底部多一项 Dependency Cache，选它进入下一层，
+  列出可选的 cache 与 None，正在用的带勾。换了之后文件在新进程里重读，所有在这个引擎上的窗口跟着刷新。
+- 打开的本来就是 dyld cache 时没有配对这一说，Dependency Cache 不出现。
 
 ## 必须知道的行为
 

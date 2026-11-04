@@ -88,9 +88,9 @@ public enum DeviceGlyph {
     /// The glyph centred in a square, which is the shape every caller wants.
     ///
     /// A symbol image is not square — `iphone.gen3` is 14×16 and `macstudio` is
-    /// 19×11 — and the engine menu pins each item's image to 20×20. Handed the
-    /// symbol directly it would *stretch* it, which turns a Mac Studio into a
-    /// cube. Squaring here rather than at the call site keeps that from being
+    /// 19×11 — and an image view or menu item that pins its image to a square
+    /// box would *stretch* the symbol, which turns a Mac Studio into a cube.
+    /// Squaring here rather than at the call site keeps that from being
     /// something every future caller has to remember.
     ///
     /// Drawn through a handler rather than rasterized, so the result stays

@@ -12,8 +12,8 @@ import DependenciesMacros
 /// an engine that reads it, in an instance of the offline service of its own.
 ///
 /// `DocumentController` hands every file that is not a RuntimeViewer document
-/// here — File › Open…, Open Recent and the Dock alike — and the engine menu's
-/// Offline Files section opens and re-pairs through here too.
+/// here — File › Open…, Open Recent and the Dock alike — and the runtime source
+/// picker's Open File… and Dependency Cache open and re-pair through here too.
 @Loggable
 @MainActor
 final class OfflineFileController {

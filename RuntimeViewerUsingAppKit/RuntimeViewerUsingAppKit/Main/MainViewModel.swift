@@ -119,7 +119,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         /// history menu on either navigation segment.
         let navigationHistorySelected: Signal<Int>
         let saveClick: Signal<Void>
-        let switchSource: Signal<String?>
+        /// The engine identifier of a source chosen in the runtime source picker's list.
+        let switchSource: Signal<String>
         let generationOptionsClick: Signal<Void>
         let increaseFontSize: Signal<Void>
         let decreaseFontSize: Signal<Void>
@@ -135,8 +136,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let tabSelected: Signal<Int>
         let tabClosed: Signal<Int>
         let newTabClicked: Signal<Void>
-        /// A choice from the engine menu's Dependency Cache submenu, for the
-        /// offline engine the window is on: `nil` reads the file alone.
+        /// A choice from the runtime source picker's Dependency Cache level, for
+        /// the offline engine the window is on: `nil` reads the file alone.
         let dependencyCacheSelected: Signal<RuntimeOfflineFile.DependencyCache?>
     }
 
@@ -156,15 +157,14 @@ final class MainViewModel: ViewModel<MainRoute> {
         let canGoPrevious: Driver<Bool>
         let canGoNext: Driver<Bool>
         let navigationHistory: Driver<NavigationHistorySnapshot>
-        let runtimeEngineSections: Driver<[RuntimeEngineSection]>
+        /// What the runtime source pickers show: the source the window is on.
         let switchSourceState: Driver<SwitchSourceState>
+        /// What the runtime source picker lists when it opens.
+        let runtimeSourcePickerContent: Driver<RuntimeSourcePickerContent>
         let attachAvailability: Driver<AttachAvailability>
         /// Load Frameworks… loads an image into the engine's process, which an
         /// offline engine does not have.
         let isLoadFrameworksEnabled: Driver<Bool>
-        /// The engine menu's Dependency Cache submenu for the engine the window
-        /// is on; empty when it is no offline engine, or reads a cache.
-        let dependencyCacheChoices: Driver<[OfflineFileController.DependencyCacheChoice]>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
@@ -416,7 +416,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                 }
             }.disposed(by: rx.disposeBag)
 
-        input.switchSource.compactMap { $0 }.emit(with: self) { owner, identifier in
+        input.switchSource.emit(with: self) { owner, identifier in
             guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
                 $0.engineID == identifier
             }) else { return }
@@ -555,6 +555,47 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
         }
 
+        // What the runtime source picker lists: the manager's sections with the window's source
+        // checked, that source on top while its engine is gone, and the dependency caches the
+        // window's offline file can be paired with.
+        let runtimeSourcePickerContent = Driver.combineLatest(
+            runtimeEngineSections,
+            switchSourceState,
+            runtimeEngineOfDocument
+        ) { [weak self] sections, state, engineOfDocument -> RuntimeSourcePickerContent in
+            guard let self else { return .empty }
+            let disconnectedSource = state.isDisconnected ? RuntimeSourcePickerContent.Source(
+                engineIdentifier: state.selectedEngineIdentifier,
+                title: state.title,
+                image: state.image,
+                isCurrent: true,
+                isEnabled: false
+            ) : nil
+            return RuntimeSourcePickerContent(
+                disconnectedSource: disconnectedSource,
+                sections: sections.map { section in
+                    RuntimeSourcePickerContent.Section(
+                        title: section.hostName,
+                        sources: section.engines.map { engine in
+                            RuntimeSourcePickerContent.Source(
+                                engineIdentifier: engine.engineID,
+                                title: engine.source.description,
+                                image: self.resolveEngineIcon(for: engine),
+                                isCurrent: engine.engineID == state.selectedEngineIdentifier
+                            )
+                        }
+                    )
+                },
+                dependencyCacheChoices: offlineFileController.dependencyCacheChoices(for: engineOfDocument).map { choice in
+                    RuntimeSourcePickerContent.DependencyCacheChoice(
+                        title: choice.title,
+                        dependencyCache: choice.dependencyCache,
+                        isCurrent: choice.isCurrent
+                    )
+                }
+            )
+        }
+
         let currentImageName = documentState.$currentImageNode.asDriver().map { $0?.name }
 
         // MARK: - Tabs
@@ -652,13 +693,10 @@ final class MainViewModel: ViewModel<MainRoute> {
                     currentIndex: selected == nil && index >= 0 ? index + 1 : index
                 )
             },
-            runtimeEngineSections: runtimeEngineSections,
             switchSourceState: switchSourceState,
+            runtimeSourcePickerContent: runtimeSourcePickerContent,
             attachAvailability: attachAvailability,
             isLoadFrameworksEnabled: isLoadFrameworksEnabled,
-            dependencyCacheChoices: Driver.combineLatest(runtimeEngineOfDocument, runtimeEngineSections) { [weak self] engine, _ in
-                self?.offlineFileController.dependencyCacheChoices(for: engine) ?? []
-            },
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),

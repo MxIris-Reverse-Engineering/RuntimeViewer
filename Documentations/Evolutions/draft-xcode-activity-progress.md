@@ -150,3 +150,4 @@ Report 导航里的三类后台工作，在一个 Engine 上每类算一个活�
 | 2026-11-03 | Xcode 27 的样式下，切换引擎的弹出按钮放在工具栏正中 | 用户看过后指出它没有居中。Xcode 27 把 scheme 与运行目标放在中间，活动挪进标题区后中间空着，RV 里与之对应的是切换引擎；它右边加一个 flexible space，右侧那排按钮留在原处 |
 | 2026-11-03 | 两种样式做成设置（General › Toolbar › Activity Style），默认 Automatic 按系统 | 用户要求，因为有人偏好 Xcode 26 的样式。每个系统都能选，标题区的进度环只用到 macOS 14 起的 API；改了当场作用于已打开的窗口，用 macOS 15 起可写的 `NSToolbar.itemIdentifiers` 换项 |
 | 2026-11-03 | 标题项做成两个，各管一种样式，不让一个标题项在运行时切换 | `TitleToolbarItem` 带不带活动在初始化时定，布局与宽度测量都按它分支，运行时切换要改这些，还会碰到防止长标题把按钮挤进溢出菜单的那几项设置。两个实例由工具栏按样式换上，绑定两边都接。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 那一节改为两种样式可切换；设置页自带说明，不写使用指南；没有新术语 |
+| 2026-11-04 | Xcode 26 样式下切换引擎的按钮改放进活动胶囊左侧，按钮本身换成自绘的 scheme 选择器加导航 popover，由 [`draft-xcode-style-runtime-source-picker`](draft-xcode-style-runtime-source-picker.md) 决定 | 用户看过后指出 Xcode 26 的 scheme 选择器就在活动胶囊里；那份提案逆向了选择器与弹出列表，本提案「切换引擎的弹出按钮排在胶囊右边」那句不再成立 |
