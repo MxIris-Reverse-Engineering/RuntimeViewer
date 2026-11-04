@@ -5,7 +5,7 @@ import Testing
 /// The toolbar's runtime source picker in both of Xcode's styles: the width it wants, how big its
 /// icon is, where its title goes and when it fades, its highlight, the toolbar view that holds it in
 /// Xcode 27's style,
-/// and what it tells accessibility (proposal `draft-xcode-style-runtime-source-picker`; specs in
+/// and what it tells accessibility (proposal `0070-xcode-style-runtime-source-picker`; specs in
 /// `/Volumes/RE/Xcode/26.6/README.md` and `/Volumes/RE/Xcode/27.2-27B52/README.md`).
 ///
 /// The press itself is not driven here: the picker sends its action through `NSApp`, which a

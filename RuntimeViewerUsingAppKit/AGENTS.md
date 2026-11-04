@@ -635,7 +635,7 @@ old `NSPopUpButton` before the trailing buttons, whose menu `RuntimeSourceMenuAd
 with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` and
 `/Volumes/RE/Xcode/27.2-27B52/README.md`; background:
 `Documentations/Evolutions/draft-xcode-activity-progress.md` and
-`Documentations/Evolutions/draft-xcode-style-runtime-source-picker.md`.
+`Documentations/Evolutions/0070-xcode-style-runtime-source-picker.md`.
 
 - **The toolbar's items depend on the style**, so they come from `MainToolbarController`'s
   `defaultItemIdentifiers` alone, and `apply(activityStyle:)` changes over an open window by setting

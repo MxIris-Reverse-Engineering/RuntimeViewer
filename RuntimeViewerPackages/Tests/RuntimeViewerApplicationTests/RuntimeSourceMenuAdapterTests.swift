@@ -7,7 +7,7 @@ import Testing
 
 /// `RuntimeSourceMenuAdapter`: the classic toolbar's runtime source pop-up, the `NSPopUpButton` with
 /// the menu RuntimeViewer had before its toolbar followed Xcode (proposal
-/// `draft-xcode-style-runtime-source-picker`). A choice is made the way the pop-up makes it, by
+/// `0070-xcode-style-runtime-source-picker`). A choice is made the way the pop-up makes it, by
 /// sending the chosen item's action to its target: a `swift test` process has no `NSApp` to send it
 /// through.
 @Suite("RuntimeSourceMenuAdapter")

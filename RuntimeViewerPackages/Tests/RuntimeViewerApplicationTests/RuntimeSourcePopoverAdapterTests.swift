@@ -8,7 +8,7 @@ import Testing
 @testable import RuntimeViewerUI
 
 /// `RuntimeSourcePopoverAdapter`: the runtime source picker's popover on AppKitPlus's
-/// `NSNavigationPopoverController` — proposal `draft-xcode-style-runtime-source-picker`, spec in
+/// `NSNavigationPopoverController` — proposal `0070-xcode-style-runtime-source-picker`, spec in
 /// `/Volumes/RE/Xcode/27.2-27B52/README.md`, "The scheme picker's popover". The controller is a real
 /// one that is never shown: a popover cannot open in a test, so the user's choices and typing reach
 /// the adapter the way the controller hands them to its delegate.

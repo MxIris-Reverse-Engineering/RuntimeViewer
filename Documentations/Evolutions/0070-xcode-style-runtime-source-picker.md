@@ -1,6 +1,6 @@
-# Draft - 工具栏的来源选择器做成 Xcode 的 scheme 选择器：自绘按钮加导航 popover，Xcode 26 样式下放进活动胶囊
+# 0070 - 工具栏的来源选择器做成 Xcode 的 scheme 选择器：自绘按钮加导航 popover，Xcode 26 样式下放进活动胶囊
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-04
 - **最后更新**: 2026-11-04
 - **实现分支 / PR**: `feature/xcode-style-runtime-source-picker`（从 `next` 切出）
@@ -69,6 +69,7 @@
 ### 后续项
 
 - **过滤时保留底部命令**：给 AppKitPlus 的 `NSNavigationPopoverController` 加一个连同 footer 一起设置过滤结果的接口（对应 Xcode 的 `filteredContent`），发版后 RV 改用它。
+- **在 macOS 15 上看一遍**：三种样式（Xcode 26、Xcode 27、Classic）与弹出列表的测试和目视只在 macOS 26.7 与 27.2 上做过。
 
 ## 决策日志
 
@@ -95,3 +96,4 @@
 | 2026-11-04 | 实现完成，待用户看过后收尾 | 验证都在 Ultra（macOS 27.2，Xcode 27.2）上跑。`RuntimeViewerPackages` 从空构建目录编译通过；全量 780 个测试中 4 个失败：两个是测试里拿 CGFloat 跟整数算式比较的写法问题（已改），`FindCrossReferenceTests` 的 Call Hierarchy 满载超时是 `next` 上已有的，`ViewModelBaseTests` 的 100 毫秒计时满载时抖动；相关的 10 组单独重跑，80 个全部通过。App 用 Debug workspace（Debug-arm64e，不签名）编译通过，`RuntimeViewerCommandLine` 编译通过，各处锁文件没被改写。没做界面验证：两种样式下的样子、悬停展开的动画、弹出列表的位置与过滤，留给用户目视 |
 | 2026-11-04 | 推翻前面「图标一律缩进图标框」那一条：Xcode 27 样式下设备图标照 Xcode 画成符号自身大小（标题字号、medium、large 档，合并进 `DeviceGlyph` 给的配色），应用与文件图标仍是 18×18；胶囊里不变。选择器的图标改成 `RuntimeSourcePicker.Icon`（`.image` / `.symbol`），`DeviceGlyph` 新增不补方的 `symbolImage(…)`，视图模型另给选择器一份图标 | 用户看过后嫌正中的图标太小。原因是设备图标先补成正方形再缩进 18 点，Mac Studio 那样的宽图标只剩约 18×10；Xcode 给符号图标原尺寸（DVTKit `-[DVTPathComponentCell _iconSize]`，判断用私有的 `-[NSImage _isSymbolImage]`），所以由调用方声明哪个是符号，不去探测。AppKit 的 `withSymbolConfiguration(_:)` 会整个替换配置，照 Xcode 的 `iconApplyingSymbolConfiguration:` 先 `applying(_:)` 合并再设，否则蓝色屏幕没了 |
 | 2026-11-04 | 设置里的 Activity Style 加第四项 Classic：工具栏回到跟 Xcode 之前的样子，不显示进度，来源切换用回系统弹出按钮与原来的菜单。菜单由新的 `RuntimeSourceMenuAdapter` 从 `RuntimeSourcePickerContent` 生成，不把删掉的旧代码搬回来 | 用户要能用回最原始的样式，确认的范围是整个工具栏回到原样，而不只是换回弹出按钮。菜单与 popover 共用一份内容和同一组信号，`MainWindowController` 只多合并几路信号。与原菜单有一处不同：Open File… 与 Dependency Cache 原先挂在 Offline Files 一节末尾，没有离线文件时不出现；现在总在菜单最后、前面隔一条分隔线，与 popover 的底部一致。Automatic 仍只在 Xcode 26/27 之间选。文档：`RuntimeViewerUsingAppKit/AGENTS.md` 与术语表补上 Classic，设置页的说明改写 |
+| 2026-11-04 | 实现完成并落地：编号 0070，状态改 Implemented | 用户看过后收尾。看效果期间按用户的反馈改了三处，各有一行在上：Xcode 27 样式下设备图标照 Xcode 画成符号自身大小；设置里的 Classic 样式；Xcode 27 样式的标题在没打开镜像时改用自绘的 App 符号（Xcode 工程图标式的方框加放大镜），并让标题图标照 Xcode 超出槽位、不裁边，这两条记在 [`draft-xcode-activity-progress`](draft-xcode-activity-progress.md)。验证在 Ultra（macOS 27.2，Xcode 27.2）上跑：`RuntimeViewerPackages` 全量 793 个测试中 1 个失败，是 `FindCrossReferenceTests` 的 Call Hierarchy 满载时等 60 秒超时，单独重跑这组 27 个全部通过；App 用 Tuist workspace 编译通过。文档：不另写使用指南与实现说明，选择器没有调用方要守的契约，宽度规则写在 `ToolbarActivityView` 的文档注释里、由测试守着；术语表的「来源选择器」已补上 Classic，没有新术语；两条后续项登记进提案索引的「暂缓的后续项」 |

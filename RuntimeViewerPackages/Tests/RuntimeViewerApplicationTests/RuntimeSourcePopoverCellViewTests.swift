@@ -4,7 +4,7 @@ import Testing
 
 /// A row of the runtime source picker's popover: Xcode 27.2's `ActivityViewPopoverTableCellView` —
 /// where the checkmark, the icon and the title go, and how the filter's match shows (proposal
-/// `draft-xcode-style-runtime-source-picker`; spec in `/Volumes/RE/Xcode/27.2-27B52/README.md`, "The
+/// `0070-xcode-style-runtime-source-picker`; spec in `/Volumes/RE/Xcode/27.2-27B52/README.md`, "The
 /// scheme picker's popover", §3).
 @Suite("RuntimeSourcePopoverCellView")
 @MainActor

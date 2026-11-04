@@ -5,7 +5,7 @@ import Testing
 
 /// The activity capsule holding the runtime source picker, as Xcode 26 holds its scheme picker: how
 /// the text and the picker share the capsule, the per-activity narrowing, the widening on hover and
-/// what a click hits (proposal `draft-xcode-style-runtime-source-picker`; spec in
+/// what a click hits (proposal `0070-xcode-style-runtime-source-picker`; spec in
 /// `/Volumes/RE/Xcode/26.6/README.md`, "Scheme picker in the toolbar activity view"). The capsule is
 /// not in a window, so nothing animates and every layout lands at once.
 @Suite("Toolbar activity view with the source picker")
