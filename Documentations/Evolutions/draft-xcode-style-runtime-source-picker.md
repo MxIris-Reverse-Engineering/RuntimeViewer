@@ -23,8 +23,8 @@
 
 ### 要做的
 
-1. **选择器控件**：`RuntimeViewerUI` 新增一个自绘的 `NSControl`（暂名 `RuntimeSourcePicker`）。
-   - 图标加名字；悬停、按下、popover 打开期间的高亮照 Xcode 的路径组件画。
+1. **选择器控件**：`RuntimeViewerUI` 新增一个自绘的 `NSControl`，`RuntimeSourcePicker`。
+   - 图标加名字；悬停与 popover 打开期间的高亮照 Xcode 的路径组件画。按下没有单独的样子，Xcode 也没有。
    - 鼠标按下就弹出，所以按住拖进 popover、松开即选也能用。
    - 无障碍上报为弹出按钮。断开时照旧显示「<名字> (Disconnected)」。
 2. **popover**：用 `NSNavigationPopoverController`（AppKitPlus 0.18.0 起提供）。
@@ -36,16 +36,20 @@
    - Xcode 26 的样式：胶囊左侧放选择器，宽度规则、悬停展开、文字右对齐都照 Xcode。点在选择器上弹列表，点在胶囊别处照旧打开 Report 导航。工具栏右侧不再有独立的选择器。
    - Xcode 27 的样式：正中那一项的视图换成选择器，最小、最大宽度照 `IDESchemePickerToolbarView`。
    - 两种样式各用一个选择器实例，与两个标题项的做法相同。两个都绑同一份状态，点哪个就从哪个弹出。
+4. **代码放在哪**：
+   - `RuntimeViewerUI`：`RuntimeSourcePicker`；Xcode 27 样式的正中项视图 `RuntimeSourcePickerToolbarView`；列表的行 `RuntimeSourcePopoverCellView`；`ToolbarActivityView(showsSourcePicker:)` 管胶囊里的选择器与它的宽度规则。
+   - `RuntimeViewerApplication`：列表内容 `RuntimeSourcePickerContent` 与弹出列表的 `RuntimeSourcePopoverAdapter`。
+   - App：`MainViewModel` 输出 `runtimeSourcePickerContent`，`MainToolbarController.runtimeSourcePickers` 交出两个选择器，`MainWindowController` 绑定它们并接上适配器。原来只为弹出菜单服务的 `RuntimeSource+.swift` 删掉。
 
 ### 落地步骤
 
 每一步单独构建、测试通过后提交；构建与测试在 Ultra 上跑。
 
 1. **逆向**（已完成）：26.6 胶囊里选择器的位置、宽度、悬停与动画；DVTKit 的路径组件在工具栏里的画法；27.2 `IDESchemePickerToolbarView` 的尺寸与工具栏项设置；popover 的条目、footer、宽度与行视图版式。规格写进资料卷 Xcode 26.6 与 27.2（27B52）的 README（两台 Mac 上的副本一致），地址与可信度的标法同前一份提案。
-2. **选择器控件**，配测试：布局、按下即发 action、悬停状态、无障碍。
-3. **popover**：条目、过滤、选中与推入下一层，配测试（含土耳其语下的过滤）。
-4. **接进两种样式**：工具栏项、胶囊左侧的选择器与它的宽度规则、点击分区，配测试；删掉 `NSPopUpButton` 那一套（`SwitchSourceToolbarItem.popUpButton`、`restoreEngineMenuSelection()` 等）。
-5. **收尾**：
+2. **选择器控件**（已完成），配测试：想要的宽度、标题的位置与渐隐、高亮、正中项视图的约束、无障碍。
+3. **popover**（已完成）：条目、过滤、选中与推入下一层，配测试（含土耳其语下的过滤）。
+4. **接进两种样式**（已完成）：工具栏项、胶囊左侧的选择器与它的宽度规则、点击分区，配测试；删掉 `NSPopUpButton` 那一套。
+5. **收尾**（已完成）：
    - AppKitPlus 的下限从 0.18.0 抬到 0.19.0：0.19.0 修了显示过 `NSIconView` 的窗口永不释放的泄漏，导航 popover 正是这种窗口。同步根 `AGENTS.md` 的依赖下限一段。
    - 改写 `RuntimeViewerUsingAppKit/AGENTS.md` 的「The Toolbar's Activity Display」一节。
    - 在 [`draft-xcode-activity-progress`](draft-xcode-activity-progress.md) 的决策日志记一行：Xcode 26 样式下选择器的位置改由本提案决定。
@@ -78,3 +82,11 @@
 | 2026-11-04 | 每节都有主机名节头，与现在的菜单相同；Xcode 只在有 Recent 时才出节头 | 用户选定按主机分节，主机名本身就是有用的信息 |
 | 2026-11-04 | popover 设 push 导航；Xcode 27.2 不设层级样式 | Dependency Cache 要推入下一层列出 cache，Xcode 的 scheme 列表只有一层 |
 | 2026-11-04 | Xcode 27 样式的工具栏项仍是普通的 `NSToolbarItem`，用 `centeredItemIdentifiers` 居中 | Xcode 把它包进只有一项的 `NSToolbarItemGroup`、用旧的单数 `centeredItemIdentifier`；两者看起来应当一样（推断），现有的居中写法不改 |
+| 2026-11-04 | 图标一律按比例缩进图标框：胶囊里 16 点，正中 18 点 | Xcode 27 让符号图标保持自身大小、只把位图画成 18×18；RV 的来源图标有位图也有设备符号，统一画法免得两种图标大小不一 |
+| 2026-11-04 | 选择器的「激活」外观跟着窗口是不是 key window 走 | 与标题项一致；Xcode 用它自己的激活外观标志，判据没有逆向 |
+| 2026-11-04 | popover 打开时再按一下选择器就关掉它，不重新打开 | 照弹出按钮的习惯；Xcode 在这时是关掉还是重开，逆向定不下，要录屏才知道 |
+| 2026-11-04 | 两个包的锁文件把 AppKitPlus 从 0.18.0 抬到 0.20.0 | 下限抬到 0.19.0 后 0.18.0 不再合格；取 App 的 Debug 与 Distribution workspace 已钉的 0.20.0，两边用同一版 |
+| 2026-11-04 | 删掉 `RuntimeSource+.swift` | 里面是给原来那个弹出按钮填菜单的辅助代码，本来就没人调用，按钮去掉后更用不上 |
+| 2026-11-04 | 「按下即发 action」不写单元测试 | 选择器经 `NSApp` 派发 action，`swift test` 进程里没有 `NSApp`；仓库里其他控件的测试也绕开这一层 |
+| 2026-11-04 | 文档：`RuntimeViewerUsingAppKit/AGENTS.md` 那一节改名为「The Toolbar's Activity Display and Runtime Source Picker」并补上选择器与列表，根 `AGENTS.md` 的依赖下限改为 AppKitPlus 0.19.0，术语表新增「来源选择器」；离线模式使用指南、设置页 Offline Files 的说明和几处代码注释里的「引擎菜单」改为来源选择器的列表；不另写使用指南与实现说明 | 选择器没有调用方要遵守的契约；宽度规则写在 `ToolbarActivityView` 的文档注释里、由测试守着，逆向规格在资料卷，不必另写一份 |
+| 2026-11-04 | 实现完成，待用户看过后收尾 | 验证都在 Ultra（macOS 27.2，Xcode 27.2）上跑。`RuntimeViewerPackages` 从空构建目录编译通过；全量 780 个测试中 4 个失败：两个是测试里拿 CGFloat 跟整数算式比较的写法问题（已改），`FindCrossReferenceTests` 的 Call Hierarchy 满载超时是 `next` 上已有的，`ViewModelBaseTests` 的 100 毫秒计时满载时抖动；相关的 10 组单独重跑，80 个全部通过。App 用 Debug workspace（Debug-arm64e，不签名）编译通过，`RuntimeViewerCommandLine` 编译通过，各处锁文件没被改写。没做界面验证：两种样式下的样子、悬停展开的动画、弹出列表的位置与过滤，留给用户目视 |
