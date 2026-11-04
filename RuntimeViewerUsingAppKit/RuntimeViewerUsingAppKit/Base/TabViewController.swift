@@ -343,8 +343,8 @@ class TabViewController: NSLayerBackedViewController {
     /// selected segment shows the alternate image, from macOS 26 only the plain one.
     private func applySymbols(of tabViewItem: TabViewItem, at index: Int) {
         let isActive = activeTabIndices.contains(index)
-        let normalImage = tabViewItem.normalSymbol.nsuiImgae
-        let selectedImage = tabViewItem.selectedSymbol.nsuiImgae
+        let normalImage = tabViewItem.normalSymbol.nsuiImage
+        let selectedImage = tabViewItem.selectedSymbol.nsuiImage
         segmentedControl.setImage(isActive ? normalImage.withActivityDot() : normalImage, forSegment: index)
         segmentedControl.setAlternateImage(isActive ? selectedImage.withActivityDot() : selectedImage, forSegment: index)
     }
