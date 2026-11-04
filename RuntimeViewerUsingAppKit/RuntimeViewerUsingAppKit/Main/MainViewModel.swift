@@ -136,8 +136,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let tabSelected: Signal<Int>
         let tabClosed: Signal<Int>
         let newTabClicked: Signal<Void>
-        /// A choice from the engine menu's Dependency Cache submenu, for the
-        /// offline engine the window is on: `nil` reads the file alone.
+        /// A choice from the runtime source picker's Dependency Cache level, for
+        /// the offline engine the window is on: `nil` reads the file alone.
         let dependencyCacheSelected: Signal<RuntimeOfflineFile.DependencyCache?>
     }
 

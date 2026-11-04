@@ -10,8 +10,8 @@ import DependenciesMacros
 /// Lets an offline engine's process go once no document has been on the engine
 /// for a while, giving back the memory of the parsed file.
 ///
-/// The engine stays in the engine menu, suspended; whoever brings a document
-/// back to it — the engine menu, opening the file again — resumes it first, in
+/// The engine stays in the runtime source picker's list, suspended; whoever brings a
+/// document back to it — that list, opening the file again — resumes it first, in
 /// a new instance of the offline service that reads the file anew. A document
 /// that comes back within the grace period finds the engine as it was.
 @Loggable

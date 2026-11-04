@@ -59,7 +59,7 @@ struct OfflineSettingsView: View {
             } header: {
                 Text("Dependency Caches")
             } footer: {
-                Text("A file built for macOS or Mac Catalyst reads what it links from this Mac's dyld shared cache. A file built for another platform reads it from a cache registered here: of its platform's caches — a simulator's file pairs only with that simulator's — the oldest one no older than the SDK the file was built with, or the newest when all are older. With none registered for its platform, the file is read alone. The Dependency Cache menu at the end of the Offline Files section in the engine menu picks another for an open file.")
+                Text("A file built for macOS or Mac Catalyst reads what it links from this Mac's dyld shared cache. A file built for another platform reads it from a cache registered here: of its platform's caches — a simulator's file pairs only with that simulator's — the oldest one no older than the SDK the file was built with, or the newest when all are older. With none registered for its platform, the file is read alone. Dependency Cache at the bottom of the toolbar's runtime source list picks another for an open file.")
             }
         }
     }

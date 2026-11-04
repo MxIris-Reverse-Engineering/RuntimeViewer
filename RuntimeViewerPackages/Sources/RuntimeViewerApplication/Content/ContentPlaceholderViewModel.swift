@@ -11,8 +11,8 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     public enum Placeholder: Equatable {
         /// Nothing is selected.
         case noSelection
-        /// The window's offline file is being read, named as the engine menu
-        /// names it.
+        /// The window's offline file is being read, named as the runtime source
+        /// picker names it.
         case readingFile(named: String)
     }
 
