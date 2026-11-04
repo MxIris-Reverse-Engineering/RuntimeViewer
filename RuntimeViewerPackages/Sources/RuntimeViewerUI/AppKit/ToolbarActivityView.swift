@@ -495,10 +495,10 @@ public final class ToolbarActivityView: NSControl {
     private func scheduleSourcePickerHoverEnd() {
         sourcePickerHoverEndTask?.cancel()
         let task = DispatchWorkItem { [weak self] in
+            guard let self else { return }
             MainActor.assumeIsolated {
-                guard let self else { return }
-                sourcePickerHoverEndTask = nil
-                setSourcePickerHoverState(.notHovered)
+                self.sourcePickerHoverEndTask = nil
+                self.setSourcePickerHoverState(.notHovered)
             }
         }
         sourcePickerHoverEndTask = task
