@@ -255,8 +255,7 @@ public final class TitleToolbarItem: NSToolbarItem {
         let isKey = containerStackView.window?.isKeyWindow ?? true
         titleLabel.textColor = isKey ? .labelColor : .tertiaryLabelColor
         subtitleLabel.textColor = isKey ? .secondaryLabelColor : .tertiaryLabelColor
-        let isDark = containerStackView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        textStackView.layer?.compositingFilter = isDark ? "plusL" : "plusD"
+        textStackView.layer?.compositingFilter = containerStackView.effectiveAppearance.vibrancyCompositingFilter
     }
 
     private func updateWidthLimits() {

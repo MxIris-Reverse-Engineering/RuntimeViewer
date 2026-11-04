@@ -668,8 +668,7 @@ extension ToolbarActivityView {
 
         override func updateLayer() {
             super.updateLayer()
-            let nonVibrantAppearance = NSAppearance(named: effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) ?? .aqua) ?? effectiveAppearance
-            nonVibrantAppearance.performAsCurrentDrawingAppearance {
+            effectiveAppearance.nonVibrantVariant.performAsCurrentDrawingAppearance {
                 layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
             }
         }

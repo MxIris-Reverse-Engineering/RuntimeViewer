@@ -8,9 +8,10 @@ import UIFoundation
 /// `IDEActivityWindowTitleView.documentIconProgressIndicator` with its `ActivityProgressViewStyle`
 /// (IDEKit 27.2 27B52, 0xA526A0 and 0xA57FC4), in Core Animation.
 ///
-/// While a run goes on, a ring takes the icon's place: a track in the secondary fill and an arc in
-/// the accent colour, which springs to each new value, spins while the progress is not known and
-/// turns once more when the progress goes back. When the run ends, the arc fills the circle and the
+/// While a run goes on, a ring takes the icon's place: a track in the secondary fill, blended with
+/// the toolbar behind it as SwiftUI blends a fill over a material, and an arc in the accent colour,
+/// which springs to each new value, spins while the progress is not known and turns once more
+/// when the progress goes back. When the run ends, the arc fills the circle and the
 /// track fades; 0.35 seconds later the centre closes and the corners grow into a rounded square;
 /// 0.45 seconds after the end the square clears and the icon fades in — the ring turns back into the
 /// icon. A new run plays it backwards. With nothing running the icon shows. A click anywhere sends
@@ -153,8 +154,13 @@ public final class TitleActivityIndicatorView: NSControl {
         let ringBounds = CGRect(x: 0, y: 0, width: Self.ringSize, height: Self.ringSize)
         ringContainerLayer.bounds = ringBounds
         ringContainerLayer.masksToBounds = false
+        // SwiftUI fades the slot of a window that is not key layer by layer (`alphaValue`, below), so
+        // the blended track keeps adding to the toolbar. Faded as a group, the track would blend with
+        // the group's empty backdrop instead and come out dark.
+        layer?.allowsGroupOpacity = false
+        ringContainerLayer.allowsGroupOpacity = false
 
-        trackLayer.frame = ringBounds
+        trackLayer.bounds = ringBounds
         // `Circle().strokeBorder(lineWidth:)`: the stroke stays inside the circle.
         trackLayer.path = CGPath(ellipseIn: ringBounds.insetBy(dx: Self.thickness / 2, dy: Self.thickness / 2), transform: nil)
         trackLayer.fillColor = nil
@@ -170,7 +176,12 @@ public final class TitleActivityIndicatorView: NSControl {
         iconLayer.frame = ringBounds.insetBy(dx: iconInset, dy: iconInset)
         iconLayer.contentsGravity = .center
 
-        ringContainerLayer.addSublayer(trackLayer)
+        // The track hangs off the view's own layer, below the ring's container, not in it. A view's
+        // layer lets its sublayers blend with what is behind the view (AppKit turns its
+        // `allowsGroupBlending` off), while a plain layer such as the container keeps them blending
+        // among themselves: in it the track blended with nothing and showed its own near-black grey.
+        // The container turns, but a full circle looks the same turned.
+        layer?.addSublayer(trackLayer)
         ringContainerLayer.addSublayer(shapeLayer)
         ringContainerLayer.addSublayer(iconLayer)
         layer?.addSublayer(ringContainerLayer)
@@ -202,7 +213,9 @@ public final class TitleActivityIndicatorView: NSControl {
     public override func layout() {
         super.layout()
         withoutImplicitAnimations {
-            ringContainerLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            let center = CGPoint(x: bounds.midX, y: bounds.midY)
+            trackLayer.position = center
+            ringContainerLayer.position = center
         }
     }
 
@@ -219,13 +232,34 @@ public final class TitleActivityIndicatorView: NSControl {
     public override func updateLayer() {
         super.updateLayer()
         let scale = window?.backingScaleFactor ?? 2
+        trackLayer.strokeColor = Self.trackColor(in: effectiveAppearance)
+        trackLayer.compositingFilter = Self.trackCompositingFilter(in: effectiveAppearance)
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            trackLayer.strokeColor = NSColor.secondarySystemFill.cgColor
             shapeLayer.shapeFillColor = NSColor.controlAccentColor.cgColor
             // Drawn here, so an icon that draws for the appearance follows it.
             iconLayer.contents = icon?.layerContents(forContentsScale: scale)
         }
         countLabel.textColor = isInKeyWindow ? .secondaryLabelColor : .tertiaryLabelColor
+    }
+
+    /// The track's colour in a view of `appearance`: the secondary fill as a vibrant appearance has
+    /// it. Xcode strokes the track in `.fill.secondary` over a background material
+    /// (`ActivityProgressViewStyle`'s `underlyingFill`, IDEKit 27.2 27B52 0xA59074), which SwiftUI
+    /// draws as that vibrant grey blended with what is behind it (`trackCompositingFilter(in:)`): the
+    /// toolbar shows through it lighter by 20 of 255 in a dark window and darker by 25 in a light one.
+    /// Laid over the toolbar unblended, the grey is near black in a dark window.
+    private static func trackColor(in appearance: NSAppearance) -> CGColor {
+        var color = NSColor.secondarySystemFill.cgColor
+        appearance.vibrantVariant.performAsCurrentDrawingAppearance {
+            color = NSColor.secondarySystemFill.cgColor
+        }
+        return color
+    }
+
+    /// How the track blends with the toolbar: plus-lighter in a dark appearance and plus-darker in a
+    /// light one, as SwiftUI blends a fill over a material.
+    private static func trackCompositingFilter(in appearance: NSAppearance) -> String {
+        appearance.vibrancyCompositingFilter
     }
 
     public override func viewWillMove(toWindow newWindow: NSWindow?) {

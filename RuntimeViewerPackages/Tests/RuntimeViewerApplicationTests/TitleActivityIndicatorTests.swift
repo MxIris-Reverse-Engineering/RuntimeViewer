@@ -74,6 +74,75 @@ struct TitleActivityIndicatorTests {
         #expect(TitleActivityIndicatorView.fractionCompleted(for: state(progress: .indeterminate)) == nil)
     }
 
+    /// The toolbar gives its views a vibrant appearance, in which the secondary fill is an opaque grey
+    /// meant to be blended with what is behind it. The track came out near black in a dark window,
+    /// first because it was laid over the toolbar unblended, then because it sat in a plain layer,
+    /// which keeps its sublayers' blending among them. The indicator's own layers are rendered here by
+    /// Core Animation's renderer, which does both as the window server does; what Xcode shows is
+    /// SwiftUI's own rendering of its track. The appearances are the toolbar's two and the two a view
+    /// has outside it.
+    @Test("The track lightens what is behind it in a dark appearance and darkens it in a light one, as Xcode's does", arguments: [true, false], [true, false])
+    func trackBlendsWithWhatIsBehindItAsXcodes(isDark: Bool, isVibrant: Bool) throws {
+        let appearanceName: NSAppearance.Name = switch (isDark, isVibrant) {
+        case (true, true): .vibrantDark
+        case (true, false): .darkAqua
+        case (false, true): .vibrantLight
+        case (false, false): .aqua
+        }
+        let indicator = try Self.indicatorShowingAQuarterOfARun(in: appearanceName)
+        // Xcode's toolbar behind the title is #202027 in a dark window, and close to white in a light one.
+        let backdropWhite = isDark ? 32 : 236
+
+        let shown = try Self.renderedTrack(of: indicator, overWhite: backdropWhite)
+        let xcodes = try secondaryFillOverMaterial(isDark: isDark, backdropWhite: backdropWhite)
+
+        #expect(zip(shown, xcodes).allSatisfy { abs($0 - $1) <= 1 }, "ours \(shown), Xcode's \(xcodes)")
+    }
+
+    /// Xcode fades the slot of a window that is not key to half, and SwiftUI applies that to the track
+    /// itself, so it still lightens the toolbar, by half as much. A layer with sublayers fades them as
+    /// a group unless told not to, and a blended track inside such a group blends with the group's
+    /// empty backdrop instead.
+    @Test("Half transparent in a window that is not key, the track still lightens what is behind it, as Xcode's does")
+    func halfTransparentTrackBlendsAsXcodes() throws {
+        let indicator = try Self.indicatorShowingAQuarterOfARun(in: .vibrantDark)
+        indicator.alphaValue = 0.5
+
+        let shown = try Self.renderedTrack(of: indicator, overWhite: 32)
+        let xcodes = try secondaryFillOverMaterial(isDark: true, backdropWhite: 32, opacity: 0.5)
+
+        #expect(zip(shown, xcodes).allSatisfy { abs($0 - $1) <= 1 }, "ours \(shown), Xcode's \(xcodes)")
+    }
+
+    /// An indicator in `appearanceName` showing a run a quarter done, laid out at its own size and
+    /// with its colours resolved.
+    private static func indicatorShowingAQuarterOfARun(in appearanceName: NSAppearance.Name) throws -> TitleActivityIndicatorView {
+        let indicator = TitleActivityIndicatorView()
+        indicator.appearance = try #require(NSAppearance(named: appearanceName))
+        indicator.apply(
+            ToolbarActivityState(reportIdentifier: UUID(), isCompleted: false, segments: [], progress: .determinate(percent: 25), activityCount: 1),
+            animated: false
+        )
+        indicator.needsLayout = true
+        indicator.layoutSubtreeIfNeeded()
+        indicator.updateLayer()
+        return indicator
+    }
+
+    /// The track at nine o'clock, clear of the arc of a quarter run, rendered over a grey of
+    /// `backdropWhite`.
+    private static func renderedTrack(of indicator: TitleActivityIndicatorView, overWhite backdropWhite: Int) throws -> [Double] {
+        let layer = try #require(indicator.layer)
+        let side = 40
+        // The rendering centres the indicator, and the ring on it; the track runs just inside the
+        // ring's edge, `thickness` wide.
+        let point = CGPoint(
+            x: CGFloat(side) / 2 - TitleActivityIndicatorView.ringSize / 2 + TitleActivityIndicatorView.thickness / 2,
+            y: CGFloat(side) / 2
+        )
+        return try renderedPixel(of: layer, overWhite: backdropWhite, side: side, at: point)
+    }
+
     @Test("The title's icon is one glyph in one flat colour, with nothing behind it")
     func documentIconIsOneFlatColour() throws {
         let symbol = try #require(NSImage(systemSymbolName: "shippingbox", accessibilityDescription: nil))

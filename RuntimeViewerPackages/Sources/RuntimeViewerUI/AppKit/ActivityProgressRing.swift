@@ -101,13 +101,30 @@ public final class ActivityProgressRing: LayerBackedView {
 
     public override func updateLayer() {
         super.updateLayer()
+        trackLayer.strokeColor = Self.trackColor(
+            in: effectiveAppearance,
+            increasesContrast: NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        )
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            let trackColor = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-                ? NSColor(white: Self.increasedContrastTrackWhite, alpha: 1)
-                : NSColor.tertiaryLabelColor
-            trackLayer.strokeColor = trackColor.cgColor
             arcLayer.strokeColor = (strokeColor ?? .controlAccentColor).cgColor
         }
+    }
+
+    /// The track's colour in a view of `appearance`: the tertiary label colour as an appearance
+    /// without vibrancy has it, or Xcode's grey when the user asks for more contrast.
+    /// `DVTProgressRingLayer.updateAppearance()` (DVTUserInterfaceKit 26.6, 0x151FB0) resolves it in
+    /// the application's appearance, which has no vibrancy and is the view's own without it unless a
+    /// window sets one of its own. In the toolbar's vibrant appearance the colour is an opaque grey
+    /// meant to be blended, darker than Xcode's track in a dark window and lighter in a light one.
+    static func trackColor(in appearance: NSAppearance, increasesContrast: Bool) -> CGColor {
+        if increasesContrast {
+            return NSColor(white: increasedContrastTrackWhite, alpha: 1).cgColor
+        }
+        var color = NSColor.tertiaryLabelColor.cgColor
+        appearance.nonVibrantVariant.performAsCurrentDrawingAppearance {
+            color = NSColor.tertiaryLabelColor.cgColor
+        }
+        return color
     }
 
     /// Shows `newValue`, animating a determinate change when `animated` is on, as

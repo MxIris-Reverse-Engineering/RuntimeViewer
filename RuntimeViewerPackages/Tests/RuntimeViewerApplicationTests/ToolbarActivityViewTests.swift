@@ -111,4 +111,30 @@ struct ToolbarActivityViewTests {
         #expect(spinsOnceDeterminate == false)
         #expect(ring.value == .determinate(40))
     }
+
+    /// Xcode resolves the ring's track in the application's appearance
+    /// (`DVTProgressRingLayer.updateAppearance()`, DVTUserInterfaceKit 26.6 0x151FB0), which has no
+    /// vibrancy. The toolbar gives its views a vibrant appearance, in which the tertiary label colour
+    /// is an opaque grey meant to be blended with what is behind it: drawn as it is, the track came
+    /// out darker than Xcode's in a dark window and lighter in a light one.
+    @Test("The ring's track is the tertiary label colour without vibrancy, as Xcode's is, in the toolbar's vibrant appearance too", arguments: [true, false])
+    func ringTrackIsTheTertiaryLabelColourWithoutVibrancy(isDark: Bool) throws {
+        let toolbarAppearance = try #require(NSAppearance(named: isDark ? .vibrantDark : .vibrantLight))
+        let applicationAppearance = try #require(NSAppearance(named: isDark ? .darkAqua : .aqua))
+        var xcodesTrackColor = NSColor.tertiaryLabelColor.cgColor
+        applicationAppearance.performAsCurrentDrawingAppearance {
+            xcodesTrackColor = NSColor.tertiaryLabelColor.cgColor
+        }
+
+        let trackColor = ActivityProgressRing.trackColor(in: toolbarAppearance, increasesContrast: false)
+
+        let shown = try Self.sRGBComponents(of: trackColor)
+        let xcodes = try Self.sRGBComponents(of: xcodesTrackColor)
+        #expect(zip(shown, xcodes).allSatisfy { abs($0 - $1) < 0.002 }, "ours \(shown), Xcode's \(xcodes)")
+    }
+
+    private static func sRGBComponents(of color: CGColor) throws -> [CGFloat] {
+        let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        return try #require(color.converted(to: colorSpace, intent: .defaultIntent, options: nil)?.components)
+    }
 }
