@@ -2,13 +2,13 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-11-03
-- **最后更新**: 2026-11-03
+- **最后更新**: 2026-11-04
 - **所属愿景**: [自建代码视图引擎](../Visions/CodeViewEngine.md)
 - **实现分支 / PR**: `feature/reconstructed-source-editor`（worktree `.worktrees/RuntimeViewer-ReconstructedSourceEditor`，从 `next` 切出）
 
 ## 摘要
 
-内容视图的 SourceEditor 编辑器（[0009](0009-content-editor-engine-selection.md)）原来是在运行时从用户安装的 Xcode 里 `dlopen` 四个私有框架，再加载一个用手写接口桩编出来的桥接 bundle：用户必须装 Xcode，框架也不能随 App 分发。SourceEditor 仓库（`Mx-Iris/SourceEditor`，私有）已经照 Xcode 26.6 把这几个框架重建出来，以 xcframework 的形式发在它的 GitHub Release 上（目前是 26.6.1）。本提案让官方构建直接链接重建版：桥接层改成 App 直接链接、直接调用的 framework，它再直接链接重建版，框架随 App 带上；运行时加载和接口桩全部删掉。拿不到重建版的外部构建在编译时跳过这部分，只用 `NSTextView`。
+内容视图的 SourceEditor 编辑器（[0009](0009-content-editor-engine-selection.md)）原来是在运行时从用户安装的 Xcode 里 `dlopen` 四个私有框架，再加载一个用手写接口桩编出来的桥接 bundle：用户必须装 Xcode，框架也不能随 App 分发。SourceEditor 仓库（`Mx-Iris/SourceEditor`，私有）已经照 Xcode 26.6 把这几个框架重建出来，以 xcframework 的形式发在它的 GitHub Release 上（目前钉的是 26.6.2）。本提案让官方构建直接链接重建版：桥接层改成 App 直接链接、直接调用的 framework，它再直接链接重建版，框架随 App 带上；运行时加载和接口桩全部删掉。拿不到重建版的外部构建在编译时跳过这部分，只用 `NSTextView`。
 
 ## 方案
 
@@ -81,3 +81,4 @@
 | 2026-11-03 | 不改成 SwiftPM 集成：既不直接依赖私有包，也不包一层本地包 | 直接依赖私有包：依赖解析在编译之前，没有 SourceEditor 权限的人和 CI 在这一步就失败，做不到退回 `NSTextView`，各台机器还要配 `.netrc`。本地包（清单按下载的 xcframework 在不在声明 `binaryTarget`）做了实验：`swift build` 和 `xcodebuild` 都按清单文字缓存解析结果，全机共享，换全新的构建目录也一样，下载前后不会切换；`touch` 清单无效，改清单文字才重新解析；框架删掉以后旧的构建产物还让 `canImport` 成立。用户事先同意过：实验不成就保持现状 |
 | 2026-11-03 | 保持动态链接，不改成可合并库，也不改成静态链接 | 用户决定。目的是让 App 里看不到这几个框架，两种办法都做不到：可合并库在 Release 里把代码并进 App，但 Xcode 仍把框架目录（资源和 `com.apple.dt.*` 的 Info.plist）嵌进去，只去掉可执行文件，因为重建版靠 `Bundle(for:)` 找资源；静态链接能去掉目录，但重建版二十多处照原版写的 `Bundle(for:)` / `bundleForClass:` 会指向 App 自己的包，`Assets.car` 还与 App 的同名，得改重建版的资源查找。两种都要 SourceEditor 重新出一版，重建版的类名和模块名也仍留在 App 的可执行文件里 |
 | 2026-11-03 | 加回归测试 `SemanticRetypingTests`：类型引用要按语义区间改写成类型 | 接上 26.6.1 后，接口里的类型引用不着色，关键字和声明正常。原因在重建版，不是接入改出来的：`SourceModelLanguageService.nodeTypeAdjuster` 漏了原版的 didSet（Xcode 26.6 的 setter 在 0x23908，调用 0x23734 的 didSet，把 adjuster 交给 syntax token provider），桥接装上的 adjuster 从没被调用。测试经桥接的 `setSource` 传入语义区间，再读编辑器给一行着色用的 `enumerateSyntaxTokensOnLine`。同一个测试二进制在 26.6.1 上失败（`Float` 是 `.identifier(nil)`，对照的关键字正常），换成 Xcode 26.6 原版的四个框架就通过：`TEST_RUNNER_DYLD_FRAMEWORK_PATH` 先指向只放这四个框架链接的目录，再接构建产物目录；不能放整个 `SharedFrameworks`，里面的 `Testing.framework` 会让测试包加载失败。修复由 SourceEditor 的 LanguageServices 区做，随 26.6.2 发布；换 pin 后这条测试应转为通过，与换 pin 同批提交 |
+| 2026-11-04 | pin 换到 26.6.2 | 26.6.2 补回了 `nodeTypeAdjuster` 的 didSet，接口里的类型引用重新着色；它另外修了文档注释里的标记不着色，三个 nib 改由 xib 编译（运行时行为不变）。四个 SHA-256 与 26.6.2 tag 里 `Package.swift` 给的一致。链接关系没变：仍只要这四个框架，用不到 `SourceEditorRegExSupport`，也仍只有 arm64。验证（Ultra，Xcode 27.2，Debug-arm64e）：桥接测试 35 个通过 33 个，`SemanticRetypingTests` 转为通过，没过的 2 个仍是 `next` 上早就不过的 `SourceEditorScrollerTests`；构建产物目录与 App 里四个框架的 LC_UUID 都和 26.6.2 的下载一致，说明测试和 App 用的都是 26.6.2；`codesign --verify --deep --strict` 通过。没验证：Release 的 universal 构建、公证、实际启动 App |
