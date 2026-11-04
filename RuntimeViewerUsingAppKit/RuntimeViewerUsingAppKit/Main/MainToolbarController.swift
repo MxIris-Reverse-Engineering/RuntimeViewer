@@ -128,10 +128,9 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     /// picker in the middle keeps its own width.
     static let noCenteredItemWidthRatio: CGFloat = -1
 
-    /// Whether the activity shows in Xcode 26's capsule in the middle of the toolbar, rather than in
-    /// Xcode 27's window title — the style the user's setting stands for, which `apply(activityStyle:)`
-    /// changes.
-    private(set) var showsActivityCapsule = Settings.ToolbarActivityStyle.automatic.resolved == .capsule
+    /// The style the toolbar is in — the one the user's setting stands for on this system, never
+    /// `automatic` — which `apply(activityStyle:)` changes.
+    private(set) var activityStyle = Settings.ToolbarActivityStyle.automatic.resolved
 
     /// Whether the toolbar has asked for its items. Until it has, a change of style needs nothing
     /// but the next answer.
@@ -151,6 +150,19 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             super.init(itemIdentifier: .Main.switchSource)
             view = pickerView
             visibilityPriority = .high
+        }
+    }
+
+    /// The runtime source in the classic toolbar, the one RuntimeViewer had before it followed Xcode: a
+    /// pop-up button before the trailing buttons, whose menu `RuntimeSourceMenuAdapter` fills.
+    final class SwitchSourcePopUpToolbarItem: NSToolbarItem {
+        let popUpButton = NSPopUpButton()
+
+        init() {
+            super.init(itemIdentifier: .Main.switchSourcePopUp)
+            view = popUpButton
+            popUpButton.controlSize = .large
+            popUpButton.bezelStyle = .toolbar
         }
     }
 
@@ -184,6 +196,10 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     let switchSourceItem = SwitchSourceToolbarItem().then {
+        $0.label = "Runtime Source"
+    }
+
+    let switchSourcePopUpItem = SwitchSourcePopUpToolbarItem().then {
         $0.label = "Runtime Source"
     }
 
@@ -227,12 +243,12 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         updateCenteredItem()
     }
 
-    /// Shows the activity in the style `activityStyle` stands for on this system, changing over the
+    /// Shows the toolbar in the style `activityStyle` stands for on this system, changing over the
     /// items of a toolbar already in a window.
     func apply(activityStyle: Settings.ToolbarActivityStyle) {
-        let showsActivityCapsule = activityStyle.resolved == .capsule
-        guard showsActivityCapsule != self.showsActivityCapsule else { return }
-        self.showsActivityCapsule = showsActivityCapsule
+        let resolvedStyle = activityStyle.resolved
+        guard resolvedStyle != self.activityStyle else { return }
+        self.activityStyle = resolvedStyle
         updateCenteredItem()
         // Diffed by AppKit against the items already there, so the ones both styles have stay put.
         if hasProvidedItems {
@@ -240,24 +256,37 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    /// The capsule in the middle, as wide as Xcode 26 makes it; or the runtime source picker at its own
-    /// width, where Xcode 27 puts its scheme and run destination.
+    /// The capsule in the middle, as wide as Xcode 26 makes it; the runtime source picker at its own
+    /// width, where Xcode 27 puts its scheme and run destination; or, in the classic toolbar, nothing
+    /// in the middle.
     private func updateCenteredItem() {
-        if showsActivityCapsule {
+        switch activityStyle {
+        case .capsule:
             toolbar.centeredItemIdentifiers = [.Main.activity]
             toolbar.box.preferredCenteredItemWidthRatio = Self.activityCapsuleWidthRatio
-        } else {
+        case .windowTitle:
             toolbar.centeredItemIdentifiers = [.Main.switchSource]
+            toolbar.box.preferredCenteredItemWidthRatio = Self.noCenteredItemWidthRatio
+        case .classic, .automatic:
+            // `automatic` never gets here: the style is resolved.
+            toolbar.centeredItemIdentifiers = []
             toolbar.box.preferredCenteredItemWidthRatio = Self.noCenteredItemWidthRatio
         }
     }
 
-    /// The centered item stands between two flexible spaces: the capsule, which holds the runtime
-    /// source picker as Xcode 26's holds its scheme picker, or in Xcode 27's style the picker itself.
+    /// In Xcode's styles the centered item stands between two flexible spaces: the capsule, which holds
+    /// the runtime source picker as Xcode 26's holds its scheme picker, or in Xcode 27's style the picker
+    /// itself. The classic toolbar is the one from before them: the title, then the runtime source
+    /// pop-up just before the trailing buttons.
     private var defaultItemIdentifiers: [NSToolbarItem.Identifier] {
-        let middleIdentifiers: [NSToolbarItem.Identifier] = showsActivityCapsule
-            ? [.Main.title, .flexibleSpace, .Main.activity, .flexibleSpace]
-            : [.Main.activityTitle, .flexibleSpace, .Main.switchSource, .flexibleSpace]
+        let middleIdentifiers: [NSToolbarItem.Identifier] = switch activityStyle {
+        case .capsule:
+            [.Main.title, .flexibleSpace, .Main.activity, .flexibleSpace]
+        case .windowTitle:
+            [.Main.activityTitle, .flexibleSpace, .Main.switchSource, .flexibleSpace]
+        case .classic, .automatic:
+            [.Main.title, .flexibleSpace, .Main.switchSourcePopUp]
+        }
         return [
             .toggleSidebar,
             .Main.sidebarBack,
@@ -296,6 +325,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.share,
             .Main.save,
             .Main.switchSource,
+            .Main.switchSourcePopUp,
             .Main.generationOptions,
             .Main.loadFrameworks,
             .Main.attach,
@@ -320,6 +350,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return saveItem
         case .Main.switchSource:
             return switchSourceItem
+        case .Main.switchSourcePopUp:
+            return switchSourcePopUpItem
         case .Main.generationOptions:
             return generationOptionsItem
         case .Main.loadFrameworks:
@@ -355,6 +387,7 @@ extension NSToolbarItem.Identifier {
         static let share: NSToolbarItem.Identifier = "share"
         static let save: NSToolbarItem.Identifier = "save"
         static let switchSource: NSToolbarItem.Identifier = "switchSource"
+        static let switchSourcePopUp: NSToolbarItem.Identifier = "switchSourcePopUp"
         static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
         static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
         static let installHelper: NSToolbarItem.Identifier = "installHelper"

@@ -28,7 +28,7 @@ struct GeneralSettingsView: View {
             } header: {
                 Text("Toolbar")
             } footer: {
-                Text("Xcode 26 shows the progress of background work in a capsule in the middle of the toolbar. Xcode 27 shows it in place of the window title's icon and puts the Runtime Source menu in the middle. Automatic follows the Xcode of this system: Xcode 27 from macOS 27.")
+                Text("Xcode 26 shows the progress of background work in a capsule in the middle of the toolbar, with the runtime source picker at its leading edge. Xcode 27 shows it in place of the window title's icon and puts the runtime source picker in the middle. Classic is the toolbar from before both: no progress in it, and the runtime source as a pop-up menu. Automatic follows the Xcode of this system: Xcode 27 from macOS 27.")
             }
 
             Section {
