@@ -46,12 +46,12 @@ are regenerated. The badge's two layers come out of
 its group settings are the BETA badge's. Background: `Documentations/Evolutions/0028-catalyst-helper-icon.md`.
 
 **The app has a symbol drawn after the icon, and the two change together.** `runtimeviewer` in the app's
-`Assets.xcassets` (`RuntimeViewerSymbols.runtimeViewer`) is the icon's lens ring with the magnifier in it,
-as an SF Symbol: the Xcode 27 style's window title shows it, in one colour, while no image is open. Its
-template is written by hand — three small-scale masters whose paths have the same commands in the same
-order, so that `actool` interpolates the weights — and its comment says where each measure comes from.
-An edit to the icon's lens or magnifier (`Disc*.svg`, `Magnifier.svg`) redraws the symbol in the same
-commit.
+`Assets.xcassets` (`RuntimeViewerSymbols.runtimeViewer`) is Xcode's project-icon frame with the icon's
+magnifier in it, as an SF Symbol: the Xcode 27 style's window title shows it, in one colour, while no image
+is open, as Xcode's title shows its project. Its template is written by hand — three small-scale masters
+whose paths have the same commands in the same order, so that `actool` interpolates the weights — and its
+comment says where each part comes from. An edit to the icon's magnifier (`Magnifier.svg`) redraws the
+symbol's in the same commit.
 
 **`actool` fails silently here.** Ask for an app icon that is not among its inputs and it exits 0
 with an *empty* partial `Info.plist`: no error, no icon, a shipped app with a blank tile. That is

@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 3300 2200">
- <!--RuntimeViewer's own symbol: the app icon's lens ring with the magnifier in it. The ring follows the
-      system `circle` and the magnifier `magnifyingglass.circle` (sizes and stroke widths measured at
-      100 points, small scale, on macOS 27.2); the magnifier's place in the ring is the app icon's
-      (Resources/AppIcon.icon: lens radius 0.41 of the ring, centre 0.115 of it up and left, handle at
-      45 degrees). Each master is one path with the same commands in the same order, so that actool can
-      interpolate the weights between them: the ring (outer, then its hole the other way round), the
-      magnifier as one outline (lens and handle merged, so no fill rule is needed), then the lens's hole.
+ <!--RuntimeViewer's own symbol, after Xcode 27's project icon (`doc-project`, which the window title
+      shows as a frame with a hammer in it): the same frame with the app icon's magnifier in place of
+      the hammer.
+      - The frame is doc-project's two outer contours, unchanged, from the Xcode 27 template exported
+        into XCOrganizer (XCOrganizerUICore/Resources/XcodeSymbols.xcassets/doc-project.symbolset).
+        doc-project's filled inner plate and hammer are left out: the title draws its frame hollow.
+      - The magnifier keeps the app icon's proportions (Resources/AppIcon.icon: handle at 45 degrees,
+        its tip 2.19 lens radii from the lens centre), centred in the frame. Lens radius and stroke:
+        20.5 and 2.25 ultralight, 20 and 6.6 regular, 19.5 and 9.5 black.
+      - The margins are symmetric, unlike doc-project's, so that the title centres the frame.
+      Each master is one path with the same commands in the same order, so that actool can
+      interpolate the weights: the frame's outer and inner contours (opposite directions), the
+      magnifier as one outline (lens and handle merged, so no fill rule is needed), the lens's hole.
       The template's layout is the one Private Symbols writes (its fixture.frame).-->
  <style>.SFSymbolsPreviewWireframe {fill:none;opacity:1.0;stroke:black;stroke-width:0.5}</style>
  <g id="Notes">
@@ -22,22 +28,22 @@
   <line id="Capline-M" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="1055.541" y2="1055.541"/>
   <line id="Baseline-L" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="1556" y2="1556"/>
   <line id="Capline-L" style="fill:none;stroke:#27AAE1;opacity:1;stroke-width:0.5;" x1="263" x2="3036" y1="1485.541" y2="1485.541"/>
-  <line id="right-margin-Black-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="2982.274" x2="2982.274" y1="600.785" y2="720.121"/>
-  <line id="left-margin-Black-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="2884.524" x2="2884.524" y1="600.785" y2="720.121"/>
-  <line id="right-margin-Regular-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="1496.094" x2="1496.094" y1="600.785" y2="720.121"/>
-  <line id="left-margin-Regular-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="1403.594" x2="1403.594" y1="600.785" y2="720.121"/>
-  <line id="right-margin-Ultralight-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="603.836" x2="603.836" y1="600.785" y2="720.121"/>
-  <line id="left-margin-Ultralight-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="515.586" x2="515.586" y1="600.785" y2="720.121"/>
+  <line id="right-margin-Black-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="2992.14" x2="2992.14" y1="600.785" y2="720.121"/>
+  <line id="left-margin-Black-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="2874.659" x2="2874.659" y1="600.785" y2="720.121"/>
+  <line id="right-margin-Regular-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="1507.594" x2="1507.594" y1="600.785" y2="720.121"/>
+  <line id="left-margin-Regular-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="1392.094" x2="1392.094" y1="600.785" y2="720.121"/>
+  <line id="right-margin-Ultralight-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="616.401" x2="616.401" y1="600.785" y2="720.121"/>
+  <line id="left-margin-Ultralight-S" style="fill:none;stroke:#00AEEF;stroke-width:0.5;opacity:1.0;" x1="503.022" x2="503.022" y1="600.785" y2="720.121"/>
  </g>
  <g id="Symbols">
-  <g id="Black-S" transform="matrix(1 0 0 1 2884.524 696)">
-   <path class="SFSymbolsPreviewWireframe" d="M48.875 -77.355C72.14 -77.355 91 -58.494 91 -35.23C91 -11.965 72.14 6.895 48.875 6.895C25.61 6.895 6.75 -11.965 6.75 -35.23C6.75 -58.494 25.61 -77.355 48.875 -77.355ZM48.875 -63.105C33.48 -63.105 21 -50.624 21 -35.23C21 -19.835 33.48 -7.355 48.875 -7.355C64.27 -7.355 76.75 -19.835 76.75 -35.23C76.75 -50.624 64.27 -63.105 48.875 -63.105ZM58.807 -31.132L66.464 -23.474C68.075 -21.863 68.075 -19.251 66.464 -17.64C64.853 -16.029 62.242 -16.029 60.631 -17.64L52.973 -25.298C45.5 -20.775 35.826 -22.544 30.438 -29.419C25.049 -36.294 25.641 -46.11 31.818 -52.286C37.995 -58.463 47.811 -59.056 54.685 -53.667C61.56 -48.278 63.329 -38.605 58.807 -31.132ZM44.031 -49.095C39.048 -49.095 35.009 -45.056 35.009 -40.074C35.009 -35.092 39.048 -31.053 44.031 -31.053C49.013 -31.053 53.052 -35.092 53.052 -40.074C53.052 -45.056 49.013 -49.095 44.031 -49.095Z"/>
+  <g id="Black-S" transform="matrix(1 0 0 1 2874.659 696)">
+   <path class="SFSymbolsPreviewWireframe" d="M39.4040 11.0842L78.0760 11.0842C93.9450 11.0842 105.0300 0.0002 105.0300 -15.8688L105.0300 -54.5408C105.0300 -70.4098 93.9450 -81.4938 78.0760 -81.4938L39.4040 -81.4938C23.5350 -81.4938 12.4510 -70.4098 12.4510 -54.5408L12.4510 -15.8688C12.4510 0.0002 23.5350 11.0842 39.4040 11.0842ZM78.0760 -0.1468L39.4040 -0.1468C29.1500 -0.1468 23.6810 -5.6158 23.6810 -15.8698L23.6810 -54.5418C23.6810 -64.7958 29.1500 -70.2648 39.4040 -70.2648L78.0760 -70.2648C88.3300 -70.2648 93.7990 -64.7958 93.7990 -54.5418L93.7990 -15.8698C93.7990 -5.6158 88.3300 -0.1468 78.0760 -0.1468ZM69.428 -31.234L82.893 -17.769C84.748 -15.914 84.748 -12.907 82.893 -11.052C81.038 -9.197 78.031 -9.197 76.176 -11.052L62.711 -24.517C54.264 -19.461 43.374 -21.494 37.32 -29.257C31.266 -37.019 31.947 -48.077 38.908 -55.038C45.869 -61.998 56.926 -62.679 64.689 -56.625C72.451 -50.571 74.484 -39.681 69.428 -31.234ZM52.696 -51.249C47.174 -51.249 42.696 -46.772 42.696 -41.249C42.696 -35.726 47.174 -31.249 52.696 -31.249C58.219 -31.249 62.696 -35.726 62.696 -41.249C62.696 -46.772 58.219 -51.249 52.696 -51.249Z"/>
   </g>
-  <g id="Regular-S" transform="matrix(1 0 0 1 1403.594 696)">
-   <path class="SFSymbolsPreviewWireframe" d="M46.25 -74.73C68.065 -74.73 85.75 -57.045 85.75 -35.23C85.75 -13.414 68.065 4.27 46.25 4.27C24.435 4.27 6.75 -13.414 6.75 -35.23C6.75 -57.045 24.435 -74.73 46.25 -74.73ZM46.25 -67.23C28.577 -67.23 14.25 -52.903 14.25 -35.23C14.25 -17.556 28.577 -3.23 46.25 -3.23C63.923 -3.23 78.25 -17.556 78.25 -35.23C78.25 -52.903 63.923 -67.23 46.25 -67.23ZM55.196 -30.809L66.049 -19.956C67.299 -18.706 67.299 -16.68 66.049 -15.431C64.799 -14.181 62.773 -14.181 61.524 -15.431L50.671 -26.283C43.74 -21.678 34.446 -23.075 29.176 -29.514C23.905 -35.953 24.372 -45.339 30.256 -51.224C36.14 -57.108 45.526 -57.575 51.966 -52.304C58.405 -47.033 59.802 -37.74 55.196 -30.809ZM41.707 -49.567C36.298 -49.567 31.912 -45.182 31.912 -39.772C31.912 -34.362 36.298 -29.977 41.707 -29.977C47.117 -29.977 51.502 -34.362 51.502 -39.772C51.502 -45.182 47.117 -49.567 41.707 -49.567Z"/>
+  <g id="Regular-S" transform="matrix(1 0 0 1 1392.094 696)">
+   <path class="SFSymbolsPreviewWireframe" d="M34.5000 10.1000L81.1000 10.1000C94.7000 10.1000 103.0000 1.7000 103.0000 -11.7000L103.0000 -58.7000C103.0000 -72.1000 94.7000 -80.5000 81.1000 -80.5000L34.5000 -80.5000C20.8000 -80.5000 12.5000 -72.1000 12.5000 -58.7000L12.5000 -11.7000C12.5000 1.7000 20.8000 10.1000 34.5000 10.1000ZM81.1000 3.1000L34.5000 3.1000C24.4000 3.1000 19.5000 -1.8000 19.5000 -11.7000L19.5000 -58.7000C19.5000 -68.7000 24.4000 -73.4000 34.5000 -73.4000L81.1000 -73.4000C91.2000 -73.4000 96.0000 -68.7000 96.0000 -58.7000L96.0000 -11.7000C96.0000 -1.8000 91.2000 3.1000 81.1000 3.1000ZM68.063 -29.554L82.752 -14.865C84.041 -13.576 84.041 -11.486 82.752 -10.198C81.464 -8.909 79.374 -8.909 78.085 -10.198L63.396 -24.887C54.926 -18.845 43.239 -20.306 36.517 -28.246C29.794 -36.186 30.282 -47.954 37.639 -55.311C44.996 -62.668 56.764 -63.156 64.704 -56.433C72.644 -49.711 74.105 -38.024 68.063 -29.554ZM51.781 -54.569C44.38 -54.569 38.381 -48.57 38.381 -41.169C38.381 -33.768 44.38 -27.769 51.781 -27.769C59.182 -27.769 65.181 -33.768 65.181 -41.169C65.181 -48.57 59.182 -54.569 51.781 -54.569Z"/>
   </g>
-  <g id="Ultralight-S" transform="matrix(1 0 0 1 515.586 696)">
-   <path class="SFSymbolsPreviewWireframe" d="M44.125 -72.605C64.767 -72.605 81.5 -55.871 81.5 -35.23C81.5 -14.588 64.767 2.145 44.125 2.145C23.483 2.145 6.75 -14.588 6.75 -35.23C6.75 -55.871 23.483 -72.605 44.125 -72.605ZM44.125 -70.355C24.726 -70.355 9 -54.629 9 -35.23C9 -15.83 24.726 -0.105 44.125 -0.105C63.524 -0.105 79.25 -15.83 79.25 -35.23C79.25 -54.629 63.524 -70.355 44.125 -70.355ZM51.429 -29.517L63.684 -17.262C64.123 -16.823 64.123 -16.11 63.684 -15.671C63.244 -15.232 62.532 -15.232 62.093 -15.671L49.838 -27.926C43.596 -22.54 34.212 -23.058 28.601 -29.097C22.989 -35.137 23.162 -44.534 28.991 -50.363C34.821 -56.193 44.217 -56.365 50.257 -50.754C56.297 -45.143 56.814 -35.758 51.429 -29.517ZM39.827 -52.601C32.606 -52.601 26.753 -46.748 26.753 -39.528C26.753 -32.307 32.606 -26.454 39.827 -26.454C47.047 -26.454 52.901 -32.307 52.901 -39.528C52.901 -46.748 47.047 -52.601 39.827 -52.601Z"/>
+  <g id="Ultralight-S" transform="matrix(1 0 0 1 503.022 696)">
+   <path class="SFSymbolsPreviewWireframe" d="M29.1500 9.1312L84.2770 9.1312C94.9700 9.1312 100.9280 2.9792 100.9280 -7.5188L100.9280 -62.6948C100.9280 -73.1928 94.9710 -79.3448 84.2770 -79.3448L29.1500 -79.3448C18.4080 -79.3448 12.4510 -73.3878 12.4510 -62.6948L12.4510 -7.5188C12.4510 3.1262 18.4080 9.1312 29.1500 9.1312ZM84.2770 6.9342L29.1500 6.9342C19.9700 6.9342 14.6480 1.6122 14.6480 -7.5188L14.6480 -62.6948C14.6480 -71.8748 19.9700 -77.1478 29.1500 -77.1478L84.2770 -77.1478C93.4570 -77.1478 98.7300 -71.7768 98.7300 -62.6948L98.7300 -7.5188C98.7300 1.5142 93.4570 6.9342 84.2770 6.9342ZM66.171 -27.216L82.648 -10.74C83.087 -10.3 83.087 -9.588 82.648 -9.149C82.208 -8.709 81.496 -8.709 81.057 -9.149L64.58 -25.625C56.311 -18.217 43.646 -18.739 36.014 -26.802C28.382 -34.865 28.556 -47.539 36.406 -55.39C44.257 -63.241 56.931 -63.415 64.994 -55.782C73.058 -48.15 73.579 -35.486 66.171 -27.216ZM50.902 -59.144C40.823 -59.144 32.652 -50.974 32.652 -40.894C32.652 -30.815 40.823 -22.644 50.902 -22.644C60.981 -22.644 69.152 -30.815 69.152 -40.894C69.152 -50.974 60.981 -59.144 50.902 -59.144Z"/>
   </g>
  </g>
 </svg>
