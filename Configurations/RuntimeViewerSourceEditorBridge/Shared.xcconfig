@@ -2,18 +2,21 @@
 
 // The framework the app links for SourceEditor. Where FetchSourceEditorScript.sh has put the
 // reconstructed SourceEditor frameworks, it compiles the bridge against them and links them; anywhere
-// else the bridge compiles out (#if canImport(SourceEditor)) and the framework carries only the
-// protocols and a factory that reports SourceEditor unavailable.
+// else the bridge compiles out (#if arch(arm64) && canImport(SourceEditor)) and the framework carries
+// only the protocols and a factory that reports SourceEditor unavailable.
 //
 // Only this target has them on its search path, and it imports them with `internal import`, so the
 // app, which links this framework, never loads their modules: SourceEditor's headers and
 // UIFoundation's both declare AppKit's private NSScrollViewDelegate, differently, and a module that
 // sees both does not compile.
 //
-// The path is set for the arm64 slices only. The frameworks have no x86_64 slice, but each has a Clang
-// module map, so an x86_64 compile that can see them still satisfies canImport(SourceEditor) and then
-// fails building their modules at the generated -Swift.h headers ("unsupported Swift architecture").
-// Without the path, the Intel slice of a universal build compiles out like a build without them.
+// The frameworks have no x86_64 slice, but each has a Clang module map, so an x86_64 compile that can
+// see them satisfies canImport(SourceEditor) and then fails building their modules at the generated
+// -Swift.h headers ("unsupported Swift architecture"). What keeps the Intel slice of a universal build
+// out is the arch(arm64) in every guard: the Copy SourceEditor Frameworks to Products phase puts them
+// in the products directory, which every target searches, so from the second build on an x86_64
+// compile can see them whatever this setting says. The path is still set for the arm64 slices only,
+// so that an x86_64 compile never looks into the download.
 FRAMEWORK_SEARCH_PATHS[arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/Frameworks
 // `internal import` keeps a module's dependencies from its clients only when it is built with library

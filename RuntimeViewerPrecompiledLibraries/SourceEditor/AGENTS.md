@@ -22,14 +22,19 @@ root `AGENTS.md` repeats the precondition and points here.
   beside this file (ignored by git), after checking every zip against its pinned SHA-256.
 - The bridge framework and its tests have `Frameworks/` on their framework search path. Where it
   holds the frameworks, the bridge compiles and links them; where it does not, everything under
-  `#if canImport(SourceEditor)` compiles out, `SourceEditorBridgeFactory.isAvailable` is `false`, and
-  the app shows interfaces in the built-in `NSTextView`.
-- **The search path covers the arm64 slices only** (`FRAMEWORK_SEARCH_PATHS[arch=arm64*]`), so the
-  Intel half of a universal build compiles out the same way. Do not widen it: the releases carry no
-  x86_64 slice, but every framework has a Clang module map, so an x86_64 compile that can see them
-  still satisfies `canImport(SourceEditor)` and then fails at their generated `-Swift.h` headers
-  ("unsupported Swift architecture"). Debug-arm64e builds arm64 only; only a Release universal build,
-  as `ArchiveScript.sh` makes, compiles that slice and would catch it.
+  `#if arch(arm64) && canImport(SourceEditor)` compiles out, `SourceEditorBridgeFactory.isAvailable`
+  is `false`, and the app shows interfaces in the built-in `NSTextView`.
+- **Every guard is `#if arch(arm64) && canImport(SourceEditor)`, never `canImport` alone**, so the
+  Intel half of a universal build compiles out the same way. The releases carry no x86_64 slice, but
+  every framework has a Clang module map, so an x86_64 compile that can see them satisfies
+  `canImport(SourceEditor)` and then fails at their generated `-Swift.h` headers ("unsupported Swift
+  architecture"). Keeping them off the x86_64 search path is not enough: the bridge's Copy
+  SourceEditor Frameworks to Products phase puts them in the products directory, which every target
+  searches, so from the second build in a DerivedData on, x86_64 sees them anyway. The search path
+  is still set for the arm64 slices only (`FRAMEWORK_SEARCH_PATHS[arch=arm64*]`). Debug-arm64e builds
+  arm64 only; only a Release universal build, as `ArchiveScript.sh` makes, compiles that slice, and
+  it fails only once the products directory holds the frameworks — so check a guard change with two
+  Release builds in the same DerivedData.
 - **The app must never load the SourceEditor modules.** Their headers declare AppKit's private
   `NSScrollViewDelegate`, and so do UIFoundation's (`UIFoundationAppleInternalObjC`), differently; a
   module that sees both fails to compile. So the app target does not have `Frameworks/` on its search

@@ -622,9 +622,10 @@ framework, `RuntimeViewerSourceEditorBridgeTests`, `SourceEditorBridgeProvider`,
 The app links the bridge framework and calls it directly; in official builds the bridge links the
 reconstruction released in the private `Mx-Iris/SourceEditor` repository — `FetchSourceEditorScript.sh`
 downloads the release pinned in `RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt`
-and the app's Embed SourceEditor Frameworks phase copies it in. Any other build compiles the bridge
-without it (`#if canImport(SourceEditor)`) and shows interfaces in the built-in `NSTextView`. Nothing
-is loaded at run time, and nothing comes from an installed Xcode.
+and the app's Embed SourceEditor Frameworks phase copies it in. Any other build, and the Intel slice
+of a universal one, compiles the bridge without it (`#if arch(arm64) && canImport(SourceEditor)`) and
+shows interfaces in the built-in `NSTextView`. Nothing is loaded at run time, and nothing comes from
+an installed Xcode.
 
 **Hard precondition: no dump, no binaries, no work.** Before touching this module, confirm the reference
 material is on disk: RuntimeViewer's own dump of the frameworks at `/Volumes/RE/SourceEditor/Xcode/<version>/`

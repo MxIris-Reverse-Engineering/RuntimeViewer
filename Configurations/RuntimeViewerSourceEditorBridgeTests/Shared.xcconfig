@@ -2,9 +2,9 @@
 
 // The tests link the bridge framework (`@testable import`) and the reconstructed frameworks directly,
 // from where FetchSourceEditorScript.sh puts them, without running inside the app. Without that
-// download the bridge and the tests compile out (#if canImport(SourceEditor)), and the bundle has
-// nothing to run. The search path is set for the arm64 slices only, for the reason the bridge's
-// Shared.xcconfig gives: an x86_64 compile that can see the frameworks fails at their headers.
+// download, and on x86_64, the bridge and the tests compile out (#if arch(arm64) &&
+// canImport(SourceEditor)), and the bundle has nothing to run. The search path is set for the arm64
+// slices only, as the bridge's Shared.xcconfig explains.
 FRAMEWORK_SEARCH_PATHS[arch=arm64*] = $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks $(SRCROOT)/../RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks
 

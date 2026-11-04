@@ -1,6 +1,6 @@
 // Compiled only where the reconstructed SourceEditor frameworks are on the framework search path,
 // as the bridge under test is.
-#if canImport(SourceEditor)
+#if arch(arm64) && canImport(SourceEditor)
 
 import AppKit
 import Testing
