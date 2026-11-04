@@ -51,7 +51,8 @@ struct ToolbarActivityViewSourcePickerTests {
         let (capsule, picker) = try Self.makeCapsule(width: 600)
         let textFrame = try Self.textFrame(of: capsule)
 
-        #expect(textFrame.maxX == 600 - 12)
+        let trailingEdge: CGFloat = 600 - 12
+        #expect(textFrame.maxX == trailingEdge)
         #expect(picker.frame.minX == 6)
         #expect(picker.frame.width == picker.wantedWidth)
         #expect(capsule.clampedSourcePickerWidth == nil)
@@ -64,7 +65,8 @@ struct ToolbarActivityViewSourcePickerTests {
         let textFrame = try Self.textFrame(of: capsule)
         let reserve = max(56, min(picker.wantedWidth, 0.2 * 300))
 
-        #expect(textFrame.maxX == 300 - 12)
+        let trailingEdge: CGFloat = 300 - 12
+        #expect(textFrame.maxX == trailingEdge)
         #expect(textFrame.minX >= reserve + 12 - 0.5)
         #expect(abs(picker.frame.maxX - textFrame.minX) <= 0.5)
         #expect(picker.frame.width < picker.wantedWidth)
