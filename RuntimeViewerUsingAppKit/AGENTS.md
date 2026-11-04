@@ -655,7 +655,10 @@ it is the middle item. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   middle item's view) Xcode 27's, and `MainToolbarController.runtimeSourcePickers` hands both to
   `MainWindowController`, which feeds them the same source. The picker is self-drawn — one path component,
   icon and name, at the metrics of the Xcode it copies — and sends its action on mouse-down, so that the
-  popover follows the press; it takes no RxSwift.
+  popover follows the press; it takes no RxSwift. A machine's glyph reaches the pickers as the symbol it
+  is (`RuntimeSourcePicker.Icon.symbol`, made by `DeviceGlyph.symbolImage`), which Xcode 27's style draws
+  at its own size as Xcode does; lists keep the squared `DeviceGlyph.image`. Handed the squared one, the
+  picker shrinks a wide glyph such as a Mac Studio's to 18 × 10.
 - **With the picker, the capsule lays the text and the picker out by hand**, by Xcode 26's rules: the text
   right-aligned, the picker given what the text leaves past a reserve, narrowed for the rest of the
   activity once the text pushes it, widened on hover and frozen while its popover shows. The rules are

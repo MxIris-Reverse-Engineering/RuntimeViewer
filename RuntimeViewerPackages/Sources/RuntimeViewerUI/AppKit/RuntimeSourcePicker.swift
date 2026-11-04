@@ -15,6 +15,10 @@ import AppKit
 ///
 /// - The component fills the picker, whatever width the owner gives it (DVTKit's
 ///   `lastComponentFillsWidth`); `wantedWidth` is the width that shows it whole.
+/// - A picture icon fits a square box — 16 points in the capsule, 18 in the middle. In the middle a
+///   symbol icon takes its own size instead, configured for the title's point size at medium weight
+///   and large scale, as DVTKit sizes a symbol in a large path control; that is how Xcode 27 draws a
+///   run destination's device glyph.
 /// - A title too long for that width is clipped, never ellipsized, and fades out over its last
 ///   10 points.
 /// - The highlight — a capsule of 5 % black, or 5 % white in a dark appearance — shows while the
@@ -30,13 +34,35 @@ public final class RuntimeSourcePicker: NSControl {
         case toolbar
     }
 
+    /// What the picker shows before its title.
+    public enum Icon: Equatable {
+        /// A picture, such as an app's or a file's icon, drawn in the style's square box at its
+        /// aspect ratio.
+        case image(NSImage)
+
+        /// A symbol image in the colours its configuration gives it, such as a device glyph. Xcode
+        /// 27's style draws it at its own size once the style's point size, weight and scale are
+        /// applied over that configuration; Xcode 26's fits it in the box like a picture.
+        case symbol(NSImage)
+
+        /// The same image in the same role: the picker redraws and relays out for nothing less.
+        public static func == (leftIcon: Icon, rightIcon: Icon) -> Bool {
+            switch (leftIcon, rightIcon) {
+            case let (.image(leftImage), .image(rightImage)), let (.symbol(leftImage), .symbol(rightImage)):
+                leftImage === rightImage
+            default:
+                false
+            }
+        }
+    }
+
     /// What changed that the picker's owner lays it out by.
     enum Change {
         /// The pointer entered or left the picker.
         case hover
         /// The popover opened or closed.
         case popover
-        /// The title or the image changed, and with them the width the picker wants.
+        /// The title or the icon changed, and with them the width the picker wants.
         case wantedWidth
     }
 
@@ -52,8 +78,13 @@ public final class RuntimeSourcePicker: NSControl {
         /// DVTKit's right divider: from the title to the picker's trailing edge.
         var trailingInset: CGFloat
 
-        /// The icon's box, square.
+        /// The box a picture icon fits, square.
         var iconSize: CGFloat
+
+        /// What a symbol icon is drawn with at its own size, applied over its own configuration, or
+        /// `nil` where a symbol fits the box like a picture. DVTKit's `_resetSymbolConfig` for a
+        /// large path control: the font's point size, medium weight, large scale.
+        var symbolConfiguration: NSImage.SymbolConfiguration?
 
         /// The highlight's height before its vertical insets, centred in the picker.
         var highlightHeight: CGFloat
@@ -82,6 +113,7 @@ public final class RuntimeSourcePicker: NSControl {
                     leadingInset: 6,
                     trailingInset: 15,
                     iconSize: 16,
+                    symbolConfiguration: nil,
                     highlightHeight: 24,
                     highlightLeadingInset: 0,
                     highlightVerticalInset: 0,
@@ -95,6 +127,7 @@ public final class RuntimeSourcePicker: NSControl {
                 leadingInset: 7,
                 trailingInset: 14,
                 iconSize: 16,
+                symbolConfiguration: nil,
                 highlightHeight: 21,
                 highlightLeadingInset: 5,
                 highlightVerticalInset: 1,
@@ -105,18 +138,22 @@ public final class RuntimeSourcePicker: NSControl {
 
         /// Xcode 27's in the middle of the toolbar: a large path control, whose font DVTKit resets
         /// to the system font at that size, with capsule highlights as tall as the toolbar view.
-        static let toolbar = Metrics(
-            font: NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .large)),
-            height: 28,
-            leadingInset: 6,
-            trailingInset: 6,
-            iconSize: 18,
-            highlightHeight: 28,
-            highlightLeadingInset: 0,
-            highlightVerticalInset: 0,
-            drawsCapsuleHighlight: true,
-            showsHoverChevron: false
-        )
+        static let toolbar: Metrics = {
+            let font = NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .large))
+            return Metrics(
+                font: font,
+                height: 28,
+                leadingInset: 6,
+                trailingInset: 6,
+                iconSize: 18,
+                symbolConfiguration: NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .medium, scale: .large),
+                highlightHeight: 28,
+                highlightLeadingInset: 0,
+                highlightVerticalInset: 0,
+                drawsCapsuleHighlight: true,
+                showsHoverChevron: false
+            )
+        }()
     }
 
     /// DVTKit's `iconTitleSpacing`.
@@ -155,11 +192,48 @@ public final class RuntimeSourcePicker: NSControl {
         }
     }
 
-    /// The source's icon, drawn in the icon box at its aspect ratio.
-    public var image: NSImage? {
+    /// The source's icon.
+    public var icon: Icon? {
         didSet {
-            guard image !== oldValue else { return }
+            guard icon != oldValue else { return }
+            drawnIcon = icon.map { Self.makeDrawnIcon(for: $0, metrics: metrics) }
             wantedWidthDidChange()
+        }
+    }
+
+    /// The icon as the picker draws it: DVTKit's `cachedConfiguredIcon`.
+    private(set) var drawnIcon: DrawnIcon?
+
+    struct DrawnIcon {
+        /// The image drawn: a symbol with the style's configuration applied over its own, or the
+        /// icon's image as given.
+        var image: NSImage
+
+        /// The slot the icon takes: the configured symbol's own size, or the style's box.
+        var size: NSSize
+
+        /// Whether the image is drawn in its own colours. A picture that is a template is tinted
+        /// like the title instead.
+        var isSymbol: Bool
+    }
+
+    /// DVTKit's `_iconSize`: with a large path control's metrics a symbol icon takes its own size
+    /// once `iconApplyingSymbolConfiguration:` has merged the configuration into the symbol's own
+    /// (which is what keeps a device glyph's palette); anything else takes the box.
+    private static func makeDrawnIcon(for icon: Icon, metrics: Metrics) -> DrawnIcon {
+        let box = NSSize(width: metrics.iconSize, height: metrics.iconSize)
+        switch icon {
+        case .image(let image):
+            return DrawnIcon(image: image, size: box, isSymbol: false)
+        case .symbol(let symbol):
+            // `withSymbolConfiguration(_:)` replaces the configuration rather than adding to it, so
+            // the style's is applied over the symbol's first.
+            guard let configuration = metrics.symbolConfiguration,
+                  let configuredSymbol = symbol.withSymbolConfiguration(symbol.symbolConfiguration.applying(configuration))
+            else {
+                return DrawnIcon(image: symbol, size: box, isSymbol: true)
+            }
+            return DrawnIcon(image: configuredSymbol, size: configuredSymbol.size, isSymbol: true)
         }
     }
 
@@ -223,9 +297,14 @@ public final class RuntimeSourcePicker: NSControl {
     /// The component's width at full size: insets, icon, spacing and the title's natural width — the
     /// width of DVTKit's `cellSizeForBounds:`, not rounded.
     public var componentWidth: CGFloat {
-        let iconWidth: CGFloat = image == nil ? 0 : metrics.iconSize
-        let titleWidth = title.isEmpty ? 0 : titleSize.width + (image == nil ? 0 : Self.iconTitleSpacing)
+        let iconWidth: CGFloat = drawnIcon?.size.width ?? 0
+        let titleWidth = title.isEmpty ? 0 : titleSize.width + (drawnIcon == nil ? 0 : Self.iconTitleSpacing)
         return metrics.leadingInset + iconWidth + titleWidth + metrics.trailingInset
+    }
+
+    /// The icon slot's size, which counts in places even without an icon: DVTKit's `_iconSize`.
+    private var iconSlotSize: NSSize {
+        drawnIcon?.size ?? NSSize(width: metrics.iconSize, height: metrics.iconSize)
     }
 
     /// The width that shows the component whole — DVTKit's `sizeWanted`.
@@ -259,7 +338,7 @@ public final class RuntimeSourcePicker: NSControl {
     /// `drawInteriorWithFrame:inView:`. `nil` when the component has no room for a title.
     func titleLayout(forWidth width: CGFloat) -> (rect: NSRect, fades: Bool)? {
         guard !title.isEmpty else { return nil }
-        let textOffset = metrics.leadingInset + (image == nil ? 0 : metrics.iconSize + Self.iconTitleSpacing)
+        let textOffset = metrics.leadingInset + (drawnIcon.map { $0.size.width + Self.iconTitleSpacing } ?? 0)
         guard width - (textOffset + metrics.trailingInset) > Self.minimumTitleRoom else { return nil }
         let size = titleSize
         let availableWidth = width - (textOffset + metrics.trailingInset - Self.wantedWidthAllowance)
@@ -269,11 +348,12 @@ public final class RuntimeSourcePicker: NSControl {
         return (NSRect(x: textOffset, y: y, width: min(size.width, availableWidth), height: size.height), fades)
     }
 
-    /// The icon's box: in from the leading edge by the leading inset, centred on the pixel grid.
+    /// The icon's slot: in from the leading edge by the leading inset, centred on the pixel grid.
     var iconRect: NSRect {
+        let size = iconSlotSize
         let scale = backingScaleFactor
-        let y = ((bounds.height - metrics.iconSize) / 2 * scale).rounded(.down) / scale
-        return NSRect(x: metrics.leadingInset, y: y, width: metrics.iconSize, height: metrics.iconSize)
+        let y = ((bounds.height - size.height) / 2 * scale).rounded(.down) / scale
+        return NSRect(x: metrics.leadingInset, y: y, width: size.width, height: size.height)
     }
 
     /// The highlight across the picker: DVTKit's `_drawHoveredInFrame:` for the only component.
@@ -310,8 +390,8 @@ public final class RuntimeSourcePicker: NSControl {
             Self.highlightColor.setFill()
             NSBezierPath(roundedRect: highlightRect, xRadius: radius, yRadius: radius).fill()
         }
-        if let image {
-            drawIcon(image, isActive: isActive)
+        if let drawnIcon {
+            drawIcon(drawnIcon, isActive: isActive)
         }
         drawTitle()
     }
@@ -357,7 +437,8 @@ public final class RuntimeSourcePicker: NSControl {
         context.restoreGraphicsState()
     }
 
-    private func drawIcon(_ image: NSImage, isActive: Bool) {
+    private func drawIcon(_ drawnIcon: DrawnIcon, isActive: Bool) {
+        let image = drawnIcon.image
         let box = iconRect
         let imageSize = image.size
         guard imageSize.width > 0, imageSize.height > 0 else { return }
@@ -370,7 +451,7 @@ public final class RuntimeSourcePicker: NSControl {
             height: drawnSize.height
         )
         let fraction: CGFloat = isActive ? 1 : 0.5
-        let drawnImage = image.isTemplate ? Self.tinted(image, with: titleColor) : image
+        let drawnImage = image.isTemplate && !drawnIcon.isSymbol ? Self.tinted(image, with: titleColor) : image
         drawnImage.draw(in: drawnRect, from: .zero, operation: .sourceOver, fraction: fraction, respectFlipped: true, hints: nil)
     }
 
@@ -388,7 +469,7 @@ public final class RuntimeSourcePicker: NSControl {
             width: chevron.size.width,
             height: chevron.size.height
         )
-        guard chevronRect.minX > bounds.minX + metrics.leadingInset + metrics.iconSize else { return }
+        guard chevronRect.minX > bounds.minX + metrics.leadingInset + iconSlotSize.width else { return }
         let tint: NSColor = if Self.isDark(effectiveAppearance) {
             isActive ? .labelColor : .secondaryLabelColor
         } else {

@@ -250,7 +250,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             guard let self else { return }
             for picker in toolbarController.runtimeSourcePickers {
                 picker.title = state.title
-                picker.image = state.image
+                picker.icon = state.pickerIcon
             }
         }
         .disposed(by: rx.disposeBag)

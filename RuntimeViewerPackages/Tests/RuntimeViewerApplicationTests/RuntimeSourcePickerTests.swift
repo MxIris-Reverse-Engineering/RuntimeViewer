@@ -2,8 +2,9 @@ import AppKit
 import Testing
 @testable import RuntimeViewerUI
 
-/// The toolbar's runtime source picker in both of Xcode's styles: the width it wants, where its
-/// title goes and when it fades, its highlight, the toolbar view that holds it in Xcode 27's style,
+/// The toolbar's runtime source picker in both of Xcode's styles: the width it wants, how big its
+/// icon is, where its title goes and when it fades, its highlight, the toolbar view that holds it in
+/// Xcode 27's style,
 /// and what it tells accessibility (proposal `draft-xcode-style-runtime-source-picker`; specs in
 /// `/Volumes/RE/Xcode/26.6/README.md` and `/Volumes/RE/Xcode/27.2-27B52/README.md`).
 ///
@@ -15,12 +16,47 @@ struct RuntimeSourcePickerTests {
     private static func makePicker(style: RuntimeSourcePicker.Style, title: String = "My Mac", hasImage: Bool = true) -> RuntimeSourcePicker {
         let picker = RuntimeSourcePicker(style: style)
         picker.title = title
-        picker.image = hasImage ? NSImage(size: NSSize(width: 32, height: 32)) : nil
+        picker.icon = hasImage ? .image(NSImage(size: NSSize(width: 32, height: 32))) : nil
         return picker
     }
 
     private static func titleWidth(_ title: String, fontSize: CGFloat) -> CGFloat {
         NSAttributedString(string: title, attributes: [.font: NSFont.systemFont(ofSize: fontSize)]).size().width
+    }
+
+    /// The glyph a Mac Studio's own window shows, made the way the app makes it.
+    private static func macStudioGlyph() throws -> NSImage {
+        try #require(DeviceGlyph.symbolImage(forModelIdentifier: "Mac14,14", operatingSystemVersion: "macOS 27.0.0", isSimulator: false))
+    }
+
+    /// `symbol` as DVTKit configures a symbol icon in a large path control: the title's point
+    /// size, medium weight, large scale, over the symbol's own configuration.
+    private static func configuredForTheToolbar(_ symbol: NSImage) throws -> NSImage {
+        let configuration = NSImage.SymbolConfiguration(pointSize: NSFont.systemFontSize(for: .large), weight: .medium, scale: .large)
+        return try #require(symbol.withSymbolConfiguration(symbol.symbolConfiguration.applying(configuration)))
+    }
+
+    /// Whether any pixel of `image` is the distinct blue of a device glyph's lit screen.
+    private static func hasLitScreen(_ image: NSImage, side: Int = 48) -> Bool {
+        var buffer = [UInt8](repeating: 0, count: side * side * 4)
+        guard let context = CGContext(
+            data: &buffer,
+            width: side,
+            height: side,
+            bitsPerComponent: 8,
+            bytesPerRow: side * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return false }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+        NSGraphicsContext.restoreGraphicsState()
+        return stride(from: 0, to: buffer.count, by: 4).contains { offset in
+            let red = Int(buffer[offset]), green = Int(buffer[offset + 1])
+            let blue = Int(buffer[offset + 2]), alpha = Int(buffer[offset + 3])
+            return alpha > 200 && blue > 150 && blue > red + 60 && blue > green + 40
+        }
     }
 
     @Test("In Xcode 27's style the picker wants 6 + 18-point icon + 4 + title + 6, plus DVTKit's 2")
@@ -81,6 +117,48 @@ struct RuntimeSourcePickerTests {
         #expect(picker.titleLayout(forWidth: 6 + 18 + 4 + 6 + 4) != nil)
     }
 
+    @Test("In Xcode 27's style a symbol icon takes its own size at the title's point size, medium weight and large scale")
+    func toolbarStyleGivesASymbolItsOwnSize() throws {
+        let glyph = try Self.macStudioGlyph()
+        let expectedSize = try Self.configuredForTheToolbar(glyph).size
+        let picker = RuntimeSourcePicker(style: .toolbar)
+        picker.title = "My Mac"
+        picker.icon = .symbol(glyph)
+        picker.frame = NSRect(x: 0, y: 0, width: picker.wantedWidth, height: 28)
+
+        let titleWidth = Self.titleWidth("My Mac", fontSize: NSFont.systemFontSize(for: .large))
+        let expectedTitleOffset: CGFloat = 6 + expectedSize.width + 4
+        let layout = try #require(picker.titleLayout(forWidth: picker.bounds.width))
+        #expect(picker.iconRect.size == expectedSize)
+        #expect(abs(picker.componentWidth - (expectedTitleOffset + titleWidth + 6)) < 0.001)
+        #expect(layout.rect.minX == expectedTitleOffset)
+        // Fitted into the 18-point box like a picture, the Mac Studio came out 18 × 10.
+        #expect(picker.iconRect.width > 18)
+    }
+
+    @Test("In Xcode 26's capsule a symbol icon fits the 16-point box like a picture")
+    func activityViewStyleFitsASymbolInItsBox() throws {
+        let picker = RuntimeSourcePicker(style: .activityView)
+        picker.icon = .symbol(try Self.macStudioGlyph())
+
+        let box = NSSize(width: 16, height: 16)
+        #expect(picker.iconRect.size == box)
+    }
+
+    /// `withSymbolConfiguration(_:)` replaces a symbol's configuration rather than adding to it, so
+    /// the size given in its place would draw the glyph without its palette.
+    @Test("The style's size goes over the symbol's own configuration, so a device glyph keeps its lit screen")
+    func symbolKeepsItsColours() throws {
+        let glyph = try #require(DeviceGlyph.symbolImage(forModelIdentifier: "iPhone16,2", operatingSystemVersion: "iOS 26.5.0", isSimulator: false))
+        let picker = RuntimeSourcePicker(style: .toolbar)
+        picker.icon = .symbol(glyph)
+
+        let drawnIcon = try #require(picker.drawnIcon)
+        #expect(drawnIcon.isSymbol)
+        #expect(drawnIcon.image !== glyph)
+        #expect(Self.hasLitScreen(drawnIcon.image))
+    }
+
     @Test("The highlight shows while the pointer is over the picker and while its popover shows, and the owner hears of each")
     func highlightFollowsHoverAndPopover() throws {
         let picker = Self.makePicker(style: .toolbar)
@@ -125,7 +203,7 @@ struct RuntimeSourcePickerTests {
 
         picker.title = "My Mac (Mac Catalyst)"
         picker.title = "My Mac (Mac Catalyst)"
-        picker.image = nil
+        picker.icon = nil
 
         let titleWidth = Self.titleWidth("My Mac (Mac Catalyst)", fontSize: NSFont.systemFontSize(for: .large))
         #expect(abs(picker.wantedWidth - (6 + titleWidth + 6 + 2)) < 0.001)
@@ -147,7 +225,7 @@ struct RuntimeSourcePickerTests {
     func toolbarViewSizesLikeXcode() throws {
         let toolbarView = RuntimeSourcePickerToolbarView()
         toolbarView.picker.title = "RuntimeViewer macOS"
-        toolbarView.picker.image = NSImage(size: NSSize(width: 32, height: 32))
+        toolbarView.picker.icon = .image(NSImage(size: NSSize(width: 32, height: 32)))
         let expectedMaximumWidth = max(toolbarView.picker.wantedWidth + 8, 87)
 
         let maximumWidthConstraint = try #require(toolbarView.constraints.first { $0.firstAttribute == .width && $0.relation == .lessThanOrEqual })

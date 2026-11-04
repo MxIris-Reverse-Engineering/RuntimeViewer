@@ -24,6 +24,17 @@ struct DeviceGlyphTests {
         }
     }
 
+    /// The runtime source picker in Xcode 27's style sizes a symbol itself and
+    /// draws it at its own proportions, so it is handed the symbol, unsquared.
+    @Test("The symbol image keeps the device's proportions, which the glyph squares")
+    func symbolImageKeepsItsProportions() throws {
+        let symbol = try #require(DeviceGlyph.symbolImage(forModelIdentifier: "Mac14,14", operatingSystemVersion: "macOS 27.0.0", isSimulator: false))
+        let glyph = try #require(image(forModelIdentifier: "Mac14,14", operatingSystemVersion: "macOS 27.0.0"))
+        #expect(symbol.size.width > symbol.size.height)
+        #expect(glyph.size.width == symbol.size.width)
+        #expect(glyph.size.height == symbol.size.width)
+    }
+
     /// The model code names the exact device and the platform only names its
     /// family, so the order matters: a Mac that reported `iOS` — nonsense, but
     /// the sort of nonsense a peer can send — must still be drawn as the Mac it

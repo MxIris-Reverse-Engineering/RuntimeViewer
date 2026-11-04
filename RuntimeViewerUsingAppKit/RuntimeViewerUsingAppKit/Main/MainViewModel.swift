@@ -28,7 +28,11 @@ struct SharingData {
 
 struct SwitchSourceState: Equatable {
     let title: String
+    /// The source's icon in a list: a machine's glyph squared.
     let image: NSImage?
+    /// The source's icon in the toolbar's runtime source picker: a machine's glyph as the symbol it
+    /// is, which Xcode 27's style draws at its own size.
+    let pickerIcon: RuntimeSourcePicker.Icon?
     let isDisconnected: Bool
     let selectedEngineIdentifier: String
 
@@ -37,6 +41,7 @@ struct SwitchSourceState: Equatable {
             && leftState.isDisconnected == rightState.isDisconnected
             && leftState.selectedEngineIdentifier == rightState.selectedEngineIdentifier
             && leftState.image === rightState.image
+            && leftState.pickerIcon == rightState.pickerIcon
     }
 }
 
@@ -204,6 +209,8 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     private var cachedSelectedEngineImage: NSImage?
 
+    private var cachedSelectedEnginePickerIcon: RuntimeSourcePicker.Icon?
+
     /// Fallback for attached processes that Launch Services knows nothing about.
     /// `NSRunningApplication(processIdentifier:)` only resolves registered GUI
     /// applications, so daemons (launchservicesd, rapportd, ...) never make it
@@ -229,29 +236,58 @@ final class MainViewModel: ViewModel<MainRoute> {
     private func switchToEngine(_ engine: RuntimeEngine) {
         cachedSelectedEngineName = engine.source.description
         cachedSelectedEngineImage = resolveEngineIcon(for: engine)
+        cachedSelectedEnginePickerIcon = resolveSourcePickerIcon(for: engine)
         router.trigger(.main(engine))
         selectedEngineIdentifier = engine.engineID
     }
 
+    /// The engine's icon in a list: its machine's glyph squared, or its own picture.
     func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
+        switch engineIconKind(for: engine) {
+        case .picture(let image):
+            image
+        case .machine:
+            Self.machineIcon(for: engine)
+        }
+    }
+
+    /// The engine's icon in the toolbar's runtime source picker: its machine's glyph as the symbol
+    /// it is, which Xcode 27's style draws at its own size as Xcode draws a run destination's, or the
+    /// picture a list shows.
+    func resolveSourcePickerIcon(for engine: RuntimeEngine) -> RuntimeSourcePicker.Icon? {
+        switch engineIconKind(for: engine) {
+        case .picture(let image):
+            .image(image)
+        case .machine:
+            Self.machineSymbol(for: engine).map(RuntimeSourcePicker.Icon.symbol) ?? .image(Self.machineIcon(for: engine))
+        }
+    }
+
+    /// What stands for an engine: the machine it runs on, or a picture of its own.
+    private enum EngineIconKind {
+        case machine
+        case picture(NSImage)
+    }
+
+    private func engineIconKind(for engine: RuntimeEngine) -> EngineIconKind {
         switch engine.source {
         case .file(_, let url):
             // The file's own: an app's icon for an app, a framework's for a framework.
-            return NSWorkspace.shared.icon(forFile: url.path)
+            return .picture(NSWorkspace.shared.icon(forFile: url.path))
         case .local:
-            return Self.machineIcon(for: engine)
+            return .machine
         case .remote(_, let identifier, _) where identifier == .macCatalyst:
-            return Self.machineIcon(for: engine)
+            return .machine
         default:
             if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
-                return runtimeEngineIconProvider.cachedIcon(for: engine) ?? Self.genericExecutableIcon
+                return .picture(runtimeEngineIconProvider.cachedIcon(for: engine) ?? Self.genericExecutableIcon)
             } else {
                 // The machine itself, for the engine that *is* the machine — the
                 // RuntimeViewer running on it. A process injected on that device
                 // is a different thing and gets an icon of its own, recorded by
                 // the attach flow; falling back to the device here would list
                 // every injected process under a picture of the phone.
-                return runtimeEngineIconProvider.cachedIcon(for: engine) ?? Self.machineIcon(for: engine)
+                return runtimeEngineIconProvider.cachedIcon(for: engine).map(EngineIconKind.picture) ?? .machine
             }
         }
     }
@@ -270,6 +306,16 @@ final class MainViewModel: ViewModel<MainRoute> {
             operatingSystemVersion: metadata.osVersion,
             isSimulator: metadata.isSimulator,
         ) ?? NSWorkspace.shared.box.deviceIcon(forModelIdentifier: metadata.modelIdentifier)
+    }
+
+    /// The same glyph unsquared, or `nil` where `machineIcon(for:)` falls back to a picture.
+    private static func machineSymbol(for engine: RuntimeEngine) -> NSImage? {
+        let metadata = engine.hostInfo.metadata
+        return DeviceGlyph.symbolImage(
+            forModelIdentifier: metadata.modelIdentifier,
+            operatingSystemVersion: metadata.osVersion,
+            isSimulator: metadata.isSimulator,
+        )
     }
 
     private let requestRestartConfirmationRelay = PublishRelay<Void>()
@@ -531,17 +577,20 @@ final class MainViewModel: ViewModel<MainRoute> {
             $selectedEngineIdentifier.asDriver()
         ).map { [weak self] sections, selectedIdentifier -> SwitchSourceState in
             guard let self else {
-                return SwitchSourceState(title: "RuntimeViewer", image: nil, isDisconnected: true, selectedEngineIdentifier: selectedIdentifier)
+                return SwitchSourceState(title: "RuntimeViewer", image: nil, pickerIcon: nil, isDisconnected: true, selectedEngineIdentifier: selectedIdentifier)
             }
             let allEngines = sections.flatMap(\.engines)
             if let engine = allEngines.first(where: { $0.engineID == selectedIdentifier }) {
                 let name = engine.source.description
                 let image = resolveEngineIcon(for: engine)
+                let pickerIcon = resolveSourcePickerIcon(for: engine)
                 cachedSelectedEngineName = name
                 cachedSelectedEngineImage = image
+                cachedSelectedEnginePickerIcon = pickerIcon
                 return SwitchSourceState(
                     title: name,
                     image: image,
+                    pickerIcon: pickerIcon,
                     isDisconnected: false,
                     selectedEngineIdentifier: selectedIdentifier
                 )
@@ -549,6 +598,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                 return SwitchSourceState(
                     title: cachedSelectedEngineName + " (Disconnected)",
                     image: cachedSelectedEngineImage,
+                    pickerIcon: cachedSelectedEnginePickerIcon,
                     isDisconnected: true,
                     selectedEngineIdentifier: selectedIdentifier
                 )

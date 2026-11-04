@@ -27,7 +27,7 @@ struct ToolbarActivityViewSourcePickerTests {
         let capsule = ToolbarActivityView(showsSourcePicker: true)
         let picker = try #require(capsule.sourcePicker)
         picker.title = "My Mac (Mac Catalyst)"
-        picker.image = NSImage(size: NSSize(width: 32, height: 32))
+        picker.icon = .image(NSImage(size: NSSize(width: 32, height: 32)))
         capsule.apply(state(text, reportIdentifier: reportIdentifier), animated: false)
         capsule.frame = NSRect(x: 0, y: 0, width: width, height: 24)
         capsule.layoutSubtreeIfNeeded()
