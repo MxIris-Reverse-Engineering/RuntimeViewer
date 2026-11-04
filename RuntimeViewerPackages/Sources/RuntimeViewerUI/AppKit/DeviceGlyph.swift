@@ -43,9 +43,32 @@ public enum DeviceGlyph {
     ///     `"macOS 27.0.0"` and so on.
     ///   - isSimulator: A simulator is drawn in one colour, with no lit screen,
     ///     so that it reads as the stand-in it is rather than as hardware.
-    /// - Returns: The glyph, or `nil` when neither the model nor the platform
-    ///   names a device family, leaving the caller's own fallback in charge.
+    /// - Returns: The glyph, squared, or `nil` when neither the model nor the
+    ///   platform names a device family, leaving the caller's own fallback in
+    ///   charge.
     public static func image(
+        forModelIdentifier modelIdentifier: String,
+        operatingSystemVersion: String,
+        isSimulator: Bool,
+    ) -> NSImage? {
+        symbolImage(
+            forModelIdentifier: modelIdentifier,
+            operatingSystemVersion: operatingSystemVersion,
+            isSimulator: isSimulator,
+        ).map(squared)
+    }
+
+    /// The same glyph as the symbol image it is, at the symbol's own
+    /// proportions, for a control that sizes symbols itself: the runtime source
+    /// picker in Xcode 27's style draws it at its own size, as Xcode draws a
+    /// run destination's. Anything that pins its image to a square box wants
+    /// `image(forModelIdentifier:operatingSystemVersion:isSimulator:)` instead.
+    ///
+    /// A size given to it later has to be applied over its configuration
+    /// (`symbolConfiguration.applying(_:)`) rather than in its place:
+    /// `withSymbolConfiguration(_:)` replaces the configuration, palette and
+    /// all.
+    public static func symbolImage(
         forModelIdentifier modelIdentifier: String,
         operatingSystemVersion: String,
         isSimulator: Bool,
@@ -61,12 +84,11 @@ public enum DeviceGlyph {
         // type that names no family at all, which is how an iPhone VM came to be
         // listed under a picture of a Cinema Display.
         guard let symbolName = NSWorkspace.shared.box.deviceSymbolName(forModelIdentifier: modelIdentifier)
-            ?? platformSymbolName(forOperatingSystemVersion: operatingSystemVersion),
-            let symbolImage = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
-            .withSymbolConfiguration(isSimulator ? simulatorConfiguration() : physicalConfiguration())
+            ?? platformSymbolName(forOperatingSystemVersion: operatingSystemVersion)
         else { return nil }
 
-        return squared(symbolImage)
+        return NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+            .withSymbolConfiguration(isSimulator ? simulatorConfiguration() : physicalConfiguration())
     }
 
     /// The device family's symbol, for a model code macOS does not know.
