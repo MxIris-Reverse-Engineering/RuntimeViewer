@@ -39,6 +39,7 @@ final class SourceEditorCommentDecorations: NSObject, SourceEditorBridgingCommen
     private static func bridgedStyle(of style: InterfaceCommentDecorations.RunStyle) -> SourceEditorBridgingCommentRunStyle {
         switch style {
         case .label: .label
+        case .key: .key
         case .value: .value
         case .type: .type
         case .name: .name

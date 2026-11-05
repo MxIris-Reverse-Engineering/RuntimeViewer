@@ -171,6 +171,20 @@ struct CommentDecorationTests {
         #expect(Self.foregroundColor(of: "Type Layout", in: layoutLine) == .systemPurple)
     }
 
+    /// The kind of fact shows in the label alone: the keys after it are one colour in every tag.
+    @Test
+    func aKeyTakesTheKeyColourWhateverItsTag() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.applyCommentTagAppearance(TestCommentTagAppearance(labelColors: [.layout: .systemPurple], keyColor: .systemGray))
+        harness.setSource(Self.wrappingSource, commentDecorations: Self.wrappingDecorations(labellingThem: true))
+        harness.layout()
+
+        let layoutLine = try #require(harness.editorView.layoutManager.lineLayerForVisibleLine(2)).attributedString
+        #expect(Self.foregroundColor(of: "Type Layout", in: layoutLine) == .systemPurple)
+        #expect(Self.foregroundColor(of: "size", in: layoutLine) == .systemGray)
+        #expect(Self.foregroundColor(of: "stride", in: layoutLine) == .systemGray)
+    }
+
     @Test
     func aTagIsOutlinedOnlyWhileTheStrokeHasAWidth() throws {
         let harness = try SourceEditorTestHarness()
@@ -438,7 +452,8 @@ struct CommentDecorationTests {
     }
 
     /// The markers hidden, and a tag over each comment, the second one a single long tag; with
-    /// `labellingThem`, the first words of each a label run.
+    /// `labellingThem`, the first words of each a label run and the type layout's first two keys
+    /// key runs.
     private static func wrappingDecorations(labellingThem: Bool = false) -> SourceEditorBridgingCommentDecorations {
         let builder = DecorationsBuilder()
         builder.source = wrappingSource
@@ -450,6 +465,8 @@ struct CommentDecorationTests {
         if labellingThem {
             builder.run("Address", onLine: 1, style: .label)
             builder.run("Type Layout", onLine: 2, style: .label)
+            builder.run("size", onLine: 2, style: .key)
+            builder.run("stride", onLine: 2, style: .key)
         }
         return builder.build()
     }
@@ -641,6 +658,7 @@ private final class TestCommentDecorations: NSObject, SourceEditorBridgingCommen
 /// A tag appearance with plain fills, so a test sets only what it looks at. No line is raised
 /// unless a test asks for it, and then against the font the editor actually draws comments in.
 private final class TestCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
+    let keyColor: NSColor
     let valueColor = NSColor.textColor
     let typeColor = NSColor.textColor
     let nameColor = NSColor.textColor
@@ -655,12 +673,14 @@ private final class TestCommentTagAppearance: NSObject, SourceEditorBridgingComm
 
     init(
         labelColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:],
+        keyColor: NSColor = .secondaryLabelColor,
         strokeWidth: CGFloat = 0,
         horizontalPadding: CGFloat = 4,
         tagLineSpacing: CGFloat = 0,
         commentFont: NSFont = .monospacedSystemFont(ofSize: 12, weight: .regular)
     ) {
         self.labelColors = labelColors
+        self.keyColor = keyColor
         self.strokeWidth = strokeWidth
         self.horizontalPadding = horizontalPadding
         self.tagLineSpacing = tagLineSpacing

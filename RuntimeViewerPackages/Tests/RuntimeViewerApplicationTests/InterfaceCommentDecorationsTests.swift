@@ -121,7 +121,12 @@ struct InterfaceCommentDecorationsTests {
 
         #expect(runs[text.range(of: "Address", onLine: 1)] == .label)
         #expect(runs[text.range(of: "0x135DC", onLine: 1)] == .value)
-        #expect(runs[text.range(of: "size", onLine: 2)] == .label)
+        // A key is coloured apart from the label that says what its facts are.
+        #expect(runs[text.range(of: "Type Layout", onLine: 2)] == .label)
+        #expect(runs[text.range(of: "size", onLine: 2)] == .key)
+        #expect(runs[text.range(of: "empty case", onLine: 9)] == .key)
+        #expect(runs[text.range(of: "offset", onLine: 11)] == .label)
+        #expect(runs[text.range(of: "0x08", onLine: 11)] == .key)
         #expect(runs[text.range(of: "origin", onLine: 4)] == .name)
         #expect(runs[text.range(of: "__C.CGPoint", onLine: 4)] == .type)
         #expect(runs[text.range(of: "├── ", onLine: 4)] == .concealed)
