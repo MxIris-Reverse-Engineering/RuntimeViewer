@@ -537,6 +537,7 @@ extension CommentDecorationController {
         var fills: [SourceEditorBridgingCommentTagStyle: NSColor]
         var strokes: [SourceEditorBridgingCommentTagStyle: NSColor]
         var labels: [SourceEditorBridgingCommentTagStyle: NSColor]
+        var key: NSColor
         var value: NSColor
         var type: NSColor
         var name: NSColor
@@ -555,6 +556,7 @@ extension CommentDecorationController {
             }),
             strokes: [:],
             labels: [:],
+            key: .secondaryLabelColor,
             value: .labelColor,
             type: .labelColor,
             name: .labelColor,
@@ -573,10 +575,12 @@ extension CommentDecorationController {
             strokeWidth > 0 ? strokes[style] : nil
         }
 
-        /// A label takes the colour of the tag it lies in; one outside every tag, the note's.
+        /// A label takes the colour of the tag it lies in; one outside every tag, the note's. A
+        /// key takes one colour whatever its tag.
         func textColor(for run: Run) -> NSColor {
             switch run.style {
             case .label: labels[run.tagStyle ?? .note] ?? labels[.note] ?? .secondaryLabelColor
+            case .key: key
             case .value: value
             case .type: type
             case .name: name
@@ -922,6 +926,7 @@ extension CommentDecorationController.TagAppearance {
             fills: fills,
             strokes: strokes,
             labels: labels,
+            key: appearance.keyColor,
             value: appearance.valueColor,
             type: appearance.typeColor,
             name: appearance.nameColor,

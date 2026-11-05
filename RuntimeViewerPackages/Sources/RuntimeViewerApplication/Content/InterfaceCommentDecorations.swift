@@ -14,8 +14,8 @@ import Semantic
 /// The rules, by role: markers are left out — all but a continuation line's alignment spaces —
 /// and so is the punctuation of separators — colons, brackets, commas, backticks, dashes, `#` —
 /// down to one space; `=` and `..<` stay, since they say something. Tree prefixes keep their width but are not drawn, so a disclosure triangle can sit in
-/// them. Labels, keys and qualifiers take the label colour, values the value colour, types and
-/// names their own; prose keeps the comment colour.
+/// them. Labels and qualifiers take the label colour, keys the key colour, values the value
+/// colour, types and names their own; prose keeps the comment colour.
 public struct InterfaceCommentDecorations: Sendable, Equatable {
     /// What a tag says, which picks its colours.
     public enum TagStyle: Sendable, Equatable, CaseIterable {
@@ -37,7 +37,10 @@ public struct InterfaceCommentDecorations: Sendable, Equatable {
     }
 
     public enum RunStyle: Sendable, Equatable {
+        /// What a fact is, `Type Layout`, and what narrows it, the `getter` of `Address (getter)`.
         case label
+        /// Which of several facts this is: `size`, `stride`.
+        case key
         case value
         case type
         case name
@@ -137,8 +140,10 @@ public struct InterfaceCommentDecorations: Sendable, Equatable {
                     hiddenRanges += Self.hiddenColumns(ofSeparator: segment.range, in: textUnits).map { NSRange($0) }
                 case .treePrefix:
                     runs.append(Run(range: NSRange(segment.range), style: .concealed))
-                case .label, .key, .qualifier:
+                case .label, .qualifier:
                     runs.append(Run(range: NSRange(segment.range), style: .label))
+                case .key:
+                    runs.append(Run(range: NSRange(segment.range), style: .key))
                 case .value:
                     runs.append(Run(range: NSRange(segment.range), style: .value))
                 case .type:

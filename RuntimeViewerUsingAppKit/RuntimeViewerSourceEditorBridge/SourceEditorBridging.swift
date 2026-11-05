@@ -227,6 +227,10 @@ public protocol SourceEditorBridgingCommentTagAppearance: NSObjectProtocol {
     /// What a fact is — a ``SourceEditorBridgingCommentRunStyle/label`` run — in a tag of `style`.
     func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor
 
+    /// Which of several facts a tag holds — a ``SourceEditorBridgingCommentRunStyle/key`` run —
+    /// in a tag of any style.
+    var keyColor: NSColor { get }
+
     /// The text of the other ``SourceEditorBridgingCommentRunStyle``s.
     var valueColor: NSColor { get }
     var typeColor: NSColor { get }
@@ -278,7 +282,7 @@ public enum SourceEditorBridgingCommentTagStyle: Int, CaseIterable {
 /// The colour a run of tag text is drawn in.
 @objc(RuntimeViewerSourceEditorBridgingCommentRunStyle)
 public enum SourceEditorBridgingCommentRunStyle: Int {
-    /// What a fact is: `Address`, `size`, `getter IMP`.
+    /// What a fact is: `Address`, `Type Layout`, `getter IMP`.
     case label
     /// The fact itself: `0x135DC`, `16`.
     case value
@@ -288,6 +292,8 @@ public enum SourceEditorBridgingCommentRunStyle: Int {
     case name
     /// Kept for its width but not drawn — a tree prefix whose columns hold a disclosure triangle.
     case concealed
+    /// Which of several facts this is: the `size` and `stride` of a type layout.
+    case key
 }
 
 /// What a landmark is, as far as choosing an icon goes.

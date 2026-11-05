@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-10-31
-- **最后更新**: 2026-11-02
+- **最后更新**: 2026-11-05
 - **所属愿景**: [自建代码视图引擎](../Visions/CodeViewEngine.md)
 - **关联提案**: [0009](0009-content-editor-engine-selection.md)（接入 SourceEditor）；上游三篇见「方案 · 一」
 - **实现分支 / PR**: `feature/source-editor-comment-annotations`（worktree `.worktrees/RuntimeViewer-SourceEditorCommentAnnotations`）
@@ -11,8 +11,8 @@
 
 内容面板用 Xcode 的 SourceEditor 显示时（Settings › Editor 打开 SourceEditor），生成器输出的注释——
 地址、VTable / PWT / 字段偏移、Type Layout、ObjC 的 IMP 与 ivar 偏移、各种说明——不再是一行行灰色
-注释，而是画成带细边的胶囊标签，按注释说的是什么分色（地址、偏移、布局、声明信息、警告、说明）：
-`//`、`/* */` 和标点不显示，标签名与数值分色，多字段的拆成几个相邻标签。Swift 的字段偏移树（`// Field offset: 0x8` 下面那串 `├──` 行）变成可折叠的大纲，默认只剩
+注释，而是画成淡灰底的胶囊标签，标签名按注释说的是什么带一点颜色（地址、偏移、布局、声明信息、警告、
+说明），文字整体比代码暗：`//`、`/* */` 和标点不显示，标签名、键与数值分色，多字段的拆成几个相邻标签。Swift 的字段偏移树（`// Field offset: 0x8` 下面那串 `├──` 行）变成可折叠的大纲，默认只剩
 根那一行；枚举布局的摘要拆成一排标签，每个 case 的说明块默认收起到 Case 那一行。`NSTextView` 那条
 路径不变。
 
@@ -82,8 +82,9 @@ MachOSwiftSection、MachOObjCSection 各有一篇配套改动，已交给三个�
     impAddress）、offset（VTable / PWT / 字段偏移、字段树、ivar 偏移）、layout（Type Layout、枚举布局
     的各部分）、declaration（`@synthesize` / `@dynamic`、protocol-extension default、私有声明出处、
     条件 witness、stripped requirement、ObjC 的类型说明）、warning、note（其余与认不出的 kind）。
-  - **着色**：label、key、qualifier 用所在标签那一类的标签名颜色，value 用压暗的正文色，type、name
-    各用自己的颜色，正文保持注释色；treePrefix 画成透明，留给展开三角。
+  - **着色**：label、qualifier 用所在标签那一类的标签名颜色，key 不分类别用一种键的颜色，value、
+    type、name 各用自己的颜色，正文保持注释色；treePrefix 画成透明，留给展开三角。（key 原先与 label
+    同色，2026-11-05 分开，见决策日志。）
   - **标签**：一般一条注释一行一个标签，正文不进标签（整行只有正文时除外）；Type Layout、枚举摘要、
     stripped requirement 在每个 key 处另起一个标签；case 头行在 name 和 key 处另起；字段树的行只给
     value 打标签；字节行的标签到第一个 value 为止，后面的二进制不进；note 与认不出的种类整行一个 note
@@ -120,11 +121,13 @@ SourceEditor UUID `6E5DBC54-96DD-3101-A63E-CDCE9E3B0572`）的反编译，地址
 - 默认收起：一份 source 第一次出现、`FoldStateCache` 里没有它时，收起每棵字段偏移树的根和每个 case
   说明块；有记录就按记录恢复。
 - 外观由 App 给：`SourceEditorBridgingCommentTagAppearance`（又一个 `@objc` 协议，理由同装饰描述）
-  按类别给出填充、描边与标签名的颜色，外加圆角、描边宽度和左右留白，bridge 每次调用时读一遍存下来。
-  App 的 `SourceEditorCommentTagAppearance` 画胶囊：圆角取标签高度的一半，1 pt 同色细边，留白 6 pt；
-  每类一个固定色相（地址蓝、偏移绿、布局紫、声明信息琥珀、警告橙红），填充浅色 7.5%、深色 11%，
-  细边 30% / 36%，标签名用同色相深一档（深色外观里浅一档）；说明取主题的注释色；数值用正文色压到
-  78% / 82%，主题的数字色在标签里太抢眼。留白是列位移，烤在排版表里，变了就按已载入的装饰重建。
+  按类别给出填充、描边与标签名的颜色，外加键、数值、类型名与名字的颜色，圆角、描边宽度和左右留白，
+  bridge 每次调用时读一遍存下来。App 的 `SourceEditorCommentTagAppearance` 画胶囊：圆角取标签高度的
+  一半，不描边，留白 6 pt；填充不分类别，取主题注释色的深色 13%、浅色 10%；类别只落在标签名上——每类
+  一个固定色相（地址蓝、偏移绿、布局紫、声明信息琥珀、警告橙红），标签名取这个色相与注释色各一半，
+  说明取注释色；键用注释色；数值与名字用正文色压到 60%（浅色 62%），类型名用主题的类型色压到 62%
+  （浅色 70%），都比代码暗。11-05 之前每类的填充与 1 pt 细边都用自己的色相，标签名用全色，数值是
+  正文色的 82% / 78%（见决策日志）。留白是列位移，烤在排版表里，变了就按已载入的装饰重建。
 - 带标签的行比文字高 4 pt，上下各 2 pt（`tagLineSpacing`），胶囊和三角仍按文字的高度画，空出的高度
   落在胶囊外面。撑高的做法见上表：每一行注释的注释符号后都有一个原本藏起的空格，放回来挂上零宽的
   run delegate。它的上伸与下伸取 App 传来的注释字体（`commentFont`，主题给注释的字体）的原值，各加
@@ -253,3 +256,4 @@ Settings › Editor 加一个「Comment Tags」开关，默认开。关掉就是
 | 2026-11-01 | 三个上游都进了各自的 `next`，抬 pin | MachOSwiftSection 的注释结构标记以 0084 落地（`1dcc0c08`），swift-semantic-string 发布 0.6.0（`next` 上 `f14caa48`），MachOObjCSection 的标记合进 `next` 并推送（`774b2baf`）。五个锁文件只改这三条 pin，其余不动；包的 edit 模式与临时 workspace 撤掉，改用默认的远程依赖、全新构建目录重跑全量验证：Core、Packages、命令行工具与 App 都编过，Distribution 的锁文件解析通过；全量测试只有满载下的几个计时类测试失败（交叉引用预先准备 2 个、批次取消 1 个、加载指示 100 ms 宽限 1 个），单独重跑全过，bridge 测试只剩基线就有的 2 个滚动条测试。 |
 | 2026-11-01 | 实现完成，落地编号 0064 | 落地前先把 `next` 合进功能分支，带进另一会话的「只看导出的 ObjC 声明」；`ContentTextViewModel` 的冲突按 `next` 的 Swift / ObjC 两侧判断改了 `showsExportedOnlyNote`，ObjC 对象被那个选项清空时的说明也画成说明标签。不另写使用指南或实现说明：用户可见的只有 Settings › Editor 的 Comment Tags 开关，设置页已有说明，机制与反编译依据都在本提案里；术语表新增「注释标签」与「注释结构」两条。 |
 | 2026-11-02 | 带标签的行加高 4 pt，上下各 2 pt，胶囊大小不变 | 用户实机看了觉得标签叠得太密、干扰正文。原因是胶囊只比整行矮 2 pt：存储属性上方的「字段偏移」与「Type Layout」两行标签几乎连成一块，也贴着上下的代码；而 13 pt 字号的一行只有 16 pt，字本身就占约 12 pt，同样字号下胶囊再缩就压到字。给了三个方向：只加高标签行、所有行加大行距、标签字号调小一号，用户选只加高标签行，代码行不变。原想用框架的 `setLineExpansionEffectForLine(_:height:)`，反编译发现它只能把行压矮，改用零宽 run delegate 撑高（依据见「方案 · 四」的表）。第一版把字体的上伸与下伸各自上取整再交给 run delegate，测出每行多高了 1 pt：编辑器是把两者之和整个上取整，改成传原值后正好高出间距。测试：`SourceEditorOverlayBehaviorTests` 新增 2 个，钉住零宽 run delegate 撑高整行、文字居中、不占宽度，以及行高等于字体上伸加下伸之和上取整（12 到 18 pt 五个字号）；`CommentDecorationTests` 新增 3 个，覆盖带标签的行高出间距、下面的行跟着下移、去掉间距后复原，胶囊的大小与横向位置不变、居中、相邻两行标签的间隔多出 4 pt，以及加高的行行号仍与文字齐平；复制测试补了加高的情形，复制出的仍是原文。`Stubs/VerifyAcrossXcodes.swift` 的探针外观带上 4 pt 间距，26.6 与 27.2 都走一遍加高的排版。验证在 Ultra 上跑（macOS 27.2、Xcode 27.2）：bridge 测试只剩基线就有的 2 个滚动条失败，跨版本探针两版都通过，App（Debug-arm64e）编过。用户确认后收尾。间距是固定的外观值，不进设置，所以不另写使用指南或实现说明；术语无新增。 |
+| 2026-11-05 | 标签降噪：不描边，填充统一取淡灰，文字压到代码之下 | 用户实机用了一阵后觉得标签仍然太抢眼。原因有三：一行 Type Layout 拆成五个胶囊，每个都描了细边；标签名和键用饱和的类别色，数值是正文色的 82%，比声明名、类型名还亮；结构体的每个属性上方有两行注释，比代码行还多，样式一亮就压过了代码。先用一页静态对比页（仓库外的一次性样例，深浅两色并排）给了五个更安静的画法：只去边并压暗文字、一行注释一个胶囊、再加淡彩底、一个声明上方的几行注释共用一块圆角底、不画底。用户选了改动最小的第一种，仍是一个事实一个胶囊；字段偏移行尾折叠自带的「…」块按用户的决定保留。新外观见「方案 · 四」。键原先与标签名同色，要让类别色只落在标签名上，`InterfaceCommentDecorations.RunStyle` 与 bridge 的 `SourceEditorBridgingCommentRunStyle` 各加了 `key`，外观协议加了 `keyColor`；限定词（`Address (getter)` 里的 `getter`）仍随标签名。测试：`InterfaceCommentDecorationsTests.runsTakeTheColourOfTheirRole` 补了键与标签名分开的断言，`CommentDecorationTests` 新增 `aKeyTakesTheKeyColourWhateverItsTag`。验证在 Ultra 上跑（macOS 27.2、Xcode 27.2）：Packages 的两个注释装饰套件 13 个测试全过；bridge 测试 36 个，只剩基线就有的 2 个滚动条失败，跑的是产物目录里的重建版 26.6.3（与下载的框架 UUID 相同）；App（Debug-arm64e）编过。颜色是固定的外观值，不进设置，不另写使用指南或实现说明；术语表「注释标签」一条与两份索引按新样子改了措辞。 |

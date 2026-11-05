@@ -1,14 +1,18 @@
 import AppKit
 import RuntimeViewerSourceEditorBridge
 
-/// How the SourceEditor pane draws comment tags: capsules with a faint fill and a hairline in a
-/// hue per kind of fact, the label in a shade of the same hue, and the value in a quietened text
-/// colour. Worked out from the theme each time it is applied; notes take the comment colour.
+/// How the SourceEditor pane draws comment tags: a capsule per fact in one faint fill of the
+/// comment colour, with no outline, and text kept below the code around it. The label carries a
+/// trace of a hue per kind of fact, keys take the comment colour, and values, types and names
+/// are their own colours at a reduced opacity. Worked out from the theme each time it is
+/// applied; notes take the comment colour.
 ///
-/// Chosen by the user from four candidates compared on real interfaces (the prototype is on the
-/// `prototype/comment-tag-styles` branch); the proposal `source-editor-comment-annotations`
-/// records why.
+/// The first look gave every capsule its kind's hue and a hairline of the same hue, the label
+/// that hue at full strength and the value 82 % of the text colour, which drew the comments
+/// brighter than the declarations they describe. The user chose this one from five quieter
+/// candidates; the proposal `source-editor-comment-annotations` records why.
 final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingCommentTagAppearance {
+    let keyColor: NSColor
     let valueColor: NSColor
     let typeColor: NSColor
     let nameColor: NSColor
@@ -17,7 +21,9 @@ final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingComm
     /// Past half a tag's height, so every tag is a capsule.
     let cornerRadius: CGFloat = 100
 
-    let strokeWidth: CGFloat = 1
+    /// No outline: a ring around each of the five capsules on a type layout's line was a large
+    /// part of what made the tags loud.
+    let strokeWidth: CGFloat = 0
 
     /// Wider than a rounded rectangle needs, so the text keeps clear of the round ends.
     let horizontalPadding: CGFloat = 6
@@ -29,39 +35,35 @@ final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingComm
 
     let commentFont: NSFont
 
-    private let fillColors: [SourceEditorBridgingCommentTagStyle: NSColor]
-    private let strokeColors: [SourceEditorBridgingCommentTagStyle: NSColor]
+    /// Behind every tag, whatever it says: the kind of fact shows in the label alone.
+    private let neutralFillColor: NSColor
     private let labelColors: [SourceEditorBridgingCommentTagStyle: NSColor]
 
     init(commentColor: NSColor, commentFont: NSFont, typeColor: NSColor, textColor: NSColor, isDark: Bool) {
         self.commentFont = commentFont
-        var fillColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
-        var strokeColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
+        // Dark backgrounds need a stronger wash to show the same contrast.
+        self.neutralFillColor = commentColor.withAlphaComponent(isDark ? 0.13 : 0.10)
         var labelColors: [SourceEditorBridgingCommentTagStyle: NSColor] = [:]
-        // Dark backgrounds need a stronger wash and line to show the same contrast.
         for style in SourceEditorBridgingCommentTagStyle.allCases {
-            let hue = Self.hue(of: style, isDark: isDark) ?? commentColor
-            fillColors[style] = hue.withAlphaComponent(isDark ? 0.11 : 0.075)
-            strokeColors[style] = hue.withAlphaComponent(isDark ? 0.36 : 0.30)
-            labelColors[style] = Self.labelShade(of: style, isDark: isDark) ?? commentColor
+            labelColors[style] = Self.labelShade(of: style, isDark: isDark).map { Self.halfway(from: $0, to: commentColor) } ?? commentColor
         }
-        self.fillColors = fillColors
-        self.strokeColors = strokeColors
         self.labelColors = labelColors
-        // The theme's number colour is meant to stand out in code; inside a tag it shouted.
-        self.valueColor = textColor.withAlphaComponent(isDark ? 0.82 : 0.78)
-        self.typeColor = typeColor
-        self.nameColor = textColor
+        self.keyColor = commentColor
+        // Values, types and names stay legible but under the code: the theme's number colour,
+        // or the text colour at full strength, made a tag outshine the declaration below it.
+        self.valueColor = textColor.withAlphaComponent(isDark ? 0.60 : 0.62)
+        self.typeColor = typeColor.withAlphaComponent(isDark ? 0.62 : 0.70)
+        self.nameColor = textColor.withAlphaComponent(isDark ? 0.60 : 0.62)
         self.disclosureColor = commentColor
         super.init()
     }
 
     func fillColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
-        fillColors[style] ?? .clear
+        neutralFillColor
     }
 
     func strokeColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor? {
-        strokeColors[style]
+        nil
     }
 
     func labelColor(for style: SourceEditorBridgingCommentTagStyle) -> NSColor {
@@ -70,20 +72,9 @@ final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingComm
 
     // MARK: - Palette
 
-    /// Each category's hue, a step off full saturation so a page of tags stays quiet; nil for
-    /// notes, which take the comment colour.
-    private static func hue(of style: SourceEditorBridgingCommentTagStyle, isDark: Bool) -> NSColor? {
-        switch style {
-        case .address: color(isDark ? (120, 165, 255) : (64, 120, 220))
-        case .offset: color(isDark ? (100, 205, 150) : (46, 150, 100))
-        case .layout: color(isDark ? (180, 150, 255) : (135, 95, 210))
-        case .declaration: color(isDark ? (230, 185, 100) : (190, 135, 40))
-        case .warning: color(isDark ? (255, 145, 100) : (225, 105, 55))
-        case .note: nil
-        }
-    }
-
-    /// The label's shade of each hue: deeper on a light background, lighter on a dark one.
+    /// Each kind's label shade at full strength: deeper on a light background, lighter on a dark
+    /// one. Nil for notes, which take the comment colour. A label is drawn halfway from its shade
+    /// to the comment colour.
     private static func labelShade(of style: SourceEditorBridgingCommentTagStyle, isDark: Bool) -> NSColor? {
         switch style {
         case .address: color(isDark ? (0x9D, 0xBE, 0xFF) : (0x2F, 0x5F, 0xB3))
@@ -93,6 +84,21 @@ final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingComm
         case .warning: color(isDark ? (0xFF, 0xAD, 0x8C) : (0xB1, 0x4A, 0x1F))
         case .note: nil
         }
+    }
+
+    /// The colour halfway between `shade` and `commentColor` in sRGB, alpha included, so a label
+    /// keeps a trace of its hue and sits near the comment colour of whatever theme is in use. A
+    /// colour with no sRGB form, such as a pattern, leaves the shade as it is.
+    private static func halfway(from shade: NSColor, to commentColor: NSColor) -> NSColor {
+        guard let shadeInSRGB = shade.usingColorSpace(.sRGB),
+              let commentColorInSRGB = commentColor.usingColorSpace(.sRGB)
+        else { return shade }
+        return NSColor(
+            srgbRed: (shadeInSRGB.redComponent + commentColorInSRGB.redComponent) / 2,
+            green: (shadeInSRGB.greenComponent + commentColorInSRGB.greenComponent) / 2,
+            blue: (shadeInSRGB.blueComponent + commentColorInSRGB.blueComponent) / 2,
+            alpha: (shadeInSRGB.alphaComponent + commentColorInSRGB.alphaComponent) / 2
+        )
     }
 
     private static func color(_ components: (red: Int, green: Int, blue: Int)) -> NSColor {
