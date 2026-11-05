@@ -1,17 +1,8 @@
-#if os(macOS) || targetEnvironment(macCatalyst)
+#if os(macOS)
 
 import AppKit
 import LaunchServicesPrivate
 
-extension LSBundleProxy {
-    public var isSandbox: Bool {
-        guard let entitlements = entitlements else { return false }
-        guard let isSandbox = entitlements["com.apple.security.app-sandbox"] as? Bool else { return false }
-        return isSandbox
-    }
-}
-
-#if os(macOS)
 extension NSRunningApplication {
     public var applicationProxy: LSApplicationProxy? {
         guard let bundleIdentifier else { return nil }
@@ -22,6 +13,5 @@ extension NSRunningApplication {
         applicationProxy?.isSandbox ?? false
     }
 }
-#endif
 
 #endif
