@@ -16,6 +16,7 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 | `RuntimeViewerUsingAppKit/AGENTS.md` | The macOS app's UI layer — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and routes, AppKit views, the sidebar's floating bars, diagnosing flicker — and `AppDelegate` with the lifecycle controllers. It also governs the ViewModels and routes in `RuntimeViewerApplication` and the views in `RuntimeViewerUI` |
 | `RuntimeViewerPackages/Sources/AGENTS.md` | Points the UI code in `RuntimeViewerApplication` and `RuntimeViewerUI` to the file above |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
+| `RuntimeViewerCore/Sources/AGENTS.md` | Where a file goes in the RuntimeViewerCore package: one top-level type per file, directories by feature |
 | `RuntimeViewerCore/Tests/AGENTS.md` | Keeping Core tests off the user's real derived data |
 | `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
 | `Configurations/AGENTS.md` | Per-target build settings: the embedded non-macOS products, the jailbroken variant's payload, service names, adding a configuration |

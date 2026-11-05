@@ -54,13 +54,13 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 | RuntimeViewerUtilities | `LaunchServices+.swift` 拆成 `LSBundleProxy+Sandbox.swift` 与 `NSRunningApplication+ApplicationProxy.swift` |
 | RuntimeViewerObjC | 不动（一个 `.m`、一个头文件） |
 
-拆完约 290 个文件。
+拆完共 295 个文件（原 152 个）。
 
 ### 三、拆开时必须处理的事
 
 - **靠 `fileprivate` 成员互相访问的四组类型**：拆开，把这些成员放宽到 `internal`（仍只在模块内可见）。
   - `RuntimeXPCMachServiceConnection` 与客户端、服务端两个子类：基类的六个成员和 `@Loggable(.fileprivate)`。
-  - `RuntimeXPCServiceConnection` 与客户端、监听端两个子类：`stateSubject`、`init()`、`sendFrame`、`installHandler`。
+  - `RuntimeXPCServiceConnection` 与客户端、监听端两个子类：`stateSubject`、`init()`、`sendFrame`、`installHandler`，以及两边都用的 `NSLock.locked(_:)`。
   - `RuntimeSwiftSection` 与 `RuntimeSwiftSectionFactory`：factory 调 section 的四个方法，外加 section 文件里几个 file-private 的辅助扩展。
   - `RuntimeDerivedData.processStore` 与读它的 `RuntimeEngine.processDerivedDataStore`。
 - 按项目规矩必须 file-private 的留在原处：`CrossReferenceSession.shared`，以及用它的 `CrossReferenceQuery.init(engine:)`。
@@ -93,8 +93,8 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 
 1. 批准后从 `next` 切 `feature/core-source-layout`，worktree 为 `.worktrees/RuntimeViewer-CoreSourceLayout`；跑基线。（已完成）
 2. 只搬家的提交，连同活文档里的路径。（已完成）
-3. 拆文件：Core → Communication → CrossReferences → Injection → Utilities，各一个提交。
-4. `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 登记。
+3. 拆文件：Core、Communication、CrossReferences 各一个提交，Injection 与 Utilities 合一个提交。（已完成）
+4. `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 登记。（已完成）
 5. 验证，收尾合回 `next`。
 
 ### 没问就采用的假设
@@ -298,3 +298,8 @@ RuntimeViewerUtilities：`DeviceIdentifier.swift`、`SandboxProbe.swift`，加�
 | 2026-11-05 | 要拆的文件在只搬家的提交里先整个搬到主类型的目录 | 搬家和拆分分开提交，搬家那次 git 能完整认出改名；拆分时只切出其余类型 |
 | 2026-11-05 | 用户批准，开始实现 | — |
 | 2026-11-05 | 只搬家的提交：96 个文件换目录，`Common/`、`Core/`、`Catalog/`、`Indexing/`、`Utils/` 与 Communication 的 `Network/` 清空删除 | 落地步骤 2；文档里跟着变的路径同批改，`SparkleRelease.md` 找上次 helper 版本变更的命令改为比较前后值，免得把搬家的提交当成一次变更 |
+| 2026-11-05 | 拆文件用脚本按大括号切出顶层声明，连同紧贴在上面的注释与属性逐字节复制；声明之间夹着 `#if` 的 `RuntimeRequestResponse.swift`、`LaunchServices+.swift` 按行号手工拆 | 不手抄代码；脚本先经用户过目，dry run 核对过每个声明的去向再写入 |
+| 2026-11-05 | 新文件带上原文件的全部 import，编译器指出没用在公开声明里的 111 处 `public import` / `package import` 改为普通 `import`，其余不删 | 只消掉拆分带来的警告；Swift 不报多余的普通 import，逐个删要靠一次次编译试，收益不抵风险。基线里原有的 1 处同类警告（`RuntimeConnectionError+LostConnection.swift`）不在本次范围 |
+| 2026-11-05 | 放宽到 `internal` 的除了起初列的四组，还有 XPC service 客户端与监听端共用的 `NSLock.locked(_:)` | 同样是拆开后跨文件使用。`RuntimeXPCMachServiceConnection` 的 `@Loggable` 改成 `.internal`：两个子类沿用它的 logger |
+| 2026-11-05 | `RuntimeEngineCommandRegistryLog` 一分为二：注册器留着自己那条日志，搬到 `RuntimeEngine+CommandExtensions.swift` 的注册逻辑另配 `RuntimeEngineCommandExtensionLog` | `@Loggable` 的 logger 只在声明它的文件里可见 |
+| 2026-11-05 | `// MARK:` 行不随声明搬；原文件里因此没东西可标的删掉；三个文件头注释改写成只描述留下的内容（`RuntimeObjCSectioning.swift`、`RuntimeBookmarkScope.swift`、`Models/RuntimeMemberReference.swift`） | 拆开后它们描述的是已经不在本文件的类型 |
