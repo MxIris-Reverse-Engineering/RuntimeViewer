@@ -731,32 +731,6 @@ final class CrossReferenceSession: Sendable {
     }
 }
 
-/// An image's prepared cross references, as the session keeps them: its
-/// index, and the memory of what the analyzer keeps to name what the index
-/// answers with — the image's function table and the names read for it —
-/// which the byte limit counts along with the index: about two thirds again
-/// for AppKit.
-struct CrossReferencePreparedImage: Sendable {
-    let index: CodeReferenceIndex
-    let namingByteCount: Int
-
-    var byteCount: Int {
-        index.approximateByteCount + namingByteCount
-    }
-}
-
-/// What a scan looked for: the key its findings are kept under.
-enum CrossReferenceScanKey: Hashable, Sendable {
-    /// The references filed under any of these keys: a callers query.
-    case references(Set<CodeReferenceTable.Key>)
-    /// The references to the class whose object lies at this location. Not
-    /// the class's name: the macOS and the Mac Catalyst variant of a
-    /// framework define classes of the same name.
-    case objectiveCClass(CodeLocation)
-    /// The references to the Swift type whose descriptor lies here.
-    case swiftType(CodeLocation)
-}
-
 extension CrossReferenceQuery {
     /// A query against the process's session — what the commands run.
     init(engine: RuntimeEngine) {
