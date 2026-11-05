@@ -95,7 +95,7 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 2. 只搬家的提交，连同活文档里的路径。（已完成）
 3. 拆文件：Core、Communication、CrossReferences 各一个提交，Injection 与 Utilities 合一个提交。（已完成）
 4. `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 登记。（已完成）
-5. 验证，收尾合回 `next`。
+5. 验证，收尾合回 `next`。（验证已完成，等用户看过后收尾）
 
 ### 没问就采用的假设
 
@@ -303,3 +303,6 @@ RuntimeViewerUtilities：`DeviceIdentifier.swift`、`SandboxProbe.swift`，加�
 | 2026-11-05 | 放宽到 `internal` 的除了起初列的四组，还有 XPC service 客户端与监听端共用的 `NSLock.locked(_:)` | 同样是拆开后跨文件使用。`RuntimeXPCMachServiceConnection` 的 `@Loggable` 改成 `.internal`：两个子类沿用它的 logger |
 | 2026-11-05 | `RuntimeEngineCommandRegistryLog` 一分为二：注册器留着自己那条日志，搬到 `RuntimeEngine+CommandExtensions.swift` 的注册逻辑另配 `RuntimeEngineCommandExtensionLog` | `@Loggable` 的 logger 只在声明它的文件里可见 |
 | 2026-11-05 | `// MARK:` 行不随声明搬；原文件里因此没东西可标的删掉；三个文件头注释改写成只描述留下的内容（`RuntimeObjCSectioning.swift`、`RuntimeBookmarkScope.swift`、`Models/RuntimeMemberReference.swift`） | 拆开后它们描述的是已经不在本文件的类型 |
+| 2026-11-06 | 验证通过 | 五个代码提交逐个检出，Core 包都能连测试一起编过。全量测试与改动前同为 1,031 个（36、75、675、245 四组）；失败 3 个，改动前是 4 个：两边共有的交叉引用预先准备与后台索引取消测试是满载下会挂的那批，新出现的 DirectTCP 尾包测试是满载超时（10.7 秒），单独跑 5 次全过、每次约 1 秒。iOS、tvOS、visionOS 编过；Mac Catalyst 与 watchOS 编不过，原因都不在这次改动：Catalyst 的 23 个错误全在内容一字未动的 `RuntimeEngineProxyServer.swift`（包级 Catalyst 构建里 `#if canImport(AppKit)` 成立，用到了 Catalyst 没有的 AppKit API；App 构建里的 Catalyst service 不受影响），watchOS 卡在依赖库的最低部署版本 8.0 低于 Xcode 27.2 的下限 9.0。RuntimeViewerPackages、RuntimeViewerCommandLine、RuntimeViewerMCP 编过；App 经 `RunScript.sh`（Debug-arm64e，连带 Catalyst service、helper 与模拟器载荷）编过 |
+| 2026-11-06 | 文档判断：不另写使用指南、实现说明，不加术语 | 改的是源码的摆放，规则写在 `RuntimeViewerCore/Sources/AGENTS.md`，没有新概念 |
+| 2026-11-06 | 实现完成，待用户看过后收尾 | 已在本地合进 `next` 的检出，未推送 |
