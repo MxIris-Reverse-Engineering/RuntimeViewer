@@ -35,8 +35,7 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
             var ids: [String: Int16] = [:]
             let count = Int(SMSourceNodeTypes.nodeTypesCount())
             for identifier in 0 ..< count {
-                // Declared `+ (id)nodeTypeNameForId:` in the framework's header, so it arrives as `Any`.
-                guard let name = SMSourceNodeTypes.nodeTypeName(forId: Int16(identifier)) as? String else { continue }
+                guard let name = SMSourceNodeTypes.nodeTypeName(forId: Int16(identifier)) else { continue }
                 ids[name] = Int16(identifier)
             }
             return ids
