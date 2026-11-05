@@ -124,6 +124,38 @@ struct RuntimeOfflineServiceHostTests {
         let objects = try await client.objects(in: Self.filePath)
         #expect(objects.isEmpty, "/usr/bin/true defines no Objective-C or Swift types")
     }
+
+    /// launchd starts an XPC service with room for 256 descriptors, and
+    /// reading a dyld shared cache whole takes several hundred: every reader
+    /// of it maps each of its eighty-odd files.
+    @Test("A launch makes room for a whole dyld shared cache's descriptors before reading the file")
+    func launchRaisesTheDescriptorLimit() async {
+        await #expect(processExitsWith: .success) {
+            let isRaised = await RuntimeOfflineServiceHostTests.launchFromTheServiceDescriptorLimitRaisesIt()
+            exit(isRaised ? EXIT_SUCCESS : EXIT_FAILURE)
+        }
+    }
+
+    /// Starts from the soft limit launchd gives a service, launches a host on
+    /// a paired file, and says whether the soft limit then stands at the most
+    /// `setrlimit(2)` advises asking for, `min(OPEN_MAX, rlim_max)`.
+    static func launchFromTheServiceDescriptorLimitRaisesIt() async -> Bool {
+        var limit = rlimit()
+        guard getrlimit(RLIMIT_NOFILE, &limit) == 0 else { return false }
+        limit.rlim_cur = 256
+        guard setrlimit(RLIMIT_NOFILE, &limit) == 0 else { return false }
+        do {
+            let file = try pairedFile()
+            let (host, endpoint) = try makeHost()
+            let client = RuntimeEngine(source: file.source, engineID: "offline-service-test.descriptor-limit")
+            try await client.connect(credential: credential(for: file, at: endpoint))
+            withExtendedLifetime(host) {}
+        } catch {
+            return false
+        }
+        guard getrlimit(RLIMIT_NOFILE, &limit) == 0 else { return false }
+        return limit.rlim_cur >= min(rlim_t(OPEN_MAX), limit.rlim_max)
+    }
 }
 
 private func pollUntil(
