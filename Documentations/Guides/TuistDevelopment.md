@@ -2,7 +2,7 @@
 
 - **面向**: 在本仓库做日常开发、想让第三方依赖走二进制缓存的人；改原生工程的 target、依赖、嵌入方式或构建设置的人（同步规则）
 - **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)
-- **最后更新**: 2026-10-15
+- **最后更新**: 2026-11-05
 
 `RuntimeViewer-Tuist.xcworkspace` 是构建 macOS App 的第二条路，只供日常开发。它由
 `./TuistScript.sh` 用 Tuist 生成，和原生工程用同样的 target、同样的源码、同一批
@@ -49,7 +49,13 @@ Xcode 27 解析出 `swift-issue-reporting` 2.1），锁文件就和原生的对�
 | 改了某个 `Package.swift`（依赖、target、设置） | `./TuistScript.sh install`，再 `generate` |
 | 依赖升级 | `./UpdatePackagesScript.sh`（顺带跑一次 `./TuistScript.sh install`），再 `./TuistScript.sh warm`（只重编变了的） |
 | 换了 Xcode 版本 | `./TuistScript.sh warm` |
+| 换钉住的 SourceEditor 版本 | `./UpdateSourceEditorScript.sh [<版本>]`：换版并下载，之后在 Xcode 里直接编，不用重新生成 |
 | 改了原生工程的结构或设置 | 同批更新 Tuist 描述，提交前 `./TuistScript.sh check`（见下文） |
+
+**`generate`、`warm`、`build`、`check` 都先跑 `FetchSourceEditorScript.sh`**，把钉住的重建版 SourceEditor
+下载到位，和 `RunScript.sh` 编之前做的一样。取不到（没装 `gh`、没登录、没有私有仓库的权限）就提示一句照常往下走，
+App 用内置的文本视图显示接口。App 的 Embed SourceEditor Frameworks 阶段发现下载的不是钉住的那一版会让构建失败，
+所以别人换了版本以后，拉下来先跑一次其中一个命令（或 `./FetchSourceEditorScript.sh`），再在 Xcode 里编。
 
 缓存按配置分开预热：Debug 是默认；要在命令行编 Debug-arm64e 就先
 `./TuistScript.sh warm --configuration Debug-arm64e`，否则第三方依赖会从源码编。

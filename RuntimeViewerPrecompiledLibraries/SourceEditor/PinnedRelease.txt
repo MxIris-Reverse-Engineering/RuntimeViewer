@@ -6,10 +6,11 @@
 # Embed SourceEditor Frameworks build phase copies it into the app. A build without them shows
 # interfaces in the built-in text view.
 #
-# To move to another release, change the version and the four SHA-256 values. Each value is the
-# checksum that release's own Package.swift gives for the framework's zip.
-version 26.6.2
-SourceEditor 19128555b9d48b5494a1292e6f409acc0519ee94f7d6483fea9a416afa0d915e
-SourceModel cc78b31017dc4047a112c481a7a3bc0d1947cd977e8381e70890c406405b263e
-SourceModelSupport d2dbb846c4e7223d41df812c52dab4f2556cd57c286d9a1f55ee548c91b42355
-_CodeCompletionFoundation 123a3c65b83c791963e57a8cfd28bf0b402f14b2d434e15fb7762486881ac909
+# To move to another release, run ./UpdateSourceEditorScript.sh [<version>]. It writes the version
+# and the four SHA-256 values, each the checksum that release's own Package.swift gives for the
+# framework's zip, and downloads the release.
+version 26.6.3
+SourceEditor 4cf13f55ddfb4d3bb49e3784b6f2bd3cd1969597febde5a1eb11705ea6468907
+SourceModel 198d46106c77edc16048f5bb315cf086a88417f3189a26dd1bedb99af02e2ab0
+SourceModelSupport 17fc8bff515b15748fb94808c569f22e96e4728a0d1c6542ca7f0f1b025f2d54
+_CodeCompletionFoundation b3e41311cc0c981cc5d7cb52cdd950d749ede09d822f8ed253a91667cfa844ff

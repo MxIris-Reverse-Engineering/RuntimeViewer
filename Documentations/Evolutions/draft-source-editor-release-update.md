@@ -1,6 +1,6 @@
 # Draft - 一条命令换钉住的 SourceEditor 版本，Tuist 构建前也取框架
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-05
 - **最后更新**: 2026-11-05
 - **实现分支 / PR**: `feature/source-editor-release-update`（从 `next` 切，并回 `next`）
@@ -17,7 +17,7 @@
   1. 照 `FetchSourceEditorScript.sh` 的读法读当前的 `PinnedRelease.txt`：版本号和框架名单。
   2. 用 `gh api` 读目标版本 tag 上的 `Package.swift`，取每个 `binaryTarget` 的 `checksum`。名单里有一个框架找不到就失败，文件不动。
   3. 只改 `version` 那一行和名单里各框架那一行，注释、空行和框架顺序原样保留。
-  4. 跑 `FetchSourceEditorScript.sh`：它下载四个 zip，逐个对新的哈希校验，等于拿真实的资产把 `Package.swift` 给的值核对一遍。下载或校验失败，就把 `PinnedRelease.txt` 恢复原样，带着它的退出码退出。
+  4. 跑 `FetchSourceEditorScript.sh`：它下载四个 zip，逐个对新的哈希校验，等于拿真实的资产把 `Package.swift` 给的值核对一遍。下载或校验失败、或者中途被打断，就把 `PinnedRelease.txt` 恢复原样，带着它的退出码退出。
   5. 打印「旧版本 → 新版本」、Release 的地址，以及跨过的每一版 Release 说明里的 Breaking 一节；最后提示跑桥接测试、提交 `PinnedRelease.txt`。
 - 已经是目标版本时不改文件，只跑一次 `FetchSourceEditorScript.sh`，确保框架在位。
 - 退出码与 `FetchSourceEditorScript.sh` 一致：0 成功；2 没装 `gh`、没登录或没有仓库权限；1 其他错误。
@@ -43,9 +43,9 @@
 - 26.6.3：桥接测试（Debug-arm64e）通过，没过的只能是 `next` 上早就不过的 `SourceEditorScrollerTests`；构建产物目录里四个框架的 LC_UUID 与 26.6.3 的下载一致。
 
 **落地步骤**
-1. 换版脚本与它的文档。
-2. `TuistScript.sh` 与 Tuist 指南。
-3. 用脚本换到 26.6.3，`PinnedRelease.txt` 的头注释、桥接里多余的类型转换同批改，跑桥接测试。
+1. 换版脚本与它的文档。（已完成）
+2. `TuistScript.sh` 与 Tuist 指南。（已完成）
+3. 用脚本换到 26.6.3，`PinnedRelease.txt` 的头注释、桥接里多余的类型转换同批改，跑桥接测试。（已完成）
 
 **没问就采用的假设**
 - 脚本名照 `UpdatePackagesScript.sh`、`FetchSourceEditorScript.sh` 的叫法，用 bash 写，风格和它们一致。
@@ -61,3 +61,5 @@
 |------|------|------|
 | 2026-11-05 | Created as Draft | 换钉住的 SourceEditor 版本要手抄四个哈希，Tuist workspace 也从不取框架；用户要一个换版脚本，并让 Tuist 脚本跟着改 |
 | 2026-11-05 | 用户批准，状态改为 Accepted；顺带把钉住的版本换到 26.6.3 | 新脚本第一次实际使用正好就是这次换版；26.6.3 修了 `string(for:)` 在没有 item 时的返回值和文档注释语言服务的回答，RV 只需删一处多余的类型转换 |
+| 2026-11-05 | 验证（公司那台 Mac，Xcode 27.2，Debug-arm64e） | 换版脚本：`--help`、`--dry-run`（列出 26.6.3 的三条 Breaking）、实际换到 26.6.3（下载目录里的副本与 `PinnedRelease.txt` 逐字节相同）、已是该版时只确认框架在位；不存在的版本号和写错的参数都报错、退出码 1、文件不动；把框架目录设成不可写让下载失败，退出码 1，`PinnedRelease.txt` 逐字节恢复，已下载的框架不动。`TuistScript.sh`：`generate`、`build` 的 `--dry-run` 第一步都是取框架，`install` 不取。26.6.3：桥接测试 35 个通过 33 个，没过的仍是 `next` 上早就不过的两个 `SourceEditorScrollerTests`（`8f3414e0` 起不再自动隐藏滚动条，测试没跟着改）；构建产物目录与 App 里四个框架的 LC_UUID 都和 26.6.3 的下载一致；`codesign --verify --deep --strict` 通过。没验证：Release universal 构建（改的那一行在 `#if arch(arm64)` 之内，Intel 切片不编译它）、实跑 Tuist 的 `generate` 与 `build`、启动 App |
+| 2026-11-05 | 实现完成，待用户看过后收尾 | 文档已同步：模块的 `AGENTS.md`、根 `AGENTS.md`、Tuist 指南；用法写在脚本头注释和模块的 `AGENTS.md` 里，不另写使用指南和实现说明；没有新术语 |

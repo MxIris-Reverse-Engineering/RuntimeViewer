@@ -618,7 +618,7 @@ code or the corpus store's read phase** — it says why each part has the shape 
 
 ## SourceEditor Module
 
-<important if="you are touching the SourceEditor module: the RuntimeViewerSourceEditorBridge framework, RuntimeViewerSourceEditorBridgeTests, SourceEditorBridgeProvider, SourceEditorFrameworks, FetchSourceEditorScript.sh, the Embed SourceEditor Frameworks phase, ContentSourceEditorViewController or SourceEditorThemeConversion">
+<important if="you are touching the SourceEditor module: the RuntimeViewerSourceEditorBridge framework, RuntimeViewerSourceEditorBridgeTests, SourceEditorBridgeProvider, SourceEditorFrameworks, FetchSourceEditorScript.sh, UpdateSourceEditorScript.sh, the Embed SourceEditor Frameworks phase, ContentSourceEditorViewController or SourceEditorThemeConversion">
 
 Everything that drives the `SourceEditor` framework family: the `RuntimeViewerSourceEditorBridge`
 framework, `RuntimeViewerSourceEditorBridgeTests`, `SourceEditorBridgeProvider`,
@@ -626,7 +626,8 @@ framework, `RuntimeViewerSourceEditorBridgeTests`, `SourceEditorBridgeProvider`,
 The app links the bridge framework and calls it directly; in official builds the bridge links the
 reconstruction released in the private `Mx-Iris/SourceEditor` repository — `FetchSourceEditorScript.sh`
 downloads the release pinned in `RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt`
-and the app's Embed SourceEditor Frameworks phase copies it in. Any other build, and the Intel slice
+and the app's Embed SourceEditor Frameworks phase copies it in; `UpdateSourceEditorScript.sh` moves
+the pin to another release. Any other build, and the Intel slice
 of a universal one, compiles the bridge without it (`#if arch(arm64) && canImport(SourceEditor)`) and
 shows interfaces in the built-in `NSTextView`. Nothing is loaded at run time, and nothing comes from
 an installed Xcode.
