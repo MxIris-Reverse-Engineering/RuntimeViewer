@@ -4,6 +4,9 @@
 **修复落地：** 本日。`TitleToolbarItem` 从 `MainToolbarController` 挪到
 `RuntimeViewerPackages/Sources/RuntimeViewerUI/AppKit/TitleToolbarItem.swift`（标识符改为初始化参数），加上四项尺寸设置，
 见「修复」。回归测试 `TitleToolbarItemOverflowTests`（`RuntimeViewerApplicationTests`）
+**后续（2026-11-05）：** 下文的四项设置原样保留，但改为作用在标题容器上；item 的视图换成一个不设宽度上限的外层视图，
+否则长标题会把工具栏正中的居中项挤到右边。见
+[`2026-11-05-long-toolbar-title-pushed-the-centered-item-aside.md`](2026-11-05-long-toolbar-title-pushed-the-centered-item-aside.md)
 **所属分支：** `next`。这个类在 `main` 上与 `next` 逐字相同；但 `main` 的 `RuntimeViewerApplicationTests` 不直接依赖
 `RuntimeViewerUI`，测试搬过去要补这条依赖
 **Severity：** Major —— 标题一长，Runtime Source 切换和其后所有按钮都进了 `»` 溢出菜单，每次都要多点一层

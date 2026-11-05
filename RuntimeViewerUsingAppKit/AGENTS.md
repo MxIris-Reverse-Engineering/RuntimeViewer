@@ -642,6 +642,16 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   `NSToolbar.itemIdentifiers`. Each style has its own title item (`.Main.title`, which Classic shares
   with Xcode 26's style, and `.Main.activityTitle`); `MainWindowController` feeds both titles and both
   activity displays, the hidden ones without animation.
+- **The centered item keeps its place and the title gives way.** In a section with a centered item,
+  NSToolbar shares the spare width among the items before it, the item and the items after it, each group
+  up to its widest, and slides the item towards the buttons once the group before it has grown past it
+  (`-[NSBarLayout _centerRectGivenItems:leadingItems:trailingItems:inRect:]`); a view that measures 10,000
+  points wide or more counts at its minimum there. So `TitleToolbarItem`'s view has no width limit: only
+  the title's container inside it hugs the text, and the rest of the view lets clicks through. Never give
+  the item's view a maximum width (`ToolbarCenteredItemTests` fails), and give any other item before the
+  centered item a fixed width or the same unbounded view — one that can grow pushes the centered item
+  aside again. The item is centred midway between the sidebar and inspector dividers, not on the window.
+  Background: `Documentations/ResolvedIssues/2026-11-05-long-toolbar-title-pushed-the-centered-item-aside.md`.
 
 - Each kind of work is one run at a time, worked out once per engine by
   `RuntimeEngineActivityReporter` (in `RuntimeEngineBackgroundWork`); each window picks what to show and
