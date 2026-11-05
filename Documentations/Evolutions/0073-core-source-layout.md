@@ -1,8 +1,8 @@
-# Draft - RuntimeViewerCore 包的源码按功能分目录，一个类型一个文件
+# 0073 - RuntimeViewerCore 包的源码按功能分目录，一个类型一个文件
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-05
-- **最后更新**: 2026-11-05
+- **最后更新**: 2026-11-06
 - **实现分支 / PR**: `feature/core-source-layout`（从 `next` 切，并回 `next`）
 
 ## 摘要
@@ -95,7 +95,7 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 2. 只搬家的提交，连同活文档里的路径。（已完成）
 3. 拆文件：Core、Communication、CrossReferences 各一个提交，Injection 与 Utilities 合一个提交。（已完成）
 4. `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 登记。（已完成）
-5. 验证，收尾合回 `next`。（验证已完成，等用户看过后收尾）
+5. 验证，收尾合回 `next`。（已完成）
 
 ### 没问就采用的假设
 
@@ -306,3 +306,4 @@ RuntimeViewerUtilities：`DeviceIdentifier.swift`、`SandboxProbe.swift`，加�
 | 2026-11-06 | 验证通过 | 五个代码提交逐个检出，Core 包都能连测试一起编过。全量测试与改动前同为 1,031 个（36、75、675、245 四组）；失败 3 个，改动前是 4 个：两边共有的交叉引用预先准备与后台索引取消测试是满载下会挂的那批，新出现的 DirectTCP 尾包测试是满载超时（10.7 秒），单独跑 5 次全过、每次约 1 秒。iOS、tvOS、visionOS 编过；Mac Catalyst 与 watchOS 编不过，原因都不在这次改动：Catalyst 的 23 个错误全在内容一字未动的 `RuntimeEngineProxyServer.swift`（包级 Catalyst 构建里 `#if canImport(AppKit)` 成立，用到了 Catalyst 没有的 AppKit API；App 构建里的 Catalyst service 不受影响），watchOS 卡在依赖库的最低部署版本 8.0 低于 Xcode 27.2 的下限 9.0。RuntimeViewerPackages、RuntimeViewerCommandLine、RuntimeViewerMCP 编过；App 经 `RunScript.sh`（Debug-arm64e，连带 Catalyst service、helper 与模拟器载荷）编过 |
 | 2026-11-06 | 文档判断：不另写使用指南、实现说明，不加术语 | 改的是源码的摆放，规则写在 `RuntimeViewerCore/Sources/AGENTS.md`，没有新概念 |
 | 2026-11-06 | 实现完成，待用户看过后收尾 | 已在本地合进 `next` 的检出，未推送 |
+| 2026-11-06 | 用户要求正式收尾；落地为 0073，合进 `next` 并推送 | 合并时 `next` 已多了注释标签降噪的两个提交。Core 包在合并结果里与测过的那份逐字节相同，测试结果沿用；RuntimeViewerPackages、RuntimeViewerCommandLine、RuntimeViewerMCP 与 App（Debug-arm64e）在合并结果上重编都通过 |

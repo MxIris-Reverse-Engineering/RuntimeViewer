@@ -1,7 +1,7 @@
 # AGENTS.md — RuntimeViewerCore sources
 
 Where a file goes in this package's five Swift targets. Background:
-`Documentations/Evolutions/draft-core-source-layout.md`.
+`Documentations/Evolutions/0073-core-source-layout.md`.
 
 ## One top-level type per file
 
