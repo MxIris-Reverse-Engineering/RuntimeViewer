@@ -7,7 +7,7 @@
 
 代码位置：
 - 通信层：`RuntimeViewerCore/Sources/RuntimeViewerCommunication/`
-- 引擎与代理：`RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`、`RuntimeEngineProxyServer.swift`
+- 引擎与代理：`RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`、`Engine/Serving/RuntimeEngineProxyServer.swift`
 - 引擎管理器：`RuntimeViewerPackages/Sources/RuntimeViewerApplication/Engine/RuntimeEngineManager.swift`、`RuntimeEngineMirrorRegistry.swift`
 
 ---
@@ -177,7 +177,7 @@ RuntimeConnection (protocol, associatedtype StatePublisher)
 
 ---
 
-### 3.1 XPC Mach service 连接（`RuntimeXPCMachServiceConnection.swift`，仅 macOS）
+### 3.1 XPC Mach service 连接（`Connections/XPCMachService/`，仅 macOS）
 
 **用途**：独立 CLI host ↔ Mac Catalyst helper App（App 自己的 Catalyst 引擎改连内嵌 service，见 §3.6）；特权操作；注入非沙盒 App 后的重连。
 
@@ -201,7 +201,7 @@ XPC 独特点：**不可重连**（SwiftyXPC 限制），只能销毁重建；`s
 
 ---
 
-### 3.2 Network / Bonjour 连接（`RuntimeNetworkConnection.swift`）
+### 3.2 Network / Bonjour 连接（`Connections/Network/`）
 
 **用途**：iOS/visionOS 设备 ↔ Mac，通过 Bonjour 局域网自动发现。
 
@@ -225,7 +225,7 @@ XPC 独特点：**不可重连**（SwiftyXPC 限制），只能销毁重建；`s
 
 ---
 
-### 3.3 LocalSocket 连接（`RuntimeLocalSocketConnection.swift`）—— 沙盒注入专用
+### 3.3 LocalSocket 连接（`Connections/LocalSocket/`）—— 沙盒注入专用
 
 **用途**：把 dylib 注入到**沙盒** App（Numbers、Pages……）后与之通信。这是最巧妙的一族。
 
@@ -271,7 +271,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ---
 
-### 3.4 DirectTCP 连接（`RuntimeDirectTCPConnection.swift`）
+### 3.4 DirectTCP 连接（`Connections/DirectTCP/`）
 
 **用途**：已知 `host:port` 直连，无需 Bonjour。**引擎镜像的 ProxyServer 就用它**（第二部分核心）。
 
@@ -296,7 +296,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ---
 
-### 3.5 Stdio 连接（`RuntimeStdioConnection.swift`）
+### 3.5 Stdio 连接（`Connections/Stdio/`）
 
 **用途**：CLI 工具、Language Server（LSP）等通过管道通信的场景。
 
@@ -312,7 +312,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ---
 
-### 3.6 XPC service 连接（`RuntimeXPCServiceConnection.swift`，仅 macOS）
+### 3.6 XPC service 连接（`Connections/XPCService/`，仅 macOS）
 
 **用途**：主 App ↔ 随 App 打包的三个 service。前两个不对应新的 `RuntimeSource` case，引擎身份不变，凭证决定传输；第三个服务 `.file` 来源：
 
@@ -337,7 +337,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ---
 
-> **`Network/` 的分文件**（原先全塞在一个 `RuntimeNetwork.swift` 里）：
+> **`Connections/Network/` 里 Bonjour 发现的分文件**（原先全塞在一个 `RuntimeNetwork.swift` 里）：
 >
 > | 文件 | 内容 |
 > |---|---|
@@ -346,11 +346,12 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 > | `RuntimeNetworkEndpoint.swift` | 发现到的对端及其 `uniqueKey` / `metadataChange` 判定 |
 > | `RuntimeNetworkBrowser.swift` | `NWBrowser` 封装与 added / removed / changed 的分派 |
 > | `RuntimeNetworkError.swift` | 传输层错误 |
+> | `RuntimeNetworkRequestError.swift` | 对端回来的请求失败，以及「对端不认识这条命令」的识别（§4.4） |
 >
 > 本机身份单独成文件，是因为那里几乎每个值都带一个坑：注入负载不得往宿主进程写任何东西、
 > 设备 ID 必须跨进程稳定、主机名有两种形态（好读的那种会做阻塞式反向 DNS，曾触发启动看门狗）。
 
-## 4. 消息通道与线路协议（`RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` + `Network/`）
+## 4. 消息通道与线路协议（`Messaging/RuntimeMessageChannel.swift` + `Messaging/RuntimeRequestData.swift` + `Connections/Network/`）
 
 除 XPC 外的四族共享 `RuntimeMessageChannel`，负责**组帧、编解码、请求路由、超时**。
 
@@ -377,7 +378,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - 处理器注册表 `messageHandlers` 与 dispatch 流的 continuation 均用 `Mutex` 保护，`AsyncSemaphore` 序列化发送。
 - **channel 不留消息**：收到的帧只交给 dispatch 流（`beginDispatch` 之后才有）和 `onMessageReceived`，交出去就不再持有。以前另有一条无界缓冲、套在 `shared()` 里的接收流，读者改走 `beginDispatch` 之后没人读它，连接收到的每条消息都留到 channel 释放（`ResolvedIssues/2026-10-28-message-channel-kept-every-received-message.md`）。再加给外部读的流，要保证一定有读者，或者给缓冲设上限。
 
-### 4.3 `RuntimeRequest` / `RuntimeResponse`（`RuntimeRequestResponse.swift`）
+### 4.3 `RuntimeRequest` / `RuntimeResponse`（`HelperService/RuntimeRequest.swift`、`RuntimeResponse.swift`）
 
 - 非 macOS：`RuntimeRequest: Codable & Sendable`，带 `associatedtype Response: RuntimeResponse` 与 `static var identifier`。
 - macOS：`RuntimeRequest` **refine** `HelperCommunication.Request`，于是任何 daemon-bound 业务请求能直接挂到 `HelperService` / `HelperPeer` 上。
@@ -397,7 +398,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。旧对端只回这一段文字，所以识别只能靠前缀：`RuntimeNetworkRequestError.isUnknownCommand`，前缀是 `unknownCommandMessagePrefix`，通道拼这条回复用的也是它。中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，错误回复照原文写下去（`RuntimeMessageChannel.replyMessage(for:)`），不再包一层类型描述，所以经过新版中转，旧对端照样认得出（`RemoteUnknownCommandTests`）。第一个用它的是语料协调器的 `isCorpusUnsupportedByEngine`（PR121.37）。经 Mach service 的旧版注入 payload 对未知命令不回这段文字，见 PR121.73。
 
-### 4.5 跨连接取消（引擎层，`RuntimeEngineRequestCancellation.swift`）
+### 4.5 跨连接取消（引擎层，`Engine/Commands/` 的 `RuntimeEngineRequestCancellation.swift`、`RuntimeEngineInboundRequests.swift`、`RuntimeEngineForwardedRequest.swift`）
 
 传输层取消不了已经发出的请求：SwiftyXPC 的 `sendMessage` 是一个不响应取消的 continuation，socket 通道的 `sendRequest` 同样只等回复；服务端则在一个没人持有句柄的 Task 里跑每条请求。所以调用方取消后，既不会提前返回，也传不到服务端——语料构建会一直等到整个镜像打印完（实测 Foundation 8–11 秒，期间进度照收），服务进程照建不误（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.29）。取消做在**引擎层**，不改任何传输的帧格式：
 

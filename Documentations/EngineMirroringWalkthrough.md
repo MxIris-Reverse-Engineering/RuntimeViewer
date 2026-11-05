@@ -67,7 +67,7 @@
 
 ### 3.2 `RuntimeEngineProxyServer`
 
-每个实例代理**一个 RuntimeEngine** 的 actor，定义在 `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngineProxyServer.swift`：
+每个实例代理**一个 RuntimeEngine** 的 actor，定义在 `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/Serving/RuntimeEngineProxyServer.swift`：
 
 - `start()`（`:36-71`）：监听 `.directTCP(role: .server)` 端口（OS 分配），拿到 `host:port` 后被 `buildEngineDescriptors` 读取以填入 descriptor 的 `directTCPHost` / `directTCPPort`。
 - 客户端连上后（`statePublisher == .connected`）：

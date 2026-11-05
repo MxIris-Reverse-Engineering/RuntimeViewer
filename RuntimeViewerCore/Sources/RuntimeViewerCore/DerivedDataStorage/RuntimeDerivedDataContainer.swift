@@ -1,29 +1,6 @@
 public import Foundation
 import Compression
 
-/// What derived data names a kind of stored data by: the first part of its
-/// file name, and part of what a container's header must match.
-///
-/// ASCII letters and digits only. A file is `<kind>-<variant>.rvdd`, and
-/// writing a kind deletes the image's files whose names begin with
-/// `<kind>-` — its other variants, which have hyphens of their own. A kind
-/// with a hyphen in its name would have its files taken for variants of the
-/// kind it starts with, and deleted whenever that kind is written.
-public struct RuntimeDerivedDataKind: Hashable, Sendable, RawRepresentable {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        precondition(
-            !rawValue.isEmpty && rawValue.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) },
-            "a derived data kind is named with ASCII letters and digits alone: \(rawValue)"
-        )
-        self.rawValue = rawValue
-    }
-
-    /// An image's Find corpus.
-    public static let interfaceCorpus = RuntimeDerivedDataKind(rawValue: "InterfaceCorpus")
-}
-
 /// One piece of derived data as it is read back: sections of bytes, each
 /// checked and decompressed, out of a file whose header said it was the
 /// piece expected.
@@ -299,85 +276,5 @@ public struct RuntimeDerivedDataContainer: Sendable {
         guard decodedCount == decodedByteCount else { return nil }
         decoded.count = decodedByteCount
         return decoded
-    }
-}
-
-// MARK: - Bytes
-
-extension Data {
-    mutating func appendLittleEndian<Integer: FixedWidthInteger>(_ value: Integer) {
-        Swift.withUnsafeBytes(of: value.littleEndian) { append(contentsOf: $0) }
-    }
-
-    mutating func appendLengthPrefixed(_ string: String) {
-        let bytes = Data(string.utf8)
-        appendLittleEndian(UInt32(bytes.count))
-        append(bytes)
-    }
-}
-
-/// Reads little-endian values out of bytes, throwing instead of reading past
-/// `limit`.
-struct RuntimeDerivedDataByteReader {
-    let data: Data
-
-    /// From the start of `data`.
-    var offset = 0
-
-    var limit: Int
-
-    init(_ data: Data) {
-        self.data = data
-        limit = data.count
-    }
-
-    var isAtEnd: Bool {
-        offset == limit
-    }
-
-    mutating func readUInt8() throws -> UInt8 {
-        try readInteger()
-    }
-
-    mutating func readUInt16() throws -> UInt16 {
-        try readInteger()
-    }
-
-    mutating func readUInt32() throws -> UInt32 {
-        try readInteger()
-    }
-
-    mutating func readUInt64() throws -> UInt64 {
-        try readInteger()
-    }
-
-    mutating func readInt64() throws -> Int64 {
-        try readInteger()
-    }
-
-    mutating func readBytes(count: Int) throws -> Data {
-        guard count >= 0, count <= limit - offset else { throw RuntimeDerivedDataContainer.Error.truncated }
-        let start = data.startIndex + offset
-        offset += count
-        return data[start ..< start + count]
-    }
-
-    /// A UInt32 byte count and that many bytes of valid UTF-8.
-    mutating func readLengthPrefixedString() throws -> String {
-        let byteCount = Int(try readUInt32())
-        let bytes = try readBytes(count: byteCount)
-        guard let string = String(data: bytes, encoding: .utf8), string.utf8.count == byteCount else {
-            throw RuntimeDerivedDataContainer.Error.truncated
-        }
-        return string
-    }
-
-    private mutating func readInteger<Integer: FixedWidthInteger>() throws -> Integer {
-        let byteCount = MemoryLayout<Integer>.size
-        guard byteCount <= limit - offset else { throw RuntimeDerivedDataContainer.Error.truncated }
-        let start = data.startIndex + offset
-        offset += byteCount
-        let value = data[start ..< start + byteCount].withUnsafeBytes { $0.loadUnaligned(as: Integer.self) }
-        return Integer(littleEndian: value)
     }
 }

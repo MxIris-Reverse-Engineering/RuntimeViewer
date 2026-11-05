@@ -87,10 +87,10 @@ public enum RuntimeDerivedData {
     /// `nil` when any of the three cannot be told, which leaves the process
     /// without derived data. Not behind `@Dependency`, as project singletons
     /// otherwise are: `RuntimeViewerCore` does not depend on
-    /// swift-dependencies, nothing outside this file reaches it, and a test
-    /// gives an engine a store of its own
+    /// swift-dependencies, nothing but `RuntimeEngine.processDerivedDataStore`
+    /// reaches it, and a test gives an engine a store of its own
     /// (`RuntimeEngine.useDerivedDataStore(_:)`).
-    fileprivate static let processStore: RuntimeDerivedDataStore? = makeProcessStore()
+    static let processStore: RuntimeDerivedDataStore? = makeProcessStore()
 
     /// A function rather than the initializer's own closure: `#log` refers
     /// to `Self`, which a stored property's initializer cannot.
@@ -109,14 +109,5 @@ public enum RuntimeDerivedData {
         }
         #log(.info, "Derived data at \(location.rootURL.path, privacy: .public), system \(system.directoryName, privacy: .public), producer \(producer.directoryName, privacy: .public)")
         return RuntimeDerivedDataStore(location: location, system: system, producer: producer)
-    }
-}
-
-extension RuntimeEngine {
-    /// The derived data a corpus store of this process reads and writes:
-    /// the process's store when derived data is on here, `nil` otherwise.
-    static var processDerivedDataStore: RuntimeDerivedDataStore? {
-        guard RuntimeDerivedData.isEnabledInThisProcess else { return nil }
-        return RuntimeDerivedData.processStore
     }
 }

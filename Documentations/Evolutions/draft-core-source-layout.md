@@ -1,13 +1,13 @@
 # Draft - RuntimeViewerCore 包的源码按功能分目录，一个类型一个文件
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-05
 - **最后更新**: 2026-11-05
 - **实现分支 / PR**: `feature/core-source-layout`（从 `next` 切，并回 `next`）
 
 ## 摘要
 
-RuntimeViewerCore 包五个 Swift target 共 152 个源文件、241 个顶层类型，其中 39 个文件装了 153 个类型——最多的 `RuntimeCrossReferenceModels.swift` 有 17 个，`RuntimeInterfaceSearch.swift` 有 15 个。目录也分不清：`Common/` 的 27 个文件分属对象、接口、搜索、关系、书签、特化等功能；`Core/` 混着 section、镜像读取和 engine 共用的协议；engine 本体和另外 13 个文件散在 target 根目录；`Indexing/` 与 `BackgroundIndexing/` 名字相近，管的却不是一回事。本提案只搬文件、拆文件：按功能重新分目录，除 `private` / `fileprivate` 的辅助类型外一个顶层类型一个文件。不改类型名、行为和公开 API。
+RuntimeViewerCore 包五个 Swift target 共 152 个源文件、241 个顶层类型，其中 39 个文件装了 153 个类型——最多的 `RuntimeCrossReferenceModels.swift` 有 17 个，`RuntimeInterfaceSearch.swift` 有 15 个。目录也分不清：`Common/` 的 25 个文件分属对象、接口、搜索、关系、书签、特化等功能；`Core/` 混着 section、镜像读取和 engine 共用的协议；engine 本体和另外 13 个文件散在 target 根目录；`Indexing/` 与 `BackgroundIndexing/` 名字相近，管的却不是一回事。本提案只搬文件、拆文件：按功能重新分目录，除 `private` / `fileprivate` 的辅助类型外一个顶层类型一个文件。不改类型名、行为和公开 API。
 
 ## 方案
 
@@ -54,13 +54,13 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 | RuntimeViewerUtilities | `LaunchServices+.swift` 拆成 `LSBundleProxy+Sandbox.swift` 与 `NSRunningApplication+ApplicationProxy.swift` |
 | RuntimeViewerObjC | 不动（一个 `.m`、一个头文件） |
 
-拆完约 290 个文件。
+拆完共 295 个文件（原 152 个）。
 
 ### 三、拆开时必须处理的事
 
 - **靠 `fileprivate` 成员互相访问的四组类型**：拆开，把这些成员放宽到 `internal`（仍只在模块内可见）。
   - `RuntimeXPCMachServiceConnection` 与客户端、服务端两个子类：基类的六个成员和 `@Loggable(.fileprivate)`。
-  - `RuntimeXPCServiceConnection` 与客户端、监听端两个子类：`stateSubject`、`init()`、`sendFrame`、`installHandler`。
+  - `RuntimeXPCServiceConnection` 与客户端、监听端两个子类：`stateSubject`、`init()`、`sendFrame`、`installHandler`，以及两边都用的 `NSLock.locked(_:)`。
   - `RuntimeSwiftSection` 与 `RuntimeSwiftSectionFactory`：factory 调 section 的四个方法，外加 section 文件里几个 file-private 的辅助扩展。
   - `RuntimeDerivedData.processStore` 与读它的 `RuntimeEngine.processDerivedDataStore`。
 - 按项目规矩必须 file-private 的留在原处：`CrossReferenceSession.shared`，以及用它的 `CrossReferenceQuery.init(engine:)`。
@@ -91,11 +91,11 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 
 ### 落地步骤
 
-1. 批准后从 `next` 切 `feature/core-source-layout`，worktree 为 `.worktrees/RuntimeViewer-CoreSourceLayout`；跑基线。
-2. 只搬家的提交，连同活文档里的路径。
-3. 拆文件：Core → Communication → CrossReferences → Injection → Utilities，各一个提交。
-4. `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 登记。
-5. 验证，收尾合回 `next`。
+1. 批准后从 `next` 切 `feature/core-source-layout`，worktree 为 `.worktrees/RuntimeViewer-CoreSourceLayout`；跑基线。（已完成）
+2. 只搬家的提交，连同活文档里的路径。（已完成）
+3. 拆文件：Core、Communication、CrossReferences 各一个提交，Injection 与 Utilities 合一个提交。（已完成）
+4. `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 登记。（已完成）
+5. 验证，收尾合回 `next`。（验证已完成，等用户看过后收尾）
 
 ### 没问就采用的假设
 
@@ -210,6 +210,7 @@ Export/
 DerivedDataStorage/
   原有 10 个文件
   RuntimeDerivedDataKind.swift, RuntimeDerivedDataByteReader.swift, Data+LittleEndian.swift   ← 拆自 RuntimeDerivedDataContainer.swift
+  RuntimeEngine+DerivedData.swift               ← 拆自 RuntimeDerivedData.swift
 Offline/
   原有 5 个文件
   RuntimeOfflineFileError.swift                 ← 拆自 RuntimeOfflineFile.swift
@@ -256,7 +257,7 @@ Connections/XPCMachService/
 Connections/XPCService/
   RuntimeXPCServiceTarget.swift, RuntimeXPCServiceEndpoint.swift, RuntimeXPCServiceConnectionError.swift,
   RuntimeXPCServiceReplyFrame.swift, RuntimeXPCServiceMessaging.swift, RuntimeXPCServiceConnection.swift,
-  RuntimeXPCServiceClientConnection.swift, RuntimeXPCServiceListenerConnection.swift   ← 拆自 Connections/RuntimeXPCServiceConnection.swift
+  RuntimeXPCServiceClientConnection.swift, RuntimeXPCServiceListenerConnection.swift, NSLock+Locked.swift   ← 拆自 Connections/RuntimeXPCServiceConnection.swift
 Messaging/
   RuntimeMessageChannel.swift, RuntimeRequestData.swift   ← 根目录
   RuntimeMessageChannelError.swift, RuntimeMessageHandler.swift, RuntimeMessageNull.swift,
@@ -296,3 +297,12 @@ RuntimeViewerUtilities：`DeviceIdentifier.swift`、`SandboxProbe.swift`，加�
 | 2026-11-05 | 嵌套类型不拆 | 嵌套类型是外层类型的一部分；只拆顶层类型，`RuntimeEngine+Commands.swift` 这类按功能归组的命令结构体保持原样 |
 | 2026-11-05 | 要拆的文件在只搬家的提交里先整个搬到主类型的目录 | 搬家和拆分分开提交，搬家那次 git 能完整认出改名；拆分时只切出其余类型 |
 | 2026-11-05 | 用户批准，开始实现 | — |
+| 2026-11-05 | 只搬家的提交：96 个文件换目录，`Common/`、`Core/`、`Catalog/`、`Indexing/`、`Utils/` 与 Communication 的 `Network/` 清空删除 | 落地步骤 2；文档里跟着变的路径同批改，`SparkleRelease.md` 找上次 helper 版本变更的命令改为比较前后值，免得把搬家的提交当成一次变更 |
+| 2026-11-05 | 拆文件用脚本按大括号切出顶层声明，连同紧贴在上面的注释与属性逐字节复制；声明之间夹着 `#if` 的 `RuntimeRequestResponse.swift`、`LaunchServices+.swift` 按行号手工拆 | 不手抄代码；脚本先经用户过目，dry run 核对过每个声明的去向再写入 |
+| 2026-11-05 | 新文件带上原文件的全部 import，编译器指出没用在公开声明里的 111 处 `public import` / `package import` 改为普通 `import`，其余不删 | 只消掉拆分带来的警告；Swift 不报多余的普通 import，逐个删要靠一次次编译试，收益不抵风险。基线里原有的 1 处同类警告（`RuntimeConnectionError+LostConnection.swift`）不在本次范围 |
+| 2026-11-05 | 放宽到 `internal` 的除了起初列的四组，还有 XPC service 客户端与监听端共用的 `NSLock.locked(_:)` | 同样是拆开后跨文件使用。`RuntimeXPCMachServiceConnection` 的 `@Loggable` 改成 `.internal`：两个子类沿用它的 logger |
+| 2026-11-05 | `RuntimeEngineCommandRegistryLog` 一分为二：注册器留着自己那条日志，搬到 `RuntimeEngine+CommandExtensions.swift` 的注册逻辑另配 `RuntimeEngineCommandExtensionLog` | `@Loggable` 的 logger 只在声明它的文件里可见 |
+| 2026-11-05 | `// MARK:` 行不随声明搬；原文件里因此没东西可标的删掉；三个文件头注释改写成只描述留下的内容（`RuntimeObjCSectioning.swift`、`RuntimeBookmarkScope.swift`、`Models/RuntimeMemberReference.swift`） | 拆开后它们描述的是已经不在本文件的类型 |
+| 2026-11-06 | 验证通过 | 五个代码提交逐个检出，Core 包都能连测试一起编过。全量测试与改动前同为 1,031 个（36、75、675、245 四组）；失败 3 个，改动前是 4 个：两边共有的交叉引用预先准备与后台索引取消测试是满载下会挂的那批，新出现的 DirectTCP 尾包测试是满载超时（10.7 秒），单独跑 5 次全过、每次约 1 秒。iOS、tvOS、visionOS 编过；Mac Catalyst 与 watchOS 编不过，原因都不在这次改动：Catalyst 的 23 个错误全在内容一字未动的 `RuntimeEngineProxyServer.swift`（包级 Catalyst 构建里 `#if canImport(AppKit)` 成立，用到了 Catalyst 没有的 AppKit API；App 构建里的 Catalyst service 不受影响），watchOS 卡在依赖库的最低部署版本 8.0 低于 Xcode 27.2 的下限 9.0。RuntimeViewerPackages、RuntimeViewerCommandLine、RuntimeViewerMCP 编过；App 经 `RunScript.sh`（Debug-arm64e，连带 Catalyst service、helper 与模拟器载荷）编过 |
+| 2026-11-06 | 文档判断：不另写使用指南、实现说明，不加术语 | 改的是源码的摆放，规则写在 `RuntimeViewerCore/Sources/AGENTS.md`，没有新概念 |
+| 2026-11-06 | 实现完成，待用户看过后收尾 | 已在本地合进 `next` 的检出，未推送 |

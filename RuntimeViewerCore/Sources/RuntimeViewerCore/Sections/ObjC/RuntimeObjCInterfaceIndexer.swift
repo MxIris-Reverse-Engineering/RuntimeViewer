@@ -1,0 +1,391 @@
+import Foundation
+import FoundationToolbox
+import MachOKit
+import ObjCIndexing
+import OrderedCollections
+
+/// Per-image Objective-C interface index: a project-owned wrapper around the
+/// upstream `MachOObjCSection` `ObjCInterfaceIndexer` that layers on the
+/// relationship reverse tables backing the Inspector's Relationships tab.
+///
+/// This is the Objective-C counterpart of `RuntimeSwiftInterfaceIndexer`, and
+/// the two are deliberately built the same way: the library parses, this
+/// wrapper remembers how the parsed things relate, and the section actor above
+/// translates into RuntimeViewer domain types. See Evolution 0008.
+///
+/// ## Why the upstream indexer is constructed in here
+///
+/// Since MachOObjCSection 0003 the library keeps no reverse tables — the three
+/// relationship cases of `ObjCIndexingEvent` are the *only* channel carrying
+/// inheritance and protocol adoption, and an `ObjCInterfaceIndexer` built
+/// without an `eventHandler` keeps none of it.
+///
+/// That makes "was a handler installed?" a correctness property rather than a
+/// configuration detail, and it is not one a caller should be able to get
+/// wrong. Evolution 0007 kept the upstream indexer at the call site and made
+/// the handler unconditional there, guarded by a comment; a later edit
+/// reintroducing a condition would compile, pass most tests, and silently empty
+/// the Relationships pane for every image loaded without a progress stream —
+/// six of the seven section-creation call sites, background indexing among
+/// them.
+///
+/// Here `upstream` is a `let` built inside `init`, so no caller ever holds an
+/// indexer whose handler was not installed. Only the *forwarding* of `.progress`
+/// events is conditional, because only that half has an optional destination.
+/// `RuntimeSwiftInterfaceIndexer` constructs its own upstream for the same
+/// reason.
+///
+/// ## Tables are folded as events arrive
+///
+/// `RuntimeObjCRelationshipTables.fold(_:)` applies each event immediately
+/// instead of queueing it for a replay on first query, which is what 0007 did.
+///
+/// The reason is that it is simpler, not that it is smaller. `prepare()`
+/// returning is the moment the tables are complete: there is no second step to
+/// forget, and no "a query arrived mid-walk" case to get right — 0007 needed a
+/// dedicated branch for that, because materializing released the queue and any
+/// later event had to be folded in directly instead.
+///
+/// Evolution 0008 originally argued the deferred queue also cost resident
+/// memory. That was measured and it does not, to any degree this can detect:
+/// three repetitions per side put the two within 0.51 MB of each other on a
+/// ~135 MB working set, well inside each side's own 4 MB spread. The first
+/// single-run comparison suggested a 3.7 MB saving and was noise. See the
+/// proposal's landing notes; the claim is retracted there rather than restated
+/// here.
+///
+/// ## Equivalence with the library's former tables
+///
+/// Three properties of the pre-0003 implementation are reproduced deliberately:
+///
+/// 1. Inline adoptions and category-contributed adoptions land in **one**
+///    conformer table, so a single query returns both.
+/// 2. Events fold in arrival order, so inline adoptions precede category ones
+///    exactly as they did when the library walked classes before categories.
+/// 3. `OrderedSet` deduplicates on all three fields, not on `className`. A class
+///    can legitimately appear twice for one protocol with differing
+///    `isSwiftStable` — inline adoption reads the class' own flag while a
+///    category resolves its target across images and falls back to `false`.
+///    Collapsing those would look like a bug fix and would be a behaviour change.
+///
+/// ## Aggregation
+///
+/// `addSubIndexer(_:)` registers a per-image indexer and `removeSubIndexer(_:)`
+/// detaches it; the query methods fan out across `self` plus every registered
+/// sub-indexer. A query against the `RuntimeObjCSectionFactory` aggregate — which
+/// holds every per-image indexer — therefore spans all loaded images in one
+/// call, which is what lets `RuntimeRelationshipsResolver` stop walking images
+/// itself. Mirrors `RuntimeSwiftInterfaceIndexer`.
+///
+/// ## Where this and the Swift side deliberately differ
+///
+/// Evolution 0008 asks these two types to correspond member for member, with
+/// every departure written down. The current list, and why each one is not
+/// something to iron out:
+///
+/// - **`prepare()` takes no progress continuation; the Swift one does.** ObjC
+///   progress arrives through the same `eventHandler` as the relationship
+///   events, so it is supplied once at `init`. The Swift upstream reports
+///   progress through `eventHandlers` *and* the wrapper emits an extra
+///   `indexingSwiftSubclasses` phase around its own table build, which happens
+///   in `prepare()`. Unifying that means changing when Swift reports progress,
+///   which is a user-visible change and not this proposal's business.
+/// - **`conformingClasses(toProtocol:)` vs `conformingTypes(of:)`.** Only
+///   classes adopt Objective-C protocols; any nominal type can conform to a
+///   Swift one. The names say which, and flattening them would make one of the
+///   two lie.
+/// - **The tables live in a separate object here.** The event handler must
+///   capture its destination before `self` exists; the Swift side builds its
+///   tables after `upstream.prepare()` returns and can store them inline.
+/// - **No `machO` stored here.** The Swift wrapper re-reads its image during
+///   `prepare()` to resolve superclass mangled names; this one hands `machO` to
+///   `upstream` at `init` and never needs it again.
+/// - **No `imagePath` stored here.** Each relationship event carries the path
+///   the library was constructed with, so references are already stamped by the
+///   time they arrive. The Swift wrapper has to keep it to stamp its own — and
+///   must be given the dyld-canonical one, not `machO.imagePath`; see its `init`.
+///
+/// Extra members on the Swift side (`typeName(forMangledName:)`,
+/// `protocolName(forMangledName:)`, `updateConfiguration`) are forwarding or
+/// lookup helpers with no Objective-C counterpart to mirror, not asymmetries in
+/// the relationship layer itself.
+///
+/// `@unchecked Sendable`: `upstream` and `relationshipTables` are immutable
+/// `let`s that guard their own state, and `subIndexers` is `@Mutex`-guarded.
+@dynamicMemberLookup
+final class RuntimeObjCInterfaceIndexer<Reading: RuntimeImageReading>: @unchecked Sendable {
+    typealias MachO = Reading.MachO
+
+    // MARK: - Upstream Indexer
+
+    /// The upstream `MachOObjCSection` indexer. Exposed (`internal`) because
+    /// `RuntimeObjCSection` hands it to `ObjCInterfaceBuilder` for interface
+    /// generation; this wrapper only *adds* the relationship layer, it does not
+    /// hide `upstream`. Mirrors `RuntimeSwiftInterfaceIndexer.upstream`, which
+    /// `RuntimeSwiftSection` likewise passes to the generic specializer.
+    ///
+    /// Built in `init` and never reassigned — see the type's docs for why that
+    /// matters here specifically.
+    let upstream: ObjCInterfaceIndexer<MachO>
+
+    /// Transparent read-through to `upstream`: any property this wrapper does
+    /// not declare itself resolves against `ObjCInterfaceIndexer`, so
+    /// `RuntimeObjCSection` can treat the wrapper as its indexer for
+    /// enumeration reads (`classNames`, `protocolNames`, `structNames`, …)
+    /// without spelling out `.upstream`. Methods are not key-path-expressible,
+    /// so the upstream methods the codebase needs are exposed as explicit
+    /// wrapper methods below. Mirrors `RuntimeSwiftInterfaceIndexer`.
+    subscript<Value>(dynamicMember keyPath: KeyPath<ObjCInterfaceIndexer<MachO>, Value>) -> Value {
+        upstream[keyPath: keyPath]
+    }
+
+    // MARK: - Relationship Reverse Tables
+
+    /// The inheritance and protocol-adoption reverse tables for this image.
+    ///
+    /// A separate object rather than two `@Mutex` properties on `self`, because
+    /// the event handler passed to `upstream`'s initializer has to capture the
+    /// destination before `self` exists. This is the one structural difference
+    /// from `RuntimeSwiftInterfaceIndexer`, which builds its tables after
+    /// `upstream.prepare()` returns and so can store them inline.
+    private let relationshipTables: RuntimeObjCRelationshipTables
+
+    /// The dyld-canonical path of this indexer's image — the key the section
+    /// factory caches it under, and what a cross-image lookup answers with so
+    /// the caller can reach the defining section. The relationship events
+    /// carry it themselves; the protocol-refinement table below, built after
+    /// the walk, does not, so the wrapper keeps it after all (the type's
+    /// documentation above predates that table).
+    let imagePath: String
+
+    /// Protocol name → the protocols of this image that adopt it. Built by
+    /// `prepare()` from each protocol's own adoption list, because the
+    /// library's event stream reports class adoptions only. The Find
+    /// navigator's Descendent Types walks it; Ancestor Types reads the
+    /// forward direction straight off `protocolGroup(forName:)`.
+    @Mutex
+    private var refiningProtocolsByProtocolName: [String: OrderedSet<RuntimeObjCProtocolReference>] = [:]
+
+    /// Per-image sub-indexers registered via `addSubIndexer`. Empty on a
+    /// section's own indexer; on the `RuntimeObjCSectionFactory` aggregate it
+    /// holds every loaded image's indexer, so the query methods fan out across
+    /// all of them. `@Mutex`-guarded because the factory keeps registering and
+    /// detaching as images load and unload. Mirrors
+    /// `RuntimeSwiftInterfaceIndexer.subIndexers`.
+    @Mutex
+    private var subIndexers: [RuntimeObjCInterfaceIndexer] = []
+
+    // MARK: - Init
+
+    /// Build the upstream indexer for `machO` with the relationship handler
+    /// already installed, and optionally forward `.progress` events to
+    /// `progressContinuation`.
+    ///
+    /// The handler captures `relationshipTables` — never `self` — so it is
+    /// fully formed before `upstream` exists and carries no retain cycle back
+    /// into this object.
+    init(machO: MachO, imagePath: String, progressContinuation: LoadingEventContinuation? = nil) {
+        let relationshipTables = RuntimeObjCRelationshipTables()
+        self.relationshipTables = relationshipTables
+        self.imagePath = imagePath
+        self.upstream = ObjCInterfaceIndexer(
+            machO: machO,
+            imagePath: imagePath,
+            eventHandler: { event in
+                relationshipTables.fold(event)
+                guard let progressContinuation,
+                      case .progress(let phase, let itemDescription, let currentCount, let totalCount) = event
+                else {
+                    return
+                }
+                progressContinuation.yield(
+                    RuntimeObjectsLoadingEvent.progress(
+                        RuntimeObjectsLoadingProgress(
+                            phase: phase.loadingPhase,
+                            itemDescription: itemDescription,
+                            currentCount: currentCount,
+                            totalCount: totalCount
+                        )
+                    )
+                )
+            }
+        )
+    }
+
+    // MARK: - Preparation
+
+    /// Run the upstream extraction. The relationship tables fill *during* this
+    /// call, from the handler installed in `init`, and are complete when it
+    /// returns — there is no separate table-building step, and none to forget.
+    ///
+    /// Call once per indexer: the library replays its whole event stream on a
+    /// second `prepare()`, which would double every relationship.
+    func prepare() async throws {
+        try await upstream.prepare()
+        var refiningTable: [String: OrderedSet<RuntimeObjCProtocolReference>] = [:]
+        for protocolName in upstream.protocolNames {
+            guard let group = upstream.protocolGroup(forName: protocolName) else { continue }
+            for adopted in group.info.protocols {
+                refiningTable[adopted.name, default: []].append(RuntimeObjCProtocolReference(protocolName: protocolName, imagePath: imagePath))
+            }
+        }
+        refiningProtocolsByProtocolName = refiningTable
+    }
+
+    // MARK: - Upstream Method Forwarding
+
+    /// `@dynamicMemberLookup` forwards property *reads* only, so the upstream
+    /// methods the codebase needs are wrapped explicitly. Mirrors
+    /// `RuntimeSwiftInterfaceIndexer.updateConfiguration`.
+    func classGroup(forName name: String) -> ObjCInterfaceIndexer<MachO>.ObjCClassGroup? {
+        upstream.classGroup(forName: name)
+    }
+
+    func protocolGroup(forName name: String) -> ObjCInterfaceIndexer<MachO>.ObjCProtocolGroup? {
+        upstream.protocolGroup(forName: name)
+    }
+
+    func categoryGroup(forName uniqueName: String) -> ObjCInterfaceIndexer<MachO>.ObjCCategoryGroup? {
+        upstream.categoryGroup(forName: uniqueName)
+    }
+
+    /// Whether this image provably does not export the class named
+    /// `className`: no exported symbol publishes its class object, as
+    /// `prepare()` read it. `false` is no evidence either way — the class may
+    /// be exported, be another image's, have been supplied by a host with no
+    /// class object to judge, or sit in an image with no export information.
+    /// A `Bool` rather than the upstream `ObjCExportStatus?`: this definite
+    /// negative is the one answer RuntimeViewer acts on, and the type lives in
+    /// `ObjCMetadataSource`, a product this target does not depend on.
+    func isClassDefinitelyNotExported(named className: String) -> Bool {
+        upstream.exportStatus(ofClassNamed: className)?.isDefinitelyNotExported ?? false
+    }
+
+    // MARK: - Relationship Query
+
+    /// Direct subclasses of `className` — this indexer's own image plus every
+    /// sub-indexer registered via `addSubIndexer`. On a per-image indexer (no
+    /// sub-indexers) the result is just this image; on the factory aggregate it
+    /// spans every loaded image. Per-image order follows the library's
+    /// `__objc_classlist` walk; cross-image order follows registration order.
+    func subclasses(of className: String) -> [RuntimeObjCClassReference] {
+        var result = relationshipTables.subclasses(of: className)
+        for subIndexer in subIndexers {
+            for reference in subIndexer.subclasses(of: className) {
+                result.append(reference)
+            }
+        }
+        return Array(result)
+    }
+
+    /// Classes adopting `protocolName` — inline adoptions first, then those
+    /// contributed by categories, then the same from each registered
+    /// sub-indexer.
+    func conformingClasses(toProtocol protocolName: String) -> [RuntimeObjCClassReference] {
+        var result = relationshipTables.conformingClasses(toProtocol: protocolName)
+        for subIndexer in subIndexers {
+            for reference in subIndexer.conformingClasses(toProtocol: protocolName) {
+                result.append(reference)
+            }
+        }
+        return Array(result)
+    }
+
+    /// The protocols `protocolName` adopts — the forward direction of
+    /// `refiningProtocols(of:)` — read off the declaring image's group. Empty
+    /// when no indexer in this aggregate declares the protocol.
+    func refinedProtocolNames(of protocolName: String) -> [String] {
+        guard let (group, _) = protocolGroupAcrossImages(forName: protocolName) else { return [] }
+        return group.info.protocols.map(\.name)
+    }
+
+    /// The protocols adopting `protocolName`, across this indexer and every
+    /// registered sub-indexer, each with the image declaring it.
+    func refiningProtocols(of protocolName: String) -> [RuntimeObjCProtocolReference] {
+        var result = refiningProtocolsByProtocolName[protocolName] ?? []
+        for subIndexer in subIndexers {
+            for reference in subIndexer.refiningProtocols(of: protocolName) {
+                result.append(reference)
+            }
+        }
+        return Array(result)
+    }
+
+    /// The class group for `name` from whichever image in this aggregate
+    /// declares the class, with that image's path — this indexer's own image
+    /// first, then each sub-indexer in registration order.
+    func classGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachO>.ObjCClassGroup, imagePath: String)? {
+        if let group = upstream.classGroup(forName: name) {
+            return (group, imagePath)
+        }
+        for subIndexer in subIndexers {
+            if let found = subIndexer.classGroupAcrossImages(forName: name) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// `classGroupAcrossImages(forName:)` for protocols.
+    func protocolGroupAcrossImages(forName name: String) -> (group: ObjCInterfaceIndexer<MachO>.ObjCProtocolGroup, imagePath: String)? {
+        if let group = upstream.protocolGroup(forName: name) {
+            return (group, imagePath)
+        }
+        for subIndexer in subIndexers {
+            if let found = subIndexer.protocolGroupAcrossImages(forName: name) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// Every image in this aggregate whose `__objc_protolist` carries a
+    /// protocol named `name`, this indexer's own image first. Each image that
+    /// compiled against a protocol carries a full copy and none of them owns
+    /// it (`Documentations/ResolvedIssues/2026-08-05-objc-protocol-ownership-filter.md`),
+    /// so the relationship walk chooses among the copies itself instead of
+    /// taking whichever image happened to be indexed first, the way
+    /// `protocolGroupAcrossImages(forName:)` answers.
+    func protocolCarrierImagePaths(forName name: String) -> [String] {
+        var carrierImagePaths: [String] = []
+        if upstream.protocolGroup(forName: name) != nil {
+            carrierImagePaths.append(imagePath)
+        }
+        for subIndexer in subIndexers {
+            carrierImagePaths.append(contentsOf: subIndexer.protocolCarrierImagePaths(forName: name))
+        }
+        return carrierImagePaths
+    }
+
+    // MARK: - Aggregation
+
+    /// Register a per-image indexer with this aggregate, so the query methods
+    /// fan out into it. `RuntimeObjCSectionFactory` calls it as each section is
+    /// created. Mirrors `RuntimeSwiftInterfaceIndexer.addSubIndexer(_:)`.
+    func addSubIndexer(_ subIndexer: RuntimeObjCInterfaceIndexer) {
+        subIndexers.append(subIndexer)
+    }
+
+    /// Detach a previously registered per-image indexer.
+    ///
+    /// **`addSubIndexer` without this is a leak, not an inconvenience.** The
+    /// aggregate lives as long as its factory — i.e. as long as the owning
+    /// `RuntimeEngine` — so a registration that is never undone pins that
+    /// image's whole parsed index for the engine's lifetime, and
+    /// `removeSection(for:)` reclaims nothing however carefully it drops its own
+    /// entry. `RuntimeObjCSectionFactory.removeSection` / `removeAllSections`
+    /// must call this *before* dropping the section.
+    ///
+    /// Identity comparison, not equality: two indexers over the same image are
+    /// still two indexers.
+    ///
+    /// A plain mutation rather than `withLock`: `@Mutex` generates a `_modify`
+    /// accessor that takes the lock, yields the storage inout, and releases it
+    /// afterwards, so `removeAll` already runs inside the critical section.
+    /// Reach for `withLock` only when a critical section has to span more than
+    /// one operation — `RuntimeSwiftInterfaceIndexer` does, because it undoes an
+    /// upstream registration in the same breath.
+    func removeSubIndexer(_ subIndexer: RuntimeObjCInterfaceIndexer) {
+        subIndexers.removeAll { $0 === subIndexer }
+    }
+}
