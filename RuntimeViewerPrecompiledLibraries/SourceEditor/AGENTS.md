@@ -9,8 +9,8 @@ the reconstruction released in the private `Mx-Iris/SourceEditor` repository:
   `SourceEditorThemeConversion` and the other `SourceEditor*` files;
 - `RuntimeViewerSourceEditorBridgeTests`, which links the bridge framework;
 - `SourceEditorFrameworks` in `RuntimeViewerSettings`;
-- the build plumbing: `FetchSourceEditorScript.sh`, `PinnedRelease.txt` beside this file, and the
-  app's Embed SourceEditor Frameworks phase (`RuntimeViewerUsingAppKit/BuildPhases/`).
+- the build plumbing: `FetchSourceEditorScript.sh`, `UpdateSourceEditorScript.sh`, `PinnedRelease.txt`
+  beside this file, and the app's Embed SourceEditor Frameworks phase (`RuntimeViewerUsingAppKit/BuildPhases/`).
 
 These rules cover all of them, not only the files in this directory. They live here because the
 app's folders are Xcode synchronized folders, where a file becomes a resource of the target. The
@@ -20,6 +20,8 @@ root `AGENTS.md` repeats the precondition and points here.
 
 - `FetchSourceEditorScript.sh` downloads the release `PinnedRelease.txt` names into `Frameworks/`
   beside this file (ignored by git), after checking every zip against its pinned SHA-256.
+  `RunScript.sh` runs it before it builds and `TuistScript.sh` before it generates or builds, both
+  carrying on without the frameworks when it cannot download them; `ArchiveScript.sh` stops instead.
 - The bridge framework and its tests have `Frameworks/` on their framework search path. Where it
   holds the frameworks, the bridge compiles and links them; where it does not, everything under
   `#if arch(arm64) && canImport(SourceEditor)` compiles out, `SourceEditorBridgeFactory.isAvailable`
@@ -51,9 +53,12 @@ root `AGENTS.md` repeats the precondition and points here.
   `DYLD_FRAMEWORK_PATH` in the environment instead replaces Xcode's whole value, and then not even the
   bridge framework is found. A test run against Xcode's copies either fails to load — Xcode 27 lacks
   symbols the reconstruction exports — or, worse, passes against the wrong frameworks.
-- Moving to another release: change the version and the four SHA-256 values in `PinnedRelease.txt`
-  (each is the checksum that release's own `Package.swift` gives for the zip), then run
-  `./FetchSourceEditorScript.sh`.
+- Moving to another release: `./UpdateSourceEditorScript.sh [<version>]`, the newest release when no
+  version is given (`--dry-run` shows the change first). It writes the version and the four SHA-256
+  values that release's own `Package.swift` gives into `PinnedRelease.txt`, downloads the release
+  through `FetchSourceEditorScript.sh` — putting the pin file back when that fails — and prints the
+  Breaking section of every release it moved across. Adapt the bridge to those changes, run
+  `RuntimeViewerSourceEditorBridgeTests`, and commit `PinnedRelease.txt` together with them.
 
 ## Hard precondition: no dump, no binaries, no work
 

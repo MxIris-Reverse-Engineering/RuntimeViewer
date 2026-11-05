@@ -1,6 +1,6 @@
 # Draft - 一条命令换钉住的 SourceEditor 版本，Tuist 构建前也取框架
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-05
 - **最后更新**: 2026-11-05
 - **实现分支 / PR**: `feature/source-editor-release-update`（从 `next` 切，并回 `next`）
@@ -17,7 +17,7 @@
   1. 照 `FetchSourceEditorScript.sh` 的读法读当前的 `PinnedRelease.txt`：版本号和框架名单。
   2. 用 `gh api` 读目标版本 tag 上的 `Package.swift`，取每个 `binaryTarget` 的 `checksum`。名单里有一个框架找不到就失败，文件不动。
   3. 只改 `version` 那一行和名单里各框架那一行，注释、空行和框架顺序原样保留。
-  4. 跑 `FetchSourceEditorScript.sh`：它下载四个 zip，逐个对新的哈希校验，等于拿真实的资产把 `Package.swift` 给的值核对一遍。下载或校验失败，就把 `PinnedRelease.txt` 恢复原样，带着它的退出码退出。
+  4. 跑 `FetchSourceEditorScript.sh`：它下载四个 zip，逐个对新的哈希校验，等于拿真实的资产把 `Package.swift` 给的值核对一遍。下载或校验失败、或者中途被打断，就把 `PinnedRelease.txt` 恢复原样，带着它的退出码退出。
   5. 打印「旧版本 → 新版本」、Release 的地址，以及跨过的每一版 Release 说明里的 Breaking 一节；最后提示跑桥接测试、提交 `PinnedRelease.txt`。
 - 已经是目标版本时不改文件，只跑一次 `FetchSourceEditorScript.sh`，确保框架在位。
 - 退出码与 `FetchSourceEditorScript.sh` 一致：0 成功；2 没装 `gh`、没登录或没有仓库权限；1 其他错误。
@@ -43,7 +43,7 @@
 - 26.6.3：桥接测试（Debug-arm64e）通过，没过的只能是 `next` 上早就不过的 `SourceEditorScrollerTests`；构建产物目录里四个框架的 LC_UUID 与 26.6.3 的下载一致。
 
 **落地步骤**
-1. 换版脚本与它的文档。
+1. 换版脚本与它的文档。（已完成）
 2. `TuistScript.sh` 与 Tuist 指南。
 3. 用脚本换到 26.6.3，`PinnedRelease.txt` 的头注释、桥接里多余的类型转换同批改，跑桥接测试。
 
