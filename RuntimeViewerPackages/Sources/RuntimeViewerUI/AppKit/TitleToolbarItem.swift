@@ -5,15 +5,22 @@ import AppKit
 /// A toolbar item showing a title, an optional subtitle below it and an optional image beside
 /// them, for a window that hides its own title.
 ///
-/// A text too long for the toolbar is cut short with an ellipsis; it never pushes the items after
-/// it into the overflow menu. Getting there takes four settings that only work together, because
-/// NSToolbar does not size an item from its view's frame: it solves the view in a layout engine of
-/// its own, once pulled to zero width at priority 200 for the minimum width and once to 10,000
-/// points at priority 200 for the maximum (`-[NSToolbarItem _itemViewMinSize:maxSize:stretchesContent:]`,
-/// the same on macOS 26.6 and 27.0), and it moves items into the overflow menu by their minimum
-/// widths alone. Each setting below says what breaks without it, and
-/// `TitleToolbarItemOverflowTests` fails if any of them goes. Background:
-/// `Documentations/ResolvedIssues/2026-10-02-long-toolbar-title-pushed-items-into-overflow.md`.
+/// A text too long for the toolbar is cut short with an ellipsis: it never pushes the items after
+/// it into the overflow menu, nor the toolbar's centered item aside. NSToolbar does not size an item
+/// from its view's frame: it solves the view in a layout engine of its own, once pulled to zero width
+/// at priority 200 for the minimum width and once to 10,000 points at priority 200 for the maximum
+/// (`-[NSToolbarItem _itemViewMinSize:maxSize:stretchesContent:]`, the same on macOS 26.6 and 27.0); it
+/// moves items into the overflow menu by their minimum widths alone; and in a section with a centered
+/// item it shares the room left over among the items before that item, the item and the items after
+/// it, each group up to its widest, before it places the centered item
+/// (`-[NSBarLayout _centerRectGivenItems:leadingItems:trailingItems:inRect:]`, the same on macOS 27.0 and
+/// 27.2). So the item's view (`ItemView`) has no widest of its own — the toolbar counts a view that
+/// measures 10,000 points wide at its minimum there — and takes whatever room the toolbar gives it,
+/// and the title sits at its leading edge in a container that takes four settings that only work
+/// together. Each setting below says what breaks without it, and `TitleToolbarItemOverflowTests` and
+/// `ToolbarCenteredItemTests` fail if any of them goes. Background:
+/// `Documentations/ResolvedIssues/2026-10-02-long-toolbar-title-pushed-items-into-overflow.md` and
+/// `Documentations/ResolvedIssues/2026-11-05-long-toolbar-title-pushed-the-centered-item-aside.md`.
 ///
 /// Made with `showsActivity`, the item is Xcode 27's window title (IDEKit 27.2
 /// `IDEActivityWindowTitleView`): an 18-point slot left of the text shows the document's icon, and
@@ -33,6 +40,13 @@ public final class TitleToolbarItem: NSToolbarItem {
     /// title came out as wide as the subtitle "NSControl" with hundreds of points to spare.
     private static let textStackHuggingPriority = NSLayoutConstraint.Priority(198)
 
+    /// How hard the title's container is pulled out to the item's width, so that it is as wide as it
+    /// was while it was the item's view itself: up to its own widest, `maximumWidthConstraint`, which
+    /// outranks the pull. Below 200, the priority at which the toolbar pulls the item's view when it
+    /// measures the item: at 200 or more the pull would hold the item's view to the container's width
+    /// and give the item a widest again.
+    private static let containerFillPriority = NSLayoutConstraint.Priority(150)
+
     /// Xcode 27's `.padding(.horizontal, 10)` around the icon slot and the text.
     private static let activityHorizontalPadding: CGFloat = 10
 
@@ -40,9 +54,9 @@ public final class TitleToolbarItem: NSToolbarItem {
     /// image and text on macOS, which Xcode 27 leaves unset. Not measured against Xcode.
     private static let activityIconSpacing: CGFloat = 8
 
-    /// While the pointer stays over the item, the activity text widens it in steps of this, and
-    /// never narrows it, so a text that changes every second does not shake the toolbar — Xcode's
-    /// `resizeIncrement` for its title item.
+    /// While the pointer stays over the item, the activity text widens the title's container in
+    /// steps of this, and never narrows it, so that a text that changes every second does not move
+    /// the container's edge under the pointer — Xcode's `resizeIncrement` for its title item.
     private static let activityWidthIncrement: CGFloat = 20
 
     private let imageView = NSImageView()
@@ -51,11 +65,15 @@ public final class TitleToolbarItem: NSToolbarItem {
     private let textStackView = NSStackView()
     private let containerStackView = ContainerStackView()
 
+    /// The item's view, which holds `containerStackView` at its leading edge.
+    private let itemView = ItemView()
+
     /// The window title's activity display, when the item was made with `showsActivity`: it takes
     /// the image's place. A click on it sends its action.
     public let activityIndicator: TitleActivityIndicatorView?
 
-    /// The narrowest the item gets: its insets and the ellipsis a truncated title ends with.
+    /// The narrowest the title's container, and so the item, gets: its insets and the ellipsis a
+    /// truncated title ends with.
     ///
     /// It also keeps the measured minimum width above zero, which the toolbar needs. A measured
     /// minimum width of exactly 0 is taken to mean the view could not be measured: the toolbar logs
@@ -66,9 +84,10 @@ public final class TitleToolbarItem: NSToolbarItem {
     /// it already did once, while the title was still empty.
     private lazy var minimumWidthConstraint = containerStackView.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
 
-    /// The widest the item gets: its insets and the wider label at full width, at a priority above
-    /// 200 so that the maximum-width measurement stops there. With the text stack hugging its labels
-    /// below 200, nothing else does: the item would stretch over all the room the other items leave.
+    /// The widest the title's container gets: its insets and the wider label at full width, at a
+    /// priority above `containerFillPriority`, so that the pull out to the item's width stops there.
+    /// With the text stack hugging its labels below 200, nothing else does: the container would
+    /// stretch over all the room the toolbar gives the item, and take the pointer over all of it.
     private lazy var maximumWidthConstraint = containerStackView.widthAnchor.constraint(lessThanOrEqualToConstant: 0)
 
     /// The subtitle the owner sets; the activity text stands in for it while the pointer is over
@@ -191,11 +210,21 @@ public final class TitleToolbarItem: NSToolbarItem {
         maximumWidthConstraint.priority = .defaultLow
         NSLayoutConstraint.activate([minimumWidthConstraint, maximumWidthConstraint])
 
+        itemView.hierarchy {
+            containerStackView
+        }
+
+        containerStackView.snp.makeConstraints { make in
+            make.leading.top.bottom.equalToSuperview()
+            make.trailing.lessThanOrEqualToSuperview()
+            make.width.equalToSuperview().priority(Self.containerFillPriority.rawValue)
+        }
+
         updateTitleFont()
         updateActivityTextAppearance()
         updateWidthLimits()
 
-        view = containerStackView
+        view = itemView
     }
 
     /// Shows the activity `state` shows: its progress in the icon slot, and its text for the
@@ -280,7 +309,22 @@ public final class TitleToolbarItem: NSToolbarItem {
 }
 
 extension TitleToolbarItem {
-    /// The item's view: tells the item where the pointer is and when the window changes.
+    /// The item's view: as wide as the toolbar lays the item out, with the title's container at its
+    /// leading edge.
+    ///
+    /// It has no widest of its own, so the toolbar measures the item 10,000 points wide at most and
+    /// counts it at its minimum width when it decides where the centered item goes: the centered item
+    /// stays where it is, and the title gets the room left beside it. Only the container hugs the
+    /// text. The rest of this view takes no clicks, so that a click there goes to the toolbar behind
+    /// it, as one on the flexible space that this room used to go to does.
+    private final class ItemView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            let hitView = super.hitTest(point)
+            return hitView === self ? nil : hitView
+        }
+    }
+
+    /// The title's container: tells the item where the pointer is and when the window changes.
     private final class ContainerStackView: NSStackView {
         var pointerInsideDidChange: ((Bool) -> Void)?
 

@@ -83,14 +83,15 @@ struct TitleToolbarItemOverflowTests {
             cutShortLabels.isEmpty,
             "cut short: \(cutShortLabels.map { "\($0.stringValue) \($0.frame.width) of \($0.intrinsicContentSize.width) pt" })"
         )
-        // The room the title does not need stays with the flexible space after it. Without the
-        // item's maximum width the title stretched over all of it: 467 pt for 54 pt of text.
+        // The part that shows the title, and takes the pointer, is no wider than its text; the item's
+        // view around it takes the rest of the room and no clicks (`ToolbarCenteredItemTests`).
+        // Without its maximum width the title stretched over all of it: 467 pt for 54 pt of text.
         let textWidth = try #require(shownLabels.map(\.intrinsicContentSize.width).max())
         let insets = fixture.titleItem.insets
-        let titleWidth = try #require(fixture.titleItem.view).frame.width
+        let titleContentWidth = try #require(fixture.titleContentView()).frame.width
         #expect(
-            titleWidth <= insets.left + textWidth + insets.right + 0.5,
-            "the title is \(titleWidth) pt wide for \(textWidth) pt of text"
+            titleContentWidth <= insets.left + textWidth + insets.right + 0.5,
+            "the title is \(titleContentWidth) pt wide for \(textWidth) pt of text"
         )
     }
 }
@@ -161,6 +162,12 @@ extension TitleToolbarItemOverflowTests {
             return Self.descendants(of: titleView)
                 .compactMap { $0 as? NSTextField }
                 .filter { label in !label.isHiddenOrHasHiddenAncestor }
+        }
+
+        /// The part of the title item that shows the title: the view holding the image and the stack
+        /// of labels.
+        func titleContentView() -> NSView? {
+            shownTitleLabels().first { $0.stringValue == titleItem.displayTitle }?.superview?.superview
         }
 
         /// The empty width between the title item's view and the first button, in window
