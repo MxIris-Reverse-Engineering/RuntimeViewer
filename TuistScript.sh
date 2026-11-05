@@ -27,6 +27,13 @@
 # out, failed or not, so the workspace Xcode has open stays a Debug one; `warm` ends with a Debug
 # generation too. Only `generate --configuration` leaves another configuration in place.
 #
+# `generate`, `warm`, `build` and `check` start by running FetchSourceEditorScript.sh, which
+# downloads the reconstructed SourceEditor frameworks official builds carry, as RunScript.sh does
+# before it builds. The app's Embed SourceEditor Frameworks phase fails when the frameworks in place
+# were downloaded for another pin, so after a move to another release a workspace generated without
+# this would not build in Xcode either. A machine that cannot download them (no `gh`, no login, no
+# access to the private release) carries on, and the app shows interfaces in the built-in text view.
+#
 # Every command uses the Xcode that DEVELOPER_DIR or xcode-select names. Resolve the dependencies
 # with the Xcode the native lock files were resolved with: some packages pick their manifest by
 # Swift version, so another Xcode resolves other packages.
@@ -1433,10 +1440,19 @@ print("    the two apps agree")
 PYTHON
 }
 
+# Puts the pinned SourceEditor release in place before a command generates or builds; see the top of
+# this file. Once per command, not in generate_workspace: `build` and `check` generate a second time
+# on the way out, and the warning would come twice.
+fetch_source_editor() {
+    if ! run "$PROJECT_DIR/FetchSourceEditorScript.sh"; then
+        warn "going on without SourceEditor: the app will show interfaces in the built-in text view"
+    fi
+}
+
 case "$COMMAND" in
     install) install_dependencies;;
-    generate) generate_workspace; log "Open $WORKSPACE";;
-    warm) warm_cache;;
-    build) build_command;;
-    check) check_command;;
+    generate) fetch_source_editor; generate_workspace; log "Open $WORKSPACE";;
+    warm) fetch_source_editor; warm_cache;;
+    build) fetch_source_editor; build_command;;
+    check) fetch_source_editor; check_command;;
 esac

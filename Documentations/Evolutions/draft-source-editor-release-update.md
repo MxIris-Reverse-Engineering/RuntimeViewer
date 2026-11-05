@@ -44,7 +44,7 @@
 
 **落地步骤**
 1. 换版脚本与它的文档。（已完成）
-2. `TuistScript.sh` 与 Tuist 指南。
+2. `TuistScript.sh` 与 Tuist 指南。（已完成）
 3. 用脚本换到 26.6.3，`PinnedRelease.txt` 的头注释、桥接里多余的类型转换同批改，跑桥接测试。
 
 **没问就采用的假设**
