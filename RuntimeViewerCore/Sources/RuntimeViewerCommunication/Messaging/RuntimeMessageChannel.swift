@@ -2,68 +2,6 @@ import Foundation
 import FoundationToolbox
 import Semaphore
 
-// MARK: - RuntimeMessageHandler
-
-/// Encapsulates a message handler that processes requests and returns responses.
-///
-/// This class handles the JSON encoding/decoding of requests and responses,
-/// allowing handlers to work with typed Swift objects.
-///
-/// - Note: Uses `@unchecked Sendable` because the stored metatypes (`requestType`, `responseType`)
-///   are immutable and inherently thread-safe, but `any Codable.Type` doesn't conform to `Sendable`.
-final class RuntimeMessageHandler: @unchecked Sendable {
-    typealias RawHandler = @Sendable (Data) async throws -> Data
-
-    /// The wrapped handler that processes raw Data.
-    let closure: RawHandler
-
-    /// The type of the request this handler expects.
-    let requestType: any Codable.Type
-
-    /// The type of the response this handler returns.
-    let responseType: any Codable.Type
-
-    /// Creates a message handler with typed request and response.
-    ///
-    /// - Parameter closure: The handler closure that receives a typed request
-    ///   and returns a typed response.
-    init<Request: Codable, Response: Codable>(closure: @escaping @Sendable (Request) async throws -> Response) {
-        self.requestType = Request.self
-        self.responseType = Response.self
-
-        self.closure = { request in
-            let request = try JSONDecoder().decode(Request.self, from: request)
-            let response = try await closure(request)
-            return try JSONEncoder().encode(response)
-        }
-    }
-}
-
-// MARK: - RuntimeMessageNull
-
-/// A null message type used when no payload is needed.
-struct RuntimeMessageNull: Codable, Sendable {
-    static let null = RuntimeMessageNull()
-}
-
-// MARK: - RuntimeMessageProtocol
-
-/// Protocol defining the message framing and processing logic.
-///
-/// Implementations handle the low-level details of reading/writing data,
-/// while the protocol provides the common message framing logic.
-protocol RuntimeMessageProtocol: Sendable {
-    /// The end marker used to delimit messages.
-    static var endMarkerData: Data { get }
-}
-
-extension RuntimeMessageProtocol {
-    /// Default end marker: `\nOK`
-    static var endMarkerData: Data {
-        "\nOK".data(using: .utf8)!
-    }
-}
-
 // MARK: - RuntimeMessageChannel
 
 /// A bidirectional message channel that handles framing, encoding, and dispatching.
@@ -709,26 +647,6 @@ private final class PendingRequest: @unchecked Sendable {
         timeoutTask.withLock { task in
             task?.cancel()
             task = nil
-        }
-    }
-}
-
-// MARK: - RuntimeMessageChannelError
-
-/// Errors that can occur during message channel operations.
-enum RuntimeMessageChannelError: Error, LocalizedError, Sendable {
-    case notConnected
-    case receiveFailed
-    case requestTimeout
-
-    var errorDescription: String? {
-        switch self {
-        case .notConnected:
-            return "Message channel is not connected"
-        case .receiveFailed:
-            return "Failed to receive message"
-        case .requestTimeout:
-            return "Request timed out before a response arrived"
         }
     }
 }

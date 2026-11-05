@@ -25,7 +25,7 @@ Release notes live at `Changelogs/<tag>.md` and are picked up automatically by
 ## Pre-flight: the helper daemon protocol version
 
 `RuntimeViewerServiceVersion` in
-`RuntimeViewerCore/Sources/RuntimeViewerCommunication/HelperService/RuntimeRequestResponse.swift`
+`RuntimeViewerCore/Sources/RuntimeViewerCommunication/HelperService/RuntimeViewerMachService.swift`
 is the **only** signal that makes an installed client replace its privileged
 helper. `HelperServiceManager.checkServiceVersionAndReinstallIfNeeded()`
 compares the running daemon's reported version against this constant on every
