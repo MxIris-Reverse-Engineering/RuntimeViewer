@@ -1,13 +1,13 @@
 # Draft - RuntimeViewerCore 包的源码按功能分目录，一个类型一个文件
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-05
 - **最后更新**: 2026-11-05
 - **实现分支 / PR**: `feature/core-source-layout`（从 `next` 切，并回 `next`）
 
 ## 摘要
 
-RuntimeViewerCore 包五个 Swift target 共 152 个源文件、241 个顶层类型，其中 39 个文件装了 153 个类型——最多的 `RuntimeCrossReferenceModels.swift` 有 17 个，`RuntimeInterfaceSearch.swift` 有 15 个。目录也分不清：`Common/` 的 27 个文件分属对象、接口、搜索、关系、书签、特化等功能；`Core/` 混着 section、镜像读取和 engine 共用的协议；engine 本体和另外 13 个文件散在 target 根目录；`Indexing/` 与 `BackgroundIndexing/` 名字相近，管的却不是一回事。本提案只搬文件、拆文件：按功能重新分目录，除 `private` / `fileprivate` 的辅助类型外一个顶层类型一个文件。不改类型名、行为和公开 API。
+RuntimeViewerCore 包五个 Swift target 共 152 个源文件、241 个顶层类型，其中 39 个文件装了 153 个类型——最多的 `RuntimeCrossReferenceModels.swift` 有 17 个，`RuntimeInterfaceSearch.swift` 有 15 个。目录也分不清：`Common/` 的 25 个文件分属对象、接口、搜索、关系、书签、特化等功能；`Core/` 混着 section、镜像读取和 engine 共用的协议；engine 本体和另外 13 个文件散在 target 根目录；`Indexing/` 与 `BackgroundIndexing/` 名字相近，管的却不是一回事。本提案只搬文件、拆文件：按功能重新分目录，除 `private` / `fileprivate` 的辅助类型外一个顶层类型一个文件。不改类型名、行为和公开 API。
 
 ## 方案
 
@@ -91,8 +91,8 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 
 ### 落地步骤
 
-1. 批准后从 `next` 切 `feature/core-source-layout`，worktree 为 `.worktrees/RuntimeViewer-CoreSourceLayout`；跑基线。
-2. 只搬家的提交，连同活文档里的路径。
+1. 批准后从 `next` 切 `feature/core-source-layout`，worktree 为 `.worktrees/RuntimeViewer-CoreSourceLayout`；跑基线。（已完成）
+2. 只搬家的提交，连同活文档里的路径。（已完成）
 3. 拆文件：Core → Communication → CrossReferences → Injection → Utilities，各一个提交。
 4. `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 登记。
 5. 验证，收尾合回 `next`。
@@ -210,6 +210,7 @@ Export/
 DerivedDataStorage/
   原有 10 个文件
   RuntimeDerivedDataKind.swift, RuntimeDerivedDataByteReader.swift, Data+LittleEndian.swift   ← 拆自 RuntimeDerivedDataContainer.swift
+  RuntimeEngine+DerivedData.swift               ← 拆自 RuntimeDerivedData.swift
 Offline/
   原有 5 个文件
   RuntimeOfflineFileError.swift                 ← 拆自 RuntimeOfflineFile.swift
@@ -256,7 +257,7 @@ Connections/XPCMachService/
 Connections/XPCService/
   RuntimeXPCServiceTarget.swift, RuntimeXPCServiceEndpoint.swift, RuntimeXPCServiceConnectionError.swift,
   RuntimeXPCServiceReplyFrame.swift, RuntimeXPCServiceMessaging.swift, RuntimeXPCServiceConnection.swift,
-  RuntimeXPCServiceClientConnection.swift, RuntimeXPCServiceListenerConnection.swift   ← 拆自 Connections/RuntimeXPCServiceConnection.swift
+  RuntimeXPCServiceClientConnection.swift, RuntimeXPCServiceListenerConnection.swift, NSLock+Locked.swift   ← 拆自 Connections/RuntimeXPCServiceConnection.swift
 Messaging/
   RuntimeMessageChannel.swift, RuntimeRequestData.swift   ← 根目录
   RuntimeMessageChannelError.swift, RuntimeMessageHandler.swift, RuntimeMessageNull.swift,
@@ -296,3 +297,4 @@ RuntimeViewerUtilities：`DeviceIdentifier.swift`、`SandboxProbe.swift`，加�
 | 2026-11-05 | 嵌套类型不拆 | 嵌套类型是外层类型的一部分；只拆顶层类型，`RuntimeEngine+Commands.swift` 这类按功能归组的命令结构体保持原样 |
 | 2026-11-05 | 要拆的文件在只搬家的提交里先整个搬到主类型的目录 | 搬家和拆分分开提交，搬家那次 git 能完整认出改名；拆分时只切出其余类型 |
 | 2026-11-05 | 用户批准，开始实现 | — |
+| 2026-11-05 | 只搬家的提交：96 个文件换目录，`Common/`、`Core/`、`Catalog/`、`Indexing/`、`Utils/` 与 Communication 的 `Network/` 清空删除 | 落地步骤 2；文档里跟着变的路径同批改，`SparkleRelease.md` 找上次 helper 版本变更的命令改为比较前后值，免得把搬家的提交当成一次变更 |

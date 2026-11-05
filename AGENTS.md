@@ -332,7 +332,7 @@ The project uses three Swift Package Manager packages:
   bundle is the configuration. The "Load Frameworks…" picker goes through `engine.loadImage(at:)`, not
   `Bundle.load`. A service crash costs the loaded images, not the app: the connection reattaches on its
   own and the engine only sees `.disconnected` then `.connected`. **All XPC-service code lives in a few
-  named places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
+  named places** — `RuntimeViewerCommunication/Connections/XPCService/RuntimeXPCServiceConnection.swift`
   (transport, `hello`, reattach, dedicated instances) plus the three `.xpcService` branches of
   `RuntimeCommunicator`; `RuntimeViewerCore/LocalRuntimeService/` (this service's `Info.plist` key and
   credential, and the service-side host all three services run);
@@ -711,7 +711,7 @@ logic, `.drive()` / `.bind(to:)` are fine: `output.imageName.drive(label.rx.stri
 - Main menu: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift`
 - Document model: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift`
 - Coordinator/navigation: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
-- Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`
+- Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`
 - Engine manager: `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift`
 - Document state: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
 - ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/`

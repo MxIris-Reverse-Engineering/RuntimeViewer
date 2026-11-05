@@ -1,7 +1,7 @@
 # Swift Object Tree Walkthrough
 
 侧栏里一个镜像的 Swift 条目是怎么来的、点开一个条目看到的 interface 又是怎么拼出来的。两件事都在
-`RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeSwiftSection.swift`：`allObjects()`（`:206`）决定列出哪些节点、
+`RuntimeViewerCore/Sources/RuntimeViewerCore/Sections/Swift/RuntimeSwiftSection.swift`：`allObjects()`（`:206`）决定列出哪些节点、
 每个节点挂哪些子节点，`interface(for:)`（`:341`）决定节点的文本。它们读的是 MachOSwiftSection 的
 `SwiftDeclarationIndexer`（`Sources/Declaration/SwiftIndexing/SwiftDeclarationIndexer.swift`，下文简称「索引器」）建好的几张表。
 

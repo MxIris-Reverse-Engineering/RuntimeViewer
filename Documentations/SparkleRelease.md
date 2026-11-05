@@ -25,7 +25,7 @@ Release notes live at `Changelogs/<tag>.md` and are picked up automatically by
 ## Pre-flight: the helper daemon protocol version
 
 `RuntimeViewerServiceVersion` in
-`RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeRequestResponse.swift`
+`RuntimeViewerCore/Sources/RuntimeViewerCommunication/HelperService/RuntimeRequestResponse.swift`
 is the **only** signal that makes an installed client replace its privileged
 helper. `HelperServiceManager.checkServiceVersionAndReinstallIfNeeded()`
 compares the running daemon's reported version against this constant on every
@@ -39,9 +39,21 @@ whenever anything there changed:
 ```bash
 # -G, not -S: bumping the value leaves the number of occurrences unchanged, so
 # a pickaxe search walks straight past every bump commit to the one that
-# introduced the constant.
-LAST_BUMP=$(git log -1 --format=%H -G'RuntimeViewerServiceVersion: String = ' \
-    -- RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeRequestResponse.swift)
+# introduced the constant. -G also stops at a commit that only moved the
+# constant to another file, so take the first commit whose value differs from
+# its parent's. The search covers the whole module because the file has moved.
+service_version_at() {
+    git grep -h -o -E 'RuntimeViewerServiceVersion: String = "[^"]+"' "$1" \
+        -- RuntimeViewerCore/Sources/RuntimeViewerCommunication
+}
+LAST_BUMP=$(git log --format=%H -G'RuntimeViewerServiceVersion: String = ' \
+        -- RuntimeViewerCore/Sources/RuntimeViewerCommunication |
+    while read -r commit; do
+        if [ "$(service_version_at "$commit")" != "$(service_version_at "$commit^")" ]; then
+            echo "$commit"
+            break
+        fi
+    done)
 
 git diff --stat "$LAST_BUMP"..HEAD -- \
     RuntimeViewerCore/Sources/RuntimeViewerCommunication \

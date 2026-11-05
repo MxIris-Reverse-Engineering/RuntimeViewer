@@ -7,7 +7,7 @@
 
 代码位置：
 - 通信层：`RuntimeViewerCore/Sources/RuntimeViewerCommunication/`
-- 引擎与代理：`RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`、`RuntimeEngineProxyServer.swift`
+- 引擎与代理：`RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`、`Engine/Serving/RuntimeEngineProxyServer.swift`
 - 引擎管理器：`RuntimeViewerPackages/Sources/RuntimeViewerApplication/Engine/RuntimeEngineManager.swift`、`RuntimeEngineMirrorRegistry.swift`
 
 ---
@@ -350,7 +350,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 > 本机身份单独成文件，是因为那里几乎每个值都带一个坑：注入负载不得往宿主进程写任何东西、
 > 设备 ID 必须跨进程稳定、主机名有两种形态（好读的那种会做阻塞式反向 DNS，曾触发启动看门狗）。
 
-## 4. 消息通道与线路协议（`RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` + `Network/`）
+## 4. 消息通道与线路协议（`Messaging/RuntimeMessageChannel.swift` + `Messaging/RuntimeRequestData.swift` + `Connections/Network/`）
 
 除 XPC 外的四族共享 `RuntimeMessageChannel`，负责**组帧、编解码、请求路由、超时**。
 
