@@ -34,11 +34,6 @@ public struct RuntimeObjectsLoadingProgress: Sendable, Codable {
     }
 }
 
-public enum RuntimeObjectsLoadingEvent: Sendable {
-    case progress(RuntimeObjectsLoadingProgress)
-    case completed([RuntimeObject])
-}
-
 // MARK: - Phase Display
 
 extension RuntimeObjectsLoadingProgress.Phase {

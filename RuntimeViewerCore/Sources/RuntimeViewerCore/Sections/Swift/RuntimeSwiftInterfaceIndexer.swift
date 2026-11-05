@@ -10,38 +10,6 @@ import SwiftStdlibToolbox
 @_spi(Support) import SwiftInterface
 @_spi(Support) import SwiftSpecialization
 
-/// A Swift type found to subclass another type or to conform to a protocol,
-/// paired with the image that named it.
-///
-/// The Swift counterpart of `RuntimeObjCClassReference`. There is no
-/// `isSwiftStable` here: a type reached through the Swift tables is a Swift type
-/// by construction, whereas the ObjC tables carry both and have to say which.
-///
-/// Deliberately neither `public` nor `Codable`, for the same reason as the ObjC
-/// one: relationship references never leave the process — what crosses the XPC
-/// boundary is the already-materialized `RuntimeObject`.
-struct RuntimeSwiftTypeReference: Hashable, Sendable {
-    let mangledName: String
-    let imagePath: String
-}
-
-/// A Swift protocol paired with the image declaring it, addressed both by
-/// the qualified name the indexer keys protocols by and by the mangled name
-/// a `RuntimeObject` carries.
-struct RuntimeSwiftProtocolReference: Hashable, Sendable {
-    let qualifiedName: String
-    let mangledName: String
-    let imagePath: String
-}
-
-/// A protocol named in another protocol's requirement signature as a base
-/// conformance: a Swift protocol by qualified name, or an Objective-C
-/// protocol by its runtime name (`isObjC`), which the ObjC tables resolve.
-struct RuntimeSwiftRefinedProtocol: Hashable, Sendable {
-    let qualifiedName: String
-    let isObjC: Bool
-}
-
 /// Per-image Swift interface index: a project-owned wrapper around the
 /// upstream `MachOSwiftSection` `SwiftDeclarationIndexer` that layers on the
 /// relationship reverse tables backing the Inspector's Relationships tab.

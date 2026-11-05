@@ -61,24 +61,6 @@ typealias RuntimeInterfaceSearchBatch = RuntimeObjectIndexedBatch<RuntimeInterfa
 /// The progress value of the member search command.
 typealias RuntimeMemberSearchBatch = RuntimeObjectIndexedBatch<RuntimeMemberMatch.Hit>
 
-extension RuntimeInterfaceSearchMatch {
-    /// What a text match carries besides its object.
-    struct Hit: Codable, Sendable {
-        let lineNumber: Int
-        let lineText: String
-        let matchRangeInLine: RuntimeTextRange
-        let semanticKind: RuntimeSemanticKind
-    }
-}
-
-extension RuntimeMemberMatch {
-    /// What a member match carries besides its object.
-    struct Hit: Codable, Sendable {
-        let member: RuntimeMemberDeclaration
-        let matchRangeInName: RuntimeTextRange
-    }
-}
-
 extension RuntimeObjectIndexedBatch where Payload == RuntimeInterfaceSearchMatch.Hit {
     init(_ matches: [RuntimeInterfaceSearchMatch]) {
         self.init(matches.map { match in

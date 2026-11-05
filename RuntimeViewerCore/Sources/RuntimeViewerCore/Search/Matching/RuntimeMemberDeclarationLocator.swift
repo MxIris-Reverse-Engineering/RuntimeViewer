@@ -491,37 +491,3 @@ enum RuntimeMemberDeclarationLocator {
         }
     }
 }
-
-/// A member a line of an interface declares, as the line spells it: what the
-/// content pane offers Find Call Hierarchy and the other cross-reference
-/// commands for. Read off the line alone, so it says no more than the line
-/// does: a Swift field and variable read alike and come back as a variable,
-/// and an initializer is never static.
-public struct RuntimeDeclaredMember: Hashable, Sendable {
-    /// As `RuntimeMemberDeclaration.name` spells it: a whole selector, a Swift
-    /// function's base name, `init`, `subscript`.
-    public let name: String
-    public let kind: RuntimeMemberKind
-    public let isStatic: Bool
-
-    public init(name: String, kind: RuntimeMemberKind, isStatic: Bool) {
-        self.name = name
-        self.kind = kind
-        self.isStatic = isStatic
-    }
-}
-
-extension RuntimeObjectInterface {
-    /// The member each line declares, by 1-based line number, read the way
-    /// the Find corpus locates members on their lines
-    /// (`RuntimeMemberDeclarationLocator`). A member of a nested type printed
-    /// inside this one is left out: it is not this object's.
-    public func declaredMembersByLineNumber() -> [Int: RuntimeDeclaredMember] {
-        let isSwift: Bool
-        switch object.kind {
-        case .swift: isSwift = true
-        case .objc, .c: isSwift = false
-        }
-        return RuntimeMemberDeclarationLocator.declaredMembersByLine(in: interfaceString, isSwift: isSwift)
-    }
-}

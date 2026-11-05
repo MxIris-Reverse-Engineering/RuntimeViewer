@@ -397,7 +397,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。旧对端只回这一段文字，所以识别只能靠前缀：`RuntimeNetworkRequestError.isUnknownCommand`，前缀是 `unknownCommandMessagePrefix`，通道拼这条回复用的也是它。中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，错误回复照原文写下去（`RuntimeMessageChannel.replyMessage(for:)`），不再包一层类型描述，所以经过新版中转，旧对端照样认得出（`RemoteUnknownCommandTests`）。第一个用它的是语料协调器的 `isCorpusUnsupportedByEngine`（PR121.37）。经 Mach service 的旧版注入 payload 对未知命令不回这段文字，见 PR121.73。
 
-### 4.5 跨连接取消（引擎层，`RuntimeEngineRequestCancellation.swift`）
+### 4.5 跨连接取消（引擎层，`Engine/Commands/` 的 `RuntimeEngineRequestCancellation.swift`、`RuntimeEngineInboundRequests.swift`、`RuntimeEngineForwardedRequest.swift`）
 
 传输层取消不了已经发出的请求：SwiftyXPC 的 `sendMessage` 是一个不响应取消的 continuation，socket 通道的 `sendRequest` 同样只等回复；服务端则在一个没人持有句柄的 Task 里跑每条请求。所以调用方取消后，既不会提前返回，也传不到服务端——语料构建会一直等到整个镜像打印完（实测 Foundation 8–11 秒，期间进度照收），服务进程照建不误（`KnownIssues/2026-10-07-pr121-review-findings.md` PR121.29）。取消做在**引擎层**，不改任何传输的帧格式：
 

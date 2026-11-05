@@ -4,10 +4,6 @@ import MachO.dyld
 package import MachOKit
 import SwiftDeclarationRendering
 
-public struct DyldOpenError: Error {
-    public let message: String?
-}
-
 @Loggable
 package enum DyldUtilities {
     package static let addImageNotification = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
