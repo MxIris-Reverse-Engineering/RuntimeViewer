@@ -1,6 +1,6 @@
-# Draft - 内容面板接入 SourceEditor 现成的四项阅读功能
+# 0074 - 内容面板接入 SourceEditor 现成的四项阅读功能
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **实现分支**: `feature/source-editor-reading-aids`
 - **创建日期**: 2026-11-06
 - **最后更新**: 2026-11-06
@@ -183,3 +183,4 @@ App 看不到框架的类型，所以选择器由 bridge 的 `@objc` 协议 `Sou
 | 2026-11-06 | 四项放进同一个实现提交 | 四项改的是 bridge、内容面板和测试 harness 里的同一批文件，分开提交就得把同一个文件拆成好几版 |
 | 2026-11-06 | 测试的等待改成在两次布局之间挂起 | 高亮同名出现的端到端测试第一次没过：框架用 `DispatchQueue.main.asyncAfter` 安排查询，而测试本身是主队列上的任务，只转 run loop 时轮不到它。这是测试环境的问题，App 里不受影响 |
 | 2026-11-06 | 实现完成，待用户看过后收尾 | 在 Ultra（macOS 27.2，Xcode 27.2）上验证。bridge 测试共 53 个，新增的 14 个全过，只有基线本来就挂的两个滚动条测试失败。逐项去掉功能后重跑，新测试都会变红；例外是关键字那个反例，以及只检查框架自身动作的 Fold 响应链测试。包测试 51 个全过，Tuist 构建 App 通过。框架用的是 Ultra 上已有的 26.6.4 下载，因为经 ssh 取不到 26.6.3；两版之间只改了 `MinimapMetalLinesLayer.swift`。真实 App 里的界面没有手动看过。不需要另写使用指南或实现说明，没有新术语 |
+| 2026-11-06 | In Progress → Implemented，编号 0074 | 用户批准收尾，与同日加的 Settings › Editor › Display › Insertion Point 开关（记在 [0009](0009-content-editor-engine-selection.md) 的决策日志）一起推上 `next`。落地前没有重跑验证：`origin/next` 在验证之后没有新提交，合并结果与验证过的代码一致，之后只改了文档。不配使用指南：四项都是界面上看得见的行为，菜单项与快捷键照 Xcode，没有要另外说明的用法；也不另写实现说明，框架行为的依据与地址都在本提案的方案一节。没有新术语要进术语表。 |
