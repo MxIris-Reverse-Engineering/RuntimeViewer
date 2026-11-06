@@ -435,7 +435,7 @@ MainSplitViewController 第 1 项
 4. ✅ **命令**：工具栏按钮、File / Navigate / View 菜单项与快捷键、⌘W 的关闭顺序、启用条件。
 5. ✅ **打开去处**：`Destination(listClickModifierFlags:)` 与 `Destination(linkClickModifierFlags:)`，侧栏、内容区、Find 与 Inspector References 的修饰键，右键菜单的 Open in Next Editor Pane。
 6. ✅ **外观照 Xcode**：逆向 27.2 的 IDEKit 与 DVTUserInterfaceKit（结论在 `/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes — visuals」），照搬能从反汇编确定的部分：标签栏的行高与边距、关栏按钮、3 点分隔线、最小栏宽、工具栏按钮的图标与菜单、⌘W 的动态标题（见「外观」）。不需要 UIFoundation 的 `TabBar` 加接口。依赖主题引擎与私有视图的三处观感留到以后（见「非目标」）。
-7. **文档与验收**：根 `AGENTS.md` 的架构要点与 `RuntimeViewerUsingAppKit/AGENTS.md` 的 coordinator 一节写进新约定（路由作用于焦点栏；内容区先取焦点再打开；标签与栏只按标识定位）；术语表登记「分栏」「焦点栏」「打开去处」；在 7 月的多 Tab 设计文档开头注明两条约定已被本提案取代；README 的功能列表加上编辑器分栏；全部测试通过后，交一份手工验收清单（加栏的四种情形、焦点与 Inspector 联动、三种打开去处、⌘W 的三种结果、切镜像与切引擎）。
+7. ✅ **文档与验收**：根 `AGENTS.md` 的架构要点与 `RuntimeViewerUsingAppKit/AGENTS.md` 的 coordinator 一节写进新约定（路由作用于焦点栏；内容区先取焦点再打开；标签与栏只按标识定位）；术语表登记「分栏」「焦点栏」「打开去处」；在 7 月的多 Tab 设计文档开头注明两条约定已被本提案取代；README 的功能列表加上编辑器分栏；全部测试通过后，交一份手工验收清单（加栏的四种情形、焦点与 Inspector 联动、三种打开去处、⌘W 的三种结果、切镜像与切引擎）。
 
 **手工验收清单**（App target 没有测试，界面只能手工看；用合进 `next` 之后的 Debug 构建）：
 
