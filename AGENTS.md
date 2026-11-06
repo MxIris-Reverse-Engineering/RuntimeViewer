@@ -371,8 +371,8 @@ The project uses three Swift Package Manager packages:
   without the key — the standalone CLI host — keeps launching `RuntimeViewerCatalystHelper`. The App Nap
   rule above covers work on this engine too. The service has no "restarted" notification yet.
   Background: `Documentations/Evolutions/0051-catalyst-xpc-service.md`
-- `RuntimeViewerOfflineService` — the XPC service each offline file (a Mach-O file, a bundle or a dyld
-  shared cache read from disk) is read in, embedded at `Contents/XPCServices/`. Its `Info.plist` declares
+- `RuntimeViewerOfflineService` — the XPC service each offline file (a Mach-O file, a bundle, a folder or
+  a dyld shared cache read from disk) is read in, embedded at `Contents/XPCServices/`. Its `Info.plist` declares
   `_MultipleInstances`: an engine reading a file connects with `RuntimeOfflineService.credential(for:)`,
   `.xpcService(.dedicatedInstance(…))`, which starts an instance of its own, and the connection's first
   `hello` names the file — `RuntimeOfflineServiceHost` reads it and installs the engine's commands before
@@ -384,7 +384,12 @@ The project uses three Swift Package Manager packages:
   file's window before the instance has read it (`RuntimeEngineManager.startReading(_:)`), which is safe
   only because a `.file` engine made with `RuntimeEngine.init(source:…)` forwards from the moment it
   exists: until its connection is up a request fails instead of being answered from the app's own
-  images. Background: `Documentations/Evolutions/0069-offline-mode.md`
+  images. **A bundle's or a folder's images are listed from their headers and opened one at a time,
+  when first asked for** (`RuntimeFileImageCatalog`, walked by `RuntimeDirectoryImageScanner`): an
+  opened image holds a file descriptor for as long as it lives and a folder can hold thousands, so
+  nothing there may open every image at once — a lookup across all of them, like the Objective-C class
+  table, opens each only for as long as it reads it. Background:
+  `Documentations/Evolutions/0069-offline-mode.md`, `Documentations/Evolutions/draft-offline-folders.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
   only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
