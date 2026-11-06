@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RuntimeViewerApplication
 
-/// `EditorLayout` arranges editor panes by Xcode 27.2's rules (proposal `draft-editor-panes`):
+/// `EditorLayout` arranges editor panes by Xcode 27.2's rules (proposal `editor-panes`):
 /// where New Editor Pane On Right / Below puts a pane, how a close collapses a child split, and the
 /// order focus moves in.
 @Suite("EditorLayout")

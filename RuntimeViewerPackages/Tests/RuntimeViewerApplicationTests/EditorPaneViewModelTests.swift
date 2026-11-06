@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerApplication
 
-/// What one editor pane's view model shows (proposal `draft-editor-panes`): its tab bar from the
+/// What one editor pane's view model shows (proposal `editor-panes`): its tab bar from the
 /// second pane or the second tab on, whether it has the focus, and the button that closes it.
 @Suite("EditorPaneViewModel")
 @MainActor

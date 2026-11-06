@@ -6,7 +6,7 @@ import RuntimeViewerCrossReferences
 @testable import RuntimeViewerApplication
 
 /// How `SelectionRoute`s change `DocumentState.editorArea`, and what follows the focused editor
-/// pane (proposal `draft-editor-panes`).
+/// pane (proposal `editor-panes`).
 @Suite("Editor area routing")
 @MainActor
 struct EditorAreaRoutingTests {

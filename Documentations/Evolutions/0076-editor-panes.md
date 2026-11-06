@@ -1,6 +1,6 @@
-# Draft - 编辑器分栏：照 Xcode 把内容区分成多个编辑器窗格
+# 0076 - 编辑器分栏：照 Xcode 把内容区分成多个编辑器窗格
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-06
 - **最后更新**: 2026-11-06
@@ -481,3 +481,5 @@ MainSplitViewController 第 1 项
 | 2026-11-06 | 标签栏那一行改用 `.fill` 分布 | 用户试用时发现只有一个标签的栏只剩一个空胶囊。UIFoundation 的 `HStackView` 在 AppKit 上默认是 NSStackView 的 `.gravityAreas`（UIFoundation 0.43.0 `StackView+Public.swift`），不拉伸任何视图，`TabBar` 只得到几点宽的适配宽度，画出来只有轨道的胶囊 |
 | 2026-11-06 | 标签栏显示时内容从栏的上沿开始，工具栏下那一条不放内容；分隔线也不画进工具栏区 | 用户试用时发现 Minimap 的竖线穿过工具栏。SourceEditor 把 Minimap 从滚动视图内容内边距的顶上排起（26.6.4 `ContentViewLayoutContainer.layoutMarginAccessories` 把它放在 `y: -topInset`，`MinimapView.performLayout()` 的分隔层铺满整个高度），内容铺满整栏时它就画进了工具栏下面；不透明的标签栏上方，向上滚的文字也会重新露出来。Xcode 的栏背景只在栏自己的范围内（`-[IDEEditorBar dvt_positionSubviewsAndSizeSelfAfterSubviewLayout]` 0x147040 把遮挡视图放在栏的原点），这里改为让内容不进那一条。只有一栏一个标签、没有标签栏时保持 8 月定下的做法，文字照旧从工具栏下滚过 |
 | 2026-11-06 | 新建的分栏与子 split view 先按所在 split view 的大小给尺寸，窗口还没排版时不均分 | 用户的控制台报了一串约束冲突，都是 `equalize(_:)` 强制排版时，新建的分栏或子 split view 宽度还是 0，栏里的标签栏与编辑器放不下。均分仍在随后那次排版里做 |
+| 2026-11-06 | 用户确认只有一栏一个标签时保持现状 | 这时没有标签栏，文字照旧从工具栏下滚过；等用户在单栏时也看到 Minimap 竖线露进工具栏，再改成一律从工具栏下沿开始 |
+| 2026-11-06 | Implemented，编号 0076 | 用户看过本地合并的效果后收尾。七个落地步骤全部完成，另加试用后的三处修正（见上面三行）。不另写实现说明与使用指南、新术语已登记，判断见前面两行；留到以后的两组内容（最大化、选栏浮层与跨栏拖动标签；标签栏照 Xcode 的三处观感）登记在提案索引的「暂缓的后续项」 |

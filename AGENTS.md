@@ -447,7 +447,7 @@ The project uses three Swift Package Manager packages:
   hands the routes to `EditorAreaCoordinator`, one `ContentCoordinator` per pane; the pane the keyboard
   focus enters becomes the focused one. A content view controller names what takes the focus through
   `EditorPaneContent.focusableView`, never `preferredFirstResponder`, which AppKitPlus's navigation
-  controller would hand the focus on every `set`. Background: `Documentations/Evolutions/draft-editor-panes.md`
+  controller would hand the focus on every `set`. Background: `Documentations/Evolutions/0076-editor-panes.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection

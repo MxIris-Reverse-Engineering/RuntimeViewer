@@ -138,7 +138,7 @@ public final class DocumentState {
 
     /// The editor area: its panes, each pane's tabs, each tab's history, how
     /// the panes are arranged and which one has the focus (proposal
-    /// `draft-editor-panes`). One value, so that no reader sees a layout and
+    /// `editor-panes`). One value, so that no reader sees a layout and
     /// a set of panes that disagree.
     ///
     /// Read-only externally: every mutation goes through `selectionRouter`,

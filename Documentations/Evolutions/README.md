@@ -88,9 +88,9 @@
 | [0073](0073-core-source-layout.md) | RuntimeViewerCore 包的源码按功能分目录，一个类型一个文件 | Implemented | 只搬文件、拆文件，不改类型名、行为与公开 API。五个 Swift target 的 152 个文件里有 39 个装了 153 个类型，`Common/`、`Core/` 与 target 根目录看不出按什么分。改为按功能分目录（`Engine/`、`Images/`、`Objects/`、`Interfaces/`、`Sections/`、`Search/`、`Relationships/`、`Bookmarks/`……），除 `private` / `fileprivate` 的辅助类型与嵌套类型外一个顶层类型一个文件；靠 `fileprivate` 互访的四组类型拆开、相关成员放宽到 `internal`。规则写进新的 `RuntimeViewerCore/Sources/AGENTS.md`。 |
 | [0074](0074-source-editor-reading-aids.md) | 内容面板接入 SourceEditor 现成的四项阅读功能 | Implemented | 复刻版 26.6.3 里还有几项现成的阅读功能没接上，接其中四项：切回对象时回到上次读到的位置（滚动位置与折叠状态一起按文本记住，带着 Find 命中打开时以定位为准）；新增 Editor ▸ Code Folding 菜单，标题与快捷键照 Xcode；从 Find 导航器打开文本命中时，查找栏带上同一个查询并高亮全部命中，焦点留在 Find 结果里；点一个标识符，同名的其他位置一起高亮（bridge 实现框架的 host extension 来回答引用查询）。只改 bridge、内容面板与主菜单，框架不动。 |
 | [0075](0075-xcode-source-editor-comparison.md) | Debug 版换用 Xcode 26.6 原版 SourceEditor，与重建版对照 | Implemented | 同一个 Debug 版 App 启动时经 `DYLD_FRAMEWORK_PATH` 改从 Xcode 26.6 加载四个原版框架（安装名与重建版相同，桥接引用的符号原版全有），桥接不改，旧的接口桩与运行时加载不恢复。新脚本 `LaunchWithXcodeSourceEditorScript.sh` 只认 26.6，启动前比对符号，另起一个实例并确认四个框架都映射自原版；Settings › Developer（只在 Debug 版）显示当前加载自哪里。App 带 hardened runtime，只在关了 SIP 的 Mac 上生效，不对外公开。 |
+| [0076](0076-editor-panes.md) | 编辑器分栏：照 Xcode 把内容区分成多个编辑器窗格 | Implemented | 照 Xcode 27.2 的 editor pane 把内容区分成多栏：File 菜单与工具栏的「加一栏」菜单在焦点栏右侧或下方开一栏，行列最多嵌套两层，插入、转向、折叠与均分的规则逆向自 Xcode。每栏有自己的标签栏（取消整窗那条，两栏以上时每栏都显示），每个标签有自己的前进后退历史；侧栏、Inspector、工具栏与 MCP 跟着焦点栏。切换镜像不再清空标签与历史；⌥-点击开新标签、⇧⌥-点击开到下一栏。最大化单栏、⌘J 选栏浮层与跨栏拖动标签留到以后。 |
 | draft | [框架的命名词云：类型名、属性名与方法名的词频](draft-naming-word-cloud.md) | Draft | 把一个镜像的类型名、属性名与方法名拆词计数，在独立窗口里画成词云。四种口径：类型名的最后一个词（Manager、Service、Session）、类型名的所有词、成员名的所有词、方法名的第一个词（set、did、will）；类名前缀按镜像统计后去掉，虚词去掉，`DataSource`、`IndexPath` 这类复合词按一个词算（有预设，可增删）。界面全部用 AppKit：字体是 SF Mono，颜色表示一个词最有代表性的那一类名字，画布比窗口大得多，拖拽、滚动与缩放浏览。点一个词列出用到它的类型或成员，点一行在主窗口打开。导出 PNG（整张画布）、CSV（词与次数）与 JSON（另带用到它的名字）。类型取自对象列表，成员取自 Find 语料，Core 只多一条 `members(in:shownUnder:)` 命令，拆词与计数在 App 一侧。 |
 | draft | [一条命令换钉住的 SourceEditor 版本，Tuist 构建前也取框架](draft-source-editor-release-update.md) | In Progress | 新脚本 `UpdateSourceEditorScript.sh` 换到指定版本或最新版：从那一版 tag 上的 `Package.swift` 取四个框架的 SHA-256 写进 `PinnedRelease.txt`，再交 `FetchSourceEditorScript.sh` 下载校验，失败就恢复原样，最后列出跨过的每一版的 Breaking 改动。`TuistScript.sh` 的 `generate`、`warm`、`build`、`check` 开始前也先取框架，和 `RunScript.sh` 一样，取不到照常往下走。顺带用新脚本把钉住的版本换到 26.6.3。 |
-| draft | [编辑器分栏：照 Xcode 把内容区分成多个编辑器窗格](draft-editor-panes.md) | In Progress | 照 Xcode 27.2 的 editor pane 把内容区分成多栏：File 菜单与工具栏的「加一栏」菜单在焦点栏右侧或下方开一栏，行列最多嵌套两层，插入、转向、折叠与均分的规则逆向自 Xcode。每栏有自己的标签栏（取消整窗那条，两栏以上时每栏都显示），每个标签有自己的前进后退历史；侧栏、Inspector、工具栏与 MCP 跟着焦点栏。切换镜像不再清空标签与历史；⌥-点击开新标签、⇧⌥-点击开到下一栏。最大化单栏、⌘J 选栏浮层与跨栏拖动标签留到以后。 |
 > 0000 采用早期格式，正文没有状态字段，按「旧文档原地不动」的约定不回填；表里的 Implemented
 > 是 2026-10-26 对照代码核实的（修复在 `RuntimeNetworkConnection.swift`）。0001 也是早期格式，
 > 但正文有英文的 Status 字段，撤回时照常更新了它。
@@ -133,6 +133,8 @@
 | 重建版 SourceEditor 过公证 | [0072](0072-reconstructed-source-editor.md) 假设「bundle ID 照抄 `com.apple.dt.*`」 | 小 | 重建版框架的 bundle ID 照抄了 Xcode 的；第一次正式发版前实测公证会不会因此被拦，被拦了再定怎么办 |
 | 重建版 SourceEditor 在 App 里的目视 | [0072](0072-reconstructed-source-editor.md) | 小 | 只跑了测试与编译（含 Release universal），没有启动 App 看过：内容区用重建版显示接口、设置页 Engine 一节的说明、Intel 上退回 `NSTextView` |
 | 桥接协议改成直接用具体类型 | [0072](0072-reconstructed-source-editor.md) 假设「`SourceEditorBridging` 先保留」 | 小到中 | 框架随 App 直接链接以后，App 里交换主题、注释装饰的那几个协议与 `@objc` 值类型可以换成具体类型 |
+| 分栏的最大化、选栏浮层与跨栏拖动标签 | [0076](0076-editor-panes.md)「非目标」 | 中 | View ▸ Editor ▸ Focus Editor Pane（⌃⇧⌘↩）把一栏最大化；Move Focus to Editor Pane…（⌘J）与 Open in…（⌥⌘,）的选栏浮层；在分栏之间拖动标签。Xcode 27.2 的规则已逆向，记在 `/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes」 |
+| 分栏标签栏照 Xcode 的三处观感 | [0076](0076-editor-panes.md)「非目标」 | 小到中 | 滚动口袋做标签栏的底、选中标签的玻璃胶囊、未聚焦栏整栏按主题变暗，以及分隔线的确切颜色。现在是近似做法：窗口背景色、降低不透明度、系统分隔线颜色；要实际运行 Xcode 逐帧比对才能定 |
 
 ## 与 `Plans/` 的关系
 

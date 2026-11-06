@@ -91,7 +91,7 @@ enum FindResultsOutline {
 /// How a Find result the user chose is opened, read off the event that chose it.
 public enum FindResultActivation {
     /// Where the result opens: with ⌥ held in a new tab — proposal `0029-find-navigator` §4 — with
-    /// ⇧⌥ in the next editor pane, otherwise in the focused tab (proposal `draft-editor-panes`).
+    /// ⇧⌥ in the next editor pane, otherwise in the focused tab (proposal `editor-panes`).
     public static func destination(for triggeringEvent: NSEvent?) -> SelectionRoute.Destination {
         SelectionRoute.Destination(listClickModifierFlags: triggeringEvent?.modifierFlags ?? [])
     }

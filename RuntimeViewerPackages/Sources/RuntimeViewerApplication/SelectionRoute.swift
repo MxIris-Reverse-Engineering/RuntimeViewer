@@ -14,7 +14,7 @@ import RuntimeViewerArchitectures
 /// to their child coordinators.
 ///
 /// The editor area holds one or more editor panes, each with tabs of its
-/// own, each tab with its own history (proposal `draft-editor-panes`). Every
+/// own, each tab with its own history (proposal `editor-panes`). Every
 /// route that does not name a tab or a pane acts on the focused pane and its
 /// active tab, the way Xcode's commands act on the last active editor.
 ///

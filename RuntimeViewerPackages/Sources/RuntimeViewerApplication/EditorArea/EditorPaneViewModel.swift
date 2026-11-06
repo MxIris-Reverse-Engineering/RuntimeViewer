@@ -9,7 +9,7 @@ import MemberwiseInit
 /// single tab: RuntimeViewer has no jump bar, which is what shows the focused
 /// pane and holds the close button in Xcode, so without it nothing would say
 /// which pane has the focus. With one pane it shows from the second tab on, as
-/// before panes existed (proposal `draft-editor-panes`).
+/// before panes existed (proposal `editor-panes`).
 public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
     public let paneID: EditorPane.ID
 
