@@ -1,6 +1,6 @@
 # Draft - Debug 版换用 Xcode 26.6 原版 SourceEditor，与重建版对照
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **实现分支**: `feature/xcode-source-editor-comparison`
 - **创建日期**: 2026-11-06
 - **最后更新**: 2026-11-06
