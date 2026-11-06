@@ -10,9 +10,40 @@ import RuntimeViewerArchitectures
 ///
 /// The content runs the whole height of the pane — under the toolbar for a pane at the top, as the
 /// content pane always has — and the tab bar floats over it: while the bar shows, the content's safe
-/// area grows by the bar's height, so its text starts below the bar and scrolls under it.
+/// area grows by the bar's height, so its text starts below the bar and scrolls under it, as in
+/// Xcode, whose editor fills its pane with the bar in its top safe area.
+///
+/// The bar's geometry is Xcode 27.2's (`-[IDEEditorBar _contentRectForBoundsWidth:returningTargetHeight:]`,
+/// IDEKit 0x146E64; RE notes "Editor panes — visuals" §3): a 28-point row of controls 8 points in from
+/// each side, 4 points below it and 4 above — none above in a pane right under the toolbar
+/// (`isToolbarAdjacent`) — so 36 points, or 32 in the top row.
 final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
-    static let tabBarHeight: CGFloat = 30
+    static let tabBarRowHeight: CGFloat = 28
+
+    static let tabBarTopPadding: CGFloat = 4
+
+    static let tabBarBottomPadding: CGFloat = 4
+
+    /// The bar's height in this pane, top padding included.
+    private var tabBarHeight: CGFloat {
+        (isToolbarAdjacent ? 0 : Self.tabBarTopPadding) + Self.tabBarRowHeight + Self.tabBarBottomPadding
+    }
+
+    /// Whether the pane's top is under the toolbar — a pane of the layout's top row — which drops the
+    /// bar's top padding.
+    private var isToolbarAdjacent = false {
+        didSet {
+            guard isToolbarAdjacent != oldValue else { return }
+            updateTabBarLayout()
+        }
+    }
+
+    private var isTabBarHidden = true {
+        didSet {
+            guard isTabBarHidden != oldValue else { return }
+            updateTabBarLayout()
+        }
+    }
 
     private let tabBarView = EditorPaneTabBarView()
 
@@ -55,8 +86,26 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         tabBarView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide)
             make.leading.trailing.equalToSuperview()
-            make.height.equalTo(Self.tabBarHeight)
+            make.height.equalTo(tabBarHeight)
         }
+        updateTabBarLayout()
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+
+        isToolbarAdjacent = view.safeAreaInsets.top > 0
+    }
+
+    /// The bar's height and padding, and the content's safe area under it.
+    private func updateTabBarLayout() {
+        guard isViewLoaded else { return }
+        tabBarView.isHidden = isTabBarHidden
+        tabBarView.topPadding = isToolbarAdjacent ? 0 : Self.tabBarTopPadding
+        tabBarView.snp.updateConstraints { make in
+            make.height.equalTo(tabBarHeight)
+        }
+        contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: isTabBarHidden ? 0 : tabBarHeight, left: 0, bottom: 0, right: 0)
     }
 
     /// A click no view inside the pane took — on the placeholder of an empty tab, say — reaches the
@@ -87,8 +136,7 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
 
         output.isTabBarHidden.driveOnNext { [weak self] isHidden in
             guard let self else { return }
-            tabBarView.isHidden = isHidden
-            contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: isHidden ? 0 : Self.tabBarHeight, left: 0, bottom: 0, right: 0)
+            isTabBarHidden = isHidden
         }
         .disposed(by: rx.disposeBag)
 
@@ -104,19 +152,36 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
 
 // MARK: - Tab Bar
 
-/// The pane's tab bar: the button that closes the pane, then the tabs.
+/// The pane's tab bar: the button that closes the pane, then the tabs, in a 28-point row 8 points in
+/// from each side of its safe area, `topPadding` below its top.
 ///
 /// A dumb view: the tabs come in as a `TabBarSnapshot`, and a selection or a close goes out as the
 /// tab's `DocumentTab.ID`, which the view model turns into a route.
 private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, TabBar.Delegate {
+    /// Xcode's close-pane button: `xmark`, 23 points wide in the row (`-[IDEEditorSplittingController
+    /// initWithEditorContext:]`, IDEKit 27.2 0x1416F0), with Xcode's tooltip and accessibility label.
     let closeButton = NSButton().then {
         $0.isBordered = false
         $0.bezelStyle = .accessoryBar
-        $0.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close Editor Pane")?
-            .withSymbolConfiguration(.init(pointSize: 11, weight: .medium))
+        $0.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close Editor Pane")
         $0.imagePosition = .imageOnly
-        $0.toolTip = "Close Editor Pane"
+        $0.toolTip = "Close this Editor Pane"
+        $0.setAccessibilityLabel("Close Editor Pane")
     }
+
+    /// The space above the row, which the pane sets: none in a pane right under the toolbar.
+    var topPadding: CGFloat = EditorPaneViewController.tabBarTopPadding {
+        didSet {
+            guard topPadding != oldValue else { return }
+            contentStackView.snp.updateConstraints { make in
+                make.top.equalToSuperview().offset(topPadding)
+            }
+        }
+    }
+
+    private static let rowHorizontalInset: CGFloat = 8
+
+    private static let closeButtonWidth: CGFloat = 23
 
     let tabSelectedRelay = PublishRelay<DocumentTab.ID>()
 
@@ -171,12 +236,14 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         }
 
         contentStackView.snp.makeConstraints { make in
-            make.top.bottom.trailing.equalToSuperview()
-            make.leading.equalToSuperview().inset(4)
+            make.top.equalToSuperview().offset(topPadding)
+            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+            make.leading.trailing.equalTo(safeAreaLayoutGuide).inset(Self.rowHorizontalInset)
         }
 
         closeButton.snp.makeConstraints { make in
-            make.width.equalTo(20)
+            make.width.equalTo(Self.closeButtonWidth)
+            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
         }
 
         tabBar.snp.makeConstraints { make in

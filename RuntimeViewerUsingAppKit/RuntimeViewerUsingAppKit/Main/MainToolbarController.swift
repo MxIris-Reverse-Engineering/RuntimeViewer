@@ -106,10 +106,11 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    /// Xcode 27.2's Add Editor toolbar item (`IDEAddEditorToolbarViewController`): a button with no
-    /// action of its own, only a menu — Tab, then Editor Pane On Right and Editor Pane Below — whose
-    /// items go up the responder chain to the key window's `MainWindowController`, as the File menu's
-    /// do. The menu shows no key equivalents, as Xcode's does not.
+    /// Xcode 27.2's Add Editor toolbar item (`IDEAddEditorToolbarViewController`): a pull-down button
+    /// with no action of its own that opens its menu on mouse-down — Tab, then Editor Pane On Right and
+    /// Editor Pane Below, with the File menu's shortcuts — whose items go up the responder chain to the
+    /// key window's `MainWindowController`, as the File menu's do. Image, label, tooltip and items are
+    /// Xcode's (`makeAddEditorButton()`, IDEKit 27.2 0xA66004; RE notes "Editor panes — visuals" §1).
     final class AddEditorToolbarItem: NSMenuToolbarItem {
         init() {
             super.init(itemIdentifier: .Main.addEditor)
@@ -117,14 +118,14 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             paletteLabel = "Add Editor"
             toolTip = "Add Editor Tabs or Editor Panes"
             showsIndicator = false
-            image = NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: "Add Editor")
+            image = NSImage(systemSymbolName: "plus.rectangle.on.rectangle", accessibilityDescription: "Add Editor")
             menu = NSMenu {
-                NSMenuItem("Tab", action: #selector(MainWindowController.newTab(_:)))
-                    .image(NSImage(systemSymbolName: "plus.rectangle.on.rectangle", accessibilityDescription: nil))
+                NSMenuItem("Tab", action: #selector(MainWindowController.newTab(_:)), keyEquivalent: "t", modifiers: [.command])
+                    .image(SFSymbols(name: RuntimeViewerSymbols.tabbarTopRectangle).nsImage)
                 NSMenuItem.separator()
-                NSMenuItem("Editor Pane On Right", action: #selector(MainWindowController.newEditorPaneOnRight(_:)))
+                NSMenuItem("Editor Pane On Right", action: #selector(MainWindowController.newEditorPaneOnRight(_:)), keyEquivalent: "t", modifiers: [.control, .command])
                     .image(NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: nil))
-                NSMenuItem("Editor Pane Below", action: #selector(MainWindowController.newEditorPaneBelow(_:)))
+                NSMenuItem("Editor Pane Below", action: #selector(MainWindowController.newEditorPaneBelow(_:)), keyEquivalent: "t", modifiers: [.control, .option, .command])
                     .image(NSImage(systemSymbolName: "inset.filled.bottomhalf.rectangle", accessibilityDescription: nil))
             }
         }

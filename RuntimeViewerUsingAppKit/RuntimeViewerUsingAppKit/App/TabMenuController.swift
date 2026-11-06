@@ -81,23 +81,32 @@ final class TabMenuController: NSObject {
 // MARK: - NSMenuDelegate
 
 extension TabMenuController: NSMenuDelegate {
-    /// Re-keys ⌘W per key window, Safari-style. AppKit fully updates a menu
+    /// Re-keys and retitles ⌘W per key window. AppKit fully updates a menu
     /// through this delegate method before matching key equivalents, so the
     /// re-keying applies to both the visible menu and the shortcut path.
     ///
-    /// - Document window key (its responder chain answers `closeTab(_:)`):
-    ///   Close Tab = ⌘W, Close Window = ⌘⇧W.
+    /// - Document window key (its responder chain answers `closeTab(_:)`) with
+    ///   a tab or an editor pane to close: the ⌘W item is titled for it, as
+    ///   Xcode titles its own — Close Tab or Close Editor Pane — and Close
+    ///   Window = ⌘⇧W.
+    /// - Document window key with nothing but the window to close: the ⌘W item
+    ///   hides, and Close Window takes ⌘W, where Xcode titles its item Close
+    ///   Window — two items of that title would differ only in their keys.
     /// - Any other window (Settings, About, panels): Close Tab loses its key
     ///   equivalent (the item is disabled anyway) and Close Window takes ⌘W
     ///   back, so ⌘W still closes those windows instead of beeping.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let keyWindowHandlesTabs = NSApp.target(forAction: #selector(MainWindowController.closeTab(_:))) != nil
-        if keyWindowHandlesTabs {
+        let windowController = NSApp.target(forAction: #selector(MainWindowController.closeTab(_:))) as? MainWindowController
+        if let closeTabTitle = windowController?.closeTabMenuItemTitle {
+            closeTabItem?.title = closeTabTitle
+            closeTabItem?.isHidden = false
             closeTabItem?.keyEquivalent = "w"
             closeTabItem?.keyEquivalentModifierMask = [.command]
             closeWindowItem?.keyEquivalent = "w"
             closeWindowItem?.keyEquivalentModifierMask = [.command, .shift]
         } else {
+            closeTabItem?.title = "Close Tab"
+            closeTabItem?.isHidden = windowController != nil
             closeTabItem?.keyEquivalent = ""
             closeWindowItem?.keyEquivalent = "w"
             closeWindowItem?.keyEquivalentModifierMask = [.command]

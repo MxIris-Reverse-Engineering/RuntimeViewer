@@ -344,6 +344,20 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         }
     }
 
+    /// The title of ⌘W for what `closeTab(_:)` closes now, the titles Xcode gives its item
+    /// (`-[IDEWorkspaceWindow menuItemTitleForCloseEditorTabBehavior:]`); `nil` when it closes the
+    /// window, which File ▸ Close Window then does under ⌘W (`TabMenuController`).
+    var closeTabMenuItemTitle: String? {
+        switch documentState.editorArea.closeTarget {
+        case .tab:
+            "Close Tab"
+        case .pane:
+            "Close Editor Pane"
+        case .window:
+            nil
+        }
+    }
+
     @objc func selectNextTab(_ sender: Any?) {
         selectTab(offsetFromActiveTab: 1)
     }

@@ -17,9 +17,9 @@ import RuntimeViewerArchitectures
 /// round, a pane that takes the focus through a command or a route gets the keyboard focus too
 /// (`focus(_:movingKeyboardFocus:)`).
 final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
-    /// The narrowest a pane gets while a divider is dragged; the divider stops there and pushes
-    /// nothing, as in Xcode.
-    static let minimumPaneExtent: CGFloat = 160
+    /// The narrowest a pane gets while a divider is dragged — Xcode's `IDEEditorSplitMinimumSize` —
+    /// along the split's axis; the divider stops there and pushes nothing, as in Xcode.
+    static let minimumPaneExtent: CGFloat = 200
 
     private let rootSplitView = EditorSplitView()
 
@@ -245,8 +245,11 @@ final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
 // MARK: - NSSplitViewDelegate
 
 extension EditorAreaViewController: NSSplitViewDelegate {
+    /// Xcode counts a divider's thickness into the minimum of the pane before it, so that pane keeps
+    /// 203 points and the one after the divider 200 (IDEKit 27.2 0x13E454; RE notes "Editor panes —
+    /// visuals" §5).
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        proposedMinimumPosition + Self.minimumPaneExtent
+        proposedMinimumPosition + Self.minimumPaneExtent + splitView.dividerThickness
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
@@ -256,8 +259,20 @@ extension EditorAreaViewController: NSSplitViewDelegate {
 
 // MARK: - Split View
 
-/// A split view of the editor area: thin dividers between panes, as Xcode's editor split view has.
+/// A split view of the editor area, Xcode's `IDEEditorSplitView`: the thin divider style, 3 points
+/// thick (`-[IDEEditorMultipleSplit loadView]`, IDEKit 27.2 0x13C3A0).
+///
+/// Xcode draws the divider in an opaque colour its editor theme computes for the appearance and for
+/// whether the pane is active; the separator colour stands in for it.
 final class EditorSplitView: NSSplitView {
+    override var dividerThickness: CGFloat {
+        3
+    }
+
+    override var dividerColor: NSColor {
+        .separatorColor
+    }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         dividerStyle = .thin
