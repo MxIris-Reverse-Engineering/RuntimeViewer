@@ -177,13 +177,3 @@ open class BaseEffectViewController<ViewModel: ViewModelProtocol>: BaseViewContr
 
     open override var containerView: NSView { effectView }
 }
-
-open class BaseNavigationController: NSNavigationController {
-    open override func viewDidLoad() {
-        super.viewDidLoad()
-
-        isToolbarHidden = true
-        isNavigationBarHidden = true
-        interactivePopGestureRecognizer?.isEnabled = false
-    }
-}
