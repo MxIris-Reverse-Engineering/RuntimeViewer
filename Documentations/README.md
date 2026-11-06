@@ -31,7 +31,7 @@
 
 - [`CommandLineInterface.md`](Guides/CommandLineInterface.md) —— `runtime-viewer-cli` 的命令一览、类型 / 镜像 / 来源的解析规则、必须遵守的契约（相对路径在客户端解析、Debug / Release 成对、host 空闲退出、退出码）、CLI host 的文件布局、App 优先与接管、attach 的前提与手动验证清单。
 
-- [`OfflineMode.md`](Guides/OfflineMode.md) —— 离线读 Mach-O 文件、`.app` / `.framework` 包与 dyld shared cache：能打开什么、从哪打开，依赖 cache 怎么配对与更换，每个文件一个进程、无人使用 30 秒后停放，哪些功能不支持，离线 cache 的派生数据。
+- [`OfflineMode.md`](Guides/OfflineMode.md) —— 离线读 Mach-O 文件、`.app` / `.framework` 包、文件夹与 dyld shared cache：能打开什么、从哪打开，包和文件夹列出什么、只在用到时打开二进制，依赖 cache 怎么配对与更换，每个文件一个进程、无人使用 30 秒后停放，哪些功能不支持，离线 cache 的派生数据。
 - [`JailbrokenDeviceInjection.md`](Guides/JailbrokenDeviceInjection.md) —— 注入越狱 iOS 设备上的进程：三条 entitlement 前提、网络方向是「设备连 Mac」（防火墙与虚拟机网络模式的要求）、越狱版必须在设备屏幕上、能注什么不能注什么，以及每条错误文案该怎么读。
 
 - [`TuistDevelopment.md`](Guides/TuistDevelopment.md) —— Tuist 开发 workspace（`RuntimeViewer-Tuist.xcworkspace`）：第一次使用与日常命令、必须用与原生锁文件相同的 Xcode、只能用 `RuntimeViewer macOS` scheme 构建 App、构建设置只写在 xcconfig 里、改原生工程时同批同步并跑 `./TuistScript.sh check`（逐项说明它查什么）、存放位置、与原生构建的已知差异，以及清单里各处绕开 Tuist 限制的写法为什么不能改。

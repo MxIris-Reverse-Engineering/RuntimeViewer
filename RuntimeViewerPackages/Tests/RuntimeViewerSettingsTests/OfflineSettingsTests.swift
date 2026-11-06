@@ -63,6 +63,25 @@ struct OfflineSettingsTests {
         #expect(Self.path(of: withSimulator.defaultDependencyCache(for: Self.file(platform: "iOSSimulator"))) == Self.cache("iOSSimulator", "27.0").path)
     }
 
+    @Test("A folder is offered every registered cache and this Mac's, whatever its first binary was built for")
+    func foldersAreOfferedEveryCache() {
+        let offline = Settings.Offline(dependencyCaches: [Self.cache("iOS", "27.0"), Self.cache("tvOS", "27.0")])
+        let folder = Self.file(platform: "iOS", content: .folder)
+
+        #expect(offline.dependencyCaches(for: folder).map(\.platformName) == ["iOS", "tvOS"])
+        #expect(Settings.Offline.canPairWithThisMacsCache(folder))
+    }
+
+    @Test("A file or a bundle is offered the caches of its own platform, and this Mac's only when it was built for macOS or Mac Catalyst")
+    func filesAreOfferedTheirPlatformsCaches() {
+        let offline = Settings.Offline(dependencyCaches: [Self.cache("iOS", "27.0"), Self.cache("tvOS", "27.0")])
+
+        #expect(offline.dependencyCaches(for: Self.file(platform: "iOS", content: .bundle)).map(\.platformName) == ["iOS"])
+        #expect(!Settings.Offline.canPairWithThisMacsCache(Self.file(platform: "iOS", content: .bundle)))
+        #expect(Settings.Offline.canPairWithThisMacsCache(Self.file(platform: "macCatalyst")))
+        #expect(!Settings.Offline.canPairWithThisMacsCache(Self.file(platform: "macOS", content: .dyldSharedCache)), "a cache is its own")
+    }
+
     @Test("A cache, a file of another platform with nothing registered, or a file that names no platform reads alone")
     func otherwiseTheFileReadsAlone() {
         let offline = Settings.Offline(dependencyCaches: [Self.cache("iOS", "27.0")])

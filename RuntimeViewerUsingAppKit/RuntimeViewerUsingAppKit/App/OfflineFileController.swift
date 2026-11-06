@@ -8,8 +8,9 @@ import RuntimeViewerSettings
 import Dependencies
 import DependenciesMacros
 
-/// Opens a Mach-O file, a bundle or a dyld shared cache offline: in a window on
-/// an engine that reads it, in an instance of the offline service of its own.
+/// Opens a Mach-O file, a bundle, a folder or a dyld shared cache offline: in a
+/// window on an engine that reads it, in an instance of the offline service of
+/// its own.
 ///
 /// `DocumentController` hands every file that is not a RuntimeViewer document
 /// here — File › Open…, Open Recent and the Dock alike — and the runtime source
@@ -119,18 +120,22 @@ final class OfflineFileController {
 
     /// What `engine`'s file can read its dependencies from: this Mac's cache
     /// for a macOS or Mac Catalyst file, the registered caches of its
-    /// platform, and nothing — the file alone. Empty for a dyld shared cache,
-    /// which is its own.
+    /// platform, and nothing — the file alone. A folder, which can hold
+    /// binaries of several platforms, is offered this Mac's cache and every
+    /// registered one, each named with its platform. Empty for a dyld shared
+    /// cache, which is its own.
     func dependencyCacheChoices(for engine: RuntimeEngine) -> [DependencyCacheChoice] {
         guard let file = runtimeEngineManager.offlineFile(of: engine) else { return [] }
         if case .dyldSharedCache = file.content { return [] }
         var choices: [DependencyCacheChoice] = []
-        if let platform = file.platform, Settings.Offline.platformNamesPairedWithThisMac.contains(platform.name) {
+        if Settings.Offline.canPairWithThisMacsCache(file) {
             choices.append(DependencyCacheChoice(title: "This Mac's Dyld Shared Cache", dependencyCache: .systemDyldSharedCache, isCurrent: file.dependencyCache == .systemDyldSharedCache))
         }
-        for cache in settings.offline.dependencyCaches(forPlatformNamed: file.platform?.name ?? "") {
+        let namesPlatforms = file.content == .folder
+        for cache in settings.offline.dependencyCaches(for: file) {
             let dependencyCache = RuntimeOfflineFile.DependencyCache.dyldSharedCache(URL(fileURLWithPath: cache.path))
-            choices.append(DependencyCacheChoice(title: "\(cache.version) (\(cache.architecture)) — \(URL(fileURLWithPath: cache.path).deletingLastPathComponent().lastPathComponent)", dependencyCache: dependencyCache, isCurrent: file.dependencyCache == dependencyCache))
+            let version = namesPlatforms ? "\(cache.platformName) \(cache.version)" : cache.version
+            choices.append(DependencyCacheChoice(title: "\(version) (\(cache.architecture)) — \(URL(fileURLWithPath: cache.path).deletingLastPathComponent().lastPathComponent)", dependencyCache: dependencyCache, isCurrent: file.dependencyCache == dependencyCache))
         }
         choices.append(DependencyCacheChoice(title: "None", dependencyCache: nil, isCurrent: file.dependencyCache == nil))
         return choices
