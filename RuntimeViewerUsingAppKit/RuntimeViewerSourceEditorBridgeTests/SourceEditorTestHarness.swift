@@ -81,7 +81,23 @@ final class SourceEditorTestHarness {
             showsMinimap: false,
             showsScopeGuides: false,
             showsInvisibles: false,
-            showsMarkSeparators: false
+            showsMarkSeparators: false,
+            showsInsertionPoint: false
+        )
+    }
+
+    /// Turns the caret on or off, the way the content pane does when Settings › Editor ›
+    /// Insertion Point changes. Every other option is passed as `init` leaves it.
+    func showInsertionPoint(_ showsInsertionPoint: Bool) {
+        bridge.applyDisplayOptions(
+            showsLineNumbers: true,
+            showsFoldingRibbon: false,
+            showsStickyHeaders: false,
+            showsMinimap: false,
+            showsScopeGuides: false,
+            showsInvisibles: false,
+            showsMarkSeparators: false,
+            showsInsertionPoint: showsInsertionPoint
         )
     }
 

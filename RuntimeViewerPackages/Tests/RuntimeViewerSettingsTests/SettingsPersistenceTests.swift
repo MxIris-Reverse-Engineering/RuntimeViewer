@@ -198,6 +198,26 @@ struct SettingsPersistenceTests {
         #expect(settings.editor.showsFoldingRibbon == true)
     }
 
+    /// Settings files written before the Insertion Point switch existed keep the caret hidden, as
+    /// the content pane drew it when they were written.
+    @Test("an editor payload without the insertion point switch keeps the caret hidden")
+    func editorPayloadWithoutInsertionPointKeepsTheCaretHidden() throws {
+        let data = Data(
+            """
+            {
+              "editor": {
+                "showsMinimap": true
+              }
+            }
+            """.utf8
+        )
+
+        let settings = try JSONDecoder().decode(Settings.self, from: data)
+
+        #expect(settings.editor.showsInsertionPoint == false)
+        #expect(settings.editor.showsMinimap == true)
+    }
+
     @Test("dependency access writes through the UIFoundation store")
     func dependencyAccessWritesAndAutoSaves() async throws {
         let storage = InMemorySettingsStorage()

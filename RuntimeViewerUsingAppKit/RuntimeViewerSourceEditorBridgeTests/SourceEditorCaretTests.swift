@@ -7,14 +7,16 @@ import SourceEditor
 @testable import RuntimeViewerSourceEditorBridge
 import Testing
 
-/// The content pane shows an interface that cannot be edited, so it draws no caret — a blinking
-/// one reads as an invitation to type — while text can still be selected and copied.
+/// The content pane shows an interface that cannot be edited, so by default it draws no caret — a
+/// blinking one reads as an invitation to type — while text can still be selected and copied.
+/// Settings › Editor › Insertion Point brings the caret back.
 ///
 /// The bridge disables editing and turns on `hideCursorWhenEditingDisabled`; with both,
 /// `SourceEditorSelectionDisplay.update()` stops the blink and leaves every cursor layer at an
-/// opacity of 0, and draws selections as before. Each test focuses the editor in a window that
-/// acts as the key window, because the display draws nothing as active anywhere else, and a caret
-/// that is transparent only because the editor is inactive would pass for a hidden one.
+/// opacity of 0, and draws selections as before. The setting reaches the bridge as a display
+/// option and turns the switch off again. Each test focuses the editor in a window that acts as
+/// the key window, because the display draws nothing as active anywhere else, and a caret that is
+/// transparent only because the editor is inactive would pass for a hidden one.
 @Suite("SourceEditorCaret", .serialized)
 @MainActor
 struct SourceEditorCaretTests {
@@ -44,19 +46,44 @@ struct SourceEditorCaretTests {
         )
     }
 
-    /// The control for the test above: with the switch off, the same insertion point draws a
-    /// visible caret, so an opacity of 0 there is the switch's doing and not an inactive display.
+    /// Turning the setting on shows the caret at the insertion point already there, without a new
+    /// click. It is also the control for the test above: the same insertion point draws a visible
+    /// caret, so an opacity of 0 there is the setting's doing and not an inactive display.
     @Test
-    func theCaretShowsWithoutTheSwitch() throws {
+    func turningTheSettingOnShowsTheCaret() throws {
         let harness = try Self.focusedHarness()
-        harness.editorView.hideCursorWhenEditingDisabled = false
         harness.select(Self.insertionPoint ..< Self.insertionPoint)
+        harness.layout()
+
+        harness.showInsertionPoint(true)
         harness.layout()
 
         let cursorLayers = harness.layers(ofClassNamed: Self.cursorLayerClassName)
         try #require(!cursorLayers.isEmpty, "the editor made no cursor layer for the insertion point")
         #expect(
             cursorLayers.contains { $0.opacity == 1 },
+            "cursor opacities: \(cursorLayers.map(\.opacity))"
+        )
+    }
+
+    @Test
+    func turningTheSettingOffAgainHidesTheCaret() throws {
+        let harness = try Self.focusedHarness()
+        harness.showInsertionPoint(true)
+        harness.select(Self.insertionPoint ..< Self.insertionPoint)
+        harness.layout()
+        try #require(
+            harness.layers(ofClassNamed: Self.cursorLayerClassName).contains { $0.opacity == 1 },
+            "the caret did not show with the setting on"
+        )
+
+        harness.showInsertionPoint(false)
+        harness.layout()
+
+        let cursorLayers = harness.layers(ofClassNamed: Self.cursorLayerClassName)
+        try #require(!cursorLayers.isEmpty, "the editor made no cursor layer for the insertion point")
+        #expect(
+            cursorLayers.allSatisfy { $0.opacity == 0 },
             "cursor opacities: \(cursorLayers.map(\.opacity))"
         )
     }

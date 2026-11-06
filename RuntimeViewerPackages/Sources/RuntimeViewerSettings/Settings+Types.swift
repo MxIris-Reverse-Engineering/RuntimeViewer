@@ -126,6 +126,13 @@ extension Settings {
         @Default(true)
         public var showsCommentTags: Bool
 
+        /// Draws the blinking caret where a click leaves the insertion point. Off by default: an
+        /// interface cannot be typed into, and a caret only suggests that it can. The insertion
+        /// point is there either way — the arrow keys move it and ⇧-arrows extend a selection
+        /// from it — so this decides only whether it is drawn.
+        @Default(false)
+        public var showsInsertionPoint: Bool
+
         public static let `default` = Self()
     }
 
