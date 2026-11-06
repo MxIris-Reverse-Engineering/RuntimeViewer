@@ -43,7 +43,7 @@ struct DeveloperSettingsView: View {
             } header: {
                 Text("SourceEditor")
             } footer: {
-                Text("The copy of the SourceEditor frameworks this instance runs on, shown whether or not developer options are on. To compare the reconstruction with Xcode's original, run LaunchWithXcodeSourceEditorScript.sh from the repository: it starts another instance of a Debug build on Xcode 26.6's own frameworks.")
+                Text("The copy of the SourceEditor frameworks this instance runs on, shown whether or not developer options are on. To compare the reconstruction with Xcode's original, run LaunchWithXcodeSourceEditorScript.sh from the repository on a Mac with System Integrity Protection off: it starts another instance on Xcode 26.6's own frameworks.")
             }
         }
     }

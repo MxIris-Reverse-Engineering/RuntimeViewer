@@ -7,7 +7,7 @@
 
 ## 摘要
 
-[0072](0072-reconstructed-source-editor.md) 之后，内容面板只用随 App 带上的重建版 SourceEditor，再也看不到 Xcode 原版的表现，没法拿两者对照。本提案给开发者一条路：同一个 Debug 版 App，启动时让 dyld 改从 Xcode 26.6 加载四个原版框架，桥接层不用改；可以和正常启动的实例同时开着，左右对比。Release 版用不了，设置界面里也看不到，不对外公开。
+[0072](0072-reconstructed-source-editor.md) 之后，内容面板只用随 App 带上的重建版 SourceEditor，再也看不到 Xcode 原版的表现，没法拿两者对照。本提案给开发者一条路：同一个 Debug 版 App，启动时让 dyld 改从 Xcode 26.6 加载四个原版框架，桥接层不用改；可以和正常启动的实例同时开着，左右对比。设置界面里没有入口，只有 Debug 版的 Developer 页显示当前用的是哪一份；它也只在关了 SIP（系统完整性保护）的 Mac 上生效，不对外公开。
 
 ## 方案
 
@@ -23,9 +23,9 @@
 - 启动前检查：
   - 四个框架都在。
   - 再比对一次符号，App 里桥接引用的符号原版缺哪个就列出来、退出，不让 dyld 在启动时才崩。
-  - 确认 App 能被调试（签名带 `get-task-allow`）或者没签名；发版签名的 App 会忽略这个变量，照样加载重建版，所以拒绝它。
 - 在临时目录里放四个指向 Xcode 里原版框架的符号链接，只放这四个：直接指向整个 `SharedFrameworks` 的话，里面同名的别的框架也会被换掉。
-- 带着 `DYLD_FRAMEWORK_PATH` 另起一个实例（`open -n`），然后看这个进程实际映射的是哪一份 `SourceEditor`，打印出来；不是原版就报错。
+- 带着 `DYLD_FRAMEWORK_PATH` 另起一个实例（`open -n --env`），然后看这个进程实际映射的四个框架各是哪一份，打印出来；有一个不是原版，就退出那个实例并报错。
+- 在哪里生效：App 带 hardened runtime，Apple 文档写明这时 dyld 只对带 `com.apple.security.cs.allow-dyld-environment-variables` 权限的 App 读 `DYLD_` 变量，RuntimeViewer 的构建都不带。关了 SIP 的 Mac 上 dyld 照样读：两台开发机都关了 SIP，实测不论怎么签名都生效。按文档，SIP 开着的 Mac 上都不生效（没实测）。
 
 **三、App 里看得到当前用的是哪一份**
 - `SourceEditorFrameworks` 加回 0072 删掉的 `loadedFrameworksDirectory()`（扫 dyld 已加载的镜像，找 `SourceEditor.framework/Versions/A/SourceEditor`），再把目录归成三类：App 自带的重建版、某个 Xcode 的原版（带版本号）、其他位置。
@@ -38,9 +38,7 @@
 **没问就采用的假设**
 - 两个实例共用同一份设置文件，后启动的那个会接管命令行工具的 host 和 MCP 桥。拿来对照没有影响，文档里写明。
 - 窗口里不加标记；分不清两个窗口时，看 Developer 页或脚本的输出。
-- 验证在 Ultra 上做：
-  - 编 Debug 版 App，用临时签名模拟开发签名（hardened runtime 加 `get-task-allow`），用脚本启动，确认加载的是原版，再退出。这会在 Ultra 的屏幕上开一次 App。
-  - 再用不带 `get-task-allow` 的签名确认脚本会拒绝。
+- 验证在 Ultra 上做，用替身 App 而不是完整的 App（原因见决策日志）：只装 bridge 和四个重建版框架、可执行文件只链接 bridge，按 App 的方式签名，用脚本启动，确认四个框架都来自 Xcode 26.6，再退出。
 
 ## 决策日志
 | 日期 | 决定 | 理由 |
@@ -48,3 +46,5 @@
 | 2026-11-06 | Created as Draft | 用户要在 RuntimeViewer 里重新用上 Xcode 原版 SourceEditor，与重建版对照，只给自己用、不对外公开 |
 | 2026-11-06 | 用启动脚本换框架，不恢复 0009 的运行时加载；放进 `next`，只在 Debug 版可用；只支持 Xcode 26.6 | 用户在三个选项里都选了推荐的做法：换框架不用改桥接，两个实例能同时开；26.6 与重建版同一版本，符号全部对得上，27 少的符号要另改桥接 |
 | 2026-11-06 | 用户批准，状态改为 Accepted，开始实现 | 照方案与假设执行，包括在 Ultra 上启动一次 App 确认加载的是原版 |
+| 2026-11-06 | 不在 Ultra 上开完整的 App，改用替身 App 验证 | Ultra 上开着一个从 Xcode 调试运行的 RuntimeViewer-Debug。再开一个完整的 App 会接管它的命令行工具 host 和 MCP 桥，退出时还会删掉它们的文件，用户那个实例就用不了了。替身只装 bridge 和四个重建版框架，可执行文件只链接 bridge，签名方式与 App 相同（临时签名、hardened runtime、`disable-library-validation`），dyld、权限和 LaunchServices 这一路与真实 App 一样 |
+| 2026-11-06 | 去掉启动前「发版签名就拒绝」的检查，改为启动后核对四个框架都来自 Xcode | 方案原先以为 dyld 只对带 `get-task-allow` 的 hardened App 读这个变量。实测不是这样：替身改用不带 `get-task-allow` 的签名后，用 `open -n --env` 照样加载了 Xcode 的四个框架，因为两台开发机都关了 SIP。Apple 文档写的条件是 `com.apple.security.cs.allow-dyld-environment-variables` 权限，没有提 `get-task-allow`。所以真正说了算的只有启动后的核对 |

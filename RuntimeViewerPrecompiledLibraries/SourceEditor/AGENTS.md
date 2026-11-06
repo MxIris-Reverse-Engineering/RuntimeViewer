@@ -118,8 +118,8 @@ it.
 
 ## Running a Debug build on Xcode's original
 
-`./LaunchWithXcodeSourceEditorScript.sh` starts another instance of a Debug build — `RunScript.sh`'s, or
-the one `--app` names — on Xcode 26.6's own frameworks, so that it can be compared side by side with an
+`./LaunchWithXcodeSourceEditorScript.sh` starts another instance of a build — `RunScript.sh`'s, or the
+one `--app` names — on Xcode 26.6's own frameworks, so that it can be compared side by side with an
 instance on the reconstruction. Background: `Documentations/Evolutions/draft-xcode-source-editor-comparison.md`.
 
 - **Why it works without changing the app.** Xcode 26.6's four frameworks depend only on each other and
@@ -127,11 +127,15 @@ instance on the reconstruction. Background: `Documentations/Evolutions/draft-xco
   `DYLD_FRAMEWORK_PATH`, which dyld searches before any rpath, at a directory of links to exactly those
   four — the whole `SharedFrameworks` would substitute every other framework found there by name — and
   the same app and bridge load Xcode's copies instead of the ones in `Contents/Frameworks`.
-- **What it checks.** Before launching: every symbol the bridge imports from the four, weak references
-  aside, is exported by Xcode's copies, or dyld would stop the app at launch; and the app is unsigned, not
-  hardened, or carries `get-task-allow` — a release's signature makes dyld ignore the variable and run on
-  the reconstruction. After launching it reads which `SourceEditor` binary the new instance mapped, and
-  quits the instance when it is not Xcode's.
+- **What it checks.** Before launching, that every symbol the bridge imports from the four, weak
+  references aside, is exported by Xcode's copies, or dyld would stop the app at launch. After launching,
+  which copies of the four the new instance mapped; it quits the instance when any of them is not Xcode's.
+- **Where it works.** The app has the hardened runtime, and Apple documents that dyld then reads `DYLD_`
+  variables only for an app with the `com.apple.security.cs.allow-dyld-environment-variables`
+  entitlement, which no RuntimeViewer build carries. With System Integrity Protection off, as on both
+  development Macs, dyld takes the variable anyway: on 2026-11-06 a hardened stand-in signed without
+  `get-task-allow` or that entitlement loaded Xcode's four frameworks. So it works on a Mac with SIP off
+  whatever the build, and — by Apple's documentation, not measured — on no Mac with SIP on.
 - **Xcode 26.6 only.** On 2026-11-06 the bridge imported 225 symbols from the four, all exported by Xcode
   26.6; Xcode 27.2 lacked three — `SourceEditorView`'s conformance to `TextFindableDisplayable`, that
   protocol's `perform(_:)`, and the requirement `NodeTypeAdjuster.adjustNodeType(for:)`, whose signature 27

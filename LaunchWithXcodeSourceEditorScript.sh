@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LaunchWithXcodeSourceEditorScript.sh — Start a Debug build of RuntimeViewer on Xcode 26.6's own
+# LaunchWithXcodeSourceEditorScript.sh — Start a build of RuntimeViewer on Xcode 26.6's own
 # SourceEditor frameworks instead of the reconstruction the app carries, to compare the two.
 #
 # The app links the reconstruction, a rebuild of Xcode 26.6's SourceEditor, SourceModel,
@@ -10,9 +10,13 @@
 # links go in a directory of their own because Xcode's SharedFrameworks holds many other frameworks
 # that the variable would substitute as well.
 #
-# Only for builds that can be debugged: dyld ignores the variable in a hardened app without
-# get-task-allow, which is how releases are signed, so this script refuses them. Only Xcode 26.6:
-# the reconstruction rebuilds that version, and Xcode 27's frameworks lack symbols the bridge uses.
+# Only where dyld takes the variable. RuntimeViewer's builds have the hardened runtime, and Apple
+# documents that dyld then reads DYLD_ variables only for an app carrying the
+# com.apple.security.cs.allow-dyld-environment-variables entitlement, which none of them does; on a
+# Mac with System Integrity Protection off, as both development Macs are, dyld took it from a
+# hardened build without that entitlement too (measured 2026-11-06). The script checks which
+# frameworks the new instance mapped and quits it when they are not Xcode's. Only Xcode 26.6: the
+# reconstruction rebuilds that version, and Xcode 27's frameworks lack symbols the bridge uses.
 #
 # The new instance runs beside any other: both read the same settings, and the one started last
 # takes over the command-line tool's host and the MCP bridge. Settings › Developer shows which
@@ -62,7 +66,7 @@ while [[ $# -gt 0 ]]; do
         --app) APP_PATH="$2"; shift 2;;
         --xcode) XCODE_PATH="$2"; shift 2;;
         --dry-run) DRY_RUN=true; shift;;
-        -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+        -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -131,36 +135,6 @@ BRIDGE_BINARY="$APP_PATH/Contents/Frameworks/$BRIDGE_NAME.framework/Versions/A/$
 otool -arch arm64 -L "$BRIDGE_BINARY" 2>/dev/null | grep -q '/SourceEditor.framework/' \
     || fail "this build links no SourceEditor (built without the reconstruction, or not for arm64), so there is nothing to swap"
 
-# dyld honours DYLD_FRAMEWORK_PATH unless the app is hardened and cannot be debugged.
-check_dyld_honours_environment() {
-    local signature
-    signature=$(codesign --display --verbose=2 "$APP_PATH" 2>&1 || true)
-    if [[ "$signature" == *"code object is not signed at all"* ]]; then
-        log "Signature: none, so nothing restricts dyld's environment"
-        return
-    fi
-    # codesign prints the flags as: CodeDirectory v=... flags=0x10000(runtime) hashes=...
-    local runtime_flag_pattern='flags=0x[0-9a-f]+\([^)]*runtime'
-    if [[ ! "$signature" =~ $runtime_flag_pattern ]]; then
-        log "Signature: no hardened runtime, so nothing restricts dyld's environment"
-        return
-    fi
-    local entitlements_file
-    entitlements_file=$(mktemp)
-    codesign --display --entitlements - --xml "$APP_PATH" > "$entitlements_file" 2>/dev/null || true
-    local entitlement
-    for entitlement in com.apple.security.get-task-allow com.apple.security.cs.allow-dyld-environment-variables; do
-        if [[ "$(/usr/libexec/PlistBuddy -c "Print :$entitlement" "$entitlements_file" 2>/dev/null || true)" == "true" ]]; then
-            rm -f "$entitlements_file"
-            log "Signature: hardened runtime with $entitlement"
-            return
-        fi
-    done
-    rm -f "$entitlements_file"
-    fail "$APP_PATH is hardened and cannot be debugged, as releases are signed: dyld would ignore DYLD_FRAMEWORK_PATH and run it on the reconstruction. Use a Debug build"
-}
-check_dyld_honours_environment
-
 # Every symbol the bridge takes from the four frameworks has to be in Xcode's copies, or dyld stops
 # the app at launch. Weak references may be missing.
 check_symbols() {
@@ -210,27 +184,34 @@ fi
 existing_process_identifiers=$(instance_process_identifiers)
 open -n --env "DYLD_FRAMEWORK_PATH=$LINK_DIRECTORY" "$APP_PATH"
 
-# The new instance, and the SourceEditor binary it mapped. dyld maps the frameworks before main, so
-# once the binary shows up it is the one this instance runs on.
+# The new instance, and the four frameworks it mapped. dyld maps them before main, so once
+# SourceEditor shows up the instance runs on whichever copies it lists.
+mapped_framework_binaries() {
+    lsof -p "$1" -Fn 2>/dev/null | sed -n 's/^n//p' \
+        | grep -E '/(SourceEditor|SourceModel|SourceModelSupport|_CodeCompletionFoundation)\.framework/Versions/A/' || true
+}
+
 process_identifier=""
-loaded_binary=""
+mapped_binaries=""
 for (( attempt = 0; attempt < LAUNCH_TIMEOUT_SECONDS * 2; attempt++ )); do
     if [[ -z "$process_identifier" ]]; then
         process_identifier=$(comm -13 <(echo "$existing_process_identifiers") <(instance_process_identifiers) | head -1)
     fi
     if [[ -n "$process_identifier" ]]; then
-        loaded_binary=$(lsof -p "$process_identifier" -Fn 2>/dev/null | sed -n 's/^n//p' \
-            | grep '/SourceEditor\.framework/Versions/A/SourceEditor$' | head -1 || true)
-        [[ -n "$loaded_binary" ]] && break
+        mapped_binaries=$(mapped_framework_binaries "$process_identifier")
+        [[ "$mapped_binaries" == *"/SourceEditor.framework/Versions/A/SourceEditor"* ]] && break
     fi
     sleep 0.5
 done
 [[ -n "$process_identifier" ]] || fail "the new instance did not show up within $LAUNCH_TIMEOUT_SECONDS seconds"
-[[ -n "$loaded_binary" ]] \
+[[ "$mapped_binaries" == *"/SourceEditor.framework/Versions/A/SourceEditor"* ]] \
     || fail "instance $process_identifier mapped no SourceEditor within $LAUNCH_TIMEOUT_SECONDS seconds; it is still running"
 
-if [[ "$loaded_binary" != "$SHARED_FRAMEWORKS_DIRECTORY/"* ]]; then
+reconstruction_binaries=$(echo "$mapped_binaries" | grep -v "^$SHARED_FRAMEWORKS_DIRECTORY/" || true)
+if [[ -n "$reconstruction_binaries" ]]; then
     kill "$process_identifier" 2>/dev/null || true
-    fail "instance $process_identifier loaded $loaded_binary, not Xcode's copy, so it was quit: DYLD_FRAMEWORK_PATH did not reach it"
+    echo "$reconstruction_binaries" | sed 's/^/  /' >&2
+    fail "instance $process_identifier mapped the copies above, not Xcode's, so it was quit: dyld did not take DYLD_FRAMEWORK_PATH. With System Integrity Protection on, a hardened app takes it only with the com.apple.security.cs.allow-dyld-environment-variables entitlement"
 fi
-log "Running: instance $process_identifier on Xcode $XCODE_VERSION's SourceEditor ($loaded_binary)"
+log "Running: instance $process_identifier on Xcode $XCODE_VERSION's frameworks:"
+echo "$mapped_binaries" | sed 's/^/  /'
