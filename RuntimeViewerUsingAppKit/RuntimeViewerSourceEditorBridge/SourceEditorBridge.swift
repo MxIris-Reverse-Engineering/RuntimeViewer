@@ -87,6 +87,10 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // gesture and consumes it before any event consumer is offered the event.
         sourceEditorView.enableCmdClickMultiCursor = false
         sourceEditorView.isEditingEnabled = false
+        // An interface cannot be typed into, so a blinking caret only suggests that it can. With
+        // editing disabled this stops the blink and leaves every cursor layer transparent; a
+        // selection is still drawn and copied (`SourceEditorSelectionDisplay.update()`).
+        sourceEditorView.hideCursorWhenEditingDisabled = true
 
         // Set once and left alone: the framework never writes it on this scroll view — its only
         // `setAutohidesScrollers:` call belongs to the Go To list — and the scroller-style

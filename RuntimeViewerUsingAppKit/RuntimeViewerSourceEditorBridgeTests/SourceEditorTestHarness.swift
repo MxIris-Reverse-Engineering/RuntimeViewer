@@ -29,7 +29,11 @@ final class SourceEditorTestHarness {
     /// The scroll view the editor builds for itself and keeps as a direct subview.
     let scrollView: NSScrollView
 
-    init() throws {
+    /// - Parameter actsAsKeyWindow: makes the window answer `isKeyWindow` with `true`. The test
+    ///   process is never the active application, so a real window never becomes key, and the
+    ///   editor draws its selection and cursor as active only while it is the first responder of
+    ///   the key window.
+    init(actsAsKeyWindow: Bool = false) throws {
         let bridge = SourceEditorBridge()
         self.bridge = bridge
 
@@ -42,12 +46,14 @@ final class SourceEditorTestHarness {
 
         // Off-screen is enough — measured. What the crash needs is a layer-backed view whose
         // layoutSublayers(of:) runs inside a CoreAnimation transaction, not a visible window.
-        window = NSWindow(
+        let window = HarnessWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.titled],
             backing: .buffered,
             defer: false
         )
+        window.actsAsKeyWindow = actsAsKeyWindow
+        self.window = window
         window.contentView = editorView
         window.orderFront(nil)
     }
@@ -109,6 +115,31 @@ final class SourceEditorTestHarness {
         return tokens
     }
 
+    /// Gives the editor view keyboard focus, as a click into the content pane does.
+    func focusEditor() {
+        window.makeFirstResponder(editorView)
+    }
+
+    /// Selects `range`, or puts the insertion point there when it is empty, as a click or a drag
+    /// in the editor does.
+    func select(_ range: Range<SourceEditorPosition>) {
+        editorView.selectTextRange(range, scrollIfNeeded: false)
+    }
+
+    /// Every layer under the editor view whose class is called `className`, such as the
+    /// framework's internal `CursorLayer`, which a test cannot name as a type.
+    func layers(ofClassNamed className: String) -> [CALayer] {
+        var matchingLayers: [CALayer] = []
+        var pendingLayers: [CALayer] = editorView.layer.map { [$0] } ?? []
+        while let layer = pendingLayers.popLast() {
+            if String(describing: type(of: layer)) == className {
+                matchingLayers.append(layer)
+            }
+            pendingLayers.append(contentsOf: layer.sublayers ?? [])
+        }
+        return matchingLayers
+    }
+
     /// Forces the layout the crash happens inside.
     ///
     /// `layoutSubtreeIfNeeded()` alone is not enough: the trap is reached from
@@ -122,6 +153,13 @@ final class SourceEditorTestHarness {
         CATransaction.flush()
         CATransaction.commit()
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+    }
+
+    /// A window that can claim to be the key window, for `init(actsAsKeyWindow: true)`.
+    private final class HarnessWindow: NSWindow {
+        var actsAsKeyWindow = false
+
+        override var isKeyWindow: Bool { actsAsKeyWindow || super.isKeyWindow }
     }
 
     enum HarnessError: Error, CustomStringConvertible {
