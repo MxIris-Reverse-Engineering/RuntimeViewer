@@ -9,6 +9,9 @@ import RuntimeViewerArchitectures
 final class ContentTextViewController: BaseViewController<ContentTextViewModel>, NSTextViewDelegate {
     override var acceptsFirstResponder: Bool { true }
 
+    /// What takes the keyboard focus when the editor pane showing this does (`EditorPaneContent`).
+    var focusableView: NSView? { textView }
+
     override var shouldDisplayCommonLoading: Bool { true }
 
     private let (scrollView, textView): (NSScrollView, ContentTextView) = {

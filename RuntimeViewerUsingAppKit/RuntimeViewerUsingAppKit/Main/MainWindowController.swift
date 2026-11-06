@@ -31,8 +31,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private(set) lazy var toolbarController = MainToolbarController(delegate: self)
 
-    private(set) lazy var tabBarAccessoryController = TabBarAccessoryController(nibName: nil, bundle: nil)
-
     private(set) lazy var splitViewController = MainSplitViewController()
 
     private var viewModel: MainViewModel?
@@ -70,7 +68,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
-        contentWindow.addTitlebarAccessoryViewController(tabBarAccessoryController)
         contentWindow.box.centerInScreen()
         contentWindow.identifier = .makeIdentifier(of: Self.self)
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
@@ -109,26 +106,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             ),
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal(),
-            tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
-            tabClosed: tabBarAccessoryController.tabClosedRelay.asSignal(),
-            newTabClicked: tabBarAccessoryController.newTabClicked,
             dependencyCacheSelected: Signal.merge(runtimeSourcePopoverAdapter.dependencyCacheSelected, runtimeSourceMenuAdapter.dependencyCacheSelected)
         )
         let output = viewModel.transform(input)
 
         output.isLoadFrameworksEnabled.drive(toolbarController.loadFrameworksItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
-
-        output.tabBarSnapshot.driveOnNext { [weak self] snapshot in
-            guard let self else { return }
-            tabBarAccessoryController.applySnapshot(snapshot)
-        }
-        .disposed(by: rx.disposeBag)
-
-        output.isTabBarHidden.driveOnNext { [weak self] isHidden in
-            guard let self else { return }
-            tabBarAccessoryController.isHidden = isHidden
-        }
-        .disposed(by: rx.disposeBag)
 
         output.windowTitle.driveOnNext { [weak self] title in
             guard let self else { return }

@@ -15,7 +15,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
     private lazy var sidebarCoordinator = SidebarCoordinator(documentState: documentState)
 
-    private lazy var contentCoordinator = ContentCoordinator(documentState: documentState)
+    private lazy var editorAreaCoordinator = EditorAreaCoordinator(documentState: documentState)
 
     private lazy var inspectorCoordinator = InspectorCoordinator(documentState: documentState)
 
@@ -46,10 +46,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             documentState.selectionRouter.trigger(.switchEngine(runtimeEngine))
 
             sidebarCoordinator.removeFromParent()
-            contentCoordinator.removeFromParent()
+            editorAreaCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
             sidebarCoordinator = SidebarCoordinator(documentState: documentState)
-            contentCoordinator = ContentCoordinator(documentState: documentState)
+            editorAreaCoordinator = EditorAreaCoordinator(documentState: documentState)
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
             inspectorCoordinator.delegate = self
             rootWindowController.setupBindings(for: viewModel)
@@ -69,9 +69,8 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
             return .multiple(
                 .show(rootWindowController.splitViewController),
-                .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator),
+                .set(sidebar: sidebarCoordinator, content: editorAreaCoordinator, inspector: inspectorCoordinator),
                 .route(on: sidebarCoordinator, to: .root),
-                .route(on: contentCoordinator, to: .placeholder),
                 .route(on: inspectorCoordinator, to: .placeholder),
             )
         case .generationOptions:
@@ -203,41 +202,18 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             } else {
                 sidebarCoordinator.contextTrigger(.back)
             }
-        case .open(let object, let destination, let highlightRequest):
-            // The highlight travels with the content route, so it lives exactly as long as the
-            // content ViewModel built for this navigation. A new tab starts its pane's scene over;
-            // the focused tab and the next pane move on from what they showed.
-            switch (destination, highlightRequest) {
-            case (.newTab, nil):
-                contentCoordinator.contextTrigger(.root(object))
-            case (.newTab, let highlightRequest?):
-                contentCoordinator.contextTrigger(.rootHighlighting(object, highlightRequest))
-            case (.focusedTab, nil), (.nextEditorPane, nil):
-                contentCoordinator.contextTrigger(.next(object))
-            case (.focusedTab, let highlightRequest?), (.nextEditorPane, let highlightRequest?):
-                contentCoordinator.contextTrigger(.nextHighlighting(object, highlightRequest))
-            }
-            inspectorCoordinator.contextTrigger(.next(.object(object)))
-            // Sidebar visual sync is handled inside
-            // `SidebarRuntimeObjectListViewModel` by observing
-            // `documentState.$selectedRuntimeObject` directly — no
-            // coordinator routing is needed for a pure UI
-            // scroll-and-highlight.
-        case .selectAtRoot(let object):
-            contentCoordinator.contextTrigger(.root(object))
-            inspectorCoordinator.contextTrigger(.root(.object(object)))
-        case .backward, .forward, .jump, .newTab, .switchTab, .closeTab, .moveTab,
+        case .open, .selectAtRoot, .backward, .forward, .jump, .newTab, .switchTab, .closeTab, .moveTab,
              .newEditorPane, .closeEditorPane, .closeOtherEditorPanes, .focusEditorPane, .changeEditorOrientation:
-            // The focused tab shows something else, or nothing: re-enter both
-            // panes for `selectedRuntimeObject`. `.back` reuses each pane's
-            // controller and rebinds only when the object changed, so a route
-            // that left the object on screen alone — a reorder, a tab closed in
-            // the background — costs nothing.
+            // The editor area works out which panes the route touched; the
+            // Inspector follows the focused pane, re-entering for
+            // `selectedRuntimeObject` — which costs nothing when the object on
+            // screen did not change. Sidebar visual sync is handled inside
+            // `SidebarRuntimeObjectListViewModel` by observing
+            // `documentState.$selectedRuntimeObject` directly.
+            editorAreaCoordinator.contextTrigger(.apply(route))
             if documentState.selectedRuntimeObject != nil {
-                contentCoordinator.contextTrigger(.back)
                 inspectorCoordinator.contextTrigger(.back)
             } else {
-                contentCoordinator.contextTrigger(.placeholder)
                 inspectorCoordinator.contextTrigger(.placeholder)
             }
         }

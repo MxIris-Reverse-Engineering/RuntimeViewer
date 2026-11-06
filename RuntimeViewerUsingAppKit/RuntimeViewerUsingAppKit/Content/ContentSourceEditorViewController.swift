@@ -29,6 +29,9 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
     private lazy var bridge: SourceEditorBridging? = sourceEditorBridgeProvider.makeBridge()
 
+    /// What takes the keyboard focus when the editor pane showing this does (`EditorPaneContent`).
+    var focusableView: NSView? { bridge?.editorView }
+
     /// The string currently handed to the editor. ⌘-click reports a UTF-16 range into this
     /// very string, so the generator's `.link` attribute can be read straight off it.
     private var displayedAttributedString: NSAttributedString?

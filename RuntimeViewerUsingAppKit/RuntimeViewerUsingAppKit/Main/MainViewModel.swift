@@ -138,9 +138,6 @@ final class MainViewModel: ViewModel<MainRoute> {
         let activityClick: Signal<Void>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
-        let tabSelected: Signal<DocumentTab.ID>
-        let tabClosed: Signal<DocumentTab.ID>
-        let newTabClicked: Signal<Void>
         /// A choice from the runtime source picker's Dependency Cache level, for
         /// the offline engine the window is on: `nil` reads the file alone.
         let dependencyCacheSelected: Signal<RuntimeOfflineFile.DependencyCache?>
@@ -173,8 +170,6 @@ final class MainViewModel: ViewModel<MainRoute> {
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
-        let tabBarSnapshot: Driver<TabBarSnapshot>
-        let isTabBarHidden: Driver<Bool>
         /// Where the toolbar shows the activity: the user's setting as it stands on this system,
         /// never `.automatic`.
         let activityStyle: Driver<Settings.ToolbarActivityStyle>
@@ -651,32 +646,10 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         let currentImageName = documentState.$currentImageNode.asDriver().map { $0?.name }
 
-        // MARK: - Tabs
+        // MARK: - Navigation
 
-        input.tabSelected.emitOnNext { [weak self] tabID in
-            guard let self else { return }
-            documentState.selectionRouter.trigger(.switchTab(tabID))
-        }
-        .disposed(by: rx.disposeBag)
-
-        input.tabClosed.emitOnNext { [weak self] tabID in
-            guard let self else { return }
-            documentState.selectionRouter.trigger(.closeTab(tabID))
-        }
-        .disposed(by: rx.disposeBag)
-
-        input.newTabClicked.emitOnNext { [weak self] in
-            guard let self else { return }
-            documentState.selectionRouter.trigger(.newTab)
-        }
-        .disposed(by: rx.disposeBag)
-
-        // Compared by what the bar shows, not by the area: titles change with
-        // the form an object is shown in, which the area's equality ignores.
-        let tabBarSnapshot = documentState.$editorArea.asDriver()
-            .map { TabBarSnapshot(pane: $0.focusedPane) }
-            .distinctUntilChanged()
-
+        // Each editor pane's tab bar is its own (`EditorPaneViewModel`); the
+        // toolbar's back and forward walk the focused pane's active tab.
         let focusedTabHistory = documentState.$editorArea.asDriver()
             .map { $0.focusedPane.activeTab.history }
 
@@ -736,8 +709,6 @@ final class MainViewModel: ViewModel<MainRoute> {
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),
-            tabBarSnapshot: tabBarSnapshot,
-            isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged(),
             activityStyle: activityStyle,
             activity: toolbarActivityPresenter.state,
             toolbarIcon: documentState.$currentImageNode.asDriver().map { Self.toolbarIcon(for: $0) }
