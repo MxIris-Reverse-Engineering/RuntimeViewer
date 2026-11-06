@@ -1,6 +1,7 @@
 import Foundation
 import Testing
-import MachOKit
+@_spi(Support) import MachOKit
+import MachOKitExtensions
 @testable import RuntimeViewerCore
 
 /// A generic type this test bundle declares, for the offline engine to
@@ -170,6 +171,22 @@ struct OfflineFileEngineTests {
         let dependencies = try await engine.dependencies(for: Self.testBundleBinaryPath, ancestorRpaths: [], mainExecutablePath: Self.testBundleBinaryPath)
         #expect(dependencies.contains { $0.resolvedPath == Self.libobjcPath })
         #expect(await engine.canOpenImage(at: Self.libobjcPath))
+    }
+
+    /// The cache's images and the dependency closures of the Swift layout
+    /// engine read one opening of this Mac's cache. A catalog that opened a
+    /// copy of its own mapped all of its eighty-odd files a second time, in a
+    /// service that starts with room for 256 descriptors.
+    @Test("a file paired with this Mac's dyld shared cache reads the opening of it this process shares")
+    func thePairedSystemCacheIsTheProcessSharedOpening() throws {
+        var file = try RuntimeOfflineFile(contentsOf: URL(fileURLWithPath: Self.testBundleBinaryPath))
+        file.dependencyCache = .systemDyldSharedCache
+
+        let catalog = try RuntimeFileImageCatalog(file: file)
+
+        let libobjc = try #require(catalog.machO(forImagePath: Self.libobjcPath))
+        let sharedHostCache = try #require(FullDyldCache.cachedHost)
+        #expect(libobjc._cachedFullCache === sharedHostCache)
     }
 
     // MARK: - A dyld shared cache

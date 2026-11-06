@@ -9,8 +9,8 @@
 # To move to another release, run ./UpdateSourceEditorScript.sh [<version>]. It writes the version
 # and the four SHA-256 values, each the checksum that release's own Package.swift gives for the
 # framework's zip, and downloads the release.
-version 26.6.3
-SourceEditor 4cf13f55ddfb4d3bb49e3784b6f2bd3cd1969597febde5a1eb11705ea6468907
-SourceModel 198d46106c77edc16048f5bb315cf086a88417f3189a26dd1bedb99af02e2ab0
-SourceModelSupport 17fc8bff515b15748fb94808c569f22e96e4728a0d1c6542ca7f0f1b025f2d54
-_CodeCompletionFoundation b3e41311cc0c981cc5d7cb52cdd950d749ede09d822f8ed253a91667cfa844ff
+version 26.6.4
+SourceEditor b2dfde113632e6f161adf8b88dcc09cd3f990097a31046afe5c8767a73dc434a
+SourceModel 993af9e7ffc3848a403cbf936faec18beb743f5c02d0a9d834361d10283c653a
+SourceModelSupport 68a416a85a0125ebac950f1f5048fdf583680c69b543bb1c6f73ca50ba4650f9
+_CodeCompletionFoundation 00f97ccf2eeeb6619e841dff161067ca3258fb96bb700d28e285cad7504127f5

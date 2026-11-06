@@ -2,6 +2,9 @@ import Foundation
 import FoundationToolbox
 import MachOKit
 import MachODependencies
+// `FullDyldCache.cachedHost` comes from MachOKitExtensions, which this
+// module reaches through MachOSwiftSection's re-export.
+import MachOSwiftSection
 import OrderedCollections
 
 /// The images of a file on disk — a Mach-O file, a bundle or a dyld shared
@@ -70,7 +73,10 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
             dependencySearchPaths.append(contentsOf: fileImages.keys.map { DependencySearchPath.machOFile(path: $0) })
             switch file.dependencyCache {
             case .systemDyldSharedCache:
-                guard let cache = FullDyldCache.host else {
+                // The process's one opening of this Mac's cache, which the
+                // Swift layout engine's dependency closures read as well.
+                // `host` opens and maps all eighty-odd files again each time.
+                guard let cache = FullDyldCache.cachedHost else {
                     throw RuntimeOfflineFileError.dependencyCacheUnavailable("this Mac has no dyld shared cache to read")
                 }
                 cacheImages = Self.images(of: cache)

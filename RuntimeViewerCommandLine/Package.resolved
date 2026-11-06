@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "c87146b7f3ab69aebb461c1128f4326e462a6fbc",
-        "version" : "0.15.0"
+        "revision" : "e79814c055e1eeb189af7c92b64c3e46ee778efd",
+        "version" : "0.17.0"
       }
     },
     {
@@ -142,7 +142,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
         "branch" : "next",
-        "revision" : "ea5d7214e3335b9871ea73d36cec7b2c10d3dcc4"
+        "revision" : "9ed03293ba0c8f64512930965667f6b4ded8404f"
       }
     },
     {
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "568a6e8fa6e6bcb984f11d8ccd3e7fced6777924",
-        "version" : "1.3.0"
+        "revision" : "6707afad0d8859ed9c10e408bbbc1a3c6a65f67f",
+        "version" : "1.3.2"
       }
     },
     {
@@ -169,7 +169,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "52910902b68fb0c5b6a0f919807b14c9b215c91e"
+        "revision" : "3f777e21af455339d1dbc4b16c3f2650f7d7c551"
       }
     },
     {
