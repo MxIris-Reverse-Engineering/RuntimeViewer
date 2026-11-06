@@ -478,6 +478,10 @@ MachOSwiftSection's evolution 0063 (`0063-private-declarations.md`).
   on the panes about to be replaced, and `fanOut` fails an assertion — a crash in a Debug build. Anything
   else that has to start the document over asks the window to, the way an engine coming back does
   through `DocumentState.startOverRequested`.
+- **Selection routes go to an editor pane**: `fanOut` hands every `SelectionRoute` but `.switchImage`
+  to `EditorAreaCoordinator`, which drives the `ContentCoordinator` of the focused pane, or of the pane
+  the route names by ID. A view inside a pane focuses its pane (`.focusEditorPane`) before it opens
+  anything. The rules: *Editor panes* in the root `AGENTS.md`.
 
 **Routes carry no views** — a route's associated values never include an AppKit or UIKit type: no
 `NSView` / `NSButton` sender, no `NSWindow`, `NSEvent` or `NSMenu`. The same goes for a ViewModel's
