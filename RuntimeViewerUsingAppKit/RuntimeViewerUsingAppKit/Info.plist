@@ -31,6 +31,7 @@
 				<string>com.apple.mach-o-binary</string>
 				<string>com.apple.mach-o-dylib</string>
 				<string>com.apple.bundle</string>
+				<string>public.folder</string>
 			</array>
 			<key>NSDocumentClass</key>
 			<string>$(PRODUCT_MODULE_NAME).Document</string>

@@ -33,7 +33,7 @@ executable.」：`RuntimeOfflineFile(contentsOf:)` 把每个目录都当成 bund
   切片的 `filetype`。只收 dyld 能加载的镜像：`MH_EXECUTE`、`MH_DYLIB`、`MH_BUNDLE`；`.o`（`MH_OBJECT`，指针没有
   重定位）与 dSYM 里的 DWARF 文件（`MH_DSYM`，代码段在文件里没有内容）不收。单独打开一个文件的行为不变。
 - 实测（单线程 `head` 读每个文件的前 4 字节，热缓存）：Xcode.app 有 126,027 个文件、3,227 个二进制，全部读一遍
-  17.5 秒；先按大小筛掉后剩 58,259 个，4.1 秒。实现时可以并发遍历子目录。
+  17.5 秒；先按大小筛掉后剩 58,259 个，4.1 秒。实现里目录本身顺序遍历，文件头并发读取。
 - 镜像按路径排序。文件夹没有主程序，引擎的 `mainExecutablePath()` 返回空串，打开时不启动「主程序依赖闭包」那一批
   后台索引（打开 dyld cache 时就是这样）；点开某个镜像触发的索引照常进行。
 
@@ -68,11 +68,12 @@ executable.」：`RuntimeOfflineFile(contentsOf:)` 把每个目录都当成 bund
 
 **App**
 
-- `Info.plist` 的 Viewer 文档类型加 `public.folder`（类型名改为「Mach-O File, Bundle or Folder」），文件夹能拖到
-  Dock 图标上打开；Finder 里每个文件夹的「打开方式」都会列出 RuntimeViewer，`Alternate` 级别，不抢默认。
+- `Info.plist` 的 Viewer 文档类型加 `public.folder`，文件夹能拖到 Dock 图标上打开；Finder 里每个文件夹的「打开方式」
+  都会列出 RuntimeViewer，`Alternate` 级别，不抢默认。类型名「Mach-O File or Bundle」不改。
 - File › Open… 面板的说明加上文件夹；Open Recent 记的是 URL，不用改。
-- 文件夹的 Dependency Cache 子菜单列出本机 cache 与全部登记的 cache，不按平台过滤：一个文件夹可能混着几个平台的
-  二进制（如 `.xcframework`），自动挑的那份只按第一个二进制定。这段筛选挪进 `Settings.Offline`，以便测试。
+- 文件夹的 Dependency Cache 子菜单列出本机 cache 与全部登记的 cache，不按平台过滤，每份标上平台名：一个文件夹可能混着
+  几个平台的二进制（如 `.xcframework`），自动挑的那份只按第一个二进制定。筛选挪进 `Settings.Offline`
+  （`dependencyCaches(for:)`、`canPairWithThisMacsCache(_:)`），以便测试。
 
 **测试**（swift-testing，Core 的在 `OfflineFolderTests`）
 
@@ -106,7 +107,7 @@ executable.」：`RuntimeOfflineFile(contentsOf:)` 把每个目录都当成 bund
 | 1 判定与遍历 | `Content.folder`、`folderWithoutMachOFiles`、平台探测；文件夹与 bundle 共用的遍历（符号链接、4 KB、`filetype`、排序） | 完成（与第 2 步同一次提交）：`OfflineFolderTests` 8 例通过；离线相关的 Core 测试（`OfflineFileEngineTests`、`RuntimeOfflineServiceHostTests`、离线派生数据与交叉引用）全过 |
 | 2 按需打开 | 目录只记路径与 `filetype`，`machO(forImagePath:)` 首次打开并缓存；ObjC 类名表 | 完成：描述符压到 256 的子进程测试在改前的 `next` 上是红的（目录只列出一部分），改后通过 |
 | 3 按 App 划分 | 每个镜像一份依赖搜索路径（目录与 Swift 工厂）；`@executable_path` 按镜像所在的 App 展开 | 完成：`OfflineFolderTests` 增至 13 例全过；经运行路径与框架符号链接的依赖那条在改前的 `next` 上是红的 |
-| 4 App | `Settings.Offline` 的文件夹候选 cache 与 `OfflineFileController`；打开面板说明；`Info.plist` 的 `public.folder` | 未开始 |
+| 4 App | `Settings.Offline` 的文件夹候选 cache 与 `OfflineFileController`；打开面板说明；`Info.plist` 的 `public.folder` | 完成：`OfflineSettingsTests` 7 例通过（Debug 设置文件校验和前后不变）；`./RunScript.sh --no-launch`（隔离构建目录）编过，产物 `Info.plist` 的 Viewer 类型带 `public.folder` |
 | 5 文档与验证 | 使用指南、`AGENTS.md`、README、术语表；Core 与 Packages 测试、App 构建 | 未开始 |
 
 ## 决策日志
@@ -120,4 +121,6 @@ executable.」：`RuntimeOfflineFile(contentsOf:)` 把每个目录都当成 bund
 | 2026-11-06 | 用户批准，开始实现；补上落地步骤 | 精简提案原先只有方案，开工前拆成五步，每步各自构建、测试通过后提交 |
 | 2026-11-06 | 第 1、2 步合成一次提交 | 按需打开改的正是第 1 步新写的遍历与目录，先写一版一开就全打开的再改掉，中间那版没有用处 |
 | 2026-11-06 | 遍历到的路径改记在打开时的路径之下 | 目录枚举按真实路径报结果（`/var/…` 下报成 `/private/var/…`），而 `RuntimeOfflineFile` 记的路径去掉了 `/private`，bundle 的主程序也按它去找；不改的话临时目录里的包找不到主程序 |
+| 2026-11-06 | 文档类型名不改，只在 `LSItemContentTypes` 里加 `public.folder` | 改名只是好看；类型名是 `NSDocument` 认文档种类的键，改了可能牵动已有文档，没有必要冒这个险 |
+| 2026-11-06 | 文件夹的 Dependency Cache 菜单项标上平台名 | 不按平台过滤之后，同一个版本号可能是几个平台的 cache，不标就分不出；文件与包的菜单项照旧 |
 | 2026-11-06 | 依赖解析出的路径换成目录登记的路径（新的目录要求 `listedImagePath(forResolvedPath:)`），顺带修掉 bundle 的老问题 | 第 3 步写测试时发现：按运行路径链接的框架解析成带 `..` 与符号链接的写法，离线目录按路径精确查找，查不到，后台索引把这些依赖记成打不开。0069 起离线 bundle 就是这样（同一测试在改前的 `next` 上是红的）；进程内的目录查不到时按文件名兜底，没有这个问题。整个代码库只有 `dependencyEntries` 一处把解析结果当路径用 |

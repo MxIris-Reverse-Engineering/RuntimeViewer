@@ -2,9 +2,9 @@ import AppKit
 import Dependencies
 
 /// The app's document controller. A file that is not a RuntimeViewer document
-/// — a Mach-O file, a bundle, a dyld shared cache — opens offline, in a window
-/// on an engine reading it (`OfflineFileController`), whether it comes from
-/// File › Open…, Open Recent or the Dock.
+/// — a Mach-O file, a bundle, a folder, a dyld shared cache — opens offline, in
+/// a window on an engine reading it (`OfflineFileController`), whether it comes
+/// from File › Open…, Open Recent or the Dock.
 ///
 /// The first `NSDocumentController` made becomes `NSDocumentController.shared`,
 /// so `install()` runs in `AppDelegate.main()`, before `NSApplication.run()`:
@@ -20,9 +20,9 @@ final class DocumentController: NSDocumentController {
     }
 
     override func beginOpenPanel(_ openPanel: NSOpenPanel, forTypes inTypes: [String]?, completionHandler: @escaping (Int) -> Void) {
-        openPanel.message = "Choose a Mach-O file, an app or framework bundle, or a dyld shared cache to read offline."
-        // A framework is a directory to the panel, and an app is read whole,
-        // never browsed into.
+        openPanel.message = "Choose a Mach-O file, an app or framework bundle, a folder, or a dyld shared cache to read offline."
+        // A framework and a folder are directories to the panel, and an app
+        // is read whole, never browsed into.
         openPanel.canChooseDirectories = true
         openPanel.treatsFilePackagesAsDirectories = false
         // Any file: a dyld shared cache has no type of its own, and an

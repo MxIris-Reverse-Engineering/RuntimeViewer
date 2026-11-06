@@ -84,6 +84,29 @@ extension Settings.Offline {
         dependencyCaches.filter { $0.platformName == platformName }
     }
 
+    /// The registered caches `file` can be paired with: those of its
+    /// platform, or every one for a folder. A folder can hold binaries of
+    /// several platforms — an `.xcframework` does — and the platform it was
+    /// paired by is only its first binary's.
+    public func dependencyCaches(for file: RuntimeOfflineFile) -> [DependencyCache] {
+        if case .folder = file.content { return dependencyCaches }
+        return dependencyCaches(forPlatformNamed: file.platform?.name ?? "")
+    }
+
+    /// Whether `file` can be paired with this Mac's own dyld shared cache: a
+    /// file built for macOS or Mac Catalyst, or a folder, whatever its first
+    /// binary was built for.
+    public static func canPairWithThisMacsCache(_ file: RuntimeOfflineFile) -> Bool {
+        switch file.content {
+        case .folder:
+            true
+        case .dyldSharedCache:
+            false
+        case .machO, .bundle:
+            file.platform.map { platformNamesPairedWithThisMac.contains($0.name) } ?? false
+        }
+    }
+
     /// Platforms whose files read this Mac's own dyld shared cache.
     public static let platformNamesPairedWithThisMac: Set<String> = ["macOS", "macCatalyst"]
 
