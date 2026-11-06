@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # TuistScript.sh — RuntimeViewer-Tuist.xcworkspace, the development-only Tuist workspace: the macOS
-# app and its tests, built with the four local packages as source and every third-party dependency
-# taken from Tuist's binary cache on this machine. Release builds, CI and every other script use the
-# native projects and are unaffected. Documentations/Guides/TuistDevelopment.md explains the setup.
+# app and its tests, built with the four local packages and the four often-changed third-party
+# packages in SOURCE_DEPENDENCIES as source and every other third-party dependency taken from Tuist's
+# binary cache on this machine. Release builds, CI and every other script use the native projects and
+# are unaffected. Documentations/Guides/TuistDevelopment.md explains the setup.
 #
 # Usage:
 #   ./TuistScript.sh install                      # resolve the dependencies (tuist install)
@@ -10,7 +11,7 @@
 #                                                 # generate RuntimeViewer-Tuist.xcworkspace against
 #                                                 # the binary cache of one configuration
 #                                                 # (default: Debug)
-#   ./TuistScript.sh warm [--configuration <c>]   # build the third-party dependencies into the
+#   ./TuistScript.sh warm [--configuration <c>]   # build the cached third-party dependencies into the
 #                                                 # binary cache of one configuration (default:
 #                                                 # Debug), then generate for Debug
 #   ./TuistScript.sh build [--configuration <c>] [--launch]
@@ -54,6 +55,9 @@ NATIVE_APP_PROJECT="RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj"
 NATIVE_PACKAGE_RESOLVED="$NATIVE_WORKSPACE/xcshareddata/swiftpm/Package.resolved"
 TUIST_PACKAGE_RESOLVED="Tuist/Package.resolved"
 LOCAL_PACKAGES=("RuntimeViewerCore" "RuntimeViewerPackages" "RuntimeViewerMCP" "RuntimeViewerCommandLine")
+# The third-party packages, by checkout directory, whose targets the cache profile keeps as source
+# (sourceDependencyTargetNames in Tuist.swift); `check` compares that list with their manifests.
+SOURCE_DEPENDENCIES=("MachOKitExtensions" "MachOObjCSection" "MachOSwiftSection" "swift-semantic-string")
 # The configuration the workspace Xcode opens is generated for.
 RESTING_CONFIGURATION="Debug"
 
@@ -759,8 +763,8 @@ warm_cache() {
     fi
     log "Building the third-party dependencies into the binary cache ($CONFIGURATION)"
     # Without --cache-profile, `tuist cache warm` ignores the default profile in Tuist.swift and
-    # caches every target it can, local ones included; the simulator payload then breaks its
-    # device build.
+    # caches every target it can, local ones and SOURCE_DEPENDENCIES included; the simulator
+    # payload then breaks its device build.
     run_tuist "warm-$CONFIGURATION" "${TUIST[@]}" cache warm --configuration "$CONFIGURATION" \
         --cache-profile development --no-upload \
         || fail "tuist cache warm failed"
@@ -855,7 +859,7 @@ check_command() {
     fi
 
     log "Comparing the projects, the target lists and the trait settings"
-    python3 - "$PROJECT_DIR" "$work_directory" <<'PYTHON' || findings=1
+    python3 - "$PROJECT_DIR" "$work_directory" "${SOURCE_DEPENDENCIES[@]}" <<'PYTHON' || findings=1
 import glob
 import json
 import os
@@ -864,6 +868,7 @@ import subprocess
 import sys
 
 project_directory, work_directory = sys.argv[1:3]
+source_dependencies = sys.argv[3:]
 manifests = os.path.join(work_directory, "Manifests")
 findings = []
 
@@ -1116,10 +1121,51 @@ def compare(description, actual, expected):
     for name in sorted(actual - expected):
         finding(f"{description}: {name} is not a target of the local packages any more.")
 
+# The third-party packages the cache profile keeps as source: every library and macro target of
+# theirs (and the bundle Tuist makes for one with resources), as the selected Xcode's SwiftPM reads
+# their checked-out manifests.
+expected_dependency_targets, unread_source_dependencies = set(), []
+for directory in source_dependencies:
+    try:
+        manifest = load_json(os.path.join(work_directory, "Dependencies", f"{directory}.json"))
+    except (OSError, ValueError):
+        unread_source_dependencies.append(directory)
+        finding(f"Tuist.swift, sourceDependencyTargetNames: the manifest of {directory} could not be read; "
+                f"is it still a dependency? (SOURCE_DEPENDENCIES in TuistScript.sh names the packages)")
+        continue
+    for target in manifest["targets"]:
+        if target["type"] in ("regular", "macro"):
+            expected_dependency_targets.add(target["name"])
+            if target.get("resources"):
+                expected_dependency_targets.add(f"{manifest['name']}_{target['name']}")
+
 configuration = load_json(os.path.join(manifests, "TuistConfig.json"))
 profiles = configuration["project"]["tuist"]["cacheOptions"]["profiles"]["profileByName"]
 cache_exceptions = {query["named"] for query in profiles["development"]["exceptTargetQueries"] if "named" in query}
-compare("Tuist.swift, localPackageTargetNames", cache_exceptions, expected_source_targets | expected_bundles)
+# Tuist.swift hands the profile both lists as one, so a name no package has any more is reported
+# against Tuist.swift as a whole.
+for name in sorted((expected_source_targets | expected_bundles) - cache_exceptions):
+    finding(f"Tuist.swift, localPackageTargetNames: {name} is missing.")
+for name in sorted(expected_dependency_targets - cache_exceptions):
+    finding(f"Tuist.swift, sourceDependencyTargetNames: {name} is missing.")
+if not unread_source_dependencies:
+    for name in sorted(cache_exceptions - expected_source_targets - expected_bundles - expected_dependency_targets):
+        finding(f"Tuist.swift: the cache exception {name} is no longer a target of the local packages or of "
+                f"{', '.join(source_dependencies)}.")
+
+# Exceptions match target names in every package, so a dependency outside SOURCE_DEPENDENCIES with a
+# target of the same name would quietly be kept as source too.
+for path in sorted(glob.glob(os.path.join(work_directory, "Dependencies", "*.json"))):
+    if os.path.basename(path)[:-5] in source_dependencies:
+        continue
+    try:
+        manifest = load_json(path)
+    except (OSError, ValueError):
+        continue
+    for target in manifest.get("targets", []):
+        if target["type"] != "test" and target["name"] in expected_dependency_targets:
+            finding(f"Tuist.swift, sourceDependencyTargetNames: {target['name']} is also a target of {manifest['name']}, "
+                    f"which the cache profile then keeps as source as well.")
 
 package_settings = load_json(os.path.join(manifests, "PackageSettings.json"))
 warning_targets = {name for name, settings in package_settings["targetSettings"].items()
