@@ -1,6 +1,6 @@
 # Draft - 离线模式打开文件夹：列出其中全部二进制，按需打开
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-06
 - **最后更新**: 2026-11-06
 - **关联提案**: [0069](0069-offline-mode.md)（离线模式本身：Mach-O 文件、bundle 与 dyld cache 的读法，每个文件一个进程，配对 cache）
@@ -95,8 +95,8 @@ executable.」：`RuntimeOfflineFile(contentsOf:)` 把每个目录都当成 bund
 
 | 步骤 | 内容 | 状态 |
 |------|------|------|
-| 1 判定与遍历 | `Content.folder`、`folderWithoutMachOFiles`、平台探测；文件夹与 bundle 共用的遍历（符号链接、4 KB、`filetype`、排序） | 未开始 |
-| 2 按需打开 | 目录只记路径与 `filetype`，`machO(forImagePath:)` 首次打开并缓存；ObjC 类名表 | 未开始 |
+| 1 判定与遍历 | `Content.folder`、`folderWithoutMachOFiles`、平台探测；文件夹与 bundle 共用的遍历（符号链接、4 KB、`filetype`、排序） | 完成（与第 2 步同一次提交）：`OfflineFolderTests` 8 例通过；离线相关的 Core 测试（`OfflineFileEngineTests`、`RuntimeOfflineServiceHostTests`、离线派生数据与交叉引用）全过 |
+| 2 按需打开 | 目录只记路径与 `filetype`，`machO(forImagePath:)` 首次打开并缓存；ObjC 类名表 | 完成：描述符压到 256 的子进程测试在改前的 `next` 上是红的（目录只列出一部分），改后通过 |
 | 3 按 App 划分 | 每个镜像一份依赖搜索路径（目录与 Swift 工厂）；`@executable_path` 按镜像所在的 App 展开 | 未开始 |
 | 4 App | `Settings.Offline` 的文件夹候选 cache 与 `OfflineFileController`；打开面板说明；`Info.plist` 的 `public.folder` | 未开始 |
 | 5 文档与验证 | 使用指南、`AGENTS.md`、README、术语表；Core 与 Packages 测试、App 构建 | 未开始 |
@@ -110,3 +110,5 @@ executable.」：`RuntimeOfflineFile(contentsOf:)` 把每个目录都当成 bund
 | 2026-11-06 | `Info.plist` 声明 `public.folder` | 用户选定：文件夹能拖到 Dock 图标上打开，代价是 Finder「打开方式」里多一项 |
 | 2026-11-06 | 依赖搜索路径按镜像所在的 App 划范围 | 按需打开之后，依赖定位器仍会把搜索路径里的文件全部打开；文件夹里有几个 App 时还会混用别的 App 里同名的框架 |
 | 2026-11-06 | 用户批准，开始实现；补上落地步骤 | 精简提案原先只有方案，开工前拆成五步，每步各自构建、测试通过后提交 |
+| 2026-11-06 | 第 1、2 步合成一次提交 | 按需打开改的正是第 1 步新写的遍历与目录，先写一版一开就全打开的再改掉，中间那版没有用处 |
+| 2026-11-06 | 遍历到的路径改记在打开时的路径之下 | 目录枚举按真实路径报结果（`/var/…` 下报成 `/private/var/…`），而 `RuntimeOfflineFile` 记的路径去掉了 `/private`，bundle 的主程序也按它去找；不改的话临时目录里的包找不到主程序 |

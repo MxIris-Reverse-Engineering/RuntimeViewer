@@ -3,9 +3,9 @@ public import RuntimeViewerCommunication
 import MachOKit
 import MachODependencies
 
-/// A file offline mode reads — a Mach-O file, a bundle or a dyld shared cache
-/// on disk — and where the images it links come from when they are not inside
-/// it.
+/// A file offline mode reads — a Mach-O file, a bundle, a folder or a dyld
+/// shared cache on disk — and where the images it links come from when they
+/// are not inside it.
 ///
 /// What an offline engine is made of. It travels from the app to the process
 /// that reads the file as that process's launch payload, so it is `Codable`.
@@ -17,8 +17,11 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
     public enum Content: Sendable, Hashable, Codable {
         /// A thin Mach-O file, or one slice of a fat one.
         case machO(slice: Slice?)
-        /// A bundle: its main executable and every Mach-O file inside it.
+        /// A bundle: its main executable and every Mach-O image inside it.
         case bundle
+        /// A folder — a directory that is no bundle: every Mach-O image inside
+        /// it and inside the apps, frameworks and folders below it.
+        case folder
         /// The main file of a dyld shared cache; its subcaches lie next to it.
         case dyldSharedCache
     }
@@ -34,8 +37,8 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
         }
     }
 
-    /// Where the images a Mach-O file or a bundle links come from, when they
-    /// are not inside it.
+    /// Where the images a Mach-O file, a bundle or a folder links come from,
+    /// when they are not inside it.
     public enum DependencyCache: Sendable, Hashable, Codable {
         /// This Mac's dyld shared cache.
         case systemDyldSharedCache
@@ -44,7 +47,8 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
     }
 
     /// The platform a file was built for and a version: the SDK's for a Mach-O
-    /// file or a bundle, the operating system's for a dyld shared cache.
+    /// file, a bundle or a folder, the operating system's for a dyld shared
+    /// cache.
     public struct Platform: Sendable, Hashable, Codable {
         /// `macOS`, `macCatalyst`, `iOS`, `iOSSimulator`, `tvOS`, `watchOS`,
         /// `visionOS`, their simulators, `driverKit` — or the load command's
@@ -67,11 +71,13 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
     /// its own.
     public var dependencyCache: DependencyCache?
 
-    /// What the file says it was built for, or `nil` when it says nothing.
+    /// What the file says it was built for, or `nil` when it says nothing. A
+    /// folder says what the first image a breadth-first walk of it meets says;
+    /// see `RuntimeDirectoryImageScanner.firstImage(in:)`.
     public let platform: Platform?
 
-    /// What menus show: the bundle's or the file's name, or the platform,
-    /// version and architecture of a dyld shared cache.
+    /// What menus show: the bundle's, the folder's or the file's name, or the
+    /// platform, version and architecture of a dyld shared cache.
     public let displayName: String
 
     public init(url: URL, content: Content, dependencyCache: DependencyCache? = nil, platform: Platform?, displayName: String) {
@@ -82,10 +88,12 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
         self.displayName = displayName
     }
 
-    /// Inspects what is at `url`: a bundle, a dyld shared cache — a subcache
-    /// stands for its main file — or a Mach-O file, picking the slice of a fat
-    /// one this Mac prefers. Reads headers and load commands only, never an
-    /// image's metadata. `dependencyCache` starts out `nil`.
+    /// Inspects what is at `url`: a bundle — a directory that names an
+    /// executable — or else a folder, a dyld shared cache — a subcache stands
+    /// for its main file — or a Mach-O file, picking the slice of a fat one this
+    /// Mac prefers. Reads headers and load commands only, never an image's
+    /// metadata; of a folder, only as far as its first image. `dependencyCache`
+    /// starts out `nil`.
     ///
     /// Throws `RuntimeOfflineFileError`.
     public init(contentsOf url: URL) throws {
@@ -95,11 +103,15 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
             throw RuntimeOfflineFileError.unreadable(fileURL)
         }
         if isDirectory.boolValue {
-            guard let executableURL = Bundle(url: fileURL)?.executableURL else {
-                throw RuntimeOfflineFileError.bundleWithoutExecutable(fileURL)
+            if let executableURL = Bundle(url: fileURL)?.executableURL {
+                let executable = try Self.machOFile(at: executableURL, preferring: nil)
+                self.init(url: fileURL, content: .bundle, platform: Self.platform(of: executable), displayName: fileURL.lastPathComponent)
+                return
             }
-            let executable = try Self.machOFile(at: executableURL, preferring: nil)
-            self.init(url: fileURL, content: .bundle, platform: Self.platform(of: executable), displayName: fileURL.lastPathComponent)
+            guard let firstImage = RuntimeDirectoryImageScanner.firstImage(in: fileURL) else {
+                throw RuntimeOfflineFileError.folderWithoutMachOFiles(fileURL)
+            }
+            self.init(url: fileURL, content: .folder, platform: Self.platform(of: firstImage.machOFile), displayName: fileURL.lastPathComponent)
             return
         }
         let leadingBytes = try Self.leadingBytes(of: fileURL)
@@ -239,7 +251,9 @@ extension RuntimeOfflineFile {
         return Array((try? fileHandle.read(upToCount: 16)) ?? Data())
     }
 
-    private static func isMachOOrFatMagic(_ bytes: [UInt8]) -> Bool {
+    /// Whether `bytes`, a file's first eight, begin a thin or a fat Mach-O
+    /// file.
+    static func isMachOOrFatMagic(_ bytes: [UInt8]) -> Bool {
         guard bytes.count >= 4 else { return false }
         let magics: Set<[UInt8]> = [
             [0xCF, 0xFA, 0xED, 0xFE], [0xCE, 0xFA, 0xED, 0xFE], // MH_MAGIC_64, MH_MAGIC (little-endian)

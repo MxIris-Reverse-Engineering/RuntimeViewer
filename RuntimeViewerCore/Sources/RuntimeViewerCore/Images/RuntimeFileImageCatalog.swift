@@ -7,23 +7,44 @@ import MachODependencies
 import MachOSwiftSection
 import OrderedCollections
 
-/// The images of a file on disk — a Mach-O file, a bundle or a dyld shared
-/// cache — and of the dyld shared cache it is paired with, read as `MachOFile`s.
+/// The images of a file on disk — a Mach-O file, a bundle, a folder or a dyld
+/// shared cache — and of the dyld shared cache it is paired with, read as
+/// `MachOFile`s.
 ///
-/// What the offline engine reads. Every image is opened when the catalog is
-/// made, so a path either names one of them or nothing; no image is run.
-/// The images of the file itself are keyed by their paths on disk, those of a
-/// dyld shared cache by their install names, which is how the cache lists them.
+/// What the offline engine reads. No image is run, and the images of a bundle
+/// or a folder are not even opened when the catalog is made: they are listed
+/// from their headers (`RuntimeDirectoryImageScanner`) and each is opened the
+/// first time it is asked for. An open image holds a file descriptor for as
+/// long as it lives, and a folder can hold thousands of images, of which a
+/// window looks at a few. A Mach-O file is opened at once, and so are the
+/// cache's images, which share the mappings of the cache's own files.
+///
+/// The images of the file itself are keyed by their paths on disk, those of
+/// a dyld shared cache by their install names, which is how the cache lists
+/// them.
 @Loggable(.private)
 final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     typealias Reading = RuntimeFileImageReading
 
     let file: RuntimeOfflineFile
 
-    /// The images of the file itself, by path on disk, the main executable
-    /// first: one for a Mach-O file, every Mach-O file inside a bundle, none
-    /// for a dyld shared cache.
-    private let fileImages: OrderedDictionary<String, MachOFile>
+    /// The paths of the file's own images, in the order the engine lists
+    /// them: the file itself for a Mach-O file; a bundle's main executable
+    /// first, then every other image by path; every image of a folder by
+    /// path; none for a dyld shared cache.
+    private let fileImagePaths: [String]
+
+    /// The same paths, to tell a path of the file's from any other.
+    private let fileImagePathSet: Set<String>
+
+    /// The slice a Mach-O file is read through. The images of a bundle or a
+    /// folder are read through the slice this Mac prefers.
+    private let fileSlice: RuntimeOfflineFile.Slice?
+
+    /// The file's images opened so far, by path. An image stays open once it
+    /// is: the sections built from it hold it anyway.
+    @Mutex
+    private var openedFileImages: [String: MachOFile] = [:]
 
     /// The images of the dyld shared cache the file is, or is paired with, by
     /// install name.
@@ -39,21 +60,37 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     @Mutex
     private var objcClassImagePaths: [String: String?] = [:]
 
-    /// Opens the file and its paired cache. Throws `RuntimeOfflineFileError`.
+    /// The file's own image that exports each Objective-C class, by class
+    /// name, made the first time a class is looked up: looking a name up image
+    /// by image would open every image of a folder for every name.
+    @Mutex
+    private var fileImagePathsByExportedObjCClassName: [String: String]? = nil
+
+    /// Lists the file's images and opens its paired cache. Throws
+    /// `RuntimeOfflineFileError`.
     init(file: RuntimeOfflineFile) throws {
         self.file = file
-        var fileImages: OrderedDictionary<String, MachOFile> = [:]
+        var fileImagePaths: [String] = []
+        var openedFileImages: [String: MachOFile] = [:]
+        var fileSlice: RuntimeOfflineFile.Slice?
         var cacheImages: OrderedDictionary<String, MachOFile> = [:]
         var pairedCacheName: String?
         var dependencySearchPaths: [DependencySearchPath] = []
 
         switch file.content {
         case .machO(let slice):
-            fileImages[file.url.path] = try RuntimeOfflineFile.machOFile(at: file.url, preferring: slice)
+            openedFileImages[file.url.path] = try RuntimeOfflineFile.machOFile(at: file.url, preferring: slice)
+            fileImagePaths = [file.url.path]
+            fileSlice = slice
         case .bundle:
-            fileImages = Self.bundleImages(of: file.url)
-            guard !fileImages.isEmpty else {
+            fileImagePaths = Self.imagePaths(ofBundleAt: file.url)
+            guard !fileImagePaths.isEmpty else {
                 throw RuntimeOfflineFileError.bundleWithoutExecutable(file.url)
+            }
+        case .folder:
+            fileImagePaths = RuntimeDirectoryImageScanner.images(in: file.url).map(\.path)
+            guard !fileImagePaths.isEmpty else {
+                throw RuntimeOfflineFileError.folderWithoutMachOFiles(file.url)
             }
         case .dyldSharedCache:
             let cache: FullDyldCache
@@ -70,7 +107,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
             // Every image of the file can stand in for a dependency of
             // another: a bundle's frameworks are linked by `@rpath` names the
             // locator matches by file name.
-            dependencySearchPaths.append(contentsOf: fileImages.keys.map { DependencySearchPath.machOFile(path: $0) })
+            dependencySearchPaths.append(contentsOf: fileImagePaths.map { DependencySearchPath.machOFile(path: $0) })
             switch file.dependencyCache {
             case .systemDyldSharedCache:
                 // The process's one opening of this Mac's cache, which the
@@ -97,25 +134,28 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
             }
         }
 
-        self.fileImages = fileImages
+        self.fileImagePaths = fileImagePaths
+        self.fileImagePathSet = Set(fileImagePaths)
+        self.fileSlice = fileSlice
         self.cacheImages = cacheImages
         self.pairedCacheName = pairedCacheName
         self.dependencySearchPathList = dependencySearchPaths
-        #log(.info, "Opened \(file.url.path, privacy: .public): \(fileImages.count, privacy: .public) images of its own, \(cacheImages.count, privacy: .public) of a dyld shared cache")
+        self.openedFileImages = openedFileImages
+        #log(.info, "Listed \(file.url.path, privacy: .public): \(fileImagePaths.count, privacy: .public) images of its own, \(cacheImages.count, privacy: .public) of a dyld shared cache")
     }
 
     // MARK: - RuntimeImageCatalog
 
     func imagePaths() -> [String] {
-        Array(fileImages.keys) + Array(cacheImages.keys)
+        fileImagePaths + Array(cacheImages.keys)
     }
 
     func rootNodes() -> [RuntimeImageNode] {
         switch file.content {
         case .dyldSharedCache:
             return [RuntimeImageNode.rootNode(for: Array(cacheImages.keys), name: file.displayName)]
-        case .machO, .bundle:
-            var rootNodes = [RuntimeImageNode.rootNode(for: Array(fileImages.keys), name: file.displayName)]
+        case .machO, .bundle, .folder:
+            var rootNodes = [RuntimeImageNode.rootNode(for: fileImagePaths, name: file.displayName)]
             if let pairedCacheName {
                 rootNodes.append(RuntimeImageNode.rootNode(for: Array(cacheImages.keys), name: pairedCacheName))
             }
@@ -128,11 +168,30 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         imagePath
     }
 
+    /// An image of the file is opened here the first time it is asked for;
+    /// `nil` when it cannot be opened any more — removed or changed since it
+    /// was listed.
     func machO(forImagePath imagePath: String) -> MachOFile? {
-        fileImages[imagePath] ?? cacheImages[imagePath]
+        guard fileImagePathSet.contains(imagePath) else {
+            return cacheImages[imagePath]
+        }
+        return _openedFileImages.withLock { openedFileImages in
+            if let openedImage = openedFileImages[imagePath] {
+                return openedImage
+            }
+            do {
+                let image = try RuntimeOfflineFile.machOFile(at: URL(fileURLWithPath: imagePath), preferring: fileSlice)
+                openedFileImages[imagePath] = image
+                return image
+            } catch {
+                #log(.error, "Could not open \(imagePath, privacy: .public): \(error, privacy: .public)")
+                return nil
+            }
+        }
     }
 
-    /// Nothing to load: every image was opened with the catalog.
+    /// Nothing to load: `machO(forImagePath:)` opens an image when it is
+    /// first asked for.
     func prepareImage(at imagePath: String) throws {}
 
     /// The image exporting the class object, which is how another image links
@@ -144,16 +203,18 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         if let known = objcClassImagePaths[className] {
             return known.flatMap { imagePath in machO(forImagePath: imagePath).map { (imagePath, $0) } }
         }
-        let symbolName = "_OBJC_CLASS_$_" + className
-        let found = (Array(fileImages.elements) + Array(cacheImages.elements)).first { image in
-            image.value.exportTrie?.search(by: symbolName) != nil
-        }
-        objcClassImagePaths[className] = .some(found?.key)
-        return found.map { ($0.key, $0.value) }
+        let foundPath = fileImagePath(exportingObjCClassNamed: className)
+            ?? cacheImages.first { $0.value.exportTrie?.search(by: Self.objcClassSymbolPrefix + className) != nil }?.key
+        objcClassImagePaths[className] = .some(foundPath)
+        return foundPath.flatMap { imagePath in machO(forImagePath: imagePath).map { (imagePath, $0) } }
     }
 
+    /// The first of the file's own images: there is nothing to run, so
+    /// nothing else stands out. A folder has none: whatever runs there is one
+    /// of its several executables.
     func mainExecutablePath() -> String {
-        fileImages.keys.first ?? ""
+        if case .folder = file.content { return "" }
+        return fileImagePaths.first ?? ""
     }
 
     func isSharedCacheImage(_ path: String) -> Bool {
@@ -164,7 +225,45 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         dependencySearchPathList
     }
 
-    // MARK: - Opening
+    // MARK: - Exported Objective-C Classes
+
+    private static let objcClassSymbolPrefix = "_OBJC_CLASS_$_"
+
+    /// The file's own image exporting `className`'s class object, the first
+    /// in listing order. The first lookup reads every image's exported class
+    /// names, opening the images not open yet only for as long as that takes.
+    private func fileImagePath(exportingObjCClassNamed className: String) -> String? {
+        _fileImagePathsByExportedObjCClassName.withLock { imagePathsByClassName in
+            if imagePathsByClassName == nil {
+                imagePathsByClassName = makeImagePathsByExportedObjCClassName()
+            }
+            return imagePathsByClassName?[className]
+        }
+    }
+
+    private func makeImagePathsByExportedObjCClassName() -> [String: String] {
+        var classNamesByImageIndex = Array(repeating: [String](), count: fileImagePaths.count)
+        classNamesByImageIndex.withUnsafeMutableBufferPointer { classNamesByImageIndex in
+            DispatchQueue.concurrentPerform(iterations: fileImagePaths.count) { index in
+                let imagePath = fileImagePaths[index]
+                let image = openedFileImages[imagePath]
+                    ?? (try? RuntimeOfflineFile.machOFile(at: URL(fileURLWithPath: imagePath), preferring: fileSlice))
+                classNamesByImageIndex[index] = (image?.exportTrie?.search(byKeyPrefix: Self.objcClassSymbolPrefix) ?? []).map { symbol in
+                    symbol.name.hasPrefix(Self.objcClassSymbolPrefix) ? String(symbol.name.dropFirst(Self.objcClassSymbolPrefix.count)) : symbol.name
+                }
+            }
+        }
+        var imagePathsByClassName: [String: String] = [:]
+        for (index, classNames) in classNamesByImageIndex.enumerated() {
+            for className in classNames where imagePathsByClassName[className] == nil {
+                imagePathsByClassName[className] = fileImagePaths[index]
+            }
+        }
+        #log(.info, "Indexed the Objective-C classes \(self.fileImagePaths.count, privacy: .public) images export: \(imagePathsByClassName.count, privacy: .public)")
+        return imagePathsByClassName
+    }
+
+    // MARK: - Listing
 
     /// Every image of a dyld shared cache, by install name, in the cache's
     /// order.
@@ -176,39 +275,13 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         return images
     }
 
-    /// Every Mach-O file inside a bundle, by path on disk, its main executable
-    /// first. Symbolic links are skipped — a framework's `Versions/Current`
-    /// would list each binary twice — and a fat file contributes the slice
-    /// this Mac prefers.
-    private static func bundleImages(of bundleURL: URL) -> OrderedDictionary<String, MachOFile> {
-        var images: OrderedDictionary<String, MachOFile> = [:]
-        if let executableURL = Bundle(url: bundleURL)?.executableURL?.standardizedFileURL.resolvingSymlinksInPath(),
-           let executable = try? RuntimeOfflineFile.machOFile(at: executableURL, preferring: nil) {
-            images[executableURL.path] = executable
+    /// Every image of a bundle, its main executable first.
+    private static func imagePaths(ofBundleAt bundleURL: URL) -> [String] {
+        var imagePaths = RuntimeDirectoryImageScanner.images(in: bundleURL).map(\.path)
+        if let executablePath = Bundle(url: bundleURL)?.executableURL?.standardizedFileURL.resolvingSymlinksInPath().path,
+           let executableIndex = imagePaths.firstIndex(of: executablePath) {
+            imagePaths.insert(imagePaths.remove(at: executableIndex), at: 0)
         }
-        let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
-        guard let enumerator = FileManager.default.enumerator(at: bundleURL, includingPropertiesForKeys: keys) else {
-            return images
-        }
-        for case let fileURL as URL in enumerator {
-            guard let values = try? fileURL.resourceValues(forKeys: Set(keys)),
-                  values.isRegularFile == true, values.isSymbolicLink != true
-            else { continue }
-            let path = fileURL.standardizedFileURL.path
-            guard images[path] == nil, Self.startsWithMachOMagic(fileURL),
-                  let machOFile = try? RuntimeOfflineFile.machOFile(at: fileURL, preferring: nil)
-            else { continue }
-            images[path] = machOFile
-        }
-        return images
-    }
-
-    private static func startsWithMachOMagic(_ fileURL: URL) -> Bool {
-        guard let fileHandle = try? FileHandle(forReadingFrom: fileURL) else { return false }
-        defer { try? fileHandle.close() }
-        guard let bytes = try? fileHandle.read(upToCount: 4), bytes.count == 4 else { return false }
-        let magic = Array(bytes)
-        return magic == [0xCF, 0xFA, 0xED, 0xFE] || magic == [0xCE, 0xFA, 0xED, 0xFE]
-            || magic == [0xCA, 0xFE, 0xBA, 0xBE] || magic == [0xCA, 0xFE, 0xBA, 0xBF]
+        return imagePaths
     }
 }
