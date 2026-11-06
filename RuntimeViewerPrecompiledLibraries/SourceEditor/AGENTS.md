@@ -60,14 +60,39 @@ root `AGENTS.md` repeats the precondition and points here.
   Breaking section of every release it moved across. Adapt the bridge to those changes, run
   `RuntimeViewerSourceEditorBridgeTests`, and commit `PinnedRelease.txt` together with them.
 
-## Hard precondition: no dump, no binaries, no work
+## Hard precondition: read the reconstruction's sources, never infer
 
-**Before touching this module, confirm the reference material is on disk. If it is not, stop and
-ask for it — say what is missing and what question it was going to answer. Do not proceed on
-inference.** This is not a preference. Every wrong answer this module has produced came from
-reasoning about what the framework "must" do instead of reading what it does.
+The frameworks the app links are our own reconstruction, not Xcode's, and their sources answer how
+they do a thing directly. **For a bug in this module or a feature it needs, read them before
+anything else.** Every wrong answer this module has produced came from reasoning about what the
+framework "must" do instead of reading what it does.
 
-What has to be present:
+- **Where**: the checkout of `Mx-Iris/SourceEditor` at
+  `/Volumes/Repositories/Private/Personal/Library/macOS/SourceEditor`, the same path on both Macs.
+- **Which version**: the release the app links — the version in `PinnedRelease.txt`, which is a tag
+  of that repository. Read it at the tag, `git -C <checkout> show <version>:<path>` and
+  `git -C <checkout> grep <pattern> <version>`, not on `main`, which runs ahead of the pin; when the
+  tag is missing, `git -C <checkout> fetch --tags`. Never check out, edit or commit in that checkout:
+  it is where the reconstruction itself is worked on.
+- **What is there**: every framework's sources, and its resources — the `.xclangspec` grammars and
+  `Built-in Syntax Types.xcsynspec` (the theme's syntax keys and their hierarchy) in
+  `SourceModel/Resources/LanguageSpecifications/`, the built-in `.xccolortheme`s in
+  `SourceEditor/Resources/`. A method's comment names the address in Xcode 26.6 it rebuilds, which is
+  what a claim taken from the sources cites.
+- **What the framework itself lacks** — a fix, a hook, a feature — is a change to the SourceEditor
+  repository, which reaches this one through a release and `UpdateSourceEditorScript.sh`; so is a
+  place where the reconstruction and Xcode 26.6 disagree. Neither is something to work around here
+  without saying so.
+
+**If the checkout, or the tag of the pinned release, is not there, stop and ask for it — say what
+is missing and what question it was going to answer. Do not proceed on inference.**
+
+## When the question is about Xcode's original
+
+Only a question about Xcode's own frameworks — whether the reconstruction matches the original, or
+how the original does something the reconstruction does not have yet — needs the material the
+reconstruction was rebuilt from. Then the same rule holds: when it is not on disk, stop and ask for
+it.
 
 1. **A RuntimeViewer dump of the frameworks** — `/Volumes/RE/SourceEditor/Xcode/<version>/`,
    one directory per framework, each holding **both** `ObjCHeaders/` and `SwiftInterfaces/`, of
@@ -88,14 +113,6 @@ What has to be present:
 2. **The framework binaries** — the reconstruction the app links, in `Frameworks/` once
    `./FetchSourceEditorScript.sh` has run, and the Xcode 26.6 originals it rebuilds,
    `<Xcode 26.6>.app/Contents/SharedFrameworks/<Name>.framework/Versions/A/<Name>`.
-3. **The framework resources**, whenever the question touches parsing, tokenization or theming:
-   `SourceModel.framework/Resources/LanguageSpecifications/` holds the `.xclangspec` grammars
-   (plain text, readable directly) and `Built-in Syntax Types.xcsynspec`, which is where the
-   theme's syntax keys and their hierarchy are defined.
-
-The reconstruction is meant to behave as Xcode 26.6 does, and its sources — the private SourceEditor
-repository — answer how *it* does a thing directly. When it and the original disagree, that is a
-finding for the SourceEditor repository, not something to work around here without saying so.
 
 ## Never infer behavior from
 
@@ -110,11 +127,11 @@ finding for the SourceEditor repository, not something to work around here witho
 
 1. **The framework's own resources.** Grammar and theme questions are answered outright by
    `*.xclangspec` / `*.xcsynspec`. Read those before anything else.
-2. **The dump**, and for the reconstruction its sources. Signatures, layouts, requirement order,
-   method addresses.
-3. **Decompilation** via the `idalib` MCP, opening the framework binary directly. This is how
-   you answer "does it call my hook, and under what condition" — the dump gives you the address,
-   so go straight to it.
+2. **The reconstruction's sources** at the pinned tag. "Does it call my hook, and under what
+   condition", a default value, which layer draws what — read the method.
+3. For Xcode's original only: **the dump** (signatures, layouts, requirement order, method
+   addresses), then **decompilation** via the `idalib` MCP, opening the framework binary directly —
+   the dump gives you the address, so go straight to it.
 4. **A runtime probe.** The last word on "does this class actually respond to that selector". A
    test in `RuntimeViewerSourceEditorBridgeTests` links the frameworks the way the app does and can
    ask the Objective-C runtime directly:
@@ -125,7 +142,8 @@ finding for the SourceEditor repository, not something to work around here witho
    ```
 
 Behavioral claims that reach the user or a document must name their evidence: the file and rule
-for a grammar fact, the symbol and address for a decompiled one, the probe's output for a
+for a grammar fact, the release, the method and the address its comment names for one read from
+the reconstruction's sources, the symbol and address for a decompiled one, the probe's output for a
 runtime one.
 
 ## Where the findings live

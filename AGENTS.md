@@ -633,17 +633,17 @@ of a universal one, compiles the bridge without it (`#if arch(arm64) && canImpor
 shows interfaces in the built-in `NSTextView`. Nothing is loaded at run time, and nothing comes from
 an installed Xcode.
 
-**Hard precondition: no dump, no binaries, no work.** Before touching this module, confirm the reference
-material is on disk: RuntimeViewer's own dump of the frameworks at `/Volumes/RE/SourceEditor/Xcode/<version>/`
-— one directory per framework holding **both** `ObjCHeaders/` and `SwiftInterfaces/`, of Xcode 26.6,
-the version the reconstruction rebuilds — and the framework binaries: the reconstruction in
-`RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks/`, and the Xcode 26.6 originals.
-**If it is not there, stop and ask for it — say
-what is missing and what question it was going to answer. Do not proceed on inference**, and never infer
-behavior from a symbol's or protocol's name, from what the equivalent AppKit class does, or from what
-would make sense. How the module is built, what the dump must contain and why nothing else substitutes,
-how to establish a fact and where findings go: `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md`
-— read it before the first change.
+**Hard precondition: read the reconstruction's sources, never infer.** The frameworks are our own
+reconstruction, so a bug or a feature here starts from its sources: the `Mx-Iris/SourceEditor` checkout at
+`/Volumes/Repositories/Private/Personal/Library/macOS/SourceEditor` (both Macs), read at the tag
+`PinnedRelease.txt` names — `git -C <checkout> show <version>:<path>`, never `main`, and never a checkout
+or an edit there. What the framework itself lacks is a change to that repository, not a workaround here.
+RuntimeViewer's dump of Xcode 26.6 (`/Volumes/RE/SourceEditor/Xcode/26.6/`) and the original binaries are
+for questions about Xcode's original only. **If what the question needs is not there, stop and ask for
+it — say what is missing and what question it was going to answer. Do not proceed on inference**, and
+never infer behavior from a symbol's or protocol's name, from what the equivalent AppKit class does, or
+from what would make sense. How the module is built, how to establish a fact and where findings go:
+`RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` — read it before the first change.
 
 </important>
 
