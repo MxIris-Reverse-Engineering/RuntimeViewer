@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import RxSwift
+import RuntimeViewerCrossReferences
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerApplication
 
