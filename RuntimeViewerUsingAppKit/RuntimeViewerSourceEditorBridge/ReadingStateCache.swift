@@ -5,18 +5,29 @@
 
 import Foundation
 
-/// Remembers what was folded in each interface the editor has shown, so that leaving a class
-/// and coming back does not silently discard the reader's folds.
+/// Remembers where the reader was in each interface the editor has shown — what was folded and
+/// how far down it was scrolled — so that leaving a class and coming back finds it as it was left.
 ///
 /// The bridge has to unfold before every source swap — a fold outstanding across the swap
-/// crashes the framework, see `SourceEditorBridge.setSource`. Saving the state first and
-/// putting it back when the same text returns is what keeps that from also being a feature
-/// regression.
+/// crashes the framework, see `SourceEditorBridge.setSource` — and every swap installs a new data
+/// source, which starts at the top. Saving both first and putting them back when the same text
+/// returns is what keeps that from losing the reader's place.
 ///
-/// Session-scoped on purpose: fold state describes one particular rendering of one particular
+/// Session-scoped on purpose: the state describes one particular rendering of one particular
 /// interface, and both the runtime metadata and the generation options behind it can differ by
 /// the next launch. There is nothing here worth persisting.
-struct FoldStateCache {
+struct ReadingStateCache {
+    /// What the bridge saves for one text.
+    struct ReadingState {
+        /// `FoldingController.stateDictionaryForSaving`.
+        let foldState: NSDictionary
+
+        /// `SourceEditorView.scrollStateForStateRestoration()`: the line at the top of the visible
+        /// area and how far into it the view is scrolled. Taken while the text's own folds are
+        /// still in place, which is what the line is counted against when it comes back.
+        let scrollPosition: (line: Int, offset: CGFloat)
+    }
+
     /// Identifies the *text*, not the object it was rendered from.
     ///
     /// The bridge is handed a `String` and nothing else — no `RuntimeObject`, no generation
@@ -46,11 +57,11 @@ struct FoldStateCache {
     }
 
     /// Enough to cover moving among a handful of classes and back. Each entry is a dictionary
-    /// of line/column pairs — hundreds of bytes for a heavily folded interface — so the ceiling
-    /// is about legibility, not memory.
+    /// of line/column pairs — hundreds of bytes for a heavily folded interface — and a scroll
+    /// position, so the ceiling is about legibility, not memory.
     private let capacity: Int
 
-    private var statesByKey: [Key: NSDictionary] = [:]
+    private var statesByKey: [Key: ReadingState] = [:]
 
     /// Least-recently-used first. Small enough (`capacity` entries) that the linear scans below
     /// beat keeping a second index in sync.
@@ -65,7 +76,7 @@ struct FoldStateCache {
     /// An empty fold list is stored like any other: "this interface had nothing folded" is a
     /// real answer, and skipping it would let an older, stale state stay behind and come back
     /// the next time the same text is shown.
-    mutating func store(_ state: NSDictionary, for key: Key) {
+    mutating func store(_ state: ReadingState, for key: Key) {
         if statesByKey[key] == nil, keysInUseOrder.count == capacity, let oldest = keysInUseOrder.first {
             keysInUseOrder.removeFirst()
             statesByKey[oldest] = nil
@@ -75,7 +86,7 @@ struct FoldStateCache {
     }
 
     /// The state stored for `key`, if any, marking it most recently used.
-    mutating func state(for key: Key) -> NSDictionary? {
+    mutating func state(for key: Key) -> ReadingState? {
         guard let state = statesByKey[key] else { return nil }
         moveToMostRecent(key)
         return state

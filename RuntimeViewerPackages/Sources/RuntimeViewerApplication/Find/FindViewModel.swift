@@ -437,7 +437,8 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
                 matchRangeInLine: match.matchRangeInLine,
                 query: searchText.text,
                 matchMode: searchText.matchMode,
-                isCaseSensitive: query.isCaseSensitive
+                isCaseSensitive: query.isCaseSensitive,
+                showsQueryInFindBar: true
             )
         case .member(let match):
             guard let lineNumber = match.member.lineNumber else { return nil }

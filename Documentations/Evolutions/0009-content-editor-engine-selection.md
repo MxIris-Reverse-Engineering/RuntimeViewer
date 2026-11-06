@@ -858,7 +858,9 @@ NSTextField.setStringValue:` 每次自增同步跑一遍,后面还带 `intrinsic
 ### 未完成
 
 **A. 其余显示项。** `lineWrappingStyle` / `overscroll`,对只读接口的价值存疑,未做。
-（查找栏与 invisibles 已完成,见上。）
+（查找栏与 invisibles 已完成,见上。）框架里另外几项现成的阅读功能——记住阅读位置、Code Folding
+菜单、查找栏带上 Find 的查询、高亮同名出现——由
+[内容面板接入 SourceEditor 现成的四项阅读功能](draft-source-editor-reading-aids.md) 接入。
 
 **B. 系统符号与工程符号的颜色区分。** 主题里 `identifier.class` 与 `identifier.class.system`
 是两个键，但 `ThemeProfile` 只有 7 种样式、没有这一维，现在两者同色。要区分必须先给

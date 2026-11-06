@@ -47,12 +47,17 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///     of them collapse, or nil to show the comments as plain text. Passed with the source
     ///     rather than separately because the decorations are columns of this very text: the
     ///     editor must never lay out one text with the other's decorations.
+    ///   - restoresScrollPosition: scroll a text shown before back to where the reader left it,
+    ///     and any other to the top. Pass `false` when a ``revealCharacterRange(_:)`` is about to
+    ///     follow, which then decides alone: the scroll waits for the next layout, which can come
+    ///     after the reveal and undo it. Folds come back either way.
     func setSource(
         _ source: String,
         languageIdentifier: String,
         semanticRanges: [NSValue],
         semanticNodeTypeNames: [String],
-        commentDecorations: SourceEditorBridgingCommentDecorations?
+        commentDecorations: SourceEditorBridgingCommentDecorations?,
+        restoresScrollPosition: Bool
     )
 
     /// How comment tags are drawn. Called with the theme, and again whenever it or the
@@ -126,6 +131,46 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// the middle of the view and flashes the editor's callout over it: what the Find navigator
     /// does with a hit once the interface is on screen.
     func revealCharacterRange(_ characterRange: NSRange)
+
+    /// Opens the editor's find bar on `query` and highlights every match, leaving keyboard
+    /// focus where it was — what the Find navigator does with a text hit, so the reader sees
+    /// the other matches in the interface and can step through them with ⌘G.
+    ///
+    /// Call it before ``revealCharacterRange(_:)`` for the same hit: opening the bar selects the
+    /// match nearest the insertion point, and the reveal then selects the hit itself.
+    ///
+    /// The query also goes to the system's find pasteboard, as any find bar's does.
+    func showFindInterface(query: String, pattern: SourceEditorBridgingFindPattern, isCaseSensitive: Bool)
+}
+
+/// How the find bar matches its query, the choices of its pattern menu.
+@objc(RuntimeViewerSourceEditorBridgingFindPattern)
+public enum SourceEditorBridgingFindPattern: Int {
+    case contains
+    /// The query between word boundaries.
+    case matchesWord
+    /// The query after a word boundary.
+    case startsWith
+    /// The query before a word boundary.
+    case endsWith
+    /// The query is an ICU regular expression.
+    case regularExpression
+}
+
+/// The code folding commands the editor view answers, Xcode's Editor ▸ Code Folding menu.
+///
+/// They travel up the responder chain like any menu action, and the editor view enables them
+/// itself. Nothing conforms to this protocol — the editor view implements the methods without
+/// it — and the app, which cannot see the editor's own types, uses it only to name the
+/// selectors in its menu.
+@objc(RuntimeViewerSourceEditorBridgingCodeFoldingCommands)
+public protocol SourceEditorBridgingCodeFoldingCommands {
+    /// Folds the structure around the insertion point — where the reader last clicked.
+    func fold(_ sender: Any?)
+    func unfold(_ sender: Any?)
+    func unfoldAll(_ sender: Any?)
+    func foldAllComments(_ sender: Any?)
+    func unfoldAllComments(_ sender: Any?)
 }
 
 /// Told when the user ⌘-clicks a token, and asked what to offer when they right-click one.

@@ -212,6 +212,7 @@ struct FindViewModelTests {
         #expect(highlight.lineText == match.lineText)
         #expect(highlight.matchRangeInLine == match.matchRangeInLine)
         #expect(highlight.query == "initWithFormat:")
+        #expect(highlight.showsQueryInFindBar, "a text hit's other matches belong in the content pane's find bar")
         #expect(router.triggeredRoutes.isEmpty)
     }
 
@@ -405,6 +406,7 @@ struct FindViewModelTests {
         let (_, highlight) = try #require(Self.highlightingPush(in: routes))
         #expect(highlight.lineNumber == match.member.lineNumber)
         #expect(highlight.query == match.member.name)
+        #expect(!highlight.showsQueryInFindBar, "a member hit names one declaration and opens no find bar")
     }
 
     @Test("a member hit's highlight lands on the member's name, not inside a type name before it")

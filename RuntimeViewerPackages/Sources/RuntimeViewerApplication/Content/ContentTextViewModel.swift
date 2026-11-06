@@ -87,6 +87,14 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// interface is rendered.
     private let highlightRangeRelay = PublishRelay<NSRange>()
 
+    /// The search the `ContentHighlightRequest` came from, for the pane's find
+    /// bar, when the request asks for it.
+    private let findBarQueryRelay = PublishRelay<ContentFindBarQuery>()
+
+    /// Whether this ViewModel was built to reveal a Find navigator hit, which
+    /// its first render is followed by.
+    private let highlightsFirstRender: Bool
+
     /// The Find navigator hit this ViewModel was built to show, until its first render uses it.
     /// Owned here, not by the document, so it goes away with the navigation that brought it: a
     /// navigation that moves on, an interface that cannot be fetched or an engine switch drops
@@ -108,6 +116,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     ) {
         self.runtimeObject = runtimeObject
         self.pendingHighlightRequest = highlightRequest
+        self.highlightsFirstRender = highlightRequest != nil
         self.theme = ResolvedTheme.fallback
         let interfaceCache = documentState.interfaceCache
         let contentLoadingDelay = Self.contentLoadingDelay()
@@ -256,19 +265,29 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         // once the object's text is first rendered, locate it in that text (off
         // main — the text can be megabytes) and hand the range to the view.
         // Used once: later renders (theme, options) leave the scroll position alone.
+        //
+        // The find bar's query goes first, with or without a range: opening the
+        // bar selects a match of its own, which the reveal then replaces.
         $renderedInterface
             .compactMap { $0 }
-            .flatMapLatest { [weak self] rendered -> Observable<NSRange?> in
+            .flatMapLatest { [weak self] rendered -> Observable<(ContentHighlightRequest, NSRange?)> in
                 guard let self, let request = self.pendingHighlightRequest else { return .empty() }
                 self.pendingHighlightRequest = nil
                 let displayedText = rendered.attributedString.string
                 return Observable.just(())
                     .observe(on: renderScheduler)
-                    .map { request.locate(in: displayedText) }
+                    .map { (request, request.locate(in: displayedText)) }
             }
             .observeOnMainScheduler()
-            .compactMap { $0 }
-            .bind(to: highlightRangeRelay)
+            .subscribeOnNext { [weak self] request, range in
+                guard let self else { return }
+                if let findBarQuery = request.findBarQuery {
+                    findBarQueryRelay.accept(findBarQuery)
+                }
+                if let range {
+                    highlightRangeRelay.accept(range)
+                }
+            }
             .disposed(by: rx.disposeBag)
     }
 
@@ -472,6 +491,14 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// Scroll to and flash this range: a Find navigator hit located in the
         /// text on screen. Emits at most once per pending highlight.
         public let highlightRange: Signal<NSRange>
+        /// Show this query in the pane's find bar, every match marked: the
+        /// search a Find navigator text hit came from. Emits at most once, just
+        /// before `highlightRange` for the same hit.
+        public let findBarQuery: Signal<ContentFindBarQuery>
+        /// Whether the first `renderedInterface` is followed by a
+        /// `highlightRange`. A pane that puts the reader back where they left an
+        /// interface skips that for the first render, so the hit is what shows.
+        public let highlightsFirstRender: Bool
     }
 
     public func transform(_ input: Input) -> Output {
@@ -544,7 +571,9 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver(),
             selectedRuntimeObjectName: documentState.$selectedRuntimeObject.asDriver().map { $0?.displayName ?? "" },
             runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal(),
-            highlightRange: highlightRangeRelay.asSignal()
+            highlightRange: highlightRangeRelay.asSignal(),
+            findBarQuery: findBarQueryRelay.asSignal(),
+            highlightsFirstRender: highlightsFirstRender
         )
     }
 }

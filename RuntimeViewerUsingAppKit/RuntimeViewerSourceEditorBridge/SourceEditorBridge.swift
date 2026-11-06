@@ -28,13 +28,23 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     /// whether or not the numbers are wanted.
     private let gutter = SourceEditorGutter()
 
-    /// What was folded in each interface this view has shown. See `setSource`, which has to
-    /// unfold before every swap and would otherwise lose the folds for good.
-    private var foldStates = FoldStateCache()
+    /// Answers the editor's question of where else the identifier under the insertion point
+    /// appears. Every new language service gets it as its host, which holds it weakly.
+    private let symbolOccurrenceProvider = SymbolOccurrenceProvider()
 
-    /// Identifies the text currently in the view, so its folds can be filed under the right key
-    /// when the next one arrives. Nil until the first `setSource`.
-    private var displayedSourceKey: FoldStateCache.Key?
+    /// What was folded in each interface this view has shown, and how far down it was
+    /// scrolled. See `setSource`, which has to unfold before every swap and would otherwise lose
+    /// both for good.
+    private var readingStates = ReadingStateCache()
+
+    /// Identifies the text currently in the view, so its reading state can be filed under the
+    /// right key when the next one arrives. Nil until the first `setSource`.
+    private var displayedSourceKey: ReadingStateCache.Key?
+
+    /// How long the insertion point rests on an identifier before its other occurrences are
+    /// highlighted. The framework leaves the highlight off until it is given a delay; this one is
+    /// ours, chosen to come after a click settles without feeling slow, not taken from Xcode.
+    private static let symbolOccurrenceHighlightDelay: Double = 0.25
 
     /// What `applyDisplayOptions` last put into effect, so a settings change that moves one
     /// toggle does not re-run the other four. That is not just tidiness: `installMinimap()`
@@ -120,6 +130,12 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // minimap draws no hover label at all — not merely no icon — while it has nobody to ask
         // for the icon. See the conformance at the end of this file. Held weakly by the view.
         sourceEditorView.setMinimapLandmarkIconProvider(self)
+
+        // The highlight of the other occurrences of a clicked identifier. The view draws it
+        // (`SelectedSymbolHighlight`) once it has a delay — nil, the default, leaves it off — and
+        // the provider, installed on each language service in `setSource`, finds them.
+        symbolOccurrenceProvider.sourceEditorView = sourceEditorView
+        sourceEditorView.selectedSymbolHighlightDelay = Self.symbolOccurrenceHighlightDelay
     }
 
     func setSource(
@@ -127,7 +143,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         languageIdentifier: String,
         semanticRanges: [NSValue],
         semanticNodeTypeNames: [String],
-        commentDecorations: SourceEditorBridgingCommentDecorations?
+        commentDecorations: SourceEditorBridgingCommentDecorations?,
+        restoresScrollPosition: Bool
     ) {
         let language: SourceEditorLanguage? =
             switch languageIdentifier {
@@ -148,7 +165,14 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         )
         // Reading `languageService` is what creates it — it is lazy — so this both brings the
         // service up and installs the adjuster before anything asks the data source to parse.
-        (dataSource.languageService as? SourceModelLanguageService)?.nodeTypeAdjuster = semanticNodeTypeAdjuster
+        //
+        // The adjuster goes in first: the host's setter also re-installs the adjuster, falling back
+        // to the host when the service has none of its own, and this host is not one.
+        if let languageService = dataSource.languageService as? SourceModelLanguageService {
+            languageService.nodeTypeAdjuster = semanticNodeTypeAdjuster
+            languageService.hostExtension = symbolOccurrenceProvider
+        }
+        symbolOccurrenceProvider.load(source: source)
 
         // **Before the assignment, never after.** Folds belong to the view, not to the data
         // source: `SourceEditorView.dataSource`'s setter reaches the folding controller only to
@@ -167,9 +191,17 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // assignment would take the same trap on the way through.
         //
         // Saving first is what keeps that from also throwing the reader's folds away: leaving a
-        // class and coming back would otherwise arrive fully expanded every time.
+        // class and coming back would otherwise arrive fully expanded every time. The scroll
+        // position is taken in the same breath, while the folds it was measured with are still
+        // in place; the new data source would otherwise start at the top.
         if let displayedSourceKey {
-            foldStates.store(sourceEditorView.foldingController.stateDictionaryForSaving, for: displayedSourceKey)
+            readingStates.store(
+                ReadingStateCache.ReadingState(
+                    foldState: sourceEditorView.foldingController.stateDictionaryForSaving,
+                    scrollPosition: sourceEditorView.scrollStateForStateRestoration()
+                ),
+                for: displayedSourceKey
+            )
         }
         // **The old decorations go before the unfold**, which lays the old text out again: they
         // are columns of the text they came with, and a column past the end of a line is a
@@ -187,13 +219,29 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // is what makes it *correct*, not just safe.
         //
         // A source shown for the first time starts with its decorated rows collapsed instead.
-        let sourceKey = FoldStateCache.Key(source: source, isDecorated: commentDecorations != nil)
+        let sourceKey = ReadingStateCache.Key(source: source, isDecorated: commentDecorations != nil)
         displayedSourceKey = sourceKey
-        if let savedState = foldStates.state(for: sourceKey) as? [AnyHashable: Any] {
-            sourceEditorView.foldingController.restore(from: savedState)
+        let savedState = readingStates.state(for: sourceKey)
+        if let foldState = savedState?.foldState as? [AnyHashable: Any] {
+            sourceEditorView.foldingController.restore(from: foldState)
         } else {
             commentDecorationController.collapseRowsThatStartCollapsed()
         }
+
+        // After the folds, which the saved line was counted against. A text shown before goes
+        // back to where it was left, any other to the top: the view keeps the clip view's origin
+        // across a data source swap, so a new interface would otherwise open as far down as the
+        // last one was scrolled. The top is the position `currentScrollState()` reports for a
+        // view with nothing laid out.
+        //
+        // Deferred, the way the framework restores a document's position itself: the view holds
+        // the position and scrolls to it when the next layout finishes
+        // (`layoutManager(_:didFinishLayoutInContentView:)`), since nothing of the new text is
+        // laid out yet. That wait is also why a reveal that follows asks for neither — it would
+        // land first and be scrolled away.
+        guard restoresScrollPosition else { return }
+        let topScrollPosition = (line: 0, offset: -sourceEditorView.contentView.layoutMargins.top)
+        sourceEditorView.applyScrollState(savedState?.scrollPosition ?? topScrollPosition, defer: true)
     }
 
     func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance) {
@@ -373,6 +421,41 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // is usually far from the previous scroll position and "optimal" leaves it at an edge.
         sourceEditorView.selectTextRange(range, scrollPlacement: .center, alwaysScroll: true)
         sourceEditorView.showCallout(for: range)
+    }
+
+    func showFindInterface(query: String, pattern: SourceEditorBridgingFindPattern, isCaseSensitive: Bool) {
+        let window = sourceEditorView.window
+        let previousFirstResponder = window?.firstResponder
+
+        // The query first, then the bar. With the bar closed, the query's observer only writes
+        // the find pasteboard, and opening the bar runs the query with the matches drawn and
+        // nothing selected (`displayTextFindableControl(mode:)`). With the bar already open, the
+        // observer runs the query at once, but hides the matches while the editor is not the
+        // first responder; opening the bar again draws them, and does nothing else to a bar that
+        // is already there.
+        sourceEditorView.findQuery = TextFindQuery(
+            find: query,
+            caseSensitive: isCaseSensitive,
+            pattern: Self.textFindPattern(for: pattern)
+        )
+        sourceEditorView.perform(NSTextFinder.Action.showFindInterface)
+
+        // Presenting the bar makes it the first responder (`present(_:)`, 26.6.3; 0x3DD7F0), as
+        // it should be for ⌘F. Here the reader is stepping through the Find navigator's results
+        // with the arrow keys, which taking the focus would stop.
+        if let window, let previousFirstResponder, window.firstResponder !== previousFirstResponder {
+            window.makeFirstResponder(previousFirstResponder)
+        }
+    }
+
+    private static func textFindPattern(for pattern: SourceEditorBridgingFindPattern) -> TextFindPattern {
+        switch pattern {
+        case .contains: .contains
+        case .matchesWord: .matchesWord
+        case .startsWith: .startsWith
+        case .endsWith: .endsWith
+        case .regularExpression: .regularExpression
+        }
     }
 
     fileprivate func reportCommandClick(at position: SourceEditorPosition) {
