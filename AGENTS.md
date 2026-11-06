@@ -436,6 +436,18 @@ The project uses three Swift Package Manager packages:
   `Documentations/Evolutions/0065-engine-resident-memory.md`,
   `Documentations/Evolutions/0066-on-demand-corpora-and-cross-references.md`,
   `Documentations/ResolvedIssues/2026-10-16-second-document-disturbs-shared-indexing.md`
+- **Editor panes**: the content area is `DocumentState.editorArea` — panes arranged by `EditorLayout`
+  (Xcode's rules, two levels at most), each pane with its tabs, each tab with its own
+  `NavigationHistory`, and the focused pane. `selectedRuntimeObject` and `cursorMember` only mirror the
+  focused pane: follow them for what is on screen, `$editorArea` for anything about panes or tabs, and
+  never `distinctUntilChanged()` the area raw — its equality compares objects by identity, so compare
+  what you show (`TabBarSnapshot`). A `SelectionRoute` that names no tab or pane acts on the focused
+  pane's active tab, so a pane's content focuses its pane (`.focusEditorPane`) before it opens anything;
+  routes name tabs and panes by `DocumentTab.ID` / `EditorPane.ID`, never by index. `MainCoordinator.fanOut`
+  hands the routes to `EditorAreaCoordinator`, one `ContentCoordinator` per pane; the pane the keyboard
+  focus enters becomes the focused one. A content view controller names what takes the focus through
+  `EditorPaneContent.focusableView`, never `preferredFirstResponder`, which AppKitPlus's navigation
+  controller would hand the focus on every `set`. Background: `Documentations/Evolutions/draft-editor-panes.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection
@@ -726,6 +738,8 @@ logic, `.drive()` / `.bind(to:)` are fine: `output.imageName.drive(label.rx.stri
 - Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`
 - Engine manager: `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift`
 - Document state: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
+- Editor panes: the model in `RuntimeViewerPackages/Sources/RuntimeViewerApplication/EditorArea/`, the views
+  and their coordinator in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/EditorArea/`
 - ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/`
 - MCP bridge window provider: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppMCPBridgeWindowProvider.swift`
 - MCP server: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/`

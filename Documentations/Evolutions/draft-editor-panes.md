@@ -245,9 +245,9 @@ public struct EditorPane: Hashable, Identifiable, Sendable {
 /// has the focus — so that no reader ever sees a layout naming a pane that is not there yet, or a
 /// focus on a pane that has gone.
 public struct EditorArea: Hashable, Sendable {
-    public internal(set) var layout: EditorLayout
+    public private(set) var layout: EditorLayout
     public internal(set) var panes: [EditorPane.ID: EditorPane]
-    public internal(set) var focusedPaneID: EditorPane.ID
+    public private(set) var focusedPaneID: EditorPane.ID
 
     /// One pane holding one empty tab.
     public init()
@@ -257,6 +257,9 @@ public struct EditorArea: Hashable, Sendable {
     public var orderedPanes: [EditorPane] { get }
     public subscript(paneID: EditorPane.ID) -> EditorPane? { get }
     public func paneID(containing tabID: DocumentTab.ID) -> EditorPane.ID?
+    /// Whether no tab of any pane has shown anything: with the sidebar at the image list, an
+    /// engine coming back has nothing to start the document over from.
+    public var hasShownNothing: Bool { get }
 
     /// What ⌘W closes: the focused tab while its pane has another, else the focused pane while
     /// there is another, else the window.
@@ -338,7 +341,7 @@ public enum SelectionRoute: Routable {
 - `backward` / `forward` / `jump(toIndex:)` / `newTab` / `selectAtRoot` 作用于焦点栏的当前标签；`jump` 的下标是那个标签历史里的下标。
 - 删掉 `.pop` 与 `.clear`：仓库里没有任何调用方（含测试）。
 - 「先改状态、再发路由」的契约不变。路由器在每条路由末尾按 `editorArea` 重算 `selectedRuntimeObject` 与 `cursorMember`，值没变就不赋值，避免多余的发射。
-- 修饰键到去处的换算放在一处：`SelectionRoute.Destination(clickModifierFlags:)`（AppKit 下），无修饰 → `.focusedTab`，⌥ → `.newTab`，⇧⌥ → `.nextEditorPane`；内容区的链接先去掉 ⌘ 再换算，⇧⌘ 另外映射到 `.newTab` 以保留现有习惯。`FindResultActivation.opensInNewTab(for:)` 换成它，`FindCrossReferenceNavigation.open(_:highlighting:inNewTab:in:)` 的 `inNewTab:` 换成 `in destination:`。
+- 修饰键到去处的换算放在一处（AppKit 下）：列表里的点击用 `SelectionRoute.Destination(listClickModifierFlags:)`，无修饰或只有 ⇧ → `.focusedTab`，⌥ → `.newTab`，⇧⌥ → `.nextEditorPane`；类型链接上的 ⌘-点击用 `Destination(linkClickModifierFlags:)`，与前者只差 ⇧ 单独也开新标签，以保留 ⇧⌘-点击的现有习惯。`FindResultActivation.opensInNewTab(for:)` 换成 `destination(for:)`，`FindCrossReferenceNavigation` 的两个 `open` 的 `inNewTab:` 换成 `destination:`。
 
 `MainCoordinator.fanOut` 只做两件事：把路由交给编辑区的 coordinator，让 Inspector 重新进入 `selectedRuntimeObject`（`.back`，同一对象时它本来就不重建）。编辑区按路由找到受影响的栏：
 
@@ -425,11 +428,11 @@ MainSplitViewController 第 1 项
 
 ## 落地步骤
 
-1. **模型**：`EditorPaneOrientation`、`EditorPanePlacement`、`EditorLayout`、`NavigationHistory`、`EditorPane`、`EditorArea`，以及它们的测试。只加类型，不接线。
-2. **DocumentState 与路由**：`editorArea` 取代 `selectionStack` / `selectionIndex` / `tabs` / `activeTabIndex`；`SelectionRoute` 改成上面的形状；切镜像不再清空；插入点按栏存；改全部调用点（侧栏、内容区、Inspector、Find、Main、iOS）与现有测试，补路由测试。这一步仍只有一栏，整窗标签栏临时改读焦点栏的标签；用户能察觉的只有「切镜像不清空」和「历史按标签」。
-3. **编辑区界面**：`EditorAreaCoordinator` / `ViewController` / `ViewModel`、`EditorPaneViewController` / `ViewModel`、嵌套 split view、各栏标签栏、焦点同步；删掉 `TabBarAccessoryController`；`fanOut` 改为交给编辑区。
-4. **命令**：工具栏按钮、File / Navigate / View 菜单项与快捷键、⌘W 的关闭顺序、启用条件。
-5. **打开去处**：`Destination(clickModifierFlags:)`，侧栏、内容区、Find 与 Inspector References 的修饰键，右键菜单的 Open in Next Editor Pane。
+1. ✅ **模型**：`EditorPaneOrientation`、`EditorPanePlacement`、`EditorLayout`、`NavigationHistory`、`EditorPane`、`EditorArea`，以及它们的测试。只加类型，不接线。
+2. ✅ **DocumentState 与路由**：`editorArea` 取代 `selectionStack` / `selectionIndex` / `tabs` / `activeTabIndex`；`SelectionRoute` 改成上面的形状；切镜像不再清空；插入点按栏存；改全部调用点（侧栏、内容区、Inspector、Find、Main、iOS）与现有测试，补路由测试。这一步仍只有一栏，整窗标签栏临时改读焦点栏的标签；用户能察觉的只有「切镜像不清空」和「历史按标签」。
+3. ✅ **编辑区界面**：`EditorAreaCoordinator` / `ViewController` / `ViewModel`、`EditorPaneViewController` / `ViewModel`、嵌套 split view、各栏标签栏、焦点同步；删掉 `TabBarAccessoryController`；`fanOut` 改为交给编辑区。
+4. ✅ **命令**：工具栏按钮、File / Navigate / View 菜单项与快捷键、⌘W 的关闭顺序、启用条件。
+5. ✅ **打开去处**：`Destination(listClickModifierFlags:)` 与 `Destination(linkClickModifierFlags:)`，侧栏、内容区、Find 与 Inspector References 的修饰键，右键菜单的 Open in Next Editor Pane。
 6. **外观照 Xcode**：逆向 27.2 的分栏标签栏活跃与非活跃样式、左端关栏按钮、分隔线、每栏最小尺寸、工具栏按钮图标，以及 macOS 26 上标签栏与内容的叠放方式；本机没有 27B52 的 DVTUserInterfaceKit 导出，要先生成。需要 UIFoundation 的 `TabBar` 加接口的，先在 UIFoundation 发版、再抬 pin。
 7. **文档与验收**：根 `AGENTS.md` 的架构要点与 `RuntimeViewerUsingAppKit/AGENTS.md` 的 coordinator 一节写进新约定（路由作用于焦点栏；内容区先取焦点再打开；标签与栏只按标识定位）；术语表登记「分栏」「焦点栏」「打开去处」；在 7 月的多 Tab 设计文档开头注明两条约定已被本提案取代；README 的功能列表加上编辑器分栏；全部测试通过后，交一份手工验收清单（加栏的四种情形、焦点与 Inspector 联动、三种打开去处、⌘W 的三种结果、切镜像与切引擎）。
 
@@ -452,3 +455,10 @@ MainSplitViewController 第 1 项
 | 2026-11-06 | 加栏按钮放工具栏 | 照 Xcode 27.2 默认：编辑区那一段的末尾、Inspector 分隔线之前。否掉「放每栏标签栏右端」与「只用菜单和快捷键」 |
 | 2026-11-06 | 确认其余默认做法 | 新栏显示焦点栏当前对象、新标签空白；⌥ 开新标签、⇧⌥ 开到下一栏；右键加 Open in Next Editor Pane；侧栏、Inspector、工具栏、MCP 跟着焦点栏；⌘W 依次关标签、关栏、关窗口；分栏菜单照 Xcode；标签栏去掉「+」；切引擎回到一栏；布局不跨启动保存。否掉「保留标签栏的『+』」 |
 | 2026-11-06 | Accepted | 用户批准，开始实现，分支 `feature/editor-panes` |
+| 2026-11-06 | 第 1 步只放布局与历史两个值类型 | `EditorPane` 依赖重做后的 `DocumentTab`，`EditorArea` 依赖 `SelectionRoute.Destination`，两者随第 2 步落地；每一步仍能单独编过 |
+| 2026-11-06 | 只有移动焦点的命令把键盘焦点带进焦点栏 | 切换焦点、新建与关闭分栏会让焦点栏的内容成为第一响应者；其余路由只在键盘焦点本来就在编辑区时才跟过去，所以在侧栏点类型、⇧⌥-点击开到下一栏之后，键盘仍留在侧栏，方向键能接着浏览 |
+| 2026-11-06 | 内容视图用 `EditorPaneContent.focusableView` 说明焦点给谁，不用 `preferredFirstResponder` | AppKitPlus 的导航控制器在每次 `set` 结束时把焦点交给 `preferredFirstResponder`，一栏从占位页换成接口就会把焦点从侧栏抢走 |
+| 2026-11-06 | 点在一栏里没有视图接收的地方，这一栏也取得焦点 | 空白标签的占位页没有能成为第一响应者的视图；这样的点击沿 responder chain 送到分栏的视图控制器。文本里的点击由文本视图成为第一响应者带动焦点 |
+| 2026-11-06 | Inspector 的 References 页补上 ⌥-点击 | 提案的表把它与 Find 一起写成「现有」，实际原先只有普通点击；照表补齐，与 Find 一致 |
+| 2026-11-06 | 焦点栏标签栏的样式、每栏最小尺寸、工具栏按钮图标先用临时值 | 未聚焦栏的标签暗一些、最小 160 点、图标借 Xcode 菜单里同一命令的图标；等第 6 步逆向 Xcode 后替换 |
+| 2026-11-06 | 基线上已有一个测试失败 | `TitleActivityIndicatorTests` 的悬停副标题用例在改动之前的提交上同样失败，与分栏无关，没有处理 |

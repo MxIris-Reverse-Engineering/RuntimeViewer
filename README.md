@@ -32,6 +32,7 @@
 
 - **Swift & Objective-C Interfaces** – Generate Swift type interfaces (with type/enum layouts and VTable offsets) alongside Objective-C headers directly from Mach-O binaries
 - **Xcode-Style Syntax Highlighting** – Full AppKit text view with type-defined jumps and rendering identical to Xcode
+- **Editor Panes** – Split the content area into Xcode-style editor panes, side by side, stacked or both, each with its own tabs and a back/forward history per tab; ⌥-click opens an object in a new tab and ⇧⌥-click in the next pane, as in Xcode
 - **Customizable Color Themes** – Pick a syntax theme in **Settings → Theme**; duplicate the built-in Xcode preset to edit per-token colors (with bold/italic), the editor background, and selection color. Each theme carries light and dark variants that adapt to the system appearance
 - **Command Line Interface** – `runtime-viewer-cli` answers the same questions from a terminal or a script without opening a window: list images and types, print interfaces, hierarchies, relationships and member addresses, specialize generics and export whole images, as text or JSON, against any source the app has (local, Mac Catalyst, attached processes, Bonjour peers). The running app serves the tool; otherwise a background host keeps the indexes warm between calls and exits when idle
 - **MCP Integration** *(macOS 15+)* – Let LLM clients (e.g., Claude) inspect runtime information via the Model Context Protocol, with an in-process bridge and a toolbar status indicator
