@@ -53,14 +53,6 @@ actor RuntimeSwiftSectionFactory<Reading: RuntimeImageReading>: RuntimeSwiftSect
     /// Where the images behind the sections come from.
     let catalog: any RuntimeImageCatalog<Reading>
 
-    /// The index configuration of every Swift indexer this factory makes —
-    /// each section's own and the aggregate. Fixed for the indexer's lifetime;
-    /// see `RuntimeSwiftSection.indexConfiguration(dependencySearchPaths:)`.
-    nonisolated let indexConfiguration: SwiftDeclarationIndexConfiguration
-
-    /// Where the static field layout of an image read from a file finds the
-    /// images its fields' types come from.
-    nonisolated let staticLayoutDependencyResolution: StaticLayoutDependencyResolution
 
     private var sections: [String: RuntimeSwiftSection<Reading>] = [:]
 
@@ -97,12 +89,28 @@ actor RuntimeSwiftSectionFactory<Reading: RuntimeImageReading>: RuntimeSwiftSect
     /// `placeholderImage` stands behind the aggregate indexer, which parses no
     /// image of its own; any image of the catalog will do.
     init(catalog: any RuntimeImageCatalog<Reading>, placeholderImage: MachO) {
-        let dependencySearchPaths = catalog.dependencySearchPaths
-        let indexConfiguration = RuntimeSwiftSection<Reading>.indexConfiguration(dependencySearchPaths: dependencySearchPaths)
         self.catalog = catalog
-        self.indexConfiguration = indexConfiguration
-        self.staticLayoutDependencyResolution = .dependencyClosure(searchPaths: dependencySearchPaths)
-        self.indexer = RuntimeSwiftInterfaceIndexer<Reading>(machO: placeholderImage, imagePath: "", configuration: indexConfiguration)
+        // The aggregate is never prepared, so it never resolves a dependency
+        // closure; it gets what no image's dependencies are looked for in.
+        self.indexer = RuntimeSwiftInterfaceIndexer<Reading>(
+            machO: placeholderImage,
+            imagePath: "",
+            configuration: RuntimeSwiftSection<Reading>.indexConfiguration(dependencySearchPaths: catalog.dependencySearchPaths(forImageAt: ""))
+        )
+    }
+
+    /// The index configuration of the Swift indexer of the image at
+    /// `imagePath`, fixed for the indexer's lifetime; see
+    /// `RuntimeSwiftSection.indexConfiguration(dependencySearchPaths:)`. Its
+    /// dependencies are looked for where the catalog says that image's are.
+    nonisolated func indexConfiguration(forImageAt imagePath: String) -> SwiftDeclarationIndexConfiguration {
+        RuntimeSwiftSection<Reading>.indexConfiguration(dependencySearchPaths: catalog.dependencySearchPaths(forImageAt: imagePath))
+    }
+
+    /// Where the static field layout of the image at `imagePath`, read from a
+    /// file, finds the images its fields' types come from.
+    nonisolated func staticLayoutDependencyResolution(forImageAt imagePath: String) -> StaticLayoutDependencyResolution {
+        .dependencyClosure(searchPaths: catalog.dependencySearchPaths(forImageAt: imagePath))
     }
 
     func existingSection(for imagePath: String) -> RuntimeSwiftSection<Reading>? {

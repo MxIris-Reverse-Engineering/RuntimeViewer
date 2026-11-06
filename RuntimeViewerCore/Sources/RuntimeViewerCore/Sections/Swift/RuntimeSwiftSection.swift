@@ -203,7 +203,7 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
         let eventHandlers: [SwiftIndexEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
-        let indexer = RuntimeSwiftInterfaceIndexer<Reading>(machO: machO, imagePath: imagePath, configuration: factory.indexConfiguration, eventHandlers: eventHandlers)
+        let indexer = RuntimeSwiftInterfaceIndexer<Reading>(machO: machO, imagePath: imagePath, configuration: factory.indexConfiguration(forImageAt: imagePath), eventHandlers: eventHandlers)
         self.indexer = indexer
         // Reads the indexer's names on its first request, long after `prepare()`.
         self.privateDiscriminatorSourceFileIndex = Reading.makePrivateDiscriminatorSourceFileIndex(indexer: indexer.upstream)
@@ -1531,7 +1531,7 @@ extension RuntimeSwiftSection {
             enumLayoutCaseTransformer: oldConfiguration.enumLayoutCaseTransformer,
         )
         newConfiguration.applySwitches(of: options)
-        newConfiguration.staticLayoutDependencyResolution = factory.staticLayoutDependencyResolution
+        newConfiguration.staticLayoutDependencyResolution = factory.staticLayoutDependencyResolution(forImageAt: imagePath)
 
         // The transformer templates render library-side
         // (`OutputTransformer` + the closure factories in

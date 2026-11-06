@@ -62,8 +62,9 @@ enum RuntimeDirectoryImageScanner {
     /// `/private/var/…` for a directory at `/var/…` — but `RuntimeOfflineFile`
     /// names a directory by the path `resolvingSymlinksInPath()` gives, which
     /// leaves `/private` out, and a bundle's main executable is looked up by
-    /// that path. Images are keyed under the latter.
-    private struct PathRebasing {
+    /// that path. Images are keyed under the latter, and so is a `realpath(3)`
+    /// of one of them.
+    struct PathRebasing: Sendable {
         let directoryPath: String
         let realDirectoryPath: String
 

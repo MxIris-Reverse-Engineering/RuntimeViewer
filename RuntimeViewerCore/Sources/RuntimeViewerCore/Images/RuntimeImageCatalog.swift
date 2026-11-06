@@ -27,6 +27,13 @@ protocol RuntimeImageCatalog<Reading>: Sendable {
     /// The spelling the section caches key an image by.
     func canonicalImagePath(_ imagePath: String) -> String
 
+    /// The path the catalog lists the image at `resolvedPath` under — a path
+    /// a dependency's install name resolved to on disk, which can run through
+    /// `..` or a framework's symbolic links
+    /// (`…/MacOS/../Frameworks/X.framework/X`). `resolvedPath` itself when the
+    /// catalog lists the image under no other path.
+    func listedImagePath(forResolvedPath resolvedPath: String) -> String
+
     /// The image behind `imagePath`, or `nil` when the catalog has none.
     func machO(forImagePath imagePath: String) -> MachO?
 
@@ -42,15 +49,23 @@ protocol RuntimeImageCatalog<Reading>: Sendable {
     /// The main executable `@executable_path` expands against.
     func mainExecutablePath() -> String
 
+    /// The main executable `@executable_path` expands against for the image
+    /// at `imagePath`, when the catalog knows it better than the walk that
+    /// reached the image: an image of an offline bundle or folder runs in the
+    /// process of the app it is in. `nil` leaves the walk's.
+    func mainExecutablePath(forImageAt imagePath: String) -> String?
+
     /// Whether `path`, which names no file on disk, is an image of the dyld
     /// shared cache this catalog's images come from.
     func isSharedCacheImage(_ path: String) -> Bool
 
-    /// Where MachOSwiftSection looks for the images an image links when it
-    /// reads one from a file: the Swift indexer's dependency closure and the
-    /// static field layout. Images read from this process need none — the
-    /// runtime resolves them — and keep the library's default.
-    var dependencySearchPaths: [DependencySearchPath] { get }
+    /// Where MachOSwiftSection looks for the images the image at `imagePath`
+    /// links when it reads one from a file: the Swift indexer's dependency
+    /// closure and the static field layout. Images read from this process
+    /// need none — the runtime resolves them — and keep the library's default.
+    /// A path that names no image of the catalog's gets what no image's
+    /// dependencies are looked for in.
+    func dependencySearchPaths(forImageAt imagePath: String) -> [DependencySearchPath]
 }
 
 // MARK: - Dependencies
@@ -80,6 +95,7 @@ extension RuntimeImageCatalog {
     ) -> [RuntimeDependencyEntry] {
         guard let image = machO(forImagePath: path) else { return [] }
         let resolver = DylibPathResolver(isSharedCacheImage: { [self] in isSharedCacheImage($0) })
+        let imageMainExecutablePath = self.mainExecutablePath(forImageAt: path) ?? mainExecutablePath
         let mergedRpaths = ancestorRpaths + image.rpaths
         return image.dependencies
             .filter { $0.type != .lazyLoad }
@@ -89,8 +105,8 @@ extension RuntimeImageCatalog {
                     installName: installName,
                     imagePath: path,
                     rpaths: mergedRpaths,
-                    mainExecutablePath: mainExecutablePath,
-                )
+                    mainExecutablePath: imageMainExecutablePath,
+                ).map(listedImagePath(forResolvedPath:))
                 // Two link modes where dyld is allowed to never produce a
                 // loaded image:
                 //

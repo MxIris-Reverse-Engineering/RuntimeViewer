@@ -53,7 +53,33 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     /// What the sidebar calls the paired cache's group.
     private let pairedCacheName: String?
 
-    private let dependencySearchPathList: [DependencySearchPath]
+    /// What kind of image each image of a bundle or a folder is, by path, as
+    /// its header said when it was listed.
+    private let fileImageTypes: [String: FileType]
+
+    /// The main executable of every app among the images of a bundle or a
+    /// folder, by the app's path. An app here is any bundle whose main
+    /// executable is an executable rather than a library — an app, an app
+    /// extension, an XPC service: each runs as a process of its own, unlike a
+    /// framework.
+    private let applicationExecutablePathsByBundlePath: [String: String]
+
+    /// The images of a bundle or a folder that are in no app.
+    private let imagePathsOutsideApplications: [String]
+
+    /// Turns the real path of one of the file's images back into the path it
+    /// is listed under.
+    private let pathRebasing: RuntimeDirectoryImageScanner.PathRebasing
+
+    /// Where the dependencies no image of the file holds are looked for: the
+    /// dyld shared cache the file is, or is paired with.
+    private let cacheDependencySearchPaths: [DependencySearchPath]
+
+    /// What `dependencySearchPaths(forImageAt:)` answers for the images of a
+    /// bundle or a folder, by the outermost app they are in — the empty path
+    /// for the images in none.
+    @Mutex
+    private var dependencySearchPathsByApplicationBundlePath: [String: [DependencySearchPath]] = [:]
 
     /// The images that define the Objective-C classes asked about so far —
     /// `nil` for a class none of the images exports.
@@ -71,6 +97,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     init(file: RuntimeOfflineFile) throws {
         self.file = file
         var fileImagePaths: [String] = []
+        var fileImageTypes: [String: FileType] = [:]
         var openedFileImages: [String: MachOFile] = [:]
         var fileSlice: RuntimeOfflineFile.Slice?
         var cacheImages: OrderedDictionary<String, MachOFile> = [:]
@@ -82,15 +109,17 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
             openedFileImages[file.url.path] = try RuntimeOfflineFile.machOFile(at: file.url, preferring: slice)
             fileImagePaths = [file.url.path]
             fileSlice = slice
-        case .bundle:
-            fileImagePaths = Self.imagePaths(ofBundleAt: file.url)
-            guard !fileImagePaths.isEmpty else {
-                throw RuntimeOfflineFileError.bundleWithoutExecutable(file.url)
+        case .bundle, .folder:
+            let images = RuntimeDirectoryImageScanner.images(in: file.url)
+            fileImagePaths = images.map(\.path)
+            fileImageTypes = Dictionary(images.map { ($0.path, $0.fileType) }, uniquingKeysWith: { first, _ in first })
+            if case .bundle = file.content {
+                Self.moveMainExecutableFirst(ofBundleAt: file.url, in: &fileImagePaths)
             }
-        case .folder:
-            fileImagePaths = RuntimeDirectoryImageScanner.images(in: file.url).map(\.path)
             guard !fileImagePaths.isEmpty else {
-                throw RuntimeOfflineFileError.folderWithoutMachOFiles(file.url)
+                throw file.content == .bundle
+                    ? RuntimeOfflineFileError.bundleWithoutExecutable(file.url)
+                    : RuntimeOfflineFileError.folderWithoutMachOFiles(file.url)
             }
         case .dyldSharedCache:
             let cache: FullDyldCache
@@ -104,10 +133,6 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         }
 
         if file.content != .dyldSharedCache {
-            // Every image of the file can stand in for a dependency of
-            // another: a bundle's frameworks are linked by `@rpath` names the
-            // locator matches by file name.
-            dependencySearchPaths.append(contentsOf: fileImagePaths.map { DependencySearchPath.machOFile(path: $0) })
             switch file.dependencyCache {
             case .systemDyldSharedCache:
                 // The process's one opening of this Mac's cache, which the
@@ -134,12 +159,24 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
             }
         }
 
+        let applicationExecutablePathsByBundlePath = Self.applicationExecutablePathsByBundlePath(
+            among: fileImagePaths.filter { fileImageTypes[$0] == .execute },
+            under: file.url.path
+        )
         self.fileImagePaths = fileImagePaths
         self.fileImagePathSet = Set(fileImagePaths)
         self.fileSlice = fileSlice
         self.cacheImages = cacheImages
         self.pairedCacheName = pairedCacheName
-        self.dependencySearchPathList = dependencySearchPaths
+        self.fileImageTypes = fileImageTypes
+        self.applicationExecutablePathsByBundlePath = applicationExecutablePathsByBundlePath
+        self.imagePathsOutsideApplications = fileImagePaths.filter { imagePath in
+            Self.applicationBundlePaths(enclosing: imagePath, under: file.url.path, among: applicationExecutablePathsByBundlePath).isEmpty
+        }
+        self.cacheDependencySearchPaths = dependencySearchPaths
+        self.pathRebasing = RuntimeDirectoryImageScanner.PathRebasing(
+            directoryPath: file.content == .folder || file.content == .bundle ? file.url.path : file.url.deletingLastPathComponent().path
+        )
         self.openedFileImages = openedFileImages
         #log(.info, "Listed \(file.url.path, privacy: .public): \(fileImagePaths.count, privacy: .public) images of its own, \(cacheImages.count, privacy: .public) of a dyld shared cache")
     }
@@ -166,6 +203,20 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     /// Paths are the catalog's own keys; nothing rewrites them.
     func canonicalImagePath(_ imagePath: String) -> String {
         imagePath
+    }
+
+    /// The listed image the path leads to once `..` and symbolic links are
+    /// followed: a framework linked as `@rpath/X.framework/X` from an
+    /// executable whose run path is `@executable_path/../Frameworks` resolves
+    /// to `…/MacOS/../Frameworks/X.framework/X`, and the file listed is
+    /// `…/Frameworks/X.framework/Versions/A/X`.
+    func listedImagePath(forResolvedPath resolvedPath: String) -> String {
+        guard !fileImagePathSet.contains(resolvedPath), cacheImages[resolvedPath] == nil,
+              let realPathPointer = realpath(resolvedPath, nil)
+        else { return resolvedPath }
+        let listedPath = pathRebasing.rebased(String(cString: realPathPointer))
+        free(realPathPointer)
+        return fileImagePathSet.contains(listedPath) ? listedPath : resolvedPath
     }
 
     /// An image of the file is opened here the first time it is asked for;
@@ -217,12 +268,46 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         return fileImagePaths.first ?? ""
     }
 
+    /// For an image of a bundle or a folder: the image itself when it is an
+    /// executable, or else the executable of the nearest app it is in — an
+    /// app extension's own, not the app's around it. `nil` for an image in no
+    /// app, and for a Mach-O file, which is its own walk's main executable.
+    func mainExecutablePath(forImageAt imagePath: String) -> String? {
+        guard let fileType = fileImageTypes[imagePath] else { return nil }
+        if fileType == .execute { return imagePath }
+        return applicationBundlePaths(enclosing: imagePath).first.flatMap { applicationExecutablePathsByBundlePath[$0] }
+    }
+
     func isSharedCacheImage(_ path: String) -> Bool {
         cacheImages[path] != nil
     }
 
-    var dependencySearchPaths: [DependencySearchPath] {
-        dependencySearchPathList
+    /// An image's own images to stand in for the dependencies it links by
+    /// `@rpath` names — which the locator matches by file name, and opens all
+    /// of — then the cache's. An image of a bundle or a folder gets the images
+    /// of the outermost app it is in, then the images in no app; another app's
+    /// never, which would hold frameworks of the same names. A whole `.app`
+    /// opened as a bundle is one app: every image gets every other.
+    func dependencySearchPaths(forImageAt imagePath: String) -> [DependencySearchPath] {
+        switch file.content {
+        case .dyldSharedCache:
+            return cacheDependencySearchPaths
+        case .machO:
+            return fileImagePaths.map { DependencySearchPath.machOFile(path: $0) } + cacheDependencySearchPaths
+        case .bundle, .folder:
+            guard fileImageTypes[imagePath] != nil else { return cacheDependencySearchPaths }
+            let applicationBundlePath = applicationBundlePaths(enclosing: imagePath).last ?? ""
+            return _dependencySearchPathsByApplicationBundlePath.withLock { searchPathsByApplicationBundlePath in
+                if let searchPaths = searchPathsByApplicationBundlePath[applicationBundlePath] {
+                    return searchPaths
+                }
+                let applicationImagePaths = applicationBundlePath.isEmpty ? [] : fileImagePaths.filter { $0.hasPrefix(applicationBundlePath + "/") }
+                let searchPaths = (applicationImagePaths + imagePathsOutsideApplications).map { DependencySearchPath.machOFile(path: $0) }
+                    + cacheDependencySearchPaths
+                searchPathsByApplicationBundlePath[applicationBundlePath] = searchPaths
+                return searchPaths
+            }
+        }
     }
 
     // MARK: - Exported Objective-C Classes
@@ -275,13 +360,74 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         return images
     }
 
-    /// Every image of a bundle, its main executable first.
-    private static func imagePaths(ofBundleAt bundleURL: URL) -> [String] {
-        var imagePaths = RuntimeDirectoryImageScanner.images(in: bundleURL).map(\.path)
-        if let executablePath = Bundle(url: bundleURL)?.executableURL?.standardizedFileURL.resolvingSymlinksInPath().path,
-           let executableIndex = imagePaths.firstIndex(of: executablePath) {
-            imagePaths.insert(imagePaths.remove(at: executableIndex), at: 0)
+    /// Puts a bundle's main executable before its other images.
+    private static func moveMainExecutableFirst(ofBundleAt bundleURL: URL, in imagePaths: inout [String]) {
+        guard let executablePath = Bundle(url: bundleURL)?.executableURL?.standardizedFileURL.resolvingSymlinksInPath().path,
+              let executableIndex = imagePaths.firstIndex(of: executablePath)
+        else { return }
+        imagePaths.insert(imagePaths.remove(at: executableIndex), at: 0)
+    }
+
+    // MARK: - Apps
+
+    /// The apps the executables at `executablePaths` are the main executables
+    /// of, by the app's path, each with its executable. Only directories at or
+    /// below `rootPath` count.
+    private static func applicationExecutablePathsByBundlePath(among executablePaths: [String], under rootPath: String) -> [String: String] {
+        var executablePathsByBundlePath: [String: String] = [:]
+        for executablePath in executablePaths {
+            guard let bundlePath = bundlePath(ofMainExecutableAt: executablePath, under: rootPath),
+                  executablePathsByBundlePath[bundlePath] == nil
+            else { continue }
+            executablePathsByBundlePath[bundlePath] = executablePath
         }
-        return imagePaths
+        return executablePathsByBundlePath
+    }
+
+    /// The bundle whose main executable `executablePath` is, when it is one:
+    /// `Foo.app` for `Foo.app/Contents/MacOS/Foo`, or for the `Foo.app/Foo`
+    /// of an app without a `Contents` directory, as iOS lays apps out. The
+    /// bundle's `Info.plist` has to name the executable.
+    private static func bundlePath(ofMainExecutableAt executablePath: String, under rootPath: String) -> String? {
+        let executableURL = URL(fileURLWithPath: executablePath)
+        let executableDirectoryURL = executableURL.deletingLastPathComponent()
+        var candidates: [(bundleURL: URL, infoPropertyListURL: URL)] = [
+            (executableDirectoryURL, executableDirectoryURL.appendingPathComponent("Info.plist")),
+        ]
+        if executableDirectoryURL.lastPathComponent == "MacOS",
+           executableDirectoryURL.deletingLastPathComponent().lastPathComponent == "Contents" {
+            let contentsURL = executableDirectoryURL.deletingLastPathComponent()
+            candidates.insert((contentsURL.deletingLastPathComponent(), contentsURL.appendingPathComponent("Info.plist")), at: 0)
+        }
+        for candidate in candidates {
+            let bundlePath = candidate.bundleURL.path
+            guard bundlePath == rootPath || bundlePath.hasPrefix(rootPath + "/"),
+                  let propertyListData = try? Data(contentsOf: candidate.infoPropertyListURL),
+                  let propertyList = try? PropertyListSerialization.propertyList(from: propertyListData, format: nil) as? [String: Any],
+                  propertyList["CFBundleExecutable"] as? String == executableURL.lastPathComponent
+            else { continue }
+            return bundlePath
+        }
+        return nil
+    }
+
+    /// The apps `imagePath` is in, nearest first.
+    private func applicationBundlePaths(enclosing imagePath: String) -> [String] {
+        Self.applicationBundlePaths(enclosing: imagePath, under: file.url.path, among: applicationExecutablePathsByBundlePath)
+    }
+
+    private static func applicationBundlePaths(enclosing imagePath: String, under rootPath: String, among applicationExecutablePathsByBundlePath: [String: String]) -> [String] {
+        guard !applicationExecutablePathsByBundlePath.isEmpty else { return [] }
+        var bundlePaths: [String] = []
+        var directoryPath = (imagePath as NSString).deletingLastPathComponent
+        while directoryPath.count >= rootPath.count {
+            if applicationExecutablePathsByBundlePath[directoryPath] != nil {
+                bundlePaths.append(directoryPath)
+            }
+            let parentPath = (directoryPath as NSString).deletingLastPathComponent
+            guard parentPath != directoryPath else { break }
+            directoryPath = parentPath
+        }
+        return bundlePaths
     }
 }

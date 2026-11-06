@@ -25,6 +25,12 @@ struct RuntimeProcessImageCatalog: RuntimeImageCatalog {
         DyldUtilities.patchImagePathForDyld(imagePath)
     }
 
+    /// dyld is asked by path, and matches a loaded image by its file name
+    /// when the path is spelled otherwise.
+    func listedImagePath(forResolvedPath resolvedPath: String) -> String {
+        resolvedPath
+    }
+
     func machO(forImagePath imagePath: String) -> MachOImage? {
         DyldUtilities.machOImage(forPath: imagePath)
     }
@@ -44,11 +50,16 @@ struct RuntimeProcessImageCatalog: RuntimeImageCatalog {
         DyldUtilities.mainExecutablePath()
     }
 
+    /// One process, one main executable.
+    func mainExecutablePath(forImageAt imagePath: String) -> String? {
+        nil
+    }
+
     func isSharedCacheImage(_ path: String) -> Bool {
         DyldUtilities.isInDyldSharedCache(path)
     }
 
-    var dependencySearchPaths: [DependencySearchPath] {
+    func dependencySearchPaths(forImageAt imagePath: String) -> [DependencySearchPath] {
         [.systemDyldSharedCache]
     }
 }
