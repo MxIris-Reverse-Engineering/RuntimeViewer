@@ -90,10 +90,10 @@ enum FindResultsOutline {
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 /// How a Find result the user chose is opened, read off the event that chose it.
 public enum FindResultActivation {
-    /// With ⌥ held the result opens in a new tab — proposal `0029-find-navigator` §4 — otherwise
-    /// in the current one.
-    public static func opensInNewTab(for triggeringEvent: NSEvent?) -> Bool {
-        triggeringEvent?.modifierFlags.contains(.option) == true
+    /// Where the result opens: with ⌥ held in a new tab — proposal `0029-find-navigator` §4 — with
+    /// ⇧⌥ in the next editor pane, otherwise in the focused tab (proposal `draft-editor-panes`).
+    public static func destination(for triggeringEvent: NSEvent?) -> SelectionRoute.Destination {
+        SelectionRoute.Destination(listClickModifierFlags: triggeringEvent?.modifierFlags ?? [])
     }
 
     /// Whether `triggeringEvent` is a character typed into the list, which selects a row by its

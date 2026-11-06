@@ -34,6 +34,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     private let openInNewTabRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
+    private let openInNextEditorPaneRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+
     private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     /// Clicks on the rows' tags. Each cell reports which of its tags was
@@ -185,10 +187,20 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 return (cellViewModel, proposed.triggeringEvent)
             }
             .share(replay: 0, scope: .whileConnected)
+        // A click with ⌥ opens the row in a new tab, with ⇧⌥ in the next editor pane — Xcode's
+        // defaults for its navigators; every other selection opens it in the focused pane's tab.
+        let destinationOfSelection: (NSEvent?) -> SelectionRoute.Destination = { event in
+            guard let event, event.type == .leftMouseUp || event.type == .leftMouseDown else { return .focusedTab }
+            return SelectionRoute.Destination(listClickModifierFlags: event.modifierFlags)
+        }
         let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel> = .merge(
-            userSelection.filter { isExplicitSelection($0.1) }.map(\.0).asSignal(onErrorSignalWith: .empty()),
+            userSelection.filter { isExplicitSelection($0.1) && destinationOfSelection($0.1) == .focusedTab }.map(\.0).asSignal(onErrorSignalWith: .empty()),
             userSelection.filter { !isExplicitSelection($0.1) }.map(\.0).debounce(.milliseconds(800), scheduler: MainScheduler.instance).asSignal(onErrorSignalWith: .empty()),
         )
+        let runtimeObjectClickedWithOption: Signal<SidebarRuntimeObjectCellViewModel> = userSelection
+            .filter { destinationOfSelection($0.1) == .newTab }.map(\.0).asSignal(onErrorSignalWith: .empty())
+        let runtimeObjectClickedWithShiftOption: Signal<SidebarRuntimeObjectCellViewModel> = userSelection
+            .filter { destinationOfSelection($0.1) == .nextEditorPane }.map(\.0).asSignal(onErrorSignalWith: .empty())
 
         // Row context menu. Items are rebuilt from `clickedRow` on every
         // `menuNeedsUpdate`; an empty item list keeps AppKit from popping an
@@ -218,7 +230,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         let input = ViewModel.Input(
             runtimeObjectClicked: runtimeObjectClicked,
-            runtimeObjectOpenedInNewTab: openInNewTabRelay.asSignal(),
+            runtimeObjectOpenedInNewTab: .merge(openInNewTabRelay.asSignal(), runtimeObjectClickedWithOption),
+            runtimeObjectOpenedInNextEditorPane: .merge(openInNextEditorPaneRelay.asSignal(), runtimeObjectClickedWithShiftOption),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
@@ -369,6 +382,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             SidebarRuntimeObjectMenuItem(title: "Open in New Tab", image: SFSymbols(name: RuntimeViewerSymbols.tabbarTopRectangle).nsImage) { [weak self] in
                 guard let self else { return }
                 openInNewTabRelay.accept(cellViewModel)
+            },
+            SidebarRuntimeObjectMenuItem(title: "Open in Next Editor Pane", image: NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: nil)) { [weak self] in
+                guard let self else { return }
+                openInNextEditorPaneRelay.accept(cellViewModel)
             },
         ]
         if let counterpartKind = cellViewModel.runtimeObject.counterpartKind {

@@ -9,6 +9,9 @@ import RuntimeViewerArchitectures
 final class ContentTextViewController: BaseViewController<ContentTextViewModel>, NSTextViewDelegate {
     override var acceptsFirstResponder: Bool { true }
 
+    /// What takes the keyboard focus when the editor pane showing this does (`EditorPaneContent`).
+    var focusableView: NSView? { textView }
+
     override var shouldDisplayCommonLoading: Bool { true }
 
     private let (scrollView, textView): (NSScrollView, ContentTextView) = {
@@ -44,6 +47,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
     private let openInNewTabRelay = PublishRelay<RuntimeObject>()
 
+    private let openInNextEditorPaneRelay = PublishRelay<RuntimeObject>()
+
     private let crossReferenceRequestedRelay = PublishRelay<FindCrossReferenceRequest>()
 
     /// The member declared on the insertion point's line, each time the point moves.
@@ -55,8 +60,14 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
     private var isPressedOption: Bool = false
 
-    /// Held with ⌘, either of these means "open in a new tab" rather than "jump in place".
-    private var isPressedOpenInNewTabModifier: Bool { isPressedShift || isPressedOption }
+    /// Where a ⌘-click on a link opens its type, by the modifiers held with ⌘: ⇧ or ⌥ a new tab,
+    /// ⇧⌥ the next editor pane, neither the focused tab.
+    private var linkClickDestination: SelectionRoute.Destination {
+        var modifierFlags: NSEvent.ModifierFlags = [.command]
+        if isPressedShift { modifierFlags.insert(.shift) }
+        if isPressedOption { modifierFlags.insert(.option) }
+        return SelectionRoute.Destination(linkClickModifierFlags: modifierFlags)
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -95,9 +106,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
         let linkClicked = textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObject }.asSignalOnErrorJustComplete()
         let input = ContentTextViewModel.Input(
-            // ⌘-click jumps in place; ⌘⇧-click and ⌥⌘-click open in a new tab (Safari semantics).
-            runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedOpenInNewTabModifier != true }, jumpToDefinitionRelay.asSignal()).merge(),
-            runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedOpenInNewTabModifier == true }, openInNewTabRelay.asSignal()).merge(),
+            // ⌘-click jumps in place; ⌘⇧-click and ⌥⌘-click open in a new tab (Safari semantics);
+            // ⇧⌥⌘-click opens the next editor pane.
+            runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .focusedTab }, jumpToDefinitionRelay.asSignal()).merge(),
+            runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .newTab }, openInNewTabRelay.asSignal()).merge(),
+            runtimeObjectOpenedInNextEditorPane: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .nextEditorPane }, openInNextEditorPaneRelay.asSignal()).merge(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
             cursorMemberChanged: cursorMemberChangedRelay.asSignal().distinctUntilChanged()
         )
@@ -178,6 +191,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             openInNewTabMenuItem.target = self
             openInNewTabMenuItem.action = #selector(openInNewTabAction(_:))
             newMenuItems.append(openInNewTabMenuItem)
+
+            let openInNextEditorPaneMenuItem = RuntimeObjectMenuItem(title: "Open in Next Editor Pane", symbolName: .insetFilledRighthalfRectangle, runtimeObject: runtimeObject)
+            openInNextEditorPaneMenuItem.target = self
+            openInNextEditorPaneMenuItem.action = #selector(openInNextEditorPaneAction(_:))
+            newMenuItems.append(openInNextEditorPaneMenuItem)
         }
         // Find Call Hierarchy and the other cross-reference commands: for the type a name links
         // to, and for the member the clicked line declares.
@@ -228,6 +246,10 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
     @objc private func openInNewTabAction(_ sender: RuntimeObjectMenuItem) {
         openInNewTabRelay.accept(sender.runtimeObject)
+    }
+
+    @objc private func openInNextEditorPaneAction(_ sender: RuntimeObjectMenuItem) {
+        openInNextEditorPaneRelay.accept(sender.runtimeObject)
     }
 
     override func lateResponderSelectors() -> [Selector] {

@@ -44,14 +44,14 @@ struct DocumentStateEngineRestartTests {
         documentState.selectionRouter.trigger(.switchImage(Self.makeImageNode()))
         documentState.selectionRouter.trigger(.newTab)
         #expect(documentState.currentImageNode != nil)
-        #expect(documentState.tabs.count == 2)
+        #expect(documentState.editorArea.focusedPane.tabs.count == 2)
 
         await engine.stop()
         try await engine.connect()
 
         let resetToRoot = await pollUntil(timeout: .seconds(5)) { documentState.currentImageNode == nil }
         #expect(resetToRoot, "the document kept the image after its engine came back")
-        #expect(documentState.tabs.count == 1)
+        #expect(documentState.editorArea.focusedPane.tabs.count == 1)
         #expect(documentState.runtimeEngine === engine)
     }
 

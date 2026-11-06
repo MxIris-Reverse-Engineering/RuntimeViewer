@@ -33,4 +33,8 @@ public enum MainRoute: Routable {
     /// View ▸ Show Report Navigator: show the sidebar and switch it to the
     /// Report navigator.
     case reports
+    /// View ▸ Reset Editor Sizes: every split of the editor area shares its
+    /// extent equally among its panes. Only the views change, so it is not a
+    /// `SelectionRoute`.
+    case resetEditorSizes
 }

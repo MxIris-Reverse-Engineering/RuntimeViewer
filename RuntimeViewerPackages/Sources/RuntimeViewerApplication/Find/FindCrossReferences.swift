@@ -390,19 +390,10 @@ extension DocumentState {
 /// the Inspector's References tab alike.
 @MainActor
 enum FindCrossReferenceNavigation {
-    /// Opens `object` in place or in a new tab, flashing `highlight` once it
-    /// is on screen.
-    static func open(_ object: RuntimeObject, highlighting highlight: ContentHighlightRequest?, inNewTab: Bool, in documentState: DocumentState) {
-        switch (inNewTab, highlight) {
-        case (false, nil):
-            documentState.selectionRouter.trigger(.push(object))
-        case (false, let highlight?):
-            documentState.selectionRouter.trigger(.pushHighlighting(object, highlight))
-        case (true, nil):
-            documentState.selectionRouter.trigger(.openInNewTab(object))
-        case (true, let highlight?):
-            documentState.selectionRouter.trigger(.openInNewTabHighlighting(object, highlight))
-        }
+    /// Opens `object` where `destination` says — the focused tab, a new tab or the next editor
+    /// pane — flashing `highlight` once it is on screen.
+    static func open(_ object: RuntimeObject, highlighting highlight: ContentHighlightRequest?, destination: SelectionRoute.Destination, in documentState: DocumentState) {
+        documentState.selectionRouter.trigger(.open(object, in: destination, highlighting: highlight))
     }
 
     /// Goes to the member's declaration. A row that found a function knows its
@@ -410,16 +401,16 @@ enum FindCrossReferenceNavigation {
     /// knows, and the click waits for it — the task returned, which the next
     /// click cancels. Without a corpus the click reaches the type, as a member
     /// search's row with no line does.
-    static func open(_ member: RuntimeMemberReference, declaration: RuntimeMemberDeclaration?, inNewTab: Bool, in documentState: DocumentState, generationOptions: RuntimeObjectInterface.GenerationOptions) -> Task<Void, Never>? {
+    static func open(_ member: RuntimeMemberReference, declaration: RuntimeMemberDeclaration?, destination: SelectionRoute.Destination, in documentState: DocumentState, generationOptions: RuntimeObjectInterface.GenerationOptions) -> Task<Void, Never>? {
         if let declaration, declaration.lineNumber != nil {
-            open(member.object, highlighting: highlight(for: member, declaration: declaration), inNewTab: inNewTab, in: documentState)
+            open(member.object, highlighting: highlight(for: member, declaration: declaration), destination: destination, in: documentState)
             return nil
         }
         let engine = documentState.runtimeEngine
         return Task { [weak documentState] in
             let declaration = try? await FindCrossReferenceRootResolver.declaration(of: member, engine: engine, generationOptions: generationOptions)
             guard let documentState, !Task.isCancelled else { return }
-            open(member.object, highlighting: declaration.flatMap { highlight(for: member, declaration: $0) }, inNewTab: inNewTab, in: documentState)
+            open(member.object, highlighting: declaration.flatMap { highlight(for: member, declaration: $0) }, destination: destination, in: documentState)
         }
     }
 

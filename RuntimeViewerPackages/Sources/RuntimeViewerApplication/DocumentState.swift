@@ -30,7 +30,8 @@ public final class DocumentState {
     /// open puts the same session in place again, and closing puts nothing in
     /// place. `MainCoordinator` is responsible for issuing that route from its
     /// `.main` handler — the trigger also atomically clears `currentImageNode`
-    /// and `selectionStack` so consumers never observe a half-switched state.
+    /// and starts `editorArea` over, so consumers never observe a
+    /// half-switched state.
     @RxObserved
     public fileprivate(set) var runtimeEngineSession: RuntimeEngineSession
 
@@ -78,10 +79,11 @@ public final class DocumentState {
 
     private let startOverRequestedRelay = PublishRelay<RuntimeEngine>()
 
-    /// The sidebar at the image list and nothing on the timeline: an engine
-    /// coming back has nothing to walk the document back from.
+    /// The sidebar at the image list and no tab of any editor pane having
+    /// shown anything: an engine coming back has nothing to walk the document
+    /// back from.
     fileprivate var hasNothingOpen: Bool {
-        currentImageNode == nil && selectionStack.isEmpty
+        currentImageNode == nil && editorArea.hasShownNothing
     }
 
     /// Watches the engine for coming back — it stops being ready and then
@@ -127,105 +129,80 @@ public final class DocumentState {
         }
     }
 
-    /// Currently inspected runtime image. `nil` when the sidebar is at the
-    /// image-picker root. Read-only externally: mutated only via the
-    /// `.switchImage` route.
+    /// The image the sidebar lists. `nil` when the sidebar is at the
+    /// image-picker root. Changing it leaves the editor area alone: an object
+    /// of another image stays open where it is. Read-only externally: mutated
+    /// only via the `.switchImage` route.
     @RxObserved
     public fileprivate(set) var currentImageNode: RuntimeImageNode?
 
-    /// Document-level navigation timeline, Xcode-style: one entry per
-    /// object the user has viewed, regardless of how it was reached —
-    /// sidebar click, content link, "Open in New Tab", or switching to a
-    /// tab already showing it. `selectionIndex` is the cursor; `.backward`
-    /// / `.forward` only move the cursor and leave the entries in place so
-    /// the user can step back and forth.
-    ///
-    /// Any navigation away from a mid-timeline cursor position (`.push`,
-    /// a tab switch, `.openInNewTab`, `.newTab`) truncates the forward
-    /// portion first (browser-style) so a new branch overwrites the
-    /// abandoned future. Consecutive duplicates are collapsed: reaching
-    /// the type already at the top only moves the cursor, though the entry
-    /// takes on the form just reached when that form differs.
-    ///
-    /// The timeline is deliberately independent of the tab strip: it
-    /// survives tab switches and closes, and it may retain objects whose
-    /// tab is long gone.
+    /// The editor area: its panes, each pane's tabs, each tab's history, how
+    /// the panes are arranged and which one has the focus (proposal
+    /// `draft-editor-panes`). One value, so that no reader sees a layout and
+    /// a set of panes that disagree.
     ///
     /// Read-only externally: every mutation goes through `selectionRouter`,
-    /// which dispatches a typed `SelectionRoute` and emits to
-    /// `routeSignal` after the state update has been applied.
+    /// which dispatches a typed `SelectionRoute` and emits to `routeSignal`
+    /// after the state update has been applied. Its equality compares objects
+    /// by identity, so do not `distinctUntilChanged()` it raw where a title
+    /// or another field of an object is shown: compare what is shown.
     @RxObserved
-    public fileprivate(set) var selectionStack: [RuntimeObject] = []
+    public fileprivate(set) var editorArea: EditorArea = EditorArea()
 
-    /// Cursor into `selectionStack`. `-1` when the stack is empty;
-    /// otherwise an index in `0..<selectionStack.count`. After every route
-    /// except `.newTab` it points at the entry `selectedRuntimeObject`
-    /// shows; on an empty tab the cursor keeps its position (the most
-    /// recently viewed entry) while `selectedRuntimeObject` is `nil`, so
-    /// the first `.backward` can return to it.
-    @RxObserved
-    public fileprivate(set) var selectionIndex: Int = -1
-
-    /// The object the content / inspector panes are showing, or `nil` for
-    /// the placeholder (empty tab). This is the display layer's single
-    /// source of truth: navigation routes set it from the timeline cursor,
-    /// tab routes set it from the target tab's `object`. Read-only
-    /// externally: mutated only via `selectionRouter`.
+    /// What the focused editor pane's active tab shows, or `nil` for an empty
+    /// tab. Every route keeps it the same as
+    /// `editorArea.focusedPane.activeTab.object`, in the same form; it stays a
+    /// property of its own because the sidebar, the Inspector, the toolbar,
+    /// Find and MCP follow the object on screen, whichever pane shows it.
+    /// Read-only externally: mutated only via `selectionRouter`.
     @RxObserved
     public fileprivate(set) var selectedRuntimeObject: RuntimeObject?
 
-    /// The member whose declaration the content pane's insertion point is on,
+    /// The member whose declaration the focused pane's insertion point is on,
     /// or `nil` when the point is on no member's line. The Inspector's
     /// References tab follows it, and Find Call Hierarchy in the main menu acts
-    /// on it, as Xcode's acts on the symbol at the insertion point. Set by the
-    /// content pane, which reads which line declares which member
-    /// (`RuntimeObjectInterface.declaredMembersByLineNumber()`); a member of
-    /// another object than the one on screen does not count.
+    /// on it, as Xcode's acts on the symbol at the insertion point. Each
+    /// content pane reports its own (`updateCursorMember(_:inEditorPane:)`),
+    /// reading which line declares which member
+    /// (`RuntimeObjectInterface.declaredMembersByLineNumber()`); this is the
+    /// focused pane's.
     @RxObserved
     public private(set) var cursorMember: RuntimeMemberReference?
 
-    public func updateCursorMember(_ member: RuntimeMemberReference?) {
+    /// The member each pane's insertion point is on, kept out of `editorArea`:
+    /// it moves with every keystroke, and every pane follows the area.
+    private var cursorMembersByEditorPane: [EditorPane.ID: RuntimeMemberReference] = [:]
+
+    /// Records where `paneID`'s insertion point is; the focused pane's becomes
+    /// `cursorMember`.
+    public func updateCursorMember(_ member: RuntimeMemberReference?, inEditorPane paneID: EditorPane.ID) {
+        cursorMembersByEditorPane[paneID] = member
+        syncCursorMember()
+    }
+
+    private func syncCursorMember() {
+        let member = cursorMembersByEditorPane[editorArea.focusedPaneID]
         guard member != cursorMember else { return }
         cursorMember = member
     }
 
-    /// Content-pane tabs. Tabs and the navigation timeline are independent
-    /// mechanisms: a tab is a display slot holding one `object`, while the
-    /// timeline records viewing order across all of them. The active tab's
-    /// `object` mirrors `selectedRuntimeObject` (the router writes
-    /// navigation through to it, so back/forward land in the active tab);
-    /// inactive tabs hold a frozen object. There is always at least one
-    /// tab. Read-only externally: mutated only via the tab selection routes
-    /// (`newTab`, `openInNewTab`, `switchTab`, `closeTab`, `moveTab`) and the
-    /// active-tab write-through applied after every history mutation.
-    @RxObserved
-    public fileprivate(set) var tabs: [DocumentTab] = [DocumentTab()]
-
-    /// Index of the active tab in `tabs`. Always a valid index (there is
-    /// always at least one tab).
-    @RxObserved
-    public fileprivate(set) var activeTabIndex: Int = 0
-
-    /// The active tab, or `nil` only in the degenerate empty-`tabs` state
-    /// (which the router never produces).
-    public var activeTab: DocumentTab? {
-        guard activeTabIndex >= 0, activeTabIndex < tabs.count else { return nil }
-        return tabs[activeTabIndex]
+    /// Brings `selectedRuntimeObject` and `cursorMember` in line with
+    /// `editorArea`, assigning only what changed, and forgets the insertion
+    /// points of panes that have closed. The router calls it after every
+    /// route.
+    fileprivate func syncWithEditorArea() {
+        let focusedObject = editorArea.focusedPane.activeTab.object
+        let isInSync = switch (selectedRuntimeObject, focusedObject) {
+        case (nil, nil): true
+        case (let selectedObject?, let focusedObject?): selectedObject.hasSameContent(as: focusedObject)
+        default: false
+        }
+        if !isInSync {
+            selectedRuntimeObject = focusedObject
+        }
+        cursorMembersByEditorPane = cursorMembersByEditorPane.filter { editorArea[$0.key] != nil }
+        syncCursorMember()
     }
-
-    /// True when `.backward` would land somewhere: either the cursor has
-    /// an earlier entry, or the pane shows the placeholder (empty tab)
-    /// while the timeline still holds the most recently viewed entry —
-    /// the first `.backward` then returns to the cursor itself. Drives
-    /// toolbar previous-button enablement.
-    public var canGoPrevious: Bool {
-        if selectedRuntimeObject == nil, selectionIndex >= 0 { return true }
-        return selectionIndex > 0
-    }
-
-    /// True when `.forward` (next) would move the cursor to a later
-    /// history entry. Drives toolbar next-button enablement.
-    public var canGoNext: Bool { selectionIndex < selectionStack.count - 1 }
 
     /// True when the object on screen belongs to the image the sidebar lists
     /// (`currentImageNode`), the only image whose rows the sidebar holds.
@@ -242,7 +219,7 @@ public final class DocumentState {
 
     /// Mutation surface for every observable state on this `DocumentState`.
     /// View models trigger routes on this router
-    /// (`documentState.selectionRouter.trigger(.push(x))`). The router
+    /// (`documentState.selectionRouter.trigger(.open(object, in: .focusedTab))`). The router
     /// applies the state mutation synchronously, then emits to
     /// `routeSignal` so scene-level subscribers (`MainCoordinator`) can
     /// fan out to their child coordinators.
@@ -421,6 +398,8 @@ private final class SelectionRouter: Router {
         with options: TransitionOptions,
         completion: ContextPresentationHandler?
     ) {
+        // Every case returns before emitting when the route changes nothing, so a
+        // subscriber never rebuilds a pane for a no-op.
         switch route {
         case .switchEngine(let engine):
             if documentState.runtimeEngine === engine, documentState.hasNothingOpen { return }
@@ -431,214 +410,53 @@ private final class SelectionRouter: Router {
                 documentState.putSessionInPlaceAgain()
             }
             documentState.currentImageNode = nil
-            resetHistory()
-            // Engine switch resets the whole document: collapse back to a
-            // single empty tab.
-            documentState.tabs = [DocumentTab()]
-            documentState.activeTabIndex = 0
+            // Everything open belonged to the engine left behind: start over
+            // with one empty pane.
+            documentState.editorArea = EditorArea()
         case .switchImage(let node):
-            if documentState.currentImageNode == node, documentState.selectionStack.isEmpty { return }
+            // Only the sidebar moves; the editor area keeps every object open,
+            // whichever image it belongs to.
+            guard documentState.currentImageNode != node else { return }
             documentState.currentImageNode = node
-            resetHistory()
-            // Tabs hold objects belonging to the current image; switching the
-            // inspected image is a fresh browsing context, so collapse back to
-            // a single empty tab (mirrors `.switchEngine`). Cross-image tab
-            // persistence is a possible later enhancement.
-            documentState.tabs = [DocumentTab()]
-            documentState.activeTabIndex = 0
-        case .selectAtRoot(let object):
-            documentState.selectionStack = [object]
-            documentState.selectionIndex = 0
-            documentState.selectedRuntimeObject = object
-        case .push(let object):
-            pushOntoTimeline(object)
-        case .pop:
-            guard !documentState.selectionStack.isEmpty else { return }
-            documentState.selectionStack.removeLast()
-            // Clamp cursor back into the new bounds — if it was sitting
-            // on the entry we just removed (or beyond), step it to the
-            // new last; otherwise leave it where it was.
-            if documentState.selectionStack.isEmpty {
-                documentState.selectionIndex = -1
-            } else if documentState.selectionIndex >= documentState.selectionStack.count {
-                documentState.selectionIndex = documentState.selectionStack.count - 1
-            }
-            syncSelectionFromCursor()
-        case .backward:
-            if documentState.selectedRuntimeObject == nil, cursorObject() != nil {
-                // Empty tab over a non-empty timeline: the first step back
-                // returns to the cursor itself (the most recently viewed
-                // entry) rather than skipping past it.
-                syncSelectionFromCursor()
-            } else {
-                guard documentState.selectionIndex > 0 else { return }
-                documentState.selectionIndex -= 1
-                syncSelectionFromCursor()
-            }
-        case .forward:
-            guard documentState.selectionIndex < documentState.selectionStack.count - 1 else { return }
-            documentState.selectionIndex += 1
-            syncSelectionFromCursor()
-        case .jump(let toIndex):
-            // The same-index jump is allowed when the pane shows the
-            // placeholder (empty tab): it restores the cursor entry.
-            guard toIndex >= 0,
-                  toIndex < documentState.selectionStack.count,
-                  toIndex != documentState.selectionIndex || documentState.selectedRuntimeObject == nil
-            else { return }
-            documentState.selectionIndex = toIndex
-            syncSelectionFromCursor()
-        case .clear:
-            guard !documentState.selectionStack.isEmpty else { return }
-            resetHistory()
-        case .newTab:
-            // The timeline survives; only the forward branch is abandoned,
-            // exactly as for a tab switch. The cursor stays on the most
-            // recently viewed entry so `.backward` can return to it.
-            truncateForwardBranch()
-            documentState.tabs.append(DocumentTab())
-            documentState.activeTabIndex = documentState.tabs.count - 1
-            documentState.selectedRuntimeObject = nil
-        case .openInNewTab(let object):
-            documentState.tabs.append(DocumentTab(object: object))
-            documentState.activeTabIndex = documentState.tabs.count - 1
-            pushOntoTimeline(object)
-        case .pushHighlighting(let object, _):
+        case .open(let object, let destination, _):
             // The highlight rides on the route itself, to the content pane.
-            pushOntoTimeline(object)
-        case .openInNewTabHighlighting(let object, _):
-            documentState.tabs.append(DocumentTab(object: object))
-            documentState.activeTabIndex = documentState.tabs.count - 1
-            pushOntoTimeline(object)
-        case .switchTab(let index):
-            guard index >= 0, index < documentState.tabs.count, index != documentState.activeTabIndex else { return }
-            documentState.activeTabIndex = index
-            rejoinTimeline(with: documentState.tabs[index].object)
-        case .closeTab(let index):
-            // The last remaining tab is never closed here — the menu layer
-            // turns ⌘W into "close window" in that state.
-            guard documentState.tabs.count > 1, index >= 0, index < documentState.tabs.count else { return }
-            let wasActive = index == documentState.activeTabIndex
-            documentState.tabs.remove(at: index)
-            if wasActive {
-                // Activate the right neighbour (same index after removal), or
-                // the left one when the closed tab was last.
-                let newActiveIndex = min(index, documentState.tabs.count - 1)
-                documentState.activeTabIndex = newActiveIndex
-                rejoinTimeline(with: documentState.tabs[newActiveIndex].object)
-            } else if index < documentState.activeTabIndex {
-                documentState.activeTabIndex -= 1
-            }
-        case .moveTab(let from, let to):
-            guard from >= 0, from < documentState.tabs.count,
-                  to >= 0, to < documentState.tabs.count,
-                  from != to
-            else { return }
-            let activeID = documentState.activeTab?.id
-            let moved = documentState.tabs.remove(at: from)
-            documentState.tabs.insert(moved, at: to)
-            if let activeID, let newActiveIndex = documentState.tabs.firstIndex(where: { $0.id == activeID }) {
-                documentState.activeTabIndex = newActiveIndex
-            }
+            documentState.editorArea.open(object, in: destination)
+        case .selectAtRoot(let object):
+            documentState.editorArea.resetFocusedTab(to: object)
+        case .backward:
+            guard documentState.editorArea.goBackward() else { return }
+        case .forward:
+            guard documentState.editorArea.goForward() else { return }
+        case .jump(let toIndex):
+            guard documentState.editorArea.goToHistoryEntry(at: toIndex) else { return }
+        case .newTab:
+            documentState.editorArea.addEmptyTab()
+        case .switchTab(let tabID):
+            guard documentState.editorArea.selectTab(tabID) else { return }
+        case .closeTab(let tabID):
+            // The only tab of the only pane is never closed here — the menu
+            // layer turns ⌘W into "close window" in that state.
+            guard documentState.editorArea.closeTab(tabID) else { return }
+        case .moveTab(let tabID, let toIndex):
+            guard documentState.editorArea.moveTab(tabID, to: toIndex) else { return }
+        case .newEditorPane(let placement):
+            documentState.editorArea.addPane(placed: placement)
+        case .closeEditorPane(let paneID):
+            guard documentState.editorArea.closePane(paneID) else { return }
+        case .closeOtherEditorPanes:
+            guard documentState.editorArea.closeOtherPanes() else { return }
+        case .focusEditorPane(let paneID):
+            guard documentState.editorArea.focus(paneID) else { return }
+        case .changeEditorOrientation:
+            documentState.editorArea.changeOrientation()
         }
-        // Keep the active tab's object in step with the (possibly mutated)
-        // `selectedRuntimeObject` — this is what makes back/forward land in
-        // the active tab. The tab-management cases above already set both
-        // sides consistently; the guard makes the write a no-op for them and
-        // suppresses redundant `tabs` emissions on plain navigation.
-        syncActiveTabObject()
+        documentState.syncWithEditorArea()
         routeRelay.accept(route)
         // Announced once the document stands on the engine, like the route.
         if case .switchEngine(let engine) = route {
             documentState.runtimeEngineDidResetRelay.accept(engine)
         }
         completion?(EmptyRouteTransitionContext.shared)
-    }
-
-    /// Entry at the timeline cursor, or `nil` when the timeline is empty.
-    private func cursorObject() -> RuntimeObject? {
-        guard documentState.selectionIndex >= 0,
-              documentState.selectionIndex < documentState.selectionStack.count
-        else { return nil }
-        return documentState.selectionStack[documentState.selectionIndex]
-    }
-
-    /// Sets `selectedRuntimeObject` from the timeline cursor. Every
-    /// navigation route ends here so the panes follow the cursor.
-    private func syncSelectionFromCursor() {
-        documentState.selectedRuntimeObject = cursorObject()
-    }
-
-    /// Drops the abandoned forward branch: entries after the cursor are
-    /// unreachable once the user navigates somewhere new from a
-    /// mid-timeline position (browser-style).
-    private func truncateForwardBranch() {
-        guard documentState.selectionIndex < documentState.selectionStack.count - 1 else { return }
-        documentState.selectionStack = Array(documentState.selectionStack.prefix(documentState.selectionIndex + 1))
-    }
-
-    /// Records viewing `object` on the timeline: truncates the forward
-    /// branch, appends the entry unless the same type already sits at the top
-    /// (consecutive duplicates only move the cursor), and shows it.
-    ///
-    /// A duplicate still replaces the top entry when it arrives in another
-    /// form — the sidebar's object after a link payload, or the reverse — so
-    /// the entry holds what is on screen. Keeping the first form instead would
-    /// have back / forward restore a form the user has already navigated away
-    /// from, with whatever `displayName` and `properties` it carried.
-    private func pushOntoTimeline(_ object: RuntimeObject) {
-        truncateForwardBranch()
-        let selectionStack = documentState.selectionStack
-        if let topEntry = selectionStack.last, topEntry == object {
-            if !topEntry.hasSameContent(as: object) {
-                documentState.selectionStack[selectionStack.count - 1] = object
-            }
-        } else {
-            documentState.selectionStack.append(object)
-        }
-        documentState.selectionIndex = documentState.selectionStack.count - 1
-        documentState.selectedRuntimeObject = object
-    }
-
-    /// Re-enters the timeline after a tab switch / close: the target tab's
-    /// object is recorded like any other navigation (Xcode-style — back
-    /// steps through everything viewed, however it was reached), or, for an
-    /// empty tab, only the forward branch is dropped and the placeholder
-    /// shows while the cursor keeps the most recently viewed entry.
-    private func rejoinTimeline(with object: RuntimeObject?) {
-        if let object {
-            pushOntoTimeline(object)
-        } else {
-            truncateForwardBranch()
-            documentState.selectedRuntimeObject = nil
-        }
-    }
-
-    /// Empties the timeline and shows the placeholder. Used when the
-    /// browsing context itself changes (engine / image switch, `.clear`).
-    private func resetHistory() {
-        documentState.selectionStack = []
-        documentState.selectionIndex = -1
-        documentState.selectedRuntimeObject = nil
-    }
-
-    /// Writes the current `selectedRuntimeObject` through to the active tab, so
-    /// the active tab's title tracks navigation. No-op (no emission) when the
-    /// tab already holds that object in that state. Compared by content, not
-    /// identity: the same type arriving in another form carries another
-    /// `displayName` for the title and other `properties` for the panes a tab
-    /// switch hands it back to.
-    private func syncActiveTabObject() {
-        let index = documentState.activeTabIndex
-        guard index >= 0, index < documentState.tabs.count else { return }
-        let currentObject = documentState.selectedRuntimeObject
-        let isInSync = switch (documentState.tabs[index].object, currentObject) {
-        case (nil, nil): true
-        case (let tabObject?, let selectedObject?): tabObject.hasSameContent(as: selectedObject)
-        default: false
-        }
-        guard !isInSync else { return }
-        documentState.tabs[index].object = currentObject
     }
 }
 

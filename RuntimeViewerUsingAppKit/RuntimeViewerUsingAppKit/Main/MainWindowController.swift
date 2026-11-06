@@ -31,8 +31,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private(set) lazy var toolbarController = MainToolbarController(delegate: self)
 
-    private(set) lazy var tabBarAccessoryController = TabBarAccessoryController(nibName: nil, bundle: nil)
-
     private(set) lazy var splitViewController = MainSplitViewController()
 
     private var viewModel: MainViewModel?
@@ -70,7 +68,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
-        contentWindow.addTitlebarAccessoryViewController(tabBarAccessoryController)
         contentWindow.box.centerInScreen()
         contentWindow.identifier = .makeIdentifier(of: Self.self)
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
@@ -109,26 +106,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             ),
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal(),
-            tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
-            tabClosed: tabBarAccessoryController.tabClosedRelay.asSignal(),
-            newTabClicked: tabBarAccessoryController.newTabClicked,
             dependencyCacheSelected: Signal.merge(runtimeSourcePopoverAdapter.dependencyCacheSelected, runtimeSourceMenuAdapter.dependencyCacheSelected)
         )
         let output = viewModel.transform(input)
 
         output.isLoadFrameworksEnabled.drive(toolbarController.loadFrameworksItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
-
-        output.tabBarSnapshot.driveOnNext { [weak self] snapshot in
-            guard let self else { return }
-            tabBarAccessoryController.applySnapshot(snapshot)
-        }
-        .disposed(by: rx.disposeBag)
-
-        output.isTabBarHidden.driveOnNext { [weak self] isHidden in
-            guard let self else { return }
-            tabBarAccessoryController.isHidden = isHidden
-        }
-        .disposed(by: rx.disposeBag)
 
         output.windowTitle.driveOnNext { [weak self] title in
             guard let self else { return }
@@ -342,33 +324,99 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     // MARK: - Tab Actions
 
+    /// ⌘T: an empty tab in the focused editor pane.
     @objc func newTab(_ sender: Any?) {
         documentState.selectionRouter.trigger(.newTab)
     }
 
-    /// ⌘W: close the active tab, or fall back to closing the window when it is
-    /// the only tab (Safari behaviour). "Close Window" (⌘⇧W) always closes the
-    /// window.
+    /// ⌘W, in the order of Xcode's Close Tab, Editor Pane, Window Tab, or
+    /// Window: the focused pane's active tab while the pane has another, else
+    /// the focused pane while there is another, else the window. "Close
+    /// Window" (⌘⇧W) always closes the window.
     @objc func closeTab(_ sender: Any?) {
-        if documentState.tabs.count > 1 {
-            documentState.selectionRouter.trigger(.closeTab(index: documentState.activeTabIndex))
-        } else {
+        switch documentState.editorArea.closeTarget {
+        case .tab(let tabID):
+            documentState.selectionRouter.trigger(.closeTab(tabID))
+        case .pane(let paneID):
+            documentState.selectionRouter.trigger(.closeEditorPane(paneID))
+        case .window:
             contentWindow.performClose(sender)
         }
     }
 
+    /// The title of ⌘W for what `closeTab(_:)` closes now, the titles Xcode gives its item
+    /// (`-[IDEWorkspaceWindow menuItemTitleForCloseEditorTabBehavior:]`); `nil` when it closes the
+    /// window, which File ▸ Close Window then does under ⌘W (`TabMenuController`).
+    var closeTabMenuItemTitle: String? {
+        switch documentState.editorArea.closeTarget {
+        case .tab:
+            "Close Tab"
+        case .pane:
+            "Close Editor Pane"
+        case .window:
+            nil
+        }
+    }
+
     @objc func selectNextTab(_ sender: Any?) {
-        let tabCount = documentState.tabs.count
-        guard tabCount > 1 else { return }
-        let nextIndex = (documentState.activeTabIndex + 1) % tabCount
-        documentState.selectionRouter.trigger(.switchTab(index: nextIndex))
+        selectTab(offsetFromActiveTab: 1)
     }
 
     @objc func selectPreviousTab(_ sender: Any?) {
-        let tabCount = documentState.tabs.count
+        selectTab(offsetFromActiveTab: -1)
+    }
+
+    /// The tab `offset` places from the focused pane's active tab, wrapping around.
+    private func selectTab(offsetFromActiveTab offset: Int) {
+        let focusedPane = documentState.editorArea.focusedPane
+        let tabCount = focusedPane.tabs.count
         guard tabCount > 1 else { return }
-        let previousIndex = (documentState.activeTabIndex - 1 + tabCount) % tabCount
-        documentState.selectionRouter.trigger(.switchTab(index: previousIndex))
+        let targetIndex = (focusedPane.activeTabIndex + offset + tabCount) % tabCount
+        documentState.selectionRouter.trigger(.switchTab(focusedPane.tabs[targetIndex].id))
+    }
+
+    // MARK: - Editor Pane Actions
+
+    /// ⌃⌘T, Xcode's Editor Pane On Right.
+    @objc func newEditorPaneOnRight(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.newEditorPane(.onRight))
+    }
+
+    /// ⌃⌥⌘T, Xcode's Editor Pane Below.
+    @objc func newEditorPaneBelow(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.newEditorPane(.below))
+    }
+
+    /// ⌃⇧⌘W.
+    @objc func closeEditorPane(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.closeEditorPane(documentState.editorArea.focusedPaneID))
+    }
+
+    /// ⌃⌥⇧⌘W.
+    @objc func closeOtherEditorPanes(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.closeOtherEditorPanes)
+    }
+
+    /// ⌃`: the next pane left to right and top to bottom, wrapping around.
+    @objc func moveFocusToNextEditorPane(_ sender: Any?) {
+        let editorArea = documentState.editorArea
+        documentState.selectionRouter.trigger(.focusEditorPane(editorArea.layout.paneID(after: editorArea.focusedPaneID)))
+    }
+
+    /// ⌃⇧`.
+    @objc func moveFocusToPreviousEditorPane(_ sender: Any?) {
+        let editorArea = documentState.editorArea
+        documentState.selectionRouter.trigger(.focusEditorPane(editorArea.layout.paneID(before: editorArea.focusedPaneID)))
+    }
+
+    @objc func changeEditorOrientation(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.changeEditorOrientation)
+    }
+
+    /// Only the views change, so it goes to the editor area through `MainCoordinator`, not through
+    /// the document.
+    @objc func resetEditorSizes(_ sender: Any?) {
+        viewModel?.router.trigger(.resetEditorSizes)
     }
 
     // MARK: - Font Size Actions
@@ -429,7 +477,13 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         case #selector(exportMultipleImages(_:)):
             return documentState.runtimeEngine.imageNodes.count >= 2
         case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
-            return documentState.tabs.count > 1
+            return documentState.editorArea.focusedPane.tabs.count > 1
+        case #selector(closeEditorPane(_:)), #selector(closeOtherEditorPanes(_:)),
+             #selector(moveFocusToNextEditorPane(_:)), #selector(moveFocusToPreviousEditorPane(_:)),
+             #selector(changeEditorOrientation(_:)), #selector(resetEditorSizes(_:)):
+            // The only pane cannot be closed, has no other pane to hand the focus to, and has
+            // nothing to turn or to size.
+            return documentState.editorArea.panes.count > 1
         case #selector(findCallHierarchy(_:)):
             return documentState.crossReferenceRequest(.callHierarchy) != nil
         case #selector(findCallees(_:)):

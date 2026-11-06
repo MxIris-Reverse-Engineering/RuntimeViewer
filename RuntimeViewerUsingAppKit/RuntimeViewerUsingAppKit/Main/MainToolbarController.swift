@@ -106,6 +106,31 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
+    /// Xcode 27.2's Add Editor toolbar item (`IDEAddEditorToolbarViewController`): a pull-down button
+    /// with no action of its own that opens its menu on mouse-down — Tab, then Editor Pane On Right and
+    /// Editor Pane Below, with the File menu's shortcuts — whose items go up the responder chain to the
+    /// key window's `MainWindowController`, as the File menu's do. Image, label, tooltip and items are
+    /// Xcode's (`makeAddEditorButton()`, IDEKit 27.2 0xA66004; RE notes "Editor panes — visuals" §1).
+    final class AddEditorToolbarItem: NSMenuToolbarItem {
+        init() {
+            super.init(itemIdentifier: .Main.addEditor)
+            label = "Add Editor"
+            paletteLabel = "Add Editor"
+            toolTip = "Add Editor Tabs or Editor Panes"
+            showsIndicator = false
+            image = NSImage(systemSymbolName: "plus.rectangle.on.rectangle", accessibilityDescription: "Add Editor")
+            menu = NSMenu {
+                NSMenuItem("Tab", action: #selector(MainWindowController.newTab(_:)), keyEquivalent: "t", modifiers: [.command])
+                    .image(SFSymbols(name: RuntimeViewerSymbols.tabbarTopRectangle).nsImage)
+                NSMenuItem.separator()
+                NSMenuItem("Editor Pane On Right", action: #selector(MainWindowController.newEditorPaneOnRight(_:)), keyEquivalent: "t", modifiers: [.control, .command])
+                    .image(NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: nil))
+                NSMenuItem("Editor Pane Below", action: #selector(MainWindowController.newEditorPaneBelow(_:)), keyEquivalent: "t", modifiers: [.control, .option, .command])
+                    .image(NSImage(systemSymbolName: "inset.filled.bottomhalf.rectangle", accessibilityDescription: nil))
+            }
+        }
+    }
+
     /// The activity capsule in the middle of the toolbar in Xcode 26's style — its Activity View,
     /// which Xcode 27 replaced with the window title's progress ring. It holds the runtime source
     /// picker at its leading edge, where Xcode 26 holds its scheme picker.
@@ -221,6 +246,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.label = "MCP Status"
     }
 
+    let addEditorItem = AddEditorToolbarItem()
+
     let activityItem = ActivityToolbarItem()
 
     /// The runtime source pickers of both styles — the one in the middle of the toolbar and the one in
@@ -300,6 +327,9 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.save,
             .Main.share,
             .Main.mcpStatus,
+            // Last in the editor area's part of the toolbar, where Xcode 27.2's default toolbar puts its
+            // Add Editor item: after it Xcode has only EditorOptions and EditorMode, which RuntimeViewer has not.
+            .Main.addEditor,
             .inspectorTrackingSeparator,
             .flexibleSpace,
             .toggleInspector,
@@ -331,6 +361,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.attach,
             .Main.mcpStatus,
             .Main.activity,
+            .Main.addEditor,
         ]
     }
 
@@ -364,6 +395,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return mcpStatusItem
         case .Main.activity:
             return activityItem
+        case .Main.addEditor:
+            return addEditorItem
         default:
             return nil
         }
@@ -395,5 +428,6 @@ extension NSToolbarItem.Identifier {
         static let attach: NSToolbarItem.Identifier = "attach"
         static let mcpStatus: NSToolbarItem.Identifier = "mcpStatus"
         static let activity: NSToolbarItem.Identifier = "activity"
+        static let addEditor: NSToolbarItem.Identifier = "addEditor"
     }
 }

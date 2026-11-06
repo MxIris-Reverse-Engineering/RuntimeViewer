@@ -1,13 +1,13 @@
 # Draft - 编辑器分栏：照 Xcode 把内容区分成多个编辑器窗格
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-06
 - **最后更新**: 2026-11-06
 - **所属愿景**: 无（[《自建代码视图引擎》](../Visions/CodeViewEngine.md)只管文本怎么显示，窗口里摆几个内容区不在它的范围内）
 - **关联提案**: [多 Tab 内容导航设计](../Plans/2026-07-20-multi-tab-content-navigation-design.md)（本提案改掉它的两条约定：整窗一条标签栏、全文档共用一条历史）、[0021](0021-runtime-object-identity.md)（历史条目按身份比较、按内容替换）、[0022](0022-reveal-in-sidebar-navigator.md)、[0029](0029-find-navigator.md)（Find 结果 ⌥-点击开新标签）、[0048](0048-routes-carry-no-views.md)
 - **实现分支 / PR**: `feature/editor-panes`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 无 —— 不另写实现说明与使用指南，理由见决策日志
 
 ## 摘要
 
@@ -118,7 +118,7 @@
 | File | New Tab（现有） | ⌘T | 文档窗口 |
 | File | New Editor Pane On Right | ⌃⌘T | 文档窗口 |
 | File | New Editor Pane Below | ⌃⌥⌘T | 文档窗口 |
-| File | Close Tab（现有，行为见「关闭」） | ⌘W | 文档窗口 |
+| File | Close Tab / Close Editor Pane（现有的 Close Tab，标题随要关的东西变，行为见「关闭」） | ⌘W | 文档窗口里有标签或分栏可关；只剩窗口可关时隐藏，⌘W 交给 Close Window |
 | File | Close Editor Pane | ⌃⇧⌘W | 两栏以上 |
 | File | Close Other Editor Panes | ⌃⌥⇧⌘W | 两栏以上 |
 | File | Close Window（现有） | ⇧⌘W | 任何窗口 |
@@ -128,9 +128,9 @@
 | Navigate | Show Next Tab（从 Window 菜单挪来） | ⇧⌘] | 焦点栏两个以上标签 |
 | View | Change Editor Orientation | 无 | 两栏以上 |
 | View | Reset Editor Sizes | 无 | 两栏以上 |
-| 工具栏 | 加一栏（菜单：Tab、Editor Pane On Right、Editor Pane Below） | 菜单里不显示快捷键 | 文档窗口 |
+| 工具栏 | Add Editor（菜单：Tab、Editor Pane On Right、Editor Pane Below） | 菜单里显示与 File 菜单相同的快捷键 | 文档窗口 |
 
-RuntimeViewer 的 File 菜单没有 New 子菜单，所以 Xcode 子菜单里的「Editor Pane On Right」在这里写成「New Editor Pane On Right」，与现有的 New Tab 并列。工具栏按钮放在 MCP 状态按钮之后、Inspector 分隔线之前：Xcode 27.2 默认工具栏里 AddEditor 之后只有 RuntimeViewer 没有的 EditorOptions、EditorMode，所以这就是同一个位置；它的图标与标签照 Xcode 的 `CustomToolbarItem.AddEditor`，实现时逆向。⌘W 菜单项的标题暂保持 Close Tab，Xcode 的标题是否随状态变化，实现时核对。
+RuntimeViewer 的 File 菜单没有 New 子菜单，所以 Xcode 子菜单里的「Editor Pane On Right」在这里写成「New Editor Pane On Right」，与现有的 New Tab 并列。工具栏按钮放在 MCP 状态按钮之后、Inspector 分隔线之前：Xcode 27.2 默认工具栏里 AddEditor 之后只有 RuntimeViewer 没有的 EditorOptions、EditorMode，所以这就是同一个位置；它的图标（`plus.rectangle.on.rectangle`）、标签（Add Editor）与提示文字照 Xcode 的 `CustomToolbarItem.AddEditor`。⌘W 菜单项的标题照 Xcode 随要关的东西变（Close Tab / Close Editor Pane）。
 
 ### 非目标
 
@@ -142,6 +142,7 @@ RuntimeViewer 的 File 菜单没有 New 子菜单，所以 Xcode 子菜单里的
 - 分栏布局、标签、历史跨启动保存；Xcode 的 assistant editor。
 - Inspector 的关系、层级、特化列表认修饰键。
 - iOS 版：`RuntimeViewerUsingUIKit` 只有一栏，只做随类型改名的编译修改。
+- 标签栏照 Xcode 的三处观感：滚动口袋做底、选中标签的玻璃胶囊、未聚焦栏整栏按主题变暗；分隔线用 Xcode 主题算出的不透明颜色。它们要实际运行 Xcode 逐帧比对才能定下来，这一批用近似做法（见「外观」）。
 
 ## 详细设计
 
@@ -245,9 +246,9 @@ public struct EditorPane: Hashable, Identifiable, Sendable {
 /// has the focus — so that no reader ever sees a layout naming a pane that is not there yet, or a
 /// focus on a pane that has gone.
 public struct EditorArea: Hashable, Sendable {
-    public internal(set) var layout: EditorLayout
+    public private(set) var layout: EditorLayout
     public internal(set) var panes: [EditorPane.ID: EditorPane]
-    public internal(set) var focusedPaneID: EditorPane.ID
+    public private(set) var focusedPaneID: EditorPane.ID
 
     /// One pane holding one empty tab.
     public init()
@@ -257,6 +258,9 @@ public struct EditorArea: Hashable, Sendable {
     public var orderedPanes: [EditorPane] { get }
     public subscript(paneID: EditorPane.ID) -> EditorPane? { get }
     public func paneID(containing tabID: DocumentTab.ID) -> EditorPane.ID?
+    /// Whether no tab of any pane has shown anything: with the sidebar at the image list, an
+    /// engine coming back has nothing to start the document over from.
+    public var hasShownNothing: Bool { get }
 
     /// What ⌘W closes: the focused tab while its pane has another, else the focused pane while
     /// there is another, else the window.
@@ -338,7 +342,7 @@ public enum SelectionRoute: Routable {
 - `backward` / `forward` / `jump(toIndex:)` / `newTab` / `selectAtRoot` 作用于焦点栏的当前标签；`jump` 的下标是那个标签历史里的下标。
 - 删掉 `.pop` 与 `.clear`：仓库里没有任何调用方（含测试）。
 - 「先改状态、再发路由」的契约不变。路由器在每条路由末尾按 `editorArea` 重算 `selectedRuntimeObject` 与 `cursorMember`，值没变就不赋值，避免多余的发射。
-- 修饰键到去处的换算放在一处：`SelectionRoute.Destination(clickModifierFlags:)`（AppKit 下），无修饰 → `.focusedTab`，⌥ → `.newTab`，⇧⌥ → `.nextEditorPane`；内容区的链接先去掉 ⌘ 再换算，⇧⌘ 另外映射到 `.newTab` 以保留现有习惯。`FindResultActivation.opensInNewTab(for:)` 换成它，`FindCrossReferenceNavigation.open(_:highlighting:inNewTab:in:)` 的 `inNewTab:` 换成 `in destination:`。
+- 修饰键到去处的换算放在一处（AppKit 下）：列表里的点击用 `SelectionRoute.Destination(listClickModifierFlags:)`，无修饰或只有 ⇧ → `.focusedTab`，⌥ → `.newTab`，⇧⌥ → `.nextEditorPane`；类型链接上的 ⌘-点击用 `Destination(linkClickModifierFlags:)`，与前者只差 ⇧ 单独也开新标签，以保留 ⇧⌘-点击的现有习惯。`FindResultActivation.opensInNewTab(for:)` 换成 `destination(for:)`，`FindCrossReferenceNavigation` 的两个 `open` 的 `inNewTab:` 换成 `destination:`。
 
 `MainCoordinator.fanOut` 只做两件事：把路由交给编辑区的 coordinator，让 Inspector 重新进入 `selectedRuntimeObject`（`.back`，同一对象时它本来就不重建）。编辑区按路由找到受影响的栏：
 
@@ -374,7 +378,7 @@ MainSplitViewController 第 1 项
 - **内容区**：`ContentTextViewModel` 多一个 `paneID`。它发出任何 `.open` 之前先发 `.focusEditorPane(paneID)`（已是焦点栏时什么也不变），插入点经 `updateCursorMember(_:inEditorPane:)` 上报。链接点击与右键菜单按上面的表换成 `Destination`。
 - **工具栏**：`MainToolbarController` 加 `.Main.addEditor`，一个只挂菜单的按钮（Xcode 的 AddEditor 也没有点击动作，只有菜单），三种活动样式的默认项里都放在 `.Main.mcpStatus` 之后、`.inspectorTrackingSeparator` 之前。菜单项与 File 菜单发同样的动作，经 responder chain 到 `MainWindowController`。它位于居中项之后，不改变居中项前面那一组的宽度，`ToolbarCenteredItemTests` 照常覆盖。
 - **窗口与菜单**：删掉 `TabBarAccessoryController` 和 `MainViewModel` 里的标签输入输出；前进后退与历史菜单改读焦点栏当前标签的 `NavigationHistory`。`MainWindowController` 的标签动作改为作用于焦点栏，新增各分栏动作与 `responds(to:)` 里的启用条件；`closeTab(_:)` 按 `editorArea.closeTarget` 决定关什么。File 菜单项沿用 `TabMenuController` 插入 New Tab 的位置，Navigate 与 View 菜单项由 `MainMenuController` 构建；Show Next/Previous Tab 从 Window 菜单挪到 Navigate，快捷键不变。
-- **外观**：焦点栏与其余栏的标签栏外观、左端关栏按钮、分隔线粗细、每栏最小尺寸、工具栏按钮的图标，都照 Xcode 27.2 逆向后实现（落地第 6 步）。macOS 26 以上标签栏是否像侧栏的栏那样浮在内容上、带滚动边缘效果，也以 Xcode 为准；macOS 15 照现在的堆叠方式。
+- **外观**：尺寸与图标照 Xcode 27.2 逆向的结果（落地第 6 步）。标签栏是一行 28 点高的控件，左右各缩进 8 点，上下各留 4 点，紧贴工具栏的顶行栏上方不留（共 36 点，顶行 32 点）；内容铺满整栏，安全区顶部加上标签栏的高度，从标签栏下面滚过，与 Xcode 相同。关栏按钮是 23 点宽的 `xmark`，提示文字「Close this Editor Pane」。分隔线 3 点、细线样式。拖分隔线时每栏至少 200 点，分隔线前面那一栏多算一条分隔线的 3 点。工具栏按钮的图标是 `plus.rectangle.on.rectangle`，按下即弹出菜单，菜单项带快捷键与 Xcode 的图标。⌘W 的菜单项按它此刻会关掉的东西改名（Close Tab / Close Editor Pane）。Xcode 依赖主题引擎和私有视图的三处观感——滚动口袋（scroll pocket）做标签栏的底、选中标签的玻璃胶囊、未聚焦栏整栏按主题变暗——以及分隔线的确切颜色，这一批先用近似：标签栏用窗口背景色、未聚焦栏的标签降低不透明度、分隔线用系统分隔线颜色（见「非目标」）。
 
 ### 测试
 
@@ -425,13 +429,22 @@ MainSplitViewController 第 1 项
 
 ## 落地步骤
 
-1. **模型**：`EditorPaneOrientation`、`EditorPanePlacement`、`EditorLayout`、`NavigationHistory`、`EditorPane`、`EditorArea`，以及它们的测试。只加类型，不接线。
-2. **DocumentState 与路由**：`editorArea` 取代 `selectionStack` / `selectionIndex` / `tabs` / `activeTabIndex`；`SelectionRoute` 改成上面的形状；切镜像不再清空；插入点按栏存；改全部调用点（侧栏、内容区、Inspector、Find、Main、iOS）与现有测试，补路由测试。这一步仍只有一栏，整窗标签栏临时改读焦点栏的标签；用户能察觉的只有「切镜像不清空」和「历史按标签」。
-3. **编辑区界面**：`EditorAreaCoordinator` / `ViewController` / `ViewModel`、`EditorPaneViewController` / `ViewModel`、嵌套 split view、各栏标签栏、焦点同步；删掉 `TabBarAccessoryController`；`fanOut` 改为交给编辑区。
-4. **命令**：工具栏按钮、File / Navigate / View 菜单项与快捷键、⌘W 的关闭顺序、启用条件。
-5. **打开去处**：`Destination(clickModifierFlags:)`，侧栏、内容区、Find 与 Inspector References 的修饰键，右键菜单的 Open in Next Editor Pane。
-6. **外观照 Xcode**：逆向 27.2 的分栏标签栏活跃与非活跃样式、左端关栏按钮、分隔线、每栏最小尺寸、工具栏按钮图标，以及 macOS 26 上标签栏与内容的叠放方式；本机没有 27B52 的 DVTUserInterfaceKit 导出，要先生成。需要 UIFoundation 的 `TabBar` 加接口的，先在 UIFoundation 发版、再抬 pin。
-7. **文档与验收**：根 `AGENTS.md` 的架构要点与 `RuntimeViewerUsingAppKit/AGENTS.md` 的 coordinator 一节写进新约定（路由作用于焦点栏；内容区先取焦点再打开；标签与栏只按标识定位）；术语表登记「分栏」「焦点栏」「打开去处」；在 7 月的多 Tab 设计文档开头注明两条约定已被本提案取代；README 的功能列表加上编辑器分栏；全部测试通过后，交一份手工验收清单（加栏的四种情形、焦点与 Inspector 联动、三种打开去处、⌘W 的三种结果、切镜像与切引擎）。
+1. ✅ **模型**：`EditorPaneOrientation`、`EditorPanePlacement`、`EditorLayout`、`NavigationHistory`、`EditorPane`、`EditorArea`，以及它们的测试。只加类型，不接线。
+2. ✅ **DocumentState 与路由**：`editorArea` 取代 `selectionStack` / `selectionIndex` / `tabs` / `activeTabIndex`；`SelectionRoute` 改成上面的形状；切镜像不再清空；插入点按栏存；改全部调用点（侧栏、内容区、Inspector、Find、Main、iOS）与现有测试，补路由测试。这一步仍只有一栏，整窗标签栏临时改读焦点栏的标签；用户能察觉的只有「切镜像不清空」和「历史按标签」。
+3. ✅ **编辑区界面**：`EditorAreaCoordinator` / `ViewController` / `ViewModel`、`EditorPaneViewController` / `ViewModel`、嵌套 split view、各栏标签栏、焦点同步；删掉 `TabBarAccessoryController`；`fanOut` 改为交给编辑区。
+4. ✅ **命令**：工具栏按钮、File / Navigate / View 菜单项与快捷键、⌘W 的关闭顺序、启用条件。
+5. ✅ **打开去处**：`Destination(listClickModifierFlags:)` 与 `Destination(linkClickModifierFlags:)`，侧栏、内容区、Find 与 Inspector References 的修饰键，右键菜单的 Open in Next Editor Pane。
+6. ✅ **外观照 Xcode**：逆向 27.2 的 IDEKit 与 DVTUserInterfaceKit（结论在 `/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes — visuals」），照搬能从反汇编确定的部分：标签栏的行高与边距、关栏按钮、3 点分隔线、最小栏宽、工具栏按钮的图标与菜单、⌘W 的动态标题（见「外观」）。不需要 UIFoundation 的 `TabBar` 加接口。依赖主题引擎与私有视图的三处观感留到以后（见「非目标」）。
+7. ✅ **文档与验收**：根 `AGENTS.md` 的架构要点与 `RuntimeViewerUsingAppKit/AGENTS.md` 的 coordinator 一节写进新约定（路由作用于焦点栏；内容区先取焦点再打开；标签与栏只按标识定位）；术语表登记「分栏」「焦点栏」「打开去处」；在 7 月的多 Tab 设计文档开头注明两条约定已被本提案取代；README 的功能列表加上编辑器分栏；全部测试通过后，交一份手工验收清单（加栏的四种情形、焦点与 Inspector 联动、三种打开去处、⌘W 的三种结果、切镜像与切引擎）。
+
+**手工验收清单**（App target 没有测试，界面只能手工看；用合进 `next` 之后的 Debug 构建）：
+
+1. **加栏的四种情形**：只有一栏时 ⌃⌘T 得到左右两栏，⌃⌥⌘T 得到上下两栏（根转向）；左右两栏里对右栏 ⌃⌥⌘T，得到「左一栏、右边上下两栏」；再对其中一栏 ⌃⌥⌘T，插进同一个子 split。每次新栏显示原焦点栏的对象、焦点移过去、所在 split 均分。工具栏 Add Editor 的菜单做同样的事。
+2. **焦点与联动**：点另一栏的文本或标签，它成为焦点栏；侧栏高亮、Inspector、工具栏副标题、前进后退与历史菜单跟着换；⌃` / ⌃⇧` 循环切换焦点，键盘焦点进到那一栏的文本。
+3. **三种打开去处**：侧栏点击 / ⌥-点击 / ⇧⌥-点击；内容区类型链接 ⌘- / ⌥⌘- / ⇧⌥⌘-点击；Find 结果与 Inspector References 的点击 / ⌥ / ⇧⌥；三处右键的 Open in Next Editor Pane。只有一栏时开到下一栏会新开一栏。
+4. **⌘W 的三种结果**：焦点栏有两个以上标签时，File 菜单这一项写 Close Tab、关当前标签；只剩一个标签但还有别的栏时写 Close Editor Pane、关这一栏，焦点给后面的兄弟；只剩一栏一个标签时这一项隐藏，⌘W 关窗口。
+5. **切镜像与切引擎**：在侧栏换镜像或退回镜像列表，分栏、标签、历史都不动；切换引擎回到一栏、一个空白标签。
+6. **外观与尺寸**：多栏时每栏顶部有标签栏，顶行 32 点高、下面各行 36 点；左端的 × 关这一栏；分隔线 3 点，拖到约 200 点停住；View ▸ Change Editor Orientation 转向、Reset Editor Sizes 均分。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -452,3 +465,16 @@ MainSplitViewController 第 1 项
 | 2026-11-06 | 加栏按钮放工具栏 | 照 Xcode 27.2 默认：编辑区那一段的末尾、Inspector 分隔线之前。否掉「放每栏标签栏右端」与「只用菜单和快捷键」 |
 | 2026-11-06 | 确认其余默认做法 | 新栏显示焦点栏当前对象、新标签空白；⌥ 开新标签、⇧⌥ 开到下一栏；右键加 Open in Next Editor Pane；侧栏、Inspector、工具栏、MCP 跟着焦点栏；⌘W 依次关标签、关栏、关窗口；分栏菜单照 Xcode；标签栏去掉「+」；切引擎回到一栏；布局不跨启动保存。否掉「保留标签栏的『+』」 |
 | 2026-11-06 | Accepted | 用户批准，开始实现，分支 `feature/editor-panes` |
+| 2026-11-06 | 第 1 步只放布局与历史两个值类型 | `EditorPane` 依赖重做后的 `DocumentTab`，`EditorArea` 依赖 `SelectionRoute.Destination`，两者随第 2 步落地；每一步仍能单独编过 |
+| 2026-11-06 | 只有移动焦点的命令把键盘焦点带进焦点栏 | 切换焦点、新建与关闭分栏会让焦点栏的内容成为第一响应者；其余路由只在键盘焦点本来就在编辑区时才跟过去，所以在侧栏点类型、⇧⌥-点击开到下一栏之后，键盘仍留在侧栏，方向键能接着浏览 |
+| 2026-11-06 | 内容视图用 `EditorPaneContent.focusableView` 说明焦点给谁，不用 `preferredFirstResponder` | AppKitPlus 的导航控制器在每次 `set` 结束时把焦点交给 `preferredFirstResponder`，一栏从占位页换成接口就会把焦点从侧栏抢走 |
+| 2026-11-06 | 点在一栏里没有视图接收的地方，这一栏也取得焦点 | 空白标签的占位页没有能成为第一响应者的视图；这样的点击沿 responder chain 送到分栏的视图控制器。文本里的点击由文本视图成为第一响应者带动焦点 |
+| 2026-11-06 | Inspector 的 References 页补上 ⌥-点击 | 提案的表把它与 Find 一起写成「现有」，实际原先只有普通点击；照表补齐，与 Find 一致 |
+| 2026-11-06 | 焦点栏标签栏的样式、每栏最小尺寸、工具栏按钮图标先用临时值 | 未聚焦栏的标签暗一些、最小 160 点、图标借 Xcode 菜单里同一命令的图标；等第 6 步逆向 Xcode 后替换 |
+| 2026-11-06 | 基线上已有一个测试失败 | `TitleActivityIndicatorTests` 的悬停副标题用例在改动之前的提交上同样失败，与分栏无关，没有处理 |
+| 2026-11-06 | 第 6 步只照搬能从反汇编确定的尺寸、图标与标题，替换掉前面的临时值 | 标签栏 28 点一行、上下各 4 点（顶行上方 0）、左右各 8 点；关栏按钮 23 点宽；分隔线 3 点；最小栏宽 200 点（分隔线前一栏 203 点）；工具栏按钮换成 Xcode 的 `plus.rectangle.on.rectangle`；⌘W 的标题随要关的东西变。这些在 Xcode 的代码里是常量，照抄即可。工具栏菜单改为显示快捷键，与原方案「不显示」相反：前期调研只看到 Xcode 先删掉菜单项的快捷键，第 6 步看到它随后按当前键位重新套上 |
+| 2026-11-06 | 滚动口袋做底、选中标签的玻璃胶囊、未聚焦栏的主题变暗、分隔线的确切颜色留到以后，列入「非目标」 | Xcode 的这几处来自它的主题引擎、AppKit 私有的 `NSScrollPocket` 样式和 `NSGlassView` 的 "tab" 变体，要实际运行 Xcode 逐帧比对才能定；UIFoundation 的 `TabBar` 也没有对应的样式。这一批保留近似做法：标签栏用窗口背景色、未聚焦栏的标签降低不透明度、分隔线用系统分隔线颜色 |
+| 2026-11-06 | ⌘W 只剩关窗口可做时隐藏这一项，由 Close Window 接过 ⌘W | Xcode 此时把这一项改名为 Close Window；这里另有一项 Close Window（⇧⌘W），照搬会出现两项同名、只差快捷键的菜单项 |
+| 2026-11-06 | 不另写实现说明与使用指南 | 代码里看不出来的约定——`selectedRuntimeObject` 只是焦点栏的镜像、没指明去处的路由作用于焦点栏、内容区先取焦点再打开、标签与栏只按标识定位、焦点视图经 `EditorPaneContent` 而不是 `preferredFirstResponder`——写进了根 `AGENTS.md` 的「Editor panes」；视图为什么等 coordinator 交来布局、键盘焦点何时跟过去，写在做这些事的类型的文档注释与本日志里。没有 App 之外的调用方，不需要使用指南 |
+| 2026-11-06 | `RuntimeViewerUsingAppKit/AGENTS.md` 的 coordinator 一节只加一条指路 | 那份文件已接近 64 KiB，Codex 读到上限就截断；规则本体放在根 `AGENTS.md`。新术语「分栏」「焦点栏」「打开去处」已登记进术语表 |
+| 2026-11-06 | 实现完成，待用户看过后收尾 | 在 Ultra 上验证：macOS App（Tuist workspace，Debug）与 iOS 版（Distribution workspace）都编译通过；包的 857 个测试里 4 个失败——`TitleActivityIndicatorTests` 的悬停用例是基线上已有的失败，另外三个（Report 在两个窗口间共享、Call Hierarchy、corpus 构建期间的 App Nap 活动）是满载下的等待超时，单独重跑这三组共 41 个测试全部通过。没做模拟器与交互式界面验证，界面按上面的手工验收清单看 |

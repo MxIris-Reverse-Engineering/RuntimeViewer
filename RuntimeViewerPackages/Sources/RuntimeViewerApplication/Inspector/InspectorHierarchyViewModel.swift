@@ -121,7 +121,7 @@ public final class InspectorHierarchyViewModel: ViewModel<InspectorRuntimeObject
                   let levelObject = cellViewModel.runtimeObject,
                   levelObject != runtimeObject
             else { return }
-            documentState.selectionRouter.trigger(.push(levelObject))
+            documentState.selectionRouter.trigger(.open(levelObject, in: .focusedTab))
         }
         .disposed(by: rx.disposeBag)
 

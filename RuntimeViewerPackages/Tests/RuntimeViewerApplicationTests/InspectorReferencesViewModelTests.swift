@@ -62,7 +62,7 @@ struct InspectorReferencesViewModelTests {
         defer { withExtendedLifetime(viewModel) {} }
         let member = RuntimeMemberReference(object: mutableString, name: "appendString:", kind: .objcMethod, isStatic: false)
 
-        environment.documentState.updateCursorMember(member)
+        environment.documentState.updateCursorMember(member, inEditorPane: environment.documentState.editorArea.focusedPaneID)
 
         #expect(try await nextValue(from: output.subjectTitle) { $0 != "NSMutableString" } == "-[NSMutableString appendString:]")
         let callers = try #require(Self.loadedRows(try await nextValue(from: output.callers, timeout: 60) { Self.loadedRows($0) != nil }))
@@ -72,7 +72,7 @@ struct InspectorReferencesViewModelTests {
         #expect(callees.allSatisfy { !$0.row.isRuntimeHelperCall })
 
         let otherMember = RuntimeMemberReference(object: Fixtures.runtimeObject(name: "Elsewhere", kind: .objc(.type(.class))), name: "appendString:", kind: .objcMethod, isStatic: false)
-        environment.documentState.updateCursorMember(otherMember)
+        environment.documentState.updateCursorMember(otherMember, inEditorPane: environment.documentState.editorArea.focusedPaneID)
         #expect(Self.isUnavailable(try await nextValue(from: output.callers) { Self.isUnavailable($0) }))
         #expect(try await nextValue(from: output.subjectTitle) == "NSMutableString")
     }
@@ -98,7 +98,7 @@ struct InspectorReferencesViewModelTests {
         showInFindNavigatorClickedRelay.accept(.callers)
         #expect(session.query.mode == .typeReferences)
 
-        environment.documentState.updateCursorMember(member)
+        environment.documentState.updateCursorMember(member, inEditorPane: environment.documentState.editorArea.focusedPaneID)
         _ = try await nextValue(from: viewModel.$member.asObservable()) { $0 == member }
         showInFindNavigatorClickedRelay.accept(.callers)
         #expect(session.query.mode == .callHierarchy)
@@ -119,7 +119,7 @@ struct InspectorReferencesViewModelTests {
         try await settleMainQueue()
         #expect(Self.isUnavailable(try await nextValue(from: output.typeReferences)))
         let member = RuntimeMemberReference(object: mutableString, name: "appendString:", kind: .objcMethod, isStatic: false)
-        environment.documentState.updateCursorMember(member)
+        environment.documentState.updateCursorMember(member, inEditorPane: environment.documentState.editorArea.focusedPaneID)
         try await settleMainQueue()
         #expect(Self.isUnavailable(try await nextValue(from: output.callers)))
 

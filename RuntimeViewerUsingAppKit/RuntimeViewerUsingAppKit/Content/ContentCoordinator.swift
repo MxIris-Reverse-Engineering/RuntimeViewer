@@ -24,6 +24,9 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     let documentState: DocumentState
 
+    /// The editor pane this coordinator shows the content of: one coordinator per pane.
+    let editorPaneID: EditorPane.ID
+
     private var currentScene: Scene = .initial
 
     private lazy var placeholderViewController: ContentPlaceholderViewController = {
@@ -74,8 +77,9 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
     /// stream).
     private var boundRuntimeObject: RuntimeObject?
 
-    init(documentState: DocumentState) {
+    init(documentState: DocumentState, editorPaneID: EditorPane.ID) {
         self.documentState = documentState
+        self.editorPaneID = editorPaneID
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
     }
 
@@ -92,8 +96,8 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         case .nextHighlighting(let runtimeObject, let highlightRequest):
             return enterTextScene(for: runtimeObject, highlightRequest: highlightRequest, forceRebind: true)
         case .back:
-            if let selected = documentState.selectedRuntimeObject {
-                return enterTextScene(for: selected, forceRebind: false)
+            if let object = documentState.editorArea[editorPaneID]?.activeTab.object {
+                return enterTextScene(for: object, forceRebind: false)
             } else {
                 return enterPlaceholderScene()
             }
@@ -131,7 +135,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         }
         guard forceRebind || boundRuntimeObject != runtimeObject else { return didReplaceViewController }
         boundRuntimeObject = runtimeObject
-        let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, highlightRequest: highlightRequest, documentState: documentState, router: self)
+        let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, highlightRequest: highlightRequest, editorPaneID: editorPaneID, documentState: documentState, router: self)
         textViewController.setupBindings(for: viewModel)
         textViewController.loadViewIfNeeded()
         return didReplaceViewController

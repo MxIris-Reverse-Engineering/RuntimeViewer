@@ -125,7 +125,7 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
     public func transform(_ input: Input) -> Output {
         input.selectRelationshipClicked.emitOnNext { [weak self] cellViewModel in
             guard let self else { return }
-            documentState.selectionRouter.trigger(.push(cellViewModel.runtimeObject))
+            documentState.selectionRouter.trigger(.open(cellViewModel.runtimeObject, in: .focusedTab))
         }
         .disposed(by: rx.disposeBag)
 

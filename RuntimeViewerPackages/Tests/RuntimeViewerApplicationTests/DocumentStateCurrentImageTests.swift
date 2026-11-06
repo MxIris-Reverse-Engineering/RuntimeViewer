@@ -24,7 +24,7 @@ struct DocumentStateCurrentImageTests {
         let documentState = DocumentState()
 
         documentState.selectionRouter.trigger(.switchImage(try sampleImageNode()))
-        documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "SampleClass")))
+        documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "SampleClass"), in: .focusedTab))
 
         #expect(documentState.isSelectedRuntimeObjectInCurrentImage)
     }
@@ -34,7 +34,7 @@ struct DocumentStateCurrentImageTests {
         let documentState = DocumentState()
 
         documentState.selectionRouter.trigger(.switchImage(try sampleImageNode()))
-        documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "OtherClass", imagePath: Self.otherImagePath)))
+        documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "OtherClass", imagePath: Self.otherImagePath), in: .focusedTab))
 
         #expect(documentState.isSelectedRuntimeObjectInCurrentImage == false)
     }
@@ -53,7 +53,7 @@ struct DocumentStateCurrentImageTests {
         let documentState = DocumentState()
 
         documentState.selectionRouter.trigger(.switchImage(try sampleImageNode()))
-        documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "SampleClass")))
+        documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "SampleClass"), in: .focusedTab))
         documentState.selectionRouter.trigger(.newTab)
 
         #expect(documentState.isSelectedRuntimeObjectInCurrentImage == false)
@@ -63,7 +63,7 @@ struct DocumentStateCurrentImageTests {
     func imageListRoot() {
         let documentState = DocumentState()
 
-        documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "SampleClass")))
+        documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "SampleClass"), in: .focusedTab))
 
         #expect(documentState.isSelectedRuntimeObjectInCurrentImage == false)
     }
@@ -79,7 +79,7 @@ struct DocumentStateCurrentImageTests {
         let documentState = DocumentState(runtimeEngine: engine)
 
         documentState.selectionRouter.trigger(.switchImage(try sampleImageNode()))
-        documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "SampleClass", imagePath: "/sim_root" + Fixtures.sampleImagePath)))
+        documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "SampleClass", imagePath: "/sim_root" + Fixtures.sampleImagePath), in: .focusedTab))
 
         #expect(documentState.isSelectedRuntimeObjectInCurrentImage)
     }

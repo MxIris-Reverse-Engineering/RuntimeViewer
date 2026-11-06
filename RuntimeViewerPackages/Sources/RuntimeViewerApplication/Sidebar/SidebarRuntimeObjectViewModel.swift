@@ -185,9 +185,12 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel>
-        /// Row context menu "Open in New Tab" (macOS only — UIKit callers
-        /// pass `.empty()`).
+        /// ⌥-click on a row, or its context menu's "Open in New Tab" (macOS only —
+        /// UIKit callers pass `.empty()`).
         public let runtimeObjectOpenedInNewTab: Signal<SidebarRuntimeObjectCellViewModel>
+        /// ⇧⌥-click on a row, or its context menu's "Open in Next Editor Pane" (macOS only).
+        @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
+        public let runtimeObjectOpenedInNextEditorPane: Signal<SidebarRuntimeObjectCellViewModel>
         public let loadImageClicked: Signal<Void>
         /// The filter field's content. A platform without tokens passes its
         /// search text as `NavigatorTextFilter(typedText:)`.
@@ -307,7 +310,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionRouter.trigger(.push(viewModel.runtimeObject))
+                documentState.selectionRouter.trigger(.open(viewModel.runtimeObject, in: .focusedTab))
                 #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
                 #endif
@@ -318,7 +321,16 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionRouter.trigger(.openInNewTab(viewModel.runtimeObject))
+                documentState.selectionRouter.trigger(.open(viewModel.runtimeObject, in: .newTab))
+                #endif
+            }
+            .disposed(by: rx.disposeBag)
+
+        input.runtimeObjectOpenedInNextEditorPane
+            .emitOnNextMainActor { [weak self] viewModel in
+                guard let self else { return }
+                #if os(macOS)
+                documentState.selectionRouter.trigger(.open(viewModel.runtimeObject, in: .nextEditorPane))
                 #endif
             }
             .disposed(by: rx.disposeBag)
@@ -344,7 +356,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 guard let self else { return }
                 switch lookup.result {
                 case .success(let counterpart?):
-                    documentState.selectionRouter.trigger(.push(counterpart))
+                    documentState.selectionRouter.trigger(.open(counterpart, in: .focusedTab))
                 case .success(nil):
                     errorRelay.accept(CounterpartNotFoundError(runtimeObject: lookup.runtimeObject))
                 case .failure(let error):
