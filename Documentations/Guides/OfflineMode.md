@@ -2,7 +2,7 @@
 
 RuntimeViewer 可以不运行任何东西，直接从磁盘读一个 Mach-O 文件、一个 `.app` / `.framework` 包、一个文件夹或一份
 dyld shared cache，像看「My Mac」一样浏览它的 ObjC 与 Swift 接口。设计与取舍见提案
-[离线模式](../Evolutions/0069-offline-mode.md)与[离线模式打开文件夹](../Evolutions/draft-offline-folders.md)。
+[离线模式](../Evolutions/0069-offline-mode.md)与[离线模式打开文件夹](../Evolutions/0077-offline-folders.md)。
 
 ## 能打开什么、从哪打开
 

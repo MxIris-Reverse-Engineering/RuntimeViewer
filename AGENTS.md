@@ -389,7 +389,7 @@ The project uses three Swift Package Manager packages:
   opened image holds a file descriptor for as long as it lives and a folder can hold thousands, so
   nothing there may open every image at once — a lookup across all of them, like the Objective-C class
   table, opens each only for as long as it reads it. Background:
-  `Documentations/Evolutions/0069-offline-mode.md`, `Documentations/Evolutions/draft-offline-folders.md`
+  `Documentations/Evolutions/0069-offline-mode.md`, `Documentations/Evolutions/0077-offline-folders.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
   only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
