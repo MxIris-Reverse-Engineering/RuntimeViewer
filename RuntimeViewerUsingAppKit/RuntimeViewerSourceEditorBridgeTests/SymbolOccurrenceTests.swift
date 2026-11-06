@@ -80,7 +80,7 @@ struct SymbolOccurrenceTests {
     /// The editor asks only after the insertion point has rested, then draws the occurrences
     /// behind the text in a highlight layer of its own.
     @Test
-    func restingOnAnIdentifierHighlightsItsOccurrences() throws {
+    func restingOnAnIdentifierHighlightsItsOccurrences() async throws {
         let harness = try SourceEditorTestHarness(actsAsKeyWindow: true)
         harness.setSource(Self.source)
         harness.focusEditor()
@@ -89,7 +89,7 @@ struct SymbolOccurrenceTests {
         let insertionPoint = SourceEditorPosition(line: 1, col: 10)
         harness.select(insertionPoint ..< insertionPoint)
 
-        let didHighlight = harness.layout(until: {
+        let didHighlight = await harness.layout(until: {
             harness.layers(ofClassNamed: "SourceEditorRangeHighlightLayer").contains { layer in
                 guard let shapeLayer = layer as? CAShapeLayer, let path = shapeLayer.path else { return false }
                 return !shapeLayer.isHidden && !path.boundingBoxOfPath.isEmpty

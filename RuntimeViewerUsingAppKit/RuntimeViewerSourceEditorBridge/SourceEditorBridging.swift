@@ -47,10 +47,10 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///     of them collapse, or nil to show the comments as plain text. Passed with the source
     ///     rather than separately because the decorations are columns of this very text: the
     ///     editor must never lay out one text with the other's decorations.
-    ///   - restoresScrollPosition: when this same text was shown before, scroll back to where the
-    ///     reader left it. Pass `false` when a ``revealCharacterRange(_:)`` is about to follow:
-    ///     the restore waits for the next layout, which can come after the reveal and undo it.
-    ///     Folds come back either way.
+    ///   - restoresScrollPosition: scroll a text shown before back to where the reader left it,
+    ///     and any other to the top. Pass `false` when a ``revealCharacterRange(_:)`` is about to
+    ///     follow, which then decides alone: the scroll waits for the next layout, which can come
+    ///     after the reveal and undo it. Folds come back either way.
     func setSource(
         _ source: String,
         languageIdentifier: String,

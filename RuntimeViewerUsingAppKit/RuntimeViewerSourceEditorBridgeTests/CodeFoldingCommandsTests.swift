@@ -63,7 +63,7 @@ struct CodeFoldingCommandsTests {
     /// Fold and Unfold All, sent the way a menu sends them: to the first responder, which passes
     /// what it does not handle up the chain.
     @Test
-    func foldAndUnfoldAllReachTheEditorThroughTheResponderChain() throws {
+    func foldAndUnfoldAllReachTheEditorThroughTheResponderChain() async throws {
         let harness = try SourceEditorTestHarness(actsAsKeyWindow: true)
         harness.setSource(Self.source)
         harness.focusEditor()
@@ -72,11 +72,11 @@ struct CodeFoldingCommandsTests {
         let firstResponder = try #require(harness.firstResponder)
 
         #expect(firstResponder.tryToPerform(#selector(SourceEditorBridgingCodeFoldingCommands.fold(_:)), with: nil))
-        let didFold = harness.layout(until: { !harness.foldingController.foldedRanges(containing: 2).isEmpty })
+        let didFold = await harness.layout(until: { !harness.foldingController.foldedRanges(containing: 2).isEmpty })
         #expect(didFold, "Fold left the class body around the insertion point open")
 
         #expect(firstResponder.tryToPerform(#selector(SourceEditorBridgingCodeFoldingCommands.unfoldAll(_:)), with: nil))
-        let didUnfold = harness.layout(until: { harness.foldingController.foldedRanges(containing: 2).isEmpty })
+        let didUnfold = await harness.layout(until: { harness.foldingController.foldedRanges(containing: 2).isEmpty })
         #expect(didUnfold, "Unfold All left a fold in place")
     }
 }

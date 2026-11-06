@@ -221,22 +221,27 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // A source shown for the first time starts with its decorated rows collapsed instead.
         let sourceKey = ReadingStateCache.Key(source: source, isDecorated: commentDecorations != nil)
         displayedSourceKey = sourceKey
-        guard let savedState = readingStates.state(for: sourceKey) else {
-            commentDecorationController.collapseRowsThatStartCollapsed()
-            return
-        }
-        if let foldState = savedState.foldState as? [AnyHashable: Any] {
+        let savedState = readingStates.state(for: sourceKey)
+        if let foldState = savedState?.foldState as? [AnyHashable: Any] {
             sourceEditorView.foldingController.restore(from: foldState)
+        } else {
+            commentDecorationController.collapseRowsThatStartCollapsed()
         }
 
-        // After the folds, which the line was counted against. Deferred, the way the framework
-        // restores a document's position itself: the view holds the position and scrolls to it
-        // when the next layout finishes (`layoutManager(_:didFinishLayoutInContentView:)`), since
-        // nothing of the new text is laid out yet. That wait is also why a reveal that follows
-        // asks for no restore — it would land first and be scrolled away.
-        if restoresScrollPosition {
-            sourceEditorView.applyScrollState(savedState.scrollPosition, defer: true)
-        }
+        // After the folds, which the saved line was counted against. A text shown before goes
+        // back to where it was left, any other to the top: the view keeps the clip view's origin
+        // across a data source swap, so a new interface would otherwise open as far down as the
+        // last one was scrolled. The top is the position `currentScrollState()` reports for a
+        // view with nothing laid out.
+        //
+        // Deferred, the way the framework restores a document's position itself: the view holds
+        // the position and scrolls to it when the next layout finishes
+        // (`layoutManager(_:didFinishLayoutInContentView:)`), since nothing of the new text is
+        // laid out yet. That wait is also why a reveal that follows asks for neither — it would
+        // land first and be scrolled away.
+        guard restoresScrollPosition else { return }
+        let topScrollPosition = (line: 0, offset: -sourceEditorView.contentView.layoutMargins.top)
+        sourceEditorView.applyScrollState(savedState?.scrollPosition ?? topScrollPosition, defer: true)
     }
 
     func applyCommentTagAppearance(_ appearance: SourceEditorBridgingCommentTagAppearance) {

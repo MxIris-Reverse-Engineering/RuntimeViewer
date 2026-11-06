@@ -179,16 +179,22 @@ final class SourceEditorTestHarness {
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
     }
 
-    /// Lays out and spins the run loop until `condition` holds, for work the framework finishes
-    /// on a timer or at the end of an animation.
+    /// Lays out until `condition` holds, for work the framework finishes later — at the end of an
+    /// animation, or after a delay.
+    ///
+    /// Suspends between passes rather than only spinning the run loop: a test runs as a job on
+    /// the main queue, which is serial, so what the framework schedules there itself —
+    /// `TimeoutContinuation` is `DispatchQueue.main.asyncAfter` — runs only once the test lets go.
     ///
     /// - Returns: whether `condition` held before `timeout` ran out.
-    func layout(until condition: () -> Bool, timeout: TimeInterval = 3) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
+    func layout(until condition: () -> Bool, timeout: Duration = .seconds(3)) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
         repeat {
             layout()
             if condition() { return true }
-        } while Date() < deadline
+            try? await Task.sleep(for: .milliseconds(50))
+        } while clock.now < deadline
         return false
     }
 

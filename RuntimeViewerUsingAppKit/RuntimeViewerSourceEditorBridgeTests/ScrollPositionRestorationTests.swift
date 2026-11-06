@@ -48,7 +48,7 @@ struct ScrollPositionRestorationTests {
     }
 
     @Test
-    func theScrollPositionComesBackWithTheSameSource() throws {
+    func theScrollPositionComesBackWithTheSameSource() async throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.longSource)
         harness.layout()
@@ -61,11 +61,13 @@ struct ScrollPositionRestorationTests {
         try #require(Self.topLine(in: harness) == 0, "the other interface should start at the top")
 
         harness.setSource(Self.longSource)
-        let didRestore = harness.layout(until: { Self.topLine(in: harness) == scrolledTopLine })
+        let didRestore = await harness.layout(until: { Self.topLine(in: harness) == scrolledTopLine })
         #expect(didRestore, "came back at line \(Self.topLine(in: harness)), not \(scrolledTopLine)")
     }
 
-    /// A source shown for the first time has nothing to come back to and starts at the top.
+    /// A source shown for the first time has nothing to come back to and starts at the top. The view
+    /// itself keeps the scroll offset across a swap, so without the bridge's own scroll this one
+    /// would open as far down as the last.
     @Test
     func aNewSourceStartsAtTheTop() throws {
         let harness = try SourceEditorTestHarness()
