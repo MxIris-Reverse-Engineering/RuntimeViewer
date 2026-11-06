@@ -1,7 +1,7 @@
 # 2026-11-05 离线服务读 Dock.app 时崩溃：每读一个镜像就把 dyld cache 的文件再映射一次，描述符用光
 
 **调查日期：** 2026-11-05
-**修复落地：** 2026-11-06。MachOSwiftSection 分支 `fix/shared-cache-file-mappings`，本仓库分支 `fix/offline-descriptor-exhaustion`；本仓库钉的 MachOSwiftSection 抬到含修复的 `next` 之后，读取层那一半才在 App 里生效
+**修复落地：** 2026-11-06。MachOSwiftSection 分支 `fix/shared-cache-file-mappings`，本仓库分支 `fix/offline-descriptor-exhaustion`；读取层那一半随同日把 MachOSwiftSection 的 pin 抬到含修复的 `next` 在 App 里生效
 **Severity：** High —— 离线服务进程整个停下，正在读的文件要重新打开
 **触发场景：** 离线打开 `/Volumes/RE/Dock/27.0/Dock.app`（bundle，配对本机的 dyld shared cache），后台给 DockHelper 建 Find 语料
 
@@ -72,3 +72,10 @@
 
 - 复现「描述符不够」要同时压硬上限，判断一个进程的上限也别假设它停在 256。
 - 「映射有缓存、有锁」不等于「每个文件只映射一次」：缓存挂在谁身上，决定了它按什么去重。
+
+## 后续
+
+同一次抬 pin 还带进了两处相关的修复：
+
+- MachOSwiftSection 提案 0086：依赖定位器原先按根各开一份配对的 cache 与 bundle 里的 Mach-O 文件，描述符随根数增长；改为同一路径在进程里只打开一份，还有人用就共用。
+- MachOKitExtensions 1.3.2：几个线程同时首读一个新文件时，文件的 `identifier` 会被提前释放（MachOSwiftSection 的 `MachOSymbolsTests` 满载下偶发 `SIGTRAP`）；改为在锁里只写一次。
