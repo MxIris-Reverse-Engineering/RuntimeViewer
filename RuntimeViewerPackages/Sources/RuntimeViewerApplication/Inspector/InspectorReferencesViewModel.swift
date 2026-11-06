@@ -98,7 +98,14 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
 
     @MemberwiseInit(.public)
     public struct Input {
+        /// A row clicked: it opens in the focused editor pane's tab.
         public let rowClicked: Signal<InspectorReferenceCellViewModel>
+        /// A row ⌥-clicked: it opens in a new tab of the focused pane.
+        @Init(default: Signal<InspectorReferenceCellViewModel>.empty())
+        public let rowOpenedInNewTab: Signal<InspectorReferenceCellViewModel>
+        /// A row ⇧⌥-clicked: it opens in the pane after the focused one.
+        @Init(default: Signal<InspectorReferenceCellViewModel>.empty())
+        public let rowOpenedInNextEditorPane: Signal<InspectorReferenceCellViewModel>
         public let showInFindNavigatorClicked: Signal<Section>
         /// The tab appearing (`true`) and disappearing (`false`).
         public let isVisible: Driver<Bool>
@@ -153,12 +160,18 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     }
 
     public func transform(_ input: Input) -> Output {
-        input.rowClicked.emitOnNext { [weak self] cellViewModel in
+        let rowOpenings: Signal<(cellViewModel: InspectorReferenceCellViewModel, destination: SelectionRoute.Destination)> = Signal.merge(
+            input.rowClicked.map { ($0, .focusedTab) },
+            input.rowOpenedInNewTab.map { ($0, .newTab) },
+            input.rowOpenedInNextEditorPane.map { ($0, .nextEditorPane) }
+        )
+        rowOpenings.emitOnNext { [weak self] cellViewModel, destination in
             guard let self else { return }
+            // A group of unnamed functions opens nothing: any click unfolds it.
             if let unnamedFunctionsGroup = cellViewModel.unnamedFunctionsGroup {
                 toggle(unnamedFunctionsGroup)
             } else {
-                open(cellViewModel.row)
+                open(cellViewModel.row, destination: destination)
             }
         }
         .disposed(by: rx.disposeBag)
@@ -307,15 +320,15 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
 
     /// A row goes where a Find navigator row goes: to the member its function implements, or to a
     /// type it references.
-    private func open(_ row: FindCrossReferenceRow) {
+    private func open(_ row: FindCrossReferenceRow, destination: SelectionRoute.Destination) {
         memberDeclarationLookupTask?.cancel()
         memberDeclarationLookupTask = nil
         switch row.item {
         case .function(let function):
             guard let member = function.member else { return }
-            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: nil, inNewTab: false, in: documentState, generationOptions: appDefaults.options)
+            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: nil, destination: destination, in: documentState, generationOptions: appDefaults.options)
         case .target(.type(_, let object?)):
-            FindCrossReferenceNavigation.open(object, highlighting: nil, inNewTab: false, in: documentState)
+            FindCrossReferenceNavigation.open(object, highlighting: nil, destination: destination, in: documentState)
         case .target, .image, .unnamedFunctions, .loading, .failure:
             break
         }

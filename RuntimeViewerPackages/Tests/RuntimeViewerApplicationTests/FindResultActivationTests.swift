@@ -22,11 +22,21 @@ struct FindResultActivationTests {
         ))
     }
 
-    @Test("⌥ opens the chosen result in a new tab; a plain click and no event do not")
-    func optionOpensInNewTab() throws {
-        #expect(FindResultActivation.opensInNewTab(for: try Self.mouseUp(with: .option)))
-        #expect(!FindResultActivation.opensInNewTab(for: try Self.mouseUp(with: [])))
-        #expect(!FindResultActivation.opensInNewTab(for: nil))
+    @Test("⌥ opens the chosen result in a new tab, ⇧⌥ in the next editor pane; a plain click, ⇧ alone and no event in the focused tab")
+    func modifiersPickTheDestination() throws {
+        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: .option)) == .newTab)
+        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: [.option, .shift])) == .nextEditorPane)
+        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: [])) == .focusedTab)
+        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: .shift)) == .focusedTab)
+        #expect(FindResultActivation.destination(for: nil) == .focusedTab)
+    }
+
+    @Test("on a type link ⇧ alone opens a new tab too, as ⇧⌘-click always has")
+    func linkClicksTakeShiftForANewTab() {
+        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command]) == .focusedTab)
+        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .shift]) == .newTab)
+        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .option]) == .newTab)
+        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .option, .shift]) == .nextEditorPane)
     }
 
     @Test("a typed character is type-select; a click, an arrow key and no event are not")

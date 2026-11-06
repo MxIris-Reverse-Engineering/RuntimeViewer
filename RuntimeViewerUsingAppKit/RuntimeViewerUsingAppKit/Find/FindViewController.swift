@@ -374,10 +374,13 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                 .asSignal(onErrorSignalWith: .empty())
         )
         let resultClicked: Signal<FindResultNode> = activation
-            .filter { !FindResultActivation.opensInNewTab(for: $0.triggeringEvent) }
+            .filter { FindResultActivation.destination(for: $0.triggeringEvent) == .focusedTab }
             .map(\.item)
         let resultOpenedWithOption: Signal<FindResultNode> = activation
-            .filter { FindResultActivation.opensInNewTab(for: $0.triggeringEvent) }
+            .filter { FindResultActivation.destination(for: $0.triggeringEvent) == .newTab }
+            .map(\.item)
+        let resultOpenedWithShiftOption: Signal<FindResultNode> = activation
+            .filter { FindResultActivation.destination(for: $0.triggeringEvent) == .nextEditorPane }
             .map(\.item)
 
         // Xcode's result rows offer Find Call Hierarchy first (`NavigatorContextualMenu` in
@@ -394,6 +397,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                 }
                 if node.canOpenInNewTab {
                     items.append(FindResultMenuItem(title: "Open in New Tab", image: SFSymbols(systemName: .plusSquareOnSquare).nsImage, node: node, action: .openInNewTab))
+                    items.append(FindResultMenuItem(title: "Open in Next Editor Pane", image: NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: nil), node: node, action: .openInNextEditorPane))
                 }
                 return items
             }
@@ -406,6 +410,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             .asSignal(onErrorSignalWith: .empty())
         let resultOpenedFromMenu: Signal<FindResultNode> = contextMenuItemSelected
             .filter { $0.action == .openInNewTab }
+            .map(\.node)
+        let resultOpenedInNextEditorPaneFromMenu: Signal<FindResultNode> = contextMenuItemSelected
+            .filter { $0.action == .openInNextEditorPane }
             .map(\.node)
         let crossReferenceCommandSelected: Signal<FindCrossReferenceCommand> = contextMenuItemSelected
             .compactMap { menuItem in
@@ -456,6 +463,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
             resultClicked: resultClicked,
             resultOpenedInNewTab: .merge(resultOpenedFromMenu, resultOpenedWithOption),
+            resultOpenedInNextEditorPane: .merge(resultOpenedInNextEditorPaneFromMenu, resultOpenedWithShiftOption),
             resultCollapsed: resultCollapsed,
             resultExpanded: resultExpanded,
             resultsSelected: resultsSelected,
@@ -617,6 +625,7 @@ extension FindViewController: NavigatorTabPage {}
 private struct FindResultMenuItem: RxMenuItemRepresentable {
     enum Action: Equatable {
         case openInNewTab
+        case openInNextEditorPane
         /// Find Call Hierarchy, Find Callees or Find Type References.
         case crossReference(FindMode)
     }

@@ -45,7 +45,11 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let filter: Driver<NavigatorTextFilter>
         /// The row the user chose, to open in place.
         public let resultClicked: Signal<FindResultNode>
+        /// ⌥-click or Open in New Tab: the row opens in a new tab of the focused editor pane.
         public let resultOpenedInNewTab: Signal<FindResultNode>
+        /// ⇧⌥-click or Open in Next Editor Pane: the row opens in the pane after the focused one.
+        @Init(default: Signal<FindResultNode>.empty())
+        public let resultOpenedInNextEditorPane: Signal<FindResultNode>
         /// Rows the outline collapsed or expanded.
         public let resultCollapsed: Signal<FindResultNode>
         public let resultExpanded: Signal<FindResultNode>
@@ -183,13 +187,19 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
             // only scroll back and flash once more. Once the document shows something else, the
             // row navigates back to it.
             guard !isShowingNavigation(to: node) else { return }
-            navigate(to: node, inNewTab: false)
+            navigate(to: node, destination: .focusedTab)
         }
         .disposed(by: rx.disposeBag)
 
         input.resultOpenedInNewTab.emitOnNext { [weak self] node in
             guard let self else { return }
-            navigate(to: node, inNewTab: true)
+            navigate(to: node, destination: .newTab)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.resultOpenedInNextEditorPane.emitOnNext { [weak self] node in
+            guard let self else { return }
+            navigate(to: node, destination: .nextEditorPane)
         }
         .disposed(by: rx.disposeBag)
 
@@ -391,19 +401,19 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         return documentState.selectedRuntimeObject == object
     }
 
-    private func navigate(to node: FindResultNode, inNewTab: Bool) {
+    private func navigate(to node: FindResultNode, destination: SelectionRoute.Destination) {
         guard let object = node.navigationTarget else { return }
         lastNavigatedResultIdentifier = node.identifier
         memberDeclarationLookupTask?.cancel()
         memberDeclarationLookupTask = nil
         if case let (member, declaration)? = Self.crossReferenceMember(of: node) {
-            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: declaration, inNewTab: inNewTab, in: documentState, generationOptions: appDefaults.options)
+            memberDeclarationLookupTask = FindCrossReferenceNavigation.open(member, declaration: declaration, destination: destination, in: documentState, generationOptions: appDefaults.options)
             return
         }
         // The query the rows answer, not the one the mode path and the
         // toggles may have been edited into since.
         let highlight = Self.highlight(for: node, query: session.results.query ?? session.query)
-        FindCrossReferenceNavigation.open(object, highlighting: highlight, inNewTab: inNewTab, in: documentState)
+        FindCrossReferenceNavigation.open(object, highlighting: highlight, destination: destination, in: documentState)
     }
 
     /// The member a cross-reference row goes to, with its declaration when the

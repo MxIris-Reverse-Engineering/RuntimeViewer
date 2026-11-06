@@ -40,6 +40,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
     private let openInNewTabRelay = PublishRelay<RuntimeObject>()
 
+    private let openInNextEditorPaneRelay = PublishRelay<RuntimeObject>()
+
     /// Find Call Hierarchy and the other cross-reference commands chosen in the right-click menu.
     /// The insertion point is not followed here: the bridge reports no selection changes.
     private let crossReferenceRequestedRelay = PublishRelay<FindCrossReferenceRequest>()
@@ -127,6 +129,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         let input = ContentTextViewModel.Input(
             runtimeObjectClicked: jumpToDefinitionRelay.asSignal(),
             runtimeObjectOpenedInNewTab: openInNewTabRelay.asSignal(),
+            runtimeObjectOpenedInNextEditorPane: openInNextEditorPaneRelay.asSignal(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal()
         )
         let output = viewModel.transform(input)
@@ -292,12 +295,15 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {
         guard let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location) else { return }
 
-        // Same split as the NSTextView path: ⌘-click jumps in place, while ⌘⇧-click and
-        // ⌥⌘-click both open a tab.
-        if NSEvent.modifierFlags.contains(.shift) || NSEvent.modifierFlags.contains(.option) {
-            openInNewTabRelay.accept(runtimeObject)
-        } else {
+        // Same split as the NSTextView path: ⌘-click jumps in place, ⌘⇧-click and ⌥⌘-click open a
+        // tab, ⇧⌥⌘-click opens the next editor pane.
+        switch SelectionRoute.Destination(linkClickModifierFlags: NSEvent.modifierFlags) {
+        case .focusedTab:
             jumpToDefinitionRelay.accept(runtimeObject)
+        case .newTab:
+            openInNewTabRelay.accept(runtimeObject)
+        case .nextEditorPane:
+            openInNextEditorPaneRelay.accept(runtimeObject)
         }
     }
 
@@ -313,7 +319,11 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
             openInNewTabMenuItem.target = self
             openInNewTabMenuItem.action = #selector(openInNewTabAction(_:))
 
-            menuItems = [jumpToDefinitionMenuItem, openInNewTabMenuItem]
+            let openInNextEditorPaneMenuItem = RuntimeObjectMenuItem(title: "Open in Next Editor Pane", symbolName: .insetFilledRighthalfRectangle, runtimeObject: runtimeObject)
+            openInNextEditorPaneMenuItem.target = self
+            openInNextEditorPaneMenuItem.action = #selector(openInNextEditorPaneAction(_:))
+
+            menuItems = [jumpToDefinitionMenuItem, openInNewTabMenuItem, openInNextEditorPaneMenuItem]
         }
 
         // As the NSTextView path: the member the token's line declares, and the type a name links to.
@@ -364,6 +374,10 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
 
     @objc private func openInNewTabAction(_ sender: RuntimeObjectMenuItem) {
         openInNewTabRelay.accept(sender.runtimeObject)
+    }
+
+    @objc private func openInNextEditorPaneAction(_ sender: RuntimeObjectMenuItem) {
+        openInNextEditorPaneRelay.accept(sender.runtimeObject)
     }
 }
 
