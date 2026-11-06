@@ -165,12 +165,12 @@ final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
             switch item {
             case .pane(let paneID):
                 if let paneView = paneViewControllers[paneID]?.view {
-                    rootSplitView.addArrangedSubview(paneView)
+                    addArrangedSubview(paneView, to: rootSplitView)
                 }
             case .split(let paneIDs):
                 let childSplitView = makeChildSplitView(holding: paneIDs)
                 childSplitViews[itemIndex] = childSplitView
-                rootSplitView.addArrangedSubview(childSplitView)
+                addArrangedSubview(childSplitView, to: rootSplitView)
             }
         }
     }
@@ -185,20 +185,34 @@ final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
         removeArrangedSubviews(of: childSplitView)
         for paneID in paneIDs {
             if let paneView = paneViewControllers[paneID]?.view {
-                childSplitView.addArrangedSubview(paneView)
+                addArrangedSubview(paneView, to: childSplitView)
             }
         }
     }
 
+    /// A new child split view starts at the root's size, so that the panes put in it have one to start
+    /// from as well (`addArrangedSubview(_:to:)`).
     private func makeChildSplitView(holding paneIDs: [EditorPane.ID]) -> EditorSplitView {
-        let childSplitView = EditorSplitView()
+        let childSplitView = EditorSplitView(frame: rootSplitView.bounds)
         childSplitView.delegate = self
         for paneID in paneIDs {
             if let paneView = paneViewControllers[paneID]?.view {
-                childSplitView.addArrangedSubview(paneView)
+                addArrangedSubview(paneView, to: childSplitView)
             }
         }
         return childSplitView
+    }
+
+    /// Adds `arrangedView` to `splitView`, sized to the split view when it has no size yet. A pane or
+    /// child split view made since the last layout has none, and the layout `equalize(_:)` forces
+    /// before the split view has framed it solves everything inside it against a zero width: the
+    /// pane's tab bar and the editor cannot fit, and AppKit breaks constraints to say so. The split
+    /// view shrinks the oversized view to its share on its next layout.
+    private func addArrangedSubview(_ arrangedView: NSView, to splitView: NSSplitView) {
+        if arrangedView.frame.isEmpty {
+            arrangedView.frame = splitView.bounds
+        }
+        splitView.addArrangedSubview(arrangedView)
     }
 
     private func removeArrangedSubviews(of splitView: NSSplitView) {
@@ -225,13 +239,17 @@ final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
     private func equalize(_ splitView: EditorSplitView) {
         let paneCount = splitView.arrangedSubviews.count
         guard paneCount > 1 else { return }
+        // Not before the window has sized the editor area: a forced layout would solve every pane
+        // against a zero width.
+        guard view.window != nil, !view.bounds.isEmpty else {
+            awaitEqualization(of: splitView)
+            return
+        }
         view.layoutSubtreeIfNeeded()
         let extent = splitView.isVertical ? splitView.bounds.width : splitView.bounds.height
         let dividerExtent = CGFloat(paneCount - 1) * splitView.dividerThickness
         guard extent > dividerExtent else {
-            if !splitViewsAwaitingEqualization.contains(where: { $0 === splitView }) {
-                splitViewsAwaitingEqualization.append(splitView)
-            }
+            awaitEqualization(of: splitView)
             return
         }
         let paneExtent = floor((extent - dividerExtent) / CGFloat(paneCount))
@@ -239,6 +257,11 @@ final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
             let position = CGFloat(dividerIndex + 1) * paneExtent + CGFloat(dividerIndex) * splitView.dividerThickness
             splitView.setPosition(position, ofDividerAt: dividerIndex)
         }
+    }
+
+    private func awaitEqualization(of splitView: EditorSplitView) {
+        guard !splitViewsAwaitingEqualization.contains(where: { $0 === splitView }) else { return }
+        splitViewsAwaitingEqualization.append(splitView)
     }
 }
 
@@ -271,6 +294,33 @@ final class EditorSplitView: NSSplitView {
 
     override var dividerColor: NSColor {
         .separatorColor
+    }
+
+    /// The top safe area the dividers were last drawn for. It moves with the toolbar — hidden, or
+    /// gone in full screen — without the split view resizing, so nothing else redraws them.
+    private var dividerTopSafeAreaInset: CGFloat = 0
+
+    override func layout() {
+        super.layout()
+        if safeAreaInsets.top != dividerTopSafeAreaInset {
+            dividerTopSafeAreaInset = safeAreaInsets.top
+            needsDisplay = true
+        }
+    }
+
+    /// Draws a divider only below the split view's top safe area. The editor area runs under the
+    /// toolbar, but the panes keep the strip under it clear while their tab bars show
+    /// (`EditorPaneViewController`), and a divider drawn up through it split the toolbar.
+    override func drawDivider(in rect: NSRect) {
+        let topSafeAreaInset = min(safeAreaInsets.top, bounds.height)
+        var drawableRect = bounds
+        drawableRect.size.height -= topSafeAreaInset
+        if isFlipped {
+            drawableRect.origin.y += topSafeAreaInset
+        }
+        let dividerRect = rect.intersection(drawableRect)
+        guard !dividerRect.isEmpty else { return }
+        super.drawDivider(in: dividerRect)
     }
 
     override init(frame frameRect: NSRect) {

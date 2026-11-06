@@ -8,10 +8,14 @@ import RuntimeViewerArchitectures
 /// One editor pane: its tab bar over the content of its active tab, which its own
 /// `ContentCoordinator` shows.
 ///
-/// The content runs the whole height of the pane — under the toolbar for a pane at the top, as the
-/// content pane always has — and the tab bar floats over it: while the bar shows, the content's safe
-/// area grows by the bar's height, so its text starts below the bar and scrolls under it, as in
-/// Xcode, whose editor fills its pane with the bar in its top safe area.
+/// While the tab bar is hidden the content runs the whole height of the pane — under the toolbar
+/// for a pane at the top, as the content pane always has. While the bar shows, the content starts
+/// at the bar's top edge and the bar floats over it: the content's safe area grows by the bar's
+/// height, so its text starts below the bar and scrolls under it, as in Xcode, whose editor has
+/// the bar in its top safe area. Nothing of the content reaches the strip of toolbar above a bar:
+/// text scrolled past the opaque bar would show again above it, and the editor's minimap, which
+/// SourceEditor frames from the top of the scroll view's content inset
+/// (`ContentViewLayoutContainer.layoutMarginAccessories`), drew its divider up through the toolbar.
 ///
 /// The bar's geometry is Xcode 27.2's (`-[IDEEditorBar _contentRectForBoundsWidth:returningTargetHeight:]`,
 /// IDEKit 0x146E64; RE notes "Editor panes — visuals" §3): a 28-point row of controls 8 points in from
@@ -49,6 +53,12 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
 
     private let contentContainerView = NSView()
 
+    /// The content's top edge while the tab bar is hidden: the pane's own.
+    private lazy var contentTopToPaneTopConstraint = contentContainerView.topAnchor.constraint(equalTo: containerView.topAnchor)
+
+    /// The content's top edge while the tab bar shows: the bar's.
+    private lazy var contentTopToTabBarTopConstraint = contentContainerView.topAnchor.constraint(equalTo: tabBarView.topAnchor)
+
     private let backgroundClickedRelay = PublishRelay<Void>()
 
     /// What takes the keyboard focus when the pane takes the focus: the interface on screen, `nil`
@@ -78,8 +88,9 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             tabBarView
         }
 
+        // The top edge follows the tab bar (`updateTabBarLayout()`).
         contentContainerView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.leading.trailing.bottom.equalToSuperview()
         }
 
         // Below the toolbar for a pane at the top of the window, at the pane's top otherwise.
@@ -97,13 +108,22 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         isToolbarAdjacent = view.safeAreaInsets.top > 0
     }
 
-    /// The bar's height and padding, and the content's safe area under it.
+    /// The bar's height and padding, where the content starts, and the content's safe area under
+    /// the bar.
     private func updateTabBarLayout() {
         guard isViewLoaded else { return }
         tabBarView.isHidden = isTabBarHidden
         tabBarView.topPadding = isToolbarAdjacent ? 0 : Self.tabBarTopPadding
         tabBarView.snp.updateConstraints { make in
             make.height.equalTo(tabBarHeight)
+        }
+        // Off before on: both pin the same edge, and with the bar under the toolbar they disagree.
+        if isTabBarHidden {
+            contentTopToTabBarTopConstraint.isActive = false
+            contentTopToPaneTopConstraint.isActive = true
+        } else {
+            contentTopToPaneTopConstraint.isActive = false
+            contentTopToTabBarTopConstraint.isActive = true
         }
         contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: isTabBarHidden ? 0 : tabBarHeight, left: 0, bottom: 0, right: 0)
     }
@@ -221,7 +241,11 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
 
     /// A stack, so that the tabs start at the leading edge while the close button is hidden: a
     /// stack view detaches a hidden arranged view, where a hidden view under constraints keeps its place.
-    private lazy var contentStackView = HStackView(spacing: 4) {
+    ///
+    /// `.fill`, which stretches the tabs, the view hugging least, over the rest of the row. An
+    /// `HStackView` on AppKit defaults to NSStackView's `.gravityAreas`, which stretches nothing: the
+    /// bar kept its fitting width, a few points, and drew only the empty capsule of its track.
+    private lazy var contentStackView = HStackView(distribution: .fill, spacing: 4) {
         closeButton
         tabBar
     }
