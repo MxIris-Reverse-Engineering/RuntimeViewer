@@ -1,6 +1,6 @@
-# Draft - Debug 版换用 Xcode 26.6 原版 SourceEditor，与重建版对照
+# 0075 - Debug 版换用 Xcode 26.6 原版 SourceEditor，与重建版对照
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **实现分支**: `feature/xcode-source-editor-comparison`
 - **创建日期**: 2026-11-06
 - **最后更新**: 2026-11-06
@@ -49,3 +49,4 @@
 | 2026-11-06 | 不在 Ultra 上开完整的 App，改用替身 App 验证 | Ultra 上开着一个从 Xcode 调试运行的 RuntimeViewer-Debug。再开一个完整的 App 会接管它的命令行工具 host 和 MCP 桥，退出时还会删掉它们的文件，用户那个实例就用不了了。替身只装 bridge 和四个重建版框架，可执行文件只链接 bridge，签名方式与 App 相同（临时签名、hardened runtime、`disable-library-validation`），dyld、权限和 LaunchServices 这一路与真实 App 一样 |
 | 2026-11-06 | 去掉启动前「发版签名就拒绝」的检查，改为启动后核对四个框架都来自 Xcode | 方案原先以为 dyld 只对带 `get-task-allow` 的 hardened App 读这个变量。实测不是这样：替身改用不带 `get-task-allow` 的签名后，用 `open -n --env` 照样加载了 Xcode 的四个框架，因为两台开发机都关了 SIP。Apple 文档写的条件是 `com.apple.security.cs.allow-dyld-environment-variables` 权限，没有提 `get-task-allow`。所以真正说了算的只有启动后的核对 |
 | 2026-11-06 | 实现完成，待用户看过后收尾 | 在 Ultra（macOS 27.2，Xcode 27.2，SIP 关闭）上验证。替身 App 分别用开发式与发版式签名、经脚本启动：两次都报告 225 个符号全部对得上，四个框架都映射自 `Xcode-26.6.0.app`，脚本退出码 0。`--xcode` 指向 27.2 时因版本被拒；用一个自称 26.6、实际链接 27.2 框架的假 Xcode 时，列出缺的 3 个符号后拒绝。`RuntimeViewerSettingsTests` 49 个全过，其中新增 4 个；把解析符号链接那一步去掉，「经链接指向 Xcode」那条测试会失败。App target 没有改动，不另编 App；完整 App 经脚本启动、Developer 页的显示，留给用户在自己的 Mac 上看 |
+| 2026-11-06 | In Progress → Implemented，编号 0075 | 用户批准收尾。落地前没有重跑验证：代码在上一行的验证之后没有改动，之后进 `next` 的只有文档。完整 App 经脚本启动与 Developer 页的显示，agent 这边仍没有亲眼看过；SIP 开着的 Mac 上不生效这一点按 Apple 文档推断，没有实测。不配使用指南：用法写在模块规则「Running a Debug build on Xcode's original」一节、根 `AGENTS.md` 的构建命令与脚本的 `--help` 里，只给开发者自己用；不另写实现说明，原理与检查都在本提案的方案一节。没有新术语要进术语表 |

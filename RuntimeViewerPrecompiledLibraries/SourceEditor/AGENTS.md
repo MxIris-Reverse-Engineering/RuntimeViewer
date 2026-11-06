@@ -120,7 +120,7 @@ it.
 
 `./LaunchWithXcodeSourceEditorScript.sh` starts another instance of a build — `RunScript.sh`'s, or the
 one `--app` names — on Xcode 26.6's own frameworks, so that it can be compared side by side with an
-instance on the reconstruction. Background: `Documentations/Evolutions/draft-xcode-source-editor-comparison.md`.
+instance on the reconstruction. Background: `Documentations/Evolutions/0075-xcode-source-editor-comparison.md`.
 
 - **Why it works without changing the app.** Xcode 26.6's four frameworks depend only on each other and
   carry the reconstruction's install names, `@rpath/<Name>.framework/Versions/A/<Name>`. The script points
