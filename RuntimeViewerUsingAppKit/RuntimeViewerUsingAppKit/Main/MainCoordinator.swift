@@ -146,6 +146,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 .expand(itemAt: 0),
                 .trigger(.showReports, on: sidebarCoordinator)
             )
+        case .resetEditorSizes:
+            editorAreaCoordinator.resetEditorSizes()
+            return .none()
         }
     }
 

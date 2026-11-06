@@ -171,11 +171,33 @@ final class MainMenuController {
             }
             builder.insertItems(after: .View.enterFullScreen) {
                 NSMenuItem.separator()
+                changeEditorOrientationItem()
+                resetEditorSizesItem()
+                NSMenuItem.separator()
                 increaseFontSizeItem()
                 decreaseFontSizeItem()
                 resetFontSizeItem()
             }
         }
+    }
+
+    /// Xcode's View ▸ Change Editor Orientation: the editor panes turn across, their arrangement
+    /// kept. No shortcut in Xcode either.
+    private func changeEditorOrientationItem() -> NSMenuItem {
+        NSMenuItem(
+            "Change Editor Orientation",
+            action: #selector(MainWindowController.changeEditorOrientation(_:)),
+        )
+        .image(NSImage(systemSymbolName: "uiwindow.split.2x1", accessibilityDescription: nil))
+    }
+
+    /// Xcode's View ▸ Reset Editor Sizes.
+    private func resetEditorSizesItem() -> NSMenuItem {
+        NSMenuItem(
+            "Reset Editor Sizes",
+            action: #selector(MainWindowController.resetEditorSizes(_:)),
+        )
+        .image(NSImage(systemSymbolName: "square.resize", accessibilityDescription: nil))
     }
 
     /// Xcode's View ▸ Navigators ▸ Show Report Navigator, shortcut included.
@@ -218,10 +240,37 @@ final class MainMenuController {
 
     // MARK: - Navigate
 
-    /// Between View and Window, where Xcode keeps its own Navigate menu.
+    /// Between View and Window, where Xcode keeps its own Navigate menu, in Xcode's order: Reveal,
+    /// moving the focus between editor panes, then stepping through the focused pane's tabs.
     private func navigateMenuItem() -> NSMenuItem {
         NSMenuItem("Navigate") {
             revealInSidebarNavigatorItem()
+            NSMenuItem.separator()
+            NSMenuItem(
+                "Move Focus to Next Editor Pane",
+                action: #selector(MainWindowController.moveFocusToNextEditorPane(_:)),
+                keyEquivalent: "`",
+                modifiers: [.control],
+            )
+            NSMenuItem(
+                "Move Focus to Previous Editor Pane",
+                action: #selector(MainWindowController.moveFocusToPreviousEditorPane(_:)),
+                keyEquivalent: "`",
+                modifiers: [.control, .shift],
+            )
+            NSMenuItem.separator()
+            NSMenuItem(
+                "Show Previous Tab",
+                action: #selector(MainWindowController.selectPreviousTab(_:)),
+                keyEquivalent: "[",
+                modifiers: [.shift, .command],
+            )
+            NSMenuItem(
+                "Show Next Tab",
+                action: #selector(MainWindowController.selectNextTab(_:)),
+                keyEquivalent: "]",
+                modifiers: [.shift, .command],
+            )
         }
     }
 

@@ -361,6 +361,50 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         documentState.selectionRouter.trigger(.switchTab(focusedPane.tabs[targetIndex].id))
     }
 
+    // MARK: - Editor Pane Actions
+
+    /// ⌃⌘T, Xcode's Editor Pane On Right.
+    @objc func newEditorPaneOnRight(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.newEditorPane(.onRight))
+    }
+
+    /// ⌃⌥⌘T, Xcode's Editor Pane Below.
+    @objc func newEditorPaneBelow(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.newEditorPane(.below))
+    }
+
+    /// ⌃⇧⌘W.
+    @objc func closeEditorPane(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.closeEditorPane(documentState.editorArea.focusedPaneID))
+    }
+
+    /// ⌃⌥⇧⌘W.
+    @objc func closeOtherEditorPanes(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.closeOtherEditorPanes)
+    }
+
+    /// ⌃`: the next pane left to right and top to bottom, wrapping around.
+    @objc func moveFocusToNextEditorPane(_ sender: Any?) {
+        let editorArea = documentState.editorArea
+        documentState.selectionRouter.trigger(.focusEditorPane(editorArea.layout.paneID(after: editorArea.focusedPaneID)))
+    }
+
+    /// ⌃⇧`.
+    @objc func moveFocusToPreviousEditorPane(_ sender: Any?) {
+        let editorArea = documentState.editorArea
+        documentState.selectionRouter.trigger(.focusEditorPane(editorArea.layout.paneID(before: editorArea.focusedPaneID)))
+    }
+
+    @objc func changeEditorOrientation(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.changeEditorOrientation)
+    }
+
+    /// Only the views change, so it goes to the editor area through `MainCoordinator`, not through
+    /// the document.
+    @objc func resetEditorSizes(_ sender: Any?) {
+        viewModel?.router.trigger(.resetEditorSizes)
+    }
+
     // MARK: - Font Size Actions
 
     @objc func increaseFontSize(_ sender: Any?) {
@@ -420,6 +464,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             return documentState.runtimeEngine.imageNodes.count >= 2
         case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
             return documentState.editorArea.focusedPane.tabs.count > 1
+        case #selector(closeEditorPane(_:)), #selector(closeOtherEditorPanes(_:)),
+             #selector(moveFocusToNextEditorPane(_:)), #selector(moveFocusToPreviousEditorPane(_:)),
+             #selector(changeEditorOrientation(_:)), #selector(resetEditorSizes(_:)):
+            // The only pane cannot be closed, has no other pane to hand the focus to, and has
+            // nothing to turn or to size.
+            return documentState.editorArea.panes.count > 1
         case #selector(findCallHierarchy(_:)):
             return documentState.crossReferenceRequest(.callHierarchy) != nil
         case #selector(findCallees(_:)):

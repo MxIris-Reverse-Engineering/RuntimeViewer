@@ -2,7 +2,8 @@ import AppKit
 import RuntimeViewerArchitectures
 import DependenciesMacros
 
-/// Installs the content-pane tab menu items into the standard File menu.
+/// Installs the tab and editor pane items into the standard File menu. Show Next / Previous Tab are
+/// in the Navigate menu, where Xcode has them (`MainMenuController`).
 ///
 /// Actions target `nil` so they travel the responder chain to the key
 /// document window's `MainWindowController`, which owns the `DocumentState`
@@ -38,30 +39,34 @@ final class TabMenuController: NSObject {
         let newTabItem = NSMenuItem(title: "New Tab", action: #selector(MainWindowController.newTab(_:)), keyEquivalent: "t")
         newTabItem.keyEquivalentModifierMask = [.command]
 
+        // Xcode's File ▸ New ▸ Editor Pane On Right / Below, shortcuts included. This File menu has
+        // no New submenu, so they stand beside New Tab with "New" in front.
+        let newEditorPaneOnRightItem = NSMenuItem(title: "New Editor Pane On Right", action: #selector(MainWindowController.newEditorPaneOnRight(_:)), keyEquivalent: "t")
+        newEditorPaneOnRightItem.keyEquivalentModifierMask = [.control, .command]
+        newEditorPaneOnRightItem.image = NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: nil)
+
+        let newEditorPaneBelowItem = NSMenuItem(title: "New Editor Pane Below", action: #selector(MainWindowController.newEditorPaneBelow(_:)), keyEquivalent: "t")
+        newEditorPaneBelowItem.keyEquivalentModifierMask = [.control, .option, .command]
+        newEditorPaneBelowItem.image = NSImage(systemSymbolName: "inset.filled.bottomhalf.rectangle", accessibilityDescription: nil)
+
+        // Closes the tab, else the editor pane, else the window: the order of Xcode's ⌘W.
         let closeTabItem = NSMenuItem(title: "Close Tab", action: #selector(MainWindowController.closeTab(_:)), keyEquivalent: "w")
         closeTabItem.keyEquivalentModifierMask = [.command]
         self.closeTabItem = closeTabItem
 
-        fileMenu.insertItem(newTabItem, at: insertionIndex)
-        fileMenu.insertItem(closeTabItem, at: insertionIndex + 1)
+        let closeEditorPaneItem = NSMenuItem(title: "Close Editor Pane", action: #selector(MainWindowController.closeEditorPane(_:)), keyEquivalent: "w")
+        closeEditorPaneItem.keyEquivalentModifierMask = [.control, .shift, .command]
+
+        let closeOtherEditorPanesItem = NSMenuItem(title: "Close Other Editor Panes", action: #selector(MainWindowController.closeOtherEditorPanes(_:)), keyEquivalent: "w")
+        closeOtherEditorPanesItem.keyEquivalentModifierMask = [.control, .option, .shift, .command]
+        closeOtherEditorPanesItem.image = NSImage(systemSymbolName: "rectangle.on.rectangle.slash", accessibilityDescription: nil)
+
+        let items = [newTabItem, newEditorPaneOnRightItem, newEditorPaneBelowItem, closeTabItem, closeEditorPaneItem, closeOtherEditorPanesItem]
+        for (offset, item) in items.enumerated() {
+            fileMenu.insertItem(item, at: insertionIndex + offset)
+        }
 
         fileMenu.delegate = self
-
-        installTabNavigationItems()
-    }
-
-    private func installTabNavigationItems() {
-        guard let windowMenu = NSApp.windowsMenu else { return }
-
-        let showNextTabItem = NSMenuItem(title: "Show Next Tab", action: #selector(MainWindowController.selectNextTab(_:)), keyEquivalent: "]")
-        showNextTabItem.keyEquivalentModifierMask = [.command, .shift]
-
-        let showPreviousTabItem = NSMenuItem(title: "Show Previous Tab", action: #selector(MainWindowController.selectPreviousTab(_:)), keyEquivalent: "[")
-        showPreviousTabItem.keyEquivalentModifierMask = [.command, .shift]
-
-        windowMenu.addItem(.separator())
-        windowMenu.addItem(showNextTabItem)
-        windowMenu.addItem(showPreviousTabItem)
     }
 
     /// The submenu of the standard "File" menu, located by its `performClose:`
