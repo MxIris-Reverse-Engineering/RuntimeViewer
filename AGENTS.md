@@ -179,8 +179,10 @@ project file, which outranks the xcconfig and which the Tuist project below does
 **`RuntimeViewer-Tuist.xcworkspace` is a second, development-only way to build the macOS app.**
 Tuist generates it from `Tuist.swift`, `Workspace.swift`, `Tuist/Package.swift` and
 `RuntimeViewerUsingAppKit/Project.swift`; it builds the same targets from the same sources and the
-same xcconfig files, with every third-party dependency taken from Tuist's local binary cache and
-the four local packages as source. **Releases, CI, `RunScript.sh`, `ArchiveScript.sh` and every
+same xcconfig files, with the four local packages as source and the third-party dependencies taken
+from Tuist's local binary cache — all but MachOKitExtensions, MachOObjCSection, MachOSwiftSection
+and swift-semantic-string, which change often alongside this repository and are built from source
+too. **Releases, CI, `RunScript.sh`, `ArchiveScript.sh` and every
 other script use the native projects only**, and the generated files are gitignored.
 
 ```bash
@@ -196,6 +198,10 @@ open RuntimeViewer-Tuist.xcworkspace
   included, which `Tuist.swift` and `Tuist/ProjectDescriptionHelpers/LocalPackages.swift` repeat — and
   `./TuistScript.sh check` passes before it is committed; `check --build` also builds both workspaces
   and compares the two apps.
+- **`Tuist.swift` also lists every target of those four third-party packages**
+  (`sourceDependencyTargetNames`; the packages are `SOURCE_DEPENDENCIES` in `TuistScript.sh`). A pin
+  move that adds or renames a target of theirs fails `check` until the list follows; a target left
+  out goes into the binary cache.
 - **`Tuist/Package.resolved` is not committed** (it is ignored). `./TuistScript.sh install` starts
   it from the Debug workspace's lock file every time, so it pins what the native lock files pin, and
   `UpdatePackagesScript.sh` runs that install after updating the Debug workspace. Install with the

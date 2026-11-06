@@ -3,7 +3,7 @@
 - **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-10-10
-- **最后更新**: 2026-10-15
+- **最后更新**: 2026-11-06
 - **所属愿景**: 无
 - **关联提案**: [0015](0015-build-embedded-products-in-app-phase.md)（嵌入产物曾用嵌套 xcodebuild 产出，已撤回；本提案沿用撤回之后「平台写死 + 普通 target 依赖」的结构）、[0025](0025-update-packages-script.md)（`UpdatePackagesScript.sh` 要顺带更新 Tuist 的锁文件）、[0051](0051-catalyst-xpc-service.md)（合入 `next` 时补上它新增的 Catalyst XPC service 与改由 App 嵌入的插件）
 - **实现分支 / PR**: `feature/tuist-integration`（worktree `.worktrees/RuntimeViewer-TuistIntegration`），从 `next` @ 2ac90984 切出；2026-10-15 合入 `next`，进 `main` 的 PR 待定
@@ -228,12 +228,17 @@ let package = Package(
 // Cache-profile exceptions match target names exactly; TuistScript.sh check keeps this list
 // in step with the four Package.swift files.
 let localPackageTargetNames = ["RuntimeViewerObjC", "RuntimeViewerCore", /* … 共 22 个 … */]
+// 2026-11-06 起：四个常改的第三方包也留成源码（见决策日志）。
+let sourceDependencyTargetNames = ["MachOKitExtensions", "MachOObjCSection", /* … 共 44 个 … */]
 
 let tuist = Tuist(
     project: .tuist(
         cacheOptions: .options(
             profiles: .profiles(
-                ["development": .profile(.onlyExternal, except: localPackageTargetNames.map { .named($0) })],
+                ["development": .profile(
+                    .onlyExternal,
+                    except: (localPackageTargetNames + sourceDependencyTargetNames).map { .named($0) }
+                )],
                 default: "development"
             )
         )
@@ -426,3 +431,4 @@ Tuist 构建的 Debug App 与原生 Debug 构建使用同一个 bundle id、同�
 | 2026-10-15 | 脚本生成的 workspace 照原生排布 | 经脚本生成的 workspace，导航栏从 `Repositories/Private/Org/…` 一层层嵌套下来，直接跑 `tuist generate` 则是平铺的。原因（读 Tuist 4.210.0 源码）：`WorkspaceStructureGenerator` 以所有工程（依赖也算）路径的公共父目录为根逐层分组（第 111 行），之后才把依赖挑进 Dependencies 组；脚本把依赖放在 `/Volumes/DerivedData` 下，公共父目录只剩 `/Volumes`。Tuist 没有控制排布的选项，排序也写死按路径。用户要求「布局和位置跟原生工程一样」：脚本在每次 `generate` 之后按 `RuntimeViewer-Debug.xcworkspace` 列出的目录顺序重写 workspace 的 `contents.xcworkspacedata`——本地工程平铺在顶层，swift-syntax 回到顶层，依赖留在 Dependencies 组、在仓库外的写绝对路径；遇到认不出的结构就保留 Tuist 的排布并警告。没有改成把依赖搬回仓库内的 `Tuist/.build`：两个卷在同一块盘上、Spotlight 与 Time Machine 设置也相同，搬回去虽然没有代价，但顺序和 swift-syntax 的分组仍与原生不同。验证：对直接生成的与经脚本生成的两份 workspace 重排结果都对，重复执行输出不变；重排后的 workspace 增量构建 Debug 通过，6 个在仓库外、以绝对路径引用的依赖工程都参与了构建。 |
 | 2026-10-15 | `Tuist/Package.resolved` 不再提交 | 用户决定（原话「Tuist/Package.resolved 忽略掉」），推翻 §7「提交进仓库」。起因：用户用默认的 Xcode 26.6 跑了一次 `tuist install`，这个被跟踪的文件就被改写（`swift-issue-reporting` 2.1.2 换成 `xctest-dynamic-overlay` 1.13.1），留下一处很容易被误提交的改动；而它本该与 Debug workspace 的锁文件一模一样，原生那份才是唯一的来源。做法：加进 `.gitignore` 并从仓库移除；`./TuistScript.sh install` 每次先把 Debug workspace 的锁文件拷过来当初值再解析——不这样的话，新 checkout 里没有这个文件，Tuist 会解析到各依赖的最新版；`UpdatePackagesScript.sh` 不再自己拷贝，也不再把它列进要提交的锁文件，只照旧跑一次 `install`。`check` 照旧逐条比对两份锁文件，用错 Xcode 时仍会报出来。 |
 | 2026-10-16 | 脚本生成的 App 工程照原生排布 | 用户看过重排后的 workspace，说「布局没有还原」，并指了另一个项目的做法（FormMaster 的 `Scripts/generate_tuist_project.rb`：生成后用 xcodeproj gem 改写导航树）。没还原的是 App 工程内部：Tuist 把所有目录包进 `Project` 组，Configurations 只列它拿到的 36 个 xcconfig、分成十几个子组，四个图标归在 `Resources` 组，target 按名字排，依赖工程散在顶层。做法照搬那个脚本的思路，用脚本里已有的 python3 + `plutil`，不引入 Ruby gem：每次 `generate` 之后按 `RuntimeViewerUsingAppKit.xcodeproj` 的导航树逐项按指向的位置匹配、挪到原生位置；原生有而 Tuist 没有的（测试计划、`com.JH.RuntimeViewerService` 目录、Configurations 同步文件夹、`Recovered References` 组）补成只供浏览的项，不进任何 target；工程文件不补——`RuntimeViewerServer.xcodeproj` 的 target 在这个工程里编，补上会被当成子工程加载——由这些 target 的源码组顶替。原生没有的项留在后面，引用的依赖工程收进末尾的 Dependencies 组，target 按原生顺序、服务器的两个 target 殿后。xcconfig 改成原生的写法：配置经 `baseConfigurationReferenceAnchor` 指向 Configurations 文件夹、`baseConfigurationReferenceRelativePath` 写相对路径，Tuist 单建的文件引用随之删掉——不删就要么在文件夹之外再列一遍，要么成为没有父组的孤立引用，而 Xcode 可能把孤立引用捡进 `Recovered References`（没有核实只被配置引用的会不会）。写回之前核对：别的对象一个不变，每项仍指向原处，没有对象悬空，写出的文件读回来与预期相同；不成立就保留 Tuist 原样并警告。写文件用自己的 OpenStep 格式输出，不依赖 Xcode 的排版。验证：对用户刚生成的工程副本改写，三套配置下 11 个 target 的 `-showBuildSettings` 改写前后逐项相同（Tuist 写的 `objectVersion` 是 55，这一步证明 anchor 写法在它下面照样解析）；`check` 读工程的代码读出的每个配置的基础 xcconfig 前后相同；再跑一次文件逐字节不变；原生工程读不到时退出码 1、文件不动。没有跑构建，也没有在 Xcode 界面里看。四个包的工程没有改写，仍是 Tuist 的样子。 |
+| 2026-11-06 | 四个常改的第三方包改为从源码编 | 用户决定 MachOSwiftSection、MachOObjCSection、swift-semantic-string、MachOKitExtensions 不进二进制缓存：这几个包经常跟着本仓库一起改，pin 动得勤，每动一次就要重新预热，缓存里也越积越多旧版本。做法：`Tuist.swift` 新增 `sourceDependencyTargetNames`（四个包的全部 44 个库与宏 target，含 App 用不到的测试支撑 target，免得包里多出一个被用到的 target 时漏掉），与本地包名单一起交给 development profile 的 `except`；除了彼此，这四个包没有被别的第三方包依赖，所以其余缓存的 hash 不变、照常命中。MachOKit 与 swift-demangling 同样跟着 `next` 分支走，用户选择仍留在缓存里。缓存例外按名字匹配所有包，`check` 因此新增两项：名单与四个包 checkout 里的清单逐个核对（包由 `TuistScript.sh` 的 `SOURCE_DEPENDENCIES` 列出），别的依赖有同名的非测试 target 时报错（当前 86 个依赖里没有，`Utilities` 这类泛称也是唯一的）。代价：从空的 DerivedData 构建要多编这四个包（MachOSwiftSection 约占全部编译任务的 13%，见「动机」），没有重新实测。验证只做了静态检查（用户选定）：bash 与内嵌 Python 语法；`tuist dump config` 读出 67 条例外；新的核对代码从脚本里原样取出，对当前的真实清单零报错，删掉一个名字、加一个过期名字、造一个撞名、删掉一份清单，各报出对应的一条。没有生成工程，也没有编译，所以 Tuist 生成时是否真把这四个包留成源码、App 是否照常编过，未经实测。 |

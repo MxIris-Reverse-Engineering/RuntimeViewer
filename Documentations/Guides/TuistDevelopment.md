@@ -2,17 +2,22 @@
 
 - **面向**: 在本仓库做日常开发、想让第三方依赖走二进制缓存的人；改原生工程的 target、依赖、嵌入方式或构建设置的人（同步规则）
 - **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)
-- **最后更新**: 2026-11-05
+- **最后更新**: 2026-11-06
 
 `RuntimeViewer-Tuist.xcworkspace` 是构建 macOS App 的第二条路，只供日常开发。它由
 `./TuistScript.sh` 用 Tuist 生成，和原生工程用同样的 target、同样的源码、同一批
-`Configurations/` 下的 xcconfig；差别在于约 85 个第三方依赖取自本机的 Tuist 二进制缓存，只编一次，
+`Configurations/` 下的 xcconfig；差别在于约 80 个第三方依赖取自本机的 Tuist 二进制缓存，只编一次，
 四个本地包（`RuntimeViewerCore` / `RuntimeViewerPackages` / `RuntimeViewerMCP` /
 `RuntimeViewerCommandLine`）照常是源码、可跳转可编辑。
 
+**MachOSwiftSection、MachOObjCSection、swift-semantic-string、MachOKitExtensions 这四个第三方包不进缓存，始终从源码编。**
+它们经常跟着本仓库一起改，pin 动得勤，放进缓存就得一次次重新预热，缓存里也越积越多旧版本。除了彼此，没有别的第三方包
+依赖它们，所以其余缓存照常命中。名单在 `Tuist.swift` 的 `sourceDependencyTargetNames`。
+
 实测（Xcode 27，完整 App，按 `RunScript.sh` 的参数从空的 DerivedData 构建 Debug）：不用缓存 504 秒，走缓存
 155 秒；预热一次约 8 分钟。没有预热过的 Debug-arm64e 与 Release 从源码编，分别约 9 分钟和 18 分钟（这两套配置下
-包要多编一个 arm64e 切片，见「已知的坑」）。
+包要多编一个 arm64e 切片，见「已知的坑」）。这些数字是上面四个包还在缓存里时测的；现在从空的 DerivedData 构建要多编
+它们（MachOSwiftSection 约占全部编译任务的 13%），没有重新实测。
 
 **发版、CI、`RunScript.sh`、`ArchiveScript.sh` 和其余脚本只走原生工程**，Tuist 这边出问题不影响
 它们。生成的工程文件都在 `.gitignore` 里，不提交。
@@ -47,7 +52,8 @@ Xcode 27 解析出 `swift-issue-reporting` 2.1），锁文件就和原生的对�
 | 命令行构建（同 `RunScript.sh` 的参数） | `./TuistScript.sh build [--configuration Debug-arm64e] [--launch]` |
 | 本地包里增删了源文件 | `./TuistScript.sh generate`（Tuist 转换包时按 glob 展开文件；只改已有文件不用） |
 | 改了某个 `Package.swift`（依赖、target、设置） | `./TuistScript.sh install`，再 `generate` |
-| 依赖升级 | `./UpdatePackagesScript.sh`（顺带跑一次 `./TuistScript.sh install`），再 `./TuistScript.sh warm`（只重编变了的） |
+| 依赖升级 | `./UpdatePackagesScript.sh`（顺带跑一次 `./TuistScript.sh install`），再 `./TuistScript.sh warm`（只重编变了的）；只动了那四个从源码编的包时，`generate` 就够了 |
+| 让另一个第三方包也从源码编 | 它的库与宏 target 加进 `Tuist.swift` 的 `sourceDependencyTargetNames`，它的 checkout 目录名加进 `TuistScript.sh` 的 `SOURCE_DEPENDENCIES`，再 `generate`。先确认没有留在缓存里的第三方包依赖它：那种情况 Tuist 怎么处理没有实测 |
 | 换了 Xcode 版本 | `./TuistScript.sh warm` |
 | 换钉住的 SourceEditor 版本 | `./UpdateSourceEditorScript.sh [<版本>]`：换版并下载，之后在 Xcode 里直接编，不用重新生成 |
 | 改了原生工程的结构或设置 | 同批更新 Tuist 描述，提交前 `./TuistScript.sh check`（见下文） |
@@ -123,8 +129,10 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
    `$(inherited)` 开头、少数只属于 Tuist 的设置）；`RuntimeViewerServer.xcodeproj` 与 AppKit 工程的
    工程级设置有差别的键，两个载荷 target 的 xcconfig 都自己给出了值（Tuist 工程里它们处在 AppKit 的工程级
    之下）；Tuist 工程的每个 target 都带 `-ObjC`（见「已知的坑」）。
-2. **本地 target 名单**：四个包的非测试 target（加 Tuist 为带资源的 target 生成的 `<包>_<target>`）与
-   `Tuist.swift` 的缓存例外名单、helpers 里的名单一致；测试 target 都在测试 scheme 里；三个只给 macOS App
+2. **target 名单**：四个本地包的非测试 target（加 Tuist 为带资源的 target 生成的 `<包>_<target>`）与
+   `Tuist.swift` 的 `localPackageTargetNames`、helpers 里的名单一致；`SOURCE_DEPENDENCIES` 那四个第三方包的库与宏
+   target 与 `sourceDependencyTargetNames` 一致（读它们 checkout 里的清单），且别的依赖没有同名的 target——缓存例外
+   按名字匹配所有包，同名的会被一起留成源码；测试 target 都在测试 scheme 里；三个只给 macOS App
    用的包的 product 都声明成了 macOS；macOS 最低版本声明在 14 以下的包，测试 target 的部署版本抬到了 14.0；
    每个测试 target 都带 `-ObjC`。
 3. **锁文件**：两份锁文件逐条一致。
@@ -143,6 +151,9 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 | `… sets X in the project file` | 有人在 Xcode 里改了设置。把值挪进它说的那个 xcconfig，工程文件里删掉 |
 | `Target … has no counterpart …` | 原生工程加了 target 而 `Project.swift` 没跟上（或反之） |
 | `… localPackageTargetNames: X is missing` | 本地包加了 target：`Tuist.swift` 与 `LocalPackages.swift` 两处都加上 |
+| `… sourceDependencyTargetNames: X is missing` | 从源码编的四个包之一加了 target：加进 `Tuist.swift` 的 `sourceDependencyTargetNames`，不加它就进缓存 |
+| `the cache exception X is no longer a target …` | 名单里的 target 被删了或改了名：从 `Tuist.swift` 里删掉或改名 |
+| `… X is also a target of …` | 别的依赖有同名 target。例外只能按名字写，两个会一起从源码编：接受的话给 `check` 加一条豁免，否则就得给其中一个改名 |
 | 锁文件不一致 | 用原生锁文件那个 Xcode 跑 `./TuistScript.sh install` |
 | `… is missing from Tuist/Package.swift's targetSettings` | 某个依赖开启了新的 trait 宏，照 Capstone 的写法补进 `targetSettings` |
 | `… lacks -ObjC` / `… leaves out N Objective-C class(es)` | 有 target 没带 `-ObjC`：新 target 走 `targetSettings`、新测试 target 进 `LocalPackages.testTargetNames` 就会带上 |
