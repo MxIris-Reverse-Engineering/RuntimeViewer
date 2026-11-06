@@ -156,7 +156,7 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
 
     /// A stack, so that the tabs start at the leading edge while the close button is hidden: a
     /// stack view detaches a hidden arranged view, where a hidden view under constraints keeps its place.
-    private lazy var stackView = HStackView(spacing: 4) {
+    private lazy var contentStackView = HStackView(spacing: 4) {
         closeButton
         tabBar
     }
@@ -167,10 +167,10 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         backgroundColor = .windowBackgroundColor
 
         hierarchy {
-            stackView
+            contentStackView
         }
 
-        stackView.snp.makeConstraints { make in
+        contentStackView.snp.makeConstraints { make in
             make.top.bottom.trailing.equalToSuperview()
             make.leading.equalToSuperview().inset(4)
         }
@@ -180,7 +180,7 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         }
 
         tabBar.snp.makeConstraints { make in
-            make.height.equalTo(stackView)
+            make.height.equalTo(contentStackView)
         }
 
         closeButton.setContentHuggingPriority(.required, for: .horizontal)
