@@ -147,7 +147,7 @@ public final class DocumentState {
     /// by identity, so do not `distinctUntilChanged()` it raw where a title
     /// or another field of an object is shown: compare what is shown.
     @RxObserved
-    public fileprivate(set) var editorArea = EditorArea()
+    public fileprivate(set) var editorArea: EditorArea = EditorArea()
 
     /// What the focused editor pane's active tab shows, or `nil` for an empty
     /// tab. Every route keeps it the same as
