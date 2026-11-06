@@ -307,7 +307,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionRouter.trigger(.push(viewModel.runtimeObject))
+                documentState.selectionRouter.trigger(.open(viewModel.runtimeObject, in: .focusedTab))
                 #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
                 #endif
@@ -318,7 +318,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionRouter.trigger(.openInNewTab(viewModel.runtimeObject))
+                documentState.selectionRouter.trigger(.open(viewModel.runtimeObject, in: .newTab))
                 #endif
             }
             .disposed(by: rx.disposeBag)
@@ -344,7 +344,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 guard let self else { return }
                 switch lookup.result {
                 case .success(let counterpart?):
-                    documentState.selectionRouter.trigger(.push(counterpart))
+                    documentState.selectionRouter.trigger(.open(counterpart, in: .focusedTab))
                 case .success(nil):
                     errorRelay.accept(CounterpartNotFoundError(runtimeObject: lookup.runtimeObject))
                 case .failure(let error):

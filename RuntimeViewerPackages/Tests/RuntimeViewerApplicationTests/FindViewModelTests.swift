@@ -264,16 +264,16 @@ struct FindViewModelTests {
         }
         #expect(environment.documentState.selectedRuntimeObject == object)
         // A plain push: nothing for the content pane to highlight.
-        guard routes.count == 1, case .push(let pushedObject) = routes[0] else {
+        guard routes.count == 1, case .open(let pushedObject, .focusedTab, .none) = routes[0] else {
             Issue.record("expected one plain push, got \(routes)")
             return
         }
         #expect(pushedObject == object)
 
-        let tabCount = environment.documentState.tabs.count
+        let tabCount = environment.documentState.editorArea.focusedPane.tabs.count
         resultOpenedInNewTabRelay.accept(typeNode)
         try await settleMainQueue()
-        #expect(environment.documentState.tabs.count == tabCount + 1)
+        #expect(environment.documentState.editorArea.focusedPane.tabs.count == tabCount + 1)
     }
 
     @Test("the filter bar narrows the results to the rows that match it")
@@ -372,7 +372,7 @@ struct FindViewModelTests {
         try await settleMainQueue()
         #expect(routes.count == 1, "the second click navigated again: \(routes)")
 
-        environment.documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "Elsewhere", kind: .objc(.type(.class)))))
+        environment.documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "Elsewhere", kind: .objc(.type(.class))), in: .focusedTab))
         resultClickedRelay.accept(hit)
         try await settleMainQueue()
         #expect(routes.count == 3)
@@ -770,7 +770,7 @@ struct FindViewModelTests {
 
     /// The object and highlight of the last route when it is a highlighting push.
     private static func highlightingPush(in routes: [SelectionRoute]) -> (RuntimeObject, ContentHighlightRequest)? {
-        guard case .pushHighlighting(let object, let highlight)? = routes.last else { return nil }
+        guard case .open(let object, .focusedTab, let highlight?)? = routes.last else { return nil }
         return (object, highlight)
     }
 

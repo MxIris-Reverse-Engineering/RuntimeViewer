@@ -120,8 +120,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let sidebarBackClick: Signal<Void>
         let navigationPreviousClick: Signal<Void>
         let navigationNextClick: Signal<Void>
-        /// Target index into `selectionStack`, chosen from a long-press
-        /// history menu on either navigation segment.
+        /// Target index into the focused tab's history, chosen from a
+        /// long-press history menu on either navigation segment.
         let navigationHistorySelected: Signal<Int>
         let saveClick: Signal<Void>
         /// The engine identifier of a source chosen in the runtime source picker's list.
@@ -138,8 +138,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let activityClick: Signal<Void>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
-        let tabSelected: Signal<Int>
-        let tabClosed: Signal<Int>
+        let tabSelected: Signal<DocumentTab.ID>
+        let tabClosed: Signal<DocumentTab.ID>
         let newTabClicked: Signal<Void>
         /// A choice from the runtime source picker's Dependency Cache level, for
         /// the offline engine the window is on: `nil` reads the file alone.
@@ -653,15 +653,15 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         // MARK: - Tabs
 
-        input.tabSelected.emitOnNext { [weak self] index in
+        input.tabSelected.emitOnNext { [weak self] tabID in
             guard let self else { return }
-            documentState.selectionRouter.trigger(.switchTab(index: index))
+            documentState.selectionRouter.trigger(.switchTab(tabID))
         }
         .disposed(by: rx.disposeBag)
 
-        input.tabClosed.emitOnNext { [weak self] index in
+        input.tabClosed.emitOnNext { [weak self] tabID in
             guard let self else { return }
-            documentState.selectionRouter.trigger(.closeTab(index: index))
+            documentState.selectionRouter.trigger(.closeTab(tabID))
         }
         .disposed(by: rx.disposeBag)
 
@@ -671,15 +671,14 @@ final class MainViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        let tabBarSnapshot = Driver.combineLatest(
-            documentState.$tabs.asDriver(),
-            documentState.$activeTabIndex.asDriver()
-        ) { tabs, activeIndex in
-            TabBarSnapshot(
-                items: tabs.map { TabBarItem(id: $0.id, title: $0.title, kind: $0.object?.kind) },
-                activeIndex: activeIndex
-            )
-        }
+        // Compared by what the bar shows, not by the area: titles change with
+        // the form an object is shown in, which the area's equality ignores.
+        let tabBarSnapshot = documentState.$editorArea.asDriver()
+            .map { TabBarSnapshot(pane: $0.focusedPane) }
+            .distinctUntilChanged()
+
+        let focusedTabHistory = documentState.$editorArea.asDriver()
+            .map { $0.focusedPane.activeTab.history }
 
         // Resolved once: `Observable.tracking` re-arms on a main-queue hop, where the dependency
         // context is gone.
@@ -712,38 +711,22 @@ final class MainViewModel: ViewModel<MainRoute> {
             sharingServiceData: sharingServiceData,
             isSavable: documentState.$selectedRuntimeObject.asDriver().map { $0 != nil },
             isSidebarBackHidden: documentState.$currentImageNode.asDriver().map { $0 == nil },
-            isNavigationHidden: documentState.$selectionStack.asDriver().map { $0.isEmpty },
-            // On an empty tab (`selectedRuntimeObject == nil` over a
-            // non-empty timeline) the first `.backward` returns to the
-            // cursor entry itself, so previous stays enabled from index 0.
-            canGoPrevious: Driver.combineLatest(
-                documentState.$selectionIndex.asDriver(),
-                documentState.$selectedRuntimeObject.asDriver()
-            ).map { index, selected in
-                selected == nil ? index >= 0 : index > 0
-            },
-            canGoNext: Driver.combineLatest(
-                documentState.$selectionStack.asDriver(),
-                documentState.$selectionIndex.asDriver()
-            ).map { stack, index in
-                index < stack.count - 1
-            },
-            navigationHistory: Driver.combineLatest(
-                documentState.$selectionStack.asDriver(),
-                documentState.$selectionIndex.asDriver(),
-                documentState.$selectedRuntimeObject.asDriver()
-            ).map { stack, index, selected in
+            // The focused pane's active tab: every tab walks only what it has
+            // shown, so switching tabs or panes switches what back and forward
+            // reach.
+            isNavigationHidden: focusedTabHistory.map { $0.entries.isEmpty }.distinctUntilChanged(),
+            canGoPrevious: focusedTabHistory.map(\.canGoBackward).distinctUntilChanged(),
+            canGoNext: focusedTabHistory.map(\.canGoForward).distinctUntilChanged(),
+            navigationHistory: focusedTabHistory.map { history in
                 NavigationHistorySnapshot(
-                    items: stack.enumerated().map { entryIndex, runtimeObject in
+                    items: history.entries.enumerated().map { entryIndex, runtimeObject in
                         NavigationHistoryItem(
                             index: entryIndex,
                             displayName: runtimeObject.displayName,
                             icon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: NavigationHistorySnapshot.iconSize)
                         )
                     },
-                    // An empty tab hovers just above the cursor: the cursor
-                    // entry itself becomes the nearest backward row.
-                    currentIndex: selected == nil && index >= 0 ? index + 1 : index
+                    currentIndex: history.currentIndex ?? -1
                 )
             },
             switchSourceState: switchSourceState,

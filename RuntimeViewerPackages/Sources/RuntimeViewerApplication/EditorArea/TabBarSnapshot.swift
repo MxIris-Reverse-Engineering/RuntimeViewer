@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 
-/// One row of the content-pane tab bar, projected from a `DocumentTab`.
+/// One tab of an editor pane's tab bar, projected from a `DocumentTab`.
 ///
 /// Carries only display-relevant data; icon resolution is left to the view
 /// layer (`RuntimeObjectIcon`) so this stays platform-agnostic.
@@ -11,8 +11,9 @@ public struct TabBarItem: Hashable, Identifiable, Sendable {
     /// Carried so the item identifies its *tab* rather than its contents: `title` and `kind` do not,
     /// since two empty tabs — or two tabs opened on the same object — are equal on those alone. The
     /// tab bar matches items across a reload by equality, and a row that cannot be told from its
-    /// neighbour is matched to the wrong button.
-    public let id: UUID
+    /// neighbour is matched to the wrong button. It is also what a click on the tab reports, so the
+    /// route names the tab rather than a position another route may have moved.
+    public let id: DocumentTab.ID
 
     public let title: String
 
@@ -20,24 +21,33 @@ public struct TabBarItem: Hashable, Identifiable, Sendable {
     /// `nil` for an empty tab.
     public let kind: RuntimeObjectKind?
 
-    public init(id: UUID, title: String, kind: RuntimeObjectKind?) {
+    public init(id: DocumentTab.ID, title: String, kind: RuntimeObjectKind?) {
         self.id = id
         self.title = title
         self.kind = kind
     }
+
+    /// The row a tab bar shows for `tab`.
+    public init(tab: DocumentTab) {
+        self.init(id: tab.id, title: tab.title, kind: tab.object?.kind)
+    }
 }
 
-/// Immutable projection of `DocumentState.tabs` + `activeTabIndex` for the
-/// content-pane tab bar. Mirrors the `NavigationHistorySnapshot` pattern.
+/// Immutable projection of an editor pane's `tabs` and active tab for its tab bar. Mirrors the
+/// `NavigationHistorySnapshot` pattern.
 public struct TabBarSnapshot: Hashable, Sendable {
     public let items: [TabBarItem]
 
-    /// Index of the active tab in `items`, mirroring
-    /// `DocumentState.activeTabIndex`.
+    /// Index of the active tab in `items`.
     public let activeIndex: Int
 
     public init(items: [TabBarItem], activeIndex: Int) {
         self.items = items
         self.activeIndex = activeIndex
+    }
+
+    /// What the tab bar of `pane` shows.
+    public init(pane: EditorPane) {
+        self.init(items: pane.tabs.map(TabBarItem.init(tab:)), activeIndex: pane.activeTabIndex)
     }
 }

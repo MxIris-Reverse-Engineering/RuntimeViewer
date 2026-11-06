@@ -10,9 +10,10 @@ import RuntimeViewerArchitectures
 /// off `MainViewModel` output — a dumb view controller with no business logic,
 /// mirroring how `MainToolbarController` hosts the toolbar items.
 ///
-/// Every tab shares the one document-level navigation history; selection /
-/// close / creation are surfaced as signals the window controller forwards to
-/// `MainViewModel`, which turns them into `SelectionRoute`s.
+/// It shows the focused editor pane's tabs, each with a history of its own;
+/// selection / close / creation are surfaced as signals the window controller
+/// forwards to `MainViewModel`, which turns them into `SelectionRoute`s naming
+/// the tab by its `DocumentTab.ID`.
 final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
     private static let topSpacing: CGFloat = 8
     private static let bottomSpacing: CGFloat = 8
@@ -62,8 +63,8 @@ final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
 
     // MARK: - Outputs to the window controller
 
-    let tabSelectedRelay = PublishRelay<Int>()
-    let tabClosedRelay = PublishRelay<Int>()
+    let tabSelectedRelay = PublishRelay<DocumentTab.ID>()
+    let tabClosedRelay = PublishRelay<DocumentTab.ID>()
 
     var newTabClicked: Signal<Void> { addTabButton.rx.click.asSignal() }
 
@@ -198,14 +199,14 @@ extension TabBarAccessoryController: TabBar.Delegate {
     }
 
     func tabBarDidChangeSelection(_ tabBar: TabBar, item: Any?) {
-        guard !isApplyingSnapshot, !isHandlingClose, let item, let index = self.item(from: item)?.index else { return }
-        tabSelectedRelay.accept(index)
+        guard !isApplyingSnapshot, !isHandlingClose, let item, let model = self.item(from: item)?.model else { return }
+        tabSelectedRelay.accept(model.id)
     }
 
     func tabBar(_ tabBar: TabBar, didCloseItem item: Any) {
-        guard let index = self.item(from: item)?.index else { return }
+        guard let model = self.item(from: item)?.model else { return }
         isHandlingClose = true
-        tabClosedRelay.accept(index)
+        tabClosedRelay.accept(model.id)
         // Reset asynchronously rather than in `applySnapshot`: if the close
         // route is rejected (stale index) no snapshot comes back, and the flag
         // must not swallow the user's next real tab click.

@@ -7,8 +7,8 @@ import RxAppKit
 /// rows: it stores the item in `representedObject`, which
 /// `rx.itemSelected(_:)` hands back on click.
 struct NavigationHistoryItem: RxMenuItemRepresentable {
-    /// Index into `DocumentState.selectionStack`, translated straight
-    /// into `SelectionRoute.jump(toIndex:)` on click.
+    /// Index into the focused tab's `NavigationHistory.entries`, translated
+    /// straight into `SelectionRoute.jump(toIndex:)` on click.
     let index: Int
 
     let displayName: String
@@ -18,20 +18,17 @@ struct NavigationHistoryItem: RxMenuItemRepresentable {
     var title: String { displayName }
 }
 
-/// Immutable projection of `DocumentState.selectionStack` +
-/// `selectionIndex` for the toolbar's back / forward history menus.
+/// Immutable projection of the focused editor pane's active tab's
+/// `NavigationHistory` for the toolbar's back / forward history menus.
 ///
 /// Built in `MainViewModel` (icon resolution included, mirroring
 /// `resolveEngineIcon(for:)`) and rendered by
 /// `NavigationHistoryMenuBuilder`.
 struct NavigationHistorySnapshot {
-    /// Same order as `selectionStack` — oldest entry first.
+    /// Same order as the history's entries — oldest entry first.
     let items: [NavigationHistoryItem]
 
-    /// Mirrors `DocumentState.selectionIndex`. `-1` when the history is
-    /// empty. `items.count` (one past the last entry) encodes an empty tab
-    /// hovering above the timeline: nothing is shown, and the cursor entry
-    /// itself is the nearest backward row.
+    /// The history's `currentIndex`, `-1` when the tab has shown nothing.
     let currentIndex: Int
 
     /// Icon edge length for menu rows. Deliberately smaller than

@@ -393,16 +393,7 @@ enum FindCrossReferenceNavigation {
     /// Opens `object` in place or in a new tab, flashing `highlight` once it
     /// is on screen.
     static func open(_ object: RuntimeObject, highlighting highlight: ContentHighlightRequest?, inNewTab: Bool, in documentState: DocumentState) {
-        switch (inNewTab, highlight) {
-        case (false, nil):
-            documentState.selectionRouter.trigger(.push(object))
-        case (false, let highlight?):
-            documentState.selectionRouter.trigger(.pushHighlighting(object, highlight))
-        case (true, nil):
-            documentState.selectionRouter.trigger(.openInNewTab(object))
-        case (true, let highlight?):
-            documentState.selectionRouter.trigger(.openInNewTabHighlighting(object, highlight))
-        }
+        documentState.selectionRouter.trigger(.open(object, in: inNewTab ? .newTab : .focusedTab, highlighting: highlight))
     }
 
     /// Goes to the member's declaration. A row that found a function knows its

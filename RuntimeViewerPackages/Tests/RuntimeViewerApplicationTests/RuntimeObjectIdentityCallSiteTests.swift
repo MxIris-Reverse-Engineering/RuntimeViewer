@@ -198,10 +198,10 @@ struct RuntimeObjectIdentityCallSiteTests {
     func timelineCollapsesBothFormsOfOneType() {
         let documentState = DocumentState()
 
-        documentState.selectionRouter.trigger(.push(Self.authoritative))
-        documentState.selectionRouter.trigger(.push(Self.payloadWithExtraProperties))
+        documentState.selectionRouter.trigger(.open(Self.authoritative, in: .focusedTab))
+        documentState.selectionRouter.trigger(.open(Self.payloadWithExtraProperties, in: .focusedTab))
 
-        #expect(documentState.selectionStack.count == 1)
+        #expect(documentState.editorArea.focusedPane.activeTab.history.entries.count == 1)
     }
 
     /// **Contract.** Pushing the very same object twice must stay one entry —
@@ -211,10 +211,10 @@ struct RuntimeObjectIdentityCallSiteTests {
     func timelineCollapsesAnIdenticalPush() {
         let documentState = DocumentState()
 
-        documentState.selectionRouter.trigger(.push(Self.authoritative))
-        documentState.selectionRouter.trigger(.push(Self.authoritative))
+        documentState.selectionRouter.trigger(.open(Self.authoritative, in: .focusedTab))
+        documentState.selectionRouter.trigger(.open(Self.authoritative, in: .focusedTab))
 
-        #expect(documentState.selectionStack.count == 1)
+        #expect(documentState.editorArea.focusedPane.activeTab.history.entries.count == 1)
     }
 
     /// **Contract.** The active tab follows the selection. Which *form* of a
@@ -223,9 +223,9 @@ struct RuntimeObjectIdentityCallSiteTests {
     func activeTabTracksTheSelection() {
         let documentState = DocumentState()
 
-        documentState.selectionRouter.trigger(.push(Self.authoritative))
+        documentState.selectionRouter.trigger(.open(Self.authoritative, in: .focusedTab))
 
-        #expect(documentState.tabs[documentState.activeTabIndex].object == Self.authoritative)
+        #expect(documentState.editorArea.focusedPane.activeTab.object == Self.authoritative)
     }
 
     /// **Contract.** One entry per type, but that entry holds the form now on
@@ -238,10 +238,10 @@ struct RuntimeObjectIdentityCallSiteTests {
     func timelineEntryCarriesTheLatestForm() {
         let documentState = DocumentState()
 
-        documentState.selectionRouter.trigger(.push(Self.payloadWithQualifiedDisplayName))
-        documentState.selectionRouter.trigger(.push(Self.authoritative))
+        documentState.selectionRouter.trigger(.open(Self.payloadWithQualifiedDisplayName, in: .focusedTab))
+        documentState.selectionRouter.trigger(.open(Self.authoritative, in: .focusedTab))
 
-        #expect(documentState.selectionStack.map(\.displayName) == ["NSView"])
+        #expect(documentState.editorArea.focusedPane.activeTab.history.entries.map(\.displayName) == ["NSView"])
     }
 
     /// **Contract.** The same for the active tab, whose title is the held
@@ -250,10 +250,10 @@ struct RuntimeObjectIdentityCallSiteTests {
     func activeTabCarriesTheLatestForm() {
         let documentState = DocumentState()
 
-        documentState.selectionRouter.trigger(.push(Self.payloadWithQualifiedDisplayName))
-        documentState.selectionRouter.trigger(.push(Self.authoritative))
+        documentState.selectionRouter.trigger(.open(Self.payloadWithQualifiedDisplayName, in: .focusedTab))
+        documentState.selectionRouter.trigger(.open(Self.authoritative, in: .focusedTab))
 
-        #expect(documentState.tabs[documentState.activeTabIndex].title == "NSView")
+        #expect(documentState.editorArea.focusedPane.activeTab.title == "NSView")
     }
 
     // MARK: - The panes' "same object, do not refetch" guards

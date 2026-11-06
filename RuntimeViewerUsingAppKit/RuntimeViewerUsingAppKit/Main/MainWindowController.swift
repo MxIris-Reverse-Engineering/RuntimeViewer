@@ -342,33 +342,41 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     // MARK: - Tab Actions
 
+    /// ⌘T: an empty tab in the focused editor pane.
     @objc func newTab(_ sender: Any?) {
         documentState.selectionRouter.trigger(.newTab)
     }
 
-    /// ⌘W: close the active tab, or fall back to closing the window when it is
-    /// the only tab (Safari behaviour). "Close Window" (⌘⇧W) always closes the
-    /// window.
+    /// ⌘W, in the order of Xcode's Close Tab, Editor Pane, Window Tab, or
+    /// Window: the focused pane's active tab while the pane has another, else
+    /// the focused pane while there is another, else the window. "Close
+    /// Window" (⌘⇧W) always closes the window.
     @objc func closeTab(_ sender: Any?) {
-        if documentState.tabs.count > 1 {
-            documentState.selectionRouter.trigger(.closeTab(index: documentState.activeTabIndex))
-        } else {
+        switch documentState.editorArea.closeTarget {
+        case .tab(let tabID):
+            documentState.selectionRouter.trigger(.closeTab(tabID))
+        case .pane(let paneID):
+            documentState.selectionRouter.trigger(.closeEditorPane(paneID))
+        case .window:
             contentWindow.performClose(sender)
         }
     }
 
     @objc func selectNextTab(_ sender: Any?) {
-        let tabCount = documentState.tabs.count
-        guard tabCount > 1 else { return }
-        let nextIndex = (documentState.activeTabIndex + 1) % tabCount
-        documentState.selectionRouter.trigger(.switchTab(index: nextIndex))
+        selectTab(offsetFromActiveTab: 1)
     }
 
     @objc func selectPreviousTab(_ sender: Any?) {
-        let tabCount = documentState.tabs.count
+        selectTab(offsetFromActiveTab: -1)
+    }
+
+    /// The tab `offset` places from the focused pane's active tab, wrapping around.
+    private func selectTab(offsetFromActiveTab offset: Int) {
+        let focusedPane = documentState.editorArea.focusedPane
+        let tabCount = focusedPane.tabs.count
         guard tabCount > 1 else { return }
-        let previousIndex = (documentState.activeTabIndex - 1 + tabCount) % tabCount
-        documentState.selectionRouter.trigger(.switchTab(index: previousIndex))
+        let targetIndex = (focusedPane.activeTabIndex + offset + tabCount) % tabCount
+        documentState.selectionRouter.trigger(.switchTab(focusedPane.tabs[targetIndex].id))
     }
 
     // MARK: - Font Size Actions
@@ -429,7 +437,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         case #selector(exportMultipleImages(_:)):
             return documentState.runtimeEngine.imageNodes.count >= 2
         case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
-            return documentState.tabs.count > 1
+            return documentState.editorArea.focusedPane.tabs.count > 1
         case #selector(findCallHierarchy(_:)):
             return documentState.crossReferenceRequest(.callHierarchy) != nil
         case #selector(findCallees(_:)):

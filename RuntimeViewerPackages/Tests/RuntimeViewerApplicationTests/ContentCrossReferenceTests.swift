@@ -133,16 +133,16 @@ struct ContentCrossReferenceTests {
         #expect(documentState.crossReferenceRequest(.callHierarchy) == nil, "nothing is shown")
         #expect(documentState.crossReferenceRequest(.typeReferences) == nil)
 
-        documentState.selectionRouter.trigger(.push(Self.foo))
+        documentState.selectionRouter.trigger(.open(Self.foo, in: .focusedTab))
         #expect(documentState.crossReferenceRequest(.typeReferences) == FindCrossReferenceRequest(mode: .typeReferences, root: .type(Self.foo)))
         #expect(documentState.crossReferenceRequest(.callHierarchy) == nil, "the insertion point is on no member")
 
-        documentState.updateCursorMember(member)
+        documentState.updateCursorMember(member, inEditorPane: documentState.editorArea.focusedPaneID)
         #expect(documentState.crossReferenceRequest(.callHierarchy) == FindCrossReferenceRequest(mode: .callHierarchy, root: .member(member, declaration: nil)))
         #expect(documentState.crossReferenceRequest(.callees) == FindCrossReferenceRequest(mode: .callees, root: .member(member, declaration: nil)))
 
         // Another object on screen: the member left behind does not count.
-        documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "Bar", kind: .objc(.type(.protocol)))))
+        documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "Bar", kind: .objc(.type(.protocol))), in: .focusedTab))
         #expect(documentState.crossReferenceRequest(.callHierarchy) == nil)
         #expect(documentState.crossReferenceRequest(.typeReferences) == nil, "a protocol is no type whose references are found")
     }

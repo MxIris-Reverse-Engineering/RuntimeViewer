@@ -101,15 +101,23 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// the ViewModel and the request with it.
     private var pendingHighlightRequest: ContentHighlightRequest?
 
-    /// - Parameter highlightRequest: where the Find navigator's hit sits, to reveal once the
-    ///   interface is first on screen; `nil` for every other way of showing an object.
-    public convenience init(runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, documentState: DocumentState, router: any Router<ContentRoute>) {
-        self.init(runtimeObject: runtimeObject, highlightRequest: highlightRequest, documentState: documentState, router: router, interfaceProvider: nil)
+    /// The editor pane this content is shown in. A link opened here opens from this pane, which
+    /// takes the focus first, and the insertion point is reported as this pane's.
+    private let editorPaneID: EditorPane.ID
+
+    /// - Parameters:
+    ///   - highlightRequest: where the Find navigator's hit sits, to reveal once the interface is
+    ///     first on screen; `nil` for every other way of showing an object.
+    ///   - editorPaneID: the editor pane showing the content; the focused pane when `nil`, which
+    ///     is right wherever the editor area has a single pane.
+    public convenience init(runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, editorPaneID: EditorPane.ID? = nil, documentState: DocumentState, router: any Router<ContentRoute>) {
+        self.init(runtimeObject: runtimeObject, highlightRequest: highlightRequest, editorPaneID: editorPaneID, documentState: documentState, router: router, interfaceProvider: nil)
     }
 
     init(
         runtimeObject: RuntimeObject,
         highlightRequest: ContentHighlightRequest? = nil,
+        editorPaneID: EditorPane.ID? = nil,
         documentState: DocumentState,
         router: any Router<ContentRoute>,
         interfaceProvider: InterfaceProvider?
@@ -117,6 +125,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         self.runtimeObject = runtimeObject
         self.pendingHighlightRequest = highlightRequest
         self.highlightsFirstRender = highlightRequest != nil
+        self.editorPaneID = editorPaneID ?? documentState.editorArea.focusedPaneID
         self.theme = ResolvedTheme.fallback
         let interfaceCache = documentState.interfaceCache
         let contentLoadingDelay = Self.contentLoadingDelay()
@@ -466,11 +475,16 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
     @MemberwiseInit(.public)
     public struct Input {
+        /// ⌘-click on a type link / "Jump to Definition": opens the type in
+        /// this pane's tab.
         public let runtimeObjectClicked: Signal<RuntimeObject>
-        /// ⌘⇧-click on a type link / "Open in New Tab" context menu item.
-        /// Resolved the same way as `runtimeObjectClicked` but routed to
-        /// `.openInNewTab` instead of an in-place `.push`.
+        /// ⌥⌘- or ⇧⌘-click on a type link / "Open in New Tab". Resolved the
+        /// same way as `runtimeObjectClicked`, opened in a new tab of this pane.
         public let runtimeObjectOpenedInNewTab: Signal<RuntimeObject>
+        /// ⇧⌥⌘-click on a type link / "Open in Next Editor Pane". Resolved the
+        /// same way, opened in the pane after this one.
+        @Init(default: Signal<RuntimeObject>.empty())
+        public let runtimeObjectOpenedInNextEditorPane: Signal<RuntimeObject>
         /// Find Call Hierarchy, Find Callees or Find Type References chosen in
         /// the right-click menu.
         @Init(default: Signal<FindCrossReferenceRequest>.empty())
@@ -504,14 +518,21 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     public func transform(_ input: Input) -> Output {
         let runtimeObjectNotFoundRelay = PublishRelay<Void>()
         
-        // Both link flows resolve through the shared `interfaceProvider`
+        // Every link flow resolves through the shared `interfaceProvider`
         // with the same merged options the destination ContentTextViewModel
         // will fetch with, so the resolution fetch warms the cache entry the
-        // post-push display fetch then hits — one engine round-trip per link
-        // click instead of two. Which object the engine resolves does not
-        // depend on the options; they only shape the generated text.
-        input.runtimeObjectClicked
-            .flatMapLatest { [weak self] runtimeObject -> Signal<RuntimeObjectInterface?> in
+        // display fetch then hits — one engine round-trip per link click
+        // instead of two. Which object the engine resolves does not depend on
+        // the options; they only shape the generated text. One pipeline for
+        // the three destinations: a newer click supersedes a resolution still
+        // under way, whichever way either was opened.
+        let linkOpenings: Signal<(runtimeObject: RuntimeObject, destination: SelectionRoute.Destination)> = Signal.merge(
+            input.runtimeObjectClicked.map { ($0, .focusedTab) },
+            input.runtimeObjectOpenedInNewTab.map { ($0, .newTab) },
+            input.runtimeObjectOpenedInNextEditorPane.map { ($0, .nextEditorPane) }
+        )
+        linkOpenings
+            .flatMapLatest { [weak self] runtimeObject, destination -> Signal<(RuntimeObjectInterface?, SelectionRoute.Destination)> in
                 guard let self else { return .empty() }
                 let interfaceProvider = self.interfaceProvider
                 let mergedOptions = self.currentMergedGenerationOptions
@@ -519,34 +540,20 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                     try await interfaceProvider(runtimeObject, mergedOptions)
                 }
                 .trackActivity(self._commonLoading)
-                .asSignal(onErrorJustReturn: nil)
+                .map { ($0, destination) }
+                .asSignal(onErrorJustReturn: (nil, destination))
             }
-            .emit(with: self) { target, interface in
-                if let interface {
-                    target.documentState.selectionRouter.trigger(.push(interface.object))
-                } else {
+            .emit(with: self) { target, resolution in
+                let (interface, destination) = resolution
+                guard let interface else {
                     runtimeObjectNotFoundRelay.accept(())
+                    return
                 }
-            }
-            .disposed(by: rx.disposeBag)
-
-        input.runtimeObjectOpenedInNewTab
-            .flatMapLatest { [weak self] runtimeObject -> Signal<RuntimeObjectInterface?> in
-                guard let self else { return .empty() }
-                let interfaceProvider = self.interfaceProvider
-                let mergedOptions = self.currentMergedGenerationOptions
-                return Observable.async {
-                    try await interfaceProvider(runtimeObject, mergedOptions)
-                }
-                .trackActivity(self._commonLoading)
-                .asSignal(onErrorJustReturn: nil)
-            }
-            .emit(with: self) { target, interface in
-                if let interface {
-                    target.documentState.selectionRouter.trigger(.openInNewTab(interface.object))
-                } else {
-                    runtimeObjectNotFoundRelay.accept(())
-                }
+                // Opened from this pane: it takes the focus first, so the
+                // focused tab, the new tab and the next pane are all reckoned
+                // from here, whichever pane had the focus before.
+                target.documentState.selectionRouter.trigger(.focusEditorPane(target.editorPaneID))
+                target.documentState.selectionRouter.trigger(.open(interface.object, in: destination))
             }
             .disposed(by: rx.disposeBag)
 
@@ -560,7 +567,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         // the object before must not stand for this one.
         input.cursorMemberChanged.emitOnNext { [weak self] member in
             guard let self else { return }
-            documentState.updateCursorMember(member?.object == runtimeObject ? member : nil)
+            documentState.updateCursorMember(member?.object == runtimeObject ? member : nil, inEditorPane: editorPaneID)
         }
         .disposed(by: rx.disposeBag)
 

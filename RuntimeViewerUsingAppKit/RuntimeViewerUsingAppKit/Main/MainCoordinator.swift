@@ -195,71 +195,44 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // An engine coming back asks for `.main` through
             // `DocumentState.startOverRequested` rather than issuing it.
             assertionFailure(".switchEngine fired with an active route subscriber; engine switches must go through MainRoute.main")
-        case .selectAtRoot(let object):
-            contentCoordinator.contextTrigger(.root(object))
-            inspectorCoordinator.contextTrigger(.root(.object(object)))
-            // Sidebar visual sync is handled inside
-            // `SidebarRuntimeObjectListViewModel` by observing
-            // `documentState.$selectedRuntimeObject` directly — no
-            // coordinator routing is needed for a pure UI
-            // scroll-and-highlight.
-        case .push(let object):
-            contentCoordinator.contextTrigger(.next(object))
-            inspectorCoordinator.contextTrigger(.next(.object(object)))
-        case .pushHighlighting(let object, let highlightRequest):
-            // The highlight travels with the content route, so it lives exactly as long as the
-            // content ViewModel built for this navigation.
-            contentCoordinator.contextTrigger(.nextHighlighting(object, highlightRequest))
-            inspectorCoordinator.contextTrigger(.next(.object(object)))
-        case .pop:
-            if documentState.selectionStack.isEmpty {
-                contentCoordinator.contextTrigger(.placeholder)
-                inspectorCoordinator.contextTrigger(.placeholder)
-            } else {
-                contentCoordinator.contextTrigger(.back)
-                inspectorCoordinator.contextTrigger(.back)
-            }
-        case .backward, .forward, .jump:
-            // History array unchanged — only the cursor moved. Re-enter
-            // the text/runtimeObject scene for the new
-            // `selectedRuntimeObject`. `.back` is the right vocabulary
-            // because both panes reuse their existing controller and
-            // just rebind to the cursor target (no push-transition
-            // flash). `.jump` crosses several entries at once but is
-            // otherwise identical — the cursor is all that moved.
-            contentCoordinator.contextTrigger(.back)
-            inspectorCoordinator.contextTrigger(.back)
-        case .clear:
-            contentCoordinator.contextTrigger(.placeholder)
-            inspectorCoordinator.contextTrigger(.placeholder)
         case .switchImage(let node):
-            contentCoordinator.contextTrigger(.placeholder)
-            inspectorCoordinator.contextTrigger(.placeholder)
+            // Only the sidebar moves: what the editor area shows stays, and so
+            // does the Inspector, which follows it.
             if let node {
                 sidebarCoordinator.contextTrigger(.clickedNode(node))
             } else {
                 sidebarCoordinator.contextTrigger(.back)
             }
-        case .newTab:
-            // New empty tab inherits the current image; the timeline survives
-            // (only its forward branch was dropped), but nothing is shown, so
-            // the content / inspector panes show the placeholder. The sidebar
-            // is untouched (tabs do not carry an image selection).
-            contentCoordinator.contextTrigger(.placeholder)
-            inspectorCoordinator.contextTrigger(.placeholder)
-        case .openInNewTab(let object):
-            // New tab already showing `object`, which was also recorded on the
-            // timeline; bind both panes to it.
+        case .open(let object, let destination, let highlightRequest):
+            // The highlight travels with the content route, so it lives exactly as long as the
+            // content ViewModel built for this navigation. A new tab starts its pane's scene over;
+            // the focused tab and the next pane move on from what they showed.
+            switch (destination, highlightRequest) {
+            case (.newTab, nil):
+                contentCoordinator.contextTrigger(.root(object))
+            case (.newTab, let highlightRequest?):
+                contentCoordinator.contextTrigger(.rootHighlighting(object, highlightRequest))
+            case (.focusedTab, nil), (.nextEditorPane, nil):
+                contentCoordinator.contextTrigger(.next(object))
+            case (.focusedTab, let highlightRequest?), (.nextEditorPane, let highlightRequest?):
+                contentCoordinator.contextTrigger(.nextHighlighting(object, highlightRequest))
+            }
+            inspectorCoordinator.contextTrigger(.next(.object(object)))
+            // Sidebar visual sync is handled inside
+            // `SidebarRuntimeObjectListViewModel` by observing
+            // `documentState.$selectedRuntimeObject` directly — no
+            // coordinator routing is needed for a pure UI
+            // scroll-and-highlight.
+        case .selectAtRoot(let object):
             contentCoordinator.contextTrigger(.root(object))
             inspectorCoordinator.contextTrigger(.root(.object(object)))
-        case .openInNewTabHighlighting(let object, let highlightRequest):
-            contentCoordinator.contextTrigger(.rootHighlighting(object, highlightRequest))
-            inspectorCoordinator.contextTrigger(.root(.object(object)))
-        case .switchTab, .closeTab:
-            // The active tab changed and its object was recorded on the
-            // timeline. Re-enter both panes for the new
-            // `selectedRuntimeObject`, or fall back to the placeholder for an
-            // empty tab.
+        case .backward, .forward, .jump, .newTab, .switchTab, .closeTab, .moveTab,
+             .newEditorPane, .closeEditorPane, .closeOtherEditorPanes, .focusEditorPane, .changeEditorOrientation:
+            // The focused tab shows something else, or nothing: re-enter both
+            // panes for `selectedRuntimeObject`. `.back` reuses each pane's
+            // controller and rebinds only when the object changed, so a route
+            // that left the object on screen alone — a reorder, a tab closed in
+            // the background — costs nothing.
             if documentState.selectedRuntimeObject != nil {
                 contentCoordinator.contextTrigger(.back)
                 inspectorCoordinator.contextTrigger(.back)
@@ -267,9 +240,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 contentCoordinator.contextTrigger(.placeholder)
                 inspectorCoordinator.contextTrigger(.placeholder)
             }
-        case .moveTab:
-            // Pure reorder of the tab bar — no pane content changes.
-            break
         }
     }
 }

@@ -55,8 +55,8 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
 
     /// Latest non-nil root object the document is inspecting, waiting to
     /// be resolved to a concrete cell once it appears in `nodes`. Driven
-    /// by `documentState.$selectionStack` (see `transform`) — never by an
-    /// external imperative call.
+    /// by `documentState.$selectedRuntimeObject`, the focused editor pane's
+    /// object (see `transform`) — never by an external imperative call.
     private let pendingSelectRelay = PublishRelay<RuntimeObject>()
 
     /// Requests from `revealSelectedRuntimeObject()`, each carrying the
@@ -564,7 +564,7 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionRouter.trigger(.push(viewModel.runtimeObject))
+                documentState.selectionRouter.trigger(.open(viewModel.runtimeObject, in: .focusedTab))
                 #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
                 #endif

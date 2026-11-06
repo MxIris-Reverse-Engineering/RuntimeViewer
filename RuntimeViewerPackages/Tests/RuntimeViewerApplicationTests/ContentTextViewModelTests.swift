@@ -38,7 +38,7 @@ struct ContentTextViewModelTests {
         defer { withExtendedLifetime(viewModel) {} }
         #expect(try await nextValue(from: output.selectedRuntimeObjectName) == "")
 
-        environment.documentState.selectionRouter.trigger(.push(nsObject))
+        environment.documentState.selectionRouter.trigger(.open(nsObject, in: .focusedTab))
 
         #expect(try await nextValue(from: output.selectedRuntimeObjectName) { !$0.isEmpty } == "NSObject")
     }
@@ -55,7 +55,7 @@ struct ContentTextViewModelTests {
 
         let selected = try await nextValue(from: environment.documentState.$selectedRuntimeObject, timeout: 60) { $0 != nil }
         #expect(selected?.name == "NSObject")
-        #expect(environment.documentState.tabs.count == 1)
+        #expect(environment.documentState.editorArea.focusedPane.tabs.count == 1)
     }
 
     @Test("opening a type link in a new tab adds an active tab showing it")
@@ -68,9 +68,9 @@ struct ContentTextViewModelTests {
 
         runtimeObjectOpenedInNewTabRelay.accept(nsObject)
 
-        let tabs = try await nextValue(from: environment.documentState.$tabs, timeout: 60) { $0.count == 2 }
-        #expect(environment.documentState.activeTabIndex == 1)
-        #expect(tabs[1].object?.name == "NSObject")
+        let editorArea = try await nextValue(from: environment.documentState.$editorArea, timeout: 60) { $0.focusedPane.tabs.count == 2 }
+        #expect(editorArea.focusedPane.activeTabIndex == 1)
+        #expect(editorArea.focusedPane.tabs[1].object?.name == "NSObject")
     }
 
     @Test("a type link the engine cannot resolve reports runtimeObjectNotFound instead of navigating")

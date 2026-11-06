@@ -98,7 +98,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         async let lookup = nextValue(from: harness.listOutput.selectCell, timeout: 60)
         try await settleMainQueue()
 
-        harness.environment.documentState.selectionRouter.trigger(.push(nsObject))
+        harness.environment.documentState.selectionRouter.trigger(.open(nsObject, in: .focusedTab))
 
         let resolved = try await lookup
         #expect(resolved.cell.runtimeObject == nsObject)
@@ -132,8 +132,8 @@ struct SidebarRuntimeObjectListViewModelTests {
 
         runtimeObjectOpenedInNewTabRelay.accept(nsObjectCell)
         try await settleMainQueue()
-        #expect(harness.environment.documentState.tabs.count == 2)
-        #expect(harness.environment.documentState.activeTab?.object == nsObjectCell.runtimeObject)
+        #expect(harness.environment.documentState.editorArea.focusedPane.tabs.count == 2)
+        #expect(harness.environment.documentState.editorArea.focusedPane.activeTab.object == nsObjectCell.runtimeObject)
 
         // Park the document on an empty tab so the Open Quickly click has
         // something observable to change.
@@ -169,7 +169,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         let harness = try await makeHarness()
         defer { withExtendedLifetime(harness.viewModel) {} }
         let nsObject = try await harness.nsObject()
-        harness.environment.documentState.selectionRouter.trigger(.push(nsObject))
+        harness.environment.documentState.selectionRouter.trigger(.open(nsObject, in: .focusedTab))
 
         for _ in 0 ..< 2 {
             async let revealed = nextValue(from: harness.listOutput.revealCell)
@@ -188,7 +188,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         let harness = try await makeHarness()
         defer { withExtendedLifetime(harness.viewModel) {} }
         let nsObject = try await harness.nsObject()
-        harness.environment.documentState.selectionRouter.trigger(.push(nsObject))
+        harness.environment.documentState.selectionRouter.trigger(.open(nsObject, in: .focusedTab))
         searchStringRelay.accept("NoRuntimeObjectIsNamedLikeThis")
         _ = try await nextValue(from: harness.baseOutput.runtimeObjects) { rows in
             !rows.contains { $0.runtimeObject == nsObject }
@@ -213,7 +213,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         let harness = try await makeHarness()
         defer { withExtendedLifetime(harness.viewModel) {} }
         let nsObject = try await harness.nsObject()
-        harness.environment.documentState.selectionRouter.trigger(.push(nsObject))
+        harness.environment.documentState.selectionRouter.trigger(.open(nsObject, in: .focusedTab))
         var protocolsOnly = RuntimeObjectScope()
         protocolsOnly.includedKinds = [.objc(.type(.protocol))]
         harness.viewModel.$scope.accept(protocolsOnly)
@@ -263,7 +263,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         defer { withExtendedLifetime(harness.viewModel) {} }
         let fullCount = try await harness.loadedRows().count
         let missingObject = Fixtures.runtimeObject(name: "NoSuchClass", kind: .objc(.type(.class)), imagePath: TestImages.libobjc)
-        harness.environment.documentState.selectionRouter.trigger(.push(missingObject))
+        harness.environment.documentState.selectionRouter.trigger(.open(missingObject, in: .focusedTab))
         searchStringRelay.accept("NSObject")
         _ = try await nextValue(from: harness.baseOutput.runtimeObjects) { rows in
             !rows.isEmpty && rows.count < fullCount
@@ -326,7 +326,7 @@ struct SidebarRuntimeObjectListViewModelTests {
         let engine = try await TestRuntimeEngine.shared()
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         if let runtimeObject {
-            environment.documentState.selectionRouter.trigger(.push(runtimeObject))
+            environment.documentState.selectionRouter.trigger(.open(runtimeObject, in: .focusedTab))
         }
         let tree = Fixtures.imageTree(rootName: "Others", imagePaths: [TestImages.libobjc])
         let leaf = try #require(tree.leaf(forImagePath: TestImages.libobjc))

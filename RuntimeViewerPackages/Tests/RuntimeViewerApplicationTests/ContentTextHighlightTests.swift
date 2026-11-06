@@ -120,8 +120,8 @@ struct ContentTextHighlightTests {
         let abandoned = Fixtures.runtimeObject(name: "Foo", kind: .objc(.type(.class)))
         let request = ContentHighlightRequest(lineNumber: 3, lineText: "- (id)initWithFormat:(id)format;", matchRangeInLine: nil, query: "initWithFormat:", isCaseSensitive: true)
         // A hit in Foo clicked, then Bar before Foo's interface ever rendered.
-        environment.documentState.selectionRouter.trigger(.pushHighlighting(abandoned, request))
-        environment.documentState.selectionRouter.trigger(.push(Fixtures.runtimeObject(name: "Bar", kind: .objc(.type(.class)))))
+        environment.documentState.selectionRouter.trigger(.open(abandoned, in: .focusedTab, highlighting: request))
+        environment.documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "Bar", kind: .objc(.type(.class))), in: .focusedTab))
 
         // Foo again later, from the sidebar: a plain visit.
         let (viewModel, output) = makeViewModel(for: abandoned, in: environment)
