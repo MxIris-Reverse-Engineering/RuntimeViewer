@@ -1,6 +1,7 @@
 #if os(macOS)
 
 import Foundation
+import MachO
 
 /// The reconstructed `SourceEditor` frameworks, which official builds carry inside the app.
 ///
@@ -74,6 +75,69 @@ public enum SourceEditorFrameworks {
         #else
         NSBundleExecutableArchitectureX86_64
         #endif
+    }
+
+    // MARK: - The Loaded Copy
+
+    /// Which copy of the frameworks a process runs on.
+    ///
+    /// A build normally runs on the reconstruction it carries. `LaunchWithXcodeSourceEditorScript.sh`
+    /// starts a Debug build on Xcode 26.6's originals instead, by pointing `DYLD_FRAMEWORK_PATH` —
+    /// which dyld searches before any rpath — at links to them; Settings › Developer shows which of
+    /// the two an instance runs on, so that two instances side by side are not mistaken for each other.
+    public enum LoadedCopy: Equatable, Sendable {
+        /// The reconstruction in the app's own `Contents/Frameworks`.
+        case embedded
+
+        /// An Xcode's own copy, from its `Contents/SharedFrameworks`. The version is the Xcode's
+        /// `CFBundleShortVersionString`, nil when its `Info.plist` cannot be read.
+        case xcode(bundleURL: URL, version: String?)
+
+        /// Anything else, named by the directory holding the frameworks.
+        case other(directory: URL)
+    }
+
+    /// The copy this process runs on, or nil when it has loaded none: a build without the
+    /// frameworks, or the Intel slice. dyld maps them before `main`, so this does not change while
+    /// the process runs.
+    public static let loadedCopy: LoadedCopy? = loadedBinaryPath().flatMap { binaryPath in
+        loadedCopy(forBinaryAt: binaryPath, embeddedDirectory: Bundle.main.privateFrameworksURL)
+    }
+
+    /// Where `SourceEditor`'s binary sits relative to the directory holding the frameworks.
+    private static let binaryPathSuffix = "/SourceEditor.framework/Versions/A/SourceEditor"
+
+    /// The path dyld loaded `SourceEditor` from: the path it opened, so through the script's links
+    /// rather than into the Xcode they point to.
+    static func loadedBinaryPath() -> String? {
+        for imageIndex in 0 ..< _dyld_image_count() {
+            guard let imageName = _dyld_get_image_name(imageIndex) else { continue }
+            let imagePath = String(cString: imageName)
+            if imagePath.hasSuffix(binaryPathSuffix) {
+                return imagePath
+            }
+        }
+        return nil
+    }
+
+    /// Classifies a loaded `SourceEditor` binary by where it really is, links resolved, against the
+    /// app's own frameworks directory. Nil for a path that is not that binary.
+    static func loadedCopy(forBinaryAt binaryPath: String, embeddedDirectory: URL?) -> LoadedCopy? {
+        let resolvedBinaryPath = URL(fileURLWithPath: binaryPath).resolvingSymlinksInPath().path
+        guard binaryPath.hasSuffix(binaryPathSuffix), resolvedBinaryPath.hasSuffix(binaryPathSuffix) else {
+            return nil
+        }
+        let directory = URL(fileURLWithPath: String(resolvedBinaryPath.dropLast(binaryPathSuffix.count)), isDirectory: true)
+        if let embeddedDirectory, directory.path == embeddedDirectory.resolvingSymlinksInPath().path {
+            return .embedded
+        }
+        let contentsDirectory = directory.deletingLastPathComponent()
+        let bundleURL = contentsDirectory.deletingLastPathComponent()
+        if directory.lastPathComponent == "SharedFrameworks", contentsDirectory.lastPathComponent == "Contents", bundleURL.pathExtension == "app" {
+            let infoDictionary = NSDictionary(contentsOf: contentsDirectory.appending(path: "Info.plist"))
+            return .xcode(bundleURL: bundleURL, version: infoDictionary?["CFBundleShortVersionString"] as? String)
+        }
+        return .other(directory: directory)
     }
 }
 

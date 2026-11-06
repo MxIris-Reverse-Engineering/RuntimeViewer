@@ -10,7 +10,9 @@ the reconstruction released in the private `Mx-Iris/SourceEditor` repository:
 - `RuntimeViewerSourceEditorBridgeTests`, which links the bridge framework;
 - `SourceEditorFrameworks` in `RuntimeViewerSettings`;
 - the build plumbing: `FetchSourceEditorScript.sh`, `UpdateSourceEditorScript.sh`, `PinnedRelease.txt`
-  beside this file, and the app's Embed SourceEditor Frameworks phase (`RuntimeViewerUsingAppKit/BuildPhases/`).
+  beside this file, and the app's Embed SourceEditor Frameworks phase (`RuntimeViewerUsingAppKit/BuildPhases/`);
+- `LaunchWithXcodeSourceEditorScript.sh`, which starts a Debug build on Xcode 26.6's originals (see
+  *Running a Debug build on Xcode's original*).
 
 These rules cover all of them, not only the files in this directory. They live here because the
 app's folders are Xcode synchronized folders, where a file becomes a resource of the target. The
@@ -113,6 +115,37 @@ it.
 2. **The framework binaries** — the reconstruction the app links, in `Frameworks/` once
    `./FetchSourceEditorScript.sh` has run, and the Xcode 26.6 originals it rebuilds,
    `<Xcode 26.6>.app/Contents/SharedFrameworks/<Name>.framework/Versions/A/<Name>`.
+
+## Running a Debug build on Xcode's original
+
+`./LaunchWithXcodeSourceEditorScript.sh` starts another instance of a build — `RunScript.sh`'s, or the
+one `--app` names — on Xcode 26.6's own frameworks, so that it can be compared side by side with an
+instance on the reconstruction. Background: `Documentations/Evolutions/draft-xcode-source-editor-comparison.md`.
+
+- **Why it works without changing the app.** Xcode 26.6's four frameworks depend only on each other and
+  carry the reconstruction's install names, `@rpath/<Name>.framework/Versions/A/<Name>`. The script points
+  `DYLD_FRAMEWORK_PATH`, which dyld searches before any rpath, at a directory of links to exactly those
+  four — the whole `SharedFrameworks` would substitute every other framework found there by name — and
+  the same app and bridge load Xcode's copies instead of the ones in `Contents/Frameworks`.
+- **What it checks.** Before launching, that every symbol the bridge imports from the four, weak
+  references aside, is exported by Xcode's copies, or dyld would stop the app at launch. After launching,
+  which copies of the four the new instance mapped; it quits the instance when any of them is not Xcode's.
+- **Where it works.** The app has the hardened runtime, and Apple documents that dyld then reads `DYLD_`
+  variables only for an app with the `com.apple.security.cs.allow-dyld-environment-variables`
+  entitlement, which no RuntimeViewer build carries. With System Integrity Protection off, as on both
+  development Macs, dyld takes the variable anyway: on 2026-11-06 a hardened stand-in signed without
+  `get-task-allow` or that entitlement loaded Xcode's four frameworks. So it works on a Mac with SIP off
+  whatever the build, and — by Apple's documentation, not measured — on no Mac with SIP on.
+- **Xcode 26.6 only.** On 2026-11-06 the bridge imported 225 symbols from the four, all exported by Xcode
+  26.6; Xcode 27.2 lacked three — `SourceEditorView`'s conformance to `TextFindableDisplayable`, that
+  protocol's `perform(_:)`, and the requirement `NodeTypeAdjuster.adjustNodeType(for:)`, whose signature 27
+  changed. A bridge change that imports something Xcode 26.6 does not export makes the script refuse, and
+  the comparison is lost until the reference is weak or goes.
+- **Which copy an instance runs on** is in Settings › Developer (`SourceEditorFrameworks.loadedCopy`). Both
+  instances read the same settings file, and the one started last takes over the command-line tool's host
+  and the MCP bridge.
+- A difference the comparison shows is a finding about the reconstruction: it goes to the SourceEditor
+  repository, like anything else the framework gets wrong (*What the framework itself lacks*, above).
 
 ## Never infer behavior from
 

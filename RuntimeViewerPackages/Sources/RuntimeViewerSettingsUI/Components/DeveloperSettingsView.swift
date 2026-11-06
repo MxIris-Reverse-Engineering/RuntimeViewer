@@ -34,6 +34,30 @@ struct DeveloperSettingsView: View {
             } footer: {
                 Text("Holds every interface fetch of the content pane back by this long, cached objects included. The loading plate appears once a load takes longer than 0.1 seconds. Applies from the next object you select.")
             }
+
+            Section {
+                LabeledContent("Frameworks") {
+                    Text(Self.loadedSourceEditorDescription)
+                        .textSelection(.enabled)
+                }
+            } header: {
+                Text("SourceEditor")
+            } footer: {
+                Text("The copy of the SourceEditor frameworks this instance runs on, shown whether or not developer options are on. To compare the reconstruction with Xcode's original, run LaunchWithXcodeSourceEditorScript.sh from the repository on a Mac with System Integrity Protection off: it starts another instance on Xcode 26.6's own frameworks.")
+            }
+        }
+    }
+
+    private static var loadedSourceEditorDescription: String {
+        switch SourceEditorFrameworks.loadedCopy {
+        case .embedded:
+            "The reconstruction RuntimeViewer carries"
+        case .xcode(let bundleURL, let version):
+            "Xcode \(version ?? "(unknown version)")'s own, from \(bundleURL.path)"
+        case .other(let directory):
+            directory.path
+        case nil:
+            "None: this build shows interfaces in the built-in text view"
         }
     }
 }

@@ -73,6 +73,11 @@ with the decompiled evidence: `Documentations/ResolvedIssues/2026-10-14-xcode-vi
 ./RunScript.sh --update-packages   # refresh SPM pins before building
 ./RunScript.sh --dry-run           # print commands without running
 
+# Start another instance of the Debug build on Xcode 26.6's own SourceEditor frameworks, to compare
+# them with the reconstruction (needs System Integrity Protection off; RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md).
+./LaunchWithXcodeSourceEditorScript.sh
+./LaunchWithXcodeSourceEditorScript.sh --app <RuntimeViewer.app> --xcode <Xcode 26.6.app>
+
 # Release build: archives the app (scheme "RuntimeViewer macOS"), notarizes, and optionally generates
 # the appcast and uploads a GitHub Release. Omit the distribution flags for a local signed zip only.
 # The version is MARKETING_VERSION in Configurations/Version.xcconfig, the one place a release bumps;
