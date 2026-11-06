@@ -52,7 +52,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     /// calling one twice installs the same overlay twice.
     ///
     /// The initial value must describe the view as `init` leaves it, not what a fresh
-    /// `SourceEditorView` looks like — the gutter below turns line numbers on.
+    /// `SourceEditorView` looks like — the gutter below turns line numbers on, and `init` hides
+    /// the caret.
     private var appliedDisplayOptions = DisplayOptions(
         showsLineNumbers: true,
         showsFoldingRibbon: false,
@@ -60,7 +61,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         showsMinimap: false,
         showsScopeGuides: false,
         showsInvisibles: false,
-        showsMarkSeparators: false
+        showsMarkSeparators: false,
+        showsInsertionPoint: false
     )
 
     private struct DisplayOptions: Equatable {
@@ -71,6 +73,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         var showsScopeGuides: Bool
         var showsInvisibles: Bool
         var showsMarkSeparators: Bool
+        var showsInsertionPoint: Bool
     }
 
     weak var navigationDelegate: SourceEditorBridgingNavigationDelegate?
@@ -100,6 +103,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // An interface cannot be typed into, so a blinking caret only suggests that it can. With
         // editing disabled this stops the blink and leaves every cursor layer transparent; a
         // selection is still drawn and copied (`SourceEditorSelectionDisplay.update()`).
+        // Settings › Editor › Insertion Point turns the caret back on (`applyDisplayOptions`).
         sourceEditorView.hideCursorWhenEditingDisabled = true
 
         // Set once and left alone: the framework never writes it on this scroll view — its only
@@ -325,7 +329,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         showsMinimap: Bool,
         showsScopeGuides: Bool,
         showsInvisibles: Bool,
-        showsMarkSeparators: Bool
+        showsMarkSeparators: Bool,
+        showsInsertionPoint: Bool
     ) {
         let options = DisplayOptions(
             showsLineNumbers: showsLineNumbers,
@@ -334,7 +339,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
             showsMinimap: showsMinimap,
             showsScopeGuides: showsScopeGuides,
             showsInvisibles: showsInvisibles,
-            showsMarkSeparators: showsMarkSeparators
+            showsMarkSeparators: showsMarkSeparators,
+            showsInsertionPoint: showsInsertionPoint
         )
         guard options != appliedDisplayOptions else { return }
         let previousOptions = appliedDisplayOptions
@@ -370,6 +376,13 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
             } else {
                 sourceEditorView.uninstallMinimap()
             }
+        }
+
+        // The switch's didSet asks for a layout, and the selection display decides after every
+        // layout whether to blink the caret or hide it, so a change shows at once without a
+        // selection change. Written only on a change, because every write asks for that layout.
+        if options.showsInsertionPoint != previousOptions.showsInsertionPoint {
+            sourceEditorView.hideCursorWhenEditingDisabled = !options.showsInsertionPoint
         }
 
         if options.showsInvisibles != previousOptions.showsInvisibles {

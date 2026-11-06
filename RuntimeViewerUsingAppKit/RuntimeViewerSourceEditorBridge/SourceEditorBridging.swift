@@ -72,7 +72,7 @@ public protocol SourceEditorBridging: NSObjectProtocol {
 
     /// Turns the editor's optional margins and overlays on or off.
     ///
-    /// Passed as one call rather than five properties because it is driven by an observation
+    /// Passed as one call rather than a property each because it is driven by an observation
     /// of Settings, which re-runs on any change and cannot say which value moved. The bridge
     /// diffs against what it last applied, so calling this with unchanged values does nothing.
     ///
@@ -89,6 +89,9 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///   - showsInvisibles: draws a glyph for every space, tab and line ending.
     ///   - showsMarkSeparators: draws a rule across the text at every `// MARK:` line. Does
     ///     nothing until the interface generator emits them.
+    ///   - showsInsertionPoint: draws the blinking caret at an empty selection. Off by default —
+    ///     the text cannot be edited. The insertion point exists either way; this only decides
+    ///     whether it is drawn. A selection is drawn regardless.
     func applyDisplayOptions(
         showsLineNumbers: Bool,
         showsFoldingRibbon: Bool,
@@ -96,7 +99,8 @@ public protocol SourceEditorBridging: NSObjectProtocol {
         showsMinimap: Bool,
         showsScopeGuides: Bool,
         showsInvisibles: Bool,
-        showsMarkSeparators: Bool
+        showsMarkSeparators: Bool,
+        showsInsertionPoint: Bool
     )
 
     /// Applies a theme built from `.xccolortheme`-equivalent plist contents. Xcode ships

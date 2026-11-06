@@ -52,10 +52,11 @@ struct EditorSettingsView: View {
                 Toggle("Invisibles", isOn: $settings.showsInvisibles)
                 Toggle("Mark Separators", isOn: $settings.showsMarkSeparators)
                 Toggle("Comment Tags", isOn: $settings.showsCommentTags)
+                Toggle("Insertion Point", isOn: $settings.showsInsertionPoint)
             } header: {
                 Text("Display")
             } footer: {
-                Text("Changes apply immediately. Sticky headers pin the enclosing declarations to the top of the view while scrolling; the folding ribbon draws the arrows that collapse a declaration. Mark separators draw a rule at every MARK comment, and have nothing to draw until generated interfaces contain them. Comment tags draw generated comments — addresses, offsets, layouts — as tags, and let field layouts and enum case layouts collapse; copying and finding still use the comments as printed.")
+                Text("Changes apply immediately. Sticky headers pin the enclosing declarations to the top of the view while scrolling; the folding ribbon draws the arrows that collapse a declaration. Mark separators draw a rule at every MARK comment, and have nothing to draw until generated interfaces contain them. Comment tags draw generated comments — addresses, offsets, layouts — as tags, and let field layouts and enum case layouts collapse; copying and finding still use the comments as printed. Insertion point draws the blinking caret where a click leaves it; interfaces cannot be edited, so it is off by default.")
             }
             .disabled(!isSourceEditorAvailable)
 
