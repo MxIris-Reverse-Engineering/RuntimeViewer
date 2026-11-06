@@ -1,6 +1,7 @@
 import AppKit
 import DependenciesMacros
 import RuntimeViewerArchitectures
+import RuntimeViewerSourceEditorBridge
 import SFSymbols
 import UIFoundation
 
@@ -17,6 +18,11 @@ final class MainMenuController {
             editMenuItem()
             viewMenuItem()
             navigateMenuItem()
+            // Every command in it is the SourceEditor content pane's, so a build that shows
+            // interfaces in the built-in text view has no use for it.
+            if SourceEditorBridgeFactory.isAvailable {
+                editorMenuItem()
+            }
             MainMenu.window()
             MainMenu.help()
         }
@@ -229,6 +235,66 @@ final class MainMenuController {
         )
         .image(SFSymbols(systemName: .sidebarLeft).nsImage)
     }
+}
+
+// MARK: - Editor
+
+extension MainMenuController {
+    /// After Navigate, where Xcode keeps its own Editor menu.
+    private func editorMenuItem() -> NSMenuItem {
+        NSMenuItem("Editor") {
+            codeFoldingMenuItem()
+        }
+    }
+
+    /// Xcode's Editor ▸ Code Folding, with its titles, symbols and shortcuts
+    /// (`IDEPegasusSourceEditor.xcplugindata`, `MenuDefinition.CodeFolding`; the same in 26.6 and
+    /// 27.2). The actions go up the responder chain to the SourceEditor content pane, which
+    /// enables them, so they are greyed out wherever else the focus is. Fold and Unfold Methods &
+    /// Functions are left out: they fold function bodies, and a generated interface has none.
+    private func codeFoldingMenuItem() -> NSMenuItem {
+        NSMenuItem("Code Folding") {
+            NSMenuItem(
+                "Fold",
+                action: #selector(SourceEditorBridgingCodeFoldingCommands.fold(_:)),
+                keyEquivalent: Self.leftArrowKeyEquivalent,
+                modifiers: [.option, .command],
+            )
+            .image(SFSymbols(systemName: .rectangleCompressVertical).nsImage)
+            NSMenuItem(
+                "Unfold",
+                action: #selector(SourceEditorBridgingCodeFoldingCommands.unfold(_:)),
+                keyEquivalent: Self.rightArrowKeyEquivalent,
+                modifiers: [.option, .command],
+            )
+            .image(SFSymbols(systemName: .rectangleExpandVertical).nsImage)
+            NSMenuItem(
+                "Unfold All",
+                action: #selector(SourceEditorBridgingCodeFoldingCommands.unfoldAll(_:)),
+            )
+            .image(SFSymbols(systemName: .rectangleExpandVertical).nsImage)
+            NSMenuItem.separator()
+            NSMenuItem(
+                "Fold Comment Blocks",
+                action: #selector(SourceEditorBridgingCodeFoldingCommands.foldAllComments(_:)),
+                keyEquivalent: Self.leftArrowKeyEquivalent,
+                modifiers: [.control, .shift, .command],
+            )
+            .image(SFSymbols(systemName: .rectangleCompressVertical).nsImage)
+            NSMenuItem(
+                "Unfold Comment Blocks",
+                action: #selector(SourceEditorBridgingCodeFoldingCommands.unfoldAllComments(_:)),
+                keyEquivalent: Self.rightArrowKeyEquivalent,
+                modifiers: [.control, .shift, .command],
+            )
+            .image(SFSymbols(systemName: .rectangleExpandVertical).nsImage)
+        }
+        .image(SFSymbols(systemName: .rectangleCompressVertical).nsImage)
+    }
+
+    private static let leftArrowKeyEquivalent = String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!))
+
+    private static let rightArrowKeyEquivalent = String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
 }
 
 // MARK: - Dependencies

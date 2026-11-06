@@ -61,6 +61,11 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// What the editor shows.
     private var displayedRenderedInterface: ContentTextViewModel.RenderedInterface?
 
+    /// Set while the view model's first render is still to come and a Find navigator hit is to
+    /// be revealed after it: that render must not put the reader back where they last left the
+    /// interface, or the restore, which waits for a layout, could scroll the hit away again.
+    private var awaitsHighlightedFirstRender = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -122,6 +127,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal()
         )
         let output = viewModel.transform(input)
+        awaitsHighlightedFirstRender = output.highlightsFirstRender
 
         Driver.combineLatest(output.renderedInterface, viewModel.$runtimeObject.asDriver())
             .driveOnNext { [weak self] renderedInterface, runtimeObject in
@@ -137,6 +143,17 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             guard let self else { return }
             currentTheme = theme
             applyCurrentTheme()
+        }
+        .disposed(by: rx.disposeBag)
+
+        // Before the reveal of the same hit, which the view model emits next.
+        output.findBarQuery.emitOnNextMainActor { [weak self] findBarQuery in
+            guard let self else { return }
+            bridge?.showFindInterface(
+                query: findBarQuery.text,
+                pattern: Self.findPattern(for: findBarQuery.matchMode),
+                isCaseSensitive: findBarQuery.isCaseSensitive
+            )
         }
         .disposed(by: rx.disposeBag)
 
@@ -172,8 +189,26 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             languageIdentifier: languageIdentifier,
             semanticRanges: semanticRanges,
             semanticNodeTypeNames: nodeTypeNames,
-            commentDecorations: commentDecorations
+            commentDecorations: commentDecorations,
+            restoresScrollPosition: !awaitsHighlightedFirstRender
         )
+        awaitsHighlightedFirstRender = false
+    }
+
+    /// The find bar's pattern closest to the way the Find navigator's search matched the query.
+    /// Close, not equal: the bar bounds words with ICU's `\b`, the engine with its own identifier
+    /// boundaries, which count `$` as part of a word (`RuntimeTextPattern.regularExpression(_:boundedAs:)`);
+    /// and the bar folds the case of every letter, the engine's literal search of ASCII letters
+    /// alone. A hit the navigator found can therefore be missing from the bar's matches, or the
+    /// other way round, in names with `$` or letters outside ASCII.
+    private static func findPattern(for matchMode: RuntimeInterfaceSearchMatchMode) -> SourceEditorBridgingFindPattern {
+        switch matchMode {
+        case .containing: .contains
+        case .matchingWord: .matchesWord
+        case .startingWith: .startsWith
+        case .endingWith: .endsWith
+        case .regularExpression: .regularExpression
+        }
     }
 
     /// Renders the app's configured theme into `.xccolortheme` form, using the framework's own

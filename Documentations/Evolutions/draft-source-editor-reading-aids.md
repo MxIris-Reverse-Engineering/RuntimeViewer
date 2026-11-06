@@ -1,6 +1,6 @@
 # Draft - 内容面板接入 SourceEditor 现成的四项阅读功能
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **实现分支**: `feature/source-editor-reading-aids`
 - **创建日期**: 2026-11-06
 - **最后更新**: 2026-11-06

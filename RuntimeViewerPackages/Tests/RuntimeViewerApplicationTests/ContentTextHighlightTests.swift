@@ -7,7 +7,8 @@ import Testing
 
 /// The content pane's half of the Find handshake: the request a navigation
 /// builds the ViewModel with is located in the rendered text once and handed
-/// out as a range; a request no ViewModel was built with goes nowhere.
+/// out as a range, a text hit's search going to the find bar first; a request
+/// no ViewModel was built with goes nowhere.
 @Suite("ContentTextViewModel highlight")
 @MainActor
 struct ContentTextHighlightTests {
@@ -48,6 +49,69 @@ struct ContentTextHighlightTests {
         let range = try await nextValue(from: output.highlightRange, timeout: 20)
         let expectedLocation = Self.interfaceText.utf16.distance(from: Self.interfaceText.startIndex, to: Self.interfaceText.range(of: "initWithFormat:")!.lowerBound)
         #expect(range == NSRange(location: expectedLocation, length: "initWithFormat:".utf16.count))
+    }
+
+    @Test("a text hit's search reaches the find bar just before the hit's range")
+    func textHitSearchPrecedesTheRange() async throws {
+        let environment = ViewModelTestEnvironment()
+        let object = Fixtures.runtimeObject(name: "Foo", kind: .objc(.type(.class)))
+        let request = ContentHighlightRequest(
+            lineNumber: 3,
+            lineText: "- (id)initWithFormat:(id)format;",
+            matchRangeInLine: nil,
+            query: "initWithFormat:",
+            matchMode: .matchingWord,
+            isCaseSensitive: true,
+            showsQueryInFindBar: true
+        )
+        let (viewModel, output) = makeViewModel(for: object, highlightRequest: request, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        var events: [String] = []
+        var findBarQueries: [ContentFindBarQuery] = []
+        let findBarSubscription = output.findBarQuery.emitOnNext { findBarQuery in
+            events.append("find bar")
+            findBarQueries.append(findBarQuery)
+        }
+        let rangeSubscription = output.highlightRange.emitOnNext { _ in events.append("range") }
+        defer {
+            findBarSubscription.dispose()
+            rangeSubscription.dispose()
+        }
+
+        _ = try await nextValue(from: output.highlightRange, timeout: 20)
+
+        #expect(events == ["find bar", "range"])
+        #expect(findBarQueries == [ContentFindBarQuery(text: "initWithFormat:", matchMode: .matchingWord, isCaseSensitive: true)])
+    }
+
+    @Test("a hit that names one declaration reveals it without a find bar")
+    func declarationHitOpensNoFindBar() async throws {
+        let environment = ViewModelTestEnvironment()
+        let object = Fixtures.runtimeObject(name: "Foo", kind: .objc(.type(.class)))
+        let request = ContentHighlightRequest(lineNumber: 3, lineText: "- (id)initWithFormat:(id)format;", matchRangeInLine: nil, query: "initWithFormat:", matchMode: .matchingWord, isCaseSensitive: true)
+        let (viewModel, output) = makeViewModel(for: object, highlightRequest: request, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        var findBarQueries: [ContentFindBarQuery] = []
+        let findBarSubscription = output.findBarQuery.emitOnNext { findBarQueries.append($0) }
+        defer { findBarSubscription.dispose() }
+
+        _ = try await nextValue(from: output.highlightRange, timeout: 20)
+
+        #expect(findBarQueries.isEmpty)
+    }
+
+    @Test("the output says whether the first render is followed by a hit")
+    func outputSaysWhetherAHitFollowsTheFirstRender() {
+        let environment = ViewModelTestEnvironment()
+        let object = Fixtures.runtimeObject(name: "Foo", kind: .objc(.type(.class)))
+        let request = ContentHighlightRequest(lineNumber: 3, lineText: "- (id)initWithFormat:(id)format;", matchRangeInLine: nil, query: "initWithFormat:", isCaseSensitive: true)
+
+        let (highlightingViewModel, highlightingOutput) = makeViewModel(for: object, highlightRequest: request, in: environment)
+        let (plainViewModel, plainOutput) = makeViewModel(for: object, in: environment)
+        defer { withExtendedLifetime((highlightingViewModel, plainViewModel)) {} }
+
+        #expect(highlightingOutput.highlightsFirstRender)
+        #expect(!plainOutput.highlightsFirstRender)
     }
 
     @Test("a highlight left behind by a navigation that moved on never reaches a later visit")

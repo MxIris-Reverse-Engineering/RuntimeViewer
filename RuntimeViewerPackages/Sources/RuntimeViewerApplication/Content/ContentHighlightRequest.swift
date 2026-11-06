@@ -34,14 +34,27 @@ public struct ContentHighlightRequest: Hashable, Sendable {
     /// How `query` matches, as the search that found the hit matched it.
     public let matchMode: RuntimeInterfaceSearchMatchMode
     public let isCaseSensitive: Bool
+    /// Whether the pane also shows `query` in its find bar, with every match
+    /// in the object marked: a text search's hit, whose other matches are
+    /// worth seeing next to it. A member search or a cross reference names a
+    /// single declaration and only reveals that one.
+    public let showsQueryInFindBar: Bool
 
-    public init(lineNumber: Int, lineText: String, matchRangeInLine: RuntimeTextRange?, query: String, matchMode: RuntimeInterfaceSearchMatchMode = .containing, isCaseSensitive: Bool) {
+    public init(lineNumber: Int, lineText: String, matchRangeInLine: RuntimeTextRange?, query: String, matchMode: RuntimeInterfaceSearchMatchMode = .containing, isCaseSensitive: Bool, showsQueryInFindBar: Bool = false) {
         self.lineNumber = lineNumber
         self.lineText = lineText
         self.matchRangeInLine = matchRangeInLine
         self.query = query
         self.matchMode = matchMode
         self.isCaseSensitive = isCaseSensitive
+        self.showsQueryInFindBar = showsQueryInFindBar
+    }
+
+    /// What the pane's find bar searches for, when `showsQueryInFindBar`
+    /// asks for one.
+    public var findBarQuery: ContentFindBarQuery? {
+        guard showsQueryInFindBar, !query.isEmpty else { return nil }
+        return ContentFindBarQuery(text: query, matchMode: matchMode, isCaseSensitive: isCaseSensitive)
     }
 
     /// The UTF-16 range in `displayedText` this request resolves to, by the

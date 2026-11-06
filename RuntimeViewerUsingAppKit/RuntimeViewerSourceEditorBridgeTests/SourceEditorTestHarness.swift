@@ -89,11 +89,13 @@ final class SourceEditorTestHarness {
     ///   - semanticRanges: UTF-16 ranges into `source`, as the content pane passes the runs the
     ///     interface generator recorded.
     ///   - semanticNodeTypeNames: parallel to `semanticRanges`: the node type each run is retyped to.
+    ///   - restoresScrollPosition: as the content pane passes it, `false` when a reveal follows.
     func setSource(
         _ source: String,
         semanticRanges: [NSRange] = [],
         semanticNodeTypeNames: [String] = [],
-        commentDecorations: SourceEditorBridgingCommentDecorations? = nil
+        commentDecorations: SourceEditorBridgingCommentDecorations? = nil,
+        restoresScrollPosition: Bool = true
     ) {
         lineCount = source.components(separatedBy: "\n").count
         bridge.setSource(
@@ -101,8 +103,19 @@ final class SourceEditorTestHarness {
             languageIdentifier: "swift",
             semanticRanges: semanticRanges.map { NSValue(range: $0) },
             semanticNodeTypeNames: semanticNodeTypeNames,
-            commentDecorations: commentDecorations
+            commentDecorations: commentDecorations,
+            restoresScrollPosition: restoresScrollPosition
         )
+    }
+
+    /// Reveals a UTF-16 range of the source, as the content pane does with a Find navigator hit.
+    func revealCharacterRange(_ characterRange: NSRange) {
+        bridge.revealCharacterRange(characterRange)
+    }
+
+    /// Opens the find bar on `query`, as the content pane does with a Find navigator text hit.
+    func showFindInterface(query: String, pattern: SourceEditorBridgingFindPattern, isCaseSensitive: Bool) {
+        bridge.showFindInterface(query: query, pattern: pattern, isCaseSensitive: isCaseSensitive)
     }
 
     /// The tokens the language service reports on `line`, each with the columns it covers. This
@@ -118,6 +131,17 @@ final class SourceEditorTestHarness {
     /// Gives the editor view keyboard focus, as a click into the content pane does.
     func focusEditor() {
         window.makeFirstResponder(editorView)
+    }
+
+    /// Takes keyboard focus away from the editor, leaving it with the window — where it is, for the
+    /// editor, while the reader is in another pane.
+    func focusWindow() {
+        window.makeFirstResponder(nil)
+    }
+
+    /// Where keyboard focus is.
+    var firstResponder: NSResponder? {
+        window.firstResponder
     }
 
     /// Selects `range`, or puts the insertion point there when it is empty, as a click or a drag
@@ -153,6 +177,19 @@ final class SourceEditorTestHarness {
         CATransaction.flush()
         CATransaction.commit()
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+    }
+
+    /// Lays out and spins the run loop until `condition` holds, for work the framework finishes
+    /// on a timer or at the end of an animation.
+    ///
+    /// - Returns: whether `condition` held before `timeout` ran out.
+    func layout(until condition: () -> Bool, timeout: TimeInterval = 3) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            layout()
+            if condition() { return true }
+        } while Date() < deadline
+        return false
     }
 
     /// A window that can claim to be the key window, for `init(actsAsKeyWindow: true)`.
