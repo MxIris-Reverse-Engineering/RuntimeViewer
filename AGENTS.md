@@ -35,14 +35,17 @@ warns once all instruction files together pass 150,000 characters.
 
 ## Build Commands
 
-**Workspace preference**: Before running any `xcodebuild` / `swift build` / `swift test`, check whether `../MxIris-Reverse-Engineering.xcworkspace` (sibling of this repo) exists. If it does, **use that workspace** via `xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme <scheme> ...` — it wires this repo together with local checkouts of MachOKit / MachOObjCSection / MachOSwiftSection / swift-capstone / swift-demangling / swift-semantic-string / swift-syntax that may contain in-progress fixes not yet published upstream. Building against the remote SPM resolution can hit stale errors (e.g. the MachOSwiftSection `@Mutex` macro expansion bug) that the workspace's local checkout already fixes. Only fall back to the standalone commands below when the workspace is absent.
-
-**Workspaces**: `RuntimeViewer-Debug.xcworkspace` (used by `RunScript.sh`)
-already wires the local sibling checkouts of MachOKit / MachOObjCSection /
-MachOSwiftSection / swift-demangling / swift-semantic-string plus the
-precompiled swift-syntax, so Debug builds pick up in-progress fixes in those
-repos without touching remote SPM pins. `RuntimeViewer-Distribution.xcworkspace`
-serves release archives.
+**Workspaces**: `RuntimeViewer-Debug.xcworkspace` (used by `RunScript.sh`) and
+`RuntimeViewer-Distribution.xcworkspace` (release archives) hold this repository's four packages, its
+projects and the precompiled swift-syntax, and take every other package at the version their committed
+`Package.resolved` pins. **`RuntimeViewer-Local.xcworkspace` adds the local checkouts of MachOKit,
+MachOKitExtensions, MachOObjCSection, MachOSwiftSection, swift-demangling and swift-semantic-string**
+(the links of those names in the `.worktrees/` beside this checkout), which replace those six packages
+everywhere in the graph: open it to build changes in them before they are pushed, and the Debug workspace
+to build against the pins; a project is open in one workspace at a time. Do not switch some manifests'
+local candidates on instead — the libraries' manifests still name the same packages by URL, and SwiftPM
+rejects a package reached through both. Setup, its uncommitted lock file and `RunScript.sh`:
+`Documentations/Guides/LocalDependencies.md`.
 
 **Embedded non-macOS products**: the app embeds three products that are not macOS — the Mac Catalyst
 service (`RuntimeViewerCatalystService`), the Mac Catalyst helper (`RuntimeViewerCatalystHelper`) and the

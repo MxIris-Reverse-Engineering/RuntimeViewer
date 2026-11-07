@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:../MachOKit">
+   </FileRef>
+   <FileRef
+      location = "group:../MachOKitExtensions">
+   </FileRef>
+   <FileRef
+      location = "group:../MachOObjCSection">
+   </FileRef>
+   <FileRef
+      location = "group:../MachOSwiftSection">
+   </FileRef>
+   <FileRef
+      location = "group:../swift-demangling">
+   </FileRef>
+   <FileRef
+      location = "group:../swift-semantic-string">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerCore">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerPackages">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerMCP">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerCommandLine">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerServer/RuntimeViewerServer.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerPrecompiledLibraries/swift-syntax">
+   </FileRef>
+</Workspace>

@@ -24,6 +24,10 @@ DerivedData
 .omc
 *.env
 RuntimeViewer.xcworkspace/xcshareddata/swiftpm
+# RuntimeViewer-Local.xcworkspace takes six libraries from the checkouts linked in .worktrees/, so its
+# lock file follows their state on each machine. It starts as a copy of the Debug workspace's
+# (Documentations/Guides/LocalDependencies.md).
+/RuntimeViewer-Local.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Release artifacts ArchiveScript.sh writes to the repository root
 RuntimeViewer-macOS.zip
