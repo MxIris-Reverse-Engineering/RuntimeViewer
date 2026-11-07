@@ -55,8 +55,12 @@ LAST_BUMP=$(git log --format=%H -G'RuntimeViewerServiceVersion: String = ' \
         fi
     done)
 
+# The daemon's entry point moved from RuntimeViewerPackages to RuntimeViewerCore;
+# both paths stay listed so a last bump from before the move shows it as a
+# rename with no changed lines rather than as a new file.
 git diff --stat "$LAST_BUMP"..HEAD -- \
     RuntimeViewerCore/Sources/RuntimeViewerCommunication \
+    RuntimeViewerCore/Sources/RuntimeViewerService \
     RuntimeViewerPackages/Sources/RuntimeViewerService \
     RuntimeViewerUsingAppKit/com.JH.RuntimeViewerService \
     RuntimeViewerServer

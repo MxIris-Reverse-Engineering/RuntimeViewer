@@ -17,6 +17,7 @@ public enum LocalPackages {
         "RuntimeViewerInjection",
         "RuntimeViewerCrossReferences",
         "RuntimeViewerUtilities",
+        "RuntimeViewerService",
         // RuntimeViewerPackages
         "RuntimeViewerArchitectures",
         "RuntimeViewerUI",
@@ -24,7 +25,6 @@ public enum LocalPackages {
         "RuntimeViewerSettingsUI",
         "RuntimeViewerSimulatorInstaller",
         "RuntimeViewerApplication",
-        "RuntimeViewerService",
         "RuntimeViewerServiceHelper",
         "RuntimeViewerHelperClient",
         "RuntimeViewerDeviceInjection",
@@ -55,7 +55,6 @@ public enum LocalPackages {
         "RuntimeViewerUI",
         "RuntimeViewerArchitectures",
         "RuntimeViewerApplication",
-        "RuntimeViewerService",
         "RuntimeViewerServiceHelper",
         "RuntimeViewerHelperClient",
         "RuntimeViewerDeviceInjection",

@@ -1,6 +1,6 @@
 # AGENTS.md — RuntimeViewerCore sources
 
-Where a file goes in this package's five Swift targets. Background:
+Where a file goes in this package's six Swift targets. Background:
 `Documentations/Evolutions/0073-core-source-layout.md`.
 
 ## One top-level type per file
@@ -59,8 +59,8 @@ per transport: `DirectTCP/`, `LocalSocket/`, `Network/` (with the Bonjour discov
 daemon's request protocols, its mach service name and the protocol version.
 
 `RuntimeViewerCrossReferences`: the commands and the engine interface at the root, the wire types in
-`Models/`, scanning and querying in `Analysis/`. `RuntimeViewerInjection` and `RuntimeViewerUtilities`
-are flat.
+`Models/`, scanning and querying in `Analysis/`. `RuntimeViewerInjection`, `RuntimeViewerService` (the
+helper daemon's entry point) and `RuntimeViewerUtilities` are flat.
 
 This file sits in `Sources/` rather than in a target's directory because SwiftPM reports any file it
 has no rule for inside a target as unhandled.

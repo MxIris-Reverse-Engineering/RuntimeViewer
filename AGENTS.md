@@ -306,13 +306,17 @@ The project uses three Swift Package Manager packages:
   …), the three commands and the engine-side on-demand scan. Same obligation as the injection module:
   `RuntimeCrossReferences.install()` once at every serving process's entry point; see
   *Injection commands* below. Background: `Documentations/Evolutions/0056-cross-references.md`
+- `RuntimeViewerService` — the privileged helper daemon's entry point: the helper server and the
+  services it mounts. Here rather than in `RuntimeViewerPackages` because this package is the only one
+  that declares swift-helper-service and swift-injection-peer: their version floors and local candidates
+  live in this manifest alone, and `RuntimeViewerPackages`' `RuntimeViewerHelperClient` imports their
+  client modules through `RuntimeViewerCommunication` without naming them
 - `RuntimeViewerCoreObjC` — Objective-C interop utilities (internal target)
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
 - `RuntimeViewerArchitectures` — MVVM + Coordinator pattern with RxSwift
 - `RuntimeViewerApplication` — ViewModels and business logic (Sidebar, Inspector, Content, Theme, FilterEngine)
 - `RuntimeViewerUI` — AppKit UI components (MinimapView, StatefulOutlineView, skeleton effects)
-- `RuntimeViewerService` — XPC service helpers and code injection
 - `RuntimeViewerServiceHelper` — Helper utilities
 - `RuntimeViewerHelperClient` — Helper client for XPC communication
 - `RuntimeViewerEngineManagement` — Engine discovery, lifecycle, sharing and mirroring (`RuntimeEngineManager`, `RuntimeProcessAttacher`); no AppKit / RxSwift so a headless process can link it alone

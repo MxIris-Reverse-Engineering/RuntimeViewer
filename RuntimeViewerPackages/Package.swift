@@ -114,10 +114,6 @@ let package = Package(
             targets: ["RuntimeViewerApplication"],
         ),
         .library(
-            name: "RuntimeViewerService",
-            targets: ["RuntimeViewerService"],
-        ),
-        .library(
             name: "RuntimeViewerServiceHelper",
             targets: ["RuntimeViewerServiceHelper"],
         ),
@@ -245,43 +241,16 @@ let package = Package(
             ),
         ),
 
-        .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-helper-service"),
-                isRelative: true,
-            ),
-            .package(
-                path: "../../swift-helper-service",
-                isRelative: true,
-            ),
-            remote: .package(
-                url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.4.0",
-            ),
-        ),
-
-        // HelperPeer and the injected-endpoint registry, which swift-helper-service
-        // 0.4.0 moved out to this package under the same module names. The local
-        // candidates mirror swift-helper-service's, for the reason given in
-        // RuntimeViewerCore's manifest.
-        .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-injection-peer"),
-                isRelative: true,
-            ),
-            .package(
-                path: "../../swift-injection-peer",
-                isRelative: true,
-            ),
-            remote: .package(
-                url: "https://github.com/Mx-Iris/swift-injection-peer",
-                from: "0.1.0",
-            ),
-        ),
+        // swift-helper-service and swift-injection-peer are declared in
+        // RuntimeViewerCore only, so their version floors and local candidates
+        // live in one manifest. RuntimeViewerHelperClient imports their client
+        // modules through RuntimeViewerCommunication, which links all of them,
+        // and the daemon's entry point, which needs the server side, is
+        // RuntimeViewerCore's RuntimeViewerService.
 
         // Reached directly rather than through swift-helper-service, whose
-        // products this package gates to AppKit platforms: on iOS there is no
-        // helper daemon to go through, so the app links the injector itself.
+        // products RuntimeViewerCore gates to AppKit platforms: on iOS there is
+        // no helper daemon to go through, so the app links the injector itself.
         // 0.6.0 is the first release with iOS support.
         .package(
             local: .package(
@@ -479,23 +448,13 @@ let package = Package(
         ),
 
         .target(
-            name: "RuntimeViewerService",
-            dependencies: [
-                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
-                .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "HelperService", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "HelperServer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "ApplicationsServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "FilesServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "InjectionServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "InjectedEndpointRegistryServiceImplementation", package: "swift-injection-peer", condition: .when(platforms: appkitPlatforms)),
-            ],
-        ),
-
-        .target(
             name: "RuntimeViewerServiceHelper",
         ),
 
+        // Imports HelperCommunication, HelperClient, the three service
+        // interfaces and the endpoint registry's interface without naming them:
+        // they come with RuntimeViewerCommunication, whose package declares
+        // swift-helper-service and swift-injection-peer.
         .target(
             name: "RuntimeViewerHelperClient",
             dependencies: [
@@ -503,12 +462,6 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
-                .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "ApplicationsServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "FilesServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "InjectionServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-injection-peer", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 

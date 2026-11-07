@@ -94,6 +94,15 @@ let package = Package(
             name: "RuntimeViewerCrossReferences",
             targets: ["RuntimeViewerCrossReferences"],
         ),
+        // The privileged helper daemon's entry point: the helper server and the
+        // services it mounts. In this package because it is the one that
+        // declares swift-helper-service and swift-injection-peer, so their
+        // version floors and local candidates are kept in one manifest; the
+        // daemon links nothing else of RuntimeViewerPackages.
+        .library(
+            name: "RuntimeViewerService",
+            targets: ["RuntimeViewerService"],
+        ),
     ],
     dependencies: [
         .package(
@@ -308,6 +317,23 @@ let package = Package(
                 .product(name: "CrossReferenceAnalysis", package: "MachOSwiftSection"),
                 .product(name: "Demangling", package: "swift-demangling"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
+            ],
+            swiftSettings: [
+                .internalImportsByDefault,
+                .immutableWeakCaptures,
+            ],
+        ),
+        .target(
+            name: "RuntimeViewerService",
+            dependencies: [
+                "RuntimeViewerCommunication",
+                .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperService", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperServer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "ApplicationsServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "FilesServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectionServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectedEndpointRegistryServiceImplementation", package: "swift-injection-peer", condition: .when(platforms: appkitPlatforms)),
             ],
             swiftSettings: [
                 .internalImportsByDefault,

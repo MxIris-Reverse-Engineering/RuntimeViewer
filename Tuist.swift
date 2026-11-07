@@ -13,6 +13,7 @@ let localPackageTargetNames = [
     "RuntimeViewerInjection",
     "RuntimeViewerCrossReferences",
     "RuntimeViewerUtilities",
+    "RuntimeViewerService",
     // RuntimeViewerPackages
     "RuntimeViewerArchitectures",
     "RuntimeViewerUI",
@@ -20,7 +21,6 @@ let localPackageTargetNames = [
     "RuntimeViewerSettingsUI",
     "RuntimeViewerSimulatorInstaller",
     "RuntimeViewerApplication",
-    "RuntimeViewerService",
     "RuntimeViewerServiceHelper",
     "RuntimeViewerHelperClient",
     "RuntimeViewerDeviceInjection",
