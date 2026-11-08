@@ -1,7 +1,29 @@
 # AGENTS.md — RuntimeViewerCore sources
 
-Where a file goes in this package's six Swift targets. Background:
-`Documentations/Evolutions/0073-core-source-layout.md`.
+Where a file goes in this package's six Swift targets, and what every engine command declares.
+Background: `Documentations/Evolutions/0073-core-source-layout.md`.
+
+## Every command says how it is routed
+
+An engine that borrows shared cache images hands a request about one of them to the image's owner
+(`RuntimeEngine.dispatch`), so every `RuntimeEngineCommand` — Core's own and a command extension's —
+declares which kind it is:
+
+- **About one image**: `subjectImagePath` returns that image's path, and the owner answers. Add
+  `isForegroundLoad` when the request loads an image for the user, `indexesSubjectImage` when it
+  indexes its image.
+- **About every image**: the command conforms to `RuntimeEngineSpanningCommand` (or
+  `RuntimeEngineSpanningProgressCommand`) — Core's in `SharedCache/RuntimeEngine+SpanningCommands.swift`,
+  an extension module's in a file of its own — saying how the participants' answers combine.
+- **Neither**: `subjectImagePath` stays `nil` and nothing conforms; the serving process alone answers.
+  Say why in the command's doc comment: a question about the process itself, or one an owner cannot
+  answer for this engine (its dependencies, its rpaths).
+
+`SharedCacheRoutingDeclarationTests` lists every built-in command with its kind and fails on one it
+does not list; a command extension's module tests its own (`CrossReferenceSharedCacheRoutingTests`).
+Never make a payload answer a new command before it can work: an injected payload of an earlier
+release drops the connection on a command it does not know (PR121.73). Background:
+`Documentations/Evolutions/draft-shared-cache-images-across-engines.md`.
 
 ## One top-level type per file
 

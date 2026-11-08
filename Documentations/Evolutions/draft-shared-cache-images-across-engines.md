@@ -3,11 +3,11 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-08
-- **最后更新**: 2026-11-08
+- **最后更新**: 2026-11-09
 - **所属愿景**: 无
 - **关联提案**: [0037](0037-local-runtime-xpc-service.md)（本地引擎搬进 XPC service）、[0051](0051-catalyst-xpc-service.md)（Catalyst 引擎改用内嵌 service）、[0054](0054-always-index-per-engine.md)（Always Index 按 Engine 区分）、[0055](0055-engine-scoped-background-work.md)（后台工作按 Engine 共享）、[0056](0056-cross-references.md)（交叉引用）、[0058](0058-runtime-engine-session.md)（RuntimeEngineSession）、[0061](0061-derived-data.md)（派生数据）、[0065](0065-engine-resident-memory.md)、[0066](0066-on-demand-corpora-and-cross-references.md)
 - **实现分支 / PR**: `feature/shared-cache-images-across-engines`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §7.4（借用与路由）、[使用指南：`runtime-viewer-cli`](../Guides/CommandLineInterface.md)「attach 进的进程与 shared cache 镜像」
 
 ## 摘要
 
@@ -338,7 +338,7 @@ extension RuntimeEngineManager {
 6. **应用层后台工作**（已完成）：注册表的借用者身份、会话的 `borrowedBackgroundWorks`、Always Index 解析、借用方协调器过滤系统镜像、特化前的按需索引、`DocumentState` 跟随归属 engine；测试。
 7. **界面**（已完成）：Report 按 engine 分组、工具栏进度合并、侧栏 Load 的语义、Load Frameworks… 改用 `loadImageInServingProcess(at:)`、Developer 页开关；测试。
 8. **App 里共用系统镜像树**（已完成）。
-9. **文档**：`Documentations/CommunicationAndEngineArchitecture.md` 加一节写借用与路由；`Documentations/Guides/CommandLineInterface.md` 与 agent 插件说明写附加进程的新行为，插件升版本；根 `AGENTS.md` 的开发准则加一条「新命令要声明它关于哪个镜像，或说明为什么不转」；术语表登记「系统镜像」「归属 engine」「借用」。
+9. **文档**（已完成）：`Documentations/CommunicationAndEngineArchitecture.md` 加一节写借用与路由；`Documentations/Guides/CommandLineInterface.md` 与 agent 插件说明写附加进程的新行为，插件升版本；根 `AGENTS.md` 的开发准则加一条「新命令要声明它关于哪个镜像，或说明为什么不转」；术语表登记「系统镜像」「归属 engine」「借用」。
 10. **手工验收与测量**：按 §11 的手工验收项，结果写进本提案的决策日志。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
@@ -375,3 +375,4 @@ extension RuntimeEngineManager {
 | 2026-11-09 | 第 6 步完成：特化前的按需索引是一种新批次，借用方也收到归属 engine 的特化结果 | 「本 engine 借用过」定为两类：本 engine 的请求让归属 engine 建了索引的镜像（声明了 `indexesSubjectImage` 的命令），和本 engine 的后台索引交出去的镜像；再与目标的 `imageList` 取交集。每次特化前逐个问服务进程是否已建索引，不另记缓存，服务进程重启也不会算错。新批次原因 `.specializationCandidates`（类别归手动），绕过路由在服务进程加载，Report 标题「Specialization Candidates」，特化请求等它结束。归属 engine 为借用镜像登记的特化，借用方转发到自己的数据变化里，借用这个镜像的窗口不用重载就能看到 |
 | 2026-11-09 | 第 7 步完成：Report 组按 engine 名与电脑图标显示，操作按行所属的工作派发 | 组行和组内各行的标识见 §8；行上的命令先找到这一行所属的工作（`ReportGroupWork.target(of:in:)`），再按它在那个 engine 自己 Report 里的身份执行。工具栏进度把各工作的活动报告合成一份（进行中的按开始时间新的在前，最近结束的取结束最晚的一个），Report 标签页的进行中标记同样算上借用的工作。侧栏的 Load 不用改：Core 的路由已经把借用镜像的加载交给归属 engine；Load Frameworks… 改用 `loadImageInServingProcess(at:)`。Developer 开关由 `SettingsLifecycleController` 在读完存储的设置之后开始跟随，写给 `RuntimeEngineManager.sharesSharedCacheImages` |
 | 2026-11-09 | 第 8 步完成：换树发生在 engine 设置镜像树时与借用关系到来时 | 服务进程推来的镜像树经 `setImageNodes` 进 engine，换树就放在这里；树常在借用关系之前到达，所以设置借用关系时再换一次，只有真换了才重新发布。是否同一份 cache 按两棵树的镜像路径集合比较；进程内 engine 的树原本也是每次现建的，同样换成共用的那棵 |
+| 2026-11-09 | 第 9 步完成：「新命令要声明路由」写进 `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 只留指引 | 根文件已有 62 KB，离 Codex 读取的 64 KiB 上限太近；这条规则也只管 `RuntimeViewerCore/Sources/` 下的命令，按「放进它所管的最窄目录」放在那里，根文件的命令准则末尾加一句指过去。架构文档新增 §7.4，原 §7.4 顺延为 §7.5；CLI 使用指南与 agent 插件说明写附加进程的新行为，两份插件清单升到 1.1.0；术语表登记「系统镜像」「归属 engine」「借用」 |

@@ -1,8 +1,8 @@
 # 使用指南：`runtime-viewer-cli`
 
 - **面向**: 在终端或脚本里查本机运行时的人；把 RuntimeViewer 接进 agent 工作流的人
-- **对应提案**: [0034-command-line-interface-foundation](../Evolutions/0034-command-line-interface-foundation.md)、[0036-command-line-interface-multi-source](../Evolutions/0036-command-line-interface-multi-source.md)
-- **最后更新**: 2026-09-06
+- **对应提案**: [0034-command-line-interface-foundation](../Evolutions/0034-command-line-interface-foundation.md)、[0036-command-line-interface-multi-source](../Evolutions/0036-command-line-interface-multi-source.md)、[draft-shared-cache-images-across-engines](../Evolutions/draft-shared-cache-images-across-engines.md)
+- **最后更新**: 2026-11-09
 
 不打开 RuntimeViewer 的窗口，用一条命令拿到某个类型的接口、某个镜像的类型清单，或把整个镜像
 的接口导出到目录。来源覆盖 GUI 支持的全部：本机进程内引擎（`--source local`，默认值）、Mac
@@ -80,6 +80,23 @@ swift build -c release --product runtime-viewer-cli
   `pid <n>` 作为名字继续。已经 attach 过的进程直接回答现有引擎，不会注入第二次。
 - **Simulator 进程**的引擎经 Bonjour 回连，identifier 是 `{deviceID}-{pid}`，所以 `attach` 对它输出
   `engine:<id>` 而不是 `pid:<n>`。
+
+### attach 进的进程与 shared cache 镜像
+
+本机 attach 的进程（`pid:<n>` / `process:<名>`）不再自己处理 dyld shared cache 里的镜像：AppKit、
+Foundation 这类只为 macOS 构建或双平台的镜像由 `local` 回答，UIKitCore 这类只为 Mac Catalyst 构建的
+由 `catalyst` 回答，每个镜像在整个 host 里只建一份索引、语料与交叉引用（提案
+[draft-shared-cache-images-across-engines](../Evolutions/draft-shared-cache-images-across-engines.md)）。
+对脚本可见的差别：
+
+- 对 shared cache 镜像的 `interface`、`members`、`hierarchy`、`load` 都在 `local` / `catalyst` 里做，
+  **不碰目标进程**。`load` 一个目标没加载的系统镜像之后，`images --loaded` 在这个来源上也把它算作
+  已加载，但目标进程的镜像列表不变。
+- `search` 与类型关系覆盖 `local` 与 `catalyst` 已索引的全部系统镜像，不只是目标加载了的那些。
+- 目标自己的镜像照旧在目标进程里读。对目标自己的泛型类型第一次 `specialize` 前，目标要为它已加载、
+  且之前借来用过的系统镜像建索引，第一次会慢一些。
+- 不在这条规则里的：Rosetta 下运行的进程、环境变量里设了 `DYLD_SHARED_REGION` 或
+  `DYLD_SHARED_CACHE_DIR` 的进程、Intel Mac、Simulator 进程与 Bonjour 对端——它们照旧自己处理所有镜像。
 
 ### 生成选项三档
 
