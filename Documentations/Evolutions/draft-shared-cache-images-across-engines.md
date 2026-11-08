@@ -70,7 +70,7 @@
 
 - 离线模式（`.file` 来源的 engine）不参与。
 - 设备、模拟器、别的 Mac 上的 engine，Rosetta 下运行的目标进程，Intel Mac：维持现状。
-- 不给 payload 加需要它先回答才能工作的命令，不改连接与握手格式，不升 helper 协议版本。唯一的线上改动是给类型关系查询加一个可选字段（见详细设计 §6），旧 payload 解码时忽略它。
+- 不给 payload 加需要它先回答才能工作的命令，不改连接与握手格式，不升 helper 协议版本。线上只有三处向后兼容的改动（见详细设计 §6）：类型关系查询的可选字段 `externalRoots`、`InterfaceCommand` 的可选字段 `resolvesReferencesAcrossImages`，以及老命令 `ImageNameOfObjectCommand` 的本地一侧开始答出镜像路径。旧 payload 忽略前两者、对后者照旧答 `nil`，结果都是退回现在的做法。
 - 目标进程打印自己的镜像时，MachOSwiftSection 内部按需读取系统镜像元数据的那部分开销不在本提案处理。
 - 不改派生数据的格式、位置与清理规则，不改语料与交叉引用的常驻内存上限。
 - 不按目标进程过滤 Find、调用层级与类型引用的结果：覆盖归属 engine 已索引的全部系统镜像。
@@ -187,12 +187,12 @@ public protocol RuntimeEngineSpanningCommand: RuntimeEngineCommand {
 |------|------|
 | `relationships(for:)` | 子类与遵循者取并集，按 `RuntimeObject` 去重 |
 | `indexedImagePathList()` | 取并集后重新排序 |
-| `interfaceCorpusCoverage()` | 两个按路径的字典合并；常驻字节数与上限各 engine 分别报，不相加 |
 | `restoreInterfaceCorpora` | 按归属把路径分组分别发出，结果字典合并 |
-| `searchInterfaces` / `searchMembers` | 两边并行扫描；进度按镜像各自转发；合并时按镜像路径排序，套用全局 `resultLimit` 重算截断，摘要字段相加或取或；重复的 ObjC 协议副本按它显示的文本再折叠一次；取消时同时撤回各子请求 |
-| `callers` / `typeReferences`（交叉引用模块） | 两边结果拼接，进度的已扫与总数相加，`resultLimit` 作用于拼接后的结果 |
+| `searchInterfaces` / `searchMembers` | 两边并行扫描；查询指定了镜像时每方只扫自己的那部分；进度按镜像各自转发，送出的结果总数受全局 `resultLimit` 约束；摘要的计数相加、路径合并排序、截断取或 |
+| `callers` / `typeReferences`（交叉引用模块） | 两边结果拼接并去重，进度的已扫与总数相加，`resultLimit` 作用于拼接后的结果；`callers` 的主体是借来的系统镜像里的成员时，先向归属 engine 取得成员的函数地址，再按地址问本 engine 的服务进程 |
 | `typeRelationships` | 见 §6 |
-| `evictInterfaceCorpus(for: nil)` | 本 engine 与各归属 engine 都执行 |
+
+不合并、各 engine 只答自己的：`interfaceCorpusCoverage()`、`evictInterfaceCorpus(for: nil)`、`evictResidentInterfaceCorpora()` 与两项常驻上限。Report 按 engine 分组（§8），每组只显示、只推出那个 engine 的语料与交叉引用表。
 
 「各取自己负责的那部分」的含义：借用方只留非系统镜像的结果；每个归属 engine 只留归它管的系统镜像。这同时去掉了特化时在目标进程里按需建出的系统镜像带来的重复（§8）。
 
@@ -205,11 +205,16 @@ public protocol RuntimeEngineSpanningCommand: RuntimeEngineCommand {
 
 ### 6. 跨镜像兜底的接力
 
-- **Swift 跳转**（`interface(for:)` 按 mangled name 的兜底）：本 engine 找不到时依次问各归属 engine。
-- **ObjC 类兜底**：先在各归属 engine 上找（它的服务进程按类名定位所在镜像，必要时把镜像加载进自己的 service 再建 section）；都找不到时退回现在的做法，由本 engine 的服务进程按需建 section。不新增问目标进程的命令：旧版经 Mach service 注入的 payload 收到不认识的命令会断开（PR121.73）。归属 engine 怎样在镜像未加载时按类名定位镜像（例如 shared cache 预先建好的 ObjC 类表），实现时查证；查不到可用的办法时，只对已加载的镜像生效，并把结论记进决策日志。
-- **父类链与协议树**（`superclassChain`、`refinedProtocolTree`）：本 engine 走到 unresolved 节点、且它是系统类型时，把归属 engine 从这个类型往上的部分接上去。
-- **`counterpart` 的 Swift 协议分支**：同 Swift 跳转。
-- **`typeRelationships`**：候选取两边的并集，按「精确匹配在前」重排后套用 `candidateLimit`。祖先树按父类链的规则接力。后代树与遵循者树：系统类型的部分由归属 engine 给出；附加进程里继承或遵循它的类型，靠查询新增的可选字段 `externalRootNames` 交给目标进程，按名字找出它自己镜像里的后代再接上。旧 payload 忽略这个字段，此时少了目标进程自己的那部分，与「目标没有索引系统镜像」时的结果相同。
+- **`interface(for:)`**（对象属于本 engine 自己的镜像，或只是按名字造出的引用）依次问四处，先答者为准：
+  1. 本 engine 的服务进程，只在对象自己的镜像里找。为此 `InterfaceCommand` 加了一个可选字段 `resolvesReferencesAcrossImages`，旧 payload 解码时忽略，照旧做跨镜像查找；
+  2. ObjC 引用（只有名字的 ObjC 类或协议，或 Swift 里导入的 `__C` 类型）：先问服务进程的运行时它定义在哪个镜像，不建索引。这用的是老命令 `ImageNameOfObjectCommand`（`imageName(ofObjectName:)`），它的本地一侧原先恒答 `nil`、全仓库没有调用方，现在答出镜像路径；旧 payload 照旧答 `nil`。是借来的系统镜像就交给归属 engine，由它在需要时加载并建索引后打印；是自己的镜像就直接走第 4 步；
+  3. 各归属 engine，它们的查找覆盖整个 shared cache；
+  4. 本 engine 的服务进程，这次带跨镜像查找，处理指向自己其他镜像的引用。
+  按类名在 shared cache 里直接定位镜像的路子查过：MachOKit 只解析了 ObjC 优化数据里的 header 表，没有类哈希表的查找，所以改用目标进程的运行时。
+- **父类链与协议树**（`superclassChain`、`refinedProtocolTree`）：本 engine 走到 unresolved 节点时，按名字请归属 engine 找到这个类型（一次查询带上所有名字，用正则一次扫完），父类链把它和它上面的链接上，协议树把每个 unresolved 节点换成归属 engine 的祖先树。
+- **`counterpart`** 不需要接力：本 engine 自己镜像里的类或协议，另一面也在同一个镜像里。
+- **`typeRelationships`**：先问各归属 engine，查询去掉镜像范围（自己镜像里的类型可能继承范围之外的系统类型，这正是要合并的情形）；再把归属方树里的所有类型作为查询新增的可选字段 `externalRoots` 交给本 engine 的服务进程，它按名字找出自己镜像里的后代或遵循者，接到归属方树的对应节点下；祖先树里的 unresolved 节点照父类链的办法换成归属方的树。最后按查询的镜像范围裁剪，按「名字与查询相同的在前、其余按名字排序」重排，套用 `candidateLimit`。旧 payload 忽略 `externalRoots`，此时少了它自己镜像里的那部分。
+- 这些接力做在 `RuntimeEngine` 的公开方法里，不在 `dispatch` 里；本机把 engine 共享给别的 Mac 时，对方经 proxy 发来的这几类请求只由本 engine 的服务进程回答，跨镜像的合并（§4）照常生效。
 
 ### 7. 资格判定与接线（`RuntimeViewerEngineManagement`）
 
@@ -327,7 +332,7 @@ extension RuntimeEngineManager {
 
 1. **归属划分**（已完成）：`RuntimeSharedCachePartition` 与 `RuntimeSharedCacheImagePlatform`，附带测试。
 2. **借用关系与单镜像路由**（已完成）：`RuntimeSharedCacheOwners`、`setSharedCacheOwners(_:)`、命令的三个声明与 `dispatch` 的转发、`dispatchBorrowedRequest`；加载语义（§5）；声明覆盖测试与路由测试。此时没有任何 engine 设置借用关系，行为不变。
-3. **跨镜像合并与接力**：`RuntimeEngineSpanningCommand` 与各命令的合并规则，交叉引用模块的两条命令；§6 的接力与 `externalRootNames`；测试。
+3. **跨镜像合并与接力**（已完成）：`RuntimeEngineSpanningCommand` 与各命令的合并规则，交叉引用模块的两条命令；§6 的接力与 `externalRootNames`；测试。
 4. **索引管理器交出系统镜像**：多根批次、`.borrowed` reason；测试。
 5. **资格判定与接线**：`RuntimeEngineManager` 的划分、资格判定、借用关系的设置与重算、`sharesSharedCacheImages`；测试。从这一步起附加进程开始借用。
 6. **应用层后台工作**：注册表的借用者身份、会话的 `borrowedBackgroundWorks`、Always Index 解析、借用方协调器过滤系统镜像、特化前的按需索引、`DocumentState` 跟随归属 engine；测试。
@@ -362,3 +367,4 @@ extension RuntimeEngineManager {
 | 2026-11-08 | 状态 → Accepted | 用户批准，开始实现；功能分支 `feature/shared-cache-images-across-engines` |
 | 2026-11-08 | 状态 → In Progress；第 1 步完成 | `RuntimeSharedCachePartition` 做成 `final class`（偏离方案里的 struct）：§9 要所有 engine 共用同一棵系统镜像树，共用的是对象本身。树按 cache 列出镜像的顺序建，与现在各 engine 推来的树一致。测试在本机 cache 上核对了两类例外镜像 |
 | 2026-11-08 | 第 2 步完成：依赖遍历用的三条命令不按镜像转发 | `CanOpenImage`、`Rpaths`、`Dependencies` 回答的是「服务进程里已加载的这个镜像」：附加进程的依赖图要在目标进程里走，系统镜像也一样，归属 engine 那边未必加载了它们，读不到依赖。原方案把它们列进了转发名单，改为留在本 engine；遍历结束后再把系统镜像交给归属 engine（§8）。新目录 `SharedCache/` 登记进 `RuntimeViewerCore/Sources/AGENTS.md` |
+| 2026-11-08 | 第 3 步完成：语料覆盖与推出不合并；ObjC 引用经目标进程的运行时定位；`InterfaceCommand` 加可选字段；`counterpart` 不接力 | 语料覆盖、推出与常驻上限各 engine 只答自己的：Report 按 engine 分组，合并后推出一组会连带清掉归属 engine 的数据。按类名定位镜像原打算用 shared cache 预建的 ObjC 类表，MachOKit 没有它的查找，改用目标进程的运行时，借的是全仓库没有调用方、本地一侧恒答 `nil` 的老命令 `ImageNameOfObjectCommand`，旧 payload 照旧答 `nil`。Swift 扩展这类本镜像里的对象也可能带着 `__C` 类型的 mangled name，若先当引用处理会答成别处的类，所以先让服务进程只在对象自己的镜像里找，为此给 `InterfaceCommand` 加了可选字段。本镜像里的对象另一面也在同一镜像，`counterpart` 不需要接力。接力做在公开方法里，经 proxy 共享给别的 Mac 的请求不经过它 |

@@ -22,8 +22,10 @@ struct SharedCacheRoutingDeclarationTests {
     enum Routing: Sendable {
         /// The owner of the image it is about, when it is a borrowed image.
         case subjectImageOwner
-        /// The engine it was sent to: a question about its serving process,
-        /// or about every image it has indexed.
+        /// The engine and its owners together, each for its own images: a
+        /// question about every image the engine has indexed.
+        case everyParticipant
+        /// The engine it was sent to: a question about its serving process.
         case servingEngine
     }
 
@@ -31,11 +33,13 @@ struct SharedCacheRoutingDeclarationTests {
         let commandName: String
         let routing: Routing
         let subjectImagePath: String?
+        let spansImages: Bool
 
         init<Command: RuntimeEngineCommand>(_ command: Command, _ routing: Routing) {
             self.commandName = Command.commandName
             self.routing = routing
             self.subjectImagePath = command.subjectImagePath
+            self.spansImages = command is any RuntimeEngineSpanningCommand || command is any RuntimeEngineSpanningProgressCommand
         }
 
         var testDescription: String {
@@ -65,7 +69,7 @@ struct SharedCacheRoutingDeclarationTests {
         Declaration(RuntimeEngine.HierarchyCommand(object: object), .subjectImageOwner),
         Declaration(RuntimeEngine.SuperclassChainCommand(object: object), .subjectImageOwner),
         Declaration(RuntimeEngine.RefinedProtocolTreeCommand(object: object), .subjectImageOwner),
-        Declaration(RuntimeEngine.RelationshipsCommand(object: object), .servingEngine),
+        Declaration(RuntimeEngine.RelationshipsCommand(object: object), .everyParticipant),
         Declaration(RuntimeEngine.CounterpartCommand(object: object), .subjectImageOwner),
         Declaration(RuntimeEngine.MemberAddressesCommand(object: object, memberName: nil), .subjectImageOwner),
         Declaration(RuntimeEngine.PrivateDeclarationSourceFilesCommand(discriminators: [], imagePath: imagePath), .subjectImageOwner),
@@ -75,11 +79,11 @@ struct SharedCacheRoutingDeclarationTests {
         Declaration(RuntimeEngine.SpecializeCommand(object: object, selection: .init()), .subjectImageOwner),
         Declaration(RuntimeEngine.BuildInterfaceCorpusCommand(imagePath: imagePath, transformer: .init(), isPrioritized: false), .subjectImageOwner),
         Declaration(RuntimeEngine.PrioritizeInterfaceCorpusCommand(imagePath: imagePath), .subjectImageOwner),
-        Declaration(RuntimeEngine.RestoreInterfaceCorporaCommand(imagePaths: [imagePath], transformer: .init()), .servingEngine),
-        Declaration(RuntimeEngine.SearchInterfacesCommand(query: .init(text: "NSObject")), .servingEngine),
-        Declaration(RuntimeEngine.SearchMembersCommand(query: .init(text: "init")), .servingEngine),
-        Declaration(RuntimeEngine.TypeRelationshipsCommand(query: .init(text: "NSObject", relationship: .descendants)), .servingEngine),
-        Declaration(RuntimeEngine.IndexedImagePathsCommand(), .servingEngine),
+        Declaration(RuntimeEngine.RestoreInterfaceCorporaCommand(imagePaths: [imagePath], transformer: .init()), .everyParticipant),
+        Declaration(RuntimeEngine.SearchInterfacesCommand(query: .init(text: "NSObject")), .everyParticipant),
+        Declaration(RuntimeEngine.SearchMembersCommand(query: .init(text: "init")), .everyParticipant),
+        Declaration(RuntimeEngine.TypeRelationshipsCommand(query: .init(text: "NSObject", relationship: .descendants)), .everyParticipant),
+        Declaration(RuntimeEngine.IndexedImagePathsCommand(), .everyParticipant),
         // Each engine's corpus coverage and budget are its own.
         Declaration(RuntimeEngine.InterfaceCorpusCoverageCommand(), .servingEngine),
         Declaration(RuntimeEngine.EvictInterfaceCorpusCommand(imagePath: imagePath, keepsStoredCorpora: nil), .subjectImageOwner),
@@ -99,13 +103,17 @@ struct SharedCacheRoutingDeclarationTests {
         #expect(Set(Self.declarations.map(\.commandName)) == installedCommandNames)
     }
 
-    @Test("A command about one image names that image, and every other command names none", arguments: declarations)
-    func subjectImageMatchesTheRouting(declaration: Declaration) {
+    @Test("A command about one image names that image, a command about every image spans the participants, and the rest do neither", arguments: declarations)
+    func declarationMatchesTheRouting(declaration: Declaration) {
         switch declaration.routing {
         case .subjectImageOwner:
             #expect(declaration.subjectImagePath == Self.imagePath)
+        case .everyParticipant:
+            #expect(declaration.subjectImagePath == nil)
+            #expect(declaration.spansImages)
         case .servingEngine:
             #expect(declaration.subjectImagePath == nil)
+            #expect(!declaration.spansImages)
         }
     }
 }

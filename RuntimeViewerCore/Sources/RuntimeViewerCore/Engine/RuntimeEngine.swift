@@ -815,7 +815,13 @@ public actor RuntimeEngine {
         return objcObjects + swiftObjects
     }
 
-    func _interface(for name: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+    /// `resolvesReferencesAcrossImages` off answers from the object's own
+    /// image only; see `InterfaceCommand.resolvesReferencesAcrossImages`.
+    func _interface(
+        for name: RuntimeObject,
+        options: RuntimeObjectInterface.GenerationOptions,
+        resolvesReferencesAcrossImages: Bool = true
+    ) async throws -> RuntimeObjectInterface? {
         let rawInterface: RuntimeObjectInterface?
 
         switch name.kind {
@@ -826,6 +832,7 @@ public actor RuntimeEngine {
                     return interface
                 }
             }
+            guard resolvesReferencesAcrossImages else { return nil }
             // The clicked type reference is not defined in the document's own
             // image (a stdlib / cross-framework / ObjC-imported reference). Its
             // mangled name still identifies the target uniquely, so resolve it
@@ -837,6 +844,8 @@ public actor RuntimeEngine {
             let objcTransformer = options.transformer.objc
             if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure) {
                 return interface
+            } else if !resolvesReferencesAcrossImages {
+                rawInterface = nil
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
@@ -916,7 +925,11 @@ public actor RuntimeEngine {
     /// tree is dropped. `demangleAsNode` would intern every node into the
     /// library's global cache, which never evicts, so each click on a type
     /// would leave a whole tree resident for the rest of the process.
-    private static func objcReference(forSwiftMangledName mangledName: String) -> (name: String, kind: RuntimeObjectKind)? {
+    ///
+    /// Internal, not private: an engine that borrows shared cache images asks
+    /// where such a reference is defined before it asks anyone for its
+    /// interface (RuntimeEngine+SharedCacheRelays.swift).
+    static func objcReference(forSwiftMangledName mangledName: String) -> (name: String, kind: RuntimeObjectKind)? {
         guard let node = try? demangleAsNodeTransient(mangledName, isType: true),
               let nominal = firstObjCNominalNode(in: node),
               let identifier = nominal.children.first(where: { $0.kind == .identifier })?.text
@@ -1006,10 +1019,14 @@ extension RuntimeEngine {
     /// feature. See ``addCommandExtension(named:install:)``.
     ///
     /// A request about one shared cache image this engine borrows goes to the
-    /// image's owner instead; see `RuntimeEngine+SharedCache.swift`.
+    /// image's owner instead, and a request about every image is answered by
+    /// this engine and its owners together; see `RuntimeEngine+SharedCache.swift`.
     public func dispatch<Command: RuntimeEngineCommand>(_ command: Command) async throws -> Command.Response {
         if let owner = sharedCacheOwner(forImageAt: command.subjectImagePath) {
             return try await owner.dispatchBorrowedRequest(command)
+        }
+        if let response = try await spanningResponse(to: command) {
+            return response
         }
         return try await dispatchToServingProcess(command)
     }
@@ -1051,6 +1068,9 @@ extension RuntimeEngine {
     ) async throws -> Command.Response {
         if let owner = sharedCacheOwner(forImageAt: command.subjectImagePath) {
             return try await owner.dispatchBorrowedRequest(command, onProgress: onProgress)
+        }
+        if let response = try await spanningResponse(to: command, onProgress: onProgress) {
+            return response
         }
         return try await dispatchToServingProcess(command, onProgress: onProgress)
     }
@@ -1228,12 +1248,39 @@ extension RuntimeEngine {
         }
     }
 
+    /// The path of the image that defines an Objective-C class or protocol
+    /// named by `name`, as the runtime of the serving process finds it —
+    /// without indexing anything. `nil` for any other object, for a name the
+    /// runtime does not know, and from a peer that predates the answer: the
+    /// command is as old as the engine, but its local arm used to answer
+    /// `nil` always.
     public func imageName(ofObjectName name: RuntimeObject) async throws -> String? {
         try await dispatch(ImageNameOfObjectCommand(object: name))
     }
 
+    func _imageName(ofObjectName object: RuntimeObject) async -> String? {
+        let objcName: RuntimeObjCName
+        switch object.kind {
+        case .objc(.type(.class)):
+            objcName = .class(object.name)
+        case .objc(.type(.protocol)):
+            objcName = .protocol(object.name)
+        default:
+            return nil
+        }
+        return await imageCatalog.image(definingObjCType: objcName)?.imagePath
+    }
+
+    /// The interface of `object` — or of the type it refers to — with the
+    /// Generation Options in `options`. On an engine that borrows shared
+    /// cache images, an object of a borrowed image is its owner's to print,
+    /// and a reference the engine's own images cannot resolve is looked up
+    /// by the owners too (`interfaceAcrossOwners(for:options:participants:)`).
     public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        try await dispatch(InterfaceCommand(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
+        if sharedCacheOwner(forImageAt: object.imagePath) == nil, let participants = spanningParticipants() {
+            return try await interfaceAcrossOwners(for: object, options: options, participants: participants)
+        }
+        return try await dispatch(InterfaceCommand(object: object, options: options, acceptsColumnarInterfaceString: true)).interface
     }
 
     public func objects(in image: String) async throws -> [RuntimeObject] {
@@ -1375,7 +1422,10 @@ extension RuntimeEngine {
     /// answers with `RuntimeNetworkRequestError.isUnknownCommand` — and only
     /// the names `hierarchy(for:)` returns to offer.
     public func superclassChain(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
-        try await dispatch(SuperclassChainCommand(object: object))
+        if sharedCacheOwner(forImageAt: object.imagePath) == nil, let participants = spanningParticipants() {
+            return try await superclassChainAcrossOwners(for: object, participants: participants)
+        }
+        return try await dispatch(SuperclassChainCommand(object: object))
     }
 
     func _superclassChain(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
@@ -1389,7 +1439,10 @@ extension RuntimeEngine {
     /// name only. Indexes nothing to answer; empty for anything that is not a
     /// protocol. A peer older than this command has no handler for it.
     public func refinedProtocolTree(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {
-        try await dispatch(RefinedProtocolTreeCommand(object: object))
+        if sharedCacheOwner(forImageAt: object.imagePath) == nil, let participants = spanningParticipants() {
+            return try await refinedProtocolTreeAcrossOwners(for: object, participants: participants)
+        }
+        return try await dispatch(RefinedProtocolTreeCommand(object: object))
     }
 
     func _refinedProtocolTree(for object: RuntimeObject) async throws -> [RuntimeRelationshipNode] {

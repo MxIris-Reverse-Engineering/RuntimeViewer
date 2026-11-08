@@ -94,6 +94,69 @@ extension RuntimeEngine {
     }
 }
 
+// MARK: - Requests about every image
+
+extension RuntimeEngine {
+    /// The engines a request about every image is answered by, this engine
+    /// first; `nil` while it borrows from no engine but itself.
+    nonisolated func spanningParticipants() -> [RuntimeSharedCacheParticipant]? {
+        guard let owners = sharedCacheOwnersSubject.value else { return nil }
+        let ownerEngines = owners.engines.filter { $0 !== self }
+        guard !ownerEngines.isEmpty else { return nil }
+        var participants = [
+            RuntimeSharedCacheParticipant(engine: self, isRequestedEngine: true) { [self] imagePath in
+                !borrowsSharedCacheImage(at: imagePath)
+            },
+        ]
+        for ownerEngine in ownerEngines {
+            participants.append(RuntimeSharedCacheParticipant(engine: ownerEngine, isRequestedEngine: false) { imagePath in
+                owners.owner(ofImageAt: ownerEngine.canonicalImagePath(imagePath)) === ownerEngine
+            })
+        }
+        return participants
+    }
+
+    /// `command` answered by every participant, for a request about every
+    /// image this engine has indexed; `nil` — leaving the request to the
+    /// serving process — when the command names a subject image, does not
+    /// span images, or this engine borrows from no one.
+    func spanningResponse<Command: RuntimeEngineCommand>(to command: Command) async throws -> Command.Response? {
+        guard command.subjectImagePath == nil,
+              let spanningCommand = command as? any RuntimeEngineSpanningCommand,
+              let participants = spanningParticipants()
+        else { return nil }
+        let response = try await spanningCommand.erasedResponse(across: participants)
+        guard let typedResponse = response as? Command.Response else {
+            RuntimeEngineSharedCacheLog.unexpectedSpanningResponse(of: Command.commandName)
+            return nil
+        }
+        return typedResponse
+    }
+
+    /// `spanningResponse(to:)` for a request that reports progress.
+    func spanningResponse<Command: RuntimeEngineProgressCommand>(
+        to command: Command,
+        onProgress: (@Sendable (Command.Progress) async -> Void)?
+    ) async throws -> Command.Response? {
+        guard command.subjectImagePath == nil,
+              let spanningCommand = command as? any RuntimeEngineSpanningProgressCommand,
+              let participants = spanningParticipants()
+        else { return nil }
+        let onErasedProgress: (@Sendable (any Sendable) async -> Void)? = onProgress.map { onProgress in
+            { erasedProgress in
+                guard let progress = erasedProgress as? Command.Progress else { return }
+                await onProgress(progress)
+            }
+        }
+        let response = try await spanningCommand.erasedResponse(across: participants, onErasedProgress: onErasedProgress)
+        guard let typedResponse = response as? Command.Response else {
+            RuntimeEngineSharedCacheLog.unexpectedSpanningResponse(of: Command.commandName)
+            return nil
+        }
+        return typedResponse
+    }
+}
+
 // MARK: - Loading borrowed images
 
 extension RuntimeEngine {
@@ -151,5 +214,9 @@ private enum RuntimeEngineSharedCacheLog {
         } else {
             #log(.info, "\(String(describing: source), privacy: .public) serves every image itself")
         }
+    }
+
+    static func unexpectedSpanningResponse(of commandName: String) {
+        #log(.fault, "The parts of \(commandName, privacy: .public) combined into an answer of another type; the request went to the serving process alone")
     }
 }

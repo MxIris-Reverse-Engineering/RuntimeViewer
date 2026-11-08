@@ -77,15 +77,16 @@ extension RuntimeEngine {
         }
     }
 
-    /// Server-side answer to `imageName(ofObjectName:)`. Symmetric with the
-    /// pre-refactor behavior where the local arm always returned `nil` and
-    /// only the remote arm answered meaningfully — so a proxy / server engine
-    /// keeps that empty answer when no upstream lookup is available.
+    /// Server-side answer to `imageName(ofObjectName:)`: the image the
+    /// serving process's runtime finds an Objective-C class or protocol in.
+    /// Its local arm answered `nil` until engines started borrowing shared
+    /// cache images, so a peer of an earlier release still does — which an
+    /// asker takes for "not known".
     struct ImageNameOfObjectCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         static var commandName: String { CommandName.imageNameOfClassName.commandName }
         func perform(on engine: RuntimeEngine) async throws -> String? {
-            nil
+            await engine._imageName(ofObjectName: object)
         }
     }
 
@@ -131,10 +132,17 @@ extension RuntimeEngine {
         /// they decode a request of this build; either way they are answered
         /// in the component array they read. See `RuntimeObjectInterfaceResponse`.
         let acceptsColumnarInterfaceString: Bool?
+        /// `false` keeps the answer to the object's own image: no lookup of a
+        /// reference across the other indexed images or through the runtime.
+        /// An engine that borrows shared cache images asks this way first, so
+        /// that a reference to a shared cache type is not indexed in its
+        /// serving process. Optional on the wire, like the field above: `nil`
+        /// — every earlier sender — looks references up.
+        var resolvesReferencesAcrossImages: Bool? = nil
         static var commandName: String { CommandName.runtimeInterfaceForRuntimeObjectInImageWithOptions.commandName }
         var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeObjectInterfaceResponse {
-            try await response(for: engine._interface(for: object, options: options))
+            try await response(for: engine._interface(for: object, options: options, resolvesReferencesAcrossImages: resolvesReferencesAcrossImages ?? true))
         }
 
         /// The reply, in the encoding the sender of this request reads.

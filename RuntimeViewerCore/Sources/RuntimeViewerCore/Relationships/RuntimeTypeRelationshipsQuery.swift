@@ -23,13 +23,23 @@ public struct RuntimeTypeRelationshipsQuery: Hashable, Codable, Sendable {
     /// to one of these images' types, and a tree left with no nodes is
     /// dropped.
     public var imagePaths: Set<String>?
+    /// Types this engine has not indexed whose descendants or conformers it
+    /// is asked for too, each answered as a tree of its own after the
+    /// candidates' — whatever its name and the candidate limit. An engine
+    /// that borrows shared cache images hands its owners' types here, so the
+    /// serving process finds its own images' subclasses and conformers of
+    /// them; the owners walk the shared cache's. Ignored for ancestors.
+    /// Optional on the wire: a peer that predates it decodes the query
+    /// without it and answers only for the candidates.
+    public var externalRoots: [RuntimeObject]?
 
-    public init(text: String, matchMode: RuntimeInterfaceSearchMatchMode = .containing, relationship: RuntimeTypeRelationship, isCaseSensitive: Bool = false, candidateLimit: Int = 50, imagePaths: Set<String>? = nil) {
+    public init(text: String, matchMode: RuntimeInterfaceSearchMatchMode = .containing, relationship: RuntimeTypeRelationship, isCaseSensitive: Bool = false, candidateLimit: Int = 50, imagePaths: Set<String>? = nil, externalRoots: [RuntimeObject]? = nil) {
         self.text = text
         self.matchMode = matchMode
         self.relationship = relationship
         self.isCaseSensitive = isCaseSensitive
         self.candidateLimit = candidateLimit
         self.imagePaths = imagePaths
+        self.externalRoots = externalRoots
     }
 }
