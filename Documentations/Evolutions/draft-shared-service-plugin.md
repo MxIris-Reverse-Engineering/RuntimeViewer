@@ -8,7 +8,7 @@
 
 ## 摘要
 
-App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO 系列库：App、local-runtime service、offline service、Catalyst 插件、内嵌 CLI。Release 通用二进制里每份约 48 MB，死代码剥离只在单个二进制内部起作用，不会跨二进制去重。Catalyst 的 service 与 helper 早就是外壳：可执行文件只有几百 KB，运行时从 `Contents/PlugIns` 加载 `RuntimeViewerCatalystHelperPlugin` 来干活。这次把 local 与 offline 两个 service 也改成这样的外壳，四个进程共用一份插件，插件改一个不再只属于 Catalyst 的名字。顺带把 `RuntimeViewerLocalRuntimeService` 改名为 `RuntimeViewerLocalService`。Debug 下试过 local service：可执行文件从 70,151 KB 降到 138 KB，插件只多了 57 KB；估计 Release 下两个 service 合计能省约 90 MB。App 与 CLI 仍各带一份，不在这次范围内。
+App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO 系列库：App、local-runtime service、offline service、Catalyst 插件、内嵌 CLI。Release 通用二进制里每份约 48 MB，死代码剥离只在单个二进制内部起作用，不会跨二进制去重。Catalyst 的 service 与 helper 早就是外壳：可执行文件只有几百 KB，运行时从 `Contents/PlugIns` 加载 `RuntimeViewerCatalystHelperPlugin` 来干活。这次把 local 与 offline 两个 service 也改成这样的外壳，四个进程共用一份插件，插件改一个不再只属于 Catalyst 的名字。顺带把 `RuntimeViewerLocalRuntimeService` 改名为 `RuntimeViewerLocalService`。Debug 下试过 local service：可执行文件从 70,151 KB 降到 138 KB，插件只多了 57 KB；Release 通用二进制里插件剥离符号后约 56 MB，据此估计两个 service 合计省约 110 MB。App 与 CLI 仍各带一份，不在这次范围内。
 
 ## 方案
 
@@ -18,12 +18,16 @@ App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO
 
 ### 要做的事
 
-1. **插件改名**：`RuntimeViewerCatalystHelperPlugin` → `RuntimeViewerServicePlugin`，target、文件夹、xcconfig 目录、App 里的 `Embed Catalyst Plugin` 拷贝阶段一起改。跨进程的入口类型同时改掉 AppKit / Catalyst 字样和缩写：`AppKitBridge` → `ServicePluginLoader`，`AppKitPlugin` → `ServicePlugin`，`AppKitPluginImpl` → `ServicePluginEntry`。
-2. **四个入口**：`launch()` → `launchCatalystHelper()`，`runService()` → `runCatalystService()`，新增 `runLocalService()` 与 `runOfflineService()`，内容分别是两个 service 原来 `main.swift` 里的启动代码。
-3. **两个 service 变外壳**：`main.swift` 只用 `ServicePluginLoader` 加载插件、调用对应入口；target 不再依赖、也不再链接任何包；`ServicePluginLoader.swift` 与 `ServicePlugin.swift` 照 Catalyst service 现在的写法，用同步文件夹的 exception set 编进来。
+1. **插件改名**（✅ 已完成）：`RuntimeViewerCatalystHelperPlugin` → `RuntimeViewerServicePlugin`，target、文件夹、xcconfig 目录、App 里的 `Embed Catalyst Plugin` 拷贝阶段一起改。跨进程的入口类型同时改掉 AppKit / Catalyst 字样和缩写：`AppKitBridge` → `ServicePluginLoader`，`AppKitPlugin` → `ServicePlugin`，`AppKitPluginImpl` → `ServicePluginEntry`。
+2. **四个入口**（✅ 已完成）：`launch()` → `launchCatalystHelper()`，`runService()` → `runCatalystService()`，新增 `runLocalService()` 与 `runOfflineService()`，内容分别是两个 service 原来 `main.swift` 里的启动代码。
+3. **两个 service 变外壳**（✅ 已完成）：`main.swift` 只用 `ServicePluginLoader` 加载插件、调用对应入口；target 不再依赖、也不再链接任何包。`ServicePluginLoader.swift` 与 `ServicePlugin.swift` 都放在插件的文件夹里，用同步文件夹的 exception set 编进四个外壳，插件自己排除加载器。
 4. **改名 local-runtime → local**（✅ 已完成）：target、文件夹、产物、xcconfig 目录、bundle identifier（`dev.JH.RuntimeViewerLocalService`、`com.JH.RuntimeViewerLocalService`）、App `Info.plist` 的 key `RuntimeViewerLocalServiceBundleIdentifier`、Core 的 `RuntimeLocalService` 与 `RuntimeLocalServiceHost`（目录 `LocalService/`）、测试工具 `LocalServiceFixture`，以及 Tuist 描述、注释与现行文档。已归档的提案、问题记录和指向 0037 的链接保留原样；`observeLocalRuntimeRestarts` 这类指「本机运行时」概念的名字不改。
-5. **文档**：根 `AGENTS.md`（外壳一节、`install()` 调用位置表、派生数据一节）、`Configurations/AGENTS.md`（插件一节）、`Documentations/DerivedData.md`、`CommunicationAndEngineArchitecture.md`、`Glossary.md`；Tuist 的 `Project.swift` 同步，提交前 `./TuistScript.sh check` 通过。
+5. **文档**（✅ 已完成）：根 `AGENTS.md`（外壳一节、`install()` 调用位置表、派生数据一节）、`Configurations/AGENTS.md`（插件一节）、`Documentations/DerivedData.md`、`CommunicationAndEngineArchitecture.md`、`Glossary.md`；Tuist 的 `Project.swift` 同步，提交前 `./TuistScript.sh check` 通过。
 6. **验证**：Debug-arm64e 与 Release 各编一次，量每个二进制的大小，确认 `PackageFrameworks` 里除 ObjCRuntimeToolbox 外没有自动拆出的 framework，daemon 与 payload 的链接不变；Core 与 Packages 的测试编译通过；用户实测「My Mac」、离线打开一个文件、「My Mac (Mac Catalyst)」三条路径都正常。
+   - ✅ Debug-arm64e：local service 70,151 KB → 86 KB，offline service 67,146 KB → 86 KB，插件 70,182 KB → 70,241 KB；`PackageFrameworks` 里只有 ObjCRuntimeToolbox。
+   - ✅ Release（通用二进制，`-IDEEnableNewPackagePIFBuilder=NO`，不签名）：三个 service 各 115 KB，插件 98,705 KB，剥离符号后 57,629 KB；daemon 不链任何 `@rpath` 库。`xcodebuild build` 不剥离符号，所以这里的数字比发版包大。
+   - ✅ Core 与 Packages 的测试编译通过，`RuntimeLocalServiceHost` 的 5 条测试通过；`./TuistScript.sh check` 通过。
+   - ⏳ 三条路径的实测待用户做。
 
 ### 没问就定下的假设
 
@@ -43,3 +47,8 @@ App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO
 | 2026-11-08 | 外壳覆盖 local 与 offline 两个 service，内嵌 CLI 不在本次范围 | 用户选定；CLI 做外壳还要把命令行代码带进插件，改动更大 |
 | 2026-11-08 | local-runtime service 改名为 local service，Core 类型一起改 | 用户要求；Core 类型对齐已有的 `RuntimeOfflineService` / `RuntimeOfflineServiceHost` |
 | 2026-11-08 | 用户批准，开始实现 | 按用户选定的条件，只在功能分支上本地提交，不推送、不合进 `next` |
+| 2026-11-08 | 加载器挪进插件的文件夹，插件自己排除它 | 它现在属于四个外壳，留在 Catalyst helper 的文件夹里名不副实；协议与加载器放在一处，外壳的 exception set 只需指向一个文件夹 |
+| 2026-11-08 | 加载器去掉 `static let shared`，改成无状态的 `enum`；`loadPlugins()` 改为 `loadPlugin()` | 外壳不能链接 swift-dependencies，单例没法按项目规矩放到 `@Dependency` 后面；三个 service 的入口不返回，用不着谁持有插件，只有 helper 的 `AppDelegate` 需要，就让它自己持有 |
+| 2026-11-08 | Catalyst service 与 local service 相同的启动代码提成 `serveInProcessEngine(engineID:serviceName:)` | 两段只差 engine ID 与日志里的名字 |
+| 2026-11-08 | 插件的 bundle identifier 改为 `com.JH.RuntimeViewerServicePlugin`，设置项改为 `RUNTIME_VIEWER_SERVICE_PLUGIN_BUNDLE_IDENTIFIER`；日志 subsystem 改为 `com.RuntimeViewer.RuntimeViewerServicePlugin` | 跟插件改名一致；自己在 `custom.xcconfig` 里覆盖过旧设置项的人要改用新名字 |
+| 2026-11-08 | 实现完成，待用户实测三条路径后收尾 | 构建、测试编译与 Tuist 检查都通过 |

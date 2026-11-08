@@ -1340,7 +1340,7 @@ native_app, tuist_app = sys.argv[1:3]
 findings = []
 
 # Known differences, each compared some other way or not at all:
-# - the Catalyst plugin is a framework in the Tuist project (Tuist does not link static packages
+# - the service plugin is a framework in the Tuist project (Tuist does not link static packages
 #   into a bundle), so it has a versioned layout instead of a flat one;
 # - RxSwift also declares a dynamic product, and Tuist builds it as a dynamic framework where
 #   SwiftPM links it statically, so its privacy manifest moves from a resource bundle into it;
@@ -1349,7 +1349,7 @@ findings = []
 # - Tuist writes the Info.plist of the packages' resource bundles itself;
 # - SwiftPM's Bundle.module accessor defines a <package>_<target>_SWIFTPM_MODULE_BUNDLER_FINDER class,
 #   which Tuist's own resource accessors do without.
-PLUGIN = "Contents/PlugIns/RuntimeViewerCatalystHelperPlugin.bundle/"
+PLUGIN = "Contents/PlugIns/RuntimeViewerServicePlugin.bundle/"
 ONLY_NATIVE = ("Contents/Resources/RxSwift_RxSwift.bundle/",)
 ONLY_TUIST = ("Contents/Frameworks/RxSwift.framework/",)
 THIRD_PARTY_FRAMEWORKS = "Contents/Frameworks/"
@@ -1468,16 +1468,16 @@ def plugin_parts(app, executable, info_plist):
         plist = plistlib.load(handle)
     return describe_binary(executable_path), {key: plist.get(key) for key in ("CFBundleIdentifier", "CFBundleExecutable", "NSPrincipalClass", "CFBundleShortVersionString")}
 
-native_plugin = plugin_parts(native_app, "Contents/MacOS/RuntimeViewerCatalystHelperPlugin", "Contents/Info.plist")
-tuist_plugin = plugin_parts(tuist_app, "Versions/A/RuntimeViewerCatalystHelperPlugin", "Versions/A/Resources/Info.plist")
+native_plugin = plugin_parts(native_app, "Contents/MacOS/RuntimeViewerServicePlugin", "Contents/Info.plist")
+tuist_plugin = plugin_parts(tuist_app, "Versions/A/RuntimeViewerServicePlugin", "Versions/A/Resources/Info.plist")
 if native_plugin[0] is None or tuist_plugin[0] is None:
-    findings.append(f"the Catalyst plugin is missing (native: {native_plugin[0] is not None}, Tuist: {tuist_plugin[0] is not None})")
+    findings.append(f"the service plugin is missing (native: {native_plugin[0] is not None}, Tuist: {tuist_plugin[0] is not None})")
 else:
     if native_plugin != tuist_plugin:
-        findings.append(f"the Catalyst plugin: {native_plugin} in the native app, {tuist_plugin} in the Tuist app")
-    compare_objective_c_classes("the Catalyst plugin",
-                                os.path.join(native_app, PLUGIN, "Contents/MacOS/RuntimeViewerCatalystHelperPlugin"),
-                                os.path.join(tuist_app, PLUGIN, "Versions/A/RuntimeViewerCatalystHelperPlugin"))
+        findings.append(f"the service plugin: {native_plugin} in the native app, {tuist_plugin} in the Tuist app")
+    compare_objective_c_classes("the service plugin",
+                                os.path.join(native_app, PLUGIN, "Contents/MacOS/RuntimeViewerServicePlugin"),
+                                os.path.join(tuist_app, PLUGIN, "Versions/A/RuntimeViewerServicePlugin"))
 
 if findings:
     print("\n".join(f"    {message}" for message in findings))

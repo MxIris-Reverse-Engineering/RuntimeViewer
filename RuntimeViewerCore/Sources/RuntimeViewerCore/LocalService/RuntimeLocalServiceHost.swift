@@ -8,11 +8,12 @@ public import RuntimeViewerCommunication
 /// An in-process engine served on an XPC service's listener: the local
 /// service's whole job, with its `.local` engine.
 ///
-/// The service's `main.swift` builds one of these around an engine and a
+/// The local service builds one of these around an engine and a
 /// `RuntimeXPCServiceListenerConnection.embeddedService()`, calls `start()`,
-/// then `activate()`. The Mac Catalyst service does the same from
-/// `RuntimeViewerCatalystHelperPlugin`'s `runService()`: its job is this one,
-/// run in a Catalyst process. The offline service builds one once the app's
+/// then `activate()` — in `RuntimeViewerServicePlugin`'s `runLocalService()`,
+/// which the service's executable loads. The Mac Catalyst service does the
+/// same from the plugin's `runCatalystService()`: its job is this one, run in
+/// a Catalyst process. The offline service builds one once the app's
 /// first `hello` named the file, around an engine reading it
 /// (`RuntimeOfflineServiceHost`). Tests build the same type around an
 /// anonymous listener and connect a client engine to its endpoint, so the

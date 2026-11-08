@@ -18,7 +18,7 @@ import RuntimeViewerCommunication
 /// service in the calling process's own bundle, and that process is the app.
 ///
 /// The service and the helper application are both shells around
-/// `RuntimeViewerCatalystHelperPlugin`, which does the work on either path.
+/// `RuntimeViewerServicePlugin`, which does the work on either path.
 public enum MacCatalystRuntimeService {
     /// The app `Info.plist` key carrying the embedded service's bundle
     /// identifier. Filled from `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER`

@@ -138,7 +138,7 @@ command changes nothing and says what to do.
 **Release archives keep Xcode 27's new package PIF builder off.** `ArchiveScript.sh` passes
 `-IDEEnableNewPackagePIFBuilder=NO` to every `xcodebuild` that resolves or builds the package graph, and a
 manual release archive outside the script needs the same flag. With the new builder every package builds
-`arm64 arm64e arm64e.x1` only — x86_64 is dropped — and the universal `RuntimeViewerCatalystHelperPlugin`
+`arm64 arm64e arm64e.x1` only — x86_64 is dropped — and the universal `RuntimeViewerServicePlugin`
 fails with `Unable to resolve module dependency`; which builder runs is otherwise a per-machine Xcode
 default, so one Mac archives cleanly and another fails on the same commit. Background:
 `Documentations/ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md`.
@@ -215,7 +215,7 @@ open RuntimeViewer-Tuist.xcworkspace
   `UpdatePackagesScript.sh` runs that install after updating the Debug workspace. Install with the
   Xcode the native lock files were resolved with: some packages pick their manifest by Swift version.
 - **Build the app with the `RuntimeViewer macOS` scheme only.** The simulator payload and the
-  Catalyst plugin are built first by the scheme's fixed order, not as dependencies.
+  service plugin are built first by the scheme's fixed order, not as dependencies.
 
 Agents run `TuistScript.sh` with `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent>/Tuist`
 and through `queued-build`. What `check` compares, the Tuist workarounds behind the oddities in the
@@ -358,7 +358,7 @@ The project uses three Swift Package Manager packages:
   `RuntimeViewerCore/Offline/RuntimeOfflineService.swift` and `RuntimeOfflineServiceHost.swift` (the
   offline service's key, credential and launch payload, and the host that opens the file the payload
   names); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift` (the Catalyst service's key and
-  credential); and the service entry points. `RuntimeEngine` and
+  credential); and the service entry points, `ServicePluginEntry` in `RuntimeViewerServicePlugin`. `RuntimeEngine` and
   `RuntimeEngineManager` know nothing about XPC — they hand an opaque credential on — keep it that
   way. **The service runs at the priority of the requests waiting on it**, and an app in App Nap
   donates none: about thirty seconds after the user switches away, work the app is waiting on slows
@@ -385,9 +385,9 @@ The project uses three Swift Package Manager packages:
   `hello` names the file — `RuntimeOfflineServiceHost` reads it and installs the engine's commands before
   answering. One instance serves one file to one client and exits when that client closes its connection
   (`setClientDepartureHandler(_:)`; a message it has no handler for is no departure). launchd never
-  relaunches an instance, so a client whose instance went away reattaches behind a new connection. It
-  links neither `RuntimeViewerInjection` nor `RuntimeViewerCrossReferences` (see *Injection commands*)
-  and carries no entitlement exception: it reads files as data and never loads one. The app opens a
+  relaunches an instance, so a client whose instance went away reattaches behind a new connection. Its
+  executable is a shell like the others below, and it carries no entitlement exception: it reads files
+  as data and never loads one. The app opens a
   file's window before the instance has read it (`RuntimeEngineManager.startReading(_:)`), which is safe
   only because a `.file` engine made with `RuntimeEngine.init(source:…)` forwards from the moment it
   exists: until its connection is up a request fails instead of being answered from the app's own
@@ -398,11 +398,18 @@ The project uses three Swift Package Manager packages:
   table, opens each only for as long as it reads it. Background:
   `Documentations/Evolutions/0069-offline-mode.md`, `Documentations/Evolutions/0077-offline-folders.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
-  the helper daemon and that connects back through it. **Both Catalyst targets are shells**: each
-  only makes its process a Catalyst one and loads `RuntimeViewerCatalystHelperPlugin` from the app's
-  `Contents/PlugIns` (`AppKitBridge`, compiled into both); the plugin does the work — `launch()` for
-  the helper, `runService()` for the service. Changes to what the Catalyst runtime does go into the
-  plugin, not into the shells
+  the helper daemon and that connects back through it
+- `RuntimeViewerServicePlugin` — the code four executables run. **The Catalyst helper and the
+  Catalyst, local and offline services are shells**: each only makes its process what it has to be (a
+  Catalyst app, a Catalyst XPC service, a macOS XPC service) and loads this macOS bundle from the
+  app's `Contents/PlugIns` (`ServicePluginLoader`, compiled into every shell); the plugin does the
+  work — `ServicePluginEntry`'s `launchCatalystHelper()`, `runCatalystService()`, `runLocalService()`
+  and `runOfflineService()`. So the app ships one copy of RuntimeViewerCore for the four processes:
+  dead stripping works inside one binary only, and a shell that linked a package would carry a copy of
+  its own. **Changes to what a service does go into the plugin, and a shell links no package.** A
+  shared dynamic RuntimeViewerCore was tried and does not work: Xcode turns every package target that
+  two images of one process link statically into a dynamic framework, for every target and platform.
+  Background: `Documentations/Evolutions/draft-shared-service-plugin.md`
 - `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
   entitlements carry `disable-library-validation`, and its deployment target has to track the app's
@@ -578,21 +585,21 @@ The five injection commands (`injectionCapability`, `processList`, `applicationI
 **Every process that serves a `RuntimeEngine` and links `RuntimeViewerInjection` must call
 `RuntimeInjection.install()` exactly once at its entry point, before any engine connects** —
 including the processes that cannot inject anything. The rule has no exceptions to reason about:
-*linked it ⇒ call it*. The ten places that do, today:
+*linked it ⇒ call it*. The eleven places that do, today:
 
 | Process | Where |
 |---------|-------|
 | macOS app | `AppDelegate.main()` |
-| Local XPC service | `RuntimeViewerLocalService/main.swift` |
-| Mac Catalyst service | `AppKitPluginImpl.runService()` |
-| Mac Catalyst helper | `AppKitPluginImpl.launch()` |
+| Local XPC service | `ServicePluginEntry.runLocalService()` |
+| Offline XPC service | `ServicePluginEntry.runOfflineService()` |
+| Mac Catalyst service | `ServicePluginEntry.runCatalystService()` |
+| Mac Catalyst helper | `ServicePluginEntry.launchCatalystHelper()` |
 | `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
 | iOS / visionOS / jailbroken iOS apps | `InjectionServiceRegistrar.registerIfAvailable()` |
 | Injected payload (`RuntimeViewerServer` / `RuntimeViewerMobileServer`) | `RuntimeViewerServer.main()` |
 
-The offline service (`RuntimeViewerOfflineService`) is the one process that serves an engine without
-linking either module, so it makes neither call. Nothing asks it: an engine reading a file (`.file`
-source) answers the injection capability query and every cross-reference command itself, without
+The offline service (`RuntimeViewerOfflineService`) makes both calls only because the service plugin
+it runs links both modules. Nothing asks it: an engine reading a file (`.file` source) answers the injection capability query and every cross-reference command itself, without
 dispatching (`RuntimeEngine+Injection.swift`, `RuntimeEngine+CrossReferences.swift`) — a file has no
 processes to inject into, and its images are never mapped into a process for the scan to read. Over XPC
 a command the serving process has no handler for is dropped, not answered, so an offline engine that did
@@ -632,8 +639,8 @@ it again. Code: `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/
 `Documentations/Evolutions/0061-derived-data.md`; **read `Documentations/DerivedData.md` before changing that
 code or the corpus store's read phase** — it says why each part has the shape it has.
 
-- **Only the two service processes read, write and clean it up.** `RuntimeViewerLocalService/main.swift`
-  and `AppKitPluginImpl.runService()` call `RuntimeDerivedData.enableInThisProcess()` before any engine exists.
+- **Only the two service processes read, write and clean it up.** `ServicePluginEntry.runLocalService()`
+  and `ServicePluginEntry.runCatalystService()` call `RuntimeDerivedData.enableInThisProcess()` before any engine exists.
   Every other process leaves it off — the app itself (its Bonjour server engine answers commands in process), the
   command-line host, the Catalyst helper application, an injected payload, a test — and the app only measures
   and deletes it (`RuntimeDerivedDataMaintenance`). Leaving the call out fails quietly: that process just goes
