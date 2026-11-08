@@ -1,6 +1,6 @@
 # Draft - 系统镜像的数据跨 engine 只存一份：My Mac 与 Mac Catalyst 分管，本机附加进程借用
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-08
 - **最后更新**: 2026-11-08
@@ -91,20 +91,23 @@ public enum RuntimeSharedCacheImagePlatform: Sendable, Hashable {
 
 /// The images of the dyld shared cache this process maps, each with the kind of
 /// process that can load it. Read once from the cache's own headers.
-public struct RuntimeSharedCachePartition: Sendable {
+public final class RuntimeSharedCachePartition: @unchecked Sendable {
+    public static let imageRootNodeName = "Dyld Shared Cache"
     public let cacheUUID: UUID
     public let imagePaths: Set<String>
+
+    /// The image tree every engine on this cache shows, built once.
+    public let imageRootNode: RuntimeImageNode
 
     /// The partition of the cache this process maps; `nil` when it maps none.
     public static func current() -> RuntimeSharedCachePartition?
 
     /// `nil` for a path that names no image of the cache.
     public func platform(ofImageAt imagePath: String) -> RuntimeSharedCacheImagePlatform?
-
-    /// The image tree every engine on this cache shows, built once.
-    public var imageRootNode: RuntimeImageNode { get }
 }
 ```
+
+- 做成 `final class` 而不是 struct：它建出的那棵树要被所有 engine 共用（§9），共用的是同一个对象。初始化时把树连同每个节点的路径一次建好，之后不再改动，所以标 `@unchecked Sendable`。
 
 - 平台取自每个镜像的 `LC_BUILD_VERSION`：只列 `macCatalyst` 的算 `.macCatalyst`，其余算 `.macOS`。读的是本进程已映射的 cache 头部，不 `dlopen`，所以 App 进程也可以算（AGENTS.md 只禁止 App 进程加载与索引镜像）。
 - 4115 个镜像的头部读一遍在毫秒级，结果由 engine 管理器持有，整个进程一份。
@@ -322,7 +325,7 @@ extension RuntimeEngineManager {
 
 ## 落地步骤
 
-1. **归属划分**：`RuntimeSharedCachePartition` 与 `RuntimeSharedCacheImagePlatform`，附带测试。
+1. **归属划分**（已完成）：`RuntimeSharedCachePartition` 与 `RuntimeSharedCacheImagePlatform`，附带测试。
 2. **借用关系与单镜像路由**：`RuntimeSharedCacheOwners`、`setSharedCacheOwners(_:)`、命令的三个声明与 `dispatch` 的转发、`dispatchBorrowedRequest`；加载语义（§5）；声明覆盖测试与路由测试。此时没有任何 engine 设置借用关系，行为不变。
 3. **跨镜像合并与接力**：`RuntimeEngineSpanningCommand` 与各命令的合并规则，交叉引用模块的两条命令；§6 的接力与 `externalRootNames`；测试。
 4. **索引管理器交出系统镜像**：多根批次、`.borrowed` reason；测试。
@@ -357,3 +360,4 @@ extension RuntimeEngineManager {
 | 2026-11-08 | 资格判定在 App 一侧做，不给 payload 发新命令 | 旧版经 Mach service 注入的 payload 收到不认识的命令会断开（PR121.73）。dyld 按自身架构选 cache，Apple Silicon 上原生进程都用 arm64e 那份，只需用 `sysctl` 排除 Rosetta、用环境变量排除私有 shared region |
 | 2026-11-08 | Load Frameworks… 仍加载进目标进程 | 没有询问即采用的假设：选择框表达的是「加载进这个进程」，与侧栏 Load 的含义不同 |
 | 2026-11-08 | 状态 → Accepted | 用户批准，开始实现；功能分支 `feature/shared-cache-images-across-engines` |
+| 2026-11-08 | 状态 → In Progress；第 1 步完成 | `RuntimeSharedCachePartition` 做成 `final class`（偏离方案里的 struct）：§9 要所有 engine 共用同一棵系统镜像树，共用的是对象本身。树按 cache 列出镜像的顺序建，与现在各 engine 推来的树一致。测试在本机 cache 上核对了两类例外镜像 |

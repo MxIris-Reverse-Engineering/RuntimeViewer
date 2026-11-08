@@ -287,7 +287,7 @@ package enum DyldUtilities {
     package static var dyldSharedCacheImageRootNode: RuntimeImageNode {
         #log(.debug, "Building dyld shared cache image root node")
         let paths = dyldSharedCacheImagePaths()
-        let node = RuntimeImageNode.rootNode(for: paths, name: "Dyld Shared Cache")
+        let node = RuntimeImageNode.rootNode(for: paths, name: RuntimeSharedCachePartition.imageRootNodeName)
         #log(.debug, "Built dyld shared cache root node with \(paths.count, privacy: .public) images")
         return node
     }
