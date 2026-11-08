@@ -198,7 +198,7 @@ let project = Project(
                 // Tuist embeds these four itself: the SourceEditor bridge framework in Frameworks, the
                 // three services in XPCServices.
                 .target(name: "RuntimeViewerSourceEditorBridge"),
-                .target(name: "RuntimeViewerLocalRuntimeService"),
+                .target(name: "RuntimeViewerLocalService"),
                 .target(name: "RuntimeViewerCatalystService"),
                 .target(name: "RuntimeViewerOfflineService"),
                 .external(name: "RuntimeViewerApplication"),
@@ -364,14 +364,14 @@ let project = Project(
             settings: targetSettings(directory: "LaunchDaemon", additionalSettings: productNameFromConfigurationFiles)
         ),
         .target(
-            name: "RuntimeViewerLocalRuntimeService",
+            name: "RuntimeViewerLocalService",
             destinations: .macOS,
             product: .xpc,
-            productName: "RuntimeViewerLocalRuntimeService",
+            productName: "RuntimeViewerLocalService",
             bundleId: "$(inherited)",
             infoPlist: nil,
             buildableFolders: [
-                .folder("RuntimeViewerLocalRuntimeService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
+                .folder("RuntimeViewerLocalService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
             ],
             dependencies: [
                 .external(name: "RuntimeViewerCore"),
@@ -379,7 +379,7 @@ let project = Project(
                 .external(name: "RuntimeViewerInjection"),
                 .external(name: "RuntimeViewerCrossReferences"),
             ],
-            settings: targetSettings(directory: "RuntimeViewerLocalRuntimeService")
+            settings: targetSettings(directory: "RuntimeViewerLocalService")
         ),
         // One instance per offline file: its Info.plist declares _MultipleInstances. It links
         // neither the injection nor the cross-reference module, so it has no install() to call.

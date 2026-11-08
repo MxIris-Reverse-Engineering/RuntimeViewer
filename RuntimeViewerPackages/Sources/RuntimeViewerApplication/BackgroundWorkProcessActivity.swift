@@ -7,7 +7,7 @@ import RuntimeViewerArchitectures
 /// `RuntimeEngineBackgroundWork.isWorkInProgress`. One per engine's work, which holds it for as
 /// long as a document is on the engine.
 ///
-/// That work runs in the local-runtime XPC service — or, for a Mac Catalyst document, the Mac
+/// That work runs in the local XPC service — or, for a Mac Catalyst document, the Mac
 /// Catalyst service — which launchd starts as an adaptive job: it runs at full speed while a
 /// request from an app that donates importance is waiting on it, and in the Darwin background
 /// band otherwise — priority 4, efficiency cores only. An app in App Nap

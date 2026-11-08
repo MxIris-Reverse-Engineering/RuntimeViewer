@@ -5,7 +5,7 @@ import RuntimeViewerCore
 @testable import RuntimeViewerApplication
 
 /// A document walks back to the image list when its engine stops being
-/// ready and becomes ready again — the local-runtime XPC service having been
+/// ready and becomes ready again — the local XPC service having been
 /// relaunched, seen through the one edge an in-process engine can reproduce:
 /// `stop()` followed by `connect()`. With something open the document asks its
 /// window to start it over, and the window does, through `MainRoute.main`;

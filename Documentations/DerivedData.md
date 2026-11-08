@@ -12,7 +12,7 @@
 ## 一、只有两个服务进程读写，App 进程从不打开这些文件
 
 派生数据默认关闭。只有「My Mac」与「My Mac (Mac Catalyst)」两个 Engine 实际执行所在的服务进程，在入口处调
-`RuntimeDerivedData.enableInThisProcess()`：`RuntimeViewerLocalRuntimeService/main.swift` 与
+`RuntimeDerivedData.enableInThisProcess()`：`RuntimeViewerLocalService/main.swift` 与
 `AppKitPluginImpl.runService()`。语料住在拥有镜像的进程里，存盘与读回也就只能在那里做。
 
 其余进程一律不开：

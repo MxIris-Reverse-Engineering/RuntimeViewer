@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <!-- This process reads Mach-O files and dyld shared caches as data and never loads
-     one, so unlike the local-runtime service it needs no library-validation
+     one, so unlike the local service it needs no library-validation
      exception: everything it loads is the app's own code.
 
      No App Sandbox: it reads files at whatever path the user opened, and the

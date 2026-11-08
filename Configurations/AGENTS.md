@@ -53,7 +53,7 @@ product instead. They live in the targets' xcconfig files,
   the app, never through the daemon. A new configuration gives it a bundle
   identifier, in a `RuntimeViewerCatalystService/<configuration>.xcconfig`
   of its own, and sets `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER` in the
-  app's xcconfig to match, the way the local-runtime service is done.
+  app's xcconfig to match, the way the local service is done.
 
 Xcode's build settings editor shows the payload target's Base SDK as
 "iphonesimulator (SDK not found)". That is the editor only: its Base SDK pop-up

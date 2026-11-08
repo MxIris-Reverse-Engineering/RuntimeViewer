@@ -44,7 +44,7 @@ struct RuntimeDerivedDataIdentityTests {
 
     // MARK: - Producer
 
-    private static let serviceImage = (name: "RuntimeViewerLocalRuntimeService", uuid: UUID(uuidString: "0B7E3E2A-5C1D-4E8F-8A21-3F0C5D9E7B44")!)
+    private static let serviceImage = (name: "RuntimeViewerLocalService", uuid: UUID(uuidString: "0B7E3E2A-5C1D-4E8F-8A21-3F0C5D9E7B44")!)
     private static let dependencyImage = (name: "@rpath/libswiftCompatibilitySpan.dylib", uuid: UUID(uuidString: "5D2C1B0A-9E8F-4D7C-8B6A-1F2E3D4C5B6A")!)
 
     @Test("The producer digest is stable and does not depend on the order of the images")
@@ -77,7 +77,7 @@ struct RuntimeDerivedDataIdentityTests {
 
     private static func makeApplication(at applicationURL: URL, info: [String: String]) throws {
         let contentsURL = applicationURL.appendingPathComponent("Contents", isDirectory: true)
-        try FileManager.default.createDirectory(at: contentsURL.appendingPathComponent("XPCServices/RuntimeViewerLocalRuntimeService.xpc", isDirectory: true), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: contentsURL.appendingPathComponent("XPCServices/RuntimeViewerLocalService.xpc", isDirectory: true), withIntermediateDirectories: true)
         try PropertyListSerialization.data(fromPropertyList: info, format: .binary, options: 0)
             .write(to: contentsURL.appendingPathComponent("Info.plist"))
     }
@@ -88,13 +88,13 @@ struct RuntimeDerivedDataIdentityTests {
         let applicationURL = directory.url.appendingPathComponent("RuntimeViewer.app", isDirectory: true)
         try Self.makeApplication(at: applicationURL, info: [
             "CFBundleIdentifier": "dev.JH.RuntimeViewer.arm64e",
-            LocalRuntimeService.bundleIdentifierInfoDictionaryKey: "dev.JH.RuntimeViewer.arm64e.LocalRuntimeService",
+            RuntimeLocalService.bundleIdentifierInfoDictionaryKey: "dev.JH.RuntimeViewer.arm64e.RuntimeLocalService",
         ])
         let cachesURL = directory.url.appendingPathComponent("Caches", isDirectory: true)
 
         let fromApplication = try #require(RuntimeDerivedDataLocation.enclosingApplication(ofBundleAt: applicationURL, cachesDirectoryURL: cachesURL))
         let fromService = try #require(RuntimeDerivedDataLocation.enclosingApplication(
-            ofBundleAt: applicationURL.appendingPathComponent("Contents/XPCServices/RuntimeViewerLocalRuntimeService.xpc", isDirectory: true),
+            ofBundleAt: applicationURL.appendingPathComponent("Contents/XPCServices/RuntimeViewerLocalService.xpc", isDirectory: true),
             cachesDirectoryURL: cachesURL
         ))
         #expect(fromApplication == fromService)
@@ -102,7 +102,7 @@ struct RuntimeDerivedDataIdentityTests {
         #expect(fromApplication.applicationURL.path == applicationURL.path)
     }
 
-    @Test("An application whose Info.plist names no local-runtime service has no location")
+    @Test("An application whose Info.plist names no local service has no location")
     func applicationWithoutService() throws {
         let directory = try DerivedDataTestDirectory()
         let applicationURL = directory.url.appendingPathComponent("Other.app", isDirectory: true)
@@ -110,7 +110,7 @@ struct RuntimeDerivedDataIdentityTests {
         let cachesURL = directory.url.appendingPathComponent("Caches", isDirectory: true)
         #expect(RuntimeDerivedDataLocation.enclosingApplication(ofBundleAt: applicationURL, cachesDirectoryURL: cachesURL) == nil)
         #expect(RuntimeDerivedDataLocation.enclosingApplication(
-            ofBundleAt: applicationURL.appendingPathComponent("Contents/XPCServices/RuntimeViewerLocalRuntimeService.xpc", isDirectory: true),
+            ofBundleAt: applicationURL.appendingPathComponent("Contents/XPCServices/RuntimeViewerLocalService.xpc", isDirectory: true),
             cachesDirectoryURL: cachesURL
         ) == nil)
     }

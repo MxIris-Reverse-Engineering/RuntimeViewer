@@ -48,7 +48,7 @@ that several features use live in `Objects/`, `Interfaces/` and `Images/`.
 | `Specialization/` | Generic specialization |
 | `Bookmarks/` | Bookmarks and bookmark scopes |
 | `BackgroundIndexing/`, `Export/`, `DerivedDataStorage/`, `Offline/` | Those features |
-| `LocalRuntimeService/` | The local-runtime XPC service's key, credential and the host its services run |
+| `LocalService/` | The local XPC service's key, credential and the host its services run |
 | `Transformer/` | `Transformer.Configuration` and the transformer modules it re-exports |
 | `Extensions/` | Standard library extensions |
 

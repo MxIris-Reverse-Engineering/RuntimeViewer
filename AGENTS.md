@@ -341,11 +341,11 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerUsingAppKit` — Main macOS application (AppKit, document-based)
 - `RuntimeViewerMCPServer` — MCP server executable (stdio-based, communicates with bridge via TCP)
 - `RuntimeViewerServer` — XPC background service for inter-process communication
-- `RuntimeViewerLocalRuntimeService` — the plain XPC service (no mach service, no daemon) the app's
+- `RuntimeViewerLocalService` — the plain XPC service (no mach service, no daemon) the app's
   "My Mac" engine runs in, embedded at `Contents/XPCServices/`. **The app process never dlopens or
   indexes an image itself.** `RuntimeEngine.local` decides where its work happens from the process's
   own `Info.plist`: the app's names the service it embeds under
-  `RuntimeViewerLocalRuntimeServiceBundleIdentifier`, so the app's `.local` forwards to it, while the
+  `RuntimeViewerLocalServiceBundleIdentifier`, so the app's `.local` forwards to it, while the
   service itself, the standalone CLI host, the Catalyst helper and service and the tests (no key) stay in
   process — launchd only finds an embedded service inside the calling process's own bundle, so the
   bundle is the configuration. The "Load Frameworks…" picker goes through `engine.loadImage(at:)`, not
@@ -353,7 +353,7 @@ The project uses three Swift Package Manager packages:
   own and the engine only sees `.disconnected` then `.connected`. **All XPC-service code lives in a few
   named places** — `RuntimeViewerCommunication/Connections/XPCService/`
   (transport, `hello`, reattach, dedicated instances) plus the three `.xpcService` branches of
-  `RuntimeCommunicator`; `RuntimeViewerCore/LocalRuntimeService/` (this service's `Info.plist` key and
+  `RuntimeCommunicator`; `RuntimeViewerCore/LocalService/` (this service's `Info.plist` key and
   credential, and the service-side host all three services run);
   `RuntimeViewerCore/Offline/RuntimeOfflineService.swift` and `RuntimeOfflineServiceHost.swift` (the
   offline service's key, credential and launch payload, and the host that opens the file the payload
@@ -464,7 +464,7 @@ The project uses three Swift Package Manager packages:
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection
 - **Multi-Process**: XPC services enable safe inspection of external processes, and the local
-  runtime itself runs out of process in `RuntimeViewerLocalRuntimeService.xpc`
+  runtime itself runs out of process in `RuntimeViewerLocalService.xpc`
 - **MCP Bridge**: TCP bridge pattern — app hosts bridge server, external MCP server connects as client
 
 ### MCP Integration
@@ -583,7 +583,7 @@ including the processes that cannot inject anything. The rule has no exceptions 
 | Process | Where |
 |---------|-------|
 | macOS app | `AppDelegate.main()` |
-| Local-runtime XPC service | `RuntimeViewerLocalRuntimeService/main.swift` |
+| Local XPC service | `RuntimeViewerLocalService/main.swift` |
 | Mac Catalyst service | `AppKitPluginImpl.runService()` |
 | Mac Catalyst helper | `AppKitPluginImpl.launch()` |
 | `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
@@ -619,7 +619,7 @@ their `AppDelegate`, right after `InjectionServiceRegistrar.registerIfAvailable(
 fails the same silent way: the engine has no handler, and a host cannot tell it from an older
 peer. A new process that serves an engine links both modules and makes both calls. The commands
 run in the process that serves the engine, because the scan reads that process's own images and
-the shared cache it maps: the local-runtime service answers for "My Mac", an injected payload for
+the shared cache it maps: the local service answers for "My Mac", an injected payload for
 the process it was injected into.
 
 ## Derived data
@@ -632,7 +632,7 @@ it again. Code: `RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/
 `Documentations/Evolutions/0061-derived-data.md`; **read `Documentations/DerivedData.md` before changing that
 code or the corpus store's read phase** — it says why each part has the shape it has.
 
-- **Only the two service processes read, write and clean it up.** `RuntimeViewerLocalRuntimeService/main.swift`
+- **Only the two service processes read, write and clean it up.** `RuntimeViewerLocalService/main.swift`
   and `AppKitPluginImpl.runService()` call `RuntimeDerivedData.enableInThisProcess()` before any engine exists.
   Every other process leaves it off — the app itself (its Bonjour server engine answers commands in process), the
   command-line host, the Catalyst helper application, an injected payload, a test — and the app only measures

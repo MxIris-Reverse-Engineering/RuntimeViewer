@@ -23,7 +23,7 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
 
     /// What the XPC service serves its engine through; kept for the life of
     /// the process.
-    private var serviceHost: RuntimeLocalRuntimeServiceHost?
+    private var serviceHost: RuntimeLocalServiceHost?
 
     override required init() {
         super.init()
@@ -80,7 +80,7 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
         RuntimeInjection.install()
         RuntimeCrossReferences.install()
         // The service keeps derived data for the Mac Catalyst engine, as the
-        // local-runtime service does for "My Mac"; the helper application,
+        // local service does for "My Mac"; the helper application,
         // which serves the standalone command-line host, does not.
         RuntimeDerivedData.enableInThisProcess()
 
@@ -94,15 +94,15 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
             Self.logger.error("Mac Catalyst service could not load UIKit: \(reason, privacy: .public)")
         }
 
-        // The same job as the local-runtime service, so the same host: an
+        // The same job as the local service, so the same host: an
         // in-process engine served on this service's listener. The app's
         // client engine is `.macCatalystClient`; which process answers it is
         // the transport's business.
         let runtimeEngine = RuntimeEngine(source: .local, engineID: "catalyst-runtime-service.\(ProcessInfo.processInfo.processIdentifier)")
         self.runtimeEngine = runtimeEngine
-        let serviceHost: RuntimeLocalRuntimeServiceHost
+        let serviceHost: RuntimeLocalServiceHost
         do {
-            serviceHost = RuntimeLocalRuntimeServiceHost(engine: runtimeEngine, connection: try RuntimeXPCServiceListenerConnection.embeddedService())
+            serviceHost = RuntimeLocalServiceHost(engine: runtimeEngine, connection: try RuntimeXPCServiceListenerConnection.embeddedService())
         } catch {
             // Without a listener there is no service; let launchd see a clean failure.
             Self.logger.error("Mac Catalyst service could not create its listener: \(error, privacy: .public)")
@@ -113,7 +113,7 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
         // Every handler has to be in place before the listener activates, and
         // `activate()` is `xpc_main`, which parks the main thread for good. So
         // the asynchronous set-up runs off the main thread while the main
-        // thread waits for it, the way the local-runtime service's `main.swift`
+        // thread waits for it, the way the local service's `main.swift`
         // does it.
         let setupFinished = DispatchSemaphore(value: 0)
         Task.detached {

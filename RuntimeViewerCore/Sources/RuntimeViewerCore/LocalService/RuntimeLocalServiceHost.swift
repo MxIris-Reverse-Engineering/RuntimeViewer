@@ -5,7 +5,7 @@ import Combine
 public import FoundationToolbox
 public import RuntimeViewerCommunication
 
-/// An in-process engine served on an XPC service's listener: the local-runtime
+/// An in-process engine served on an XPC service's listener: the local
 /// service's whole job, with its `.local` engine.
 ///
 /// The service's `main.swift` builds one of these around an engine and a
@@ -25,7 +25,7 @@ public import RuntimeViewerCommunication
 /// process, so what it gets is an empty slate — which is the truth, and
 /// what walks the app's document back to the image list.
 @Loggable(.private)
-public final class RuntimeLocalRuntimeServiceHost {
+public final class RuntimeLocalServiceHost {
     public let engine: RuntimeEngine
 
     private let connection: RuntimeXPCServiceListenerConnection
@@ -37,7 +37,7 @@ public final class RuntimeLocalRuntimeServiceHost {
     public init(engine: RuntimeEngine, connection: RuntimeXPCServiceListenerConnection) {
         self.engine = engine
         self.connection = connection
-        self.server = RuntimeEngineConnectionServer(engine: engine, connection: connection, label: "LocalRuntimeService")
+        self.server = RuntimeEngineConnectionServer(engine: engine, connection: connection, label: "RuntimeLocalService")
     }
 
     /// Connects the engine and installs every handler and relay.
@@ -61,7 +61,7 @@ public final class RuntimeLocalRuntimeServiceHost {
                 Task { await server.sendInitialData() }
             }
         let imageCount = await engine.imageList.count
-        #log(.info, "Local runtime service host ready: \(imageCount, privacy: .public) images")
+        #log(.info, "Local service host ready: \(imageCount, privacy: .public) images")
     }
 
     /// Starts accepting clients. For the embedded service this is `xpc_main`

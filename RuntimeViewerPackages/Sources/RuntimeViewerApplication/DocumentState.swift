@@ -90,7 +90,7 @@ public final class DocumentState {
     /// becomes ready again — after which the document walks back to the
     /// image list.
     ///
-    /// That edge is the local-runtime XPC service having been relaunched —
+    /// That edge is the local XPC service having been relaunched —
     /// after a crash, or after the system reclaimed it while it sat idle:
     /// the engine object survives, but the process behind it is new and holds
     /// none of the images this document was browsing, so every request from

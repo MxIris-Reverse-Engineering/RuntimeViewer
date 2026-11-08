@@ -1,6 +1,6 @@
 //
 //  main.swift
-//  RuntimeViewerLocalRuntimeService
+//  RuntimeViewerLocalService
 //
 //  The process "My Mac" runs in. The app never dlopens or indexes an image
 //  itself any more: its `.local` engine forwards every request here, and a
@@ -29,14 +29,14 @@ RuntimeCrossReferences.install()
 // serve the app's engines, so it is turned on here, before the engine exists.
 RuntimeDerivedData.enableInThisProcess()
 
-let engine = RuntimeEngine(source: .local, engineID: "local-runtime-service.\(ProcessInfo.processInfo.processIdentifier)")
+let engine = RuntimeEngine(source: .local, engineID: "local-service.\(ProcessInfo.processInfo.processIdentifier)")
 
-let host: RuntimeLocalRuntimeServiceHost
+let host: RuntimeLocalServiceHost
 do {
-    host = RuntimeLocalRuntimeServiceHost(engine: engine, connection: try RuntimeXPCServiceListenerConnection.embeddedService())
+    host = RuntimeLocalServiceHost(engine: engine, connection: try RuntimeXPCServiceListenerConnection.embeddedService())
 } catch {
     // Without a listener there is no service; let launchd see a clean failure.
-    FileHandle.standardError.write(Data("RuntimeViewerLocalRuntimeService: could not create the service listener: \(error)\n".utf8))
+    FileHandle.standardError.write(Data("RuntimeViewerLocalService: could not create the service listener: \(error)\n".utf8))
     exit(EXIT_FAILURE)
 }
 
@@ -51,7 +51,7 @@ Task.detached {
     do {
         try await host.start()
     } catch {
-        FileHandle.standardError.write(Data("RuntimeViewerLocalRuntimeService: could not start the local runtime engine: \(error)\n".utf8))
+        FileHandle.standardError.write(Data("RuntimeViewerLocalService: could not start the local runtime engine: \(error)\n".utf8))
         exit(EXIT_FAILURE)
     }
     setupFinished.signal()

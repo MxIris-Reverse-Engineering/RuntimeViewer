@@ -9,7 +9,7 @@ import RuntimeViewerCommunication
 /// Mac Catalyst XPC service (`RuntimeViewerCatalystService.xpc`) instead,
 /// which launchd starts on the first message and starts again after it
 /// exits. Which process takes which path is decided by the bundle, the way
-/// `LocalRuntimeService` in RuntimeViewerCore decides it for "My Mac": the
+/// `RuntimeLocalService` in RuntimeViewerCore decides it for "My Mac": the
 /// app's `Info.plist` names the service it embeds under
 /// ``bundleIdentifierInfoDictionaryKey``, so the app connects its Catalyst
 /// engine with ``embeddedServiceCredential``. A process without the key —

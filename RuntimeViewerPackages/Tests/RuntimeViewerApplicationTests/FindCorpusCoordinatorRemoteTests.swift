@@ -8,10 +8,10 @@ import Testing
 @testable import RuntimeViewerSettings
 
 /// The corpus coordinator on the engine the app actually runs "My Mac" on: a
-/// `.local` engine forwarding to the local-runtime service, here an anonymous
+/// `.local` engine forwarding to the local service, here an anonymous
 /// listener in this process. The in-process engine the other coordinator
 /// suites use takes none of the paths a connection takes.
-@Suite("FindCorpusCoordinator over the local runtime service", .serialized)
+@Suite("FindCorpusCoordinator over the local service", .serialized)
 @MainActor
 struct FindCorpusCoordinatorRemoteTests {
     private static func isBuilding(_ state: RuntimeInterfaceCorpusBuildState?) -> Bool {
@@ -34,9 +34,9 @@ struct FindCorpusCoordinatorRemoteTests {
         return try await engine.interfaceCorpusCoverage()
     }
 
-    @Test("cancelling a build over the local runtime service stops it there, and the row stays gone")
+    @Test("cancelling a build over the local service stops it there, and the row stays gone")
     func cancelReachesTheServingProcess() async throws {
-        let fixture = try await LocalRuntimeServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.cancel")
+        let fixture = try await LocalServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.cancel")
         defer { Task { await fixture.stop() } }
         try await fixture.serving.loadImage(at: TestImages.foundation)
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
@@ -52,7 +52,7 @@ struct FindCorpusCoordinatorRemoteTests {
         // This document was the build's only subscriber, so the service gives
         // the build up.
         let coverage = try await Self.waitForServingCoverage(of: fixture.serving, timeout: 5) { $0.statesByImagePath[TestImages.foundation] == nil }
-        #expect(coverage.statesByImagePath[TestImages.foundation] == nil, "the local runtime service kept building: \(String(describing: coverage.statesByImagePath[TestImages.foundation]))")
+        #expect(coverage.statesByImagePath[TestImages.foundation] == nil, "the local service kept building: \(String(describing: coverage.statesByImagePath[TestImages.foundation]))")
 
         // And a refresh does not bring the row back.
         coordinator.refreshCoverage()
@@ -69,7 +69,7 @@ struct FindCorpusCoordinatorRemoteTests {
     /// a small budget just evicted (PR121.34).
     @Test("an image indexed behind the coordinator's back is asked for once a search over every image says it is unbuilt")
     func imageIndexedElsewhereIsAskedForAfterASearch() async throws {
-        let fixture = try await LocalRuntimeServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.indexedElsewhere")
+        let fixture = try await LocalServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.indexedElsewhere")
         defer { Task { await fixture.stop() } }
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)
         environment.settings.search.isCorpusEnabled = true
@@ -94,7 +94,7 @@ struct FindCorpusCoordinatorRemoteTests {
 
     @Test("a build the service gives up leaves no failed entry in the history")
     func storeCancellationIsNotAFailure() async throws {
-        let fixture = try await LocalRuntimeServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.storeCancellation")
+        let fixture = try await LocalServiceFixture.make(label: "FindCorpusCoordinatorRemoteTests.storeCancellation")
         defer { Task { await fixture.stop() } }
         try await fixture.serving.loadImage(at: TestImages.foundation)
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)

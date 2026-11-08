@@ -2,16 +2,16 @@
 
 // The plain XPC service the app's "My Mac" engine runs in, embedded at Contents/XPCServices. Each
 // configuration embeds a service of its own identifier, which the app reads back from its
-// Info.plist (RuntimeViewerLocalRuntimeServiceBundleIdentifier) to open the connection.
-CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalRuntimeService/RuntimeViewerLocalRuntimeService.entitlements
+// Info.plist (RuntimeViewerLocalServiceBundleIdentifier) to open the connection.
+CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalService/RuntimeViewerLocalService.entitlements
 CODE_SIGN_STYLE = Manual
 COMBINE_HIDPI_IMAGES = YES
 DEVELOPMENT_TEAM = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
 ENABLE_HARDENED_RUNTIME = YES
 ENABLE_POINTER_AUTHENTICATION = NO
 GENERATE_INFOPLIST_FILE = YES
-INFOPLIST_FILE = RuntimeViewerLocalRuntimeService/Info.plist
-INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalRuntimeService
+INFOPLIST_FILE = RuntimeViewerLocalService/Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalService
 INFOPLIST_KEY_NSHumanReadableCopyright =
 MACOSX_DEPLOYMENT_TARGET = 15.0
 PRODUCT_NAME = $(TARGET_NAME)

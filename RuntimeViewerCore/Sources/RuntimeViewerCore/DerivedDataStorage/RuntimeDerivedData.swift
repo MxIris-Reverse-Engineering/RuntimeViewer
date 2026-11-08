@@ -8,7 +8,7 @@ import FoundationToolbox
 /// is the contract; `RuntimeDerivedDataStore` is where it lives.
 ///
 /// **Off unless a process turns it on.** The two processes that serve the
-/// app's engines — the local-runtime XPC service and the Mac Catalyst
+/// app's engines — the local XPC service and the Mac Catalyst
 /// service — call `enableInThisProcess()` at their entry points, before any
 /// engine connects. Every other process leaves it off: the app itself, whose
 /// Bonjour server engine answers commands in its own process; the
@@ -21,7 +21,7 @@ import FoundationToolbox
 public enum RuntimeDerivedData {
     /// Turns derived data on for this process. Called once, at the entry
     /// point of the two processes that serve an engine and keep derived
-    /// data — the local-runtime XPC service and the Mac Catalyst service —
+    /// data — the local XPC service and the Mac Catalyst service —
     /// before any engine connects. Every other process leaves it off, the
     /// app's own process included.
     public static func enableInThisProcess() {

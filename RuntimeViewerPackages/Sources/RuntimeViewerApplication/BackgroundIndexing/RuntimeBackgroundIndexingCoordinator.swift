@@ -334,7 +334,7 @@ extension RuntimeBackgroundIndexingCoordinator {
     // MARK: - The engine coming back
 
     /// Follows the engine's readiness. A `false → true` edge is a new process
-    /// behind the engine — the local runtime service relaunched, a peer
+    /// behind the engine — the local service relaunched, a peer
     /// reconnected, the engine's first connection — which has indexed none of
     /// what the old one had. The coordinator hears of it from the engine
     /// itself, whatever the documents on it have open: a document walks back

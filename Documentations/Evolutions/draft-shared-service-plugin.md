@@ -1,6 +1,6 @@
 # Draft - 两个 XPC service 改成加载共享插件的外壳，local-runtime service 改名为 local service
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-08
 - **最后更新**: 2026-11-08
 - **所属愿景**: 无
@@ -21,7 +21,7 @@ App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO
 1. **插件改名**：`RuntimeViewerCatalystHelperPlugin` → `RuntimeViewerServicePlugin`，target、文件夹、xcconfig 目录、App 里的 `Embed Catalyst Plugin` 拷贝阶段一起改。跨进程的入口类型同时改掉 AppKit / Catalyst 字样和缩写：`AppKitBridge` → `ServicePluginLoader`，`AppKitPlugin` → `ServicePlugin`，`AppKitPluginImpl` → `ServicePluginEntry`。
 2. **四个入口**：`launch()` → `launchCatalystHelper()`，`runService()` → `runCatalystService()`，新增 `runLocalService()` 与 `runOfflineService()`，内容分别是两个 service 原来 `main.swift` 里的启动代码。
 3. **两个 service 变外壳**：`main.swift` 只用 `ServicePluginLoader` 加载插件、调用对应入口；target 不再依赖、也不再链接任何包；`ServicePluginLoader.swift` 与 `ServicePlugin.swift` 照 Catalyst service 现在的写法，用同步文件夹的 exception set 编进来。
-4. **改名 local-runtime → local**（已在本分支完成）：target、文件夹、产物、xcconfig 目录、bundle identifier（`dev.JH.RuntimeViewerLocalService`、`com.JH.RuntimeViewerLocalService`）、App `Info.plist` 的 key `RuntimeViewerLocalServiceBundleIdentifier`、Core 的 `RuntimeLocalService` 与 `RuntimeLocalServiceHost`（目录 `LocalService/`）、测试工具 `LocalServiceFixture`，以及 Tuist 描述、注释与现行文档。已归档的提案、问题记录和指向 0037 的链接保留原样；`observeLocalRuntimeRestarts` 这类指「本机运行时」概念的名字不改。
+4. **改名 local-runtime → local**（✅ 已完成）：target、文件夹、产物、xcconfig 目录、bundle identifier（`dev.JH.RuntimeViewerLocalService`、`com.JH.RuntimeViewerLocalService`）、App `Info.plist` 的 key `RuntimeViewerLocalServiceBundleIdentifier`、Core 的 `RuntimeLocalService` 与 `RuntimeLocalServiceHost`（目录 `LocalService/`）、测试工具 `LocalServiceFixture`，以及 Tuist 描述、注释与现行文档。已归档的提案、问题记录和指向 0037 的链接保留原样；`observeLocalRuntimeRestarts` 这类指「本机运行时」概念的名字不改。
 5. **文档**：根 `AGENTS.md`（外壳一节、`install()` 调用位置表、派生数据一节）、`Configurations/AGENTS.md`（插件一节）、`Documentations/DerivedData.md`、`CommunicationAndEngineArchitecture.md`、`Glossary.md`；Tuist 的 `Project.swift` 同步，提交前 `./TuistScript.sh check` 通过。
 6. **验证**：Debug-arm64e 与 Release 各编一次，量每个二进制的大小，确认 `PackageFrameworks` 里除 ObjCRuntimeToolbox 外没有自动拆出的 framework，daemon 与 payload 的链接不变；Core 与 Packages 的测试编译通过；用户实测「My Mac」、离线打开一个文件、「My Mac (Mac Catalyst)」三条路径都正常。
 

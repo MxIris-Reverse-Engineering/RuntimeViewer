@@ -51,7 +51,7 @@ extension RuntimeEngine {
 
     /// Whether a client engine on `source` asks its peer for that peer's
     /// `DYLD_ROOT_PATH`. Only a socket can lead to a process in the iOS
-    /// Simulator. An XPC peer — the local-runtime service, the Catalyst
+    /// Simulator. An XPC peer — the local service, the Catalyst
     /// helper, an app injected over a Mach service — is a Mac process, whose
     /// root is `nil`; and a payload of an earlier release injected over a
     /// Mach service takes a command it does not know for its client going

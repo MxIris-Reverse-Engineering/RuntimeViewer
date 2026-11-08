@@ -40,11 +40,11 @@ enum DerivedDataTestIdentities {
     )
 
     static let producer = RuntimeDerivedDataProducerIdentity(
-        digest: RuntimeDerivedDataProducerIdentity.digest(of: [(name: "RuntimeViewerLocalRuntimeService", uuid: UUID(uuidString: "0B7E3E2A-5C1D-4E8F-8A21-3F0C5D9E7B44")!)])
+        digest: RuntimeDerivedDataProducerIdentity.digest(of: [(name: "RuntimeViewerLocalService", uuid: UUID(uuidString: "0B7E3E2A-5C1D-4E8F-8A21-3F0C5D9E7B44")!)])
     )
 
     static let otherProducer = RuntimeDerivedDataProducerIdentity(
-        digest: RuntimeDerivedDataProducerIdentity.digest(of: [(name: "RuntimeViewerLocalRuntimeService", uuid: UUID(uuidString: "9F1D2C3B-4A5E-4F60-8172-93A4B5C6D7E8")!)])
+        digest: RuntimeDerivedDataProducerIdentity.digest(of: [(name: "RuntimeViewerLocalService", uuid: UUID(uuidString: "9F1D2C3B-4A5E-4F60-8172-93A4B5C6D7E8")!)])
     )
 
     /// A store over `directory` that keeps every image, so a test can use

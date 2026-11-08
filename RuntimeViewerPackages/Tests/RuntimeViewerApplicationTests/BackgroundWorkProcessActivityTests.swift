@@ -8,7 +8,7 @@ import Testing
 /// The activity an engine's background work holds while any of it is in
 /// progress (`Documentations/ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`).
 ///
-/// The work runs in the local-runtime XPC service, which runs at full speed
+/// The work runs in the local XPC service, which runs at full speed
 /// only while the app waiting on it donates importance, and an app in App Nap
 /// donates none. So the app holds a user-initiated activity — one, however
 /// often the work is reported — exactly while work is in progress, and ends
