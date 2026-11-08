@@ -7,7 +7,7 @@ import Combine
 @testable import RuntimeViewerCommunication
 
 /// The local engine running out of process, with both processes played by
-/// this one: a `RuntimeLocalRuntimeServiceHost` over an anonymous listener
+/// this one: a `RuntimeLocalServiceHost` over an anonymous listener
 /// stands in for the embedded service, and a `.local` engine connected with
 /// `.xpcService(.anonymousListener(…))` stands in for the app's. A `.remote`
 /// client on the same credential stands in for the app's Mac Catalyst
@@ -16,14 +16,14 @@ import Combine
 /// What the engine does when the service goes away is not exercised here —
 /// the engine only reacts to its connection's state, and the connection's
 /// reattach has its own suite in `RuntimeViewerCommunicationTests`.
-@Suite("RuntimeLocalRuntimeServiceHost", .serialized)
-struct RuntimeLocalRuntimeServiceHostTests {
+@Suite("RuntimeLocalServiceHost", .serialized)
+struct RuntimeLocalServiceHostTests {
     private static let libobjcPath = "/usr/lib/libobjc.A.dylib"
 
-    private static func makeHost() async throws -> (host: RuntimeLocalRuntimeServiceHost, endpoint: RuntimeXPCServiceEndpoint) {
-        let serviceEngine = RuntimeEngine(source: .local, engineID: "local-runtime-service-test.host")
+    private static func makeHost() async throws -> (host: RuntimeLocalServiceHost, endpoint: RuntimeXPCServiceEndpoint) {
+        let serviceEngine = RuntimeEngine(source: .local, engineID: "local-service-test.host")
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
-        let host = RuntimeLocalRuntimeServiceHost(engine: serviceEngine, connection: listener)
+        let host = RuntimeLocalServiceHost(engine: serviceEngine, connection: listener)
         try await host.start()
         host.activate()
         return (host, endpoint)
@@ -38,7 +38,7 @@ struct RuntimeLocalRuntimeServiceHostTests {
     @Test("A .local engine connected with the service credential forwards, and receives the service's data")
     func connectingReceivesTheServiceData() async throws {
         let (host, endpoint) = try await Self.makeHost()
-        let client = try await Self.makeClient(for: endpoint, engineID: "local-runtime-service-test.client")
+        let client = try await Self.makeClient(for: endpoint, engineID: "local-service-test.client")
         defer { Task { await client.stop(); await host.stop() } }
 
         let hostImageList = await host.engine.imageList
@@ -58,7 +58,7 @@ struct RuntimeLocalRuntimeServiceHostTests {
     @Test("Requests are forwarded to the service and its pushes come back")
     func requestsForwardAndPushesReturn() async throws {
         let (host, endpoint) = try await Self.makeHost()
-        let client = try await Self.makeClient(for: endpoint, engineID: "local-runtime-service-test.client-loading")
+        let client = try await Self.makeClient(for: endpoint, engineID: "local-service-test.client-loading")
         defer { Task { await client.stop(); await host.stop() } }
 
         var subscriptions: Set<AnyCancellable> = []
@@ -86,7 +86,7 @@ struct RuntimeLocalRuntimeServiceHostTests {
     @Test("Every client that attaches gets the current data, not only the first")
     func everyAttachGetsTheCurrentData() async throws {
         let (host, endpoint) = try await Self.makeHost()
-        let firstClient = try await Self.makeClient(for: endpoint, engineID: "local-runtime-service-test.first")
+        let firstClient = try await Self.makeClient(for: endpoint, engineID: "local-service-test.first")
         defer { Task { await firstClient.stop(); await host.stop() } }
         let hostImageList = await host.engine.imageList
         let firstReceived = await pollUntil { await firstClient.imageList == hostImageList }
@@ -94,7 +94,7 @@ struct RuntimeLocalRuntimeServiceHostTests {
 
         // The app reattaching after the service came back looks, to the
         // listener, like a new peer replacing the old one.
-        let secondClient = try await Self.makeClient(for: endpoint, engineID: "local-runtime-service-test.second")
+        let secondClient = try await Self.makeClient(for: endpoint, engineID: "local-service-test.second")
         defer { Task { await secondClient.stop() } }
 
         let secondReceived = await pollUntil { await secondClient.imageList == hostImageList }
@@ -108,8 +108,8 @@ struct RuntimeLocalRuntimeServiceHostTests {
     @Test("A .remote client engine connected with the service credential reaches the service")
     func remoteClientWithServiceCredentialReachesTheService() async throws {
         let (host, endpoint) = try await Self.makeHost()
-        let source = RuntimeSource.remote(name: "Embedded service client", identifier: "local-runtime-service-test.remote-client", role: .client)
-        let client = RuntimeEngine(source: source, engineID: "local-runtime-service-test.remote-client")
+        let source = RuntimeSource.remote(name: "Embedded service client", identifier: "local-service-test.remote-client", role: .client)
+        let client = RuntimeEngine(source: source, engineID: "local-service-test.remote-client")
         defer { Task { await client.stop(); await host.stop() } }
 
         try await client.connect(credential: .xpcService(.anonymousListener(endpoint)))
@@ -132,7 +132,7 @@ struct RuntimeLocalRuntimeServiceHostTests {
 
     @Test("Without a credential a .local engine stays in process")
     func withoutCredentialStaysInProcess() async throws {
-        let engine = RuntimeEngine(source: .local, engineID: "local-runtime-service-test.in-process")
+        let engine = RuntimeEngine(source: .local, engineID: "local-service-test.in-process")
         defer { Task { await engine.stop() } }
 
         try await engine.connect()

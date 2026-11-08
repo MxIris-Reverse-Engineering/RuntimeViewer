@@ -12,8 +12,8 @@ import Testing
 /// `Foundation`, `libswiftCore.dylib`, `SwiftUI` and `SwiftUICore`, none of
 /// them following dependencies, maximum concurrency 28 — and opens AppKit once
 /// its background build is under way. The engine standing in for the app's
-/// forwards to a `RuntimeLocalRuntimeServiceHost` over a real XPC connection,
-/// as in `RuntimeLocalRuntimeServiceHostTests`: the batches run at utility
+/// forwards to a `RuntimeLocalServiceHost` over a real XPC connection,
+/// as in `RuntimeLocalServiceHostTests`: the batches run at utility
 /// priority on the app side, and the opening request comes from a
 /// user-initiated task through the `objectsWithProgress(in:)` the sidebar calls.
 ///
@@ -158,10 +158,10 @@ extension ForegroundLoadDuringBackgroundIndexingTests {
         let phaseChanges: [PhaseChange]
     }
 
-    private static func makeConnectedEngines(label: String) async throws -> (host: RuntimeLocalRuntimeServiceHost, client: RuntimeEngine) {
+    private static func makeConnectedEngines(label: String) async throws -> (host: RuntimeLocalServiceHost, client: RuntimeEngine) {
         let serviceEngine = RuntimeEngine(source: .local, engineID: "foreground-load-test.\(label).host")
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
-        let host = RuntimeLocalRuntimeServiceHost(engine: serviceEngine, connection: listener)
+        let host = RuntimeLocalServiceHost(engine: serviceEngine, connection: listener)
         try await host.start()
         host.activate()
         let client = RuntimeEngine(source: .local, engineID: "foreground-load-test.\(label).client")

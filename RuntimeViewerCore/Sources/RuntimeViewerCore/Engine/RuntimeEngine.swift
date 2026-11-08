@@ -49,15 +49,15 @@ extension RuntimeEngine {
 @Loggable(.private)
 public actor RuntimeEngine {
     /// This Mac's runtime. Where its work happens is the process's own
-    /// business: a process whose bundle embeds the local-runtime XPC
+    /// business: a process whose bundle embeds the local XPC
     /// service — the app — connects to it and forwards everything, so it
     /// never dlopens an image itself; every other process (the service
     /// itself, the standalone CLI host, the Catalyst helper and service, a test) loads
-    /// and indexes in process. See ``LocalRuntimeService``.
+    /// and indexes in process. See ``RuntimeLocalService``.
     public static let local: RuntimeEngine = {
         let runtimeEngine = RuntimeEngine(source: .local)
         Task {
-            await runtimeEngine.connectReportingFailure(credential: LocalRuntimeService.embeddedServiceCredential)
+            await runtimeEngine.connectReportingFailure(credential: RuntimeLocalService.embeddedServiceCredential)
         }
         return runtimeEngine
     }()

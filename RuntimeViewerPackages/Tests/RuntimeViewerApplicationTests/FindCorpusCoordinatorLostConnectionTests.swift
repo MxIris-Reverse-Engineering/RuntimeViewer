@@ -8,7 +8,7 @@ import Testing
 @testable import RuntimeViewerSettings
 
 /// The corpus coordinator when the connection under a build goes away: the
-/// local-runtime service exits, a device or an injected app drops its
+/// local service exits, a device or an injected app drops its
 /// socket. Every build in flight failed then, and each was recorded as a
 /// Failed build in the Report navigator's history, although nothing failed
 /// to print (PR121.30, the part left to batch S3b).
@@ -16,7 +16,7 @@ import Testing
 @MainActor
 struct FindCorpusCoordinatorLostConnectionTests {
     enum Transport: String, CaseIterable, Sendable, CustomTestStringConvertible {
-        /// "My Mac": a `.local` engine forwarding to the local-runtime
+        /// "My Mac": a `.local` engine forwarding to the local
         /// service, here an anonymous listener in this process.
         case xpcService
         /// A device, a mirrored Mac or an injected app.
@@ -44,7 +44,7 @@ struct FindCorpusCoordinatorLostConnectionTests {
         case .xpcService:
             let serving = RuntimeEngine(source: .local, engineID: "\(label).serving")
             let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
-            let host = RuntimeLocalRuntimeServiceHost(engine: serving, connection: listener)
+            let host = RuntimeLocalServiceHost(engine: serving, connection: listener)
             try await host.start()
             // SwiftyXPC copies a listener's handlers onto each connection it
             // accepts, so the replacement has to precede the activation.

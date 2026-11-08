@@ -17,7 +17,7 @@ SUPPORTS_MACCATALYST = YES
 // variant's search paths after the target's own LIBRARY_SEARCH_PATHS, rejects DT_TOOLCHAIN_DIR in a
 // search path, and a target-level TOOLCHAINS loses to Xcode's. So TOOLCHAIN_DIR names Xcode's own
 // toolchain here. The cost: with a custom Swift toolchain selected, settings built on TOOLCHAIN_DIR
-// still point into Xcode's for this target, which only loads the Catalyst plugin.
+// still point into Xcode's for this target, which only loads the service plugin.
 // RuntimeViewerCatalystService/Shared.xcconfig repeats it; Configurations/AGENTS.md has the note.
 TOOLCHAIN_DIR = $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain
 

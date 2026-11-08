@@ -31,7 +31,7 @@ public struct RuntimeDerivedDataLocation: Hashable, Sendable {
 
     /// The `.app` enclosing `bundle` — the bundle itself, or an XPC service
     /// under its `Contents/XPCServices` — when the application's `Info.plist`
-    /// names `RuntimeViewerLocalRuntimeServiceBundleIdentifier`; `nil`
+    /// names `RuntimeViewerLocalServiceBundleIdentifier`; `nil`
     /// anywhere else.
     public static func enclosingApplication(of bundle: Bundle) -> RuntimeDerivedDataLocation? {
         guard let cachesDirectoryURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
@@ -56,7 +56,7 @@ public struct RuntimeDerivedDataLocation: Hashable, Sendable {
         guard applicationURL.pathExtension == "app",
               let informationPropertyListData = try? Data(contentsOf: applicationURL.appendingPathComponent("Contents/Info.plist")),
               let informationPropertyList = try? PropertyListSerialization.propertyList(from: informationPropertyListData, format: nil) as? [String: Any],
-              let serviceBundleIdentifier = informationPropertyList[LocalRuntimeService.bundleIdentifierInfoDictionaryKey] as? String, !serviceBundleIdentifier.isEmpty,
+              let serviceBundleIdentifier = informationPropertyList[RuntimeLocalService.bundleIdentifierInfoDictionaryKey] as? String, !serviceBundleIdentifier.isEmpty,
               let bundleIdentifier = informationPropertyList["CFBundleIdentifier"] as? String, !bundleIdentifier.isEmpty,
               !bundleIdentifier.contains("/")
         else { return nil }

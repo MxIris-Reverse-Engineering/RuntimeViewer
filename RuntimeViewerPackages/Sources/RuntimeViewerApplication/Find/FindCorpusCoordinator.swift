@@ -964,7 +964,7 @@ public final class FindCorpusCoordinator {
     // MARK: - The engine coming back
 
     /// Follows the engine's readiness. A `false → true` edge is a new process
-    /// behind the engine — the local runtime service relaunched, a peer
+    /// behind the engine — the local service relaunched, a peer
     /// reconnected, the engine's first connection — heard from the engine
     /// itself, whatever its documents have open, so a search run again on the
     /// new process finds the coordinator on it already.

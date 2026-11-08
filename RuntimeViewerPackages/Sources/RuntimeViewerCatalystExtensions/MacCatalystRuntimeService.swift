@@ -9,7 +9,7 @@ import RuntimeViewerCommunication
 /// Mac Catalyst XPC service (`RuntimeViewerCatalystService.xpc`) instead,
 /// which launchd starts on the first message and starts again after it
 /// exits. Which process takes which path is decided by the bundle, the way
-/// `LocalRuntimeService` in RuntimeViewerCore decides it for "My Mac": the
+/// `RuntimeLocalService` in RuntimeViewerCore decides it for "My Mac": the
 /// app's `Info.plist` names the service it embeds under
 /// ``bundleIdentifierInfoDictionaryKey``, so the app connects its Catalyst
 /// engine with ``embeddedServiceCredential``. A process without the key —
@@ -18,7 +18,7 @@ import RuntimeViewerCommunication
 /// service in the calling process's own bundle, and that process is the app.
 ///
 /// The service and the helper application are both shells around
-/// `RuntimeViewerCatalystHelperPlugin`, which does the work on either path.
+/// `RuntimeViewerServicePlugin`, which does the work on either path.
 public enum MacCatalystRuntimeService {
     /// The app `Info.plist` key carrying the embedded service's bundle
     /// identifier. Filled from `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER`

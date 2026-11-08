@@ -11,8 +11,8 @@ public import RuntimeViewerCommunication
 /// `activate()`. Nothing is read before the app attaches: its first `hello`
 /// carries the file (``RuntimeOfflineService``), and before that `hello` is
 /// answered this host opens the file, connects an engine reading it and
-/// installs the engine's commands through a `RuntimeLocalRuntimeServiceHost`
-/// — the same host the local runtime service runs, here started after the
+/// installs the engine's commands through a `RuntimeLocalServiceHost`
+/// — the same host the local service runs, here started after the
 /// listener activated rather than before. A file that cannot be read fails
 /// the `hello`, and with it the app's connect, carrying the reason. Tests
 /// build the same type around an anonymous listener.
@@ -24,7 +24,7 @@ public final class RuntimeOfflineServiceHost: @unchecked Sendable {
     private let connection: RuntimeXPCServiceListenerConnection
 
     @Mutex
-    private var serviceHost: RuntimeLocalRuntimeServiceHost?
+    private var serviceHost: RuntimeLocalServiceHost?
 
     public init(connection: RuntimeXPCServiceListenerConnection) {
         self.connection = connection
@@ -61,7 +61,7 @@ public final class RuntimeOfflineServiceHost: @unchecked Sendable {
         if let derivedDataStore = RuntimeDerivedData.offlineStore(for: file, isSharedCacheImage: { catalog.isSharedCacheImage($0) }) {
             await engine.useDerivedDataStore(derivedDataStore)
         }
-        let serviceHost = RuntimeLocalRuntimeServiceHost(engine: engine, connection: connection)
+        let serviceHost = RuntimeLocalServiceHost(engine: engine, connection: connection)
         try await serviceHost.start()
         self.serviceHost = serviceHost
         #log(.info, "Offline service reading \(file.displayName, privacy: .public)")

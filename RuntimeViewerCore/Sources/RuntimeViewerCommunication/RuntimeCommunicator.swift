@@ -54,7 +54,7 @@ public final class RuntimeCommunicator {
             #if os(macOS)
             // `.local` is an identity, not a transport. The one connection it
             // can have is to the embedded XPC service, and which service that
-            // is arrives as the credential — see `LocalRuntimeService` in RuntimeViewerCore.
+            // is arrives as the credential — see `RuntimeLocalService` in RuntimeViewerCore.
             if case .xpcService(let target) = credential {
                 #log(.debug, "Creating XPC service client connection: \(String(describing: target), privacy: .public)")
                 let connection = try await RuntimeXPCServiceClientConnection(target: target, modifier: modifier)

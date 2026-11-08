@@ -6,8 +6,8 @@ public import RuntimeViewerCommunication
 /// Serves one engine on one connection.
 ///
 /// The part `RuntimeEngineProxyServer` (a local engine shared with peers over
-/// TCP) and `RuntimeLocalRuntimeServiceHost` (the in-process engine inside the
-/// local-runtime XPC service) have in common: the shared command table, the
+/// TCP) and `RuntimeLocalServiceHost` (the in-process engine inside the
+/// local XPC service) have in common: the shared command table, the
 /// four pushes a client engine's `setupMessageHandlerForClient` listens for,
 /// and the initial data a freshly connected client needs. Each owner decides
 /// *when* to call which — a TCP server wires up per accepted client, an XPC

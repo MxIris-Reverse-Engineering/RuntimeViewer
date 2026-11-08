@@ -12,8 +12,8 @@
 ## 一、只有两个服务进程读写，App 进程从不打开这些文件
 
 派生数据默认关闭。只有「My Mac」与「My Mac (Mac Catalyst)」两个 Engine 实际执行所在的服务进程，在入口处调
-`RuntimeDerivedData.enableInThisProcess()`：`RuntimeViewerLocalRuntimeService/main.swift` 与
-`AppKitPluginImpl.runService()`。语料住在拥有镜像的进程里，存盘与读回也就只能在那里做。
+`RuntimeDerivedData.enableInThisProcess()`：服务插件 `RuntimeViewerServicePlugin` 的
+`ServicePluginEntry.runLocalService()` 与 `runCatalystService()`。语料住在拥有镜像的进程里，存盘与读回也就只能在那里做。
 
 其余进程一律不开：
 
@@ -41,8 +41,8 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
 
 ## 二、生产者身份读的是内存里的映像，带名字不带路径
 
-一份数据由哪份代码产出，靠的是**生产者身份**：含 RuntimeViewerCore 的那个映像（`#dsohandle` 所在的映像，可能是
-服务的可执行文件，也可能是 Catalyst plugin），加上它直接或间接依赖、且不在共享缓存里的映像，各取 `LC_UUID`，
+一份数据由哪份代码产出，靠的是**生产者身份**：含 RuntimeViewerCore 的那个映像（`#dsohandle` 所在的映像：两个服务进程里都是它们加载的
+服务插件，别处是静态链着 Core 的可执行文件），加上它直接或间接依赖、且不在共享缓存里的映像，各取 `LC_UUID`，
 连同名字一起算 SHA-256。几条看起来更简单的路为什么走不通：
 
 - **为什么不用版本号**：Debug 构建不改版本号，而打印方式的任何改动都必须作废旧数据。`LC_UUID` 随链接内容变，

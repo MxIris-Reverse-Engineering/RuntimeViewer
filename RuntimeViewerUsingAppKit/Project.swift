@@ -179,11 +179,11 @@ let project = Project(
                     subpath: "Contents/Applications",
                     files: [.buildProduct(name: "RuntimeViewerCatalystHelper", codeSignOnCopy: true)]
                 ),
-                // The one copy of the plugin both Catalyst shells load, from the app's PlugIns. Not a
+                // The one copy of the plugin the four shells load, from the app's PlugIns. Not a
                 // dependency, for the reason its target gives; the scheme builds it first.
                 .plugins(
-                    name: "Embed Catalyst Plugin",
-                    files: [.buildProduct(name: "RuntimeViewerCatalystHelperPlugin", codeSignOnCopy: true)]
+                    name: "Embed Service Plugin",
+                    files: [.buildProduct(name: "RuntimeViewerServicePlugin", codeSignOnCopy: true)]
                 ),
             ],
             scripts: [
@@ -198,7 +198,7 @@ let project = Project(
                 // Tuist embeds these four itself: the SourceEditor bridge framework in Frameworks, the
                 // three services in XPCServices.
                 .target(name: "RuntimeViewerSourceEditorBridge"),
-                .target(name: "RuntimeViewerLocalRuntimeService"),
+                .target(name: "RuntimeViewerLocalService"),
                 .target(name: "RuntimeViewerCatalystService"),
                 .target(name: "RuntimeViewerOfflineService"),
                 .external(name: "RuntimeViewerApplication"),
@@ -229,14 +229,7 @@ let project = Project(
             bundleId: "$(inherited)",
             infoPlist: nil,
             buildableFolders: [
-                .folder(
-                    "RuntimeViewerCatalystHelper",
-                    exceptions: .exceptions([
-                        .exception(excluded: ["Info.plist"]),
-                        // The plugin loader both Catalyst shells share.
-                        .exception(target: "RuntimeViewerCatalystService", included: ["AppKitBridge.swift"]),
-                    ])
-                ),
+                .folder("RuntimeViewerCatalystHelper", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
             ],
             settings: targetSettings(directory: "RuntimeViewerCatalystHelper")
         ),
@@ -255,26 +248,30 @@ let project = Project(
             ],
             settings: targetSettings(directory: "RuntimeViewerCatalystService")
         ),
-        // The macOS bundle both Catalyst shells load from the app's PlugIns. Tuist never links static
+        // The macOS bundle the four shells load from the app's PlugIns. Tuist never links static
         // products into a .bundle, so it is declared as a framework that keeps the .bundle
         // extension; the shells load it by path either way. Not a dependency of the app: Tuist would
         // embed it in Frameworks/, as it does every framework an app can reach, and with the binary
         // cache on it drops a dependency marked not to link. The scheme builds it first instead, and
         // the app's copy phase embeds it.
         .target(
-            name: "RuntimeViewerCatalystHelperPlugin",
+            name: "RuntimeViewerServicePlugin",
             destinations: .macOS,
             product: .framework,
-            productName: "RuntimeViewerCatalystHelperPlugin",
+            productName: "RuntimeViewerServicePlugin",
             bundleId: "$(inherited)",
             infoPlist: nil,
             buildableFolders: [
                 .folder(
-                    "RuntimeViewerCatalystHelperPlugin",
+                    "RuntimeViewerServicePlugin",
                     exceptions: .exceptions([
-                        // The protocol the shells talk to the plugin through.
-                        .exception(target: "RuntimeViewerCatalystHelper", included: ["AppKitPlugin.swift"]),
-                        .exception(target: "RuntimeViewerCatalystService", included: ["AppKitPlugin.swift"]),
+                        // The loader is the shells' code, not the plugin's.
+                        .exception(excluded: ["ServicePluginLoader.swift"]),
+                        // The protocol the shells talk to the plugin through, and the loader.
+                        .exception(target: "RuntimeViewerCatalystHelper", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
+                        .exception(target: "RuntimeViewerCatalystService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
+                        .exception(target: "RuntimeViewerLocalService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
+                        .exception(target: "RuntimeViewerOfflineService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
                     ])
                 ),
             ],
@@ -286,7 +283,7 @@ let project = Project(
                 .external(name: "RuntimeViewerCrossReferences"),
             ],
             settings: targetSettings(
-                directory: "RuntimeViewerCatalystHelperPlugin",
+                directory: "RuntimeViewerServicePlugin",
                 configurationsWithOwnFile: [],
                 additionalSettings: manuallyOrderedTargetSettings.merging([
                     // Nothing imports the plugin; as a framework it would otherwise carry a module
@@ -364,25 +361,18 @@ let project = Project(
             settings: targetSettings(directory: "LaunchDaemon", additionalSettings: productNameFromConfigurationFiles)
         ),
         .target(
-            name: "RuntimeViewerLocalRuntimeService",
+            name: "RuntimeViewerLocalService",
             destinations: .macOS,
             product: .xpc,
-            productName: "RuntimeViewerLocalRuntimeService",
+            productName: "RuntimeViewerLocalService",
             bundleId: "$(inherited)",
             infoPlist: nil,
             buildableFolders: [
-                .folder("RuntimeViewerLocalRuntimeService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
+                .folder("RuntimeViewerLocalService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
             ],
-            dependencies: [
-                .external(name: "RuntimeViewerCore"),
-                .external(name: "RuntimeViewerCommunication"),
-                .external(name: "RuntimeViewerInjection"),
-                .external(name: "RuntimeViewerCrossReferences"),
-            ],
-            settings: targetSettings(directory: "RuntimeViewerLocalRuntimeService")
+            settings: targetSettings(directory: "RuntimeViewerLocalService")
         ),
-        // One instance per offline file: its Info.plist declares _MultipleInstances. It links
-        // neither the injection nor the cross-reference module, so it has no install() to call.
+        // One instance per offline file: its Info.plist declares _MultipleInstances.
         .target(
             name: "RuntimeViewerOfflineService",
             destinations: .macOS,
@@ -392,10 +382,6 @@ let project = Project(
             infoPlist: nil,
             buildableFolders: [
                 .folder("RuntimeViewerOfflineService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
-            ],
-            dependencies: [
-                .external(name: "RuntimeViewerCore"),
-                .external(name: "RuntimeViewerCommunication"),
             ],
             settings: targetSettings(directory: "RuntimeViewerOfflineService")
         ),
@@ -451,13 +437,13 @@ let project = Project(
     ],
     schemes: [
         // The only scheme that builds the app here. Two of the products the app embeds — the
-        // simulator payload and the Catalyst plugin — are not dependencies of anything (see their
+        // simulator payload and the service plugin — are not dependencies of anything (see their
         // targets), so this scheme builds them first, in a fixed order. Building the app target on
         // its own leaves them unbuilt and its copy phases fail.
         .scheme(
             name: "RuntimeViewer macOS",
             buildAction: .buildAction(
-                targets: ["RuntimeViewerSimulatorServer", "RuntimeViewerCatalystHelperPlugin", "RuntimeViewerUsingAppKit"],
+                targets: ["RuntimeViewerSimulatorServer", "RuntimeViewerServicePlugin", "RuntimeViewerUsingAppKit"],
                 buildOrder: .manual
             ),
             runAction: .runAction(configuration: "Debug", executable: "RuntimeViewerUsingAppKit")

@@ -17,7 +17,7 @@ import Foundation
 struct RemoteEnginePair: Sendable {
     enum Transport: String, CaseIterable, Sendable, CustomStringConvertible {
         /// The app's "My Mac": a `.local` engine forwarding to the embedded
-        /// local-runtime service, here an anonymous listener.
+        /// local service, here an anonymous listener.
         case xpcService
         /// A mirrored engine or an injected app: a client engine over a TCP
         /// connection to a peer serving the shared command table.
@@ -61,7 +61,7 @@ struct RemoteEnginePair: Sendable {
         switch transport {
         case .xpcService:
             let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
-            let host = RuntimeLocalRuntimeServiceHost(engine: serving, connection: listener)
+            let host = RuntimeLocalServiceHost(engine: serving, connection: listener)
             try await host.start()
             // SwiftyXPC copies a listener's handlers onto each connection it
             // accepts, so a replacement has to precede the activation.

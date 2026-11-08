@@ -36,8 +36,9 @@ public struct RuntimeDerivedDataProducerIdentity: Hashable, Sendable {
     public static func currentProcess() -> RuntimeDerivedDataProducerIdentity? {
         #if canImport(Darwin)
         // `#dsohandle` here is the header of the image this file is linked
-        // into: the service's executable when Core is linked statically, the
-        // Mac Catalyst plug-in, or a framework of its own.
+        // into: in the app's two services, the service plugin both of them
+        // load; anywhere else, the executable Core is linked into statically,
+        // or a framework of its own.
         guard let images = codeImages(rootedAt: UnsafeRawPointer(#dsohandle)) else { return nil }
         return RuntimeDerivedDataProducerIdentity(digest: digest(of: images))
         #else

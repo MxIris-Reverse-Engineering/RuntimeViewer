@@ -15,10 +15,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerCatalystHelper", category: "AppDelegate")
 
+    /// The loaded plugin, which keeps the helper's engine; held for the life
+    /// of the application.
+    private var plugin: ServicePlugin?
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         do {
-            let plugin = try AppKitBridge.shared.loadPlugins()
-            plugin.launch()
+            let plugin = try ServicePluginLoader.loadPlugin()
+            self.plugin = plugin
+            plugin.launchCatalystHelper()
         } catch {
             Self.logger.error("\(error, privacy: .public)")
         }

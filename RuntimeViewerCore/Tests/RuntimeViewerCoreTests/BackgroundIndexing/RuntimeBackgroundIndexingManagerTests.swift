@@ -366,7 +366,7 @@ import RuntimeViewerCommunication
     }
 
     /// A load the connection drops under is not a failed image. The process behind a remote
-    /// engine went away — the local runtime service exited, a device or an injected app closed
+    /// engine went away — the local service exited, a device or an injected app closed
     /// its socket — and every image still to load would fail the same way, each recorded as a
     /// failure with the transport's words for it ("serviceExited", "notConnected"). The batch
     /// stops there and ends cancelled, as an engine swap ends it (the indexing half of PR121.30).

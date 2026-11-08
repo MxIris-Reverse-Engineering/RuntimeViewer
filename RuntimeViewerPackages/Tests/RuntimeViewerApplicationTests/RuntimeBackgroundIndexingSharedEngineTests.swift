@@ -162,7 +162,7 @@ struct RuntimeBackgroundIndexingSharedEngineTests {
 
     // MARK: - The engine coming back
 
-    /// The local runtime service relaunching, or a peer reconnecting, puts a new process behind the
+    /// The local service relaunching, or a peer reconnecting, puts a new process behind the
     /// engine that has indexed none of the rows. The coordinator heard of it only when a document
     /// walked back to the image list through `.switchEngine`, which happens only when the document
     /// had something open; with nothing open the rows were never dispatched again. An in-process

@@ -298,7 +298,7 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
-    /// The local-runtime service relaunching while the document has nothing
+    /// The local service relaunching while the document has nothing
     /// open: `.switchEngine` has nothing to walk back, so the coordinator never
     /// heard, and went on listing the corpora of the process that is gone as
     /// built — and skipping them when asked for (PR121.30, the part left to

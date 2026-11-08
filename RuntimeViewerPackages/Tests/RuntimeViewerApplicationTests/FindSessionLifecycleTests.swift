@@ -168,7 +168,7 @@ struct FindSessionLifecycleTests {
         await newEngine.stop()
     }
 
-    /// The local-runtime service relaunching while the document sits at the
+    /// The local service relaunching while the document sits at the
     /// image list with nothing open: `.switchEngine` has nothing to walk back
     /// there, so the engine never "changed", and the rows of the process that
     /// is gone stayed on screen (the gap PR121.05 left, closed with PR121.30).
@@ -202,7 +202,7 @@ struct FindSessionLifecycleTests {
     /// and every corpus built later waited on it (PR121.38).
     @Test("a widening search that fails leaves the session idle and keeps the results it would have merged into")
     func failedWideningSearchEndsTheSearch() async throws {
-        let fixture = try await LocalRuntimeServiceFixture.make(label: "FindSessionLifecycleTests.failedWidening")
+        let fixture = try await LocalServiceFixture.make(label: "FindSessionLifecycleTests.failedWidening")
         try await fixture.serving.loadImage(at: TestImages.libobjc)
         _ = try await fixture.client.buildInterfaceCorpus(for: TestImages.libobjc, transformer: .default)
         let environment = ViewModelTestEnvironment(runtimeEngine: fixture.client)

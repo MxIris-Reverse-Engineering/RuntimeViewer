@@ -25,19 +25,19 @@ RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService
 RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystHelper
 RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper
 
-// Local-runtime XPC service (RuntimeViewerLocalRuntimeService target), the process the
+// Local XPC service (RuntimeViewerLocalService target), the process the
 // app's "My Mac" engine runs in. One identifier per configuration: launchd resolves an
 // embedded service inside the calling app's own bundle, so the three app variants could
 // share one name without colliding, but distinct names keep logs and Activity Monitor
 // unambiguous. The app reads its configuration's value back from its Info.plist
-// (RuntimeViewerLocalRuntimeServiceBundleIdentifier) to open the connection.
-RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerLocalRuntimeService
-RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerLocalRuntimeService.arm64e
-RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerLocalRuntimeService
+// (RuntimeViewerLocalServiceBundleIdentifier) to open the connection.
+RUNTIME_VIEWER_LOCAL_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerLocalService
+RUNTIME_VIEWER_LOCAL_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerLocalService.arm64e
+RUNTIME_VIEWER_LOCAL_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerLocalService
 
 // Mac Catalyst XPC service (RuntimeViewerCatalystService target), the process the app's
 // "My Mac (Mac Catalyst)" engine runs in. One identifier per configuration for the same reason
-// as the local-runtime service above; the app reads its configuration's value back from its
+// as the local service above; the app reads its configuration's value back from its
 // Info.plist (RuntimeViewerCatalystServiceBundleIdentifier). The Catalyst helper app keeps its
 // own identifiers: the standalone command-line host still launches it through the daemon.
 RUNTIME_VIEWER_CATALYST_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystService
@@ -46,19 +46,20 @@ RUNTIME_VIEWER_CATALYST_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer
 
 // Offline XPC service (RuntimeViewerOfflineService target), the process an offline file is read in.
 // Its Info.plist declares _MultipleInstances: the app starts an instance of it of its own for every
-// file. One identifier per configuration for the same reason as the local-runtime service above;
+// file. One identifier per configuration for the same reason as the local service above;
 // the app reads its configuration's value back from its Info.plist
 // (RuntimeViewerOfflineServiceBundleIdentifier).
 RUNTIME_VIEWER_OFFLINE_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerOfflineService
 RUNTIME_VIEWER_OFFLINE_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerOfflineService.arm64e
 RUNTIME_VIEWER_OFFLINE_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerOfflineService
 
-// Mac Catalyst helper plugin bundle (RuntimeViewerCatalystHelperPlugin target), the code
-// both the helper app and the Catalyst XPC service load from the app's PlugIns.
+// Service plugin bundle (RuntimeViewerServicePlugin target), the code the four shells — the
+// Mac Catalyst helper app and the Mac Catalyst, local and offline XPC services — load from the
+// app's PlugIns.
 // Plugin uses one identifier across all configurations because the helper app
 // loads it by exact bundle identifier and a debug variant would silently fail
 // to load when run from Xcode against a release-built helper.
-RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin
+RUNTIME_VIEWER_SERVICE_PLUGIN_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerServicePlugin
 
 // SourceEditor bridge bundle (RuntimeViewerSourceEditorBridge target).
 // Holds the only code that links Xcode's private SourceEditor framework; the app loads it

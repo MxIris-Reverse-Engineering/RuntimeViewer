@@ -5,14 +5,15 @@ import Combine
 public import FoundationToolbox
 public import RuntimeViewerCommunication
 
-/// An in-process engine served on an XPC service's listener: the local-runtime
+/// An in-process engine served on an XPC service's listener: the local
 /// service's whole job, with its `.local` engine.
 ///
-/// The service's `main.swift` builds one of these around an engine and a
+/// The local service builds one of these around an engine and a
 /// `RuntimeXPCServiceListenerConnection.embeddedService()`, calls `start()`,
-/// then `activate()`. The Mac Catalyst service does the same from
-/// `RuntimeViewerCatalystHelperPlugin`'s `runService()`: its job is this one,
-/// run in a Catalyst process. The offline service builds one once the app's
+/// then `activate()` — in `RuntimeViewerServicePlugin`'s `runLocalService()`,
+/// which the service's executable loads. The Mac Catalyst service does the
+/// same from the plugin's `runCatalystService()`: its job is this one, run in
+/// a Catalyst process. The offline service builds one once the app's
 /// first `hello` named the file, around an engine reading it
 /// (`RuntimeOfflineServiceHost`). Tests build the same type around an
 /// anonymous listener and connect a client engine to its endpoint, so the
@@ -25,7 +26,7 @@ public import RuntimeViewerCommunication
 /// process, so what it gets is an empty slate — which is the truth, and
 /// what walks the app's document back to the image list.
 @Loggable(.private)
-public final class RuntimeLocalRuntimeServiceHost {
+public final class RuntimeLocalServiceHost {
     public let engine: RuntimeEngine
 
     private let connection: RuntimeXPCServiceListenerConnection
@@ -37,7 +38,7 @@ public final class RuntimeLocalRuntimeServiceHost {
     public init(engine: RuntimeEngine, connection: RuntimeXPCServiceListenerConnection) {
         self.engine = engine
         self.connection = connection
-        self.server = RuntimeEngineConnectionServer(engine: engine, connection: connection, label: "LocalRuntimeService")
+        self.server = RuntimeEngineConnectionServer(engine: engine, connection: connection, label: "RuntimeLocalService")
     }
 
     /// Connects the engine and installs every handler and relay.
@@ -61,7 +62,7 @@ public final class RuntimeLocalRuntimeServiceHost {
                 Task { await server.sendInitialData() }
             }
         let imageCount = await engine.imageList.count
-        #log(.info, "Local runtime service host ready: \(imageCount, privacy: .public) images")
+        #log(.info, "Local service host ready: \(imageCount, privacy: .public) images")
     }
 
     /// Starts accepting clients. For the embedded service this is `xpc_main`

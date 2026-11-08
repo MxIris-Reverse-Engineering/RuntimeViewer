@@ -53,7 +53,7 @@ product instead. They live in the targets' xcconfig files,
   the app, never through the daemon. A new configuration gives it a bundle
   identifier, in a `RuntimeViewerCatalystService/<configuration>.xcconfig`
   of its own, and sets `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER` in the
-  app's xcconfig to match, the way the local-runtime service is done.
+  app's xcconfig to match, the way the local service is done.
 - On the service and the helper,
   `TOOLCHAIN_DIR = $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain`. The
   SDK's Catalyst variant adds `$(TOOLCHAIN_DIR)/usr/lib/swift/maccatalyst`, and
@@ -64,7 +64,7 @@ product instead. They live in the targets' xcconfig files,
   own `LIBRARY_SEARCH_PATHS`, rejects `DT_TOOLCHAIN_DIR` in a search path, and a
   target-level `TOOLCHAINS` loses to Xcode's. The cost is that with a custom
   Swift toolchain selected, these two targets still see Xcode's toolchain in
-  `TOOLCHAIN_DIR`; both only load the Catalyst plugin. A new Catalyst target
+  `TOOLCHAIN_DIR`; both only load the service plugin. A new Catalyst target
   needs the same line. Drop it once an Xcode stops putting the Metal toolchain
   first: the `export TOOLCHAINS` line of a build log shows the order.
 
@@ -74,17 +74,21 @@ offers no simulator SDK, while the build resolves `iphonesimulator` normally.
 Leave it — picking any SDK in that pop-up overwrites `SDKROOT`, and the payload
 then builds for the wrong platform without an error.
 
-`RuntimeViewerCatalystHelperPlugin`, the code both Catalyst shells load, is a
-plain macOS bundle: it builds into `<configuration>/`, and the app's
-`Embed Catalyst Plugin` phase copies it into `Contents/PlugIns/`. **The app ships
-one copy, not one per shell** — the plugin is about 44 MB in Release, the
-service and the helper are kilobytes — and `AppKitBridge` finds it two levels
-up from either shell's own bundle (`Contents/XPCServices/…` and
-`Contents/Applications/…` both sit below `Contents`). Its run path
+`RuntimeViewerServicePlugin`, the code the four shells load — the Catalyst
+helper and the Catalyst, local and offline services — is a plain macOS bundle:
+it builds into `<configuration>/`, and the app's `Embed Service Plugin` phase
+copies it into `Contents/PlugIns/`. **The app ships one copy, not one per
+shell** — the plugin is about 56 MB in Release, the shells are kilobytes — and
+`ServicePluginLoader` finds it two levels up from every shell's own bundle
+(`Contents/XPCServices/…` and `Contents/Applications/…` both sit below
+`Contents`). The shells link no package and get the loader and the
+`ServicePlugin` protocol from the plugin's folder through their own exception
+sets; the plugin itself excludes the loader. Its run path
 `@loader_path/../../../../Frameworks` is the app's `Frameworks`, which is where
 `libswiftCompatibilitySpan.dylib` comes from on a system whose `/usr/lib/swift`
-lacks it; the app's copy covers macOS and Mac Catalyst alike, so the Catalyst
-processes load it too. Moving the plugin, or a shell, changes those paths.
+lacks it; the app's copy covers macOS and Mac Catalyst alike, so every process
+that loads the plugin loads it too. Moving the plugin, or a shell, changes those
+paths.
 
 **The simulator payload has a target of its own.** `RuntimeViewerSimulatorServer`
 compiles the same synchronized `RuntimeViewerServer/` folder and links the same

@@ -208,7 +208,7 @@ log "xcodebuild logs: $LOG_DIR"
 # expresses that as `ARCHS = $(inherited) arm64e`; the new one writes the literal
 # `arm64 arm64e arm64e.x1` on macOS, and x86_64 drops out of every package while
 # the app's own targets still build it. The first universal target to import a
-# package, RuntimeViewerCatalystHelperPlugin, then fails with "Unable to resolve
+# package, RuntimeViewerServicePlugin, then fails with "Unable to resolve
 # module dependency". The builder is chosen by a per-machine Xcode default, so
 # the same commit archived on one Mac and failed on another; passing the default
 # here takes the machine out of it. Background:
