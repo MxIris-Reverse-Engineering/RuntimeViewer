@@ -413,7 +413,7 @@ The project uses three Swift Package Manager packages:
   its own. **Changes to what a service does go into the plugin, and a shell links no package.** A
   shared dynamic RuntimeViewerCore was tried and does not work: Xcode turns every package target that
   two images of one process link statically into a dynamic framework, for every target and platform.
-  Background: `Documentations/Evolutions/draft-shared-service-plugin.md`
+  Background: `Documentations/Evolutions/0079-shared-service-plugin.md`
 - `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
   entitlements carry `disable-library-validation`, and its deployment target has to track the app's

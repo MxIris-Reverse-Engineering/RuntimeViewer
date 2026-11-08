@@ -1,14 +1,14 @@
-# Draft - 两个 XPC service 改成加载共享插件的外壳，local-runtime service 改名为 local service
+# 0079 - 两个 XPC service 改成加载共享插件的外壳，local-runtime service 改名为 local service
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-08
 - **最后更新**: 2026-11-08
 - **所属愿景**: 无
-- **实现分支 / PR**: `feature/shared-service-plugin`（worktree `.worktrees/RuntimeViewer-SharedServicePlugin`），从 `next` 切出
+- **实现分支 / PR**: `feature/shared-service-plugin`，从 `next` 切出，以 merge commit 合进 `next`
 
 ## 摘要
 
-App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO 系列库：App、local-runtime service、offline service、Catalyst 插件、内嵌 CLI。Release 通用二进制里每份约 48 MB，死代码剥离只在单个二进制内部起作用，不会跨二进制去重。Catalyst 的 service 与 helper 早就是外壳：可执行文件只有几百 KB，运行时从 `Contents/PlugIns` 加载 `RuntimeViewerCatalystHelperPlugin` 来干活。这次把 local 与 offline 两个 service 也改成这样的外壳，四个进程共用一份插件，插件改一个不再只属于 Catalyst 的名字。顺带把 `RuntimeViewerLocalRuntimeService` 改名为 `RuntimeViewerLocalService`。Debug 下试过 local service：可执行文件从 70,151 KB 降到 138 KB，插件只多了 57 KB；Release 通用二进制里插件剥离符号后约 56 MB，据此估计两个 service 合计省约 110 MB。App 与 CLI 仍各带一份，不在这次范围内。
+App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO 系列库：App、local-runtime service、offline service、Catalyst 插件、内嵌 CLI。Release 通用二进制里每份约 48 MB，死代码剥离只在单个二进制内部起作用，不会跨二进制去重。Catalyst 的 service 与 helper 早就是外壳：可执行文件只有几百 KB，运行时从 `Contents/PlugIns` 加载 `RuntimeViewerCatalystHelperPlugin` 来干活。这次把 local 与 offline 两个 service 也改成这样的外壳，四个进程共用一份插件，插件改一个不再只属于 Catalyst 的名字。顺带把 `RuntimeViewerLocalRuntimeService` 改名为 `RuntimeViewerLocalService`。Debug 下两个 service 的可执行文件从约 70 MB 降到 86 KB，插件只多了 59 KB；Release 通用二进制里插件剥离符号后约 56 MB，据此估计两个 service 合计省约 110 MB。App 与 CLI 仍各带一份，不在这次范围内。
 
 ## 方案
 
@@ -27,7 +27,7 @@ App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO
    - ✅ Debug-arm64e：local service 70,151 KB → 86 KB，offline service 67,146 KB → 86 KB，插件 70,182 KB → 70,241 KB；`PackageFrameworks` 里只有 ObjCRuntimeToolbox。
    - ✅ Release（通用二进制，`-IDEEnableNewPackagePIFBuilder=NO`，不签名）：三个 service 各 115 KB，插件 98,705 KB，剥离符号后 57,629 KB；daemon 不链任何 `@rpath` 库。`xcodebuild build` 不剥离符号，所以这里的数字比发版包大。
    - ✅ Core 与 Packages 的测试编译通过，`RuntimeLocalServiceHost` 的 5 条测试通过；`./TuistScript.sh check` 通过。
-   - ⏳ 三条路径的实测待用户做。
+   - ✅ 三条路径由用户在本地合进 `next` 的构建上实测，之后要求收尾。合并后的 `next`（含升级后的 MachO 库）Debug-arm64e 编过，`./TuistScript.sh check` 通过，`RuntimeLocalServiceHost` 的测试照样通过。
 
 ### 没问就定下的假设
 
@@ -52,3 +52,4 @@ App 包里有五个二进制各自静态链着一份 RuntimeViewerCore 与 MachO
 | 2026-11-08 | Catalyst service 与 local service 相同的启动代码提成 `serveInProcessEngine(engineID:serviceName:)` | 两段只差 engine ID 与日志里的名字 |
 | 2026-11-08 | 插件的 bundle identifier 改为 `com.JH.RuntimeViewerServicePlugin`，设置项改为 `RUNTIME_VIEWER_SERVICE_PLUGIN_BUNDLE_IDENTIFIER`；日志 subsystem 改为 `com.RuntimeViewer.RuntimeViewerServicePlugin` | 跟插件改名一致；自己在 `custom.xcconfig` 里覆盖过旧设置项的人要改用新名字 |
 | 2026-11-08 | 实现完成，待用户实测三条路径后收尾 | 构建、测试编译与 Tuist 检查都通过 |
+| 2026-11-08 | 合进 `next`，编号 0079，状态改为 Implemented | 用户实测后要求收尾。合并时只有 `Configurations/AGENTS.md` 冲突：`next` 同期加了 Catalyst 两个 target 的 `TOOLCHAIN_DIR` 说明，两边都保留，其中「Catalyst plugin」随之改为「service plugin」（helper 的 xcconfig 注释同改）。除上面记下的几处外没有偏离方案，没有未做的项。不另写使用指南或实现说明：外壳与插件的分工写在根 `AGENTS.md` 与 `Configurations/AGENTS.md`，进程结构写在 `CommunicationAndEngineArchitecture.md`；新术语「服务插件」已登记进 `Glossary.md` |
