@@ -55,6 +55,27 @@ struct ReportEngineGroupsTests {
         await fixture.stop()
     }
 
+    @Test("a borrowing document whose engines have nothing to report shows an empty Report, not empty groups")
+    func nothingToReportIsEmpty() async throws {
+        let fixture = try await SharedCacheBorrowingFixture.make(label: "report.empty")
+        let environment = ViewModelTestEnvironment(runtimeEngine: fixture.borrowerEngine)
+        // Every kind on and idle: no batch to start, no corpus to build on two fresh engines.
+        environment.settings.indexing.isEnabled = true
+        environment.settings.indexing.heuristic.isEnabled = false
+        environment.settings.indexing.custom.isEnabled = false
+        environment.settings.search.isCorpusEnabled = true
+        environment.startBackgroundWork()
+        let page = environment.make { ReportGroupsPage(documentState: environment.documentState) }
+
+        let shownNodes = try await values(from: page.nodes, during: 0.5)
+
+        let isEmptyThroughout = shownNodes.allSatisfy { $0.isEmpty }
+        #expect(!shownNodes.isEmpty)
+        #expect(isEmptyThroughout, "the Report showed \(shownNodes.last.map { $0.map(\.identifier) } ?? [])")
+        environment.make { environment.documentState.documentWillClose() }
+        await fixture.stop()
+    }
+
     @Test("a row of an owner's group stands for the owner's work, any other for the engine's own")
     func rowsStandForTheirGroupsWork() async throws {
         let fixture = try await SharedCacheBorrowingFixture.make(label: "report.targets")

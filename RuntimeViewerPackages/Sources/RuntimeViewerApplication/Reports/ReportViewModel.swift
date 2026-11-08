@@ -136,10 +136,13 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                     }
                     // Borrowing nothing, the document's Report is its engine's, as it always was.
                     guard groupWorks.count > 1 else { return categoriesOfEachGroup[0] }
+                    // A group with nothing to report is left out, so a Report with nothing at all
+                    // in it is still empty.
                     return Observable.combineLatest(categoriesOfEachGroup) { categoriesOfEachGroup in
                         MainActor.assumeIsolated {
-                            zip(groupWorks, categoriesOfEachGroup).map { groupWork, categories in
-                                groupTreeBuilders.groupNode(for: groupWork, children: categories.map(groupWork.listed))
+                            zip(groupWorks, categoriesOfEachGroup).compactMap { groupWork, categories in
+                                guard !categories.isEmpty else { return nil }
+                                return groupTreeBuilders.groupNode(for: groupWork, children: categories.map(groupWork.listed))
                             }
                         }
                     }
