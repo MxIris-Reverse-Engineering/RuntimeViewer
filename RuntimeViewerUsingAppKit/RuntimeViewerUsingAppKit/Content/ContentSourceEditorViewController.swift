@@ -172,7 +172,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         output.runtimeObjectNotFound.emitOnNextMainActor { [weak self] in
             guard let self else { return }
             var configuration = HUDView.Configuration.standard()
-            configuration.image = SFSymbols(systemName: .questionmark, pointSize: 80, weight: .light).nsuiImgae
+            configuration.image = SFSymbols(systemName: .questionmark, pointSize: 80, weight: .light).nsuiImage
             view.window?.showHUD(with: configuration)
         }
         .disposed(by: rx.disposeBag)

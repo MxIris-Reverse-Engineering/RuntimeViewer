@@ -25,7 +25,7 @@ final class ReportCellView: TableCellView {
     /// A plain `NSButton`: an image-only borderless button, which `PushButton`'s fixed bezel is not.
     private let ejectButton = NSButton()
 
-    private static let issueImage = SFSymbols(systemName: .xmarkOctagonFill).nsuiImgae
+    private static let issueImage = SFSymbols(systemName: .xmarkOctagonFill).nsuiImage
 
     private static let ejectImage = SFSymbols(systemName: .ejectFill).nsuiImage
 

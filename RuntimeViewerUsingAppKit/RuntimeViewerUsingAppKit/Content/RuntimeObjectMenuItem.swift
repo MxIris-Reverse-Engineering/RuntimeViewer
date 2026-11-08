@@ -15,7 +15,7 @@ final class RuntimeObjectMenuItem: NSMenuItem {
         self.runtimeObject = runtimeObject
         super.init(title: title, action: nil, keyEquivalent: "")
         if #available(macOS 26.0, *) {
-            image = SFSymbols(systemName: symbolName).nsuiImgae
+            image = SFSymbols(systemName: symbolName).nsuiImage
         }
     }
 

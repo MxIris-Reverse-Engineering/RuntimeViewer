@@ -83,6 +83,7 @@ final class SourceEditorCommentTagAppearance: NSObject, SourceEditorBridgingComm
         case .declaration: color(isDark ? (0xE8, 0xC5, 0x8A) : (0x8C, 0x61, 0x18))
         case .warning: color(isDark ? (0xFF, 0xAD, 0x8C) : (0xB1, 0x4A, 0x1F))
         case .note: nil
+        @unknown default: nil
         }
     }
 

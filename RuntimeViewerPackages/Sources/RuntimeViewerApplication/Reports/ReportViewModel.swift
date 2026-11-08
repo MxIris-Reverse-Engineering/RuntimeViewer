@@ -690,17 +690,17 @@ enum ReportOutline {
 
     // MARK: - Text and icons
 
-    static let indexingIcon: NSUIImage = SFSymbols(systemName: .squareStack3dDownRight).nsuiImgae
+    static let indexingIcon: NSUIImage = SFSymbols(systemName: .squareStack3dDownRight).nsuiImage
 
-    static let corpusIcon: NSUIImage = SFSymbols(systemName: .magnifyingglass).nsuiImgae
+    static let corpusIcon: NSUIImage = SFSymbols(systemName: .magnifyingglass).nsuiImage
 
-    static let crossReferenceIcon: NSUIImage = SFSymbols(systemName: .arrowTriangleBranch).nsuiImgae
+    static let crossReferenceIcon: NSUIImage = SFSymbols(systemName: .arrowTriangleBranch).nsuiImage
 
-    static let turnedOffIcon: NSUIImage = SFSymbols(systemName: .powerCircle).nsuiImgae
+    static let turnedOffIcon: NSUIImage = SFSymbols(systemName: .powerCircle).nsuiImage
 
-    static let unsupportedIcon: NSUIImage = SFSymbols(systemName: .exclamationmarkCircle).nsuiImgae
+    static let unsupportedIcon: NSUIImage = SFSymbols(systemName: .exclamationmarkCircle).nsuiImage
 
-    static let restoredCorporaIcon: NSUIImage = SFSymbols(systemName: .archivebox).nsuiImgae
+    static let restoredCorporaIcon: NSUIImage = SFSymbols(systemName: .archivebox).nsuiImage
 
     static func icon(forImagePath imagePath: String) -> NSUIImage {
         imagePath.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon

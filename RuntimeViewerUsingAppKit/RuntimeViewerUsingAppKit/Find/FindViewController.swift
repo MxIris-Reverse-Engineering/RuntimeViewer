@@ -89,8 +89,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
     /// Show Runtime Calls, on the bar's trailing side while the mode is Callees. An item has no
     /// state of its own: it shows on in the accent colour.
     private let runtimeHelperCallsToggle = FindFilterBarToggle(
-        image: SFSymbols(systemName: .memorychip).nsuiImgae,
-        activeImage: SFSymbols(systemName: .memorychip).paletteColors([.controlAccentColor]).nsuiImgae,
+        image: SFSymbols(systemName: .memorychip).nsuiImage,
+        activeImage: SFSymbols(systemName: .memorychip).paletteColors([.controlAccentColor]).nsuiImage,
         toolTip: "Show Runtime Calls"
     )
 

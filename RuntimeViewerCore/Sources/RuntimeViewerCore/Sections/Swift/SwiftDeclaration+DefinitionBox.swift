@@ -21,5 +21,5 @@ import MetaCodable
 // `Definition` is class-bound, so the generated `box` setter must not assign `self`: from
 // FrameworkToolbox 0.14 on it does unless told otherwise, and the compiler crashes in SILGen
 // instead of reporting it.
-@FrameworkToolboxExtension(.internal, referenceSemantics: true)
+@FrameworkToolboxExtension(.internal)
 extension SwiftDeclaration.Definition {}

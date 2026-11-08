@@ -127,7 +127,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
 
     override func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [SidebarRuntimeObjectMenuItem] {
         super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow) + [
-            SidebarRuntimeObjectMenuItem(title: "Add Item to Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImgae) { [weak self] in
+            SidebarRuntimeObjectMenuItem(title: "Add Item to Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
                 guard let self else { return }
                 addToBookmarkRelay.accept(cellViewModel)
                 SystemHUD.default.configuration = .addToBookmarkHUDConfiguration

@@ -70,7 +70,7 @@ extension SidebarRootBookmarkViewController: NSMenuDelegate {
         if outlineView.parent(forItem: outlineView.itemAtClickedRow) == nil, let index = outlineView.rootIndex(forRow: outlineView.clickedRow) {
             menu.removeAllItems()
             menu.addItem(withTitle: "Remove Bookmark", action: #selector(removeBookmarkMenuItemAction(_:)), keyEquivalent: "").then {
-                $0.image = SFSymbols(systemName: .bookmark).nsuiImgae
+                $0.image = SFSymbols(systemName: .bookmark).nsuiImage
                 $0.representedObject = index
             }
         } else {

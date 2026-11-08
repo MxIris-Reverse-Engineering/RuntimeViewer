@@ -56,13 +56,13 @@ extension RuntimeImageNode: @retroactive Sequence {
 }
 
 extension RuntimeImageNode {
-    public static let frameworkIcon: NSUIImage = SFSymbols(systemName: .latch2Case).nsuiImgae
+    public static let frameworkIcon: NSUIImage = SFSymbols(systemName: .latch2Case).nsuiImage
 
-    public static let bundleIcon: NSUIImage = SFSymbols(systemName: .shippingbox).nsuiImgae
+    public static let bundleIcon: NSUIImage = SFSymbols(systemName: .shippingbox).nsuiImage
 
-    public static let imageIcon: NSUIImage = SFSymbols(systemName: .doc).nsuiImgae
+    public static let imageIcon: NSUIImage = SFSymbols(systemName: .doc).nsuiImage
 
-    public static let folderIcon: NSUIImage = SFSymbols(systemName: .folder).nsuiImgae
+    public static let folderIcon: NSUIImage = SFSymbols(systemName: .folder).nsuiImage
 
     public var icon: NSUIImage {
         if name.hasSuffix("framework") {

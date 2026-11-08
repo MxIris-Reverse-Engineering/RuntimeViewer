@@ -42,7 +42,7 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
         // children have no standalone bookmark to delete.
         if outlineView.parent(forItem: cellViewModel) == nil, let index = outlineView.rootIndex(forRow: clickedRow) {
             items.append(
-                SidebarRuntimeObjectMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImgae) { [weak self] in
+                SidebarRuntimeObjectMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
                     guard let self else { return }
                     removeBookmarkRelay.accept(index)
                 }

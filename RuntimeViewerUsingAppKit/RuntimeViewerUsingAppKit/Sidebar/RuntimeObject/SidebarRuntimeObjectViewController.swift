@@ -389,7 +389,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             },
         ]
         if let counterpartKind = cellViewModel.runtimeObject.counterpartKind {
-            menuItems.append(SidebarRuntimeObjectMenuItem(title: Self.counterpartMenuItemTitle(for: counterpartKind), image: SFSymbols(systemName: .arrowLeftArrowRight).nsuiImgae) { [weak self] in
+            menuItems.append(SidebarRuntimeObjectMenuItem(title: Self.counterpartMenuItemTitle(for: counterpartKind), image: SFSymbols(systemName: .arrowLeftArrowRight).nsuiImage) { [weak self] in
                 guard let self else { return }
                 counterpartRequestedRelay.accept(cellViewModel)
             })
@@ -482,7 +482,7 @@ extension SidebarRuntimeObjectViewController {
 
         let filterModeItem = ChoiceFilterControlBarItem<FilterMode>(
             image: .symbol(systemName: .line3HorizontalDecrease),
-            alternateImage: SFSymbols(systemName: .line3HorizontalDecrease).hierarchicalColor(.controlAccentColor).nsuiImgae
+            alternateImage: SFSymbols(systemName: .line3HorizontalDecrease).hierarchicalColor(.controlAccentColor).nsuiImage
         )
 
         /// Has no menu: pressing it sends the view controller's action from its button, which the scope popover is
@@ -509,7 +509,7 @@ extension SidebarRuntimeObjectViewController {
         var isFilterScopeActive = false {
             didSet {
                 filterScopeItem.image = isFilterScopeActive
-                    ? SFSymbols(systemName: .sliderHorizontal3).paletteColors([.controlAccentColor]).nsuiImgae
+                    ? SFSymbols(systemName: .sliderHorizontal3).paletteColors([.controlAccentColor]).nsuiImage
                     : .symbol(systemName: .sliderHorizontal3)
             }
         }

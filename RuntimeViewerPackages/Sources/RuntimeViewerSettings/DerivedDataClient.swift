@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import Observation
 
 /// What the Indexing settings page shows of the app's derived data — where it

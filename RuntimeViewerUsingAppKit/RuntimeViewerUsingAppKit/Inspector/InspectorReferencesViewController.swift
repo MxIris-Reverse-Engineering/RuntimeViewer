@@ -332,7 +332,7 @@ extension InspectorReferencesViewController {
             }
 
             showInFindNavigatorButton.do {
-                $0.image = SFSymbols(systemName: .arrowRightCircle).nsuiImgae
+                $0.image = SFSymbols(systemName: .arrowRightCircle).nsuiImage
                 $0.imagePosition = .imageOnly
                 $0.isBordered = false
                 $0.bezelStyle = .accessoryBarAction

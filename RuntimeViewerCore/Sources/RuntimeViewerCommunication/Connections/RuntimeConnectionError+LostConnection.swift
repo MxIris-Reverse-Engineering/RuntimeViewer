@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 #if canImport(Network)
 import Network
 #endif

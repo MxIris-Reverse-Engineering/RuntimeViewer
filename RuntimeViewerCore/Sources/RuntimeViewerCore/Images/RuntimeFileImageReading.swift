@@ -25,7 +25,7 @@ enum RuntimeFileImageReading: RuntimeImageReading {
         in machO: MachOFile,
         across aggregate: RuntimeSwiftInterfaceIndexer<Self>
     ) throws -> [String] {
-        var names = [try classDescriptor.name(in: machO)]
+        var names = [try classDescriptor.name(in: machO.context)]
         var currentMangledName = mangledTypeName
         var visitedMangledNames: Set<String> = [mangledTypeName]
         while let superclassMangledName = aggregate.superclassMangledName(forMangledTypeName: currentMangledName) {

@@ -35,6 +35,7 @@ enum SourceEditorLandmarkIcon {
         case .property: return ("P", .teal)
         case .macro, .define: return ("#", .gray)
         case .mark, .file, .include, .other: return nil
+        @unknown default: return nil
         }
     }
 }

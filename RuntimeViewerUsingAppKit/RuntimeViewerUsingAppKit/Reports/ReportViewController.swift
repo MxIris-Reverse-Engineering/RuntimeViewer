@@ -48,7 +48,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
 
     private let clearHistoryMenuItem = NSMenuItem(title: "Clear History", action: nil, keyEquivalent: "")
 
-    private lazy var actionsItem = NSFilterControlBarItem(image: SFSymbols(systemName: .ellipsisCircle).nsuiImgae, menu: actionsMenu)
+    private lazy var actionsItem = NSFilterControlBarItem(image: SFSymbols(systemName: .ellipsisCircle).nsuiImage, menu: actionsMenu)
 
     private let filterField = NSFilterTokenField()
 

@@ -13,7 +13,7 @@ final class SidebarRootDirectoryViewController: SidebarRootViewController<Sideba
         outlineView.do {
             $0.menu = NSMenu().then {
                 $0.addItem(withTitle: "Add Item to Bookmark", action: #selector(addToBookmarkMenuItemAction(_:)), keyEquivalent: "").then {
-                    $0.image = SFSymbols(systemName: .bookmark).nsuiImgae
+                    $0.image = SFSymbols(systemName: .bookmark).nsuiImage
                 }
             }
         }
@@ -39,7 +39,7 @@ final class SidebarRootDirectoryViewController: SidebarRootViewController<Sideba
 
 extension SystemHUD.Configuration {
     static let addToBookmarkHUDConfiguration = SystemHUD.Configuration(
-        image: SFSymbols(systemName: .bookmarkFill, pointSize: 90, weight: .medium).nsuiImgae,
+        image: SFSymbols(systemName: .bookmarkFill, pointSize: 90, weight: .medium).nsuiImage,
         title: "Added Bookmark"
     )
 }
