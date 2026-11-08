@@ -126,6 +126,15 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
     nonisolated var borrowerName: String {
         source.description
     }
+
+    func loadImageForBackgroundIndexingInServingProcess(at path: String) async throws {
+        _ = try await dispatchToServingProcess(LoadImageForBackgroundIndexingCommand(path: path))
+        imageDidIndexSubject.send(path)
+    }
+
+    func recordHandedOverImages(_ imagePaths: [String]) {
+        borrowedIndexedImagePaths.formUnion(imagePaths.map(canonicalImagePath))
+    }
 }
 
 // MARK: - Local implementations of the BFS metadata methods

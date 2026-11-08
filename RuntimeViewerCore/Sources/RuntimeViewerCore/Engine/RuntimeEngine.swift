@@ -174,6 +174,18 @@ public actor RuntimeEngine {
     /// as loaded, whatever the serving process has loaded. Canonical paths.
     var borrowedLoadedImagePaths: Set<String> = []
 
+    /// The shared cache images an owner indexed for this engine — on a
+    /// request of this engine, or handed over by its background indexing —
+    /// which a specialization of this engine's own types has its serving
+    /// process index too, so their types stay candidates there. Canonical
+    /// paths.
+    var borrowedIndexedImagePaths: Set<String> = []
+
+    /// The owners' data changes this engine forwards: a specialization an
+    /// owner registered for an image this engine borrows reaches this
+    /// engine's observers too. See `RuntimeEngine+SharedCache.swift`.
+    var sharedCacheOwnerSubscriptions: [AnyCancellable] = []
+
     /// Back-compat unit signal derived from `dataChangePublisher`. Fires only
     /// for `.fullReload` events; subscribers wanting `.specializationAdded`
     /// (or any future fine-grained change) must use `dataChangePublisher`.
@@ -1023,6 +1035,7 @@ extension RuntimeEngine {
     /// this engine and its owners together; see `RuntimeEngine+SharedCache.swift`.
     public func dispatch<Command: RuntimeEngineCommand>(_ command: Command) async throws -> Command.Response {
         if let owner = sharedCacheOwner(forImageAt: command.subjectImagePath) {
+            noteBorrowedIndexing(by: command)
             return try await owner.dispatchBorrowedRequest(command)
         }
         if let response = try await spanningResponse(to: command) {
@@ -1067,6 +1080,7 @@ extension RuntimeEngine {
         onProgress: (@Sendable (Command.Progress) async -> Void)?
     ) async throws -> Command.Response {
         if let owner = sharedCacheOwner(forImageAt: command.subjectImagePath) {
+            noteBorrowedIndexing(by: command)
             return try await owner.dispatchBorrowedRequest(command, onProgress: onProgress)
         }
         if let response = try await spanningResponse(to: command, onProgress: onProgress) {

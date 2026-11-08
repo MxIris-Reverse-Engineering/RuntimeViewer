@@ -720,6 +720,8 @@ enum ReportOutline {
             // An owner's batch of the shared cache images another engine
             // reached: what that engine indexed them for, and which engine.
             "\(title(for: reason)) for \(borrowerName)"
+        case .specializationCandidates:
+            "Specialization Candidates"
         }
     }
 

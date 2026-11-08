@@ -12,8 +12,14 @@ extension RuntimeEngine {
     /// The wire format is built from public Codable types
     /// (`RuntimeSpecializationRequest`) so the client does not need
     /// `@_spi(Support) SwiftInterface` to deserialize the response.
+    ///
+    /// On an engine that borrows shared cache images, a type of its own
+    /// images waits for the borrowed images its serving process has loaded
+    /// to be indexed there first; see
+    /// `indexBorrowedImagesForSpecialization(of:)`.
     public func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
-        try await dispatch(SpecializationRequestForObjectCommand(object: object))
+        await indexBorrowedImagesForSpecialization(of: object)
+        return try await dispatch(SpecializationRequestForObjectCommand(object: object))
     }
 
     func _specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {

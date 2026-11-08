@@ -335,7 +335,7 @@ extension RuntimeEngineManager {
 3. **跨镜像合并与接力**（已完成）：`RuntimeEngineSpanningCommand` 与各命令的合并规则，交叉引用模块的两条命令；§6 的接力与 `externalRootNames`；测试。
 4. **索引管理器交出系统镜像**（已完成）：多根批次、`.borrowed` reason；测试。
 5. **资格判定与接线**（已完成）：`RuntimeEngineManager` 的划分、资格判定、借用关系的设置与重算、`sharesSharedCacheImages`；测试。从这一步起附加进程开始借用。
-6. **应用层后台工作**：注册表的借用者身份、会话的 `borrowedBackgroundWorks`、Always Index 解析、借用方协调器过滤系统镜像、特化前的按需索引、`DocumentState` 跟随归属 engine；测试。
+6. **应用层后台工作**（已完成）：注册表的借用者身份、会话的 `borrowedBackgroundWorks`、Always Index 解析、借用方协调器过滤系统镜像、特化前的按需索引、`DocumentState` 跟随归属 engine；测试。
 7. **界面**：Report 按 engine 分组、工具栏进度合并、侧栏 Load 的语义、Load Frameworks… 改用 `loadImageInServingProcess(at:)`、Developer 页开关；测试。
 8. **App 里共用系统镜像树**。
 9. **文档**：`Documentations/CommunicationAndEngineArchitecture.md` 加一节写借用与路由；`Documentations/Guides/CommandLineInterface.md` 与 agent 插件说明写附加进程的新行为，插件升版本；根 `AGENTS.md` 的开发准则加一条「新命令要声明它关于哪个镜像，或说明为什么不转」；术语表登记「系统镜像」「归属 engine」「借用」。
@@ -372,3 +372,4 @@ extension RuntimeEngineManager {
 | 2026-11-09 | 第 5 步完成：借用关系在每次 engine 列表变化后重算 | 管理器的每次 engine 增减最后都走 `rebuildSections()`，借用关系的重算挂在它的末尾，不再逐个调用点去补；给 engine 设置借用关系的异步任务串成一条，保证同一个 engine 按先后顺序收到。是否在 Rosetta 下运行的探针放进 `RuntimeViewerHelperClient`，挨着已有的进程环境探针。Report 的批次标题对借用批次写成「原因 for 借用方」 |
 | 2026-11-09 | 第 6 步：借用关系变化时三个协调器各自补齐，管理器先给附加 engine 设好借用关系再交出 | 语料与交叉引用协调器撤回已变成借用的镜像的请求、重新要一遍已索引镜像（拿回不再借用的）；索引协调器取消还有借用镜像待加载的批次，重跑开场派发与 Always Index（已索引的不产生批次，Report 不多出空批次）。附加 engine 在借用关系设好之后才交给文档，否则它的开场批次会先在目标进程里把系统依赖索引一遍。新会话沿用上一个会话的注册表，不在回调里重新解析依赖；Core 的 `setSharedCacheOwners(_:)` 在忘掉借来加载过的镜像时发一次 `.fullReload`，侧栏的「已加载」随之刷新 |
 | 2026-11-09 | 第 6 步：Always Index 只解析到有归属 engine 的系统镜像，按进程平台挑同名镜像 | Catalyst engine 不在时，Catalyst 专用镜像不算可解析，否则 My Mac 会为 UIKitCore 这样的行开一个必然失败的批次；Catalyst 起来、借用关系变化时重跑一遍，这一行就交给 Catalyst。进程平台：Catalyst engine 是 Mac Catalyst；其他 engine 加载了任何 Catalyst 专用镜像就是 Mac Catalyst（macOS 进程加载不了它们），否则是 macOS。借来的 Always Index 镜像由归属 engine 的语料协调器在批次开始时从派生数据读回（借用批次的类别沿用原因的类别）；交叉引用的 Always Index 先后顺序不转给归属 engine，它按路径顺序准备 |
+| 2026-11-09 | 第 6 步完成：特化前的按需索引是一种新批次，借用方也收到归属 engine 的特化结果 | 「本 engine 借用过」定为两类：本 engine 的请求让归属 engine 建了索引的镜像（声明了 `indexesSubjectImage` 的命令），和本 engine 的后台索引交出去的镜像；再与目标的 `imageList` 取交集。每次特化前逐个问服务进程是否已建索引，不另记缓存，服务进程重启也不会算错。新批次原因 `.specializationCandidates`（类别归手动），绕过路由在服务进程加载，Report 标题「Specialization Candidates」，特化请求等它结束。归属 engine 为借用镜像登记的特化，借用方转发到自己的数据变化里，借用这个镜像的窗口不用重载就能看到 |

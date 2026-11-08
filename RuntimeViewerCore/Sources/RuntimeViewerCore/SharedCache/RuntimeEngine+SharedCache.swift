@@ -30,9 +30,27 @@ extension RuntimeEngine {
         let hadBorrowedLoads = !borrowedLoadedImagePaths.isEmpty
         borrowedLoadedImagePaths.removeAll()
         sharedCacheOwnersSubject.value = owners
+        followSpecializations(of: owners)
         RuntimeEngineSharedCacheLog.ownersChanged(of: source, to: owners)
         if hadBorrowedLoads {
             dataChangeSubject.send(.fullReload(isReloadImageNodes: false))
+        }
+    }
+
+    /// A specialization an owner registers for a type of an image this engine
+    /// borrows is announced on this engine too: a window on this engine shows
+    /// the image's types as the owner lists them, the new specialization
+    /// among them, without reloading.
+    private func followSpecializations(of owners: RuntimeSharedCacheOwners?) {
+        let ownerEngines = owners?.engines.filter { $0 !== self } ?? []
+        sharedCacheOwnerSubscriptions = ownerEngines.map { ownerEngine in
+            ownerEngine.dataChangeSubject.sink { [weak self, weak ownerEngine] change in
+                guard let self, let ownerEngine,
+                      case .specializationAdded(let parent, _) = change,
+                      self.sharedCacheOwner(forImageAt: parent.imagePath) === ownerEngine
+                else { return }
+                self.dataChangeSubject.send(change)
+            }
         }
     }
 
@@ -165,6 +183,14 @@ extension RuntimeEngine {
 // MARK: - Loading borrowed images
 
 extension RuntimeEngine {
+    /// A request handed to an owner indexes its subject image there, for this
+    /// engine: one of the images a specialization of this engine's own types
+    /// has its serving process index too.
+    func noteBorrowedIndexing<Command: RuntimeEngineCommand>(by command: Command) {
+        guard Command.indexesSubjectImage, let subjectImagePath = command.subjectImagePath else { return }
+        borrowedIndexedImagePaths.insert(canonicalImagePath(subjectImagePath))
+    }
+
     /// A shared cache image an owner loaded for this engine counts as loaded
     /// on it from now on. The serving process loaded nothing and sends no
     /// reload, so the engine tells its own observers — the sidebar showing

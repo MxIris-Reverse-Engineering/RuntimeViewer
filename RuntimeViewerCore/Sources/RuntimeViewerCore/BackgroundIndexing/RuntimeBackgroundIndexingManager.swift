@@ -11,6 +11,9 @@ public actor RuntimeBackgroundIndexingManager {
         var startOrder: UInt64
         var drivingTask: Task<Void, Never>?
         var priorityBoostPaths: Set<String> = []
+        /// The batch loads its images in the serving process, borrowed ones
+        /// included; see `indexInServingProcess(imagePaths:reason:)`.
+        var loadsInServingProcess = false
     }
 
     /// A batch waiting for its turn to start one more background load.
@@ -294,6 +297,7 @@ public actor RuntimeBackgroundIndexingManager {
             handOvers[ObjectIdentifier(ownerManager), default: (ownerManager, [])].roots.append(root)
         }
         guard !handOvers.isEmpty else { return keptItems }
+        await engine.recordHandedOverImages(handOvers.values.flatMap { $0.roots.map(\.imagePath) })
         let borrowedReason = RuntimeIndexingBatchReason.borrowed(borrowerName: engine.borrowerName, reason: reason)
         for handOver in handOvers.values {
             _ = await handOver.manager.startBatch(roots: handOver.roots, maxConcurrency: maxConcurrency, reason: borrowedReason)
@@ -301,11 +305,28 @@ public actor RuntimeBackgroundIndexingManager {
         return keptItems
     }
 
+    /// Indexes `imagePaths` in the process that serves this manager's engine,
+    /// as one batch with no walk, and returns once the batch has ended: the
+    /// shared cache images the engine borrows are loaded there too, where
+    /// every other batch hands them to their owner. What a specialization of
+    /// the engine's own types runs first, its candidates being the types that
+    /// process has indexed.
+    func indexInServingProcess(imagePaths: [String], reason: RuntimeIndexingBatchReason) async {
+        var seenImagePaths: Set<String> = []
+        let items = imagePaths
+            .filter { seenImagePaths.insert($0).inserted }
+            .map { RuntimeIndexingTaskItem(id: $0, resolvedPath: $0, state: .pending, hasPriorityBoost: false) }
+        guard let firstItem = items.first else { return }
+        let id = launchBatch(rootImagePath: firstItem.id, depth: 0, reason: reason, items: items, loadsInServingProcess: true)
+        await activeBatches[id]?.drivingTask?.value
+    }
+
     private func launchBatch(
         rootImagePath: String,
         depth: Int,
         reason: RuntimeIndexingBatchReason,
-        items: [RuntimeIndexingTaskItem]
+        items: [RuntimeIndexingTaskItem],
+        loadsInServingProcess: Bool = false
     ) -> RuntimeIndexingBatchID {
         let id = RuntimeIndexingBatchID()
         let batch = RuntimeIndexingBatch(
@@ -313,7 +334,7 @@ public actor RuntimeBackgroundIndexingManager {
             reason: reason, items: items,
             isCancelled: false, isFinished: false
         )
-        let state = BatchState(batch: batch, startOrder: nextBatchStartOrder)
+        let state = BatchState(batch: batch, startOrder: nextBatchStartOrder, loadsInServingProcess: loadsInServingProcess)
         nextBatchStartOrder &+= 1
         activeBatches[id] = state
         emit(.batchStarted(batch))
@@ -605,7 +626,11 @@ public actor RuntimeBackgroundIndexingManager {
         emit(.taskStarted(batchID: batchID, path: path))
         do {
             try Task.checkCancellation()
-            try await engine.loadImageForBackgroundIndexing(at: path)
+            if activeBatches[batchID]?.loadsInServingProcess == true {
+                try await engine.loadImageForBackgroundIndexingInServingProcess(at: path)
+            } else {
+                try await engine.loadImageForBackgroundIndexing(at: path)
+            }
             updateItemState(batchID: batchID, path: path, state: .completed)
             emit(.taskFinished(batchID: batchID, path: path,
                                result: .completed))

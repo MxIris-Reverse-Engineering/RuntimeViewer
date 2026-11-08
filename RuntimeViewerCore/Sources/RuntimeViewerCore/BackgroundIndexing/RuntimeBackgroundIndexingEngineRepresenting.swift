@@ -63,6 +63,14 @@ protocol RuntimeBackgroundIndexingEngineRepresenting: AnyObject, Sendable {
 
     /// The name an owner shows the batches it runs for this engine under.
     var borrowerName: String { get }
+
+    /// `loadImageForBackgroundIndexing(at:)` in the process that serves this
+    /// engine, a shared cache image it borrows included: what a batch of
+    /// `.specializationCandidates` loads.
+    func loadImageForBackgroundIndexingInServingProcess(at path: String) async throws
+
+    /// A walk handed `imagePaths` to their owners' indexing.
+    func recordHandedOverImages(_ imagePaths: [String]) async
 }
 
 extension RuntimeBackgroundIndexingEngineRepresenting {
@@ -70,6 +78,13 @@ extension RuntimeBackgroundIndexingEngineRepresenting {
     func ownerBackgroundIndexingManager(forImageAt path: String) async -> RuntimeBackgroundIndexingManager? {
         nil
     }
+
+    /// An engine that borrows nothing loads every image where it loads any.
+    func loadImageForBackgroundIndexingInServingProcess(at path: String) async throws {
+        try await loadImageForBackgroundIndexing(at: path)
+    }
+
+    func recordHandedOverImages(_ imagePaths: [String]) async {}
 
     func isOwnedSharedCacheImage(_ path: String) -> Bool {
         false
