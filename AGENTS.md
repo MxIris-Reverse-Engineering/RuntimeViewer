@@ -231,9 +231,13 @@ calls (`NSScrollView.box.registerScrollPocketContainer(_:on:)`, `setScrollPocket
 trait) that `NavigatorScrollViewLayout` and the navigator bars use; the older features the app relies
 on — `NSTableView.box.estimatesRowHeights`, `Label` mirroring `attributedStringValue` into its tooltip,
 the synchronous `SettingsStore.save()`, `SettingsConfiguration`, `MainMenu` — all arrived before it.
-`0.39.0` needs FrameworkToolbox `0.15.0` or later, which is why `RuntimeViewerCore` takes
-FrameworkToolbox `from: "0.15.0"` instead of the exact pin it had; the comment there says what to check
-when FrameworkToolbox moves. AppKitPlus-Release is declared `from: "0.19.0"`: `0.18.0` brought what the
+`0.39.0` needs FrameworkToolbox `0.15.0` or later, which is why `RuntimeViewerCore` takes a FrameworkToolbox
+floor instead of the exact pin it had; the comment there says what to check when FrameworkToolbox moves.
+The floor is `from: "0.16.0"`, which `RuntimeViewerCommandLine` repeats: `0.16.0` is the first release whose
+`@FrameworkToolboxExtension` works out by itself whether the extended protocol is class-bound, and with an older
+one `SwiftDeclaration.Definition`'s generated `box` setter assigns `self`, which crashes the compiler in SILGen.
+SFSymbols is declared `from: "0.4.0"`, the first release with `nsuiImage` (it deprecated the misspelled
+`nsuiImgae`). AppKitPlus-Release is declared `from: "0.19.0"`: `0.18.0` brought what the
 sidebar's text-token filter fields need — a comparison type's `valuePrefix` / `valueSuffix`, no menu for a
 token whose comparison the field does not offer, and the delegate's `filterTokenField(_:editingStringFor:)` —
 and `NSNavigationPopoverController`, which the runtime source picker's list is; `0.19.0` stops a window that

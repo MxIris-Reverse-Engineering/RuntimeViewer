@@ -291,9 +291,10 @@ let package = Package(
             from: "6.10.2",
         ),
         
+        // 0.4.0 is the first release with `nsuiImage`, which replaced the misspelled `nsuiImgae`.
         .package(
             url: "https://github.com/Mx-Iris/SFSymbols",
-            from: "0.3.0",
+            from: "0.4.0",
         ),
         
         .package(

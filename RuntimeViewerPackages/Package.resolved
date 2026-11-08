@@ -1,5 +1,5 @@
 {
-  "originHash" : "d0714f9aaf403256e8538ddccb2c2f7024006232c2362ef6838d7cf90abf7af5",
+  "originHash" : "f303756ac8d6f2f39b2fde22d346ee43ba4de222bdde6c8d1cc836f09239392e",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -285,8 +285,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/SFSymbols",
       "state" : {
-        "revision" : "373b919278adc197759ebcc2018956cacff1cc57",
-        "version" : "0.3.0"
+        "revision" : "d41c076aacc034c19bfd9570f86c928a07d3a069",
+        "version" : "0.4.0"
       }
     },
     {
