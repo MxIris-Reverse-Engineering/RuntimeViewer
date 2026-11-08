@@ -441,7 +441,10 @@ The project uses three Swift Package Manager packages:
   `startBackgroundWork()`, which `Document.makeWindowControllers` calls first; a new session is put in
   place then and when `.switchEngine` moves the document to another engine, the same one again when its
   engine starts over with something open, and a session without work (`backgroundWork == nil`) means
-  show nothing and command nothing. A document that closes or moves away only leaves — nothing is
+  show nothing and command nothing. A session also holds, as a borrower, the work of the engines its
+  engine borrows shared cache images from (`borrowedBackgroundWorks`, a new session when they change):
+  take an image's work from `backgroundWork(forImageAt:)`, never the engine's own for a borrowed image
+  (`CommunicationAndEngineArchitecture.md` §7.4). A document that closes or moves away only leaves — nothing is
   cancelled while another document is on the engine — and the last one leaving cancels the engine's work
   and drops its Report; Cancel, Cancel All and Clear History speak for every window on the engine.
   **Never give a document indexing or corpus state of its own again.** A root already indexed starts no
