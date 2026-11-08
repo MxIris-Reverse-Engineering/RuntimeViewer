@@ -795,7 +795,16 @@ public actor RuntimeEngine {
     }
 
     private func setImageNodes(_ imageNodes: [RuntimeImageNode]) {
-        self.imageNodesSubject.value = imageNodes
+        self.imageNodesSubject.value = sharingSharedCacheImageRoot(in: imageNodes)
+    }
+
+    /// The owners changing can share the shared cache's tree the serving
+    /// process sent before they arrived; the nodes are published again only
+    /// when they do.
+    func shareSharedCacheImageRootInPublishedNodes() {
+        let sharedImageNodes = sharingSharedCacheImageRoot(in: imageNodes)
+        guard !sharedImageNodes.elementsEqual(imageNodes, by: ===) else { return }
+        imageNodesSubject.value = sharedImageNodes
     }
 
     /// Forwards an `imageDidLoad` event to the connected client when this

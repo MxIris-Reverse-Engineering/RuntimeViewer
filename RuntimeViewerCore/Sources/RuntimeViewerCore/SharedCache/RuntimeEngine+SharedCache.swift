@@ -31,6 +31,7 @@ extension RuntimeEngine {
         borrowedLoadedImagePaths.removeAll()
         sharedCacheOwnersSubject.value = owners
         followSpecializations(of: owners)
+        shareSharedCacheImageRootInPublishedNodes()
         RuntimeEngineSharedCacheLog.ownersChanged(of: source, to: owners)
         if hadBorrowedLoads {
             dataChangeSubject.send(.fullReload(isReloadImageNodes: false))
@@ -68,6 +69,25 @@ extension RuntimeEngine {
               owner !== self
         else { return nil }
         return owner
+    }
+}
+
+// MARK: - The shared cache image tree
+
+extension RuntimeEngine {
+    /// `imageNodes` with the tree of the shared cache replaced by the partition's, when the two
+    /// list the same images: every engine on this Mac's cache then holds one tree of its images —
+    /// thousands of nodes — instead of a copy each, decoded from what its serving process sent. A
+    /// tree of another cache, or of a cache seen another way, is kept as it came.
+    nonisolated func sharingSharedCacheImageRoot(in imageNodes: [RuntimeImageNode]) -> [RuntimeImageNode] {
+        guard let partition = sharedCacheOwnersSubject.value?.partition else { return imageNodes }
+        return imageNodes.map { imageNode in
+            guard imageNode !== partition.imageRootNode,
+                  imageNode.name == RuntimeSharedCachePartition.imageRootNodeName,
+                  imageNode.leafImagePaths == partition.imagePaths
+            else { return imageNode }
+            return partition.imageRootNode
+        }
     }
 }
 

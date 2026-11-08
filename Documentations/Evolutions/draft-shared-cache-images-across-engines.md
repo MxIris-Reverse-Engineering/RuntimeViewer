@@ -253,7 +253,7 @@ extension RuntimeEngineManager {
 - **Always Index**：借用方的条目解析时，先查目标的 `imageList`，再查全部系统镜像；短名同时匹配到两个平台的同名镜像时（如 SwiftUI），取本 engine 所在进程的平台能加载的那个。解析到系统镜像的条目交给归属 engine 的管理器（多根批次，reason 为 `.borrowed`），其余照旧。My Mac 与 Catalyst 自己的文档同样遵循这条规则，所以 My Mac 文档里的 UIKitCore 条目会交给 Catalyst。
 - **借用方自己的协调器**：语料协调器与交叉引用协调器忽略系统镜像（`imageDidIndexPublisher` 发来的与 `indexedImagePathList()` 列出的都过滤掉）。
 - **泛型特化的按需索引**：借用方 engine 第一次为目标自己的类型发 `specializationRequest` 前，把「目标已加载、且本 engine 借用过」的系统镜像在目标进程里建好 section，作为一次本 engine 的后台批次显示在 Report 里。这一批明确绕过路由，直接发给目标进程（与 `loadImageInServingProcess(at:)` 同一条路），否则会被 §3 转回归属 engine。这些镜像不建语料、不备交叉引用。
-- **Report**：顶层改为每个 engine 一组：本 engine 一组，每个借用的归属 engine 一组（组标题是 engine 名），组内仍是后台索引、Searchable Interfaces、Cross References 三类。`ReportNodeIdentifier` 加上 engine 标识，取消、推出、清历史作用于所在组的工作。会话没有借用时只有一组，界面与现在一样。
+- **Report**：顶层改为每个 engine 一组：本 engine 一组，每个借用的归属 engine 一组（组标题是 engine 名），组内仍是后台索引、Searchable Interfaces、Cross References 三类。`ReportNodeIdentifier` 新增组行 `.engineGroup(ReportEngineGroup)`，归属 engine 组里的每一行包成 `.borrowed(owner:identifier:)`，两个 engine 的同名行因此不会冲突；每组各用一个树构建器。取消、推出作用于所在组的工作，Cancel All 与 Clear History 作用于所有组。会话没有借用时只有一组，界面与现在一样。
 - **工具栏进度**：`ToolbarActivityPresenter` 合并本 engine 与借用工作的 `activityReporter`，沿用每个窗口自己的 `ActivityReportSelector` 选出要显示的那一条。App Nap 由各工作自己的 `processActivity` 负责，不需要改。
 - **回到起点**：`DocumentState` 除了跟随自己 engine 的就绪状态，也跟随所借归属 engine 的；其中任何一个从「未就绪」回到「就绪」、且文档有内容打开时，回到起点。
 
@@ -336,8 +336,8 @@ extension RuntimeEngineManager {
 4. **索引管理器交出系统镜像**（已完成）：多根批次、`.borrowed` reason；测试。
 5. **资格判定与接线**（已完成）：`RuntimeEngineManager` 的划分、资格判定、借用关系的设置与重算、`sharesSharedCacheImages`；测试。从这一步起附加进程开始借用。
 6. **应用层后台工作**（已完成）：注册表的借用者身份、会话的 `borrowedBackgroundWorks`、Always Index 解析、借用方协调器过滤系统镜像、特化前的按需索引、`DocumentState` 跟随归属 engine；测试。
-7. **界面**：Report 按 engine 分组、工具栏进度合并、侧栏 Load 的语义、Load Frameworks… 改用 `loadImageInServingProcess(at:)`、Developer 页开关；测试。
-8. **App 里共用系统镜像树**。
+7. **界面**（已完成）：Report 按 engine 分组、工具栏进度合并、侧栏 Load 的语义、Load Frameworks… 改用 `loadImageInServingProcess(at:)`、Developer 页开关；测试。
+8. **App 里共用系统镜像树**（已完成）。
 9. **文档**：`Documentations/CommunicationAndEngineArchitecture.md` 加一节写借用与路由；`Documentations/Guides/CommandLineInterface.md` 与 agent 插件说明写附加进程的新行为，插件升版本；根 `AGENTS.md` 的开发准则加一条「新命令要声明它关于哪个镜像，或说明为什么不转」；术语表登记「系统镜像」「归属 engine」「借用」。
 10. **手工验收与测量**：按 §11 的手工验收项，结果写进本提案的决策日志。
 
@@ -373,3 +373,5 @@ extension RuntimeEngineManager {
 | 2026-11-09 | 第 6 步：借用关系变化时三个协调器各自补齐，管理器先给附加 engine 设好借用关系再交出 | 语料与交叉引用协调器撤回已变成借用的镜像的请求、重新要一遍已索引镜像（拿回不再借用的）；索引协调器取消还有借用镜像待加载的批次，重跑开场派发与 Always Index（已索引的不产生批次，Report 不多出空批次）。附加 engine 在借用关系设好之后才交给文档，否则它的开场批次会先在目标进程里把系统依赖索引一遍。新会话沿用上一个会话的注册表，不在回调里重新解析依赖；Core 的 `setSharedCacheOwners(_:)` 在忘掉借来加载过的镜像时发一次 `.fullReload`，侧栏的「已加载」随之刷新 |
 | 2026-11-09 | 第 6 步：Always Index 只解析到有归属 engine 的系统镜像，按进程平台挑同名镜像 | Catalyst engine 不在时，Catalyst 专用镜像不算可解析，否则 My Mac 会为 UIKitCore 这样的行开一个必然失败的批次；Catalyst 起来、借用关系变化时重跑一遍，这一行就交给 Catalyst。进程平台：Catalyst engine 是 Mac Catalyst；其他 engine 加载了任何 Catalyst 专用镜像就是 Mac Catalyst（macOS 进程加载不了它们），否则是 macOS。借来的 Always Index 镜像由归属 engine 的语料协调器在批次开始时从派生数据读回（借用批次的类别沿用原因的类别）；交叉引用的 Always Index 先后顺序不转给归属 engine，它按路径顺序准备 |
 | 2026-11-09 | 第 6 步完成：特化前的按需索引是一种新批次，借用方也收到归属 engine 的特化结果 | 「本 engine 借用过」定为两类：本 engine 的请求让归属 engine 建了索引的镜像（声明了 `indexesSubjectImage` 的命令），和本 engine 的后台索引交出去的镜像；再与目标的 `imageList` 取交集。每次特化前逐个问服务进程是否已建索引，不另记缓存，服务进程重启也不会算错。新批次原因 `.specializationCandidates`（类别归手动），绕过路由在服务进程加载，Report 标题「Specialization Candidates」，特化请求等它结束。归属 engine 为借用镜像登记的特化，借用方转发到自己的数据变化里，借用这个镜像的窗口不用重载就能看到 |
+| 2026-11-09 | 第 7 步完成：Report 组按 engine 名与电脑图标显示，操作按行所属的工作派发 | 组行和组内各行的标识见 §8；行上的命令先找到这一行所属的工作（`ReportGroupWork.target(of:in:)`），再按它在那个 engine 自己 Report 里的身份执行。工具栏进度把各工作的活动报告合成一份（进行中的按开始时间新的在前，最近结束的取结束最晚的一个），Report 标签页的进行中标记同样算上借用的工作。侧栏的 Load 不用改：Core 的路由已经把借用镜像的加载交给归属 engine；Load Frameworks… 改用 `loadImageInServingProcess(at:)`。Developer 开关由 `SettingsLifecycleController` 在读完存储的设置之后开始跟随，写给 `RuntimeEngineManager.sharesSharedCacheImages` |
+| 2026-11-09 | 第 8 步完成：换树发生在 engine 设置镜像树时与借用关系到来时 | 服务进程推来的镜像树经 `setImageNodes` 进 engine，换树就放在这里；树常在借用关系之前到达，所以设置借用关系时再换一次，只有真换了才重新发布。是否同一份 cache 按两棵树的镜像路径集合比较；进程内 engine 的树原本也是每次现建的，同样换成共用的那棵 |
