@@ -464,7 +464,10 @@ public final class DocumentState {
         $runtimeEngineSession.asDriver()
             .flatMapLatest { session -> Driver<Bool> in
                 MainActor.assumeIsolated {
-                    session.backgroundWork?.isWorkInProgress ?? .just(false)
+                    // The work of the engines the document borrows from is in its Report too.
+                    let progressOfEachWork = session.backgroundWorks.map(\.isWorkInProgress)
+                    guard !progressOfEachWork.isEmpty else { return .just(false) }
+                    return Driver.combineLatest(progressOfEachWork) { $0.contains(true) }
                 }
             }
             .distinctUntilChanged()

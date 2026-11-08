@@ -25,12 +25,26 @@ extension Settings {
         @Default(0.0)
         public var contentLoadingDelay: TimeInterval
 
+        /// Whether My Mac, My Mac (Mac Catalyst) and the processes attached on this Mac share the
+        /// data of the shared cache images — each image indexed, printed and scanned once, by
+        /// the engine that owns it — while ``isEnabled`` is on. Turned off, every engine keeps
+        /// its own copy, as it did before they shared: for comparing memory, and for telling a
+        /// difference in what an engine shows from one that sharing makes.
+        @Default(true)
+        public var sharesSharedCacheImages: Bool
+
         public static let `default` = Self()
 
         /// The content loading delay that actually applies: ``contentLoadingDelay`` while the
         /// master switch is on, zero otherwise.
         public var effectiveContentLoadingDelay: TimeInterval {
             isEnabled ? contentLoadingDelay : 0
+        }
+
+        /// Whether the engines share the shared cache images: ``sharesSharedCacheImages`` while
+        /// the master switch is on, and the default — sharing — otherwise.
+        public var effectiveSharesSharedCacheImages: Bool {
+            isEnabled ? sharesSharedCacheImages : true
         }
     }
 }

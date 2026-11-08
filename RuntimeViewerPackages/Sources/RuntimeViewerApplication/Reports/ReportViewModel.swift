@@ -63,8 +63,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         public let hasHistory: Driver<Bool>
     }
 
-    /// Builds the tree one kind of work at a time, keeping cell ViewModels and finished rows.
-    private let treeBuilder = ReportTreeBuilder()
+    /// Builds each group's tree one kind of work at a time, keeping cell ViewModels and finished
+    /// rows, and the groups' own rows.
+    private let groupTreeBuilders = ReportGroupTreeBuilders()
 
     @RxObserved
     private var allNodes: [ReportNode] = []
@@ -99,177 +100,124 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
     public func transform(_ input: Input) -> Output {
         let documentState = documentState
-        let treeBuilder = treeBuilder
+        let groupTreeBuilders = groupTreeBuilders
         let isIndexingEnabled = $isIndexingEnabled.asObservable()
         let isCorpusEnabled = $isCorpusEnabled.asObservable()
         let isCrossReferencePreparationEnabled = $isCrossReferencePreparationEnabled.asObservable()
         let isVisible = input.isVisible.asObservable().distinctUntilChanged()
-        // The coordinators of the engine's work the document holds, again with every session it
-        // puts in place — starting its background work, moving to another engine — and `nil`
-        // while it holds none: the page then shows an empty Report.
-        let coordinators = documentState.$runtimeEngineSession.asObservable()
+        // The work the document holds, by group — the engine's own, then each engine it borrows
+        // from — again with every session it puts in place: starting its background work, moving
+        // to another engine, the engine given other owners. None while it holds none: the page
+        // then shows an empty Report.
+        let groupWorks = documentState.$runtimeEngineSession.asObservable()
             .map { runtimeEngineSession in
                 MainActor.assumeIsolated {
-                    runtimeEngineSession.backgroundWork.map { backgroundWork in
-                        (
-                            indexing: backgroundWork.indexingCoordinator,
-                            corpus: backgroundWork.corpusCoordinator,
-                            crossReferences: backgroundWork.crossReferencePreparationCoordinator
-                        )
-                    }
+                    ReportGroupWork.groups(of: runtimeEngineSession)
                 }
             }
             .share(replay: 1)
 
-        Observable.combineLatest(isVisible, coordinators)
-            .flatMapLatest { isVisible, coordinators -> Observable<[ReportNode]> in
+        Observable.combineLatest(isVisible, groupWorks)
+            .flatMapLatest { isVisible, groupWorks -> Observable<[ReportNode]> in
                 // A page nobody sees builds nothing. Coming on screen replays the latest of every
                 // input, so the tree is current before the page is drawn.
                 guard isVisible else { return .empty() }
-                guard let coordinators else { return .just([]) }
-                let indexingCoordinator = coordinators.indexing
-                let corpusCoordinator = coordinators.corpus
-                // Each kind is rebuilt from its own inputs only: a corpus build's progress leaves
-                // the indexing rows alone.
-                let indexingCategory = Observable.combineLatest(
-                    indexingCoordinator.batchesObservable,
-                    indexingCoordinator.historyObservable,
-                    isIndexingEnabled
-                )
-                .observe(on: MainScheduler.instance)
-                .map { batches, history, isIndexingEnabled in
-                    MainActor.assumeIsolated {
-                        treeBuilder.indexingCategory(batches: batches, history: history, isEnabled: isIndexingEnabled)
-                    }
-                }
-                // What the engine's process keeps for each kind, while the kind is on: the size its
-                // row shows and ejects. Only a change rebuilds the tree — the first answer is often
-                // the zero there was before it.
-                let corpusKeptByteCount = Observable.combineLatest(isCorpusEnabled, corpusCoordinator.$residentByteCount.asObservable()) { isEnabled, residentByteCount in
-                    isEnabled ? residentByteCount ?? 0 : 0
-                }
-                .distinctUntilChanged()
-                let corpusCategory = Observable.combineLatest(
-                    corpusCoordinator.$buildStatesByImagePath.asObservable(),
-                    corpusCoordinator.$followedImagePaths.asObservable(),
-                    corpusCoordinator.$finishedBuilds.asObservable(),
-                    corpusCoordinator.$restoredImagesByImagePath.asObservable(),
-                    corpusCoordinator.$isCorpusUnsupportedByEngine.asObservable(),
-                    isCorpusEnabled,
-                    corpusKeptByteCount
-                )
-                .observe(on: MainScheduler.instance)
-                .map { states, followedImagePaths, finishedBuilds, restoredImages, isCorpusUnsupportedByEngine, isCorpusEnabled, keptByteCount in
-                    MainActor.assumeIsolated {
-                        treeBuilder.corpusCategory(
-                            states: states,
-                            followedImagePaths: followedImagePaths,
-                            finishedBuilds: finishedBuilds,
-                            restoredImages: restoredImages,
-                            isUnsupportedByEngine: isCorpusUnsupportedByEngine,
-                            isEnabled: isCorpusEnabled,
-                            keptByteCount: keptByteCount
+                guard !groupWorks.isEmpty else { return .just([]) }
+                return MainActor.assumeIsolated {
+                    groupTreeBuilders.keepOnly(groupWorks.map(\.group))
+                    let categoriesOfEachGroup = groupWorks.map { groupWork in
+                        ReportOutline.categoryNodes(
+                            of: groupWork.backgroundWork,
+                            treeBuilder: groupTreeBuilders.treeBuilder(for: groupWork.group),
+                            isIndexingEnabled: isIndexingEnabled,
+                            isCorpusEnabled: isCorpusEnabled,
+                            isCrossReferencePreparationEnabled: isCrossReferencePreparationEnabled
                         )
                     }
-                }
-                let crossReferencePreparationCoordinator = coordinators.crossReferences
-                // Turned off, the engine's process keeps nothing prepared: its limit is zero.
-                let crossReferenceKeptByteCount = Observable.combineLatest(isCrossReferencePreparationEnabled, crossReferencePreparationCoordinator.$preparedByteCount.asObservable()) { isEnabled, preparedByteCount in
-                    isEnabled ? preparedByteCount ?? 0 : 0
-                }
-                .distinctUntilChanged()
-                let crossReferenceCategory = Observable.combineLatest(
-                    crossReferencePreparationCoordinator.$preparationStatesByImagePath.asObservable(),
-                    crossReferencePreparationCoordinator.$followedImagePaths.asObservable(),
-                    crossReferencePreparationCoordinator.$finishedPreparations.asObservable(),
-                    crossReferencePreparationCoordinator.$isUnsupportedByEngine.asObservable(),
-                    isCrossReferencePreparationEnabled,
-                    crossReferenceKeptByteCount
-                )
-                .observe(on: MainScheduler.instance)
-                .map { states, followedImagePaths, finishedPreparations, isUnsupportedByEngine, isEnabled, keptByteCount in
-                    MainActor.assumeIsolated {
-                        treeBuilder.crossReferenceCategory(
-                            states: states,
-                            followedImagePaths: followedImagePaths,
-                            finishedPreparations: finishedPreparations,
-                            isUnsupportedByEngine: isUnsupportedByEngine,
-                            isEnabled: isEnabled,
-                            keptByteCount: keptByteCount
-                        )
+                    // Borrowing nothing, the document's Report is its engine's, as it always was.
+                    guard groupWorks.count > 1 else { return categoriesOfEachGroup[0] }
+                    return Observable.combineLatest(categoriesOfEachGroup) { categoriesOfEachGroup in
+                        MainActor.assumeIsolated {
+                            zip(groupWorks, categoriesOfEachGroup).map { groupWork, categories in
+                                groupTreeBuilders.groupNode(for: groupWork, children: categories.map(groupWork.listed))
+                            }
+                        }
                     }
-                }
-                return Observable.combineLatest(indexingCategory, corpusCategory, crossReferenceCategory) { indexingCategory, corpusCategory, crossReferenceCategory in
-                    [indexingCategory, corpusCategory, crossReferenceCategory].compactMap { $0 }
                 }
             }
             .bind(to: $allNodes)
             .disposed(by: rx.disposeBag)
 
-        Observable.combineLatest(isVisible, coordinators)
+        Observable.combineLatest(isVisible, groupWorks)
             .filter { isVisible, _ in isVisible }
-            .subscribeOnNext { _, coordinators in
+            .subscribeOnNext { _, groupWorks in
                 MainActor.assumeIsolated {
-                    coordinators?.corpus.refreshCoverage()
-                    // A query prepares images too, and the limit drops them, without a word.
-                    coordinators?.crossReferences.refreshPreparedByteCount()
+                    for groupWork in groupWorks {
+                        groupWork.backgroundWork.corpusCoordinator.refreshCoverage()
+                        // A query prepares images too, and the limit drops them, without a word.
+                        groupWork.backgroundWork.crossReferencePreparationCoordinator.refreshPreparedByteCount()
+                    }
                 }
             }
             .disposed(by: rx.disposeBag)
 
-        // The commands go to the coordinators of the engine's work, so every window on the engine
-        // sees them; a document holding none has nothing to command.
+        // The commands go to the coordinators of the work a row stands for — the engine's own, or
+        // an engine's the document borrows from — so every window holding that work sees them; a
+        // document holding none has nothing to command.
         input.cancel.emitOnNext { node in
-            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
-            switch node.identifier {
+            guard let target = ReportGroupWork.target(of: node.identifier, in: documentState.runtimeEngineSession) else { return }
+            let backgroundWork = target.backgroundWork
+            switch target.identifier {
             case .indexingBatch(let batchID):
                 backgroundWork.indexingCoordinator.cancelBatch(batchID)
             case .corpusBuild(let imagePath):
                 backgroundWork.corpusCoordinator.cancelBuild(of: imagePath)
             case .crossReferencePreparation(let imagePath):
                 backgroundWork.crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
-            case .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .finishedCrossReferencePreparation:
+            case .engineGroup, .borrowed, .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .finishedCrossReferencePreparation:
                 break
             }
         }
         .disposed(by: rx.disposeBag)
 
         input.cancelAll.emitOnNext {
-            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
-            backgroundWork.indexingCoordinator.cancelAllBatches()
-            // What the engine's documents asked for; a build another connection asked for is not
-            // this page's to stop.
-            let corpusCoordinator = backgroundWork.corpusCoordinator
-            for imagePath in corpusCoordinator.followedImagePaths {
-                corpusCoordinator.cancelBuild(of: imagePath)
-            }
-            let crossReferencePreparationCoordinator = backgroundWork.crossReferencePreparationCoordinator
-            for imagePath in crossReferencePreparationCoordinator.followedImagePaths {
-                crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
+            for backgroundWork in documentState.runtimeEngineSession.backgroundWorks {
+                backgroundWork.indexingCoordinator.cancelAllBatches()
+                // What the engines' documents asked for; a build another connection asked for is
+                // not this page's to stop.
+                let corpusCoordinator = backgroundWork.corpusCoordinator
+                for imagePath in corpusCoordinator.followedImagePaths {
+                    corpusCoordinator.cancelBuild(of: imagePath)
+                }
+                let crossReferencePreparationCoordinator = backgroundWork.crossReferencePreparationCoordinator
+                for imagePath in crossReferencePreparationCoordinator.followedImagePaths {
+                    crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
+                }
             }
         }
         .disposed(by: rx.disposeBag)
 
-        // Every window on the engine shares what the engine's process keeps, so an eject in one
-        // empties the row in all of them.
+        // Every window holding an engine's work shares what the engine's process keeps, so an
+        // eject in one empties the row in all of them.
         input.eject.emitOnNext { node in
-            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
-            switch node.identifier {
+            guard let target = ReportGroupWork.target(of: node.identifier, in: documentState.runtimeEngineSession) else { return }
+            switch target.identifier {
             case .category(.searchableInterfaces):
-                backgroundWork.corpusCoordinator.ejectCorpora()
+                target.backgroundWork.corpusCoordinator.ejectCorpora()
             case .category(.crossReferences):
-                backgroundWork.crossReferencePreparationCoordinator.ejectPreparations()
-            case .category(.backgroundIndexing), .turnedOff, .unsupportedByEngine, .indexingBatch, .indexingItem, .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .crossReferencePreparation, .finishedCrossReferencePreparation:
+                target.backgroundWork.crossReferencePreparationCoordinator.ejectPreparations()
+            case .engineGroup, .borrowed, .category(.backgroundIndexing), .turnedOff, .unsupportedByEngine, .indexingBatch, .indexingItem, .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .crossReferencePreparation, .finishedCrossReferencePreparation:
                 break
             }
         }
         .disposed(by: rx.disposeBag)
 
         input.clearHistory.emitOnNext {
-            guard let backgroundWork = documentState.runtimeEngineSession.backgroundWork else { return }
-            backgroundWork.indexingCoordinator.clearHistory()
-            backgroundWork.corpusCoordinator.clearFinishedBuilds()
-            backgroundWork.crossReferencePreparationCoordinator.clearFinishedPreparations()
+            for backgroundWork in documentState.runtimeEngineSession.backgroundWorks {
+                backgroundWork.indexingCoordinator.clearHistory()
+                backgroundWork.corpusCoordinator.clearFinishedBuilds()
+                backgroundWork.crossReferencePreparationCoordinator.clearFinishedPreparations()
+            }
         }
         .disposed(by: rx.disposeBag)
 
@@ -284,7 +232,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         .disposed(by: rx.disposeBag)
 
         input.doubleClickedNode.emitOnNext { [weak self] node in
-            guard let self, case .turnedOff = node.identifier else { return }
+            guard let self, case .turnedOff = node.identifier.unwrapped else { return }
             appRouter.trigger(.settings)
         }
         .disposed(by: rx.disposeBag)
@@ -324,17 +272,23 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
             filteringChanged: filteringChangedRelay.asSignal(),
             isEmpty: $allNodes.asDriver().map(\.isEmpty).distinctUntilChanged(),
             hasCancellableWork: $allNodes.asDriver().map { nodes in nodes.contains(where: ReportOutline.isCancellable) }.distinctUntilChanged(),
-            hasHistory: coordinators
-                .flatMapLatest { coordinators -> Observable<Bool> in
-                    guard let coordinators else { return .just(false) }
-                    return Observable.combineLatest(
-                        coordinators.indexing.historyObservable,
-                        coordinators.corpus.$finishedBuilds.asObservable(),
-                        coordinators.corpus.$restoredImagesByImagePath.asObservable(),
-                        coordinators.crossReferences.$finishedPreparations.asObservable()
-                    ) { history, finishedBuilds, restoredImages, finishedPreparations in
-                        !history.isEmpty || !finishedBuilds.isEmpty || !restoredImages.isEmpty || !finishedPreparations.isEmpty
+            hasHistory: groupWorks
+                .flatMapLatest { groupWorks -> Observable<Bool> in
+                    let historyOfEachGroup = MainActor.assumeIsolated {
+                        groupWorks.map { groupWork -> Observable<Bool> in
+                            let backgroundWork = groupWork.backgroundWork
+                            return Observable.combineLatest(
+                                backgroundWork.indexingCoordinator.historyObservable,
+                                backgroundWork.corpusCoordinator.$finishedBuilds.asObservable(),
+                                backgroundWork.corpusCoordinator.$restoredImagesByImagePath.asObservable(),
+                                backgroundWork.crossReferencePreparationCoordinator.$finishedPreparations.asObservable()
+                            ) { history, finishedBuilds, restoredImages, finishedPreparations in
+                                !history.isEmpty || !finishedBuilds.isEmpty || !restoredImages.isEmpty || !finishedPreparations.isEmpty
+                            }
+                        }
                     }
+                    guard !historyOfEachGroup.isEmpty else { return .just(false) }
+                    return Observable.combineLatest(historyOfEachGroup) { $0.contains(true) }
                 }
                 .asDriver(onErrorJustReturn: false)
                 .distinctUntilChanged()
@@ -402,6 +356,93 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 /// How the Report navigator's rows read and how its filter bar narrows them — kept apart from the
 /// generic `ReportViewModel`, which can hold no static stored values, and tested on its own.
 enum ReportOutline {
+    // MARK: - One engine's work
+
+    /// The three kinds of one engine's work, as the engine's own Report lists them, each rebuilt
+    /// from its own inputs only: a corpus build's progress leaves the indexing rows alone.
+    @MainActor
+    static func categoryNodes(
+        of backgroundWork: RuntimeEngineBackgroundWork,
+        treeBuilder: ReportTreeBuilder,
+        isIndexingEnabled: Observable<Bool>,
+        isCorpusEnabled: Observable<Bool>,
+        isCrossReferencePreparationEnabled: Observable<Bool>
+    ) -> Observable<[ReportNode]> {
+        let indexingCoordinator = backgroundWork.indexingCoordinator
+        let corpusCoordinator = backgroundWork.corpusCoordinator
+        let crossReferencePreparationCoordinator = backgroundWork.crossReferencePreparationCoordinator
+        let indexingCategory = Observable.combineLatest(
+            indexingCoordinator.batchesObservable,
+            indexingCoordinator.historyObservable,
+            isIndexingEnabled
+        )
+        .observe(on: MainScheduler.instance)
+        .map { batches, history, isIndexingEnabled in
+            MainActor.assumeIsolated {
+                treeBuilder.indexingCategory(batches: batches, history: history, isEnabled: isIndexingEnabled)
+            }
+        }
+        // What the engine's process keeps for each kind, while the kind is on: the size its row
+        // shows and ejects. Only a change rebuilds the tree — the first answer is often the zero
+        // there was before it.
+        let corpusKeptByteCount = Observable.combineLatest(isCorpusEnabled, corpusCoordinator.$residentByteCount.asObservable()) { isEnabled, residentByteCount in
+            isEnabled ? residentByteCount ?? 0 : 0
+        }
+        .distinctUntilChanged()
+        let corpusCategory = Observable.combineLatest(
+            corpusCoordinator.$buildStatesByImagePath.asObservable(),
+            corpusCoordinator.$followedImagePaths.asObservable(),
+            corpusCoordinator.$finishedBuilds.asObservable(),
+            corpusCoordinator.$restoredImagesByImagePath.asObservable(),
+            corpusCoordinator.$isCorpusUnsupportedByEngine.asObservable(),
+            isCorpusEnabled,
+            corpusKeptByteCount
+        )
+        .observe(on: MainScheduler.instance)
+        .map { states, followedImagePaths, finishedBuilds, restoredImages, isCorpusUnsupportedByEngine, isCorpusEnabled, keptByteCount in
+            MainActor.assumeIsolated {
+                treeBuilder.corpusCategory(
+                    states: states,
+                    followedImagePaths: followedImagePaths,
+                    finishedBuilds: finishedBuilds,
+                    restoredImages: restoredImages,
+                    isUnsupportedByEngine: isCorpusUnsupportedByEngine,
+                    isEnabled: isCorpusEnabled,
+                    keptByteCount: keptByteCount
+                )
+            }
+        }
+        // Turned off, the engine's process keeps nothing prepared: its limit is zero.
+        let crossReferenceKeptByteCount = Observable.combineLatest(isCrossReferencePreparationEnabled, crossReferencePreparationCoordinator.$preparedByteCount.asObservable()) { isEnabled, preparedByteCount in
+            isEnabled ? preparedByteCount ?? 0 : 0
+        }
+        .distinctUntilChanged()
+        let crossReferenceCategory = Observable.combineLatest(
+            crossReferencePreparationCoordinator.$preparationStatesByImagePath.asObservable(),
+            crossReferencePreparationCoordinator.$followedImagePaths.asObservable(),
+            crossReferencePreparationCoordinator.$finishedPreparations.asObservable(),
+            crossReferencePreparationCoordinator.$isUnsupportedByEngine.asObservable(),
+            isCrossReferencePreparationEnabled,
+            crossReferenceKeptByteCount
+        )
+        .observe(on: MainScheduler.instance)
+        .map { states, followedImagePaths, finishedPreparations, isUnsupportedByEngine, isEnabled, keptByteCount in
+            MainActor.assumeIsolated {
+                treeBuilder.crossReferenceCategory(
+                    states: states,
+                    followedImagePaths: followedImagePaths,
+                    finishedPreparations: finishedPreparations,
+                    isUnsupportedByEngine: isUnsupportedByEngine,
+                    isEnabled: isEnabled,
+                    keptByteCount: keptByteCount
+                )
+            }
+        }
+        return Observable.combineLatest(indexingCategory, corpusCategory, crossReferenceCategory) { indexingCategory, corpusCategory, crossReferenceCategory in
+            [indexingCategory, corpusCategory, crossReferenceCategory].compactMap { $0 }
+        }
+    }
+
     /// Whether a batch shows a row per image. An Always Index entry names one image, so a batch of
     /// one shows none: the batch's own row stands for the image.
     static func showsItems(of batch: RuntimeIndexingBatch) -> Bool {
@@ -649,9 +690,26 @@ enum ReportOutline {
     /// first time it appears — as Xcode opens its newest builds. A row seen once is never opened
     /// or closed again, so what the user collapses stays collapsed. `seenIdentifiers` carries what
     /// has been seen from one call to the next.
+    /// An engine's group, while the document borrows from other engines, opens the first time it
+    /// appears too, and its kinds of work are opened as the top level's are.
     static func nodesToExpand(in nodes: [ReportNode], seenIdentifiers: inout Set<ReportNodeIdentifier>) -> [ReportNode] {
         var nodesToExpand: [ReportNode] = []
-        for categoryNode in nodes {
+        for topLevelNode in nodes {
+            guard case .engineGroup = topLevelNode.identifier else {
+                nodesToExpand += categoryNodesToExpand(in: [topLevelNode], seenIdentifiers: &seenIdentifiers)
+                continue
+            }
+            if seenIdentifiers.insert(topLevelNode.identifier).inserted {
+                nodesToExpand.append(topLevelNode)
+            }
+            nodesToExpand += categoryNodesToExpand(in: topLevelNode.children, seenIdentifiers: &seenIdentifiers)
+        }
+        return nodesToExpand
+    }
+
+    private static func categoryNodesToExpand(in categoryNodes: [ReportNode], seenIdentifiers: inout Set<ReportNodeIdentifier>) -> [ReportNode] {
+        var nodesToExpand: [ReportNode] = []
+        for categoryNode in categoryNodes {
             if seenIdentifiers.insert(categoryNode.identifier).inserted {
                 nodesToExpand.append(categoryNode)
             }
@@ -665,9 +723,15 @@ enum ReportOutline {
         return nodesToExpand
     }
 
+    /// A row that only groups others — a kind of work, an engine's group — which the filter bar
+    /// keeps for its descendants alone.
     static func isCategory(_ node: ReportNode) -> Bool {
-        if case .category = node.identifier { return true }
-        return false
+        switch node.identifier.unwrapped {
+        case .category, .engineGroup:
+            true
+        default:
+            false
+        }
     }
 
     static func isInProgress(_ node: ReportNode) -> Bool {

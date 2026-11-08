@@ -15,9 +15,24 @@ public enum ReportCategory: Hashable, Sendable, CaseIterable {
     case crossReferences
 }
 
+/// Whose work a group of the Report navigator lists, while the document borrows shared cache
+/// images: the engine the document is on, or one it borrows from.
+public enum ReportEngineGroup: Hashable, Sendable {
+    /// The engine the document is on.
+    case own
+    /// An engine the document borrows shared cache images from, by identity.
+    case owner(ObjectIdentifier)
+}
+
 /// What a row of the Report navigator stands for. Stable across updates, so a row keeps its cell,
 /// its expansion and its selection while what it shows changes.
 public enum ReportNodeIdentifier: Hashable, Sendable {
+    /// The row of one engine's work, above its kinds of work, while the document borrows from
+    /// other engines; a document that borrows nothing shows the kinds of work at the top.
+    case engineGroup(ReportEngineGroup)
+    /// A row of the work of an engine the document borrows from, as `identifier` would be in that
+    /// engine's own Report: under its group, so two engines' rows never share an identifier.
+    indirect case borrowed(owner: ObjectIdentifier, identifier: ReportNodeIdentifier)
     case category(ReportCategory)
     /// The single row a category shows while its feature is turned off in Settings.
     case turnedOff(ReportCategory)
@@ -41,9 +56,13 @@ public enum ReportNodeIdentifier: Hashable, Sendable {
 }
 
 extension ReportNodeIdentifier {
-    /// The kind of work the row belongs to.
-    var category: ReportCategory {
+    /// The kind of work the row belongs to; `nil` for an engine's group.
+    var category: ReportCategory? {
         switch self {
+        case .engineGroup:
+            nil
+        case .borrowed(_, let identifier):
+            identifier.category
         case .category(let category), .turnedOff(let category), .unsupportedByEngine(let category):
             category
         case .indexingBatch, .indexingItem:
@@ -53,6 +72,28 @@ extension ReportNodeIdentifier {
         case .crossReferencePreparation, .finishedCrossReferencePreparation:
             .crossReferences
         }
+    }
+
+    /// The row as it is in its engine's own Report: the identifier a row of a borrowed engine's
+    /// work wraps, any other as it is.
+    public var unwrapped: ReportNodeIdentifier {
+        if case .borrowed(_, let identifier) = self {
+            return identifier.unwrapped
+        }
+        return self
+    }
+
+    /// The same row under the group of the engine `owner` names.
+    func borrowed(from owner: ObjectIdentifier) -> ReportNodeIdentifier {
+        .borrowed(owner: owner, identifier: self)
+    }
+}
+
+extension ReportNode {
+    /// The same subtree with every row under the group of the engine `owner` names, on the same
+    /// cell ViewModels.
+    func borrowed(from owner: ObjectIdentifier) -> ReportNode {
+        ReportNode(identifier: identifier.borrowed(from: owner), cellViewModel: cellViewModel, children: children.map { $0.borrowed(from: owner) })
     }
 }
 

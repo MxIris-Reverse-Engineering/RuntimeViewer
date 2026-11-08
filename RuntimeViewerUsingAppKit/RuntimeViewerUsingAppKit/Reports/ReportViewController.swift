@@ -332,7 +332,7 @@ final class ReportViewController<Route: Routable>: BaseEffectViewController<Repo
                 $0.image = SFSymbols(systemName: .xmarkCircle).nsImage
             }
         }
-        if case .turnedOff = node.identifier {
+        if case .turnedOff = node.identifier.unwrapped {
             menu.addItem(withTitle: "Open Settings…", action: #selector(openSettingsMenuItemAction(_:)), keyEquivalent: "").then {
                 $0.target = self
                 $0.image = SFSymbols(systemName: .gearshape).nsImage

@@ -331,7 +331,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         // The picked framework is loaded by the document's engine, in whatever
         // process that engine runs in. It used to be `Bundle.load` — a dlopen
         // into this process — which is exactly what moving the local engine
-        // into the XPC service exists to stop.
+        // into the XPC service exists to stop. A framework of the shared cache
+        // an attached process borrows still goes into that process: loading it
+        // there is what was asked for, and its data still comes from its owner.
         input.frameworksSelected.emitOnNext { [weak self] urls in
             guard let self else { return }
             Task { @MainActor in
@@ -340,7 +342,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                         guard let executableURL = Bundle(url: url)?.executableURL else {
                             throw MessageError.message("\(url.lastPathComponent) has no executable to load.")
                         }
-                        try await self.documentState.runtimeEngine.loadImage(at: executableURL.path)
+                        try await self.documentState.runtimeEngine.loadImageInServingProcess(at: executableURL.path)
                     } catch {
                         self.errorRelay.accept(error)
                     }
