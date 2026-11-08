@@ -303,6 +303,7 @@ extension RuntimeEngine {
         let isPrioritized: Bool
         static var commandName: String { CommandName.buildInterfaceCorpus.commandName }
         static var cancelsAcrossConnections: Bool { true }
+        var subjectImagePath: String? { imagePath }
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeInterfaceCorpusBuildProgress) async -> Void) async throws -> RuntimeInterfaceCorpusBuildOutcome {
             try await engine._buildInterfaceCorpus(for: imagePath, transformer: transformer, isPrioritized: isPrioritized, reportProgress: reportProgress)
         }
@@ -311,6 +312,7 @@ extension RuntimeEngine {
     struct PrioritizeInterfaceCorpusCommand: RuntimeEngineCommand {
         let imagePath: String
         static var commandName: String { CommandName.prioritizeInterfaceCorpus.commandName }
+        var subjectImagePath: String? { imagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             await engine._prioritizeInterfaceCorpus(for: imagePath)
             return RuntimeEngineEmpty()
@@ -392,6 +394,9 @@ extension RuntimeEngine {
         let imagePath: String?
         let keepsStoredCorpora: Bool?
         static var commandName: String { CommandName.evictInterfaceCorpus.commandName }
+        /// One image's corpus is that image's owner's to drop; every corpus is
+        /// this engine's own.
+        var subjectImagePath: String? { imagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             await engine._evictInterfaceCorpus(for: imagePath, keepsStoredCorpora: keepsStoredCorpora ?? false)
             return RuntimeEngineEmpty()

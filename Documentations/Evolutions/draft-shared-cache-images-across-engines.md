@@ -160,8 +160,8 @@ extension RuntimeEngineCommand {
 ```
 
 - `dispatch(_:)` 的第一步：`subjectImagePath` 有归属 engine 时，交给 `owner.dispatchBorrowedRequest(command)`。后者在归属 engine 上照常分发，并按命令的两个声明替它做一个窗口直接发请求时会做的事：前台加载时压住它的后台索引，建好索引后在它的 `imageDidIndexPublisher` 上通告。这样归属 engine 的语料与交叉引用协调器像对待自己窗口的请求一样接着处理。
-- 声明 `subjectImagePath` 的命令：`IsImageIndexed`、`LoadImage`、`LoadImageWithProgress`、`LoadImageForBackgroundIndexing`、`CanOpenImage`、`Rpaths`、`Dependencies`、`ObjectsInImage`、`Interface`、`Hierarchy`、`Counterpart`、`MemberAddresses`、`PrivateDeclarationSourceFiles`、`SpecializationRequestForObject`、`RuntimePreflight`、`Specialize`、`BuildInterfaceCorpus`、`PrioritizeInterfaceCorpus`、`EvictInterfaceCorpus`（给了路径时）、`ExportModuleInfo`；交叉引用模块的 `Callees` 与 `PrepareCrossReferences` 在它自己的模块里声明（AGENTS.md 第 8 条）。
-- `IsImageLoaded` 不按镜像转出去，见 §5。进程级的命令（主程序路径、`reloadData`、`dyldRootPath`、注入命令、engine 列表、常驻上限）不声明，留在本 engine。
+- 声明 `subjectImagePath` 的命令：`IsImageIndexed`、`LoadImage`、`LoadImageWithProgress`、`LoadImageForBackgroundIndexing`、`ObjectsInImage`、`Interface`、`Hierarchy`、`SuperclassChain`、`RefinedProtocolTree`、`Counterpart`、`MemberAddresses`、`PrivateDeclarationSourceFiles`、`SpecializationRequestForObject`、`SpecializationRequestForCandidate`（按候选类型自己的镜像）、`RuntimePreflight`、`Specialize`、`BuildInterfaceCorpus`、`PrioritizeInterfaceCorpus`、`EvictInterfaceCorpus`（给了路径时）、`ExportModuleInfo`；交叉引用模块的 `Callees`、`PrepareCrossReferences`，以及范围是单个镜像时的 `Callers` 与 `TypeReferences`，在它自己的模块里声明（AGENTS.md 第 8 条）。对象的镜像路径为空（引擎只凭名字造出的引用）时不声明，留给本 engine 按名字查找。
+- 不转出去的：`IsImageLoaded`（见 §5）；`CanOpenImage`、`Rpaths`、`Dependencies`，后台索引的依赖遍历读的是服务进程已加载的镜像，见 §8；进程级的命令（主程序路径、`reloadData`、`dyldRootPath`、注入命令、engine 列表、常驻上限、语料覆盖情况）；跨镜像的查询（§4）。
 - 测试钉住覆盖：枚举所有内置命令与两个扩展模块的命令，断言每个带镜像路径字段的命令要么声明了 `subjectImagePath`，要么在「有意不转」的名单里。以后新增命令漏了声明，测试会红。
 
 ### 4. 跨镜像查询的合并
@@ -326,7 +326,7 @@ extension RuntimeEngineManager {
 ## 落地步骤
 
 1. **归属划分**（已完成）：`RuntimeSharedCachePartition` 与 `RuntimeSharedCacheImagePlatform`，附带测试。
-2. **借用关系与单镜像路由**：`RuntimeSharedCacheOwners`、`setSharedCacheOwners(_:)`、命令的三个声明与 `dispatch` 的转发、`dispatchBorrowedRequest`；加载语义（§5）；声明覆盖测试与路由测试。此时没有任何 engine 设置借用关系，行为不变。
+2. **借用关系与单镜像路由**（已完成）：`RuntimeSharedCacheOwners`、`setSharedCacheOwners(_:)`、命令的三个声明与 `dispatch` 的转发、`dispatchBorrowedRequest`；加载语义（§5）；声明覆盖测试与路由测试。此时没有任何 engine 设置借用关系，行为不变。
 3. **跨镜像合并与接力**：`RuntimeEngineSpanningCommand` 与各命令的合并规则，交叉引用模块的两条命令；§6 的接力与 `externalRootNames`；测试。
 4. **索引管理器交出系统镜像**：多根批次、`.borrowed` reason；测试。
 5. **资格判定与接线**：`RuntimeEngineManager` 的划分、资格判定、借用关系的设置与重算、`sharesSharedCacheImages`；测试。从这一步起附加进程开始借用。
@@ -361,3 +361,4 @@ extension RuntimeEngineManager {
 | 2026-11-08 | Load Frameworks… 仍加载进目标进程 | 没有询问即采用的假设：选择框表达的是「加载进这个进程」，与侧栏 Load 的含义不同 |
 | 2026-11-08 | 状态 → Accepted | 用户批准，开始实现；功能分支 `feature/shared-cache-images-across-engines` |
 | 2026-11-08 | 状态 → In Progress；第 1 步完成 | `RuntimeSharedCachePartition` 做成 `final class`（偏离方案里的 struct）：§9 要所有 engine 共用同一棵系统镜像树，共用的是对象本身。树按 cache 列出镜像的顺序建，与现在各 engine 推来的树一致。测试在本机 cache 上核对了两类例外镜像 |
+| 2026-11-08 | 第 2 步完成：依赖遍历用的三条命令不按镜像转发 | `CanOpenImage`、`Rpaths`、`Dependencies` 回答的是「服务进程里已加载的这个镜像」：附加进程的依赖图要在目标进程里走，系统镜像也一样，归属 engine 那边未必加载了它们，读不到依赖。原方案把它们列进了转发名单，改为留在本 engine；遍历结束后再把系统镜像交给归属 engine（§8）。新目录 `SharedCache/` 登记进 `RuntimeViewerCore/Sources/AGENTS.md` |

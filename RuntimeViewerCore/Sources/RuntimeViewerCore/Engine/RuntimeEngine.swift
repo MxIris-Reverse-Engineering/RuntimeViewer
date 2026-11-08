@@ -157,7 +157,22 @@ public actor RuntimeEngine {
         dataChangeSubject
     }
 
-    private nonisolated let dataChangeSubject = PassthroughSubject<RuntimeDataChange, Never>()
+    // Internal, not private: a load an owner made for this engine sends a
+    // reload from RuntimeEngine+SharedCache.swift.
+    nonisolated let dataChangeSubject = PassthroughSubject<RuntimeDataChange, Never>()
+
+    // MARK: - Shared Cache Owners
+
+    /// The engines this one borrows shared cache images from; `nil` while it
+    /// serves every image itself. A subject, like `imageNodesSubject`, so
+    /// that routing a request reads it from any isolation context without a
+    /// hop. See `RuntimeEngine+SharedCache.swift`.
+    nonisolated let sharedCacheOwnersSubject = CurrentValueSubject<RuntimeSharedCacheOwners?, Never>(nil)
+
+    /// The shared cache images an owner loaded for this engine —
+    /// `loadImage(at:)` on one of them — which `isImageLoaded(path:)` counts
+    /// as loaded, whatever the serving process has loaded. Canonical paths.
+    var borrowedLoadedImagePaths: Set<String> = []
 
     /// Back-compat unit signal derived from `dataChangePublisher`. Fires only
     /// for `.fullReload` events; subscribers wanting `.specializationAdded`
@@ -544,6 +559,9 @@ public actor RuntimeEngine {
         connection?.stop()
         stateSubject.send(.disconnected(error: nil))
         releaseIndexedSections()
+        // An owner engine's owners name the engine itself; letting them go
+        // keeps a stopped engine from holding itself alive.
+        setSharedCacheOwners(nil)
         #log(.info, "RuntimeEngine stopped")
     }
 
@@ -986,7 +1004,19 @@ extension RuntimeEngine {
     /// *send* the commands it declares, not only serve them — a module that
     /// could register a handler but not dispatch could only ever be half of a
     /// feature. See ``addCommandExtension(named:install:)``.
+    ///
+    /// A request about one shared cache image this engine borrows goes to the
+    /// image's owner instead; see `RuntimeEngine+SharedCache.swift`.
     public func dispatch<Command: RuntimeEngineCommand>(_ command: Command) async throws -> Command.Response {
+        if let owner = sharedCacheOwner(forImageAt: command.subjectImagePath) {
+            return try await owner.dispatchBorrowedRequest(command)
+        }
+        return try await dispatchToServingProcess(command)
+    }
+
+    /// `dispatch(_:)` without the shared cache owners: the request goes to
+    /// the process that serves this engine, whatever image it is about.
+    func dispatchToServingProcess<Command: RuntimeEngineCommand>(_ command: Command) async throws -> Command.Response {
         if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
             return try await connection.sendMessage(name: Command.commandName, request: command)
@@ -1016,6 +1046,17 @@ extension RuntimeEngine {
     /// sides. A command type that cancels across connections is forwarded by
     /// `forwardWithdrawably(_:onProgress:over:)` instead.
     public func dispatch<Command: RuntimeEngineProgressCommand>(
+        _ command: Command,
+        onProgress: (@Sendable (Command.Progress) async -> Void)?
+    ) async throws -> Command.Response {
+        if let owner = sharedCacheOwner(forImageAt: command.subjectImagePath) {
+            return try await owner.dispatchBorrowedRequest(command, onProgress: onProgress)
+        }
+        return try await dispatchToServingProcess(command, onProgress: onProgress)
+    }
+
+    /// `dispatch(_:onProgress:)` without the shared cache owners.
+    func dispatchToServingProcess<Command: RuntimeEngineProgressCommand>(
         _ command: Command,
         onProgress: (@Sendable (Command.Progress) async -> Void)?
     ) async throws -> Command.Response {
@@ -1110,18 +1151,31 @@ extension RuntimeEngine {
         await route(push.payload)
     }
 
+    /// Whether the process that serves this engine has the image loaded — or,
+    /// for a shared cache image this engine borrows, whether an owner loaded
+    /// it for this engine. A borrowed image's loaded state otherwise follows
+    /// the serving process: the target of an attached process decides which
+    /// of the cache's images it shows as loaded, and its owner only answers
+    /// for their data.
     public func isImageLoaded(path: String) async throws -> Bool {
-        try await dispatch(IsImageLoadedCommand(path: path))
+        if sharedCacheOwner(forImageAt: path) != nil, borrowedLoadedImagePaths.contains(canonicalImagePath(path)) {
+            return true
+        }
+        return try await dispatch(IsImageLoadedCommand(path: path))
     }
 
     func _isImageLoaded(path: String) -> Bool {
         imageList.contains(imageCatalog.canonicalImagePath(path))
     }
 
+    /// Loads the image and builds its sections, in the process that serves
+    /// this engine — or, for a shared cache image this engine borrows, in its
+    /// owner's, which leaves the serving process untouched.
     public func loadImage(at path: String) async throws {
         try await performingForegroundLoad {
             _ = try await dispatch(LoadImageCommand(path: path))
         }
+        noteBorrowedLoad(ofImageAt: path)
         imageDidIndexSubject.send(path)
     }
 
@@ -1140,6 +1194,7 @@ extension RuntimeEngine {
         try await performingForegroundLoad {
             _ = try await dispatch(LoadImageWithProgressCommand(path: path), onProgress: onProgress)
         }
+        noteBorrowedLoad(ofImageAt: path)
         imageDidIndexSubject.send(path)
     }
 
@@ -1209,6 +1264,7 @@ extension RuntimeEngine {
         in image: String,
         onProgress: (@Sendable (RuntimeObjectsLoadingProgress) async -> Void)?
     ) async throws -> [RuntimeObject] {
+        try await loadBorrowedImageIfNeeded(at: image, onProgress: onProgress)
         let objects = try await performingForegroundLoad {
             try await dispatch(ObjectsInImageCommand(image: image), onProgress: onProgress)
         }
@@ -1225,7 +1281,10 @@ extension RuntimeEngine {
     /// over structures the process shares, not over CPU cores (proposal
     /// background-indexing-yields-to-foreground). Builds the background
     /// indexer already started are left to finish.
-    private func performingForegroundLoad<Result>(_ load: () async throws -> Result) async throws -> Result {
+    ///
+    /// Internal, not private: an owner holds its own background indexing back
+    /// for a load a borrowing engine hands it (RuntimeEngine+SharedCache.swift).
+    func performingForegroundLoad<Result>(_ load: () async throws -> Result) async throws -> Result {
         await backgroundIndexingManager.foregroundLoadDidBegin()
         do {
             let result = try await load()

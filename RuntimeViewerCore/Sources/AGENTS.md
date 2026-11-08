@@ -47,6 +47,7 @@ that several features use live in `Objects/`, `Interfaces/` and `Images/`.
 | `Relationships/` | The Inspector's relationship rows and the Find navigator's relationship trees |
 | `Specialization/` | Generic specialization |
 | `Bookmarks/` | Bookmarks and bookmark scopes |
+| `SharedCache/` | Borrowing shared cache images from the engines that own them: the owners, handing a request about one image to its owner, and combining the answers of a request about every image |
 | `BackgroundIndexing/`, `Export/`, `DerivedDataStorage/`, `Offline/` | Those features |
 | `LocalService/` | The local XPC service's key, credential and the host its services run |
 | `Transformer/` | `Transformer.Configuration` and the transformer modules it re-exports |

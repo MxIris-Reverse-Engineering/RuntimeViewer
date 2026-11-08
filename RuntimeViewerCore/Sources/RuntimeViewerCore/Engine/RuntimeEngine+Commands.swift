@@ -15,6 +15,7 @@ extension RuntimeEngine {
     struct IsImageIndexedCommand: RuntimeEngineCommand {
         let path: String
         static var commandName: String { CommandName.isImageIndexed.commandName }
+        var subjectImagePath: String? { path }
         func perform(on engine: RuntimeEngine) async throws -> Bool {
             await engine._isImageIndexed(path: path)
         }
@@ -30,6 +31,9 @@ extension RuntimeEngine {
     struct LoadImageCommand: RuntimeEngineCommand {
         let path: String
         static var commandName: String { CommandName.loadImage.commandName }
+        var subjectImagePath: String? { path }
+        static var isForegroundLoad: Bool { true }
+        static var indexesSubjectImage: Bool { true }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             try await engine._loadImage(at: path)
             return RuntimeEngineEmpty()
@@ -39,6 +43,9 @@ extension RuntimeEngine {
     struct LoadImageWithProgressCommand: RuntimeEngineProgressCommand {
         let path: String
         static var commandName: String { CommandName.loadImageWithProgress.commandName }
+        var subjectImagePath: String? { path }
+        static var isForegroundLoad: Bool { true }
+        static var indexesSubjectImage: Bool { true }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             try await engine._loadImage(at: path)
             return RuntimeEngineEmpty()
@@ -53,6 +60,8 @@ extension RuntimeEngine {
     struct LoadImageForBackgroundIndexingCommand: RuntimeEngineCommand {
         let path: String
         static var commandName: String { CommandName.loadImageForBackgroundIndexing.commandName }
+        var subjectImagePath: String? { path }
+        static var indexesSubjectImage: Bool { true }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
             try await engine._loadImageForBackgroundIndexing(at: path)
             return RuntimeEngineEmpty()
@@ -88,6 +97,7 @@ extension RuntimeEngine {
         let imagePath: String
         let imageName: String
         static var commandName: String { CommandName.runtimeInterfaceExportModuleInfo.commandName }
+        var subjectImagePath: String? { imagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeInterfaceExportMetadata.ModuleInfo {
             RuntimeInterfaceExportMetadata.ModuleInfo.resolve(imagePath: imagePath, imageName: imageName)
         }
@@ -100,6 +110,9 @@ extension RuntimeEngine {
     struct ObjectsInImageCommand: RuntimeEngineProgressCommand {
         let image: String
         static var commandName: String { CommandName.runtimeObjectsInImage.commandName }
+        var subjectImagePath: String? { image }
+        static var isForegroundLoad: Bool { true }
+        static var indexesSubjectImage: Bool { true }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeObject] {
             try await engine._objects(in: image)
         }
@@ -119,6 +132,7 @@ extension RuntimeEngine {
         /// in the component array they read. See `RuntimeObjectInterfaceResponse`.
         let acceptsColumnarInterfaceString: Bool?
         static var commandName: String { CommandName.runtimeInterfaceForRuntimeObjectInImageWithOptions.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeObjectInterfaceResponse {
             try await response(for: engine._interface(for: object, options: options))
         }
@@ -135,6 +149,7 @@ extension RuntimeEngine {
     struct HierarchyCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         static var commandName: String { CommandName.runtimeObjectHierarchy.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> [String] {
             try await engine._hierarchy(for: object)
         }
@@ -143,6 +158,7 @@ extension RuntimeEngine {
     struct SuperclassChainCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         static var commandName: String { CommandName.runtimeObjectSuperclassChain.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeRelationshipNode] {
             try await engine._superclassChain(for: object)
         }
@@ -151,6 +167,7 @@ extension RuntimeEngine {
     struct RefinedProtocolTreeCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         static var commandName: String { CommandName.runtimeObjectRefinedProtocolTree.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeRelationshipNode] {
             try await engine._refinedProtocolTree(for: object)
         }
@@ -167,6 +184,7 @@ extension RuntimeEngine {
     struct CounterpartCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         static var commandName: String { CommandName.runtimeCounterpartForObject.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeObject? {
             await engine._counterpart(for: object)
         }
@@ -176,6 +194,7 @@ extension RuntimeEngine {
         let object: RuntimeObject
         let memberName: String?
         static var commandName: String { CommandName.memberAddresses.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeMemberAddress] {
             try await engine._memberAddresses(for: object, memberName: memberName)
         }
@@ -185,6 +204,7 @@ extension RuntimeEngine {
         let discriminators: [String]
         let imagePath: String
         static var commandName: String { CommandName.privateDeclarationSourceFiles.commandName }
+        var subjectImagePath: String? { imagePath }
         func perform(on engine: RuntimeEngine) async throws -> [String: RuntimePrivateDeclarationSourceFile] {
             await engine._privateDeclarationSourceFiles(forDiscriminators: discriminators, inImage: imagePath)
         }
@@ -200,6 +220,7 @@ extension RuntimeEngine {
     struct SpecializationRequestForObjectCommand: RuntimeEngineCommand {
         let object: RuntimeObject
         static var commandName: String { CommandName.specializationRequest.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeSpecializationRequest {
             try await engine._specializationRequest(for: object)
         }
@@ -209,6 +230,7 @@ extension RuntimeEngine {
         let candidateID: String
         let imagePath: String
         static var commandName: String { CommandName.specializationRequestForCandidate.commandName }
+        var subjectImagePath: String? { imagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeSpecializationRequest {
             try await engine._specializationRequest(forCandidateID: candidateID, in: imagePath)
         }
@@ -218,6 +240,7 @@ extension RuntimeEngine {
         let object: RuntimeObject
         let selection: RuntimeSpecializationSelection
         static var commandName: String { CommandName.runtimePreflight.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeSpecializationValidation {
             try await engine._runtimePreflight(for: object, with: selection)
         }
@@ -227,8 +250,20 @@ extension RuntimeEngine {
         let object: RuntimeObject
         let selection: RuntimeSpecializationSelection
         static var commandName: String { CommandName.specialize.commandName }
+        var subjectImagePath: String? { object.subjectImagePath }
         func perform(on engine: RuntimeEngine) async throws -> RuntimeObject {
             try await engine._specialize(object, with: selection)
         }
+    }
+}
+
+// MARK: - Subject images
+
+private extension RuntimeObject {
+    /// The image a request about this object is about. A reference the engine
+    /// built from a name alone carries an empty path and names no image, so
+    /// it stays with the engine it was sent to, which looks the name up.
+    var subjectImagePath: String? {
+        imagePath.isEmpty ? nil : imagePath
     }
 }
