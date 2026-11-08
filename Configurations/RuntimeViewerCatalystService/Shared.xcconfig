@@ -13,6 +13,10 @@ SDK_VARIANT = iosmac
 SUPPORTED_PLATFORMS = macosx
 SUPPORTS_MACCATALYST = YES
 
+// Xcode's own toolchain, so the SDK's Catalyst search path does not point into the Metal toolchain
+// Xcode 27.2 lists first; RuntimeViewerCatalystHelper/Shared.xcconfig explains.
+TOOLCHAIN_DIR = $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain
+
 ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO
 CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystService/RuntimeViewerCatalystService.entitlements
 CODE_SIGN_IDENTITY = Apple Development

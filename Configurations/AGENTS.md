@@ -54,6 +54,19 @@ product instead. They live in the targets' xcconfig files,
   identifier, in a `RuntimeViewerCatalystService/<configuration>.xcconfig`
   of its own, and sets `RUNTIME_VIEWER_CATALYST_SERVICE_BUNDLE_IDENTIFIER` in the
   app's xcconfig to match, the way the local-runtime service is done.
+- On the service and the helper,
+  `TOOLCHAIN_DIR = $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain`. The
+  SDK's Catalyst variant adds `$(TOOLCHAIN_DIR)/usr/lib/swift/maccatalyst`, and
+  Xcode 27.2 puts the downloadable Metal toolchain first in `TOOLCHAINS`, above
+  any target setting, so `TOOLCHAIN_DIR` names a toolchain without that
+  directory and every link warns "search path … not found". Nothing narrower
+  works: Swift Build appends the SDK variant's search paths after the target's
+  own `LIBRARY_SEARCH_PATHS`, rejects `DT_TOOLCHAIN_DIR` in a search path, and a
+  target-level `TOOLCHAINS` loses to Xcode's. The cost is that with a custom
+  Swift toolchain selected, these two targets still see Xcode's toolchain in
+  `TOOLCHAIN_DIR`; both only load the Catalyst plugin. A new Catalyst target
+  needs the same line. Drop it once an Xcode stops putting the Metal toolchain
+  first: the `export TOOLCHAINS` line of a build log shows the order.
 
 Xcode's build settings editor shows the payload target's Base SDK as
 "iphonesimulator (SDK not found)". That is the editor only: its Base SDK pop-up
