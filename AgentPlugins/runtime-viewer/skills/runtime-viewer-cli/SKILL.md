@@ -226,6 +226,16 @@ live process.
 - Every host that starts reconnects the processes injected earlier. `detach` drops one: it
   stays injected but is no longer a source and is not reconnected. The record of injected
   processes is shared by debug and release builds.
+- **The shared cache images of a process attached on this Mac are answered by `local` and
+  `catalyst`**, which keep each of them once for every source: `interface`, `members`,
+  `hierarchy` and `load` of AppKit, Foundation or UIKitCore never touch the target process, and
+  `search` covers every shared cache image indexed in either, not only those the target loaded.
+  After `load` of a shared cache image the target never loaded, `images --loaded` lists it for
+  the source while the target's own list stays as it was. The target's own images are still read
+  in the target; the first `specialize` of one of its own generic types waits for the target to
+  index the shared cache images it uses. A process under Rosetta, one started with
+  `DYLD_SHARED_REGION` or `DYLD_SHARED_CACHE_DIR`, and every Simulator process keep reading every
+  image themselves.
 
 ## 7. Traps
 

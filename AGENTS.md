@@ -16,7 +16,7 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 | `RuntimeViewerUsingAppKit/AGENTS.md` | The macOS app's UI layer — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and routes, AppKit views, the sidebar's floating bars, diagnosing flicker — and `AppDelegate` with the lifecycle controllers. It also governs the ViewModels and routes in `RuntimeViewerApplication` and the views in `RuntimeViewerUI` |
 | `RuntimeViewerPackages/Sources/AGENTS.md` | Points the UI code in `RuntimeViewerApplication` and `RuntimeViewerUI` to the file above |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
-| `RuntimeViewerCore/Sources/AGENTS.md` | Where a file goes in the RuntimeViewerCore package: one top-level type per file, directories by feature |
+| `RuntimeViewerCore/Sources/AGENTS.md` | Where a file goes in the RuntimeViewerCore package: one top-level type per file, directories by feature; how every engine command declares its routing |
 | `RuntimeViewerCore/Tests/AGENTS.md` | Keeping Core tests off the user's real derived data |
 | `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
 | `Configurations/AGENTS.md` | Per-target build settings: the embedded non-macOS products, the jailbroken variant's payload, service names, adding a configuration |
@@ -441,7 +441,10 @@ The project uses three Swift Package Manager packages:
   `startBackgroundWork()`, which `Document.makeWindowControllers` calls first; a new session is put in
   place then and when `.switchEngine` moves the document to another engine, the same one again when its
   engine starts over with something open, and a session without work (`backgroundWork == nil`) means
-  show nothing and command nothing. A document that closes or moves away only leaves — nothing is
+  show nothing and command nothing. A session also holds, as a borrower, the work of the engines its
+  engine borrows shared cache images from (`borrowedBackgroundWorks`, a new session when they change):
+  take an image's work from `backgroundWork(forImageAt:)`, never the engine's own for a borrowed image
+  (`CommunicationAndEngineArchitecture.md` §7.4). A document that closes or moves away only leaves — nothing is
   cancelled while another document is on the engine — and the last one leaving cancels the engine's work
   and drops its Report; Cancel, Cancel All and Clear History speak for every window on the engine.
   **Never give a document indexing or corpus state of its own again.** A root already indexed starts no
@@ -564,7 +567,9 @@ When adding new features, you **MUST** follow these rules:
    module's own namespace, and install them from
    `RuntimeEngine.addCommandExtension(named:install:)`. Nothing
    in `RuntimeViewerCore` changes. `RuntimeViewerInjection` is the reference implementation; see
-   *Injection commands* below for the one obligation this puts on every process.
+   *Injection commands* below for the one obligation this puts on every process. Like Core's own,
+   the command declares how an engine borrowing shared cache images routes it
+   (`RuntimeViewerCore/Sources/AGENTS.md`).
 9. **A new `RuntimeObject.Properties` flag gets a row in the sidebar's Filter Scope**: declare it as
    a new case of `RuntimeObject.Properties.Flag` with the next bit position — the positions are wire
    format, so never renumber or reuse one — and build its static from that case, never from

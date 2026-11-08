@@ -36,6 +36,15 @@ struct DeveloperSettingsView: View {
             }
 
             Section {
+                Toggle("Share Shared Cache Images Between Sources", isOn: $developer.sharesSharedCacheImages)
+                    .disabled(!developer.isEnabled)
+            } header: {
+                Text("Shared Cache")
+            } footer: {
+                Text("My Mac keeps the data of the shared cache images a macOS process can load, My Mac (Mac Catalyst) that of the images built for Mac Catalyst alone, and every app attached on this Mac borrows both. Turned off, every source indexes and keeps its own copy, as before: for comparing memory, or for telling whether a difference comes from sharing. Windows that were borrowing start over.")
+            }
+
+            Section {
                 LabeledContent("Frameworks") {
                     Text(Self.loadedSourceEditorDescription)
                         .textSelection(.enabled)

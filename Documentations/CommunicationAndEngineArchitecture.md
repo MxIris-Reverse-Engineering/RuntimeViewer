@@ -526,7 +526,35 @@ Manager 把所有引擎按来源分成六组 `@Published`，`runtimeEngines` 计
 
 AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive 探针仍被主机内核应答，`NWConnection` 永远不 `.disconnected`。为此 `startBonjourHeartbeat` 每 30s 重发 `engineList`，连续 2 次超时（每次 15s 容忍 AWDL 拥塞）就 `stop()` 引擎，走正常断开路径清掉僵尸条目。
 
-### 7.4 状态观测与断开清理
+### 7.4 共用系统镜像：归属、借用与路由
+
+本机 dyld shared cache 里的镜像（系统镜像）只由一个 engine 处理一次，别的 engine 借用（提案
+[draft-shared-cache-images-across-engines](Evolutions/draft-shared-cache-images-across-engines.md)）。
+
+- **归属**：管理器启动时用 `RuntimeSharedCachePartition.current()` 把本进程映射的 cache 划分一次：
+  `LC_BUILD_VERSION` 只写了 Mac Catalyst 的镜像归 Mac Catalyst engine，其余归 My Mac。App 在 Rosetta 下
+  或不是 Apple Silicon 时没有划分，整套机制不启用。
+- **谁借用**：每次 `rebuildSections()` 末尾 `updateSharedCacheOwners()` 重算，把 `RuntimeSharedCacheOwners`
+  交给 My Mac、Catalyst engine 与符合条件的附加进程——`.remote` / `.localSocket` 来源、不在 Rosetta 下、
+  环境变量里没有 `DYLD_SHARED_REGION` 与 `DYLD_SHARED_CACHE_DIR`（`RuntimeSharedCacheEligibility`）。
+  条件全在 App 一侧判定，不向 payload 发新命令。附加 engine 拿到借用关系后才交还给调用方；
+  `sharesSharedCacheImages`（Settings › Developer）关掉时全部清空。
+- **路由**（`RuntimeEngine.dispatch`）：命令声明自己关于哪个镜像（`subjectImagePath`）。关于借用镜像的
+  交给归属 engine 的 `dispatchBorrowedRequest`；跨镜像的（`RuntimeEngineSpanningCommand`）同时问本 engine
+  与各归属 engine，各取自己负责的镜像再合并；其余经 `dispatchToServingProcess` 发给服务进程。新命令
+  怎么声明见 `RuntimeViewerCore/Sources/AGENTS.md`。单镜像查询里的跨镜像兜底（interface、父类链、协议树）
+  在公开方法里接力，所以经 proxy 来的请求只由服务进程回答。
+- **加载**：借用镜像的 `loadImage(at:)` 加载进归属 engine，不碰目标进程，借用方记下它算已加载；
+  Load Frameworks… 用 `loadImageInServingProcess(at:)` 照旧加载进目标。
+- **后台工作**：索引遍历遇到借用镜像，交给归属 engine 的多根批次（reason `.borrowed`）；特化本 engine
+  自己的类型前，`.specializationCandidates` 批次在服务进程里为它已加载、又借用过的系统镜像建 section。
+  App 里文档以借用者身份持有归属 engine 的后台工作（`RuntimeEngineBackgroundWorkRegistry.borrow`），
+  `RuntimeEngineSession` 记下借用关系并按镜像分流；借用关系变化或归属 engine 重启时，正在借用的文档
+  回到起点。
+- **镜像树**：用同一份 cache 的 engine 的「Dyld Shared Cache」树换成 `partition.imageRootNode`，路径
+  集合相同才换。
+
+### 7.5 状态观测与断开清理
 
 `observeRuntimeEngineState` 订阅每个引擎的 `statePublisher`：
 - `.connected` → 发 `RuntimeEngineManagerEvent.engineConnected`（App 层据此弹「已连接」通知）。
@@ -653,6 +681,7 @@ port = connection.connectionInfo.port
 | 加一条**别的模块**的 RPC 命令 | `extension RuntimeEngine.CommandName` 声明短名（前缀不变），再在那个模块里 `RuntimeEngine.addCommandExtension(named:install:)`；Core 一行不改。该模块的每个进程入口要调一次它的 install，漏调没有编译错误 —— 参照 `RuntimeViewerInjection` |
 | 让一条长命令的取消跨过连接 | §4.5：进度命令加 `cancelsAcrossConnections`；只对旧对端从没服务过的新命令开启（命令扩展的命令同一条规则） |
 | 调 Bonjour 发现/心跳/重试参数 | `RuntimeEngineManager` 顶部的 static 常量 |
+| 系统镜像为什么由 My Mac / Catalyst 回答、新命令怎么声明路由 | §7.4 + `RuntimeViewerCore/Sources/AGENTS.md` |
 | 理解镜像/断开/去重规则 | `RuntimeEngineMirrorRegistry`（纯逻辑，有单测）+ `Documentations/EngineMirroringWalkthrough.md` |
 | 沙盒注入端口/角色反转 | `RuntimeLocalSocketConnection.swift` 顶部文档 + `RuntimeLocalSocketPortDiscovery` |
 ```

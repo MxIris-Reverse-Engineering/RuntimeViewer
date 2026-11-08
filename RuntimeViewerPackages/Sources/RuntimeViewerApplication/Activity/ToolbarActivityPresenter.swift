@@ -26,7 +26,7 @@ public final class ToolbarActivityPresenter {
         state = documentState.$runtimeEngineSession.asObservable()
             .flatMapLatest { session -> Observable<ToolbarActivityState> in
                 MainActor.assumeIsolated {
-                    let snapshots = session.backgroundWork?.activityReporter.$snapshot.asObservable() ?? .just(.empty)
+                    let snapshots = Self.snapshots(of: session)
                     return Self.states(
                         from: snapshots,
                         sourceName: session.engine.source.description,
@@ -39,6 +39,17 @@ public final class ToolbarActivityPresenter {
             .distinctUntilChanged()
             .throttle(Self.updateThreshold, latest: true, scheduler: scheduler)
             .asDriver(onErrorDriveWith: .empty())
+    }
+
+    /// The reports of the work `session` holds, as one: the engine's own and, while it borrows shared
+    /// cache images, those of every engine it borrows from — what the document's Report lists.
+    static func snapshots(of session: RuntimeEngineSession) -> Observable<ActivityReportsSnapshot> {
+        let reporters = session.backgroundWorks.map(\.activityReporter)
+        guard let firstReporter = reporters.first else { return .just(.empty) }
+        guard reporters.count > 1 else { return firstReporter.$snapshot.asObservable() }
+        return Observable.combineLatest(reporters.map { $0.$snapshot.asObservable() }) { snapshots in
+            ActivityReportsSnapshot.merged(snapshots)
+        }
     }
 
     /// The display's states for one engine's snapshots, before the update threshold: one for every

@@ -49,7 +49,32 @@ public final class RuntimeEngineManager {
     @Published
     public private(set) var runtimeEngineSections: [RuntimeEngineSection] = []
 
+    /// Whether engines borrow the shared cache images My Mac and My Mac (Mac
+    /// Catalyst) keep, instead of each indexing them in its own process. On by
+    /// default; the app turns it off from Settings › Developer, to compare
+    /// with every engine keeping its own. Turning it off or on hands every
+    /// engine its owners anew.
+    public var sharesSharedCacheImages = true {
+        didSet {
+            guard oldValue != sharesSharedCacheImages else { return }
+            updateSharedCacheOwners()
+        }
+    }
+
     // MARK: - Private State
+
+    /// The shared cache this process maps, partitioned between its two
+    /// owners; `nil` where no engine can share it — off Apple Silicon, or
+    /// running under Rosetta. Read once: the cache does not change while a
+    /// process runs.
+    private let sharedCachePartition: RuntimeSharedCachePartition?
+
+    /// Which attached processes map this process's shared cache. Test seam.
+    var sharedCacheEligibility = RuntimeSharedCacheEligibility.live
+
+    /// The update of every engine's owners under way; see
+    /// `updateSharedCacheOwners()`.
+    private var sharedCacheOwnersUpdate: Task<Void, Never>?
 
     /// The file each offline engine reads, by engine identifier.
     private var offlineFilesByEngineID: [String: RuntimeOfflineFile] = [:]
@@ -331,6 +356,7 @@ public final class RuntimeEngineManager {
     ) {
         self.configuration = configuration
         self.macCatalystLaunching = macCatalystLaunching
+        self.sharedCachePartition = RuntimeSharedCacheEligibility.live.sharesThisProcessSharedCache() ? RuntimeSharedCachePartition.current() : nil
         #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public), configuration: \(String(describing: configuration), privacy: .public)")
 
         let startupSteps = configuration.startupSteps
@@ -572,7 +598,10 @@ public final class RuntimeEngineManager {
     /// after it. Now the failure is logged, reported as
     /// ``RuntimeEngineManagerEvent/catalystHelperUnavailable(_:)``, and nothing
     /// else is held up by it.
-    private func launchSystemRuntimeEngines() async {
+    /// Internal, not private: a test brings the system engines up through it
+    /// with the Mac Catalyst launch stood in for, to see them borrow from each
+    /// other.
+    func launchSystemRuntimeEngines() async {
         #log(.info,"Appending local runtime engine")
         systemRuntimeEngines.append(.local)
         rebuildSections()
@@ -725,6 +754,10 @@ public final class RuntimeEngineManager {
             addInjectedSocketEndpointRecord(pid: pid, appName: name)
         }
         rebuildSections()
+        // Before a document can be put on it: one whose background work
+        // started first would index the target's shared cache images in the
+        // target, before the engine knew they are borrowed.
+        await waitForSharedCacheOwnersUpdate()
         return runtimeEngine
     }
 
@@ -1392,6 +1425,7 @@ public final class RuntimeEngineManager {
                 }
             }
             rebuildSections()
+            await waitForSharedCacheOwnersUpdate()
         } catch {
             #log(.error, "Failed to fetch injected endpoints: \(error, privacy: .public)")
         }
@@ -1437,6 +1471,7 @@ public final class RuntimeEngineManager {
         // Update the persisted records to only contain alive entries
         saveInjectedSocketEndpointRecords(aliveRecords)
         rebuildSections()
+        await waitForSharedCacheOwnersUpdate()
     }
 
     // MARK: - State Observation
@@ -1892,6 +1927,58 @@ public final class RuntimeEngineManager {
         let sectionSummary = sections.map { "\($0.hostName)(\($0.engines.count))" }.joined(separator: ", ")
         #log(.debug,"[EngineIcon] rebuildSections: \(sections.count, privacy: .public) sections — \(sectionSummary, privacy: .public)")
         runtimeEngineSections = sections
+        // Every change to the engine lists ends here, so this is where the
+        // engines learn who they borrow from now.
+        updateSharedCacheOwners()
+    }
+
+    // MARK: - Shared Cache Owners
+
+    /// Gives every engine that can borrow shared cache images the owners it
+    /// borrows from now — My Mac for every image a macOS process loads, the
+    /// Mac Catalyst engine for the images built for Mac Catalyst alone — and
+    /// takes them away from every other engine. The two owners borrow from
+    /// each other; a process attached on this Mac borrows from both when it
+    /// maps this process's shared cache (`RuntimeSharedCacheEligibility`).
+    /// Nothing borrows while `sharesSharedCacheImages` is off, where this
+    /// process cannot share its cache, or before My Mac is up.
+    ///
+    /// The engines are told in one task, after the previous update's: an
+    /// engine must hear two updates in the order they were made.
+    private func updateSharedCacheOwners() {
+        let owners = currentSharedCacheOwners()
+        let assignments = (systemRuntimeEngines + attachedRuntimeEngines).map { engine in
+            (engine, owners.flatMap { isBorrowingEngine(engine) ? $0 : nil })
+        }
+        let previousUpdate = sharedCacheOwnersUpdate
+        sharedCacheOwnersUpdate = Task {
+            await previousUpdate?.value
+            for (engine, engineOwners) in assignments {
+                await engine.setSharedCacheOwners(engineOwners)
+            }
+        }
+    }
+
+    private func currentSharedCacheOwners() -> RuntimeSharedCacheOwners? {
+        guard sharesSharedCacheImages,
+              let sharedCachePartition,
+              let localEngine = systemRuntimeEngines.first(where: { $0.source == .local })
+        else { return nil }
+        return RuntimeSharedCacheOwners(partition: sharedCachePartition, macOS: localEngine, macCatalyst: macCatalystRuntimeEngine)
+    }
+
+    private func isBorrowingEngine(_ engine: RuntimeEngine) -> Bool {
+        if engine.source == .local || engine === macCatalystRuntimeEngine {
+            return true
+        }
+        return sharedCacheEligibility.isEligible(engine.source)
+    }
+
+    /// Waits for the owners the engines were last given to reach them: an
+    /// engine attached is handed back only once it has its owners, and tests
+    /// wait here too.
+    func waitForSharedCacheOwnersUpdate() async {
+        await sharedCacheOwnersUpdate?.value
     }
 
     /// Drops mirrored engines that duplicate an entry the local app already reaches

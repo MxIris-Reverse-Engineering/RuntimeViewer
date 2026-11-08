@@ -18,6 +18,7 @@ public final class DocumentState {
         self.runtimeEngineSession = RuntimeEngineSession(engine: runtimeEngine)
         observeReadiness(of: runtimeEngine)
         followSidebarImage()
+        followOwnersReadiness()
     }
 
     /// The engine backing this Document and the document's hold on the
@@ -115,6 +116,7 @@ public final class DocumentState {
                     self.handleReadinessChange(isReady, of: engine)
                 }
             }
+        observeSharedCacheOwners(of: engine)
     }
 
     private func handleReadinessChange(_ isReady: Bool, of engine: RuntimeEngine) {
@@ -122,11 +124,108 @@ public final class DocumentState {
         let becameReadyAgain = isReady && !engineWasReady
         engineWasReady = isReady
         guard becameReadyAgain else { return }
+        startOverOrAnnounceReset(on: engine)
+    }
+
+    /// The document starts over on `engine`: the window walks it back when it
+    /// has something open, and otherwise only the reset is announced.
+    private func startOverOrAnnounceReset(on engine: RuntimeEngine) {
         if hasNothingOpen {
             runtimeEngineDidResetRelay.accept(engine)
         } else {
             startOverRequestedRelay.accept(engine)
         }
+    }
+
+    // MARK: - Shared cache owners
+
+    /// Subscription to the current engine's shared cache owners; see
+    /// ``observeSharedCacheOwners(of:)``.
+    private var sharedCacheOwnersSubscription: AnyCancellable?
+
+    /// Subscriptions to the readiness of the engines the current session
+    /// borrows from, by engine.
+    private var ownerReadinessSubscriptions: [ObjectIdentifier: AnyCancellable] = [:]
+
+    /// Whether each engine the current session borrows from was ready at its
+    /// last readiness event.
+    private var ownerWasReady: [ObjectIdentifier: Bool] = [:]
+
+    /// Watches the engine manager give the engine other owners: My Mac and
+    /// Mac Catalyst coming up or going, the engine attached, sharing turned
+    /// off in Settings › Developer. A new session is put in place, holding the
+    /// new owners' work in place of the old ones', and a document that was
+    /// borrowing starts over as when its engine comes back: what it showed of
+    /// a borrowed image came from an owner it no longer asks. A document that
+    /// borrowed nothing before showed nothing an owner gave it, and only
+    /// moves to the new session.
+    private func observeSharedCacheOwners(of engine: RuntimeEngine) {
+        sharedCacheOwnersSubscription = engine.sharedCacheOwnersPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak engine] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let engine else { return }
+                    self.sharedCacheOwnersDidChange(of: engine)
+                }
+            }
+    }
+
+    private func sharedCacheOwnersDidChange(of engine: RuntimeEngine) {
+        guard engine === runtimeEngine, !isClosed else { return }
+        let previousSession = runtimeEngineSession
+        guard previousSession.sharedCacheOwners != engine.sharedCacheOwners else { return }
+        let wasBorrowing = previousSession.borrowsSharedCacheImages
+        runtimeEngineSession = previousSession.successor(on: engine)
+        previousSession.leave()
+        if wasBorrowing {
+            startOverOrAnnounceReset(on: engine)
+        }
+    }
+
+    /// Follows the readiness of the engines each session borrows from. An
+    /// owner coming back — the local or the Mac Catalyst service relaunched —
+    /// holds none of the images it kept for the document, so the document
+    /// starts over as when its own engine comes back.
+    private func followOwnersReadiness() {
+        $runtimeEngineSession.asObservable()
+            .subscribeOnNext { [weak self] session in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.observeReadiness(ofOwners: session.ownerEngines)
+                }
+            }
+            .disposed(by: disposeBag)
+    }
+
+    private func observeReadiness(ofOwners ownerEngines: [RuntimeEngine]) {
+        let ownerIdentifiers = Set(ownerEngines.map(ObjectIdentifier.init))
+        let departedOwnerIdentifiers = ownerReadinessSubscriptions.keys.filter { !ownerIdentifiers.contains($0) }
+        for ownerIdentifier in departedOwnerIdentifiers {
+            ownerReadinessSubscriptions[ownerIdentifier] = nil
+            ownerWasReady[ownerIdentifier] = nil
+        }
+        for ownerEngine in ownerEngines {
+            let ownerIdentifier = ObjectIdentifier(ownerEngine)
+            guard ownerReadinessSubscriptions[ownerIdentifier] == nil else { continue }
+            ownerWasReady[ownerIdentifier] = ownerEngine.state.isReady
+            ownerReadinessSubscriptions[ownerIdentifier] = ownerEngine.statePublisher
+                .map(\.isReady)
+                .sink { [weak self, weak ownerEngine] isReady in
+                    Task { @MainActor [weak self, weak ownerEngine] in
+                        guard let self, let ownerEngine else { return }
+                        self.handleReadinessChange(isReady, ofOwner: ownerEngine)
+                    }
+                }
+        }
+    }
+
+    private func handleReadinessChange(_ isReady: Bool, ofOwner ownerEngine: RuntimeEngine) {
+        let ownerIdentifier = ObjectIdentifier(ownerEngine)
+        guard ownerReadinessSubscriptions[ownerIdentifier] != nil, !isClosed else { return }
+        let becameReadyAgain = isReady && ownerWasReady[ownerIdentifier] == false
+        ownerWasReady[ownerIdentifier] = isReady
+        guard becameReadyAgain else { return }
+        startOverOrAnnounceReset(on: runtimeEngine)
     }
 
     /// The image the sidebar lists. `nil` when the sidebar is at the
@@ -272,11 +371,7 @@ public final class DocumentState {
     /// last document has left. `.switchEngine` calls this for another engine.
     fileprivate func moveSession(to engine: RuntimeEngine) {
         let previousSession = runtimeEngineSession
-        runtimeEngineSession = if previousSession.backgroundWork != nil, !isClosed {
-            RuntimeEngineSession(joining: engine, as: backgroundWorkMember, through: backgroundWorkRegistry)
-        } else {
-            RuntimeEngineSession(engine: engine)
-        }
+        runtimeEngineSession = isClosed ? RuntimeEngineSession(engine: engine) : previousSession.successor(on: engine)
         previousSession.leave()
     }
 
@@ -289,17 +384,23 @@ public final class DocumentState {
         runtimeEngineSession = currentSession
     }
 
-    /// Tells the corpus coordinator of the work the document holds which image
-    /// its sidebar lists, whenever the session or the image changes; with no
-    /// work held, nothing. A session the document leaves withdraws the image
-    /// itself (`RuntimeEngineSession.leave()`), and a closed document tells
-    /// nothing.
+    /// Tells the corpus coordinators of the work the document holds which image
+    /// its sidebar lists, whenever the session or the image changes: the
+    /// coordinator of the work that keeps the image's data hears it, the others
+    /// hear none — a shared cache image the engine borrows is its owner's to
+    /// favour. With no work held, nothing. A session the document leaves
+    /// withdraws the image itself (`RuntimeEngineSession.leave()`), and a closed
+    /// document tells nothing.
     private func followSidebarImage() {
         Observable.combineLatest($runtimeEngineSession.asObservable(), $currentImageNode.asObservable())
             .subscribeOnNext { [weak self] session, currentImageNode in
                 MainActor.assumeIsolated {
                     guard let self, !self.isClosed else { return }
-                    session.backgroundWork?.corpusCoordinator.setOnScreenImagePath(currentImageNode?.path, ofDocument: self.backgroundWorkMember)
+                    let imagePath = currentImageNode?.path
+                    for backgroundWork in session.backgroundWorks {
+                        let onScreenImagePath = imagePath.flatMap { session.keepsData(ofImageAt: $0, in: backgroundWork) ? $0 : nil }
+                        backgroundWork.corpusCoordinator.setOnScreenImagePath(onScreenImagePath, ofDocument: self.backgroundWorkMember)
+                    }
                 }
             }
             .disposed(by: disposeBag)
@@ -363,7 +464,10 @@ public final class DocumentState {
         $runtimeEngineSession.asDriver()
             .flatMapLatest { session -> Driver<Bool> in
                 MainActor.assumeIsolated {
-                    session.backgroundWork?.isWorkInProgress ?? .just(false)
+                    // The work of the engines the document borrows from is in its Report too.
+                    let progressOfEachWork = session.backgroundWorks.map(\.isWorkInProgress)
+                    guard !progressOfEachWork.isEmpty else { return .just(false) }
+                    return Driver.combineLatest(progressOfEachWork) { $0.contains(true) }
                 }
             }
             .distinctUntilChanged()

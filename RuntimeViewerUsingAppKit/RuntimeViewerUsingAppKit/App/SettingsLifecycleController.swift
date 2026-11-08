@@ -1,5 +1,7 @@
 import AppKit
+import Observation
 import RuntimeViewerArchitectures
+import RuntimeViewerEngineManagement
 import RuntimeViewerSettings
 import DependenciesMacros
 
@@ -11,6 +13,10 @@ import DependenciesMacros
 /// all — the store's one-second auto-save debounce simply lost anything
 /// changed just before quitting.
 ///
+/// It also carries the one setting the engine manager takes, whether the
+/// engines share the shared cache images, from the stored settings into the
+/// manager.
+///
 /// Following the `AppDelegate` convention, `AppDelegate` only forwards the
 /// lifecycle callbacks to the methods below.
 @MainActor
@@ -19,12 +25,32 @@ final class SettingsLifecycleController {
 
     @Dependency(\.settings) private var settings
 
+    @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
+
     private init() {}
 
     /// Reads the stored settings. Call first thing at launch, so the least
-    /// possible amount of UI is built against default values.
+    /// possible amount of UI is built against default values. Once they are
+    /// read, the engine manager follows the ones it takes.
     func loadOnLaunch() {
-        Task { await settings.load() }
+        Task {
+            await settings.load()
+            followSharedCacheSharing()
+        }
+    }
+
+    /// Settings › Developer's shared cache switch, into the engine manager —
+    /// from the stored value on, every change after it. Started once the
+    /// stored settings are read: `load()` replaces the object a tracking
+    /// started earlier would have followed.
+    private func followSharedCacheSharing() {
+        withObservationTracking {
+            runtimeEngineManager.sharesSharedCacheImages = settings.developer.effectiveSharesSharedCacheImages
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.followSharedCacheSharing()
+            }
+        }
     }
 
     /// Backs `applicationShouldTerminate(_:)`.

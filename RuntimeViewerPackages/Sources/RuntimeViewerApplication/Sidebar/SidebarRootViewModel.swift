@@ -223,11 +223,14 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         // have no associated image path, so they are filtered out.
         // Note: `node.path` strips the synthetic root component (e.g.
         // "Dyld Shared Cache") that prefixes `absolutePath`, yielding the
-        // real dyld image path expected by the indexing manager.
+        // real dyld image path expected by the indexing manager. A shared
+        // cache image the engine borrows is indexed by its owner, so the
+        // owner's indexer is the one told.
         input.selectedNode.emitOnNextMainActor { [weak self] viewModel in
             guard let self else { return }
             guard viewModel.node.isLeaf else { return }
-            documentState.runtimeEngineSession.backgroundWork?.indexingCoordinator.prioritize(imagePath: viewModel.node.path)
+            let imagePath = viewModel.node.path
+            documentState.runtimeEngineSession.backgroundWork(forImageAt: imagePath)?.indexingCoordinator.prioritize(imagePath: imagePath)
         }
         .disposed(by: rx.disposeBag)
 

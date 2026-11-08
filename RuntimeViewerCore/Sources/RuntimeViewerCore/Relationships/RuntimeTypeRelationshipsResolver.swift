@@ -101,6 +101,35 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
                 trees.append(RuntimeRelationshipTree(root: candidate, nodes: nodes))
             }
         }
+        trees += try await externalRootTrees(for: query)
+        return trees
+    }
+
+    /// The descendants or conformers this engine's images hold of each of the
+    /// query's external roots — types it has not indexed itself, handed over
+    /// by an engine that borrows them from their owner. They are found the
+    /// way a candidate's are: by name, through the relationship tables of the
+    /// images this engine has indexed, which record their supertypes by name
+    /// whoever defines them. A root nothing here descends from or conforms to
+    /// gets no tree.
+    private func externalRootTrees(for query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
+        guard let externalRoots = query.externalRoots, query.relationship != .ancestors else { return [] }
+        var trees: [RuntimeRelationshipTree] = []
+        for externalRoot in externalRoots {
+            try Task.checkCancellation()
+            let nodes: [RuntimeRelationshipNode]
+            switch query.relationship {
+            case .descendants:
+                nodes = await descendantNodes(of: externalRoot, path: RelationshipWalkPath(root: identity(of: externalRoot)))
+            case .conformers:
+                nodes = await conformerNodes(of: externalRoot)
+            case .ancestors:
+                nodes = []
+            }
+            try Task.checkCancellation()
+            guard !nodes.isEmpty else { continue }
+            trees.append(RuntimeRelationshipTree(root: externalRoot, nodes: nodes))
+        }
         return trees
     }
 

@@ -26,6 +26,46 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
     private var reloadCount = 0
     var mainExecutable: String = "/fake/MainApp"
 
+    /// The owners' indexing a borrowed image goes to, by path; empty for an
+    /// engine that borrows nothing.
+    private var ownerManagersByPath: [String: RuntimeBackgroundIndexingManager] = [:]
+    /// The paths this engine's owners keep, borrowed or not.
+    private var sharedCachePaths: Set<String> = []
+    /// Programmed paths that cannot be opened until they are loaded — a
+    /// shared cache image no process loaded yet.
+    private var unloadedPaths: Set<String> = []
+    let borrowerName: String
+
+    init(borrowerName: String = "") {
+        self.borrowerName = borrowerName
+    }
+
+    /// Makes `path` a borrowed image whose owner indexes it through `manager`.
+    func borrow(_ path: String, from manager: RuntimeBackgroundIndexingManager) {
+        lock.withLock {
+            ownerManagersByPath[path] = manager
+            sharedCachePaths.insert(path)
+        }
+    }
+
+    /// Makes `path` a shared cache image this engine keeps.
+    func ownSharedCacheImage(_ path: String) {
+        _ = lock.withLock { sharedCachePaths.insert(path) }
+    }
+
+    /// Makes a programmed `path` unopenable until it is loaded.
+    func leaveUnloaded(_ path: String) {
+        _ = lock.withLock { unloadedPaths.insert(path) }
+    }
+
+    func ownerBackgroundIndexingManager(forImageAt path: String) async -> RuntimeBackgroundIndexingManager? {
+        lock.withLock { ownerManagersByPath[path] }
+    }
+
+    func isOwnedSharedCacheImage(_ path: String) -> Bool {
+        lock.withLock { sharedCachePaths.contains(path) }
+    }
+
     func program(path: String, _ entry: ProgrammedPath) {
         lock.lock(); defer { lock.unlock() }
         paths[path] = entry
@@ -62,6 +102,7 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
         var entry = paths[path] ?? ProgrammedPath()
         entry.isIndexed = true
         paths[path] = entry
+        unloadedPaths.remove(path)
         loadOrder.append(path)
     }
 
@@ -69,7 +110,7 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
 
     func canOpenImage(at path: String) async -> Bool {
         lock.lock(); defer { lock.unlock() }
-        return paths[path] != nil
+        return paths[path] != nil && !unloadedPaths.contains(path)
     }
     func rpaths(for path: String) async -> [String] {
         lock.lock(); defer { lock.unlock() }
@@ -84,6 +125,8 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
         dependenciesCallLog.append(.init(path: path,
                                          ancestorRpaths: ancestorRpaths,
                                          mainExecutablePath: mainExecutablePath))
+        // An image the process has not loaded has nothing to read them from.
+        guard !unloadedPaths.contains(path) else { return [] }
         return paths[path]?.dependencies ?? []
     }
 }

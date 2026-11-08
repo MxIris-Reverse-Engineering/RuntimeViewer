@@ -11,6 +11,19 @@ extension RuntimeCrossReferences {
 
         static var commandName: String { RuntimeEngine.CommandName.crossReferenceCallees.commandName }
 
+        /// The image of the function decoded — which is also where its callees'
+        /// names are read from.
+        var subjectImagePath: String? {
+            switch subject {
+            case .function(let imagePath, _):
+                imagePath
+            case .member(let member):
+                member.object.imagePath.isEmpty ? nil : member.object.imagePath
+            case .selector:
+                nil
+            }
+        }
+
         func perform(on engine: RuntimeEngine) async throws -> RuntimeCrossReferenceQueryResult {
             try await CrossReferenceQuery(engine: engine).callees(of: subject, options: options)
         }
@@ -30,6 +43,10 @@ extension RuntimeCrossReferences {
         /// New with this module, so every peer that serves it also knows
         /// `cancelRequest`: cancelling a caller stops the scan where it runs.
         static var cancelsAcrossConnections: Bool { true }
+
+        /// The image scanned when the scope names one; a scan of every indexed
+        /// image has no single subject.
+        var subjectImagePath: String? { scope.scannedImagePath }
 
         func perform(
             on engine: RuntimeEngine,
@@ -54,6 +71,9 @@ extension RuntimeCrossReferences {
         /// also knows `cancelRequest`.
         static var cancelsAcrossConnections: Bool { true }
 
+        /// Like the callers': the image scanned when the scope names one.
+        var subjectImagePath: String? { scope.scannedImagePath }
+
         func perform(
             on engine: RuntimeEngine,
             reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
@@ -76,6 +96,8 @@ extension RuntimeCrossReferences {
         /// `cancelRequest`: a host that stops waiting stops the preparation
         /// where it runs, unless a query still waits for it.
         static var cancelsAcrossConnections: Bool { true }
+
+        var subjectImagePath: String? { imagePath }
 
         func perform(
             on engine: RuntimeEngine,
@@ -109,6 +131,18 @@ extension RuntimeCrossReferences {
 
         func perform(on engine: RuntimeEngine) async throws -> Int {
             CrossReferenceQuery(engine: engine).preparedByteCount
+        }
+    }
+}
+
+private extension RuntimeCrossReferenceScope {
+    /// The one image a query in this scope scans, if it scans one.
+    var scannedImagePath: String? {
+        switch self {
+        case .image(let path):
+            path
+        case .indexedImages:
+            nil
         }
     }
 }
