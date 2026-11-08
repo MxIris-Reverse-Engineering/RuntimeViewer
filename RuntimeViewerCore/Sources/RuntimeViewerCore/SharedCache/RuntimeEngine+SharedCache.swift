@@ -23,12 +23,17 @@ extension RuntimeEngine {
     ///
     /// A request already under way is not moved. The images an owner loaded
     /// for this engine are forgotten when the owners change: they were the
-    /// old owners' loads.
+    /// old owners' loads, so they no longer count as loaded here, and the
+    /// engine's observers hear of it as of any other change to what is loaded.
     public func setSharedCacheOwners(_ owners: RuntimeSharedCacheOwners?) {
         guard sharedCacheOwnersSubject.value != owners else { return }
+        let hadBorrowedLoads = !borrowedLoadedImagePaths.isEmpty
         borrowedLoadedImagePaths.removeAll()
         sharedCacheOwnersSubject.value = owners
         RuntimeEngineSharedCacheLog.ownersChanged(of: source, to: owners)
+        if hadBorrowedLoads {
+            dataChangeSubject.send(.fullReload(isReloadImageNodes: false))
+        }
     }
 
     /// Whether a request about the image at `imagePath` goes to an owner.
@@ -143,7 +148,7 @@ extension RuntimeEngine {
               let participants = spanningParticipants()
         else { return nil }
         let onErasedProgress: (@Sendable (any Sendable) async -> Void)? = onProgress.map { onProgress in
-            { erasedProgress in
+            { @Sendable erasedProgress in
                 guard let progress = erasedProgress as? Command.Progress else { return }
                 await onProgress(progress)
             }

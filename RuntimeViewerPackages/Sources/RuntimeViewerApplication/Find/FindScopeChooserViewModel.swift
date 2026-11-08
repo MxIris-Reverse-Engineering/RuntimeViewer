@@ -102,12 +102,13 @@ public final class FindScopeChooserViewModel<Route: FindNavigatorRoutable>: View
     }
 
     public func transform(_ input: Input) -> Output {
-        // The build states of the corpus coordinator of the engine's work the document holds;
-        // none while it holds none.
+        // The build states of the corpus coordinators of the work the document holds — the
+        // engine's own and the owners' it borrows shared cache images from; none while it holds
+        // none.
         let buildStates = documentState.$runtimeEngineSession.asObservable()
             .flatMapLatest { runtimeEngineSession -> Observable<[String: RuntimeInterfaceCorpusBuildState]> in
                 MainActor.assumeIsolated {
-                    runtimeEngineSession.backgroundWork?.corpusCoordinator.$buildStatesByImagePath.asObservable() ?? .just([:])
+                    FindCorpusCoordinators(session: runtimeEngineSession)?.buildStatesByImagePath ?? .just([:])
                 }
             }
         Observable.combineLatest(

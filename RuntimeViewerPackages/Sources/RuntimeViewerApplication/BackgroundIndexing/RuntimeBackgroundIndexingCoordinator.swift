@@ -82,13 +82,17 @@ public final class RuntimeBackgroundIndexingCoordinator {
     #if canImport(RuntimeViewerSettings)
     @Dependency(\.settings)
     private var settings
-    /// `documentDidOpen()` has run: a document opened on the engine.
-    private var hasStarted = false
+    /// `documentDidOpen()` has run: a document opened on the engine. A document
+    /// that only borrows from the engine never runs it. Read by tests.
+    private(set) var hasStarted = false
     /// Whether the engine was ready when last heard from, so a `false → true`
     /// edge — a new process behind the engine — can be told from the state
     /// replayed on subscribing.
     private var engineWasReady = false
     private var engineReadinessSubscription: AnyCancellable?
+    /// The engine's shared cache owners changing; see
+    /// `sharedCacheOwnersDidChange()`.
+    private var sharedCacheOwnersSubscription: AnyCancellable?
     /// Last observed values of each Settings.Indexing toggle, used by
     /// `handleSettingsChange` to detect transitions and dispatch only the
     /// minimal start / cancel work. Seeded by `bootstrapSettingsObservation`.
@@ -127,6 +131,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
         startReloadDataPump()
         bootstrapSettingsObservation()
         observeEngineReadiness()
+        observeSharedCacheOwners()
         #endif
     }
 
@@ -378,6 +383,44 @@ extension RuntimeBackgroundIndexingCoordinator {
         }
     }
 
+    // MARK: - Shared cache owners
+
+    /// Follows the engine manager giving the engine other owners: My Mac and
+    /// Mac Catalyst coming up or going, sharing turned off or on. What was
+    /// dispatched under the old owners stops counting.
+    private func observeSharedCacheOwners() {
+        sharedCacheOwnersSubscription = engine.sharedCacheOwnersPublisher
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.sharedCacheOwnersDidChange()
+                }
+            }
+    }
+
+    /// A batch still to load an image the engine borrows now is cancelled —
+    /// the owner indexes that image — and opening's dispatch runs again, the
+    /// Always Index rows included: a row resolves to other images with other
+    /// owners, an image borrowed now goes to its owner, and one the engine no
+    /// longer borrows is indexed here. The rows already indexed start nothing,
+    /// so nothing else reaches the Report.
+    private func sharedCacheOwnersDidChange() {
+        guard !isClosed else { return }
+        connectionGeneration += 1
+        alwaysIndexPassesUnderWay = 0
+        isAlwaysIndexRetryPending = false
+        dispatchedAlwaysIndexIdentifiers.removeAll()
+        Task { [weak self, engine, connectionGeneration] in
+            await engine.backgroundIndexingManager.cancelBatches { batch in
+                batch.items.contains { $0.state == .pending && engine.borrowsSharedCacheImage(at: $0.id) }
+            }
+            guard let self, self.isCurrent(connectionGeneration), self.hasStarted else { return }
+            self.dispatchForOpening()
+        }
+    }
+
     // MARK: - Dispatching
 
     /// Shared logic for "index the main executable" batches. Both the opening
@@ -443,10 +486,10 @@ extension RuntimeBackgroundIndexingCoordinator {
     }
 
     /// Reads `Settings.Indexing.custom.entries` and asks the manager to index
-    /// each resolvable entry that applies to this engine. Entries that don't
-    /// resolve to a path in the engine's `imageList` are silently skipped —
-    /// they stay out of `dispatchedAlwaysIndexIdentifiers`, so the next
-    /// fullReload retry can pick them up.
+    /// each resolvable entry that applies to this engine. Entries that name
+    /// no image on the engine (`AlwaysIndexImageResolver`) are silently
+    /// skipped — they stay out of `dispatchedAlwaysIndexIdentifiers`, so the
+    /// next fullReload retry can pick them up.
     ///
     /// `isEnabled` is the per-row switch: disabled entries are skipped at
     /// dispatch time with the same semantics as a removed row — an
@@ -506,12 +549,16 @@ extension RuntimeBackgroundIndexingCoordinator {
         // retry until they finally match a path in `imageList`.
         let imageList = await engine.imageList
         guard isCurrent(connectionGeneration) else { return }
-        let resolvedImagePaths = dispatches.compactMap { resolveAlwaysIndexIdentifier($0.identifier, in: imageList) }
+        // On an engine that borrows from the shared cache owners a row also
+        // names a shared cache image nothing loaded yet; the manager hands a
+        // borrowed one to its owner.
+        let resolver = AlwaysIndexImageResolver(loadedImagePaths: imageList, sharedCacheOwners: engine.sharedCacheOwners, source: engine.source)
+        let resolvedImagePaths = dispatches.compactMap { resolver.imagePath(for: $0.identifier) }
         if !resolvedImagePaths.isEmpty {
             alwaysIndexImagePathsResolvedRelay.accept(resolvedImagePaths)
         }
         for dispatch in dispatches {
-            guard let resolvedPath = resolveAlwaysIndexIdentifier(dispatch.identifier, in: imageList) else { continue }
+            guard let resolvedPath = resolver.imagePath(for: dispatch.identifier) else { continue }
             let effectiveDepth = dispatch.followDependencies ? indexing.heuristic.depth : 0
             // No batch comes back for an image indexed already; the row is
             // dispatched all the same.
@@ -553,25 +600,6 @@ extension RuntimeBackgroundIndexingCoordinator {
             return
         }
         startAlwaysIndexBatches()
-    }
-
-    /// Maps a user-supplied identifier to a path that exists in `imageList`.
-    /// - Full imagePath (leading `/`): looked up verbatim against `imageList`
-    ///   (which is already the patched form returned by `DyldUtilities.imageNames`).
-    /// - imageName (no leading `/`): matched against `lastPathComponent` of
-    ///   each entry. Strict equality — `Foundation` won't match `CoreFoundation`.
-    /// Returns nil when no entry matches; caller should silent-skip.
-    private nonisolated func resolveAlwaysIndexIdentifier(
-        _ identifier: String,
-        in imageList: [String]
-    ) -> String? {
-        let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        if trimmed.hasPrefix("/") {
-            return imageList.contains(trimmed) ? trimmed : nil
-        } else {
-            return imageList.first { ($0 as NSString).lastPathComponent == trimmed }
-        }
     }
 
     /// Pump that listens for `engine.reloadDataPublisher` and retries the

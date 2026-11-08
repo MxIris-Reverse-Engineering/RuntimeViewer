@@ -37,6 +37,10 @@ import RuntimeViewerSettings
 /// query then scans as it did before. The engine coming back with a new
 /// process behind it starts the coordinator over.
 ///
+/// A shared cache image the engine borrows is not this coordinator's: its
+/// owner prepares it, and a query that needs it is answered there, so none of
+/// the triggers above asks for it.
+///
 /// `preparationStatesByImagePath` takes every image it asked for from queued
 /// to prepared or failed, progress published at most once a frame, and
 /// `finishedPreparations` keeps the preparations that ended. The Report
@@ -68,6 +72,10 @@ public final class CrossReferencePreparationCoordinator {
     private var engineWasReady = false
 
     private var engineReadinessSubscription: AnyCancellable?
+
+    /// The engine's shared cache owners changing; see
+    /// `sharedCacheOwnersDidChange()`.
+    private var sharedCacheOwnersSubscription: AnyCancellable?
 
     private var preparationRequests: [String: PreparationRequest] = [:] {
         didSet {
@@ -156,6 +164,7 @@ public final class CrossReferencePreparationCoordinator {
         self.engine = engine
         bootstrapSettingsObservation()
         observeEngineReadiness()
+        observeSharedCacheOwners()
         startPumps()
     }
 
@@ -195,6 +204,7 @@ public final class CrossReferencePreparationCoordinator {
     public func requestPreparation(of requestedImagePath: String) {
         guard isEnabled, !isClosed, !isUnsupportedByEngine, !isResidentLimitFull else { return }
         let imagePath = canonicalImagePath(requestedImagePath)
+        guard !engine.borrowsSharedCacheImage(at: imagePath) else { return }
         guard preparationRequests[imagePath] == nil, preparationStatesByImagePath[imagePath]?.isPrepared != true else { return }
         nextRequestIdentifier += 1
         let identifier = nextRequestIdentifier
@@ -350,6 +360,40 @@ public final class CrossReferencePreparationCoordinator {
         preparationRequests = [:]
         _ = progressStaging.drain()
         preparationStatesByImagePath = preparationStatesByImagePath.filter { !$0.value.isActive }
+    }
+
+    // MARK: - Shared cache owners
+
+    /// Follows the engine manager giving the engine other owners, as the
+    /// engine's corpus coordinator does.
+    private func observeSharedCacheOwners() {
+        sharedCacheOwnersSubscription = engine.sharedCacheOwnersPublisher
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, !self.isClosed else { return }
+                    self.sharedCacheOwnersDidChange()
+                }
+            }
+    }
+
+    /// The requests for the images the engine borrows now are withdrawn — the
+    /// owners prepare them — and every indexed image is asked for again,
+    /// which brings back the images the engine no longer borrows.
+    private func sharedCacheOwnersDidChange() {
+        let borrowedImagePaths = preparationRequests.keys.filter { engine.borrowsSharedCacheImage(at: $0) }
+        var states = preparationStatesByImagePath
+        for imagePath in borrowedImagePaths {
+            preparationRequests.removeValue(forKey: imagePath)?.task.cancel()
+            if states[imagePath]?.isActive == true {
+                states[imagePath] = nil
+            }
+        }
+        if states != preparationStatesByImagePath {
+            preparationStatesByImagePath = states
+        }
+        requestPreparationOfIndexedImages()
     }
 
     // MARK: - Preparation state

@@ -165,11 +165,12 @@ public final class FindSession {
     /// The corpus coordinator's build states, for the summary bar.
     private var corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState] = [:]
 
-    /// The coordinator `follow(_:)` hooked the session to — the corpus
+    /// The coordinators `follow(_:)` hooked the session to — the corpus
     /// coordinator of the engine's work the document holds, which every
-    /// document on the engine shares; it moves the images in scope to the
-    /// front of its queue. `nil` while the document holds none.
-    private weak var corpusCoordinator: FindCorpusCoordinator?
+    /// document on the engine shares, and those of the owners it borrows
+    /// shared cache images from; each moves the images in scope it keeps to
+    /// the front of its queue. `nil` while the document holds no work.
+    private var corpusCoordinators: FindCorpusCoordinators?
 
     @Dependency(\.appDefaults)
     private var appDefaults
@@ -257,7 +258,7 @@ public final class FindSession {
             .driveOnNext { [weak self] runtimeEngineSession in
                 guard let self else { return }
                 MainActor.assumeIsolated {
-                    self.follow(runtimeEngineSession.backgroundWork?.corpusCoordinator)
+                    self.follow(FindCorpusCoordinators(session: runtimeEngineSession))
                 }
             }
             .disposed(by: disposeBag)
@@ -281,36 +282,38 @@ public final class FindSession {
         corpusCoordinatorDisposeBag = DisposeBag()
     }
 
-    /// Hooks the session to the corpus coordinator of the document's engine,
-    /// or with `nil` to none, letting go of the build states it showed. The
-    /// session follows `DocumentState.$runtimeEngineSession` from `init`: the
-    /// coordinator's build states feed the summary bar, and each corpus it
-    /// reports built is read by the search in force. Once every corpus is
-    /// dropped to be printed with a new transformer, that search runs again:
-    /// the images rebuilt are ones it has already read.
-    func follow(_ corpusCoordinator: FindCorpusCoordinator?) {
-        guard self.corpusCoordinator !== corpusCoordinator else { return }
-        self.corpusCoordinator = corpusCoordinator
+    /// Hooks the session to the corpus coordinators of the document's
+    /// session, or with `nil` to none, letting go of the build states it
+    /// showed. The session follows `DocumentState.$runtimeEngineSession` from
+    /// `init`: the coordinators' build states feed the summary bar, and each
+    /// corpus they report built is read by the search in force. Once every
+    /// corpus of a coordinator is dropped to be printed with a new
+    /// transformer, that search runs again: the images rebuilt are ones it
+    /// has already read.
+    func follow(_ corpusCoordinators: FindCorpusCoordinators?) {
+        if let corpusCoordinators, corpusCoordinators.reachesSameCoordinators(as: self.corpusCoordinators) { return }
+        if corpusCoordinators == nil, self.corpusCoordinators == nil { return }
+        self.corpusCoordinators = corpusCoordinators
         corpusCoordinatorDisposeBag = DisposeBag()
-        guard let corpusCoordinator else {
+        guard let corpusCoordinators else {
             corpusBuildStates = [:]
             updateSummary()
             return
         }
-        corpusCoordinator.$buildStatesByImagePath.asDriver()
+        corpusCoordinators.buildStatesByImagePath.asDriver(onErrorJustReturn: [:])
             .driveOnNextMainActor { [weak self] states in
                 guard let self else { return }
                 self.corpusBuildStates = states
                 self.updateSummary()
             }
             .disposed(by: corpusCoordinatorDisposeBag)
-        corpusCoordinator.corpusBuilt
+        corpusCoordinators.corpusBuilt
             .emitOnNextMainActor { [weak self] imagePath in
                 guard let self else { return }
                 self.corpusDidBuild(at: imagePath)
             }
             .disposed(by: corpusCoordinatorDisposeBag)
-        corpusCoordinator.corporaRebuilt
+        corpusCoordinators.corporaRebuilt
             .emitOnNextMainActor { [weak self] in
                 guard let self else { return }
                 self.rerunShownSearch()
@@ -468,9 +471,9 @@ public final class FindSession {
     /// failed is asked for again. A scope of every indexed image has no
     /// favourites.
     private func prioritizeCorpora(of scopeImagePaths: Set<String>?) {
-        guard let scopeImagePaths, let corpusCoordinator else { return }
-        for imagePath in scopeImagePaths.sorted() where corpusCoordinator.buildState(forImagePath: imagePath)?.isBuilt != true {
-            corpusCoordinator.requestBuild(of: imagePath, isPrioritized: true)
+        guard let scopeImagePaths, let corpusCoordinators else { return }
+        for imagePath in scopeImagePaths.sorted() where corpusCoordinators.buildState(forImagePath: imagePath)?.isBuilt != true {
+            corpusCoordinators.requestBuild(of: imagePath, isPrioritized: true)
         }
     }
 
@@ -726,7 +729,7 @@ public final class FindSession {
         // What the search could not read is asked for now — an image the
         // store evicted behind the coordinator's back included: this is the
         // moment the user has just been told it is missing.
-        corpusCoordinator?.reconcile(unbuiltIndexedImagePaths: summary.unbuiltIndexedImagePaths, scopeImagePaths: shownSearch.scopeImagePaths)
+        corpusCoordinators?.reconcile(unbuiltIndexedImagePaths: summary.unbuiltIndexedImagePaths, scopeImagePaths: shownSearch.scopeImagePaths)
     }
 
     /// A corpus the coordinator reports built is read by the search on

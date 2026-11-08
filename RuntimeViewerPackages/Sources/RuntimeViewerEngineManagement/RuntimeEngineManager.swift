@@ -754,6 +754,10 @@ public final class RuntimeEngineManager {
             addInjectedSocketEndpointRecord(pid: pid, appName: name)
         }
         rebuildSections()
+        // Before a document can be put on it: one whose background work
+        // started first would index the target's shared cache images in the
+        // target, before the engine knew they are borrowed.
+        await waitForSharedCacheOwnersUpdate()
         return runtimeEngine
     }
 
@@ -1421,6 +1425,7 @@ public final class RuntimeEngineManager {
                 }
             }
             rebuildSections()
+            await waitForSharedCacheOwnersUpdate()
         } catch {
             #log(.error, "Failed to fetch injected endpoints: \(error, privacy: .public)")
         }
@@ -1466,6 +1471,7 @@ public final class RuntimeEngineManager {
         // Update the persisted records to only contain alive entries
         saveInjectedSocketEndpointRecords(aliveRecords)
         rebuildSections()
+        await waitForSharedCacheOwnersUpdate()
     }
 
     // MARK: - State Observation
@@ -1968,8 +1974,9 @@ public final class RuntimeEngineManager {
         return sharedCacheEligibility.isEligible(engine.source)
     }
 
-    /// Waits for the owners the engines were last given to reach them. Test
-    /// seam.
+    /// Waits for the owners the engines were last given to reach them: an
+    /// engine attached is handed back only once it has its owners, and tests
+    /// wait here too.
     func waitForSharedCacheOwnersUpdate() async {
         await sharedCacheOwnersUpdate?.value
     }

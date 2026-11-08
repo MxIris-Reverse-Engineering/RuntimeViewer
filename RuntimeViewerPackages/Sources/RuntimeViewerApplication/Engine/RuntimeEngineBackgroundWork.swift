@@ -20,8 +20,10 @@ import DependenciesMacros
 /// Brought into being when the first document on the engine starts its background work
 /// (`DocumentState.startBackgroundWork()`), and closed when the last one leaves it — closing, or
 /// moving to another engine: its running work is cancelled and its history goes with it, as when
-/// a single window closes. The next document on the engine starts afresh. A document holds it
-/// through its `RuntimeEngineSession`; see `RuntimeEngineBackgroundWorkRegistry`.
+/// a single window closes. The next document on the engine starts afresh. A document on another
+/// engine that borrows this engine's shared cache images holds it too, as a borrower: for My Mac
+/// and Mac Catalyst the documents of the processes attached on this Mac, and each other's. A
+/// document holds it through its `RuntimeEngineSession`; see `RuntimeEngineBackgroundWorkRegistry`.
 @MainActor
 final class RuntimeEngineBackgroundWork {
     let engine: RuntimeEngine
@@ -50,17 +52,31 @@ final class RuntimeEngineBackgroundWork {
 
     private let disposeBag = DisposeBag()
 
-    /// The documents that hold the work, by identity.
-    fileprivate var memberIdentifiers: Set<ObjectIdentifier> = []
+    /// The documents that hold the work as documents on the engine, by identity, each with how
+    /// many of its sessions do: a document puts its next session in place before it lets the last
+    /// one go.
+    fileprivate var memberCounts: [ObjectIdentifier: Int] = [:]
+
+    /// The documents that hold the work because they borrow the engine's shared cache images —
+    /// documents on another engine — counted the same way. They keep the work running; they never
+    /// start the engine's own indexing.
+    fileprivate var borrowerCounts: [ObjectIdentifier: Int] = [:]
+
+    /// Whether no document holds the work any longer, in either way.
+    fileprivate var hasNoHolders: Bool {
+        memberCounts.isEmpty && borrowerCounts.isEmpty
+    }
 
     /// The last document left; see `close()`.
     private(set) var isClosed = false
 
-    /// Work for the first document joining `engine`: its three coordinators come into being with
-    /// it, the engine's background indexing starts, as a document opening on the engine starts it,
-    /// and the activity that keeps the app out of App Nap begins following the work. The documents
-    /// joining later find it all under way. `processActivityScheduler` is what the activity begins
-    /// and ends activities with.
+    /// Work for the first document joining or borrowing from `engine`: its three coordinators come
+    /// into being with it, and the activity that keeps the app out of App Nap begins following the
+    /// work. The engine's background indexing starts with the first document *on* the engine
+    /// (`RuntimeEngineBackgroundWorkRegistry.join(_:as:)`), not with one that only borrows from it:
+    /// a borrower hands the shared cache images it needs to the engine's indexing itself. The
+    /// documents coming later find it all under way. `processActivityScheduler` is what the
+    /// activity begins and ends activities with.
     fileprivate init(engine: RuntimeEngine, processActivityScheduler: any ProcessActivityScheduling) {
         let indexingCoordinator = RuntimeBackgroundIndexingCoordinator(engine: engine)
         let corpusCoordinator = FindCorpusCoordinator(engine: engine)
@@ -87,14 +103,17 @@ final class RuntimeEngineBackgroundWork {
         // The Always Index images are read from derived data as their rows
         // are dispatched, searchable before the batches index them — so the
         // corpus coordinator listens before the indexing starts. Their order
-        // is the order cross references are prepared in.
+        // is the order cross references are prepared in. A shared cache image
+        // the engine borrows is its owner's to read and prepare: the owner's
+        // corpus coordinator reads it as the batch it was handed starts.
         indexingCoordinator.alwaysIndexImagePathsResolved
-            .subscribeOnNextMainActor { [weak corpusCoordinator, weak crossReferencePreparationCoordinator] imagePaths in
-                corpusCoordinator?.restoreCorpora(of: imagePaths)
-                crossReferencePreparationCoordinator?.noteAlwaysIndexImagePaths(imagePaths)
+            .subscribeOnNextMainActor { [weak corpusCoordinator, weak crossReferencePreparationCoordinator, engine] imagePaths in
+                let ownImagePaths = imagePaths.filter { !engine.borrowsSharedCacheImage(at: $0) }
+                guard !ownImagePaths.isEmpty else { return }
+                corpusCoordinator?.restoreCorpora(of: ownImagePaths)
+                crossReferencePreparationCoordinator?.noteAlwaysIndexImagePaths(ownImagePaths)
             }
             .disposed(by: disposeBag)
-        indexingCoordinator.documentDidOpen()
     }
 
     /// The last document left: every coordinator stops, cancelling what it still has running,
@@ -109,8 +128,9 @@ final class RuntimeEngineBackgroundWork {
     }
 }
 
-/// Hands each document the background work of the engine it is on: the same work to every
-/// document on one engine, for as long as any of them stays.
+/// Hands each document the background work of the engine it is on, and the work of the engines it
+/// borrows shared cache images from: the same work to every document on one engine, and to every
+/// document borrowing from it, for as long as any of them stays.
 @MainActor
 final class RuntimeEngineBackgroundWorkRegistry {
     fileprivate static let shared = RuntimeEngineBackgroundWorkRegistry()
@@ -123,30 +143,71 @@ final class RuntimeEngineBackgroundWorkRegistry {
     /// activities with. Test seam: every test has a registry of its own.
     var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
 
-    /// An engine's first document joining, or its last one leaving — what lets an offline engine's
-    /// process go while nobody is on it (`RuntimeOfflineEngineParking`).
+    /// An engine's work coming into being for its first document, or closing as its last one
+    /// leaves — what lets an offline engine's process go while nobody is on it
+    /// (`RuntimeOfflineEngineParking`). A document that borrows from the engine counts too; no
+    /// document borrows from an offline engine.
     let occupancyChanges = PassthroughSubject<RuntimeEngineOccupancyChange, Never>()
 
     fileprivate init() {}
 
-    /// `member` holds `engine`'s background work from now on, brought into being — and started —
-    /// if no document on the engine holds it.
+    /// `member` holds `engine`'s background work from now on as a document on the engine, brought
+    /// into being if nobody holds it. The first member starts the engine's indexing; a document
+    /// that only borrowed from the engine before did not.
     func join(_ engine: RuntimeEngine, as member: ObjectIdentifier) -> RuntimeEngineBackgroundWork {
-        let engineIdentifier = ObjectIdentifier(engine)
-        let isFirstMember = backgroundWorkByEngine[engineIdentifier] == nil
-        let backgroundWork = backgroundWorkByEngine[engineIdentifier] ?? RuntimeEngineBackgroundWork(engine: engine, processActivityScheduler: processActivityScheduler)
-        backgroundWorkByEngine[engineIdentifier] = backgroundWork
-        backgroundWork.memberIdentifiers.insert(member)
+        let backgroundWork = backgroundWorkBroughtIntoBeing(on: engine)
+        let isFirstMember = backgroundWork.memberCounts.isEmpty
+        backgroundWork.memberCounts[member, default: 0] += 1
         if isFirstMember {
-            occupancyChanges.send(.occupied(engine))
+            backgroundWork.indexingCoordinator.documentDidOpen()
         }
         return backgroundWork
     }
 
-    /// `member` lets go of `backgroundWork`. The last one letting go closes it, and the next
-    /// document on the engine gets work of its own.
+    /// `borrower` — a document on another engine, which borrows `engine`'s shared cache images —
+    /// holds `engine`'s background work from now on, brought into being if nobody holds it. The
+    /// work runs for it as for a document on the engine, but borrowing starts none of the engine's
+    /// own indexing: the borrower hands the images it needs to it.
+    func borrow(_ engine: RuntimeEngine, as borrower: ObjectIdentifier) -> RuntimeEngineBackgroundWork {
+        let backgroundWork = backgroundWorkBroughtIntoBeing(on: engine)
+        backgroundWork.borrowerCounts[borrower, default: 0] += 1
+        return backgroundWork
+    }
+
+    /// `member` lets go of `backgroundWork` once. The last one letting go, member or borrower,
+    /// closes it, and the next document gets work of its own.
     func leave(_ backgroundWork: RuntimeEngineBackgroundWork, as member: ObjectIdentifier) {
-        guard backgroundWork.memberIdentifiers.remove(member) != nil, backgroundWork.memberIdentifiers.isEmpty else { return }
+        guard Self.releaseHold(of: member, in: &backgroundWork.memberCounts) else { return }
+        closeIfNobodyHolds(backgroundWork)
+    }
+
+    /// `borrower` lets go of `backgroundWork` once, as `leave(_:as:)` does for a member.
+    func stopBorrowing(_ backgroundWork: RuntimeEngineBackgroundWork, as borrower: ObjectIdentifier) {
+        guard Self.releaseHold(of: borrower, in: &backgroundWork.borrowerCounts) else { return }
+        closeIfNobodyHolds(backgroundWork)
+    }
+
+    /// `engine`'s work, the one in place or a new one.
+    private func backgroundWorkBroughtIntoBeing(on engine: RuntimeEngine) -> RuntimeEngineBackgroundWork {
+        let engineIdentifier = ObjectIdentifier(engine)
+        if let backgroundWork = backgroundWorkByEngine[engineIdentifier] {
+            return backgroundWork
+        }
+        let backgroundWork = RuntimeEngineBackgroundWork(engine: engine, processActivityScheduler: processActivityScheduler)
+        backgroundWorkByEngine[engineIdentifier] = backgroundWork
+        occupancyChanges.send(.occupied(engine))
+        return backgroundWork
+    }
+
+    /// Takes one of `holder`'s holds out of `counts`; whether it had one.
+    private static func releaseHold(of holder: ObjectIdentifier, in counts: inout [ObjectIdentifier: Int]) -> Bool {
+        guard let count = counts[holder] else { return false }
+        counts[holder] = count > 1 ? count - 1 : nil
+        return true
+    }
+
+    private func closeIfNobodyHolds(_ backgroundWork: RuntimeEngineBackgroundWork) {
+        guard backgroundWork.hasNoHolders else { return }
         backgroundWork.close()
         let engineIdentifier = ObjectIdentifier(backgroundWork.engine)
         if backgroundWorkByEngine[engineIdentifier] === backgroundWork {

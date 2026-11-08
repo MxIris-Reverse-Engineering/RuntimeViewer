@@ -41,6 +41,11 @@ import RuntimeViewerSettings
 /// connection interrupted is not recorded as failed. A document moving to
 /// another engine moves to that engine's coordinator.
 ///
+/// A shared cache image the engine borrows is not this coordinator's: its
+/// owner's coordinator builds and keeps its corpus for every engine that
+/// borrows it, so it is asked for by none of the triggers above, and the Find
+/// navigator reaches the owner's coordinator through `FindCorpusCoordinators`.
+///
 /// It also says how its requests are going: `buildStatesByImagePath` takes
 /// every image it asked for from queued to built or failed, progress
 /// published at most once a frame, and `finishedBuilds` keeps the builds
@@ -111,6 +116,10 @@ public final class FindCorpusCoordinator {
     private var engineWasReady = false
 
     private var engineReadinessSubscription: AnyCancellable?
+
+    /// The engine's shared cache owners changing; see
+    /// `sharedCacheOwnersDidChange()`.
+    private var sharedCacheOwnersSubscription: AnyCancellable?
 
     /// The build requests the coordinator holds open, by image path, for every
     /// document on the engine. Cancelling one withdraws the coordinator's
@@ -300,6 +309,7 @@ public final class FindCorpusCoordinator {
         bootstrapSettingsObservation()
         #endif
         observeEngineReadiness()
+        observeSharedCacheOwners()
         startPumps()
     }
 
@@ -359,6 +369,9 @@ public final class FindCorpusCoordinator {
     public func requestBuild(of requestedImagePath: String, isPrioritized: Bool = false) {
         guard isEnabled, !isClosed, !isCorpusUnsupportedByEngine else { return }
         let imagePath = canonicalImagePath(requestedImagePath)
+        // A shared cache image the engine borrows has its corpus built by its
+        // owner; the Find navigator asks the owner's coordinator for it.
+        guard !engine.borrowsSharedCacheImage(at: imagePath) else { return }
         if buildRequests[imagePath] != nil {
             if isPrioritized {
                 buildRequests[imagePath]?.isPrioritized = true
@@ -426,7 +439,7 @@ public final class FindCorpusCoordinator {
     /// Paths may be spelled either way; see `canonicalImagePath(_:)`.
     func restoreCorpora(of requestedImagePaths: [String]) {
         guard !isClosed else { return }
-        let canonicalImagePaths = Set(requestedImagePaths.map(canonicalImagePath))
+        let canonicalImagePaths = Set(requestedImagePaths.map(canonicalImagePath).filter { !engine.borrowsSharedCacheImage(at: $0) })
         requestedRestoreImagePaths.formUnion(canonicalImagePaths)
         guard isEnabled, !isCorpusUnsupportedByEngine else { return }
         let imagePaths = canonicalImagePaths.filter { imagePath in
@@ -1004,6 +1017,43 @@ public final class FindCorpusCoordinator {
         requestedImagePaths.removeAll()
         requestedRestoreImagePaths.removeAll()
         startPumps()
+    }
+
+    // MARK: - Shared cache owners
+
+    /// Follows the engine manager giving the engine other owners: an image
+    /// the engine starts borrowing is its owner's to build from then on, and
+    /// one it stops borrowing is this coordinator's again.
+    private func observeSharedCacheOwners() {
+        sharedCacheOwnersSubscription = engine.sharedCacheOwnersPublisher
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, !self.isClosed else { return }
+                    self.sharedCacheOwnersDidChange()
+                }
+            }
+    }
+
+    /// The requests for the images the engine borrows now are withdrawn — the
+    /// owners build them for the documents that borrow them — and every
+    /// indexed image is asked for again, which brings back the images the
+    /// engine no longer borrows. Nothing goes into the history: no build was
+    /// cancelled by the user.
+    private func sharedCacheOwnersDidChange() {
+        let borrowedImagePaths = buildRequests.keys.filter { engine.borrowsSharedCacheImage(at: $0) }
+        var states = buildStatesByImagePath
+        for imagePath in borrowedImagePaths {
+            buildRequests.removeValue(forKey: imagePath)?.task.cancel()
+            if states[imagePath]?.isActive == true {
+                states[imagePath] = nil
+            }
+        }
+        if states != buildStatesByImagePath {
+            buildStatesByImagePath = states
+        }
+        requestBuildOfIndexedImages()
     }
 
     // MARK: - Settings
