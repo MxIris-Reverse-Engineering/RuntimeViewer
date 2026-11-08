@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-11-03
-- **最后更新**: 2026-11-05
+- **最后更新**: 2026-11-08
 - **所属愿景**: [自建代码视图引擎](../Visions/CodeViewEngine.md)
 - **实现分支 / PR**: `feature/reconstructed-source-editor`（从 `next` 切，并回 `next`）
 - **配套文档**: 模块的构建方式与查证规则在 [`RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md`](../../RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md)
@@ -86,3 +86,4 @@
 | 2026-11-04 | 框架搜索路径只给 arm64 的切片 | 收尾时照发版的写法编 Release universal（Distribution workspace，关掉新的 package PIF builder），桥接 framework 的 x86_64 那一半失败。每个重建版框架都带 Clang module map，搜索路径里有它们时，x86_64 上 `canImport(SourceEditor)` 照样成立，桥接没有跳过；编译器为 x86_64 预编译 `SourceModelSupport` 的模块，停在生成的 `SourceModelSupport-Swift.h` 里的 `#error unsupported Swift architecture`。所以上面「Intel 那一份在编译时跳过」的做法不成立；Debug-arm64e 只编 arm64，前面的验证都碰不到它，正式发版的 archive 才会挂。桥接与桥接测试的 `FRAMEWORK_SEARCH_PATHS` 改为只对 `arm64*` 生效，x86_64 上找不到这几个框架，和没下载的构建一样跳过。Tuist 读同一份 xcconfig，不用另改 |
 | 2026-11-05 | 每处判断改为 `#if arch(arm64) && canImport(SourceEditor)` | 只改搜索路径不够：同一个 DerivedData 里第二次 Release universal 构建又在 x86_64 上同样失败，这回头文件来自构建产物目录。桥接的 Copy SourceEditor Frameworks to Products 阶段（为了让测试与调试运行先找到重建版）把框架拷进产物目录，而产物目录对每个 target 都在搜索路径里，所以从第二次构建起 x86_64 照样看得到它们；`ArchiveScript.sh` 固定复用 `/Volumes/DerivedData/RuntimeViewer/Archive`，从第二次发版起每次都会挂。用户批准改为在桥接与测试的 15 处判断里都先看 `arch(arm64)`，x86_64 不论搜索路径里有什么都跳过；搜索路径仍只对 arm64 设，x86_64 不去看下载目录。产物目录里已经有框架的那个 DerivedData 正好能复现失败，用它验证修复 |
 | 2026-11-05 | 实现完成并落地：编号 0072，状态改 Implemented | 用户批准收尾。验证都在最终的合并结果（`next` 加本分支，Ultra，Xcode 27.2）上跑。Release universal 构建照发版的写法，先后暴露出上面两行的问题；修后，在产物目录里已有重建版的那个 DerivedData 里通过，桥接 framework 的 arm64 切片链接三个重建版框架，x86_64 切片一个都不链接。Debug-arm64e 下桥接测试 35 个通过 33 个，没过的仍是 `next` 上早就不过的两个 `SourceEditorScrollerTests`。`RuntimeViewerPackages` 全量 796 个测试里，只有 `FindCrossReferenceTests` 的 Call Hierarchy 一条在满载下超时，单独重跑通过（之前一轮另有两个等引擎事件的测试满载超时，也是单独重跑通过）。`./TuistScript.sh check` 通过。没做的三项（公证、在 App 里目视、桥接协议换成具体类型）登记进提案索引的「暂缓的后续项」。文档：不另写使用指南和实现说明，模块的构建方式与查证规则在它的 `AGENTS.md`，已登记为配套文档；术语表已有「重建版 SourceEditor」，没有新术语 |
+| 2026-11-08 | 设置页去掉 SourceEditor 可用时的那句说明，以及 Syntax Coloring 一节 | 用户决定去掉这两段说明。Engine 一节只在这个构建用不了 SourceEditor 时出现，照旧说明为什么用的是文本视图，下面的显示设置也因此置灰；用得了时整节不显示。Syntax Coloring 一节是 [0009](0009-content-editor-engine-selection.md) 2026-08-15 那条写的着色来源说明，一起去掉 |

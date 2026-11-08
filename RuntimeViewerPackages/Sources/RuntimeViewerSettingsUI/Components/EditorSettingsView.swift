@@ -17,30 +17,28 @@ struct EditorSettingsView: View {
         return false
     }
 
+    /// Why this build shows interfaces in the built-in text view, which is also why the display
+    /// options are disabled. `nil` for a build that uses SourceEditor: there is nothing to explain.
+    private var textViewReason: LocalizedStringKey? {
+        switch availability {
+        case .available:
+            nil
+        case .notEmbedded:
+            "This build of RuntimeViewer does not include SourceEditor, so interfaces are shown in the built-in text view. The official releases include it."
+        case .unsupportedArchitecture:
+            "SourceEditor needs a Mac with Apple silicon, so interfaces are shown in the built-in text view."
+        }
+    }
+
     var body: some View {
         SettingsForm {
-            Section {
-                switch availability {
-                case .available:
-                    Label(
-                        "Interfaces are shown in SourceEditor, a rebuild of Xcode's source editor that comes with RuntimeViewer: code folding, sticky headers, a minimap, scope guides and ⌘-hover underlining. Large interfaces scroll without dropping frames.",
-                        systemImage: "checkmark.circle"
-                    )
-                case .notEmbedded:
-                    Label(
-                        "This build of RuntimeViewer does not include SourceEditor, so interfaces are shown in the built-in text view. The official releases include it.",
-                        systemImage: "exclamationmark.triangle"
-                    )
-                    .foregroundStyle(.secondary)
-                case .unsupportedArchitecture:
-                    Label(
-                        "SourceEditor needs a Mac with Apple silicon, so interfaces are shown in the built-in text view.",
-                        systemImage: "exclamationmark.triangle"
-                    )
-                    .foregroundStyle(.secondary)
+            if let textViewReason {
+                Section {
+                    Label(textViewReason, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Engine")
                 }
-            } header: {
-                Text("Engine")
             }
 
             Section {
@@ -59,16 +57,6 @@ struct EditorSettingsView: View {
                 Text("Changes apply immediately. Sticky headers pin the enclosing declarations to the top of the view while scrolling; the folding ribbon draws the arrows that collapse a declaration. Mark separators draw a rule at every MARK comment, and have nothing to draw until generated interfaces contain them. Comment tags draw generated comments — addresses, offsets, layouts — as tags, and let field layouts and enum case layouts collapse; copying and finding still use the comments as printed. Insertion point draws the blinking caret where a click leaves it; interfaces cannot be edited, so it is off by default.")
             }
             .disabled(!isSourceEditorAvailable)
-
-            Section {
-                Label(
-                    "Syntax coloring uses the runtime metadata the interface was generated from, not Xcode's own tokenizer — the same information the built-in text view colors from. The exception is a token the editor parses as spanning two of those runs, such as a parameter type and the parameter name after it, which keeps the editor's own reading.",
-                    systemImage: "paintpalette"
-                )
-                .foregroundStyle(.secondary)
-            } header: {
-                Text("Syntax Coloring")
-            }
         }
     }
 }

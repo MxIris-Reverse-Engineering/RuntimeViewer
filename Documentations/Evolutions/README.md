@@ -134,7 +134,7 @@
 | 工具栏三种样式在 macOS 15 上的目视 | [0070](0070-xcode-style-runtime-source-picker.md)「后续项」 | 小 | Xcode 26、Xcode 27、Classic 三种样式与弹出列表只在 macOS 26.7 与 27.2 上测过、看过 |
 | 活动显示要录屏才能定的几处细节 | [0071](0071-xcode-activity-progress.md) 决策日志 2026-11-04 | 小 | Xcode 27 图标槽与文字的间距、进度环收拢成的方块变透明是渐变还是跳变、几处默认动画曲线；逆向定不下，要录一段 Xcode 26 与 27 构建的过程对照 |
 | 重建版 SourceEditor 过公证 | [0072](0072-reconstructed-source-editor.md) 假设「bundle ID 照抄 `com.apple.dt.*`」 | 小 | 重建版框架的 bundle ID 照抄了 Xcode 的；第一次正式发版前实测公证会不会因此被拦，被拦了再定怎么办 |
-| 重建版 SourceEditor 在 App 里的目视 | [0072](0072-reconstructed-source-editor.md) | 小 | 只跑了测试与编译（含 Release universal），没有启动 App 看过：内容区用重建版显示接口、设置页 Engine 一节的说明、Intel 上退回 `NSTextView` |
+| 重建版 SourceEditor 在 App 里的目视 | [0072](0072-reconstructed-source-editor.md) | 小 | 只跑了测试与编译（含 Release universal），没有启动 App 看过：内容区用重建版显示接口、Intel 上退回 `NSTextView`，以及这时设置页 Engine 一节给的说明 |
 | 桥接协议改成直接用具体类型 | [0072](0072-reconstructed-source-editor.md) 假设「`SourceEditorBridging` 先保留」 | 小到中 | 框架随 App 直接链接以后，App 里交换主题、注释装饰的那几个协议与 `@objc` 值类型可以换成具体类型 |
 | 分栏的最大化、选栏浮层与跨栏拖动标签 | [0076](0076-editor-panes.md)「非目标」 | 中 | View ▸ Editor ▸ Focus Editor Pane（⌃⇧⌘↩）把一栏最大化；Move Focus to Editor Pane…（⌘J）与 Open in…（⌥⌘,）的选栏浮层；在分栏之间拖动标签。Xcode 27.2 的规则已逆向，记在 `/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes」 |
 | 分栏标签栏照 Xcode 的三处观感 | [0076](0076-editor-panes.md)「非目标」 | 小到中 | 滚动口袋做标签栏的底、选中标签的玻璃胶囊、未聚焦栏整栏按主题变暗，以及分隔线的确切颜色。现在是近似做法：窗口背景色、降低不透明度、系统分隔线颜色；要实际运行 Xcode 逐帧比对才能定 |
