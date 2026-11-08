@@ -50,4 +50,32 @@ protocol RuntimeBackgroundIndexingEngineRepresenting: AnyObject, Sendable {
     /// manager calls it once per batch, so every document watching the engine
     /// hears one `.fullReload`, however many documents there are.
     func reloadDataAfterBackgroundIndexing() async
+
+    /// The background indexing of the engine that owns the shared cache image
+    /// at `path`, when this engine borrows the image; `nil` when this engine
+    /// indexes it itself. A walk hands the borrowed images it reaches over to
+    /// their owner's indexing.
+    func ownerBackgroundIndexingManager(forImageAt path: String) async -> RuntimeBackgroundIndexingManager?
+
+    /// Whether `path` is an image of the shared cache this engine's owners
+    /// keep — one a walk may start from before any process loaded it.
+    func isOwnedSharedCacheImage(_ path: String) -> Bool
+
+    /// The name an owner shows the batches it runs for this engine under.
+    var borrowerName: String { get }
+}
+
+extension RuntimeBackgroundIndexingEngineRepresenting {
+    /// An engine that borrows nothing indexes every image itself.
+    func ownerBackgroundIndexingManager(forImageAt path: String) async -> RuntimeBackgroundIndexingManager? {
+        nil
+    }
+
+    func isOwnedSharedCacheImage(_ path: String) -> Bool {
+        false
+    }
+
+    var borrowerName: String {
+        ""
+    }
 }

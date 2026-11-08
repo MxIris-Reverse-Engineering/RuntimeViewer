@@ -333,7 +333,7 @@ extension RuntimeEngineManager {
 1. **归属划分**（已完成）：`RuntimeSharedCachePartition` 与 `RuntimeSharedCacheImagePlatform`，附带测试。
 2. **借用关系与单镜像路由**（已完成）：`RuntimeSharedCacheOwners`、`setSharedCacheOwners(_:)`、命令的三个声明与 `dispatch` 的转发、`dispatchBorrowedRequest`；加载语义（§5）；声明覆盖测试与路由测试。此时没有任何 engine 设置借用关系，行为不变。
 3. **跨镜像合并与接力**（已完成）：`RuntimeEngineSpanningCommand` 与各命令的合并规则，交叉引用模块的两条命令；§6 的接力与 `externalRootNames`；测试。
-4. **索引管理器交出系统镜像**：多根批次、`.borrowed` reason；测试。
+4. **索引管理器交出系统镜像**（已完成）：多根批次、`.borrowed` reason；测试。
 5. **资格判定与接线**：`RuntimeEngineManager` 的划分、资格判定、借用关系的设置与重算、`sharesSharedCacheImages`；测试。从这一步起附加进程开始借用。
 6. **应用层后台工作**：注册表的借用者身份、会话的 `borrowedBackgroundWorks`、Always Index 解析、借用方协调器过滤系统镜像、特化前的按需索引、`DocumentState` 跟随归属 engine；测试。
 7. **界面**：Report 按 engine 分组、工具栏进度合并、侧栏 Load 的语义、Load Frameworks… 改用 `loadImageInServingProcess(at:)`、Developer 页开关；测试。
@@ -368,3 +368,4 @@ extension RuntimeEngineManager {
 | 2026-11-08 | 状态 → In Progress；第 1 步完成 | `RuntimeSharedCachePartition` 做成 `final class`（偏离方案里的 struct）：§9 要所有 engine 共用同一棵系统镜像树，共用的是对象本身。树按 cache 列出镜像的顺序建，与现在各 engine 推来的树一致。测试在本机 cache 上核对了两类例外镜像 |
 | 2026-11-08 | 第 2 步完成：依赖遍历用的三条命令不按镜像转发 | `CanOpenImage`、`Rpaths`、`Dependencies` 回答的是「服务进程里已加载的这个镜像」：附加进程的依赖图要在目标进程里走，系统镜像也一样，归属 engine 那边未必加载了它们，读不到依赖。原方案把它们列进了转发名单，改为留在本 engine；遍历结束后再把系统镜像交给归属 engine（§8）。新目录 `SharedCache/` 登记进 `RuntimeViewerCore/Sources/AGENTS.md` |
 | 2026-11-08 | 第 3 步完成：语料覆盖与推出不合并；ObjC 引用经目标进程的运行时定位；`InterfaceCommand` 加可选字段；`counterpart` 不接力 | 语料覆盖、推出与常驻上限各 engine 只答自己的：Report 按 engine 分组，合并后推出一组会连带清掉归属 engine 的数据。按类名定位镜像原打算用 shared cache 预建的 ObjC 类表，MachOKit 没有它的查找，改用目标进程的运行时，借的是全仓库没有调用方、本地一侧恒答 `nil` 的老命令 `ImageNameOfObjectCommand`，旧 payload 照旧答 `nil`。Swift 扩展这类本镜像里的对象也可能带着 `__C` 类型的 mangled name，若先当引用处理会答成别处的类，所以先让服务进程只在对象自己的镜像里找，为此给 `InterfaceCommand` 加了可选字段。本镜像里的对象另一面也在同一镜像，`counterpart` 不需要接力。接力做在公开方法里，经 proxy 共享给别的 Mac 的请求不经过它 |
+| 2026-11-09 | 第 4 步完成：遍历在目标进程里走完再移交；只为 shared cache 里的根预先加载 | 借用方的遍历照旧经目标进程读依赖（目标已加载的系统镜像能读到它们的依赖），走完后把待索引的系统镜像连同剩余深度一次交给归属 engine，归属方按多根批次再往下走、跳过别的批次正在索引的镜像；目标进程没加载、读不到依赖的借来镜像不再记为失败，而是照样移交。归属方的根若是还没有进程加载过的 shared cache 镜像（Always Index 的系统镜像条目现在按全部系统镜像解析，见 §8），先加载再读依赖；非 shared cache 的根行为不变，现有测试替身的语义也没动。全量测试里挂掉的两个（批次取消计时、交叉引用预备）单独跑都通过，属于满载下的已知波动 |

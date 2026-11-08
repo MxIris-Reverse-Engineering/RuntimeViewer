@@ -113,6 +113,19 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
     func reloadDataAfterBackgroundIndexing() async {
         await reloadData(isReloadImageNodes: false)
     }
+
+    func ownerBackgroundIndexingManager(forImageAt path: String) async -> RuntimeBackgroundIndexingManager? {
+        guard let owner = sharedCacheOwner(forImageAt: path) else { return nil }
+        return await owner.backgroundIndexingManager
+    }
+
+    nonisolated func isOwnedSharedCacheImage(_ path: String) -> Bool {
+        sharedCacheOwnersSubject.value?.partition.platform(ofImageAt: canonicalImagePath(path)) != nil
+    }
+
+    nonisolated var borrowerName: String {
+        source.description
+    }
 }
 
 // MARK: - Local implementations of the BFS metadata methods

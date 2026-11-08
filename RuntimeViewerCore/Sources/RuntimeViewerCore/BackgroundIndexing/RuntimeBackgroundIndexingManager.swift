@@ -209,7 +209,7 @@ public actor RuntimeBackgroundIndexingManager {
             return existingId
         }
 
-        let items = await expandDependencyGraph(rootPath: rootImagePath, depth: depth)
+        let graph = await expandDependencyGraph(roots: [RuntimeIndexingBatchRoot(imagePath: rootImagePath, depth: depth)])
 
         // Re-check after the suspension: actor reentrancy means another
         // `startBatch` call for the same root could have raced us through
@@ -227,8 +227,86 @@ public actor RuntimeBackgroundIndexingManager {
             return existingId
         }
 
+        // The borrowed images the walk reached are their owners' to index.
+        let items = await handingOverBorrowedImages(of: graph, maxConcurrency: maxConcurrency, reason: reason)
+        if let existingId = findActiveBatchID(forRootImagePath: rootImagePath) {
+            return existingId
+        }
+
         guard !items.isEmpty else { return nil }
 
+        return launchBatch(rootImagePath: rootImagePath, depth: depth, reason: reason, items: items)
+    }
+
+    /// Starts indexing several roots, each with its own depth, as one batch —
+    /// what an engine that borrows shared cache images hands this manager,
+    /// its engine being their owner. A root or an image another batch is
+    /// indexing already is left to that batch, so the borrowers of one image
+    /// never index it twice at once; `nil` comes back when nothing is left.
+    /// The batch is listed under the first root that is left.
+    public func startBatch(
+        roots: [RuntimeIndexingBatchRoot],
+        maxConcurrency: Int,
+        reason: RuntimeIndexingBatchReason
+    ) async -> RuntimeIndexingBatchID? {
+        backgroundLoadLimit = max(1, maxConcurrency)
+        grantBackgroundLoadSlots()
+
+        let remainingRoots = roots.filter { !isUnderWay($0.imagePath) }
+        guard let firstRoot = remainingRoots.first else { return nil }
+        let graph = await expandDependencyGraph(roots: remainingRoots)
+        let handedOverItems = await handingOverBorrowedImages(of: graph, maxConcurrency: maxConcurrency, reason: reason)
+        // Re-read after the suspensions: a batch started meanwhile may have
+        // taken some of the images.
+        let items = handedOverItems.filter { $0.state.isTerminal || !isUnderWay($0.id) }
+        guard !items.isEmpty else { return nil }
+        return launchBatch(rootImagePath: firstRoot.imagePath, depth: remainingRoots.map(\.depth).max() ?? 0, reason: reason, items: items)
+    }
+
+    /// Whether an active batch is indexing `imagePath` already, as its root or
+    /// as an image still to load.
+    private func isUnderWay(_ imagePath: String) -> Bool {
+        activeBatches.values.contains { state in
+            !state.batch.isFinished && !state.batch.isCancelled
+                && (state.batch.rootImagePath == imagePath || state.batch.items.contains { $0.id == imagePath && !$0.state.isTerminal })
+        }
+    }
+
+    /// `graph`'s items, the borrowed images still to load taken out and
+    /// handed to their owners' indexing — one batch per owner, each image with
+    /// the depth the walk still had to go below it, under the reason this
+    /// batch has, marked as borrowed by this engine. An owner walks below
+    /// them itself: its process can read the dependencies of an image the
+    /// serving process here never loaded.
+    private func handingOverBorrowedImages(
+        of graph: DependencyGraph,
+        maxConcurrency: Int,
+        reason: RuntimeIndexingBatchReason
+    ) async -> [RuntimeIndexingTaskItem] {
+        var keptItems: [RuntimeIndexingTaskItem] = []
+        var handOvers: [ObjectIdentifier: (manager: RuntimeBackgroundIndexingManager, roots: [RuntimeIndexingBatchRoot])] = [:]
+        for item in graph.items {
+            guard item.state == .pending, let ownerManager = await engine.ownerBackgroundIndexingManager(forImageAt: item.id) else {
+                keptItems.append(item)
+                continue
+            }
+            let root = RuntimeIndexingBatchRoot(imagePath: item.id, depth: graph.remainingDepthsByImagePath[item.id] ?? 0)
+            handOvers[ObjectIdentifier(ownerManager), default: (ownerManager, [])].roots.append(root)
+        }
+        guard !handOvers.isEmpty else { return keptItems }
+        let borrowedReason = RuntimeIndexingBatchReason.borrowed(borrowerName: engine.borrowerName, reason: reason)
+        for handOver in handOvers.values {
+            _ = await handOver.manager.startBatch(roots: handOver.roots, maxConcurrency: maxConcurrency, reason: borrowedReason)
+        }
+        return keptItems
+    }
+
+    private func launchBatch(
+        rootImagePath: String,
+        depth: Int,
+        reason: RuntimeIndexingBatchReason,
+        items: [RuntimeIndexingTaskItem]
+    ) -> RuntimeIndexingBatchID {
         let id = RuntimeIndexingBatchID()
         let batch = RuntimeIndexingBatch(
             id: id, rootImagePath: rootImagePath, depth: depth,
@@ -287,10 +365,32 @@ public actor RuntimeBackgroundIndexingManager {
         }?.key
     }
 
+    /// What a walk found: the items of the batch, and how many levels the walk
+    /// still had to go below each image it listed — what an owner handed one
+    /// of them walks below it.
+    struct DependencyGraph {
+        var items: [RuntimeIndexingTaskItem] = []
+        var remainingDepthsByImagePath: [String: Int] = [:]
+    }
+
     func expandDependencyGraph(rootPath: String, depth: Int)
         async -> [RuntimeIndexingTaskItem] {
+        await expandDependencyGraph(roots: [RuntimeIndexingBatchRoot(imagePath: rootPath, depth: depth)]).items
+    }
+
+    /// The walk from every root at once, one visited set for all of them.
+    ///
+    /// Two kinds of image are walked unlike the rest. A borrowed image this
+    /// process cannot open — a shared cache image its serving process never
+    /// loaded — is listed all the same, for its owner to load, and not walked
+    /// below: there is nothing here to read its dependencies from, and the
+    /// owner walks them. A root of the shared cache no process loaded yet — an
+    /// Always Index row now resolves against every shared cache image — is
+    /// loaded before its dependencies are read, when it has any to follow.
+    func expandDependencyGraph(roots: [RuntimeIndexingBatchRoot]) async -> DependencyGraph {
         var visited: Set<String> = []
-        var items: [RuntimeIndexingTaskItem] = []
+        var graph = DependencyGraph()
+        let rootPaths = Set(roots.map(\.imagePath))
         // Fetch `mainExecutablePath` once at BFS entry and thread it through
         // every `dependencies(for:...)` call below. Without this, a 50-image
         // graph triggers 50 redundant calls (50 XPC / TCP round-trips on a
@@ -308,10 +408,10 @@ public actor RuntimeBackgroundIndexingManager {
         //
         // `Deque` (swift-collections) gives O(1) `popFirst()`; `Array.removeFirst()`
         // is O(n) and would make a deep BFS quadratic.
-        var frontier: Deque<(path: String, level: Int, ancestorRpaths: [String])> =
-            [(rootPath, 0, [])]
+        var frontier: Deque<(path: String, remainingDepth: Int, ancestorRpaths: [String])> =
+            Deque(roots.map { ($0.imagePath, $0.depth, []) })
 
-        while let (path, level, ancestorRpaths) = frontier.popFirst() {
+        while let (path, remainingDepth, ancestorRpaths) = frontier.popFirst() {
             guard visited.insert(path).inserted else { continue }
 
             // `try?` — if the engine errors out (e.g. remote XPC drops mid-batch),
@@ -320,22 +420,37 @@ public actor RuntimeBackgroundIndexingManager {
             // failure ≠ indexed.
             if (try? await engine.isImageIndexed(path: path)) == true { continue }
 
+            let isRoot = rootPaths.contains(path)
             // Non-root paths that can't be opened as MachO go straight to
             // `.failed` and don't recurse — saves a wasted dlopen attempt later.
             // Root is always represented so that the batch has at least one item.
-            if path != rootPath {
+            if !isRoot {
                 let canOpen = await engine.canOpenImage(at: path)
                 if !canOpen {
-                    items.append(.init(id: path, resolvedPath: path,
-                                       state: .failed(message: "cannot open MachOImage"),
-                                       hasPriorityBoost: false))
+                    if await engine.ownerBackgroundIndexingManager(forImageAt: path) != nil {
+                        graph.items.append(.init(id: path, resolvedPath: path,
+                                                 state: .pending, hasPriorityBoost: false))
+                        graph.remainingDepthsByImagePath[path] = remainingDepth
+                    } else {
+                        graph.items.append(.init(id: path, resolvedPath: path,
+                                                 state: .failed(message: "cannot open MachOImage"),
+                                                 hasPriorityBoost: false))
+                    }
                     continue
                 }
             }
 
-            items.append(.init(id: path, resolvedPath: path,
-                               state: .pending, hasPriorityBoost: false))
-            guard level < depth else { continue }
+            graph.items.append(.init(id: path, resolvedPath: path,
+                                     state: .pending, hasPriorityBoost: false))
+            graph.remainingDepthsByImagePath[path] = remainingDepth
+            guard remainingDepth > 0 else { continue }
+
+            if isRoot, engine.isOwnedSharedCacheImage(path), !(await engine.canOpenImage(at: path)) {
+                // Borrowed: the owner it is handed to walks it. Kept: load it
+                // now, or its dependencies cannot be read.
+                if await engine.ownerBackgroundIndexingManager(forImageAt: path) != nil { continue }
+                guard (try? await engine.loadImageForBackgroundIndexing(at: path)) != nil else { continue }
+            }
 
             // `try?` — if dependency lookup fails, treat as no deps; the path
             // itself is still pending and will be retried on next batch.
@@ -352,18 +467,18 @@ public actor RuntimeBackgroundIndexingManager {
             for dep in deps {
                 if let resolved = dep.resolvedPath {
                     if !visited.contains(resolved) {
-                        frontier.append((resolved, level + 1, descendantAncestors))
+                        frontier.append((resolved, remainingDepth - 1, descendantAncestors))
                     }
                 } else {
                     if visited.insert(dep.installName).inserted {
-                        items.append(.init(id: dep.installName, resolvedPath: nil,
-                                           state: .failed(message: "path unresolved"),
-                                           hasPriorityBoost: false))
+                        graph.items.append(.init(id: dep.installName, resolvedPath: nil,
+                                                 state: .failed(message: "path unresolved"),
+                                                 hasPriorityBoost: false))
                     }
                 }
             }
         }
-        return items
+        return graph
     }
 
     private func runBatch(id: RuntimeIndexingBatchID) async {
