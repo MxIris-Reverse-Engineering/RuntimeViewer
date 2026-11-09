@@ -1,9 +1,11 @@
 import ProjectDescription
 import ProjectDescriptionHelpers
 
-// EXPERIMENT: with the upstream libraries taken from local checkouts (TUIST_LOCAL_UPSTREAM_CHECKOUTS,
-// Tuist/Package.swift) the local packages' test targets are not mapped, so there is no test scheme.
+// In the local dependency mode (TUIST_LOCAL_UPSTREAM_CHECKOUTS and TUIST_LOCAL_UPSTREAM_PACKAGES,
+// see Tuist/Package.swift) the local packages' test targets are not mapped, so there is no test
+// scheme either.
 let usesLocalUpstreamCheckouts = !Environment.localUpstreamCheckouts.getString(default: "").isEmpty
+    && !Environment.localUpstreamPackages.getString(default: "").isEmpty
 
 // RuntimeViewer-Tuist.xcworkspace, the development-only workspace Tuist generates beside the native
 // ones: Documentations/Guides/TuistDevelopment.md.

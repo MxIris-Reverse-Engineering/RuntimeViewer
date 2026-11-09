@@ -57,6 +57,10 @@ RuntimeViewer-iOS-Simulator.zip
 /RuntimeViewerPrecompiledLibraries/SourceEditor/Frameworks/
 /RuntimeViewerPrecompiledLibraries/SourceEditor/.Fetch.*/
 /Tuist/.build/
+# The local dependency mode's dependency checkouts when /Volumes/DerivedData is not mounted, and the
+# file recording that mode for this checkout (`./TuistScript.sh <command> --local-dependencies`).
+/Tuist/.build-LocalDependencies/
+/Tuist/.local-dependencies
 # `./TuistScript.sh install` starts it from RuntimeViewer-Debug.xcworkspace's lock file every time;
 # the native lock files are the ones to commit.
 /Tuist/Package.resolved
