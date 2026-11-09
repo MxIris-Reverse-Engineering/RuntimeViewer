@@ -22,7 +22,8 @@ let localUpstreamPackageNames = [
     "swift-demangling",
     "swift-semantic-string",
 ]
-let localUpstreamDependencies: [Package.Dependency] = localUpstreamCheckoutsDirectory.map { directory in
+// Qualified: Tuist evaluates this file with ProjectDescription imported too, which has a Package of its own.
+let localUpstreamDependencies: [PackageDescription.Package.Dependency] = localUpstreamCheckoutsDirectory.map { directory in
     localUpstreamPackageNames.map { packageName in .package(path: "\(directory)/\(packageName)") }
 } ?? []
 
