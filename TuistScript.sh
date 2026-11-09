@@ -20,8 +20,26 @@
 #   ./TuistScript.sh check [--build]              # compare the Tuist description with the native
 #                                                 # projects; --build also builds both and compares
 #                                                 # the apps they produce
+#   ./TuistScript.sh <command> --local-dependencies
+#                                                 # from now on take the upstream libraries
+#                                                 # RuntimeViewer-Local.xcworkspace takes from beside
+#                                                 # the checkout from those checkouts too
+#   ./TuistScript.sh <command> --remote-dependencies
+#                                                 # from now on take them at the lock file's pins
+#                                                 # again (the default)
 #   ./TuistScript.sh <command> --dry-run          # print what would run
 #   ./TuistScript.sh --help
+#
+# The local dependency mode declares those libraries by path in Tuist/Package.swift, and SwiftPM lets
+# that stand in for every other declaration of them, so they build from their checkouts, uncommitted
+# edits included, and everything else still comes from the cache. The mode holds for the commands
+# after the one that switched it ($LOCAL_DEPENDENCIES_MARKER records it), and each mode has its own
+# dependency checkouts; switching resolves again. The libraries are taken from the directory above
+# the checkout, `.worktrees/` for a worktree, where that workspace finds them too, or from the
+# directory TUIST_LOCAL_UPSTREAM_CHECKOUTS names when the mode is switched on. That mode has no tests
+# of the local packages: Tuist would map the libraries' tests as well and rejects one of them. `warm`
+# and `check` always work on the remote packages, the binaries being the same for both modes, and
+# generate in the recorded mode on the way out.
 #
 # The generated projects link the cached binaries of one configuration. `build` and `check` generate
 # for the configuration they build and, when that is not Debug, generate for Debug again on the way
@@ -60,12 +78,18 @@ LOCAL_PACKAGES=("RuntimeViewerCore" "RuntimeViewerPackages" "RuntimeViewerMCP" "
 SOURCE_DEPENDENCIES=("MachOKitExtensions" "MachOObjCSection" "MachOSwiftSection" "swift-semantic-string")
 # The configuration the workspace Xcode opens is generated for.
 RESTING_CONFIGURATION="Debug"
+# The local dependency mode: the workspace whose members beside the checkout (`group:../<name>`) are
+# the libraries it takes locally, and the file recording the directory they are taken from (absent
+# in the remote mode).
+LOCAL_WORKSPACE="RuntimeViewer-Local.xcworkspace"
+LOCAL_DEPENDENCIES_MARKER="Tuist/.local-dependencies"
 
 COMMAND=""
 CONFIGURATION="Debug"
 LAUNCH=false
 CHECK_BUILD=false
 DRY_RUN=false
+REQUESTED_DEPENDENCY_MODE=""
 
 fail() { echo "error: $*" >&2; exit 1; }
 log()  { echo "[TuistScript] $*"; }
@@ -147,6 +171,9 @@ while [[ $# -gt 0 ]]; do
             CONFIGURATION="$2"; shift 2;;
         --launch) LAUNCH=true; shift;;
         --build) CHECK_BUILD=true; shift;;
+        --local-dependencies|--remote-dependencies)
+            [[ -z "$REQUESTED_DEPENDENCY_MODE" ]] || fail "one of --local-dependencies and --remote-dependencies at a time"
+            REQUESTED_DEPENDENCY_MODE="${1#--}"; REQUESTED_DEPENDENCY_MODE="${REQUESTED_DEPENDENCY_MODE%-dependencies}"; shift;;
         --dry-run) DRY_RUN=true; shift;;
         -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0;;
         *) fail "unknown argument: $1 (see --help)";;
@@ -170,20 +197,21 @@ else
 fi
 if [[ -n "$STORAGE_ROOT" ]]; then
     export TUIST_XDG_CACHE_HOME="$STORAGE_ROOT/Cache"
-    export SWIFTPM_BUILD_DIR="$STORAGE_ROOT/Dependencies/$CHECKOUT_NAME"
     export TUIST_CACHE_WARM_SCRATCH_DIRECTORY="$STORAGE_ROOT/WarmScratch/$CHECKOUT_NAME"
-    DEPENDENCIES_DIRECTORY="$SWIFTPM_BUILD_DIR"
     WORK_ROOT="$STORAGE_ROOT/Work/$CHECKOUT_NAME"
 else
-    DEPENDENCIES_DIRECTORY="$PROJECT_DIR/Tuist/.build"
     WORK_ROOT="$PROJECT_DIR/DerivedData/Tuist"
 fi
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs/Tuist}"
+# The dependency mode Tuist/Package.resolved and SwiftPM's state were last resolved for. The two
+# modes share that lock file, so running in the other one resolves again first.
+INSTALLED_DEPENDENCIES_STAMP="$WORK_ROOT/InstalledDependencies"
 
-# The manifests choose local checkouts or remote packages by this variable; the lock files and the
-# Tuist description assume the remote ones.
+# The manifests choose local checkouts or remote packages by this variable, for every package at
+# once; the lock files and the Tuist description assume the remote ones. The upstream libraries come
+# from their checkouts through --local-dependencies instead.
 if [[ -n "${USING_LOCAL_DEPENDENCIES:-}" ]]; then
-    warn "ignoring USING_LOCAL_DEPENDENCIES=$USING_LOCAL_DEPENDENCIES: the Tuist workspace uses the remote packages"
+    warn "ignoring USING_LOCAL_DEPENDENCIES=$USING_LOCAL_DEPENDENCIES; --local-dependencies takes the upstream libraries from their checkouts"
     unset USING_LOCAL_DEPENDENCIES
 fi
 
@@ -204,14 +232,203 @@ fi
 
 command -v xcodebuild >/dev/null 2>&1 || fail "xcodebuild not found"
 command -v python3 >/dev/null 2>&1 || fail "python3 not found (check compares the projects with it)"
+
+# The libraries the local dependency mode takes from their checkouts: the members of
+# $LOCAL_WORKSPACE beside the checkout (`group:../<name>`), so a library added there is local here too.
+read_local_upstream_package_names() {
+    python3 - "$PROJECT_DIR/$LOCAL_WORKSPACE/contents.xcworkspacedata" <<'PYTHON'
+import sys
+import xml.etree.ElementTree as ElementTree
+
+prefix = "group:../"
+for element in ElementTree.parse(sys.argv[1]).getroot().iter("FileRef"):
+    location = element.get("location", "")
+    if location.startswith(prefix) and "/" not in location[len(prefix):]:
+        print(location[len(prefix):])
+PYTHON
+}
+
+# The library and macro targets of those libraries, read from their manifests, for
+# Tuist/Package.swift to give them back their warnings. Prints them separated by commas.
+read_local_upstream_target_names() {
+    local package_name manifest_path
+    mkdir -p "$WORK_ROOT/LocalDependencies"
+    for package_name in "${LOCAL_UPSTREAM_PACKAGES[@]}"; do
+        manifest_path="$WORK_ROOT/LocalDependencies/$package_name.json"
+        swift package --package-path "$LOCAL_DEPENDENCIES_DIRECTORY/$package_name" \
+            --scratch-path "$WORK_ROOT/LocalDependencies/Scratch/$package_name" dump-package \
+            > "$manifest_path" 2> "$manifest_path.err" \
+            || { cat "$manifest_path.err" >&2; fail "swift package dump-package failed in $LOCAL_DEPENDENCIES_DIRECTORY/$package_name"; }
+    done
+    python3 - "$WORK_ROOT/LocalDependencies" "${LOCAL_UPSTREAM_PACKAGES[@]}" <<'PYTHON'
+import json
+import os
+import sys
+
+directory, package_names = sys.argv[1], sys.argv[2:]
+target_names = []
+for package_name in package_names:
+    with open(os.path.join(directory, f"{package_name}.json")) as handle:
+        target_names += [target["name"] for target in json.load(handle)["targets"] if target["type"] in ("regular", "macro")]
+print(",".join(target_names))
+PYTHON
+}
+
+# Tuist writes a project of its own into every package declared by path — <name>.xcodeproj and
+# Derived/ beside its Package.swift — which the libraries' repositories do not ignore, and which
+# belongs to the one checkout that generated it: another checkout's local mode would overwrite it.
+# Claiming the libraries records this checkout in each library's own git directory, refuses a library
+# another checkout's local mode holds, refuses a project file git tracks, and keeps Tuist's files out
+# of `git status` through the repository's info/exclude, which stays on this Mac.
+LOCAL_CHECKOUT_OWNER_FILE_NAME="runtimeviewer-tuist-local-dependencies"
+LOCAL_CHECKOUT_EXCLUDE_COMMENT="# Generated by RuntimeViewer's TuistScript.sh --local-dependencies"
+
+local_checkout_owner_file() {   # $1: a library's checkout; prints nothing when it is not a git checkout
+    local git_directory
+    git_directory="$(git -C "$1" rev-parse --absolute-git-dir 2>/dev/null)" || return 0
+    printf '%s/%s\n' "$git_directory" "$LOCAL_CHECKOUT_OWNER_FILE_NAME"
+}
+
+claim_local_checkouts() {
+    local package_name package_directory owner_file owner owner_directory exclude_file pattern
+    for package_name in "${LOCAL_UPSTREAM_PACKAGES[@]}"; do
+        package_directory="$LOCAL_DEPENDENCIES_DIRECTORY/$package_name"
+        owner_file="$(local_checkout_owner_file "$package_directory")"
+        [[ -n "$owner_file" ]] || continue
+        owner="$(cat "$owner_file" 2>/dev/null || true)"
+        if [[ -n "$owner" && "$owner" != "$PROJECT_DIR" ]]; then
+            # Still another checkout's when that checkout's local mode takes this very directory.
+            owner_directory="$(cat "$owner/$LOCAL_DEPENDENCIES_MARKER" 2>/dev/null || true)"
+            if [[ -n "$owner_directory" ]] \
+                && [[ "$(cd "$owner_directory/$package_name" 2>/dev/null && pwd -P)" == "$(cd "$package_directory" && pwd -P)" ]]; then
+                fail "$package_directory is in the local dependencies of $owner, and generating here would replace the Tuist project that checkout uses; run ./TuistScript.sh generate --remote-dependencies there first"
+            fi
+        fi
+        if git -C "$package_directory" ls-files --error-unmatch "$package_name.xcodeproj" >/dev/null 2>&1; then
+            fail "$package_directory tracks $package_name.xcodeproj, which Tuist would overwrite"
+        fi
+        if $DRY_RUN; then
+            log "would claim $package_directory for this checkout and exclude /$package_name.xcodeproj/ and /Derived/ there"
+            continue
+        fi
+        printf '%s\n' "$PROJECT_DIR" > "$owner_file"
+        exclude_file="$(git -C "$package_directory" rev-parse --path-format=absolute --git-path info/exclude)"
+        mkdir -p "$(dirname "$exclude_file")"
+        for pattern in "$LOCAL_CHECKOUT_EXCLUDE_COMMENT" "/$package_name.xcodeproj/" "/Derived/"; do
+            grep -qxF -- "$pattern" "$exclude_file" 2>/dev/null || printf '%s\n' "$pattern" >> "$exclude_file"
+        done
+    done
+}
+
+# Gives up the libraries in $1 this checkout claimed: removes the project Tuist generated into each,
+# so that opening the library's folder in Xcode opens its Package.swift again. Derived/ stays,
+# excluded: five of the repositories ignore a Derived/ of their own anyway, and it changes nothing
+# for Xcode.
+release_local_checkouts() {
+    local package_name package_directory owner_file
+    for package_name in "${LOCAL_UPSTREAM_PACKAGES[@]}"; do
+        package_directory="$1/$package_name"
+        [[ -d "$package_directory" ]] || continue
+        owner_file="$(local_checkout_owner_file "$package_directory")"
+        [[ -n "$owner_file" && "$(cat "$owner_file" 2>/dev/null || true)" == "$PROJECT_DIR" ]] || continue
+        if ! git -C "$package_directory" ls-files --error-unmatch "$package_name.xcodeproj" >/dev/null 2>&1; then
+            run rm -rf "$package_directory/$package_name.xcodeproj"
+        fi
+        run rm -f "$owner_file"
+    done
+}
+
+# Points this process at the dependencies of one mode ($1: local or remote). Each mode resolves into
+# a directory of its own, so switching back and forth keeps both sets of checkouts. Tuist/Package.swift
+# and Workspace.swift learn the mode from the TUIST_LOCAL_UPSTREAM_* variables.
+LOCAL_UPSTREAM_TARGET_NAMES=""
+use_dependency_mode() {
+    CURRENT_DEPENDENCY_MODE="$1"
+    local directory_suffix=""
+    if [[ "$1" == local ]]; then
+        directory_suffix="-LocalDependencies"
+        if [[ -z "$LOCAL_UPSTREAM_TARGET_NAMES" ]] && ! $DRY_RUN; then
+            LOCAL_UPSTREAM_TARGET_NAMES="$(read_local_upstream_target_names)" || fail "cannot read the targets of the local dependencies"
+        fi
+        export TUIST_LOCAL_UPSTREAM_CHECKOUTS="$LOCAL_DEPENDENCIES_DIRECTORY"
+        export TUIST_LOCAL_UPSTREAM_PACKAGES
+        TUIST_LOCAL_UPSTREAM_PACKAGES="$(IFS=,; printf '%s' "${LOCAL_UPSTREAM_PACKAGES[*]}")"
+        export TUIST_LOCAL_UPSTREAM_TARGETS="$LOCAL_UPSTREAM_TARGET_NAMES"
+        LAYOUT_WORKSPACE="$LOCAL_WORKSPACE"
+    else
+        unset TUIST_LOCAL_UPSTREAM_CHECKOUTS TUIST_LOCAL_UPSTREAM_PACKAGES TUIST_LOCAL_UPSTREAM_TARGETS
+        LAYOUT_WORKSPACE="$NATIVE_WORKSPACE"
+    fi
+    if [[ -n "$STORAGE_ROOT" ]]; then
+        export SWIFTPM_BUILD_DIR="$STORAGE_ROOT/Dependencies/$CHECKOUT_NAME$directory_suffix"
+    elif [[ -n "$directory_suffix" ]]; then
+        export SWIFTPM_BUILD_DIR="$PROJECT_DIR/Tuist/.build$directory_suffix"
+    else
+        unset SWIFTPM_BUILD_DIR
+    fi
+    DEPENDENCIES_DIRECTORY="${SWIFTPM_BUILD_DIR:-$PROJECT_DIR/Tuist/.build}"
+}
+
+LOCAL_UPSTREAM_PACKAGES=()
+local_upstream_package_names_output="$(read_local_upstream_package_names)" \
+    || fail "cannot read which libraries $LOCAL_WORKSPACE takes from beside the checkout"
+for package_name in $local_upstream_package_names_output; do
+    LOCAL_UPSTREAM_PACKAGES+=("$package_name")
+done
+[[ ${#LOCAL_UPSTREAM_PACKAGES[@]} -gt 0 ]] || fail "$LOCAL_WORKSPACE takes no library from beside the checkout"
+
+# The mode from now on: what --local-dependencies or --remote-dependencies asks for, or what
+# $LOCAL_DEPENDENCIES_MARKER recorded the last time.
+RECORDED_LOCAL_DEPENDENCIES_DIRECTORY="$(cat "$LOCAL_DEPENDENCIES_MARKER" 2>/dev/null || true)"
+case "$REQUESTED_DEPENDENCY_MODE" in
+    local) LOCAL_DEPENDENCIES_DIRECTORY="${TUIST_LOCAL_UPSTREAM_CHECKOUTS:-$(dirname "$PROJECT_DIR")}";;
+    remote) LOCAL_DEPENDENCIES_DIRECTORY="";;
+    *) LOCAL_DEPENDENCIES_DIRECTORY="$RECORDED_LOCAL_DEPENDENCIES_DIRECTORY";;
+esac
+if [[ -n "$LOCAL_DEPENDENCIES_DIRECTORY" ]]; then
+    resolved_directory="$(cd "$LOCAL_DEPENDENCIES_DIRECTORY" 2>/dev/null && pwd)" \
+        || fail "no directory $LOCAL_DEPENDENCIES_DIRECTORY to take the local dependencies from (./TuistScript.sh <command> --remote-dependencies goes back to the remote packages)"
+    LOCAL_DEPENDENCIES_DIRECTORY="$resolved_directory"
+    for package_name in "${LOCAL_UPSTREAM_PACKAGES[@]}"; do
+        [[ -f "$LOCAL_DEPENDENCIES_DIRECTORY/$package_name/Package.swift" ]] \
+            || fail "no package $package_name in $LOCAL_DEPENDENCIES_DIRECTORY. The local dependency mode takes the libraries $LOCAL_WORKSPACE takes from beside the checkout, under the same names; Documentations/Guides/LocalDependencies.md sets up the links."
+    done
+    DEPENDENCY_MODE=local
+else
+    DEPENDENCY_MODE=remote
+fi
+
+# A switch gives up the libraries the old mode generated Tuist projects into and records the new
+# mode; ensure_dependencies resolves again before Tuist next runs.
+if [[ "$LOCAL_DEPENDENCIES_DIRECTORY" != "$RECORDED_LOCAL_DEPENDENCIES_DIRECTORY" ]]; then
+    log "switching to the $DEPENDENCY_MODE dependencies"
+    if [[ -n "$RECORDED_LOCAL_DEPENDENCIES_DIRECTORY" ]]; then
+        release_local_checkouts "$RECORDED_LOCAL_DEPENDENCIES_DIRECTORY"
+    fi
+    if $DRY_RUN; then
+        log "would record the $DEPENDENCY_MODE mode in $LOCAL_DEPENDENCIES_MARKER"
+    elif [[ "$DEPENDENCY_MODE" == local ]]; then
+        printf '%s\n' "$LOCAL_DEPENDENCIES_DIRECTORY" > "$LOCAL_DEPENDENCIES_MARKER"
+    else
+        rm -f "$LOCAL_DEPENDENCIES_MARKER"
+    fi
+fi
+use_dependency_mode "$DEPENDENCY_MODE"
+
 log "command=$COMMAND configuration=$CONFIGURATION tuist=$PINNED_TUIST_VERSION"
 log "xcode: $(xcodebuild -version | tr '\n' ' ')(${DEVELOPER_DIR:-$(xcode-select -p)})"
 log "storage: ${STORAGE_ROOT:-inside the checkout} (dependencies: $DEPENDENCIES_DIRECTORY)"
+if [[ "$DEPENDENCY_MODE" == local ]]; then
+    log "upstream libraries: the checkouts in $LOCAL_DEPENDENCIES_DIRECTORY (${LOCAL_UPSTREAM_PACKAGES[*]})"
+else
+    log "upstream libraries: the lock file's pins (--local-dependencies takes them from their checkouts)"
+fi
 
-# Compares the pins of Tuist/Package.resolved with those of the native Debug workspace. Prints the
-# differences and returns 1 when there are any.
+# Compares the pins of Tuist/Package.resolved with those of the native Debug workspace, leaving out
+# the packages named in the arguments: the local mode's libraries, which have no pin when they are
+# declared by path. Prints the differences and returns 1 when there are any.
 compare_lock_files() {
-    python3 - "$TUIST_PACKAGE_RESOLVED" "$NATIVE_PACKAGE_RESOLVED" <<'PYTHON'
+    python3 - "$TUIST_PACKAGE_RESOLVED" "$NATIVE_PACKAGE_RESOLVED" "$@" <<'PYTHON'
 import json
 import sys
 
@@ -225,6 +442,7 @@ def read_pins(path):
     return pins
 
 tuist_path, native_path = sys.argv[1:3]
+left_out = {package_name.lower() for package_name in sys.argv[3:]}
 try:
     tuist_pins, native_pins = read_pins(tuist_path), read_pins(native_path)
 except OSError as error:
@@ -232,7 +450,7 @@ except OSError as error:
     sys.exit(1)
 differences = [
     f"    {identity}: Tuist {tuist_pins.get(identity, 'absent')}, native {native_pins.get(identity, 'absent')}"
-    for identity in sorted(tuist_pins.keys() | native_pins.keys())
+    for identity in sorted((tuist_pins.keys() | native_pins.keys()) - left_out)
     if tuist_pins.get(identity) != native_pins.get(identity)
 ]
 if differences:
@@ -248,17 +466,43 @@ install_dependencies() {
     # lock file, so Tuist resolves the versions the native workspaces pin rather than the newest
     # ones, and the comparison below shows whether it resolved the same.
     run cp "$NATIVE_PACKAGE_RESOLVED" "$TUIST_PACKAGE_RESOLVED"
-    log "Resolving the dependencies (tuist install)"
+    log "Resolving the $CURRENT_DEPENDENCY_MODE dependencies (tuist install)"
     run_tuist "install" "${TUIST[@]}" install || fail "tuist install failed"
     if ! $DRY_RUN; then
-        if ! compare_lock_files; then
+        local lock_files_agree=true
+        if [[ "$CURRENT_DEPENDENCY_MODE" == local ]]; then
+            compare_lock_files "${LOCAL_UPSTREAM_PACKAGES[@]}" || lock_files_agree=false
+        else
+            compare_lock_files || lock_files_agree=false
+        fi
+        if ! $lock_files_agree; then
             warn "$TUIST_PACKAGE_RESOLVED now differs from $NATIVE_PACKAGE_RESOLVED (above). $LOCK_FILE_HINT"
         fi
+        mkdir -p "$WORK_ROOT"
+        installed_dependencies_description > "$INSTALLED_DEPENDENCIES_STAMP"
     fi
 }
 
+# What $INSTALLED_DEPENDENCIES_STAMP says once the current mode's dependencies are resolved.
+installed_dependencies_description() {
+    if [[ "$CURRENT_DEPENDENCY_MODE" == local ]]; then
+        echo "local $LOCAL_DEPENDENCIES_DIRECTORY"
+    else
+        echo "remote"
+    fi
+}
+
+# Resolves the dependencies unless they were last resolved for the current mode. A checkout without
+# the stamp was resolved before the local mode existed, which means for the remote packages.
 ensure_dependencies() {
+    local installed
+    installed="$(cat "$INSTALLED_DEPENDENCIES_STAMP" 2>/dev/null || true)"
     if [[ ! -d "$DEPENDENCIES_DIRECTORY/checkouts" ]]; then
+        install_dependencies
+    elif [[ -z "$installed" && "$CURRENT_DEPENDENCY_MODE" == remote ]]; then
+        return 0
+    elif [[ "$installed" != "$(installed_dependencies_description)" ]]; then
+        log "$TUIST_PACKAGE_RESOLVED was last resolved for the ${installed%% *} dependencies"
         install_dependencies
     fi
 }
@@ -269,16 +513,23 @@ ensure_dependencies() {
 generate_workspace() {
     local configuration="${1:-$CONFIGURATION}"
     ensure_dependencies
-    log "Generating $WORKSPACE ($configuration)"
+    if [[ "$CURRENT_DEPENDENCY_MODE" == local ]]; then
+        claim_local_checkouts
+    fi
+    log "Generating $WORKSPACE ($configuration, $CURRENT_DEPENDENCY_MODE dependencies)"
     run_tuist "generate-$configuration" "${TUIST[@]}" generate --no-open --configuration "$configuration" \
         || fail "tuist generate failed"
     arrange_workspace_like_native
     arrange_project_like_native
 }
 
+# Generates the workspace Xcode opens again on the way out of `build`, `check` and `warm`: for Debug
+# and in the recorded dependency mode, whatever this command built or compared.
 restore_resting_generation() {
-    log "Generating $WORKSPACE for $RESTING_CONFIGURATION again"
-    if run_tuist "generate-$RESTING_CONFIGURATION" "${TUIST[@]}" generate --no-open --configuration "$RESTING_CONFIGURATION"; then
+    use_dependency_mode "$DEPENDENCY_MODE"
+    log "Generating $WORKSPACE for $RESTING_CONFIGURATION again ($DEPENDENCY_MODE dependencies)"
+    if (ensure_dependencies && { [[ "$CURRENT_DEPENDENCY_MODE" != local ]] || claim_local_checkouts; }) \
+        && run_tuist "generate-$RESTING_CONFIGURATION" "${TUIST[@]}" generate --no-open --configuration "$RESTING_CONFIGURATION"; then
         arrange_workspace_like_native
         arrange_project_like_native
     else
@@ -287,19 +538,21 @@ restore_resting_generation() {
 }
 
 # Lays the generated workspace out the way the native workspaces are: the local packages and the
-# app project at the top level, in the order $NATIVE_WORKSPACE lists their directories, and the
-# third-party projects in the Dependencies group Tuist puts them in. Tuist offers no say in this: it
-# sorts the projects by path and nests them in a group per directory below the common ancestor of
-# every project, dependencies included (WorkspaceStructureGenerator in Tuist 4.210), so with the
-# dependencies outside the checkout the local projects sat under groups for /Volumes and down. The
-# workspace keeps Tuist's own layout, with a warning, if its contents are not what this expects.
+# app project at the top level, in the order $LAYOUT_WORKSPACE lists their directories, and the
+# third-party projects in the Dependencies group Tuist puts them in. That workspace is the Debug one,
+# or in the local dependency mode RuntimeViewer-Local.xcworkspace, whose libraries come first. Tuist
+# offers no say in this: it sorts the projects by path and nests them in a group per directory below
+# the common ancestor of every project, dependencies included (WorkspaceStructureGenerator in Tuist
+# 4.210), so with the dependencies outside the checkout the local projects sat under groups for
+# /Volumes and down. The workspace keeps Tuist's own layout, with a warning, if its contents are not
+# what this expects.
 arrange_workspace_like_native() {
     if $DRY_RUN; then
-        log "would arrange $WORKSPACE like $NATIVE_WORKSPACE"
+        log "would arrange $WORKSPACE like $LAYOUT_WORKSPACE"
         return 0
     fi
     local arranged=true
-    python3 - "$PROJECT_DIR" "$WORKSPACE" "$NATIVE_WORKSPACE" <<'PYTHON' || arranged=false
+    python3 - "$PROJECT_DIR" "$WORKSPACE" "$LAYOUT_WORKSPACE" <<'PYTHON' || arranged=false
 import os
 import sys
 import xml.etree.ElementTree as ElementTree
@@ -378,7 +631,7 @@ if not unchanged:
 print(f"    {len(local_paths)} projects in {native_workspace_name}'s order, {len(dependency_paths)} under Dependencies")
 PYTHON
     if ! $arranged; then
-        warn "could not arrange $WORKSPACE like $NATIVE_WORKSPACE (above); it keeps Tuist's layout"
+        warn "could not arrange $WORKSPACE like $LAYOUT_WORKSPACE (above); it keeps Tuist's layout"
     fi
 }
 
@@ -746,15 +999,20 @@ PYTHON
     fi
 }
 
-# For the commands that build: generate for $CONFIGURATION, and for Debug again when the script exits.
+# For the commands that build: generate for $CONFIGURATION, and for Debug in the recorded dependency
+# mode again when the script exits, if either differs from what this command generates.
 generate_for_this_command() {
-    if [[ "$CONFIGURATION" != "$RESTING_CONFIGURATION" ]] && ! $DRY_RUN; then
+    if [[ "$CONFIGURATION" != "$RESTING_CONFIGURATION" || "$CURRENT_DEPENDENCY_MODE" != "$DEPENDENCY_MODE" ]] && ! $DRY_RUN; then
         trap restore_resting_generation EXIT
     fi
     generate_workspace "$CONFIGURATION"
 }
 
+# Warms the remote mode's graph whatever the recorded mode: no other third-party package depends on
+# the libraries the local mode takes from their checkouts, so that mode uses the same binaries for
+# everything else.
 warm_cache() {
+    use_dependency_mode remote
     ensure_dependencies
     if [[ -n "$STORAGE_ROOT" ]]; then
         # Tuist refuses to start with anything left in it from an earlier run, and never empties it.
@@ -769,6 +1027,7 @@ warm_cache() {
         --cache-profile development --no-upload \
         || fail "tuist cache warm failed"
     # A workspace generated before the warm-up still builds the dependencies from source.
+    use_dependency_mode "$DEPENDENCY_MODE"
     generate_workspace "$RESTING_CONFIGURATION"
 }
 
@@ -830,10 +1089,12 @@ build_command() {
 }
 
 # Everything `check` compares is read from evaluated manifests and generated project files, never
-# from the Swift sources of the manifests.
+# from the Swift sources of the manifests. It compares the remote mode, whatever the recorded one:
+# the native projects resolve the libraries at their pins.
 check_command() {
     local work_directory="$WORK_ROOT/Check"
     local findings=0
+    use_dependency_mode remote
     generate_for_this_command
     $DRY_RUN && { log "would compare the projects, the target lists, the lock files and the trait settings"; return 0; }
     rm -rf "$work_directory"

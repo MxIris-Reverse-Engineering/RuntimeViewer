@@ -1,20 +1,44 @@
 // swift-tools-version: 6.2
+import Foundation
 import PackageDescription
 
 // The dependencies of RuntimeViewer-Tuist.xcworkspace, the development-only Tuist workspace
 // (Documentations/Guides/TuistDevelopment.md). The four local packages are declared by path, so
 // their own Package.swift files stay the only definition of their targets and dependencies.
 
+// The local dependency mode (`./TuistScript.sh <command> --local-dependencies`): the upstream
+// libraries RuntimeViewer-Local.xcworkspace takes from beside the checkout are declared by path as
+// well. The script names them in TUIST_LOCAL_UPSTREAM_PACKAGES and the directory holding them in
+// TUIST_LOCAL_UPSTREAM_CHECKOUTS; a path package's identity is its directory's name. SwiftPM lets a
+// root's path dependency stand in for every other declaration of the same package in the graph —
+// the URLs in RuntimeViewerCore's manifest and in the libraries' own manifests included — so the
+// libraries build from those checkouts, uncommitted edits and all. Without the two variables nothing
+// here changes.
+let processEnvironment = ProcessInfo.processInfo.environment
+let localUpstreamCheckoutsDirectory = processEnvironment["TUIST_LOCAL_UPSTREAM_CHECKOUTS"] ?? ""
+let localUpstreamPackageNames = (processEnvironment["TUIST_LOCAL_UPSTREAM_PACKAGES"] ?? "")
+    .split(separator: ",").map(String.init)
+// Qualified: Tuist evaluates this file with ProjectDescription imported too, which has a Package of
+// its own.
+let localUpstreamDependencies: [PackageDescription.Package.Dependency] = localUpstreamCheckoutsDirectory.isEmpty
+    ? []
+    : localUpstreamPackageNames.map { packageName in .package(path: "\(localUpstreamCheckoutsDirectory)/\(packageName)") }
+
 #if TUIST
     import ProjectDescription
     import ProjectDescriptionHelpers
 
     // Tuist suppresses warnings in every package; Xcode does so for remote packages only, so the
-    // local packages' targets get theirs back.
+    // local packages' targets get theirs back. In the local dependency mode the upstream libraries'
+    // targets do too, as they do in RuntimeViewer-Local.xcworkspace; the script reads their names from
+    // the libraries' manifests (TUIST_LOCAL_UPSTREAM_TARGETS).
+    let localUpstreamTargetNames = (processEnvironment["TUIST_LOCAL_UPSTREAM_TARGETS"] ?? "")
+        .split(separator: ",").map(String.init)
     let localPackageWarnings: [String: Settings] = Dictionary(
-        uniqueKeysWithValues: LocalPackages.sourceTargetNames.map { targetName in
-            (targetName, .settings(base: ["SWIFT_SUPPRESS_WARNINGS": "NO", "GCC_WARN_INHIBIT_ALL_WARNINGS": "NO"]))
-        }
+        (LocalPackages.sourceTargetNames + localUpstreamTargetNames).map { targetName in
+            (targetName, Settings.settings(base: ["SWIFT_SUPPRESS_WARNINGS": "NO", "GCC_WARN_INHIBIT_ALL_WARNINGS": "NO"]))
+        },
+        uniquingKeysWith: { first, _ in first }
     )
 
     // Tuist drops a package setting whose only condition is a trait. MachOSwiftSection enables
@@ -96,7 +120,12 @@ import PackageDescription
         targetSettings: localPackageWarnings
             .merging(restatedTraitDefinitions) { $1 }
             .merging(localTestTargetSettings) { $1 },
-        includeLocalPackageTestTargets: true
+        // Covers every package declared by path, so in the local dependency mode it would map the
+        // upstream libraries' tests as well: Tuist rejects MachOSwiftSection's SwiftSectionCommandTests,
+        // which depends on an executable target, and wants every product such a test uses declared in
+        // this file. That mode therefore goes without the local packages' tests (Workspace.swift
+        // leaves their scheme out too).
+        includeLocalPackageTestTargets: localUpstreamDependencies.isEmpty
     )
 #endif
 
@@ -114,5 +143,5 @@ let package = Package(
         // the native project gives them.
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.1"),
         .package(url: "https://github.com/LookInsideApp/LookInside-Release", from: "1.0.1"),
-    ]
+    ] + localUpstreamDependencies
 )
