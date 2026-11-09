@@ -1,6 +1,6 @@
 # Draft - 语料用一次性的 Swift section 打印
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-09
 - **最后更新**: 2026-11-09
 - **实现分支 / PR**: `feature/throwaway-corpus-swift-section`（从 `origin/next` 切出）
@@ -54,7 +54,7 @@
 
 **落地步骤**
 
-1. [ ] 一次性 Swift section 与回归测试：factory 新增建一次性 section 的调用，`RuntimeInterfaceCorpusBuilding` 改为返回打印上下文，store 把打印阶段拆成单独一步、打完就放掉上下文，测试替身随之改。回归测试先在未改的代码上确认是红的，改完转绿；语料相关测试全过。
+1. [x] 一次性 Swift section 与回归测试：factory 新增建一次性 section 的调用，`RuntimeInterfaceCorpusBuilding` 改为返回打印上下文，store 把打印阶段拆成单独一步、打完就放掉上下文，测试替身随之改。回归测试先在未改的代码上确认是红的，改完转绿；语料相关测试全过。
 2. [ ] 验收与文档：Core 全量测试；重跑探针并记下 SwiftUI 语料构建的耗时；同步 `Documentations/DerivedData.md` 与语料仓库的注释。
 
 探针是临时分支 `probe/derived-data-memory` 上的 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/DerivedDataMemoryProbe.swift`，用 `RUNTIMEVIEWER_MEMORY_PROBE_DIRECTORY=<空目录> swift test --skip-build --filter DerivedDataMemoryProbe` 运行；验收完删分支。
@@ -67,3 +67,6 @@
 | 2026-11-09 | 选一次性 Swift section，不改上游定义模型，也不另起进程 | 一次性 section 只改 RuntimeViewer，与内容区不共享任何定义，没有并发问题。上游加释放接口要重做成员存储；单独进程能连碎片一起省，但属于架构改动。 |
 | 2026-11-09 | 用户批准，开始实现；补上两个落地步骤 | 精简提案原本没有分步，按各自能构建验证的粒度拆开。 |
 | 2026-11-09 | 提案随功能分支的第一个提交走，功能分支从 `origin/next` 切 | 本地 `next` 上有另一条线（Tuist 本地依赖模式）在本地合进来、还在等用户看过的提交；提案不能单独推到 `next`，功能分支也不该把那次合并带进来。 |
+| 2026-11-09 | 回归测试先在未改的代码上确认是红的 | 建完 libswiftObservation 的语料后，常驻 section 里已解析的定义从 0 变成 59；改后保持 0。测试经 SwiftIndexing 的 `Support` SPI 读定义表。 |
+| 2026-11-09 | 验收（内存）：活对象省下约 67 MB，未达 25 MB 的验收线，差额记在这里，不另改代码 | 同一探针、同一台 Ultra：打印那次的 footprint 由 448.7 MB 降到 380.1 MB，malloc 在用由 341.0 MB 降到 274.1 MB；推出常驻语料后比索引完时多 31.6 MB（改前 99 MB），比验收线多 6.6 MB。两次启动的内存图里定义对象数相同，一次性 section 没被留住；剩下的差额都是进程级缓存：符号查找表约 11 MB、反解节点约 3 MB、ObjC 方法层级约 2.6 MB、Swift 运行时元数据约 1.3 MB，以及字段布局、反解缓存与打印出的语料多出的容量。它们属于「不做」里的上游缓存；25 MB 这条线是按改前内存图估的，没有算全。 |
+| 2026-11-09 | 验收（耗时）：多出的构建时间记在这里，不另优化 | Debug 测试进程里五个镜像的语料构建由 70.9 秒变成 119.4 秒：SwiftUI 25.0 → 32.4 秒、AppKit 12.7 → 32.3 秒、Foundation 9.3 → 24.3 秒。采样显示多出的时间在一次性 section 的 `prepare()` 里，其中约四分之一是测试进程独有的开销：MachOSwiftSection 给每个类型读一次 `@Dependency(\.symbolIndexStore)`，swift-dependencies 在测试进程里每读一次都 `dlsym` 找当前测试；App 进程里 `TestContext.current` 先看 `isTesting`，不走这条路，所以 App 里多出的时间比这里少。只在没有派生数据、真正打印时发生。 |
