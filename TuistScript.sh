@@ -419,7 +419,9 @@ log "command=$COMMAND configuration=$CONFIGURATION tuist=$PINNED_TUIST_VERSION"
 log "xcode: $(xcodebuild -version | tr '\n' ' ')(${DEVELOPER_DIR:-$(xcode-select -p)})"
 log "storage: ${STORAGE_ROOT:-inside the checkout} (dependencies: $DEPENDENCIES_DIRECTORY)"
 if [[ "$DEPENDENCY_MODE" == local ]]; then
-    log "local dependencies: ${LOCAL_UPSTREAM_PACKAGES[*]} from $LOCAL_DEPENDENCIES_DIRECTORY"
+    log "upstream libraries: the checkouts in $LOCAL_DEPENDENCIES_DIRECTORY (${LOCAL_UPSTREAM_PACKAGES[*]})"
+else
+    log "upstream libraries: the lock file's pins (--local-dependencies takes them from their checkouts)"
 fi
 
 # Compares the pins of Tuist/Package.resolved with those of the native Debug workspace, leaving out
