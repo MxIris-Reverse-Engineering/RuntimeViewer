@@ -1,0 +1,22 @@
+import Foundation
+
+/// One image as one corpus build lists and prints it
+/// (`RuntimeInterfaceCorpusBuilding.corpusPrinting(forImageAt:)`). Whatever
+/// it holds goes when the build lets go of it.
+protocol RuntimeInterfaceCorpusPrinting: Sendable {
+    /// Every object of the image, nested children included, each followed by
+    /// its own descendants — the order of `RuntimeObject.corpusFamily`.
+    func objects() async throws -> [RuntimeObject]
+
+    /// The prints of `family`, one outcome per object, in order. The first
+    /// object is the one the others are nested in, at any depth, each listed
+    /// after the object it is nested in: a nested type's own definition is
+    /// taken out of its parent's print, so a family is printed as a unit —
+    /// see `RuntimeInterfaceCorpusNesting`. Every interface is printed once,
+    /// with `transformer`, marked for every combination of the Generation
+    /// Options; an object that fails to print comes back `.failed` and the
+    /// store carries on. Throws only when cancelled. The store makes the
+    /// image's entries out of the prints once every family is printed — see
+    /// `RuntimeInterfaceCorpusAssembly`.
+    func prints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome]
+}

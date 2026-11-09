@@ -16,6 +16,14 @@ import Semantic
 ///   `printingWidth` families — an object with the objects nested in it —
 ///   are printed at once, and the entries keep the listing order whatever
 ///   order the prints finish in.
+/// - **A build prints with something of its own** (proposal
+///   `throwaway-corpus-swift-section`). The builder gives every build what
+///   it lists and prints the image with — the engine's prints Swift on a
+///   section made for that build — and the build lets go of it once its
+///   prints are in. Printing every definition of an image resolves every member and
+///   symbol of it; on the section the content pane uses they would stay for
+///   the life of the process, which a launch that reads the corpora back
+///   from derived data never pays.
 /// - **A build is a subscription.** Every `build(imagePath:…)` call is one
 ///   subscriber of that image's build; the build is cancelled only when the
 ///   last subscriber goes away. Two documents sharing the `.local` engine
@@ -502,65 +510,18 @@ actor RuntimeInterfaceCorpusStore {
     /// The build itself. Actor-isolated, but every heavy step happens in a
     /// child task off this actor, which stays free between completions; the
     /// `.utility` priority comes from the detached task that calls it.
-    /// Families print `printingWidth` at a time and their prints land in the
-    /// slots of the objects they belong to, so the entries keep the listing
-    /// order. `buildIdentifier` goes with everything it reports: once the
-    /// build is cancelled the image's build is another one, or none.
+    /// `buildIdentifier` goes with everything it reports: once the build is
+    /// cancelled the image's build is another one, or none.
     private func run(imagePath: String, buildIdentifier: UInt64, transformer: Transformer.Configuration) async {
         let start = Date()
-        var skippedCount = 0
         let outcome: BuildOutcome
         do {
-            guard let builder else { throw CancellationError() }
-            let objects = try await builder.corpusObjects(in: imagePath)
-            let total = objects.count
-            await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: 0, total: total)
-            var printsByObjectIndex = [RuntimeInterfaceCorpusPrint?](repeating: nil, count: total)
-            let families = Self.families(in: objects)
-            func printOperation(forFamilyAt familyIndex: Int) -> @Sendable () async throws -> (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]) {
-                let familyRange = families[familyIndex]
-                let family = Array(objects[familyRange])
-                return {
-                    try Task.checkCancellation()
-                    return (familyRange, try await builder.corpusPrints(of: family, transformer: transformer))
-                }
-            }
-            try await withThrowingTaskGroup(of: (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]).self) { group in
-                var nextFamilyIndex = 0
-                while nextFamilyIndex < min(printingWidth, families.count) {
-                    group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
-                    nextFamilyIndex += 1
-                }
-                var built = 0
-                while let (familyRange, printOutcomes) = try await group.next() {
-                    for (offset, objectIndex) in familyRange.enumerated() {
-                        let printOutcome = offset < printOutcomes.count ? printOutcomes[offset] : .failed("its family's print had no outcome for it")
-                        switch printOutcome {
-                        case .printed(let objectPrint):
-                            printsByObjectIndex[objectIndex] = objectPrint
-                        case .empty:
-                            skippedCount += 1
-                        case .failed(let message):
-                            skippedCount += 1
-                            #log(.debug, "Skipping \(objects[objectIndex].displayName, privacy: .public) in the corpus of \(imagePath, privacy: .public): \(message, privacy: .public)")
-                        }
-                    }
-                    let previouslyBuilt = built
-                    built += familyRange.count
-                    if built / Self.progressReportStride > previouslyBuilt / Self.progressReportStride || built == total {
-                        await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: built, total: total)
-                    }
-                    if nextFamilyIndex < families.count {
-                        group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
-                        nextFamilyIndex += 1
-                    }
-                }
-            }
+            let printed = try await printFamilies(ofImageAt: imagePath, buildIdentifier: buildIdentifier, transformer: transformer)
             // Saves an assembly nobody will take. A cancellation that comes
             // during the assembly is caught by `finishBuild`.
             try Task.checkCancellation()
-            let corpus = await assembleCorpus(of: printsByObjectIndex.compactMap { $0 }, skippedCount: skippedCount, transformer: transformer)
-            #log(.info, "Built corpus for \(imagePath, privacy: .public): \(corpus.entries.count, privacy: .public) objects, \(corpus.summary.byteCount, privacy: .public) bytes, \(skippedCount, privacy: .public) skipped, in \(Date().timeIntervalSince(start), privacy: .public) s")
+            let corpus = await assembleCorpus(of: printed.prints, skippedCount: printed.skippedCount, transformer: transformer)
+            #log(.info, "Built corpus for \(imagePath, privacy: .public): \(corpus.entries.count, privacy: .public) objects, \(corpus.summary.byteCount, privacy: .public) bytes, \(printed.skippedCount, privacy: .public) skipped, in \(Date().timeIntervalSince(start), privacy: .public) s")
             // Searchable from here on, and written before the build settles:
             // while the app waits on the build, the serving process works at
             // the app's priority, not at the background one it falls to when
@@ -578,6 +539,67 @@ actor RuntimeInterfaceCorpusStore {
             #log(.error, "Corpus build of \(imagePath, privacy: .public) failed: \(error, privacy: .public)")
         }
         finishBuild(imagePath: imagePath, buildIdentifier: buildIdentifier, outcome: outcome)
+    }
+
+    /// Every family of the image printed with what the builder gives this
+    /// build, `printingWidth` at a time. The prints land in the slots of the
+    /// objects they belong to, so they keep the listing order; returned with
+    /// how many objects printed nothing.
+    ///
+    /// A method of its own so that what the builder gave the build goes when
+    /// it returns, before the corpus is assembled and written: the engine's
+    /// holds a Swift section made for this build, and with it everything
+    /// printing resolved in its definitions (proposal
+    /// `throwaway-corpus-swift-section`).
+    private func printFamilies(ofImageAt imagePath: String, buildIdentifier: UInt64, transformer: Transformer.Configuration) async throws -> (prints: [RuntimeInterfaceCorpusPrint], skippedCount: Int) {
+        guard let builder else { throw CancellationError() }
+        let printing = try await builder.corpusPrinting(forImageAt: imagePath)
+        let objects = try await printing.objects()
+        let total = objects.count
+        await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: 0, total: total)
+        var printsByObjectIndex = [RuntimeInterfaceCorpusPrint?](repeating: nil, count: total)
+        var skippedCount = 0
+        let families = Self.families(in: objects)
+        func printOperation(forFamilyAt familyIndex: Int) -> @Sendable () async throws -> (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]) {
+            let familyRange = families[familyIndex]
+            let family = Array(objects[familyRange])
+            return {
+                try Task.checkCancellation()
+                return (familyRange, try await printing.prints(of: family, transformer: transformer))
+            }
+        }
+        try await withThrowingTaskGroup(of: (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]).self) { group in
+            var nextFamilyIndex = 0
+            while nextFamilyIndex < min(printingWidth, families.count) {
+                group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
+                nextFamilyIndex += 1
+            }
+            var built = 0
+            while let (familyRange, printOutcomes) = try await group.next() {
+                for (offset, objectIndex) in familyRange.enumerated() {
+                    let printOutcome = offset < printOutcomes.count ? printOutcomes[offset] : .failed("its family's print had no outcome for it")
+                    switch printOutcome {
+                    case .printed(let objectPrint):
+                        printsByObjectIndex[objectIndex] = objectPrint
+                    case .empty:
+                        skippedCount += 1
+                    case .failed(let message):
+                        skippedCount += 1
+                        #log(.debug, "Skipping \(objects[objectIndex].displayName, privacy: .public) in the corpus of \(imagePath, privacy: .public): \(message, privacy: .public)")
+                    }
+                }
+                let previouslyBuilt = built
+                built += familyRange.count
+                if built / Self.progressReportStride > previouslyBuilt / Self.progressReportStride || built == total {
+                    await publishProgress(imagePath: imagePath, buildIdentifier: buildIdentifier, built: built, total: total)
+                }
+                if nextFamilyIndex < families.count {
+                    group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
+                    nextFamilyIndex += 1
+                }
+            }
+        }
+        return (printsByObjectIndex.compactMap { $0 }, skippedCount)
     }
 
     /// The objects in print units, each a range of the listing: an object

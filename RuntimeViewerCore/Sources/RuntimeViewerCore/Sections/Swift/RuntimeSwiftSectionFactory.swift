@@ -198,6 +198,17 @@ actor RuntimeSwiftSectionFactory<Reading: RuntimeImageReading>: RuntimeSwiftSect
         return sectionBuild
     }
 
+    /// Built the way `sectionBuild(for:)` builds one, from the same image and
+    /// the same index configuration, and then left alone: not registered, so
+    /// nothing here keeps it or reaches its definitions.
+    func makeUncachedSection(for imagePath: String) async throws -> RuntimeSwiftSection<Reading>? {
+        guard let machO = catalog.machO(forImagePath: imagePath) else {
+            #log(.error, "No image to build an uncached Swift section for: \(imagePath, privacy: .public)")
+            return nil
+        }
+        return try await RuntimeSwiftSection(imagePath: imagePath, machO: machO, factory: self)
+    }
+
     private func registerBuiltSection(_ section: RuntimeSwiftSection<Reading>, for imagePath: String) async {
         sections[imagePath] = section
         sectionBuilds[imagePath] = nil

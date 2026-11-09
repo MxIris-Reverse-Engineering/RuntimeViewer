@@ -31,6 +31,25 @@ struct RuntimeInterfaceRepeatedProtocolCopyTests {
             self.objectsByImagePath = objectsByImagePath
         }
 
+        /// One image of this builder's, listed by `corpusObjects(in:)` and
+        /// printed by `corpusPrints(of:transformer:)`.
+        struct ScriptedPrinting: RuntimeInterfaceCorpusPrinting {
+            let builder: ScriptedBuilder
+            let imagePath: String
+
+            func objects() async throws -> [RuntimeObject] {
+                try await builder.corpusObjects(in: imagePath)
+            }
+
+            func prints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
+                try await builder.corpusPrints(of: family, transformer: transformer)
+            }
+        }
+
+        func corpusPrinting(forImageAt imagePath: String) async throws -> any RuntimeInterfaceCorpusPrinting {
+            ScriptedPrinting(builder: self, imagePath: imagePath)
+        }
+
         func corpusObjects(in imagePath: String) async throws -> [RuntimeObject] {
             (objectsByImagePath[imagePath] ?? []).map { object in
                 RuntimeObject(name: object.name, displayName: object.name, kind: object.kind, imagePath: imagePath, children: [])
