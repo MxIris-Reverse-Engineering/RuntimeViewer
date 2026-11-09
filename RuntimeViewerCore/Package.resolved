@@ -1,5 +1,5 @@
 {
-  "originHash" : "b91a8d5040aea46d667ed5926b971972ee5009e9893417c1d9bdaa04c57eda92",
+  "originHash" : "a4181571a80bedcafcb47a6a95712190ba092ea61eb6f5cfac2c8569d761bdef",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -61,7 +61,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
         "branch" : "next",
-        "revision" : "9ed03293ba0c8f64512930965667f6b4ded8404f"
+        "revision" : "af92491e491b086a4e93df0702a55b118c259b09"
       }
     },
     {
@@ -79,7 +79,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "774b2bafca2dc5dc014e7677cf45c137b71038a0"
+        "revision" : "71dcefcbf8f1dbaf6595069ab238f96f4fd8ec30"
       }
     },
     {
@@ -88,7 +88,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "3f777e21af455339d1dbc4b16c3f2650f7d7c551"
+        "revision" : "f5493f1c54ad2b0de30a20dd5b925767fea5ad47"
       }
     },
     {
@@ -232,7 +232,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
         "branch" : "next",
-        "revision" : "230d3fd3c90251190a04cebf7a77c2617ae167b6"
+        "revision" : "c5ad6101f7d7f739615b765d3c94f842cca742f7"
       }
     },
     {

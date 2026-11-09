@@ -69,6 +69,7 @@ let sourceDependencyTargetNames = [
     "MachOSwiftSectionC",
     "MachOSwiftSection",
     "SwiftInspection",
+    "SwiftObjCInterop",
     "SwiftLayout",
     "SwiftDeclarationRendering",
     "SwiftThunkAnalysis",
