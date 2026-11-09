@@ -118,7 +118,10 @@ let localUpstreamDependencies: [PackageDescription.Package.Dependency] = localUp
         targetSettings: localPackageWarnings
             .merging(restatedTraitDefinitions) { $1 }
             .merging(localTestTargetSettings) { $1 },
-        includeLocalPackageTestTargets: true
+        // EXPERIMENT: the option covers every package declared by path, so with the upstream
+        // libraries taken from local checkouts it would map their test targets as well, and Tuist
+        // rejects MachOSwiftSection's SwiftSectionCommandTests, which depends on an executable target.
+        includeLocalPackageTestTargets: localUpstreamCheckoutsDirectory == nil
     )
 #endif
 
