@@ -144,13 +144,16 @@ extension RuntimeEngine {
     /// `.cancelled`, a value, so it survives the trip to a caller in another
     /// process; see `RuntimeInterfaceCorpusBuildOutcome`.
     ///
-    /// A corpus is printed from the sections the engine already built; asking
-    /// for it never indexes an image. Indexing here would bypass both the
-    /// foreground and the background schedulers, an image that is not loaded
-    /// would fail and stay failed, and for a path dyld does not know, the
-    /// section factories' file-name fallback would index a same-named image
-    /// under that path. An image without both sections is `.imageNotIndexed`
-    /// and leaves the store untouched; it is asked for again once indexed.
+    /// A corpus is printed only for an image whose sections the engine
+    /// already built; asking for it never indexes a new image. Indexing here
+    /// would bypass both the foreground and the background schedulers, an
+    /// image that is not loaded would fail and stay failed, and for a path
+    /// dyld does not know, the section factories' file-name fallback would
+    /// index a same-named image under that path. An image without both
+    /// sections is `.imageNotIndexed` and leaves the store untouched; it is
+    /// asked for again once indexed. The build still prints Swift on a
+    /// section of its own, made from the image the cached one was made from
+    /// (`corpusPrinting(forImageAt:)`).
     func _buildInterfaceCorpus(
         for imagePath: String,
         transformer: Transformer.Configuration,
@@ -239,52 +242,67 @@ extension RuntimeEngine {
 // MARK: - Corpus building
 
 extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
-    /// The sections already built, never new ones — see
+    /// The image's cached Objective-C section, and a Swift section made for
+    /// this build alone (`RuntimeSwiftSectionProviding.makeUncachedSection(for:)`).
+    /// Printing resolves every member and symbol of every Swift definition it
+    /// prints, and a definition keeps them for as long as it lives: on the
+    /// cached section, which the content pane prints from, they stayed for
+    /// the life of the process (proposal `throwaway-corpus-swift-section`).
+    /// An Objective-C section holds nothing a print adds — its members are
+    /// read when it is indexed.
+    ///
+    /// Only for an image with both sections cached, never a new image — see
     /// `_buildInterfaceCorpus`. Missing ones mean the engine let go of them
     /// while the build waited for its turn.
-    func corpusObjects(in imagePath: String) async throws -> [RuntimeObject] {
+    func corpusPrinting(forImageAt imagePath: String) async throws -> any RuntimeInterfaceCorpusPrinting {
         guard let objcSection = await objcSectionFactory.existingSection(for: imagePath),
-              let swiftSection = await swiftSectionFactory.existingSection(for: imagePath)
+              await swiftSectionFactory.hasCachedSection(for: imagePath),
+              let swiftSection = try await swiftSectionFactory.makeUncachedSection(for: imagePath)
         else {
             throw RuntimeInterfaceCorpusBuildError.imageNotIndexed(imagePath: imagePath)
         }
-        let objcObjects = try await objcSection.allObjects()
-        let swiftObjects = try await swiftSection.allObjects()
-        return (objcObjects + swiftObjects).flatMap(\.corpusFamily)
+        return InterfaceCorpusPrinting(objcSection: objcSection, swiftSection: swiftSection)
     }
 
-    /// A Swift family goes to its section whole, which takes the nested
-    /// types' definitions out of their parent's print. Nothing nests in
-    /// Objective-C, so each object of such a family is printed on its own.
-    func corpusPrints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
-        guard let root = family.first else { return [] }
-        switch root.kind {
-        case .swift:
-            guard let section = await swiftSectionFactory.existingSection(for: root.imagePath) else {
-                return family.map { _ in .empty }
-            }
-            return try await section.corpusPrints(of: family, transformer: transformer)
-        case .objc, .c:
-            guard let section = await objcSectionFactory.existingSection(for: root.imagePath) else {
-                return family.map { _ in .empty }
-            }
-            var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
-            outcomes.reserveCapacity(family.count)
-            for object in family {
-                try Task.checkCancellation()
-                do {
-                    if let objectPrint = try await section.corpusPrint(for: object, transformer: transformer) {
-                        outcomes.append(.printed(objectPrint))
-                    } else {
-                        outcomes.append(.empty)
+    /// The two sections one build prints an image with; see
+    /// `corpusPrinting(forImageAt:)`.
+    private struct InterfaceCorpusPrinting: RuntimeInterfaceCorpusPrinting {
+        let objcSection: any RuntimeObjCSectioning
+        let swiftSection: any RuntimeSwiftSectioning
+
+        func objects() async throws -> [RuntimeObject] {
+            let objcObjects = try await objcSection.allObjects()
+            let swiftObjects = try await swiftSection.allObjects()
+            return (objcObjects + swiftObjects).flatMap(\.corpusFamily)
+        }
+
+        /// A Swift family goes to its section whole, which takes the nested
+        /// types' definitions out of their parent's print. Nothing nests in
+        /// Objective-C, so each object of such a family is printed on its own.
+        func prints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
+            guard let root = family.first else { return [] }
+            switch root.kind {
+            case .swift:
+                return try await swiftSection.corpusPrints(of: family, transformer: transformer)
+            case .objc, .c:
+                var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
+                outcomes.reserveCapacity(family.count)
+                for object in family {
+                    try Task.checkCancellation()
+                    do {
+                        if let objectPrint = try await objcSection.corpusPrint(for: object, transformer: transformer) {
+                            outcomes.append(.printed(objectPrint))
+                        } else {
+                            outcomes.append(.empty)
+                        }
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        outcomes.append(.failed("\(error)"))
                     }
-                } catch is CancellationError {
-                    throw CancellationError()
-                } catch {
-                    outcomes.append(.failed("\(error)"))
                 }
+                return outcomes
             }
-            return outcomes
         }
     }
 }
