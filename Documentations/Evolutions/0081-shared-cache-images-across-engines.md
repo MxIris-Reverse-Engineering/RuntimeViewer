@@ -1,6 +1,6 @@
-# Draft - 系统镜像的数据跨 engine 只存一份：My Mac 与 Mac Catalyst 分管，本机附加进程借用
+# 0081 - 系统镜像的数据跨 engine 只存一份：My Mac 与 Mac Catalyst 分管，本机附加进程借用
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-08
 - **最后更新**: 2026-11-09
@@ -339,7 +339,7 @@ extension RuntimeEngineManager {
 7. **界面**（已完成）：Report 按 engine 分组、工具栏进度合并、侧栏 Load 的语义、Load Frameworks… 改用 `loadImageInServingProcess(at:)`、Developer 页开关；测试。
 8. **App 里共用系统镜像树**（已完成）。
 9. **文档**（已完成）：`Documentations/CommunicationAndEngineArchitecture.md` 加一节写借用与路由；`Documentations/Guides/CommandLineInterface.md` 与 agent 插件说明写附加进程的新行为，插件升版本；根 `AGENTS.md` 的开发准则加一条「新命令要声明它关于哪个镜像，或说明为什么不转」；术语表登记「系统镜像」「归属 engine」「借用」。
-10. **手工验收与测量**：按 §11 的手工验收项，结果写进本提案的决策日志。
+10. **手工验收与测量**（未做，收尾时挪进提案索引的「暂缓的后续项」）：按 §11 的手工验收项，结果写进本提案的决策日志。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -377,3 +377,4 @@ extension RuntimeEngineManager {
 | 2026-11-09 | 第 8 步完成：换树发生在 engine 设置镜像树时与借用关系到来时 | 服务进程推来的镜像树经 `setImageNodes` 进 engine，换树就放在这里；树常在借用关系之前到达，所以设置借用关系时再换一次，只有真换了才重新发布。是否同一份 cache 按两棵树的镜像路径集合比较；进程内 engine 的树原本也是每次现建的，同样换成共用的那棵 |
 | 2026-11-09 | 第 9 步完成：「新命令要声明路由」写进 `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 只留指引 | 根文件已有 62 KB，离 Codex 读取的 64 KiB 上限太近；这条规则也只管 `RuntimeViewerCore/Sources/` 下的命令，按「放进它所管的最窄目录」放在那里，根文件的命令准则末尾加一句指过去。架构文档新增 §7.4，原 §7.4 顺延为 §7.5；CLI 使用指南与 agent 插件说明写附加进程的新行为，两份插件清单升到 1.1.0；术语表登记「系统镜像」「归属 engine」「借用」 |
 | 2026-11-09 | 实现完成，待用户看过后收尾 | 第 1–9 步完成；第 10 步手工验收（附加 TextEdit 对比开关开 / 关时的内存与索引时长、My Mac 打开 UIKitCore、Report 分组与操作、CLI 对附加进程的 `load` 与 `interface`）留给用户。验证：Core 全量 726 项挂 2 条、Packages 全量 1,029 项挂 3 条，都是满载下的已知波动或 next 上本来就有的红——交叉引用「An image loaded later…」、后台索引 `cancelBatchStopsPendingItemsAndEmitsCancelledEvent`、`InjectedDeviceEngineTests` 两条单独重跑全过，`TitleActivityIndicatorTests` 悬停那条 next 上同样红；CLI 包 122 项、MCP 包 95 项全过；macOS App（Debug-arm64e）与 iOS（Simulator）都编得过。自审发现借用时 Report 会留下没内容的组行、页面到不了空状态，已修并补测试 |
+| 2026-11-09 | 编号 0081，状态改为 Implemented；第 10 步的手工验收挪进暂缓的后续项 | 用户要求收尾，实现已合进 `next` 并推送。第 10 步没有做，列进提案索引的「暂缓的后续项」，做完把结果补进本日志。除上面各步记下的几处外没有偏离方案。不另写实现说明：路由声明、合并规则与借用关系写在 `CommunicationAndEngineArchitecture.md` §7.4 与 `RuntimeViewerCore/Sources/AGENTS.md`，附加进程的新行为写在 CLI 使用指南；新术语「系统镜像」「归属 engine」「借用」已在第 9 步登记进 `Glossary.md` |

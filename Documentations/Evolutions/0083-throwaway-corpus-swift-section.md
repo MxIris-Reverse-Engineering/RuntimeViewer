@@ -1,9 +1,10 @@
-# Draft - 语料用一次性的 Swift section 打印
+# 0083 - 语料用一次性的 Swift section 打印
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-09
 - **最后更新**: 2026-11-09
 - **实现分支 / PR**: `feature/throwaway-corpus-swift-section`（从 `origin/next` 切出）
+- **配套文档**: [实现说明：派生数据为什么是这个形状](../DerivedData.md)「六、语料仓库里，读取在哪一步」
 
 ## 摘要
 
@@ -74,3 +75,4 @@
 | 2026-11-09 | 对象列表改回取常驻 section，一次性 section 只管 Swift 家族的打印，并从构建一开始在后台建 | 最初对象列表也从一次性 section 取，构建的第一次进度要等它建完才发出。Core 全量测试里两条转发语料构建的测试（`RemoteRequestCancellationTests`、`RemoteCorpusBuildOutcomeTests`，两种传输都挂）等第一次进度等满 60 秒；App 的 Report 在这段时间里也看不到进度。读常驻 section 的对象列表不解析定义，两份 section 的对象键（镜像路径、名字、种类）相同，一次性 section 照样认得出；后台建的同时先打印 ObjC 家族，AppKit、Foundation 这类以 ObjC 为主的镜像多出的时间能被盖住一部分。 |
 | 2026-11-09 | 改后复测：省下的内存不变，构建时间只少约 3 秒；`prepare()` 的上游开销记为后续项 | 同一探针：活对象仍少约 68 MB（推出语料后比索引完时多 31.3 MB），打印那次的 footprint 391.3 MB（碎片因次而异，上一轮 380.1 MB）。五个镜像的构建 116.3 秒，ObjC 家族先打印只盖住约 3 秒，多出的时间几乎都在一次性 section 的 `prepare()`。采样里 `prepare()` 的 52% 落在 MachOSwiftSection 的 `ExportStatus.resolve` 给每个类型读两次 `@Dependency(\.symbolIndexStore)` 上，其中相当一部分是测试进程才有的 `dlsym`；App 进程里这笔开销小一些，但每索引一个镜像都在付。改成每次 `prepare()` 只读一次是上游的事，常驻 section 的索引也会跟着变快。 |
 | 2026-11-09 | 实现完成，待用户看过后收尾 | Mac Studio Ultra 上 Core 全量测试（Debug）：转发语料构建的两条测试改后通过；剩下的三条失败——交叉引用预建的 `imagesAskedAboutRenewTheAnalyzer`、`firstPreparationReadsThePrefilters` 与后台索引的 `cancelBatchStopsPendingItemsAndEmitsCancelledEvent`——正是 [0066](0066-on-demand-corpora-and-cross-references.md) 记下的满载偶发，单独重跑这两个套件 18 + 27 个全过。文档：`DerivedData.md` 第六节加一条说明两种启动的内存差别；没有新术语，`AGENTS.md` 不需要改：约定写在语料仓库与引擎的注释里。探针分支 `probe/derived-data-memory` 与 Ultra 上的检出留到用户看过后删。 |
+| 2026-11-09 | 合进 `next`，编号 0083，状态改为 Implemented；接受构建时间换内存，上游加速记为后续项 | 用户接受这个交换（没有派生数据的首次启动少占约 68 MB，Debug 下五个镜像的语料构建 71 → 116 秒）并要求收尾；`prepare()` 里上游的开销不另立提案，列进提案索引的「暂缓的后续项」。合并只在两份索引上与 Tuist 本地依赖模式冲突，两边都保留。合并后按锁文件钉住的版本编不过：`next` 上同期进来的一个提交让 RuntimeViewerCore 依赖 MachOSwiftSection 新拆出的 `SwiftObjCInterop` 模块，钉住的版本还没有它，不含本分支的 `next` 报同一个错。改用六个上游库的本地检出（MachOSwiftSection 在已含该模块的 `next` 上）在合并结果上跑 Core 全量测试：727 项挂 2 条，交叉引用预建的「An image loaded later…」与后台索引的 `cancelBatchStopsPendingItemsAndEmitsCancelledEvent`，正是上面记下的满载偶发，单独重跑这两个套件 18 + 27 项全过。探针分支 `probe/derived-data-memory` 与 Ultra 上的探针检出随收尾删除。配套文档是 `DerivedData.md` 第六节，已登记到头部；没有新术语，`AGENTS.md` 不需要改 |

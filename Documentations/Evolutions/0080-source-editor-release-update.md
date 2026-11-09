@@ -1,8 +1,8 @@
-# Draft - 一条命令换钉住的 SourceEditor 版本，Tuist 构建前也取框架
+# 0080 - 一条命令换钉住的 SourceEditor 版本，Tuist 构建前也取框架
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-05
-- **最后更新**: 2026-11-05
+- **最后更新**: 2026-11-09
 - **实现分支 / PR**: `feature/source-editor-release-update`（从 `next` 切，并回 `next`）
 
 ## 摘要
@@ -63,3 +63,4 @@
 | 2026-11-05 | 用户批准，状态改为 Accepted；顺带把钉住的版本换到 26.6.3 | 新脚本第一次实际使用正好就是这次换版；26.6.3 修了 `string(for:)` 在没有 item 时的返回值和文档注释语言服务的回答，RV 只需删一处多余的类型转换 |
 | 2026-11-05 | 验证（公司那台 Mac，Xcode 27.2，Debug-arm64e） | 换版脚本：`--help`、`--dry-run`（列出 26.6.3 的三条 Breaking）、实际换到 26.6.3（下载目录里的副本与 `PinnedRelease.txt` 逐字节相同）、已是该版时只确认框架在位；不存在的版本号和写错的参数都报错、退出码 1、文件不动；把框架目录设成不可写让下载失败，退出码 1，`PinnedRelease.txt` 逐字节恢复，已下载的框架不动。`TuistScript.sh`：`generate`、`build` 的 `--dry-run` 第一步都是取框架，`install` 不取。26.6.3：桥接测试 35 个通过 33 个，没过的仍是 `next` 上早就不过的两个 `SourceEditorScrollerTests`（`8f3414e0` 起不再自动隐藏滚动条，测试没跟着改）；构建产物目录与 App 里四个框架的 LC_UUID 都和 26.6.3 的下载一致；`codesign --verify --deep --strict` 通过。没验证：Release universal 构建（改的那一行在 `#if arch(arm64)` 之内，Intel 切片不编译它）、实跑 Tuist 的 `generate` 与 `build`、启动 App |
 | 2026-11-05 | 实现完成，待用户看过后收尾 | 文档已同步：模块的 `AGENTS.md`、根 `AGENTS.md`、Tuist 指南；用法写在脚本头注释和模块的 `AGENTS.md` 里，不另写使用指南和实现说明；没有新术语 |
+| 2026-11-09 | 编号 0080，状态改为 Implemented | 用户要求收尾。实现在 2026-11-05 就已合进 `next`，此后钉住的版本又换到了 26.6.4。当时没验证的三项：Tuist 生成与构建前取框架，此后每次 `TuistScript.sh check` 第一步都会走到（收尾时那次也是，框架已在位）；启动 App 的目视并入 [0072](0072-reconstructed-source-editor.md) 的后续项「重建版 SourceEditor 在 App 里的目视」；Release universal 构建留给下次发版的归档。没有偏离方案之处，没有未做的项。不另写使用指南或实现说明：用法在脚本头注释与 `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` 里；没有新术语 |

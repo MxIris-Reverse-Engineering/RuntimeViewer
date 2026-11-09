@@ -122,7 +122,7 @@ Debug、Debug-arm64e、Release 的 bundle id 不同，各有一处。
   （根 `AGENTS.md` 的 *The service runs at the priority of the requests waiting on it*，以及
   `ResolvedIssues/2026-10-13-background-work-throttled-by-app-nap.md`）。
 - **打印用的 Swift section 是这次构建专用的**，不是内容区用的那个（提案
-  [语料用一次性的 Swift section 打印](Evolutions/draft-throwaway-corpus-swift-section.md)）。打印一个定义会解析出它的
+  [语料用一次性的 Swift section 打印](Evolutions/0083-throwaway-corpus-swift-section.md)）。打印一个定义会解析出它的
   全部成员与符号，定义会一直留着它们；在共用的 section 上打印，没有派生数据的那次启动会比读回派生数据的启动多留约
   70 MB（My Mac 的五个 Always Index 镜像，Debug）。现在这些随构建结束一起释放，两种启动剩下的差别是上游为打印建的
   进程级缓存（约 25 MB）与 malloc 碎片，代价是每打印一个镜像要多建一遍它的 Swift 索引，读回派生数据时没有这笔开销。

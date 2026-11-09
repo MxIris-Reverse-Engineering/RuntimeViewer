@@ -529,7 +529,7 @@ AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive �
 ### 7.4 共用系统镜像：归属、借用与路由
 
 本机 dyld shared cache 里的镜像（系统镜像）只由一个 engine 处理一次，别的 engine 借用（提案
-[draft-shared-cache-images-across-engines](Evolutions/draft-shared-cache-images-across-engines.md)）。
+[0081-shared-cache-images-across-engines](Evolutions/0081-shared-cache-images-across-engines.md)）。
 
 - **归属**：管理器启动时用 `RuntimeSharedCachePartition.current()` 把本进程映射的 cache 划分一次：
   `LC_BUILD_VERSION` 只写了 Mac Catalyst 的镜像归 Mac Catalyst engine，其余归 My Mac。App 在 Rosetta 下

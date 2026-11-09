@@ -1,7 +1,7 @@
 # 使用指南：Tuist 开发 workspace
 
 - **面向**: 在本仓库做日常开发、想让第三方依赖走二进制缓存的人；改原生工程的 target、依赖、嵌入方式或构建设置的人（同步规则）
-- **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)；本地依赖模式见 [draft-tuist-local-dependencies](../Evolutions/draft-tuist-local-dependencies.md)
+- **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)；本地依赖模式见 [0082](../Evolutions/0082-tuist-local-dependencies.md)
 - **最后更新**: 2026-11-09
 
 `RuntimeViewer-Tuist.xcworkspace` 是构建 macOS App 的第二条路，只供日常开发。它由
