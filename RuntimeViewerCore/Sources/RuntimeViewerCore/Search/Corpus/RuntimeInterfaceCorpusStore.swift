@@ -18,9 +18,9 @@ import Semantic
 ///   order the prints finish in.
 /// - **A build prints with something of its own** (proposal
 ///   `throwaway-corpus-swift-section`). The builder gives every build what
-///   it lists and prints the image with — the engine's is a Swift section
-///   made for that build — and the build lets go of it once its prints are
-///   in. Printing every definition of an image resolves every member and
+///   it lists and prints the image with — the engine's prints Swift on a
+///   section made for that build — and the build lets go of it once its
+///   prints are in. Printing every definition of an image resolves every member and
 ///   symbol of it; on the section the content pane uses they would stay for
 ///   the life of the process, which a launch that reads the corpora back
 ///   from derived data never pays.
@@ -548,8 +548,9 @@ actor RuntimeInterfaceCorpusStore {
     ///
     /// A method of its own so that what the builder gave the build goes when
     /// it returns, before the corpus is assembled and written: the engine's
-    /// is a Swift section made for this build, holding everything printing
-    /// resolved in its definitions (proposal `throwaway-corpus-swift-section`).
+    /// holds a Swift section made for this build, and with it everything
+    /// printing resolved in its definitions (proposal
+    /// `throwaway-corpus-swift-section`).
     private func printFamilies(ofImageAt imagePath: String, buildIdentifier: UInt64, transformer: Transformer.Configuration) async throws -> (prints: [RuntimeInterfaceCorpusPrint], skippedCount: Int) {
         guard let builder else { throw CancellationError() }
         let printing = try await builder.corpusPrinting(forImageAt: imagePath)

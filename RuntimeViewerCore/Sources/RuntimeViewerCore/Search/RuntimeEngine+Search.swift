@@ -242,37 +242,66 @@ extension RuntimeEngine {
 // MARK: - Corpus building
 
 extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
-    /// The image's cached Objective-C section, and a Swift section made for
-    /// this build alone (`RuntimeSwiftSectionProviding.makeUncachedSection(for:)`).
-    /// Printing resolves every member and symbol of every Swift definition it
-    /// prints, and a definition keeps them for as long as it lives: on the
-    /// cached section, which the content pane prints from, they stayed for
-    /// the life of the process (proposal `throwaway-corpus-swift-section`).
-    /// An Objective-C section holds nothing a print adds — its members are
-    /// read when it is indexed.
+    /// The image's cached sections list its objects, and its Objective-C
+    /// families print on the cached Objective-C section, which a print adds
+    /// nothing to — its members are read when it is indexed. Its Swift
+    /// families print on a section made for this build alone
+    /// (`RuntimeSwiftSectionProviding.makeUncachedSection(for:)`): printing
+    /// resolves every member and symbol of every Swift definition it prints,
+    /// and a definition keeps them for as long as it lives — on the cached
+    /// section, which the content pane prints from, they stayed for the life
+    /// of the process (proposal `throwaway-corpus-swift-section`).
+    ///
+    /// That section is made in the background from the start. The listing
+    /// does not wait for it, so the build reports its progress at once, and
+    /// the Objective-C families, which come first in the listing, print while
+    /// it is being made.
     ///
     /// Only for an image with both sections cached, never a new image — see
     /// `_buildInterfaceCorpus`. Missing ones mean the engine let go of them
     /// while the build waited for its turn.
     func corpusPrinting(forImageAt imagePath: String) async throws -> any RuntimeInterfaceCorpusPrinting {
         guard let objcSection = await objcSectionFactory.existingSection(for: imagePath),
-              await swiftSectionFactory.hasCachedSection(for: imagePath),
-              let swiftSection = try await swiftSectionFactory.makeUncachedSection(for: imagePath)
+              let cachedSwiftSection = await swiftSectionFactory.existingSection(for: imagePath)
         else {
             throw RuntimeInterfaceCorpusBuildError.imageNotIndexed(imagePath: imagePath)
         }
-        return InterfaceCorpusPrinting(objcSection: objcSection, swiftSection: swiftSection)
+        let hasSwiftObjects = try await !cachedSwiftSection.allObjects().isEmpty
+        let swiftSectionFactory = swiftSectionFactory
+        let uncachedSwiftSection = Task<(any RuntimeSwiftSectioning)?, any Swift.Error> {
+            guard hasSwiftObjects else { return nil }
+            return try await swiftSectionFactory.makeUncachedSection(for: imagePath)
+        }
+        return InterfaceCorpusPrinting(objcSection: objcSection, cachedSwiftSection: cachedSwiftSection, uncachedSwiftSection: uncachedSwiftSection)
     }
 
-    /// The two sections one build prints an image with; see
+    /// What one build lists and prints an image with; see
     /// `corpusPrinting(forImageAt:)`.
-    private struct InterfaceCorpusPrinting: RuntimeInterfaceCorpusPrinting {
-        let objcSection: any RuntimeObjCSectioning
-        let swiftSection: any RuntimeSwiftSectioning
+    private final class InterfaceCorpusPrinting: RuntimeInterfaceCorpusPrinting {
+        private let objcSection: any RuntimeObjCSectioning
+
+        private let cachedSwiftSection: any RuntimeSwiftSectioning
+
+        /// The Swift section the Swift families print on, being made since
+        /// the build began; `nil` for an image without Swift objects, or one
+        /// that cannot be found any more.
+        private let uncachedSwiftSection: Task<(any RuntimeSwiftSectioning)?, any Swift.Error>
+
+        init(objcSection: any RuntimeObjCSectioning, cachedSwiftSection: any RuntimeSwiftSectioning, uncachedSwiftSection: Task<(any RuntimeSwiftSectioning)?, any Swift.Error>) {
+            self.objcSection = objcSection
+            self.cachedSwiftSection = cachedSwiftSection
+            self.uncachedSwiftSection = uncachedSwiftSection
+        }
+
+        /// A build given up before its Swift families print no longer needs
+        /// their section.
+        deinit {
+            uncachedSwiftSection.cancel()
+        }
 
         func objects() async throws -> [RuntimeObject] {
             let objcObjects = try await objcSection.allObjects()
-            let swiftObjects = try await swiftSection.allObjects()
+            let swiftObjects = try await cachedSwiftSection.allObjects()
             return (objcObjects + swiftObjects).flatMap(\.corpusFamily)
         }
 
@@ -283,6 +312,17 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
             guard let root = family.first else { return [] }
             switch root.kind {
             case .swift:
+                let swiftSection: (any RuntimeSwiftSectioning)?
+                do {
+                    swiftSection = try await uncachedSwiftSection.value
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    return family.map { _ in .failed("its image's Swift section could not be made for the corpus: \(error)") }
+                }
+                guard let swiftSection else {
+                    return family.map { _ in .empty }
+                }
                 return try await swiftSection.corpusPrints(of: family, transformer: transformer)
             case .objc, .c:
                 var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []

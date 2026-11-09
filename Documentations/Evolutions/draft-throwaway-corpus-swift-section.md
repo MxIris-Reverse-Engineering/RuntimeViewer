@@ -29,10 +29,11 @@
 
 **改动**
 
-1. 打印一个镜像的语料时，引擎另建一个这个镜像的 `RuntimeSwiftSection`：同一个镜像，同一份索引配置，不进 factory 的缓存，也不挂到聚合索引器上。这次构建的 Swift 对象列表与全部打印都走它；构建结束（建完、失败或取消）就丢掉，它解析出的成员随之释放。
-2. 内容区、Inspector、交叉引用用的常驻 section 不被语料打印碰到，其中的定义只在用户打开时才解析，与读回派生数据的启动一样。
-3. `RuntimeInterfaceCorpusBuilding` 的两个调用（`corpusObjects(in:)`、`corpusPrints(of:transformer:)`）改为每次构建先向引擎要一个打印上下文，对象列表与打印都向它要，`RuntimeInterfaceCorpusStore.run` 持有它到构建结束。ObjC 部分在上下文里照旧用常驻的 ObjC section。测试替身随之改。
-4. 代价：每打印一个镜像的语料，要多建一遍它的 Swift 索引。符号库按镜像共享、不会重建，重建的是类型、协议、遵循与扩展这几遍；构建期间同时存在两份定义的外壳。只在真正打印时发生，读回派生数据时没有。
+1. 打印一个镜像的语料时，引擎另建一个这个镜像的 `RuntimeSwiftSection`（`makeUncachedSection(for:)`）：同一个镜像，同一份索引配置，不进 factory 的缓存，也不挂到聚合索引器上。这次构建的 Swift 家族都在它上面打印；构建的打印阶段结束（打完、失败或取消）就丢掉，它解析出的成员随之释放。
+2. 对象列表照旧取常驻的两个 section（读它们的对象列表不解析任何定义），ObjC 家族照旧在常驻的 ObjC section 上打印。一次性 section 从构建一开始就在后台建：进度不等它，ObjC 家族排在列表前面，趁它建的时候先打印。
+3. 内容区、Inspector、交叉引用用的常驻 section 不被语料打印碰到，其中的定义只在用户打开时才解析，与读回派生数据的启动一样。
+4. `RuntimeInterfaceCorpusBuilding` 的两个调用（`corpusObjects(in:)`、`corpusPrints(of:transformer:)`）改为每次构建先向引擎要一个打印上下文（`RuntimeInterfaceCorpusPrinting`），对象列表与打印都向它要。`RuntimeInterfaceCorpusStore` 把打印阶段拆成单独一个方法，在里面持有上下文，组装语料之前就放掉。测试替身随之改。
+5. 代价：每打印一个镜像的语料，要多建一遍它的 Swift 索引。符号库按镜像共享、不会重建，重建的是类型、协议、遵循与扩展这几遍；构建期间同时存在两份定义的外壳。只在真正打印时发生，读回派生数据时没有。
 
 **没有询问就采用的假设**
 
@@ -70,3 +71,4 @@
 | 2026-11-09 | 回归测试先在未改的代码上确认是红的 | 建完 libswiftObservation 的语料后，常驻 section 里已解析的定义从 0 变成 59；改后保持 0。测试经 SwiftIndexing 的 `Support` SPI 读定义表。 |
 | 2026-11-09 | 验收（内存）：活对象省下约 67 MB，未达 25 MB 的验收线，差额记在这里，不另改代码 | 同一探针、同一台 Ultra：打印那次的 footprint 由 448.7 MB 降到 380.1 MB，malloc 在用由 341.0 MB 降到 274.1 MB；推出常驻语料后比索引完时多 31.6 MB（改前 99 MB），比验收线多 6.6 MB。两次启动的内存图里定义对象数相同，一次性 section 没被留住；剩下的差额都是进程级缓存：符号查找表约 11 MB、反解节点约 3 MB、ObjC 方法层级约 2.6 MB、Swift 运行时元数据约 1.3 MB，以及字段布局、反解缓存与打印出的语料多出的容量。它们属于「不做」里的上游缓存；25 MB 这条线是按改前内存图估的，没有算全。 |
 | 2026-11-09 | 验收（耗时）：多出的构建时间记在这里，不另优化 | Debug 测试进程里五个镜像的语料构建由 70.9 秒变成 119.4 秒：SwiftUI 25.0 → 32.4 秒、AppKit 12.7 → 32.3 秒、Foundation 9.3 → 24.3 秒。采样显示多出的时间在一次性 section 的 `prepare()` 里，其中约四分之一是测试进程独有的开销：MachOSwiftSection 给每个类型读一次 `@Dependency(\.symbolIndexStore)`，swift-dependencies 在测试进程里每读一次都 `dlsym` 找当前测试；App 进程里 `TestContext.current` 先看 `isTesting`，不走这条路，所以 App 里多出的时间比这里少。只在没有派生数据、真正打印时发生。 |
+| 2026-11-09 | 对象列表改回取常驻 section，一次性 section 只管 Swift 家族的打印，并从构建一开始在后台建 | 最初对象列表也从一次性 section 取，构建的第一次进度要等它建完才发出。Core 全量测试里两条转发语料构建的测试（`RemoteRequestCancellationTests`、`RemoteCorpusBuildOutcomeTests`，两种传输都挂）等第一次进度等满 60 秒；App 的 Report 在这段时间里也看不到进度。读常驻 section 的对象列表不解析定义，两份 section 的对象键（镜像路径、名字、种类）相同，一次性 section 照样认得出；后台建的同时先打印 ObjC 家族，AppKit、Foundation 这类以 ObjC 为主的镜像多出的时间能被盖住一部分。 |
