@@ -11,6 +11,7 @@ import Demangling
 @_spi(Support) import SwiftSpecialization
 @_spi(Support) import SwiftPrivateDiscriminators
 @_spi(Internals) import SwiftInspection
+@_spi(Internals) import SwiftObjCInterop
 
 /// What every engine read before offline mode: the images dyld loaded into
 /// this process, whose metadata can be instantiated.

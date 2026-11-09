@@ -261,6 +261,7 @@ let package = Package(
                 .product(name: "OutputTransformer", package: "swift-semantic-string"),
                 .product(name: "ObjCOutputTransformer", package: "MachOObjCSection"),
                 .product(name: "SwiftOutputTransformer", package: "MachOSwiftSection"),
+                .product(name: "SwiftObjCInterop", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclaration", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclarationRendering", package: "MachOSwiftSection"),
                 .product(name: "SwiftIndexing", package: "MachOSwiftSection"),

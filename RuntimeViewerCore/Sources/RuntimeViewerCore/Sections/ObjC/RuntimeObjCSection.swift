@@ -7,6 +7,7 @@ import OrderedCollections
 private import RuntimeViewerObjC
 import Semantic
 import SwiftInspection
+import SwiftObjCInterop
 import Utilities
 import MetaCodable
 
