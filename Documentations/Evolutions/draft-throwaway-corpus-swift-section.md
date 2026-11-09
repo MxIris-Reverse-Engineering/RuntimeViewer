@@ -56,7 +56,7 @@
 **落地步骤**
 
 1. [x] 一次性 Swift section 与回归测试：factory 新增建一次性 section 的调用，`RuntimeInterfaceCorpusBuilding` 改为返回打印上下文，store 把打印阶段拆成单独一步、打完就放掉上下文，测试替身随之改。回归测试先在未改的代码上确认是红的，改完转绿；语料相关测试全过。
-2. [ ] 验收与文档：Core 全量测试；重跑探针并记下 SwiftUI 语料构建的耗时；同步 `Documentations/DerivedData.md` 与语料仓库的注释。
+2. [x] 验收与文档：Core 全量测试；重跑探针并记下 SwiftUI 语料构建的耗时；同步 `Documentations/DerivedData.md` 与语料仓库的注释。
 
 探针是临时分支 `probe/derived-data-memory` 上的 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/DerivedDataMemoryProbe.swift`，用 `RUNTIMEVIEWER_MEMORY_PROBE_DIRECTORY=<空目录> swift test --skip-build --filter DerivedDataMemoryProbe` 运行；验收完删分支。
 
@@ -72,3 +72,5 @@
 | 2026-11-09 | 验收（内存）：活对象省下约 67 MB，未达 25 MB 的验收线，差额记在这里，不另改代码 | 同一探针、同一台 Ultra：打印那次的 footprint 由 448.7 MB 降到 380.1 MB，malloc 在用由 341.0 MB 降到 274.1 MB；推出常驻语料后比索引完时多 31.6 MB（改前 99 MB），比验收线多 6.6 MB。两次启动的内存图里定义对象数相同，一次性 section 没被留住；剩下的差额都是进程级缓存：符号查找表约 11 MB、反解节点约 3 MB、ObjC 方法层级约 2.6 MB、Swift 运行时元数据约 1.3 MB，以及字段布局、反解缓存与打印出的语料多出的容量。它们属于「不做」里的上游缓存；25 MB 这条线是按改前内存图估的，没有算全。 |
 | 2026-11-09 | 验收（耗时）：多出的构建时间记在这里，不另优化 | Debug 测试进程里五个镜像的语料构建由 70.9 秒变成 119.4 秒：SwiftUI 25.0 → 32.4 秒、AppKit 12.7 → 32.3 秒、Foundation 9.3 → 24.3 秒。采样显示多出的时间在一次性 section 的 `prepare()` 里，其中约四分之一是测试进程独有的开销：MachOSwiftSection 给每个类型读一次 `@Dependency(\.symbolIndexStore)`，swift-dependencies 在测试进程里每读一次都 `dlsym` 找当前测试；App 进程里 `TestContext.current` 先看 `isTesting`，不走这条路，所以 App 里多出的时间比这里少。只在没有派生数据、真正打印时发生。 |
 | 2026-11-09 | 对象列表改回取常驻 section，一次性 section 只管 Swift 家族的打印，并从构建一开始在后台建 | 最初对象列表也从一次性 section 取，构建的第一次进度要等它建完才发出。Core 全量测试里两条转发语料构建的测试（`RemoteRequestCancellationTests`、`RemoteCorpusBuildOutcomeTests`，两种传输都挂）等第一次进度等满 60 秒；App 的 Report 在这段时间里也看不到进度。读常驻 section 的对象列表不解析定义，两份 section 的对象键（镜像路径、名字、种类）相同，一次性 section 照样认得出；后台建的同时先打印 ObjC 家族，AppKit、Foundation 这类以 ObjC 为主的镜像多出的时间能被盖住一部分。 |
+| 2026-11-09 | 改后复测：省下的内存不变，构建时间只少约 3 秒；`prepare()` 的上游开销记为后续项 | 同一探针：活对象仍少约 68 MB（推出语料后比索引完时多 31.3 MB），打印那次的 footprint 391.3 MB（碎片因次而异，上一轮 380.1 MB）。五个镜像的构建 116.3 秒，ObjC 家族先打印只盖住约 3 秒，多出的时间几乎都在一次性 section 的 `prepare()`。采样里 `prepare()` 的 52% 落在 MachOSwiftSection 的 `ExportStatus.resolve` 给每个类型读两次 `@Dependency(\.symbolIndexStore)` 上，其中相当一部分是测试进程才有的 `dlsym`；App 进程里这笔开销小一些，但每索引一个镜像都在付。改成每次 `prepare()` 只读一次是上游的事，常驻 section 的索引也会跟着变快。 |
+| 2026-11-09 | 实现完成，待用户看过后收尾 | Mac Studio Ultra 上 Core 全量测试（Debug）：转发语料构建的两条测试改后通过；剩下的三条失败——交叉引用预建的 `imagesAskedAboutRenewTheAnalyzer`、`firstPreparationReadsThePrefilters` 与后台索引的 `cancelBatchStopsPendingItemsAndEmitsCancelledEvent`——正是 [0066](0066-on-demand-corpora-and-cross-references.md) 记下的满载偶发，单独重跑这两个套件 18 + 27 个全过。文档：`DerivedData.md` 第六节加一条说明两种启动的内存差别；没有新术语，`AGENTS.md` 不需要改：约定写在语料仓库与引擎的注释里。探针分支 `probe/derived-data-memory` 与 Ultra 上的检出留到用户看过后删。 |
