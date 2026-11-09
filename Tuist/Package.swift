@@ -1,9 +1,30 @@
 // swift-tools-version: 6.2
+import Foundation
 import PackageDescription
 
 // The dependencies of RuntimeViewer-Tuist.xcworkspace, the development-only Tuist workspace
 // (Documentations/Guides/TuistDevelopment.md). The four local packages are declared by path, so
 // their own Package.swift files stay the only definition of their targets and dependencies.
+
+// EXPERIMENT: local checkouts of the six upstream libraries RuntimeViewer-Local.xcworkspace takes
+// from beside the checkout. TUIST_LOCAL_UPSTREAM_CHECKOUTS names the directory that holds them, one
+// directory per package, named exactly like the package (SwiftPM takes a path package's identity
+// from its directory name). When it is set, this root package declares the six by path, and SwiftPM
+// lets a root's path dependency stand in for every other declaration of the same package in the
+// graph — the URLs in RuntimeViewerCore's manifest and in the libraries' own manifests included.
+let localUpstreamCheckoutsDirectory = ProcessInfo.processInfo.environment["TUIST_LOCAL_UPSTREAM_CHECKOUTS"]
+    .flatMap { directory in directory.isEmpty ? nil : directory }
+let localUpstreamPackageNames = [
+    "MachOKit",
+    "MachOKitExtensions",
+    "MachOObjCSection",
+    "MachOSwiftSection",
+    "swift-demangling",
+    "swift-semantic-string",
+]
+let localUpstreamDependencies: [Package.Dependency] = localUpstreamCheckoutsDirectory.map { directory in
+    localUpstreamPackageNames.map { packageName in .package(path: "\(directory)/\(packageName)") }
+} ?? []
 
 #if TUIST
     import ProjectDescription
@@ -114,5 +135,5 @@ let package = Package(
         // the native project gives them.
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.1"),
         .package(url: "https://github.com/LookInsideApp/LookInside-Release", from: "1.0.1"),
-    ]
+    ] + localUpstreamDependencies
 )
