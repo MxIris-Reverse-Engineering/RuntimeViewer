@@ -1,4 +1,6 @@
 import Foundation
+import SwiftDeclaration
+@_spi(Support) import SwiftIndexing
 import Testing
 @testable import RuntimeViewerCore
 
@@ -22,8 +24,8 @@ struct RuntimeInterfaceCorpusUncachedSectionTests {
         let engine = RuntimeEngine(source: .local, engineID: "test-corpus-uncached-swift-section")
         try await engine.connect()
         try await engine.loadImage(at: Self.observationPath)
-        let objects = try await engine.objects(in: Self.observationPath)
-        let swiftObject = try #require(objects.first(where: \.kind.isSwift))
+        let firstSwiftObject = try await engine.objects(in: Self.observationPath).first(where: \.kind.isSwift)
+        let swiftObject = try #require(firstSwiftObject)
         let section = try #require(await engine.swiftSectionFactory.existingSection(for: swiftObject.imagePath) as? RuntimeSwiftSection<RuntimeLoadedImageReading>)
         let resolvedCountBeforeBuild = Self.resolvedDefinitionCount(in: section)
 
