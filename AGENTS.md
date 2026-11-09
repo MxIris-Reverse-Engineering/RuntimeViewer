@@ -216,6 +216,8 @@ open RuntimeViewer-Tuist.xcworkspace
   Xcode the native lock files were resolved with: some packages pick their manifest by Swift version.
 - **Build the app with the `RuntimeViewer macOS` scheme only.** The simulator payload and the
   service plugin are built first by the scheme's fixed order, not as dependencies.
+- **`--local-dependencies` builds the libraries `RuntimeViewer-Local.xcworkspace` takes from beside
+  the checkout from those checkouts**, until `--remote-dependencies`; that mode has no package tests.
 
 Agents run `TuistScript.sh` with `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent>/Tuist`
 and through `queued-build`. What `check` compares, the Tuist workarounds behind the oddities in the

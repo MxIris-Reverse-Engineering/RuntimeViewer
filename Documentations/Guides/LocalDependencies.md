@@ -2,7 +2,7 @@
 
 - **面向**: 同时改本仓库和 MachO 那几个上游库、要在 App 里直接编进未推送改动的人
 - **对应提案**: [0078](../Evolutions/0078-local-dependencies-workspace.md)
-- **最后更新**: 2026-11-08
+- **最后更新**: 2026-11-09
 
 `RuntimeViewer-Local.xcworkspace` 的内容与 `RuntimeViewer-Debug.xcworkspace` 相同，另外多了六个上游库的本地检出：
 MachOKit、MachOKitExtensions、MachOObjCSection、MachOSwiftSection、swift-demangling、swift-semantic-string。
@@ -23,6 +23,10 @@ workspace 里的本地包会顶替依赖图里所有同名的包，不论哪个�
   ```
 
   这个 workspace 已经用本地检出，不要再加 `--local-deps`。
+
+- 想让其余第三方依赖走 Tuist 的二进制缓存：Tuist workspace 有同样的模式，`./TuistScript.sh generate --local-dependencies`
+  打开，经同一组链接取这六个库，见 [Tuist 开发 workspace](TuistDevelopment.md)「用本地检出的上游库」。那个模式下
+  跑不了四个本地包的测试，要跑就用这个 workspace。
 
 ## 它从哪找这六个库
 
@@ -70,4 +74,5 @@ RxSwiftPlus、RxAppKit、MachInjector、swift-helper-service、swift-injection-p
 ## 再加一个库
 
 在 `contents.xcworkspacedata` 里照现有条目加一条 `group:../<库名>`，在 `.worktrees/` 下建同名链接，再在上面的表里补一行。
-链接名要与包名相同，理由见上一节的「包按目录名认」。
+链接名要与包名相同，理由见上一节的「包按目录名认」。Tuist workspace 的本地依赖模式按这个 workspace 的
+`group:../<库名>` 成员取库，不用另外改。

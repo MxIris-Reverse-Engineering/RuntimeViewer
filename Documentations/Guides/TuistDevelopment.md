@@ -1,8 +1,8 @@
 # 使用指南：Tuist 开发 workspace
 
 - **面向**: 在本仓库做日常开发、想让第三方依赖走二进制缓存的人；改原生工程的 target、依赖、嵌入方式或构建设置的人（同步规则）
-- **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)
-- **最后更新**: 2026-11-06
+- **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)；本地依赖模式见 [draft-tuist-local-dependencies](../Evolutions/draft-tuist-local-dependencies.md)
+- **最后更新**: 2026-11-09
 
 `RuntimeViewer-Tuist.xcworkspace` 是构建 macOS App 的第二条路，只供日常开发。它由
 `./TuistScript.sh` 用 Tuist 生成，和原生工程用同样的 target、同样的源码、同一批
@@ -56,6 +56,7 @@ Xcode 27 解析出 `swift-issue-reporting` 2.1），锁文件就和原生的对�
 | 让另一个第三方包也从源码编 | 它的库与宏 target 加进 `Tuist.swift` 的 `sourceDependencyTargetNames`，它的 checkout 目录名加进 `TuistScript.sh` 的 `SOURCE_DEPENDENCIES`，再 `generate`。先确认没有留在缓存里的第三方包依赖它：那种情况 Tuist 怎么处理没有实测 |
 | 换了 Xcode 版本 | `./TuistScript.sh warm` |
 | 换钉住的 SourceEditor 版本 | `./UpdateSourceEditorScript.sh [<版本>]`：换版并下载，之后在 Xcode 里直接编，不用重新生成 |
+| 同时改 MachO 那几个上游库 | `./TuistScript.sh generate --local-dependencies`，之后的命令沿用；用完 `generate --remote-dependencies` 切回。见下文「用本地检出的上游库」 |
 | 改了原生工程的结构或设置 | 同批更新 Tuist 描述，提交前 `./TuistScript.sh check`（见下文） |
 
 **`generate`、`warm`、`build`、`check` 都先跑 `FetchSourceEditorScript.sh`**，把钉住的重建版 SourceEditor
@@ -97,6 +98,43 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 脚本写回之前会核对：除了导航栏、target 顺序和 xcconfig 的引用方式，工程里别的内容都没动，每个文件仍指向原处；
 有一条不成立就保留 Tuist 原样的工程并给出警告。实测改写前后三套配置下 11 个 target 的 `-showBuildSettings` 逐项相同。
 包的四个工程没有改写，仍是 Tuist 的样子（`Project` 组下分 `Sources`、`Tests`、`Derived`）。
+
+## 用本地检出的上游库
+
+同时改 MachO 那几个上游库和本仓库时，Tuist workspace 也能像 `RuntimeViewer-Local.xcworkspace`
+（[本地依赖 workspace](LocalDependencies.md)）那样，直接编它们的本地检出，其余第三方依赖照旧走缓存：
+
+```bash
+./TuistScript.sh generate --local-dependencies    # 打开；之后不带参数的命令都沿用
+./TuistScript.sh generate --remote-dependencies   # 回到锁文件钉住的版本（默认）
+```
+
+- **哪几个库、从哪取**：本地 workspace 从检出旁边取的那几个，也就是它的 `group:../<名字>` 成员，现在是
+  MachOKit、MachOKitExtensions、MachOObjCSection、MachOSwiftSection、swift-demangling、swift-semantic-string；
+  本地 workspace 加了库，这里自动跟上。默认从检出的上一级目录取，worktree 里就是 `.worktrees/` 下那组链接，与本地
+  workspace 相同。打开时设了 `TUIST_LOCAL_UPSTREAM_CHECKOUTS`，就改从它指的目录取：每个库一个子目录，名字与包名
+  相同（SwiftPM 按目录名认包）。
+- **效果**：`Tuist/Package.swift` 按路径声明这几个库，顶替依赖图里所有按 URL 声明的同名包。它们从本地源码编，
+  没提交的改动也算；改已有文件后在 Xcode 里直接编就生效，不用重新生成。MachOKit 与 swift-demangling 也改从源码编，
+  这几个库的编译警告照常显示。
+- **模式会记住**：记在 `Tuist/.local-dependencies`（已忽略），之后不带参数的 `install`、`generate`、`build` 都沿用；
+  每条命令开头都打印当前用的是哪种依赖。
+- **切换会重新解析**：两种模式各有一份依赖 checkout（见「存放位置」），但共用 `Tuist/Package.resolved`，所以
+  切换后、以及上一次解析用的是另一种模式时，命令会先重新 `install`。本地模式下锁文件比对跳过这几个库。
+- **库的 `Package.swift` 改了**（加依赖、加 target）：`./TuistScript.sh install` 再 `generate`，和四个本地包一样；
+  增删了源文件只要 `generate`。
+- **`warm` 与 `check` 总在远程模式下做**，做完按记住的模式重新生成：其余第三方依赖的二进制两种模式通用，`check`
+  对照的原生工程用的也是钉住的版本。在本地模式下跑它们，前后各要重新解析一次依赖。
+- **没有包的测试**：这个模式下不映射四个本地包的测试 target，也没有 `RuntimeViewer Tests` scheme。Tuist 的
+  `includeLocalPackageTestTargets` 对所有按路径声明的包一视同仁，打开就会连这几个库的测试一起映射，其中
+  MachOSwiftSection 的 `SwiftSectionCommandTests` 依赖可执行 target，Tuist 不支持。要跑测试，切回远程模式，或用
+  原生的本地 workspace。
+- **写进库目录的文件**：Tuist 会在每个按路径声明的包目录里生成 `<包名>.xcodeproj/` 和 `Derived/`。脚本把这两项写进
+  那个仓库的 `info/exclude`（只在本机，不提交），`git status` 里看不到；切回远程模式时删掉 `<包名>.xcodeproj/`，
+  之后用 Xcode 打开那个库的目录，打开的仍是它的 `Package.swift`。`Derived/` 留着。git 跟踪着 `<包名>.xcodeproj`
+  的库，脚本不会让 Tuist 覆盖它，直接报错。
+- **同一时刻只让一个检出用这组库**：生成进库目录的工程属于生成它的那个检出，脚本把这个检出记在库的 git 目录里。
+  另一个检出对同一组库打开本地模式会报错，先在原来那个检出里切回远程模式。
 
 ## 必须遵守的约定
 
@@ -162,14 +200,16 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 ## 存放位置
 
 `/Volumes/DerivedData` 挂载时，全部放在 `/Volumes/DerivedData/RuntimeViewer/Tuist/` 下；没挂载时放在
-仓库内（`Tuist/.build/`、`DerivedData/Tuist/`，都已忽略）。`TUIST_SCRIPT_ROOT` 可以指定别处。
+仓库内（`Tuist/.build/`、本地依赖模式的 `Tuist/.build-LocalDependencies/`、`DerivedData/Tuist/`，都已忽略）。
+`TUIST_SCRIPT_ROOT` 可以指定别处。
 
 | 目录 | 内容 | 大小 |
 |---|---|---|
 | `Cache/` | Tuist 的二进制缓存与清单缓存，所有 checkout 共用（按内容寻址） | 每套配置、每个 Xcode 版本约 1.5 GB |
 | `Dependencies/<checkout>/` | 依赖的 checkout 与 git 镜像，每个 checkout 一份 | 约 3.6 GB |
+| `Dependencies/<checkout>-LocalDependencies/` | 本地依赖模式的那一份，用过这个模式才有 | 约 3.6 GB |
 | `WarmScratch/<checkout>/` | 预热时的临时构建目录，每次预热前清空 | 预热期间 |
-| `Work/<checkout>/` | `build` 与 `check` 的 DerivedData、`check` 的中间文件 | 视构建而定 |
+| `Work/<checkout>/` | `build` 与 `check` 的 DerivedData、`check` 的中间文件，上次解析依赖用的模式，本地模式读库清单的中间文件 | 视构建而定 |
 
 `<checkout>` 是 checkout 目录名加路径的短 hash，同名的两个 worktree 不会混用。想从头来：删掉
 `Dependencies/<checkout>/` 后 `install`，删掉 `Cache/` 后 `warm`。
