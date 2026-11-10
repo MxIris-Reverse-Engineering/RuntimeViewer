@@ -1,11 +1,12 @@
-# Draft - Generated Interface：把 ObjC 对象显示成 Swift 接口
+# 0084 - Generated Interface：把 ObjC 对象显示成 Swift 接口
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-10
 - **最后更新**: 2026-11-10
 - **所属愿景**: 无
 - **关联提案**: MachOSwiftSection 的提案 0090-objc-imported-declarations（ObjC 类、category 与协议按 ClangImporter 的规则建成 Swift 声明，本提案的全部 Swift 文本都由它生成）、[0026](0026-objc-swift-class-counterparts.md)（ObjC 类与 Swift 类互标角标、互相跳转）、[0063](0063-swift-declared-objc-protocols-in-swift-list.md)（Swift 列表列出 Swift 定义的 `@objc` 协议）、[0076](0076-editor-panes.md)（编辑器分栏：每个标签有自己的导航历史）
-- **实现分支 / PR**: `feature/objc-generated-interface`（worktree `.worktrees/RuntimeViewer-ObjCGeneratedInterface`，自 `next` 切出）
+- **实现分支 / PR**: `feature/objc-generated-interface`（从 `next` 切出）
+- **配套文档**: 无 —— 不另写实现说明与使用指南，理由见决策日志
 
 ## 摘要
 
@@ -51,7 +52,18 @@ Xcode 打开一个 ObjC 头文件时，相关项菜单里有 Generated Interface
 3. App：导航条目、三处入口、内容区的请求与旧版提示。
 4. 抬 MachOSwiftSection 的 pin，更新 README 的功能列表（已完成）。
 
-第二、三步已完成：Core 的语言字段、分派与测试（`GeneratedInterfaceTests`，混版本测试里加了旧服务端回复解出空语言），App 的导航条目、三处入口、内容区的请求与旧版说明、保存与分享。
+四步都已完成：Core 的语言字段、分派与测试（`GeneratedInterfaceTests`，混版本测试里加了旧服务端回复解出空语言），App 的导航条目、三处入口、内容区的请求与旧版说明、保存与分享。验证跑了 Core 与包的测试，并用 Tuist workspace 编过 App；没有启动 App 做交互验收。
+
+### 后续项
+
+都登记在提案索引的「暂缓的后续项」：
+
+- 在 App 里的验收：三处入口与打勾、Swift 形式的显示与高亮、Back、在 Swift 形式里点类型跳转、保存与分享、连旧版对端时的说明。
+- `runtime-viewer-cli` 与 MCP 的入口、批量导出成 Swift。
+- C struct 与 union：要 MachOSwiftSection 先能按导入的样子建出它们（它的 0090 的后续项），现在命令对它们置灰。
+- 反方向的视图：Swift 类显示成编译器生成的 `-Swift.h` 头文件。
+
+显示出的 Swift 文本里还差的（`Protocol` 后缀这类 Swift 改名、async 变体等）是 MachOSwiftSection 0090 的后续项，在那边做，本仓库抬 pin 即得。
 
 ## 决策日志
 
@@ -69,3 +81,6 @@ Xcode 打开一个 ObjC 头文件时，相关项菜单里有 Generated Interface
 | 2026-11-10 | 内容区右键菜单的入口针对正在显示的对象，不针对点中的类型名 | 与 Navigate 菜单是同一个开关；点中的类型可以先跳过去再切换 |
 | 2026-11-10 | 没有「拷贝接口」命令，改为让工具栏的保存与分享跟着语言走 | 应用里单个对象的导出只有这两条路，拷贝就是拷选中的文本 |
 | 2026-11-10 | 侧栏的入口只打开 Swift 形式、只在当前标签打开 | 与同一菜单里的「跳到对应的类」一致；要新标签可以用菜单里已有的两项先打开再切换 |
+| 2026-11-10 | 合进 `next` 时，四份锁文件里 MachOSwiftSection 的修订取 `next` 一侧的 | 同一时段落地的另一项改动已把它抬到更新的修订，本分支的修订是它的祖先；取分支一侧会退回那项改动依赖的上游修复 |
+| 2026-11-10 | 不另写实现说明与使用指南；术语表在实现时已登记「Generated Interface」 | 混版本的做法写进了 `CommunicationAndEngineArchitecture.md` §4.4 的第三个例子，导航条目的身份写进了 App 的 `AGENTS.md`；没有别的在代码里看不出、下一任会踩到的决定 |
+| 2026-11-10 | 实现完成，落地为 0084，状态改 Implemented；在 App 里的验收与「本提案不做的」几项列入暂缓的后续项 | 用户要求在 App 里验收之前就收尾 |
