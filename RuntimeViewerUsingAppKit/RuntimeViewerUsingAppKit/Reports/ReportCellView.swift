@@ -27,7 +27,7 @@ final class ReportCellView: TableCellView {
 
     private static let issueImage = SFSymbols(systemName: .xmarkOctagonFill).nsuiImage
 
-    private static let ejectImage = SFSymbols(systemName: .ejectFill).nsuiImage
+    private static let ejectImage = SFSymbols(systemName: .ejectFill, scale: .small).nsuiImage
 
     /// The row's Eject button pressed. The list's view controller pairs it with the row it bound
     /// this cell to.

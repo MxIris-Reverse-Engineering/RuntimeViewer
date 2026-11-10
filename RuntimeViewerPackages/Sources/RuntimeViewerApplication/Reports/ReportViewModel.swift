@@ -456,7 +456,7 @@ enum ReportOutline {
         // The batch's row stands for its only image, which has no row of its own to say why it
         // failed — what the toolbar popover showed as `path — message`.
         if !showsItems(of: batch), batch.isFinished, let item = batch.items.first, case .failed(let message) = item.state {
-            cellViewModel.update(icon: indexingIcon, title: title(for: batch.reason), detail: "Failed", status: .failed(message: message), toolTip: "\(item.id)\n\(message)")
+            cellViewModel.update(icon: icon(forImagePath: batch.rootImagePath), title: title(for: batch.reason), detail: "Failed", status: .failed(message: message), toolTip: "\(item.id)\n\(message)")
             return
         }
         let isRunning = !batch.isFinished
@@ -479,7 +479,7 @@ enum ReportOutline {
             .none
         }
         cellViewModel.update(
-            icon: indexingIcon,
+            icon: icon(forImagePath: batch.rootImagePath),
             title: title(for: batch.reason),
             detail: detail,
             status: status,
