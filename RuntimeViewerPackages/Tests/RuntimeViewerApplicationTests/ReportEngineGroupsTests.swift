@@ -1,3 +1,5 @@
+import AppKit
+import Dependencies
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -51,6 +53,38 @@ struct ReportEngineGroupsTests {
         #expect(nodes[1].children.map(\.identifier) == nodes[0].children.map { .borrowed(owner: owner, identifier: $0.identifier) })
         let identifiers = Self.identifiers(in: nodes)
         #expect(Set(identifiers).count == identifiers.count, "two rows of the Report share an identifier")
+        environment.make { environment.documentState.documentWillClose() }
+        await fixture.stop()
+    }
+
+    @Test("a group's row shows its engine's icon, and keeps the same image while the Report is built again")
+    func groupRowsShowTheirEnginesIcons() async throws {
+        let fixture = try await SharedCacheBorrowingFixture.make(label: "report.icons")
+        let environment = Self.environment(on: fixture.borrowerEngine)
+        environment.startBackgroundWork()
+        let page = environment.make { ReportGroupsPage(documentState: environment.documentState) }
+        let owner = ObjectIdentifier(fixture.ownerEngine)
+
+        let nodes = try await nextValue(from: page.nodes) { $0.count == 2 }
+
+        let rowIcons = try nodes.map { try #require($0.cellViewModel.appearance.icon) }
+        @Dependency(\.runtimeEngineIconProvider) var runtimeEngineIconProvider
+        let engineIcons = [fixture.borrowerEngine, fixture.ownerEngine].map { runtimeEngineIconProvider.icon(for: $0) }
+        let rowPixels = try rowIcons.map(Self.pixels)
+        let enginePixels = try engineIcons.map(Self.pixels)
+        #expect(rowPixels == enginePixels, "a group's row does not show its engine's icon")
+
+        // Every step of a batch on the owner's work builds the rows again.
+        _ = await fixture.ownerEngine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual)
+        let rebuiltNodes = try await nextValue(from: page.nodes, timeout: 60) { nodes in
+            nodes.count == 2 && Self.identifiers(in: nodes[1].children).contains { identifier in
+                if case .borrowed(owner, .indexingBatch) = identifier { return true }
+                return false
+            }
+        }
+
+        let keepsItsImage = zip(rebuiltNodes, rowIcons).allSatisfy { node, rowIcon in node.cellViewModel.appearance.icon === rowIcon }
+        #expect(keepsItsImage, "a group's row took a new image when the Report was built again")
         environment.make { environment.documentState.documentWillClose() }
         await fixture.stop()
     }
@@ -145,6 +179,28 @@ struct ReportEngineGroupsTests {
 
     private static func identifiers(in nodes: [ReportNode]) -> [ReportNodeIdentifier] {
         nodes.flatMap { [$0.identifier] + identifiers(in: $0.children) }
+    }
+
+    /// The pixels of `image` drawn as a row's 16-point icon on a 2× screen, in the light
+    /// appearance: what two images show, to compare.
+    private static func pixels(of image: NSImage) throws -> Data {
+        let bitmap = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 32,
+            pixelsHigh: 32,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        bitmap.size = NSSize(width: 16, height: 16)
+        let lightAppearance = try #require(NSAppearance(named: .aqua))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        lightAppearance.performAsCurrentDrawingAppearance {
+            image.draw(in: NSRect(x: 0, y: 0, width: 16, height: 16))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        let bitmapData = try #require(bitmap.bitmapData)
+        return Data(bytes: bitmapData, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
     }
 }
 

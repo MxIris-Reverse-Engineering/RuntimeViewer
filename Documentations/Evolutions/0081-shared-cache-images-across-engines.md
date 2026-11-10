@@ -3,7 +3,7 @@
 - **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-08
-- **最后更新**: 2026-11-09
+- **最后更新**: 2026-11-10
 - **所属愿景**: 无
 - **关联提案**: [0037](0037-local-runtime-xpc-service.md)（本地引擎搬进 XPC service）、[0051](0051-catalyst-xpc-service.md)（Catalyst 引擎改用内嵌 service）、[0054](0054-always-index-per-engine.md)（Always Index 按 Engine 区分）、[0055](0055-engine-scoped-background-work.md)（后台工作按 Engine 共享）、[0056](0056-cross-references.md)（交叉引用）、[0058](0058-runtime-engine-session.md)（RuntimeEngineSession）、[0061](0061-derived-data.md)（派生数据）、[0065](0065-engine-resident-memory.md)、[0066](0066-on-demand-corpora-and-cross-references.md)
 - **实现分支 / PR**: `feature/shared-cache-images-across-engines`
@@ -378,3 +378,4 @@ extension RuntimeEngineManager {
 | 2026-11-09 | 第 9 步完成：「新命令要声明路由」写进 `RuntimeViewerCore/Sources/AGENTS.md`，根 `AGENTS.md` 只留指引 | 根文件已有 62 KB，离 Codex 读取的 64 KiB 上限太近；这条规则也只管 `RuntimeViewerCore/Sources/` 下的命令，按「放进它所管的最窄目录」放在那里，根文件的命令准则末尾加一句指过去。架构文档新增 §7.4，原 §7.4 顺延为 §7.5；CLI 使用指南与 agent 插件说明写附加进程的新行为，两份插件清单升到 1.1.0；术语表登记「系统镜像」「归属 engine」「借用」 |
 | 2026-11-09 | 实现完成，待用户看过后收尾 | 第 1–9 步完成；第 10 步手工验收（附加 TextEdit 对比开关开 / 关时的内存与索引时长、My Mac 打开 UIKitCore、Report 分组与操作、CLI 对附加进程的 `load` 与 `interface`）留给用户。验证：Core 全量 726 项挂 2 条、Packages 全量 1,029 项挂 3 条，都是满载下的已知波动或 next 上本来就有的红——交叉引用「An image loaded later…」、后台索引 `cancelBatchStopsPendingItemsAndEmitsCancelledEvent`、`InjectedDeviceEngineTests` 两条单独重跑全过，`TitleActivityIndicatorTests` 悬停那条 next 上同样红；CLI 包 122 项、MCP 包 95 项全过；macOS App（Debug-arm64e）与 iOS（Simulator）都编得过。自审发现借用时 Report 会留下没内容的组行、页面到不了空状态，已修并补测试 |
 | 2026-11-09 | 编号 0081，状态改为 Implemented；第 10 步的手工验收挪进暂缓的后续项 | 用户要求收尾，实现已合进 `next` 并推送。第 10 步没有做，列进提案索引的「暂缓的后续项」，做完把结果补进本日志。除上面各步记下的几处外没有偏离方案。不另写实现说明：路由声明、合并规则与借用关系写在 `CommunicationAndEngineArchitecture.md` §7.4 与 `RuntimeViewerCore/Sources/AGENTS.md`，附加进程的新行为写在 CLI 使用指南；新术语「系统镜像」「归属 engine」「借用」已在第 9 步登记进 `Glossary.md` |
+| 2026-11-10 | Report 的组行改用 engine 自己的图标，不再固定画电脑 | 用户要求。组行原先对任何 engine 都画同一个台式电脑符号，附加的 App 也显示成台式机。改为与运行时源选择器的列表一致：My Mac 与 Mac Catalyst 显示本机机型的设备图标，附加的进程显示它自己的图标。解析逻辑从 `MainViewModel` 挪进 `RuntimeEngineIconProvider` 供两处共用；图标在会话建立时取一次，组行随进度重建时不换图，`ReportEngineGroupsTests` 的新测试守住这两点 |

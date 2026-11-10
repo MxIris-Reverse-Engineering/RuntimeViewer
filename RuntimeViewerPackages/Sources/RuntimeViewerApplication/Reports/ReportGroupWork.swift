@@ -1,10 +1,11 @@
 import Foundation
+import Dependencies
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
 
-/// One engine's work as the Report navigator lists it: the group it goes under, the name the group
-/// shows and the work itself.
+/// One engine's work as the Report navigator lists it: the group it goes under, the name and the
+/// icon the group shows and the work itself.
 ///
 /// A document that borrows shared cache images holds the work of every engine it borrows from
 /// besides its own engine's, and its Report lists each engine's work in a group of its own — the
@@ -18,16 +19,38 @@ struct ReportGroupWork {
     /// What the group's row says: the engine's name.
     let engineName: String
 
+    /// What the group's row shows before the name: the engine's icon as the runtime source picker
+    /// lists it. Resolved once, with the session: the row is built again each time any work under
+    /// it moves on, and an icon resolved each time is a new image each time, which the row would
+    /// take for a change and set again. None off macOS, where nothing resolves an engine's icon.
+    let engineIcon: NSUIImage?
+
     let backgroundWork: RuntimeEngineBackgroundWork
 
     /// The work `session` holds, the engine's own first, then that of each engine it borrows
     /// from; none while it holds none.
     static func groups(of session: RuntimeEngineSession) -> [ReportGroupWork] {
         guard let ownWork = session.backgroundWork else { return [] }
-        let ownGroup = ReportGroupWork(group: .own, engineName: session.engine.source.description, backgroundWork: ownWork)
+        let ownGroup = ReportGroupWork(group: .own, engine: session.engine, backgroundWork: ownWork)
         return [ownGroup] + session.borrowedBackgroundWorks.map { borrowedWork in
-            ReportGroupWork(group: .owner(ObjectIdentifier(borrowedWork.engine)), engineName: borrowedWork.engine.source.description, backgroundWork: borrowedWork)
+            ReportGroupWork(group: .owner(ObjectIdentifier(borrowedWork.engine)), engine: borrowedWork.engine, backgroundWork: borrowedWork)
         }
+    }
+
+    private init(group: ReportEngineGroup, engine: RuntimeEngine, backgroundWork: RuntimeEngineBackgroundWork) {
+        self.group = group
+        self.engineName = engine.source.description
+        self.engineIcon = Self.icon(for: engine)
+        self.backgroundWork = backgroundWork
+    }
+
+    private static func icon(for engine: RuntimeEngine) -> NSUIImage? {
+        #if os(macOS)
+        @Dependency(\.runtimeEngineIconProvider) var runtimeEngineIconProvider
+        return runtimeEngineIconProvider.icon(for: engine)
+        #else
+        return nil
+        #endif
     }
 
     /// `node`, built as the engine's own Report has it, as this group lists it.
@@ -61,8 +84,6 @@ final class ReportGroupTreeBuilders {
 
     private var groupCellViewModels: [ReportEngineGroup: ReportCellViewModel] = [:]
 
-    private static let groupIcon: NSUIImage = SFSymbols(systemName: .desktopcomputer).nsuiImage
-
     /// Lets go of the builders and rows of every group but `groups`.
     func keepOnly(_ groups: [ReportEngineGroup]) {
         let keptGroups = Set(groups)
@@ -90,7 +111,7 @@ final class ReportGroupTreeBuilders {
         case .owner:
             "The shared cache images \(groupWork.engineName) keeps for this source: its work for them is shared with every window that shows them."
         }
-        cellViewModel.update(icon: Self.groupIcon, title: groupWork.engineName, toolTip: toolTip)
+        cellViewModel.update(icon: groupWork.engineIcon, title: groupWork.engineName, toolTip: toolTip)
         return ReportNode(identifier: identifier, cellViewModel: cellViewModel, children: children)
     }
 }
