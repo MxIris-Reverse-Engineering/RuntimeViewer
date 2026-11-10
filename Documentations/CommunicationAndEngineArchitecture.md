@@ -398,6 +398,8 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 第二例是进度请求信封 `RuntimeEngineProgressEnvelope` 的 `requestIdentifier`（§4.5）：可选字段，为 `nil` 时不编码。只有新命令的信封带它，`objectsInImage`、`loadImageWithProgress` 这些旧命令的信封与旧版逐字节相同；旧对端即使收到也只会跳过这个键。`RemoteRequestIdentifierTests` 守住「旧命令不带」这一条。
 
+第三例是接口命令的语言（Generated Interface）：请求的 `GenerationOptions` 加可选的 `interfaceLanguage`，旧对端解码时跳过它、照旧回对象自己语言的接口；回复的 `RuntimeObjectInterface` 加可选的 `interfaceLanguage`，本版对端总是填上，旧对端的回复里没有这个键。所以客户端要了 `.swift` 却拿到语言不是 `.swift` 的回复时，就知道对端早于这个功能，内容面板显示一段说明，而不是把头文件当成 Swift 显示。没有加新命令：旧版注入 payload 对不认识的命令会断开连接（PR121.73）。测试：`RuntimeObjectInterfaceWireCompatibilityTests` 里旧服务端的回复解出空语言，`GeneratedInterfaceTests`。
+
 新增**命令**不在此列，但旧对端会对它回「No handler registered for …」（2.1.0 起），调用方要把这当成「对端不支持」，而不是一次普通失败。旧对端只回这一段文字，所以识别只能靠前缀：`RuntimeNetworkRequestError.isUnknownCommand`，前缀是 `unknownCommandMessagePrefix`，通道拼这条回复用的也是它。中转节点自己的转发请求以 `RuntimeNetworkRequestError` 失败时，错误回复照原文写下去（`RuntimeMessageChannel.replyMessage(for:)`），不再包一层类型描述，所以经过新版中转，旧对端照样认得出（`RemoteUnknownCommandTests`）。第一个用它的是语料协调器的 `isCorpusUnsupportedByEngine`（PR121.37）。经 Mach service 的旧版注入 payload 对未知命令不回这段文字，见 PR121.73。
 
 ### 4.5 跨连接取消（引擎层，`Engine/Commands/` 的 `RuntimeEngineRequestCancellation.swift`、`RuntimeEngineInboundRequests.swift`、`RuntimeEngineForwardedRequest.swift`）

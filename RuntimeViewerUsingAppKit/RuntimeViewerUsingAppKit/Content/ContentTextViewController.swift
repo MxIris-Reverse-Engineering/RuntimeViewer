@@ -54,6 +54,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     /// The member declared on the insertion point's line, each time the point moves.
     private let cursorMemberChangedRelay = PublishRelay<RuntimeMemberReference?>()
 
+    private let generatedInterfaceToggledRelay = PublishRelay<SelectionRoute.Destination>()
+
     private var isPressedCommand: Bool = false
 
     private var isPressedShift: Bool = false
@@ -112,7 +114,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .newTab }, openInNewTabRelay.asSignal()).merge(),
             runtimeObjectOpenedInNextEditorPane: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .nextEditorPane }, openInNextEditorPaneRelay.asSignal()).merge(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
-            cursorMemberChanged: cursorMemberChangedRelay.asSignal().distinctUntilChanged()
+            cursorMemberChanged: cursorMemberChangedRelay.asSignal().distinctUntilChanged(),
+            generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal()
         )
         let output = viewModel.transform(input)
 
@@ -218,9 +221,29 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
                 }
             }
         }
+        if let generatedInterfaceMenuItem = generatedInterfaceMenuItem() {
+            if !newMenuItems.isEmpty {
+                newMenuItems.append(.separator())
+            }
+            newMenuItems.append(generatedInterfaceMenuItem)
+        }
         newMenuItems.append(contentsOf: menu.items.filter { $0.action?.isStandardAction ?? false })
         menu.items = newMenuItems
         return menu
+    }
+
+    /// Generated Interface for the object on screen, checked while it is the form shown; `nil` for
+    /// an object that has none.
+    private func generatedInterfaceMenuItem() -> NSMenuItem? {
+        guard let viewModel, viewModel.offersGeneratedInterface else { return nil }
+        return NSMenuItem(title: "Generated Interface", action: #selector(generatedInterfaceAction(_:)), keyEquivalent: "").then {
+            $0.target = self
+            $0.state = viewModel.showsGeneratedInterface ? .on : .off
+        }
+    }
+
+    @objc private func generatedInterfaceAction(_ sender: NSMenuItem) {
+        generatedInterfaceToggledRelay.accept(SelectionRoute.Destination(listClickModifierFlags: NSEvent.modifierFlags))
     }
 
     @objc private func crossReferenceAction(_ sender: NSMenuItem) {

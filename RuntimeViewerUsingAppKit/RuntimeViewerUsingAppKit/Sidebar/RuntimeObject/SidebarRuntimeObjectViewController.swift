@@ -38,6 +38,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
+    private let generatedInterfaceRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+
     /// Clicks on the rows' tags. Each cell reports which of its tags was
     /// clicked; the cell provider pairs that with the row the cell is bound to.
     private let tagClickedRelay = PublishRelay<SidebarRuntimeObjectViewModel.TagClick>()
@@ -239,6 +241,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
             runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
+            runtimeObjectGeneratedInterfaceRequested: generatedInterfaceRequestedRelay.asSignal(),
             runtimeObjectTagClicked: tagClickedRelay.asSignal(),
             filterScopeClicked: filterScopeItemPressedRelay.asSignal(),
         )
@@ -392,6 +395,12 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             menuItems.append(SidebarRuntimeObjectMenuItem(title: Self.counterpartMenuItemTitle(for: counterpartKind), image: SFSymbols(systemName: .arrowLeftArrowRight).nsuiImage) { [weak self] in
                 guard let self else { return }
                 counterpartRequestedRelay.accept(cellViewModel)
+            })
+        }
+        if cellViewModel.runtimeObject.hasGeneratedInterface {
+            menuItems.append(SidebarRuntimeObjectMenuItem(title: "Open Generated Interface", image: SFSymbols(systemName: .swift).nsuiImage) { [weak self] in
+                guard let self else { return }
+                generatedInterfaceRequestedRelay.accept(cellViewModel)
             })
         }
         return menuItems

@@ -861,6 +861,9 @@ public actor RuntimeEngine {
             return try await resolveSwiftReferenceInterface(mangledName: name.name, options: options)
         case .c,
              .objc:
+            if options.interfaceLanguage == .swift {
+                return try await importedSwiftInterface(for: name, options: options, resolvesReferencesAcrossImages: resolvesReferencesAcrossImages)
+            }
             let objcSection = await objcSectionFactory.existingSection(for: name.imagePath)
             let objcTransformer = options.transformer.objc
             if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure) {
@@ -883,6 +886,38 @@ public actor RuntimeEngine {
         }
 
         return rawInterface
+    }
+
+    /// An Objective-C object as Swift imports it (`GenerationOptions.interfaceLanguage`), printed by
+    /// the Swift section of the image that defines it, which also takes what Swift implements from
+    /// that image. A reference into another image is followed as the Objective-C arm follows it.
+    /// `nil` for a C struct or union, which Swift imports as no declaration of its own here.
+    private func importedSwiftInterface(
+        for object: RuntimeObject,
+        options: RuntimeObjectInterface.GenerationOptions,
+        resolvesReferencesAcrossImages: Bool
+    ) async throws -> RuntimeObjectInterface? {
+        guard case .objc(let objcKind) = object.kind else { return nil }
+        if await objcSectionFactory.existingSection(for: object.imagePath) != nil,
+           let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath) {
+            try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
+            if let interface = try await swiftSection.importedInterface(for: object) {
+                return interface
+            }
+        }
+        guard resolvesReferencesAcrossImages else { return nil }
+        let definingImagePath: String? = switch objcKind {
+        case .type(.class):
+            try? await objcSectionFactory.section(for: .class(object.name))?.imagePath
+        case .type(.protocol):
+            try? await objcSectionFactory.section(for: .protocol(object.name))?.imagePath
+        case .category:
+            nil
+        }
+        guard let definingImagePath, definingImagePath != object.imagePath else { return nil }
+        let (_, swiftSection) = try await swiftSectionFactory.section(for: definingImagePath)
+        try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
+        return try await swiftSection.importedInterface(for: object.withImagePath(definingImagePath))
     }
 
     /// Resolves a Swift type/protocol reference — identified only by its

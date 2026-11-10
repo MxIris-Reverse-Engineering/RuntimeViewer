@@ -264,7 +264,7 @@ struct FindViewModelTests {
         }
         #expect(environment.documentState.selectedRuntimeObject == object)
         // A plain push: nothing for the content pane to highlight.
-        guard routes.count == 1, case .open(let pushedObject, .focusedTab, .none) = routes[0] else {
+        guard routes.count == 1, case .open(let pushedObject, .focusedTab, .none, .none) = routes[0] else {
             Issue.record("expected one plain push, got \(routes)")
             return
         }
@@ -770,7 +770,7 @@ struct FindViewModelTests {
 
     /// The object and highlight of the last route when it is a highlighting push.
     private static func highlightingPush(in routes: [SelectionRoute]) -> (RuntimeObject, ContentHighlightRequest)? {
-        guard case .open(let object, .focusedTab, let highlight?)? = routes.last else { return nil }
+        guard case .open(let object, .focusedTab, let highlight?, _)? = routes.last else { return nil }
         return (object, highlight)
     }
 

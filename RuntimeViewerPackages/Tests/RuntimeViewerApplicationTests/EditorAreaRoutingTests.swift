@@ -30,7 +30,7 @@ struct EditorAreaRoutingTests {
         documentState.selectionRouter.trigger(.open(secondObject, in: .focusedTab))
 
         let activeTab = documentState.editorArea.focusedPane.activeTab
-        #expect(activeTab.history.entries == [firstObject, secondObject])
+        #expect(activeTab.history.entries.map(\.object) == [firstObject, secondObject])
         #expect(documentState.selectedRuntimeObject == secondObject)
     }
 
@@ -43,7 +43,7 @@ struct EditorAreaRoutingTests {
         let focusedPane = documentState.editorArea.focusedPane
         #expect(focusedPane.tabs.count == 2)
         #expect(focusedPane.activeTabIndex == 1)
-        #expect(focusedPane.activeTab.history.entries == [secondObject])
+        #expect(focusedPane.activeTab.history.entries.map(\.object) == [secondObject])
     }
 
     @Test("opening in the next pane while there is one pane makes a pane on its right and focuses it")
@@ -58,7 +58,7 @@ struct EditorAreaRoutingTests {
         #expect(editorArea.layout.paneIDs.first == firstPaneID)
         #expect(editorArea.layout.paneIDs.count == 2)
         #expect(editorArea.focusedPaneID != firstPaneID)
-        #expect(editorArea.focusedPane.activeTab.history.entries == [secondObject])
+        #expect(editorArea.focusedPane.activeTab.history.entries.map(\.object) == [secondObject])
         #expect(editorArea[firstPaneID]?.activeTab.object == firstObject)
     }
 
@@ -71,7 +71,7 @@ struct EditorAreaRoutingTests {
         documentState.selectionRouter.trigger(.open(secondObject, in: .nextEditorPane))
 
         #expect(documentState.editorArea.focusedPaneID == firstPaneID)
-        #expect(documentState.editorArea.focusedPane.activeTab.history.entries == [firstObject, secondObject])
+        #expect(documentState.editorArea.focusedPane.activeTab.history.entries.map(\.object) == [firstObject, secondObject])
     }
 
     // MARK: - Panes
@@ -86,7 +86,7 @@ struct EditorAreaRoutingTests {
 
         let editorArea = documentState.editorArea
         #expect(editorArea.focusedPaneID != sourcePaneID)
-        #expect(editorArea.focusedPane.activeTab.history.entries == [secondObject])
+        #expect(editorArea.focusedPane.activeTab.history.entries.map(\.object) == [secondObject])
         #expect(editorArea.layout.orientation == .stacked)
     }
 

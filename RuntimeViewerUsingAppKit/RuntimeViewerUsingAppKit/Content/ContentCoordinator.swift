@@ -75,7 +75,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
     /// still rebind unconditionally so re-clicking a row recovers from a
     /// failed generation (`catchAndReturn` terminates the old ViewModel's
     /// stream).
-    private var boundRuntimeObject: RuntimeObject?
+    private var boundEntry: NavigationEntry?
 
     init(documentState: DocumentState, editorPaneID: EditorPane.ID) {
         self.documentState = documentState
@@ -109,7 +109,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
     private func enterPlaceholderScene() -> ContentTransition {
         guard currentScene != .placeholder else { return .none() }
         currentScene = .placeholder
-        boundRuntimeObject = nil
+        boundEntry = nil
         return .set([placeholderViewController], animated: false)
     }
 
@@ -130,12 +130,16 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         if !isCurrentTextScene || currentEditorKind != desiredKind {
             textViewController = makeTextViewController(kind: desiredKind)
             currentEditorKind = desiredKind
-            boundRuntimeObject = nil
+            boundEntry = nil
             didReplaceViewController = true
         }
-        guard forceRebind || boundRuntimeObject != runtimeObject else { return didReplaceViewController }
-        boundRuntimeObject = runtimeObject
-        let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, highlightRequest: highlightRequest, editorPaneID: editorPaneID, documentState: documentState, router: self)
+        // The router has put the entry on the pane's active tab before the route got here; its
+        // language is the one the object is to be shown in.
+        let interfaceLanguage = documentState.editorArea[editorPaneID]?.activeTab.currentEntry.flatMap { $0.object == runtimeObject ? $0.interfaceLanguage : nil }
+        let entry = NavigationEntry(object: runtimeObject, interfaceLanguage: interfaceLanguage)
+        guard forceRebind || boundEntry != entry else { return didReplaceViewController }
+        boundEntry = entry
+        let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, interfaceLanguage: interfaceLanguage, highlightRequest: highlightRequest, editorPaneID: editorPaneID, documentState: documentState, router: self)
         textViewController.setupBindings(for: viewModel)
         textViewController.loadViewIfNeeded()
         return didReplaceViewController

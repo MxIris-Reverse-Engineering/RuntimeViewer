@@ -46,6 +46,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// The insertion point is not followed here: the bridge reports no selection changes.
     private let crossReferenceRequestedRelay = PublishRelay<FindCrossReferenceRequest>()
 
+    private let generatedInterfaceToggledRelay = PublishRelay<SelectionRoute.Destination>()
+
     /// `viewDidChangeEffectiveAppearance` is an `NSView` callback, not an `NSViewController`
     /// one, so the appearance switch has to be observed rather than overridden.
     private var effectiveAppearanceObservation: NSKeyValueObservation?
@@ -130,17 +132,19 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             runtimeObjectClicked: jumpToDefinitionRelay.asSignal(),
             runtimeObjectOpenedInNewTab: openInNewTabRelay.asSignal(),
             runtimeObjectOpenedInNextEditorPane: openInNextEditorPaneRelay.asSignal(),
-            crossReferenceRequested: crossReferenceRequestedRelay.asSignal()
+            crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
+            generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal()
         )
         let output = viewModel.transform(input)
         awaitsHighlightedFirstRender = output.highlightsFirstRender
 
+        let interfaceLanguage = viewModel.interfaceLanguage
         Driver.combineLatest(output.renderedInterface, viewModel.$runtimeObject.asDriver())
             .driveOnNext { [weak self] renderedInterface, runtimeObject in
                 guard let self else { return }
                 displayedAttributedString = renderedInterface.attributedString
                 displayedRenderedInterface = renderedInterface
-                displayedLanguageIdentifier = Self.languageIdentifier(for: runtimeObject.kind)
+                displayedLanguageIdentifier = Self.languageIdentifier(for: runtimeObject.kind, interfaceLanguage: interfaceLanguage)
                 showDisplayedSource()
             }
             .disposed(by: rx.disposeBag)
@@ -281,8 +285,13 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         return (ranges, nodeTypeNames)
     }
 
-    private static func languageIdentifier(for kind: RuntimeObjectKind) -> String {
-        switch kind {
+    /// The language the editor highlights an interface as: the language it is asked for in, or the
+    /// object's own — an Objective-C object's Generated Interface is Swift.
+    private static func languageIdentifier(for kind: RuntimeObjectKind, interfaceLanguage: RuntimeInterfaceLanguage?) -> String {
+        if interfaceLanguage == .swift {
+            return "swift"
+        }
+        return switch kind {
         case .swift: "swift"
         case .objc, .c: "objc"
         }
@@ -343,7 +352,27 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
                 $0.representedObject = request
             }
         }
+        if let generatedInterfaceMenuItem = generatedInterfaceMenuItem() {
+            if !menuItems.isEmpty {
+                menuItems.append(.separator())
+            }
+            menuItems.append(generatedInterfaceMenuItem)
+        }
         return menuItems
+    }
+
+    /// Generated Interface for the object on screen, checked while it is the form shown; `nil` for
+    /// an object that has none.
+    private func generatedInterfaceMenuItem() -> NSMenuItem? {
+        guard let viewModel, viewModel.offersGeneratedInterface else { return nil }
+        return NSMenuItem(title: "Generated Interface", action: #selector(generatedInterfaceAction(_:)), keyEquivalent: "").then {
+            $0.target = self
+            $0.state = viewModel.showsGeneratedInterface ? .on : .off
+        }
+    }
+
+    @objc private func generatedInterfaceAction(_ sender: NSMenuItem) {
+        generatedInterfaceToggledRelay.accept(SelectionRoute.Destination(listClickModifierFlags: NSEvent.modifierFlags))
     }
 
     /// The member the line holding `characterIndex` declares, if it declares one with code.

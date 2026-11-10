@@ -24,7 +24,9 @@ import RuntimeViewerArchitectures
 /// - `switchImage`: change the image the sidebar lists. Panes, tabs and
 ///   histories stay: an object of another image stays open where it is.
 /// - `open`: show an object in the focused tab, a new tab or the next pane,
-///   optionally with a place in its interface to reveal (a Find hit).
+///   optionally with a place in its interface to reveal (a Find hit), and in a
+///   language other than its own — `.swift` for an Objective-C object shown as
+///   Swift imports it (Generated Interface).
 /// - `selectAtRoot`: the focused tab's history becomes one object
 ///   (specialization completion).
 /// - `backward` / `forward` / `jump`: move along the focused tab's history
@@ -41,7 +43,7 @@ import RuntimeViewerArchitectures
 public enum SelectionRoute: Routable {
     case switchEngine(RuntimeEngine)
     case switchImage(RuntimeImageNode?)
-    case open(RuntimeObject, in: Destination, highlighting: ContentHighlightRequest? = nil)
+    case open(RuntimeObject, in: Destination, highlighting: ContentHighlightRequest? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil)
     case selectAtRoot(RuntimeObject)
     case backward
     case forward

@@ -241,7 +241,7 @@ struct RuntimeObjectIdentityCallSiteTests {
         documentState.selectionRouter.trigger(.open(Self.payloadWithQualifiedDisplayName, in: .focusedTab))
         documentState.selectionRouter.trigger(.open(Self.authoritative, in: .focusedTab))
 
-        #expect(documentState.editorArea.focusedPane.activeTab.history.entries.map(\.displayName) == ["NSView"])
+        #expect(documentState.editorArea.focusedPane.activeTab.history.entries.map(\.object.displayName) == ["NSView"])
     }
 
     /// **Contract.** The same for the active tab, whose title is the held

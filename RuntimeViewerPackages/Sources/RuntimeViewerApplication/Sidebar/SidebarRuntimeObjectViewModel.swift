@@ -204,6 +204,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// (`RuntimeEngine.counterpart(for:)`). macOS only.
         @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
         public let runtimeObjectCounterpartRequested: Signal<SidebarRuntimeObjectCellViewModel>
+        /// Row context menu "Open Generated Interface": show the row's Objective-C class,
+        /// category or protocol as Swift imports it, in the focused tab.
+        @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
+        public let runtimeObjectGeneratedInterfaceRequested: Signal<SidebarRuntimeObjectCellViewModel>
         /// A click on one of a row's tags (`RuntimeObjectCellTag`). macOS only.
         @Init(default: Signal<TagClick>.empty())
         public let runtimeObjectTagClicked: Signal<TagClick>
@@ -332,6 +336,14 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 #if os(macOS)
                 documentState.selectionRouter.trigger(.open(viewModel.runtimeObject, in: .nextEditorPane))
                 #endif
+            }
+            .disposed(by: rx.disposeBag)
+
+        // Pushed like a row click, so it enters the history; Back returns to the header.
+        input.runtimeObjectGeneratedInterfaceRequested
+            .emitOnNextMainActor { [weak self] cellViewModel in
+                guard let self, cellViewModel.runtimeObject.hasGeneratedInterface else { return }
+                documentState.selectionRouter.trigger(.open(cellViewModel.runtimeObject, in: .focusedTab, interfaceLanguage: .swift))
             }
             .disposed(by: rx.disposeBag)
 

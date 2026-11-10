@@ -522,9 +522,9 @@ private final class SelectionRouter: Router {
             // whichever image it belongs to.
             guard documentState.currentImageNode != node else { return }
             documentState.currentImageNode = node
-        case .open(let object, let destination, _):
+        case .open(let object, let destination, _, let interfaceLanguage):
             // The highlight rides on the route itself, to the content pane.
-            documentState.editorArea.open(object, in: destination)
+            documentState.editorArea.open(object, in: destination, interfaceLanguage: interfaceLanguage)
         case .selectAtRoot(let object):
             documentState.editorArea.resetFocusedTab(to: object)
         case .backward:

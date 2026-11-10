@@ -45,6 +45,21 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @RxObserved
     public private(set) var runtimeObject: RuntimeObject
 
+    /// The language the pane asks for the interface in: `nil` for the object's own, `.swift` for
+    /// an Objective-C object shown as Swift imports it (Generated Interface). Fixed for the
+    /// ViewModel: another language is another navigation entry, which binds a new one.
+    public let interfaceLanguage: RuntimeInterfaceLanguage?
+
+    /// Whether the right-click menu offers Generated Interface: the object on screen has one.
+    public var offersGeneratedInterface: Bool {
+        runtimeObject.hasGeneratedInterface
+    }
+
+    /// Whether Generated Interface is the form on screen, which its menu item's check mark shows.
+    public var showsGeneratedInterface: Bool {
+        NavigationEntry(object: runtimeObject, interfaceLanguage: interfaceLanguage).showsGeneratedInterface
+    }
+
     @RxObserved
     public private(set) var imageNameOfRuntimeObject: String?
 
@@ -110,12 +125,13 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     ///     first on screen; `nil` for every other way of showing an object.
     ///   - editorPaneID: the editor pane showing the content; the focused pane when `nil`, which
     ///     is right wherever the editor area has a single pane.
-    public convenience init(runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, editorPaneID: EditorPane.ID? = nil, documentState: DocumentState, router: any Router<ContentRoute>) {
-        self.init(runtimeObject: runtimeObject, highlightRequest: highlightRequest, editorPaneID: editorPaneID, documentState: documentState, router: router, interfaceProvider: nil)
+    public convenience init(runtimeObject: RuntimeObject, interfaceLanguage: RuntimeInterfaceLanguage? = nil, highlightRequest: ContentHighlightRequest? = nil, editorPaneID: EditorPane.ID? = nil, documentState: DocumentState, router: any Router<ContentRoute>) {
+        self.init(runtimeObject: runtimeObject, interfaceLanguage: interfaceLanguage, highlightRequest: highlightRequest, editorPaneID: editorPaneID, documentState: documentState, router: router, interfaceProvider: nil)
     }
 
     init(
         runtimeObject: RuntimeObject,
+        interfaceLanguage: RuntimeInterfaceLanguage? = nil,
         highlightRequest: ContentHighlightRequest? = nil,
         editorPaneID: EditorPane.ID? = nil,
         documentState: DocumentState,
@@ -123,6 +139,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         interfaceProvider: InterfaceProvider?
     ) {
         self.runtimeObject = runtimeObject
+        self.interfaceLanguage = interfaceLanguage
         self.pendingHighlightRequest = highlightRequest
         self.highlightsFirstRender = highlightRequest != nil
         self.editorPaneID = editorPaneID ?? documentState.editorArea.focusedPaneID
@@ -216,6 +233,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 mergedOptions.marksCommentStructure = marksCommentStructure
+                mergedOptions.interfaceLanguage = interfaceLanguage
                 return Observable.async {
                     let fetchInterval = contentTextSignposter.beginInterval("content.interfaceFetch", id: contentTextSignposter.makeSignpostID())
                     defer { contentTextSignposter.endInterval("content.interfaceFetch", fetchInterval) }
@@ -349,6 +367,15 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         of interface: RuntimeObjectInterface,
         options: RuntimeObjectInterface.GenerationOptions
     ) -> FrozenSemanticString {
+        if isAnsweredInAnotherLanguage(interface, options: options) {
+            // The peer predates Generated Interface: it ignored the language and sent the header.
+            return SemanticString {
+                Comment("\(interface.object.displayName) cannot be shown as Swift imports it: this engine's process runs an earlier RuntimeViewer, which sends only the Objective-C header.")
+                BreakLine()
+                Comment("Go back to see the header.")
+            }
+            .frozen()
+        }
         guard showsExportedOnlyNote(for: interface, options: options) else { return interface.interfaceString }
         // Says what the option did, not that nothing here is exported: a type
         // the image does not export is left out whole, an exported type nested
@@ -359,6 +386,17 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             Comment("Turn it off in Generation Options to show what \(interface.object.imageName) does not export.")
         }
         .frozen()
+    }
+
+    /// Whether the interface was asked for in a language and came back in another: from a peer that
+    /// predates `GenerationOptions.interfaceLanguage`, which ignores it and answers in the object's
+    /// own language without saying which.
+    nonisolated static func isAnsweredInAnotherLanguage(
+        _ interface: RuntimeObjectInterface,
+        options: RuntimeObjectInterface.GenerationOptions
+    ) -> Bool {
+        guard let requestedLanguage = options.interfaceLanguage else { return false }
+        return interface.interfaceLanguage != requestedLanguage
     }
 
     /// Whether Print Exported Declarations Only left the interface empty, on the side of Generation
@@ -383,7 +421,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         options: RuntimeObjectInterface.GenerationOptions
     ) -> FetchedInterface {
         let interfaceString = displayedInterfaceString(of: interface, options: options)
-        let commentStructure = showsExportedOnlyNote(for: interface, options: options)
+        let commentStructure = isAnsweredInAnotherLanguage(interface, options: options) || showsExportedOnlyNote(for: interface, options: options)
             ? noteCommentStructure(of: interfaceString)
             : interface.commentStructure
         return FetchedInterface(interfaceString: interfaceString, runtimeObject: runtimeObject, commentStructure: commentStructure)
@@ -493,6 +531,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// `nil` off every member's line.
         @Init(default: Signal<RuntimeMemberReference?>.empty())
         public let cursorMemberChanged: Signal<RuntimeMemberReference?>
+        /// Generated Interface chosen in the right-click menu: the object on screen as Swift
+        /// imports it, or back in its own language, where the modifier keys say.
+        @Init(default: Signal<SelectionRoute.Destination>.empty())
+        public let generatedInterfaceToggled: Signal<SelectionRoute.Destination>
     }
 
     public struct Output {
@@ -553,9 +595,17 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 // focused tab, the new tab and the next pane are all reckoned
                 // from here, whichever pane had the focus before.
                 target.documentState.selectionRouter.trigger(.focusEditorPane(target.editorPaneID))
-                target.documentState.selectionRouter.trigger(.open(interface.object, in: destination))
+                let interfaceLanguage = NavigationEntry.interfaceLanguage(forLinkTo: interface.object, from: target.interfaceLanguage)
+                target.documentState.selectionRouter.trigger(.open(interface.object, in: destination, interfaceLanguage: interfaceLanguage))
             }
             .disposed(by: rx.disposeBag)
+
+        input.generatedInterfaceToggled.emitOnNext { [weak self] destination in
+            guard let self, let toggledEntry = NavigationEntry(object: runtimeObject, interfaceLanguage: interfaceLanguage).togglingGeneratedInterface else { return }
+            documentState.selectionRouter.trigger(.focusEditorPane(editorPaneID))
+            documentState.selectionRouter.trigger(.open(toggledEntry.object, in: destination, interfaceLanguage: toggledEntry.interfaceLanguage))
+        }
+        .disposed(by: rx.disposeBag)
 
         input.crossReferenceRequested.emitOnNext { [weak self] request in
             guard let self else { return }

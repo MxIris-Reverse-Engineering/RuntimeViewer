@@ -64,7 +64,7 @@ struct InspectorSwiftSpecializationViewModelTests {
         try await settleMainQueue()
 
         #expect(environment.documentState.selectedRuntimeObject == specializedWithInt)
-        #expect(environment.documentState.editorArea.focusedPane.activeTab.history.entries == [specializedWithInt])
+        #expect(environment.documentState.editorArea.focusedPane.activeTab.history.entries.map(\.object) == [specializedWithInt])
         #expect(router.triggeredRoutes.isEmpty)
     }
 
