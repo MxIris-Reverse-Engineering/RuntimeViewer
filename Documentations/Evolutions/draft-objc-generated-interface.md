@@ -1,11 +1,11 @@
 # Draft - Generated Interface：把 ObjC 对象显示成 Swift 接口
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-10
 - **最后更新**: 2026-11-10
 - **所属愿景**: 无
-- **关联提案**: MachOSwiftSection 的草案 `draft-objc-imported-declarations`（ObjC 类、category 与协议按 ClangImporter 的规则建成 Swift 声明，本提案的全部 Swift 文本都由它生成）、[0026](0026-objc-swift-class-counterparts.md)（ObjC 类与 Swift 类互标角标、互相跳转）、[0063](0063-swift-declared-objc-protocols-in-swift-list.md)（Swift 列表列出 Swift 定义的 `@objc` 协议）、[0076](0076-editor-panes.md)（编辑器分栏：每个标签有自己的导航历史）
-- **实现分支 / PR**: `feature/objc-generated-interface`（worktree `.worktrees/RuntimeViewer-ObjCGeneratedInterface`，自 `next` 切出；MachOSwiftSection 一侧的第一步做完再建）
+- **关联提案**: MachOSwiftSection 的提案 0090-objc-imported-declarations（ObjC 类、category 与协议按 ClangImporter 的规则建成 Swift 声明，本提案的全部 Swift 文本都由它生成）、[0026](0026-objc-swift-class-counterparts.md)（ObjC 类与 Swift 类互标角标、互相跳转）、[0063](0063-swift-declared-objc-protocols-in-swift-list.md)（Swift 列表列出 Swift 定义的 `@objc` 协议）、[0076](0076-editor-panes.md)（编辑器分栏：每个标签有自己的导航历史）
+- **实现分支 / PR**: `feature/objc-generated-interface`（worktree `.worktrees/RuntimeViewer-ObjCGeneratedInterface`，自 `next` 切出）
 
 ## 摘要
 
@@ -45,7 +45,7 @@ Xcode 打开一个 ObjC 头文件时，相关项菜单里有 Generated Interface
 
 ### 落地顺序
 
-1. MachOSwiftSection 的草案落地并发版；开发期间用 `RuntimeViewer-Local.xcworkspace` 接本地检出。
+1. MachOSwiftSection 的提案落地（已完成，0090）。本仓库对它是 `branch: "next"` 依赖，不用等发版，把锁文件里的修订号抬到含 0090 的 `next` 即可。
 2. Core：`RuntimeInterfaceLanguage`、请求与返回的两个字段、服务进程里的分派，以及测试，包括旧版对端不带返回字段的情形。
 3. App：导航条目、三处入口、内容区的请求与旧版提示。
 4. 抬 MachOSwiftSection 的 pin，更新 README 的功能列表。
@@ -59,3 +59,5 @@ Xcode 打开一个 ObjC 头文件时，相关项菜单里有 Generated Interface
 | 2026-11-10 | 入口做成 Xcode 式的命令，作为一次导航打开，不做全局开关 | 用户选定。与 Xcode 一致，Back 能回到头文件；Find 的语料与结果也不受影响 |
 | 2026-11-10 | 按轻量档写精简提案，与 MachOSwiftSection 的草案各管一个仓库 | 用户选定 |
 | 2026-11-10 | 用户批准；先做 MachOSwiftSection 草案的第一步（命名准确率测量），本仓库的实现排在它之后 | 用户批准时指定的顺序；测量结果可能改变 MachOSwiftSection 一侧类型来源的优先级，本仓库只消费它的输出 |
+| 2026-11-10 | MachOSwiftSection 一侧落地为 0090 并推送到它的 `next`；用户要求接着做本仓库一侧，状态改 In Progress | 用户看过 MachOSwiftSection 一侧后的安排 |
+| 2026-11-10 | 不等 MachOSwiftSection 发版：锁文件里它的 `branch: "next"` pin 直接抬到含 0090 的修订号 | 本仓库的三个包与两个 workspace 都按分支依赖它，发版不是前提；它这段区间没有改依赖声明，不用连带抬别的库 |

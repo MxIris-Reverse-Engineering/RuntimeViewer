@@ -21,15 +21,23 @@ public struct RuntimeObjectInterface: Codable, Sendable {
     /// reply. The text itself is the same either way.
     public let commentStructure: RuntimeInterfaceCommentStructure?
 
-    public init(object: RuntimeObject, interfaceString: SemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil) {
+    /// The language `interfaceString` is written in: Objective-C for an Objective-C object's header,
+    /// Swift for a Swift object and for an Objective-C one asked for as Swift imports it
+    /// (`GenerationOptions.interfaceLanguage`). Always nil from a peer that predates it, which
+    /// answers every request in the object's own language and leaves the key out of its reply.
+    public let interfaceLanguage: RuntimeInterfaceLanguage?
+
+    public init(object: RuntimeObject, interfaceString: SemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil) {
         self.object = object
         self.interfaceString = interfaceString.frozen()
         self.commentStructure = commentStructure
+        self.interfaceLanguage = interfaceLanguage
     }
 
-    public init(object: RuntimeObject, interfaceString: FrozenSemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil) {
+    public init(object: RuntimeObject, interfaceString: FrozenSemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil) {
         self.object = object
         self.interfaceString = interfaceString
         self.commentStructure = commentStructure
+        self.interfaceLanguage = interfaceLanguage
     }
 }

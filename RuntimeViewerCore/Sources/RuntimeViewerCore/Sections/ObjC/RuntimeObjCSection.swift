@@ -194,9 +194,9 @@ actor RuntimeObjCSection<Reading: RuntimeImageReading>: RuntimeObjCSectioning {
 
         if let interfaceString {
             if marksCommentStructure {
-                return .init(object: name, markedInterfaceString: interfaceString.frozen())
+                return .init(object: name, markedInterfaceString: interfaceString.frozen(), interfaceLanguage: .objectiveC)
             }
-            return .init(object: name, interfaceString: interfaceString)
+            return .init(object: name, interfaceString: interfaceString, interfaceLanguage: .objectiveC)
         }
 
         #log(.default, "Invalid runtime object: \(object.name, privacy: .public) kind: \(String(describing: object.kind), privacy: .public)")

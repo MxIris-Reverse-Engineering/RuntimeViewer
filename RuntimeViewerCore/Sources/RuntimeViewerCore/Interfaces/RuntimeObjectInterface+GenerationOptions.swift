@@ -24,6 +24,14 @@ extension RuntimeObjectInterface {
         @Default(false)
         public var marksCommentStructure: Bool
 
+        /// The language to write the interface in: `nil` for the object's own; `.swift` asks for an
+        /// Objective-C class, category or protocol as Swift imports it (Generated Interface).
+        ///
+        /// Not a Generation Option the user sets: the content pane decides it for each request, from
+        /// the navigation entry it shows. A peer that predates it ignores the key and answers in the
+        /// object's own language, which `RuntimeObjectInterface.interfaceLanguage` then tells.
+        public var interfaceLanguage: RuntimeInterfaceLanguage? = nil
+
         /// Options tuned for MCP usage: all strip options disabled, all add options enabled,
         /// all Swift detail options enabled, and every declaration printed, exported or not.
         /// Provides maximum information to LLM clients.

@@ -83,6 +83,12 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
     /// both maps and throw `invalidRuntimeObject`.
     private var interfaceByObject: OrderedDictionary<RuntimeObjectKey, RuntimeObjectInterface> = [:]
 
+    /// The Objective-C objects of this image as Swift imports them
+    /// (`importedInterface(for:)`), by the Objective-C object's key. Kept
+    /// apart from `interfaceByObject`, whose keys are this image's Swift
+    /// objects, and cleared with it when the print configuration changes.
+    private var importedInterfaceByObject: [RuntimeObjectKey: RuntimeObjectInterface] = [:]
+
     private var specializedDefinitionByObject: [RuntimeObjectKey: TypeDefinition] = [:]
 
     private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
@@ -415,13 +421,49 @@ extension RuntimeSwiftSection {
         let marksCommentStructure = printer.configuration.marksCommentStructure
         let newInterfaceString = try await printInterface(for: object, using: printer)
         let newInterface = if marksCommentStructure {
-            RuntimeObjectInterface(object: object, markedInterfaceString: newInterfaceString.frozen())
+            RuntimeObjectInterface(object: object, markedInterfaceString: newInterfaceString.frozen(), interfaceLanguage: .swift)
         } else {
-            RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
+            RuntimeObjectInterface(object: object, interfaceString: newInterfaceString, interfaceLanguage: .swift)
         }
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
         return newInterface
+    }
+
+    /// An Objective-C class, category or protocol of this image as Swift imports it — the
+    /// Generated Interface. MachOSwiftSection names the members by the ClangImporter's rules and
+    /// takes what Swift implements (a Swift class, an `@objc @implementation` class, a Swift
+    /// extension) from this image's Swift definitions, which is why the Swift section prints it.
+    /// `nil` for anything else, and for an object this image does not define.
+    func importedInterface(for object: RuntimeObject) async throws -> RuntimeObjectInterface? {
+        let object = object.withImagePath(imagePath)
+        if let interface = importedInterfaceByObject[object.key] {
+            return interface
+        }
+        // Read before printing, as the configuration the print starts with.
+        let marksCommentStructure = printer.configuration.marksCommentStructure
+        let upstreamIndexer = indexer.upstream
+        let interfaceString: SemanticString
+        switch object.kind {
+        case .objc(.type(.class)):
+            guard let definition = upstreamIndexer.objcImportedClassDefinition(named: object.name) else { return nil }
+            interfaceString = try await printer.printObjCImportedClassDefinition(definition)
+        case .objc(.type(.protocol)):
+            guard let definition = upstreamIndexer.objcImportedProtocolDefinition(named: object.name) else { return nil }
+            interfaceString = try await printer.printObjCImportedProtocolDefinition(definition)
+        case .objc(.category):
+            guard let definition = upstreamIndexer.objcImportedCategoryDefinition(uniqueName: object.name) else { return nil }
+            interfaceString = try await printer.printObjCImportedCategoryDefinition(definition)
+        default:
+            return nil
+        }
+        let interface = if marksCommentStructure {
+            RuntimeObjectInterface(object: object, markedInterfaceString: interfaceString.frozen(), interfaceLanguage: .swift)
+        } else {
+            RuntimeObjectInterface(object: object, interfaceString: interfaceString, interfaceLanguage: .swift)
+        }
+        importedInterfaceByObject[object.key] = interface
+        return interface
     }
 
     /// One definition of an object's interface, in printing order.
@@ -1492,6 +1534,7 @@ extension RuntimeSwiftSection {
             printerConfigurationUpdateCount += 1
             #log(.debug, "Print configuration changed, clearing interface cache")
             interfaceByObject.removeAll()
+            importedInterfaceByObject.removeAll()
         }
 
         // The printer keeps every resolver it is given and asks each in turn,
