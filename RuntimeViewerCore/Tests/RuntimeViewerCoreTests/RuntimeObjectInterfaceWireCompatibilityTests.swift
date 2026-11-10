@@ -188,6 +188,9 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         #expect(interface.object.hasSameContent(as: Self.object))
         #expect(interface.interfaceString.string == "@interface NSObject <NSObject>\n@end")
         #expect(interface.interfaceString.components == Self.shippedInterfaceComponents)
+        // A server that predates the interface language says none: that is how the content pane
+        // tells an earlier peer's header from the Generated Interface it asked for.
+        #expect(interface.interfaceLanguage == nil)
         // The shipped server read this build's request, including the key it
         // does not know — which says that this build reads the columnar form.
         let requests = await shippedServer.receivedRequests.values
@@ -255,6 +258,7 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         let expected = try #require(try await server.engine.interface(for: Self.object, options: RuntimeObjectInterface.GenerationOptions()))
         #expect(interface.object.hasSameContent(as: Self.object))
         #expect(interface.interfaceString == expected.interfaceString)
+        #expect(interface.interfaceLanguage == .objectiveC)
     }
 
     // MARK: - Through a relay of this build

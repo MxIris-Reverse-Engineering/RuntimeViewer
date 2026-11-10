@@ -89,7 +89,9 @@ object's own fields*: the Inspector's Specialization tab lists `runtimeObject.ch
 `hasSameContent(as:)`, or a type that has grown a specialization never shows it. Ask which one a new pane
 is before copying the guard above. The same applies to anything that stores the form of a type it was
 last given — the navigation timeline and the active tab replace an entry whose content differs even when
-`==` holds. And never decide *which* type an object is from its `displayName`: one type prints under more
+`==` holds. A navigation entry is an object **and** the language it is shown in (`NavigationEntry`): an
+Objective-C object's Generated Interface is a step of its own, so the content pane's guard compares the
+entry, never the object alone, or Back from the Swift form would keep showing it. And never decide *which* type an object is from its `displayName`: one type prints under more
 than one name (a nested protocol is listed by its short name in the sidebar and by its qualified name
 after a jump).
 

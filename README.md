@@ -31,6 +31,7 @@
 ## Highlights
 
 - **Swift & Objective-C Interfaces** – Generate Swift type interfaces (with type/enum layouts and VTable offsets) alongside Objective-C headers directly from Mach-O binaries
+- **Generated Interface** – Show an Objective-C class, category or protocol as Swift imports it, like Xcode's Generated Interface: names follow the ClangImporter's rules, and what Swift implements — a Swift class, an `@objc @implementation` class, a Swift extension — shows as Swift declares it. **Navigate → Generated Interface** or the right-click menus open it as a navigation step; Back returns to the header
 - **Xcode-Style Syntax Highlighting** – Full AppKit text view with type-defined jumps and rendering identical to Xcode
 - **Editor Panes** – Split the content area into Xcode-style editor panes, side by side, stacked or both, each with its own tabs and a back/forward history per tab; ⌥-click opens an object in a new tab and ⇧⌥-click in the next pane, as in Xcode
 - **Customizable Color Themes** – Pick a syntax theme in **Settings → Theme**; duplicate the built-in Xcode preset to edit per-token colors (with bold/italic), the editor background, and selection color. Each theme carries light and dark variants that adapt to the system appearance
