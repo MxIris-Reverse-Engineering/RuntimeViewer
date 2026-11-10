@@ -11,9 +11,9 @@ struct NavigationHistoryTests {
 
     private func historyOfThree() -> NavigationHistory {
         var history = NavigationHistory()
-        history.record(firstObject)
-        history.record(secondObject)
-        history.record(thirdObject)
+        history.record(NavigationEntry(object: firstObject))
+        history.record(NavigationEntry(object: secondObject))
+        history.record(NavigationEntry(object: thirdObject))
         return history
     }
 
@@ -21,7 +21,7 @@ struct NavigationHistoryTests {
     func emptyHistory() {
         let history = NavigationHistory()
 
-        #expect(history.currentEntry == nil)
+        #expect(history.currentEntry?.object == nil)
         #expect(!history.canGoBackward)
         #expect(!history.canGoForward)
     }
@@ -30,8 +30,8 @@ struct NavigationHistoryTests {
     func recordingAppends() {
         let history = historyOfThree()
 
-        #expect(history.entries == [firstObject, secondObject, thirdObject])
-        #expect(history.currentEntry == thirdObject)
+        #expect(history.entries.map(\.object) == [firstObject, secondObject, thirdObject])
+        #expect(history.currentEntry?.object == thirdObject)
         #expect(history.canGoBackward)
         #expect(!history.canGoForward)
     }
@@ -43,10 +43,10 @@ struct NavigationHistoryTests {
         history.goBackward()
         let otherObject = Fixtures.runtimeObject(name: "Other")
 
-        history.record(otherObject)
+        history.record(NavigationEntry(object: otherObject))
 
-        #expect(history.entries == [firstObject, otherObject])
-        #expect(history.currentEntry == otherObject)
+        #expect(history.entries.map(\.object) == [firstObject, otherObject])
+        #expect(history.currentEntry?.object == otherObject)
     }
 
     @Test("showing the last entry again in another form keeps one entry, in the new form")
@@ -54,10 +54,10 @@ struct NavigationHistoryTests {
         var history = historyOfThree()
         let renamedThirdObject = Fixtures.runtimeObject(name: "Third", displayName: "Module.Third")
 
-        history.record(renamedThirdObject)
+        history.record(NavigationEntry(object: renamedThirdObject))
 
         #expect(history.entries.count == 3)
-        #expect(try #require(history.currentEntry).displayName == "Module.Third")
+        #expect(try #require(history.currentEntry).object.displayName == "Module.Third")
     }
 
     @Test("going backward and forward moves the current entry and stops at both ends")
@@ -67,11 +67,11 @@ struct NavigationHistoryTests {
         history.goBackward()
         history.goBackward()
         history.goBackward()
-        #expect(history.currentEntry == firstObject)
+        #expect(history.currentEntry?.object == firstObject)
         #expect(!history.canGoBackward)
 
         history.goForward()
-        #expect(history.currentEntry == secondObject)
+        #expect(history.currentEntry?.object == secondObject)
         #expect(history.canGoForward)
     }
 
@@ -80,10 +80,10 @@ struct NavigationHistoryTests {
         var history = historyOfThree()
 
         history.go(to: 0)
-        #expect(history.currentEntry == firstObject)
+        #expect(history.currentEntry?.object == firstObject)
 
         history.go(to: 7)
-        #expect(history.currentEntry == firstObject)
+        #expect(history.currentEntry?.object == firstObject)
         #expect(history.entries.count == 3)
     }
 
@@ -93,7 +93,50 @@ struct NavigationHistoryTests {
 
         history.reset(to: secondObject)
 
-        #expect(history.entries == [secondObject])
-        #expect(history.currentEntry == secondObject)
+        #expect(history.entries.map(\.object) == [secondObject])
+        #expect(history.currentEntry?.object == secondObject)
+    }
+
+    // MARK: - Generated Interface
+
+    @Test("an object's Generated Interface is a step of its own, and going back returns to its header")
+    func generatedInterfaceIsAStepOfItsOwn() {
+        let objcClass = Fixtures.runtimeObject(name: "NSColor", kind: .objc(.type(.class)))
+        var history = NavigationHistory()
+        history.record(NavigationEntry(object: objcClass))
+        history.record(NavigationEntry(object: objcClass, interfaceLanguage: .swift))
+        #expect(history.entries.count == 2)
+        #expect(history.currentEntry?.showsGeneratedInterface == true)
+
+        history.goBackward()
+        #expect(history.currentEntry == NavigationEntry(object: objcClass))
+        #expect(history.currentEntry?.showsGeneratedInterface == false)
+    }
+
+    @Test("Generated Interface switches an Objective-C entry to Swift and back; links from it stay in Swift")
+    func generatedInterfaceToggleAndLinks() {
+        let objcClass = Fixtures.runtimeObject(name: "NSColor", kind: .objc(.type(.class)))
+        let swiftClass = Fixtures.runtimeObject(name: "Module.Swifty")
+        let header = NavigationEntry(object: objcClass)
+        let swiftForm = NavigationEntry(object: objcClass, interfaceLanguage: .swift)
+        #expect(header.togglingGeneratedInterface == swiftForm)
+        #expect(swiftForm.togglingGeneratedInterface == header)
+        #expect(NavigationEntry(object: swiftClass).togglingGeneratedInterface == nil)
+
+        #expect(NavigationEntry.interfaceLanguage(forLinkTo: objcClass, from: .swift) == .swift)
+        #expect(NavigationEntry.interfaceLanguage(forLinkTo: swiftClass, from: .swift) == nil)
+        #expect(NavigationEntry.interfaceLanguage(forLinkTo: objcClass, from: nil) == nil)
+    }
+
+    @Test("opening in a language records it on the focused tab")
+    func editorAreaOpensInALanguage() {
+        let objcClass = Fixtures.runtimeObject(name: "NSColor", kind: .objc(.type(.class)))
+        var editorArea = EditorArea()
+        editorArea.open(objcClass, in: .focusedTab)
+        editorArea.open(objcClass, in: .focusedTab, interfaceLanguage: .swift)
+        let activeTab = editorArea.focusedPane.activeTab
+        #expect(activeTab.history.entries.count == 2)
+        #expect(activeTab.object == objcClass)
+        #expect(activeTab.interfaceLanguage == .swift)
     }
 }

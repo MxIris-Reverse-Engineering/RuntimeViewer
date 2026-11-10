@@ -86,13 +86,13 @@ final class EditorAreaCoordinator: ViewCoordinator<EditorAreaRoute, EditorAreaTr
     /// active tab": `nil` for the others.
     private static func contentRoute(for selectionRoute: SelectionRoute) -> ContentRoute? {
         switch selectionRoute {
-        case .open(let object, .newTab, nil):
+        case .open(let object, .newTab, nil, _):
             .root(object)
-        case .open(let object, .newTab, let highlightRequest?):
+        case .open(let object, .newTab, let highlightRequest?, _):
             .rootHighlighting(object, highlightRequest)
-        case .open(let object, _, nil):
+        case .open(let object, _, nil, _):
             .next(object)
-        case .open(let object, _, let highlightRequest?):
+        case .open(let object, _, let highlightRequest?, _):
             .nextHighlighting(object, highlightRequest)
         case .selectAtRoot(let object):
             .root(object)

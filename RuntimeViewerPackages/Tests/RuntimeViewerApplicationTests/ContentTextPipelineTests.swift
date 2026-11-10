@@ -314,6 +314,27 @@ struct ContentTextPipelineTests {
         #expect(printed.string == "class ContentPipelineFixture {}")
     }
 
+    /// A peer that predates Generated Interface ignores the language and answers with the header,
+    /// without saying in which language: the pane says why rather than show a header as Swift.
+    @Test("a Generated Interface answered in the object's own language says the peer predates it")
+    func olderPeerAnswersWithTheHeader() {
+        let objcClass = Fixtures.runtimeObject(name: "NSColor", kind: .objc(.type(.class)))
+        var swiftOptions = RuntimeObjectInterface.GenerationOptions()
+        swiftOptions.interfaceLanguage = .swift
+        let header = RuntimeObjectInterface(object: objcClass, interfaceString: "@interface NSColor : NSObject")
+
+        let note = ContentTextViewModel.displayedInterfaceString(of: header, options: swiftOptions).string
+        #expect(note.contains("earlier RuntimeViewer"), "\(note)")
+        #expect(!note.contains("@interface"), "\(note)")
+        #expect(ContentTextViewModel.displayedInterface(of: header, runtimeObject: objcClass, options: swiftOptions).commentStructure?.comments.count == 2)
+
+        // This build's peer answers in Swift and says so.
+        let swiftForm = RuntimeObjectInterface(object: objcClass, interfaceString: "class NSColor: __C.NSObject {}", interfaceLanguage: .swift)
+        #expect(ContentTextViewModel.displayedInterfaceString(of: swiftForm, options: swiftOptions).string == "class NSColor: __C.NSObject {}")
+        // A request in the object's own language never shows the note.
+        #expect(ContentTextViewModel.displayedInterfaceString(of: header, options: RuntimeObjectInterface.GenerationOptions()).string == "@interface NSColor : NSObject")
+    }
+
     @Test("the pane shows the note for an interface fetched empty with the option on")
     func paneShowsTheNoteForAnEmptiedInterface() async throws {
         let appDefaults = AppDefaults.isolated()

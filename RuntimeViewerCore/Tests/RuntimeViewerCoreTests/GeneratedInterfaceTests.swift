@@ -69,7 +69,7 @@ struct GeneratedInterfaceTests {
         #expect(interface.interfaceLanguage == .swift)
         #expect(text.contains("class NSColor: __C.NSObject"), "\(text.prefix(2000))")
         // A factory method restating the class name is an initializer.
-        #expect(text.contains("init(red: Swift.Double, green: Swift.Double, blue: Swift.Double, alpha: Swift.Double)"), "\(text.prefix(2000))")
+        #expect(text.contains("convenience init!(red: Swift.Double, green: Swift.Double, blue: Swift.Double, alpha: Swift.Double)"), "\(text.prefix(2000))")
         #expect(!text.contains("@interface"), "\(text.prefix(2000))")
     }
 

@@ -30,9 +30,20 @@ public struct DocumentTab: Hashable, Identifiable, Sendable {
         self.history = history
     }
 
+    /// The step on screen, or `nil` for an empty tab.
+    public var currentEntry: NavigationEntry? {
+        history.currentEntry
+    }
+
     /// The object on screen, or `nil` for an empty tab.
     public var object: RuntimeObject? {
-        history.currentEntry
+        history.currentEntry?.object
+    }
+
+    /// The language the object on screen is shown in: `nil` for its own, `.swift` for an
+    /// Objective-C object shown as Swift imports it.
+    public var interfaceLanguage: RuntimeInterfaceLanguage? {
+        history.currentEntry?.interfaceLanguage
     }
 
     /// Title shown on the tab. Falls back to a neutral label for an empty tab.

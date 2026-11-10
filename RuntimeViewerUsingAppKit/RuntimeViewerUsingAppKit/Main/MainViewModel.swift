@@ -347,10 +347,18 @@ final class MainViewModel: ViewModel<MainRoute> {
         let selectedRuntimeObjectSignal = selectedRuntimeObjectObservable
             .asSignal(onErrorSignalWith: .empty())
 
+        // The language the focused tab shows its object in: Save and Share write what is on
+        // screen, a Generated Interface as a Swift interface.
+        let focusedInterfaceLanguageObservable = documentState.$editorArea.asObservable()
+            .map { $0.focusedPane.activeTab.interfaceLanguage }
+            .distinctUntilChanged()
+
         let requestSaveLocation = input.saveClick
             .withLatestFrom(selectedRuntimeObjectSignal)
             .filterNil()
-            .map { (name: $0.displayName, type: $0.contentType) }
+            .map { [weak self] runtimeObject in
+                (name: runtimeObject.displayName, type: runtimeObject.contentType(in: self?.documentState.editorArea.focusedPane.activeTab.interfaceLanguage))
+            }
 
         input.saveLocationSelected
             .withLatestFrom(selectedRuntimeObjectSignal) { saveLocation, selectedRuntimeObject in
@@ -359,14 +367,16 @@ final class MainViewModel: ViewModel<MainRoute> {
             .filterNil()
             .emitOnNext { [weak self] url, runtimeObject in
                 guard let self else { return }
+                var options = currentMergedGenerationOptions
+                options.interfaceLanguage = documentState.editorArea.focusedPane.activeTab.interfaceLanguage
                 Task {
                     do {
                         // Fetch through the interface cache with the same
                         // merged options as the content pane, so saving the
                         // visible object is a cache hit and the written text
                         // matches what the pane displays (the transformer
-                        // configuration participates in both).
-                        let semanticString = try await self.documentState.interfaceCache.interface(for: runtimeObject, options: self.currentMergedGenerationOptions)?.interfaceString
+                        // configuration and the language participate in both).
+                        let semanticString = try await self.documentState.interfaceCache.interface(for: runtimeObject, options: options)?.interfaceString
                         try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
                     } catch {
                         self.errorRelay.accept(error)
@@ -418,13 +428,13 @@ final class MainViewModel: ViewModel<MainRoute> {
             return true
         }
 
-        let sharingServiceData = selectedRuntimeObjectObservable
-            .map { [weak self] selected -> [SharingData] in
+        let sharingServiceData = Observable.combineLatest(selectedRuntimeObjectObservable, focusedInterfaceLanguageObservable)
+            .map { [weak self] selected, interfaceLanguage -> [SharingData] in
                 guard let self, let runtimeObjectType = selected else { return [] }
 
                 let item = NSItemProvider()
 
-                item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType.identifier, visibility: .all) { [weak self] completion in
+                item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType(in: interfaceLanguage).identifier, visibility: .all) { [weak self] completion in
                     guard let self else {
                         completion(nil, nil)
                         return nil
@@ -435,7 +445,9 @@ final class MainViewModel: ViewModel<MainRoute> {
                             // Same cache + merged options as the save flow:
                             // sharing the visible object costs no engine
                             // round-trip and yields the displayed text.
-                            let semanticString = try await documentState.interfaceCache.interface(for: runtimeObjectType, options: self.currentMergedGenerationOptions)?.interfaceString
+                            var options = self.currentMergedGenerationOptions
+                            options.interfaceLanguage = interfaceLanguage
+                            let semanticString = try await documentState.interfaceCache.interface(for: runtimeObjectType, options: options)?.interfaceString
                             completion(semanticString?.string.data(using: .utf8), nil)
                         } catch {
                             completion(nil, error)
@@ -606,11 +618,12 @@ final class MainViewModel: ViewModel<MainRoute> {
             canGoNext: focusedTabHistory.map(\.canGoForward).distinctUntilChanged(),
             navigationHistory: focusedTabHistory.map { history in
                 NavigationHistorySnapshot(
-                    items: history.entries.enumerated().map { entryIndex, runtimeObject in
+                    items: history.entries.enumerated().map { entryIndex, entry in
                         NavigationHistoryItem(
                             index: entryIndex,
-                            displayName: runtimeObject.displayName,
-                            icon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: NavigationHistorySnapshot.iconSize)
+                            // An object and its Generated Interface are two steps: the title tells them apart.
+                            displayName: entry.showsGeneratedInterface ? "\(entry.object.displayName) (Generated Interface)" : entry.object.displayName,
+                            icon: RuntimeObjectIcon.icon(for: entry.object.kind, size: NavigationHistorySnapshot.iconSize)
                         )
                     },
                     currentIndex: history.currentIndex ?? -1
@@ -635,7 +648,12 @@ extension UTType {
 }
 
 extension RuntimeObject {
-    fileprivate var contentType: UTType {
+    /// The file type of the object's interface in `interfaceLanguage`: a Swift interface for a Swift
+    /// object and for an Objective-C one shown as Swift imports it, a C header otherwise.
+    fileprivate func contentType(in interfaceLanguage: RuntimeInterfaceLanguage?) -> UTType {
+        if interfaceLanguage == .swift {
+            return .swiftInterface
+        }
         switch kind {
         case .c,
              .objc:

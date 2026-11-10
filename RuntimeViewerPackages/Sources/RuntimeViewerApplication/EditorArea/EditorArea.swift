@@ -77,26 +77,27 @@ public struct EditorArea: Hashable, Sendable {
 
     // MARK: - Opening
 
-    /// Shows `object` where `destination` says and returns the pane it is shown in, which has the
-    /// focus afterwards.
+    /// Shows `object` where `destination` says, in `interfaceLanguage` (`nil` for its own), and
+    /// returns the pane it is shown in, which has the focus afterwards.
     ///
     /// The next pane is the one after the focused pane in layout order. While the focused pane is
     /// the only one, a pane is made after it along the root, as Xcode's ⇧⌥-click does, and the
     /// object is all that pane has shown.
     @discardableResult
-    mutating func open(_ object: RuntimeObject, in destination: SelectionRoute.Destination) -> EditorPane.ID {
+    mutating func open(_ object: RuntimeObject, in destination: SelectionRoute.Destination, interfaceLanguage: RuntimeInterfaceLanguage? = nil) -> EditorPane.ID {
+        let entry = NavigationEntry(object: object, interfaceLanguage: interfaceLanguage)
         switch destination {
         case .focusedTab:
-            updateActiveTab(ofPane: focusedPaneID) { $0.history.record(object) }
+            updateActiveTab(ofPane: focusedPaneID) { $0.history.record(entry) }
         case .newTab:
-            addTab(DocumentTab(history: NavigationHistory(entry: object)), toPane: focusedPaneID)
+            addTab(DocumentTab(history: NavigationHistory(entry: entry)), toPane: focusedPaneID)
         case .nextEditorPane:
             if panes.count == 1 {
                 let placement: EditorPanePlacement = layout.orientation == .sideBySide ? .onRight : .below
-                insertPane(EditorPane(tab: DocumentTab(history: NavigationHistory(entry: object))), placed: placement)
+                insertPane(EditorPane(tab: DocumentTab(history: NavigationHistory(entry: entry))), placed: placement)
             } else {
                 focusedPaneID = layout.paneID(after: focusedPaneID)
-                updateActiveTab(ofPane: focusedPaneID) { $0.history.record(object) }
+                updateActiveTab(ofPane: focusedPaneID) { $0.history.record(entry) }
             }
         }
         return focusedPaneID
@@ -177,7 +178,7 @@ public struct EditorArea: Hashable, Sendable {
     /// showing what the focused pane's active tab shows — that one entry, without its back and
     /// forward, as Xcode opens only the source tab's current item in a new pane — and taking the focus.
     mutating func addPane(placed placement: EditorPanePlacement) {
-        let history = focusedPane.activeTab.object.map(NavigationHistory.init(entry:)) ?? NavigationHistory()
+        let history = focusedPane.activeTab.currentEntry.map(NavigationHistory.init(entry:)) ?? NavigationHistory()
         insertPane(EditorPane(tab: DocumentTab(history: history)), placed: placement)
     }
 

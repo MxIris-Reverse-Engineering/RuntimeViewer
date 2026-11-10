@@ -439,6 +439,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.revealInSidebarNavigator)
     }
 
+    /// The focused tab's object as Swift imports it, or back to its header, where the modifier
+    /// keys say.
+    @objc func toggleGeneratedInterface(_ sender: Any?) {
+        guard let toggledEntry = documentState.editorArea.focusedPane.activeTab.currentEntry?.togglingGeneratedInterface else { return }
+        let destination = SelectionRoute.Destination(listClickModifierFlags: NSEvent.modifierFlags)
+        documentState.selectionRouter.trigger(.open(toggledEntry.object, in: destination, interfaceLanguage: toggledEntry.interfaceLanguage))
+    }
+
     // MARK: - Find Actions
 
     @objc func showFindNavigator(_ sender: Any?) {
@@ -474,6 +482,8 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             return documentState.currentImageNode != nil
         case #selector(revealInSidebarNavigator(_:)):
             return documentState.isSelectedRuntimeObjectInCurrentImage
+        case #selector(toggleGeneratedInterface(_:)):
+            return documentState.editorArea.focusedPane.activeTab.currentEntry?.togglingGeneratedInterface != nil
         case #selector(exportMultipleImages(_:)):
             return documentState.runtimeEngine.imageNodes.count >= 2
         case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
@@ -497,6 +507,17 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}
+
+extension MainWindowController: NSMenuItemValidation {
+    /// Enabling is `responds(to:)`'s; this only checks Generated Interface while the focused tab
+    /// shows it.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleGeneratedInterface(_:)) {
+            menuItem.state = documentState.editorArea.focusedPane.activeTab.currentEntry?.showsGeneratedInterface == true ? .on : .off
+        }
+        return true
+    }
+}
 
 extension NSUserInterfaceItemIdentifier {
     static func makeIdentifier<T>(of type: T.Type) -> Self {
