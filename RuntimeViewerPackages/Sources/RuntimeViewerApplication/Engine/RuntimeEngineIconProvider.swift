@@ -1,15 +1,19 @@
 #if os(macOS)
 import AppKit
 import Combine
+import UniformTypeIdentifiers
 import Dependencies
 import DependenciesMacros
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerEngineManagement
 import RuntimeViewerArchitectures
+import RuntimeViewerUI
 
-/// Icons for the engines `RuntimeEngineManager` holds, resolved the moment an
-/// engine appears and dropped when it goes.
+/// What stands for an engine wherever one is shown — the runtime source picker
+/// and its list, the Report navigator's engine groups — and the icons of the
+/// engines `RuntimeEngineManager` holds, resolved the moment an engine appears
+/// and dropped when it goes.
 ///
 /// A locally attached engine is looked up through Launch Services while its
 /// process is alive; a mirrored engine carries icon bytes in its descriptor,
@@ -17,7 +21,7 @@ import RuntimeViewerArchitectures
 /// links no AppKit, which is why this lives one layer up.
 @MainActor
 public final class RuntimeEngineIconProvider {
-    fileprivate static let shared = RuntimeEngineIconProvider()
+    fileprivate static let shared = RuntimeEngineIconProvider(followsRuntimeEngineManager: true)
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
@@ -36,7 +40,15 @@ public final class RuntimeEngineIconProvider {
 
     private var cancellables: Set<AnyCancellable> = []
 
-    private init() {
+    /// - Parameter followsRuntimeEngineManager: Whether icons are looked up and
+    ///   dropped as the manager's engines come and go. Only the process-wide
+    ///   provider follows it. The dependency's test value does not, so a test
+    ///   that shows an engine's icon starts no manager: each engine gets its
+    ///   machine's glyph, its file's icon or the generic executable icon, and a
+    ///   picture of its own only once one is recorded.
+    fileprivate init(followsRuntimeEngineManager: Bool) {
+        guard followsRuntimeEngineManager else { return }
+
         // `@Published` emits from `willSet`, so each sink sees the incoming
         // collection before the manager's property changes: the same moment
         // the manager used to fill its own cache, and before it rebuilds
@@ -64,9 +76,103 @@ public final class RuntimeEngineIconProvider {
             .store(in: &cancellables)
     }
 
+    // MARK: - What Stands for an Engine
+
+    /// The engine's icon in a list — the runtime source picker's, the Report
+    /// navigator's engine groups: its machine's glyph squared, or a picture of
+    /// its own.
+    public func icon(for engine: RuntimeEngine) -> NSImage {
+        switch iconKind(for: engine) {
+        case .picture(let image):
+            image
+        case .machine:
+            Self.machineIcon(for: engine)
+        }
+    }
+
+    /// The engine's icon in the toolbar's runtime source picker: its machine's
+    /// glyph as the symbol it is, which Xcode 27's style draws at its own size
+    /// as Xcode draws a run destination's, or the picture a list shows.
+    public func sourcePickerIcon(for engine: RuntimeEngine) -> RuntimeSourcePicker.Icon {
+        switch iconKind(for: engine) {
+        case .picture(let image):
+            .image(image)
+        case .machine:
+            Self.machineSymbol(for: engine).map(RuntimeSourcePicker.Icon.symbol) ?? .image(Self.machineIcon(for: engine))
+        }
+    }
+
+    /// What stands for an engine: the machine it runs on, or a picture of its own.
+    private enum IconKind {
+        case machine
+        case picture(NSImage)
+    }
+
+    private func iconKind(for engine: RuntimeEngine) -> IconKind {
+        switch engine.source {
+        case .file(_, let url):
+            // The file's own: an app's icon for an app, a framework's for a framework.
+            return .picture(NSWorkspace.shared.icon(forFile: url.path))
+        case .local:
+            return .machine
+        case .remote(_, let identifier, _) where identifier == .macCatalyst:
+            return .machine
+        default:
+            if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
+                return .picture(cachedIcon(for: engine) ?? Self.genericExecutableIcon)
+            } else {
+                // The machine itself, for the engine that *is* the machine — the
+                // RuntimeViewer running on it. A process injected on that device
+                // is a different thing and gets an icon of its own, recorded by
+                // the attach flow; falling back to the device here would list
+                // every injected process under a picture of the phone.
+                return cachedIcon(for: engine).map(IconKind.picture) ?? .machine
+            }
+        }
+    }
+
+    /// The glyph standing for the machine an engine runs on.
+    ///
+    /// Every machine row goes through this, the local Mac included, because one
+    /// photorealistic row beside three flat ones is worse than either treatment
+    /// on its own. `deviceIcon(forModelIdentifier:)` stays as the last resort:
+    /// it substitutes a generic display, which is a fair showing of a machine
+    /// whose model and platform both said nothing.
+    private static func machineIcon(for engine: RuntimeEngine) -> NSImage {
+        let metadata = engine.hostInfo.metadata
+        return DeviceGlyph.image(
+            forModelIdentifier: metadata.modelIdentifier,
+            operatingSystemVersion: metadata.osVersion,
+            isSimulator: metadata.isSimulator,
+        ) ?? NSWorkspace.shared.box.deviceIcon(forModelIdentifier: metadata.modelIdentifier)
+    }
+
+    /// The same glyph unsquared, or `nil` where `machineIcon(for:)` falls back to a picture.
+    private static func machineSymbol(for engine: RuntimeEngine) -> NSImage? {
+        let metadata = engine.hostInfo.metadata
+        return DeviceGlyph.symbolImage(
+            forModelIdentifier: metadata.modelIdentifier,
+            operatingSystemVersion: metadata.osVersion,
+            isSimulator: metadata.isSimulator,
+        )
+    }
+
+    /// Fallback for attached processes that Launch Services knows nothing about.
+    /// `NSRunningApplication(processIdentifier:)` only resolves registered GUI
+    /// applications, so daemons (launchservicesd, rapportd, ...) never make it
+    /// into this type's cache and would otherwise fall back to an App Store
+    /// placeholder symbol. The generic executable icon is what the attach picker
+    /// already shows for those processes.
+    ///
+    /// Resolved once: `NSWorkspace.icon(for:)` is expensive, and the source menu
+    /// re-resolves an icon for every engine each time the engine list changes.
+    private static let genericExecutableIcon = NSWorkspace.shared.icon(for: .unixExecutable)
+
+    // MARK: - Icons of Their Own
+
     /// The icon resolved for `engine`, or `nil` when there is none — a daemon
     /// with no bundle, or a mirrored engine whose descriptor carried no bytes.
-    public func cachedIcon(for engine: RuntimeEngine) -> NSImage? {
+    private func cachedIcon(for engine: RuntimeEngine) -> NSImage? {
         recordedEngineIcons[engine.engineID]
             ?? attachedEngineIcons[engine.engineID]
             ?? mirroredEngineIcons[engine.engineID]
@@ -166,7 +272,10 @@ public final class RuntimeEngineIconProvider {
 
 @MainActor
 extension DependencyValues {
+    /// A test gets a provider of its own that follows no engine manager (see
+    /// `init(followsRuntimeEngineManager:)`): the live one would start the
+    /// process-wide manager the first time a test shows an engine's icon.
     @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeEngineIconProvider.shared })
-    public var runtimeEngineIconProvider: RuntimeEngineIconProvider
+    public var runtimeEngineIconProvider: RuntimeEngineIconProvider = MainActor.assumeIsolated { RuntimeEngineIconProvider(followsRuntimeEngineManager: false) }
 }
 #endif

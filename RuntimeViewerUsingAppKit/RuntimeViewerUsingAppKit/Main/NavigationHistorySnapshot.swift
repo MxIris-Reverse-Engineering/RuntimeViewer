@@ -21,8 +21,7 @@ struct NavigationHistoryItem: RxMenuItemRepresentable {
 /// Immutable projection of the focused editor pane's active tab's
 /// `NavigationHistory` for the toolbar's back / forward history menus.
 ///
-/// Built in `MainViewModel` (icon resolution included, mirroring
-/// `resolveEngineIcon(for:)`) and rendered by
+/// Built in `MainViewModel` (icon resolution included) and rendered by
 /// `NavigationHistoryMenuBuilder`.
 struct NavigationHistorySnapshot {
     /// Same order as the history's entries — oldest entry first.
