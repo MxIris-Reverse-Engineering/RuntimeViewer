@@ -83,7 +83,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
     @Dependency(\.settings)
     private var settings
     /// `documentDidOpen()` has run: a document opened on the engine. A document
-    /// that only borrows from the engine never runs it. Read by tests.
+    /// that only borrows from the engine never runs it, and until it has run
+    /// nothing starts the engine's own batches — not the reload pump, not the
+    /// settings changing — however long borrowers hold the work: they hand
+    /// over the images they need. Read by tests.
     private(set) var hasStarted = false
     /// Whether the engine was ready when last heard from, so a `false → true`
     /// edge — a new process behind the engine — can be told from the state
@@ -428,8 +431,10 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// `.settingsEnabled`) funnel through here so the Report's title-by-reason
     /// branch surfaces the correct label instead of always saying "App launch
     /// indexing". Callers are responsible for checking master / heuristic
-    /// enablement before invoking — this method does not re-check.
+    /// enablement before invoking — this method does not re-check. It starts
+    /// nothing before a document opened on the engine (`hasStarted`).
     private func startMainExecutableBatch(reason: RuntimeIndexingBatchReason) {
+        guard hasStarted else { return }
         // The class is `@MainActor`, so this Task inherits main-actor isolation.
         // `connectionGeneration` is captured at task creation: a batch set up
         // for a process that has gone, or after the last document left, must
@@ -511,8 +516,12 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// triggers (opening, settings change, the engine coming back; the reload
     /// pump comes in through `retryAlwaysIndexBatches()`). Callers are
     /// responsible for checking master / custom enablement before invoking.
+    /// It dispatches nothing before a document opened on the engine
+    /// (`hasStarted`): on an engine only borrowed from, every trigger but the
+    /// opening would otherwise index the rows that apply to it — Mac Catalyst
+    /// indexing UIKitCore for a window on My Mac.
     private func startAlwaysIndexBatches() {
-        guard !isClosed else { return }
+        guard !isClosed, hasStarted else { return }
         // Gate: only process entries we haven't dispatched yet on this
         // connection. The reload pump re-enters here after every fullReload,
         // including the ones the engine's own batches cause as they end;

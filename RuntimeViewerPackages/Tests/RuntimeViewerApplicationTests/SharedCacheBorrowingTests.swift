@@ -1,6 +1,7 @@
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RxSwift
 import Testing
 @testable import RuntimeViewerApplication
 @testable import RuntimeViewerSettings
@@ -32,6 +33,61 @@ struct SharedCacheBorrowingTests {
         #expect(ownerEnvironment.documentState.runtimeEngineSession.backgroundWork === ownerWork, "the owner's document got other work than its borrower holds")
         #expect(ownerWork.indexingCoordinator.hasStarted, "the first document on the owner did not start its indexing")
         Self.close(borrowerEnvironment, ownerEnvironment)
+        await fixture.stop()
+    }
+
+    @Test("an owner only borrowed from starts none of its own indexing when its engine reloads")
+    func ownerOnlyBorrowedFromIndexesNothingOnReload() async throws {
+        let fixture = try await SharedCacheBorrowingFixture.make(label: "reloads")
+        let environment = Self.environment(on: fixture.borrowerEngine)
+        Self.turnOnAlwaysIndex(in: environment, rows: [Self.ownImageRow])
+        environment.startBackgroundWork()
+        let ownerWork = try #require(environment.documentState.runtimeEngineSession.borrowedBackgroundWorks.first)
+
+        // The owner's process reloading — its first connection settling, an image loaded there —
+        // is what set Mac Catalyst indexing its own Always Index rows for a window on My Mac.
+        await fixture.ownerEngine.reloadData(isReloadImageNodes: false)
+
+        let ownerBatches = try await Self.batchesShown(by: ownerWork.indexingCoordinator, during: Self.dispatchWindow)
+        #expect(ownerBatches.isEmpty, "the owner indexed \(ownerBatches.map(\.rootImagePath)) for a document that only borrows from it")
+        Self.close(environment)
+        await fixture.stop()
+    }
+
+    @Test("an owner only borrowed from starts none of its own indexing when the indexing settings change", arguments: IndexingSettingsChange.allCases)
+    func ownerOnlyBorrowedFromIndexesNothingOnSettingsChange(_ change: IndexingSettingsChange) async throws {
+        let fixture = try await SharedCacheBorrowingFixture.make(label: "settings.\(change.rawValue)")
+        let environment = Self.environment(on: fixture.borrowerEngine)
+        Self.turnOnAlwaysIndex(in: environment, rows: [Self.ownImageRow])
+        // Only the main executable itself, should the change start its batch.
+        environment.settings.indexing.heuristic.depth = 0
+        switch change {
+        case .alwaysIndexRowAdded:
+            environment.settings.indexing.custom.entries = []
+        case .alwaysIndexTurnedOn, .mainExecutableIndexingTurnedOn:
+            environment.settings.indexing.custom.isEnabled = false
+        case .indexingTurnedOn:
+            environment.settings.indexing.isEnabled = false
+        }
+        environment.startBackgroundWork()
+        let ownerWork = try #require(environment.documentState.runtimeEngineSession.borrowedBackgroundWorks.first)
+
+        environment.make {
+            switch change {
+            case .alwaysIndexRowAdded:
+                environment.settings.indexing.custom.entries = [Self.ownImageRow]
+            case .alwaysIndexTurnedOn:
+                environment.settings.indexing.custom.isEnabled = true
+            case .indexingTurnedOn:
+                environment.settings.indexing.isEnabled = true
+            case .mainExecutableIndexingTurnedOn:
+                environment.settings.indexing.heuristic.isEnabled = true
+            }
+        }
+
+        let ownerBatches = try await Self.batchesShown(by: ownerWork.indexingCoordinator, during: Self.dispatchWindow)
+        #expect(ownerBatches.isEmpty, "the owner indexed \(ownerBatches.map(\.rootImagePath)) for a document that only borrows from it")
+        Self.close(environment)
         await fixture.stop()
     }
 
@@ -203,12 +259,48 @@ struct SharedCacheBorrowingTests {
 
     // MARK: - Support
 
+    /// A change to the indexing settings that starts batches on the engine of a document on it.
+    enum IndexingSettingsChange: String, CaseIterable {
+        case alwaysIndexRowAdded
+        case alwaysIndexTurnedOn
+        case indexingTurnedOn
+        case mainExecutableIndexingTurnedOn
+    }
+
+    /// An Always Index row naming an image the borrower keeps itself, so nothing the borrower
+    /// asks for reaches the owner: any batch the owner shows is the owner's own indexing.
+    private static let ownImageRow = Settings.Indexing.AlwaysIndexEntry(identifier: "libdispatch.dylib")
+
+    /// How long a test watches an owner that must start nothing. In process a dispatch shows
+    /// within milliseconds; when the owner is right, nothing shows at all.
+    private static let dispatchWindow: TimeInterval = 3
+
     /// A document on `engine` whose indexing is off, so a document starting does not set the
     /// engine's process indexing the test runner's dependencies.
     private static func environment(on engine: RuntimeEngine) -> ViewModelTestEnvironment {
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         environment.settings.indexing.isEnabled = false
         return environment
+    }
+
+    /// Turns on Always Index alone, with `rows`; the discovery from the main executable stays off.
+    private static func turnOnAlwaysIndex(in environment: ViewModelTestEnvironment, rows: [Settings.Indexing.AlwaysIndexEntry]) {
+        environment.settings.indexing.isEnabled = true
+        environment.settings.indexing.heuristic.isEnabled = false
+        environment.settings.indexing.custom.isEnabled = true
+        environment.settings.indexing.custom.entries = rows
+    }
+
+    /// Every batch `coordinator` shows during `interval`, running or finished, those it showed
+    /// already included.
+    private static func batchesShown(by coordinator: RuntimeBackgroundIndexingCoordinator, during interval: TimeInterval) async throws -> [RuntimeIndexingBatch] {
+        let shownBatchLists = try await values(
+            from: Observable.combineLatest(coordinator.batchesObservable, coordinator.historyObservable) { runningBatches, finishedBatches in
+                runningBatches + finishedBatches
+            },
+            during: interval
+        )
+        return shownBatchLists.flatMap { $0 }
     }
 
     private static func close(_ environments: ViewModelTestEnvironment...) {

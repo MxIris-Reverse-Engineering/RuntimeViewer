@@ -552,7 +552,9 @@ AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive �
   自己的类型前，`.specializationCandidates` 批次在服务进程里为它已加载、又借用过的系统镜像建 section。
   App 里文档以借用者身份持有归属 engine 的后台工作（`RuntimeEngineBackgroundWorkRegistry.borrow`），
   `RuntimeEngineSession` 记下借用关系并按镜像分流；借用关系变化或归属 engine 重启时，正在借用的文档
-  回到起点。
+  回到起点。借用者只让那份工作存在，不启动归属 engine 自己的索引（主程序批次与 Always Index），
+  engine 重载、设置变化也不会；那要等有文档开在归属 engine 上（索引协调器的 `hasStarted`，见
+  `ResolvedIssues/2026-11-10-catalyst-indexed-its-own-rows-for-a-window-on-my-mac.md`）。
 - **镜像树**：用同一份 cache 的 engine 的「Dyld Shared Cache」树换成 `partition.imageRootNode`，路径
   集合相同才换。
 
