@@ -101,10 +101,12 @@ struct SwiftExportedDeclarationsTests {
     }
 
     /// An extension or a conformance has no descriptor symbol of its own, and
-    /// an `@objc` protocol declared in Swift has none at all — not even the
-    /// private one `SwiftDeclaredObjCProtocolListTests` declares.
-    @Test("no extension, conformance or @objc protocol entry is marked")
-    func entriesWithoutAVerdictAreNotMarked() async throws {
+    /// an `@objc` protocol declared in Swift has none at all, so only a name
+    /// can rule: MachOSwiftSection judges the private `@objc` protocol
+    /// `SwiftDeclaredObjCProtocolListTests` declares not exported, and leaves
+    /// every other such entry without a verdict.
+    @Test("no extension, conformance or non-private @objc protocol entry is marked, and the private @objc protocol is")
+    func onlyThePrivateObjCProtocolIsMarkedAmongEntriesWithoutASymbol() async throws {
         let (_, objects) = try await Self.sharedBundle.value
         let extensionEntries = objects.filter {
             switch $0.kind {
@@ -112,14 +114,15 @@ struct SwiftExportedDeclarationsTests {
             default: false
             }
         }
-        let objcProtocolEntries = objects.filter { $0.kind == .swift(.type(.protocol)) && $0.properties.contains(.isObjCProtocol) }
         let privateObjCProtocol = try #require(Self.entry(named: "SwiftDeclaredObjCProtocolPrivateFixture", kind: .swift(.type(.protocol)), in: objects))
+        let otherObjCProtocolEntries = objects.filter { $0.kind == .swift(.type(.protocol)) && $0.properties.contains(.isObjCProtocol) && $0.key != privateObjCProtocol.key }
 
         #expect(!extensionEntries.isEmpty)
-        #expect(!objcProtocolEntries.isEmpty)
-        for entry in extensionEntries + objcProtocolEntries + [privateObjCProtocol] {
+        #expect(!otherObjCProtocolEntries.isEmpty)
+        for entry in extensionEntries + otherObjCProtocolEntries {
             #expect(!entry.properties.contains(.isNotExported), "\(entry.kind) \(entry.displayName)")
         }
+        #expect(privateObjCProtocol.properties.contains(.isNotExported))
     }
 
     // MARK: - Print Exported Declarations Only
@@ -149,6 +152,7 @@ struct SwiftExportedDeclarationsTests {
     @Test("a type or protocol the image does not export prints nothing at all", arguments: [
         ("ExportedDeclarationsPrivateFixture", RuntimeObjectKind.swift(.type(.struct)), ["memberOfPrivateFixture", "ExportedDeclarationsPrivateFixture: RuntimeViewerCoreTests.ExportedDeclarationsPublicProtocolFixture {}"]),
         ("ExportedDeclarationsPrivateProtocolFixture", .swift(.type(.protocol)), ["protocol ExportedDeclarationsPrivateProtocolFixture"]),
+        ("SwiftDeclaredObjCProtocolPrivateFixture", .swift(.type(.protocol)), ["@objc protocol SwiftDeclaredObjCProtocolPrivateFixture"]),
     ])
     func unexportedDeclarationPrintsNothing(name: String, kind: RuntimeObjectKind, textsPrintedWithTheOptionOff: [String]) async throws {
         let (engine, objects) = try await Self.sharedBundle.value
@@ -161,6 +165,31 @@ struct SwiftExportedDeclarationsTests {
             #expect(everything.string.contains(text), "\(everything.string)")
         }
         #expect(exportedOnly.isEmpty, "\(exportedOnly.string)")
+    }
+
+    /// A category conformance is printed by the Swift section itself, so it
+    /// applies the rule MachOSwiftSection's interface builder does: one whose
+    /// every protocol is a private `@objc` protocol goes, as a Swift type's
+    /// conformance to a protocol the image does not export does, and one
+    /// adopting a protocol nothing rules on stays. The fixtures are the
+    /// categories `SwiftDeclaredObjCProtocolListTests` declares.
+    @Test("a category adopting only a private @objc protocol prints nothing, one adopting another protocol prints as before", arguments: [
+        ("ISO8601DateFormatter", "SwiftDeclaredObjCProtocolPrivateFixture", true),
+        ("ByteCountFormatter", "SwiftDeclaredObjCProtocolCategoryFixture", false),
+    ])
+    func categoryConformanceFollowsItsProtocols(className: String, protocolName: String, printsNothing: Bool) async throws {
+        let (engine, objects) = try await Self.sharedBundle.value
+        let entry = try #require(objects.first { $0.kind == .swift(.conformance(.class)) && $0.displayName.contains(className) }, "no conformance entry for \(className)")
+
+        let everything = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: false))).interfaceString
+        let exportedOnly = try #require(try await engine.interface(for: entry, options: Self.options(exportedOnly: true))).interfaceString
+
+        #expect(everything.string.contains(protocolName), "\(everything.string)")
+        if printsNothing {
+            #expect(exportedOnly.isEmpty, "\(exportedOnly.string)")
+        } else {
+            #expect(exportedOnly.string == everything.string, "\(exportedOnly.string)")
+        }
     }
 
     @Test("a batch export with the option on writes no file for what prints nothing")

@@ -65,6 +65,13 @@ private final class SwiftDeclaredObjCProtocolPrivateAdopterFixture: NSObject, Sw
     func privateRequirementFixture() {}
 }
 
+/// A category of a Foundation class adopting only the private protocol:
+/// Print Exported Declarations Only leaves its conformance out
+/// (`SwiftExportedDeclarationsTests`).
+extension ISO8601DateFormatter: SwiftDeclaredObjCProtocolPrivateFixture {
+    func privateRequirementFixture() {}
+}
+
 /// The `@objc` protocols a Swift image declares, listed and printed on the
 /// Swift side from MachOSwiftSection's `objcProtocolDefinitions`, and the
 /// Objective-C protocols the image's classes adopt, printed where Swift
