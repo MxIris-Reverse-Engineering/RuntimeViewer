@@ -62,4 +62,4 @@ Ultra 上用 `RuntimeViewer-Local.xcworkspace` 编的 Debug 版，启动约 50 �
 - **相关测试组**（按原始退出码）：后台索引、Report、文档生命周期、会话、App Nap activity、语料协调器、派生数据读回、推出数据共 15 组 98 个测试通过。
 - **回归**：`RuntimeViewerApplicationTests` 全量 884 个、130 组，3 个失败。其中两个是满载下的等待超时，所在的两组单独重跑都通过：「语料构建期间一直持有 engine 的 activity」（等 120 秒）与「Call Hierarchy 展开调用方」（等 60 秒）。另一个是 `TitleActivityIndicatorTests` 的悬停用例，单独跑也失败，与这次改动无关：它只测 `TitleToolbarItem`，不碰 engine，同日改动之前的一次全量运行里就已经失败。
 - 每次运行前后，两个包的锁文件没变；测试用的是内存里的设置，不碰用户的 `settings.json`。
-- **真实 App 未验证**：用修复后的版本只开一个 My Mac 窗口，`RuntimeViewerCatalystService` 应停在几十 MB，日志里不再出现它给 iOSSupport 版 SwiftUI、UIKitCore 建 Swift section 与语料。
+- **真实 App**：修复后在 Ultra 上重新运行，只开一个 My Mac 窗口，等本地服务的索引结束（启动后约 2 分钟）：`RuntimeViewerCatalystService` 30 MB（峰值 36 MB），启动以来日志里没有它建 Swift section、语料或交叉引用的记录；本地服务 413 MB，App 94 MB。修复前同样的设置，Catalyst 服务在 451 MB、峰值 501 MB。
