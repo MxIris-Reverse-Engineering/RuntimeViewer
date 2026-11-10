@@ -290,16 +290,22 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
     /// protocols and under the same rule for its name. One declared in a type
     /// is listed at the top level: MachOSwiftSection prints it in an
     /// extension of its parent, which reads the same wherever it is listed.
+    ///
+    /// Such a protocol has no symbol of its own, so MachOSwiftSection rules
+    /// on it by its name alone: a private one, or one nested in a private
+    /// type, is marked `isNotExported`, and any other carries no verdict.
     private func makeRuntimeObject(for objcProtocolDefinition: ObjCProtocolDefinition) throws -> RuntimeObject {
         let protocolName = objcProtocolDefinition.protocolName
         let mangledName = try mangleAsString(protocolName.node)
+        var properties: RuntimeObject.Properties = objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol]
+        properties.formUnion(objcProtocolDefinition.exportStatus.runtimeObjectProperties)
         let runtimeObject = RuntimeObject(
             name: mangledName,
             displayName: protocolName.name,
             kind: protocolName.runtimeObjectKind,
             imagePath: imagePath,
             children: [],
-            properties: objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol],
+            properties: properties,
             privateDeclarations: protocolName.privateDeclarations
         )
         interfaceDefinitionNameByObject[runtimeObject.key] = .objcProtocol(protocolName)
@@ -432,10 +438,11 @@ extension RuntimeSwiftSection {
         /// Printed with its default implementations after it.
         case objcProtocol(ObjCProtocolDefinition)
         /// `extension Class: P {}`, from a category of this image.
-        /// `extendsUnexportedType` when the class is a type of this image
-        /// that is not exported: the exported-only filter leaves the
-        /// conformance out with it.
-        case objcCategoryConformance(ObjCCategoryConformance, extendsUnexportedType: Bool)
+        /// `isNotExported` when the exported-only filter leaves the
+        /// conformance out: the class is a type of this image that is not
+        /// exported, or every protocol the category adopts is an `@objc`
+        /// protocol of this image that is not — a private one.
+        case objcCategoryConformance(ObjCCategoryConformance, isNotExported: Bool)
     }
 
     /// The definitions an object's interface is printed from, in the order
@@ -513,7 +520,22 @@ extension RuntimeSwiftSection {
     /// `extensionName` names; see `objcCategoryConformancesByExtensionName`.
     private func objcCategoryConformances(filedUnder extensionName: SwiftDeclaration.ExtensionName) -> [PrintedDefinition] {
         (objcCategoryConformancesByExtensionName[extensionName] ?? []).map { conformance in
-            .objcCategoryConformance(conformance, extendsUnexportedType: indexer.allTypeDefinitions[conformance.extendedTypeName]?.exportStatus.isDefinitelyNotExported == true)
+            .objcCategoryConformance(conformance, isNotExported: isNotExported(conformance))
+        }
+    }
+
+    /// The rule MachOSwiftSection's `SwiftInterfaceBuilder` applies to the
+    /// category conformances it prints, which RuntimeViewer prints itself: a
+    /// conformance goes with a class of this image that is not exported, and
+    /// with protocols that are all `@objc` protocols of this image that are
+    /// not exported, as a Swift type's conformance to a non-exported protocol
+    /// does. One that also adopts an exported or unjudged protocol stays whole.
+    private func isNotExported(_ conformance: ObjCCategoryConformance) -> Bool {
+        if indexer.allTypeDefinitions[conformance.extendedTypeName]?.exportStatus.isDefinitelyNotExported == true {
+            return true
+        }
+        return !conformance.protocolNames.isEmpty && conformance.protocolNames.allSatisfy { protocolName in
+            indexer.objcProtocolDefinitions[protocolName]?.exportStatus.isDefinitelyNotExported == true
         }
     }
 
@@ -584,18 +606,19 @@ extension RuntimeSwiftSection {
             try await printer.printExtensionDefinition(extensionDefinition)
         case .objcProtocol(let objcProtocolDefinition):
             try await printer.printObjCProtocolDefinition(objcProtocolDefinition)
-        case .objcCategoryConformance(let objcCategoryConformance, let extendsUnexportedType):
-            try await printObjCCategoryConformance(objcCategoryConformance, extendsUnexportedType: extendsUnexportedType, using: printer)
+        case .objcCategoryConformance(let objcCategoryConformance, let isNotExported):
+            try await printObjCCategoryConformance(objcCategoryConformance, isNotExported: isNotExported, using: printer)
         }
     }
 
     /// A category conformance as `SwiftInterfaceBuilder.printRoot()` prints
-    /// one, which the printer's own export filter never sees: one on a class
-    /// that is not exported is left out while `printExportedDeclarationsOnly`
-    /// is on, or, when marking, visible only while it is off.
-    private static func printObjCCategoryConformance(_ conformance: ObjCCategoryConformance, extendsUnexportedType: Bool, using printer: SwiftDeclarationPrinter<MachO>) async throws -> SemanticString {
+    /// one, which the printer's own export filter never sees: one that is
+    /// not exported (`isNotExported(_:)`) is left out while
+    /// `printExportedDeclarationsOnly` is on, or, when marking, visible only
+    /// while it is off.
+    private static func printObjCCategoryConformance(_ conformance: ObjCCategoryConformance, isNotExported: Bool, using printer: SwiftDeclarationPrinter<MachO>) async throws -> SemanticString {
         let configuration = printer.configuration
-        guard extendsUnexportedType, configuration.printExportedDeclarationsOnly || configuration.marksOptionalContent else {
+        guard isNotExported, configuration.printExportedDeclarationsOnly || configuration.marksOptionalContent else {
             return try await printer.printObjCCategoryConformance(conformance)
         }
         guard configuration.marksOptionalContent else { return "" }
@@ -832,10 +855,12 @@ extension RuntimeSwiftSection {
     func makeRuntimeObject(forMangledProtocolName mangledName: String) -> RuntimeObject? {
         guard let protocolName = indexer.protocolName(forMangledName: mangledName) else { return nil }
         var properties: RuntimeObject.Properties = objcProtocolPairs.objcProtocolNameByMangledProtocolName[mangledName] == nil ? [] : [.isObjCProtocol]
-        // An `@objc` protocol declared in Swift has no `ProtocolDefinition`,
-        // and no symbol to be judged by.
+        // An `@objc` protocol declared in Swift has no `ProtocolDefinition`:
+        // its `ObjCProtocolDefinition` carries the verdict its name gives.
         if let protocolDefinition = indexer.allProtocolDefinitions[protocolName] {
             properties.formUnion(protocolDefinition.exportStatus.runtimeObjectProperties)
+        } else if let objcProtocolDefinition = indexer.objcProtocolDefinitions[protocolName] {
+            properties.formUnion(objcProtocolDefinition.exportStatus.runtimeObjectProperties)
         }
         return RuntimeObject(
             name: mangledName,
