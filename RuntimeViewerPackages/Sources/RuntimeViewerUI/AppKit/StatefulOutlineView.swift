@@ -185,12 +185,23 @@ open class StatefulOutlineView: OutlineView {
         let row = row(forItem: selectedItem)
         guard row >= 0 else { return }
 
-        // Scroll before selecting. A row view is materialized as its row is
-        // scrolled into view, and the emphasized (accent-colored) selection
-        // style is applied on a pass after that — so selecting first draws the
-        // row once with the inactive grey highlight and flips it on the next
-        // frame. Forcing the layout closes the gap the raw clip-view scroll
-        // leaves behind, so the row view exists when the selection lands.
+        selectRowBringingIntoView(row)
+    }
+
+    // MARK: - Bringing a Row Into View
+
+    /// Moves the selection to `row`, bringing the row on screen first.
+    ///
+    /// The order matters. `NSOutlineView` materializes a row view only as the row is scrolled
+    /// into view, and applies the emphasized (accent-colored) selection style on a pass after
+    /// that. Selecting before scrolling therefore draws the row once with the inactive grey
+    /// highlight and flips it to the accent color on the next frame — a visible blink every time
+    /// the list has to travel to reach the row, which is exactly what happens when a selection
+    /// arrives from the Inspector or the history. Scrolling first, and forcing the layout the raw
+    /// clip-view scroll would otherwise defer, means the row view already exists when the
+    /// selection lands, so selection and emphasis are drawn in the same pass.
+    public func selectRowBringingIntoView(_ row: Int) {
+        guard row >= 0, row < numberOfRows else { return }
         if !box.visibleRowIndexes.contains(row) {
             box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
             layoutSubtreeIfNeeded()

@@ -49,7 +49,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
 
         output.selectRuntimeObject.emitOnNextMainActor { [weak self] item in
             guard let self else { return }
-            selectRowBringingIntoView(outlineView.row(forItem: item))
+            outlineView.selectRowBringingIntoView(outlineView.row(forItem: item))
         }
         .disposed(by: rx.disposeBag)
 
@@ -58,7 +58,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
             for ancestor in result.ancestors where !outlineView.isItemExpanded(ancestor) {
                 outlineView.expandItem(ancestor)
             }
-            selectRowBringingIntoView(outlineView.row(forItem: result.cell))
+            outlineView.selectRowBringingIntoView(outlineView.row(forItem: result.cell))
         }
         .disposed(by: rx.disposeBag)
 
@@ -88,7 +88,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         for ancestor in result.ancestors where !outlineView.isItemExpanded(ancestor) {
             outlineView.expandItem(ancestor)
         }
-        selectRowBringingIntoView(outlineView.row(forItem: result.cell))
+        outlineView.selectRowBringingIntoView(outlineView.row(forItem: result.cell))
         view.window?.makeFirstResponder(outlineView)
     }
 
