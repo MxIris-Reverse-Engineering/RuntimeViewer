@@ -14,8 +14,11 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
     private let filterField = NSFilterTokenField()
 
-    /// Commands chosen in an image's context menu.
+    /// Commands chosen in an image's context menu, and ⌘C.
     private let imageActionRequestedRelay = PublishRelay<(action: RuntimeImageAction, node: RuntimeImageNode)>()
+
+    /// Return on the selected row, which does what a double-click does.
+    private let returnPressedRelay = PublishRelay<SidebarRootCellViewModel>()
 
     /// Configures `filterField` and reports its filter. The directory and bookmark pages share one list of recent
     /// filters.
@@ -114,8 +117,14 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         }
         .disposed(by: rx.disposeBag)
 
+        outlineView.keyDownHandler = { [weak self] event in
+            guard let self else { return false }
+            return handleKeyDown(event)
+        }
+
         let input = ViewModel.Input(
-            clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
+            // Return opens an image or opens and closes a folder, as a double-click does.
+            clickedNode: .merge(outlineView.rx.modelDoubleClicked().asSignal(), returnPressedRelay.asSignal()),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
             filter: filterFieldAdapter.filter,
             imageActionRequested: imageActionRequestedRelay.asSignal()
@@ -207,6 +216,30 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRootCellViewModel else { return nil }
         return cellViewModel.appearance.name.string
+    }
+
+    /// The row the user selected, if any.
+    var selectedCellViewModel: SidebarRootCellViewModel? {
+        outlineView.item(atRow: outlineView.selectedRow) as? SidebarRootCellViewModel
+    }
+
+    /// A key press on the list, offered before the outline handles it; `true` takes it. Override
+    /// point: this base class takes Return on a selected row; the bookmark page adds Delete.
+    func handleKeyDown(_ event: NSEvent) -> Bool {
+        guard event.isReturnKeyPress, let selectedCellViewModel else { return false }
+        returnPressedRelay.accept(selectedCellViewModel)
+        return true
+    }
+
+    /// ⌘C: the selected row's name, through the context menu's Copy Name. The pages, which are not
+    /// generic, carry the `copy(_:)` action and ask `canCopySelectedRowName` to enable it.
+    func copySelectedRowName() {
+        guard let selectedCellViewModel else { return }
+        imageActionRequestedRelay.accept((.copyName, selectedCellViewModel.node))
+    }
+
+    var canCopySelectedRowName: Bool {
+        selectedCellViewModel != nil
     }
 
     /// Context-menu entries for the clicked row. Override point: this base class contributes the

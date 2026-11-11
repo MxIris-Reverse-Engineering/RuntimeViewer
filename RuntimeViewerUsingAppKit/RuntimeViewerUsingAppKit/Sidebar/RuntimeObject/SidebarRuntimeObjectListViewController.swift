@@ -136,11 +136,18 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         ]
     }
 
+    /// Edit ▸ Copy (⌘C): the selected row's name.
+    @objc func copy(_ sender: Any?) {
+        copySelectedRowName()
+    }
+
     override func responds(to aSelector: Selector!) -> Bool {
         guard let aSelector else { return super.responds(to: aSelector) }
         switch aSelector {
         case #selector(openQuickly(_:)):
             return viewModel?.loadState == .loaded
+        case #selector(copy(_:)):
+            return canCopySelectedRowName
         default:
             return super.responds(to: aSelector)
         }
