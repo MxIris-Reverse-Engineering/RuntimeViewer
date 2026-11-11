@@ -28,9 +28,13 @@
 
 **落地步骤**
 
-1. Go Back / Go Forward 菜单项与动作。
-2. `StatefulOutlineView.keyDownHandler` 与 `NSEvent` 的按键判断；单元测试。
-3. 镜像列表的回车、两个书签页的 ⌫、侧栏四页的 ⌘C。
+1. ✅ Go Back / Go Forward 菜单项与动作。
+2. ✅ `StatefulOutlineView.keyDownHandler` 与 `NSEvent` 的按键判断；单元测试。
+3. ✅ 镜像列表的回车、两个书签页的 ⌫、侧栏四页的 ⌘C。
+
+**验证**：`RuntimeViewerPackages` 的相关测试（新增按键判断一个套件，连同侧栏、镜像页、右键菜单命令与跨平台源码守卫，共 20 个套件 108 个测试）在 Ultra 上全部通过；Tuist workspace 编 App（Debug）通过。没有启动 App 手工按过这些键；SourceEditor 面板有焦点时 ⌃⌘← 会不会先被编辑器接走，没有验证。
+
+**文档**：README 的 Highlights 同批补了这三块交互补全（Filter Scope 记忆、右键菜单、Go Back / Go Forward 与标签菜单），不另写指南。
 
 ## 决策日志
 
@@ -40,3 +44,6 @@
 | 2026-11-11 | 用户批准，提案由 agent 起草、用户事前未审阅全文 | 用户看过交互缺口的盘点与默认做法后，选择三块都做，经 `implement-feature` 一路实现 |
 | 2026-11-11 | 开始实现 | |
 | 2026-11-11 | 从本地 `next` 切出，叠在 `feature/context-menus` 合并之后 | 拷贝与打开要用右键菜单那份提案加的命令 |
+| 2026-11-11 | ⌘C 也拷贝文件夹行的名字 | 镜像列表里选中的可能是路径中间的文件夹；拷贝名字对它同样有意义，右键菜单的 Copy Name 只给镜像是因为文件夹没有别的命令 |
+| 2026-11-11 | README 的 Highlights 在本分支一并补上三块交互补全 | 三块按顺序落地，README 一处改完比分在三条分支上各改一次少一轮冲突 |
+| 2026-11-11 | 实现完成，待用户看过后收尾 | 自审没有发现要修的问题；文档：提案、两个索引与 README 已同批更新，`StatefulOutlineView` 的新入口写在它自己的文档注释里，不需要改 `AGENTS.md`，没有新术语 |
