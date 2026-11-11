@@ -230,6 +230,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             .emitOnNext { $0.action() }
             .disposed(by: rx.disposeBag)
 
+        // Match Case as the user last left it, before the toggle's first value
+        // reaches the view model: the view model remembers only the values
+        // after that one.
+        imageLoadedView.matchCaseButton.state = viewModel.isSearchCaseSensitive ? .on : .off
+
         let input = ViewModel.Input(
             runtimeObjectClicked: runtimeObjectClicked,
             runtimeObjectOpenedInNewTab: .merge(openInNewTabRelay.asSignal(), runtimeObjectClickedWithOption),

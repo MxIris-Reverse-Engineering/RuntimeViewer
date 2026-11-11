@@ -134,7 +134,8 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
 
         applyAvailability(
             kinds: viewModel.availableKinds,
-            properties: viewModel.availableProperties
+            properties: viewModel.availableProperties,
+            constrainedBy: viewModel.draft
         )
 
         let rowEntries = groupRows.values
@@ -198,10 +199,15 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
     /// One-shot at popover-open time: hide group rows whose intersection
     /// with `kinds` is empty, hide individual kind checkboxes for kinds
     /// that don't appear in the image, and hide property rows whose flags
-    /// nothing in the image carries.
+    /// nothing in the image carries — unless `scope` constrains the row.
+    /// A remembered scope can constrain a property no object carries yet,
+    /// such as Not Exported before background indexing has ruled on the
+    /// image's types; hidden, that row would empty the list with nothing on
+    /// screen to say why, and nothing to undo it with.
     private func applyAvailability(
         kinds: Set<RuntimeObjectKind>,
-        properties: RuntimeObject.Properties
+        properties: RuntimeObject.Properties,
+        constrainedBy scope: RuntimeObjectScope
     ) {
         for (group, row) in groupRows {
             let visibleKinds = Set(group.kinds).intersection(kinds)
@@ -209,7 +215,8 @@ final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarR
             row.applyVisibleKinds(visibleKinds)
         }
         for propertyRow in propertyRows {
-            propertyRow.isHidden = properties.isDisjoint(with: propertyRow.property.flags)
+            let isCarriedByNothing = properties.isDisjoint(with: propertyRow.property.flags)
+            propertyRow.isHidden = isCarriedByNothing && scope[propertyRow.property] == .any
         }
         // With no row left — a plain C or Objective-C image — the section
         // would otherwise be a heading over nothing.

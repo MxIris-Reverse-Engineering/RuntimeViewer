@@ -24,13 +24,20 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     /// Mirrors the search field's "Match Case" toggle: `true` matches case
     /// sensitively. `FilterContext` carries the inverse
     /// (`isCaseInsensitive`); `scheduleRefilter()` is the only place the two
-    /// meet. Defaults to `false` so the filter ignores case until asked not
-    /// to, matching the toggle's own unselected default.
+    /// meet. Starts as `AppDefaults.isRuntimeObjectFilterCaseSensitive`, the
+    /// toggle as the user last left it on any image; the view sets its toggle
+    /// to this value before it binds.
     @RxObserved public private(set) var isSearchCaseSensitive: Bool = false
     @RxObserved public private(set) var loadingProgress: Double = 0
     @RxObserved public private(set) var loadingDescription: String = ""
     @RxObserved public private(set) var loadingItemCount: String = ""
+    /// The image's Filter Scope. Starts as the scope remembered for this
+    /// engine and image, and is kept in step with it both ways — see
+    /// `rememberScopeChanges()`.
     @RxObserved public private(set) var scope: RuntimeObjectScope = .init()
+
+    /// Where this image's Filter Scope is remembered.
+    private let scopeMemory: RuntimeObjectScopeMemory
 
     /// Distinct kinds that actually appear in the current image (top-level
     /// nodes and every descendant). The scope popover uses this to skip
@@ -118,7 +125,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         self.imageNode = imageNode
         self.imagePath = imagePath
         self.imageName = imageNode.name
+        self.scopeMemory = RuntimeObjectScopeMemory(engine: documentState.runtimeEngine, imagePath: imagePath)
         super.init(documentState: documentState, router: router)
+
+        // Before the first reload, which filters by both.
+        scope = scopeMemory.scope(in: appDefaults.runtimeObjectScopesByEngineAndImagePath)
+        isSearchCaseSensitive = appDefaults.isRuntimeObjectFilterCaseSensitive
+        rememberScopeChanges()
 
         runtimeEngine.dataChangePublisher
             .asObservable()
@@ -182,6 +195,42 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         }
     }
 
+    /// Keeps `scope` and the scope remembered for this engine and image in
+    /// step, both ways.
+    ///
+    /// Every change of `scope` — the scope popover, a reveal that clears it —
+    /// is written to the store. Every change of the store — the image's other
+    /// page, or a window on the same engine and image — is read back. What is
+    /// read back is the store's current value, not the one the change carries:
+    /// the store writes asynchronously, so a change can arrive after a later
+    /// write, and taking what it carries would put the older scope back. Both
+    /// sides act only on a difference, so a write that comes back as a change
+    /// of the store does nothing.
+    private func rememberScopeChanges() {
+        $scope
+            .asObservable()
+            .skip(1)
+            .subscribeOnNext { [weak self] scope in
+                guard let self else { return }
+                let rememberedScopes = appDefaults.runtimeObjectScopesByEngineAndImagePath
+                let updatedScopes = scopeMemory.remembering(scope, in: rememberedScopes)
+                guard updatedScopes != rememberedScopes else { return }
+                appDefaults.runtimeObjectScopesByEngineAndImagePath = updatedScopes
+            }
+            .disposed(by: rx.disposeBag)
+
+        appDefaults.$runtimeObjectScopesByEngineAndImagePath
+            .skip(1)
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribeOnNext { [weak self] _ in
+                guard let self else { return }
+                let rememberedScope = scopeMemory.scope(in: appDefaults.runtimeObjectScopesByEngineAndImagePath)
+                guard rememberedScope != scope else { return }
+                scope = rememberedScope
+            }
+            .disposed(by: rx.disposeBag)
+    }
+
     @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel>
@@ -197,7 +246,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let filter: Driver<NavigatorTextFilter>
         /// The "Match Case" toggle: `true` == case sensitive. Callers with
         /// no such control pass `.just(false)` for the case-insensitive
-        /// default.
+        /// default. A caller with the toggle starts it at the view model's
+        /// `isSearchCaseSensitive`; every value after the first is the user
+        /// toggling it, and is remembered for every image.
         public let isSearchCaseSensitive: Driver<Bool>
         /// Row context menu "Jump to Swift Class" / "Jump to Objective-C
         /// Class": push the other face of the row's class
@@ -284,6 +335,18 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 self.filter = filter
                 self.isSearchCaseSensitive = isSearchCaseSensitive
                 scheduleRefilter()
+            }
+            .disposed(by: rx.disposeBag)
+
+        // The first value is where the caller's toggle starts — the view
+        // model's own value, or `false` from a caller without one — so only
+        // the values after it are the user's, and only those are remembered.
+        input.isSearchCaseSensitive
+            .skip(1)
+            .distinctUntilChanged()
+            .driveOnNext { [weak self] isSearchCaseSensitive in
+                guard let self else { return }
+                appDefaults.isRuntimeObjectFilterCaseSensitive = isSearchCaseSensitive
             }
             .disposed(by: rx.disposeBag)
 

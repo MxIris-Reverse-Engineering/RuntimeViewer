@@ -582,10 +582,14 @@ When adding new features, you **MUST** follow these rules:
    `isSwiftProtocol` and `isObjCProtocol` share `bridgedSwiftProtocol`). A flag belongs to at least
    one row, and to more than one when two rows overlap: `isSwiftClass` and `isSwiftProtocol` are
    also in `swiftDefined`, which takes the Objective-C entries of Swift-defined classes and
-   protocols and leaves their Swift entries alone.
+   protocols and leaves their Swift entries alone. **A `Property` case's raw value is stored**: the
+   scope of every image is remembered per engine and image (`RuntimeObjectScopeMemory`, in
+   `AppDefaults.runtimeObjectScopesByEngineAndImagePath`), so never rename a raw value of
+   `Property` or `PropertyState` — a remembered scope would quietly drop that constraint.
    Background: `Documentations/Evolutions/0049-scope-filter-all-object-properties.md`, for
    `swiftDefined` `Documentations/Evolutions/0062-swift-defined-objc-protocol-mark-and-filter.md`,
-   and for the protocol pair `Documentations/Evolutions/0063-swift-declared-objc-protocols-in-swift-list.md`.
+   for the protocol pair `Documentations/Evolutions/0063-swift-declared-objc-protocols-in-swift-list.md`,
+   and for the memory `Documentations/Evolutions/draft-filter-scope-memory.md`.
 
 ## Injection commands
 
