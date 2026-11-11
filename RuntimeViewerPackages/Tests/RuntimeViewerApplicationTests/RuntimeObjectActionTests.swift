@@ -51,10 +51,11 @@ struct RuntimeObjectActionTests {
         let harness = try await Harness.make(router: router)
         defer { withExtendedLifetime(harness.viewModel) {} }
         let nsObject = try await harness.nsObject()
+        // Made inside the environment, so it records into the environment's defaults.
+        let session = harness.environment.make { harness.environment.documentState.findSession }
 
         harness.viewModel.perform(.findTypeReferences, on: nsObject)
 
-        let session = harness.environment.documentState.findSession
         #expect(session.query.mode == .typeReferences)
         #expect(session.query.crossReferenceRoot == .type(nsObject))
     }

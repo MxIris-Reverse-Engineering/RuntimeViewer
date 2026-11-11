@@ -35,6 +35,8 @@ struct RuntimeObjectActionWiringTests {
 
         actionRelay.accept(RuntimeObjectActionRequest(action: .copyName, runtimeObject: nsObject))
 
+        // The sidebar's handlers run in a main-actor task of their own.
+        try await waitUntil { !environment.pasteboard.copiedStrings.isEmpty }
         #expect(environment.pasteboard.copiedStrings == [nsObject.displayName])
     }
 
