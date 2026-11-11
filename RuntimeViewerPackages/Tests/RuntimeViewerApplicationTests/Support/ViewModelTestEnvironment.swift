@@ -26,6 +26,11 @@ struct ViewModelTestEnvironment {
     let settings: SettingsAccess
     let resolvedThemeStream: ResolvedThemeStream
     let documentState: DocumentState
+    /// What the context menus' copy commands wrote: the general pasteboard is
+    /// the user's.
+    let pasteboard = RecordingPasteboard()
+    /// The files Show in Finder asked to show: no Finder window opens.
+    let finder = RecordingFinder()
 
     init(runtimeEngine: RuntimeEngine? = nil) {
         let appDefaults = AppDefaults.isolated()
@@ -47,10 +52,12 @@ struct ViewModelTestEnvironment {
 
     func make<Result>(_ build: () throws -> Result) rethrows -> Result {
         try withDependencies(
-            {
+            { [pasteboard, finder] in
                 $0.appDefaults = appDefaults
                 $0.settings = settings
                 $0.resolvedThemeStream = resolvedThemeStream
+                $0.pasteboardClient = PasteboardClient { string in pasteboard.copiedStrings.append(string) }
+                $0.finderClient = FinderClient { fileURL in finder.revealedFileURLs.append(fileURL) }
             },
             operation: build
         )
@@ -71,6 +78,18 @@ struct ViewModelTestEnvironment {
     func startBackgroundWork() {
         make { documentState.startBackgroundWork() }
     }
+}
+
+/// The strings a test's view models copied, in order.
+@MainActor
+final class RecordingPasteboard {
+    var copiedStrings: [String] = []
+}
+
+/// The files a test's view models asked the Finder to show, in order.
+@MainActor
+final class RecordingFinder {
+    var revealedFileURLs: [URL] = []
 }
 
 extension AppDefaults {
