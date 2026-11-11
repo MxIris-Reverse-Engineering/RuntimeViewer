@@ -5,7 +5,7 @@ import Testing
 @testable import RuntimeViewerApplication
 
 /// The lists that offer the runtime object commands carry out the ones their
-/// menus report (draft-context-menus).
+/// menus report (proposal `context-menus`).
 @Suite("RuntimeObjectAction wiring")
 @MainActor
 struct RuntimeObjectActionWiringTests {

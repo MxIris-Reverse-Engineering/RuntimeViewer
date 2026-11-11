@@ -6,7 +6,7 @@ import Testing
 
 /// The object pages remember their Filter Scope per engine and image, share it
 /// between the image's pages, and remember the Match Case toggle for every
-/// image (draft-filter-scope-memory).
+/// image (proposal `filter-scope-memory`).
 @Suite("Sidebar Filter Scope memory")
 @MainActor
 struct SidebarRuntimeObjectScopeMemoryTests {

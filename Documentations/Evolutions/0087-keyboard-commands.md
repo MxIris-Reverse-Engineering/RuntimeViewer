@@ -1,11 +1,12 @@
-# Draft - 键盘与标准命令：前进后退、回车、删除与拷贝
+# 0087 - 键盘与标准命令：前进后退、回车、删除与拷贝
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-11
 - **最后更新**: 2026-11-11
 - **所属愿景**: 无
-- **关联提案**: `draft-context-menus`（共用的对象命令与镜像命令，本提案的拷贝与打开都走它们）、[0076](0076-editor-panes.md)（每个标签有自己的导航历史）
-- **实现分支 / PR**: `feature/keyboard-commands`（从本地 `next` 切出，`next` 已含 `feature/filter-scope-memory` 与 `feature/context-menus`）
+- **关联提案**: [0086](0086-context-menus.md)（共用的对象命令与镜像命令，本提案的拷贝与打开都走它们）、[0085](0085-filter-scope-memory.md)（同批的交互补全）、[0076](0076-editor-panes.md)（每个标签有自己的导航历史）
+- **实现分支 / PR**: `feature/keyboard-commands`（从本地 `next` 切出，`next` 已含 `feature/filter-scope-memory` 与 `feature/context-menus`；并回 `next`）
+- **配套文档**: 无 —— 理由见决策日志
 
 ## 摘要
 
@@ -47,3 +48,4 @@
 | 2026-11-11 | ⌘C 也拷贝文件夹行的名字 | 镜像列表里选中的可能是路径中间的文件夹；拷贝名字对它同样有意义，右键菜单的 Copy Name 只给镜像是因为文件夹没有别的命令 |
 | 2026-11-11 | README 的 Highlights 在本分支一并补上三块交互补全 | 三块按顺序落地，README 一处改完比分在三条分支上各改一次少一轮冲突 |
 | 2026-11-11 | 实现完成，待用户看过后收尾 | 自审没有发现要修的问题；文档：提案、两个索引与 README 已同批更新，`StatefulOutlineView` 的新入口写在它自己的文档注释里，不需要改 `AGENTS.md`，没有新术语 |
+| 2026-11-11 | 用户看过后收尾，落地为 0087，状态改 Implemented | 与方案没有偏离，没有留下未做的项。用户看效果时报的「揭示的行停在钉住的分节标题下」是之前就有的问题，另修在 `fix/reveal-below-pinned-rows`（`ResolvedIssues/2026-11-11-revealed-row-under-pinned-section-header.md`）。不配使用指南或实现说明：快捷键在菜单里看得到，README 已写；没有新术语 |

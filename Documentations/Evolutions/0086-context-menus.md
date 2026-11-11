@@ -1,11 +1,12 @@
-# Draft - 补全右键菜单：各处列出的对象用同一组命令
+# 0086 - 补全右键菜单：各处列出的对象用同一组命令
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-11
 - **最后更新**: 2026-11-11
 - **所属愿景**: 无
-- **关联提案**: [0022](0022-reveal-in-sidebar-navigator.md)（Reveal in Sidebar Navigator）、[0056](0056-cross-references.md)（交叉引用）、[0076](0076-editor-panes.md)（编辑器分栏与标签）、[0084](0084-objc-generated-interface.md)（Generated Interface）、`draft-filter-scope-memory`（同批的交互补全，先落地）
-- **实现分支 / PR**: `feature/context-menus`（从本地 `next` 切出，`next` 已含 `feature/filter-scope-memory`）
+- **关联提案**: [0022](0022-reveal-in-sidebar-navigator.md)（Reveal in Sidebar Navigator）、[0056](0056-cross-references.md)（交叉引用）、[0076](0076-editor-panes.md)（编辑器分栏与标签）、[0084](0084-objc-generated-interface.md)（Generated Interface）、[0085](0085-filter-scope-memory.md)（同批的交互补全，先落地）、[0087](0087-keyboard-commands.md)（同批，拷贝与打开复用本提案的命令）
+- **实现分支 / PR**: `feature/context-menus`（从本地 `next` 切出，`next` 已含 `feature/filter-scope-memory`；并回 `next`）
+- **配套文档**: 无 —— 理由见决策日志
 
 ## 摘要
 
@@ -60,3 +61,4 @@
 | 2026-11-11 | 标签菜单去掉 Open in New Tab 与 Open Generated Interface | 两者都作用于焦点窗格的当前标签，在别的标签上选会打开错的对象 |
 | 2026-11-11 | 命令的执行放在 `ViewModel` 基类的 `perform(_:on:)`，不放在 `DocumentState` | 剪贴板依赖要在 ViewModel 创建时解析（测试环境才替换得到）；`DocumentState` 在测试里建在依赖覆盖之外 |
 | 2026-11-11 | 实现完成，待用户看过后收尾 | 自审没有发现要修的问题；文档：提案、两个索引与 `RuntimeViewerUsingAppKit/AGENTS.md` 的一条约定已同批更新，不需要另写指南或实现说明，没有新术语 |
+| 2026-11-11 | 用户看过后收尾，落地为 0086，状态改 Implemented | 偏离方案之处只有 References 列表没加菜单（上一行已记）。导出、加入 Always Index、跨镜像的 Reveal 与 References 的菜单列为暂缓的后续项。不配使用指南或实现说明：菜单本身就是说明，约定已写进 `AGENTS.md`；没有新术语 |

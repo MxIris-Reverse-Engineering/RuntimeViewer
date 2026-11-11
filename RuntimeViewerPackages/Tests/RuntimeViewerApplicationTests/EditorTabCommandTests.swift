@@ -6,7 +6,7 @@ import RuntimeViewerArchitectures
 @testable import RuntimeViewerApplication
 
 /// An editor tab's context menu and the order a drag leaves the tabs in
-/// (draft-context-menus).
+/// (proposal `context-menus`).
 @Suite("Editor tab commands")
 @MainActor
 struct EditorTabCommandTests {

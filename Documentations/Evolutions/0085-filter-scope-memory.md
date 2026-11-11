@@ -1,11 +1,12 @@
-# Draft - Filter Scope 按 Engine 与 Image 记住
+# 0085 - Filter Scope 按 Engine 与 Image 记住
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-11
 - **最后更新**: 2026-11-11
 - **所属愿景**: 无
 - **关联提案**: [0049](0049-scope-filter-all-object-properties.md)（Filter Scope 补齐全部属性）、[0054](0054-always-index-per-engine.md)（Engine 的稳定键：本机 Attach 的进程按进程名认）、[0022](0022-reveal-in-sidebar-navigator.md)（Reveal 为露出那一行清掉过滤条件）
-- **实现分支 / PR**: `feature/filter-scope-memory`（从 `next` 切出）
+- **实现分支 / PR**: `feature/filter-scope-memory`（从 `next` 切出，并回 `next`）
+- **配套文档**: 无 —— 理由见决策日志
 
 ## 摘要
 
@@ -59,3 +60,4 @@
 | 2026-11-11 | Engine 键沿用 Always Index 的 `EngineReference.key(for:)`，不用书签的 scope 键 | 书签键对本机 Attach 的进程带 pid，目标一重启就对不上；Scope 是用户写的过滤条件，按进程名共用正合适 |
 | 2026-11-11 | Match Case 只记调用方第一个值之后的变化 | 第一个值是开关的起点：有开关的页面先把开关设成记住的值，没有开关的调用方（iOS）传常量 `false`，不能拿它覆盖记住的值 |
 | 2026-11-11 | 实现完成，待用户看过后收尾 | 自审没有发现要修的问题；文档：提案、两个索引与 `AGENTS.md` 的规则已同批更新，不需要另写指南或实现说明，没有新术语 |
+| 2026-11-11 | 用户看过后收尾，落地为 0085，状态改 Implemented | 与方案没有偏离，没有留下未做的项。不配使用指南或实现说明：行为一句话说得清，README 的 Highlights（随 0087 落地）已写明；没有新术语要进术语表 |

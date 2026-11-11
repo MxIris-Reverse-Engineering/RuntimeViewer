@@ -5,7 +5,7 @@ import Testing
 @testable import RuntimeViewerApplication
 
 /// The image list's context menu and the Find results' Copy
-/// (draft-context-menus).
+/// (proposal `context-menus`).
 @Suite("Image and Find result commands")
 @MainActor
 struct ImageAndFindResultCommandTests {

@@ -3,7 +3,7 @@ import Testing
 import RuntimeViewerUI
 
 /// The keys a list page gives a meaning of its own, and the outline handing them to the page
-/// first (draft-keyboard-commands).
+/// first (proposal `keyboard-commands`).
 @Suite("List key presses")
 @MainActor
 struct ListKeyPressTests {

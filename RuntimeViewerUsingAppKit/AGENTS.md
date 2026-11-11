@@ -344,7 +344,7 @@ cell-reuse code) for data already produced by an Rx pipeline.
    optional methods to the delegate you set.
 8. **Context menus** — `tableView.installContextMenu(items:)` with `ContextMenuItem` entries. Commands on
    a runtime object come from `RuntimeObjectAction` and run in `ViewModel.perform(_:on:)`, titled only by
-   `RuntimeObjectAction+Menu`, so every list offers them alike (`draft-context-menus`).
+   `RuntimeObjectAction+Menu`, so every list offers them alike (`Documentations/Evolutions/0086-context-menus.md`).
 
 ### Cell ViewModels
 

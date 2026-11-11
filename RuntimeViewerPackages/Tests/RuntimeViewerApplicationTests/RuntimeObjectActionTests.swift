@@ -5,7 +5,7 @@ import Testing
 @testable import RuntimeViewerApplication
 
 /// The commands every context menu offers on a runtime object, and what each
-/// does (draft-context-menus).
+/// does (proposal `context-menus`).
 @Suite("RuntimeObjectAction")
 @MainActor
 struct RuntimeObjectActionTests {
