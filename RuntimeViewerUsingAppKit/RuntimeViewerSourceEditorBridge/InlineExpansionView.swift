@@ -53,8 +53,13 @@ final class InlineExpansionView: NSView {
         super.init(frame: .zero)
 
         semanticNodeTypeAdjuster.load(semanticRanges: semanticRanges, nodeTypeNames: semanticNodeTypeNames)
+        // The text as it comes: a document gets a line ending appended at its end, which here
+        // would show as an empty last line. The framework's own embedded editors and its Go To
+        // preview make the same setting, the preview before it builds the data source as here.
+        var formattingOptions = SourceEditorFormattingOptions()
+        formattingOptions.lineEndingAtEndOfFileBehavior = .optional
         let dataSource = SourceEditorDataSource(usingMutableString: NSMutableString(string: source),
-            language: language, formattingOptions: SourceEditorFormattingOptions())
+            language: language, formattingOptions: formattingOptions)
         // As in `setSource`: reading `languageService` creates it, and the adjuster goes in before
         // anything asks the data source to parse.
         if let languageService = dataSource.languageService as? SourceModelLanguageService {
