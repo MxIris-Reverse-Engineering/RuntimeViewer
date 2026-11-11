@@ -200,13 +200,57 @@ open class StatefulOutlineView: OutlineView {
     /// arrives from the Inspector or the history. Scrolling first, and forcing the layout the raw
     /// clip-view scroll would otherwise defer, means the row view already exists when the
     /// selection lands, so selection and emphasis are drawn in the same pass.
+    ///
+    /// "On screen" means where nothing pinned over the list covers it — see
+    /// `bringRowOutFromUnderPinnedContent(_:)`.
     public func selectRowBringingIntoView(_ row: Int) {
         guard row >= 0, row < numberOfRows else { return }
-        if !box.visibleRowIndexes.contains(row) {
-            box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
-            layoutSubtreeIfNeeded()
-        }
+        bringRowOutFromUnderPinnedContent(row)
         selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+    }
+
+    /// Scrolls `row` to the middle of the part of the list nothing pinned covers, unless it lies
+    /// wholly inside that part already.
+    ///
+    /// Two things are pinned over a sidebar list from macOS 26 on: the bars it runs under — the
+    /// toolbar and the tab switcher's bar above, the filter bar below — which reach it as the clip
+    /// view's content insets (`NavigatorScrollViewLayout`), and the header of the row's section,
+    /// which a list whose group rows float pins right under the top bars while the section scrolls
+    /// beneath it. All of the visible rect counts as visible to AppKit, so a row under any of them
+    /// used to be taken for one on screen and left covered, and a row near the top of the list was
+    /// scrolled no further up than the document's top edge, under the bars.
+    private func bringRowOutFromUnderPinnedContent(_ row: Int) {
+        guard let scrollView = enclosingScrollView else { return }
+        let clipView = scrollView.contentView
+        let contentInsets = clipView.contentInsets
+        let rowRect = rect(ofRow: row)
+        let coveredTopHeight = contentInsets.top + pinnedSectionHeaderHeight(over: row)
+        let uncoveredMinY = clipView.bounds.minY + coveredTopHeight
+        let uncoveredMaxY = clipView.bounds.maxY - contentInsets.bottom
+        guard rowRect.minY < uncoveredMinY || rowRect.maxY > uncoveredMaxY else { return }
+
+        let uncoveredHeight = clipView.bounds.height - coveredTopHeight - contentInsets.bottom
+        var proposedBounds = clipView.bounds
+        proposedBounds.origin.y = rowRect.midY - uncoveredHeight / 2 - coveredTopHeight
+        // The clip view keeps the bounds where it can scroll to, which with content insets starts
+        // above the document's top edge, so the first rows can come out from under the top bars.
+        let scrolledBounds = clipView.constrainBoundsRect(proposedBounds)
+        clipView.scroll(to: scrolledBounds.origin)
+        scrollView.reflectScrolledClipView(clipView)
+        layoutSubtreeIfNeeded()
+    }
+
+    /// The height of the section header that is pinned over `row` while the row's section scrolls
+    /// under the top bars: the row of the top-level group item the row sits under, when group rows
+    /// float. Zero for a group row itself, and for a row of a list without floating group rows.
+    private func pinnedSectionHeaderHeight(over row: Int) -> CGFloat {
+        guard floatsGroupRows, var topLevelItem = item(atRow: row) else { return 0 }
+        while let parentItem = parent(forItem: topLevelItem) {
+            topLevelItem = parentItem
+        }
+        let headerRow = self.row(forItem: topLevelItem)
+        guard headerRow >= 0, headerRow != row, delegate?.outlineView?(self, isGroupItem: topLevelItem) == true else { return 0 }
+        return rect(ofRow: headerRow).height
     }
 
     // MARK: - Row Height Estimation
