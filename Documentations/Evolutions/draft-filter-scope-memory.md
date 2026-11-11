@@ -42,7 +42,7 @@
 
 **落地步骤**
 
-1. `RuntimeObjectScope` 的编码与宽松解码、`RuntimeObjectScopeMemory`、`AppDefaults` 的两项；单元测试。
+1. ✅ `RuntimeObjectScope` 的编码与宽松解码、`RuntimeObjectScopeMemory`、`AppDefaults` 的两项；单元测试。
 2. `SidebarRuntimeObjectViewModel` 接入记忆、页面间同步与 Match Case；ViewModel 测试。
 3. 视图：Match Case 按钮的初值、弹窗显示有约束的行；`AGENTS.md` 补一条规则（`Property` 的原始值是存盘格式）。
 
