@@ -132,6 +132,13 @@ With `--full`, an Objective-C method ends in `// IMP: 0x…`, a property in
 comments on the lines **above** it: `// Address: 0x…`, `// Address (getter): 0x…`,
 `// VTable offset: <n>`.
 
+**Macro expansions are folded except under `--full`.** By default a class compiled from
+`@Observable` reads as its source does — `@Observation.Observable` on the class, each tracked
+property a plain `var` — and the members the macro generated are left out: the
+`_$observationRegistrar`, the `_x` storage, `access(keyPath:)`, `withMutation(keyPath:_:)` and the
+`extension …: Observation.Observable`. A folded `var` keeps its storage's field offset comment;
+`--full` prints everything the macro generated as the binary holds it.
+
 `members` prints `ADDRESS`, `KIND`, `NAME` and `SYMBOL` for each member; `--member` is a
 case-insensitive substring filter on the name.
 

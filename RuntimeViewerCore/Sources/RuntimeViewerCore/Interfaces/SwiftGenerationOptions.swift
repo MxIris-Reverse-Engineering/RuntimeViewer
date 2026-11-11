@@ -67,6 +67,14 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
     @Default(false)
     public var printExportedDeclarationsOnly: Bool
 
+    /// Show what an attached macro generated as the binary holds it instead of as its source reads.
+    /// Off, a class compiled from `@Observable` prints with `@Observation.Observable` and each tracked
+    /// property as a plain `var`; on, it prints the registrar, the `_x` storage, the computed
+    /// properties and the generated methods — MachOSwiftSection's `expandsMacros`. Off in settings
+    /// saved before it existed.
+    @Default(false)
+    public var expandsMacros: Bool
+
     public static let `default` = Self()
 }
 

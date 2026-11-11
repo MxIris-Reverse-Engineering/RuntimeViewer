@@ -24,6 +24,18 @@ extension RuntimeObjectInterface {
         @Default(false)
         public var marksCommentStructure: Bool
 
+        /// Asks the engine to send, with an interface printed folded, the attached macros it shows
+        /// — `@Observation.Observable` on a class compiled from `@Observable` — each with where its
+        /// attribute is and the declarations it generated (`RuntimeObjectInterface.macroExpansions`),
+        /// for a viewer that shows them below the attribute as Xcode shows an expanded macro. The
+        /// text is the same either way.
+        ///
+        /// Not a Generation Option the user sets: the content pane decides it for each request (the
+        /// SourceEditor pane), like `marksCommentStructure`. A peer that predates it ignores the key
+        /// and sends no expansions.
+        @Default(false)
+        public var marksAttachedMacros: Bool
+
         /// The language to write the interface in: `nil` for the object's own; `.swift` asks for an
         /// Objective-C class, category or protocol as Swift imports it (Generated Interface).
         ///
@@ -33,8 +45,9 @@ extension RuntimeObjectInterface {
         public var interfaceLanguage: RuntimeInterfaceLanguage? = nil
 
         /// Options tuned for MCP usage: all strip options disabled, all add options enabled,
-        /// all Swift detail options enabled, and every declaration printed, exported or not.
-        /// Provides maximum information to LLM clients.
+        /// all Swift detail options enabled, every declaration printed, exported or not, and
+        /// macro expansions printed as the binary holds them. Provides maximum information to
+        /// LLM clients.
         public static let mcp = GenerationOptions(
             objcHeaderOptions: ObjCGenerationOptions(
                 stripProtocolConformance: false,
@@ -59,7 +72,8 @@ extension RuntimeObjectInterface {
                 printTypeLayout: true,
                 printEnumLayout: true,
                 synthesizeOpaqueType: true,
-                printExportedDeclarationsOnly: false
+                printExportedDeclarationsOnly: false,
+                expandsMacros: true
             )
         )
     }

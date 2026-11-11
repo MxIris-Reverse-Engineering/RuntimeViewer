@@ -848,7 +848,7 @@ public actor RuntimeEngine {
         switch name.kind {
         case .swift:
             if let swiftSection = await swiftSectionFactory.existingSection(for: name.imagePath) {
-                try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
+                try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure, marksAttachedMacros: options.marksAttachedMacros)
                 if let interface = try? await swiftSection.interface(for: name) {
                     return interface
                 }
@@ -900,7 +900,7 @@ public actor RuntimeEngine {
         guard case .objc(let objcKind) = object.kind else { return nil }
         if await objcSectionFactory.existingSection(for: object.imagePath) != nil,
            let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath) {
-            try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
+            try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure, marksAttachedMacros: options.marksAttachedMacros)
             if let interface = try await swiftSection.importedInterface(for: object) {
                 return interface
             }
@@ -916,7 +916,7 @@ public actor RuntimeEngine {
         }
         guard let definingImagePath, definingImagePath != object.imagePath else { return nil }
         let (_, swiftSection) = try await swiftSectionFactory.section(for: definingImagePath)
-        try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
+        try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure, marksAttachedMacros: options.marksAttachedMacros)
         return try await swiftSection.importedInterface(for: object.withImagePath(definingImagePath))
     }
 
@@ -941,7 +941,7 @@ public actor RuntimeEngine {
         if let definingImagePath = await swiftSectionFactory.imagePath(definingTypeWithCandidateID: mangledName),
            let section = await swiftSectionFactory.existingSection(for: definingImagePath),
            let object = await section.makeRuntimeObject(forMangledTypeName: mangledName) {
-            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
+            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure, marksAttachedMacros: options.marksAttachedMacros)
             if let interface = try? await section.interface(for: object) {
                 return interface
             }
@@ -950,7 +950,7 @@ public actor RuntimeEngine {
         if let definingImagePath = await swiftSectionFactory.imagePath(definingProtocolWithCandidateID: mangledName),
            let section = await swiftSectionFactory.existingSection(for: definingImagePath),
            let object = await section.makeRuntimeObject(forMangledProtocolName: mangledName) {
-            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure)
+            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift, marksCommentStructure: options.marksCommentStructure, marksAttachedMacros: options.marksAttachedMacros)
             if let interface = try? await section.interface(for: object) {
                 return interface
             }

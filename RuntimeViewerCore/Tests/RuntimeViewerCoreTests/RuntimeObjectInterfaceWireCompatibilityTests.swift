@@ -347,6 +347,43 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         #expect(String(describing: responseError) == String(describing: columnarError))
     }
 
+    /// The attached macros a folded interface shows, with what each generated, for the
+    /// SourceEditor pane to expand: the columnar encoding carries them with the rest of the
+    /// interface, and an interface without them leaves the key out.
+    @Test("the macro expansions travel with the columnar encoding")
+    func macroExpansionsTravelWithColumnarEncoding() throws {
+        let request = RuntimeEngine.InterfaceCommand(object: Self.object, options: RuntimeObjectInterface.GenerationOptions(), acceptsColumnarInterfaceString: true)
+        let interface = Self.interfaceWithMacroExpansion()
+
+        let data = try JSONEncoder().encode(request.response(for: interface))
+
+        let response = try JSONDecoder().decode(RuntimeObjectInterfaceResponse.self, from: data)
+        #expect(response.interfaceStringEncoding == .columnar)
+        try Self.expectSameMacroExpansions(response.interface, interface)
+
+        let withoutExpansions = RuntimeObjectInterface(object: Self.object, interfaceString: SemanticString(components: Self.shippedInterfaceComponents))
+        let dataWithoutExpansions = try JSONEncoder().encode(request.response(for: withoutExpansions))
+        #expect(!String(decoding: dataWithoutExpansions, as: UTF8.self).contains("macroExpansions"))
+    }
+
+    private static func interfaceWithMacroExpansion() -> RuntimeObjectInterface {
+        let expansion = RuntimeInterfaceMacroExpansion(
+            macroName: "Observation.Observable",
+            attributeUTF8Range: 0 ..< 23,
+            expansionString: SemanticString(components: shippedInterfaceComponents).frozen()
+        )
+        return RuntimeObjectInterface(object: object, interfaceString: SemanticString(components: shippedInterfaceComponents), macroExpansions: [expansion])
+    }
+
+    private static func expectSameMacroExpansions(_ received: RuntimeObjectInterface?, _ sent: RuntimeObjectInterface) throws {
+        let receivedExpansion = try #require(received?.macroExpansions?.first)
+        let sentExpansion = try #require(sent.macroExpansions?.first)
+        #expect(received?.macroExpansions?.count == 1)
+        #expect(receivedExpansion.macroName == sentExpansion.macroName)
+        #expect(receivedExpansion.attributeUTF8Range == sentExpansion.attributeUTF8Range)
+        #expect(receivedExpansion.expansionString == sentExpansion.expansionString)
+    }
+
     #if canImport(SwiftyXPC)
     // A Mach service connection encodes with SwiftyXPC rather than JSON, and
     // an injected 3.0.0-beta.6 payload answers through one.
@@ -387,6 +424,20 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         let response = try XPCDecoder().decode(type: RuntimeObjectInterfaceResponse.self, from: encodedReply)
         #expect(response.interfaceStringEncoding == .columnar)
         #expect(response.interface?.interfaceString == interface.interfaceString)
+    }
+
+    /// The app's own engine runs in an XPC service, so this is the path the SourceEditor pane's
+    /// macro expansions take.
+    @Test("over a Mach service, the macro expansions travel with the columnar encoding")
+    func macroExpansionsTravelOverMachService() throws {
+        let request = RuntimeEngine.InterfaceCommand(object: Self.object, options: RuntimeObjectInterface.GenerationOptions(), acceptsColumnarInterfaceString: true)
+        let interface = Self.interfaceWithMacroExpansion()
+
+        let encodedReply = try XPCEncoder().encode(request.response(for: interface))
+
+        let response = try XPCDecoder().decode(type: RuntimeObjectInterfaceResponse.self, from: encodedReply)
+        #expect(response.interfaceStringEncoding == .columnar)
+        try Self.expectSameMacroExpansions(response.interface, interface)
     }
     #endif
 }

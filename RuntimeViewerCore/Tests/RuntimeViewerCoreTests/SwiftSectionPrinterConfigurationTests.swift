@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import RuntimeViewerCore
 
-/// What `RuntimeSwiftSection.updateConfiguration(using:transformer:marksCommentStructure:)`
+/// What `RuntimeSwiftSection.updateConfiguration(using:transformer:marksCommentStructure:marksAttachedMacros:)`
 /// does to the section's printer. The engine updates the section before every
 /// Swift interface it prints, almost always with the options it already has,
 /// so an update that changes nothing must leave the printer alone: a new
@@ -35,7 +35,7 @@ struct SwiftSectionPrinterConfigurationTests {
     }
 
     private static func update(_ section: RuntimeSwiftSection<RuntimeLoadedImageReading>, with options: SwiftGenerationOptions) async throws {
-        try await section.updateConfiguration(using: options, transformer: .init(), marksCommentStructure: false)
+        try await section.updateConfiguration(using: options, transformer: .init(), marksCommentStructure: false, marksAttachedMacros: false)
     }
 
     @Test("updating with the options a section already has leaves its printer alone")

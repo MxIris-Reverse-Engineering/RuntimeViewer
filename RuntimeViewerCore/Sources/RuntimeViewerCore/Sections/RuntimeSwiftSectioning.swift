@@ -12,7 +12,7 @@ protocol RuntimeSwiftSectioning: Actor {
     /// define it.
     func importedInterface(for object: RuntimeObject) async throws -> RuntimeObjectInterface?
 
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool) async throws
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool, marksAttachedMacros: Bool) async throws
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String]
 

@@ -108,6 +108,40 @@ struct SwiftGenerationOptionsTests {
         #expect(options.synthesizeOpaqueType == false)
         #expect(options.memberSortOrder == .byCategory)
         #expect(options.printExportedDeclarationsOnly == false)
+        #expect(options.expandsMacros == false)
+    }
+
+    /// The release that adds Expand Macros prints macro expansions folded by
+    /// default, and so does every saved set of options without its key.
+    @Test("options saved before Expand Macros existed decode with the expansions folded")
+    func optionsSavedBeforeExpandMacrosDecodeFolded() throws {
+        let savedSwiftOptions = Data(#"{"printFieldOffset":true,"printExportedDeclarationsOnly":true}"#.utf8)
+        let decodedSwiftOptions = try JSONDecoder().decode(SwiftGenerationOptions.self, from: savedSwiftOptions)
+        #expect(decodedSwiftOptions.expandsMacros == false)
+        #expect(decodedSwiftOptions.printExportedDeclarationsOnly == true)
+
+        let savedOptions = Data(#"{"swiftInterfaceOptions":{"printFieldOffset":true}}"#.utf8)
+        let decodedOptions = try JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: savedOptions)
+        #expect(decodedOptions.swiftInterfaceOptions.expandsMacros == false)
+    }
+
+    /// The content pane's printer and Find's reading of the corpus both take
+    /// the option through `applySwitches(of:)`, so a search matches the form
+    /// the pane shows.
+    @Test("Expand Macros switches the printer's option of the same name")
+    func expandMacrosReachesThePrinter() {
+        var options = RuntimeObjectInterface.GenerationOptions()
+        #expect(!RuntimeInterfaceVisibility(options).isOptionEnabled("swift.expandsMacros"))
+
+        options.swiftInterfaceOptions.expandsMacros = true
+        #expect(RuntimeInterfaceVisibility(options).isOptionEnabled("swift.expandsMacros"))
+    }
+
+    /// `full` on the command line and the MCP server show everything the
+    /// binary holds, the macros' generated members included.
+    @Test("the MCP options print macro expansions as the binary holds them")
+    func mcpOptionsExpandMacros() {
+        #expect(RuntimeObjectInterface.GenerationOptions.mcp.swiftInterfaceOptions.expandsMacros)
     }
 
     /// Generation Options are kept in the user's defaults; one saved by a

@@ -35,5 +35,6 @@ extension SwiftDeclarationPrintConfiguration {
         printEnumLayout = options.printEnumLayout
         infersObjCOverridesFromSelectorNames = options.infersObjCOverridesFromSelectorNames
         printExportedDeclarationsOnly = options.printExportedDeclarationsOnly
+        expandsMacros = options.expandsMacros
     }
 }

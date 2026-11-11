@@ -60,6 +60,7 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Synthesize Opaque Type", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
             .checkbox(title: "Infers ObjC Overrides From Selector Names", keyPath: \.swiftInterfaceOptions.infersObjCOverridesFromSelectorNames),
             .checkbox(title: "Print Exported Declarations Only", keyPath: \.swiftInterfaceOptions.printExportedDeclarationsOnly),
+            .checkbox(title: "Expand Macros", keyPath: \.swiftInterfaceOptions.expandsMacros),
             .enumOption(title: "Member Sort Order", labels: ["By Category", "By Offset"], keyPath: \.swiftInterfaceOptions.memberSortOrder),
         ]),
     ]

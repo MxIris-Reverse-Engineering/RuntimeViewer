@@ -27,17 +27,24 @@ public struct RuntimeObjectInterface: Codable, Sendable {
     /// answers every request in the object's own language and leaves the key out of its reply.
     public let interfaceLanguage: RuntimeInterfaceLanguage?
 
-    public init(object: RuntimeObject, interfaceString: SemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil) {
+    /// The attached macros `interfaceString` shows folded, with the declarations each generated, in
+    /// text order, when the request asked for them (`GenerationOptions.marksAttachedMacros`); nil
+    /// otherwise, and always nil from a peer that predates it, which leaves the key out of its reply.
+    public let macroExpansions: [RuntimeInterfaceMacroExpansion]?
+
+    public init(object: RuntimeObject, interfaceString: SemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil, macroExpansions: [RuntimeInterfaceMacroExpansion]? = nil) {
         self.object = object
         self.interfaceString = interfaceString.frozen()
         self.commentStructure = commentStructure
         self.interfaceLanguage = interfaceLanguage
+        self.macroExpansions = macroExpansions
     }
 
-    public init(object: RuntimeObject, interfaceString: FrozenSemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil) {
+    public init(object: RuntimeObject, interfaceString: FrozenSemanticString, commentStructure: RuntimeInterfaceCommentStructure? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil, macroExpansions: [RuntimeInterfaceMacroExpansion]? = nil) {
         self.object = object
         self.interfaceString = interfaceString
         self.commentStructure = commentStructure
         self.interfaceLanguage = interfaceLanguage
+        self.macroExpansions = macroExpansions
     }
 }

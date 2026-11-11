@@ -425,12 +425,22 @@ extension RuntimeSwiftSection {
         }
         // Read before printing, as the configuration the print starts with.
         let marksCommentStructure = printer.configuration.marksCommentStructure
+        let marksAttachedMacros = printer.configuration.marksAttachedMacros
         let newInterfaceString = try await printInterface(for: object, using: printer)
-        let newInterface = if marksCommentStructure {
-            RuntimeObjectInterface(object: object, markedInterfaceString: newInterfaceString.frozen(), interfaceLanguage: .swift)
-        } else {
-            RuntimeObjectInterface(object: object, interfaceString: newInterfaceString, interfaceLanguage: .swift)
+        let separatedPrint = Self.separatingMarks(of: newInterfaceString, marksAttachedMacros: marksAttachedMacros,
+                                                  marksCommentStructure: marksCommentStructure)
+        var macroExpansions: [RuntimeInterfaceMacroExpansion]?
+        if marksAttachedMacros, let annotations = separatedPrint.annotations {
+            macroExpansions = try await self.macroExpansions(of: object, definitionRegions: separatedPrint.definitionRegions,
+                                                             annotations: annotations)
         }
+        let newInterface = RuntimeObjectInterface(
+            object: object,
+            interfaceString: separatedPrint.text,
+            commentStructure: marksCommentStructure ? separatedPrint.annotations.map(RuntimeInterfaceCommentStructure.init) : nil,
+            interfaceLanguage: .swift,
+            macroExpansions: macroExpansions
+        )
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
         return newInterface
@@ -448,6 +458,7 @@ extension RuntimeSwiftSection {
         }
         // Read before printing, as the configuration the print starts with.
         let marksCommentStructure = printer.configuration.marksCommentStructure
+        let marksAttachedMacros = printer.configuration.marksAttachedMacros
         let upstreamIndexer = indexer.upstream
         let interfaceString: SemanticString
         switch object.kind {
@@ -463,13 +474,127 @@ extension RuntimeSwiftSection {
         default:
             return nil
         }
-        let interface = if marksCommentStructure {
-            RuntimeObjectInterface(object: object, markedInterfaceString: interfaceString.frozen(), interfaceLanguage: .swift)
-        } else {
-            RuntimeObjectInterface(object: object, interfaceString: interfaceString, interfaceLanguage: .swift)
-        }
+        // The marks attached macros bring are taken out with the rest; an imported interface shows
+        // no macro of its own to expand.
+        let separatedPrint = Self.separatingMarks(of: interfaceString, marksAttachedMacros: marksAttachedMacros,
+                                                  marksCommentStructure: marksCommentStructure)
+        let interface = RuntimeObjectInterface(
+            object: object,
+            interfaceString: separatedPrint.text,
+            commentStructure: marksCommentStructure ? separatedPrint.annotations.map(RuntimeInterfaceCommentStructure.init) : nil,
+            interfaceLanguage: .swift
+        )
         importedInterfaceByObject[object.key] = interface
         return interface
+    }
+
+    /// A display print's text, and the tables of the marks the printer was
+    /// configured to put in it (`updateConfiguration`): the definition regions
+    /// while attached macros are marked, the annotation regions — comments and
+    /// attached macros' attributes — while either is. A table that was not
+    /// asked for is nil. The text is what printing without the marks gives.
+    private static func separatingMarks(of print: SemanticString, marksAttachedMacros: Bool, marksCommentStructure: Bool)
+        -> (text: FrozenSemanticString, definitionRegions: DefinitionRegionTable?, annotations: AnnotationRegionTable?) {
+        var text = print.frozen()
+        var definitionRegions: DefinitionRegionTable?
+        if marksAttachedMacros {
+            let (unmarkedText, regions) = text.separatingDefinitionRegions()
+            text = unmarkedText
+            definitionRegions = regions
+        }
+        var annotations: AnnotationRegionTable?
+        if marksAttachedMacros || marksCommentStructure {
+            let (unmarkedText, regions) = text.separatingAnnotationRegions()
+            text = unmarkedText
+            annotations = regions
+        }
+        return (text, definitionRegions, annotations)
+    }
+
+    /// The macros attached to the definitions in `object`'s print, each with
+    /// the declarations it generated, in text order.
+    ///
+    /// MachOSwiftSection marks each attribute it prints with an annotation
+    /// region of the macro's kind, and every type printed inside another with
+    /// a definition region named after the type's mangled name: an attribute
+    /// belongs to the innermost definition region around it, or to the type
+    /// `object` prints when there is none. The types are looked up in the
+    /// definitions printed, not in `object`'s children, which a caller may
+    /// not have filled in. The expansion is the printer's, under the
+    /// configuration it printed the interface with, its marks taken out.
+    private func macroExpansions(of object: RuntimeObject, definitionRegions: DefinitionRegionTable?,
+                                 annotations: AnnotationRegionTable) async throws -> [RuntimeInterfaceMacroExpansion] {
+        let attributeRegions = annotations.regions.filter {
+            RuntimeInterfaceCommentStructure.isAttachedMacroRegionKind($0.kind.rawValue)
+        }
+        guard !attributeRegions.isEmpty else { return [] }
+
+        let definitions = try printedDefinitions(for: object)
+        let printedType = definitions.lazy.compactMap { definition -> TypeDefinition? in
+            if case .type(let typeDefinition) = definition { return typeDefinition }
+            return nil
+        }.first
+        let nestedTypesByMangledName = Self.nestedTypeDefinitionsByMangledName(in: definitions)
+        let regions = definitionRegions?.regions ?? []
+
+        var expansions: [RuntimeInterfaceMacroExpansion] = []
+        // A type carries one attribute of each macro. A second attributed to
+        // the same type lies in a nested type that was printed without its
+        // region, and whose expansion is therefore unknown: it gets none.
+        var expandedOwners: Set<String> = []
+        for attributeRegion in attributeRegions {
+            guard let macro = Self.knownAttachedMacros.first(where: {
+                AnnotationRegion.Kind.attachedMacro($0) == attributeRegion.kind
+            }) else { continue }
+            let attributeRange = Int(attributeRegion.utf8Offset) ..< Int(attributeRegion.utf8Offset) + Int(attributeRegion.utf8Length)
+            let innermostRegion = regions
+                .filter { region in
+                    let regionStart = Int(region.utf8Offset)
+                    return regionStart <= attributeRange.lowerBound && attributeRange.upperBound <= regionStart + Int(region.utf8Length)
+                }
+                .max { $0.depth < $1.depth }
+            let owner = if let innermostRegion { nestedTypesByMangledName[innermostRegion.identity] } else { printedType }
+            let ownerIdentity = "\(innermostRegion?.identity ?? "")|\(attributeRegion.kind.rawValue)"
+            guard let owner, expandedOwners.insert(ownerIdentity).inserted else { continue }
+            let expansion = try await printer.printMacroExpansion(of: macro, attachedTo: owner)
+            let expansionText = Self.separatingMarks(of: expansion, marksAttachedMacros: true, marksCommentStructure: true).text
+            guard !expansionText.string.isEmpty else { continue }
+            expansions.append(RuntimeInterfaceMacroExpansion(
+                macroName: String(attributeRegion.kind.rawValue.dropFirst("attachedMacro.".count)),
+                attributeUTF8Range: attributeRange,
+                expansionString: expansionText
+            ))
+        }
+        return expansions
+    }
+
+    /// The attached macros MachOSwiftSection recognizes. Computed: the section
+    /// is generic, and a generic type stores no static property.
+    private static var knownAttachedMacros: [SwiftAttachedMacro] { [.observable] }
+
+    /// Every type printed inside `definitions` — nested in the type, or in one
+    /// of its extensions, at any depth — by its mangled name, which is what
+    /// MachOSwiftSection names a nested definition's region after, and what
+    /// the sidebar names the type's object.
+    private static func nestedTypeDefinitionsByMangledName(in definitions: [PrintedDefinition]) -> [String: TypeDefinition] {
+        var typeDefinitionsByMangledName: [String: TypeDefinition] = [:]
+        func visit(_ typeDefinition: TypeDefinition) {
+            if let mangledName = try? mangleAsString(typeDefinition.typeName.node) {
+                typeDefinitionsByMangledName[mangledName] = typeDefinition
+            }
+            typeDefinition.typeChildren.forEach(visit)
+        }
+        for definition in definitions {
+            switch definition {
+            case .type(let typeDefinition):
+                typeDefinition.typeChildren.forEach(visit)
+            case .extension(let extensionDefinition):
+                extensionDefinition.types.forEach(visit)
+            case .protocol, .objcProtocol, .objcCategoryConformance:
+                break
+            }
+        }
+        return typeDefinitionsByMangledName
     }
 
     /// One definition of an object's interface, in printing order.
@@ -1530,10 +1655,13 @@ extension RuntimeSwiftSection {
     /// Configures the display printer for the next `interface(for:)`. With
     /// `marksCommentStructure` on, it also marks what each comment is, which
     /// `interface(for:)` then separates into the interface's comment
-    /// structure; the text is the same either way. A change of either clears
-    /// the interface cache, so an interface with a structure and one without
-    /// never stand in for each other.
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool) async throws {
+    /// structure; with `marksAttachedMacros` on, it marks each attached
+    /// macro's attribute and the definitions printed inside others, from which
+    /// `interface(for:)` works out the interface's macro expansions. The text
+    /// is the same either way. A change of any of them clears the interface
+    /// cache, so an interface with a structure and one without never stand in
+    /// for each other.
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool, marksAttachedMacros: Bool) async throws {
         #log(.debug, "Updating Swift section configuration")
 
         let oldPrintConfiguration = printer.configuration
@@ -1548,6 +1676,11 @@ extension RuntimeSwiftSection {
             transformerChanged: transformerChanged,
         )
         newPrintConfiguration.marksCommentStructure = marksCommentStructure
+        // An attribute region belongs to the innermost definition region
+        // around it, or to the definition printed when there is none
+        // (`macroExpansions(of:definitionRegions:annotations:)`).
+        newPrintConfiguration.marksAttachedMacros = marksAttachedMacros
+        newPrintConfiguration.marksNestedDefinitions = marksAttachedMacros
 
         // The engine updates the section before every interface, nearly
         // always with what it already has. Handing the printer even an equal

@@ -87,9 +87,11 @@ extension Command {
 
 /// Which set of interface generation options a command uses.
 public enum GenerationOptionsChoice: String, Codable, Sendable, Hashable, CaseIterable {
-    /// The library defaults.
+    /// The library defaults, which print a macro's expansion folded: an `@Observable` class reads as
+    /// its source does.
     case `default`
-    /// Every comment and layout detail switched on (`GenerationOptions.mcp`).
+    /// Every comment and layout detail switched on, and macro expansions printed as the binary holds
+    /// them (`GenerationOptions.mcp`).
     case full
     /// What the RuntimeViewer app currently has configured, read from its
     /// persisted options and settings. Falls back to the defaults when the app
