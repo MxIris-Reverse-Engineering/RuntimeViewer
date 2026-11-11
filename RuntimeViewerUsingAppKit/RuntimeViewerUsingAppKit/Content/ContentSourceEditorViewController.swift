@@ -71,6 +71,11 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// What the editor shows.
     private var displayedRenderedInterface: ContentTextViewModel.RenderedInterface?
 
+    /// The text last handed to the editor. A source shown again unchanged — a theme or font change
+    /// renders the same text anew — gets back the macro expansions that were open, which the
+    /// editor drops with every source it is given.
+    private var lastShownSource: String?
+
     /// Set while the view model's first render is still to come and a Find navigator hit is to
     /// be revealed after it: that render must not put the reader back where they last left the
     /// interface, or the restore, which waits for a layout, could scroll the hit away again.
@@ -198,15 +203,69 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         let commentDecorations = settings.editor.showsCommentTags
             ? renderedInterface.commentDecorations.flatMap { $0.isEmpty ? nil : SourceEditorCommentDecorations($0) }
             : nil
+        let source = renderedInterface.attributedString.string
+        let reopenedExpansions = source == lastShownSource
+            ? renderedInterface.macroExpansions.filter { bridge.isInlineExpansionShown(identifier: Self.inlineExpansionIdentifier(for: $0)) }
+            : []
         bridge.setSource(
-            renderedInterface.attributedString.string,
+            source,
             languageIdentifier: languageIdentifier,
             semanticRanges: semanticRanges,
             semanticNodeTypeNames: nodeTypeNames,
             commentDecorations: commentDecorations,
             restoresScrollPosition: !awaitsHighlightedFirstRender
         )
+        lastShownSource = source
         awaitsHighlightedFirstRender = false
+        for expansion in reopenedExpansions {
+            showInlineExpansion(expansion, with: bridge)
+        }
+    }
+
+    // MARK: - Macro Expansions
+
+    /// Expand Macro on an attached macro's attribute, Hide Macro Expansion once it is expanded —
+    /// what Xcode's editor offers on a macro. `nil` for a token outside every attribute.
+    private func macroExpansionMenuItem(forTokenIn characterRange: NSRange) -> NSMenuItem? {
+        guard let bridge, let expansion = displayedRenderedInterface?.macroExpansions.first(where: {
+            NSLocationInRange(characterRange.location, $0.attributeCharacterRange)
+        }) else { return nil }
+        let isShown = bridge.isInlineExpansionShown(identifier: Self.inlineExpansionIdentifier(for: expansion))
+        return NSMenuItem(title: isShown ? "Hide Macro Expansion" : "Expand Macro", action: #selector(macroExpansionAction(_:)), keyEquivalent: "").then {
+            $0.target = self
+            $0.representedObject = expansion
+        }
+    }
+
+    @objc private func macroExpansionAction(_ sender: NSMenuItem) {
+        guard let bridge, let expansion = sender.representedObject as? ContentTextViewModel.MacroExpansion else { return }
+        let identifier = Self.inlineExpansionIdentifier(for: expansion)
+        if bridge.isInlineExpansionShown(identifier: identifier) {
+            bridge.hideInlineExpansion(identifier: identifier)
+        } else {
+            showInlineExpansion(expansion, with: bridge)
+        }
+    }
+
+    /// Shows the declarations the macro generated below its attribute's line, coloured the way the
+    /// interface is.
+    private func showInlineExpansion(_ expansion: ContentTextViewModel.MacroExpansion, with bridge: SourceEditorBridging) {
+        let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: expansion.expansionString)
+        bridge.showInlineExpansion(
+            expansion.expansionString.string,
+            languageIdentifier: "swift",
+            semanticRanges: semanticRanges,
+            semanticNodeTypeNames: nodeTypeNames,
+            title: expansion.macroName.split(separator: ".").last.map(String.init) ?? expansion.macroName,
+            identifier: Self.inlineExpansionIdentifier(for: expansion),
+            belowLineContaining: expansion.attributeCharacterRange
+        )
+    }
+
+    /// Names an expansion by its macro and where its attribute is, which stays the same while the
+    /// text does.
+    private static func inlineExpansionIdentifier(for expansion: ContentTextViewModel.MacroExpansion) -> String {
+        "\(expansion.macroName)@\(expansion.attributeCharacterRange.location)"
     }
 
     /// The find bar's pattern closest to the way the Find navigator's search matched the query.
@@ -370,6 +429,10 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
             menuItems.append(.separator())
         }
         menuItems.append(.revealInSidebarNavigator())
+        // At the top, where Xcode puts Expand Macro.
+        if let macroExpansionMenuItem = macroExpansionMenuItem(forTokenIn: characterRange) {
+            menuItems.insert(contentsOf: [macroExpansionMenuItem, .separator()], at: 0)
+        }
         return menuItems
     }
 

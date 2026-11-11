@@ -81,14 +81,33 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// How the SourceEditor pane draws the comments of this text; nil when the engine sent no
         /// comment structure with it. The `NSTextView` pane does not read it.
         public let commentDecorations: InterfaceCommentDecorations?
+
+        /// The attached macros this text shows folded, which the SourceEditor pane can expand
+        /// below their attributes; empty when the engine sent none. The `NSTextView` pane does
+        /// not read them.
+        public var macroExpansions: [MacroExpansion] = []
+    }
+
+    /// An attached macro of the rendered text — `@Observation.Observable` — with the declarations
+    /// it generated.
+    public struct MacroExpansion: Sendable {
+        /// The macro as its attribute names it, `Observation.Observable`.
+        public let macroName: String
+
+        /// Where the attribute is in the rendered text, in UTF-16 offsets, as the editor indexes it.
+        public let attributeCharacterRange: NSRange
+
+        /// The declarations the macro generated.
+        public let expansionString: FrozenSemanticString
     }
 
     /// What the fetch half hands the render half: the text to show, the object it belongs to, and
-    /// the structure of its comments when the engine sent one.
+    /// the structure of its comments and the macro expansions when the engine sent them.
     struct FetchedInterface: Sendable {
         let interfaceString: FrozenSemanticString
         let runtimeObject: RuntimeObject
         let commentStructure: RuntimeInterfaceCommentStructure?
+        var macroExpansions: [RuntimeInterfaceMacroExpansion] = []
     }
 
     @RxObserved
@@ -164,7 +183,11 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
         let transformerObservable: Observable<Transformer.Configuration>
         let marksCommentStructureObservable: Observable<Bool>
+        // Fixed for the process: whether SourceEditor runs does not change while the app does.
+        // Merged the way `currentMergedGenerationOptions` merges it, like the comment structure.
+        let marksAttachedMacros: Bool
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        marksAttachedMacros = settings.editor.showsMacroExpansionsInline
         // Resolve the dependency once. `Observable.tracking` re-arms on a
         // main-queue hop where the dependency context is no longer available.
         // This is `ViewModel`'s own `settings`, already resolved by `super.init`
@@ -191,6 +214,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         #else
         transformerObservable = .just(.init())
         marksCommentStructureObservable = .just(false)
+        marksAttachedMacros = false
         #endif
 
         let themeObservable: Observable<ThemeProfile>
@@ -233,6 +257,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 mergedOptions.marksCommentStructure = marksCommentStructure
+                mergedOptions.marksAttachedMacros = marksAttachedMacros
                 mergedOptions.interfaceLanguage = interfaceLanguage
                 return Observable.async {
                     let fetchInterval = contentTextSignposter.beginInterval("content.interfaceFetch", id: contentTextSignposter.makeSignpostID())
@@ -421,10 +446,18 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         options: RuntimeObjectInterface.GenerationOptions
     ) -> FetchedInterface {
         let interfaceString = displayedInterfaceString(of: interface, options: options)
-        let commentStructure = isAnsweredInAnotherLanguage(interface, options: options) || showsExportedOnlyNote(for: interface, options: options)
+        let showsNote = isAnsweredInAnotherLanguage(interface, options: options) || showsExportedOnlyNote(for: interface, options: options)
+        let commentStructure = showsNote
             ? noteCommentStructure(of: interfaceString)
             : interface.commentStructure
-        return FetchedInterface(interfaceString: interfaceString, runtimeObject: runtimeObject, commentStructure: commentStructure)
+        // A note shifts the text the attributes' offsets were taken in, and stands for a text with
+        // no macro to expand anyway.
+        return FetchedInterface(
+            interfaceString: interfaceString,
+            runtimeObject: runtimeObject,
+            commentStructure: commentStructure,
+            macroExpansions: showsNote ? [] : interface.macroExpansions ?? []
+        )
     }
 
     /// Each `// ` line of `text` as a note: the marker, then the prose.
@@ -462,8 +495,30 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return RenderedInterface(
             semanticString: interfacePair.interfaceString,
             attributedString: markingDeclaredMembers(in: attributedString, of: interfacePair),
-            commentDecorations: commentDecorations
+            commentDecorations: commentDecorations,
+            macroExpansions: renderedMacroExpansions(of: fetchedInterface)
         )
+    }
+
+    /// The fetched interface's macro expansions, their attributes located in UTF-16 offsets of its
+    /// text. An attribute whose UTF-8 range does not fall on character boundaries of that text is
+    /// left out.
+    nonisolated static func renderedMacroExpansions(of fetchedInterface: FetchedInterface) -> [MacroExpansion] {
+        guard !fetchedInterface.macroExpansions.isEmpty else { return [] }
+        let text = fetchedInterface.interfaceString.string
+        let utf8View = text.utf8
+        return fetchedInterface.macroExpansions.compactMap { expansion in
+            let utf8Range = expansion.attributeUTF8Range
+            guard utf8Range.lowerBound >= 0, utf8Range.upperBound <= utf8View.count,
+                  let lowerBound = utf8View.index(utf8View.startIndex, offsetBy: utf8Range.lowerBound).samePosition(in: text),
+                  let upperBound = utf8View.index(utf8View.startIndex, offsetBy: utf8Range.upperBound).samePosition(in: text)
+            else { return nil }
+            return MacroExpansion(
+                macroName: expansion.macroName,
+                attributeCharacterRange: NSRange(lowerBound ..< upperBound, in: text),
+                expansionString: expansion.expansionString
+            )
+        }
     }
 
     /// `attributedString` with every line that declares a member with code

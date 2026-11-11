@@ -67,6 +67,7 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         mergedOptions.transformer = settings.transformer
         mergedOptions.marksCommentStructure = settings.editor.drawsCommentTags
+        mergedOptions.marksAttachedMacros = settings.editor.showsMacroExpansionsInline
         #else
         mergedOptions.transformer = .init()
         #endif
@@ -84,6 +85,14 @@ extension Settings.Editor {
     var drawsCommentTags: Bool {
         guard case .available = SourceEditorFrameworks.availability else { return false }
         return showsCommentTags
+    }
+
+    /// Whether the content pane can show an attached macro's expansion below its attribute, the way
+    /// Xcode shows an expanded macro, and so asks the engine for the expansions: only SourceEditor
+    /// can, in a build that can run it.
+    var showsMacroExpansionsInline: Bool {
+        guard case .available = SourceEditorFrameworks.availability else { return false }
+        return true
     }
 }
 #endif
