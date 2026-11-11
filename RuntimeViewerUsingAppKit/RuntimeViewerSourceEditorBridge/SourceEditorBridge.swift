@@ -41,6 +41,11 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     /// right key when the next one arrives. Nil until the first `setSource`.
     private var displayedSourceKey: ReadingStateCache.Key?
 
+    /// The theme and line number font `applyTheme` last put into effect, which an inline expansion
+    /// shown afterwards starts with. Nil until the first `applyTheme`.
+    private var appliedTheme: SourceEditorTheme?
+    private var appliedLineNumberFont: NSFont?
+
     /// How long the insertion point rests on an identifier before its other occurrences are
     /// highlighted. The framework leaves the highlight off until it is given a delay; this one is
     /// ours, chosen to come after a click settles without feeling slow, not taken from Xcode.
@@ -150,12 +155,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         commentDecorations: SourceEditorBridgingCommentDecorations?,
         restoresScrollPosition: Bool
     ) {
-        let language: SourceEditorLanguage? =
-            switch languageIdentifier {
-            case "swift": SourceModelEditorLanguage.swift
-            case "objc": SourceModelEditorLanguage.objc
-            default: nil
-            }
+        let language = Self.language(forIdentifier: languageIdentifier)
 
         semanticNodeTypeAdjuster.load(
             semanticRanges: semanticRanges.map(\.rangeValue),
@@ -207,6 +207,9 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
                 for: displayedSourceKey
             )
         }
+        // The inline expansions go first: a gap hangs under a line of the data source it was
+        // inserted into, and keeps that line's identifier, which the new data source does not have.
+        sourceEditorView.editorGapController.removeAllGapItems()
         // **The old decorations go before the unfold**, which lays the old text out again: they
         // are columns of the text they came with, and a column past the end of a line is a
         // `fatalError` in the framework. The new ones come in only once their text is in place.
@@ -263,6 +266,11 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         sourceEditorView.colorTheme = theme
         sourceEditorView.fontTheme = theme
         applyLineNumberFont(lineNumberFont)
+        appliedTheme = theme
+        appliedLineNumberFont = lineNumberFont
+        for expansionView in InlineExpansionView.views(in: sourceEditorView) {
+            expansionView.apply(theme, lineNumberFont: lineNumberFont)
+        }
 
         // `showInvisibles()` copies the colour out of whatever theme was current when it ran,
         // so a theme applied afterwards leaves the invisible glyphs in the old one. Re-running
@@ -351,6 +359,9 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
                 gutter.enableLineNumbers()
             } else {
                 gutter.disableLineNumbers()
+            }
+            for expansionView in InlineExpansionView.views(in: sourceEditorView) {
+                expansionView.setShowsLineNumbers(options.showsLineNumbers)
             }
         }
 
@@ -492,6 +503,100 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     private func characterIndex(of position: SourceEditorPosition, in dataSource: SourceEditorDataSource) -> Int {
         let lineRange = dataSource.characterRangeForLineRange(NSRange(location: position.line, length: 1))
         return lineRange.location + position.col
+    }
+}
+
+// MARK: - Inline Expansions
+
+/// Names an inline expansion's gap, so that it cannot be taken for a gap anything else inserts.
+private struct InlineExpansionGapIdentifier: Hashable {
+    let identifier: String
+}
+
+/// An inline expansion is a gap of the editor's own `editorGapController` — the mechanism Xcode
+/// shows an expanded macro with, which is SourceEditor's, not Xcode's — holding an
+/// `InlineExpansionView`. The framework draws the gap's tint, border and dismiss button, folds it
+/// open, and lists it in the accessibility rotor of expanded macros; a Command-click on the dismiss
+/// button closes every expansion.
+extension SourceEditorBridge {
+    func showInlineExpansion(
+        _ source: String,
+        languageIdentifier: String,
+        semanticRanges: [NSValue],
+        semanticNodeTypeNames: [String],
+        title: String,
+        identifier: String,
+        belowLineContaining anchorRange: NSRange
+    ) {
+        let gapIdentifier = InlineExpansionGapIdentifier(identifier: identifier)
+        let gapController = sourceEditorView.editorGapController
+        guard !gapController.hasGapItemWithIdentifier(gapIdentifier) else { return }
+
+        // The same conversion `revealCharacterRange(_:)` makes.
+        let dataSource = sourceEditorView.dataSource
+        let lowerBound = dataSource.positionFromInternalCharOffset(max(0, anchorRange.location), lineHint: 0)
+        let upperBound = dataSource.positionFromInternalCharOffset(max(0, NSMaxRange(anchorRange)), lineHint: lowerBound.line)
+        let range = lowerBound ..< max(lowerBound, upperBound)
+
+        let expansionView = InlineExpansionView(
+            source: source,
+            language: Self.language(forIdentifier: languageIdentifier),
+            semanticRanges: semanticRanges.map(\.rangeValue),
+            semanticNodeTypeNames: semanticNodeTypeNames,
+            title: title,
+            indent: Self.inlineExpansionIndent(for: range, in: dataSource),
+            anchorLine: range.lowerBound.line,
+            hostEditorView: sourceEditorView
+        )
+        expansionView.setShowsLineNumbers(appliedDisplayOptions.showsLineNumbers)
+        if let appliedTheme, let appliedLineNumberFont {
+            expansionView.apply(appliedTheme, lineNumberFont: appliedLineNumberFont)
+        }
+        // The arguments Xcode 26.6 gives an expanded macro's gap in
+        // `MacroManager.showInGap(macroReplacement:in:workspace:)` (IDESourceEditor 0x1816D0): below
+        // the line, a point above and below, a 5 % tint and a 15 % border, no highlight of the range.
+        gapController.insertGapItem(SourceEditorGapItem(
+            identifier: gapIdentifier,
+            range: range,
+            contentView: expansionView,
+            position: .belowLine,
+            insets: NSEdgeInsets(top: 1, left: 0, bottom: 1, right: 0),
+            backgroundColor: (light: NSColor.black.withAlphaComponent(0.05), dark: NSColor.white.withAlphaComponent(0.05)),
+            borderColor: (light: NSColor.black.withAlphaComponent(0.15), dark: NSColor.white.withAlphaComponent(0.15)),
+            highlightRange: false
+        ))
+    }
+
+    func hideInlineExpansion(identifier: String) {
+        sourceEditorView.editorGapController.removeGapItemsWithIdentifier(InlineExpansionGapIdentifier(identifier: identifier))
+    }
+
+    func isInlineExpansionShown(identifier: String) -> Bool {
+        sourceEditorView.editorGapController.hasGapItemWithIdentifier(InlineExpansionGapIdentifier(identifier: identifier))
+    }
+
+    /// The SourceModel language a `languageIdentifier` of `setSource` names; nil leaves the text
+    /// uncoloured by the framework's own parse.
+    static func language(forIdentifier languageIdentifier: String) -> (any SourceEditorLanguage)? {
+        switch languageIdentifier {
+        case "swift": SourceModelEditorLanguage.swift
+        case "objc": SourceModelEditorLanguage.objc
+        default: nil
+        }
+    }
+
+    /// How far Xcode indents an expanded macro's editor, in columns
+    /// (`MacroManager.showInGap`, IDESourceEditor 26.6 0x1816D0): the leading whitespace of the line
+    /// the range starts on, tabs expanded, one indent width more unless the range reaches the end of
+    /// its last line and that line does not end with `{`.
+    static func inlineExpansionIndent(for range: Range<SourceEditorPosition>, in dataSource: SourceEditorDataSource) -> Int {
+        let lineIndent = dataSource.leadingWhitespaceWidthForLine(range.lowerBound.line, expandTabs: true)
+        let lastLine = range.upperBound.line
+        if range.upperBound.col >= dataSource.lineContentLengthForLine(lastLine),
+           !dataSource.lineContentForLine(lastLine).hasSuffix("{") {
+            return lineIndent
+        }
+        return lineIndent + dataSource.formattingOptions.indentWidth
     }
 }
 

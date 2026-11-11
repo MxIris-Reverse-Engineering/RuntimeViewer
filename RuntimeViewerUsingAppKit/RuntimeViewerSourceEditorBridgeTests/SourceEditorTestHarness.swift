@@ -129,6 +129,29 @@ final class SourceEditorTestHarness {
         bridge.revealCharacterRange(characterRange)
     }
 
+    /// Shows `source` below the line holding `anchorRange`, as the content pane does with a
+    /// macro's expansion.
+    func showInlineExpansion(_ source: String, title: String, identifier: String,
+                             belowLineContaining anchorRange: NSRange) {
+        bridge.showInlineExpansion(
+            source,
+            languageIdentifier: "swift",
+            semanticRanges: [],
+            semanticNodeTypeNames: [],
+            title: title,
+            identifier: identifier,
+            belowLineContaining: anchorRange
+        )
+    }
+
+    func hideInlineExpansion(identifier: String) {
+        bridge.hideInlineExpansion(identifier: identifier)
+    }
+
+    func isInlineExpansionShown(identifier: String) -> Bool {
+        bridge.isInlineExpansionShown(identifier: identifier)
+    }
+
     /// Opens the find bar on `query`, as the content pane does with a Find navigator text hit.
     func showFindInterface(query: String, pattern: SourceEditorBridgingFindPattern, isCaseSensitive: Bool) {
         bridge.showFindInterface(query: query, pattern: pattern, isCaseSensitive: isCaseSensitive)

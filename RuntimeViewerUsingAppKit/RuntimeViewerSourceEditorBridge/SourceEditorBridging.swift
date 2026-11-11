@@ -145,6 +145,37 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     ///
     /// The query also goes to the system's find pasteboard, as any find bar's does.
     func showFindInterface(query: String, pattern: SourceEditorBridgingFindPattern, isCaseSensitive: Bool)
+
+    /// Shows `source` below the line that holds `anchorRange`, the way Xcode shows an expanded
+    /// macro: in a gap the editor opens between that line and the next, with a read-only editor
+    /// of its own, the theme's colours and a dismiss button beside its first line.
+    ///
+    /// The source and its semantic ranges are what `setSource` takes; the expansion keeps them
+    /// until it is hidden, dismissed, or the next `setSource` replaces the text it hangs under.
+    /// Showing an identifier that is already shown does nothing.
+    ///
+    /// - Parameters:
+    ///   - title: what the gap is called — the name at the right of its first line and in the
+    ///     editor's accessibility rotor of expanded macros.
+    ///   - identifier: names the expansion for ``hideInlineExpansion(identifier:)`` and
+    ///     ``isInlineExpansionShown(identifier:)``.
+    ///   - anchorRange: a UTF-16 range into the source last passed to `setSource`.
+    func showInlineExpansion(
+        _ source: String,
+        languageIdentifier: String,
+        semanticRanges: [NSValue],
+        semanticNodeTypeNames: [String],
+        title: String,
+        identifier: String,
+        belowLineContaining anchorRange: NSRange
+    )
+
+    /// Closes the expansion shown under `identifier`, if there is one.
+    func hideInlineExpansion(identifier: String)
+
+    /// Whether an expansion is shown under `identifier`. False again once the reader closed it
+    /// with its dismiss button.
+    func isInlineExpansionShown(identifier: String) -> Bool
 }
 
 /// How the find bar matches its query, the choices of its pattern menu.
