@@ -252,6 +252,20 @@ open class StatefulOutlineView: OutlineView {
         super.mouseDown(with: event)
     }
 
+    // MARK: - Keyboard
+
+    /// Offered every key press before the outline handles it; returning `true` takes the press,
+    /// and the outline never sees it. Lets a page give keys the outline leaves unhandled a meaning
+    /// on its rows — Return opens the selected image, Delete removes the selected bookmark —
+    /// without a subclass per page. Arrow keys and type-select still reach the outline when the
+    /// handler returns `false`.
+    open var keyDownHandler: ((NSEvent) -> Bool)?
+
+    open override func keyDown(with event: NSEvent) {
+        if keyDownHandler?(event) == true { return }
+        super.keyDown(with: event)
+    }
+
     // MARK: - Reload
 
     open override func reloadData() {
