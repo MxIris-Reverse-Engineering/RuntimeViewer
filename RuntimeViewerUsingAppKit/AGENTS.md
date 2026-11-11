@@ -735,8 +735,8 @@ Two causes account for every flicker found so far — check them first:
   materializes a row view only as the row scrolls into view, and applies the emphasized selection style
   after that. **Always scroll a row into view before selecting it** — never the reverse — and force the
   layout that the raw clip-view scroll would otherwise defer.
-  `SidebarRuntimeObjectViewController.selectRowBringingIntoView(_:)` is the reference implementation;
-  route new call sites through it rather than pairing `selectRowIndexes` with `scrollRowToVisible` by hand.
+  `StatefulOutlineView.selectRowBringingIntoView(_:)` is the reference implementation, which also keeps the
+  row clear of the bars and the pinned section header; route new call sites through it, not `scrollRowToVisible`.
 
 Full write-up, including the frame table that pinned it down:
 `Documentations/ResolvedIssues/2026-08-05-sidebar-selection-highlight-flicker.md`.
