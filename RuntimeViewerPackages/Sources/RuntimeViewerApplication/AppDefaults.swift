@@ -70,6 +70,7 @@ public final class AppDefaults: @unchecked Sendable {
         let userDefaults = userDefaultsNamespace.userDefaults
         _options = UserDefault(key: userDefaultsNamespace.key("generationOptions"), defaultValue: .init(), suite: userDefaults)
         _filterMode = UserDefault(key: userDefaultsNamespace.key("filterMode"), defaultValue: nil, suite: userDefaults)
+        _isRuntimeObjectFilterCaseSensitive = UserDefault(key: userDefaultsNamespace.key("runtimeObjectFilterIsCaseSensitive"), defaultValue: false, suite: userDefaults)
         _bookmarkMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkMigrationCompleted"), defaultValue: false, suite: userDefaults)
         _bookmarkScopeMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkScopeMigrationCompleted"), defaultValue: false, suite: userDefaults)
 
@@ -78,11 +79,13 @@ public final class AppDefaults: @unchecked Sendable {
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directoryURL: storageDirectoryURL)
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directoryURL: storageDirectoryURL)
             _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directoryURL: storageDirectoryURL)
+            _runtimeObjectScopesByEngineAndImagePath = ResilientFileStorage(wrappedValue: [:], "runtimeObjectScopesByEngineAndImagePath", directoryURL: storageDirectoryURL)
         } else {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directory: .applicationSupportDirectory)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directory: .applicationSupportDirectory)
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directory: .applicationSupportDirectory)
             _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directory: .applicationSupportDirectory)
+            _runtimeObjectScopesByEngineAndImagePath = ResilientFileStorage(wrappedValue: [:], "runtimeObjectScopesByEngineAndImagePath", directory: .applicationSupportDirectory)
         }
 
         // Not a bookmark concern, but it belongs to the same one-time rekeying
@@ -111,7 +114,7 @@ public final class AppDefaults: @unchecked Sendable {
 
     static let sidebarAutosaveCleanupFlagKey = "sidebarAutosaveKeyCleanupCompleted"
 
-    /// Where the four values below live; see `init`.
+    /// Where the `@UserDefault` values below live; see `init`.
     let userDefaultsNamespace: UserDefaultsNamespace
 
     @UserDefault
@@ -119,6 +122,12 @@ public final class AppDefaults: @unchecked Sendable {
 
     @UserDefault
     public var filterMode: FilterMode?
+
+    /// The Match Case toggle of the object lists' filter field — an image's
+    /// list and its bookmarks — remembered for every image, as the Filter Mode
+    /// is.
+    @UserDefault
+    public var isRuntimeObjectFilterCaseSensitive: Bool
 
     @UserDefault
     private var bookmarkMigrationCompleted: Bool
@@ -156,6 +165,13 @@ public final class AppDefaults: @unchecked Sendable {
     /// `NavigatorTextFilterFieldAdapter`.
     @ResilientFileStorage
     public var navigatorFilterFieldStates: [String: Data]
+
+    /// The object lists' Filter Scope of each image, keyed by
+    /// `Settings.Indexing.EngineReference.key(for:)` and then by image path.
+    /// Only scopes that narrow the list are kept. Read and written through
+    /// `RuntimeObjectScopeMemory`.
+    @ResilientFileStorage
+    public var runtimeObjectScopesByEngineAndImagePath: [String: [String: RuntimeObjectScope]]
 }
 
 // MARK: - Bookmark migrations
