@@ -9,7 +9,30 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
     override var isReorderable: Bool { true }
     
     private let removeBookmarkRelay = PublishRelay<Int>()
-    
+
+    /// Edit ▸ Copy (⌘C): the selected row's name.
+    @objc func copy(_ sender: Any?) {
+        copySelectedRowName()
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        if aSelector == #selector(copy(_:)) {
+            return canCopySelectedRowName
+        }
+        return super.responds(to: aSelector)
+    }
+
+    /// Delete removes the selected bookmark, as its context menu's Remove
+    /// Bookmark does — only on a bookmark row, not on a specialization
+    /// listed below one.
+    override func handleKeyDown(_ event: NSEvent) -> Bool {
+        guard event.isDeleteKeyPress, let selectedCellViewModel, outlineView.parent(forItem: selectedCellViewModel) == nil,
+              let index = outlineView.rootIndex(forRow: outlineView.selectedRow)
+        else { return super.handleKeyDown(event) }
+        removeBookmarkRelay.accept(index)
+        return true
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 

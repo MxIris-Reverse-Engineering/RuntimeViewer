@@ -322,6 +322,18 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.exportMultipleImages)
     }
 
+    // MARK: - Navigation Actions
+
+    /// Navigate ▸ Go Back (⌃⌘←): what the toolbar's back button does.
+    @objc func goBack(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.backward)
+    }
+
+    /// Navigate ▸ Go Forward (⌃⌘→): what the toolbar's forward button does.
+    @objc func goForward(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.forward)
+    }
+
     // MARK: - Tab Actions
 
     /// ⌘T: an empty tab in the focused editor pane.
@@ -482,6 +494,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             return documentState.currentImageNode != nil
         case #selector(revealInSidebarNavigator(_:)):
             return documentState.isSelectedRuntimeObjectInCurrentImage
+        case #selector(goBack(_:)):
+            // The toolbar's buttons enable by the same history.
+            return documentState.editorArea.focusedPane.activeTab.history.canGoBackward
+        case #selector(goForward(_:)):
+            return documentState.editorArea.focusedPane.activeTab.history.canGoForward
         case #selector(toggleGeneratedInterface(_:)):
             return documentState.editorArea.focusedPane.activeTab.currentEntry?.togglingGeneratedInterface != nil
         case #selector(exportMultipleImages(_:)):

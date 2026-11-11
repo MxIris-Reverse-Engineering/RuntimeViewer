@@ -272,7 +272,33 @@ final class MainMenuController {
                 keyEquivalent: "]",
                 modifiers: [.shift, .command],
             )
+            NSMenuItem.separator()
+            goBackItem()
+            goForwardItem()
         }
+    }
+
+    /// Xcode's Navigate ▸ Go Back, shortcut included: the focused tab's previous entry, as the
+    /// toolbar's back button.
+    private func goBackItem() -> NSMenuItem {
+        NSMenuItem(
+            "Go Back",
+            action: #selector(MainWindowController.goBack(_:)),
+            keyEquivalent: Self.leftArrowKeyEquivalent,
+            modifiers: [.control, .command],
+        )
+        .image(SFSymbols(systemName: .chevronBackward).nsImage)
+    }
+
+    /// Xcode's Navigate ▸ Go Forward, shortcut included.
+    private func goForwardItem() -> NSMenuItem {
+        NSMenuItem(
+            "Go Forward",
+            action: #selector(MainWindowController.goForward(_:)),
+            keyEquivalent: Self.rightArrowKeyEquivalent,
+            modifiers: [.control, .command],
+        )
+        .image(SFSymbols(systemName: .chevronForward).nsImage)
     }
 
     /// Xcode's Generated Interface: the Objective-C class, category or protocol on screen as Swift

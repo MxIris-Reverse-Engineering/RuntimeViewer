@@ -213,6 +213,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
 
+        outlineView.keyDownHandler = { [weak self] event in
+            guard let self else { return false }
+            return handleKeyDown(event)
+        }
+
         // Match Case as the user last left it, before the toggle's first value
         // reaches the view model: the view model remembers only the values
         // after that one.
@@ -361,6 +366,30 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
         return cellViewModel.appearance.title.string
+    }
+
+    /// The row the user selected, if any.
+    var selectedCellViewModel: SidebarRuntimeObjectCellViewModel? {
+        outlineView.item(atRow: outlineView.selectedRow) as? SidebarRuntimeObjectCellViewModel
+    }
+
+    /// A key press on the list, offered before the outline handles it;
+    /// `true` takes it. Override point: the base takes none — selecting a row
+    /// already opens it — and the bookmark page takes Delete.
+    func handleKeyDown(_ event: NSEvent) -> Bool {
+        false
+    }
+
+    /// ⌘C: the selected row's name, through the context menu's Copy Name.
+    /// The pages, which are not generic, carry the `copy(_:)` action and ask
+    /// `canCopySelectedRowName` to enable it.
+    func copySelectedRowName() {
+        guard let selectedCellViewModel else { return }
+        runtimeObjectActionRequestedRelay.accept(RuntimeObjectActionRequest(action: .copyName, runtimeObject: selectedCellViewModel.runtimeObject))
+    }
+
+    var canCopySelectedRowName: Bool {
+        selectedCellViewModel != nil
     }
 
     /// Context-menu entries for the clicked row. Override point: this base

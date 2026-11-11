@@ -17,6 +17,18 @@ final class SidebarRootDirectoryViewController: SidebarRootViewController<Sideba
         _ = viewModel.transform(input)
     }
 
+    /// Edit ▸ Copy (⌘C): the selected row's name.
+    @objc func copy(_ sender: Any?) {
+        copySelectedRowName()
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        if aSelector == #selector(copy(_:)) {
+            return canCopySelectedRowName
+        }
+        return super.responds(to: aSelector)
+    }
+
     override func contextMenuItems(for cellViewModel: SidebarRootCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
         super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow) + [
             ContextMenuItem(title: "Add Item to Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in

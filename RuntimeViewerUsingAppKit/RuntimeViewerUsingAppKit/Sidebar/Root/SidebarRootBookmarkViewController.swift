@@ -51,6 +51,29 @@ final class SidebarRootBookmarkViewController: SidebarRootViewController<Sidebar
         Driver.just(true).drive(outlineView.rx.isRootLevelReorderingOnly).disposed(by: rx.disposeBag)
     }
 
+    /// Edit ▸ Copy (⌘C): the selected row's name.
+    @objc func copy(_ sender: Any?) {
+        copySelectedRowName()
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        if aSelector == #selector(copy(_:)) {
+            return canCopySelectedRowName
+        }
+        return super.responds(to: aSelector)
+    }
+
+    /// Delete removes the selected bookmark, as its context menu's Remove Bookmark does — only on a
+    /// bookmark row, not on the folders and files below it.
+    override func handleKeyDown(_ event: NSEvent) -> Bool {
+        if event.isDeleteKeyPress, let selectedCellViewModel, outlineView.parent(forItem: selectedCellViewModel) == nil,
+           let index = outlineView.rootIndex(forRow: outlineView.selectedRow) {
+            removeBookmarkRelay.accept(index)
+            return true
+        }
+        return super.handleKeyDown(event)
+    }
+
     /// Only a bookmark row can be removed: the rows below one are its image's folders and files.
     override func contextMenuItems(for cellViewModel: SidebarRootCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
         var items = super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
