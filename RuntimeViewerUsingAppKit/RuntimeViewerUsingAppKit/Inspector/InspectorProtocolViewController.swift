@@ -9,6 +9,9 @@ import RuntimeViewerArchitectures
 /// where a class's form the chain `InspectorClassViewController` lists. Laid
 /// out like that page and the Relationships page, with the same rows.
 final class InspectorProtocolViewController: BaseEffectViewController<InspectorHierarchyViewModel> {
+    /// Commands chosen in a level's context menu.
+    private let runtimeObjectActionRequestedRelay = PublishRelay<RuntimeObjectActionRequest>()
+
     private let headerLabel = Label()
 
     private let (scrollView, outlineView): (SelfSizingScrollView, SelfSizingOutlineView) = SelfSizingOutlineView.scrollableSingleColumnOutlineView()
@@ -84,10 +87,27 @@ final class InspectorProtocolViewController: BaseEffectViewController<InspectorH
     override func setupBindings(for viewModel: InspectorHierarchyViewModel) {
         super.setupBindings(for: viewModel)
 
-        let selectHierarchyLevel: Signal<InspectorHierarchyCellViewModel> = outlineView.rx.modelClicked().asSignal()
+        // A plain click opens the protocol in place; ⌥ and ⇧⌥ open it
+        // elsewhere, as in the sidebar.
+        let levelClicks: Signal<ListRowClick<InspectorHierarchyCellViewModel>> = outlineView.rx.modelClicked()
+            .asSignal()
+            .map { ListRowClick(model: $0) }
+
+        outlineView.installContextMenu { [weak outlineView, runtimeObjectActionRequestedRelay] clickedRow in
+            guard let outlineView,
+                  let cellViewModel = outlineView.item(atRow: clickedRow) as? InspectorHierarchyCellViewModel,
+                  let levelObject = cellViewModel.runtimeObject
+            else { return [] }
+            return RuntimeObjectAction.contextMenuItems(for: levelObject, reportingTo: runtimeObjectActionRequestedRelay)
+        }
+        .disposed(by: rx.disposeBag)
 
         let input = InspectorHierarchyViewModel.Input(
-            selectHierarchyLevelClicked: selectHierarchyLevel
+            selectHierarchyLevelClicked: levelClicks.filter { $0.destination == .focusedTab }.map(\.model),
+            runtimeObjectActionRequested: .merge(
+                levelClicks.compactMap { RuntimeObjectAction.request(for: $0.model.runtimeObject, clickedTowards: $0.destination) },
+                runtimeObjectActionRequestedRelay.asSignal()
+            )
         )
         let output = viewModel.transform(input)
 

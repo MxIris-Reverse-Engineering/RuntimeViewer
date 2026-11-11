@@ -36,13 +36,13 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
         imageLoadedView.emptyLabel.stringValue = "No Bookmarks"
     }
     
-    override func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [SidebarRuntimeObjectMenuItem] {
+    override func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
         var items = super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
         // Only root-level bookmark rows can be removed; nested specialization
         // children have no standalone bookmark to delete.
         if outlineView.parent(forItem: cellViewModel) == nil, let index = outlineView.rootIndex(forRow: clickedRow) {
             items.append(
-                SidebarRuntimeObjectMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
+                ContextMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
                     guard let self else { return }
                     removeBookmarkRelay.accept(index)
                 }

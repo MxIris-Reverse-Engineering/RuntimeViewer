@@ -16,6 +16,10 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
     public struct Input {
         public let addSpecializationClicked: Signal<Void>
         public let selectSpecializationClicked: Signal<InspectorSwiftSpecializationCellViewModel>
+        /// A command chosen in a row's context menu, or the one a modified
+        /// click stands for (⌥ Open in New Tab, ⇧⌥ Open in Next Editor Pane).
+        @Init(default: Signal<RuntimeObjectActionRequest>.empty())
+        public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
     }
 
     public struct Output {
@@ -34,6 +38,14 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
             documentState.selectionRouter.trigger(.open(cellViewModel.runtimeObject, in: .focusedTab))
         }
         .disposed(by: rx.disposeBag)
+
+        #if os(macOS)
+        input.runtimeObjectActionRequested.emitOnNext { [weak self] request in
+            guard let self else { return }
+            perform(request.action, on: request.runtimeObject)
+        }
+        .disposed(by: rx.disposeBag)
+        #endif
 
         let specializedChildren = $runtimeObject
             .map { runtimeObject in

@@ -51,6 +51,9 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
     private let crossReferenceRequestedRelay = PublishRelay<FindCrossReferenceRequest>()
 
+    /// The commands every list offers on a runtime object, chosen on a type link.
+    private let runtimeObjectActionRequestedRelay = PublishRelay<RuntimeObjectActionRequest>()
+
     /// The member declared on the insertion point's line, each time the point moves.
     private let cursorMemberChangedRelay = PublishRelay<RuntimeMemberReference?>()
 
@@ -115,7 +118,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             runtimeObjectOpenedInNextEditorPane: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .nextEditorPane }, openInNextEditorPaneRelay.asSignal()).merge(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
             cursorMemberChanged: cursorMemberChangedRelay.asSignal().distinctUntilChanged(),
-            generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal()
+            generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal(),
+            runtimeObjectActionRequested: runtimeObjectActionRequestedRelay.asSignal()
         )
         let output = viewModel.transform(input)
 
@@ -199,6 +203,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             openInNextEditorPaneMenuItem.target = self
             openInNextEditorPaneMenuItem.action = #selector(openInNextEditorPaneAction(_:))
             newMenuItems.append(openInNextEditorPaneMenuItem)
+
+            let copyNameMenuItem = RuntimeObjectMenuItem(.copyName, runtimeObject: runtimeObject)
+            copyNameMenuItem.target = self
+            copyNameMenuItem.action = #selector(runtimeObjectActionMenuItemAction(_:))
+            newMenuItems.append(copyNameMenuItem)
         }
         // Find Call Hierarchy and the other cross-reference commands: for the type a name links
         // to, and for the member the clicked line declares.
@@ -227,6 +236,10 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             }
             newMenuItems.append(generatedInterfaceMenuItem)
         }
+        if !newMenuItems.isEmpty {
+            newMenuItems.append(.separator())
+        }
+        newMenuItems.append(.revealInSidebarNavigator())
         newMenuItems.append(contentsOf: menu.items.filter { $0.action?.isStandardAction ?? false })
         menu.items = newMenuItems
         return menu
@@ -249,6 +262,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     @objc private func crossReferenceAction(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? FindCrossReferenceRequest else { return }
         crossReferenceRequestedRelay.accept(request)
+    }
+
+    @objc private func runtimeObjectActionMenuItemAction(_ sender: RuntimeObjectMenuItem) {
+        guard let action = sender.runtimeObjectAction else { return }
+        runtimeObjectActionRequestedRelay.accept(RuntimeObjectActionRequest(action: action, runtimeObject: sender.runtimeObject))
     }
 
     /// The insertion point moved: the member its line declares, if any, is the one the Inspector's

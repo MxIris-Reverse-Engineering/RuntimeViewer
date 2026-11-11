@@ -6,6 +6,9 @@ import RuntimeViewerArchitectures
 import SnapKit
 
 final class InspectorRelationshipsViewController: BaseEffectViewController<InspectorRelationshipsViewModel> {
+    /// Commands chosen in a row's context menu.
+    private let runtimeObjectActionRequestedRelay = PublishRelay<RuntimeObjectActionRequest>()
+
     private let headerLabel = Label()
     
     private let emptyLabel = Label(wrappingLabelWithString: "")
@@ -81,19 +84,22 @@ final class InspectorRelationshipsViewController: BaseEffectViewController<Inspe
     override func setupBindings(for viewModel: InspectorRelationshipsViewModel) {
         super.setupBindings(for: viewModel)
 
-        let selectRelationship: Signal<InspectorRelationshipsCellViewModel> = tableView.rx
-            .itemClicked()
-            .compactMap { [weak tableView] index -> InspectorRelationshipsCellViewModel? in
-                guard let tableView,
-                      index.row >= 0,
-                      index.row < tableView.numberOfRows
-                else { return nil }
-                return try? tableView.rx.model(at: index.row)
-            }
-            .asSignal(onErrorSignalWith: .empty())
+        // A plain click opens the row in place; ⌥ and ⇧⌥ open it elsewhere, as
+        // in the sidebar.
+        let rowClicks = tableView.rx.rowClicks(of: InspectorRelationshipsCellViewModel.self)
+
+        tableView.installContextMenu { [weak tableView, runtimeObjectActionRequestedRelay] clickedRow in
+            guard let tableView, let cellViewModel: InspectorRelationshipsCellViewModel = try? tableView.rx.model(at: clickedRow) else { return [] }
+            return RuntimeObjectAction.contextMenuItems(for: cellViewModel.runtimeObject, reportingTo: runtimeObjectActionRequestedRelay)
+        }
+        .disposed(by: rx.disposeBag)
 
         let input = InspectorRelationshipsViewModel.Input(
-            selectRelationshipClicked: selectRelationship
+            selectRelationshipClicked: rowClicks.filter { $0.destination == .focusedTab }.map(\.model),
+            runtimeObjectActionRequested: .merge(
+                rowClicks.compactMap { RuntimeObjectAction.request(for: $0.model.runtimeObject, clickedTowards: $0.destination) },
+                runtimeObjectActionRequestedRelay.asSignal()
+            )
         )
         let output = viewModel.transform(input)
 

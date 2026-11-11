@@ -6,6 +6,11 @@ import RuntimeViewerArchitectures
 import SnapKit
 
 final class InspectorSwiftSpecializationViewController: BaseEffectViewController<InspectorSwiftSpecializationViewModel> {
+    // MARK: - Relays
+
+    /// Commands chosen in a row's context menu.
+    private let runtimeObjectActionRequestedRelay = PublishRelay<RuntimeObjectActionRequest>()
+
     // MARK: - Subviews
 
     private let headerLabel = Label()
@@ -71,20 +76,23 @@ final class InspectorSwiftSpecializationViewController: BaseEffectViewController
     override func setupBindings(for viewModel: InspectorSwiftSpecializationViewModel) {
         super.setupBindings(for: viewModel)
 
-        let selectSpecialization: Signal<InspectorSwiftSpecializationCellViewModel> = tableView.rx
-            .itemClicked()
-            .compactMap { [weak tableView] index -> InspectorSwiftSpecializationCellViewModel? in
-                guard let tableView,
-                      index.row >= 0,
-                      index.row < tableView.numberOfRows
-                else { return nil }
-                return try? tableView.rx.model(at: index.row)
-            }
-            .asSignal(onErrorSignalWith: .empty())
+        // A plain click opens the row in place; ⌥ and ⇧⌥ open it elsewhere, as
+        // in the sidebar.
+        let rowClicks = tableView.rx.rowClicks(of: InspectorSwiftSpecializationCellViewModel.self)
+
+        tableView.installContextMenu { [weak tableView, runtimeObjectActionRequestedRelay] clickedRow in
+            guard let tableView, let cellViewModel: InspectorSwiftSpecializationCellViewModel = try? tableView.rx.model(at: clickedRow) else { return [] }
+            return RuntimeObjectAction.contextMenuItems(for: cellViewModel.runtimeObject, reportingTo: runtimeObjectActionRequestedRelay)
+        }
+        .disposed(by: rx.disposeBag)
 
         let input = InspectorSwiftSpecializationViewModel.Input(
             addSpecializationClicked: addSpecializationButton.rx.click.asSignal(),
-            selectSpecializationClicked: selectSpecialization
+            selectSpecializationClicked: rowClicks.filter { $0.destination == .focusedTab }.map(\.model),
+            runtimeObjectActionRequested: .merge(
+                rowClicks.compactMap { RuntimeObjectAction.request(for: $0.model.runtimeObject, clickedTowards: $0.destination) },
+                runtimeObjectActionRequestedRelay.asSignal()
+            )
         )
 
         let output = viewModel.transform(input)
