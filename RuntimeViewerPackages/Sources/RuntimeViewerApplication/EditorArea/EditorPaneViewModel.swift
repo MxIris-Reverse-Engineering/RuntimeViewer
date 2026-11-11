@@ -26,6 +26,72 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         /// A click in the pane that no view inside it took: the pane gets the
         /// focus, as a click in an Xcode editor does.
         public let backgroundClicked: Signal<Void>
+        /// A command chosen in a tab's context menu (`commands(forTab:)`).
+        @Init(default: Signal<(command: EditorTabCommand, tabID: DocumentTab.ID)>.empty())
+        public let tabCommandChosen: Signal<(command: EditorTabCommand, tabID: DocumentTab.ID)>
+        /// The pane's tabs in the order a drag in the bar left them.
+        @Init(default: Signal<[DocumentTab.ID]>.empty())
+        public let tabsReordered: Signal<[DocumentTab.ID]>
+    }
+
+    /// The commands the context menu of `tabID` offers, in menu order: Close
+    /// Tab; Close Other Tabs when the pane has another tab; Close Tabs to the
+    /// Right when the tab is not its pane's last; then the commands on the
+    /// object it shows, less Open in New Tab and Open Generated Interface,
+    /// which act on the focused pane's tab rather than this one. Empty for a
+    /// tab the pane no longer holds.
+    public func commands(forTab tabID: DocumentTab.ID) -> [EditorTabCommand] {
+        guard let pane = documentState.editorArea[paneID], let tabIndex = pane.index(ofTab: tabID) else { return [] }
+        var commands: [EditorTabCommand] = [.close]
+        if pane.tabs.count > 1 {
+            commands.append(.closeOthers)
+        }
+        if tabIndex < pane.tabs.count - 1 {
+            commands.append(.closeToTheRight)
+        }
+        if let runtimeObject = pane.tabs[tabIndex].object {
+            commands += RuntimeObjectAction.actions(for: runtimeObject)
+                .filter { $0 != .openInNewTab && $0 != .openGeneratedInterface }
+                .map(EditorTabCommand.runtimeObjectAction)
+        }
+        return commands
+    }
+
+    /// Carries out a tab's context menu command. Tabs close one at a time
+    /// through `closeTab`, the path the tabs' close buttons take; which ones is
+    /// read before the first goes, as every close reshapes the pane.
+    private func run(_ command: EditorTabCommand, onTab tabID: DocumentTab.ID) {
+        guard let pane = documentState.editorArea[paneID], let tabIndex = pane.index(ofTab: tabID) else { return }
+        switch command {
+        case .close:
+            documentState.selectionRouter.trigger(.closeTab(tabID))
+        case .closeOthers:
+            for otherTab in pane.tabs where otherTab.id != tabID {
+                documentState.selectionRouter.trigger(.closeTab(otherTab.id))
+            }
+        case .closeToTheRight:
+            for laterTab in pane.tabs[(tabIndex + 1)...] {
+                documentState.selectionRouter.trigger(.closeTab(laterTab.id))
+            }
+        case .runtimeObjectAction(let action):
+            #if os(macOS)
+            guard let runtimeObject = pane.tabs[tabIndex].object else { return }
+            perform(action, on: runtimeObject)
+            #endif
+        }
+    }
+
+    /// The one tab a drag moved from `originalOrder` to `reorderedOrder`, and
+    /// the index it now has: the tab without which both orders are the same.
+    /// `nil` when nothing moved, or when the two orders do not hold the same
+    /// tabs.
+    static func movedTab(from originalOrder: [DocumentTab.ID], to reorderedOrder: [DocumentTab.ID]) -> (tabID: DocumentTab.ID, destinationIndex: Int)? {
+        guard originalOrder != reorderedOrder, Set(originalOrder) == Set(reorderedOrder) else { return nil }
+        for (destinationIndex, tabID) in reorderedOrder.enumerated()
+            where originalOrder.filter({ $0 != tabID }) == reorderedOrder.filter({ $0 != tabID }) {
+            return (tabID, destinationIndex)
+        }
+        return nil
     }
 
     public struct Output {
@@ -58,6 +124,21 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         input.backgroundClicked.emitOnNext { [weak self] in
             guard let self else { return }
             documentState.selectionRouter.trigger(.focusEditorPane(paneID))
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.tabCommandChosen.emitOnNext { [weak self] command, tabID in
+            guard let self else { return }
+            run(command, onTab: tabID)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.tabsReordered.emitOnNext { [weak self] reorderedOrder in
+            guard let self,
+                  let pane = documentState.editorArea[paneID],
+                  let move = Self.movedTab(from: pane.tabs.map(\.id), to: reorderedOrder)
+            else { return }
+            documentState.selectionRouter.trigger(.moveTab(move.tabID, toIndex: move.destinationIndex))
         }
         .disposed(by: rx.disposeBag)
 
