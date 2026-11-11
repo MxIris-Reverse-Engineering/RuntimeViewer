@@ -342,6 +342,9 @@ cell-reuse code) for data already produced by an Rx pipeline.
    `tableView.rx.setDelegate(self)` / `outlineView.rx.setDelegate(delegate)` and implement them in an
    extension. The adapter owns the data source and the required-method delegate proxy, and forwards
    optional methods to the delegate you set.
+8. **Context menus** — `tableView.installContextMenu(items:)` with `ContextMenuItem` entries. Commands on
+   a runtime object come from `RuntimeObjectAction` and run in `ViewModel.perform(_:on:)`, titled only by
+   `RuntimeObjectAction+Menu`, so every list offers them alike (`draft-context-menus`).
 
 ### Cell ViewModels
 

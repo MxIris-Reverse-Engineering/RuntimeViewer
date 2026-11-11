@@ -32,13 +32,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     let imageUnknownView = ImageUnknownView()
 
-    private let openInNewTabRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
-
-    private let openInNextEditorPaneRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+    /// The commands every list offers on a runtime object, chosen in a row's context menu.
+    private let runtimeObjectActionRequestedRelay = PublishRelay<RuntimeObjectActionRequest>()
 
     private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
-
-    private let generatedInterfaceRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     /// Clicks on the rows' tags. Each cell reports which of its tags was
     /// clicked; the cell provider pairs that with the row the cell is bound to.
@@ -204,31 +201,17 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         let runtimeObjectClickedWithShiftOption: Signal<SidebarRuntimeObjectCellViewModel> = userSelection
             .filter { destinationOfSelection($0.1) == .nextEditorPane }.map(\.0).asSignal(onErrorSignalWith: .empty())
 
-        // Row context menu. Items are rebuilt from `clickedRow` on every
-        // `menuNeedsUpdate`; an empty item list keeps AppKit from popping an
-        // empty menu on whitespace right-clicks. `menu.rx.items` + `itemSelected`
-        // instead of target/action because a generic class cannot host `@objc`
-        // menu actions. Every entry carries its own `action`, so this base
-        // class forwards `itemSelected` without knowing which subclass
-        // contributed the item — subclasses override `contextMenuItems(for:clickedRow:)`
-        // to append their own entries (see List / Bookmark variants).
-        let contextMenu = NSMenu()
-        imageLoadedView.outlineView.menu = contextMenu
-        let menuItemsSource: Observable<[SidebarRuntimeObjectMenuItem]> = contextMenu.rx.needsUpdate
-            .asObservable()
-            .map { [weak self, weak outlineView = imageLoadedView.outlineView] _ -> [SidebarRuntimeObjectMenuItem] in
-                guard let self, let outlineView,
-                      outlineView.clickedRow >= 0,
-                      let cellViewModel = outlineView.item(atRow: outlineView.clickedRow) as? SidebarRuntimeObjectCellViewModel
-                else { return [] }
-                return contextMenuItems(for: cellViewModel, clickedRow: outlineView.clickedRow)
-            }
-        contextMenu.rx.items(source: menuItemsSource)({ menuItem, entry in menuItem.image = entry.image }).disposed(by: rx.disposeBag)
-        contextMenu.rx.itemSelected(SidebarRuntimeObjectMenuItem.self)
-            .map(\.item)
-            .asSignal(onErrorSignalWith: .empty())
-            .emitOnNext { $0.action() }
-            .disposed(by: rx.disposeBag)
+        // Row context menu, rebuilt for the clicked row each time it opens.
+        // Every entry carries its own `action`, so subclasses override
+        // `contextMenuItems(for:clickedRow:)` to append their own entries
+        // (see List / Bookmark variants) without this base class knowing.
+        imageLoadedView.outlineView.installContextMenu { [weak self, weak outlineView = imageLoadedView.outlineView] clickedRow in
+            guard let self, let outlineView,
+                  let cellViewModel = outlineView.item(atRow: clickedRow) as? SidebarRuntimeObjectCellViewModel
+            else { return [] }
+            return contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
+        }
+        .disposed(by: rx.disposeBag)
 
         // Match Case as the user last left it, before the toggle's first value
         // reaches the view model: the view model remembers only the values
@@ -237,8 +220,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         let input = ViewModel.Input(
             runtimeObjectClicked: runtimeObjectClicked,
-            runtimeObjectOpenedInNewTab: .merge(openInNewTabRelay.asSignal(), runtimeObjectClickedWithOption),
-            runtimeObjectOpenedInNextEditorPane: .merge(openInNextEditorPaneRelay.asSignal(), runtimeObjectClickedWithShiftOption),
+            runtimeObjectOpenedInNewTab: runtimeObjectClickedWithOption,
+            runtimeObjectOpenedInNextEditorPane: runtimeObjectClickedWithShiftOption,
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
@@ -246,7 +229,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
             runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
-            runtimeObjectGeneratedInterfaceRequested: generatedInterfaceRequestedRelay.asSignal(),
+            runtimeObjectActionRequested: runtimeObjectActionRequestedRelay.asSignal(),
             runtimeObjectTagClicked: tagClickedRelay.asSignal(),
             filterScopeClicked: filterScopeItemPressedRelay.asSignal(),
         )
@@ -381,32 +364,26 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     }
 
     /// Context-menu entries for the clicked row. Override point: this base
-    /// class contributes "Open in New Tab" and, for a class both lists show,
-    /// the jump to its other face; subclasses call `super` and append their
-    /// own entries. Because every entry carries its own `action`, the base
-    /// never needs to know which items a subclass added.
-    func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [SidebarRuntimeObjectMenuItem] {
-        var menuItems = [
-            SidebarRuntimeObjectMenuItem(title: "Open in New Tab", image: SFSymbols(name: RuntimeViewerSymbols.tabbarTopRectangle).nsImage) { [weak self] in
+    /// class contributes the commands every list offers on a runtime object
+    /// (`RuntimeObjectAction`) and, for a class both lists show, the jump to
+    /// its other face, right after the two ways of opening the row;
+    /// subclasses call `super` and append their own entries. Because every
+    /// entry carries its own `action`, the base never needs to know which
+    /// items a subclass added.
+    func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
+        let runtimeObject = cellViewModel.runtimeObject
+        var menuItems = RuntimeObjectAction.actions(for: runtimeObject).map { action in
+            ContextMenuItem(action) { [weak self] in
                 guard let self else { return }
-                openInNewTabRelay.accept(cellViewModel)
-            },
-            SidebarRuntimeObjectMenuItem(title: "Open in Next Editor Pane", image: NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: nil)) { [weak self] in
-                guard let self else { return }
-                openInNextEditorPaneRelay.accept(cellViewModel)
-            },
-        ]
-        if let counterpartKind = cellViewModel.runtimeObject.counterpartKind {
-            menuItems.append(SidebarRuntimeObjectMenuItem(title: Self.counterpartMenuItemTitle(for: counterpartKind), image: SFSymbols(systemName: .arrowLeftArrowRight).nsuiImage) { [weak self] in
+                runtimeObjectActionRequestedRelay.accept(RuntimeObjectActionRequest(action: action, runtimeObject: runtimeObject))
+            }
+        }
+        if let counterpartKind = runtimeObject.counterpartKind {
+            let counterpartMenuItem = ContextMenuItem(title: Self.counterpartMenuItemTitle(for: counterpartKind), image: SFSymbols(systemName: .arrowLeftArrowRight).nsuiImage) { [weak self] in
                 guard let self else { return }
                 counterpartRequestedRelay.accept(cellViewModel)
-            })
-        }
-        if cellViewModel.runtimeObject.hasGeneratedInterface {
-            menuItems.append(SidebarRuntimeObjectMenuItem(title: "Open Generated Interface", image: SFSymbols(systemName: .swift).nsuiImage) { [weak self] in
-                guard let self else { return }
-                generatedInterfaceRequestedRelay.accept(cellViewModel)
-            })
+            }
+            menuItems.insert(counterpartMenuItem, at: min(2, menuItems.count))
         }
         return menuItems
     }
@@ -433,23 +410,6 @@ extension SidebarRuntimeObjectViewController: NavigatorTabPage {
     var tabSwitcherOverlayViews: [NSView] {
         get { imageLoadedView.inheritedTopOverlayViews }
         set { imageLoadedView.inheritedTopOverlayViews = newValue }
-    }
-}
-
-/// A runtime-object outline context-menu entry for `menu.rx.items` /
-/// `itemSelected`. Carries its own `action` closure so the generic base view
-/// controller can forward selection without knowing which subclass contributed
-/// the item. File-scoped (not nested) because the enclosing view controller is
-/// generic.
-struct SidebarRuntimeObjectMenuItem: RxMenuItemRepresentable {
-    let title: String
-    var image: NSImage?
-    let action: () -> Void
-
-    init(title: String, image: NSImage? = nil, action: @escaping () -> Void) {
-        self.title = title
-        self.image = image
-        self.action = action
     }
 }
 

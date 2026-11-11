@@ -14,6 +14,9 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
 
     private let filterField = NSFilterTokenField()
 
+    /// Commands chosen in an image's context menu.
+    private let imageActionRequestedRelay = PublishRelay<(action: RuntimeImageAction, node: RuntimeImageNode)>()
+
     /// Configures `filterField` and reports its filter. The directory and bookmark pages share one list of recent
     /// filters.
     private lazy var filterFieldAdapter = NavigatorTextFilterFieldAdapter(filterField: filterField, recentFiltersGroup: .imageList)
@@ -103,10 +106,19 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
     override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
+        // Row context menu, rebuilt for the clicked row each time it opens: the commands the view
+        // model offers on the image, then the page's own (`contextMenuItems(for:clickedRow:)`).
+        outlineView.installContextMenu { [weak self, weak outlineView] clickedRow in
+            guard let self, let outlineView, let cellViewModel = outlineView.item(atRow: clickedRow) as? SidebarRootCellViewModel else { return [] }
+            return contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
+        }
+        .disposed(by: rx.disposeBag)
+
         let input = ViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
-            filter: filterFieldAdapter.filter
+            filter: filterFieldAdapter.filter,
+            imageActionRequested: imageActionRequestedRelay.asSignal()
         )
 
         let output = viewModel.transform(input)
@@ -196,6 +208,41 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         guard let cellViewModel = item as? SidebarRootCellViewModel else { return nil }
         return cellViewModel.appearance.name.string
     }
+
+    /// Context-menu entries for the clicked row. Override point: this base class contributes the
+    /// commands the view model offers on the image (`SidebarRootViewModel.imageActions(for:)`);
+    /// the pages call `super` and append their bookmark command.
+    func contextMenuItems(for cellViewModel: SidebarRootCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
+        guard let viewModel else { return [] }
+        let node = cellViewModel.node
+        return viewModel.imageActions(for: node).map { action in
+            ContextMenuItem(title: action.menuTitle, image: action.menuImage) { [weak self] in
+                guard let self else { return }
+                imageActionRequestedRelay.accept((action, node))
+            }
+        }
+    }
 }
 
 extension SidebarRootViewController: NavigatorTabPage {}
+
+extension RuntimeImageAction {
+    fileprivate var menuTitle: String {
+        switch self {
+        case .open: "Open"
+        case .findInImage: "Find in This Image…"
+        case .copyName: "Copy Name"
+        case .copyPath: "Copy Path"
+        case .showInFinder: "Show in Finder"
+        }
+    }
+
+    fileprivate var menuImage: NSImage? {
+        switch self {
+        case .open: NSImage(systemSymbolName: "arrow.right.circle", accessibilityDescription: nil)
+        case .findInImage: SFSymbols(systemName: .magnifyingglass).nsImage
+        case .copyName, .copyPath: NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
+        case .showInFinder: NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+        }
+    }
+}

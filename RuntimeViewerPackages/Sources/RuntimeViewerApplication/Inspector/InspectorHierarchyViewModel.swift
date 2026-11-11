@@ -42,6 +42,10 @@ public final class InspectorHierarchyViewModel: ViewModel<InspectorRuntimeObject
     @MemberwiseInit(.public)
     public struct Input {
         public let selectHierarchyLevelClicked: Signal<InspectorHierarchyCellViewModel>
+        /// A command chosen in a level's context menu, or the one a modified
+        /// click stands for (⌥ Open in New Tab, ⇧⌥ Open in Next Editor Pane).
+        @Init(default: Signal<RuntimeObjectActionRequest>.empty())
+        public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
     }
 
     public struct Output {
@@ -124,6 +128,14 @@ public final class InspectorHierarchyViewModel: ViewModel<InspectorRuntimeObject
             documentState.selectionRouter.trigger(.open(levelObject, in: .focusedTab))
         }
         .disposed(by: rx.disposeBag)
+
+        #if os(macOS)
+        input.runtimeObjectActionRequested.emitOnNext { [weak self] request in
+            guard let self else { return }
+            perform(request.action, on: request.runtimeObject)
+        }
+        .disposed(by: rx.disposeBag)
+        #endif
 
         return Output(hierarchyState: $hierarchyState.asDriver())
     }

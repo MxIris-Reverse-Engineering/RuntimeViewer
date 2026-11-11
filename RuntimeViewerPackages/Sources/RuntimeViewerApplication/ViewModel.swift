@@ -21,6 +21,11 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
     @Dependency(\.settings)
     public var settings
 
+    /// Where the context menus' copy commands put their text; see
+    /// `perform(_:on:)`.
+    @Dependency(\.pasteboardClient)
+    public var pasteboardClient
+
     public let errorRelay = PublishRelay<Error>()
 
     package let _commonLoading = ActivityIndicator()

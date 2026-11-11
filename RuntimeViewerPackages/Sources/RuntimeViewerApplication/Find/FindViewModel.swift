@@ -60,6 +60,9 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let crossReferenceCommandSelected: Signal<FindCrossReferenceCommand>
         /// The filter bar's Show Runtime Calls toggle, as clicked.
         public let runtimeHelperCallsToggled: Signal<Bool>
+        /// Copy chosen in a row's context menu: the text the row shows.
+        @Init(default: Signal<FindResultNode>.empty())
+        public let resultCopied: Signal<FindResultNode>
     }
 
     public struct Output {
@@ -225,6 +228,12 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         input.crossReferenceCommandSelected.emitOnNext { [weak self] command in
             guard let self, let root = command.node.crossReferenceRoot else { return }
             run(session.query.crossReferenceQuery(command.mode, for: root))
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.resultCopied.emitOnNext { [weak self] node in
+            guard let self else { return }
+            pasteboardClient.copyString(node.filterableText)
         }
         .disposed(by: rx.disposeBag)
 

@@ -255,10 +255,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// (`RuntimeEngine.counterpart(for:)`). macOS only.
         @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
         public let runtimeObjectCounterpartRequested: Signal<SidebarRuntimeObjectCellViewModel>
-        /// Row context menu "Open Generated Interface": show the row's Objective-C class,
-        /// category or protocol as Swift imports it, in the focused tab.
-        @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
-        public let runtimeObjectGeneratedInterfaceRequested: Signal<SidebarRuntimeObjectCellViewModel>
+        /// A command every list offers on a runtime object, chosen in a row's
+        /// context menu (`RuntimeObjectAction`). macOS only.
+        @Init(default: Signal<RuntimeObjectActionRequest>.empty())
+        public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
         /// A click on one of a row's tags (`RuntimeObjectCellTag`). macOS only.
         @Init(default: Signal<TagClick>.empty())
         public let runtimeObjectTagClicked: Signal<TagClick>
@@ -402,15 +402,14 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             }
             .disposed(by: rx.disposeBag)
 
-        // Pushed like a row click, so it enters the history; Back returns to the header.
-        input.runtimeObjectGeneratedInterfaceRequested
-            .emitOnNextMainActor { [weak self] cellViewModel in
-                guard let self, cellViewModel.runtimeObject.hasGeneratedInterface else { return }
-                documentState.selectionRouter.trigger(.open(cellViewModel.runtimeObject, in: .focusedTab, interfaceLanguage: .swift))
+        #if os(macOS)
+        input.runtimeObjectActionRequested
+            .emitOnNextMainActor { [weak self] request in
+                guard let self else { return }
+                perform(request.action, on: request.runtimeObject)
             }
             .disposed(by: rx.disposeBag)
 
-        #if os(macOS)
         // Pushed like a row click, so the jump enters the history and the
         // sidebar selects the other face's row.
         input.runtimeObjectCounterpartRequested

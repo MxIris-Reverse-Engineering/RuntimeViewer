@@ -30,12 +30,6 @@ final class SidebarRootBookmarkViewController: SidebarRootViewController<Sidebar
             $0.font = .systemFont(ofSize: 18, weight: .regular)
             $0.textColor = .secondaryLabelColor
         }
-
-        outlineView.do {
-            $0.menu = NSMenu().then {
-                $0.delegate = self
-            }
-        }
     }
 
     override func setupBindings(for viewModel: SidebarRootBookmarkViewModel) {
@@ -57,24 +51,17 @@ final class SidebarRootBookmarkViewController: SidebarRootViewController<Sidebar
         Driver.just(true).drive(outlineView.rx.isRootLevelReorderingOnly).disposed(by: rx.disposeBag)
     }
 
-    @objc private func removeBookmarkMenuItemAction(_ sender: NSMenuItem) {
-        guard outlineView.hasValidClickedRow, let index = sender.representedObject as? Int else { return }
-        removeBookmarkRelay.accept(index)
-    }
-}
-
-extension SidebarRootBookmarkViewController: NSMenuDelegate {
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        guard outlineView.hasValidClickedRow else { return }
-        
-        if outlineView.parent(forItem: outlineView.itemAtClickedRow) == nil, let index = outlineView.rootIndex(forRow: outlineView.clickedRow) {
-            menu.removeAllItems()
-            menu.addItem(withTitle: "Remove Bookmark", action: #selector(removeBookmarkMenuItemAction(_:)), keyEquivalent: "").then {
-                $0.image = SFSymbols(systemName: .bookmark).nsuiImage
-                $0.representedObject = index
-            }
-        } else {
-            menu.removeAllItems()
+    /// Only a bookmark row can be removed: the rows below one are its image's folders and files.
+    override func contextMenuItems(for cellViewModel: SidebarRootCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
+        var items = super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
+        if outlineView.parent(forItem: cellViewModel) == nil, let index = outlineView.rootIndex(forRow: clickedRow) {
+            items.append(
+                ContextMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
+                    guard let self else { return }
+                    removeBookmarkRelay.accept(index)
+                }
+            )
         }
+        return items
     }
 }

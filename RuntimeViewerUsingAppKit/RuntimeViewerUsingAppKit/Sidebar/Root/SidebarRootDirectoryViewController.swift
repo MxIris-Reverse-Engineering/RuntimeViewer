@@ -7,25 +7,6 @@ import RuntimeViewerApplication
 final class SidebarRootDirectoryViewController: SidebarRootViewController<SidebarRootDirectoryViewModel> {
     private let addToBookmarkRelay = PublishRelay<SidebarRootCellViewModel>()
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        outlineView.do {
-            $0.menu = NSMenu().then {
-                $0.addItem(withTitle: "Add Item to Bookmark", action: #selector(addToBookmarkMenuItemAction(_:)), keyEquivalent: "").then {
-                    $0.image = SFSymbols(systemName: .bookmark).nsuiImage
-                }
-            }
-        }
-    }
-
-    @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {
-        guard outlineView.hasValidClickedRow, let cellViewModel = outlineView.itemAtClickedRow as? SidebarRootCellViewModel else { return }
-        addToBookmarkRelay.accept(cellViewModel)
-        SystemHUD.default.configuration = .addToBookmarkHUDConfiguration
-        SystemHUD.default.show(delay: 1)
-    }
-
     override func setupBindings(for viewModel: SidebarRootDirectoryViewModel) {
         super.setupBindings(for: viewModel)
 
@@ -34,6 +15,17 @@ final class SidebarRootDirectoryViewController: SidebarRootViewController<Sideba
         )
 
         _ = viewModel.transform(input)
+    }
+
+    override func contextMenuItems(for cellViewModel: SidebarRootCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
+        super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow) + [
+            ContextMenuItem(title: "Add Item to Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
+                guard let self else { return }
+                addToBookmarkRelay.accept(cellViewModel)
+                SystemHUD.default.configuration = .addToBookmarkHUDConfiguration
+                SystemHUD.default.show(delay: 1)
+            },
+        ]
     }
 }
 

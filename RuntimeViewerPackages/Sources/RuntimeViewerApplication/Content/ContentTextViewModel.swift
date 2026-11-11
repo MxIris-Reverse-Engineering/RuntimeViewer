@@ -535,6 +535,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// imports it, or back in its own language, where the modifier keys say.
         @Init(default: Signal<SelectionRoute.Destination>.empty())
         public let generatedInterfaceToggled: Signal<SelectionRoute.Destination>
+        /// A command every list offers on a runtime object, chosen in the
+        /// right-click menu on a type link (Copy Name).
+        @Init(default: Signal<RuntimeObjectActionRequest>.empty())
+        public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
     }
 
     public struct Output {
@@ -612,6 +616,14 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             documentState.findSession.runCrossReferenceCommand(request)
         }
         .disposed(by: rx.disposeBag)
+
+        #if os(macOS)
+        input.runtimeObjectActionRequested.emitOnNext { [weak self] request in
+            guard let self else { return }
+            perform(request.action, on: request.runtimeObject)
+        }
+        .disposed(by: rx.disposeBag)
+        #endif
 
         // Only a member of the object on screen: a late event from the text of
         // the object before must not stand for this one.

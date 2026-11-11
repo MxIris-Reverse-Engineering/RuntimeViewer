@@ -140,11 +140,19 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     override func setupBindings(for viewModel: EditorPaneViewModel) {
         super.setupBindings(for: viewModel)
 
+        // Asked as the bar builds each tab's menu, which it does on every reload: the commands
+        // depend on the tabs around it.
+        tabBarView.commandsProvider = { [weak viewModel] tabID in
+            viewModel?.commands(forTab: tabID) ?? []
+        }
+
         let input = EditorPaneViewModel.Input(
             tabSelected: tabBarView.tabSelectedRelay.asSignal(),
             tabClosed: tabBarView.tabClosedRelay.asSignal(),
             closeButtonClicked: tabBarView.closeButton.rx.click.asSignal(),
-            backgroundClicked: backgroundClickedRelay.asSignal()
+            backgroundClicked: backgroundClickedRelay.asSignal(),
+            tabCommandChosen: tabBarView.tabCommandChosenRelay.asSignal(),
+            tabsReordered: tabBarView.tabsReorderedRelay.asSignal()
         )
         let output = viewModel.transform(input)
 
@@ -206,6 +214,15 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
     let tabSelectedRelay = PublishRelay<DocumentTab.ID>()
 
     let tabClosedRelay = PublishRelay<DocumentTab.ID>()
+
+    /// A command chosen in a tab's context menu.
+    let tabCommandChosenRelay = PublishRelay<(command: EditorTabCommand, tabID: DocumentTab.ID)>()
+
+    /// The tabs in the order a drag left them.
+    let tabsReorderedRelay = PublishRelay<[DocumentTab.ID]>()
+
+    /// What a tab's context menu offers, asked as the bar builds the menu (`EditorPaneViewModel.commands(forTab:)`).
+    var commandsProvider: ((DocumentTab.ID) -> [EditorTabCommand])?
 
     /// Whether the pane has the focus. A pane without it draws its tabs dimmed.
     var isFocused = true {
@@ -325,6 +342,26 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         .left
     }
 
+    /// The tab's right-click menu. The bar builds it as it reloads, so it is rebuilt with every
+    /// snapshot, which is when the tabs around it can change.
+    func tabBar(_ tabBar: TabBar, menuForItem item: Any) -> NSMenu? {
+        guard let tabItem = self.item(from: item), let commands = commandsProvider?(tabItem.id), !commands.isEmpty else { return nil }
+        let menu = NSMenu()
+        for command in commands {
+            let menuItem = NSMenuItem(title: command.menuTitle, action: #selector(tabCommandMenuItemChosen(_:)), keyEquivalent: "")
+            menuItem.target = self
+            menuItem.image = command.menuImage
+            menuItem.representedObject = EditorTabCommandMenuItemPayload(command: command, tabID: tabItem.id)
+            menu.addItem(menuItem)
+        }
+        return menu
+    }
+
+    @objc private func tabCommandMenuItemChosen(_ sender: NSMenuItem) {
+        guard let payload = sender.representedObject as? EditorTabCommandMenuItemPayload else { return }
+        tabCommandChosenRelay.accept((payload.command, payload.tabID))
+    }
+
     // MARK: TabBar.Delegate
 
     func tabBar(_ tabBar: TabBar, canSelectItem item: Any) -> Bool {
@@ -336,7 +373,17 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
     }
 
     func tabBar(_ tabBar: TabBar, canReorderItem item: Any) -> Bool {
-        false
+        true
+    }
+
+    /// A drag left the tabs in a new order. The rows follow at once, so a reload before the
+    /// snapshot comes back does not put the tab back where it was; the view model works out which
+    /// tab moved.
+    func tabBar(_ tabBar: TabBar, didReorderItems reorderedItems: [Any]) {
+        let reorderedTabItems = reorderedItems.compactMap { $0 as? TabBarItem }
+        guard reorderedTabItems.count == items.count else { return }
+        items = reorderedTabItems
+        tabsReorderedRelay.accept(reorderedTabItems.map(\.id))
     }
 
     func tabBar(_ tabBar: TabBar, canEditTitleOfItem item: Any) -> Bool {
@@ -354,6 +401,32 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         tabClosedRelay.accept(tabItem.id)
         DispatchQueue.main.async { [weak self] in
             self?.isHandlingClose = false
+        }
+    }
+}
+
+/// What a tab's menu item carries to its action.
+private struct EditorTabCommandMenuItemPayload {
+    let command: EditorTabCommand
+    let tabID: DocumentTab.ID
+}
+
+extension EditorTabCommand {
+    /// Xcode's titles for the closing commands; the object commands keep the title they have in
+    /// every other menu.
+    fileprivate var menuTitle: String {
+        switch self {
+        case .close: "Close Tab"
+        case .closeOthers: "Close Other Tabs"
+        case .closeToTheRight: "Close Tabs to the Right"
+        case .runtimeObjectAction(let action): action.menuTitle
+        }
+    }
+
+    fileprivate var menuImage: NSImage? {
+        switch self {
+        case .close, .closeOthers, .closeToTheRight: nil
+        case .runtimeObjectAction(let action): action.menuImage
         }
     }
 }

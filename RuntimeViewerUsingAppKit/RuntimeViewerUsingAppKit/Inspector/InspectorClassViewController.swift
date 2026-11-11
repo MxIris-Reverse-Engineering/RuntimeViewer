@@ -9,6 +9,9 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorHier
     /// the others.
     private static let levelMinimumHeight: CGFloat = 30
 
+    /// Commands chosen in a level's context menu.
+    private let runtimeObjectActionRequestedRelay = PublishRelay<RuntimeObjectActionRequest>()
+
     private let headerLabel = Label()
 
     private let (scrollView, tableView) = SelfSizingTableView.scrollableNavigationListTableView()
@@ -67,19 +70,26 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorHier
     override func setupBindings(for viewModel: InspectorHierarchyViewModel) {
         super.setupBindings(for: viewModel)
 
-        let selectHierarchyLevel: Signal<InspectorHierarchyCellViewModel> = tableView.rx
-            .itemClicked()
-            .compactMap { [weak tableView] index -> InspectorHierarchyCellViewModel? in
-                guard let tableView,
-                      index.row >= 0,
-                      index.row < tableView.numberOfRows
-                else { return nil }
-                return try? tableView.rx.model(at: index.row)
-            }
-            .asSignal(onErrorSignalWith: .empty())
+        // A plain click opens the level in place; ⌥ and ⇧⌥ open it elsewhere,
+        // as in the sidebar. A level no indexed image defines has no object,
+        // so no menu either.
+        let levelClicks = tableView.rx.rowClicks(of: InspectorHierarchyCellViewModel.self)
+
+        tableView.installContextMenu { [weak tableView, runtimeObjectActionRequestedRelay] clickedRow in
+            guard let tableView,
+                  let cellViewModel: InspectorHierarchyCellViewModel = try? tableView.rx.model(at: clickedRow),
+                  let levelObject = cellViewModel.runtimeObject
+            else { return [] }
+            return RuntimeObjectAction.contextMenuItems(for: levelObject, reportingTo: runtimeObjectActionRequestedRelay)
+        }
+        .disposed(by: rx.disposeBag)
 
         let input = InspectorHierarchyViewModel.Input(
-            selectHierarchyLevelClicked: selectHierarchyLevel
+            selectHierarchyLevelClicked: levelClicks.filter { $0.destination == .focusedTab }.map(\.model),
+            runtimeObjectActionRequested: .merge(
+                levelClicks.compactMap { RuntimeObjectAction.request(for: $0.model.runtimeObject, clickedTowards: $0.destination) },
+                runtimeObjectActionRequestedRelay.asSignal()
+            )
         )
         let output = viewModel.transform(input)
 

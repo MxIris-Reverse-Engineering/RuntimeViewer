@@ -41,6 +41,10 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
     @MemberwiseInit(.public)
     public struct Input {
         public let selectRelationshipClicked: Signal<InspectorRelationshipsCellViewModel>
+        /// A command chosen in a row's context menu, or the one a modified
+        /// click stands for (⌥ Open in New Tab, ⇧⌥ Open in Next Editor Pane).
+        @Init(default: Signal<RuntimeObjectActionRequest>.empty())
+        public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
     }
 
     public struct Output {
@@ -128,6 +132,14 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
             documentState.selectionRouter.trigger(.open(cellViewModel.runtimeObject, in: .focusedTab))
         }
         .disposed(by: rx.disposeBag)
+
+        #if os(macOS)
+        input.runtimeObjectActionRequested.emitOnNext { [weak self] request in
+            guard let self else { return }
+            perform(request.action, on: request.runtimeObject)
+        }
+        .disposed(by: rx.disposeBag)
+        #endif
 
         return Output(
             state: $state.asDriver(),

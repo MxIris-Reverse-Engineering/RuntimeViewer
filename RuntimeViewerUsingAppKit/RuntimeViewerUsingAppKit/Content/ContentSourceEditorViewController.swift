@@ -46,6 +46,9 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// The insertion point is not followed here: the bridge reports no selection changes.
     private let crossReferenceRequestedRelay = PublishRelay<FindCrossReferenceRequest>()
 
+    /// The commands every list offers on a runtime object, chosen on a type link.
+    private let runtimeObjectActionRequestedRelay = PublishRelay<RuntimeObjectActionRequest>()
+
     private let generatedInterfaceToggledRelay = PublishRelay<SelectionRoute.Destination>()
 
     /// `viewDidChangeEffectiveAppearance` is an `NSView` callback, not an `NSViewController`
@@ -133,7 +136,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             runtimeObjectOpenedInNewTab: openInNewTabRelay.asSignal(),
             runtimeObjectOpenedInNextEditorPane: openInNextEditorPaneRelay.asSignal(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
-            generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal()
+            generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal(),
+            runtimeObjectActionRequested: runtimeObjectActionRequestedRelay.asSignal()
         )
         let output = viewModel.transform(input)
         awaitsHighlightedFirstRender = output.highlightsFirstRender
@@ -332,7 +336,11 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
             openInNextEditorPaneMenuItem.target = self
             openInNextEditorPaneMenuItem.action = #selector(openInNextEditorPaneAction(_:))
 
-            menuItems = [jumpToDefinitionMenuItem, openInNewTabMenuItem, openInNextEditorPaneMenuItem]
+            let copyNameMenuItem = RuntimeObjectMenuItem(.copyName, runtimeObject: runtimeObject)
+            copyNameMenuItem.target = self
+            copyNameMenuItem.action = #selector(runtimeObjectActionMenuItemAction(_:))
+
+            menuItems = [jumpToDefinitionMenuItem, openInNewTabMenuItem, openInNextEditorPaneMenuItem, copyNameMenuItem]
         }
 
         // As the NSTextView path: the member the token's line declares, and the type a name links to.
@@ -358,6 +366,10 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
             }
             menuItems.append(generatedInterfaceMenuItem)
         }
+        if !menuItems.isEmpty {
+            menuItems.append(.separator())
+        }
+        menuItems.append(.revealInSidebarNavigator())
         return menuItems
     }
 
@@ -386,6 +398,11 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
     @objc private func crossReferenceAction(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? FindCrossReferenceRequest else { return }
         crossReferenceRequestedRelay.accept(request)
+    }
+
+    @objc private func runtimeObjectActionMenuItemAction(_ sender: RuntimeObjectMenuItem) {
+        guard let action = sender.runtimeObjectAction else { return }
+        runtimeObjectActionRequestedRelay.accept(RuntimeObjectActionRequest(action: action, runtimeObject: sender.runtimeObject))
     }
 
     /// The jump target the generator recorded for the token starting at `characterIndex`, if
