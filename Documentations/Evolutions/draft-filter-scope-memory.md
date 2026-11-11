@@ -43,8 +43,10 @@
 **落地步骤**
 
 1. ✅ `RuntimeObjectScope` 的编码与宽松解码、`RuntimeObjectScopeMemory`、`AppDefaults` 的两项；单元测试。
-2. `SidebarRuntimeObjectViewModel` 接入记忆、页面间同步与 Match Case；ViewModel 测试。
-3. 视图：Match Case 按钮的初值、弹窗显示有约束的行；`AGENTS.md` 补一条规则（`Property` 的原始值是存盘格式）。
+2. ✅ `SidebarRuntimeObjectViewModel` 接入记忆、页面间同步与 Match Case；ViewModel 测试。
+3. ✅ 视图：Match Case 按钮的初值、弹窗显示有约束的行；`AGENTS.md` 补一条规则（`Property` 的原始值是存盘格式）。
+
+**验证**：`RuntimeViewerPackages` 的侧栏相关测试（新增 17 个，连同两个对象页 ViewModel 的既有套件共 34 个）在 Ultra 上全部通过；Tuist workspace 编 App（Debug）通过。没有启动 App 手工看过。
 
 ## 决策日志
 
@@ -55,3 +57,5 @@
 | 2026-11-11 | 开始实现 | |
 | 2026-11-11 | 种类存「被排除的」 | 白名单存盘后，以后新增的种类会被已记住的 Scope 隐藏 |
 | 2026-11-11 | Engine 键沿用 Always Index 的 `EngineReference.key(for:)`，不用书签的 scope 键 | 书签键对本机 Attach 的进程带 pid，目标一重启就对不上；Scope 是用户写的过滤条件，按进程名共用正合适 |
+| 2026-11-11 | Match Case 只记调用方第一个值之后的变化 | 第一个值是开关的起点：有开关的页面先把开关设成记住的值，没有开关的调用方（iOS）传常量 `false`，不能拿它覆盖记住的值 |
+| 2026-11-11 | 实现完成，待用户看过后收尾 | 自审没有发现要修的问题；文档：提案、两个索引与 `AGENTS.md` 的规则已同批更新，不需要另写指南或实现说明，没有新术语 |
