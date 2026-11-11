@@ -396,9 +396,10 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                     FindResultMenuItem(title: "Find \(mode.title)", image: nil, node: node, action: .crossReference(mode))
                 }
                 if node.canOpenInNewTab {
-                    items.append(FindResultMenuItem(title: "Open in New Tab", image: SFSymbols(systemName: .plusSquareOnSquare).nsImage, node: node, action: .openInNewTab))
-                    items.append(FindResultMenuItem(title: "Open in Next Editor Pane", image: NSImage(systemSymbolName: "inset.filled.righthalf.rectangle", accessibilityDescription: nil), node: node, action: .openInNextEditorPane))
+                    items.append(FindResultMenuItem(title: RuntimeObjectAction.openInNewTab.menuTitle, image: RuntimeObjectAction.openInNewTab.menuImage, node: node, action: .openInNewTab))
+                    items.append(FindResultMenuItem(title: RuntimeObjectAction.openInNextEditorPane.menuTitle, image: RuntimeObjectAction.openInNextEditorPane.menuImage, node: node, action: .openInNextEditorPane))
                 }
+                items.append(FindResultMenuItem(title: "Copy", image: RuntimeObjectAction.copyName.menuImage, node: node, action: .copy))
                 return items
             }
         contextMenu.rx.items(source: contextMenuItems)({ menuItem, entry in
@@ -470,7 +471,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             crossReferenceCommandSelected: crossReferenceCommandSelected,
             runtimeHelperCallsToggled: runtimeHelperCallsToggle.clicked
                 .map { [weak runtimeHelperCallsToggle] in !(runtimeHelperCallsToggle?.isActive ?? false) }
-                .asSignal(onErrorSignalWith: .empty())
+                .asSignal(onErrorSignalWith: .empty()),
+            resultCopied: contextMenuItemSelected.filter { $0.action == .copy }.map(\.node)
         )
         let output = viewModel.transform(input)
 
@@ -628,6 +630,8 @@ private struct FindResultMenuItem: RxMenuItemRepresentable {
         case openInNextEditorPane
         /// Find Call Hierarchy, Find Callees or Find Type References.
         case crossReference(FindMode)
+        /// The text the row shows.
+        case copy
     }
 
     let title: String

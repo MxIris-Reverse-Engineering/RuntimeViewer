@@ -1,12 +1,17 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
 @Loggable(.private)
 public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     private let nodesSource: Observable<[RuntimeImageNode]>
+
+    /// Where Show in Finder sends an image's file.
+    @Dependency(\.finderClient)
+    private var finderClient
 
     private var nodesIndexed: Signal<Void> = .empty()
 
@@ -191,6 +196,58 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         /// The filter field's content. A platform without tokens passes its
         /// search text as `NavigatorTextFilter(typedText:)`.
         public let filter: Signal<NavigatorTextFilter>
+        /// A command chosen in an image's context menu (`imageActions(for:)`).
+        /// macOS only.
+        @Init(default: Signal<(action: RuntimeImageAction, node: RuntimeImageNode)>.empty())
+        public let imageActionRequested: Signal<(action: RuntimeImageAction, node: RuntimeImageNode)>
+    }
+
+    /// The commands an image's context menu offers, in menu order. A folder
+    /// row — a path segment, not an image — offers none. Show in Finder only
+    /// where the image is a file on this Mac's disk: the engine runs on this
+    /// Mac, and the path is there — never true of an image read from the dyld
+    /// shared cache, nor of a device's or another Mac's path that happens to
+    /// exist here.
+    public func imageActions(for node: RuntimeImageNode) -> [RuntimeImageAction] {
+        guard node.isLeaf else { return [] }
+        var actions: [RuntimeImageAction] = [.open, .findInImage, .copyName, .copyPath]
+        if Self.isOnThisMac(documentState.runtimeEngine.source), FileManager.default.fileExists(atPath: node.path) {
+            actions.append(.showInFinder)
+        }
+        return actions
+    }
+
+    #if os(macOS)
+    /// Carries out an image's context menu command.
+    private func perform(_ action: RuntimeImageAction, on node: RuntimeImageNode) {
+        switch action {
+        case .open:
+            documentState.selectionRouter.trigger(.switchImage(node))
+        case .findInImage:
+            documentState.findSession.update { query in
+                query.scope = .images([node.path])
+            }
+            router.trigger(.find)
+        case .copyName:
+            pasteboardClient.copyString(node.name)
+        case .copyPath:
+            pasteboardClient.copyString(node.path)
+        case .showInFinder:
+            finderClient.revealFile(URL(fileURLWithPath: node.path))
+        }
+    }
+    #endif
+
+    /// Whether an engine of `source` reads images from this Mac's disk: My Mac,
+    /// Mac Catalyst and a process attached on this Mac (XPC or a local socket),
+    /// or a file read offline here.
+    static func isOnThisMac(_ source: RuntimeSource) -> Bool {
+        switch source {
+        case .local, .remote, .localSocket, .file:
+            return true
+        case .injectedTCP, .directTCP, .bonjour:
+            return false
+        }
     }
 
     @MemberwiseInit(.public)
@@ -233,6 +290,14 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
             documentState.runtimeEngineSession.backgroundWork(forImageAt: imagePath)?.indexingCoordinator.prioritize(imagePath: imagePath)
         }
         .disposed(by: rx.disposeBag)
+
+        #if os(macOS)
+        input.imageActionRequested.emitOnNext { [weak self] action, node in
+            guard let self else { return }
+            perform(action, on: node)
+        }
+        .disposed(by: rx.disposeBag)
+        #endif
 
         // Applied as it arrives: the fields coalesce typing themselves — the
         // macOS token field reports it after a 0.2-second pause, and the iOS
