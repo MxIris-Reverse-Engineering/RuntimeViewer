@@ -45,3 +45,7 @@
 | 2026-11-11 | 这次一起做 Xcode 式的原地展开 | 用户选定；SourceEditor 的 Gap 与 Xcode 的做法已查清，示例 App 已经实现过一遍 |
 | 2026-11-11 | 展开块由 MachOSwiftSection 打印，RV 不从区域里拼 | 对方会话的建议：展开块里的注释与转换器要和接口其余部分一致，只有打印器自己做得到 |
 | 2026-11-11 | 用户批准，开始实现 | 在功能分支 `feature/observable-macro` 上做；提案在本地 `next` 提交、不推送，因为 `next` 上还有一个按用户要求不推送的文档提交 |
+| 2026-11-11 | 先做 bridge 的行内展开（落地步骤 3 的 bridge 部分），步骤 1 的代码写好后等 MachOSwiftSection 的 `expandsMacros` 推上来再编 | bridge 不依赖 MachOSwiftSection，可以先验证；步骤 1 引用的打印配置成员对方还没推 |
+| 2026-11-11 | 行内展开里不接 ⌘ 点和右键菜单，也不画注释标签 | 内容区的导航与注释装饰都按主编辑器的文本范围工作，展开是另一段文本；先做显示，有需要再加 |
+| 2026-11-11 | bridge 的展开视图照 SourceEditor 示例的 `InlineDefinitionView` 移植 | 两边都照 Xcode 26.6 的 `GapEmbeddedEditorContentView` 逆向而来，公式与地址在 `/Volumes/RE/Xcode/26.6/README.md` |
+| 2026-11-11 | 展开的数据源不在末尾补换行（`lineEndingAtEndOfFileBehavior = .optional`） | 默认的 `.mandatory` 会在文本末尾补一个换行，展开因此多出一行空行；新测试比对展开文本时抓到。框架自己的内嵌编辑器和跳转预览都这样设，SourceEditor 示例同批改正 |
