@@ -82,14 +82,13 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// comment structure with it. The `NSTextView` pane does not read it.
         public let commentDecorations: InterfaceCommentDecorations?
 
-        /// The attached macros this text shows folded, which the SourceEditor pane can expand
-        /// below their attributes; empty when the engine sent none. The `NSTextView` pane does
-        /// not read them.
+        /// The attached macros this text shows folded, which the SourceEditor pane can expand in
+        /// place; empty when the engine sent none. The `NSTextView` pane does not read them.
         public var macroExpansions: [MacroExpansion] = []
     }
 
     /// An attached macro of the rendered text — `@Observation.Observable` — with the declarations
-    /// it generated.
+    /// it generated, in the places they go.
     public struct MacroExpansion: Sendable {
         /// The macro as its attribute names it, `Observation.Observable`.
         public let macroName: String
@@ -97,8 +96,20 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// Where the attribute is in the rendered text, in UTF-16 offsets, as the editor indexes it.
         public let attributeCharacterRange: NSRange
 
-        /// The declarations the macro generated.
-        public let expansionString: FrozenSemanticString
+        /// The declarations the macro generated, a part for each place they go, in text order.
+        public let parts: [Part]
+
+        /// One place of the expansion: what it hangs at in the rendered text, on which side of
+        /// that line, and the declarations, without indentation of their own.
+        public struct Part: Sendable {
+            /// A tracked property's declaration, or the line of the type's closing brace, in
+            /// UTF-16 offsets of the rendered text.
+            public let anchorCharacterRange: NSRange
+
+            public let placement: RuntimeInterfaceMacroExpansion.Part.Placement
+
+            public let content: FrozenSemanticString
+        }
     }
 
     /// What the fetch half hands the render half: the text to show, the object it belongs to, and
@@ -500,25 +511,33 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         )
     }
 
-    /// The fetched interface's macro expansions, their attributes located in UTF-16 offsets of its
-    /// text. An attribute whose UTF-8 range does not fall on character boundaries of that text is
-    /// left out.
+    /// The fetched interface's macro expansions, their attributes and the anchors of their parts
+    /// located in UTF-16 offsets of its text. A part whose anchor's UTF-8 range does not fall on
+    /// character boundaries of that text is left out, and so is an expansion whose attribute does
+    /// not or that has no part left.
     nonisolated static func renderedMacroExpansions(of fetchedInterface: FetchedInterface) -> [MacroExpansion] {
         guard !fetchedInterface.macroExpansions.isEmpty else { return [] }
         let text = fetchedInterface.interfaceString.string
-        let utf8View = text.utf8
         return fetchedInterface.macroExpansions.compactMap { expansion in
-            let utf8Range = expansion.attributeUTF8Range
-            guard utf8Range.lowerBound >= 0, utf8Range.upperBound <= utf8View.count,
-                  let lowerBound = utf8View.index(utf8View.startIndex, offsetBy: utf8Range.lowerBound).samePosition(in: text),
-                  let upperBound = utf8View.index(utf8View.startIndex, offsetBy: utf8Range.upperBound).samePosition(in: text)
-            else { return nil }
-            return MacroExpansion(
-                macroName: expansion.macroName,
-                attributeCharacterRange: NSRange(lowerBound ..< upperBound, in: text),
-                expansionString: expansion.expansionString
-            )
+            guard let attributeCharacterRange = characterRange(ofUTF8Range: expansion.attributeUTF8Range, in: text) else { return nil }
+            let parts = expansion.parts.compactMap { part -> MacroExpansion.Part? in
+                guard let anchorCharacterRange = characterRange(ofUTF8Range: part.anchorUTF8Range, in: text) else { return nil }
+                return MacroExpansion.Part(anchorCharacterRange: anchorCharacterRange, placement: part.placement, content: part.content)
+            }
+            guard !parts.isEmpty else { return nil }
+            return MacroExpansion(macroName: expansion.macroName, attributeCharacterRange: attributeCharacterRange, parts: parts)
         }
+    }
+
+    /// `utf8Range` of `text` in UTF-16 offsets, or nil when it does not fall on character
+    /// boundaries of `text`.
+    private nonisolated static func characterRange(ofUTF8Range utf8Range: Range<Int>, in text: String) -> NSRange? {
+        let utf8View = text.utf8
+        guard utf8Range.lowerBound >= 0, utf8Range.upperBound <= utf8View.count,
+              let lowerBound = utf8View.index(utf8View.startIndex, offsetBy: utf8Range.lowerBound).samePosition(in: text),
+              let upperBound = utf8View.index(utf8View.startIndex, offsetBy: utf8Range.upperBound).samePosition(in: text)
+        else { return nil }
+        return NSRange(lowerBound ..< upperBound, in: text)
     }
 
     /// `attributedString` with every line that declares a member with code

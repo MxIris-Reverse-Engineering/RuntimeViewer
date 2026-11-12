@@ -250,15 +250,25 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// Shows the declarations the macro generated below its attribute's line, coloured the way the
     /// interface is.
     private func showInlineExpansion(_ expansion: ContentTextViewModel.MacroExpansion, with bridge: SourceEditorBridging) {
-        let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: expansion.expansionString)
+        let parts = expansion.parts.map { part in
+            let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: part.content)
+            let placement: SourceEditorBridgingInlineExpansionPlacement = switch part.placement {
+            case .belowLine: .belowLine
+            case .aboveLine: .aboveLine
+            }
+            return SourceEditorBridgingInlineExpansionPart(
+                source: part.content.string,
+                semanticRanges: semanticRanges,
+                semanticNodeTypeNames: nodeTypeNames,
+                anchorRange: part.anchorCharacterRange,
+                placement: placement
+            )
+        }
         bridge.showInlineExpansion(
-            expansion.expansionString.string,
+            parts,
             languageIdentifier: "swift",
-            semanticRanges: semanticRanges,
-            semanticNodeTypeNames: nodeTypeNames,
             title: expansion.macroName.split(separator: ".").last.map(String.init) ?? expansion.macroName,
-            identifier: Self.inlineExpansionIdentifier(for: expansion),
-            belowLineContaining: expansion.attributeCharacterRange
+            identifier: Self.inlineExpansionIdentifier(for: expansion)
         )
     }
 

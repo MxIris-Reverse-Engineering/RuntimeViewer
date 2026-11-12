@@ -129,18 +129,23 @@ final class SourceEditorTestHarness {
         bridge.revealCharacterRange(characterRange)
     }
 
-    /// Shows `source` below the line holding `anchorRange`, as the content pane does with a
-    /// macro's expansion.
-    func showInlineExpansion(_ source: String, title: String, identifier: String,
-                             belowLineContaining anchorRange: NSRange) {
+    /// Shows each part's text above or below the line of its anchor, as the content pane does with
+    /// a macro's expansion: `(source, anchorRange, placement)`, without semantic runs.
+    func showInlineExpansion(_ parts: [(String, NSRange, SourceEditorBridgingInlineExpansionPlacement)],
+                             title: String, identifier: String) {
         bridge.showInlineExpansion(
-            source,
+            parts.map { source, anchorRange, placement in
+                SourceEditorBridgingInlineExpansionPart(
+                    source: source,
+                    semanticRanges: [],
+                    semanticNodeTypeNames: [],
+                    anchorRange: anchorRange,
+                    placement: placement
+                )
+            },
             languageIdentifier: "swift",
-            semanticRanges: [],
-            semanticNodeTypeNames: [],
             title: title,
-            identifier: identifier,
-            belowLineContaining: anchorRange
+            identifier: identifier
         )
     }
 

@@ -146,36 +146,80 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// The query also goes to the system's find pasteboard, as any find bar's does.
     func showFindInterface(query: String, pattern: SourceEditorBridgingFindPattern, isCaseSensitive: Bool)
 
-    /// Shows `source` below the line that holds `anchorRange`, the way Xcode shows an expanded
-    /// macro: in a gap the editor opens between that line and the next, with a read-only editor
-    /// of its own, the theme's colours and a dismiss button beside its first line.
+    /// Shows an expansion the way Xcode shows an expanded macro: each part in a gap the editor
+    /// opens above or below the line of the part's anchor, with a read-only editor of its own, the
+    /// theme's colours and a dismiss button beside its first line. An attached macro's expansion
+    /// goes to several places — after a member, inside the body above its closing brace, after
+    /// the type — so it is several parts, and they are one expansion: hiding it, or the dismiss
+    /// button of any of its gaps, closes every one.
     ///
-    /// The source and its semantic ranges are what `setSource` takes; the expansion keeps them
-    /// until it is hidden, dismissed, or the next `setSource` replaces the text it hangs under.
-    /// Showing an identifier that is already shown does nothing.
+    /// The parts keep their text until the expansion is hidden, dismissed, or the next
+    /// `setSource` replaces the text they hang in. Showing an identifier that is already shown,
+    /// or no part at all, does nothing.
     ///
     /// - Parameters:
-    ///   - title: what the gap is called — the name at the right of its first line and in the
+    ///   - title: what each gap is called — the name at the right of its first line and in the
     ///     editor's accessibility rotor of expanded macros.
     ///   - identifier: names the expansion for ``hideInlineExpansion(identifier:)`` and
     ///     ``isInlineExpansionShown(identifier:)``.
-    ///   - anchorRange: a UTF-16 range into the source last passed to `setSource`.
     func showInlineExpansion(
-        _ source: String,
+        _ parts: [SourceEditorBridgingInlineExpansionPart],
         languageIdentifier: String,
-        semanticRanges: [NSValue],
-        semanticNodeTypeNames: [String],
         title: String,
-        identifier: String,
-        belowLineContaining anchorRange: NSRange
+        identifier: String
     )
 
-    /// Closes the expansion shown under `identifier`, if there is one.
+    /// Closes the expansion shown under `identifier`, every part of it, if there is one.
     func hideInlineExpansion(identifier: String)
 
     /// Whether an expansion is shown under `identifier`. False again once the reader closed it
     /// with its dismiss button.
     func isInlineExpansionShown(identifier: String) -> Bool
+}
+
+/// One gap of an inline expansion: the text it shows and the line it opens at. A class, because
+/// `SourceEditorBridging` is an Objective-C protocol and takes only what Objective-C can represent.
+@objc(RuntimeViewerSourceEditorBridgingInlineExpansionPart)
+public final class SourceEditorBridgingInlineExpansionPart: NSObject {
+    /// The part's text, without the indentation of the line it opens at, which the gap adds.
+    public let source: String
+
+    /// The semantic runs of `source`, as `setSource` takes them.
+    public let semanticRanges: [NSValue]
+
+    /// The node type each run of `semanticRanges` is, as `setSource` takes them.
+    public let semanticNodeTypeNames: [String]
+
+    /// A UTF-16 range into the source last passed to `setSource`; the part opens at the line its
+    /// end lies on.
+    public let anchorRange: NSRange
+
+    /// Which side of that line the part opens on.
+    public let placement: SourceEditorBridgingInlineExpansionPlacement
+
+    public init(
+        source: String,
+        semanticRanges: [NSValue],
+        semanticNodeTypeNames: [String],
+        anchorRange: NSRange,
+        placement: SourceEditorBridgingInlineExpansionPlacement
+    ) {
+        self.source = source
+        self.semanticRanges = semanticRanges
+        self.semanticNodeTypeNames = semanticNodeTypeNames
+        self.anchorRange = anchorRange
+        self.placement = placement
+        super.init()
+    }
+}
+
+/// Which side of its anchor's line a part of an inline expansion opens on.
+@objc(RuntimeViewerSourceEditorBridgingInlineExpansionPlacement)
+public enum SourceEditorBridgingInlineExpansionPlacement: Int {
+    /// Between the line and the next: what follows a declaration, or a type's closing brace.
+    case belowLine
+    /// Between the line and the one before: what a type's body ends with, above its closing brace.
+    case aboveLine
 }
 
 /// How the find bar matches its query, the choices of its pattern menu.
