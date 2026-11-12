@@ -91,6 +91,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     var editorView: NSView { sourceEditorView }
 
+    var scrollView: NSScrollView { sourceEditorView.scrollView }
+
     /// One of the `.xccolortheme` files the framework ships in its own resources, such as
     /// `Default (Dark)`.
     static func builtInThemeDictionary(named themeName: String) -> NSDictionary? {

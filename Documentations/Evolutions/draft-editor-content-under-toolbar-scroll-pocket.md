@@ -1,6 +1,6 @@
 # Draft - 编辑区内容从工具栏与标签栏下滚过并透出模糊
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-12
 - **最后更新**: 2026-11-12
 - **实现分支**: `feature/editor-content-under-toolbar-scroll-pocket`
@@ -14,17 +14,17 @@ macOS 26 起，把编辑区顶部改成 Xcode 27.2 的样子：每一栏的内�
 Xcode 的做法（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes — visuals」§6，只在公司那台 Mac 的 RE 卷上）：编辑器视图铺满整栏，标签栏放在安全区顶部，内容的安全区加上栏高，栏的底是一个 `DVTEdgeOcclusionView`，里面是 style 2 的 `NSScrollPocket`。本提案改走侧栏已经在用的另一条路（`NavigatorScrollViewLayout`，把浮在列表上的栏登记为列表滚动视图的 pocket 容器），效果相同，不新增私有 API：
 
 1. **内容铺满整栏。** macOS 26 起，`EditorPaneViewController` 的内容不论标签栏显示与否都铺满整栏，撤掉 11-06 加的「内容顶边跟标签栏顶边」那组约束切换。顶行栏的滚动视图碰到标题栏，AppKit 会自动把标题栏容器登记为它的顶部 pocket 容器，工具栏那一条就有了模糊。标签栏的高度照旧经内容的 `additionalSafeAreaInsets` 让出。
-2. **标签栏变成「栏」。** macOS 26 起，`EditorPaneTabBarView` 不再画不透明背景，`_scrollPocketElementStyle` 回答 `NSView.barScrollPocketElementStyle`（与 `ScrollPocketBarView` 同一个值），并经 UIFoundation 的 `NSScrollView.box.registerScrollPocketContainer(_:on: .top)` 登记为当前内容滚动视图的顶部容器。内容换了，先从旧的滚动视图撤销，再登记到新的；栏隐藏时撤销。
-3. **内容交出滚动视图。** `EditorPaneContent` 加 `var contentScrollView: NSScrollView? { get }`（先例是 UIKit 的 `UIViewController.contentScrollView(for:)`；这里只用到顶边，所以写成属性）。`ContentTextViewController` 交出它的 `scrollView`；`ContentSourceEditorViewController` 交出桥接层新加的 `SourceEditorBridging.scrollView: NSScrollView`，也就是 `SourceEditorView.scrollView`（重建版里本来就是 public），以 `NSScrollView` 交出，桥接层的公开接口仍不出现 SourceEditor 的类型；占位页没有，返回 `nil`。窗格做自己 `ContentNavigationController` 的 delegate，在 `navigationController(_:didShow:)` 里跟上当前显示的内容。
+2. **标签栏变成「栏」。** macOS 26 起，`EditorPaneTabBarView` 不再画不透明背景，`_scrollPocketElementStyle` 回答 `NSView.barScrollPocketElementStyle`（与 `ScrollPocketBarView` 同一个值），并登记为当前内容滚动视图的顶部容器。登记由 RuntimeViewerUI 新增的 `ScrollPocketContainerRegistration` 来做：它一次只把一个视图登记在一个滚动视图上（经 UIFoundation 的 `NSScrollView.box.registerScrollPocketContainer(_:on:)`），换滚动视图时先从旧的撤销再登记到新的，设为 `nil` 就哪里都不登记；栏隐藏时设为 `nil`。
+3. **内容交出滚动视图。** `EditorPaneContent` 加 `var contentScrollView: NSScrollView? { get }`（先例是 UIKit 的 `UIViewController.contentScrollView(for:)`；这里只用到顶边，所以写成属性）。`ContentTextViewController` 交出它的 `scrollView`；`ContentSourceEditorViewController` 交出桥接层新加的 `SourceEditorBridging.scrollView: NSScrollView`，也就是 `SourceEditorView.scrollView`（重建版里本来就是 public），以 `NSScrollView` 交出，桥接层的公开接口仍不出现 SourceEditor 的类型；占位页不遵循这个协议，取到的是 `nil`。窗格做自己 `ContentNavigationController` 的 delegate，在 `navigationController(_:didShow:)` 里跟上当前显示的内容；`viewDidLayout` 里再对一次，接住没有报告的切换。
 4. **macOS 15 不变**：内容仍从标签栏上沿开始，标签栏仍用窗口背景色。
-5. **测试**：量内容滚动视图顶部 pocket 的几何，确认它盖住标签栏，且换内容之后跟着新的滚动视图走。
+5. **测试**：`ScrollPocketContainerRegistrationTests`（RuntimeViewerApplicationTests）量顶部 pocket 的高度，确认栏登记后成为那个滚动视图的 pocket、内容换了要等登记跟过去才有、离开的滚动视图不再带着它、设为 `nil` 后撤销；夹具照导航控制器的方式一次只放一个滚动视图（实测两个滚动视图叠在一起时，AppKit 会自己给前面那个一个 pocket，与登记无关）；`ScrollPocketUnderToolbarTests`（桥接测试）确认 SourceEditor 的滚动视图伸到工具栏下时，顶部 pocket 正好与工具栏一样高，并把下面「风险」里 Minimap 的问题记成已知问题。App target 没有单元测试 target，窗格本身的接线靠构建与目视验收。
 6. **文档**：0076 的「外观」「非目标」与决策日志，提案索引「暂缓的后续项」里那一行，`EditorPaneViewController` 的文档注释，`RuntimeViewerUsingAppKit/AGENTS.md` 补一条：编辑栏也是登记给内容滚动视图的 pocket 容器。
 
 **落地步骤**（每步各自能构建通过）
 
-1. 先量风险：测试里量 Minimap 与 AppKit 顶部 pocket 视图在 SourceEditor 滚动视图子视图里的先后。
-2. 桥接层的 `SourceEditorBridging.scrollView`、`EditorPaneContent.contentScrollView`，三个内容控制器各自交出滚动视图。
-3. 窗格：内容铺满整栏（macOS 26 起），标签栏去底色、回答 Bar 样式、登记为当前内容滚动视图的顶部 pocket 容器并随内容切换，附测试。
+1. ✅ 先量风险：测试里量 Minimap 与 AppKit 顶部 pocket 视图在 SourceEditor 滚动视图子视图里的先后（结论见「风险」）。
+2. ✅ 桥接层的 `SourceEditorBridging.scrollView`、`EditorPaneContent.contentScrollView`，两个显示接口的内容控制器各自交出滚动视图。
+3. ✅ 窗格：内容铺满整栏（macOS 26 起），标签栏去底色、回答 Bar 样式、经 `ScrollPocketContainerRegistration` 登记为当前内容滚动视图的顶部 pocket 容器并随内容切换，附测试。
 4. 文档：0076、提案索引、`EditorPaneViewController` 的文档注释与 `RuntimeViewerUsingAppKit/AGENTS.md`。
 
 **没有询问就采用的假设**
@@ -36,7 +36,8 @@ Xcode 的做法（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes — vi
 
 **风险**
 
-- 11-06 让内容避开工具栏，是因为 Minimap 的竖线穿过了工具栏。重建版把 Minimap 当作 `marginOverlayView` 加进滚动视图、铺满整个高度（27.2.0-alpha.1 的 `ContentViewLayoutContainer.layoutMarginAccessories`）。如果 AppKit 的 pocket 视图排在它下面，工具栏下的 Minimap 和竖线就依旧清晰。实现第一步先写测试，量出两者在滚动视图子视图里的先后；如果 Minimap 在上面，要改的是重建版 SourceEditor 仓库，到时再定。
+- 11-06 让内容避开工具栏，是因为 Minimap 的竖线穿过了工具栏。重建版把 Minimap 当作 `marginOverlayView` 加进滚动视图、铺满整个高度（27.2.0-alpha.1 与 alpha.2 的 `ContentViewLayoutContainer.layoutMarginAccessories`）。如果 AppKit 的 pocket 视图排在它下面，工具栏下的 Minimap 和竖线就依旧清晰。
+- **实测（2026-11-12，macOS 27.2，27.2.0-alpha.2）：风险成立。** 编辑器铺满一个全尺寸内容、带工具栏的窗口时，滚动视图的安全区顶部是 66 点，AppKit 在它的子视图里放了一个 `NSScrollPocket`，框 `(0, 0, 900, 66)`，正好盖住工具栏，Gutter、折叠条与正文都在它下面，会被模糊。`MinimapView` 却排在它之后（子视图第 5 个，pocket 是第 3 个），框是滚动视图的整个高度，所以开着 Minimap 时，它和它的竖线在工具栏下、以及透明的标签栏下都清晰可见。Minimap 默认关闭；只有一栏一个标签时内容 8 月起就铺满整栏，这个现象那时就有。修复要在重建版里让 Minimap 排到 pocket 下面，或者让它从安全区顶部排起，属于 SourceEditor 仓库的改动，列为后续项；`ScrollPocketUnderToolbarTests` 把它记成已知问题，修好后那条测试会提醒删掉标记。
 - 最终观感只能目视验收。
 
 ## 决策日志
@@ -47,3 +48,6 @@ Xcode 的做法（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes — vi
 | 2026-11-12 | 把标签栏登记为内容滚动视图的 pocket 容器，不照 Xcode 在栏里单独放一块 `NSScrollPocket` | 复用侧栏已有的登记机制，不用为私有类新写封装，也不必先发 UIFoundation 再抬 pin；用户选定 |
 | 2026-11-12 | 走轻量档 | 用户选定 |
 | 2026-11-12 | 状态改为 Accepted，开始实现 | 用户批准 |
+| 2026-11-12 | Minimap 盖在模糊层上面已实测证实；RV 这一侧照方案做完，Minimap 列为重建版 SourceEditor 的后续项 | Minimap 默认关闭，单栏时 8 月起就是这样，这次没有让它更糟；修复属于重建版仓库，按 SourceEditor 模块的规矩不在 RV 里绕过 |
+| 2026-11-12 | 登记逻辑做成 RuntimeViewerUI 的 `ScrollPocketContainerRegistration`，不直接写在窗格里 | App target 没有单元测试 target，放进包里才能测；侧栏的 `NavigatorScrollViewLayout` 也在那里 |
+| 2026-11-12 | 窗格除了 `navigationController(_:didShow:)`，在 `viewDidLayout` 里也对一次当前内容的滚动视图 | AppKitPlus 的头文件只说转场完成时与视图出现时会发 didShow，没写明不带动画的 `set` 算不算转场，窗格又没有测试能证明；重复登记同一个滚动视图什么也不做，代价只是一次比较 |
