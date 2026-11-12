@@ -19,6 +19,12 @@ internal import SourceModelSupport
 /// Two things Xcode's view does are left out because nothing here gives them anything to act on:
 /// hiding the title when the first line carries a line annotation, and drawing the dismiss button
 /// white over a gutter annotation such as a breakpoint.
+///
+/// One thing is done differently: where the text starts. Xcode pads the embedded editor's text by
+/// half the font's point size plus the indent, which lines it up with the host's only while the two
+/// editors' left margins match. Here they do not: a gutter is as wide as its widest line number,
+/// the host has the folding ribbon, and SourceEditor pads the host's text by half a point size only
+/// while its gutter shows certain annotations. So the padding is measured (`alignTextWithHost()`).
 final class InlineExpansionView: NSView {
     let embeddedEditorView: SourceEditorView
     /// The editor whose gap this view is in.
@@ -30,6 +36,8 @@ final class InlineExpansionView: NSView {
     private let firstLineNumberAttributesProvider = FirstLineNumberAttributesProvider()
     private let firstLineLayoutObserver = FirstLineLayoutObserver()
     private let expansionTitle: String
+    /// Columns past the host's column 0 the text starts at.
+    private let indent: Int
     private var showsLineNumbers = true
     private var cachedAccessoryColor: (appearance: NSAppearance, color: NSColor)?
     private lazy var titleLabel = NSTextField(labelWithString: expansionTitle)
@@ -48,6 +56,7 @@ final class InlineExpansionView: NSView {
         hostEditorView: SourceEditorView) {
         self.hostEditorView = hostEditorView
         expansionTitle = title
+        self.indent = indent
         let editor = InlineExpansionEditorView(frame: .zero, sourceEditorScrollViewClass: SourceEditorScrollView.self)
         editor.initialIndent = indent
         embeddedEditorView = editor
@@ -107,7 +116,8 @@ final class InlineExpansionView: NSView {
         needsLayout = true
     }
 
-    /// Follows the content pane's line numbers, as an expanded macro does in Xcode.
+    /// Follows the content pane's line numbers, as an expanded macro does in Xcode. Both gutters
+    /// change width, so the text is aligned again.
     func setShowsLineNumbers(_ shows: Bool) {
         showsLineNumbers = shows
         if shows {
@@ -115,6 +125,26 @@ final class InlineExpansionView: NSView {
         } else {
             embeddedGutter.disableLineNumbers()
         }
+        needsLayout = true
+    }
+
+    /// Puts the expansion's column 0 where the host's is, then the indent's columns further: the
+    /// distance between where the two editors start their text, in window coordinates, without the
+    /// padding this editor has now. Each editor lays its lines out from the left edge of its
+    /// `layoutBounds`, past its margin accessories, content margin and padding. A no-op once
+    /// aligned, so the layouts it starts end.
+    fileprivate func alignTextWithHost() {
+        let embeddedContentView = embeddedEditorView.contentView
+        let hostContentView = hostEditorView.contentView
+        let hostTextStart = hostContentView.convert(CGPoint(x: hostContentView.layoutBounds.minX, y: 0), to: nil).x
+        let currentPadding = embeddedContentView.additionalLeftPadding
+        let unpaddedTextStart = embeddedContentView.convert(CGPoint(x: embeddedContentView.layoutBounds.minX, y: 0), to: nil).x
+            - currentPadding
+        let indentWidth = embeddedEditorView.layoutManager.spaceWidth * CGFloat(indent)
+        let padding = max(0, (hostTextStart - unpaddedTextStart + indentWidth).rounded())
+        guard padding != currentPadding else { return }
+        embeddedContentView.additionalLeftPadding = padding
+        embeddedEditorView.layoutManager.setNeedsLayout()
     }
 
     /// `GapEmbeddedEditorContentView.layout()` (0x151BD0): the editor starts a quarter line
@@ -125,6 +155,7 @@ final class InlineExpansionView: NSView {
         let layoutManager = embeddedEditorView.layoutManager
         embeddedEditorView.frame = CGRect(x: 0, y: layoutManager.lineSpacing * 1.25, width: bounds.width,
             height: bounds.height).integral
+        alignTextWithHost()
         titleLabel.font = .systemFont(ofSize: embeddedEditorView.fontTheme.plainTextFont.pointSize)
         titleLabel.textColor = accessoryColor
         titleLabel.appearance = NSAppearance(named: embeddedEditorView.colorTheme.hasLightBackground ? .aqua : .darkAqua)
@@ -288,7 +319,8 @@ private final class InlineExpansionEditorView: SourceEditorView {
         set { super.colorTheme = InlineExpansionColorTheme(parentColorTheme: newValue) }
     }
 
-    /// The text is indented after every font change (`fontTheme`'s setter, 0x154850).
+    /// The text is indented after every font change (`fontTheme`'s setter, 0x154850), as a start:
+    /// `InlineExpansionView.alignTextWithHost()` measures the padding that lines it up.
     override var fontTheme: any SourceEditorFontTheme {
         get { super.fontTheme }
         set {
@@ -340,6 +372,8 @@ private final class FirstLineLayoutObserver: LayoutVisualization {
         frameChanged: Bool) {
         guard line == 0 else { return }
         inlineExpansionView?.updateTitleVisibility()
+        // The editor's own margins are known once it has laid out.
+        inlineExpansionView?.alignTextWithHost()
     }
 }
 

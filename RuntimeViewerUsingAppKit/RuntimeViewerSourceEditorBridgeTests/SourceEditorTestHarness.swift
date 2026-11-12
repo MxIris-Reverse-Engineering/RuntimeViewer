@@ -86,6 +86,21 @@ final class SourceEditorTestHarness {
         )
     }
 
+    /// Turns on the line numbers and the folding ribbon, the margins the content pane shows by
+    /// default.
+    func showLineNumbersAndFoldingRibbon() {
+        bridge.applyDisplayOptions(
+            showsLineNumbers: true,
+            showsFoldingRibbon: true,
+            showsStickyHeaders: false,
+            showsMinimap: false,
+            showsScopeGuides: false,
+            showsInvisibles: false,
+            showsMarkSeparators: false,
+            showsInsertionPoint: false
+        )
+    }
+
     /// Turns the caret on or off, the way the content pane does when Settings › Editor ›
     /// Insertion Point changes. Every other option is passed as `init` leaves it.
     func showInsertionPoint(_ showsInsertionPoint: Bool) {

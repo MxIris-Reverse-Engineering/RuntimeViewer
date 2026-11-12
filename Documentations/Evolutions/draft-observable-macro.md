@@ -63,3 +63,4 @@
 | 2026-11-12 | `{ get set }` 放在属性下方的 gap 里，属性那一行不改写 | 用户选定。gap 只能插在行与行之间；改写正文要重算注释标签、跳转与其他展开的全部偏移，Xcode 展开访问器宏也是放在下方 |
 | 2026-11-12 | 存储属性各自紧跟在它的属性下面，不集中放在类体末尾 | 用户选定；与宏自己生成存储属性的位置一致 |
 | 2026-11-12 | 分段打印由 MachOSwiftSection 在它收尾前加：折叠形态里每个被跟踪属性的声明标一个按属性命名的区域，展开按属性、成员、一致性分段打印；类的 `}` 不单独标，用嵌套类型的定义区域或 RV 打印的那个定义的最后一行 | 用户选定现在就协调。`}` 由 swift-semantic-string 的 `DeclarationBlock` 写出、没有挂钩，单独标它要改上游再发版；RV 本来就分开打印各个定义再拼接，自己记下类型定义的范围即可 |
+| 2026-11-12 | 展开里的文字按测量对齐正文：内嵌编辑器的左边距取「正文第 0 列在窗口里的横坐标，减去内嵌编辑器不加边距时第 0 列的横坐标，再加缩进格数乘空格宽」，不再用 Xcode 的「字号一半加缩进」 | 用户在 macOS 27.2 的 AppKit 上看到每段都比正文往左偏十几个点。重建版 27.2.0-alpha.1 里三处让两边的左边距不同：行号栏宽度按行数的位数算（`SourceEditorGutter.gutterWidthFor(lineCount:referenceFont:)`），正文有折叠条、内嵌编辑器没有，macOS 26 起正文只在行号栏出现 overfillTrailing 类标注时才加字号一半的边距（`SourceEditorView.updateAdditionalLeftPadding()`）。两个编辑器都从 `layoutBounds` 的左边开始排每一行（`ContentViewLayoutContainer`、`ViewportLayoutStrategy`），所以比较它们就能算准；折叠条开关时 bridge 让展开重新对齐 |

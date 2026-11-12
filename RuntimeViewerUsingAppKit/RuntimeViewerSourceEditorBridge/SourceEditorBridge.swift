@@ -371,6 +371,10 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
             } else {
                 sourceEditorView.uninstallFoldingRibbon()
             }
+            // The ribbon moves where the text starts, which every expansion lines up with.
+            for expansionView in InlineExpansionView.views(in: sourceEditorView) {
+                expansionView.needsLayout = true
+            }
         }
 
         if options.showsStickyHeaders != previousOptions.showsStickyHeaders {
