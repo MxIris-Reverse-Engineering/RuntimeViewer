@@ -106,6 +106,8 @@
 
 按时间倒序。
 
+- [不带版本号运行 UpdateSourceEditorScript.sh，把 pin 从 27.2.0-alpha.1 退回 26.6.6](ResolvedIssues/2026-11-12-update-source-editor-moved-the-pin-back.md)（2026-11-12）—— 脚本不带版本号时取 GitHub 的 Latest 发布，Latest 不含预发布版，于是从 27 线的预发布版退回 26.6 线；比钉的版本旧也照退。改为在钉的版本所在的线（主版本号相同）里取最新的发布、含预发布版，不带版本号时绝不往回退；`version_is_after` 改按语义化版本比较，正式版排在它的预发布版之后。
+
 - [行内宏展开左上角的关闭按钮点了没反应：行号栏盖在它上面，SDK 27 下的普通按钮不接转来的点击](ResolvedIssues/2026-11-11-inline-expansion-dismiss-button-ignores-clicks.md)（2026-11-11）—— 主编辑器的行号栏浮在 gap 之上，hit-test 落在行号栏，点击只能靠 AppKit 转给按钮，而 macOS 27 SDK 下的普通 `NSButton` 由手势识别器跟踪、不接转来的点击；重建版复刻 26.6，按钮是普通 `NSButton`。Xcode 27.2 用覆写 `mouseDown(with:)` 的私有子类 `GapDismissButton` 修好，SourceEditor 在 `xcode-27` 线照搬并发 `27.2.0-alpha.1`，RuntimeViewer 抬 pin。回归测试断言按钮的类有自己的 `mouseDown:`：测试进程里投递的点击区分不了修复前后。
 
 - [Reveal in Sidebar Navigator 把对象行留在钉住的分组标题或顶栏下面](ResolvedIssues/2026-11-11-revealed-row-under-pinned-section-header.md)（2026-11-11）—— 「行是否已在屏幕上」用整个 `visibleRect` 判断，把各栏所在的内容边距与浮动分节标题盖住的那一条也算作可见，于是不滚动；需要滚动时 UIFoundation 的居中又不认内容边距、截在文档顶边，前几行停在顶栏下。滚动到行的逻辑收进 `StatefulOutlineView.selectRowBringingIntoView(_:)`，按「没有被遮住的区域」判断与居中，交给 `NSClipView.constrainBoundsRect` 截断；侧栏对象页与过滤结束后的恢复选中共用。回归测试 `StatefulOutlineViewRevealTests` 修复前四处断言失败、修复后通过。

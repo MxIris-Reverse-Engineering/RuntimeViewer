@@ -4,26 +4,30 @@
 #
 # RuntimeViewerPrecompiledLibraries/SourceEditor/PinnedRelease.txt pins the release official builds
 # carry: its version and the SHA-256 of each framework's zip. This script takes the release asked
-# for, or the newest release of the private repository Mx-Iris/SourceEditor when none is named, and
-# reads the checksum of every pinned framework from the Package.swift at that release's tag. It
-# writes the version and those checksums into the pin file, leaving its comments and the order of
-# the frameworks as they are, then runs FetchSourceEditorScript.sh, which downloads the zips and
-# checks each against its new checksum. When the download or a check fails, the pin file goes back
-# to what it was. It ends with the Breaking section of every release it moved across: code that
-# uses the frameworks may have to change before it builds again.
+# for or, when none is named, the newest release of the private repository Mx-Iris/SourceEditor on
+# the pinned release's line — the same major version, 26 or 27 — prereleases included, and reads
+# the checksum of every pinned framework from the Package.swift at that release's tag. Without a
+# version it never moves back, and never takes GitHub's own latest release, which leaves prereleases
+# out: from a pin of 27.2.0-alpha.1 that release was 26.6.6. Moving to an older release, or to
+# another line, takes its version. It writes the version and those checksums into the pin file,
+# leaving its comments and the order of the frameworks as they are, then runs
+# FetchSourceEditorScript.sh, which downloads the zips and checks each against its new checksum.
+# When the download or a check fails, the pin file goes back to what it was. It ends with the
+# Breaking section of every release it moved across: code that uses the frameworks may have to
+# change before it builds again.
 #
 # Usage:
-#   ./UpdateSourceEditorScript.sh              # move to the newest release
-#   ./UpdateSourceEditorScript.sh 26.6.3       # move to that release
+#   ./UpdateSourceEditorScript.sh              # move to the newest release on the pinned line
+#   ./UpdateSourceEditorScript.sh 26.6.3       # move to that release, on any line, forward or back
 #   ./UpdateSourceEditorScript.sh --dry-run    # print what would change in the pin file; change nothing
 #   ./UpdateSourceEditorScript.sh --help
 #
 # It needs `gh`, logged in to github.com with read access to Mx-Iris/SourceEditor.
 #
 # Exit status: 0 when the release is pinned and in place; 2 when `gh` is missing, not logged in or
-# cannot read the repository; 1 for anything else, such as a release that does not exist, a
-# Package.swift without one of the pinned frameworks, or a zip whose checksum is not the one its
-# Package.swift gives.
+# cannot read the repository; 1 for anything else, such as a release that does not exist, a pin
+# newer than every release on its line when no version is named, a Package.swift without one of the
+# pinned frameworks, or a zip whose checksum is not the one its Package.swift gives.
 
 set -euo pipefail
 
@@ -37,12 +41,28 @@ log()         { echo "[UpdateSourceEditor] $*"; }
 fail()        { echo "error: $*" >&2; exit 1; }
 unavailable() { echo "error: $*" >&2; exit 2; }
 
+# Whether version $1 comes after version $2, a prerelease before the release it leads to
+# (27.2.0-alpha.1 before 27.2.0), as semantic versioning orders them; `sort -V` alone puts it after.
+version_is_after() {
+    local first="$1" second="$2"
+    [ "$first" != "$second" ] || return 1
+    local first_core="${first%%-*}" second_core="${second%%-*}"
+    if [ "$first_core" != "$second_core" ]; then
+        [ "$(printf '%s\n%s\n' "$first_core" "$second_core" | sort -V | tail -n 1)" = "$first_core" ]
+        return
+    fi
+    local first_suffix="${first#"$first_core"}" second_suffix="${second#"$second_core"}"
+    [ -n "$first_suffix" ] || return 0
+    [ -n "$second_suffix" ] || return 1
+    [ "$(printf '%s\n%s\n' "$first_suffix" "$second_suffix" | sort -V | tail -n 1)" = "$first_suffix" ]
+}
+
 requested_version=""
 DRY_RUN=false
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=true; shift;;
-        -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
+        -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0;;
         -*) fail "unknown argument: $1 (see --help)";;
         *)
             [ -z "$requested_version" ] || fail "more than one version given: $requested_version and $1"
@@ -74,8 +94,24 @@ if [ -n "$requested_version" ]; then
         || fail "$REPOSITORY has no release $requested_version"
     target_version="$requested_version"
 else
-    target_version="$(gh release view --repo "$REPOSITORY" --json tagName --jq .tagName)" \
-        || fail "could not find the newest release of $REPOSITORY"
+    # The newest release on the pinned release's line, prereleases included — not GitHub's latest
+    # release, which leaves prereleases out and so moved a pin of 27.2.0-alpha.1 back to 26.6.6.
+    pinned_line="${pinned_version%%.*}"
+    release_tags="$(gh release list --repo "$REPOSITORY" --limit 100 --json tagName,isDraft \
+        --jq '.[] | select(.isDraft | not) | .tagName')" \
+        || fail "could not list the releases of $REPOSITORY"
+    target_version=""
+    for tag in $release_tags; do
+        [ "${tag%%.*}" = "$pinned_line" ] || continue
+        if [ -z "$target_version" ] || version_is_after "$tag" "$target_version"; then
+            target_version="$tag"
+        fi
+    done
+    [ -n "$target_version" ] \
+        || fail "$REPOSITORY has no release on the $pinned_line line of the pinned $pinned_version; name the version to move to"
+    if version_is_after "$pinned_version" "$target_version"; then
+        fail "the pinned $pinned_version is newer than $target_version, the newest release on its line; name the version to move to"
+    fi
 fi
 
 # Every binary target the release's Package.swift declares, as "name checksum" lines.
@@ -119,11 +155,6 @@ awk -v version="$target_version" -v names="${framework_names[*]}" -v checksums="
     $1 in checksum_by_name { print $1 " " checksum_by_name[$1]; next }
     { print }
 ' "$PIN_FILE" > "$new_pin_file"
-
-# Whether version $1 comes after version $2.
-version_is_after() {
-    [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
-}
 
 # The Breaking section of the notes of every release after the pinned one, up to the target.
 breaking_changes() {

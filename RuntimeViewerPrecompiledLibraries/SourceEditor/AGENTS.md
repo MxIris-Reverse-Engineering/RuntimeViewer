@@ -55,8 +55,12 @@ root `AGENTS.md` repeats the precondition and points here.
   `DYLD_FRAMEWORK_PATH` in the environment instead replaces Xcode's whole value, and then not even the
   bridge framework is found. A test run against Xcode's copies either fails to load — Xcode 27 lacks
   symbols the reconstruction exports — or, worse, passes against the wrong frameworks.
-- Moving to another release: `./UpdateSourceEditorScript.sh [<version>]`, the newest release when no
-  version is given (`--dry-run` shows the change first). It writes the version and the four SHA-256
+- Moving to another release: `./UpdateSourceEditorScript.sh [<version>]` (`--dry-run` shows the
+  change first). Without a version it takes the newest release on the pinned release's line — the
+  same major version, 26 or 27 — prereleases included, and never moves back: GitHub's own latest
+  release leaves prereleases out, and taking it once moved a pin of `27.2.0-alpha.1` back to `26.6.6`
+  (`Documentations/ResolvedIssues/2026-11-12-update-source-editor-moved-the-pin-back.md`). Moving to
+  an older release or to another line takes the version. It writes the version and the four SHA-256
   values that release's own `Package.swift` gives into `PinnedRelease.txt`, downloads the release
   through `FetchSourceEditorScript.sh` — putting the pin file back when that fails — and prints the
   Breaking section of every release it moved across. Adapt the bridge to those changes, run
