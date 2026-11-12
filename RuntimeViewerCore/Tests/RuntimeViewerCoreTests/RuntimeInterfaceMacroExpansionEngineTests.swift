@@ -85,6 +85,12 @@ struct RuntimeInterfaceMacroExpansionEngineTests {
         part.content.string
     }
 
+    /// `parts`, each followed by the parts of its nested expansions, depth first: everything an
+    /// expansion shows once every attribute in it is expanded too.
+    private static func allParts(of parts: [RuntimeInterfaceMacroExpansion.Part]) -> [RuntimeInterfaceMacroExpansion.Part] {
+        parts.flatMap { part in [part] + part.nestedExpansions.flatMap { allParts(of: $0.parts) } }
+    }
+
     /// The line `range` starts on, up to the end of `range`, and how far it is indented.
     private static func anchorLine(of range: Range<Int>, in text: String) -> (line: String, indentation: Int) {
         let bytes = Array(text.utf8)
@@ -108,20 +114,22 @@ struct RuntimeInterfaceMacroExpansionEngineTests {
         }
         #expect(expansions.map(\.attributeUTF8Range.lowerBound) == expansions.map(\.attributeUTF8Range.lowerBound).sorted())
 
-        let outer = try #require(expansions.first).parts.map(Self.content(of:)).joined(separator: "\n")
+        let outer = Self.allParts(of: try #require(expansions.first).parts).map(Self.content(of:)).joined(separator: "\n")
         #expect(outer.contains("_count"))
         #expect(outer.contains("_title"))
         #expect(outer.contains("_$observationRegistrar"))
         #expect(!outer.contains("_isEnabled"))
 
-        let nested = try #require(expansions.last).parts.map(Self.content(of:)).joined(separator: "\n")
+        let nested = Self.allParts(of: try #require(expansions.last).parts).map(Self.content(of:)).joined(separator: "\n")
         #expect(nested.contains("_isEnabled"))
         #expect(!nested.contains("_count"))
         #expect(nested.contains("NestedFixture"))
     }
 
-    /// Each tracked property's part goes below its declaration; the generated members above the
-    /// type's closing brace, inside the body; the generated conformance below it. The nested
+    /// The two levels Xcode shows: expanding `@Observable` puts the `@ObservationTracked` it
+    /// attaches above each tracked property's declaration, the generated members above the type's
+    /// closing brace, inside the body, and the generated conformance below it; expanding that
+    /// attribute puts the property's accessors and storage below its declaration. The nested
     /// type's parts go by its own declarations and its own brace, one level further in.
     @Test func eachPartGoesWhereXcodePutsIt() async throws {
         let interface = try await Self.interface(Self.options(marksAttachedMacros: true))
@@ -130,15 +138,25 @@ struct RuntimeInterfaceMacroExpansionEngineTests {
         try #require(expansions.count == 2)
 
         for (expansion, propertyNames, braceIndentation) in [(expansions[0], ["count", "title"], 0), (expansions[1], ["isEnabled"], 4)] {
-            let propertyParts = expansion.parts.filter { Self.content(of: $0).contains("var _") }
-            #expect(propertyParts.count == propertyNames.count)
-            for (part, propertyName) in zip(propertyParts, propertyNames) {
+            let attributeParts = expansion.parts.filter { Self.content(of: $0).hasSuffix("ObservationTracked") }
+            #expect(attributeParts.count == propertyNames.count)
+            for (part, propertyName) in zip(attributeParts, propertyNames) {
                 let (line, indentation) = Self.anchorLine(of: part.anchorUTF8Range, in: text)
-                #expect(part.placement == .belowLine)
+                #expect(part.placement == .aboveLine)
                 #expect(line.hasSuffix(Self.text(in: part.anchorUTF8Range, of: text)))
                 #expect(line.contains("var \(propertyName):"), "\(line)")
                 #expect(indentation == braceIndentation + 4, "\(line)")
-                #expect(Self.content(of: part).contains("_\(propertyName)"))
+
+                try #require(part.nestedExpansions.count == 1)
+                let trackedExpansion = try #require(part.nestedExpansions.first)
+                let attributeText = String(decoding: Array(Self.content(of: part).utf8)[trackedExpansion.attributeUTF8Range], as: UTF8.self)
+                #expect(trackedExpansion.macroName == "Observation.ObservationTracked")
+                #expect(attributeText.hasSuffix("ObservationTracked"), "\(attributeText)")
+                try #require(trackedExpansion.parts.count == 1)
+                let trackedPart = try #require(trackedExpansion.parts.first)
+                #expect(trackedPart.placement == .belowLine)
+                #expect(trackedPart.anchorUTF8Range == part.anchorUTF8Range)
+                #expect(Self.content(of: trackedPart).contains("_\(propertyName)"))
             }
 
             let membersPart = try #require(expansion.parts.first { Self.content(of: $0).contains("_$observationRegistrar") })
@@ -173,21 +191,25 @@ struct RuntimeInterfaceMacroExpansionEngineTests {
         let expansions = try #require(interface.macroExpansions)
 
         #expect(expansions.count == 2)
-        #expect(expansions.first?.parts.contains { Self.content(of: $0).contains("_count") } == true)
-        #expect(expansions.last?.parts.contains { Self.content(of: $0).contains("_isEnabled") } == true)
+        let outerParts = Self.allParts(of: try #require(expansions.first).parts)
+        let nestedParts = Self.allParts(of: try #require(expansions.last).parts)
+        #expect(outerParts.contains { Self.content(of: $0).contains("_count") })
+        #expect(nestedParts.contains { Self.content(of: $0).contains("_isEnabled") })
     }
 
     /// The parts carry no indentation of their own and no line break around them: the content
     /// pane indents each from the line it goes at.
     @Test func partsHaveNoIndentationOfTheirOwn() async throws {
         let interface = try await Self.interface(Self.options(marksAttachedMacros: true))
-        let parts = try #require(interface.macroExpansions).flatMap(\.parts)
+        let parts = try #require(interface.macroExpansions).flatMap { Self.allParts(of: $0.parts) }
 
         #expect(!parts.isEmpty)
         for part in parts {
             let content = Self.content(of: part)
             #expect(!content.hasPrefix(" ") && !content.hasPrefix("\n") && !content.hasSuffix("\n"), "\(content)")
         }
+        let attributePart = try #require(parts.first { Self.content(of: $0).hasSuffix("ObservationTracked") })
+        #expect(Self.content(of: attributePart).hasPrefix("@"), "the attribute alone: \(Self.content(of: attributePart))")
         let propertyPart = try #require(parts.first { Self.content(of: $0).contains("var _count") })
         #expect(Self.content(of: propertyPart).hasPrefix("{"), "the accessor block first: \(Self.content(of: propertyPart))")
     }

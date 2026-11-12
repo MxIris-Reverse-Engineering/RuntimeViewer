@@ -97,6 +97,40 @@ struct ContentMacroExpansionTests {
         #expect(try Self.render([fetchedWithoutPlaceableParts]).macroExpansions.isEmpty)
     }
 
+    /// `@Observable`'s part for a tracked property is the attribute it puts there, and expanding
+    /// that attribute gives the accessors and storage below the declaration. The attribute is found
+    /// in the part's own text — here behind a three-byte character, so a UTF-8 offset read as UTF-16
+    /// would miss it — and the parts it expands to hang in the rendered text like any other.
+    @Test func aNestedExpansionIsLocatedInItsPartAndHangsInTheRenderedText() throws {
+        let attributePartText = "/* └ */ @Observation.ObservationTracked"
+        let nestedAttribute = "@Observation.ObservationTracked"
+        let nestedAttributeStart = attributePartText.utf8.count - nestedAttribute.utf8.count
+        let nestedExpansion = RuntimeInterfaceMacroExpansion(
+            macroName: "Observation.ObservationTracked",
+            attributeUTF8Range: nestedAttributeStart ..< attributePartText.utf8.count,
+            parts: [.init(anchorUTF8Range: try Self.utf8Range(of: Self.declaration), placement: .belowLine,
+                          content: SemanticString { Standard(Self.propertyPartText) }.frozen())]
+        )
+        let expansion = RuntimeInterfaceMacroExpansion(
+            macroName: "Observation.Observable",
+            attributeUTF8Range: try Self.utf8Range(of: Self.attribute),
+            parts: [.init(anchorUTF8Range: try Self.utf8Range(of: Self.declaration), placement: .aboveLine,
+                          content: SemanticString { Standard(attributePartText) }.frozen(), nestedExpansions: [nestedExpansion])]
+        )
+
+        let rendered = try Self.render([expansion])
+        let renderedText = rendered.attributedString.string as NSString
+        let attributePart = try #require(rendered.macroExpansions.first?.parts.first)
+        let renderedNestedExpansion = try #require(attributePart.nestedExpansions.first)
+        #expect(attributePart.nestedExpansions.count == 1)
+        #expect(renderedNestedExpansion.macroName == "Observation.ObservationTracked")
+        #expect((attributePartText as NSString).substring(with: renderedNestedExpansion.attributeCharacterRange) == nestedAttribute)
+        let nestedPart = try #require(renderedNestedExpansion.parts.first)
+        #expect(renderedText.substring(with: nestedPart.anchorCharacterRange) == Self.declaration)
+        #expect(nestedPart.placement == .belowLine)
+        #expect(nestedPart.content.string == Self.propertyPartText)
+    }
+
     @Test func anInterfaceWithoutExpansionsRendersNone() throws {
         #expect(try Self.render([]).macroExpansions.isEmpty)
     }

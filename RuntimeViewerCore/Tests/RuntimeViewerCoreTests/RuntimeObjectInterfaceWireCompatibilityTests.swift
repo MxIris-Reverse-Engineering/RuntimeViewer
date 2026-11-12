@@ -366,12 +366,22 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         #expect(!String(decoding: dataWithoutExpansions, as: UTF8.self).contains("macroExpansions"))
     }
 
+    /// An expansion with a part that attaches a macro of its own, as `@Observable`'s part for a
+    /// tracked property attaches `@ObservationTracked`.
     private static func interfaceWithMacroExpansion() -> RuntimeObjectInterface {
+        let nestedExpansion = RuntimeInterfaceMacroExpansion(
+            macroName: "Observation.ObservationTracked",
+            attributeUTF8Range: 0 ..< 19,
+            parts: [
+                .init(anchorUTF8Range: 24 ..< 40, placement: .belowLine, content: SemanticString(components: shippedInterfaceComponents).frozen()),
+            ]
+        )
         let expansion = RuntimeInterfaceMacroExpansion(
             macroName: "Observation.Observable",
             attributeUTF8Range: 0 ..< 23,
             parts: [
-                .init(anchorUTF8Range: 24 ..< 40, placement: .belowLine, content: SemanticString(components: shippedInterfaceComponents).frozen()),
+                .init(anchorUTF8Range: 24 ..< 40, placement: .aboveLine, content: SemanticString(components: shippedInterfaceComponents).frozen(),
+                      nestedExpansions: [nestedExpansion]),
                 .init(anchorUTF8Range: 41 ..< 42, placement: .aboveLine, content: SemanticString(components: shippedInterfaceComponents).frozen()),
             ]
         )
@@ -379,14 +389,22 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
     }
 
     private static func expectSameMacroExpansions(_ received: RuntimeObjectInterface?, _ sent: RuntimeObjectInterface) throws {
-        let receivedExpansion = try #require(received?.macroExpansions?.first)
-        let sentExpansion = try #require(sent.macroExpansions?.first)
         #expect(received?.macroExpansions?.count == 1)
-        #expect(receivedExpansion.macroName == sentExpansion.macroName)
-        #expect(receivedExpansion.attributeUTF8Range == sentExpansion.attributeUTF8Range)
-        #expect(receivedExpansion.parts.map(\.anchorUTF8Range) == sentExpansion.parts.map(\.anchorUTF8Range))
-        #expect(receivedExpansion.parts.map(\.placement) == sentExpansion.parts.map(\.placement))
-        #expect(receivedExpansion.parts.map(\.content) == sentExpansion.parts.map(\.content))
+        try expectSameMacroExpansion(try #require(received?.macroExpansions?.first), try #require(sent.macroExpansions?.first))
+    }
+
+    private static func expectSameMacroExpansion(_ received: RuntimeInterfaceMacroExpansion, _ sent: RuntimeInterfaceMacroExpansion) throws {
+        #expect(received.macroName == sent.macroName)
+        #expect(received.attributeUTF8Range == sent.attributeUTF8Range)
+        #expect(received.parts.map(\.anchorUTF8Range) == sent.parts.map(\.anchorUTF8Range))
+        #expect(received.parts.map(\.placement) == sent.parts.map(\.placement))
+        #expect(received.parts.map(\.content) == sent.parts.map(\.content))
+        #expect(received.parts.map(\.nestedExpansions.count) == sent.parts.map(\.nestedExpansions.count))
+        for (receivedPart, sentPart) in zip(received.parts, sent.parts) {
+            for (receivedNested, sentNested) in zip(receivedPart.nestedExpansions, sentPart.nestedExpansions) {
+                try expectSameMacroExpansion(receivedNested, sentNested)
+            }
+        }
     }
 
     #if canImport(SwiftyXPC)

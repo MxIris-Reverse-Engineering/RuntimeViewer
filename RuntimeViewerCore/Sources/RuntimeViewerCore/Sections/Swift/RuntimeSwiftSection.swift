@@ -537,10 +537,7 @@ extension RuntimeSwiftSection {
     /// `typeUTF8Range` of `text`. The types are looked up in the definitions
     /// printed, not in `object`'s children, which a caller may not have
     /// filled in. The parts are the printer's, under the configuration it
-    /// printed the interface with, their marks taken out: a tracked
-    /// property's goes below its declaration, the generated members above
-    /// the type's closing brace — the last line of the type's range — and the
-    /// generated conformance below it.
+    /// printed the interface with, placed by `interfaceParts(of:in:)`.
     private func macroExpansions(
         of object: RuntimeObject,
         text: FrozenSemanticString,
@@ -577,37 +574,14 @@ extension RuntimeSwiftSection {
             let ownerRange = ownerRegion.map { Self.utf8Range(offset: $0.utf8Offset, length: $0.utf8Length) } ?? typeUTF8Range
             let ownerIdentity = "\(ownerRegion?.identity ?? "")|\(attributeRegion.kind.rawValue)"
             guard let owner, let ownerRange, expandedOwners.insert(ownerIdentity).inserted else { continue }
-            let closingBraceLine = Self.lastLineRange(of: ownerRange, in: utf8Text)
-
-            var parts: [RuntimeInterfaceMacroExpansion.Part] = []
-            for expansionPart in try await printer.printMacroExpansionParts(of: macro, attachedTo: owner) {
-                let anchorRange: Range<Int>
-                let placement: RuntimeInterfaceMacroExpansion.Part.Placement
-                switch expansionPart.placement {
-                case .trackedProperty:
-                    // The declaration in the owner itself: a type nested in it can track a
-                    // property of the same name, whose region has the same kind.
-                    guard let anchorKind = expansionPart.anchorKind,
-                          let declarationRegion = annotations.regions.first(where: { region in
-                              let declarationRange = Self.utf8Range(offset: region.utf8Offset, length: region.utf8Length)
-                              return region.kind == anchorKind
-                                  && ownerRange.contains(declarationRange.lowerBound)
-                                  && Self.innermostDefinitionRegion(around: declarationRange, in: regions)?.utf8Offset == ownerRegion?.utf8Offset
-                          })
-                    else { continue }
-                    anchorRange = Self.utf8Range(offset: declarationRegion.utf8Offset, length: declarationRegion.utf8Length)
-                    placement = .belowLine
-                case .members:
-                    anchorRange = closingBraceLine
-                    placement = .aboveLine
-                case .conformance:
-                    anchorRange = closingBraceLine
-                    placement = .belowLine
-                }
-                let content = Self.separatingMarks(of: expansionPart.content, marksAttachedMacros: true, marksCommentStructure: true).text
-                guard !content.string.isEmpty else { continue }
-                parts.append(RuntimeInterfaceMacroExpansion.Part(anchorUTF8Range: anchorRange, placement: placement, content: content))
-            }
+            let placement = MacroExpansionPlacement(
+                ownerRange: ownerRange,
+                ownerRegion: ownerRegion,
+                closingBraceLine: Self.lastLineRange(of: ownerRange, in: utf8Text),
+                annotations: annotations,
+                definitionRegions: regions
+            )
+            let parts = Self.interfaceParts(of: try await printer.printMacroExpansionParts(of: macro, attachedTo: owner), in: placement)
             guard !parts.isEmpty else { continue }
             expansions.append(RuntimeInterfaceMacroExpansion(
                 macroName: String(attributeRegion.kind.rawValue.dropFirst("attachedMacro.".count)),
@@ -616,6 +590,76 @@ extension RuntimeSwiftSection {
             ))
         }
         return expansions
+    }
+
+    /// Where the parts of one type's expansion go in the interface's text.
+    private struct MacroExpansionPlacement {
+        /// The print of the type the macro is attached to.
+        let ownerRange: Range<Int>
+        /// The type's definition region; nil for the type the object prints.
+        let ownerRegion: DefinitionRegionTable.Region?
+        /// The type's closing brace, indentation included.
+        let closingBraceLine: Range<Int>
+        let annotations: AnnotationRegionTable
+        let definitionRegions: [DefinitionRegionTable.Region]
+
+        /// The folded declaration the printer marked with `anchorKind` in the
+        /// type itself: a type nested in it can track a property of the same
+        /// name, whose region has the same kind.
+        func declarationRange(markedWith anchorKind: AnnotationRegion.Kind?) -> Range<Int>? {
+            guard let anchorKind else { return nil }
+            return annotations.regions.lazy
+                .filter { $0.kind == anchorKind }
+                .map { RuntimeSwiftSection.utf8Range(offset: $0.utf8Offset, length: $0.utf8Length) }
+                .first { declarationRange in
+                    ownerRange.contains(declarationRange.lowerBound)
+                        && RuntimeSwiftSection.innermostDefinitionRegion(around: declarationRange, in: definitionRegions)?.utf8Offset == ownerRegion?.utf8Offset
+                }
+        }
+    }
+
+    /// The printer's parts placed where Xcode's Expand Macro puts them, their
+    /// marks taken out: the attribute `@Observable` attaches to a tracked
+    /// property above its declaration, and what expanding that attribute
+    /// gives below it; the generated members above the type's closing brace
+    /// — the last line of the type's range — and the generated conformance
+    /// below it. A part's own nested expansions are placed the same way, in
+    /// the interface's text, their attribute ranges left in the part's
+    /// content. A part with no place or no text is left out, and so is a
+    /// nested expansion with no part left.
+    private static func interfaceParts(of expansionParts: [MacroExpansionPart], in placement: MacroExpansionPlacement) -> [RuntimeInterfaceMacroExpansion.Part] {
+        expansionParts.compactMap { expansionPart in
+            let anchorRange: Range<Int>
+            let side: RuntimeInterfaceMacroExpansion.Part.Placement
+            switch expansionPart.placement {
+            case .trackedPropertyAttribute:
+                guard let declarationRange = placement.declarationRange(markedWith: expansionPart.anchorKind) else { return nil }
+                anchorRange = declarationRange
+                side = .aboveLine
+            case .trackedProperty:
+                guard let declarationRange = placement.declarationRange(markedWith: expansionPart.anchorKind) else { return nil }
+                anchorRange = declarationRange
+                side = .belowLine
+            case .members:
+                anchorRange = placement.closingBraceLine
+                side = .aboveLine
+            case .conformance:
+                anchorRange = placement.closingBraceLine
+                side = .belowLine
+            }
+            let content = separatingMarks(of: expansionPart.content, marksAttachedMacros: true, marksCommentStructure: true).text
+            guard !content.string.isEmpty else { return nil }
+            let nestedExpansions = expansionPart.nestedExpansions.compactMap { nestedExpansion -> RuntimeInterfaceMacroExpansion? in
+                let nestedParts = interfaceParts(of: nestedExpansion.parts, in: placement)
+                guard !nestedParts.isEmpty else { return nil }
+                return RuntimeInterfaceMacroExpansion(
+                    macroName: "\(nestedExpansion.macro.moduleName).\(nestedExpansion.macro.name)",
+                    attributeUTF8Range: nestedExpansion.attributeUTF8Range,
+                    parts: nestedParts
+                )
+            }
+            return RuntimeInterfaceMacroExpansion.Part(anchorUTF8Range: anchorRange, placement: side, content: content, nestedExpansions: nestedExpansions)
+        }
     }
 
     private static func utf8Range(offset: some BinaryInteger, length: some BinaryInteger) -> Range<Int> {

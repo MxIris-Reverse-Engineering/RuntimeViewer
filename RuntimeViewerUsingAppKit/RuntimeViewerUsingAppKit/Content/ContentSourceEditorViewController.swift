@@ -204,8 +204,9 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             ? renderedInterface.commentDecorations.flatMap { $0.isEmpty ? nil : SourceEditorCommentDecorations($0) }
             : nil
         let source = renderedInterface.attributedString.string
+        // Parents come before what was expanded out of them, so each finds its parent shown.
         let reopenedExpansions = source == lastShownSource
-            ? renderedInterface.macroExpansions.filter { bridge.isInlineExpansionShown(identifier: Self.inlineExpansionIdentifier(for: $0)) }
+            ? showableMacroExpansions(of: renderedInterface).filter { bridge.isInlineExpansionShown(identifier: $0.identifier) }
             : []
         bridge.setSource(
             source,
@@ -217,39 +218,97 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         )
         lastShownSource = source
         awaitsHighlightedFirstRender = false
-        for expansion in reopenedExpansions {
-            showInlineExpansion(expansion, with: bridge)
+        for showableExpansion in reopenedExpansions {
+            showInlineExpansion(showableExpansion, with: bridge)
         }
     }
 
     // MARK: - Macro Expansions
 
+    /// An expansion the pane can show: the attribute's of the interface itself, or one a shown
+    /// expansion's part attaches — `@ObservationTracked` in the expanded `@Observable` — with the
+    /// identifier it is shown under and the one of the expansion it comes out of.
+    private struct ShowableMacroExpansion {
+        let expansion: ContentTextViewModel.MacroExpansion
+        let identifier: String
+        /// nil for an attribute of the interface itself.
+        let parentIdentifier: String?
+    }
+
+    /// Every expansion `renderedInterface` offers, each followed by those its parts attach.
+    private func showableMacroExpansions(of renderedInterface: ContentTextViewModel.RenderedInterface) -> [ShowableMacroExpansion] {
+        var showableExpansions: [ShowableMacroExpansion] = []
+        func append(_ expansion: ContentTextViewModel.MacroExpansion, identifier: String, parentIdentifier: String?) {
+            showableExpansions.append(ShowableMacroExpansion(expansion: expansion, identifier: identifier, parentIdentifier: parentIdentifier))
+            for (partIndex, part) in expansion.parts.enumerated() {
+                for nestedExpansion in part.nestedExpansions {
+                    let nestedIdentifier = Self.inlineExpansionIdentifier(for: nestedExpansion, inPartAt: partIndex, of: identifier)
+                    append(nestedExpansion, identifier: nestedIdentifier, parentIdentifier: identifier)
+                }
+            }
+        }
+        for expansion in renderedInterface.macroExpansions {
+            append(expansion, identifier: Self.inlineExpansionIdentifier(for: expansion), parentIdentifier: nil)
+        }
+        return showableExpansions
+    }
+
     /// Expand Macro on an attached macro's attribute, Hide Macro Expansion once it is expanded —
     /// what Xcode's editor offers on a macro. `nil` for a token outside every attribute.
     private func macroExpansionMenuItem(forTokenIn characterRange: NSRange) -> NSMenuItem? {
-        guard let bridge, let expansion = displayedRenderedInterface?.macroExpansions.first(where: {
+        guard let expansion = displayedRenderedInterface?.macroExpansions.first(where: {
             NSLocationInRange(characterRange.location, $0.attributeCharacterRange)
         }) else { return nil }
-        let isShown = bridge.isInlineExpansionShown(identifier: Self.inlineExpansionIdentifier(for: expansion))
+        return macroExpansionMenuItem(for: ShowableMacroExpansion(
+            expansion: expansion,
+            identifier: Self.inlineExpansionIdentifier(for: expansion),
+            parentIdentifier: nil
+        ))
+    }
+
+    /// The same on a token of a shown expansion's part, for a macro the part attaches, as Xcode
+    /// offers it inside an expanded macro. `nil` for a token outside every such attribute.
+    private func macroExpansionMenuItem(
+        forTokenIn characterRange: NSRange,
+        inPartAt partIndex: Int,
+        ofExpansionShownAs identifier: String
+    ) -> NSMenuItem? {
+        guard let displayedRenderedInterface,
+              let parent = showableMacroExpansions(of: displayedRenderedInterface).first(where: { $0.identifier == identifier }),
+              parent.expansion.parts.indices.contains(partIndex),
+              let nestedExpansion = parent.expansion.parts[partIndex].nestedExpansions.first(where: {
+                  NSLocationInRange(characterRange.location, $0.attributeCharacterRange)
+              })
+        else { return nil }
+        return macroExpansionMenuItem(for: ShowableMacroExpansion(
+            expansion: nestedExpansion,
+            identifier: Self.inlineExpansionIdentifier(for: nestedExpansion, inPartAt: partIndex, of: identifier),
+            parentIdentifier: identifier
+        ))
+    }
+
+    private func macroExpansionMenuItem(for showableExpansion: ShowableMacroExpansion) -> NSMenuItem? {
+        guard let bridge else { return nil }
+        let isShown = bridge.isInlineExpansionShown(identifier: showableExpansion.identifier)
         return NSMenuItem(title: isShown ? "Hide Macro Expansion" : "Expand Macro", action: #selector(macroExpansionAction(_:)), keyEquivalent: "").then {
             $0.target = self
-            $0.representedObject = expansion
+            $0.representedObject = showableExpansion
         }
     }
 
     @objc private func macroExpansionAction(_ sender: NSMenuItem) {
-        guard let bridge, let expansion = sender.representedObject as? ContentTextViewModel.MacroExpansion else { return }
-        let identifier = Self.inlineExpansionIdentifier(for: expansion)
-        if bridge.isInlineExpansionShown(identifier: identifier) {
-            bridge.hideInlineExpansion(identifier: identifier)
+        guard let bridge, let showableExpansion = sender.representedObject as? ShowableMacroExpansion else { return }
+        if bridge.isInlineExpansionShown(identifier: showableExpansion.identifier) {
+            bridge.hideInlineExpansion(identifier: showableExpansion.identifier)
         } else {
-            showInlineExpansion(expansion, with: bridge)
+            showInlineExpansion(showableExpansion, with: bridge)
         }
     }
 
-    /// Shows the declarations the macro generated below its attribute's line, coloured the way the
-    /// interface is.
-    private func showInlineExpansion(_ expansion: ContentTextViewModel.MacroExpansion, with bridge: SourceEditorBridging) {
+    /// Shows what the macro wrote where Xcode shows it, coloured the way the interface is; one
+    /// expanded out of another closes with it.
+    private func showInlineExpansion(_ showableExpansion: ShowableMacroExpansion, with bridge: SourceEditorBridging) {
+        let expansion = showableExpansion.expansion
         let parts = expansion.parts.map { part in
             let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: part.content)
             let placement: SourceEditorBridgingInlineExpansionPlacement = switch part.placement {
@@ -268,7 +327,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             parts,
             languageIdentifier: "swift",
             title: expansion.macroName.split(separator: ".").last.map(String.init) ?? expansion.macroName,
-            identifier: Self.inlineExpansionIdentifier(for: expansion)
+            identifier: showableExpansion.identifier,
+            parentIdentifier: showableExpansion.parentIdentifier
         )
     }
 
@@ -276,6 +336,16 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// text does.
     private static func inlineExpansionIdentifier(for expansion: ContentTextViewModel.MacroExpansion) -> String {
         "\(expansion.macroName)@\(expansion.attributeCharacterRange.location)"
+    }
+
+    /// Names one expanded out of another by that one's identifier, the part holding its attribute,
+    /// and the attribute's place in the part.
+    private static func inlineExpansionIdentifier(
+        for nestedExpansion: ContentTextViewModel.MacroExpansion,
+        inPartAt partIndex: Int,
+        of parentIdentifier: String
+    ) -> String {
+        "\(parentIdentifier)/\(partIndex)/\(nestedExpansion.macroName)@\(nestedExpansion.attributeCharacterRange.location)"
     }
 
     /// The find bar's pattern closest to the way the Find navigator's search matched the query.
@@ -444,6 +514,15 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
             menuItems.insert(contentsOf: [macroExpansionMenuItem, .separator()], at: 0)
         }
         return menuItems
+    }
+
+    func sourceEditorBridge(
+        _ bridge: SourceEditorBridging,
+        contextualMenuItemsForTokenIn characterRange: NSRange,
+        inInlineExpansionPartAt partIndex: Int,
+        identifier: String
+    ) -> [NSMenuItem] {
+        macroExpansionMenuItem(forTokenIn: characterRange, inPartAt: partIndex, ofExpansionShownAs: identifier).map { [$0] } ?? []
     }
 
     /// Generated Interface for the object on screen, checked while it is the form shown; `nil` for

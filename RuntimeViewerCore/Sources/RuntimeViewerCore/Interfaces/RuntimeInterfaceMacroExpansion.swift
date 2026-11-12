@@ -2,9 +2,12 @@ import Foundation
 public import Semantic
 
 /// An attached macro an interface printed folded shows — `@Observation.Observable` on a class
-/// compiled from `@Observable` — with where its attribute is and the declarations it generated, in
-/// the places Xcode's Expand Macro shows them: after each tracked property, inside the type's body
-/// above its closing brace, and after the type.
+/// compiled from `@Observable` — with where its attribute is and what it wrote, in the places
+/// Xcode's Expand Macro shows them: above each tracked property the `@ObservationTracked` it puts
+/// there, inside the type's body above its closing brace, and after the type. What such an
+/// attribute expands to in turn — the property's accessors and storage, below its declaration —
+/// is a nested expansion of the part that holds it (`Part.nestedExpansions`), as Xcode expands it
+/// from inside the expanded text.
 ///
 /// The engine sends these when the request asks for them
 /// (`RuntimeObjectInterface.GenerationOptions.marksAttachedMacros`). MachOSwiftSection marks each
@@ -17,7 +20,8 @@ public struct RuntimeInterfaceMacroExpansion: Codable, Sendable {
     public let macroName: String
 
     /// Where the attribute is in the interface's text, in UTF-8 offsets, as the comment structure
-    /// counts them.
+    /// counts them. For an expansion in a part's `nestedExpansions`, where the attribute is in that
+    /// part's `content` instead.
     public let attributeUTF8Range: Range<Int>
 
     /// The declarations the macro generated, a part for each place they go, in text order.
@@ -52,10 +56,19 @@ public struct RuntimeInterfaceMacroExpansion: Codable, Sendable {
         /// they go at, as Xcode indents an expanded macro.
         public let content: FrozenSemanticString
 
-        public init(anchorUTF8Range: Range<Int>, placement: Placement, content: FrozenSemanticString) {
+        /// The macros `content` attaches, each with what it expands to — which Xcode expands from
+        /// inside the expanded text. `@Observable`'s part for a tracked property is the
+        /// `@ObservationTracked` it puts on the declaration, and that attribute expands to the
+        /// property's accessors and storage. Each one's attribute range is in `content`, and its
+        /// parts hang in the interface's text like every other part. Empty for a part that
+        /// attaches nothing.
+        public let nestedExpansions: [RuntimeInterfaceMacroExpansion]
+
+        public init(anchorUTF8Range: Range<Int>, placement: Placement, content: FrozenSemanticString, nestedExpansions: [RuntimeInterfaceMacroExpansion] = []) {
             self.anchorUTF8Range = anchorUTF8Range
             self.placement = placement
             self.content = content
+            self.nestedExpansions = nestedExpansions
         }
     }
 }
