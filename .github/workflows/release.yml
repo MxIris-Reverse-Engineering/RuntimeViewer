@@ -49,22 +49,19 @@ jobs:
 
       - name: Import code signing certificates
         env:
-          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
-          DEVELOPER_ID_PASSWORD: ${{ secrets.DEVELOPER_ID_PASSWORD }}
-          MAC_DEVELOPMENT_P12: ${{ secrets.MAC_DEVELOPMENT_P12 }}
-          MAC_DEVELOPMENT_PASSWORD: ${{ secrets.MAC_DEVELOPMENT_PASSWORD }}
+          # Organization secrets shared by every release workflow. The one .p12 holds both the
+          # Developer ID Application identity (export) and the Apple Development identity (archive).
+          DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer_id.p12"
+          echo "$DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/developer_id.p12"
           chmod 600 "$RUNNER_TEMP/developer_id.p12"
-          security import "$RUNNER_TEMP/developer_id.p12" -P "$DEVELOPER_ID_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          echo "$MAC_DEVELOPMENT_P12" | base64 --decode > "$RUNNER_TEMP/mac_development.p12"
-          chmod 600 "$RUNNER_TEMP/mac_development.p12"
-          security import "$RUNNER_TEMP/mac_development.p12" -P "$MAC_DEVELOPMENT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/developer_id.p12" -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           for cert_url in https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer; do
             cert_file="$RUNNER_TEMP/$(basename "$cert_url")"
             curl -sL "$cert_url" -o "$cert_file"
@@ -75,19 +72,20 @@ jobs:
 
       - name: Decode notary API key
         env:
-          NOTARY_AUTH_KEY: ${{ secrets.NOTARY_AUTH_KEY }}
-          NOTARY_KEY_ID:   ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID:     ${{ secrets.NOTARY_KEY_IDENTIFIER }}
         run: |
           mkdir -p "$RUNNER_TEMP/notary_keys/private_keys"
-          echo "$NOTARY_AUTH_KEY" | base64 --decode > "$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
+          echo "$NOTARY_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
           chmod 600 "$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
           echo "NOTARY_KEY_FILE=$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8" >> $GITHUB_ENV
 
-      - name: Decode Sparkle EdDSA private key
+      - name: Write Sparkle EdDSA private key
         env:
-          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+          # The key exactly as `generate_keys -x` exports it, with no extra base64 layer.
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          echo "$SPARKLE_EDDSA_PRIVATE_KEY" | base64 --decode > "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
           chmod 600 "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
           echo "SPARKLE_ED_KEY_FILE=$RUNNER_TEMP/sparkle_ed25519_priv.pem" >> $GITHUB_ENV
 
@@ -130,8 +128,8 @@ jobs:
 
           ./ArchiveScript.sh \
             --notary-api-key "$NOTARY_KEY_FILE" \
-            --notary-key-id "${{ secrets.NOTARY_KEY_ID }}" \
-            --notary-issuer-id "${{ secrets.NOTARY_ISSUER_ID }}" \
+            --notary-key-id "${{ secrets.NOTARY_KEY_IDENTIFIER }}" \
+            --notary-issuer-id "${{ secrets.NOTARY_ISSUER_IDENTIFIER }}" \
             --version-tag "$TAG" \
             --ed-key-file "$SPARKLE_ED_KEY_FILE" \
             --include-ios-simulator \
@@ -169,6 +167,5 @@ jobs:
           # could otherwise read. Matters most on self-hosted runners — ephemeral
           # GitHub-hosted runners destroy $RUNNER_TEMP automatically.
           rm -f "$RUNNER_TEMP/developer_id.p12" \
-                "$RUNNER_TEMP/mac_development.p12" \
                 "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
           rm -rf "$RUNNER_TEMP/notary_keys"
