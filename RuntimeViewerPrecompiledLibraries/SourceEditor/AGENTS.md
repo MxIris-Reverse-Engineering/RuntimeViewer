@@ -99,6 +99,10 @@ it.
 1. **A RuntimeViewer dump of the frameworks** — `/Volumes/RE/SourceEditor/Xcode/<version>/`,
    one directory per framework, each holding **both** `ObjCHeaders/` and `SwiftInterfaces/`, of
    Xcode 26.6: the reconstruction rebuilds that version, and its release numbers say so (`26.6.N`).
+   Releases of its `xcode-27` line (`27.M.N`, and prereleases such as `27.2.0-alpha.1`) are the
+   same rebuild with the changes Xcode 27 made carried over one at a time, each recorded with its
+   Xcode 27.2 addresses in the reconstruction's SourceNotes; for one of those, the original to
+   compare with is Xcode 27.2's (`/Volumes/RE/SourceEditor/Xcode/27.2/`).
 
    **It has to be RuntimeViewer's own export, and both directories have to be there.** A dump from
    any other tool does not substitute, and neither does reading the binary with `nm` / `otool` /

@@ -106,6 +106,8 @@
 
 按时间倒序。
 
+- [行内宏展开左上角的关闭按钮点了没反应：行号栏盖在它上面，SDK 27 下的普通按钮不接转来的点击](ResolvedIssues/2026-11-11-inline-expansion-dismiss-button-ignores-clicks.md)（2026-11-11）—— 主编辑器的行号栏浮在 gap 之上，hit-test 落在行号栏，点击只能靠 AppKit 转给按钮，而 macOS 27 SDK 下的普通 `NSButton` 由手势识别器跟踪、不接转来的点击；重建版复刻 26.6，按钮是普通 `NSButton`。Xcode 27.2 用覆写 `mouseDown(with:)` 的私有子类 `GapDismissButton` 修好，SourceEditor 在 `xcode-27` 线照搬并发 `27.2.0-alpha.1`，RuntimeViewer 抬 pin。回归测试断言按钮的类有自己的 `mouseDown:`：测试进程里投递的点击区分不了修复前后。
+
 - [Reveal in Sidebar Navigator 把对象行留在钉住的分组标题或顶栏下面](ResolvedIssues/2026-11-11-revealed-row-under-pinned-section-header.md)（2026-11-11）—— 「行是否已在屏幕上」用整个 `visibleRect` 判断，把各栏所在的内容边距与浮动分节标题盖住的那一条也算作可见，于是不滚动；需要滚动时 UIFoundation 的居中又不认内容边距、截在文档顶边，前几行停在顶栏下。滚动到行的逻辑收进 `StatefulOutlineView.selectRowBringingIntoView(_:)`，按「没有被遮住的区域」判断与居中，交给 `NSClipView.constrainBoundsRect` 截断；侧栏对象页与过滤结束后的恢复选中共用。回归测试 `StatefulOutlineViewRevealTests` 修复前四处断言失败、修复后通过。
 
 - [只开 My Mac 窗口，Mac Catalyst 服务也把它自己的 Always Index 建了一遍，多占约 420 MB](ResolvedIssues/2026-11-10-catalyst-indexed-its-own-rows-for-a-window-on-my-mac.md)（2026-11-10）—— 0081 之后 My Mac 文档以借用者身份持有 Catalyst engine 的后台工作，工作里的索引协调器构造时就起了 reload 泵与设置观察，这两条路派发 Always Index 与主程序批次时不查 `hasStarted`，Catalyst engine 一重载就按自己的平台建了 iOSSupport 版 SwiftUI 与 UIKitCore 的索引、语料与交叉引用。检查下沉到两个派发入口；5 条回归测试修复前红、修复后绿。

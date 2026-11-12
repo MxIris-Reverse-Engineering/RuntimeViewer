@@ -58,3 +58,4 @@
 | 2026-11-11 | 同一段文本因主题或字号变化重新显示时，已展开的宏重新展开 | bridge 每次换文本都会收起所有展开，不这样做的话一改字号展开就全没了 |
 | 2026-11-11 | 注释结构跳过 `attachedMacro.` 类的区域并重新编号 | 宏区域与注释在同一张表里，不跳过的话 `@Observation.Observable` 会被画成注释标签 |
 | 2026-11-11 | RV 一侧实现完成，对着 MachOSwiftSection 功能分支的 a792aed8 验证通过；暂不合进本地 `next` | 本地 `next` 锁文件里的 MachOSwiftSection 没有这些接口，合进去 `next` 就编不过。等对方把识别合进它的 `next`，抬 pin 后再落地 |
+| 2026-11-12 | SourceEditor 的 pin 抬到 `27.2.0-alpha.1`，行内展开的关闭按钮才点得动 | 用 macOS 27 SDK 编的 App 里，主编辑器的行号栏盖住按钮，普通 `NSButton` 不接 AppKit 转来的点击。用户定重建版 26.6 线不改，SourceEditor 新开 `xcode-27` 线照 Xcode 27.2 修好，见 `Documentations/ResolvedIssues/2026-11-11-inline-expansion-dismiss-button-ignores-clicks.md` |
