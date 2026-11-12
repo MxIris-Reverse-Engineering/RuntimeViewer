@@ -25,7 +25,7 @@ Xcode 的做法（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes — vi
 1. ✅ 先量风险：测试里量 Minimap 与 AppKit 顶部 pocket 视图在 SourceEditor 滚动视图子视图里的先后（结论见「风险」）。
 2. ✅ 桥接层的 `SourceEditorBridging.scrollView`、`EditorPaneContent.contentScrollView`，两个显示接口的内容控制器各自交出滚动视图。
 3. ✅ 窗格：内容铺满整栏（macOS 26 起），标签栏去底色、回答 Bar 样式、经 `ScrollPocketContainerRegistration` 登记为当前内容滚动视图的顶部 pocket 容器并随内容切换，附测试。
-4. 文档：0076、提案索引、`EditorPaneViewController` 的文档注释与 `RuntimeViewerUsingAppKit/AGENTS.md`。
+4. ✅ 文档：0076、提案索引、`EditorPaneViewController` 的文档注释与 `RuntimeViewerUsingAppKit/AGENTS.md`。
 
 **没有询问就采用的假设**
 
@@ -51,3 +51,4 @@ Xcode 的做法（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor panes — vi
 | 2026-11-12 | Minimap 盖在模糊层上面已实测证实；RV 这一侧照方案做完，Minimap 列为重建版 SourceEditor 的后续项 | Minimap 默认关闭，单栏时 8 月起就是这样，这次没有让它更糟；修复属于重建版仓库，按 SourceEditor 模块的规矩不在 RV 里绕过 |
 | 2026-11-12 | 登记逻辑做成 RuntimeViewerUI 的 `ScrollPocketContainerRegistration`，不直接写在窗格里 | App target 没有单元测试 target，放进包里才能测；侧栏的 `NavigatorScrollViewLayout` 也在那里 |
 | 2026-11-12 | 窗格除了 `navigationController(_:didShow:)`，在 `viewDidLayout` 里也对一次当前内容的滚动视图 | AppKitPlus 的头文件只说转场完成时与视图出现时会发 didShow，没写明不带动画的 `set` 算不算转场，窗格又没有测试能证明；重复登记同一个滚动视图什么也不做，代价只是一次比较 |
+| 2026-11-12 | 实现完成，待用户目视验收后收尾 | 整个 App 在 Debug 下编译通过；桥接测试 71 条中只有 `SourceEditorScrollerTests` 两条既有红；RuntimeViewerPackages 全量 939 条里满载下红的几组单独重跑都过，只剩 `TitleActivityIndicatorTests` 的悬停一条，它测的 `TitleToolbarItem` 与基线逐字相同，属基线既有。不另写实现说明与使用指南：规则写进了 `RuntimeViewerUsingAppKit/AGENTS.md`，没有 App 之外的调用方；没有新术语 |
