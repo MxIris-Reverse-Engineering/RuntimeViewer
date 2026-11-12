@@ -426,13 +426,27 @@ extension RuntimeSwiftSection {
         // Read before printing, as the configuration the print starts with.
         let marksCommentStructure = printer.configuration.marksCommentStructure
         let marksAttachedMacros = printer.configuration.marksAttachedMacros
-        let newInterfaceString = try await printInterface(for: object, using: printer)
+        let definitions = try printedDefinitions(for: object)
+        let definitionPrints = try await Self.printDefinitions(definitions, using: printer)
+        let newInterfaceString = Self.joinedDefinitionPrints(definitionPrints)
         let separatedPrint = Self.separatingMarks(of: newInterfaceString, marksAttachedMacros: marksAttachedMacros,
                                                   marksCommentStructure: marksCommentStructure)
         var macroExpansions: [RuntimeInterfaceMacroExpansion]?
         if marksAttachedMacros, let annotations = separatedPrint.annotations {
-            macroExpansions = try await self.macroExpansions(of: object, definitionRegions: separatedPrint.definitionRegions,
-                                                             annotations: annotations)
+            // The type's own print comes first, and joining puts nothing before it: its range ends
+            // with the type's closing brace, which part of a macro's expansion goes by.
+            let typeUTF8Range: Range<Int>? = if case .type? = definitions.first, let typePrint = definitionPrints.first, !typePrint.isEmpty {
+                0 ..< typePrint.string.utf8.count
+            } else {
+                nil
+            }
+            macroExpansions = try await self.macroExpansions(
+                of: object,
+                text: separatedPrint.text,
+                typeUTF8Range: typeUTF8Range,
+                definitionRegions: separatedPrint.definitionRegions,
+                annotations: annotations
+            )
         }
         let newInterface = RuntimeObjectInterface(
             object: object,
@@ -512,20 +526,30 @@ extension RuntimeSwiftSection {
     }
 
     /// The macros attached to the definitions in `object`'s print, each with
-    /// the declarations it generated, in text order.
+    /// the declarations it generated in the places they go, in text order.
     ///
     /// MachOSwiftSection marks each attribute it prints with an annotation
-    /// region of the macro's kind, and every type printed inside another with
-    /// a definition region named after the type's mangled name: an attribute
-    /// belongs to the innermost definition region around it, or to the type
-    /// `object` prints when there is none. The types are looked up in the
-    /// definitions printed, not in `object`'s children, which a caller may
-    /// not have filled in. The expansion is the printer's, under the
-    /// configuration it printed the interface with, its marks taken out.
-    private func macroExpansions(of object: RuntimeObject, definitionRegions: DefinitionRegionTable?,
-                                 annotations: AnnotationRegionTable) async throws -> [RuntimeInterfaceMacroExpansion] {
-        let attributeRegions = annotations.regions.filter {
-            RuntimeInterfaceCommentStructure.isAttachedMacroRegionKind($0.kind.rawValue)
+    /// region of the macro's kind, each tracked property's declaration with
+    /// one of a kind naming the property, and every type printed inside
+    /// another with a definition region named after the type's mangled name:
+    /// an attribute belongs to the innermost definition region around it, or
+    /// to the type `object` prints when there is none, whose own print is
+    /// `typeUTF8Range` of `text`. The types are looked up in the definitions
+    /// printed, not in `object`'s children, which a caller may not have
+    /// filled in. The parts are the printer's, under the configuration it
+    /// printed the interface with, their marks taken out: a tracked
+    /// property's goes below its declaration, the generated members above
+    /// the type's closing brace — the last line of the type's range — and the
+    /// generated conformance below it.
+    private func macroExpansions(
+        of object: RuntimeObject,
+        text: FrozenSemanticString,
+        typeUTF8Range: Range<Int>?,
+        definitionRegions: DefinitionRegionTable?,
+        annotations: AnnotationRegionTable
+    ) async throws -> [RuntimeInterfaceMacroExpansion] {
+        let attributeRegions = annotations.regions.filter { region in
+            Self.knownAttachedMacros.contains { AnnotationRegion.Kind.attachedMacro($0) == region.kind }
         }
         guard !attributeRegions.isEmpty else { return [] }
 
@@ -536,6 +560,7 @@ extension RuntimeSwiftSection {
         }.first
         let nestedTypesByMangledName = Self.nestedTypeDefinitionsByMangledName(in: definitions)
         let regions = definitionRegions?.regions ?? []
+        let utf8Text = Array(text.string.utf8)
 
         var expansions: [RuntimeInterfaceMacroExpansion] = []
         // A type carries one attribute of each macro. A second attributed to
@@ -546,26 +571,81 @@ extension RuntimeSwiftSection {
             guard let macro = Self.knownAttachedMacros.first(where: {
                 AnnotationRegion.Kind.attachedMacro($0) == attributeRegion.kind
             }) else { continue }
-            let attributeRange = Int(attributeRegion.utf8Offset) ..< Int(attributeRegion.utf8Offset) + Int(attributeRegion.utf8Length)
-            let innermostRegion = regions
-                .filter { region in
-                    let regionStart = Int(region.utf8Offset)
-                    return regionStart <= attributeRange.lowerBound && attributeRange.upperBound <= regionStart + Int(region.utf8Length)
+            let attributeRange = Self.utf8Range(offset: attributeRegion.utf8Offset, length: attributeRegion.utf8Length)
+            let ownerRegion = Self.innermostDefinitionRegion(around: attributeRange, in: regions)
+            let owner = if let ownerRegion { nestedTypesByMangledName[ownerRegion.identity] } else { printedType }
+            let ownerRange = ownerRegion.map { Self.utf8Range(offset: $0.utf8Offset, length: $0.utf8Length) } ?? typeUTF8Range
+            let ownerIdentity = "\(ownerRegion?.identity ?? "")|\(attributeRegion.kind.rawValue)"
+            guard let owner, let ownerRange, expandedOwners.insert(ownerIdentity).inserted else { continue }
+            let closingBraceLine = Self.lastLineRange(of: ownerRange, in: utf8Text)
+
+            var parts: [RuntimeInterfaceMacroExpansion.Part] = []
+            for expansionPart in try await printer.printMacroExpansionParts(of: macro, attachedTo: owner) {
+                let anchorRange: Range<Int>
+                let placement: RuntimeInterfaceMacroExpansion.Part.Placement
+                switch expansionPart.placement {
+                case .trackedProperty:
+                    // The declaration in the owner itself: a type nested in it can track a
+                    // property of the same name, whose region has the same kind.
+                    guard let anchorKind = expansionPart.anchorKind,
+                          let declarationRegion = annotations.regions.first(where: { region in
+                              let declarationRange = Self.utf8Range(offset: region.utf8Offset, length: region.utf8Length)
+                              return region.kind == anchorKind
+                                  && ownerRange.contains(declarationRange.lowerBound)
+                                  && Self.innermostDefinitionRegion(around: declarationRange, in: regions)?.utf8Offset == ownerRegion?.utf8Offset
+                          })
+                    else { continue }
+                    anchorRange = Self.utf8Range(offset: declarationRegion.utf8Offset, length: declarationRegion.utf8Length)
+                    placement = .belowLine
+                case .members:
+                    anchorRange = closingBraceLine
+                    placement = .aboveLine
+                case .conformance:
+                    anchorRange = closingBraceLine
+                    placement = .belowLine
                 }
-                .max { $0.depth < $1.depth }
-            let owner = if let innermostRegion { nestedTypesByMangledName[innermostRegion.identity] } else { printedType }
-            let ownerIdentity = "\(innermostRegion?.identity ?? "")|\(attributeRegion.kind.rawValue)"
-            guard let owner, expandedOwners.insert(ownerIdentity).inserted else { continue }
-            let expansion = try await printer.printMacroExpansion(of: macro, attachedTo: owner)
-            let expansionText = Self.separatingMarks(of: expansion, marksAttachedMacros: true, marksCommentStructure: true).text
-            guard !expansionText.string.isEmpty else { continue }
+                let content = Self.separatingMarks(of: expansionPart.content, marksAttachedMacros: true, marksCommentStructure: true).text
+                guard !content.string.isEmpty else { continue }
+                parts.append(RuntimeInterfaceMacroExpansion.Part(anchorUTF8Range: anchorRange, placement: placement, content: content))
+            }
+            guard !parts.isEmpty else { continue }
             expansions.append(RuntimeInterfaceMacroExpansion(
                 macroName: String(attributeRegion.kind.rawValue.dropFirst("attachedMacro.".count)),
                 attributeUTF8Range: attributeRange,
-                expansionString: expansionText
+                parts: parts
             ))
         }
         return expansions
+    }
+
+    private static func utf8Range(offset: some BinaryInteger, length: some BinaryInteger) -> Range<Int> {
+        Int(offset) ..< Int(offset) + Int(length)
+    }
+
+    /// The deepest definition region `range` lies in, if any: the type a
+    /// piece of the print belongs to.
+    private static func innermostDefinitionRegion(around range: Range<Int>, in regions: [DefinitionRegionTable.Region]) -> DefinitionRegionTable.Region? {
+        regions
+            .filter { region in
+                let regionRange = utf8Range(offset: region.utf8Offset, length: region.utf8Length)
+                return regionRange.lowerBound <= range.lowerBound && range.upperBound <= regionRange.upperBound
+            }
+            .max { $0.depth < $1.depth }
+    }
+
+    /// The last line of `range` in `utf8Text`, without the line break and
+    /// trailing whitespace before its end: a definition's closing brace,
+    /// indentation included.
+    private static func lastLineRange(of range: Range<Int>, in utf8Text: [UInt8]) -> Range<Int> {
+        var lineEnd = min(range.upperBound, utf8Text.count)
+        while lineEnd > range.lowerBound, [UInt8(ascii: " "), UInt8(ascii: "\t"), UInt8(ascii: "\n")].contains(utf8Text[lineEnd - 1]) {
+            lineEnd -= 1
+        }
+        var lineStart = lineEnd
+        while lineStart > range.lowerBound, utf8Text[lineStart - 1] != UInt8(ascii: "\n") {
+            lineStart -= 1
+        }
+        return lineStart ..< lineEnd
     }
 
     /// The attached macros MachOSwiftSection recognizes. Computed: the section
@@ -744,12 +824,18 @@ extension RuntimeSwiftSection {
     /// so it runs off the actor: the printer is `Sendable` and the section's
     /// own state is not needed past the definition list.
     private static func printInterface(of definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachO>) async throws -> SemanticString {
+        try await joinedDefinitionPrints(printDefinitions(definitions, using: printer))
+    }
+
+    /// Each definition printed on its own, in order, before `joinedDefinitionPrints(_:)` puts them
+    /// together.
+    private static func printDefinitions(_ definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachO>) async throws -> [SemanticString] {
         var definitionPrints: [SemanticString] = []
         definitionPrints.reserveCapacity(definitions.count)
         for definition in definitions {
             definitionPrints.append(try await printDefinition(definition, using: printer))
         }
-        return joinedDefinitionPrints(definitionPrints)
+        return definitionPrints
     }
 
     /// Definitions printed one after another, a blank line between two. A

@@ -513,58 +513,64 @@ private struct InlineExpansionGapIdentifier: Hashable {
     let identifier: String
 }
 
-/// An inline expansion is a gap of the editor's own `editorGapController` — the mechanism Xcode
-/// shows an expanded macro with, which is SourceEditor's, not Xcode's — holding an
-/// `InlineExpansionView`. The framework draws the gap's tint, border and dismiss button, folds it
-/// open, and lists it in the accessibility rotor of expanded macros; a Command-click on the dismiss
-/// button closes every expansion.
+/// An inline expansion is gaps of the editor's own `editorGapController` — the mechanism Xcode
+/// shows an expanded macro with, which is SourceEditor's, not Xcode's — each holding an
+/// `InlineExpansionView`. The framework draws a gap's tint, border and dismiss button, folds it
+/// open, and lists it in the accessibility rotor of expanded macros. Every gap of one expansion
+/// carries the same identifier, and the dismiss button removes the gaps of its identifier, so any
+/// of them closes them all; a Command-click closes every expansion.
 extension SourceEditorBridge {
     func showInlineExpansion(
-        _ source: String,
+        _ parts: [SourceEditorBridgingInlineExpansionPart],
         languageIdentifier: String,
-        semanticRanges: [NSValue],
-        semanticNodeTypeNames: [String],
         title: String,
-        identifier: String,
-        belowLineContaining anchorRange: NSRange
+        identifier: String
     ) {
         let gapIdentifier = InlineExpansionGapIdentifier(identifier: identifier)
         let gapController = sourceEditorView.editorGapController
-        guard !gapController.hasGapItemWithIdentifier(gapIdentifier) else { return }
+        guard !parts.isEmpty, !gapController.hasGapItemWithIdentifier(gapIdentifier) else { return }
 
-        // The same conversion `revealCharacterRange(_:)` makes.
         let dataSource = sourceEditorView.dataSource
-        let lowerBound = dataSource.positionFromInternalCharOffset(max(0, anchorRange.location), lineHint: 0)
-        let upperBound = dataSource.positionFromInternalCharOffset(max(0, NSMaxRange(anchorRange)), lineHint: lowerBound.line)
-        let range = lowerBound ..< max(lowerBound, upperBound)
+        let language = Self.language(forIdentifier: languageIdentifier)
+        for part in parts {
+            // The same conversion `revealCharacterRange(_:)` makes.
+            let lowerBound = dataSource.positionFromInternalCharOffset(max(0, part.anchorRange.location), lineHint: 0)
+            let upperBound = dataSource.positionFromInternalCharOffset(max(0, NSMaxRange(part.anchorRange)), lineHint: lowerBound.line)
+            let range = lowerBound ..< max(lowerBound, upperBound)
+            let position: SourceEditorGapItem.Position = switch part.placement {
+            case .belowLine: .belowLine
+            case .aboveLine: .aboveLine
+            }
 
-        let expansionView = InlineExpansionView(
-            source: source,
-            language: Self.language(forIdentifier: languageIdentifier),
-            semanticRanges: semanticRanges.map(\.rangeValue),
-            semanticNodeTypeNames: semanticNodeTypeNames,
-            title: title,
-            indent: Self.inlineExpansionIndent(for: range, in: dataSource),
-            anchorLine: range.lowerBound.line,
-            hostEditorView: sourceEditorView
-        )
-        expansionView.setShowsLineNumbers(appliedDisplayOptions.showsLineNumbers)
-        if let appliedTheme, let appliedLineNumberFont {
-            expansionView.apply(appliedTheme, lineNumberFont: appliedLineNumberFont)
+            let expansionView = InlineExpansionView(
+                source: part.source,
+                language: language,
+                semanticRanges: part.semanticRanges.map(\.rangeValue),
+                semanticNodeTypeNames: part.semanticNodeTypeNames,
+                title: title,
+                indent: Self.inlineExpansionIndent(for: range, position: position, in: dataSource),
+                anchorLine: range.upperBound.line,
+                hostEditorView: sourceEditorView
+            )
+            expansionView.setShowsLineNumbers(appliedDisplayOptions.showsLineNumbers)
+            if let appliedTheme, let appliedLineNumberFont {
+                expansionView.apply(appliedTheme, lineNumberFont: appliedLineNumberFont)
+            }
+            // The arguments Xcode 26.6 gives an expanded macro's gap in
+            // `MacroManager.showInGap(macroReplacement:in:workspace:)` (IDESourceEditor 0x1816D0): a
+            // point above and below, a 5 % tint and a 15 % border, no highlight of the range. The
+            // controller hangs the gap at the line of the range's end.
+            gapController.insertGapItem(SourceEditorGapItem(
+                identifier: gapIdentifier,
+                range: range,
+                contentView: expansionView,
+                position: position,
+                insets: NSEdgeInsets(top: 1, left: 0, bottom: 1, right: 0),
+                backgroundColor: (light: NSColor.black.withAlphaComponent(0.05), dark: NSColor.white.withAlphaComponent(0.05)),
+                borderColor: (light: NSColor.black.withAlphaComponent(0.15), dark: NSColor.white.withAlphaComponent(0.15)),
+                highlightRange: false
+            ))
         }
-        // The arguments Xcode 26.6 gives an expanded macro's gap in
-        // `MacroManager.showInGap(macroReplacement:in:workspace:)` (IDESourceEditor 0x1816D0): below
-        // the line, a point above and below, a 5 % tint and a 15 % border, no highlight of the range.
-        gapController.insertGapItem(SourceEditorGapItem(
-            identifier: gapIdentifier,
-            range: range,
-            contentView: expansionView,
-            position: .belowLine,
-            insets: NSEdgeInsets(top: 1, left: 0, bottom: 1, right: 0),
-            backgroundColor: (light: NSColor.black.withAlphaComponent(0.05), dark: NSColor.white.withAlphaComponent(0.05)),
-            borderColor: (light: NSColor.black.withAlphaComponent(0.15), dark: NSColor.white.withAlphaComponent(0.15)),
-            highlightRange: false
-        ))
     }
 
     func hideInlineExpansion(identifier: String) {
@@ -587,15 +593,22 @@ extension SourceEditorBridge {
 
     /// How far Xcode indents an expanded macro's editor, in columns
     /// (`MacroManager.showInGap`, IDESourceEditor 26.6 0x1816D0): the leading whitespace of the line
-    /// the range starts on, tabs expanded, one indent width more unless the range reaches the end of
-    /// its last line and that line does not end with `{`.
-    static func inlineExpansionIndent(for range: Range<SourceEditorPosition>, in dataSource: SourceEditorDataSource) -> Int {
+    /// the range starts on, tabs expanded, plus one indent width when the gap opens above a line
+    /// starting with `}` — a body's end, which the expansion belongs inside — below a line ending
+    /// with `{`, or when the range ends before the end of its line.
+    static func inlineExpansionIndent(
+        for range: Range<SourceEditorPosition>,
+        position: SourceEditorGapItem.Position,
+        in dataSource: SourceEditorDataSource
+    ) -> Int {
         let lineIndent = dataSource.leadingWhitespaceWidthForLine(range.lowerBound.line, expandTabs: true)
         let lastLine = range.upperBound.line
-        if range.upperBound.col >= dataSource.lineContentLengthForLine(lastLine),
-           !dataSource.lineContentForLine(lastLine).hasSuffix("{") {
-            return lineIndent
-        }
+        let lastLineContent = dataSource.lineContentForLine(lastLine)
+        let opensAboveBodyEnd = position == .aboveLine
+            && lastLineContent.drop(while: { $0 == " " || $0 == "\t" }).hasPrefix("}")
+        let opensBelowBodyStart = position == .belowLine && lastLineContent.hasSuffix("{")
+        let endsInsideItsLine = range.upperBound.col < dataSource.lineContentLengthForLine(lastLine)
+        guard opensAboveBodyEnd || opensBelowBodyStart || endsInsideItsLine else { return lineIndent }
         return lineIndent + dataSource.formattingOptions.indentWidth
     }
 }

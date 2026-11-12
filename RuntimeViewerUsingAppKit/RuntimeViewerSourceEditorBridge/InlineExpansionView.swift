@@ -40,8 +40,9 @@ final class InlineExpansionView: NSView {
     }
 
     /// - Parameters:
-    ///   - indent: columns to shift the text right by; see `SourceEditorBridge.inlineExpansionIndent(for:in:)`.
-    ///   - anchorLine: the host's line the gap hangs under, zero-based, for the accessibility label.
+    ///   - indent: columns to shift the text right by; see `SourceEditorBridge.inlineExpansionIndent(for:position:in:)`.
+    ///   - anchorLine: the host's line the gap opens at, above or below it, zero-based, for the
+    ///     accessibility label.
     init(source: String, language: (any SourceEditorLanguage)?, semanticRanges: [NSRange],
         semanticNodeTypeNames: [String], title: String, indent: Int, anchorLine: Int,
         hostEditorView: SourceEditorView) {

@@ -80,6 +80,22 @@ struct RuntimeInterfaceMacroExpansionEngineTests {
         String(decoding: Array(text.utf8)[range], as: UTF8.self)
     }
 
+    /// The text of `part`'s content.
+    private static func content(of part: RuntimeInterfaceMacroExpansion.Part) -> String {
+        part.content.string
+    }
+
+    /// The line `range` starts on, up to the end of `range`, and how far it is indented.
+    private static func anchorLine(of range: Range<Int>, in text: String) -> (line: String, indentation: Int) {
+        let bytes = Array(text.utf8)
+        var lineStart = range.lowerBound
+        while lineStart > 0, bytes[lineStart - 1] != UInt8(ascii: "\n") {
+            lineStart -= 1
+        }
+        let line = String(decoding: bytes[lineStart ..< range.upperBound], as: UTF8.self)
+        return (line, line.prefix { $0 == " " }.count)
+    }
+
     @Test func eachAttributeComesWithTheExpansionOfItsType() async throws {
         let interface = try await Self.interface(Self.options(marksAttachedMacros: true))
         let text = interface.interfaceString.string
@@ -92,16 +108,53 @@ struct RuntimeInterfaceMacroExpansionEngineTests {
         }
         #expect(expansions.map(\.attributeUTF8Range.lowerBound) == expansions.map(\.attributeUTF8Range.lowerBound).sorted())
 
-        let outerExpansion = try #require(expansions.first).expansionString.string
-        #expect(outerExpansion.contains("_$observationRegistrar"))
-        #expect(outerExpansion.contains("_count"))
-        #expect(outerExpansion.contains("_title"))
-        #expect(!outerExpansion.contains("_isEnabled"))
+        let outer = try #require(expansions.first).parts.map(Self.content(of:)).joined(separator: "\n")
+        #expect(outer.contains("_count"))
+        #expect(outer.contains("_title"))
+        #expect(outer.contains("_$observationRegistrar"))
+        #expect(!outer.contains("_isEnabled"))
 
-        let nestedExpansion = try #require(expansions.last).expansionString.string
-        #expect(nestedExpansion.contains("_isEnabled"))
-        #expect(!nestedExpansion.contains("_count"))
-        #expect(nestedExpansion.split(separator: "\n").last?.contains("NestedFixture") == true)
+        let nested = try #require(expansions.last).parts.map(Self.content(of:)).joined(separator: "\n")
+        #expect(nested.contains("_isEnabled"))
+        #expect(!nested.contains("_count"))
+        #expect(nested.contains("NestedFixture"))
+    }
+
+    /// Each tracked property's part goes below its declaration; the generated members above the
+    /// type's closing brace, inside the body; the generated conformance below it. The nested
+    /// type's parts go by its own declarations and its own brace, one level further in.
+    @Test func eachPartGoesWhereXcodePutsIt() async throws {
+        let interface = try await Self.interface(Self.options(marksAttachedMacros: true))
+        let text = interface.interfaceString.string
+        let expansions = try #require(interface.macroExpansions)
+        try #require(expansions.count == 2)
+
+        for (expansion, propertyNames, braceIndentation) in [(expansions[0], ["count", "title"], 0), (expansions[1], ["isEnabled"], 4)] {
+            let propertyParts = expansion.parts.filter { Self.content(of: $0).contains("var _") }
+            #expect(propertyParts.count == propertyNames.count)
+            for (part, propertyName) in zip(propertyParts, propertyNames) {
+                let (line, indentation) = Self.anchorLine(of: part.anchorUTF8Range, in: text)
+                #expect(part.placement == .belowLine)
+                #expect(line.hasSuffix(Self.text(in: part.anchorUTF8Range, of: text)))
+                #expect(line.contains("var \(propertyName):"), "\(line)")
+                #expect(indentation == braceIndentation + 4, "\(line)")
+                #expect(Self.content(of: part).contains("_\(propertyName)"))
+            }
+
+            let membersPart = try #require(expansion.parts.first { Self.content(of: $0).contains("_$observationRegistrar") })
+            let conformancePart = try #require(expansion.parts.last)
+            #expect(Self.content(of: conformancePart).hasPrefix("extension "))
+            #expect(membersPart.placement == .aboveLine)
+            #expect(conformancePart.placement == .belowLine)
+            #expect(membersPart.anchorUTF8Range == conformancePart.anchorUTF8Range)
+            let (braceLine, indentation) = Self.anchorLine(of: membersPart.anchorUTF8Range, in: text)
+            #expect(braceLine.trimmingCharacters(in: .whitespaces) == "}", "\(braceLine)")
+            #expect(indentation == braceIndentation, "\(braceLine)")
+        }
+        // The outer type's brace is the last line of its print.
+        let outerBrace = try #require(expansions.first?.parts.last).anchorUTF8Range
+        let textAfterOuterBrace = Self.text(in: outerBrace.upperBound ..< text.utf8.count, of: text)
+        #expect(textAfterOuterBrace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "\(textAfterOuterBrace)")
     }
 
     /// A caller that names the object without its children — a link followed to it — gets the
@@ -120,23 +173,23 @@ struct RuntimeInterfaceMacroExpansionEngineTests {
         let expansions = try #require(interface.macroExpansions)
 
         #expect(expansions.count == 2)
-        #expect(expansions.first?.expansionString.string.contains("_count") == true)
-        #expect(expansions.last?.expansionString.string.contains("_isEnabled") == true)
+        #expect(expansions.first?.parts.contains { Self.content(of: $0).contains("_count") } == true)
+        #expect(expansions.last?.parts.contains { Self.content(of: $0).contains("_isEnabled") } == true)
     }
 
-    /// The members print one level in from the attribute and the generated conformance at its
-    /// level, the way the content pane lays them out below the attribute's line.
-    @Test func anExpansionIsIndentedAsTheTypeBody() async throws {
+    /// The parts carry no indentation of their own and no line break around them: the content
+    /// pane indents each from the line it goes at.
+    @Test func partsHaveNoIndentationOfTheirOwn() async throws {
         let interface = try await Self.interface(Self.options(marksAttachedMacros: true))
-        let expansion = try #require(interface.macroExpansions?.first).expansionString.string
-        let lines = expansion.split(separator: "\n", omittingEmptySubsequences: false)
+        let parts = try #require(interface.macroExpansions).flatMap(\.parts)
 
-        #expect(!expansion.hasPrefix("\n"))
-        #expect(!expansion.hasSuffix("\n"))
-        #expect(lines.first?.hasPrefix("    ") == true)
-        let conformance = try #require(lines.last)
-        #expect(conformance.hasPrefix("extension "))
-        #expect(conformance.contains("Observation.Observable"))
+        #expect(!parts.isEmpty)
+        for part in parts {
+            let content = Self.content(of: part)
+            #expect(!content.hasPrefix(" ") && !content.hasPrefix("\n") && !content.hasSuffix("\n"), "\(content)")
+        }
+        let propertyPart = try #require(parts.first { Self.content(of: $0).contains("var _count") })
+        #expect(Self.content(of: propertyPart).hasPrefix("{"), "the accessor block first: \(Self.content(of: propertyPart))")
     }
 
     @Test func theTextIsTheSameWithOrWithoutTheMarks() async throws {

@@ -7,9 +7,9 @@ import SourceEditor
 @testable import RuntimeViewerSourceEditorBridge
 import Testing
 
-/// Covers the bridge's inline expansions, which the content pane uses to show a macro's expansion
-/// below the line of its attribute, the way Xcode does: a gap of the editor's own
-/// `editorGapController` holding a read-only editor with the expansion's text.
+/// Covers the bridge's inline expansions, which the content pane uses to show an attached macro's
+/// expansion inside the type, the way Xcode does: gaps of the editor's own `editorGapController`,
+/// one for each part of the expansion, each holding a read-only editor with the part's text.
 @Suite("InlineExpansion", .serialized)
 @MainActor
 struct InlineExpansionTests {
@@ -20,53 +20,104 @@ struct InlineExpansionTests {
     }
     """
 
-    private static let expansion = """
-    @Observation.ObservationIgnored private let _$observationRegistrar: Observation.ObservationRegistrar
-    private var _count: Int
+    /// What `@Observable` generated for `count`: its accessors, then its storage.
+    private static let trackedPropertyPart = """
+    {
+        get
+        set
+    }
+    final var _count: Swift.Int
     """
 
-    /// The attribute on the first line, which the expansions hang under.
-    private static let anchorRange = NSRange(location: 0, length: "@Observation.Observable".utf16.count)
+    private static let membersPart = """
+    let _$observationRegistrar: Observation.ObservationRegistrar
+    func access<A>(keyPath: Swift.KeyPath<Model, A>)
+    """
+
+    private static let conformancePart = "extension Model: Observation.Observable {}"
+
+    /// `var count: Int`, on the third line.
+    private static let propertyRange = NSRange(location: ("@Observation.Observable\nfinal class Model {\n    " as NSString).length,
+                                               length: "var count: Int".utf16.count)
+
+    /// The type's closing brace, on the last line.
+    private static let closingBraceRange = NSRange(location: (source as NSString).length - 1, length: 1)
+
+    /// The three places `@Observable` puts its expansion: after the tracked property, inside the
+    /// body above its closing brace, and after the type.
+    private static let parts: [(String, NSRange, SourceEditorBridgingInlineExpansionPlacement)] = [
+        (trackedPropertyPart, propertyRange, .belowLine),
+        (membersPart, closingBraceRange, .aboveLine),
+        (conformancePart, closingBraceRange, .belowLine),
+    ]
 
     private static func harnessShowingExpansion() throws -> SourceEditorTestHarness {
         let harness = try SourceEditorTestHarness()
         harness.setSource(source)
         harness.layout()
-        harness.showInlineExpansion(expansion, title: "Observable", identifier: "Model", belowLineContaining: anchorRange)
+        harness.showInlineExpansion(parts, title: "Observable", identifier: "Model")
         harness.layout()
         return harness
     }
 
-    @Test("an expansion is a gap below the anchor's line, with the text in an editor of its own")
-    func expansionIsAGapBelowTheAnchorLine() throws {
+    /// The gaps of the expansion, ordered by the line they open at and above before below.
+    private static func gapItems(of harness: SourceEditorTestHarness) -> [SourceEditorGapItem] {
+        harness.editorView.editorGapController.allGapItems.sorted { firstItem, secondItem in
+            let firstLine = firstItem.managedRange.originalRange.upperBound.line
+            let secondLine = secondItem.managedRange.originalRange.upperBound.line
+            return firstLine != secondLine ? firstLine < secondLine : firstItem.position < secondItem.position
+        }
+    }
+
+    @Test("each part is a gap at its anchor's line, above or below it, with its text in an editor of its own")
+    func eachPartIsAGapAtItsAnchorLine() throws {
         let harness = try Self.harnessShowingExpansion()
 
         #expect(harness.isInlineExpansionShown(identifier: "Model"))
-        let gapItems = harness.editorView.editorGapController.allGapItems
-        try #require(gapItems.count == 1)
-        let gapItem = gapItems[0]
-        #expect(gapItem.position == .belowLine)
-        #expect(gapItem.managedRange.originalRange.lowerBound.line == 0)
-        #expect(gapItem.contentView.title == "Observable")
-        let embeddedEditor = try #require(gapItem.contentView as? any SourceEditorGapWithEmbeddedSourceEditor)
-        #expect(embeddedEditor.embeddedEditorView.dataSource.string == Self.expansion)
-        #expect(!embeddedEditor.embeddedEditorView.isEditingEnabled)
+        let gapItems = Self.gapItems(of: harness)
+        try #require(gapItems.count == 3)
+        #expect(gapItems.map { $0.managedRange.originalRange.upperBound.line } == [2, 3, 3])
+        #expect(gapItems.map(\.position) == [.belowLine, .aboveLine, .belowLine])
+        let texts = gapItems.map { gapItem in
+            (gapItem.contentView as? any SourceEditorGapWithEmbeddedSourceEditor)?.embeddedEditorView.dataSource.string
+        }
+        #expect(texts == [Self.trackedPropertyPart, Self.membersPart, Self.conformancePart])
+        for gapItem in gapItems {
+            #expect(gapItem.contentView.title == "Observable")
+            let embeddedEditor = try #require(gapItem.contentView as? any SourceEditorGapWithEmbeddedSourceEditor)
+            #expect(!embeddedEditor.embeddedEditorView.isEditingEnabled)
+        }
     }
 
     @Test("showing an identifier that is shown already adds nothing")
     func showingTwiceAddsNothing() throws {
         let harness = try Self.harnessShowingExpansion()
 
-        harness.showInlineExpansion(Self.expansion, title: "Observable", identifier: "Model",
-                                    belowLineContaining: Self.anchorRange)
-        #expect(harness.editorView.editorGapController.allGapItems.count == 1)
+        harness.showInlineExpansion(Self.parts, title: "Observable", identifier: "Model")
+        #expect(harness.editorView.editorGapController.allGapItems.count == 3)
     }
 
-    @Test("hiding an expansion removes its gap")
-    func hidingRemovesTheGap() throws {
+    @Test("hiding an expansion removes every part of it")
+    func hidingRemovesEveryPart() throws {
         let harness = try Self.harnessShowingExpansion()
 
         harness.hideInlineExpansion(identifier: "Model")
+        #expect(!harness.isInlineExpansionShown(identifier: "Model"))
+        #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
+    }
+
+    /// The parts are one expansion: the dismiss button of any of them closes them all, as hiding
+    /// does. The action is called directly, since a click a test delivers does not reach the
+    /// button (see `dismissButtonTracksWithItsOwnMouseDown()`).
+    @Test("the dismiss button of one part closes every part")
+    func dismissingOnePartClosesEveryPart() throws {
+        let harness = try Self.harnessShowingExpansion()
+        let gapViews = Self.descendants(of: harness.editorView, ofType: SourceEditorGapView.self)
+        try #require(gapViews.count >= 2)
+
+        // The action reads `NSApp.currentEvent`, which a test process has no application for.
+        _ = NSApplication.shared
+        try #require(gapViews.first).dismissButtonAction(nil)
         #expect(!harness.isInlineExpansionShown(identifier: "Model"))
         #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
     }
@@ -127,18 +178,32 @@ struct InlineExpansionTests {
         #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
     }
 
-    /// Xcode's rule for an expanded macro: the line's own indentation when the range reaches the
-    /// end of a line that does not open a body, one level deeper otherwise.
-    @Test("the expansion is indented as Xcode indents an expanded macro")
+    /// Xcode's rule for an expanded macro: the line's own indentation, one level deeper when the gap
+    /// opens above a body's closing brace, below a line that opens a body, or when the range ends
+    /// inside its line.
+    @Test("each part is indented as Xcode indents an expanded macro")
     func expansionIndent() throws {
         let harness = try SourceEditorTestHarness()
         harness.setSource(Self.source)
         let dataSource = harness.editorView.dataSource
-        let attributeLine = SourceEditorPosition(line: 0, col: 0) ..< SourceEditorPosition(line: 0, col: 23)
-        #expect(SourceEditorBridge.inlineExpansionIndent(for: attributeLine, in: dataSource) == 0)
-        let typeName = SourceEditorPosition(line: 1, col: 12) ..< SourceEditorPosition(line: 1, col: 17)
-        #expect(SourceEditorBridge.inlineExpansionIndent(for: typeName, in: dataSource)
-            == dataSource.formattingOptions.indentWidth)
+        let indentWidth = dataSource.formattingOptions.indentWidth
+        func indent(line: Int, columns: Range<Int>, _ position: SourceEditorGapItem.Position) -> Int {
+            SourceEditorBridge.inlineExpansionIndent(
+                for: SourceEditorPosition(line: line, col: columns.lowerBound) ..< SourceEditorPosition(line: line, col: columns.upperBound),
+                position: position,
+                in: dataSource
+            )
+        }
+        // The attribute's whole line, and the closing brace's: the line's own indentation.
+        #expect(indent(line: 0, columns: 0 ..< 23, .belowLine) == 0)
+        #expect(indent(line: 3, columns: 0 ..< 1, .belowLine) == 0)
+        // The tracked property's declaration: its own indentation, the member's.
+        #expect(indent(line: 2, columns: 4 ..< 18, .belowLine) == 4)
+        // Above the closing brace, the body's end: one level in, where the members are.
+        #expect(indent(line: 3, columns: 0 ..< 1, .aboveLine) == indentWidth)
+        // Below the line that opens the body, and a range that ends inside its line.
+        #expect(indent(line: 1, columns: 0 ..< 19, .belowLine) == indentWidth)
+        #expect(indent(line: 1, columns: 12 ..< 17, .belowLine) == indentWidth)
     }
 }
 

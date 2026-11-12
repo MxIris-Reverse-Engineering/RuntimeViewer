@@ -370,7 +370,10 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         let expansion = RuntimeInterfaceMacroExpansion(
             macroName: "Observation.Observable",
             attributeUTF8Range: 0 ..< 23,
-            expansionString: SemanticString(components: shippedInterfaceComponents).frozen()
+            parts: [
+                .init(anchorUTF8Range: 24 ..< 40, placement: .belowLine, content: SemanticString(components: shippedInterfaceComponents).frozen()),
+                .init(anchorUTF8Range: 41 ..< 42, placement: .aboveLine, content: SemanticString(components: shippedInterfaceComponents).frozen()),
+            ]
         )
         return RuntimeObjectInterface(object: object, interfaceString: SemanticString(components: shippedInterfaceComponents), macroExpansions: [expansion])
     }
@@ -381,7 +384,9 @@ struct RuntimeObjectInterfaceWireCompatibilityTests {
         #expect(received?.macroExpansions?.count == 1)
         #expect(receivedExpansion.macroName == sentExpansion.macroName)
         #expect(receivedExpansion.attributeUTF8Range == sentExpansion.attributeUTF8Range)
-        #expect(receivedExpansion.expansionString == sentExpansion.expansionString)
+        #expect(receivedExpansion.parts.map(\.anchorUTF8Range) == sentExpansion.parts.map(\.anchorUTF8Range))
+        #expect(receivedExpansion.parts.map(\.placement) == sentExpansion.parts.map(\.placement))
+        #expect(receivedExpansion.parts.map(\.content) == sentExpansion.parts.map(\.content))
     }
 
     #if canImport(SwiftyXPC)
