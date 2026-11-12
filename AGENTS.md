@@ -235,7 +235,8 @@ on — `NSTableView.box.estimatesRowHeights`, `Label` mirroring `attributedStrin
 the synchronous `SettingsStore.save()`, `SettingsConfiguration`, `MainMenu` — all arrived before it.
 `0.39.0` needs FrameworkToolbox `0.15.0` or later, which is why `RuntimeViewerCore` takes a FrameworkToolbox
 floor instead of the exact pin it had; the comment there says what to check when FrameworkToolbox moves.
-The floor is `from: "0.16.0"`, which `RuntimeViewerCommandLine` repeats: `0.16.0` is the first release whose
+The floor is `from: "0.21.0"`, which `RuntimeViewerCommandLine` repeats: `0.21.0` is the first release with
+`LogCategory(_:prefixesMessages:)`, which the log categories under *Logging* use. `0.16.0` was the first whose
 `@FrameworkToolboxExtension` works out by itself whether the extended protocol is class-bound, and with an older
 one `SwiftDeclaration.Definition`'s generated `box` setter assigns `self`, which crashes the compiler in SILGen.
 SFSymbols is declared `from: "0.4.0"`, the first release with `nsuiImage` (it deprecated the misspelled

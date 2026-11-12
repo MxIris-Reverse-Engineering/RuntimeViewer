@@ -77,7 +77,7 @@ let package = Package(
         // headless host overrides at its entry point.
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.17.1"),
         // Same floor as RuntimeViewerCore.
-        .package(url: "https://github.com/Mx-Iris/FrameworkToolbox", from: "0.16.0"),
+        .package(url: "https://github.com/Mx-Iris/FrameworkToolbox", from: "0.21.0"),
         // Test-only: a controllable clock for the host's idle timer.
         .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     ],

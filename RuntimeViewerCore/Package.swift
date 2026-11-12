@@ -169,13 +169,14 @@ let package = Package(
         // app's Frameworks directory, crashed in dyld. 0.11.0 made ObjCRuntimeToolbox macro-only again,
         // and FrameworkToolbox's PackageTopologyGuardTests keep it that way. A release build's embedded
         // executables still must not link an @rpath toolbox framework other than ObjCRuntimeToolbox
-        // (`otool -L`). 0.16.0 is the first release whose @FrameworkToolboxExtension works out by
-        // itself whether the extended protocol is class-bound. SwiftDeclaration.Definition's extension
-        // relies on it: with an older release its generated `box` setter assigns `self`, and the
-        // compiler crashes in SILGen.
+        // (`otool -L`). 0.21.0 is the first release with LogCategory(_:prefixesMessages:), which the log
+        // categories that name themselves in front of each message use. 0.16.0 was the first whose
+        // @FrameworkToolboxExtension works out by itself whether the extended protocol is class-bound.
+        // SwiftDeclaration.Definition's extension relies on it: with an older release its generated `box`
+        // setter assigns `self`, and the compiler crashes in SILGen.
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox",
-            from: "0.16.0",
+            from: "0.21.0",
         ),
         .package(
             local: .package(
