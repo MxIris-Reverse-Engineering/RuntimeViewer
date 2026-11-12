@@ -46,6 +46,10 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     private var appliedTheme: SourceEditorTheme?
     private var appliedLineNumberFont: NSFont?
 
+    /// Which inline expansion each nested one came out of; registered with the gap controller in
+    /// `init`, which holds its observers weakly.
+    private let inlineExpansionNesting = InlineExpansionNesting()
+
     /// How long the insertion point rests on an identifier before its other occurrences are
     /// highlighted. The framework leaves the highlight off until it is given a delay; this one is
     /// ours, chosen to come after a click settles without feeling slow, not taken from Xcode.
@@ -134,6 +138,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // Held weakly by the view, and the view is owned by this object, so this does not
         // retain-cycle and does not need clearing.
         sourceEditorView.contextualMenuItemProvider = self
+
+        sourceEditorView.editorGapController.addObserver(observer: inlineExpansionNesting)
 
         // Registered here, unconditionally, and not once the app supplies its provider: the
         // minimap draws no hover label at all — not merely no icon — while it has nobody to ask
@@ -493,7 +499,12 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     /// The UTF-16 range of the token at `position`, in the source last passed to `setSource`.
     private func characterRange(ofTokenAt position: SourceEditorPosition) -> NSRange? {
-        let dataSource = sourceEditorView.dataSource
+        Self.characterRange(ofTokenAt: position, in: sourceEditorView.dataSource)
+    }
+
+    /// The UTF-16 range of the token at `position` in `dataSource`'s text, nil where there is no
+    /// token. Also asked of an inline expansion's own editor.
+    static func characterRange(ofTokenAt position: SourceEditorPosition, in dataSource: SourceEditorDataSource) -> NSRange? {
         guard let (_, tokenRange) = dataSource.tokenRangeAtPosition(position) else { return nil }
 
         let lowerBound = characterIndex(of: tokenRange.lowerBound, in: dataSource)
@@ -504,7 +515,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     /// A `SourceEditorPosition` is a line/column pair; the app indexes the same text by
     /// UTF-16 offset, which is what `NSAttributedString` uses.
-    private func characterIndex(of position: SourceEditorPosition, in dataSource: SourceEditorDataSource) -> Int {
+    private static func characterIndex(of position: SourceEditorPosition, in dataSource: SourceEditorDataSource) -> Int {
         let lineRange = dataSource.characterRangeForLineRange(NSRange(location: position.line, length: 1))
         return lineRange.location + position.col
     }
@@ -517,26 +528,60 @@ private struct InlineExpansionGapIdentifier: Hashable {
     let identifier: String
 }
 
+/// Closes the expansions that came out of another one once that one's last gap goes, however it
+/// went: hidden, dismissed, or cleared with the source it hung in.
+///
+/// Registered with the editor's `editorGapController`, which tells its observers after each gap
+/// it removed (`SourceEditorGapController.removeGapItemsWithIdentifier(_:)` and
+/// `removeAllGapItems()`, reconstruction 27.2.0-alpha.1). Both have finished changing their gaps
+/// by then and walk a copy of what they removed, so removing more gaps from here is safe.
+private final class InlineExpansionNesting: SourceEditorGapObserver {
+    /// The expansion each nested one was expanded from, by identifier.
+    private(set) var parentIdentifiersByIdentifier: [String: String] = [:]
+
+    func recordNestedExpansion(_ identifier: String, in parentIdentifier: String) {
+        parentIdentifiersByIdentifier[identifier] = parentIdentifier
+    }
+
+    func gapController(_ controller: SourceEditorGapController, didRemoveGapItem gapItem: SourceEditorGapItem) {
+        guard let removedIdentifier = gapItem.identifier.base as? InlineExpansionGapIdentifier,
+              !controller.hasGapItemWithIdentifier(gapItem.identifier)
+        else { return }
+        parentIdentifiersByIdentifier[removedIdentifier.identifier] = nil
+        let nestedIdentifiers = parentIdentifiersByIdentifier.filter { $0.value == removedIdentifier.identifier }.map(\.key)
+        for nestedIdentifier in nestedIdentifiers {
+            controller.removeGapItemsWithIdentifier(InlineExpansionGapIdentifier(identifier: nestedIdentifier))
+        }
+    }
+}
+
 /// An inline expansion is gaps of the editor's own `editorGapController` — the mechanism Xcode
 /// shows an expanded macro with, which is SourceEditor's, not Xcode's — each holding an
 /// `InlineExpansionView`. The framework draws a gap's tint, border and dismiss button, folds it
 /// open, and lists it in the accessibility rotor of expanded macros. Every gap of one expansion
 /// carries the same identifier, and the dismiss button removes the gaps of its identifier, so any
-/// of them closes them all; a Command-click closes every expansion.
+/// of them closes them all; a Command-click closes every expansion. An expansion expanded from
+/// another one's text hangs in this editor too, and `inlineExpansionNesting` closes it with that
+/// one.
 extension SourceEditorBridge {
     func showInlineExpansion(
         _ parts: [SourceEditorBridgingInlineExpansionPart],
         languageIdentifier: String,
         title: String,
-        identifier: String
+        identifier: String,
+        parentIdentifier: String?
     ) {
         let gapIdentifier = InlineExpansionGapIdentifier(identifier: identifier)
         let gapController = sourceEditorView.editorGapController
         guard !parts.isEmpty, !gapController.hasGapItemWithIdentifier(gapIdentifier) else { return }
+        if let parentIdentifier {
+            guard gapController.hasGapItemWithIdentifier(InlineExpansionGapIdentifier(identifier: parentIdentifier)) else { return }
+            inlineExpansionNesting.recordNestedExpansion(identifier, in: parentIdentifier)
+        }
 
         let dataSource = sourceEditorView.dataSource
         let language = Self.language(forIdentifier: languageIdentifier)
-        for part in parts {
+        for (partIndex, part) in parts.enumerated() {
             // The same conversion `revealCharacterRange(_:)` makes.
             let lowerBound = dataSource.positionFromInternalCharOffset(max(0, part.anchorRange.location), lineHint: 0)
             let upperBound = dataSource.positionFromInternalCharOffset(max(0, NSMaxRange(part.anchorRange)), lineHint: lowerBound.line)
@@ -559,6 +604,15 @@ extension SourceEditorBridge {
             expansionView.setShowsLineNumbers(appliedDisplayOptions.showsLineNumbers)
             if let appliedTheme, let appliedLineNumberFont {
                 expansionView.apply(appliedTheme, lineNumberFont: appliedLineNumberFont)
+            }
+            expansionView.contextualMenuItemsForToken = { [weak self] characterRange in
+                guard let self, let navigationDelegate else { return [] }
+                return navigationDelegate.sourceEditorBridge(
+                    self,
+                    contextualMenuItemsForTokenIn: characterRange,
+                    inInlineExpansionPartAt: partIndex,
+                    identifier: identifier
+                )
             }
             // The arguments Xcode 26.6 gives an expanded macro's gap in
             // `MacroManager.showInGap(macroReplacement:in:workspace:)` (IDESourceEditor 0x1816D0): a
@@ -632,7 +686,7 @@ extension SourceEditorBridge {
 /// `ContextualMenuEventConsumer` — an ordering nothing enforces.
 extension SourceEditorBridge: SourceEditorViewContextualMenuItemProvider {
     func setupContextMenu(for menu: NSMenu) {
-        removeCutItem(from: menu)
+        Self.removeCutItem(from: menu)
 
         guard let navigationDelegate,
               let characterRange = characterRangeOfTokenUnderPointer()
@@ -658,8 +712,9 @@ extension SourceEditorBridge: SourceEditorViewContextualMenuItemProvider {
     /// it up a responder chain where nothing handles it and it is dropped.
     ///
     /// Nothing breaks, then — but a Cut that silently means Copy is worse than no Cut, and
-    /// this pane never edits anything.
-    private func removeCutItem(from menu: NSMenu) {
+    /// this pane never edits anything. An inline expansion's editor is read-only as well, and its
+    /// menu loses Cut the same way.
+    static func removeCutItem(from menu: NSMenu) {
         guard let index = menu.items.firstIndex(where: { $0.action == #selector(NSText.cut(_:)) }) else { return }
         menu.removeItem(at: index)
     }

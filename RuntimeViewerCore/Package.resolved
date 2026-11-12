@@ -88,7 +88,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "e7a3b984fdb6704a9ce4d362b9b5081f2f4cd2fe"
+        "revision" : "270c0218a89a6fa103a77d4b551755fcd5700f6f"
       }
     },
     {
@@ -232,7 +232,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
         "branch" : "next",
-        "revision" : "c5ad6101f7d7f739615b765d3c94f842cca742f7"
+        "revision" : "8809c1b7583c486205a2f8bd5a1cf7fb50a70aa1"
       }
     },
     {

@@ -146,8 +146,11 @@ final class SourceEditorTestHarness {
 
     /// Shows each part's text above or below the line of its anchor, as the content pane does with
     /// a macro's expansion: `(source, anchorRange, placement)`, without semantic runs.
+    ///
+    /// - Parameter parentIdentifier: the expansion this one was expanded from, as the content pane
+    ///   passes it for a macro an expansion attaches.
     func showInlineExpansion(_ parts: [(String, NSRange, SourceEditorBridgingInlineExpansionPlacement)],
-                             title: String, identifier: String) {
+                             title: String, identifier: String, parentIdentifier: String? = nil) {
         bridge.showInlineExpansion(
             parts.map { source, anchorRange, placement in
                 SourceEditorBridgingInlineExpansionPart(
@@ -160,8 +163,16 @@ final class SourceEditorTestHarness {
             },
             languageIdentifier: "swift",
             title: title,
-            identifier: identifier
+            identifier: identifier,
+            parentIdentifier: parentIdentifier
         )
+    }
+
+    /// What the content pane is to the bridge: told of ⌘-clicks and asked for menu items. The
+    /// bridge holds it weakly, so whoever sets it keeps it.
+    var navigationDelegate: SourceEditorBridgingNavigationDelegate? {
+        get { bridge.navigationDelegate }
+        set { bridge.navigationDelegate = newValue }
     }
 
     func hideInlineExpansion(identifier: String) {

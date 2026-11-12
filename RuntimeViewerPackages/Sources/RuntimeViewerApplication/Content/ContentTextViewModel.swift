@@ -87,16 +87,17 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         public var macroExpansions: [MacroExpansion] = []
     }
 
-    /// An attached macro of the rendered text — `@Observation.Observable` — with the declarations
-    /// it generated, in the places they go.
+    /// An attached macro of the rendered text — `@Observation.Observable` — with what it wrote,
+    /// in the places it goes.
     public struct MacroExpansion: Sendable {
         /// The macro as its attribute names it, `Observation.Observable`.
         public let macroName: String
 
         /// Where the attribute is in the rendered text, in UTF-16 offsets, as the editor indexes it.
+        /// For an expansion in a part's `nestedExpansions`, where it is in that part's `content`.
         public let attributeCharacterRange: NSRange
 
-        /// The declarations the macro generated, a part for each place they go, in text order.
+        /// What the macro wrote, a part for each place it goes, in text order.
         public let parts: [Part]
 
         /// One place of the expansion: what it hangs at in the rendered text, on which side of
@@ -109,6 +110,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             public let placement: RuntimeInterfaceMacroExpansion.Part.Placement
 
             public let content: FrozenSemanticString
+
+            /// The macros `content` attaches — `@ObservationTracked` — each expandable from inside
+            /// the shown part, with its parts hanging in the rendered text.
+            public let nestedExpansions: [MacroExpansion]
         }
     }
 
@@ -514,19 +519,36 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// The fetched interface's macro expansions, their attributes and the anchors of their parts
     /// located in UTF-16 offsets of its text. A part whose anchor's UTF-8 range does not fall on
     /// character boundaries of that text is left out, and so is an expansion whose attribute does
-    /// not or that has no part left.
+    /// not or that has no part left. A nested expansion's attribute is located the same way in
+    /// the text of the part that holds it.
     nonisolated static func renderedMacroExpansions(of fetchedInterface: FetchedInterface) -> [MacroExpansion] {
         guard !fetchedInterface.macroExpansions.isEmpty else { return [] }
         let text = fetchedInterface.interfaceString.string
         return fetchedInterface.macroExpansions.compactMap { expansion in
-            guard let attributeCharacterRange = characterRange(ofUTF8Range: expansion.attributeUTF8Range, in: text) else { return nil }
-            let parts = expansion.parts.compactMap { part -> MacroExpansion.Part? in
-                guard let anchorCharacterRange = characterRange(ofUTF8Range: part.anchorUTF8Range, in: text) else { return nil }
-                return MacroExpansion.Part(anchorCharacterRange: anchorCharacterRange, placement: part.placement, content: part.content)
-            }
-            guard !parts.isEmpty else { return nil }
-            return MacroExpansion(macroName: expansion.macroName, attributeCharacterRange: attributeCharacterRange, parts: parts)
+            renderedMacroExpansion(expansion, attributeIn: text, anchorsIn: text)
         }
+    }
+
+    private nonisolated static func renderedMacroExpansion(
+        _ expansion: RuntimeInterfaceMacroExpansion,
+        attributeIn attributeText: String,
+        anchorsIn text: String
+    ) -> MacroExpansion? {
+        guard let attributeCharacterRange = characterRange(ofUTF8Range: expansion.attributeUTF8Range, in: attributeText) else { return nil }
+        let parts = expansion.parts.compactMap { part -> MacroExpansion.Part? in
+            guard let anchorCharacterRange = characterRange(ofUTF8Range: part.anchorUTF8Range, in: text) else { return nil }
+            let partText = part.content.string
+            return MacroExpansion.Part(
+                anchorCharacterRange: anchorCharacterRange,
+                placement: part.placement,
+                content: part.content,
+                nestedExpansions: part.nestedExpansions.compactMap { nestedExpansion in
+                    renderedMacroExpansion(nestedExpansion, attributeIn: partText, anchorsIn: text)
+                }
+            )
+        }
+        guard !parts.isEmpty else { return nil }
+        return MacroExpansion(macroName: expansion.macroName, attributeCharacterRange: attributeCharacterRange, parts: parts)
     }
 
     /// `utf8Range` of `text` in UTF-16 offsets, or nil when it does not fall on character

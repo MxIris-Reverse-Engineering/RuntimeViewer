@@ -42,6 +42,10 @@ final class InlineExpansionView: NSView {
     private var cachedAccessoryColor: (appearance: NSAppearance, color: NSColor)?
     private lazy var titleLabel = NSTextField(labelWithString: expansionTitle)
 
+    /// The items to put at the top of the contextual menu opened on a token of this part's text,
+    /// asked with the token's UTF-16 range in it. Nil, or no items, leaves the editor's own menu.
+    var contextualMenuItemsForToken: ((NSRange) -> [NSMenuItem])?
+
     /// The expansions shown in `editor`'s gaps.
     static func views(in editor: SourceEditorView) -> [InlineExpansionView] {
         editor.editorGapController.allGapItems.compactMap { $0.contentView as? InlineExpansionView }
@@ -90,6 +94,10 @@ final class InlineExpansionView: NSView {
         editor.layoutManager.addLayoutVisualization(firstLineLayoutObserver)
         // Held weakly by the editor; this view owns the editor.
         editor.delegate = self
+        // Every `SourceEditorView` opens its menu itself on a right click (its
+        // `ContextualMenuEventConsumer`) and asks this hook for more items, as the main editor's
+        // does. Held weakly as well.
+        editor.contextualMenuItemProvider = self
         editor.setAccessibilityLabel("Expanded Macro for \"\(title)\" on line \(anchorLine + 1)")
         // The title first and the editor over it, in Xcode's order; the title hides while the
         // first line's text reaches under it.
@@ -272,6 +280,39 @@ extension InlineExpansionView: SourceEditorSizableAssociatedView {
 
 /// Lets the host editor's accessibility reach the expansion's text.
 extension InlineExpansionView: SourceEditorGapWithEmbeddedSourceEditor {}
+
+// MARK: - Contextual Menu
+
+/// Xcode offers Expand Macro inside an expanded macro too, on a macro the expansion attaches, and
+/// expands it from there (`SourceCodeEditor.showMacroExpansion()`, IDESourceEditor 26.6 0x1873B0,
+/// passes the expansion buffer's name when its editor is an embedded one).
+extension InlineExpansionView: SourceEditorViewContextualMenuItemProvider {
+    func setupContextMenu(for menu: NSMenu) {
+        SourceEditorBridge.removeCutItem(from: menu)
+
+        // The click comes from the event being handled, as in the main editor's hook
+        // (`SourceEditorBridge.setupContextMenu(for:)`): the menu is built inside the handling of
+        // the right mouse down that opens it.
+        guard let event = NSApp.currentEvent,
+              let position = embeddedEditorView.positionAtPoint(embeddedEditorView.convert(event.locationInWindow, from: nil))
+        else { return }
+        let items = contextualMenuItems(forTokenAt: position)
+        guard !items.isEmpty else { return }
+
+        for (index, item) in items.enumerated() {
+            menu.insertItem(item, at: index)
+        }
+        menu.insertItem(.separator(), at: items.count)
+    }
+
+    /// The items for the token at `position` of this part's text; none where there is no token.
+    func contextualMenuItems(forTokenAt position: SourceEditorPosition) -> [NSMenuItem] {
+        guard let contextualMenuItemsForToken,
+              let characterRange = SourceEditorBridge.characterRange(ofTokenAt: position, in: embeddedEditorView.dataSource)
+        else { return [] }
+        return contextualMenuItemsForToken(characterRange)
+    }
+}
 
 // MARK: - SourceEditorViewDelegate
 

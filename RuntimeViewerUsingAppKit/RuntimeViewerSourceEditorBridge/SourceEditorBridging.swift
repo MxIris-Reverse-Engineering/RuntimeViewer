@@ -157,16 +157,25 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// `setSource` replaces the text they hang in. Showing an identifier that is already shown,
     /// or no part at all, does nothing.
     ///
+    /// An expansion can come out of another one: a macro's expansion may attach a macro of its
+    /// own — `@Observable` puts `@ObservationTracked` on each property it tracks — and Xcode
+    /// expands that one from inside the expanded text. Its parts still hang in the source, at the
+    /// declaration the attribute belongs to, and it closes with the expansion it came out of.
+    ///
     /// - Parameters:
     ///   - title: what each gap is called — the name at the right of its first line and in the
     ///     editor's accessibility rotor of expanded macros.
     ///   - identifier: names the expansion for ``hideInlineExpansion(identifier:)`` and
     ///     ``isInlineExpansionShown(identifier:)``.
+    ///   - parentIdentifier: the expansion whose text this one was expanded from, nil for one of
+    ///     the source's own. Hiding or dismissing the parent closes this one too; closing this one
+    ///     leaves the parent alone. Nothing is shown while the parent is not.
     func showInlineExpansion(
         _ parts: [SourceEditorBridgingInlineExpansionPart],
         languageIdentifier: String,
         title: String,
-        identifier: String
+        identifier: String,
+        parentIdentifier: String?
     )
 
     /// Closes the expansion shown under `identifier`, every part of it, if there is one.
@@ -274,6 +283,21 @@ public protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
     ///
     /// - Parameter characterRange: as above, the token's UTF-16 range in the current source.
     func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem]
+
+    /// The items to put at the top of the contextual menu opened on a token of an inline
+    /// expansion's text — where Xcode offers Expand Macro on a macro the expansion attaches.
+    ///
+    /// - Parameters:
+    ///   - characterRange: the token's UTF-16 range in that part's `source`.
+    ///   - partIndex: the part's index in the array ``SourceEditorBridging/showInlineExpansion(_:languageIdentifier:title:identifier:parentIdentifier:)``
+    ///     was given.
+    ///   - identifier: the expansion's identifier.
+    func sourceEditorBridge(
+        _ bridge: SourceEditorBridging,
+        contextualMenuItemsForTokenIn characterRange: NSRange,
+        inInlineExpansionPartAt partIndex: Int,
+        identifier: String
+    ) -> [NSMenuItem]
 }
 
 /// Asked for the icon that leads each of the minimap's hover labels — the `[M]` in
