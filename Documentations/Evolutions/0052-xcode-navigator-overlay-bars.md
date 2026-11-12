@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-10-14
-- **最后更新**: 2026-10-20
+- **最后更新**: 2026-11-12
 - **所属愿景**: 无
 - **配套文档**: 给贡献者的规则在 `AGENTS.md` 的「Navigator pages run under their bars (macOS 26 and later)」一节。逆向证据与全部地址在本机资料卷 `/Volumes/RE/Xcode/27.2/README.md` 的「Navigator chooser and scroll pockets (2026-10-14)」一节（IDEKit 27.2 的头文件、Swift dump 与 IDA 库在同目录 `IDEKit/`，AppKit 27.0 的库是 `/Volumes/DyldSharedCaches/macOS/27.0/AppKit-20261014.i64`）
 
@@ -104,3 +104,4 @@
 | 2026-10-15 | 每个 tab 切换器的每个页面，内容都从分段控件下方 8 点开始，统一取 `TabViewController.pageTopSpacing`（即 `NavigatorScrollViewLayout.topContentInsetBeyondSafeArea`）。堆叠的页面（macOS 26 之前的全部页面、所有系统上的 Inspector）由切换器留出这 8 点，页面自己不再留上边距；macOS 26 起跑在栏下的侧栏页面，列表靠内容边距，Find 的查询区靠约束 | 用户目视后先要求「Find 这里要 10 的 spacing」；看到各页不一致（侧栏列表 8，Find 与 macOS 26 之前的页面 10，Inspector 8 到 25 不等）后要求「全部统一一下，都改成8」。8 是 Xcode 导航区列表的值。结果列表的安全区由 `NavigatorScrollViewLayout` 按查询区与 summary 行的实际位置算，自动跟着移动。方案一节里「查询区钉在 `containerView` 的安全区顶边」是原先的做法，保留原文 |
 | 2026-10-15 | 接着统一：Find 查询区第一行的「Aa」按钮与模式路径同在行顶；Inspector 的 Class 页标题与内容的左右边距、标题与内容之间的间距都从 15 改为 8，与另外两页的标题及其下的列表一致；四个侧栏页面类删掉 macOS 26 起把 `contentInsets` 归零的覆写 | 用户：「这3个也改一下」，随后对 Class 页标题与内容之间的 15 点说「改」。Xcode 里路径与「Aa」都在 y = 3（[0029](0029-find-navigator.md) 的实测），此前路径已移到行顶、按钮还在 3，差了 3 点。`BaseViewController.contentInsets` 的默认值已从顶部 10 点改为 0，那四处覆写在两种系统上都不再改变任何东西；方案一节里「`contentInsets` 归零」一句是当时的做法，保留原文 |
 | 2026-10-20 | 1 点分隔线从 macOS 26 起不再加进视图层级（`HorizontalSeparatorView.makeForStackedNavigatorLayout()` 在那里返回 `nil`），之前的堆叠布局改用不报告固有宽度的 `HorizontalSeparatorView`（RuntimeViewerUI），筛选范围弹窗的两条也换成它 | 用户反馈启动后侧栏分隔线拖不动、切一次 tab 才好。镜像目录页那条被隐藏的 `NSBox` 分隔线，在启动的第一轮约束更新里被 AppKit 判成竖线，布局引擎里留下 `width == 1`、抱紧优先级 750 的约束，把侧栏钉在最小宽度，拖动分隔线压不过它。隐藏不是触发条件，但隐藏的视图照样参与布局。见 [ResolvedIssues/2026-10-20-sidebar-divider-locked-by-a-separator.md](../ResolvedIssues/2026-10-20-sidebar-divider-locked-by-a-separator.md)；方案一节里「1 点分隔线隐藏」是当时的做法，保留原文 |
+| 2026-11-12 | Find 页 summary 行底部的 1 点线在所有系统上都画，不再走 `makeForStackedNavigatorLayout()`；结果列表上方与过滤栏上方的两条照旧从 macOS 26 起省掉 | 用户发现 macOS 27 上 summary 行下少了一条线。这条线不是被边缘效果取代的分隔线，而是 summary 行自己的一部分：Xcode 26.6 与 27.2 的 `IDEFindNavigator.nib` 里，summary 行都含一个 1 点高的 `DVTBorderView`，代码从不隐藏它（26.6 在 `-[IDEFindNavigator viewDidLoad]` 里给它设 `vibrantDividerColor`；27.2 不再连 outlet，用 `DVTBorderView` 默认的主题 `contentBorderColor`）。26.6 把它放在行顶，27.2 放在行底；用户批准所有系统都放行底，与 27.2 和 macOS 26 之前的堆叠布局一致。方案一节里「1 点分隔线隐藏，由边缘效果取代」不含这一条 |

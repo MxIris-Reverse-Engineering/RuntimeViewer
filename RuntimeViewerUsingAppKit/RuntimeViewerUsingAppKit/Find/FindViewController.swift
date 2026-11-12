@@ -56,8 +56,11 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
 
     private let summaryLabel = Label()
 
-    /// The line below the summary; `nil` from macOS 26, where the results fade out under the summary instead.
-    private let summarySeparatorView = HorizontalSeparatorView.makeForStackedNavigatorLayout()
+    /// The line along the bottom of the summary, on every system. Unlike the lines above the results and the
+    /// filter bar, it is part of the row in Xcode, not a divider the scroll edge effect replaces: the summary row
+    /// in `IDEFindNavigator.nib` holds a 1-point `DVTBorderView` in Xcode 26.6 and 27.2 alike, which nothing hides
+    /// (27.2 draws it along the row's bottom edge, 26.6 along its top).
+    private let summarySeparatorView = HorizontalSeparatorView()
 
     private var summaryHeightConstraint: Constraint?
 
@@ -141,9 +144,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             }
             summaryView.hierarchy {
                 summaryLabel
-                if let summarySeparatorView {
-                    summarySeparatorView
-                }
+                summarySeparatorView
             }
             if let resultsTopSeparatorView {
                 resultsTopSeparatorView
@@ -215,7 +216,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             make.height.equalTo(14)
         }
 
-        summarySeparatorView?.snp.makeConstraints { make in
+        summarySeparatorView.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
             make.height.equalTo(1)
         }
