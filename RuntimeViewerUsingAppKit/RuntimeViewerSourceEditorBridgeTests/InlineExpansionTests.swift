@@ -71,6 +71,50 @@ struct InlineExpansionTests {
         #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
     }
 
+    /// The gap's dismiss button sits in the expansion's own gutter, under the editor's line-number
+    /// column, which floats above the text and is what the window's hit-test finds there. The press
+    /// reaches the button only as the mouse-down the column leaves unhandled, which AppKit passes on
+    /// to the view below. Under the macOS 27 SDK the app links, a plain `NSButton` tracks with a
+    /// gesture recognizer and ignores such a press, so the SourceEditor release the app pins has to
+    /// give the button its own `mouseDown(with:)`, as Xcode 27.2 does: AppKit keeps a control whose
+    /// class overrides it on the tracking loop, which takes the forwarded press.
+    ///
+    /// A click delivered by the test does not show the difference: in this test process, which is
+    /// never the active application, it closed the expansion neither with 26.6.4 nor with
+    /// 27.2.0-alpha.1. So the test checks what AppKit decides by.
+    @Test("the dismiss button tracks with its own mouseDown, so a press the gutter passes on reaches it")
+    func dismissButtonTracksWithItsOwnMouseDown() throws {
+        let harness = try Self.harnessShowingExpansion()
+        let gapView = try #require(Self.descendants(of: harness.editorView, ofType: SourceEditorGapView.self).first)
+        let dismissButton = try #require(gapView.subviews.compactMap { $0 as? NSButton }.first { button in
+            button.action == #selector(SourceEditorGapView.dismissButtonAction(_:))
+        })
+
+        let buttonClass: AnyClass = type(of: dismissButton)
+        #expect(ObjectIdentifier(buttonClass) != ObjectIdentifier(NSButton.self))
+        var methodCount: UInt32 = 0
+        let methods = class_copyMethodList(buttonClass, &methodCount)
+        defer { free(methods) }
+        let ownSelectors = (0..<Int(methodCount)).compactMap { methodIndex in
+            methods.map { methodList in method_getName(methodList[methodIndex]) }
+        }
+        #expect(ownSelectors.contains(#selector(NSResponder.mouseDown(with:))))
+    }
+
+    private static func descendants<DescendantView: NSView>(
+        of view: NSView, ofType descendantType: DescendantView.Type
+    ) -> [DescendantView] {
+        var matchingViews: [DescendantView] = []
+        var pendingViews = view.subviews
+        while let pendingView = pendingViews.popLast() {
+            if let matchingView = pendingView as? DescendantView {
+                matchingViews.append(matchingView)
+            }
+            pendingViews.append(contentsOf: pendingView.subviews)
+        }
+        return matchingViews
+    }
+
     /// A gap hangs under a line identifier of the data source it was inserted into, which the next
     /// text does not have.
     @Test("a new source closes every expansion")
