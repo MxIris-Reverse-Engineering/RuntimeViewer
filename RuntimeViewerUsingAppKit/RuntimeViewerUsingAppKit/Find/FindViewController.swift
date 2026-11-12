@@ -10,8 +10,9 @@ import SnapKit
 /// The Find navigator page, laid out to the measurements of Xcode 26's — proposal
 /// `0029-find-navigator` §4.1. Four blocks, top to bottom: the query parameters (three
 /// 24-point rows: the mode path and the case toggle, the search field, the scope — and in
-/// Members mode the member kinds), the summary bar (22 points, only while there are results), the
-/// results outline, and the 44-point filter bar at the bottom.
+/// Members mode the member kinds — with a 1-point line below them from macOS 26 on), the summary
+/// bar (22 points, only while there are results), the results outline, and the 44-point filter
+/// bar at the bottom.
 ///
 /// Generic over the sidebar level's route because the page is a tab of both levels; both bind
 /// the document's one `FindSession` through their own `FindViewModel`, and the scope chooser is
@@ -47,6 +48,20 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
     private let scopeButton = FindScopeButton()
 
     private let memberKindPopUpButton = PopUpButton()
+
+    /// The line along the bottom of the query area, from macOS 26 on. Xcode 27.2 ends the query
+    /// parameters' stack with a 1-point `DVTBorderView` (`_bottomDivider` in
+    /// `IDEFindNavigatorQueryParametersController.nib`, which `-[IDEFindNavigatorQueryParametersController
+    /// refreshUserInterface:]` adds as the last row every time), and the results' top scroll pocket draws its
+    /// own hairline right below it. `nil` before macOS 26: Xcode 26.6's query area has no such line, and the
+    /// stacked layout draws one above the results instead.
+    private let queryParametersSeparatorView: HorizontalSeparatorView? = {
+        if #available(macOS 26.0, *) {
+            HorizontalSeparatorView()
+        } else {
+            nil
+        }
+    }()
 
     // MARK: - Summary Bar
 
@@ -141,6 +156,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                 searchField
                 scopeButton
                 memberKindPopUpButton
+                if let queryParametersSeparatorView {
+                    queryParametersSeparatorView
+                }
             }
             summaryView.hierarchy {
                 summaryLabel
@@ -164,7 +182,8 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
                 make.top.equalToSuperview()
             }
             make.leading.trailing.equalToSuperview()
-            make.height.equalTo(72)
+            // Three 24-point rows, and the line below them where there is one.
+            make.height.equalTo(queryParametersSeparatorView == nil ? 72 : 73)
         }
 
         // Row 1 (y 0–24): the mode path at (3, 0), W − 39 wide, and the case toggle, 21×16, at the
@@ -191,8 +210,11 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             make.height.equalTo(22)
         }
 
+        // Row 3 (y 48–72): the scope pop-up 4 points below the row's top, 15 tall. Xcode's nib places it
+        // at (0, 5) in the row's `IDEFindNavigatorScopeButtonContainer`, which is not flipped, so the 5 is
+        // its distance from the row's bottom.
         scopeButton.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(53)
+            make.top.equalToSuperview().offset(52)
             make.leading.equalToSuperview().offset(8)
             make.height.equalTo(15)
             make.trailing.lessThanOrEqualTo(memberKindPopUpButton.snp.leading).offset(-8)
@@ -202,6 +224,11 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             make.centerY.equalTo(scopeButton)
             make.trailing.equalToSuperview().inset(8)
             make.height.equalTo(15)
+        }
+
+        queryParametersSeparatorView?.snp.makeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview()
+            make.height.equalTo(1)
         }
 
         summaryView.snp.makeConstraints { make in

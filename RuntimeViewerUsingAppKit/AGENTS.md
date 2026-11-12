@@ -604,7 +604,9 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   edge effect replaces them — by making them with `HorizontalSeparatorView.makeForStackedNavigatorLayout()`,
   which returns `nil` there: never keep one hidden, since a hidden view still takes part in Auto Layout
   (*Never lay a plain separator box across a pane*, under *Views*). The line in the Find page's summary row
-  is no such separator: it is part of the row in Xcode and stays on every system. Centre empty-state text
+  is no such separator: it is part of the row in Xcode and stays on every system. Nor is the 1-point line
+  along the bottom of the Find page's query area, which exists from macOS 26 on only: Xcode 27.2 ends its
+  query parameters with it, and the scroll pocket's own hairline lies right below it. Centre empty-state text
   and placeholders in the safe area (`scrollView.safeAreaLayoutGuide`), not in the scroll view.
 - Keep the scroll view's own `automaticallyAdjustsContentInsets` on, and leave the clip view's insets, its
   `automaticallyAdjustsContentInsets` and the scroll view's `additionalSafeAreaInsets` to the layout. AppKit
