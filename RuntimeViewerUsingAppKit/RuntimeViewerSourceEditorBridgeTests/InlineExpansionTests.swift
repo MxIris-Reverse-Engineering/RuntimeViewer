@@ -178,6 +178,48 @@ struct InlineExpansionTests {
         #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
     }
 
+    /// Where each part's text starts: at its anchor's column, as the indent rule counts it, on the
+    /// host's columns. The host here shows two-digit line numbers and the folding ribbon, the
+    /// expansion's editor one-digit numbers and no ribbon, and SourceEditor pads the host's text
+    /// only while its gutter shows certain annotations — so the two editors' left margins differ,
+    /// and padding the expansion by Xcode's formula left its text a dozen points short.
+    @Test("each part's text starts on the host's columns")
+    func partsLineUpWithTheHostColumns() throws {
+        let commentLines = (1 ... 8).map { "// line \($0)\n" }.joined()
+        let source = commentLines + Self.source
+        let sourceText = source as NSString
+        let propertyRange = sourceText.range(of: "var count: Int")
+        let closingBraceRange = NSRange(location: sourceText.length - 1, length: 1)
+        let harness = try SourceEditorTestHarness()
+        harness.showLineNumbersAndFoldingRibbon()
+        harness.setSource(source)
+        harness.layout()
+        harness.showInlineExpansion([
+            (Self.trackedPropertyPart, propertyRange, .belowLine),
+            (Self.membersPart, closingBraceRange, .aboveLine),
+            (Self.conformancePart, closingBraceRange, .belowLine),
+        ], title: "Observable", identifier: "Model")
+        harness.layout()
+        harness.layout()
+
+        let hostEditor = harness.editorView
+        let hostFirstLine = try #require(hostEditor.layoutManager.layoutFrameForFirstFragmentOfVisibleLine(0, includeLineSpacing: false))
+        let hostColumnZero = hostEditor.contentView.convert(hostFirstLine, to: nil).minX
+        let spaceWidth = hostEditor.layoutManager.spaceWidth
+        let gapItems = hostEditor.editorGapController.allGapItems
+        try #require(gapItems.count == 3)
+        for gapItem in gapItems {
+            let indent = SourceEditorBridge.inlineExpansionIndent(for: gapItem.managedRange.originalRange, position: gapItem.position,
+                                                                  in: hostEditor.dataSource)
+            let embeddedEditor = try #require((gapItem.contentView as? any SourceEditorGapWithEmbeddedSourceEditor)?.embeddedEditorView)
+            let embeddedFirstLine = try #require(embeddedEditor.layoutManager.layoutFrameForFirstFragmentOfVisibleLine(0, includeLineSpacing: false))
+            let textStart = embeddedEditor.contentView.convert(embeddedFirstLine, to: nil).minX
+            let expectedTextStart = hostColumnZero + CGFloat(indent) * spaceWidth
+            #expect(abs(textStart - expectedTextStart) < 1,
+                    "the part at line \(gapItem.managedRange.originalRange.upperBound.line), \(gapItem.position), starts at \(textStart), not \(expectedTextStart)")
+        }
+    }
+
     /// Xcode's rule for an expanded macro: the line's own indentation, one level deeper when the gap
     /// opens above a body's closing brace, below a line that opens a body, or when the range ends
     /// inside its line.
