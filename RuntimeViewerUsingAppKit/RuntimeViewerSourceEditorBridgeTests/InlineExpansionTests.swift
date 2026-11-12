@@ -220,6 +220,158 @@ struct InlineExpansionTests {
         }
     }
 
+    // MARK: - An expansion expanded out of another one
+
+    /// What `@Observable` puts on the tracked property; expanding it gives `trackedPropertyPart`.
+    private static let trackedAttributePart = "@ObservationTracked"
+
+    /// `@Observable` expanded, with the attribute it puts above `count`, and that attribute
+    /// expanded in turn: its accessors and storage below `count`, in the source, where Xcode puts
+    /// them.
+    private static func harnessShowingNestedExpansion() throws -> SourceEditorTestHarness {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(source)
+        harness.layout()
+        harness.showInlineExpansion([
+            (trackedAttributePart, propertyRange, .aboveLine),
+            (membersPart, closingBraceRange, .aboveLine),
+            (conformancePart, closingBraceRange, .belowLine),
+        ], title: "Observable", identifier: "Model")
+        harness.showInlineExpansion([(trackedPropertyPart, propertyRange, .belowLine)],
+                                    title: "ObservationTracked", identifier: "Model.count", parentIdentifier: "Model")
+        harness.layout()
+        return harness
+    }
+
+    @Test("an expansion out of another one hangs in the source, at the declaration its attribute is on")
+    func nestedExpansionHangsInTheSource() throws {
+        let harness = try Self.harnessShowingNestedExpansion()
+
+        #expect(harness.isInlineExpansionShown(identifier: "Model.count"))
+        let nestedGapItems = harness.editorView.editorGapController.allGapItems.filter { $0.contentView.title == "ObservationTracked" }
+        try #require(nestedGapItems.count == 1)
+        let nestedGapItem = try #require(nestedGapItems.first)
+        #expect(nestedGapItem.managedRange.originalRange.upperBound.line == 2)
+        #expect(nestedGapItem.position == .belowLine)
+        let nestedText = (nestedGapItem.contentView as? any SourceEditorGapWithEmbeddedSourceEditor)?.embeddedEditorView.dataSource.string
+        #expect(nestedText == Self.trackedPropertyPart)
+    }
+
+    @Test("hiding an expansion closes the ones expanded out of it")
+    func hidingClosesNestedExpansions() throws {
+        let harness = try Self.harnessShowingNestedExpansion()
+
+        harness.hideInlineExpansion(identifier: "Model")
+        #expect(!harness.isInlineExpansionShown(identifier: "Model.count"))
+        #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
+    }
+
+    /// The dismiss button removes its gap view's gaps by identifier, from the framework, without
+    /// the bridge being asked; the gap controller's observers are told.
+    @Test("the dismiss button of an expansion closes the ones expanded out of it")
+    func dismissingClosesNestedExpansions() throws {
+        let harness = try Self.harnessShowingNestedExpansion()
+        let membersGapView = try #require(Self.descendants(of: harness.editorView, ofType: SourceEditorGapView.self).first { gapView in
+            gapView.gapItems.contains { ($0.contentView as? InlineExpansionView)?.embeddedEditorView.dataSource.string == Self.membersPart }
+        })
+
+        // The action reads `NSApp.currentEvent`, which a test process has no application for.
+        _ = NSApplication.shared
+        membersGapView.dismissButtonAction(nil)
+        #expect(!harness.isInlineExpansionShown(identifier: "Model"))
+        #expect(!harness.isInlineExpansionShown(identifier: "Model.count"))
+        #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
+    }
+
+    @Test("closing an expansion out of another one leaves that one")
+    func closingNestedExpansionLeavesItsParent() throws {
+        let harness = try Self.harnessShowingNestedExpansion()
+
+        harness.hideInlineExpansion(identifier: "Model.count")
+        #expect(!harness.isInlineExpansionShown(identifier: "Model.count"))
+        #expect(harness.isInlineExpansionShown(identifier: "Model"))
+        #expect(harness.editorView.editorGapController.allGapItems.count == 3)
+    }
+
+    @Test("an expansion out of another one is not shown while that one is not")
+    func nestedExpansionNeedsItsParent() throws {
+        let harness = try SourceEditorTestHarness()
+        harness.setSource(Self.source)
+        harness.layout()
+
+        harness.showInlineExpansion([(Self.trackedPropertyPart, Self.propertyRange, .belowLine)],
+                                    title: "ObservationTracked", identifier: "Model.count", parentIdentifier: "Model")
+        #expect(!harness.isInlineExpansionShown(identifier: "Model.count"))
+        #expect(harness.editorView.editorGapController.allGapItems.isEmpty)
+    }
+
+    /// Stands in for the content pane: records what the bridge asks for a menu opened on an
+    /// expansion's text, and offers the items it was given.
+    private final class RecordingNavigationDelegate: NSObject, SourceEditorBridgingNavigationDelegate {
+        struct InlineExpansionMenuRequest {
+            let characterRange: NSRange
+            let partIndex: Int
+            let identifier: String
+        }
+
+        private let offeredItems: [NSMenuItem]
+        private(set) var inlineExpansionMenuRequests: [InlineExpansionMenuRequest] = []
+
+        init(offering offeredItems: [NSMenuItem]) {
+            self.offeredItems = offeredItems
+        }
+
+        func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {}
+
+        func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem] {
+            []
+        }
+
+        func sourceEditorBridge(
+            _ bridge: SourceEditorBridging,
+            contextualMenuItemsForTokenIn characterRange: NSRange,
+            inInlineExpansionPartAt partIndex: Int,
+            identifier: String
+        ) -> [NSMenuItem] {
+            inlineExpansionMenuRequests.append(InlineExpansionMenuRequest(characterRange: characterRange, partIndex: partIndex, identifier: identifier))
+            return offeredItems
+        }
+    }
+
+    /// Where Xcode offers Expand Macro on `@ObservationTracked` inside the expanded `@Observable`.
+    @Test("a menu opened on an expansion's text asks for items with the token, the part and the expansion")
+    func menuOnAnExpansionAsksForItems() throws {
+        let harness = try Self.harnessShowingNestedExpansion()
+        let delegate = RecordingNavigationDelegate(offering: [NSMenuItem(title: "Expand Macro", action: nil, keyEquivalent: "")])
+        harness.navigationDelegate = delegate
+        let attributeView = try #require(InlineExpansionView.views(in: harness.editorView).first { expansionView in
+            expansionView.embeddedEditorView.dataSource.string == Self.trackedAttributePart
+        })
+
+        let items = attributeView.contextualMenuItems(forTokenAt: SourceEditorPosition(line: 0, col: 5))
+        #expect(items.map(\.title) == ["Expand Macro"])
+        try #require(delegate.inlineExpansionMenuRequests.count == 1)
+        let request = try #require(delegate.inlineExpansionMenuRequests.first)
+        #expect(request.partIndex == 0)
+        #expect(request.identifier == "Model")
+        // The token reaches over the column clicked, inside the part's own text.
+        #expect(NSLocationInRange(5, request.characterRange))
+        #expect(NSMaxRange(request.characterRange) <= Self.trackedAttributePart.utf16.count)
+    }
+
+    @Test("a menu opened on an expansion's text has no Cut, as the main editor's has none")
+    func menuOnAnExpansionHasNoCut() throws {
+        let harness = try Self.harnessShowingExpansion()
+        let expansionView = try #require(InlineExpansionView.views(in: harness.editorView).first)
+        let menu = try #require(SourceEditorView.defaultMenu)
+
+        // The hook reads `NSApp.currentEvent`, which a test process has no application for.
+        _ = NSApplication.shared
+        expansionView.setupContextMenu(for: menu)
+        #expect(!menu.items.contains { $0.action == #selector(NSText.cut(_:)) })
+        #expect(menu.items.contains { $0.action == #selector(NSText.copy(_:)) })
+    }
+
     /// Xcode's rule for an expanded macro: the line's own indentation, one level deeper when the gap
     /// opens above a body's closing brace, below a line that opens a body, or when the range ends
     /// inside its line.
