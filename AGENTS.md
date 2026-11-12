@@ -751,6 +751,13 @@ logic, `.drive()` / `.bind(to:)` are fine: `output.imageName.drive(label.rx.stri
   genuinely needs `self` (e.g. `#log`, which expands to `Self.logger`), use `[weak self]` +
   `guard let self` with an early-return value.
 
+### Logging
+
+Never start a `#log` message with a hand-written `[Tag]`. Log to a category declared with
+`LogCategory("Tag", prefixesMessages: true)`, which puts `[Tag] ` in front by itself —
+`#log(.debug, category: .engineMirroring, "…")` — and declare it in a `private extension LogCategory` at
+the end of the file that logs to it. The line then goes to that os_log category, not the type's.
+
 ### Platform Requirements
 
 - Swift 6.2, Xcode 15+

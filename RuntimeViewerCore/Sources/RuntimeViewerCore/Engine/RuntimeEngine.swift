@@ -449,7 +449,7 @@ public actor RuntimeEngine {
     private func connectAsClient(credential: RuntimeConnectionCredential?) async throws {
         #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
         connection = try await communicator.connect(to: source, credential: credential) { connection in
-            #log(.debug, "[EngineMirroring] client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
+            #log(.debug, category: .engineMirroring, "client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
             self.connection = connection
             self.setupMessageHandlerForClient()
             self.observeConnectionState(connection)
@@ -631,9 +631,9 @@ public actor RuntimeEngine {
         // shared registry because `RuntimeEngineProxyServer` runs below the
         // manager and has no engine list of its own.
         setMessageHandlerBinding(forName: .engineList) { _ -> [RuntimeRemoteEngineDescriptor] in
-            #log(.debug, "[EngineMirroring] engineList handler called, provider set: \(RuntimeEngine.engineListProvider != nil, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "engineList handler called, provider set: \(RuntimeEngine.engineListProvider != nil, privacy: .public)")
             let result = await RuntimeEngine.engineListProvider?() ?? []
-            #log(.debug, "[EngineMirroring] engineList handler returning \(result.count, privacy: .public) descriptors")
+            #log(.debug, category: .engineMirroring, "engineList handler returning \(result.count, privacy: .public) descriptors")
             return result
         }
         #log(.debug, "Server message handlers setup complete")
@@ -653,7 +653,7 @@ public actor RuntimeEngine {
             await engine.routeProgressPush(push)
         }
         setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RuntimeRemoteEngineDescriptor]) in
-            #log(.debug, "[EngineMirroring] engineListChanged received: \(descriptors.count, privacy: .public) descriptors, handler set: \(RuntimeEngine.engineListChangedHandler != nil, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "engineListChanged received: \(descriptors.count, privacy: .public) descriptors, handler set: \(RuntimeEngine.engineListChangedHandler != nil, privacy: .public)")
             await RuntimeEngine.engineListChangedHandler?(descriptors, engine)
         }
         #log(.debug, "Client message handlers setup complete")
@@ -1621,11 +1621,18 @@ extension RuntimeEngine {
         let hasConnection = connection != nil
         let isServer = source.remoteRole?.isServer == true
         guard let connection, isServer else {
-            #log(.debug, "[EngineMirroring] pushEngineListChanged skipped: connection=\(hasConnection, privacy: .public), isServer=\(isServer, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "pushEngineListChanged skipped: connection=\(hasConnection, privacy: .public), isServer=\(isServer, privacy: .public)")
             return
         }
-        #log(.debug, "[EngineMirroring] pushEngineListChanged sending \(descriptors.count, privacy: .public) descriptors")
+        #log(.debug, category: .engineMirroring, "pushEngineListChanged sending \(descriptors.count, privacy: .public) descriptors")
         try await connection.sendMessage(name: .engineListChanged, request: descriptors)
-        #log(.debug, "[EngineMirroring] pushEngineListChanged sent successfully")
+        #log(.debug, category: .engineMirroring, "pushEngineListChanged sent successfully")
     }
+}
+
+// MARK: - Log Categories
+
+// `#log(category:)` logs to the category and names it in front of each message: `[EngineMirroring] …`.
+private extension LogCategory {
+    static let engineMirroring = LogCategory("EngineMirroring", prefixesMessages: true)
 }

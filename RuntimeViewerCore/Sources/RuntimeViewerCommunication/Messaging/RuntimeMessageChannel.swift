@@ -205,10 +205,10 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
         let isDispatching = dispatchContinuation.withLock { $0 != nil }
         if extractedMessages.isEmpty {
-            #log(.debug, "[MessageChannel] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, dispatching=\(isDispatching, privacy: .public))")
+            #log(.debug, category: .messageChannel, "processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, dispatching=\(isDispatching, privacy: .public))")
         }
         for messageData in extractedMessages {
-            #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, dispatching=\(isDispatching, privacy: .public))")
+            #log(.debug, category: .messageChannel, "processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, dispatching=\(isDispatching, privacy: .public))")
             _ = dispatchContinuation.withLock { $0?.yield(messageData) }
             onMessageReceived?(messageData)
         }
@@ -649,4 +649,11 @@ private final class PendingRequest: @unchecked Sendable {
             task = nil
         }
     }
+}
+
+// MARK: - Log Categories
+
+// `#log(category:)` logs to the category and names it in front of each message: `[MessageChannel] …`.
+private extension LogCategory {
+    static let messageChannel = LogCategory("MessageChannel", prefixesMessages: true)
 }

@@ -519,7 +519,7 @@ public final class RuntimeEngineManager {
                 // Let the remote's initial imageList push drain before
                 // competing for the AWDL channel with our small RPC.
                 try? await Task.sleep(nanoseconds: Self.initialEngineListPreflightDelay)
-                #log(.debug,"[EngineMirroring] requesting engine list from \(endpoint.name, privacy: .public)...")
+                #log(.debug, category: .engineMirroring, "requesting engine list from \(endpoint.name, privacy: .public)...")
                 // Deadline per attempt: peers without engine sharing (iOS, visionOS) or
                 // whose bonjour transport is silently dead (e.g. flaky AWDL) would otherwise
                 // hang this Task forever. One retry absorbs an AWDL slot miss before the
@@ -528,9 +528,9 @@ public final class RuntimeEngineManager {
                 for attempt in 1...Self.initialEngineListMaxAttempts {
                     do {
                         let descriptors = try await runtimeEngine.requestEngineList(timeout: Self.bonjourHeartbeatTimeout)
-                        #log(.debug,"[EngineMirroring] received \(descriptors.count, privacy: .public) descriptors from \(endpoint.name, privacy: .public)")
+                        #log(.debug, category: .engineMirroring, "received \(descriptors.count, privacy: .public) descriptors from \(endpoint.name, privacy: .public)")
                         if descriptors.isEmpty {
-                            #log(.debug,"[EngineMirroring] remote \(endpoint.name, privacy: .public) returned 0 descriptors, marking as direct engine")
+                            #log(.debug, category: .engineMirroring, "remote \(endpoint.name, privacy: .public) returned 0 descriptors, marking as direct engine")
                             self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
                             self.rebuildSections()
                         } else {
@@ -540,13 +540,13 @@ public final class RuntimeEngineManager {
                         return
                     } catch {
                         lastError = error
-                        #log(.error,"[EngineMirroring] requestEngineList attempt \(attempt, privacy: .public)/\(Self.initialEngineListMaxAttempts, privacy: .public) failed for \(endpoint.name, privacy: .public): \(error, privacy: .public)")
+                        #log(.error, category: .engineMirroring, "requestEngineList attempt \(attempt, privacy: .public)/\(Self.initialEngineListMaxAttempts, privacy: .public) failed for \(endpoint.name, privacy: .public): \(error, privacy: .public)")
                         if attempt < Self.initialEngineListMaxAttempts {
                             try? await Task.sleep(nanoseconds: Self.initialEngineListRetryDelay)
                         }
                     }
                 }
-                #log(.error,"[EngineMirroring] giving up on engine list for \(endpoint.name, privacy: .public), marking as direct: \(String(describing: lastError), privacy: .public)")
+                #log(.error, category: .engineMirroring, "giving up on engine list for \(endpoint.name, privacy: .public), marking as direct: \(String(describing: lastError), privacy: .public)")
                 self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
                 self.rebuildSections()
                 self.startBonjourHeartbeat(for: runtimeEngine)
@@ -1623,9 +1623,9 @@ public final class RuntimeEngineManager {
                     }
                 } catch {
                     consecutiveFailures += 1
-                    #log(.info,"[EngineHeartbeat] \(runtimeEngine.source.description, privacy: .public) failed (\(consecutiveFailures, privacy: .public)/\(Self.bonjourHeartbeatMaxConsecutiveFailures, privacy: .public)): \(error, privacy: .public)")
+                    #log(.info, category: .engineHeartbeat, "\(runtimeEngine.source.description, privacy: .public) failed (\(consecutiveFailures, privacy: .public)/\(Self.bonjourHeartbeatMaxConsecutiveFailures, privacy: .public)): \(error, privacy: .public)")
                     if consecutiveFailures >= Self.bonjourHeartbeatMaxConsecutiveFailures {
-                        #log(.info,"[EngineHeartbeat] \(runtimeEngine.source.description, privacy: .public) hit max failures, stopping engine")
+                        #log(.info, category: .engineHeartbeat, "\(runtimeEngine.source.description, privacy: .public) hit max failures, stopping engine")
                         await runtimeEngine.stop()
                         return
                     }
@@ -1654,14 +1654,14 @@ public final class RuntimeEngineManager {
     // MARK: - Engine Sharing (Server-Side)
 
     func buildEngineDescriptors() async -> [RuntimeRemoteEngineDescriptor] {
-        #log(.debug,"[EngineMirroring] buildEngineDescriptors called, runtimeEngines count: \(self.runtimeEngines.count, privacy: .public), proxyServers count: \(self.proxyServers.count, privacy: .public)")
-        #log(.debug,"[EngineMirroring] proxyServer keys: \(Array(self.proxyServers.keys).joined(separator: ", "), privacy: .public)")
+        #log(.debug, category: .engineMirroring, "buildEngineDescriptors called, runtimeEngines count: \(self.runtimeEngines.count, privacy: .public), proxyServers count: \(self.proxyServers.count, privacy: .public)")
+        #log(.debug, category: .engineMirroring, "proxyServer keys: \(Array(self.proxyServers.keys).joined(separator: ", "), privacy: .public)")
         var descriptors: [RuntimeRemoteEngineDescriptor] = []
         for engine in runtimeEngines {
             let isBonjourServer = engine === bonjourServerEngine
             let localID = engine.source.identifier
             let hasProxy = proxyServers[localID] != nil
-            #log(.debug,"[EngineMirroring] engine: \(localID, privacy: .public), isBonjourServer: \(isBonjourServer, privacy: .public), hasProxy: \(hasProxy, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "engine: \(localID, privacy: .public), isBonjourServer: \(isBonjourServer, privacy: .public), hasProxy: \(hasProxy, privacy: .public)")
             guard !isBonjourServer else { continue }
             // A source kind that peers predating it cannot decode never goes on
             // the wire: `engineList` is one array, so one unreadable descriptor
@@ -1669,7 +1669,7 @@ public final class RuntimeEngineManager {
             // the failure as a dead link and drops this Mac altogether. See
             // `RuntimeSource.isMirrorableToPeers`.
             guard engine.source.isMirrorableToPeers else {
-                #log(.debug,"[EngineMirroring] not advertising \(localID, privacy: .public): its source kind is not mirrorable")
+                #log(.debug, category: .engineMirroring, "not advertising \(localID, privacy: .public): its source kind is not mirrorable")
                 continue
             }
             guard let proxy = proxyServers[localID] else { continue }
@@ -1694,10 +1694,10 @@ public final class RuntimeEngineManager {
                 metadata: engine.hostInfo.metadata,
                 iconData: await proxy.iconData()
             )
-            #log(.debug,"[EngineMirroring] built descriptor: \(globalID, privacy: .public) at \(proxyHost, privacy: .public):\(proxyPort, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "built descriptor: \(globalID, privacy: .public) at \(proxyHost, privacy: .public):\(proxyPort, privacy: .public)")
             descriptors.append(descriptor)
         }
-        #log(.debug,"[EngineMirroring] buildEngineDescriptors returning \(descriptors.count, privacy: .public) descriptors")
+        #log(.debug, category: .engineMirroring, "buildEngineDescriptors returning \(descriptors.count, privacy: .public) descriptors")
         return descriptors
     }
 
@@ -1724,7 +1724,7 @@ public final class RuntimeEngineManager {
             .sink { [weak self] engines in
                 guard let self else { return }
                 let ids = engines.map { $0.source.identifier }
-                #log(.debug,"[EngineIcon] runtimeEngines emitted \(engines.count, privacy: .public) engines: \(ids.joined(separator: ", "), privacy: .public)")
+                #log(.debug, category: .engineIcon, "runtimeEngines emitted \(engines.count, privacy: .public) engines: \(ids.joined(separator: ", "), privacy: .public)")
                 self.updateProxyServers(for: engines)
             }
             .store(in: &cancellables)
@@ -1747,13 +1747,13 @@ public final class RuntimeEngineManager {
     }
 
     private func updateProxyServers(for engines: [RuntimeEngine]) {
-        #log(.debug,"[EngineMirroring] updateProxyServers called with \(engines.count, privacy: .public) engines")
+        #log(.debug, category: .engineMirroring, "updateProxyServers called with \(engines.count, privacy: .public) engines")
         let currentIDs = Set(engines.map { $0.source.identifier })
         let existingIDs = Set(proxyServers.keys)
 
         // Remove proxy servers for engines that no longer exist
         for id in existingIDs.subtracting(currentIDs) {
-            #log(.debug,"[EngineMirroring] removing proxy server: \(id, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "removing proxy server: \(id, privacy: .public)")
             let proxy = proxyServers.removeValue(forKey: id)
             Task.detached { await proxy?.stop() }
         }
@@ -1763,11 +1763,11 @@ public final class RuntimeEngineManager {
             let id = engine.source.identifier
             guard !existingIDs.contains(id) else { continue }
             guard engine !== bonjourServerEngine else {
-                #log(.debug,"[EngineMirroring] skipping bonjourServerEngine: \(id, privacy: .public)")
+                #log(.debug, category: .engineMirroring, "skipping bonjourServerEngine: \(id, privacy: .public)")
                 continue
             }
 
-            #log(.debug,"[EngineMirroring] starting proxy server for: \(id, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "starting proxy server for: \(id, privacy: .public)")
             let proxy = RuntimeEngineProxyServer(engine: engine, identifier: id)
             proxyServers[id] = proxy
 
@@ -1785,16 +1785,16 @@ public final class RuntimeEngineManager {
 
                 // Push updated engine list after proxy is ready
                 guard let self else { return }
-                #log(.debug,"[EngineIcon] proxy \(id, privacy: .public) started, building descriptors to push...")
+                #log(.debug, category: .engineIcon, "proxy \(id, privacy: .public) started, building descriptors to push...")
                 let descriptors = await self.buildEngineDescriptors()
-                #log(.debug,"[EngineIcon] pushing \(descriptors.count, privacy: .public) descriptors after proxy \(id, privacy: .public) ready")
+                #log(.debug, category: .engineIcon, "pushing \(descriptors.count, privacy: .public) descriptors after proxy \(id, privacy: .public) ready")
                 if let bonjourServerEngine = await MainActor.run(body: { self.bonjourServerEngine }) {
                     let serverState = bonjourServerEngine.state
-                    #log(.debug,"[EngineIcon] bonjourServerEngine state: \(String(describing: serverState), privacy: .public)")
+                    #log(.debug, category: .engineIcon, "bonjourServerEngine state: \(String(describing: serverState), privacy: .public)")
                     try? await bonjourServerEngine.pushEngineListChanged(descriptors)
-                    #log(.debug,"[EngineIcon] pushEngineListChanged completed")
+                    #log(.debug, category: .engineIcon, "pushEngineListChanged completed")
                 } else {
-                    #log(.debug,"[EngineIcon] bonjourServerEngine is nil, cannot push")
+                    #log(.debug, category: .engineIcon, "bonjourServerEngine is nil, cannot push")
                 }
             }
         }
@@ -1809,10 +1809,10 @@ public final class RuntimeEngineManager {
 
     func handleEngineListChanged(_ descriptors: [RuntimeRemoteEngineDescriptor], from engine: RuntimeEngine) {
         let sourceHostID = engine.hostInfo.hostID
-        #log(.debug,"[EngineMirroring] handleEngineListChanged called with \(descriptors.count, privacy: .public) descriptors from source=\(sourceHostID, privacy: .public) (\(engine.source.description, privacy: .public))")
+        #log(.debug, category: .engineMirroring, "handleEngineListChanged called with \(descriptors.count, privacy: .public) descriptors from source=\(sourceHostID, privacy: .public) (\(engine.source.description, privacy: .public))")
 
         for d in descriptors {
-            #log(.debug,"[EngineMirroring]   descriptor: \(d.engineID, privacy: .public) host:\(d.directTCPHost, privacy: .public) port:\(d.directTCPPort, privacy: .public) originChain:\(d.originChain.joined(separator: ","), privacy: .public)")
+            #log(.debug, category: .engineMirroring, "  descriptor: \(d.engineID, privacy: .public) host:\(d.directTCPHost, privacy: .public) port:\(d.directTCPPort, privacy: .public) originChain:\(d.originChain.joined(separator: ","), privacy: .public)")
         }
 
         let outcome = mirrorRegistry.reconcile(
@@ -1858,7 +1858,7 @@ public final class RuntimeEngineManager {
 
         switch outcome {
         case .skippedDuplicate:
-            #log(.debug,"[EngineMirroring] skipping duplicate descriptor set from \(sourceHostID, privacy: .public)")
+            #log(.debug, category: .engineMirroring, "skipping duplicate descriptor set from \(sourceHostID, privacy: .public)")
             return
 
         case .applied(let removed, let added):
@@ -1925,7 +1925,7 @@ public final class RuntimeEngineManager {
         sections = deduplicateForwardedMirrors(in: sections)
 
         let sectionSummary = sections.map { "\($0.hostName)(\($0.engines.count))" }.joined(separator: ", ")
-        #log(.debug,"[EngineIcon] rebuildSections: \(sections.count, privacy: .public) sections — \(sectionSummary, privacy: .public)")
+        #log(.debug, category: .engineIcon, "rebuildSections: \(sections.count, privacy: .public) sections — \(sectionSummary, privacy: .public)")
         runtimeEngineSections = sections
         // Every change to the engine lists ends here, so this is where the
         // engines learn who they borrow from now.
@@ -2225,5 +2225,14 @@ extension DependencyValues {
     /// `prepareDependencies { $0.runtimeEngineManager = RuntimeEngineManager(configuration: .headlessHost) }`.
     @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeEngineManager.shared })
     public var runtimeEngineManager: RuntimeEngineManager
+}
+
+// MARK: - Log Categories
+
+// `#log(category:)` logs to each category and names it in front of each message: `[EngineMirroring] …`.
+private extension LogCategory {
+    static let engineMirroring = LogCategory("EngineMirroring", prefixesMessages: true)
+    static let engineIcon = LogCategory("EngineIcon", prefixesMessages: true)
+    static let engineHeartbeat = LogCategory("EngineHeartbeat", prefixesMessages: true)
 }
 #endif
