@@ -54,4 +54,21 @@ public final class UpdaterClient {
         let build = informationDictionary?["CFBundleVersion"] as? String ?? "—"
         return "\(shortVersionString) (\(build))"
     }
+
+    /// What the Updates page shows for the last check: `date` relative to the page's clock `now`.
+    ///
+    /// The page's clock only ticks every 30 seconds, so a check that finished since the last tick is later
+    /// than `now`. A check is never in the future: such a date reads as "now", not "in 8 seconds".
+    public nonisolated static func lastCheckDisplay(
+        for date: Date?,
+        relativeTo now: Date,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        guard let date else { return "Never" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = locale
+        formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .named
+        return formatter.localizedString(for: date, relativeTo: max(now, date))
+    }
 }

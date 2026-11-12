@@ -242,7 +242,10 @@ other app that trusts the current public key.
 
 ## Rolling back a bad release
 
-Sparkle never downgrades, so:
+Sparkle never downgrades: it offers only a build numbered higher than the
+running one, and the app also turns down a release whose version
+(`sparkle:shortVersionString`) is lower than its own (`UpdateEligibility` in
+`RuntimeViewerSettings`). So:
 
 - **Preferred:** ship a higher-versioned hotfix ASAP. Users auto-upgrade away
   from the broken build.

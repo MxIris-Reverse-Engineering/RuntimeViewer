@@ -131,6 +131,29 @@ extension UpdaterService: SPUUpdaterDelegate {
         allowedChannelsStorage.withLock { $0 }
     }
 
+    /// Keeps Sparkle from offering a release `UpdateEligibility` rules out — an older version, or for a
+    /// build started from Xcode a published build of its own version — which Sparkle's build number
+    /// comparison alone would offer. Returns `nil`, leaving the choice to Sparkle, when nothing is ruled
+    /// out, and the empty item, which reads as up to date, when everything is.
+    nonisolated func bestValidUpdate(in appcast: SUAppcast, for updater: SPUUpdater) -> SUAppcastItem? {
+        guard let eligibility = UpdateEligibility.runningApplication() else { return nil }
+        let eligibleItems = appcast.items.filter {
+            eligibility.allowsUpdate(toVersion: $0.displayVersionString)
+        }
+        guard eligibleItems.count < appcast.items.count else { return nil }
+        // Sparkle's own choice among what is left: the highest build number, the first one on a tie.
+        let comparator = SUStandardVersionComparator.default
+        var bestItem: SUAppcastItem?
+        for item in eligibleItems {
+            if let currentBestItem = bestItem,
+               comparator.compareVersion(currentBestItem.versionString, toVersion: item.versionString) != .orderedAscending {
+                continue
+            }
+            bestItem = item
+        }
+        return bestItem ?? SUAppcastItem.empty()
+    }
+
     nonisolated func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
         let message = error.localizedDescription
         #log(.error, "Sparkle updater aborted: \(message, privacy: .public)")

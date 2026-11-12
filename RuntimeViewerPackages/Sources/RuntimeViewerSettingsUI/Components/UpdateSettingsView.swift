@@ -22,7 +22,7 @@ struct UpdateSettingsView: View {
             Section {
                 LabeledContent("Current Version", value: updaterClient.currentVersionDisplay)
                 LabeledContent("Last Check",
-                               value: Self.lastCheckDisplay(updaterClient.lastCheckDate, now: now))
+                               value: UpdaterClient.lastCheckDisplay(for: updaterClient.lastCheckDate, relativeTo: now))
                 if let error = updaterClient.lastCheckError {
                     LabeledContent("Last Check Error") {
                         Text(error.localizedDescription)
@@ -72,13 +72,6 @@ struct UpdateSettingsView: View {
             }
         }
         .onReceive(ticker) { now = $0 }
-    }
-
-    private static func lastCheckDisplay(_ date: Date?, now: Date) -> String {
-        guard let date else { return "Never" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: now)
     }
 }
 
