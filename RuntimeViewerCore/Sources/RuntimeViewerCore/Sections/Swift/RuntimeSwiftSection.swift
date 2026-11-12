@@ -2043,6 +2043,7 @@ extension SwiftDeclaration.AccessorKind {
         case .readAccessor: return "readAccessor"
         case .borrowAccessor: return "borrowAccessor"
         case .mutateAccessor: return "mutateAccessor"
+        case .initAccessor: return "initAccessor"
         case .none: return "none"
         }
     }
