@@ -106,6 +106,8 @@
 
 按时间倒序。
 
+- [不带版本号运行 UpdateSourceEditorScript.sh，把 pin 从 27.2.0-alpha.1 退回 26.6.6](ResolvedIssues/2026-11-12-update-source-editor-moved-the-pin-back.md)（2026-11-12）—— 脚本不带版本号时取 GitHub 的 Latest 发布，Latest 不含预发布版，于是从 27 线的预发布版退回 26.6 线；比钉的版本旧也照退。改为在钉的版本所在的线（主版本号相同）里取最新的发布、含预发布版，不带版本号时绝不往回退；`version_is_after` 改按语义化版本比较，正式版排在它的预发布版之后。
+
 - [Reveal in Sidebar Navigator 把对象行留在钉住的分组标题或顶栏下面](ResolvedIssues/2026-11-11-revealed-row-under-pinned-section-header.md)（2026-11-11）—— 「行是否已在屏幕上」用整个 `visibleRect` 判断，把各栏所在的内容边距与浮动分节标题盖住的那一条也算作可见，于是不滚动；需要滚动时 UIFoundation 的居中又不认内容边距、截在文档顶边，前几行停在顶栏下。滚动到行的逻辑收进 `StatefulOutlineView.selectRowBringingIntoView(_:)`，按「没有被遮住的区域」判断与居中，交给 `NSClipView.constrainBoundsRect` 截断；侧栏对象页与过滤结束后的恢复选中共用。回归测试 `StatefulOutlineViewRevealTests` 修复前四处断言失败、修复后通过。
 
 - [只开 My Mac 窗口，Mac Catalyst 服务也把它自己的 Always Index 建了一遍，多占约 420 MB](ResolvedIssues/2026-11-10-catalyst-indexed-its-own-rows-for-a-window-on-my-mac.md)（2026-11-10）—— 0081 之后 My Mac 文档以借用者身份持有 Catalyst engine 的后台工作，工作里的索引协调器构造时就起了 reload 泵与设置观察，这两条路派发 Always Index 与主程序批次时不查 `hasStarted`，Catalyst engine 一重载就按自己的平台建了 iOSSupport 版 SwiftUI 与 UIKitCore 的索引、语料与交叉引用。检查下沉到两个派发入口；5 条回归测试修复前红、修复后绿。
