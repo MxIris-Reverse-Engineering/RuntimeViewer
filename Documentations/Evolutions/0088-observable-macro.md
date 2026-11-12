@@ -1,10 +1,10 @@
-# Draft - 识别 @Observable 宏：默认折叠，可在原地展开
+# 0088 - 识别 @Observable 宏：默认折叠，可在原地展开
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-11
 - **最后更新**: 2026-11-12
-- **实现分支**: `feature/observable-macro`
-- **依赖**: MachOSwiftSection 的提案 0093-observable-macro-folding（已合进它的 `next`，未发布）与 `draft-observable-nested-expansion`（两层展开的接口，待批准）
+- **实现分支**: `feature/observable-macro`（已合进 `next`）
+- **依赖**: MachOSwiftSection 的提案 0093-observable-macro-folding 与 0095-observable-nested-expansion（都已合进它的 `next`，未发布）
 
 ## 摘要
 
@@ -16,8 +16,8 @@
   - 已获对方用户批准：识别 `@Observable`、折叠打印、打印配置的 `expandsMacros`（默认 false，即折叠），以及 Find 语料用的可见性选项 `swift.expandsMacros`。
   - 同样已获批准、已推到对方的 `feature/observable-macro`：打印配置的 `marksAttachedMacros` 给折叠形态里的每个宏属性包一个 `attachedMacro.<模块>.<宏>` 类的 annotation region；`printMacroExpansion(of:attachedTo:level:)` 单独打印一个类型的展开块。原地展开靠这两项。
   - 开发期间：包级构建用 SwiftPM 的 edit 模式，把 MachOSwiftSection 换成对方的功能分支、swift-demangling 换成它的 `next`（对方的 `next` 已经用到 swift-demangling 未发版的接口）；App 构建用一个临时 workspace 加上这两个本地包。换掉这两个之后，其余依赖仍按 RV 现有锁文件解析，没有一条被改动。
-  - 合进 RV 的 `next`：RuntimeViewerCore 按 `branch: "next"` 依赖 MachOSwiftSection 和 swift-demangling，所以先要 MachOSwiftSection 把这批改动合进它的 `next`，再把 RV 锁文件里这两个库的 pin 一起抬到各自 `next` 上的对应提交（swift-demangling 至少到 8809c1b）。MachOSwiftSection 的 0093 与 0094 已合进它的 `next`（270c0218），功能分支上五份锁文件（Debug 与 Distribution 两个 workspace、Core、Packages、CommandLine）已抬到 270c0218 与 swift-demangling 的 8809c1b；两层展开的接口合进它的 `next` 后再抬一次。
-  - 两层展开的接口（MachOSwiftSection 的 `draft-observable-nested-expansion`）：`@Observable` 每个被跟踪属性那段只是它加的 `@ObservationTracked`；这段文字里标出属性的位置，并带上它展开后的几段（访问器块与存储属性），这几段锚在正文里那个属性的声明上。
+  - 合进 RV 的 `next`：RuntimeViewerCore 按 `branch: "next"` 依赖 MachOSwiftSection 和 swift-demangling，所以先要 MachOSwiftSection 把这批改动合进它的 `next`，再把 RV 锁文件里这两个库的 pin 一起抬到各自 `next` 上的对应提交（swift-demangling 至少到 8809c1b）。落地时五份锁文件（Debug 与 Distribution 两个 workspace、Core、Packages、CommandLine）钉在 MachOSwiftSection `next` 的 1ba927ad（含 0093、0094 与 0095）与 swift-demangling `next` 的 8809c1b。
+  - 两层展开的接口（MachOSwiftSection 的 0095-observable-nested-expansion）：`@Observable` 每个被跟踪属性那段只是它加的 `@ObservationTracked`；这段文字里标出属性的位置，并带上它展开后的几段（访问器块与存储属性），这几段锚在正文里那个属性的声明上。
 - **生成选项**：`SwiftGenerationOptions` 加 `expandsMacros`（`@Default(false)`，旧设置读成折叠），`applySwitches(of:)` 把它交给打印配置；Generation Options 的 Swift 一栏加 Expand Macros 勾选框。Find 语料走同一个映射，搜索结果与内容区显示的形态一致。
 - **接口模型**：`RuntimeObjectInterface` 带上宏展开（`macroExpansions`，元素是 `RuntimeInterfaceMacroExpansion`），每个识别出的宏一项：宏名、属性在接口文本里的 UTF-8 范围，以及展开的各段——每段带锚点（被跟踪属性的声明，或类型 `}` 所在的行）、放在锚点行的上方还是下方、不带缩进的语义文本。各段由 MachOSwiftSection 的 `printMacroExpansionParts(of:attachedTo:)` 打印；RV 只负责放：属性那段按区域类型找到它的声明，`}` 取嵌套类型定义区域的最后一行，或 RV 分开打印各个定义时记下的类型自身范围的最后一行。请求带上 `GenerationOptions.marksAttachedMacros` 时，RuntimeSwiftSection 在折叠打印接口时一起算出；属性范围从 annotation region 读，读法与现有的注释结构相同，注释结构跳过这类区域。展开打印时没有属性，也就没有展开。每段还可以带「段内再展开」（`Part.nestedExpansions`，元素同样是 `RuntimeInterfaceMacroExpansion`）：段里的文字本身挂着宏时，属性范围是在这段文字里的 UTF-8 范围，它那几段照常锚在接口文本里。进程间传输走已有的列式编码，旧版本的对端不认这个键、也不会请求它。
 - **内容区**：`ContentSourceEditorViewController` 的右键菜单在属性上加 Expand Macro，展开后换成 Hide Macro Expansion。展开照 Xcode 放 attached macro 的位置分成几段，放进类型里，分两层：展开 `@Observable`，每个被跟踪的属性上方是它加的 `@ObservationTracked`，类的 `}` 上方是 registrar 与生成的方法，`}` 下方是一致性扩展；在展开段里的 `@ObservationTracked` 上右键再选 Expand Macro，属性下方出现它的访问器块（`{`、`get`、`set`、`}`）与存储属性 `_x`。写了 `@ObservationIgnored` 的属性没有 `@ObservationTracked`，也就没有第二层，和宏本身一样。已有的行不变，属性那一行不改写成计算属性。几段是同一个展开，收起或点任意一段的关闭按钮都一起关；收起外层也收起从它里面展开的第二层，单独收起第二层不影响外层。bridge 的接口是一次传入多段（`SourceEditorBridgingInlineExpansionPart`：文字、锚点范围、放在行上方还是下方），`SourceEditorBridging` 里仍不出现 SourceEditor 的类型。实现照 SourceEditor 示例的 `InlineDefinitionView`（即 Xcode 的 `GapEmbeddedEditorContentView`）：只读的内嵌编辑器，主题和语义着色与内容区相同，首行行号让给关闭按钮。换显示的接口之前先收起所有展开。用 `NSTextView` 显示时不提供原地展开，只能靠生成选项切换。
@@ -36,7 +36,7 @@
 2. ✅ 接口模型带上宏展开（等 MachOSwiftSection 的展开块与属性位置）。
 3. ✅ bridge 的行内展开与内容区的右键菜单。
 4. ✅ 测试与文档已补齐；MachOSwiftSection 的 0093 与 0094 合进它的 `next` 后，锁文件里它与 swift-demangling 的 pin 已抬上去。
-5. 两层展开：bridge 的第二层与展开段里的右键菜单 ✅，接口模型与内容区 ✅，App 的菜单 ✅；RuntimeSwiftSection 按两层摆放等 MachOSwiftSection 的 `draft-observable-nested-expansion` 批准并合进它的 `next`，之后再抬一次 pin、全量验证，再合进 RV 的 `next`。
+5. ✅ 两层展开：bridge 的第二层与展开段里的右键菜单，接口模型、RuntimeSwiftSection 的两层摆放、内容区与 App 的菜单；MachOSwiftSection 的 0095 合进它的 `next` 后抬 pin、全量验证，合进 RV 的 `next`。
 
 ## 决策日志
 
@@ -71,3 +71,5 @@
 | 2026-11-12 | 第二层的几段挂在正文里，收起外层（菜单或任意一段的关闭按钮）时一起收起；单独收起第二层，外层不动；外层没显示时第二层不显示 | 第二层锚在正文里的属性上，与外层的段是不同的 gap。外层的关闭按钮由框架直接移除 gap、不经 bridge，所以 bridge 向主编辑器的 gap controller 注册观察者，外层最后一个 gap 被移除时收掉从它展开的那些（重建版 27.2.0-alpha.1 `SourceEditorGapController.addObserver(observer:)`，移除完才通知、遍历的是副本，回调里再移除是安全的；Xcode 26.6 的 SourceEditor 也导出这两个接口） |
 | 2026-11-12 | 展开段里接右键菜单，只为展开里挂着的宏给出 Expand Macro / Hide Macro Expansion，并去掉 Cut；⌘ 点、跳转与注释标签仍不接 | 推翻 2026-11-11「行内展开里不接右键菜单」的一半：第二层要从这里打开。每个 `SourceEditorView` 初始化时都注册自己的 `ContextualMenuEventConsumer`，右键时问 `contextualMenuItemProvider` 要更多菜单项（重建版 27.2.0-alpha.1），主编辑器用的也是这个钩子 |
 | 2026-11-12 | 不等 swift-demangling 发版，先把锁文件抬到 MachOSwiftSection 的 270c0218 与 swift-demangling 的 8809c1b；功能分支快进到本地 `next`，带上 init 访问器的 `.initAccessor` 标签 | RV 根包对两者都按 `branch: "next"` 依赖，盖过 MachOSwiftSection 写的版本下限，锁文件钉的是提交，RV 自己的构建与发版都不受影响。270c0218 带着 init 访问器，`AccessorKind` 多了 `.initAccessor`，成员列表的 switch 要有那一行才编得过；它只在本地 `next` 上（另一个会话提交），功能分支是 `next` 的祖先，快进不产生合并提交 |
+| 2026-11-12 | 折叠形态里 `@Observation.ObservationIgnored` 单独占一行，声明放在下一行、缩进相同；被忽略的属性带属性包装器时，包装器属性也单独一行；`lazy` 留在声明行 | 用户看 SwiftUI 的类时提出：属性与长类型挤在一行，每行都折行，难读。打印由 MachOSwiftSection 做（并进它的 0095），RV 不用改：Find 语料与右键菜单按每行的 `.variable` 片段认成员（`RuntimeMemberDeclarationLocator`），属性那一行没有变量名，成员仍落在声明行 |
+| 2026-11-12 | 实现完成，合进 `next`，编号 0088，状态改为 Implemented | 五份锁文件钉在 MachOSwiftSection `next` 的 1ba927ad 与 swift-demangling `next` 的 8809c1b，FrameworkToolbox 0.21.0 不动。落地前在 MacBook 上对这个提交验证：Debug workspace 的 App（Debug-arm64e）与命令行工具编过；bridge 测试 69 个只有 `SourceEditorScrollerTests` 的两个滚动条用例失败，基线上同样；Core 与 Packages 全量测试里满载时的失败单独重跑都过，只有 `TitleActivityIndicatorTests` 的标题悬停仍失败，不含本次改动的 origin/next 上在同一行同样失败。不另写使用指南或实现说明：入口是 Generation Options 的 Expand Macros 与内容区的右键菜单，用法与 Xcode 一致，命令行指南与 agent 插件在实现时已同步，设计与证据都在本提案；术语表加「行内展开」 |
