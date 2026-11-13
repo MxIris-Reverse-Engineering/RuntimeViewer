@@ -205,7 +205,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             } else {
                 sidebarCoordinator.contextTrigger(.back)
             }
-        case .open, .selectAtRoot, .backward, .forward, .jump, .newTab, .switchTab, .closeTab, .moveTab,
+        case .open, .openImage, .selectAtRoot, .backward, .forward, .jump, .newTab, .switchTab, .closeTab, .moveTab,
              .newEditorPane, .closeEditorPane, .closeOtherEditorPanes, .focusEditorPane, .changeEditorOrientation:
             // The editor area works out which panes the route touched; the
             // Inspector follows the focused pane, re-entering for

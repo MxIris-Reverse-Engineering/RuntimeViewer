@@ -254,7 +254,13 @@ final class MainViewModel: ViewModel<MainRoute> {
                         guard let executableURL = Bundle(url: url)?.executableURL else {
                             throw MessageError.message("\(url.lastPathComponent) has no executable to load.")
                         }
-                        try await self.documentState.runtimeEngine.loadImageInServingProcess(at: executableURL.path)
+                        // The user's own load, which the Report's Manual Loading records
+                        // (proposal `editor-jump-bar`).
+                        let runtimeEngine = self.documentState.runtimeEngine
+                        let executablePath = executableURL.path
+                        try await self.documentState.recordingManualLoad(ofImageAt: executablePath) { _ in
+                            try await runtimeEngine.loadImageInServingProcess(at: executablePath)
+                        }
                     } catch {
                         self.errorRelay.accept(error)
                     }
@@ -622,8 +628,8 @@ final class MainViewModel: ViewModel<MainRoute> {
                         NavigationHistoryItem(
                             index: entryIndex,
                             // An object and its Generated Interface are two steps: the title tells them apart.
-                            displayName: entry.showsGeneratedInterface ? "\(entry.object.displayName) (Generated Interface)" : entry.object.displayName,
-                            icon: RuntimeObjectIcon.icon(for: entry.object.kind, size: NavigationHistorySnapshot.iconSize)
+                            displayName: entry.showsGeneratedInterface ? "\(entry.displayName) (Generated Interface)" : entry.displayName,
+                            icon: entry.object.map { RuntimeObjectIcon.icon(for: $0.kind, size: NavigationHistorySnapshot.iconSize) } ?? RuntimeImageNode.imageIcon
                         )
                     },
                     currentIndex: history.currentIndex ?? -1

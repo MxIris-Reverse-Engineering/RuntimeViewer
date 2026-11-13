@@ -27,6 +27,10 @@ final class EditorAreaCoordinator: ViewCoordinator<EditorAreaRoute, EditorAreaTr
 
     private lazy var viewModel = EditorAreaViewModel(documentState: documentState, router: self)
 
+    /// The tree every pane's jump bar walks, one per document so that the panes share its items
+    /// (proposal `editor-jump-bar`). It follows the document's engine itself.
+    private lazy var jumpBarItemStore = EditorJumpBarItemStore(documentState: documentState)
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(rootViewController: EditorAreaViewController(), initialRoute: .sync)
@@ -68,7 +72,7 @@ final class EditorAreaCoordinator: ViewCoordinator<EditorAreaRoute, EditorAreaTr
             if let targetedRoute, paneID == editorArea.focusedPaneID {
                 pane.contentCoordinator.contextTrigger(targetedRoute)
             } else {
-                pane.contentCoordinator.contextTrigger(editorArea[paneID]?.activeTab.object == nil ? .placeholder : .back)
+                pane.contentCoordinator.contextTrigger(editorArea[paneID]?.activeTab.currentEntry == nil ? .placeholder : .back)
             }
         }
 
@@ -94,6 +98,8 @@ final class EditorAreaCoordinator: ViewCoordinator<EditorAreaRoute, EditorAreaTr
             .next(object)
         case .open(let object, _, let highlightRequest?, _):
             .nextHighlighting(object, highlightRequest)
+        case .openImage(let imagePath, _):
+            .image(imagePath)
         case .selectAtRoot(let object):
             .root(object)
         default:
@@ -106,6 +112,7 @@ final class EditorAreaCoordinator: ViewCoordinator<EditorAreaRoute, EditorAreaTr
         addChild(contentCoordinator)
         let viewController = EditorPaneViewController()
         let viewModel = EditorPaneViewModel(paneID: paneID, documentState: documentState, router: self)
+        viewController.jumpBarItemStore = jumpBarItemStore
         viewController.setupBindings(for: viewModel)
         viewController.setContent(contentCoordinator.rootViewController)
         return Pane(contentCoordinator: contentCoordinator, viewController: viewController)

@@ -73,6 +73,9 @@ enum ActivityText {
             "Building Searchable Interfaces"
         case .crossReferences:
             "Preparing Cross References"
+        // The reporter tracks no manual loads; the words are there for when it does.
+        case .manualLoading:
+            "Loading"
         }
     }
 
@@ -84,6 +87,8 @@ enum ActivityText {
             "Searchable Interfaces"
         case .crossReferences:
             "Cross References"
+        case .manualLoading:
+            "Manual Loading"
         }
     }
 
@@ -95,6 +100,8 @@ enum ActivityText {
             "Built"
         case (.succeeded, .crossReferences):
             "Prepared"
+        case (.succeeded, .manualLoading):
+            "Loaded"
         case (.failed, _):
             "Failed"
         case (.cancelled, _):

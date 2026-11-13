@@ -42,15 +42,16 @@ public struct NavigationHistory: Hashable, Sendable {
 
     /// Records `entry` as shown. The entries after the current one are dropped first — a new
     /// branch overwrites the abandoned future, as in a browser. When the last entry is already
-    /// `entry` — the same object in the same language — only the position moves there, and the
-    /// entry takes on the form just reached (another `displayName`, other `properties`), so going
-    /// back and forth restores what was on screen rather than a form the user has already left.
+    /// `entry` — the same object in the same language, or the same image — only the position moves
+    /// there, and an object entry takes on the form just reached (another `displayName`, other
+    /// `properties`), so going back and forth restores what was on screen rather than a form the
+    /// user has already left.
     mutating func record(_ entry: NavigationEntry) {
         if let currentIndex {
             entries.removeSubrange((currentIndex + 1)...)
         }
         if let lastEntry = entries.last, lastEntry == entry {
-            if !lastEntry.object.hasSameContent(as: entry.object) {
+            if let lastObject = lastEntry.object, let object = entry.object, !lastObject.hasSameContent(as: object) {
                 entries[entries.count - 1] = entry
             }
         } else {

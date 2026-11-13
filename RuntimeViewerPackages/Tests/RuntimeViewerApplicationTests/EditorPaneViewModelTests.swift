@@ -5,8 +5,9 @@ import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerApplication
 
-/// What one editor pane's view model shows (proposal `editor-panes`): its tab bar from the
-/// second pane or the second tab on, whether it has the focus, and the button that closes it.
+/// What one editor pane's view model shows (proposal `editor-panes`): its tab bar while any pane
+/// has a second tab, its jump bar (proposal `editor-jump-bar`), whether it has the focus, and the
+/// button that closes it.
 @Suite("EditorPaneViewModel")
 @MainActor
 struct EditorPaneViewModelTests {
@@ -15,6 +16,7 @@ struct EditorPaneViewModelTests {
     private let tabClosedRelay = PublishRelay<DocumentTab.ID>()
     private let closeButtonClickedRelay = PublishRelay<Void>()
     private let backgroundClickedRelay = PublishRelay<Void>()
+    private let jumpBarChoiceRelay = PublishRelay<EditorJumpBarChoice>()
 
     private func makeViewModel(
         for paneID: EditorPane.ID,
@@ -27,7 +29,8 @@ struct EditorPaneViewModelTests {
             tabSelected: tabSelectedRelay.asSignal(),
             tabClosed: tabClosedRelay.asSignal(),
             closeButtonClicked: closeButtonClickedRelay.asSignal(),
-            backgroundClicked: backgroundClickedRelay.asSignal()
+            backgroundClicked: backgroundClickedRelay.asSignal(),
+            jumpBarChoiceSelected: jumpBarChoiceRelay.asSignal()
         ))
         return (viewModel, output)
     }
@@ -54,7 +57,7 @@ struct EditorPaneViewModelTests {
         #expect(try await nextValue(from: output.tabBarSnapshot).items.count == 2)
     }
 
-    @Test("with a second pane every pane shows its tab bar and close button, even over one tab")
+    @Test("with a second pane every pane shows its close button, but no tab bar over one tab")
     func aSecondPaneShowsEveryBar() async throws {
         let environment = ViewModelTestEnvironment()
         let firstPaneID = environment.documentState.editorArea.focusedPaneID
@@ -63,9 +66,23 @@ struct EditorPaneViewModelTests {
 
         environment.documentState.selectionRouter.trigger(.newEditorPane(.onRight))
 
-        #expect(try await nextValue(from: output.isTabBarHidden) == false)
+        #expect(try await nextValue(from: output.isTabBarHidden) == true, "one tab in each pane: the close button sits in the jump bar")
         #expect(try await nextValue(from: output.isCloseButtonHidden) == false)
         #expect(try await nextValue(from: output.isFocused) == false, "the new pane took the focus")
+    }
+
+    @Test("a second tab in any pane shows every pane's tab bar, as Xcode does")
+    func aSecondTabAnywhereShowsEveryTabBar() async throws {
+        let environment = ViewModelTestEnvironment()
+        let firstPaneID = environment.documentState.editorArea.focusedPaneID
+        let (viewModel, output) = makeViewModel(for: firstPaneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        environment.documentState.selectionRouter.trigger(.newEditorPane(.onRight))
+        #expect(environment.documentState.editorArea.focusedPaneID != firstPaneID)
+
+        environment.documentState.selectionRouter.trigger(.newTab)
+
+        #expect(try await nextValue(from: output.isTabBarHidden) == false, "the other pane's second tab shows this pane's tab bar too")
     }
 
     @Test("clicking a pane's background focuses it, and its close button closes it")
@@ -100,5 +117,44 @@ struct EditorPaneViewModelTests {
 
         tabClosedRelay.accept(secondTabID)
         #expect(environment.documentState.editorArea.focusedPane.tabs.map(\.id) == [firstTabID])
+    }
+
+    // MARK: - Jump bar
+
+    @Test("the jump bar points at what the pane's active tab shows")
+    func jumpBarFollowsTheActiveTab() async throws {
+        let environment = ViewModelTestEnvironment()
+        let paneID = environment.documentState.editorArea.focusedPaneID
+        let (viewModel, output) = makeViewModel(for: paneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let object = Fixtures.runtimeObject(name: "Shown")
+
+        #expect(try await nextValue(from: output.jumpBarLocation) == .nothing)
+
+        environment.documentState.selectionRouter.trigger(.open(object, in: .focusedTab))
+        #expect(try await nextValue(from: output.jumpBarLocation) == .object(object))
+
+        environment.documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
+        #expect(try await nextValue(from: output.jumpBarLocation) == .image(path: Fixtures.sampleImagePath))
+    }
+
+    @Test("a choice in the jump bar of a pane without the focus focuses that pane and opens there")
+    func jumpBarChoiceOpensInItsPane() async throws {
+        let environment = ViewModelTestEnvironment()
+        let firstPaneID = environment.documentState.editorArea.focusedPaneID
+        let (viewModel, _) = makeViewModel(for: firstPaneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        environment.documentState.selectionRouter.trigger(.newEditorPane(.onRight))
+        #expect(environment.documentState.editorArea.focusedPaneID != firstPaneID)
+        let object = Fixtures.runtimeObject(name: "Chosen")
+
+        jumpBarChoiceRelay.accept(EditorJumpBarChoice(target: .image(path: Fixtures.sampleImagePath), destination: .focusedTab))
+        #expect(environment.documentState.editorArea.focusedPaneID == firstPaneID)
+        #expect(environment.documentState.editorArea[firstPaneID]?.activeTab.imagePath == Fixtures.sampleImagePath)
+        #expect(environment.documentState.currentImageNode == nil, "the sidebar stays where it was")
+
+        jumpBarChoiceRelay.accept(EditorJumpBarChoice(target: .object(object), destination: .newTab))
+        #expect(environment.documentState.editorArea[firstPaneID]?.tabs.count == 2)
+        #expect(environment.documentState.selectedRuntimeObject == object)
     }
 }

@@ -234,7 +234,15 @@ old `PopUpPathControl` and `ItemPopUpButton` were deleted). Background:
 - `NSPopUpPathControl` selects the chosen item before it tells its delegate. The Find page's mode path is
   the view model's to decide, so `FindModePathControlAdapter` puts the view model's path back in
   `popUpPathControl(_:didSelect:)` and only reports the choice. A path that an owner decides needs the
-  same, or the control shows the bare chosen item for a moment.
+  same, or the control shows the bare chosen item for a moment — the editor panes' jump bars
+  (`EditorJumpBarAdapter`) do it too.
+- **The jump bars' items are `EditorJumpBarItem`s from one `EditorJumpBarItemStore` per document**, which
+  the editor area's coordinator hands every pane: the control compares items by pointer, so an item is
+  never made twice for one node while the tree stands, and the store makes the tree again — and says so —
+  when the engine or its image list changes. Images are document roots: their rows have no submenu, and
+  choosing one opens the image page. **The jump bar indexes nothing itself**: it reads an image's objects
+  only once the engine reports the image indexed, and indexing is the image page's or the content pane's
+  to start, with their progress where the user is looking.
 - The Find page's query field is an `NSFindPatternSearchField`, whose content is a `FindQueryTerm`. A term
   with find patterns goes to the engine as a regular expression bounded by the engine's own identifier
   boundaries (`RuntimeTextPattern.regularExpression(_:boundedAs:)`), never ICU's `\b`, so a match style
@@ -639,6 +647,14 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   puts the minimap above that pocket, so a minimap that is on shows plainly under the toolbar
   (`ScrollPocketUnderToolbarTests`). Background:
   `Documentations/Evolutions/draft-editor-content-under-toolbar-scroll-pocket.md`.
+- **Every pane has a jump bar under its tab bar**, always shown and registered with the same pocket
+  (proposal `editor-jump-bar`). Its geometry and control settings are Xcode 27.2's
+  (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Editor jump bar"): a 28-point row, 4 below it, a 1-point
+  `vibrantDividerColor` border, no top padding under the toolbar or the tab bar — 33 points, 37 in a lower
+  pane without a tab bar; the path control small, menus not popovers, hugging its own width. The tab bar
+  follows Xcode's rule — shown in every pane once any pane has a second tab — and while it is hidden the
+  pane's close button sits at the start of the jump bar, after which the path control starts at 40 points
+  instead of 8. The content's safe area makes room for both bars.
 
 </important>
 
@@ -682,7 +698,9 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   when with `ActivityReportSelector` — Xcode's rules: the user's work at once, other work after 4
   seconds, 3 seconds on screen at least — and `ToolbarActivityPresenter` shows a new state at most once
   a second. **A new kind of background work does not show until the reporter follows it**: add a
-  `ReportCategory` case, an `ActivityRunTracker` and its words in `ActivityText`.
+  `ReportCategory` case, an `ActivityRunTracker` and its words in `ActivityText`. Manual Loading, the
+  images the user loads, is a `ReportCategory` the reporter deliberately does not follow: it is not
+  background work, and its progress already shows where the user started it.
 - `ToolbarActivityState` and `ActivityTextSegment` live in `RuntimeViewerUI`, below
   `RuntimeViewerApplication`, because the views that take them do. The views take no RxSwift; their
   clicks are `NSControl` actions that open the Report navigator.
