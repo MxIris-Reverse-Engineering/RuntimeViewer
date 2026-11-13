@@ -327,8 +327,8 @@ The project uses three Swift Package Manager packages:
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
 - `RuntimeViewerArchitectures` — MVVM + Coordinator pattern with RxSwift
-- `RuntimeViewerAppCore` — ViewModels, cell ViewModels, routes, `DocumentState` and the application logic (Sidebar, Inspector, Content, Find, Theme, FilterEngine); testable, and no UI component appears in it (`RuntimeViewerPackages/Sources/AGENTS.md`)
-- `RuntimeViewerAppUI` — the UI glue split out of the application layer: the adapters that set up AppKit and AppKitPlus controls, the jump bar's items, the toolbar activity presenter
+- `RuntimeViewerAppCore` — ViewModels, cell ViewModels, routes, `DocumentState` and the application logic (Sidebar, Inspector, Content, Find, Theme, FilterEngine); testable, no UI component appears in it, and it depends on no UI library (`RuntimeViewerPackages/Sources/AGENTS.md`)
+- `RuntimeViewerAppUI` — the UI glue split out of the application layer: the adapters that set up AppKit and AppKitPlus controls, the jump bar's items, the toolbar activity presenter, the navigation controller's transitions, the Find query field's content as a `FindQueryTerm`, and the live implementations of the services RuntimeViewerAppCore declares
 - `RuntimeViewerApplication` — a facade that only re-exports the two above; the apps link this one product
 - `RuntimeViewerUI` — AppKit UI components (MinimapView, StatefulOutlineView, skeleton effects)
 - `RuntimeViewerServiceHelper` — Helper utilities

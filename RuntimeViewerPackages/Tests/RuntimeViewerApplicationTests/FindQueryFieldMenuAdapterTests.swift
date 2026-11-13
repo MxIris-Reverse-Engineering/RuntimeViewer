@@ -103,7 +103,7 @@ struct FindQueryFieldMenuAdapterTests {
         let menu = adapter.makeMenu()
         try choose(menu.items[4])
         #expect(chosenQueries == [Self.recentQueries[1]])
-        #expect(queryField.findPatternComponents == Self.recentQueries[1].term.components)
+        #expect(queryField.findPatternComponents == Self.recentQueries[1].term.findPatternComponents)
     }
 
     @Test("choosing Clear Recents reports it")

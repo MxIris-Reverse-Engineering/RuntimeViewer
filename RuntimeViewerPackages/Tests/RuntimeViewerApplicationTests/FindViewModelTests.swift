@@ -1,5 +1,4 @@
 import AppKit
-import AppKitPlus
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -796,10 +795,10 @@ struct FindViewModelTests {
         let (viewModel, output) = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        let word = try #require(NSFindPattern.standardPatternGroups.flatMap { $0 }.first { $0.title == "Any Word Characters" }).withIdentifier("word")
+        let word = FindPattern.anyWordCharacters(identifier: "word")
         modePathChoiceSelectedRelay.accept(.textMatchStyle(.matchingWord))
         caseSensitiveToggledRelay.accept(true)
-        searchCommittedRelay.accept(FindQueryTerm(components: NSFindPatternComponents([.text("NSMutable"), .pattern(word)])))
+        searchCommittedRelay.accept(FindQueryTerm(components: [.text("NSMutable"), .pattern(word)]))
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
         let hits = nodes.flatMap(\.children).compactMap { node -> RuntimeInterfaceSearchMatch? in
             if case .textMatch(let match) = node.content { return match }

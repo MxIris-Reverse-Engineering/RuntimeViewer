@@ -1,5 +1,3 @@
-import AppKit
-import AppKitPlus
 import Foundation
 import RuntimeViewerCore
 import Testing
@@ -11,12 +9,8 @@ import Testing
 /// property list Xcode's find field writes.
 @Suite("FindQueryTerm")
 struct FindQueryTermTests {
-    private static func standardPattern(_ title: String) throws -> NSFindPattern {
-        try #require(NSFindPattern.standardPatternGroups.flatMap { $0 }.first { $0.title == title })
-    }
-
-    private static func term(_ components: [NSFindPatternComponents.Component]) -> FindQueryTerm {
-        FindQueryTerm(components: NSFindPatternComponents(components))
+    private static func term(_ components: [FindQueryTerm.Component]) -> FindQueryTerm {
+        FindQueryTerm(components: components)
     }
 
     // MARK: - Search text
@@ -38,7 +32,7 @@ struct FindQueryTermTests {
 
     @Test("a term with patterns is a regular expression: the text escaped, each token its pattern, bounded like the match style")
     func patternsMakeABoundedRegularExpression() throws {
-        let digits = try Self.standardPattern("Digits").withIdentifier("digits")
+        let digits = FindPattern.digits(identifier: "digits")
         let unboundedExpression = #"build\.(\d+)"#
         var query = FindQuery(term: Self.term([.text("build."), .pattern(digits)]))
         #expect(query.textSearchText == FindSearchText(text: unboundedExpression, matchMode: .regularExpression))
@@ -56,7 +50,7 @@ struct FindQueryTermTests {
 
     @Test("with patterns in a regular expression the text is regular expression syntax, put in as it is and unbounded")
     func regularExpressionTextIsNotEscaped() throws {
-        let digits = try Self.standardPattern("Digits").withIdentifier("digits")
+        let digits = FindPattern.digits(identifier: "digits")
         var query = FindQuery(mode: .regularExpression, term: Self.term([.text("^v."), .pattern(digits), .text("$")]), textMatchStyle: .matchingWord)
         #expect(query.textSearchText == FindSearchText(text: #"^v.(\d+)$"#, matchMode: .regularExpression))
         query.mode = .members
@@ -66,9 +60,9 @@ struct FindQueryTermTests {
 
     @Test("only the ends of the field are trimmed, not the white space next to a pattern")
     func onlyTheEndsAreTrimmed() throws {
-        let word = try Self.standardPattern("Any Word Characters").withIdentifier("word")
+        let word = FindPattern.anyWordCharacters(identifier: "word")
         let term = Self.term([.text("  a "), .pattern(word), .text(" b \n")])
-        #expect(term.trimmed.components.components == [.text("a "), .pattern(word), .text(" b")])
+        #expect(term.trimmed.components == [.text("a "), .pattern(word), .text(" b")])
         #expect(FindQuery(term: term).textSearchText.text == #"a (\w+) b"#)
 
         let lonePattern = Self.term([.text(" "), .pattern(word), .text(" ")])
@@ -80,7 +74,7 @@ struct FindQueryTermTests {
         #expect(FindQueryTerm().isEmpty)
         #expect(FindQueryTerm(text: " \n\t").isEmpty)
         #expect(!FindQueryTerm(text: "a").isEmpty)
-        #expect(!Self.term([.text(" "), .pattern(try Self.standardPattern("Digits"))]).isEmpty)
+        #expect(!Self.term([.text(" "), .pattern(.digits())]).isEmpty)
         #expect(FindQuery(text: "  ").isEmpty)
     }
 
@@ -88,7 +82,7 @@ struct FindQueryTermTests {
     func patternsMatchLikeTheirWords() throws {
         // `NSMutable` then a word: what Matching Word finds with a pattern is a whole identifier,
         // as it is for `NSMutableString` typed out.
-        let word = try Self.standardPattern("Any Word Characters").withIdentifier("word")
+        let word = FindPattern.anyWordCharacters(identifier: "word")
         let query = FindQuery(term: Self.term([.text("NSMutable"), .pattern(word)]), textMatchStyle: .matchingWord, isCaseSensitive: true)
         let searchText = query.textSearchText
         let pattern = try RuntimeTextPattern(text: searchText.text, matchMode: searchText.matchMode, isCaseSensitive: true)
@@ -99,11 +93,10 @@ struct FindQueryTermTests {
     // MARK: - Identity
 
     @Test("two terms typed apart are the same search, whatever identifiers their tokens have")
-    func searchIdentityIgnoresTokenIdentifiers() throws {
-        let digits = try Self.standardPattern("Digits")
-        let backreference = Self.term([.text("v"), .pattern(digits.withIdentifier("first")), .pattern(digits.withIdentifier("first"))])
-        let sameBackreference = Self.term([.text("v"), .pattern(digits.withIdentifier("second")), .pattern(digits.withIdentifier("second"))])
-        let twoGroups = Self.term([.text("v"), .pattern(digits.withIdentifier("first")), .pattern(digits.withIdentifier("other"))])
+    func searchIdentityIgnoresTokenIdentifiers() {
+        let backreference = Self.term([.text("v"), .pattern(.digits(identifier: "first")), .pattern(.digits(identifier: "first"))])
+        let sameBackreference = Self.term([.text("v"), .pattern(.digits(identifier: "second")), .pattern(.digits(identifier: "second"))])
+        let twoGroups = Self.term([.text("v"), .pattern(.digits(identifier: "first")), .pattern(.digits(identifier: "other"))])
         #expect(backreference != sameBackreference)
         #expect(backreference.searchIdentity == sameBackreference.searchIdentity)
         #expect(backreference.searchIdentity != twoGroups.searchIdentity)
@@ -114,7 +107,7 @@ struct FindQueryTermTests {
 
     @Test("a query is stored with every setting, its patterns as the property list Xcode writes, and reads back equal")
     func codingRoundTrip() throws {
-        let digits = try Self.standardPattern("Digits").withIdentifier("digits")
+        let digits = FindPattern.digits(identifier: "digits")
         let query = FindQuery(
             mode: .members,
             term: Self.term([.text("x"), .pattern(digits)]),

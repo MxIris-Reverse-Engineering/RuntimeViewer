@@ -370,7 +370,6 @@ let package = Package(
                 .product(name: "XCoordinatorRx", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "SwiftNavigation", package: "swift-navigation"),
@@ -441,13 +440,10 @@ let package = Package(
         ),
 
         // The app's view models and application logic. Everything here can be
-        // built and driven in a unit test, and no UI component appears here:
-        // views, controls, cells, menus, popovers, windows, their delegates and
-        // adapters belong to RuntimeViewerAppUI (Sources/AGENTS.md).
-        //
-        // While the split lands (Documentations/Evolutions/draft-app-core-ui-split.md)
-        // this still depends on AppKitPlus, for the Find query field's pattern
-        // components; the proposal's third step takes it out.
+        // built and driven in a unit test; no UI component appears here, and no
+        // UI library is a dependency: views, controls, cells, menus, popovers,
+        // windows, their delegates and adapters belong to RuntimeViewerAppUI
+        // (Sources/AGENTS.md).
         .target(
             name: "RuntimeViewerAppCore",
             dependencies: [
@@ -458,7 +454,6 @@ let package = Package(
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
-                .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
@@ -469,9 +464,10 @@ let package = Package(
         // The UI glue split out of the application layer: the adapters that set
         // up AppKit and AppKitPlus controls, the jump bar's items, the presenter
         // that feeds the toolbar's activity view, the coordinator that opens the
-        // app's own windows, and the live values of the services
-        // RuntimeViewerAppCore declares (the engine icons, the object icons'
-        // drawing, `appRouter`).
+        // app's own windows and the navigation controller's transitions, the
+        // Find query field's content as a FindQueryTerm, and the live values of
+        // the services RuntimeViewerAppCore declares (the engine icons, the
+        // object icons' drawing, `appRouter`).
         .target(
             name: "RuntimeViewerAppUI",
             dependencies: [

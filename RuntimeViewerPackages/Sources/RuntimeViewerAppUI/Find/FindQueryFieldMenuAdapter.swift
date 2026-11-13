@@ -79,7 +79,7 @@ public final class FindQueryFieldMenuAdapter: NSObject, NSFilterSearchFieldDeleg
     /// menu, often while it is being edited.
     @objc private func recentQueryChosen(_ sender: NSMenuItem) {
         guard let recentQuery = sender.representedObject as? FindQuery else { return }
-        queryField.findPatternComponents = recentQuery.term.components
+        queryField.findPatternComponents = recentQuery.term.findPatternComponents
         recentQuerySelectedRelay.accept(recentQuery)
     }
 

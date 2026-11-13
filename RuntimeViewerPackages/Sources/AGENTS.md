@@ -14,8 +14,9 @@ The apps' application layer is two targets and a facade
 - **`RuntimeViewerAppUI/`** holds the UI glue: the adapters that set up AppKit and AppKitPlus controls
   (`NavigatorTextFilterFieldAdapter`, the Find page's and the runtime source picker's), the jump bar's
   path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`,
-  the coordinator that opens the app's own windows, and the live implementations of the services
-  RuntimeViewerAppCore declares (below).
+  the coordinator that opens the app's own windows, the transitions that drive AppKitPlus's navigation
+  controller (`Transition+Navigation.swift`), the Find query field's content as a `FindQueryTerm` and
+  back, and the live implementations of the services RuntimeViewerAppCore declares (below).
   Code whose job is to drive a UI component goes here even when it can be tested; it depends on
   RuntimeViewerAppCore, never the other way round.
 - **`RuntimeViewerApplication/`** is a facade that only re-exports the two; the apps link this one
@@ -23,13 +24,17 @@ The apps' application layer is two targets and a facade
   use, not the facade.
 
 **RuntimeViewerAppCore depends on no UI library**: not on RuntimeViewerUI or RuntimeViewerSettingsUI, not on
-UIFoundation or SFSymbols. What it took from them it has of its own: the `NSUIImage` / `NSUIColor` /
-`NSUIFont` aliases (`PlatformTypes.swift`; UIFoundation's and SFSymbols' name the same types, so a file
-that sees several still compiles), `NSAttributedString(rowText:fontSize:color:)` for a row's title,
-`SystemSymbol` for the system symbols it draws (`SystemSymbolTests` loads every case), and the Xcode
-colours of `NSColor+Xcode.swift`. While the split lands it still depends on AppKitPlus, for the Find query
-field's pattern components; the proposal's third step takes that out, and its fourth adds a test that fails
-on a UI component in RuntimeViewerAppCore.
+UIFoundation, SFSymbols or AppKitPlus, and neither does RuntimeViewerArchitectures beneath it. What it took
+from them it has of its own: the `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`PlatformTypes.swift`;
+UIFoundation's and SFSymbols' name the same types, so a file that sees several still compiles),
+`NSAttributedString(rowText:fontSize:color:)` for a row's title, `SystemSymbol` for the system symbols it
+draws (`SystemSymbolTests` loads every case), the Xcode colours of `NSColor+Xcode.swift`, and the Find query
+field's content as data: `FindQueryTerm` and `FindPattern`, with AppKitPlus's rules for the regular
+expression a term makes and for its property list rewritten in `FindQueryTerm.swift`. **A change to those
+rules in AppKitPlus is carried over by hand**: `FindPatternParityTests` runs both on the same input and fails
+when they part, and the recent queries every earlier version stored must still read back
+(`FindRecentQueriesTests`). The proposal's fourth step adds a test that fails on a UI component in
+RuntimeViewerAppCore.
 
 **A service whose live implementation needs a UI library is declared in RuntimeViewerAppCore and implemented
 in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by `AppCoordinator`), the

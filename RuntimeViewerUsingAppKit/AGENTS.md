@@ -243,7 +243,11 @@ old `PopUpPathControl` and `ItemPopUpButton` were deleted). Background:
   choosing one opens the image page. **The jump bar indexes nothing itself**: it reads an image's objects
   only once the engine reports the image indexed, and indexing is the image page's or the content pane's
   to start, with their progress where the user is looking.
-- The Find page's query field is an `NSFindPatternSearchField`, whose content is a `FindQueryTerm`. A term
+- The Find page's query field is an `NSFindPatternSearchField`, whose content is a `FindQueryTerm`:
+  RuntimeViewerAppCore's own model of AppKitPlus's `NSFindPatternComponents`, which the page reads with
+  `FindQueryTerm(findPatternComponents:)` and writes back with `term.findPatternComponents`
+  (RuntimeViewerAppUI). The regular expression a term makes follows AppKitPlus's rules, which
+  RuntimeViewerAppCore rewrites and `FindPatternParityTests` holds equal to AppKitPlus's. A term
   with find patterns goes to the engine as a regular expression bounded by the engine's own identifier
   boundaries (`RuntimeTextPattern.regularExpression(_:boundedAs:)`), never ICU's `\b`, so a match style
   means the same with patterns and without; patterns can be inserted in Text mode alone

@@ -1,8 +1,4 @@
 import Foundation
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-import AppKitPlus
-#endif
 
 /// The Find navigator's recent queries — the Recent Queries section of the query field's menu —
 /// kept as Xcode's `IDEFindNavigatorQueryHistoryManager` keeps its own: the latest first, ten at
@@ -63,30 +59,25 @@ package enum FindRecentQueries {
 
     /// `In Indexed Images, text containing “NSView”, ignore case`: Xcode's title for a recent query
     /// (`-[IDEFindNavigatorQueryParametersController descriptionForHistoryItem:withFont:inWorkspace:]`),
-    /// the patterns left out — the plain title of the menu item, which `attributedTitle(for:font:)`
-    /// draws over.
+    /// the patterns left out — the plain title of the menu item, which RuntimeViewerAppUI's
+    /// `attributedTitle(for:font:)` draws over.
     package static func title(for query: FindQuery) -> String {
-        "\(query.scope.title), \(searchDescription(of: query)) “\(query.term.plainText)”, \(caseDescription(of: query))"
+        titlePrefix(for: query) + query.term.plainText + titleSuffix(for: query)
+    }
+
+    /// `In Indexed Images, text containing “`: what a title says before the query's term.
+    package static func titlePrefix(for query: FindQuery) -> String {
+        "\(query.scope.title), \(searchDescription(of: query)) “"
+    }
+
+    /// `”, ignore case`: what a title says after the query's term.
+    package static func titleSuffix(for query: FindQuery) -> String {
+        "”, \(caseDescription(of: query))"
     }
 
     private static func caseDescription(of query: FindQuery) -> String {
         query.isCaseSensitive ? "match case" : "ignore case"
     }
-
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-    /// `title(for:)` with the patterns drawn between the quotes as the query field draws them.
-    @MainActor
-    package static func attributedTitle(for query: FindQuery, font: NSFont?) -> NSAttributedString {
-        var textAttributes: [NSAttributedString.Key: Any] = [:]
-        if let font {
-            textAttributes[.font] = font
-        }
-        let attributedTitle = NSMutableAttributedString(string: "\(query.scope.title), \(searchDescription(of: query)) “", attributes: textAttributes)
-        attributedTitle.append(query.term.components.attributedString(font: font, textColor: nil))
-        attributedTitle.append(NSAttributedString(string: "”, \(caseDescription(of: query))", attributes: textAttributes))
-        return attributedTitle
-    }
-    #endif
 }
 
 extension FindQuery {
