@@ -32,6 +32,10 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// What takes the keyboard focus when the editor pane showing this does (`EditorPaneContent`).
     var focusableView: NSView? { bridge?.editorView }
 
+    /// The scroll view the pane's tab bar floats over (`EditorPaneContent`): the one inside the
+    /// editor view, not the editor view itself.
+    var contentScrollView: NSScrollView? { bridge?.scrollView }
+
     /// The string currently handed to the editor. ⌘-click reports a UTF-16 range into this
     /// very string, so the generator's `.link` attribute can be read straight off it.
     private var displayedAttributedString: NSAttributedString?

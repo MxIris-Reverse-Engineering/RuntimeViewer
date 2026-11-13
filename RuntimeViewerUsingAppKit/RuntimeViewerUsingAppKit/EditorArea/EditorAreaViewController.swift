@@ -309,7 +309,7 @@ final class EditorSplitView: NSSplitView {
     }
 
     /// Draws a divider only below the split view's top safe area. The editor area runs under the
-    /// toolbar, but the panes keep the strip under it clear while their tab bars show
+    /// toolbar, whose strip shows the panes' content blurred in their scroll pockets
     /// (`EditorPaneViewController`), and a divider drawn up through it split the toolbar.
     override func drawDivider(in rect: NSRect) {
         let topSafeAreaInset = min(safeAreaInsets.top, bounds.height)

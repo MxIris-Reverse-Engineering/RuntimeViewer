@@ -12,6 +12,9 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     /// What takes the keyboard focus when the editor pane showing this does (`EditorPaneContent`).
     var focusableView: NSView? { textView }
 
+    /// The scroll view the pane's tab bar floats over (`EditorPaneContent`).
+    var contentScrollView: NSScrollView? { scrollView }
+
     override var shouldDisplayCommonLoading: Bool { true }
 
     private let (scrollView, textView): (NSScrollView, ContentTextView) = {
