@@ -15,6 +15,7 @@ struct EditorPaneViewModelTests {
     private let tabClosedRelay = PublishRelay<DocumentTab.ID>()
     private let closeButtonClickedRelay = PublishRelay<Void>()
     private let backgroundClickedRelay = PublishRelay<Void>()
+    private let jumpBarChoiceRelay = PublishRelay<EditorJumpBarChoice>()
 
     private func makeViewModel(
         for paneID: EditorPane.ID,
@@ -27,7 +28,8 @@ struct EditorPaneViewModelTests {
             tabSelected: tabSelectedRelay.asSignal(),
             tabClosed: tabClosedRelay.asSignal(),
             closeButtonClicked: closeButtonClickedRelay.asSignal(),
-            backgroundClicked: backgroundClickedRelay.asSignal()
+            backgroundClicked: backgroundClickedRelay.asSignal(),
+            jumpBarChoiceSelected: jumpBarChoiceRelay.asSignal()
         ))
         return (viewModel, output)
     }
@@ -100,5 +102,44 @@ struct EditorPaneViewModelTests {
 
         tabClosedRelay.accept(secondTabID)
         #expect(environment.documentState.editorArea.focusedPane.tabs.map(\.id) == [firstTabID])
+    }
+
+    // MARK: - Jump bar
+
+    @Test("the jump bar points at what the pane's active tab shows")
+    func jumpBarFollowsTheActiveTab() async throws {
+        let environment = ViewModelTestEnvironment()
+        let paneID = environment.documentState.editorArea.focusedPaneID
+        let (viewModel, output) = makeViewModel(for: paneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let object = Fixtures.runtimeObject(name: "Shown")
+
+        #expect(try await nextValue(from: output.jumpBarLocation) == .nothing)
+
+        environment.documentState.selectionRouter.trigger(.open(object, in: .focusedTab))
+        #expect(try await nextValue(from: output.jumpBarLocation) == .object(object))
+
+        environment.documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
+        #expect(try await nextValue(from: output.jumpBarLocation) == .image(path: Fixtures.sampleImagePath))
+    }
+
+    @Test("a choice in the jump bar of a pane without the focus focuses that pane and opens there")
+    func jumpBarChoiceOpensInItsPane() async throws {
+        let environment = ViewModelTestEnvironment()
+        let firstPaneID = environment.documentState.editorArea.focusedPaneID
+        let (viewModel, _) = makeViewModel(for: firstPaneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        environment.documentState.selectionRouter.trigger(.newEditorPane(.onRight))
+        #expect(environment.documentState.editorArea.focusedPaneID != firstPaneID)
+        let object = Fixtures.runtimeObject(name: "Chosen")
+
+        jumpBarChoiceRelay.accept(EditorJumpBarChoice(target: .image(path: Fixtures.sampleImagePath), destination: .focusedTab))
+        #expect(environment.documentState.editorArea.focusedPaneID == firstPaneID)
+        #expect(environment.documentState.editorArea[firstPaneID]?.activeTab.imagePath == Fixtures.sampleImagePath)
+        #expect(environment.documentState.currentImageNode == nil, "the sidebar stays where it was")
+
+        jumpBarChoiceRelay.accept(EditorJumpBarChoice(target: .object(object), destination: .newTab))
+        #expect(environment.documentState.editorArea[firstPaneID]?.tabs.count == 2)
+        #expect(environment.documentState.selectedRuntimeObject == object)
     }
 }

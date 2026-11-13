@@ -56,8 +56,8 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 
 ### 落地步骤（每步各自能构建通过）
 
-1. 逆向 Xcode 27.2 的路径栏，补齐上面缺的几何与配置。
-2. 模型：镜像条目、`SelectionRoute.openImage`，`EditorArea` 与 `ContentRoute` 跟上，附测试。
+1. ✅ 逆向 Xcode 27.2 的路径栏，补齐上面缺的几何与配置（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor jump bar (2026-11-13)」，含 AppKitPlus 映射清单）。
+2. ✅ 模型：镜像条目、`SelectionRoute.openImage`，`EditorArea` 与 `ContentRoute` 跟上，附测试。
 3. 路径项与 adapter，附测试：路径怎么构成、菜单列什么、选中变成什么路由、换来源后重建。
 4. 镜像页：`ContentImageViewModel`（索引状态机，附测试）与视图，加载视图挪进 RuntimeViewerUI。
 5. Report 的 Manual Loading：`ManualImageLoadCoordinator`、第四类的行、各个手动加载入口接上，附测试。

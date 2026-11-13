@@ -32,6 +32,9 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         /// The pane's tabs in the order a drag in the bar left them.
         @Init(default: Signal<[DocumentTab.ID]>.empty())
         public let tabsReordered: Signal<[DocumentTab.ID]>
+        /// An image or an object chosen in the pane's jump bar (proposal `editor-jump-bar`).
+        @Init(default: Signal<EditorJumpBarChoice>.empty())
+        public let jumpBarChoiceSelected: Signal<EditorJumpBarChoice>
     }
 
     /// The commands the context menu of `tabID` offers, in menu order: Close
@@ -100,6 +103,8 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         public let isFocused: Driver<Bool>
         /// Hidden while the pane is the only one: the only pane cannot be closed.
         public let isCloseButtonHidden: Driver<Bool>
+        /// What the pane's jump bar shows the path to: the step on screen in its active tab.
+        public let jumpBarLocation: Driver<EditorJumpBarLocation>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -142,6 +147,16 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        // Chosen in this pane's jump bar, so it opens from this pane: the pane takes the focus
+        // first, and the focused tab, a new tab and the next pane are reckoned from it. The sidebar
+        // stays where it is.
+        input.jumpBarChoiceSelected.emitOnNext { [weak self] choice in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.focusEditorPane(paneID))
+            documentState.selectionRouter.trigger(choice.route)
+        }
+        .disposed(by: rx.disposeBag)
+
         // A pane that has just closed is not looked up any more: its view goes
         // away with it.
         let paneID = paneID
@@ -157,7 +172,8 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
             }
             .distinctUntilChanged(),
             isFocused: editorArea.map { $0.focusedPaneID == paneID }.distinctUntilChanged(),
-            isCloseButtonHidden: paneCount.map { $0 < 2 }.distinctUntilChanged()
+            isCloseButtonHidden: paneCount.map { $0 < 2 }.distinctUntilChanged(),
+            jumpBarLocation: pane.map { EditorJumpBarLocation(entry: $0.activeTab.currentEntry) }.distinctUntilChanged()
         )
     }
 }
