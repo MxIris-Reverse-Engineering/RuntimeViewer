@@ -8,7 +8,7 @@
 代码位置：
 - 通信层：`RuntimeViewerCore/Sources/RuntimeViewerCommunication/`
 - 引擎与代理：`RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`、`Engine/Serving/RuntimeEngineProxyServer.swift`
-- 引擎管理器：`RuntimeViewerPackages/Sources/RuntimeViewerApplication/Engine/RuntimeEngineManager.swift`、`RuntimeEngineMirrorRegistry.swift`
+- 引擎管理器：`RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift`、`RuntimeEngineMirrorRegistry.swift`
 
 ---
 
@@ -450,7 +450,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 - **配置**：`RuntimeEngineManagerConfiguration` 决定 Bonjour 广播、引擎共享、系统引擎、已注入进程重连各自开不开。App 用 `.application`（全开），无头 host 用 `.headlessHost`（只浏览、只重连，不广播不共享）。「My Mac」在哪个进程执行不是配置：`RuntimeEngine.local` 自己按进程 bundle 决定（§3.6），无头 host 是裸可执行文件、没有那个键，自动留在进程内。
 - **事件**：manager 不再直接调用通知服务，而是发 `RuntimeEngineManagerEvent`（`engineConnected` / `hostDisconnected` / `catalystHelperUnavailable`）；App 层的 `RuntimeConnectionNotificationService.start()` 订阅 `eventPublisher` 转成系统通知。事件不重放，订阅要在第一条连接建立前完成（App 在 `applicationDidFinishLaunching` 里做）。**manager 从不观察 `RuntimeEngine.local` 的状态**：别的引擎报 `.disconnected` 即出列表，它报 `.disconnected` 意味着 service 退出了，引擎留在原位、连接自己重连；「重启了」这条通知由 `RuntimeConnectionNotificationService` 直接观察 `RuntimeEngine.local.statePublisher` 的 `.disconnected → .connected` 边沿发出，首次 `.connected` 不发。**连内嵌 service 的 Mac Catalyst 引擎同样不被观察**，理由相同；它连上时 manager 补发一次 `engineConnected`（观察本来会在订阅时发出的那一次），service 重启后暂不发通知。走 helper App 的 Catalyst 引擎（CLI 独立 host）照旧被观察，断线即出列表。
-- **App 层叠加**（都在 `RuntimeViewerApplication/Engine/`）：`RuntimeEngineIconProvider` 负责图标——本机进程查 Launch Services，镜像引擎解码 manager 保留的 `remoteIconData(for:)`；每个引擎在界面上用什么图标（所在机器的设备图标、文件自己的图标或进程自己的图标）也由它定：`icon(for:)` 给列表用（运行时源选择器的列表、Report 导航器的引擎分组），`sourcePickerIcon(for:)` 给工具栏的选择器用。`RuntimeEngineManager+Reactive` 提供 `rx.runtimeEngines` / `rx.runtimeEngineSections` 两个 `Driver`。
+- **App 层叠加**：`RuntimeEngineIconProvider`（`RuntimeViewerAppUI/Engine/`）负责图标——本机进程查 Launch Services，镜像引擎解码 manager 保留的 `remoteIconData(for:)`；每个引擎在界面上用什么图标（所在机器的设备图标、文件自己的图标或进程自己的图标）也由它定：`icon(for:)` 给列表用（运行时源选择器的列表、Report 导航器的引擎分组），`sourcePickerIcon(for:)` 给工具栏的选择器用。`RuntimeViewerAppCore` 里的代码不直接用它，而是经接口 `RuntimeEngineIconProviding`（依赖 `\.runtimeEngineIconProviding`）取列表图标。`RuntimeEngineManager+Reactive`（`RuntimeViewerAppCore/Engine/`）提供 `rx.runtimeEngines` / `rx.runtimeEngineSections` 两个 `Driver`。
 - **attach 流程**：`RuntimeProcessAttacher`（同模块）承接原先散在 `AttachToProcessViewModel` 里的「选载荷 → 装载荷 → 选传输 → 注入 → 确认握手」，ViewModel 只剩调用。载荷与 Catalyst helper 的路径经 `RuntimeViewerHelperClient` 的 `RuntimeResourceLocating` 取得，默认实现读 `Bundle.main`。
 
 ---

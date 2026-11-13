@@ -1,9 +1,9 @@
 # Draft - 把 RuntimeViewerApplication 拆成 AppCore 与 AppUI
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-13
-- **最后更新**: 2026-11-13
+- **最后更新**: 2026-11-14
 - **所属愿景**: 无
 - **关联提案**: [0016](0016-application-viewmodel-tests.md)（ViewModel 测试覆盖）、[0035](0035-engine-management-module.md)（引擎管理下沉为无 UI 模块）、[0048](0048-routes-carry-no-views.md)（Route 不携带视图）、[0073](0073-core-source-layout.md)（Core 源码按功能分目录，只搬家）
 - **实现分支 / PR**: `feature/app-core-ui-split`（worktree `.worktrees/RuntimeViewer-AppCoreUISplit`）
@@ -158,8 +158,8 @@ AppCore 要用、但实现只能放在 AppUI 的服务有三个：
 - **属性串**：7 处 builder 换成一个手写的初始化方法 `NSAttributedString(rowText:fontSize:color:)`。
 - **外观判断**：`isLight` 换成同样的 `bestMatch(from: [.darkAqua, .aqua]) == .aqua`。
 - **系统图标**：18 个图标改用 AppCore 自己的 `SystemSymbol` 枚举。每个 case 的 raw value 是符号名，直接调系统 API 造图，找不到符号时同样 trap。`SystemSymbolTests` 逐个载入全部 case，补回 SFSymbols 原先在编译期做的名字检查。
-- **对象图标**：`RuntimeObjectIcon` 选什么文字、什么颜色，以及按描述缓存图片，都留在 AppCore；只有「画」这一步经依赖注入交给 AppUI，由 AppUI 用 `IDEIcon` 实现。描述里的颜色与样式是 AppCore 自己的枚举，取值与 `IDEIconColor`、`IDEIconStyle` 同名，所以调用处不用改。Find 成员行的角标走同一个接口。
-- **Find 查询**：AppCore 自己定义 `FindQueryTerm` 的组成（文字与 `FindPattern`），用 Swift 照 `NSFindPattern.m` 逐字重写四件事：数捕获组、转义、拼接、属性表读写，并照搬 AppKitPlus 的 25 个测试。存盘格式不变，已存的最近查询照常读回。AppUI 在查询框与 `FindQueryTerm` 之间按属性表互转。AppUI 的测试里另加一组对照测试，逐例比较 AppCore 与 AppKitPlus 拼出的正则；AppKitPlus 升级后规则一变，这组测试就会失败。`FindRecentQueries.attributedTitle(for:font:)` 要画 token，随菜单 adapter 搬进 AppUI。
+- **对象图标**：`RuntimeObjectIcon` 选什么文字、什么颜色留在 AppCore；「画」和按描述缓存图片经依赖注入交给 AppUI，由 AppUI 用 `IDEIcon` 实现。描述里的颜色与样式是 AppCore 自己的枚举，取值与 `IDEIconColor`、`IDEIconStyle` 同名，所以只写 `.blue` 这类取值的调用处不用改；写出了类型名的要换成 `RuntimeObjectIcon.Glyph.Color` / `.Style`（App 里只有 `SourceEditorLandmarkIcon` 一处，见决策日志）。Find 成员行的角标走同一个接口。
+- **Find 查询**：AppCore 自己定义 `FindQueryTerm` 的组成（文字与 `FindPattern`），用 Swift 照 `NSFindPattern.m` 逐字重写四件事：数捕获组、转义、拼接、属性表读写，并照搬 AppKitPlus 测试里测这四件事与组成规则的那些（25 个里的 13 个，见决策日志）。存盘格式不变，已存的最近查询照常读回。AppUI 在查询框与 `FindQueryTerm` 之间逐个组件互转。AppUI 的测试里另加一组对照测试，逐例比较 AppCore 与 AppKitPlus 拼出的正则；AppKitPlus 升级后规则一变，这组测试就会失败。`FindRecentQueries.attributedTitle(for:font:)` 要画 token，随菜单 adapter 搬进 AppUI。
 - **间接依赖**：`Transition+Navigation.swift` 从 `RuntimeViewerArchitectures` 挪进 AppUI，Architectures 去掉对 AppKitPlus 的依赖。`SidebarCoordinator` 经门面照样拿得到这些转场。
 
 ### 越界检查
@@ -170,7 +170,7 @@ AppCore 要用、但实现只能放在 AppUI 的服务有三个：
 
 - **`RuntimeViewerAppCoreTests`**：只依赖 AppCore 与 Core 系列，装下现有测试里测 AppCore 的大多数，以及新增的 `SystemSymbolTests`、移植过来的查找 pattern 测试。
 - **`RuntimeViewerAppUITests`**：依赖 AppUI、`RuntimeViewerUI` 与 AppKitPlus，装下测 AppUI 和 `RuntimeViewerUI` 视图的约 30 个文件，以及正则对照测试。
-- **`RuntimeViewerAppTestingSupport`**：两边都要用的测试帮手放进这个新的普通 target，只给这两个测试 target 依赖。
+- **`RuntimeViewerAppTestingSupport`**：两边都要用的测试帮手放进这个新 target，只给这两个测试 target 依赖。Tuist 只映射属于某个 product 的 target，所以它也声明成一个 library product，App 不链接它（见决策日志）。
 
 ### 门面与使用方
 
@@ -194,13 +194,13 @@ AppCore 要用、但实现只能放在 AppUI 的服务有三个：
 - `RuntimeViewerUI` 视图的测试随 AppUITests 走，这次不给 `RuntimeViewerUI` 建自己的测试 target。
 - AppUI 要用到的 AppCore `internal` 成员改成 `package`，不改成 `public`。
 - `Then.swift` 留在 AppCore。它的 `Then` 协议是 `internal` 的，AppUI 要用 `.then {}` 时自带一份，和 `RuntimeViewerUI` 现在的做法一样。
-- `RuntimeConnectionNotificationService` 留在 AppCore。它对 `UNUserNotificationCenter` 的调用改成走一个可替换的依赖，并补一组测试，证明它现在能测——测什么时候发、发什么。
+- `RuntimeConnectionNotificationService` 留在 AppCore。它对 `UNUserNotificationCenter` 的调用改成走一个可替换的依赖 `UserNotificationCenterClient`（真实值调系统，测试默认值被调用就记 issue，写法照 `PasteboardClient`），并补一组测试，证明它现在能测——测什么时候发、发什么。
 - 新增的 `SystemSymbolTests`、移植的查找 pattern 测试和正则对照测试，都是为替换上游库而加的。除此之外，不为没有测试的类型补测试。
 - 新代码照 `RuntimeViewerCore/Sources/AGENTS.md` 的做法按功能分目录；搬进来的文件保持原来的子目录结构。
 
 ### 非目标
 
-- 不改 `RuntimeViewerUI` 与 App target 的内容。`RuntimeViewerArchitectures` 只挪走 `Transition+Navigation.swift`。ViewModel 的写法约定（`Driver` / `Signal`、`@RxObserved`、`Router`）不改。
+- 不改 App target 的内容。例外只有两处，都是 AppCore 的类型换了以后跟着改的写法（见决策日志）：对象图标的颜色换了类型名（`SourceEditorLandmarkIcon`），Find 页读写查询框改用 `FindQueryTerm(findPatternComponents:)` 与 `term.findPatternComponents`（`FindViewController`）。`RuntimeViewerUI` 只挪走 `NSColor+Xcode.swift`（见决策日志），`RuntimeViewerArchitectures` 只挪走 `Transition+Navigation.swift`。ViewModel 的写法约定（`Driver` / `Signal`、`@RxObserved`、`Router`）不改。
 - 不把 ViewModel 的输出改成不含 UI 类型的描述。属性串和图标照旧由 ViewModel 产出，只是图标的绘制经接口完成。
 - 不追求链接级的纯净：AppCore 仍会经 RxCocoa、CocoaCoordinator 间接链接 AppKit。
 - 不改 UIFoundation、SFSymbols、AppKitPlus 本身，也不改 Find 查询的行为与存盘格式。
@@ -287,6 +287,8 @@ UIFoundation 的依赖边和 `RuntimeViewerUI` 一样不带平台条件，AppKit
 @_exported import RuntimeViewerAppUI
 ```
 
+测试一侧（第四步）：`RuntimeViewerAppTestingSupport` 是 `Tests/RuntimeViewerAppTestingSupport` 下的 target，另有一个同名 library product，只为让 Tuist 映射它；`RuntimeViewerAppCoreTests` 依赖 AppCore、支持库、Architectures、Settings 与 Core 系列；`RuntimeViewerAppUITests` 另依赖 AppUI、`RuntimeViewerUI` 与 AppKitPlus。
+
 ### 文件归属
 
 路径相对 `RuntimeViewerPackages/Sources/RuntimeViewerApplication/`。
@@ -307,6 +309,8 @@ UIFoundation 的依赖边和 `RuntimeViewerUI` 一样不带平台条件，AppKit
 | `Activity/ToolbarActivityState+Reports.swift` | 同上 | 第一步 |
 | `RuntimeViewerArchitectures/Transition+Navigation.swift` | coordinator 驱动 AppKitPlus 的导航控制器 | 第三步 |
 
+**从 `RuntimeViewerUI` 挪进 AppCore（第二步）**：`AppKit/NSColor+Xcode.swift`，照 Xcode 主题定义的五个颜色。它们是模型，只有 AppCore 的 Find 行样式和 App 的 Find 页在用，`RuntimeViewerUI` 自己的视图一个都没用；放在 `RuntimeViewerUI` 里，AppCore 就得依赖视图库才拿得到。
+
 **拆开**
 
 | 文件 | 留在 AppCore | 进 AppUI | 哪一步 |
@@ -326,7 +330,7 @@ UIFoundation 的依赖边和 `RuntimeViewerUI` 一样不带平台条件，AppKit
   - `Reports/ReportViewModel.swift`：图标改用 `SystemSymbol`。
   - `Reports/ReportGroupWork.swift`：改用引擎图标的接口。
   - `Engine/RuntimeConnectionNotificationService.swift`：加可替换的依赖与测试。
-- 第三步：`Find/FindQueryTerm.swift` 改用 AppCore 自己的模型。
+- 第三步：`Find/FindQueryTerm.swift` 改用 AppCore 自己的模型，`FindPattern` 另起一个文件 `Find/FindPattern.swift`。
 - 不改：`DocumentState.swift`——iOS 路由属于允许的例外。
 
 其余文件原样搬进 `Sources/RuntimeViewerAppCore/`，保持原来的子目录。`SelectionRouteDestination+ModifierFlags.swift`、`RuntimeSourcePicker/RuntimeSourcePickerContent.swift`、`Theme/` 下的文件都只用 UI 框架的模型，留在 AppCore。`ContextMenus/FinderClient.swift`、`ContextMenus/PasteboardClient.swift` 是系统服务的可替换依赖，也留在 AppCore。
@@ -428,19 +432,16 @@ extension RuntimeObjectIcon {
     }
 }
 
-@MainActor
+/// A renderer gives back the same image for the same glyph: a cell's `Appearance` compares its icons.
 public protocol RuntimeObjectIconRendering: AnyObject, Sendable {
     func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage
 }
 
 package enum RuntimeObjectIconRenderingKey: TestDependencyKey {
-    // An empty image of the glyph's size: tests compare glyphs, not pixels.
-    package static var testValue: any RuntimeObjectIconRendering {
-        MainActor.assumeIsolated { BlankRuntimeObjectIconRenderer() }
-    }
+    // An empty image of the glyph's size, one per glyph: tests compare glyphs, not pixels.
+    package static let testValue: any RuntimeObjectIconRendering = BlankRuntimeObjectIconRenderer()
 }
 
-@MainActor
 extension DependencyValues {
     public var runtimeObjectIconRendering: any RuntimeObjectIconRendering {
         get { self[RuntimeObjectIconRenderingKey.self] }
@@ -448,22 +449,30 @@ extension DependencyValues {
     }
 }
 
+/// One image per glyph, drawn the first time it is asked for, under a lock.
+package final class RuntimeObjectIconImageCache: @unchecked Sendable {
+    package func image(for glyph: RuntimeObjectIcon.Glyph, drawing draw: (RuntimeObjectIcon.Glyph) -> NSUIImage) -> NSUIImage
+}
+
 // RuntimeViewerAppUI
-@MainActor
 final class IDEIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
+    private let imageCache = RuntimeObjectIconImageCache()
+
     func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage {
-        IDEIcon(glyph.text, color: IDEIconColor(glyph.color), style: IDEIconStyle(glyph.style), size: glyph.size).image
+        imageCache.image(for: glyph) { glyph in
+            IDEIcon(glyph.text, color: IDEIconColor(glyph.color), style: IDEIconStyle(glyph.style), size: glyph.size).image
+        }
     }
 }
 
 extension RuntimeObjectIconRenderingKey: DependencyKey {
-    package static var liveValue: any RuntimeObjectIconRendering {
-        MainActor.assumeIsolated { IDEIconRuntimeObjectIconRenderer() }
-    }
+    package static let liveValue: any RuntimeObjectIconRendering = IDEIconRuntimeObjectIconRenderer()
 }
 ```
 
-`RuntimeObjectIcon` 的缓存仍以描述为键，留在 AppCore；渲染只在缓存未命中时才调用。
+缓存跟着渲染器走：真实实现与测试替身各按描述缓存一份，同一个描述总是给回同一张图；`RuntimeObjectIcon` 自己不缓存。这样测试替身画的空图和真实图标不会共用一份缓存。渲染器不限主线程，和原来的 `RuntimeObjectIcon` 一样；但 `IDEIcon` 用一个没有加锁的字典缓存图像，所以图标仍只在主线程上画，画图标的测试也跑在主 actor 上。
+
+`RuntimeObjectIcon.glyph(for:)` 公开出每个种类对应的描述，测试按描述比较，不比像素。
 
 解析规则沿用根 `AGENTS.md` 对 `@MainActor` 依赖的要求：只在已有的主线程调用路径里第一次解析，非隔离类型不要用存储属性持有它们。
 
@@ -514,10 +523,13 @@ package enum SystemSymbol: String, CaseIterable, Sendable {
     case textAlignleft = "text.alignleft"
     // ... the eighteen symbols in Extensions.swift, FindResultCellStyle.swift and ReportViewModel.swift
 
-    /// Traps when the system has no symbol of this name, as SFSymbols did.
+    /// Traps when the system has no symbol of this name, as SFSymbols did (`image(named:)`, which an
+    /// exit test covers).
     package var image: NSUIImage { get }
 
     #if os(macOS)
+    /// Falls back to the plain image, never traps: only a symbol image takes a symbol configuration,
+    /// and `image` always is one.
     package func image(pointSize: CGFloat, weight: NSFont.Weight) -> NSImage
     #endif
 }
@@ -544,8 +556,8 @@ public struct FindQueryTerm: Hashable, Sendable {
     func regularExpressionPattern(escapingText: Bool) -> String
 
     /// The form Xcode's find field writes to the pasteboard, and the form recent queries are stored in.
-    public init?(propertyListRepresentation: Any)
-    public var propertyListRepresentation: [Any] { get }
+    init?(propertyListRepresentation: Any)
+    var propertyListRepresentation: [Any] { get }
 }
 
 /// A token in the Find navigator's query field: AppKitPlus's `NSFindPattern`, as data.
@@ -557,12 +569,23 @@ public struct FindPattern: Hashable, Sendable {
     public var replacementString: String?
     public var isNegation: Bool
     public var identifier: String?
+
+    // Defaults as NSFindPattern's short initializer: backreferences, no replacement, no negation, no identifier.
+    public init(regularExpression: String, title: String, tokenTitle: String, allowsBackreferences: Bool = true,
+                replacementString: String? = nil, isNegation: Bool = false, identifier: String? = nil)
+}
+
+// RuntimeViewerAppUI
+extension FindQueryTerm {
+    public init(findPatternComponents: NSFindPatternComponents)
+    public var findPatternComponents: NSFindPatternComponents { get }
 }
 ```
 
 - **数捕获组、转义与拼接**按 UTF-16 逐个处理，和原实现读 `unichar` 的方式一致。
-- **`Codable` 编码**沿用现有的 `StoredComponent` 形状。pattern 字典的键名和取值照 `NSFindPattern.m` 的属性表读写：`replacementString` 与 `identifier` 为空时不写，读不到正则时整条作废。
-- **AppUI 里的互转**：`FindQueryTerm(propertyListRepresentation: components.propertyListRepresentation)` 与 `NSFindPatternComponents(propertyListRepresentation: term.propertyListRepresentation)`。
+- **`Codable` 编码**沿用现有的 `StoredComponent` 形状。pattern 字典的键名和取值照 `NSFindPattern.m` 的属性表读写：`replacementString` 与 `identifier` 为空时不写，读不到正则时整条作废。属性表的两个方向只给编码与测试用，不对外。
+- **AppUI 里的互转**：逐个组件对应，pattern 的七个属性逐个转，不经属性表（见决策日志）。App 的 Find 页用 `FindQueryTerm(findPatternComponents:)` 读查询框、用 `term.findPatternComponents` 写回。
+- **标题**：`FindRecentQueries` 把标题拆成 `titlePrefix(for:)` 与 `titleSuffix(for:)` 两半，`title(for:)` 与 AppUI 画 token 的 `attributedTitle(for:font:)` 共用，标题的写法只在 AppCore 一处。
 
 ### 越界检查的规则
 
@@ -591,26 +614,32 @@ public struct FindPattern: Hashable, Sendable {
 
 **进 `RuntimeViewerAppUITests` 的**：
 
-- AppUI 的测试：`EditorJumpBarTests`、`FindModePathControlAdapterTests`、`FindQueryFieldMenuAdapterTests`、`FindResultsOutlineTests`、`RuntimeSourceMenuAdapterTests`、`RuntimeSourcePopoverAdapterTests`、`ToolbarActivityPresenterTests`、`ToolbarActivityStateTests`、`ReportOutlineBindingTests`。
-- `RuntimeViewerUI` 视图的测试：`ApplicationIconMaskTests`、`BaseNavigationControllerTests`、`ChoiceFilterControlBarItemTests`、`DeviceGlyphTests`、`EditorSplitViewTests`、`GenericViewControllerAppearanceEventTests`、`HorizontalSeparatorViewTests`、`NavigatorScrollViewLayoutTests`、`RuntimeSourcePickerTests`、`RuntimeSourcePopoverCellViewTests`、`StackedHeightSharingTests`、`StatefulOutlineViewAutosaveTests`、`StatefulOutlineViewRevealTests`、`StatefulOutlineViewRowGeometryTests`、`TabSwitcherBarSafeAreaTests`、`TagButtonHitTestingTests`、`TitleToolbarItemOverflowTests`、`ToolbarActivityViewSourcePickerTests`、`ToolbarCenteredItemTests`、`ToolbarScrollPocketContainerViewTests`。
-- 新增：`FindPatternParityTests`，用同一份属性表分别造 `FindQueryTerm` 与 `NSFindPatternComponents`，逐例比较两边拼出的正则；`IDEIconRuntimeObjectIconRendererTests`，确认描述到 `IDEIcon` 的映射。
+- AppUI 的测试：`EditorJumpBarTests`、`FindModePathControlAdapterTests`、`FindQueryFieldMenuAdapterTests`、`FindResultsOutlineTests`、`NavigatorTextFilterFieldAdapterTests`、`RuntimeSourceMenuAdapterTests`、`RuntimeSourcePopoverAdapterTests`、`ToolbarActivityPresenterTests`、`ToolbarActivityStateTests`、`ReportOutlineBindingTests`。
+- `RuntimeViewerUI` 视图的测试：`ApplicationIconMaskTests`、`BaseNavigationControllerTests`、`ChoiceFilterControlBarItemTests`、`DeviceGlyphTests`、`EditorSplitViewTests`、`GenericViewControllerAppearanceEventTests`、`HorizontalSeparatorViewTests`、`ListKeyPressTests`、`NavigatorScrollViewLayoutTests`、`RuntimeSourcePickerTests`、`RuntimeSourcePopoverCellViewTests`、`StackedHeightSharingTests`、`StatefulOutlineViewAutosaveTests`、`StatefulOutlineViewRevealTests`、`StatefulOutlineViewRowGeometryTests`、`TabSwitcherBarSafeAreaTests`、`TagButtonHitTestingTests`、`TitleActivityIndicatorTests`、`TitleToolbarItemOverflowTests`、`ToolbarActivityViewSourcePickerTests`、`ToolbarActivityViewTests`、`ToolbarCenteredItemTests`、`ToolbarScrollPocketContainerViewTests`。
+- 第二步、第三步为替换上游库加的、要用 AppUI 或上游库的测试：
+  - `FindPatternParityTests`：用同一份属性表分别造 `FindQueryTerm` 与 `NSFindPatternComponents`，逐例比较两边拼出的正则；互转来回不丢东西；测试用的标准 pattern 与 AppKitPlus 的一致。
+  - `IDEIconRuntimeObjectIconRendererTests`：从 `RuntimeObjectIconGlyphTests` 拆出来的逐像素对照（14 种颜色、4 种样式），确认字形到 `IDEIcon` 的映射；只测字形表的用例留在 AppCoreTests。
+  - `RowTextAttributedStringTests`：`NSAttributedString(rowText:fontSize:color:)` 与 UIFoundation 的 builder 逐属性对照。
+  - `CrossLayerDependencyTests`：三个跨层接口在链接 AppUI 后拿到真实实现，`appRouter` 的测试值被调用就记 issue。
+- 从 AppCore 的测试里拆出来、用到 UI 组件的用例，各成一个文件：`ReportFilterFieldTests`（Report 页读 AppKitPlus 的过滤框）、`FindRecentQueriesAttributedTitleTests`（最近查询的标题画 token）、`FindResultRowDrawingTests`（Find 结果行的标题在 `RuntimeViewerUI` 的 `Label` 里单行截断）。
 - 只有它们用的帮手：`Support/LayerRendering.swift`、`Support/MaterialFillRendering.swift`。
 
-**要逐个看的**：
+**逐个看过的**：
 
-- `FindCrossReferenceTests` 与 `ReportViewModelTests` 测的是 AppCore 的类型，却构造了窗口或 `NSFilterSearchField`。按同一条规则处理：用到 UI 组件的那几个用例拆进 AppUITests，其余留下。
-- `FindCrossReferenceTests.swift:178` 用 `IDEIconColor` 造期望的角标。留在 AppCoreTests 的部分改成比较 `RuntimeObjectIcon.Glyph`。
-- `FindQueryTermTests` 与 `FindViewModelTests` 现在用 AppKitPlus 造查询。改用 AppCore 自己的模型，留在 AppCoreTests。
+- `FindCrossReferenceTests` 其实没有构造 UI 组件（`NSWindow` 只出现在字符串里），整份留在 AppCoreTests，只删掉遗留的 `RuntimeViewerUI` 与 AppUI 的 import。`ReportViewModelTests` 只有一例构造了 `NSFilterSearchField`，拆成上面的 `ReportFilterFieldTests`。`FindResultNodeTests` 有一例用 `Label` 画标题，拆成 `FindResultRowDrawingTests`。`ReportCellViewModelTests` 的 `RuntimeViewerUI` import 是遗留的，删掉。
+- `FindCrossReferenceTests.swift:178` 用 `IDEIconColor` 造期望的角标。第二步已改成比较 `RuntimeObjectIcon.Glyph.Color`，留在 AppCoreTests。
+- `FindQueryTermTests` 与 `FindViewModelTests` 原来用 AppKitPlus 造查询，第三步已改用 AppCore 自己的模型，留在 AppCoreTests。`FindRecentQueriesTests` 同样改了，只有画 token 的标题那一例要 AppUI，拆成上面的 `FindRecentQueriesAttributedTitleTests`。
 
-**进 `RuntimeViewerAppTestingSupport` 的**：`TestRuntimeEngine`、`ViewModelTestEnvironment`、`FindResultFixtures`、`AsyncObservation`。只有 AppCore 一侧用到的帮手（`DerivedDataFixture`、`ScriptedPeer`、`SharedCacheBorrowingFixture`、`LocalServiceFixture`、`RuntimeObjectFixtures`、`JoinedBackgroundWork`）留在 AppCoreTests。
+**进 `RuntimeViewerAppTestingSupport` 的**：`TestRuntimeEngine`、`ViewModelTestEnvironment`、`FindResultFixtures` 与它用到的 `RuntimeObjectFixtures`（`Fixtures`）、`AsyncObservation`（连同从 `TestSupport.swift` 挪来的 `pollUntil`）、`MockRouter`，以及第三步加的 `FindPattern+StandardPatterns.swift`（照 AppKitPlus 目录抄的 Xcode 十二个标准 pattern，AppCore 的 pattern 测试与 AppUI 的对照测试都用）。它的声明都是 `package`，经 AppCore 与 Settings 的 `package` 测试接缝取用内部成员，不用 `@testable import`，也不 import Testing。只有 AppCore 一侧用到的帮手（`DerivedDataFixture`、`ScriptedPeer`、`SharedCacheBorrowingFixture`、`LocalServiceFixture`、`JoinedBackgroundWork`、`CrossSuiteTestLock`、`SharedLocalEngineTestLock`，以及 `TestSupport.swift` 剩下的 `withLiveDependencyContext` 与 `makeLoadedImageNode`）留在 AppCoreTests。
 
 **其余**全部进 `RuntimeViewerAppCoreTests`，再加上三组新测试：
 
 - `SystemSymbolTests`；
-- 照 AppKitPlus 的 25 个测试移植的查找 pattern 测试；
-- 一条用现版本写出的最近查询存盘样本做的读回测试。
+- `FindPatternTests`：AppKitPlus 25 个测试里测重写部分的 13 个，照搬过来；
+- `FindRecentQueriesTests` 里的一条读回测试：一份改动前的版本写出的最近查询文件，读回后搜索内容不变，再写回逐字节一致；
+- 第二步加的 `RuntimeConnectionNotificationServiceTests`。
 
-`CrossPlatformSourceGuardTests` 也进 AppCoreTests，它的 target 清单换成 `RuntimeViewerAppCore`、`RuntimeViewerAppUI`、`RuntimeViewerApplication`、`RuntimeViewerArchitectures`、`RuntimeViewerSettings`、`RuntimeViewerUI`。
+`CrossPlatformSourceGuardTests` 也进 AppCoreTests，它的 target 清单换成 `RuntimeViewerAppCore`、`RuntimeViewerAppUI`、`RuntimeViewerApplication`、`RuntimeViewerArchitectures`、`RuntimeViewerSettings`、`RuntimeViewerUI`。它读源码的代码抽到 `Support/PackageSourceScan.swift`，与 `AppCoreBoundaryTests` 共用，`#if` 改为按 macOS 与 iOS 一族各求值一次。
 
 ### 文档与工程描述
 
@@ -620,7 +649,7 @@ public struct FindPattern: Hashable, Sendable {
 | `RuntimeViewerPackages/Sources/AGENTS.md` | 分界规则全文、两个模块各放什么、门面不放任何实现、AppCore 不依赖 UI 库 |
 | `RuntimeViewerUsingAppKit/AGENTS.md` | 写着「(RuntimeViewerApplication)」的地方改成实际所在的模块；Find 查询框一段说明内容在 AppUI 与 `FindQueryTerm` 之间按属性表互转、拼接规则在 AppCore 有一份照抄并由对照测试守住 |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | 改成两个测试 target 与帮手 target 的规则 |
-| `Documentations/CommunicationAndEngineArchitecture.md`、`Documentations/Guides/TuistDevelopment.md`、`Documentations/Visions/HeadlessRuntimeViewer.md` | 提到 `RuntimeViewerApplication` 的地方 |
+| `Documentations/CommunicationAndEngineArchitecture.md`、`Documentations/Guides/TuistDevelopment.md` | 提到 `RuntimeViewerApplication` 的地方 |
 | `Tuist/ProjectDescriptionHelpers/LocalPackages.swift`、`Tuist.swift` | 新 target、测试 target、product 清单，以及 Architectures 不再依赖 AppKitPlus |
 
 已落地的提案、计划、审查记录、已解决问题与任务报告是历史记录，不改。
@@ -681,7 +710,7 @@ public struct FindPattern: Hashable, Sendable {
 
 ## 落地步骤
 
-**第一步：建 target 与门面，把 UI 胶水搬进 AppUI**（合进 `next` 一次，提案在这次分配编号，状态改为 In Progress）
+**第一步：建 target 与门面，把 UI 胶水搬进 AppUI**（✅ 已完成。合进 `next` 一次，提案在这次分配编号，状态改为 In Progress）
 
 1. `Package.swift`：新增 `RuntimeViewerAppCore`、`RuntimeViewerAppUI`，把 `RuntimeViewerApplication` 改成门面，新增 product `RuntimeViewerAppCore`。AppCore 暂时保留现在 Application 的全部依赖（第二步、第三步逐步去掉），旁边加注释说明这是过渡。
 2. 用 `git mv` 把 10 个文件搬进 `Sources/RuntimeViewerAppUI/`，其余文件按原子目录搬进 `Sources/RuntimeViewerAppCore/`；把 `FindResultsPresentation.apply(to:)` 拆到 AppUI 的扩展里。AppUI 要用的 AppCore 成员改成 `package`。
@@ -693,7 +722,7 @@ public struct FindPattern: Hashable, Sendable {
    - 包测试全绿，`RuntimeViewerMCP` 的测试全绿；
    - `./TuistScript.sh check` 通过。
 
-**第二步：接口与实现分开，AppCore 不再依赖视图库、UIFoundation 与 SFSymbols**（合进 `next` 一次）
+**第二步：接口与实现分开，AppCore 不再依赖视图库、UIFoundation 与 SFSymbols**（✅ 已完成，截图对照留给用户目视验收。合进 `next` 一次）
 
 1. 三个跨层服务：
    - `appRouter`：`AppRoute` 与接口留在 AppCore，`AppCoordinator` 与 `liveValue` 搬进 AppUI。
@@ -705,7 +734,7 @@ public struct FindPattern: Hashable, Sendable {
 5. 根 `AGENTS.md` 写上依赖注入的例外。
 6. 验证同第一步，并逐一比对侧栏、Inspector、Find、Report 的图标与改动前一致（截图对照）。
 
-**第三步：AppCore 不再依赖 AppKitPlus**（合进 `next` 一次）
+**第三步：AppCore 不再依赖 AppKitPlus**（✅ 已完成，手动查 Find 搜索与最近查询菜单留给用户。合进 `next` 一次）
 
 1. `FindQueryTerm` 与 `FindPattern` 改成 AppCore 自己的模型。数捕获组、转义、拼接与属性表读写照 `NSFindPattern.m` 用 Swift 重写；照搬 AppKitPlus 的 25 个测试，再加最近查询存盘样本的读回测试。
 2. AppUI 里加上与 `NSFindPatternComponents` 的互转；`FindRecentQueries.attributedTitle(for:font:)` 搬进 AppUI；加 `FindPatternParityTests`。
@@ -713,7 +742,7 @@ public struct FindPattern: Hashable, Sendable {
 4. 更新 `RuntimeViewerUsingAppKit/AGENTS.md` 里 Find 查询框那一段。
 5. 验证同第一步，并手动查一次带 pattern 的 Find 搜索与最近查询菜单。
 
-**第四步：拆测试，加越界检查**（合进 `next` 一次，提案改为 Implemented）
+**第四步：拆测试，加越界检查**（✅ 已完成。合进 `next` 一次，提案改为 Implemented）
 
 1. 建 `RuntimeViewerAppCoreTests`、`RuntimeViewerAppUITests`、`RuntimeViewerAppTestingSupport`，按「详细设计 · 测试」搬文件，删掉 `RuntimeViewerApplicationTests`。
 2. 加 `AppCoreBoundaryTests`，与 `CrossPlatformSourceGuardTests` 共用扫描代码。
@@ -747,3 +776,28 @@ public struct FindPattern: Hashable, Sendable {
 | 2026-11-13 | 去掉三个上游库 | 审阅草案时，用户要求 AppCore 也不依赖 UIFoundation、SFSymbols、AppKitPlus，推翻了上一行里「只取模型」的默认做法。调研后定下：`NSUI*` 别名自己定义，属性串手写，系统图标改用 AppCore 的 `SystemSymbol`。`IDEIcon` 的绘制经依赖注入交给 AppUI，否决让 UIFoundation 拆出单独的 product。Find 的拼接规则在 AppCore 照 AppKitPlus 重写，并用对照测试守住，否决经依赖注入交给 AppUI，也否决保留 AppKitPlus。`Transition+Navigation.swift` 挪进 AppUI，Architectures 去掉 AppKitPlus，否决不挪。 |
 | 2026-11-13 | 落地改为四次 | 新增的「去掉 AppKitPlus」自带对照测试，单独合一次，保持每次改动小、能单独验收。用户确认四次，否决并回第二步。 |
 | 2026-11-13 | Accepted | 用户批准，开始实现。实现在功能分支 `feature/app-core-ui-split` 上按四步提交，每一步的最后一个提交就是一次可单独合进 `next` 的边界；合进 `next` 由用户看过后经 `finish-feature` 按步进行。 |
+| 2026-11-13 | 第一步：访问级别 | AppUI 用到的 AppCore 成员改成 `package`，没有一个改成 `public`：`ActivityReportSelector`（连同 `Selection` 的三个字段、`init()` 与 `update(with:now:)`）、`ActivityReportsSnapshot.merged(_:)`、`RuntimeEngineSession.backgroundWorks`、`RuntimeEngineBackgroundWork`、`RuntimeEngineActivityReporter` 与它的 `snapshot`、`FindRecentQueries` 的 `title(for:)` 与 `attributedTitle(for:font:)`、`FindModePathComponent.path(for:)`、`SidebarRootViewModel.isOnThisMac(_:)`。 |
+| 2026-11-13 | 第一步：文档 | 愿景《无头 RuntimeViewer》里提到 `RuntimeViewerApplication` 的两处，说的是写愿景时的旧状态和当时考虑过的选项，属于历史论证，不改；「文档与工程描述」表相应删去这一项。`CommunicationAndEngineArchitecture.md` 里引擎管理器的路径本来就过时（0035 已把它搬进 `RuntimeViewerEngineManagement`），借这次一并改正。测试 target 第一步还没改名，测试规则文件与根 `AGENTS.md`「Testing」里的名字留到第四步。 |
+| 2026-11-14 | 第一步：测试基线 | 全量包测试里有 5 处失败。`InjectedDeviceEngineReconnectionTests`、`ReportSharedByEngineTests`、`FindViewModelCrossReferenceTests`、`BackgroundWorkProcessActivityTests` 是满载并行时的超时，单独重跑全部通过。`TitleActivityIndicatorTests` 里「指针在标题上时副标题显示活动」一例在 `next` 基线上同样失败，与本次无关；它只测 `RuntimeViewerUI`，本提案不碰。 |
+| 2026-11-14 | 第一步：验证 | macOS App（`RunScript.sh --no-launch`）、iOS App（`RuntimeViewer iOS`，不签名）、`RuntimeViewerMCP` 的构建与 95 个测试都通过。`./TuistScript.sh check` 的 target 名单、锁文件与 trait 各项都过了，只报 `RuntimeViewerUsingAppKit.xcodeproj` 在工程级设了 `DEVELOPMENT_TEAM`：这是 `next` 上 8768b8cd 照收 Xcode 改写时带进来的，本分支没有改动任何工程文件，与本提案无关，不在这条分支上修。 |
+| 2026-11-14 | 第二步：Xcode 主题颜色 | `NSColor+Xcode.swift` 从 `RuntimeViewerUI` 挪进 AppCore 的 `Theme/`，偏离了「`RuntimeViewerUI` 不动」。AppCore 去掉 `import RuntimeViewerUI` 后才发现，Find 行样式用着其中两个颜色。这五个颜色只有 AppCore 与 App 的 Find 页在用，`RuntimeViewerUI` 自己不用；按分界规则，它们是该放在 AppCore 的模型。 |
+| 2026-11-14 | 第二步：图标缓存 | 缓存从 `RuntimeObjectIcon` 的静态字典挪进渲染器，真实实现与测试替身各一份。留在 AppCore 的话，测试替身画的空图会和真实图标共用一份缓存，测试之间互相污染。同一个描述仍总是给回同一张图，`Appearance` 的判等不受影响。渲染器不限主线程；但 `IDEIcon` 的图像缓存是没加锁的全局字典，画图标的测试并行跑时撞坏过它，所以这些测试跑在主 actor 上。 |
+| 2026-11-14 | 第二步：测试替身 | `UserNotificationCenterClient` 的测试默认值改成被调用就记 issue（`unimplemented`），而不是像 `PasteboardClient` 那样什么都不做：只有构造通知服务的测试会碰到它，它们都装了自己的记录替身。`appRouter` 的测试默认值同样记 issue。 |
+| 2026-11-14 | 第二步：检查与 trap | `CrossPlatformSourceGuardTests` 原来只认 `@DependencyEntry` 声明的 key，现在也认手写的访问器（`get { self[…Key.self] }`）；否则 `appRouter` 改成手写之后会漏查。`SystemSymbol` 找不到符号时 trap，这一步收进 `image(named:)`，并配了一个 exit test；给符号图像加配置那一步不可能失败，改成退回原图、不 trap。 |
+| 2026-11-14 | 第二步：Report 图标测试 | `ReportEngineGroupsTests` 原来拿 AppUI 的具体提供者画的图去比 Report 行的图（比像素）。Report 改经 AppCore 的接口取图标后，测试里拿到的是测试替身，两边对不上。现在占位提供者给每个 engine 一张自己的空图，同一个 engine 总是同一张；测试改为经同一个接口取图、按同一性比较。行显示的必须正是自己 engine 的那张，比原来比像素更严。 |
+| 2026-11-14 | 第二步：App 的调用处 | `RuntimeObjectIcon` 的颜色与样式参数换成 `Glyph.Color` / `Glyph.Style` 之后，App 里只有一处跟着改：`SourceEditorLandmarkIcon`（小地图悬停标签前的图标）原来把颜色写成 UIFoundation 的 `IDEIconColor`，现在写成 `RuntimeObjectIcon.Glyph.Color`，并去掉不再用到的 `import UIFoundation`。包测试覆盖不到 App target，这一处是编 App 时发现的。 |
+| 2026-11-14 | 第二步：验证 | macOS App、iOS App、`RuntimeViewerMCP` 的构建与 95 个测试都通过；`./TuistScript.sh check` 同第一步，只报既有的 `DEVELOPMENT_TEAM`。全量包测试 6 个 target 共 1239 个测试，8 处失败：`InjectedDeviceEngineReconnectionTests` 两例、`StatefulOutlineViewAutosaveTests` 两例、`CrossReferencePreparationFillTests` 与 `FindViewModelCrossReferenceTests` 的 Call Hierarchy 是满载并行时的超时与时序，单独重跑全部通过；`TitleActivityIndicatorTests` 是第一步记过的基线失败；Report 引擎图标那例是这一步引入的，已按上面一行改好、重跑通过。截图对照没有做：要启动 App 并点开各页，属于交互式界面操作，不在这次授权里，留给用户目视验收。改用离线核对：18 个系统符号的名字与取图写法（`accessibilityDescription` 为 `nil`、同样的 `SymbolConfiguration(pointSize:weight:)`）和 SFSymbols 原来的逐个相同；对象图标的 14 种颜色、4 种样式由 `RuntimeObjectIconGlyphTests` 与 `IDEIcon` 直接画的图逐像素对照；行标题由 `RowTextAttributedStringTests` 与 UIFoundation 的 builder 逐属性对照。 |
+| 2026-11-14 | 第三步：移植的测试 | AppKitPlus 的 25 个测试移植了 13 个：转义、反向引用、没有标识的组、不带反向引用的 pattern、组号把 pattern 自己的组算进去、数捕获组、标准 pattern 的组数与 ICU 一致、组成规则、判等、属性表来回、读 Xcode 写的属性表、坏属性表、存盘保留全部属性（对应原来的归档测试）。其余 12 个测的是 AppCore 不重写的部分——标准 pattern 目录、按匹配方式包正则、编译失败报错、替换模板（两个）、拒收别的类型（Swift 的枚举在类型上就排除了）、新标识是 UUID、token 编号、属性串画 token（三个）——仍由 AppKitPlus 自己的测试守着。标准目录改由对照测试核对：测试用的十二个 pattern 与 AppKitPlus 的逐个相同。 |
+| 2026-11-14 | 第三步：互转不经属性表 | 设计写的是经属性表互转，实际改为逐个组件对应，pattern 的七个属性逐个转。两边的属性一一对应，逐个转不会失败；经属性表反而要为一条走不到的失败分支写处理。属性表本身的兼容（已存的最近查询、Xcode 写进粘贴板的内容）由对照测试与读回测试守着。属性表的两个方向因此只给编码与测试用，留在 AppCore 内部，不像设计草图那样公开。 |
+| 2026-11-14 | 第三步：App 的调用处 | `FindQueryTerm.components` 换成 AppCore 自己的类型后，App 的 `FindViewController` 跟着改了三行：读查询框用 `FindQueryTerm(findPatternComponents:)`，比较与写回用 `term.findPatternComponents`。AppUI 的菜单 adapter 同样改用后者。 |
+| 2026-11-14 | 第三步：标题只写一处 | `attributedTitle(for:font:)` 搬进 AppUI 后，要拼出和 `title(for:)` 一样的前后文字。为了不让标题的写法分在两个模块，`FindRecentQueries` 把它拆成 `titlePrefix(for:)` 与 `titleSuffix(for:)`（package），两个标题都由它们拼。 |
+| 2026-11-14 | 第三步：其他平台与上游新增的组件 | 原来 AppKitPlus 只在 macOS 上，`FindQueryTerm` 在其他平台只有纯文本，首尾空白按 `whitespacesAndNewlines` 裁。现在各平台是同一个模型、同一套裁剪规则（`Character.isWhitespace`）；iOS 等平台没有 Find 页，看不到差别。AppKitPlus 是二进制发布的库，`NSFindPatternComponents.Component` 以后可能加 case；互转时认不出的组件丢掉，和 AppKitPlus 自己的 Swift 覆盖层一样。 |
+| 2026-11-14 | 第三步：先证明样本是旧版本写的 | 读回测试用的文件是手写的。这条测试只用新旧两版都有的 API，所以先在改动前的代码上跑：旧版本读回、再写出，与样本逐字节相同，证明样本正是旧版本写出的格式；改动后同一条测试照样通过。另做了一次变异检查：临时从转义的字符里去掉 `/`，移植测试与对照测试都变红，随后改回。 |
+| 2026-11-14 | 第三步：验证 | macOS App、iOS App、`RuntimeViewerMCP` 的构建与 95 个测试都通过；`./TuistScript.sh check` 同前两步，只报既有的 `DEVELOPMENT_TEAM`。Find 相关的 6 组 75 个测试全过。全量包测试 6 个 target 共 1257 个测试，12 处失败：`InjectedDeviceEngineReconnectionTests` 两例、`InspectorHierarchyViewModelTests` 两例（连不上对端）、`StatefulOutlineViewAutosaveTests` 三例，以及 `ContentImageViewModelTests`、`ReportSharedByEngineTests`、`RuntimeBackgroundIndexingSharedEngineTests`、`FindViewModelCrossReferenceTests`（Call Hierarchy）各一例，都是满载并行时的超时与时序，单独重跑全部通过；`TitleActivityIndicatorTests` 是基线失败。手动查带 pattern 的 Find 搜索与最近查询菜单没有做：要在 App 里操作界面，不在这次授权里，留给用户；拼出的正则与菜单标题的写法由对照测试与读回测试守着。 |
+| 2026-11-14 | 第四步：测试支持库是 product | 提案写的是普通 target，实测 Tuist 不认：它只映射属于某个 product 的普通 target（上游的 `MachOTestingSupport` 等也被它略过，日志写「ignored by product type」），而本仓库的测试 target 要映射，依赖一个被略过的 target 时 `tuist generate` 报「Couldn't find target」。所以 `RuntimeViewerAppTestingSupport` 也声明成 library product，清单里的注释写明只为 Tuist，App 不链接它；Tuist 的三份名单随之补上。 |
+| 2026-11-14 | 第四步：支持库不用 `@testable import` | 挪进支持库的帮手原来 `@testable import` AppCore 与 Settings；支持库是会被 `swift build -c release` 编到的普通代码，那样在 Release 下编不过。改为把它们用到的七处测试接缝开到 `package`：`AppDefaults(storageDirectoryURL:userDefaultsNamespace:)`、`AppDefaults.makeTemporaryStorageDirectoryURL(label:)`、`UserDefaultsNamespace` 与它的 `makeIsolated()`、`ResolvedThemeStream()`、`RuntimeEngineBackgroundWorkRegistry` 与它的依赖访问器、`SettingsAccess.preview`。它们的注释本来就写着是留给包里的测试的。支持库的声明也都改成 `package`。 |
+| 2026-11-14 | 第四步：归类与提案名单的出入 | `RuntimeObjectFixtures`（`Fixtures`）被共用的 `FindResultFixtures` 用到，跟着进支持库。`TestSupport.swift` 里 AppUI 一侧只用 `pollUntil`，挪进支持库；只有 AppCore 用的 `withLiveDependencyContext` 与要用 Testing 宏的 `makeLoadedImageNode` 留在 AppCoreTests，支持库因此不 import Testing，「风险」一节担心的普通 target 用 swift-testing 不再出现。名单漏列的 `ListKeyPressTests`、`TitleActivityIndicatorTests`、`ToolbarActivityViewTests` 只测 `RuntimeViewerUI`，进 AppUITests。拆开的用例见「详细设计 · 测试」。 |
+| 2026-11-14 | 第四步：越界检查的写法 | 读源码的代码从 `CrossPlatformSourceGuardTests` 抽到 `Support/PackageSourceScan.swift`，`#if` 改为按 macOS 与 iOS 一族各求值，两个检查共用。越界检查报出文件与行；跨行写的类型声明头合并起来读（最多 6 行）；`class var`、`class func` 这类成员不当作类型声明；清单一项从 AppCore 往下走包里它依赖的 target。故意越界的验证：临时在 AppCore 加一个文件，写 `import AppKitPlus` 与 `NSMenu()`——编译照样通过（SwiftPM 不拦未声明依赖的 import，这正是要有这道检查的原因），检查报出这两处并给出文件与行；删掉后恢复通过。 |
+| 2026-11-14 | 第四步：AppCoreTests 真的不带 AppUI | Xcode 27 工具链下的 `swift test` 给每个测试 target 各编一个 bundle、各跑一个进程（与 Xcode 一样）。用 `nm` 核对过：`RuntimeViewerAppCoreTests.xctest` 里没有一个 AppUI 的符号，AppUITests 的有 1537 个；AppCoreTests 的 817 个测试就是在没有 AppUI 的进程里跑过的。因此在那里用 live 依赖上下文读三个跨层接口会被记成问题，这一条写进了 `Tests/AGENTS.md`。 |
+| 2026-11-14 | 第四步：验证 | macOS App、iOS App、`RuntimeViewerMCP` 的构建与 95 个测试都通过；`./TuistScript.sh check` 的名单、锁文件与 trait 各项都过了（生成里有两个测试 target 与支持库），只报既有的 `DEVELOPMENT_TEAM`。全量包测试 7 个 target 共 1263 个测试，其中 AppCoreTests 817 个、AppUITests 200 个；5 处失败：`InjectedDeviceEngineReconnectionTests` 两例、`ReportSharedByEngineTests` 与 `FindViewModelCrossReferenceTests`（Call Hierarchy）各一例是满载并行时的超时，单独重跑全部通过；`TitleActivityIndicatorTests` 是基线失败。按 target 名过滤（`--filter RuntimeViewerAppUITests`）只跑了 AppUI 的 200 个。越界检查的故意越界验证见上一行。 |
+| 2026-11-14 | 实现完成，待用户看过后收尾 | 四步都已提交在 `feature/app-core-ui-split`。文档已随各步同步：根 `AGENTS.md`、`RuntimeViewerPackages/Sources/AGENTS.md`、`RuntimeViewerPackages/Tests/AGENTS.md`、`RuntimeViewerUsingAppKit/AGENTS.md`、`CommunicationAndEngineArchitecture.md`、`Guides/TuistDevelopment.md`。没做的验证：第二步的图标截图对照、第三步手动查 Find 搜索与最近查询菜单，都要在 App 里操作界面，留给用户。收尾时要判断的两件事（配套文章、新术语）留给 `finish-feature`；`Documentations/README.md` 的索引行也留到那时补，常驻检出里那一行与别人未提交的改动混在一起。 |

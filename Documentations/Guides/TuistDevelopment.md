@@ -273,7 +273,8 @@ Agent 运行时用 `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent
   `localTestTargetSettings`）：Tuist 把包编成静态库，链接器只拉被符号引用到的成员；原生的 SwiftPM 集成把每个包
   target 整块链进去。运行时按名字查找的代码因此会丢：RxCocoa 的 `DelegateProxy` 是泛型类，按名字找它的 ObjC
   父类 `_RXDelegateProxy`，类不在，realize 任何一个 `DelegateProxy` 子类都会 `abort`（测试进程在启动时把所有类
-  realize 一遍，`RuntimeViewerApplicationTests` 就这样整个没跑起来）。Xcode 27 的链接器下 `-ObjC` 会拉进所有定义了
+  realize 一遍，当时的 `RuntimeViewerApplicationTests`——如今拆成 `RuntimeViewerAppCoreTests` 与
+  `RuntimeViewerAppUITests`——就这样整个没跑起来）。Xcode 27 的链接器下 `-ObjC` 会拉进所有定义了
   ObjC 类或分类、Swift 类型或 extension 的成员。没用 `-all_load`：它会把部署到 macOS 10.15 的注入载荷自动链接的
   Swift 兼容静态库也整个拉进来，那是原生不做的。`check` 两层都查：静态核对查每个 target 都带这个参数，
   `check --build` 比对两边每个可执行文件定义的 ObjC 类。

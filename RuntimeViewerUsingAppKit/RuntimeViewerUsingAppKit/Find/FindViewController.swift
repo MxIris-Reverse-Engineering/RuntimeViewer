@@ -486,7 +486,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             // both pages share.
             caseSensitiveToggled: caseSensitiveButton.rx.click(with: \.state).asSignal().map { $0 == .on },
             scopeMenuChoiceSelected: scopeMenuChoiceSelected,
-            searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in FindQueryTerm(components: searchField.findPatternComponents) },
+            searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in FindQueryTerm(findPatternComponents: searchField.findPatternComponents) },
             recentQuerySelected: searchFieldMenuAdapter.recentQuerySelected,
             clearRecentQueriesSelected: searchFieldMenuAdapter.clearRecentQueriesSelected,
             filter: filterFieldAdapter.filter.asDriver(onErrorDriveWith: .empty()),
@@ -520,8 +520,9 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
             // turns bold and takes the accent colour; off, it is regular and untinted.
             caseSensitiveButton.font = query.isCaseSensitive ? .boldSystemFont(ofSize: 11) : .systemFont(ofSize: 11)
             caseSensitiveButton.contentTintColor = query.isCaseSensitive ? .controlAccentColor : nil
-            if searchField.findPatternComponents != query.term.components, searchField.currentEditor() == nil {
-                searchField.findPatternComponents = query.term.components
+            let queryFieldComponents = query.term.findPatternComponents
+            if searchField.findPatternComponents != queryFieldComponents, searchField.currentEditor() == nil {
+                searchField.findPatternComponents = queryFieldComponents
             }
             memberKindPopUpButton.isHidden = !query.mode.hasMemberKinds
             if let kindIndex = FindMemberKindFilter.allCases.firstIndex(of: query.memberKindFilter), memberKindPopUpButton.indexOfSelectedItem != kindIndex {

@@ -21,6 +21,8 @@ let localPackageTargetNames = [
     "RuntimeViewerSettingsUI",
     "RuntimeViewerSimulatorInstaller",
     "RuntimeViewerApplication",
+    "RuntimeViewerAppCore",
+    "RuntimeViewerAppUI",
     "RuntimeViewerServiceHelper",
     "RuntimeViewerHelperClient",
     "RuntimeViewerDeviceInjection",
@@ -28,6 +30,7 @@ let localPackageTargetNames = [
     "RuntimeViewerRunningBoardSupport",
     "RuntimeViewerCatalystExtensions",
     "RuntimeViewerEngineManagement",
+    "RuntimeViewerAppTestingSupport",
     "RuntimeViewerPackages_RuntimeViewerSettingsUI",
     // RuntimeViewerMCP
     "RuntimeViewerMCPBridge",

@@ -14,8 +14,8 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 | File | Covers |
 |------|--------|
 | `RuntimeViewerUsingAppKit/AGENTS.md` | The macOS app's UI layer — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and routes, AppKit views, the sidebar's floating bars, diagnosing flicker — and `AppDelegate` with the lifecycle controllers. It also governs the ViewModels and routes in `RuntimeViewerApplication` and the views in `RuntimeViewerUI` |
-| `RuntimeViewerPackages/Sources/AGENTS.md` | Points the UI code in `RuntimeViewerApplication` and `RuntimeViewerUI` to the file above |
-| `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
+| `RuntimeViewerPackages/Sources/AGENTS.md` | What goes in `RuntimeViewerAppCore` and what in `RuntimeViewerAppUI`, and the facade `RuntimeViewerApplication`; points their UI code and `RuntimeViewerUI` to the file above |
+| `RuntimeViewerPackages/Tests/AGENTS.md` | Which test goes in `RuntimeViewerAppCoreTests`, `RuntimeViewerAppUITests` or the helpers they share; keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
 | `RuntimeViewerCore/Sources/AGENTS.md` | Where a file goes in the RuntimeViewerCore package: one top-level type per file, directories by feature; how every engine command declares its routing |
 | `RuntimeViewerCore/Tests/AGENTS.md` | Keeping Core tests off the user's real derived data |
 | `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
@@ -163,11 +163,13 @@ scratch path:
 ```bash
 cd RuntimeViewerPackages
 queued-build swift build --build-tests --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages
-queued-build swift test --skip-build --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages --filter RuntimeViewerApplicationTests
+queued-build swift test --skip-build --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages --filter 'RuntimeViewerAppCoreTests|RuntimeViewerAppUITests'
 ```
 
-How the suites stay off the user's real settings and bookmarks, and how they get an engine:
-`RuntimeViewerPackages/Tests/AGENTS.md`.
+The application layer's tests are two targets: `RuntimeViewerAppCoreTests` (the ViewModels and the
+application logic, nothing of the UI layer linked) and `RuntimeViewerAppUITests` (the UI glue and the
+views). Which test goes where, how the suites stay off the user's real settings and bookmarks, and how
+they get an engine: `RuntimeViewerPackages/Tests/AGENTS.md`.
 
 </important>
 
@@ -327,7 +329,9 @@ The project uses three Swift Package Manager packages:
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
 - `RuntimeViewerArchitectures` — MVVM + Coordinator pattern with RxSwift
-- `RuntimeViewerApplication` — ViewModels and business logic (Sidebar, Inspector, Content, Theme, FilterEngine)
+- `RuntimeViewerAppCore` — ViewModels, cell ViewModels, routes, `DocumentState` and the application logic (Sidebar, Inspector, Content, Find, Theme, FilterEngine); testable, no UI component appears in it, and it depends on no UI library (`RuntimeViewerPackages/Sources/AGENTS.md`)
+- `RuntimeViewerAppUI` — the UI glue split out of the application layer: the adapters that set up AppKit and AppKitPlus controls, the jump bar's items, the toolbar activity presenter, the navigation controller's transitions, the Find query field's content as a `FindQueryTerm`, and the live implementations of the services RuntimeViewerAppCore declares
+- `RuntimeViewerApplication` — a facade that only re-exports the two above; the apps link this one product
 - `RuntimeViewerUI` — AppKit UI components (MinimapView, StatefulOutlineView, skeleton effects)
 - `RuntimeViewerServiceHelper` — Helper utilities
 - `RuntimeViewerHelperClient` — Helper client for XPC communication
@@ -740,6 +744,7 @@ from what would make sense. How the module is built, how to establish a fact and
 
 - `static let shared` **始终**使用 `fileprivate`（同文件中的 macro expansion 可以访问它，其他文件不能），绝不使用 `public` 或无修饰的 `static let`。禁止在定义文件外调用 `Foo.shared.bar()`，也不为了够到 `Foo.shared` 而 import 一个 module。
 - 用 `extension DependencyValues` 里的 `@DependencyEntry` 生成 key 与 accessor，不要手写 `DependencyKey` enum 与 `get` / `set`。生成的 key 是 `nonisolated`，所以 `@MainActor` singleton 写 `@DependencyEntry(liveValue: MainActor.assumeIsolated { MyService.shared })`，且只允许在既有的 main-actor 调用路径中首次解析；非 `@MainActor` singleton 直接写 `@DependencyEntry(liveValue: MyService.shared)`。通常只写属性类型，让默认 test behavior 保持不变；确实需要时才加默认 test value 或 `previewValue:`。
+- **唯一例外：接口在 `RuntimeViewerAppCore`、真实实现只能放在 `RuntimeViewerAppUI` 的依赖**（现在是 `appRouter`、`runtimeEngineIconProviding`、`runtimeObjectIconRendering`），照 swift-dependencies 文档「Separating interface and implementation」手写：AppCore 声明一个遵循 `TestDependencyKey`、只给 `testValue` 的 `package enum XxxKey` 和 `DependencyValues` 访问器（`get { self[XxxKey.self] }`），AppUI 在真实实现的文件里补 `extension XxxKey: DependencyKey` 与 `liveValue`。测试值要么被调用就记 issue，要么是不碰系统的替身。`CrossLayerDependencyTests` 核对每个这样的 key 在链接 AppUI 之后都有 live 值：新加一个，就加进它的清单。只限这一类，其余依赖照旧用 `@DependencyEntry`。
 - key path 与类型同名、首字母小写（`MyService` → `\.myService`，`HelperServiceManager` → `\.helperServiceManager`）；`DependencyValues` 属性的访问级别与实际使用范围一致：跨 module 用 `public`，否则用 `package` 或 internal。调用方一律 `@Dependency(\.myService) private var myService`。
 - **非隔离的类型（普通 class、actor、`nonisolated` 成员）不要用存储属性 `@Dependency` 持有 `@MainActor` 依赖。** 存储属性在哪个线程被读，就在哪个线程解析；只要那是进程里第一次读，`MainActor.assumeIsolated` 就会让进程中止，而「别处已经先在主线程取过」只是启动顺序的巧合——`15ed432a` 修过 `\.settings` 的一处，2026-10-14 又在 `RuntimeInjectClient` / `RuntimeHelperClient` 上崩了一次（`Documentations/ResolvedIssues/2026-10-14-helper-service-manager-resolved-off-main-actor.md`）。改成 `@MainActor` 的计算属性、在 getter 里声明 `@Dependency`（参照 `RuntimeInjectClient.helperServiceManager`）：每个读都先跳到主线程，新调用点漏了 `await` 编译不过；跳转留在同一个任务里，`withDependencies` 的覆盖照常生效。
 - 有限例外：enclosing type 已经是 `private` / `fileprivate`（例如 file-scoped helper `EmptyRouteTransitionContext`）时保留 `static let shared`，额外加 `fileprivate` 会触发 redundant-modifier warning；Apple SDK singleton（`NSApplication.shared`、`NSWorkspace.shared`、`NSDocumentController.shared`、`UserDefaults.standard`、`FileManager.default` 等）不属于项目 singleton，直接使用。
@@ -792,10 +797,10 @@ the end of the file that logs to it. The line then goes to that os_log category,
 - Coordinator/navigation: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
 - Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`
 - Engine manager: `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift`
-- Document state: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
-- Editor panes: the model in `RuntimeViewerPackages/Sources/RuntimeViewerApplication/EditorArea/`, the views
+- Document state: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/DocumentState.swift`
+- Editor panes: the model in `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/`, the views
   and their coordinator in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/EditorArea/`
-- ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/`
+- ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/`; the UI glue they are bound through: `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/`
 - MCP bridge window provider: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppMCPBridgeWindowProvider.swift`
 - MCP server: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/`
 - MCP bridge: `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/`
