@@ -15,5 +15,8 @@ public enum ContentRoute: Routable {
     case next(RuntimeObject)
     /// `next`, with the same: a Find navigator hit.
     case nextHighlighting(RuntimeObject, ContentHighlightRequest)
+    /// An image chosen in the pane's jump bar, by its image tree path, before any of its objects:
+    /// indexed first when it is not (proposal `editor-jump-bar`).
+    case image(String)
     case back
 }

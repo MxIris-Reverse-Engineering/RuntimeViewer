@@ -1,13 +1,13 @@
 # Draft - 编辑栏的路径栏：在编辑栏里切换镜像，侧栏不动
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-11-13
 - **最后更新**: 2026-11-13
 - **实现分支**: `feature/editor-jump-bar`
 
 ## 摘要
 
-给每个编辑栏（pane）加一条 Xcode 式的路径栏（jump bar），控件用 AppKitPlus 的 `NSPopUpPathControl`——Xcode `DVTPathControl` 的移植，Find 的模式路径已经在用。路径是「来源 › 镜像树根 › 各级目录 › 镜像 › 对象」，点任一段弹出那一层的同级项，目录行带子菜单逐层展开，只有选到镜像或对象时菜单才关上并跳转。跳转只发生在这一栏，侧栏不跟着换镜像。跳到还没索引的镜像时自动开始索引，进度显示在这一栏里，索引完再显示内容。RuntimeViewer 现在没有路径栏（[0084](0084-objc-generated-interface.md)「入口」一节）。
+给每个编辑栏（pane）加一条 Xcode 式的路径栏（jump bar），控件用 AppKitPlus 的 `NSPopUpPathControl`——Xcode `DVTPathControl` 的移植，Find 的模式路径已经在用。路径是「来源 › 镜像树根 › 各级目录 › 镜像 › 对象」，点任一段弹出那一层的同级项，目录行带子菜单逐层展开，只有选到镜像或对象时菜单才关上并跳转。跳转只发生在这一栏，侧栏不跟着换镜像。跳到还没索引的镜像时自动开始索引，进度显示在这一栏里，索引完再显示内容。RuntimeViewer 现在没有路径栏（[0084](0084-objc-generated-interface.md)「入口」一节）。另外，用户手动加载的镜像也记进 Report navigator，作为第四类「Manual Loading」。
 
 ## 方案
 
@@ -32,6 +32,16 @@
   - 进度按 `withLoadingPlaceholder` 的时机出现，索引一闪而过时不闪进度。
 - 索引按前台加载走（`performingForegroundLoad`，后台索引让路）。离开镜像页不取消已经开始的索引：引擎这一层取消不了，建好的结果之后照样用得上。
 
+### 附带：用户手动加载的镜像记进 Report
+
+Report navigator 现在只记后台工作（后台索引、可搜索接口、交叉引用），用户自己加载的镜像哪里都查不到。加第四类 **Manual Loading**：
+
+- **记哪些**：用户发起、真的做了加载或索引的那些——侧栏的 Load now、在侧栏打开一个还要索引的镜像、Load Frameworks…、路径栏跳到的镜像、Find 结果或内容区要用到的未索引镜像。不记：已经索引好、一打开就有的镜像（没做任何事）；批量导出（有它自己的进度表单）；MCP 与命令行的请求（不是用户在 App 里点的）。
+- **怎么显示**：与另三类同一个样子——进行中的一行一张镜像，转圈加阶段与百分比；结束的按时间倒序，写用了多久，失败的带错误标记与原因。Clear History 一并清掉，进行中的不能取消（引擎这一层取消不了）。
+- **放在哪**：按 Engine 共享，与另三类一起在 `RuntimeEngineBackgroundWork` 里（新的 `ManualImageLoadCoordinator`），同一个 Engine 的各个窗口看到同一份；共享缓存里借来的镜像记在它所属 Engine 的那一组。
+- **算进「进行中」**：手动加载进行中时，Report 标签照样标出有工作在跑，App 也不进 App Nap（`isWorkInProgress`），不然切走后大镜像会慢好几倍。
+- 工具栏的活动显示这次不跟（它只报后台工作），列为后续项。
+
 ### 栏的位置与外观（照 Xcode 27.2）
 
 - 每一栏都有路径栏，在标签栏下面，标签栏隐藏时就在这一栏顶部。macOS 26 起与标签栏一样浮在内容上：内容的安全区加上栏高，栏登记为内容滚动视图的顶部 pocket 容器（沿用 `ScrollPocketContainerRegistration`）。macOS 15 上栏不透明，内容从栏下开始。
@@ -50,8 +60,9 @@
 2. 模型：镜像条目、`SelectionRoute.openImage`，`EditorArea` 与 `ContentRoute` 跟上，附测试。
 3. 路径项与 adapter，附测试：路径怎么构成、菜单列什么、选中变成什么路由、换来源后重建。
 4. 镜像页：`ContentImageViewModel`（索引状态机，附测试）与视图，加载视图挪进 RuntimeViewerUI。
-5. 编辑栏接上路径栏：布局、pocket 登记、标签栏显隐与关闭按钮挪位。
-6. 文档：本提案、`RuntimeViewerUsingAppKit/AGENTS.md` 的路径栏规则、0084「入口」那一句、两份索引。
+5. Report 的 Manual Loading：`ManualImageLoadCoordinator`、第四类的行、各个手动加载入口接上，附测试。
+6. 编辑栏接上路径栏：布局、pocket 登记、标签栏显隐与关闭按钮挪位。
+7. 文档：本提案、`RuntimeViewerUsingAppKit/AGENTS.md` 的路径栏规则、0084「入口」那一句、两份索引。
 
 ### 没有询问就采用的假设
 
@@ -74,3 +85,5 @@
 | 2026-11-13 | 跳到镜像、索引完成后显示「No Selection」占位页，对象从路径栏末段选 | 用户选定；同 Xcode 打开文件后在符号段选符号。另两个选项——在编辑栏里列出对象列表、自动打开一个对象——前者要多做一个列表页，后者打开哪个是猜的 |
 | 2026-11-13 | 镜像在菜单里是末端，不展开成对象子菜单 | 用户选定；同 Xcode 菜单里的文件行，菜单里只有一种行为。已索引的镜像展开、未索引的作末端的做法，会让同一个菜单里有两种行为 |
 | 2026-11-13 | 状态改为 Accepted，开始实现 | 用户批准 |
+| 2026-11-13 | 功能分支从本地 `next` 切，叠在尚未推送的「编辑区内容从工具栏与标签栏下滚过」合并上 | 本地 `next` 有那次合并的 4 个提交等用户目视验收后才推；路径栏要用它的 pocket 登记，所以叠在上面，提案提交只留在本地 `next` |
+| 2026-11-13 | 追加：用户手动加载的镜像也记进 Report，作为第四类「Manual Loading」 | 用户在开工后追加的小需求；路径栏的自动索引也是用户发起的加载，同一份提案一起做。记哪些、不记哪些见「附带」一节 |

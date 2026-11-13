@@ -622,8 +622,8 @@ final class MainViewModel: ViewModel<MainRoute> {
                         NavigationHistoryItem(
                             index: entryIndex,
                             // An object and its Generated Interface are two steps: the title tells them apart.
-                            displayName: entry.showsGeneratedInterface ? "\(entry.object.displayName) (Generated Interface)" : entry.object.displayName,
-                            icon: RuntimeObjectIcon.icon(for: entry.object.kind, size: NavigationHistorySnapshot.iconSize)
+                            displayName: entry.showsGeneratedInterface ? "\(entry.displayName) (Generated Interface)" : entry.displayName,
+                            icon: entry.object.map { RuntimeObjectIcon.icon(for: $0.kind, size: NavigationHistorySnapshot.iconSize) } ?? RuntimeImageNode.imageIcon
                         )
                     },
                     currentIndex: history.currentIndex ?? -1

@@ -35,7 +35,7 @@ public struct DocumentTab: Hashable, Identifiable, Sendable {
         history.currentEntry
     }
 
-    /// The object on screen, or `nil` for an empty tab.
+    /// The object on screen, or `nil` for an empty tab and for a tab showing an image.
     public var object: RuntimeObject? {
         history.currentEntry?.object
     }
@@ -46,8 +46,14 @@ public struct DocumentTab: Hashable, Identifiable, Sendable {
         history.currentEntry?.interfaceLanguage
     }
 
-    /// Title shown on the tab. Falls back to a neutral label for an empty tab.
+    /// The path of the image on screen while the tab shows an image rather than one of its objects
+    /// (proposal `editor-jump-bar`); `nil` otherwise.
+    public var imagePath: String? {
+        history.currentEntry?.imagePath
+    }
+
+    /// Title shown on the tab: what is on screen, or a neutral label for an empty tab.
     public var title: String {
-        object?.displayName ?? "New Tab"
+        history.currentEntry?.displayName ?? "New Tab"
     }
 }

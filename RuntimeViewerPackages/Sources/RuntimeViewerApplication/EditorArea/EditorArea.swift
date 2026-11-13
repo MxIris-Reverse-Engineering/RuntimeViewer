@@ -79,13 +79,19 @@ public struct EditorArea: Hashable, Sendable {
 
     /// Shows `object` where `destination` says, in `interfaceLanguage` (`nil` for its own), and
     /// returns the pane it is shown in, which has the focus afterwards.
+    @discardableResult
+    mutating func open(_ object: RuntimeObject, in destination: SelectionRoute.Destination, interfaceLanguage: RuntimeInterfaceLanguage? = nil) -> EditorPane.ID {
+        open(NavigationEntry(object: object, interfaceLanguage: interfaceLanguage), in: destination)
+    }
+
+    /// Shows `entry` — an object, or an image before any of its objects — where `destination`
+    /// says, and returns the pane it is shown in, which has the focus afterwards.
     ///
     /// The next pane is the one after the focused pane in layout order. While the focused pane is
     /// the only one, a pane is made after it along the root, as Xcode's ⇧⌥-click does, and the
-    /// object is all that pane has shown.
+    /// entry is all that pane has shown.
     @discardableResult
-    mutating func open(_ object: RuntimeObject, in destination: SelectionRoute.Destination, interfaceLanguage: RuntimeInterfaceLanguage? = nil) -> EditorPane.ID {
-        let entry = NavigationEntry(object: object, interfaceLanguage: interfaceLanguage)
+    mutating func open(_ entry: NavigationEntry, in destination: SelectionRoute.Destination) -> EditorPane.ID {
         switch destination {
         case .focusedTab:
             updateActiveTab(ofPane: focusedPaneID) { $0.history.record(entry) }

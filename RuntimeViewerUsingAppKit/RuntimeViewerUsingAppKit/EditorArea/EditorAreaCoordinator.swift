@@ -68,7 +68,7 @@ final class EditorAreaCoordinator: ViewCoordinator<EditorAreaRoute, EditorAreaTr
             if let targetedRoute, paneID == editorArea.focusedPaneID {
                 pane.contentCoordinator.contextTrigger(targetedRoute)
             } else {
-                pane.contentCoordinator.contextTrigger(editorArea[paneID]?.activeTab.object == nil ? .placeholder : .back)
+                pane.contentCoordinator.contextTrigger(editorArea[paneID]?.activeTab.currentEntry == nil ? .placeholder : .back)
             }
         }
 
@@ -94,6 +94,8 @@ final class EditorAreaCoordinator: ViewCoordinator<EditorAreaRoute, EditorAreaTr
             .next(object)
         case .open(let object, _, let highlightRequest?, _):
             .nextHighlighting(object, highlightRequest)
+        case .openImage(let imagePath, _):
+            .image(imagePath)
         case .selectAtRoot(let object):
             .root(object)
         default:

@@ -27,6 +27,10 @@ import RuntimeViewerArchitectures
 ///   optionally with a place in its interface to reveal (a Find hit), and in a
 ///   language other than its own — `.swift` for an Objective-C object shown as
 ///   Swift imports it (Generated Interface).
+/// - `openImage`: show an image, by the path its image tree node gives, before
+///   any of its objects — an image chosen in an editor pane's jump bar
+///   (proposal `editor-jump-bar`). A step of the tab's history like `open`;
+///   the sidebar does not move.
 /// - `selectAtRoot`: the focused tab's history becomes one object
 ///   (specialization completion).
 /// - `backward` / `forward` / `jump`: move along the focused tab's history
@@ -44,6 +48,7 @@ public enum SelectionRoute: Routable {
     case switchEngine(RuntimeEngine)
     case switchImage(RuntimeImageNode?)
     case open(RuntimeObject, in: Destination, highlighting: ContentHighlightRequest? = nil, interfaceLanguage: RuntimeInterfaceLanguage? = nil)
+    case openImage(String, in: Destination)
     case selectAtRoot(RuntimeObject)
     case backward
     case forward

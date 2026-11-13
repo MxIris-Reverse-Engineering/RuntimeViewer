@@ -57,7 +57,7 @@ struct NavigationHistoryTests {
         history.record(NavigationEntry(object: renamedThirdObject))
 
         #expect(history.entries.count == 3)
-        #expect(try #require(history.currentEntry).object.displayName == "Module.Third")
+        #expect(try #require(history.currentEntry).object?.displayName == "Module.Third")
     }
 
     @Test("going backward and forward moves the current entry and stops at both ends")
@@ -138,5 +138,34 @@ struct NavigationHistoryTests {
         #expect(activeTab.history.entries.count == 2)
         #expect(activeTab.object == objcClass)
         #expect(activeTab.interfaceLanguage == .swift)
+    }
+
+    // MARK: - Images
+
+    @Test("an image entry is named after the image's file, has no object and no Generated Interface")
+    func imageEntry() {
+        let imageEntry = NavigationEntry(imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+
+        #expect(imageEntry.displayName == "AppKit")
+        #expect(imageEntry.object == nil)
+        #expect(imageEntry.interfaceLanguage == nil)
+        #expect(imageEntry.imagePath == "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+        #expect(imageEntry.showsGeneratedInterface == false)
+        #expect(imageEntry.togglingGeneratedInterface == nil)
+        #expect(NavigationEntry(object: firstObject).imagePath == nil)
+    }
+
+    @Test("an image is a step between objects, and recording it again only moves to it")
+    func imageIsAStep() {
+        var history = NavigationHistory()
+        history.record(NavigationEntry(object: firstObject))
+        history.record(NavigationEntry(imagePath: Fixtures.sampleImagePath))
+        history.record(NavigationEntry(imagePath: Fixtures.sampleImagePath))
+        history.record(NavigationEntry(object: secondObject))
+
+        #expect(history.entries.map(\.displayName) == ["First", "Sample", "Second"])
+        history.goBackward()
+        #expect(history.currentEntry?.imagePath == Fixtures.sampleImagePath)
+        #expect(history.currentEntry?.object == nil)
     }
 }

@@ -388,8 +388,14 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
     }
 
     func tabBar(_ tabBar: TabBar, iconForItem item: Any) -> NSImage? {
-        guard let kind = (item as? TabBarItem)?.kind else { return nil }
-        return RuntimeObjectIcon.icon(for: kind, size: 16)
+        switch (item as? TabBarItem)?.icon {
+        case .object(let kind)?:
+            RuntimeObjectIcon.icon(for: kind, size: 16)
+        case .image?:
+            RuntimeImageNode.imageIcon
+        case nil:
+            nil
+        }
     }
 
     func tabBar(_ tabBar: TabBar, closeIconForItem item: Any) -> NSImage? {

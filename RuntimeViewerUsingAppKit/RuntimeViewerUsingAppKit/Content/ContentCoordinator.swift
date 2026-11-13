@@ -95,10 +95,15 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
             return enterTextScene(for: runtimeObject, forceRebind: true)
         case .nextHighlighting(let runtimeObject, let highlightRequest):
             return enterTextScene(for: runtimeObject, highlightRequest: highlightRequest, forceRebind: true)
+        case .image:
+            // The image page comes with the jump bar (proposal `editor-jump-bar`); until it does,
+            // an image shows the placeholder.
+            return enterPlaceholderScene()
         case .back:
-            if let object = documentState.editorArea[editorPaneID]?.activeTab.object {
+            switch documentState.editorArea[editorPaneID]?.activeTab.currentEntry?.content {
+            case .object(let object, _)?:
                 return enterTextScene(for: object, forceRebind: false)
-            } else {
+            case .image?, nil:
                 return enterPlaceholderScene()
             }
         }
