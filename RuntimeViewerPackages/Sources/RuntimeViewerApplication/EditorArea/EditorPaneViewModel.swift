@@ -6,11 +6,12 @@ import MemberwiseInit
 /// focus, and the button that closes it.
 ///
 /// The tab bar follows Xcode 27.2's rule: it shows in every pane as soon as any
-/// pane has a second tab, and in none otherwise. The jump bar always shows
-/// (proposal `editor-jump-bar`); while the tab bar is hidden it holds the button
-/// that closes the pane, as Xcode's does. Before the jump bar the tab bar showed
-/// over a single tab as soon as there was a second pane, only to hold that
-/// button (proposal `editor-panes`).
+/// pane has a second tab, and in none otherwise. The jump bar (proposal
+/// `editor-jump-bar`) shows while the active tab shows an image or an object,
+/// and not over an empty tab, where Xcode shows "No Selection"; while the tab
+/// bar is hidden it holds the button that closes the pane, as Xcode's does.
+/// Before the jump bar the tab bar showed over a single tab as soon as there was
+/// a second pane, only to hold that button (proposal `editor-panes`).
 public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
     public let paneID: EditorPane.ID
 
@@ -108,6 +109,9 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         public let isCloseButtonHidden: Driver<Bool>
         /// What the pane's jump bar shows the path to: the step on screen in its active tab.
         public let jumpBarLocation: Driver<EditorJumpBarLocation>
+        /// Hidden while the active tab shows nothing: the jump bar shows only over an image or an
+        /// object.
+        public let isJumpBarHidden: Driver<Bool>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -167,6 +171,7 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         let pane = editorArea.compactMap { $0[paneID] }
         let paneCount = editorArea.map(\.panes.count).distinctUntilChanged()
         let tabBarSnapshot = pane.map(TabBarSnapshot.init(pane:)).distinctUntilChanged()
+        let jumpBarLocation = pane.map { EditorJumpBarLocation(entry: $0.activeTab.currentEntry) }.distinctUntilChanged()
 
         return Output(
             tabBarSnapshot: tabBarSnapshot,
@@ -176,7 +181,8 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
             .distinctUntilChanged(),
             isFocused: editorArea.map { $0.focusedPaneID == paneID }.distinctUntilChanged(),
             isCloseButtonHidden: paneCount.map { $0 < 2 }.distinctUntilChanged(),
-            jumpBarLocation: pane.map { EditorJumpBarLocation(entry: $0.activeTab.currentEntry) }.distinctUntilChanged()
+            jumpBarLocation: jumpBarLocation,
+            isJumpBarHidden: jumpBarLocation.map { $0 == .nothing }.distinctUntilChanged()
         )
     }
 }

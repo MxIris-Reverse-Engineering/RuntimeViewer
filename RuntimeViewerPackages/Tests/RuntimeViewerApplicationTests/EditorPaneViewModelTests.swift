@@ -66,7 +66,7 @@ struct EditorPaneViewModelTests {
 
         environment.documentState.selectionRouter.trigger(.newEditorPane(.onRight))
 
-        #expect(try await nextValue(from: output.isTabBarHidden) == true, "one tab in each pane: the close button sits in the jump bar")
+        #expect(try await nextValue(from: output.isTabBarHidden) == true, "one tab in each pane: the close button sits in the jump bar, where it shows")
         #expect(try await nextValue(from: output.isCloseButtonHidden) == false)
         #expect(try await nextValue(from: output.isFocused) == false, "the new pane took the focus")
     }
@@ -136,6 +136,30 @@ struct EditorPaneViewModelTests {
 
         environment.documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
         #expect(try await nextValue(from: output.jumpBarLocation) == .image(path: Fixtures.sampleImagePath))
+    }
+
+    @Test("the jump bar shows only while the active tab shows an image or an object")
+    func jumpBarHiddenOverAnEmptyTab() async throws {
+        let environment = ViewModelTestEnvironment()
+        let paneID = environment.documentState.editorArea.focusedPaneID
+        let firstTabID = environment.documentState.editorArea.focusedPane.activeTabID
+        let (viewModel, output) = makeViewModel(for: paneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        #expect(try await nextValue(from: output.isJumpBarHidden) == true, "a new document's tab shows nothing")
+
+        environment.documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "Shown"), in: .focusedTab))
+        #expect(try await nextValue(from: output.isJumpBarHidden) == false)
+
+        environment.documentState.selectionRouter.trigger(.newTab)
+        #expect(try await nextValue(from: output.isJumpBarHidden) == true, "the new tab shows nothing")
+
+        environment.documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
+        #expect(try await nextValue(from: output.isJumpBarHidden) == false, "an image's page shows it")
+
+        environment.documentState.selectionRouter.trigger(.newTab)
+        tabSelectedRelay.accept(firstTabID)
+        #expect(try await nextValue(from: output.isJumpBarHidden) == false, "back on the tab showing the object")
     }
 
     @Test("a choice in the jump bar of a pane without the focus focuses that pane and opens there")
