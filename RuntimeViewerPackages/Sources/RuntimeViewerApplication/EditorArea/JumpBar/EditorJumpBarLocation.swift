@@ -4,7 +4,7 @@ import RuntimeViewerCore
 /// What an editor pane's jump bar shows the path to: the step on screen in the pane's active tab
 /// (proposal `editor-jump-bar`).
 public enum EditorJumpBarLocation: Hashable, Sendable {
-    /// An empty tab: the jump bar shows "No Selection".
+    /// An empty tab, over which the jump bar is hidden (`EditorPaneViewModel.Output.isJumpBarHidden`).
     case nothing
 
     /// An image, by the path its image tree node gives, before any of its objects.

@@ -18,7 +18,7 @@
 - **对象**：镜像在路径末尾时，后面接一段「No Selection」（控件对 document root 的既有行为），它的菜单列出这个镜像的全部对象；显示对象时，这一段就是对象本身，菜单同样列出全部对象。嵌套类型缩进列在外层类型下面（控件的 inline 子项，同 Xcode 列文件内符号的方式），不同种类之间有分隔线。选一个对象就在这一栏打开，等同在侧栏单击它。
 - **图标**沿用侧栏：镜像树节点用 `RuntimeImageNode.icon`，对象用 `RuntimeObjectIcon`。
 - **修饰键**沿用其他打开方式（`SelectionRouteDestination+ModifierFlags`）：⌥ 在新标签打开，⇧⌥ 在下一个编辑栏打开。
-- **空标签**：路径栏只有「No Selection」一段，菜单从来源开始，可以从空标签直接走到任何镜像。
+- **空标签**：不显示路径栏，标签里打开了镜像或对象才有。Xcode 的空编辑器显示一段点不开的「No Selection」。
 - 呈现用菜单（Xcode 的默认），不用 popover；控件两种都支持，换只要一行配置。
 
 ### 跳到镜像：索引与进度都在这一栏
@@ -44,16 +44,17 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 
 ### 栏的位置与外观（照 Xcode 27.2）
 
-- 每一栏都有路径栏，在标签栏下面，标签栏隐藏时就在这一栏顶部。macOS 26 起与标签栏一样浮在内容上：内容的安全区加上两条栏的高度，两条栏都登记为内容滚动视图的顶部 pocket 容器（沿用 `ScrollPocketContainerRegistration`）。macOS 15 上栏不透明，内容从第一条栏的上沿开始、靠安全区让出栏高。
-- 几何与控件配置照逆向结果（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor jump bar (2026-11-13)」，含 AppKitPlus 映射清单）：28 点的控件行，行下 4 点，底边一条 1 点的线（`vibrantDividerColor`：黑或白 10%，增强对比度时 55.7% / 49.8%）；顶行一栏或标签栏下方行上不留白，共 33 点，下方一栏没有标签栏时留 4 点，共 37 点。控件行从安全区左缘 8 点开始；路径控件 `controlSize = .small`，其余用 AppKitPlus 的默认值（菜单而非 popover、不画 capsule、末段不占满整行），宽度贴自己的内容、行窄了先压缩它。
-- **关闭按钮挪位**，照 Xcode 的规则（同一份笔记「Editor panes」§7）：标签栏只在某一栏有两个以上标签时显示（各栏一起显示），隐藏时关闭按钮（23 点宽）和一条分隔线（1 × 12，两侧各 4 点）放到路径栏最前面，路径控件因此从 40 点开始。原来只要有两个以上的栏就显示标签栏，只是为了放关闭按钮。
+- 一栏的当前标签打开了镜像或对象时才有路径栏，在标签栏下面，标签栏隐藏时就在这一栏顶部；空标签不显示，内容的安全区也不留它的高度。macOS 26 起与标签栏一样浮在内容上：内容的安全区加上显示着的栏的高度，显示着的栏都登记为内容滚动视图的顶部 pocket 容器（沿用 `ScrollPocketContainerRegistration`）。macOS 15 上栏不透明，内容从第一条栏的上沿开始、靠安全区让出栏高。
+- 高度与控件配置照逆向结果（`/Volumes/RE/Xcode/27.2-27B52/README.md`「Editor jump bar (2026-11-13)」，含 AppKitPlus 映射清单）：28 点的控件行，底边一条 1 点的线（`vibrantDividerColor`：黑或白 10%，增强对比度时 55.7% / 49.8%）；顶行一栏或标签栏下方共 33 点，下方一栏没有标签栏时共 37 点。控件行从安全区左缘 8 点开始；路径控件 `controlSize = .small`，其余用 AppKitPlus 的默认值（菜单而非 popover、不画 capsule、末段不占满整行），宽度贴自己的内容、行窄了先压缩它。
+- **控件行垂直居中**，与 Xcode 不同：没有标签栏时，控件行放在栏顶与底边线的正中——顶行一栏上下各 2 点，下方一栏各 4 点。Xcode 顶行一栏的控件行贴着栏顶、下面留 4 点，文字比中线高 2 点。标签栏下方仍贴着栏顶：上面隔着标签栏行下的 4 点，与下面的 4 点相等。两条栏的高度与这个位置都由 `EditorPaneBarMetrics` 算，有测试钉住。
+- **关闭按钮挪位**，照 Xcode 的规则（同一份笔记「Editor panes」§7）：标签栏只在某一栏有两个以上标签时显示（各栏一起显示），隐藏时关闭按钮（23 点宽）和一条分隔线（1 × 12，两侧各 4 点）放到路径栏最前面，路径控件因此从 40 点开始。原来只要有两个以上的栏就显示标签栏，只是为了放关闭按钮。当前标签空着、两条栏都不显示的那一栏没有关闭按钮，用菜单的 Close Editor Pane（⌃⇧⌘W）关。
 - **未聚焦的栏**：路径的标题用次级标签色（代理的 `titleColorFor` 回答，聚焦变化时重建路径）。Xcode 另把箭头从 11 点换成 8 点、图标转灰，AppKitPlus 只有窗口级的激活状态，这两点这次不做。
 
 ### 代码位置
 
 - **路径项**（RuntimeViewerApplication `EditorArea/JumpBar/`）：`EditorJumpBarItem`（来源、目录、镜像、对象四种），由每个文档一份的 `EditorJumpBarItemStore` 惰性建立并保留，同一个节点始终是同一个对象（控件按指针比较）；它跟随文档的 Engine，Engine 或镜像列表变了就整棵重建并发出 `treeRebuilt`。从对象找镜像节点按 Engine 的规范路径比较（模拟器的 `DYLD_ROOT_PATH`），树里没有的镜像挂在来源下面。镜像的对象只在镜像已索引后才读（`isImageIndexed`，否则等 `imageDidIndexPublisher`），读到后经 `childItems` 的 KVO 通知控件；一个对象在读到之前先挂在镜像下，读到后保留同一个 item、挪到外层类型下面并发出 `itemsMoved`。类型加了特化时重读那个镜像。
 - **adapter**：`EditorJumpBarAdapter`，做法同 `FindModePathControlAdapter`：把这一栏的位置（`EditorJumpBarLocation`）换成控件的 `selectedItem`，把选中换成 `EditorJumpBarChoice`（目标加修饰键决定的打开位置）；路径由 view model 决定，选中后立刻放回。只有镜像与对象能选，来源与目录只用来往下走；对象的嵌套类型在菜单里缩进列出。
-- **编辑栏**：`EditorPaneViewModel` 加 `jumpBarLocation` 输出与 `jumpBarChoiceSelected` 输入（先 `.focusEditorPane` 再打开），标签栏改照 Xcode 的显隐规则；`EditorPaneViewController` 放路径栏视图（`EditorPaneJumpBarView`），store 由 `EditorAreaCoordinator` 交给每一栏。
+- **编辑栏**：`EditorPaneViewModel` 加 `jumpBarLocation`、`isJumpBarHidden` 输出与 `jumpBarChoiceSelected` 输入（先 `.focusEditorPane` 再打开），标签栏改照 Xcode 的显隐规则；`EditorPaneViewController` 放路径栏视图（`EditorPaneJumpBarView`），按 `EditorPaneBarMetrics`（RuntimeViewerApplication）排两条栏，store 由 `EditorAreaCoordinator` 交给每一栏。
 - **镜像页**：`ContentImageViewModel` 与 `ContentImageViewController`，`ContentCoordinator` 的第四种 scene；进度视图 `ImageIndexingProgressView` 挪进 RuntimeViewerUI，侧栏对象页也用它。
 - **Manual Loading**（RuntimeViewerApplication `ManualLoading/`）：`ManualImageLoadCoordinator`（`RuntimeEngineBackgroundWork` 的一部分）与 `DocumentState.recordingManualLoad(ofImageAt:_:)` / `indexImageForUser(at:)`；Report 的 `ReportCategory.manualLoading` 与两种行。接入点：侧栏的 Load now 与打开未索引镜像、Load Frameworks…、镜像页、内容区索引对象所在的镜像、Find 的交叉引用查询。
 
@@ -72,7 +73,6 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 - 同一镜像内跳对象，侧栏对象页照旧选中那一行（Find 与内容里的链接现在也是这样）；「侧栏不动」指不换侧栏显示的镜像。
 - 没加载的镜像直接加载，不再先问 Load now。加载会在 service 进程里 dlopen 它、跑它的初始化代码。
 - 路径到对象为止。Xcode 最后那段「光标所在的符号」在这里是成员（`cursorMember`），这次不做；⌃4–⌃6 打开各段菜单的快捷键、Related Items 菜单也不做。三者列为后续项。
-- 空标签的「No Selection」可以点开，菜单从来源开始，能从空标签走到任何镜像。Xcode 的空编辑器那一段点不开；这里每个新窗口都从空标签开始，能从它直接选镜像正是这个功能要的。
 - Manual Loading 不记批量导出（它有自己的进度表单）、MCP 与命令行的请求（不是用户在 App 里点的），也不记已经索引好、什么都没做的打开。
 
 ### 后续项
@@ -105,3 +105,6 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 | 2026-11-13 | 用户的加载只在对端是本 App 自带的服务（本机 `.local`、离线文件 `.file`）时用带进度的加载命令，注入的进程、网络对端照旧用不带进度的（`RuntimeEngine.loadImageForUser(at:reportProgress:)`） | 带进度的加载命令 3.0.0-beta.5 才有，更早版本注入的载荷或对端收到不认识的命令会断开连接；本机与离线文件的服务与 App 同一个版本。对那些对端，镜像页的进度在「加载」这一段只能显示阶段开始前的状态 |
 | 2026-11-13 | 路径项的 store 在读对象途中收到「已索引」通知时，读完发现没索引就再读一次 | 复查时发现的竞态：先问「是否已索引」得到否、索引恰在其后完成，那次通知被忽略，镜像就一直等一个已经过去的通知。时序竞争没法稳定复现，没写测试 |
 | 2026-11-13 | 实现完成，待用户看过后收尾 | Ultra（macOS 27.2、Xcode 27.2）上：RuntimeViewerPackages 全量 970 条测试，失败 5 条——注入载荷的两条 IPC、Call Hierarchy、标题悬停、语料构建的 activity——在功能分支切出前的基线上同样失败（基线另有一条偶发），没有本次引入的；其中 Call Hierarchy 与语料 activity 两条单独重跑通过。App（Tuist workspace，Debug）编译通过。没做界面验证（没有在 App 里点过路径栏，大镜像对象菜单的速度也没实测）。文档：规则写进根目录与 UI 层的 AGENTS.md，README 的 Highlights、术语表与两份索引已更新；不另写使用指南与实现说明，没有 App 之外的调用方 |
+| 2026-11-13 | 用户看过后定：当前标签什么都没打开时不显示路径栏，打开了镜像或对象才显示；取代上面「空标签的 No Selection 可以点开」那一条 | 用户的决定。从空标签选镜像改由侧栏开始。多栏、每栏一个标签时关闭按钮放在路径栏里，空标签那一栏于是没有关闭按钮，靠菜单的 Close Editor Pane 关；不为它单留一条只放关闭按钮的栏，那样空标签上仍有一条栏 |
+| 2026-11-13 | 用户看过后指出路径栏没有垂直居中：没有标签栏时，控件行改放在栏顶与底边线正中；标签栏下方不变，栏高仍照 Xcode | 照 Xcode 的几何，顶行一栏的控件行贴着栏顶、下面留 4 点，文字比中线高 2 点，用户一开窗口看到的正是这种；下方一栏上下本来各 4 点，标签栏下方上面有标签栏行下的 4 点、下面也是 4 点，看上去本来就居中，改成在自己的范围里居中反而离标签近。两条栏的尺寸抽成 `EditorPaneBarMetrics` 以便测试 |
+| 2026-11-13 | 这两处修完，待用户再看 | Ultra 上：路径栏相关的四个套件（`EditorPaneBarMetrics`、`EditorPaneViewModel`、编辑区路由、路径栏）48 条测试通过；居中那条测试先在旧算法上跑过，只有顶行一栏没有标签栏那一例失败，确认抓得住；App（Tuist workspace，Debug）编译通过。仍没做界面验证 |

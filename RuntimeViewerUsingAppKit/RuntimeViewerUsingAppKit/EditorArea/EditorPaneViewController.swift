@@ -29,42 +29,15 @@ import RuntimeViewerArchitectures
 /// (`isToolbarAdjacent`) — so 36 points, or 32 in the top row.
 ///
 /// Under the tab bar — or in its place while it is hidden — is the pane's jump bar (proposal
-/// `editor-jump-bar`; RE notes "Editor jump bar"): the same row, with a 1-point border under it and
-/// no top padding right under the toolbar or under the tab bar, so 33 points, or 37 in a pane
-/// further down without a tab bar. The content runs under both bars, and both are containers of its
-/// top scroll pocket.
+/// `editor-jump-bar`; RE notes "Editor jump bar"): the same row, with a 1-point border under it, so
+/// 33 points, or 37 in a pane further down without a tab bar. Its row sits midway between its top
+/// and its border, or right under the tab bar's row and its 4 points (`EditorPaneBarMetrics`, which
+/// holds both bars' numbers). It shows only while the active tab shows something. The content runs
+/// under both bars, and both are containers of its top scroll pocket while they show.
 final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
-    static let tabBarRowHeight: CGFloat = 28
-
-    static let tabBarTopPadding: CGFloat = 4
-
-    static let tabBarBottomPadding: CGFloat = 4
-
-    static let jumpBarBorderWidth: CGFloat = 1
-
-    /// The bar's height in this pane, top padding included.
-    private var tabBarHeight: CGFloat {
-        (isToolbarAdjacent ? 0 : Self.tabBarTopPadding) + Self.tabBarRowHeight + Self.tabBarBottomPadding
-    }
-
-    /// The jump bar's top padding: none right under the toolbar or under the tab bar.
-    private var jumpBarTopPadding: CGFloat {
-        isToolbarAdjacent || !isTabBarHidden ? 0 : Self.tabBarTopPadding
-    }
-
-    /// The jump bar's height, border included.
-    private var jumpBarHeight: CGFloat {
-        jumpBarTopPadding + Self.tabBarRowHeight + Self.tabBarBottomPadding + Self.jumpBarBorderWidth
-    }
-
-    /// How far down the jump bar starts: under the tab bar while it shows.
-    private var jumpBarTopOffset: CGFloat {
-        isTabBarHidden ? 0 : tabBarHeight
-    }
-
-    /// The depth of both bars, which the content's safe area makes room for.
-    private var barsHeight: CGFloat {
-        jumpBarTopOffset + jumpBarHeight
+    /// Both bars' heights and the jump bar's row, from what the pane shows and where it is.
+    private var barMetrics: EditorPaneBarMetrics {
+        EditorPaneBarMetrics(isToolbarAdjacent: isToolbarAdjacent, isTabBarHidden: isTabBarHidden, isJumpBarHidden: isJumpBarHidden)
     }
 
     /// Whether the pane's top is under the toolbar — a pane of the layout's top row — which drops the
@@ -72,14 +45,22 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     private var isToolbarAdjacent = false {
         didSet {
             guard isToolbarAdjacent != oldValue else { return }
-            updateTabBarLayout()
+            updateBarLayout()
         }
     }
 
     private var isTabBarHidden = true {
         didSet {
             guard isTabBarHidden != oldValue else { return }
-            updateTabBarLayout()
+            updateBarLayout()
+        }
+    }
+
+    /// Whether the jump bar is hidden: the active tab shows nothing.
+    private var isJumpBarHidden = true {
+        didSet {
+            guard isJumpBarHidden != oldValue else { return }
+            updateBarLayout()
         }
     }
 
@@ -103,7 +84,7 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     /// bar shows.
     private lazy var tabBarScrollPocketRegistration = ScrollPocketContainerRegistration(containerView: tabBarView, edge: .top)
 
-    /// Keeps the jump bar registered with the same pocket; it always shows.
+    /// Keeps the jump bar registered with the same pocket while it shows.
     private lazy var jumpBarScrollPocketRegistration = ScrollPocketContainerRegistration(containerView: jumpBarView, edge: .top)
 
     /// The content's top edge from macOS 26 on: the pane's own.
@@ -152,7 +133,7 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             jumpBarView
         }
 
-        // The top edge follows the bars (`updateTabBarLayout()`).
+        // The top edge follows the bars (`updateBarLayout()`).
         contentContainerView.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
         }
@@ -161,16 +142,16 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         tabBarView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide)
             make.leading.trailing.equalToSuperview()
-            make.height.equalTo(tabBarHeight)
+            make.height.equalTo(barMetrics.tabBarHeight)
         }
 
         // Under the tab bar while it shows, in its place otherwise.
         jumpBarView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(jumpBarTopOffset)
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(barMetrics.jumpBarTopOffset)
             make.leading.trailing.equalToSuperview()
-            make.height.equalTo(jumpBarHeight)
+            make.height.equalTo(barMetrics.jumpBarHeight)
         }
-        updateTabBarLayout()
+        updateBarLayout()
     }
 
     override func viewDidLayout() {
@@ -179,23 +160,25 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         isToolbarAdjacent = view.safeAreaInsets.top > 0
         // Also kept up to date from the content navigation controller; this pass only catches a
         // content swap that reported nothing.
-        updateTabBarScrollPocketRegistration()
+        updateBarScrollPocketRegistration()
     }
 
-    /// The bars' heights and paddings, where the content starts, the content's safe area under the
-    /// bars, where the close button sits, and the bars' registration with the content's scroll
-    /// pocket.
-    private func updateTabBarLayout() {
+    /// Which bars show, their heights and paddings, where the content starts, the content's safe
+    /// area under the bars, where the close button sits, and the bars' registration with the
+    /// content's scroll pocket.
+    private func updateBarLayout() {
         guard isViewLoaded else { return }
+        let metrics = barMetrics
         tabBarView.isHidden = isTabBarHidden
-        tabBarView.topPadding = isToolbarAdjacent ? 0 : Self.tabBarTopPadding
+        tabBarView.topPadding = metrics.tabBarTopPadding
         tabBarView.snp.updateConstraints { make in
-            make.height.equalTo(tabBarHeight)
+            make.height.equalTo(metrics.tabBarHeight)
         }
-        jumpBarView.topPadding = jumpBarTopPadding
+        jumpBarView.isHidden = isJumpBarHidden
+        jumpBarView.topPadding = metrics.jumpBarTopPadding
         jumpBarView.snp.updateConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(jumpBarTopOffset)
-            make.height.equalTo(jumpBarHeight)
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(metrics.jumpBarTopOffset)
+            make.height.equalTo(metrics.jumpBarHeight)
         }
         updateCloseButtonPlacement()
         // Off before on: both pin the same edge, and with the bar under the toolbar they disagree.
@@ -206,8 +189,8 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             contentTopToPaneTopConstraint.isActive = false
             contentTopToTabBarTopConstraint.isActive = true
         }
-        contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: barsHeight, left: 0, bottom: 0, right: 0)
-        updateTabBarScrollPocketRegistration()
+        contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: metrics.barsHeight, left: 0, bottom: 0, right: 0)
+        updateBarScrollPocketRegistration()
     }
 
     /// Whether the pane can be closed — there is another pane — which shows its close button.
@@ -219,19 +202,21 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     }
 
     /// The close button sits in the tab bar while that shows, and at the start of the jump bar
-    /// otherwise, as in Xcode 27.2 (RE notes "Editor panes" §7).
+    /// otherwise, as in Xcode 27.2 (RE notes "Editor panes" §7). With both bars hidden — a tab that
+    /// shows nothing, in a pane beside others that have one tab each — the pane shows no close
+    /// button; Close Editor Pane in the menu still closes it.
     private func updateCloseButtonPlacement() {
         guard isViewLoaded else { return }
         tabBarView.closeButton.isHidden = isCloseButtonHidden
         jumpBarView.showsCloseButton = !isCloseButtonHidden && isTabBarHidden
     }
 
-    /// Registers the bars with the top scroll pocket of the content on screen: the tab bar while it
-    /// shows, the jump bar always. Before macOS 26 the registration does nothing.
-    private func updateTabBarScrollPocketRegistration() {
+    /// Registers the bars with the top scroll pocket of the content on screen while they show.
+    /// Before macOS 26 the registration does nothing.
+    private func updateBarScrollPocketRegistration() {
         guard isViewLoaded else { return }
         tabBarScrollPocketRegistration.scrollView = isTabBarHidden ? nil : contentScrollView
-        jumpBarScrollPocketRegistration.scrollView = contentScrollView
+        jumpBarScrollPocketRegistration.scrollView = isJumpBarHidden ? nil : contentScrollView
     }
 
     /// A click no view inside the pane took — on the placeholder of an empty tab, say — reaches the
@@ -298,16 +283,22 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             jumpBarAdapter?.show(location)
         }
         .disposed(by: rx.disposeBag)
+
+        output.isJumpBarHidden.driveOnNext { [weak self] isHidden in
+            guard let self else { return }
+            isJumpBarHidden = isHidden
+        }
+        .disposed(by: rx.disposeBag)
     }
 }
 
 // MARK: - NSNavigationControllerDelegate
 
 extension EditorPaneViewController: NSNavigationControllerDelegate {
-    /// The content of the active tab changed, or the pane's content first appeared: the tab bar
-    /// follows it to its scroll view.
+    /// The content of the active tab changed, or the pane's content first appeared: the bars follow
+    /// it to its scroll view.
     func navigationController(_ navigationController: NSNavigationController, didShow viewController: NSViewController) {
-        updateTabBarScrollPocketRegistration()
+        updateBarScrollPocketRegistration()
     }
 }
 
@@ -335,7 +326,7 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
     }
 
     /// The space above the row, which the pane sets: none in a pane right under the toolbar.
-    var topPadding: CGFloat = EditorPaneViewController.tabBarTopPadding {
+    var topPadding: CGFloat = EditorPaneBarMetrics.padding {
         didSet {
             guard topPadding != oldValue else { return }
             contentStackView.snp.updateConstraints { make in
@@ -422,13 +413,13 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
 
         contentStackView.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(topPadding)
-            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+            make.height.equalTo(EditorPaneBarMetrics.rowHeight)
             make.leading.trailing.equalTo(safeAreaLayoutGuide).inset(Self.rowHorizontalInset)
         }
 
         closeButton.snp.makeConstraints { make in
             make.width.equalTo(Self.closeButtonWidth)
-            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+            make.height.equalTo(EditorPaneBarMetrics.rowHeight)
         }
 
         tabBar.snp.makeConstraints { make in
@@ -561,8 +552,9 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
 /// (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Editor jump bar"): a 28-point row `topPadding` below
 /// its top and 8 points in from each side of its safe area — the close button and a separator
 /// first while the tab bar is hidden and there is another pane, then the path control at its own
-/// width, which it gives up as the row narrows — 4 points below the row, and a 1-point border along
-/// the bottom.
+/// width, which it gives up as the row narrows — and a 1-point border along the bottom. The pane
+/// sets the bar's height and `topPadding` (`EditorPaneBarMetrics`), which put the row midway between
+/// the top and the border unless the tab bar is right above it.
 ///
 /// From macOS 26 on it draws no background: it is a bar in the content's top scroll pocket, which
 /// draws what is under it, and it answers `_scrollPocketElementStyle` as Xcode's bars do. Before
@@ -585,8 +577,9 @@ private final class EditorPaneJumpBarView: LayerBackedView {
         $0.setContentHuggingPriority(.required, for: .horizontal)
     }
 
-    /// The space above the row: none right under the toolbar or under the tab bar.
-    var topPadding: CGFloat = EditorPaneViewController.tabBarTopPadding {
+    /// The space above the row: none under the tab bar, half of what the row leaves above the
+    /// border otherwise (`EditorPaneBarMetrics.jumpBarTopPadding`).
+    var topPadding: CGFloat = EditorPaneBarMetrics.padding {
         didSet {
             guard topPadding != oldValue else { return }
             rowStackView.snp.updateConstraints { make in
@@ -652,23 +645,23 @@ private final class EditorPaneJumpBarView: LayerBackedView {
 
         rowStackView.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(topPadding)
-            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+            make.height.equalTo(EditorPaneBarMetrics.rowHeight)
             make.leading.equalTo(safeAreaLayoutGuide).inset(Self.rowHorizontalInset)
             make.trailing.lessThanOrEqualTo(safeAreaLayoutGuide).inset(Self.rowHorizontalInset)
         }
 
         closeButton.snp.makeConstraints { make in
             make.width.equalTo(Self.closeButtonWidth)
-            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+            make.height.equalTo(EditorPaneBarMetrics.rowHeight)
         }
 
         pathControl.snp.makeConstraints { make in
-            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+            make.height.equalTo(EditorPaneBarMetrics.rowHeight)
         }
 
         borderView.snp.makeConstraints { make in
             make.bottom.equalToSuperview()
-            make.height.equalTo(EditorPaneViewController.jumpBarBorderWidth)
+            make.height.equalTo(EditorPaneBarMetrics.jumpBarBorderWidth)
             make.leading.trailing.equalTo(safeAreaLayoutGuide)
         }
 

@@ -647,14 +647,19 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   puts the minimap above that pocket, so a minimap that is on shows plainly under the toolbar
   (`ScrollPocketUnderToolbarTests`). Background:
   `Documentations/Evolutions/draft-editor-content-under-toolbar-scroll-pocket.md`.
-- **Every pane has a jump bar under its tab bar**, always shown and registered with the same pocket
-  (proposal `editor-jump-bar`). Its geometry and control settings are Xcode 27.2's
-  (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Editor jump bar"): a 28-point row, 4 below it, a 1-point
-  `vibrantDividerColor` border, no top padding under the toolbar or the tab bar — 33 points, 37 in a lower
-  pane without a tab bar; the path control small, menus not popovers, hugging its own width. The tab bar
-  follows Xcode's rule — shown in every pane once any pane has a second tab — and while it is hidden the
-  pane's close button sits at the start of the jump bar, after which the path control starts at 40 points
-  instead of 8. The content's safe area makes room for both bars.
+- **A pane has a jump bar under its tab bar while its active tab shows an image or an object**
+  (proposal `editor-jump-bar`), registered with the same pocket; over an empty tab it is hidden and keeps
+  no room (`EditorPaneViewModel.Output.isJumpBarHidden`). Its heights and control settings are Xcode
+  27.2's (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Editor jump bar"): a 28-point row, a 1-point
+  `vibrantDividerColor` border, 33 points, 37 in a lower pane without a tab bar; the path control small,
+  menus not popovers, hugging its own width. Unlike Xcode's, the row sits midway between the bar's top and
+  its border while the tab bar is hidden (under the tab bar it stays at the top, the tab bar's 4 points
+  above it). Both bars' numbers are `EditorPaneBarMetrics` (RuntimeViewerApplication), which its tests pin:
+  change them there, not in the view controller. The tab bar follows Xcode's rule — shown in every pane
+  once any pane has a second tab — and while it is hidden the pane's close button sits at the start of the
+  jump bar, after which the path control starts at 40 points instead of 8; a pane whose bars are both
+  hidden has no close button, only Close Editor Pane in the menu. The content's safe area makes room for
+  the bars on show.
 
 </important>
 
