@@ -461,7 +461,13 @@ The project uses three Swift Package Manager packages:
   64 MB each by default): a corpus its derived data holds is built whether it is in memory or not, and
   a search reads the missing ones back one image at a time; Keep Cross References Ready prepares images,
   the Always Index ones first, until its limit is full, evicting nothing, and leaves the rest to the
-  queries that need them. Background:
+  queries that need them. **An image the user loads or has indexed goes through
+  `DocumentState.recordingManualLoad(ofImageAt:_:)` or `indexImageForUser(at:)`**, which the Report lists
+  under Manual Loading (`ManualImageLoadCoordinator`, part of the engine's work, and counted as work in
+  progress): Load now, an image the sidebar or a jump bar opens before it is indexed, Load Frameworks…, a
+  Find result or an object in an image not indexed yet. A new place that loads or indexes an image for the
+  user does the same, and hands them only work that does something — an image answered from its index
+  records nothing. Background:
   `Documentations/Evolutions/0055-engine-scoped-background-work.md`,
   `Documentations/Evolutions/0058-runtime-engine-session.md`,
   `Documentations/Evolutions/0065-engine-resident-memory.md`,
@@ -478,7 +484,12 @@ The project uses three Swift Package Manager packages:
   hands the routes to `EditorAreaCoordinator`, one `ContentCoordinator` per pane; the pane the keyboard
   focus enters becomes the focused one. A content view controller names what takes the focus through
   `EditorPaneContent.focusableView`, never `preferredFirstResponder`, which AppKitPlus's navigation
-  controller would hand the focus on every `set`. Background: `Documentations/Evolutions/0076-editor-panes.md`
+  controller would hand the focus on every `set`. **A step of a tab's history is an object in a language
+  or an image** (`NavigationEntry.Content`): an image chosen in a pane's jump bar (`.openImage`) shows the
+  image page, which indexes it first; `selectedRuntimeObject` is `nil` on it, so read an entry's `object`
+  as optional and switch over `content` where both matter. The jump bar never moves the sidebar
+  (`.switchImage` is the sidebar's alone). Background: `Documentations/Evolutions/0076-editor-panes.md`,
+  `Documentations/Evolutions/draft-editor-jump-bar.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection

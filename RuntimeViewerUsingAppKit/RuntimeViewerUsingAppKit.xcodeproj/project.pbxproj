@@ -404,10 +404,10 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				E9DAF50F2FEE741500DD20CB /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerCatalystHelper" target */,
-				E9C5E7A10000000000000009 /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerCatalystService" target */,
-				E9EB5E000000000000000002 /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerLocalService" target */,
-				E9EB5E000000000000000003 /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerOfflineService" target */,
 				E9EB5E000000000000000004 /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerServicePlugin" target */,
+				E9EB5E000000000000000002 /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerLocalService" target */,
+				E9C5E7A10000000000000009 /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerCatalystService" target */,
+				E9EB5E000000000000000003 /* Exceptions for "RuntimeViewerServicePlugin" folder in "RuntimeViewerOfflineService" target */,
 			);
 			path = RuntimeViewerServicePlugin;
 			sourceTree = "<group>";
@@ -1174,6 +1174,7 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKitProject/Debug.xcconfig;
 			buildSettings = {
+				DEVELOPMENT_TEAM = D5Q73692VW;
 			};
 			name = Debug;
 		};
@@ -1182,6 +1183,7 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKitProject/Release.xcconfig;
 			buildSettings = {
+				DEVELOPMENT_TEAM = D5Q73692VW;
 			};
 			name = Release;
 		};
@@ -1294,6 +1296,7 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = "RuntimeViewerUsingAppKitProject/Debug-arm64e.xcconfig";
 			buildSettings = {
+				DEVELOPMENT_TEAM = D5Q73692VW;
 			};
 			name = "Debug-arm64e";
 		};

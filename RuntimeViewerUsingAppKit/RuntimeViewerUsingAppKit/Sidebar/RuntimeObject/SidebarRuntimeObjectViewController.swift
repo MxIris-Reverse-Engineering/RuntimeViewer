@@ -24,7 +24,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     let imageNotLoadedView = ImageLoadableView()
 
-    let imageLoadingView = ImageLoadingView()
+    let imageLoadingView = ImageIndexingProgressView()
 
     let imageLoadedView = ImageLoadedView()
 
@@ -580,55 +580,6 @@ extension SidebarRuntimeObjectViewController {
             }
 
             navigatorScrollViewLayout = NavigatorScrollViewLayout(scrollView: scrollView, bottomOverlayViews: [filterControlBar])
-        }
-    }
-
-    final class ImageLoadingView: XiblessView {
-        let progressIndicator = NSProgressIndicator()
-        let descriptionLabel = Label()
-        let countLabel = Label()
-
-        override init(frame frameRect: CGRect) {
-            super.init(frame: frameRect)
-
-            let contentStack = VStackView(alignment: .center, spacing: 8) {
-                progressIndicator
-                descriptionLabel
-                countLabel
-            }
-
-            hierarchy {
-                contentStack
-            }
-
-            // The safe area: from macOS 26 the page runs under the toolbar and the tab switcher's bar.
-            contentStack.snp.makeConstraints { make in
-                make.center.equalTo(safeAreaLayoutGuide)
-            }
-
-            progressIndicator.snp.makeConstraints { make in
-                make.width.equalTo(260)
-            }
-
-            progressIndicator.do {
-                $0.style = .bar
-                $0.isIndeterminate = false
-                $0.minValue = 0
-                $0.maxValue = 1
-                $0.doubleValue = 0
-            }
-
-            descriptionLabel.do {
-                $0.textColor = .secondaryLabelColor
-                $0.font = .systemFont(ofSize: 12)
-                $0.alignment = .center
-            }
-
-            countLabel.do {
-                $0.textColor = .tertiaryLabelColor
-                $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-                $0.alignment = .center
-            }
         }
     }
 

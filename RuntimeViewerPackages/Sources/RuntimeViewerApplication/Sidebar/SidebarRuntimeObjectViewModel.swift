@@ -795,11 +795,17 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         }
     }
 
+    /// Load now: the user's own load, which the Report's Manual Loading records (proposal
+    /// `editor-jump-bar`).
     private func tryLoadImage() {
         Task { @MainActor in
             do {
                 loadState = .loading
-                try await runtimeEngine.loadImage(at: imagePath)
+                let runtimeEngine = runtimeEngine
+                let imagePath = imagePath
+                try await documentState.recordingManualLoad(ofImageAt: imagePath) { reportProgress in
+                    try await runtimeEngine.loadImageForUser(at: imagePath, reportProgress: reportProgress)
+                }
                 loadState = .loaded
 
             } catch {

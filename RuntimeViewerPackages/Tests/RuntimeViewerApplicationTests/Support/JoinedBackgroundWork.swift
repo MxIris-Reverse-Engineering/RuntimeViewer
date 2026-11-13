@@ -19,6 +19,10 @@ extension DocumentState {
         try joinedBackgroundWork(sourceLocation: sourceLocation).crossReferencePreparationCoordinator
     }
 
+    func joinedManualImageLoadCoordinator(sourceLocation: SourceLocation = #_sourceLocation) throws -> ManualImageLoadCoordinator {
+        try joinedBackgroundWork(sourceLocation: sourceLocation).manualImageLoadCoordinator
+    }
+
     private func joinedBackgroundWork(sourceLocation: SourceLocation) throws -> RuntimeEngineBackgroundWork {
         try #require(runtimeEngineSession.backgroundWork, "the document has not started its background work", sourceLocation: sourceLocation)
     }

@@ -234,7 +234,15 @@ old `PopUpPathControl` and `ItemPopUpButton` were deleted). Background:
 - `NSPopUpPathControl` selects the chosen item before it tells its delegate. The Find page's mode path is
   the view model's to decide, so `FindModePathControlAdapter` puts the view model's path back in
   `popUpPathControl(_:didSelect:)` and only reports the choice. A path that an owner decides needs the
-  same, or the control shows the bare chosen item for a moment.
+  same, or the control shows the bare chosen item for a moment — the editor panes' jump bars
+  (`EditorJumpBarAdapter`) do it too.
+- **The jump bars' items are `EditorJumpBarItem`s from one `EditorJumpBarItemStore` per document**, which
+  the editor area's coordinator hands every pane: the control compares items by pointer, so an item is
+  never made twice for one node while the tree stands, and the store makes the tree again — and says so —
+  when the engine or its image list changes. Images are document roots: their rows have no submenu, and
+  choosing one opens the image page. **The jump bar indexes nothing itself**: it reads an image's objects
+  only once the engine reports the image indexed, and indexing is the image page's or the content pane's
+  to start, with their progress where the user is looking.
 - The Find page's query field is an `NSFindPatternSearchField`, whose content is a `FindQueryTerm`. A term
   with find patterns goes to the engine as a regular expression bounded by the engine's own identifier
   boundaries (`RuntimeTextPattern.regularExpression(_:boundedAs:)`), never ICU's `\b`, so a match style
@@ -604,7 +612,9 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   edge effect replaces them — by making them with `HorizontalSeparatorView.makeForStackedNavigatorLayout()`,
   which returns `nil` there: never keep one hidden, since a hidden view still takes part in Auto Layout
   (*Never lay a plain separator box across a pane*, under *Views*). The line in the Find page's summary row
-  is no such separator: it is part of the row in Xcode and stays on every system. Centre empty-state text
+  is no such separator: it is part of the row in Xcode and stays on every system. Nor is the 1-point line
+  along the bottom of the Find page's query area, which exists from macOS 26 on only: Xcode 27.2 ends its
+  query parameters with it, and the scroll pocket's own hairline lies right below it. Centre empty-state text
   and placeholders in the safe area (`scrollView.safeAreaLayoutGuide`), not in the scroll view.
 - Keep the scroll view's own `automaticallyAdjustsContentInsets` on, and leave the clip view's insets, its
   `automaticallyAdjustsContentInsets` and the scroll view's `additionalSafeAreaInsets` to the layout. AppKit
@@ -626,19 +636,33 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   because `NSTabViewItem(viewController:)` loads a page's view only when it is first shown. The
   inspector's switcher does none of this.
 - **Editor panes use stand-alone pockets instead, as Xcode 27.2's editor does.** From macOS 26 on an editor
-  pane's content fills the pane — under the toolbar, and under the pane's tab bar while it shows. The
+  pane's content fills the pane — under the toolbar, and under the pane's bars while they show. The
   toolbar's strip is covered by one UIFoundation `ScrollPocketView` in front of every pane
   (`ToolbarScrollPocketContainerView`, RuntimeViewerUI, which `EditorAreaViewController` puts its root split
-  view in), and each tab bar has one behind it; each pocket's capture view lies behind the content it
-  covers. **Do not register an editor's bar with the content's scroll pocket instead, and do not count on
-  the content's own pocket under the toolbar:** AppKit draws every pocket that reaches the title bar from
-  one backdrop capture per window, taken when the first is drawn, so the toolbar over every pane after the
-  first shows the window's background, flat (measured on macOS 27.2). The content's own pockets still lie
-  under both, each pane's in a backdrop group of its own (`NSView.box.titlebarBackdropGroupName` on the
-  pane's content container). Before macOS 26 the bar is opaque and the content starts at its top edge. The
-  reconstructed SourceEditor draws its minimap over the scroll view's own pocket
-  (`ScrollPocketUnderToolbarTests`); in the app the pockets in front cover it. Background:
-  `Documentations/Evolutions/draft-editor-content-under-toolbar-scroll-pocket.md`.
+  view in), and the tab bar and the jump bar each have one behind them; each pocket's capture view lies
+  behind the content it covers. **Do not register an editor's bar with the content's scroll pocket instead,
+  and do not count on the content's own pocket under the toolbar:** AppKit draws every pocket that reaches
+  the title bar from one backdrop capture per window, taken when the first is drawn, so the toolbar over
+  every pane after the first shows the window's background, flat (measured on macOS 27.2). The content's
+  own pockets still lie under all of them, each pane's in a backdrop group of its own
+  (`NSView.box.titlebarBackdropGroupName` on the pane's content container). Before macOS 26 the bars are
+  opaque and the content starts at the first one's top edge. The reconstructed SourceEditor draws its
+  minimap over the scroll view's own pocket (`ScrollPocketUnderToolbarTests`); in the app the pockets in
+  front cover it. Background: `Documentations/Evolutions/draft-editor-content-under-toolbar-scroll-pocket.md`.
+- **A pane has a jump bar under its tab bar while its active tab shows an image or an object**
+  (proposal `editor-jump-bar`), with a scroll pocket of its own behind it as the tab bar has; over an empty
+  tab it is hidden and keeps no room (`EditorPaneViewModel.Output.isJumpBarHidden`). Its heights and
+  control settings are Xcode 27.2's (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Editor jump bar"): a
+  28-point row, a 1-point
+  `vibrantDividerColor` border, 33 points, 37 in a lower pane without a tab bar; the path control small,
+  menus not popovers, hugging its own width. Unlike Xcode's, the row sits midway between the bar's top and
+  its border while the tab bar is hidden (under the tab bar it stays at the top, the tab bar's 4 points
+  above it). Both bars' numbers are `EditorPaneBarMetrics` (RuntimeViewerApplication), which its tests pin:
+  change them there, not in the view controller. The tab bar follows Xcode's rule — shown in every pane
+  once any pane has a second tab — and while it is hidden the pane's close button sits at the start of the
+  jump bar, after which the path control starts at 40 points instead of 8; a pane whose bars are both
+  hidden has no close button, only Close Editor Pane in the menu. The content's safe area makes room for
+  the bars on show.
 
 </important>
 
@@ -682,7 +706,9 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   when with `ActivityReportSelector` — Xcode's rules: the user's work at once, other work after 4
   seconds, 3 seconds on screen at least — and `ToolbarActivityPresenter` shows a new state at most once
   a second. **A new kind of background work does not show until the reporter follows it**: add a
-  `ReportCategory` case, an `ActivityRunTracker` and its words in `ActivityText`.
+  `ReportCategory` case, an `ActivityRunTracker` and its words in `ActivityText`. Manual Loading, the
+  images the user loads, is a `ReportCategory` the reporter deliberately does not follow: it is not
+  background work, and its progress already shows where the user started it.
 - `ToolbarActivityState` and `ActivityTextSegment` live in `RuntimeViewerUI`, below
   `RuntimeViewerApplication`, because the views that take them do. The views take no RxSwift; their
   clicks are `NSControl` actions that open the Report navigator.

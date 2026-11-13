@@ -915,7 +915,8 @@ public final class FindSession {
             let scopes = crossReferenceScopes()
             let maximumConcurrentScans = settings.search.maximumConcurrentCrossReferenceScans
             let preparedIndexByteLimit = settings.search.preparedCrossReferenceByteLimit
-            crossReferenceLoadTask = Task { [weak self] in
+            let documentState = documentState
+            crossReferenceLoadTask = Task { [weak self, documentState] in
                 let outcome: Result<RuntimeCrossReferenceQueryResult, any Swift.Error>
                 do {
                     outcome = .success(try await Self.loadLevel(
@@ -925,6 +926,15 @@ public final class FindSession {
                         maximumConcurrentScans: maximumConcurrentScans,
                         preparedIndexByteLimit: preparedIndexByteLimit,
                         engine: engine,
+                        // Indexing the query's image is the user's own load, which the Report's
+                        // Manual Loading records (proposal `editor-jump-bar`).
+                        indexImage: { [weak documentState] imagePath in
+                            if let documentState {
+                                try await documentState.indexImageForUser(at: imagePath)
+                            } else {
+                                try await engine.indexImageIfNeeded(at: imagePath)
+                            }
+                        },
                         reportImageLoading: { [weak self] imagePath in
                             await self?.crossReferenceLevelLoadsImage(imagePath, from: run)
                         }
@@ -962,12 +972,13 @@ public final class FindSession {
         maximumConcurrentScans: Int,
         preparedIndexByteLimit: Int?,
         engine: RuntimeEngine,
+        indexImage: @escaping @Sendable (String) async throws -> Void,
         reportImageLoading: @escaping @Sendable (String?) async -> Void,
         reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void
     ) async throws -> RuntimeCrossReferenceQueryResult {
         if let imagePath = request.imagePath, try await !engine.isImageIndexed(path: imagePath) {
             await reportImageLoading(imagePath)
-            try await engine.indexImageIfNeeded(at: imagePath)
+            try await indexImage(imagePath)
             await reportImageLoading(nil)
         }
         if case .calls(let subject) = request, direction == .callees {

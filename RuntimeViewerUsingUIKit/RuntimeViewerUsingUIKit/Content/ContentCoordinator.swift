@@ -30,6 +30,9 @@ class ContentCoordinator: NavigationCoordinator<ContentRoute> {
             return .push(makeTextViewController(for: runtimeObjectType), animation: .default)
         case .nextHighlighting(let runtimeObjectType, let highlightRequest):
             return .push(makeTextViewController(for: runtimeObjectType, highlightRequest: highlightRequest), animation: .default)
+        case .image:
+            // Sent by the macOS editor pane's jump bar alone; this app has none.
+            return .none()
         case .back:
             return .pop(animation: .default)
         }

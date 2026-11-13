@@ -263,6 +263,69 @@ struct EditorAreaRoutingTests {
         #expect(documentState.selectedRuntimeObject == secondObject)
     }
 
+    @Test("opening an image records it after the object on screen, and neither the sidebar nor the object follows")
+    func openingAnImage() {
+        let documentState = documentShowingFirstObject()
+
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
+
+        let activeTab = documentState.editorArea.focusedPane.activeTab
+        #expect(activeTab.history.entries == [NavigationEntry(object: firstObject), NavigationEntry(imagePath: Fixtures.sampleImagePath)])
+        #expect(activeTab.imagePath == Fixtures.sampleImagePath)
+        #expect(activeTab.object == nil)
+        #expect(activeTab.title == "Sample")
+        #expect(documentState.selectedRuntimeObject == nil, "an image is no object, so the Inspector has nothing to show")
+        #expect(documentState.currentImageNode == nil, "the sidebar stays where it was")
+    }
+
+    @Test("going back from an image shows the object before it again")
+    func goingBackFromAnImage() {
+        let documentState = documentShowingFirstObject()
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
+
+        documentState.selectionRouter.trigger(.backward)
+
+        #expect(documentState.selectedRuntimeObject == firstObject)
+        documentState.selectionRouter.trigger(.forward)
+        #expect(documentState.editorArea.focusedPane.activeTab.imagePath == Fixtures.sampleImagePath)
+    }
+
+    @Test("opening the image on screen again is no new step")
+    func openingTheSameImageTwice() {
+        let documentState = documentShowingFirstObject()
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
+
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .focusedTab))
+
+        #expect(documentState.editorArea.focusedPane.activeTab.history.entries.count == 2)
+    }
+
+    @Test("an image opens in a new tab and in the next pane like an object")
+    func openingAnImageElsewhere() {
+        let documentState = documentShowingFirstObject()
+        let firstPaneID = documentState.editorArea.focusedPaneID
+
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .newTab))
+        #expect(documentState.editorArea.focusedPane.tabs.count == 2)
+        #expect(documentState.editorArea.focusedPane.activeTab.history.entries == [NavigationEntry(imagePath: Fixtures.sampleImagePath)])
+
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .nextEditorPane))
+        #expect(documentState.editorArea.layout.paneIDs.count == 2)
+        #expect(documentState.editorArea.focusedPaneID != firstPaneID)
+        #expect(documentState.editorArea.focusedPane.activeTab.imagePath == Fixtures.sampleImagePath)
+    }
+
+    @Test("a tab showing an image shows the image's name and the image icon")
+    func tabBarItemOfAnImage() {
+        let documentState = documentShowingFirstObject()
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .newTab))
+
+        let snapshot = TabBarSnapshot(pane: documentState.editorArea.focusedPane)
+
+        #expect(snapshot.items.map(\.title) == ["First", "Sample"])
+        #expect(snapshot.items.map(\.icon) == [.object(firstObject.kind), .image])
+    }
+
     @Test("switching the engine starts over with one pane holding one empty tab")
     func switchingTheEngineStartsOver() {
         let documentState = documentShowingFirstObject()

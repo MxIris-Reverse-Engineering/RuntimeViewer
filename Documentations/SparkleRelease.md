@@ -137,8 +137,8 @@ gh workflow run release.yml -f tag=v2.0.0-RC.4 -f channel=beta
 gh workflow run release.yml -f tag=v2.0.0 -f create_release=false   # build only
 ```
 
-CI watches `.github/workflows/release.yml`; it decodes the
-`SPARKLE_EDDSA_PRIVATE_KEY` secret to a tempfile and passes
+CI watches `.github/workflows/release.yml`; it writes the
+`SPARKLE_PRIVATE_KEY` secret to a tempfile and passes
 `--ed-key-file` to `ArchiveScript.sh`. Tag pushes always create/upload the
 GitHub Release and commit the updated `docs/appcast.xml` back to `main`.
 
@@ -193,9 +193,13 @@ below) affects every app that uses it — coordinate before regenerating.
 when invoked without `--ed-key-file`, which is what local runs of
 `ArchiveScript.sh` rely on.
 
-**CI use:** the same private key is stored as GitHub repo secret
-`SPARKLE_EDDSA_PRIVATE_KEY` in base64-encoded PEM form. The workflow decodes
-it into `$RUNNER_TEMP/sparkle_ed25519_priv.pem` and passes `--ed-key-file`
+**CI use:** the same private key is stored as the organization secret
+`SPARKLE_PRIVATE_KEY`, exactly as `generate_keys -x` exports it (no extra
+base64 layer). It sits beside the other shared signing secrets
+(`DEVELOPER_ID_CERTIFICATE_BASE64` and `_PASSWORD`, `NOTARY_KEY_BASE64`,
+`NOTARY_KEY_IDENTIFIER`, `NOTARY_ISSUER_IDENTIFIER`), which every release
+workflow of the owner's apps reads under the same names. The workflow writes it
+to `$RUNNER_TEMP/sparkle_ed25519_priv.pem` and passes `--ed-key-file`
 explicitly.
 
 **Cold backup:** kept as a GPG-symmetric-encrypted PEM
@@ -226,8 +230,8 @@ that, local `ArchiveScript.sh` runs work again without `--ed-key-file`.
 
 1. Generate a new EdDSA key pair with `generate_keys` and re-export a PEM.
 2. Replace `SPARKLE_PUBLIC_ED_KEY` in `Debug.xcconfig` and `Release.xcconfig`
-   with the new public key; rotate the `SPARKLE_EDDSA_PRIVATE_KEY` repo
-   secret with the new base64 PEM.
+   with the new public key; replace the `SPARKLE_PRIVATE_KEY` organization
+   secret with the newly exported key.
 3. Ship the next release with the new public key.
 4. Publish a notice in the README and in the next GitHub Release explaining
    that **already-installed clients cannot auto-update to this release** and
@@ -238,7 +242,10 @@ other app that trusts the current public key.
 
 ## Rolling back a bad release
 
-Sparkle never downgrades, so:
+Sparkle never downgrades: it offers only a build numbered higher than the
+running one, and the app also turns down a release whose version
+(`sparkle:shortVersionString`) is lower than its own (`UpdateEligibility` in
+`RuntimeViewerSettings`). So:
 
 - **Preferred:** ship a higher-versioned hotfix ASAP. Users auto-upgrade away
   from the broken build.

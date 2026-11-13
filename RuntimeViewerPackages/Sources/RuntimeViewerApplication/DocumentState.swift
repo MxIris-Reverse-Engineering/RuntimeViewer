@@ -525,6 +525,10 @@ private final class SelectionRouter: Router {
         case .open(let object, let destination, _, let interfaceLanguage):
             // The highlight rides on the route itself, to the content pane.
             documentState.editorArea.open(object, in: destination, interfaceLanguage: interfaceLanguage)
+        case .openImage(let imagePath, let destination):
+            // Like `.switchImage` the other way round: the editor area moves to
+            // the image, the sidebar stays where it is.
+            documentState.editorArea.open(NavigationEntry(imagePath: imagePath), in: destination)
         case .selectAtRoot(let object):
             documentState.editorArea.resetFocusedTab(to: object)
         case .backward:

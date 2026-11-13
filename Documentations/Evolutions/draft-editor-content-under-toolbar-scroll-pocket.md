@@ -15,7 +15,7 @@ macOS 26 起，把编辑区顶部改成 Xcode 27.2 的样子：每一栏的内�
 
 1. **内容铺满整栏。** macOS 26 起，`EditorPaneViewController` 的内容不论标签栏显示与否都铺满整栏，撤掉 11-06 加的「内容顶边跟标签栏顶边」那组约束切换。标签栏的高度照旧经内容的 `additionalSafeAreaInsets` 让出。
 2. **工具栏那一条：编辑区最前面一块 pocket。** `EditorAreaViewController` 把根分栏视图放进 RuntimeViewerUI 新增的 `ToolbarScrollPocketContainerView`：最前面一块 UIFoundation 的 `ScrollPocketView`（style 2、不画分隔线、自己的 backdrop 分组），从容器顶边到安全区顶边、横跨所有分栏；它的 capture view 放在最底层同一位置，供它重放内容后面的底色。所有分栏的正文、Minimap、AppKit 给滚动视图自带的 pocket 都在它后面，一次截全。
-3. **标签栏：各自背后一块 pocket。** `EditorPaneTabBarView` 在最底层放一块 `ScrollPocketView`（同样 style 2），capture view 由窗格放在内容后面、与标签栏重合；标签栏隐藏时一起隐藏。标签栏不再登记给内容的滚动视图，也不再回答 Bar 样式。
+3. **标签栏与路径栏：各自背后一块 pocket。** `EditorPaneTabBarView` 在最底层放一块 `ScrollPocketView`（同样 style 2），capture view 由窗格放在内容后面、与标签栏重合；标签栏隐藏时一起隐藏。后来加进 `next` 的路径栏（提案 `editor-jump-bar`）照同样做。两条栏都不再登记给内容的滚动视图，也不再回答 Bar 样式。
 4. **内容自带的 pocket 单独分组。** AppKit 仍给伸到标题栏下的内容滚动视图各加一个顶部 pocket（软模糊），它们压在上面两种 pocket 下面。窗格在内容容器上设 `NSView.box.titlebarBackdropGroupName`（UIFoundation），让每栏的这一层各自截图，而不是共用窗口的分组、在第二栏绘制前就截好。
 5. **macOS 15 不变**：内容仍从标签栏上沿开始，标签栏仍用窗口背景色，没有 pocket。
 6. **依赖**：`ScrollPocketView` 与 `titlebarBackdropGroupName` 是 UIFoundation 0.47.0 新增的（UIFoundation 提案 0038），UIFoundation 的下限与四份锁文件（Debug、Distribution 两个 workspace，`RuntimeViewerPackages`、`RuntimeViewerCommandLine`）的 pin 抬到 0.47.0。
@@ -63,3 +63,4 @@ macOS 26 起，把编辑区顶部改成 Xcode 27.2 的样子：每一栏的内�
 | 2026-11-13 | 撤掉第一版的 `ScrollPocketContainerRegistration`、`EditorPaneContent.contentScrollView`、`SourceEditorBridging.scrollView` | 新做法用不到；桥接测试改为从 `editorView` 取 `SourceEditorView.scrollView`，与已有的测试辅助一致 |
 | 2026-11-13 | UIFoundation 0.47.0 发布；四份锁文件只改 UIFoundation 一条，手改后用全新构建目录核验 | 用户批准发版。全新构建目录下两个 workspace 与两个包重新解析，锁文件字节不变；不用会推进所有 pin 的 `UpdatePackagesScript.sh`。Tuist 工作区的锁文件不进仓库，本地要 `./TuistScript.sh install` 之后才用上新版 |
 | 2026-11-13 | 实现完成，待用户目视验收后收尾 | Debug workspace 对着发布的 UIFoundation 0.47.0 编译通过，`ToolbarScrollPocketContainerViewTests` 四条通过。对着本地 UIFoundation 跑过全量：桥接测试 71 条只有 `SourceEditorScrollerTests` 两条既有的红；包测试 939 条只剩 `TitleActivityIndicatorTests` 悬停一条基线既有的红，满载下红的两组单独重跑都通过。观感没有截图核对过，交给用户目视 |
+| 2026-11-13 | 合进 `origin/next` 时，路径栏也改用背后一块独立 pocket | `origin/next` 已经有了路径栏（提案 `editor-jump-bar`），它照第一版把自己登记给内容的滚动视图，用的正是这次撤掉的 `ScrollPocketContainerRegistration`。照本提案的做法给它背后一块 `ScrollPocketView`，与标签栏一致，Xcode 的编辑栏也是各自一块；不保留登记，否则路径栏那一段是软模糊、标签栏是近乎实色，两段不一样。图片页的 `contentScrollView` 随协议一起删掉。合并后 App（Debug workspace）编译通过；`RuntimeViewerApplicationTests` 975 条只剩 `TitleActivityIndicatorTests` 悬停一条基线既有的红，满载下超时的三组（引擎共享的 Report、Find 的交叉引用、后台工作的进程活动）单独重跑都通过。路径栏的观感同样没有截图核对过 |

@@ -13,6 +13,11 @@ public enum ReportCategory: Hashable, Sendable, CaseIterable {
     case searchableInterfaces
     /// The cross references prepared ahead of Call Hierarchy and Type References.
     case crossReferences
+    /// The images the user loaded or had indexed — Load now, an image the sidebar or a jump bar
+    /// opened before it was indexed, Load Frameworks…, a Find result in an image not indexed yet
+    /// (proposal `editor-jump-bar`). Not background work: the toolbar's activity display does not
+    /// follow it.
+    case manualLoading
 }
 
 /// Whose work a group of the Report navigator lists, while the document borrows shared cache
@@ -53,6 +58,10 @@ public enum ReportNodeIdentifier: Hashable, Sendable {
     case crossReferencePreparation(imagePath: String)
     /// A cross-reference preparation that ended, one row per ending.
     case finishedCrossReferencePreparation(UUID)
+    /// An image the user is loading, by image.
+    case manualLoad(imagePath: String)
+    /// A load of the user's that ended, one row per ending.
+    case finishedManualLoad(UUID)
 }
 
 extension ReportNodeIdentifier {
@@ -71,6 +80,8 @@ extension ReportNodeIdentifier {
             .searchableInterfaces
         case .crossReferencePreparation, .finishedCrossReferencePreparation:
             .crossReferences
+        case .manualLoad, .finishedManualLoad:
+            .manualLoading
         }
     }
 

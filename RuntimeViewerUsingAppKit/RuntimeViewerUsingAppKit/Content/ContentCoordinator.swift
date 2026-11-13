@@ -20,6 +20,8 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         case initial
         case placeholder
         case text
+        /// An image chosen in the jump bar, before any of its objects (proposal `editor-jump-bar`).
+        case image
     }
 
     let documentState: DocumentState
@@ -36,6 +38,14 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         viewController.loadViewIfNeeded()
         return viewController
     }()
+
+    /// The image scene's view controller, kept like the text scene's and bound to a new
+    /// `ContentImageViewModel` for each image.
+    private lazy var imageViewController = ContentImageViewController()
+
+    /// The image the image scene is bound to. A `.back` re-entry of the same image — a tab switch,
+    /// a pane that did not change — keeps the binding, so its indexing is not asked about again.
+    private var boundImagePath: String?
 
     /// Which content view is in use. Recorded so that flipping Settings › Editor swaps the
     /// view on the next selection rather than only after the scene has been left and
@@ -95,13 +105,33 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
             return enterTextScene(for: runtimeObject, forceRebind: true)
         case .nextHighlighting(let runtimeObject, let highlightRequest):
             return enterTextScene(for: runtimeObject, highlightRequest: highlightRequest, forceRebind: true)
+        case .image(let imagePath):
+            return enterImageScene(for: imagePath, forceRebind: true)
         case .back:
-            if let object = documentState.editorArea[editorPaneID]?.activeTab.object {
+            switch documentState.editorArea[editorPaneID]?.activeTab.currentEntry?.content {
+            case .object(let object, _)?:
                 return enterTextScene(for: object, forceRebind: false)
-            } else {
+            case .image(let imagePath)?:
+                return enterImageScene(for: imagePath, forceRebind: false)
+            case nil:
                 return enterPlaceholderScene()
             }
         }
+    }
+
+    /// Shows the image page for `imagePath`. A route that chose the image binds it afresh — choosing
+    /// it again tries again after a failure; re-entering the same image keeps what is on screen.
+    private func enterImageScene(for imagePath: String, forceRebind: Bool) -> ContentTransition {
+        if forceRebind || currentScene != .image || boundImagePath != imagePath {
+            boundImagePath = imagePath
+            let viewModel = ContentImageViewModel(imagePath: imagePath, documentState: documentState, router: self)
+            imageViewController.setupBindings(for: viewModel)
+            imageViewController.loadViewIfNeeded()
+        }
+        guard currentScene != .image else { return .none() }
+        currentScene = .image
+        boundEntry = nil
+        return .set([imageViewController], animated: false)
     }
 
     private var isCurrentTextScene: Bool { currentScene == .text }

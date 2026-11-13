@@ -25,6 +25,9 @@ final class ReportTreeBuilder {
     /// Ended cross-reference preparations' rows by entry, likewise.
     private var finishedCrossReferencePreparationNodes: [UUID: ReportNode] = [:]
 
+    /// Ended manual loads' rows by entry, likewise.
+    private var finishedManualLoadNodes: [UUID: ReportNode] = [:]
+
     /// Nodes built since the builder was made — the regression seam for the reuse above, as
     /// `StatefulOutlineView.expansionAutosavePersistCount` is one for its coalescing.
     private(set) var builtNodeCount = 0
@@ -204,6 +207,49 @@ final class ReportTreeBuilder {
             }
         }
         dropCellViewModels(of: .crossReferences, except: usedIdentifiers)
+        return categoryNode
+    }
+
+    /// The Manual Loading category, or `nil` when it has nothing to show: the images the user is
+    /// loading, the first begun first, then the loads that ended, newest first (proposal
+    /// `editor-jump-bar`). Nothing turns it off and every peer answers loads, so it has neither
+    /// row saying it cannot run.
+    func manualLoadingCategory(activeLoads: [String: ManualImageLoad], finishedLoads: [FinishedManualImageLoad]) -> ReportNode? {
+        var usedIdentifiers: Set<ReportNodeIdentifier> = []
+        var children: [ReportNode] = []
+        let runningLoads = activeLoads.values.sorted { leftLoad, rightLoad in
+            if leftLoad.startedAt != rightLoad.startedAt {
+                return leftLoad.startedAt < rightLoad.startedAt
+            }
+            return leftLoad.imagePath < rightLoad.imagePath
+        }
+        for load in runningLoads {
+            children.append(makeNode(.manualLoad(imagePath: load.imagePath), usedIdentifiers: &usedIdentifiers) {
+                ReportOutline.configure($0, forManualLoad: load)
+            })
+        }
+        var finishedLoadIdentifiers: Set<UUID> = []
+        for finishedLoad in finishedLoads {
+            finishedLoadIdentifiers.insert(finishedLoad.id)
+            if let cachedNode = finishedManualLoadNodes[finishedLoad.id] {
+                children.append(cachedNode)
+            } else {
+                let node = makeNode(.finishedManualLoad(finishedLoad.id), usedIdentifiers: &usedIdentifiers) {
+                    ReportOutline.configure($0, for: finishedLoad)
+                }
+                finishedManualLoadNodes[finishedLoad.id] = node
+                children.append(node)
+            }
+        }
+        finishedManualLoadNodes = finishedManualLoadNodes.filter { finishedLoadIdentifiers.contains($0.key) }
+
+        var categoryNode: ReportNode?
+        if !children.isEmpty {
+            categoryNode = makeNode(.category(.manualLoading), children: children, usedIdentifiers: &usedIdentifiers) {
+                $0.update(icon: ReportOutline.manualLoadingIcon, title: "Manual Loading")
+            }
+        }
+        dropCellViewModels(of: .manualLoading, except: usedIdentifiers)
         return categoryNode
     }
 
