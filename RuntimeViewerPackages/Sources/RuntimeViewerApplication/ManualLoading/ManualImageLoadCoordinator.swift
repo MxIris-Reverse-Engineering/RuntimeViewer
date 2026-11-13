@@ -50,7 +50,7 @@ final class ManualImageLoadCoordinator {
         beginLoad(ofImageAt: imagePath)
         do {
             let result = try await work { [weak self] progress in
-                await MainActor.run {
+                await MainActor.run { [weak self] in
                     self?.updateLoad(ofImageAt: imagePath, with: progress)
                 }
             }

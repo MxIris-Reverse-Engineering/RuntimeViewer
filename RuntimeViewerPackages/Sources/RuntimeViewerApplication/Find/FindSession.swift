@@ -916,7 +916,7 @@ public final class FindSession {
             let maximumConcurrentScans = settings.search.maximumConcurrentCrossReferenceScans
             let preparedIndexByteLimit = settings.search.preparedCrossReferenceByteLimit
             let documentState = documentState
-            crossReferenceLoadTask = Task { [weak self] in
+            crossReferenceLoadTask = Task { [weak self, documentState] in
                 let outcome: Result<RuntimeCrossReferenceQueryResult, any Swift.Error>
                 do {
                     outcome = .success(try await Self.loadLevel(

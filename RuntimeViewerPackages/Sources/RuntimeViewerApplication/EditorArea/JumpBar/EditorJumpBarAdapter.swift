@@ -63,8 +63,7 @@ public final class EditorJumpBarAdapter: NSObject {
             .disposed(by: disposeBag)
 
         itemStore.itemsMoved
-            .emitOnNext { [weak self] in
-                guard let self else { return }
+            .emitOnNext {
                 pathControl.invalidateContent()
             }
             .disposed(by: disposeBag)

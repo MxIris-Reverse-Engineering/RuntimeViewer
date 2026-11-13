@@ -129,8 +129,8 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
                 MainActor.assumeIsolated {
                     self?.indexingProgress = .preparing
                 }
-                return Observable<State>.async {
-                    let objects = try await resolvedIndexer(imagePath) { progress in
+                return Observable<State>.async { [weak self] in
+                    let objects = try await resolvedIndexer(imagePath) { [weak self] progress in
                         await MainActor.run { [weak self] in
                             guard let self else { return }
                             indexingProgress = IndexingProgress(progress)

@@ -451,7 +451,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                             // Same cache + merged options as the save flow:
                             // sharing the visible object costs no engine
                             // round-trip and yields the displayed text.
-                            var options = self.currentMergedGenerationOptions
+                            var options = await self.currentMergedGenerationOptions
                             options.interfaceLanguage = interfaceLanguage
                             let semanticString = try await documentState.interfaceCache.interface(for: runtimeObjectType, options: options)?.interfaceString
                             completion(semanticString?.string.data(using: .utf8), nil)
