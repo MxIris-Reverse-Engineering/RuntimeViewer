@@ -30,6 +30,7 @@ let localPackageTargetNames = [
     "RuntimeViewerRunningBoardSupport",
     "RuntimeViewerCatalystExtensions",
     "RuntimeViewerEngineManagement",
+    "RuntimeViewerAppTestingSupport",
     "RuntimeViewerPackages_RuntimeViewerSettingsUI",
     // RuntimeViewerMCP
     "RuntimeViewerMCPBridge",

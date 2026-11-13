@@ -260,7 +260,7 @@ public final class SettingsAccess {
     /// the live value, which attaches the real settings file — so touching a
     /// control in a rendered settings page would write to the developer's own
     /// stored settings once the auto-save delay elapsed.
-    static var preview: SettingsAccess {
+    package static var preview: SettingsAccess {
         #if os(macOS)
         SettingsAccess(store: SettingsStore(defaultValue: Settings(), storage: InMemorySettingsStorage()))
         #else

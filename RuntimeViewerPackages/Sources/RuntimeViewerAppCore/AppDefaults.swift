@@ -41,7 +41,7 @@ public final class AppDefaults: @unchecked Sendable {
     /// A fresh, unique directory under the temporary directory. Backs the
     /// test fallback above and the isolated instances the package's tests
     /// build for themselves.
-    static func makeTemporaryStorageDirectoryURL(label: String) -> URL {
+    package static func makeTemporaryStorageDirectoryURL(label: String) -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("RuntimeViewer.AppDefaults.\(label).\(UUID().uuidString)", isDirectory: true)
     }
@@ -52,8 +52,9 @@ public final class AppDefaults: @unchecked Sendable {
     ///
     /// Production only ever uses the single Application Support instance
     /// behind `DependencyValues.appDefaults`, on the standard defaults. The
-    /// initializer is `internal` so the package's tests can build isolated
-    /// instances that point at a directory the app never reads: the storage
+    /// initializer is `package` so the package's tests, and the helpers they
+    /// share in `RuntimeViewerAppTestingSupport`, can build isolated instances
+    /// that point at a directory the app never reads: the storage
     /// path is not scoped by bundle identifier and the app is not sandboxed,
     /// so a test that resolved the shared instance would read and overwrite
     /// the user's real bookmark files. The one-time migrations read their
@@ -65,7 +66,7 @@ public final class AppDefaults: @unchecked Sendable {
     /// hear each other's writes — a Find session in one test searched again
     /// whenever another test changed the Generation Options — and every write
     /// stayed in the test process's defaults for the next run to read.
-    init(storageDirectoryURL: URL?, userDefaultsNamespace: UserDefaultsNamespace = .standard) {
+    package init(storageDirectoryURL: URL?, userDefaultsNamespace: UserDefaultsNamespace = .standard) {
         self.userDefaultsNamespace = userDefaultsNamespace
         let userDefaults = userDefaultsNamespace.userDefaults
         _options = UserDefault(key: userDefaultsNamespace.key("generationOptions"), defaultValue: .init(), suite: userDefaults)

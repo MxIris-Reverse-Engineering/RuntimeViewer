@@ -34,6 +34,7 @@ public enum LocalPackages {
         "RuntimeViewerRunningBoardSupport",
         "RuntimeViewerCatalystExtensions",
         "RuntimeViewerEngineManagement",
+        "RuntimeViewerAppTestingSupport",
         // RuntimeViewerMCP
         "RuntimeViewerMCPBridge",
         // RuntimeViewerCommandLine
@@ -66,6 +67,7 @@ public enum LocalPackages {
         "RuntimeViewerSettingsUI",
         "RuntimeViewerSimulatorInstaller",
         "RuntimeViewerCatalystExtensions",
+        "RuntimeViewerAppTestingSupport",
         // RuntimeViewerMCP
         "RuntimeViewerMCPBridge",
         // RuntimeViewerCommandLine
@@ -86,7 +88,8 @@ public enum LocalPackages {
             "RuntimeViewerDeviceInjectionTests",
             "RuntimeViewerHelperClientTests",
             "RuntimeViewerEngineManagementTests",
-            "RuntimeViewerApplicationTests",
+            "RuntimeViewerAppCoreTests",
+            "RuntimeViewerAppUITests",
         ]),
         ("RuntimeViewerMCP", [
             "RuntimeViewerMCPBridgeTests",

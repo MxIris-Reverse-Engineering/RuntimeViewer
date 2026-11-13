@@ -15,7 +15,7 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 |------|--------|
 | `RuntimeViewerUsingAppKit/AGENTS.md` | The macOS app's UI layer — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and routes, AppKit views, the sidebar's floating bars, diagnosing flicker — and `AppDelegate` with the lifecycle controllers. It also governs the ViewModels and routes in `RuntimeViewerApplication` and the views in `RuntimeViewerUI` |
 | `RuntimeViewerPackages/Sources/AGENTS.md` | What goes in `RuntimeViewerAppCore` and what in `RuntimeViewerAppUI`, and the facade `RuntimeViewerApplication`; points their UI code and `RuntimeViewerUI` to the file above |
-| `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
+| `RuntimeViewerPackages/Tests/AGENTS.md` | Which test goes in `RuntimeViewerAppCoreTests`, `RuntimeViewerAppUITests` or the helpers they share; keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
 | `RuntimeViewerCore/Sources/AGENTS.md` | Where a file goes in the RuntimeViewerCore package: one top-level type per file, directories by feature; how every engine command declares its routing |
 | `RuntimeViewerCore/Tests/AGENTS.md` | Keeping Core tests off the user's real derived data |
 | `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
@@ -163,11 +163,13 @@ scratch path:
 ```bash
 cd RuntimeViewerPackages
 queued-build swift build --build-tests --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages
-queued-build swift test --skip-build --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages --filter RuntimeViewerApplicationTests
+queued-build swift test --skip-build --scratch-path /Volumes/DerivedData/Agents.noindex/<agent>/SwiftPM/RuntimeViewerPackages --filter 'RuntimeViewerAppCoreTests|RuntimeViewerAppUITests'
 ```
 
-How the suites stay off the user's real settings and bookmarks, and how they get an engine:
-`RuntimeViewerPackages/Tests/AGENTS.md`.
+The application layer's tests are two targets: `RuntimeViewerAppCoreTests` (the ViewModels and the
+application logic, nothing of the UI layer linked) and `RuntimeViewerAppUITests` (the UI glue and the
+views). Which test goes where, how the suites stay off the user's real settings and bookmarks, and how
+they get an engine: `RuntimeViewerPackages/Tests/AGENTS.md`.
 
 </important>
 

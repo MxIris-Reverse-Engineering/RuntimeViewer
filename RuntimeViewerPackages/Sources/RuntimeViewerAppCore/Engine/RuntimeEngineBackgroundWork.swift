@@ -141,7 +141,7 @@ package final class RuntimeEngineBackgroundWork {
 /// borrows shared cache images from: the same work to every document on one engine, and to every
 /// document borrowing from it, for as long as any of them stays.
 @MainActor
-final class RuntimeEngineBackgroundWorkRegistry {
+package final class RuntimeEngineBackgroundWorkRegistry {
     fileprivate static let shared = RuntimeEngineBackgroundWorkRegistry()
 
     /// By engine identity. An entry goes as its last document leaves, so an identifier is never
@@ -245,5 +245,5 @@ extension DependencyValues {
     /// Every test gets a registry of its own: the dependency's test value is cached per test, so
     /// tests sharing an engine — `TestRuntimeEngine.shared()` — never share its coordinators.
     @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeEngineBackgroundWorkRegistry.shared })
-    var runtimeEngineBackgroundWorkRegistry: RuntimeEngineBackgroundWorkRegistry = MainActor.assumeIsolated { RuntimeEngineBackgroundWorkRegistry() }
+    package var runtimeEngineBackgroundWorkRegistry: RuntimeEngineBackgroundWorkRegistry = MainActor.assumeIsolated { RuntimeEngineBackgroundWorkRegistry() }
 }

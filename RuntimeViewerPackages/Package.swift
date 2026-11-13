@@ -149,6 +149,13 @@ let package = Package(
             name: "RuntimeViewerCatalystExtensions",
             targets: ["RuntimeViewerCatalystExtensions"],
         ),
+        // The application layer's test helpers. A product only so that Tuist maps the target: it
+        // leaves out a target no product holds, and a test target depending on one then fails to
+        // generate. Nothing in the apps links it (Tests/AGENTS.md).
+        .library(
+            name: "RuntimeViewerAppTestingSupport",
+            targets: ["RuntimeViewerAppTestingSupport"],
+        ),
 
     ],
     dependencies: [
@@ -604,17 +611,50 @@ let package = Package(
             ],
         ),
 
-        .testTarget(
-            name: "RuntimeViewerApplicationTests",
+        // What the application layer's two test targets share: a private engine, the ViewModel
+        // test environment, fixtures, waiting on Rx streams, a router that records. It reaches
+        // RuntimeViewerAppCore through `package` declarations, never `@testable import`, so it builds
+        // in any configuration; and it imports no UI library and not Testing (Tests/AGENTS.md).
+        .target(
+            name: "RuntimeViewerAppTestingSupport",
             dependencies: [
                 "RuntimeViewerAppCore",
-                "RuntimeViewerAppUI",
                 "RuntimeViewerArchitectures",
                 "RuntimeViewerSettings",
-                "RuntimeViewerUI",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
+            ],
+            path: "Tests/RuntimeViewerAppTestingSupport",
+        ),
+
+        // RuntimeViewerAppCore's tests, with nothing of the UI layer linked: the ViewModels and the
+        // application logic, and the check that keeps UI components out of RuntimeViewerAppCore.
+        .testTarget(
+            name: "RuntimeViewerAppCoreTests",
+            dependencies: [
+                "RuntimeViewerAppCore",
+                "RuntimeViewerAppTestingSupport",
+                "RuntimeViewerArchitectures",
+                "RuntimeViewerSettings",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
+            ],
+        ),
+
+        // The tests of the UI layer: RuntimeViewerAppUI's glue and RuntimeViewerUI's views, and what
+        // RuntimeViewerAppCore rewrote from a UI library checked against that library.
+        .testTarget(
+            name: "RuntimeViewerAppUITests",
+            dependencies: [
+                "RuntimeViewerAppUI",
+                "RuntimeViewerAppCore",
+                "RuntimeViewerAppTestingSupport",
+                "RuntimeViewerUI",
+                "RuntimeViewerArchitectures",
+                "RuntimeViewerSettings",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
             ],
         ),

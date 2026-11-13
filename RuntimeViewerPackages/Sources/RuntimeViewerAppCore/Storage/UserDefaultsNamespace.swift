@@ -15,7 +15,7 @@ import Foundation
 /// `~/Library/Preferences`, so every test run would leave about a hundred
 /// empty files behind. Key-value observation of user defaults is per key, so
 /// a write in one namespace is not reported in another.
-enum UserDefaultsNamespace {
+package enum UserDefaultsNamespace {
     /// The standard defaults, keys unchanged. Never cleared by this type.
     case standard
 
@@ -43,7 +43,7 @@ enum UserDefaultsNamespace {
 
     /// A namespace nothing else uses, named after this process so that a
     /// later process can tell it was left behind.
-    static func makeIsolated() -> UserDefaultsNamespace {
+    package static func makeIsolated() -> UserDefaultsNamespace {
         makeIsolated(owningProcessIdentifier: ProcessInfo.processInfo.processIdentifier)
     }
 

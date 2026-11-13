@@ -2,8 +2,36 @@
 
 How to build and run these suites: the root `AGENTS.md`, *Testing*.
 
-Rules for `RuntimeViewerApplicationTests` (every ViewModel in `RuntimeViewerAppCore` has a contract
-suite there, next to the defect-specific regression suites):
+The application layer has two test targets and a library they share
+(`Documentations/Evolutions/draft-app-core-ui-split.md`):
+
+- **`RuntimeViewerAppCoreTests`** tests `RuntimeViewerAppCore` with nothing of the UI layer linked: no
+  `RuntimeViewerAppUI`, `RuntimeViewerUI`, AppKitPlus or UIFoundation. Every ViewModel in
+  `RuntimeViewerAppCore` has a contract suite here, next to the defect-specific regression suites, and so
+  do `CrossPlatformSourceGuardTests` and `AppCoreBoundaryTests`, which read the package's sources
+  (`Support/PackageSourceScan.swift`). A test that needs a view, a control or a UI library — even one
+  case of a suite — goes in the other target.
+- **`RuntimeViewerAppUITests`** tests the UI layer: `RuntimeViewerAppUI`'s adapters and live
+  implementations, `RuntimeViewerUI`'s views, and what `RuntimeViewerAppCore` rewrote from a UI library
+  checked against that library (`FindPatternParityTests`, `IDEIconRuntimeObjectIconRendererTests`,
+  `RowTextAttributedStringTests`).
+- **`RuntimeViewerAppTestingSupport`** (`Tests/RuntimeViewerAppTestingSupport`) holds what both use:
+  `ViewModelTestEnvironment`, `TestRuntimeEngine`, the fixtures, waiting on Rx, `pollUntil`,
+  `MockRouter`, and Xcode's find patterns as `FindPattern`s. Its declarations are `package`, and it
+  reaches into `RuntimeViewerAppCore` and `RuntimeViewerSettings` only through their `package` test
+  seams (`AppDefaults(storageDirectoryURL:userDefaultsNamespace:)`, `SettingsAccess.preview` and the
+  like), never `@testable import`: it is a library product, which `swift build -c release` builds too,
+  and which an app could link by mistake. It is a product only because Tuist maps no target outside one,
+  and a test target depending on such a target fails to generate. It imports no UI library and not
+  `Testing`. A helper only one target uses stays in that target's `Support/`.
+
+Each test target builds into a bundle of its own and runs in a process of its own — in Xcode, and in
+`swift test` with Xcode 27's toolchain — so `RuntimeViewerAppCoreTests` runs without
+`RuntimeViewerAppUI`, and the live implementations of `appRouter`, `runtimeEngineIconProviding` and
+`runtimeObjectIconRendering` are not there: a test that reads one of them in a live dependency context
+reports an issue. Override the dependency instead.
+
+Rules for both test targets:
 
 - **Build ViewModels inside `ViewModelTestEnvironment.make { }`.** It overrides `appDefaults`, `settings`
   and `resolvedThemeStream` with test-owned instances. `AppDefaults` is file-backed under a path the
@@ -17,7 +45,7 @@ suite there, next to the defect-specific regression suites):
   (`UserDefaultsNamespace`), so tests neither hear each other's option changes nor write the test
   process's standard defaults, and need no lock around them. `settings` is `SettingsAccess.preview`
   (in-memory); the live one auto-saves over the user's `RuntimeViewer-Debug/settings.json`.
-- **Derived data stays in a `DerivedDataFixture`** (`Support/DerivedDataFixture.swift`): a store in a temporary
+- **Derived data stays in a `DerivedDataFixture`** (`RuntimeViewerAppCoreTests/Support/DerivedDataFixture.swift`): a store in a temporary
   directory of the test's own, handed to an engine through `RuntimeEngine.useDerivedDataStore(_:)`. Never call
   `RuntimeDerivedData.enableInThisProcess()` in a test — it is the two services' switch, and once on it points
   every engine made afterwards in the test process at the real `~/Library/Caches/<bundle identifier>/DerivedData`,

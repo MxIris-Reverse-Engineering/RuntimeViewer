@@ -33,8 +33,28 @@ field's content as data: `FindQueryTerm` and `FindPattern`, with AppKitPlus's ru
 expression a term makes and for its property list rewritten in `FindQueryTerm.swift`. **A change to those
 rules in AppKitPlus is carried over by hand**: `FindPatternParityTests` runs both on the same input and fails
 when they part, and the recent queries every earlier version stored must still read back
-(`FindRecentQueriesTests`). The proposal's fourth step adds a test that fails on a UI component in
-RuntimeViewerAppCore.
+(`FindRecentQueriesTests`).
+
+**`AppCoreBoundaryTests` holds RuntimeViewerAppCore to this**, because the compiler does not: SwiftPM lets a
+target import any module the same build compiles, declared or not. It reads RuntimeViewerAppCore's sources
+— comments and strings left out, every `#if` evaluated for macOS and for the iOS family — and reports, file
+and line:
+
+1. an import of a UI library: `RuntimeViewerUI`, `RuntimeViewerSettingsUI`, `RuntimeViewerAppUI`,
+   `RuntimeViewerApplication`, SwiftUI, SnapKit, AppKitPlus, SFSymbols, `AppKitNavigation`,
+   `UIKitNavigation`, or a module of UIFoundation other than `UIFoundationSettings`;
+2. a type that inherits from `NSResponder`, `UIResponder`, a CocoaCoordinator or XCoordinator coordinator
+   class, or an `NS` / `UI` class whose name ends in `View`, `ViewController`, `Window`, `WindowController`,
+   `Control`, `Cell`, `Menu`, `MenuItem`, `Popover`, `Field`, `Bar` or `Button`; or that conforms to an
+   `NS` / `UI` protocol ending in `Delegate` or `DataSource`, AppKitPlus's included;
+3. a call to the initializer of one of those classes.
+
+It also walks the manifest from RuntimeViewerAppCore down through the package's targets beneath it and
+fails on a UI library among their dependencies. The check reads names: it cannot follow a superclass chain
+or a type alias, so `NSObject`, the models (`NSImage(…)`, `NSMutableParagraphStyle()`), `UIViewController`
+as a type in the iOS route and system service protocols outside AppKit and UIKit
+(`UNUserNotificationCenterDelegate`) pass. A line it reports that belongs here all the same goes in the
+test's `allowedLines`, with the reason; it is empty.
 
 **A service whose live implementation needs a UI library is declared in RuntimeViewerAppCore and implemented
 in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by `AppCoordinator`), the
