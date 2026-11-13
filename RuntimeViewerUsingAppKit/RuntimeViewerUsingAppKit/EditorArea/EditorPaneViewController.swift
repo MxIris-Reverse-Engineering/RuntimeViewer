@@ -464,8 +464,8 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         switch (item as? TabBarItem)?.icon {
         case .object(let kind)?:
             RuntimeObjectIcon.icon(for: kind, size: 16)
-        case .image?:
-            RuntimeImageNode.imageIcon
+        case .image(let kind)?:
+            kind.icon
         case nil:
             nil
         }

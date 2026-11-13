@@ -316,7 +316,7 @@ struct EditorAreaRoutingTests {
         #expect(documentState.editorArea.focusedPane.activeTab.imagePath == Fixtures.sampleImagePath)
     }
 
-    @Test("a tab showing an image shows the image's name and the image icon")
+    @Test("a tab showing an image shows the image's name and the icon of what it is part of")
     func tabBarItemOfAnImage() {
         let documentState = documentShowingFirstObject()
         documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .newTab))
@@ -324,7 +324,8 @@ struct EditorAreaRoutingTests {
         let snapshot = TabBarSnapshot(pane: documentState.editorArea.focusedPane)
 
         #expect(snapshot.items.map(\.title) == ["First", "Sample"])
-        #expect(snapshot.items.map(\.icon) == [.object(firstObject.kind), .image])
+        // `Fixtures.sampleImagePath` is in Sample.framework.
+        #expect(snapshot.items.map(\.icon) == [.object(firstObject.kind), .image(.framework)])
     }
 
     @Test("switching the engine starts over with one pane holding one empty tab")

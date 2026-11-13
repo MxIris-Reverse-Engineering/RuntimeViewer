@@ -188,9 +188,19 @@ final class MainViewModel: ViewModel<MainRoute> {
         guard let imageNode else {
             return TitleDocumentIcon.image(symbol: SFSymbols(name: RuntimeViewerSymbols.runtimeViewer).nsImage, color: .systemBlue)
         }
-        let symbol = imageNode.icon
-        let color: NSColor = symbol === RuntimeImageNode.bundleIcon ? .systemBrown : .systemBlue
-        return TitleDocumentIcon.image(symbol: symbol, color: color)
+        let kind = imageNode.kind
+        let color: NSColor = kind == .bundle ? .systemBrown : .systemBlue
+        return TitleDocumentIcon.image(symbol: kind.icon, color: color)
+    }
+
+    /// The icon of a step in the history menu: the object's, or for an image what it is part of.
+    private static func historyIcon(for entry: NavigationEntry) -> NSImage {
+        switch entry.content {
+        case .object(let object, _):
+            RuntimeObjectIcon.icon(for: object.kind, size: NavigationHistorySnapshot.iconSize)
+        case .image(let path):
+            RuntimeImageKind(ofImageAt: path).icon
+        }
     }
 
     private lazy var toolbarActivityPresenter = ToolbarActivityPresenter(documentState: documentState)
@@ -629,7 +639,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                             index: entryIndex,
                             // An object and its Generated Interface are two steps: the title tells them apart.
                             displayName: entry.showsGeneratedInterface ? "\(entry.displayName) (Generated Interface)" : entry.displayName,
-                            icon: entry.object.map { RuntimeObjectIcon.icon(for: $0.kind, size: NavigationHistorySnapshot.iconSize) } ?? RuntimeImageNode.imageIcon
+                            icon: Self.historyIcon(for: entry)
                         )
                     },
                     currentIndex: history.currentIndex ?? -1

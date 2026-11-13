@@ -28,7 +28,10 @@ UIFoundation, SFSymbols or AppKitPlus, and neither does RuntimeViewerArchitectur
 from them it has of its own: the `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`PlatformTypes.swift`;
 UIFoundation's and SFSymbols' name the same types, so a file that sees several still compiles),
 `NSAttributedString(rowText:fontSize:color:)` for a row's title, `SystemSymbol` for the system symbols it
-draws (`SystemSymbolTests` loads every case), the Xcode colours of `NSColor+Xcode.swift`, and the Find query
+draws (`SystemSymbolTests` loads every case) and `CustomSymbol` for the ones it ships in its own asset
+catalog, `Resources/Symbols.xcassets` (the image kinds' symbols taken from Xcode, kept as version 6
+templates so that macOS 15 reads them; `CustomSymbolTests` loads every case and checks the version),
+the Xcode colours of `NSColor+Xcode.swift`, and the Find query
 field's content as data: `FindQueryTerm` and `FindPattern`, with AppKitPlus's rules for the regular
 expression a term makes and for its property list rewritten in `FindQueryTerm.swift`. **A change to those
 rules in AppKitPlus is carried over by hand**: `FindPatternParityTests` runs both on the same input and fails
@@ -63,6 +66,11 @@ object's icon (`runtimeObjectIconRendering`, implemented with UIFoundation's `ID
 written: root `AGENTS.md`, *Singletons & Dependency Injection*. `IDEIcon` keeps its images in a dictionary
 without a lock, so object icons are drawn on the main thread only, and tests that draw them run on the main
 actor.
+
+**Every list of images takes a row's icon from `RuntimeImageKind`**: a node of the image tree by
+`node.kind` (its own name), a place that lists one image by `RuntimeImageKind(ofImageAt:)` (the bundle
+nearest to it on its path). The jump bar's coloured icons are `jumpBarIcon` in RuntimeViewerAppUI.
+Background: `Documentations/Evolutions/draft-image-kind-icons.md`.
 
 ## The rest of the UI layer
 

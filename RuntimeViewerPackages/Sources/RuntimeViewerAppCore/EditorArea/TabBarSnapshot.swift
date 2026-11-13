@@ -11,8 +11,9 @@ public struct TabBarItem: Hashable, Identifiable, Sendable {
         /// An object of this kind (`RuntimeObjectIcon`).
         case object(RuntimeObjectKind)
 
-        /// An image shown before any of its objects (`RuntimeImageNode.imageIcon`).
-        case image
+        /// An image shown before any of its objects, as what it is part of
+        /// (`RuntimeImageKind(ofImageAt:)`).
+        case image(RuntimeImageKind)
     }
 
     /// The projected tab's `DocumentTab.id`.
@@ -39,7 +40,7 @@ public struct TabBarItem: Hashable, Identifiable, Sendable {
     public init(tab: DocumentTab) {
         let icon: Icon? = switch tab.currentEntry?.content {
         case .object(let object, _)?: .object(object.kind)
-        case .image?: .image
+        case .image(let path)?: .image(RuntimeImageKind(ofImageAt: path))
         case nil: nil
         }
         self.init(id: tab.id, title: tab.title, icon: icon)

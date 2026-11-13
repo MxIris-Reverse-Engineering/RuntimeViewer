@@ -8,9 +8,7 @@ import UIKit
 /// The system symbols this module draws. A case's raw value is the symbol's name; `SystemSymbolTests`
 /// loads every case, which is what SFSymbols' typed names used to check at compile time.
 package enum SystemSymbol: String, CaseIterable, Sendable {
-    // Image lists
-    case latch2Case = "latch.2.case"
-    case shippingbox
+    // Image lists (`RuntimeImageKind`; the bundles' symbols are `CustomSymbol`s)
     case doc
     case folder
 

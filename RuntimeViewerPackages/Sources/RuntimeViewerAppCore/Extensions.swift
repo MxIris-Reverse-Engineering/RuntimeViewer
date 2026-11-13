@@ -53,28 +53,6 @@ extension RuntimeImageNode: @retroactive Sequence {
     }
 }
 
-extension RuntimeImageNode {
-    public static let frameworkIcon: NSUIImage = SystemSymbol.latch2Case.image
-
-    public static let bundleIcon: NSUIImage = SystemSymbol.shippingbox.image
-
-    public static let imageIcon: NSUIImage = SystemSymbol.doc.image
-
-    public static let folderIcon: NSUIImage = SystemSymbol.folder.image
-
-    public var icon: NSUIImage {
-        if name.hasSuffix("framework") {
-            Self.frameworkIcon
-        } else if name.hasSuffix("bundle") {
-            Self.bundleIcon
-        } else if isLeaf {
-            Self.imageIcon
-        } else {
-            Self.folderIcon
-        }
-    }
-}
-
 extension NSUIColor {
     public convenience init(light: NSUIColor, dark: NSUIColor) {
         #if os(macOS)

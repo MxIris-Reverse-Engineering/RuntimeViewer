@@ -100,7 +100,7 @@ public enum FindResultCellStyle {
             return unresolvedIcon
         case .image(let path):
             // As the Report navigator draws an image.
-            return path.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon
+            return RuntimeImageKind(ofImageAt: path).icon
         case .unnamedFunctions:
             return languageBadge(for: nil, size: size)
         case .loading:

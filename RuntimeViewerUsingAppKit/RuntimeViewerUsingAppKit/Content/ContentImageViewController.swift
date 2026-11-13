@@ -74,7 +74,6 @@ final class ContentImageViewController: BaseViewController<ContentImageViewModel
         summaryStackView.setCustomSpacing(16, after: objectCountsLabel)
 
         iconView.do {
-            $0.image = RuntimeImageNode.imageIcon.withSymbolConfiguration(.init(pointSize: 40, weight: .light))
             $0.contentTintColor = .tertiaryLabelColor
         }
 
@@ -117,6 +116,8 @@ final class ContentImageViewController: BaseViewController<ContentImageViewModel
     override func setupBindings(for viewModel: ContentImageViewModel) {
         super.setupBindings(for: viewModel)
 
+        let imageIcon = RuntimeImageKind(ofImageAt: viewModel.imagePath).icon
+        iconView.image = imageIcon.withSymbolConfiguration(.init(pointSize: 40, weight: .light))
         titleLabel.stringValue = viewModel.imageName
         pathLabel.stringValue = viewModel.imagePath
 

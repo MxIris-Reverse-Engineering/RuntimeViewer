@@ -44,6 +44,7 @@ public enum LocalPackages {
     /// The bundle target Tuist generates, named `<package>_<target>`, for each of those targets that
     /// declares resources.
     public static let resourceBundleTargetNames: [String] = [
+        "RuntimeViewerPackages_RuntimeViewerAppCore",
         "RuntimeViewerPackages_RuntimeViewerSettingsUI",
     ]
 

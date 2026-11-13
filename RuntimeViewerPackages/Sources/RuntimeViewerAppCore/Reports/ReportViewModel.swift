@@ -822,7 +822,7 @@ enum ReportOutline {
     static let restoredCorporaIcon: NSUIImage = SystemSymbol.archivebox.image
 
     static func icon(forImagePath imagePath: String) -> NSUIImage {
-        imagePath.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon
+        RuntimeImageKind(ofImageAt: imagePath).icon
     }
 
     static func title(for reason: RuntimeIndexingBatchReason) -> String {

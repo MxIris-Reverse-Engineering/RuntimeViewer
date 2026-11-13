@@ -466,6 +466,11 @@ let package = Package(
                 .product(name: "IfritStatic", package: "Ifrit"),
                 .product(name: "FuzzySearch", package: "fuzzy-search"),
             ],
+            // The symbols of the image kinds (CustomSymbol), which no UI library
+            // beneath this target can carry for it.
+            resources: [
+                .process("Resources"),
+            ],
         ),
 
         // The UI glue split out of the application layer: the adapters that set

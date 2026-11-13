@@ -232,7 +232,7 @@ public final class EditorJumpBarItemStore {
         }
         let parentItem = node.parent.map { nodeItem(for: $0) } ?? sourceItem
         let content: EditorJumpBarItem.Content = node.isLeaf ? .image(path: node.path, node: node) : .folder(node)
-        let item = EditorJumpBarItem(content: content, name: node.name, icon: node.icon, parentItem: parentItem, store: self)
+        let item = EditorJumpBarItem(content: content, name: node.name, icon: node.kind.jumpBarIcon, parentItem: parentItem, store: self)
         nodeItemsByNode[ObjectIdentifier(node)] = item
         return item
     }
@@ -260,7 +260,8 @@ public final class EditorJumpBarItemStore {
         let item = EditorJumpBarItem(
             content: .image(path: imagePath, node: nil),
             name: NavigationEntry.imageName(ofImageAt: imagePath),
-            icon: RuntimeImageNode.imageIcon,
+            // As an image of the tree: the jump bar shows the tree, not what the image is part of.
+            icon: RuntimeImageKind.image.jumpBarIcon,
             parentItem: sourceItem,
             store: self
         )
