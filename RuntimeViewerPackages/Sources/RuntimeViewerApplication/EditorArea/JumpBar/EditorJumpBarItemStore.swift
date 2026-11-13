@@ -89,7 +89,7 @@ public final class EditorJumpBarItemStore {
             .subscribeOnNext { [weak self] engine in
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    follow(engine)
+                    self.follow(engine)
                 }
             }
             .disposed(by: disposeBag)
@@ -160,7 +160,7 @@ public final class EditorJumpBarItemStore {
             .subscribeOnNext { [weak self, weak engine] imageNodes in
                 MainActor.assumeIsolated {
                     guard let self, let engine, self.engine === engine else { return }
-                    rebuildTree(on: engine, rootNodes: imageNodes)
+                    self.rebuildTree(on: engine, rootNodes: imageNodes)
                 }
             }
             .disposed(by: engineDisposeBag)
@@ -170,7 +170,7 @@ public final class EditorJumpBarItemStore {
             .subscribeOnNext { [weak self, weak engine] imagePath in
                 MainActor.assumeIsolated {
                     guard let self, let engine, self.engine === engine else { return }
-                    imageDidIndex(at: imagePath)
+                    self.imageDidIndex(at: imagePath)
                 }
             }
             .disposed(by: engineDisposeBag)
@@ -181,7 +181,7 @@ public final class EditorJumpBarItemStore {
                 MainActor.assumeIsolated {
                     guard let self, let engine, self.engine === engine else { return }
                     if case .specializationAdded(let parent, _) = change {
-                        readObjectsAgain(ofImageAt: parent.imagePath)
+                        self.readObjectsAgain(ofImageAt: parent.imagePath)
                     }
                 }
             }
