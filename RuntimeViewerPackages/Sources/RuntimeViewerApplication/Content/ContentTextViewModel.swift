@@ -188,7 +188,16 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             return try await ContentTextViewModel.interface(
                 of: runtimeObject,
                 fetchingWith: { try await interfaceCache.interface(for: runtimeObject, options: options) },
-                runtimeEngine: { await documentState?.runtimeEngine }
+                runtimeEngine: { await documentState?.runtimeEngine },
+                // Indexing the object's image is the user's own load, which the Report's Manual
+                // Loading records (proposal `editor-jump-bar`).
+                indexingImage: { imagePath, runtimeEngine in
+                    if let documentState {
+                        try await documentState.indexImageForUser(at: imagePath)
+                    } else {
+                        try await runtimeEngine.indexImageIfNeeded(at: imagePath)
+                    }
+                }
             )
         }
         super.init(documentState: documentState, router: router)
@@ -387,13 +396,16 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     nonisolated static func interface(
         of runtimeObject: RuntimeObject,
         fetchingWith fetchInterface: () async throws -> RuntimeObjectInterface?,
-        runtimeEngine: () async -> RuntimeEngine?
+        runtimeEngine: () async -> RuntimeEngine?,
+        indexingImage indexImage: (_ imagePath: String, _ runtimeEngine: RuntimeEngine) async throws -> Void = { imagePath, runtimeEngine in
+            try await runtimeEngine.indexImageIfNeeded(at: imagePath)
+        }
     ) async throws -> RuntimeObjectInterface? {
         if let interface = try await fetchInterface() {
             return interface
         }
         guard !runtimeObject.imagePath.isEmpty, let runtimeEngine = await runtimeEngine() else { return nil }
-        try await runtimeEngine.indexImageIfNeeded(at: runtimeObject.imagePath)
+        try await indexImage(runtimeObject.imagePath, runtimeEngine)
         return try await fetchInterface()
     }
 

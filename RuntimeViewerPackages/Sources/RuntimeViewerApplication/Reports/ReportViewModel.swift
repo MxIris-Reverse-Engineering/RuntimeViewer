@@ -10,9 +10,10 @@ import RuntimeViewerSettings
 #endif
 
 /// The Report navigator page: the background indexer's batches, the Find navigator's corpus
-/// builds and the cross references prepared ahead of its queries, as Xcode's Report navigator
-/// lists builds and runs — one outline, each kind of work a first-level row, the newest work
-/// first, a spinner on whatever is still running.
+/// builds, the cross references prepared ahead of its queries and the images the user loaded
+/// (Manual Loading, proposal `editor-jump-bar`), as Xcode's Report navigator lists builds and
+/// runs — one outline, each kind of work a first-level row, the newest work first, a spinner on
+/// whatever is still running.
 ///
 /// Generic over the sidebar level's route because the page is a tab of both levels; both read the
 /// `RuntimeBackgroundIndexingCoordinator`, `FindCorpusCoordinator` and
@@ -177,7 +178,9 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 backgroundWork.corpusCoordinator.cancelBuild(of: imagePath)
             case .crossReferencePreparation(let imagePath):
                 backgroundWork.crossReferencePreparationCoordinator.cancelPreparation(of: imagePath)
-            case .engineGroup, .borrowed, .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .finishedCrossReferencePreparation:
+            case .engineGroup, .borrowed, .category, .turnedOff, .unsupportedByEngine, .indexingItem, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .finishedCrossReferencePreparation,
+                 // The engine cannot stop a load once it has begun.
+                 .manualLoad, .finishedManualLoad:
                 break
             }
         }
@@ -209,7 +212,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 target.backgroundWork.corpusCoordinator.ejectCorpora()
             case .category(.crossReferences):
                 target.backgroundWork.crossReferencePreparationCoordinator.ejectPreparations()
-            case .engineGroup, .borrowed, .category(.backgroundIndexing), .turnedOff, .unsupportedByEngine, .indexingBatch, .indexingItem, .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .crossReferencePreparation, .finishedCrossReferencePreparation:
+            case .engineGroup, .borrowed, .category(.backgroundIndexing), .category(.manualLoading), .turnedOff, .unsupportedByEngine, .indexingBatch, .indexingItem, .corpusBuild, .finishedCorpusBuild, .restoredCorpora, .restoredCorpus, .crossReferencePreparation, .finishedCrossReferencePreparation, .manualLoad, .finishedManualLoad:
                 break
             }
         }
@@ -220,6 +223,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                 backgroundWork.indexingCoordinator.clearHistory()
                 backgroundWork.corpusCoordinator.clearFinishedBuilds()
                 backgroundWork.crossReferencePreparationCoordinator.clearFinishedPreparations()
+                backgroundWork.manualImageLoadCoordinator.clearFinishedLoads()
             }
         }
         .disposed(by: rx.disposeBag)
@@ -284,9 +288,10 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
                                 backgroundWork.indexingCoordinator.historyObservable,
                                 backgroundWork.corpusCoordinator.$finishedBuilds.asObservable(),
                                 backgroundWork.corpusCoordinator.$restoredImagesByImagePath.asObservable(),
-                                backgroundWork.crossReferencePreparationCoordinator.$finishedPreparations.asObservable()
-                            ) { history, finishedBuilds, restoredImages, finishedPreparations in
-                                !history.isEmpty || !finishedBuilds.isEmpty || !restoredImages.isEmpty || !finishedPreparations.isEmpty
+                                backgroundWork.crossReferencePreparationCoordinator.$finishedPreparations.asObservable(),
+                                backgroundWork.manualImageLoadCoordinator.$finishedLoads.asObservable()
+                            ) { history, finishedBuilds, restoredImages, finishedPreparations, finishedLoads in
+                                !history.isEmpty || !finishedBuilds.isEmpty || !restoredImages.isEmpty || !finishedPreparations.isEmpty || !finishedLoads.isEmpty
                             }
                         }
                     }
@@ -361,7 +366,7 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 enum ReportOutline {
     // MARK: - One engine's work
 
-    /// The three kinds of one engine's work, as the engine's own Report lists them, each rebuilt
+    /// The four kinds of one engine's work, as the engine's own Report lists them, each rebuilt
     /// from its own inputs only: a corpus build's progress leaves the indexing rows alone.
     @MainActor
     static func categoryNodes(
@@ -441,8 +446,19 @@ enum ReportOutline {
                 )
             }
         }
-        return Observable.combineLatest(indexingCategory, corpusCategory, crossReferenceCategory) { indexingCategory, corpusCategory, crossReferenceCategory in
-            [indexingCategory, corpusCategory, crossReferenceCategory].compactMap { $0 }
+        let manualImageLoadCoordinator = backgroundWork.manualImageLoadCoordinator
+        let manualLoadingCategory = Observable.combineLatest(
+            manualImageLoadCoordinator.$activeLoadsByImagePath.asObservable(),
+            manualImageLoadCoordinator.$finishedLoads.asObservable()
+        )
+        .observe(on: MainScheduler.instance)
+        .map { activeLoads, finishedLoads in
+            MainActor.assumeIsolated {
+                treeBuilder.manualLoadingCategory(activeLoads: activeLoads, finishedLoads: finishedLoads)
+            }
+        }
+        return Observable.combineLatest(indexingCategory, corpusCategory, crossReferenceCategory, manualLoadingCategory) { indexingCategory, corpusCategory, crossReferenceCategory, manualLoadingCategory in
+            [indexingCategory, corpusCategory, crossReferenceCategory, manualLoadingCategory].compactMap { $0 }
         }
     }
 
@@ -627,6 +643,41 @@ enum ReportOutline {
         cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: imagePath, isCancellable: isFollowed, isInProgress: true)
     }
 
+    /// An image the user is loading: how far, and the phase under way, once the work reports them.
+    static func configure(_ cellViewModel: ReportCellViewModel, forManualLoad load: ManualImageLoad) {
+        let detail: String
+        if let fractionCompleted = load.fractionCompleted {
+            let percent = Int((fractionCompleted * 100).rounded(.down))
+            detail = load.phaseDescription.map { "\(percent)% · \($0)" } ?? "\(percent)%"
+        } else {
+            detail = "Loading"
+        }
+        cellViewModel.update(icon: icon(forImagePath: load.imagePath), title: FindScope.imageName(of: load.imagePath), detail: detail, status: .running, toolTip: load.imagePath, isInProgress: true)
+    }
+
+    /// A load of the user's that ended: what it took and when, or why it failed.
+    static func configure(_ cellViewModel: ReportCellViewModel, for finishedLoad: FinishedManualImageLoad) {
+        let time = timeText(finishedLoad.finishedAt)
+        let duration = String(format: "%.1f s", finishedLoad.duration)
+        let detail: String
+        let status: ReportRowStatus
+        var toolTip = finishedLoad.imagePath
+        switch finishedLoad.outcome {
+        case .loaded:
+            detail = "\(duration) · \(time)"
+            status = .none
+            toolTip += "\nLoaded in \(duration)"
+        case .failed(let message):
+            detail = "Failed · \(time)"
+            status = .failed(message: message)
+            toolTip += "\n\(message)"
+        case .cancelled:
+            detail = "Cancelled · \(time)"
+            status = .none
+        }
+        cellViewModel.update(icon: icon(forImagePath: finishedLoad.imagePath), title: FindScope.imageName(of: finishedLoad.imagePath), detail: detail, status: status, toolTip: toolTip)
+    }
+
     /// The Cross References category's one row while the engine's process cannot prepare cross
     /// references — a RuntimeViewer older than the preparation on the other end. Queries still
     /// scan there.
@@ -762,6 +813,8 @@ enum ReportOutline {
     static let corpusIcon: NSUIImage = SFSymbols(systemName: .magnifyingglass).nsuiImage
 
     static let crossReferenceIcon: NSUIImage = SFSymbols(systemName: .arrowTriangleBranch).nsuiImage
+
+    static let manualLoadingIcon: NSUIImage = SFSymbols(systemName: .trayAndArrowDown).nsuiImage
 
     static let turnedOffIcon: NSUIImage = SFSymbols(systemName: .powerCircle).nsuiImage
 

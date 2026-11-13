@@ -250,6 +250,10 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         try await runtimeEngine.objects(in: imagePath)
     }
 
+    /// The image's objects with the progress of building them. Building an image the engine has not
+    /// indexed is the user opening it, which the Report's Manual Loading records (proposal
+    /// `editor-jump-bar`); a reload of an indexed one — after every batch of background indexing —
+    /// is not.
     override func buildRuntimeObjectsStream() -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Error> {
         AsyncThrowingStream { continuation in
             Task { [weak self] in
@@ -257,10 +261,21 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
                     continuation.finish()
                     return
                 }
-                do {
-                    let stream = await runtimeEngine.objectsWithProgress(in: imagePath)
-                    for try await event in stream {
+                let runtimeEngine = runtimeEngine
+                let imagePath = imagePath
+                let streamObjects: @Sendable (_ reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> Void = { reportProgress in
+                    for try await event in await runtimeEngine.objectsWithProgress(in: imagePath) {
+                        if case .progress(let progress) = event {
+                            await reportProgress(progress)
+                        }
                         continuation.yield(event)
+                    }
+                }
+                do {
+                    if try await runtimeEngine.isImageIndexed(path: imagePath) {
+                        try await streamObjects { _ in }
+                    } else {
+                        try await documentState.recordingManualLoad(ofImageAt: imagePath, streamObjects)
                     }
                     continuation.finish()
                 } catch {

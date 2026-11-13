@@ -254,7 +254,13 @@ final class MainViewModel: ViewModel<MainRoute> {
                         guard let executableURL = Bundle(url: url)?.executableURL else {
                             throw MessageError.message("\(url.lastPathComponent) has no executable to load.")
                         }
-                        try await self.documentState.runtimeEngine.loadImageInServingProcess(at: executableURL.path)
+                        // The user's own load, which the Report's Manual Loading records
+                        // (proposal `editor-jump-bar`).
+                        let runtimeEngine = self.documentState.runtimeEngine
+                        let executablePath = executableURL.path
+                        try await self.documentState.recordingManualLoad(ofImageAt: executablePath) { _ in
+                            try await runtimeEngine.loadImageInServingProcess(at: executablePath)
+                        }
                     } catch {
                         self.errorRelay.accept(error)
                     }

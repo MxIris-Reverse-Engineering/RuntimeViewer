@@ -38,9 +38,14 @@ final class RuntimeEngineBackgroundWork {
     /// The engine's prepared cross references, kept like `indexingCoordinator`.
     let crossReferencePreparationCoordinator: CrossReferencePreparationCoordinator
 
+    /// The images the engine's documents loaded at the user's request, for the Report's Manual
+    /// Loading (proposal `editor-jump-bar`).
+    let manualImageLoadCoordinator: ManualImageLoadCoordinator
+
     /// Whether any of the work is in progress — an indexing batch, a corpus queued or being
-    /// printed, cross references queued or being prepared — for every document on the engine: what
-    /// their Report navigator tabs mark, and what `processActivity` follows.
+    /// printed, cross references queued or being prepared, an image the user is loading — for every
+    /// document on the engine: what their Report navigator tabs mark, and what `processActivity`
+    /// follows.
     let isWorkInProgress: Driver<Bool>
 
     /// Keeps the app out of App Nap while `isWorkInProgress` says so.
@@ -81,18 +86,21 @@ final class RuntimeEngineBackgroundWork {
         let indexingCoordinator = RuntimeBackgroundIndexingCoordinator(engine: engine)
         let corpusCoordinator = FindCorpusCoordinator(engine: engine)
         let crossReferencePreparationCoordinator = CrossReferencePreparationCoordinator(engine: engine)
+        let manualImageLoadCoordinator = ManualImageLoadCoordinator()
         let isWorkInProgress = Driver.combineLatest(
             indexingCoordinator.hasActiveBatchObservable.asDriver(onErrorJustReturn: false),
             corpusCoordinator.hasActiveBuild,
-            crossReferencePreparationCoordinator.hasActivePreparation
-        ) { hasActiveBatch, hasActiveBuild, hasActivePreparation in
-            hasActiveBatch || hasActiveBuild || hasActivePreparation
+            crossReferencePreparationCoordinator.hasActivePreparation,
+            manualImageLoadCoordinator.hasActiveLoad
+        ) { hasActiveBatch, hasActiveBuild, hasActivePreparation, hasActiveLoad in
+            hasActiveBatch || hasActiveBuild || hasActivePreparation || hasActiveLoad
         }
         .distinctUntilChanged()
         self.engine = engine
         self.indexingCoordinator = indexingCoordinator
         self.corpusCoordinator = corpusCoordinator
         self.crossReferencePreparationCoordinator = crossReferencePreparationCoordinator
+        self.manualImageLoadCoordinator = manualImageLoadCoordinator
         self.isWorkInProgress = isWorkInProgress
         processActivity = BackgroundWorkProcessActivity(isWorkInProgress: isWorkInProgress, scheduler: processActivityScheduler)
         activityReporter = RuntimeEngineActivityReporter(
@@ -124,6 +132,7 @@ final class RuntimeEngineBackgroundWork {
         indexingCoordinator.close()
         corpusCoordinator.close()
         crossReferencePreparationCoordinator.close()
+        manualImageLoadCoordinator.close()
         processActivity.close()
     }
 }

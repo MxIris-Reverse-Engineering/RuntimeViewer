@@ -19,6 +19,23 @@ extension RuntimeEngine {
         }
     }
 
+    /// `indexImageIfNeeded(at:)`, reporting the indexing phase by phase as the sidebar's progress
+    /// view shows it — the user's own loads go through this one, which the Report's Manual Loading
+    /// follows (proposal `editor-jump-bar`). An image to load goes through the load command that
+    /// reports progress, the one batch export uses.
+    nonisolated func indexImageIfNeeded(at imagePath: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws {
+        guard try await !isImageIndexed(path: imagePath) else { return }
+        if try await isImageLoaded(path: imagePath) {
+            for try await event in await objectsWithProgress(in: imagePath) {
+                if case .progress(let progress) = event {
+                    await reportProgress(progress)
+                }
+            }
+        } else {
+            try await loadImage(at: imagePath, onProgress: reportProgress)
+        }
+    }
+
     /// Emits once when this engine reports `imagePath` indexed, and completes
     /// without emitting when the image is indexed already — the moment a pane
     /// showing an object of an image without sections has more to show. Such

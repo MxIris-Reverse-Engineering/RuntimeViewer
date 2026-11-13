@@ -101,8 +101,21 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
         self.imagePath = imagePath
         self.imageName = NavigationEntry.imageName(ofImageAt: imagePath)
         let engine = documentState.runtimeEngine
-        let resolvedIndexer: Indexer = indexer ?? { imagePath, reportProgress in
-            try await Self.index(imageAt: imagePath, on: engine, reportProgress: reportProgress)
+        // An image indexed already is read; any other is the user's own load, which the Report's
+        // Manual Loading records along with this page.
+        let resolvedIndexer: Indexer = indexer ?? { [weak documentState] imagePath, reportProgress in
+            if try await engine.isImageIndexed(path: imagePath) {
+                return try await engine.objects(in: imagePath)
+            }
+            guard let documentState else {
+                return try await Self.index(imageAt: imagePath, on: engine, reportProgress: reportProgress)
+            }
+            return try await documentState.recordingManualLoad(ofImageAt: imagePath) { recordProgress in
+                try await Self.index(imageAt: imagePath, on: engine) { progress in
+                    await reportProgress(progress)
+                    await recordProgress(progress)
+                }
+            }
         }
         super.init(documentState: documentState, router: router)
 
