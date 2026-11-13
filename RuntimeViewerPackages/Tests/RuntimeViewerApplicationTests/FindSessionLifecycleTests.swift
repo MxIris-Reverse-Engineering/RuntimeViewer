@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The Find session against the life of its document and of the engine calls
 /// it makes: a session may outlive its document, and must then neither read

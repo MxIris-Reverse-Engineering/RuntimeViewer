@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The runtime-object list under the sidebar's text filter (`NavigatorTextFilter`): every term tests one object's own
 /// name — as Xcode's navigators test each item — and an object stays when it or a descendant passes the scope and every

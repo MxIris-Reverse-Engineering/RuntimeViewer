@@ -6,7 +6,7 @@ import Dependencies
 import RuntimeViewerCore
 @testable import RuntimeViewerCommunication
 @testable import RuntimeViewerEngineManagement
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Letting an offline engine's process go while no document is on it. The
 /// documents coming and going are the background-work registry's occupancy

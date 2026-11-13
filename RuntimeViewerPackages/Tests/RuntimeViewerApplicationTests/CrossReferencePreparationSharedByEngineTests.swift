@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerCrossReferences
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The windows on one engine share its prepared cross references: the engine's

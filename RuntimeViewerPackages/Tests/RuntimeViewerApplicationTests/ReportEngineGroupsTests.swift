@@ -4,7 +4,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The Report of a document that borrows shared cache images lists each engine's work in a group

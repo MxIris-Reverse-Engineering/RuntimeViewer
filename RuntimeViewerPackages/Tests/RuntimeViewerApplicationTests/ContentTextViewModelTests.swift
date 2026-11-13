@@ -2,7 +2,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerSettings
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// End-to-end behaviour of the content pane against a real engine. The
 /// fetch/render split itself, fetch counting and failure recovery are pinned

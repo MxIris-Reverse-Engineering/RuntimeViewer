@@ -5,7 +5,8 @@ import Testing
 import RxSwift
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// The tree an editor pane's jump bar walks, and the adapter that puts it on AppKitPlus's
 /// `NSPopUpPathControl` (proposal `editor-jump-bar`). The engine is a real in-process one; the

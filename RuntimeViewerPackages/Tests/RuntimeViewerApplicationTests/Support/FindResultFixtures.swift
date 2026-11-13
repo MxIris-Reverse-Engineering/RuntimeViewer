@@ -1,6 +1,6 @@
 import Foundation
 import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Find result trees built by hand: a type row per name, with text hits under it. Every call
 /// builds new instances, the way a search builds rows for each batch it delivers.

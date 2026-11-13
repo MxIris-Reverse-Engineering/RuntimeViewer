@@ -114,6 +114,10 @@ let package = Package(
             targets: ["RuntimeViewerApplication"],
         ),
         .library(
+            name: "RuntimeViewerAppCore",
+            targets: ["RuntimeViewerAppCore"],
+        ),
+        .library(
             name: "RuntimeViewerServiceHelper",
             targets: ["RuntimeViewerServiceHelper"],
         ),
@@ -431,6 +435,23 @@ let package = Package(
         .target(
             name: "RuntimeViewerApplication",
             dependencies: [
+                "RuntimeViewerAppCore",
+                "RuntimeViewerAppUI",
+            ],
+        ),
+
+        // The app's view models and application logic. Everything here can be
+        // built and driven in a unit test, and no UI component appears here:
+        // views, controls, cells, menus, popovers, windows, their delegates and
+        // adapters belong to RuntimeViewerAppUI (Sources/AGENTS.md).
+        //
+        // While the split lands (Documentations/Evolutions/draft-app-core-ui-split.md)
+        // this still depends on what RuntimeViewerApplication depended on;
+        // RuntimeViewerUI, RuntimeViewerSettingsUI and AppKitPlus go in its
+        // later steps.
+        .target(
+            name: "RuntimeViewerAppCore",
+            dependencies: [
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
                 "RuntimeViewerSettings",
@@ -445,6 +466,20 @@ let package = Package(
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
                 .product(name: "FuzzySearch", package: "fuzzy-search"),
+            ],
+        ),
+
+        // The UI glue split out of the application layer: the adapters that set
+        // up AppKit and AppKitPlus controls, the jump bar's items, and the
+        // presenter that feeds the toolbar's activity view.
+        .target(
+            name: "RuntimeViewerAppUI",
+            dependencies: [
+                "RuntimeViewerAppCore",
+                "RuntimeViewerUI",
+                "RuntimeViewerArchitectures",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 
@@ -571,7 +606,8 @@ let package = Package(
         .testTarget(
             name: "RuntimeViewerApplicationTests",
             dependencies: [
-                "RuntimeViewerApplication",
+                "RuntimeViewerAppCore",
+                "RuntimeViewerAppUI",
                 "RuntimeViewerArchitectures",
                 "RuntimeViewerSettings",
                 "RuntimeViewerUI",

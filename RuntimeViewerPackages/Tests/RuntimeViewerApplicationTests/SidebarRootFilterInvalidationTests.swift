@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Pins that a rebuilt image tree invalidates the in-flight root filter
 /// pass in the *same* main-actor turn that installs the new tree.

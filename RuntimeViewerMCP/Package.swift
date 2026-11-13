@@ -73,7 +73,7 @@ let package = Package(
             name: "RuntimeViewerMCPBridge",
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
-                .product(name: "RuntimeViewerApplication", package: "RuntimeViewerPackages"),
+                .product(name: "RuntimeViewerAppCore", package: "RuntimeViewerPackages"),
                 .product(name: "RuntimeViewerSettings", package: "RuntimeViewerPackages"),
                 .product(name: "SwiftMCP", package: "SwiftMCP"),
             ]

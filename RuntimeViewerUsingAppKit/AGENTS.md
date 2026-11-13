@@ -3,8 +3,8 @@
 Rules for the app's UI code — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and
 routes, AppKit views — and for `AppDelegate` and the lifecycle controllers. The UI code is the app
 target's folder below this directory, `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/`, plus the
-ViewModels, cell ViewModels and routes in `RuntimeViewerPackages/Sources/RuntimeViewerApplication/` and
-the views in `RuntimeViewerPackages/Sources/RuntimeViewerUI/` (`RuntimeViewerPackages/Sources/AGENTS.md`
+ViewModels, cell ViewModels and routes in `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/`, the UI glue in
+`RuntimeViewerPackages/Sources/RuntimeViewerAppUI/` and the views in `RuntimeViewerPackages/Sources/RuntimeViewerUI/` (`RuntimeViewerPackages/Sources/AGENTS.md`
 points here). The other targets in this directory — the Catalyst shells and plugin, the XPC services, the
 command-line tool target — follow these rules only where they have UI code, and the SourceEditor bridge
 framework (`RuntimeViewerSourceEditorBridge/`) and the `Content/SourceEditor…` files are governed by
@@ -198,7 +198,7 @@ old `PopUpPathControl` and `ItemPopUpButton` were deleted). Background:
 `Documentations/Evolutions/0032-appkitplus-filter-and-path-controls.md`.
 
 - A sidebar page's filter field — both image list pages, both object list pages, the Find results, the
-  Report — is an `NSFilterTokenField` set up by `NavigatorTextFilterFieldAdapter` (RuntimeViewerApplication),
+  Report — is an `NSFilterTokenField` set up by `NavigatorTextFilterFieldAdapter` (RuntimeViewerAppUI),
   with Xcode's navigator text tokens: `loo`, `!loo`, `loo*`, `*loo`, wildcard patterns. Its tokens and the
   text still being typed all have to hold; the adapter reports them as a `NavigatorTextFilter`, and the
   page's view model tests each row's own name against it (`NavigatorTextFilter.Matcher`). Give the adapter
@@ -358,7 +358,7 @@ cell-reuse code) for data already produced by an Rx pipeline.
 
 - **Wrap each row's domain model in a per-cell `XxxCellViewModel`** (à la `SidebarRuntimeObjectCellViewModel`,
   `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`), declared
-  `public final class … : NSObject, @unchecked Sendable` under the relevant `RuntimeViewerApplication`
+  `public final class … : NSObject, @unchecked Sendable` under the relevant `RuntimeViewerAppCore`
   subfolder, holding the model as a stored `let`. The parent ViewModel's `Input` / `Output` traffic in
   cell ViewModels, not in raw models.
 - **Everything a row shows goes into one `Appearance` struct behind a single `@RxObserved` — never one
@@ -657,7 +657,7 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   `vibrantDividerColor` border, 33 points, 37 in a lower pane without a tab bar; the path control small,
   menus not popovers, hugging its own width. Unlike Xcode's, the row sits midway between the bar's top and
   its border while the tab bar is hidden (under the tab bar it stays at the top, the tab bar's 4 points
-  above it). Both bars' numbers are `EditorPaneBarMetrics` (RuntimeViewerApplication), which its tests pin:
+  above it). Both bars' numbers are `EditorPaneBarMetrics` (RuntimeViewerAppCore), which its tests pin:
   change them there, not in the view controller. The tab bar follows Xcode's rule — shown in every pane
   once any pane has a second tab — and while it is hidden the pane's close button sits at the start of the
   jump bar, after which the path control starts at 40 points instead of 8; a pane whose bars are both
@@ -679,7 +679,7 @@ picker is Xcode's scheme picker: in Xcode 26's style it sits at the capsule's le
 it is the middle item. A third style, Classic, is the toolbar from before RuntimeViewer followed Xcode
 (Automatic never picks it): no activity in the toolbar, nothing centered, and the runtime source as the
 old `NSPopUpButton` before the trailing buttons, whose menu `RuntimeSourceMenuAdapter`
-(RuntimeViewerApplication) fills from the same `RuntimeSourcePickerContent` as the popover and reports
+(RuntimeViewerAppUI) fills from the same `RuntimeSourcePickerContent` as the popover and reports
 with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` and
 `/Volumes/RE/Xcode/27.2-27B52/README.md`; background:
 `Documentations/Evolutions/0071-xcode-activity-progress.md` and
@@ -710,7 +710,8 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   images the user loads, is a `ReportCategory` the reporter deliberately does not follow: it is not
   background work, and its progress already shows where the user started it.
 - `ToolbarActivityState` and `ActivityTextSegment` live in `RuntimeViewerUI`, below
-  `RuntimeViewerApplication`, because the views that take them do. The views take no RxSwift; their
+  `RuntimeViewerAppUI`, because the views that take them do; `ToolbarActivityPresenter`, which makes them
+  from the Reports, is in RuntimeViewerAppUI for the same reason. The views take no RxSwift; their
   clicks are `NSControl` actions that open the Report navigator.
 - The capsule is 40 % of the toolbar wide through UIFoundation's
   `NSToolbar.box.preferredCenteredItemWidthRatio`, set before the toolbar goes into the window: it lays
@@ -744,7 +745,7 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   activity once the text pushes it, widened on hover and frozen while its popover shows. The rules are
   the doc comment of `ToolbarActivityView`; `ToolbarActivityViewSourcePickerTests` pins them. Without a
   picker the text stays left-aligned through constraints.
-- **The list is `RuntimeSourcePopoverAdapter`** (RuntimeViewerApplication): AppKitPlus's
+- **The list is `RuntimeSourcePopoverAdapter`** (RuntimeViewerAppUI): AppKitPlus's
   `NSNavigationPopoverController`, set up as Xcode's path cell sets up the scheme list, with
   `RuntimeSourcePopoverCellView` rows. It is the view layer's, like the menu it replaced: no route and no
   view model of its own. `MainViewModel` works out what it lists (`runtimeSourcePickerContent`) and takes

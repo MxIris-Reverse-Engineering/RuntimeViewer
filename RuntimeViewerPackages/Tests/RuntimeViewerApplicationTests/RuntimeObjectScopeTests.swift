@@ -1,6 +1,6 @@
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 @Suite("RuntimeObjectScope")
 struct RuntimeObjectScopeTests {

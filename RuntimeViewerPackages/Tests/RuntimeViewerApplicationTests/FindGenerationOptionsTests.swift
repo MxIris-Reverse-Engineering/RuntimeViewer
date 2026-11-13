@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// Find answers from what the content pane shows. The Generation Options

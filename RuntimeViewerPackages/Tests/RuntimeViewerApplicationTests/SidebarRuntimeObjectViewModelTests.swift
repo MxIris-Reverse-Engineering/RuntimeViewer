@@ -1,7 +1,7 @@
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The base class produces no objects of its own (`buildRuntimeObjects` is
 /// empty), which makes it the right subject for the load-state machine and

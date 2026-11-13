@@ -13,7 +13,7 @@ import AppKitPlus
 /// A query is recorded when the user runs it — Return in the query field, or a recent query chosen
 /// from the menu — never when it runs again by itself on another engine, under other Generation
 /// Options or over a corpus built later.
-enum FindRecentQueries {
+package enum FindRecentQueries {
     /// Xcode's limit.
     static let maximumCount = 10
 
@@ -65,7 +65,7 @@ enum FindRecentQueries {
     /// (`-[IDEFindNavigatorQueryParametersController descriptionForHistoryItem:withFont:inWorkspace:]`),
     /// the patterns left out — the plain title of the menu item, which `attributedTitle(for:font:)`
     /// draws over.
-    static func title(for query: FindQuery) -> String {
+    package static func title(for query: FindQuery) -> String {
         "\(query.scope.title), \(searchDescription(of: query)) “\(query.term.plainText)”, \(caseDescription(of: query))"
     }
 
@@ -76,7 +76,7 @@ enum FindRecentQueries {
     #if canImport(AppKit) && !targetEnvironment(macCatalyst)
     /// `title(for:)` with the patterns drawn between the quotes as the query field draws them.
     @MainActor
-    static func attributedTitle(for query: FindQuery, font: NSFont?) -> NSAttributedString {
+    package static func attributedTitle(for query: FindQuery, font: NSFont?) -> NSAttributedString {
         var textAttributes: [NSAttributedString.Key: Any] = [:]
         if let font {
             textAttributes[.font] = font

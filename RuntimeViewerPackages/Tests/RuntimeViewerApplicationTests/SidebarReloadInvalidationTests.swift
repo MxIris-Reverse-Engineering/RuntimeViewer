@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Pins that *every* terminal outcome of `reloadData()` invalidates the
 /// state a subclass derived from the previous object list — not only the

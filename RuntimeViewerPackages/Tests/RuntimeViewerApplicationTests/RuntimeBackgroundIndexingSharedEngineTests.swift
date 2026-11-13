@@ -3,7 +3,7 @@
 import Combine
 import Foundation
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerSettings
 

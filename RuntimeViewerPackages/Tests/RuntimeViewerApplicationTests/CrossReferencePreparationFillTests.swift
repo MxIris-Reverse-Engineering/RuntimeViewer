@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerCrossReferences
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// Keep Cross References Ready fills the resident limit and evicts nothing for it: every image is

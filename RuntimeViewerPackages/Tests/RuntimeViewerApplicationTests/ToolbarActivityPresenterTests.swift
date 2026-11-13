@@ -1,7 +1,8 @@
 import Foundation
 import Testing
 import RuntimeViewerArchitectures
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 import RuntimeViewerUI
 
 /// The window's activity display over time: the selection changes on its own when a run reaches

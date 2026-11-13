@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The scope chooser's contract — the sheet the scope menu's Custom Scopes…
 /// opens: it lists the engine's indexed images and the images the scope

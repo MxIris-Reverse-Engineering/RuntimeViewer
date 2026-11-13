@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The lists that offer the runtime object commands carry out the ones their
 /// menus report (proposal `context-menus`).

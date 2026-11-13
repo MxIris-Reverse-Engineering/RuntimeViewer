@@ -3,7 +3,7 @@ import AppKitPlus
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What the Find navigator sends the engine for the query field's term — proposal
 /// `find-patterns-and-recent-queries`: text alone as before, a term with find patterns as a

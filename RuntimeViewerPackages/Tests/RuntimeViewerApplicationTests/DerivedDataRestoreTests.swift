@@ -2,7 +2,7 @@ import Foundation
 @testable import RuntimeViewerCore
 import Synchronization
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// Corpora read from derived data, on the app's side: the Always Index images

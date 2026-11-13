@@ -2,7 +2,7 @@
 
 How to build and run these suites: the root `AGENTS.md`, *Testing*.
 
-Rules for `RuntimeViewerApplicationTests` (every ViewModel in `RuntimeViewerApplication` has a contract
+Rules for `RuntimeViewerApplicationTests` (every ViewModel in `RuntimeViewerAppCore` has a contract
 suite there, next to the defect-specific regression suites):
 
 - **Build ViewModels inside `ViewModelTestEnvironment.make { }`.** It overrides `appDefaults`, `settings`

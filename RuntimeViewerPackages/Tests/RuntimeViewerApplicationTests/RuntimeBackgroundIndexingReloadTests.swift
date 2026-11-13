@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What a batch's end costs the documents sharing its engine: one reload of the engine's data,
 /// however many documents listen. Every document hears every batch event, and each one's indexing

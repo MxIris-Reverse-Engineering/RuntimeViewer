@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Regression suite for `RuntimeInterfaceCache` — the per-document LRU that
 /// lets content navigation revisits render without an engine round-trip.

@@ -4,7 +4,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The Find navigator page's contract: the mode path and the toggles edit the
 /// query without searching, Return searches, results group hits by type,

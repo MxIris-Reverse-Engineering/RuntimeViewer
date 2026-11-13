@@ -3,7 +3,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCommunication
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What the summary bar says when a search could not give a full answer: a regular expression
 /// the engine stopped because it took too long (PR121.06), and a source whose RuntimeViewer is

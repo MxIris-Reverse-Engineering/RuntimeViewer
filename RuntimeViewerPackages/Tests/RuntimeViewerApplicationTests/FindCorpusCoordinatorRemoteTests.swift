@@ -4,7 +4,7 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The corpus coordinator on the engine the app actually runs "My Mac" on: a

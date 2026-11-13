@@ -1,5 +1,5 @@
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The coordinators of the background work a document joined with
 /// `startBackgroundWork()` — how every test reaches them. Asked of a document

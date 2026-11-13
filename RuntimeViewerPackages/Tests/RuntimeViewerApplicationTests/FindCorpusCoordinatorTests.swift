@@ -1,7 +1,7 @@
 import Foundation
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The corpus coordinator against a private engine: a requested image gets

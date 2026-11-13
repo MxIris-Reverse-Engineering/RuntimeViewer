@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The batch export picker's image tree: what a query shows, and what a checkbox, Select All or
 /// Deselect All does to the selection while a query is active.

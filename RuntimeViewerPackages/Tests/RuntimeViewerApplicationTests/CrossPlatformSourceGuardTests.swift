@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// The iOS, visionOS and jailbroken iOS apps compile these four targets too,
+/// The iOS, visionOS and jailbroken iOS apps compile these targets too,
 /// and only the release job builds those apps — so code that compiles on
 /// macOS alone has, more than once, been found by a failed release rather
 /// than by a test. A macOS test run cannot compile for iOS, so this reads the
@@ -20,6 +20,8 @@ import Testing
 @Suite("macOS-only code in the cross-platform targets")
 struct CrossPlatformSourceGuardTests {
     private static let crossPlatformTargetNames = [
+        "RuntimeViewerAppCore",
+        "RuntimeViewerAppUI",
         "RuntimeViewerApplication",
         "RuntimeViewerArchitectures",
         "RuntimeViewerSettings",

@@ -3,7 +3,7 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Regression suite for Open Quickly's lazy row materialization.
 ///

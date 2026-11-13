@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// How a text or member search's hits become the results tree, batch after batch: a search
 /// delivers one batch per image, and every batch used to rebuild the row — and its attributed

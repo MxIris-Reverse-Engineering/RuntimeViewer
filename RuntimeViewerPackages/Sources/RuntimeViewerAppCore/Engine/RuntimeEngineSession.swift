@@ -76,7 +76,7 @@ public final class RuntimeEngineSession {
     }
 
     /// The engine's own work, then the work of each engine it borrows from.
-    var backgroundWorks: [RuntimeEngineBackgroundWork] {
+    package var backgroundWorks: [RuntimeEngineBackgroundWork] {
         (backgroundWork.map { [$0] } ?? []) + borrowedBackgroundWorks
     }
 

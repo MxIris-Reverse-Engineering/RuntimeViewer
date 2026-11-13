@@ -1,4 +1,5 @@
 import Foundation
+import RuntimeViewerAppCore
 import RuntimeViewerUI
 
 extension ToolbarActivityState {

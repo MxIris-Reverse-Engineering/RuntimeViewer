@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The indexing coordinator's staging, event by event, so the outcome does not hang on the timing
 /// of a real batch. A batch archived as cancelled when a document moved to another engine used to

@@ -3,7 +3,7 @@ import Testing
 import RxSwift
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What one editor pane's view model shows (proposal `editor-panes`): its tab bar while any pane
 /// has a second tab, its jump bar (proposal `editor-jump-bar`), whether it has the focus, and the

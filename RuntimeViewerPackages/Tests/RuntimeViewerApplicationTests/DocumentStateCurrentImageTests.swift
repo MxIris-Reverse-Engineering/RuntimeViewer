@@ -1,6 +1,6 @@
 import Testing
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// `isSelectedRuntimeObjectInCurrentImage` decides whether Navigate ▸ Reveal
 /// in Sidebar Navigator is enabled: the sidebar only ever lists the rows of

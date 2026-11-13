@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The activity an engine's background work holds while any of it is in

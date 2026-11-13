@@ -1,6 +1,7 @@
 import Foundation
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 import RuntimeViewerUI
 
 /// What the activity display says about a report: the segments, which of them go first when the

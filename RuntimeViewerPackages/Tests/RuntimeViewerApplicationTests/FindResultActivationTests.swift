@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// How a Find result the user chose opens, read off the event that chose it: ⌥ opens it in a new
 /// tab (proposal `0029-find-navigator` §4, missing until PR121.07), and a typed character is

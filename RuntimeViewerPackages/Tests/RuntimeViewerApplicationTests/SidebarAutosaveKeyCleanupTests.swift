@@ -2,7 +2,7 @@
 
 import Testing
 import Foundation
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 

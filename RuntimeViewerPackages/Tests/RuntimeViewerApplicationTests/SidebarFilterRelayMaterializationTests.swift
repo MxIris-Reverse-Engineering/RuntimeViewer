@@ -3,7 +3,7 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Guards the saving from the proposal *`@RxObserved` 惰性创建 relay*: the
 /// wrapper allocates its `BehaviorRelay` on the first `$property` access, so

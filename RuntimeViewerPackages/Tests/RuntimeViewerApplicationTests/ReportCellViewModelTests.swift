@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// A Report navigator row publishes what it shows as one appearance: an update that changes
 /// several parts of the row is one event, and an update that changes nothing is none. The cell

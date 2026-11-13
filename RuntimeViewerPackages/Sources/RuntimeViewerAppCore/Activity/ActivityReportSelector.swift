@@ -10,32 +10,34 @@ import Foundation
 ///   comes, or the report on screen ends.
 ///
 /// One per window: what each window shows depends on when it started looking.
-struct ActivityReportSelector {
+package struct ActivityReportSelector {
     /// How long a run nobody waits on goes on before it is shown (`startPreDisplayDelayValidatorForReport:`).
     static let backgroundDisplayDelay: TimeInterval = 4
 
     /// How long a report stays on screen before another takes its place (`minimumReportTime`).
     static let minimumDisplayDuration: TimeInterval = 3
 
-    struct Selection: Equatable {
+    package struct Selection: Equatable {
         /// The report to show, as of the latest snapshot; `nil` for none.
-        var report: ActivityReport?
+        package var report: ActivityReport?
 
         /// The runs under way, plus the report shown when it is not one of them; 0 while nothing
         /// is shown.
-        var activityCount: Int
+        package var activityCount: Int
 
         /// When the selection can change without a new snapshot — a run reaching its display
         /// delay, the report on screen reaching its minimum time — so the caller updates again
         /// then.
-        var nextUpdateDate: Date?
+        package var nextUpdateDate: Date?
     }
 
     private var displayedReport: ActivityReport?
 
     private var displayStartDate: Date?
 
-    mutating func update(with snapshot: ActivityReportsSnapshot, now: Date) -> Selection {
+    package init() {}
+
+    package mutating func update(with snapshot: ActivityReportsSnapshot, now: Date) -> Selection {
         let candidate = Self.nextReport(in: snapshot, now: now)
         var nextUpdateDate = Self.nextDisplayDelayEnd(in: snapshot, now: now)
 

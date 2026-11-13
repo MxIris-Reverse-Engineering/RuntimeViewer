@@ -2,7 +2,7 @@
 
 import Testing
 import Foundation
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 import RuntimeViewerCore
 
 /// Everything here writes into a fresh temporary directory.

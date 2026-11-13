@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// `NavigatorTextFilter`: the sidebar's text filter, parsed and compared the way Xcode 27's navigators parse and
 /// compare their filter text (`/Volumes/RE/Xcode/27.2/README.md`, "Navigator text filter tokens"), plus the `!x` form

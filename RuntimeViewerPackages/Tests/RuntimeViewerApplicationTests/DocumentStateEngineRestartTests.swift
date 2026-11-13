@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// A document walks back to the image list when its engine stops being
 /// ready and becomes ready again — the local XPC service having been

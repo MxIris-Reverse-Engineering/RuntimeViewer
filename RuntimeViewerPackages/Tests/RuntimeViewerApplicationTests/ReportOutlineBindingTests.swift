@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerUI
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The Report navigator's tree bound to a real outline the way its page binds it — a
 /// `StatefulOutlineView` in the source list style, `rx.nodes(options: [])` — with the cell

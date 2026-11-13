@@ -4,7 +4,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import Testing
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The Report navigator is the engine's: the windows on one engine show the same Report, and only

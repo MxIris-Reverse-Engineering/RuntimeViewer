@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The Find session against corpora that keep arriving: a search on screen
 /// reads an image built after it ran without starting over, and the summary

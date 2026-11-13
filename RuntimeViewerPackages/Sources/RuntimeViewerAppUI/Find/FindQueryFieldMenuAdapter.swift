@@ -1,6 +1,7 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 import AppKit
+import RuntimeViewerAppCore
 import AppKitPlus
 import RuntimeViewerArchitectures
 

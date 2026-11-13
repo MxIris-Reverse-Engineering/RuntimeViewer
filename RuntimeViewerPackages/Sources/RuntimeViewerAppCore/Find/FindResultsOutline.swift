@@ -5,7 +5,7 @@ import AppKit
 import Foundation
 
 /// One update of the Find page's outline: the rows, and what the page does to them once its data
-/// source has them.
+/// source has them. RuntimeViewerAppUI applies it to the outline (`apply(to:)`).
 public struct FindResultsPresentation {
     public let nodes: [FindResultNode]
     /// Rows to show expanded, parents before children; see `FindResultsOutline.nodesToExpand`.
@@ -13,30 +13,6 @@ public struct FindResultsPresentation {
     /// The rows the user selected, as nodes of this tree; empty when none of them is shown.
     public let nodesToSelect: [FindResultNode]
 }
-
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-extension FindResultsPresentation {
-    /// Expands `nodesToExpand` and puts the user's selection back on `nodesToSelect`, for an
-    /// outline whose data source already holds `nodes`.
-    ///
-    /// The selection has to be put back by item: a batch only appends types, which the outline's
-    /// diff inserts without touching the rows on screen, but a filter change reloads, and AppKit
-    /// keeps a reloaded selection by row number. It is only selected, never scrolled to: the user
-    /// may have scrolled away from it, and a row that is not on screen has no row view to draw in
-    /// the wrong emphasis either. Selecting this way is not a choice the user made, so it reaches
-    /// nobody listening to `proposedSelection()`.
-    @MainActor
-    public func apply(to outlineView: NSOutlineView) {
-        for node in nodesToExpand where !outlineView.isItemExpanded(node) {
-            outlineView.expandItem(node)
-        }
-        let selectedRowIndexes = IndexSet(nodesToSelect.map { outlineView.row(forItem: $0) }.filter { $0 >= 0 })
-        if outlineView.selectedRowIndexes != selectedRowIndexes {
-            outlineView.selectRowIndexes(selectedRowIndexes, byExtendingSelection: false)
-        }
-    }
-}
-#endif
 
 /// The Find page's rules for its outline, kept out of the view controller so they can be tested.
 enum FindResultsOutline {

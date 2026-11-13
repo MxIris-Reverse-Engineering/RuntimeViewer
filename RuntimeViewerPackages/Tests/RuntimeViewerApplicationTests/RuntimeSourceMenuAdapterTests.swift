@@ -3,7 +3,8 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// `RuntimeSourceMenuAdapter`: the classic toolbar's runtime source pop-up, the `NSPopUpButton` with
 /// the menu RuntimeViewer had before its toolbar followed Xcode (proposal

@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// Everything a ViewModel resolves through `@Dependency`, pointed at

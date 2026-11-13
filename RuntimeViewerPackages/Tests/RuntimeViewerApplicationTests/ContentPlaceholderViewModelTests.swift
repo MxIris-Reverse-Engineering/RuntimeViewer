@@ -5,7 +5,7 @@ import Testing
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 @testable import RuntimeViewerCommunication
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What the content pane's placeholder says while it has no object: the hint
 /// to select one, or — while the offline service is still reading the

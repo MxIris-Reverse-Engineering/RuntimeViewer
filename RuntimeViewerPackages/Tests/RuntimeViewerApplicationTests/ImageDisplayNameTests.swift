@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// An image goes by one name wherever the navigators show it: its file name, extension included —
 /// Find's scope and summary bar, Find's result rows and the Report navigator's rows alike. The Find

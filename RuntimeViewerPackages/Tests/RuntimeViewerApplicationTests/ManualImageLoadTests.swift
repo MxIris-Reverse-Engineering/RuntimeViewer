@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The images the user loads, as the Report navigator's Manual Loading lists them (proposal
 /// `editor-jump-bar`): a row while the load runs, an entry with its outcome once it ends, and only

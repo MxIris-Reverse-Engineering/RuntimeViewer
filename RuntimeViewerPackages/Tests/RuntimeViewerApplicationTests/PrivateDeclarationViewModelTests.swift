@@ -1,7 +1,7 @@
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The popover a sidebar row's `Private` tag opens: the row's private declarations, each with its
 /// discriminator and the source file the engine recovers from the names of the row's image

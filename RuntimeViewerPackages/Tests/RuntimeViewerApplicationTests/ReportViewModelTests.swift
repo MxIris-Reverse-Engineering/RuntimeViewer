@@ -7,7 +7,7 @@ import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The Report navigator page against a private engine: indexing batches and corpus builds under

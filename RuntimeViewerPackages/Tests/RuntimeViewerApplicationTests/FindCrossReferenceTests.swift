@@ -5,7 +5,8 @@ import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// The rules of Call Hierarchy, Callees and Type References that hold without an engine: how a
 /// level is grouped and ordered, how a tree loads, where it stops, and how a term names a member.

@@ -1,7 +1,7 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
-import RuntimeViewerApplication
+import RuntimeViewerAppCore
 import RuntimeViewerSettings
 import Dependencies
 import SwiftMCP

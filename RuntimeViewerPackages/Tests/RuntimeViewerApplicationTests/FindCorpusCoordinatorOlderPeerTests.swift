@@ -4,7 +4,7 @@ import Foundation
 import RuntimeViewerCommunication
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The corpus coordinator against a peer older than the corpus commands — a

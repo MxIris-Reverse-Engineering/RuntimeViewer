@@ -14,7 +14,7 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 | File | Covers |
 |------|--------|
 | `RuntimeViewerUsingAppKit/AGENTS.md` | The macOS app's UI layer — ViewModels, ViewControllers, cells and cell ViewModels, coordinators and routes, AppKit views, the sidebar's floating bars, diagnosing flicker — and `AppDelegate` with the lifecycle controllers. It also governs the ViewModels and routes in `RuntimeViewerApplication` and the views in `RuntimeViewerUI` |
-| `RuntimeViewerPackages/Sources/AGENTS.md` | Points the UI code in `RuntimeViewerApplication` and `RuntimeViewerUI` to the file above |
+| `RuntimeViewerPackages/Sources/AGENTS.md` | What goes in `RuntimeViewerAppCore` and what in `RuntimeViewerAppUI`, and the facade `RuntimeViewerApplication`; points their UI code and `RuntimeViewerUI` to the file above |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | Keeping package tests off the user's real settings, bookmarks and derived data; engines in tests |
 | `RuntimeViewerCore/Sources/AGENTS.md` | Where a file goes in the RuntimeViewerCore package: one top-level type per file, directories by feature; how every engine command declares its routing |
 | `RuntimeViewerCore/Tests/AGENTS.md` | Keeping Core tests off the user's real derived data |
@@ -327,7 +327,9 @@ The project uses three Swift Package Manager packages:
 
 **RuntimeViewerPackages** (`RuntimeViewerPackages/`):
 - `RuntimeViewerArchitectures` — MVVM + Coordinator pattern with RxSwift
-- `RuntimeViewerApplication` — ViewModels and business logic (Sidebar, Inspector, Content, Theme, FilterEngine)
+- `RuntimeViewerAppCore` — ViewModels, cell ViewModels, routes, `DocumentState` and the application logic (Sidebar, Inspector, Content, Find, Theme, FilterEngine); testable, and no UI component appears in it (`RuntimeViewerPackages/Sources/AGENTS.md`)
+- `RuntimeViewerAppUI` — the UI glue split out of the application layer: the adapters that set up AppKit and AppKitPlus controls, the jump bar's items, the toolbar activity presenter
+- `RuntimeViewerApplication` — a facade that only re-exports the two above; the apps link this one product
 - `RuntimeViewerUI` — AppKit UI components (MinimapView, StatefulOutlineView, skeleton effects)
 - `RuntimeViewerServiceHelper` — Helper utilities
 - `RuntimeViewerHelperClient` — Helper client for XPC communication
@@ -792,10 +794,10 @@ the end of the file that logs to it. The line then goes to that os_log category,
 - Coordinator/navigation: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
 - Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`
 - Engine manager: `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift`
-- Document state: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
-- Editor panes: the model in `RuntimeViewerPackages/Sources/RuntimeViewerApplication/EditorArea/`, the views
+- Document state: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/DocumentState.swift`
+- Editor panes: the model in `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/`, the views
   and their coordinator in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/EditorArea/`
-- ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/`
+- ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/`; the UI glue they are bound through: `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/`
 - MCP bridge window provider: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppMCPBridgeWindowProvider.swift`
 - MCP server: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/`
 - MCP bridge: `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/`

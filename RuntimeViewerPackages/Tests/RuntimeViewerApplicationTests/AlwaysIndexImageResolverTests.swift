@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCommunication
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerCore
 
 /// What an Always Index row names on one engine. Without owners only what the engine's process

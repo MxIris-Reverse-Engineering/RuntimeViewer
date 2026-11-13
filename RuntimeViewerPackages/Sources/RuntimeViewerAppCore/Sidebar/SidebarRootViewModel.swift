@@ -241,7 +241,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     /// Whether an engine of `source` reads images from this Mac's disk: My Mac,
     /// Mac Catalyst and a process attached on this Mac (XPC or a local socket),
     /// or a file read offline here.
-    static func isOnThisMac(_ source: RuntimeSource) -> Bool {
+    package static func isOnThisMac(_ source: RuntimeSource) -> Bool {
         switch source {
         case .local, .remote, .localSocket, .file:
             return true

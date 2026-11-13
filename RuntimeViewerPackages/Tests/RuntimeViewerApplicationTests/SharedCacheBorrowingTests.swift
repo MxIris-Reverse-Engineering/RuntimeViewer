@@ -3,7 +3,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RxSwift
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// A document on an engine that borrows shared cache images holds the background work of the

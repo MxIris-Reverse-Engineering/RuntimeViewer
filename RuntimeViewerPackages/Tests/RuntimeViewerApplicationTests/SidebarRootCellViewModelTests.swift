@@ -1,6 +1,6 @@
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Text filtering of the image tree lives in `SidebarRootFilterPipeline`
 /// (covered by `SidebarRootFilterPipelineTests`); the cell only owns its

@@ -3,7 +3,7 @@ import Testing
 import RxSwift
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// An editor tab's context menu and the order a drag leaves the tabs in
 /// (proposal `context-menus`).

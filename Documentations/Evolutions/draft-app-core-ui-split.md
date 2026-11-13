@@ -1,6 +1,6 @@
 # Draft - 把 RuntimeViewerApplication 拆成 AppCore 与 AppUI
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-13
 - **最后更新**: 2026-11-13
@@ -591,7 +591,7 @@ public struct FindPattern: Hashable, Sendable {
 
 **进 `RuntimeViewerAppUITests` 的**：
 
-- AppUI 的测试：`EditorJumpBarTests`、`FindModePathControlAdapterTests`、`FindQueryFieldMenuAdapterTests`、`FindResultsOutlineTests`、`RuntimeSourceMenuAdapterTests`、`RuntimeSourcePopoverAdapterTests`、`ToolbarActivityPresenterTests`、`ToolbarActivityStateTests`、`ReportOutlineBindingTests`。
+- AppUI 的测试：`EditorJumpBarTests`、`FindModePathControlAdapterTests`、`FindQueryFieldMenuAdapterTests`、`FindResultsOutlineTests`、`NavigatorTextFilterFieldAdapterTests`、`RuntimeSourceMenuAdapterTests`、`RuntimeSourcePopoverAdapterTests`、`ToolbarActivityPresenterTests`、`ToolbarActivityStateTests`、`ReportOutlineBindingTests`。
 - `RuntimeViewerUI` 视图的测试：`ApplicationIconMaskTests`、`BaseNavigationControllerTests`、`ChoiceFilterControlBarItemTests`、`DeviceGlyphTests`、`EditorSplitViewTests`、`GenericViewControllerAppearanceEventTests`、`HorizontalSeparatorViewTests`、`NavigatorScrollViewLayoutTests`、`RuntimeSourcePickerTests`、`RuntimeSourcePopoverCellViewTests`、`StackedHeightSharingTests`、`StatefulOutlineViewAutosaveTests`、`StatefulOutlineViewRevealTests`、`StatefulOutlineViewRowGeometryTests`、`TabSwitcherBarSafeAreaTests`、`TagButtonHitTestingTests`、`TitleToolbarItemOverflowTests`、`ToolbarActivityViewSourcePickerTests`、`ToolbarCenteredItemTests`、`ToolbarScrollPocketContainerViewTests`。
 - 新增：`FindPatternParityTests`，用同一份属性表分别造 `FindQueryTerm` 与 `NSFindPatternComponents`，逐例比较两边拼出的正则；`IDEIconRuntimeObjectIconRendererTests`，确认描述到 `IDEIcon` 的映射。
 - 只有它们用的帮手：`Support/LayerRendering.swift`、`Support/MaterialFillRendering.swift`。
@@ -620,7 +620,7 @@ public struct FindPattern: Hashable, Sendable {
 | `RuntimeViewerPackages/Sources/AGENTS.md` | 分界规则全文、两个模块各放什么、门面不放任何实现、AppCore 不依赖 UI 库 |
 | `RuntimeViewerUsingAppKit/AGENTS.md` | 写着「(RuntimeViewerApplication)」的地方改成实际所在的模块；Find 查询框一段说明内容在 AppUI 与 `FindQueryTerm` 之间按属性表互转、拼接规则在 AppCore 有一份照抄并由对照测试守住 |
 | `RuntimeViewerPackages/Tests/AGENTS.md` | 改成两个测试 target 与帮手 target 的规则 |
-| `Documentations/CommunicationAndEngineArchitecture.md`、`Documentations/Guides/TuistDevelopment.md`、`Documentations/Visions/HeadlessRuntimeViewer.md` | 提到 `RuntimeViewerApplication` 的地方 |
+| `Documentations/CommunicationAndEngineArchitecture.md`、`Documentations/Guides/TuistDevelopment.md` | 提到 `RuntimeViewerApplication` 的地方 |
 | `Tuist/ProjectDescriptionHelpers/LocalPackages.swift`、`Tuist.swift` | 新 target、测试 target、product 清单，以及 Architectures 不再依赖 AppKitPlus |
 
 已落地的提案、计划、审查记录、已解决问题与任务报告是历史记录，不改。
@@ -681,7 +681,7 @@ public struct FindPattern: Hashable, Sendable {
 
 ## 落地步骤
 
-**第一步：建 target 与门面，把 UI 胶水搬进 AppUI**（合进 `next` 一次，提案在这次分配编号，状态改为 In Progress）
+**第一步：建 target 与门面，把 UI 胶水搬进 AppUI**（✅ 已完成。合进 `next` 一次，提案在这次分配编号，状态改为 In Progress）
 
 1. `Package.swift`：新增 `RuntimeViewerAppCore`、`RuntimeViewerAppUI`，把 `RuntimeViewerApplication` 改成门面，新增 product `RuntimeViewerAppCore`。AppCore 暂时保留现在 Application 的全部依赖（第二步、第三步逐步去掉），旁边加注释说明这是过渡。
 2. 用 `git mv` 把 10 个文件搬进 `Sources/RuntimeViewerAppUI/`，其余文件按原子目录搬进 `Sources/RuntimeViewerAppCore/`；把 `FindResultsPresentation.apply(to:)` 拆到 AppUI 的扩展里。AppUI 要用的 AppCore 成员改成 `package`。
@@ -747,3 +747,7 @@ public struct FindPattern: Hashable, Sendable {
 | 2026-11-13 | 去掉三个上游库 | 审阅草案时，用户要求 AppCore 也不依赖 UIFoundation、SFSymbols、AppKitPlus，推翻了上一行里「只取模型」的默认做法。调研后定下：`NSUI*` 别名自己定义，属性串手写，系统图标改用 AppCore 的 `SystemSymbol`。`IDEIcon` 的绘制经依赖注入交给 AppUI，否决让 UIFoundation 拆出单独的 product。Find 的拼接规则在 AppCore 照 AppKitPlus 重写，并用对照测试守住，否决经依赖注入交给 AppUI，也否决保留 AppKitPlus。`Transition+Navigation.swift` 挪进 AppUI，Architectures 去掉 AppKitPlus，否决不挪。 |
 | 2026-11-13 | 落地改为四次 | 新增的「去掉 AppKitPlus」自带对照测试，单独合一次，保持每次改动小、能单独验收。用户确认四次，否决并回第二步。 |
 | 2026-11-13 | Accepted | 用户批准，开始实现。实现在功能分支 `feature/app-core-ui-split` 上按四步提交，每一步的最后一个提交就是一次可单独合进 `next` 的边界；合进 `next` 由用户看过后经 `finish-feature` 按步进行。 |
+| 2026-11-13 | 第一步：访问级别 | AppUI 用到的 AppCore 成员改成 `package`，没有一个改成 `public`：`ActivityReportSelector`（连同 `Selection` 的三个字段、`init()` 与 `update(with:now:)`）、`ActivityReportsSnapshot.merged(_:)`、`RuntimeEngineSession.backgroundWorks`、`RuntimeEngineBackgroundWork`、`RuntimeEngineActivityReporter` 与它的 `snapshot`、`FindRecentQueries` 的 `title(for:)` 与 `attributedTitle(for:font:)`、`FindModePathComponent.path(for:)`、`SidebarRootViewModel.isOnThisMac(_:)`。 |
+| 2026-11-13 | 第一步：文档 | 愿景《无头 RuntimeViewer》里提到 `RuntimeViewerApplication` 的两处，说的是写愿景时的旧状态和当时考虑过的选项，属于历史论证，不改；「文档与工程描述」表相应删去这一项。`CommunicationAndEngineArchitecture.md` 里引擎管理器的路径本来就过时（0035 已把它搬进 `RuntimeViewerEngineManagement`），借这次一并改正。测试 target 第一步还没改名，测试规则文件与根 `AGENTS.md`「Testing」里的名字留到第四步。 |
+| 2026-11-14 | 第一步：测试基线 | 全量包测试里有 5 处失败。`InjectedDeviceEngineReconnectionTests`、`ReportSharedByEngineTests`、`FindViewModelCrossReferenceTests`、`BackgroundWorkProcessActivityTests` 是满载并行时的超时，单独重跑全部通过。`TitleActivityIndicatorTests` 里「指针在标题上时副标题显示活动」一例在 `next` 基线上同样失败，与本次无关；它只测 `RuntimeViewerUI`，本提案不碰。 |
+| 2026-11-14 | 第一步：验证 | macOS App（`RunScript.sh --no-launch`）、iOS App（`RuntimeViewer iOS`，不签名）、`RuntimeViewerMCP` 的构建与 95 个测试都通过。`./TuistScript.sh check` 的 target 名单、锁文件与 trait 各项都过了，只报 `RuntimeViewerUsingAppKit.xcodeproj` 在工程级设了 `DEVELOPMENT_TEAM`：这是 `next` 上 8768b8cd 照收 Xcode 改写时带进来的，本分支没有改动任何工程文件，与本提案无关，不在这条分支上修。 |

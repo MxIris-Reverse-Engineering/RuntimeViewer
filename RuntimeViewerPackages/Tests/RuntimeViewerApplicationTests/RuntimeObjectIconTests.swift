@@ -1,7 +1,7 @@
 import AppKit
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The secondary badge: the other face of a class both lists show. On an
 /// Objective-C class row two different facts put a `C` there and they say

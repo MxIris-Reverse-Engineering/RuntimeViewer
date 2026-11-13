@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Contract suite for `FilterEngine`'s case-sensitivity semantics.
 ///

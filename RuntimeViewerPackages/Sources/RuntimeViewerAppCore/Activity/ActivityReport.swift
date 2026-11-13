@@ -97,7 +97,7 @@ public struct ActivityReportsSnapshot: Hashable, Sendable {
 
     /// Several engines' reports at one moment, as one: every run under way, the newest first, and
     /// the run that ended last among them all.
-    static func merged(_ snapshots: [ActivityReportsSnapshot]) -> ActivityReportsSnapshot {
+    package static func merged(_ snapshots: [ActivityReportsSnapshot]) -> ActivityReportsSnapshot {
         let runningReports = snapshots.flatMap(\.runningReports).sorted { $0.startDate > $1.startDate }
         let lastCompletedReport = snapshots.compactMap(\.lastCompletedReport).max { leftReport, rightReport in
             (leftReport.completion?.date ?? .distantPast) < (rightReport.completion?.date ?? .distantPast)

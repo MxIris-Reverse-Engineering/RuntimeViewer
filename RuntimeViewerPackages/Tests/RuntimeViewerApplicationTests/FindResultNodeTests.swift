@@ -5,7 +5,7 @@ import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What a Find result row is to the outline that shows it: when two rows are the same row, and
 /// when a row — with everything beneath it — still shows the same.

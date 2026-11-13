@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerCore
 import Semantic
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Pins the policy that turns a comment structure into what the SourceEditor pane draws: what is
 /// hidden, which run takes which colour, which runs a tag covers, and which rows collapse.

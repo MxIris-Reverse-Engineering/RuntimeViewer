@@ -1,7 +1,7 @@
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 @Suite("SidebarRootDirectoryViewModel")
 @MainActor

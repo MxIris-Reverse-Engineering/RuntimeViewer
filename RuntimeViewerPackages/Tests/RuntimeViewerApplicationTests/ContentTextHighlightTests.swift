@@ -3,7 +3,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Semantic
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The content pane's half of the Find handshake: the request a navigation
 /// builds the ViewModel with is located in the rendered text once and handed

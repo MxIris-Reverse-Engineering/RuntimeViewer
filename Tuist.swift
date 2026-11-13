@@ -21,6 +21,8 @@ let localPackageTargetNames = [
     "RuntimeViewerSettingsUI",
     "RuntimeViewerSimulatorInstaller",
     "RuntimeViewerApplication",
+    "RuntimeViewerAppCore",
+    "RuntimeViewerAppUI",
     "RuntimeViewerServiceHelper",
     "RuntimeViewerHelperClient",
     "RuntimeViewerDeviceInjection",

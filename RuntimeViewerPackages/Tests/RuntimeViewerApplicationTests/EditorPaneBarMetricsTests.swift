@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The numbers an editor pane lays its two bars out by (proposal `editor-jump-bar`): Xcode 27.2's
 /// heights, the jump bar's row as far from what is above it — the bar's top, or the tab bar's row —

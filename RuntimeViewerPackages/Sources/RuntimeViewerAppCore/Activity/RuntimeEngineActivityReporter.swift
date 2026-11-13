@@ -9,12 +9,12 @@ import RuntimeViewerArchitectures
 /// times a second while images index, and the activity display shows a new state at most once a
 /// second anyway.
 @MainActor
-final class RuntimeEngineActivityReporter {
+package final class RuntimeEngineActivityReporter {
     static let inputSamplingInterval: RxTimeInterval = .milliseconds(250)
 
     /// The engine's reports as of the latest change of its work.
     @RxObserved
-    private(set) var snapshot: ActivityReportsSnapshot = .empty
+    package private(set) var snapshot: ActivityReportsSnapshot = .empty
 
     private var indexingTracker = ActivityRunTracker(kind: .backgroundIndexing)
 

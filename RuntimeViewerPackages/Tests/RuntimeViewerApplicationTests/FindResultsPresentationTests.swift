@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The Find page's outline rules: which rows show expanded after an update, and which rows are
 /// the user's selection in the new tree.

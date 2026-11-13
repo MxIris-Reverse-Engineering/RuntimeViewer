@@ -3,7 +3,7 @@ import Testing
 import RxSwift
 import RuntimeViewerCrossReferences
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// How `SelectionRoute`s change `DocumentState.editorArea`, and what follows the focused editor
 /// pane (proposal `editor-panes`).

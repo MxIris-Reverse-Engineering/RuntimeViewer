@@ -3,7 +3,8 @@ import AppKitPlus
 import Foundation
 import RuntimeViewerArchitectures
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// `FindModePathControlAdapter`: the Find page's mode path on AppKitPlus's `NSPopUpPathControl` —
 /// proposal `appkitplus-filter-and-path-controls`. The control is a real one, off screen. What

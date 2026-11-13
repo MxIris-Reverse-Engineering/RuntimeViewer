@@ -1,6 +1,6 @@
 import Testing
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// `NavigationHistory` is what one tab has shown, the list back and forward walk.
 @Suite("NavigationHistory")

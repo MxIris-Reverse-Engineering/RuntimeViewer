@@ -4,7 +4,7 @@ import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import Semantic
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The content pane's side of the cross-reference commands: which lines carry which member, what a
 /// command chosen there does, and the member at the insertion point that the Inspector and the main

@@ -2,7 +2,7 @@ import Foundation
 @testable import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The cross-reference preparation coordinator against a private engine: the

@@ -2,7 +2,7 @@ import AppKit
 import AppKitPlus
 import Foundation
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The Find navigator's recent queries, kept as Xcode's `IDEFindNavigatorQueryHistoryManager` keeps
 /// its own — the latest first, ten at most, a search run again moved up — and titled as Xcode titles

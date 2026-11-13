@@ -4,7 +4,8 @@ import Dependencies
 import Foundation
 import RuntimeViewerArchitectures
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// `NavigatorTextFilterFieldAdapter`: a sidebar page's token field set up as Xcode's navigator filter — text tokens, the
 /// four comparisons with their value marks, no ANY / ALL — reporting a `NavigatorTextFilter`, and keeping one list of

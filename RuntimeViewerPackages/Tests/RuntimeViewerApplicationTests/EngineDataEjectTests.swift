@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 import Testing
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerCrossReferences
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The Report navigator's Searchable Interfaces and Cross References rows show what the engine's

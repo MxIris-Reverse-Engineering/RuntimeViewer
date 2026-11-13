@@ -1,7 +1,7 @@
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 @Suite("InspectorHierarchyViewModel")
 @MainActor

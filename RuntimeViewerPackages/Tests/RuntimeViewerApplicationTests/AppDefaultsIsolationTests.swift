@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What `AppDefaults.isolated()` promises the suites that build one: a write
 /// to one instance reaches no other, and none reaches the test process's

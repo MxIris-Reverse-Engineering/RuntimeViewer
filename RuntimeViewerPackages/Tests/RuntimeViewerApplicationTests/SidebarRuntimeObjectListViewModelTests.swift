@@ -1,7 +1,7 @@
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The public contract of the object list against a real image. The filter
 /// pipeline's cost model, Open Quickly's lazy materialization and reload

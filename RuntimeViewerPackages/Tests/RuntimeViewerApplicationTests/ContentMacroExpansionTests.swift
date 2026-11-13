@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerCore
 import Semantic
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Pins how the content pane carries the attached macros an interface shows folded from the
 /// engine's reply to what the SourceEditor pane expands: the UTF-8 ranges of the attribute and of

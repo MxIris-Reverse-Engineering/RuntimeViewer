@@ -3,7 +3,8 @@ import AppKitPlus
 import Foundation
 import RuntimeViewerArchitectures
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// `FindQueryFieldMenuAdapter`: the Find page's query field menu as
 /// `-[IDEFindNavigatorQueryParametersController findFieldMenu]` builds Xcode's — Insert Pattern

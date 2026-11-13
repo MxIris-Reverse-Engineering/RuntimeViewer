@@ -25,7 +25,7 @@ import DependenciesMacros
 /// and Mac Catalyst the documents of the processes attached on this Mac, and each other's. A
 /// document holds it through its `RuntimeEngineSession`; see `RuntimeEngineBackgroundWorkRegistry`.
 @MainActor
-final class RuntimeEngineBackgroundWork {
+package final class RuntimeEngineBackgroundWork {
     let engine: RuntimeEngine
 
     /// The engine's background indexing, kept with its feature turned off too, so it can start
@@ -53,7 +53,7 @@ final class RuntimeEngineBackgroundWork {
 
     /// The work's runs as activity reports, for the toolbar's activity display of every window on
     /// the engine.
-    let activityReporter: RuntimeEngineActivityReporter
+    package let activityReporter: RuntimeEngineActivityReporter
 
     private let disposeBag = DisposeBag()
 

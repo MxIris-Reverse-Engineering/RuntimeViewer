@@ -7,7 +7,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Semantic
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Regression suite for the split content-text pipeline
 /// (`ContentTextViewModel`'s fetch half vs. render half).

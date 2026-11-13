@@ -4,7 +4,7 @@ import Foundation
 import RuntimeViewerCommunication
 @testable import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 @testable import RuntimeViewerSettings
 
 /// The corpus coordinator when the connection under a build goes away: the

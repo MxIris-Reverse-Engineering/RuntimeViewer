@@ -2,7 +2,7 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The object pages remember their Filter Scope per engine and image, share it
 /// between the image's pages, and remember the Match Case toggle for every

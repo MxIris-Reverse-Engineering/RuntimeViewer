@@ -3,7 +3,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The Inspector's References tab, on the shared test engine with every query held to Foundation:
 /// which sections apply, what they load as the insertion point moves, and what Show in Find

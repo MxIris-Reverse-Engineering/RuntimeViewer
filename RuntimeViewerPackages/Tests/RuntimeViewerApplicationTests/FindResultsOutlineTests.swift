@@ -4,7 +4,8 @@ import Testing
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerUI
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// The Find page's results outline under updates, bound the way the page binds it: a diffing
 /// adapter over the nodes, in a window outside every display.

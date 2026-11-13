@@ -1,7 +1,7 @@
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The two placeholder ViewModels add nothing to `ViewModel<Route>`, so they
 /// double as the concrete subjects for the base class's own contract.

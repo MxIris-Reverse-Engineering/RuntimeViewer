@@ -3,7 +3,7 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Pins the atomic-appearance contract introduced by proposal 0005: a cell
 /// view model publishes its entire visual state as ONE

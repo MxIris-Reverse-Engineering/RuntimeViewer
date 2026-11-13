@@ -2,7 +2,7 @@ import Dependencies
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Runs `operation` with the live dependency context.
 ///

@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// The content pane's second-stage locate: a corpus line found in the text on
 /// screen by the priority order of `ContentHighlightRequest.locate(in:)`.

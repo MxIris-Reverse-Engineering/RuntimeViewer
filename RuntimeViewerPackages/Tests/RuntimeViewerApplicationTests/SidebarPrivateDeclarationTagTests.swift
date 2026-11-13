@@ -2,7 +2,7 @@ import AppKit
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// A private Swift type's row: its `displayName`, which the engine prints without private
 /// discriminators, and a `Private` tag after it whenever the object carries private declarations;

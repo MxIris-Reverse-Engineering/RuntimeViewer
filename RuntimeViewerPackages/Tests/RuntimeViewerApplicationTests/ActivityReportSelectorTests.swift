@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Which report a window's activity display shows, and when it changes — the rules of Xcode's
 /// `ActivityViewReportCoordinator` (IDEKit 26.6 and 27.2): a run the user asked for at once, a run

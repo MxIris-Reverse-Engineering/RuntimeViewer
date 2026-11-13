@@ -64,7 +64,7 @@ public struct FindModePathComponent: Hashable, Sendable {
     }
 
     /// `Find`, the mode, and — in the modes that have one — the match style.
-    static func path(for query: FindQuery) -> [FindModePathComponent] {
+    package static func path(for query: FindQuery) -> [FindModePathComponent] {
         var path = [
             FindModePathComponent(title: "Find", choice: nil, menuChoices: []),
             FindModePathComponent(choice: .mode(query.mode), menuChoices: FindMode.allCases.map(FindModePathChoice.mode)),

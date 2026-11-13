@@ -1,7 +1,7 @@
 import AppKit
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// A member row shows the member's declaration with the part the query
 /// matched set apart — also when the match lies in a later piece of a

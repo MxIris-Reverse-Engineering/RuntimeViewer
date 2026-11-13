@@ -3,7 +3,7 @@ import Testing
 import RxSwift
 import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What an editor pane shows for an image chosen in its jump bar (proposal `editor-jump-bar`): the
 /// image indexed first, its progress in the pane, then the page naming it; or why it failed, with

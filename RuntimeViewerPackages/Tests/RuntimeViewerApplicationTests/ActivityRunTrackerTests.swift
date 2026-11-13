@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// One kind of background work followed from run to run: what makes a run, how far it is, and how
 /// it ended — the activity display's raw material (proposal `0071-xcode-activity-progress`).

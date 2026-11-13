@@ -3,7 +3,7 @@ import DifferenceKit
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// Every place that compares two `RuntimeObject`s, pinned at the seam its
 /// caller sees.

@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
 
 /// What a rebuild of the Report tree builds: only what changed. The page rebuilt and reconfigured
 /// the whole tree whenever any input moved — a corpus build's progress, about sixty times a second,

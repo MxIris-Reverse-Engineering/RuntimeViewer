@@ -4,7 +4,8 @@ import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import Testing
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 @testable import RuntimeViewerUI
 
 /// `RuntimeSourcePopoverAdapter`: the runtime source picker's popover on AppKitPlus's
