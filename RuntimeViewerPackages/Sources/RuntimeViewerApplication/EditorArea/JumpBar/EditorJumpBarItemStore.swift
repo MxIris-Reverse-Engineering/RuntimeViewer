@@ -69,6 +69,10 @@ public final class EditorJumpBarItemStore {
 
     private var objectListStatesByCanonicalImagePath: [String: ObjectListState] = [:]
 
+    /// Images the engine reported indexed while their objects were being read: a read that found
+    /// such an image not indexed asked before the indexing ended, and reads again.
+    private var imagesIndexedWhileReading: Set<String> = []
+
     /// Bumped whenever the tree is made again, so a read that started before is dropped.
     private var treeGeneration = 0
 
@@ -201,6 +205,7 @@ public final class EditorJumpBarItemStore {
         unlistedImageItemsByCanonicalPath = [:]
         objectItemsByCanonicalImagePath = [:]
         objectListStatesByCanonicalImagePath = [:]
+        imagesIndexedWhileReading = []
         let sourceItem = EditorJumpBarItem(
             content: .source(engine),
             name: engine.source.description,
@@ -307,8 +312,16 @@ public final class EditorJumpBarItemStore {
             let isIndexed = (try? await engine.isImageIndexed(path: imagePath)) ?? false
             let objects: [RuntimeObject]? = isIndexed ? try? await engine.objects(in: imagePath) : nil
             guard let self, self.treeGeneration == treeGeneration else { return }
+            let wasIndexedWhileReading = imagesIndexedWhileReading.remove(canonicalImagePath) != nil
             guard let objects else {
-                objectListStatesByCanonicalImagePath[canonicalImagePath] = .waitingForIndex
+                // Indexed between the question and now: the report came while this read was under
+                // way and waits for nothing, so read again rather than wait for a report that has
+                // already gone by.
+                if wasIndexedWhileReading {
+                    startReadingObjects(of: imageItem, imagePath: imagePath, canonicalImagePath: canonicalImagePath, on: engine)
+                } else {
+                    objectListStatesByCanonicalImagePath[canonicalImagePath] = .waitingForIndex
+                }
                 return
             }
             install(objects, in: imageItem, canonicalImagePath: canonicalImagePath)
@@ -319,10 +332,15 @@ public final class EditorJumpBarItemStore {
     private func imageDidIndex(at imagePath: String) {
         guard let engine else { return }
         let canonicalImagePath = engine.canonicalImagePath(imagePath)
-        guard objectListStatesByCanonicalImagePath[canonicalImagePath] == .waitingForIndex,
-              let imageItem = imageItem(forImageAt: imagePath)
-        else { return }
-        startReadingObjects(of: imageItem, imagePath: imagePath, canonicalImagePath: canonicalImagePath, on: engine)
+        switch objectListStatesByCanonicalImagePath[canonicalImagePath] {
+        case .waitingForIndex?:
+            guard let imageItem = imageItem(forImageAt: imagePath) else { return }
+            startReadingObjects(of: imageItem, imagePath: imagePath, canonicalImagePath: canonicalImagePath, on: engine)
+        case .reading?:
+            imagesIndexedWhileReading.insert(canonicalImagePath)
+        case .read?, nil:
+            break
+        }
     }
 
     /// Reads an image's objects again after a type of it gained a specialization, if they were read.
