@@ -134,6 +134,94 @@ struct EditorJumpBarTests {
         #expect(unlistedItem.parentItem === store.rootItems.first)
     }
 
+    // MARK: - Icons
+
+    /// The colour the opaque part of `image` is drawn in, in the light appearance, or `nil` when no
+    /// part of it is opaque.
+    private static func drawnColor(of image: NSImage) -> NSColor? {
+        let pixelSize = 32
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: pixelSize, pixelsHigh: pixelSize, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        bitmap.size = NSSize(width: 16, height: 16)
+        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+            image.draw(in: NSRect(x: 0, y: 0, width: 16, height: 16))
+            NSGraphicsContext.restoreGraphicsState()
+        }
+        var red = 0.0, green = 0.0, blue = 0.0, opaquePixelCount = 0.0
+        for row in 0 ..< pixelSize {
+            for column in 0 ..< pixelSize {
+                guard let pixelColor = bitmap.colorAt(x: column, y: row)?.usingColorSpace(.sRGB),
+                      pixelColor.alphaComponent > 0.9 else { continue }
+                red += pixelColor.redComponent
+                green += pixelColor.greenComponent
+                blue += pixelColor.blueComponent
+                opaquePixelCount += 1
+            }
+        }
+        guard opaquePixelCount > 0 else { return nil }
+        return NSColor(srgbRed: red / opaquePixelCount, green: green / opaquePixelCount, blue: blue / opaquePixelCount, alpha: 1)
+    }
+
+    /// Whether `image` is drawn in `expectedColor`, as the light appearance resolves it.
+    private static func isDrawn(_ image: NSImage?, in expectedColor: NSColor) -> Bool {
+        guard let image, let drawnColor = drawnColor(of: image) else { return false }
+        var resolvedColor: NSColor?
+        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+            resolvedColor = expectedColor.usingColorSpace(.sRGB)
+        }
+        guard let resolvedColor else { return false }
+        let tolerance = 0.08
+        return abs(drawnColor.redComponent - resolvedColor.redComponent) < tolerance
+            && abs(drawnColor.greenComponent - resolvedColor.greenComponent) < tolerance
+            && abs(drawnColor.blueComponent - resolvedColor.blueComponent) < tolerance
+    }
+
+    @Test(
+        "a kind's jump bar icon is drawn as it is, in the kind's colour",
+        arguments: [
+            (RuntimeImageKind.folder, NSColor.systemBlue),
+            (.framework, .systemYellow),
+            (.bundle, .systemCyan),
+            (.application, .controlAccentColor),
+            (.kernelExtension, .controlAccentColor),
+            (.image, .controlAccentColor),
+        ]
+    )
+    func jumpBarIconColor(kind: RuntimeImageKind, expectedColor: NSColor) {
+        #expect(!kind.jumpBarIcon.isTemplate, "a template image would be drawn in the text colour")
+        #expect(Self.isDrawn(kind.jumpBarIcon, in: expectedColor))
+    }
+
+    @Test("the tree's folders are blue, a framework yellow, and an image the accent colour, listed or not")
+    func treeIconColors() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let (environment, store) = try await makeStore(on: engine)
+        defer { withExtendedLifetime(environment) {} }
+
+        let libobjcItem = try #require(store.item(for: .image(path: TestImages.libobjc)))
+        let libFolderItem = try #require(libobjcItem.parentItem as? EditorJumpBarItem)
+        // The path the shared cache lists, so that the image is the tree's and not one under the engine.
+        let foundationItem = try #require(store.item(for: .image(path: "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation")))
+        var frameworkItem: EditorJumpBarItem? = foundationItem
+        while let item = frameworkItem, item.pathComponentName != "Foundation.framework" {
+            frameworkItem = item.parentItem as? EditorJumpBarItem
+        }
+        let foundationFrameworkItem = try #require(frameworkItem, "Foundation's path has no Foundation.framework")
+        let unlistedItem = try #require(store.item(for: .image(path: "/Nowhere/Unlisted.dylib")))
+
+        #expect(libFolderItem.pathComponentName == "lib")
+        #expect(Self.isDrawn(libFolderItem.pathComponentIcon, in: .systemBlue))
+        #expect(Self.isDrawn(foundationFrameworkItem.pathComponentIcon, in: .systemYellow))
+        #expect(Self.isDrawn(libobjcItem.pathComponentIcon, in: .controlAccentColor))
+        #expect(Self.isDrawn(foundationItem.pathComponentIcon, in: .controlAccentColor), "the image inside the framework is an image")
+        #expect(Self.isDrawn(unlistedItem.pathComponentIcon, in: .controlAccentColor))
+    }
+
     @Test("an image that is not indexed gets its objects once the engine reports it indexed, never before")
     func objectsWaitForTheIndex() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "EditorJumpBarTests.waitsForTheIndex")
