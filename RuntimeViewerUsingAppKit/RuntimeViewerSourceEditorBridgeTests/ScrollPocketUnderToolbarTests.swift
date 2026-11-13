@@ -32,9 +32,11 @@ struct ScrollPocketUnderToolbarTests {
     /// The reconstruction adds the minimap as a margin overlay straight into the scroll view and
     /// frames it the scroll view's full height (`ContentViewLayoutContainer.layoutMarginAccessories`,
     /// 27.2.0-alpha.2), and it lands above the top pocket in the scroll view's subviews. So with the
-    /// minimap on, it is drawn plainly over the toolbar instead of blurred. A fix belongs to the
-    /// reconstruction; when one arrives, this known issue stops being recorded and the test fails
-    /// until `withKnownIssue` is removed.
+    /// minimap on, an editor alone under a toolbar draws it plainly over the toolbar instead of
+    /// blurred. The app does not show this: its editor area lays one pocket over the toolbar's strip
+    /// in front of every pane, minimap included (`ToolbarScrollPocketContainerView`). A fix in the
+    /// editor itself belongs to the reconstruction; when one arrives, this known issue stops being
+    /// recorded and the test fails until `withKnownIssue` is removed.
     @Test
     func theMinimapIsDrawnBelowTheTopPocket() throws {
         guard #available(macOS 26.0, *) else { return }
@@ -107,7 +109,7 @@ struct ScrollPocketUnderToolbarTests {
             bridge.applyTopContentInset(toolbarDepth)
             Self.layout(window)
 
-            scrollView = bridge.scrollView
+            scrollView = try #require(editorView as? SourceEditorView).scrollView
         }
 
         /// The pocket along the scroll view's top edge.

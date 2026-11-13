@@ -558,7 +558,7 @@ touching AppDelegate**.
 
 </important>
 
-<important if="you are adding or changing a sidebar or inspector page, a tab switcher, a filter bar, an editor pane's tab bar or content, or anything laid over a list's scroll view">
+<important if="you are adding or changing a sidebar or inspector page, a tab switcher, a filter bar, the editor area, an editor pane's tab bar or content, or anything laid over a list's scroll view">
 
 ## Navigator Pages Run Under Their Bars (macOS 26 and later)
 
@@ -625,17 +625,19 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   shown in a sidebar switcher adopts `NavigatorTabPage` and keeps the value until it makes its layout,
   because `NSTabViewItem(viewController:)` loads a page's view only when it is first shown. The
   inspector's switcher does none of this.
-- **Editor panes do the same over a scroll view that changes.** From macOS 26 on an editor pane's content
-  fills the pane — under the toolbar, and under the pane's tab bar while it shows — and the tab bar draws
-  no background. `EditorPaneViewController` registers the bar with the top scroll pocket of the content on
-  screen through `ScrollPocketContainerRegistration` (RuntimeViewerUI), which moves it when the content
-  changes and drops it while the bar is hidden, so the content scrolled under the toolbar and the bar shows
-  through blurred, as in Xcode 27.2. A new kind of pane content adopts `EditorPaneContent` and returns its
-  scroll view as `contentScrollView`, or nothing under its bar is blurred; the SourceEditor content returns
-  the editor's own scroll view (`SourceEditorBridging.scrollView`), not the editor view. Before macOS 26
-  the bar is opaque and the content starts at its top edge. Known issue: the reconstructed SourceEditor
-  puts the minimap above that pocket, so a minimap that is on shows plainly under the toolbar
-  (`ScrollPocketUnderToolbarTests`). Background:
+- **Editor panes use stand-alone pockets instead, as Xcode 27.2's editor does.** From macOS 26 on an editor
+  pane's content fills the pane — under the toolbar, and under the pane's tab bar while it shows. The
+  toolbar's strip is covered by one UIFoundation `ScrollPocketView` in front of every pane
+  (`ToolbarScrollPocketContainerView`, RuntimeViewerUI, which `EditorAreaViewController` puts its root split
+  view in), and each tab bar has one behind it; each pocket's capture view lies behind the content it
+  covers. **Do not register an editor's bar with the content's scroll pocket instead, and do not count on
+  the content's own pocket under the toolbar:** AppKit draws every pocket that reaches the title bar from
+  one backdrop capture per window, taken when the first is drawn, so the toolbar over every pane after the
+  first shows the window's background, flat (measured on macOS 27.2). The content's own pockets still lie
+  under both, each pane's in a backdrop group of its own (`NSView.box.titlebarBackdropGroupName` on the
+  pane's content container). Before macOS 26 the bar is opaque and the content starts at its top edge. The
+  reconstructed SourceEditor draws its minimap over the scroll view's own pocket
+  (`ScrollPocketUnderToolbarTests`); in the app the pockets in front cover it. Background:
   `Documentations/Evolutions/draft-editor-content-under-toolbar-scroll-pocket.md`.
 
 </important>

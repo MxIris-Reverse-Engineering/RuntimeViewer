@@ -15,12 +15,6 @@ public protocol SourceEditorBridging: NSObjectProtocol {
     /// The editor view, ready to be installed in a view hierarchy.
     var editorView: NSView { get }
 
-    /// The scroll view inside `editorView` that the text scrolls in, for the views laid over the
-    /// editor's top edge: an editor pane registers its tab bar as a container of this scroll view's
-    /// top scroll pocket, so that the text scrolled under the bar shows through it blurred. The
-    /// editor builds it once, so it never changes.
-    var scrollView: NSScrollView { get }
-
     /// Receives the ⌘-click notifications. Held weakly.
     var navigationDelegate: SourceEditorBridgingNavigationDelegate? { get set }
 

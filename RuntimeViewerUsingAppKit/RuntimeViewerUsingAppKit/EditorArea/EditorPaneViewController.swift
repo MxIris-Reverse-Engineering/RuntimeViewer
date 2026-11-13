@@ -1,5 +1,4 @@
 import AppKit
-import AppKitPlus
 import RxAppKit
 import UIFoundation
 import RuntimeViewerUI
@@ -13,12 +12,11 @@ import RuntimeViewerArchitectures
 /// From macOS 26 on the content runs the whole height of the pane, as Xcode 27.2's editor does
 /// (RE notes "Editor panes — visuals" §6): under the toolbar for a pane at the top, and under the
 /// tab bar while it shows. The content's safe area grows by the bar's height, so its text starts
-/// below the bar, and the bar has no background of its own: it is registered as a container of the
-/// top scroll pocket of the content on screen (`ScrollPocketContainerRegistration`), so AppKit's
-/// scroll edge effect shows the text scrolled under the toolbar and the bar blurred, as Xcode's bar
-/// backing, a scroll pocket of its own, does. The content's scroll view reaches the toolbar, so AppKit
-/// registers the toolbar with that pocket itself. The pane follows the content on screen through its
-/// `ContentNavigationController`, whose delegate it is.
+/// below the bar. What scrolls under the bar shows through the bar's own scroll edge effect, whose
+/// capture view lies behind the content; under the toolbar, through the one the editor area lays
+/// over all its panes (`ToolbarScrollPocketContainerView`). The content's own scroll pockets, which
+/// AppKit gives every scroll view reaching the toolbar, lie behind both, in a backdrop group of the
+/// pane's own: in the window's shared one they were drawn from a capture taken before the next pane.
 ///
 /// Before macOS 26, which has no scroll pockets, the bar is opaque and the content starts at its top
 /// edge while it shows.
@@ -64,10 +62,6 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         if #available(macOS 26.0, *) { true } else { false }
     }
 
-    /// Keeps the tab bar registered with the top scroll pocket of the content on screen while the
-    /// bar shows.
-    private lazy var tabBarScrollPocketRegistration = ScrollPocketContainerRegistration(containerView: tabBarView, edge: .top)
-
     /// The content's top edge from macOS 26 on, and before it while the tab bar is hidden: the
     /// pane's own.
     private lazy var contentTopToPaneTopConstraint = contentContainerView.topAnchor.constraint(equalTo: containerView.topAnchor)
@@ -83,12 +77,6 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         (contentNavigationController?.topViewController as? EditorPaneContent)?.focusableView
     }
 
-    /// The scroll view of the content on screen, which the tab bar floats over: `nil` on the
-    /// placeholder of an empty tab.
-    private var contentScrollView: NSScrollView? {
-        (contentNavigationController?.topViewController as? EditorPaneContent)?.contentScrollView
-    }
-
     private var contentNavigationController: ContentNavigationController? {
         children.first as? ContentNavigationController
     }
@@ -97,7 +85,6 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     func setContent(_ contentViewController: NSViewController) {
         loadViewIfNeeded()
         addChild(contentViewController)
-        (contentViewController as? ContentNavigationController)?.delegate = self
         contentContainerView.hierarchy {
             contentViewController.view
         }
@@ -113,6 +100,18 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             contentContainerView
             tabBarView
         }
+
+        // Behind the content, over the bar: the bar's edge effect replays the background from it.
+        if let tabBarScrollPocketCaptureView = tabBarView.scrollPocketCaptureView {
+            containerView.addSubview(tabBarScrollPocketCaptureView, positioned: .below, relativeTo: contentContainerView)
+            tabBarScrollPocketCaptureView.snp.makeConstraints { make in
+                make.edges.equalTo(tabBarView)
+            }
+        }
+
+        // A backdrop group of the pane's own for the content's scroll pockets, which every pane's
+        // would otherwise share with the window (`ToolbarScrollPocketContainerView`).
+        contentContainerView.box.titlebarBackdropGroupName = "EditorPane-\(UUID().uuidString)"
 
         // The top edge follows the tab bar (`updateTabBarLayout()`).
         contentContainerView.snp.makeConstraints { make in
@@ -132,16 +131,14 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         super.viewDidLayout()
 
         isToolbarAdjacent = view.safeAreaInsets.top > 0
-        // Also kept up to date from the content navigation controller; this pass only catches a
-        // content swap that reported nothing.
-        updateTabBarScrollPocketRegistration()
     }
 
-    /// The bar's height and padding, where the content starts, the content's safe area under the
-    /// bar, and the bar's registration with the content's scroll pocket.
+    /// The bar's height and padding, where the content starts, and the content's safe area under the
+    /// bar.
     private func updateTabBarLayout() {
         guard isViewLoaded else { return }
         tabBarView.isHidden = isTabBarHidden
+        tabBarView.scrollPocketCaptureView?.isHidden = isTabBarHidden
         tabBarView.topPadding = isToolbarAdjacent ? 0 : Self.tabBarTopPadding
         tabBarView.snp.updateConstraints { make in
             make.height.equalTo(tabBarHeight)
@@ -155,14 +152,6 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             contentTopToTabBarTopConstraint.isActive = true
         }
         contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: isTabBarHidden ? 0 : tabBarHeight, left: 0, bottom: 0, right: 0)
-        updateTabBarScrollPocketRegistration()
-    }
-
-    /// Registers the tab bar with the top scroll pocket of the content on screen while the bar shows,
-    /// and with none while it is hidden. Before macOS 26 the registration does nothing.
-    private func updateTabBarScrollPocketRegistration() {
-        guard isViewLoaded else { return }
-        tabBarScrollPocketRegistration.scrollView = isTabBarHidden ? nil : contentScrollView
     }
 
     /// A click no view inside the pane took — on the placeholder of an empty tab, say — reaches the
@@ -215,24 +204,14 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     }
 }
 
-// MARK: - NSNavigationControllerDelegate
-
-extension EditorPaneViewController: NSNavigationControllerDelegate {
-    /// The content of the active tab changed, or the pane's content first appeared: the tab bar
-    /// follows it to its scroll view.
-    func navigationController(_ navigationController: NSNavigationController, didShow viewController: NSViewController) {
-        updateTabBarScrollPocketRegistration()
-    }
-}
-
 // MARK: - Tab Bar
 
 /// The pane's tab bar: the button that closes the pane, then the tabs, in a 28-point row 8 points in
 /// from each side of its safe area, `topPadding` below its top.
 ///
-/// From macOS 26 on it draws no background: it is a bar in the content's top scroll pocket, which
-/// draws what is under it, and it answers `_scrollPocketElementStyle` as Xcode's bars do. Before
-/// macOS 26 it is opaque.
+/// From macOS 26 on its background is a scroll edge effect of its own, as Xcode's editor bars have:
+/// the content under the bar blurred under a near-opaque replay of the background. Before macOS 26 it
+/// is opaque.
 ///
 /// A dumb view: the tabs come in as a `TabBarSnapshot`, and a selection or a close goes out as the
 /// tab's `DocumentTab.ID`, which the view model turns into a route.
@@ -318,9 +297,17 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         tabBar
     }
 
-    @available(macOS 26.0, *)
-    override var _scrollPocketElementStyle: Int {
-        NSView.barScrollPocketElementStyle
+    /// The edge effect behind the bar from macOS 26 on: Xcode's editor bar background, a
+    /// `DVTEdgeOcclusionView` hosting a hard scroll pocket (`-[IDEEditorBar
+    /// initWithCenterItem:showBottomBorder:]`, IDEKit 27.2 0x145EC0; RE notes "Editor panes — visuals" §6).
+    private let scrollPocketView: ScrollPocketView? = {
+        if #available(macOS 26.0, *) { ScrollPocketView(edge: .top) } else { nil }
+    }()
+
+    /// The capture view of the edge effect behind the bar, which the pane puts behind its content, over
+    /// the bar: the effect replays the background from it. `nil` before macOS 26.
+    var scrollPocketCaptureView: NSView? {
+        scrollPocketView?.captureView
     }
 
     override func setup() {
@@ -328,6 +315,13 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
 
         if #unavailable(macOS 26.0) {
             backgroundColor = .windowBackgroundColor
+        }
+
+        if let scrollPocketView {
+            addSubview(scrollPocketView)
+            scrollPocketView.snp.makeConstraints { make in
+                make.edges.equalToSuperview()
+            }
         }
 
         hierarchy {

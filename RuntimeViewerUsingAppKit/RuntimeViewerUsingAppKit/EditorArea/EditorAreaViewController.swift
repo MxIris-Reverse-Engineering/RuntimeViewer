@@ -16,12 +16,19 @@ import RuntimeViewerArchitectures
 /// becomes the focused one, the way an Xcode editor pane becomes the last active one. The other way
 /// round, a pane that takes the focus through a command or a route gets the keyboard focus too
 /// (`focus(_:movingKeyboardFocus:)`).
+///
+/// The panes run under the toolbar, and one scroll edge effect lies over the toolbar's strip in front
+/// of them all (`ToolbarScrollPocketContainerView`), as Xcode 27.2 lays one over its editor area: the
+/// panes' own scroll pockets blur from one capture taken before the second pane is drawn.
 final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
     /// The narrowest a pane gets while a divider is dragged — Xcode's `IDEEditorSplitMinimumSize` —
     /// along the split's axis; the divider stops there and pushes nothing, as in Xcode.
     static let minimumPaneExtent: CGFloat = 200
 
     private let rootSplitView = EditorSplitView()
+
+    /// The root split view, with the edge effect over the toolbar's strip in front of it.
+    private lazy var toolbarScrollPocketContainerView = ToolbarScrollPocketContainerView(contentView: rootSplitView)
 
     /// The split view of each child split, by its index in the applied layout's `items`.
     private var childSplitViews: [Int: EditorSplitView] = [:]
@@ -44,10 +51,10 @@ final class EditorAreaViewController: BaseViewController<EditorAreaViewModel> {
         rootSplitView.delegate = self
 
         containerView.hierarchy {
-            rootSplitView
+            toolbarScrollPocketContainerView
         }
 
-        rootSplitView.snp.makeConstraints { make in
+        toolbarScrollPocketContainerView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
     }
@@ -309,8 +316,8 @@ final class EditorSplitView: NSSplitView {
     }
 
     /// Draws a divider only below the split view's top safe area. The editor area runs under the
-    /// toolbar, whose strip shows the panes' content blurred in their scroll pockets
-    /// (`EditorPaneViewController`), and a divider drawn up through it split the toolbar.
+    /// toolbar, whose strip shows the panes' content blurred by the edge effect over it
+    /// (`ToolbarScrollPocketContainerView`), and a divider drawn up through it split the toolbar.
     override func drawDivider(in rect: NSRect) {
         let topSafeAreaInset = min(safeAreaInsets.top, bounds.height)
         var drawableRect = bounds
