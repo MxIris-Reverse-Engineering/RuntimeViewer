@@ -5,8 +5,9 @@ import RuntimeViewerArchitectures
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerApplication
 
-/// What one editor pane's view model shows (proposal `editor-panes`): its tab bar from the
-/// second pane or the second tab on, whether it has the focus, and the button that closes it.
+/// What one editor pane's view model shows (proposal `editor-panes`): its tab bar while any pane
+/// has a second tab, its jump bar (proposal `editor-jump-bar`), whether it has the focus, and the
+/// button that closes it.
 @Suite("EditorPaneViewModel")
 @MainActor
 struct EditorPaneViewModelTests {
@@ -56,7 +57,7 @@ struct EditorPaneViewModelTests {
         #expect(try await nextValue(from: output.tabBarSnapshot).items.count == 2)
     }
 
-    @Test("with a second pane every pane shows its tab bar and close button, even over one tab")
+    @Test("with a second pane every pane shows its close button, but no tab bar over one tab")
     func aSecondPaneShowsEveryBar() async throws {
         let environment = ViewModelTestEnvironment()
         let firstPaneID = environment.documentState.editorArea.focusedPaneID
@@ -65,9 +66,23 @@ struct EditorPaneViewModelTests {
 
         environment.documentState.selectionRouter.trigger(.newEditorPane(.onRight))
 
-        #expect(try await nextValue(from: output.isTabBarHidden) == false)
+        #expect(try await nextValue(from: output.isTabBarHidden) == true, "one tab in each pane: the close button sits in the jump bar")
         #expect(try await nextValue(from: output.isCloseButtonHidden) == false)
         #expect(try await nextValue(from: output.isFocused) == false, "the new pane took the focus")
+    }
+
+    @Test("a second tab in any pane shows every pane's tab bar, as Xcode does")
+    func aSecondTabAnywhereShowsEveryTabBar() async throws {
+        let environment = ViewModelTestEnvironment()
+        let firstPaneID = environment.documentState.editorArea.focusedPaneID
+        let (viewModel, output) = makeViewModel(for: firstPaneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        environment.documentState.selectionRouter.trigger(.newEditorPane(.onRight))
+        #expect(environment.documentState.editorArea.focusedPaneID != firstPaneID)
+
+        environment.documentState.selectionRouter.trigger(.newTab)
+
+        #expect(try await nextValue(from: output.isTabBarHidden) == false, "the other pane's second tab shows this pane's tab bar too")
     }
 
     @Test("clicking a pane's background focuses it, and its close button closes it")

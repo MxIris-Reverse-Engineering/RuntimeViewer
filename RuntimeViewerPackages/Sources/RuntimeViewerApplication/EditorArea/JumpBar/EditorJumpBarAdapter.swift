@@ -38,6 +38,16 @@ public final class EditorJumpBarAdapter: NSObject {
         choiceSelectedRelay.asSignal()
     }
 
+    /// Whether the pane has the focus. An unfocused pane's path is drawn in the secondary label
+    /// colour, as Xcode 27.2 draws it (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Editor jump
+    /// bar"); the control asks for the colours as it rebuilds the path, so a change rebuilds it.
+    public var isPaneFocused = true {
+        didSet {
+            guard isPaneFocused != oldValue else { return }
+            pathControl.invalidateContent()
+        }
+    }
+
     public init(pathControl: NSPopUpPathControl, itemStore: EditorJumpBarItemStore) {
         self.pathControl = pathControl
         self.itemStore = itemStore
@@ -94,6 +104,12 @@ extension EditorJumpBarAdapter: NSPopUpPathControlDelegate {
     public func popUpPathControl(_ pathControl: NSPopUpPathControl, shouldSeparateDisplayOfChildItemsFor item: any NSPopUpPathItem) -> Bool {
         guard let item = item as? EditorJumpBarItem, case .object = item.content else { return true }
         return false
+    }
+
+    /// The secondary label colour in a pane without the focus; the control's own colours otherwise,
+    /// which already follow the window.
+    public func popUpPathControl(_ pathControl: NSPopUpPathControl, titleColorFor componentCell: NSPopUpPathComponentCell, at index: Int) -> NSColor? {
+        isPaneFocused ? nil : .secondaryLabelColor
     }
 }
 

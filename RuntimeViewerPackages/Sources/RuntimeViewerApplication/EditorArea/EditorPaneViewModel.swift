@@ -2,14 +2,15 @@ import Foundation
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
-/// One editor pane's view model: its tab bar, whether it has the focus, and the
-/// button that closes it.
+/// One editor pane's view model: its tab bar, its jump bar, whether it has the
+/// focus, and the button that closes it.
 ///
-/// The tab bar shows as soon as the editor area has a second pane, even over a
-/// single tab: RuntimeViewer has no jump bar, which is what shows the focused
-/// pane and holds the close button in Xcode, so without it nothing would say
-/// which pane has the focus. With one pane it shows from the second tab on, as
-/// before panes existed (proposal `editor-panes`).
+/// The tab bar follows Xcode 27.2's rule: it shows in every pane as soon as any
+/// pane has a second tab, and in none otherwise. The jump bar always shows
+/// (proposal `editor-jump-bar`); while the tab bar is hidden it holds the button
+/// that closes the pane, as Xcode's does. Before the jump bar the tab bar showed
+/// over a single tab as soon as there was a second pane, only to hold that
+/// button (proposal `editor-panes`).
 public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
     public let paneID: EditorPane.ID
 
@@ -99,9 +100,11 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
 
     public struct Output {
         public let tabBarSnapshot: Driver<TabBarSnapshot>
+        /// Hidden unless some pane of the editor area has a second tab.
         public let isTabBarHidden: Driver<Bool>
         public let isFocused: Driver<Bool>
-        /// Hidden while the pane is the only one: the only pane cannot be closed.
+        /// Hidden while the pane is the only one: the only pane cannot be closed. It sits in the
+        /// tab bar while that shows, and in the jump bar otherwise.
         public let isCloseButtonHidden: Driver<Bool>
         /// What the pane's jump bar shows the path to: the step on screen in its active tab.
         public let jumpBarLocation: Driver<EditorJumpBarLocation>
@@ -167,8 +170,8 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
 
         return Output(
             tabBarSnapshot: tabBarSnapshot,
-            isTabBarHidden: Driver.combineLatest(paneCount, tabBarSnapshot.map(\.items.count)) { paneCount, tabCount in
-                paneCount < 2 && tabCount < 2
+            isTabBarHidden: editorArea.map { editorArea in
+                !editorArea.panes.values.contains { $0.tabs.count > 1 }
             }
             .distinctUntilChanged(),
             isFocused: editorArea.map { $0.focusedPaneID == paneID }.distinctUntilChanged(),

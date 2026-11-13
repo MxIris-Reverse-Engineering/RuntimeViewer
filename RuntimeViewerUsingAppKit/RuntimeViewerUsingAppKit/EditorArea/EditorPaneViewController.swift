@@ -27,6 +27,12 @@ import RuntimeViewerArchitectures
 /// IDEKit 0x146E64; RE notes "Editor panes — visuals" §3): a 28-point row of controls 8 points in from
 /// each side, 4 points below it and 4 above — none above in a pane right under the toolbar
 /// (`isToolbarAdjacent`) — so 36 points, or 32 in the top row.
+///
+/// Under the tab bar — or in its place while it is hidden — is the pane's jump bar (proposal
+/// `editor-jump-bar`; RE notes "Editor jump bar"): the same row, with a 1-point border under it and
+/// no top padding right under the toolbar or under the tab bar, so 33 points, or 37 in a pane
+/// further down without a tab bar. The content runs under both bars, and both are containers of its
+/// top scroll pocket.
 final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     static let tabBarRowHeight: CGFloat = 28
 
@@ -34,9 +40,31 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
 
     static let tabBarBottomPadding: CGFloat = 4
 
+    static let jumpBarBorderWidth: CGFloat = 1
+
     /// The bar's height in this pane, top padding included.
     private var tabBarHeight: CGFloat {
         (isToolbarAdjacent ? 0 : Self.tabBarTopPadding) + Self.tabBarRowHeight + Self.tabBarBottomPadding
+    }
+
+    /// The jump bar's top padding: none right under the toolbar or under the tab bar.
+    private var jumpBarTopPadding: CGFloat {
+        isToolbarAdjacent || !isTabBarHidden ? 0 : Self.tabBarTopPadding
+    }
+
+    /// The jump bar's height, border included.
+    private var jumpBarHeight: CGFloat {
+        jumpBarTopPadding + Self.tabBarRowHeight + Self.tabBarBottomPadding + Self.jumpBarBorderWidth
+    }
+
+    /// How far down the jump bar starts: under the tab bar while it shows.
+    private var jumpBarTopOffset: CGFloat {
+        isTabBarHidden ? 0 : tabBarHeight
+    }
+
+    /// The depth of both bars, which the content's safe area makes room for.
+    private var barsHeight: CGFloat {
+        jumpBarTopOffset + jumpBarHeight
     }
 
     /// Whether the pane's top is under the toolbar — a pane of the layout's top row — which drops the
@@ -57,9 +85,16 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
 
     private let tabBarView = EditorPaneTabBarView()
 
+    private let jumpBarView = EditorPaneJumpBarView()
+
+    /// The document's jump bar items, which the coordinator hands every pane before it binds it.
+    var jumpBarItemStore: EditorJumpBarItemStore?
+
+    private var jumpBarAdapter: EditorJumpBarAdapter?
+
     private let contentContainerView = NSView()
 
-    /// Whether the content runs under the tab bar: from macOS 26 on.
+    /// Whether the content runs under the bars: from macOS 26 on.
     private static var contentRunsUnderTabBar: Bool {
         if #available(macOS 26.0, *) { true } else { false }
     }
@@ -68,11 +103,13 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
     /// bar shows.
     private lazy var tabBarScrollPocketRegistration = ScrollPocketContainerRegistration(containerView: tabBarView, edge: .top)
 
-    /// The content's top edge from macOS 26 on, and before it while the tab bar is hidden: the
-    /// pane's own.
+    /// Keeps the jump bar registered with the same pocket; it always shows.
+    private lazy var jumpBarScrollPocketRegistration = ScrollPocketContainerRegistration(containerView: jumpBarView, edge: .top)
+
+    /// The content's top edge from macOS 26 on: the pane's own.
     private lazy var contentTopToPaneTopConstraint = contentContainerView.topAnchor.constraint(equalTo: containerView.topAnchor)
 
-    /// The content's top edge before macOS 26 while the tab bar shows: the bar's.
+    /// The content's top edge before macOS 26: the first bar's, the bars being opaque there.
     private lazy var contentTopToTabBarTopConstraint = contentContainerView.topAnchor.constraint(equalTo: tabBarView.topAnchor)
 
     private let backgroundClickedRelay = PublishRelay<Void>()
@@ -112,9 +149,10 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         containerView.hierarchy {
             contentContainerView
             tabBarView
+            jumpBarView
         }
 
-        // The top edge follows the tab bar (`updateTabBarLayout()`).
+        // The top edge follows the bars (`updateTabBarLayout()`).
         contentContainerView.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
         }
@@ -124,6 +162,13 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             make.top.equalTo(view.safeAreaLayoutGuide)
             make.leading.trailing.equalToSuperview()
             make.height.equalTo(tabBarHeight)
+        }
+
+        // Under the tab bar while it shows, in its place otherwise.
+        jumpBarView.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(jumpBarTopOffset)
+            make.leading.trailing.equalToSuperview()
+            make.height.equalTo(jumpBarHeight)
         }
         updateTabBarLayout()
     }
@@ -137,8 +182,9 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         updateTabBarScrollPocketRegistration()
     }
 
-    /// The bar's height and padding, where the content starts, the content's safe area under the
-    /// bar, and the bar's registration with the content's scroll pocket.
+    /// The bars' heights and paddings, where the content starts, the content's safe area under the
+    /// bars, where the close button sits, and the bars' registration with the content's scroll
+    /// pocket.
     private func updateTabBarLayout() {
         guard isViewLoaded else { return }
         tabBarView.isHidden = isTabBarHidden
@@ -146,23 +192,46 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         tabBarView.snp.updateConstraints { make in
             make.height.equalTo(tabBarHeight)
         }
+        jumpBarView.topPadding = jumpBarTopPadding
+        jumpBarView.snp.updateConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(jumpBarTopOffset)
+            make.height.equalTo(jumpBarHeight)
+        }
+        updateCloseButtonPlacement()
         // Off before on: both pin the same edge, and with the bar under the toolbar they disagree.
-        if isTabBarHidden || Self.contentRunsUnderTabBar {
+        if Self.contentRunsUnderTabBar {
             contentTopToTabBarTopConstraint.isActive = false
             contentTopToPaneTopConstraint.isActive = true
         } else {
             contentTopToPaneTopConstraint.isActive = false
             contentTopToTabBarTopConstraint.isActive = true
         }
-        contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: isTabBarHidden ? 0 : tabBarHeight, left: 0, bottom: 0, right: 0)
+        contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: barsHeight, left: 0, bottom: 0, right: 0)
         updateTabBarScrollPocketRegistration()
     }
 
-    /// Registers the tab bar with the top scroll pocket of the content on screen while the bar shows,
-    /// and with none while it is hidden. Before macOS 26 the registration does nothing.
+    /// Whether the pane can be closed — there is another pane — which shows its close button.
+    private var isCloseButtonHidden = true {
+        didSet {
+            guard isCloseButtonHidden != oldValue else { return }
+            updateCloseButtonPlacement()
+        }
+    }
+
+    /// The close button sits in the tab bar while that shows, and at the start of the jump bar
+    /// otherwise, as in Xcode 27.2 (RE notes "Editor panes" §7).
+    private func updateCloseButtonPlacement() {
+        guard isViewLoaded else { return }
+        tabBarView.closeButton.isHidden = isCloseButtonHidden
+        jumpBarView.showsCloseButton = !isCloseButtonHidden && isTabBarHidden
+    }
+
+    /// Registers the bars with the top scroll pocket of the content on screen: the tab bar while it
+    /// shows, the jump bar always. Before macOS 26 the registration does nothing.
     private func updateTabBarScrollPocketRegistration() {
         guard isViewLoaded else { return }
         tabBarScrollPocketRegistration.scrollView = isTabBarHidden ? nil : contentScrollView
+        jumpBarScrollPocketRegistration.scrollView = contentScrollView
     }
 
     /// A click no view inside the pane took — on the placeholder of an empty tab, say — reaches the
@@ -183,13 +252,19 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             viewModel?.commands(forTab: tabID) ?? []
         }
 
+        // The document's items, shared by its panes; made once per pane, as the path control is.
+        if jumpBarAdapter == nil, let jumpBarItemStore {
+            jumpBarAdapter = EditorJumpBarAdapter(pathControl: jumpBarView.pathControl, itemStore: jumpBarItemStore)
+        }
+
         let input = EditorPaneViewModel.Input(
             tabSelected: tabBarView.tabSelectedRelay.asSignal(),
             tabClosed: tabBarView.tabClosedRelay.asSignal(),
-            closeButtonClicked: tabBarView.closeButton.rx.click.asSignal(),
+            closeButtonClicked: Signal.merge(tabBarView.closeButton.rx.click.asSignal(), jumpBarView.closeButton.rx.click.asSignal()),
             backgroundClicked: backgroundClickedRelay.asSignal(),
             tabCommandChosen: tabBarView.tabCommandChosenRelay.asSignal(),
-            tabsReordered: tabBarView.tabsReorderedRelay.asSignal()
+            tabsReordered: tabBarView.tabsReorderedRelay.asSignal(),
+            jumpBarChoiceSelected: jumpBarAdapter?.choiceSelected ?? .empty()
         )
         let output = viewModel.transform(input)
 
@@ -208,10 +283,21 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         output.isFocused.driveOnNext { [weak self] isFocused in
             guard let self else { return }
             tabBarView.isFocused = isFocused
+            jumpBarAdapter?.isPaneFocused = isFocused
         }
         .disposed(by: rx.disposeBag)
 
-        output.isCloseButtonHidden.drive(tabBarView.closeButton.rx.isHidden).disposed(by: rx.disposeBag)
+        output.isCloseButtonHidden.driveOnNext { [weak self] isHidden in
+            guard let self else { return }
+            isCloseButtonHidden = isHidden
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.jumpBarLocation.driveOnNext { [weak self] location in
+            guard let self else { return }
+            jumpBarAdapter?.show(location)
+        }
+        .disposed(by: rx.disposeBag)
     }
 }
 
@@ -465,6 +551,158 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         tabClosedRelay.accept(tabItem.id)
         DispatchQueue.main.async { [weak self] in
             self?.isHandlingClose = false
+        }
+    }
+}
+
+// MARK: - Jump Bar
+
+/// The pane's jump bar row (proposal `editor-jump-bar`), as Xcode 27.2's editor draws it
+/// (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Editor jump bar"): a 28-point row `topPadding` below
+/// its top and 8 points in from each side of its safe area — the close button and a separator
+/// first while the tab bar is hidden and there is another pane, then the path control at its own
+/// width, which it gives up as the row narrows — 4 points below the row, and a 1-point border along
+/// the bottom.
+///
+/// From macOS 26 on it draws no background: it is a bar in the content's top scroll pocket, which
+/// draws what is under it, and it answers `_scrollPocketElementStyle` as Xcode's bars do. Before
+/// macOS 26 it is opaque.
+private final class EditorPaneJumpBarView: LayerBackedView {
+    /// Xcode's close-pane button, the tab bar's twin: the jump bar holds it while the tab bar is
+    /// hidden.
+    let closeButton = NSButton().then {
+        $0.isBordered = false
+        $0.bezelStyle = .accessoryBar
+        $0.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close Editor Pane")
+        $0.imagePosition = .imageOnly
+        $0.toolTip = "Close this Editor Pane"
+        $0.setAccessibilityLabel("Close Editor Pane")
+    }
+
+    /// Small, as Xcode's: its font is the small system font, which the control sets itself.
+    let pathControl = NSPopUpPathControl().then {
+        $0.controlSize = .small
+        $0.setContentHuggingPriority(.required, for: .horizontal)
+    }
+
+    /// The space above the row: none right under the toolbar or under the tab bar.
+    var topPadding: CGFloat = EditorPaneViewController.tabBarTopPadding {
+        didSet {
+            guard topPadding != oldValue else { return }
+            rowStackView.snp.updateConstraints { make in
+                make.top.equalToSuperview().offset(topPadding)
+            }
+        }
+    }
+
+    var showsCloseButton = false {
+        didSet {
+            closeButton.isHidden = !showsCloseButton
+            separatorView.isHidden = !showsCloseButton
+        }
+    }
+
+    private static let rowHorizontalInset: CGFloat = 8
+
+    private static let closeButtonWidth: CGFloat = 23
+
+    /// Black or white at 10 % (55.7 % and 49.8 % with Increase Contrast), Xcode's
+    /// `vibrantDividerColor`.
+    private static let borderColor = NSColor(name: nil) { appearance in
+        switch appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua]) {
+        case .darkAqua?:
+            NSColor.white.withAlphaComponent(0.10)
+        case .accessibilityHighContrastAqua?:
+            NSColor.black.withAlphaComponent(0.557)
+        case .accessibilityHighContrastDarkAqua?:
+            NSColor.white.withAlphaComponent(0.498)
+        default:
+            NSColor.black.withAlphaComponent(0.10)
+        }
+    }
+
+    private let separatorView = SeparatorView()
+
+    private let borderView = LayerBackedView()
+
+    /// A stack, so that the path control moves to the row's start while the close button is
+    /// hidden: a stack view detaches a hidden arranged view.
+    private lazy var rowStackView = HStackView(spacing: 0) {
+        closeButton
+        separatorView
+        pathControl
+    }
+
+    @available(macOS 26.0, *)
+    override var _scrollPocketElementStyle: Int {
+        NSView.barScrollPocketElementStyle
+    }
+
+    override func setup() {
+        super.setup()
+
+        if #unavailable(macOS 26.0) {
+            backgroundColor = .windowBackgroundColor
+        }
+
+        hierarchy {
+            rowStackView
+            borderView
+        }
+
+        rowStackView.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(topPadding)
+            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+            make.leading.equalTo(safeAreaLayoutGuide).inset(Self.rowHorizontalInset)
+            make.trailing.lessThanOrEqualTo(safeAreaLayoutGuide).inset(Self.rowHorizontalInset)
+        }
+
+        closeButton.snp.makeConstraints { make in
+            make.width.equalTo(Self.closeButtonWidth)
+            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+        }
+
+        pathControl.snp.makeConstraints { make in
+            make.height.equalTo(EditorPaneViewController.tabBarRowHeight)
+        }
+
+        borderView.snp.makeConstraints { make in
+            make.bottom.equalToSuperview()
+            make.height.equalTo(EditorPaneViewController.jumpBarBorderWidth)
+            make.leading.trailing.equalTo(safeAreaLayoutGuide)
+        }
+
+        borderView.backgroundColor = Self.borderColor
+        closeButton.isHidden = true
+        separatorView.isHidden = true
+    }
+
+    /// The separator after the close button: a 1 × 12 line with rounded ends, centred in a slot 9
+    /// points wide — 4 points of margin on each side — and 21 high, as Xcode's
+    /// `DVTBarSeparatorView` is. The line's colour approximates Xcode's `contentDividerColor`, whose
+    /// value the RE notes do not give.
+    private final class SeparatorView: LayerBackedView {
+        private let lineView = LayerBackedView()
+
+        override var intrinsicContentSize: NSSize {
+            NSSize(width: 9, height: 21)
+        }
+
+        override func setup() {
+            super.setup()
+
+            hierarchy {
+                lineView
+            }
+
+            lineView.snp.makeConstraints { make in
+                make.center.equalToSuperview()
+                make.width.equalTo(1)
+                make.height.equalTo(12)
+            }
+
+            lineView.cornerRadius = 0.5
+            lineView.backgroundColor = .separatorColor
         }
     }
 }
