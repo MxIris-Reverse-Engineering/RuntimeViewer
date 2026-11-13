@@ -224,13 +224,15 @@ and through `queued-build`. What `check` compares, the Tuist workarounds behind 
 manifests, and the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
 Background: `Documentations/Evolutions/0053-tuist-coexistence.md`.
 
-**Dependency floors**: UIFoundation is declared `from: "0.43.0"` with its `Settings` trait on (which
-exposes `UIFoundationSettings` and `UIFoundationSettingsUI`). `0.43.0` is the first release with
-`NSToolbar.box.preferredCenteredItemWidthRatio` (`AppleInternal` trait), which sizes the toolbar's
-activity capsule at 40 % of the toolbar's width as Xcode 26 does. `0.39.0` brought the scroll pocket
-calls (`NSScrollView.box.registerScrollPocketContainer(_:on:)`, `setScrollPocketStyle(_:on:)`,
-`NSView.barScrollPocketElementStyle` and the `_scrollPocketElementStyle` declaration, `AppleInternal`
-trait) that `NavigatorScrollViewLayout` and the navigator bars use; the older features the app relies
+**Dependency floors**: UIFoundation is declared `from: "0.47.0"` with its `Settings` trait on (which
+exposes `UIFoundationSettings` and `UIFoundationSettingsUI`). `0.47.0` is the first release with
+`ScrollPocketView` and `NSView.box.titlebarBackdropGroupName` (`AppleInternal` trait), the stand-alone
+scroll edge effects over the editor area's toolbar strip and behind each editor pane's tab bar, and the
+backdrop group each pane's content gets. `0.43.0` brought `NSToolbar.box.preferredCenteredItemWidthRatio`,
+which sizes the toolbar's activity capsule at 40 % of the toolbar's width as Xcode 26 does. `0.39.0`
+brought the scroll pocket calls (`NSScrollView.box.registerScrollPocketContainer(_:on:)`,
+`setScrollPocketStyle(_:on:)`, `NSView.barScrollPocketElementStyle` and the `_scrollPocketElementStyle`
+declaration, `AppleInternal` trait) that `NavigatorScrollViewLayout` and the navigator bars use; the older features the app relies
 on — `NSTableView.box.estimatesRowHeights`, `Label` mirroring `attributedStringValue` into its tooltip,
 the synchronous `SettingsStore.save()`, `SettingsConfiguration`, `MainMenu` — all arrived before it.
 `0.39.0` needs FrameworkToolbox `0.15.0` or later, which is why `RuntimeViewerCore` takes a FrameworkToolbox
