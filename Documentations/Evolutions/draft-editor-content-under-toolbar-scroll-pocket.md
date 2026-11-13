@@ -19,7 +19,7 @@ macOS 26 起，把编辑区顶部改成 Xcode 27.2 的样子：每一栏的内�
 4. **内容自带的 pocket 单独分组。** AppKit 仍给伸到标题栏下的内容滚动视图各加一个顶部 pocket（软模糊），它们压在上面两种 pocket 下面。窗格在内容容器上设 `NSView.box.titlebarBackdropGroupName`（UIFoundation），让每栏的这一层各自截图，而不是共用窗口的分组、在第二栏绘制前就截好。
 5. **macOS 15 不变**：内容仍从标签栏上沿开始，标签栏仍用窗口背景色，没有 pocket。
 6. **依赖**：`ScrollPocketView` 与 `titlebarBackdropGroupName` 是 UIFoundation 0.47.0 新增的（UIFoundation 提案 0038），UIFoundation 的下限与四份锁文件（Debug、Distribution 两个 workspace，`RuntimeViewerPackages`、`RuntimeViewerCommandLine`）的 pin 抬到 0.47.0。
-7. **测试**：`ToolbarScrollPocketContainerViewTests`（RuntimeViewerApplicationTests）：两个滚动视图并排在工具栏下，容器最前面有一块盖住整条工具栏的 pocket、capture view 在最底层同一位置、它的分组和各栏自带 pocket 的不同、工具栏隐藏后高度跟着变；修复前四条全红。`ScrollPocketUnderToolbarTests`（桥接测试）确认 SourceEditor 的滚动视图伸到工具栏下时，自带的顶部 pocket 正好与工具栏一样高，并把 Minimap 排在它之上记成已知问题。App target 没有单元测试 target，窗格与标签栏的接线靠构建与目视验收。
+7. **测试**：`ToolbarScrollPocketContainerViewTests`（RuntimeViewerApplicationTests）：两个滚动视图并排在工具栏下，容器最前面有一块盖住整条工具栏的 pocket、capture view 在最底层同一位置、它的分组和各栏自带 pocket 的不同、工具栏隐藏后高度跟着变；修复前四条全红。`EditorSplitViewTests`（同一个 target）：两栏、三栏关掉一栏后，分割视图提交给窗口服务器的内容里没有旧分割线；用 `CARenderer` 读 AppKit 最后提交的内容，因为 `render(in:)` 会让视图当场重画，读不出残留；修复前五条红。`ScrollPocketUnderToolbarTests`（桥接测试）确认 SourceEditor 的滚动视图伸到工具栏下时，自带的顶部 pocket 正好与工具栏一样高，并把 Minimap 排在它之上记成已知问题。App target 没有单元测试 target，窗格与标签栏的接线靠构建与目视验收。
 8. **文档**：0076 的「外观」「非目标」与决策日志，提案索引的暂缓后续项，`EditorPaneViewController` 与 `EditorAreaViewController` 的文档注释，`RuntimeViewerUsingAppKit/AGENTS.md`，根 `AGENTS.md` 的依赖下限。
 
 **落地步骤**（每步各自能构建通过）
@@ -30,6 +30,7 @@ macOS 26 起，把编辑区顶部改成 Xcode 27.2 的样子：每一栏的内�
 4. ✅ UIFoundation：`ScrollPocketView` 与 `titlebarBackdropGroupName`，附测试；随 0.47.0 发布（UIFoundation 提案 0038）。
 5. ✅ RV：编辑区前置 pocket（`ToolbarScrollPocketContainerView`，附测试）、标签栏各自的 pocket、内容单独分组；撤掉第一版的 `ScrollPocketContainerRegistration`、`EditorPaneContent.contentScrollView` 与 `SourceEditorBridging.scrollView`。
 6. ✅ 抬 UIFoundation 到 0.47.0，编译、测试、文档。
+7. ✅ 修目视发现的第二个问题：关掉一栏后，原来的分割线留在原处（原因见「风险」）。
 
 **没有询问就采用的假设**
 
@@ -42,6 +43,7 @@ macOS 26 起，把编辑区顶部改成 Xcode 27.2 的样子：每一栏的内�
 
 - 11-06 让内容避开工具栏，是因为 Minimap 的竖线穿过了工具栏。重建版把 Minimap 当作 `marginOverlayView` 加进滚动视图、铺满整个高度，排在滚动视图自带的 pocket 之上（2026-11-12 实测，27.2.0-alpha.2），所以只靠自带的 pocket 时，工具栏下的 Minimap 是清晰的。现在前置 pocket 和标签栏的 pocket 排在它前面，App 里看不到这个问题；编辑器单独放在工具栏下时问题仍在，修复属于重建版仓库，`ScrollPocketUnderToolbarTests` 记成已知问题。
 - **第一版目视发现的问题（2026-11-13，macOS 27.2）**：两栏时只有左栏正文上方的工具栏是模糊的，从左栏 Minimap 往右（连同整个右栏）是一块平的窗口底色。原因在 AppKit：一个窗口里所有伸到标题栏下的 pocket 共用一个 backdrop 分组（`TitlebarGroup-<窗口>`），只截一次图，在第一个 pocket 绘制时截，之后才绘制的左栏 Minimap 和整个右栏都不在截图里。纯 AppKit 两个并排滚动视图也复现，与焦点、Minimap、文件长短无关。证据：运行中的 App 里两栏 pocket 模糊内容的 `CABackdropLayer` 分组同名；逆向见 UIFoundation 的 `Researchs/AppKit-NSScrollView-ScrollPocket-Internals.md` 第 5 节。
+- **目视发现的第二个问题（2026-11-13，macOS 27.2）**：关掉一栏后，原来两栏之间那条 3 点宽的分割线还留着——空标签时从工具栏下沿贯穿到窗口底部，有内容时只在路径栏那一条透出来；拖一下窗口就消失。原因：分割线是 `NSSplitView` 画在自己 layer 里的，而分割视图一旦有 delegate（编辑区用它限制每栏至少 200 点），增删子视图后就不再重画自己；去掉 delegate 它就会重画。平时旧线被不透明的内容挡住；空标签的占位页是透明的，路径栏的 pocket 又会回放窗格背后的底色，所以在这两处露出来。分割视图和它的 delegate 0076 就有；内容铺到栏下之后，路径栏那一条也会透出来。修法：`EditorSplitView` 在 `didAddSubview` 与 `willRemoveSubview` 里把自己标成需要重画；为了能在包里测，它从 App target 搬进 RuntimeViewerUI。
 - 最终观感只能目视验收；这一版的效果没有截图核对过（验证用的那台 Mac 锁着屏）。
 
 ## 决策日志
@@ -64,3 +66,4 @@ macOS 26 起，把编辑区顶部改成 Xcode 27.2 的样子：每一栏的内�
 | 2026-11-13 | UIFoundation 0.47.0 发布；四份锁文件只改 UIFoundation 一条，手改后用全新构建目录核验 | 用户批准发版。全新构建目录下两个 workspace 与两个包重新解析，锁文件字节不变；不用会推进所有 pin 的 `UpdatePackagesScript.sh`。Tuist 工作区的锁文件不进仓库，本地要 `./TuistScript.sh install` 之后才用上新版 |
 | 2026-11-13 | 实现完成，待用户目视验收后收尾 | Debug workspace 对着发布的 UIFoundation 0.47.0 编译通过，`ToolbarScrollPocketContainerViewTests` 四条通过。对着本地 UIFoundation 跑过全量：桥接测试 71 条只有 `SourceEditorScrollerTests` 两条既有的红；包测试 939 条只剩 `TitleActivityIndicatorTests` 悬停一条基线既有的红，满载下红的两组单独重跑都通过。观感没有截图核对过，交给用户目视 |
 | 2026-11-13 | 合进 `origin/next` 时，路径栏也改用背后一块独立 pocket | `origin/next` 已经有了路径栏（提案 `editor-jump-bar`），它照第一版把自己登记给内容的滚动视图，用的正是这次撤掉的 `ScrollPocketContainerRegistration`。照本提案的做法给它背后一块 `ScrollPocketView`，与标签栏一致，Xcode 的编辑栏也是各自一块；不保留登记，否则路径栏那一段是软模糊、标签栏是近乎实色，两段不一样。图片页的 `contentScrollView` 随协议一起删掉。合并后 App（Debug workspace）编译通过；`RuntimeViewerApplicationTests` 975 条只剩 `TitleActivityIndicatorTests` 悬停一条基线既有的红，满载下超时的三组（引擎共享的 Report、Find 的交叉引用、后台工作的进程活动）单独重跑都通过。路径栏的观感同样没有截图核对过 |
+| 2026-11-13 | 修目视发现的「关掉一栏后分割线残留」：`EditorSplitView` 增删子视图时整块重画，并从 App target 搬进 RuntimeViewerUI | 用户批准。用户的两张截图（空标签时贯穿到底、有内容时只在路径栏）与「拖窗口就恢复」定位到分割视图自己的 layer；测试夹具只有装上编辑区那样的 delegate 才复现，去掉 delegate 分割视图就会重画。修复前 `EditorSplitViewTests` 五条红，修复后八个用例全绿 |
