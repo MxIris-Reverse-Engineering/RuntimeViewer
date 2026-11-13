@@ -454,9 +454,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
     /// The focused tab's object as Swift imports it, or back to its header, where the modifier
     /// keys say.
     @objc func toggleGeneratedInterface(_ sender: Any?) {
-        guard let toggledEntry = documentState.editorArea.focusedPane.activeTab.currentEntry?.togglingGeneratedInterface else { return }
+        guard let toggledEntry = documentState.editorArea.focusedPane.activeTab.currentEntry?.togglingGeneratedInterface,
+              let toggledObject = toggledEntry.object
+        else { return }
         let destination = SelectionRoute.Destination(listClickModifierFlags: NSEvent.modifierFlags)
-        documentState.selectionRouter.trigger(.open(toggledEntry.object, in: destination, interfaceLanguage: toggledEntry.interfaceLanguage))
+        documentState.selectionRouter.trigger(.open(toggledObject, in: destination, interfaceLanguage: toggledEntry.interfaceLanguage))
     }
 
     // MARK: - Find Actions

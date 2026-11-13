@@ -701,9 +701,12 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .disposed(by: rx.disposeBag)
 
         input.generatedInterfaceToggled.emitOnNext { [weak self] destination in
-            guard let self, let toggledEntry = NavigationEntry(object: runtimeObject, interfaceLanguage: interfaceLanguage).togglingGeneratedInterface else { return }
+            guard let self,
+                  let toggledEntry = NavigationEntry(object: runtimeObject, interfaceLanguage: interfaceLanguage).togglingGeneratedInterface,
+                  let toggledObject = toggledEntry.object
+            else { return }
             documentState.selectionRouter.trigger(.focusEditorPane(editorPaneID))
-            documentState.selectionRouter.trigger(.open(toggledEntry.object, in: destination, interfaceLanguage: toggledEntry.interfaceLanguage))
+            documentState.selectionRouter.trigger(.open(toggledObject, in: destination, interfaceLanguage: toggledEntry.interfaceLanguage))
         }
         .disposed(by: rx.disposeBag)
 
