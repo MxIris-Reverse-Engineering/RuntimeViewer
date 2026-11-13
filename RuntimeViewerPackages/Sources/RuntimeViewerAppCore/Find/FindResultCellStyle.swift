@@ -1,9 +1,7 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
-import UIFoundation
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
-import RuntimeViewerUI
 
 /// Every font, colour and icon a Find result row is drawn with, so tuning the
 /// rows means changing a value here and nowhere else. `FindResultNode` builds
@@ -47,13 +45,13 @@ public enum FindResultCellStyle {
     // MARK: - Icons
 
     /// Xcode's match rows carry three horizontal lines in a rounded square.
-    static let matchIcon: NSImage? = SFSymbols(systemName: .textAlignleft, pointSize: 13, weight: .regular).nsImage
+    static let matchIcon: NSImage? = SystemSymbol.textAlignleft.image(pointSize: 13, weight: .regular)
 
     /// Xcode draws that glyph at 45 %.
     static let matchIconAlpha: CGFloat = 0.45
 
     /// A relationship node no indexed image defines.
-    static let unresolvedIcon: NSImage? = SFSymbols(systemName: .questionmarkSquare, pointSize: 13, weight: .regular).nsImage
+    static let unresolvedIcon: NSImage? = SystemSymbol.questionmarkSquare.image(pointSize: 13, weight: .regular)
 
     static let unresolvedIconAlpha: CGFloat = 0.45
 
@@ -116,7 +114,7 @@ public enum FindResultCellStyle {
     /// Objective-C side and blue on the Swift side, the colours the type badges
     /// use.
     private static func memberBadge(for member: RuntimeMemberReference, size: CGFloat) -> NSImage? {
-        let color: IDEIconColor = member.kind.isObjC ? .orange : .blue
+        let color: RuntimeObjectIcon.Glyph.Color = member.kind.isObjC ? .orange : .blue
         switch member.kind {
         case .objcProperty, .swiftVariable, .swiftField, .objcIvar:
             return badge("P", color: color, size: size)
@@ -154,19 +152,19 @@ public enum FindResultCellStyle {
         isExpanded ? expandedDisclosureIcon : collapsedDisclosureIcon
     }
 
-    private static let collapsedDisclosureIcon: NSImage? = SFSymbols(systemName: .chevronRight, pointSize: 10, weight: .semibold).nsImage
+    private static let collapsedDisclosureIcon: NSImage? = SystemSymbol.chevronRight.image(pointSize: 10, weight: .semibold)
 
-    private static let expandedDisclosureIcon: NSImage? = SFSymbols(systemName: .chevronDown, pointSize: 10, weight: .semibold).nsImage
+    private static let expandedDisclosureIcon: NSImage? = SystemSymbol.chevronDown.image(pointSize: 10, weight: .semibold)
 
-    private static func badge(_ text: String, color: IDEIconColor, size: CGFloat) -> NSImage? {
+    private static func badge(_ text: String, color: RuntimeObjectIcon.Glyph.Color, size: CGFloat) -> NSImage? {
         RuntimeObjectIcon.icon(text: text, color: color, size: size)
     }
 
-    static let recursiveCallIcon: NSImage? = SFSymbols(systemName: .arrowTriangle2Circlepath, pointSize: 12, weight: .regular).nsImage
+    static let recursiveCallIcon: NSImage? = SystemSymbol.arrowTriangle2Circlepath.image(pointSize: 12, weight: .regular)
 
-    static let loadingIcon: NSImage? = SFSymbols(systemName: .hourglass, pointSize: 12, weight: .regular).nsImage
+    static let loadingIcon: NSImage? = SystemSymbol.hourglass.image(pointSize: 12, weight: .regular)
 
-    static let failureIcon: NSImage? = SFSymbols(systemName: .exclamationmarkTriangle, pointSize: 12, weight: .regular).nsImage
+    static let failureIcon: NSImage? = SystemSymbol.exclamationmarkTriangle.image(pointSize: 12, weight: .regular)
 
     // MARK: - Type Rows
 

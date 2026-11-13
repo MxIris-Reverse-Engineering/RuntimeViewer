@@ -176,7 +176,7 @@ struct FindCrossReferenceTreeTests {
         func icon(of item: FindCrossReferenceRow.Item) -> NSImage? {
             FindResultNode.crossReference(FindCrossReferenceRow(item: item, direction: .callers), identifier: "row", children: []).appearance.icon
         }
-        func badge(_ text: String, _ color: IDEIconColor) -> NSImage {
+        func badge(_ text: String, _ color: RuntimeObjectIcon.Glyph.Color) -> NSImage {
             RuntimeObjectIcon.icon(text: text, color: color, size: size)
         }
         let thing = RuntimeObject(name: "SampleThing", displayName: "SampleThing", kind: .objc(.type(.class)), imagePath: Self.image, children: [])

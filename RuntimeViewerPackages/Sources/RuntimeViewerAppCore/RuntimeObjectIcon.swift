@@ -4,7 +4,7 @@ import AppKit
 import UIKit
 #endif
 
-import UIFoundation
+import Dependencies
 import RuntimeViewerCore
 
 public enum RuntimeObjectIcon {
@@ -14,18 +14,51 @@ public enum RuntimeObjectIcon {
     public static let defaultIconSize: CGFloat = 24
     #endif
 
-    public static let defaultIconStyle: IDEIconStyle = .simple
+    public static let defaultIconStyle: Glyph.Style = .simple
 
-    private struct IconCacheKey: Hashable {
-        let text: String
-        let color: IDEIconColor
-        let style: IDEIconStyle
-        let size: CGFloat
+    /// What an object's icon shows: a short text on a coloured badge, the way Xcode marks a symbol's
+    /// kind. This module only picks the glyph; `RuntimeObjectIconRendering` draws it.
+    public struct Glyph: Hashable, Sendable {
+        /// The colours of UIFoundation's `IDEIconColor`, under the same names.
+        public enum Color: Hashable, Sendable {
+            case monochrome
+            case blue
+            case brown
+            case gray
+            case green
+            case orange
+            case pink
+            case purple
+            case red
+            case teal
+            case yellow
+            case indigo
+            case mint
+            case cyan
+        }
+
+        /// The styles of UIFoundation's `IDEIconStyle`, under the same names.
+        public enum Style: Hashable, Sendable {
+            case `default`
+            case outline
+            case simple
+            case simpleHighlighted
+        }
+
+        public var text: String
+        public var color: Color
+        public var style: Style
+        public var size: CGFloat
+
+        public init(text: String, color: Color, style: Style, size: CGFloat) {
+            self.text = text
+            self.color = color
+            self.style = style
+            self.size = size
+        }
     }
 
-    private static var iconCache: [IconCacheKey: NSUIImage] = [:]
-
-    private static func iconInfo(for kind: RuntimeObjectKind) -> (text: String, color: IDEIconColor) {
+    private static func glyphContent(for kind: RuntimeObjectKind) -> (text: String, color: Glyph.Color) {
         switch kind {
         case .c(let kind):
             switch kind {
@@ -60,37 +93,24 @@ public enum RuntimeObjectIcon {
         }
     }
 
-    public static func icon(text: String, color: IDEIconColor, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
-        let key = IconCacheKey(
-            text: text,
-            color: color,
-            style: style,
-            size: size
-        )
-
-        if let cachedImage = Self.iconCache[key] {
-            return cachedImage
-        }
-
-        let image = IDEIcon(
-            text,
-            color: color,
-            style: style,
-            size: size
-        ).image
-
-        Self.iconCache[key] = image
-
-        return image
+    /// The glyph `icon(for: kind)` draws.
+    public static func glyph(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: Glyph.Style = Self.defaultIconStyle) -> Glyph {
+        let (text, color) = glyphContent(for: kind)
+        return Glyph(text: text, color: color, style: style, size: size)
     }
 
-    public static func iconForGeneric(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+    public static func icon(text: String, color: Glyph.Color, size: CGFloat = Self.defaultIconSize, style: Glyph.Style = Self.defaultIconStyle) -> NSUIImage {
+        @Dependency(\.runtimeObjectIconRendering) var runtimeObjectIconRendering
+        return runtimeObjectIconRendering.image(for: Glyph(text: text, color: color, style: style, size: size))
+    }
+
+    public static func iconForGeneric(size: CGFloat = Self.defaultIconSize, style: Glyph.Style = Self.defaultIconStyle) -> NSUIImage {
         return icon(text: "G", color: .teal, size: size, style: style)
     }
 
     public static let tooltipForGeneric = "Generic Type"
 
-    public static func iconForSpecialized(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+    public static func iconForSpecialized(size: CGFloat = Self.defaultIconSize, style: Glyph.Style = Self.defaultIconStyle) -> NSUIImage {
         return icon(text: "Sp", color: .pink, size: size, style: style)
     }
 
@@ -102,12 +122,12 @@ public enum RuntimeObjectIcon {
     /// a bridged class is a Swift class the ObjC runtime can see, while this
     /// one is a real ObjC class whose header is still ObjC and whose bodies
     /// happen to be Swift.
-    public static func iconForObjCImplementation(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+    public static func iconForObjCImplementation(size: CGFloat = Self.defaultIconSize, style: Glyph.Style = Self.defaultIconStyle) -> NSUIImage {
         return icon(text: "C", color: .pink, size: size, style: style)
     }
 
-    public static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
-        let (text, color) = iconInfo(for: kind)
+    public static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: Glyph.Style = Self.defaultIconStyle) -> NSUIImage {
+        let (text, color) = glyphContent(for: kind)
         return icon(text: text, color: color, size: size, style: style)
     }
 
@@ -129,7 +149,7 @@ public enum RuntimeObjectIcon {
     /// An `@objc` protocol declared in Swift is badged the way a bridged class
     /// is: a blue Swift `P` on its Objective-C entry (`isSwiftProtocol`), a
     /// purple Objective-C `P` on its Swift entry (`isObjCProtocol`).
-    public static func secondaryIcon(for object: RuntimeObject, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage? {
+    public static func secondaryIcon(for object: RuntimeObject, size: CGFloat = Self.defaultIconSize, style: Glyph.Style = Self.defaultIconStyle) -> NSUIImage? {
         switch secondaryBadge(for: object) {
         case .objcImplementation:
             return iconForObjCImplementation(size: size, style: style)
@@ -198,5 +218,66 @@ public enum RuntimeObjectIcon {
             return .objcProtocol
         }
         return nil
+    }
+}
+
+// MARK: - Drawing
+
+/// Draws an object's icon. RuntimeViewerAppUI's live value draws it the way Xcode draws a symbol's
+/// kind, with UIFoundation's `IDEIcon`; this module only picks the glyph.
+///
+/// A renderer gives back the same image for the same glyph, as the icons always have: a cell's
+/// `Appearance` compares its icons, and a row republishes only when they differ.
+public protocol RuntimeObjectIconRendering: AnyObject, Sendable {
+    func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage
+}
+
+/// RuntimeViewerAppUI adds the `DependencyKey` conformance with the live value; this module declares
+/// the interface and the value tests get (swift-dependencies' "Separating interface and implementation").
+package enum RuntimeObjectIconRenderingKey: TestDependencyKey {
+    package static let testValue: any RuntimeObjectIconRendering = BlankRuntimeObjectIconRenderer()
+}
+
+extension DependencyValues {
+    public var runtimeObjectIconRendering: any RuntimeObjectIconRendering {
+        get { self[RuntimeObjectIconRenderingKey.self] }
+        set { self[RuntimeObjectIconRenderingKey.self] = newValue }
+    }
+}
+
+/// One image per glyph, drawn the first time it is asked for. The lock guards the dictionary; drawing
+/// happens under it, so a glyph is never drawn twice.
+package final class RuntimeObjectIconImageCache: @unchecked Sendable {
+    private let lock = NSLock()
+
+    private var imagesByGlyph: [RuntimeObjectIcon.Glyph: NSUIImage] = [:]
+
+    package init() {}
+
+    package func image(for glyph: RuntimeObjectIcon.Glyph, drawing draw: (RuntimeObjectIcon.Glyph) -> NSUIImage) -> NSUIImage {
+        lock.lock()
+        defer { lock.unlock() }
+        if let image = imagesByGlyph[glyph] {
+            return image
+        }
+        let image = draw(glyph)
+        imagesByGlyph[glyph] = image
+        return image
+    }
+}
+
+/// The icons a test gets: an empty image of the glyph's size, one per glyph. A test that cares what an
+/// icon shows compares glyphs (`RuntimeObjectIcon.glyph(for:)`), not pixels.
+final class BlankRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
+    private let imageCache = RuntimeObjectIconImageCache()
+
+    func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage {
+        imageCache.image(for: glyph) { glyph in
+            #if os(macOS)
+            NSImage(size: NSSize(width: glyph.size, height: glyph.size))
+            #else
+            UIImage()
+            #endif
+        }
     }
 }

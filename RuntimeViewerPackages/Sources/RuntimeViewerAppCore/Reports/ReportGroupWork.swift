@@ -2,7 +2,6 @@ import Foundation
 import Dependencies
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerUI
 
 /// One engine's work as the Report navigator lists it: the group it goes under, the name and the
 /// icon the group shows and the work itself.
@@ -46,8 +45,8 @@ struct ReportGroupWork {
 
     private static func icon(for engine: RuntimeEngine) -> NSUIImage? {
         #if os(macOS)
-        @Dependency(\.runtimeEngineIconProvider) var runtimeEngineIconProvider
-        return runtimeEngineIconProvider.icon(for: engine)
+        @Dependency(\.runtimeEngineIconProviding) var runtimeEngineIconProviding
+        return runtimeEngineIconProviding.icon(for: engine)
         #else
         return nil
         #endif

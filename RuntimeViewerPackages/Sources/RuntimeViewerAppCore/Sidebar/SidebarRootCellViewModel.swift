@@ -8,7 +8,6 @@ import UIKit
 #endif
 
 import RuntimeViewerCore
-import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
 public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @unchecked Sendable {
@@ -75,12 +74,7 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
         self.node = node
         self.appearance = Appearance(
             icon: node.icon,
-            name: NSAttributedString {
-                AText(node.name)
-                    .font(.systemFont(ofSize: 13))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
+            name: NSAttributedString(rowText: node.name, fontSize: 13)
         )
     }
 

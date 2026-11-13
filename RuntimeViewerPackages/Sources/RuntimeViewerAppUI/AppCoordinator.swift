@@ -2,13 +2,9 @@
 
 import AppKit
 import Dependencies
-import DependenciesMacros
 import CocoaCoordinator
 import RuntimeViewerSettingsUI
-
-public enum AppRoute: Routable {
-    case settings
-}
+import RuntimeViewerAppCore
 
 /// `@unchecked` because `Coordinator` descends from `NSResponder`, which is not
 /// `Sendable`. Every member of `Router` is `@MainActor`, and the sole instance
@@ -20,7 +16,7 @@ private final class AppCoordinator: Coordinator<AppRoute, AppTransition>, @unche
 
     @Dependency(\.settingsWindowController)
     var settingsWindowController
-    
+
     override func prepareTransition(for route: AppRoute) -> AppTransition {
         switch route {
         case .settings:
@@ -30,14 +26,12 @@ private final class AppCoordinator: Coordinator<AppRoute, AppTransition>, @unche
     }
 }
 
-@MainActor
-extension DependencyValues {
-    // `& Sendable` is load-bearing: `Router` is `@MainActor`, but an existential
-    // does not pick up `Sendable` from that, and a dependency value has to be
-    // `Sendable` to cross into `DependencyValues`.
-    @DependencyEntry(liveValue: MainActor.assumeIsolated { AppCoordinator.shared })
-    public var appRouter: any Router<AppRoute> & Sendable
+/// The live value of RuntimeViewerAppCore's `appRouter`, which declares only the interface and the
+/// value tests get.
+extension AppRouterKey: DependencyKey {
+    package static var liveValue: any Router<AppRoute> & Sendable {
+        MainActor.assumeIsolated { AppCoordinator.shared }
+    }
 }
-
 
 #endif

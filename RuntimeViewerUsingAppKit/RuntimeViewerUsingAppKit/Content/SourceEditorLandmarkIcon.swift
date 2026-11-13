@@ -1,7 +1,6 @@
 import AppKit
 import RuntimeViewerApplication
 import RuntimeViewerSourceEditorBridge
-import UIFoundation
 
 /// The icon that leads a minimap hover label — the `[M]` in `[M] -copyWithZone:` — drawn by
 /// the renderer the sidebar uses for its row icons, so a class reads as the same `C` in both
@@ -20,7 +19,7 @@ enum SourceEditorLandmarkIcon {
 
     /// Nil for the kinds that get no icon: `// MARK:` lines, the file itself, and the kinds
     /// only other languages produce.
-    private static func glyph(for kind: SourceEditorBridgingLandmarkKind, isSwift: Bool) -> (text: String, color: IDEIconColor)? {
+    private static func glyph(for kind: SourceEditorBridgingLandmarkKind, isSwift: Bool) -> (text: String, color: RuntimeObjectIcon.Glyph.Color)? {
         switch kind {
         case .class: return ("C", isSwift ? .blue : .orange)
         case .protocol: return ("Pr", isSwift ? .blue : .purple)

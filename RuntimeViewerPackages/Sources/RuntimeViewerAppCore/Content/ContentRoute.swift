@@ -1,7 +1,6 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
-import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
 @AssociatedValue(.public)

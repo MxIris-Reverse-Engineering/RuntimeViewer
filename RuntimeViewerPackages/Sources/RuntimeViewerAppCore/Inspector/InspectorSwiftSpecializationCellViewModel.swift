@@ -8,7 +8,6 @@ import UIKit
 #endif
 
 import Foundation
-import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -26,13 +25,7 @@ public final class InspectorSwiftSpecializationCellViewModel: NSObject, @uncheck
             primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
             secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
             secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
-            title: NSAttributedString {
-                AText(runtimeObject.displayName)
-                    .foregroundColor(.labelColor)
-                    .font(.systemFont(ofSize: 13))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
+            title: NSAttributedString(rowText: runtimeObject.displayName, fontSize: 13, color: .labelColor)
         )
         if runtimeObject.properties.contains(.isGeneric) {
             composedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)

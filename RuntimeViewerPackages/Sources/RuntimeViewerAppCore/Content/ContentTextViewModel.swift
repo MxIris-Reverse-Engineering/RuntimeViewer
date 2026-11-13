@@ -11,7 +11,6 @@ import os
 import Semantic
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
-import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
 import Dependencies

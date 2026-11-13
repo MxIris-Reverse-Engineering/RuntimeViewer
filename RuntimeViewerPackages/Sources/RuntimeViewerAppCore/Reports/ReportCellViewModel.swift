@@ -1,6 +1,5 @@
 import Foundation
 import RuntimeViewerArchitectures
-import RuntimeViewerUI
 
 /// What one row of the Report navigator shows, laid out like Xcode's `DVTTableCellViewOneLine`:
 /// an icon, the title, a secondary text right after it and a status mark at the trailing edge.

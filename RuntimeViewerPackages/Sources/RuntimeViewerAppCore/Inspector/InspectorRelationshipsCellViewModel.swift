@@ -8,7 +8,6 @@ import UIKit
 #endif
 
 import Foundation
-import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 

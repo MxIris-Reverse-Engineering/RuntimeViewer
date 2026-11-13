@@ -22,7 +22,9 @@ public final class RuntimeConnectionNotificationService: NSObject {
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
-    private let notificationCenter = UNUserNotificationCenter.current()
+    /// The system's notification center, behind a dependency so that a test sees what would be
+    /// delivered (`UserNotificationCenterClient`).
+    @Dependency(\.userNotificationCenterClient) private var notificationCenter
 
     private var eventSubscription: AnyCancellable?
 
@@ -34,9 +36,11 @@ public final class RuntimeConnectionNotificationService: NSObject {
     /// connection.
     private var localRuntimeWasDisconnected = false
 
-    private override init() {
+    /// Internal rather than private so that a test can make one with a notification center of its own;
+    /// the app uses the shared instance.
+    override init() {
         super.init()
-        notificationCenter.delegate = self
+        notificationCenter.setDelegate(self)
         requestAuthorization()
     }
 
@@ -96,10 +100,10 @@ public final class RuntimeConnectionNotificationService: NSObject {
     // MARK: - Authorization
 
     private func requestAuthorization() {
-        notificationCenter.requestAuthorization(options: [.alert]) { granted, error in
+        notificationCenter.requestAuthorization { isGranted, error in
             if let error {
                 #log(.error,"Notification authorization failed: \(error.localizedDescription, privacy: .public)")
-            } else if granted {
+            } else if isGranted {
                 #log(.info,"Notification authorization granted")
             } else {
                 #log(.info,"Notification authorization denied")

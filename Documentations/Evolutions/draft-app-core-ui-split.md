@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-13
-- **最后更新**: 2026-11-13
+- **最后更新**: 2026-11-14
 - **所属愿景**: 无
 - **关联提案**: [0016](0016-application-viewmodel-tests.md)（ViewModel 测试覆盖）、[0035](0035-engine-management-module.md)（引擎管理下沉为无 UI 模块）、[0048](0048-routes-carry-no-views.md)（Route 不携带视图）、[0073](0073-core-source-layout.md)（Core 源码按功能分目录，只搬家）
 - **实现分支 / PR**: `feature/app-core-ui-split`（worktree `.worktrees/RuntimeViewer-AppCoreUISplit`）
@@ -158,7 +158,7 @@ AppCore 要用、但实现只能放在 AppUI 的服务有三个：
 - **属性串**：7 处 builder 换成一个手写的初始化方法 `NSAttributedString(rowText:fontSize:color:)`。
 - **外观判断**：`isLight` 换成同样的 `bestMatch(from: [.darkAqua, .aqua]) == .aqua`。
 - **系统图标**：18 个图标改用 AppCore 自己的 `SystemSymbol` 枚举。每个 case 的 raw value 是符号名，直接调系统 API 造图，找不到符号时同样 trap。`SystemSymbolTests` 逐个载入全部 case，补回 SFSymbols 原先在编译期做的名字检查。
-- **对象图标**：`RuntimeObjectIcon` 选什么文字、什么颜色，以及按描述缓存图片，都留在 AppCore；只有「画」这一步经依赖注入交给 AppUI，由 AppUI 用 `IDEIcon` 实现。描述里的颜色与样式是 AppCore 自己的枚举，取值与 `IDEIconColor`、`IDEIconStyle` 同名，所以调用处不用改。Find 成员行的角标走同一个接口。
+- **对象图标**：`RuntimeObjectIcon` 选什么文字、什么颜色留在 AppCore；「画」和按描述缓存图片经依赖注入交给 AppUI，由 AppUI 用 `IDEIcon` 实现。描述里的颜色与样式是 AppCore 自己的枚举，取值与 `IDEIconColor`、`IDEIconStyle` 同名，所以只写 `.blue` 这类取值的调用处不用改；写出了类型名的要换成 `RuntimeObjectIcon.Glyph.Color` / `.Style`（App 里只有 `SourceEditorLandmarkIcon` 一处，见决策日志）。Find 成员行的角标走同一个接口。
 - **Find 查询**：AppCore 自己定义 `FindQueryTerm` 的组成（文字与 `FindPattern`），用 Swift 照 `NSFindPattern.m` 逐字重写四件事：数捕获组、转义、拼接、属性表读写，并照搬 AppKitPlus 的 25 个测试。存盘格式不变，已存的最近查询照常读回。AppUI 在查询框与 `FindQueryTerm` 之间按属性表互转。AppUI 的测试里另加一组对照测试，逐例比较 AppCore 与 AppKitPlus 拼出的正则；AppKitPlus 升级后规则一变，这组测试就会失败。`FindRecentQueries.attributedTitle(for:font:)` 要画 token，随菜单 adapter 搬进 AppUI。
 - **间接依赖**：`Transition+Navigation.swift` 从 `RuntimeViewerArchitectures` 挪进 AppUI，Architectures 去掉对 AppKitPlus 的依赖。`SidebarCoordinator` 经门面照样拿得到这些转场。
 
@@ -194,13 +194,13 @@ AppCore 要用、但实现只能放在 AppUI 的服务有三个：
 - `RuntimeViewerUI` 视图的测试随 AppUITests 走，这次不给 `RuntimeViewerUI` 建自己的测试 target。
 - AppUI 要用到的 AppCore `internal` 成员改成 `package`，不改成 `public`。
 - `Then.swift` 留在 AppCore。它的 `Then` 协议是 `internal` 的，AppUI 要用 `.then {}` 时自带一份，和 `RuntimeViewerUI` 现在的做法一样。
-- `RuntimeConnectionNotificationService` 留在 AppCore。它对 `UNUserNotificationCenter` 的调用改成走一个可替换的依赖，并补一组测试，证明它现在能测——测什么时候发、发什么。
+- `RuntimeConnectionNotificationService` 留在 AppCore。它对 `UNUserNotificationCenter` 的调用改成走一个可替换的依赖 `UserNotificationCenterClient`（真实值调系统，测试默认值被调用就记 issue，写法照 `PasteboardClient`），并补一组测试，证明它现在能测——测什么时候发、发什么。
 - 新增的 `SystemSymbolTests`、移植的查找 pattern 测试和正则对照测试，都是为替换上游库而加的。除此之外，不为没有测试的类型补测试。
 - 新代码照 `RuntimeViewerCore/Sources/AGENTS.md` 的做法按功能分目录；搬进来的文件保持原来的子目录结构。
 
 ### 非目标
 
-- 不改 `RuntimeViewerUI` 与 App target 的内容。`RuntimeViewerArchitectures` 只挪走 `Transition+Navigation.swift`。ViewModel 的写法约定（`Driver` / `Signal`、`@RxObserved`、`Router`）不改。
+- 不改 App target 的内容，只有对象图标的颜色换了类型名的那一处例外（`SourceEditorLandmarkIcon`，见决策日志）。`RuntimeViewerUI` 只挪走 `NSColor+Xcode.swift`（见决策日志），`RuntimeViewerArchitectures` 只挪走 `Transition+Navigation.swift`。ViewModel 的写法约定（`Driver` / `Signal`、`@RxObserved`、`Router`）不改。
 - 不把 ViewModel 的输出改成不含 UI 类型的描述。属性串和图标照旧由 ViewModel 产出，只是图标的绘制经接口完成。
 - 不追求链接级的纯净：AppCore 仍会经 RxCocoa、CocoaCoordinator 间接链接 AppKit。
 - 不改 UIFoundation、SFSymbols、AppKitPlus 本身，也不改 Find 查询的行为与存盘格式。
@@ -306,6 +306,8 @@ UIFoundation 的依赖边和 `RuntimeViewerUI` 一样不带平台条件，AppKit
 | `Activity/ToolbarActivityPresenter.swift` | 产出 `RuntimeViewerUI` 的 `ToolbarActivityState`，使用方是 App 的 `MainViewModel` | 第一步 |
 | `Activity/ToolbarActivityState+Reports.swift` | 同上 | 第一步 |
 | `RuntimeViewerArchitectures/Transition+Navigation.swift` | coordinator 驱动 AppKitPlus 的导航控制器 | 第三步 |
+
+**从 `RuntimeViewerUI` 挪进 AppCore（第二步）**：`AppKit/NSColor+Xcode.swift`，照 Xcode 主题定义的五个颜色。它们是模型，只有 AppCore 的 Find 行样式和 App 的 Find 页在用，`RuntimeViewerUI` 自己的视图一个都没用；放在 `RuntimeViewerUI` 里，AppCore 就得依赖视图库才拿得到。
 
 **拆开**
 
@@ -428,19 +430,16 @@ extension RuntimeObjectIcon {
     }
 }
 
-@MainActor
+/// A renderer gives back the same image for the same glyph: a cell's `Appearance` compares its icons.
 public protocol RuntimeObjectIconRendering: AnyObject, Sendable {
     func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage
 }
 
 package enum RuntimeObjectIconRenderingKey: TestDependencyKey {
-    // An empty image of the glyph's size: tests compare glyphs, not pixels.
-    package static var testValue: any RuntimeObjectIconRendering {
-        MainActor.assumeIsolated { BlankRuntimeObjectIconRenderer() }
-    }
+    // An empty image of the glyph's size, one per glyph: tests compare glyphs, not pixels.
+    package static let testValue: any RuntimeObjectIconRendering = BlankRuntimeObjectIconRenderer()
 }
 
-@MainActor
 extension DependencyValues {
     public var runtimeObjectIconRendering: any RuntimeObjectIconRendering {
         get { self[RuntimeObjectIconRenderingKey.self] }
@@ -448,22 +447,30 @@ extension DependencyValues {
     }
 }
 
+/// One image per glyph, drawn the first time it is asked for, under a lock.
+package final class RuntimeObjectIconImageCache: @unchecked Sendable {
+    package func image(for glyph: RuntimeObjectIcon.Glyph, drawing draw: (RuntimeObjectIcon.Glyph) -> NSUIImage) -> NSUIImage
+}
+
 // RuntimeViewerAppUI
-@MainActor
 final class IDEIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
+    private let imageCache = RuntimeObjectIconImageCache()
+
     func image(for glyph: RuntimeObjectIcon.Glyph) -> NSUIImage {
-        IDEIcon(glyph.text, color: IDEIconColor(glyph.color), style: IDEIconStyle(glyph.style), size: glyph.size).image
+        imageCache.image(for: glyph) { glyph in
+            IDEIcon(glyph.text, color: IDEIconColor(glyph.color), style: IDEIconStyle(glyph.style), size: glyph.size).image
+        }
     }
 }
 
 extension RuntimeObjectIconRenderingKey: DependencyKey {
-    package static var liveValue: any RuntimeObjectIconRendering {
-        MainActor.assumeIsolated { IDEIconRuntimeObjectIconRenderer() }
-    }
+    package static let liveValue: any RuntimeObjectIconRendering = IDEIconRuntimeObjectIconRenderer()
 }
 ```
 
-`RuntimeObjectIcon` 的缓存仍以描述为键，留在 AppCore；渲染只在缓存未命中时才调用。
+缓存跟着渲染器走：真实实现与测试替身各按描述缓存一份，同一个描述总是给回同一张图；`RuntimeObjectIcon` 自己不缓存。这样测试替身画的空图和真实图标不会共用一份缓存。渲染器不限主线程，和原来的 `RuntimeObjectIcon` 一样；但 `IDEIcon` 用一个没有加锁的字典缓存图像，所以图标仍只在主线程上画，画图标的测试也跑在主 actor 上。
+
+`RuntimeObjectIcon.glyph(for:)` 公开出每个种类对应的描述，测试按描述比较，不比像素。
 
 解析规则沿用根 `AGENTS.md` 对 `@MainActor` 依赖的要求：只在已有的主线程调用路径里第一次解析，非隔离类型不要用存储属性持有它们。
 
@@ -514,10 +521,13 @@ package enum SystemSymbol: String, CaseIterable, Sendable {
     case textAlignleft = "text.alignleft"
     // ... the eighteen symbols in Extensions.swift, FindResultCellStyle.swift and ReportViewModel.swift
 
-    /// Traps when the system has no symbol of this name, as SFSymbols did.
+    /// Traps when the system has no symbol of this name, as SFSymbols did (`image(named:)`, which an
+    /// exit test covers).
     package var image: NSUIImage { get }
 
     #if os(macOS)
+    /// Falls back to the plain image, never traps: only a symbol image takes a symbol configuration,
+    /// and `image` always is one.
     package func image(pointSize: CGFloat, weight: NSFont.Weight) -> NSImage
     #endif
 }
@@ -693,7 +703,7 @@ public struct FindPattern: Hashable, Sendable {
    - 包测试全绿，`RuntimeViewerMCP` 的测试全绿；
    - `./TuistScript.sh check` 通过。
 
-**第二步：接口与实现分开，AppCore 不再依赖视图库、UIFoundation 与 SFSymbols**（合进 `next` 一次）
+**第二步：接口与实现分开，AppCore 不再依赖视图库、UIFoundation 与 SFSymbols**（✅ 已完成，截图对照留给用户目视验收。合进 `next` 一次）
 
 1. 三个跨层服务：
    - `appRouter`：`AppRoute` 与接口留在 AppCore，`AppCoordinator` 与 `liveValue` 搬进 AppUI。
@@ -751,3 +761,10 @@ public struct FindPattern: Hashable, Sendable {
 | 2026-11-13 | 第一步：文档 | 愿景《无头 RuntimeViewer》里提到 `RuntimeViewerApplication` 的两处，说的是写愿景时的旧状态和当时考虑过的选项，属于历史论证，不改；「文档与工程描述」表相应删去这一项。`CommunicationAndEngineArchitecture.md` 里引擎管理器的路径本来就过时（0035 已把它搬进 `RuntimeViewerEngineManagement`），借这次一并改正。测试 target 第一步还没改名，测试规则文件与根 `AGENTS.md`「Testing」里的名字留到第四步。 |
 | 2026-11-14 | 第一步：测试基线 | 全量包测试里有 5 处失败。`InjectedDeviceEngineReconnectionTests`、`ReportSharedByEngineTests`、`FindViewModelCrossReferenceTests`、`BackgroundWorkProcessActivityTests` 是满载并行时的超时，单独重跑全部通过。`TitleActivityIndicatorTests` 里「指针在标题上时副标题显示活动」一例在 `next` 基线上同样失败，与本次无关；它只测 `RuntimeViewerUI`，本提案不碰。 |
 | 2026-11-14 | 第一步：验证 | macOS App（`RunScript.sh --no-launch`）、iOS App（`RuntimeViewer iOS`，不签名）、`RuntimeViewerMCP` 的构建与 95 个测试都通过。`./TuistScript.sh check` 的 target 名单、锁文件与 trait 各项都过了，只报 `RuntimeViewerUsingAppKit.xcodeproj` 在工程级设了 `DEVELOPMENT_TEAM`：这是 `next` 上 8768b8cd 照收 Xcode 改写时带进来的，本分支没有改动任何工程文件，与本提案无关，不在这条分支上修。 |
+| 2026-11-14 | 第二步：Xcode 主题颜色 | `NSColor+Xcode.swift` 从 `RuntimeViewerUI` 挪进 AppCore 的 `Theme/`，偏离了「`RuntimeViewerUI` 不动」。AppCore 去掉 `import RuntimeViewerUI` 后才发现，Find 行样式用着其中两个颜色。这五个颜色只有 AppCore 与 App 的 Find 页在用，`RuntimeViewerUI` 自己不用；按分界规则，它们是该放在 AppCore 的模型。 |
+| 2026-11-14 | 第二步：图标缓存 | 缓存从 `RuntimeObjectIcon` 的静态字典挪进渲染器，真实实现与测试替身各一份。留在 AppCore 的话，测试替身画的空图会和真实图标共用一份缓存，测试之间互相污染。同一个描述仍总是给回同一张图，`Appearance` 的判等不受影响。渲染器不限主线程；但 `IDEIcon` 的图像缓存是没加锁的全局字典，画图标的测试并行跑时撞坏过它，所以这些测试跑在主 actor 上。 |
+| 2026-11-14 | 第二步：测试替身 | `UserNotificationCenterClient` 的测试默认值改成被调用就记 issue（`unimplemented`），而不是像 `PasteboardClient` 那样什么都不做：只有构造通知服务的测试会碰到它，它们都装了自己的记录替身。`appRouter` 的测试默认值同样记 issue。 |
+| 2026-11-14 | 第二步：检查与 trap | `CrossPlatformSourceGuardTests` 原来只认 `@DependencyEntry` 声明的 key，现在也认手写的访问器（`get { self[…Key.self] }`）；否则 `appRouter` 改成手写之后会漏查。`SystemSymbol` 找不到符号时 trap，这一步收进 `image(named:)`，并配了一个 exit test；给符号图像加配置那一步不可能失败，改成退回原图、不 trap。 |
+| 2026-11-14 | 第二步：Report 图标测试 | `ReportEngineGroupsTests` 原来拿 AppUI 的具体提供者画的图去比 Report 行的图（比像素）。Report 改经 AppCore 的接口取图标后，测试里拿到的是测试替身，两边对不上。现在占位提供者给每个 engine 一张自己的空图，同一个 engine 总是同一张；测试改为经同一个接口取图、按同一性比较。行显示的必须正是自己 engine 的那张，比原来比像素更严。 |
+| 2026-11-14 | 第二步：App 的调用处 | `RuntimeObjectIcon` 的颜色与样式参数换成 `Glyph.Color` / `Glyph.Style` 之后，App 里只有一处跟着改：`SourceEditorLandmarkIcon`（小地图悬停标签前的图标）原来把颜色写成 UIFoundation 的 `IDEIconColor`，现在写成 `RuntimeObjectIcon.Glyph.Color`，并去掉不再用到的 `import UIFoundation`。包测试覆盖不到 App target，这一处是编 App 时发现的。 |
+| 2026-11-14 | 第二步：验证 | macOS App、iOS App、`RuntimeViewerMCP` 的构建与 95 个测试都通过；`./TuistScript.sh check` 同第一步，只报既有的 `DEVELOPMENT_TEAM`。全量包测试 6 个 target 共 1239 个测试，8 处失败：`InjectedDeviceEngineReconnectionTests` 两例、`StatefulOutlineViewAutosaveTests` 两例、`CrossReferencePreparationFillTests` 与 `FindViewModelCrossReferenceTests` 的 Call Hierarchy 是满载并行时的超时与时序，单独重跑全部通过；`TitleActivityIndicatorTests` 是第一步记过的基线失败；Report 引擎图标那例是这一步引入的，已按上面一行改好、重跑通过。截图对照没有做：要启动 App 并点开各页，属于交互式界面操作，不在这次授权里，留给用户目视验收。改用离线核对：18 个系统符号的名字与取图写法（`accessibilityDescription` 为 `nil`、同样的 `SymbolConfiguration(pointSize:weight:)`）和 SFSymbols 原来的逐个相同；对象图标的 14 种颜色、4 种样式由 `RuntimeObjectIconGlyphTests` 与 `IDEIcon` 直接画的图逐像素对照；行标题由 `RowTextAttributedStringTests` 与 UIFoundation 的 builder 逐属性对照。 |

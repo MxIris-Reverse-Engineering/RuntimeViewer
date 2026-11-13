@@ -13,16 +13,31 @@ The apps' application layer is two targets and a facade
   are `Driver` / `Signal`, `@RxObserved` and `Router`.
 - **`RuntimeViewerAppUI/`** holds the UI glue: the adapters that set up AppKit and AppKitPlus controls
   (`NavigatorTextFilterFieldAdapter`, the Find page's and the runtime source picker's), the jump bar's
-  path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`.
+  path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`,
+  the coordinator that opens the app's own windows, and the live implementations of the services
+  RuntimeViewerAppCore declares (below).
   Code whose job is to drive a UI component goes here even when it can be tested; it depends on
   RuntimeViewerAppCore, never the other way round.
 - **`RuntimeViewerApplication/`** is a facade that only re-exports the two; the apps link this one
   product and import this one module. Put no code in it. Package code and tests import the target they
   use, not the facade.
 
-While the split lands, RuntimeViewerAppCore still depends on RuntimeViewerUI, RuntimeViewerSettingsUI and
-AppKitPlus; the proposal's later steps take these out and add a test that fails on a UI component in
-RuntimeViewerAppCore. Do not add new uses of them there in the meantime.
+**RuntimeViewerAppCore depends on no UI library**: not on RuntimeViewerUI or RuntimeViewerSettingsUI, not on
+UIFoundation or SFSymbols. What it took from them it has of its own: the `NSUIImage` / `NSUIColor` /
+`NSUIFont` aliases (`PlatformTypes.swift`; UIFoundation's and SFSymbols' name the same types, so a file
+that sees several still compiles), `NSAttributedString(rowText:fontSize:color:)` for a row's title,
+`SystemSymbol` for the system symbols it draws (`SystemSymbolTests` loads every case), and the Xcode
+colours of `NSColor+Xcode.swift`. While the split lands it still depends on AppKitPlus, for the Find query
+field's pattern components; the proposal's third step takes that out, and its fourth adds a test that fails
+on a UI component in RuntimeViewerAppCore.
+
+**A service whose live implementation needs a UI library is declared in RuntimeViewerAppCore and implemented
+in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by `AppCoordinator`), the
+engines' icons (`runtimeEngineIconProviding`, implemented by `RuntimeEngineIconProvider`), and drawing an
+object's icon (`runtimeObjectIconRendering`, implemented with UIFoundation's `IDEIcon`). How such a key is
+written: root `AGENTS.md`, *Singletons & Dependency Injection*. `IDEIcon` keeps its images in a dictionary
+without a lock, so object icons are drawn on the main thread only, and tests that draw them run on the main
+actor.
 
 ## The rest of the UI layer
 

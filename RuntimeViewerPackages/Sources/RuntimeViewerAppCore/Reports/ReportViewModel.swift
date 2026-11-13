@@ -3,7 +3,6 @@ import Observation
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
-import RuntimeViewerUI
 import MemberwiseInit
 #if canImport(RuntimeViewerSettings)
 import RuntimeViewerSettings
@@ -808,19 +807,19 @@ enum ReportOutline {
 
     // MARK: - Text and icons
 
-    static let indexingIcon: NSUIImage = SFSymbols(systemName: .squareStack3dDownRight).nsuiImage
+    static let indexingIcon: NSUIImage = SystemSymbol.squareStack3dDownRight.image
 
-    static let corpusIcon: NSUIImage = SFSymbols(systemName: .magnifyingglass).nsuiImage
+    static let corpusIcon: NSUIImage = SystemSymbol.magnifyingglass.image
 
-    static let crossReferenceIcon: NSUIImage = SFSymbols(systemName: .arrowTriangleBranch).nsuiImage
+    static let crossReferenceIcon: NSUIImage = SystemSymbol.arrowTriangleBranch.image
 
-    static let manualLoadingIcon: NSUIImage = SFSymbols(systemName: .trayAndArrowDown).nsuiImage
+    static let manualLoadingIcon: NSUIImage = SystemSymbol.trayAndArrowDown.image
 
-    static let turnedOffIcon: NSUIImage = SFSymbols(systemName: .powerCircle).nsuiImage
+    static let turnedOffIcon: NSUIImage = SystemSymbol.powerCircle.image
 
-    static let unsupportedIcon: NSUIImage = SFSymbols(systemName: .exclamationmarkCircle).nsuiImage
+    static let unsupportedIcon: NSUIImage = SystemSymbol.exclamationmarkCircle.image
 
-    static let restoredCorporaIcon: NSUIImage = SFSymbols(systemName: .archivebox).nsuiImage
+    static let restoredCorporaIcon: NSUIImage = SystemSymbol.archivebox.image
 
     static func icon(forImagePath imagePath: String) -> NSUIImage {
         imagePath.contains(".framework/") ? RuntimeImageNode.frameworkIcon : RuntimeImageNode.imageIcon

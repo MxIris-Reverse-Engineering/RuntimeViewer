@@ -14,9 +14,9 @@ import Testing
 /// `RuntimeObjectIcon.secondaryIcon(for:)` is the single place that chooses,
 /// so this pins the choice rather than each call site.
 ///
-/// Identity comparison is exact: `RuntimeObjectIcon` memoizes on
-/// (text, color, style, size), so two calls that agree on all four return the
-/// same instance and two that differ in colour cannot.
+/// Identity comparison is exact: the icon renderer gives back one image per
+/// glyph (text, color, style, size), so two calls that agree on all four return
+/// the same instance and two that differ in colour cannot.
 @Suite("RuntimeObjectIcon")
 @MainActor
 struct RuntimeObjectIconTests {

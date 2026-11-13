@@ -8,7 +8,6 @@ import UIKit
 
 import Semantic
 import RuntimeViewerCore
-import UIFoundation
 
 extension FrozenSemanticString {
     public func attributedString(

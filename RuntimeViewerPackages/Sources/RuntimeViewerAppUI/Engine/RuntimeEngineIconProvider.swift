@@ -9,6 +9,7 @@ import RuntimeViewerCommunication
 import RuntimeViewerEngineManagement
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
+import RuntimeViewerAppCore
 
 /// What stands for an engine wherever one is shown — the runtime source picker
 /// and its list, the Report navigator's engine groups — and the icons of the
@@ -277,5 +278,15 @@ extension DependencyValues {
     /// process-wide manager the first time a test shows an engine's icon.
     @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeEngineIconProvider.shared })
     public var runtimeEngineIconProvider: RuntimeEngineIconProvider = MainActor.assumeIsolated { RuntimeEngineIconProvider(followsRuntimeEngineManager: false) }
+}
+
+extension RuntimeEngineIconProvider: RuntimeEngineIconProviding {}
+
+/// The live value of RuntimeViewerAppCore's `runtimeEngineIconProviding`: the same provider the app
+/// reaches through `runtimeEngineIconProvider`.
+extension RuntimeEngineIconProvidingKey: DependencyKey {
+    package static var liveValue: any RuntimeEngineIconProviding {
+        MainActor.assumeIsolated { RuntimeEngineIconProvider.shared }
+    }
 }
 #endif

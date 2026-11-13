@@ -7,7 +7,6 @@ import RxAppKit
 import UIKit
 #endif
 
-import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -244,13 +243,13 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             return defaultAttributedTitle()
         }
 
-        let title = NSMutableAttributedString {
-            AText(runtimeObject.displayName)
-                .font(.systemFont(ofSize: fontSize))
-                .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
-                .alignment(.left)
-                .lineBreakeMode(.byTruncatingTail)
-        }
+        let title = NSMutableAttributedString(
+            attributedString: NSAttributedString(
+                rowText: runtimeObject.displayName,
+                fontSize: fontSize,
+                color: forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor
+            )
+        )
 
         // This row's own name is the prefix of its subtree haystack by
         // construction — `currentAndChildrenNames` builds
@@ -301,13 +300,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         _appearance.hasMaterializedRelay
     }
 
-    @NSAttributedStringBuilder
     private func defaultAttributedTitle() -> NSAttributedString {
-        AText(runtimeObject.displayName)
-            .font(.systemFont(ofSize: fontSize))
-            .foregroundColor(.labelColor)
-            .alignment(.left)
-            .lineBreakeMode(.byTruncatingTail)
+        NSAttributedString(rowText: runtimeObject.displayName, fontSize: fontSize, color: .labelColor)
     }
 
     public init(runtimeObject: RuntimeObject, forOpenQuickly: Bool, parent: SidebarRuntimeObjectCellViewModel? = nil) {

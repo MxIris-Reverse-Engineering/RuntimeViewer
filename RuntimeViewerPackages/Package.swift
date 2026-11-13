@@ -446,16 +446,13 @@ let package = Package(
         // adapters belong to RuntimeViewerAppUI (Sources/AGENTS.md).
         //
         // While the split lands (Documentations/Evolutions/draft-app-core-ui-split.md)
-        // this still depends on what RuntimeViewerApplication depended on;
-        // RuntimeViewerUI, RuntimeViewerSettingsUI and AppKitPlus go in its
-        // later steps.
+        // this still depends on AppKitPlus, for the Find query field's pattern
+        // components; the proposal's third step takes it out.
         .target(
             name: "RuntimeViewerAppCore",
             dependencies: [
-                "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
                 "RuntimeViewerSettings",
-                .target(name: "RuntimeViewerSettingsUI", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
@@ -470,16 +467,24 @@ let package = Package(
         ),
 
         // The UI glue split out of the application layer: the adapters that set
-        // up AppKit and AppKitPlus controls, the jump bar's items, and the
-        // presenter that feeds the toolbar's activity view.
+        // up AppKit and AppKitPlus controls, the jump bar's items, the presenter
+        // that feeds the toolbar's activity view, the coordinator that opens the
+        // app's own windows, and the live values of the services
+        // RuntimeViewerAppCore declares (the engine icons, the object icons'
+        // drawing, `appRouter`).
         .target(
             name: "RuntimeViewerAppUI",
             dependencies: [
                 "RuntimeViewerAppCore",
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
+                .target(name: "RuntimeViewerSettingsUI", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],
         ),
 

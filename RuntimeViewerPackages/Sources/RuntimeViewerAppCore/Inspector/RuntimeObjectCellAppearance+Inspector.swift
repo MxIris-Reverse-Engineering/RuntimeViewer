@@ -7,7 +7,6 @@ import UIKit
 #endif
 
 import Foundation
-import RuntimeViewerUI
 import RuntimeViewerCore
 
 extension RuntimeObjectCellAppearance {
@@ -24,13 +23,7 @@ extension RuntimeObjectCellAppearance {
             primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
             secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
             secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
-            title: NSAttributedString {
-                AText(runtimeObject.displayName)
-                    .foregroundColor(.labelColor)
-                    .font(.systemFont(ofSize: 12))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
+            title: NSAttributedString(rowText: runtimeObject.displayName, fontSize: 12, color: .labelColor)
         )
         if runtimeObject.properties.contains(.isGeneric) {
             appearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
@@ -42,13 +35,7 @@ extension RuntimeObjectCellAppearance {
         }
         let imageName = runtimeObject.imageName
         if !imageName.isEmpty {
-            appearance.subtitle = NSAttributedString {
-                AText(imageName)
-                    .foregroundColor(.secondaryLabelColor)
-                    .font(.systemFont(ofSize: 10))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
+            appearance.subtitle = NSAttributedString(rowText: imageName, fontSize: 10, color: .secondaryLabelColor)
         }
         return appearance
     }

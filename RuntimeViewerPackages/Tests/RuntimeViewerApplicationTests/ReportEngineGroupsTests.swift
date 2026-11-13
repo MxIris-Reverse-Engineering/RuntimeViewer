@@ -68,11 +68,10 @@ struct ReportEngineGroupsTests {
         let nodes = try await nextValue(from: page.nodes) { $0.count == 2 }
 
         let rowIcons = try nodes.map { try #require($0.cellViewModel.appearance.icon) }
-        @Dependency(\.runtimeEngineIconProvider) var runtimeEngineIconProvider
-        let engineIcons = [fixture.borrowerEngine, fixture.ownerEngine].map { runtimeEngineIconProvider.icon(for: $0) }
-        let rowPixels = try rowIcons.map(Self.pixels)
-        let enginePixels = try engineIcons.map(Self.pixels)
-        #expect(rowPixels == enginePixels, "a group's row does not show its engine's icon")
+        // The test value of `runtimeEngineIconProviding` gives each engine an image of its own.
+        @Dependency(\.runtimeEngineIconProviding) var runtimeEngineIconProviding
+        let engineIcons = [fixture.borrowerEngine, fixture.ownerEngine].map { runtimeEngineIconProviding.icon(for: $0) }
+        #expect(zip(rowIcons, engineIcons).allSatisfy { rowIcon, engineIcon in rowIcon === engineIcon }, "a group's row does not show its engine's icon")
 
         // Every step of a batch on the owner's work builds the rows again.
         _ = await fixture.ownerEngine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual)
@@ -179,28 +178,6 @@ struct ReportEngineGroupsTests {
 
     private static func identifiers(in nodes: [ReportNode]) -> [ReportNodeIdentifier] {
         nodes.flatMap { [$0.identifier] + identifiers(in: $0.children) }
-    }
-
-    /// The pixels of `image` drawn as a row's 16-point icon on a 2× screen, in the light
-    /// appearance: what two images show, to compare.
-    private static func pixels(of image: NSImage) throws -> Data {
-        let bitmap = try #require(NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: 32,
-            pixelsHigh: 32,
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
-        ))
-        bitmap.size = NSSize(width: 16, height: 16)
-        let lightAppearance = try #require(NSAppearance(named: .aqua))
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        lightAppearance.performAsCurrentDrawingAppearance {
-            image.draw(in: NSRect(x: 0, y: 0, width: 16, height: 16))
-        }
-        NSGraphicsContext.restoreGraphicsState()
-        let bitmapData = try #require(bitmap.bitmapData)
-        return Data(bytes: bitmapData, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
     }
 }
 

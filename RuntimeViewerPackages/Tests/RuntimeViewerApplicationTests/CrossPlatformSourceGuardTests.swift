@@ -220,11 +220,21 @@ struct CrossPlatformSourceGuardTests {
         }
 
         /// The `var` each `@DependencyEntry` attribute declares, looked for on
-        /// the attribute's own line and the few after it.
+        /// the attribute's own line and the few after it; and the `var` of each
+        /// accessor written by hand over a key (`get { self[SomeKey.self] }`, the
+        /// form a key takes when its live value lives in another module), looked
+        /// for on the getter's line and the few before it.
         var dependencyKeyDeclarations: [DependencyKeyDeclaration] {
             var declarations: [DependencyKeyDeclaration] = []
             for (lineIndex, line) in lines.enumerated() where line.code.contains("@DependencyEntry") {
                 for candidateLine in lines[lineIndex..<min(lineIndex + 4, lines.count)] {
+                    guard let name = Self.declaredVariableName(in: candidateLine.code) else { continue }
+                    declarations.append(DependencyKeyDeclaration(name: name, isCompiledForIOSFamily: candidateLine.isCompiledForIOSFamily))
+                    break
+                }
+            }
+            for (lineIndex, line) in lines.enumerated() where line.code.contains("get { self[") && line.code.contains(".self]") {
+                for candidateLine in lines[max(0, lineIndex - 3)..<lineIndex].reversed() {
                     guard let name = Self.declaredVariableName(in: candidateLine.code) else { continue }
                     declarations.append(DependencyKeyDeclaration(name: name, isCompiledForIOSFamily: candidateLine.isCompiledForIOSFamily))
                     break

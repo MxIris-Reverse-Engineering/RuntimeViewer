@@ -1,7 +1,6 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
-import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
 

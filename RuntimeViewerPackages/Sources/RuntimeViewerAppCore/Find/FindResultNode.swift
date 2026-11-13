@@ -6,7 +6,6 @@ import RxAppKit
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
-import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
 /// What a Find result row is painted from: an icon, its opacity, the

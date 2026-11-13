@@ -7,7 +7,6 @@ import UIKit
 #endif
 
 import Semantic
-import UIFoundation
 import RuntimeViewerCore
 
 /// A resolved, render-ready theme. Concrete themes are data-driven and stored

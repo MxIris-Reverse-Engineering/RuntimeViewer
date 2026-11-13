@@ -6,7 +6,6 @@ import AppKit
 import UIKit
 #endif
 
-import RuntimeViewerUI
 import MemberwiseInit
 
 /// The complete visual state of a runtime-object cell, published as one value

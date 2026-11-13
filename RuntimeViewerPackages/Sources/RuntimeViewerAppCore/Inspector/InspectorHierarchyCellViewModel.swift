@@ -8,7 +8,6 @@ import UIKit
 #endif
 
 import Foundation
-import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -56,13 +55,7 @@ public final class InspectorHierarchyCellViewModel: NSObject, @unchecked Sendabl
         self.appearance = RuntimeObjectCellAppearance(
             primaryIcon: RuntimeObjectIcon.icon(text: "?", color: .gray, size: RuntimeObjectCellAppearance.inspectorIconSize),
             primaryTooltip: "Not found in the indexed images",
-            title: NSAttributedString {
-                AText(name)
-                    .foregroundColor(.secondaryLabelColor)
-                    .font(.systemFont(ofSize: 12))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
+            title: NSAttributedString(rowText: name, fontSize: 12, color: .secondaryLabelColor)
         )
         super.init()
     }

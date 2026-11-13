@@ -4,8 +4,6 @@ import AppKit
 import UIKit
 #endif
 
-import UIFoundation
-import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -56,13 +54,13 @@ extension RuntimeImageNode: @retroactive Sequence {
 }
 
 extension RuntimeImageNode {
-    public static let frameworkIcon: NSUIImage = SFSymbols(systemName: .latch2Case).nsuiImage
+    public static let frameworkIcon: NSUIImage = SystemSymbol.latch2Case.image
 
-    public static let bundleIcon: NSUIImage = SFSymbols(systemName: .shippingbox).nsuiImage
+    public static let bundleIcon: NSUIImage = SystemSymbol.shippingbox.image
 
-    public static let imageIcon: NSUIImage = SFSymbols(systemName: .doc).nsuiImage
+    public static let imageIcon: NSUIImage = SystemSymbol.doc.image
 
-    public static let folderIcon: NSUIImage = SFSymbols(systemName: .folder).nsuiImage
+    public static let folderIcon: NSUIImage = SystemSymbol.folder.image
 
     public var icon: NSUIImage {
         if name.hasSuffix("framework") {
@@ -81,7 +79,7 @@ extension NSUIColor {
     public convenience init(light: NSUIColor, dark: NSUIColor) {
         #if os(macOS)
         self.init(name: nil) { appearance in
-            appearance.isLight ? light : dark
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .aqua ? light : dark
         }
         #else
         self.init { traitCollection in
