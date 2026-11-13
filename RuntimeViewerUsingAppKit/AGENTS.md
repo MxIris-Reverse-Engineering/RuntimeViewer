@@ -648,7 +648,7 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   (`NSView.box.titlebarBackdropGroupName` on the pane's content container). Before macOS 26 the bars are
   opaque and the content starts at the first one's top edge. The reconstructed SourceEditor draws its
   minimap over the scroll view's own pocket (`ScrollPocketUnderToolbarTests`); in the app the pockets in
-  front cover it. Background: `Documentations/Evolutions/draft-editor-content-under-toolbar-scroll-pocket.md`.
+  front cover it. Background: `Documentations/Evolutions/0089-editor-content-under-toolbar-scroll-pocket.md`.
 - **A pane has a jump bar under its tab bar while its active tab shows an image or an object**
   (proposal `editor-jump-bar`), with a scroll pocket of its own behind it as the tab bar has; over an empty
   tab it is hidden and keeps no room (`EditorPaneViewModel.Output.isJumpBarHidden`). Its heights and

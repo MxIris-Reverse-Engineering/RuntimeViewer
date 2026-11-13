@@ -142,7 +142,7 @@ RuntimeViewer 的 File 菜单没有 New 子菜单，所以 Xcode 子菜单里的
 - 分栏布局、标签、历史跨启动保存；Xcode 的 assistant editor。
 - Inspector 的关系、层级、特化列表认修饰键。
 - iOS 版：`RuntimeViewerUsingUIKit` 只有一栏，只做随类型改名的编译修改。
-- 标签栏照 Xcode 的三处观感：滚动口袋做底、选中标签的玻璃胶囊、未聚焦栏整栏按主题变暗；分隔线用 Xcode 主题算出的不透明颜色。它们要实际运行 Xcode 逐帧比对才能定下来，这一批用近似做法（见「外观」）。其中「滚动口袋做底」由提案[《编辑区内容从工具栏与标签栏下滚过并透出模糊》](draft-editor-content-under-toolbar-scroll-pocket.md)接手。
+- 标签栏照 Xcode 的三处观感：滚动口袋做底、选中标签的玻璃胶囊、未聚焦栏整栏按主题变暗；分隔线用 Xcode 主题算出的不透明颜色。它们要实际运行 Xcode 逐帧比对才能定下来，这一批用近似做法（见「外观」）。其中「滚动口袋做底」由提案[《0089 编辑区内容从工具栏与标签栏下滚过并透出模糊》](0089-editor-content-under-toolbar-scroll-pocket.md)接手。
 
 ## 详细设计
 

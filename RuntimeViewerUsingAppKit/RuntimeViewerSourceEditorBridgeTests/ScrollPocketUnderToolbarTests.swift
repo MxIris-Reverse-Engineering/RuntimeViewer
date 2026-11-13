@@ -9,8 +9,8 @@ import SourceEditor
 
 /// The editor's scroll view under a full-size-content toolbar, as an editor pane at the top of the
 /// window puts it: AppKit gives it a top scroll pocket over the toolbar, which is what shows the
-/// interface blurred there instead of plainly (Evolution draft
-/// `draft-editor-content-under-toolbar-scroll-pocket`).
+/// interface blurred there instead of plainly (proposal
+/// `editor-content-under-toolbar-scroll-pocket`).
 ///
 /// The pocket is found among the scroll view's subviews by its class name, `NSScrollPocket`:
 /// UIFoundation's `NSScrollView.box.scrollPocket(on:)` cannot be used here, because this bundle sees
