@@ -31,17 +31,25 @@ struct ContentImageViewModelTests {
         return (viewModel, output)
     }
 
-    @Test("an image indexed already shows its page at once, never the progress view")
+    @Test("an image indexed already shows its page without the progress view in between")
     func indexedImageShowsItsPageAtOnce() async throws {
+        let startedAt = ContinuousClock.now
         let environment = ViewModelTestEnvironment()
         let (viewModel, output) = makeViewModel(in: environment) { _, _ in Self.objects }
         defer { withExtendedLifetime(viewModel) {} }
+        var seenStates: [ContentImageViewModel.State] = []
+        let subscription = output.state.driveOnNext { seenStates.append($0) }
+        defer { subscription.dispose() }
 
-        let states = try await values(from: output.state, during: 0.5)
+        let shownState = try await nextValue(from: output.state) { if case .indexed = $0 { true } else { false } }
 
-        #expect(!states.contains(.indexing))
-        #expect(states.last == .indexed(ContentImageViewModel.Summary(objects: Self.objects)))
+        #expect(shownState == .indexed(ContentImageViewModel.Summary(objects: Self.objects)))
         #expect(viewModel.imageName == "Sample")
+        // The progress view only comes up once the work has taken `appearsAfter`; a run slowed down
+        // past that by a loaded machine may show it, which says nothing about the page.
+        if ContinuousClock.now - startedAt < .milliseconds(Int(LoadingPlaceholderTiming.appearsAfter * 1000)) {
+            #expect(!seenStates.contains(.indexing))
+        }
     }
 
     @Test("a slow image shows the progress view with the indexing's progress, then its page")

@@ -804,7 +804,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 let runtimeEngine = runtimeEngine
                 let imagePath = imagePath
                 try await documentState.recordingManualLoad(ofImageAt: imagePath) { reportProgress in
-                    try await runtimeEngine.loadImage(at: imagePath, onProgress: reportProgress)
+                    try await runtimeEngine.loadImageForUser(at: imagePath, reportProgress: reportProgress)
                 }
                 loadState = .loaded
 

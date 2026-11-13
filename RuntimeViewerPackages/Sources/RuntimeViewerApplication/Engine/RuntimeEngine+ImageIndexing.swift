@@ -21,8 +21,7 @@ extension RuntimeEngine {
 
     /// `indexImageIfNeeded(at:)`, reporting the indexing phase by phase as the sidebar's progress
     /// view shows it — the user's own loads go through this one, which the Report's Manual Loading
-    /// follows (proposal `editor-jump-bar`). An image to load goes through the load command that
-    /// reports progress, the one batch export uses.
+    /// follows (proposal `editor-jump-bar`). An image to load is loaded by `loadImageForUser(at:reportProgress:)`.
     nonisolated func indexImageIfNeeded(at imagePath: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws {
         guard try await !isImageIndexed(path: imagePath) else { return }
         if try await isImageLoaded(path: imagePath) {
@@ -32,7 +31,21 @@ extension RuntimeEngine {
                 }
             }
         } else {
+            try await loadImageForUser(at: imagePath, reportProgress: reportProgress)
+        }
+    }
+
+    /// Loads the image at `imagePath` for the user, reporting its indexing where the engine's process
+    /// is one this app ships — the local service, an offline file's service — and without progress
+    /// anywhere else. The load that reports progress arrived in 3.0.0-beta.5, and a process injected
+    /// by an earlier release, or a peer running one, drops the connection on a command it does not
+    /// know; the plain load is as old as the engine.
+    nonisolated func loadImageForUser(at imagePath: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws {
+        switch source {
+        case .local, .file:
             try await loadImage(at: imagePath, onProgress: reportProgress)
+        case .remote, .bonjour, .localSocket, .directTCP, .injectedTCP:
+            try await loadImage(at: imagePath)
         }
     }
 

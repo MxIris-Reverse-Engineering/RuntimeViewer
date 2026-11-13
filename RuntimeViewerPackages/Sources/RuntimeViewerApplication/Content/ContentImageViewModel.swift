@@ -197,7 +197,7 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
             }
             return objects
         }
-        try await engine.loadImage(at: imagePath, onProgress: reportProgress)
+        try await engine.loadImageForUser(at: imagePath, reportProgress: reportProgress)
         return try await engine.objects(in: imagePath)
     }
 
