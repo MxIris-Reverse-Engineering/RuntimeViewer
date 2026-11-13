@@ -64,8 +64,8 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 3. ✅ 路径项与 adapter，附测试：路径怎么构成、菜单列什么、选中变成什么路由、换来源后重建。
 4. ✅ 镜像页：`ContentImageViewModel`（索引状态机，附测试）与视图，加载视图挪进 RuntimeViewerUI。
 5. ✅ Report 的 Manual Loading：`ManualImageLoadCoordinator`、第四类的行、各个手动加载入口接上，附测试。
-6. 编辑栏接上路径栏：布局、pocket 登记、标签栏显隐与关闭按钮挪位。
-7. 文档：本提案、根目录与 `RuntimeViewerUsingAppKit/AGENTS.md` 的规则、README 的 Highlights、两份索引。
+6. ✅ 编辑栏接上路径栏：布局、pocket 登记、标签栏显隐与关闭按钮挪位。
+7. ✅ 文档：本提案、根目录与 `RuntimeViewerUsingAppKit/AGENTS.md` 的规则、README 的 Highlights、术语表、两份索引。
 
 ### 没有询问就采用的假设
 
