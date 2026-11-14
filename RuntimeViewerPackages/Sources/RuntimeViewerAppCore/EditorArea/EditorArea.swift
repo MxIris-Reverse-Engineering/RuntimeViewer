@@ -92,11 +92,13 @@ public struct EditorArea: Hashable, Sendable {
     }
 
     /// Shows `entry` — an object, or an image before any of its objects — where `destination`
-    /// says, and returns the pane it is shown in, which has the focus afterwards.
+    /// says, and returns the pane it is shown in, which has the focus afterwards. It makes a new tab
+    /// or a pane even for an entry a tab shows already: the router asks
+    /// `tabIDToBringForward(insteadOfOpening:in:)` first.
     ///
     /// The next pane is the one after the focused pane in layout order. While the focused pane is
-    /// the only one, a pane is made after it along the root, as Xcode's ⇧⌥-click does, and the
-    /// entry is all that pane has shown.
+    /// the only one, a pane is made after it along the root, as Xcode does for a click it sends to
+    /// the next editor, and the entry is all that pane has shown.
     @discardableResult
     mutating func open(_ entry: NavigationEntry, in destination: SelectionRoute.Destination) -> EditorPane.ID {
         switch destination {
@@ -114,6 +116,47 @@ public struct EditorArea: Hashable, Sendable {
             }
         }
         return focusedPaneID
+    }
+
+    /// The tab to bring forward instead of opening `entry` in `destination`, so that one entry is
+    /// not shown twice: for a new tab or the next pane, the tab that shows `entry` already
+    /// (`tabID(showing:)`); `nil` for the focused tab, which records the entry whatever the other
+    /// tabs show, and while no tab shows it (proposal `option-click-next-editor-pane`).
+    func tabIDToBringForward(insteadOfOpening entry: NavigationEntry, in destination: SelectionRoute.Destination) -> DocumentTab.ID? {
+        switch destination {
+        case .focusedTab:
+            nil
+        case .newTab, .nextEditorPane:
+            tabID(showing: entry)
+        }
+    }
+
+    /// The tab that shows `entry` now — as the step it is on, not one back or ahead in its history —
+    /// looked for in the focused pane first and then in the other panes in layout order, each
+    /// pane's active tab before its others; `nil` while no tab shows it. Entries compare as steps
+    /// do (`NavigationEntry.==`): an object by identity and the language it is shown in, an image by
+    /// its path.
+    func tabID(showing entry: NavigationEntry) -> DocumentTab.ID? {
+        let otherPanes = orderedPanes.filter { $0.id != focusedPaneID }
+        for pane in [focusedPane] + otherPanes {
+            let otherTabs = pane.tabs.filter { $0.id != pane.activeTabID }
+            if let tab = ([pane.activeTab] + otherTabs).first(where: { $0.currentEntry == entry }) {
+                return tab.id
+            }
+        }
+        return nil
+    }
+
+    /// Brings `tabID`, which shows `entry`, forward instead of showing `entry` a second time: the
+    /// tab becomes the active tab of its pane and that pane the focused one, as choosing the tab
+    /// does, and an object entry takes on the form just reached (`NavigationHistory.takeOnForm(of:)`);
+    /// the tab's history stays as it was otherwise, the steps ahead included. `false` when nothing
+    /// changed.
+    mutating func bringForward(_ tabID: DocumentTab.ID, showing entry: NavigationEntry) -> Bool {
+        guard let paneID = paneID(containing: tabID), let tabIndex = panes[paneID]?.index(ofTab: tabID) else { return false }
+        let didSelectTab = selectTab(tabID)
+        let didTakeOnForm = panes[paneID]?.tabs[tabIndex].history.takeOnForm(of: entry) ?? false
+        return didSelectTab || didTakeOnForm
     }
 
     // MARK: - History of the focused tab

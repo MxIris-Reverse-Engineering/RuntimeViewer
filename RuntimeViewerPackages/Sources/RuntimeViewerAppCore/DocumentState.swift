@@ -503,7 +503,10 @@ private final class SelectionRouter: Router {
         completion: ContextPresentationHandler?
     ) {
         // Every case returns before emitting when the route changes nothing, so a
-        // subscriber never rebuilds a pane for a no-op.
+        // subscriber never rebuilds a pane for a no-op. The route sent is the one
+        // triggered, unless a case did something else: an opening that brought a
+        // tab forward sends what choosing that tab would.
+        var routeToSend = route
         switch route {
         case .switchEngine(let engine):
             if documentState.runtimeEngine === engine, documentState.hasNothingOpen { return }
@@ -522,13 +525,33 @@ private final class SelectionRouter: Router {
             // whichever image it belongs to.
             guard documentState.currentImageNode != node else { return }
             documentState.currentImageNode = node
-        case .open(let object, let destination, _, let interfaceLanguage):
-            // The highlight rides on the route itself, to the content pane.
-            documentState.editorArea.open(object, in: destination, interfaceLanguage: interfaceLanguage)
+        case .open(let object, let destination, let highlightRequest, let interfaceLanguage):
+            let entry = NavigationEntry(object: object, interfaceLanguage: interfaceLanguage)
+            if let tabID = documentState.editorArea.tabIDToBringForward(insteadOfOpening: entry, in: destination) {
+                // Open already: its tab comes forward rather than a second copy. A
+                // place to reveal still has to reach the content pane, as an opening
+                // in the tab that is now the focused one.
+                let didChange = documentState.editorArea.bringForward(tabID, showing: entry)
+                if let highlightRequest {
+                    routeToSend = .open(object, in: .focusedTab, highlighting: highlightRequest, interfaceLanguage: interfaceLanguage)
+                } else {
+                    guard didChange else { return }
+                    routeToSend = .switchTab(tabID)
+                }
+            } else {
+                // The highlight rides on the route itself, to the content pane.
+                documentState.editorArea.open(entry, in: destination)
+            }
         case .openImage(let imagePath, let destination):
             // Like `.switchImage` the other way round: the editor area moves to
             // the image, the sidebar stays where it is.
-            documentState.editorArea.open(NavigationEntry(imagePath: imagePath), in: destination)
+            let entry = NavigationEntry(imagePath: imagePath)
+            if let tabID = documentState.editorArea.tabIDToBringForward(insteadOfOpening: entry, in: destination) {
+                guard documentState.editorArea.bringForward(tabID, showing: entry) else { return }
+                routeToSend = .switchTab(tabID)
+            } else {
+                documentState.editorArea.open(entry, in: destination)
+            }
         case .selectAtRoot(let object):
             documentState.editorArea.resetFocusedTab(to: object)
         case .backward:
@@ -560,7 +583,7 @@ private final class SelectionRouter: Router {
             documentState.editorArea.changeOrientation()
         }
         documentState.syncWithEditorArea()
-        routeRelay.accept(route)
+        routeRelay.accept(routeToSend)
         // Announced once the document stands on the engine, like the route.
         if case .switchEngine(let engine) = route {
             documentState.runtimeEngineDidResetRelay.accept(engine)

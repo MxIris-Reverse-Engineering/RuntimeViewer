@@ -623,10 +623,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// ⌘-click on a type link / "Jump to Definition": opens the type in
         /// this pane's tab.
         public let runtimeObjectClicked: Signal<RuntimeObject>
-        /// ⌥⌘- or ⇧⌘-click on a type link / "Open in New Tab". Resolved the
+        /// ⇧⌥⌘- or ⇧⌘-click on a type link / "Open in New Tab". Resolved the
         /// same way as `runtimeObjectClicked`, opened in a new tab of this pane.
         public let runtimeObjectOpenedInNewTab: Signal<RuntimeObject>
-        /// ⇧⌥⌘-click on a type link / "Open in Next Editor Pane". Resolved the
+        /// ⌥⌘-click on a type link / "Open in Next Editor Pane". Resolved the
         /// same way, opened in the pane after this one.
         @Init(default: Signal<RuntimeObject>.empty())
         public let runtimeObjectOpenedInNextEditorPane: Signal<RuntimeObject>

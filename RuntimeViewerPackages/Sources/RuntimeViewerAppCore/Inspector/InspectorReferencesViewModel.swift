@@ -99,10 +99,10 @@ public final class InspectorReferencesViewModel: ViewModel<InspectorRuntimeObjec
     public struct Input {
         /// A row clicked: it opens in the focused editor pane's tab.
         public let rowClicked: Signal<InspectorReferenceCellViewModel>
-        /// A row ⌥-clicked: it opens in a new tab of the focused pane.
+        /// A row ⇧⌥-clicked: it opens in a new tab of the focused pane.
         @Init(default: Signal<InspectorReferenceCellViewModel>.empty())
         public let rowOpenedInNewTab: Signal<InspectorReferenceCellViewModel>
-        /// A row ⇧⌥-clicked: it opens in the pane after the focused one.
+        /// A row ⌥-clicked: it opens in the pane after the focused one.
         @Init(default: Signal<InspectorReferenceCellViewModel>.empty())
         public let rowOpenedInNextEditorPane: Signal<InspectorReferenceCellViewModel>
         public let showInFindNavigatorClicked: Signal<Section>

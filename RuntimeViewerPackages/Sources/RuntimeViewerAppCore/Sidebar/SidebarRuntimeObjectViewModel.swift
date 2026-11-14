@@ -234,10 +234,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel>
-        /// ⌥-click on a row, or its context menu's "Open in New Tab" (macOS only —
+        /// ⇧⌥-click on a row, or its context menu's "Open in New Tab" (macOS only —
         /// UIKit callers pass `.empty()`).
         public let runtimeObjectOpenedInNewTab: Signal<SidebarRuntimeObjectCellViewModel>
-        /// ⇧⌥-click on a row, or its context menu's "Open in Next Editor Pane" (macOS only).
+        /// ⌥-click on a row, or its context menu's "Open in Next Editor Pane" (macOS only).
         @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
         public let runtimeObjectOpenedInNextEditorPane: Signal<SidebarRuntimeObjectCellViewModel>
         public let loadImageClicked: Signal<Void>

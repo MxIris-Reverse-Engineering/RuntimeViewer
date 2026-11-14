@@ -390,7 +390,7 @@ final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewCont
         // What the user chose: one row, by click, arrow key or type-select — never a reload, the
         // selection the page puts back after one, or a selection of several rows. Type-select
         // reports every keystroke, so that path waits for the typing to settle, as the sidebar's
-        // does; ⌥ opens the row in a new tab.
+        // does; ⌥ opens the row in the next editor pane, ⇧⌥ in a new tab.
         let userActivation = outlineView.rx.userActivatedItem(FindResultNode.self)
         let activation: Signal<OutlineViewUserActivation<FindResultNode>> = .merge(
             userActivation

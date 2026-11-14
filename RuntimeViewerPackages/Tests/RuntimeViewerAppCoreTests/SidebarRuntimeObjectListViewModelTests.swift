@@ -131,6 +131,8 @@ struct SidebarRuntimeObjectListViewModelTests {
         try await settleMainQueue()
         #expect(harness.environment.documentState.selectedRuntimeObject == nsObjectCell.runtimeObject)
 
+        // Put another object on screen, so the object is not open already and does get a tab of its own (an open one is brought forward instead).
+        harness.environment.documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "Elsewhere", kind: .objc(.type(.class))), in: .focusedTab))
         runtimeObjectOpenedInNewTabRelay.accept(nsObjectCell)
         try await settleMainQueue()
         #expect(harness.environment.documentState.editorArea.focusedPane.tabs.count == 2)

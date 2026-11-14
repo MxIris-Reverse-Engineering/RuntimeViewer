@@ -41,7 +41,7 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
     public struct Input {
         public let selectRelationshipClicked: Signal<InspectorRelationshipsCellViewModel>
         /// A command chosen in a row's context menu, or the one a modified
-        /// click stands for (⌥ Open in New Tab, ⇧⌥ Open in Next Editor Pane).
+        /// click stands for (⌥ Open in Next Editor Pane, ⇧⌥ Open in New Tab).
         @Init(default: Signal<RuntimeObjectActionRequest>.empty())
         public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
     }

@@ -60,6 +60,19 @@ public struct NavigationHistory: Hashable, Sendable {
         currentIndex = entries.count - 1
     }
 
+    /// Lets the entry on screen take on the form of `entry`, the same step (`==`) reached again
+    /// another way — another `displayName`, other `properties` — as `record(_:)` does, but without
+    /// dropping the entries after it. `false` when the entry on screen is another step, or has that
+    /// form already.
+    mutating func takeOnForm(of entry: NavigationEntry) -> Bool {
+        guard let currentIndex, entries[currentIndex] == entry,
+              let currentObject = entries[currentIndex].object, let object = entry.object,
+              !currentObject.hasSameContent(as: object)
+        else { return false }
+        entries[currentIndex] = entry
+        return true
+    }
+
     mutating func goBackward() {
         guard let currentIndex, currentIndex > 0 else { return }
         self.currentIndex = currentIndex - 1
