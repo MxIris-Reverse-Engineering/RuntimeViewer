@@ -75,6 +75,169 @@ struct EditorAreaRoutingTests {
         #expect(documentState.editorArea.focusedPane.activeTab.history.entries.map(\.object) == [firstObject, secondObject])
     }
 
+    // MARK: - Opening what is open already (proposal `option-click-next-editor-pane`)
+
+    @Test("opening in a new tab an object another tab shows brings that tab forward, as choosing it does")
+    func newTabBringsTheOpenTabForward() {
+        let documentState = documentShowingFirstObject()
+        let firstTabID = documentState.editorArea.focusedPane.activeTabID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .newTab))
+        var routes: [SelectionRoute] = []
+        let subscription = documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { subscription.dispose() }
+
+        documentState.selectionRouter.trigger(.open(firstObject, in: .newTab))
+
+        let focusedPane = documentState.editorArea.focusedPane
+        #expect(focusedPane.tabs.count == 2)
+        #expect(focusedPane.activeTabID == firstTabID)
+        #expect(documentState.selectedRuntimeObject == firstObject)
+        guard routes.count == 1, case .switchTab(let switchedTabID) = routes[0] else {
+            Issue.record("the window was not told to switch to the tab: \(routes)")
+            return
+        }
+        #expect(switchedTabID == firstTabID)
+    }
+
+    @Test("opening in the next pane an object a tab of another pane shows focuses that tab, and makes no pane")
+    func nextPaneBringsTheOpenTabForward() {
+        let documentState = documentShowingFirstObject()
+        let firstPaneID = documentState.editorArea.focusedPaneID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .nextEditorPane))
+        let secondPaneID = documentState.editorArea.focusedPaneID
+        let secondObjectTabID = documentState.editorArea.focusedPane.activeTabID
+        documentState.selectionRouter.trigger(.open(thirdObject, in: .newTab))
+        documentState.selectionRouter.trigger(.focusEditorPane(firstPaneID))
+
+        documentState.selectionRouter.trigger(.open(secondObject, in: .nextEditorPane))
+
+        let editorArea = documentState.editorArea
+        #expect(editorArea.layout.paneIDs.count == 2)
+        #expect(editorArea.focusedPaneID == secondPaneID)
+        #expect(editorArea.focusedPane.activeTabID == secondObjectTabID)
+        #expect(editorArea.focusedPane.tabs.map(\.history.entries.count) == [1, 1], "no tab recorded the object again")
+    }
+
+    @Test("bringing a tab forward keeps the steps ahead of it in its history")
+    func bringingForwardKeepsTheHistory() {
+        let documentState = documentShowingFirstObject()
+        let firstTabID = documentState.editorArea.focusedPane.activeTabID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .focusedTab))
+        documentState.selectionRouter.trigger(.backward)
+        documentState.selectionRouter.trigger(.open(thirdObject, in: .newTab))
+
+        documentState.selectionRouter.trigger(.open(firstObject, in: .newTab))
+
+        let activeTab = documentState.editorArea.focusedPane.activeTab
+        #expect(activeTab.id == firstTabID)
+        #expect(activeTab.history.entries.map(\.object) == [firstObject, secondObject])
+        #expect(activeTab.history.canGoForward)
+    }
+
+    @Test("a tab brought forward takes on the form of the object just opened, as recording it again would")
+    func bringingForwardTakesOnTheNewForm() {
+        let documentState = documentShowingFirstObject()
+        let firstTabID = documentState.editorArea.focusedPane.activeTabID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .newTab))
+        let grownFirstObject = Fixtures.runtimeObject(name: "First", children: [thirdObject])
+
+        documentState.selectionRouter.trigger(.open(grownFirstObject, in: .newTab))
+
+        let activeTab = documentState.editorArea.focusedPane.activeTab
+        #expect(activeTab.id == firstTabID)
+        #expect(activeTab.history.entries.count == 1)
+        #expect(activeTab.object?.children == [thirdObject])
+        #expect(documentState.selectedRuntimeObject?.children == [thirdObject])
+    }
+
+    @Test("only the step a tab is on counts as open, not one back or ahead in its history")
+    func onlyTheCurrentStepCountsAsOpen() {
+        let documentState = documentShowingFirstObject()
+        documentState.selectionRouter.trigger(.open(secondObject, in: .focusedTab))
+
+        documentState.selectionRouter.trigger(.open(firstObject, in: .newTab))
+
+        let focusedPane = documentState.editorArea.focusedPane
+        #expect(focusedPane.tabs.count == 2)
+        #expect(focusedPane.activeTab.history.entries.map(\.object) == [firstObject])
+    }
+
+    @Test("an object shown in another language is another step, so it opens in a tab of its own")
+    func anotherLanguageIsNotOpenYet() {
+        let documentState = documentShowingFirstObject()
+
+        documentState.selectionRouter.trigger(.open(firstObject, in: .newTab, interfaceLanguage: .swift))
+
+        let focusedPane = documentState.editorArea.focusedPane
+        #expect(focusedPane.tabs.count == 2)
+        #expect(focusedPane.activeTab.interfaceLanguage == .swift)
+    }
+
+    @Test("a plain click opens in the focused tab even when another tab shows the object")
+    func focusedTabIgnoresOtherTabs() {
+        let documentState = documentShowingFirstObject()
+        let firstTabID = documentState.editorArea.focusedPane.activeTabID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .newTab))
+
+        documentState.selectionRouter.trigger(.open(firstObject, in: .focusedTab))
+
+        let focusedPane = documentState.editorArea.focusedPane
+        #expect(focusedPane.activeTabID != firstTabID)
+        #expect(focusedPane.activeTab.history.entries.map(\.object) == [secondObject, firstObject])
+    }
+
+    @Test("opening elsewhere the object the focused tab shows changes nothing, and the route is not sent")
+    func openingWhatTheFocusedTabShowsChangesNothing() {
+        let documentState = documentShowingFirstObject()
+        let editorAreaBefore = documentState.editorArea
+        var routes: [SelectionRoute] = []
+        let subscription = documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { subscription.dispose() }
+
+        documentState.selectionRouter.trigger(.open(firstObject, in: .newTab))
+        documentState.selectionRouter.trigger(.open(firstObject, in: .nextEditorPane))
+
+        #expect(documentState.editorArea == editorAreaBefore)
+        #expect(routes.isEmpty)
+    }
+
+    @Test("a place to reveal still reaches the tab brought forward, as an opening in the focused tab")
+    func bringingForwardKeepsTheHighlight() {
+        let documentState = documentShowingFirstObject()
+        let firstTabID = documentState.editorArea.focusedPane.activeTabID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .newTab))
+        let highlightRequest = ContentHighlightRequest(lineNumber: 3, lineText: "first", matchRangeInLine: nil, query: "first", isCaseSensitive: false)
+        var routes: [SelectionRoute] = []
+        let subscription = documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { subscription.dispose() }
+
+        documentState.selectionRouter.trigger(.open(firstObject, in: .newTab, highlighting: highlightRequest))
+
+        #expect(documentState.editorArea.focusedPane.activeTabID == firstTabID)
+        #expect(documentState.editorArea.focusedPane.tabs.count == 2)
+        guard routes.count == 1, case .open(let openedObject, .focusedTab, let sentHighlightRequest?, nil) = routes[0] else {
+            Issue.record("the window was not told to open the object in the focused tab with its highlight: \(routes)")
+            return
+        }
+        #expect(openedObject == firstObject)
+        #expect(sentHighlightRequest == highlightRequest)
+    }
+
+    @Test("an image a tab shows already is brought forward, not opened again")
+    func openImageBringsTheOpenTabForward() {
+        let documentState = documentShowingFirstObject()
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .newTab))
+        let imageTabID = documentState.editorArea.focusedPane.activeTabID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .newTab))
+
+        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .nextEditorPane))
+
+        let editorArea = documentState.editorArea
+        #expect(editorArea.layout.paneIDs.count == 1)
+        #expect(editorArea.focusedPane.tabs.count == 3)
+        #expect(editorArea.focusedPane.activeTabID == imageTabID)
+    }
+
     // MARK: - Panes
 
     @Test("a new pane shows the focused pane's object, without its history, and takes the focus")
@@ -339,17 +502,17 @@ struct EditorAreaRoutingTests {
 
     @Test("an image opens in a new tab and in the next pane like an object")
     func openingAnImageElsewhere() {
-        let documentState = documentShowingFirstObject()
-        let firstPaneID = documentState.editorArea.focusedPaneID
+        let newTabDocumentState = documentShowingFirstObject()
+        newTabDocumentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .newTab))
+        #expect(newTabDocumentState.editorArea.focusedPane.tabs.count == 2)
+        #expect(newTabDocumentState.editorArea.focusedPane.activeTab.history.entries == [NavigationEntry(imagePath: Fixtures.sampleImagePath)])
 
-        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .newTab))
-        #expect(documentState.editorArea.focusedPane.tabs.count == 2)
-        #expect(documentState.editorArea.focusedPane.activeTab.history.entries == [NavigationEntry(imagePath: Fixtures.sampleImagePath)])
-
-        documentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .nextEditorPane))
-        #expect(documentState.editorArea.layout.paneIDs.count == 2)
-        #expect(documentState.editorArea.focusedPaneID != firstPaneID)
-        #expect(documentState.editorArea.focusedPane.activeTab.imagePath == Fixtures.sampleImagePath)
+        let nextPaneDocumentState = documentShowingFirstObject()
+        let firstPaneID = nextPaneDocumentState.editorArea.focusedPaneID
+        nextPaneDocumentState.selectionRouter.trigger(.openImage(Fixtures.sampleImagePath, in: .nextEditorPane))
+        #expect(nextPaneDocumentState.editorArea.layout.paneIDs.count == 2)
+        #expect(nextPaneDocumentState.editorArea.focusedPaneID != firstPaneID)
+        #expect(nextPaneDocumentState.editorArea.focusedPane.activeTab.imagePath == Fixtures.sampleImagePath)
     }
 
     @Test("a tab showing an image shows the image's name and the icon of what it is part of")

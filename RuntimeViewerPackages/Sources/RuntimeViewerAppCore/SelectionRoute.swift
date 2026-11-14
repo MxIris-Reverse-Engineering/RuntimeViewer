@@ -63,8 +63,9 @@ public enum SelectionRoute: Routable {
     case focusEditorPane(EditorPane.ID)
     case changeEditorOrientation
 
-    /// Where `open` shows an object — the three targets Xcode offers by default for a click, an
-    /// ⌥-click and an ⇧⌥-click.
+    /// Where `open` shows an object — the three targets a click, an ⌥-click and an ⇧⌥-click choose
+    /// (`init(listClickModifierFlags:)`). A new tab and the next pane go to the tab that shows the
+    /// object already, when one does, rather than show it a second time.
     public enum Destination: Hashable, Sendable {
         /// The focused pane's active tab, recorded on its history.
         case focusedTab

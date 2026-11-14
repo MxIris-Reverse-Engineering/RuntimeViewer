@@ -46,7 +46,8 @@ struct RuntimeObjectActionWiringTests {
         let engine = try await TestRuntimeEngine.shared()
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let nsObject = try await Self.nsObject(in: engine)
-        environment.documentState.selectionRouter.trigger(.open(nsObject, in: .focusedTab))
+        // Show another object on screen, so the object is not open already and does get a tab of its own (an open one is brought forward instead).
+        environment.documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "Elsewhere", kind: .objc(.type(.class))), in: .focusedTab))
         _ = try await nextValue(from: environment.documentState.$editorArea) { $0.focusedPane.tabs.count == 1 }
         let router = MockRouter<InspectorRuntimeObjectRoute>()
         let viewModel = environment.make {
