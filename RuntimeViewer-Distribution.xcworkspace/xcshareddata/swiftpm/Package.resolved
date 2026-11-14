@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "954e6bd30bc452bf54d65793b638e82d3a6a586d",
-        "version" : "0.21.0"
+        "revision" : "7a1a8966da744fd0644b767327eb4f2b01d298c1",
+        "version" : "0.22.0"
       }
     },
     {
