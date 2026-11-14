@@ -4,6 +4,7 @@
 - **创建日期**: 2026-11-13
 - **最后更新**: 2026-11-14
 - **实现分支**: `feature/editor-jump-bar`
+- **功能地图**: [`FeatureMaps/EditorJumpBar.md`](../FeatureMaps/EditorJumpBar.md)
 
 ## 摘要
 

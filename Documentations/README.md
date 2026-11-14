@@ -7,6 +7,7 @@
 | [`Visions/`](Visions/) | **愿景** —— 一个方向的边界与取舍原则，统领多个提案。不做具体决定，具体做什么写在提案里 |
 | [`Evolutions/`](Evolutions/) | **提案** —— 今后所有新功能与架构改动的唯一入口，一次改动一份文件，见 [提案索引](Evolutions/README.md) |
 | [`Guides/`](Guides/) | **使用指南** —— 面向调用方：怎么用、必须遵守的契约、已知的坑 |
+| [`FeatureMaps/`](FeatureMaps/) | **功能地图** —— 一个功能的代码在哪：文件树、关键流程（每步一个 `file:line`）、地标、测试、复杂度热点；头部记着核对时的 commit，对账从那里开始 |
 | [`Plans/`](Plans/) | 提案制确立前的设计与实现计划，同一件事常拆成 `-design` / `-plan` 两份。保留归档，不再新增 |
 | [`ResolvedIssues/`](ResolvedIssues/) | 已定位并修复的疑难问题纪要，含根因与验证过程 |
 | [`KnownIssues/`](KnownIssues/) | 代码审查发现但当时未修的问题快照，见 [子索引](KnownIssues/README.md) |
@@ -26,6 +27,10 @@
 
 - [`CodeViewEngine.md`](Visions/CodeViewEngine.md) —— **自建代码视图引擎**。把 interface 显示出来的那一层要往哪走：抄 SourceEditor 的架构而不是它的 API，自己写一台按行分层的只读视口引擎，语义由生成侧直供。统领 0009、0010 及后续的布局核心、边栏、折叠、查找等提案。
 - [`HeadlessRuntimeViewer.md`](Visions/HeadlessRuntimeViewer.md) —— **无头 RuntimeViewer**。不开窗口也能用上每一项能力：引擎管理下沉为无 UI 模块，命令行走「常驻 CLI host + 薄客户端」的命令级协议，App 在跑就由 App 充当 host，查询全覆盖而管理只带 attach 必需的。统领四篇命令行提案与将来的 MCP 无头化。
+
+## 功能地图（FeatureMaps）
+
+- [`EditorJumpBar.md`](FeatureMaps/EditorJumpBar.md) —— 编辑栏路径栏（jump bar）与附带的 Report「Manual Loading」：代码按层分在哪些文件，路径怎么跟着标签变、选一个未索引镜像时从菜单到镜像页再到索引完成的九步，两条栏怎么摆，六个手动加载入口，测试覆盖什么，以及路径项身份、读对象竞态等难懂处。核对基准 `2ecf759e`。
 
 ## 使用指南（Guides）
 
