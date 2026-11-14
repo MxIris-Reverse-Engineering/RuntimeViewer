@@ -12,11 +12,11 @@ import RuntimeViewerCore
 /// adds around these the commands only it has — a sidebar row's bookmark and
 /// its jump to the other face, the content pane's Jump to Definition.
 public enum RuntimeObjectAction: Hashable, Sendable {
-    /// Opens the object in a new tab of the focused editor pane, as ⌥-click
+    /// Opens the object in a new tab of the focused editor pane, as ⇧⌥-click
     /// does in a list.
     case openInNewTab
 
-    /// Opens the object in the editor pane after the focused one, as ⇧⌥-click
+    /// Opens the object in the editor pane after the focused one, as ⌥-click
     /// does in a list.
     case openInNextEditorPane
 
@@ -45,8 +45,8 @@ public enum RuntimeObjectAction: Hashable, Sendable {
     }
 
     /// The command a click on a list row stands for when its modifiers send
-    /// the row somewhere other than the focused tab — ⌥ Open in New Tab, ⇧⌥
-    /// Open in Next Editor Pane — so that a list offering the commands in its
+    /// the row somewhere other than the focused tab — ⌥ Open in Next Editor Pane,
+    /// ⇧⌥ Open in New Tab — so that a list offering the commands in its
     /// menu takes the clicks for them too; `nil` for a plain click, which each
     /// list handles its own way.
     public init?(opening destination: SelectionRoute.Destination) {

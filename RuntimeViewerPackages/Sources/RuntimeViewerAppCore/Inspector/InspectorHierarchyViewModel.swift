@@ -42,7 +42,7 @@ public final class InspectorHierarchyViewModel: ViewModel<InspectorRuntimeObject
     public struct Input {
         public let selectHierarchyLevelClicked: Signal<InspectorHierarchyCellViewModel>
         /// A command chosen in a level's context menu, or the one a modified
-        /// click stands for (⌥ Open in New Tab, ⇧⌥ Open in Next Editor Pane).
+        /// click stands for (⌥ Open in Next Editor Pane, ⇧⌥ Open in New Tab).
         @Init(default: Signal<RuntimeObjectActionRequest>.empty())
         public let runtimeObjectActionRequested: Signal<RuntimeObjectActionRequest>
     }

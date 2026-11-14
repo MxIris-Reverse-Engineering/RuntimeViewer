@@ -45,9 +45,9 @@ public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route>
         public let filter: Driver<NavigatorTextFilter>
         /// The row the user chose, to open in place.
         public let resultClicked: Signal<FindResultNode>
-        /// ⌥-click or Open in New Tab: the row opens in a new tab of the focused editor pane.
+        /// ⇧⌥-click or Open in New Tab: the row opens in a new tab of the focused editor pane.
         public let resultOpenedInNewTab: Signal<FindResultNode>
-        /// ⇧⌥-click or Open in Next Editor Pane: the row opens in the pane after the focused one.
+        /// ⌥-click or Open in Next Editor Pane: the row opens in the pane after the focused one.
         @Init(default: Signal<FindResultNode>.empty())
         public let resultOpenedInNextEditorPane: Signal<FindResultNode>
         /// Rows the outline collapsed or expanded.

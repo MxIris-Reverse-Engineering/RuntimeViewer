@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 /// A click on a list row: the row's model, and where the click's modifiers
-/// send it — ⌥ a new tab, ⇧⌥ the next editor pane, none the focused tab, as in
+/// send it — ⌥ the next editor pane, ⇧⌥ a new tab, none the focused tab, as in
 /// the sidebar and the Find navigator.
 struct ListRowClick<Model> {
     let model: Model

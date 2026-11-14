@@ -52,7 +52,7 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/           views
 
 ### 2. 在菜单里选一个还没索引的镜像
 
-1. 控件回调 adapter：先把选中项放回原位，再按修饰键（⌥ 新标签、⇧⌥ 下一栏）发出 `EditorJumpBarChoice` — `RuntimeViewerPackages/Sources/RuntimeViewerApplication/EditorArea/JumpBar/EditorJumpBarAdapter.swift:88`
+1. 控件回调 adapter：先把选中项放回原位，再按修饰键（⌥ 下一栏、⇧⌥ 新标签）发出 `EditorJumpBarChoice` — `RuntimeViewerPackages/Sources/RuntimeViewerApplication/EditorArea/JumpBar/EditorJumpBarAdapter.swift:88`
 2. 这一栏先拿焦点（`.focusEditorPane`），再发路由 — `RuntimeViewerPackages/Sources/RuntimeViewerApplication/EditorArea/EditorPaneViewModel.swift:160`
 3. 选择变成 `.openImage(path, in:)` — `RuntimeViewerPackages/Sources/RuntimeViewerApplication/EditorArea/JumpBar/EditorJumpBarChoice.swift:27`
 4. 镜像条目进入标签历史；不发 `.switchImage`，所以侧栏不动 — `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift:528`

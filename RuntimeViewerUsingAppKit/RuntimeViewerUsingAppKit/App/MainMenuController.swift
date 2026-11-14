@@ -303,7 +303,7 @@ final class MainMenuController {
 
     /// Xcode's Generated Interface: the Objective-C class, category or protocol on screen as Swift
     /// imports it, or back to its header, as a navigation step; checked while the Swift form is on
-    /// screen. ⌥ opens it in a new tab, ⇧⌥ in the next editor pane. No shortcut yet.
+    /// screen. ⌥ opens it in the next editor pane, ⇧⌥ in a new tab. No shortcut yet.
     private func generatedInterfaceItem() -> NSMenuItem {
         NSMenuItem(
             "Generated Interface",

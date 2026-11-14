@@ -447,8 +447,8 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {
         guard let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location) else { return }
 
-        // Same split as the NSTextView path: ⌘-click jumps in place, ⌘⇧-click and ⌥⌘-click open a
-        // tab, ⇧⌥⌘-click opens the next editor pane.
+        // Same split as the NSTextView path: ⌘-click jumps in place, ⌥⌘-click opens the next
+        // editor pane, ⌘⇧-click and ⇧⌥⌘-click open a tab.
         switch SelectionRoute.Destination(linkClickModifierFlags: NSEvent.modifierFlags) {
         case .focusedTab:
             jumpToDefinitionRelay.accept(runtimeObject)

@@ -65,8 +65,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
     private var isPressedOption: Bool = false
 
-    /// Where a ⌘-click on a link opens its type, by the modifiers held with ⌘: ⇧ or ⌥ a new tab,
-    /// ⇧⌥ the next editor pane, neither the focused tab.
+    /// Where a ⌘-click on a link opens its type, by the modifiers held with ⌘: ⌥ the next editor
+    /// pane, ⇧ or ⇧⌥ a new tab, neither the focused tab.
     private var linkClickDestination: SelectionRoute.Destination {
         var modifierFlags: NSEvent.ModifierFlags = [.command]
         if isPressedShift { modifierFlags.insert(.shift) }
@@ -111,8 +111,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
         let linkClicked = textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObject }.asSignalOnErrorJustComplete()
         let input = ContentTextViewModel.Input(
-            // ⌘-click jumps in place; ⌘⇧-click and ⌥⌘-click open in a new tab (Safari semantics);
-            // ⇧⌥⌘-click opens the next editor pane.
+            // ⌘-click jumps in place; ⌥⌘-click opens the next editor pane; ⌘⇧-click (Safari
+            // semantics) and ⇧⌥⌘-click open in a new tab.
             runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .focusedTab }, jumpToDefinitionRelay.asSignal()).merge(),
             runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .newTab }, openInNewTabRelay.asSignal()).merge(),
             runtimeObjectOpenedInNextEditorPane: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .nextEditorPane }, openInNextEditorPaneRelay.asSignal()).merge(),

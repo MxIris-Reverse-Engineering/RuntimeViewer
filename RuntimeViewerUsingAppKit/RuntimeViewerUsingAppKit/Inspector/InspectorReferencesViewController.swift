@@ -117,8 +117,8 @@ final class InspectorReferencesViewController: BaseEffectViewController<Inspecto
         super.setupBindings(for: viewModel)
 
         let sectionViews = [callersSectionView, calleesSectionView, typeReferencesSectionView]
-        // Where a row opens, read off the click that chose it: ⌥ in a new tab, ⇧⌥ in the next
-        // editor pane, as in the Find navigator.
+        // Where a row opens, read off the click that chose it: ⌥ in the next editor pane, ⇧⌥ in a
+        // new tab, as in the Find navigator.
         let rowClicks: Signal<(cellViewModel: InspectorReferenceCellViewModel, destination: SelectionRoute.Destination)> = Signal.merge(sectionViews.map(\.rowClicked))
             .map { cellViewModel in
                 (cellViewModel, SelectionRoute.Destination(listClickModifierFlags: NSApp.currentEvent?.modifierFlags ?? []))

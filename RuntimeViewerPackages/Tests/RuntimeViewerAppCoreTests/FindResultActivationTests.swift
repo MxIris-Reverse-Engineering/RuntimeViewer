@@ -3,9 +3,9 @@ import Testing
 @testable import RuntimeViewerAppCore
 import RuntimeViewerAppTestingSupport
 
-/// How a Find result the user chose opens, read off the event that chose it: ⌥ opens it in a new
-/// tab (proposal `0029-find-navigator` §4, missing until PR121.07), and a typed character is
-/// type-select, which the page waits out before it navigates.
+/// How a Find result the user chose opens, read off the event that chose it: ⌥ opens it in the next
+/// editor pane and ⇧⌥ in a new tab (proposal `option-click-next-editor-pane`), and a typed character
+/// is type-select, which the page waits out before it navigates.
 @Suite("Find result activation")
 @MainActor
 struct FindResultActivationTests {
@@ -23,10 +23,10 @@ struct FindResultActivationTests {
         ))
     }
 
-    @Test("⌥ opens the chosen result in a new tab, ⇧⌥ in the next editor pane; a plain click, ⇧ alone and no event in the focused tab")
+    @Test("⌥ opens the chosen result in the next editor pane, ⇧⌥ in a new tab; a plain click, ⇧ alone and no event in the focused tab")
     func modifiersPickTheDestination() throws {
-        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: .option)) == .newTab)
-        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: [.option, .shift])) == .nextEditorPane)
+        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: .option)) == .nextEditorPane)
+        #expect(FindResultActivation.destination(for: try Self.mouseUp(with: [.option, .shift])) == .newTab)
         #expect(FindResultActivation.destination(for: try Self.mouseUp(with: [])) == .focusedTab)
         #expect(FindResultActivation.destination(for: try Self.mouseUp(with: .shift)) == .focusedTab)
         #expect(FindResultActivation.destination(for: nil) == .focusedTab)
@@ -36,8 +36,8 @@ struct FindResultActivationTests {
     func linkClicksTakeShiftForANewTab() {
         #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command]) == .focusedTab)
         #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .shift]) == .newTab)
-        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .option]) == .newTab)
-        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .option, .shift]) == .nextEditorPane)
+        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .option]) == .nextEditorPane)
+        #expect(SelectionRoute.Destination(linkClickModifierFlags: [.command, .option, .shift]) == .newTab)
     }
 
     @Test("a typed character is type-select; a click, an arrow key and no event are not")

@@ -3,13 +3,14 @@ import AppKit
 
 extension SelectionRoute.Destination {
     /// Where a click in a list of objects — the sidebar's object list, the Find results, the
-    /// Inspector's References — opens one, by Xcode 27.2's defaults: a plain click in the focused
-    /// pane's tab, ⌥ in a new tab of the focused pane, ⇧⌥ in the next pane (proposal
-    /// `editor-panes`). Only Option and Shift count; ⇧ alone is a plain click.
+    /// Inspector's lists — opens one: a plain click in the focused pane's tab, ⌥ in the next pane,
+    /// ⇧⌥ in a new tab of the focused pane. That is Xcode with its optional navigation set to "Uses
+    /// Separate Editor"; Xcode 27.2's defaults have ⌥ and ⇧⌥ the other way round (proposal
+    /// `option-click-next-editor-pane`). Only Option and Shift count; ⇧ alone is a plain click.
     public init(listClickModifierFlags modifierFlags: NSEvent.ModifierFlags) {
         switch modifierFlags.intersection([.option, .shift]) {
-        case [.option, .shift]: self = .nextEditorPane
-        case [.option]: self = .newTab
+        case [.option]: self = .nextEditorPane
+        case [.option, .shift]: self = .newTab
         default: self = .focusedTab
         }
     }
@@ -18,8 +19,8 @@ extension SelectionRoute.Destination {
     /// alone opens a new tab as well, as ⇧⌘-click always has here.
     public init(linkClickModifierFlags modifierFlags: NSEvent.ModifierFlags) {
         switch modifierFlags.intersection([.option, .shift]) {
-        case [.option, .shift]: self = .nextEditorPane
-        case [.option], [.shift]: self = .newTab
+        case [.option]: self = .nextEditorPane
+        case [.option, .shift], [.shift]: self = .newTab
         default: self = .focusedTab
         }
     }
