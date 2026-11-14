@@ -104,8 +104,9 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         /// Hidden unless some pane of the editor area has a second tab.
         public let isTabBarHidden: Driver<Bool>
         public let isFocused: Driver<Bool>
-        /// Hidden while the pane is the only one: the only pane cannot be closed. It sits in the
-        /// tab bar while that shows, and in the jump bar otherwise.
+        /// Hidden while closing the pane would change nothing (`EditorArea.canClosePane(_:)`): it is
+        /// the only pane, and holds one tab that has shown nothing. It sits in the tab bar while that
+        /// shows, and in the jump bar otherwise.
         public let isCloseButtonHidden: Driver<Bool>
         /// What the pane's jump bar shows the path to: the step on screen in its active tab.
         public let jumpBarLocation: Driver<EditorJumpBarLocation>
@@ -169,7 +170,6 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         let paneID = paneID
         let editorArea = documentState.$editorArea.asDriver()
         let pane = editorArea.compactMap { $0[paneID] }
-        let paneCount = editorArea.map(\.panes.count).distinctUntilChanged()
         let tabBarSnapshot = pane.map(TabBarSnapshot.init(pane:)).distinctUntilChanged()
         let jumpBarLocation = pane.map { EditorJumpBarLocation(entry: $0.activeTab.currentEntry) }.distinctUntilChanged()
 
@@ -180,7 +180,7 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
             }
             .distinctUntilChanged(),
             isFocused: editorArea.map { $0.focusedPaneID == paneID }.distinctUntilChanged(),
-            isCloseButtonHidden: paneCount.map { $0 < 2 }.distinctUntilChanged(),
+            isCloseButtonHidden: editorArea.map { !$0.canClosePane(paneID) }.distinctUntilChanged(),
             jumpBarLocation: jumpBarLocation,
             isJumpBarHidden: jumpBarLocation.map { $0 == .nothing }.distinctUntilChanged()
         )

@@ -54,6 +54,13 @@ public struct EditorArea: Hashable, Sendable {
         panes.values.first { $0.index(ofTab: tabID) != nil }?.id
     }
 
+    /// Whether closing `paneID` changes anything (`closePane(_:)`): it is one of several panes, or
+    /// the only one and not empty. What the pane's close button and Close Editor Pane follow.
+    public func canClosePane(_ paneID: EditorPane.ID) -> Bool {
+        guard let pane = panes[paneID] else { return false }
+        return panes.count > 1 || !pane.isEmpty
+    }
+
     /// Whether no tab of any pane has shown anything.
     public var hasShownNothing: Bool {
         panes.values.allSatisfy { pane in
@@ -154,10 +161,13 @@ public struct EditorArea: Hashable, Sendable {
 
     /// Closes `tabID`. Closing the active tab activates the one to its right, or to its left when it
     /// was the last. A pane's last tab closes the pane while there is another; the only tab of the
-    /// only pane stays, and `false` says nothing changed.
+    /// only pane stays — ⌘W closes the window there — and `false` says nothing changed.
     mutating func closeTab(_ tabID: DocumentTab.ID) -> Bool {
         guard let paneID = paneID(containing: tabID), var pane = panes[paneID], let tabIndex = pane.index(ofTab: tabID) else { return false }
-        guard pane.tabs.count > 1 else { return closePane(paneID) }
+        guard pane.tabs.count > 1 else {
+            guard panes.count > 1 else { return false }
+            return closePane(paneID)
+        }
         let wasActive = pane.activeTabID == tabID
         pane.tabs.remove(at: tabIndex)
         if wasActive {
@@ -189,9 +199,17 @@ public struct EditorArea: Hashable, Sendable {
     }
 
     /// Closes `paneID`; when it had the focus, the focus goes to its sibling (`EditorLayout.paneID(succeeding:)`).
-    /// The only pane stays, and `false` says nothing changed.
+    ///
+    /// The only pane is emptied instead: its tabs give way to one empty tab, and the pane keeps its
+    /// identity and its place in the layout. Xcode never closes its only pane, but the sidebar going
+    /// back to the image list leaves the editor area as it is, so this is how the user clears it.
+    /// `false` says nothing changed (`canClosePane(_:)`).
     mutating func closePane(_ paneID: EditorPane.ID) -> Bool {
-        guard panes.count > 1, panes[paneID] != nil else { return false }
+        guard canClosePane(paneID) else { return false }
+        guard panes.count > 1 else {
+            panes[paneID] = EditorPane(id: paneID)
+            return true
+        }
         let succeedingPaneID = layout.paneID(succeeding: paneID)
         layout.remove(paneID)
         panes[paneID] = nil

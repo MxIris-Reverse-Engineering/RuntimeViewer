@@ -152,6 +152,42 @@ struct EditorAreaRoutingTests {
         #expect(routes.isEmpty)
     }
 
+    @Test("closing the only pane empties it: one empty tab in the same pane, and the route is sent")
+    func closingTheOnlyPaneEmptiesIt() {
+        let documentState = documentShowingFirstObject()
+        let paneID = documentState.editorArea.focusedPaneID
+        documentState.selectionRouter.trigger(.open(secondObject, in: .newTab))
+        #expect(documentState.editorArea.canClosePane(paneID))
+        var routes: [SelectionRoute] = []
+        let subscription = documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { subscription.dispose() }
+
+        documentState.selectionRouter.trigger(.closeEditorPane(paneID))
+
+        let editorArea = documentState.editorArea
+        #expect(editorArea.layout.paneIDs == [paneID])
+        #expect(editorArea.focusedPaneID == paneID)
+        #expect(editorArea.focusedPane.tabs.count == 1)
+        #expect(editorArea.hasShownNothing)
+        #expect(documentState.selectedRuntimeObject == nil)
+        #expect(routes.count == 1)
+        #expect(!editorArea.canClosePane(paneID), "an empty only pane has nothing left to close")
+    }
+
+    @Test("closing the only pane while it shows nothing changes nothing, and the route is not sent")
+    func closingTheEmptyOnlyPaneChangesNothing() {
+        let documentState = DocumentState()
+        let editorAreaBefore = documentState.editorArea
+        var routes: [SelectionRoute] = []
+        let subscription = documentState.routeSignal.emitOnNext { routes.append($0) }
+        defer { subscription.dispose() }
+
+        documentState.selectionRouter.trigger(.closeEditorPane(documentState.editorArea.focusedPaneID))
+
+        #expect(documentState.editorArea == editorAreaBefore)
+        #expect(routes.isEmpty)
+    }
+
     @Test("⌘W closes the focused tab while its pane has another")
     func closeTargetIsTheTab() {
         let documentState = documentShowingFirstObject()

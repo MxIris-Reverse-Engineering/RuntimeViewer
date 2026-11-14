@@ -550,6 +550,7 @@ private final class SelectionRouter: Router {
         case .newEditorPane(let placement):
             documentState.editorArea.addPane(placed: placement)
         case .closeEditorPane(let paneID):
+            // The only pane is emptied rather than closed, see `EditorArea.closePane(_:)`.
             guard documentState.editorArea.closePane(paneID) else { return }
         case .closeOtherEditorPanes:
             guard documentState.editorArea.closeOtherPanes() else { return }

@@ -56,6 +56,24 @@ struct EditorPaneViewModelTests {
 
         #expect(try await nextValue(from: output.isTabBarHidden) == false)
         #expect(try await nextValue(from: output.tabBarSnapshot).items.count == 2)
+        #expect(try await nextValue(from: output.isCloseButtonHidden) == false, "closing the pane would close its tabs")
+    }
+
+    @Test("the only pane shows its close button while it shows something, and closing it leaves one empty tab")
+    func theOnlyPaneClosesToAnEmptyTab() async throws {
+        let environment = ViewModelTestEnvironment()
+        let paneID = environment.documentState.editorArea.focusedPaneID
+        let (viewModel, output) = makeViewModel(for: paneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        environment.documentState.selectionRouter.trigger(.open(Fixtures.runtimeObject(name: "Shown"), in: .focusedTab))
+        #expect(try await nextValue(from: output.isCloseButtonHidden) == false)
+
+        closeButtonClickedRelay.accept(())
+        #expect(environment.documentState.editorArea.layout.paneIDs == [paneID])
+        #expect(environment.documentState.editorArea.hasShownNothing)
+        #expect(try await nextValue(from: output.isCloseButtonHidden) == true)
+        #expect(try await nextValue(from: output.isJumpBarHidden) == true)
     }
 
     @Test("with a second pane every pane shows its close button, but no tab bar over one tab")

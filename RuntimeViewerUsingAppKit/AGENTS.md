@@ -665,8 +665,12 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
   change them there, not in the view controller. The tab bar follows Xcode's rule — shown in every pane
   once any pane has a second tab — and while it is hidden the pane's close button sits at the start of the
   jump bar, after which the path control starts at 40 points instead of 8; a pane whose bars are both
-  hidden has no close button, only Close Editor Pane in the menu. The content's safe area makes room for
-  the bars on show.
+  hidden has no close button, only Close Editor Pane in the menu. **The only pane has a close button too**
+  while it shows something or holds a second tab, which Xcode's does not: closing it leaves the pane with
+  one empty tab (`EditorArea.closePane(_:)`), and both the button and Close Editor Pane follow
+  `EditorArea.canClosePane(_:)`. The sidebar going back to the image list leaves the editor area as it
+  is, so this is how the user clears it; ⌘W on the only tab of the only pane still closes the window. The
+  content's safe area makes room for the bars on show.
 
 </important>
 

@@ -36,4 +36,10 @@ public struct EditorPane: Hashable, Identifiable, Sendable {
     public func index(ofTab tabID: DocumentTab.ID) -> Int? {
         tabs.firstIndex { $0.id == tabID }
     }
+
+    /// Whether the pane holds one tab that has shown nothing: what a new window shows, and what
+    /// closing the only pane leaves (`EditorArea.closePane(_:)`).
+    public var isEmpty: Bool {
+        tabs.count == 1 && tabs[0].history.entries.isEmpty
+    }
 }

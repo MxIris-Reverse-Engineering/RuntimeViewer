@@ -192,7 +192,7 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
         contentContainerView.additionalSafeAreaInsets = NSEdgeInsets(top: metrics.barsHeight, left: 0, bottom: 0, right: 0)
     }
 
-    /// Whether the pane can be closed — there is another pane — which shows its close button.
+    /// Whether the close button is hidden: closing the pane would change nothing (`EditorArea.canClosePane(_:)`).
     private var isCloseButtonHidden = true {
         didSet {
             guard isCloseButtonHidden != oldValue else { return }

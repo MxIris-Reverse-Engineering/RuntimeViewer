@@ -507,11 +507,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             return documentState.runtimeEngine.imageNodes.count >= 2
         case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
             return documentState.editorArea.focusedPane.tabs.count > 1
-        case #selector(closeEditorPane(_:)), #selector(closeOtherEditorPanes(_:)),
+        case #selector(closeEditorPane(_:)):
+            // The only pane closes too, to one empty tab, unless it already is that.
+            return documentState.editorArea.canClosePane(documentState.editorArea.focusedPaneID)
+        case #selector(closeOtherEditorPanes(_:)),
              #selector(moveFocusToNextEditorPane(_:)), #selector(moveFocusToPreviousEditorPane(_:)),
              #selector(changeEditorOrientation(_:)), #selector(resetEditorSizes(_:)):
-            // The only pane cannot be closed, has no other pane to hand the focus to, and has
-            // nothing to turn or to size.
+            // The only pane has no other pane to close or to hand the focus to, and has nothing to
+            // turn or to size.
             return documentState.editorArea.panes.count > 1
         case #selector(findCallHierarchy(_:)):
             return documentState.crossReferenceRequest(.callHierarchy) != nil
