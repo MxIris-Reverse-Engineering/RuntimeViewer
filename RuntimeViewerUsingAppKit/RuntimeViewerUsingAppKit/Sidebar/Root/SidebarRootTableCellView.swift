@@ -10,34 +10,28 @@ final class SidebarRootTableCellView: TableCellView {
 
     override func setup() {
         super.setup()
-
-        addSubview(iconView)
-        addSubview(titleLabel)
-
-//        iconView.makeConstraints { make in
-//            make.leftAnchor.constraint(equalTo: leftAnchor)
-//            make.centerYAnchor.constraint(equalTo: centerYAnchor)
-//        }
+        
+        hierarchy {
+            iconView
+            titleLabel
+        }
 
         iconView.snp.makeConstraints { make in
             make.leading.equalToSuperview().offset(2)
             make.centerY.equalToSuperview()
         }
-        
-//        titleLabel.makeConstraints { make in
-//            make.leftAnchor.constraint(equalTo: iconView.rightAnchor, constant: 10)
-//            make.centerYAnchor.constraint(equalTo: centerYAnchor)
-//            make.rightAnchor.constraint(lessThanOrEqualTo: rightAnchor)
-//        }
-        
+
         titleLabel.snp.makeConstraints { make in
             make.leading.equalTo(iconView.snp.trailing).offset(4)
             make.centerY.equalToSuperview()
             make.trailing.lessThanOrEqualToSuperview()
         }
 
-        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        titleLabel.maximumNumberOfLines = 1
+        titleLabel.do {
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            $0.maximumNumberOfLines = 1
+        }
+        
     }
 
     func bind(to viewModel: SidebarRootCellViewModel) {
