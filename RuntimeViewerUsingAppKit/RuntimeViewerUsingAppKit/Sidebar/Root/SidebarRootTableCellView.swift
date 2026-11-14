@@ -27,9 +27,6 @@ final class SidebarRootTableCellView: TableCellView {
 
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleLabel.maximumNumberOfLines = 1
-        
-        iconView.contentTintColor = .controlAccentColor
-        
     }
 
     func bind(to viewModel: SidebarRootCellViewModel) {
@@ -38,6 +35,8 @@ final class SidebarRootTableCellView: TableCellView {
         viewModel.$appearance.asDriver().driveOnNext { [weak self] appearance in
             guard let self else { return }
             iconView.image = appearance.icon
+            // A template tinted per kind, as Xcode's navigator draws it; a selected row turns it white.
+            iconView.contentTintColor = appearance.iconColor
             titleLabel.attributedStringValue = appearance.name
         }
         .disposed(by: rx.disposeBag)

@@ -181,16 +181,15 @@ final class MainViewModel: ViewModel<MainRoute> {
     }
 
     /// The title's icon: the kind of the image the title names, as one glyph in one colour, as
-    /// Xcode 27 draws its project icon — brown for a bundle, after Xcode's package icon, blue
-    /// otherwise — and while no image is open the app's own symbol, in blue too, rather than a
-    /// picture of the app icon among the glyphs.
+    /// Xcode 27 draws its project icon — in the colour Xcode gives that kind of file
+    /// (`RuntimeImageKind.iconColor`) — and while no image is open the app's own symbol, in blue,
+    /// rather than a picture of the app icon among the glyphs.
     private static func toolbarIcon(for imageNode: RuntimeImageNode?) -> NSImage? {
         guard let imageNode else {
             return TitleDocumentIcon.image(symbol: SFSymbols(name: RuntimeViewerSymbols.runtimeViewer).nsImage, color: .systemBlue)
         }
         let kind = imageNode.kind
-        let color: NSColor = kind == .bundle ? .systemBrown : .systemBlue
-        return TitleDocumentIcon.image(symbol: kind.icon, color: color)
+        return TitleDocumentIcon.image(symbol: kind.icon, color: kind.iconColor)
     }
 
     /// The icon of a step in the history menu: the object's, or for an image what it is part of.
@@ -199,7 +198,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         case .object(let object, _):
             RuntimeObjectIcon.icon(for: object.kind, size: NavigationHistorySnapshot.iconSize)
         case .image(let path):
-            RuntimeImageKind(ofImageAt: path).icon
+            RuntimeImageKind(ofImageAt: path).coloredIcon
         }
     }
 

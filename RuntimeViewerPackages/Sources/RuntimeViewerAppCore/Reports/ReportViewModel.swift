@@ -471,7 +471,7 @@ enum ReportOutline {
         // The batch's row stands for its only image, which has no row of its own to say why it
         // failed — what the toolbar popover showed as `path — message`.
         if !showsItems(of: batch), batch.isFinished, let item = batch.items.first, case .failed(let message) = item.state {
-            cellViewModel.update(icon: icon(forImagePath: batch.rootImagePath), title: title(for: batch.reason), detail: "Failed", status: .failed(message: message), toolTip: "\(item.id)\n\(message)")
+            cellViewModel.update(icon: icon(forImagePath: batch.rootImagePath), iconColor: iconColor(forImagePath: batch.rootImagePath), title: title(for: batch.reason), detail: "Failed", status: .failed(message: message), toolTip: "\(item.id)\n\(message)")
             return
         }
         let isRunning = !batch.isFinished
@@ -495,6 +495,7 @@ enum ReportOutline {
         }
         cellViewModel.update(
             icon: icon(forImagePath: batch.rootImagePath),
+            iconColor: iconColor(forImagePath: batch.rootImagePath),
             title: title(for: batch.reason),
             detail: detail,
             status: status,
@@ -524,7 +525,7 @@ enum ReportOutline {
             detail = "Cancelled"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: item.id), title: FindScope.imageName(of: item.id), detail: detail, status: status, toolTip: item.id, isInProgress: !item.state.isTerminal)
+        cellViewModel.update(icon: icon(forImagePath: item.id), iconColor: iconColor(forImagePath: item.id), title: FindScope.imageName(of: item.id), detail: detail, status: status, toolTip: item.id, isInProgress: !item.state.isTerminal)
     }
 
     /// `isFollowed`: the engine's corpus coordinator asked for the build — for whichever window on
@@ -547,7 +548,7 @@ enum ReportOutline {
             status = .none
         }
         let toolTip = isFollowed ? imagePath : "\(imagePath)\nRequested by another connection"
-        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: toolTip, isCancellable: isFollowed, isInProgress: true)
+        cellViewModel.update(icon: icon(forImagePath: imagePath), iconColor: iconColor(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: toolTip, isCancellable: isFollowed, isInProgress: true)
     }
 
     /// The Searchable Interfaces category's one row while the engine's process does not know the
@@ -581,7 +582,7 @@ enum ReportOutline {
             detail = time.isEmpty ? "Cancelled" : "Cancelled · \(time)"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: finishedBuild.imagePath), title: FindScope.imageName(of: finishedBuild.imagePath), detail: detail, status: status, toolTip: toolTip)
+        cellViewModel.update(icon: icon(forImagePath: finishedBuild.imagePath), iconColor: iconColor(forImagePath: finishedBuild.imagePath), title: FindScope.imageName(of: finishedBuild.imagePath), detail: detail, status: status, toolTip: toolTip)
     }
 
     /// A kind of work's own row: its title and, while the engine's process keeps something for it,
@@ -617,7 +618,7 @@ enum ReportOutline {
         if restoredImage.summary.skippedCount > 0 {
             toolTip += "\n\(restoredImage.summary.skippedCount) skipped when it was printed"
         }
-        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: "\(byteCount) · \(duration)", toolTip: toolTip)
+        cellViewModel.update(icon: icon(forImagePath: imagePath), iconColor: iconColor(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: "\(byteCount) · \(duration)", toolTip: toolTip)
     }
 
     /// An image whose cross references are queued or being prepared. `isFollowed`: the engine's
@@ -639,7 +640,7 @@ enum ReportOutline {
             detail = "Waiting"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: imagePath, isCancellable: isFollowed, isInProgress: true)
+        cellViewModel.update(icon: icon(forImagePath: imagePath), iconColor: iconColor(forImagePath: imagePath), title: FindScope.imageName(of: imagePath), detail: detail, status: status, toolTip: imagePath, isCancellable: isFollowed, isInProgress: true)
     }
 
     /// An image the user is loading: how far, and the phase under way, once the work reports them.
@@ -651,7 +652,7 @@ enum ReportOutline {
         } else {
             detail = "Loading"
         }
-        cellViewModel.update(icon: icon(forImagePath: load.imagePath), title: FindScope.imageName(of: load.imagePath), detail: detail, status: .running, toolTip: load.imagePath, isInProgress: true)
+        cellViewModel.update(icon: icon(forImagePath: load.imagePath), iconColor: iconColor(forImagePath: load.imagePath), title: FindScope.imageName(of: load.imagePath), detail: detail, status: .running, toolTip: load.imagePath, isInProgress: true)
     }
 
     /// A load of the user's that ended: what it took and when, or why it failed.
@@ -674,7 +675,7 @@ enum ReportOutline {
             detail = "Cancelled · \(time)"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: finishedLoad.imagePath), title: FindScope.imageName(of: finishedLoad.imagePath), detail: detail, status: status, toolTip: toolTip)
+        cellViewModel.update(icon: icon(forImagePath: finishedLoad.imagePath), iconColor: iconColor(forImagePath: finishedLoad.imagePath), title: FindScope.imageName(of: finishedLoad.imagePath), detail: detail, status: status, toolTip: toolTip)
     }
 
     /// The Cross References category's one row while the engine's process cannot prepare cross
@@ -709,7 +710,7 @@ enum ReportOutline {
             detail = "Cancelled · \(time)"
             status = .none
         }
-        cellViewModel.update(icon: icon(forImagePath: finishedPreparation.imagePath), title: FindScope.imageName(of: finishedPreparation.imagePath), detail: detail, status: status, toolTip: toolTip)
+        cellViewModel.update(icon: icon(forImagePath: finishedPreparation.imagePath), iconColor: iconColor(forImagePath: finishedPreparation.imagePath), title: FindScope.imageName(of: finishedPreparation.imagePath), detail: detail, status: status, toolTip: toolTip)
     }
 
     // MARK: - Filtering
@@ -823,6 +824,10 @@ enum ReportOutline {
 
     static func icon(forImagePath imagePath: String) -> NSUIImage {
         RuntimeImageKind(ofImageAt: imagePath).icon
+    }
+
+    static func iconColor(forImagePath imagePath: String) -> NSUIColor {
+        RuntimeImageKind(ofImageAt: imagePath).iconColor
     }
 
     static func title(for reason: RuntimeIndexingBatchReason) -> String {

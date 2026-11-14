@@ -15,6 +15,10 @@ import RuntimeViewerArchitectures
 public struct FindResultCellAppearance: Equatable {
     public var icon: NSUIImage?
     public var iconAlpha: CGFloat = 1
+    /// The colour a template `icon` is drawn in when the row has one of its own: an image's, after
+    /// what the image is part of (`RuntimeImageKind.iconColor`). `nil` leaves the usual tint
+    /// (`FindResultCellStyle.iconTintColor`).
+    public var iconColor: NSUIColor?
     public var title: NSAttributedString = .init()
     public var allowsWrapping = false
     public var isSecondary = false
@@ -221,6 +225,9 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
                 appearance.isSecondary = true
             case .function, .target, .image, .unnamedFunctions:
                 appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle, metrics: metrics)
+            }
+            if case .image(let path) = row.item {
+                appearance.iconColor = RuntimeImageKind(ofImageAt: path).iconColor
             }
         }
         return appearance

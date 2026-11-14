@@ -465,7 +465,8 @@ private final class EditorPaneTabBarView: LayerBackedView, TabBar.DataSource, Ta
         case .object(let kind)?:
             RuntimeObjectIcon.icon(for: kind, size: 16)
         case .image(let kind)?:
-            kind.icon
+            // Drawn as it is, in the kind's colour, as the jump bar draws it.
+            kind.coloredIcon
         case nil:
             nil
         }

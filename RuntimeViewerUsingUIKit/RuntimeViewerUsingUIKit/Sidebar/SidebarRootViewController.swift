@@ -74,6 +74,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UIKitViewContr
             content.textProperties.allowsDefaultTighteningForTruncation = false
             content.attributedText = viewModel.appearance.name
             content.image = viewModel.appearance.icon
+            content.imageProperties.tintColor = viewModel.appearance.iconColor
             cell.contentConfiguration = content
             cell.indentationWidth = 8
         }

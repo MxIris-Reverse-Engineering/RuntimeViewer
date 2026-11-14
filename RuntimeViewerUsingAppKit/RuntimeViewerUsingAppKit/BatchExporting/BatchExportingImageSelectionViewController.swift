@@ -253,8 +253,6 @@ extension BatchExportingImageSelectionViewController {
             // Mixed is only ever set from the tree; a click goes through the tree as well.
             checkbox.allowsMixedState = true
 
-            iconImageView.contentTintColor = .controlAccentColor
-
             nameLabel.do {
                 $0.font = .systemFont(ofSize: 13)
                 $0.textColor = .labelColor
@@ -277,7 +275,9 @@ extension BatchExportingImageSelectionViewController {
         func bind(to node: BatchExportingImageTreeNode, toggleNodeRelay: PublishRelay<BatchExportingImageTreeNode>) {
             rx.disposeBag = DisposeBag()
 
-            iconImageView.image = node.imageNode.icon
+            let imageKind = node.imageNode.kind
+            iconImageView.image = imageKind.icon
+            iconImageView.contentTintColor = imageKind.iconColor
             nameLabel.stringValue = node.name
             // After `stringValue`, which sets the tooltip to the name.
             nameLabel.toolTip = node.imagePath ?? node.name

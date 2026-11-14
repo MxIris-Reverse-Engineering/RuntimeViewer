@@ -52,10 +52,13 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
     /// rows resident, so per-row Rx fixed cost matters (proposal 0005).
     public struct Appearance: Equatable {
         public var icon: NSUIImage?
+        /// The colour the template `icon` is drawn in: what the node is (`RuntimeImageKind.iconColor`).
+        public var iconColor: NSUIColor
         public var name: NSAttributedString
 
-        public init(icon: NSUIImage?, name: NSAttributedString) {
+        public init(icon: NSUIImage?, iconColor: NSUIColor, name: NSAttributedString) {
             self.icon = icon
+            self.iconColor = iconColor
             self.name = name
         }
     }
@@ -72,8 +75,10 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
 
     public init(node: RuntimeImageNode) {
         self.node = node
+        let kind = node.kind
         self.appearance = Appearance(
-            icon: node.icon,
+            icon: kind.icon,
+            iconColor: kind.iconColor,
             name: NSAttributedString(rowText: node.name, fontSize: 13)
         )
     }

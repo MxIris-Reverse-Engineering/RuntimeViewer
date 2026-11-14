@@ -199,6 +199,21 @@ struct FindCrossReferenceTreeTests {
         #expect(icon(of: .unnamedFunctions(count: 3)) === badge("f", .gray))
     }
 
+    @Test("an image's row is drawn in the colour of what the image is part of, and the other rows keep the usual tint")
+    func imageRowsTakeTheirKindsColour() {
+        func appearance(of item: FindCrossReferenceRow.Item) -> FindResultCellAppearance {
+            FindResultNode.crossReference(FindCrossReferenceRow(item: item, direction: .callers), identifier: "row", children: []).appearance
+        }
+        let frameworkImageRow = appearance(of: .image(path: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"))
+        let plainImageRow = appearance(of: .image(path: "/usr/lib/libobjc.A.dylib"))
+
+        #expect(frameworkImageRow.icon === RuntimeImageKind.framework.icon)
+        #expect(frameworkImageRow.iconColor == RuntimeImageKind.framework.iconColor)
+        #expect(plainImageRow.icon === RuntimeImageKind.image.icon)
+        #expect(plainImageRow.iconColor == RuntimeImageKind.image.iconColor)
+        #expect(appearance(of: .unnamedFunctions(count: 3)).iconColor == nil)
+    }
+
     // MARK: - Loading
 
     @Test("a row not loaded has one row standing in for its level; one that loaded nothing has none")

@@ -17,6 +17,11 @@ public final class ReportCellViewModel: NSObject, @unchecked Sendable {
     public struct Appearance: Equatable {
         public var icon: NSUIImage?
 
+        /// The colour the template `icon` is drawn in when the row has one of its own: an image's,
+        /// after what the image is part of (`RuntimeImageKind.iconColor`). `nil` leaves the
+        /// navigator's secondary label colour.
+        public var iconColor: NSUIColor?
+
         public var title: String = ""
 
         /// Right after the title, in the secondary color: progress, a count or a time.
@@ -49,8 +54,8 @@ public final class ReportCellViewModel: NSObject, @unchecked Sendable {
 
     /// Sets what the row shows. The appearance is published in one assignment and only when it
     /// changed, so the cell's binding fires once per real change.
-    func update(icon: NSUIImage?, title: String, detail: String = "", status: ReportRowStatus = .none, toolTip: String? = nil, isCancellable: Bool = false, isInProgress: Bool = false, isEjectable: Bool = false) {
-        let newAppearance = Appearance(icon: icon, title: title, detail: detail, status: status, toolTip: toolTip, showsEjectButton: isEjectable)
+    func update(icon: NSUIImage?, iconColor: NSUIColor? = nil, title: String, detail: String = "", status: ReportRowStatus = .none, toolTip: String? = nil, isCancellable: Bool = false, isInProgress: Bool = false, isEjectable: Bool = false) {
+        let newAppearance = Appearance(icon: icon, iconColor: iconColor, title: title, detail: detail, status: status, toolTip: toolTip, showsEjectButton: isEjectable)
         if appearance != newAppearance {
             appearance = newAppearance
         }

@@ -73,10 +73,6 @@ final class ContentImageViewController: BaseViewController<ContentImageViewModel
         summaryStackView.setCustomSpacing(12, after: pathLabel)
         summaryStackView.setCustomSpacing(16, after: objectCountsLabel)
 
-        iconView.do {
-            $0.contentTintColor = .tertiaryLabelColor
-        }
-
         titleLabel.do {
             $0.font = .systemFont(ofSize: 20, weight: .regular)
             $0.textColor = .labelColor
@@ -116,8 +112,9 @@ final class ContentImageViewController: BaseViewController<ContentImageViewModel
     override func setupBindings(for viewModel: ContentImageViewModel) {
         super.setupBindings(for: viewModel)
 
-        let imageIcon = RuntimeImageKind(ofImageAt: viewModel.imagePath).icon
-        iconView.image = imageIcon.withSymbolConfiguration(.init(pointSize: 40, weight: .light))
+        let imageKind = RuntimeImageKind(ofImageAt: viewModel.imagePath)
+        iconView.image = imageKind.icon.withSymbolConfiguration(.init(pointSize: 40, weight: .light))
+        iconView.contentTintColor = imageKind.iconColor
         titleLabel.stringValue = viewModel.imageName
         pathLabel.stringValue = viewModel.imagePath
 

@@ -86,7 +86,9 @@ final class FindResultCellView: TableCellView {
     func configure(with appearance: FindResultCellAppearance) {
         iconImageView.image = appearance.icon
         iconImageView.alphaValue = appearance.iconAlpha
-        iconImageView.contentTintColor = appearance.isSecondary ? FindResultCellStyle.unresolvedIconTintColor : FindResultCellStyle.iconTintColor
+        iconImageView.contentTintColor = appearance.isSecondary
+            ? FindResultCellStyle.unresolvedIconTintColor
+            : appearance.iconColor ?? FindResultCellStyle.iconTintColor
         titleLabel.attributedStringValue = appearance.title
         titleLabel.maximumNumberOfLines = appearance.allowsWrapping ? 2 : 1
         titleLabel.lineBreakMode = appearance.allowsWrapping ? .byWordWrapping : .byTruncatingTail

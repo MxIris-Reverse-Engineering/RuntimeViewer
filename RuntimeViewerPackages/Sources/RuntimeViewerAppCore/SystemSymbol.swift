@@ -10,7 +10,7 @@ import UIKit
 package enum SystemSymbol: String, CaseIterable, Sendable {
     // Image lists (`RuntimeImageKind`; the bundles' symbols are `CustomSymbol`s)
     case doc
-    case folder
+    case folderFill = "folder.fill"
 
     // Find results
     case textAlignleft = "text.alignleft"
