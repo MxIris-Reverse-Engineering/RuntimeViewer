@@ -18,8 +18,8 @@ package enum CustomSymbol: String, CaseIterable, Sendable {
     /// Xcode's `doc-bundle.fill`, the symbol Xcode draws a bundle with.
     case bundle = "bundle.fill"
 
-    /// Xcode's `app`.
-    case application = "app"
+    /// Xcode's `doc-app.fill`, the symbol Xcode draws an app with.
+    case application = "app.fill"
 
     /// Xcode's `doc-kext`.
     case kernelExtension = "kext"

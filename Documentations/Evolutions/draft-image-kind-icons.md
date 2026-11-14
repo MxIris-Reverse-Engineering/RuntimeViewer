@@ -8,26 +8,28 @@
 
 各处列出镜像时用的图标原来是几个随手挑的系统符号：framework 是 `latch.2.case`，bundle 是
 `shippingbox`，App 与内核扩展没有自己的图标，判定写了三份（镜像树按节点名、Find 与 Report 只认
-`.framework/`）。改为照 Xcode：framework、bundle、App、内核扩展用从 Xcode 提取的符号，文件夹用 Xcode
-的 `folder.fill`，镜像文件本身仍用系统的 `doc`；种类只在一处判定，侧栏、路径栏、Find、Report、批量导出、
-标签、历史、镜像页与标题都走它。图标的颜色也照 Xcode 按种类定、各处一样：文件夹、bundle 与内核扩展是
-Xcode 自己的浅蓝，framework 系统黄，App 次要文字的灰，镜像文件用强调色。
+`.framework/`）。改为照 Xcode：framework、bundle、App、内核扩展用从 Xcode 提取的符号，文件夹与 dylib 用
+Xcode 的 `folder.fill` 与 `building.columns.fill`，其他二进制用系统的 `doc.fill`；种类只在一处判定，侧栏、
+路径栏、Find、Report、批量导出、标签、历史、镜像页与标题都走它。图标的颜色也照 Xcode 按种类定、各处一样：
+文件夹、bundle 与内核扩展是 Xcode 自己的浅蓝，framework 系统黄，dylib Xcode 的钢灰，App 次要文字的灰，其他
+二进制用强调色。
 
 ## 方案
 
-**种类**：`RuntimeImageKind`（RuntimeViewerAppCore）六种——`folder`、`framework`、`bundle`
+**种类**：`RuntimeImageKind`（RuntimeViewerAppCore）七种——`folder`、`framework`、`bundle`
 （`.bundle`、`.plugin`、`.xpc`、`.appex`）、`application`（`.app`）、`kernelExtension`（`.kext`）、
-`image`。两种判法：
+`dynamicLibrary`（`.dylib`）、`image`（其他二进制）。两种判法：
 
-- 镜像树的节点按自己的名字：扩展名是上面几种之一就是那一种，否则叶子是 `image`、其余是 `folder`。
-  所以树里 `AppKit.framework` 是 framework，它下面的 `AppKit` 是镜像文件。
-- 只列一个镜像的地方（Find、Report、标签、历史、镜像页）没有树，按路径上离它最近的那个包：
-  `RuntimeImageKind(ofImageAt:)`，AppKit 显示 framework，`/usr/lib/libobjc.A.dylib` 显示镜像。
+- 镜像树的节点按自己的名字：扩展名是几种包之一就是那一种，否则叶子按文件名是 `dynamicLibrary` 或
+  `image`（`RuntimeImageKind(imageFileAt:)`）、其余是 `folder`。所以树里 `AppKit.framework` 是
+  framework，它下面的 `AppKit` 是其他二进制，`libobjc.A.dylib` 是 dylib。
+- 只列一个镜像的地方（Find、Report、标签、历史、镜像页）没有树，按路径上离它最近的那个包，不在任何包里
+  才按文件本身：`RuntimeImageKind(ofImageAt:)`，AppKit 显示 framework，`/usr/lib/libobjc.A.dylib` 显示 dylib。
   标签的 `TabBarItem.Icon.image` 因此带上种类。
 
 **符号**：framework、bundle、App、内核扩展四个符号放进 RuntimeViewerAppCore 自己的 asset catalog
 （`Resources/Symbols.xcassets`，经 `Bundle.module` 取，`CustomSymbol` 列出全部），因为它不再依赖带资源的
-UI 库。源文件是 Xcode 的 `doc-framework`、`doc-bundle.fill`、`app`、`doc-kext` 导出的 SF Symbols 7 模板，**降成
+UI 库。源文件是 Xcode 的 `doc-framework`、`doc-bundle.fill`、`doc-app.fill`、`doc-kext` 导出的 SF Symbols 7 模板，**降成
 v6 模板放进来**：v7 比 v6 只多一条绘制动画的属性（`-sfsymbols-draw-reverses-motion-groups`），而 v6 是
 macOS 15 那一代的模板、App 里已有的 `inject` 符号就是 v6；按 macOS 15 编出的两种 asset catalog 结构一致，
 只差模板版本号。Find 的文件、头文件后缀、submodule 等其余符号这次不用。
@@ -42,8 +44,9 @@ macOS 15 那一代的模板、App 里已有的 `inject` 符号就是 v6；按 ma
 | bundle | `com.apple.bundle` | `doc-bundle.fill` | `doc-lightBlue` |
 | 内核扩展 | `com.apple.kernel-extension` | `doc-kext` | `doc-lightBlue` |
 | App | 产品类型 `com.apple.product-type.application` | `doc-app.fill` | 没有 `tint`，Xcode 画成 `secondaryLabelColor` |
+| dylib | `com.apple.mach-o-dylib` | `building.columns.fill` | `doc-steel`：Display P3 98, 127, 147，深色 sRGB 183, 213, 235，不是系统色 |
 
-镜像文件不照 Xcode（它给 dylib 用钢灰色的 `building.columns.fill`），保持 `doc` 与强调色。Xcode 的分组
+其他二进制 Xcode 没有专门的图标，用系统的 `doc.fill` 与强调色。Xcode 的分组
 （`com.apple.dt.xcode.nav-group`）是灰色文件夹，镜像树的文件夹是磁盘上真的目录，对应的是 `public.folder`。
 
 两种画法，选中的行都和 Xcode 一样变白：
@@ -58,7 +61,7 @@ macOS 15 那一代的模板、App 里已有的 `inject` 符号就是 v6；按 ma
 来源（My Mac）的图标与对象图标不变。**标题图标**也用 `iconColor`（原来 bundle 棕色、其余蓝色）。
 
 **没问就定的**：DriverKit 的 `.dext` 不算内核扩展，按文件夹显示；路径栏里不在树上的镜像
-（直接挂在来源下的那种）与树里的镜像文件一样用 `doc`，不按所在的包——路径栏的形状就是那棵树。
+（直接挂在来源下的那种）与树里的文件一样按自己的文件名，不按所在的包——路径栏的形状就是那棵树。
 
 **测试**：`RuntimeImageKindTests` 用已知路径与节点名逐种核对两种判法，用上表的数值核对每种的颜色（浅色、
 深色两种外观），核对 `coloredIcon` 画出来是那个颜色、镜像树的行带上节点种类的颜色；`CustomSymbolTests` 载入
@@ -81,3 +84,4 @@ target 共用。
 | 2026-11-14 | App 用 Xcode 画它的次要文字灰，不用强调色 | 用户的选择。Xcode 没给 App 图标配颜色，没有颜色名时它取 `secondaryLabelColor` |
 | 2026-11-14 | bundle 的符号换成实心的 `doc-bundle.fill` | 用户的选择：Xcode 给 bundle 用的就是它 |
 | 2026-11-14 | 镜像文件不照 Xcode，保持 `doc` 与强调色 | 用户这次只点名了文件夹、framework、bundle、App；镜像文件此前定的是 `doc`（见上） |
+| 2026-11-14 | dylib 单列一种，用 Xcode 的 `building.columns.fill` 与钢灰；App 换成实心的 `doc-app.fill`；其他二进制用 `doc.fill` | 用户的要求，推翻上一行「镜像文件保持 `doc`」：dylib 照 Xcode 的 library 图标与颜色，App 与其他二进制都用实心版。其他二进制 Xcode 没有专门的图标，颜色保持强调色 |

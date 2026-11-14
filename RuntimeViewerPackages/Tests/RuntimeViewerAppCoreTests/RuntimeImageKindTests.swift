@@ -25,7 +25,7 @@ struct RuntimeImageKindTests {
             ("AppKit", .image),
             ("Frameworks", .folder),
             ("usr", .folder),
-            ("libobjc.A.dylib", .image),
+            ("libobjc.A.dylib", .dynamicLibrary),
             ("Safari.app", .application),
             ("IOUSBHostFamily.kext", .kernelExtension),
             ("AGXMetalG13X.bundle", .bundle),
@@ -44,8 +44,9 @@ struct RuntimeImageKindTests {
         arguments: [
             ("/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", RuntimeImageKind.framework),
             ("/System/Library/Frameworks/Foundation.framework/Foundation", .framework),
-            ("/usr/lib/libobjc.A.dylib", .image),
-            ("/usr/lib/swift/libswiftCore.dylib", .image),
+            ("/usr/lib/libobjc.A.dylib", .dynamicLibrary),
+            ("/usr/lib/swift/libswiftCore.dylib", .dynamicLibrary),
+            ("/usr/libexec/rapportd", .image),
             ("/Applications/Safari.app/Contents/MacOS/Safari", .application),
             ("/System/Library/Extensions/IOUSBHostFamily.kext/Contents/MacOS/IOUSBHostFamily", .kernelExtension),
             ("/System/Library/Extensions/AGXMetalG13X.bundle/Contents/MacOS/AGXMetalG13X", .bundle),
@@ -58,6 +59,19 @@ struct RuntimeImageKindTests {
     )
     func imageKind(imagePath: String, expectedKind: RuntimeImageKind) {
         #expect(RuntimeImageKind(ofImageAt: imagePath) == expectedKind)
+    }
+
+    @Test(
+        "a file of a tree is what its own name says, whatever it is part of",
+        arguments: [
+            ("/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", RuntimeImageKind.image),
+            ("/usr/lib/libobjc.A.dylib", .dynamicLibrary),
+            ("/Applications/Safari.app/Contents/Frameworks/libSafariShared.dylib", .dynamicLibrary),
+            ("/usr/libexec/rapportd", .image),
+        ]
+    )
+    func imageFileKind(imagePath: String, expectedKind: RuntimeImageKind) {
+        #expect(RuntimeImageKind(imageFileAt: imagePath) == expectedKind)
     }
 
     @Test("an image named like a bundle is still an image: only directories make the bundle")
@@ -80,6 +94,14 @@ struct RuntimeImageKindTests {
             : NSColor(srgbRed: 70 / 255, green: 169 / 255, blue: 255 / 255, alpha: 1)
     }
 
+    /// Xcode's `doc-steel`, from the same catalog: Display P3 98, 127, 147 in the light appearance and
+    /// sRGB 183, 213, 235 in the dark. Not a system colour.
+    static let xcodeSteel = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 183 / 255, green: 213 / 255, blue: 235 / 255, alpha: 1)
+            : NSColor(displayP3Red: 98 / 255, green: 127 / 255, blue: 147 / 255, alpha: 1)
+    }
+
     @Test(
         "a kind's colour is the one Xcode draws that kind of file in, in the light and the dark appearance",
         arguments: [
@@ -90,7 +112,8 @@ struct RuntimeImageKindTests {
             (.framework, NSColor.systemYellow),
             // Xcode gives an app's icon no colour and draws it in this one.
             (.application, .secondaryLabelColor),
-            // Not Xcode's: an image file keeps the accent colour.
+            (.dynamicLibrary, RuntimeImageKindTests.xcodeSteel),
+            // Not Xcode's: any other image keeps the accent colour.
             (.image, .controlAccentColor),
         ]
     )

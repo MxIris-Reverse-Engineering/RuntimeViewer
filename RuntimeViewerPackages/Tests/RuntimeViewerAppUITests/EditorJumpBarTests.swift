@@ -136,7 +136,7 @@ struct EditorJumpBarTests {
 
     // MARK: - Icons
 
-    @Test("the tree's items are drawn in their kinds' colours: a folder, a framework and an image, listed or not")
+    @Test("the tree's items are drawn in their kinds' colours: a folder, a framework, a dynamic library and an image, listed or not")
     func treeIconColors() async throws {
         let engine = try await TestRuntimeEngine.shared()
         let (environment, store) = try await makeStore(on: engine)
@@ -157,9 +157,9 @@ struct EditorJumpBarTests {
         #expect(!(libFolderItem.pathComponentIcon?.isTemplate ?? true), "the path control draws a template image in the text colour")
         #expect(ImageColorSampling.isDrawn(libFolderItem.pathComponentIcon, in: RuntimeImageKind.folder.iconColor))
         #expect(ImageColorSampling.isDrawn(foundationFrameworkItem.pathComponentIcon, in: RuntimeImageKind.framework.iconColor))
-        #expect(ImageColorSampling.isDrawn(libobjcItem.pathComponentIcon, in: RuntimeImageKind.image.iconColor))
+        #expect(ImageColorSampling.isDrawn(libobjcItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor))
         #expect(ImageColorSampling.isDrawn(foundationItem.pathComponentIcon, in: RuntimeImageKind.image.iconColor), "the image inside the framework is an image")
-        #expect(ImageColorSampling.isDrawn(unlistedItem.pathComponentIcon, in: RuntimeImageKind.image.iconColor))
+        #expect(ImageColorSampling.isDrawn(unlistedItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor), "an image under the engine is what its own name says")
     }
 
     @Test("an image that is not indexed gets its objects once the engine reports it indexed, never before")

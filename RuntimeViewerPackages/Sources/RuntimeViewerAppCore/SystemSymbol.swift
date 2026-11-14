@@ -9,7 +9,8 @@ import UIKit
 /// loads every case, which is what SFSymbols' typed names used to check at compile time.
 package enum SystemSymbol: String, CaseIterable, Sendable {
     // Image lists (`RuntimeImageKind`; the bundles' symbols are `CustomSymbol`s)
-    case doc
+    case docFill = "doc.fill"
+    case buildingColumnsFill = "building.columns.fill"
     case folderFill = "folder.fill"
 
     // Find results

@@ -70,8 +70,8 @@ struct ReportViewModelTests {
         let corpusRow = try #require(Self.finishedCorpusRow(titled: "libobjc.A.dylib", in: nodes))
         #expect(nodes.last?.children.contains { $0.identifier == corpusRow.identifier } == true)
         // An image's row is drawn in the colour of what the image is part of; a kind of work keeps the navigator's.
-        #expect(batchRow.children.first?.cellViewModel.appearance.iconColor == RuntimeImageKind.image.iconColor)
-        #expect(corpusRow.cellViewModel.appearance.iconColor == RuntimeImageKind.image.iconColor)
+        #expect(batchRow.children.first?.cellViewModel.appearance.iconColor == RuntimeImageKind.dynamicLibrary.iconColor)
+        #expect(corpusRow.cellViewModel.appearance.iconColor == RuntimeImageKind.dynamicLibrary.iconColor)
         #expect(nodes.first?.cellViewModel.appearance.iconColor == nil)
         await engine.stop()
     }

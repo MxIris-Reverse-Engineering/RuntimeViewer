@@ -261,7 +261,7 @@ public final class EditorJumpBarItemStore {
             content: .image(path: imagePath, node: nil),
             name: NavigationEntry.imageName(ofImageAt: imagePath),
             // As an image of the tree: the jump bar shows the tree, not what the image is part of.
-            icon: RuntimeImageKind.image.coloredIcon,
+            icon: RuntimeImageKind(imageFileAt: imagePath).coloredIcon,
             parentItem: sourceItem,
             store: self
         )

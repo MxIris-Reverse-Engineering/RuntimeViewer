@@ -209,8 +209,8 @@ struct FindCrossReferenceTreeTests {
 
         #expect(frameworkImageRow.icon === RuntimeImageKind.framework.icon)
         #expect(frameworkImageRow.iconColor == RuntimeImageKind.framework.iconColor)
-        #expect(plainImageRow.icon === RuntimeImageKind.image.icon)
-        #expect(plainImageRow.iconColor == RuntimeImageKind.image.iconColor)
+        #expect(plainImageRow.icon === RuntimeImageKind.dynamicLibrary.icon)
+        #expect(plainImageRow.iconColor == RuntimeImageKind.dynamicLibrary.iconColor)
         #expect(appearance(of: .unnamedFunctions(count: 3)).iconColor == nil)
     }
 
