@@ -73,7 +73,7 @@ nearest to it on its path). Its colour is the kind's too, Xcode's for that kind 
 a template draws `icon` with `contentTintColor` set to `iconColor`, which a selected row turns white as Xcode's
 navigator does, and a place that draws an image as it is — the jump bar and its menus, the editor's tabs, the
 history menu — takes `coloredIcon`. Never pick a colour for an image's icon anywhere else.
-Background: `Documentations/Evolutions/draft-image-kind-icons.md`.
+Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
 
 ## The rest of the UI layer
 

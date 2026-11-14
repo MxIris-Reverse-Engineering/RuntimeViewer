@@ -7,7 +7,7 @@ import UIKit
 import RuntimeViewerCore
 
 /// What a node of the image tree, or the image at a path, is — the one place every list of images
-/// decides which icon a row shows (proposal `draft-image-kind-icons`).
+/// decides which icon a row shows (proposal `image-kind-icons`).
 public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
     /// A directory that is none of the bundles below.
     case folder

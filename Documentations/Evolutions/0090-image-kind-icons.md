@@ -1,6 +1,6 @@
-# Draft - 镜像种类图标换成 Xcode 的符号与颜色
+# 0090 - 镜像种类图标换成 Xcode 的符号与颜色
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-14
 - **最后更新**: 2026-11-14
 
@@ -85,3 +85,5 @@ target 共用。
 | 2026-11-14 | bundle 的符号换成实心的 `doc-bundle.fill` | 用户的选择：Xcode 给 bundle 用的就是它 |
 | 2026-11-14 | 镜像文件不照 Xcode，保持 `doc` 与强调色 | 用户这次只点名了文件夹、framework、bundle、App；镜像文件此前定的是 `doc`（见上） |
 | 2026-11-14 | dylib 单列一种，用 Xcode 的 `building.columns.fill` 与钢灰；App 换成实心的 `doc-app.fill`；其他二进制用 `doc.fill` | 用户的要求，推翻上一行「镜像文件保持 `doc`」：dylib 照 Xcode 的 library 图标与颜色，App 与其他二进制都用实心版。其他二进制 Xcode 没有专门的图标，颜色保持强调色 |
+| 2026-11-14 | 侧栏镜像树的行收紧图标与标题的间距：图标离行首 2 pt，标题跟在图标右边 4 pt | 原来标题在图标右边 10 pt，换成更宽的实心符号后显得太空。先试过照 Xcode 项目导航器（`IDENavigatorDataCell`）把图标放进 16 pt 的槽、标题固定从 19 pt 开始，用户没有采用，改用自己调的这组值 |
+| 2026-11-14 | 实现完成，落地为 0090 | 用户在 App 里看过。不另写使用指南或实现说明：种类、符号与颜色都在 `RuntimeImageKind` 一处，各处该用 `icon` 还是 `coloredIcon` 已写在它的文档注释和 `RuntimeViewerPackages/Sources/AGENTS.md` 里。没有新术语。没做的验证：v6 符号没在 macOS 15 上实测（依据见上）；iOS 侧栏只加了一行着色，没编 iOS |

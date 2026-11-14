@@ -10,7 +10,7 @@ import UIKit
 ///
 /// The symbol sets are SF Symbols 7 templates downgraded to version 6, the version of the macOS 15 era
 /// the app still runs on: version 7 adds only a drawing animation property to them
-/// (proposal `draft-image-kind-icons`). Keep a new one at version 6 as well.
+/// (proposal `image-kind-icons`). Keep a new one at version 6 as well.
 package enum CustomSymbol: String, CaseIterable, Sendable {
     /// Xcode's `doc-framework`.
     case framework

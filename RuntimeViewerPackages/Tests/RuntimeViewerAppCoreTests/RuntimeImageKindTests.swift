@@ -4,7 +4,7 @@ import RuntimeViewerCore
 @testable import RuntimeViewerAppCore
 import RuntimeViewerAppTestingSupport
 
-/// The one place every list of images decides what an image is (proposal `draft-image-kind-icons`):
+/// The one place every list of images decides what an image is (proposal `image-kind-icons`):
 /// a node of the image tree by its own name, the image at a path by the bundle nearest to it — and
 /// the colour its icon is drawn in, Xcode's for that kind of file.
 @Suite("Image kinds")

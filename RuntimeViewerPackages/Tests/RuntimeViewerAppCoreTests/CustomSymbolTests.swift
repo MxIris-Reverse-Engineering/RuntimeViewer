@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import RuntimeViewerAppCore
 
-/// The symbols RuntimeViewerAppCore ships in its own asset catalog (proposal `draft-image-kind-icons`).
+/// The symbols RuntimeViewerAppCore ships in its own asset catalog (proposal `image-kind-icons`).
 /// They are named by string, so a misspelt name or a symbol set left out of the catalog is caught here.
 @Suite("Custom symbols")
 struct CustomSymbolTests {
