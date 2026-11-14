@@ -22,10 +22,10 @@
 		E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */; };
 		E9AB8550306F733800D32891 /* RuntimeViewerServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E97BF5C62F82C386006943C2 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9B10F050000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E050000000000000000 /* RuntimeViewerInjection */; };
-		E9C70F050000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E050000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9B10F060000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E060000000000000000 /* RuntimeViewerInjection */; };
-		E9C70F060000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E060000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9B10F070000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E070000000000000000 /* RuntimeViewerInjection */; };
+		E9C70F050000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E050000000000000000 /* RuntimeViewerCrossReferences */; };
+		E9C70F060000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E060000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9C70F070000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E070000000000000000 /* RuntimeViewerCrossReferences */; };
 /* End PBXBuildFile section */
 
@@ -50,6 +50,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = E994E2892F323A51009DD28A;
 			remoteInfo = RuntimeViewerMobileServer;
+		};
+		E9CC847E30A5E2E500093A68 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E9CA7A1B000000000000000B;
+			remoteInfo = RuntimeViewerSimulatorServer;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -202,6 +209,7 @@
 			children = (
 				E97BF5C42F82C386006943C2 /* RuntimeViewerServer.framework */,
 				E97BF5C62F82C386006943C2 /* RuntimeViewerServer.framework */,
+				E9CC847F30A5E2E500093A68 /* RuntimeViewerMobileServer.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -352,6 +360,13 @@
 			fileType = wrapper.framework;
 			path = RuntimeViewerServer.framework;
 			remoteRef = E97BF5C52F82C386006943C2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		E9CC847F30A5E2E500093A68 /* RuntimeViewerMobileServer.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = RuntimeViewerMobileServer.framework;
+			remoteRef = E9CC847E30A5E2E500093A68 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -511,6 +526,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D5Q73692VW;
@@ -581,6 +597,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D5Q73692VW;
@@ -877,21 +894,21 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
 		};
-		E9C70E050000000000000000 /* RuntimeViewerCrossReferences */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerCrossReferences;
-		};
 		E9B10E060000000000000000 /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
 		};
-		E9C70E060000000000000000 /* RuntimeViewerCrossReferences */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerCrossReferences;
-		};
 		E9B10E070000000000000000 /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
+		};
+		E9C70E050000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
+		};
+		E9C70E060000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
 		};
 		E9C70E070000000000000000 /* RuntimeViewerCrossReferences */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -10,15 +10,15 @@
 		E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */; };
 		E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E994E3C72F325593009DD28A /* RuntimeViewerCore */; };
 		E9B10F080000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E080000000000000000 /* RuntimeViewerInjection */; };
-		E9C70F080000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E080000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9B10F090000000000000000 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9B10E090000000000000000 /* RuntimeViewerInjection */; };
+		E9C70F080000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E080000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9C70F090000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E090000000000000000 /* RuntimeViewerCrossReferences */; };
-		E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */; };
-		E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */; };
+		E9C70F0A0000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E0A0000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9CA7A1B000000000000000F /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000C /* RuntimeViewerCore */; };
 		E9CA7A1B0000000000000010 /* RuntimeViewerInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000D /* RuntimeViewerInjection */; };
-		E9C70F0A0000000000000000 /* RuntimeViewerCrossReferences in Frameworks */ = {isa = PBXBuildFile; productRef = E9C70E0A0000000000000000 /* RuntimeViewerCrossReferences */; };
 		E9CA7A1B0000000000000011 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CA7A1B000000000000000E /* RuntimeViewerUtilities */; };
+		E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */; };
+		E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,13 +26,13 @@
 		E978F92B2F1C9900004C09B4 /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
 		E994E2962F323A51009DD28A /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E994E3CB2F3257B6009DD28A /* RuntimeViewerCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = RuntimeViewerCore; path = ../RuntimeViewerCore; sourceTree = SOURCE_ROOT; };
-		E9CA7A1B000000000000000B /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerMobileServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9C0F16A0000000000000001 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		E9C0F16A0000000000000002 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		E9C0F16A0000000000000003 /* Debug-arm64e.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Debug-arm64e.xcconfig"; sourceTree = "<group>"; };
 		E9C0F16A0000000000000004 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		E9C0F16A0000000000000005 /* Distribution.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Distribution.xcconfig; sourceTree = "<group>"; };
 		E9C0F16A0000000000000006 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		E9CA7A1B000000000000000B /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerMobileServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -367,6 +367,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -491,6 +492,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -561,6 +563,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -756,6 +759,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -947,25 +951,21 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
 		};
-		E9C70E080000000000000000 /* RuntimeViewerCrossReferences */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerCrossReferences;
-		};
 		E9B10E090000000000000000 /* RuntimeViewerInjection */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
+		};
+		E9C70E080000000000000000 /* RuntimeViewerCrossReferences */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCrossReferences;
 		};
 		E9C70E090000000000000000 /* RuntimeViewerCrossReferences */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCrossReferences;
 		};
-		E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */ = {
+		E9C70E0A0000000000000000 /* RuntimeViewerCrossReferences */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerUtilities;
-		};
-		E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerUtilities;
+			productName = RuntimeViewerCrossReferences;
 		};
 		E9CA7A1B000000000000000C /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -975,11 +975,15 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerInjection;
 		};
-		E9C70E0A0000000000000000 /* RuntimeViewerCrossReferences */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerCrossReferences;
-		};
 		E9CA7A1B000000000000000E /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
+		};
+		E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
+		};
+		E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUtilities;
 		};

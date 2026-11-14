@@ -1174,6 +1174,7 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKitProject/Debug.xcconfig;
 			buildSettings = {
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				DEVELOPMENT_TEAM = D5Q73692VW;
 			};
 			name = Debug;
@@ -1183,6 +1184,7 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKitProject/Release.xcconfig;
 			buildSettings = {
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				DEVELOPMENT_TEAM = D5Q73692VW;
 			};
 			name = Release;
@@ -1296,6 +1298,7 @@
 			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
 			baseConfigurationReferenceRelativePath = "RuntimeViewerUsingAppKitProject/Debug-arm64e.xcconfig";
 			buildSettings = {
+				COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS = YES;
 				DEVELOPMENT_TEAM = D5Q73692VW;
 			};
 			name = "Debug-arm64e";
