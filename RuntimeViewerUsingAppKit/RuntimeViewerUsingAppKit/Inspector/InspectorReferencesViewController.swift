@@ -278,6 +278,15 @@ extension InspectorReferencesViewController {
         /// Between the title and the loading placeholder.
         private static let placeholderSpacing: CGFloat = 8
 
+        /// The edges that close the content in on the trailing and bottom sides: just below
+        /// required. `SectionsView` gives a section its frame in `layout()`, so a section is still
+        /// 0×0 when the page goes into the window, while its content needs at least 32 points of
+        /// width (a placeholder row) and 6 of height (the gap under the title). At required, the
+        /// zero frame and the content broke each other's constraints, a burst of "Conflicting
+        /// constraints detected" every time the page was first shown; below it, the content
+        /// overruns the section until its frame arrives.
+        private static let closingEdgePriority = NSLayoutConstraint.Priority(999)
+
         /// A row clicked, as the model it shows.
         var rowClicked: Signal<InspectorReferenceCellViewModel> {
             tableView.rx.itemClicked()
@@ -300,23 +309,26 @@ extension InspectorReferencesViewController {
             }
 
             titleRow.snp.makeConstraints { make in
-                make.top.leading.trailing.equalToSuperview()
+                make.top.leading.equalToSuperview()
+                make.trailing.equalToSuperview().priority(Self.closingEdgePriority.rawValue)
             }
 
             scrollView.snp.makeConstraints { make in
                 make.top.equalTo(titleRow.snp.bottom).offset(Self.contentSpacing)
-                make.leading.trailing.bottom.equalToSuperview()
+                make.leading.trailing.equalToSuperview()
+                make.bottom.equalToSuperview().priority(Self.closingEdgePriority.rawValue)
             }
 
             statusLabel.snp.makeConstraints { make in
                 make.top.equalTo(titleRow.snp.bottom).offset(Self.contentSpacing)
                 make.leading.trailing.equalToSuperview()
-                make.bottom.lessThanOrEqualToSuperview()
+                make.bottom.lessThanOrEqualToSuperview().priority(Self.closingEdgePriority.rawValue)
             }
 
             skeletonPlaceholderView.snp.makeConstraints { make in
                 make.top.equalTo(titleRow.snp.bottom).offset(Self.placeholderSpacing)
-                make.leading.trailing.equalToSuperview()
+                make.leading.equalToSuperview()
+                make.trailing.equalToSuperview().priority(Self.closingEdgePriority.rawValue)
                 make.bottom.lessThanOrEqualToSuperview().priority(.high)
             }
 
