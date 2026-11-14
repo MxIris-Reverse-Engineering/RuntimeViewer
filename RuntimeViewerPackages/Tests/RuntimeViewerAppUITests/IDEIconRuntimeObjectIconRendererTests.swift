@@ -5,7 +5,7 @@ import RuntimeViewerAppCore
 @testable import RuntimeViewerAppUI
 
 /// RuntimeViewerAppUI draws the glyphs RuntimeViewerAppCore picks with UIFoundation's `IDEIcon`
-/// (proposal `draft-app-core-ui-split`): each of the glyph's colours and styles must come out as
+/// (proposal `app-core-ui-split`): each of the glyph's colours and styles must come out as
 /// `IDEIcon` draws the one of the same name. The glyphs themselves are RuntimeViewerAppCore's,
 /// tested in `RuntimeObjectIconGlyphTests`.
 ///

@@ -4,7 +4,7 @@ import Testing
 import RuntimeViewerAppTestingSupport
 
 /// The find pattern rules RuntimeViewerAppCore rewrote from AppKitPlus (`NSFindPattern.m`, proposal
-/// `draft-app-core-ui-split`): the regular expression a term makes, the capture groups counted, the text escaped, and
+/// `app-core-ui-split`): the regular expression a term makes, the capture groups counted, the text escaped, and
 /// the property list. The cases are AppKitPlus's own (`AppKitPlusTests/Filter Field/NSFindPatternTests.m`, 0.21.0) for
 /// what was rewritten; `FindPatternParityTests` runs both implementations on the same input.
 @Suite("FindPattern")

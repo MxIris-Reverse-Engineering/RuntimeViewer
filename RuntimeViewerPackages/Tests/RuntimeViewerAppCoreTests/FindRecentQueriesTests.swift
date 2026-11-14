@@ -85,7 +85,7 @@ struct FindRecentQueriesTests {
     private static let storedTab = #"{"NSFindPatternDisplayStringKey":"Tab","NSFindPatternRegularExpressionKey":"\t","NSFindPatternTokenAllowsBackreferencesKey":false,"NSFindPatternTokenIsNegationKey":false,"NSFindPatternTokenReplacementStringKey":"\t","NSFindPatternTokenStringKey":"→","NSFindPatternTokenUniqueIDKey":"9F8E7D6C-5B4A-4392-8170-6F5E4D3C2B75"}"#
     private static let storedNonASCII = #"{"NSFindPatternDisplayStringKey":"Non-ASCII Characters","NSFindPatternRegularExpressionKey":"[^\\00-\\x7E]+","NSFindPatternTokenAllowsBackreferencesKey":true,"NSFindPatternTokenIsNegationKey":true,"NSFindPatternTokenStringKey":"ASCII","NSFindPatternTokenUniqueIDKey":"1E2D3C4B-5A69-4788-9A0B-1C2D3E4F5A86"}"#
 
-    /// `findRecentQueriesByScope.json` as the version before the proposal `draft-app-core-ui-split` wrote it, when
+    /// `findRecentQueriesByScope.json` as the version before the proposal `app-core-ui-split` wrote it, when
     /// `FindQueryTerm` held AppKitPlus's `NSFindPatternComponents`: a backreference, text that is regular expression
     /// syntax with a group of its own, a token without backreferences, a replacement string, a negation, and a query
     /// without patterns.

@@ -4,7 +4,7 @@ import RuntimeViewerUI
 @testable import RuntimeViewerAppCore
 
 /// `NSAttributedString(rowText:fontSize:color:)` replaced UIFoundation's attributed string builder in
-/// the rows' cell view models (proposal `draft-app-core-ui-split`): a row's title has to come out
+/// the rows' cell view models (proposal `app-core-ui-split`): a row's title has to come out
 /// attribute for attribute as the builder made it.
 @Suite("Row text")
 struct RowTextAttributedStringTests {

@@ -3,7 +3,7 @@ import Testing
 @testable import RuntimeViewerAppCore
 
 /// The system symbols RuntimeViewerAppCore draws. They are named by string since the module stopped
-/// depending on SFSymbols (proposal `draft-app-core-ui-split`), so a misspelt name is caught here
+/// depending on SFSymbols (proposal `app-core-ui-split`), so a misspelt name is caught here
 /// rather than by SFSymbols' typed cases at compile time.
 @Suite("System symbols")
 struct SystemSymbolTests {

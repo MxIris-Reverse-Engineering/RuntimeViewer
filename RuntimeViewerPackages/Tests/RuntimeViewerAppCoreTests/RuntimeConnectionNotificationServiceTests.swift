@@ -7,7 +7,7 @@ import RuntimeViewerCore
 @testable import RuntimeViewerSettings
 
 /// Which notifications the connection events turn into, read off a notification center of the test's
-/// own (`UserNotificationCenterClient`, proposal `draft-app-core-ui-split`): the system's needs an
+/// own (`UserNotificationCenterClient`, proposal `app-core-ui-split`): the system's needs an
 /// application bundle behind the process, and a delivered notification would reach the developer's
 /// screen.
 @Suite("Connection notifications")

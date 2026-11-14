@@ -3,7 +3,7 @@
 How to build and run these suites: the root `AGENTS.md`, *Testing*.
 
 The application layer has two test targets and a library they share
-(`Documentations/Evolutions/draft-app-core-ui-split.md`):
+(`Documentations/Evolutions/0091-app-core-ui-split.md`):
 
 - **`RuntimeViewerAppCoreTests`** tests `RuntimeViewerAppCore` with nothing of the UI layer linked: no
   `RuntimeViewerAppUI`, `RuntimeViewerUI`, AppKitPlus or UIFoundation. Every ViewModel in

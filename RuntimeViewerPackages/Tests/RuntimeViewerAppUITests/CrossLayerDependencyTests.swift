@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 @testable import RuntimeViewerAppUI
 
 /// The dependencies RuntimeViewerAppCore declares and RuntimeViewerAppUI implements (proposal
-/// `draft-app-core-ui-split`): AppCore gives each key its test value, AppUI its live value.
+/// `app-core-ui-split`): AppCore gives each key its test value, AppUI its live value.
 @Suite("Dependencies declared in AppCore, implemented in AppUI")
 struct CrossLayerDependencyTests {
     /// Without these conformances a live run would find no value for the key and stop.

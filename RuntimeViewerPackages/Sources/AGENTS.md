@@ -3,7 +3,7 @@
 ## The application layer: RuntimeViewerAppCore, RuntimeViewerAppUI and the facade
 
 The apps' application layer is two targets and a facade
-(`Documentations/Evolutions/draft-app-core-ui-split.md`):
+(`Documentations/Evolutions/0091-app-core-ui-split.md`):
 
 - **`RuntimeViewerAppCore/`** holds the ViewModels, cell ViewModels, routes, `DocumentState` and the
   application logic. **Everything in it can be built and driven in a unit test, and no UI component

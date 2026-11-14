@@ -1,13 +1,13 @@
-# Draft - 把 RuntimeViewerApplication 拆成 AppCore 与 AppUI
+# 0091 - 把 RuntimeViewerApplication 拆成 AppCore 与 AppUI
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-13
 - **最后更新**: 2026-11-14
 - **所属愿景**: 无
 - **关联提案**: [0016](0016-application-viewmodel-tests.md)（ViewModel 测试覆盖）、[0035](0035-engine-management-module.md)（引擎管理下沉为无 UI 模块）、[0048](0048-routes-carry-no-views.md)（Route 不携带视图）、[0073](0073-core-source-layout.md)（Core 源码按功能分目录，只搬家）
-- **实现分支 / PR**: `feature/app-core-ui-split`（worktree `.worktrees/RuntimeViewer-AppCoreUISplit`）
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/app-core-ui-split`（从 `next` 切，四步一次并回 `next`）
+- **配套文档**: 无单独的实现说明或使用指南（判断见决策日志）。规则在 [`RuntimeViewerPackages/Sources/AGENTS.md`](../../RuntimeViewerPackages/Sources/AGENTS.md) 与 [`RuntimeViewerPackages/Tests/AGENTS.md`](../../RuntimeViewerPackages/Tests/AGENTS.md)
 
 ## 摘要
 
@@ -23,7 +23,7 @@ AppCore 不依赖任何 UI 库：本仓库的 `RuntimeViewerUI`、`RuntimeViewer
 - Xcode 风格字母图标的绘制，经依赖注入交给 AppUI。
 - `RuntimeViewerArchitectures` 里驱动 AppKitPlus 导航的转场挪到 AppUI。
 
-AppCore 要用、但实现只能放在 AppUI 的服务，按 swift-dependencies 的「接口与实现分开」写法接入。`RuntimeViewerApplication` 保留下来，只做再导出的门面，两个 App 的 import 和 Xcode 工程都不用改。分界规则写进 AGENTS.md，再由一个跟着包测试一起跑的检查守住。整件事分四次合进 `next`，用户看不到任何变化。
+AppCore 要用、但实现只能放在 AppUI 的服务，按 swift-dependencies 的「接口与实现分开」写法接入。`RuntimeViewerApplication` 保留下来，只做再导出的门面，两个 App 的 import 和 Xcode 工程都不用改。分界规则写进 AGENTS.md，再由一个跟着包测试一起跑的检查守住。整件事分四步完成、一次合进 `next`，用户看不到任何变化。
 
 ## 动机
 
@@ -177,9 +177,9 @@ AppCore 要用、但实现只能放在 AppUI 的服务有三个：
 - `RuntimeViewerApplication` 只剩一个文件，内容是两行 `@_exported import`。product 名不变，所以两个 App 的 import、两个 Xcode 工程和 Tuist 的 App 工程描述都不用动。
 - MCP bridge 改成直接依赖 `RuntimeViewerAppCore`：它只用 `DocumentState`，不该经门面带上 AppUI。
 
-### 分四次合进 `next`
+### 分四步落地
 
-每一步都能单独构建、测试全绿，各自更新文档与 Tuist 描述，详见「落地步骤」。
+每一步都能单独构建、测试全绿，各自更新文档与 Tuist 描述，在功能分支上各是一个提交，详见「落地步骤」。原定每一步单独合进 `next`；实际四步一起经用户看过，一次合进（见决策日志）。
 
 1. 建 target 与门面，把 UI 胶水搬进 AppUI。
 2. 接口与实现分开，AppCore 不再依赖视图库、UIFoundation 与 SFSymbols。
@@ -710,7 +710,7 @@ extension FindQueryTerm {
 
 ## 落地步骤
 
-**第一步：建 target 与门面，把 UI 胶水搬进 AppUI**（✅ 已完成。合进 `next` 一次，提案在这次分配编号，状态改为 In Progress）
+**第一步：建 target 与门面，把 UI 胶水搬进 AppUI**（✅ 已完成）
 
 1. `Package.swift`：新增 `RuntimeViewerAppCore`、`RuntimeViewerAppUI`，把 `RuntimeViewerApplication` 改成门面，新增 product `RuntimeViewerAppCore`。AppCore 暂时保留现在 Application 的全部依赖（第二步、第三步逐步去掉），旁边加注释说明这是过渡。
 2. 用 `git mv` 把 10 个文件搬进 `Sources/RuntimeViewerAppUI/`，其余文件按原子目录搬进 `Sources/RuntimeViewerAppCore/`；把 `FindResultsPresentation.apply(to:)` 拆到 AppUI 的扩展里。AppUI 要用的 AppCore 成员改成 `package`。
@@ -722,7 +722,7 @@ extension FindQueryTerm {
    - 包测试全绿，`RuntimeViewerMCP` 的测试全绿；
    - `./TuistScript.sh check` 通过。
 
-**第二步：接口与实现分开，AppCore 不再依赖视图库、UIFoundation 与 SFSymbols**（✅ 已完成，截图对照留给用户目视验收。合进 `next` 一次）
+**第二步：接口与实现分开，AppCore 不再依赖视图库、UIFoundation 与 SFSymbols**（✅ 已完成，截图对照留给用户目视验收）
 
 1. 三个跨层服务：
    - `appRouter`：`AppRoute` 与接口留在 AppCore，`AppCoordinator` 与 `liveValue` 搬进 AppUI。
@@ -734,7 +734,7 @@ extension FindQueryTerm {
 5. 根 `AGENTS.md` 写上依赖注入的例外。
 6. 验证同第一步，并逐一比对侧栏、Inspector、Find、Report 的图标与改动前一致（截图对照）。
 
-**第三步：AppCore 不再依赖 AppKitPlus**（✅ 已完成，手动查 Find 搜索与最近查询菜单留给用户。合进 `next` 一次）
+**第三步：AppCore 不再依赖 AppKitPlus**（✅ 已完成，手动查 Find 搜索与最近查询菜单留给用户）
 
 1. `FindQueryTerm` 与 `FindPattern` 改成 AppCore 自己的模型。数捕获组、转义、拼接与属性表读写照 `NSFindPattern.m` 用 Swift 重写；照搬 AppKitPlus 的 25 个测试，再加最近查询存盘样本的读回测试。
 2. AppUI 里加上与 `NSFindPatternComponents` 的互转；`FindRecentQueries.attributedTitle(for:font:)` 搬进 AppUI；加 `FindPatternParityTests`。
@@ -742,7 +742,7 @@ extension FindQueryTerm {
 4. 更新 `RuntimeViewerUsingAppKit/AGENTS.md` 里 Find 查询框那一段。
 5. 验证同第一步，并手动查一次带 pattern 的 Find 搜索与最近查询菜单。
 
-**第四步：拆测试，加越界检查**（✅ 已完成。合进 `next` 一次，提案改为 Implemented）
+**第四步：拆测试，加越界检查**（✅ 已完成）
 
 1. 建 `RuntimeViewerAppCoreTests`、`RuntimeViewerAppUITests`、`RuntimeViewerAppTestingSupport`，按「详细设计 · 测试」搬文件，删掉 `RuntimeViewerApplicationTests`。
 2. 加 `AppCoreBoundaryTests`，与 `CrossPlatformSourceGuardTests` 共用扫描代码。
@@ -752,7 +752,7 @@ extension FindQueryTerm {
    - 故意在 AppCore 里写一个 `NSMenu()`、加一行 `import AppKitPlus`，确认检查会失败，再删掉；
    - Tuist check 通过。
 
-每一步都能单独构建通过。
+每一步都能单独构建通过。四步在功能分支上各是一个提交，一起经用户看过后一次合进 `next`，那时分配编号、改为 Implemented。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -801,3 +801,6 @@ extension FindQueryTerm {
 | 2026-11-14 | 第四步：AppCoreTests 真的不带 AppUI | Xcode 27 工具链下的 `swift test` 给每个测试 target 各编一个 bundle、各跑一个进程（与 Xcode 一样）。用 `nm` 核对过：`RuntimeViewerAppCoreTests.xctest` 里没有一个 AppUI 的符号，AppUITests 的有 1537 个；AppCoreTests 的 817 个测试就是在没有 AppUI 的进程里跑过的。因此在那里用 live 依赖上下文读三个跨层接口会被记成问题，这一条写进了 `Tests/AGENTS.md`。 |
 | 2026-11-14 | 第四步：验证 | macOS App、iOS App、`RuntimeViewerMCP` 的构建与 95 个测试都通过；`./TuistScript.sh check` 的名单、锁文件与 trait 各项都过了（生成里有两个测试 target 与支持库），只报既有的 `DEVELOPMENT_TEAM`。全量包测试 7 个 target 共 1263 个测试，其中 AppCoreTests 817 个、AppUITests 200 个；5 处失败：`InjectedDeviceEngineReconnectionTests` 两例、`ReportSharedByEngineTests` 与 `FindViewModelCrossReferenceTests`（Call Hierarchy）各一例是满载并行时的超时，单独重跑全部通过；`TitleActivityIndicatorTests` 是基线失败。按 target 名过滤（`--filter RuntimeViewerAppUITests`）只跑了 AppUI 的 200 个。越界检查的故意越界验证见上一行。 |
 | 2026-11-14 | 实现完成，待用户看过后收尾 | 四步都已提交在 `feature/app-core-ui-split`。文档已随各步同步：根 `AGENTS.md`、`RuntimeViewerPackages/Sources/AGENTS.md`、`RuntimeViewerPackages/Tests/AGENTS.md`、`RuntimeViewerUsingAppKit/AGENTS.md`、`CommunicationAndEngineArchitecture.md`、`Guides/TuistDevelopment.md`。没做的验证：第二步的图标截图对照、第三步手动查 Find 搜索与最近查询菜单，都要在 App 里操作界面，留给用户。收尾时要判断的两件事（配套文章、新术语）留给 `finish-feature`；`Documentations/README.md` 的索引行也留到那时补，常驻检出里那一行与别人未提交的改动混在一起。 |
+| 2026-11-14 | 收尾：一次合进 `next` | 原定四步各自合进 `next`，好让每一步单独验收。实际四步按顺序做完、各自构建与测试通过，用户一起看过后要求收尾；那时镜像种类图标（0090）的提交已经接在这次合并之后，改回四次合并就得重写它们，所以保留这一次合并。每一步仍是功能分支上单独的提交，可以单独回退。 |
+| 2026-11-14 | 收尾：配套文档与术语 | 不另写实现说明或使用指南。「落地步骤」末尾列的三个问题，本提案里都有答案：不追求链接级纯净见决策日志「边界标准」一行，引擎图标为什么有两个依赖见「详细设计 · 跨层服务的写法」，Find 的拼接规则为什么有两份见决策日志「去掉三个上游库」一行。改代码时要守的规则——什么进 AppCore、什么进 AppUI，AppKitPlus 改了 Find 规则要手工搬过来，跨层依赖怎么写——已经在 `RuntimeViewerPackages/Sources/AGENTS.md` 与根 `AGENTS.md` 里，越界检查失败时也会报出原因，再写一份只会重复。不登记新术语：AppCore、AppUI 是模块名，术语表不收模块名；门面是通用说法；跨层依赖与越界检查在用到它们的规则文件里就地说明。 |
+| 2026-11-14 | Implemented，落地为 0091 | 用户看过后要求收尾。0090 已被同在本地 `next`、先收尾的镜像种类图标取走，本提案取 0091。agent 没做的两项——第二步的图标截图对照、第三步在 App 里查 Find——交给了用户在 App 里看。推送前在接上镜像种类图标之后的最终代码上补跑：iOS App 构建通过；AppCoreTests 829 个、AppUITests 201 个测试里 3 处失败，`FindViewModelCrossReferenceTests` 的 Call Hierarchy 与 `BackgroundWorkProcessActivityTests` 各一例是满载并行时的超时，单独重跑通过，`TitleActivityIndicatorTests` 是基线失败。macOS App 由镜像种类图标那边在同一份代码上编过。 |

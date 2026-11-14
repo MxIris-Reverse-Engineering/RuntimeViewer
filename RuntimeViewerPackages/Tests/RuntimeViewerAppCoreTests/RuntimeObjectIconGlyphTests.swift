@@ -4,7 +4,7 @@ import RuntimeViewerCore
 @testable import RuntimeViewerAppCore
 
 /// RuntimeViewerAppCore picks each object's icon as a glyph — Xcode's letter and colour for the kind —
-/// and asks the `runtimeObjectIconRendering` dependency to draw it (proposal `draft-app-core-ui-split`).
+/// and asks the `runtimeObjectIconRendering` dependency to draw it (proposal `app-core-ui-split`).
 /// Here the dependency is its test value, which draws a blank image per glyph; that RuntimeViewerAppUI's
 /// renderer draws each glyph as UIFoundation's `IDEIcon` does is `IDEIconRuntimeObjectIconRendererTests`'.
 @Suite("Runtime object icon glyphs")

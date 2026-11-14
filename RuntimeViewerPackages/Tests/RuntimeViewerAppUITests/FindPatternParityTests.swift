@@ -7,7 +7,7 @@ import RuntimeViewerAppTestingSupport
 @testable import RuntimeViewerAppUI
 
 /// RuntimeViewerAppCore's copy of AppKitPlus's find pattern rules against AppKitPlus itself (proposal
-/// `draft-app-core-ui-split`): one property list read by both, and the regular expressions, text and property lists
+/// `app-core-ui-split`): one property list read by both, and the regular expressions, text and property lists
 /// they make compared. When an AppKitPlus update changes a rule, a case here fails; carry the change over to
 /// `FindQueryTerm`.
 @Suite("Find pattern parity with AppKitPlus")

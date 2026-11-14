@@ -3,7 +3,7 @@ import Testing
 
 /// RuntimeViewerAppCore can be built and driven in a unit test, no UI component appears in it, and it
 /// depends on no UI library (`RuntimeViewerPackages/Sources/AGENTS.md`; proposal
-/// `draft-app-core-ui-split`). The rule held in writing alone before, and the adapters that had to be
+/// `app-core-ui-split`). The rule held in writing alone before, and the adapters that had to be
 /// split out of it got in all the same; this reads its sources the way a build does
 /// (`PackageSourceScan`: comments and strings left out, every `#if` evaluated for macOS and for the iOS
 /// family) and reports, file and line, any of
