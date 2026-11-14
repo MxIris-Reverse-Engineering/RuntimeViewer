@@ -24,6 +24,9 @@ package enum CustomSymbol: String, CaseIterable, Sendable {
     /// Xcode's `doc-kext`.
     case kernelExtension = "kext"
 
+    /// Xcode's `doc-system.extension`, the symbol Xcode draws a system extension with.
+    case systemExtension = "system.extension"
+
     /// The symbol at the system's default size. Traps when the asset catalog has no symbol of this
     /// name, as `SystemSymbol` does for the system's.
     package var image: NSUIImage {

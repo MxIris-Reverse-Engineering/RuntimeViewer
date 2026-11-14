@@ -5,9 +5,8 @@ import RuntimeViewerCore
 import RuntimeViewerAppTestingSupport
 
 /// The one place every list of images decides what an image is (proposal `image-kind-icons`):
-/// a node of the image tree by its own name — a framework's own binary by the framework it is in —
-/// the image at a path by the bundle nearest to it, and the colour its icon is drawn in, Xcode's for
-/// that kind of file.
+/// a node of the image tree by its own name, the image at a path by the bundle nearest to it, and the
+/// colour its icon is drawn in, Xcode's for that kind of file.
 @Suite("Image kinds")
 struct RuntimeImageKindTests {
     private static let imagePaths = [
@@ -17,26 +16,49 @@ struct RuntimeImageKindTests {
         "/System/Library/Extensions/IOUSBHostFamily.kext/Contents/MacOS/IOUSBHostFamily",
         "/System/Library/Extensions/AGXMetalG13X.bundle/Contents/MacOS/AGXMetalG13X",
         "/System/Library/Frameworks/QuickLookUI.framework/PlugIns/Preview.plugin/Contents/MacOS/Preview",
-        "/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework/Versions/A/Resources/softwareupdated",
+        "/Applications/Mail.app/Contents/PlugIns/MailShareExtension.appex/Contents/MacOS/MailShareExtension",
+        "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking",
+        "/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/Resources/UVCAssistant.systemextension/Contents/MacOS/UVCAssistant",
+        "/System/Library/PreferencePanes/Appearance.prefPane/Contents/MacOS/Appearance",
+        "/System/Library/Screen Savers/Random.saver/Contents/MacOS/Random",
+        "/System/Library/QuickLook/Web.qlgenerator/Contents/MacOS/Web",
+        // An iOS bundle keeps its executable at its top.
+        "/System/Library/AccessibilityBundles/ARKit.axbundle/ARKit",
+        "/System/Library/Accounts/Notification/com.apple.askpermission.AccountNotificationPlugin.bundle/Contents/MacOS/com.apple.askpermission.AccountNotificationPlugin",
+        "/opt/homebrew/Cellar/imagemagick/7.1.2-35/bin/magick",
+        "/opt/homebrew/lib/ruby/gems/4.0.0/extensions/arm64-darwin-20/fiddle.bundle",
     ]
 
     @Test(
         "a node of the image tree is what its own name says",
         arguments: [
             ("AppKit.framework", RuntimeImageKind.framework),
-            // A framework's own binary is the framework's dynamic library.
-            ("AppKit", .dynamicLibrary),
-            // Any other binary in a framework is not.
-            ("softwareupdated", .image),
+            // A framework's binary is a file like any other: only a `.dylib` is a dynamic library.
+            ("AppKit", .image),
             ("Safari", .image),
             ("Preview", .image),
             ("Frameworks", .folder),
             ("usr", .folder),
             ("libobjc.A.dylib", .dynamicLibrary),
             ("Safari.app", .application),
+            ("MailShareExtension.appex", .applicationExtension),
+            ("com.apple.WebKit.Networking.xpc", .xpcService),
+            ("UVCAssistant.systemextension", .systemExtension),
             ("IOUSBHostFamily.kext", .kernelExtension),
+            ("Appearance.prefPane", .preferencePane),
+            ("Random.saver", .screenSaver),
             ("AGXMetalG13X.bundle", .bundle),
             ("Preview.plugin", .bundle),
+            ("Web.qlgenerator", .bundle),
+            ("ARKit.axbundle", .bundle),
+            ("ARKit", .image),
+            // A name with dots in it, whose last part is no extension of a Mach-O file.
+            ("com.apple.askpermission.AccountNotificationPlugin", .image),
+            // A version number is no bundle's extension.
+            ("7.1.2-35", .folder),
+            ("magick", .image),
+            // A file named like a bundle is still a file.
+            ("fiddle.bundle", .image),
         ]
     )
     func nodeKind(name: String, expectedKind: RuntimeImageKind) throws {
@@ -57,11 +79,20 @@ struct RuntimeImageKindTests {
             ("/Applications/Safari.app/Contents/MacOS/Safari", .application),
             ("/System/Library/Extensions/IOUSBHostFamily.kext/Contents/MacOS/IOUSBHostFamily", .kernelExtension),
             ("/System/Library/Extensions/AGXMetalG13X.bundle/Contents/MacOS/AGXMetalG13X", .bundle),
-            ("/Applications/Mail.app/Contents/PlugIns/MailShareExtension.appex/Contents/MacOS/MailShareExtension", .bundle),
-            ("/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking", .bundle),
+            ("/Applications/Mail.app/Contents/PlugIns/MailShareExtension.appex/Contents/MacOS/MailShareExtension", .applicationExtension),
+            ("/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking", .xpcService),
+            ("/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/Resources/UVCAssistant.systemextension/Contents/MacOS/UVCAssistant", .systemExtension),
+            ("/System/Library/PreferencePanes/Appearance.prefPane/Contents/MacOS/Appearance", .preferencePane),
+            // The system compares extensions without regard to case.
+            ("/Library/PreferencePanes/SwiftDefaultApps.prefpane/Contents/MacOS/SwiftDefaultApps", .preferencePane),
+            ("/System/Library/Screen Savers/Random.saver/Contents/MacOS/Random", .screenSaver),
             ("/Applications/Xcode.app/Contents/SharedFrameworks/DVTFoundation.framework/Versions/A/DVTFoundation", .framework),
+            ("/Applications/Xcode.app/Contents/PlugIns/IDEDistribution.ideplugin/Contents/MacOS/IDEDistribution", .bundle),
+            ("/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBFTDI.dext/com.apple.DriverKit-AppleUSBFTDI", .bundle),
+            ("/System/Library/Frameworks/Tcl.framework/Versions/8.5/Tcl", .framework),
             // A directory of an extension that is not a bundle's: the nearest bundle further up.
-            ("/Applications/Xcode.app/Contents/PlugIns/IDEDistribution.ideplugin/Contents/MacOS/IDEDistribution", .application),
+            ("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-frontend", .application),
+            ("/opt/homebrew/Cellar/imagemagick/7.1.2-35/bin/magick", .image),
         ]
     )
     func imageKind(imagePath: String, expectedKind: RuntimeImageKind) {
@@ -69,20 +100,15 @@ struct RuntimeImageKindTests {
     }
 
     @Test(
-        "a file of a tree is what its own name says, or a dynamic library when it is its framework's binary",
+        "a file of a tree is a dynamic library by the .dylib extension and an image otherwise, whatever it is part of",
         arguments: [
-            ("/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", RuntimeImageKind.dynamicLibrary),
-            ("/System/Library/Frameworks/Foundation.framework/Foundation", .dynamicLibrary),
+            ("/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", RuntimeImageKind.image),
             ("/usr/lib/libobjc.A.dylib", .dynamicLibrary),
             ("/Applications/Safari.app/Contents/Frameworks/libSafariShared.dylib", .dynamicLibrary),
             ("/usr/libexec/rapportd", .image),
             ("/Applications/Safari.app/Contents/MacOS/Safari", .image),
-            // In a framework, but not the framework's binary: a tool among its resources.
-            ("/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework/Versions/A/Resources/softwareupdated", .image),
-            // Named like a framework further up, but in a bundle of its own.
-            ("/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/WebKit.xpc/Contents/MacOS/WebKit", .image),
-            // Named like the directory it is in, which is no framework.
-            ("/Library/Application Support/Tool/Tool", .image),
+            ("/System/Library/MediaCapture/H13ISP.mediacapture", .image),
+            ("/opt/homebrew/lib/python3.13/lib-dynload/_ssl.cpython-313-darwin.so", .image),
         ]
     )
     func imageFileKind(imagePath: String, expectedKind: RuntimeImageKind) {
@@ -122,14 +148,19 @@ struct RuntimeImageKindTests {
         arguments: [
             (RuntimeImageKind.folder, RuntimeImageKindTests.xcodeLightBlue),
             (.bundle, RuntimeImageKindTests.xcodeLightBlue),
+            (.applicationExtension, RuntimeImageKindTests.xcodeLightBlue),
+            (.systemExtension, RuntimeImageKindTests.xcodeLightBlue),
             (.kernelExtension, RuntimeImageKindTests.xcodeLightBlue),
+            (.preferencePane, RuntimeImageKindTests.xcodeLightBlue),
+            (.screenSaver, RuntimeImageKindTests.xcodeLightBlue),
             // DVTUserInterfaceKit's `doc-yellow` names the system colour.
             (.framework, NSColor.systemYellow),
             // Xcode gives an app's icon no colour and draws it in this one.
             (.application, .secondaryLabelColor),
+            (.xpcService, RuntimeImageKindTests.xcodeSteel),
             (.dynamicLibrary, RuntimeImageKindTests.xcodeSteel),
-            // Xcode's for an executable (`public.executable`), `doc-text`: the label colour.
-            (.image, .labelColor),
+            // Xcode's for a file it has no other icon for (`public.item`).
+            (.image, RuntimeImageKindTests.xcodeSteel),
         ]
     )
     func iconColor(kind: RuntimeImageKind, expectedColor: NSColor) {

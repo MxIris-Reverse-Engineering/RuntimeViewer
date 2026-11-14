@@ -159,7 +159,7 @@ struct EditorJumpBarTests {
         #expect(ImageColorSampling.isDrawn(libFolderItem.pathComponentIcon, in: RuntimeImageKind.folder.iconColor))
         #expect(ImageColorSampling.isDrawn(foundationFrameworkItem.pathComponentIcon, in: RuntimeImageKind.framework.iconColor))
         #expect(ImageColorSampling.isDrawn(libobjcItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor))
-        #expect(ImageColorSampling.isDrawn(foundationItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor), "the framework's own binary is its dynamic library")
+        #expect(ImageColorSampling.isDrawn(foundationItem.pathComponentIcon, in: RuntimeImageKind.image.iconColor), "the image inside the framework is an image")
         #expect(ImageColorSampling.isDrawn(unlistedItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor), "an image under the engine is what its own name says")
         #expect(ImageColorSampling.isDrawn(unlistedToolItem.pathComponentIcon, in: RuntimeImageKind.image.iconColor), "an image under the engine is what its own name says")
     }

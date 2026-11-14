@@ -8,6 +8,10 @@ import RuntimeViewerCore
 
 /// What a node of the image tree, or the image at a path, is — the one place every list of images
 /// decides which icon a row shows (proposal `image-kind-icons`).
+///
+/// A directory is the bundle its extension names, compared without regard to case as the system does;
+/// a directory of any other extension, or of none, is a folder. A file is a dynamic library by the
+/// `.dylib` extension and an image otherwise, whatever directory it is in.
 public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
     /// A directory that is none of the bundles below.
     case folder
@@ -15,79 +19,104 @@ public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
     /// A `.framework`.
     case framework
 
-    /// A loadable bundle: a `.bundle`, `.plugin`, `.xpc` or `.appex`.
+    /// Any other bundle: a `.bundle`, a `.plugin`, or one of the other extensions in
+    /// `bundleExtensions`.
     case bundle
 
     /// An `.app`.
     case application
 
+    /// An `.appex`, an app extension.
+    case applicationExtension
+
+    /// An `.xpc`, an XPC service.
+    case xpcService
+
+    /// A `.systemextension`.
+    case systemExtension
+
     /// A `.kext`.
     case kernelExtension
 
-    /// A dynamic library: a `.dylib`, or the binary of the framework it is in. In the image tree the
-    /// file itself, and for an image path a `.dylib` in none of the bundles above.
+    /// A `.prefPane`.
+    case preferencePane
+
+    /// A `.saver`, a screen saver.
+    case screenSaver
+
+    /// A `.dylib` file. For an image path, one in none of the bundles above.
     case dynamicLibrary
 
-    /// Any other Mach-O file: in the image tree the file itself — the executable inside an app or a
-    /// bundle, say, or a tool among a framework's resources — and for an image path one in none of
-    /// the bundles above.
+    /// Any other Mach-O file — the executable inside an app or a bundle, the binary of a framework, a
+    /// tool — whether its name has an extension or not. For an image path, one in none of the bundles
+    /// above.
     case image
 
-    /// What the Mach-O file at `imagePath` is by its own name, whatever else it is part of: a dynamic
-    /// library by its extension or when it is the binary of the framework it is in — the file named
-    /// like the bundle nearest to it, when that is a framework, as `AppKit.framework/Versions/C/AppKit`
-    /// — otherwise an image. What a tree of paths shows for an image, where its bundle is a node of
-    /// its own.
+    /// What the Mach-O file at `imagePath` is by its own name, whatever it is part of: a dynamic
+    /// library by the `.dylib` extension, otherwise an image. What a tree of paths shows for an image,
+    /// where its bundle is a node of its own.
     public init(imageFileAt imagePath: String) {
-        let fileName = (imagePath as NSString).lastPathComponent
-        if (fileName as NSString).pathExtension == "dylib" {
-            self = .dynamicLibrary
-        } else if let nearestBundle = Self.nearestBundle(onPathOf: imagePath),
-                  nearestBundle.kind == .framework,
-                  (nearestBundle.directoryName as NSString).deletingPathExtension == fileName {
-            self = .dynamicLibrary
-        } else {
-            self = .image
-        }
-    }
-
-    /// The bundle directory on `imagePath` nearest to its file, and the kind it makes, or `nil` when
-    /// the file is in none.
-    private static func nearestBundle(onPathOf imagePath: String) -> (directoryName: String, kind: RuntimeImageKind)? {
-        let directoryNames = (imagePath as NSString).pathComponents.dropLast()
-        return directoryNames.reversed().lazy
-            .compactMap { directoryName in
-                Self(bundleExtension: (directoryName as NSString).pathExtension).map { (directoryName: directoryName, kind: $0) }
-            }
-            .first
+        self = (imagePath as NSString).pathExtension.lowercased() == "dylib" ? .dynamicLibrary : .image
     }
 
     /// The bundle kind a directory named with `pathExtension` is, or `nil` for any other directory.
     private init?(bundleExtension pathExtension: String) {
-        switch pathExtension {
+        switch pathExtension.lowercased() {
         case "framework":
             self = .framework
-        case "bundle", "plugin", "xpc", "appex":
-            self = .bundle
         case "app":
             self = .application
+        case "appex":
+            self = .applicationExtension
+        case "xpc":
+            self = .xpcService
+        case "systemextension":
+            self = .systemExtension
         case "kext":
             self = .kernelExtension
+        case "prefpane":
+            self = .preferencePane
+        case "saver":
+            self = .screenSaver
+        case let otherExtension where Self.bundleExtensions.contains(otherExtension):
+            self = .bundle
         default:
             return nil
         }
     }
 
-    /// What `node` is, by its own name: a bundle by its extension, otherwise a leaf is a dynamic
-    /// library or an image as `init(imageFileAt:)` says for its path, and any other node a folder.
-    /// `AppKit.framework` is a framework; the `AppKit` inside it, its dynamic library, as is
-    /// `libobjc.A.dylib`; `rapportd`, an image.
+    /// The extensions of the bundles that are none of the kinds above, in lower case: every one on
+    /// the path of an image in the shared caches of macOS 27.2, iOS 27.0 and its simulator, and of
+    /// the Mach-O files on a Mac with Xcode and the simulator runtimes installed (2026-11-14), less
+    /// the directories that only look like bundles — a version number, a reverse-DNS name, an SDK or
+    /// a toolchain, which hold no bundle's layout. A directory of an extension missing here is a
+    /// folder.
+    private static let bundleExtensions: Set<String> = [
+        "action", "addresshandler", "assistantbundle", "axbundle", "axuiservice", "brailledriver",
+        "brailletable", "bundle", "caction", "cifilter", "component", "coredeviceplugin", "csutil",
+        "daplug", "dataconsumer", "desplugin", "devicechrome", "devicekitplugin", "dext", "docktileplugin",
+        "driver", "dsclext", "dsym", "dvtplugin", "feature", "flowtool", "flplugin", "fs", "fxp", "fxplug",
+        "gdtdplugin", "gtplugin", "gtpplugin_ios", "gtpplugin_osx", "gtpplugin_tvos", "gtpplugin_watchos",
+        "gtpplugin_xros", "healthplugin", "icdplugin", "ideplugin", "ilmbplugin", "imservice", "jdk",
+        "lockbundle", "loginplugin", "mdimporter", "mediastream", "menu", "migrator", "monitorpanel",
+        "monitorpanels", "mrplugin", "oesystemplugin", "opplugin", "osax", "ozp", "platform", "plugin",
+        "pluginkit", "ppp", "profiledomainplugin", "proofingtool", "prrplugin", "qldisplay", "qlgenerator",
+        "radplug", "rcplugin", "scripting", "seplugin", "service", "settings", "simdeviceio",
+        "simdevicetype", "simdeviceui", "simruntime", "siriuibundle", "siriuipresentationbundle", "slotd",
+        "sourcebundle", "speechbundle", "speechsynthesizer", "spreporter", "syncbundle", "syncschema",
+        "transport", "vfxlibrary", "vpn", "vsplugin", "vzplugin", "wkbundle", "xcpext", "xlplugin",
+        "xrcliplugin", "xrplugin", "xruiplugin",
+    ]
+
+    /// What `node` is, by its own name: a leaf is a file, a dynamic library or an image
+    /// (`init(imageFileAt:)`); any other node is a directory, the bundle its extension names or a
+    /// folder. `AppKit.framework` is a framework; the `AppKit` inside it, an image; `libobjc.A.dylib`, a
+    /// dynamic library.
     public init(node: RuntimeImageNode) {
-        if let bundleKind = Self(bundleExtension: (node.name as NSString).pathExtension) {
-            self = bundleKind
+        if node.isLeaf {
+            self = Self(imageFileAt: node.name)
         } else {
-            // The absolute path, which a bookmarked node keeps without its ancestors.
-            self = node.isLeaf ? Self(imageFileAt: node.absolutePath) : .folder
+            self = Self(bundleExtension: (node.name as NSString).pathExtension) ?? .folder
         }
     }
 
@@ -95,13 +124,20 @@ public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
     /// in none, what the file itself is. AppKit's is a framework, `/usr/lib/libobjc.A.dylib` a dynamic
     /// library.
     public init(ofImageAt imagePath: String) {
-        self = Self.nearestBundle(onPathOf: imagePath)?.kind ?? Self(imageFileAt: imagePath)
+        let directoryNames = (imagePath as NSString).pathComponents.dropLast()
+        let nearestBundleKind = directoryNames.reversed().lazy
+            .compactMap { Self(bundleExtension: ($0 as NSString).pathExtension) }
+            .first
+        self = nearestBundleKind ?? Self(imageFileAt: imagePath)
     }
 
     /// The kind's symbol at the system's default size, a template image, the one Xcode draws that kind
-    /// of file with: its own for the bundles and an app, the system's `folder.fill` for a folder,
-    /// `building.columns.fill` for a dynamic library and `terminal.fill`, Xcode's for an executable
-    /// (`public.executable`), for any other image. A view that can tint a template draws it in
+    /// of file with (the `Xcode.SymbolicIcon` extensions of DVTUserInterfaceKit, Xcode 27.2): its own
+    /// for a framework, a bundle, an app, a system extension and a kernel extension; and the system's
+    /// `folder.fill` for a folder, `e.circle.fill` for an app extension, `wrench.and.screwdriver.fill`
+    /// for an XPC service, `switch.2` for a preference pane, `sparkles` for a screen saver,
+    /// `building.columns.fill` for a dynamic library, and `doc` — Xcode's for any file it has no other
+    /// icon for (`public.item`) — for any other image. A view that can tint a template draws it in
     /// `iconColor`, which a selected row turns white as Xcode's does; a view that draws an image as it
     /// is takes `coloredIcon`.
     public var icon: NSUIImage {
@@ -110,25 +146,33 @@ public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
         case .framework: Self.frameworkIcon
         case .bundle: Self.bundleIcon
         case .application: Self.applicationIcon
+        case .applicationExtension: Self.applicationExtensionIcon
+        case .xpcService: Self.xpcServiceIcon
+        case .systemExtension: Self.systemExtensionIcon
         case .kernelExtension: Self.kernelExtensionIcon
+        case .preferencePane: Self.preferencePaneIcon
+        case .screenSaver: Self.screenSaverIcon
         case .dynamicLibrary: Self.dynamicLibraryIcon
         case .image: Self.imageIcon
         }
     }
 
-    /// The colour Xcode draws this kind's icon in (the `Xcode.SymbolicIcon` extensions of
-    /// DVTUserInterfaceKit, Xcode 27.2): a folder (`public.folder`), a bundle and a kernel extension
-    /// Xcode's own light blue, a framework system yellow, a dynamic library (`com.apple.mach-o-dylib`)
-    /// Xcode's steel, an app the secondary label colour — Xcode gives an app's icon no colour of its
-    /// own and draws it in that one — and any other image the label colour: Xcode's `doc-text` for an
-    /// executable is the label colour's light value, and the only value it has.
+    /// The colour Xcode draws this kind's icon in, from the same extensions: Xcode's own light blue
+    /// for a folder (`public.folder`) and for the bundles but the three below, system yellow for a
+    /// framework, Xcode's steel for an XPC service (the product type `com.apple.product-type.xpc-service`),
+    /// a dynamic library (`com.apple.mach-o-dylib`) and any other image (`public.item`), and the
+    /// secondary label colour for an app — Xcode gives an app's icon no colour of its own and draws it
+    /// in that one.
     public var iconColor: NSUIColor {
         switch self {
-        case .folder, .bundle, .kernelExtension: Self.xcodeLightBlue
-        case .framework: .systemYellow
-        case .application: Self.secondaryLabelColor
-        case .dynamicLibrary: Self.xcodeSteel
-        case .image: Self.labelColor
+        case .folder, .bundle, .applicationExtension, .systemExtension, .kernelExtension, .preferencePane, .screenSaver:
+            Self.xcodeLightBlue
+        case .framework:
+            .systemYellow
+        case .application:
+            Self.secondaryLabelColor
+        case .xpcService, .dynamicLibrary, .image:
+            Self.xcodeSteel
         }
     }
 
@@ -147,10 +191,8 @@ public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
 
     #if os(macOS)
     private static let secondaryLabelColor = NSColor.secondaryLabelColor
-    private static let labelColor = NSColor.labelColor
     #else
     private static let secondaryLabelColor = UIColor.secondaryLabel
-    private static let labelColor = UIColor.label
     #endif
 
     // Loaded once each: every row of every list asks for one.
@@ -158,15 +200,20 @@ public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
     private static let frameworkIcon = CustomSymbol.framework.image
     private static let bundleIcon = CustomSymbol.bundle.image
     private static let applicationIcon = CustomSymbol.application.image
+    private static let applicationExtensionIcon = SystemSymbol.eCircleFill.image
+    private static let xpcServiceIcon = SystemSymbol.wrenchAndScrewdriverFill.image
+    private static let systemExtensionIcon = CustomSymbol.systemExtension.image
     private static let kernelExtensionIcon = CustomSymbol.kernelExtension.image
+    private static let preferencePaneIcon = SystemSymbol.switch2.image
+    private static let screenSaverIcon = SystemSymbol.sparkles.image
     private static let dynamicLibraryIcon = SystemSymbol.buildingColumnsFill.image
-    private static let imageIcon = SystemSymbol.terminalFill.image
+    private static let imageIcon = SystemSymbol.doc.image
 
     #if os(macOS)
     /// The kind's icon already in `iconColor`, for a view that draws an image as it is rather than
     /// tinting a template: the jump bar and its menus, the editor's tabs, the history menu. Not a
-    /// template image; the palette keeps the colour dynamic, so the icon follows the appearance and
-    /// the accent colour when it is drawn.
+    /// template image; the palette keeps the colour dynamic, so the icon follows the appearance when
+    /// it is drawn.
     public var coloredIcon: NSImage {
         Self.coloredIcons[self] ?? icon
     }
