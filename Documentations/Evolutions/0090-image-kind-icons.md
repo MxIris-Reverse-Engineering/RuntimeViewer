@@ -9,20 +9,22 @@
 各处列出镜像时用的图标原来是几个随手挑的系统符号：framework 是 `latch.2.case`，bundle 是
 `shippingbox`，App 与内核扩展没有自己的图标，判定写了三份（镜像树按节点名、Find 与 Report 只认
 `.framework/`）。改为照 Xcode：framework、bundle、App、内核扩展用从 Xcode 提取的符号，文件夹与 dylib 用
-Xcode 的 `folder.fill` 与 `building.columns.fill`，其他二进制用系统的 `doc.fill`；种类只在一处判定，侧栏、
-路径栏、Find、Report、批量导出、标签、历史、镜像页与标题都走它。图标的颜色也照 Xcode 按种类定、各处一样：
-文件夹、bundle 与内核扩展是 Xcode 自己的浅蓝，framework 系统黄，dylib Xcode 的钢灰，App 次要文字的灰，其他
-二进制用强调色。
+Xcode 的 `folder.fill` 与 `building.columns.fill`，framework 自己的二进制算 dylib，其他二进制用 Xcode 给可执行
+文件的 `terminal.fill`；种类只在一处判定，侧栏、路径栏、Find、Report、批量导出、标签、历史、镜像页与标题都走
+它。图标的颜色也照 Xcode 按种类定、各处一样：文件夹、bundle 与内核扩展是 Xcode 自己的浅蓝，framework 系统黄，
+dylib Xcode 的钢灰，App 次要文字的灰，其他二进制正文文字的颜色。
 
 ## 方案
 
 **种类**：`RuntimeImageKind`（RuntimeViewerAppCore）七种——`folder`、`framework`、`bundle`
 （`.bundle`、`.plugin`、`.xpc`、`.appex`）、`application`（`.app`）、`kernelExtension`（`.kext`）、
-`dynamicLibrary`（`.dylib`）、`image`（其他二进制）。两种判法：
+`dynamicLibrary`（`.dylib`，以及 framework 自己的二进制）、`image`（其他二进制）。两种判法：
 
 - 镜像树的节点按自己的名字：扩展名是几种包之一就是那一种，否则叶子按文件名是 `dynamicLibrary` 或
-  `image`（`RuntimeImageKind(imageFileAt:)`）、其余是 `folder`。所以树里 `AppKit.framework` 是
-  framework，它下面的 `AppKit` 是其他二进制，`libobjc.A.dylib` 是 dylib。
+  `image`（`RuntimeImageKind(imageFileAt:)`）、其余是 `folder`。叶子与路径上离它最近的包是同名的 framework
+  时（`AppKit.framework/Versions/C/AppKit`），它就是那个 framework 的二进制，也算 `dynamicLibrary`；framework
+  里别的二进制（`Resources` 里的工具、`XPCServices` 里的 service）不算。所以树里 `AppKit.framework` 是
+  framework，它下面的 `AppKit` 与 `libobjc.A.dylib` 都是 dylib，`/usr/libexec/rapportd` 是其他二进制。
 - 只列一个镜像的地方（Find、Report、标签、历史、镜像页）没有树，按路径上离它最近的那个包，不在任何包里
   才按文件本身：`RuntimeImageKind(ofImageAt:)`，AppKit 显示 framework，`/usr/lib/libobjc.A.dylib` 显示 dylib。
   标签的 `TabBarItem.Icon.image` 因此带上种类。
@@ -45,8 +47,11 @@ macOS 15 那一代的模板、App 里已有的 `inject` 符号就是 v6；按 ma
 | 内核扩展 | `com.apple.kernel-extension` | `doc-kext` | `doc-lightBlue` |
 | App | 产品类型 `com.apple.product-type.application` | `doc-app.fill` | 没有 `tint`，Xcode 画成 `secondaryLabelColor` |
 | dylib | `com.apple.mach-o-dylib` | `building.columns.fill` | `doc-steel`：Display P3 98, 127, 147，深色 sRGB 183, 213, 235，不是系统色 |
+| 其他二进制 | `public.executable`，产品类型 `com.apple.product-type.tool` | `terminal.fill` | `doc-text`：sRGB 黑色、不透明度 0.847，即 `labelColor` 的浅色值；只有这一个值，App 用会随外观变化的 `labelColor` |
 
-其他二进制 Xcode 没有专门的图标，用系统的 `doc.fill` 与强调色。Xcode 的分组
+framework 自己的二进制在磁盘上没有扩展名，系统认成 `public.unix-executable`，Xcode 会按上表最后一行画它；这里
+按它实际是什么（一个动态库）画成 dylib。Xcode 的 module 符号（叠起来的三层）不用：Xcode 拿它表示能
+`import` 的模块，不表示文件，而一个镜像可能装着几个 Swift 模块，App 的主程序与插件也不是模块。Xcode 的分组
 （`com.apple.dt.xcode.nav-group`）是灰色文件夹，镜像树的文件夹是磁盘上真的目录，对应的是 `public.folder`。
 
 两种画法，选中的行都和 Xcode 一样变白：
@@ -87,3 +92,4 @@ target 共用。
 | 2026-11-14 | dylib 单列一种，用 Xcode 的 `building.columns.fill` 与钢灰；App 换成实心的 `doc-app.fill`；其他二进制用 `doc.fill` | 用户的要求，推翻上一行「镜像文件保持 `doc`」：dylib 照 Xcode 的 library 图标与颜色，App 与其他二进制都用实心版。其他二进制 Xcode 没有专门的图标，颜色保持强调色 |
 | 2026-11-14 | 侧栏镜像树的行收紧图标与标题的间距：图标离行首 2 pt，标题跟在图标右边 4 pt | 原来标题在图标右边 10 pt，换成更宽的实心符号后显得太空。先试过照 Xcode 项目导航器（`IDENavigatorDataCell`）把图标放进 16 pt 的槽、标题固定从 19 pt 开始，用户没有采用，改用自己调的这组值 |
 | 2026-11-14 | 实现完成，落地为 0090 | 用户在 App 里看过。不另写使用指南或实现说明：种类、符号与颜色都在 `RuntimeImageKind` 一处，各处该用 `icon` 还是 `coloredIcon` 已写在它的文档注释和 `RuntimeViewerPackages/Sources/AGENTS.md` 里。没有新术语。没做的验证：v6 符号没在 macOS 15 上实测（依据见上）；iOS 侧栏只加了一行着色，没编 iOS |
+| 2026-11-14 | framework 自己的二进制算 dylib；其他二进制换成 Xcode 给可执行文件的 `terminal.fill` 与 `labelColor`，不再是 `doc.fill` 与强调色 | 用户问树里 framework 下面的二进制该用什么图标、Xcode 的 module 合不合适。查 DVTUserInterfaceKit 的图标表发现前面「其他二进制 Xcode 没有专门的图标」不对：`public.executable` 配的是 `terminal.fill` 与 `doc-text`。但 framework 的二进制画成命令行工具不对味，它实际是动态库；module 在 Xcode 里表示模块、不表示文件。用户选择按所在的包区分：与所在 framework 同名的算 dylib，其余照 Xcode 用 `terminal.fill` |

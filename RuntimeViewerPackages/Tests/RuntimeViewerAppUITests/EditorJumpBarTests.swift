@@ -152,14 +152,16 @@ struct EditorJumpBarTests {
         }
         let foundationFrameworkItem = try #require(frameworkItem, "Foundation's path has no Foundation.framework")
         let unlistedItem = try #require(store.item(for: .image(path: "/Nowhere/Unlisted.dylib")))
+        let unlistedToolItem = try #require(store.item(for: .image(path: "/Nowhere/UnlistedTool")))
 
         #expect(libFolderItem.pathComponentName == "lib")
         #expect(!(libFolderItem.pathComponentIcon?.isTemplate ?? true), "the path control draws a template image in the text colour")
         #expect(ImageColorSampling.isDrawn(libFolderItem.pathComponentIcon, in: RuntimeImageKind.folder.iconColor))
         #expect(ImageColorSampling.isDrawn(foundationFrameworkItem.pathComponentIcon, in: RuntimeImageKind.framework.iconColor))
         #expect(ImageColorSampling.isDrawn(libobjcItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor))
-        #expect(ImageColorSampling.isDrawn(foundationItem.pathComponentIcon, in: RuntimeImageKind.image.iconColor), "the image inside the framework is an image")
+        #expect(ImageColorSampling.isDrawn(foundationItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor), "the framework's own binary is its dynamic library")
         #expect(ImageColorSampling.isDrawn(unlistedItem.pathComponentIcon, in: RuntimeImageKind.dynamicLibrary.iconColor), "an image under the engine is what its own name says")
+        #expect(ImageColorSampling.isDrawn(unlistedToolItem.pathComponentIcon, in: RuntimeImageKind.image.iconColor), "an image under the engine is what its own name says")
     }
 
     @Test("an image that is not indexed gets its objects once the engine reports it indexed, never before")

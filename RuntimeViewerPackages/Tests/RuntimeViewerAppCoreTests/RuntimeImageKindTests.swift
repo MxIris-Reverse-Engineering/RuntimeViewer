@@ -5,8 +5,9 @@ import RuntimeViewerCore
 import RuntimeViewerAppTestingSupport
 
 /// The one place every list of images decides what an image is (proposal `image-kind-icons`):
-/// a node of the image tree by its own name, the image at a path by the bundle nearest to it — and
-/// the colour its icon is drawn in, Xcode's for that kind of file.
+/// a node of the image tree by its own name — a framework's own binary by the framework it is in —
+/// the image at a path by the bundle nearest to it, and the colour its icon is drawn in, Xcode's for
+/// that kind of file.
 @Suite("Image kinds")
 struct RuntimeImageKindTests {
     private static let imagePaths = [
@@ -16,13 +17,19 @@ struct RuntimeImageKindTests {
         "/System/Library/Extensions/IOUSBHostFamily.kext/Contents/MacOS/IOUSBHostFamily",
         "/System/Library/Extensions/AGXMetalG13X.bundle/Contents/MacOS/AGXMetalG13X",
         "/System/Library/Frameworks/QuickLookUI.framework/PlugIns/Preview.plugin/Contents/MacOS/Preview",
+        "/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework/Versions/A/Resources/softwareupdated",
     ]
 
     @Test(
         "a node of the image tree is what its own name says",
         arguments: [
             ("AppKit.framework", RuntimeImageKind.framework),
-            ("AppKit", .image),
+            // A framework's own binary is the framework's dynamic library.
+            ("AppKit", .dynamicLibrary),
+            // Any other binary in a framework is not.
+            ("softwareupdated", .image),
+            ("Safari", .image),
+            ("Preview", .image),
             ("Frameworks", .folder),
             ("usr", .folder),
             ("libobjc.A.dylib", .dynamicLibrary),
@@ -62,12 +69,20 @@ struct RuntimeImageKindTests {
     }
 
     @Test(
-        "a file of a tree is what its own name says, whatever it is part of",
+        "a file of a tree is what its own name says, or a dynamic library when it is its framework's binary",
         arguments: [
-            ("/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", RuntimeImageKind.image),
+            ("/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", RuntimeImageKind.dynamicLibrary),
+            ("/System/Library/Frameworks/Foundation.framework/Foundation", .dynamicLibrary),
             ("/usr/lib/libobjc.A.dylib", .dynamicLibrary),
             ("/Applications/Safari.app/Contents/Frameworks/libSafariShared.dylib", .dynamicLibrary),
             ("/usr/libexec/rapportd", .image),
+            ("/Applications/Safari.app/Contents/MacOS/Safari", .image),
+            // In a framework, but not the framework's binary: a tool among its resources.
+            ("/System/Library/PrivateFrameworks/SoftwareUpdateCore.framework/Versions/A/Resources/softwareupdated", .image),
+            // Named like a framework further up, but in a bundle of its own.
+            ("/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/WebKit.xpc/Contents/MacOS/WebKit", .image),
+            // Named like the directory it is in, which is no framework.
+            ("/Library/Application Support/Tool/Tool", .image),
         ]
     )
     func imageFileKind(imagePath: String, expectedKind: RuntimeImageKind) {
@@ -113,8 +128,8 @@ struct RuntimeImageKindTests {
             // Xcode gives an app's icon no colour and draws it in this one.
             (.application, .secondaryLabelColor),
             (.dynamicLibrary, RuntimeImageKindTests.xcodeSteel),
-            // Not Xcode's: any other image keeps the accent colour.
-            (.image, .controlAccentColor),
+            // Xcode's for an executable (`public.executable`), `doc-text`: the label colour.
+            (.image, .labelColor),
         ]
     )
     func iconColor(kind: RuntimeImageKind, expectedColor: NSColor) {
