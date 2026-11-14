@@ -496,7 +496,7 @@ The project uses three Swift Package Manager packages:
   image page, which indexes it first; `selectedRuntimeObject` is `nil` on it, so read an entry's `object`
   as optional and switch over `content` where both matter. The jump bar never moves the sidebar
   (`.switchImage` is the sidebar's alone). Background: `Documentations/Evolutions/0076-editor-panes.md`,
-  `Documentations/Evolutions/draft-editor-jump-bar.md`
+  `Documentations/Evolutions/0092-editor-jump-bar.md`
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection

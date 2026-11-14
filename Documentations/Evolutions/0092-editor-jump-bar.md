@@ -1,8 +1,8 @@
-# Draft - 编辑栏的路径栏：在编辑栏里切换镜像，侧栏不动
+# 0092 - 编辑栏的路径栏：在编辑栏里切换镜像，侧栏不动
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-11-13
-- **最后更新**: 2026-11-13
+- **最后更新**: 2026-11-14
 - **实现分支**: `feature/editor-jump-bar`
 
 ## 摘要
@@ -52,11 +52,11 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 
 ### 代码位置
 
-- **路径项**（RuntimeViewerApplication `EditorArea/JumpBar/`）：`EditorJumpBarItem`（来源、目录、镜像、对象四种），由每个文档一份的 `EditorJumpBarItemStore` 惰性建立并保留，同一个节点始终是同一个对象（控件按指针比较）；它跟随文档的 Engine，Engine 或镜像列表变了就整棵重建并发出 `treeRebuilt`。从对象找镜像节点按 Engine 的规范路径比较（模拟器的 `DYLD_ROOT_PATH`），树里没有的镜像挂在来源下面。镜像的对象只在镜像已索引后才读（`isImageIndexed`，否则等 `imageDidIndexPublisher`），读到后经 `childItems` 的 KVO 通知控件；一个对象在读到之前先挂在镜像下，读到后保留同一个 item、挪到外层类型下面并发出 `itemsMoved`。类型加了特化时重读那个镜像。
+- **路径项**（RuntimeViewerAppUI `EditorArea/JumpBar/`；这一栏的位置 `EditorJumpBarLocation` 与选中 `EditorJumpBarChoice` 在 RuntimeViewerAppCore 的同名目录）：`EditorJumpBarItem`（来源、目录、镜像、对象四种），由每个文档一份的 `EditorJumpBarItemStore` 惰性建立并保留，同一个节点始终是同一个对象（控件按指针比较）；它跟随文档的 Engine，Engine 或镜像列表变了就整棵重建并发出 `treeRebuilt`。从对象找镜像节点按 Engine 的规范路径比较（模拟器的 `DYLD_ROOT_PATH`），树里没有的镜像挂在来源下面。镜像的对象只在镜像已索引后才读（`isImageIndexed`，否则等 `imageDidIndexPublisher`），读到后经 `childItems` 的 KVO 通知控件；一个对象在读到之前先挂在镜像下，读到后保留同一个 item、挪到外层类型下面并发出 `itemsMoved`。类型加了特化时重读那个镜像。
 - **adapter**：`EditorJumpBarAdapter`，做法同 `FindModePathControlAdapter`：把这一栏的位置（`EditorJumpBarLocation`）换成控件的 `selectedItem`，把选中换成 `EditorJumpBarChoice`（目标加修饰键决定的打开位置）；路径由 view model 决定，选中后立刻放回。只有镜像与对象能选，来源与目录只用来往下走；对象的嵌套类型在菜单里缩进列出。
-- **编辑栏**：`EditorPaneViewModel` 加 `jumpBarLocation`、`isJumpBarHidden` 输出与 `jumpBarChoiceSelected` 输入（先 `.focusEditorPane` 再打开），标签栏改照 Xcode 的显隐规则；`EditorPaneViewController` 放路径栏视图（`EditorPaneJumpBarView`），按 `EditorPaneBarMetrics`（RuntimeViewerApplication）排两条栏，store 由 `EditorAreaCoordinator` 交给每一栏。
+- **编辑栏**：`EditorPaneViewModel` 加 `jumpBarLocation`、`isJumpBarHidden` 输出与 `jumpBarChoiceSelected` 输入（先 `.focusEditorPane` 再打开），标签栏改照 Xcode 的显隐规则；`EditorPaneViewController` 放路径栏视图（`EditorPaneJumpBarView`），按 `EditorPaneBarMetrics`（RuntimeViewerAppCore）排两条栏，store 由 `EditorAreaCoordinator` 交给每一栏。
 - **镜像页**：`ContentImageViewModel` 与 `ContentImageViewController`，`ContentCoordinator` 的第四种 scene；进度视图 `ImageIndexingProgressView` 挪进 RuntimeViewerUI，侧栏对象页也用它。
-- **Manual Loading**（RuntimeViewerApplication `ManualLoading/`）：`ManualImageLoadCoordinator`（`RuntimeEngineBackgroundWork` 的一部分）与 `DocumentState.recordingManualLoad(ofImageAt:_:)` / `indexImageForUser(at:)`；Report 的 `ReportCategory.manualLoading` 与两种行。接入点：侧栏的 Load now 与打开未索引镜像、Load Frameworks…、镜像页、内容区索引对象所在的镜像、Find 的交叉引用查询。
+- **Manual Loading**（RuntimeViewerAppCore `ManualLoading/`）：`ManualImageLoadCoordinator`（`RuntimeEngineBackgroundWork` 的一部分）与 `DocumentState.recordingManualLoad(ofImageAt:_:)` / `indexImageForUser(at:)`；Report 的 `ReportCategory.manualLoading` 与两种行。接入点：侧栏的 Load now 与打开未索引镜像、Load Frameworks…、镜像页、内容区索引对象所在的镜像、Find 的交叉引用查询。
 
 ### 落地步骤（每步各自能构建通过）
 
@@ -81,6 +81,7 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 - 未聚焦栏的 8 点箭头与灰色图标：要 AppKitPlus 加栏级的激活状态。
 - 关闭按钮后那条分隔线的颜色用的是 `separatorColor`，Xcode 的 `contentDividerColor` 具体值逆向笔记里没有。
 - 工具栏的活动显示跟进 Manual Loading（现在只在 Report 里）。
+- 在 App 里实测大镜像对象菜单的速度（见「风险」）。
 
 ### 风险
 
@@ -109,3 +110,4 @@ Report navigator 现在只记后台工作（后台索引、可搜索接口、交
 | 2026-11-13 | 用户看过后指出路径栏没有垂直居中：没有标签栏时，控件行改放在栏顶与底边线正中；标签栏下方不变，栏高仍照 Xcode | 照 Xcode 的几何，顶行一栏的控件行贴着栏顶、下面留 4 点，文字比中线高 2 点，用户一开窗口看到的正是这种；下方一栏上下本来各 4 点，标签栏下方上面有标签栏行下的 4 点、下面也是 4 点，看上去本来就居中，改成在自己的范围里居中反而离标签近。两条栏的尺寸抽成 `EditorPaneBarMetrics` 以便测试 |
 | 2026-11-13 | 这两处修完，待用户再看 | Ultra 上：路径栏相关的四个套件（`EditorPaneBarMetrics`、`EditorPaneViewModel`、编辑区路由、路径栏）48 条测试通过；居中那条测试先在旧算法上跑过，只有顶行一栏没有标签栏那一例失败，确认抓得住；App（Tuist workspace，Debug）编译通过。仍没做界面验证 |
 | 2026-11-13 | 路径栏的模糊改为背后一块独立 pocket，不再登记给内容的滚动视图 | 随「编辑区内容从工具栏与标签栏下滚过」的修复（两栏时工具栏只有左栏一段有模糊）一起改：那次修复撤掉了 `ScrollPocketContainerRegistration`，标签栏改用背后一块 `ScrollPocketView`；路径栏照同样的做法，与 Xcode 的编辑栏一致。合并时在那个提案的功能分支上改，路径栏的布局与行为不变 |
+| 2026-11-14 | 实现完成，落地为 0092 | 用户确认收尾，代码已全部在 `next` 上。其后 [0091](0091-app-core-ui-split.md) 拆分了应用层：路径项与 adapter 搬进 RuntimeViewerAppUI，栏的位置与选中、两条栏的尺寸、镜像页的 ViewModel 与 Manual Loading 搬进 RuntimeViewerAppCore，「代码位置」一节已照现状改写。大镜像对象菜单的速度仍没实测，和另外四项一起列在后续项，并登记进提案索引的「暂缓的后续项」。不另写使用指南或实现说明：没有 App 之外的调用方，规则已在根目录与 UI 层的 AGENTS.md。术语表里的路径栏、镜像页与 Manual Loading 三条早已登记，只把出处改成本提案的编号 |
