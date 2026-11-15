@@ -192,7 +192,15 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
         case .dyldSharedCache:
             return [RuntimeImageNode.rootNode(for: Array(cacheImages.keys), name: file.displayName)]
         case .machO, .bundle, .folder:
-            var rootNodes = [RuntimeImageNode.rootNode(for: fileImagePaths, name: file.displayName)]
+            // The file's group starts where the file was opened — at the bundle or the folder
+            // itself, at the directory a Mach-O file is in. The directories above it lead to
+            // nothing else and would only lengthen every path in the sidebar and the jump bars.
+            let openedDirectoryPath = if case .machO = file.content {
+                file.url.deletingLastPathComponent().path
+            } else {
+                file.url.path
+            }
+            var rootNodes = [RuntimeImageNode.rootNode(for: fileImagePaths, name: file.displayName, startingAt: openedDirectoryPath)]
             if let pairedCacheName {
                 rootNodes.append(RuntimeImageNode.rootNode(for: Array(cacheImages.keys), name: pairedCacheName))
             }

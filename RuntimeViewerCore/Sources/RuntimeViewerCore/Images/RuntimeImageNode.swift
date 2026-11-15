@@ -43,11 +43,30 @@ public final class RuntimeImageNode: Codable {
         return child
     }
 
-    public static func rootNode(for imagePaths: [String], name: String = "") -> RuntimeImageNode {
+    /// A tree of `imagePaths` under a root named `name`, one node per path component.
+    ///
+    /// With `directoryPath`, the tree starts at that directory instead of at `/`: the root stands
+    /// for the directory, and its children are what the paths name below it. Every node's `path`
+    /// is still its whole path, and so is the root's, which is the directory's. When one of the
+    /// paths is not below the directory, the tree starts at `/` as it does without one.
+    public static func rootNode(for imagePaths: [String], name: String = "", startingAt directoryPath: String? = nil) -> RuntimeImageNode {
         let root = RuntimeImageNode(name)
+        var directoryPrefixLength = 0
+        if let directoryPath {
+            // A trailing separator is dropped; `/` itself leaves nothing to start below.
+            var directoryPrefix = directoryPath
+            while directoryPrefix.hasSuffix("/") {
+                directoryPrefix.removeLast()
+            }
+            if !directoryPrefix.isEmpty, imagePaths.allSatisfy({ $0.hasPrefix(directoryPrefix + "/") }) {
+                // The root's own path is the directory, so every node below derives its whole path.
+                root.absolutePath = "/" + name + directoryPrefix
+                directoryPrefixLength = directoryPrefix.count
+            }
+        }
         for path in imagePaths {
             var current = root
-            for pathComponent in path.split(separator: "/") {
+            for pathComponent in path.dropFirst(directoryPrefixLength).split(separator: "/") {
                 switch pathComponent {
                 case ".":
                     break // current

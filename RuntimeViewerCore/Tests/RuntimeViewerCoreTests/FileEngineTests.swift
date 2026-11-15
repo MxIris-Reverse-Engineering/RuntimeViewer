@@ -95,6 +95,21 @@ struct FileEngineTests {
         try await engine.connect()
         #expect(await engine.imageList.first == Self.testBundleBinaryPath)
         #expect(engine.imageNodes.map(\.name) == [file.displayName])
+        #expect(engine.imageNodes.first?.path == Self.testBundleURL.path, "the group stands for the bundle")
+        #expect(engine.imageNodes.first?.children.map(\.name) == ["Contents"], "the group starts at the bundle, not at /")
+    }
+
+    @Test("a Mach-O file's group starts at the directory it is in and holds the file under its whole path")
+    func machOFileGroupStartsAtItsDirectory() async throws {
+        let file = try RuntimeOfflineFile(contentsOf: URL(fileURLWithPath: "/usr/bin/true"))
+        let engine = try RuntimeEngine(reading: file, engineID: "OfflineFileEngineTests.machOFileGroup")
+        try await engine.connect()
+        #expect(engine.imageNodes.map(\.name) == [file.displayName])
+        let fileNode = try #require(engine.imageNodes.first?.children.first)
+        #expect(engine.imageNodes.first?.children.count == 1)
+        #expect(fileNode.name == "true")
+        #expect(fileNode.isLeaf)
+        #expect(fileNode.path == "/usr/bin/true")
     }
 
     // MARK: - The handle on a file another process reads

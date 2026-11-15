@@ -65,6 +65,14 @@ struct FileFolderTests {
             folderPath + "/true",
         ], "listed: \(imageList)")
         #expect(engine.imageNodes.map(\.name) == [file.displayName], "a folder read alone is one group, under its name")
+        let folderNode = try #require(engine.imageNodes.first)
+        #expect(folderNode.path == folderPath, "the group stands for the folder")
+        #expect(folderNode.children.map(\.name) == ["PlugIns", "lib", "true"], "the group starts at the folder, not at /")
+        #expect(Self.leafPaths(of: folderNode) == imageList, "every image keeps its whole path")
+    }
+
+    private static func leafPaths(of node: RuntimeImageNode) -> [String] {
+        node.isLeaf ? [node.path] : node.children.flatMap { leafPaths(of: $0) }
     }
 
     /// A temporary directory is under `/var`, which is a link to

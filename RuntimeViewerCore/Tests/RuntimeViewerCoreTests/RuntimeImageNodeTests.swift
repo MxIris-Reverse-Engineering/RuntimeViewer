@@ -166,6 +166,66 @@ struct RuntimeImageNodeTests {
         #expect(root.isLeaf == true)
     }
 
+    // MARK: - rootNode(for:startingAt:)
+
+    private static let openedFolderImagePaths = [
+        "/Volumes/RE/iWork/Numbers/Numbers 3.0.1/Numbers.app/Contents/MacOS/Numbers",
+        "/Volumes/RE/iWork/Numbers/libFixture.dylib",
+    ]
+
+    private static func leafPaths(of node: RuntimeImageNode) -> [String] {
+        node.isLeaf ? [node.path] : node.children.flatMap { leafPaths(of: $0) }
+    }
+
+    @Test("rootNode starting at a directory lists what is below it, and every node keeps its whole path")
+    func rootNodeStartingAtDirectory() throws {
+        let root = RuntimeImageNode.rootNode(for: Self.openedFolderImagePaths, name: "Numbers", startingAt: "/Volumes/RE/iWork/Numbers")
+
+        #expect(root.name == "Numbers")
+        #expect(root.path == "/Volumes/RE/iWork/Numbers", "the root stands for the directory")
+        #expect(root.children.map(\.name) == ["Numbers 3.0.1", "libFixture.dylib"])
+        let applicationFolder = try #require(root.children.first)
+        #expect(applicationFolder.path == "/Volumes/RE/iWork/Numbers/Numbers 3.0.1")
+        #expect(Self.leafPaths(of: root) == Self.openedFolderImagePaths)
+    }
+
+    @Test("rootNode ignores a trailing separator of the directory it starts at")
+    func rootNodeStartingAtDirectoryWithTrailingSeparator() {
+        let root = RuntimeImageNode.rootNode(for: Self.openedFolderImagePaths, name: "Numbers", startingAt: "/Volumes/RE/iWork/Numbers/")
+
+        #expect(root.children.map(\.name) == ["Numbers 3.0.1", "libFixture.dylib"])
+        #expect(Self.leafPaths(of: root) == Self.openedFolderImagePaths)
+    }
+
+    @Test("rootNode starts at / when a path is outside the directory, or the directory is /")
+    func rootNodeStartingAtDirectoryFallsBack() {
+        let outside = RuntimeImageNode.rootNode(
+            for: Self.openedFolderImagePaths + ["/usr/lib/libobjc.A.dylib"],
+            name: "Numbers",
+            startingAt: "/Volumes/RE/iWork/Numbers"
+        )
+        #expect(outside.children.map(\.name) == ["Volumes", "usr"])
+        #expect(Self.leafPaths(of: outside) == Self.openedFolderImagePaths + ["/usr/lib/libobjc.A.dylib"])
+
+        let namePrefix = RuntimeImageNode.rootNode(for: Self.openedFolderImagePaths, name: "Num", startingAt: "/Volumes/RE/iWork/Num")
+        #expect(namePrefix.children.map(\.name) == ["Volumes"], "a directory whose name only begins another's is not above it")
+
+        let systemRoot = RuntimeImageNode.rootNode(for: ["/true"], name: "true", startingAt: "/")
+        #expect(systemRoot.children.map(\.name) == ["true"])
+        #expect(Self.leafPaths(of: systemRoot) == ["/true"])
+    }
+
+    @Test("a tree starting at a directory keeps its whole paths through encoding")
+    func rootNodeStartingAtDirectoryCodable() throws {
+        let root = RuntimeImageNode.rootNode(for: Self.openedFolderImagePaths, name: "Numbers", startingAt: "/Volumes/RE/iWork/Numbers")
+
+        let data = try JSONEncoder().encode(root)
+        let decoded = try JSONDecoder().decode(RuntimeImageNode.self, from: data)
+
+        #expect(decoded.path == "/Volumes/RE/iWork/Numbers")
+        #expect(Self.leafPaths(of: decoded) == Self.openedFolderImagePaths)
+    }
+
     // MARK: - Codable
 
     @Test("encodes and decodes correctly")
