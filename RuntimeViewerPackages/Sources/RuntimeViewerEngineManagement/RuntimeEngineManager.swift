@@ -537,6 +537,11 @@ public final class RuntimeEngineManager {
     /// Asks a Bonjour peer that has just connected for the engines it shares,
     /// a moment after it connected, and either mirrors them or marks the peer
     /// as a direct engine; then starts its heartbeat.
+    ///
+    /// The peer can disconnect — and be terminated — during the seconds this
+    /// waits and asks. Nothing is done for a peer no longer among the Bonjour
+    /// engines: its cleanup has already run, so a mirror, a direct-engine mark
+    /// or a heartbeat started for it now would stay behind (KnownIssues UR.5).
     func discoverEngineList(of runtimeEngine: RuntimeEngine, endpointName: String) async {
         // Let the remote's initial imageList push drain before
         // competing for the AWDL channel with our small RPC.
@@ -551,6 +556,7 @@ public final class RuntimeEngineManager {
             do {
                 let descriptors = try await runtimeEngine.requestEngineList(timeout: Self.bonjourHeartbeatTimeout)
                 #log(.debug, category: .engineMirroring, "received \(descriptors.count, privacy: .public) descriptors from \(endpointName, privacy: .public)")
+                guard isListedBonjourEngine(runtimeEngine) else { return }
                 if descriptors.isEmpty {
                     #log(.debug, category: .engineMirroring, "remote \(endpointName, privacy: .public) returned 0 descriptors, marking as direct engine")
                     self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
@@ -568,10 +574,15 @@ public final class RuntimeEngineManager {
                 }
             }
         }
+        guard isListedBonjourEngine(runtimeEngine) else { return }
         #log(.error, category: .engineMirroring, "giving up on engine list for \(endpointName, privacy: .public), marking as direct: \(String(describing: lastError), privacy: .public)")
         self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
         self.rebuildSections()
         self.startBonjourHeartbeat(for: runtimeEngine)
+    }
+
+    private func isListedBonjourEngine(_ runtimeEngine: RuntimeEngine) -> Bool {
+        bonjourRuntimeEngines.contains { $0 === runtimeEngine }
     }
 
     private func appendBonjourRuntimeEngine(_ bonjourRuntimeEngine: RuntimeEngine) {

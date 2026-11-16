@@ -42,9 +42,12 @@ public final class DraftWriteBack<Value> {
         write(value)
     }
 
-    /// The editor went away.
+    /// The editor went away: a change still waiting is written now, or the
+    /// last edit made before the editor closed would be lost.
     public func editorDidDisappear() {
-        pendingWrite?.task.cancel()
-        pendingWrite = nil
+        guard let pendingWrite else { return }
+        self.pendingWrite = nil
+        pendingWrite.task.cancel()
+        pendingWrite.write(pendingWrite.value)
     }
 }

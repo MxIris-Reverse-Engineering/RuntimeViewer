@@ -77,6 +77,24 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // Installed once, here: the coordinator binds this controller to a new
+        // view model for every object it shows, and a monitor added in
+        // `setupBindings(for:)` piled up one per object for the window's life.
+        eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
+            guard let self else { return event }
+            isPressedCommand = event.modifierFlags.contains(.command)
+            isPressedShift = event.modifierFlags.contains(.shift)
+            isPressedOption = event.modifierFlags.contains(.option)
+            if isPressedCommand {
+                textView.linkTextAttributes = [
+                    .cursor: NSCursor.pointingHand,
+                ]
+            } else {
+                textView.linkTextAttributes = [:]
+            }
+            return event
+        }
+
         containerView.hierarchy {
             scrollView
         }
@@ -169,21 +187,6 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             view.window?.showHUD(with: configuration)
         }
         .disposed(by: rx.disposeBag)
-
-        eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
-            guard let self else { return event }
-            isPressedCommand = event.modifierFlags.contains(.command)
-            isPressedShift = event.modifierFlags.contains(.shift)
-            isPressedOption = event.modifierFlags.contains(.option)
-            if isPressedCommand {
-                textView.linkTextAttributes = [
-                    .cursor: NSCursor.pointingHand,
-                ]
-            } else {
-                textView.linkTextAttributes = [:]
-            }
-            return event
-        }
     }
 
     func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {

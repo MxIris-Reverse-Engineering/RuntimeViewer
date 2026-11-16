@@ -1342,7 +1342,7 @@ extension RuntimeEngine {
 
     public func objectsWithProgress(in image: String) -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error> {
         AsyncThrowingStream { continuation in
-            Task { [weak self] in
+            let producer = Task { [weak self] in
                 guard let self else {
                     continuation.finish()
                     return
@@ -1356,6 +1356,13 @@ extension RuntimeEngine {
                 } catch {
                     continuation.finish(throwing: error)
                 }
+            }
+            // A consumer that stops listening — the user moved on to another
+            // image — ends the load: a request to the serving process is
+            // withdrawn, and the foreground load holding back background
+            // indexing ends with it (KnownIssues M6.1).
+            continuation.onTermination = { _ in
+                producer.cancel()
             }
         }
     }
