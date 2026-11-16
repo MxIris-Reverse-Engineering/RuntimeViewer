@@ -116,6 +116,16 @@
 - **全量测试中的失败**：Core 与 Packages 全量并行时出现一批超时（当时负载均值约 73），负载降下后单独重跑全部通过。
 - **唯一稳定复现的失败**：`InjectedDeviceEngineTests` 的两条在整个 `RuntimeViewerEngineManagementTests` 一起跑时必失败；在基线 `0a0003b8` 上用同样条件也一样失败，单独跑这个套件则通过。所以是基线已有的测试间干扰，不是本次引入的，记为 CA.30。
 
+### 第二批的验证
+
+在 `JHs-Mac-Studio-Ultra` 上对 `47f95bd4` 做了以下验证：
+
+- **新测试**：CA.12、CA.19 的新测试修复前红、修复后绿；CA.11 的复现测试按已知问题记录。
+- **相关套件**：侧栏、Manual Loading、内容面板等相关套件全部通过；App 编译通过（`bc112d20`，之后只还原了 Core 与 AppCore 里 CA.11 的改动）。
+- **AppCore 整包一起跑时的失败**：
+  - `ContentImageViewModelTests:73`、Call Hierarchy、Report 共享、语料 activity 在基线 `0a0003b8` 上同样失败；
+  - 只在本分支出现过的 `ContentImageViewModelTests:35` 与 `ContentTextPipelineTests:122`，单独连跑 3 次全过，属于整包并发时的超时。
+
 ## 其余逻辑问题（按严重程度）
 
 用户挑了 CA.7、CA.8、CA.11、CA.12、CA.19 作为第二批：四条已修（先红的测试在 `4502c029`，修复在 `bc112d20`），CA.11 的修复验证无效，已撤回、记为暂不修；其余未修。CA.7 与 CA.8 的代码在 App target，那里没有测试 target，经用户同意只验证编译。
