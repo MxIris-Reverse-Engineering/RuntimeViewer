@@ -47,6 +47,25 @@ struct SidebarRootBookmarkViewModelTests {
         #expect(environment.appDefaults.imageBookmarksByScope[otherScopeKey]?.count == 1)
     }
 
+    /// The rows on screen are the filtered ones, so the row the user removes
+    /// is named among them, not by its place in the stored list.
+    @Test("removing a bookmark while a filter hides rows removes the row the user picked")
+    func removingBookmarkWhileFilteringRemovesPickedRow() async throws {
+        try seedBookmarks()
+        let (viewModel, _, _) = makeViewModel()
+        defer { withExtendedLifetime(viewModel) {} }
+        _ = try await nextValue(from: viewModel.$nodes) { $0.count == 2 }
+
+        searchStringRelay.accept("libobjc")
+        _ = try await nextValue(from: viewModel.$nodes) { $0.map(\.node.name) == ["libobjc.A.dylib"] }
+
+        // The first row on screen, as the context menu and the Delete key name it.
+        removeBookmarkRelay.accept(0)
+
+        let stored = try await nextValue(from: environment.appDefaults.$imageBookmarksByScope) { $0[documentScopeKey]?.count == 1 }
+        #expect(stored[documentScopeKey]?.map(\.imageNode.name) == ["Foundation"])
+    }
+
     @Test("moving a bookmark reorders the stored list")
     func movingBookmarkReorders() async throws {
         try seedBookmarks()

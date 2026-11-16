@@ -10,6 +10,7 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
     private let router = MockRouter<SidebarRuntimeObjectRoute>()
     private let moveBookmarkRelay = PublishRelay<OutlineMove>()
     private let removeBookmarkRelay = PublishRelay<Int>()
+    private let filterRelay = BehaviorRelay<NavigatorTextFilter>(value: .empty)
 
     private let nsObject = Fixtures.runtimeObject(name: "NSObject", kind: .objc(.type(.class)), imagePath: TestImages.libobjc)
     private let nsCopying = Fixtures.runtimeObject(name: "NSCopying", kind: .objc(.type(.protocol)), imagePath: TestImages.libobjc)
@@ -37,6 +38,26 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
         removeBookmarkRelay.accept(0)
         _ = try await nextValue(from: harness.viewModel.$nodes) { $0.isEmpty }
         #expect(try await nextValue(from: harness.output.isBookmarkEmpty) { $0 } == true)
+    }
+
+    /// The rows on screen are the filtered ones, so the row the user removes
+    /// is named among them, not by its place in the stored list.
+    @Test("removing a bookmark while a filter hides rows removes the row the user picked")
+    func removingBookmarkWhileFilteringRemovesPickedRow() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.count == 2 }
+
+        filterRelay.accept(NavigatorTextFilter(typedText: "NSCopying"))
+        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.map(\.runtimeObject) == [nsCopying] }
+
+        // The first row on screen, as the context menu and the Delete key name it.
+        removeBookmarkRelay.accept(0)
+
+        let stored = try await nextValue(from: harness.environment.appDefaults.$objectBookmarksByScopeAndImagePath) {
+            $0[harness.scopeKey]?[TestImages.libobjc]?.count == 1
+        }
+        #expect(stored[harness.scopeKey]?[TestImages.libobjc]?.map(\.object) == [nsObject])
     }
 
     @Test("moving a bookmark reorders the stored list")
@@ -86,7 +107,7 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
                 runtimeObjectClicked: .empty(),
                 runtimeObjectOpenedInNewTab: .empty(),
                 loadImageClicked: .empty(),
-                filter: .just(.empty),
+                filter: filterRelay.asDriver(),
                 isSearchCaseSensitive: .just(false)
             )
         )
