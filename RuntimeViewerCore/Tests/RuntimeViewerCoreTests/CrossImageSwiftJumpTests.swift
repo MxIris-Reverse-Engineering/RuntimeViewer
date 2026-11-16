@@ -12,7 +12,7 @@ struct CrossImageJumpTargetFixture {
 /// table of mangled names. The table used to remember the defining image's own
 /// `imagePath` — the install name in its `LC_ID_DYLIB` — instead of the path
 /// its section is keyed by, so an image without an install name (this test
-/// bundle) or one named `@rpath/…` was never found, and offline a file names
+/// bundle) or one named `@rpath/…` was never found, and read from disk a file names
 /// itself by its install name too.
 @Suite
 struct CrossImageSwiftJumpTests {

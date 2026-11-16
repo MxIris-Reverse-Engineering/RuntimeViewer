@@ -86,7 +86,7 @@ SwiftUICore 的 `__auth_stubs` 有 35,120 字节，共 2,195 个 16 字节的桩
 
 还能从元数据补回、不必猜的（估算）：名字齐全的 Swift 镜像（SwiftUICore、SwiftUI、libswiftCore、Combine）里，协议见证占全部函数的 11–18%，值见证占 4–13%，两者都能从见证表确定是谁的哪一项。剥了符号的镜像里另有 13–16% 的无名函数只是一条跳转（SwiftData 696、WidgetKit 1,444、Charts 1,504 个），但九成以上跳向的目标本身也无名，按目标起名补不回多少；它们多半是合并后的协议见证，见证表会直接指向它们。闭包、特化、结构体和枚举的方法补不回来。
 
-iOS 真机把本地符号放在单独的 `.symbols` 文件里，不映射进进程，`DyldCacheLoaded.localSymbolsInfo`（`DyldCacheLoaded.swift:183-191`）在那里是空的。落地第一步读离线缓存核实：真机缓存里的本地符号条目和地址都还在，名字全是 `<redacted>`，真名只在不映射的 `.symbols` 文件里；Simulator 与 macOS 一样能读到名字。因此「靠元数据能叫出名字的方法也算」这条决定，对真机和第三方 App 的发布版意义最大。
+iOS 真机把本地符号放在单独的 `.symbols` 文件里，不映射进进程，`DyldCacheLoaded.localSymbolsInfo`（`DyldCacheLoaded.swift:183-191`）在那里是空的。落地第一步从磁盘读缓存核实：真机缓存里的本地符号条目和地址都还在，名字全是 `<redacted>`，真名只在不映射的 `.symbols` 文件里；Simulator 与 macOS 一样能读到名字。因此「靠元数据能叫出名字的方法也算」这条决定，对真机和第三方 App 的发布版意义最大。
 
 ### 跨库调用者可以先筛库（实测 + 推测）
 
@@ -127,7 +127,7 @@ SwiftUICore 里的两种典型形态：
   - `SwiftThunkAnalysis` 有一套与反汇编引擎无关的指令词汇 `ThunkInstruction`（`call`、`branch`、`indirectCall`、`materializePageAddress`、`loadFromMemory`、`signOrAuthenticatePointer`……），Capstone 只出现在 `CapstoneThunkDecoder.swift` 这一个文件里；`ThunkRegisterTracker` 负责跟踪 `adrp` + `add` 拼出来的地址。
   - `SymbolIndexStore` 收集本地与导出符号（`Sources/MachO/MachOSymbols/SymbolIndexStore.swift`）。
 - **RuntimeViewer**：
-  - 引擎只经内存里的 `MachOImage` 读镜像（`DyldUtilities.machOImage(forPath:)`，`RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift:179-211`），没有离线路径。
+  - 引擎只经内存里的 `MachOImage` 读镜像（`DyldUtilities.machOImage(forPath:)`，`RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift:179-211`），没有从磁盘读的路径。
   - 成员：`RuntimeMemberDeclaration` / `RuntimeMemberKind` / `RuntimeMemberMatch`（`RuntimeViewerCore/Sources/RuntimeViewerCore/Common/RuntimeMemberDeclaration.swift`）、`RuntimeMemberDeclarationLocator`（`RuntimeViewerCore/Sources/RuntimeViewerCore/Search/`）、`RuntimeMemberAddress`（mangled 符号名与未滑动地址）。Find 的成员命中经 `ContentHighlightRequest` 滚到声明行并闪一下（`RuntimeViewerPackages/Sources/RuntimeViewerApplication/Content/ContentHighlightRequest.swift`、`Find/FindViewModel.swift:348-372`）。
   - 内容区只有类型名带链接（`.type` span，`RuntimeViewerApplication/Theme/FrozenSemanticString+ThemeProfile.swift:52-183`），成员名没有身份；右键菜单也只出现在类型名上（`RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentTextViewController.swift:161-177`、`ContentSourceEditorViewController.swift:230-242`）。
   - 命令扩展：`RuntimeEngine.addCommandExtension(named:install:)`（`RuntimeEngineCommandRegistrar.swift:197-208`），范式是 `RuntimeViewerInjection`；需要进度、可跨连接取消的命令走 `RuntimeEngineProgressCommand`（`RuntimeEngineCommand.swift`）。
@@ -155,7 +155,7 @@ SwiftUICore 里的两种典型形态：
 | macOS 27.2、iOS 27.0 真机 | 这两个段在镜像里大小为 0，改用全缓存共用的 selector 桩 | 全缓存共用的 GOT 桩 |
 | iOS 27.0 Simulator（arm64） | 镜像自己的 `__objc_stubs` | 镜像自己的 `__stubs` |
 
-（离线缓存用 `ipsw dyld macho` 读，macOS 27.2 在进程内读。）
+（磁盘上的缓存用 `ipsw dyld macho` 读，macOS 27.2 在进程内读。）
 
 - 共用的 selector 桩是 `adrp x1, 页; add x1, x1, #偏移; b <objc_msgSend 副本>`：`x1` 直接就是 selector 字符串的地址，跳去的 `objc_msgSend` 副本在 `libobjcMsgSend1.dylib` 里。同一个 selector 在不同子缓存里各有一份桩，被调用的桩有 1,552,332 个，只对应 1,042,853 个不同的 selector 字符串，所以 **selector 要以字符串地址为键**，不能以桩地址为键。
 - 共用的 GOT 桩是 `adrp x17, 页; add x17, x17, #偏移; ldr x16, [x17]; braa x16, x17`。在进程内读出槽位里已绑定的指针、去掉指针认证位，就是真正的目标。
@@ -243,7 +243,7 @@ SwiftUICore 里的两种典型形态：
 - 字符串常量与全局变量的引用。
 - 完整的接收者类型推断（跨调用、跨返回值的数据流分析）。
 - 在 RuntimeViewer 里显示反汇编或伪代码。
-- 存盘的全量交叉引用索引，以及从缓存文件离线建索引。
+- 存盘的全量交叉引用索引，以及从磁盘上的缓存文件建索引。
 - 经数据结构间接传递的引用（存进表里的回调）和 `performSelector:`、`NSSelectorFromString` 这类动态派发——静态分析看不见。
 - 修改现有的 Find 模式、Relationships 标签或生成侧的语义标注。
 
@@ -267,7 +267,7 @@ App（Find / 内容区 / Inspector） · CLI（callers / callees / references）
 
 ### 2. MachOSwiftSection：`CrossReferenceAnalysis`（形状，以库提案为准）
 
-签名只列 `MachOImage`；是否对 `MachOFile` 泛型由库提案决定（离线建索引是本提案的非目标）。
+签名只列 `MachOImage`；是否对 `MachOFile` 泛型由库提案决定（从磁盘建索引是本提案的非目标）。
 
 ```swift
 import MachOKit
@@ -691,7 +691,7 @@ func typeReferences(windowIdentifier: String, typeName: String, imagePath: Strin
 - **先只做 CLI / MCP、GUI 另起提案；或只做 GUI**：三个前端共用一套命令，分开做反而要把目标写法与精度标注重复设计一遍。
 - **只做调用**：类型是 RuntimeViewer 的导航单位，「哪些方法用到了这个类型」顺着现有导航就能用起来，代价只是多认几种调用目标。
 - **再加字符串与全局变量引用**：要识别更多取地址的形态，还要为字符串和全局变量各做一套展示，留给后续提案。
-- **分析逻辑全放在 RuntimeViewer 的新模块里**：离线的 `swift-section` 用不上；也违背了「二进制分析的规则放在 MachOSwiftSection，RuntimeViewer 只负责显示」的既有做法（[0031](0031-private-discriminator-tag.md)）。
+- **分析逻辑全放在 RuntimeViewer 的新模块里**：读磁盘文件的 `swift-section` 用不上；也违背了「二进制分析的规则放在 MachOSwiftSection，RuntimeViewer 只负责显示」的既有做法（[0031](0031-private-discriminator-tag.md)）。
 - **新建一个独立的库**：多一个仓库、多一套发版流程；而 MachOSwiftSection 已经有 Capstone、thunk 分析和符号索引。
 - **跨库只算目标进程已加载的库**：问「全系统谁在用」时会漏掉没加载的框架，而整个缓存本来就映射在每个进程里。
 - **每次查询自己选一组库**：多一步选择；需要缩小范围时，用 Find 的范围控件或 CLI 的 `--scope` 即可。

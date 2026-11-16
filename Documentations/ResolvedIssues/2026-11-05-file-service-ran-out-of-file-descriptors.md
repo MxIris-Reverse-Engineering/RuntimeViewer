@@ -1,9 +1,9 @@
-# 2026-11-05 离线服务读 Dock.app 时崩溃：每读一个镜像就把 dyld cache 的文件再映射一次，描述符用光
+# 2026-11-05 文件服务读 Dock.app 时崩溃：每读一个镜像就把 dyld cache 的文件再映射一次，描述符用光
 
 **调查日期：** 2026-11-05
 **修复落地：** 2026-11-06。MachOSwiftSection 分支 `fix/shared-cache-file-mappings`，本仓库分支 `fix/offline-descriptor-exhaustion`；读取层那一半随同日把 MachOSwiftSection 的 pin 抬到含修复的 `next` 在 App 里生效
-**Severity：** High —— 离线服务进程整个停下，正在读的文件要重新打开
-**触发场景：** 离线打开 `/Volumes/RE/Dock/27.0/Dock.app`（bundle，配对本机的 dyld shared cache），后台给 DockHelper 建 Find 语料
+**Severity：** High —— 文件服务进程整个停下，正在读的文件要重新打开
+**触发场景：** 以文件模式打开 `/Volumes/RE/Dock/27.0/Dock.app`（bundle，配对本机的 dyld shared cache），后台给 DockHelper 建 Find 语料
 
 ---
 
@@ -11,10 +11,10 @@
 
 | 字段 | 内容 |
 |---|---|
-| **现象** | `RuntimeViewerOfflineService` 停在 MachOSwiftSection `MachOReading/Extensions/DyldCache+.swift:50` 的 `try! MemoryMappedFile.open`：`'try!' expression unexpectedly raised an error: system error 24`（`EMFILE`）。栈自上而下：`DyldCache.fileIO` ← `MachOFile.readWrapperElement` ← `BuiltinTypeLayoutIndex.init` ← `ImageReference.init` ← `ImageUniverse.indexNextDependency()` ← `ImageUniverse.resolveProtocolClassConstraint("DockCore.MenuHelperClientProtocol")` ← 存在类型与 Optional 的布局 ← DockHelper 一个类的字段布局 ← `RuntimeSwiftSection.corpusPrints` ← `RuntimeInterfaceCorpusStore.run` |
-| **影响范围** | 所有离线读 dyld cache 镜像的进程，读过的镜像越多占的描述符越多；swift-section 等 MachOSwiftSection 的离线读者同样受影响。字段类型里有 Swift 声明的 `@objc` 协议时，一个镜像就要把几百个依赖镜像读一遍，最快撞上限 |
+| **现象** | `RuntimeViewerFileService` 停在 MachOSwiftSection `MachOReading/Extensions/DyldCache+.swift:50` 的 `try! MemoryMappedFile.open`：`'try!' expression unexpectedly raised an error: system error 24`（`EMFILE`）。栈自上而下：`DyldCache.fileIO` ← `MachOFile.readWrapperElement` ← `BuiltinTypeLayoutIndex.init` ← `ImageReference.init` ← `ImageUniverse.indexNextDependency()` ← `ImageUniverse.resolveProtocolClassConstraint("DockCore.MenuHelperClientProtocol")` ← 存在类型与 Optional 的布局 ← DockHelper 一个类的字段布局 ← `RuntimeSwiftSection.corpusPrints` ← `RuntimeInterfaceCorpusStore.run` |
+| **影响范围** | 所有从磁盘读 dyld cache 镜像的进程，读过的镜像越多占的描述符越多；swift-section 等 MachOSwiftSection 的其它读文件的使用方同样受影响。字段类型里有 Swift 声明的 `@objc` 协议时，一个镜像就要把几百个依赖镜像读一遍，最快撞上限 |
 | **根因** | MachOSwiftSection 读取层的文件映射挂在每个 `MachOFile` / `DyldCache` 实例上，而 MachOKit 给每个镜像新建 `DyldCache`、依赖闭包给每个根新建一批 `MachOFile`：同一个 cache 文件被映射几百次，每次占一个描述符 |
-| **Status** | **Fixed** —— MachOSwiftSection 改为每次打开的文件只映射一次；本仓库的离线服务读文件前自己抬高描述符上限，配对本机 cache 改用进程共享的那一份 |
+| **Status** | **Fixed** —— MachOSwiftSection 改为每次打开的文件只映射一次；本仓库的文件服务读文件前自己抬高描述符上限，配对本机 cache 改用进程共享的那一份 |
 
 ---
 
@@ -44,7 +44,7 @@
   - `ImageUniverse.resolveProtocol` 每索引一个镜像就同时查 Swift 描述符和 ObjC 记录，谁先认出就停：DockHelper 那个字段不再读任何依赖。
 - **本仓库**（`fix/offline-descriptor-exhaustion`）：
   - `RuntimeFileImageCatalog` 配对本机 cache 时用 `FullDyldCache.cachedHost`，与依赖定位器共用一份。
-  - `RuntimeOfflineServiceHost` 在读文件之前把软上限抬到 `min(OPEN_MAX, rlim_max)`——`setrlimit(2)` 手册建议的最大值，本机是 10,240。共享之后整份 cache 由 MachOKit、Swift 读取层、ObjC 读取层各映射一遍就要两百多个描述符，256 不够，不能再指望 CoreFoundation 顺手抬上去。
+  - `RuntimeFileServiceHost` 在读文件之前把软上限抬到 `min(OPEN_MAX, rlim_max)`——`setrlimit(2)` 手册建议的最大值，本机是 10,240。共享之后整份 cache 由 MachOKit、Swift 读取层、ObjC 读取层各映射一遍就要两百多个描述符，256 不够，不能再指望 CoreFoundation 顺手抬上去。
 
 ## 复现与验证
 
@@ -60,8 +60,8 @@
 - **回归测试，修复前红、修复后绿**：
   - MachOSwiftSection `SharedFileMappingTests`：子进程里压到 256 后连读本机 cache 的 400 个 Swift 镜像（修复前 `SIGTRAP`）；同一文件的各个读者拿到同一个映射；文件被删后读取抛错而不是停下（修复前 `SIGTRAP`）。
   - MachOSwiftSection `SwiftDeclaredObjCProtocolExistentialLayoutTests`：`@objc` 协议的存在类型字段在依赖闭包里算布局，一个依赖都不索引（修复前索引了全部 513 个、64 秒，修复后 0.19 秒）。
-  - 本仓库 `OfflineFileEngineTests`：配对本机 cache 的目录用的是 `FullDyldCache.cachedHost`。
-  - 本仓库 `RuntimeOfflineServiceHostTests`：子进程从软上限 256 起跑一次宿主启动，之后软上限达到 `min(OPEN_MAX, rlim_max)`。
+  - 本仓库 `FileEngineTests`：配对本机 cache 的目录用的是 `FullDyldCache.cachedHost`。
+  - 本仓库 `RuntimeFileServiceHostTests`：子进程从软上限 256 起跑一次宿主启动，之后软上限达到 `min(OPEN_MAX, rlim_max)`。
 
 ## 以前修过吗
 

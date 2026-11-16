@@ -5,7 +5,7 @@ import RuntimeViewerCore
 
 /// What the toolbar's runtime source picker lists when it opens: the sources a window can move to,
 /// under one header per host, the one the window is on checked, and the dependency caches the
-/// window's offline file can read its dependencies from.
+/// window's file can read its dependencies from.
 ///
 /// The window's view model works it out from the engine manager's sections, as it worked out the
 /// pop-up menu this picker replaced; `RuntimeSourcePopoverAdapter` turns it into the popover's rows.
@@ -47,17 +47,17 @@ public struct RuntimeSourcePickerContent: Equatable {
         }
     }
 
-    /// A dependency cache the window's offline file can be paired with.
+    /// A dependency cache the window's file can be paired with.
     public struct DependencyCacheChoice: Equatable {
         public let title: String
 
         /// The cache, or `nil` for reading the file alone.
-        public let dependencyCache: RuntimeOfflineFile.DependencyCache?
+        public let dependencyCache: RuntimeFile.DependencyCache?
 
         /// Whether the file reads its dependencies from it now.
         public let isCurrent: Bool
 
-        public init(title: String, dependencyCache: RuntimeOfflineFile.DependencyCache?, isCurrent: Bool) {
+        public init(title: String, dependencyCache: RuntimeFile.DependencyCache?, isCurrent: Bool) {
             self.title = title
             self.dependencyCache = dependencyCache
             self.isCurrent = isCurrent
@@ -70,8 +70,8 @@ public struct RuntimeSourcePickerContent: Equatable {
 
     public var sections: [Section]
 
-    /// The caches the window's offline file can read its dependencies from — empty unless the window
-    /// is on an offline engine that reads a Mach-O file or a bundle.
+    /// The caches the window's file can read its dependencies from — empty unless the window
+    /// is on a file engine that reads a Mach-O file or a bundle.
     public var dependencyCacheChoices: [DependencyCacheChoice]
 
     public init(disconnectedSource: Source? = nil, sections: [Section], dependencyCacheChoices: [DependencyCacheChoice] = []) {

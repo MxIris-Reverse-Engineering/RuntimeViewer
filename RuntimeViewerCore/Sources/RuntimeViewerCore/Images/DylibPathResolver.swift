@@ -7,7 +7,7 @@ struct DylibPathResolver {
 
     /// Whether a path that names no file on disk is an image of the dyld
     /// shared cache the images being resolved come from: this process's cache
-    /// for images dyld loaded, the cache an offline file is paired with for
+    /// for images dyld loaded, the cache a file is paired with for
     /// one read from disk.
     private let isSharedCacheImage: @Sendable (String) -> Bool
 

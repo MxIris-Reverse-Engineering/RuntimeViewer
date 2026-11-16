@@ -15,7 +15,7 @@ final class Document: NSDocument {
 
     private lazy var mainCoordinator = MainCoordinator(documentState: documentState)
 
-    /// A document whose window starts on `runtimeEngine`: an offline file's
+    /// A document whose window starts on `runtimeEngine`: a file's
     /// engine for a file the user opened, `.local` for a new window.
     init(runtimeEngine: RuntimeEngine) {
         documentState = DocumentState(runtimeEngine: runtimeEngine)

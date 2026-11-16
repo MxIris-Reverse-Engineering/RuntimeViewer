@@ -73,7 +73,7 @@ extension RuntimeBookmarkScope {
         /// device do share a scope. That is an accepted cost, not an oversight.
         case bonjour(deviceID: String, processName: String, role: RuntimeSource.Role)
 
-        /// An offline file, by its standardized path: the same file opened
+        /// A file, by its standardized path: the same file opened
         /// again — on another launch, paired with another cache — is the same
         /// scope, and the same file at another path is another one.
         case file(path: String)

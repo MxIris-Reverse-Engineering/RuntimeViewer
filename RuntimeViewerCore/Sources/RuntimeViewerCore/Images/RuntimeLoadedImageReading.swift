@@ -13,7 +13,7 @@ import Demangling
 @_spi(Internals) import SwiftInspection
 @_spi(Internals) import SwiftObjCInterop
 
-/// What every engine read before offline mode: the images dyld loaded into
+/// What every engine read before file mode: the images dyld loaded into
 /// this process, whose metadata can be instantiated.
 enum RuntimeLoadedImageReading: RuntimeImageReading {
     typealias MachO = MachOImage

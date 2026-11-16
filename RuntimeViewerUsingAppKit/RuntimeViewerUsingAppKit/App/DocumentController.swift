@@ -2,8 +2,8 @@ import AppKit
 import Dependencies
 
 /// The app's document controller. A file that is not a RuntimeViewer document
-/// — a Mach-O file, a bundle, a folder, a dyld shared cache — opens offline, in
-/// a window on an engine reading it (`OfflineFileController`), whether it comes
+/// — a Mach-O file, a bundle, a folder, a dyld shared cache — opens in
+/// a window on an engine reading it (`FileController`), whether it comes
 /// from File › Open…, Open Recent or the Dock.
 ///
 /// The first `NSDocumentController` made becomes `NSDocumentController.shared`,
@@ -12,7 +12,7 @@ import Dependencies
 /// would make a plain one.
 @MainActor
 final class DocumentController: NSDocumentController {
-    @Dependency(\.offlineFileController) private var offlineFileController
+    @Dependency(\.fileController) private var fileController
 
     /// Makes this the shared document controller.
     static func install() {
@@ -20,7 +20,7 @@ final class DocumentController: NSDocumentController {
     }
 
     override func beginOpenPanel(_ openPanel: NSOpenPanel, forTypes inTypes: [String]?, completionHandler: @escaping (Int) -> Void) {
-        openPanel.message = "Choose a Mach-O file, an app or framework bundle, a folder, or a dyld shared cache to read offline."
+        openPanel.message = "Choose a Mach-O file, an app or framework bundle, a folder, or a dyld shared cache to read from disk."
         // A framework and a folder are directories to the panel, and an app
         // is read whole, never browsed into.
         openPanel.canChooseDirectories = true
@@ -31,7 +31,7 @@ final class DocumentController: NSDocumentController {
     }
 
     override func openDocument(withContentsOf url: URL, display displayDocument: Bool, completionHandler: @escaping (NSDocument?, Bool, (any Error)?) -> Void) {
-        guard offlineFileController.opensFile(at: url) else {
+        guard fileController.opensFile(at: url) else {
             super.openDocument(withContentsOf: url, display: displayDocument, completionHandler: completionHandler)
             return
         }
@@ -39,7 +39,7 @@ final class DocumentController: NSDocumentController {
             do {
                 // Returns as soon as the window is up; the file is read in the
                 // background, and joins Open Recent once it has been.
-                let document = try await offlineFileController.openDocument(forFileAt: url, display: displayDocument)
+                let document = try await fileController.openDocument(forFileAt: url, display: displayDocument)
                 completionHandler(document, false, nil)
             } catch {
                 // The controller presents it: "… is not a Mach-O file, a

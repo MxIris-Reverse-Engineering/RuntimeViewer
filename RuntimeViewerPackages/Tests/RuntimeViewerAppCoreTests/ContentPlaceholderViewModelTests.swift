@@ -9,9 +9,9 @@ import RuntimeViewerCore
 import RuntimeViewerAppTestingSupport
 
 /// What the content pane's placeholder says while it has no object: the hint
-/// to select one, or — while the offline service is still reading the
+/// to select one, or — while the file service is still reading the
 /// window's file — that the file is being read. The file is served by a
-/// `RuntimeOfflineServiceHost` over an anonymous listener that accepts nothing
+/// `RuntimeFileServiceHost` over an anonymous listener that accepts nothing
 /// until the test starts it, which holds the read under way.
 @Suite("Content placeholder", .serialized)
 @MainActor
@@ -33,8 +33,8 @@ struct ContentPlaceholderViewModelTests {
     @Test("A file still being read says so, and asks for a selection once the file is read")
     func fileBeingReadSaysSo() async throws {
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
-        let host = RuntimeOfflineServiceHost(connection: listener)
-        let file = try RuntimeOfflineFile(contentsOf: URL(fileURLWithPath: "/usr/bin/true"))
+        let host = RuntimeFileServiceHost(connection: listener)
+        let file = try RuntimeFile(contentsOf: URL(fileURLWithPath: "/usr/bin/true"))
         let engine = RuntimeEngine(source: file.source, engineID: "content-placeholder-test.file")
         let recorder = PlaceholderRecorder()
         let subscription = ContentPlaceholderViewModel.placeholders(for: engine).subscribeOnNext { placeholder in
@@ -44,7 +44,7 @@ struct ContentPlaceholderViewModelTests {
             subscription.dispose()
             Task { await host.stop() }
         }
-        let credential = RuntimeConnectionCredential.xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeOfflineService.launchPayload(for: file))))
+        let credential = RuntimeConnectionCredential.xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeFileService.launchPayload(for: file))))
         let connecting = Task { try await engine.connect(credential: credential) }
 
         #expect(await pollUntil { recorder.placeholders.last == .readingFile(named: file.displayName) })

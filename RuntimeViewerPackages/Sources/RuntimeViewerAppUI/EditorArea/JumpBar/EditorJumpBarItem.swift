@@ -22,8 +22,8 @@ public final class EditorJumpBarItem: NSObject, NSPopUpPathItem {
         /// The engine the document is on: the first component, as Xcode's project or SDK is.
         case source(RuntimeEngine)
 
-        /// A folder of the image tree, its synthetic roots (`Dyld Shared Cache`, `Others`, an
-        /// offline file's name) included.
+        /// A folder of the image tree, its synthetic roots (`Dyld Shared Cache`, `Others`, a
+        /// file's name) included.
         case folder(RuntimeImageNode)
 
         /// An image: a document root, chosen as a whole, whose objects follow it in the path.

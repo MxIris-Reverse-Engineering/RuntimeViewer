@@ -12,7 +12,7 @@ import RuntimeViewerCore
 ///
 /// The menu is the one the pop-up had: a section header per host with its sources under it, each with
 /// its icon, the source the window is on selected; while that source's engine is gone, a dimmed item
-/// for it on top, selected. Below the sources sit Open File… and — while the window is on an offline
+/// for it on top, selected. Below the sources sit Open File… and — while the window is on a file
 /// file that can be paired with a dependency cache — a Dependency Cache submenu listing the caches, the
 /// one in use checked, with Manage in Settings… below them. A command is no source to show, so after
 /// one the pop-up shows the window's source again.
@@ -25,7 +25,7 @@ public final class RuntimeSourceMenuAdapter: NSObject {
     enum Row: Equatable {
         case source(engineIdentifier: String)
         case openFile
-        case dependencyCacheChoice(RuntimeOfflineFile.DependencyCache?)
+        case dependencyCacheChoice(RuntimeFile.DependencyCache?)
         case manageDependencyCaches
     }
 
@@ -43,7 +43,7 @@ public final class RuntimeSourceMenuAdapter: NSObject {
 
     private let openFileRequestedRelay = PublishRelay<Void>()
 
-    private let dependencyCacheSelectedRelay = PublishRelay<RuntimeOfflineFile.DependencyCache?>()
+    private let dependencyCacheSelectedRelay = PublishRelay<RuntimeFile.DependencyCache?>()
 
     private let dependencyCacheSettingsRequestedRelay = PublishRelay<Void>()
 
@@ -57,8 +57,8 @@ public final class RuntimeSourceMenuAdapter: NSObject {
         openFileRequestedRelay.asSignal()
     }
 
-    /// The dependency cache chosen for the window's offline file; `nil` reads the file alone.
-    public var dependencyCacheSelected: Signal<RuntimeOfflineFile.DependencyCache?> {
+    /// The dependency cache chosen for the window's file; `nil` reads the file alone.
+    public var dependencyCacheSelected: Signal<RuntimeFile.DependencyCache?> {
         dependencyCacheSelectedRelay.asSignal()
     }
 

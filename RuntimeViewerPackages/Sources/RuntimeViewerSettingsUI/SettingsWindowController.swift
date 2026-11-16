@@ -28,8 +28,8 @@ package final class SettingsWindowController: UIFoundationSettingsUI.SettingsWin
             SettingsPage("Search", id: "search", plainSymbol: "magnifyingglass") {
                 SearchSettingsView()
             }
-            SettingsPage("Offline Files", id: "offline", plainSymbol: "doc.viewfinder") {
-                OfflineSettingsView()
+            SettingsPage("Files", id: "file", plainSymbol: "doc.viewfinder") {
+                FileSettingsView()
             }
             SettingsPage("MCP", id: "mcp", plainSymbol: "network") {
                 MCPSettingsView()

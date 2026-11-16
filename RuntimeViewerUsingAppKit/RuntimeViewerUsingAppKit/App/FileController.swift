@@ -8,8 +8,8 @@ import RuntimeViewerSettings
 import Dependencies
 import DependenciesMacros
 
-/// Opens a Mach-O file, a bundle, a folder or a dyld shared cache offline: in a
-/// window on an engine that reads it, in an instance of the offline service of
+/// Opens a Mach-O file, a bundle, a folder or a dyld shared cache from disk: in a
+/// window on an engine that reads it, in an instance of the file service of
 /// its own.
 ///
 /// `DocumentController` hands every file that is not a RuntimeViewer document
@@ -17,36 +17,36 @@ import DependenciesMacros
 /// picker's Open File… and Dependency Cache open and re-pair through here too.
 @Loggable
 @MainActor
-final class OfflineFileController {
-    fileprivate static let shared = OfflineFileController()
+final class FileController {
+    fileprivate static let shared = FileController()
 
     /// The filename extension of a RuntimeViewer document, the one kind of file
-    /// not opened offline.
+    /// not opened in file mode.
     private static let documentFilenameExtension = "runtimedocument"
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
     @Dependency(\.settings) private var settings
 
-    @Dependency(\.runtimeOfflineEngineParking) private var runtimeOfflineEngineParking
+    @Dependency(\.runtimeFileEngineParking) private var runtimeFileEngineParking
 
     private init() {}
 
-    /// Lets an offline engine's process go while no window is on it.
+    /// Lets a file engine's process go while no window is on it.
     func start() {
-        runtimeOfflineEngineParking.start()
+        runtimeFileEngineParking.start()
     }
 
-    /// Whether `url` is opened offline rather than as a RuntimeViewer document.
+    /// Whether `url` is opened in file mode rather than as a RuntimeViewer document.
     func opensFile(at url: URL) -> Bool {
         url.pathExtension.lowercased() != Self.documentFilenameExtension
     }
 
     /// A new document on the engine reading the file at `url`, added to the
     /// document controller and, when `display` is set, shown at once — while
-    /// an instance of the offline service is still reading the file, which a
+    /// an instance of the file service is still reading the file, which a
     /// dyld shared cache keeps busy for a while; the window says so until it
-    /// has. Throws, before any window opens, when `url` is no file offline
+    /// has. Throws, before any window opens, when `url` is nothing file
     /// mode reads. When the instance cannot read it, the window says why and
     /// closes once the user has acknowledged it, and Open Recent does not
     /// list the file.
@@ -65,18 +65,18 @@ final class OfflineFileController {
         return document
     }
 
-    /// The file at `url` as offline mode reads it: the listed one, with the
+    /// The file at `url` as file mode reads it: the listed one, with the
     /// cache the user paired it with, or a new one paired with the default
     /// cache. What is at `url` is inspected off the main thread — a header
     /// read, but of a file that can be anywhere, a slow volume included.
-    private func fileToRead(at url: URL) async throws -> RuntimeOfflineFile {
+    private func fileToRead(at url: URL) async throws -> RuntimeFile {
         var file = try await Task.detached(priority: .userInitiated) {
-            try RuntimeOfflineFile(contentsOf: url)
+            try RuntimeFile(contentsOf: url)
         }.value
         if let listedFile = listedFile(withSource: file.source) {
             file = listedFile
         } else {
-            file.dependencyCache = settings.offline.defaultDependencyCache(for: file)
+            file.dependencyCache = settings.file.defaultDependencyCache(for: file)
         }
         return file
     }
@@ -88,9 +88,9 @@ final class OfflineFileController {
         do {
             try await runtimeEngineManager.waitUntilFileIsRead(by: engine)
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
-            #log(.info, "Opened \(url.lastPathComponent, privacy: .public) offline")
+            #log(.info, "Opened \(url.lastPathComponent, privacy: .public) from disk")
         } catch {
-            #log(.error, "Could not open \(url.lastPathComponent, privacy: .public) offline: \(error.localizedDescription, privacy: .public)")
+            #log(.error, "Could not open \(url.lastPathComponent, privacy: .public) from disk: \(error.localizedDescription, privacy: .public)")
             // Closed while the file was being read: nobody is waiting to hear.
             guard NSDocumentController.shared.documents.contains(where: { $0 === document }) else { return }
             let alert = NSAlert()
@@ -111,10 +111,10 @@ final class OfflineFileController {
 
     // MARK: - Dependency cache
 
-    /// One entry of an offline engine's Dependency Cache menu.
+    /// One entry of a file engine's Dependency Cache menu.
     struct DependencyCacheChoice {
         let title: String
-        let dependencyCache: RuntimeOfflineFile.DependencyCache?
+        let dependencyCache: RuntimeFile.DependencyCache?
         let isCurrent: Bool
     }
 
@@ -125,15 +125,15 @@ final class OfflineFileController {
     /// registered one, each named with its platform. Empty for a dyld shared
     /// cache, which is its own.
     func dependencyCacheChoices(for engine: RuntimeEngine) -> [DependencyCacheChoice] {
-        guard let file = runtimeEngineManager.offlineFile(of: engine) else { return [] }
+        guard let file = runtimeEngineManager.file(of: engine) else { return [] }
         if case .dyldSharedCache = file.content { return [] }
         var choices: [DependencyCacheChoice] = []
-        if Settings.Offline.canPairWithThisMacsCache(file) {
+        if Settings.File.canPairWithThisMacsCache(file) {
             choices.append(DependencyCacheChoice(title: "This Mac's Dyld Shared Cache", dependencyCache: .systemDyldSharedCache, isCurrent: file.dependencyCache == .systemDyldSharedCache))
         }
         let namesPlatforms = file.content == .folder
-        for cache in settings.offline.dependencyCaches(for: file) {
-            let dependencyCache = RuntimeOfflineFile.DependencyCache.dyldSharedCache(URL(fileURLWithPath: cache.path))
+        for cache in settings.file.dependencyCaches(for: file) {
+            let dependencyCache = RuntimeFile.DependencyCache.dyldSharedCache(URL(fileURLWithPath: cache.path))
             let version = namesPlatforms ? "\(cache.platformName) \(cache.version)" : cache.version
             choices.append(DependencyCacheChoice(title: "\(version) (\(cache.architecture)) — \(URL(fileURLWithPath: cache.path).deletingLastPathComponent().lastPathComponent)", dependencyCache: dependencyCache, isCurrent: file.dependencyCache == dependencyCache))
         }
@@ -145,22 +145,22 @@ final class OfflineFileController {
     /// until it has. The engine stays the same object, so every window on it
     /// stays, saying it is reading meanwhile; its new instance lists the
     /// images anew.
-    func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeOfflineFile.DependencyCache?) async throws {
-        guard var file = runtimeEngineManager.offlineFile(of: engine), file.dependencyCache != dependencyCache else { return }
+    func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeFile.DependencyCache?) async throws {
+        guard var file = runtimeEngineManager.file(of: engine), file.dependencyCache != dependencyCache else { return }
         file.dependencyCache = dependencyCache
         _ = try await runtimeEngineManager.runtimeEngine(reading: file)
         #log(.info, "Paired \(file.displayName, privacy: .public) with another dependency cache")
     }
 
-    private func listedFile(withSource source: RuntimeSource) -> RuntimeOfflineFile? {
-        for engine in runtimeEngineManager.offlineRuntimeEngines where engine.source == source {
-            return runtimeEngineManager.offlineFile(of: engine)
+    private func listedFile(withSource source: RuntimeSource) -> RuntimeFile? {
+        for engine in runtimeEngineManager.fileRuntimeEngines where engine.source == source {
+            return runtimeEngineManager.file(of: engine)
         }
         return nil
     }
 }
 
 extension DependencyValues {
-    @DependencyEntry(liveValue: MainActor.assumeIsolated { OfflineFileController.shared })
-    var offlineFileController: OfflineFileController
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { FileController.shared })
+    var fileController: FileController
 }

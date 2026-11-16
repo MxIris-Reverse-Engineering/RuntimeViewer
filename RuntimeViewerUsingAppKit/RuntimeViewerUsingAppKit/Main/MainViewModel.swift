@@ -139,8 +139,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
         /// A choice from the runtime source picker's Dependency Cache level, for
-        /// the offline engine the window is on: `nil` reads the file alone.
-        let dependencyCacheSelected: Signal<RuntimeOfflineFile.DependencyCache?>
+        /// the file engine the window is on: `nil` reads the file alone.
+        let dependencyCacheSelected: Signal<RuntimeFile.DependencyCache?>
     }
 
     struct Output {
@@ -164,8 +164,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         /// What the runtime source picker lists when it opens.
         let runtimeSourcePickerContent: Driver<RuntimeSourcePickerContent>
         let attachAvailability: Driver<AttachAvailability>
-        /// Load Frameworks… loads an image into the engine's process, which an
-        /// offline engine does not have.
+        /// Load Frameworks… loads an image into the engine's process, which a
+        /// file engine does not have.
         let isLoadFrameworksEnabled: Driver<Bool>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
@@ -208,7 +208,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     @Dependency(\.runtimeEngineIconProvider) private var runtimeEngineIconProvider
 
-    @Dependency(\.offlineFileController) private var offlineFileController
+    @Dependency(\.fileController) private var fileController
 
     @RxObserved private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
 
@@ -243,7 +243,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         rx.disposeBag = DisposeBag()
 
         // The engine the document opened on, which is not "My Mac" for a file
-        // opened offline.
+        // opened from disk.
         selectedEngineIdentifier = documentState.runtimeEngine.engineID
         cachedSelectedEngineName = documentState.runtimeEngine.source.description
 
@@ -403,8 +403,8 @@ final class MainViewModel: ViewModel<MainRoute> {
             guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
                 $0.engineID == identifier
             }) else { return }
-            guard owner.runtimeEngineManager.isOfflineEngineSuspended(engine),
-                  let file = owner.runtimeEngineManager.offlineFile(of: engine)
+            guard owner.runtimeEngineManager.isFileEngineSuspended(engine),
+                  let file = owner.runtimeEngineManager.file(of: engine)
             else {
                 owner.switchToEngine(engine)
                 return
@@ -430,7 +430,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    try await offlineFileController.pair(engine, with: dependencyCache)
+                    try await fileController.pair(engine, with: dependencyCache)
                 } catch {
                     errorRelay.accept(error)
                 }
@@ -546,7 +546,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         // What the runtime source picker lists: the manager's sections with the window's source
         // checked, that source on top while its engine is gone, and the dependency caches the
-        // window's offline file can be paired with.
+        // window's file can be paired with.
         let runtimeSourcePickerContent = Driver.combineLatest(
             runtimeEngineSections,
             switchSourceState,
@@ -575,7 +575,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                         }
                     )
                 },
-                dependencyCacheChoices: offlineFileController.dependencyCacheChoices(for: engineOfDocument).map { choice in
+                dependencyCacheChoices: fileController.dependencyCacheChoices(for: engineOfDocument).map { choice in
                     RuntimeSourcePickerContent.DependencyCacheChoice(
                         title: choice.title,
                         dependencyCache: choice.dependencyCache,

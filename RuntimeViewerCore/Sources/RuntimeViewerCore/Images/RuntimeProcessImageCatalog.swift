@@ -3,7 +3,7 @@ import MachOKit
 import MachODependencies
 
 /// The images dyld loaded into this process — what every engine read before
-/// offline files: the local runtime, the Mac Catalyst runtime, an injected
+/// file mode: the local runtime, the Mac Catalyst runtime, an injected
 /// payload, a test.
 ///
 /// Stateless: each answer is read off dyld when asked, so images loaded later

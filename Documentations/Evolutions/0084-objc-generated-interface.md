@@ -70,7 +70,7 @@ Xcode 打开一个 ObjC 头文件时，相关项菜单里有 Generated Interface
 | 日期 | 决定 | 理由 |
 |------|------|------|
 | 2026-11-10 | Created as Draft | 用户想要 Xcode 的 Generated Interface：把 ObjC 内容显示成 Swift 接口，名字照 ClangImporter 的规则；由 Swift 定义或实现的类要与 Swift 一侧的信息合在一起 |
-| 2026-11-10 | Swift 文本由 MachOSwiftSection 扩展已有的 ClangImporter 移植生成，不在运行时调用编译器 | 用户选定。离线文件、iOS 与命令行都能用，不依赖装了 Xcode |
+| 2026-11-10 | Swift 文本由 MachOSwiftSection 扩展已有的 ClangImporter 移植生成，不在运行时调用编译器 | 用户选定。文件模式、iOS 与命令行都能用，不依赖装了 Xcode |
 | 2026-11-10 | 入口做成 Xcode 式的命令，作为一次导航打开，不做全局开关 | 用户选定。与 Xcode 一致，Back 能回到头文件；Find 的语料与结果也不受影响 |
 | 2026-11-10 | 按轻量档写精简提案，与 MachOSwiftSection 的草案各管一个仓库 | 用户选定 |
 | 2026-11-10 | 用户批准；先做 MachOSwiftSection 草案的第一步（命名准确率测量），本仓库的实现排在它之后 | 用户批准时指定的顺序；测量结果可能改变 MachOSwiftSection 一侧类型来源的优先级，本仓库只消费它的输出 |

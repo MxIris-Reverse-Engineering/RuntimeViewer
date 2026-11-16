@@ -1,23 +1,23 @@
-# 0069 - 离线模式：打开磁盘上的 Mach-O 文件、bundle 与 dyld shared cache
+# 0069 - 文件模式：打开磁盘上的 Mach-O 文件、bundle 与 dyld shared cache
 
 - **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-02
-- **最后更新**: 2026-11-03
+- **最后更新**: 2026-11-16
 - **所属愿景**: 无
-- **关联提案**: [0037](0037-local-runtime-xpc-service.md)（本地运行时 XPC service：离线 service 沿用它的 service host、凭证与重连做法）、[0051](0051-catalyst-xpc-service.md)（第二个内嵌 service 的先例）、[0003](0003-generic-type-specialization.md)（泛型特化的 UI 流程；离线走 MachOSwiftSection 0069 的静态特化）、[0033](0033-runtime-bookmark-scope.md)（新来源要有自己的书签身份）、[0054](0054-always-index-per-engine.md) / [0055](0055-engine-scoped-background-work.md) / [0058](0058-runtime-engine-session.md)（每个引擎一份后台工作；「最后一个文档离开」是停放离线进程的钩子）、[0056](0056-cross-references.md)（交叉引用只能在进程内做，离线不支持）、[0061](0061-derived-data.md)（派生数据：离线 cache 的语料要按该 cache 的身份存，并躲开本机的清理规则）
+- **关联提案**: [0037](0037-local-runtime-xpc-service.md)（本地运行时 XPC service：文件 service 沿用它的 service host、凭证与重连做法）、[0051](0051-catalyst-xpc-service.md)（第二个内嵌 service 的先例）、[0003](0003-generic-type-specialization.md)（泛型特化的 UI 流程；文件模式走 MachOSwiftSection 0069 的静态特化）、[0033](0033-runtime-bookmark-scope.md)（新来源要有自己的书签身份）、[0054](0054-always-index-per-engine.md) / [0055](0055-engine-scoped-background-work.md) / [0058](0058-runtime-engine-session.md)（每个引擎一份后台工作；「最后一个文档离开」是停放文件进程的钩子）、[0056](0056-cross-references.md)（交叉引用只能在进程内做，文件模式不支持）、[0061](0061-derived-data.md)（派生数据：文件 cache 的语料要按该 cache 的身份存，并躲开本机的清理规则）
 - **实现分支 / PR**: `feature/offline-mode`（从 `next` 切，并回 `next`）
-- **配套文档**: [使用指南：离线读文件](../Guides/OfflineMode.md)；多实例 XPC 的约束写在 [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §3.6，引擎管理器的离线组在 §7.1，离线 cache 的派生数据在 [`DerivedData.md`](../DerivedData.md)
+- **配套文档**: [使用指南：文件模式](../Guides/FileMode.md)；多实例 XPC 的约束写在 [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §3.6，引擎管理器的文件组在 §7.1，文件 cache 的派生数据在 [`DerivedData.md`](../DerivedData.md)
 
 ## 摘要
 
-RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个引擎读的都是 dyld 映射进进程的 `MachOImage`。本提案加一种新的引擎来源——**磁盘上的文件**：单个 Mach-O（含胖二进制）、`.app` / `.framework` 等 bundle、dyld shared cache（含 `.01`… 子缓存）。用户经 File › Open…、Open Recent 或拖到 Dock 图标打开，App 为它开一个新窗口；它在工具栏引擎菜单里单列一组「Offline Files」，任何窗口都能切过去、切走。每个打开的文件由**自己的一个进程**解析（内嵌 XPC service 的多实例），崩溃只影响它自己；所有窗口都离开后进程退出、释放内存，菜单条目保留，再选中时重新拉起。单个 Mach-O 或 bundle 的系统依赖由一个 dyld cache 提供：macOS 文件自动用本机的 cache，iOS 等其它平台的文件从 Settings 里登记的 cache 中按平台挑版本最接近的一个，也能在引擎菜单里改。离线可用的有 ObjC / Swift 接口、侧栏、关系、泛型特化、Find 与导出；交叉引用、注入、载入框架不可用。技术上，Core 里写死 `MachOImage` 的那一簇类型（两个 section、两个 indexer 包装、两个工厂、两个关系解析器）改成对 Mach-O 读取方式泛型，进程内的镜像与磁盘上的文件各给一份「镜像目录」实现，引擎经一个非泛型协议持有它们。
+RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个引擎读的都是 dyld 映射进进程的 `MachOImage`。本提案加一种新的引擎来源——**磁盘上的文件**：单个 Mach-O（含胖二进制）、`.app` / `.framework` 等 bundle、dyld shared cache（含 `.01`… 子缓存）。用户经 File › Open…、Open Recent 或拖到 Dock 图标打开，App 为它开一个新窗口；它在工具栏引擎菜单里单列一组「Files」，任何窗口都能切过去、切走。每个打开的文件由**自己的一个进程**解析（内嵌 XPC service 的多实例），崩溃只影响它自己；所有窗口都离开后进程退出、释放内存，菜单条目保留，再选中时重新拉起。单个 Mach-O 或 bundle 的系统依赖由一个 dyld cache 提供：macOS 文件自动用本机的 cache，iOS 等其它平台的文件从 Settings 里登记的 cache 中按平台挑版本最接近的一个，也能在引擎菜单里改。文件模式下可用的有 ObjC / Swift 接口、侧栏、关系、泛型特化、Find 与导出；交叉引用、注入、载入框架不可用。技术上，Core 里写死 `MachOImage` 的那一簇类型（两个 section、两个 indexer 包装、两个工厂、两个关系解析器）改成对 Mach-O 读取方式泛型，进程内的镜像与磁盘上的文件各给一份「镜像目录」实现，引擎经一个非泛型协议持有它们。
 
 ## 动机
 
 **磁盘上的二进制看不了。** 用户手里常有不在本机运行、也不该在本机运行的二进制：从 IPSW 解出来的 iOS / visionOS dyld cache（本机 `/Volumes/DyldSharedCaches/<平台>/<版本>/` 下按版本存了一批）、别的 macOS 版本的 cache、第三方 App 的发布版、不能或不想注入的进程的主程序。今天要看它们只有两条路：注入一个正在运行的进程，或者改用命令行的 `swift-section` / `objc-section`——后者没有侧栏、关系、跳转、Find 和泛型特化。
 
-**限制来自 RuntimeViewer 自己，不是上游。** 引擎拿镜像的唯一入口是 `DyldUtilities.machOImage(forPath:)`（`RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift:179-185`）：它只在 dyld 已加载的镜像里按路径找，找不到就按文件名猜一个已加载的同名镜像。两个 section 都在 `init` 里调它（`Core/RuntimeObjCSection.swift:77-92`、`Core/RuntimeSwiftSection.swift:232-252`），找不到就抛 `invalidMachOImage`；`loadImage(at:)` 的本地实现先 `dlopen`（`RuntimeEngine.swift:1102-1105`、`DyldUtilities.swift:221-237`）。而 MachOObjCSection 与 MachOSwiftSection 的索引、渲染、打印、特化全部对 `MachOFile` 通用（见前期调研 §2）——上游 MachOSwiftSection 甚至专门为「RuntimeViewer 将来的离线模式」做了离线泛型特化（它的提案 0069，状态 Implemented），至今没有消费方。
+**限制来自 RuntimeViewer 自己，不是上游。** 引擎拿镜像的唯一入口是 `DyldUtilities.machOImage(forPath:)`（`RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift:179-185`）：它只在 dyld 已加载的镜像里按路径找，找不到就按文件名猜一个已加载的同名镜像。两个 section 都在 `init` 里调它（`Core/RuntimeObjCSection.swift:77-92`、`Core/RuntimeSwiftSection.swift:232-252`），找不到就抛 `invalidMachOImage`；`loadImage(at:)` 的本地实现先 `dlopen`（`RuntimeEngine.swift:1102-1105`、`DyldUtilities.swift:221-237`）。而 MachOObjCSection 与 MachOSwiftSection 的索引、渲染、打印、特化全部对 `MachOFile` 通用（见前期调研 §2）——上游 MachOSwiftSection 甚至专门为「RuntimeViewer 将来的文件模式」做了离线泛型特化（它的提案 0069，状态 Implemented），至今没有消费方。
 
 ## 前期调研
 
@@ -25,7 +25,7 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 
 - **镜像清单来自 dyld**：`imageList` 是 `_dyld_get_image_name` 的结果去掉注入载荷（`DyldUtilities.swift:52-100`），侧栏的两个根节点「Dyld Shared Cache」「Others」由 `DyldCacheLoaded.current.imageInfos` 和这份清单拼出（`DyldUtilities.swift:243-305`）；`RuntimeEngine.observeRuntime()` / `reloadLocalData` 直接读它们（`RuntimeEngine.swift:658-710`）。`RuntimeImageNode.rootNode(for:name:)` 只是按 `/` 切路径建树（`Common/RuntimeImageNode.swift:46`），对任何路径列表都适用。
 - **写死 `MachOImage` 的类型集中在一簇**：`RuntimeObjCSection` / `RuntimeSwiftSection`（各持一个 `machO: MachOImage`，打印器是 `SwiftDeclarationPrinter<MachOImage>`）、`RuntimeObjCInterfaceIndexer` / `RuntimeSwiftInterfaceIndexer`（包着 `ObjCInterfaceIndexer<MachOImage>`、`SwiftDeclarationIndexer<MachOImage>`、`IndexerConformanceProvider<MachOImage>`）、两个工厂（各有一个以 `MachOImage.current()` 占位的聚合 indexer，`RuntimeObjCSection.swift:488-491`、`RuntimeSwiftSection.swift:1899`）。引擎与两个关系解析器只经工厂和包装类型拿数据：`RuntimeEngine.swift` 有 44 处、`RuntimeTypeRelationshipsResolver.swift` 45 处、`RuntimeRelationshipsResolver.swift` 16 处、`+Search` / `+GenericSpecialization` / `+BackgroundIndexing` 共 16 处引用工厂或 section；工厂和包装类型以外，只有 `RuntimeEngine.swift:804,813`（读 `entry.machO.imagePath`）和 `RuntimeTypeRelationshipsResolver.swift:299,515,552,665`（推断出 `ObjCInterfaceIndexer<MachOImage>.ObjCClassGroup`）碰到上游的泛型类型。
-- **镜像路径的键**：`MachOFile.imagePath` 返回的是 install name，不是磁盘路径（MachOKit `MachOFile.swift:175`）。离线时镜像的键必须由镜像目录给出，不能从 `machO.imagePath` 推。
+- **镜像路径的键**：`MachOFile.imagePath` 返回的是 install name，不是磁盘路径（MachOKit `MachOFile.swift:175`）。文件模式下镜像的键必须由镜像目录给出，不能从 `machO.imagePath` 推。
 - **派生数据只认本机**：系统身份取自本进程映射的 cache 与 `kern.osversion`（`DerivedDataStorage/RuntimeDerivedDataSystemIdentity.swift:29-50`，`Platform` 只有 `macOS` / `macCatalyst`）；本机 service 启动时的清理会删掉「build 与本机不同」的每个系统目录（`DerivedDataStorage/RuntimeDerivedDataMaintenance.swift` 的 `cleanUp`）。
 
 ### 2. 上游已经具备的能力（钉在 `next` 的同一修订）
@@ -33,12 +33,12 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 - **索引与渲染**：`ObjCInterfaceIndexer<MachO: ObjCMetadataSource>` / `ObjCInterfaceBuilder<MachO>`，`MachOFile` 与 `MachOImage` 都遵循 `ObjCMetadataSource`（MachOObjCSection `Sources/ObjCMetadataSource/MachOFile+ObjCMetadataSource.swift:7`）；`SwiftDeclarationIndexer<MachO: MachOSwiftSectionRepresentableWithCache>`、`SwiftDeclarationPrinter<MachO: MachOFieldLayoutRenderable>`、`GenericSpecializer<MachO>`、`IndexerConformanceProvider<MachO>`，两种读取方式都遵循（MachOSwiftSection `Sources/ABI/MachOSwiftSection/Protocols/MachOSwiftSectionRepresentableWithCache.swift:10-11`）。MachOObjCSection 自己的 `objc-section` 命令行就是 `ObjCInterfaceBuilder<MachOFile>`。
 - **字段布局**：`MachOImage` 从进程里实例化好的 metadata 读（`RuntimeFieldLayoutBackend.swift:11-12`），`MachOFile` 用静态布局引擎算（`StaticFieldLayoutBackend.swift:10-12`）。静态布局要知道依赖镜像在哪：`SwiftDeclarationPrintConfiguration.staticLayoutDependencyResolution`（`SwiftDeclarationPrintConfiguration.swift:222`），取值 `.singleImage` 或 `.dependencyClosure(searchPaths:)`，默认只搜本机 cache（`StaticFieldLayoutProvider.swift:12-28`）。
 - **依赖闭包**：Swift indexer 对 `MachOFile` 按 `SwiftDeclarationIndexConfiguration.dependencySearchPaths`（默认 `[.systemDyldSharedCache]`，`SwiftDeclarationIndexConfiguration.swift:21`）建传递依赖闭包，用来认出别的镜像里的 property wrapper 与 ObjC 祖先类（`SwiftDeclarationIndexer.swift:400-436`）。`DependencySearchPath` 有 `.machOFile(path:)`、`.dyldSharedCache(path:)`、`.systemDyldSharedCache`、`.systemRoot(path:)`；`FileDependencyLocator` 不展开 `@rpath`，bundle 里的框架要作为 `.machOFile` 显式给出（`Sources/MachO/MachODependencies/FileDependencyLocator.swift:145-163`）。
-- **离线泛型特化**（MachOSwiftSection 提案 0069）：`GenericSpecializer where MachO == MachOFile` 提供 `specialize(_:with:) -> StaticSpecializationResult` 与 `staticPreflight(selection:for:) -> SpecializationValidation`（`GenericSpecializer+StaticSpecialization.swift:24-63`，`@_spi(Support)`），`TypeDefinition.specialize(with: StaticSpecializationResult, derivingNestedSpecializationsWith:in: MachOFile)`（`TypeDefinition+Specialization.swift:485-530`）。`SpecializationValidation` 的错误与警告枚举不变，RuntimeViewer 的翻译函数和线上类型都不用改；离线证据不全时「无法证明的遵循」降为警告。
+- **离线泛型特化**（MachOSwiftSection 提案 0069）：`GenericSpecializer where MachO == MachOFile` 提供 `specialize(_:with:) -> StaticSpecializationResult` 与 `staticPreflight(selection:for:) -> SpecializationValidation`（`GenericSpecializer+StaticSpecialization.swift:24-63`，`@_spi(Support)`），`TypeDefinition.specialize(with: StaticSpecializationResult, derivingNestedSpecializationsWith:in: MachOFile)`（`TypeDefinition+Specialization.swift:485-530`）。`SpecializationValidation` 的错误与警告枚举不变，RuntimeViewer 的翻译函数和线上类型都不用改；文件模式下证据不全时「无法证明的遵循」降为警告。
 - **读文件的先例**：MachOSwiftSection 的 `MachOSource.load()`（`Sources/Commands/SwiftSectionKit/Inputs/MachOSource.swift:50-90`）——薄文件直接用，胖文件按架构挑切片，cache 一律经 `FullDyldCache(url:)`（同时映射子缓存，否则子缓存里的段读越界），再按名字或路径取 `MachOFile`。
 
 ### 3. 只能在进程内做的事
 
-| 位置 | 做什么 | 离线怎么办 |
+| 位置 | 做什么 | 文件模式怎么办 |
 |------|--------|-----------|
 | `RuntimeObjCSectionFactory.section(for: RuntimeObjCName)` + `MachOImage.image(forClassName:)`（`RuntimeObjCSection.swift:522-543,611-627`） | 点到别的镜像里的 ObjC 类 / 协议时，用 `NSClassFromString` 找定义它的镜像（`RuntimeEngine.swift:768-776`） | 先在已解析镜像里找（聚合 indexer 已有 `classGroupAcrossImages`），找不到再查「名字 → 镜像」表，见详细设计 §3 |
 | `RuntimeSwiftSection.classHierarchy(for:)` 用 `ClassHierarchyDumper(machO:)`（`RuntimeSwiftSection.swift:656`） | 调 metadata accessor 走 Swift 类的父类链 | 用 indexer 的父类 mangled 名静态走链 |
@@ -57,7 +57,7 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 
 ### 5. App 侧现状
 
-- **引擎菜单**按 `hostInfo.hostID` 分组（`RuntimeEngineManager.swift:1828-1860`），默认的 `hostID` 是本机，离线引擎要有自己的 `hostID` 才会单列一组；去重逻辑写死了三组本地引擎（`:1880-1912`）。菜单项选中后按 `engineID` 找引擎、`router.trigger(.main(engine))`（`MainViewModel.swift:368-375`）。
+- **引擎菜单**按 `hostInfo.hostID` 分组（`RuntimeEngineManager.swift:1828-1860`），默认的 `hostID` 是本机，文件引擎要有自己的 `hostID` 才会单列一组；去重逻辑写死了三组本地引擎（`:1880-1912`）。菜单项选中后按 `engineID` 找引擎、`router.trigger(.main(engine))`（`MainViewModel.swift:368-375`）。
 - **文档**：`Document` 不读写文件（`read(from:ofType:)` 抛 `unimpErr`），`DocumentState()` 默认 `.local`，`MainCoordinator.init` 写死 `initialRoute: .main(.local)`（`Main/MainCoordinator.swift:36`）。没有 `NSDocumentController` 子类。File › Open…（⌘O → `openDocument:`）来自 UIFoundation 的 `MainMenu.file`，Open Recent 由 `NSDocumentController` 自己插入；`Info.plist` 只声明了一个 `com.JH.RuntimeViewer.Document` 类型，所以今天 ⌘O 只能选 `.runtimedocument`，选了也打不开。
 - **「最后一个文档离开」**：`RuntimeEngineBackgroundWorkRegistry.leave` 在成员清空时关闭该引擎的后台工作（`RuntimeViewerApplication/Engine/RuntimeEngineBackgroundWork.swift:105-143`），目前没有对外的通知。
 - **功能开关**：Attach to Process 经 `injectionTargetsRunOnThisMachine`（`RuntimeEngine+Injection.swift:72-80`，穷举 switch）；Load Frameworks… 没有任何开关（`MainViewModel.swift:244-258`）；交叉引用与 Find 语料在对端回答「未知命令」时把自己标为「此引擎不支持」，Report 显示对应行（`CrossReferencePreparationCoordinator.swift:404-408`、`FindCorpusCoordinator.swift:781-788`、`ReportTreeBuilder.swift:166`）。
@@ -75,16 +75,16 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 ## 提议方案
 
 1. **新来源**：`RuntimeSource.file(name:url:)`——身份只有文件的规范化 URL（`name` 只用于显示，和其它 case 一样不参与相等）。配对哪个 cache、胖文件取哪个切片都是**配置**，不进身份：换配对 cache 不会让书签、侧栏状态、Always Index 列表另起一份。
-2. **描述打开的东西**：Core 新增值类型 `RuntimeOfflineFile`——URL、内容种类（Mach-O 带切片 / bundle / dyld cache）、依赖 cache（本机的、某个 cache 文件、或没有）。它是 App → service 的启动参数、service 里引擎的构造参数、管理器里停放条目的配置。
-3. **每个文件一个进程**：新的内嵌 XPC service `RuntimeViewerOfflineService.xpc`，`_MultipleInstances`。App 侧引擎带一个 `.xpcService(.dedicatedInstance(bundleIdentifier:launchPayload:))` 凭证连接，连接层给每次启动生成实例 UUID，`RuntimeOfflineFile` 编码后随第一个 `hello` 交给新实例；service 在回复这个 `hello` 之前建好进程内的文件引擎、经 `RuntimeLocalRuntimeServiceHost` 登记命令，peer 断开即退出。XPC 的细节只在连接层与 service 入口两处（与 0037 定下的「XPC 逻辑不进 Engine、改动要聚合」一致）。
+2. **描述打开的东西**：Core 新增值类型 `RuntimeFile`——URL、内容种类（Mach-O 带切片 / bundle / dyld cache）、依赖 cache（本机的、某个 cache 文件、或没有）。它是 App → service 的启动参数、service 里引擎的构造参数、管理器里停放条目的配置。
+3. **每个文件一个进程**：新的内嵌 XPC service `RuntimeViewerFileService.xpc`，`_MultipleInstances`。App 侧引擎带一个 `.xpcService(.dedicatedInstance(bundleIdentifier:launchPayload:))` 凭证连接，连接层给每次启动生成实例 UUID，`RuntimeFile` 编码后随第一个 `hello` 交给新实例；service 在回复这个 `hello` 之前建好进程内的文件引擎、经 `RuntimeLocalRuntimeServiceHost` 登记命令，peer 断开即退出。XPC 的细节只在连接层与 service 入口两处（与 0037 定下的「XPC 逻辑不进 Engine、改动要聚合」一致）。
 4. **Core 泛型化**：section、indexer 包装、工厂、关系解析器对 Mach-O 读取方式泛型；两种读取方式的差异（特化、Swift 父类链、ObjC 类名、`dlopen`）集中在一个内部协议的两份实现里（读取方式策略 `RuntimeImageReading`）；引擎经几个非泛型协议持有它们，本地臂的逻辑基本不挪窝。镜像从哪来由「镜像目录」决定：`RuntimeProcessImageCatalog`（就是今天的 dyld 逻辑）与 `RuntimeFileImageCatalog`（文件 / bundle / cache + 配对 cache）。
 5. **打开**：App 新增 `NSDocumentController` 子类拦截打开，`Info.plist` 声明 Mach-O 可执行文件、动态库与 bundle 为 Viewer 类型。选中的文件先判种类（读文件头 / bundle 结构），定配对 cache，交给管理器取得（或新建、或唤醒）对应引擎，再开一个直接落在该引擎上的新窗口，并记入 Open Recent。
-6. **引擎菜单**：离线引擎用专属的 `hostInfo`（`hostID` 固定，`hostName` 为「Offline Files」），单列一组；组末两项「Open File…」与「Dependency Cache ▸」（后者作用于当前窗口所在的离线引擎）。图标取文件自身的 Finder 图标（`.app` 就是 App 图标）。
-7. **停放与唤醒**：后台工作注册表在「第一个文档加入」「最后一个文档离开」时发事件；App 侧的 `OfflineFileController` 收到「离开」后等 30 秒，仍无文档就让管理器停放该引擎（引擎 `stop()`，连接取消，service 退出），条目仍在菜单里；用户再选它、或经 Open / Open Recent 再开它，管理器先唤醒（同一个引擎对象再 `connect`，新实例、同一份 `RuntimeOfflineFile`）再切换。
-8. **配对 cache**：macOS 与 Mac Catalyst 文件配本机 cache（`.systemDyldSharedCache`）；其它平台从 Settings › Offline 登记的 cache 里挑平台相同、版本最接近文件 SDK 版本的一个，没有就只看文件本身；「Dependency Cache ▸」可改，改了重启该引擎的进程。打开 dyld cache 本身不需要配对。bundle 内的每个 Mach-O 自动作为 `.machOFile` 依赖路径。
-9. **侧栏**：打开的文件一组（bundle 时按包内目录展开）、配对的 cache 一组；打开 cache 本身时只有 cache 一组。离线引擎的 `imageList` 是目录里的全部镜像，全部视为「已加载」，点开即解析。
-10. **不可用的功能**：Attach to Process 对离线引擎回答不支持；Load Frameworks… 对离线引擎禁用；离线 service 不链接 `RuntimeViewerCrossReferences` 与 `RuntimeViewerInjection`，交叉引用走现成的「此引擎不支持」路径。CLI 的 `sources` 不列离线引擎；MCP 按窗口工作，窗口切到离线引擎就能用。
-11. **派生数据**：离线进程按它读的那份 cache（打开的 cache，或配对的 cache）的身份存 Find 语料；单独的 Mach-O 与 bundle 里的文件不存。离线 cache 的目录与本机身份的目录分开，本机 service 的清理不碰它们；Settings › Indexing 的「删除派生数据」照旧全删。
+6. **引擎菜单**：文件引擎用专属的 `hostInfo`（`hostID` 固定，`hostName` 为「Files」），单列一组；组末两项「Open File…」与「Dependency Cache ▸」（后者作用于当前窗口所在的文件引擎）。图标取文件自身的 Finder 图标（`.app` 就是 App 图标）。
+7. **停放与唤醒**：后台工作注册表在「第一个文档加入」「最后一个文档离开」时发事件；App 侧的 `FileController` 收到「离开」后等 30 秒，仍无文档就让管理器停放该引擎（引擎 `stop()`，连接取消，service 退出），条目仍在菜单里；用户再选它、或经 Open / Open Recent 再开它，管理器先唤醒（同一个引擎对象再 `connect`，新实例、同一份 `RuntimeFile`）再切换。
+8. **配对 cache**：macOS 与 Mac Catalyst 文件配本机 cache（`.systemDyldSharedCache`）；其它平台从 Settings › File 登记的 cache 里挑平台相同、版本最接近文件 SDK 版本的一个，没有就只看文件本身；「Dependency Cache ▸」可改，改了重启该引擎的进程。打开 dyld cache 本身不需要配对。bundle 内的每个 Mach-O 自动作为 `.machOFile` 依赖路径。
+9. **侧栏**：打开的文件一组（bundle 时按包内目录展开）、配对的 cache 一组；打开 cache 本身时只有 cache 一组。文件引擎的 `imageList` 是目录里的全部镜像，全部视为「已加载」，点开即解析。
+10. **不可用的功能**：Attach to Process 对文件引擎回答不支持；Load Frameworks… 对文件引擎禁用；文件 service 不链接 `RuntimeViewerCrossReferences` 与 `RuntimeViewerInjection`，交叉引用走现成的「此引擎不支持」路径。CLI 的 `sources` 不列文件引擎；MCP 按窗口工作，窗口切到文件引擎就能用。
+11. **派生数据**：文件进程按它读的那份 cache（打开的 cache，或配对的 cache）的身份存 Find 语料；单独的 Mach-O 与 bundle 里的文件不存。文件 cache 的目录与本机身份的目录分开，本机 service 的清理不碰它们；Settings › Indexing 的「删除派生数据」照旧全删。
 
 ### 未询问自定的假设
 
@@ -95,14 +95,14 @@ RuntimeViewer 现在只能看「某个进程里已经加载的镜像」：每个
 - 打开的文件不跨 App 重启恢复（窗口本来就不恢复）；停放的条目留到 App 退出，第一版没有「从菜单移除」。
 - File › Open… 的面板不进入包内容：选 `.app` 就是打开整个 bundle；想单看包里某个二进制，可用 ⌘⇧G 输入路径或直接拖文件。
 - 胖文件自动取本机优先的切片（arm64e、arm64、x86_64 依次）；iOS 等文件只看 arm64e / arm64。
-- App 进程只读文件头与 `LC_BUILD_VERSION` 判种类和平台（沿用已经为畸形胖文件头加固过的 `InjectionTargetPlatform.platform(ofMachOFileAt:)` 的读法），登记 cache 时只读 cache 头；其余解析都在离线进程里。
+- App 进程只读文件头与 `LC_BUILD_VERSION` 判种类和平台（沿用已经为畸形胖文件头加固过的 `InjectionTargetPlatform.platform(ofMachOFileAt:)` 的读法），登记 cache 时只读 cache 头；其余解析都在文件进程里。
 
 ### 非目标
 
 - **交叉引用**：上游分析器只能读本进程（前期调研 §3）；要支持得先有 MachOSwiftSection 一侧的提案，把分析器改成能读文件。
-- **CLI**：`runtime-viewer-cli` 不列、不读离线文件，agent 插件的 skill 不动。以后要做时，CLI 指定文件与列出 App 已打开的离线文件分两件事考虑。
+- **CLI**：`runtime-viewer-cli` 不列文件引擎、不读文件，agent 插件的 skill 不动。以后要做时，CLI 指定文件与列出 App 已打开的文件分两件事考虑。
 - **iOS 版 App**（`RuntimeViewerUsingUIKit`）与越狱版：不做。
-- **镜像给其它 Mac**：离线引擎不可镜像（新 case 的线协议规则，也没有意义）。
+- **镜像给其它 Mac**：文件引擎不可镜像（新 case 的线协议规则，也没有意义）。
 - **监视文件变化**：磁盘上的文件被重新编译不自动刷新；要刷新就让引擎停放后再打开。
 - **手选胖文件切片、在面板里浏览包内容**：第一版不做（见上面的假设）。
 - **AOT cache（Rosetta）**、kernel cache、`.ipa` 解包：不做。
@@ -122,7 +122,7 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
     ///
     /// The identity is `url` alone, standardized when the file is opened; `name` is what
     /// menus show. Where its dependencies come from and which slice of a fat file is read
-    /// are configuration, not identity — see `RuntimeOfflineFile`.
+    /// are configuration, not identity — see `RuntimeFile`.
     case file(name: String, url: URL)
 }
 ```
@@ -132,8 +132,8 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
 - `canonicalImagePath`（`RuntimeEngine+ImagePathCanonicalization.swift:88`）对 `.file` 不加 `DYLD_ROOT_PATH` 前缀。
 
 ```swift
-// RuntimeViewerCore/Offline/RuntimeOfflineFile.swift
-public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
+// RuntimeViewerCore/File/RuntimeFile.swift
+public struct RuntimeFile: Sendable, Hashable, Codable {
     public enum Content: Sendable, Hashable, Codable {
         /// A thin Mach-O file, or one slice of a fat one.
         case machO(slice: Slice?)
@@ -163,7 +163,7 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
     public var dependencyCache: DependencyCache?
 
     /// Inspects what is at `url` — a Mach-O magic, a fat header, a bundle, a dyld cache
-    /// magic — reading no more than its header. Throws `RuntimeOfflineFileError`.
+    /// magic — reading no more than its header. Throws `RuntimeFileError`.
     public init(contentsOf url: URL) throws
 
     public var displayName: String
@@ -231,21 +231,21 @@ protocol RuntimeImageCatalog<Reading>: Sendable {
 ```
 
 - **`RuntimeProcessImageCatalog`**：今天 `DyldUtilities` 的那些静态函数原样搬进来；按名字找 ObjC 类型仍是 `NSClassFromString`。
-- **`RuntimeFileImageCatalog`**，按 `RuntimeOfflineFile.Content`，构造时打开全部镜像：
+- **`RuntimeFileImageCatalog`**，按 `RuntimeFile.Content`，构造时打开全部镜像：
   - **Mach-O**：`File.loadFromFile(url:)`，胖文件取 `Slice` 指定的切片；镜像键是磁盘路径。
   - **bundle**：遍历包内普通文件（跳过符号链接，框架的 `Versions/Current` 否则会重复），按魔数收下所有 Mach-O，主程序取 `Bundle(url:).executableURL` 排第一。包内每个文件都进 `dependencySearchPaths`（`.machOFile`），`@rpath` / `@loader_path` / `@executable_path` 由现有的 `DylibPathResolver` 在磁盘上展开。
   - **dyld cache**：`FullDyldCache(url:)` 的 `machOFiles()` 遍历一次，镜像键是 install name；`dependencySearchPaths` 只有它自己。
   - **配对 cache**：本机的用 `FullDyldCache.host`（读磁盘上的 cache 文件，不是进程里映射的那份），别的用 `FullDyldCache(url:)`；它的镜像是第二个根节点，也能被解析；`dependencySearchPaths` 末尾加上 `.systemDyldSharedCache` 或 `.dyldSharedCache(path:)`。`DylibPathResolver` 判断「不在磁盘上的路径是不是 cache 镜像」改问目录。
-  - **按名字找 ObjC 类**：在各镜像的导出 trie 里查 `_OBJC_CLASS_$_<类名>`，先查文件自己的镜像、再查 cache，结果按类名记住。ObjC 协议没有导出符号，离线只在已解析的镜像里找得到。
+  - **按名字找 ObjC 类**：在各镜像的导出 trie 里查 `_OBJC_CLASS_$_<类名>`，先查文件自己的镜像、再查 cache，结果按类名记住。ObjC 协议没有导出符号，文件只在已解析的镜像里找得到。
 - **引擎的本地臂**：`observeRuntime()` / `reloadLocalData` 的镜像清单与根节点、`_isImageLoaded`、`_loadImage`、后台索引的 `_canOpenImage` / `_rpaths` / `_dependencies` / `loadImageForBackgroundIndexing`、`mainExecutablePath`、Find 与关系查询里的路径规范化全部改问目录；`DyldUtilities` 只剩进程目录在用。
 
 ```swift
-// RuntimeViewerCore/Offline/RuntimeEngine+Offline.swift
+// RuntimeViewerCore/File/RuntimeEngine+File.swift
 extension RuntimeEngine {
-    /// An engine that reads `file` in this process — what the offline service runs. Its
+    /// An engine that reads `file` in this process — what the file service runs. Its
     /// source is `file.source`; `connect()` without a credential starts it. Throws
-    /// `RuntimeOfflineFileError` when the file or its paired cache cannot be opened.
-    public init(reading file: RuntimeOfflineFile, engineID: String = UUID().uuidString) throws
+    /// `RuntimeFileError` when the file or its paired cache cannot be opened.
+    public init(reading file: RuntimeFile, engineID: String = UUID().uuidString) throws
 }
 ```
 
@@ -278,12 +278,12 @@ extension RuntimeXPCServiceListenerConnection {
 - **都能在进程内测**：匿名监听加一个只给测试用的入口，让 client 带 payload 连上它，「payload 随 `hello` 到达、launch handler 里登记的命令立刻可用、换新连接时重装处理器」都在一个进程里跑；只有一次性实例本身要真实的内嵌 service，归第 5 步与人工验收。
 - 引擎对此一无所知：它只看到连接的 `.connecting` / `.connected` / `.disconnected`。
 
-### 5. 离线 service target
+### 5. 文件 service target
 
-- **`RuntimeViewerOfflineService`**（`RuntimeViewerUsingAppKit/RuntimeViewerOfflineService/`）：`main.swift`、`Info.plist`（`XPCService`：`ServiceType = Application`、`_MultipleInstances = true`，第 0 步只设这两个就可用）、entitlements（不带任何例外：只把文件当数据读、不加载任何代码；不开沙盒——要读任意路径的文件）。`Configurations/RuntimeViewerOfflineService/` 下 Shared 与三个配置的 xcconfig（`SKIP_INSTALL = YES`、hardened runtime、`MACOSX_DEPLOYMENT_TARGET = 15.0`、各配置的 bundle ID），`CodeSigning.xcconfig` 三个变量，App 的 `Info.plist` 加 `RuntimeViewerOfflineServiceBundleIdentifier`，App target 依赖它并在「Embed XPC Services」阶段嵌入。Tuist 描述（`RuntimeViewerUsingAppKit/Project.swift`）同一个 commit 加上，`./TuistScript.sh check` 通过。
-- **`main.swift`**：建监听、交给 `RuntimeOfflineServiceHost`，订阅监听方的状态（接入过的 peer 断开即 `exit(0)`），然后 `activate()`。启动逻辑不在入口里，而在 Core 的 `RuntimeOfflineServiceHost`：它的 launch handler 解出 `RuntimeOfflineFile`（解不出就抛错：`hello` 失败、App 的连接带着原因失败）；若读的是 cache（打开的或配对的），按它的身份打开派生数据（§9）；建 `RuntimeEngine(reading:)`，交给 `RuntimeLocalRuntimeServiceHost`（它本来就是「把一个进程内引擎挂到 service 监听上」，文档注释已改成不限于 `.local`）并 `start()`。放在 Core 里，整条路径就能用匿名监听在进程内测。
+- **`RuntimeViewerFileService`**（`RuntimeViewerUsingAppKit/RuntimeViewerFileService/`）：`main.swift`、`Info.plist`（`XPCService`：`ServiceType = Application`、`_MultipleInstances = true`，第 0 步只设这两个就可用）、entitlements（不带任何例外：只把文件当数据读、不加载任何代码；不开沙盒——要读任意路径的文件）。`Configurations/RuntimeViewerFileService/` 下 Shared 与三个配置的 xcconfig（`SKIP_INSTALL = YES`、hardened runtime、`MACOSX_DEPLOYMENT_TARGET = 15.0`、各配置的 bundle ID），`CodeSigning.xcconfig` 三个变量，App 的 `Info.plist` 加 `RuntimeViewerFileServiceBundleIdentifier`，App target 依赖它并在「Embed XPC Services」阶段嵌入。Tuist 描述（`RuntimeViewerUsingAppKit/Project.swift`）同一个 commit 加上，`./TuistScript.sh check` 通过。
+- **`main.swift`**：建监听、交给 `RuntimeFileServiceHost`，订阅监听方的状态（接入过的 peer 断开即 `exit(0)`），然后 `activate()`。启动逻辑不在入口里，而在 Core 的 `RuntimeFileServiceHost`：它的 launch handler 解出 `RuntimeFile`（解不出就抛错：`hello` 失败、App 的连接带着原因失败）；若读的是 cache（打开的或配对的），按它的身份打开派生数据（§9）；建 `RuntimeEngine(reading:)`，交给 `RuntimeLocalRuntimeServiceHost`（它本来就是「把一个进程内引擎挂到 service 监听上」，文档注释已改成不限于 `.local`）并 `start()`。放在 Core 里，整条路径就能用匿名监听在进程内测。
 - **进程义务**：不链接 `RuntimeViewerInjection` 与 `RuntimeViewerCrossReferences`，所以没有两个 `install()`——这是根 `AGENTS.md`「linked it ⇒ call it」表格里的第一个有意不链接的进程，表格下加一段说明为什么。也没有人问它：`.file` 引擎在引擎侧自己回答注入能力查询（第 3 步）与全部交叉引用命令（回「未知命令」，App 各处现成的「此来源不支持」照常显示），不发出去——XPC 上对端没有处理器的命令会被丢掉而不是回答，问了也得不到「不支持」。退出：监听方的 `setClientDepartureHandler(_:)` 只在 client 连接真正关闭时回调，service 在那里 `exit(0)`；没有处理器的消息也会清空监听方的 peer 槽位，但不算离开。
-- **`RuntimeOfflineService`**（`RuntimeViewerCore/Offline/`，仿 `LocalRuntimeService`）：`Info.plist` 键名、从进程 bundle 读出 bundle ID、为某个 `RuntimeOfflineFile` 造凭证（`.dedicatedInstance`，载荷是 JSON 编码的文件），以及 service 侧把载荷解回文件。
+- **`RuntimeFileService`**（`RuntimeViewerCore/File/`，仿 `LocalRuntimeService`）：`Info.plist` 键名、从进程 bundle 读出 bundle ID、为某个 `RuntimeFile` 造凭证（`.dedicatedInstance`，载荷是 JSON 编码的文件），以及 service 侧把载荷解回文件。
 
 ### 6. 引擎管理（`RuntimeViewerEngineManagement`）
 
@@ -292,50 +292,50 @@ extension RuntimeEngineManager {
     /// Starts reading `file` and returns, at once, the engine that reads it, listed: the one
     /// already listed for its URL — woken if it was suspended, restarted if `file` asks for
     /// another dependency cache — or a new one. The file is read in the background.
-    public func startReading(_ file: RuntimeOfflineFile) async throws -> RuntimeEngine
+    public func startReading(_ file: RuntimeFile) async throws -> RuntimeEngine
     /// Waits until the engine's process has read its file; throws why it could not.
     public func waitUntilFileIsRead(by engine: RuntimeEngine) async throws
     /// `startReading(_:)`, then `waitUntilFileIsRead(by:)`.
-    public func runtimeEngine(reading file: RuntimeOfflineFile) async throws -> RuntimeEngine
-    /// Lets the engine's process exit. The engine stays listed; `resumeOfflineEngine(_:)`
+    public func runtimeEngine(reading file: RuntimeFile) async throws -> RuntimeEngine
+    /// Lets the engine's process exit. The engine stays listed; `resumeFileEngine(_:)`
     /// or `startReading(_:)` brings it back.
-    public func suspendOfflineEngine(_ engine: RuntimeEngine) async
-    public func resumeOfflineEngine(_ engine: RuntimeEngine) async throws
-    public func offlineFile(of engine: RuntimeEngine) -> RuntimeOfflineFile?
+    public func suspendFileEngine(_ engine: RuntimeEngine) async
+    public func resumeFileEngine(_ engine: RuntimeEngine) async throws
+    public func file(of engine: RuntimeEngine) -> RuntimeFile?
 }
 ```
 
 - **先登记、后读**：`startReading(_:)` 立刻登记引擎并返回，service 实例在后台读文件；窗口因此能在读完之前打开。`.file` 来源经普通构造器建出的引擎从创建起就转发（`RuntimeEngine` 的构造器按来源决定），所以读完之前窗口发出的请求一律失败，不会被 App 进程自己的镜像回答。第一次就读不了的引擎从列表撤下（它从没显示过任何东西），停放后重读失败的引擎再次停放、留在列表里。同一引擎上的读与停按先后排队，停放不会插进一次读的中途。
 
-- 第五组 `@Published offlineRuntimeEngines`，进 `runtimeEngines`、去重的本地组判断、`terminateRuntimeEngine` 的移除；不进 `startSharingEngines` 的组合——离线引擎不可镜像，也不该为它起代理服务器。每个离线引擎记着它的 `RuntimeOfflineFile`。
-- 离线引擎的 `hostInfo` 是固定的 `RuntimeHostInfo(hostID: "offline-files", hostName: "Offline Files")`，所以 `rebuildSections()` 自然把它们单列一组。
+- 第五组 `@Published fileRuntimeEngines`，进 `runtimeEngines`、去重的本地组判断、`terminateRuntimeEngine` 的移除；不进 `startSharingEngines` 的组合——文件引擎不可镜像，也不该为它起代理服务器。每个文件引擎记着它的 `RuntimeFile`。
+- 文件引擎的 `hostInfo` 是固定的 `RuntimeHostInfo(hostID: "files", hostName: "Files")`，所以 `rebuildSections()` 自然把它们单列一组。
 - **停放与唤醒用同一个引擎对象**：`suspend` 调 `engine.stop()`；`resume` 再 `connect(credential:)`，新实例、同一份 payload。`RuntimeEngine` 目前没有「停止后再连接」的调用方，补测试证明它可行（状态、处理器、镜像清单推送都重新来过）。
-- 无头的 CLI host 没有离线 service，`runtimeEngine(reading:)` 抛错；CLI 本来也不调用它。
-- **CLI 不暴露**：`RuntimeEngineManagerCatalog.snapshot()`（`SourceCatalog.swift:159-170`）把 `.file` 的引擎从 `sections` 里滤掉；离线组不在 `allEngines` 里，`--source engine:<id>` 也找不到它。`SourceKind(source:)` 改为可失败的 `init?(source:)`，`.file` 返回 `nil`，调用处跳过。
+- 无头的 CLI host 没有文件 service，`runtimeEngine(reading:)` 抛错；CLI 本来也不调用它。
+- **CLI 不暴露**：`RuntimeEngineManagerCatalog.snapshot()`（`SourceCatalog.swift:159-170`）把 `.file` 的引擎从 `sections` 里滤掉；文件组不在 `allEngines` 里，`--source engine:<id>` 也找不到它。`SourceKind(source:)` 改为可失败的 `init?(source:)`，`.file` 返回 `nil`，调用处跳过。
 
 ### 7. 应用层
 
-- **`DocumentController`**（`NSDocumentController` 子类，`AppDelegate.main()` 里在任何文档之前实例化，使它成为 shared；注释写明为什么必须在那里）：重写 `beginOpenPanel` 一类入口配置面板（允许任意文件与包，不浏览包内容），重写 `openDocument(withContentsOf:display:completionHandler:)`：URL 交给 `OfflineFileController`，窗口一出现就把新建的 `Document` 交还完成回调；不是离线文件的 URL 走原路。Dock 拖放与 Open Recent 都走这里。
-- **`OfflineFileController`**（App target 的 `@MainActor` 控制器，`@Dependency(\.offlineFileController)`）：在主线程之外用 `RuntimeOfflineFile(contentsOf:)` 判种类；按 §8 定配对 cache；向管理器 `startReading(_:)` 要引擎；`Document(runtimeEngine:)` 立刻开窗口，内容区在读取期间显示转圈与「Reading “…”…」（`ContentPlaceholderViewModel`，沿用共用的加载占位时机，读得快就不出现）；读完后文件才进最近打开，读失败就在窗口上弹提示（不能读的原因），用户点 OK 后关窗；订阅后台工作注册表的占用事件做停放（30 秒）；提供「Dependency Cache ▸」菜单的内容与动作。认不出的文件在开窗口之前就报错（「不是 Mach-O 文件、bundle 或 dyld shared cache」，带具体原因）。
+- **`DocumentController`**（`NSDocumentController` 子类，`AppDelegate.main()` 里在任何文档之前实例化，使它成为 shared；注释写明为什么必须在那里）：重写 `beginOpenPanel` 一类入口配置面板（允许任意文件与包，不浏览包内容），重写 `openDocument(withContentsOf:display:completionHandler:)`：URL 交给 `FileController`，窗口一出现就把新建的 `Document` 交还完成回调；不走文件模式的 URL 走原路。Dock 拖放与 Open Recent 都走这里。
+- **`FileController`**（App target 的 `@MainActor` 控制器，`@Dependency(\.fileController)`）：在主线程之外用 `RuntimeFile(contentsOf:)` 判种类；按 §8 定配对 cache；向管理器 `startReading(_:)` 要引擎；`Document(runtimeEngine:)` 立刻开窗口，内容区在读取期间显示转圈与「Reading “…”…」（`ContentPlaceholderViewModel`，沿用共用的加载占位时机，读得快就不出现）；读完后文件才进最近打开，读失败就在窗口上弹提示（不能读的原因），用户点 OK 后关窗；订阅后台工作注册表的占用事件做停放（30 秒）；提供「Dependency Cache ▸」菜单的内容与动作。认不出的文件在开窗口之前就报错（「不是 Mach-O 文件、bundle 或 dyld shared cache」，带具体原因）。
 - **`Info.plist`**：`CFBundleDocumentTypes` 加一项 Viewer、`LSHandlerRank = Alternate`，`LSItemContentTypes` 为 `public.unix-executable`、`com.apple.mach-o-dylib`、`com.apple.mach-o-binary`、`com.apple.bundle`、`com.apple.application-bundle`、`com.apple.framework`（具体 UTI 以实测 Finder 给出的为准）。
 - **从指定引擎起步的文档**：`DocumentState(runtimeEngine:)`、`MainCoordinator(documentState:)` 的初始路由取文档的引擎，不再写死 `.local`；`Document()` 的默认仍是 `.local`。
-- **引擎菜单**（`MainWindowController.swift:213-260`、`MainViewModel.swift:368-375`）：选中已停放的离线引擎时 `startReading(_:)` 让它重读，窗口立刻 `.main(engine)` 切过去、读取期间同样显示「Reading…」；离线组末尾的「Open File…」「Dependency Cache ▸」两项。图标：`Utils/RuntimeSource+.swift` 的 `icon` 对 `.file` 返回 `NSWorkspace.shared.icon(forFile:)`。
-- **后台工作注册表**（`RuntimeEngineBackgroundWork.swift:105-143`）：加一个发布者，在某个引擎的第一个成员加入、最后一个成员离开时各发一次。只有离线引擎的控制器订阅它。
-- **功能开关**：`RuntimeEngine+Injection` 对 `.file` 直接回答不支持（`injectionTargetsRunOnThisMachine` 为 `false`，`injectionAvailability()` 不问对端）；Load Frameworks… 在离线引擎上禁用；交叉引用与「Keep Cross References Ready」靠对端没有这几条命令，落到现成的「此引擎不支持」，Report 显示该行。
+- **引擎菜单**（`MainWindowController.swift:213-260`、`MainViewModel.swift:368-375`）：选中已停放的文件引擎时 `startReading(_:)` 让它重读，窗口立刻 `.main(engine)` 切过去、读取期间同样显示「Reading…」；文件组末尾的「Open File…」「Dependency Cache ▸」两项。图标：`Utils/RuntimeSource+.swift` 的 `icon` 对 `.file` 返回 `NSWorkspace.shared.icon(forFile:)`。
+- **后台工作注册表**（`RuntimeEngineBackgroundWork.swift:105-143`）：加一个发布者，在某个引擎的第一个成员加入、最后一个成员离开时各发一次。只有文件引擎的控制器订阅它。
+- **功能开关**：`RuntimeEngine+Injection` 对 `.file` 直接回答不支持（`injectionTargetsRunOnThisMachine` 为 `false`，`injectionAvailability()` 不问对端）；Load Frameworks… 在文件引擎上禁用；交叉引用与「Keep Cross References Ready」靠对端没有这几条命令，落到现成的「此引擎不支持」，Report 显示该行。
 
 ### 8. 设置
 
-- **`Settings.offline`**（新分支，`Settings.Offline`）：`dependencyCaches: [Settings.Offline.DependencyCache]`，每项存 cache 主文件的路径与登记时读出的平台、系统版本、架构、UUID（显示与自动挑选都不必再开 cache）。`accessPersistedValues()` 与 `SettingsPersistenceTests` 的覆盖表同批更新。
-- **Settings › Offline 页**：一张表（路径、平台、版本、架构）加「+」「−」；「+」弹面板选 cache 主文件，读头失败就提示并不登记。
+- **`Settings.file`**（新分支，`Settings.File`）：`dependencyCaches: [Settings.File.DependencyCache]`，每项存 cache 主文件的路径与登记时读出的平台、系统版本、架构、UUID（显示与自动挑选都不必再开 cache）。`accessPersistedValues()` 与 `SettingsPersistenceTests` 的覆盖表同批更新。
+- **Settings › File 页**：一张表（路径、平台、版本、架构）加「+」「−」；「+」弹面板选 cache 主文件，读头失败就提示并不登记。
 - **自动挑选**：文件的平台（`LC_BUILD_VERSION` 的 platform；Mac Catalyst 与 macOS 用本机 cache）相同的登记项里，取版本不低于文件 SDK 版本的最小者；都低于就取最高的；没有同平台的就不配对。模拟器文件只配模拟器的 cache。
 - 「Dependency Cache ▸」列出本机 cache（macOS / Catalyst 文件）、同平台的登记项、「None」和「Manage in Settings…」，当前项打勾。
 
 ### 9. 派生数据（只给 dyld cache）
 
-- **身份来自 cache 文件**：`RuntimeDerivedDataSystemIdentity` 加一个由 `FullDyldCache` 头构造的入口——平台、OS 版本、UUID。cache 头只有 `platform` / `osVersion` / `altPlatform` / `altOsVersion`，没有 build 号（MachOKit `Header/DyldCacheHeader/DyldCacheHeader.swift:40-61`），目录名改用 `Offline-<平台>-<版本>-<UUID>`，由 UUID 区分不同的 cache。`Platform` 补 iOS、iOS Simulator、tvOS、watchOS、visionOS 等。
-- **哪些镜像存**：离线进程的「是不是 shared cache 镜像」由目录回答——它读的那份 cache 的镜像存，单独的文件与包里的文件不存。
-- **清理**：本机 service 的 `cleanUp` 跳过 `Offline-` 开头的系统目录；离线目录只由「删除派生数据」清掉，或在第一版之后再加按最近使用时间的清理（先记为后续项）。App 侧的「派生数据占用」统计照旧把它们算进去。
-- **不撞车**：离线 service 是另一个二进制，生产者身份不同，即使配对的是本机 cache，`MachOFile` 打出的语料也落在与本机 service 不同的目录。
+- **身份来自 cache 文件**：`RuntimeDerivedDataSystemIdentity` 加一个由 `FullDyldCache` 头构造的入口——平台、OS 版本、UUID。cache 头只有 `platform` / `osVersion` / `altPlatform` / `altOsVersion`，没有 build 号（MachOKit `Header/DyldCacheHeader/DyldCacheHeader.swift:40-61`），目录名改用 `File-<平台>-<版本>-<UUID>`，由 UUID 区分不同的 cache。`Platform` 补 iOS、iOS Simulator、tvOS、watchOS、visionOS 等。
+- **哪些镜像存**：文件进程的「是不是 shared cache 镜像」由目录回答——它读的那份 cache 的镜像存，单独的文件与包里的文件不存。
+- **清理**：本机 service 的 `cleanUp` 跳过 `File-` 开头的系统目录；文件 cache 的目录只由「删除派生数据」清掉，或在第一版之后再加按最近使用时间的清理（先记为后续项）。App 侧的「派生数据占用」统计照旧把它们算进去。
+- **不撞车**：文件 service 是另一个二进制，生产者身份不同，即使配对的是本机 cache，`MachOFile` 打出的语料也落在与本机 service 不同的目录。
 - 动手前按根 `AGENTS.md` 先读 `Documentations/DerivedData.md`。
 
 ### 10. 测试
@@ -345,48 +345,48 @@ extension RuntimeEngineManager {
   - 用测试 bundle 自己在磁盘上的二进制建文件引擎，与进程内引擎对照：对象清单一致，ObjC 与 Swift 接口在去掉布局注释后一致。
   - 用本机 cache 文件（`FullDyldCache.host`）建 cache 引擎：清单含 Foundation，解析 Foundation 后 ObjC 与 Swift 对象非空，`NSObject` 的接口能打出。
   - 离线泛型特化：测试 bundle 里一个泛型类型走 request → `staticPreflight` → specialize，结果出现在子节点。
-  - 目录：bundle 遍历（`.xctest` 本身就是 bundle）、胖文件取片（系统里现成的 universal 二进制）、`RuntimeOfflineFile(contentsOf:)` 对非 Mach-O 文件抛错。
+  - 目录：bundle 遍历（`.xctest` 本身就是 bundle）、胖文件取片（系统里现成的 universal 二进制）、`RuntimeFile(contentsOf:)` 对非 Mach-O 文件抛错。
   - 引擎停止后再连接：匿名监听器上的 client 引擎 `stop()` 后 `connect(credential:)`，再次收到镜像清单。
 - **通信层**：用匿名监听在进程内测 payload 随 `hello` 到达、launch handler 只跑一次且失败时 `hello` 失败、launch handler 里登记的命令立刻可用、重连换新连接并重装处理器；一次性实例本身只有真实的内嵌 service 能测，归第 5 步与人工验收。SwiftyXPC 一侧测监听方激活后登记的处理器对已接入的连接生效。
-- **Packages**：`SettingsPersistenceTests` 加 `offline`；管理器的离线组（单列一组、不进 CLI 快照、停放后仍列出、唤醒复用同一对象）；`DocumentState(runtimeEngine:)` 起步即在该引擎上。
-- **人工验收**（用户在真实 App 里做）：打开一个第三方 `.app`、一个 iOS cache、一个胖二进制；切走窗口 30 秒后 Activity Monitor 里该进程消失、再选回来能用；`kill -9` 离线进程后窗口回根、其它窗口不受影响；打开一个截断的 Mach-O 只影响它自己。
+- **Packages**：`SettingsPersistenceTests` 加 `file`；管理器的文件组（单列一组、不进 CLI 快照、停放后仍列出、唤醒复用同一对象）；`DocumentState(runtimeEngine:)` 起步即在该引擎上。
+- **人工验收**（用户在真实 App 里做）：打开一个第三方 `.app`、一个 iOS cache、一个胖二进制；切走窗口 30 秒后 Activity Monitor 里该进程消失、再选回来能用；`kill -9` 文件进程后窗口回根、其它窗口不受影响；打开一个截断的 Mach-O 只影响它自己。
 
 ## 替代方案考量
 
-- **在 App 进程里解析离线文件**：最省事。否：0037 把「My Mac」搬出去，正是因为解析器碰到畸形二进制会让 App 崩溃、索引结果常驻 App 内存；用户打开的任意文件更不可控。
-- **所有离线文件共用一个 XPC service 进程**：和「My Mac」同一套做法，实现少。否：一个文件把解析器弄崩，所有离线文件一起断开；内存要等所有离线文件都关了才回收。
+- **在 App 进程里解析文件**：最省事。否：0037 把「My Mac」搬出去，正是因为解析器碰到畸形二进制会让 App 崩溃、索引结果常驻 App 内存；用户打开的任意文件更不可控。
+- **所有文件共用一个 XPC service 进程**：和「My Mac」同一套做法，实现少。否：一个文件把解析器弄崩，所有文件一起断开；内存要等所有文件都关了才回收。
 - **复用 `RuntimeViewerLocalRuntimeService` 的二进制跑多实例**：省一个 target。否：「My Mac」的实例也要改成按 bootstrap 分支；更要紧的是同一个生产者身份让本机 cache 的两种语料互相删除（前期调研 §4）。
 - **自己起子进程，走 socket 或 stdio**：不依赖私有接口，`RuntimeStdioConnection` 现成。否（本次）：进程生命周期、僵尸进程、崩溃后的重拉都要自己管，launchd 免费给的正是这些；第 0 步若证明多实例不可用，退回这条路，并在决策日志里记下。
-- **把离线文件做成真正的文档（NSDocument 读文件、窗口绑定文件）**：标题、最近打开、同一文件只开一个窗口都是现成的。否：用户选了「当作引擎接入」——窗口要能在离线文件与「My Mac」、设备之间切换，绑死文件的窗口做不到。
+- **把文件做成真正的文档（NSDocument 读文件、窗口绑定文件）**：标题、最近打开、同一文件只开一个窗口都是现成的。否：用户选了「当作引擎接入」——窗口要能在文件与「My Mac」、设备之间切换，绑死文件的窗口做不到。
 - **只放进引擎菜单、不走 File › Open**：否：用户要 ⌘O、最近打开与拖到 Dock。
 - **单个文件只看它自己 / 每次都让用户选 cache**：前者解析不出父类在系统框架里的类、跨框架的类型和字段布局；后者打开 macOS 文件也要多一步。用户选了自动配同平台 cache。
 - **让 `RuntimeEngine` 本身对 Mach-O 泛型**：否：`RuntimeEngine` 是整个 App、管理器、CLI 的公共类型，泛型会一路传染；只在 section 这一簇泛型、引擎经协议持有，波及面小得多。
 - **包一个同时代表 `MachOImage` 与 `MachOFile` 的类型去遵循上游协议**：否：上游协议的面很大，而且上游自己按 `machO.asMachOFile` / `as? MachOImage` 分支（例如 `SwiftDeclarationIndexer.swift:401`），包一层会让它们全部走错路。
 - **配对 cache 算进来源身份**：否：换配对 cache 会让书签、侧栏状态与 Always Index 另起一份，而用户看的还是同一个文件。
 - **用 MachOKit 的 dyld cache ObjC 优化表按类名找镜像**：MachOKit 能读优化表的头（`ObjCOptimization`），但没有现成的类名查表接口；自己按 libobjc 的哈希表格式读，依赖未公开的布局且随系统变化。否（本次），先用「只读名字建表」的办法。
-- **CLI 第一版就列出离线文件**：用户定为第一版不暴露。
+- **CLI 第一版就列出文件引擎**：用户定为第一版不暴露。
 
 ## 影响
 
 ### 用户可见变化
 
-- **File › Open…（⌘O）** 从「只能选一个打不开的 `.runtimedocument`」变成打开 Mach-O 文件、bundle 与 dyld cache；**File › Open Recent** 列出打开过的离线文件。Finder 里把可执行文件、动态库或 `.app` / `.framework` 拖到 Dock 图标上也能打开；「打开方式」菜单会列出 RuntimeViewer（Alternate 级别，不抢默认）。
-- **工具栏引擎菜单**多一组「Offline Files」：已打开（含已停放）的离线文件，加「Open File…」「Dependency Cache ▸」。
-- **离线窗口**：侧栏是文件一组、配对的 cache 一组；Load Frameworks… 不可用；Attach to Process 提示此引擎不支持；Report 的交叉引用一行显示不支持，Find 的调用层级等交叉引用功能不可用。
-- **离线时内容区的差别**：字段偏移与类型布局注释是静态推算的，个别跨模块、带 resilient 父类的类型可能比在线少；泛型特化的结果没有 metadata 数值，约束检查里无法证明的遵循显示为警告而不是错误。
-- **Settings** 多一页 **Offline**，登记非 macOS 平台用的 dyld cache。
+- **File › Open…（⌘O）** 从「只能选一个打不开的 `.runtimedocument`」变成打开 Mach-O 文件、bundle 与 dyld cache；**File › Open Recent** 列出打开过的文件。Finder 里把可执行文件、动态库或 `.app` / `.framework` 拖到 Dock 图标上也能打开；「打开方式」菜单会列出 RuntimeViewer（Alternate 级别，不抢默认）。
+- **工具栏引擎菜单**多一组「Files」：已打开（含已停放）的文件，加「Open File…」「Dependency Cache ▸」。
+- **文件引擎的窗口**：侧栏是文件一组、配对的 cache 一组；Load Frameworks… 不可用；Attach to Process 提示此引擎不支持；Report 的交叉引用一行显示不支持，Find 的调用层级等交叉引用功能不可用。
+- **文件模式下内容区的差别**：字段偏移与类型布局注释是静态推算的，个别跨模块、带 resilient 父类的类型可能比在线少；泛型特化的结果没有 metadata 数值，约束检查里无法证明的遵循显示为警告而不是错误。
+- **Settings** 多一页 **File**，登记非 macOS 平台用的 dyld cache。
 - 已有的操作习惯不受影响：「My Mac」、Catalyst、设备、注入照旧。
 
 ### 可发现性
 
-- ⌘O 是 macOS 的通用打开方式；引擎菜单里的「Open File…」给只在工具栏里找来源的用户；Settings › Offline 页说明 iOS 等文件为什么需要登记 cache。
+- ⌘O 是 macOS 的通用打开方式；引擎菜单里的「Open File…」给只在工具栏里找来源的用户；Settings › File 页说明 iOS 等文件为什么需要登记 cache。
 - 功能默认开启：它只在用户主动打开文件时出现，不打开就什么都不变。
 
 ### 数据与配置兼容
 
-- 设置新增 `offline` 分支，旧设置文件没有它就是空列表，无需迁移。
-- 书签、侧栏状态、Find 最近查询、Always Index 列表按离线文件的书签身份（规范化路径）各存一份；同一文件换了路径算另一个来源。
-- 派生数据新增 `Offline-…` 目录，旧目录不受影响；本机 service 的清理规则改为跳过它们。
+- 设置新增 `file` 分支，旧设置文件没有它就是空列表，无需迁移。
+- 书签、侧栏状态、Find 最近查询、Always Index 列表按文件的书签身份（规范化路径）各存一份；同一文件换了路径算另一个来源。
+- 派生数据新增 `File-…` 目录，旧目录不受影响；本机 service 的清理规则改为跳过它们。
 - 线协议：新 `RuntimeSource` case 不可镜像，不出现在发给其它 Mac 的引擎列表里，旧版本对端看不到它。
 
 ### 平台与最低版本
@@ -408,14 +408,14 @@ extension RuntimeEngineManager {
 0. **验证多实例 XPC**（前期调研 §6 第 1–3 条）：在丢弃分支上用一个只回显 bootstrap 的临时 service（不进仓库）实测——两个连接得到两个进程、`xpc_copy_bootstrap` 拿到数据、取消连接后进程退出、`kill -9` 后连接报什么、换新 UUID 重连。结论写回本提案；不可用就改走「自起子进程」并记进决策日志。
 1. **SwiftyXPC**：fork 里加带实例的连接类型，监听方改为收到消息时查当前的处理器；发 0.5.106，RuntimeViewer 抬下限，只改各锁文件里 SwiftyXPC 这一条（`UpdatePackagesScript.sh` 会连带升级别的依赖，不用它）。
 2. **Core 泛型化，行为不变**：读取方式协议、泛型的 section / indexer / 工厂 / 解析器、给引擎用的非泛型协议与 `RuntimeImageIndex`、`RuntimeProcessImageCatalog`；引擎改经目录与这些协议。验收：`RuntimeViewerCore` 全量测试与基线一致（满载下 IPC 类测试成批超时是已知现象，对照基线判断）。
-3. **文件目录与文件引擎（进程内）**：`RuntimeOfflineFile`、`RuntimeFileImageCatalog`（Mach-O / 胖文件 / bundle / cache / 配对 cache）、`RuntimeFileImageReading`（特化、父类链、ObjC 名字）、按导出符号找 ObjC 类、`RuntimeEngine(reading:)`、`RuntimeSource.file`。测试见 §10。
-4. **传输**：`.dedicatedInstance` 目标、`hello` 带 payload 与 launch handler、换新连接的重连与处理器重装、`RuntimeOfflineService`；引擎停止后再连接的测试。`RuntimeSource.file`、各处 `switch` 与 `RuntimeBookmarkScope` 已在第 3 步做完。
-5. **离线 service target**：目录、`Info.plist`、entitlements、xcconfig、bundle ID、App 的 `Info.plist` 键、目标依赖与嵌入阶段、Tuist 描述（`./TuistScript.sh check` 通过）、根 `AGENTS.md` 的进程表。验收：`./RunScript.sh --no-launch` 后 `Contents/XPCServices/RuntimeViewerOfflineService.xpc` 存在，`codesign -dv` 显示 hardened runtime 与 entitlements，`Info.plist` 带 `_MultipleInstances`。
-6. **引擎管理**：离线组、`runtimeEngine(reading:)`、停放 / 唤醒、CLI 快照过滤与 `SourceKind`。测试见 §10。
-7. **应用层与设置**：`DocumentController`、`OfflineFileController`、`Info.plist` 文档类型、`DocumentState(runtimeEngine:)` 与初始路由、引擎菜单两项与图标、注册表的占用事件、功能开关、`Settings.offline` 与 Settings › Offline 页。
-8. **派生数据**：cache 身份、`Platform` 补全、离线进程的镜像判断、清理规则跳过 `Offline-` 目录。动手前读 `Documentations/DerivedData.md`。
+3. **文件目录与文件引擎（进程内）**：`RuntimeFile`、`RuntimeFileImageCatalog`（Mach-O / 胖文件 / bundle / cache / 配对 cache）、`RuntimeFileImageReading`（特化、父类链、ObjC 名字）、按导出符号找 ObjC 类、`RuntimeEngine(reading:)`、`RuntimeSource.file`。测试见 §10。
+4. **传输**：`.dedicatedInstance` 目标、`hello` 带 payload 与 launch handler、换新连接的重连与处理器重装、`RuntimeFileService`；引擎停止后再连接的测试。`RuntimeSource.file`、各处 `switch` 与 `RuntimeBookmarkScope` 已在第 3 步做完。
+5. **文件 service target**：目录、`Info.plist`、entitlements、xcconfig、bundle ID、App 的 `Info.plist` 键、目标依赖与嵌入阶段、Tuist 描述（`./TuistScript.sh check` 通过）、根 `AGENTS.md` 的进程表。验收：`./RunScript.sh --no-launch` 后 `Contents/XPCServices/RuntimeViewerFileService.xpc` 存在，`codesign -dv` 显示 hardened runtime 与 entitlements，`Info.plist` 带 `_MultipleInstances`。
+6. **引擎管理**：文件组、`runtimeEngine(reading:)`、停放 / 唤醒、CLI 快照过滤与 `SourceKind`。测试见 §10。
+7. **应用层与设置**：`DocumentController`、`FileController`、`Info.plist` 文档类型、`DocumentState(runtimeEngine:)` 与初始路由、引擎菜单两项与图标、注册表的占用事件、功能开关、`Settings.file` 与 Settings › File 页。
+8. **派生数据**：cache 身份、`Platform` 补全、文件进程的镜像判断、清理规则跳过 `File-` 目录。动手前读 `Documentations/DerivedData.md`。
 9. **人工验收**（用户）：§10 的人工验收清单。
-10. **文档**：根 `AGENTS.md`（Application Targets 加离线 service；XPC 代码的位置列表加上它的入口；进程义务表；派生数据一节）、`CommunicationAndEngineArchitecture.md`（多实例连接）、`DerivedData.md`（离线身份与清理）、`Glossary.md`（离线文件、依赖 cache、停放）、`README.md` 的功能介绍、两份索引；本提案推进状态并补决策日志。
+10. **文档**：根 `AGENTS.md`（Application Targets 加文件 service；XPC 代码的位置列表加上它的入口；进程义务表；派生数据一节）、`CommunicationAndEngineArchitecture.md`（多实例连接）、`DerivedData.md`（文件 cache 的身份与清理）、`Glossary.md`（文件、依赖 cache、停放）、`README.md` 的功能介绍、两份索引；本提案推进状态并补决策日志。
 
 ### 进度
 
@@ -424,67 +424,68 @@ extension RuntimeEngineManager {
 | 0 验证多实例 XPC | 完成 | 用户过目后运行：一次性实例可用；取消连接与 App 退出后实例都退出；`kill -9` 后连接先 `INTERRUPTED` 再 `INVALID`、不重拉，新 UUID 能重起；bootstrap 不按实例保存，改由 `hello` 传文件（前期调研 §6） |
 | 1 SwiftyXPC | 完成 | fork 发 0.5.106（用户同意发版）：带实例的连接、监听方在收到消息时查处理器；新加的 4 个进程内测试改前 2 个红、改后全绿，依赖 launchctl 的老测试没跑。RuntimeViewer 下限抬到 0.5.106，六份锁文件只改这一条，全新构建目录的远程解析不改写它 |
 | 2 Core 泛型化 | 完成 | Core 全量与基线对照：基线就有的满载失败（交叉引用预先准备、后台索引批次取消、事件订阅三个之中的两个）照旧，无新增失败；新增的跳转回归测试在旧查找逻辑上红、修复后绿 |
-| 3 文件目录与文件引擎 | 完成 | `OfflineFileEngineTests` 9 例通过：薄 / 胖 / 非 Mach-O / bundle 的判定，离线与进程内引擎对同一镜像列出的对象一致、打印一致，离线泛型特化，依赖解析进配对 cache，cache 引擎按导出符号找到 `NSObject` 所在的 libobjc。Core 全量 663 项只有基线就有的两个满载失败；Packages 全量 701 项挂 1 个交叉引用的等待超时（174 秒），单独跑该套件 11 项全过；CLI 121 项全过；Debug 设置文件前后校验和不变。App 目标未编，第 5 步加 service target 时一起编 |
-| 4 传输 | 完成 | `.dedicatedInstance`、`hello` 带载荷、launch handler、换新连接的重连与处理器重装、`RuntimeOfflineService` / `RuntimeOfflineServiceHost`、引擎对 `.file` 带凭证转发。新测试：传输 5 项（载荷随第一个 `hello` 到达且 launch handler 只跑一次、launch 失败让连接失败、实例退出后换新连接且处理器仍应答、被拒绝的 `hello` 每次换新实例、内嵌 service 的 client 不换连接），离线 service host 5 项（载荷往返、`.file` 引擎转发并收到镜像清单、请求到达 service 侧引擎、读不了的文件让连接失败、停止后再连接）；原有 XPC 传输与本地 service host 的 17 项照旧通过 |
-| 5 离线 service target | 完成 | `./RunScript.sh --no-launch`（隔离构建目录）成功；产物里 `Contents/XPCServices/RuntimeViewerOfflineService.xpc` 存在，hardened runtime、团队签名、entitlements 为空，`Info.plist` 带 `_MultipleInstances = true`，App 的 `RuntimeViewerOfflineServiceBundleIdentifier` 是 `dev.JH.RuntimeViewerOfflineService.arm64e`；`./TuistScript.sh check` 通过。新测试：监听方的「客户端离开」只认连接关闭（未知消息不算），`.file` 引擎对交叉引用命令自己回答「未知命令」；传输与离线 host 共 23 项、交叉引用 33 项通过。真实 service 实例的端到端运行归第 9 步人工验收 |
-| 6 引擎管理 | 完成 | 离线组、`runtimeEngine(reading:)`、停放 / 唤醒、`RuntimeHostInfo.offlineFiles`；CLI 的过滤与 `SourceKind` 在第 3 步已做。新测试：管理器 6 项（自成一组且转发、同一文件返回同一引擎、停放后仍列出且唤醒是同一对象并起新实例、改配对后在新实例里读到 cache 的镜像、没有 service 时报错且不列出、终止后忘掉），CLI 1 项（离线文件不是 CLI 的来源）；CLI 全量 122 项通过 |
-| 7 应用层 | 完成 | 设置分支与设置页、`RuntimeDyldSharedCacheSummary`；后台工作注册表的占用事件与 `RuntimeOfflineEngineParking`（30 秒后停放）；`Document(runtimeEngine:)` 与 `MainCoordinator` 从文档的引擎起步；`DocumentController`、`OfflineFileController`、`Info.plist` 的 Viewer 文档类型；引擎菜单（选中停放的引擎先唤醒、离线组末尾的 Open File… 与 Dependency Cache 子菜单、文件自己的图标）；离线引擎上 Load Frameworks… 禁用。设置测试 39 项、停放 3 项、后台工作相关 15 项通过，Debug 设置文件前后校验和不变；`./RunScript.sh --no-launch` 构建成功，产物的 `CFBundleDocumentTypes` 带新类型。界面与打开流程没有自动化测试，归第 9 步人工验收 |
-| 8 派生数据 | 完成 | 离线身份 `Offline-<平台>-<版本>-<UUID>`、离线 service 的开关与按 cache 建的存储、本机清理跳过 `Offline-` 目录。新测试 4 项（离线 cache 的目录不被清理、离线身份的目录名且解析不出 build、文件的 cache 镜像归谁、默认关闭）；派生数据与离线 host 相关 46 项通过 |
-| 9 人工验收 | 完成 | 详细设计 §10 的「人工验收」：第三方 `.app`、iOS cache、胖二进制；切走 30 秒后进程消失、选回来能用；`kill -9` 离线进程后窗口回根、别的窗口不受影响；截断的 Mach-O 只影响它自己。用户首轮验收报了两个问题：打开 dyld cache 时迟迟不出窗口（已修，见决策日志 11-03「打开文件立刻出窗口」）；离线生成 Swift 接口很慢（已修，见决策日志 11-03「离线 Swift 接口慢」）。两处修好后用户复验，确认人工验收通过 |
-| 10 文档 | 完成 | 使用指南 `Guides/OfflineMode.md`；术语表六条（离线文件、依赖 cache、停放、专属实例、镜像目录、读取方式）；README 两处；`CommunicationAndEngineArchitecture.md` §3.6 / §7.1、`DerivedData.md`、根与 App 层 `AGENTS.md` 已随各步更新；提案索引的后续项表划掉「跨镜像点击跳到 `@rpath` 镜像落空」（第 2 步修好），加上三条本提案的后续项 |
+| 3 文件目录与文件引擎 | 完成 | `FileEngineTests` 9 例通过：薄 / 胖 / 非 Mach-O / bundle 的判定，文件与进程内引擎对同一镜像列出的对象一致、打印一致，离线泛型特化，依赖解析进配对 cache，cache 引擎按导出符号找到 `NSObject` 所在的 libobjc。Core 全量 663 项只有基线就有的两个满载失败；Packages 全量 701 项挂 1 个交叉引用的等待超时（174 秒），单独跑该套件 11 项全过；CLI 121 项全过；Debug 设置文件前后校验和不变。App 目标未编，第 5 步加 service target 时一起编 |
+| 4 传输 | 完成 | `.dedicatedInstance`、`hello` 带载荷、launch handler、换新连接的重连与处理器重装、`RuntimeFileService` / `RuntimeFileServiceHost`、引擎对 `.file` 带凭证转发。新测试：传输 5 项（载荷随第一个 `hello` 到达且 launch handler 只跑一次、launch 失败让连接失败、实例退出后换新连接且处理器仍应答、被拒绝的 `hello` 每次换新实例、内嵌 service 的 client 不换连接），文件 service host 5 项（载荷往返、`.file` 引擎转发并收到镜像清单、请求到达 service 侧引擎、读不了的文件让连接失败、停止后再连接）；原有 XPC 传输与本地 service host 的 17 项照旧通过 |
+| 5 文件 service target | 完成 | `./RunScript.sh --no-launch`（隔离构建目录）成功；产物里 `Contents/XPCServices/RuntimeViewerFileService.xpc` 存在，hardened runtime、团队签名、entitlements 为空，`Info.plist` 带 `_MultipleInstances = true`，App 的 `RuntimeViewerFileServiceBundleIdentifier` 是 `dev.JH.RuntimeViewerFileService.arm64e`；`./TuistScript.sh check` 通过。新测试：监听方的「客户端离开」只认连接关闭（未知消息不算），`.file` 引擎对交叉引用命令自己回答「未知命令」；传输与文件 host 共 23 项、交叉引用 33 项通过。真实 service 实例的端到端运行归第 9 步人工验收 |
+| 6 引擎管理 | 完成 | 文件组、`runtimeEngine(reading:)`、停放 / 唤醒、`RuntimeHostInfo.files`；CLI 的过滤与 `SourceKind` 在第 3 步已做。新测试：管理器 6 项（自成一组且转发、同一文件返回同一引擎、停放后仍列出且唤醒是同一对象并起新实例、改配对后在新实例里读到 cache 的镜像、没有 service 时报错且不列出、终止后忘掉），CLI 1 项（文件不是 CLI 的来源）；CLI 全量 122 项通过 |
+| 7 应用层 | 完成 | 设置分支与设置页、`RuntimeDyldSharedCacheSummary`；后台工作注册表的占用事件与 `RuntimeFileEngineParking`（30 秒后停放）；`Document(runtimeEngine:)` 与 `MainCoordinator` 从文档的引擎起步；`DocumentController`、`FileController`、`Info.plist` 的 Viewer 文档类型；引擎菜单（选中停放的引擎先唤醒、文件组末尾的 Open File… 与 Dependency Cache 子菜单、文件自己的图标）；文件引擎上 Load Frameworks… 禁用。设置测试 39 项、停放 3 项、后台工作相关 15 项通过，Debug 设置文件前后校验和不变；`./RunScript.sh --no-launch` 构建成功，产物的 `CFBundleDocumentTypes` 带新类型。界面与打开流程没有自动化测试，归第 9 步人工验收 |
+| 8 派生数据 | 完成 | 文件 cache 的身份 `File-<平台>-<版本>-<UUID>`、文件 service 的开关与按 cache 建的存储、本机清理跳过 `File-` 目录。新测试 4 项（文件 cache 的目录不被清理、文件 cache 的身份的目录名且解析不出 build、文件的 cache 镜像归谁、默认关闭）；派生数据与文件 host 相关 46 项通过 |
+| 9 人工验收 | 完成 | 详细设计 §10 的「人工验收」：第三方 `.app`、iOS cache、胖二进制；切走 30 秒后进程消失、选回来能用；`kill -9` 文件进程后窗口回根、别的窗口不受影响；截断的 Mach-O 只影响它自己。用户首轮验收报了两个问题：打开 dyld cache 时迟迟不出窗口（已修，见决策日志 11-03「打开文件立刻出窗口」）；文件模式生成 Swift 接口很慢（已修，见决策日志 11-03「文件模式 Swift 接口慢」）。两处修好后用户复验，确认人工验收通过 |
+| 10 文档 | 完成 | 使用指南 `Guides/FileMode.md`；术语表六条（文件、依赖 cache、停放、专属实例、镜像目录、读取方式）；README 两处；`CommunicationAndEngineArchitecture.md` §3.6 / §7.1、`DerivedData.md`、根与 App 层 `AGENTS.md` 已随各步更新；提案索引的后续项表划掉「跨镜像点击跳到 `@rpath` 镜像落空」（第 2 步修好），加上三条本提案的后续项 |
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
-- **要不要配套专题文章** —— 预计要一篇使用指南（`Guides/OfflineMode.md`）：能打开什么、配对 cache 怎么定、哪些功能不可用、停放是什么；以及一篇实现说明或架构文档的一节：多实例 XPC 的约束（一次性实例不重拉、重连要换新连接、bootstrap 不按实例保存所以文件随 `hello` 传、peer 断开即退出）。
-- **有没有引入新术语** —— 「离线文件」「依赖 cache（配对 cache）」「停放」要进 `Documentations/Glossary.md`。
+- **要不要配套专题文章** —— 预计要一篇使用指南（`Guides/FileMode.md`）：能打开什么、配对 cache 怎么定、哪些功能不可用、停放是什么；以及一篇实现说明或架构文档的一节：多实例 XPC 的约束（一次性实例不重拉、重连要换新连接、bootstrap 不按实例保存所以文件随 `hello` 传、peer 断开即退出）。
+- **有没有引入新术语** —— 「文件（file）」「依赖 cache（配对 cache）」「停放」要进 `Documentations/Glossary.md`。
 
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
 |------|------|------|
-| 2026-11-02 | Created as Draft | 引擎只能读进程里已加载的镜像（`MachOImage`），而上游 ObjC / Swift 两套库对 `MachOFile` 早已通用；用户要求实现离线模式，打开磁盘上的 Mach-O 文件与 dyld cache。 |
+| 2026-11-02 | Created as Draft | 引擎只能读进程里已加载的镜像（`MachOImage`），而上游 ObjC / Swift 两套库对 `MachOFile` 早已通用；用户要求实现文件模式，打开磁盘上的 Mach-O 文件与 dyld cache。 |
 | 2026-11-02 | 按完整档处理 | 新的引擎来源、Core 的泛型化、新的进程，属于架构改动；按完整档拷问两轮后确认共识，再写本提案。 |
-| 2026-11-02 | 每个文件一个进程 | 用户选定。否决「所有离线文件共用一个 XPC service」（一个文件崩溃带走全部）与「在 App 进程里解析」（违背 0037 的隔离原则）。 |
-| 2026-11-02 | 离线文件当作一种引擎接入 | 用户选定：File › Open… 开新窗口，引擎菜单单列，任何窗口可切换，进最近打开。否决「当作文档绑定窗口」（窗口不能切引擎）与「只放进引擎菜单」。 |
+| 2026-11-02 | 每个文件一个进程 | 用户选定。否决「所有文件共用一个 XPC service」（一个文件崩溃带走全部）与「在 App 进程里解析」（违背 0037 的隔离原则）。 |
+| 2026-11-02 | 文件当作一种引擎接入 | 用户选定：File › Open… 开新窗口，引擎菜单单列，任何窗口可切换，进最近打开。否决「当作文档绑定窗口」（窗口不能切引擎）与「只放进引擎菜单」。 |
 | 2026-11-02 | 自动配同平台的 dyld cache | 用户选定：macOS 文件用本机 cache，其它平台用登记的 cache，没有就只看文件本身。否决「只看文件本身」（父类链、跨框架类型与字段布局解析不出）与「总让用户选」。 |
 | 2026-11-02 | 第一版加上 `.app` / `.framework` 包 | 用户选定；CLI 直接指定文件与交叉引用不进第一版。 |
 | 2026-11-02 | 无窗口时进程退出、菜单保留 | 用户选定：释放内存优先，再选中时重新拉起、重新解析。否决「一直活着直到手动关闭」与「彻底关闭、只能从最近打开再开」。 |
 | 2026-11-02 | 非 macOS 文件的 cache 在设置里登记、按平台自动挑 | 用户选定，可在引擎菜单里改。否决「每次打开弹窗选」与「打开后再从菜单挂」。 |
 | 2026-11-02 | 侧栏：文件一组、cache 一组 | 用户选定，与「My Mac」的「Dyld Shared Cache / Others」同形；跳到系统类型时侧栏有它的位置。 |
-| 2026-11-02 | CLI 第一版不暴露离线文件 | 用户选定；agent 插件的 skill 不动。MCP 按窗口工作，不受影响。 |
-| 2026-11-02 | 默认假设（用户未反对） | 同一文件只起一个进程；胖文件自动取本机优先的切片；cache 选主文件、子缓存自动带上；不跨重启恢复；交叉引用沿用「此引擎不支持」、载入框架与注入对离线引擎禁用；Find 语料落盘只给 dyld cache；文件改动不自动刷新；只做 macOS App；不镜像给其它 Mac。 |
+| 2026-11-02 | CLI 第一版不暴露文件引擎 | 用户选定；agent 插件的 skill 不动。MCP 按窗口工作，不受影响。 |
+| 2026-11-02 | 默认假设（用户未反对） | 同一文件只起一个进程；胖文件自动取本机优先的切片；cache 选主文件、子缓存自动带上；不跨重启恢复；交叉引用沿用「此引擎不支持」、载入框架与注入对文件引擎禁用；Find 语料落盘只给 dyld cache；文件改动不自动刷新；只做 macOS App；不镜像给其它 Mac。 |
 | 2026-11-02 | 共识确认 | 用户确认以上决定即为共识，同意据此写提案。 |
-| 2026-11-02 | 写方案时自定的几条 | 停放前等 30 秒；Dock 拖放不接 dyld cache（不声明 `public.data`）；停放条目留到 App 退出、第一版不能从菜单移除；面板不进入包内容；离线引擎菜单组名「Offline Files」；配对的选择规则（同平台、版本不低于 SDK 的最小者）；App 进程只读文件头与 cache 头。理由见「未询问自定的假设」。 |
-| 2026-11-02 | 技术路线 | 新 service target 而不复用本地运行时 service（语料撞车）；多实例用一次性实例 + bootstrap（WebKit 的现行做法），须第 0 步实测；Core 只把 section 一簇泛型化、引擎经非泛型协议持有；配对 cache 是配置不是身份；离线 service 不链接注入与交叉引用两个模块。 |
+| 2026-11-02 | 写方案时自定的几条 | 停放前等 30 秒；Dock 拖放不接 dyld cache（不声明 `public.data`）；停放条目留到 App 退出、第一版不能从菜单移除；面板不进入包内容；文件引擎菜单组名「Files」；配对的选择规则（同平台、版本不低于 SDK 的最小者）；App 进程只读文件头与 cache 头。理由见「未询问自定的假设」。 |
+| 2026-11-02 | 技术路线 | 新 service target 而不复用本地运行时 service（语料撞车）；多实例用一次性实例 + bootstrap（WebKit 的现行做法），须第 0 步实测；Core 只把 section 一簇泛型化、引擎经非泛型协议持有；配对 cache 是配置不是身份；文件 service 不链接注入与交叉引用两个模块。 |
 | 2026-11-02 | Draft → Accepted | 用户批准，开始实现。 |
 | 2026-11-03 | Accepted → In Progress | 功能分支 `feature/offline-mode` 开工。 |
 | 2026-11-03 | 第 0 步挪到第 3 步之后 | 第 0 步的多实例实验是自己写的程序，按全局规则要先给用户看过才能运行；第 2、3 步（Core 泛型化与进程内的文件引擎）不依赖它，先做，做到第 0 步时一并请用户过目。 |
 | 2026-11-03 | 引擎持有四个协议类型的属性，不另立 `RuntimeImageIndexing` | 详细设计 §2 原拟一个总协议。实现时让 `objcSectionFactory`、`swiftSectionFactory`、`relationshipsResolver`、`typeRelationshipsResolver` 保留原名、类型换成 `any RuntimeObjCSectionProviding` 等四个协议（工厂协议以关联类型声明自己的 section，经 `any` 调用时自动擦除成 section 协议），引擎里的调用点几乎不用改；五样东西由 `RuntimeImageIndex` 按同一种读取方式成套建出，另加 `imageCatalog`。 |
 | 2026-11-03 | `RuntimeIndexableMachO` 多两项要求 | MachOObjCSection 读 ObjC 协议记录的名字、MachOSwiftSection 建私有鉴别器的源文件索引，都是按 `MachOImage` / `MachOFile` 分开的具体重载，泛型代码调不到；协议里加 `objcProtocolRecords(in:)` 与 `makePrivateDiscriminatorSourceFileIndex(indexer:)`。Core target 补上 `ObjCMetadataSource` 产品依赖（协议的约束在这个模块里）。 |
-| 2026-11-03 | Swift 工厂的跨镜像表记下 section 自己的键 | 「mangled 名 → 定义它的镜像」两张表原来拿 `MachOImage.imagePath` 去找 section；离线时单个文件的 `imagePath` 是 install name，找不到。改成两张表各记注册它的 section 的键，引擎经 `imagePath(definingTypeWithCandidateID:)` / `imagePath(definingProtocolWithCandidateID:)` 取。这顺带修掉了提案索引「暂缓的后续项」里的「跨镜像点击跳到 `@rpath` 镜像落空」（同一个原因），收尾时从那张表里划掉。 |
+| 2026-11-03 | Swift 工厂的跨镜像表记下 section 自己的键 | 「mangled 名 → 定义它的镜像」两张表原来拿 `MachOImage.imagePath` 去找 section；文件模式下单个文件的 `imagePath` 是 install name，找不到。改成两张表各记注册它的 section 的键，引擎经 `imagePath(definingTypeWithCandidateID:)` / `imagePath(definingProtocolWithCandidateID:)` 取。这顺带修掉了提案索引「暂缓的后续项」里的「跨镜像点击跳到 `@rpath` 镜像落空」（同一个原因），收尾时从那张表里划掉。 |
 | 2026-11-03 | `RuntimeSource.file` 提前到第 3 步 | 进程内的文件引擎（`RuntimeEngine(reading:)`）构造时就要有来源，第 3 步的测试离不开它；`RuntimeSource` 自身六处、`RuntimeCommunicator`、路径规范化、注入能力与 `RuntimeBookmarkScope`（新增 `Identity.file(path:)`）随之同批改完。App 与 CLI 两侧的 switch 仍在第 4、6 步。 |
-| 2026-11-03 | 离线按名字找 ObjC 类走导出符号，协议只看已解析的镜像 | 详细设计 §3 原拟按需建「名字 → 镜像」表。实现时改查各镜像导出 trie 里的 `_OBJC_CLASS_$_<类名>`：别的镜像引用一个类正是经这个导出符号，查一次是几次 trie 节点读取，整份 cache 查一遍也远比解析全部 classlist 便宜，所以不必建表、也不用实测建表代价。ObjC 协议没有导出符号，离线时只能在已解析的镜像里找到——跳到一个尚未解析的镜像里的协议会找不到，记为已知降级。 |
+| 2026-11-03 | 文件模式按名字找 ObjC 类走导出符号，协议只看已解析的镜像 | 详细设计 §3 原拟按需建「名字 → 镜像」表。实现时改查各镜像导出 trie 里的 `_OBJC_CLASS_$_<类名>`：别的镜像引用一个类正是经这个导出符号，查一次是几次 trie 节点读取，整份 cache 查一遍也远比解析全部 classlist 便宜，所以不必建表、也不用实测建表代价。ObjC 协议没有导出符号，文件模式下只能在已解析的镜像里找到——跳到一个尚未解析的镜像里的协议会找不到，记为已知降级。 |
 | 2026-11-03 | 读取方式改为策略类型 `RuntimeImageReading` | 第 2 步按提案让 `MachOImage` / `MachOFile` 直接遵循 `RuntimeIndexableMachO`；第 3 步加 `MachOFile` 时编译不过：它是非 final 的 class，满足不了在别的泛型里写 `Self` 的要求（`GenericSpecializer<Self>`、`SwiftDeclarationIndexer<Self>`）。改成两个枚举 `RuntimeLoadedImageReading` / `RuntimeFileImageReading` 实现同一协议，各带关联类型 `MachO`；泛型类型改为对策略泛型、体内 `typealias MachO = Reading.MachO`，方法体不用动。详细设计 §2、§3 已改成实际的样子。 |
-| 2026-11-03 | 离线的 Swift 父类链停在第一个 ObjC 父类 | `RuntimeEngine.hierarchy(for:)` 在进程内实例化 metadata 一路走到 `NSObject`；离线时只能读各镜像索引时记下的父类名，走到第一个 ObjC 父类（记它的运行时名字）或尚未索引的镜像里的 Swift 类为止。Inspector 的父类时间线走的是 `superclassChain`，不受影响。 |
-| 2026-11-03 | CLI 的排除与两处 App / 设置的 switch 也在第 3 步做 | 新 case 一进 Core，CLI 的 `SourceKind(source:)`、设置里的 `carriesProcessIdentifier` 与 App 的来源图标三处穷举 switch 就编不过，每一步都要整个仓库可构建，所以提前做：`SourceKind.init?(source:)` 对 `.file` 返回 `nil`，`SourceInfo.init?(engine:)` 随之可失败，CLI 的快照把离线引擎从各分组里滤掉（即第 6 步「CLI 不暴露」的全部改动）；`.file` 不带进程号；来源菜单的图标先用文档符号，第 7 步做引擎菜单时再定。 |
+| 2026-11-03 | 文件模式下 Swift 父类链停在第一个 ObjC 父类 | `RuntimeEngine.hierarchy(for:)` 在进程内实例化 metadata 一路走到 `NSObject`；文件模式下只能读各镜像索引时记下的父类名，走到第一个 ObjC 父类（记它的运行时名字）或尚未索引的镜像里的 Swift 类为止。Inspector 的父类时间线走的是 `superclassChain`，不受影响。 |
+| 2026-11-03 | CLI 的排除与两处 App / 设置的 switch 也在第 3 步做 | 新 case 一进 Core，CLI 的 `SourceKind(source:)`、设置里的 `carriesProcessIdentifier` 与 App 的来源图标三处穷举 switch 就编不过，每一步都要整个仓库可构建，所以提前做：`SourceKind.init?(source:)` 对 `.file` 返回 `nil`，`SourceInfo.init?(engine:)` 随之可失败，CLI 的快照把文件引擎从各分组里滤掉（即第 6 步「CLI 不暴露」的全部改动）；`.file` 不带进程号；来源菜单的图标先用文档符号，第 7 步做引擎菜单时再定。 |
 | 2026-11-03 | 第 0 步结论：多实例可用，文件改随第一个 `hello` 传 | 实验见前期调研 §6。bootstrap 会串到别的实例上；要靠它，就得让 App 串行启动实例、再加校验，还要依赖一个没有文档的行为。改为 `hello` 带 payload、service 在回复前建引擎：只用一个私有函数（一次性实例），全部逻辑都能用进程内的匿名监听测试。代价是 SwiftyXPC 要让监听方激活后登记的处理器对已接入的连接生效（增量行为），以及重连换新连接时重装处理器。详细设计 §4、§5 与落地步骤 1、4 已改。 |
-| 2026-11-03 | 离线 service 的启动逻辑放进 Core 的 `RuntimeOfflineServiceHost` | 详细设计 §5 原拟写在 service 的 `main.swift` 里。放进 Core，「载荷到达 → 建引擎 → 登记命令 → 回复 `hello`」这条路径就能用匿名监听在进程内测；入口只剩建监听、退出条件与 `activate()`。 |
+| 2026-11-03 | 文件 service 的启动逻辑放进 Core 的 `RuntimeFileServiceHost` | 详细设计 §5 原拟写在 service 的 `main.swift` 里。放进 Core，「载荷到达 → 建引擎 → 登记命令 → 回复 `hello`」这条路径就能用匿名监听在进程内测；入口只剩建监听、退出条件与 `activate()`。 |
 | 2026-11-03 | 实例拒绝了载荷，下一次重连就换新实例 | 提案没写。读不了的文件可能稍后恢复（例如卷重新挂上），同一个实例会一直记着失败的结果，所以 `hello` 回 `remoteFailure` 时把连接标记为要换，下一次重连拉起新实例重新读。 |
 | 2026-11-03 | 引擎的 `forwardsToLocalService` 改名 `forwardsToServiceProcess` | `.file` 带凭证时与 `.local` 一样转发；哪些来源由凭证搬进别的进程收在一个穷举 `switch` 里（`credentialMovesWorkOutOfProcess(for:)`），新来源会编译不过、逼着人决定。 |
-| 2026-11-03 | 离线 service 不带库校验例外 | 详细设计 §5 原拟与本地运行时 service 一样带 `disable-library-validation`。那个例外是给 dlopen 用户挑的镜像的；离线 service 只把文件当数据读，加载的只有 App 自己的代码，与 Catalyst service 一样不需要它。产物核对：hardened runtime、团队签名、entitlements 为空。 |
+| 2026-11-03 | 文件 service 不带库校验例外 | 详细设计 §5 原拟与本地运行时 service 一样带 `disable-library-validation`。那个例外是给 dlopen 用户挑的镜像的；文件 service 只把文件当数据读，加载的只有 App 自己的代码，与 Catalyst service 一样不需要它。产物核对：hardened runtime、团队签名、entitlements 为空。 |
 | 2026-11-03 | 监听方加「客户端离开」回调，service 只在连接真正关闭时退出 | 提案没写退出的判据。监听方在收到没有处理器的消息时也会报 `.disconnected`（已有测试写明的行为），拿它当退出条件，一条不认识的命令就会让 service 退出、App 再拉起新实例重新解析。`setClientDepartureHandler(_:)` 只认 XPC 报的连接关闭，且只认最后认领的那条连接。 |
-| 2026-11-03 | 交叉引用对 `.file` 引擎在引擎侧直接回答「未知命令」，提前到第 5 步 | 提案只说沿用「此引擎不支持」。实测链路：XPC 上没有处理器的命令被丢掉，发送方拿到的是「service 退出」，交叉引用协调器把它当连接中断，不会标成不支持，而 service 那边还会因此重推一遍初始数据。改为六个入口对 `.file` 引擎先抛 `RuntimeNetworkRequestError.unknownCommand(named:)`——与 socket 对端回的完全一样，Find 摘要、Report 行与两个协调器现成的判断都照常生效，App 层不用改。离线 service 不链接这个模块，所以随第 5 步一起做。 |
-| 2026-11-03 | 离线引擎只经离线 service，进程内不兜底 | 提案没写没有 service 的进程怎么办。App 总是内嵌它，CLI 第一版不支持离线文件；兜底改在进程内读会让「每个文件一个进程」名不副实，还会让配对变化无法生效（进程内的目录建好就不能换）。所以 `runtimeEngine(reading:)` 在拿不到凭证时抛 `serviceUnavailable`；测试经 `offlineEngineCredential` 这个缝换成匿名监听上的 `RuntimeOfflineServiceHost`。 |
-| 2026-11-03 | 离线组的接口写在 `RuntimeEngineManager.swift` 里 | `@Loggable` 生成的 logger 是私有的，别的文件里的扩展用不了 `#log`；放回同一个文件，存储属性也就能保持私有。 |
-| 2026-11-03 | 停放做成 `RuntimeViewerApplication` 里的 `RuntimeOfflineEngineParking` | 详细设计 §7 原拟由 App 层的 `OfflineFileController` 订阅注册表。注册表是 `RuntimeViewerApplication` 的内部类型，放在同一模块里不必把它公开，还能在 Packages 测试里测；控制器只在 `start()` 里启动它。 |
+| 2026-11-03 | 交叉引用对 `.file` 引擎在引擎侧直接回答「未知命令」，提前到第 5 步 | 提案只说沿用「此引擎不支持」。实测链路：XPC 上没有处理器的命令被丢掉，发送方拿到的是「service 退出」，交叉引用协调器把它当连接中断，不会标成不支持，而 service 那边还会因此重推一遍初始数据。改为六个入口对 `.file` 引擎先抛 `RuntimeNetworkRequestError.unknownCommand(named:)`——与 socket 对端回的完全一样，Find 摘要、Report 行与两个协调器现成的判断都照常生效，App 层不用改。文件 service 不链接这个模块，所以随第 5 步一起做。 |
+| 2026-11-03 | 文件引擎只经文件 service，进程内不兜底 | 提案没写没有 service 的进程怎么办。App 总是内嵌它，CLI 第一版不支持文件引擎；兜底改在进程内读会让「每个文件一个进程」名不副实，还会让配对变化无法生效（进程内的目录建好就不能换）。所以 `runtimeEngine(reading:)` 在拿不到凭证时抛 `serviceUnavailable`；测试经 `fileEngineCredential` 这个缝换成匿名监听上的 `RuntimeFileServiceHost`。 |
+| 2026-11-03 | 文件组的接口写在 `RuntimeEngineManager.swift` 里 | `@Loggable` 生成的 logger 是私有的，别的文件里的扩展用不了 `#log`；放回同一个文件，存储属性也就能保持私有。 |
+| 2026-11-03 | 停放做成 `RuntimeViewerApplication` 里的 `RuntimeFileEngineParking` | 详细设计 §7 原拟由 App 层的 `FileController` 订阅注册表。注册表是 `RuntimeViewerApplication` 的内部类型，放在同一模块里不必把它公开，还能在 Packages 测试里测；控制器只在 `start()` 里启动它。 |
 | 2026-11-03 | `Document` 用便利构造器覆写 `init()` | 加 `init(runtimeEngine:)` 时若写成指定构造器而 `init()` 不是覆写，Swift 就不再继承 NSDocument 的 `init(type:)`、`init(contentsOf:ofType:)`、`init(for:withContentsOf:ofType:)`，AppKit 从 Objective-C 调它们（按原路打开文件、恢复窗口）会直接陷入。`init()` 是 NSDocument 唯一的指定构造器，用便利构造器覆写它就保住了继承；代码注释写明了原因。 |
 | 2026-11-03 | dyld cache 主文件拖到 Dock 也会打开 | 提案「写方案时自定的几条」说 Dock 拖放不接 dyld cache。实测 `mdls`：带执行权限的 cache 主文件被标成 `public.unix-executable`，正好落在声明的 Viewer 类型里；打开流程本来就认 cache，所以不另加限制。子缓存与符号文件没有这类类型，只能从 File › Open… 选（会被换成主文件）。 |
-| 2026-11-03 | 离线文档不设 `fileURL`，每次打开都是新窗口 | 设了 `fileURL`，NSDocument 会把窗口当成那个文件的编辑器（标题代理图标、文件变动时提示还原、自动保存的判断），而本文档不读不写文件。同一个文件再开一次复用的是引擎（同一个 service 实例），窗口另开一个；最近打开靠 `noteNewRecentDocumentURL(_:)` 记下。 |
-| 2026-11-03 | 「Manage in Settings…」只打开设置窗口 | 设置窗口还没有跳到指定页的入口；第一版先打开窗口，由用户点 Offline Files 页。 |
-| 2026-11-03 | 离线 service 用自己的派生数据开关 | 详细设计 §9 没说开关。离线 service 若调 `enableInThisProcess()`，进程级存储会取本机身份、用本机 dyld 判断共享缓存镜像，iOS cache 的镜像（路径与本机的同名）就会按本机身份存进本机目录。改为 `enableForOfflineEngineInThisProcess()` 加 `offlineStore(for:isSharedCacheImage:)`：由离线 host 按引擎读的 cache 建存储交给引擎，镜像归属由引擎的目录回答；存储不清理（`cleansUpOnFirstUse: false`），以免按「build 不同」删掉本机的系统目录。 |
-| 2026-11-03 | `Platform` 补了 iOS 等平台，系统目录名照旧只认 macOS 与 Mac Catalyst | 已有测试把「`iOS-…` 不是系统目录」写成了契约（清理会删认不出的目录）。加了平台后解析时只认这台 Mac 自己跑的平台，离线目录靠 `Offline-` 前缀另认。 |
-| 2026-11-03 | 收尾判断：配套文档与新术语 | 写了使用指南 `Guides/OfflineMode.md`（能打开什么、配对、停放、不支持的功能、派生数据）；多实例 XPC 的约束不另写实现说明，放进架构文档 §3.6，那里本来就讲 XPC service 的传输。新术语六条进 `Glossary.md`。 |
+| 2026-11-03 | 文件引擎的文档不设 `fileURL`，每次打开都是新窗口 | 设了 `fileURL`，NSDocument 会把窗口当成那个文件的编辑器（标题代理图标、文件变动时提示还原、自动保存的判断），而本文档不读不写文件。同一个文件再开一次复用的是引擎（同一个 service 实例），窗口另开一个；最近打开靠 `noteNewRecentDocumentURL(_:)` 记下。 |
+| 2026-11-03 | 「Manage in Settings…」只打开设置窗口 | 设置窗口还没有跳到指定页的入口；第一版先打开窗口，由用户点 Files 页。 |
+| 2026-11-03 | 文件 service 用自己的派生数据开关 | 详细设计 §9 没说开关。文件 service 若调 `enableInThisProcess()`，进程级存储会取本机身份、用本机 dyld 判断共享缓存镜像，iOS cache 的镜像（路径与本机的同名）就会按本机身份存进本机目录。改为 `enableForFileEngineInThisProcess()` 加 `fileStore(for:isSharedCacheImage:)`：由文件 host 按引擎读的 cache 建存储交给引擎，镜像归属由引擎的目录回答；存储不清理（`cleansUpOnFirstUse: false`），以免按「build 不同」删掉本机的系统目录。 |
+| 2026-11-03 | `Platform` 补了 iOS 等平台，系统目录名照旧只认 macOS 与 Mac Catalyst | 已有测试把「`iOS-…` 不是系统目录」写成了契约（清理会删认不出的目录）。加了平台后解析时只认这台 Mac 自己跑的平台，文件 cache 的目录靠 `File-` 前缀另认。 |
+| 2026-11-03 | 收尾判断：配套文档与新术语 | 写了使用指南 `Guides/FileMode.md`（能打开什么、配对、停放、不支持的功能、派生数据）；多实例 XPC 的约束不另写实现说明，放进架构文档 §3.6，那里本来就讲 XPC service 的传输。新术语六条进 `Glossary.md`。 |
 | 2026-11-03 | 实现完成，待用户验收后收尾 | 第 0–8、10 步完成并推送到 `feature/offline-mode`；第 9 步的人工验收由用户在真实 App 里做，之后用 finish-feature 落地编号、改 Implemented。 |
-| 2026-11-03 | 打开文件立刻出窗口，文件在后台读 | 首轮验收：打开 dyld cache 后很久才出窗口，看着像卡死。原因是管理器要等离线 service 把整份 cache 读完、连接建好才登记引擎，App 才建窗口，期间没有任何反馈；识别文件头那一步也在主线程上。用户要的行为：立刻出窗口并显示加载中，不占主线程，读失败弹提示、点确认后关窗。实现：管理器拆出 `startReading(_:)`（先登记、后台连接）与 `waitUntilFileIsRead(by:)`；`.file` 来源经普通构造器建出的引擎从创建起就转发，窗口在读完之前发出的请求一律失败，不会被 App 进程自己的镜像回答；内容区占位在读取期间显示转圈与「Reading “…”…」；读失败时在窗口上弹提示，点 OK 后关窗，第一次就读失败的引擎从菜单撤下，重读失败的引擎再次停放；文件读成功才进 Open Recent；切回停放的引擎也立刻切窗口；同一引擎上的读与停排队执行。 |
-| 2026-11-03 | 离线 Swift 接口慢：静态布局计算器每次都被重建 | 首轮验收：离线生成 Swift 接口很慢，ObjC 快。用户开着字段偏移、类型布局、枚举布局，离线时这些注释靠 MachOSwiftSection 为 `MachOFile` 建的静态布局计算器，建一次要解析这个镜像的整串依赖、把 cache 的三千多个镜像过一遍。引擎在每次生成接口前都更新一次 section 的打印配置，而 MachOSwiftSection 的打印器一收到配置（哪怕相同）就扔掉计算器，于是每个接口都重建一遍；开着「合成不透明类型」时每次更新还会给打印器再挂一个解析器。进程内的引擎不建这个计算器，所以 My Mac 不受影响。用户选择两边一起修：RuntimeViewer 只在打印配置真的变了才交给打印器，解析器只在选项打开时挂一次；MachOSwiftSection 只在布局相关的输入变了才扔计算器，并让各镜像共用 cache 的镜像索引（它的 next 52910902，台账第 120 节；同一个 cache 上第二个定位器的首次查询从 0.27 秒降到 0.006 秒），RuntimeViewer 的五份锁文件随之抬到这个修订，只改这一条。两边都带修前失败、修后通过的测试。 |
-| 2026-11-03 | 落地：编号 0069，状态改为 Implemented | 用户复验后确认第 9 步人工验收通过，批准收尾。实现与验收后的两处修复都已在 11-03 合进 `next` 并推送，这次只补编号、状态与引用。与方案的出入已逐条记在上面各行，只有一处没记：设置页的标题定为 Offline Files（方案里写作 Offline）。没做完的三项——离线 cache 派生数据的按时清理、「Manage in Settings…」直接跳到 Offline Files 页、命令行读文件与离线引擎上的交叉引用——列在提案索引的「暂缓的后续项」。agent 的验证是测试与编译，界面与打开流程由用户在 App 里验收。配套文档与术语的判断同 11-03「收尾判断」一行：使用指南已写，术语六条已登记；验收后的两处修复只改了行为细节，使用指南、架构文档与 `AGENTS.md` 已随修复同步，没有新术语。MachOSwiftSection 一侧的改动没有单独的提案，记在它的台账第 120 节。 |
+| 2026-11-03 | 打开文件立刻出窗口，文件在后台读 | 首轮验收：打开 dyld cache 后很久才出窗口，看着像卡死。原因是管理器要等文件 service 把整份 cache 读完、连接建好才登记引擎，App 才建窗口，期间没有任何反馈；识别文件头那一步也在主线程上。用户要的行为：立刻出窗口并显示加载中，不占主线程，读失败弹提示、点确认后关窗。实现：管理器拆出 `startReading(_:)`（先登记、后台连接）与 `waitUntilFileIsRead(by:)`；`.file` 来源经普通构造器建出的引擎从创建起就转发，窗口在读完之前发出的请求一律失败，不会被 App 进程自己的镜像回答；内容区占位在读取期间显示转圈与「Reading “…”…」；读失败时在窗口上弹提示，点 OK 后关窗，第一次就读失败的引擎从菜单撤下，重读失败的引擎再次停放；文件读成功才进 Open Recent；切回停放的引擎也立刻切窗口；同一引擎上的读与停排队执行。 |
+| 2026-11-03 | 文件模式 Swift 接口慢：静态布局计算器每次都被重建 | 首轮验收：文件模式生成 Swift 接口很慢，ObjC 快。用户开着字段偏移、类型布局、枚举布局，文件模式下这些注释靠 MachOSwiftSection 为 `MachOFile` 建的静态布局计算器，建一次要解析这个镜像的整串依赖、把 cache 的三千多个镜像过一遍。引擎在每次生成接口前都更新一次 section 的打印配置，而 MachOSwiftSection 的打印器一收到配置（哪怕相同）就扔掉计算器，于是每个接口都重建一遍；开着「合成不透明类型」时每次更新还会给打印器再挂一个解析器。进程内的引擎不建这个计算器，所以 My Mac 不受影响。用户选择两边一起修：RuntimeViewer 只在打印配置真的变了才交给打印器，解析器只在选项打开时挂一次；MachOSwiftSection 只在布局相关的输入变了才扔计算器，并让各镜像共用 cache 的镜像索引（它的 next 52910902，台账第 120 节；同一个 cache 上第二个定位器的首次查询从 0.27 秒降到 0.006 秒），RuntimeViewer 的五份锁文件随之抬到这个修订，只改这一条。两边都带修前失败、修后通过的测试。 |
+| 2026-11-03 | 落地：编号 0069，状态改为 Implemented | 用户复验后确认第 9 步人工验收通过，批准收尾。实现与验收后的两处修复都已在 11-03 合进 `next` 并推送，这次只补编号、状态与引用。与方案的出入已逐条记在上面各行，只有一处没记：设置页的标题定为 Files（方案里写作 File）。没做完的三项——文件 cache 派生数据的按时清理、「Manage in Settings…」直接跳到 Files 页、命令行读文件与文件引擎上的交叉引用——列在提案索引的「暂缓的后续项」。agent 的验证是测试与编译，界面与打开流程由用户在 App 里验收。配套文档与术语的判断同 11-03「收尾判断」一行：使用指南已写，术语六条已登记；验收后的两处修复只改了行为细节，使用指南、架构文档与 `AGENTS.md` 已随修复同步，没有新术语。MachOSwiftSection 一侧的改动没有单独的提案，记在它的台账第 120 节。 |
+| 2026-11-16 | 「离线」（Offline）统一改名为「文件」（File） | 功能还没随任何版本发布，没有要兼容的用户数据，用户要求把代码、配置与文档里的 Offline / 离线一律改成 File / 文件，以「读磁盘上的文件」而不是「不联网」来命名这项功能。代码与配置：`RuntimeViewerOfflineService` → `RuntimeViewerFileService`（target、目录、bundle ID、`Info.plist` 键与 xcconfig 变量），`RuntimeOfflineFile` → `RuntimeFile`，`RuntimeOfflineService(Host)` → `RuntimeFileService(Host)`，`RuntimeOfflineEngineParking` → `RuntimeFileEngineParking`，`OfflineFileController` → `FileController`，`Settings.Offline` → `Settings.File`（设置键 `offline` → `file`），派生数据目录前缀 `Offline-` → `File-`（旧目录会被本机 service 的清理当作别的系统删掉）；引擎菜单分组与设置页「Offline Files」改为「Files」。文档：本提案、0077、使用指南与 2026-11-05 的问题记录连同文件名一并改名，正文里的「离线模式 / 离线 service / 离线引擎」改为「文件模式 / 文件 service / 文件引擎」；别处泛指「不运行、不联网」的「离线」按原意改写。保留原名的只有真实存在过的名字：分支 `feature/offline-mode`、`feature/offline-folders`、`fix/offline-descriptor-exhaustion`，实验目录 `OfflineModeXPCProbe`，上游 MachOSwiftSection 提案 0069 的标题「离线泛型特化」，以及 Sparkle 文档里指离线备份的 offline。 |

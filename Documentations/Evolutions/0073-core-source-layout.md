@@ -40,7 +40,7 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 | `Relationships/` | Inspector 的关系行与 Find 的关系树：resolver、协议、模型 | `Relationships/`、`Common/`、`Core/` |
 | `Specialization/` | 泛型特化的请求、选择、校验与 engine 接口 | `Common/`、根目录 |
 | `Bookmarks/` | 书签与书签作用域 | `Common/` |
-| `BackgroundIndexing/`、`Export/`、`DerivedDataStorage/`、`Offline/` | 保留，收进各自的 `RuntimeEngine+功能.swift` 和拆出来的类型 | 原目录、根目录 |
+| `BackgroundIndexing/`、`Export/`、`DerivedDataStorage/`、`File/` | 保留，收进各自的 `RuntimeEngine+功能.swift` 和拆出来的类型 | 原目录、根目录 |
 | `LocalRuntimeService/`、`Transformer/` | 不动 | — |
 | `Extensions/` | 标准库扩展（原 `Utils/`：dyld 工具搬去 `Images/` 后只剩这些） | `Utils/`、`Common/RuntimeImageNode.swift` |
 
@@ -100,7 +100,7 @@ RuntimeViewerCore target（每个文件的去向见文末清单）：
 ### 没问就采用的假设
 
 - 范围是包里五个 Swift target 的 `Sources/`；测试目录不动。
-- `LocalRuntimeService/` 和 `Offline/` 里 service、host 的文件原地不动：根 `AGENTS.md` 把它们列为 XPC service 代码的固定位置。
+- `LocalRuntimeService/` 和 `File/` 里 service、host 的文件原地不动：根 `AGENTS.md` 把它们列为 XPC service 代码的固定位置。
 - `RuntimeEngine.swift` 自己的扩展不拆，它们用到 engine file-private 的 logger 和 private 成员。只搬走给 `RuntimeConnection` 的扩展（去 `Engine/Commands/`）和导出接口那段（去 `Export/`，已核对不碰 private 成员）。
 - `RuntimeEngine+Commands.swift` 里的命令结构体不按功能重新分配。
 - `Utils/` 改名 `Extensions/`。
@@ -211,10 +211,10 @@ DerivedDataStorage/
   原有 10 个文件
   RuntimeDerivedDataKind.swift, RuntimeDerivedDataByteReader.swift, Data+LittleEndian.swift   ← 拆自 RuntimeDerivedDataContainer.swift
   RuntimeEngine+DerivedData.swift               ← 拆自 RuntimeDerivedData.swift
-Offline/
+File/
   原有 5 个文件
-  RuntimeOfflineFileError.swift                 ← 拆自 RuntimeOfflineFile.swift
-  RuntimeHostInfo+Offline.swift                 ← 拆自 RuntimeEngine+Offline.swift
+  RuntimeFileError.swift                 ← 拆自 RuntimeFile.swift
+  RuntimeHostInfo+File.swift                 ← 拆自 RuntimeEngine+File.swift
 LocalRuntimeService/、Transformer/                不动
 Extensions/
   Array+AllocatedByteCount.swift, String+AllocatedByteCount.swift   ← 拆自 Utils/AllocatedByteCount.swift
@@ -292,7 +292,7 @@ RuntimeViewerUtilities：`DeviceIdentifier.swift`、`SandboxProbe.swift`，加�
 | 日期 | 决定 | 理由 |
 |------|------|------|
 | 2026-11-05 | Created as Draft | 用户提出 RuntimeViewerCore 包的源码太乱：多个类型挤在一个文件里，`Common/`、`Core/` 和 target 根目录看不出按什么分。整理成按功能分目录、除 file-private 类型外一个类型一个文件 |
-| 2026-11-05 | 目录按功能分，不按层分 | 一个功能的模型、实现和 engine 接口放在一起，找一个功能只看一个目录；现有的 `BackgroundIndexing/`、`Export/`、`Offline/` 本来就是这样。按层分会把同一个功能散到 `Models/`、`Engine/`、`Services/` 几处 |
+| 2026-11-05 | 目录按功能分，不按层分 | 一个功能的模型、实现和 engine 接口放在一起，找一个功能只看一个目录；现有的 `BackgroundIndexing/`、`Export/`、`File/` 本来就是这样。按层分会把同一个功能散到 `Models/`、`Engine/`、`Services/` 几处 |
 | 2026-11-05 | 靠 `fileprivate` 互访的四组类型拆开，相关成员放宽到 `internal` | 留在一个文件就得为它们开例外；放宽后这些成员仍只在模块内可见 |
 | 2026-11-05 | 嵌套类型不拆 | 嵌套类型是外层类型的一部分；只拆顶层类型，`RuntimeEngine+Commands.swift` 这类按功能归组的命令结构体保持原样 |
 | 2026-11-05 | 要拆的文件在只搬家的提交里先整个搬到主类型的目录 | 搬家和拆分分开提交，搬家那次 git 能完整认出改名；拆分时只切出其余类型 |

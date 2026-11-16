@@ -13,9 +13,9 @@ public import RuntimeViewerCommunication
 /// then `activate()` — in `RuntimeViewerServicePlugin`'s `runLocalService()`,
 /// which the service's executable loads. The Mac Catalyst service does the
 /// same from the plugin's `runCatalystService()`: its job is this one, run in
-/// a Catalyst process. The offline service builds one once the app's
+/// a Catalyst process. The file service builds one once the app's
 /// first `hello` named the file, around an engine reading it
-/// (`RuntimeOfflineServiceHost`). Tests build the same type around an
+/// (`RuntimeFileServiceHost`). Tests build the same type around an
 /// anonymous listener and connect a client engine to its endpoint, so the
 /// whole path — hello, initial data, forwarded requests, pushes — runs inside
 /// one process.
@@ -45,7 +45,7 @@ public final class RuntimeLocalServiceHost {
     ///
     /// Everything is wired before a client is answered, because a request
     /// that reaches the service ahead of its handler fails: the local runtime
-    /// service starts its host before the listener activates, the offline
+    /// service starts its host before the listener activates, the file
     /// service inside its launch handler, before the first `hello` is
     /// answered. The relays are installed once and stay: the listener keeps
     /// one peer slot, and a push with nobody attached is simply dropped.

@@ -666,7 +666,7 @@ append；HTTP `PUT /v1/files/content` 要求 VM 以 `--api-listen` 启动，而 
 **照搬 macOS 的 `SMAppService` daemon + XPC 委派。** 否决理由：实测不需要——uid 501 的 App
 带三条 entitlement 即可自行枚举与注入。多一个 daemon 等于多一层可坏的东西。
 
-**把越狱版 IPA 内置进 RV macOS。** 离线可用、版本永远匹配，但 RV macOS 装包要大几十 MB。
+**把越狱版 IPA 内置进 RV macOS。** 不联网也能用、版本永远匹配，但 RV macOS 装包要大几十 MB。
 用户选择 release 下载。
 
 **给 RV iOS 加一个 build configuration 而非独立 target。** 改动更小，但两个版本 bundle

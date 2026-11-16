@@ -34,7 +34,7 @@
 
 - 菜单不加分隔线：列表菜单用 RxAppKit 的 `rx.items`，它不支持分隔线；内容区沿用原有的分隔方式。
 - 「Copy Name」拷贝列表里显示的名字（`displayName`），不拷贝 mangled name 或限定名。
-- Show in Finder 只给 My Mac、Mac Catalyst、本机 Attach 的进程与离线文件；设备与另一台 Mac 上的路径不在本机，即使本机碰巧有同名文件也不提供。
+- Show in Finder 只给 My Mac、Mac Catalyst、本机 Attach 的进程与文件引擎；设备与另一台 Mac 上的路径不在本机，即使本机碰巧有同名文件也不提供。
 - 导出、加入 Always Index、跨镜像的 Reveal、References 列表的菜单不在这次范围内，记为后续项。
 - 「Open in New Tab」的图标统一用 `plus.square.on.square`（内容区与 Find 原本就用它），侧栏原来的自定义标签图标不再用于这一项。
 

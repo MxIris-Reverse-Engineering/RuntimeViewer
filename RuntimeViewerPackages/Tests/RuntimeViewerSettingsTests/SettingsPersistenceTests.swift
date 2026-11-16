@@ -109,13 +109,13 @@ private let persistedProperties: [PersistedProperty] = [
         matches: { $0.developer.contentLoadingDelay == 2 }
     ),
     PersistedProperty(
-        encodedKey: "offline",
+        encodedKey: "file",
         apply: {
-            $0.offline.dependencyCaches = [
-                Settings.Offline.DependencyCache(path: "/tmp/dyld_shared_cache_arm64e", platformName: "iOS", version: "27.0", architecture: "arm64e", uuid: "00000000-0000-0000-0000-000000000000"),
+            $0.file.dependencyCaches = [
+                Settings.File.DependencyCache(path: "/tmp/dyld_shared_cache_arm64e", platformName: "iOS", version: "27.0", architecture: "arm64e", uuid: "00000000-0000-0000-0000-000000000000"),
             ]
         },
-        matches: { $0.offline.dependencyCaches.map(\.path) == ["/tmp/dyld_shared_cache_arm64e"] }
+        matches: { $0.file.dependencyCaches.map(\.path) == ["/tmp/dyld_shared_cache_arm64e"] }
     ),
 ]
 

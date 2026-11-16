@@ -11,7 +11,7 @@ import OrderedCollections
 /// shared cache — and of the dyld shared cache it is paired with, read as
 /// `MachOFile`s.
 ///
-/// What the offline engine reads. No image is run, and the images of a bundle
+/// What the file engine reads. No image is run, and the images of a bundle
 /// or a folder are not even opened when the catalog is made: they are listed
 /// from their headers (`RuntimeDirectoryImageScanner`) and each is opened the
 /// first time it is asked for. An open image holds a file descriptor for as
@@ -26,7 +26,7 @@ import OrderedCollections
 final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     typealias Reading = RuntimeFileImageReading
 
-    let file: RuntimeOfflineFile
+    let file: RuntimeFile
 
     /// The paths of the file's own images, in the order the engine lists
     /// them: the file itself for a Mach-O file; a bundle's main executable
@@ -39,7 +39,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
 
     /// The slice a Mach-O file is read through. The images of a bundle or a
     /// folder are read through the slice this Mac prefers.
-    private let fileSlice: RuntimeOfflineFile.Slice?
+    private let fileSlice: RuntimeFile.Slice?
 
     /// The file's images opened so far, by path. An image stays open once it
     /// is: the sections built from it hold it anyway.
@@ -93,20 +93,20 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     private var fileImagePathsByExportedObjCClassName: [String: String]? = nil
 
     /// Lists the file's images and opens its paired cache. Throws
-    /// `RuntimeOfflineFileError`.
-    init(file: RuntimeOfflineFile) throws {
+    /// `RuntimeFileError`.
+    init(file: RuntimeFile) throws {
         self.file = file
         var fileImagePaths: [String] = []
         var fileImageTypes: [String: FileType] = [:]
         var openedFileImages: [String: MachOFile] = [:]
-        var fileSlice: RuntimeOfflineFile.Slice?
+        var fileSlice: RuntimeFile.Slice?
         var cacheImages: OrderedDictionary<String, MachOFile> = [:]
         var pairedCacheName: String?
         var dependencySearchPaths: [DependencySearchPath] = []
 
         switch file.content {
         case .machO(let slice):
-            openedFileImages[file.url.path] = try RuntimeOfflineFile.machOFile(at: file.url, preferring: slice)
+            openedFileImages[file.url.path] = try RuntimeFile.machOFile(at: file.url, preferring: slice)
             fileImagePaths = [file.url.path]
             fileSlice = slice
         case .bundle, .folder:
@@ -118,15 +118,15 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
             }
             guard !fileImagePaths.isEmpty else {
                 throw file.content == .bundle
-                    ? RuntimeOfflineFileError.bundleWithoutExecutable(file.url)
-                    : RuntimeOfflineFileError.folderWithoutMachOFiles(file.url)
+                    ? RuntimeFileError.bundleWithoutExecutable(file.url)
+                    : RuntimeFileError.folderWithoutMachOFiles(file.url)
             }
         case .dyldSharedCache:
             let cache: FullDyldCache
             do {
                 cache = try FullDyldCache(url: file.url)
             } catch {
-                throw RuntimeOfflineFileError.unsupportedContent(file.url)
+                throw RuntimeFileError.unsupportedContent(file.url)
             }
             cacheImages = Self.images(of: cache)
             dependencySearchPaths.append(.dyldSharedCache(path: file.url.path))
@@ -139,7 +139,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
                 // Swift layout engine's dependency closures read as well.
                 // `host` opens and maps all eighty-odd files again each time.
                 guard let cache = FullDyldCache.cachedHost else {
-                    throw RuntimeOfflineFileError.dependencyCacheUnavailable("this Mac has no dyld shared cache to read")
+                    throw RuntimeFileError.dependencyCacheUnavailable("this Mac has no dyld shared cache to read")
                 }
                 cacheImages = Self.images(of: cache)
                 pairedCacheName = "Dyld Shared Cache"
@@ -149,7 +149,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
                 do {
                     cache = try FullDyldCache(url: cacheURL)
                 } catch {
-                    throw RuntimeOfflineFileError.dependencyCacheUnavailable("\(cacheURL.path) is not a dyld shared cache")
+                    throw RuntimeFileError.dependencyCacheUnavailable("\(cacheURL.path) is not a dyld shared cache")
                 }
                 cacheImages = Self.images(of: cache)
                 pairedCacheName = "Dyld Shared Cache"
@@ -231,7 +231,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
                 return openedImage
             }
             do {
-                let image = try RuntimeOfflineFile.machOFile(at: URL(fileURLWithPath: imagePath), preferring: fileSlice)
+                let image = try RuntimeFile.machOFile(at: URL(fileURLWithPath: imagePath), preferring: fileSlice)
                 openedFileImages[imagePath] = image
                 return image
             } catch {
@@ -248,7 +248,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
     /// The image exporting the class object, which is how another image links
     /// to it: its own images first, then the cache's. A protocol is exported
     /// by no image, so only an image indexed already can answer for one; see
-    /// the offline mode proposal's decision log.
+    /// the file mode proposal's decision log.
     func image(definingObjCType name: RuntimeObjCName) async -> (imagePath: String, machO: MachOFile)? {
         guard case .class(let className) = name else { return nil }
         if let known = objcClassImagePaths[className] {
@@ -332,7 +332,7 @@ final class RuntimeFileImageCatalog: RuntimeImageCatalog, @unchecked Sendable {
             DispatchQueue.concurrentPerform(iterations: fileImagePaths.count) { index in
                 let imagePath = fileImagePaths[index]
                 let image = openedFileImages[imagePath]
-                    ?? (try? RuntimeOfflineFile.machOFile(at: URL(fileURLWithPath: imagePath), preferring: fileSlice))
+                    ?? (try? RuntimeFile.machOFile(at: URL(fileURLWithPath: imagePath), preferring: fileSlice))
                 classNamesByImageIndex[index] = (image?.exportTrie?.search(byKeyPrefix: Self.objcClassSymbolPrefix) ?? []).map { symbol in
                     symbol.name.hasPrefix(Self.objcClassSymbolPrefix) ? String(symbol.name.dropFirst(Self.objcClassSymbolPrefix.count)) : symbol.name
                 }

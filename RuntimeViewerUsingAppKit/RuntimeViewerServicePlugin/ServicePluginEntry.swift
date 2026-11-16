@@ -12,7 +12,7 @@ extension NSObject {
 }
 
 /// What the four shells run: the Mac Catalyst helper application and the
-/// Mac Catalyst, local and offline XPC services. Each shell only loads this
+/// Mac Catalyst, local and file XPC services. Each shell only loads this
 /// plugin and calls its entry point, so the app ships one copy of
 /// RuntimeViewerCore for all four processes instead of one per executable.
 @objc(ServicePluginEntry)
@@ -29,9 +29,9 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
     /// life of the process.
     private var serviceHost: RuntimeLocalServiceHost?
 
-    /// What the offline service serves its file through; kept for the life of
+    /// What the file service serves its file through; kept for the life of
     /// the process.
-    private var offlineServiceHost: RuntimeOfflineServiceHost?
+    private var fileServiceHost: RuntimeFileServiceHost?
 
     override required init() {
         super.init()
@@ -129,8 +129,8 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
         serveInProcessEngine(engineID: "local-service.\(ProcessInfo.processInfo.processIdentifier)", serviceName: "Local service")
     }
 
-    func runOfflineService() {
-        // The plugin links both command modules, so the offline service
+    func runFileService() {
+        // The plugin links both command modules, so the file service
         // installs them like every other process that serves an engine. Nothing
         // ever asks it for either: an engine reading a file answers the
         // injection capability query and every cross-reference command itself,
@@ -144,20 +144,20 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
             listener = try RuntimeXPCServiceListenerConnection.embeddedService()
         } catch {
             // Without a listener there is no service; let launchd see a clean failure.
-            Self.logger.error("Offline service could not create its listener: \(error, privacy: .public)")
+            Self.logger.error("File service could not create its listener: \(error, privacy: .public)")
             exit(EXIT_FAILURE)
         }
 
         // Derived data — the Find corpora of the cache images this instance
         // reads — kept under the identity of the dyld shared cache they come
-        // from, not this Mac's; see `RuntimeDerivedData.offlineStore(for:isSharedCacheImage:)`.
-        RuntimeDerivedData.enableForOfflineEngineInThisProcess()
+        // from, not this Mac's; see `RuntimeDerivedData.fileStore(for:isSharedCacheImage:)`.
+        RuntimeDerivedData.enableForFileEngineInThisProcess()
 
         // The service declares `_MultipleInstances`, and the app starts an
         // instance for every file it opens: the connection's first hello names
         // the file, and the host reads it and serves it before answering.
-        let offlineServiceHost = RuntimeOfflineServiceHost(connection: listener)
-        self.offlineServiceHost = offlineServiceHost
+        let fileServiceHost = RuntimeFileServiceHost(connection: listener)
+        self.fileServiceHost = fileServiceHost
 
         // Nobody else can ever reach this instance — launchd starts a new one
         // for every connection — so once its client closed the connection,
@@ -168,7 +168,7 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
 
         // `xpc_main`; never returns. Nothing is read until the first hello
         // names the file, so there is nothing to set up first.
-        offlineServiceHost.activate()
+        fileServiceHost.activate()
     }
 
     /// Serves an in-process engine on this XPC service's listener, as the

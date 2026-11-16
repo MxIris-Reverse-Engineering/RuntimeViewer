@@ -33,7 +33,7 @@
 
 ## 现场证据
 
-Ultra 上用 `RuntimeViewer-Local.xcworkspace` 编的 Debug 版，启动约 50 分钟，没开 Malloc Stack Logging，给三个进程各抓了一份内存图（`leaks --forkCorpse --fullContent --outputGraph=…`），再离线用 `leaks --dominatorTree --groupByType` 按持有者归类：
+Ultra 上用 `RuntimeViewer-Local.xcworkspace` 编的 Debug 版，启动约 50 分钟，没开 Malloc Stack Logging，给三个进程各抓了一份内存图（`leaks --forkCorpse --fullContent --outputGraph=…`），再事后用 `leaks --dominatorTree --groupByType` 按持有者归类：
 
 - **唯一的窗口在 My Mac 上**：App 里只有一个 `DocumentState`；对三个 `RuntimeEngine` 跑 `leaks --traceTree`，侧栏的 `runtimeEngine` 指向本地 engine，会话的 `sharedCacheOwners.macCatalyst` 指向 `RuntimeEngineManager.macCatalystRuntimeEngine`。
 - **Catalyst 服务 451 MB**：malloc 在用 237 MB——UIKitCore 等的 ObjC 索引约 50 MB、iOSSupport 版 SwiftUI 的语料 41.5 MB、交叉引用约 30 MB 等；其余约 190 MB 是这批工作释放后 malloc 还没还给系统的（已释放的大块 72 MB）。

@@ -44,17 +44,17 @@ RUNTIME_VIEWER_CATALYST_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCa
 RUNTIME_VIEWER_CATALYST_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystService.arm64e
 RUNTIME_VIEWER_CATALYST_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystService
 
-// Offline XPC service (RuntimeViewerOfflineService target), the process an offline file is read in.
+// File XPC service (RuntimeViewerFileService target), the process a file is read in.
 // Its Info.plist declares _MultipleInstances: the app starts an instance of it of its own for every
 // file. One identifier per configuration for the same reason as the local service above;
 // the app reads its configuration's value back from its Info.plist
-// (RuntimeViewerOfflineServiceBundleIdentifier).
-RUNTIME_VIEWER_OFFLINE_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerOfflineService
-RUNTIME_VIEWER_OFFLINE_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerOfflineService.arm64e
-RUNTIME_VIEWER_OFFLINE_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerOfflineService
+// (RuntimeViewerFileServiceBundleIdentifier).
+RUNTIME_VIEWER_FILE_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerFileService
+RUNTIME_VIEWER_FILE_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerFileService.arm64e
+RUNTIME_VIEWER_FILE_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerFileService
 
 // Service plugin bundle (RuntimeViewerServicePlugin target), the code the four shells — the
-// Mac Catalyst helper app and the Mac Catalyst, local and offline XPC services — load from the
+// Mac Catalyst helper app and the Mac Catalyst, local and file XPC services — load from the
 // app's PlugIns.
 // Plugin uses one identifier across all configurations because the helper app
 // loads it by exact bundle identifier and a debug variant would silently fail

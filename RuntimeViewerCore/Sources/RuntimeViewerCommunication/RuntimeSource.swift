@@ -148,7 +148,7 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
     case injectedTCP(name: String, host: String, port: UInt16, identifier: Identifier, role: Role)
 
     /// A Mach-O file, a bundle or a dyld shared cache on disk, read without
-    /// running it — offline mode.
+    /// running it — file mode.
     ///
     /// The identity is `url` alone, standardized when the file is opened;
     /// `name` is what menus show, and like every other case's it takes no part

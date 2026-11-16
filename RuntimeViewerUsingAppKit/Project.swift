@@ -200,7 +200,7 @@ let project = Project(
                 .target(name: "RuntimeViewerSourceEditorBridge"),
                 .target(name: "RuntimeViewerLocalService"),
                 .target(name: "RuntimeViewerCatalystService"),
-                .target(name: "RuntimeViewerOfflineService"),
+                .target(name: "RuntimeViewerFileService"),
                 .external(name: "RuntimeViewerApplication"),
                 .external(name: "RuntimeViewerCatalystExtensions"),
                 .external(name: "RuntimeViewerMCPBridge"),
@@ -271,7 +271,7 @@ let project = Project(
                         .exception(target: "RuntimeViewerCatalystHelper", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
                         .exception(target: "RuntimeViewerCatalystService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
                         .exception(target: "RuntimeViewerLocalService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
-                        .exception(target: "RuntimeViewerOfflineService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
+                        .exception(target: "RuntimeViewerFileService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
                     ])
                 ),
             ],
@@ -372,18 +372,18 @@ let project = Project(
             ],
             settings: targetSettings(directory: "RuntimeViewerLocalService")
         ),
-        // One instance per offline file: its Info.plist declares _MultipleInstances.
+        // One instance per file: its Info.plist declares _MultipleInstances.
         .target(
-            name: "RuntimeViewerOfflineService",
+            name: "RuntimeViewerFileService",
             destinations: .macOS,
             product: .xpc,
-            productName: "RuntimeViewerOfflineService",
+            productName: "RuntimeViewerFileService",
             bundleId: "$(inherited)",
             infoPlist: nil,
             buildableFolders: [
-                .folder("RuntimeViewerOfflineService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
+                .folder("RuntimeViewerFileService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
             ],
-            settings: targetSettings(directory: "RuntimeViewerOfflineService")
+            settings: targetSettings(directory: "RuntimeViewerFileService")
         ),
         .target(
             name: "runtime-viewer-cli",
