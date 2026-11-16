@@ -160,7 +160,7 @@ public final class RuntimeEngineManager {
     /// Bonjour client engines whose remotes don't support engine sharing
     /// (returned 0 descriptors). These are shown directly in the Toolbar
     /// instead of being hidden as management-only connections.
-    private var directBonjourEngines: Set<ObjectIdentifier> = []
+    private(set) var directBonjourEngines: Set<ObjectIdentifier> = []
 
     /// Per-engine liveness ping. AWDL-routed peers (iOS / visionOS / Apple TV)
     /// can leave a TCP connection in `.ready` long after the remote process has
@@ -169,7 +169,7 @@ public final class RuntimeEngineManager {
     /// heartbeat re-sends `engineList` on a fixed cadence and `stop()`s the
     /// engine after `bonjourHeartbeatMaxConsecutiveFailures` consecutive
     /// timeouts, letting the existing disconnect path drop the stale entry.
-    private var bonjourHeartbeatTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+    private(set) var bonjourHeartbeatTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
     /// Per-engine state-observation tokens, keyed by engine identity.
     ///
@@ -516,40 +516,7 @@ public final class RuntimeEngineManager {
 
             // Request the remote peer's engine list for mirroring
             Task { @MainActor in
-                // Let the remote's initial imageList push drain before
-                // competing for the AWDL channel with our small RPC.
-                try? await Task.sleep(nanoseconds: Self.initialEngineListPreflightDelay)
-                #log(.debug, category: .engineMirroring, "requesting engine list from \(endpoint.name, privacy: .public)...")
-                // Deadline per attempt: peers without engine sharing (iOS, visionOS) or
-                // whose bonjour transport is silently dead (e.g. flaky AWDL) would otherwise
-                // hang this Task forever. One retry absorbs an AWDL slot miss before the
-                // catch block marks the engine as a direct bonjour entry.
-                var lastError: Error?
-                for attempt in 1...Self.initialEngineListMaxAttempts {
-                    do {
-                        let descriptors = try await runtimeEngine.requestEngineList(timeout: Self.bonjourHeartbeatTimeout)
-                        #log(.debug, category: .engineMirroring, "received \(descriptors.count, privacy: .public) descriptors from \(endpoint.name, privacy: .public)")
-                        if descriptors.isEmpty {
-                            #log(.debug, category: .engineMirroring, "remote \(endpoint.name, privacy: .public) returned 0 descriptors, marking as direct engine")
-                            self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
-                            self.rebuildSections()
-                        } else {
-                            self.handleEngineListChanged(descriptors, from: runtimeEngine)
-                        }
-                        self.startBonjourHeartbeat(for: runtimeEngine)
-                        return
-                    } catch {
-                        lastError = error
-                        #log(.error, category: .engineMirroring, "requestEngineList attempt \(attempt, privacy: .public)/\(Self.initialEngineListMaxAttempts, privacy: .public) failed for \(endpoint.name, privacy: .public): \(error, privacy: .public)")
-                        if attempt < Self.initialEngineListMaxAttempts {
-                            try? await Task.sleep(nanoseconds: Self.initialEngineListRetryDelay)
-                        }
-                    }
-                }
-                #log(.error, category: .engineMirroring, "giving up on engine list for \(endpoint.name, privacy: .public), marking as direct: \(String(describing: lastError), privacy: .public)")
-                self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
-                self.rebuildSections()
-                self.startBonjourHeartbeat(for: runtimeEngine)
+                await self.discoverEngineList(of: runtimeEngine, endpointName: endpoint.name)
             }
         } catch {
             #log(.error,"Failed to connect to Bonjour endpoint: \(endpoint.name, privacy: .public) (attempt \(attempt + 1, privacy: .public)): \(error, privacy: .public)")
@@ -565,6 +532,46 @@ public final class RuntimeEngineManager {
                 #log(.error,"Exhausted retry attempts for Bonjour endpoint: \(endpoint.name, privacy: .public)")
             }
         }
+    }
+
+    /// Asks a Bonjour peer that has just connected for the engines it shares,
+    /// a moment after it connected, and either mirrors them or marks the peer
+    /// as a direct engine; then starts its heartbeat.
+    func discoverEngineList(of runtimeEngine: RuntimeEngine, endpointName: String) async {
+        // Let the remote's initial imageList push drain before
+        // competing for the AWDL channel with our small RPC.
+        try? await Task.sleep(nanoseconds: Self.initialEngineListPreflightDelay)
+        #log(.debug, category: .engineMirroring, "requesting engine list from \(endpointName, privacy: .public)...")
+        // Deadline per attempt: peers without engine sharing (iOS, visionOS) or
+        // whose bonjour transport is silently dead (e.g. flaky AWDL) would otherwise
+        // hang this Task forever. One retry absorbs an AWDL slot miss before the
+        // catch block marks the engine as a direct bonjour entry.
+        var lastError: Error?
+        for attempt in 1...Self.initialEngineListMaxAttempts {
+            do {
+                let descriptors = try await runtimeEngine.requestEngineList(timeout: Self.bonjourHeartbeatTimeout)
+                #log(.debug, category: .engineMirroring, "received \(descriptors.count, privacy: .public) descriptors from \(endpointName, privacy: .public)")
+                if descriptors.isEmpty {
+                    #log(.debug, category: .engineMirroring, "remote \(endpointName, privacy: .public) returned 0 descriptors, marking as direct engine")
+                    self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
+                    self.rebuildSections()
+                } else {
+                    self.handleEngineListChanged(descriptors, from: runtimeEngine)
+                }
+                self.startBonjourHeartbeat(for: runtimeEngine)
+                return
+            } catch {
+                lastError = error
+                #log(.error, category: .engineMirroring, "requestEngineList attempt \(attempt, privacy: .public)/\(Self.initialEngineListMaxAttempts, privacy: .public) failed for \(endpointName, privacy: .public): \(error, privacy: .public)")
+                if attempt < Self.initialEngineListMaxAttempts {
+                    try? await Task.sleep(nanoseconds: Self.initialEngineListRetryDelay)
+                }
+            }
+        }
+        #log(.error, category: .engineMirroring, "giving up on engine list for \(endpointName, privacy: .public), marking as direct: \(String(describing: lastError), privacy: .public)")
+        self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
+        self.rebuildSections()
+        self.startBonjourHeartbeat(for: runtimeEngine)
     }
 
     private func appendBonjourRuntimeEngine(_ bonjourRuntimeEngine: RuntimeEngine) {
