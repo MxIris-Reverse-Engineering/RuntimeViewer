@@ -57,7 +57,8 @@ struct SidebarRootBookmarkViewModelTests {
         _ = try await nextValue(from: viewModel.$nodes) { $0.count == 2 }
 
         searchStringRelay.accept("libobjc")
-        _ = try await nextValue(from: viewModel.$nodes) { $0.map(\.node.name) == ["libobjc.A.dylib"] }
+        // The rows on screen are the filtered ones.
+        _ = try await nextValue(from: viewModel.$filteredNodes) { $0.map(\.node.name) == ["libobjc.A.dylib"] }
 
         // The first row on screen, as the context menu and the Delete key name it.
         removeBookmarkRelay.accept(0)

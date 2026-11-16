@@ -30,18 +30,22 @@ struct ContentLinkLookupTests {
         #expect(Self.text().declaredMember(at: 0) == nil)
     }
 
-    /// Run in a process of its own: before the fix the lookup raised, which
-    /// takes the whole test process down.
-    @Test("asking past the end of the text answers nothing")
+    /// The text a text view hands over is its text storage, which — like any
+    /// mutable attributed string, and unlike an immutable one — raises for an
+    /// index at its end. Run in a process of its own: before the fix the
+    /// lookup raised, which takes the whole test process down.
+    @Test("asking past the end of a text view's text answers nothing")
     func lookupPastTheEnd() async {
         await #expect(processExitsWith: .success) {
-            let text = NSAttributedString(string: "class NSObject")
-            let emptyText = NSAttributedString(string: "")
+            let storage = NSTextStorage(string: "class NSObject")
+            let emptyStorage = NSTextStorage(string: "")
+            let mutableText = NSMutableAttributedString(string: "class NSObject")
             let answers: [Bool] = [
-                text.linkedRuntimeObject(at: text.length) == nil,
-                text.declaredMember(at: text.length) == nil,
-                emptyText.linkedRuntimeObject(at: 0) == nil,
-                emptyText.declaredMember(at: 0) == nil,
+                storage.linkedRuntimeObject(at: storage.length) == nil,
+                storage.declaredMember(at: storage.length) == nil,
+                emptyStorage.linkedRuntimeObject(at: 0) == nil,
+                emptyStorage.declaredMember(at: 0) == nil,
+                mutableText.linkedRuntimeObject(at: mutableText.length) == nil,
             ]
             exit(answers.allSatisfy { $0 } ? EXIT_SUCCESS : EXIT_FAILURE)
         }

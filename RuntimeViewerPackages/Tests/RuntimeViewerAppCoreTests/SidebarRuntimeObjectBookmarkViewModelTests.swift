@@ -49,7 +49,8 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
         _ = try await nextValue(from: harness.viewModel.$nodes) { $0.count == 2 }
 
         filterRelay.accept(NavigatorTextFilter(typedText: "NSCopying"))
-        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.map(\.runtimeObject) == [nsCopying] }
+        // The rows on screen are the filtered ones.
+        _ = try await nextValue(from: harness.viewModel.$filteredNodes) { $0.map(\.runtimeObject) == [nsCopying] }
 
         // The first row on screen, as the context menu and the Delete key name it.
         removeBookmarkRelay.accept(0)
