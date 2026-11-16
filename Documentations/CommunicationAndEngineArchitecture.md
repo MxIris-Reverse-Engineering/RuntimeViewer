@@ -267,7 +267,8 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - 底层 `RuntimeLocalSocketConnection` 用裸 BSD socket + 独立 `readQueue`/`writeQueue`，`TCP_NODELAY` 关 Nagle。
 - 收包循环对 `EINTR`/`EAGAIN`/`EWOULDBLOCK` 重试（注入进程里信号频繁），对端关闭 → `.peerClosed`。
 - `stop()` 先 `shutdown(SHUT_RDWR)` 再 `close()`，可靠唤醒阻塞在另一线程的 `recv()`。
-- 客户端 `RuntimeLocalSocketClientConnection` 内置**重连循环**（500ms 间隔）+ `pendingHandlers` 快照，断线后自动重连并重装处理器，用自持的 private `stateSubject` 跨重连桥接状态。
+- 客户端 `RuntimeLocalSocketClientConnection` 内置**重连循环**（500ms 间隔），断线后自动重连，用自持的 private `stateSubject` 跨重连桥接状态。
+- **处理器跨底层连接保留**：底层连接会被换掉的四个类——本地 socket 的服务端与客户端、Bonjour 服务端、DirectTCP 服务端——都遵循 `RuntimeHandlerReplayingConnection`。处理器记在 `RuntimeMessageHandlerReplay` 里，每个消息名一份、同名替换（服务端引擎每次重连都会重新注册）；每个新的底层连接在开始收数据前先全部装上。Bonjour 服务端接受的连接因此改为装好处理器后才 `start()`。在这之前，Bonjour 与 DirectTCP 服务端只把处理器设在当时那个底层连接上，换了客户端后、引擎重新注册前到达的请求会得到「No handler registered」，被调用方当成旧版对端（2026-11-16 体检 CA.5）。
 
 ---
 
