@@ -64,3 +64,4 @@ RuntimeViewer-iOS-Simulator.zip
 # `./TuistScript.sh install` starts it from RuntimeViewer-Debug.xcworkspace's lock file every time;
 # the native lock files are the ones to commit.
 /Tuist/Package.resolved
+.build
