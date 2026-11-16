@@ -23,12 +23,19 @@ extension DocumentState {
 
     /// Indexes the image at `imagePath` for the user the way the sidebar opens one — loading it
     /// first when the engine's process has not — unless it is indexed already, recorded in Manual
-    /// Loading when there is work to do.
-    public func indexImageForUser(at imagePath: String) async throws {
+    /// Loading when there is work to do. `reportProgress`, when given, hears the indexing too, for
+    /// a caller that shows it in a place of its own (batch export's rows).
+    public func indexImageForUser(
+        at imagePath: String,
+        reportProgress: (@Sendable (RuntimeObjectsLoadingProgress) async -> Void)? = nil
+    ) async throws {
         let runtimeEngine = runtimeEngine
         guard try await !runtimeEngine.isImageIndexed(path: imagePath) else { return }
-        try await recordingManualLoad(ofImageAt: imagePath) { reportProgress in
-            try await runtimeEngine.indexImageIfNeeded(at: imagePath, reportProgress: reportProgress)
+        try await recordingManualLoad(ofImageAt: imagePath) { recordProgress in
+            try await runtimeEngine.indexImageIfNeeded(at: imagePath) { progress in
+                await recordProgress(progress)
+                await reportProgress?(progress)
+            }
         }
     }
 }

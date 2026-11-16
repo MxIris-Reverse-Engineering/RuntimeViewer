@@ -72,6 +72,8 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         }
 
         let total = images.count
+        // Locals, so the export loop below captures them and not this view model.
+        let documentState = self.documentState
         let runtimeEngine = documentState.runtimeEngine
         let objcFormat = exportingState.objcFormat
         let swiftFormat = exportingState.swiftFormat
@@ -101,6 +103,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                             includeMetadata: includeMetadata,
                             generationOptions: generationOptions,
                             runtimeEngine: runtimeEngine,
+                            documentState: documentState,
                         )
                     }
                 }
@@ -119,6 +122,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                                 includeMetadata: includeMetadata,
                                 generationOptions: generationOptions,
                                 runtimeEngine: runtimeEngine,
+                                documentState: documentState,
                             )
                         }
                     }
@@ -160,6 +164,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         includeMetadata: Bool,
         generationOptions: RuntimeObjectInterface.GenerationOptions,
         runtimeEngine: RuntimeEngine,
+        documentState: DocumentState,
     ) async -> BatchExportingPerImageOutcome {
         let image = rowViewModel.image
 
@@ -170,11 +175,11 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         // no sections yet, and the export needs the sections either way.
         rowViewModel.markRunning()
         do {
-            if try await !runtimeEngine.isImageIndexed(path: image.path) {
-                try await runtimeEngine.loadImage(at: image.path) { indexingProgress in
-                    await MainActor.run {
-                        rowViewModel.updateIndexingProgress(indexingProgress)
-                    }
+            // The user's own load: Manual Loading lists it, and it counts as work in progress,
+            // which keeps the app out of App Nap while the export runs in the background.
+            try await documentState.indexImageForUser(at: image.path) { indexingProgress in
+                await MainActor.run {
+                    rowViewModel.updateIndexingProgress(indexingProgress)
                 }
             }
         } catch {

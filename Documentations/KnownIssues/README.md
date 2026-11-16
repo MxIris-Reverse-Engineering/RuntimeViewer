@@ -285,3 +285,14 @@ when picking up follow-up work.
   positive**, shown by a test that now pins it. `PR127.6`, `10`, `12`, `14`,
   `15` are recorded as not fixed; `PR127.11`, an AppKitPlus API for recent
   filters, is deferred to a change of its own.
+- [2026-11-16-codebase-audit-findings.md](2026-11-16-codebase-audit-findings.md) —
+  adjudications from the first codebase audit of `next` @ `0a0003b8` (the full
+  report is `Reviews/CodebaseAudits/CodebaseAudit20261116.md`). `CA.11`, the
+  object list's load that cannot be withdrawn from the serving process once the
+  sidebar stops listening (the old M6.1), is left until `ObjectsInImageCommand`
+  can be withdrawn from peers that know `cancelRequest`. Five more findings,
+  IDs `CA.31`–`CA.35`, confirmed as not to be fixed: the seven process
+  liveness checks (the `EPERM` divergence is intended), the per-module
+  `Then.swift` copies, `BatchExportingState`'s writable `@RxObserved`
+  properties, the Catalyst helper's hand-written `Logger` (a shell links no
+  package), and the ViewModels that live in the app target.

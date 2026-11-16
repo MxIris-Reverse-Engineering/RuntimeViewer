@@ -239,12 +239,12 @@ private struct ThemeDetailsView: View {
 
     @State private var draft: RuntimeViewerSettings.Settings.Theme.Preset
     @State private var editingAppearance: EditingAppearance
-    @State private var pendingFlushTask: Task<Void, Never>?
+    /// Writes the draft back a moment after the editing stops, at once on
+    /// Done, and — the last edit — when the sheet goes away (KnownIssues TS.1).
+    @State private var draftWriteBack = DraftWriteBack<RuntimeViewerSettings.Settings.Theme.Preset>(delay: .milliseconds(150))
 
     @Environment(\.dismiss)
     private var dismiss
-
-    private static let draftFlushDelay: Duration = .milliseconds(150)
 
     init(
         preset: RuntimeViewerSettings.Settings.Theme.Preset,
@@ -307,9 +307,7 @@ private struct ThemeDetailsView: View {
             HStack {
                 Spacer()
                 Button("Done") {
-                    pendingFlushTask?.cancel()
-                    pendingFlushTask = nil
-                    onUpdate(draft)
+                    draftWriteBack.commit(draft, write: onUpdate)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -318,16 +316,10 @@ private struct ThemeDetailsView: View {
         .padding(20)
         .frame(width: 460, height: 600)
         .onChange(of: draft) { _, newValue in
-            pendingFlushTask?.cancel()
-            pendingFlushTask = Task { @MainActor in
-                try? await Task.sleep(for: Self.draftFlushDelay)
-                guard !Task.isCancelled else { return }
-                onUpdate(newValue)
-            }
+            draftWriteBack.draftDidChange(to: newValue, write: onUpdate)
         }
         .onDisappear {
-            pendingFlushTask?.cancel()
-            pendingFlushTask = nil
+            draftWriteBack.editorDidDisappear()
         }
     }
 

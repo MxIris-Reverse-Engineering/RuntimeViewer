@@ -53,8 +53,8 @@ public actor RuntimeBackgroundIndexingManager {
 
     /// Image loads the engine is running for the user rather than for this
     /// manager. While any is in flight, no new background load starts; the
-    /// ones already running are left to finish.
-    private var foregroundLoadCount = 0
+    /// ones already running are left to finish. Read by tests.
+    private(set) var foregroundLoadCount = 0
 
     private var backgroundLoadSlotWaiters: Deque<BackgroundLoadSlotWaiter> = []
 
