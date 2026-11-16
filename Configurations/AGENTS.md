@@ -129,8 +129,8 @@ and works, which is what `RuntimeViewerCatalystService` is built on; its README 
 ## The jailbroken iOS variant
 
 **It embeds the payload from `RuntimeViewerMobileServer` directly.** `RuntimeViewerUsingUIKit-JB` is
-itself an iOS app, so the `SDKROOT = auto` target resolves to iOS for it: it carries a plain
-`PBXTargetDependency` on `RuntimeViewerMobileServer` plus an `Embed RuntimeViewerMobileServer Framework`
+itself an iOS app, so the `SDKROOT = auto` target resolves to iOS for it: it carries a plain target
+dependency on `RuntimeViewerMobileServer` plus an `Embed RuntimeViewerMobileServer Framework`
 copy phase. What is specific to it:
 
 - The payload lands in `Frameworks/`, not `Contents/Resources/` — an iOS bundle

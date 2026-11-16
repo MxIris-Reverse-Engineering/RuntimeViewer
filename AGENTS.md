@@ -149,11 +149,12 @@ default, so one Mac archives cleanly and another fails on the same commit. Backg
   it as a dependency, so this scheme is only for working on the helper. It no longer builds the
   plugin, which belongs to the app now; the Catalyst service has no scheme of its own
 - `RuntimeViewerUsingAppKit` — plain Debug builds of the AppKit app target
-- `RuntimeViewerCommandLineTool` — the copy of `runtime-viewer-cli` embedded in the app bundle; the app
-  target depends on it, so building the app builds it too. It is named after the scheme, not after its
-  product (`PRODUCT_NAME` is pinned to `runtime-viewer-cli`): the workspace also contains the SwiftPM
-  package's executable product of that name, and two schemes called `runtime-viewer-cli` make
-  `xcodebuild -scheme` pick one silently
+- `RuntimeViewerCommandLineTool` — builds the `runtime-viewer-cli` target, the copy of the tool embedded
+  in the app bundle; the app target depends on it, so building the app builds it too. The scheme is not
+  named after its target: the workspace also contains the SwiftPM package's executable product
+  `runtime-viewer-cli`, and two schemes of that name make `xcodebuild -scheme` pick one silently. The
+  target, though, has to carry its product's name: in the `project.xcproj` format Xcode looks for a
+  product the app copies under its target's name
 
 ### Testing
 
@@ -185,6 +186,11 @@ project level, and `RuntimeViewerServer` / `RuntimeViewerSimulatorServer` in
 never Xcode's build settings editor or a target's General tab: both write a target-level value into the
 project file, which outranks the xcconfig and which the Tuist project below does not see.
 `./TuistScript.sh check` reports any such value.
+
+**The three native projects are saved in Xcode 27's `project.xcproj` format**, which replaced
+`project.pbxproj` and which no earlier Xcode opens. The only tool that reads a project file itself,
+`TuistScript.sh`, does so through `Tuist/ReadNativeProject.py`, which reads either format. Background:
+`Documentations/Evolutions/draft-xcode27-project-format.md`.
 
 **`RuntimeViewer-Tuist.xcworkspace` is a second, development-only way to build the macOS app.**
 Tuist generates it from `Tuist.swift`, `Workspace.swift`, `Tuist/Package.swift` and
@@ -426,7 +432,7 @@ The project uses three Swift Package Manager packages:
   shared dynamic RuntimeViewerCore was tried and does not work: Xcode turns every package target that
   two images of one process link statically into a dynamic framework, for every target and platform.
   Background: `Documentations/Evolutions/0079-shared-service-plugin.md`
-- `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
+- `runtime-viewer-cli` (scheme `RuntimeViewerCommandLineTool`) — the tool built as a target dependency of the app and
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
   entitlements carry `disable-library-validation`, and its deployment target has to track the app's
   (15.0) — Xcode fills in the current SDK version, which would make the embedded tool refuse to

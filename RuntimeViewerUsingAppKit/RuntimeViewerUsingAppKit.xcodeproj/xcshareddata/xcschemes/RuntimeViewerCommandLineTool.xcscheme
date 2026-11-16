@@ -17,7 +17,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "E99510E93052AA7800D3FAB2"
                BuildableName = "runtime-viewer-cli"
-               BlueprintName = "RuntimeViewerCommandLineTool"
+               BlueprintName = "runtime-viewer-cli"
                ReferencedContainer = "container:RuntimeViewerUsingAppKit.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -47,7 +47,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E99510E93052AA7800D3FAB2"
             BuildableName = "runtime-viewer-cli"
-            BlueprintName = "RuntimeViewerCommandLineTool"
+            BlueprintName = "runtime-viewer-cli"
             ReferencedContainer = "container:RuntimeViewerUsingAppKit.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -64,7 +64,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E99510E93052AA7800D3FAB2"
             BuildableName = "runtime-viewer-cli"
-            BlueprintName = "RuntimeViewerCommandLineTool"
+            BlueprintName = "runtime-viewer-cli"
             ReferencedContainer = "container:RuntimeViewerUsingAppKit.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

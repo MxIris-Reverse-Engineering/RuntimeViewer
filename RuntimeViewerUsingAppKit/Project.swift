@@ -159,7 +159,7 @@ let project = Project(
                 .wrapper(
                     name: "Embed RuntimeViewerCLI",
                     subpath: "Contents/Applications",
-                    files: [.buildProduct(name: "RuntimeViewerCommandLineTool", codeSignOnCopy: true)]
+                    files: [.buildProduct(name: "runtime-viewer-cli", codeSignOnCopy: true)]
                 ),
                 // The two injection payloads are copied, never linked, and neither is a
                 // dependency: Tuist embeds every framework an app can reach in Frameworks/, whatever
@@ -192,7 +192,7 @@ let project = Project(
                 embedSourceEditorFrameworks,
             ],
             dependencies: [
-                .target(name: "RuntimeViewerCommandLineTool"),
+                .target(name: "runtime-viewer-cli"),
                 .target(name: "com.mxiris.runtimeviewer.service"),
                 .target(name: "RuntimeViewerCatalystHelper"),
                 // Tuist embeds these four itself: the SourceEditor bridge framework in Frameworks, the
@@ -386,7 +386,7 @@ let project = Project(
             settings: targetSettings(directory: "RuntimeViewerOfflineService")
         ),
         .target(
-            name: "RuntimeViewerCommandLineTool",
+            name: "runtime-viewer-cli",
             destinations: .macOS,
             product: .commandLineTool,
             productName: "runtime-viewer-cli",

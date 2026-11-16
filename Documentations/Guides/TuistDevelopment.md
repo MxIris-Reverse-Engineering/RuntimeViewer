@@ -2,7 +2,7 @@
 
 - **面向**: 在本仓库做日常开发、想让第三方依赖走二进制缓存的人；改原生工程的 target、依赖、嵌入方式或构建设置的人（同步规则）
 - **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)；本地依赖模式见 [0082](../Evolutions/0082-tuist-local-dependencies.md)
-- **最后更新**: 2026-11-09
+- **最后更新**: 2026-11-16
 
 `RuntimeViewer-Tuist.xcworkspace` 是构建 macOS App 的第二条路，只供日常开发。它由
 `./TuistScript.sh` 用 Tuist 生成，和原生工程用同样的 target、同样的源码、同一批
@@ -160,6 +160,11 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
 ## `check` 查什么
 
 `./TuistScript.sh check` 先重新生成 workspace，再逐项核对，任何一项不符就以非零退出码结束并列出原因：
+
+> 原生工程存成 Xcode 27 的 `project.xcproj` 格式（见提案
+> [`draft-xcode27-project-format`](../Evolutions/draft-xcode27-project-format.md)）。`check` 与生成后照原生
+> 工程重排导航栏，都经 `Tuist/ReadNativeProject.py` 读原生工程：它把 `project.xcproj` 换算成 `plutil` 读
+> `project.pbxproj` 得到的那种对象表；工程里仍是 `project.pbxproj` 时直接交给 `plutil`。两种格式都认。
 
 1. **设置的接线**（读工程文件，不编译）：原生工程里对应的 target 和 AppKit 工程级在工程文件里一项设置都
    没有；Tuist 工程的每个 target、每个配置引用的 xcconfig 与原生的相同；Tuist 在 target 层只写了已知的

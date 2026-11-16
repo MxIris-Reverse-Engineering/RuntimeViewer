@@ -70,6 +70,10 @@ SCHEME="RuntimeViewer macOS"
 NATIVE_WORKSPACE="RuntimeViewer-Debug.xcworkspace"
 TUIST_APP_PROJECT="RuntimeViewerUsingAppKit/RuntimeViewer-Tuist.xcodeproj"
 NATIVE_APP_PROJECT="RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj"
+# Reads a native project whichever format it is saved in — a project.pbxproj or Xcode 27's
+# project.xcproj — as the JSON plutil makes of a project.pbxproj. `check` and the navigator
+# arrangement read the native projects through it.
+NATIVE_PROJECT_READER="$PROJECT_DIR/Tuist/ReadNativeProject.py"
 NATIVE_PACKAGE_RESOLVED="$NATIVE_WORKSPACE/xcshareddata/swiftpm/Package.resolved"
 TUIST_PACKAGE_RESOLVED="Tuist/Package.resolved"
 LOCAL_PACKAGES=("RuntimeViewerCore" "RuntimeViewerPackages" "RuntimeViewerMCP" "RuntimeViewerCommandLine")
@@ -655,7 +659,7 @@ arrange_project_like_native() {
         return 0
     fi
     local arranged=true
-    python3 - "$PROJECT_DIR/$NATIVE_APP_PROJECT" "$PROJECT_DIR/$TUIST_APP_PROJECT" <<'PYTHON' || arranged=false
+    python3 - "$PROJECT_DIR/$NATIVE_APP_PROJECT" "$PROJECT_DIR/$TUIST_APP_PROJECT" "$NATIVE_PROJECT_READER" <<'PYTHON' || arranged=false
 import copy
 import hashlib
 import json
@@ -665,7 +669,7 @@ import subprocess
 import sys
 import tempfile
 
-native_project, generated_project = sys.argv[1:3]
+native_project, generated_project, native_project_reader = sys.argv[1:4]
 # Both projects sit in the same directory, so a path means the same in either.
 root_directory = os.path.dirname(native_project)
 native_name = os.path.basename(native_project)
@@ -770,7 +774,9 @@ def serialized(value, indentation=""):
     raise ArrangementError(f"unexpected value {value!r} in the project file")
 
 def arrange():
-    native = read_project(os.path.join(native_project, "project.pbxproj"))
+    # The native project may be a project.pbxproj or Xcode 27's project.xcproj; the reader hands
+    # either over in the shape plutil makes of a project.pbxproj.
+    native = json.loads(subprocess.check_output([sys.executable, "-I", native_project_reader, native_project]))
     document = read_project(os.path.join(generated_project, "project.pbxproj"))
     baseline = copy.deepcopy(document)
     native_objects = native["objects"]
@@ -1143,13 +1149,16 @@ def load_json(path):
 # MARK: - Project files
 
 class ProjectFile:
-    """A project.pbxproj, its targets and their configurations, with base xcconfig files as paths
-    relative to the repository."""
+    """A project file, its targets and their configurations, with base xcconfig files as paths
+    relative to the repository. A native project may be saved as a project.pbxproj or in Xcode 27's
+    project.xcproj format; Tuist/ReadNativeProject.py hands either over in the shape plutil makes of
+    a project.pbxproj."""
 
     def __init__(self, relative_path):
         self.relative_path = relative_path
         self.directory = os.path.dirname(os.path.join(project_directory, relative_path))
-        output = subprocess.check_output(["plutil", "-convert", "json", "-o", "-", os.path.join(project_directory, relative_path, "project.pbxproj")])
+        output = subprocess.check_output([sys.executable, "-I", os.path.join(project_directory, "Tuist", "ReadNativeProject.py"),
+                                          os.path.join(project_directory, relative_path)])
         document = json.loads(output)
         self.objects = document["objects"]
         self.root = self.objects[document["rootObject"]]
