@@ -23,7 +23,10 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
     @MemberwiseInit(.public)
     public struct Input {
         public let moveBookmark: Signal<OutlineMove>
-        public let removeBookmark: Signal<Int>
+        /// The bookmark row to remove. A row, not its position: the rows on
+        /// screen are the filtered ones, and a position among them names
+        /// another bookmark in the stored list.
+        public let removeBookmark: Signal<SidebarRootCellViewModel>
     }
 
     public struct Output {
@@ -44,10 +47,12 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
         .disposed(by: rx.disposeBag)
 
         input.removeBookmark
-            .emitOnNext { [weak self] index in
+            .emitOnNext { [weak self] cellViewModel in
                 guard let self else { return }
+                let bookmarkKey = documentState.runtimeEngine.bookmarkScope.bookmarkKey
                 var bookmarks = appDefaults.imageBookmarksByScope
-                bookmarks[documentState.runtimeEngine.bookmarkScope.bookmarkKey, default: []].remove(at: index)
+                guard let index = bookmarks[bookmarkKey, default: []].firstIndex(where: { $0.imageNode == cellViewModel.node }) else { return }
+                bookmarks[bookmarkKey, default: []].remove(at: index)
                 appDefaults.imageBookmarksByScope = bookmarks
             }
             .disposed(by: rx.disposeBag)

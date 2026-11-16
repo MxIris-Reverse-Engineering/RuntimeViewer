@@ -1574,11 +1574,7 @@ public final class RuntimeEngineManager {
         // Case 1: the disconnected engine is itself a mirrored entry.
         let ownMirrorRemovals = mirrorRegistry.clearOwnMirror(matching: runtimeEngine)
         if !ownMirrorRemovals.isEmpty {
-            for removal in ownMirrorRemovals {
-                let stopped = removal.engine
-                Task { @MainActor in await stopped.stop() }
-                remoteIconDataByEngineID.removeValue(forKey: removal.engineID)
-            }
+            stopRemovedMirrors(ownMirrorRemovals)
             mirroredEngines = mirrorRegistry.engines
             return
         }
@@ -1594,13 +1590,24 @@ public final class RuntimeEngineManager {
             hostID: disconnectedHostID,
             originInstanceID: runtimeEngine.originChain.first
         )
-        for removal in allRemovals {
-            let stopped = removal.engine
-            Task { @MainActor in await stopped.stop() }
-            remoteIconDataByEngineID.removeValue(forKey: removal.engineID)
-        }
+        stopRemovedMirrors(allRemovals)
         if !allRemovals.isEmpty {
             mirroredEngines = mirrorRegistry.engines
+        }
+    }
+
+    /// Stops the mirrors the registry has let go of, after cancelling each
+    /// one's state observation. Left in place, the `.disconnected` a mirror's
+    /// `stop()` reports came back through `handleStateChange`, found the
+    /// mirror no longer registered, and was taken for its whole host going
+    /// away: every other mirror of that host was removed and stopped with it,
+    /// though the host was still there and still forwarding them.
+    private func stopRemovedMirrors(_ removals: [RuntimeEngineMirrorRegistry.ReconcileOutcome.Removal]) {
+        for removal in removals {
+            let stopped = removal.engine
+            stateObservationTokens.removeValue(forKey: ObjectIdentifier(stopped))?.cancel()
+            remoteIconDataByEngineID.removeValue(forKey: removal.engineID)
+            Task { @MainActor in await stopped.stop() }
         }
     }
 
@@ -1862,11 +1869,7 @@ public final class RuntimeEngineManager {
             return
 
         case .applied(let removed, let added):
-            for removal in removed {
-                let stopped = removal.engine
-                Task { @MainActor in await stopped.stop() }
-                remoteIconDataByEngineID.removeValue(forKey: removal.engineID)
-            }
+            stopRemovedMirrors(removed)
 
             for addition in added {
                 let mirroredEngine = addition.engine

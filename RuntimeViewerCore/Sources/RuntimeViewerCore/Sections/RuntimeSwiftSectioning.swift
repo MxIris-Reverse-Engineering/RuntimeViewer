@@ -6,13 +6,14 @@ protocol RuntimeSwiftSectioning: Actor {
 
     func allObjects() async throws -> [RuntimeObject]
 
-    func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface
+    /// The interface of `object` printed with `options`. Configuring the printer and printing
+    /// with it are one step, so a request with other options cannot reconfigure the printer in
+    /// the middle of this one's print.
+    func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface
 
-    /// An Objective-C object of this image as Swift imports it; `nil` when the image does not
-    /// define it.
-    func importedInterface(for object: RuntimeObject) async throws -> RuntimeObjectInterface?
-
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool, marksAttachedMacros: Bool) async throws
+    /// An Objective-C object of this image as Swift imports it, printed with `options` as
+    /// `interface(for:options:)` prints; `nil` when the image does not define it.
+    func importedInterface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface?
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String]
 

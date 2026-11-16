@@ -110,12 +110,9 @@ public final class FindCorpusCoordinator {
     /// shows it goes to the front of the queue.
     private var onScreenImagePathsByDocument: [ObjectIdentifier: String] = [:]
 
-    /// Whether the engine was ready when last heard from, so a `false → true`
-    /// edge — a new process behind the engine — can be told from the state
-    /// replayed on subscribing.
-    private var engineWasReady = false
 
-    private var engineReadinessSubscription: AnyCancellable?
+    /// The engine's readiness; see `observeEngineReadiness()`.
+    private var engineReadinessObserver: RuntimeEngineReadinessEdgeObserver?
 
     /// The engine's shared cache owners changing; see
     /// `sharedCacheOwnersDidChange()`.
@@ -559,7 +556,7 @@ public final class FindCorpusCoordinator {
         guard !isClosed else { return }
         isClosed = true
         stopPumps()
-        engineReadinessSubscription = nil
+        engineReadinessObserver = nil
         withdrawEveryBuild()
         withdrawEveryRestore()
     }
@@ -982,23 +979,10 @@ public final class FindCorpusCoordinator {
     /// itself, whatever its documents have open, so a search run again on the
     /// new process finds the coordinator on it already.
     private func observeEngineReadiness() {
-        engineWasReady = engine.state.isReady
-        engineReadinessSubscription = engine.statePublisher
-            .map(\.isReady)
-            .sink { [weak self] isReady in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.handleEngineReadinessChange(isReady)
-                }
-            }
-    }
-
-    private func handleEngineReadinessChange(_ isReady: Bool) {
-        guard !isClosed else { return }
-        let becameReadyAgain = isReady && !engineWasReady
-        engineWasReady = isReady
-        guard becameReadyAgain else { return }
-        engineDidReset()
+        engineReadinessObserver = RuntimeEngineReadinessEdgeObserver(engine: engine) { [weak self] _ in
+            guard let self, !isClosed else { return }
+            engineDidReset()
+        }
     }
 
     /// The process behind the engine has corpora of its own, so the states

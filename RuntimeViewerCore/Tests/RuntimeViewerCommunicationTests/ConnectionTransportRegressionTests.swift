@@ -687,3 +687,79 @@ struct TransportLateReplyTests {
         channel.finishReceiving()
     }
 }
+
+// MARK: - Handlers outlive the transport connection
+
+/// A server connection takes a new transport connection for every client it
+/// accepts. Handlers registered with it before a client connected, or while an
+/// earlier client was connected, have to be on the new transport connection
+/// before the client's first message arrives: the engine registers its
+/// handlers once and re-registers them only after it has seen `.connected`,
+/// too late for a request sent the moment the client is in. A request that
+/// finds no handler is answered as one a peer of an older build does not
+/// know, and the caller turns the feature off.
+@Suite("Transport Regression: handlers outlive the transport connection", .serialized)
+struct TransportHandlerReplayTests {
+    #if canImport(Network)
+    /// Connects to `port`, retrying while the server is still putting its
+    /// listener back after the previous client left.
+    private static func connectRetrying(port: UInt16, timeout: TimeInterval = 5) async throws -> RuntimeDirectTCPClientConnection {
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            do {
+                return try await RuntimeDirectTCPClientConnection(host: "127.0.0.1", port: port, timeout: 1)
+            } catch {
+                guard Date() < deadline else { throw error }
+                try await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+    }
+    #endif
+
+    @Test("DirectTCP: a handler registered before any client connects answers the client's first request")
+    func directTCPHandlerRegisteredBeforeTheClientConnects() async throws {
+        #if canImport(Network)
+        let server = try await RuntimeDirectTCPServerConnection(port: 0, waitForConnection: false)
+        defer { server.stop() }
+        server.setMessageHandler(name: "echo") { (text: String) -> String in text }
+
+        let client = try await RuntimeDirectTCPClientConnection(host: "127.0.0.1", port: server.port)
+        defer { client.stop() }
+
+        let reply = try await withTransportTimeout(5) { () async throws -> String in
+            try await client.sendMessage(name: "echo", request: "first")
+        }
+        #expect(reply == "first")
+        #endif
+    }
+
+    @Test("DirectTCP: handlers answer the client that connects after the first one left")
+    func directTCPHandlersAnswerTheNextClient() async throws {
+        #if canImport(Network)
+        let server = try await RuntimeDirectTCPServerConnection(port: 0, waitForConnection: false)
+        defer { server.stop() }
+        let port = server.port
+
+        let firstClient = try await RuntimeDirectTCPClientConnection(host: "127.0.0.1", port: port)
+        try await waitUntilConnected(server)
+        server.setMessageHandler(name: "echo") { (text: String) -> String in text }
+        let firstReply = try await withTransportTimeout(5) { () async throws -> String in
+            try await firstClient.sendMessage(name: "echo", request: "first")
+        }
+        #expect(firstReply == "first")
+
+        firstClient.stop()
+        let deadline = Date().addingTimeInterval(5)
+        while server.state == .connected, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        let secondClient = try await Self.connectRetrying(port: port)
+        defer { secondClient.stop() }
+        let secondReply = try await withTransportTimeout(5) { () async throws -> String in
+            try await secondClient.sendMessage(name: "echo", request: "second")
+        }
+        #expect(secondReply == "second")
+        #endif
+    }
+}

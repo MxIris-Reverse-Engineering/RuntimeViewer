@@ -350,8 +350,8 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerCatalystExtensions` — Mac Catalyst support
 
 **RuntimeViewerMCP** (`RuntimeViewerMCP/`) — MCP integration (macOS 15+ only):
-- `RuntimeViewerMCPShared` — Shared protocols and transport types
-- `RuntimeViewerMCPBridge` — Bridge server that runs inside the main app
+- `RuntimeViewerMCPBridge` — the MCP server itself, run inside the main app: `MCPService` (the
+  HTTP+SSE transport and the port file) and `MCPBridgeServer` (the tools)
 
 **RuntimeViewerCommandLine** (`RuntimeViewerCommandLine/`) — the `runtime-viewer-cli` tool (macOS 15+ only), built with plain `swift build`; depends on `RuntimeViewerCore` and on the UI-free products of `RuntimeViewerPackages` (`RuntimeViewerEngineManagement`, `RuntimeViewerHelperClient`):
 - `RuntimeViewerCommandLineInterface` — everything but `main.swift`: Codable command/result models, the length-prefixed JSON protocol over a Unix domain socket, `CommandExecutor` + `SourceResolving` (`EngineManagerSourceResolver` serves every source a `RuntimeEngineManager` holds and answers `sources` / `attach` / `detach`; `LocalSourceResolver` is the local-only fallback), the resident CLI host (`CommandLineHostServer`, spawned on demand, idle exit) and its client, `HostTakeover` / `HostRetirement` (the app replacing a standalone host, the client replacing an outdated one), renderers, and the swift-argument-parser commands. The app links this library too: `CommandLineHostController` makes the running app the host
@@ -361,7 +361,6 @@ The project uses three Swift Package Manager packages:
 ### Application Targets
 
 - `RuntimeViewerUsingAppKit` — Main macOS application (AppKit, document-based)
-- `RuntimeViewerMCPServer` — MCP server executable (stdio-based, communicates with bridge via TCP)
 - `RuntimeViewerServer` — XPC background service for inter-process communication
 - `RuntimeViewerLocalService` — the plain XPC service (no mach service, no daemon) the app's
   "My Mac" engine runs in, embedded at `Contents/XPCServices/`. **The app process never dlopens or
@@ -508,7 +507,7 @@ The project uses three Swift Package Manager packages:
 - **Dependency Injection**: Uses swift-dependencies for service injection
 - **Multi-Process**: XPC services enable safe inspection of external processes, and the local
   runtime itself runs out of process in `RuntimeViewerLocalService.xpc`
-- **MCP Bridge**: TCP bridge pattern — app hosts bridge server, external MCP server connects as client
+- **MCP**: the app itself is the MCP server, over HTTP+SSE on the loopback address
 
 ### MCP Integration
 
@@ -518,19 +517,20 @@ The MCP feature enables LLM clients (e.g., Claude) to inspect runtime informatio
 ```
 RuntimeViewerApp (NSDocument)
     ↓ provides DocumentState
-AppMCPBridgeWindowProvider
-    ↓ bridge (TCP, length-prefixed JSON)
-RuntimeViewerMCPBridge (library, in-process)
-    ↓ TCP server
-RuntimeViewerMCPServer (executable, stdio MCP)
-    ↓ MCP protocol
+AppMCPBridgeDocumentProvider
+    ↓ in process
+RuntimeViewerMCPBridge: MCPBridgeServer (the tools) behind MCPService
+    ↓ MCP over HTTP+SSE (SwiftMCP's HTTPSSETransport, 127.0.0.1)
 LLM Client
 ```
 
-- Bridge uses simple length-prefixed JSON over TCP (not RuntimeViewerCommunication framework)
-- Port file: `~/Library/Application Support/RuntimeViewer/mcp-bridge-port`
-- Bridge starts automatically in `AppDelegate.applicationDidFinishLaunching`
-- MCP server entry: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/main.swift`
+- `MCPService` starts in `AppDelegate.applicationDidFinishLaunching` (`mcpService.start(for:)`) and listens
+  on Settings › MCP's fixed port or on one the system assigns
+- Port file: `Settings.MCP.portFileURL`, `~/Library/Application Support/RuntimeViewer[-Debug]/mcp-http-port`
+  — the `-Debug` directory for a Debug build, as for the settings, so a Debug app and the released one
+  never read or delete each other's. A client's configuration names the server `Settings.MCP.serverName`
+  (`RuntimeViewer-Debug` in a Debug build); `Settings.MCP.clientConfigurationJSON(port:)` is the one place
+  the JSON is written
 
 <important if="you are adding, reading or changing a setting, or touching the settings window or its SwiftUI pages">
 
@@ -810,7 +810,6 @@ the end of the file that logs to it. The line then goes to that os_log category,
 - Editor panes: the model in `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/`, the views
   and their coordinator in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/EditorArea/`
 - ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/`; the UI glue they are bound through: `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/`
-- MCP bridge window provider: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppMCPBridgeWindowProvider.swift`
-- MCP server: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/`
-- MCP bridge: `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/`
+- MCP document provider: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppMCPBridgeDocumentProvider.swift`
+- MCP server: `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/`
 - Command-line tool: `RuntimeViewerCommandLine/Sources/RuntimeViewerCommandLineInterface/` (usage guide: `Documentations/Guides/CommandLineInterface.md`)

@@ -8,7 +8,7 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
     
     override var isReorderable: Bool { true }
     
-    private let removeBookmarkRelay = PublishRelay<Int>()
+    private let removeBookmarkRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     /// Edit ▸ Copy (⌘C): the selected row's name.
     @objc func copy(_ sender: Any?) {
@@ -26,10 +26,9 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
     /// Bookmark does — only on a bookmark row, not on a specialization
     /// listed below one.
     override func handleKeyDown(_ event: NSEvent) -> Bool {
-        guard event.isDeleteKeyPress, let selectedCellViewModel, outlineView.parent(forItem: selectedCellViewModel) == nil,
-              let index = outlineView.rootIndex(forRow: outlineView.selectedRow)
+        guard event.isDeleteKeyPress, let selectedCellViewModel, outlineView.parent(forItem: selectedCellViewModel) == nil
         else { return super.handleKeyDown(event) }
-        removeBookmarkRelay.accept(index)
+        removeBookmarkRelay.accept(selectedCellViewModel)
         return true
     }
 
@@ -63,32 +62,14 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
         var items = super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
         // Only root-level bookmark rows can be removed; nested specialization
         // children have no standalone bookmark to delete.
-        if outlineView.parent(forItem: cellViewModel) == nil, let index = outlineView.rootIndex(forRow: clickedRow) {
+        if outlineView.parent(forItem: cellViewModel) == nil {
             items.append(
                 ContextMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
                     guard let self else { return }
-                    removeBookmarkRelay.accept(index)
+                    removeBookmarkRelay.accept(cellViewModel)
                 }
             )
         }
         return items
-    }
-}
-
-extension NSOutlineView {
-    func rootIndex(forRow row: Int) -> Int? {
-        guard row >= 0, let initialItem = self.item(atRow: row) else {
-            return nil
-        }
-        
-        var currentItem = initialItem
-        
-        while let parent = self.parent(forItem: currentItem) {
-            currentItem = parent
-        }
-        
-        let index = self.childIndex(forItem: currentItem)
-        
-        return index != -1 ? index : nil
     }
 }

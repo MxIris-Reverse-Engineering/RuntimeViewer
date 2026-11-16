@@ -188,7 +188,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
     func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
         var newMenuItems: [NSMenuItem] = []
-        if let runtimeObject = view.attributedString().attributes(at: charIndex, effectiveRange: nil)[.link] as? RuntimeObject {
+        // AppKit hands over the text's length for a click past its end, which no attribute lookup
+        // may be asked for; the lookups below answer nothing there.
+        let text = view.attributedString()
+        let linkedObject = text.linkedRuntimeObject(at: charIndex)
+        if let runtimeObject = linkedObject {
             let jumpToDefinitionMenuItem = RuntimeObjectMenuItem(title: "Jump to Definition", symbolName: .arrowTurnDownRight, runtimeObject: runtimeObject)
             jumpToDefinitionMenuItem.target = self
             jumpToDefinitionMenuItem.action = #selector(jumpToDefinitionAction(_:))
@@ -211,12 +215,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         }
         // Find Call Hierarchy and the other cross-reference commands: for the type a name links
         // to, and for the member the clicked line declares.
-        let attributes = view.attributedString().attributes(at: charIndex, effectiveRange: nil)
         var requests: [FindCrossReferenceRequest] = []
-        if let member = attributes[.runtimeViewerDeclaredMember] as? RuntimeMemberReference {
+        if let member = text.declaredMember(at: charIndex) {
             requests += FindCrossReferenceRequest.requests(for: member)
         }
-        if let runtimeObject = attributes[.link] as? RuntimeObject {
+        if let runtimeObject = linkedObject {
             requests += FindCrossReferenceRequest.requests(for: runtimeObject)
         }
         if !requests.isEmpty {
@@ -272,13 +275,7 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     /// The insertion point moved: the member its line declares, if any, is the one the Inspector's
     /// References tab and Find ▸ Find Call Hierarchy follow.
     func textViewDidChangeSelection(_ notification: Notification) {
-        let selectedRange = textView.selectedRange()
-        let length = textView.textStorage?.length ?? 0
-        guard selectedRange.location < length else {
-            cursorMemberChangedRelay.accept(nil)
-            return
-        }
-        cursorMemberChangedRelay.accept(textView.attributedString().attribute(.runtimeViewerDeclaredMember, at: selectedRange.location, effectiveRange: nil) as? RuntimeMemberReference)
+        cursorMemberChangedRelay.accept(textView.attributedString().declaredMember(at: textView.selectedRange().location))
     }
 
     @objc private func jumpToDefinitionAction(_ sender: RuntimeObjectMenuItem) {

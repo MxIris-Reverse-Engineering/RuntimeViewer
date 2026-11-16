@@ -10,7 +10,7 @@ struct SidebarRootBookmarkViewModelTests {
     private let environment = ViewModelTestEnvironment()
     private let router = MockRouter<SidebarRootRoute>()
     private let moveBookmarkRelay = PublishRelay<OutlineMove>()
-    private let removeBookmarkRelay = PublishRelay<Int>()
+    private let removeBookmarkRelay = PublishRelay<SidebarRootCellViewModel>()
     private let searchStringRelay = PublishRelay<String>()
 
     /// A peer that is not the document's engine; its bookmarks must never show.
@@ -36,15 +36,35 @@ struct SidebarRootBookmarkViewModelTests {
         try seedBookmarks()
         let (viewModel, _, output) = makeViewModel()
         defer { withExtendedLifetime(viewModel) {} }
-        _ = try await nextValue(from: viewModel.$nodes) { $0.count == 2 }
+        let rows = try await nextValue(from: viewModel.$nodes) { $0.count == 2 }
 
-        removeBookmarkRelay.accept(0)
-        _ = try await nextValue(from: viewModel.$nodes) { $0.map(\.node.name) == ["libobjc.A.dylib"] }
+        removeBookmarkRelay.accept(rows[0])
+        let remainingRows = try await nextValue(from: viewModel.$nodes) { $0.map(\.node.name) == ["libobjc.A.dylib"] }
 
-        removeBookmarkRelay.accept(0)
+        removeBookmarkRelay.accept(remainingRows[0])
         _ = try await nextValue(from: viewModel.$nodes) { $0.isEmpty }
         #expect(try await nextValue(from: output.isBookmarkEmpty) { $0 } == true)
         #expect(environment.appDefaults.imageBookmarksByScope[otherScopeKey]?.count == 1)
+    }
+
+    /// The rows on screen are the filtered ones, so the row the user removes
+    /// is named among them, not by its place in the stored list.
+    @Test("removing a bookmark while a filter hides rows removes the row the user picked")
+    func removingBookmarkWhileFilteringRemovesPickedRow() async throws {
+        try seedBookmarks()
+        let (viewModel, _, _) = makeViewModel()
+        defer { withExtendedLifetime(viewModel) {} }
+        _ = try await nextValue(from: viewModel.$nodes) { $0.count == 2 }
+
+        searchStringRelay.accept("libobjc")
+        // The rows on screen are the filtered ones.
+        let shownRows = try await nextValue(from: viewModel.$filteredNodes) { $0.map(\.node.name) == ["libobjc.A.dylib"] }
+
+        // The one row on screen, as the context menu and the Delete key name it.
+        removeBookmarkRelay.accept(shownRows[0])
+
+        let stored = try await nextValue(from: environment.appDefaults.$imageBookmarksByScope) { $0[documentScopeKey]?.count == 1 }
+        #expect(stored[documentScopeKey]?.map(\.imageNode.name) == ["Foundation"])
     }
 
     @Test("moving a bookmark reorders the stored list")

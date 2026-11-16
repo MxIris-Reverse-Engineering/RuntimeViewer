@@ -170,6 +170,8 @@
 
 ## 审查记录（Reviews）
 
+全仓定期体检（不针对某次改动，按模块轮流深审）：见 [体检账本](Reviews/CodebaseAudits/README.md)，各轮报告由账本索引。
+
 后台索引（提案 0002）的完整审查闭环，五轮：
 
 - [第一轮](Reviews/2026-04-24-background-indexing-review.md)（2026-04-24）

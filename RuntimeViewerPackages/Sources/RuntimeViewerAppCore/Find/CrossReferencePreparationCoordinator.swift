@@ -66,12 +66,9 @@ public final class CrossReferencePreparationCoordinator {
 
     private var imageIndexedSubscription: AnyCancellable?
 
-    /// Whether the engine was ready when last heard from, so a `false → true`
-    /// edge — a new process behind the engine — can be told from the state
-    /// replayed on subscribing.
-    private var engineWasReady = false
 
-    private var engineReadinessSubscription: AnyCancellable?
+    /// The engine's readiness; see `observeEngineReadiness()`.
+    private var engineReadinessObserver: RuntimeEngineReadinessEdgeObserver?
 
     /// The engine's shared cache owners changing; see
     /// `sharedCacheOwnersDidChange()`.
@@ -342,7 +339,7 @@ public final class CrossReferencePreparationCoordinator {
         guard !isClosed else { return }
         isClosed = true
         stopPumps()
-        engineReadinessSubscription = nil
+        engineReadinessObserver = nil
         withdrawEveryPreparation()
         cancelPreparedByteCountRefresh()
     }
@@ -500,23 +497,10 @@ public final class CrossReferencePreparationCoordinator {
     // MARK: - The engine coming back
 
     private func observeEngineReadiness() {
-        engineWasReady = engine.state.isReady
-        engineReadinessSubscription = engine.statePublisher
-            .map(\.isReady)
-            .sink { [weak self] isReady in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    handleEngineReadinessChange(isReady)
-                }
-            }
-    }
-
-    private func handleEngineReadinessChange(_ isReady: Bool) {
-        guard !isClosed else { return }
-        let becameReadyAgain = isReady && !engineWasReady
-        engineWasReady = isReady
-        guard becameReadyAgain else { return }
-        engineDidReset()
+        engineReadinessObserver = RuntimeEngineReadinessEdgeObserver(engine: engine) { [weak self] _ in
+            guard let self, !isClosed else { return }
+            engineDidReset()
+        }
     }
 
     /// The process behind the engine has prepared nothing yet, so the states

@@ -9,7 +9,8 @@ import RuntimeViewerAppTestingSupport
 struct SidebarRuntimeObjectBookmarkViewModelTests {
     private let router = MockRouter<SidebarRuntimeObjectRoute>()
     private let moveBookmarkRelay = PublishRelay<OutlineMove>()
-    private let removeBookmarkRelay = PublishRelay<Int>()
+    private let removeBookmarkRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+    private let filterRelay = BehaviorRelay<NavigatorTextFilter>(value: .empty)
 
     private let nsObject = Fixtures.runtimeObject(name: "NSObject", kind: .objc(.type(.class)), imagePath: TestImages.libobjc)
     private let nsCopying = Fixtures.runtimeObject(name: "NSCopying", kind: .objc(.type(.protocol)), imagePath: TestImages.libobjc)
@@ -29,14 +30,35 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
     func removingBookmarkDropsRow() async throws {
         let harness = try await makeHarness()
         defer { withExtendedLifetime(harness.viewModel) {} }
-        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.count == 2 }
+        let rows = try await nextValue(from: harness.viewModel.$nodes) { $0.count == 2 }
 
-        removeBookmarkRelay.accept(0)
-        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.map(\.runtimeObject) == [nsCopying] }
+        removeBookmarkRelay.accept(rows[0])
+        let remainingRows = try await nextValue(from: harness.viewModel.$nodes) { $0.map(\.runtimeObject) == [nsCopying] }
 
-        removeBookmarkRelay.accept(0)
+        removeBookmarkRelay.accept(remainingRows[0])
         _ = try await nextValue(from: harness.viewModel.$nodes) { $0.isEmpty }
         #expect(try await nextValue(from: harness.output.isBookmarkEmpty) { $0 } == true)
+    }
+
+    /// The rows on screen are the filtered ones, so the row the user removes
+    /// is named among them, not by its place in the stored list.
+    @Test("removing a bookmark while a filter hides rows removes the row the user picked")
+    func removingBookmarkWhileFilteringRemovesPickedRow() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.count == 2 }
+
+        filterRelay.accept(NavigatorTextFilter(typedText: "NSCopying"))
+        // The rows on screen are the filtered ones.
+        let shownRows = try await nextValue(from: harness.viewModel.$filteredNodes) { $0.map(\.runtimeObject) == [nsCopying] }
+
+        // The one row on screen, as the context menu and the Delete key name it.
+        removeBookmarkRelay.accept(shownRows[0])
+
+        let stored = try await nextValue(from: harness.environment.appDefaults.$objectBookmarksByScopeAndImagePath) {
+            $0[harness.scopeKey]?[TestImages.libobjc]?.count == 1
+        }
+        #expect(stored[harness.scopeKey]?[TestImages.libobjc]?.map(\.object) == [nsObject])
     }
 
     @Test("moving a bookmark reorders the stored list")
@@ -86,7 +108,7 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
                 runtimeObjectClicked: .empty(),
                 runtimeObjectOpenedInNewTab: .empty(),
                 loadImageClicked: .empty(),
-                filter: .just(.empty),
+                filter: filterRelay.asDriver(),
                 isSearchCaseSensitive: .just(false)
             )
         )

@@ -88,11 +88,8 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// settings changing — however long borrowers hold the work: they hand
     /// over the images they need. Read by tests.
     private(set) var hasStarted = false
-    /// Whether the engine was ready when last heard from, so a `false → true`
-    /// edge — a new process behind the engine — can be told from the state
-    /// replayed on subscribing.
-    private var engineWasReady = false
-    private var engineReadinessSubscription: AnyCancellable?
+    /// The engine's readiness; see `observeEngineReadiness()`.
+    private var engineReadinessObserver: RuntimeEngineReadinessEdgeObserver?
     /// The engine's shared cache owners changing; see
     /// `sharedCacheOwnersDidChange()`.
     private var sharedCacheOwnersSubscription: AnyCancellable?
@@ -210,7 +207,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
         eventPumpTask = nil
         reloadDataPumpTask = nil
         #if canImport(RuntimeViewerSettings)
-        engineReadinessSubscription = nil
+        engineReadinessObserver = nil
         alwaysIndexPassesUnderWay = 0
         isAlwaysIndexRetryPending = false
         #endif
@@ -349,23 +346,10 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// to the image list only when it had something open, and the coordinator
     /// used to hear of the new process only through that walk.
     private func observeEngineReadiness() {
-        engineWasReady = engine.state.isReady
-        engineReadinessSubscription = engine.statePublisher
-            .map(\.isReady)
-            .sink { [weak self] isReady in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.handleEngineReadinessChange(isReady)
-                }
-            }
-    }
-
-    private func handleEngineReadinessChange(_ isReady: Bool) {
-        guard !isClosed else { return }
-        let becameReadyAgain = isReady && !engineWasReady
-        engineWasReady = isReady
-        guard becameReadyAgain else { return }
-        engineDidReset()
+        engineReadinessObserver = RuntimeEngineReadinessEdgeObserver(engine: engine) { [weak self] _ in
+            guard let self, !isClosed else { return }
+            engineDidReset()
+        }
     }
 
     /// What ran on the old process is cancelled, and opening's dispatch runs

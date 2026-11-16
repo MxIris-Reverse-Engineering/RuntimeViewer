@@ -175,6 +175,42 @@ extension Settings {
 
         /// The port file name used by both the MCP HTTP server and the settings UI.
         public static let portFileName = "mcp-http-port"
+
+        #if os(macOS)
+        /// The file the MCP server writes the port it listens on to, in the
+        /// application's own directory, so a Debug app and the released one
+        /// running side by side never read or delete each other's.
+        public static var portFileURL: URL {
+            Settings.applicationDirectoryURL.appending(path: portFileName, directoryHint: .notDirectory)
+        }
+        #endif
+
+        /// The name a client's MCP configuration lists the server under: a
+        /// Debug build's apart from the released app's.
+        #if DEBUG
+        public static let serverName = "RuntimeViewer-Debug"
+        #else
+        public static let serverName = "RuntimeViewer"
+        #endif
+
+        /// The server's address, with `<port>` in place of a port not known.
+        public static func serverURL(port: UInt16?) -> String {
+            "http://127.0.0.1:\(port.map { String($0) } ?? "<port>")/mcp"
+        }
+
+        /// The JSON an MCP client is configured with to reach the server.
+        public static func clientConfigurationJSON(port: UInt16?) -> String {
+            """
+            {
+              "mcpServers": {
+                "\(serverName)": {
+                  "type": "http",
+                  "url": "\(serverURL(port: port))"
+                }
+              }
+            }
+            """
+        }
     }
 
     @Codable

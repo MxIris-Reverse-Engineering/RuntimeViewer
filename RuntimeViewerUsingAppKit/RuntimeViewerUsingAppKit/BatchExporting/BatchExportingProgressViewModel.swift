@@ -21,15 +21,20 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
     @RxObserved private(set) var overallProgress: Double = 0
 
     private let exportingState: BatchExportingState
-    private var exportTask: Task<Void, Never>?
+
+    /// What the export loop reports back to this ViewModel.
+    private enum ExportProgress {
+        case imageFinished(BatchExportingPerImageOutcome)
+        case allImagesFinished
+    }
+
+    /// Holds the export loop without holding this ViewModel, so closing the
+    /// sheet releases the ViewModel and stops the export with it.
+    private let exportRun = OwnerReportingTask<ExportProgress>()
 
     init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
-    }
-
-    deinit {
-        exportTask?.cancel()
     }
 
     func transform(_ input: Input) -> Output {
@@ -80,13 +85,8 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         progressText = "0 / \(total) completed"
         overallProgress = 0
 
-        exportTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            exportingState.perImageOutcomes = []
-            var succeededCount = 0
-            var failedCount = 0
-            var completedCount = 0
-
+        exportingState.perImageOutcomes = []
+        exportRun.start(reportingTo: self) { report in
             await withTaskGroup(of: BatchExportingPerImageOutcome.self) { group in
                 var iterator = rowViewModels.makeIterator()
 
@@ -106,20 +106,10 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                 }
 
                 while let outcome = await group.next() {
-                    completedCount += 1
-                    if outcome.didSucceed {
-                        succeededCount += 1
-                    } else {
-                        failedCount += 1
-                    }
-                    self.exportingState.perImageOutcomes.append(outcome)
-                    self.overallProgress = Double(completedCount) / Double(total)
-                    var parts = ["\(completedCount) / \(total) completed"]
-                    if succeededCount > 0 { parts.append("\(succeededCount) succeeded") }
-                    if failedCount > 0 { parts.append("\(failedCount) failed") }
-                    self.progressText = parts.joined(separator: " · ")
+                    report(.imageFinished(outcome))
 
-                    if let nextRowViewModel = iterator.next() {
+                    // A cancelled export starts no further image.
+                    if !Task.isCancelled, let nextRowViewModel = iterator.next() {
                         group.addTask { @MainActor in
                             await Self.exportOne(
                                 rowViewModel: nextRowViewModel,
@@ -135,6 +125,25 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                 }
             }
 
+            report(.allImagesFinished)
+        } receive: { viewModel, progress in
+            viewModel.handle(progress, total: total)
+        }
+    }
+
+    private func handle(_ progress: ExportProgress, total: Int) {
+        switch progress {
+        case .imageFinished(let outcome):
+            exportingState.perImageOutcomes.append(outcome)
+            let completedCount = exportingState.perImageOutcomes.count
+            let succeededCount = exportingState.perImageOutcomes.count(where: \.didSucceed)
+            let failedCount = completedCount - succeededCount
+            overallProgress = Double(completedCount) / Double(total)
+            var parts = ["\(completedCount) / \(total) completed"]
+            if succeededCount > 0 { parts.append("\(succeededCount) succeeded") }
+            if failedCount > 0 { parts.append("\(failedCount) failed") }
+            progressText = parts.joined(separator: " · ")
+        case .allImagesFinished:
             overallProgress = 1
             titleText = "Completed \(total) image\(total == 1 ? "" : "s")"
             exportingState.aggregatedResult = .init(outcomes: exportingState.perImageOutcomes)

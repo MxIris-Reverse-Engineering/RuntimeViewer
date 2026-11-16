@@ -37,7 +37,10 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     @MemberwiseInit(.public)
     public struct Input {
         public let moveBookmark: Signal<OutlineMove>
-        public let removeBookmark: Signal<Int>
+        /// The bookmark row to remove. A row, not its position: the rows on
+        /// screen are the filtered ones, and a position among them names
+        /// another bookmark in the stored list.
+        public let removeBookmark: Signal<SidebarRuntimeObjectCellViewModel>
     }
 
     public struct Output {
@@ -53,8 +56,9 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
         .disposed(by: rx.disposeBag)
 
         input.removeBookmark
-            .emitOnNext { [weak self] index in
+            .emitOnNext { [weak self] cellViewModel in
                 guard let self else { return }
+                guard let index = currentImageObjectBookmarks.firstIndex(where: { $0.object == cellViewModel.runtimeObject }) else { return }
                 currentImageObjectBookmarks.remove(at: index)
             }
             .disposed(by: rx.disposeBag)

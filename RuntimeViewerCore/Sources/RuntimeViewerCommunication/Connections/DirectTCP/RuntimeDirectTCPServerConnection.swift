@@ -23,10 +23,14 @@ import Combine
 /// }
 /// ```
 @Loggable
-final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+final class RuntimeDirectTCPServerConnection: RuntimeHandlerReplayingConnection, @unchecked Sendable {
+    var underlyingConnection: RuntimeDirectTCPConnection? { _underlyingConnection }
 
     private var _underlyingConnection: RuntimeDirectTCPConnection?
+
+    /// The handlers every accepted client's connection gets before it starts
+    /// receiving, including the ones registered before any client connected.
+    let messageHandlerReplay = RuntimeMessageHandlerReplay<RuntimeDirectTCPConnection>()
 
     private var listener: NWListener?
     private var connectionStateCancellable: AnyCancellable?
@@ -85,7 +89,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
         self.listener = listener
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let didResume = Mutex<Bool>(false)
+            let didResume = RuntimeOnceFlag()
 
             listener.stateUpdateHandler = { [weak self] listenerState in
                 guard let self else { return }
@@ -100,22 +104,14 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
                         #log(.info, "Server listening on \(self.host, privacy: .public):\(self.port, privacy: .public)")
                     }
                     if !waitForConnection {
-                        let shouldResume = didResume.withLock { val -> Bool in
-                            guard !val else { return false }
-                            val = true
-                            return true
-                        }
+                        let shouldResume = didResume.claim()
                         if shouldResume {
                             #log(.info, "Server ready (not waiting for connection)")
                             continuation.resume()
                         }
                     }
                 case .failed(let error):
-                    let shouldResume = didResume.withLock { val -> Bool in
-                        guard !val else { return false }
-                        val = true
-                        return true
-                    }
+                    let shouldResume = didResume.claim()
                     if shouldResume {
                         continuation.resume(throwing: error)
                     }
@@ -131,6 +127,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
 
                 let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
                 self._underlyingConnection = tcpConnection
+                self.messageHandlerReplay.apply(to: tcpConnection)
 
                 // Observe connection state
                 self.connectionStateCancellable = tcpConnection.statePublisher
@@ -139,21 +136,13 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
                         if state.isConnected {
                             #log(.info, "Direct TCP client connected")
                             self?.stateSubject.send(.connected)
-                            let shouldResume = didResume.withLock { val -> Bool in
-                                guard !val else { return false }
-                                val = true
-                                return true
-                            }
+                            let shouldResume = didResume.claim()
                             if shouldResume {
                                 #log(.info, "Initial direct TCP connection ready")
                                 continuation.resume()
                             }
                         } else if state.isDisconnected {
-                            let shouldResume = didResume.withLock { val -> Bool in
-                                guard !val else { return false }
-                                val = true
-                                return true
-                            }
+                            let shouldResume = didResume.claim()
                             if shouldResume {
                                 // Connection failed before becoming ready
                                 if case .disconnected(let error) = state, let error {
@@ -231,6 +220,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
 
             let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
             self._underlyingConnection = tcpConnection
+            self.messageHandlerReplay.apply(to: tcpConnection)
 
             self.connectionStateCancellable = tcpConnection.statePublisher
                 .sink { [weak self] state in

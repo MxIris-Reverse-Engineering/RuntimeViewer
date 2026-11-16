@@ -3,6 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
+import RuntimeViewerSettings
 
 enum MCPConfigType {
     case claudeCode
@@ -10,44 +11,16 @@ enum MCPConfigType {
     case json
 
     func configString(port: UInt16) -> String {
-        let url = "http://127.0.0.1:\(port)/mcp"
-        #if DEBUG
+        let serverName = Settings.MCP.serverName
+        let url = Settings.MCP.serverURL(port: port)
         switch self {
         case .claudeCode:
-            return "claude mcp add RuntimeViewer-Debug --transport http \(url)"
+            return "claude mcp add \(serverName) --transport http \(url)"
         case .codex:
-            return "codex mcp add RuntimeViewer-Debug --url \(url)"
+            return "codex mcp add \(serverName) --url \(url)"
         case .json:
-            return """
-            {
-              "mcpServers": {
-                "RuntimeViewer-Debug": {
-                  "type": "http",
-                  "url": "\(url)"
-                }
-              }
-            }
-            """
+            return Settings.MCP.clientConfigurationJSON(port: port)
         }
-        #else
-        switch self {
-        case .claudeCode:
-            return "claude mcp add RuntimeViewer --transport http \(url)"
-        case .codex:
-            return "codex mcp add RuntimeViewer --url \(url)"
-        case .json:
-            return """
-            {
-              "mcpServers": {
-                "RuntimeViewer": {
-                  "type": "http",
-                  "url": "\(url)"
-                }
-              }
-            }
-            """
-        }
-        #endif
     }
 }
 

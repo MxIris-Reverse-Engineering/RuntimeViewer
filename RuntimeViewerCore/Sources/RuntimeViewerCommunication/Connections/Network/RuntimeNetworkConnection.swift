@@ -93,13 +93,14 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         try start()
     }
 
-    /// Creates a connection from an accepted NWConnection.
+    /// Creates a connection from an accepted NWConnection. It receives nothing
+    /// until `start()`: the server sets the connection's handlers first, so a
+    /// message the client sends the moment it is in finds them.
     ///
     /// - Parameter connection: The accepted connection from NWListener.
-    init(connection: NWConnection) throws {
+    init(connection: NWConnection) {
         #log(.info, "Creating incoming connection: \(connection.debugDescription, privacy: .public)")
         self.connection = connection
-        try start()
     }
 
     // MARK: - Lifecycle
