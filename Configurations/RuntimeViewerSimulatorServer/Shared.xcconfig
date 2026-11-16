@@ -8,6 +8,18 @@ SDKROOT = iphonesimulator
 SUPPORTED_PLATFORMS = iphonesimulator
 PRODUCT_NAME = RuntimeViewerMobileServer
 
+// Debug builds compile only this Mac's own architecture, the one its iOS Simulator runs.
+// ONLY_ACTIVE_ARCH cannot do that here: Swift Build turns it off for a target that does not support
+// the run destination's platform, so under "My Mac" this target builds every standard simulator
+// architecture, arm64 and x86_64, while the packages it links keep ONLY_ACTIVE_ARCH and — with
+// Xcode 27's new package PIF builder — list no x86_64 at all; the x86_64 pass then fails with
+// "Unable to resolve module dependency". EXCLUDED_ARCHS rather than ARCHS, so that an ARCHS a
+// project writes at the target level cannot undo it. Release and Distribution keep both slices.
+RUNTIME_VIEWER_SIMULATOR_ARCHITECTURES_OTHER_THAN_arm64 = x86_64
+RUNTIME_VIEWER_SIMULATOR_ARCHITECTURES_OTHER_THAN_x86_64 = arm64
+EXCLUDED_ARCHS[config=Debug] = $(RUNTIME_VIEWER_SIMULATOR_ARCHITECTURES_OTHER_THAN_$(NATIVE_ARCH_ACTUAL))
+EXCLUDED_ARCHS[config=Debug-arm64e] = $(RUNTIME_VIEWER_SIMULATOR_ARCHITECTURES_OTHER_THAN_$(NATIVE_ARCH_ACTUAL))
+
 // Set for every target at the project level of RuntimeViewerServer.xcodeproj. Restated here
 // because the Tuist-generated project builds this target under RuntimeViewerUsingAppKit's project
 // level, which does not set them.

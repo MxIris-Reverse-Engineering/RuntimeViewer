@@ -102,6 +102,23 @@ app cannot link a simulator binary — and lands in `Contents/Resources/` becaus
 `RuntimeInjectClient` finds it with `Bundle.main.url(forResource:withExtension:)`,
 which looks nowhere else.
 
+**In Debug and Debug-arm64e the payload builds this Mac's own architecture only**,
+through `EXCLUDED_ARCHS` in its `Shared.xcconfig`. `ONLY_ACTIVE_ARCH` does not
+reach it: Swift Build switches that off for a target that does not support the
+run destination's platform, so under "My Mac" the payload builds arm64 and
+x86_64, while the packages it links keep `ONLY_ACTIVE_ARCH` and, under Xcode 27's
+new package PIF builder, have no x86_64 for the simulator at all. A Debug build
+from the Xcode GUI then failed in the payload's x86_64 pass with `Unable to
+resolve module dependency: 'RuntimeViewerCore'` and five more. `RunScript.sh` and
+`TuistScript.sh` never hit it, because both pass `EXCLUDED_ARCHS=x86_64`, and
+neither does a Mac whose Xcode keeps the old builder
+(`IDEEnableNewPackagePIFBuilder` set to `NO`), where the packages build both
+simulator slices. The cost is that a Debug payload cannot be injected into an
+x86_64 simulator process running under Rosetta.
+Release and Distribution are left with both slices: `ArchiveScript.sh` switches
+the new builder off, and a Release build from the GUI on a Mac using the new
+builder is expected to fail the same way (not tried).
+
 The old staging paths, `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app` and
 `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework`, are still gitignored for checkouts that
 predate this; nothing reads or writes them. A build phase that built both from inside the app's build was
