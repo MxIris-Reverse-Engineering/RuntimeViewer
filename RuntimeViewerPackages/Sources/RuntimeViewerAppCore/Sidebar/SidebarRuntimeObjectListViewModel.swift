@@ -256,7 +256,7 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// is not.
     override func buildRuntimeObjectsStream() -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Error> {
         AsyncThrowingStream { continuation in
-            let producer = Task { [weak self] in
+            Task { [weak self] in
                 guard let self else {
                     continuation.finish()
                     return
@@ -281,13 +281,6 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
                 } catch {
                     continuation.finish(throwing: error)
                 }
-            }
-            // A reload that supersedes this one, or the page going away, stops
-            // listening: the engine's stream is cancelled with this task, and
-            // the page is released instead of living until the image is built
-            // (KnownIssues M6.1, M6.6).
-            continuation.onTermination = { _ in
-                producer.cancel()
             }
         }
     }

@@ -779,7 +779,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
     func buildRuntimeObjectsStream() -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Error> {
         AsyncThrowingStream { continuation in
-            let producer = Task { [weak self] in
+            Task { [weak self] in
                 guard let self else {
                     continuation.finish()
                     return
@@ -791,10 +791,6 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 } catch {
                     continuation.finish(throwing: error)
                 }
-            }
-            // Stops with the reload that stopped listening (KnownIssues M6.1).
-            continuation.onTermination = { _ in
-                producer.cancel()
             }
         }
     }

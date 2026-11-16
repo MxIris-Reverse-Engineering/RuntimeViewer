@@ -116,23 +116,25 @@
 - **全量测试中的失败**：Core 与 Packages 全量并行时出现一批超时（当时负载均值约 73），负载降下后单独重跑全部通过。
 - **唯一稳定复现的失败**：`InjectedDeviceEngineTests` 的两条在整个 `RuntimeViewerEngineManagementTests` 一起跑时必失败；在基线 `0a0003b8` 上用同样条件也一样失败，单独跑这个套件则通过。所以是基线已有的测试间干扰，不是本次引入的，记为 CA.30。
 
-## 其余逻辑问题（未修，按严重程度）
+## 其余逻辑问题（按严重程度）
+
+用户挑了 CA.7、CA.8、CA.11、CA.12、CA.19 作为第二批：四条已修（先红的测试在 `4502c029`，修复在 `bc112d20`），CA.11 的修复验证无效，已撤回、记为暂不修；其余未修。CA.7 与 CA.8 的代码在 App target，那里没有测试 target，经用户同意只验证编译。
 
 | 编号 | 问题 | 位置 | 判定 | 备注 |
 |------|------|------|------|------|
-| CA.7 | 文本编辑器每显示一个对象就多装一个按键监听，窗口关闭前不释放 | `ContentTextViewController.swift:162` | 读代码确认 | |
-| CA.8 | 批量导出直接调 `loadImage`，绕开 Report 的 Manual Loading，也不阻止 App Nap（切到后台约 30 秒后会被降速） | `BatchExportingProgressViewModel.swift` `exportOne` | 读代码确认 | 违反根 `AGENTS.md` 对手动加载的规定 |
+| CA.7 | 文本编辑器每显示一个对象就多装一个按键监听，窗口关闭前不释放 | `ContentTextViewController.swift:162` | 读代码确认 | **已修**（`bc112d20`）：监听移到 `viewDidLoad`；App target 无测试，只验证编译 |
+| CA.8 | 批量导出直接调 `loadImage`，绕开 Report 的 Manual Loading，也不阻止 App Nap（切到后台约 30 秒后会被降速） | `BatchExportingProgressViewModel.swift` `exportOne` | 读代码确认 | 违反根 `AGENTS.md` 对手动加载的规定；**已修**（`bc112d20`）：改走 `indexImageForUser(at:reportProgress:)`；App target 无测试，只验证编译 |
 | CA.9 | 打印接口出错被 `try?` 吞掉，用户只看到「找不到」 | `RuntimeEngine.swift` 的 `_interface` 与 `resolveSwiftReferenceInterface` | 读代码确认 | |
 | CA.10 | 引擎停止时还没建完的 section 会在之后注册回去 | `RuntimeSwiftSectionFactory.swift` `registerBuiltSection`、`RuntimeObjCSectionFactory.swift` | 读代码确认 | |
-| CA.11 | 对象列表的加载流取消后，后台仍读完整个镜像 | `SidebarRuntimeObjectListViewModel.swift:257`、`RuntimeEngine.objectsWithProgress` | 读代码确认 | 即 KnownIssues M6.1 / M6.6，记录过但未修 |
-| CA.12 | 主题编辑器关闭前 150 毫秒内的最后一次修改会丢失 | `ThemeSettingsView.swift:328` | 读代码确认 | KnownIssues TS.1 修过，代码又改回去了 |
+| CA.11 | 对象列表的加载流取消后，后台仍读完整个镜像 | `SidebarRuntimeObjectListViewModel.swift:257`、`RuntimeEngine.objectsWithProgress` | 读代码确认 | 即 KnownIssues M6.1 / M6.6，记录过但未修；**暂不修**（用户决定）：在流结束时取消生产任务没有用——转发出去的 `ObjectsInImageCommand` 没有声明 `cancelsAcrossConnections`，为了兼容不认识 `cancelRequest` 的旧版对端，撤不回。要修得让这条命令只对认识 `cancelRequest` 的对端可撤回。复现测试 `RuntimeObjectsStreamCancellationTests` 以已知问题保留；登记为 KnownIssues 的 CA.11 |
+| CA.12 | 主题编辑器关闭前 150 毫秒内的最后一次修改会丢失 | `ThemeSettingsView.swift:328` | 读代码确认 | KnownIssues TS.1 修过，代码又改回去了；**已修**（`bc112d20`）：测试 `DraftWriteBackTests` |
 | CA.13 | Helper 状态每刷新一次，两个客户端各重连一次 | `RuntimeHelperClient.swift:47`、`RuntimeInjectClient.swift:55` | 读代码确认 | |
 | CA.14 | MCP 只按镜像路径记录「已加载」，不分引擎 | `MCPBridgeServer.swift:62` | 读代码确认 | |
 | CA.15 | MCP 的 `memberAddresses` 把成员地址查询的错误报成「加载失败」 | `MCPBridgeServer.swift:398` | 读代码确认 | |
 | CA.16 | 注入 socket 的记录文件不分 Debug 与 Release | `RuntimeEngineManager.swift:227` | 读代码确认 | MCP 端口文件的同类问题已在本批修好 |
 | CA.17 | 本地 socket 连接的描述符在三个队列间读写无同步，关闭后可能写进被复用的描述符 | `RuntimeLocalSocketConnection.swift:252` | 疑似 | |
 | CA.18 | 本地 socket 服务端 `accept` 失败一次就永久停止监听 | `RuntimeLocalSocketServerConnection.swift` 接受循环 | 疑似 | |
-| CA.19 | 对端在预检期间断开，仍会建出没人清理的镜像 | `RuntimeEngineManager.swift:518` | 读代码确认 | 即 KnownIssues UR.5，未修 |
+| CA.19 | 对端在预检期间断开，仍会建出没人清理的镜像 | `RuntimeEngineManager.swift:518` | 读代码确认 | 即 KnownIssues UR.5，未修；**已修**（`bc112d20`）：测试 `BonjourEngineListDiscoveryTests` |
 | CA.20 | 导出配置页出错后，转圈一直不消失 | `ExportingConfigurationViewModel.swift:50` | 读代码确认 | |
 | CA.21 | 代理启动失败时，可能把同名的新代理从表里移除 | `RuntimeEngineManager.swift:1775` | 疑似 | |
 | CA.22 | 本地 socket 客户端在一个很窄的时间窗里会丢掉重连 | `RuntimeLocalSocketClientConnection.swift` `startReconnecting` | 疑似 | |
