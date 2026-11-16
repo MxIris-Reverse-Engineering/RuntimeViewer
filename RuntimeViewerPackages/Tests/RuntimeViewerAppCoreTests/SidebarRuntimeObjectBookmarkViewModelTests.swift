@@ -9,7 +9,7 @@ import RuntimeViewerAppTestingSupport
 struct SidebarRuntimeObjectBookmarkViewModelTests {
     private let router = MockRouter<SidebarRuntimeObjectRoute>()
     private let moveBookmarkRelay = PublishRelay<OutlineMove>()
-    private let removeBookmarkRelay = PublishRelay<Int>()
+    private let removeBookmarkRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
     private let filterRelay = BehaviorRelay<NavigatorTextFilter>(value: .empty)
 
     private let nsObject = Fixtures.runtimeObject(name: "NSObject", kind: .objc(.type(.class)), imagePath: TestImages.libobjc)
@@ -30,12 +30,12 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
     func removingBookmarkDropsRow() async throws {
         let harness = try await makeHarness()
         defer { withExtendedLifetime(harness.viewModel) {} }
-        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.count == 2 }
+        let rows = try await nextValue(from: harness.viewModel.$nodes) { $0.count == 2 }
 
-        removeBookmarkRelay.accept(0)
-        _ = try await nextValue(from: harness.viewModel.$nodes) { $0.map(\.runtimeObject) == [nsCopying] }
+        removeBookmarkRelay.accept(rows[0])
+        let remainingRows = try await nextValue(from: harness.viewModel.$nodes) { $0.map(\.runtimeObject) == [nsCopying] }
 
-        removeBookmarkRelay.accept(0)
+        removeBookmarkRelay.accept(remainingRows[0])
         _ = try await nextValue(from: harness.viewModel.$nodes) { $0.isEmpty }
         #expect(try await nextValue(from: harness.output.isBookmarkEmpty) { $0 } == true)
     }
@@ -50,10 +50,10 @@ struct SidebarRuntimeObjectBookmarkViewModelTests {
 
         filterRelay.accept(NavigatorTextFilter(typedText: "NSCopying"))
         // The rows on screen are the filtered ones.
-        _ = try await nextValue(from: harness.viewModel.$filteredNodes) { $0.map(\.runtimeObject) == [nsCopying] }
+        let shownRows = try await nextValue(from: harness.viewModel.$filteredNodes) { $0.map(\.runtimeObject) == [nsCopying] }
 
-        // The first row on screen, as the context menu and the Delete key name it.
-        removeBookmarkRelay.accept(0)
+        // The one row on screen, as the context menu and the Delete key name it.
+        removeBookmarkRelay.accept(shownRows[0])
 
         let stored = try await nextValue(from: harness.environment.appDefaults.$objectBookmarksByScopeAndImagePath) {
             $0[harness.scopeKey]?[TestImages.libobjc]?.count == 1

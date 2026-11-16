@@ -541,10 +541,7 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
 
     /// The member the line holding `characterIndex` declares, if it declares one with code.
     private func declaredMember(atCharacterIndex characterIndex: Int) -> RuntimeMemberReference? {
-        guard let displayedAttributedString,
-              characterIndex < displayedAttributedString.length
-        else { return nil }
-        return displayedAttributedString.attribute(.runtimeViewerDeclaredMember, at: characterIndex, effectiveRange: nil) as? RuntimeMemberReference
+        displayedAttributedString?.declaredMember(at: characterIndex)
     }
 
     @objc private func crossReferenceAction(_ sender: NSMenuItem) {
@@ -560,10 +557,7 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
     /// The jump target the generator recorded for the token starting at `characterIndex`, if
     /// that token is one.
     private func runtimeObject(atCharacterIndex characterIndex: Int) -> RuntimeObject? {
-        guard let displayedAttributedString,
-              characterIndex < displayedAttributedString.length
-        else { return nil }
-        return displayedAttributedString.attributes(at: characterIndex, effectiveRange: nil)[.link] as? RuntimeObject
+        displayedAttributedString?.linkedRuntimeObject(at: characterIndex)
     }
 
     @objc private func jumpToDefinitionAction(_ sender: RuntimeObjectMenuItem) {

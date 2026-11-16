@@ -80,30 +80,7 @@ private struct CopyMCPConfigButton: View {
     private func copyMCPConfig() {
         let port = resolvePort()
 
-        let json: String
-        if let port {
-            json = """
-            {
-              "mcpServers": {
-                "RuntimeViewer": {
-                  "type": "http",
-                  "url": "http://127.0.0.1:\(port)/mcp"
-                }
-              }
-            }
-            """
-        } else {
-            json = """
-            {
-              "mcpServers": {
-                "RuntimeViewer": {
-                  "type": "http",
-                  "url": "http://127.0.0.1:<port>/mcp"
-                }
-              }
-            }
-            """
-        }
+        let json = RuntimeViewerSettings.Settings.MCP.clientConfigurationJSON(port: port)
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(json, forType: .string)
@@ -120,13 +97,7 @@ private struct CopyMCPConfigButton: View {
             return settings.fixedPort
         }
         // Read the auto-assigned port from port file
-        let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        let portFilePath = appSupportURL?
-            .appendingPathComponent("RuntimeViewer")
-            .appendingPathComponent(Settings.MCP.portFileName)
-            .path
-        guard let portFilePath,
-              let content = try? String(contentsOfFile: portFilePath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let content = try? String(contentsOf: RuntimeViewerSettings.Settings.MCP.portFileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
               let port = UInt16(content) else {
             return nil
         }

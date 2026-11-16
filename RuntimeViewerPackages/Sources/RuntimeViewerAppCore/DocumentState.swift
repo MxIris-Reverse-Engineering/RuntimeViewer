@@ -42,12 +42,8 @@ public final class DocumentState {
         runtimeEngineSession.engine
     }
 
-    /// Subscription to the current engine's readiness; see ``observeReadiness(of:)``.
-    private var engineReadinessSubscription: AnyCancellable?
-
-    /// Whether the current engine was ready at the last readiness event, so
-    /// a `false → true` edge can be told apart from the replayed current state.
-    private var engineWasReady = false
+    /// The current engine's readiness; see ``observeReadiness(of:)``.
+    private var engineReadinessObserver: RuntimeEngineReadinessEdgeObserver?
 
     /// Fires with the document's engine each time the document starts over on
     /// it: the `.switchEngine` route put an engine in place — another one, or
@@ -107,24 +103,11 @@ public final class DocumentState {
     /// goes `.localOnly` rather than `.connected`, and a test can drive the
     /// same edge with `stop()` followed by `connect()`.
     fileprivate func observeReadiness(of engine: RuntimeEngine) {
-        engineWasReady = engine.state.isReady
-        engineReadinessSubscription = engine.statePublisher
-            .map(\.isReady)
-            .sink { [weak self, weak engine] isReady in
-                Task { @MainActor [weak self, weak engine] in
-                    guard let self, let engine else { return }
-                    self.handleReadinessChange(isReady, of: engine)
-                }
-            }
+        engineReadinessObserver = RuntimeEngineReadinessEdgeObserver(engine: engine) { [weak self] engine in
+            guard let self, engine === runtimeEngine, !isClosed else { return }
+            startOverOrAnnounceReset(on: engine)
+        }
         observeSharedCacheOwners(of: engine)
-    }
-
-    private func handleReadinessChange(_ isReady: Bool, of engine: RuntimeEngine) {
-        guard engine === runtimeEngine else { return }
-        let becameReadyAgain = isReady && !engineWasReady
-        engineWasReady = isReady
-        guard becameReadyAgain else { return }
-        startOverOrAnnounceReset(on: engine)
     }
 
     /// The document starts over on `engine`: the window walks it back when it
@@ -143,13 +126,9 @@ public final class DocumentState {
     /// ``observeSharedCacheOwners(of:)``.
     private var sharedCacheOwnersSubscription: AnyCancellable?
 
-    /// Subscriptions to the readiness of the engines the current session
-    /// borrows from, by engine.
-    private var ownerReadinessSubscriptions: [ObjectIdentifier: AnyCancellable] = [:]
-
-    /// Whether each engine the current session borrows from was ready at its
-    /// last readiness event.
-    private var ownerWasReady: [ObjectIdentifier: Bool] = [:]
+    /// The readiness of the engines the current session borrows from, by
+    /// engine.
+    private var ownerReadinessObservers: [ObjectIdentifier: RuntimeEngineReadinessEdgeObserver] = [:]
 
     /// Watches the engine manager give the engine other owners: My Mac and
     /// Mac Catalyst coming up or going, the engine attached, sharing turned
@@ -199,33 +178,18 @@ public final class DocumentState {
 
     private func observeReadiness(ofOwners ownerEngines: [RuntimeEngine]) {
         let ownerIdentifiers = Set(ownerEngines.map(ObjectIdentifier.init))
-        let departedOwnerIdentifiers = ownerReadinessSubscriptions.keys.filter { !ownerIdentifiers.contains($0) }
+        let departedOwnerIdentifiers = ownerReadinessObservers.keys.filter { !ownerIdentifiers.contains($0) }
         for ownerIdentifier in departedOwnerIdentifiers {
-            ownerReadinessSubscriptions[ownerIdentifier] = nil
-            ownerWasReady[ownerIdentifier] = nil
+            ownerReadinessObservers[ownerIdentifier] = nil
         }
         for ownerEngine in ownerEngines {
             let ownerIdentifier = ObjectIdentifier(ownerEngine)
-            guard ownerReadinessSubscriptions[ownerIdentifier] == nil else { continue }
-            ownerWasReady[ownerIdentifier] = ownerEngine.state.isReady
-            ownerReadinessSubscriptions[ownerIdentifier] = ownerEngine.statePublisher
-                .map(\.isReady)
-                .sink { [weak self, weak ownerEngine] isReady in
-                    Task { @MainActor [weak self, weak ownerEngine] in
-                        guard let self, let ownerEngine else { return }
-                        self.handleReadinessChange(isReady, ofOwner: ownerEngine)
-                    }
-                }
+            guard ownerReadinessObservers[ownerIdentifier] == nil else { continue }
+            ownerReadinessObservers[ownerIdentifier] = RuntimeEngineReadinessEdgeObserver(engine: ownerEngine) { [weak self] ownerEngine in
+                guard let self, ownerReadinessObservers[ObjectIdentifier(ownerEngine)] != nil, !isClosed else { return }
+                startOverOrAnnounceReset(on: runtimeEngine)
+            }
         }
-    }
-
-    private func handleReadinessChange(_ isReady: Bool, ofOwner ownerEngine: RuntimeEngine) {
-        let ownerIdentifier = ObjectIdentifier(ownerEngine)
-        guard ownerReadinessSubscriptions[ownerIdentifier] != nil, !isClosed else { return }
-        let becameReadyAgain = isReady && ownerWasReady[ownerIdentifier] == false
-        ownerWasReady[ownerIdentifier] = isReady
-        guard becameReadyAgain else { return }
-        startOverOrAnnounceReset(on: runtimeEngine)
     }
 
     /// The image the sidebar lists. `nil` when the sidebar is at the

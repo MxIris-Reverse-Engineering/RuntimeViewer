@@ -23,10 +23,14 @@ import Combine
 ///
 /// - Note: The server automatically restarts listening after a client disconnects.
 @Loggable
-final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+final class RuntimeNetworkServerConnection: RuntimeHandlerReplayingConnection, @unchecked Sendable {
+    var underlyingConnection: RuntimeNetworkConnection? { _underlyingConnection }
 
     private var _underlyingConnection: RuntimeNetworkConnection?
+
+    /// The handlers every accepted client's connection gets before it starts
+    /// receiving, including the ones registered before any client connected.
+    let messageHandlerReplay = RuntimeMessageHandlerReplay<RuntimeNetworkConnection>()
 
     private var listener: NWListener?
     private var connectionStateCancellable: AnyCancellable?
@@ -105,13 +109,13 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
     private func waitForConnection(listener: NWListener) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
 
-            let didResume = Mutex<Bool>(false)
+            let didResume = RuntimeOnceFlag()
             // Guard against multiple NWConnections from different network paths
             // (IPv6 link-local, IPv4, AWDL) — only the first one should be accepted.
-            let hasAccepted = Mutex<Bool>(false)
+            let hasAccepted = RuntimeOnceFlag()
 
             // Track whether a .waiting timeout has been scheduled to avoid duplicates.
-            let waitingTimeoutScheduled = Mutex<Bool>(false)
+            let waitingTimeoutScheduled = RuntimeOnceFlag()
 
             listener.stateUpdateHandler = { state in
                 #log(.info, "Bonjour listener state: \(String(describing: state), privacy: .public)")
@@ -121,18 +125,10 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
                     // After the user grants permission, the listener should transition to .ready.
                     // If it doesn't recover within the timeout, we cancel and retry with a new listener.
                     #log(.info, "Bonjour listener waiting (may require local network permission): \(error, privacy: .public)")
-                    let shouldSchedule = waitingTimeoutScheduled.withLock { scheduled -> Bool in
-                        guard !scheduled else { return false }
-                        scheduled = true
-                        return true
-                    }
+                    let shouldSchedule = waitingTimeoutScheduled.claim()
                     if shouldSchedule {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
-                            let shouldResume = didResume.withLock { val -> Bool in
-                                guard !val else { return false }
-                                val = true
-                                return true
-                            }
+                            let shouldResume = didResume.claim()
                             if shouldResume {
                                 #log(.error, "Bonjour listener waiting timeout exceeded, cancelling for retry")
                                 listener.cancel()
@@ -141,11 +137,7 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
                         }
                     }
                 case .failed(let error):
-                    let shouldResume = didResume.withLock { val -> Bool in
-                        guard !val else { return false }
-                        val = true
-                        return true
-                    }
+                    let shouldResume = didResume.claim()
                     if shouldResume {
                         #log(.error, "Bonjour listener failed: \(error, privacy: .public)")
                         continuation.resume(throwing: RuntimeConnectionError.networkError("Listener failed: \(error.localizedDescription)"))
@@ -154,17 +146,13 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
                     // If we already accepted a connection, this cancellation was self-initiated
                     // (we call listener.cancel() in newConnectionHandler). In that case, let the
                     // connection state monitoring handle the continuation — do NOT resume with error.
-                    let alreadyAccepted = hasAccepted.withLock { $0 }
+                    let alreadyAccepted = hasAccepted.isClaimed
                     guard !alreadyAccepted else {
                         #log(.info, "Bonjour listener cancelled after accepting connection (expected)")
                         break
                     }
                     // Prevent hung continuation if the listener is cancelled externally
-                    let shouldResume = didResume.withLock { val -> Bool in
-                        guard !val else { return false }
-                        val = true
-                        return true
-                    }
+                    let shouldResume = didResume.claim()
                     if shouldResume {
                         #log(.error, "Bonjour listener cancelled unexpectedly")
                         continuation.resume(throwing: RuntimeConnectionError.networkError("Listener cancelled"))
@@ -175,11 +163,7 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
             }
 
             listener.newConnectionHandler = { [weak self] newConnection in
-                let isFirstAccept = hasAccepted.withLock { accepted -> Bool in
-                    guard !accepted else { return false }
-                    accepted = true
-                    return true
-                }
+                let isFirstAccept = hasAccepted.claim()
                 guard isFirstAccept else {
                     #log(.info, "Rejecting duplicate Bonjour connection from another network path: \(newConnection.debugDescription, privacy: .public)")
                     newConnection.cancel()
@@ -194,30 +178,23 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
                 #log(.info, "Accepted new Bonjour connection: \(newConnection.debugDescription, privacy: .public)")
 
                 do {
-                    let connection = try RuntimeNetworkConnection(connection: newConnection)
+                    let connection = RuntimeNetworkConnection(connection: newConnection)
                     self._underlyingConnection = connection
+                    self.messageHandlerReplay.apply(to: connection)
 
                     // Observe connection state
                     self.connectionStateCancellable = connection.statePublisher
                         .sink { [weak self] state in
                             #log(.info, "Bonjour connection state changed: \(String(describing: state), privacy: .public)")
                             if state.isConnected {
-                                let shouldResume = didResume.withLock { val -> Bool in
-                                    guard !val else { return false }
-                                    val = true
-                                    return true
-                                }
+                                let shouldResume = didResume.claim()
                                 if shouldResume {
                                     #log(.info, "Initial Bonjour connection ready")
                                     self?.stateSubject.send(.connected)
                                     continuation.resume()
                                 }
                             } else if state.isDisconnected {
-                                let shouldResume = didResume.withLock { val -> Bool in
-                                    guard !val else { return false }
-                                    val = true
-                                    return true
-                                }
+                                let shouldResume = didResume.claim()
                                 if shouldResume {
                                     // Connection failed before becoming ready
                                     if case .disconnected(let error) = state, let error {
@@ -241,13 +218,12 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
                                 }
                             }
                         }
+
+                    // Receiving starts only now, with the handlers and the state observation in place.
+                    try connection.start()
                 } catch {
                     #log(.error, "Failed to create Bonjour connection: \(error, privacy: .public)")
-                    let shouldResume = didResume.withLock { val -> Bool in
-                        guard !val else { return false }
-                        val = true
-                        return true
-                    }
+                    let shouldResume = didResume.claim()
                     if shouldResume {
                         continuation.resume(throwing: error)
                     }
@@ -274,14 +250,10 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
             }
         }
 
-        let hasAccepted = Mutex<Bool>(false)
+        let hasAccepted = RuntimeOnceFlag()
 
         newListener.newConnectionHandler = { [weak self] newConnection in
-            let isFirstAccept = hasAccepted.withLock { accepted -> Bool in
-                guard !accepted else { return false }
-                accepted = true
-                return true
-            }
+            let isFirstAccept = hasAccepted.claim()
             guard isFirstAccept else {
                 #log(.info, "Rejecting duplicate Bonjour connection from another network path after restart: \(newConnection.debugDescription, privacy: .public)")
                 newConnection.cancel()
@@ -296,8 +268,9 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
             #log(.info, "Accepted new Bonjour connection after restart: \(newConnection.debugDescription, privacy: .public)")
 
             do {
-                let connection = try RuntimeNetworkConnection(connection: newConnection)
+                let connection = RuntimeNetworkConnection(connection: newConnection)
                 self._underlyingConnection = connection
+                self.messageHandlerReplay.apply(to: connection)
 
                 self.connectionStateCancellable = connection.statePublisher
                     .sink { [weak self] state in
@@ -316,6 +289,9 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
                             }
                         }
                     }
+
+                // Receiving starts only now, with the handlers and the state observation in place.
+                try connection.start()
             } catch {
                 #log(.error, "Failed to create Bonjour connection on restart: \(error, privacy: .public)")
             }

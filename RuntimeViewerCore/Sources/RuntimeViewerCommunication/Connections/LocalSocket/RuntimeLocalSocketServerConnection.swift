@@ -49,8 +49,8 @@ import Combine
 ///   `RuntimeLocalSocketClientConnection`. Both sides use the same identifier
 ///   to compute the deterministic port number.
 @Loggable
-final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnection, @unchecked Sendable {
+    var underlyingConnection: RuntimeLocalSocketConnection? { _underlyingConnection }
 
     private var _underlyingConnection: RuntimeLocalSocketConnection?
 
@@ -66,15 +66,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
     /// failure instead of a payload that quietly never arrives.
     private let bindAddress: String
 
-    /// Pending message handlers to apply to new connections.
-    ///
-    /// Mirrors `RuntimeLocalSocketClientConnection`: public `setMessageHandler`
-    /// overloads (caller contexts) append while the background accept loop
-    /// iterates via `applyPendingHandlers`. `@Mutex` serializes the append
-    /// against that iteration — without it the concurrent array access is
-    /// memory-unsafe despite `@unchecked Sendable`.
-    @Mutex
-    private var pendingHandlers: [@Sendable (RuntimeLocalSocketConnection) -> Void] = []
+    let messageHandlerReplay = RuntimeMessageHandlerReplay<RuntimeLocalSocketConnection>()
 
     /// Subscription for observing connection state changes.
     ///
@@ -130,81 +122,6 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
         self.identifier = ""
         self.bindAddress = bindAddress
         self.port = port
-    }
-
-    // MARK: - Message Handler Replay
-
-    func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
-        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
-                try await handler()
-                return RuntimeMessageNull.null
-            }
-        }
-        pendingHandlers.append(setupHandler)
-        if let connection = _underlyingConnection {
-            setupHandler(connection)
-        }
-    }
-
-    func setMessageHandler<Request>(name: String, handler: @escaping @Sendable (Request) async throws -> Void) where Request: Codable {
-        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
-                try await handler(request)
-                return RuntimeMessageNull.null
-            }
-        }
-        pendingHandlers.append(setupHandler)
-        if let connection = _underlyingConnection {
-            setupHandler(connection)
-        }
-    }
-
-    func setMessageHandler<Response>(name: String, handler: @escaping @Sendable () async throws -> Response) where Response: Codable {
-        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
-                return try await handler()
-            }
-        }
-        pendingHandlers.append(setupHandler)
-        if let connection = _underlyingConnection {
-            setupHandler(connection)
-        }
-    }
-
-    func setMessageHandler<Request>(requestType: Request.Type, handler: @escaping @Sendable (Request) async throws -> Request.Response) where Request: RuntimeRequest {
-        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler { @Sendable (request: Request) in
-                return try await handler(request)
-            }
-        }
-        pendingHandlers.append(setupHandler)
-        if let connection = _underlyingConnection {
-            setupHandler(connection)
-        }
-    }
-
-    func setMessageHandler<Request, Response>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) where Request: Codable, Response: Codable {
-        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
-                return try await handler(request)
-            }
-        }
-        pendingHandlers.append(setupHandler)
-        if let connection = _underlyingConnection {
-            setupHandler(connection)
-        }
-    }
-
-    /// Applies all pending handlers to a connection.
-    ///
-    /// Snapshots the array inside the lock so user-supplied handler closures run
-    /// outside the critical section.
-    private func applyPendingHandlers(to connection: RuntimeLocalSocketConnection) {
-        let snapshot = _pendingHandlers.withLock { $0 }
-        for handler in snapshot {
-            handler(connection)
-        }
     }
 
     /// Starts listening for connections.
@@ -305,7 +222,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
         self._underlyingConnection = socketConnection
 
         // Apply all pending message handlers to the new connection
-        applyPendingHandlers(to: socketConnection)
+        messageHandlerReplay.apply(to: socketConnection)
 
         // Observe connection state to restart accepting when disconnected.
         // Cancel-and-replace atomically under the lock so a stale subscription

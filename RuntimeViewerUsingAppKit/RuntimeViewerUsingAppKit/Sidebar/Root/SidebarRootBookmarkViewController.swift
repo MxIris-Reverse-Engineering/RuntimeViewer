@@ -8,7 +8,7 @@ final class SidebarRootBookmarkViewController: SidebarRootViewController<Sidebar
     
     override var isReorderable: Bool { true }
     
-    private let removeBookmarkRelay = PublishRelay<Int>()
+    private let removeBookmarkRelay = PublishRelay<SidebarRootCellViewModel>()
 
     private let noBookmarkLabel = Label()
 
@@ -66,9 +66,8 @@ final class SidebarRootBookmarkViewController: SidebarRootViewController<Sidebar
     /// Delete removes the selected bookmark, as its context menu's Remove Bookmark does — only on a
     /// bookmark row, not on the folders and files below it.
     override func handleKeyDown(_ event: NSEvent) -> Bool {
-        if event.isDeleteKeyPress, let selectedCellViewModel, outlineView.parent(forItem: selectedCellViewModel) == nil,
-           let index = outlineView.rootIndex(forRow: outlineView.selectedRow) {
-            removeBookmarkRelay.accept(index)
+        if event.isDeleteKeyPress, let selectedCellViewModel, outlineView.parent(forItem: selectedCellViewModel) == nil {
+            removeBookmarkRelay.accept(selectedCellViewModel)
             return true
         }
         return super.handleKeyDown(event)
@@ -77,11 +76,11 @@ final class SidebarRootBookmarkViewController: SidebarRootViewController<Sidebar
     /// Only a bookmark row can be removed: the rows below one are its image's folders and files.
     override func contextMenuItems(for cellViewModel: SidebarRootCellViewModel, clickedRow: Int) -> [ContextMenuItem] {
         var items = super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
-        if outlineView.parent(forItem: cellViewModel) == nil, let index = outlineView.rootIndex(forRow: clickedRow) {
+        if outlineView.parent(forItem: cellViewModel) == nil {
             items.append(
                 ContextMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImage) { [weak self] in
                     guard let self else { return }
-                    removeBookmarkRelay.accept(index)
+                    removeBookmarkRelay.accept(cellViewModel)
                 }
             )
         }

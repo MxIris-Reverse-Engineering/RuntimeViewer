@@ -63,14 +63,13 @@ public final class MCPService {
     private var hasWrittenPortFile = false
 
     private convenience init() {
-        let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let runtimeViewerDirectory = appSupportURL.appendingPathComponent("RuntimeViewer")
+        let portFileURL = Settings.MCP.portFileURL
         do {
-            try FileManager.default.createDirectory(at: runtimeViewerDirectory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: portFileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         } catch {
             #log(.error,"Failed to create app support directory: \(error)")
         }
-        self.init(portFilePath: runtimeViewerDirectory.appendingPathComponent(Settings.MCP.portFileName).path)
+        self.init(portFilePath: portFileURL.path)
     }
 
     /// Internal seam so tests can point the port file at a scratch location.

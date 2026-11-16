@@ -20,17 +20,13 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
 
     private let exportingState: ExportingState
 
-    private var exportTask: Task<Void, Never>?
-    private var eventsTask: Task<Void, Never>?
+    /// Holds the export without holding this ViewModel, so closing the sheet
+    /// releases the ViewModel and stops the export with it.
+    private let exportRun = OwnerReportingTask<RuntimeInterfaceExportEvent>()
 
     init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
-    }
-
-    deinit {
-        exportTask?.cancel()
-        eventsTask?.cancel()
     }
 
     func transform(_ input: Input) -> Output {
@@ -70,25 +66,19 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
             includeMetadata: exportingState.includeMetadata
         )
 
-        let reporter = RuntimeInterfaceExportReporter()
-
-        eventsTask = Task { @MainActor [weak self] in
-            guard let self else { return }
+        let runtimeEngine = documentState.runtimeEngine
+        exportRun.start(reportingTo: self) { report in
+            let reporter = RuntimeInterfaceExportReporter()
+            async let exporting: Void = runtimeEngine.exportInterfaces(with: configuration, reporter: reporter)
+            // The reporter finishes its events when the export returns or throws.
             for await event in reporter.events {
-                handleExportEvent(event)
+                report(event)
             }
-        }
-
-        exportTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            do {
-                try await documentState.runtimeEngine.exportInterfaces(
-                    with: configuration,
-                    reporter: reporter
-                )
-            } catch {
-                errorRelay.accept(error)
-            }
+            try await exporting
+        } receive: { viewModel, event in
+            viewModel.handleExportEvent(event)
+        } fail: { viewModel, error in
+            viewModel.errorRelay.accept(error)
         }
     }
 

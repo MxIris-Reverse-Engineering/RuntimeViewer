@@ -62,28 +62,20 @@ final class RuntimeDirectTCPClientConnection: RuntimeForwardingConnection, @unch
             }
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let didResume = Mutex<Bool>(false)
+            let didResume = RuntimeOnceFlag()
 
             // Observe connection state
             self.connectionStateCancellable = connection.statePublisher
                 .sink { state in
                     #log(.info, "Direct TCP client connection state: \(String(describing: state), privacy: .public)")
                     if state.isConnected {
-                        let shouldResume = didResume.withLock { val -> Bool in
-                            guard !val else { return false }
-                            val = true
-                            return true
-                        }
+                        let shouldResume = didResume.claim()
                         if shouldResume {
                             #log(.info, "Direct TCP client connected to \(host, privacy: .public):\(port, privacy: .public)")
                             continuation.resume()
                         }
                     } else if state.isDisconnected {
-                        let shouldResume = didResume.withLock { val -> Bool in
-                            guard !val else { return false }
-                            val = true
-                            return true
-                        }
+                        let shouldResume = didResume.claim()
                         if shouldResume {
                             if case .disconnected(let error) = state, let error {
                                 #log(.error, "Direct TCP client connection failed: \(error.localizedDescription, privacy: .public)")
@@ -99,11 +91,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeForwardingConnection, @unch
             do {
                 try connection.start()
             } catch {
-                let shouldResume = didResume.withLock { val -> Bool in
-                    guard !val else { return false }
-                    val = true
-                    return true
-                }
+                let shouldResume = didResume.claim()
                 if shouldResume {
                     #log(.error, "Failed to start direct TCP client: \(error, privacy: .public)")
                     continuation.resume(throwing: error)
@@ -111,11 +99,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeForwardingConnection, @unch
             }
 
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                let shouldResume = didResume.withLock { val -> Bool in
-                    guard !val else { return false }
-                    val = true
-                    return true
-                }
+                let shouldResume = didResume.claim()
                 if shouldResume {
                     #log(.error, "Direct TCP client connection timed out after \(timeout, privacy: .public)s")
                     connection.stop(with: .timeout)

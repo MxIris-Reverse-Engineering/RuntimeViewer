@@ -46,11 +46,19 @@ public final class Settings {
     internal init() {}
 
     #if os(macOS)
+    /// The directory under Application Support the application keeps its
+    /// files in: `RuntimeViewer-Debug` for a Debug build, so a Debug app
+    /// running beside the released one never shares a file with it.
     #if DEBUG
-    private static let applicationDirectoryName = "RuntimeViewer-Debug"
+    public static let applicationDirectoryName = "RuntimeViewer-Debug"
     #else
-    private static let applicationDirectoryName = "RuntimeViewer"
+    public static let applicationDirectoryName = "RuntimeViewer"
     #endif
+
+    /// `~/Library/Application Support/<applicationDirectoryName>`.
+    public static var applicationDirectoryURL: URL {
+        URL.applicationSupportDirectory.appending(path: applicationDirectoryName, directoryHint: .isDirectory)
+    }
 
     @MainActor
     public static let store = SettingsStore(

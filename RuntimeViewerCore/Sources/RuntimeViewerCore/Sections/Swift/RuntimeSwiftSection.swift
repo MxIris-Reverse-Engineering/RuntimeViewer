@@ -16,6 +16,7 @@ import MachOObjCSection
 import MachOSwiftSection
 import OrderedCollections
 import Semantic
+import Semaphore
 import MetaCodable
 
 @Loggable(.private)
@@ -64,6 +65,13 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
     private nonisolated let privateDiscriminatorSourceFileIndex: PrivateDiscriminatorSourceFileIndex
 
     private let printer: SwiftDeclarationPrinter<MachO>
+
+    /// One display print at a time: a request configures `printer`, prints
+    /// with it and caches the result while holding it. A print suspends at
+    /// every definition, and a request with other options that reconfigured
+    /// the printer in between used to mix both configurations into the print
+    /// — and cache it for everyone after (`interface(for:options:)`).
+    private let displayPrintGate = AsyncSemaphore(value: 1)
 
     /// The printer the corpus is built with: marking optional content (so
     /// one print serves every combination of the Generation Options) with
@@ -417,7 +425,23 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
 }
 
 extension RuntimeSwiftSection {
-    func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
+    func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface {
+        await displayPrintGate.wait()
+        defer { displayPrintGate.signal() }
+        try await updateConfiguration(for: options)
+        return try await interface(for: object)
+    }
+
+    func importedInterface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+        await displayPrintGate.wait()
+        defer { displayPrintGate.signal() }
+        try await updateConfiguration(for: options)
+        return try await importedInterface(for: object)
+    }
+
+    /// Prints with `printer` as it is configured, or answers from the cache;
+    /// only ever inside `displayPrintGate`.
+    private func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating Swift interface for: \(object.displayName, privacy: .public)")
         if let interface = interfaceByObject[object.key] {
             #log(.debug, "Using cached interface")
@@ -465,7 +489,7 @@ extension RuntimeSwiftSection {
     /// takes what Swift implements (a Swift class, an `@objc @implementation` class, a Swift
     /// extension) from this image's Swift definitions, which is why the Swift section prints it.
     /// `nil` for anything else, and for an object this image does not define.
-    func importedInterface(for object: RuntimeObject) async throws -> RuntimeObjectInterface? {
+    private func importedInterface(for object: RuntimeObject) async throws -> RuntimeObjectInterface? {
         let object = object.withImagePath(imagePath)
         if let interface = importedInterfaceByObject[object.key] {
             return interface
@@ -1791,6 +1815,15 @@ extension RuntimeSwiftSection {
     /// is the same either way. A change of any of them clears the interface
     /// cache, so an interface with a structure and one without never stand in
     /// for each other.
+    func updateConfiguration(for options: RuntimeObjectInterface.GenerationOptions) async throws {
+        try await updateConfiguration(
+            using: options.swiftInterfaceOptions,
+            transformer: options.transformer.swift,
+            marksCommentStructure: options.marksCommentStructure,
+            marksAttachedMacros: options.marksAttachedMacros
+        )
+    }
+
     func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration, marksCommentStructure: Bool, marksAttachedMacros: Bool) async throws {
         #log(.debug, "Updating Swift section configuration")
 
