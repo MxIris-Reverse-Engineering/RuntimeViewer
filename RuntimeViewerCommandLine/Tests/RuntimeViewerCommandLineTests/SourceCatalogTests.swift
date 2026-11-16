@@ -21,12 +21,12 @@ struct SourceCatalogTests {
         #expect(SourceKind(source: TestEngines.injectedDevice(name: "sharingd").source) == .injectedDevice)
     }
 
-    @Test("An offline file is no source of the command-line tool's, and leaves its catalog empty-handed")
-    func offlineFilesAreLeftOut() {
+    @Test("A file is no source of the command-line tool's, and leaves its catalog empty-handed")
+    func filesAreLeftOut() {
         let source = RuntimeSource.file(name: "Foo.framework", url: URL(fileURLWithPath: "/tmp/Foo.framework"))
 
         #expect(SourceKind(source: source) == nil)
-        #expect(SourceInfo(engine: RuntimeEngine(source: source, engineID: "offline-file")) == nil)
+        #expect(SourceInfo(engine: RuntimeEngine(source: source, engineID: "file")) == nil)
     }
 
     @Test("The selector of an engine is the one that resolves back to it")

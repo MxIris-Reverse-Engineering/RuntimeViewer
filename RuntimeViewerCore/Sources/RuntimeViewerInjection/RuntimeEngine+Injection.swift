@@ -101,7 +101,7 @@ extension RuntimeEngine {
     /// which is the one cost of installing these commands from outside Core.
     public func injectionAvailability() async -> RuntimeInjectionAvailability {
         if case .file = source {
-            return .unsupported(reason: "An offline file has no processes to inject into.")
+            return .unsupported(reason: "A file has no processes to inject into.")
         }
         do {
             return try await dispatch(RuntimeInjection.InjectionCapabilityCommand())

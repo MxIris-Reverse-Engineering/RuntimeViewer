@@ -3,8 +3,8 @@ import RuntimeViewerCommunication
 import MachOKit
 import MachODependencies
 
-/// Why a file cannot be opened offline.
-public enum RuntimeOfflineFileError: Error, LocalizedError, Sendable, Equatable {
+/// Why a file cannot be opened.
+public enum RuntimeFileError: Error, LocalizedError, Sendable, Equatable {
     case unreadable(URL)
     case unsupportedContent(URL)
     case bundleWithoutExecutable(URL)

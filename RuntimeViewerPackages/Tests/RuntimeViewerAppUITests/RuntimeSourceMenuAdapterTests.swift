@@ -103,7 +103,7 @@ struct RuntimeSourceMenuAdapterTests {
         #expect(adapter.popUpButton.titleOfSelectedItem == "iPad (Disconnected)")
     }
 
-    @Test("an offline file that can be paired adds a Dependency Cache submenu: the caches, the one in use checked, then Manage in Settings…")
+    @Test("a file that can be paired adds a Dependency Cache submenu: the caches, the one in use checked, then Manage in Settings…")
     func dependencyCacheSubmenu() throws {
         let adapter = Self.makeAdapter(content: RuntimeSourcePickerContent(sections: Self.content.sections, dependencyCacheChoices: Self.dependencyCacheChoices))
         let menu = adapter.popUpButton.menu
@@ -139,7 +139,7 @@ struct RuntimeSourceMenuAdapterTests {
     func commandsAreReportedAndTheSourceStaysSelected() throws {
         let adapter = Self.makeAdapter(content: RuntimeSourcePickerContent(sections: Self.content.sections, dependencyCacheChoices: Self.dependencyCacheChoices))
         var openFileRequests = 0
-        var chosenCaches: [RuntimeOfflineFile.DependencyCache?] = []
+        var chosenCaches: [RuntimeFile.DependencyCache?] = []
         var settingsRequests = 0
         let subscriptions = [
             adapter.openFileRequested.emitOnNext { openFileRequests += 1 },

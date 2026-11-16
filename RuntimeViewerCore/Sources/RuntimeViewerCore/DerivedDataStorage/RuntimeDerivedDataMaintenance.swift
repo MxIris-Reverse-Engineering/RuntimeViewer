@@ -89,10 +89,10 @@ public enum RuntimeDerivedDataMaintenance {
         removeRenamedRoots(in: rootURL.deletingLastPathComponent())
         for systemDirectoryURL in subdirectories(of: rootURL, fileManager: fileManager) {
             let systemDirectoryName = systemDirectoryURL.lastPathComponent
-            // A cache the offline service read from disk: no system update
+            // A cache the file service read from disk: no system update
             // makes it useless, and only Delete Derived Data removes it.
             if systemDirectoryName != currentSystemDirectoryName,
-               RuntimeDerivedDataSystemIdentity.isOfflineCacheDirectory(named: systemDirectoryName) {
+               RuntimeDerivedDataSystemIdentity.isFileCacheDirectory(named: systemDirectoryName) {
                 continue
             }
             if systemDirectoryName != currentSystemDirectoryName {

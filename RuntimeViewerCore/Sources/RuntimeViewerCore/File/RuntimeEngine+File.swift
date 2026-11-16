@@ -4,14 +4,14 @@ public import RuntimeViewerCommunication
 extension RuntimeEngine {
     /// An engine that reads `file` in this process: the images of a Mach-O
     /// file, a bundle or a dyld shared cache, and of the cache it is paired
-    /// with, parsed as files — nothing is loaded or run. What the offline
+    /// with, parsed as files — nothing is loaded or run. What the file
     /// service runs for the one file it was started for; `connect()` without a
     /// credential starts it.
     ///
-    /// Throws `RuntimeOfflineFileError` when the file or its paired cache
+    /// Throws `RuntimeFileError` when the file or its paired cache
     /// cannot be opened.
     public init(
-        reading file: RuntimeOfflineFile,
+        reading file: RuntimeFile,
         engineID: String = UUID().uuidString,
         hostInfo: RuntimeHostInfo = RuntimeHostInfo(
             hostID: RuntimeNetworkBonjour.localInstanceID,
@@ -22,7 +22,7 @@ extension RuntimeEngine {
         guard let placeholderPath = catalog.imagePaths().first,
               let placeholderImage = catalog.machO(forImagePath: placeholderPath)
         else {
-            throw RuntimeOfflineFileError.unsupportedContent(file.url)
+            throw RuntimeFileError.unsupportedContent(file.url)
         }
         self.init(
             source: file.source,

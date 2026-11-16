@@ -116,7 +116,7 @@
             "ServicePluginLoader.swift",
           ],
         }, {
-          "target": "RuntimeViewerOfflineService",
+          "target": "RuntimeViewerFileService",
           "inclusions": [
             "ServicePlugin.swift",
             "ServicePluginLoader.swift",
@@ -167,13 +167,13 @@
       ],
     }, {
       "kind": "folder",
-      "path": "RuntimeViewerOfflineService",
+      "path": "RuntimeViewerFileService",
       "target-membership": [
-        "RuntimeViewerOfflineService",
+        "RuntimeViewerFileService",
       ],
       "membership-exceptions": [
         {
-          "target": "RuntimeViewerOfflineService",
+          "target": "RuntimeViewerFileService",
           "exclusions": [
             "Info.plist",
           ],
@@ -218,7 +218,7 @@
         { "path": "<PRODUCTS>/runtime-viewer-cli", "id": "E99510EA3052AA7800D3FAB2", "type": "compiled.mach-o.executable", "index": false, "target-membership": [ { "build-phase": "RuntimeViewerUsingAppKit/copy/Embed RuntimeViewerCLI", "code-sign-on-copy": true } ] },
         { "path": "<PRODUCTS>/RuntimeViewerLocalService.xpc", "id": "E918631130611D0200DCEAC1", "type": "wrapper.xpc-service", "index": false, "target-membership": [ { "build-phase": "RuntimeViewerUsingAppKit/copy/Embed XPC Services", "header-preservation": "remove-on-copy" } ] },
         { "path": "<PRODUCTS>/RuntimeViewerCatalystService.xpc", "id": "E9C5E7A10000000000000002", "type": "wrapper.xpc-service", "index": false, "target-membership": [ { "build-phase": "RuntimeViewerUsingAppKit/copy/Embed XPC Services", "header-preservation": "remove-on-copy" } ] },
-        { "path": "<PRODUCTS>/RuntimeViewerOfflineService.xpc", "id": "E90FF5E20000000000000005", "type": "wrapper.xpc-service", "index": false, "target-membership": [ { "build-phase": "RuntimeViewerUsingAppKit/copy/Embed XPC Services", "header-preservation": "remove-on-copy" } ] },
+        { "path": "<PRODUCTS>/RuntimeViewerFileService.xpc", "id": "E90FF5E20000000000000005", "type": "wrapper.xpc-service", "index": false, "target-membership": [ { "build-phase": "RuntimeViewerUsingAppKit/copy/Embed XPC Services", "header-preservation": "remove-on-copy" } ] },
       ],
     },
     { "kind": "group", "name": "Frameworks" },
@@ -250,7 +250,7 @@
         "RuntimeViewerSourceEditorBridge",
         "RuntimeViewerLocalService",
         "RuntimeViewerCatalystService",
-        "RuntimeViewerOfflineService",
+        "RuntimeViewerFileService",
         "RuntimeViewerServicePlugin",
         "RuntimeViewerCatalystHelper",
         { "kind": "remoteTarget", "project": "RuntimeViewerServer.xcodeproj", "target": "RuntimeViewerSimulatorServer", "target-id": "E9CA7A1B0000000000000001" },
@@ -552,14 +552,14 @@
         "resources",
       ],
     }, {
-      "name": "RuntimeViewerOfflineService",
+      "name": "RuntimeViewerFileService",
       "id": "E90FF5E20000000000000009",
-      "product": "Products/RuntimeViewerOfflineService.xpc",
+      "product": "Products/RuntimeViewerFileService.xpc",
       "product-type": "xpc-service",
       "specialized-configurations": [
-        { "name": "Debug", "file": { "anchor": "Configurations", "relative-path": "RuntimeViewerOfflineService/Debug.xcconfig" } },
-        { "name": "Debug-arm64e", "file": { "anchor": "Configurations", "relative-path": "RuntimeViewerOfflineService/Debug-arm64e.xcconfig" } },
-        { "name": "Release", "file": { "anchor": "Configurations", "relative-path": "RuntimeViewerOfflineService/Release.xcconfig" } },
+        { "name": "Debug", "file": { "anchor": "Configurations", "relative-path": "RuntimeViewerFileService/Debug.xcconfig" } },
+        { "name": "Debug-arm64e", "file": { "anchor": "Configurations", "relative-path": "RuntimeViewerFileService/Debug-arm64e.xcconfig" } },
+        { "name": "Release", "file": { "anchor": "Configurations", "relative-path": "RuntimeViewerFileService/Release.xcconfig" } },
       ],
       "build-phases": [
         "compile-sources",

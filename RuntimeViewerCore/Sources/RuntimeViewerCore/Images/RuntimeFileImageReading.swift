@@ -9,7 +9,7 @@ import Demangling
 @_spi(Support) import SwiftPrivateDiscriminators
 @_spi(Internals) import SwiftInspection
 
-/// Offline mode: images read from a file on disk. Nothing in an image runs,
+/// File mode: images read from a file on disk. Nothing in an image runs,
 /// so every answer comes from what the file holds.
 enum RuntimeFileImageReading: RuntimeImageReading {
     typealias MachO = MachOFile

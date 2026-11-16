@@ -71,7 +71,7 @@ public protocol SourceCatalog: Sendable {
 
 extension SourceKind {
     /// The kind `source` is listed as, or `nil` for a source the command-line
-    /// tool does not serve: an offline file, which only the app opens and
+    /// tool does not serve: a file, which only the app opens and
     /// whose engine the catalog leaves out.
     public init?(source: RuntimeSource) {
         switch source {
@@ -170,8 +170,8 @@ public final class RuntimeEngineManagerCatalog: SourceCatalog {
             attachedEngines: engineManager.attachedRuntimeEngines,
             bonjourEngines: engineManager.bonjourRuntimeEngines,
             mirroredEngines: engineManager.mirroredEngines.values.elements,
-            // Offline files are the app's own: the command-line tool neither
-            // lists nor reaches them (the offline mode proposal's first
+            // Files are the app's own: the command-line tool neither
+            // lists nor reaches them (the file mode proposal's first
             // release leaves them out).
             sections: engineManager.runtimeEngineSections.compactMap { section in
                 let engines = section.engines.filter { SourceKind(source: $0.source) != nil }

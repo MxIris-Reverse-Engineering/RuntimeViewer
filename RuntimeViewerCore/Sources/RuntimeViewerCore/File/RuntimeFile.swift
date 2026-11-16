@@ -3,16 +3,16 @@ public import RuntimeViewerCommunication
 import MachOKit
 import MachODependencies
 
-/// A file offline mode reads — a Mach-O file, a bundle, a folder or a dyld
+/// A file that file mode reads — a Mach-O file, a bundle, a folder or a dyld
 /// shared cache on disk — and where the images it links come from when they
 /// are not inside it.
 ///
-/// What an offline engine is made of. It travels from the app to the process
+/// What a file engine is made of. It travels from the app to the process
 /// that reads the file as that process's launch payload, so it is `Codable`.
 /// The engine's identity is the URL alone (`RuntimeSource.file`); everything
 /// else here is configuration, so pairing a file with another dyld shared
 /// cache keeps its bookmarks and settings.
-public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
+public struct RuntimeFile: Sendable, Hashable, Codable {
     /// What kind of file `url` names.
     public enum Content: Sendable, Hashable, Codable {
         /// A thin Mach-O file, or one slice of a fat one.
@@ -95,12 +95,12 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
     /// metadata; of a folder, only as far as its first image. `dependencyCache`
     /// starts out `nil`.
     ///
-    /// Throws `RuntimeOfflineFileError`.
+    /// Throws `RuntimeFileError`.
     public init(contentsOf url: URL) throws {
         let fileURL = url.standardizedFileURL.resolvingSymlinksInPath()
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory) else {
-            throw RuntimeOfflineFileError.unreadable(fileURL)
+            throw RuntimeFileError.unreadable(fileURL)
         }
         if isDirectory.boolValue {
             if let executableURL = Bundle(url: fileURL)?.executableURL {
@@ -109,7 +109,7 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
                 return
             }
             guard let firstImage = RuntimeDirectoryImageScanner.firstImage(in: fileURL) else {
-                throw RuntimeOfflineFileError.folderWithoutMachOFiles(fileURL)
+                throw RuntimeFileError.folderWithoutMachOFiles(fileURL)
             }
             self.init(url: fileURL, content: .folder, platform: Self.platform(of: firstImage.machOFile), displayName: fileURL.lastPathComponent)
             return
@@ -132,7 +132,7 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
             return
         }
         guard Self.isMachOOrFatMagic(leadingBytes) else {
-            throw RuntimeOfflineFileError.unsupportedContent(fileURL)
+            throw RuntimeFileError.unsupportedContent(fileURL)
         }
         let machOFile = try Self.machOFile(at: fileURL, preferring: nil)
         let slice: Slice? = Self.isFatMagic(leadingBytes) ? Slice(cpuType: machOFile.header.layout.cputype, cpuSubtype: machOFile.header.layout.cpusubtype) : nil
@@ -146,7 +146,7 @@ public struct RuntimeOfflineFile: Sendable, Hashable, Codable {
 
 // MARK: - Reading Headers
 
-extension RuntimeOfflineFile {
+extension RuntimeFile {
     /// The Mach-O file at `url`: the file itself, or the slice of a fat one
     /// `slice` names — the one this Mac prefers when `slice` is `nil`.
     static func machOFile(at url: URL, preferring slice: Slice?) throws -> MachOFile {
@@ -154,25 +154,25 @@ extension RuntimeOfflineFile {
         do {
             file = try File.loadFromFile(url: url)
         } catch {
-            throw RuntimeOfflineFileError.unsupportedContent(url)
+            throw RuntimeFileError.unsupportedContent(url)
         }
         switch file {
         case .machO(let machOFile):
             return machOFile
         case .fat(let fatFile):
             guard let machOFiles = try? fatFile.machOFiles(), !machOFiles.isEmpty else {
-                throw RuntimeOfflineFileError.noSupportedSlice(url)
+                throw RuntimeFileError.noSupportedSlice(url)
             }
             if let slice {
                 guard let matching = machOFiles.first(where: { Self.cpuSubtypeMatches($0, slice) }) else {
-                    throw RuntimeOfflineFileError.noSupportedSlice(url)
+                    throw RuntimeFileError.noSupportedSlice(url)
                 }
                 return matching
             }
             guard let preferred = machOFiles.min(by: { Self.slicePreference(of: $0) < Self.slicePreference(of: $1) }),
                   Self.slicePreference(of: preferred) < Int.max
             else {
-                throw RuntimeOfflineFileError.noSupportedSlice(url)
+                throw RuntimeFileError.noSupportedSlice(url)
             }
             return preferred
         }
@@ -245,7 +245,7 @@ extension RuntimeOfflineFile {
 
     private static func leadingBytes(of url: URL) throws -> [UInt8] {
         guard let fileHandle = try? FileHandle(forReadingFrom: url) else {
-            throw RuntimeOfflineFileError.unreadable(url)
+            throw RuntimeFileError.unreadable(url)
         }
         defer { try? fileHandle.close() }
         return Array((try? fileHandle.read(upToCount: 16)) ?? Data())

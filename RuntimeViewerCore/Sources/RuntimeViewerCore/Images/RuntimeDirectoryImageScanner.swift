@@ -4,7 +4,7 @@ import MachOKit
 /// The Mach-O images in a directory and in everything below it — a bundle's
 /// or a folder's — found from file headers alone.
 ///
-/// Offline mode lists every image of a bundle or a folder it opens and opens
+/// File mode lists every image of a bundle or a folder it opens and opens
 /// none of them until one is needed, so listing reads no more than a file's
 /// header:
 ///
@@ -20,7 +20,7 @@ import MachOKit
 ///   no code, so neither can be read for its classes.
 /// - A directory the walk cannot read is left out rather than ending it.
 ///
-/// A fat file is judged by the slice this Mac prefers, the slice offline mode
+/// A fat file is judged by the slice this Mac prefers, the slice file mode
 /// reads it through.
 enum RuntimeDirectoryImageScanner {
     /// One image: where it is, and what kind of image its header says it is.
@@ -59,7 +59,7 @@ enum RuntimeDirectoryImageScanner {
     }
 
     /// The enumerator names what it finds under the directory's real path —
-    /// `/private/var/…` for a directory at `/var/…` — but `RuntimeOfflineFile`
+    /// `/private/var/…` for a directory at `/var/…` — but `RuntimeFile`
     /// names a directory by the path `resolvingSymlinksInPath()` gives, which
     /// leaves `/private` out, and a bundle's main executable is looked up by
     /// that path. Images are keyed under the latter, and so is a `realpath(3)`
@@ -86,7 +86,7 @@ enum RuntimeDirectoryImageScanner {
 
     /// The first image a breadth-first walk of `directoryURL` meets, taking
     /// the entries of each directory by name, together with the image opened:
-    /// what offline mode tells a folder's platform by. The walk stops there.
+    /// what file mode tells a folder's platform by. The walk stops there.
     static func firstImage(in directoryURL: URL) -> (image: Image, machOFile: MachOFile)? {
         var pendingDirectoryURLs: [URL] = [directoryURL]
         var nextDirectoryIndex = 0
@@ -138,8 +138,8 @@ enum RuntimeDirectoryImageScanner {
         guard let fileHandle = try? FileHandle(forReadingFrom: fileURL) else { return nil }
         let leadingBytes = Array((try? fileHandle.read(upToCount: 8)) ?? Data())
         try? fileHandle.close()
-        guard RuntimeOfflineFile.isMachOOrFatMagic(leadingBytes),
-              let machOFile = try? RuntimeOfflineFile.machOFile(at: fileURL, preferring: nil),
+        guard RuntimeFile.isMachOOrFatMagic(leadingBytes),
+              let machOFile = try? RuntimeFile.machOFile(at: fileURL, preferring: nil),
               let fileType = machOFile.header.fileType,
               loadableFileTypes.contains(fileType)
         else { return nil }

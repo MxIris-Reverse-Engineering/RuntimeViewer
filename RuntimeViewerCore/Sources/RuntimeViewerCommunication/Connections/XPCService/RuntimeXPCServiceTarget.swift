@@ -22,7 +22,7 @@ public enum RuntimeXPCServiceTarget: Sendable {
     /// instance of the embedded service, which declares `_MultipleInstances`
     /// in its `Info.plist`, and the connection's first `hello` hands the
     /// instance `launchPayload` — what it has to know before it can serve,
-    /// such as the file an offline engine reads. An instance that went away
+    /// such as the file a file engine reads. An instance that went away
     /// is never relaunched, so reattaching starts another one, with the same
     /// payload, behind a new connection.
     case dedicatedInstance(bundleIdentifier: String, launchPayload: Data)

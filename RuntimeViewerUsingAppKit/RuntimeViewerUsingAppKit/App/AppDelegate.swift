@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.debugMenuController) private var debugMenuController
     @Dependency(\.helperServiceVersionChecker) private var helperServiceVersionChecker
     @Dependency(\.mcpService) private var mcpService
-    @Dependency(\.offlineFileController) private var offlineFileController
+    @Dependency(\.fileController) private var fileController
     @Dependency(\.runtimeConnectionNotificationService) private var runtimeConnectionNotificationService
     @Dependency(\.runtimeDerivedDataController) private var runtimeDerivedDataController
     @Dependency(\.settingsLifecycleController) private var settingsLifecycleController
@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Before `NSApplication.run()`: the first document controller made
         // becomes the shared one, and window restoration inside `run()` would
         // make a plain one. This one opens Mach-O files, bundles and dyld
-        // shared caches offline.
+        // shared caches in file mode.
         DocumentController.install()
 
         // Puts the injection commands into the engine command table. Has to
@@ -96,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         commandLineHostController.start()
         updaterService.start()
         runtimeDerivedDataController.install()
-        offlineFileController.start()
+        fileController.start()
         helperServiceVersionChecker.checkOnLaunch()
     }
 

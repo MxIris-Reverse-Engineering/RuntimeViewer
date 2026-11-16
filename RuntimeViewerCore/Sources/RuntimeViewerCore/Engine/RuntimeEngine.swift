@@ -96,7 +96,7 @@ public actor RuntimeEngine {
 
     /// Whether requests leave this process: a client of a remote source, the
     /// `.local` engine handing its work to the process that runs this Mac's
-    /// runtime, or an offline file's engine handing it to the process that
+    /// runtime, or a file's engine handing it to the process that
     /// reads the file. Everything that used to test
     /// `source.remoteRole?.isClient` tests this instead.
     public var forwardsRequests: Bool {

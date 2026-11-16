@@ -1,7 +1,7 @@
 #include "../Version.xcconfig"
 
 // The macOS bundle the four shells — the Mac Catalyst helper app and the Mac Catalyst, local and
-// offline XPC services — load from the app's PlugIns; one file for every configuration.
+// file XPC services — load from the app's PlugIns; one file for every configuration.
 CODE_SIGN_STYLE = Manual
 COMBINE_HIDPI_IMAGES = YES
 DEAD_CODE_STRIPPING = YES

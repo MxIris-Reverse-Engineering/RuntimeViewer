@@ -70,13 +70,13 @@ public final class RuntimeCommunicator {
             // Like `.local`, an identity: the file is read in-process, or by
             // the process of its own the credential names.
             if case .xpcService(let target) = credential {
-                #log(.debug, "Creating XPC service client connection for an offline file: \(String(describing: target), privacy: .public)")
+                #log(.debug, "Creating XPC service client connection for a file: \(String(describing: target), privacy: .public)")
                 let connection = try await RuntimeXPCServiceClientConnection(target: target, modifier: modifier)
                 #log(.info, "XPC service client connection established")
                 return connection
             }
             #endif
-            #log(.error, "An offline file has no connection without a credential")
+            #log(.error, "A file has no connection without a credential")
             throw RuntimeCommunicatorError.localConnectionNotSupported
 
         case .remote(_, let identifier, let role):

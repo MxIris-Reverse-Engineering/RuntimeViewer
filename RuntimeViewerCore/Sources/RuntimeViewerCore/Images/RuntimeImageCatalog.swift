@@ -5,7 +5,7 @@ import MachODependencies
 /// Where an engine's images come from, and how one of them is found by path.
 ///
 /// An engine that serves images itself — the local runtime, an injected
-/// payload, the offline service — reads every image through one catalog:
+/// payload, the file service — reads every image through one catalog:
 /// the images dyld loaded into this process (`RuntimeProcessImageCatalog`), or
 /// the images of a file on disk. The engine asks it for the image list and the
 /// sidebar's root nodes, the section factories ask it for the image behind a
@@ -51,7 +51,7 @@ protocol RuntimeImageCatalog<Reading>: Sendable {
 
     /// The main executable `@executable_path` expands against for the image
     /// at `imagePath`, when the catalog knows it better than the walk that
-    /// reached the image: an image of an offline bundle or folder runs in the
+    /// reached the image: an image of a file bundle or folder runs in the
     /// process of the app it is in. `nil` leaves the walk's.
     func mainExecutablePath(forImageAt imagePath: String) -> String?
 

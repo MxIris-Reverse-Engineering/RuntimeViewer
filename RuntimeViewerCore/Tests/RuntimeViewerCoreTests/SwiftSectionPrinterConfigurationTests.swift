@@ -6,7 +6,7 @@ import Testing
 /// does to the section's printer. The engine updates the section before every
 /// Swift interface it prints, almost always with the options it already has,
 /// so an update that changes nothing must leave the printer alone: a new
-/// configuration makes an offline printer throw away its static layout
+/// configuration makes a file engine's printer throw away its static layout
 /// calculator, which resolves every image the printed image depends on, and
 /// the printer keeps every opaque type resolver it is given.
 @Suite("Swift section printer configuration", .serialized)

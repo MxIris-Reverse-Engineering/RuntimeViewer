@@ -260,7 +260,7 @@ and `NSNavigationPopoverController`, which the runtime source picker's list is; 
 showed a navigation popover from never being freed, and filters a long list in one quickly.
 SwiftyXPC (the `MxIris-macOS-Library-Forks` fork) is declared `from: "0.5.106"`, the first release with
 connections to an instance of an embedded service of their own (`ConnectionType.remoteServiceInstance`, which
-each offline file's process is started with) and with listener handlers that reach connections accepted before
+each file's process is started with) and with listener handlers that reach connections accepted before
 they were set.
 
 </important>
@@ -377,8 +377,8 @@ The project uses three Swift Package Manager packages:
   (transport, `hello`, reattach, dedicated instances) plus the three `.xpcService` branches of
   `RuntimeCommunicator`; `RuntimeViewerCore/LocalService/` (this service's `Info.plist` key and
   credential, and the service-side host all three services run);
-  `RuntimeViewerCore/Offline/RuntimeOfflineService.swift` and `RuntimeOfflineServiceHost.swift` (the
-  offline service's key, credential and launch payload, and the host that opens the file the payload
+  `RuntimeViewerCore/File/RuntimeFileService.swift` and `RuntimeFileServiceHost.swift` (the
+  file service's key, credential and launch payload, and the host that opens the file the payload
   names); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift` (the Catalyst service's key and
   credential); and the service entry points, `ServicePluginEntry` in `RuntimeViewerServicePlugin`. `RuntimeEngine` and
   `RuntimeEngineManager` know nothing about XPC — they hand an opaque credential on — keep it that
@@ -400,11 +400,11 @@ The project uses three Swift Package Manager packages:
   without the key — the standalone CLI host — keeps launching `RuntimeViewerCatalystHelper`. The App Nap
   rule above covers work on this engine too. The service has no "restarted" notification yet.
   Background: `Documentations/Evolutions/0051-catalyst-xpc-service.md`
-- `RuntimeViewerOfflineService` — the XPC service each offline file (a Mach-O file, a bundle, a folder or
+- `RuntimeViewerFileService` — the XPC service each file (a Mach-O file, a bundle, a folder or
   a dyld shared cache read from disk) is read in, embedded at `Contents/XPCServices/`. Its `Info.plist` declares
-  `_MultipleInstances`: an engine reading a file connects with `RuntimeOfflineService.credential(for:)`,
+  `_MultipleInstances`: an engine reading a file connects with `RuntimeFileService.credential(for:)`,
   `.xpcService(.dedicatedInstance(…))`, which starts an instance of its own, and the connection's first
-  `hello` names the file — `RuntimeOfflineServiceHost` reads it and installs the engine's commands before
+  `hello` names the file — `RuntimeFileServiceHost` reads it and installs the engine's commands before
   answering. One instance serves one file to one client and exits when that client closes its connection
   (`setClientDepartureHandler(_:)`; a message it has no handler for is no departure). launchd never
   relaunches an instance, so a client whose instance went away reattaches behind a new connection. Its
@@ -418,15 +418,15 @@ The project uses three Swift Package Manager packages:
   opened image holds a file descriptor for as long as it lives and a folder can hold thousands, so
   nothing there may open every image at once — a lookup across all of them, like the Objective-C class
   table, opens each only for as long as it reads it. Background:
-  `Documentations/Evolutions/0069-offline-mode.md`, `Documentations/Evolutions/0077-offline-folders.md`
+  `Documentations/Evolutions/0069-file-mode.md`, `Documentations/Evolutions/0077-file-folders.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it
 - `RuntimeViewerServicePlugin` — the code four executables run. **The Catalyst helper and the
-  Catalyst, local and offline services are shells**: each only makes its process what it has to be (a
+  Catalyst, local and file services are shells**: each only makes its process what it has to be (a
   Catalyst app, a Catalyst XPC service, a macOS XPC service) and loads this macOS bundle from the
   app's `Contents/PlugIns` (`ServicePluginLoader`, compiled into every shell); the plugin does the
   work — `ServicePluginEntry`'s `launchCatalystHelper()`, `runCatalystService()`, `runLocalService()`
-  and `runOfflineService()`. So the app ships one copy of RuntimeViewerCore for the four processes:
+  and `runFileService()`. So the app ships one copy of RuntimeViewerCore for the four processes:
   dead stripping works inside one binary only, and a shell that linked a package would carry a copy of
   its own. **Changes to what a service does go into the plugin, and a shell links no package.** A
   shared dynamic RuntimeViewerCore was tried and does not work: Xcode turns every package target that
@@ -633,18 +633,18 @@ including the processes that cannot inject anything. The rule has no exceptions 
 |---------|-------|
 | macOS app | `AppDelegate.main()` |
 | Local XPC service | `ServicePluginEntry.runLocalService()` |
-| Offline XPC service | `ServicePluginEntry.runOfflineService()` |
+| File XPC service | `ServicePluginEntry.runFileService()` |
 | Mac Catalyst service | `ServicePluginEntry.runCatalystService()` |
 | Mac Catalyst helper | `ServicePluginEntry.launchCatalystHelper()` |
 | `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
 | iOS / visionOS / jailbroken iOS apps | `InjectionServiceRegistrar.registerIfAvailable()` |
 | Injected payload (`RuntimeViewerServer` / `RuntimeViewerMobileServer`) | `RuntimeViewerServer.main()` |
 
-The offline service (`RuntimeViewerOfflineService`) makes both calls only because the service plugin
+The file service (`RuntimeViewerFileService`) makes both calls only because the service plugin
 it runs links both modules. Nothing asks it: an engine reading a file (`.file` source) answers the injection capability query and every cross-reference command itself, without
 dispatching (`RuntimeEngine+Injection.swift`, `RuntimeEngine+CrossReferences.swift`) — a file has no
 processes to inject into, and its images are never mapped into a process for the scan to read. Over XPC
-a command the serving process has no handler for is dropped, not answered, so an offline engine that did
+a command the serving process has no handler for is dropped, not answered, so a file engine that did
 ask would never learn the command is unsupported.
 
 **Forgetting the call is not a compile error.** Handlers are installed as a connection is set up,
@@ -686,11 +686,11 @@ code or the corpus store's read phase** — it says why each part has the shape 
   Every other process leaves it off — the app itself (its Bonjour server engine answers commands in process), the
   command-line host, the Catalyst helper application, an injected payload, a test — and the app only measures
   and deletes it (`RuntimeDerivedDataMaintenance`). Leaving the call out fails quietly: that process just goes
-  without derived data. **The offline service is the third**, with a switch of its own,
-  `RuntimeDerivedData.enableForOfflineEngineInThisProcess()`: its engine reads a cache from disk, so its store
-  (`RuntimeDerivedData.offlineStore(for:isSharedCacheImage:)`) is keyed by that cache — an `Offline-<platform>-<version>-<UUID>`
+  without derived data. **The file service is the third**, with a switch of its own,
+  `RuntimeDerivedData.enableForFileEngineInThisProcess()`: its engine reads a cache from disk, so its store
+  (`RuntimeDerivedData.fileStore(for:isSharedCacheImage:)`) is keyed by that cache — an `File-<platform>-<version>-<UUID>`
   system directory, or this Mac's when the file is paired with this Mac's cache — keeps only that cache's images
-  as the engine's catalog names them, and never cleans up. The two local services' cleanup skips `Offline-`
+  as the engine's catalog names them, and never cleans up. The two local services' cleanup skips `File-`
   directories; only Delete Derived Data removes them.
 - **Only images of the dyld shared cache**, whose contents the system identity names; a store does nothing for
   any other image.

@@ -101,9 +101,9 @@ extension RuntimeEngine {
 
 extension RuntimeEngine {
     /// Cross references are read from arm64 code mapped into the process
-    /// serving the engine, and an offline file's images are never mapped into
+    /// serving the engine, and a file's images are never mapped into
     /// one. So an engine reading a file — whether its own process reads it or
-    /// the offline service does, which does not even link this module —
+    /// the file service does, which does not even link this module —
     /// answers the way a peer without these commands does, without asking:
     /// every caller already reads that answer as a source that cannot serve
     /// cross references.

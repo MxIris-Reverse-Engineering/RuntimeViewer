@@ -4,12 +4,12 @@ import Foundation
 public import FoundationToolbox
 public import RuntimeViewerCommunication
 
-/// The offline service's whole job: read the file the app names, and serve it.
+/// The file service's whole job: read the file the app names, and serve it.
 ///
 /// The service's `main.swift` builds one of these around
 /// `RuntimeXPCServiceListenerConnection.embeddedService()` and calls
 /// `activate()`. Nothing is read before the app attaches: its first `hello`
-/// carries the file (``RuntimeOfflineService``), and before that `hello` is
+/// carries the file (``RuntimeFileService``), and before that `hello` is
 /// answered this host opens the file, connects an engine reading it and
 /// installs the engine's commands through a `RuntimeLocalServiceHost`
 /// — the same host the local service runs, here started after the
@@ -20,7 +20,7 @@ public import RuntimeViewerCommunication
 /// One instance serves one file for its whole life: a later `hello` waits
 /// for the same launch.
 @Loggable(.private)
-public final class RuntimeOfflineServiceHost: @unchecked Sendable {
+public final class RuntimeFileServiceHost: @unchecked Sendable {
     private let connection: RuntimeXPCServiceListenerConnection
 
     @Mutex
@@ -55,16 +55,16 @@ public final class RuntimeOfflineServiceHost: @unchecked Sendable {
 
     private func launch(with payload: Data) async throws {
         Self.raiseDescriptorLimitForReadingFiles()
-        let file = try RuntimeOfflineService.file(fromLaunchPayload: payload)
-        let engine = try RuntimeEngine(reading: file, engineID: "offline-service.\(ProcessInfo.processInfo.processIdentifier)")
+        let file = try RuntimeFileService.file(fromLaunchPayload: payload)
+        let engine = try RuntimeEngine(reading: file, engineID: "file-service.\(ProcessInfo.processInfo.processIdentifier)")
         let catalog = engine.imageCatalog
-        if let derivedDataStore = RuntimeDerivedData.offlineStore(for: file, isSharedCacheImage: { catalog.isSharedCacheImage($0) }) {
+        if let derivedDataStore = RuntimeDerivedData.fileStore(for: file, isSharedCacheImage: { catalog.isSharedCacheImage($0) }) {
             await engine.useDerivedDataStore(derivedDataStore)
         }
         let serviceHost = RuntimeLocalServiceHost(engine: engine, connection: connection)
         try await serviceHost.start()
         self.serviceHost = serviceHost
-        #log(.info, "Offline service reading \(file.displayName, privacy: .public)")
+        #log(.info, "File service reading \(file.displayName, privacy: .public)")
     }
 
     /// Raises this process's soft limit on open descriptors to the most

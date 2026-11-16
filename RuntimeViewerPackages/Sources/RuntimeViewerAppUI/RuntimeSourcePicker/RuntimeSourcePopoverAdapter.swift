@@ -14,7 +14,7 @@ import RuntimeViewerUI
 /// The rows come from `content`, which the window's view model works out: one header per host with
 /// its sources under it, the source the window is on checked, and while that source's engine is gone,
 /// a dimmed row for it on top. Below the list, as the popover's footer, sit Open File… and — while the
-/// window is on an offline file that can be paired with a dependency cache — Dependency Cache, which
+/// window is on a file that can be paired with a dependency cache — Dependency Cache, which
 /// pushes a level listing the caches, the one in use checked, with Manage in Settings… below them.
 ///
 /// What it copies from Xcode 27.2's scheme picker (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "The
@@ -57,7 +57,7 @@ public final class RuntimeSourcePopoverAdapter: NSObject {
         case source(engineIdentifier: String)
         case openFile
         case dependencyCache
-        case dependencyCacheChoice(RuntimeOfflineFile.DependencyCache?)
+        case dependencyCacheChoice(RuntimeFile.DependencyCache?)
         case manageDependencyCaches
     }
 
@@ -78,7 +78,7 @@ public final class RuntimeSourcePopoverAdapter: NSObject {
 
     private let openFileRequestedRelay = PublishRelay<Void>()
 
-    private let dependencyCacheSelectedRelay = PublishRelay<RuntimeOfflineFile.DependencyCache?>()
+    private let dependencyCacheSelectedRelay = PublishRelay<RuntimeFile.DependencyCache?>()
 
     private let dependencyCacheSettingsRequestedRelay = PublishRelay<Void>()
 
@@ -92,8 +92,8 @@ public final class RuntimeSourcePopoverAdapter: NSObject {
         openFileRequestedRelay.asSignal()
     }
 
-    /// The dependency cache chosen for the window's offline file; `nil` reads the file alone.
-    public var dependencyCacheSelected: Signal<RuntimeOfflineFile.DependencyCache?> {
+    /// The dependency cache chosen for the window's file; `nil` reads the file alone.
+    public var dependencyCacheSelected: Signal<RuntimeFile.DependencyCache?> {
         dependencyCacheSelectedRelay.asSignal()
     }
 

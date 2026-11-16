@@ -3,14 +3,14 @@ import Testing
 import MachODependencies
 @testable import RuntimeViewerCore
 
-/// Offline mode opens a folder — a directory that is no bundle — as it opens
+/// File mode opens a folder — a directory that is no bundle — as it opens
 /// a bundle: every executable, dynamic library and bundle below it is listed,
 /// and none is opened before it is needed. The folders are made in temporary
 /// directories, of `/usr/bin/true` copies and of files holding nothing but a
 /// Mach-O header, which is all a listing reads; the class lookup reads this
 /// test bundle's own directory.
-@Suite("Offline folders", .serialized)
-struct OfflineFolderTests {
+@Suite("File folders", .serialized)
+struct FileFolderTests {
     // MARK: - What a folder is
 
     @Test("a directory that names no executable opens as a folder, its platform told by the first image a walk meets")
@@ -20,7 +20,7 @@ struct OfflineFolderTests {
         try Self.copyTrue(to: folderURL.appendingPathComponent("true"))
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: folderURL.appendingPathComponent("lib/libFixture.dylib"))
 
-        let file = try RuntimeOfflineFile(contentsOf: folderURL)
+        let file = try RuntimeFile(contentsOf: folderURL)
 
         #expect(file.content == .folder)
         #expect(file.platform?.name == "macOS", "/usr/bin/true, the first image a breadth-first walk meets, is built for macOS")
@@ -34,7 +34,7 @@ struct OfflineFolderTests {
         try Self.writePropertyList(["XCFrameworkFormatVersion": "1.0"], to: folderURL.appendingPathComponent("Info.plist"))
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: folderURL.appendingPathComponent("macos-arm64/Fixture.framework/Versions/A/Fixture"))
 
-        let file = try RuntimeOfflineFile(contentsOf: folderURL)
+        let file = try RuntimeFile(contentsOf: folderURL)
 
         #expect(file.content == .folder)
     }
@@ -52,9 +52,9 @@ struct OfflineFolderTests {
         try Data(repeating: 0x41, count: 8192).write(to: folderURL.appendingPathComponent("notes.txt"))
         try FileManager.default.createDirectory(at: folderURL.appendingPathComponent("links"), withIntermediateDirectories: true)
         try FileManager.default.createSymbolicLink(at: folderURL.appendingPathComponent("links/true"), withDestinationURL: folderURL.appendingPathComponent("true"))
-        let file = try RuntimeOfflineFile(contentsOf: folderURL)
+        let file = try RuntimeFile(contentsOf: folderURL)
 
-        let engine = try RuntimeEngine(reading: file, engineID: "OfflineFolderTests.listing")
+        let engine = try RuntimeEngine(reading: file, engineID: "FileFolderTests.listing")
         try await engine.connect()
 
         let folderPath = file.url.path
@@ -77,10 +77,10 @@ struct OfflineFolderTests {
         try Self.writePropertyList(["CFBundleExecutable": "Fixture", "CFBundlePackageType": "APPL"], to: bundleURL.appendingPathComponent("Contents/Info.plist"))
         try Self.copyTrue(to: bundleURL.appendingPathComponent("Contents/MacOS/Fixture"))
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: bundleURL.appendingPathComponent("Contents/Frameworks/libFixture.dylib"))
-        let file = try RuntimeOfflineFile(contentsOf: bundleURL)
+        let file = try RuntimeFile(contentsOf: bundleURL)
         #expect(file.content == .bundle)
 
-        let engine = try RuntimeEngine(reading: file, engineID: "OfflineFolderTests.linkedBundle")
+        let engine = try RuntimeEngine(reading: file, engineID: "FileFolderTests.linkedBundle")
         try await engine.connect()
 
         let imageList = await engine.imageList
@@ -97,8 +97,8 @@ struct OfflineFolderTests {
         try Self.writeHeaderOnlyMachO(fileType: Self.objectFileType, to: folderURL.appendingPathComponent("fixture.o"))
         try Data(repeating: 0x41, count: 8192).write(to: folderURL.appendingPathComponent("notes.txt"))
 
-        #expect(throws: RuntimeOfflineFileError.folderWithoutMachOFiles(folderURL.standardizedFileURL.resolvingSymlinksInPath())) {
-            try RuntimeOfflineFile(contentsOf: folderURL)
+        #expect(throws: RuntimeFileError.folderWithoutMachOFiles(folderURL.standardizedFileURL.resolvingSymlinksInPath())) {
+            try RuntimeFile(contentsOf: folderURL)
         }
     }
 
@@ -107,7 +107,7 @@ struct OfflineFolderTests {
         let folderURL = try Self.makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: folderURL) }
         try Self.copyTrue(to: folderURL.appendingPathComponent("true"))
-        let engine = try RuntimeEngine(reading: try RuntimeOfflineFile(contentsOf: folderURL), engineID: "OfflineFolderTests.mainExecutable")
+        let engine = try RuntimeEngine(reading: try RuntimeFile(contentsOf: folderURL), engineID: "FileFolderTests.mainExecutable")
         try await engine.connect()
 
         #expect(try await engine.mainExecutablePath() == "")
@@ -117,9 +117,9 @@ struct OfflineFolderTests {
 
     @Test("an Objective-C class is found by name in the folder's image that exports it")
     func findsAClassInTheFolderImageThatExportsIt() async throws {
-        let file = try RuntimeOfflineFile(contentsOf: URL(fileURLWithPath: Self.testBundleBinaryPath).deletingLastPathComponent())
+        let file = try RuntimeFile(contentsOf: URL(fileURLWithPath: Self.testBundleBinaryPath).deletingLastPathComponent())
         #expect(file.content == .folder)
-        let engine = try RuntimeEngine(reading: file, engineID: "OfflineFolderTests.objcClass")
+        let engine = try RuntimeEngine(reading: file, engineID: "FileFolderTests.objcClass")
         try await engine.connect()
 
         let className = "_TtC22RuntimeViewerCoreTests23ObjCExportPublicFixture"
@@ -135,7 +135,7 @@ struct OfflineFolderTests {
     @Test("a bundle with more images than the process has descriptors for lists every one of them and reads its executable")
     func bundleListsMoreImagesThanDescriptors() async {
         await #expect(processExitsWith: .success) {
-            let isListedAndRead = await OfflineFolderTests.listAndReadBundleUnderASmallDescriptorLimit()
+            let isListedAndRead = await FileFolderTests.listAndReadBundleUnderASmallDescriptorLimit()
             exit(isListedAndRead ? EXIT_SUCCESS : EXIT_FAILURE)
         }
     }
@@ -156,8 +156,8 @@ struct OfflineFolderTests {
             for libraryIndex in 0 ..< 300 {
                 try writeHeaderOnlyMachO(fileType: dynamicLibraryFileType, to: bundleURL.appendingPathComponent("Contents/Frameworks/libFixture\(libraryIndex).dylib"))
             }
-            let file = try RuntimeOfflineFile(contentsOf: bundleURL)
-            let engine = try RuntimeEngine(reading: file, engineID: "OfflineFolderTests.descriptors")
+            let file = try RuntimeFile(contentsOf: bundleURL)
+            let engine = try RuntimeEngine(reading: file, engineID: "FileFolderTests.descriptors")
             try await engine.connect()
             guard await engine.imageList.count == 301 else { return false }
             _ = try await engine.objects(in: file.url.path + "/Contents/MacOS/Fixture")
@@ -181,8 +181,8 @@ struct OfflineFolderTests {
         let frameworkInstallName = "@executable_path/../Frameworks/X.framework/Versions/A/X"
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: folderURL.appendingPathComponent("Foo.app/Contents/Frameworks/X.framework/Versions/A/X"))
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, loadingLibrariesNamed: [frameworkInstallName], to: folderURL.appendingPathComponent("Foo.app/Contents/Frameworks/Y.framework/Versions/A/Y"))
-        let file = try RuntimeOfflineFile(contentsOf: folderURL)
-        let engine = try RuntimeEngine(reading: file, engineID: "OfflineFolderTests.executablePath")
+        let file = try RuntimeFile(contentsOf: folderURL)
+        let engine = try RuntimeEngine(reading: file, engineID: "FileFolderTests.executablePath")
         try await engine.connect()
 
         let dependencies = try await engine.dependencies(
@@ -216,8 +216,8 @@ struct OfflineFolderTests {
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: frameworkURL.appendingPathComponent("Versions/A/X"))
         try FileManager.default.createSymbolicLink(atPath: frameworkURL.appendingPathComponent("Versions/Current").path, withDestinationPath: "A")
         try FileManager.default.createSymbolicLink(atPath: frameworkURL.appendingPathComponent("X").path, withDestinationPath: "Versions/Current/X")
-        let file = try RuntimeOfflineFile(contentsOf: bundleURL)
-        let engine = try RuntimeEngine(reading: file, engineID: "OfflineFolderTests.runPath")
+        let file = try RuntimeFile(contentsOf: bundleURL)
+        let engine = try RuntimeEngine(reading: file, engineID: "FileFolderTests.runPath")
         try await engine.connect()
 
         let executablePath = file.url.path + "/Contents/MacOS/Foo"
@@ -236,7 +236,7 @@ struct OfflineFolderTests {
         try Self.makeApplication(named: "Extension", extension: "appex", in: folderURL.appendingPathComponent("Foo.app/Contents/PlugIns"))
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: folderURL.appendingPathComponent("Foo.app/Contents/PlugIns/Extension.appex/Contents/Frameworks/libExtension.dylib"))
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: folderURL.appendingPathComponent("lib/libLoose.dylib"))
-        let file = try RuntimeOfflineFile(contentsOf: folderURL)
+        let file = try RuntimeFile(contentsOf: folderURL)
         let catalog = try RuntimeFileImageCatalog(file: file)
         let folderPath = file.url.path
 
@@ -259,7 +259,7 @@ struct OfflineFolderTests {
         }
         try Self.makeApplication(named: "Extension", extension: "appex", in: folderURL.appendingPathComponent("Foo.app/Contents/PlugIns"))
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: folderURL.appendingPathComponent("lib/libLoose.dylib"))
-        let file = try RuntimeOfflineFile(contentsOf: folderURL)
+        let file = try RuntimeFile(contentsOf: folderURL)
         let catalog = try RuntimeFileImageCatalog(file: file)
         let folderPath = file.url.path
         let fooSearchPaths = [
@@ -281,7 +281,7 @@ struct OfflineFolderTests {
         try Self.makeApplication(named: "Foo", in: folderURL)
         try Self.writeHeaderOnlyMachO(fileType: Self.dynamicLibraryFileType, to: folderURL.appendingPathComponent("Foo.app/Contents/Frameworks/X.framework/Versions/A/X"))
         try Self.makeApplication(named: "Extension", extension: "appex", in: folderURL.appendingPathComponent("Foo.app/Contents/PlugIns"))
-        let file = try RuntimeOfflineFile(contentsOf: folderURL.appendingPathComponent("Foo.app"))
+        let file = try RuntimeFile(contentsOf: folderURL.appendingPathComponent("Foo.app"))
         #expect(file.content == .bundle)
         let catalog = try RuntimeFileImageCatalog(file: file)
         let bundlePath = file.url.path
@@ -321,7 +321,7 @@ struct OfflineFolderTests {
     /// A new, empty directory of its own under the temporary directory — or,
     /// with `name`, a directory of that name inside one.
     static func makeTemporaryDirectory(named name: String? = nil) throws -> URL {
-        var directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent("OfflineFolderTests-\(UUID().uuidString)")
+        var directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent("FileFolderTests-\(UUID().uuidString)")
         if let name {
             directoryURL.appendPathComponent(name)
         }

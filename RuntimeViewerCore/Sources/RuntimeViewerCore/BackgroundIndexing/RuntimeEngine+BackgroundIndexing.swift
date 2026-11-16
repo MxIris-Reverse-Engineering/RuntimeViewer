@@ -140,7 +140,7 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
 // MARK: - Local implementations of the BFS metadata methods
 
 /// The local arm of each answers from the engine's image catalog: what dyld
-/// loaded into this process, or the images of an offline file. The walk and
+/// loaded into this process, or the images of a file. The walk and
 /// the dependency rules themselves are the catalog's; see
 /// `RuntimeImageCatalog.dependencyEntries(ofImageAt:ancestorRpaths:mainExecutablePath:)`.
 extension RuntimeEngine {

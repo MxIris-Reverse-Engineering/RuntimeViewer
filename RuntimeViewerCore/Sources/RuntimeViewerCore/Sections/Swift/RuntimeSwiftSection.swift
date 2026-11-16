@@ -1814,9 +1814,9 @@ extension RuntimeSwiftSection {
 
         // The engine updates the section before every interface, nearly
         // always with what it already has. Handing the printer even an equal
-        // configuration made an offline printer throw away its static layout
+        // configuration made a file engine's printer throw away its static layout
         // calculator, which resolves every image this one depends on — the
-        // whole cost of an offline interface, paid on every one.
+        // whole cost of a file engine's interface, paid on every one.
         if newPrintConfiguration != oldPrintConfiguration {
             printer.updateConfiguration(newPrintConfiguration)
             printerConfigurationUpdateCount += 1

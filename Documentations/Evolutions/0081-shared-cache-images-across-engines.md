@@ -52,7 +52,7 @@
 2. **谁借用**：
    - My Mac 与 Mac Catalyst 互相借用：My Mac 文档里的 Catalyst 专用镜像由 Catalyst engine 提供，Catalyst 文档里的其余系统镜像由 My Mac 提供。
    - 本机 Attach 的进程（`.remote` / `.localSocket` 来源，identifier 是 pid）借用这两份，前提是 App 判定它与 App 用同一份 shared cache：Apple Silicon、App 与目标都不在 Rosetta 下运行、目标的环境变量里没有 `DYLD_SHARED_REGION` 与 `DYLD_SHARED_CACHE_DIR`。
-   - 不借用：离线文件、Bonjour 设备与模拟器、别的 Mac、Rosetta 下的目标、Intel Mac。
+   - 不借用：文件引擎、Bonjour 设备与模拟器、别的 Mac、Rosetta 下的目标、Intel Mac。
 3. **路由做在 `RuntimeEngine` 这一层**：只涉及一个镜像的请求，按镜像转给它的归属 engine；跨镜像的查询同时问本 engine 与归属 engine，各取自己负责的那部分镜像再合并；单镜像查询里的跨镜像兜底（Swift 跳转、ObjC 类、父类链、协议树）改为先本 engine、后归属 engine 接力。App 窗口、MCP、`runtime-viewer-cli` 用的是同一批 engine 对象，一起生效。
 4. **加载语义**：借用方的侧栏里，系统镜像的「已加载」= 目标进程已加载的，加上经本 engine 借来加载过的。目标已加载的镜像打开时，由归属 engine 自动加载并索引；没加载的仍标「not yet loaded」，点 Load 只加载进归属 engine，不碰目标进程。
 5. **后台工作**：
@@ -68,7 +68,7 @@
 
 ### 非目标
 
-- 离线模式（`.file` 来源的 engine）不参与。
+- 文件模式（`.file` 来源的 engine）不参与。
 - 设备、模拟器、别的 Mac 上的 engine，Rosetta 下运行的目标进程，Intel Mac：维持现状。
 - 不给 payload 加需要它先回答才能工作的命令，不改连接与握手格式，不升 helper 协议版本。线上只有三处向后兼容的改动（见详细设计 §6）：类型关系查询的可选字段 `externalRoots`、`InterfaceCommand` 的可选字段 `resolvesReferencesAcrossImages`，以及老命令 `ImageNameOfObjectCommand` 的本地一侧开始答出镜像路径。旧 payload 忽略前两者、对后者照旧答 `nil`，结果都是退回现在的做法。
 - 目标进程打印自己的镜像时，MachOSwiftSection 内部按需读取系统镜像元数据的那部分开销不在本提案处理。
@@ -350,7 +350,7 @@ extension RuntimeEngineManager {
 
 | 日期 | 变更 | 说明 |
 |------|------|------|
-| 2026-11-08 | Created as Draft | 用户提出系统 shared cache 的数据只存一份：My Mac 存 Catalyst 专用以外的，Mac Catalyst 只存 Catalyst 专用的，本机附加进程直接用这两份，离线模式不参与。起因是每多一个 engine 就重建一遍同样的数据，附加进程还建在目标进程里。按完整档走，经三轮澄清提问定下以下决策。 |
+| 2026-11-08 | Created as Draft | 用户提出系统 shared cache 的数据只存一份：My Mac 存 Catalyst 专用以外的，Mac Catalyst 只存 Catalyst 专用的，本机附加进程直接用这两份，文件模式不参与。起因是每多一个 engine 就重建一遍同样的数据，附加进程还建在目标进程里。按完整档走，经三轮澄清提问定下以下决策。 |
 | 2026-11-08 | 归属按镜像平台划分，不按 `/System/iOSSupport/` 路径 | 实测路径前缀有 5 个例外，平台划分与 dyld 能否加载完全一致；用户同意 |
 | 2026-11-08 | My Mac 与 Mac Catalyst 双向借用 | 用户选定。两个文档对系统镜像看到同一份数据，My Mac 文档也能打开 Catalyst 专用镜像 |
 | 2026-11-08 | 附加进程的 Find、调用层级与类型引用覆盖全部已索引的系统镜像 | 用户选定。规则简单，各窗口结果一致 |

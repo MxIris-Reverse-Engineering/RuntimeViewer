@@ -36,7 +36,7 @@ extension RuntimeEngine {
     }
 
     /// Loads the image at `imagePath` for the user, reporting its indexing where the engine's process
-    /// is one this app ships — the local service, an offline file's service — and without progress
+    /// is one this app ships — the local service, a file's service — and without progress
     /// anywhere else. The load that reports progress arrived in 3.0.0-beta.5, and a process injected
     /// by an earlier release, or a peer running one, drops the connection on a command it does not
     /// know; the plain load is as old as the engine.

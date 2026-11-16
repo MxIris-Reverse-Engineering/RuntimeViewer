@@ -41,10 +41,10 @@ public final class RuntimeEngineManager {
     @Published
     public private(set) var mirroredEngines: OrderedDictionary<String, RuntimeEngine> = [:]
 
-    /// Engines reading a file from disk, listed under ``RuntimeHostInfo/offlineFiles``.
-    /// A suspended one stays listed; see *Offline Files* below.
+    /// Engines reading a file from disk, listed under ``RuntimeHostInfo/files``.
+    /// A suspended one stays listed; see *Files* below.
     @Published
-    public private(set) var offlineRuntimeEngines: [RuntimeEngine] = []
+    public private(set) var fileRuntimeEngines: [RuntimeEngine] = []
 
     @Published
     public private(set) var runtimeEngineSections: [RuntimeEngineSection] = []
@@ -76,27 +76,27 @@ public final class RuntimeEngineManager {
     /// `updateSharedCacheOwners()`.
     private var sharedCacheOwnersUpdate: Task<Void, Never>?
 
-    /// The file each offline engine reads, by engine identifier.
-    private var offlineFilesByEngineID: [String: RuntimeOfflineFile] = [:]
+    /// The file each file engine reads, by engine identifier.
+    private var filesByEngineID: [String: RuntimeFile] = [:]
 
-    /// The offline engines whose process was let go: stopped, still listed.
-    private var suspendedOfflineEngineIDs: Set<String> = []
+    /// The file engines whose process was let go: stopped, still listed.
+    private var suspendedFileEngineIDs: Set<String> = []
 
-    /// The latest read of each offline engine's file, by engine identifier:
+    /// The latest read of each file engine's file, by engine identifier:
     /// under way while its process reads the file, then finished — or failed,
     /// with why. ``waitUntilFileIsRead(by:)`` waits on it.
-    private var offlineFileReadsByEngineID: [String: Task<Void, any Error>] = [:]
+    private var fileReadsByEngineID: [String: Task<Void, any Error>] = [:]
 
-    /// The last read or stop started on each offline engine, by engine
+    /// The last read or stop started on each file engine, by engine
     /// identifier. Each waits for the one before it, so a stop never cuts
     /// into a read and two reads never race for the engine's connection.
-    private var lastOfflineEngineOperationsByEngineID: [String: Task<Void, Never>] = [:]
+    private var lastFileEngineOperationsByEngineID: [String: Task<Void, Never>] = [:]
 
-    /// What an offline engine connects with: an instance of the app's offline
+    /// What a file engine connects with: an instance of the app's file
     /// service of its own. `nil` in a process that embeds no such service.
     /// Tests replace it to serve the file from an anonymous listener.
-    var offlineEngineCredential: @MainActor (RuntimeOfflineFile) throws -> RuntimeConnectionCredential? = { file in
-        try RuntimeOfflineService.credential(for: file)
+    var fileEngineCredential: @MainActor (RuntimeFile) throws -> RuntimeConnectionCredential? = { file in
+        try RuntimeFileService.credential(for: file)
     }
 
     private let browser = RuntimeNetworkBrowser()
@@ -588,7 +588,7 @@ public final class RuntimeEngineManager {
     // MARK: - Engine Lifecycle
 
     public var runtimeEngines: [RuntimeEngine] {
-        systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.elements + offlineRuntimeEngines
+        systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.elements + fileRuntimeEngines
     }
 
     /// `.local` cannot fail; the Mac Catalyst engine is best effort.
@@ -887,13 +887,13 @@ public final class RuntimeEngineManager {
             directBonjourEngines.remove(ObjectIdentifier(engine))
         }
         bonjourRuntimeEngines.removeAll { $0.source == source }
-        for engine in offlineRuntimeEngines where engine.source == source {
-            offlineFilesByEngineID.removeValue(forKey: engine.engineID)
-            suspendedOfflineEngineIDs.remove(engine.engineID)
-            offlineFileReadsByEngineID.removeValue(forKey: engine.engineID)
-            lastOfflineEngineOperationsByEngineID.removeValue(forKey: engine.engineID)
+        for engine in fileRuntimeEngines where engine.source == source {
+            filesByEngineID.removeValue(forKey: engine.engineID)
+            suspendedFileEngineIDs.remove(engine.engineID)
+            fileReadsByEngineID.removeValue(forKey: engine.engineID)
+            lastFileEngineOperationsByEngineID.removeValue(forKey: engine.engineID)
         }
-        offlineRuntimeEngines.removeAll { $0.source == source }
+        fileRuntimeEngines.removeAll { $0.source == source }
         rebuildSections()
 
         // Release each removed engine's underlying connection now, deterministically,
@@ -2008,7 +2008,7 @@ public final class RuntimeEngineManager {
                         return systemRuntimeEngines.contains(where: { $0 === engine })
                             || attachedRuntimeEngines.contains(where: { $0 === engine })
                             || bonjourRuntimeEngines.contains(where: { $0 === engine })
-                            || offlineRuntimeEngines.contains(where: { $0 === engine })
+                            || fileRuntimeEngines.contains(where: { $0 === engine })
                     }
                     .map { $0.source.description }
             )
@@ -2019,7 +2019,7 @@ public final class RuntimeEngineManager {
                 if systemRuntimeEngines.contains(where: { $0 === engine })
                     || attachedRuntimeEngines.contains(where: { $0 === engine })
                     || bonjourRuntimeEngines.contains(where: { $0 === engine })
-                    || offlineRuntimeEngines.contains(where: { $0 === engine }) {
+                    || fileRuntimeEngines.contains(where: { $0 === engine }) {
                     return true
                 }
                 // A mirror with the same display name as a local route to this same
@@ -2037,33 +2037,33 @@ public final class RuntimeEngineManager {
     }
 }
 
-// MARK: - Offline Files
+// MARK: - Files
 
-/// Why the manager could not start an offline engine.
-public enum RuntimeOfflineEngineError: Error, LocalizedError, Sendable {
-    /// This process embeds no offline service to read the file in.
+/// Why the manager could not start a file engine.
+public enum RuntimeFileEngineError: Error, LocalizedError, Sendable {
+    /// This process embeds no file service to read the file in.
     case serviceUnavailable
 
     public var errorDescription: String? {
         switch self {
         case .serviceUnavailable:
-            "This process cannot read files offline: it embeds no offline service."
+            "This process cannot read files: it embeds no file service."
         }
     }
 }
 
-/// Offline engines: one per file opened from disk, each reading its file in
-/// an instance of the app's offline service of its own, listed together
-/// under ``RuntimeViewerCore/RuntimeHostInfo/offlineFiles``.
+/// File engines: one per file opened from disk, each reading its file in
+/// an instance of the app's file service of its own, listed together
+/// under ``RuntimeViewerCore/RuntimeHostInfo/files``.
 ///
-/// An offline engine is never mirrored to peers and never shared through a
+/// A file engine is never mirrored to peers and never shared through a
 /// proxy server: its source does not cross the wire, and the engine-sharing
 /// pipeline only watches the other four groups.
 extension RuntimeEngineManager {
     /// Starts reading `file` and returns, at once, the engine that reads it,
     /// listed: the one already listed for its URL — woken if it was
     /// suspended, started over if `file` pairs it with another dependency
-    /// cache — or a new one. An instance of the offline service reads the
+    /// cache — or a new one. An instance of the file service reads the
     /// file in the background; ``waitUntilFileIsRead(by:)`` waits for it.
     /// Until then the engine forwards every request to a process that has
     /// not answered yet, so a request fails rather than being answered here,
@@ -2072,35 +2072,35 @@ extension RuntimeEngineManager {
     /// A new engine whose file cannot be read is taken off the list again; a
     /// listed one is suspended, so asking for it again reads the file again.
     ///
-    /// Throws ``RuntimeOfflineEngineError/serviceUnavailable`` in a process
-    /// that embeds no offline service.
-    public func startReading(_ file: RuntimeOfflineFile) async throws -> RuntimeEngine {
-        if let listedEngine = offlineRuntimeEngines.first(where: { $0.source == file.source }) {
-            if offlineFilesByEngineID[listedEngine.engineID] != file {
+    /// Throws ``RuntimeFileEngineError/serviceUnavailable`` in a process
+    /// that embeds no file service.
+    public func startReading(_ file: RuntimeFile) async throws -> RuntimeEngine {
+        if let listedEngine = fileRuntimeEngines.first(where: { $0.source == file.source }) {
+            if filesByEngineID[listedEngine.engineID] != file {
                 // Another pairing is another set of images: the instance reading
                 // the old one has to go, and a new one reads the file again.
                 #log(.info, "Starting \(file.displayName, privacy: .public) over with another dependency cache")
-                offlineFilesByEngineID[listedEngine.engineID] = file
-                await suspendOfflineEngine(listedEngine)
+                filesByEngineID[listedEngine.engineID] = file
+                await suspendFileEngine(listedEngine)
             }
-            if isOfflineEngineSuspended(listedEngine) {
+            if isFileEngineSuspended(listedEngine) {
                 try startResuming(listedEngine)
             }
             return listedEngine
         }
 
-        guard let credential = try offlineEngineCredential(file) else {
-            throw RuntimeOfflineEngineError.serviceUnavailable
+        guard let credential = try fileEngineCredential(file) else {
+            throw RuntimeFileEngineError.serviceUnavailable
         }
         // A `.file` engine made this way forwards from the start: nothing a
         // window asks before the instance answers is answered from this
         // process's images.
-        let engine = RuntimeEngine(source: file.source, hostInfo: .offlineFiles, originChain: [RuntimeNetworkBonjour.localInstanceID])
-        offlineFilesByEngineID[engine.engineID] = file
-        offlineRuntimeEngines.append(engine)
+        let engine = RuntimeEngine(source: file.source, hostInfo: .files, originChain: [RuntimeNetworkBonjour.localInstanceID])
+        filesByEngineID[engine.engineID] = file
+        fileRuntimeEngines.append(engine)
         rebuildSections()
         startReadingFile(by: engine, with: credential, isFirstRead: true)
-        #log(.info, "Reading \(file.displayName, privacy: .public) offline")
+        #log(.info, "Reading \(file.displayName, privacy: .public) from disk")
         return engine
     }
 
@@ -2109,61 +2109,61 @@ extension RuntimeEngineManager {
     /// reached. Returns at once when the file is read already, and for an
     /// engine that reads no file.
     public func waitUntilFileIsRead(by engine: RuntimeEngine) async throws {
-        try await offlineFileReadsByEngineID[engine.engineID]?.value
+        try await fileReadsByEngineID[engine.engineID]?.value
     }
 
     /// The engine reading `file`, once it has read it:
     /// ``startReading(_:)``, then ``waitUntilFileIsRead(by:)``.
-    public func runtimeEngine(reading file: RuntimeOfflineFile) async throws -> RuntimeEngine {
+    public func runtimeEngine(reading file: RuntimeFile) async throws -> RuntimeEngine {
         let engine = try await startReading(file)
         try await waitUntilFileIsRead(by: engine)
         return engine
     }
 
-    /// The file `engine` reads, when it is an offline engine this manager lists.
-    public func offlineFile(of engine: RuntimeEngine) -> RuntimeOfflineFile? {
-        guard offlineRuntimeEngines.contains(where: { $0 === engine }) else { return nil }
-        return offlineFilesByEngineID[engine.engineID]
+    /// The file `engine` reads, when it is a file engine this manager lists.
+    public func file(of engine: RuntimeEngine) -> RuntimeFile? {
+        guard fileRuntimeEngines.contains(where: { $0 === engine }) else { return nil }
+        return filesByEngineID[engine.engineID]
     }
 
-    /// Whether `engine` is an offline engine whose process was let go.
-    public func isOfflineEngineSuspended(_ engine: RuntimeEngine) -> Bool {
-        suspendedOfflineEngineIDs.contains(engine.engineID)
+    /// Whether `engine` is a file engine whose process was let go.
+    public func isFileEngineSuspended(_ engine: RuntimeEngine) -> Bool {
+        suspendedFileEngineIDs.contains(engine.engineID)
     }
 
-    /// Lets an offline engine's process exit, and the memory of the parsed
+    /// Lets a file engine's process exit, and the memory of the parsed
     /// file with it. The engine stops but stays listed, the same object:
-    /// ``resumeOfflineEngine(_:)``, or ``startReading(_:)`` with its file,
+    /// ``resumeFileEngine(_:)``, or ``startReading(_:)`` with its file,
     /// starts it again, reading the file anew. A read still under way
-    /// finishes first. No-op for an engine that is not an offline one, or
+    /// finishes first. No-op for an engine that is not a file one, or
     /// already suspended.
-    public func suspendOfflineEngine(_ engine: RuntimeEngine) async {
-        guard offlineRuntimeEngines.contains(where: { $0 === engine }),
-              !suspendedOfflineEngineIDs.contains(engine.engineID)
+    public func suspendFileEngine(_ engine: RuntimeEngine) async {
+        guard fileRuntimeEngines.contains(where: { $0 === engine }),
+              !suspendedFileEngineIDs.contains(engine.engineID)
         else { return }
-        suspendedOfflineEngineIDs.insert(engine.engineID)
-        await enqueueOfflineEngineOperation(on: engine) {
+        suspendedFileEngineIDs.insert(engine.engineID)
+        await enqueueFileEngineOperation(on: engine) {
             await engine.stop()
         }.value
-        #log(.info, "Suspended the offline engine \(engine.source.description, privacy: .public)")
+        #log(.info, "Suspended the file engine \(engine.source.description, privacy: .public)")
     }
 
-    /// Starts a suspended offline engine again, in a new instance of the
-    /// offline service, which reads its file anew, and waits until it has.
+    /// Starts a suspended file engine again, in a new instance of the
+    /// file service, which reads its file anew, and waits until it has.
     /// No-op for an engine that is not suspended.
-    public func resumeOfflineEngine(_ engine: RuntimeEngine) async throws {
+    public func resumeFileEngine(_ engine: RuntimeEngine) async throws {
         try startResuming(engine)
         try await waitUntilFileIsRead(by: engine)
     }
 
     private func startResuming(_ engine: RuntimeEngine) throws {
-        guard isOfflineEngineSuspended(engine), let file = offlineFilesByEngineID[engine.engineID] else { return }
-        guard let credential = try offlineEngineCredential(file) else {
-            throw RuntimeOfflineEngineError.serviceUnavailable
+        guard isFileEngineSuspended(engine), let file = filesByEngineID[engine.engineID] else { return }
+        guard let credential = try fileEngineCredential(file) else {
+            throw RuntimeFileEngineError.serviceUnavailable
         }
-        suspendedOfflineEngineIDs.remove(engine.engineID)
+        suspendedFileEngineIDs.remove(engine.engineID)
         startReadingFile(by: engine, with: credential, isFirstRead: false)
-        #log(.info, "Resuming the offline engine \(engine.source.description, privacy: .public)")
+        #log(.info, "Resuming the file engine \(engine.source.description, privacy: .public)")
     }
 
     /// Connects `engine` to the instance `credential` starts, which reads the
@@ -2172,46 +2172,46 @@ extension RuntimeEngineManager {
     /// engine off the list — no window ever showed anything of it — and a
     /// later one suspends it.
     private func startReadingFile(by engine: RuntimeEngine, with credential: RuntimeConnectionCredential, isFirstRead: Bool) {
-        let previousOperation = lastOfflineEngineOperationsByEngineID[engine.engineID]
+        let previousOperation = lastFileEngineOperationsByEngineID[engine.engineID]
         let read = Task { @MainActor in
             await previousOperation?.value
             do {
                 try await engine.connect(credential: credential)
             } catch {
-                await self.offlineFileReadFailed(by: engine, isFirstRead: isFirstRead, error: error)
+                await self.fileReadFailed(by: engine, isFirstRead: isFirstRead, error: error)
                 throw error
             }
         }
-        offlineFileReadsByEngineID[engine.engineID] = read
-        lastOfflineEngineOperationsByEngineID[engine.engineID] = Task { _ = await read.result }
+        fileReadsByEngineID[engine.engineID] = read
+        lastFileEngineOperationsByEngineID[engine.engineID] = Task { _ = await read.result }
     }
 
-    private func offlineFileReadFailed(by engine: RuntimeEngine, isFirstRead: Bool, error: any Error) async {
-        #log(.error, "Could not read \(engine.source.description, privacy: .public) offline: \(error.localizedDescription, privacy: .public)")
+    private func fileReadFailed(by engine: RuntimeEngine, isFirstRead: Bool, error: any Error) async {
+        #log(.error, "Could not read \(engine.source.description, privacy: .public) from disk: \(error.localizedDescription, privacy: .public)")
         // Terminated while it was reading: nothing is left to undo.
-        guard offlineRuntimeEngines.contains(where: { $0 === engine }) else { return }
+        guard fileRuntimeEngines.contains(where: { $0 === engine }) else { return }
         if isFirstRead {
             // The failed read stays behind for whoever still waits on it.
-            offlineRuntimeEngines.removeAll { $0 === engine }
-            offlineFilesByEngineID.removeValue(forKey: engine.engineID)
-            suspendedOfflineEngineIDs.remove(engine.engineID)
-            lastOfflineEngineOperationsByEngineID.removeValue(forKey: engine.engineID)
+            fileRuntimeEngines.removeAll { $0 === engine }
+            filesByEngineID.removeValue(forKey: engine.engineID)
+            suspendedFileEngineIDs.remove(engine.engineID)
+            lastFileEngineOperationsByEngineID.removeValue(forKey: engine.engineID)
             rebuildSections()
         } else {
-            suspendedOfflineEngineIDs.insert(engine.engineID)
+            suspendedFileEngineIDs.insert(engine.engineID)
         }
         await engine.stop()
     }
 
     /// Runs `operation` on `engine` after whatever was started on it before.
     @discardableResult
-    private func enqueueOfflineEngineOperation(on engine: RuntimeEngine, _ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
-        let previousOperation = lastOfflineEngineOperationsByEngineID[engine.engineID]
+    private func enqueueFileEngineOperation(on engine: RuntimeEngine, _ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+        let previousOperation = lastFileEngineOperationsByEngineID[engine.engineID]
         let task = Task { @MainActor in
             await previousOperation?.value
             await operation()
         }
-        lastOfflineEngineOperationsByEngineID[engine.engineID] = task
+        lastFileEngineOperationsByEngineID[engine.engineID] = task
         return task
     }
 }

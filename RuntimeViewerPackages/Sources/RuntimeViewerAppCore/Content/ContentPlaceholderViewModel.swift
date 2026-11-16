@@ -3,7 +3,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 /// What the content pane shows while it has no object: the hint to select
-/// one — or, while the offline service is still reading the window's file,
+/// one — or, while the file service is still reading the window's file,
 /// that it is. A window opens on a file the moment the user opens it, and a
 /// dyld shared cache keeps the service busy for a while; without this the
 /// window would sit empty with no sign that anything is happening.
@@ -11,7 +11,7 @@ public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {
     public enum Placeholder: Equatable {
         /// Nothing is selected.
         case noSelection
-        /// The window's offline file is being read, named as the runtime source
+        /// The window's file is being read, named as the runtime source
         /// picker names it.
         case readingFile(named: String)
     }

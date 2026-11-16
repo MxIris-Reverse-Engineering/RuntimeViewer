@@ -6,11 +6,11 @@ import RuntimeViewerCore
 import RuntimeViewerSettings
 import UIFoundationSettingsUI
 
-/// Settings › Offline Files: the dyld shared caches that files built for
+/// Settings › Files: the dyld shared caches that files built for
 /// other platforms read what they link from.
-struct OfflineSettingsView: View {
-    @AppSettings(\.offline)
-    var offline
+struct FileSettingsView: View {
+    @AppSettings(\.file)
+    var fileSettings
 
     /// Why the cache last chosen could not be registered.
     @State private var registrationFailure: String?
@@ -18,11 +18,11 @@ struct OfflineSettingsView: View {
     var body: some View {
         SettingsForm {
             Section {
-                if offline.dependencyCaches.isEmpty {
+                if fileSettings.dependencyCaches.isEmpty {
                     Text("No dyld shared caches registered.")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(offline.dependencyCaches) { cache in
+                ForEach(fileSettings.dependencyCaches) { cache in
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(Self.platformDisplayName(cache.platformName)) \(cache.version) (\(cache.architecture))")
@@ -35,7 +35,7 @@ struct OfflineSettingsView: View {
                         }
                         Spacer()
                         Button {
-                            offline.dependencyCaches.removeAll { $0.id == cache.id }
+                            fileSettings.dependencyCaches.removeAll { $0.id == cache.id }
                         } label: {
                             Image(systemName: "minus.circle.fill")
                                 .foregroundStyle(.secondary)
@@ -76,10 +76,10 @@ struct OfflineSettingsView: View {
         guard panel.runModal() == .OK, let chosenURL = panel.url else { return }
         do {
             let summary = try RuntimeDyldSharedCacheSummary(contentsOf: chosenURL)
-            let cache = Settings.Offline.DependencyCache(summary: summary)
+            let cache = Settings.File.DependencyCache(summary: summary)
             registrationFailure = nil
-            guard !offline.dependencyCaches.contains(where: { $0.path == cache.path }) else { return }
-            offline.dependencyCaches.append(cache)
+            guard !fileSettings.dependencyCaches.contains(where: { $0.path == cache.path }) else { return }
+            fileSettings.dependencyCaches.append(cache)
         } catch {
             registrationFailure = "\(chosenURL.lastPathComponent) was not added: \(error.localizedDescription)"
         }

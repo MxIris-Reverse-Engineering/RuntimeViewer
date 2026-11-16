@@ -5,40 +5,40 @@ import Foundation
 @testable import RuntimeViewerCore
 @testable import RuntimeViewerCommunication
 
-/// An offline file read out of process, with both processes played by this
-/// one: a `RuntimeOfflineServiceHost` over an anonymous listener stands in for
-/// an instance of the offline service, and a `.file` engine connected through
+/// A file read out of process, with both processes played by this
+/// one: a `RuntimeFileServiceHost` over an anonymous listener stands in for
+/// an instance of the file service, and a `.file` engine connected through
 /// an endpoint carrying the file's launch payload stands in for the app's.
-@Suite("RuntimeOfflineServiceHost", .serialized)
-struct RuntimeOfflineServiceHostTests {
+@Suite("RuntimeFileServiceHost", .serialized)
+struct RuntimeFileServiceHostTests {
     /// Fat and tiny, so the engine reading it spends its time on the dyld
     /// shared cache it is paired with rather than on the file.
     private static let filePath = "/usr/bin/true"
 
     /// `/usr/bin/true`, paired with this Mac's dyld shared cache as the app
     /// pairs a macOS file.
-    private static func pairedFile() throws -> RuntimeOfflineFile {
-        var file = try RuntimeOfflineFile(contentsOf: URL(fileURLWithPath: filePath))
+    private static func pairedFile() throws -> RuntimeFile {
+        var file = try RuntimeFile(contentsOf: URL(fileURLWithPath: filePath))
         file.dependencyCache = .systemDyldSharedCache
         return file
     }
 
-    private static func makeHost() throws -> (host: RuntimeOfflineServiceHost, endpoint: RuntimeXPCServiceEndpoint) {
+    private static func makeHost() throws -> (host: RuntimeFileServiceHost, endpoint: RuntimeXPCServiceEndpoint) {
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
-        let host = RuntimeOfflineServiceHost(connection: listener)
+        let host = RuntimeFileServiceHost(connection: listener)
         host.activate()
         return (host, endpoint)
     }
 
-    private static func credential(for file: RuntimeOfflineFile, at endpoint: RuntimeXPCServiceEndpoint) throws -> RuntimeConnectionCredential {
-        .xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeOfflineService.launchPayload(for: file))))
+    private static func credential(for file: RuntimeFile, at endpoint: RuntimeXPCServiceEndpoint) throws -> RuntimeConnectionCredential {
+        .xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeFileService.launchPayload(for: file))))
     }
 
     @Test("A launch payload round-trips the file it names")
     func launchPayloadRoundTrips() throws {
         let file = try Self.pairedFile()
 
-        let decoded = try RuntimeOfflineService.file(fromLaunchPayload: try RuntimeOfflineService.launchPayload(for: file))
+        let decoded = try RuntimeFileService.file(fromLaunchPayload: try RuntimeFileService.launchPayload(for: file))
 
         #expect(decoded == file)
     }
@@ -47,7 +47,7 @@ struct RuntimeOfflineServiceHostTests {
     func connectingReceivesTheFilesImages() async throws {
         let file = try Self.pairedFile()
         let (host, endpoint) = try Self.makeHost()
-        let client = RuntimeEngine(source: file.source, engineID: "offline-service-test.client")
+        let client = RuntimeEngine(source: file.source, engineID: "file-service-test.client")
         defer { Task { await client.stop(); await host.stop() } }
 
         try await client.connect(credential: Self.credential(for: file, at: endpoint))
@@ -68,7 +68,7 @@ struct RuntimeOfflineServiceHostTests {
     func requestsReachTheServiceEngine() async throws {
         let file = try Self.pairedFile()
         let (host, endpoint) = try Self.makeHost()
-        let client = RuntimeEngine(source: file.source, engineID: "offline-service-test.requests")
+        let client = RuntimeEngine(source: file.source, engineID: "file-service-test.requests")
         defer { Task { await client.stop(); await host.stop() } }
         try await client.connect(credential: Self.credential(for: file, at: endpoint))
 
@@ -83,16 +83,16 @@ struct RuntimeOfflineServiceHostTests {
 
     @Test("A payload naming a file that cannot be read fails the connect, carrying the reason")
     func unreadableFileFailsTheConnect() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("RuntimeOfflineServiceHostTests-\(UUID().uuidString)")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("RuntimeFileServiceHostTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let copyURL = directory.appendingPathComponent("true")
         try FileManager.default.copyItem(at: URL(fileURLWithPath: Self.filePath), to: copyURL)
-        let file = try RuntimeOfflineFile(contentsOf: copyURL)
+        let file = try RuntimeFile(contentsOf: copyURL)
         try FileManager.default.removeItem(at: copyURL)
         let (host, endpoint) = try Self.makeHost()
         defer { Task { await host.stop() } }
-        let client = RuntimeEngine(source: file.source, engineID: "offline-service-test.unreadable")
+        let client = RuntimeEngine(source: file.source, engineID: "file-service-test.unreadable")
 
         await #expect(throws: RuntimeXPCServiceConnectionError.self) {
             try await client.connect(credential: Self.credential(for: file, at: endpoint))
@@ -104,7 +104,7 @@ struct RuntimeOfflineServiceHostTests {
     func stoppedEngineConnectsAgain() async throws {
         let file = try Self.pairedFile()
         let (host, endpoint) = try Self.makeHost()
-        let client = RuntimeEngine(source: file.source, engineID: "offline-service-test.reconnect")
+        let client = RuntimeEngine(source: file.source, engineID: "file-service-test.reconnect")
         defer { Task { await client.stop(); await host.stop() } }
         let credential = try Self.credential(for: file, at: endpoint)
         try await client.connect(credential: credential)
@@ -131,7 +131,7 @@ struct RuntimeOfflineServiceHostTests {
     @Test("A launch makes room for a whole dyld shared cache's descriptors before reading the file")
     func launchRaisesTheDescriptorLimit() async {
         await #expect(processExitsWith: .success) {
-            let isRaised = await RuntimeOfflineServiceHostTests.launchFromTheServiceDescriptorLimitRaisesIt()
+            let isRaised = await RuntimeFileServiceHostTests.launchFromTheServiceDescriptorLimitRaisesIt()
             exit(isRaised ? EXIT_SUCCESS : EXIT_FAILURE)
         }
     }
@@ -147,7 +147,7 @@ struct RuntimeOfflineServiceHostTests {
         do {
             let file = try pairedFile()
             let (host, endpoint) = try makeHost()
-            let client = RuntimeEngine(source: file.source, engineID: "offline-service-test.descriptor-limit")
+            let client = RuntimeEngine(source: file.source, engineID: "file-service-test.descriptor-limit")
             try await client.connect(credential: credential(for: file, at: endpoint))
             withExtendedLifetime(host) {}
         } catch {

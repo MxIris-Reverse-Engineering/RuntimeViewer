@@ -8,7 +8,7 @@ public struct RuntimeDyldSharedCacheSummary: Sendable, Hashable {
     public let mainFileURL: URL
 
     /// The operating system the cache belongs to, and its version.
-    public let platform: RuntimeOfflineFile.Platform?
+    public let platform: RuntimeFile.Platform?
 
     /// The architecture its magic names, such as `arm64e`.
     public let architecture: String
@@ -16,18 +16,18 @@ public struct RuntimeDyldSharedCacheSummary: Sendable, Hashable {
     public let uuid: UUID
 
     /// Reads the header of the cache at `url`, which may name the main file,
-    /// a subcache or the symbols file. Throws `RuntimeOfflineFileError` when
+    /// a subcache or the symbols file. Throws `RuntimeFileError` when
     /// it is no dyld shared cache.
     public init(contentsOf url: URL) throws {
-        let file = try RuntimeOfflineFile(contentsOf: url)
+        let file = try RuntimeFile(contentsOf: url)
         guard case .dyldSharedCache = file.content else {
-            throw RuntimeOfflineFileError.unsupportedContent(url)
+            throw RuntimeFileError.unsupportedContent(url)
         }
         let cache: DyldCache
         do {
             cache = try DyldCache(url: file.url)
         } catch {
-            throw RuntimeOfflineFileError.unreadable(file.url)
+            throw RuntimeFileError.unreadable(file.url)
         }
         self.mainFileURL = file.url
         self.platform = file.platform

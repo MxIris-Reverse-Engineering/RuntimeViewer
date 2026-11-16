@@ -75,7 +75,7 @@ struct RuntimeSourcePopoverAdapterTests {
         #expect(controller.items.dropFirst().first?.title == "JH's Mac Studio")
     }
 
-    @Test("an offline file that can be paired adds Dependency Cache below, which pushes the caches and Manage in Settings…")
+    @Test("a file that can be paired adds Dependency Cache below, which pushes the caches and Manage in Settings…")
     func dependencyCachePushesTheCaches() throws {
         var content = Self.content
         content.dependencyCacheChoices = Self.dependencyCacheChoices
@@ -101,7 +101,7 @@ struct RuntimeSourcePopoverAdapterTests {
         let adapter = Self.makeAdapter(content: content)
         var chosenSources: [String] = []
         var openFileRequests = 0
-        var chosenCaches: [RuntimeOfflineFile.DependencyCache?] = []
+        var chosenCaches: [RuntimeFile.DependencyCache?] = []
         var settingsRequests = 0
         let subscriptions = [
             adapter.sourceSelected.emitOnNext { chosenSources.append($0) },

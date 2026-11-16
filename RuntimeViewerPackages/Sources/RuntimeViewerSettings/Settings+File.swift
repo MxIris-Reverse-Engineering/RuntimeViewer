@@ -10,7 +10,7 @@ extension Settings {
     /// from a cache registered here, picked by ``defaultDependencyCache(for:)``.
     @Codable
     @MemberInit
-    public struct Offline: Sendable {
+    public struct File: Sendable {
         /// The dyld shared caches files built for other platforms are paired
         /// with, in the order they were registered.
         @Default([DependencyCache]())
@@ -27,7 +27,7 @@ extension Settings {
             /// The path of the cache's main file.
             public var path: String
 
-            /// `RuntimeOfflineFile.Platform.name`: `iOS`, `iOSSimulator`, …
+            /// `RuntimeFile.Platform.name`: `iOS`, `iOSSimulator`, …
             public var platformName: String
 
             /// The operating system version, such as `27.0`.
@@ -55,7 +55,7 @@ extension Settings {
     }
 }
 
-extension Settings.Offline {
+extension Settings.File {
     /// The dyld shared cache `file` reads what it links from, unless the user
     /// picks another.
     ///
@@ -65,7 +65,7 @@ extension Settings.Offline {
     /// older than the SDK the file was built with, or the newest when all are
     /// older. `nil` — the file alone — when no registered cache matches, the
     /// file says nothing about its platform, or it is a cache itself.
-    public func defaultDependencyCache(for file: RuntimeOfflineFile) -> RuntimeOfflineFile.DependencyCache? {
+    public func defaultDependencyCache(for file: RuntimeFile) -> RuntimeFile.DependencyCache? {
         if case .dyldSharedCache = file.content { return nil }
         guard let platform = file.platform else { return nil }
         if Self.platformNamesPairedWithThisMac.contains(platform.name) {
@@ -88,7 +88,7 @@ extension Settings.Offline {
     /// platform, or every one for a folder. A folder can hold binaries of
     /// several platforms — an `.xcframework` does — and the platform it was
     /// paired by is only its first binary's.
-    public func dependencyCaches(for file: RuntimeOfflineFile) -> [DependencyCache] {
+    public func dependencyCaches(for file: RuntimeFile) -> [DependencyCache] {
         if case .folder = file.content { return dependencyCaches }
         return dependencyCaches(forPlatformNamed: file.platform?.name ?? "")
     }
@@ -96,7 +96,7 @@ extension Settings.Offline {
     /// Whether `file` can be paired with this Mac's own dyld shared cache: a
     /// file built for macOS or Mac Catalyst, or a folder, whatever its first
     /// binary was built for.
-    public static func canPairWithThisMacsCache(_ file: RuntimeOfflineFile) -> Bool {
+    public static func canPairWithThisMacsCache(_ file: RuntimeFile) -> Bool {
         switch file.content {
         case .folder:
             true

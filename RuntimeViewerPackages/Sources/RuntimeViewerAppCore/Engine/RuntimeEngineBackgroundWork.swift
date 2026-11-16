@@ -153,9 +153,9 @@ package final class RuntimeEngineBackgroundWorkRegistry {
     var processActivityScheduler: any ProcessActivityScheduling = ProcessInfo.processInfo
 
     /// An engine's work coming into being for its first document, or closing as its last one
-    /// leaves — what lets an offline engine's process go while nobody is on it
-    /// (`RuntimeOfflineEngineParking`). A document that borrows from the engine counts too; no
-    /// document borrows from an offline engine.
+    /// leaves — what lets a file engine's process go while nobody is on it
+    /// (`RuntimeFileEngineParking`). A document that borrows from the engine counts too; no
+    /// document borrows from a file engine.
     let occupancyChanges = PassthroughSubject<RuntimeEngineOccupancyChange, Never>()
 
     fileprivate init() {}

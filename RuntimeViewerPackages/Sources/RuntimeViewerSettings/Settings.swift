@@ -40,8 +40,8 @@ public final class Settings {
     @Default(Developer.default)
     public var developer: Developer = .init()
 
-    @Default(Offline.default)
-    public var offline: Offline = .init()
+    @Default(File.default)
+    public var file: File = .init()
 
     internal init() {}
 
@@ -81,7 +81,7 @@ extension Settings: PersistentSettings {
         _ = update
         _ = theme
         _ = developer
-        _ = offline
+        _ = file
     }
 }
 #endif

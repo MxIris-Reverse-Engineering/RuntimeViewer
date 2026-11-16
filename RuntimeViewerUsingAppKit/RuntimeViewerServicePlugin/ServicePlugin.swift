@@ -22,8 +22,8 @@ protocol ServicePlugin: NSObjectProtocol {
     /// listener. Never returns; the main thread ends up in `xpc_main`.
     func runLocalService()
 
-    /// The offline XPC service the app embeds, one instance per file: serve
+    /// The file XPC service the app embeds, one instance per file: serve
     /// the file the connection's first hello names. Never returns; the main
     /// thread ends up in `xpc_main`.
-    func runOfflineService()
+    func runFileService()
 }
