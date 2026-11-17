@@ -224,11 +224,23 @@ public final class RuntimeEngineManager {
         let appName: String
     }
 
+    /// The directory under Application Support the app keeps its files in:
+    /// `RuntimeViewer-Debug` for a Debug build, as `Settings.applicationDirectoryName`
+    /// says — a module this one cannot import. A Debug app and the released one
+    /// must not share the records below: each listens again for the processes
+    /// in them at launch and drops the ones it cannot reconnect, so a shared
+    /// file let each take over or forget the other's injected processes
+    /// (CA.16 of the 2026-11-16 codebase audit).
+    #if DEBUG
+    static let applicationDirectoryName = "RuntimeViewer-Debug"
+    #else
+    static let applicationDirectoryName = "RuntimeViewer"
+    #endif
+
     static var injectedSocketEndpointsFileURL: URL {
-        let applicationSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let runtimeViewerDirectory = applicationSupportURL.appendingPathComponent("RuntimeViewer")
-        try? FileManager.default.createDirectory(at: runtimeViewerDirectory, withIntermediateDirectories: true)
-        return runtimeViewerDirectory.appendingPathComponent("injected-socket-endpoints.json")
+        URL.applicationSupportDirectory
+            .appending(path: applicationDirectoryName, directoryHint: .isDirectory)
+            .appending(path: "injected-socket-endpoints.json", directoryHint: .notDirectory)
     }
 
     private func loadInjectedSocketEndpointRecords() -> [InjectedSocketEndpointRecord] {
@@ -240,6 +252,7 @@ public final class RuntimeEngineManager {
     private func saveInjectedSocketEndpointRecords(_ records: [InjectedSocketEndpointRecord]) {
         let fileURL = Self.injectedSocketEndpointsFileURL
         guard let data = try? JSONEncoder().encode(records) else { return }
+        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: fileURL, options: [.atomic])
     }
 

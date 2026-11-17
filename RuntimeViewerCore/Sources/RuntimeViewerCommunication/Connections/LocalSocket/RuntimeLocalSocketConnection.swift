@@ -110,11 +110,23 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         stateSubject.value
     }
 
-    private var socketFD: Int32 = -1
+    /// Read by the receiving loop and the sends while any thread may stop the
+    /// connection, so it is closed only once neither is using it
+    /// (CA.17 of the 2026-11-16 codebase audit).
+    private let descriptor: RuntimeSocketDescriptor
     private let systemCalls: any RuntimeSocketSystemCalls
     private let messageChannel = RuntimeMessageChannel()
 
-    private var isStarted = false
+    private enum Lifecycle {
+        case idle
+        case started
+        case stopped
+    }
+
+    /// Changed by `start()`, by `stop()` from any thread and by the receiving
+    /// loop's own stop, so the change is made under a lock and only one of
+    /// them stops the connection.
+    private let lifecycle = Mutex(Lifecycle.idle)
 
     private let readQueue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeLocalSocketConnection.readQueue")
     private let writeQueue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeLocalSocketConnection.writeQueue")
@@ -122,7 +134,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     // MARK: - Initialization
 
     init(socketFD: Int32, systemCalls: any RuntimeSocketSystemCalls = RuntimeDarwinSocketSystemCalls()) {
-        self.socketFD = socketFD
+        self.descriptor = RuntimeSocketDescriptor(socketFD, systemCalls: systemCalls)
         self.systemCalls = systemCalls
     }
 
@@ -135,12 +147,14 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     init(host: String, port: UInt16, systemCalls: any RuntimeSocketSystemCalls = RuntimeDarwinSocketSystemCalls()) throws {
         self.systemCalls = systemCalls
         #log(.info, "Creating connection to \(host, privacy: .public):\(port, privacy: .public)")
-        try connect(toHost: host, port: port)
+        let socketFD = try Self.connect(toHost: host, port: port)
+        self.descriptor = RuntimeSocketDescriptor(socketFD, systemCalls: systemCalls)
     }
 
-    private func connect(toHost host: String, port: UInt16) throws {
+    /// A socket connected to `host`, with ``configureSocketOptions(_:)`` applied.
+    private static func connect(toHost host: String, port: UInt16) throws -> Int32 {
         errno = 0
-        socketFD = socket(AF_INET, SOCK_STREAM, 0)
+        let socketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard socketFD >= 0 else {
             throw RuntimeLocalSocketError.socketCreationFailed(errno: errno)
         }
@@ -153,7 +167,6 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         // host address would become a connection attempt rather than an error.
         guard inet_pton(AF_INET, host, &addr.sin_addr) == 1 else {
             close(socketFD)
-            socketFD = -1
             throw RuntimeLocalSocketError.invalidHostAddress(host)
         }
 
@@ -167,13 +180,13 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
 
         guard result == 0 else {
             close(socketFD)
-            socketFD = -1
             throw RuntimeLocalSocketError.connectFailed(errno: connectErrno, host: host, port: port)
         }
 
-        Self.configureSocketOptions(socketFD)
+        configureSocketOptions(socketFD)
 
         #log(.info, "Connected to \(host, privacy: .public):\(port, privacy: .public)")
+        return socketFD
     }
 
     /// Applies the options every connected socket here wants, whichever end
@@ -241,9 +254,21 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     // MARK: - Lifecycle
 
     func start() throws {
-        guard !isStarted else { return }
-        guard socketFD >= 0 else { throw RuntimeLocalSocketError.notConnected }
-        isStarted = true
+        let previousLifecycle = lifecycle.withLock { current in
+            let previousLifecycle = current
+            if previousLifecycle == .idle {
+                current = .started
+            }
+            return previousLifecycle
+        }
+        switch previousLifecycle {
+        case .idle:
+            break
+        case .started:
+            return
+        case .stopped:
+            throw RuntimeLocalSocketError.notConnected
+        }
 
         setupReceiver()
         observeIncomingMessages()
@@ -253,35 +278,35 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     }
 
     func stop() {
-        guard isStarted else { return }
-        isStarted = false
-
-        if socketFD >= 0 {
-            // shutdown() before close() to reliably unblock recv() on readQueue.
-            // close() alone has undefined behavior for blocked syscalls on another thread (BSD).
-            systemCalls.shutdown(socketFD)
-            systemCalls.close(socketFD)
-            socketFD = -1
-        }
-        messageChannel.finishReceiving()
-        stateSubject.send(.disconnected(error: nil))
-
-        #log(.info, "Connection stopped")
+        stop(reporting: nil)
     }
 
     func stop(with error: RuntimeConnectionError) {
-        guard isStarted else { return }
-        isStarted = false
+        stop(reporting: error)
+    }
 
-        if socketFD >= 0 {
-            systemCalls.shutdown(socketFD)
-            systemCalls.close(socketFD)
-            socketFD = -1
+    /// Stops the connection once, whichever thread gets here first.
+    ///
+    /// Invalidating the descriptor shuts the socket down, which wakes the
+    /// receiving loop and fails a send in progress; the descriptor is closed
+    /// when both have let go of it.
+    private func stop(reporting error: RuntimeConnectionError?) {
+        let stops = lifecycle.withLock { current in
+            guard current == .started else { return false }
+            current = .stopped
+            return true
         }
+        guard stops else { return }
+
+        descriptor.invalidate()
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: error))
 
-        #log(.info, "Connection stopped with error: \(error.localizedDescription, privacy: .public)")
+        if let error {
+            #log(.info, "Connection stopped with error: \(error.localizedDescription, privacy: .public)")
+        } else {
+            #log(.info, "Connection stopped")
+        }
     }
 
     // MARK: - Receiving
@@ -291,8 +316,13 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
             guard let self else { return }
             var buffer = [UInt8](repeating: 0, count: 65536)
 
-            while self.isStarted && self.socketFD >= 0 {
-                let bytesRead = buffer.withUnsafeMutableBytes { self.systemCalls.receive(self.socketFD, into: $0) }
+            while true {
+                // `nil` once the connection is stopped.
+                guard let received = self.descriptor.withDescriptor({ socketDescriptor in
+                    let bytesRead = buffer.withUnsafeMutableBytes { self.systemCalls.receive(socketDescriptor, into: $0) }
+                    return (bytesRead: bytesRead, errorNumber: errno)
+                }) else { break }
+                let bytesRead = received.bytesRead
 
                 if bytesRead > 0 {
                     let data = Data(buffer[0..<bytesRead])
@@ -306,7 +336,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                     }
                     break
                 } else {
-                    let recvErrno = errno
+                    let recvErrno = received.errorNumber
                     // EINTR: the syscall was interrupted by a signal (not rare in
                     // an injected process) — retry rather than tear the connection
                     // down. EAGAIN/EWOULDBLOCK: no data yet on a (non-blocking)
@@ -369,37 +399,43 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     // MARK: - Private
 
     private func sendRaw(data: Data) async throws {
-        guard socketFD >= 0 else { throw RuntimeLocalSocketError.notConnected }
+        guard !descriptor.isInvalidated else { throw RuntimeLocalSocketError.notConnected }
 
         try await withCheckedThrowingContinuation { [weak self] (continuation: CheckedContinuation<Void, Error>) in
-            guard let self, self.socketFD >= 0 else {
+            guard let self else {
                 continuation.resume(throwing: RuntimeLocalSocketError.notConnected)
                 return
             }
 
             self.writeQueue.async { [weak self] in
-                guard let self, self.socketFD >= 0 else {
+                guard let self else {
                     continuation.resume(throwing: RuntimeLocalSocketError.notConnected)
                     return
                 }
 
-                data.withUnsafeBytes { buffer in
-                    guard let baseAddress = buffer.baseAddress else {
-                        continuation.resume(throwing: RuntimeLocalSocketError.notConnected)
-                        return
-                    }
-
-                    var totalSent = 0
-                    while totalSent < data.count {
-                        let sent = self.systemCalls.send(self.socketFD, from: UnsafeRawBufferPointer(start: baseAddress.advanced(by: totalSent), count: data.count - totalSent))
-                        if sent < 0 {
-                            let sendErrno = errno
-                            continuation.resume(throwing: RuntimeLocalSocketError.sendFailed(errno: sendErrno))
-                            return
+                // The whole message is sent under one use of the descriptor, so a
+                // stop between two of its `send`s cannot close it under the next.
+                let outcome: Result<Void, RuntimeLocalSocketError>? = self.descriptor.withDescriptor { socketDescriptor in
+                    data.withUnsafeBytes { buffer in
+                        var totalSent = 0
+                        while totalSent < buffer.count {
+                            let sent = self.systemCalls.send(socketDescriptor, from: UnsafeRawBufferPointer(rebasing: buffer[totalSent...]))
+                            if sent < 0 {
+                                return .failure(.sendFailed(errno: errno))
+                            }
+                            totalSent += sent
                         }
-                        totalSent += sent
+                        return .success(())
                     }
+                }
+
+                switch outcome {
+                case nil:
+                    continuation.resume(throwing: RuntimeLocalSocketError.notConnected)
+                case .success:
                     continuation.resume()
+                case .failure(let error):
+                    continuation.resume(throwing: error)
                 }
             }
         }
