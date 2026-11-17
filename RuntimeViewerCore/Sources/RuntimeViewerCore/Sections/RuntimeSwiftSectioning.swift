@@ -1,4 +1,5 @@
 import Foundation
+import ObjCDeclarationRendering
 
 /// What the engine asks an image's Swift section.
 protocol RuntimeSwiftSectioning: Actor {
@@ -14,6 +15,11 @@ protocol RuntimeSwiftSectioning: Actor {
     /// An Objective-C object of this image as Swift imports it, printed with `options` as
     /// `interface(for:options:)` prints; `nil` when the image does not define it.
     func importedInterface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface?
+
+    /// What the header of an Objective-C class of this image says about Swift imports, as far as
+    /// the image's Swift side shows: `NS_REFINED_FOR_SWIFT` on the members MachOSwiftSection finds
+    /// refined. Empty for anything but a class, and for a class no Swift code of the image extends.
+    func objcSwiftImportNotes(for object: RuntimeObject) async throws -> ObjCSwiftImportNotes
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String]
 

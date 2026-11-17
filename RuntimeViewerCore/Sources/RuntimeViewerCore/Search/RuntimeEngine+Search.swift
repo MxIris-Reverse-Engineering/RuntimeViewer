@@ -1,4 +1,5 @@
 import Foundation
+import ObjCDeclarationRendering
 import RuntimeViewerCommunication
 
 // MARK: - Public API
@@ -330,7 +331,10 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
                 for object in family {
                     try Task.checkCancellation()
                     do {
-                        if let objectPrint = try await objcSection.corpusPrint(for: object, transformer: transformer) {
+                        // The notes the display prints a class's header with
+                        // (`RuntimeEngine.objcHeaderInterface(of:in:options:)`).
+                        let swiftImportNotes = (try? await cachedSwiftSection.objcSwiftImportNotes(for: object)) ?? ObjCSwiftImportNotes()
+                        if let objectPrint = try await objcSection.corpusPrint(for: object, transformer: transformer, swiftImportNotes: swiftImportNotes) {
                             outcomes.append(.printed(objectPrint))
                         } else {
                             outcomes.append(.empty)

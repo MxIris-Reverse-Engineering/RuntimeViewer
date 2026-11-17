@@ -1,4 +1,5 @@
 import Foundation
+import ObjCDeclarationRendering
 
 // The sections, their factories and the relationship resolvers are generic
 // over the way an image is read (`RuntimeImageReading`). `RuntimeEngine` is
@@ -16,7 +17,9 @@ protocol RuntimeObjCSectioning: Actor {
 
     func allObjects() async throws -> [RuntimeObject]
 
-    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration, marksCommentStructure: Bool) async throws -> RuntimeObjectInterface
+    /// `swiftImportNotes` are what the image's Swift side shows a class's header to say about
+    /// Swift imports (`RuntimeSwiftSectioning.objcSwiftImportNotes(for:)`); empty for anything else.
+    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration, marksCommentStructure: Bool, swiftImportNotes: ObjCSwiftImportNotes) async throws -> RuntimeObjectInterface
 
     func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress]
 
@@ -26,5 +29,7 @@ protocol RuntimeObjCSectioning: Actor {
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String]
 
-    nonisolated func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint?
+    /// `swiftImportNotes` must be the ones `interface(for:using:transformer:marksCommentStructure:swiftImportNotes:)`
+    /// is given for the object: Find highlights a result at its place in this print.
+    nonisolated func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration, swiftImportNotes: ObjCSwiftImportNotes) async throws -> RuntimeInterfaceCorpusPrint?
 }

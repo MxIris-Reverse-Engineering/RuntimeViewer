@@ -13,6 +13,7 @@ import FrameworkToolbox
 import MachOKit
 import MachODependencies
 import MachOObjCSection
+import ObjCDeclarationRendering
 import MachOSwiftSection
 import OrderedCollections
 import Semantic
@@ -96,6 +97,9 @@ actor RuntimeSwiftSection<Reading: RuntimeImageReading>: RuntimeSwiftSectioning 
     /// apart from `interfaceByObject`, whose keys are this image's Swift
     /// objects, and cleared with it when the print configuration changes.
     private var importedInterfaceByObject: [RuntimeObjectKey: RuntimeObjectInterface] = [:]
+
+    /// `objcClassNamesExtendedInSwift` once it has been read.
+    private var objcClassNamesExtendedInSwiftStorage: Set<String>?
 
     private var specializedDefinitionByObject: [RuntimeObjectKey: TypeDefinition] = [:]
 
@@ -482,6 +486,41 @@ extension RuntimeSwiftSection {
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
         return newInterface
+    }
+
+    /// What the header of this image's Objective-C class says about Swift imports, as far as the
+    /// image's Swift side shows (evolution proposal `swift-first-imported-declarations`, kept in
+    /// MachOSwiftSection): `NS_REFINED_FOR_SWIFT` on each member MachOSwiftSection finds refined —
+    /// one a Swift member named with the importer's `__` prefix implements, or a property whose
+    /// plain name a Swift property of another type has taken. The binary keeps no trace of the
+    /// macro; the Objective-C section prints it back from these. A class no Swift code of the
+    /// image extends — nearly every class — is answered from a set, without looking at it.
+    func objcSwiftImportNotes(for object: RuntimeObject) throws -> ObjCSwiftImportNotes {
+        var notes = ObjCSwiftImportNotes()
+        guard case .objc(.type(.class)) = object.kind,
+              objcClassNamesExtendedInSwift.contains(object.name),
+              let definition = indexer.upstream.objcImportedClassDefinition(named: object.name)
+        else { return notes }
+        for refinedMember in try printer.objcMembersRefinedForSwift(in: definition) {
+            switch refinedMember.member {
+            case .property(let propertyName, let isClassProperty):
+                notes[.property(name: propertyName, isClassProperty: isClassProperty)] = .init(isRefinedForSwift: true)
+            case .method(let selector, let isClassMethod):
+                notes[.method(selector: selector, isClassMethod: isClassMethod)] = .init(isRefinedForSwift: true)
+            }
+        }
+        return notes
+    }
+
+    /// The Objective-C classes this image's Swift code extends, read once: the image's
+    /// extensions do not change.
+    private var objcClassNamesExtendedInSwift: Set<String> {
+        if let objcClassNamesExtendedInSwiftStorage {
+            return objcClassNamesExtendedInSwiftStorage
+        }
+        let classNames = indexer.upstream.objcClassRuntimeNamesExtendedInSwift
+        objcClassNamesExtendedInSwiftStorage = classNames
+        return classNames
     }
 
     /// An Objective-C class, category or protocol of this image as Swift imports it — the
