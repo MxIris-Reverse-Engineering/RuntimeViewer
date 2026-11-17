@@ -134,9 +134,11 @@ Foundation 这类只为 macOS 构建或双平台的镜像由 `local` 回答，UI
 8. **`--timeout` 覆盖整条调用**，包括等 `host.lock`、拉起 host、等它应答（含它 accept 了却迟迟
    不握手的情况），`host status` / `host stop` / `host restart` 同样受它约束。它是脚本可以依赖的
    上限，不只是发送阶段的上限。
-9. **注入记录不分 Debug / Release**。helper daemon 里的 XPC 端点注册表与
-   `~/Library/Application Support/RuntimeViewer/injected-socket-endpoints.json` 都只有一份，任何配置的
-   host 启动时都会重连里面记录的进程；`detach` 会从记录里删掉它。
+9. **注入记录按 Debug / Release 分开**。沙盒进程的注入记录在
+   `~/Library/Application Support/RuntimeViewer[-Debug]/injected-socket-endpoints.json`，同一配置的 App
+   与 host 共用一份；XPC 端点注册表在 helper daemon 里，而 Debug 与 Release 连的本来就是不同的 daemon。
+   host 启动时重连记录里的进程，`detach` 会从记录里删掉它。2026-11-17 之前沙盒进程的记录不分配置，
+   Debug 与 Release 会接走、或删掉对方注入的进程（体检 CA.16）。
 10. **同一时刻只有一个进程做 Bonjour 客户端与注入者**：App 在跑就是 App，否则是独立 host。独立 host
    不广播自己、不共享引擎；只做客户端。
 

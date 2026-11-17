@@ -266,7 +266,9 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 **其它工程细节**：
 - 底层 `RuntimeLocalSocketConnection` 用裸 BSD socket + 独立 `readQueue`/`writeQueue`，`TCP_NODELAY` 关 Nagle。
 - 收包循环对 `EINTR`/`EAGAIN`/`EWOULDBLOCK` 重试（注入进程里信号频繁），对端关闭 → `.peerClosed`。
-- `stop()` 先 `shutdown(SHUT_RDWR)` 再 `close()`，可靠唤醒阻塞在另一线程的 `recv()`。
+- `stop()` 用 `shutdown(SHUT_RDWR)` 唤醒阻塞在另一线程的 `recv()` / `accept()`，但不当场 `close()`：**描述符由 `RuntimeSocketDescriptor` 持有**，收包循环、一条消息的整段发送、每次 `accept` 都在它的 `withDescriptor` 里用描述符，`close()` 推迟到最后一个进行中的调用返回之后，只做一次；作废之后不再有调用开始。在这之前 `stop()` 当场关闭，另一线程可能还拿着旧号码去 `recv` / `send`，而号码已被系统分给进程里下一个打开的文件（2026-11-16 体检 CA.17）。连接的生命周期（未启动、已启动、已停止）同样加锁，`stop()` 与收包循环转来的 `stop(with:)` 只有一个生效。
+- 服务端的 accept 循环在 `accept` 失败时不退出：只要监听描述符没被 `stop()` 作废就继续接受，`EINTR` 立即重试，其余错误（客户端在被接受前放弃的 `ECONNABORTED`、描述符耗尽的 `EMFILE` / `ENFILE`）停顿后重试，停顿从 50 毫秒倍增到 1 秒。`stop()` 让阻塞中的 `accept` 也以 `ECONNABORTED` 失败，所以分辨两者靠描述符是否作废，不靠错误码。在这之前失败一次就再也不接受连接，断线的注入进程连不回来（CA.18）。
+- 这几处系统调用经 `RuntimeSocketSystemCalls` 发出，测试用 `ScriptedSocketSystemCalls` 替换它来制造失败和时序。
 - 客户端 `RuntimeLocalSocketClientConnection` 内置**重连循环**（500ms 间隔），断线后自动重连，用自持的 private `stateSubject` 跨重连桥接状态。
 - **处理器跨底层连接保留**：底层连接会被换掉的四个类——本地 socket 的服务端与客户端、Bonjour 服务端、DirectTCP 服务端——都遵循 `RuntimeHandlerReplayingConnection`。处理器记在 `RuntimeMessageHandlerReplay` 里，每个消息名一份、同名替换（服务端引擎每次重连都会重新注册）；每个新的底层连接在开始收数据前先全部装上。Bonjour 服务端接受的连接因此改为装好处理器后才 `start()`。在这之前，Bonjour 与 DirectTCP 服务端只把处理器设在当时那个底层连接上，换了客户端后、引擎重新注册前到达的请求会得到「No handler registered」，被调用方当成旧版对端（2026-11-16 体检 CA.5）。
 

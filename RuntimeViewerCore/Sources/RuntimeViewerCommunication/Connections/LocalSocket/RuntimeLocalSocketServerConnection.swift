@@ -54,8 +54,13 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
 
     private var _underlyingConnection: RuntimeLocalSocketConnection?
 
-    private var serverSocketFD: Int32 = -1
+    /// The listening socket, once `start()` has it listening. The accept loop
+    /// blocks in it while `stop()` may come from any thread, so it is closed
+    /// only once the loop has let go of it (CA.17 of the 2026-11-16 codebase
+    /// audit).
+    private let listeningDescriptor = Mutex<RuntimeSocketDescriptor?>(nil)
     private let identifier: String
+    private let systemCalls: any RuntimeSocketSystemCalls
 
     /// The address this side binds.
     ///
@@ -94,10 +99,11 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
     /// Creates a server connection with deterministic port calculation.
     ///
     /// - Parameter identifier: Unique identifier used to compute the port.
-    init(identifier: String) {
+    init(identifier: String, systemCalls: any RuntimeSocketSystemCalls = RuntimeDarwinSocketSystemCalls()) {
         self.identifier = identifier
         self.bindAddress = RuntimeLocalSocketAddress.loopback
         self.port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
+        self.systemCalls = systemCalls
     }
 
     /// Creates a server connection on a specific port.
@@ -107,6 +113,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         self.identifier = ""
         self.bindAddress = RuntimeLocalSocketAddress.loopback
         self.port = port
+        self.systemCalls = RuntimeDarwinSocketSystemCalls()
     }
 
     /// Creates a server connection on a specific address and port.
@@ -122,6 +129,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         self.identifier = ""
         self.bindAddress = bindAddress
         self.port = port
+        self.systemCalls = RuntimeDarwinSocketSystemCalls()
     }
 
     /// Starts listening for connections.
@@ -132,7 +140,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
     func start() async throws {
         #log(.info, "Starting local socket server on \(self.bindAddress, privacy: .public):\(self.port, privacy: .public) for identifier: \(self.identifier, privacy: .public)")
         errno = 0
-        serverSocketFD = socket(AF_INET, SOCK_STREAM, 0)
+        let serverSocketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard serverSocketFD >= 0 else {
             throw RuntimeLocalSocketError.socketCreationFailed(errno: errno)
         }
@@ -147,7 +155,6 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         // malformed address into a bind on the broadcast address.
         guard inet_pton(AF_INET, bindAddress, &addr.sin_addr) == 1 else {
             close(serverSocketFD)
-            serverSocketFD = -1
             throw RuntimeLocalSocketError.invalidHostAddress(bindAddress)
         }
 
@@ -161,7 +168,6 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
 
         guard bindResult == 0 else {
             close(serverSocketFD)
-            serverSocketFD = -1
             throw RuntimeLocalSocketError.bindFailed(errno: bindErrno, host: bindAddress, port: port)
         }
 
@@ -169,11 +175,12 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         guard listen(serverSocketFD, 5) == 0 else {
             let listenErrno = errno
             close(serverSocketFD)
-            serverSocketFD = -1
             throw RuntimeLocalSocketError.listenFailed(errno: listenErrno)
         }
 
         #log(.info, "Server listening on \(self.bindAddress, privacy: .public):\(self.port, privacy: .public)")
+
+        listeningDescriptor.withLock { $0 = RuntimeSocketDescriptor(serverSocketFD, systemCalls: systemCalls) }
 
         // Start accepting connections in background (non-blocking)
         startAcceptingConnections()
@@ -181,34 +188,23 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
 
     /// Starts accepting connections asynchronously in background.
     private func startAcceptingConnections() {
+        guard let descriptor = listeningDescriptor.withLock({ $0 }), !descriptor.isInvalidated else {
+            #log(.info, "Not accepting connections: the server is not listening")
+            return
+        }
         stateSubject.send(.connecting)
         #log(.info, "Waiting for local socket client connection on port \(self.port, privacy: .public)...")
         DispatchQueue.global().async { [weak self] in
-            self?.acceptConnectionLoop()
+            self?.acceptConnectionLoop(on: descriptor)
         }
     }
 
-    /// Continuously accepts client connections.
-    private func acceptConnectionLoop() {
-        guard serverSocketFD >= 0 else {
-            #log(.error, "Accept loop aborted: server socket is invalid (fd=\(self.serverSocketFD, privacy: .public))")
-            return
-        }
-
+    /// Accepts one client connection and starts it.
+    private func acceptConnectionLoop(on descriptor: RuntimeSocketDescriptor) {
         #log(.debug, "Blocking on accept() for port \(self.port, privacy: .public)...")
 
-        var clientAddr = sockaddr_in()
-        var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-
-        let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                accept(serverSocketFD, sockaddrPtr, &clientAddrLen)
-            }
-        }
-
-        guard clientFD >= 0 else {
-            let acceptErrno = errno
-            #log(.info, "Accept returned -1 (errno=\(acceptErrno, privacy: .public)), server likely stopped")
+        guard let clientFD = acceptClient(on: descriptor) else {
+            #log(.info, "Accept loop ended: the server stopped")
             return
         }
 
@@ -218,7 +214,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         // in fact: on a device injection this is the end that outlives the peer.
         RuntimeLocalSocketConnection.configureSocketOptions(clientFD)
 
-        let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD)
+        let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD, systemCalls: systemCalls)
         self._underlyingConnection = socketConnection
 
         // Apply all pending message handlers to the new connection
@@ -254,6 +250,47 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         }
     }
 
+    /// The next client's socket; `nil` once the server is stopped.
+    ///
+    /// A failed `accept` does not end the loop by itself (CA.18 of the
+    /// 2026-11-16 codebase audit). It fails with the socket still listening
+    /// when a signal interrupts it (`EINTR`), when a client gives up before it
+    /// is accepted (`ECONNABORTED`) and when the process is out of descriptors
+    /// (`EMFILE`, `ENFILE`); returning then would leave a server that listens
+    /// on and never takes a client again. Only ``stop()`` ends the loop: it
+    /// shuts the socket down, which fails the `accept` blocked in it — with
+    /// `ECONNABORTED`, so it is the descriptor being invalidated, not the
+    /// error, that tells the two apart. `EINTR` is retried at once; any other
+    /// error after a pause that doubles up to a second, so one that lasts does
+    /// not spin.
+    private func acceptClient(on descriptor: RuntimeSocketDescriptor) -> Int32? {
+        var retryDelay = Self.initialAcceptRetryDelay
+        while true {
+            guard let accepted = descriptor.withDescriptor({ socketDescriptor in
+                let clientFD = systemCalls.accept(socketDescriptor)
+                return (clientFD: clientFD, errorNumber: errno)
+            }) else { return nil }
+
+            if accepted.clientFD >= 0 {
+                guard !descriptor.isInvalidated else {
+                    close(accepted.clientFD)
+                    return nil
+                }
+                return accepted.clientFD
+            }
+            guard !descriptor.isInvalidated else { return nil }
+            if accepted.errorNumber == EINTR {
+                continue
+            }
+            #log(.error, "accept() failed (errno=\(accepted.errorNumber, privacy: .public)), accepting again in \(retryDelay, privacy: .public)s")
+            Thread.sleep(forTimeInterval: retryDelay)
+            retryDelay = min(retryDelay * 2, Self.maximumAcceptRetryDelay)
+        }
+    }
+
+    private static let initialAcceptRetryDelay: TimeInterval = 0.05
+    private static let maximumAcceptRetryDelay: TimeInterval = 1
+
     /// Stops the server and cleans up resources.
     func stop() {
         #log(.info, "Stopping local socket server on port \(self.port, privacy: .public)")
@@ -262,12 +299,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
             current = nil
         }
         _underlyingConnection?.stop()
-        if serverSocketFD >= 0 {
-            // shutdown() before close() to unblock accept() on the background accept loop.
-            shutdown(serverSocketFD, SHUT_RDWR)
-            close(serverSocketFD)
-            serverSocketFD = -1
-        }
+        // Shuts the socket down, which fails the `accept` the loop is blocked
+        // in; the socket is closed once the loop has let go of it.
+        listeningDescriptor.withLock { $0 }?.invalidate()
         stateSubject.send(.disconnected(error: nil))
     }
 

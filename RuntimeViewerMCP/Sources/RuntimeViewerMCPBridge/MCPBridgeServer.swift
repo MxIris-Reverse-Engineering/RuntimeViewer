@@ -59,7 +59,6 @@ private enum ObjectLoadResult<T> {
 @MCPServer(name: "RuntimeViewer", toolNaming: .pascalCase)
 public actor MCPBridgeServer {
     private let documentProvider: MCPBridgeDocumentProvider
-    private var objectsLoadedPaths: Set<String> = []
 
     public init(documentProvider: MCPBridgeDocumentProvider) {
         self.documentProvider = documentProvider
@@ -440,18 +439,17 @@ public actor MCPBridgeServer {
                 throw MCPBridgeError.operationFailed("Failed to load image: \(error.localizedDescription)")
             }
         }
-        var didLoadObjects = false
-        if loadObjects && !objectsLoadedPaths.contains(imagePath) {
+        var objectsLoaded = await Self.areObjectsLoaded(in: imagePath, on: engine)
+        if loadObjects && !objectsLoaded {
             do {
                 _ = try await engine.objects(in: imagePath)
-                objectsLoadedPaths.insert(imagePath)
-                didLoadObjects = true
+                objectsLoaded = true
             } catch {
                 #log(.error,"Failed to load objects from \(imagePath): \(error)")
                 throw MCPBridgeError.operationFailed("Image loaded but failed to load objects: \(error.localizedDescription)")
             }
         }
-        return MCPLoadImageResponse(imagePath: imagePath, alreadyLoaded: imageAlreadyLoaded, objectsLoaded: didLoadObjects || objectsLoadedPaths.contains(imagePath), error: nil)
+        return MCPLoadImageResponse(imagePath: imagePath, alreadyLoaded: imageAlreadyLoaded, objectsLoaded: objectsLoaded, error: nil)
     }
 
     /// Checks whether an image has been loaded and parsed by RuntimeViewer.
@@ -475,14 +473,10 @@ public actor MCPBridgeServer {
     func loadObjects(windowIdentifier: String, imagePath: String) async throws -> MCPLoadObjectsResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
-        if objectsLoadedPaths.contains(imagePath) {
-            let objects = try await engine.objects(in: imagePath)
-            return MCPLoadObjectsResponse(imagePath: imagePath, alreadyLoaded: true, objectCount: objects.count, error: nil)
-        }
+        let alreadyLoaded = await Self.areObjectsLoaded(in: imagePath, on: engine)
         do {
             let objects = try await engine.objects(in: imagePath)
-            objectsLoadedPaths.insert(imagePath)
-            return MCPLoadObjectsResponse(imagePath: imagePath, alreadyLoaded: false, objectCount: objects.count, error: nil)
+            return MCPLoadObjectsResponse(imagePath: imagePath, alreadyLoaded: alreadyLoaded, objectCount: objects.count, error: nil)
         } catch {
             #log(.error,"Failed to load objects from \(imagePath): \(error)")
             throw MCPBridgeError.operationFailed("Failed to load objects: \(error.localizedDescription)")
@@ -495,7 +489,20 @@ public actor MCPBridgeServer {
     /// - Parameter imagePath: Full file system path of the image to check
     @MCPTool(hints: [.readOnly])
     func isObjectsLoaded(windowIdentifier: String, imagePath: String) async throws -> MCPIsObjectsLoadedResponse {
-        MCPIsObjectsLoadedResponse(imagePath: imagePath, isLoaded: objectsLoadedPaths.contains(imagePath))
+        let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
+        return MCPIsObjectsLoadedResponse(imagePath: imagePath, isLoaded: await Self.areObjectsLoaded(in: imagePath, on: context.runtimeEngine))
+    }
+
+    /// Whether `engine` has the image's objects already — loaded through this
+    /// bridge, the app's sidebar or background indexing alike.
+    ///
+    /// The engine is asked, never a record kept here: windows can be on
+    /// different engines, and one remembered list of paths made every window
+    /// report an image loaded once any had loaded it (CA.14 of the
+    /// 2026-11-16 codebase audit). An engine that cannot answer counts as not
+    /// loaded, which only costs a load that was not needed.
+    private static func areObjectsLoaded(in imagePath: String, on engine: RuntimeEngine) async -> Bool {
+        (try? await engine.isImageIndexed(path: imagePath)) ?? false
     }
 
     // MARK: - Private Helpers
