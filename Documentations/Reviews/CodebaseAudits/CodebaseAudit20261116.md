@@ -126,9 +126,20 @@
   - `ContentImageViewModelTests:73`、Call Hierarchy、Report 共享、语料 activity 在基线 `0a0003b8` 上同样失败；
   - 只在本分支出现过的 `ContentImageViewModelTests:35` 与 `ContentTextPipelineTests:122`，单独连跑 3 次全过，属于整包并发时的超时。
 
+### 第三批的验证
+
+在 `JHs-MacBook-Pro`（macOS 27.2、Xcode 27.2）上验证。当天 Ultra 连不上 GitHub（SSH 与 HTTPS 都被断开），拉不到分支，所以改用 MacBook。
+
+- **先红**：`8b79df58` 上四组新测试都失败，CA.18 的三种错误码各失败一次；CA.14 的第二条测试修复前就通过，已在修复提交里删去。
+- **修复后**：`8ce48247` 上 `RuntimeViewerCommunicationTests` 250 条、`RuntimeViewerMCPBridgeTests` 96 条全部通过。
+- **引擎管理整包**：只有 `InjectedDeviceEngineTests` 的两条失败（即 CA.30）。这个套件单独连跑 3 次全部通过；基线 `93edffb3` 在同一台机器上整包一起跑，失败的也是这两条。
+- **没有编 App**：改动的都是包内部的类型，公开接口没变。
+
 ## 其余逻辑问题（按严重程度）
 
-用户挑了 CA.7、CA.8、CA.11、CA.12、CA.19 作为第二批：四条已修（先红的测试在 `4502c029`，修复在 `bc112d20`），CA.11 的修复验证无效，已撤回、记为暂不修；其余未修。CA.7 与 CA.8 的代码在 App target，那里没有测试 target，经用户同意只验证编译。
+用户挑了 CA.7、CA.8、CA.11、CA.12、CA.19 作为第二批：四条已修（先红的测试在 `4502c029`，修复在 `bc112d20`），CA.11 的修复验证无效，已撤回、记为暂不修。CA.7 与 CA.8 的代码在 App target，那里没有测试 target，经用户同意只验证编译。
+
+第三批由用户在 2026-11-17 选定 CA.14、CA.16、CA.17、CA.18、CA.28：四条已修（先红的测试在 `8b79df58`，修复在 `8ce48247`），CA.28 复核为误报；四问与修法见表后的「第三批」。其余未修。
 
 | 编号 | 问题 | 位置 | 判定 | 备注 |
 |------|------|------|------|------|
@@ -139,11 +150,11 @@
 | CA.11 | 对象列表的加载流取消后，后台仍读完整个镜像 | `SidebarRuntimeObjectListViewModel.swift:257`、`RuntimeEngine.objectsWithProgress` | 读代码确认 | 即 KnownIssues M6.1 / M6.6，记录过但未修；**暂不修**（用户决定）：在流结束时取消生产任务没有用——转发出去的 `ObjectsInImageCommand` 没有声明 `cancelsAcrossConnections`，为了兼容不认识 `cancelRequest` 的旧版对端，撤不回。要修得让这条命令只对认识 `cancelRequest` 的对端可撤回。复现测试 `RuntimeObjectsStreamCancellationTests` 以已知问题保留；登记为 KnownIssues 的 CA.11 |
 | CA.12 | 主题编辑器关闭前 150 毫秒内的最后一次修改会丢失 | `ThemeSettingsView.swift:328` | 读代码确认 | KnownIssues TS.1 修过，代码又改回去了；**已修**（`bc112d20`）：测试 `DraftWriteBackTests` |
 | CA.13 | Helper 状态每刷新一次，两个客户端各重连一次 | `RuntimeHelperClient.swift:47`、`RuntimeInjectClient.swift:55` | 读代码确认 | |
-| CA.14 | MCP 只按镜像路径记录「已加载」，不分引擎 | `MCPBridgeServer.swift:62` | 读代码确认 | |
+| CA.14 | MCP 只按镜像路径记录「已加载」，不分引擎 | `MCPBridgeServer.swift:62` | 测试复现 | **已修**（`8ce48247`）：改问窗口的引擎；实际影响只在两个状态字段，见「第三批」 |
 | CA.15 | MCP 的 `memberAddresses` 把成员地址查询的错误报成「加载失败」 | `MCPBridgeServer.swift:398` | 读代码确认 | |
-| CA.16 | 注入 socket 的记录文件不分 Debug 与 Release | `RuntimeEngineManager.swift:227` | 读代码确认 | MCP 端口文件的同类问题已在本批修好 |
-| CA.17 | 本地 socket 连接的描述符在三个队列间读写无同步，关闭后可能写进被复用的描述符 | `RuntimeLocalSocketConnection.swift:252` | 疑似 | |
-| CA.18 | 本地 socket 服务端 `accept` 失败一次就永久停止监听 | `RuntimeLocalSocketServerConnection.swift` 接受循环 | 疑似 | |
+| CA.16 | 注入 socket 的记录文件不分 Debug 与 Release | `RuntimeEngineManager.swift:227` | 测试复现 | MCP 端口文件的同类问题已在第一批修好；**已修**（`8ce48247`） |
+| CA.17 | 本地 socket 连接的描述符在三个队列间读写无同步，关闭后可能写进被复用的描述符 | `RuntimeLocalSocketConnection.swift:252` | 测试复现 | **已修**（`8ce48247`）；服务端的监听描述符同类，一并修 |
+| CA.18 | 本地 socket 服务端 `accept` 失败一次就永久停止监听 | `RuntimeLocalSocketServerConnection.swift` 接受循环 | 测试复现 | **已修**（`8ce48247`） |
 | CA.19 | 对端在预检期间断开，仍会建出没人清理的镜像 | `RuntimeEngineManager.swift:518` | 读代码确认 | 即 KnownIssues UR.5，未修；**已修**（`bc112d20`）：测试 `BonjourEngineListDiscoveryTests` |
 | CA.20 | 导出配置页出错后，转圈一直不消失 | `ExportingConfigurationViewModel.swift:50` | 读代码确认 | |
 | CA.21 | 代理启动失败时，可能把同名的新代理从表里移除 | `RuntimeEngineManager.swift:1775` | 疑似 | |
@@ -153,9 +164,48 @@
 | CA.25 | XPC service 客户端的 `.connected` 可能盖掉 `.disconnected`，几秒后自愈 | `RuntimeXPCServiceClientConnection.swift:255` | 疑似 | |
 | CA.26 | 命令行 host 接管时可能输给客户端拉起的独立 host，App 不再重试 | `CommandLineHostServer.swift:379`、`CommandLineHostController.swift:57` | 疑似 | |
 | CA.27 | 连接落在 host 闲置退出的时间窗里，不可重试的命令直接失败 | `CommandLineHostServer.swift:199`、`CommandRunner.swift:71` | 读代码确认 | 与已裁决的 PR112.6 不是同一个时间窗 |
-| CA.28 | 跨引用导航用的是没合并的生成选项 | `FindViewModel.swift:419`、`InspectorReferencesViewModel.swift:328` | 疑似 | |
+| CA.28 | 跨引用导航用的是没合并的生成选项 | `FindViewModel.swift:419`、`InspectorReferencesViewModel.swift:328` | 误报 | 第三批复核，理由见「第三批」 |
 | CA.29 | 文件模式的目录只能查类，查不了协议 | `RuntimeFileImageCatalog.swift:252` | 疑似 | |
 | CA.30 | `InjectedDeviceEngineTests` 的两条在整个引擎管理测试包一起跑时必失败，单独跑通过 | `InjectedDeviceEngineTests.swift:314`、`:386` | 基线上同样复现 | 测试之间互相干扰，原因未查；可能是 `RuntimeUnusedPort.find()` 给出的端口在绑定前被同包里别的测试占走 |
+
+### 第三批：CA.14、CA.16、CA.17、CA.18
+
+先红的测试在 `8b79df58`，修复在 `8ce48247`。
+
+**CA.14 MCP 只按镜像路径记录「已加载」**
+
+- **能复现吗**: 能。两个窗口各在一个引擎上，第一个窗口加载 libobjc 的对象后，第二个窗口的 `isObjectsLoaded` 也报已加载（`MCPObjectsLoadedPerEngineTests`）。影响比上表原先写的小：查询工具本来就按需枚举对象，`loadImage` 也会在自己的引擎上建索引，错的只是 `isObjectsLoaded` 与 `loadObjects` 的 `alreadyLoaded`。为「`loadImage` 跳过枚举」写的第二条测试修复前就通过，已删
+- **新的还是旧的**: `7f6f0039`（2026-03-08）起就这样，main 上也有
+- **值不值得修**: 修。改动小，LLM 客户端按这两个字段决定下一步
+- **以前修过吗**: 没有
+- **修法**: 不再自己记，改问窗口的引擎 `isImageIndexed(path:)`；侧栏或后台索引加载过的也算已加载
+
+**CA.16 注入 socket 的记录文件不分 Debug 与 Release**
+
+- **能复现吗**: 能。Debug 构建下记录文件在 `RuntimeViewer/` 而不是 `RuntimeViewer-Debug/`（`InjectedSocketEndpointRecordLocationTests`）。两个 App 启动时都按这份记录重新监听已注入的进程，先到的接走对方注入的进程，连不上的记录被删掉——删的正是对方的。没有在两个 App 上实测
+- **新的还是旧的**: 记录始于 `3210a2d2`（2026-03-31），早于设置目录按 Debug 分开（`6f921828`，2026-08-14），main 上也有
+- **值不值得修**: 修。只影响同时装着 Debug 与 Release 的开发机，但改动只是一个路径
+- **以前修过吗**: 没有。CLI 指南（`e4d4b652`）把「注入记录不分 Debug / Release」当现状记了下来，没有给出必须共用的理由；Debug 与 Release 连的本来就是不同的 helper daemon，XPC 那一侧早已分开。指南已随修复改写
+- **修法**: 记录放进按 Debug 区分的应用目录；取路径不再顺手建目录，写入时才建
+
+**CA.17 本地 socket 的描述符关闭后还可能被另一线程使用**
+
+- **能复现吗**: 能（`RuntimeLocalSocketDescriptorLifetimeTests`）。用替换的系统调用把 `stop()` 卡在 `close` 之后、忘掉描述符号之前，同一条消息的下一次 `send` 就落在已关闭的描述符上。真实环境里这个窗口很窄；一旦撞上，协议数据会写进进程里刚打开的另一个文件，或从它那里读走数据
+- **新的还是旧的**: `stop()` 当场关闭一直如此（先 `shutdown` 再 `close` 始于 `00b4f2d2`，2026-04-17），main 上也有
+- **值不值得修**: 修。触发概率低，但后果是静默的数据损坏，而且发生在被注入的进程里
+- **以前修过吗**: `00b4f2d2` 加 `shutdown()` 解决的是另一线程阻塞的 `recv()` 唤不醒，没有处理关闭后号码被复用
+- **修法**: `RuntimeSocketDescriptor` 持有描述符：作废只 `shutdown`，最后一个进行中的调用返回后才关闭、只关一次，作废后不再有调用开始；一条消息的整段发送在一次使用里完成；连接的生命周期加锁，`stop()` 与收包循环转来的 `stop(with:)` 只有一个生效
+- **同类实例**: 服务端的监听描述符（接受循环阻塞在它上面，`stop()` 从别的线程关它），一并改用它。DirectTCP 与 Bonjour 用 `NWConnection`，不直接持有描述符；`RuntimeStdio*` 是死代码
+
+**CA.18 本地 socket 服务端 `accept` 失败一次就永久停止**
+
+- **能复现吗**: 能，`ECONNABORTED`、`EINTR`、`EMFILE` 三种都复现（`RuntimeLocalSocketAcceptRetryTests`）。XNU 的 `accept` 在被不带 `SA_RESTART` 的信号处理器打断、客户端在被接受前断开、描述符耗尽时都会失败，而套接字仍在监听
+- **新的还是旧的**: 接受循环一直如此（日志措辞来自 `2cd10e27`，2026-03-03），main 上也有
+- **值不值得修**: 修。服务端在 App 里，失败之后断线的沙盒注入进程再也连不回来，只能重新 attach
+- **以前修过吗**: 没有。收包循环早就对 `EINTR` 重试，接受循环没有跟上
+- **修法**: 只有服务端被停止才结束循环，靠监听描述符是否作废判断——`stop()` 让阻塞的 `accept` 同样以 `ECONNABORTED` 失败，错误码分不开两者；`EINTR` 立即重试，其余错误停顿后重试，停顿从 50 毫秒倍增到 1 秒。另加一条测试守住「停止后循环确实结束」
+
+**CA.28 复核为误报**: 引擎端的成员搜索只读选项里的 ObjC 头文件与 Swift 接口两组开关（`RuntimeInterfaceVisibility`），合并后的选项只在 transformer 与两个标记位上不同于 `appDefaults.options`，用哪一套搜出的结果都一样；Find 自己的搜索也用 `appDefaults.options`，跳转与搜索一致。也不违反根 `AGENTS.md` 第 7 条：那条管的是取单个对象的接口，这里是搜索。
 
 ## 规则
 
