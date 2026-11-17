@@ -111,6 +111,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     }
 
     private var socketFD: Int32 = -1
+    private let systemCalls: any RuntimeSocketSystemCalls
     private let messageChannel = RuntimeMessageChannel()
 
     private var isStarted = false
@@ -120,8 +121,9 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
 
     // MARK: - Initialization
 
-    init(socketFD: Int32) {
+    init(socketFD: Int32, systemCalls: any RuntimeSocketSystemCalls = RuntimeDarwinSocketSystemCalls()) {
         self.socketFD = socketFD
+        self.systemCalls = systemCalls
     }
 
     /// Connects to a host's listening socket.
@@ -130,7 +132,8 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     ///   for the localhost case this class was written for; a host's address on
     ///   the network for the injected-payload case, which is the same inversion
     ///   over a route that leaves the machine.
-    init(host: String, port: UInt16) throws {
+    init(host: String, port: UInt16, systemCalls: any RuntimeSocketSystemCalls = RuntimeDarwinSocketSystemCalls()) throws {
+        self.systemCalls = systemCalls
         #log(.info, "Creating connection to \(host, privacy: .public):\(port, privacy: .public)")
         try connect(toHost: host, port: port)
     }
@@ -256,8 +259,8 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         if socketFD >= 0 {
             // shutdown() before close() to reliably unblock recv() on readQueue.
             // close() alone has undefined behavior for blocked syscalls on another thread (BSD).
-            shutdown(socketFD, SHUT_RDWR)
-            close(socketFD)
+            systemCalls.shutdown(socketFD)
+            systemCalls.close(socketFD)
             socketFD = -1
         }
         messageChannel.finishReceiving()
@@ -271,8 +274,8 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         isStarted = false
 
         if socketFD >= 0 {
-            shutdown(socketFD, SHUT_RDWR)
-            close(socketFD)
+            systemCalls.shutdown(socketFD)
+            systemCalls.close(socketFD)
             socketFD = -1
         }
         messageChannel.finishReceiving()
@@ -289,7 +292,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
             var buffer = [UInt8](repeating: 0, count: 65536)
 
             while self.isStarted && self.socketFD >= 0 {
-                let bytesRead = recv(self.socketFD, &buffer, buffer.count, 0)
+                let bytesRead = buffer.withUnsafeMutableBytes { self.systemCalls.receive(self.socketFD, into: $0) }
 
                 if bytesRead > 0 {
                     let data = Data(buffer[0..<bytesRead])
@@ -388,7 +391,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
 
                     var totalSent = 0
                     while totalSent < data.count {
-                        let sent = Darwin.send(self.socketFD, baseAddress.advanced(by: totalSent), data.count - totalSent, 0)
+                        let sent = self.systemCalls.send(self.socketFD, from: UnsafeRawBufferPointer(start: baseAddress.advanced(by: totalSent), count: data.count - totalSent))
                         if sent < 0 {
                             let sendErrno = errno
                             continuation.resume(throwing: RuntimeLocalSocketError.sendFailed(errno: sendErrno))

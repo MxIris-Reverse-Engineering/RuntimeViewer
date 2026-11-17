@@ -224,7 +224,7 @@ public final class RuntimeEngineManager {
         let appName: String
     }
 
-    private static var injectedSocketEndpointsFileURL: URL {
+    static var injectedSocketEndpointsFileURL: URL {
         let applicationSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let runtimeViewerDirectory = applicationSupportURL.appendingPathComponent("RuntimeViewer")
         try? FileManager.default.createDirectory(at: runtimeViewerDirectory, withIntermediateDirectories: true)

@@ -56,6 +56,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
 
     private var serverSocketFD: Int32 = -1
     private let identifier: String
+    private let systemCalls: any RuntimeSocketSystemCalls
 
     /// The address this side binds.
     ///
@@ -94,10 +95,11 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
     /// Creates a server connection with deterministic port calculation.
     ///
     /// - Parameter identifier: Unique identifier used to compute the port.
-    init(identifier: String) {
+    init(identifier: String, systemCalls: any RuntimeSocketSystemCalls = RuntimeDarwinSocketSystemCalls()) {
         self.identifier = identifier
         self.bindAddress = RuntimeLocalSocketAddress.loopback
         self.port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
+        self.systemCalls = systemCalls
     }
 
     /// Creates a server connection on a specific port.
@@ -107,6 +109,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         self.identifier = ""
         self.bindAddress = RuntimeLocalSocketAddress.loopback
         self.port = port
+        self.systemCalls = RuntimeDarwinSocketSystemCalls()
     }
 
     /// Creates a server connection on a specific address and port.
@@ -122,6 +125,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         self.identifier = ""
         self.bindAddress = bindAddress
         self.port = port
+        self.systemCalls = RuntimeDarwinSocketSystemCalls()
     }
 
     /// Starts listening for connections.
@@ -197,14 +201,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
 
         #log(.debug, "Blocking on accept() for port \(self.port, privacy: .public)...")
 
-        var clientAddr = sockaddr_in()
-        var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-
-        let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                accept(serverSocketFD, sockaddrPtr, &clientAddrLen)
-            }
-        }
+        let clientFD = systemCalls.accept(serverSocketFD)
 
         guard clientFD >= 0 else {
             let acceptErrno = errno
@@ -218,7 +215,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         // in fact: on a device injection this is the end that outlives the peer.
         RuntimeLocalSocketConnection.configureSocketOptions(clientFD)
 
-        let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD)
+        let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD, systemCalls: systemCalls)
         self._underlyingConnection = socketConnection
 
         // Apply all pending message handlers to the new connection
@@ -264,8 +261,8 @@ final class RuntimeLocalSocketServerConnection: RuntimeHandlerReplayingConnectio
         _underlyingConnection?.stop()
         if serverSocketFD >= 0 {
             // shutdown() before close() to unblock accept() on the background accept loop.
-            shutdown(serverSocketFD, SHUT_RDWR)
-            close(serverSocketFD)
+            systemCalls.shutdown(serverSocketFD)
+            systemCalls.close(serverSocketFD)
             serverSocketFD = -1
         }
         stateSubject.send(.disconnected(error: nil))
