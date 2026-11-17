@@ -1,4 +1,5 @@
 import Foundation
+import ObjCDeclarationRendering
 import ObjCDump
 import Semantic
 
@@ -15,8 +16,12 @@ extension RuntimeObjCSection {
     /// section never changes, so a corpus build never holds the section while
     /// the content pane asks it for an interface, and prints of one image can
     /// overlap.
-    nonisolated func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
-        guard let markedInterface = markedInterface(for: object, transformer: transformer.objc) else {
+    ///
+    /// `swiftImportNotes` are the ones the display passes for the object
+    /// (`RuntimeEngine.objcSwiftImportNotes(for:)`): Find highlights a result
+    /// at its place in this print, so the two must read alike.
+    nonisolated func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration, swiftImportNotes: ObjCSwiftImportNotes = ObjCSwiftImportNotes()) async throws -> RuntimeInterfaceCorpusPrint? {
+        guard let markedInterface = markedInterface(for: object, transformer: transformer.objc, swiftImportNotes: swiftImportNotes) else {
             throw Error.invalidRuntimeObject
         }
         let separated = markedInterface.frozen().separatingVisibilityRegions()

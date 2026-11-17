@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import MachOObjCSection
+import ObjCDeclarationRendering
 import ObjCDump
 import ObjCTypeDecodeKit
 import OrderedCollections
@@ -137,7 +138,12 @@ actor RuntimeObjCSection<Reading: RuntimeImageReading>: RuntimeObjCSectioning {
     /// With `marksCommentStructure` on, the builder also marks what each
     /// comment is, and the interface carries the structure separated from
     /// the print; the text is the same either way.
-    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration, marksCommentStructure: Bool) async throws -> RuntimeObjectInterface {
+    ///
+    /// `swiftImportNotes` are what the image's Swift side shows a class's
+    /// header to say about Swift imports — `NS_REFINED_FOR_SWIFT` on a member
+    /// Swift knows by another name (`RuntimeSwiftSection.objcSwiftImportNotes(forClassNamed:)`).
+    /// The engine supplies them; they apply to a class only.
+    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration, marksCommentStructure: Bool, swiftImportNotes: ObjCSwiftImportNotes = ObjCSwiftImportNotes()) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
 
@@ -158,7 +164,8 @@ actor RuntimeObjCSection<Reading: RuntimeImageReading>: RuntimeObjCSectioning {
                 named: name.name,
                 options: options,
                 cTypeReplacements: cTypeReplacements,
-                ivarOffsetCommentBuilder: ivarOffsetCommentBuilder
+                ivarOffsetCommentBuilder: ivarOffsetCommentBuilder,
+                swiftImportNotes: swiftImportNotes
             )
         case .objc(.type(.protocol)):
             interfaceString = builder.protocolInterface(
@@ -209,14 +216,15 @@ actor RuntimeObjCSection<Reading: RuntimeImageReading>: RuntimeObjCSectioning {
     /// `corpusPrint(for:transformer:)`). Projected with some options, it reads
     /// as `interface(for:using:transformer:)` with them. C structs and unions
     /// have nothing to mark and print as usual. `nil` for an object this image
-    /// does not have.
-    nonisolated func markedInterface(for object: RuntimeObject, transformer: Transformer.ObjCConfiguration) -> SemanticString? {
+    /// does not have. `swiftImportNotes` must be the ones the display passes,
+    /// or the projection would not read as what it shows.
+    nonisolated func markedInterface(for object: RuntimeObject, transformer: Transformer.ObjCConfiguration, swiftImportNotes: ObjCSwiftImportNotes = ObjCSwiftImportNotes()) -> SemanticString? {
         let name = object.withImagePath(imagePath)
         let builder = ObjCInterfaceBuilder(indexer: objcIndexer.upstream, machO: machO)
         let (cTypeReplacements, ivarOffsetCommentBuilder) = Self.builderInputs(for: transformer)
         switch name.kind {
         case .objc(.type(.class)):
-            return builder.markedClassInterface(named: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder)
+            return builder.markedClassInterface(named: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder, swiftImportNotes: swiftImportNotes)
         case .objc(.type(.protocol)):
             return builder.markedProtocolInterface(named: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder)
         case .objc(.category(.class)):

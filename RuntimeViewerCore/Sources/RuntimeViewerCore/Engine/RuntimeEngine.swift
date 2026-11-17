@@ -5,6 +5,7 @@ public import Foundation
 public import Combine
 public import RuntimeViewerCommunication
 import Demangling
+import ObjCDeclarationRendering
 import OrderedCollections
 
 // public import Version
@@ -863,21 +864,20 @@ public actor RuntimeEngine {
             if options.interfaceLanguage == .swift {
                 return try await importedSwiftInterface(for: name, options: options, resolvesReferencesAcrossImages: resolvesReferencesAcrossImages)
             }
-            let objcSection = await objcSectionFactory.existingSection(for: name.imagePath)
-            let objcTransformer = options.transformer.objc
-            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure) {
+            if let objcSection = await objcSectionFactory.existingSection(for: name.imagePath),
+               let interface = try? await objcHeaderInterface(of: name, in: objcSection, options: options) {
                 return interface
             } else if !resolvesReferencesAcrossImages {
                 rawInterface = nil
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
-                    switch kind {
-                    case .class:
-                        return try? await objcSectionFactory.section(for: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
-                    case .protocol:
-                        return try? await objcSectionFactory.section(for: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
+                    let definingSection: (any RuntimeObjCSectioning)? = switch kind {
+                    case .class: try? await objcSectionFactory.section(for: .class(name.name))
+                    case .protocol: try? await objcSectionFactory.section(for: .protocol(name.name))
                     }
+                    guard let definingSection else { return nil }
+                    return try? await objcHeaderInterface(of: name, in: definingSection, options: options)
                 default:
                     rawInterface = nil
                 }
@@ -885,6 +885,20 @@ public actor RuntimeEngine {
         }
 
         return rawInterface
+    }
+
+    /// The Objective-C header of `object` as `objcSection` prints it, with what the Swift side of
+    /// the section's image shows a class's header to say about Swift imports: `NS_REFINED_FOR_SWIFT`
+    /// on a member Swift knows by another name (MachOSwiftSection's evolution proposal
+    /// `swift-first-imported-declarations`). A header without the macro is still the header, so a
+    /// failure to read them prints it without. The Find corpus prints a class with the same notes
+    /// (`InterfaceCorpusPrinting`), which it must for its highlights to land.
+    private func objcHeaderInterface(of object: RuntimeObject, in objcSection: any RuntimeObjCSectioning, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface {
+        var swiftImportNotes = ObjCSwiftImportNotes()
+        if case .objc(.type(.class)) = object.kind, let swiftSection = await swiftSectionFactory.existingSection(for: objcSection.imagePath) {
+            swiftImportNotes = (try? await swiftSection.objcSwiftImportNotes(for: object)) ?? ObjCSwiftImportNotes()
+        }
+        return try await objcSection.interface(for: object, using: options.objcHeaderOptions, transformer: options.transformer.objc, marksCommentStructure: options.marksCommentStructure, swiftImportNotes: swiftImportNotes)
     }
 
     /// An Objective-C object as Swift imports it (`GenerationOptions.interfaceLanguage`), printed by
@@ -953,15 +967,13 @@ public actor RuntimeEngine {
 
         if let objcReference = Self.objcReference(forSwiftMangledName: mangledName) {
             let objcObject = RuntimeObject(name: objcReference.name, displayName: objcReference.name, kind: objcReference.kind, imagePath: "", children: [])
-            let objcTransformer = options.transformer.objc
-            switch objcReference.kind {
-            case .objc(.type(.class)):
-                return try? await objcSectionFactory.section(for: .class(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
-            case .objc(.type(.protocol)):
-                return try? await objcSectionFactory.section(for: .protocol(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer, marksCommentStructure: options.marksCommentStructure)
-            default:
-                return nil
+            let definingSection: (any RuntimeObjCSectioning)? = switch objcReference.kind {
+            case .objc(.type(.class)): try? await objcSectionFactory.section(for: .class(objcReference.name))
+            case .objc(.type(.protocol)): try? await objcSectionFactory.section(for: .protocol(objcReference.name))
+            default: nil
             }
+            guard let definingSection else { return nil }
+            return try? await objcHeaderInterface(of: objcObject, in: definingSection, options: options)
         }
 
         return nil
