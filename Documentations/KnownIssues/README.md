@@ -290,7 +290,11 @@ when picking up follow-up work.
   report is `Reviews/CodebaseAudits/CodebaseAudit20261116.md`). `CA.11`, the
   object list's load that cannot be withdrawn from the serving process once the
   sidebar stops listening (the old M6.1), is left until `ObjectsInImageCommand`
-  can be withdrawn from peers that know `cancelRequest`. Five more findings,
+  can be withdrawn from peers that know `cancelRequest`. `CA.28` (cross-reference
+  navigation locating declarations with the unmerged Generation Options; the
+  member search reads none of the fields merging changes) and `CA.29` (a file
+  engine finds the image of an Objective-C class by name but not of a protocol,
+  which no image exports) are false positives. Five more findings,
   IDs `CA.31`–`CA.35`, confirmed as not to be fixed: the seven process
   liveness checks (the `EPERM` divergence is intended), the per-module
   `Then.swift` copies, `BatchExportingState`'s writable `@RxObserved`

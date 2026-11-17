@@ -164,8 +164,8 @@
 | CA.25 | XPC service 客户端的 `.connected` 可能盖掉 `.disconnected`，几秒后自愈 | `RuntimeXPCServiceClientConnection.swift:255` | 疑似 | |
 | CA.26 | 命令行 host 接管时可能输给客户端拉起的独立 host，App 不再重试 | `CommandLineHostServer.swift:379`、`CommandLineHostController.swift:57` | 疑似 | |
 | CA.27 | 连接落在 host 闲置退出的时间窗里，不可重试的命令直接失败 | `CommandLineHostServer.swift:199`、`CommandRunner.swift:71` | 读代码确认 | 与已裁决的 PR112.6 不是同一个时间窗 |
-| CA.28 | 跨引用导航用的是没合并的生成选项 | `FindViewModel.swift:419`、`InspectorReferencesViewModel.swift:328` | 误报 | 第三批复核，理由见「第三批」 |
-| CA.29 | 文件模式的目录只能查类，查不了协议 | `RuntimeFileImageCatalog.swift:252` | 疑似 | |
+| CA.28 | 跨引用导航用的是没合并的生成选项 | `FindViewModel.swift:419`、`InspectorReferencesViewModel.swift:328` | 误报 | 第三批复核，理由见「第三批」；用户确认后登记为已裁决清单的 CA.28 |
+| CA.29 | 文件模式的目录只能查类，查不了协议 | `RuntimeFileImageCatalog.swift:252` | 误报 | 有意设计：ObjC 协议没有导出符号，只能在已解析的镜像里找到，代码注释与提案 0069 都写明了；用户确认后登记为已裁决清单的 CA.29 |
 | CA.30 | `InjectedDeviceEngineTests` 的两条在整个引擎管理测试包一起跑时必失败，单独跑通过 | `InjectedDeviceEngineTests.swift:314`、`:386` | 基线上同样复现 | 测试之间互相干扰，原因未查；可能是 `RuntimeUnusedPort.find()` 给出的端口在绑定前被同包里别的测试占走 |
 
 ### 第三批：CA.14、CA.16、CA.17、CA.18
@@ -265,7 +265,7 @@
 
 ## 建议不修（用户确认后登记进已裁决清单）
 
-用户已全部确认，登记为 [`KnownIssues/2026-11-16-codebase-audit-findings.md`](../../KnownIssues/2026-11-16-codebase-audit-findings.md) 的 CA.31–CA.35。
+用户已全部确认，登记为 [`KnownIssues/2026-11-16-codebase-audit-findings.md`](../../KnownIssues/2026-11-16-codebase-audit-findings.md) 的 CA.31–CA.35。上表的 CA.28 与 CA.29 经 2026-11-17 复核为误报，用户确认后也登记在那里。
 
 | 发现 | 理由 | 重新判断的条件 |
 |------|------|---------------|
