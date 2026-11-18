@@ -31,9 +31,21 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
     /// soon-to-be-discarded coordinators.
     private var routeDisposeBag = DisposeBag()
 
+    /// The document's naming word cloud windows, one per image; each leaves
+    /// when its window closes, and all of them close with the document's window.
+    private var namingWordCloudCoordinators: [String: NamingWordCloudCoordinator] = [:]
+
+    private var mainWindowCloseObservation: NSObjectProtocol?
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowController: .init(documentState: documentState), initialRoute: .main(documentState.runtimeEngine))
+        mainWindowCloseObservation = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: rootWindowController.window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.closeNamingWordClouds()
+            }
+        }
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
@@ -65,6 +77,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // the way choosing it again does, so the reset reaches no pane about to be replaced.
             documentState.startOverRequested
                 .emit(with: self) { coordinator, runtimeEngine in coordinator.trigger(.main(runtimeEngine)) }
+                .disposed(by: routeDisposeBag)
+            // An image list's context menu asks through the document: the sidebar's
+            // coordinators do not reach this one.
+            documentState.namingWordCloudRequested
+                .emit(with: self) { coordinator, imagePath in coordinator.trigger(.namingWordCloud(imagePath: imagePath)) }
                 .disposed(by: routeDisposeBag)
 
             return .multiple(
@@ -149,7 +166,32 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         case .resetEditorSizes:
             editorAreaCoordinator.resetEditorSizes()
             return .none()
+        case .namingWordCloud(let imagePath):
+            showNamingWordCloud(forImageAt: imagePath)
+            return .none()
         }
+    }
+
+    // MARK: - Naming word clouds
+
+    /// The image's word cloud window, brought forward when it is open already.
+    private func showNamingWordCloud(forImageAt imagePath: String) {
+        if let coordinator = namingWordCloudCoordinators[imagePath] {
+            coordinator.showWindow()
+            return
+        }
+        let coordinator = NamingWordCloudCoordinator(imagePath: imagePath, documentState: documentState)
+        coordinator.windowClosingHandler = { [weak self] in
+            guard let self else { return }
+            namingWordCloudCoordinators[imagePath] = nil
+        }
+        namingWordCloudCoordinators[imagePath] = coordinator
+        coordinator.showWindow()
+    }
+
+    private func closeNamingWordClouds() {
+        // Each window's closing removes its coordinator from the dictionary.
+        Array(namingWordCloudCoordinators.values).forEach { $0.closeWindow() }
     }
 
     /// The button a popover about `toolbarItem` anchors at, looked up here so

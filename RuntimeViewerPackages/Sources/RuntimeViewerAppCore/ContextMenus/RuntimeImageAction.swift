@@ -11,6 +11,9 @@ public enum RuntimeImageAction: Hashable, Sendable {
     /// image, waiting for a query.
     case findInImage
 
+    /// The image's naming word cloud, in a window of its own.
+    case showNamingWordCloud
+
     /// Puts the image's name on the pasteboard.
     case copyName
 

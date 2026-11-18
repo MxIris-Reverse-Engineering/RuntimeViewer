@@ -210,7 +210,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     /// exist here.
     public func imageActions(for node: RuntimeImageNode) -> [RuntimeImageAction] {
         guard node.isLeaf else { return [] }
-        var actions: [RuntimeImageAction] = [.open, .findInImage, .copyName, .copyPath]
+        var actions: [RuntimeImageAction] = [.open, .findInImage, .showNamingWordCloud, .copyName, .copyPath]
         if Self.isOnThisMac(documentState.runtimeEngine.source), FileManager.default.fileExists(atPath: node.path) {
             actions.append(.showInFinder)
         }
@@ -228,6 +228,8 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
                 query.scope = .images([node.path])
             }
             router.trigger(.find)
+        case .showNamingWordCloud:
+            documentState.requestNamingWordCloud(forImageAt: node.path)
         case .copyName:
             pasteboardClient.copyString(node.name)
         case .copyPath:

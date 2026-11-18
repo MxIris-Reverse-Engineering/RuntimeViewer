@@ -114,7 +114,7 @@ Export 菜单里三项，都按当前口径与筛选导出：
 - **RuntimeViewerAppCore**（`NamingWordCloud/`）：拆词、前缀统计、复合词预设、四种口径的计数、按「最有代表性」定类别、用法列表、CSV 与 JSON 编码，都是不依赖 UI 的值与函数；窗口的 ViewModel、路由与状态枚举；三种类别色是 `ColorDescriptor` 的新值。设置记在 `AppDefaults`。测试在 `RuntimeViewerAppCoreTests`：拆词的边界情况（缩略词、数字、下划线、选择子、前缀、复合词）、去重与跳过规则、定色、两种编码（含 CSV 转义），以及 ViewModel 的状态与导航。
 - **RuntimeViewerAppUI**：类别色的解析（`ColorDescriptor.color`）。
 - **RuntimeViewerUI**（`AppKit/WordCloud/`）：`WordCloudLayout` 只接收量好的词尺寸，算出画布大小与每个词的位置，是纯几何计算，测试（`RuntimeViewerAppUITests`）断言不重叠、不出界、同样的输入得到同样的结果；`WordCloudView` 是滚动视图的文档视图，负责画它，以及悬停、点击、选中与拖拽平移。排版放在后台做。
-- **App**（`NamingWordCloud/`）：窗口控制器与 view controller；`MainCoordinator` 按镜像管着这个文档的词云窗口（一个镜像一个，再开就提到前面，随文档关闭）；View 菜单与镜像列表右键菜单（`RuntimeImageAction`）的入口；导出用的存储面板。
+- **App**（`NamingWordCloud/`）：`NamingWordCloudWindowController`、`NamingWordCloudCoordinator`（导出的存储面板以表单挂在词云窗口上、Compound Words 表单）、`NamingWordCloudViewController`、`NamingCompoundWordsViewController`；`MainCoordinator` 处理 `MainRoute.namingWordCloud(imagePath:)`，按镜像管着这个文档的词云窗口（一个镜像一个，再开就提到前面，主窗口关闭时一起关）。入口两处：View 菜单的 Show Naming Word Cloud（`MainWindowController.showNamingWordCloud(_:)`，侧栏开着镜像时可用），以及镜像列表右键菜单的新动作 `RuntimeImageAction.showNamingWordCloud`——它经 `DocumentState.namingWordCloudRequested` 请求窗口，因为侧栏的 coordinator 够不到主窗口的。
 - 不新增 target，不改工程设置，所以 Tuist 描述不用动。落地时 README 的功能列表加一行。
 
 ### 6. 落地步骤
@@ -127,7 +127,7 @@ Export 菜单里三项，都按当前口径与筛选导出：
    - 行为：不重叠、不出界、确定性、画布按词的总面积定；点到词、点到空白
 4. **AppCore 的窗口 ViewModel**（已完成）—— `NamingWordCloudViewModel`、状态、设置、类别色
    - 行为：类型口径一打开就能算；成员口径等语料建好再算；语料开关关着时成员口径给提示；对端太旧时成员口径给提示；换生成选项重算；点用法里的一行在主窗口打开（成员带高亮）；导出的内容
-5. **App 的窗口与入口** —— 窗口控制器、view controller、`MainCoordinator` 的窗口管理、View 菜单、镜像列表右键菜单、导出面板、README
+5. **App 的窗口与入口**（已完成，界面待用户看）—— 窗口控制器、view controller、`MainCoordinator` 的窗口管理、View 菜单、镜像列表右键菜单、导出面板、README
    - 行为：App 编得过；一个镜像只开一个窗口；界面效果由用户看
 
 **不做**：命令行与 MCP 输出（以后要做时，把拆词与计数挪进命令行也能链接的无 UI 模块即可）；PDF 与 SVG 导出；多个镜像合成一张词云；旋转摆放的词；单复数合并（`View` 与 `Views` 分开算）。
@@ -170,3 +170,4 @@ Export 菜单里三项，都按当前口径与筛选导出：
 | 2026-11-18 | 第二步自定的细节 | 一、复合词预设 18 个：草案点名的 14 个（`ViewController`、`GestureRecognizer`、`DataSource`、`IndexPath`、`TraitCollection`、`HitTest`、`CornerRadius`、`SafeArea`、`ToolTip`、`KeyPath`、`RunLoop`、`TimeZone`、`UserInfo`、`PopUp`），加 `FirstResponder`、`LayoutGuide`、`LineBreak`、`WhiteSpace`。没有原型可以按频率重新统计，所以只加了这几个固定说法，不加以 `Manager`、`Controller` 这类角色词结尾的组合，免得吃掉类型后缀。二、虚词表：and、as、at、by、for、from、in、into、of、on、or、the、to、with。三、类名前缀取两到三个大写字母后面还跟着大写字母的开头，三个字母的候选占到两个字母那个的八成以上才取它（Metal 得 `MTL`，AppKit 的 `NSURL…` 不会把 `NS` 变成 `NSU`）；至少要有三个、且占类型名的五分之一，否则不认前缀。四、局部类型与用户做出来的特化类型的成员也不算，与类型口径一致。五、类型名取 `displayName` 去掉外层类型与泛型参数，只用来拆词；JSON 里的类型名与所属类型写完整的 `displayName`。六、一个词的写法取它最常见的那种，用来决定是不是缩略词。 |
 | 2026-11-18 | 第三步自定的细节 | 一、螺旋线是按画布比例拉伸的阿基米德螺线，圈距约 19 点（比最小的词连同间距还矮），步长按弧长约 8 点；碰撞检查把已放下的词按 48 点见方的格子归档，只比附近的。Debug 构建下 500 个词约 1.5 秒，在后台算。二、字号与字重的规则放在 RuntimeViewerUI 的 `WordCloudTypography`，量文字尺寸在主线程，排版在后台。三、画布是自绘的 `NSView`，不继承 `LayerBackedView`：整块画布连底色都在 `draw(_:)` 里画，不用图层属性。四、点在空白处什么也不做，不清掉选中。五、导出 PNG 时先把选中与悬停的底板拿掉，画完再放回。 |
 | 2026-11-18 | 第四步自定的细节 | 一、状态枚举 `NamingWordCloudState`：索引镜像、建语料（都带进度）、就绪、不可用（语料开关关着、对端太旧、文档没有后台工作可建语料、没有可数的名字）、失败；加载占位照 `withLoadingPlaceholder` 的规矩，快的读取不闪。二、设置整体存成 `AppDefaults.namingWordCloudPreferences`（一个 `Codable` 值，缺的键读成默认值），窗口经它的 `$` 投影互相同步。三、换口径只在「读不读成员」变了时重读，其余开关、分组与词数只在后台重算。四、成员读法：先问引擎要，没有语料就向文档共享的语料协调器请求优先构建，等它的状态到 built 再取；协调器没接这个请求（这个 Engine 不建语料）时提示不可用，不空等。五、Print Exported Declarations Only 按语言分别作用于类型：ObjC 类型看 ObjC 的开关，Swift 类型看 Swift 的。六、Compound Words 表单单独一个 `NamingCompoundWordsViewModel`，增删直接写回设置；输入能对上某个预设时直接恢复，不管能不能拆成两个词（全小写的 `datasource` 也行），其余单个词拒绝并说明。七、用法点开走 `.focusedTab`。 |
+| 2026-11-18 | 第五步自定的细节 | 一、右键菜单的入口经 `DocumentState.namingWordCloudRequested` 请求窗口，照 `startOverRequested` 的先例：镜像列表的 ViewModel 的路由只到侧栏的 coordinator，够不到 `MainCoordinator`。View 菜单的入口直接触发 `MainRoute.namingWordCloud(imagePath:)`，只在侧栏开着镜像时可用。二、词云窗口记住大小与位置时按镜像名分开存（`NamingWordCloud <镜像名>`）：同时开着的几个窗口不能共用一个自动保存名。三、Zoom to Fit 与 Actual Size 只动滚动视图的缩放，留在视图控制器里，不进 ViewModel。四、排行表与用法列表是单列表格、每行左右两个标签，用 `DifferentiableBox` 驱动，cell ViewModel 在 cell 构造闭包里建（行的内容完全由模型决定，用法列表可达数千行）。五、Compound Words 表单里回车是 Add、Esc 是 Done，免得在输入框里按回车就关掉表单。六、导出的存储面板以表单挂在词云窗口上，写入失败时用表单提示原因。 |
