@@ -63,7 +63,7 @@ svg .headFill { fill: var(--muted); } svg .headAddFill { fill: var(--add); }
 <p>让 <code>RuntimeViewerEngineManagement</code> 在 iOS（含越狱版）与 visionOS 上编译并可用，<b>Mac 上的行为一点不变</b>。只属于 macOS 的三块——内嵌 XPC service、特权 helper daemon、Mac Catalyst——收进带 <code>.live</code> 的闭包接缝，iOS 上的 <code>.live</code> 是「没有这项能力」；配置新增「浏览局域网」与「服务端推送运行时数据」两个开关和一份 iOS 用的 <code>.deviceApplication</code>；iOS 上文件引擎直接在 App 进程里读。iOS app 把今天手工建的两个引擎（本机引擎、给 Mac 连的 Bonjour 服务端）交给管理器启动，Mac 看到的设备与今天一样。</p>
 <p>不在这一篇：在设备上自己附加进程（另起一篇，和附加界面一起做）、iOS 上浏览局域网、共享系统镜像与派生数据、AppCore 链接管理器、任何界面变化。</p>
 </div>
-<p><b>要你定</b>：批准这份提案（改为 Accepted）后开工。没有其他未决问题；实现由另一台 Mac 上的协作 agent 接手。</p>
+<p><b>现状</b>：已批准，四步都已实现，待你看过后收尾。还没做的只有一项：在 vphone 上看 Mac 能否照常连上设备、往设备进程里注入（<code>macStillConnectsToTheDeviceAndInjects</code>）。</p>
 
 <h2 id="arch">架构图</h2>
 <p class="legend"><span><span class="tag t-add">+</span>新增</span><span><span class="tag t-mod">~</span>修改</span><span><span class="tag t-del">−</span>删除</span><span><span class="tag t-same">=</span>不变</span></p>
@@ -222,14 +222,14 @@ svg .headFill { fill: var(--muted); } svg .headAddFill { fill: var(--add); }
 
 <h2 id="steps">落地步骤</h2>
 <ol>
-<li><b>配置与启动步骤</b>
+<li><b>配置与启动步骤</b>（已完成）
   <ul class="small"><li><code>applicationConfigurationStartsEverythingInTheSameOrder</code></li><li><code>headlessHostConfigurationIsUnchanged</code></li><li><code>deviceApplicationStartsServerAndSystemEnginesOnly</code></li><li><code>configurationWithoutBrowsingSkipsTheBrowser</code></li></ul></li>
-<li><b>平台接缝与进程内读文件</b>（此时模块仍只在 macOS 上编，全部在 Mac 上测）
+<li><b>平台接缝与进程内读文件</b>（已完成；此时模块仍只在 macOS 上编，全部在 Mac 上测）
   <ul class="small"><li><code>systemEnginesWithoutMacCatalystAreLocalOnly</code></li><li><code>relaunchWithoutMacCatalystDoesNothing</code></li><li><code>daemonBecomingAvailableRelaunchesTheHelperEngine</code></li><li><code>fileReadInThisProcessIsReadBeforeStartReadingReturns</code></li><li><code>fileThatCannotBeReadInThisProcessIsNotListed</code></li><li><code>fileEngineReadInThisProcessIsNeverSuspended</code></li><li><code>changingTheDependencyCacheOfAFileReadInThisProcessThrows</code></li><li><code>unavailableEligibilitySharesNothing</code></li><li><code>fileServiceReadingIsUnchanged</code></li></ul></li>
-<li><b>放开平台限定</b>
+<li><b>放开平台限定</b>（已完成）
   <ul class="small"><li><code>engineManagementBuildsForIOSAndVisionOS</code></li><li><code>bonjourServerPushesRuntimeDataOnlyWhenConfigured</code></li><li><code>deviceConfiguredManagerOnMacListsOnlyLocal</code></li><li><code>macAppAndCommandLineHostBuildUnchanged</code></li></ul></li>
-<li><b>iOS app 换用管理器</b>
-  <ul class="small"><li><code>iOSAppBuildsForAllThreeTargets</code>（Ultra 上没有 visionOS SDK 时记下，只编前两个）</li><li><code>macStillConnectsToTheDeviceAndInjects</code>（由用户在 vphone 上看）</li></ul></li>
+<li><b>iOS app 换用管理器</b>（已完成，设备上待你看）
+  <ul class="small"><li><code>iOSAppBuildsForAllThreeTargets</code>（Ultra 上三个都编过）</li><li><code>macStillConnectsToTheDeviceAndInjects</code>（由用户在 vphone 上看）</li></ul></li>
 </ol>
 <p class="small">收尾判断：预计不需要配套文章（接缝的用法在文档注释里，平台代码的位置写进根 <code>AGENTS.md</code>）；预计没有新术语。</p>
 
@@ -377,6 +377,8 @@ func application(_:didFinishLaunchingWithOptions:) -&gt; Bool {
 <tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，由 Ultra 上的会话接手实现；功能分支从 <code>origin/next</code> 切出，避开本机 <code>next</code> 上一个有意没推送的提交</td></tr>
 <tr><td>2026-11-18</td><td>第二步实现中的调整</td><td>XPC 重连写成 <code>@Loggable</code> 的 <code>InjectedXPCEngineReconnection</code>（管理器的日志器是 <code>private</code>）；同一文件正在进程内读时第二个请求等同一次读；进程内引擎状态是 <code>.localOnly</code>；挂起与否按整个管理器的 <code>fileReading</code> 判断；<code>init</code> 加 <code>sharedCacheEligibility:</code>；列出 <code>.local</code> 的测试挂到串行的父套件下</td></tr>
 <tr><td>2026-11-18</td><td>第三步实现中的调整</td><td>主文件不再 import 两个 macOS 模块；服务端引擎由静态的 <code>makeBonjourServerEngine(named:configuration:)</code> 建、不连接，测试不必广播；模块以 iOS 模拟器、iOS 真机与 visionOS 模拟器为目标各编一次，全部通过</td></tr>
+<tr><td>2026-11-18</td><td>第四步实现中的调整</td><td><code>AppDelegate</code> 直接 <code>import Dependencies</code>（模块随 RuntimeViewerApplication 的依赖编出）；删掉不再用的 <code>import RuntimeViewerCommunication</code>；三个 target 在 Ultra 上关签名各编一次，全部通过</td></tr>
+<tr><td>2026-11-18</td><td>实现完成，待用户看过后收尾</td><td>包里全部测试 1372 个，失败 6 条：两条是基线上本来就红的，四条是整包一起跑才红、单独重跑全过；macOS App、命令行包、iOS app 三个 target 都编过。没做 vphone 上的实测。不另写指南，没有新术语。</td></tr>
 </table>
 </main>
 </body>
