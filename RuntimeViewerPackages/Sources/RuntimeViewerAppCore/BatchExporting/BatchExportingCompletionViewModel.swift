@@ -1,19 +1,20 @@
-import AppKit
-import RuntimeViewerApplication
+#if os(macOS)
+
+import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
-final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
-    struct Summary: Equatable {
-        let hasFailures: Bool
-        let headerTitle: String
-        let headerSubtitle: String
-        let interfacesValue: String
-        let imagesValue: String
-        let objcSwiftValue: String
-        let durationValue: String
+public final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
+    public struct Summary: Equatable {
+        public let hasFailures: Bool
+        public let headerTitle: String
+        public let headerSubtitle: String
+        public let interfacesValue: String
+        public let imagesValue: String
+        public let objcSwiftValue: String
+        public let durationValue: String
 
-        static let empty = Summary(
+        public static let empty = Summary(
             hasFailures: false,
             headerTitle: "Export Complete",
             headerSubtitle: "",
@@ -24,26 +25,33 @@ final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
         )
     }
 
-    struct Input {
-        let refresh: Signal<Void>
-        let showInFinderClick: Signal<Void>
+    public struct Input {
+        public let refresh: Signal<Void>
+        public let showInFinderClick: Signal<Void>
+
+        public init(refresh: Signal<Void>, showInFinderClick: Signal<Void>) {
+            self.refresh = refresh
+            self.showInFinderClick = showInFinderClick
+        }
     }
 
-    struct Output {
-        let summary: Driver<Summary>
-        let rows: Driver<[BatchExportingCompletionRowViewModel]>
+    public struct Output {
+        public let summary: Driver<Summary>
+        public let rows: Driver<[BatchExportingCompletionRowViewModel]>
     }
 
     @RxObserved private(set) var summary: Summary = .empty
 
+    @Dependency(\.finderClient) private var finderClient
+
     private let exportingState: BatchExportingState
 
-    init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
+    public init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         exportingState.$aggregatedResult
             .asObservable()
             .compactMap { $0 }
@@ -62,7 +70,7 @@ final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
         input.showInFinderClick.emitOnNext { [weak self] in
             guard let self else { return }
             guard let url = exportingState.destinationURL else { return }
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            finderClient.revealFile(url)
         }
         .disposed(by: rx.disposeBag)
 
@@ -140,19 +148,21 @@ final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
 }
 
 extension BatchExportingCompletionViewModel: ExportingStepViewModel {
-    var title: Driver<String> {
+    public var title: Driver<String> {
         "Export Complete:"
     }
 
-    var nextTitle: Driver<String> {
+    public var nextTitle: Driver<String> {
         "Done"
     }
 
-    var isPreviousEnabled: Driver<Bool> {
+    public var isPreviousEnabled: Driver<Bool> {
         false
     }
 
-    var isNextEnabled: Driver<Bool> {
+    public var isNextEnabled: Driver<Bool> {
         true
     }
 }
+
+#endif

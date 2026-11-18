@@ -1,19 +1,23 @@
-import AppKit
+#if os(macOS)
+
 import Foundation
-import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
-final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
-    struct Input {
-        let startExport: Signal<Void>
+public final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
+    public struct Input {
+        public let startExport: Signal<Void>
+
+        public init(startExport: Signal<Void>) {
+            self.startExport = startExport
+        }
     }
 
-    struct Output {
-        let titleText: Driver<String>
-        let progressText: Driver<String>
-        let overallProgress: Driver<Double>
-        let rows: Driver<[BatchExportingProgressRowViewModel]>
+    public struct Output {
+        public let titleText: Driver<String>
+        public let progressText: Driver<String>
+        public let overallProgress: Driver<Double>
+        public let rows: Driver<[BatchExportingProgressRowViewModel]>
     }
 
     @RxObserved private(set) var titleText: String = ""
@@ -32,12 +36,12 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
     /// sheet releases the ViewModel and stops the export with it.
     private let exportRun = OwnerReportingTask<ExportProgress>()
 
-    init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
+    public init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         input.startExport.emitOnNext { [weak self] in
             guard let self else { return }
             startExport()
@@ -274,15 +278,17 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
 }
 
 extension BatchExportingProgressViewModel: ExportingStepViewModel {
-    var title: Driver<String> {
+    public var title: Driver<String> {
         "Exporting..."
     }
 
-    var isPreviousEnabled: Driver<Bool> {
+    public var isPreviousEnabled: Driver<Bool> {
         false
     }
 
-    var isNextEnabled: Driver<Bool> {
+    public var isNextEnabled: Driver<Bool> {
         false
     }
 }
+
+#endif

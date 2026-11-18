@@ -1,23 +1,30 @@
-import AppKit
-import RuntimeViewerApplication
+#if os(macOS)
+
+import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
-final class BatchExportingConfigurationViewModel: ViewModel<ExportingRoute> {
-    struct Input {
-        let objcFormatSelected: Signal<Int>
-        let swiftFormatSelected: Signal<Int>
-        let includeMetadataSelected: Signal<Bool>
+public final class BatchExportingConfigurationViewModel: ViewModel<ExportingRoute> {
+    public struct Input {
+        public let objcFormatSelected: Signal<Int>
+        public let swiftFormatSelected: Signal<Int>
+        public let includeMetadataSelected: Signal<Bool>
+
+        public init(objcFormatSelected: Signal<Int>, swiftFormatSelected: Signal<Int>, includeMetadataSelected: Signal<Bool>) {
+            self.objcFormatSelected = objcFormatSelected
+            self.swiftFormatSelected = swiftFormatSelected
+            self.includeMetadataSelected = includeMetadataSelected
+        }
     }
 
-    struct Output {
-        let summary: Driver<String>
-        let objcFormat: Driver<ExportFormat>
-        let swiftFormat: Driver<ExportFormat>
-        let includeMetadata: Driver<Bool>
+    public struct Output {
+        public let summary: Driver<String>
+        public let objcFormat: Driver<ExportFormat>
+        public let swiftFormat: Driver<ExportFormat>
+        public let includeMetadata: Driver<Bool>
     }
 
-    let exportingState: BatchExportingState
+    public let exportingState: BatchExportingState
 
     @UserDefault(key: ExportingDefaultsKey.objcFormat, defaultValue: .directory)
     private var storedObjcFormat: ExportFormat
@@ -28,7 +35,7 @@ final class BatchExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     @UserDefault(key: ExportingDefaultsKey.includeMetadata, defaultValue: true)
     private var storedIncludeMetadata: Bool
 
-    init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
+    public init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
         exportingState.objcFormat = storedObjcFormat
@@ -36,7 +43,7 @@ final class BatchExportingConfigurationViewModel: ViewModel<ExportingRoute> {
         exportingState.includeMetadata = storedIncludeMetadata
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         input.objcFormatSelected.emitOnNext { [weak self] index in
             guard let self else { return }
             let format = ExportFormat(rawValue: index) ?? .singleFile
@@ -76,15 +83,17 @@ final class BatchExportingConfigurationViewModel: ViewModel<ExportingRoute> {
 }
 
 extension BatchExportingConfigurationViewModel: ExportingStepViewModel {
-    var title: Driver<String> {
+    public var title: Driver<String> {
         "Export Configuration:"
     }
 
-    var isPreviousEnabled: Driver<Bool> {
+    public var isPreviousEnabled: Driver<Bool> {
         true
     }
 
-    var isNextEnabled: Driver<Bool> {
+    public var isNextEnabled: Driver<Bool> {
         true
     }
 }
+
+#endif

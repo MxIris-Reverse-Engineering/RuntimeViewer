@@ -1,33 +1,52 @@
-import AppKit
-import RuntimeViewerApplication
+#if os(macOS)
+
+import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
-final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
-    struct Input {
-        let searchString: Signal<String>
-        let matchMode: Signal<BatchExportingImageQuery.MatchMode>
-        let matchTarget: Signal<BatchExportingImageQuery.MatchTarget>
-        let isCaseSensitive: Signal<Bool>
-        let selectAllClicked: Signal<Void>
-        let deselectAllClicked: Signal<Void>
-        let toggleNode: Signal<BatchExportingImageTreeNode>
+public final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
+    public struct Input {
+        public let searchString: Signal<String>
+        public let matchMode: Signal<BatchExportingImageQuery.MatchMode>
+        public let matchTarget: Signal<BatchExportingImageQuery.MatchTarget>
+        public let isCaseSensitive: Signal<Bool>
+        public let selectAllClicked: Signal<Void>
+        public let deselectAllClicked: Signal<Void>
+        public let toggleNode: Signal<BatchExportingImageTreeNode>
+
+        public init(
+            searchString: Signal<String>,
+            matchMode: Signal<BatchExportingImageQuery.MatchMode>,
+            matchTarget: Signal<BatchExportingImageQuery.MatchTarget>,
+            isCaseSensitive: Signal<Bool>,
+            selectAllClicked: Signal<Void>,
+            deselectAllClicked: Signal<Void>,
+            toggleNode: Signal<BatchExportingImageTreeNode>
+        ) {
+            self.searchString = searchString
+            self.matchMode = matchMode
+            self.matchTarget = matchTarget
+            self.isCaseSensitive = isCaseSensitive
+            self.selectAllClicked = selectAllClicked
+            self.deselectAllClicked = deselectAllClicked
+            self.toggleNode = toggleNode
+        }
     }
 
-    struct Output {
-        let nodes: Driver<[BatchExportingImageTreeNode]>
-        let didBeginFiltering: Signal<Void>
-        let didApplyQuery: Signal<Void>
-        let didEndFiltering: Signal<Void>
-        let summary: Driver<Summary>
+    public struct Output {
+        public let nodes: Driver<[BatchExportingImageTreeNode]>
+        public let didBeginFiltering: Signal<Void>
+        public let didApplyQuery: Signal<Void>
+        public let didEndFiltering: Signal<Void>
+        public let summary: Driver<Summary>
     }
 
-    struct Summary: Equatable {
-        let text: String
-        let isError: Bool
+    public struct Summary: Equatable {
+        public let text: String
+        public let isError: Bool
     }
 
-    let exportingState: BatchExportingState
+    public let exportingState: BatchExportingState
 
     /// The root rows the outline shows.
     @RxObserved
@@ -50,7 +69,7 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
 
     private var currentQueryTask: Task<Void, Never>?
 
-    init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
+    public init(exportingState: BatchExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
 
@@ -76,7 +95,7 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
             .disposed(by: rx.disposeBag)
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         // Typing waits 150 ms before matching, as the sidebar's search does; clearing the field
         // and the other controls apply at once. This must be `delay`, not `debounce`: on a
         // single-element `.just`, `debounce` flushes the element the moment the source completes.
@@ -178,23 +197,25 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
 }
 
 extension BatchExportingImageSelectionViewModel: ExportingStepViewModel {
-    var title: Driver<String> {
+    public var title: Driver<String> {
         "Select Images:"
     }
 
-    var previousTitle: Driver<String> {
+    public var previousTitle: Driver<String> {
         "Previous"
     }
 
-    var nextTitle: Driver<String> {
+    public var nextTitle: Driver<String> {
         "Next"
     }
 
-    var isPreviousEnabled: Driver<Bool> {
+    public var isPreviousEnabled: Driver<Bool> {
         false
     }
 
-    var isNextEnabled: Driver<Bool> {
+    public var isNextEnabled: Driver<Bool> {
         exportingState.$selectedImagePaths.asDriver().map { !$0.isEmpty }
     }
 }
+
+#endif

@@ -4,7 +4,6 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 
 @Loggable(.private)
 public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
@@ -74,6 +73,12 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         /// onto the coordinator, which resolves the anchor back from the VC
         /// and presents the type-picker popover.
         public let requestTypePickerClicked: Signal<[ParameterPathSegment]>
+
+        public init(specializeClicked: Signal<Void>, cancelClicked: Signal<Void>, requestTypePickerClicked: Signal<[ParameterPathSegment]>) {
+            self.specializeClicked = specializeClicked
+            self.cancelClicked = cancelClicked
+            self.requestTypePickerClicked = requestTypePickerClicked
+        }
     }
 
     public struct Output {

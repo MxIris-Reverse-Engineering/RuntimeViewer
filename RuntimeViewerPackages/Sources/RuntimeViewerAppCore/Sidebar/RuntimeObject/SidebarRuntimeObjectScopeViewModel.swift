@@ -1,6 +1,7 @@
-import AppKit
+#if os(macOS)
+
+import Foundation
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 import RuntimeViewerCore
 
 /// View model behind the sidebar scope popover. Edits a working `draft`
@@ -9,21 +10,21 @@ import RuntimeViewerCore
 /// user clicks. There is no Apply / Cancel split — closing the popover just
 /// dismisses the UI; whatever state the relay holds at dismissal time is
 /// the new active scope.
-final class SidebarRuntimeObjectScopeViewModel<Route: Routable>: ViewModel<Route> {
+public final class SidebarRuntimeObjectScopeViewModel<Route: Routable>: ViewModel<Route> {
     private let relay: BehaviorRelay<RuntimeObjectScope>
 
-    @RxObserved private(set) var draft: RuntimeObjectScope
+    @RxObserved public private(set) var draft: RuntimeObjectScope
 
     /// Snapshot of which kinds appear in the current image. The popover
     /// uses this to hide rows for kinds nothing carries; the model itself
     /// stays agnostic.
-    let availableKinds: Set<RuntimeObjectKind>
+    public let availableKinds: Set<RuntimeObjectKind>
 
     /// Snapshot of which `RuntimeObject.Properties` bits actually occur in
     /// the current image. Drives row visibility in the Properties section.
-    let availableProperties: RuntimeObject.Properties
+    public let availableProperties: RuntimeObject.Properties
 
-    init(
+    public init(
         relay: BehaviorRelay<RuntimeObjectScope>,
         availableKinds: Set<RuntimeObjectKind>,
         availableProperties: RuntimeObject.Properties,
@@ -37,18 +38,30 @@ final class SidebarRuntimeObjectScopeViewModel<Route: Routable>: ViewModel<Route
         super.init(documentState: documentState, router: router)
     }
 
-    struct Input {
-        let toggleKind: Signal<RuntimeObjectKind>
-        let toggleGroup: Signal<RuntimeObjectScope.KindGroup>
-        let setPropertyState: Signal<(RuntimeObjectScope.Property, RuntimeObjectScope.PropertyState)>
-        let reset: Signal<Void>
+    public struct Input {
+        public let toggleKind: Signal<RuntimeObjectKind>
+        public let toggleGroup: Signal<RuntimeObjectScope.KindGroup>
+        public let setPropertyState: Signal<(RuntimeObjectScope.Property, RuntimeObjectScope.PropertyState)>
+        public let reset: Signal<Void>
+
+        public init(
+            toggleKind: Signal<RuntimeObjectKind>,
+            toggleGroup: Signal<RuntimeObjectScope.KindGroup>,
+            setPropertyState: Signal<(RuntimeObjectScope.Property, RuntimeObjectScope.PropertyState)>,
+            reset: Signal<Void>
+        ) {
+            self.toggleKind = toggleKind
+            self.toggleGroup = toggleGroup
+            self.setPropertyState = setPropertyState
+            self.reset = reset
+        }
     }
 
-    struct Output {
-        let draft: Driver<RuntimeObjectScope>
+    public struct Output {
+        public let draft: Driver<RuntimeObjectScope>
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         input.toggleKind.emitOnNext { [weak self] kind in
             guard let self else { return }
             var next = draft
@@ -88,3 +101,5 @@ final class SidebarRuntimeObjectScopeViewModel<Route: Routable>: ViewModel<Route
         relay.accept(next)
     }
 }
+
+#endif

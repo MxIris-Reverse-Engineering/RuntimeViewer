@@ -1,27 +1,34 @@
-import AppKit
+#if os(macOS)
+
+import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 
-final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
-    struct Input {
-        let objcFormatSelected: Signal<Int>
-        let swiftFormatSelected: Signal<Int>
-        let includeMetadataSelected: Signal<Bool>
+public final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
+    public struct Input {
+        public let objcFormatSelected: Signal<Int>
+        public let swiftFormatSelected: Signal<Int>
+        public let includeMetadataSelected: Signal<Bool>
+
+        public init(objcFormatSelected: Signal<Int>, swiftFormatSelected: Signal<Int>, includeMetadataSelected: Signal<Bool>) {
+            self.objcFormatSelected = objcFormatSelected
+            self.swiftFormatSelected = swiftFormatSelected
+            self.includeMetadataSelected = includeMetadataSelected
+        }
     }
 
-    struct Output {
-        let objcCount: Driver<Int>
-        let swiftCount: Driver<Int>
-        let hasObjC: Driver<Bool>
-        let hasSwift: Driver<Bool>
-        let imageName: Driver<String>
-        let objcFormat: Driver<ExportFormat>
-        let swiftFormat: Driver<ExportFormat>
-        let includeMetadata: Driver<Bool>
+    public struct Output {
+        public let objcCount: Driver<Int>
+        public let swiftCount: Driver<Int>
+        public let hasObjC: Driver<Bool>
+        public let hasSwift: Driver<Bool>
+        public let imageName: Driver<String>
+        public let objcFormat: Driver<ExportFormat>
+        public let swiftFormat: Driver<ExportFormat>
+        public let includeMetadata: Driver<Bool>
     }
 
-    let exportingState: ExportingState
+    public let exportingState: ExportingState
 
     @UserDefault(key: ExportingDefaultsKey.objcFormat, defaultValue: .directory)
     private var storedObjcFormat: ExportFormat
@@ -34,11 +41,11 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
 
     @RxObserved private(set) var isLoading: Bool = true
 
-    override var delayedLoading: Driver<Bool> {
+    public override var delayedLoading: Driver<Bool> {
         $isLoading.asDriver()
     }
 
-    init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
+    public init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
         exportingState.objcFormat = storedObjcFormat
@@ -60,7 +67,7 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
         }
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         input.objcFormatSelected.emitOnNext { [weak self] index in
             guard let self else { return }
             let format = ExportFormat(rawValue: index) ?? .singleFile
@@ -98,15 +105,17 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
 }
 
 extension ExportingConfigurationViewModel: ExportingStepViewModel {
-    var title: Driver<String> {
+    public var title: Driver<String> {
         "Export Configuration:"
     }
 
-    var isPreviousEnabled: Driver<Bool> {
+    public var isPreviousEnabled: Driver<Bool> {
         false
     }
 
-    var isNextEnabled: Driver<Bool> {
+    public var isNextEnabled: Driver<Bool> {
         true
     }
 }
+
+#endif

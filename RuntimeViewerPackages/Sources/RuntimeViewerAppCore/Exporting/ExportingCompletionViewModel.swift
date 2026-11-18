@@ -1,19 +1,27 @@
-import AppKit
+#if os(macOS)
+
+import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 
-final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
-    struct Input {
-        let refresh: Signal<Void>
-        let showInFinderClick: Signal<Void>
+public final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
+    public struct Input {
+        public let refresh: Signal<Void>
+        public let showInFinderClick: Signal<Void>
+
+        public init(refresh: Signal<Void>, showInFinderClick: Signal<Void>) {
+            self.refresh = refresh
+            self.showInFinderClick = showInFinderClick
+        }
     }
 
-    struct Output {
-        let summaryText: Driver<String>
+    public struct Output {
+        public let summaryText: Driver<String>
     }
 
     @RxObserved private(set) var summaryText: String = ""
+
+    @Dependency(\.finderClient) private var finderClient
 
     private let exportingState: ExportingState
 
@@ -28,7 +36,7 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
         summaryText = lines.joined(separator: "\n")
     }
 
-    init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
+    public init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
     }
@@ -38,7 +46,7 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
         updateSummaryText(with: result)
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         exportingState.$exportResult
             .asObservable()
             .compactMap { $0 }
@@ -57,7 +65,7 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
         input.showInFinderClick.emitOnNext { [weak self] in
             guard let self else { return }
             guard let url = exportingState.destinationURL else { return }
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            finderClient.revealFile(url)
         }
         .disposed(by: rx.disposeBag)
 
@@ -68,19 +76,21 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
 }
 
 extension ExportingCompletionViewModel: ExportingStepViewModel {
-    var title: Driver<String> {
+    public var title: Driver<String> {
         "Export Complete:"
     }
 
-    var nextTitle: Driver<String> {
+    public var nextTitle: Driver<String> {
         "Done"
     }
 
-    var isPreviousEnabled: RxCocoa.Driver<Bool> {
+    public var isPreviousEnabled: Driver<Bool> {
         false
     }
 
-    var isNextEnabled: Driver<Bool> {
+    public var isNextEnabled: Driver<Bool> {
         true
     }
 }
+
+#endif

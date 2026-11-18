@@ -4,7 +4,6 @@ import Foundation
 import os
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 
 /// Identity-only row element for the type-picker table. Letting the
 /// driver carry `CandidateBox` instead of `SpecializationTypePickerCellViewModel`

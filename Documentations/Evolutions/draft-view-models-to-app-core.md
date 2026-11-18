@@ -292,7 +292,7 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
 | `MAC/Specialization/SpecializationViewController.swift` | 修改 | 描述标签绑定 `descriptionText.attributedString(in: .list)` | 跟随 `RowText` | 2 |
 | `MAC/Generation Options/GenerationOptionsViewModel.swift` → `AC/GenerationOptions/` | 移动 | `public`（连同两个 typealias）；删多余 import | 可测试 | 2 |
 | `MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectScopeViewModel.swift` → `AC/Sidebar/RuntimeObject/` | 移动 | `public`（`init`、`draft`、`availableKinds`、`availableProperties`） | 可测试 | 2 |
-| `ACT/ExportingCompletionViewModelTests.swift`、`ACT/BatchExportingCompletionViewModelTests.swift` | 新增 | Show in Finder 经 `finderClient` 揭示导出目录（记录器替身） | 从 `NSWorkspace` 改成服务的部分 | 2 |
+| `ACT/ExportingCompletionViewModelTests.swift` | 新增 | 单个与批量导出的 Show in Finder 都经 `finderClient` 揭示导出目录（记录器替身），没有目录时什么都不揭示 | 从 `NSWorkspace` 改成服务的部分 | 2 |
 | `ACT/SpecializationCellViewModelTests.swift` | 新增 | 描述与占位的 `RowText` 取值 | 从富文本改成值的部分 | 2 |
 | `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/MCPService.swift` | 修改 | `MCPServerState` 移出；`@Observable`（其余属性 `@ObservationIgnored`）；删 `onStateChange`；加 `resume()`；加 `extension MCPServerClientKey: DependencyKey` 的 `liveValue` | 真实实现在 MCP 包 | 3 |
 | `AC/MCP/MCPServerState.swift` | 新增（移入） | 原样 | AppCore 要用这个类型 | 3 |
@@ -634,7 +634,7 @@ extension MCPServerClientKey: DependencyKey {
    - 行为：`appBuildsWithGenericViewsFromRuntimeViewerUI`
    - 行为：`lineNumberRulerColorMatchesInBothAppearances`
    - 行为：`loadFrameworksStillOpensThePanel`
-2. **导出、批量导出、特化、生成选项、过滤范围的 ViewModel 进 AppCore**：步骤 2 的各行。
+2. **导出、批量导出、特化、生成选项、过滤范围的 ViewModel 进 AppCore**（已完成，2026-11-18）：步骤 2 的各行。
    - 行为：`exportingCompletionRevealsDestinationThroughFinderClient`
    - 行为：`batchExportingCompletionRevealsDestinationThroughFinderClient`
    - 行为：`specializationDescriptionIsPrimaryRowTextAtThirteenPoints`

@@ -4,24 +4,6 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-protocol ExportingStepViewModel: ViewModelProtocol {
-    var title: Driver<String> { get }
-    var previousTitle: Driver<String> { get }
-    var nextTitle: Driver<String> { get }
-    var isNextEnabled: Driver<Bool> { get }
-    var isPreviousEnabled: Driver<Bool> { get }
-}
-
-extension ExportingStepViewModel {
-    var previousTitle: Driver<String> {
-        "Previous"
-    }
-
-    var nextTitle: Driver<String> {
-        "Next"
-    }
-}
-
 protocol ExportingStepViewController<ViewModel>: NSViewController {
     associatedtype ViewModel: ExportingStepViewModel
 

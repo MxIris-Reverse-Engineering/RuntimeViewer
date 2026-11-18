@@ -1,13 +1,8 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-import RxAppKit
-#endif
+#if os(macOS)
 
 import Foundation
-import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import DifferenceKit
 
 /// One segment of a `SpecializationCellViewModel.parameterPath`.
 ///
@@ -61,8 +56,10 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     @RxObserved
     public private(set) var buttonTitle: String
 
+    /// The parameter's description, or the placeholder's "Loading inner parameters…"; the cell
+    /// draws it in the list style.
     @RxObserved
-    public private(set) var descriptionText: NSAttributedString
+    public private(set) var descriptionText: RowText
 
     /// True while the row's type-picker payload (sort + box construction)
     /// is being built on a background queue. The cell view drives the
@@ -234,34 +231,14 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
 
     private static let defaultButtonTitle = "Choose Type…"
 
-    private static func makeDescriptionText(for parameter: RuntimeSpecializationRequest.Parameter) -> NSAttributedString {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineBreakMode = .byTruncatingTail
-        return NSAttributedString(
-            string: parameter.displayDescription,
-            attributes: [
-                .foregroundColor: NSUIColor.labelColor,
-                .font: NSUIFont.systemFont(ofSize: 13),
-                .paragraphStyle: paragraphStyle,
-            ]
-        )
+    static func makeDescriptionText(for parameter: RuntimeSpecializationRequest.Parameter) -> RowText {
+        RowText(parameter.displayDescription, fontSize: 13)
     }
 
-    private static func makeLoadingPlaceholderText() -> NSAttributedString {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineBreakMode = .byTruncatingTail
-        return NSAttributedString(
-            string: "Loading inner parameters…",
-            attributes: [
-                .foregroundColor: NSUIColor.secondaryLabelColor,
-                .font: NSUIFont.systemFont(ofSize: 13),
-                .paragraphStyle: paragraphStyle,
-            ]
-        )
+    static func makeLoadingPlaceholderText() -> RowText {
+        RowText("Loading inner parameters…", role: .secondary, fontSize: 13)
     }
 }
-
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 extension SpecializationCellViewModel: Differentiable {
     public var differenceIdentifier: [ParameterPathSegment] { parameterPath }

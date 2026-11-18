@@ -3,14 +3,6 @@ import FoundationToolbox
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-enum ExportingRoute: Routable {
-    case initial
-    case previous
-    case next
-    case cancel
-    case directoryPicker
-}
-
 typealias ExportingTransition = Transition<ExportingWindowController, ExportingViewController>
 
 @Loggable(.private)

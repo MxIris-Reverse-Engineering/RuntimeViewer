@@ -1,10 +1,11 @@
-import AppKit
-import RuntimeViewerApplication
+#if os(macOS)
+
+import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
-final class BatchExportingProgressRowViewModel: CellViewModel {
-    enum Status: Sendable, Equatable {
+public final class BatchExportingProgressRowViewModel: CellViewModel {
+    public enum Status: Sendable, Equatable {
         case queued
         case running
         case succeeded(RuntimeInterfaceExportResult)
@@ -15,30 +16,30 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
     /// image the engine lists, after Select All — and every `@RxObserved` a cell binds costs a
     /// relay with a lock of its own for as long as the row exists (proposal
     /// 0005-cellvm-appearance-single-observed).
-    struct State: Equatable {
-        var status: Status = .queued
+    public struct State: Equatable {
+        public var status: Status = .queued
 
         /// Fraction of the current phase that is done. Each phase — every indexing
         /// pass the engine reports, then the interface export — runs its own
         /// 0…1 sweep, so the bar restarts at a phase boundary.
-        var progress: Double = 0
+        public var progress: Double = 0
 
         /// What the row is doing right now, shown beside the progress bar while
         /// `status` is `.running`: the indexing phase and its counts, the object
         /// being exported, or the export phase name.
-        var progressText: String = ""
+        public var progressText: String = ""
 
         /// Objects whose interface failed during this image's export. Surfaced in the
         /// row tooltip so a partially-failed (but still "succeeded") image isn't silent.
-        var objectFailures: [BatchExportingObjectFailure] = []
+        public var objectFailures: [BatchExportingObjectFailure] = []
     }
 
-    let image: BatchExportingImage
+    public let image: BatchExportingImage
 
     @RxObserved
-    private(set) var state: State = State()
+    public private(set) var state: State = State()
 
-    init(image: BatchExportingImage) {
+    public init(image: BatchExportingImage) {
         self.image = image
     }
 
@@ -108,10 +109,14 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
     }
 }
 
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 extension BatchExportingProgressRowViewModel: Differentiable {
-    var differenceIdentifier: String { image.path }
+    public var differenceIdentifier: String { image.path }
 
-    func isContentEqual(to source: BatchExportingProgressRowViewModel) -> Bool {
+    public func isContentEqual(to source: BatchExportingProgressRowViewModel) -> Bool {
         true
     }
 }
+#endif
+
+#endif

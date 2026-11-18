@@ -1,17 +1,8 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-import RxAppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
-#endif
+#if os(macOS)
 
 import Foundation
-import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 
 /// Per-row backing model for the type-picker popover under the generic
 /// specialization sheet.
@@ -76,5 +67,7 @@ extension RuntimeSpecializationRequest.Candidate.Kind {
 extension SpecializationTypePickerCellViewModel: RuntimeObjectCellDisplayable {
     public var appearanceDriver: Driver<RuntimeObjectCellAppearance> { $appearance.asDriver() }
 }
+
+#endif
 
 #endif

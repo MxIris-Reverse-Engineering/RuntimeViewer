@@ -1,32 +1,43 @@
+#if os(macOS)
+
 import Foundation
 import RuntimeViewerCore
-import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-enum BatchExportingStep: Int {
+public enum BatchExportingStep: Int {
     case imageSelection = 0
     case configuration = 1
     case progress = 2
     case completion = 3
 }
 
-struct BatchExportingImage: Hashable, Sendable {
-    let path: String
-    let name: String
+public struct BatchExportingImage: Hashable, Sendable {
+    public let path: String
+    public let name: String
+
+    public init(path: String, name: String) {
+        self.path = path
+        self.name = name
+    }
 }
 
 /// A single object whose interface failed to export, kept so the per-image row
 /// can surface *which* objects failed and *why* instead of only a failure count.
-struct BatchExportingObjectFailure: Sendable, Hashable {
-    let objectName: String
-    let errorDescription: String
+public struct BatchExportingObjectFailure: Sendable, Hashable {
+    public let objectName: String
+    public let errorDescription: String
+
+    public init(objectName: String, errorDescription: String) {
+        self.objectName = objectName
+        self.errorDescription = errorDescription
+    }
 }
 
 extension Collection where Element == BatchExportingObjectFailure {
     /// Multi-line tooltip listing each failed object and its reason, or `nil`
     /// when nothing failed. Capped so a pathological image doesn't build a
     /// thousand-line tooltip.
-    var exportFailureTooltip: String? {
+    public var exportFailureTooltip: String? {
         guard !isEmpty else { return nil }
         let total = count
         let header = total == 1 ? "1 interface failed:" : "\(total) interfaces failed:"
@@ -38,66 +49,66 @@ extension Collection where Element == BatchExportingObjectFailure {
     }
 }
 
-struct BatchExportingPerImageOutcome: Sendable {
-    let image: BatchExportingImage
-    let outcome: Outcome
+public struct BatchExportingPerImageOutcome: Sendable {
+    public let image: BatchExportingImage
+    public let outcome: Outcome
     /// Per-object interface failures collected from the export reporter. Empty
     /// when the whole image failed up front (that error lives in `.failure`),
     /// or when every object exported cleanly.
-    let objectFailures: [BatchExportingObjectFailure]
+    public let objectFailures: [BatchExportingObjectFailure]
 
-    init(image: BatchExportingImage, outcome: Outcome, objectFailures: [BatchExportingObjectFailure] = []) {
+    public init(image: BatchExportingImage, outcome: Outcome, objectFailures: [BatchExportingObjectFailure] = []) {
         self.image = image
         self.outcome = outcome
         self.objectFailures = objectFailures
     }
 
-    enum Outcome: Sendable {
+    public enum Outcome: Sendable {
         case success(RuntimeInterfaceExportResult)
         case failure(errorDescription: String)
     }
 
-    var succeeded: Int {
+    public var succeeded: Int {
         if case .success(let result) = outcome { return result.succeeded }
         return 0
     }
 
-    var failed: Int {
+    public var failed: Int {
         if case .success(let result) = outcome { return result.failed }
         return 0
     }
 
-    var totalDuration: TimeInterval {
+    public var totalDuration: TimeInterval {
         if case .success(let result) = outcome { return result.totalDuration }
         return 0
     }
 
-    var objcCount: Int {
+    public var objcCount: Int {
         if case .success(let result) = outcome { return result.objcCount }
         return 0
     }
 
-    var swiftCount: Int {
+    public var swiftCount: Int {
         if case .success(let result) = outcome { return result.swiftCount }
         return 0
     }
 
-    var didSucceed: Bool {
+    public var didSucceed: Bool {
         if case .success = outcome { return true }
         return false
     }
 }
 
-struct BatchExportingAggregatedResult: Sendable {
-    let imagesSucceeded: Int
-    let imagesFailed: Int
-    let interfacesSucceeded: Int
-    let interfacesFailed: Int
-    let totalDuration: TimeInterval
-    let totalObjcCount: Int
-    let totalSwiftCount: Int
+public struct BatchExportingAggregatedResult: Sendable {
+    public let imagesSucceeded: Int
+    public let imagesFailed: Int
+    public let interfacesSucceeded: Int
+    public let interfacesFailed: Int
+    public let totalDuration: TimeInterval
+    public let totalObjcCount: Int
+    public let totalSwiftCount: Int
 
-    init(outcomes: [BatchExportingPerImageOutcome]) {
+    public init(outcomes: [BatchExportingPerImageOutcome]) {
         var imagesSucceeded = 0
         var imagesFailed = 0
         var interfacesSucceeded = 0
@@ -128,42 +139,46 @@ struct BatchExportingAggregatedResult: Sendable {
 }
 
 @MainActor
-final class BatchExportingState {
+public final class BatchExportingState {
     @RxObserved
-    var availableImages: [BatchExportingImage] = []
+    public var availableImages: [BatchExportingImage] = []
 
     /// The tree the image selection step shows; `nil` until the coordinator has built it.
     @RxObserved
-    var imageTree: BatchExportingImageTree?
+    public var imageTree: BatchExportingImageTree?
 
     @RxObserved
-    var selectedImagePaths: Set<String> = []
+    public var selectedImagePaths: Set<String> = []
 
     @RxObserved
-    var objcFormat: ExportFormat = .directory
+    public var objcFormat: ExportFormat = .directory
 
     @RxObserved
-    var swiftFormat: ExportFormat = .singleFile
+    public var swiftFormat: ExportFormat = .singleFile
 
     @RxObserved
-    var includeMetadata: Bool = true
+    public var includeMetadata: Bool = true
 
     @RxObserved
-    var destinationURL: URL?
+    public var destinationURL: URL?
 
     @RxObserved
-    var progressRowViewModels: [BatchExportingProgressRowViewModel] = []
+    public var progressRowViewModels: [BatchExportingProgressRowViewModel] = []
 
     @RxObserved
-    var perImageOutcomes: [BatchExportingPerImageOutcome] = []
+    public var perImageOutcomes: [BatchExportingPerImageOutcome] = []
 
     @RxObserved
-    var aggregatedResult: BatchExportingAggregatedResult?
+    public var aggregatedResult: BatchExportingAggregatedResult?
 
     @RxObserved
-    var currentStep: BatchExportingStep = .imageSelection
+    public var currentStep: BatchExportingStep = .imageSelection
 
-    var selectedImages: [BatchExportingImage] {
+    public init() {}
+
+    public var selectedImages: [BatchExportingImage] {
         availableImages.filter { selectedImagePaths.contains($0.path) }
     }
 }
+
+#endif
