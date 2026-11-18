@@ -82,13 +82,17 @@ struct SidebarRuntimeObjectViewModelTests {
             if case .loadError = state { return true }
             return false
         }
-        guard case .loadError = failedState else {
+        guard case .loadError(let error) = failedState else {
             Issue.record("expected loadError, got \(failedState)")
             return
         }
         let errorText = try await nextValue(from: output.errorText)
-        #expect(errorText.hasPrefix("An unknown error"))
         #expect(errorText.contains(TestImages.libobjc))
+        // A failure from another process is never a `DyldOpenError` here — the
+        // app's "My Mac" forwards to the local XPC service, so dyld's message
+        // arrives as the description of a transport error — and the text has
+        // to carry what that error says.
+        #expect(errorText.contains(error.localizedDescription), "the text does not say what went wrong: \(errorText)")
     }
 
     // MARK: - Counterpart

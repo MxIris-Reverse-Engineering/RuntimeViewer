@@ -101,8 +101,8 @@ struct FileEngineTests {
 
     @Test("a Mach-O file's group starts at the directory it is in and holds the file under its whole path")
     func machOFileGroupStartsAtItsDirectory() async throws {
-        let file = try RuntimeOfflineFile(contentsOf: URL(fileURLWithPath: "/usr/bin/true"))
-        let engine = try RuntimeEngine(reading: file, engineID: "OfflineFileEngineTests.machOFileGroup")
+        let file = try RuntimeFile(contentsOf: URL(fileURLWithPath: "/usr/bin/true"))
+        let engine = try RuntimeEngine(reading: file, engineID: "FileEngineTests.machOFileGroup")
         try await engine.connect()
         #expect(engine.imageNodes.map(\.name) == [file.displayName])
         let fileNode = try #require(engine.imageNodes.first?.children.first)

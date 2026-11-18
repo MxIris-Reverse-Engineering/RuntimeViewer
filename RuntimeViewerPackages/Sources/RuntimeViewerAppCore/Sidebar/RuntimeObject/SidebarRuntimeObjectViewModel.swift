@@ -471,9 +471,11 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 guard let self else { return "" }
                 if let dyldOpenError = error as? DyldOpenError, let message = dyldOpenError.message {
                     return message
-                } else {
-                    return "An unknown error occured trying to load '\(imagePath)'"
                 }
+                // An engine that forwards to another process — "My Mac" forwards to the
+                // local XPC service — never receives a `DyldOpenError`, only its
+                // description inside a transport error: say what that error says.
+                return "'\(imagePath)' could not be loaded: \(error.localizedDescription)"
             }
             .asDriver(onErrorJustReturn: "")
 
