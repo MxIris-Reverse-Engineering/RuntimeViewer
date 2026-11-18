@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import RuntimeViewerAppCore
 import RuntimeViewerSettings
 import Dependencies
@@ -59,9 +60,21 @@ private enum ObjectLoadResult<T> {
 @MCPServer(name: "RuntimeViewer", toolNaming: .pascalCase)
 public actor MCPBridgeServer {
     private let documentProvider: MCPBridgeDocumentProvider
+    /// How long a cross-reference tool waits for its query before answering
+    /// with what it has.
+    private let crossReferenceTimeLimit: Duration
+
+    /// What a cross-reference tool waits for: a client times a call out, and
+    /// a scan of every indexed image can take longer.
+    static let defaultCrossReferenceTimeLimit: Duration = .seconds(30)
 
     public init(documentProvider: MCPBridgeDocumentProvider) {
+        self.init(documentProvider: documentProvider, crossReferenceTimeLimit: Self.defaultCrossReferenceTimeLimit)
+    }
+
+    init(documentProvider: MCPBridgeDocumentProvider, crossReferenceTimeLimit: Duration) {
         self.documentProvider = documentProvider
+        self.crossReferenceTimeLimit = crossReferenceTimeLimit
     }
 
     // MARK: - Prompts
@@ -503,6 +516,198 @@ public actor MCPBridgeServer {
     /// loaded, which only costs a load that was not needed.
     private static func areObjectsLoaded(in imagePath: String, on engine: RuntimeEngine) async -> Bool {
         (try? await engine.isImageIndexed(path: imagePath)) ?? false
+    }
+
+    // MARK: - Cross Reference Tools
+
+    /// Lists the code that calls a function or method, or sends a selector, across the images the window's engine has indexed — read from their arm64 machine code. Only indexed images are scanned: call loadImage first for the others.
+    /// Answers within 30 seconds: a longer scan returns what it found with isComplete false, and calling again continues with the images not yet scanned.
+    /// - Parameter windowIdentifier: The window identifier obtained from listWindows
+    /// - Parameter target: -[Class selector] or +[Class selector]; a Swift member as memberAddresses names it (SwiftUI.ViewGraph.updateOutputs(at:)); a symbol (_objc_msgSend, CFRelease, a mangled Swift name); an unslid address 0x… together with imagePath or imageName; or, with isSelector, a selector
+    /// - Parameter isSelector: Treat target as a selector and list every send of it
+    /// - Parameter imagePath: Full path of the image the target is in. An address needs it; it picks one of several definitions of a symbol; with scope "image", it is the image scanned. Mutually exclusive with imageName.
+    /// - Parameter imageName: Short name of that image. Mutually exclusive with imagePath.
+    /// - Parameter scope: "indexed" (default) scans every indexed image; "image" scans the image named
+    /// - Parameter receiverClassName: Keep only sends whose receiver is this class or is unknown
+    /// - Parameter limit: Report at most this many references
+    @MCPTool(hints: [.readOnly])
+    func callers(windowIdentifier: String, target: String, isSelector: Bool = false, imagePath: String? = nil, imageName: String? = nil, scope: String? = nil, receiverClassName: String? = nil, limit: Int? = nil) async throws -> MCPCrossReferencesResponse {
+        let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
+        let engine = context.runtimeEngine
+        let targetImagePath = try await crossReferenceImagePath(imagePath: imagePath, imageName: imageName, engine: engine)
+        let subject = try await crossReferenceSubject(target, isSelector: isSelector, imagePath: targetImagePath, selectedImagePath: context.selectedImageNode?.path, engine: engine)
+        let resolvedScope = try crossReferenceScope(scope, imagePath: targetImagePath)
+        let options = RuntimeCrossReferenceQueryOptions(receiverClassName: receiverClassName, resultLimit: limit)
+        let outcome = try await Self.references(within: crossReferenceTimeLimit) { reportProgress in
+            try await engine.callers(of: subject, in: resolvedScope, options: options, reportProgress: reportProgress)
+        }
+        return Self.response(subject: Self.description(of: subject), outcome: outcome, timeLimit: crossReferenceTimeLimit)
+    }
+
+    /// Lists what a function or method references — calls, sends, types — in instruction order, read from its arm64 machine code.
+    /// - Parameter windowIdentifier: The window identifier obtained from listWindows
+    /// - Parameter target: Spelled as for callers; a selector has no callees
+    /// - Parameter imagePath: Full path of the image the target is in. Mutually exclusive with imageName.
+    /// - Parameter imageName: Short name of that image. Mutually exclusive with imagePath.
+    /// - Parameter includeRuntimeHelperCalls: Keep retains, releases and other runtime helper calls
+    /// - Parameter limit: Report at most this many references
+    @MCPTool(hints: [.readOnly])
+    func callees(windowIdentifier: String, target: String, imagePath: String? = nil, imageName: String? = nil, includeRuntimeHelperCalls: Bool = false, limit: Int? = nil) async throws -> MCPCrossReferencesResponse {
+        let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
+        let engine = context.runtimeEngine
+        let targetImagePath = try await crossReferenceImagePath(imagePath: imagePath, imageName: imageName, engine: engine)
+        let subject = try await crossReferenceSubject(target, isSelector: false, imagePath: targetImagePath, selectedImagePath: context.selectedImageNode?.path, engine: engine)
+        let options = RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: includeRuntimeHelperCalls, resultLimit: limit)
+        let outcome = try await Self.references(within: crossReferenceTimeLimit) { _ in
+            try await engine.callees(of: subject, options: options)
+        }
+        return Self.response(subject: Self.description(of: subject), outcome: outcome, timeLimit: crossReferenceTimeLimit)
+    }
+
+    /// Lists the code that references a type — an Objective-C class, or a Swift struct, enum or class — across the indexed images: an instruction that takes the class or the type's metadata, or instantiates a mangled name that names it.
+    /// Answers within 30 seconds, like callers.
+    /// - Parameter windowIdentifier: The window identifier obtained from listWindows
+    /// - Parameter typeName: The name of the type
+    /// - Parameter imagePath: Full path of the image that defines the type. Mutually exclusive with imageName.
+    /// - Parameter imageName: Short name of that image. Mutually exclusive with imagePath.
+    /// - Parameter scope: "indexed" (default) scans every indexed image; "image" scans the image named
+    /// - Parameter limit: Report at most this many references
+    @MCPTool(hints: [.readOnly])
+    func typeReferences(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil, scope: String? = nil, limit: Int? = nil) async throws -> MCPCrossReferencesResponse {
+        let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
+        let engine = context.runtimeEngine
+        let targetImagePath = try await crossReferenceImagePath(imagePath: imagePath, imageName: imageName, engine: engine)
+        guard let object = try await crossReferenceType(named: typeName, imagePath: targetImagePath, selectedImagePath: context.selectedImageNode?.path, engine: engine) else {
+            throw MCPBridgeError.typeNotFound(name: typeName, scope: imagePath ?? imageName ?? "all loaded images")
+        }
+        let resolvedScope = try crossReferenceScope(scope, imagePath: targetImagePath)
+        let options = RuntimeCrossReferenceQueryOptions(resultLimit: limit)
+        let outcome = try await Self.references(within: crossReferenceTimeLimit) { reportProgress in
+            try await engine.typeReferences(to: object, in: resolvedScope, options: options, reportProgress: reportProgress)
+        }
+        return Self.response(subject: object.displayName, outcome: outcome, timeLimit: crossReferenceTimeLimit)
+    }
+
+    /// Says what each unslid address is in the window's engine: inside which function and how far into it, a stub and where it leads, a pointer slot and what it holds, a string, or the nearest symbol.
+    /// - Parameter windowIdentifier: The window identifier obtained from listWindows
+    /// - Parameter addresses: Unslid addresses as hexadecimal strings (0x…)
+    /// - Parameter imagePath: Full path of the image the addresses are in; without it each is read in the first image that maps it. Mutually exclusive with imageName.
+    /// - Parameter imageName: Short name of that image. Mutually exclusive with imagePath.
+    @MCPTool(hints: [.readOnly])
+    func symbolicate(windowIdentifier: String, addresses: [String], imagePath: String? = nil, imageName: String? = nil) async throws -> MCPSymbolicateResponse {
+        let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
+        let engine = context.runtimeEngine
+        let parsedAddresses = try addresses.map { text -> UInt64 in
+            let digits = text.lowercased().hasPrefix("0x") ? text.dropFirst(2) : Substring(text)
+            guard let address = UInt64(digits, radix: 16) else {
+                throw MCPBridgeError.operationFailed("'\(text)' is not a hexadecimal address.")
+            }
+            return address
+        }
+        let targetImagePath = try await crossReferenceImagePath(imagePath: imagePath, imageName: imageName, engine: engine)
+        let symbolications = try await engine.symbolicate(parsedAddresses, inImageAt: targetImagePath)
+        return MCPSymbolicateResponse(symbolications: symbolications.map { MCPAddressSymbolicationInfo(RuntimeAddressSymbolicationRow($0)) })
+    }
+
+    /// What a cross-reference query found within `timeLimit`.
+    struct CrossReferenceOutcome: Sendable {
+        let references: [RuntimeCrossReference]
+        let isComplete: Bool
+        let didRunOutOfTime: Bool
+    }
+
+    /// Runs `query`, keeping what its progress reports carry, and answers
+    /// with those once `timeLimit` passes: the query is then cancelled, which
+    /// stops the scan where it runs, and the images it finished stay cached
+    /// for the next call.
+    static func references(
+        within timeLimit: Duration,
+        _ query: @escaping @Sendable (_ reportProgress: @escaping @Sendable (RuntimeCrossReferenceQueryProgress) async -> Void) async throws -> RuntimeCrossReferenceQueryResult
+    ) async throws -> CrossReferenceOutcome {
+        let collected = CollectedReferences()
+        return try await withThrowingTaskGroup(of: CrossReferenceOutcome?.self) { group in
+            group.addTask {
+                let result = try await query { progress in await collected.append(progress.references) }
+                return CrossReferenceOutcome(references: result.references, isComplete: result.isComplete, didRunOutOfTime: false)
+            }
+            group.addTask {
+                try await Task.sleep(for: timeLimit)
+                return nil
+            }
+            defer { group.cancelAll() }
+            if let finished = try await group.next() ?? nil {
+                return finished
+            }
+            return CrossReferenceOutcome(references: await collected.references, isComplete: false, didRunOutOfTime: true)
+        }
+    }
+
+    private actor CollectedReferences {
+        private(set) var references: [RuntimeCrossReference] = []
+
+        func append(_ more: [RuntimeCrossReference]) {
+            references += more
+        }
+    }
+
+    private static func response(subject: String, outcome: CrossReferenceOutcome, timeLimit: Duration) -> MCPCrossReferencesResponse {
+        let note: String? = if outcome.didRunOutOfTime {
+            "Stopped after \(timeLimit.components.seconds) seconds with the references of the images scanned so far. Those images are cached: call again with the same arguments to continue with the rest."
+        } else if !outcome.isComplete {
+            "The limit was reached; raise it, or narrow the scope, for the rest."
+        } else {
+            nil
+        }
+        return MCPCrossReferencesResponse(
+            subject: subject,
+            references: outcome.references.map { MCPCrossReferenceInfo(RuntimeCrossReferenceRow($0)) },
+            isComplete: outcome.isComplete,
+            note: note,
+            error: nil
+        )
+    }
+
+    /// The one image a cross-reference tool names, loaded; `nil` when it
+    /// names none.
+    private func crossReferenceImagePath(imagePath: String?, imageName: String?, engine: RuntimeEngine) async throws -> String? {
+        guard imagePath != nil || imageName != nil else { return nil }
+        return try await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: nil, engine: engine).sorted().first
+    }
+
+    private func crossReferenceType(named typeName: String, imagePath: String?, selectedImagePath: String?, engine: RuntimeEngine) async throws -> RuntimeObject? {
+        for path in try await resolveImagePaths(requestImagePath: imagePath, requestImageName: nil, selectedImagePath: selectedImagePath, engine: engine).sorted() {
+            if let object = findObject(named: typeName, in: try await engine.objects(in: path)) { return object }
+        }
+        return nil
+    }
+
+    private func crossReferenceSubject(_ target: String, isSelector: Bool, imagePath: String?, selectedImagePath: String?, engine: RuntimeEngine) async throws -> RuntimeCrossReferenceSubject {
+        try await RuntimeCrossReferenceTargetResolution.subject(forTarget: target, isSelector: isSelector, imagePath: imagePath, engine: engine) { typeName in
+            try await self.crossReferenceType(named: typeName, imagePath: imagePath, selectedImagePath: selectedImagePath, engine: engine)
+        }
+    }
+
+    private func crossReferenceScope(_ scope: String?, imagePath: String?) throws -> RuntimeCrossReferenceScope {
+        switch scope {
+        case nil, "indexed":
+            return .indexedImages
+        case "image":
+            guard let imagePath else { throw MCPBridgeError.operationFailed("scope \"image\" scans the image imagePath or imageName names; name one.") }
+            return .image(path: imagePath)
+        case let other?:
+            throw MCPBridgeError.operationFailed("scope is \"indexed\" or \"image\", not \"\(other)\".")
+        }
+    }
+
+    private static func description(of subject: RuntimeCrossReferenceSubject) -> String {
+        switch subject {
+        case .function(let imagePath, let address):
+            "0x\(String(address, radix: 16)) in \((imagePath as NSString).lastPathComponent)"
+        case .member(let member):
+            member.kind.isObjC ? "\(member.isStatic ? "+" : "-")[\(member.object.displayName) \(member.name)]" : "\(member.object.displayName).\(member.name)"
+        case .selector(let selector):
+            selector
+        }
     }
 
     // MARK: - Private Helpers

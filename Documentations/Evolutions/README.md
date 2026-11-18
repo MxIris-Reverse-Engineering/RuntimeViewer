@@ -113,6 +113,7 @@
 | draft | [原生工程改用 Xcode 27 的新工程格式](draft-xcode27-project-format.md) | In Progress | 三个原生工程转成 Xcode 27 的 `project.xcproj` 之后要跟上的事：命令行工具的 target 改名为与产物同名的 `runtime-viewer-cli`（新格式下复制进 App 的产物按 target 名查找），Tuist 描述随之改名，`TuistScript.sh` 的 `check` 与导航栏重排改为两种格式都认（把新格式换算成原来的对象表），删掉转换带进 target 层的设置，更新文档。 |
 | draft | [引擎管理在 iOS 上可用](draft-engine-management-on-ios.md) | Draft | 愿景《iOS 版功能对齐》第一步。`RuntimeViewerEngineManagement` 在 iOS 与 visionOS 上也编，Mac 行为不变：XPC service、helper daemon 与 Mac Catalyst 收进带 `.live` 的闭包接缝（集中在 `RuntimeEngineManager+PlatformServices.swift`），配置加「浏览局域网」与「服务端推送运行时数据」两个开关和 iOS 用的 `.deviceApplication`，iOS 上文件在 App 进程里读；iOS app 的本机引擎与给 Mac 连的 Bonjour 服务端改由管理器启动，不浏览（服务端一次只接一个客户端）。设备上自己附加进程另起一篇。 |
 | [cross-repository draft](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection/blob/next/Documentations/Evolutions/draft-swift-first-imported-declarations.md) | Swift 实现的类，导入声明以 Swift 一侧为准 | In Progress | 由 MachOSwiftSection 维护唯一提案，MachOObjCSection 也参与。`@objc @implementation` 类的 Generated Interface 改以 Swift 一侧为准（抬 MachOSwiftSection 的修订号即得）；头文件标了 `NS_REFINED_FOR_SWIFT` 的成员，ObjC 头文件打回这个宏。本仓库的部分：服务进程打印 ObjC 类的头文件时向同一镜像的 Swift section 要「改了名的成员」（`RuntimeSwiftSection.objcSwiftImportNotes(for:)`），交给 `ObjCInterfaceBuilder`；Find 语料带同样的标注，与显示逐字一致。|
+| [cross-repository draft](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection/blob/next/Documentations/Evolutions/draft-offline-cross-references-and-symbolication.md) | 离线交叉引用与地址符号化 | In Progress | 由 MachOSwiftSection 维护唯一提案。本仓库的部分是 0056 暂缓的第 4 步加符号化：引擎命令 `crossReferenceSymbolicate` 与 `crossReferenceLocateSymbol`；CLI 子命令 `callers`、`callees`、`references`、`symbolicate`（协议版本 2 → 3）；MCP 工具 `Callers`、`Callees`、`TypeReferences`、`Symbolicate`（最多等 30 秒，超时返回已有结果并标 `isComplete: false`）。目标写法由 `RuntimeCrossReferenceTargetResolution` 统一解析，CLI 的 `--json` 与 MCP 的每行字段同出 `RuntimeCrossReferenceRow`。只服务活的引擎。 |
 > 0000 采用早期格式，正文没有状态字段，按「旧文档原地不动」的约定不回填；表里的 Implemented
 > 是 2026-10-26 对照代码核实的（修复在 `RuntimeNetworkConnection.swift`）。0001 也是早期格式，
 > 但正文有英文的 Status 字段，撤回时照常更新了它。
@@ -131,7 +132,7 @@
 
 | 后续项 | 出处 | 规模 | 说明 |
 |--------|------|------|------|
-| 交叉引用的命令行与 MCP 入口 | [0056](0056-cross-references.md) 落地第 4 步 | 中 | `runtime-viewer-cli` 的 `callers` / `callees` / `references` 三个子命令与 MCP 的三个工具；同批更新 agent 插件与 `Guides/CommandLineInterface.md` |
+| 交叉引用的命令行与 MCP 入口 | [0056](0056-cross-references.md) 落地第 4 步 | 进行中 | 由 MachOSwiftSection 的[离线交叉引用与地址符号化](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection/blob/next/Documentations/Evolutions/draft-offline-cross-references-and-symbolication.md)提案一并实现：`runtime-viewer-cli` 的 `callers` / `callees` / `references` / `symbolicate` 与 MCP 的 `Callers` / `Callees` / `TypeReferences` / `Symbolicate`，同批更新 agent 插件与 `Guides/CommandLineInterface.md` |
 | 命令行工具的安装设置页 | [0059](0059-command-line-interface-app-embedding.md) | 中 | Settings 的「Command Line Tool」页、`/usr/local/bin` 符号链接安装器与「允许命令行访问」开关。旧实现在本地分支 `feature/command-line-interface-app-embedding`（`c8b8f039`，落后 `next` 454 个 commit），要在新分支上参照它重做 |
 | 嵌入的 CLI 在 Debug-arm64e 构建里可能连错 helper daemon | [0059](0059-command-line-interface-app-embedding.md) 决策日志 2026-10-12 | 待查 | 疑点，未复现：那条旧分支在嵌入入口里打开了 `runtimeViewerIsARM64EVariant`，`next` 上没有这一行 |
 | SourceEditor 里系统符号与工程符号分色 | [0009](0009-content-editor-engine-selection.md)「未完成」B | 小到中 | 主题模型 `Settings.Theme.Preset` 要先加一档（例如 `systemTypeName`） |
