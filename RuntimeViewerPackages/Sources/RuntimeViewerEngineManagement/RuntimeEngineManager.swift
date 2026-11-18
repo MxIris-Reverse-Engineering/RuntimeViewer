@@ -385,7 +385,9 @@ public final class RuntimeEngineManager {
             startBonjourServer()
         }
 
-        startBonjourBrowser()
+        if startupSteps.contains(.bonjourBrowser) {
+            startBonjourBrowser()
+        }
 
         Task { @MainActor in
             if startupSteps.contains(.systemEngines) {

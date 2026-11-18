@@ -1,6 +1,6 @@
 # Draft - 引擎管理在 iOS 上可用
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
@@ -338,7 +338,7 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
 
 ## 落地步骤
 
-1. **配置与启动步骤** —— 改动地图里 `RuntimeEngineManagerConfiguration`、它的测试、愿景的相关提案表
+1. **配置与启动步骤**（已完成）—— 改动地图里 `RuntimeEngineManagerConfiguration`、它的测试、愿景的相关提案表
    - 行为：`applicationConfigurationStartsEverythingInTheSameOrder`
    - 行为：`headlessHostConfigurationIsUnchanged`
    - 行为：`deviceApplicationStartsServerAndSystemEnginesOnly`
