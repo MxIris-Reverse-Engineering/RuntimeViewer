@@ -28,7 +28,7 @@ coordinators, `AppDelegate` with the lifecycle controllers in `App/`, and the vi
 list interactions bound to RuntimeViewerAppCore's types. A view that names no type of RuntimeViewerAppCore,
 RuntimeViewerAppUI or the app goes in `RuntimeViewerUI` — except one only its ViewController uses, which
 stays a private nested type of that controller (*ViewControllers*). Background:
-`Documentations/Evolutions/draft-view-models-to-app-core.md`.
+`Documentations/Evolutions/0096-view-models-to-app-core.md`.
 
 ## ViewModels
 

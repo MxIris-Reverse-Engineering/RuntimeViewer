@@ -7,7 +7,7 @@ The apps' application layer is two targets and a facade
 
 - **`RuntimeViewerAppCore/`** holds the ViewModels, cell ViewModels, routes, `DocumentState` and the
   application logic — **every ViewModel of the apps; the macOS app target holds none**
-  (`Documentations/Evolutions/draft-view-models-to-app-core.md`), and `AppTargetBoundaryTests` reads the
+  (`Documentations/Evolutions/0096-view-models-to-app-core.md`), and `AppTargetBoundaryTests` reads the
   app's sources and fails on a type there named as a view model or inheriting `ViewModel<…>`,
   `CellViewModel` or `ViewModelProtocol`. The macOS window's view models, routes and page states are wrapped
   in `#if os(macOS)`. **Everything in it can be built and driven in a unit test, and no UI component

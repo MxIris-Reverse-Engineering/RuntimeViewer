@@ -1,13 +1,13 @@
-# Draft - macOS App 的 ViewModel 移进 AppCore，通用视图移进 RuntimeViewerUI
+# 0096 - macOS App 的 ViewModel 移进 AppCore，通用视图移进 RuntimeViewerUI
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
 - **所属愿景**: 无
 - **关联提案**: [0091](0091-app-core-ui-split.md)（拆出 AppCore 与 AppUI，当时明确「App target 不动，以后另立提案」）、[0094](0094-app-core-without-ui-models.md)（AppCore 不用 AppKit/UIKit 模型；当时把 `RuntimeSourcePickerContent` 搬进了 AppUI）、[0095](0095-app-layer-directory-layout.md)（AppCore 与 AppUI 的目录规则）、[0048](0048-routes-carry-no-views.md)（路由不带视图）、[0070](0070-xcode-style-runtime-source-picker.md) 与 [0071](0071-xcode-activity-progress.md)（来源选择器与工具栏活动）
-- **实现分支 / PR**: `feature/view-models-to-app-core`（worktree `.worktrees/RuntimeViewer-ViewModelsToAppCore`），做完一次合进 `next`
-- **配套文档**: 待定 —— 落地时判断
+- **实现分支 / PR**: `feature/view-models-to-app-core`，一次合进 `next`（分支已删）
+- **配套文档**: 无 —— 规则写进三份 `AGENTS.md`
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -706,3 +706,4 @@ extension MCPServerClientKey: @retroactive DependencyKey {
 | 2026-11-18 | Accepted | 用户批准，开始实现。 |
 | 2026-11-18 | 实现中的调整 | 与方案不同的几处，改动地图与详细设计已按实际改写：一、`MainRoute` 随第四步提前搬，附加进程的 ViewModel 以它为路由。二、`MCPService` 本身不加 `@Observable`，状态存进私有的 `@Observable` 小类 `MCPServerStateStorage`，避开它的 `@Loggable`、`@Dependency` 属性包装器与 `isolated deinit`；live 值经 `MCPServerClient.driving(_:)`，测试用自建的服务驱动，live 测试的三条行为名随之换成 `liveValueExists`、`liveClientFollowsServiceState`、`resumeWithoutDocumentProviderDoesNothing`；`MCPServerStateTests` 随类型搬进 AppCoreTests。三、依赖缓存写成 AppCore 内部的 `@Loggable enum RuntimeFileDependencyCaches`，不是 `RuntimeEngineManager` 的扩展：配对成功要记日志，`#log` 用所在类型的日志器，而管理器的日志器在另一个模块。四、`ToolbarActivityStateTests` 留在 AppUI，改成经 AppCore 构造、AppUI 转换来测文字（文字断言要用 RuntimeViewerUI 的分段辅助函数），「每个字段一一照抄」并入这个文件，不另建文件；`ToolbarActivityPresenterTests` 搬进 AppCoreTests 并加一例。五、`RuntimeSourcePickerContent.Source.icon` 是可选的 `IconDescriptor?`，测试里有不画图标的来源。六、`MainViewModel` 抽出内部静态函数 `toolbarIcon(for:)` 与 `historyItem(for:at:)` 供测试。七、导出两个完成页的测试合在 `ExportingCompletionViewModelTests` 一个文件。八、防回流测试多一例 `inheritanceClauseIsReadAsDeclared`，保证泛型参数与泛型实参里的 `ViewModel` 不算。九、附加进程的 VC 在选择器的代理方法里记住选中的行，再把 `Target` 交给 ViewModel。十、第五步的提交里 `MainViewModelTests` 用了引擎管理器不公开的初始化方法，测试 target 编不过；下一个提交改成 `@testable import` 修好，已推送的历史不改写。 |
 | 2026-11-18 | 实现完成，待用户看过后收尾 | 验证在 Ultra 上：第一到第四步的提交各自 `swift build --build-tests` 通过，第五步的提交包与 App 构建通过、测试 target 由下一个提交修好；第一到第五步各自 `./TuistScript.sh warm` 与 macOS App（Tuist workspace，Debug）构建通过。最终提交上：包级构建通过；AppCore 与 AppUI 测试共 1105 个，失败 3 条均为既有红灯（Call Hierarchy 超时、标题悬停副标题、整包跑时的 `BackgroundWorkProcessActivityTests`），新加的各组全部通过；MCP 包构建与 90 个测试通过；iOS 模拟器包构建通过；macOS App 构建通过。没做界面验证。文档判断：不另写使用指南或实现说明，规则写进三份 `AGENTS.md`；没有新术语。 |
+| 2026-11-18 | Implemented，编号 0096 | 用户看过后决定收尾：取号 0096、推送 `next`，删除功能分支与 worktree。验证沿用最终提交上那次（之后只改了文档，合并后的代码与功能分支相同）；三个红灯是基线上本来就有的。没做的界面目视与后续项见上文「后续项」。文档判断不变：不另写使用指南或实现说明，没有新术语。 |
