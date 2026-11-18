@@ -1,28 +1,33 @@
-#if os(macOS)
 import Combine
 import Foundation
 import FoundationToolbox
 import OrderedCollections
-import ServiceManagement
 import Dependencies
 import DependenciesMacros
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerInjection
-import RuntimeViewerHelperClient
-import RuntimeViewerCatalystExtensions
 
 /// Discovers, connects, groups and shares runtime engines for one process.
 ///
 /// Links no UI framework on purpose: icons, Rx bridging and user notifications
 /// are layered on by `RuntimeViewerApplication`, so a headless process can own
 /// an instance of this type alone. Which responsibilities an instance takes on
-/// is fixed by its ``RuntimeEngineManagerConfiguration``; the app uses
-/// `.application`, a windowless host `.headlessHost`.
+/// is fixed by its ``RuntimeEngineManagerConfiguration``; the Mac app uses
+/// `.application`, a windowless host `.headlessHost`, the iOS, iPadOS and
+/// visionOS app `.deviceApplication`.
+///
+/// Builds on every platform. What only the Mac has — the embedded XPC
+/// services, the privileged helper daemon, Mac Catalyst — is reached through
+/// seams whose live values are in `RuntimeEngineManager+PlatformServices.swift`.
 @Loggable
 @MainActor
 public final class RuntimeEngineManager {
+    #if os(macOS)
     fileprivate static let shared = RuntimeEngineManager(configuration: .application)
+    #else
+    fileprivate static let shared = RuntimeEngineManager(configuration: .deviceApplication)
+    #endif
 
     /// What this instance was told to bring up. Fixed at construction.
     public let configuration: RuntimeEngineManagerConfiguration
@@ -431,12 +436,35 @@ public final class RuntimeEngineManager {
         // Process-level identity travels in the TXT record instead; see
         // `RuntimeNetworkBonjour.localServiceName` for why the name itself must
         // not carry it.
-        let name = RuntimeNetworkBonjour.localServiceName
+        #if os(macOS)
+        // Synchronous on the Mac: `startSharingEngines()` reads the server
+        // engine right after this returns. The two names are the same on macOS.
+        startBonjourServer(named: RuntimeNetworkBonjour.localServiceName)
+        #else
+        // A device advertises the name its user gave it, which only resolves
+        // asynchronously; the synchronous one falls back to the model name. An
+        // older Mac that reads no TXT record titles its window and keys the
+        // device's sidebar state by this name. Nothing reads the server engine
+        // right away here: a device shares no engines.
+        Task { @MainActor in
+            self.startBonjourServer(named: await RuntimeNetworkBonjour.resolvedServiceName())
+        }
+        #endif
+    }
+
+    /// The engine the Bonjour server runs on, not yet connected: it serves
+    /// the engine list, and this process's own runtime when the configuration
+    /// says so. Test seam — connecting it would advertise on the network.
+    static func makeBonjourServerEngine(named name: String, configuration: RuntimeEngineManagerConfiguration) -> RuntimeEngine {
         let source = RuntimeSource.bonjour(name: name, identifier: .init(rawValue: name), role: .server)
-        let engine = RuntimeEngine(source: source, pushesRuntimeData: false)
+        return RuntimeEngine(source: source, pushesRuntimeData: configuration.bonjourServerPushesRuntimeData)
+    }
+
+    private func startBonjourServer(named name: String) {
+        let engine = Self.makeBonjourServerEngine(named: name, configuration: configuration)
         bonjourServerEngine = engine
 
-        #log(.info,"Starting Bonjour server with name: \(name, privacy: .public)")
+        #log(.info,"Starting Bonjour server with name: \(name, privacy: .public), pushing runtime data: \(engine.pushesRuntimeData, privacy: .public)")
 
         Task { @MainActor in
             do {
@@ -2301,4 +2329,3 @@ private extension LogCategory {
     static let engineIcon = LogCategory("EngineIcon", prefixesMessages: true)
     static let engineHeartbeat = LogCategory("EngineHeartbeat", prefixesMessages: true)
 }
-#endif

@@ -1,4 +1,3 @@
-#if os(macOS)
 import Combine
 import Foundation
 import FoundationToolbox
@@ -138,5 +137,4 @@ enum InjectedXPCEngineReconnection {
         }
     }
 }
-#endif
 #endif

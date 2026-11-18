@@ -1,4 +1,3 @@
-#if os(macOS)
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 
@@ -21,7 +20,6 @@ public enum RuntimeEngineManagerEvent: Sendable {
     /// The Mac Catalyst client engine could not be brought up: its embedded
     /// service did not answer, or its helper application did not launch or
     /// connect back. `.local` and injected-process reconnection are
-    /// unaffected.
+    /// unaffected. Never sent off the Mac, where there is no Mac Catalyst.
     case catalystHelperUnavailable(any Error)
 }
-#endif

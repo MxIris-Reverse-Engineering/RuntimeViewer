@@ -344,7 +344,7 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerUI` — AppKit UI components (MinimapView, StatefulOutlineView, skeleton effects)
 - `RuntimeViewerServiceHelper` — Helper utilities
 - `RuntimeViewerHelperClient` — Helper client for XPC communication
-- `RuntimeViewerEngineManagement` — Engine discovery, lifecycle, sharing and mirroring (`RuntimeEngineManager`, `RuntimeProcessAttacher`); no AppKit / RxSwift so a headless process can link it alone
+- `RuntimeViewerEngineManagement` — Engine discovery, lifecycle, sharing and mirroring (`RuntimeEngineManager`, `RuntimeProcessAttacher`); no AppKit / RxSwift so a headless process can link it alone. Builds for iOS and visionOS too (`RuntimeProcessAttacher` stays macOS-only): what only the Mac has — the XPC services, the helper daemon, Mac Catalyst — goes in `RuntimeEngineManager+PlatformServices.swift`, behind seams whose live values are per platform
 - `RuntimeViewerSettings` — RuntimeViewer's settings schema and dependency boundary over the single `UIFoundationSettings` store
 - `RuntimeViewerSettingsUI` — RuntimeViewer's SwiftUI settings pages hosted by `UIFoundationSettingsUI`
 - `RuntimeViewerCatalystExtensions` — Mac Catalyst support

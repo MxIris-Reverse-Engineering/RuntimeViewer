@@ -131,7 +131,7 @@ svg .headFill { fill: var(--muted); } svg .headAddFill { fill: var(--add); }
   <text x="732" y="237" class="mono">MacCatalystLaunching.live</text>
   <text x="732" y="254" class="mono">FileReading.live (file service)</text>
   <text x="732" y="271" class="mono">Eligibility.live (probes)</text>
-  <text x="732" y="288" class="mono">reconnectInjectedXPCEngines()</text>
+  <text x="732" y="288" class="mono">InjectedXPCEngineReconnection</text>
   <text x="722" y="310" class="mono">#else</text>
   <text x="732" y="327" class="mono">nil · .inThisProcess · .unavailable</text>
   <text x="722" y="347" class="mono">#endif</text>
@@ -200,16 +200,19 @@ svg .headFill { fill: var(--muted); } svg .headAddFill { fill: var(--add); }
 <tr><td><code>EM/RuntimeEngineManager.swift</code> · <code>MacCatalystLaunching</code></td><td><span class="tag t-mod">~</span></td><td><code>HelperApplication</code> 加 <code>daemonBecameAvailable</code>；<code>.live</code> 搬走；管理器持有可选值</td><td>管理器不再直接碰 helper daemon</td><td>2</td></tr>
 <tr><td><code>EM/RuntimeEngineManager.swift</code> · <code>RuntimeEngineManager</code></td><td><span class="tag t-mod">~</span></td><td><code>init</code> 的 Catalyst 参数改可选；订阅改走 <code>daemonBecameAvailable()</code>；删三个 helper 的 <code>@Dependency</code> 存储属性；<code>fileEngineCredential</code> → <code>fileReading</code>；文件引擎四个方法加进程内分支；没有 Catalyst 时重启不做事</td><td>平台差异收进接缝</td><td>2</td></tr>
 <tr><td><code>RuntimeFileEngineError</code></td><td><span class="tag t-mod">~</span></td><td>加 <code>.dependencyCacheFixedInThisProcess</code></td><td>进程内引擎不能换配对</td><td>2</td></tr>
-<tr><td><code>EM/RuntimeEngineManager+PlatformServices.swift</code></td><td><span class="tag t-add">+</span></td><td>三个 <code>.live</code> 的两个平台分支；<code>reconnectInjectedXPCEngines()</code>（只在 macOS）</td><td>平台代码集中在一处</td><td>2</td></tr>
-<tr><td><code>EM/RuntimeEngineManager.swift</code> · 若干成员</td><td><span class="tag t-mod">~</span></td><td><code>reconnectInjectedXPCEngines()</code> 用到的成员 <code>private</code> → <code>internal</code>（以编译为准）</td><td>跨文件扩展要用</td><td>2</td></tr>
+<tr><td><code>EM/RuntimeEngineManager+PlatformServices.swift</code></td><td><span class="tag t-add">+</span></td><td>三个 <code>.live</code> 的两个平台分支；注入进程的 XPC 重连 <code>InjectedXPCEngineReconnection</code>（<code>@Loggable</code> 的 enum，只在 macOS）</td><td>平台代码集中在一处</td><td>2</td></tr>
+<tr><td><code>EM/RuntimeEngineManager.swift</code> · 若干成员</td><td><span class="tag t-mod">~</span></td><td>XPC 重连用到的 <code>attachedRuntimeEngines</code> 的写、<code>observeRuntimeEngineState</code>、<code>rebuildSections</code> 从 <code>private</code> 放宽到 <code>internal</code>；<code>init</code> 加 <code>sharedCacheEligibility:</code>，分区也从它算</td><td>跨文件要用；测试用 <code>.unavailable</code> 建管理器</td><td>2</td></tr>
 <tr><td><code>EM/RuntimeSharedCacheEligibility.swift</code></td><td><span class="tag t-mod">~</span></td><td>加 <code>.unavailable</code>；<code>.live</code> 搬到平台文件；去掉 HelperClient 的 import</td><td>规则与平台无关</td><td>2</td></tr>
-<tr><td><code>EMT/RuntimeEngineManagerMacCatalystLaunchTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>给 <code>daemonBecameAvailable</code>；加 daemon 可用时重启、没有 Catalyst 时只起 <code>.local</code></td><td>新接缝的行为</td><td>2</td></tr>
+<tr><td><code>EMT/RuntimeEngineManagerMacCatalystLaunchTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>加「没有 Catalyst 时重启请求不做事」</td><td>新接缝的行为</td><td>2</td></tr>
+<tr><td><code>EMT/LocalEngineManagerSuites.swift</code></td><td><span class="tag t-add">+</span></td><td>串行的父套件：管理器列出 <code>.local</code> 的套件都挂在它下面，一次只跑一个</td><td><code>.local</code> 全进程一份，并行跑会互相看到对方设的 owner</td><td>2</td></tr>
+<tr><td><code>EMT/SystemEngineLaunchTests.swift</code></td><td><span class="tag t-add">+</span></td><td>没有 Catalyst 时只起 <code>.local</code>；daemon 可用时重启 Catalyst 引擎（用只起系统引擎的配置真的跑 <code>init</code>）</td><td>新接缝的行为</td><td>2</td></tr>
+<tr><td><code>EMT/SharedCacheOwnersWiringTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>挂到 <code>LocalEngineManagerSuites</code> 下</td><td>同上</td><td>2</td></tr>
 <tr><td><code>EMT/FileEngineManagementTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>改用 <code>fileReading = .inFileService { … }</code>；加进程内读的用例</td><td>新接缝的行为</td><td>2</td></tr>
 <tr><td><code>RuntimeViewerAppCoreTests/RuntimeFileEngineParkingTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>同上的改名</td><td>跟着改名</td><td>2</td></tr>
 <tr><td><code>EMT/RuntimeSharedCacheEligibilityTests.swift</code></td><td><span class="tag t-mod">~</span></td><td><code>.unavailable</code> 不共享、不放行任何来源</td><td>新值的行为</td><td>2</td></tr>
-<tr><td>Configuration、Event、Manager、Eligibility 四个文件</td><td><span class="tag t-mod">~</span></td><td>去掉 <code>#if os(macOS)</code>；删 <code>import ServiceManagement</code>；两个 macOS 模块的 import 只在 macOS；<code>shared</code> 按平台选配置</td><td>iOS 能编</td><td>3</td></tr>
-<tr><td><code>RuntimeEngineManager.startBonjourServer()</code></td><td><span class="tag t-mod">~</span></td><td><code>pushesRuntimeData</code> 取配置；macOS 照旧同步取名，其他平台先 <code>await resolvedServiceName()</code></td><td>与 iOS app 今天的服务端一致；Mac 上共享要同步读到服务端</td><td>3</td></tr>
-<tr><td><code>EMT/RuntimeEngineManagerDeviceConfigurationTests.swift</code></td><td><span class="tag t-add">+</span></td><td>在 Mac 上用 <code>.deviceApplication</code> 与 iOS 的接缝值建管理器：只有 <code>.local</code>、不重连、进程内读文件</td><td>iOS 路径在 Mac 上测到</td><td>3</td></tr>
+<tr><td>Configuration、Event、Manager、Eligibility 与平台文件</td><td><span class="tag t-mod">~</span></td><td>去掉最外层的 <code>#if os(macOS)</code>；主文件删掉 <code>import ServiceManagement</code> 与两个 macOS 模块的 import（只剩平台文件在 <code>#if os(macOS)</code> 里引入）；<code>shared</code> 按平台选配置</td><td>iOS 能编</td><td>3</td></tr>
+<tr><td><code>RuntimeEngineManager.startBonjourServer()</code></td><td><span class="tag t-mod">~</span></td><td>新增静态的 <code>makeBonjourServerEngine(named:configuration:)</code>，建引擎不连接，<code>pushesRuntimeData</code> 取配置；macOS 照旧同步取名，其他平台先 <code>await resolvedServiceName()</code></td><td>与 iOS app 今天的服务端一致；Mac 上共享要同步读到服务端；测试不必真的广播</td><td>3</td></tr>
+<tr><td><code>EMT/RuntimeEngineManagerDeviceConfigurationTests.swift</code></td><td><span class="tag t-add">+</span></td><td>三种配置的服务端只有设备配置推送；在 Mac 上用 <code>.deviceApplication</code> 与 iOS 的接缝值建管理器（经启动接缝，不广播）：只有 <code>.local</code> 与文件引擎、不重连、进程内读文件</td><td>iOS 路径在 Mac 上测到</td><td>3</td></tr>
 <tr><td><code>AGENTS.md</code>（根）· Package Structure</td><td><span class="tag t-mod">~</span></td><td>管理器也在 iOS 与 visionOS 上编；平台代码在哪</td><td>文档同步</td><td>3</td></tr>
 <tr><td><code>RuntimeViewerUsingUIKit/.../App/AppDelegate.swift</code></td><td><span class="tag t-mod">~</span></td><td>删手工建的服务端；注册之后解析 <code>@Dependency(\.runtimeEngineManager)</code>；保留后台预热 <code>.local</code></td><td>iOS app 换用管理器</td><td>4</td></tr>
 <tr><td><code>RuntimeViewerUsingUIKit.xcodeproj/project.xcproj</code></td><td><span class="tag t-mod">~</span></td><td>三个 target 的 <code>package-product-members</code> 加 <code>RuntimeViewerEngineManagement</code></td><td>链接管理器</td><td>4</td></tr>
@@ -262,18 +265,24 @@ svg .headFill { fill: var(--muted); } svg .headAddFill { fill: var(--add); }
     }
 }
 
-// startReading(_:), in-process branch
-case .inThisProcess:
+// startReading(_:), in-process branch: readInThisProcess(_:)
+if let readUnderWay = inProcessFileReadsBySource[file.source] {
+    _ = try await readUnderWay.value     // the same file asked for twice
+    return try await startReading(file)  // finds the listed engine
+}
+let read = Task { @MainActor in
+    defer { inProcessFileReadsBySource.removeValue(forKey: file.source) }
     let engine = try await Task.detached(priority: .userInitiated) {
         try RuntimeEngine(reading: file, hostInfo: .files)
     }.value
-    try await engine.connect()
+    try await engine.connect()           // state .localOnly
     filesByEngineID[engine.engineID] = file
     fileRuntimeEngines.append(engine)
     fileReadsByEngineID[engine.engineID] = Task {}   // already read
     rebuildSections()
-    return engine</code></pre>
-<p class="small"><code>RuntimeEngine</code> 能否从 detached 任务交出来（是否 <code>Sendable</code>）实现时核对；不能就另议并记入决策日志。进程内引擎不挂起，换配对的 cache 抛 <code>.dependencyCacheFixedInThisProcess</code>。</p></details>
+    return engine
+}</code></pre>
+<p class="small"><code>RuntimeEngine</code> 是 actor，可以从 detached 任务交出来。进程内引擎不挂起，换配对的 cache 抛 <code>.dependencyCacheFixedInThisProcess</code>。</p></details>
 <details><summary>Catalyst 启动的接缝</summary>
 <pre><code>struct MacCatalystLaunching {
     struct HelperApplication {
@@ -365,6 +374,9 @@ func application(_:didFinishLaunchingWithOptions:) -&gt; Bool {
 <tr><td>2026-11-18</td><td>自定：XPC 重连与服务端取名用 <code>#if</code>，不做接缝</td><td>这两处在 iOS 上没有路径可测</td></tr>
 <tr><td>2026-11-18</td><td>自定：进程内的文件引擎读完才返回、不挂起、不能换配对</td><td>不改 Core 的连接层；那篇再定</td></tr>
 <tr><td>2026-11-18</td><td>提交为 Draft，未批准</td><td>标着「代用户选」「代用户确认」的几行，是另一台 Mac 上的协作 agent 代用户作答的；提案先保持 Draft 推到 next，实现交给那台 Mac 上的 agent</td></tr>
+<tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，由 Ultra 上的会话接手实现；功能分支从 <code>origin/next</code> 切出，避开本机 <code>next</code> 上一个有意没推送的提交</td></tr>
+<tr><td>2026-11-18</td><td>第二步实现中的调整</td><td>XPC 重连写成 <code>@Loggable</code> 的 <code>InjectedXPCEngineReconnection</code>（管理器的日志器是 <code>private</code>）；同一文件正在进程内读时第二个请求等同一次读；进程内引擎状态是 <code>.localOnly</code>；挂起与否按整个管理器的 <code>fileReading</code> 判断；<code>init</code> 加 <code>sharedCacheEligibility:</code>；列出 <code>.local</code> 的测试挂到串行的父套件下</td></tr>
+<tr><td>2026-11-18</td><td>第三步实现中的调整</td><td>主文件不再 import 两个 macOS 模块；服务端引擎由静态的 <code>makeBonjourServerEngine(named:configuration:)</code> 建、不连接，测试不必广播；模块以 iOS 模拟器、iOS 真机与 visionOS 模拟器为目标各编一次，全部通过</td></tr>
 </table>
 </main>
 </body>

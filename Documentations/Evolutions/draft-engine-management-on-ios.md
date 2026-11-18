@@ -102,9 +102,9 @@
 | `EMT/FileEngineManagementTests.swift` | 修改 | `fileEngineCredential` 改 `fileReading = .inFileService { … }`；加进程内读的用例 | 新接缝的行为 | 2 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/RuntimeFileEngineParkingTests.swift` | 修改 | 同上的改名 | 跟着改名 | 2 |
 | `EMT/RuntimeSharedCacheEligibilityTests.swift` | 修改 | 加 `.unavailable` 不共享、不放行任何来源 | 新值的行为 | 2 |
-| `EM/RuntimeEngineManager.swift`、`EM/RuntimeEngineManagerConfiguration.swift`、`EM/RuntimeEngineManagerEvent.swift`、`EM/RuntimeSharedCacheEligibility.swift` | 修改 | 去掉 `#if os(macOS)`；删 `import ServiceManagement`；HelperClient、CatalystExtensions 的 import 包进 `#if os(macOS)`；`shared` 按平台选配置；`RuntimeEngineManagerEvent.catalystHelperUnavailable` 的注释写明 macOS 之外不会发 | iOS 能编 | 3 |
-| `EM/RuntimeEngineManager.swift` · `startBonjourServer()` | 修改 | `pushesRuntimeData` 取配置；macOS 上照旧同步用 `localServiceName`，其他平台先 `await resolvedServiceName()` 再建 | 与 iOS app 今天的服务端一致；Mac 上共享要同步读到服务端 | 3 |
-| `EMT/` 新增 `RuntimeEngineManagerDeviceConfigurationTests.swift` | 新增 | 用 `.deviceApplication` 与 iOS 的接缝值在 Mac 上建管理器：系统引擎只有 `.local`、不重连、文件在进程里读 | iOS 路径在 Mac 上测到 | 3 |
+| `EM/RuntimeEngineManager.swift`、`EM/RuntimeEngineManagerConfiguration.swift`、`EM/RuntimeEngineManagerEvent.swift`、`EM/RuntimeSharedCacheEligibility.swift`、`EM/RuntimeEngineManager+PlatformServices.swift` | 修改 | 去掉最外层的 `#if os(macOS)`；主文件删掉 `import ServiceManagement` 与 HelperClient、CatalystExtensions 的 import（只剩平台文件在 `#if os(macOS)` 里引入它们）；`shared` 按平台选配置；`RuntimeEngineManagerEvent.catalystHelperUnavailable` 的注释写明 macOS 之外不会发 | iOS 能编 | 3 |
+| `EM/RuntimeEngineManager.swift` · `startBonjourServer()` | 修改 | 新增静态的 `makeBonjourServerEngine(named:configuration:)` 建服务端引擎、不连接，`pushesRuntimeData` 取配置；macOS 上照旧同步用 `localServiceName`，其他平台先 `await resolvedServiceName()` 再建 | 与 iOS app 今天的服务端一致；Mac 上共享要同步读到服务端；测试不必真的广播 | 3 |
+| `EMT/` 新增 `RuntimeEngineManagerDeviceConfigurationTests.swift` | 新增 | 三种配置各建一个服务端引擎，只有设备配置推送运行时数据；用 `.deviceApplication` 与 iOS 的接缝值在 Mac 上建管理器（经启动接缝，不广播），手动起系统引擎、读一个文件：只有 `.local` 与文件引擎、不重连、文件在进程里读。后者列出 `.local`，挂在 `LocalEngineManagerSuites` 下 | iOS 路径在 Mac 上测到 | 3 |
 | `RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/AppDelegate.swift` | 修改 | 删 `remoteRuntimeEngine` 与手工建服务端的 `Task`；注册之后解析 `@Dependency(\.runtimeEngineManager)` 并持有；保留后台预热 `.local` | iOS app 换用管理器 | 4 |
 | `RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit.xcodeproj/project.xcproj` | 修改 | 三个 target 的 `package-product-members` 加 `RuntimeViewerEngineManagement` | 链接管理器 | 4 |
 | `AGENTS.md`（根）· Package Structure | 修改 | `RuntimeViewerEngineManagement` 一行补上「也在 iOS 与 visionOS 上编，只属于 macOS 的部分在 `RuntimeEngineManager+PlatformServices.swift`」 | 文档同步 | 3 |
@@ -224,22 +224,35 @@ extension RuntimeEngineManager {
 }
 ```
 
-`startReading(_:)` 的进程内分支：
+`startReading(_:)` 的进程内分支（`readInThisProcess(_:)`）：
 
 ```swift
-case .inThisProcess:
+if let readUnderWay = inProcessFileReadsBySource[file.source] {
+    _ = try await readUnderWay.value     // the same file asked for twice
+    return try await startReading(file)  // finds the listed engine
+}
+let read = Task { @MainActor in
+    defer { self.inProcessFileReadsBySource.removeValue(forKey: file.source) }
     let engine = try await Task.detached(priority: .userInitiated) {
         try RuntimeEngine(reading: file, hostInfo: .files)
     }.value
-    try await engine.connect()
-    filesByEngineID[engine.engineID] = file
-    fileRuntimeEngines.append(engine)
-    fileReadsByEngineID[engine.engineID] = Task {}   // already read
-    rebuildSections()
+    do {
+        try await engine.connect()       // no credential: state .localOnly
+    } catch {
+        await engine.stop()
+        throw error
+    }
+    self.filesByEngineID[engine.engineID] = file
+    self.fileRuntimeEngines.append(engine)
+    self.fileReadsByEngineID[engine.engineID] = Task {}   // already read
+    self.rebuildSections()
     return engine
+}
+inProcessFileReadsBySource[file.source] = read
+return try await read.value
 ```
 
-`RuntimeEngine` 能不能从 detached 任务里交出来（是否 `Sendable`），实现时核对；不能就在主 actor 上建、把目录的构建挪进去的办法另议并记入决策日志。
+`RuntimeEngine` 是 actor，可以从 detached 任务里交出来。
 
 **Catalyst 启动的接缝**：
 
@@ -356,7 +369,7 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
    - 行为：`changingTheDependencyCacheOfAFileReadInThisProcessThrows`
    - 行为：`unavailableEligibilitySharesNothing`
    - 行为：`fileServiceReadingIsUnchanged`（现有用例改名后照过）
-3. **放开平台限定** —— 四个文件去掉 `#if os(macOS)`、import 调整、`shared` 按平台、`startBonjourServer()`、新的设备配置测试、根 `AGENTS.md`
+3. **放开平台限定**（已完成）—— 四个文件去掉 `#if os(macOS)`、import 调整、`shared` 按平台、`startBonjourServer()`、新的设备配置测试、根 `AGENTS.md`
    - 行为：`engineManagementBuildsForIOSAndVisionOS`（Ultra 上以 iOS 模拟器与 visionOS 为目标编译该模块）
    - 行为：`bonjourServerPushesRuntimeDataOnlyWhenConfigured`
    - 行为：`deviceConfiguredManagerOnMacListsOnlyLocal`
@@ -386,3 +399,4 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
 | 2026-11-18 | 提交为 Draft，未批准 | 标着「代用户选」「代用户确认」的几行，是另一台 Mac 上的协作 agent 代用户作答的；用户决定提案先保持 Draft 推到 next，实现交给那台 Mac 上的 agent |
 | 2026-11-18 | Accepted | 用户批准，由 Ultra 上的会话接手实现。功能分支从 `origin/next` 切出，而不是本机的 `next`：本机 `next` 上有一个自 11-15 起有意留着没推送的提交（离线文件的镜像树），不该随这条分支推上去；两者改的文件不重叠。 |
 | 2026-11-18 | 第二步实现中的调整 | 一、注入进程的 XPC 重连写成平台文件里的 `@Loggable` enum `InjectedXPCEngineReconnection`，不是管理器的扩展：这一版 FrameworkToolbox 的 `@Loggable` 给管理器生成的日志器是 `private`，另一个文件里的扩展用不了 `#log`。二、进程内读文件时，同一个文件正在读的第二个请求等同一次读（`inProcessFileReadsBySource`），读完再按已列出的引擎处理：提案没写，不加会在两次并发打开时列出两个引擎。三、进程内读的引擎不带凭据 `connect()`，状态是 `.localOnly`，不是 `.connected`。四、进程内读是整个管理器的读法（`fileReading`），`suspendFileEngine` 据此不做事，不逐个引擎记。五、`init` 加 `sharedCacheEligibility:` 参数，共享缓存分区也从它算；新测试用 `.unavailable` 建管理器，不给 `.local` 留下 owner。六、会让管理器列出 `.local` 的测试（两条新测试与原有的共享缓存接线）挂到串行的父套件 `LocalEngineManagerSuites` 下：`.local` 全进程一份，并行跑的套件会互相看到对方设的 owner；「daemon 可用时重启」因此也放进新套件 `SystemEngineLaunchTests`，而不是 Catalyst 启动的套件。 |
+| 2026-11-18 | 第三步实现中的调整 | 一、主文件不再 import HelperClient 与 CatalystExtensions：第二步之后它已经用不到两者，只有平台文件在 `#if os(macOS)` 里引入。二、服务端引擎由新的静态方法 `makeBonjourServerEngine(named:configuration:)` 建、不连接，测试据此断言三种配置的推送开关，不必真的在网上广播。三、`engineManagementBuildsForIOSAndVisionOS` 在 Ultra 上用 `xcodebuild -scheme RuntimeViewerEngineManagement` 以 iOS 模拟器、iOS 真机与 visionOS 模拟器为目标各编一次，全部通过，第一次就没有平台相关的编译错误。 |

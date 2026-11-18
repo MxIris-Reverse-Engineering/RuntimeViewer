@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 import RuntimeViewerCommunication
 
@@ -75,4 +74,3 @@ struct RuntimeSharedCacheEligibility: Sendable {
         }
     }
 }
-#endif

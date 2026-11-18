@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 
 /// Which responsibilities a ``RuntimeEngineManager`` takes on.
@@ -115,4 +114,3 @@ extension RuntimeEngineManagerConfiguration {
         return steps
     }
 }
-#endif
