@@ -675,10 +675,11 @@ extension MCPServerClientKey: @retroactive DependencyKey {
    - 行为：`titleIconFollowsImageKind`
    - 行为：`historyItemsDescribeObjectAndImageIcons`
    - 行为：`historyTitleMarksGeneratedInterface`
-6. **防回流检查与文档收尾**：步骤 6 的各行，以及三份 `AGENTS.md` 的剩余改动。
+6. **防回流检查与文档收尾**（已完成，2026-11-18）：步骤 6 的各行，以及三份 `AGENTS.md` 的剩余改动。
    - 行为：`appTargetDeclaresNoViewModel`
    - 行为：`appTargetInheritsNoViewModel`
    - 行为：`appTargetDirectoryExists`
+   - 行为：`inheritanceClauseIsReadAsDeclared`（继承子句按声明读，泛型参数与泛型实参里的 `ViewModel` 不算）
 
 每一步各自构建通过。全部做完后跑一次「详细设计 · 验证」的完整清单，在一条功能分支上一次合进 `next`。
 

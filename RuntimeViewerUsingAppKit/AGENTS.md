@@ -21,6 +21,15 @@ operations — never goes in the ViewController, which only lays out its views, 
 the ViewModel's `Input`, and binds the `Output` to its views in `setupBindings(for:)`. The coordinator
 creates both (see *Coordinators and Routes*).
 
+**The app target holds no ViewModel.** Every ViewModel and cell ViewModel, with its routes and page
+states, is in `RuntimeViewerAppCore`, where a test builds and drives it; `AppTargetBoundaryTests` fails on
+a view model in the app target. The app target keeps the ViewControllers and window controllers, the
+coordinators, `AppDelegate` with the lifecycle controllers in `App/`, and the views, cell views, menus and
+list interactions bound to RuntimeViewerAppCore's types. A view that names no type of RuntimeViewerAppCore,
+RuntimeViewerAppUI or the app goes in `RuntimeViewerUI` — except one only its ViewController uses, which
+stays a private nested type of that controller (*ViewControllers*). Background:
+`Documentations/Evolutions/draft-view-models-to-app-core.md`.
+
 ## ViewModels
 
 - **Base class**: every ViewModel inherits `ViewModel<Route>`, which provides `documentState`, `router`,

@@ -6,7 +6,11 @@ The apps' application layer is two targets and a facade
 (`Documentations/Evolutions/0091-app-core-ui-split.md`):
 
 - **`RuntimeViewerAppCore/`** holds the ViewModels, cell ViewModels, routes, `DocumentState` and the
-  application logic. **Everything in it can be built and driven in a unit test, and no UI component
+  application logic — **every ViewModel of the apps; the macOS app target holds none**
+  (`Documentations/Evolutions/draft-view-models-to-app-core.md`), and `AppTargetBoundaryTests` reads the
+  app's sources and fails on a type there named as a view model or inheriting `ViewModel<…>`,
+  `CellViewModel` or `ViewModelProtocol`. The macOS window's view models, routes and page states are wrapped
+  in `#if os(macOS)`. **Everything in it can be built and driven in a unit test, and no UI component
   appears in it**: no subclass or construction of a view, control, cell, menu, popover, window or view
   controller, no delegate, data source or adapter of a control, no coordinator. `Driver` / `Signal`,
   `@RxObserved` and `Router` are fine. **No AppKit or UIKit model either**
@@ -135,10 +139,12 @@ Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
 (`Documentations/Evolutions/0095-app-layer-directory-layout.md`)
 
 - **Nothing at a target's root.** Every file is in a directory named after a feature: the app's own folder
-  name where the app has one (`App`, `Base`, `BatchExporting`, `Content`, `EditorArea`, `Find`, `Inspector`,
-  `Reports`, `Sidebar/Root`, `Sidebar/RuntimeObject`), otherwise what the directory holds (`Activity`,
-  `BackgroundWork`, `ContextMenus`, `Document`, `Engine`, `Extensions`, `Filtering`, `Presentation`,
-  `RuntimeImage`, `RuntimeObject`, `Storage`). `Find/` has `Query/`, `Scope/`, `Results/` and
+  name where the app has one (`App`, `Base`, `BatchExporting`, `Content`, `EditorArea`, `Exporting`, `Find`,
+  `Inspector`, `Main`, `MCP`, `Reports`, `Sidebar/Root`, `Sidebar/RuntimeObject`, `Specialization`; without
+  the space where the app's has one: `AttachToProcess` for `Attach Process`, `GenerationOptions` for
+  `Generation Options`), otherwise what the directory holds (`Activity`, `BackgroundWork`, `ContextMenus`,
+  `Document`, `Engine`, `Extensions`, `Filtering`, `Presentation`, `RuntimeImage`, `RuntimeObject`,
+  `RuntimeSourcePicker`, `Storage`). `Find/` has `Query/`, `Scope/`, `Results/` and
   `CrossReferences/` below it; its root keeps only `FindViewModel`, `FindSession` and `FindNavigatorRoutable`.
 - **An engine's background work is in `BackgroundWork/`**: `RuntimeEngineBackgroundWork` and what it holds —
   `Indexing/`, `FindCorpus/`, `CrossReferencePreparation/`, `ManualLoading/` — each with its state and
@@ -147,7 +153,7 @@ Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
   goes in the directory of the same name as that type's: `RuntimeObject/RuntimeObjectIcon+Image.swift` beside
   AppCore's `RuntimeObject/RuntimeObjectIcon.swift`, `Content/ContentInterface+Theme.swift` beside
   `Content/ContentInterface.swift`. What only AppUI has gets a directory of its own (`Theme/`,
-  `RuntimeSourcePicker/`, `Resources/`) or goes with its one user (`NSColor+Xcode.swift`, the Find results'
+  `Resources/`) or goes with its one user (`NSColor+Xcode.swift`, the Find results'
   text colours, in `Find/Results/`).
 - **A file is named after its main type.** Small helper types may stay beside it; a file whose name names no
   type in it, or that holds unrelated things, is split.
