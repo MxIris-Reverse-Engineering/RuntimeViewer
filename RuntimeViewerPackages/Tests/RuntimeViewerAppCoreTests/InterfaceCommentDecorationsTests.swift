@@ -274,11 +274,11 @@ struct InterfaceCommentDecorationsTests {
             commentStructure: fixture.structure
         )
 
-        let rendered = ContentTextViewModel.renderInterface(for: fetched, theme: ResolvedTheme.fallback)
-        #expect(rendered?.commentDecorations?.collapsibles.count == 3)
+        let rendered = ContentInterface.prepared(from: fetched)
+        #expect(rendered.commentDecorations?.collapsibles.count == 3)
 
         let unstructured = ContentTextViewModel.FetchedInterface(interfaceString: fetched.interfaceString, runtimeObject: runtimeObject, commentStructure: nil)
-        #expect(ContentTextViewModel.renderInterface(for: unstructured, theme: ResolvedTheme.fallback)?.commentDecorations == nil)
+        #expect(ContentInterface.prepared(from: unstructured).commentDecorations == nil)
     }
 
     /// The note the pane prints in place of an interface Print Exported Declarations Only empties

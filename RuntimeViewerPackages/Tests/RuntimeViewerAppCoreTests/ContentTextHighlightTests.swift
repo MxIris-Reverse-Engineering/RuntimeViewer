@@ -29,7 +29,7 @@ struct ContentTextHighlightTests {
                 }
             )
         }
-        let output = viewModel.transform(.init(runtimeObjectClicked: .empty(), runtimeObjectOpenedInNewTab: .empty()))
+        let output = viewModel.transform(.init(runtimeObjectClicked: .empty(), runtimeObjectOpenedInNewTab: .empty(), interfaceDisplayed: .empty()))
         return (viewModel, output)
     }
 
@@ -132,7 +132,7 @@ struct ContentTextHighlightTests {
         let subscription = output.highlightRange.emitOnNext { highlightRanges.append($0) }
         defer { subscription.dispose() }
 
-        _ = try await nextValue(from: output.attributedString, timeout: 20) { $0 != nil }
+        _ = try await nextValue(from: output.interface, timeout: 20)
         try await Task.sleep(for: .milliseconds(500))
         #expect(highlightRanges.isEmpty)
     }

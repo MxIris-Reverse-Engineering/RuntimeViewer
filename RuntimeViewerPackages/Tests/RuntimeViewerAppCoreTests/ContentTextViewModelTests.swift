@@ -23,11 +23,9 @@ struct ContentTextViewModelTests {
         let (viewModel, output) = makeViewModel(for: nsString, in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        let rendered = try await nextValue(from: output.renderedInterface, timeout: 120)
-        #expect(rendered.attributedString.string.contains("@interface NSString"))
-        #expect(try await nextValue(from: output.attributedString).string == rendered.attributedString.string)
+        let rendered = try await nextValue(from: output.interface, timeout: 120)
+        #expect(rendered.string.contains("@interface NSString"))
         #expect(try await nextValue(from: output.imageNameOfRuntimeObject) == "Foundation")
-        _ = try await nextValue(from: output.theme)
     }
 
     @Test("selectedRuntimeObjectName follows the document's selection")
@@ -100,7 +98,7 @@ struct ContentTextViewModelTests {
         // Warms the document's interface cache, so what follows would come back at once
         // without the delay — which is what makes a slow result attributable to it.
         let (warmingViewModel, warmingOutput) = makeViewModel(for: nsObject, in: environment)
-        _ = try await nextValue(from: warmingOutput.renderedInterface, timeout: 120)
+        _ = try await nextValue(from: warmingOutput.interface, timeout: 120)
         withExtendedLifetime(warmingViewModel) {}
 
         environment.settings.developer.isEnabled = true
@@ -109,7 +107,7 @@ struct ContentTextViewModelTests {
         let startInstant = clock.now
         let (delayedViewModel, delayedOutput) = makeViewModel(for: nsObject, in: environment)
         defer { withExtendedLifetime(delayedViewModel) {} }
-        _ = try await nextValue(from: delayedOutput.renderedInterface, timeout: 60)
+        _ = try await nextValue(from: delayedOutput.interface, timeout: 60)
 
         #expect(clock.now - startInstant >= .milliseconds(800))
     }
@@ -126,7 +124,8 @@ struct ContentTextViewModelTests {
         let output = viewModel.transform(
             .init(
                 runtimeObjectClicked: runtimeObjectClickedRelay.asSignal(),
-                runtimeObjectOpenedInNewTab: runtimeObjectOpenedInNewTabRelay.asSignal()
+                runtimeObjectOpenedInNewTab: runtimeObjectOpenedInNewTabRelay.asSignal(),
+                interfaceDisplayed: .empty()
             )
         )
         return (viewModel, output)

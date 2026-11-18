@@ -19,8 +19,7 @@ import Testing
 ///
 /// Rules 4 and 5 come from proposal `app-core-without-ui-models`: RuntimeViewerAppCore describes images,
 /// colours, row text and the content pane's text as values, and RuntimeViewerAppUI turns them into
-/// AppKit and UIKit objects. They land in steps; until the last one, the files still to be cleaned up
-/// are listed in `AppCoreBoundary.filesPendingCleanup` and only rules 1 to 3 apply to them.
+/// AppKit and UIKit objects.
 ///
 /// The check reads names, not types: it cannot follow a superclass chain or a type alias. A line it
 /// reports that is inside the boundary all the same goes in `allowedLines`, with the reason.
@@ -31,12 +30,9 @@ struct AppCoreBoundaryTests {
         let packageScan = try Self.packageScan.get()
         var findings: [String] = []
         for sourceFile in packageScan.sourceFiles(inTargetNamed: "RuntimeViewerAppCore") {
-            let isPendingCleanup = AppCoreBoundary.filesPendingCleanup[sourceFile.relativePath] != nil
             for declaration in AppCoreBoundary.declarations(in: sourceFile) {
-                let reasons = isPendingCleanup
-                    ? AppCoreBoundary.componentViolations(in: declaration.code)
-                    : AppCoreBoundary.violations(in: declaration.code)
-                for reason in reasons where !Self.isAllowed(relativePath: sourceFile.relativePath, code: declaration.code) {
+                for reason in AppCoreBoundary.violations(in: declaration.code)
+                    where !Self.isAllowed(relativePath: sourceFile.relativePath, code: declaration.code) {
                     findings.append("\(sourceFile.relativePath):\(declaration.lineNumber) \(reason)")
                 }
             }
@@ -58,23 +54,6 @@ struct AppCoreBoundaryTests {
                 declaration.code.contains(allowedLine.code) && !AppCoreBoundary.violations(in: declaration.code).isEmpty
             }
             #expect(isStillReported, "\(allowedLine.relativePath): no reported line contains \"\(allowedLine.code)\" any more; drop the allowance")
-        }
-    }
-
-    /// The list only shrinks: a file cleaned up, moved or deleted leaves it, so that the rules apply to
-    /// it from then on.
-    @Test("every file pending cleanup still exists and still names an AppKit or UIKit type")
-    func pendingFilesAreStillPending() throws {
-        let sourceFiles = try Self.packageScan.get().sourceFiles(inTargetNamed: "RuntimeViewerAppCore")
-        for relativePath in AppCoreBoundary.filesPendingCleanup.keys.sorted() {
-            let sourceFile = try #require(
-                sourceFiles.first { $0.relativePath == relativePath },
-                "\(relativePath) is gone; take it off AppCoreBoundary.filesPendingCleanup"
-            )
-            let isStillPending = AppCoreBoundary.declarations(in: sourceFile).contains { declaration in
-                !AppCoreBoundary.platformUIViolations(in: declaration.code).isEmpty
-            }
-            #expect(isStillPending, "\(relativePath) breaks rules 4 and 5 no more; take it off AppCoreBoundary.filesPendingCleanup")
         }
     }
 
@@ -307,18 +286,6 @@ enum AppCoreBoundary {
         "NSString",
         "NSURL",
         "UIFoundationSettings",
-    ]
-
-    /// The files rules 4 and 5 do not apply to yet, each with the step of proposal
-    /// `app-core-without-ui-models` that cleans it up. Empty once the last step lands.
-    static let filesPendingCleanup: [String: Int] = [
-        "RuntimeViewerAppCore/Content/ContentTextViewModel.swift": 4,
-        "RuntimeViewerAppCore/Content/NSAttributedString+ContentLinks.swift": 4,
-        "RuntimeViewerAppCore/Extensions.swift": 4,
-        "RuntimeViewerAppCore/PlatformTypes.swift": 4,
-        "RuntimeViewerAppCore/Theme/FrozenSemanticString+ThemeProfile.swift": 4,
-        "RuntimeViewerAppCore/Theme/ThemePreset+ThemeProfile.swift": 4,
-        "RuntimeViewerAppCore/Theme/ThemeProfile.swift": 4,
     ]
 
     /// What `code` breaks, one reason per rule broken.

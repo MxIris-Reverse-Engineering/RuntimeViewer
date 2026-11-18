@@ -59,6 +59,13 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
     private let generatedInterfaceToggledRelay = PublishRelay<SelectionRoute.Destination>()
 
+    /// Each interface once its themed text is in the text view.
+    private let interfaceDisplayedRelay = PublishRelay<ContentInterface.ID>()
+
+    /// The interface whose text is in the text view, which the right-click menu and the insertion
+    /// point look links and declared members up in.
+    private var displayedInterface: ContentInterface?
+
     private var isPressedCommand: Bool = false
 
     private var isPressedShift: Bool = false
@@ -133,6 +140,7 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             // semantics) and ⇧⌥⌘-click open in a new tab.
             runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .focusedTab }, jumpToDefinitionRelay.asSignal()).merge(),
             runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .newTab }, openInNewTabRelay.asSignal()).merge(),
+            interfaceDisplayed: interfaceDisplayedRelay.asSignal(),
             runtimeObjectOpenedInNextEditorPane: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.linkClickDestination == .nextEditorPane }, openInNextEditorPaneRelay.asSignal()).merge(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
             cursorMemberChanged: cursorMemberChangedRelay.asSignal().distinctUntilChanged(),
@@ -152,13 +160,24 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 //        }
 //        .disposed(by: rx.disposeBag)
 
-        output.attributedString.drive(with: self) { target, attributedString in
-            target.textView.textStorage?.setAttributedString(attributedString)
+        // The view model hands over the interface; this pane themes it (proposal
+        // `app-core-without-ui-models`) and reports it displayed once its text is in place, which
+        // ends the view model's loading.
+        let renderer = ContentTextRenderer(interfaces: output.interface)
+
+        renderer.renderedText.drive(with: self) { target, renderedText in
+            // Before the text: setting it moves the insertion point, whose member is looked up here.
+            target.displayedInterface = renderedText.interface
+            target.textView.textStorage?.setAttributedString(renderedText.attributedString)
             target.lineNumberRulerView.reload()
+            target.interfaceDisplayedRelay.accept(renderedText.interface.id)
         }
         .disposed(by: rx.disposeBag)
 
-        output.theme.drive(with: self) {
+        // A theme-only change (⌘+) re-themes here, where the view model does not see it.
+        renderer.delayedRendering.drive(additionalCommonLoadingRelay).disposed(by: rx.disposeBag)
+
+        renderer.theme.drive(with: self) {
             $0.containerView._backgroundColor = $1.backgroundColor
             $0.commonLoadingView.backgroundColor = $1.backgroundColor
             $0.textView.backgroundColor = $1.backgroundColor
@@ -193,8 +212,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         var newMenuItems: [NSMenuItem] = []
         // AppKit hands over the text's length for a click past its end, which no attribute lookup
         // may be asked for; the lookups below answer nothing there.
-        let text = view.attributedString()
-        let linkedObject = text.linkedRuntimeObject(at: charIndex)
+        let interface = displayedInterface
+        let linkedObject = interface?.linkedRuntimeObject(at: charIndex)
         if let runtimeObject = linkedObject {
             let jumpToDefinitionMenuItem = RuntimeObjectMenuItem(title: "Jump to Definition", symbolName: .arrowTurnDownRight, runtimeObject: runtimeObject)
             jumpToDefinitionMenuItem.target = self
@@ -219,7 +238,7 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         // Find Call Hierarchy and the other cross-reference commands: for the type a name links
         // to, and for the member the clicked line declares.
         var requests: [FindCrossReferenceRequest] = []
-        if let member = text.declaredMember(at: charIndex) {
+        if let member = interface?.declaredMember(at: charIndex) {
             requests += FindCrossReferenceRequest.requests(for: member)
         }
         if let runtimeObject = linkedObject {
@@ -278,7 +297,7 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     /// The insertion point moved: the member its line declares, if any, is the one the Inspector's
     /// References tab and Find ▸ Find Call Hierarchy follow.
     func textViewDidChangeSelection(_ notification: Notification) {
-        cursorMemberChangedRelay.accept(textView.attributedString().declaredMember(at: textView.selectedRange().location))
+        cursorMemberChangedRelay.accept(displayedInterface?.declaredMember(at: textView.selectedRange().location))
     }
 
     @objc private func jumpToDefinitionAction(_ sender: RuntimeObjectMenuItem) {

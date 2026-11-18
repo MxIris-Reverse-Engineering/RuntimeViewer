@@ -238,34 +238,33 @@ ul { padding-left: 22px; }
 <tr><td><code>TUI/CrossLayerDependencyTests.swift</code></td><td>修改</td><td>加 <code>PasteboardClientKey</code>、<code>FinderClientKey</code>；第二步删 <code>RuntimeObjectIconRenderingKey</code>、<code>RuntimeEngineIconProvidingKey</code></td><td>跨层清单</td><td>1、2</td></tr>
 <tr><td><code>AC/Presentation/IconDescriptor.swift</code> · <code>IconDescriptor</code>、<code>FindResultSymbol</code></td><td>新增</td><td>见详细设计</td><td>图标的描述值</td><td>2</td></tr>
 <tr><td><code>AC/Presentation/ColorDescriptor.swift</code> · <code>ColorDescriptor</code></td><td>新增</td><td>见详细设计</td><td>图标颜色的描述值</td><td>2</td></tr>
-<tr><td><code>AUI/Presentation/IconDescriptor+Image.swift</code></td><td>新增</td><td><code>IconDescriptor.image</code>、<code>image(size:)</code>（缓存）；<code>ColorDescriptor.color</code></td><td>AppUI 解析</td><td>2</td></tr>
-<tr><td><code>AC/SystemSymbol.swift</code></td><td>修改</td><td>只留枚举与名字；<code>image</code>、<code>image(pointSize:weight:)</code>、<code>image(named:)</code> 搬走</td><td>造 <code>NSImage</code></td><td>2</td></tr>
-<tr><td><code>AUI/SystemSymbol+Image.swift</code></td><td>新增</td><td>搬来的三个成员</td><td>同上</td><td>2</td></tr>
-<tr><td><code>AC/CustomSymbol.swift</code></td><td>移动 → <code>AUI/CustomSymbol.swift</code></td><td>内容不变（<code>bundle: .module</code> 随之指向 AppUI 的资源包）</td><td>只有搬走的 <code>RuntimeImageKind+Icon</code> 用</td><td>2</td></tr>
+<tr><td><code>AUI/Presentation/IconDescriptor+Image.swift</code></td><td>新增</td><td><code>IconDescriptor.image</code>（主线程缓存）、<code>image(size:)</code>（第三步加入）；<code>FindResultSymbol</code> 的六个符号；<code>ColorDescriptor.color</code></td><td>AppUI 解析</td><td>2、3</td></tr>
+<tr><td><code>AC/SystemSymbol.swift</code></td><td>修改</td><td>只留枚举与名字，改为 <code>public</code>；画图的成员搬走</td><td>造 <code>NSImage</code></td><td>2</td></tr>
+<tr><td><code>AUI/Icons/SystemSymbol+Image.swift</code></td><td>新增</td><td>搬来的三个成员</td><td>同上</td><td>2</td></tr>
+<tr><td><code>AC/CustomSymbol.swift</code></td><td>移动 → <code>AUI/Icons/CustomSymbol.swift</code></td><td>加 <code>import RuntimeViewerAppCore</code>，其余不变</td><td>只有搬走的 <code>RuntimeImageKind+Icon</code> 用</td><td>2</td></tr>
 <tr><td><code>AC/Resources/Symbols.xcassets</code></td><td>移动 → <code>AUI/Resources/Symbols.xcassets</code></td><td>内容不变</td><td>同上</td><td>2</td></tr>
 <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td>修改</td><td>AppCore 去掉 <code>resources</code>，AppUI 加 <code>resources: [.process("Resources")]</code>，注释随之改</td><td>同上</td><td>2</td></tr>
+<tr><td><code>Tuist.swift</code>、<code>Tuist/ProjectDescriptionHelpers/LocalPackages.swift</code></td><td>修改</td><td>资源包 target 名改为 <code>RuntimeViewerPackages_RuntimeViewerAppUI</code></td><td>Tuist 描述重复了资源包 target</td><td>2</td></tr>
 <tr><td><code>AC/RuntimeImageKind.swift</code></td><td>修改</td><td>只留种类与判定；<code>icon</code>、<code>iconColor</code>、<code>coloredIcon</code> 和私有的图像、颜色常量搬走</td><td>UI 类型</td><td>2</td></tr>
-<tr><td><code>AUI/RuntimeImageKind+Icon.swift</code></td><td>新增</td><td>同名的 <code>icon</code>、<code>iconColor</code>、<code>coloredIcon</code></td><td>App 的调用点不用改</td><td>2</td></tr>
+<tr><td><code>AUI/Icons/RuntimeImageKind+Icon.swift</code></td><td>新增</td><td>同名的 <code>icon</code>、<code>iconColor</code>、<code>coloredIcon</code></td><td>App 的调用点不用改</td><td>2</td></tr>
 <tr><td><code>AC/RuntimeObjectIcon.swift</code></td><td>修改</td><td>留 <code>Glyph</code>、<code>glyph(for:)</code>、tooltip；新增 <code>genericGlyph</code>、<code>specializedGlyph</code>、<code>objcImplementationGlyph</code>、<code>secondaryGlyph(for:)</code>；删 <code>icon(...)</code> 一族、<code>RuntimeObjectIconRendering</code>、key、<code>RuntimeObjectIconImageCache</code>、<code>BlankRuntimeObjectIconRenderer</code></td><td>造 <code>NSImage</code></td><td>2</td></tr>
-<tr><td><code>AUI/RuntimeObjectIcon+Image.swift</code></td><td>新增</td><td>同名的 <code>icon(...)</code> 一族、<code>secondaryIcon(for:)</code>；<code>RuntimeObjectIconRendering</code> 协议、缓存与 <code>@DependencyEntry</code></td><td>App 的调用点不用改</td><td>2</td></tr>
-<tr><td><code>AUI/IDEIconRuntimeObjectIconRenderer.swift</code></td><td>修改</td><td>不再补 AppCore 的 key，改由上面的 <code>@DependencyEntry</code> 当 live 值</td><td>不再跨层</td><td>2</td></tr>
+<tr><td><code>AUI/Icons/RuntimeObjectIcon+Image.swift</code></td><td>新增</td><td>同名的 <code>icon(...)</code> 一族、<code>secondaryIcon(for:)</code>、<code>image(for:)</code>；渲染协议、缓存、空白渲染器，key 成为 AppUI 内部的 <code>DependencyKey</code></td><td>App 的调用点不用改</td><td>2</td></tr>
+<tr><td><code>AUI/IDEIconRuntimeObjectIconRenderer.swift</code></td><td>修改</td><td>删掉给 AppCore 的 key 补 live 值的扩展</td><td>不再跨层</td><td>2</td></tr>
 <tr><td><code>AC/Engine/RuntimeEngineIconProviding.swift</code></td><td>删除</td><td>—</td><td>AppCore 改用 <code>.runtimeEngine(engineID:)</code></td><td>2</td></tr>
 <tr><td><code>AUI/Engine/RuntimeEngineIconProvider.swift</code></td><td>修改</td><td>去掉对 AppCore 协议的遵循与 key；新增 <code>icon(forEngineID:) -&gt; NSImage</code>，经 <code>RuntimeEngineManager.runtimeEngines</code> 找回引擎，找不到用占位图</td><td>解析 <code>.runtimeEngine</code></td><td>2</td></tr>
 <tr><td><code>AC/RuntimeObject/RuntimeObjectCellAppearance.swift</code></td><td>修改</td><td>三个图标字段改 <code>IconDescriptor</code> / <code>IconDescriptor?</code></td><td>状态是值</td><td>2</td></tr>
 <tr><td><code>AC/Sidebar/SidebarRuntimeObjectCellViewModel.swift</code></td><td>修改</td><td>图标改描述值（第二步）；标题改 <code>RowText</code>（第三步）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/Sidebar/SidebarRootCellViewModel.swift</code> · <code>Appearance</code></td><td>修改</td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor?</code>（第二步）；<code>name: RowText</code>（第三步）</td><td>同上</td><td>2、3</td></tr>
+<tr><td><code>AC/Sidebar/SidebarRootCellViewModel.swift</code> · <code>Appearance</code></td><td>修改</td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor</code>（2）；<code>name: RowText</code>（3）</td><td>同上</td><td>2、3</td></tr>
 <tr><td><code>AC/Inspector/InspectorSwiftSpecializationCellViewModel.swift</code>、<code>AC/Inspector/RuntimeObjectCellAppearance+Inspector.swift</code>、<code>AC/Inspector/InspectorHierarchyCellViewModel.swift</code></td><td>修改</td><td>图标改描述值（第二步）；标题、副标题改 <code>RowText</code>、去掉 import（第三步）</td><td>同上</td><td>2、3</td></tr>
 <tr><td><code>AC/Reports/ReportCellViewModel.swift</code> · <code>Appearance</code></td><td>修改</td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor?</code></td><td>同上</td><td>2</td></tr>
 <tr><td><code>AC/Reports/ReportViewModel.swift</code> · <code>ReportOutline</code></td><td>修改</td><td>九个图标常量与 <code>icon(forImagePath:)</code>、<code>iconColor(forImagePath:)</code> 改返回描述值</td><td>同上</td><td>2</td></tr>
 <tr><td><code>AC/Reports/ReportTreeBuilder.swift</code></td><td>修改</td><td>跟随 <code>ReportOutline</code> 的类型</td><td>同上</td><td>2</td></tr>
 <tr><td><code>AC/Reports/ReportGroupWork.swift</code></td><td>修改</td><td><code>engineIcon: IconDescriptor?</code>，值为 <code>.runtimeEngine(engineID:)</code></td><td>同上</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindResultNode+Icon.swift</code></td><td>新增</td><td>从 <code>FindResultCellStyle</code> 搬来「哪种行配哪个图标」的逻辑（<code>crossReferenceIcon(for:)</code> 两个重载、徽章选择），返回 <code>IconDescriptor</code></td><td>逻辑留在 AppCore</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindResultNode.swift</code> · <code>FindResultCellAppearance</code></td><td>修改</td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor?</code>，删 <code>iconAlpha</code>（第二步）；<code>title: RowText</code>，<code>makeAppearance(for:)</code> 不再收 <code>metrics</code>，<code>isContentEqual</code> 改 <code>==</code>（第三步）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/Find/FindResultCellStyle.swift</code></td><td>修改（2）→ 移动 → <code>AUI/Find/</code>（3）</td><td>第二步删掉图标部分；第三步整份搬走，<code>Metrics</code>、字体、颜色、段落样式与六个符号的画法留在其中，新增 <code>RowTextStyle.findResult(_:)</code></td><td>渲染</td><td>2、3</td></tr>
+<tr><td><code>AC/Find/FindResultNode+Icon.swift</code> · <code>FindResultIcon</code></td><td>新增</td><td>「哪种行配哪个图标」的逻辑与淡化的透明度 <code>dimmedAlpha</code>，返回 <code>IconDescriptor</code></td><td>逻辑留在 AppCore</td><td>2</td></tr>
+<tr><td><code>AC/Find/FindResultNode.swift</code> · <code>FindResultCellAppearance</code></td><td>修改</td><td><code>icon</code>、<code>iconColor</code> 改描述值，<code>iconAlpha</code> 保留为数字（2）；<code>title: RowText</code>，不再收尺寸，<code>isContentEqual</code> 改 <code>==</code>（3）</td><td>同上</td><td>2、3</td></tr>
+<tr><td><code>AC/Find/FindResultCellStyle.swift</code></td><td>修改（2）→ 移动 → <code>AUI/Find/</code>（3）</td><td>第二步删掉图标部分，只留两个着色常量；第三步整份搬走，新增 <code>RowTextStyle.findResult(_:)</code></td><td>渲染</td><td>2、3</td></tr>
 <tr><td><code>AC/Inspector/InspectorReferencesViewModel.swift</code></td><td>修改</td><td>展开三角改 <code>.findResultSymbol(.disclosure(isExpanded:))</code>（2）；去掉 <code>.inspector</code> 尺寸（3）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift</code> · <code>Source</code></td><td>修改</td><td><code>image: NSImage?</code> → <code>icon: IconDescriptor?</code>，去掉 import</td><td>同上</td><td>2</td></tr>
-<tr><td><code>AUI/RuntimeSourcePicker/RuntimeSourceMenuAdapter.swift</code>、<code>RuntimeSourcePopoverAdapter.swift</code></td><td>修改</td><td>用 <code>icon?.image</code></td><td>解析</td><td>2</td></tr>
-<tr><td><code>MAC/Main/MainViewModel.swift</code></td><td>修改</td><td>造来源列表时给 <code>.runtimeEngine(engineID:)</code></td><td>同上</td><td>2</td></tr>
+<tr><td><code>AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift</code></td><td>移动 → <code>AUI/RuntimeSourcePicker/</code></td><td>内容不变，仍带 <code>NSImage</code></td><td>AppCore 里没人用它；断开的来源显示的是存下的图像，按 ID 找不回</td><td>2</td></tr>
 <tr><td><code>MAC/Base/RuntimeObjectCellView.swift</code></td><td>修改</td><td>图标用 <code>.image</code>（2）；标题用 <code>attributedString(in:)</code>（3）</td><td>解析</td><td>2、3</td></tr>
 <tr><td><code>MAC/Sidebar/Root/SidebarRootTableCellView.swift</code></td><td>修改</td><td>同上</td><td>同上</td><td>2、3</td></tr>
 <tr><td><code>MAC/Find/FindResultCellView.swift</code></td><td>修改</td><td>图标用 <code>image(size: metrics.iconSize)</code>、颜色用 <code>.color</code>（2）；按自己的 <code>metrics</code> 渲染标题（3）</td><td>同上</td><td>2、3</td></tr>
@@ -279,7 +278,9 @@ ul { padding-left: 22px; }
 <tr><td><code>T/FindResultNodeTests.swift</code></td><td>修改</td><td>图标尺寸断言搬进 <code>TUI/FindResultCellStyleTests.swift</code>（新增，2）；字号断言同去（3）；<code>title ===</code> 改 <code>==</code></td><td>同上</td><td>2、3</td></tr>
 <tr><td><code>TUI/IconDescriptorRenderingTests.swift</code></td><td>新增</td><td>每种描述值都画得出图，同一描述值取到同一个缓存图像，<code>.runtimeEngine</code> 找不到引擎时用占位图</td><td>解析的测试</td><td>2</td></tr>
 <tr><td><code>AC/Presentation/RowText.swift</code> · <code>RowText</code></td><td>新增</td><td>见详细设计</td><td>行文字的描述值</td><td>3</td></tr>
-<tr><td><code>AC/NSAttributedString+RowText.swift</code></td><td>移动 → <code>AUI/Presentation/</code></td><td>原有 <code>init(rowText:fontSize:color:)</code> 保留；新增 <code>RowText.attributedString(in:)</code> 与 <code>RowTextStyle</code></td><td>渲染</td><td>3</td></tr>
+<tr><td><code>AC/NSAttributedString+RowText.swift</code></td><td>移动 → <code>AUI/Presentation/</code></td><td>原有 <code>init(rowText:fontSize:color:)</code> 原样保留</td><td>渲染</td><td>3</td></tr>
+<tr><td><code>AUI/Presentation/RowText+AttributedString.swift</code> · <code>RowTextStyle</code></td><td>新增</td><td><code>RowTextStyle.list</code>、<code>RowTextStyle.findResult(_:)</code> 与 <code>RowText.attributedString(in:)</code></td><td>渲染</td><td>3</td></tr>
+<tr><td><code>AC/Find/FindResultNode.swift</code> · <code>subtitleSeparator</code></td><td>修改</td><td>名字与副标题之间的两个空格从 <code>FindResultCellStyle</code> 搬到这里：它是文字内容</td><td>第三步</td><td>3</td></tr>
 <tr><td><code>AC/Theme/NSColor+Xcode.swift</code></td><td>移动 → <code>AUI/Theme/</code></td><td>内容不变</td><td>只有 Find 的样式与 App 的 Find 页用</td><td>3</td></tr>
 <tr><td><code>MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectViewController.swift:346</code>、<code>MAC/Sidebar/Root/SidebarRootViewController.swift:218</code></td><td>不改（核对）</td><td><code>.title.string</code> / <code>.name.string</code> 由 <code>RowText.string</code> 承接</td><td>—</td><td>3</td></tr>
 <tr><td><code>T/FindResultMemberEmphasisTests.swift</code></td><td>修改</td><td>改成断言 <code>RowText</code> 的段与角色；字体断言搬进 <code>TUI/FindResultCellStyleTests.swift</code></td><td>同上</td><td>3</td></tr>
@@ -295,13 +296,14 @@ ul { padding-left: 22px; }
 <tr><td><code>AC/ViewModel.swift</code></td><td>修改</td><td><code>delayedLoading</code> 的「true 晚 100 毫秒、false 立即」抽成 <code>delayingTrue(by:)</code>，AppUI 复用</td><td>两处同一规则</td><td>4</td></tr>
 <tr><td><code>MAC/Content/ContentTextViewController.swift</code></td><td>修改</td><td>用 <code>ContentTextRenderer</code>；显示后发 <code>interfaceDisplayed</code>；右键菜单与光标成员改查 <code>ContentInterface</code>；背景色等取 <code>renderer.theme</code>；转圈合并 <code>renderer.delayedRendering</code></td><td>跟随</td><td>4</td></tr>
 <tr><td><code>MAC/Content/ContentSourceEditorViewController.swift</code></td><td>修改</td><td>直接绑 <code>output.interface</code>；<code>setSource</code> 后发 <code>interfaceDisplayed</code>；⌘-点击、菜单改查 <code>ContentInterface</code>；主题取 <code>renderer.theme</code>（不订阅 <code>renderedText</code>）</td><td>跟随</td><td>4</td></tr>
-<tr><td><code>MAC/Base/ViewControllers.swift</code> · <code>BaseViewController</code></td><td>修改</td><td>转圈绑定改成可覆写的 <code>commonLoadingState: Driver&lt;Bool&gt;</code>（默认 <code>viewModel.delayedLoading</code>）</td><td>内容视图要合并两路</td><td>4</td></tr>
+<tr><td><code>MAC/Base/ViewControllers.swift</code> · <code>BaseViewController</code></td><td>修改</td><td>新增 <code>additionalCommonLoadingRelay</code>，每次绑定新 ViewModel 时置回 <code>false</code>；转圈显示它与 <code>viewModel.delayedLoading</code> 的「或」（父类先绑转圈、子类后建渲染环节，所以不做成可覆写的属性）</td><td>内容视图要合并两路</td><td>4</td></tr>
 <tr><td><code>IOS/Content/ContentTextViewController.swift</code></td><td>修改</td><td>用 <code>ContentTextRenderer</code>（主题为 <code>ResolvedTheme.fallback</code>）；显示后发 <code>interfaceDisplayed</code></td><td>跟随</td><td>4</td></tr>
 <tr><td><code>RuntimeViewerAppTestingSupport/ViewModelTestEnvironment.swift</code></td><td>修改</td><td>去掉 <code>resolvedThemeStream</code> 注入</td><td>主题不在 AppCore</td><td>4</td></tr>
 <tr><td><code>T/ContentTextPipelineTests.swift</code></td><td>修改</td><td><code>:60</code>、<code>:109</code>、<code>:261</code> 三例搬进 <code>TUI/ContentTextRendererTests.swift</code>（新增）；其余改等 <code>interface</code>；新增显示报告的用例</td><td>同上</td><td>4</td></tr>
 <tr><td><code>T/ContentTextViewModelTests</code>、<code>T/ContentCrossReferenceTests</code>、<code>T/ContentMacroExpansionTests</code>、<code>T/InterfaceCommentDecorationsTests</code>、<code>T/ContentTextHighlightTests</code>、<code>T/DerivedDataRestoreTests</code></td><td>修改</td><td>改读 <code>ContentInterface</code>；去掉调用签名里的主题参数</td><td>同上</td><td>4</td></tr>
 <tr><td><code>T/ContentLinkLookupTests.swift</code></td><td>修改</td><td>改测 <code>ContentInterface.linkedRuntimeObject(at:)</code> / <code>declaredMember(at:)</code> 与越界</td><td>同上</td><td>4</td></tr>
-<tr><td><code>TUI/ContentTextRendererTests.swift</code>、<code>TUI/ContentTextRenderingPerformanceTests.swift</code></td><td>新增</td><td>渲染环节的行为；上色的基准测试</td><td>同上</td><td>4</td></tr>
+<tr><td><code>TUI/ContentTextRendererTests.swift</code>、<code>TUI/ContentTextRenderingPerformanceTests.swift</code></td><td>新增</td><td>渲染环节的行为；准备与上色的耗时测量（设了环境变量 <code>RUNTIME_VIEWER_MEASURE_CONTENT_RENDERING</code> 才跑）</td><td>同上</td><td>4</td></tr>
+<tr><td><code>T/AppCoreBoundaryTests.swift</code></td><td>修改</td><td>删掉过渡清单与守护它的测试：规则对 AppCore 全面生效</td><td>同上</td><td>4</td></tr>
 <tr><td><code>RuntimeViewerPackages/Sources/AGENTS.md</code></td><td>修改</td><td>分界规则、描述值、跨层服务清单、资源位置、<code>RuntimeImageKind</code> 一段</td><td>文档同批</td><td>1–4</td></tr>
 <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md:71-72,368-378</code></td><td>修改</td><td>「造 AppKit 对象的值在 <code>observeOnMainScheduler()</code> 之后映射」改成「在视图里解析描述值」；<code>Appearance</code> 一节写明字段是描述值</td><td>同上</td><td>2、3</td></tr>
 <tr><td><code>AGENTS.md</code>（仓库根）· Package Structure</td><td>修改</td><td>AppCore 一行补上「代码里没有 AppKit/UIKit 类型」</td><td>同上</td><td>4</td></tr>
@@ -386,7 +388,7 @@ ul { padding-left: 22px; }
 
 <h2 id="steps">落地步骤</h2>
 <p>每一步都单独合进 <code>next</code>，合入前跑两组包测试、编 macOS App，并编 iOS App 确认 UIKit 分支能编译。</p>
-<details open><summary>1. 系统服务与修饰键</summary>
+<details open><summary>1. 系统服务与修饰键（已完成）</summary>
 <ul>
 <li><code>pasteboardClientResolvesToTheGeneralPasteboardOnceAppUIIsLinked</code></li>
 <li><code>finderClientResolvesToTheWorkspaceOnceAppUIIsLinked</code></li>
@@ -397,7 +399,7 @@ ul { padding-left: 22px; }
 <li><code>foundationNamesAreNotReported</code></li>
 <li><code>theIOSRouteViewControllerIsTheOnlyAllowedLine</code></li>
 </ul></details>
-<details><summary>2. 图标与图标颜色</summary>
+<details><summary>2. 图标与图标颜色（已完成）</summary>
 <ul>
 <li><code>everyIconDescriptorDrawsAnImage</code></li>
 <li><code>theSameIconDescriptorReturnsTheSameCachedImage</code></li>
@@ -410,7 +412,7 @@ ul { padding-left: 22px; }
 <li><code>customSymbolsLoadFromAppUIsResourceBundle</code></li>
 <li><code>runtimeEngineManagerKnowsEveryEngineTheReportShows</code>（验证调研里的推测；不成立就改用弱引用记录）</li>
 </ul></details>
-<details><summary>3. 行文字</summary>
+<details><summary>3. 行文字（已完成）</summary>
 <ul>
 <li><code>listStyleDrawsEachRoleAsTheOldRowTextInitializerDid</code></li>
 <li><code>sidebarFilterMatchesAreEmphasizedRuns</code></li>
@@ -419,7 +421,7 @@ ul { padding-left: 22px; }
 <li><code>findStyleDrawsEmphasisInBoldMatchColour</code></li>
 <li><code>findResultContentEqualityComparesRowText</code></li>
 </ul></details>
-<details><summary>4. 内容页与主题</summary>
+<details><summary>4. 内容页与主题（已完成）</summary>
 <p>先在改动前的 <code>next</code> 上加基准测试的前身，对一个大接口（本机 AppKit 的 <code>NSView</code>）连续上色 20 次取中位数并记下；改完后同一测试改调 <code>attributedString(themedWith:)</code>，中位数不得高出 10%。结果写进决策日志。</p>
 <ul>
 <li><code>contentInterfaceCarriesTheLinkTableAndDeclaredMembersWithoutATheme</code></li>
@@ -510,7 +512,7 @@ FindResultCellAppearance(icon: .findResultSymbol(.match), iconColor: .secondaryL
 // AppUI
 public struct RowTextStyle: Sendable {
     public static let list: RowTextStyle
-    public static func findResult(_ metrics: FindResultCellStyle.Metrics, allowsWrapping: Bool) -&gt; RowTextStyle
+    public static func findResult(_ metrics: FindResultCellStyle.Metrics) -&gt; RowTextStyle
 }
 extension RowText {
     public func attributedString(in style: RowTextStyle) -&gt; NSAttributedString
@@ -527,7 +529,7 @@ extension RowText {
 </details>
 <details><summary><code>ContentInterface</code> 与 <code>ContentTextViewModel</code> 的改动（AppCore）</summary>
 <pre><code>public struct ContentInterface: Sendable, Identifiable {
-    public struct ID: Hashable, Sendable { let generation: Int }
+    public struct ID: Hashable, Sendable { private let value = UUID() }
     public struct Link: Sendable { public let range: NSRange; public let target: RuntimeObject }
     public struct DeclaredMemberLine: Sendable { public let range: NSRange; public let member: RuntimeMemberReference }
 
@@ -576,7 +578,7 @@ public final class ContentTextRenderer {
 extension ContentInterface {
     public func attributedString(themedWith theme: some ThemeProfile) -&gt; NSAttributedString
 }</code></pre>
-<p>保留 signpost 名 <code>content.attributedStringBuild</code>。<code>ContentTextViewController</code> 覆写 <code>commonLoadingState</code> 为 <code>viewModel.delayedLoading</code> 与 <code>renderer.delayedRendering</code> 的或。</p>
+<p>保留 signpost 名 <code>content.attributedStringBuild</code>。<code>ContentTextViewController</code> 把 <code>renderer.delayedRendering</code> 接进 <code>BaseViewController.additionalCommonLoadingRelay</code>，转圈显示它与 <code>viewModel.delayedLoading</code> 的「或」。</p>
 </details>
 <details><summary>跨层服务与边界测试</summary>
 <pre><code>// AppCore
@@ -680,6 +682,12 @@ enum AppCoreBoundary {
 <tr><td>2026-11-18</td><td>下层模块</td><td>用户定：只管 AppCore。</td></tr>
 <tr><td>2026-11-18</td><td>Codable</td><td>用户定：留给 <code>ls</code> / <code>do</code> 提案。</td></tr>
 <tr><td>2026-11-18</td><td>共识</td><td>用户确认以上决定和「未经询问采用的做法」作为写提案的共识。</td></tr>
+<tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。四步共用一条功能分支，每做完一步先在本地合进 <code>next</code> 的检出给用户看，同意后再推送、开始下一步。</td></tr>
+<tr><td>2026-11-18</td><td>第一步完成</td><td>规则 4、5 用参数化样例测；另加两条守护测试（过渡清单只减不增、允许的行要对得上）；Foundation 名字清单预收了几个确定的名字；这一步只为 iOS 模拟器编了应用层包。</td></tr>
+<tr><td>2026-11-18</td><td>第二步完成</td><td><code>RuntimeSourcePickerContent</code> 原样搬进 AppUI（断开的来源显示的是存下的图像，按 ID 找不回）；<code>iconAlpha</code> 保留为数字（透明度不由符号决定）；<code>image(size:)</code> 推到第三步；对象图标的 key 成为 AppUI 内部的 <code>DependencyKey</code>；Tuist 的资源包 target 名随之改。</td></tr>
+<tr><td>2026-11-18</td><td>第三步完成</td><td><code>RowTextStyle.findResult(_:)</code> 只收尺寸；分隔符搬进 AppCore；Find 行的尺寸全部留在 cell 视图；侧栏根节点标题显式写 <code>labelColor</code>，显示效果相同。</td></tr>
+<tr><td>2026-11-18</td><td>第四步完成</td><td>转圈合并改用 <code>BaseViewController.additionalCommonLoadingRelay</code>；<code>ContentInterface.ID</code> 包 <code>UUID</code>；渲染环节多一个只给测试看的 <code>isRendering</code>；过渡清单删除；SourceEditor 换主题不再重新 <code>setSource</code>。测量（<code>NSString</code>，约 2.2 万 UTF-16 单位，20 次中位数）：改动前 15.3 毫秒，改动后 <code>NSTextView</code> 一路 11.9 毫秒、SourceEditor 一路 7.3 毫秒。</td></tr>
+<tr><td>2026-11-18</td><td>实现完成</td><td>四步都已在本地合进 <code>next</code> 的检出，待用户看过后收尾。</td></tr>
 </table></div>
 </details>
 </main>

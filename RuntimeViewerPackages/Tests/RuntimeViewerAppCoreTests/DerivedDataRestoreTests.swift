@@ -302,8 +302,8 @@ struct DerivedDataRestoreTests {
         }
         defer { withExtendedLifetime(viewModel) {} }
 
-        let rendered = try await nextValue(from: viewModel.$renderedInterface.asObservable(), timeout: 120) { $0 != nil }
-        #expect(rendered?.attributedString.length ?? 0 > 0)
+        let rendered = try await nextValue(from: viewModel.$interface.asObservable(), timeout: 120) { $0 != nil }
+        #expect(rendered?.string.isEmpty == false)
         #expect(try await engine.isImageIndexed(path: overlayPath))
         await engine.stop()
     }

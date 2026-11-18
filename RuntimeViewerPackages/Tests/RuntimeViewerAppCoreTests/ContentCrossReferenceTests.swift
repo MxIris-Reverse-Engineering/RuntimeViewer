@@ -55,34 +55,35 @@ struct ContentCrossReferenceTests {
         let output = viewModel.transform(.init(
             runtimeObjectClicked: .empty(),
             runtimeObjectOpenedInNewTab: .empty(),
+            interfaceDisplayed: .empty(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
             cursorMemberChanged: cursorMemberChangedRelay.asSignal()
         ))
         return (viewModel, output)
     }
 
-    /// The member the rendered text says line `lineNumber` declares.
-    private static func declaredMember(onLine lineNumber: Int, of attributedString: NSAttributedString) -> RuntimeMemberReference? {
-        let lines = attributedString.string.components(separatedBy: "\n")
+    /// The member the interface says line `lineNumber` declares.
+    private static func declaredMember(onLine lineNumber: Int, of interface: ContentInterface) -> RuntimeMemberReference? {
+        let lines = interface.string.components(separatedBy: "\n")
         let lineStart = lines.prefix(lineNumber - 1).reduce(0) { $0 + ($1 as NSString).length + 1 }
-        return attributedString.attribute(.runtimeViewerDeclaredMember, at: lineStart, effectiveRange: nil) as? RuntimeMemberReference
+        return interface.declaredMember(at: lineStart)
     }
 
     @Test("a line declaring a member with code carries the member, over the whole line; an ivar's line carries none")
-    func renderedTextCarriesDeclaredMembers() async throws {
+    func interfaceCarriesDeclaredMembers() async throws {
         let environment = ViewModelTestEnvironment()
         let (viewModel, output) = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        let rendered = try await nextValue(from: output.renderedInterface, timeout: 30).attributedString
+        let interface = try await nextValue(from: output.interface, timeout: 30)
 
-        #expect(Self.declaredMember(onLine: 4, of: rendered) == RuntimeMemberReference(object: Self.foo, name: "delegate", kind: .objcProperty, isStatic: false))
-        #expect(Self.declaredMember(onLine: 5, of: rendered) == RuntimeMemberReference(object: Self.foo, name: "doSomething:", kind: .objcMethod, isStatic: false))
-        #expect(Self.declaredMember(onLine: 2, of: rendered) == nil, "an ivar has no code")
-        #expect(Self.declaredMember(onLine: 1, of: rendered) == nil)
+        #expect(Self.declaredMember(onLine: 4, of: interface) == RuntimeMemberReference(object: Self.foo, name: "delegate", kind: .objcProperty, isStatic: false))
+        #expect(Self.declaredMember(onLine: 5, of: interface) == RuntimeMemberReference(object: Self.foo, name: "doSomething:", kind: .objcMethod, isStatic: false))
+        #expect(Self.declaredMember(onLine: 2, of: interface) == nil, "an ivar has no code")
+        #expect(Self.declaredMember(onLine: 1, of: interface) == nil)
         // The whole line: the name is not where a right-click has to land.
-        let methodLineEnd = (rendered.string as NSString).range(of: "thing;").location
-        #expect(rendered.attribute(.runtimeViewerDeclaredMember, at: methodLineEnd, effectiveRange: nil) as? RuntimeMemberReference == Self.declaredMember(onLine: 5, of: rendered))
+        let methodLineEnd = (interface.string as NSString).range(of: "thing;").location
+        #expect(interface.declaredMember(at: methodLineEnd) == Self.declaredMember(onLine: 5, of: interface))
     }
 
     @Test("a command chosen in the content pane runs in the Find navigator, recorded, and asks for the navigator")

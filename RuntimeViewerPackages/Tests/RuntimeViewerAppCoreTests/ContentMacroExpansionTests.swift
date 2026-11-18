@@ -57,19 +57,19 @@ struct ContentMacroExpansionTests {
         )
     }
 
-    private static func render(_ expansions: [RuntimeInterfaceMacroExpansion]) throws -> ContentTextViewModel.RenderedInterface {
+    private static func render(_ expansions: [RuntimeInterfaceMacroExpansion]) throws -> ContentInterface {
         let fetched = ContentTextViewModel.FetchedInterface(
             interfaceString: SemanticString { Standard(text) }.frozen(),
             runtimeObject: runtimeObject(),
             commentStructure: nil,
             macroExpansions: expansions
         )
-        return try #require(ContentTextViewModel.renderInterface(for: fetched, theme: ResolvedTheme.fallback))
+        return ContentInterface.prepared(from: fetched)
     }
 
     @Test func theAttributeAndTheAnchorsAreLocatedInUTF16OffsetsOfTheRenderedText() throws {
         let rendered = try Self.render([try Self.macroExpansion()])
-        let renderedText = rendered.attributedString.string as NSString
+        let renderedText = rendered.string as NSString
 
         let expansion = try #require(rendered.macroExpansions.first)
         #expect(expansion.macroName == "Observation.Observable")
@@ -119,7 +119,7 @@ struct ContentMacroExpansionTests {
         )
 
         let rendered = try Self.render([expansion])
-        let renderedText = rendered.attributedString.string as NSString
+        let renderedText = rendered.string as NSString
         let attributePart = try #require(rendered.macroExpansions.first?.parts.first)
         let renderedNestedExpansion = try #require(attributePart.nestedExpansions.first)
         #expect(attributePart.nestedExpansions.count == 1)

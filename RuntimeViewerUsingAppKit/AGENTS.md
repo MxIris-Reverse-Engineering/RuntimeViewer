@@ -68,10 +68,10 @@ of a newer one.
   all, and a placeholder that does appear stays up for `staysAtLeast` instead of blinking for a frame.
   Engine calls that hit a warm cache return in single-digit milliseconds, so this is the common case.
 - Build the pipeline in `init` and return `$state.asDriver()` from `transform`, the way
-  `ContentTextViewModel` does. Values that build AppKit objects (cell ViewModels, `NSAttributedString`)
-  are mapped **after** `observeOnMainScheduler()`; only plain model data crosses back from the background.
-  A ViewModel never makes an image or a colour: it describes one (`IconDescriptor`, `ColorDescriptor`) and
-  the view draws it with `.image` / `.color` (RuntimeViewerPackages/Sources/AGENTS.md).
+  `ContentTextViewModel` does. Cell ViewModels are made **after** `observeOnMainScheduler()`; only plain
+  model data crosses back from the background. A ViewModel never makes an image, a colour or an attributed
+  string: it describes one (`IconDescriptor`, `ColorDescriptor`, `RowText`, `ContentInterface`) and the view
+  draws it (RuntimeViewerPackages/Sources/AGENTS.md).
 
 **Reusable panes: keep the ViewModel, swap the object.** A pane that shows a series of objects (Inspector
 tabs, Content text) must not build a fresh ViewModel and call `setupBindings(for:)` per object:

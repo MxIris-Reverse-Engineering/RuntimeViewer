@@ -9,13 +9,12 @@ The apps' application layer is two targets and a facade
   application logic. **Everything in it can be built and driven in a unit test, and no UI component
   appears in it**: no subclass or construction of a view, control, cell, menu, popover, window or view
   controller, no delegate, data source or adapter of a control, no coordinator. `Driver` / `Signal`,
-  `@RxObserved` and `Router` are fine. **AppKit's and UIKit's models are on their way out too**
-  (`Documentations/Evolutions/draft-app-core-without-ui-models.md`, landing in four steps): AppCore does
-  not import AppKit, UIKit or Cocoa and names no AppKit or UIKit type — not `NSImage`, `NSColor`,
-  `NSFont`, `NSAttributedString`, `NSEvent` — but describes images, colours, row text and the content
-  pane's text as values that RuntimeViewerAppUI resolves. Until the last step lands, the files still to be
-  cleaned up are listed in `AppCoreBoundary.filesPendingCleanup`; never add one to the list, and take a
-  file off it in the commit that cleans it up.
+  `@RxObserved` and `Router` are fine. **No AppKit or UIKit model either**
+  (`Documentations/Evolutions/draft-app-core-without-ui-models.md`): AppCore does not import AppKit,
+  UIKit or Cocoa and names no AppKit or UIKit type — not `NSImage`, `NSColor`, `NSFont`,
+  `NSAttributedString`, `NSEvent`, `NSPasteboard` — but describes images, colours, row text and the
+  content pane's text as values that RuntimeViewerAppUI resolves, so every view model's state is a value.
+  The one exception is the iOS route's `UIViewController`, which XCoordinator's protocols name.
 - **`RuntimeViewerAppUI/`** holds the UI glue: the adapters that set up AppKit and AppKitPlus controls
   (`NavigatorTextFilterFieldAdapter`, the Find page's and the runtime source picker's), the jump bar's
   path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`,
@@ -30,9 +29,7 @@ The apps' application layer is two targets and a facade
 
 **RuntimeViewerAppCore depends on no UI library**: not on RuntimeViewerUI or RuntimeViewerSettingsUI, not on
 UIFoundation, SFSymbols or AppKitPlus, and neither does RuntimeViewerArchitectures beneath it. What it took
-from them it has of its own: the `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`PlatformTypes.swift`;
-UIFoundation's and SFSymbols' name the same types, so a file that sees several still compiles),
-`SystemSymbol` naming the system symbols it shows, and the Find query
+from them it has of its own: `SystemSymbol` naming the system symbols it shows, and the Find query
 field's content as data: `FindQueryTerm` and `FindPattern`, with AppKitPlus's rules for the regular
 expression a term makes and for its property list rewritten in `FindQueryTerm.swift`. **A change to those
 rules in AppKitPlus is carried over by hand**: `FindPatternParityTests` runs both on the same input and fails
@@ -58,9 +55,7 @@ and line:
    `NSAttributedString` is reported although Foundation declares it: it carries fonts and colours. A
    Foundation name AppCore starts to use goes on that list without a reason.
 
-Rules 4 and 5 skip the files in `AppCoreBoundary.filesPendingCleanup` until the proposal's step that
-cleans each one up; a second test fails when a listed file no longer breaks them, so the list only
-shrinks. It also walks the manifest from RuntimeViewerAppCore down through the package's targets beneath it
+It also walks the manifest from RuntimeViewerAppCore down through the package's targets beneath it
 and fails on a UI library among their dependencies. The check reads names: it cannot follow a superclass
 chain or a type alias, and system service protocols outside AppKit and UIKit
 (`UNUserNotificationCenterDelegate`) pass. A line it reports that belongs here all the same goes in the
@@ -98,6 +93,23 @@ the list style is attribute for attribute what `NSAttributedString(rowText:fontS
 which lives in AppUI with the Xcode colours of `Theme/NSColor+Xcode.swift`. A Find row's sizes — the
 navigator's or the Inspector's References tab's — are its cell view's, not the row's: the view draws the
 badges at `metrics.iconSize` (`IconDescriptor.image(size:)`).
+
+**The content pane's text is a `ContentInterface`, and the theme is RuntimeViewerAppUI's.**
+`ContentTextViewModel` fetches the interface and prepares it off the main thread — the semantic string,
+the link and declared-member tables the panes look things up in by UTF-16 offset
+(`linkedRuntimeObject(at:)`, `declaredMember(at:)`), the comment decorations and the macro expansions — and
+knows no theme. The views theme it with AppUI's `ContentTextRenderer` (`ThemeProfile`, `ResolvedTheme`,
+`resolvedThemeStream` and `ContentInterface.attributedString(themedWith:)` all live in AppUI's `Theme/`),
+which re-themes on a theme change without a refetch. The renderer's `renderedText` is cold: the
+SourceEditor pane colours the semantic runs itself and subscribes only `theme`, so it never builds an
+attributed string. **A view that shows an interface reports it through `Input.interfaceDisplayed`** — the
+`NSTextView` pane once the themed text is set, SourceEditor after `setSource`, iOS once the text is set —
+and the view model's loading lasts until that report: a pane that never reported would leave its loading
+plate up. A theme-only change, which the view model does not see, lights the plate through the renderer's
+`delayedRendering`, which the `NSTextView` pane feeds into `BaseViewController.additionalCommonLoadingRelay`.
+The `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`PlatformTypes.swift`; UIFoundation's and SFSymbols'
+name the same types, so a file that sees several still compiles) and `NSUIColor(light:dark:)` live in
+AppUI too.
 
 **Every list of images takes a row's icon from `RuntimeImageKind`**: a node of the image tree by
 `node.kind` (its own name), a place that lists one image by `RuntimeImageKind(ofImageAt:)` (the bundle

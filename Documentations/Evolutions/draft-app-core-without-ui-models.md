@@ -251,13 +251,14 @@ ContentTextViewModel (AppCore)                       AppUI / views
 | `AC/ViewModel.swift` | 修改 | `delayedLoading` 的「true 晚 100 毫秒、false 立即」抽成 `SharedSequence<DriverSharingStrategy, Bool>.delayingTrue(by:)`，AppUI 的渲染环节复用 | 两处同一规则 | 4 |
 | `MAC/Content/ContentTextViewController.swift` | 修改 | 用 `ContentTextRenderer`；显示后发 `interfaceDisplayed`；右键菜单与光标成员改查 `ContentInterface`；背景色等取 `renderer.theme`；转圈合并 `renderer.delayedRendering` | 跟随 | 4 |
 | `MAC/Content/ContentSourceEditorViewController.swift` | 修改 | 直接绑 `output.interface`；`setSource` 后发 `interfaceDisplayed`；⌘-点击、菜单改查 `ContentInterface`；主题取 `renderer.theme`（不订阅 `renderedText`） | 跟随 | 4 |
-| `MAC/Base/ViewControllers.swift` · `BaseViewController` | 修改 | 绑定转圈的地方改成可覆写的 `commonLoadingState: Driver<Bool>`（默认 `viewModel.delayedLoading`） | 内容视图要合并两路 | 4 |
+| `MAC/Base/ViewControllers.swift` · `BaseViewController` | 修改 | 新增 `additionalCommonLoadingRelay: BehaviorRelay<Bool>`，每次绑定新 ViewModel 时置回 `false`；转圈显示 `viewModel.delayedLoading` 与它的「或」。没有做成可覆写的属性：父类在 `setupBindings` 开头就绑转圈，那时子类的渲染环节还没建 | 内容视图要合并两路 | 4 |
 | `IOS/Content/ContentTextViewController.swift` | 修改 | 用 `ContentTextRenderer`（主题为 `ResolvedTheme.fallback`，与今天一致）；显示后发 `interfaceDisplayed` | 跟随 | 4 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppTestingSupport/ViewModelTestEnvironment.swift` | 修改 | 去掉 `resolvedThemeStream` 注入 | 主题不在 AppCore | 4 |
 | `T/ContentTextPipelineTests.swift` | 修改 | `:60`、`:109`、`:261` 三例（换字号重新上色、换字号点亮转圈、上色结果相等）搬进 `TUI/ContentTextRendererTests.swift`（新增）；其余改等 `interface`；新增显示报告的用例 | 同上 | 4 |
 | `T/ContentTextViewModelTests.swift`、`T/ContentCrossReferenceTests.swift`、`T/ContentMacroExpansionTests.swift`、`T/InterfaceCommentDecorationsTests.swift`、`T/ContentTextHighlightTests.swift`、`T/DerivedDataRestoreTests.swift` | 修改 | 改读 `ContentInterface`（文字、旁表）；去掉调用签名里的主题参数 | 同上 | 4 |
 | `T/ContentLinkLookupTests.swift` | 修改 | 改测 `ContentInterface.linkedRuntimeObject(at:)` / `declaredMember(at:)` 与越界 | 同上 | 4 |
-| `TUI/ContentTextRendererTests.swift`、`TUI/ContentTextRenderingPerformanceTests.swift` | 新增 | 渲染环节的行为；上色的基准测试（见落地步骤 4） | 同上 | 4 |
+| `TUI/ContentTextRendererTests.swift`、`TUI/ContentTextRenderingPerformanceTests.swift` | 新增 | 渲染环节的行为；准备与上色的耗时测量（设了环境变量 `RUNTIME_VIEWER_MEASURE_CONTENT_RENDERING` 才跑，见落地步骤 4） | 同上 | 4 |
+| `T/AppCoreBoundaryTests.swift` | 修改 | 删掉过渡清单 `filesPendingCleanup` 与守护它的测试：四步做完，规则对 AppCore 全面生效 | 同上 | 4 |
 | `RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 分界规则、描述值、跨层服务清单、资源位置、`RuntimeImageKind` 一段 | 文档同批 | 1–4 |
 | `RuntimeViewerUsingAppKit/AGENTS.md:71-72,368-378` | 修改 | 「造 AppKit 对象的值在 `observeOnMainScheduler()` 之后映射」改成「在视图里解析描述值」；`Appearance` 一节写明字段是描述值 | 同上 | 2、3 |
 | `AGENTS.md`（仓库根）· Package Structure | 修改 | AppCore 一行补上「代码里没有 AppKit/UIKit 类型」 | 同上 | 4 |
@@ -495,10 +496,10 @@ extension RowText {
 /// One interface as the content pane shows it: the generator's semantic string with what the
 /// pane looks up by character position. Every index is a UTF-16 offset into `string`.
 public struct ContentInterface: Sendable, Identifiable {
-    /// Which interface a view reports displayed; a later interface of the same view model has a
-    /// later identifier.
+    /// Which interface a view reports displayed; every interface a view model prepares has an
+    /// identifier of its own.
     public struct ID: Hashable, Sendable {
-        let generation: Int
+        private let value = UUID()
     }
 
     /// A jump target over a range of the text.
@@ -532,7 +533,7 @@ public struct ContentInterface: Sendable, Identifiable {
 }
 ```
 
-两个查找都按区间二分。`ID` 的初始化只在 AppCore 内可见，由 `ContentTextViewModel` 逐次加一。
+两个查找都按区间二分。`ID` 包着一个 `UUID`，初始化只在 AppCore 内可见，`ContentTextViewModel` 每准备一个接口就取一个新的。
 
 `ContentTextViewModel` 改动的部分：
 
@@ -585,7 +586,7 @@ extension ContentInterface {
 }
 ```
 
-`attributedString(themedWith:)` 保留今天的 signpost 名 `content.attributedStringBuild`，以便前后对比。`ContentTextViewController` 覆写 `commonLoadingState` 为 `Driver.combineLatest(viewModel.delayedLoading, renderer.delayedRendering).map { $0 || $1 }`。
+`attributedString(themedWith:)` 保留今天的 signpost 名 `content.attributedStringBuild`，以便前后对比。`ContentTextViewController` 把 `renderer.delayedRendering` 接进 `BaseViewController.additionalCommonLoadingRelay`，转圈显示它与 `viewModel.delayedLoading` 的「或」。
 
 ### 跨层服务（AppCore 声明、AppUI 实现）
 
@@ -694,8 +695,8 @@ enum AppCoreBoundary {
    - 行为：`findHitLineMarksTheMatchAsEmphasized`
    - 行为：`findStyleDrawsEmphasisInBoldMatchColour`（从 AppCoreTests 搬来的字体断言）
    - 行为：`findResultContentEqualityComparesRowText`
-4. **内容页与主题** —— 步骤为 4 的各行
-   - 先在改动前的 `next` 上加 `TUI/ContentTextRenderingPerformanceTests.swift` 的前身（放在 AppCoreTests 里，调今天的 `renderAttributedString` 与 `markingDeclaredMembers`），对一个大接口（本机 AppKit 的 `NSView`）连续上色 20 次取中位数，记下数字；改完后同一测试改调 `attributedString(themedWith:)`，中位数不得高出 10%。结果写进本提案的决策日志。
+4. **内容页与主题**（已完成，2026-11-18）—— 步骤为 4 的各行
+   - 先在改动前的 `next` 上加 `TUI/ContentTextRenderingPerformanceTests.swift` 的前身（放在 AppCoreTests 里，调今天的 `renderAttributedString` 与 `markingDeclaredMembers`），对一个大接口（Foundation 的 `NSString`：测试支持库里能取到的镜像只有 Foundation 与 libobjc）连续上色 20 次取中位数，记下数字；改完后同一测试改调 `attributedString(themedWith:)`，中位数不得高出 10%。结果写进本提案的决策日志。
    - 行为：`contentInterfaceCarriesTheLinkTableAndDeclaredMembersWithoutATheme`
    - 行为：`linkedRuntimeObjectAndDeclaredMemberLookUpByUTF16Offset`
    - 行为：`lookupsOutOfBoundsReturnNil`
@@ -730,3 +731,5 @@ enum AppCoreBoundary {
 | 2026-11-18 | 第一步完成 | 照计划做完。与提案不同的三处：一、规则 4、5 的行为用参数化样例覆盖（「要报告」与「不报告」两组），没有逐条单列成提案里写的几个测试名；另加两条守护测试：过渡清单里的文件不再违规或已不存在就失败（清单只减不增），`allowedLines` 里的条目对不上任何被报告的行就失败。二、Foundation 名字清单除了 AppCore 现在用到的，还预先收了几个确定属于 Foundation 的（`NSError`、`NSURL`、`NSCharacterSet`、`NSMakeRange`、`NSRangeException`、`NSRecursiveLock`）。三、iOS 一侧这一步只为 iOS 模拟器编了 `RuntimeViewerApplication` 包（AppCore、AppUI 的 UIKit 分支），没编 iOS App 本身：这一步没有改 iOS App 的任何代码。验证在 Ultra 上：包级构建、iOS 包构建与 macOS App（Tuist workspace，Debug）构建通过；AppCoreTests 与 AppUITests 共 1055 个测试，只有三条既有红灯失败（`TitleActivityIndicatorTests` 的悬停副标题、`ContentImageViewModelTests` 的图像失败重试、`FindCrossReferenceTests` 的 Call Hierarchy 超时），新加与搬家的测试全部通过。 |
 | 2026-11-18 | 第二步完成 | 照计划做完，与提案不同的四处，改动地图已按实际做法改写：一、`RuntimeSourcePickerContent` 没改成描述值，而是原样搬进 AppUI：AppCore 里没有任何地方用它，它是 AppUI 两个 adapter 的输入、由 App 层的 `MainViewModel` 构造；断开的来源显示的是引擎消失前存下的图像，按 ID 已经找不回，改成描述值会变成通用图标。二、`FindResultCellAppearance.iconAlpha` 保留为数字：同一个未解析符号在关系树里淡化、在交叉引用行里不淡化，透明度不由符号决定。三、`IconDescriptor.image(size:)` 推到第三步：这一步 Find 的图标尺寸还在 AppCore 里算，用不到它。四、`RuntimeObjectIconRendering` 的 key 成为 AppUI 内部的 `DependencyKey`，不是 `@DependencyEntry`，以保留原来「测试画空白图」的测试值。另外 Tuist 描述里重复了资源包 target 名，随资源搬家改成 AppUI 的。引擎图标按 ID 查找：live 值经 `RuntimeEngineManager.runtimeEngines` 找回引擎；测试用的提供者不跟随管理器，一律画通用可执行文件图标（解析调研里那条推测没有专门验证，Report 与来源选择器显示的引擎都由管理器创建）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1060 个，失败 4 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、`ReportSharedByEngineTests` 与 `BackgroundWorkProcessActivityTests` 整包跑时各一条），后两条单独重跑 14 个测试全部通过。 |
 | 2026-11-18 | 第三步完成 | 照计划做完，与提案不同的几处，改动地图与详细设计已按实际做法改写：一、`RowTextStyle.findResult(_:)` 只收尺寸，不收 `allowsWrapping`：标题换不换行原本就由 `FindResultCellView` 设在标签上。二、名字与副标题之间的两个空格（`subtitleSeparator`）从 `FindResultCellStyle` 搬进 AppCore 的 `FindResultNode`：它是文字内容，不是样式。三、`FindResultNode.makeAppearance(for:)` 与 Inspector 的引用行不再只在 AppKit 下构造外观，各平台都描述同一个值；Find 行的尺寸全部留在 cell 视图（`metrics`），徽章按默认尺寸描述、由视图用 `IconDescriptor.image(size:)` 画成 16 或 14 点。四、侧栏根节点的标题原来不带颜色属性（用标签自己的 `labelColor`），现在与其他行一样显式写 `labelColor`，显示效果相同。去掉 AppKit import 后，两个侧栏 cell ViewModel 补了 `import Foundation`（`NSObject` 原来经 AppKit 间接可见）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1065 个，失败 2 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时），新加与改写的行文字测试全部通过。 |
+| 2026-11-18 | 第四步完成 | 照计划做完，与提案不同的几处，改动地图与详细设计已按实际做法改写：一、转圈的合并没有做成 `BaseViewController` 上可覆写的 `commonLoadingState`，而是新增 `additionalCommonLoadingRelay`：父类在 `setupBindings` 开头就绑转圈，那时子类的渲染环节还没建。二、`ContentInterface.ID` 包一个 `UUID`，不是逐次加一的计数：准备在后台调度器上进行，用不着跨线程的计数器，迟到报告的过滤只需要相等比较。三、`ContentTextRenderer` 多了一个 `package` 的 `isRendering`（不带延迟），只给测试看；iOS 不写链接靠上色代码里的 `#if`，macOS 上跑的测试验不到，没有加 `iOSThemedTextCarriesNoLinks`。四、过渡清单与守护它的测试在这一步删除，规则对 AppCore 全面生效，只剩 iOS 路由那几行例外。另外，SourceEditor 视图换主题时不再重新 `setSource`（原来每次换主题都会把同一段文字重新交给编辑器），只重新套主题字典。测量（Ultra，负载约 7.5，Foundation 的 `NSString`，约 2.2 万个 UTF-16 单位，各 20 次取中位数）：改动前 `renderInterface` 15.3 毫秒；改动后准备 7.3 毫秒、上色 4.5 毫秒，`NSTextView` 一路合计 11.9 毫秒，SourceEditor 一路只有准备的 7.3 毫秒，都没有变慢。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1069 个，失败 3 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、`BackgroundWorkProcessActivityTests` 整包跑时超时），新加与改写的内容页测试全部通过。 |
+| 2026-11-18 | 实现完成 | 四步都已在本地合进 `next` 的检出，待用户看过后收尾（编号、改 Implemented、重新生成网页版）。文档判断：`RuntimeViewerPackages/Sources/AGENTS.md` 已写明描述值、行文字、内容页与主题的分工，`Tests/AGENTS.md`、`RuntimeViewerUsingAppKit/AGENTS.md` 与根 `AGENTS.md` 已同步，不另写指南或实现说明；「描述值」是否进术语表留到收尾时定。 |

@@ -33,8 +33,9 @@ reports an issue. Override the dependency instead.
 
 Rules for both test targets:
 
-- **Build ViewModels inside `ViewModelTestEnvironment.make { }`.** It overrides `appDefaults`, `settings`
-  and `resolvedThemeStream` with test-owned instances. `AppDefaults` is file-backed under a path the
+- **Build ViewModels inside `ViewModelTestEnvironment.make { }`.** It overrides `appDefaults` and
+  `settings` with test-owned instances, and the pasteboard and the Finder with recorders. (The theme is
+  not the view models': a test of `ContentTextRenderer` hands it a theme stream of its own.) `AppDefaults` is file-backed under a path the
   running app shares (`~/Library/Application Support/AppStorage`, not bundle-scoped, and the app is not
   sandboxed), so a test that resolves `AppDefaults.shared` reads and writes the user's real bookmark files.
   The key's `testValue` is an isolated temporary-directory instance for that reason, and
