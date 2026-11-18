@@ -18,10 +18,14 @@ import RuntimeViewerAppTestingSupport
 /// theme — so every theme / font-size change re-fetched the interface over
 /// XPC and rebuilt the whole attributed string on the main thread, and a
 /// trailing `catchAndReturn` on the outer chain completed the pipeline on
-/// the first fetch error, permanently freezing the tab. The assertions
-/// below pin all three fixes: theme-only changes must not re-fetch, a
-/// failed fetch must not kill the pipeline, and the off-main render helper
-/// must reproduce the direct builder output byte for byte.
+/// the first fetch error, permanently freezing the tab. A failed fetch must
+/// not kill the pipeline, which this suite pins.
+///
+/// Since proposal `app-core-without-ui-models` the theme is not the view
+/// model's at all: the view themes the interface (`ContentTextRenderer`, whose
+/// tests in RuntimeViewerAppUITests pin that a theme change re-themes without a
+/// refetch), and the view model's loading lasts until the view reports the
+/// interface displayed, which this suite pins too.
 @Suite("ContentTextPipeline", .serialized)
 @MainActor
 struct ContentTextPipelineTests {
@@ -39,15 +43,10 @@ struct ContentTextPipelineTests {
     /// one-second auto-save and flush those defaults over the real file,
     /// silently resetting the developer's Debug settings. It has happened.
     ///
-    /// **`static`, and it has to be.** swift-testing builds a fresh suite value
-    /// per `@Test`, so a stored property would hand each case its own store —
-    /// and `ResolvedThemeStream.shared`, the singleton the render half observes,
-    /// captures `@Dependency(\.settings)` once in its `init` into a `let` that
-    /// its `.forever`-scoped `observable` closes over. Whichever case resolves
-    /// it first wins; every later case would then write to a store nothing is
-    /// watching, and its re-render assertion would hang until the timeout.
-    /// One store per process keeps the singleton's capture and the assertions'
-    /// writes pointed at the same object.
+    /// **`static`.** swift-testing builds a fresh suite value per `@Test`, so a
+    /// stored property would hand each case a store of its own; one store per
+    /// process keeps whatever captures the settings once pointed at the same
+    /// object as the assertions.
     ///
     /// `makeViewModel` creates the view model inside
     /// `withLiveDependencyContext`, so the pipeline inherits this instance and
@@ -55,76 +54,23 @@ struct ContentTextPipelineTests {
     @MainActor
     private static let testSettings = SettingsAccess.preview
 
-    // MARK: - Theme-only changes must not re-fetch
+    // MARK: - The loading indicator lasts until the view shows the interface
 
-    @Test("font-size change re-renders without re-fetching the interface")
-    func fontSizeChangeDoesNotRefetch() async throws {
-        let fetchRecorder = InterfaceFetchRecorder()
-        let fixtureRuntimeObject = makeRuntimeObject()
+    /// The view themes the text after the view model hands the interface over (RuntimeViewerAppUI's
+    /// `ContentTextRenderer`), so the loading the view model tracks lasts until the view reports the
+    /// interface displayed: ending at the hand-over would leave the plate off while the text is still
+    /// being themed (proposal `app-core-without-ui-models`).
+    @Test("loading stays on until the view reports the interface displayed")
+    func loadingStaysOnUntilTheViewReportsTheInterfaceDisplayed() async throws {
+        let interfaceDisplayedRelay = PublishRelay<ContentInterface.ID>()
         let (viewModel, mockRouter) = makeViewModel(
-            runtimeObject: fixtureRuntimeObject,
-            interfaceProvider: { runtimeObject, _ in
-                _ = fetchRecorder.recordFetch()
-                return RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
-            }
-        )
-
-        let initialRendered = try await pollUntil(timeout: .seconds(10)) {
-            viewModel.attributedString != nil
-        }
-        #expect(initialRendered, "initial fetch never produced an attributed string")
-        #expect(fetchRecorder.fetchCount == 1)
-        let initialAttributedString = try #require(viewModel.attributedString)
-
-        let settings = liveSettings()
-        let originalFontSize = settings.theme.fontSize
-        defer { withLiveDependencyContext { settings.theme.fontSize = originalFontSize } }
-
-        let changedFontSize = originalFontSize + 3
-        withLiveDependencyContext { settings.theme.fontSize = changedFontSize }
-
-        let rebuiltWithNewFontSize = try await pollUntil(timeout: .seconds(10)) {
-            guard let rebuiltAttributedString = viewModel.attributedString,
-                  rebuiltAttributedString !== initialAttributedString,
-                  rebuiltAttributedString.length > 0,
-                  let font = rebuiltAttributedString.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-            else { return false }
-            return font.pointSize == CGFloat(changedFontSize)
-        }
-        #expect(rebuiltWithNewFontSize, "font-size change never produced a re-rendered attributed string")
-        #expect(fetchRecorder.fetchCount == 1, "a theme-only change must not re-fetch the interface")
-
-        // The view model holds its router unowned — keep the mock alive
-        // until every assertion has run.
-        withExtendedLifetime(mockRouter) {}
-    }
-
-    // MARK: - The loading indicator must cover the render half
-
-    /// PR #88 review, finding 3: after the fetch/render split, only the
-    /// fetch half was tracked by `_commonLoading` — a theme or font-size
-    /// change re-renders without ever entering a tracked region, so the
-    /// indicator never appears even though the user is waiting on the
-    /// rebuild. This fails against a fetch-only `trackActivity` placement.
-    @Test("font-size change surfaces the loading indicator through the render half")
-    func fontSizeChangeSurfacesLoadingIndicator() async throws {
-        let fixtureRuntimeObject = makeRuntimeObject()
-        let (viewModel, mockRouter) = makeViewModel(
-            runtimeObject: fixtureRuntimeObject,
+            runtimeObject: makeRuntimeObject(),
             interfaceProvider: { runtimeObject, _ in
                 RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
             }
         )
-
-        let initialRendered = try await pollUntil(timeout: .seconds(10)) {
-            viewModel.attributedString != nil
-        }
-        #expect(initialRendered, "initial fetch never produced an attributed string")
-        let initialAttributedString = try #require(viewModel.attributedString)
-
-        // Record loading emissions only from here on, so the initial
-        // fetch's activity cannot satisfy the assertion.
-        let loadingRecorder = LoadingEmissionRecorder()
+        _ = viewModel.transform(Self.input(reportingDisplayedWith: interfaceDisplayedRelay))
+        let loadingRecorder = LoadingStateRecorder()
         let subscriptionDisposeBag = DisposeBag()
         viewModel._commonLoading.asDriver()
             .driveOnNext { isLoading in
@@ -132,22 +78,79 @@ struct ContentTextPipelineTests {
             }
             .disposed(by: subscriptionDisposeBag)
 
-        let settings = liveSettings()
-        let originalFontSize = settings.theme.fontSize
-        defer { withLiveDependencyContext { settings.theme.fontSize = originalFontSize } }
-        withLiveDependencyContext { settings.theme.fontSize = originalFontSize + 3 }
+        let prepared = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.interface != nil
+        }
+        #expect(prepared, "the interface never reached the view model")
+        let interface = try #require(viewModel.interface)
+        // Well past the hand-over, and nothing has reported the interface displayed.
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(loadingRecorder.isLoading, "the loading ended before the view reported the interface displayed")
 
-        let rebuilt = try await pollUntil(timeout: .seconds(10)) {
-            viewModel.attributedString !== initialAttributedString && viewModel.attributedString != nil
+        interfaceDisplayedRelay.accept(interface.id)
+        let ended = try await pollUntil(timeout: .seconds(5)) {
+            !loadingRecorder.isLoading
         }
-        #expect(rebuilt, "font-size change never produced a re-rendered attributed string")
-        let indicatorAppeared = try await pollUntil(timeout: .seconds(5)) {
-            loadingRecorder.sawLoading
-        }
-        #expect(indicatorAppeared, "a theme-only re-render must pass through a tracked region so the indicator can appear")
+        #expect(ended, "the report of the interface on screen did not end the loading")
 
         withExtendedLifetime(mockRouter) {}
         withExtendedLifetime(subscriptionDisposeBag) {}
+    }
+
+    @Test("a late report of an older interface does not end the loading of a newer one")
+    func aLateReportOfAnOlderInterfaceDoesNotEndLoading() async throws {
+        let interfaceDisplayedRelay = PublishRelay<ContentInterface.ID>()
+        let appDefaults = AppDefaults.isolated()
+        let (viewModel, mockRouter) = makeViewModel(
+            runtimeObject: makeRuntimeObject(),
+            appDefaults: appDefaults,
+            interfaceProvider: { runtimeObject, _ in
+                RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
+            }
+        )
+        _ = viewModel.transform(Self.input(reportingDisplayedWith: interfaceDisplayedRelay))
+        let loadingRecorder = LoadingStateRecorder()
+        let subscriptionDisposeBag = DisposeBag()
+        viewModel._commonLoading.asDriver()
+            .driveOnNext { isLoading in
+                loadingRecorder.record(isLoading)
+            }
+            .disposed(by: subscriptionDisposeBag)
+
+        let firstPrepared = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.interface != nil
+        }
+        #expect(firstPrepared, "the first interface never reached the view model")
+        let firstInterface = try #require(viewModel.interface)
+
+        // A generation-option change prepares the same object anew. The store is the view model's own.
+        appDefaults.options.swiftInterfaceOptions.printFieldOffset.toggle()
+        let secondPrepared = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.interface.map { $0.id != firstInterface.id } ?? false
+        }
+        #expect(secondPrepared, "the options change never prepared a second interface")
+        let secondInterface = try #require(viewModel.interface)
+
+        interfaceDisplayedRelay.accept(firstInterface.id)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(loadingRecorder.isLoading, "a report of the first interface ended the loading of the second")
+
+        interfaceDisplayedRelay.accept(secondInterface.id)
+        let ended = try await pollUntil(timeout: .seconds(5)) {
+            !loadingRecorder.isLoading
+        }
+        #expect(ended, "the report of the second interface did not end the loading")
+
+        withExtendedLifetime(mockRouter) {}
+        withExtendedLifetime(subscriptionDisposeBag) {}
+    }
+
+    private static func input(reportingDisplayedWith interfaceDisplayedRelay: PublishRelay<ContentInterface.ID>) -> ContentTextViewModel.Input {
+        ContentTextViewModel.Input(
+            runtimeObjectClicked: .empty(),
+            runtimeObjectOpenedInNewTab: .empty(),
+            interfaceDisplayed: interfaceDisplayedRelay.asSignal()
+        )
     }
 
     // MARK: - Fetch errors must not kill the pipeline
@@ -172,7 +175,7 @@ struct ContentTextPipelineTests {
             fetchRecorder.fetchCount == 1
         }
         #expect(firstFetchCompleted, "initial fetch never ran")
-        #expect(viewModel.attributedString == nil)
+        #expect(viewModel.interface == nil)
 
         // Re-trigger the fetch half via a generation-option change; before
         // the split this subscription was already dead (`catchAndReturn` on
@@ -181,7 +184,7 @@ struct ContentTextPipelineTests {
         appDefaults.options.swiftInterfaceOptions.printFieldOffset.toggle()
 
         let recovered = try await pollUntil(timeout: .seconds(10)) {
-            viewModel.attributedString != nil
+            viewModel.interface != nil
         }
         #expect(recovered, "an options change after a failed fetch never recovered the pipeline")
         #expect(fetchRecorder.fetchCount == 2)
@@ -228,7 +231,7 @@ struct ContentTextPipelineTests {
             )
         }
         let firstRendered = try await pollUntil(timeout: .seconds(10)) {
-            firstViewModel?.attributedString != nil
+            firstViewModel?.interface != nil
         }
         #expect(firstRendered, "the first view model never rendered")
         #expect(fetchRecorder.fetchCount == 1)
@@ -247,34 +250,13 @@ struct ContentTextPipelineTests {
             )
         }
         let secondRendered = try await pollUntil(timeout: .seconds(10)) {
-            secondViewModel.attributedString != nil
+            secondViewModel.interface != nil
         }
         #expect(secondRendered, "the revisiting view model never rendered")
         #expect(fetchRecorder.fetchCount == 1, "a navigation revisit must render from the cache, not refetch")
 
         withExtendedLifetime(firstMockRouter) {}
         withExtendedLifetime(secondMockRouter) {}
-    }
-
-    // MARK: - Render helper equivalence (pins the PR2 restyle baseline)
-
-    @Test("renderAttributedString matches a direct builder invocation and returns an immutable string")
-    func renderMatchesDirectBuilderInvocation() {
-        let fixtureRuntimeObject = makeRuntimeObject()
-        let interfaceString = ("class ContentPipelineFixture {}" as SemanticString).frozen()
-        let theme = ResolvedTheme.fallback
-
-        let rendered = ContentTextViewModel.renderAttributedString(
-            for: (interfaceString: interfaceString, runtimeObject: fixtureRuntimeObject),
-            theme: theme
-        )
-        let direct = interfaceString.attributedString(for: theme, runtimeObjectName: fixtureRuntimeObject)
-        #expect(rendered?.isEqual(to: direct) == true)
-
-        // The cross-thread handoff contract: the builder must not leak its
-        // mutable working copy.
-        #expect(!(rendered is NSMutableAttributedString))
-        #expect(ContentTextViewModel.renderAttributedString(for: nil, theme: theme) == nil)
     }
 
     // MARK: - An interface Print Exported Declarations Only empties
@@ -349,9 +331,9 @@ struct ContentTextPipelineTests {
         )
 
         let rendered = try await pollUntil(timeout: .seconds(10)) {
-            viewModel.attributedString?.string.contains("Print Exported Declarations Only") == true
+            viewModel.interface?.string.contains("Print Exported Declarations Only") == true
         }
-        #expect(rendered, "the note never reached the pane: \(viewModel.attributedString?.string ?? "nil")")
+        #expect(rendered, "the note never reached the pane: \(viewModel.interface?.string ?? "nil")")
         withExtendedLifetime(mockRouter) {}
     }
 
@@ -448,19 +430,18 @@ struct ContentTextPipelineTests {
     // named `Error`, which otherwise shadows the standard library protocol.
     private struct StubInterfaceFetchError: Swift.Error {}
 
-    /// Thread-safe recorder for `_commonLoading` emissions (delivered on
+    /// Thread-safe recorder of the latest `_commonLoading` state (delivered on
     /// the main thread by the driver, read from the polling loop).
-    private final class LoadingEmissionRecorder: @unchecked Sendable {
+    private final class LoadingStateRecorder: @unchecked Sendable {
         private let lock = NSLock()
-        private var storedSawLoading = false
+        private var storedIsLoading = false
 
-        var sawLoading: Bool {
-            lock.withLock { storedSawLoading }
+        var isLoading: Bool {
+            lock.withLock { storedIsLoading }
         }
 
         func record(_ isLoading: Bool) {
-            guard isLoading else { return }
-            lock.withLock { storedSawLoading = true }
+            lock.withLock { storedIsLoading = isLoading }
         }
     }
 

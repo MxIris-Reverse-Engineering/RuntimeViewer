@@ -35,20 +35,7 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
     }
 
     open var delayedLoading: Driver<Bool> {
-        _commonLoading
-            .distinctUntilChanged()
-            .flatMapLatest { isLoading -> Driver<Bool> in
-                if isLoading {
-                    // If loading starts, return a sequence that emits 'true' after a delay.
-                    // If 'isLoading' becomes false before the delay finishes,
-                    // flatMapLatest will dispose this subscription, cancelling the 'true' emission.
-                    return Driver.just(true)
-                        .delay(.milliseconds(100))
-                } else {
-                    // If loading ends, emit 'false' immediately to hide the spinner.
-                    return Driver.just(false)
-                }
-            }
+        _commonLoading.asDriver().delayingTrue(by: .milliseconds(100))
     }
 
     public init(documentState: DocumentState, router: any Router<Route>) {
@@ -99,3 +86,20 @@ extension Settings.Editor {
 
 @MainActor
 open class CellViewModel: NSObject {}
+
+extension SharedSequence where SharingStrategy == DriverSharingStrategy, Element == Bool {
+    /// A loading state as a spinner shows it: `true` only once the work has lasted `delay`, so work
+    /// faster than that shows nothing, and `false` at once when it ends. Shared by the view models'
+    /// `delayedLoading` and the content pane's renderer (RuntimeViewerAppUI's `ContentTextRenderer`).
+    public func delayingTrue(by delay: RxTimeInterval) -> Driver<Bool> {
+        distinctUntilChanged()
+            .flatMapLatest { isLoading -> Driver<Bool> in
+                if isLoading {
+                    // A loading that ends before the delay disposes this, so its `true` never comes.
+                    return Driver.just(true).delay(delay)
+                } else {
+                    return Driver.just(false)
+                }
+            }
+    }
+}

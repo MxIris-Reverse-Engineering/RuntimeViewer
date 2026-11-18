@@ -24,7 +24,6 @@ import RuntimeViewerSettings
 package struct ViewModelTestEnvironment {
     package let appDefaults: AppDefaults
     package let settings: SettingsAccess
-    package let resolvedThemeStream: ResolvedThemeStream
     package let documentState: DocumentState
     /// What the context menus' copy commands wrote: the general pasteboard is
     /// the user's.
@@ -39,11 +38,6 @@ package struct ViewModelTestEnvironment {
         settings.search.isCrossReferencePreparationEnabled = false
         self.appDefaults = appDefaults
         self.settings = settings
-        self.resolvedThemeStream = withDependencies {
-            $0.settings = settings
-        } operation: {
-            ResolvedThemeStream()
-        }
         self.documentState = DocumentState()
         if let runtimeEngine {
             documentState.selectionRouter.trigger(.switchEngine(runtimeEngine))
@@ -55,7 +49,6 @@ package struct ViewModelTestEnvironment {
             { [pasteboard, finder] in
                 $0.appDefaults = appDefaults
                 $0.settings = settings
-                $0.resolvedThemeStream = resolvedThemeStream
                 $0.pasteboardClient = PasteboardClient { string in pasteboard.copiedStrings.append(string) }
                 $0.finderClient = FinderClient { fileURL in finder.revealedFileURLs.append(fileURL) }
             },

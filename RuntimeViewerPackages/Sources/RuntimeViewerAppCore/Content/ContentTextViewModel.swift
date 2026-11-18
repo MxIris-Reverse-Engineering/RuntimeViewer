@@ -1,12 +1,8 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
 @preconcurrency import RuntimeViewerSettings
 #endif
 
-#if canImport(UIKit)
-import UIKit
-#endif
-
+import Foundation
 import os
 import Semantic
 import RuntimeViewerCore
@@ -39,9 +35,6 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     private let interfaceProvider: InterfaceProvider
 
     @RxObserved
-    public private(set) var theme: ThemeProfile
-
-    @RxObserved
     public private(set) var runtimeObject: RuntimeObject
 
     /// The language the pane asks for the interface in: `nil` for the object's own, `.swift` for
@@ -61,30 +54,6 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
     @RxObserved
     public private(set) var imageNameOfRuntimeObject: String?
-
-    /// The rendered interface, carrying both forms of the same generation.
-    ///
-    /// They travel together rather than as two `@RxObserved` properties because a consumer that
-    /// needs both must never see one updated ahead of the other — the semantic runs would
-    /// describe a different object than the text on screen.
-    public struct RenderedInterface {
-        /// Semantic runs from the generator: what each identifier actually *is*, which no
-        /// amount of scanning the rendered text can recover.
-        public let semanticString: FrozenSemanticString
-
-        /// The same content with the theme's colors and fonts applied, plus the `.link`
-        /// attributes that carry jump targets and the `.runtimeViewerDeclaredMember` attributes
-        /// that say which member a line declares.
-        public let attributedString: NSAttributedString
-
-        /// How the SourceEditor pane draws the comments of this text; nil when the engine sent no
-        /// comment structure with it. The `NSTextView` pane does not read it.
-        public let commentDecorations: InterfaceCommentDecorations?
-
-        /// The attached macros this text shows folded, which the SourceEditor pane can expand in
-        /// place; empty when the engine sent none. The `NSTextView` pane does not read them.
-        public var macroExpansions: [MacroExpansion] = []
-    }
 
     /// An attached macro of the rendered text — `@Observation.Observable` — with what it wrote,
     /// in the places it goes.
@@ -125,11 +94,15 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         var macroExpansions: [RuntimeInterfaceMacroExpansion] = []
     }
 
+    /// The interface on screen: the text, the tables the pane looks things up in, and what the
+    /// SourceEditor pane draws beside it. The view themes it (RuntimeViewerAppUI's
+    /// `ContentTextRenderer`) and reports it displayed (`Input.interfaceDisplayed`).
     @RxObserved
-    public private(set) var renderedInterface: RenderedInterface?
+    public private(set) var interface: ContentInterface?
 
-    @RxObserved
-    public private(set) var attributedString: NSAttributedString?
+    /// The views' reports that they put an interface on screen, which end its wait in the loading
+    /// indicator.
+    private let interfaceDisplayedRelay = PublishRelay<ContentInterface.ID>()
 
     /// The range the `ContentHighlightRequest` this ViewModel was built with
     /// resolved to in the text on screen — the Find navigator's hit, once the
@@ -177,7 +150,6 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         self.pendingHighlightRequest = highlightRequest
         self.highlightsFirstRender = highlightRequest != nil
         self.editorPaneID = editorPaneID ?? documentState.editorArea.focusedPaneID
-        self.theme = ResolvedTheme.fallback
         let interfaceCache = documentState.interfaceCache
         let contentLoadingDelay = Self.contentLoadingDelay()
         self.interfaceProvider = interfaceProvider ?? { [interfaceCache, weak documentState] runtimeObject, options in
@@ -241,29 +213,11 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         marksAttachedMacros = false
         #endif
 
-        let themeObservable: Observable<ThemeProfile>
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        // The shared stream multicasts a single `Observable.tracking` chain
-        // across every document, so editing any custom preset only rebuilds
-        // `ResolvedTheme` once instead of once per open document. Equatable
-        // dedup happens upstream so the downstream `combineLatest` only
-        // re-runs the engine `interface(for:)` fetch on a real change.
-        @Dependency(\.resolvedThemeStream) var resolvedThemeStream
-        themeObservable = resolvedThemeStream.observable.map { $0 as ThemeProfile }
-        #else
-        themeObservable = .just(ResolvedTheme.fallback)
-        #endif
-
-        themeObservable
-            .observeOnMainScheduler()
-            .bind(to: $theme)
-            .disposed(by: rx.disposeBag)
-
-        // ── Fetch half (theme-independent) ──────────────────────────────
+        // ── Fetch half ──────────────────────────────────────────────────
         // Only object / generation-option / transformer changes reach the
-        // engine; theme and font-size changes never trigger an XPC
-        // round-trip — they replay the latest fetched interface into the
-        // render half below.
+        // engine. The theme is not this view model's: a theme or font-size
+        // change re-themes the interface on screen in the view's
+        // `ContentTextRenderer` (RuntimeViewerAppUI), without a refetch.
         //
         // Capture the document-scoped dependencies instead of `self`: the
         // `Observable.async` Task keeps running briefly after disposal
@@ -301,57 +255,61 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             }
             .share(replay: 1, scope: .whileConnected)
 
-        // ── Render half (theme-dependent, off-main) ─────────────────────
-        // Rebuilds the attributed string whenever the fetched interface or
-        // the theme changes. The build runs on a background scheduler;
-        // `flatMapLatest` drops a superseded build's emission, so a burst of
-        // font-size clicks only publishes the newest result.
+        // ── Prepare half (off-main) ─────────────────────────────────────
+        // Builds the tables the pane looks things up in — links, declared
+        // members — with the comment decorations and the macro expansions, on
+        // a background scheduler; `flatMapLatest` drops a superseded build.
         //
         // One scheduler for the pipeline's lifetime: the convenience
         // initializer allocates a fresh DispatchQueue, so constructing it
         // inside the closure would churn a queue per emission.
-        let renderScheduler = ConcurrentDispatchQueueScheduler(qos: .userInitiated)
-        Observable
-            .combineLatest(interfaceStream, themeObservable)
-            .flatMapLatest { [_commonLoading = self._commonLoading] fetchedInterface, theme -> Observable<RenderedInterface?> in
-                // Tracked so the indicator covers click → new text on
-                // screen: with a warm interface cache the fetch half is
-                // near-instant, and theme / font-size changes skip it
-                // entirely — without this, every visible wait would fall in
-                // an untracked gap. No dark gap between the halves either:
-                // the fetch's element propagates here (incrementing the
-                // activity) before its `Observable.async` completes and
-                // decrements.
-                Observable.just(())
-                    .observe(on: renderScheduler)
-                    .map { Self.renderInterface(for: fetchedInterface, theme: theme) }
+        let prepareScheduler = ConcurrentDispatchQueueScheduler(qos: .userInitiated)
+        interfaceStream
+            .flatMapLatest { [_commonLoading = self._commonLoading, interfaceDisplayedRelay] fetchedInterface -> Observable<ContentInterface?> in
+                guard let fetchedInterface else { return .just(nil) }
+                let interfaceID = ContentInterface.ID()
+                // Tracked from here until the view reports this interface on
+                // screen, so the indicator covers click → new text on screen
+                // with the view's theming inside it. The sequence emits the
+                // interface, then stays open until the report: its
+                // subscription to the reports is made as the interface is
+                // emitted, before it reaches the main thread and the view.
+                // A newer interface drops this wait (`flatMapLatest`), so a
+                // late report of an older one ends nothing. No dark gap
+                // between the halves either: the fetch's element propagates
+                // here (incrementing the activity) before its
+                // `Observable.async` completes and decrements.
+                let displayed = interfaceDisplayedRelay
+                    .filter { $0 == interfaceID }
+                    .take(1)
+                    .ignoreElements()
+                    .asObservable()
+                    .map { _ -> ContentInterface? in nil }
+                return Observable.just(())
+                    .observe(on: prepareScheduler)
+                    .map { ContentInterface?.some(ContentInterface.prepared(from: fetchedInterface, id: interfaceID)) }
+                    .concat(displayed)
                     .trackActivity(_commonLoading)
             }
             .observeOnMainScheduler()
-            .bind(to: $renderedInterface)
-            .disposed(by: rx.disposeBag)
-
-        // Kept as its own property so existing consumers are untouched; it is strictly derived.
-        $renderedInterface
-            .map { $0?.attributedString }
-            .bind(to: $attributedString)
+            .bind(to: $interface)
             .disposed(by: rx.disposeBag)
 
         // A Find navigator hit arrives with the route that built this ViewModel;
-        // once the object's text is first rendered, locate it in that text (off
+        // once the object's text is first prepared, locate it in that text (off
         // main — the text can be megabytes) and hand the range to the view.
-        // Used once: later renders (theme, options) leave the scroll position alone.
+        // Used once: later interfaces (options) leave the scroll position alone.
         //
         // The find bar's query goes first, with or without a range: opening the
         // bar selects a match of its own, which the reveal then replaces.
-        $renderedInterface
+        $interface
             .compactMap { $0 }
-            .flatMapLatest { [weak self] rendered -> Observable<(ContentHighlightRequest, NSRange?)> in
+            .flatMapLatest { [weak self] interface -> Observable<(ContentHighlightRequest, NSRange?)> in
                 guard let self, let request = self.pendingHighlightRequest else { return .empty() }
                 self.pendingHighlightRequest = nil
-                let displayedText = rendered.attributedString.string
+                let displayedText = interface.string
                 return Observable.just(())
-                    .observe(on: renderScheduler)
+                    .observe(on: prepareScheduler)
                     .map { (request, request.locate(in: displayedText)) }
             }
             .observeOnMainScheduler()
@@ -504,29 +462,6 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return RuntimeInterfaceCommentStructure(comments: comments, segments: segments)
     }
 
-    /// Builds both forms of a fetched interface in one pass, so the semantic runs and the
-    /// attributed text a consumer receives always describe the same generation.
-    ///
-    /// `nonisolated` for the same reason as ``renderAttributedString(for:theme:)``, which it
-    /// delegates the theming pass to: this runs on the render half's background scheduler.
-    nonisolated static func renderInterface(
-        for fetchedInterface: FetchedInterface?,
-        theme: ThemeProfile
-    ) -> RenderedInterface? {
-        guard let fetchedInterface else { return nil }
-        let interfacePair = (interfaceString: fetchedInterface.interfaceString, runtimeObject: fetchedInterface.runtimeObject)
-        guard let attributedString = renderAttributedString(for: interfacePair, theme: theme) else { return nil }
-        let commentDecorations = fetchedInterface.commentStructure.map {
-            InterfaceCommentDecorations(structure: $0, interfaceString: fetchedInterface.interfaceString)
-        }
-        return RenderedInterface(
-            semanticString: interfacePair.interfaceString,
-            attributedString: markingDeclaredMembers(in: attributedString, of: interfacePair),
-            commentDecorations: commentDecorations,
-            macroExpansions: renderedMacroExpansions(of: fetchedInterface)
-        )
-    }
-
     /// The fetched interface's macro expansions, their attributes and the anchors of their parts
     /// located in UTF-16 offsets of its text. A part whose anchor's UTF-8 range does not fall on
     /// character boundaries of that text is left out, and so is an expansion whose attribute does
@@ -573,51 +508,6 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return NSRange(lowerBound ..< upperBound, in: text)
     }
 
-    /// `attributedString` with every line that declares a member with code
-    /// carrying it as `.runtimeViewerDeclaredMember`, which the right-click
-    /// menu and the insertion point read off a character as the `.link`
-    /// attribute names a type. Which line declares what is read the way the
-    /// Find corpus locates members on their lines.
-    nonisolated static func markingDeclaredMembers(
-        in attributedString: NSAttributedString,
-        of interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)
-    ) -> NSAttributedString {
-        let interface = RuntimeObjectInterface(object: interfacePair.runtimeObject, interfaceString: interfacePair.interfaceString)
-        let membersByLineNumber = interface.declaredMembersByLineNumber()
-            .filter { FindCrossReferenceRoot.memberKindsWithCode.contains($0.value.kind) }
-        guard !membersByLineNumber.isEmpty else { return attributedString }
-        let markedString = NSMutableAttributedString(attributedString: attributedString)
-        let text = attributedString.string as NSString
-        var lineNumber = 1
-        var lineStart = 0
-        while lineStart < text.length {
-            let lineRange = text.lineRange(for: NSRange(location: lineStart, length: 0))
-            if let declaredMember = membersByLineNumber[lineNumber] {
-                let member = RuntimeMemberReference(object: interfacePair.runtimeObject, name: declaredMember.name, kind: declaredMember.kind, isStatic: declaredMember.isStatic)
-                markedString.addAttribute(.runtimeViewerDeclaredMember, value: member, range: lineRange)
-            }
-            lineNumber += 1
-            lineStart = NSMaxRange(lineRange)
-        }
-        return markedString
-    }
-
-    /// Builds the display-ready attributed string for a fetched interface.
-    ///
-    /// `nonisolated`: invoked on the render half's background scheduler.
-    /// Safe off the main thread — `ResolvedTheme`'s color/font lookups are
-    /// init-time-precomputed read-only tables, and the builder allocates
-    /// only immutable font/color/string values, returning an immutable copy.
-    nonisolated static func renderAttributedString(
-        for interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?,
-        theme: ThemeProfile
-    ) -> NSAttributedString? {
-        guard let interfacePair else { return nil }
-        let buildInterval = contentTextSignposter.beginInterval("content.attributedStringBuild", id: contentTextSignposter.makeSignpostID())
-        defer { contentTextSignposter.endInterval("content.attributedStringBuild", buildInterval) }
-        return interfacePair.interfaceString.attributedString(for: theme, runtimeObjectName: interfacePair.runtimeObject)
-    }
-
     @MemberwiseInit(.public)
     public struct Input {
         /// ⌘-click on a type link / "Jump to Definition": opens the type in
@@ -626,6 +516,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// ⇧⌥⌘- or ⇧⌘-click on a type link / "Open in New Tab". Resolved the
         /// same way as `runtimeObjectClicked`, opened in a new tab of this pane.
         public let runtimeObjectOpenedInNewTab: Signal<RuntimeObject>
+        /// The view has put this interface on screen — themed and set, or handed to the editor —
+        /// which ends the loading indicator's wait for it. No default: a pane that never reported
+        /// would leave the indicator on for good.
+        public let interfaceDisplayed: Signal<ContentInterface.ID>
         /// ⌥⌘-click on a type link / "Open in Next Editor Pane". Resolved the
         /// same way, opened in the pane after this one.
         @Init(default: Signal<RuntimeObject>.empty())
@@ -649,9 +543,8 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     }
 
     public struct Output {
-        public let renderedInterface: Driver<RenderedInterface>
-        public let attributedString: Driver<NSAttributedString>
-        public let theme: Driver<ThemeProfile>
+        /// The interface to show, each a new one; the view themes it and reports it displayed.
+        public let interface: Driver<ContentInterface>
         public let imageNameOfRuntimeObject: Driver<String?>
         public let selectedRuntimeObjectName: Driver<String>
         public let runtimeObjectNotFound: Signal<Void>
@@ -662,7 +555,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// search a Find navigator text hit came from. Emits at most once, just
         /// before `highlightRange` for the same hit.
         public let findBarQuery: Signal<ContentFindBarQuery>
-        /// Whether the first `renderedInterface` is followed by a
+        /// Whether the first `interface` is followed by a
         /// `highlightRange`. A pane that puts the reader back where they left an
         /// interface skips that for the first render, so the hit is what shows.
         public let highlightsFirstRender: Bool
@@ -743,10 +636,12 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        input.interfaceDisplayed
+            .emit(to: interfaceDisplayedRelay)
+            .disposed(by: rx.disposeBag)
+
         return Output(
-            renderedInterface: $renderedInterface.asDriver().compactMap { $0 },
-            attributedString: $attributedString.asDriver().compactMap { $0 },
-            theme: $theme.asDriver(),
+            interface: $interface.asDriver().compactMap { $0 },
             imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver(),
             selectedRuntimeObjectName: documentState.$selectedRuntimeObject.asDriver().map { $0?.displayName ?? "" },
             runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal(),
@@ -755,12 +650,4 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             highlightsFirstRender: highlightsFirstRender
         )
     }
-}
-
-extension NSAttributedString: @unchecked @retroactive Sendable {}
-
-extension NSAttributedString.Key {
-    /// The `RuntimeMemberReference` a line of the content pane's text declares,
-    /// over the whole line; see `ContentTextViewModel.markingDeclaredMembers(in:of:)`.
-    public static let runtimeViewerDeclaredMember = NSAttributedString.Key("RuntimeViewerDeclaredMember")
 }

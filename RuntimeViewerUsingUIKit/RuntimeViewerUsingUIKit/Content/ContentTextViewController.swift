@@ -11,6 +11,9 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
 
     let runtimeObjectClicked = PublishRelay<RuntimeObject>()
 
+    /// Each interface once its text is in the text view.
+    private let interfaceDisplayedRelay = PublishRelay<ContentInterface.ID>()
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -35,10 +38,18 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
 
     override func setupBindings(for viewModel: ContentTextViewModel) {
         super.setupBindings(for: viewModel)
-        let input = ContentTextViewModel.Input(runtimeObjectClicked: runtimeObjectClicked.asSignal(), runtimeObjectOpenedInNewTab: .empty())
+        let input = ContentTextViewModel.Input(runtimeObjectClicked: runtimeObjectClicked.asSignal(), runtimeObjectOpenedInNewTab: .empty(), interfaceDisplayed: interfaceDisplayedRelay.asSignal())
         let output = viewModel.transform(input)
 
-        output.attributedString.drive(textView.rx.attributedText).disposed(by: rx.disposeBag)
+        // Themed here in the fallback theme, as this pane always was; reported displayed once set,
+        // which ends the view model's loading for it.
+        let renderer = ContentTextRenderer(interfaces: output.interface)
+        renderer.renderedText.driveOnNext { [weak self] renderedText in
+            guard let self else { return }
+            textView.attributedText = renderedText.attributedString
+            interfaceDisplayedRelay.accept(renderedText.interface.id)
+        }
+        .disposed(by: rx.disposeBag)
         output.selectedRuntimeObjectName.drive(navigationItem.rx.title).disposed(by: rx.disposeBag)
     }
 }

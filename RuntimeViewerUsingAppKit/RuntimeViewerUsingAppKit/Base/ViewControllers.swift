@@ -25,6 +25,11 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: LayerBackedViewCont
     /// `backgroundColor` — the content panes use the editor's, to be covered while they load.
     let commonLoadingView = CommonLoadingView()
 
+    /// Loading of the pane's own, shown together with its view model's: a subclass that works on what
+    /// the view model hands it — the content pane's renderer theming a text — drives it. Set back to
+    /// `false` for every view model the pane is bound to.
+    let additionalCommonLoadingRelay = BehaviorRelay<Bool>(value: false)
+
     public private(set) var containerView = NSView()
 
     open var contentInsets: NSDirectionalEdgeInsets { .zero }
@@ -95,8 +100,10 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: LayerBackedViewCont
         self.viewModel = viewModel
 
         if shouldDisplayCommonLoading {
+            additionalCommonLoadingRelay.accept(false)
+            let delayedLoading = Driver.combineLatest(viewModel.delayedLoading, additionalCommonLoadingRelay.asDriver()) { $0 || $1 }
             if usesSkeletonReplaceCommonLoading {
-                viewModel.delayedLoading.driveOnNextMainActor { [weak self] isLoading in
+                delayedLoading.driveOnNextMainActor { [weak self] isLoading in
                     guard let self else { return }
                     if isLoading {
                         containerView.showSkeleton()
@@ -106,7 +113,7 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: LayerBackedViewCont
                 }
                 .disposed(by: rx.disposeBag)
             } else {
-                viewModel.delayedLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
+                delayedLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
             }
         }
 

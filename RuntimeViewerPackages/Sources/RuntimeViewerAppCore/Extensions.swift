@@ -1,35 +1,9 @@
-#if os(macOS)
-import AppKit
-#else
-import UIKit
-#endif
+import Foundation
 
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 extension RuntimeImageLoadState: @retroactive CaseAccessible {}
-
-#if canImport(UIKit)
-
-extension UIColor {
-    public static var labelColor: UIColor {
-        .label
-    }
-
-    public static var secondaryLabelColor: UIColor {
-        .secondaryLabel
-    }
-
-    public static var tertiaryLabelColor: UIColor {
-        .tertiaryLabel
-    }
-
-    public static var quaternaryLabelColor: UIColor {
-        .quaternaryLabel
-    }
-}
-
-#endif
 
 extension RuntimeImageNode: @retroactive Sequence {
     public func makeIterator() -> Iterator {
@@ -50,20 +24,6 @@ extension RuntimeImageNode: @retroactive Sequence {
             }
             return nil
         }
-    }
-}
-
-extension NSUIColor {
-    public convenience init(light: NSUIColor, dark: NSUIColor) {
-        #if os(macOS)
-        self.init(name: nil) { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .aqua ? light : dark
-        }
-        #else
-        self.init { traitCollection in
-            traitCollection.userInterfaceStyle == .light ? light : dark
-        }
-        #endif
     }
 }
 

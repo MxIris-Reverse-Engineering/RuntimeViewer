@@ -32,9 +32,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// What takes the keyboard focus when the editor pane showing this does (`EditorPaneContent`).
     var focusableView: NSView? { bridge?.editorView }
 
-    /// The string currently handed to the editor. ⌘-click reports a UTF-16 range into this
-    /// very string, so the generator's `.link` attribute can be read straight off it.
-    private var displayedAttributedString: NSAttributedString?
+    /// Each interface once it is in the editor.
+    private let interfaceDisplayedRelay = PublishRelay<ContentInterface.ID>()
 
     private let jumpToDefinitionRelay = PublishRelay<RuntimeObject>()
 
@@ -69,7 +68,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     private var displayedLanguageIdentifier: String?
 
     /// What the editor shows.
-    private var displayedRenderedInterface: ContentTextViewModel.RenderedInterface?
+    private var displayedInterface: ContentInterface?
 
     /// The text last handed to the editor. A source shown again unchanged — a theme or font change
     /// renders the same text anew — gets back the macro expansions that were open, which the
@@ -139,6 +138,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         let input = ContentTextViewModel.Input(
             runtimeObjectClicked: jumpToDefinitionRelay.asSignal(),
             runtimeObjectOpenedInNewTab: openInNewTabRelay.asSignal(),
+            interfaceDisplayed: interfaceDisplayedRelay.asSignal(),
             runtimeObjectOpenedInNextEditorPane: openInNextEditorPaneRelay.asSignal(),
             crossReferenceRequested: crossReferenceRequestedRelay.asSignal(),
             generatedInterfaceToggled: generatedInterfaceToggledRelay.asSignal(),
@@ -148,17 +148,21 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         awaitsHighlightedFirstRender = output.highlightsFirstRender
 
         let interfaceLanguage = viewModel.interfaceLanguage
-        Driver.combineLatest(output.renderedInterface, viewModel.$runtimeObject.asDriver())
-            .driveOnNext { [weak self] renderedInterface, runtimeObject in
+        Driver.combineLatest(output.interface, viewModel.$runtimeObject.asDriver())
+            .driveOnNext { [weak self] interface, runtimeObject in
                 guard let self else { return }
-                displayedAttributedString = renderedInterface.attributedString
-                displayedRenderedInterface = renderedInterface
+                displayedInterface = interface
                 displayedLanguageIdentifier = Self.languageIdentifier(for: runtimeObject.kind, interfaceLanguage: interfaceLanguage)
                 showDisplayedSource()
+                // In the editor: the view model's loading for it ends.
+                interfaceDisplayedRelay.accept(interface.id)
             }
             .disposed(by: rx.disposeBag)
 
-        output.theme.driveOnNext { [weak self] theme in
+        // The editor colours the semantic runs itself and takes only the theme from the renderer,
+        // whose themed text it never asks for: none is built (proposal `app-core-without-ui-models`).
+        let renderer = ContentTextRenderer(interfaces: output.interface)
+        renderer.theme.driveOnNext { [weak self] theme in
             guard let self else { return }
             currentTheme = theme
             applyCurrentTheme()
@@ -195,18 +199,18 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// are on — checked here too, since a fetch made before they were turned off can still
     /// arrive with them.
     private func showDisplayedSource() {
-        guard let bridge, let renderedInterface = displayedRenderedInterface, let languageIdentifier = displayedLanguageIdentifier else { return }
+        guard let bridge, let interface = displayedInterface, let languageIdentifier = displayedLanguageIdentifier else { return }
 
         // The parse the editor makes of this text cannot tell what an identifier is;
         // these runs can, so they are handed over to correct it.
-        let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: renderedInterface.semanticString)
+        let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: interface.semanticString)
         let commentDecorations = settings.editor.showsCommentTags
-            ? renderedInterface.commentDecorations.flatMap { $0.isEmpty ? nil : SourceEditorCommentDecorations($0) }
+            ? interface.commentDecorations.flatMap { $0.isEmpty ? nil : SourceEditorCommentDecorations($0) }
             : nil
-        let source = renderedInterface.attributedString.string
+        let source = interface.string
         // Parents come before what was expanded out of them, so each finds its parent shown.
         let reopenedExpansions = source == lastShownSource
-            ? showableMacroExpansions(of: renderedInterface).filter { bridge.isInlineExpansionShown(identifier: $0.identifier) }
+            ? showableMacroExpansions(of: interface).filter { bridge.isInlineExpansionShown(identifier: $0.identifier) }
             : []
         bridge.setSource(
             source,
@@ -235,8 +239,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         let parentIdentifier: String?
     }
 
-    /// Every expansion `renderedInterface` offers, each followed by those its parts attach.
-    private func showableMacroExpansions(of renderedInterface: ContentTextViewModel.RenderedInterface) -> [ShowableMacroExpansion] {
+    /// Every expansion `interface` offers, each followed by those its parts attach.
+    private func showableMacroExpansions(of interface: ContentInterface) -> [ShowableMacroExpansion] {
         var showableExpansions: [ShowableMacroExpansion] = []
         func append(_ expansion: ContentTextViewModel.MacroExpansion, identifier: String, parentIdentifier: String?) {
             showableExpansions.append(ShowableMacroExpansion(expansion: expansion, identifier: identifier, parentIdentifier: parentIdentifier))
@@ -247,7 +251,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
                 }
             }
         }
-        for expansion in renderedInterface.macroExpansions {
+        for expansion in interface.macroExpansions {
             append(expansion, identifier: Self.inlineExpansionIdentifier(for: expansion), parentIdentifier: nil)
         }
         return showableExpansions
@@ -256,7 +260,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// Expand Macro on an attached macro's attribute, Hide Macro Expansion once it is expanded —
     /// what Xcode's editor offers on a macro. `nil` for a token outside every attribute.
     private func macroExpansionMenuItem(forTokenIn characterRange: NSRange) -> NSMenuItem? {
-        guard let expansion = displayedRenderedInterface?.macroExpansions.first(where: {
+        guard let expansion = displayedInterface?.macroExpansions.first(where: {
             NSLocationInRange(characterRange.location, $0.attributeCharacterRange)
         }) else { return nil }
         return macroExpansionMenuItem(for: ShowableMacroExpansion(
@@ -273,8 +277,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         inPartAt partIndex: Int,
         ofExpansionShownAs identifier: String
     ) -> NSMenuItem? {
-        guard let displayedRenderedInterface,
-              let parent = showableMacroExpansions(of: displayedRenderedInterface).first(where: { $0.identifier == identifier }),
+        guard let displayedInterface,
+              let parent = showableMacroExpansions(of: displayedInterface).first(where: { $0.identifier == identifier }),
               parent.expansion.parts.indices.contains(partIndex),
               let nestedExpansion = parent.expansion.parts[partIndex].nestedExpansions.first(where: {
                   NSLocationInRange(characterRange.location, $0.attributeCharacterRange)
@@ -541,7 +545,7 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
 
     /// The member the line holding `characterIndex` declares, if it declares one with code.
     private func declaredMember(atCharacterIndex characterIndex: Int) -> RuntimeMemberReference? {
-        displayedAttributedString?.declaredMember(at: characterIndex)
+        displayedInterface?.declaredMember(at: characterIndex)
     }
 
     @objc private func crossReferenceAction(_ sender: NSMenuItem) {
@@ -557,7 +561,7 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
     /// The jump target the generator recorded for the token starting at `characterIndex`, if
     /// that token is one.
     private func runtimeObject(atCharacterIndex characterIndex: Int) -> RuntimeObject? {
-        displayedAttributedString?.linkedRuntimeObject(at: characterIndex)
+        displayedInterface?.linkedRuntimeObject(at: characterIndex)
     }
 
     @objc private func jumpToDefinitionAction(_ sender: RuntimeObjectMenuItem) {
