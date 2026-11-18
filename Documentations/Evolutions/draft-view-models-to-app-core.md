@@ -178,7 +178,7 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
   - 「启动」调用新加的 `MCPService.resume()`，用上次 `start(for:)` 存下的文档提供者再启动一次。
   - 没有存过提供者时记一条错误日志，什么也不做。
 - **`MCPService` 改用 Observation 让状态可被跟踪，去掉只有弹窗在用的 `onStateChange`。**
-  - 加 `@Observable`，除 `serverState` 外的存储属性标 `@ObservationIgnored`。
+  - `serverState` 存进一个私有的 `@Observable` 小类 `MCPServerStateStorage`，`serverState` 改成转发给它的计算属性，值没变时不赋值。`MCPService` 本身不加 `@Observable`，免得与它的 `@Loggable`、`@Dependency` 属性包装器和 `isolated deinit` 纠缠。
   - 弹窗的 ViewModel 用 `Observable.tracking { mcpServerClient.state() }`（`RuntimeViewerArchitectures/Observable+Tracking.swift:40`）跟随状态，写法同 `MainViewModel` 跟随设置。
   - 多个弹窗不再互相覆盖。
 - **`MCPStatusPopoverViewModel` 与 `MCPConfigType` 搬进 `AC/MCP/`**，拷贝改走 `pasteboardClient.copyString`。
@@ -294,13 +294,14 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
 | `MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectScopeViewModel.swift` → `AC/Sidebar/RuntimeObject/` | 移动 | `public`（`init`、`draft`、`availableKinds`、`availableProperties`） | 可测试 | 2 |
 | `ACT/ExportingCompletionViewModelTests.swift` | 新增 | 单个与批量导出的 Show in Finder 都经 `finderClient` 揭示导出目录（记录器替身），没有目录时什么都不揭示 | 从 `NSWorkspace` 改成服务的部分 | 2 |
 | `ACT/SpecializationCellViewModelTests.swift` | 新增 | 描述与占位的 `RowText` 取值 | 从富文本改成值的部分 | 2 |
-| `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/MCPService.swift` | 修改 | `MCPServerState` 移出；`@Observable`（其余属性 `@ObservationIgnored`）；删 `onStateChange`；加 `resume()`；加 `extension MCPServerClientKey: DependencyKey` 的 `liveValue` | 真实实现在 MCP 包 | 3 |
+| `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/MCPService.swift` | 修改 | `MCPServerState` 移出；`serverState` 存进私有的 `@Observable` 类 `MCPServerStateStorage`；删 `onStateChange`；加 `resume()`；加 `MCPServerClient.driving(_:)` 与 `extension MCPServerClientKey: @retroactive DependencyKey` 的 `liveValue` | 真实实现在 MCP 包 | 3 |
 | `AC/MCP/MCPServerState.swift` | 新增（移入） | 原样 | AppCore 要用这个类型 | 3 |
+| `RuntimeViewerMCP/Tests/RuntimeViewerMCPBridgeTests/MCPServerStateTests.swift` → `ACT/MCPServerStateTests.swift` | 移动 | 改 import AppCore | 随类型 | 3 |
 | `AC/MCP/MCPServerClient.swift` | 新增 | `MCPServerClient`、`inert`、`public enum MCPServerClientKey: TestDependencyKey`、`DependencyValues.mcpServerClient` | 跨层服务 | 3 |
 | `MAC/MCP/MCPStatusPopoverViewModel.swift` → `AC/MCP/MCPStatusPopoverViewModel.swift`；`MCPConfigType` → `AC/MCP/MCPConfigType.swift` | 移动、拆出 | 改用 `mcpServerClient`、`Observable.tracking`、`pasteboardClient`；`public` | 可测试 | 3 |
 | `RuntimeViewerMCP/Package.swift` | 修改 | `RuntimeViewerMCPBridgeTests` 加 `RuntimeViewerAppCore` 依赖 | 测试要点名 key | 3 |
-| `RuntimeViewerMCP/Tests/RuntimeViewerMCPBridgeTests/MCPServerClientLiveTests.swift` | 新增 | live 值存在，状态读自服务，`resume()` 用存下的提供者 | `CrossLayerDependencyTests` 链接不到 MCP 包 | 3 |
-| `ACT/MCPStatusPopoverViewModelTests.swift` | 新增 | 三种状态下按钮的动作；拷贝端口与配置走 `pasteboardClient` | 从 `NSPasteboard` / 闭包槽改成服务的部分 | 3 |
+| `RuntimeViewerMCP/Tests/RuntimeViewerMCPBridgeTests/MCPServerClientLiveTests.swift` | 新增 | live 值存在；客户端读的是服务的状态，状态改变可被 Observation 观察到；从没启动过的服务 `resume()` 什么也不做 | `CrossLayerDependencyTests` 链接不到 MCP 包 | 3 |
+| `ACT/MCPStatusPopoverViewModelTests.swift` | 新增 | 三种状态下按钮的动作；拷贝端口与配置走 `pasteboardClient`，没在运行时什么都不拷；两个弹窗同时跟随状态 | 从 `NSPasteboard` / 闭包槽改成服务的部分 | 3 |
 | 根 `AGENTS.md`、`RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 跨层依赖例外加 `mcpServerClient` | 同批文档 | 3 |
 | `MAC/Attach Process/AttachToProcessViewModel.swift` → `AC/AttachToProcess/AttachToProcessViewModel.swift` | 移动 | `Input` 收 `RuntimeProcessAttacher.Target`；加 `Output.remoteProcessAttached`；删图标参数与 `runtimeEngineIconProvider` | 不收 UI 库的类型 | 4 |
 | `MAC/Attach Process/AttachToProcessViewController.swift` | 修改 | `RunningItem` 转 `Target`；记住选中的行；收到 `remoteProcessAttached` 时记图标 | 图标只在视图层 | 4 |
@@ -552,17 +553,23 @@ extension DependencyValues {
 }
 
 // RuntimeViewerMCPBridge/MCPService.swift
-extension MCPServerClientKey: DependencyKey {
-    public static let liveValue = MCPServerClient(
-        state: { MCPService.shared.serverState },
-        start: { MCPService.shared.resume() },
-        stop: { MCPService.shared.stop() }
-    )
+@Observable @MainActor
+private final class MCPServerStateStorage {
+    var state: MCPServerState = .stopped
+}
+
+extension MCPServerClient {
+    // The client that drives the service `service` returns, looked up at every call.
+    static func driving(_ service: @escaping @MainActor @Sendable () -> MCPService) -> MCPServerClient
+}
+
+extension MCPServerClientKey: @retroactive DependencyKey {
+    public static let liveValue = MCPServerClient.driving { MCPService.shared }
 }
 ```
 
-- `MCPService` 加了 `@Observable`，`state()` 读到的 `serverState` 会被 `Observable.tracking` 跟踪。
-- 如果 `@Observable` 与 `@Loggable`、`isolated deinit` 或 `@Dependency` 属性包装器冲突、编不过，退路是在 `MCPServerClient` 里加一个 `observeState` 成员，返回取消令牌，`MCPService` 维护一组观察者代替单个闭包槽。退路同样去掉 `onStateChange`，选哪条写进决策日志。
+- `MCPService.serverState` 读写的是 `MCPServerStateStorage.state`，所以 `state()` 读到的值会被 `Observable.tracking` 跟踪。`MCPService` 本身没有加 `@Observable`：它有 `@Loggable`、`@Dependency` 属性包装器和 `isolated deinit`，单拎出一个存储类最省事。
+- `driving(_:)` 让测试拿一个自己建的 `MCPService(portFilePath:)` 来驱动，live 值与测试走同一段代码。
 
 ### 防回流检查
 
@@ -639,14 +646,17 @@ extension MCPServerClientKey: DependencyKey {
    - 行为：`batchExportingCompletionRevealsDestinationThroughFinderClient`
    - 行为：`specializationDescriptionIsPrimaryRowTextAtThirteenPoints`
    - 行为：`specializationLoadingPlaceholderIsSecondaryRowText`
-3. **MCP 状态改走跨层服务**：步骤 3 的各行。
+3. **MCP 状态改走跨层服务**（已完成，2026-11-18）：步骤 3 的各行。
    - 行为：`actionButtonOpensSettingsWhenDisabled`
    - 行为：`actionButtonStartsWhenStopped`
    - 行为：`actionButtonStopsWhenRunning`
    - 行为：`copyPortCopiesThroughPasteboardClient`
    - 行为：`copyConfigurationCopiesClientCommand`
+   - 行为：`copyingNeedsARunningServer`
    - 行为：`stateFollowsServerWithoutCallbackSlot`
-   - 行为：`liveClientResumesWithStoredDocumentProvider`
+   - 行为：`liveValueExists`
+   - 行为：`liveClientFollowsServiceState`
+   - 行为：`resumeWithoutDocumentProviderDoesNothing`
 4. **附加进程进 AppCore**：步骤 4 的各行。
    - 行为：`attachInputIsAProcessTarget`
    - 行为：`remoteAttachReportsInjectedEngineBeforeDismiss`

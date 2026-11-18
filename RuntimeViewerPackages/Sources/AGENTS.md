@@ -67,8 +67,13 @@ transition name `UIViewController` because XCoordinator's `Presentable` and `Tra
 and implemented in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by
 `AppCoordinator`), the copy commands' pasteboard (`pasteboardClient`, `PasteboardClient.general`) and Show
 in Finder (`finderClient`, `FinderClient.workspace`). The pasteboard and the Finder give tests an inert
-client that does nothing; `ViewModelTestEnvironment` swaps in recorders. How such a key is written: root
-`AGENTS.md`, *Singletons & Dependency Injection*.
+client that does nothing; `ViewModelTestEnvironment` swaps in recorders. **A service implemented in a
+package above this one is declared the same way**: the MCP status popover starts, stops and follows the app's
+MCP server through `mcpServerClient` (`MCP/MCPServerClient.swift`), whose live value `RuntimeViewerMCPBridge`
+supplies, because that package depends on RuntimeViewerAppCore and so this module cannot name its
+`MCPService`; the key is `public`, since `package` does not reach another package, and the bridge's own
+`MCPServerClientLiveTests` checks the live value. How such a key is written: root `AGENTS.md`,
+*Singletons & Dependency Injection*.
 
 **An icon or a colour RuntimeViewerAppCore shows is a value it describes, and RuntimeViewerAppUI draws it**
 (`Presentation/IconDescriptor.swift`, `ColorDescriptor.swift`; drawn by `IconDescriptor.image` and

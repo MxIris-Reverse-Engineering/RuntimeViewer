@@ -1,5 +1,7 @@
+#if os(macOS)
+
 import Testing
-@testable import RuntimeViewerMCPBridge
+import RuntimeViewerAppCore
 
 @Suite("MCPServerState")
 struct MCPServerStateTests {
@@ -67,3 +69,5 @@ struct MCPServerStateTests {
         #expect(MCPServerState.running(port: 8080) != .running(port: 9090))
     }
 }
+
+#endif

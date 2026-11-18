@@ -83,6 +83,7 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerMCPBridge",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerAppCore", package: "RuntimeViewerPackages"),
             ]
         ),
     ],
