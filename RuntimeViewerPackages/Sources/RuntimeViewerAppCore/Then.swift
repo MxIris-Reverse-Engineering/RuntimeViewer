@@ -3,14 +3,6 @@ import Foundation
 import CoreGraphics
 #endif
 
-#if os(macOS) && !targetEnvironment(macCatalyst)
-import AppKit
-#endif
-
-#if os(iOS) || os(tvOS)
-import UIKit.UIGeometry
-#endif
-
 protocol Then {}
 
 extension Then where Self: Any {
@@ -75,32 +67,3 @@ extension Dictionary: Then {}
 extension Set: Then {}
 extension JSONDecoder: Then {}
 extension JSONEncoder: Then {}
-
-#if os(macOS)
-extension NSEdgeInsets: Then {}
-extension NSRectEdge: Then {}
-extension NSDirectionalRectEdge: Then {}
-extension NSDirectionalEdgeInsets: Then {}
-@available(macOS 15.0, *)
-extension NSHorizontalDirection: Then {}
-@available(macOS 15.0, *)
-extension NSHorizontalDirection.Set: Then {}
-@available(macOS 15.0, *)
-extension NSVerticalDirection: Then {}
-@available(macOS 15.0, *)
-extension NSVerticalDirection.Set: Then {}
-@available(macOS 15.0, *)
-extension NSSuggestionItem: Then {}
-@available(macOS 15.0, *)
-extension NSSuggestionItemResponse: Then {}
-@available(macOS 15.0, *)
-extension NSSuggestionItemResponse.Highlight: Then {}
-@available(macOS 15.0, *)
-extension NSSuggestionItemResponse.Phase: Then {}
-@available(macOS 15.0, *)
-extension NSSuggestionItemSection: Then {}
-@available(macOS 26.0, *)
-extension NSItemBadge: Then {}
-@available(macOS 26.0, *)
-extension NSView.LayoutRegion: Then {}
-#endif

@@ -1,6 +1,7 @@
 import AppKit
 import Testing
 @testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 import RuntimeViewerAppTestingSupport
 
 /// How a Find result the user chose opens, read off the event that chose it: ⌥ opens it in the next

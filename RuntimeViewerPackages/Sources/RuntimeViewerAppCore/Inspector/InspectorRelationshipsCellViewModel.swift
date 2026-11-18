@@ -1,10 +1,5 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
 import RxAppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
 #endif
 
 import Foundation

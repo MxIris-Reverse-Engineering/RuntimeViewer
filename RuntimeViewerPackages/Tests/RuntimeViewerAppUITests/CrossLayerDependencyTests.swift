@@ -15,6 +15,8 @@ struct CrossLayerDependencyTests {
             AppRouterKey.self,
             RuntimeEngineIconProvidingKey.self,
             RuntimeObjectIconRenderingKey.self,
+            PasteboardClientKey.self,
+            FinderClientKey.self,
         ]
         for keyType in keyTypes {
             #expect(keyType is any DependencyKey.Type, "\(keyType) has no live value")

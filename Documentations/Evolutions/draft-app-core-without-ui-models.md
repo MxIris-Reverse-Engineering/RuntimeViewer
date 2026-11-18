@@ -1,6 +1,6 @@
 # Draft - AppCore 不再使用 AppKit/UIKit 模型
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
