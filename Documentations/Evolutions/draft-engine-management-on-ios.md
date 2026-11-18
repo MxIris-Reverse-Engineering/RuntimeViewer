@@ -1,12 +1,12 @@
 # Draft - 引擎管理在 iOS 上可用
 
-- **状态**: Draft
+- **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
 - **所属愿景**: [iOS 版功能对齐](../Visions/IOSFeatureParity.md)（第一步）
 - **关联提案**: [0035-engine-management-module](0035-engine-management-module.md)（把引擎管理抽成无 UI 模块）、[0069-file-mode](0069-file-mode.md)（文件模式）、[0081-shared-cache-images-across-engines](0081-shared-cache-images-across-engines.md)（系统镜像跨引擎共享）
-- **实现分支 / PR**: 待定
+- **实现分支 / PR**: `feature/engine-management-on-ios`（worktree `.worktrees/RuntimeViewer-EngineManagementOnIOS`），做完一次合进 `next`
 - **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
 - **网页版**: 同目录同名的 `.html`
 
@@ -381,3 +381,4 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
 | 2026-11-18 | 自定：iOS 上不会走的 macOS 功能（XPC 重连）与服务端名字的取法用 `#if`，不做接缝 | 接缝用于 iOS 上行为不同、需要在 Mac 上测到的路径；这两处在 iOS 上没有路径可测 |
 | 2026-11-18 | 自定：进程内读的文件引擎读完才返回、不挂起、不能换配对 | 不改 Core 的连接层；契约差异只在 iOS 文件模式的界面出现，那篇再定 |
 | 2026-11-18 | 提交为 Draft，未批准 | 标着「代用户选」「代用户确认」的几行，是另一台 Mac 上的协作 agent 代用户作答的；用户决定提案先保持 Draft 推到 next，实现交给那台 Mac 上的 agent |
+| 2026-11-18 | Accepted | 用户批准，由 Ultra 上的会话接手实现。功能分支从 `origin/next` 切出，而不是本机的 `next`：本机 `next` 上有一个自 11-15 起有意留着没推送的提交（离线文件的镜像树），不该随这条分支推上去；两者改的文件不重叠。 |
