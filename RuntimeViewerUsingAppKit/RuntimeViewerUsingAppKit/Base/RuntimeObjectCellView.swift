@@ -152,14 +152,14 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
     }
 
     private func apply(_ appearance: RuntimeObjectCellAppearance) {
-        primaryIconImageView.image = appearance.primaryIcon
+        primaryIconImageView.image = appearance.primaryIcon?.image
         primaryIconImageView.toolTip = appearance.primaryTooltip
 
-        secondaryIconImageView.image = appearance.secondaryIcon
+        secondaryIconImageView.image = appearance.secondaryIcon?.image
         secondaryIconImageView.toolTip = appearance.secondaryTooltip
         secondaryIconImageView.isHidden = appearance.secondaryIcon == nil
 
-        tertiaryIconImageView.image = appearance.tertiaryIcon
+        tertiaryIconImageView.image = appearance.tertiaryIcon?.image
         tertiaryIconImageView.toolTip = appearance.tertiaryTooltip
         tertiaryIconImageView.isHidden = appearance.tertiaryIcon == nil
 

@@ -172,11 +172,11 @@ struct FindCrossReferenceTreeTests {
     @Test("a function's icon takes the colour of its language: Swift blue, C and C++ green, Objective-C orange, none grey")
     func functionIconsTakeTheirLanguagesColours() {
         let size = FindResultCellStyle.Metrics.navigator.iconSize
-        func icon(of item: FindCrossReferenceRow.Item) -> NSImage? {
+        func icon(of item: FindCrossReferenceRow.Item) -> IconDescriptor? {
             FindResultNode.crossReference(FindCrossReferenceRow(item: item, direction: .callers), identifier: "row", children: []).appearance.icon
         }
-        func badge(_ text: String, _ color: RuntimeObjectIcon.Glyph.Color) -> NSImage {
-            RuntimeObjectIcon.icon(text: text, color: color, size: size)
+        func badge(_ text: String, _ color: RuntimeObjectIcon.Glyph.Color) -> IconDescriptor {
+            .glyph(RuntimeObjectIcon.glyph(text: text, color: color, size: size))
         }
         let thing = RuntimeObject(name: "SampleThing", displayName: "SampleThing", kind: .objc(.type(.class)), imagePath: Self.image, children: [])
         let swiftSymbol = RuntimeFunctionReference(imagePath: Self.image, address: 0x2000, displayName: "Sample.Thing.run()", symbolName: "_$s6Sample5ThingV3runyyF", member: nil, foldedSymbolCount: 0)
@@ -187,16 +187,16 @@ struct FindCrossReferenceTreeTests {
             member: RuntimeMemberReference(object: thing, name: "run", kind: .objcMethod, isStatic: false), foldedSymbolCount: 0
         )
 
-        #expect(icon(of: .function(swiftSymbol)) === badge("f", .blue))
-        #expect(icon(of: .function(swiftMetadataName)) === badge("f", .blue))
-        #expect(icon(of: .function(Self.function("_sample_run", address: 0x2300))) === badge("f", .green))
-        #expect(icon(of: .function(Self.function("__ZN6Sample3runEv", address: 0x2400))) === badge("f", .green))
-        #expect(icon(of: .function(objectiveCMethod)) === badge("M", .orange))
-        #expect(icon(of: .function(Self.function(nil, address: 0x2500))) === badge("f", .gray))
+        #expect(icon(of: .function(swiftSymbol)) == badge("f", .blue))
+        #expect(icon(of: .function(swiftMetadataName)) == badge("f", .blue))
+        #expect(icon(of: .function(Self.function("_sample_run", address: 0x2300))) == badge("f", .green))
+        #expect(icon(of: .function(Self.function("__ZN6Sample3runEv", address: 0x2400))) == badge("f", .green))
+        #expect(icon(of: .function(objectiveCMethod)) == badge("M", .orange))
+        #expect(icon(of: .function(Self.function(nil, address: 0x2500))) == badge("f", .gray))
         // A callee another image exports, by its symbol.
-        #expect(icon(of: .target(.importedSymbol(name: "_$sSS5countSivg"))) === badge("f", .blue))
-        #expect(icon(of: .target(.importedSymbol(name: "_strlen"))) === badge("f", .green))
-        #expect(icon(of: .unnamedFunctions(count: 3)) === badge("f", .gray))
+        #expect(icon(of: .target(.importedSymbol(name: "_$sSS5countSivg"))) == badge("f", .blue))
+        #expect(icon(of: .target(.importedSymbol(name: "_strlen"))) == badge("f", .green))
+        #expect(icon(of: .unnamedFunctions(count: 3)) == badge("f", .gray))
     }
 
     @Test("an image's row is drawn in the colour of what the image is part of, and the other rows keep the usual tint")
@@ -207,10 +207,10 @@ struct FindCrossReferenceTreeTests {
         let frameworkImageRow = appearance(of: .image(path: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"))
         let plainImageRow = appearance(of: .image(path: "/usr/lib/libobjc.A.dylib"))
 
-        #expect(frameworkImageRow.icon === RuntimeImageKind.framework.icon)
-        #expect(frameworkImageRow.iconColor == RuntimeImageKind.framework.iconColor)
-        #expect(plainImageRow.icon === RuntimeImageKind.dynamicLibrary.icon)
-        #expect(plainImageRow.iconColor == RuntimeImageKind.dynamicLibrary.iconColor)
+        #expect(frameworkImageRow.icon == .imageKind(.framework))
+        #expect(frameworkImageRow.iconColor == .imageKind(.framework))
+        #expect(plainImageRow.icon == .imageKind(.dynamicLibrary))
+        #expect(plainImageRow.iconColor == .imageKind(.dynamicLibrary))
         #expect(appearance(of: .unnamedFunctions(count: 3)).iconColor == nil)
     }
 

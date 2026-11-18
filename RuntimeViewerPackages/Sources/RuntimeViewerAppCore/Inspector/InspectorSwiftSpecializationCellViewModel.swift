@@ -21,18 +21,18 @@ public final class InspectorSwiftSpecializationCellViewModel: NSObject, @uncheck
         self.runtimeObject = runtimeObject
         let iconSize = RuntimeObjectIcon.defaultIconSize
         var composedAppearance = RuntimeObjectCellAppearance(
-            primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
+            primaryIcon: .runtimeObject(runtimeObject.kind, size: iconSize),
             primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
-            secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
+            secondaryIcon: RuntimeObjectIcon.secondaryGlyph(for: runtimeObject, size: iconSize).map(IconDescriptor.glyph),
             secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
             title: NSAttributedString(rowText: runtimeObject.displayName, fontSize: 13, color: .labelColor)
         )
         if runtimeObject.properties.contains(.isGeneric) {
-            composedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
+            composedAppearance.tertiaryIcon = .glyph(RuntimeObjectIcon.genericGlyph(size: iconSize))
             composedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForGeneric
         }
         if runtimeObject.properties.contains(.isSpecialized) {
-            composedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
+            composedAppearance.tertiaryIcon = .glyph(RuntimeObjectIcon.specializedGlyph(size: iconSize))
             composedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForSpecialized
         }
         self.appearance = composedAppearance

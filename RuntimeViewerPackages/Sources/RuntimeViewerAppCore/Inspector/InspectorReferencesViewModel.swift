@@ -380,7 +380,7 @@ public final class InspectorReferenceCellViewModel: NSObject, @unchecked Sendabl
         var appearance = FindResultNode.makeAppearance(for: .crossReference(row), metrics: .inspector)
         // A list has no disclosure triangle to show the row expands; the icon shows it instead.
         if let unnamedFunctionsGroup {
-            appearance.icon = FindResultCellStyle.disclosureIcon(isExpanded: unnamedFunctionsGroup.isExpanded)
+            appearance.icon = .findResultSymbol(.disclosure(isExpanded: unnamedFunctionsGroup.isExpanded))
         }
         self.appearance = appearance
         #else

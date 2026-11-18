@@ -588,7 +588,7 @@ enum ReportOutline {
     /// A kind of work's own row: its title and, while the engine's process keeps something for it,
     /// how much, beside the title, with an Eject button that has the process drop it — as Finder
     /// shows a volume (proposal `engine-resident-memory`).
-    static func configureCategoryRow(_ cellViewModel: ReportCellViewModel, icon: NSUIImage?, title: String, keptByteCount: Int) {
+    static func configureCategoryRow(_ cellViewModel: ReportCellViewModel, icon: IconDescriptor?, title: String, keptByteCount: Int) {
         let isKeepingAnything = keptByteCount > 0
         cellViewModel.update(
             icon: icon,
@@ -808,26 +808,26 @@ enum ReportOutline {
 
     // MARK: - Text and icons
 
-    static let indexingIcon: NSUIImage = SystemSymbol.squareStack3dDownRight.image
+    static let indexingIcon: IconDescriptor = .systemSymbol(.squareStack3dDownRight)
 
-    static let corpusIcon: NSUIImage = SystemSymbol.magnifyingglass.image
+    static let corpusIcon: IconDescriptor = .systemSymbol(.magnifyingglass)
 
-    static let crossReferenceIcon: NSUIImage = SystemSymbol.arrowTriangleBranch.image
+    static let crossReferenceIcon: IconDescriptor = .systemSymbol(.arrowTriangleBranch)
 
-    static let manualLoadingIcon: NSUIImage = SystemSymbol.trayAndArrowDown.image
+    static let manualLoadingIcon: IconDescriptor = .systemSymbol(.trayAndArrowDown)
 
-    static let turnedOffIcon: NSUIImage = SystemSymbol.powerCircle.image
+    static let turnedOffIcon: IconDescriptor = .systemSymbol(.powerCircle)
 
-    static let unsupportedIcon: NSUIImage = SystemSymbol.exclamationmarkCircle.image
+    static let unsupportedIcon: IconDescriptor = .systemSymbol(.exclamationmarkCircle)
 
-    static let restoredCorporaIcon: NSUIImage = SystemSymbol.archivebox.image
+    static let restoredCorporaIcon: IconDescriptor = .systemSymbol(.archivebox)
 
-    static func icon(forImagePath imagePath: String) -> NSUIImage {
-        RuntimeImageKind(ofImageAt: imagePath).icon
+    static func icon(forImagePath imagePath: String) -> IconDescriptor {
+        .imageKind(RuntimeImageKind(ofImageAt: imagePath))
     }
 
-    static func iconColor(forImagePath imagePath: String) -> NSUIColor {
-        RuntimeImageKind(ofImageAt: imagePath).iconColor
+    static func iconColor(forImagePath imagePath: String) -> ColorDescriptor {
+        .imageKind(RuntimeImageKind(ofImageAt: imagePath))
     }
 
     static func title(for reason: RuntimeIndexingBatchReason) -> String {

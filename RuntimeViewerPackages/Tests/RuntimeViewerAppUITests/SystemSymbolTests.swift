@@ -1,6 +1,7 @@
 import AppKit
 import Testing
 @testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// The system symbols RuntimeViewerAppCore draws. They are named by string since the module stopped
 /// depending on SFSymbols (proposal `app-core-ui-split`), so a misspelt name is caught here

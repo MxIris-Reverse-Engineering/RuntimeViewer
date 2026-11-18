@@ -3,7 +3,7 @@ import AppKit
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
 
-/// Every font, colour and icon a Find result row is drawn with, so tuning the
+/// Every font and colour a Find result row is drawn with, so tuning the
 /// rows means changing a value here and nowhere else. `FindResultNode` builds
 /// each row's appearance from these; `FindResultCellView` sizes and tints its
 /// icon from them.
@@ -42,129 +42,13 @@ public enum FindResultCellStyle {
         }
     }
 
-    // MARK: - Icons
-
-    /// Xcode's match rows carry three horizontal lines in a rounded square.
-    static let matchIcon: NSImage? = SystemSymbol.textAlignleft.image(pointSize: 13, weight: .regular)
-
-    /// Xcode draws that glyph at 45 %.
-    static let matchIconAlpha: CGFloat = 0.45
-
-    /// A relationship node no indexed image defines.
-    static let unresolvedIcon: NSImage? = SystemSymbol.questionmarkSquare.image(pointSize: 13, weight: .regular)
-
-    static let unresolvedIconAlpha: CGFloat = 0.45
+    // MARK: - Icon Tints
 
     /// Tints the glyphs; a type's badge is drawn in its own colours and
-    /// ignores it.
+    /// ignores it. Which icon a row shows is `FindResultIcon`'s.
     public static let iconTintColor: NSColor = .secondaryLabelColor
 
     public static let unresolvedIconTintColor: NSColor = .tertiaryLabelColor
-
-    // MARK: - Cross-Reference Rows
-
-    /// A cross-reference root's icon: its member's badge, or its type's.
-    static func crossReferenceIcon(for root: FindCrossReferenceRoot, metrics: Metrics) -> NSImage? {
-        switch root {
-        case .member(let member, _):
-            memberBadge(for: member, size: metrics.iconSize)
-        case .function(let function):
-            functionBadge(for: function, size: metrics.iconSize)
-        case .type(let object):
-            RuntimeObjectIcon.icon(for: object.kind, size: metrics.iconSize)
-        }
-    }
-
-    /// A cross-reference row's icon. Xcode draws the symbol's kind, and swaps in
-    /// a recursion badge for a call that came back around
-    /// (`function_recursive` / `method_recursive`).
-    static func crossReferenceIcon(for row: FindCrossReferenceRow, metrics: Metrics) -> NSImage? {
-        if row.isRecursive {
-            return recursiveCallIcon
-        }
-        let size = metrics.iconSize
-        switch row.item {
-        case .function(let function):
-            return functionBadge(for: function, size: size)
-        case .target(.selector):
-            return badge("M", color: .orange, size: size)
-        case .target(.importedSymbol(let name)):
-            return languageBadge(for: RuntimeFunctionLanguage(symbol: name), size: size)
-        case .target(.type(_, let object?)):
-            return RuntimeObjectIcon.icon(for: object.kind, size: size)
-        case .target(.type(_, nil)):
-            return badge("T", color: .gray, size: size)
-        case .target(.function(let function)):
-            return functionBadge(for: function, size: size)
-        case .target(.indirect), .target(.unrecognizedCode):
-            return unresolvedIcon
-        case .image(let path):
-            // As the Report navigator draws an image.
-            return RuntimeImageKind(ofImageAt: path).icon
-        case .unnamedFunctions:
-            return languageBadge(for: nil, size: size)
-        case .loading:
-            return loadingIcon
-        case .failure:
-            return failureIcon
-        }
-    }
-
-    /// `M` for a method, `P` for a property or variable — orange on the
-    /// Objective-C side and blue on the Swift side, the colours the type badges
-    /// use.
-    private static func memberBadge(for member: RuntimeMemberReference, size: CGFloat) -> NSImage? {
-        let color: RuntimeObjectIcon.Glyph.Color = member.kind.isObjC ? .orange : .blue
-        switch member.kind {
-        case .objcProperty, .swiftVariable, .swiftField, .objcIvar:
-            return badge("P", color: color, size: size)
-        case .swiftEnumCase:
-            return badge("E", color: color, size: size)
-        case .objcMethod, .swiftFunction, .swiftInitializer, .swiftSubscript:
-            return badge("M", color: color, size: size)
-        }
-    }
-
-    /// A member's badge; otherwise the badge of the language its name tells.
-    private static func functionBadge(for function: RuntimeFunctionReference, size: CGFloat) -> NSImage? {
-        if let member = function.member {
-            return memberBadge(for: member, size: size)
-        }
-        return languageBadge(for: function.language, size: size)
-    }
-
-    /// A function's badge by its language, in the colours the member badges
-    /// use: `f` in blue for Swift, `M` in orange for an Objective-C method, `f`
-    /// in green for C and C++, and in grey for a function nothing names.
-    private static func languageBadge(for language: RuntimeFunctionLanguage?, size: CGFloat) -> NSImage? {
-        switch language {
-        case .swift?: badge("f", color: .blue, size: size)
-        case .objectiveC?: badge("M", color: .orange, size: size)
-        case .cOrCPlusPlus?: badge("f", color: .green, size: size)
-        case nil: badge("f", color: .gray, size: size)
-        }
-    }
-
-    /// The disclosure the Inspector's References tab draws on the row
-    /// gathering a section's unnamed functions, which has no outline to draw
-    /// one: pointing right while the row is collapsed, down while expanded.
-    static func disclosureIcon(isExpanded: Bool) -> NSImage? {
-        isExpanded ? expandedDisclosureIcon : collapsedDisclosureIcon
-    }
-
-    private static let collapsedDisclosureIcon: NSImage? = SystemSymbol.chevronRight.image(pointSize: 10, weight: .semibold)
-
-    private static let expandedDisclosureIcon: NSImage? = SystemSymbol.chevronDown.image(pointSize: 10, weight: .semibold)
-
-    private static func badge(_ text: String, color: RuntimeObjectIcon.Glyph.Color, size: CGFloat) -> NSImage? {
-        RuntimeObjectIcon.icon(text: text, color: color, size: size)
-    }
-
-    static let recursiveCallIcon: NSImage? = SystemSymbol.arrowTriangle2Circlepath.image(pointSize: 12, weight: .regular)
-
-    static let loadingIcon: NSImage? = SystemSymbol.hourglass.image(pointSize: 12, weight: .regular)
-
-    static let failureIcon: NSImage? = SystemSymbol.exclamationmarkTriangle.image(pointSize: 12, weight: .regular)
 
     // MARK: - Type Rows
 

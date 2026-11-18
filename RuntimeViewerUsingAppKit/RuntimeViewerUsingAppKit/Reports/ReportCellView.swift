@@ -160,10 +160,10 @@ final class ReportCellView: TableCellView {
         }
 
         if differs(\.icon) {
-            iconImageView.image = appearance.icon
+            iconImageView.image = appearance.icon?.image
         }
         if differs(\.iconColor) {
-            iconImageView.contentTintColor = appearance.iconColor ?? .secondaryLabelColor
+            iconImageView.contentTintColor = appearance.iconColor?.color ?? .secondaryLabelColor
         }
         if differs(\.title) {
             titleLabel.stringValue = appearance.title

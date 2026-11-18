@@ -22,7 +22,7 @@ struct ReportGroupWork {
     /// lists it. Resolved once, with the session: the row is built again each time any work under
     /// it moves on, and an icon resolved each time is a new image each time, which the row would
     /// take for a change and set again. None off macOS, where nothing resolves an engine's icon.
-    let engineIcon: NSUIImage?
+    let engineIcon: IconDescriptor?
 
     let backgroundWork: RuntimeEngineBackgroundWork
 
@@ -43,10 +43,11 @@ struct ReportGroupWork {
         self.backgroundWork = backgroundWork
     }
 
-    private static func icon(for engine: RuntimeEngine) -> NSUIImage? {
+    /// The engine's icon, which RuntimeViewerAppUI draws from the manager's engine of that identifier;
+    /// no icon off macOS, where nothing draws engines.
+    private static func icon(for engine: RuntimeEngine) -> IconDescriptor? {
         #if os(macOS)
-        @Dependency(\.runtimeEngineIconProviding) var runtimeEngineIconProviding
-        return runtimeEngineIconProviding.icon(for: engine)
+        return .runtimeEngine(engineID: engine.engineID)
         #else
         return nil
         #endif

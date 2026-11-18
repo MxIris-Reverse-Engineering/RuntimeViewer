@@ -58,7 +58,7 @@ struct ReportEngineGroupsTests {
         await fixture.stop()
     }
 
-    @Test("a group's row shows its engine's icon, and keeps the same image while the Report is built again")
+    @Test("a group's row shows its engine's icon, and keeps naming the same engine while the Report is built again")
     func groupRowsShowTheirEnginesIcons() async throws {
         let fixture = try await SharedCacheBorrowingFixture.make(label: "report.icons")
         let environment = Self.environment(on: fixture.borrowerEngine)
@@ -69,10 +69,8 @@ struct ReportEngineGroupsTests {
         let nodes = try await nextValue(from: page.nodes) { $0.count == 2 }
 
         let rowIcons = try nodes.map { try #require($0.cellViewModel.appearance.icon) }
-        // The test value of `runtimeEngineIconProviding` gives each engine an image of its own.
-        @Dependency(\.runtimeEngineIconProviding) var runtimeEngineIconProviding
-        let engineIcons = [fixture.borrowerEngine, fixture.ownerEngine].map { runtimeEngineIconProviding.icon(for: $0) }
-        #expect(zip(rowIcons, engineIcons).allSatisfy { rowIcon, engineIcon in rowIcon === engineIcon }, "a group's row does not show its engine's icon")
+        let engineIcons = [fixture.borrowerEngine, fixture.ownerEngine].map { IconDescriptor.runtimeEngine(engineID: $0.engineID) }
+        #expect(rowIcons == engineIcons, "a group's row does not show its engine's icon")
 
         // Every step of a batch on the owner's work builds the rows again.
         _ = await fixture.ownerEngine.backgroundIndexingManager.startBatch(rootImagePath: Self.smallImage, depth: 0, maxConcurrency: 1, reason: .manual)
@@ -83,8 +81,8 @@ struct ReportEngineGroupsTests {
             }
         }
 
-        let keepsItsImage = zip(rebuiltNodes, rowIcons).allSatisfy { node, rowIcon in node.cellViewModel.appearance.icon === rowIcon }
-        #expect(keepsItsImage, "a group's row took a new image when the Report was built again")
+        let keepsItsImage = zip(rebuiltNodes, rowIcons).allSatisfy { node, rowIcon in node.cellViewModel.appearance.icon == rowIcon }
+        #expect(keepsItsImage, "a group's row named another engine when the Report was built again")
         environment.make { environment.documentState.documentWillClose() }
         await fixture.stop()
     }
