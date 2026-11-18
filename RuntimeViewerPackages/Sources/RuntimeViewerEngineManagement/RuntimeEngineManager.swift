@@ -33,7 +33,7 @@ public final class RuntimeEngineManager {
     public private(set) var systemRuntimeEngines: [RuntimeEngine] = []
 
     @Published
-    public private(set) var attachedRuntimeEngines: [RuntimeEngine] = []
+    public internal(set) var attachedRuntimeEngines: [RuntimeEngine] = []
 
     @Published
     public private(set) var bonjourRuntimeEngines: [RuntimeEngine] = []
@@ -69,8 +69,9 @@ public final class RuntimeEngineManager {
     /// process runs.
     private let sharedCachePartition: RuntimeSharedCachePartition?
 
-    /// Which attached processes map this process's shared cache. Test seam.
-    var sharedCacheEligibility = RuntimeSharedCacheEligibility.live
+    /// Which attached processes map this process's shared cache, and whether
+    /// this process can share its own at all. Test seam.
+    var sharedCacheEligibility: RuntimeSharedCacheEligibility
 
     /// The update of every engine's owners under way; see
     /// `updateSharedCacheOwners()`.
@@ -92,12 +93,15 @@ public final class RuntimeEngineManager {
     /// into a read and two reads never race for the engine's connection.
     private var lastFileEngineOperationsByEngineID: [String: Task<Void, Never>] = [:]
 
-    /// What a file engine connects with: an instance of the app's file
-    /// service of its own. `nil` in a process that embeds no such service.
-    /// Tests replace it to serve the file from an anonymous listener.
-    var fileEngineCredential: @MainActor (RuntimeFile) throws -> RuntimeConnectionCredential? = { file in
-        try RuntimeFileService.credential(for: file)
-    }
+    /// Where file engines read their files: in an instance of the app's file
+    /// service on the Mac, in this process everywhere else. Tests replace it
+    /// to serve the file from an anonymous listener, or to read it here.
+    var fileReading = FileReading.live
+
+    /// The reads in this process under way, by the source of the file being
+    /// read: a second request for the file waits for the first instead of
+    /// reading it again. Only for ``FileReading/inThisProcess``.
+    private var inProcessFileReadsBySource: [RuntimeSource: Task<RuntimeEngine, any Error>] = [:]
 
     private let browser = RuntimeNetworkBrowser()
 
@@ -135,11 +139,12 @@ public final class RuntimeEngineManager {
     private var macCatalystLaunchTask: Task<Void, Never>?
 
     /// How the Mac Catalyst engine is brought up, on the embedded service or
-    /// with the helper application; the test seam.
-    private let macCatalystLaunching: MacCatalystLaunching
+    /// with the helper application; `nil` where there is no Mac Catalyst —
+    /// every platform but the Mac. The test seam.
+    private let macCatalystLaunching: MacCatalystLaunching?
 
     /// Subscription to the helper daemon's availability; see
-    /// ``HelperServiceManager/daemonAvailabilityPublisher``.
+    /// ``MacCatalystLaunching/HelperApplication/daemonBecameAvailable``.
     private var daemonAvailabilitySubscription: AnyCancellable?
 
     private var proxyServers: [String: RuntimeEngineProxyServer] = [:]
@@ -205,17 +210,6 @@ public final class RuntimeEngineManager {
     /// transfer on AWDL, which can blow the timeout. A 2 s grace gives the
     /// initial push time to drain.
     private static let initialEngineListPreflightDelay: UInt64 = 2_000_000_000 // 2 seconds
-
-    // MARK: - Dependencies
-
-    @Dependency(\.helperServiceManager)
-    private var helperServiceManager
-
-    @Dependency(\.runtimeHelperClient)
-    private var runtimeHelperClient
-
-    @Dependency(\.runtimeInjectClient)
-    private var runtimeInjectClient
 
     // MARK: - Socket Injection Persistence
 
@@ -293,6 +287,11 @@ public final class RuntimeEngineManager {
             /// app launch plus two XPC round-trips through the daemon, seconds
             /// rather than milliseconds on a busy machine.
             var handshakeTimeout: TimeInterval
+
+            /// Fires when the helper daemon is installed again or becomes
+            /// enabled, which is when a helper launched against the old daemon
+            /// has to go.
+            var daemonBecameAvailable: @MainActor () -> AnyPublisher<Void, Never> = { Empty().eraseToAnyPublisher() }
         }
 
         /// Creates the client engine and connects it. On the embedded service
@@ -304,40 +303,7 @@ public final class RuntimeEngineManager {
         /// engine's peer is the app's embedded Mac Catalyst service.
         var helperApplication: HelperApplication?
 
-        /// The app embeds the Mac Catalyst service and reaches it directly;
-        /// a process whose bundle does not — the standalone CLI host — opens
-        /// the helper application through the daemon. See
-        /// `MacCatalystRuntimeService`.
-        static let live: MacCatalystLaunching = {
-            if let credential = MacCatalystRuntimeService.embeddedServiceCredential {
-                return MacCatalystLaunching(
-                    makeConnectedEngine: {
-                        let runtimeEngine = RuntimeEngine(source: .macCatalystClient)
-                        try await runtimeEngine.connect(credential: credential)
-                        return runtimeEngine
-                    },
-                    helperApplication: nil
-                )
-            }
-            return MacCatalystLaunching(
-                makeConnectedEngine: {
-                    let runtimeEngine = RuntimeEngine(source: .macCatalystClient)
-                    try await runtimeEngine.connect()
-                    return runtimeEngine
-                },
-                helperApplication: HelperApplication(
-                    launch: {
-                        @Dependency(\.runtimeHelperClient) var runtimeHelperClient
-                        try await runtimeHelperClient.launchMacCatalystHelper()
-                    },
-                    terminate: {
-                        @Dependency(\.runtimeHelperClient) var runtimeHelperClient
-                        await runtimeHelperClient.terminateMacCatalystHelper()
-                    },
-                    handshakeTimeout: 15
-                )
-            )
-        }()
+        // `live` is in RuntimeEngineManager+PlatformServices.swift.
     }
 
     /// Why the Mac Catalyst engine was not brought up, beyond the transport
@@ -361,15 +327,19 @@ public final class RuntimeEngineManager {
     /// `startupHandler` is the test seam. When set, every step the
     /// configuration selects is handed to it and nothing is performed, so a
     /// test can assert which steps a configuration maps to without starting
-    /// Bonjour or talking to the helper daemon.
+    /// Bonjour or talking to the helper daemon. The other two stand in for
+    /// what this platform has: the Mac Catalyst launch, and whether processes
+    /// can be probed for the shared cache they map.
     init(
         configuration: RuntimeEngineManagerConfiguration,
         startupHandler: ((RuntimeEngineManagerConfiguration.StartupStep) -> Void)?,
-        macCatalystLaunching: MacCatalystLaunching = .live
+        macCatalystLaunching: MacCatalystLaunching? = .live,
+        sharedCacheEligibility: RuntimeSharedCacheEligibility = .live
     ) {
         self.configuration = configuration
         self.macCatalystLaunching = macCatalystLaunching
-        self.sharedCachePartition = RuntimeSharedCacheEligibility.live.sharesThisProcessSharedCache() ? RuntimeSharedCachePartition.current() : nil
+        self.sharedCacheEligibility = sharedCacheEligibility
+        self.sharedCachePartition = sharedCacheEligibility.sharesThisProcessSharedCache() ? RuntimeSharedCachePartition.current() : nil
         #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public), configuration: \(String(describing: configuration), privacy: .public)")
 
         let startupSteps = configuration.startupSteps
@@ -404,8 +374,8 @@ public final class RuntimeEngineManager {
             startSharingEngines()
         }
 
-        if startupSteps.contains(.systemEngines), macCatalystLaunching.helperApplication != nil {
-            observeDaemonAvailability()
+        if startupSteps.contains(.systemEngines), let helperApplication = macCatalystLaunching?.helperApplication {
+            observeDaemonAvailability(of: helperApplication)
         }
     }
 
@@ -420,8 +390,8 @@ public final class RuntimeEngineManager {
     ///
     /// Only the helper application path goes through the daemon; an engine
     /// on the embedded service never notices it, so nothing subscribes then.
-    private func observeDaemonAvailability() {
-        daemonAvailabilitySubscription = helperServiceManager.daemonAvailabilityPublisher
+    private func observeDaemonAvailability(of helperApplication: MacCatalystLaunching.HelperApplication) {
+        daemonAvailabilitySubscription = helperApplication.daemonBecameAvailable()
             .sink { [weak self] in
                 guard let self else { return }
                 #log(.info, "Helper daemon became available; relaunching the Mac Catalyst runtime engine")
@@ -638,6 +608,7 @@ public final class RuntimeEngineManager {
         #log(.info,"Appending local runtime engine")
         systemRuntimeEngines.append(.local)
         rebuildSections()
+        guard macCatalystLaunching != nil else { return }
         // Not awaited: the handshake wait can run to its timeout when the
         // helper is broken, and injected-process reconnection should not sit
         // behind it. A relaunch finds the task here and supersedes it.
@@ -651,15 +622,16 @@ public final class RuntimeEngineManager {
     /// call while a launch is in flight: that launch is cancelled and awaited
     /// first.
     ///
-    /// Does nothing for a configuration that does not launch system engines.
+    /// Does nothing for a configuration that does not launch system engines,
+    /// nor where there is no Mac Catalyst.
     public func relaunchMacCatalystRuntimeEngine() {
-        guard configuration.launchesSystemEngines else { return }
+        guard configuration.launchesSystemEngines, let macCatalystLaunching else { return }
         let previousLaunchTask = macCatalystLaunchTask
         previousLaunchTask?.cancel()
         macCatalystLaunchTask = Task { @MainActor in
             await previousLaunchTask?.value
             self.terminateMacCatalystRuntimeEngine()
-            await self.macCatalystLaunching.helperApplication?.terminate()
+            await macCatalystLaunching.helperApplication?.terminate()
             await self.launchMacCatalystRuntimeEngineReportingFailure()
         }
     }
@@ -713,6 +685,7 @@ public final class RuntimeEngineManager {
     /// injected processes with
     /// ``confirmAttachedRuntimeEngineConnected(name:identifier:isSandbox:timeout:)``.
     private func launchMacCatalystRuntimeEngine() async throws {
+        guard let macCatalystLaunching else { return }
         #log(.info,"Creating Mac Catalyst client runtime engine...")
         let macCatalystClientEngine = try await macCatalystLaunching.makeConnectedEngine()
         let helperApplication = macCatalystLaunching.helperApplication
@@ -761,7 +734,9 @@ public final class RuntimeEngineManager {
     }
 
     private func reconnectInjectedEngines() async {
-        await reconnectInjectedXPCEngines()
+        #if os(macOS)
+        await InjectedXPCEngineReconnection.reconnect(in: self)
+        #endif
         await reconnectInjectedSocketEngines()
     }
 
@@ -1427,42 +1402,8 @@ public final class RuntimeEngineManager {
 
     // MARK: - Injected Endpoint Reconnection
 
-    /// Reconnects to already-injected non-sandboxed apps by fetching their
-    /// registered XPC endpoints from the Mach Service daemon.
-    private func reconnectInjectedXPCEngines() async {
-        do {
-            let injectedEndpoints = try await runtimeInjectClient.fetchAllInjectedEndpoints()
-            guard !injectedEndpoints.isEmpty else {
-                #log(.info, "No injected endpoints to reconnect")
-                return
-            }
-            #log(.info, "Found \(injectedEndpoints.count) injected endpoint(s) to reconnect")
-
-            for injectedEndpointInfo in injectedEndpoints {
-                do {
-                    let runtimeEngine = RuntimeEngine(
-                        source: .remote(
-                            name: injectedEndpointInfo.appName,
-                            identifier: .init(rawValue: "\(injectedEndpointInfo.pid)"),
-                            role: .client
-                        )
-                    )
-                    try await runtimeEngine.connect(credential: .xpcServer(injectedEndpointInfo.endpoint))
-                    #log(.info, "Reconnected to injected app: \(injectedEndpointInfo.appName, privacy: .public) (PID: \(injectedEndpointInfo.pid))")
-                    attachedRuntimeEngines.append(runtimeEngine)
-                    observeRuntimeEngineState(runtimeEngine)
-                } catch {
-                    #log(.error, "Failed to reconnect to injected app \(injectedEndpointInfo.appName, privacy: .public) (PID: \(injectedEndpointInfo.pid)): \(error, privacy: .public)")
-                    // Clean up stale endpoint
-                    try? await runtimeInjectClient.removeInjectedEndpoint(pid: injectedEndpointInfo.pid)
-                }
-            }
-            rebuildSections()
-            await waitForSharedCacheOwnersUpdate()
-        } catch {
-            #log(.error, "Failed to fetch injected endpoints: \(error, privacy: .public)")
-        }
-    }
+    // Reconnecting to injected apps over XPC, through the helper daemon's
+    // registry, is in RuntimeEngineManager+PlatformServices.swift.
 
     /// Reconnects to already-injected sandboxed apps by reading persisted
     /// socket endpoint records and recreating socket servers.
@@ -1509,7 +1450,7 @@ public final class RuntimeEngineManager {
 
     // MARK: - State Observation
 
-    private func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
+    func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
         // Each state hops to the main actor through its own `Task`, the way the
         // RxSwiftPlus `subscribeOnNextMainActor` this replaced did. The state
         // publisher emits from the engine's executor, and the hop is what keeps
@@ -1931,7 +1872,7 @@ public final class RuntimeEngineManager {
 
     // MARK: - Section Building
 
-    private func rebuildSections() {
+    func rebuildSections() {
         var sections: [RuntimeEngineSection] = []
         var hostIDToIndex: [String: Int] = [:]
 
@@ -2080,39 +2021,76 @@ public enum RuntimeFileEngineError: Error, LocalizedError, Sendable {
     /// This process embeds no file service to read the file in.
     case serviceUnavailable
 
+    /// The file is read in this process, by an engine made with the images
+    /// of the dependency cache it was first paired with, and cannot be
+    /// paired with another.
+    case dependencyCacheFixedInThisProcess
+
     public var errorDescription: String? {
         switch self {
         case .serviceUnavailable:
             "This process cannot read files: it embeds no file service."
+        case .dependencyCacheFixedInThisProcess:
+            "This file is read in this process and stays paired with the dependency cache it was opened with."
         }
     }
 }
 
-/// File engines: one per file opened from disk, each reading its file in
-/// an instance of the app's file service of its own, listed together
-/// under ``RuntimeViewerCore/RuntimeHostInfo/files``.
+extension RuntimeEngineManager {
+    /// Where a file engine's file is read.
+    enum FileReading {
+        /// In an instance of the app's file service, reached with the
+        /// credential this returns. `nil` when the process embeds no file
+        /// service, which ``RuntimeEngineManager/startReading(_:)`` reports as
+        /// ``RuntimeFileEngineError/serviceUnavailable``.
+        case inFileService(credential: @MainActor (RuntimeFile) throws -> RuntimeConnectionCredential?)
+
+        /// In this process, by an engine made with `RuntimeEngine(reading:)`.
+        /// The file is read before ``RuntimeEngineManager/startReading(_:)``
+        /// returns, and the engine is never suspended nor paired with another
+        /// dependency cache.
+        case inThisProcess
+
+        // `live` is in RuntimeEngineManager+PlatformServices.swift.
+    }
+}
+
+/// File engines: one per file opened from disk, listed together under
+/// ``RuntimeViewerCore/RuntimeHostInfo/files``. On the Mac each reads its
+/// file in an instance of the app's file service of its own; elsewhere the
+/// file is read in this process (``FileReading``).
 ///
 /// A file engine is never mirrored to peers and never shared through a
 /// proxy server: its source does not cross the wire, and the engine-sharing
 /// pipeline only watches the other four groups.
 extension RuntimeEngineManager {
-    /// Starts reading `file` and returns, at once, the engine that reads it,
-    /// listed: the one already listed for its URL — woken if it was
-    /// suspended, started over if `file` pairs it with another dependency
-    /// cache — or a new one. An instance of the file service reads the
-    /// file in the background; ``waitUntilFileIsRead(by:)`` waits for it.
-    /// Until then the engine forwards every request to a process that has
-    /// not answered yet, so a request fails rather than being answered here,
-    /// which is what lets a window open on the engine before its file is read.
+    /// Starts reading `file` and returns the engine that reads it, listed:
+    /// the one already listed for its URL — woken if it was suspended,
+    /// started over if `file` pairs it with another dependency cache — or a
+    /// new one.
     ///
-    /// A new engine whose file cannot be read is taken off the list again; a
-    /// listed one is suspended, so asking for it again reads the file again.
+    /// In the file service, an instance reads the file in the background and
+    /// this returns at once; ``waitUntilFileIsRead(by:)`` waits for it. Until
+    /// then the engine forwards every request to a process that has not
+    /// answered yet, so a request fails rather than being answered here,
+    /// which is what lets a window open on the engine before its file is
+    /// read. A new engine whose file cannot be read is taken off the list
+    /// again; a listed one is suspended, so asking for it again reads the
+    /// file again.
+    ///
+    /// In this process, the file is read before this returns, and an engine
+    /// is listed only once it has read it. A file that cannot be read throws
+    /// and lists nothing; pairing a listed file with another dependency cache
+    /// throws ``RuntimeFileEngineError/dependencyCacheFixedInThisProcess``.
     ///
     /// Throws ``RuntimeFileEngineError/serviceUnavailable`` in a process
-    /// that embeds no file service.
+    /// that reads in a file service but embeds none.
     public func startReading(_ file: RuntimeFile) async throws -> RuntimeEngine {
         if let listedEngine = fileRuntimeEngines.first(where: { $0.source == file.source }) {
             if filesByEngineID[listedEngine.engineID] != file {
+                guard case .inFileService = fileReading else {
+                    throw RuntimeFileEngineError.dependencyCacheFixedInThisProcess
+                }
                 // Another pairing is another set of images: the instance reading
                 // the old one has to go, and a new one reads the file again.
                 #log(.info, "Starting \(file.displayName, privacy: .public) over with another dependency cache")
@@ -2125,7 +2103,15 @@ extension RuntimeEngineManager {
             return listedEngine
         }
 
-        guard let credential = try fileEngineCredential(file) else {
+        let fileServiceCredential: @MainActor (RuntimeFile) throws -> RuntimeConnectionCredential?
+        switch fileReading {
+        case .inFileService(let credential):
+            fileServiceCredential = credential
+        case .inThisProcess:
+            return try await readInThisProcess(file)
+        }
+
+        guard let credential = try fileServiceCredential(file) else {
             throw RuntimeFileEngineError.serviceUnavailable
         }
         // A `.file` engine made this way forwards from the start: nothing a
@@ -2138,6 +2124,45 @@ extension RuntimeEngineManager {
         startReadingFile(by: engine, with: credential, isFirstRead: true)
         #log(.info, "Reading \(file.displayName, privacy: .public) from disk")
         return engine
+    }
+
+    /// Reads `file` in this process and lists the engine that read it. A
+    /// second request for the file while it is being read waits for the same
+    /// read, then goes through ``startReading(_:)`` again, which finds the
+    /// engine listed.
+    private func readInThisProcess(_ file: RuntimeFile) async throws -> RuntimeEngine {
+        if let readUnderWay = inProcessFileReadsBySource[file.source] {
+            _ = try await readUnderWay.value
+            return try await startReading(file)
+        }
+        let read = Task { @MainActor in
+            defer { self.inProcessFileReadsBySource.removeValue(forKey: file.source) }
+            // Parsing the file's headers, and its paired cache's, is the slow
+            // part: off the main actor.
+            let engine = try await Task.detached(priority: .userInitiated) {
+                try RuntimeEngine(reading: file, hostInfo: .files)
+            }.value
+            do {
+                try await engine.connect()
+            } catch {
+                await engine.stop()
+                throw error
+            }
+            self.filesByEngineID[engine.engineID] = file
+            self.fileRuntimeEngines.append(engine)
+            // Already read: whoever waits on it returns at once.
+            self.fileReadsByEngineID[engine.engineID] = Task {}
+            self.rebuildSections()
+            #log(.info, "Read \(file.displayName, privacy: .public) from disk in this process")
+            return engine
+        }
+        inProcessFileReadsBySource[file.source] = read
+        do {
+            return try await read.value
+        } catch {
+            #log(.error, "Could not read \(file.displayName, privacy: .public) from disk: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
     }
 
     /// Waits until `engine`'s process has read its file, and throws why it
@@ -2162,7 +2187,8 @@ extension RuntimeEngineManager {
         return filesByEngineID[engine.engineID]
     }
 
-    /// Whether `engine` is a file engine whose process was let go.
+    /// Whether `engine` is a file engine whose process was let go. Never for
+    /// a file read in this process.
     public func isFileEngineSuspended(_ engine: RuntimeEngine) -> Bool {
         suspendedFileEngineIDs.contains(engine.engineID)
     }
@@ -2171,10 +2197,11 @@ extension RuntimeEngineManager {
     /// file with it. The engine stops but stays listed, the same object:
     /// ``resumeFileEngine(_:)``, or ``startReading(_:)`` with its file,
     /// starts it again, reading the file anew. A read still under way
-    /// finishes first. No-op for an engine that is not a file one, or
-    /// already suspended.
+    /// finishes first. No-op for an engine that is not a file one, already
+    /// suspended, or read in this process — there is no process to let go.
     public func suspendFileEngine(_ engine: RuntimeEngine) async {
-        guard fileRuntimeEngines.contains(where: { $0 === engine }),
+        guard case .inFileService = fileReading,
+              fileRuntimeEngines.contains(where: { $0 === engine }),
               !suspendedFileEngineIDs.contains(engine.engineID)
         else { return }
         suspendedFileEngineIDs.insert(engine.engineID)
@@ -2193,8 +2220,11 @@ extension RuntimeEngineManager {
     }
 
     private func startResuming(_ engine: RuntimeEngine) throws {
-        guard isFileEngineSuspended(engine), let file = filesByEngineID[engine.engineID] else { return }
-        guard let credential = try fileEngineCredential(file) else {
+        guard isFileEngineSuspended(engine),
+              let file = filesByEngineID[engine.engineID],
+              case .inFileService(let fileServiceCredential) = fileReading
+        else { return }
+        guard let credential = try fileServiceCredential(file) else {
             throw RuntimeFileEngineError.serviceUnavailable
         }
         suspendedFileEngineIDs.remove(engine.engineID)

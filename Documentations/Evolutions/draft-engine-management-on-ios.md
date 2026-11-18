@@ -92,10 +92,13 @@
 | `EM/RuntimeEngineManager.swift` · `MacCatalystLaunching` | 修改 | `HelperApplication` 加 `daemonBecameAvailable: @MainActor () -> AnyPublisher<Void, Never>`；`.live` 搬走；管理器持有 `MacCatalystLaunching?` | 管理器不再直接碰 helper daemon | 2 |
 | `EM/RuntimeEngineManager.swift` · `RuntimeEngineManager` | 修改 | `init` 的 `macCatalystLaunching` 参数改可选；`observeDaemonAvailability()` 改订阅 `helperApplication.daemonBecameAvailable()`；删除三个 helper 的 `@Dependency` 存储属性；`fileEngineCredential` 换成 `fileReading: FileReading`；`startReading` / `suspendFileEngine` / `resumeFileEngine` / `isFileEngineSuspended` 加进程内分支；`relaunchMacCatalystRuntimeEngine()` 在没有 Catalyst 时不做事 | 平台差异收进接缝 | 2 |
 | `EM/RuntimeEngineManager.swift` · `RuntimeFileEngineError` | 修改 | 加 `.dependencyCacheFixedInThisProcess` | 进程内引擎不能换配对 | 2 |
-| `EM/RuntimeEngineManager+PlatformServices.swift` | 新增 | `MacCatalystLaunching.live`、`FileReading.live`、`RuntimeSharedCacheEligibility.live` 的两个平台分支；`reconnectInjectedXPCEngines()`（只在 macOS）；文件开头写明「只属于某个平台的东西都在这里」 | 平台代码集中在一处 | 2 |
-| `EM/RuntimeEngineManager.swift` · 若干成员 | 修改 | `reconnectInjectedXPCEngines()` 用到的成员从 `private` 放宽到 `internal`（`attachedRuntimeEngines` 的写、`observeRuntimeEngineState`、`rebuildSections` 等，以实际编译为准） | 跨文件扩展要用 | 2 |
+| `EM/RuntimeEngineManager+PlatformServices.swift` | 新增 | `MacCatalystLaunching.live`、`FileReading.live`、`RuntimeSharedCacheEligibility.live` 的两个平台分支；注入进程的 XPC 重连 `InjectedXPCEngineReconnection`（`@Loggable` 的 enum，只在 macOS）；文件开头写明「只属于某个平台的东西都在这里」 | 平台代码集中在一处 | 2 |
+| `EM/RuntimeEngineManager.swift` · 若干成员 | 修改 | XPC 重连用到的成员从 `private` 放宽到 `internal`：`attachedRuntimeEngines` 的写、`observeRuntimeEngineState`、`rebuildSections`；`init` 加 `sharedCacheEligibility:` 参数，共享缓存分区也从它算 | 跨文件要用；测试用 `.unavailable` 建管理器 | 2 |
 | `EM/RuntimeSharedCacheEligibility.swift` · `RuntimeSharedCacheEligibility` | 修改 | 加 `.unavailable`；`.live` 搬到平台文件；去掉 HelperClient 的 import | 规则与平台无关 | 2 |
-| `EMT/RuntimeEngineManagerMacCatalystLaunchTests.swift` | 修改 | 构造 `HelperApplication` 时给 `daemonBecameAvailable`；加「daemon 可用时重启 Catalyst 引擎」「没有 Catalyst 时只起 `.local`」 | 新接缝的行为 | 2 |
+| `EMT/RuntimeEngineManagerMacCatalystLaunchTests.swift` | 修改 | 加「没有 Catalyst 时重启请求不做事」 | 新接缝的行为 | 2 |
+| `EMT/LocalEngineManagerSuites.swift` | 新增 | 串行的父套件：管理器列出 `.local` 的套件都挂在它下面，一次只跑一个 | `.local` 全进程一份，管理器会给它设共享缓存的 owner，并行跑会互相看到 | 2 |
+| `EMT/SystemEngineLaunchTests.swift` | 新增 | 「没有 Catalyst 时只起 `.local`」「daemon 可用时重启 Catalyst 引擎」（后者不经启动接缝，用只起系统引擎、不浏览的配置真的跑 `init`）；管理器都用 `.unavailable` 建，不在 `.local` 上留下 owner | 新接缝的行为 | 2 |
+| `EMT/SharedCacheOwnersWiringTests.swift` | 修改 | 挂到 `LocalEngineManagerSuites` 下 | 同上 | 2 |
 | `EMT/FileEngineManagementTests.swift` | 修改 | `fileEngineCredential` 改 `fileReading = .inFileService { … }`；加进程内读的用例 | 新接缝的行为 | 2 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/RuntimeFileEngineParkingTests.swift` | 修改 | 同上的改名 | 跟着改名 | 2 |
 | `EMT/RuntimeSharedCacheEligibilityTests.swift` | 修改 | 加 `.unavailable` 不共享、不放行任何来源 | 新值的行为 | 2 |
@@ -343,7 +346,7 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
    - 行为：`headlessHostConfigurationIsUnchanged`
    - 行为：`deviceApplicationStartsServerAndSystemEnginesOnly`
    - 行为：`configurationWithoutBrowsingSkipsTheBrowser`
-2. **平台接缝与进程内读文件** —— `MacCatalystLaunching`、`FileReading`、`RuntimeSharedCacheEligibility.unavailable`、新的 `RuntimeEngineManager+PlatformServices.swift`、成员放宽、三份测试与 AppCore 的改名（此时整个模块仍只在 macOS 上编，全部在 Mac 上测）
+2. **平台接缝与进程内读文件**（已完成）—— `MacCatalystLaunching`、`FileReading`、`RuntimeSharedCacheEligibility.unavailable`、新的 `RuntimeEngineManager+PlatformServices.swift`、成员放宽、三份测试与 AppCore 的改名（此时整个模块仍只在 macOS 上编，全部在 Mac 上测）
    - 行为：`systemEnginesWithoutMacCatalystAreLocalOnly`
    - 行为：`relaunchWithoutMacCatalystDoesNothing`
    - 行为：`daemonBecomingAvailableRelaunchesTheHelperEngine`
@@ -382,3 +385,4 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
 | 2026-11-18 | 自定：进程内读的文件引擎读完才返回、不挂起、不能换配对 | 不改 Core 的连接层；契约差异只在 iOS 文件模式的界面出现，那篇再定 |
 | 2026-11-18 | 提交为 Draft，未批准 | 标着「代用户选」「代用户确认」的几行，是另一台 Mac 上的协作 agent 代用户作答的；用户决定提案先保持 Draft 推到 next，实现交给那台 Mac 上的 agent |
 | 2026-11-18 | Accepted | 用户批准，由 Ultra 上的会话接手实现。功能分支从 `origin/next` 切出，而不是本机的 `next`：本机 `next` 上有一个自 11-15 起有意留着没推送的提交（离线文件的镜像树），不该随这条分支推上去；两者改的文件不重叠。 |
+| 2026-11-18 | 第二步实现中的调整 | 一、注入进程的 XPC 重连写成平台文件里的 `@Loggable` enum `InjectedXPCEngineReconnection`，不是管理器的扩展：这一版 FrameworkToolbox 的 `@Loggable` 给管理器生成的日志器是 `private`，另一个文件里的扩展用不了 `#log`。二、进程内读文件时，同一个文件正在读的第二个请求等同一次读（`inProcessFileReadsBySource`），读完再按已列出的引擎处理：提案没写，不加会在两次并发打开时列出两个引擎。三、进程内读的引擎不带凭据 `connect()`，状态是 `.localOnly`，不是 `.connected`。四、进程内读是整个管理器的读法（`fileReading`），`suspendFileEngine` 据此不做事，不逐个引擎记。五、`init` 加 `sharedCacheEligibility:` 参数，共享缓存分区也从它算；新测试用 `.unavailable` 建管理器，不给 `.local` 留下 owner。六、会让管理器列出 `.local` 的测试（两条新测试与原有的共享缓存接线）挂到串行的父套件 `LocalEngineManagerSuites` 下：`.local` 全进程一份，并行跑的套件会互相看到对方设的 owner；「daemon 可用时重启」因此也放进新套件 `SystemEngineLaunchTests`，而不是 Catalyst 启动的套件。 |

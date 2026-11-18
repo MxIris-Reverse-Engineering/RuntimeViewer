@@ -79,6 +79,21 @@ struct RuntimeSharedCacheEligibilityTests {
     func thisProcessShares() {
         #expect(RuntimeSharedCacheEligibility.live.sharesThisProcessSharedCache())
     }
+
+    /// Where no process can be probed — every platform but the Mac — nothing
+    /// is shared and no engine borrows.
+    @Test(
+        "Unavailable eligibility shares nothing and lends to no engine",
+        arguments: [
+            RuntimeSource.remote(name: "Finder", identifier: "613", role: .client),
+            RuntimeSource.localSocket(name: "Notes", identifier: "1234", role: .client),
+            RuntimeSource.macCatalystClient,
+        ]
+    )
+    func unavailableEligibilitySharesNothing(source: RuntimeSource) {
+        #expect(!RuntimeSharedCacheEligibility.unavailable.sharesThisProcessSharedCache())
+        #expect(!RuntimeSharedCacheEligibility.unavailable.isEligible(source))
+    }
 }
 
 #endif

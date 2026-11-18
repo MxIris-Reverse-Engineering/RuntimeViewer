@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 import RuntimeViewerCommunication
-import RuntimeViewerHelperClient
 
 /// Which engines may borrow the shared cache images My Mac and My Mac (Mac
 /// Catalyst) keep: the ones whose process maps the cache this process maps.
@@ -26,10 +25,11 @@ struct RuntimeSharedCacheEligibility: Sendable {
     /// user's process does not allow.
     var environment: @Sendable (pid_t) -> [String: String]?
 
-    static let live = RuntimeSharedCacheEligibility(
-        isTranslated: { ProcessTranslationProbe.isTranslated(processIdentifier: $0) },
-        environment: { ProcessEnvironmentProbe.environment(ofProcess: $0) }
-    )
+    /// For a process that cannot probe others: it shares nothing and lends
+    /// to no engine. What every platform but the Mac has.
+    static let unavailable = RuntimeSharedCacheEligibility(isTranslated: { _ in nil }, environment: { _ in nil })
+
+    // `live` is in RuntimeEngineManager+PlatformServices.swift.
 
     /// The variables that make dyld map a shared cache other than the
     /// system's, which only a developer sets.
