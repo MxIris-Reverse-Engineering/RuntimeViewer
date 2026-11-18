@@ -18,11 +18,11 @@ import Testing
 struct RuntimeSourcePopoverAdapterTests {
     private static let content = RuntimeSourcePickerContent(sections: [
         RuntimeSourcePickerContent.Section(title: "JH's Mac Studio", sources: [
-            RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", image: nil, isCurrent: true),
-            RuntimeSourcePickerContent.Source(engineIdentifier: "catalyst", title: "My Mac (Mac Catalyst)", image: nil, isCurrent: false),
+            RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", icon: nil, isCurrent: true),
+            RuntimeSourcePickerContent.Source(engineIdentifier: "catalyst", title: "My Mac (Mac Catalyst)", icon: nil, isCurrent: false),
         ]),
         RuntimeSourcePickerContent.Section(title: "iPhone", sources: [
-            RuntimeSourcePickerContent.Source(engineIdentifier: "springboard", title: "SpringBoard", image: nil, isCurrent: false),
+            RuntimeSourcePickerContent.Source(engineIdentifier: "springboard", title: "SpringBoard", icon: nil, isCurrent: false),
         ]),
     ])
 
@@ -59,7 +59,7 @@ struct RuntimeSourcePopoverAdapterTests {
         content.disconnectedSource = RuntimeSourcePickerContent.Source(
             engineIdentifier: "gone",
             title: "SpringBoard (Disconnected)",
-            image: nil,
+            icon: nil,
             isCurrent: true,
             isEnabled: false
         )
@@ -212,7 +212,7 @@ struct RuntimeSourcePopoverAdapterTests {
 
         let longContent = RuntimeSourcePickerContent(sections: [
             RuntimeSourcePickerContent.Section(title: "Host", sources: [
-                RuntimeSourcePickerContent.Source(engineIdentifier: "long", title: String(repeating: "W", count: 80), image: nil, isCurrent: false),
+                RuntimeSourcePickerContent.Source(engineIdentifier: "long", title: String(repeating: "W", count: 80), icon: nil, isCurrent: false),
             ]),
         ])
         let longAdapter = Self.makeAdapter(content: longContent)

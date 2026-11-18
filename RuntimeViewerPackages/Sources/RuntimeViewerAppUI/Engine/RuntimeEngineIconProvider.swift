@@ -87,38 +87,68 @@ public final class RuntimeEngineIconProvider {
     /// navigator's engine groups: its machine's glyph squared, or a picture of
     /// its own.
     public func icon(for engine: RuntimeEngine) -> NSImage {
-        switch iconKind(for: engine) {
+        let icon = switch iconKind(for: engine) {
         case .picture(let image):
             image
         case .machine:
             Self.machineIcon(for: engine)
         }
+        lastIcons[engine.engineID] = icon
+        return icon
     }
 
     /// The icon of the engine `engineID` names, which RuntimeViewerAppCore describes as
     /// `IconDescriptor.runtimeEngine(engineID:)`: the manager's engine of that identifier, as
     /// `icon(for:)` draws it. An engine the manager no longer holds — and every engine, for a provider
-    /// that follows no manager, so that a test starts none — gets the generic executable icon.
+    /// that follows no manager, so that a test starts none — gets the icon last drawn for it, and the
+    /// generic executable icon when none was.
     public func icon(forEngineID engineID: String) -> NSImage {
-        guard followsRuntimeEngineManager,
-              let engine = runtimeEngineManager.runtimeEngines.first(where: { $0.engineID == engineID })
-        else {
-            return Self.genericExecutableIcon
+        if let engine = heldEngine(withID: engineID) {
+            return icon(for: engine)
         }
-        return icon(for: engine)
+        return lastIcons[engineID] ?? Self.genericExecutableIcon
     }
 
     /// The engine's icon in the toolbar's runtime source picker: its machine's
     /// glyph as the symbol it is, which Xcode 27's style draws at its own size
     /// as Xcode draws a run destination's, or the picture a list shows.
     public func sourcePickerIcon(for engine: RuntimeEngine) -> RuntimeSourcePicker.Icon {
-        switch iconKind(for: engine) {
+        let icon: RuntimeSourcePicker.Icon = switch iconKind(for: engine) {
         case .picture(let image):
             .image(image)
         case .machine:
             Self.machineSymbol(for: engine).map(RuntimeSourcePicker.Icon.symbol) ?? .image(Self.machineIcon(for: engine))
         }
+        lastSourcePickerIcons[engine.engineID] = icon
+        return icon
     }
+
+    /// The source picker's icon of the engine `engineID` names, as `sourcePickerIcon(for:)` draws
+    /// it; for an engine the manager no longer holds, the icon last drawn for it, and the generic
+    /// executable icon when none was.
+    public func sourcePickerIcon(forEngineID engineID: String) -> RuntimeSourcePicker.Icon {
+        if let engine = heldEngine(withID: engineID) {
+            return sourcePickerIcon(for: engine)
+        }
+        return lastSourcePickerIcons[engineID] ?? .image(Self.genericExecutableIcon)
+    }
+
+    /// The manager's engine of that identifier, or `nil` when it holds none — or when this provider
+    /// follows no manager.
+    private func heldEngine(withID engineID: String) -> RuntimeEngine? {
+        guard followsRuntimeEngineManager else { return nil }
+        return runtimeEngineManager.runtimeEngines.first { $0.engineID == engineID }
+    }
+
+    /// The icons last drawn for each engine, by its identifier, kept after the engine goes.
+    ///
+    /// A window whose engine went away keeps listing its source, marked disconnected, and the source
+    /// keeps the icon it had: nothing can look it up any more — an injected process's icon was
+    /// recorded by the attach flow and dropped with the engine, a mirrored one came with the engine's
+    /// descriptor. One entry per engine the process has shown, so a few dozen at most.
+    private var lastIcons: [String: NSImage] = [:]
+
+    private var lastSourcePickerIcons: [String: RuntimeSourcePicker.Icon] = [:]
 
     /// What stands for an engine: the machine it runs on, or a picture of its own.
     private enum IconKind {

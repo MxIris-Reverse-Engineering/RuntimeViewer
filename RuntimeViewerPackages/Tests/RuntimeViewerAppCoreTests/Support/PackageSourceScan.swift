@@ -42,6 +42,27 @@ struct PackageSourceScan {
         return PackageSourceScan(manifest: manifest, macOSOnlyModuleNames: macOSOnlyModuleNames, sourceFilesByTargetName: sourceFilesByTargetName)
     }
 
+    /// The Swift files under `directoryURL`, each named by its path below the directory, read the same
+    /// way as a target's: for the sources of a target outside this package, such as the macOS app's
+    /// (`AppTargetBoundaryTests`). Empty when the directory does not exist.
+    static func sourceFiles(inDirectory directoryURL: URL) throws -> [ScannedSourceFile] {
+        guard let enumerator = FileManager.default.enumerator(at: directoryURL, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        var sourceFiles: [ScannedSourceFile] = []
+        for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+            let source = try String(contentsOf: fileURL, encoding: .utf8)
+            let relativePath = String(fileURL.path.dropFirst(directoryURL.path.count).drop { $0 == "/" })
+            sourceFiles.append(ScannedSourceFile(relativePath: relativePath, source: source, macOSOnlyModuleNames: ["AppKit", "Cocoa"]))
+        }
+        return sourceFiles
+    }
+
+    /// The repository, the directory `RuntimeViewerPackages/` is in.
+    static var repositoryDirectoryURL: URL {
+        packageDirectoryURL.deletingLastPathComponent()
+    }
+
     /// `RuntimeViewerPackages/`, found from this file's own path.
     private static var packageDirectoryURL: URL {
         URL(fileURLWithPath: #filePath)

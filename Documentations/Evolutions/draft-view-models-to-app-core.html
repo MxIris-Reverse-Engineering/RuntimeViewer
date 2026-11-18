@@ -50,7 +50,7 @@ svg .arrowMove { stroke: var(--move); stroke-width: 1.6; fill: none; marker-end:
 <body>
 <main>
 <h1>Draft - macOS App 的 ViewModel 移进 AppCore，通用视图移进 RuntimeViewerUI</h1>
-<div class="meta">状态：Accepted · 对应提案最后更新：2026-11-18 · 原文：<code>draft-view-models-to-app-core.md</code>（两者不一致时以原文为准）</div>
+<div class="meta">状态：In Progress（实现完成，待你看过后收尾） · 对应提案最后更新：2026-11-18 · 原文：<code>draft-view-models-to-app-core.md</code>（两者不一致时以原文为准）</div>
 <nav><a href="#summary">摘要</a><a href="#decided">已定</a><a href="#arch">架构图</a><a href="#map">改动地图</a><a href="#steps">落地步骤</a><a href="#design">详细设计</a><a href="#research">调研</a><a href="#alt">替代方案</a><a href="#log">决策日志</a></nav>
 
 <h2 id="summary">摘要</h2>
@@ -116,7 +116,7 @@ svg .arrowMove { stroke: var(--move); stroke-width: 1.6; fill: none; marker-end:
 <text x="434" y="78" font-size="12">+ Activity/ToolbarActivity (value)</text>
 <text x="434" y="98" font-size="12">+ Activity/ToolbarActivityPresenter</text>
 <text x="434" y="118" font-size="12">+ RuntimeSourcePicker/…Content (icon: IconDescriptor)</text>
-<text x="434" y="138" font-size="12">+ Engine/RuntimeEngineManager+DependencyCache</text>
+<text x="434" y="138" font-size="12">+ Engine/RuntimeFileDependencyCaches</text>
 <text x="434" y="158" font-size="12">+ MCP/MCPServerState, MCPServerClient</text>
 <text x="434" y="178" font-size="12">+ AttachToProcess/, Main/, Exporting/ …</text>
 <text x="434" y="206" font-size="11" fill="#8e8e93">deps: + RuntimeViewerInjection (declared)</text>
@@ -143,7 +143,7 @@ svg .arrowMove { stroke: var(--move); stroke-width: 1.6; fill: none; marker-end:
 <rect class="box" x="800" y="10" width="230" height="150" rx="10"/>
 <text x="814" y="34" font-weight="600" font-size="14">RuntimeViewerMCPBridge</text>
 <text x="814" y="58" font-size="12" style="fill: var(--del)">− MCPServerState (→ AppCore)</text>
-<text x="814" y="78" font-size="12">~ MCPService: @Observable,</text>
+<text x="814" y="78" font-size="12">~ MCPService: observable state,</text>
 <text x="828" y="94" font-size="12">− onStateChange, + resume()</text>
 <text x="814" y="114" font-size="12">+ MCPServerClientKey.liveValue</text>
 <text x="814" y="140" font-size="11" fill="#8e8e93">depends on AppCore</text>
@@ -191,20 +191,21 @@ After
 <tr><td>2</td><td>特化 4 个 ViewModel + <code>SpecializationRoute</code> → <code>AC/Specialization/</code></td><td><span class="tag t-move">移动</span></td><td><code>descriptionText</code> 改 <code>RowText</code>；VC 画成 <code>attributedString(in: .list)</code></td></tr>
 <tr><td>2</td><td><code>GenerationOptionsViewModel</code> → <code>AC/GenerationOptions/</code>；<code>SidebarRuntimeObjectScopeViewModel</code> → <code>AC/Sidebar/RuntimeObject/</code></td><td><span class="tag t-move">移动</span></td><td><code>public</code>；删多余 import</td></tr>
 <tr><td>2</td><td><code>ACT/</code> 导出与批量导出完成页、特化 cell 的测试</td><td><span class="tag t-add">新增</span></td><td>经 <code>finderClient</code> 揭示；<code>RowText</code> 取值</td></tr>
-<tr><td>3</td><td><code>MCPService.swift</code></td><td><span class="tag t-mod">修改</span></td><td><code>MCPServerState</code> 移出；<code>@Observable</code>；删 <code>onStateChange</code>；加 <code>resume()</code> 与 live 值</td></tr>
+<tr><td>3</td><td><code>MCPService.swift</code></td><td><span class="tag t-mod">修改</span></td><td><code>MCPServerState</code> 移出；状态存进私有的 <code>@Observable</code> 小类；删 <code>onStateChange</code>；加 <code>resume()</code>、<code>MCPServerClient.driving(_:)</code> 与 live 值；<code>MCPServerStateTests</code> 随类型搬进 AppCoreTests</td></tr>
 <tr><td>3</td><td><code>AC/MCP/MCPServerState</code>、<code>MCPServerClient</code></td><td><span class="tag t-add">新增</span></td><td>key 是 <code>public enum MCPServerClientKey: TestDependencyKey</code></td></tr>
 <tr><td>3</td><td><code>MCPStatusPopoverViewModel</code>、<code>MCPConfigType</code> → <code>AC/MCP/</code></td><td><span class="tag t-move">移动</span></td><td>改用 <code>mcpServerClient</code>、<code>Observable.tracking</code>、<code>pasteboardClient</code></td></tr>
 <tr><td>3</td><td>MCP 包测试依赖 AppCore；<code>MCPServerClientLiveTests</code>；<code>ACT/MCPStatusPopoverViewModelTests</code></td><td><span class="tag t-add">新增</span></td><td>live 值存在；按钮动作与拷贝</td></tr>
 <tr><td>4</td><td><code>AttachToProcessViewModel</code> → <code>AC/AttachToProcess/</code>；<code>AttachAvailability</code>、<code>SIPChecker</code> 同去</td><td><span class="tag t-move">移动</span></td><td><code>Input</code> 收 <code>RuntimeProcessAttacher.Target</code>；加 <code>Output.remoteProcessAttached</code></td></tr>
 <tr><td>4</td><td><code>AttachToProcessViewController</code></td><td><span class="tag t-mod">修改</span></td><td>记住选中的行，附加成功后记图标</td></tr>
 <tr><td>4</td><td><code>Package.swift</code> · AppCore</td><td><span class="tag t-mod">修改</span></td><td>声明 <code>RuntimeViewerInjection</code></td></tr>
+<tr><td>4</td><td><code>MainRoute</code> → <code>AC/Main/</code></td><td><span class="tag t-move">移动</span></td><td>附加进程的 ViewModel 以它为路由，提前到这一步</td></tr>
 <tr><td>5</td><td><code>AC/Activity/ToolbarActivity</code>；<code>ToolbarActivityPresenter</code> AUI → AC；<code>AUI/…ToolbarActivityState+ToolbarActivity</code></td><td><span class="tag t-add">新增</span> <span class="tag t-move">移动</span></td><td>挑选、定时、去重、节流在 AppCore；AppUI 一一转换</td></tr>
-<tr><td>5</td><td><code>RuntimeSourcePickerContent</code> AUI → <code>AC/RuntimeSourcePicker/</code>；两个 adapter</td><td><span class="tag t-move">移动</span> <span class="tag t-mod">修改</span></td><td><code>Source.icon: IconDescriptor</code></td></tr>
+<tr><td>5</td><td><code>RuntimeSourcePickerContent</code> AUI → <code>AC/RuntimeSourcePicker/</code>；两个 adapter</td><td><span class="tag t-move">移动</span> <span class="tag t-mod">修改</span></td><td><code>Source.icon: IconDescriptor?</code></td></tr>
 <tr><td>5</td><td><code>AUI/Engine/RuntimeEngineIconProvider</code></td><td><span class="tag t-mod">修改</span></td><td>按 engineID 记住最后的图；<code>sourcePickerIcon(forEngineID:)</code></td></tr>
-<tr><td>5</td><td><code>AC/Engine/RuntimeEngineManager+DependencyCache</code>；<code>FileController</code></td><td><span class="tag t-add">新增</span> <span class="tag t-mod">修改</span></td><td>两段纯逻辑搬过来</td></tr>
-<tr><td>5</td><td><code>MainViewModel</code>、<code>MainRoute</code>、<code>NavigationHistorySnapshot</code> → <code>AC/Main/</code></td><td><span class="tag t-move">移动</span></td><td><code>SwitchSourceState.icon</code>、<code>TitleIcon</code>、<code>activity</code> 改值；历史项图标改描述值</td></tr>
+<tr><td>5</td><td><code>AC/Engine/RuntimeFileDependencyCaches</code>；<code>FileController</code></td><td><span class="tag t-add">新增</span> <span class="tag t-mod">修改</span></td><td>两段纯逻辑搬过来，写成带自己日志器的内部 <code>@Loggable enum</code></td></tr>
+<tr><td>5</td><td><code>MainViewModel</code>、<code>NavigationHistorySnapshot</code> → <code>AC/Main/</code></td><td><span class="tag t-move">移动</span></td><td><code>SwitchSourceState.icon</code>、<code>TitleIcon</code>、<code>activity</code> 改值；历史项图标改描述值</td></tr>
 <tr><td>5</td><td><code>MainWindowController</code></td><td><span class="tag t-mod">修改</span></td><td>画标题图标、活动、选择器图标、历史菜单</td></tr>
-<tr><td>5</td><td><code>AppCoreBoundaryTests</code>；新测试 <code>MainViewModelTests</code>、<code>ToolbarActivityTests</code>、图标表测试</td><td><span class="tag t-mod">修改</span> <span class="tag t-add">新增</span></td><td>白名单加 <code>NSItemProvider</code></td></tr>
+<tr><td>5</td><td><code>AppCoreBoundaryTests</code>；新测试 <code>MainViewModelTests</code>、<code>RuntimeEngineIconProviderTests</code>；<code>ToolbarActivityPresenterTests</code> 搬进 AppCoreTests；<code>ToolbarActivityStateTests</code> 留在 AppUI，改经 AppCore 构造与 AppUI 转换来测</td><td><span class="tag t-mod">修改</span> <span class="tag t-add">新增</span></td><td>白名单加 <code>NSItemProvider</code></td></tr>
 <tr><td>6</td><td><code>PackageSourceScan</code>；<code>AppTargetBoundaryTests</code></td><td><span class="tag t-mod">修改</span> <span class="tag t-add">新增</span></td><td>读任意目录；App 里不得有 ViewModel</td></tr>
 <tr><td>2–6</td><td>三份 <code>AGENTS.md</code></td><td><span class="tag t-mod">修改</span></td><td>分层、跨层服务、工具栏一节、路径</td></tr>
 </table>
@@ -213,10 +214,10 @@ After
 <ol>
 <li><strong>通用视图进 RuntimeViewerUI，删死代码</strong> — 行为：<code>appBuildsWithGenericViewsFromRuntimeViewerUI</code>、<code>lineNumberRulerColorMatchesInBothAppearances</code>、<code>loadFrameworksStillOpensThePanel</code></li>
 <li><strong>导出、批量导出、特化、生成选项、过滤范围的 ViewModel 进 AppCore</strong> — <code>exportingCompletionRevealsDestinationThroughFinderClient</code>、<code>batchExportingCompletionRevealsDestinationThroughFinderClient</code>、<code>specializationDescriptionIsPrimaryRowTextAtThirteenPoints</code>、<code>specializationLoadingPlaceholderIsSecondaryRowText</code></li>
-<li><strong>MCP 状态改走跨层服务</strong> — <code>actionButtonOpensSettingsWhenDisabled</code>、<code>actionButtonStartsWhenStopped</code>、<code>actionButtonStopsWhenRunning</code>、<code>copyPortCopiesThroughPasteboardClient</code>、<code>copyConfigurationCopiesClientCommand</code>、<code>stateFollowsServerWithoutCallbackSlot</code>、<code>liveClientResumesWithStoredDocumentProvider</code></li>
+<li><strong>MCP 状态改走跨层服务</strong> — <code>actionButtonOpensSettingsWhenDisabled</code>、<code>actionButtonStartsWhenStopped</code>、<code>actionButtonStopsWhenRunning</code>、<code>copyPortCopiesThroughPasteboardClient</code>、<code>copyConfigurationCopiesClientCommand</code>、<code>copyingNeedsARunningServer</code>、<code>stateFollowsServerWithoutCallbackSlot</code>、<code>liveValueExists</code>、<code>liveClientFollowsServiceState</code>、<code>resumeWithoutDocumentProviderDoesNothing</code></li>
 <li><strong>附加进程进 AppCore</strong> — <code>attachInputIsAProcessTarget</code>、<code>remoteAttachReportsInjectedEngineBeforeDismiss</code>、<code>attachedDeviceProcessKeepsItsRowIcon</code>（App 内，构建与人工核对）</li>
-<li><strong>主窗口的 ViewModel 进 AppCore</strong> — <code>toolbarActivityMatchesFormerDisplayState</code>、<code>toolbarActivityThrottlesOnDisplayedValue</code>、<code>toolbarActivityStateCopiesEveryField</code>、<code>sourcePickerContentDescribesEngineIcons</code>、<code>disconnectedSourceKeepsEngineIconDescriptor</code>、<code>iconProviderReturnsLastIconForDepartedEngine</code>、<code>titleIconIsApplicationWithoutImage</code>、<code>titleIconFollowsImageKind</code>、<code>historyItemsDescribeObjectAndImageIcons</code>、<code>historyTitleMarksGeneratedInterface</code></li>
-<li><strong>防回流检查与文档收尾</strong> — <code>appTargetDeclaresNoViewModel</code>、<code>appTargetInheritsNoViewModel</code>、<code>appTargetDirectoryExists</code></li>
+<li><strong>主窗口的 ViewModel 进 AppCore</strong> — <code>toolbarActivityMatchesFormerDisplayState</code>、<code>toolbarActivityThrottlesOnDisplayedValue</code>、<code>toolbarActivityStateCopiesEveryField</code>、<code>sourcePickerContentDescribesEngineIcons</code>、<code>disconnectedSourceKeepsEngineIconDescriptor</code>、<code>iconProviderReturnsLastIconForDepartedEngine</code>、<code>neverDrawnEngineGetsGenericIcon</code>、<code>titleIconIsApplicationWithoutImage</code>、<code>titleIconFollowsImageKind</code>、<code>historyItemsDescribeObjectAndImageIcons</code>、<code>historyTitleMarksGeneratedInterface</code></li>
+<li><strong>防回流检查与文档收尾</strong> — <code>appTargetDeclaresNoViewModel</code>、<code>appTargetInheritsNoViewModel</code>、<code>appTargetDirectoryExists</code>、<code>inheritanceClauseIsReadAsDeclared</code></li>
 </ol>
 <p>验证（Ultra）：每步 <code>swift build --build-tests</code>；AppCore 与 AppUI 测试全量（已知红灯 4 条）；MCP 包测试；iOS 模拟器包构建；<code>./TuistScript.sh warm</code> 后编 macOS App。不做界面验证。</p>
 
@@ -248,7 +249,7 @@ extension ToolbarActivityState { public init(_ activity: ToolbarActivity) }   //
     public struct Source: Equatable {
         public let engineIdentifier: String
         public let title: String
-        public let icon: IconDescriptor          // was image: NSImage?
+        public let icon: IconDescriptor?         // was image: NSImage?
         public let isCurrent: Bool
         public let isEnabled: Bool
     }
@@ -271,10 +272,12 @@ public struct NavigationHistoryItem: RxMenuItemRepresentable, Hashable, Sendable
     public let displayName: String
     public let icon: IconDescriptor
 }
-extension RuntimeEngineManager {   // AppCore, macOS
-    @MainActor public func dependencyCacheChoices(for engine: RuntimeEngine) -&gt; [RuntimeSourcePickerContent.DependencyCacheChoice]
-    @MainActor public func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeFile.DependencyCache?) async throws
+@Loggable @MainActor
+enum RuntimeFileDependencyCaches {   // AppCore, macOS
+    static func choices(for engine: RuntimeEngine, runtimeEngineManager: RuntimeEngineManager, settings: SettingsAccess) -&gt; [RuntimeSourcePickerContent.DependencyCacheChoice]
+    static func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeFile.DependencyCache?, runtimeEngineManager: RuntimeEngineManager) async throws
 }</code></pre>
+<p>没有写成 <code>RuntimeEngineManager</code> 的扩展：配对成功要记日志，而 <code>#log</code> 用所在类型的日志器，那个日志器在另一个模块里。</p>
 <p>App 自己的符号（<code>RuntimeViewerSymbols.runtimeViewer</code>）留在 App，由 <code>MainWindowController</code> 画。历史菜单里镜像画 <code>coloredIcon</code>，对象画 16 点的字形。</p>
 </details>
 <details><summary>MCP</summary>
@@ -286,13 +289,15 @@ extension RuntimeEngineManager {   // AppCore, macOS
 }
 public enum MCPServerClientKey: TestDependencyKey { public static let testValue = MCPServerClient.inert }
 // RuntimeViewerMCPBridge
-extension MCPServerClientKey: DependencyKey {
-    public static let liveValue = MCPServerClient(
-        state: { MCPService.shared.serverState },
-        start: { MCPService.shared.resume() },
-        stop: { MCPService.shared.stop() })
+@Observable @MainActor
+private final class MCPServerStateStorage { var state: MCPServerState = .stopped }
+extension MCPServerClient {
+    static func driving(_ service: @escaping @MainActor @Sendable () -&gt; MCPService) -&gt; MCPServerClient
+}
+extension MCPServerClientKey: @retroactive DependencyKey {
+    public static let liveValue = MCPServerClient.driving { MCPService.shared }
 }</code></pre>
-<p>key 必须是 <code>public</code>：真实实现在另一个包，<code>package</code> 跨不了包。如果 <code>@Observable</code> 与 <code>MCPService</code> 现有的宏或属性包装器冲突，退路是给客户端加 <code>observeState</code>、服务维护一组观察者；两条路都去掉 <code>onStateChange</code>。</p>
+<p>key 必须是 <code>public</code>：真实实现在另一个包，<code>package</code> 跨不了包。<code>MCPService</code> 本身没加 <code>@Observable</code>（它有 <code>@Loggable</code>、<code>@Dependency</code> 属性包装器和 <code>isolated deinit</code>），状态单独存进一个可观察的小类；测试用 <code>driving(_:)</code> 驱动自己建的服务，与 live 值走同一段代码。</p>
 </details>
 <details><summary>访问级别与平台条件</summary>
 <p>搬进 AppCore 的文件整体包在 <code>#if os(macOS)</code> 里，与今天的 <code>SpecializationViewModel.swift</code> 相同，所以 iOS App 自己的 <code>MainViewModel</code> / <code>MainRoute</code> 不受影响。App 要读的成员改 <code>public</code>，各 <code>Input</code> 补 <code>public init</code>，以编译器报错为准补齐。新目录名不带空格：<code>AttachToProcess/</code>、<code>GenerationOptions/</code>、<code>Exporting/</code>、<code>MCP/</code>、<code>Main/</code>、<code>RuntimeSourcePicker/</code>、<code>Specialization/</code>。</p>
@@ -336,6 +341,13 @@ extension MCPServerClientKey: DependencyKey {
 <li>生命周期控制器的非 UI 逻辑一起抽——否：用户定不动。</li>
 </ul>
 
+<h2 id="followups">后续项</h2>
+<ul>
+<li>根 <code>AGENTS.md</code> 超过 64 KiB：在 <code>next</code> 上就已经是 67,966 字节，这次多了约 700 字节；要另起一次整理，把一部分挪去子目录的 <code>AGENTS.md</code>。</li>
+<li><code>RemoteProcessItemSource</code> 里「能不能注入」的判断没有测试；要测得先把判断抽进 AppCore。</li>
+<li>附加设备进程后的图标只能连真实设备人工核对。</li>
+</ul>
+
 <h2 id="log">决策日志</h2>
 <table>
 <tr><th>日期</th><th>变更</th><th>说明</th></tr>
@@ -347,6 +359,8 @@ extension MCPServerClientKey: DependencyKey {
 <tr><td>2026-11-18</td><td>防回流</td><td>用户定：加 <code>AppTargetBoundaryTests</code>。</td></tr>
 <tr><td>2026-11-18</td><td>自定的做法</td><td>用户认可：路由与状态随 ViewModel 走；<code>FileController</code> 两段进 AppCore；挑选与节流在 AppCore；选择器内容回 AppCore、图标改描述值；视图层记附加图标；只给改成值的部分补测试；一次合进 <code>next</code>。</td></tr>
 <tr><td>2026-11-18</td><td>调研中定下的细节</td><td><code>LoadFrameworks/</code> 删除；<code>SIPChecker</code> 进 AppCore；私有嵌套视图留原处；<code>RemoteProcessItemSource</code> 留 App；通用视图 8 个；搬进 AppCore 的文件 <code>#if os(macOS)</code>；MCP 的 key 必须 <code>public</code>。</td></tr>
+<tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
+<tr><td>2026-11-18</td><td>实现中的调整</td><td><code>MainRoute</code> 提前到第四步；<code>MCPService</code> 的状态存进私有的可观察小类，live 值经 <code>driving(_:)</code>；依赖缓存写成内部的 <code>@Loggable enum RuntimeFileDependencyCaches</code>；<code>ToolbarActivityStateTests</code> 留在 AppUI、经两层来测；<code>Source.icon</code> 可选；<code>MainViewModel</code> 抽出两个静态函数供测试；防回流测试多一例；第五步的测试编译错误由下一个提交修好。</td></tr>
 </table>
 </main>
 </body>

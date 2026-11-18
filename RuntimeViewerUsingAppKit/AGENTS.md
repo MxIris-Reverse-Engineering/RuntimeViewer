@@ -21,6 +21,15 @@ operations — never goes in the ViewController, which only lays out its views, 
 the ViewModel's `Input`, and binds the `Output` to its views in `setupBindings(for:)`. The coordinator
 creates both (see *Coordinators and Routes*).
 
+**The app target holds no ViewModel.** Every ViewModel and cell ViewModel, with its routes and page
+states, is in `RuntimeViewerAppCore`, where a test builds and drives it; `AppTargetBoundaryTests` fails on
+a view model in the app target. The app target keeps the ViewControllers and window controllers, the
+coordinators, `AppDelegate` with the lifecycle controllers in `App/`, and the views, cell views, menus and
+list interactions bound to RuntimeViewerAppCore's types. A view that names no type of RuntimeViewerAppCore,
+RuntimeViewerAppUI or the app goes in `RuntimeViewerUI` — except one only its ViewController uses, which
+stays a private nested type of that controller (*ViewControllers*). Background:
+`Documentations/Evolutions/draft-view-models-to-app-core.md`.
+
 ## ViewModels
 
 - **Base class**: every ViewModel inherits `ViewModel<Route>`, which provides `documentState`, `router`,
@@ -121,8 +130,8 @@ after a jump).
   a plain `NSView`, because the split view wraps the item in an `NSGlassEffectView` that no colour or
   material matches, so the page stays transparent and sits on that glass directly. **Do not give pages a
   resident background of their own**: the opaque backdrop the sidebar's push / pop needs is inserted
-  under both sliding pages for the transition's duration by `NavigationTransitionBackdropController` (the
-  sidebar navigation controller's delegate) — UIFoundation's `GlassEffectReplicaView` on macOS 27+, a glass
+  under both sliding pages for the transition's duration by `NavigationTransitionBackdropController`
+  (RuntimeViewerUI; the sidebar navigation controller's delegate) — UIFoundation's `GlassEffectReplicaView` on macOS 27+, a glass
   that copies the enclosing glass and shares its backdrop group, and `windowBackgroundColor` on macOS 26.
   See `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`.
 
@@ -278,7 +287,7 @@ centralizes everything in `updateLayer()`, so:
   `borderWidth` and a non-nil `borderColor`: a full rounded border needs `borderPositions = .all`.
 - **Gotcha — a plain `NSView` has no `backgroundColor` of ours.** AppKitPlus gives every `NSView` a
   `backgroundColor` through an Objective-C category whose header is internal, so the app reaches it by
-  key-value coding as `view._backgroundColor` (`NavigationTransitionBackdropController.swift`). Keep that
+  key-value coding as `view._backgroundColor` (RuntimeViewerUI's `AppKit/NavigationTransitionBackdropController.swift`). Keep that
   bridge under a different name: while it was an `NSView` extension called `backgroundColor`, an
   unqualified `backgroundColor` inside a `LayerBackedView` subclass resolved to it instead of to the layer
   renderer's own property, and the background never showed. Use `_backgroundColor` only on plain views
@@ -721,10 +730,14 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   `ReportCategory` case, an `ActivityRunTracker` and its words in `ActivityText`. Manual Loading, the
   images the user loads, is a `ReportCategory` the reporter deliberately does not follow: it is not
   background work, and its progress already shows where the user started it.
-- `ToolbarActivityState` and `ActivityTextSegment` live in `RuntimeViewerUI`, below
-  `RuntimeViewerAppUI`, because the views that take them do; `ToolbarActivityPresenter`, which makes them
-  from the Reports, is in RuntimeViewerAppUI for the same reason. The views take no RxSwift; their
-  clicks are `NSControl` actions that open the Report navigator.
+- `ToolbarActivityPresenter` and `ActivityText` are RuntimeViewerAppCore's: they make a `ToolbarActivity`,
+  a value, from the Reports, and `MainViewModel` hands it on. `ToolbarActivityState` and `ActivityTextSegment`
+  live in `RuntimeViewerUI`, below the application layer, because the views that take them do;
+  RuntimeViewerAppUI's `ToolbarActivityState.init(_:)` copies an activity into one field by field, and the
+  window controller does that before it hands the views the state. Two activities are equal exactly when
+  their states are, so the presenter drops repeats and holds changes back on the activity as it would on
+  the state. The views take no RxSwift; their clicks are `NSControl` actions that open the Report
+  navigator.
 - The capsule is 40 % of the toolbar wide through UIFoundation's
   `NSToolbar.box.preferredCenteredItemWidthRatio`, set before the toolbar goes into the window: it lays
   nothing out by itself. The ratio goes back to −1, no preference, while the picker is the centered item.

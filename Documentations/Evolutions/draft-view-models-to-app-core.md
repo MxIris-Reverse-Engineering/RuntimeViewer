@@ -1,6 +1,6 @@
 # Draft - macOS App 的 ViewModel 移进 AppCore，通用视图移进 RuntimeViewerUI
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
@@ -178,7 +178,7 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
   - 「启动」调用新加的 `MCPService.resume()`，用上次 `start(for:)` 存下的文档提供者再启动一次。
   - 没有存过提供者时记一条错误日志，什么也不做。
 - **`MCPService` 改用 Observation 让状态可被跟踪，去掉只有弹窗在用的 `onStateChange`。**
-  - 加 `@Observable`，除 `serverState` 外的存储属性标 `@ObservationIgnored`。
+  - `serverState` 存进一个私有的 `@Observable` 小类 `MCPServerStateStorage`，`serverState` 改成转发给它的计算属性，值没变时不赋值。`MCPService` 本身不加 `@Observable`，免得与它的 `@Loggable`、`@Dependency` 属性包装器和 `isolated deinit` 纠缠。
   - 弹窗的 ViewModel 用 `Observable.tracking { mcpServerClient.state() }`（`RuntimeViewerArchitectures/Observable+Tracking.swift:40`）跟随状态，写法同 `MainViewModel` 跟随设置。
   - 多个弹窗不再互相覆盖。
 - **`MCPStatusPopoverViewModel` 与 `MCPConfigType` 搬进 `AC/MCP/`**，拷贝改走 `pasteboardClient.copyString`。
@@ -216,9 +216,10 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
   - `NavigationHistoryItem.icon` 从 `NSImage` 改成 `IconDescriptor`：对象是 `.runtimeObject(kind)`，镜像是 `.imageKind(RuntimeImageKind(ofImageAt:))`。
   - App 构造菜单时画图：对象按 `image(size: NavigationHistorySnapshot.iconSize)`；镜像照 AGENTS.md「菜单里的镜像图标取 `coloredIcon`」，画 `kind.coloredIcon`。
   - `RxMenuItemRepresentable` 的一致性随类型留在 AppCore。
-- **依赖缓存**：`FileController` 的两段搬进 `AC/Engine/RuntimeEngineManager+DependencyCache.swift`，作为 `RuntimeEngineManager` 的扩展：
-  - `dependencyCacheChoices(for:)` 直接返回 `RuntimeSourcePickerContent.DependencyCacheChoice`。
-  - `pair(_:with:)` 原样搬。
+- **依赖缓存**：`FileController` 的两段搬进 `AC/Engine/RuntimeFileDependencyCaches.swift`，是 AppCore 内部一个带自己日志器的 `@Loggable enum`：
+  - `choices(for:runtimeEngineManager:settings:)` 直接返回 `RuntimeSourcePickerContent.DependencyCacheChoice`。
+  - `pair(_:with:runtimeEngineManager:)` 原样搬。
+  - 没有写成 `RuntimeEngineManager` 的扩展：配对成功要记一条日志，`#log` 用的是所在类型的日志器，而 `RuntimeEngineManager` 的日志器在另一个模块里，扩展里用不了。
 
   `FileController.DependencyCacheChoice` 删掉。`MainViewModel` 不再依赖 `fileController`。
 - **分享**：`SharingData.provider` 仍是 `NSItemProvider`。它是 Foundation 的类型，加进 `AppCoreBoundary.allowedSystemPrefixedNames`。
@@ -292,35 +293,37 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
 | `MAC/Specialization/SpecializationViewController.swift` | 修改 | 描述标签绑定 `descriptionText.attributedString(in: .list)` | 跟随 `RowText` | 2 |
 | `MAC/Generation Options/GenerationOptionsViewModel.swift` → `AC/GenerationOptions/` | 移动 | `public`（连同两个 typealias）；删多余 import | 可测试 | 2 |
 | `MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectScopeViewModel.swift` → `AC/Sidebar/RuntimeObject/` | 移动 | `public`（`init`、`draft`、`availableKinds`、`availableProperties`） | 可测试 | 2 |
-| `ACT/ExportingCompletionViewModelTests.swift`、`ACT/BatchExportingCompletionViewModelTests.swift` | 新增 | Show in Finder 经 `finderClient` 揭示导出目录（记录器替身） | 从 `NSWorkspace` 改成服务的部分 | 2 |
+| `ACT/ExportingCompletionViewModelTests.swift` | 新增 | 单个与批量导出的 Show in Finder 都经 `finderClient` 揭示导出目录（记录器替身），没有目录时什么都不揭示 | 从 `NSWorkspace` 改成服务的部分 | 2 |
 | `ACT/SpecializationCellViewModelTests.swift` | 新增 | 描述与占位的 `RowText` 取值 | 从富文本改成值的部分 | 2 |
-| `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/MCPService.swift` | 修改 | `MCPServerState` 移出；`@Observable`（其余属性 `@ObservationIgnored`）；删 `onStateChange`；加 `resume()`；加 `extension MCPServerClientKey: DependencyKey` 的 `liveValue` | 真实实现在 MCP 包 | 3 |
+| `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/MCPService.swift` | 修改 | `MCPServerState` 移出；`serverState` 存进私有的 `@Observable` 类 `MCPServerStateStorage`；删 `onStateChange`；加 `resume()`；加 `MCPServerClient.driving(_:)` 与 `extension MCPServerClientKey: @retroactive DependencyKey` 的 `liveValue` | 真实实现在 MCP 包 | 3 |
 | `AC/MCP/MCPServerState.swift` | 新增（移入） | 原样 | AppCore 要用这个类型 | 3 |
+| `RuntimeViewerMCP/Tests/RuntimeViewerMCPBridgeTests/MCPServerStateTests.swift` → `ACT/MCPServerStateTests.swift` | 移动 | 改 import AppCore | 随类型 | 3 |
 | `AC/MCP/MCPServerClient.swift` | 新增 | `MCPServerClient`、`inert`、`public enum MCPServerClientKey: TestDependencyKey`、`DependencyValues.mcpServerClient` | 跨层服务 | 3 |
 | `MAC/MCP/MCPStatusPopoverViewModel.swift` → `AC/MCP/MCPStatusPopoverViewModel.swift`；`MCPConfigType` → `AC/MCP/MCPConfigType.swift` | 移动、拆出 | 改用 `mcpServerClient`、`Observable.tracking`、`pasteboardClient`；`public` | 可测试 | 3 |
 | `RuntimeViewerMCP/Package.swift` | 修改 | `RuntimeViewerMCPBridgeTests` 加 `RuntimeViewerAppCore` 依赖 | 测试要点名 key | 3 |
-| `RuntimeViewerMCP/Tests/RuntimeViewerMCPBridgeTests/MCPServerClientLiveTests.swift` | 新增 | live 值存在，状态读自服务，`resume()` 用存下的提供者 | `CrossLayerDependencyTests` 链接不到 MCP 包 | 3 |
-| `ACT/MCPStatusPopoverViewModelTests.swift` | 新增 | 三种状态下按钮的动作；拷贝端口与配置走 `pasteboardClient` | 从 `NSPasteboard` / 闭包槽改成服务的部分 | 3 |
+| `RuntimeViewerMCP/Tests/RuntimeViewerMCPBridgeTests/MCPServerClientLiveTests.swift` | 新增 | live 值存在；客户端读的是服务的状态，状态改变可被 Observation 观察到；从没启动过的服务 `resume()` 什么也不做 | `CrossLayerDependencyTests` 链接不到 MCP 包 | 3 |
+| `ACT/MCPStatusPopoverViewModelTests.swift` | 新增 | 三种状态下按钮的动作；拷贝端口与配置走 `pasteboardClient`，没在运行时什么都不拷；两个弹窗同时跟随状态 | 从 `NSPasteboard` / 闭包槽改成服务的部分 | 3 |
 | 根 `AGENTS.md`、`RuntimeViewerPackages/Sources/AGENTS.md` | 修改 | 跨层依赖例外加 `mcpServerClient` | 同批文档 | 3 |
 | `MAC/Attach Process/AttachToProcessViewModel.swift` → `AC/AttachToProcess/AttachToProcessViewModel.swift` | 移动 | `Input` 收 `RuntimeProcessAttacher.Target`；加 `Output.remoteProcessAttached`；删图标参数与 `runtimeEngineIconProvider` | 不收 UI 库的类型 | 4 |
 | `MAC/Attach Process/AttachToProcessViewController.swift` | 修改 | `RunningItem` 转 `Target`；记住选中的行；收到 `remoteProcessAttached` 时记图标 | 图标只在视图层 | 4 |
 | `MAC/Main/MainViewModel.swift` · `AttachAvailability` → `AC/AttachToProcess/AttachAvailability.swift` | 拆出、移动 | `public` | 一个文件一个主类型 | 4 |
 | `MAC/Utils/SIPChecker.swift` → `AC/AttachToProcess/SIPChecker.swift` | 移动 | `public` | 不是 UI，`MainViewModel` 要用 | 4 |
 | `RuntimeViewerPackages/Package.swift` · `RuntimeViewerAppCore` | 修改 | 声明 `RuntimeViewerInjection`（AppKit 平台） | 附加流程直接用它 | 4 |
+| `MAC/Main/MainRoute.swift` → `AC/Main/MainRoute.swift` | 移动 | `#if os(macOS)`；去掉门面 import | 附加进程的 ViewModel 以它为路由，只能随第四步提前搬 | 4 |
 | `AC/Activity/ToolbarActivity.swift` | 新增 | `ToolbarActivity`（含 `Segment`、`Progress`）、`idle`、`make(for:sourceName:readyDate:)`、`ActivityText` | 显示状态的值 | 5 |
 | `AUI/Activity/ToolbarActivityPresenter.swift` → `AC/Activity/ToolbarActivityPresenter.swift` | 移动 | 输出 `Driver<ToolbarActivity>` | 挑选与节流归 AppCore | 5 |
 | `AUI/Activity/ToolbarActivityState+Reports.swift` | 删除 | 内容进 `ToolbarActivity.swift` | 同上 | 5 |
 | `AUI/Activity/ToolbarActivityState+ToolbarActivity.swift` | 新增 | `ToolbarActivityState.init(_:)` | 值到显示状态 | 5 |
-| `AUT/ToolbarActivityStateTests.swift` → `ACT/ToolbarActivityTests.swift`；`AUT/ToolbarActivityPresenterTests.swift` → `ACT/` | 移动、改写 | 断言 `ToolbarActivity` | 随代码 | 5 |
-| `AUT/ToolbarActivityStateConversionTests.swift` | 新增 | 每个字段一一照抄 | 转换不丢信息 | 5 |
-| `AUI/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` → `AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` | 移动 | `Source.image: NSImage?` → `icon: IconDescriptor` | 回到 AppCore | 5 |
+| `AUT/ToolbarActivityPresenterTests.swift` → `ACT/ToolbarActivityPresenterTests.swift` | 移动、改写 | 断言 `ToolbarActivity`；加一例「不改变显示的重挑与原值相等」 | 随代码 | 5 |
+| `AUT/ToolbarActivityStateTests.swift` | 修改 | 留在 AppUI，改成经 `ToolbarActivity.make` 再经 `ToolbarActivityState.init(_:)` 测文字；加「每个字段一一照抄」与「两值相等当且仅当状态相等」两例 | 文字断言要用 RuntimeViewerUI 的分段辅助函数，所以连同转换一起测 | 5 |
+| `AUI/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` → `AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` | 移动 | `Source.image: NSImage?` → `icon: IconDescriptor?`（可选，测试与将来可以列出不画图标的来源） | 回到 AppCore | 5 |
 | `AUI/RuntimeSourcePicker/RuntimeSourcePopoverAdapter.swift`、`RuntimeSourceMenuAdapter.swift` 及其测试 | 修改 | 画 `source.icon.image` | 跟随描述值 | 5 |
 | `AUI/Engine/RuntimeEngineIconProvider.swift` | 修改 | 按 engineID 记住最后画的图与选择器图标；`icon(forEngineID:)` 先用记下的；新增 `sourcePickerIcon(forEngineID:)` | 断开来源按 ID 取图 | 5 |
 | `AUT/RuntimeEngineIconProviderTests.swift` | 新增 | 引擎离开后按 ID 仍得到最后的图标 | 新行为 | 5 |
-| `AC/Engine/RuntimeEngineManager+DependencyCache.swift` | 新增 | `dependencyCacheChoices(for:)`、`pair(_:with:)` | 纯逻辑归 AppCore | 5 |
+| `AC/Engine/RuntimeFileDependencyCaches.swift` | 新增 | `choices(for:runtimeEngineManager:settings:)`、`pair(_:with:runtimeEngineManager:)` | 纯逻辑归 AppCore | 5 |
 | `MAC/App/FileController.swift` | 修改 | 删 `DependencyCacheChoice` 与两段方法 | 已搬走 | 5 |
 | `MAC/Main/MainViewModel.swift` → `AC/Main/MainViewModel.swift` | 移动 | `SwitchSourceState.icon`、`TitleIcon`、`activity` 改值；删 `fileController`、`runtimeEngineIconProvider` 与每窗口的图像缓存；`public` | 可测试 | 5 |
-| `MAC/Main/MainRoute.swift`、`NavigationHistorySnapshot.swift` → `AC/Main/` | 移动 | 历史项的 `icon` 改 `IconDescriptor`；`public` | 随 ViewModel | 5 |
+| `MAC/Main/NavigationHistorySnapshot.swift` → `AC/Main/` | 移动 | 历史项的 `icon` 改 `IconDescriptor`；`public` | 随 ViewModel | 5 |
 | `MAC/Main/MainWindowController.swift` | 修改 | 画标题图标；活动转显示状态；选择器图标按 ID 取并随 `recordedIconsChanged` 重取；历史菜单画描述值 | 画图在视图层 | 5 |
 | `ACT/AppCoreBoundaryTests.swift` | 修改 | `allowedSystemPrefixedNames` 加 `NSItemProvider` | Foundation 类型 | 5 |
 | `ACT/MainViewModelTests.swift` | 新增 | 来源状态与选择器内容的描述值、断开来源、标题图标、历史项 | 从 UI 类型改成值的部分 | 5 |
@@ -469,7 +472,7 @@ public struct RuntimeSourcePickerContent: Equatable {
     public struct Source: Equatable {
         public let engineIdentifier: String
         public let title: String
-        public let icon: IconDescriptor          // was image: NSImage?
+        public let icon: IconDescriptor?         // was image: NSImage?
         public let isCurrent: Bool
         public let isEnabled: Bool
     }
@@ -517,19 +520,19 @@ public struct NavigationHistoryItem: RxMenuItemRepresentable, Hashable, Sendable
 ### 依赖缓存
 
 ```swift
-// RuntimeViewerAppCore/Engine/RuntimeEngineManager+DependencyCache.swift
+// RuntimeViewerAppCore/Engine/RuntimeFileDependencyCaches.swift
 #if os(macOS)
-extension RuntimeEngineManager {
-    @MainActor
-    public func dependencyCacheChoices(for engine: RuntimeEngine) -> [RuntimeSourcePickerContent.DependencyCacheChoice]
-    @MainActor
-    public func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeFile.DependencyCache?) async throws
+@Loggable
+@MainActor
+enum RuntimeFileDependencyCaches {
+    static func choices(for engine: RuntimeEngine, runtimeEngineManager: RuntimeEngineManager, settings: SettingsAccess) -> [RuntimeSourcePickerContent.DependencyCacheChoice]
+    static func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeFile.DependencyCache?, runtimeEngineManager: RuntimeEngineManager) async throws
 }
 #endif
 ```
 
-- 函数体照搬，设置经 `@Dependency(\.settings)` 读取。
-- 日志改用 `private extension LogCategory` 里声明的分类（根 `AGENTS.md`「Logging」）。
+- 函数体照搬，管理器与设置由 `MainViewModel` 传入。
+- 日志照旧用类型自己的日志器（`@Loggable`），与原来在 `FileController` 里一样。
 
 ### MCP
 
@@ -552,17 +555,23 @@ extension DependencyValues {
 }
 
 // RuntimeViewerMCPBridge/MCPService.swift
-extension MCPServerClientKey: DependencyKey {
-    public static let liveValue = MCPServerClient(
-        state: { MCPService.shared.serverState },
-        start: { MCPService.shared.resume() },
-        stop: { MCPService.shared.stop() }
-    )
+@Observable @MainActor
+private final class MCPServerStateStorage {
+    var state: MCPServerState = .stopped
+}
+
+extension MCPServerClient {
+    // The client that drives the service `service` returns, looked up at every call.
+    static func driving(_ service: @escaping @MainActor @Sendable () -> MCPService) -> MCPServerClient
+}
+
+extension MCPServerClientKey: @retroactive DependencyKey {
+    public static let liveValue = MCPServerClient.driving { MCPService.shared }
 }
 ```
 
-- `MCPService` 加了 `@Observable`，`state()` 读到的 `serverState` 会被 `Observable.tracking` 跟踪。
-- 如果 `@Observable` 与 `@Loggable`、`isolated deinit` 或 `@Dependency` 属性包装器冲突、编不过，退路是在 `MCPServerClient` 里加一个 `observeState` 成员，返回取消令牌，`MCPService` 维护一组观察者代替单个闭包槽。退路同样去掉 `onStateChange`，选哪条写进决策日志。
+- `MCPService.serverState` 读写的是 `MCPServerStateStorage.state`，所以 `state()` 读到的值会被 `Observable.tracking` 跟踪。`MCPService` 本身没有加 `@Observable`：它有 `@Loggable`、`@Dependency` 属性包装器和 `isolated deinit`，单拎出一个存储类最省事。
+- `driving(_:)` 让测试拿一个自己建的 `MCPService(portFilePath:)` 来驱动，live 值与测试走同一段代码。
 
 ### 防回流检查
 
@@ -630,46 +639,57 @@ extension MCPServerClientKey: DependencyKey {
 
 ## 落地步骤
 
-1. **通用视图进 RuntimeViewerUI，删死代码**：改动地图步骤 1 的各行。
+1. **通用视图进 RuntimeViewerUI，删死代码**（已完成，2026-11-18）：改动地图步骤 1 的各行。
    - 行为：`appBuildsWithGenericViewsFromRuntimeViewerUI`
    - 行为：`lineNumberRulerColorMatchesInBothAppearances`
    - 行为：`loadFrameworksStillOpensThePanel`
-2. **导出、批量导出、特化、生成选项、过滤范围的 ViewModel 进 AppCore**：步骤 2 的各行。
+2. **导出、批量导出、特化、生成选项、过滤范围的 ViewModel 进 AppCore**（已完成，2026-11-18）：步骤 2 的各行。
    - 行为：`exportingCompletionRevealsDestinationThroughFinderClient`
    - 行为：`batchExportingCompletionRevealsDestinationThroughFinderClient`
    - 行为：`specializationDescriptionIsPrimaryRowTextAtThirteenPoints`
    - 行为：`specializationLoadingPlaceholderIsSecondaryRowText`
-3. **MCP 状态改走跨层服务**：步骤 3 的各行。
+3. **MCP 状态改走跨层服务**（已完成，2026-11-18）：步骤 3 的各行。
    - 行为：`actionButtonOpensSettingsWhenDisabled`
    - 行为：`actionButtonStartsWhenStopped`
    - 行为：`actionButtonStopsWhenRunning`
    - 行为：`copyPortCopiesThroughPasteboardClient`
    - 行为：`copyConfigurationCopiesClientCommand`
+   - 行为：`copyingNeedsARunningServer`
    - 行为：`stateFollowsServerWithoutCallbackSlot`
-   - 行为：`liveClientResumesWithStoredDocumentProvider`
-4. **附加进程进 AppCore**：步骤 4 的各行。
-   - 行为：`attachInputIsAProcessTarget`
-   - 行为：`remoteAttachReportsInjectedEngineBeforeDismiss`
+   - 行为：`liveValueExists`
+   - 行为：`liveClientFollowsServiceState`
+   - 行为：`resumeWithoutDocumentProviderDoesNothing`
+4. **附加进程进 AppCore**（已完成，2026-11-18）：步骤 4 的各行。这一步没有新的包测试：`Input` 只收 `RuntimeProcessAttacher.Target` 由类型保证；附加设备上的进程要连真实设备，包测试造不出来；记图标在 App 里。三条都靠构建与人工核对。
+   - 行为：`attachInputIsAProcessTarget`（由类型保证）
+   - 行为：`remoteAttachReportsInjectedEngineBeforeDismiss`（代码核对：先发出引擎，再 `.dismiss`）
    - 行为：`attachedDeviceProcessKeepsItsRowIcon`（App 内，构建与人工核对）
-5. **主窗口的 ViewModel 进 AppCore**：步骤 5 的各行。
+5. **主窗口的 ViewModel 进 AppCore**（已完成，2026-11-18）：步骤 5 的各行。
    - 行为：`toolbarActivityMatchesFormerDisplayState`
    - 行为：`toolbarActivityThrottlesOnDisplayedValue`
    - 行为：`toolbarActivityStateCopiesEveryField`
    - 行为：`sourcePickerContentDescribesEngineIcons`
    - 行为：`disconnectedSourceKeepsEngineIconDescriptor`
    - 行为：`iconProviderReturnsLastIconForDepartedEngine`
+   - 行为：`neverDrawnEngineGetsGenericIcon`
    - 行为：`titleIconIsApplicationWithoutImage`
    - 行为：`titleIconFollowsImageKind`
    - 行为：`historyItemsDescribeObjectAndImageIcons`
    - 行为：`historyTitleMarksGeneratedInterface`
-6. **防回流检查与文档收尾**：步骤 6 的各行，以及三份 `AGENTS.md` 的剩余改动。
+6. **防回流检查与文档收尾**（已完成，2026-11-18）：步骤 6 的各行，以及三份 `AGENTS.md` 的剩余改动。
    - 行为：`appTargetDeclaresNoViewModel`
    - 行为：`appTargetInheritsNoViewModel`
    - 行为：`appTargetDirectoryExists`
+   - 行为：`inheritanceClauseIsReadAsDeclared`（继承子句按声明读，泛型参数与泛型实参里的 `ViewModel` 不算）
 
 每一步各自构建通过。全部做完后跑一次「详细设计 · 验证」的完整清单，在一条功能分支上一次合进 `next`。
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：要不要配使用指南或实现说明；有没有新术语要进 `Documentations/Glossary.md`。
+
+## 后续项
+
+- **根 `AGENTS.md` 超过 64 KiB。** 在 `next` 上就已经是 67,966 字节，超过它自己写明的「远低于 64 KiB」（Codex 只读前 64 KiB）；这次多了约 700 字节。要整体挪一部分内容去子目录的 `AGENTS.md`，另起一次整理。
+- **`RemoteProcessItemSource` 里的逻辑没有测试。** 它记下设备对每个进程「能不能注入」的判断，再回答选择器的 `shouldSelect`；这次按「绑着引擎的选择器胶水留在 App」没动它。要测就得把判断那一半抽进 AppCore。
+- **附加设备进程后的图标没有自动化验证。** 记图标挪到了视图层，只能连真实设备人工核对。
 
 ## 决策日志
 
@@ -684,3 +704,5 @@ extension MCPServerClientKey: DependencyKey {
 | 2026-11-18 | 自定的做法 | 用户认可以下做法：路由与页面状态随 ViewModel 进 AppCore；`FileController` 的两段纯逻辑进 AppCore；工具栏活动的挑选与节流在 AppCore，转显示状态在 AppUI；来源选择器内容回到 AppCore，图标改描述值，图标表记住断开引擎的图标；附加进程的图标由视图层记；只给从 UI 类型改成值的部分补测试；一条功能分支分步提交，做完一次合进 `next`。 |
 | 2026-11-18 | 调研中定下的细节 | `LoadFrameworks/` 是死代码，删除；`SIPChecker` 不是 UI，进 AppCore 而非 `RuntimeViewerUI`；嵌在 VC 里的私有小视图按 `RuntimeViewerUsingAppKit/AGENTS.md` 的规则留在原处；`RemoteProcessItemSource` 是绑着引擎的选择器胶水，留在 App；`ContentTextView` 与 `NavigationTransitionBackdropController` 不依赖 AppCore，按同一判据进 `RuntimeViewerUI`，通用视图因此是 8 个而不是先前估计的约 6 个；搬进 AppCore 的文件一律 `#if os(macOS)`，避开 iOS App 同名的 `MainViewModel` / `MainRoute`；MCP 的 key 必须是 `public`。 |
 | 2026-11-18 | Accepted | 用户批准，开始实现。 |
+| 2026-11-18 | 实现中的调整 | 与方案不同的几处，改动地图与详细设计已按实际改写：一、`MainRoute` 随第四步提前搬，附加进程的 ViewModel 以它为路由。二、`MCPService` 本身不加 `@Observable`，状态存进私有的 `@Observable` 小类 `MCPServerStateStorage`，避开它的 `@Loggable`、`@Dependency` 属性包装器与 `isolated deinit`；live 值经 `MCPServerClient.driving(_:)`，测试用自建的服务驱动，live 测试的三条行为名随之换成 `liveValueExists`、`liveClientFollowsServiceState`、`resumeWithoutDocumentProviderDoesNothing`；`MCPServerStateTests` 随类型搬进 AppCoreTests。三、依赖缓存写成 AppCore 内部的 `@Loggable enum RuntimeFileDependencyCaches`，不是 `RuntimeEngineManager` 的扩展：配对成功要记日志，`#log` 用所在类型的日志器，而管理器的日志器在另一个模块。四、`ToolbarActivityStateTests` 留在 AppUI，改成经 AppCore 构造、AppUI 转换来测文字（文字断言要用 RuntimeViewerUI 的分段辅助函数），「每个字段一一照抄」并入这个文件，不另建文件；`ToolbarActivityPresenterTests` 搬进 AppCoreTests 并加一例。五、`RuntimeSourcePickerContent.Source.icon` 是可选的 `IconDescriptor?`，测试里有不画图标的来源。六、`MainViewModel` 抽出内部静态函数 `toolbarIcon(for:)` 与 `historyItem(for:at:)` 供测试。七、导出两个完成页的测试合在 `ExportingCompletionViewModelTests` 一个文件。八、防回流测试多一例 `inheritanceClauseIsReadAsDeclared`，保证泛型参数与泛型实参里的 `ViewModel` 不算。九、附加进程的 VC 在选择器的代理方法里记住选中的行，再把 `Target` 交给 ViewModel。十、第五步的提交里 `MainViewModelTests` 用了引擎管理器不公开的初始化方法，测试 target 编不过；下一个提交改成 `@testable import` 修好，已推送的历史不改写。 |
+| 2026-11-18 | 实现完成，待用户看过后收尾 | 验证在 Ultra 上：第一到第四步的提交各自 `swift build --build-tests` 通过，第五步的提交包与 App 构建通过、测试 target 由下一个提交修好；第一到第五步各自 `./TuistScript.sh warm` 与 macOS App（Tuist workspace，Debug）构建通过。最终提交上：包级构建通过；AppCore 与 AppUI 测试共 1105 个，失败 3 条均为既有红灯（Call Hierarchy 超时、标题悬停副标题、整包跑时的 `BackgroundWorkProcessActivityTests`），新加的各组全部通过；MCP 包构建与 90 个测试通过；iOS 模拟器包构建通过；macOS App 构建通过。没做界面验证。文档判断：不另写使用指南或实现说明，规则写进三份 `AGENTS.md`；没有新术语。 |

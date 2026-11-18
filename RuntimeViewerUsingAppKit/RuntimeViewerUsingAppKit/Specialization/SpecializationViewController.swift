@@ -275,6 +275,7 @@ extension SpecializationViewController {
             rx.disposeBag = DisposeBag()
 
             row.$descriptionText.asDriver()
+                .map { $0.attributedString(in: .list) }
                 .drive(descriptionLabel.rx.attributedStringValue)
                 .disposed(by: rx.disposeBag)
 

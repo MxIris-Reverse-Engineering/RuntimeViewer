@@ -1,25 +1,20 @@
 import Foundation
+import Observation
 import FoundationToolbox
 import Dependencies
 import DependenciesMacros
 import SwiftNavigation
 import RuntimeViewerSettings
+import RuntimeViewerAppCore
 import SwiftMCP
 
-public enum MCPServerState: Equatable, Sendable {
-    case disabled
-    case stopped
-    case running(port: UInt16)
-
-    public var isRunning: Bool {
-        if case .running = self { return true }
-        return false
-    }
-
-    public var port: UInt16? {
-        if case .running(let port) = self { return port }
-        return nil
-    }
+/// Holds `MCPService.serverState` so that reading it can be tracked: the status popover follows
+/// it through `Observable.tracking`, the way views follow the settings, and any number of
+/// popovers can follow it at once.
+@Observable
+@MainActor
+private final class MCPServerStateStorage {
+    var state: MCPServerState = .stopped
 }
 
 @Loggable
@@ -30,14 +25,16 @@ public final class MCPService {
     @Dependency(\.settings)
     private var settings
 
-    public private(set) var serverState: MCPServerState = .stopped {
-        didSet {
-            guard oldValue != serverState else { return }
-            onStateChange?(serverState)
+    private let serverStateStorage = MCPServerStateStorage()
+
+    /// Where the server stands. Assigning the value it already has notifies no one.
+    public private(set) var serverState: MCPServerState {
+        get { serverStateStorage.state }
+        set {
+            guard newValue != serverStateStorage.state else { return }
+            serverStateStorage.state = newValue
         }
     }
-
-    public var onStateChange: ((MCPServerState) -> Void)?
 
     private(set) var transport: HTTPSSETransport?
 
@@ -142,6 +139,16 @@ public final class MCPService {
         }
     }
 
+    /// Starts the server again for the document provider of the last `start(for:)`. The app
+    /// starts the server at launch, so a provider is there whenever the status popover can ask.
+    public func resume() {
+        guard let documentProvider else {
+            #log(.error, "Cannot resume the MCP server: it was never started with a document provider")
+            return
+        }
+        start(for: documentProvider)
+    }
+
     public func stop() {
         startTask?.cancel()
         startTask = nil
@@ -232,4 +239,21 @@ public final class MCPService {
 extension DependencyValues {
     @DependencyEntry(liveValue: MainActor.assumeIsolated { MCPService.shared })
     public var mcpService: MCPService
+}
+
+extension MCPServerClient {
+    /// The client that drives the service `service` returns, looked up at every call.
+    static func driving(_ service: @escaping @MainActor @Sendable () -> MCPService) -> MCPServerClient {
+        MCPServerClient(
+            state: { service().serverState },
+            start: { service().resume() },
+            stop: { service().stop() }
+        )
+    }
+}
+
+/// The live value of the client RuntimeViewerAppCore declares for the status popover: the app's
+/// one `MCPService`.
+extension MCPServerClientKey: @retroactive DependencyKey {
+    public static let liveValue = MCPServerClient.driving { MCPService.shared }
 }

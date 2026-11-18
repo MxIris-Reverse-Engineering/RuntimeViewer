@@ -4,6 +4,7 @@ import RuntimeViewerInjection
 import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
+import RuntimeViewerEngineManagement
 import DependenciesMacros
 
 final class AttachToProcessViewController: BaseViewController<AttachToProcessViewModel> {
@@ -27,7 +28,15 @@ final class AttachToProcessViewController: BaseViewController<AttachToProcessVie
 
     private let pickerViewController: RunningPickerTabViewController
 
-    private let attachRelay = PublishRelay<any RunningItem>()
+    private let attachRelay = PublishRelay<RuntimeProcessAttacher.Target>()
+
+    /// The row the user confirmed last. Its icon is filed against the engine a device process
+    /// reports in as: it came from a file on the device, read to draw this row, and only the
+    /// view has it.
+    private var confirmedItem: (any RunningItem)?
+
+    @Dependency(\.runtimeEngineIconProvider)
+    private var runtimeEngineIconProvider
 
     private let cancelRelay = PublishRelay<Void>()
 
@@ -104,17 +113,29 @@ final class AttachToProcessViewController: BaseViewController<AttachToProcessVie
             cancel: cancelRelay.asSignal()
         )
 
-        _ = viewModel.transform(input)
+        let output = viewModel.transform(input)
+
+        output.remoteProcessAttached.emitOnNext { [weak self] injectedEngine in
+            guard let self, let icon = confirmedItem?.icon else { return }
+            runtimeEngineIconProvider.record(icon, for: injectedEngine)
+        }
+        .disposed(by: rx.disposeBag)
     }
 }
 
 extension AttachToProcessViewController: RunningPickerTabViewController.Delegate {
     func runningPickerTabViewController(_ viewController: RunningPickerTabViewController, didConfirmProcess process: RunningProcess) {
-        attachRelay.accept(process)
+        confirm(process)
     }
 
     func runningPickerTabViewController(_ viewController: RunningPickerTabViewController, didConfirmApplication application: RunningApplication) {
-        attachRelay.accept(application)
+        confirm(application)
+    }
+
+    /// Hands the view model the process as a target, and keeps the row for its icon.
+    private func confirm(_ runningItem: any RunningItem) {
+        confirmedItem = runningItem
+        attachRelay.accept(RuntimeProcessAttacher.Target(name: runningItem.name, processIdentifier: runningItem.processIdentifier))
     }
 
     /// Only the far end can say whether one of its processes is injectable, so for a device

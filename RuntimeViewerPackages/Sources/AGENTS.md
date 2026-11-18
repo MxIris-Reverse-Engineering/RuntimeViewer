@@ -6,7 +6,11 @@ The apps' application layer is two targets and a facade
 (`Documentations/Evolutions/0091-app-core-ui-split.md`):
 
 - **`RuntimeViewerAppCore/`** holds the ViewModels, cell ViewModels, routes, `DocumentState` and the
-  application logic. **Everything in it can be built and driven in a unit test, and no UI component
+  application logic — **every ViewModel of the apps; the macOS app target holds none**
+  (`Documentations/Evolutions/draft-view-models-to-app-core.md`), and `AppTargetBoundaryTests` reads the
+  app's sources and fails on a type there named as a view model or inheriting `ViewModel<…>`,
+  `CellViewModel` or `ViewModelProtocol`. The macOS window's view models, routes and page states are wrapped
+  in `#if os(macOS)`. **Everything in it can be built and driven in a unit test, and no UI component
   appears in it**: no subclass or construction of a view, control, cell, menu, popover, window or view
   controller, no delegate, data source or adapter of a control, no coordinator. `Driver` / `Signal`,
   `@RxObserved` and `Router` are fine. **No AppKit or UIKit model either**
@@ -17,7 +21,8 @@ The apps' application layer is two targets and a facade
   The one exception is the iOS route's `UIViewController`, which XCoordinator's protocols name.
 - **`RuntimeViewerAppUI/`** holds the UI glue: the adapters that set up AppKit and AppKitPlus controls
   (`NavigatorTextFilterFieldAdapter`, the Find page's and the runtime source picker's), the jump bar's
-  path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`,
+  path items, the toolbar activity views' state made from RuntimeViewerAppCore's `ToolbarActivity`
+  (`ToolbarActivityState.init(_:)`), `FindResultsPresentation.apply(to:)`,
   the coordinator that opens the app's own windows, the transitions that drive AppKitPlus's navigation
   controller (`Base/Transition+Navigation.swift`), the Find query field's content as a `FindQueryTerm` and
   back, and the live implementations of the services RuntimeViewerAppCore declares (below).
@@ -67,16 +72,24 @@ transition name `UIViewController` because XCoordinator's `Presentable` and `Tra
 and implemented in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by
 `AppCoordinator`), the copy commands' pasteboard (`pasteboardClient`, `PasteboardClient.general`) and Show
 in Finder (`finderClient`, `FinderClient.workspace`). The pasteboard and the Finder give tests an inert
-client that does nothing; `ViewModelTestEnvironment` swaps in recorders. How such a key is written: root
-`AGENTS.md`, *Singletons & Dependency Injection*.
+client that does nothing; `ViewModelTestEnvironment` swaps in recorders. **A service implemented in a
+package above this one is declared the same way**: the MCP status popover starts, stops and follows the app's
+MCP server through `mcpServerClient` (`MCP/MCPServerClient.swift`), whose live value `RuntimeViewerMCPBridge`
+supplies, because that package depends on RuntimeViewerAppCore and so this module cannot name its
+`MCPService`; the key is `public`, since `package` does not reach another package, and the bridge's own
+`MCPServerClientLiveTests` checks the live value. How such a key is written: root `AGENTS.md`,
+*Singletons & Dependency Injection*.
 
 **An icon or a colour RuntimeViewerAppCore shows is a value it describes, and RuntimeViewerAppUI draws it**
 (`Presentation/IconDescriptor.swift`, `ColorDescriptor.swift`; drawn by `IconDescriptor.image` and
 `ColorDescriptor.color` in AppUI's `Presentation/`): a system symbol (`SystemSymbol`, names only), a kind of
 image, an object's glyph or a letter badge (`RuntimeObjectIcon.Glyph`, which AppCore picks and AppUI draws with
 UIFoundation's `IDEIcon` through `runtimeObjectIconRendering`), one of the Find navigator's row symbols, or an
-engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` finds it among the manager's
-engines). A cell's `Appearance` carries the descriptors and the cell view draws them, on the main thread:
+engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` and
+`sourcePickerIcon(forEngineID:)` find it among the manager's engines, and for an engine the manager no longer
+holds answer with the icon they last drew for it — what the runtime source picker shows for a window whose
+engine went away). A view that draws engines' icons draws them again on the provider's
+`recordedIconsChanged`: an injected device process's icon is recorded after its engine has been listed. A cell's `Appearance` carries the descriptors and the cell view draws them, on the main thread:
 `IDEIcon` keeps its images in a dictionary without a lock, so tests that draw icons run on the main actor.
 AppUI also keeps the drawing under the names AppCore used to have — `RuntimeImageKind.icon`, `iconColor`,
 `coloredIcon`, `RuntimeObjectIcon.icon(for:)` — for the views that draw an image directly. `CustomSymbol`
@@ -126,10 +139,12 @@ Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
 (`Documentations/Evolutions/0095-app-layer-directory-layout.md`)
 
 - **Nothing at a target's root.** Every file is in a directory named after a feature: the app's own folder
-  name where the app has one (`App`, `Base`, `BatchExporting`, `Content`, `EditorArea`, `Find`, `Inspector`,
-  `Reports`, `Sidebar/Root`, `Sidebar/RuntimeObject`), otherwise what the directory holds (`Activity`,
-  `BackgroundWork`, `ContextMenus`, `Document`, `Engine`, `Extensions`, `Filtering`, `Presentation`,
-  `RuntimeImage`, `RuntimeObject`, `Storage`). `Find/` has `Query/`, `Scope/`, `Results/` and
+  name where the app has one (`App`, `Base`, `BatchExporting`, `Content`, `EditorArea`, `Exporting`, `Find`,
+  `Inspector`, `Main`, `MCP`, `Reports`, `Sidebar/Root`, `Sidebar/RuntimeObject`, `Specialization`; without
+  the space where the app's has one: `AttachToProcess` for `Attach Process`, `GenerationOptions` for
+  `Generation Options`), otherwise what the directory holds (`Activity`, `BackgroundWork`, `ContextMenus`,
+  `Document`, `Engine`, `Extensions`, `Filtering`, `Presentation`, `RuntimeImage`, `RuntimeObject`,
+  `RuntimeSourcePicker`, `Storage`). `Find/` has `Query/`, `Scope/`, `Results/` and
   `CrossReferences/` below it; its root keeps only `FindViewModel`, `FindSession` and `FindNavigatorRoutable`.
 - **An engine's background work is in `BackgroundWork/`**: `RuntimeEngineBackgroundWork` and what it holds —
   `Indexing/`, `FindCorpus/`, `CrossReferencePreparation/`, `ManualLoading/` — each with its state and
@@ -138,7 +153,7 @@ Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
   goes in the directory of the same name as that type's: `RuntimeObject/RuntimeObjectIcon+Image.swift` beside
   AppCore's `RuntimeObject/RuntimeObjectIcon.swift`, `Content/ContentInterface+Theme.swift` beside
   `Content/ContentInterface.swift`. What only AppUI has gets a directory of its own (`Theme/`,
-  `RuntimeSourcePicker/`, `Resources/`) or goes with its one user (`NSColor+Xcode.swift`, the Find results'
+  `Resources/`) or goes with its one user (`NSColor+Xcode.swift`, the Find results'
   text colours, in `Find/Results/`).
 - **A file is named after its main type.** Small helper types may stay beside it; a file whose name names no
   type in it, or that holds unrelated things, is split.

@@ -272,6 +272,7 @@ enum AppCoreBoundary {
     static let allowedSystemPrefixedNames: Set<String> = [
         "NSCharacterSet",
         "NSError",
+        "NSItemProvider",
         "NSLock",
         "NSMakeRange",
         "NSMaxRange",
