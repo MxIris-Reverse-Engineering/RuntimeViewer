@@ -174,7 +174,7 @@ struct SidebarRuntimeObjectCellViewModelTests {
     func specializedBadgeKeepsItsTooltip() {
         let cell = makeCell(for: object(name: "Box.Int", displayName: "Box<Int>", properties: [.isGeneric, .isSpecialized]))
 
-        #expect(cell.appearance.tertiaryIcon === RuntimeObjectIcon.iconForSpecialized())
+        #expect(cell.appearance.tertiaryIcon == .glyph(RuntimeObjectIcon.specializedGlyph()))
         #expect(cell.appearance.tertiaryTooltip == "Specialized Generic Type")
     }
 

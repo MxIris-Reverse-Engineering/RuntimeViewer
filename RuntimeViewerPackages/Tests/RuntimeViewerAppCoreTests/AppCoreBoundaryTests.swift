@@ -312,15 +312,6 @@ enum AppCoreBoundary {
     /// The files rules 4 and 5 do not apply to yet, each with the step of proposal
     /// `app-core-without-ui-models` that cleans it up. Empty once the last step lands.
     static let filesPendingCleanup: [String: Int] = [
-        "RuntimeViewerAppCore/CustomSymbol.swift": 2,
-        "RuntimeViewerAppCore/Engine/RuntimeEngineIconProviding.swift": 2,
-        "RuntimeViewerAppCore/Reports/ReportCellViewModel.swift": 2,
-        "RuntimeViewerAppCore/Reports/ReportGroupWork.swift": 2,
-        "RuntimeViewerAppCore/Reports/ReportViewModel.swift": 2,
-        "RuntimeViewerAppCore/RuntimeImageKind.swift": 2,
-        "RuntimeViewerAppCore/RuntimeObjectIcon.swift": 2,
-        "RuntimeViewerAppCore/RuntimeSourcePicker/RuntimeSourcePickerContent.swift": 2,
-        "RuntimeViewerAppCore/SystemSymbol.swift": 2,
         "RuntimeViewerAppCore/Find/FindResultCellStyle.swift": 3,
         "RuntimeViewerAppCore/Find/FindResultNode.swift": 3,
         "RuntimeViewerAppCore/Inspector/InspectorHierarchyCellViewModel.swift": 3,

@@ -1,6 +1,7 @@
 import AppKit
 import Testing
 @testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// The symbols RuntimeViewerAppCore ships in its own asset catalog (proposal `image-kind-icons`).
 /// They are named by string, so a misspelt name or a symbol set left out of the catalog is caught here.
@@ -29,7 +30,7 @@ struct CustomSymbolTests {
     func templateVersion(symbol: CustomSymbol) throws {
         let assetCatalogURL = URL(filePath: #filePath)
             .deletingLastPathComponent()
-            .appending(path: "../../Sources/RuntimeViewerAppCore/Resources/Symbols.xcassets")
+            .appending(path: "../../Sources/RuntimeViewerAppUI/Resources/Symbols.xcassets")
             .standardized
         let symbolSetURL = assetCatalogURL.appending(path: "\(symbol.rawValue).symbolset")
         let templateURLs = try FileManager.default.contentsOfDirectory(at: symbolSetURL, includingPropertiesForKeys: nil)

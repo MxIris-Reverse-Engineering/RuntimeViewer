@@ -1,4 +1,3 @@
-import AppKit
 import RuntimeViewerCore
 import Testing
 @testable import RuntimeViewerAppCore
@@ -12,7 +11,7 @@ import RuntimeViewerAppTestingSupport
 /// faces answer in kind: a Swift class registered with the Objective-C runtime
 /// gets the orange Objective-C `C`, an `@objc @implementation` extension the
 /// same pink. An Objective-C protocol defined in Swift gets a Swift `P`.
-/// `RuntimeObjectIcon.secondaryIcon(for:)` is the single place that chooses,
+/// `RuntimeObjectIcon.secondaryGlyph(for:)` is the single place that chooses,
 /// so this pins the choice rather than each call site.
 ///
 /// Identity comparison is exact: the icon renderer gives back one image per
@@ -25,14 +24,14 @@ struct RuntimeObjectIconTests {
     func objcImplementationGetsPink() {
         let object = Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isObjCImplementation])
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.iconForObjCImplementation())
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == RuntimeObjectIcon.objcImplementationGlyph())
     }
 
     @Test("a bridged Swift class keeps the blue badge")
     func bridgedSwiftClassKeepsBlue() {
         let object = Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.icon(for: .swift(.type(.class))))
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == RuntimeObjectIcon.glyph(for: .swift(.type(.class))))
     }
 
     @Test("the two badges are different images")
@@ -40,7 +39,7 @@ struct RuntimeObjectIconTests {
         let objcImplementation = Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isObjCImplementation])
         let bridged = Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: objcImplementation) !== RuntimeObjectIcon.secondaryIcon(for: bridged))
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: objcImplementation) != RuntimeObjectIcon.secondaryGlyph(for: bridged))
     }
 
     /// The binary cannot produce both at once, but the function still has to
@@ -53,63 +52,63 @@ struct RuntimeObjectIconTests {
             properties: [.isObjCImplementation, .isSwiftClass]
         )
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.iconForObjCImplementation())
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == RuntimeObjectIcon.objcImplementationGlyph())
     }
 
     @Test("a plain ObjC class gets no badge")
     func plainObjCClassGetsNothing() {
         let object = Fixtures.runtimeObject(kind: .objc(.type(.class)))
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == nil)
     }
 
     @Test("a Swift class registered with the ObjC runtime gets the orange ObjC badge")
     func swiftClassWithObjCFaceGetsOrange() {
         let object = Fixtures.runtimeObject(kind: .swift(.type(.class)), properties: [.isObjCClass])
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.icon(for: .objc(.type(.class))))
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == RuntimeObjectIcon.glyph(for: .objc(.type(.class))))
     }
 
     @Test("an @objc @implementation extension gets the same pink badge as its class")
     func implementationExtensionGetsPink() {
         let object = Fixtures.runtimeObject(kind: .swift(.extension(.class)), properties: [.isObjCImplementation])
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.iconForObjCImplementation())
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == RuntimeObjectIcon.objcImplementationGlyph())
     }
 
     @Test("a plain Swift class gets no badge")
     func plainSwiftClassGetsNothing() {
         let object = Fixtures.runtimeObject(kind: .swift(.type(.class)))
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == nil)
     }
 
     @Test("an Objective-C protocol defined in Swift gets the Swift protocol badge")
     func swiftDefinedProtocolGetsSwiftBadge() {
         let object = Fixtures.runtimeObject(kind: .objc(.type(.protocol)), properties: [.isSwiftProtocol])
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.icon(for: .swift(.type(.protocol))))
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == RuntimeObjectIcon.glyph(for: .swift(.type(.protocol))))
     }
 
     @Test("a protocol written in Objective-C gets no badge")
     func plainObjCProtocolGetsNothing() {
         let object = Fixtures.runtimeObject(kind: .objc(.type(.protocol)))
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == nil)
     }
 
     @Test("the Swift entry of an @objc protocol gets the Objective-C protocol badge")
     func objcProtocolSwiftEntryGetsObjCBadge() {
         let object = Fixtures.runtimeObject(kind: .swift(.type(.protocol)), properties: [.isObjCProtocol])
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.icon(for: .objc(.type(.protocol))))
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == RuntimeObjectIcon.glyph(for: .objc(.type(.protocol))))
     }
 
     @Test("a plain Swift protocol gets no badge")
     func plainSwiftProtocolGetsNothing() {
         let object = Fixtures.runtimeObject(kind: .swift(.type(.protocol)))
 
-        #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
+        #expect(RuntimeObjectIcon.secondaryGlyph(for: object) == nil)
     }
 
     // MARK: - Tooltips

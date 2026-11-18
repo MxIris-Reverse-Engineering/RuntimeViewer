@@ -13,8 +13,6 @@ struct CrossLayerDependencyTests {
     func appUIProvidesTheLiveValues() {
         let keyTypes: [Any.Type] = [
             AppRouterKey.self,
-            RuntimeEngineIconProvidingKey.self,
-            RuntimeObjectIconRenderingKey.self,
             PasteboardClientKey.self,
             FinderClientKey.self,
         ]

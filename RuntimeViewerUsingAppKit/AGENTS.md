@@ -68,9 +68,10 @@ of a newer one.
   all, and a placeholder that does appear stays up for `staysAtLeast` instead of blinking for a frame.
   Engine calls that hit a warm cache return in single-digit milliseconds, so this is the common case.
 - Build the pipeline in `init` and return `$state.asDriver()` from `transform`, the way
-  `ContentTextViewModel` does. Values that build AppKit objects (cell ViewModels, `NSImage`,
-  `NSAttributedString`) are mapped **after** `observeOnMainScheduler()`; only plain model data crosses
-  back from the background.
+  `ContentTextViewModel` does. Values that build AppKit objects (cell ViewModels, `NSAttributedString`)
+  are mapped **after** `observeOnMainScheduler()`; only plain model data crosses back from the background.
+  A ViewModel never makes an image or a colour: it describes one (`IconDescriptor`, `ColorDescriptor`) and
+  the view draws it with `.image` / `.color` (RuntimeViewerPackages/Sources/AGENTS.md).
 
 **Reusable panes: keep the ViewModel, swap the object.** A pane that shows a series of objects (Inspector
 tabs, Content text) must not build a fresh ViewModel and call `setupBindings(for:)` per object:
@@ -377,6 +378,8 @@ cell-reuse code) for data already produced by an Rx pipeline.
   - **Publish once per change.** Build the new struct and assign it once, and only when it differs
     (`Appearance` is `Equatable`). The macro generates a plain getter and setter, so `appearance.title = …`
     field by field sends one event per statement.
+  - **Icons and their colours are descriptors** (`IconDescriptor`, `ColorDescriptor`), compared as values;
+    the cell view draws them when it applies the appearance.
   - **The cell binds `$appearance` once** and applies it in one place. When the appearance changes many
     times a second (a row showing progress), set each part only when it differs, as `ReportCellView` does.
   - **State nothing displays stays a plain property.** A flag only the filter reads

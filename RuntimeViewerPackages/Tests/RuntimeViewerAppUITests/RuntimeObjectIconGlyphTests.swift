@@ -2,6 +2,7 @@ import AppKit
 import Testing
 import RuntimeViewerCore
 @testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// RuntimeViewerAppCore picks each object's icon as a glyph — Xcode's letter and colour for the kind —
 /// and asks the `runtimeObjectIconRendering` dependency to draw it (proposal `app-core-ui-split`).

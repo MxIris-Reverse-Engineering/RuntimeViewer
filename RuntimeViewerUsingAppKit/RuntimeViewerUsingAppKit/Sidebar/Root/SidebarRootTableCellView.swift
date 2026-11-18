@@ -39,9 +39,9 @@ final class SidebarRootTableCellView: TableCellView {
 
         viewModel.$appearance.asDriver().driveOnNext { [weak self] appearance in
             guard let self else { return }
-            iconView.image = appearance.icon
+            iconView.image = appearance.icon?.image
             // A template tinted per kind, as Xcode's navigator draws it; a selected row turns it white.
-            iconView.contentTintColor = appearance.iconColor
+            iconView.contentTintColor = appearance.iconColor.color
             titleLabel.attributedStringValue = appearance.name
         }
         .disposed(by: rx.disposeBag)

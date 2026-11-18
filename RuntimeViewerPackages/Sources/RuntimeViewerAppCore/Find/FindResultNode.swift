@@ -10,15 +10,15 @@ import RuntimeViewerArchitectures
 
 /// What a Find result row is painted from: an icon, its opacity, the
 /// attributed title, and whether the title may wrap onto a second line (a
-/// hit's line does, a type name does not). The fonts, colours and icons come
-/// from `FindResultCellStyle`.
+/// hit's line does, a type name does not). The fonts and colours come from
+/// `FindResultCellStyle`, the icons from `FindResultIcon`.
 public struct FindResultCellAppearance: Equatable {
-    public var icon: NSUIImage?
+    public var icon: IconDescriptor?
     public var iconAlpha: CGFloat = 1
     /// The colour a template `icon` is drawn in when the row has one of its own: an image's, after
-    /// what the image is part of (`RuntimeImageKind.iconColor`). `nil` leaves the usual tint
+    /// what the image is part of (`ColorDescriptor.imageKind(_:)`). `nil` leaves the usual tint
     /// (`FindResultCellStyle.iconTintColor`).
-    public var iconColor: NSUIColor?
+    public var iconColor: ColorDescriptor?
     public var title: NSAttributedString = .init()
     public var allowsWrapping = false
     public var isSecondary = false
@@ -191,43 +191,43 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         var appearance = FindResultCellAppearance()
         switch content {
         case .object(let object):
-            appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: metrics.iconSize)
+            appearance.icon = .runtimeObject(object.kind, size: metrics.iconSize)
             appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
         case .textMatch(let match):
-            appearance.icon = FindResultCellStyle.matchIcon
-            appearance.iconAlpha = FindResultCellStyle.matchIconAlpha
+            appearance.icon = .findResultSymbol(.match)
+            appearance.iconAlpha = FindResultIcon.dimmedAlpha
             appearance.title = emphasized(match.lineText, range: match.matchRangeInLine.nsRange)
             appearance.allowsWrapping = true
         case .member(let match):
-            appearance.icon = FindResultCellStyle.matchIcon
-            appearance.iconAlpha = FindResultCellStyle.matchIconAlpha
+            appearance.icon = .findResultSymbol(.match)
+            appearance.iconAlpha = FindResultIcon.dimmedAlpha
             appearance.title = emphasized(match.member.declarationText, range: Self.nameRange(of: match))
             appearance.allowsWrapping = true
         case .relationship(let name, let object):
             if let object {
-                appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: metrics.iconSize)
+                appearance.icon = .runtimeObject(object.kind, size: metrics.iconSize)
                 appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
             } else {
-                appearance.icon = FindResultCellStyle.unresolvedIcon
-                appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
+                appearance.icon = .findResultSymbol(.unresolved)
+                appearance.iconAlpha = FindResultIcon.dimmedAlpha
                 appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
                 appearance.isSecondary = true
             }
         case .crossReferenceRoot(let root, _):
-            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: root, metrics: metrics)
+            appearance.icon = FindResultIcon.crossReferenceIcon(for: root, size: metrics.iconSize)
             appearance.title = titleWithSubtitle(root.title, subtitle: FindScope.imageName(of: root.imagePath), metrics: metrics)
         case .crossReference(let row):
-            appearance.icon = FindResultCellStyle.crossReferenceIcon(for: row, metrics: metrics)
+            appearance.icon = FindResultIcon.crossReferenceIcon(for: row, size: metrics.iconSize)
             switch row.item {
             case .loading, .failure:
-                appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
+                appearance.iconAlpha = FindResultIcon.dimmedAlpha
                 appearance.title = plainTitle(row.title, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
                 appearance.isSecondary = true
             case .function, .target, .image, .unnamedFunctions:
                 appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle, metrics: metrics)
             }
             if case .image(let path) = row.item {
-                appearance.iconColor = RuntimeImageKind(ofImageAt: path).iconColor
+                appearance.iconColor = .imageKind(RuntimeImageKind(ofImageAt: path))
             }
         }
         return appearance

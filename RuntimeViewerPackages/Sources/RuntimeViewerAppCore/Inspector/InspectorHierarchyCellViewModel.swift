@@ -53,7 +53,7 @@ public final class InspectorHierarchyCellViewModel: NSObject, @unchecked Sendabl
         self.children = children
         self.identifier = identifier
         self.appearance = RuntimeObjectCellAppearance(
-            primaryIcon: RuntimeObjectIcon.icon(text: "?", color: .gray, size: RuntimeObjectCellAppearance.inspectorIconSize),
+            primaryIcon: .glyph(RuntimeObjectIcon.glyph(text: "?", color: .gray, size: RuntimeObjectCellAppearance.inspectorIconSize)),
             primaryTooltip: "Not found in the indexed images",
             title: NSAttributedString(rowText: name, fontSize: 12, color: .secondaryLabelColor)
         )

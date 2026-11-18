@@ -32,11 +32,8 @@ The apps' application layer is two targets and a facade
 UIFoundation, SFSymbols or AppKitPlus, and neither does RuntimeViewerArchitectures beneath it. What it took
 from them it has of its own: the `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`PlatformTypes.swift`;
 UIFoundation's and SFSymbols' name the same types, so a file that sees several still compiles),
-`NSAttributedString(rowText:fontSize:color:)` for a row's title, `SystemSymbol` for the system symbols it
-draws (`SystemSymbolTests` loads every case) and `CustomSymbol` for the ones it ships in its own asset
-catalog, `Resources/Symbols.xcassets` (the image kinds' symbols taken from Xcode, kept as version 6
-templates so that macOS 15 reads them; `CustomSymbolTests` loads every case and checks the version),
-the Xcode colours of `NSColor+Xcode.swift`, and the Find query
+`NSAttributedString(rowText:fontSize:color:)` for a row's title, `SystemSymbol` naming the system symbols
+it shows, the Xcode colours of `NSColor+Xcode.swift`, and the Find query
 field's content as data: `FindQueryTerm` and `FindPattern`, with AppKitPlus's rules for the regular
 expression a term makes and for its property list rewritten in `FindQueryTerm.swift`. **A change to those
 rules in AppKitPlus is carried over by hand**: `FindPatternParityTests` runs both on the same input and fails
@@ -74,21 +71,33 @@ transition name `UIViewController` because XCoordinator's `Presentable` and `Tra
 
 **A service whose live implementation needs a UI library, AppKit or UIKit is declared in RuntimeViewerAppCore
 and implemented in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by
-`AppCoordinator`), the engines' icons (`runtimeEngineIconProviding`, implemented by
-`RuntimeEngineIconProvider`), drawing an object's icon (`runtimeObjectIconRendering`, implemented with
-UIFoundation's `IDEIcon`), the copy commands' pasteboard (`pasteboardClient`, `PasteboardClient.general`) and
-Show in Finder (`finderClient`, `FinderClient.workspace`). The pasteboard and the Finder give tests an inert
-client that does nothing; `ViewModelTestEnvironment` swaps in recorders. How such a key is
-written: root `AGENTS.md`, *Singletons & Dependency Injection*. `IDEIcon` keeps its images in a dictionary
-without a lock, so object icons are drawn on the main thread only, and tests that draw them run on the main
-actor.
+`AppCoordinator`), the copy commands' pasteboard (`pasteboardClient`, `PasteboardClient.general`) and Show
+in Finder (`finderClient`, `FinderClient.workspace`). The pasteboard and the Finder give tests an inert
+client that does nothing; `ViewModelTestEnvironment` swaps in recorders. How such a key is written: root
+`AGENTS.md`, *Singletons & Dependency Injection*.
+
+**An icon or a colour RuntimeViewerAppCore shows is a value it describes, and RuntimeViewerAppUI draws it**
+(`Presentation/IconDescriptor.swift`, `ColorDescriptor.swift`; drawn by `IconDescriptor.image` and
+`ColorDescriptor.color` in AppUI's `Presentation/`): a system symbol (`SystemSymbol`, names only), a kind of
+image, an object's glyph or a letter badge (`RuntimeObjectIcon.Glyph`, which AppCore picks and AppUI draws with
+UIFoundation's `IDEIcon` through `runtimeObjectIconRendering`), one of the Find navigator's row symbols, or an
+engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` finds it among the manager's
+engines). A cell's `Appearance` carries the descriptors and the cell view draws them, on the main thread:
+`IDEIcon` keeps its images in a dictionary without a lock, so tests that draw icons run on the main actor.
+AppUI also keeps the drawing under the names AppCore used to have — `RuntimeImageKind.icon`, `iconColor`,
+`coloredIcon`, `RuntimeObjectIcon.icon(for:)` — for the views that draw an image directly. `CustomSymbol`
+and its asset catalog, `Resources/Symbols.xcassets` of RuntimeViewerAppUI (the image kinds' symbols taken from
+Xcode, kept as version 6 templates so that macOS 15 reads them), live there too; `SystemSymbolTests` and
+`CustomSymbolTests` in RuntimeViewerAppUITests load every case.
 
 **Every list of images takes a row's icon from `RuntimeImageKind`**: a node of the image tree by
 `node.kind` (its own name), a place that lists one image by `RuntimeImageKind(ofImageAt:)` (the bundle
-nearest to it on its path). Its colour is the kind's too, Xcode's for that kind of file: a list that can tint
-a template draws `icon` with `contentTintColor` set to `iconColor`, which a selected row turns white as Xcode's
+nearest to it on its path). Its colour is the kind's too, Xcode's for that kind of file. A view model names
+both as `IconDescriptor.imageKind(_:)` and `ColorDescriptor.imageKind(_:)`; a list that can tint a template
+draws `icon` with `contentTintColor` set to `iconColor`, which a selected row turns white as Xcode's
 navigator does, and a place that draws an image as it is — the jump bar and its menus, the editor's tabs, the
-history menu — takes `coloredIcon`. Never pick a colour for an image's icon anywhere else.
+history menu — takes `coloredIcon` (all three in RuntimeViewerAppUI's `Icons/RuntimeImageKind+Icon.swift`).
+Never pick a colour for an image's icon anywhere else.
 Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
 
 ## The rest of the UI layer

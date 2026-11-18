@@ -19,18 +19,18 @@ extension RuntimeObjectCellAppearance {
     static func inspectorRow(for runtimeObject: RuntimeObject) -> RuntimeObjectCellAppearance {
         let iconSize = inspectorIconSize
         var appearance = RuntimeObjectCellAppearance(
-            primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
+            primaryIcon: .runtimeObject(runtimeObject.kind, size: iconSize),
             primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
-            secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
+            secondaryIcon: RuntimeObjectIcon.secondaryGlyph(for: runtimeObject, size: iconSize).map(IconDescriptor.glyph),
             secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
             title: NSAttributedString(rowText: runtimeObject.displayName, fontSize: 12, color: .labelColor)
         )
         if runtimeObject.properties.contains(.isGeneric) {
-            appearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
+            appearance.tertiaryIcon = .glyph(RuntimeObjectIcon.genericGlyph(size: iconSize))
             appearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForGeneric
         }
         if runtimeObject.properties.contains(.isSpecialized) {
-            appearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
+            appearance.tertiaryIcon = .glyph(RuntimeObjectIcon.specializedGlyph(size: iconSize))
             appearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForSpecialized
         }
         let imageName = runtimeObject.imageName

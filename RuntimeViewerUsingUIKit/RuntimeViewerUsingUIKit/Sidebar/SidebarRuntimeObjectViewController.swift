@@ -92,7 +92,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 var content = cell.defaultContentConfiguration()
                 content.textProperties.allowsDefaultTighteningForTruncation = false
                 content.attributedText = viewModel.appearance.title
-                content.image = viewModel.appearance.primaryIcon
+                content.image = viewModel.appearance.primaryIcon?.image
                 cell.contentConfiguration = content
             }
         )

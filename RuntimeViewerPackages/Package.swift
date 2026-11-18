@@ -466,20 +466,16 @@ let package = Package(
                 .product(name: "IfritStatic", package: "Ifrit"),
                 .product(name: "FuzzySearch", package: "fuzzy-search"),
             ],
-            // The symbols of the image kinds (CustomSymbol), which no UI library
-            // beneath this target can carry for it.
-            resources: [
-                .process("Resources"),
-            ],
         ),
 
         // The UI glue split out of the application layer: the adapters that set
         // up AppKit and AppKitPlus controls, the jump bar's items, the presenter
         // that feeds the toolbar's activity view, the coordinator that opens the
         // app's own windows and the navigation controller's transitions, the
-        // Find query field's content as a FindQueryTerm, and the live values of
-        // the services RuntimeViewerAppCore declares (the engine icons, the
-        // object icons' drawing, `appRouter`).
+        // Find query field's content as a FindQueryTerm, the drawing of the
+        // icons and colours RuntimeViewerAppCore describes as values, and the
+        // live values of the services RuntimeViewerAppCore declares (the
+        // pasteboard, the Finder, `appRouter`).
         .target(
             name: "RuntimeViewerAppUI",
             dependencies: [
@@ -493,6 +489,10 @@ let package = Package(
                 .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
+            ],
+            // The symbols of the image kinds (CustomSymbol), taken from Xcode.
+            resources: [
+                .process("Resources"),
             ],
         ),
 

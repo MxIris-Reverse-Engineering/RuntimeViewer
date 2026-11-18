@@ -15,12 +15,6 @@ final class IDEIconRuntimeObjectIconRenderer: RuntimeObjectIconRendering {
     }
 }
 
-/// The live value of RuntimeViewerAppCore's `runtimeObjectIconRendering`, which declares only the
-/// interface and the value tests get.
-extension RuntimeObjectIconRenderingKey: DependencyKey {
-    package static let liveValue: any RuntimeObjectIconRendering = IDEIconRuntimeObjectIconRenderer()
-}
-
 extension IDEIconColor {
     init(_ color: RuntimeObjectIcon.Glyph.Color) {
         switch color {

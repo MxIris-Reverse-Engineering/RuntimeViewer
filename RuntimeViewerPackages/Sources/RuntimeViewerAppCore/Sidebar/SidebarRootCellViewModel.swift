@@ -51,12 +51,12 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
     /// Both display outlets in one stream: the image list keeps ~13k of these
     /// rows resident, so per-row Rx fixed cost matters (proposal 0005).
     public struct Appearance: Equatable {
-        public var icon: NSUIImage?
-        /// The colour the template `icon` is drawn in: what the node is (`RuntimeImageKind.iconColor`).
-        public var iconColor: NSUIColor
+        public var icon: IconDescriptor?
+        /// The colour the template `icon` is drawn in: what the node is (`ColorDescriptor.imageKind(_:)`).
+        public var iconColor: ColorDescriptor
         public var name: NSAttributedString
 
-        public init(icon: NSUIImage?, iconColor: NSUIColor, name: NSAttributedString) {
+        public init(icon: IconDescriptor?, iconColor: ColorDescriptor, name: NSAttributedString) {
             self.icon = icon
             self.iconColor = iconColor
             self.name = name
@@ -77,8 +77,8 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
         self.node = node
         let kind = node.kind
         self.appearance = Appearance(
-            icon: kind.icon,
-            iconColor: kind.iconColor,
+            icon: .imageKind(kind),
+            iconColor: .imageKind(kind),
             name: NSAttributedString(rowText: node.name, fontSize: 13)
         )
     }

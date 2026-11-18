@@ -170,8 +170,8 @@ struct FindResultNodeTests {
 
         #expect(Self.fontSizes(in: navigatorAppearance.title) == [13])
         #expect(Self.fontSizes(in: inspectorAppearance.title) == [NSFont.smallSystemFontSize])
-        #expect(navigatorAppearance.icon?.size == NSSize(width: 16, height: 16))
-        #expect(inspectorAppearance.icon?.size == NSSize(width: 14, height: 14))
+        #expect(navigatorAppearance.icon == .glyph(RuntimeObjectIcon.glyph(text: "M", color: .orange, size: 16)))
+        #expect(inspectorAppearance.icon == .glyph(RuntimeObjectIcon.glyph(text: "M", color: .orange, size: 14)))
     }
 
     /// Every point size the title is set in.

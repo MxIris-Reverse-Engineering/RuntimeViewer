@@ -40,9 +40,9 @@ public final class SpecializationTypePickerCellViewModel: NSObject, @unchecked S
         self.candidate = candidate
         let iconSize = RuntimeObjectIcon.defaultIconSize
         self.appearance = RuntimeObjectCellAppearance(
-            primaryIcon: RuntimeObjectIcon.icon(for: candidate.kind.runtimeObjectKind, size: iconSize),
+            primaryIcon: .runtimeObject(candidate.kind.runtimeObjectKind, size: iconSize),
             primaryTooltip: RuntimeObjectIcon.tooltip(for: candidate.kind.runtimeObjectKind),
-            secondaryIcon: candidate.isGeneric ? RuntimeObjectIcon.iconForGeneric(size: iconSize) : nil,
+            secondaryIcon: candidate.isGeneric ? .glyph(RuntimeObjectIcon.genericGlyph(size: iconSize)) : nil,
             secondaryTooltip: candidate.isGeneric ? RuntimeObjectIcon.tooltipForGeneric : nil,
             title: NSAttributedString {
                 AText(candidate.displayName)

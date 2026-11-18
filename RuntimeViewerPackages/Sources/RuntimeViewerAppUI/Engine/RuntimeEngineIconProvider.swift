@@ -41,6 +41,9 @@ public final class RuntimeEngineIconProvider {
 
     private var cancellables: Set<AnyCancellable> = []
 
+    /// Whether this provider follows the process-wide manager; see `init(followsRuntimeEngineManager:)`.
+    private let followsRuntimeEngineManager: Bool
+
     /// - Parameter followsRuntimeEngineManager: Whether icons are looked up and
     ///   dropped as the manager's engines come and go. Only the process-wide
     ///   provider follows it. The dependency's test value does not, so a test
@@ -48,6 +51,7 @@ public final class RuntimeEngineIconProvider {
     ///   machine's glyph, its file's icon or the generic executable icon, and a
     ///   picture of its own only once one is recorded.
     fileprivate init(followsRuntimeEngineManager: Bool) {
+        self.followsRuntimeEngineManager = followsRuntimeEngineManager
         guard followsRuntimeEngineManager else { return }
 
         // `@Published` emits from `willSet`, so each sink sees the incoming
@@ -89,6 +93,19 @@ public final class RuntimeEngineIconProvider {
         case .machine:
             Self.machineIcon(for: engine)
         }
+    }
+
+    /// The icon of the engine `engineID` names, which RuntimeViewerAppCore describes as
+    /// `IconDescriptor.runtimeEngine(engineID:)`: the manager's engine of that identifier, as
+    /// `icon(for:)` draws it. An engine the manager no longer holds — and every engine, for a provider
+    /// that follows no manager, so that a test starts none — gets the generic executable icon.
+    public func icon(forEngineID engineID: String) -> NSImage {
+        guard followsRuntimeEngineManager,
+              let engine = runtimeEngineManager.runtimeEngines.first(where: { $0.engineID == engineID })
+        else {
+            return Self.genericExecutableIcon
+        }
+        return icon(for: engine)
     }
 
     /// The engine's icon in the toolbar's runtime source picker: its machine's
@@ -278,15 +295,5 @@ extension DependencyValues {
     /// process-wide manager the first time a test shows an engine's icon.
     @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeEngineIconProvider.shared })
     public var runtimeEngineIconProvider: RuntimeEngineIconProvider = MainActor.assumeIsolated { RuntimeEngineIconProvider(followsRuntimeEngineManager: false) }
-}
-
-extension RuntimeEngineIconProvider: RuntimeEngineIconProviding {}
-
-/// The live value of RuntimeViewerAppCore's `runtimeEngineIconProviding`: the same provider the app
-/// reaches through `runtimeEngineIconProvider`.
-extension RuntimeEngineIconProvidingKey: DependencyKey {
-    package static var liveValue: any RuntimeEngineIconProviding {
-        MainActor.assumeIsolated { RuntimeEngineIconProvider.shared }
-    }
 }
 #endif

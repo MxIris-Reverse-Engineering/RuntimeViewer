@@ -181,7 +181,7 @@ struct InspectorReferencesUnnamedFunctionsTests {
         #expect(listing.totalCount == 3)
         let gatheringRow = try #require(listing.rows.last)
         #expect(gatheringRow.unnamedFunctionsGroup == .init(section: .typeReferences, request: Self.request, isExpanded: false))
-        #expect(gatheringRow.appearance.icon === FindResultCellStyle.disclosureIcon(isExpanded: false))
+        #expect(gatheringRow.appearance.icon == .findResultSymbol(.disclosure(isExpanded: false)))
         #expect(listing.rows.first?.unnamedFunctionsGroup == nil, "a function's row goes where a function goes")
     }
 
@@ -193,7 +193,7 @@ struct InspectorReferencesUnnamedFunctionsTests {
         #expect(listing.listedCount == 3)
         let gatheringRow = listing.rows[1]
         #expect(gatheringRow.unnamedFunctionsGroup?.isExpanded == true)
-        #expect(gatheringRow.appearance.icon === FindResultCellStyle.disclosureIcon(isExpanded: true))
+        #expect(gatheringRow.appearance.icon == .findResultSymbol(.disclosure(isExpanded: true)))
         #expect(Set(listing.rows.map(\.identifier)).count == listing.rows.count, "every row has an identifier of its own")
     }
 }

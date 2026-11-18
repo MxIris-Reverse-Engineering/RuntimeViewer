@@ -130,7 +130,7 @@ ContentTextViewModel (AppCore)                       AppUI / views
 ### 跨层服务
 
 - `PasteboardClient`、`FinderClient`：结构体与 `inert` 留在 AppCore，改成 0091 的跨层写法（`package enum PasteboardClientKey: TestDependencyKey`，`testValue = .inert`），`general` / `workspace` 两个真实实现搬进 AppUI。两个 key 加进 `CrossLayerDependencyTests`。
-- `runtimeObjectIconRendering` 与 `runtimeEngineIconProviding` 不再跨层：AppCore 不再画对象图标、不再取引擎图标，`RuntimeObjectIconRendering` 协议、它的缓存与 key 整体搬进 AppUI，成为普通的 `@DependencyEntry`；`RuntimeEngineIconProviding` 协议与 key 删除，AppCore 用 `.runtimeEngine(engineID:)`，AppUI 的 `RuntimeEngineIconProvider` 增加按 ID 取图标。两个 key 从 `CrossLayerDependencyTests` 移除。
+- `runtimeObjectIconRendering` 与 `runtimeEngineIconProviding` 不再跨层：AppCore 不再画对象图标、不再取引擎图标，`RuntimeObjectIconRendering` 协议、它的缓存与 key 整体搬进 AppUI，key 成为 AppUI 内部的普通 `DependencyKey`（live 值用 `IDEIcon` 画，测试值画空白图）；`RuntimeEngineIconProviding` 协议与 key 删除，AppCore 用 `.runtimeEngine(engineID:)`，AppUI 的 `RuntimeEngineIconProvider` 增加按 ID 取图标。两个 key 从 `CrossLayerDependencyTests` 移除。
 
 ### 修饰键
 
@@ -193,34 +193,33 @@ ContentTextViewModel (AppCore)                       AppUI / views
 | `TUI/CrossLayerDependencyTests.swift` | 修改 | 加 `PasteboardClientKey`、`FinderClientKey`；第二步删 `RuntimeObjectIconRenderingKey`、`RuntimeEngineIconProvidingKey` | 跨层清单 | 1、2 |
 | `AC/Presentation/IconDescriptor.swift` · `IconDescriptor`、`FindResultSymbol` | 新增 | 见详细设计 | 图标的描述值 | 2 |
 | `AC/Presentation/ColorDescriptor.swift` · `ColorDescriptor` | 新增 | 见详细设计 | 图标颜色的描述值 | 2 |
-| `AUI/Presentation/IconDescriptor+Image.swift` | 新增 | `IconDescriptor.image`、`image(size:)`（缓存）；`ColorDescriptor.color` | AppUI 解析 | 2 |
-| `AC/SystemSymbol.swift` · `SystemSymbol` | 修改 | 只留枚举与名字；`image`、`image(pointSize:weight:)`、`image(named:)` 搬走 | 造 `NSImage` | 2 |
-| `AUI/SystemSymbol+Image.swift` | 新增 | 搬来的三个成员 | 同上 | 2 |
-| `AC/CustomSymbol.swift` | 移动 → `AUI/CustomSymbol.swift` | 内容不变（`bundle: .module` 随之指向 AppUI 的资源包） | 只有搬走的 `RuntimeImageKind+Icon` 用 | 2 |
+| `AUI/Presentation/IconDescriptor+Image.swift` | 新增 | `IconDescriptor.image`（系统符号与 Find 符号另有一份主线程缓存，其余用各自的缓存）；`FindResultSymbol` 的六个符号按原来的字号字重画；`ColorDescriptor.color`。`image(size:)` 留到第三步，那时 Find 的尺寸才搬出 AppCore | AppUI 解析 | 2 |
+| `AC/SystemSymbol.swift` · `SystemSymbol` | 修改 | 只留枚举与名字，改为 `public`（`IconDescriptor` 的 case 要用）；`image`、`image(pointSize:weight:)`、`image(named:)` 搬走 | 造 `NSImage` | 2 |
+| `AUI/Icons/SystemSymbol+Image.swift` | 新增 | 搬来的三个成员 | 同上 | 2 |
+| `AC/CustomSymbol.swift` | 移动 → `AUI/Icons/CustomSymbol.swift` | 加 `import RuntimeViewerAppCore`，其余不变（`bundle: .module` 随之指向 AppUI 的资源包） | 只有搬走的 `RuntimeImageKind+Icon` 用 | 2 |
 | `AC/Resources/Symbols.xcassets` | 移动 → `AUI/Resources/Symbols.xcassets` | 内容不变 | 同上 | 2 |
 | `RuntimeViewerPackages/Package.swift` | 修改 | AppCore 去掉 `resources`，AppUI 加 `resources: [.process("Resources")]`，注释随之改 | 同上 | 2 |
+| `Tuist.swift`、`Tuist/ProjectDescriptionHelpers/LocalPackages.swift` | 修改 | 资源包 target 名 `RuntimeViewerPackages_RuntimeViewerAppCore` 改为 `…_RuntimeViewerAppUI` | Tuist 描述重复了本地包的资源包 target | 2 |
 | `AC/RuntimeImageKind.swift` · `RuntimeImageKind` | 修改 | 只留种类与判定；`icon`、`iconColor`、`coloredIcon` 和私有的图像、颜色常量搬走 | UI 类型 | 2 |
-| `AUI/RuntimeImageKind+Icon.swift` | 新增 | 同名的 `icon`、`iconColor`、`coloredIcon` | App 的调用点不用改 | 2 |
-| `AC/RuntimeObjectIcon.swift` · `RuntimeObjectIcon` | 修改 | 留 `Glyph`、`glyph(for:)`、tooltip；新增 `genericGlyph`、`specializedGlyph`、`objcImplementationGlyph`、`secondaryGlyph(for:)`；删 `icon(...)` 一族、`RuntimeObjectIconRendering`、key、`RuntimeObjectIconImageCache`、`BlankRuntimeObjectIconRenderer` | 造 `NSImage` | 2 |
-| `AUI/RuntimeObjectIcon+Image.swift` | 新增 | 同名的 `icon(...)` 一族、`secondaryIcon(for:)`；`RuntimeObjectIconRendering` 协议、缓存与 `@DependencyEntry` | App 的调用点不用改 | 2 |
-| `AUI/IDEIconRuntimeObjectIconRenderer.swift` | 修改 | 不再补 AppCore 的 key，改由上面的 `@DependencyEntry` 当 live 值 | 不再跨层 | 2 |
+| `AUI/Icons/RuntimeImageKind+Icon.swift` | 新增 | 同名的 `icon`、`iconColor`、`coloredIcon` | App 的调用点不用改 | 2 |
+| `AC/RuntimeObjectIcon.swift` · `RuntimeObjectIcon` | 修改 | 留 `Glyph`、`glyph(for:)`、tooltip；新增 `glyph(text:color:size:style:)`、`genericGlyph`、`specializedGlyph`、`objcImplementationGlyph`、`secondaryGlyph(for:)`；删 `icon(...)` 一族、`RuntimeObjectIconRendering`、key、`RuntimeObjectIconImageCache`、`BlankRuntimeObjectIconRenderer` | 造 `NSImage` | 2 |
+| `AUI/Icons/RuntimeObjectIcon+Image.swift` | 新增 | 同名的 `icon(...)` 一族、`secondaryIcon(for:)`、`image(for: Glyph)`；`RuntimeObjectIconRendering` 协议、缓存、空白渲染器，key 改成 AppUI 内部的 `DependencyKey`（live 用 `IDEIcon`，测试用空白图） | App 的调用点不用改 | 2 |
+| `AUI/IDEIconRuntimeObjectIconRenderer.swift` | 修改 | 删掉给 AppCore 的 key 补 live 值的扩展 | 不再跨层 | 2 |
 | `AC/Engine/RuntimeEngineIconProviding.swift` | 删除 | — | AppCore 改用 `.runtimeEngine(engineID:)` | 2 |
 | `AUI/Engine/RuntimeEngineIconProvider.swift` · `RuntimeEngineIconProvider` | 修改 | 去掉对 AppCore 协议的遵循与 key；新增 `icon(forEngineID:) -> NSImage`，经 `RuntimeEngineManager.runtimeEngines` 找回引擎，找不到用占位图 | 解析 `.runtimeEngine` | 2 |
 | `AC/RuntimeObject/RuntimeObjectCellAppearance.swift` | 修改 | 三个图标字段改 `IconDescriptor` / `IconDescriptor?` | 状态是值 | 2 |
 | `AC/Sidebar/SidebarRuntimeObjectCellViewModel.swift` | 修改 | 图标改描述值（第二步）；标题改 `RowText`（第三步） | 同上 | 2、3 |
-| `AC/Sidebar/SidebarRootCellViewModel.swift` · `Appearance` | 修改 | `icon: IconDescriptor?`、`iconColor: ColorDescriptor?`（第二步）；`name: RowText`（第三步） | 同上 | 2、3 |
+| `AC/Sidebar/SidebarRootCellViewModel.swift` · `Appearance` | 修改 | `icon: IconDescriptor?`、`iconColor: ColorDescriptor`（第二步，颜色原来就不是可选的）；`name: RowText`（第三步） | 同上 | 2、3 |
 | `AC/Inspector/InspectorSwiftSpecializationCellViewModel.swift`、`AC/Inspector/RuntimeObjectCellAppearance+Inspector.swift`、`AC/Inspector/InspectorHierarchyCellViewModel.swift` | 修改 | 图标改描述值（第二步）；标题、副标题改 `RowText`、去掉 import（第三步） | 同上 | 2、3 |
 | `AC/Reports/ReportCellViewModel.swift` · `Appearance` | 修改 | `icon: IconDescriptor?`、`iconColor: ColorDescriptor?` | 同上 | 2 |
 | `AC/Reports/ReportViewModel.swift` · `ReportOutline` | 修改 | 九个图标常量与 `icon(forImagePath:)`、`iconColor(forImagePath:)` 改返回描述值 | 同上 | 2 |
 | `AC/Reports/ReportTreeBuilder.swift` | 修改 | 跟随 `ReportOutline` 的类型 | 同上 | 2 |
 | `AC/Reports/ReportGroupWork.swift` | 修改 | `engineIcon: IconDescriptor?`，值为 `.runtimeEngine(engineID:)` | 同上 | 2 |
-| `AC/Find/FindResultNode+Icon.swift` | 新增 | 从 `FindResultCellStyle` 搬来「哪种行配哪个图标」的逻辑（`crossReferenceIcon(for:)` 两个重载、徽章选择），返回 `IconDescriptor` | 逻辑留在 AppCore | 2 |
-| `AC/Find/FindResultNode.swift` · `FindResultCellAppearance` | 修改 | `icon: IconDescriptor?`、`iconColor: ColorDescriptor?`，删 `iconAlpha`（第二步，淡化由 `FindResultSymbol` 在 AppUI 决定）；`title: RowText`，`makeAppearance(for:)` 不再收 `metrics`，`isContentEqual` 改 `==`（第三步） | 同上 | 2、3 |
-| `AC/Find/FindResultCellStyle.swift` | 修改（第二步）→ 移动 → `AUI/Find/FindResultCellStyle.swift`（第三步） | 第二步删掉图标部分；第三步整份搬走，`Metrics`、字体、颜色、段落样式与六个符号的画法留在其中，新增把 `RowText` 角色映射成属性的 `RowTextStyle.findResult(_:)` | 渲染 | 2、3 |
+| `AC/Find/FindResultNode+Icon.swift` · `FindResultIcon` | 新增 | 从 `FindResultCellStyle` 搬来「哪种行配哪个图标」的逻辑（`crossReferenceIcon(for:size:)` 两个重载、徽章选择）与淡化的透明度 `dimmedAlpha`，返回 `IconDescriptor` | 逻辑留在 AppCore | 2 |
+| `AC/Find/FindResultNode.swift` · `FindResultCellAppearance` | 修改 | `icon: IconDescriptor?`、`iconColor: ColorDescriptor?`；`iconAlpha` 保留为数字（同一个未解析符号在关系树里淡化、在交叉引用行里不淡化，透明度不是符号本身决定的）（第二步）；`title: RowText`，`makeAppearance(for:)` 不再收 `metrics`，`isContentEqual` 改 `==`（第三步） | 同上 | 2、3 |
+| `AC/Find/FindResultCellStyle.swift` | 修改（第二步）→ 移动 → `AUI/Find/FindResultCellStyle.swift`（第三步） | 第二步删掉图标部分，只留两个着色常量；第三步整份搬走，`Metrics`、字体、颜色、段落样式留在其中，新增把 `RowText` 角色映射成属性的 `RowTextStyle.findResult(_:)` | 渲染 | 2、3 |
 | `AC/Inspector/InspectorReferencesViewModel.swift` | 修改 | 展开三角改 `.findResultSymbol(.disclosure(isExpanded:))`（第二步）；去掉 `.inspector` 尺寸（第三步） | 同上 | 2、3 |
-| `AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` · `Source` | 修改 | `image: NSImage?` → `icon: IconDescriptor?`，去掉 import | 同上 | 2 |
-| `AUI/RuntimeSourcePicker/RuntimeSourceMenuAdapter.swift`、`AUI/RuntimeSourcePicker/RuntimeSourcePopoverAdapter.swift` | 修改 | 用 `icon?.image` | 解析 | 2 |
-| `MAC/Main/MainViewModel.swift` | 修改 | 造来源列表时给 `.runtimeEngine(engineID:)` | 同上 | 2 |
+| `AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` | 移动 → `AUI/RuntimeSourcePicker/` | 内容不变，仍带 `NSImage` | AppCore 里没有任何地方用它：它是 AppUI 两个 adapter 的输入，由 App 层的 `MainViewModel` 构造；断开的来源显示的是引擎消失前存下的图像，按 ID 已经找不回，改成描述值会变成通用图标 | 2 |
 | `MAC/Base/RuntimeObjectCellView.swift` | 修改 | 图标用 `.image`（第二步）；标题用 `attributedString(in:)`（第三步） | 解析 | 2、3 |
 | `MAC/Sidebar/Root/SidebarRootTableCellView.swift` | 修改 | 同上 | 同上 | 2、3 |
 | `MAC/Find/FindResultCellView.swift` | 修改 | 图标用 `image(size: metrics.iconSize)`、颜色用 `.color`（第二步）；按自己的 `metrics` 渲染标题（第三步） | 同上 | 2、3 |
@@ -674,7 +673,7 @@ enum AppCoreBoundary {
    - 行为：`appCoreNamingAnAppKitTypeOutsideThePendingFilesIsReported`
    - 行为：`foundationNamesAreNotReported`
    - 行为：`theIOSRouteViewControllerIsTheOnlyAllowedLine`
-2. **图标与图标颜色** —— 步骤为 2 的各行
+2. **图标与图标颜色**（已完成，2026-11-18）—— 步骤为 2 的各行
    - 行为：`everyIconDescriptorDrawsAnImage`
    - 行为：`theSameIconDescriptorReturnsTheSameCachedImage`
    - 行为：`anUnknownEngineIDDrawsThePlaceholder`
@@ -726,3 +725,4 @@ enum AppCoreBoundary {
 | 2026-11-18 | 共识 | 用户确认以上决定和「未经询问采用的做法」作为写提案的共识。 |
 | 2026-11-18 | Accepted | 用户批准，开始实现。四步共用一条功能分支，每做完一步就先在本地合进 `next` 的检出给用户看，用户同意后再推送 `next`、开始下一步；编号与 Implemented 等第四步合入后再定。 |
 | 2026-11-18 | 第一步完成 | 照计划做完。与提案不同的三处：一、规则 4、5 的行为用参数化样例覆盖（「要报告」与「不报告」两组），没有逐条单列成提案里写的几个测试名；另加两条守护测试：过渡清单里的文件不再违规或已不存在就失败（清单只减不增），`allowedLines` 里的条目对不上任何被报告的行就失败。二、Foundation 名字清单除了 AppCore 现在用到的，还预先收了几个确定属于 Foundation 的（`NSError`、`NSURL`、`NSCharacterSet`、`NSMakeRange`、`NSRangeException`、`NSRecursiveLock`）。三、iOS 一侧这一步只为 iOS 模拟器编了 `RuntimeViewerApplication` 包（AppCore、AppUI 的 UIKit 分支），没编 iOS App 本身：这一步没有改 iOS App 的任何代码。验证在 Ultra 上：包级构建、iOS 包构建与 macOS App（Tuist workspace，Debug）构建通过；AppCoreTests 与 AppUITests 共 1055 个测试，只有三条既有红灯失败（`TitleActivityIndicatorTests` 的悬停副标题、`ContentImageViewModelTests` 的图像失败重试、`FindCrossReferenceTests` 的 Call Hierarchy 超时），新加与搬家的测试全部通过。 |
+| 2026-11-18 | 第二步完成 | 照计划做完，与提案不同的四处，改动地图已按实际做法改写：一、`RuntimeSourcePickerContent` 没改成描述值，而是原样搬进 AppUI：AppCore 里没有任何地方用它，它是 AppUI 两个 adapter 的输入、由 App 层的 `MainViewModel` 构造；断开的来源显示的是引擎消失前存下的图像，按 ID 已经找不回，改成描述值会变成通用图标。二、`FindResultCellAppearance.iconAlpha` 保留为数字：同一个未解析符号在关系树里淡化、在交叉引用行里不淡化，透明度不由符号决定。三、`IconDescriptor.image(size:)` 推到第三步：这一步 Find 的图标尺寸还在 AppCore 里算，用不到它。四、`RuntimeObjectIconRendering` 的 key 成为 AppUI 内部的 `DependencyKey`，不是 `@DependencyEntry`，以保留原来「测试画空白图」的测试值。另外 Tuist 描述里重复了资源包 target 名，随资源搬家改成 AppUI 的。引擎图标按 ID 查找：live 值经 `RuntimeEngineManager.runtimeEngines` 找回引擎；测试用的提供者不跟随管理器，一律画通用可执行文件图标（解析调研里那条推测没有专门验证，Report 与来源选择器显示的引擎都由管理器创建）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1060 个，失败 4 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、`ReportSharedByEngineTests` 与 `BackgroundWorkProcessActivityTests` 整包跑时各一条），后两条单独重跑 14 个测试全部通过。 |
