@@ -130,7 +130,7 @@ public final class RuntimeSourceMenuAdapter: NSObject {
     private func makeSourceItem(for source: RuntimeSourcePickerContent.Source) -> NSMenuItem {
         let item = NSMenuItem(title: source.title, action: nil, keyEquivalent: "")
         // A copy, so that sizing it for the menu leaves the popover's rows alone.
-        if let image = source.image?.copy() as? NSImage {
+        if let image = source.icon?.image.copy() as? NSImage {
             image.size = Self.iconSize
             item.image = image
         }

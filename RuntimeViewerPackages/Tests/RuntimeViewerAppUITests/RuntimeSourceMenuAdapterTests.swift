@@ -16,11 +16,11 @@ import Testing
 struct RuntimeSourceMenuAdapterTests {
     private static let content = RuntimeSourcePickerContent(sections: [
         RuntimeSourcePickerContent.Section(title: "JH's Mac Studio", sources: [
-            RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", image: NSImage(size: NSSize(width: 32, height: 32)), isCurrent: true),
-            RuntimeSourcePickerContent.Source(engineIdentifier: "catalyst", title: "My Mac (Mac Catalyst)", image: nil, isCurrent: false),
+            RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", icon: .runtimeEngine(engineID: "local"), isCurrent: true),
+            RuntimeSourcePickerContent.Source(engineIdentifier: "catalyst", title: "My Mac (Mac Catalyst)", icon: nil, isCurrent: false),
         ]),
         RuntimeSourcePickerContent.Section(title: "iPhone", sources: [
-            RuntimeSourcePickerContent.Source(engineIdentifier: "springboard", title: "SpringBoard", image: nil, isCurrent: false),
+            RuntimeSourcePickerContent.Source(engineIdentifier: "springboard", title: "SpringBoard", icon: nil, isCurrent: false),
         ]),
     ])
 
@@ -75,22 +75,24 @@ struct RuntimeSourceMenuAdapterTests {
 
     @Test("the menu sizes copies of the icons, leaving the list's own images alone")
     func iconsAreSizedOnCopies() throws {
-        let image = try #require(Self.content.sections.first?.sources.first?.image)
+        let icon = try #require(Self.content.sections.first?.sources.first?.icon)
+        let image = icon.image
+        let originalSize = image.size
         let adapter = Self.makeAdapter()
 
         let myMac = try Self.item(titled: "My Mac", in: adapter.popUpButton.menu)
-        let originalSize = NSSize(width: 32, height: 32)
         #expect(myMac.image !== image)
         #expect(image.size == originalSize)
+        #expect(icon.image.size == originalSize)
     }
 
     @Test("while its engine is gone, the window's source leads the menu, dimmed and selected")
     func disconnectedSourceLeadsTheMenu() throws {
         let content = RuntimeSourcePickerContent(
-            disconnectedSource: RuntimeSourcePickerContent.Source(engineIdentifier: "gone", title: "iPad (Disconnected)", image: nil, isCurrent: true, isEnabled: false),
+            disconnectedSource: RuntimeSourcePickerContent.Source(engineIdentifier: "gone", title: "iPad (Disconnected)", icon: nil, isCurrent: true, isEnabled: false),
             sections: [
                 RuntimeSourcePickerContent.Section(title: "JH's Mac Studio", sources: [
-                    RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", image: nil, isCurrent: false),
+                    RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", icon: nil, isCurrent: false),
                 ]),
             ]
         )
@@ -167,8 +169,8 @@ struct RuntimeSourceMenuAdapterTests {
         let adapter = Self.makeAdapter()
         adapter.content = RuntimeSourcePickerContent(sections: [
             RuntimeSourcePickerContent.Section(title: "JH's Mac Studio", sources: [
-                RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", image: nil, isCurrent: false),
-                RuntimeSourcePickerContent.Source(engineIdentifier: "catalyst", title: "My Mac (Mac Catalyst)", image: nil, isCurrent: true),
+                RuntimeSourcePickerContent.Source(engineIdentifier: "local", title: "My Mac", icon: nil, isCurrent: false),
+                RuntimeSourcePickerContent.Source(engineIdentifier: "catalyst", title: "My Mac (Mac Catalyst)", icon: nil, isCurrent: true),
             ]),
         ])
 

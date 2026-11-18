@@ -216,9 +216,10 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
   - `NavigationHistoryItem.icon` 从 `NSImage` 改成 `IconDescriptor`：对象是 `.runtimeObject(kind)`，镜像是 `.imageKind(RuntimeImageKind(ofImageAt:))`。
   - App 构造菜单时画图：对象按 `image(size: NavigationHistorySnapshot.iconSize)`；镜像照 AGENTS.md「菜单里的镜像图标取 `coloredIcon`」，画 `kind.coloredIcon`。
   - `RxMenuItemRepresentable` 的一致性随类型留在 AppCore。
-- **依赖缓存**：`FileController` 的两段搬进 `AC/Engine/RuntimeEngineManager+DependencyCache.swift`，作为 `RuntimeEngineManager` 的扩展：
-  - `dependencyCacheChoices(for:)` 直接返回 `RuntimeSourcePickerContent.DependencyCacheChoice`。
-  - `pair(_:with:)` 原样搬。
+- **依赖缓存**：`FileController` 的两段搬进 `AC/Engine/RuntimeFileDependencyCaches.swift`，是 AppCore 内部一个带自己日志器的 `@Loggable enum`：
+  - `choices(for:runtimeEngineManager:settings:)` 直接返回 `RuntimeSourcePickerContent.DependencyCacheChoice`。
+  - `pair(_:with:runtimeEngineManager:)` 原样搬。
+  - 没有写成 `RuntimeEngineManager` 的扩展：配对成功要记一条日志，`#log` 用的是所在类型的日志器，而 `RuntimeEngineManager` 的日志器在另一个模块里，扩展里用不了。
 
   `FileController.DependencyCacheChoice` 删掉。`MainViewModel` 不再依赖 `fileController`。
 - **分享**：`SharingData.provider` 仍是 `NSItemProvider`。它是 Foundation 的类型，加进 `AppCoreBoundary.allowedSystemPrefixedNames`。
@@ -313,13 +314,13 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
 | `AUI/Activity/ToolbarActivityPresenter.swift` → `AC/Activity/ToolbarActivityPresenter.swift` | 移动 | 输出 `Driver<ToolbarActivity>` | 挑选与节流归 AppCore | 5 |
 | `AUI/Activity/ToolbarActivityState+Reports.swift` | 删除 | 内容进 `ToolbarActivity.swift` | 同上 | 5 |
 | `AUI/Activity/ToolbarActivityState+ToolbarActivity.swift` | 新增 | `ToolbarActivityState.init(_:)` | 值到显示状态 | 5 |
-| `AUT/ToolbarActivityStateTests.swift` → `ACT/ToolbarActivityTests.swift`；`AUT/ToolbarActivityPresenterTests.swift` → `ACT/` | 移动、改写 | 断言 `ToolbarActivity` | 随代码 | 5 |
-| `AUT/ToolbarActivityStateConversionTests.swift` | 新增 | 每个字段一一照抄 | 转换不丢信息 | 5 |
-| `AUI/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` → `AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` | 移动 | `Source.image: NSImage?` → `icon: IconDescriptor` | 回到 AppCore | 5 |
+| `AUT/ToolbarActivityPresenterTests.swift` → `ACT/ToolbarActivityPresenterTests.swift` | 移动、改写 | 断言 `ToolbarActivity`；加一例「不改变显示的重挑与原值相等」 | 随代码 | 5 |
+| `AUT/ToolbarActivityStateTests.swift` | 修改 | 留在 AppUI，改成经 `ToolbarActivity.make` 再经 `ToolbarActivityState.init(_:)` 测文字；加「每个字段一一照抄」与「两值相等当且仅当状态相等」两例 | 文字断言要用 RuntimeViewerUI 的分段辅助函数，所以连同转换一起测 | 5 |
+| `AUI/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` → `AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift` | 移动 | `Source.image: NSImage?` → `icon: IconDescriptor?`（可选，测试与将来可以列出不画图标的来源） | 回到 AppCore | 5 |
 | `AUI/RuntimeSourcePicker/RuntimeSourcePopoverAdapter.swift`、`RuntimeSourceMenuAdapter.swift` 及其测试 | 修改 | 画 `source.icon.image` | 跟随描述值 | 5 |
 | `AUI/Engine/RuntimeEngineIconProvider.swift` | 修改 | 按 engineID 记住最后画的图与选择器图标；`icon(forEngineID:)` 先用记下的；新增 `sourcePickerIcon(forEngineID:)` | 断开来源按 ID 取图 | 5 |
 | `AUT/RuntimeEngineIconProviderTests.swift` | 新增 | 引擎离开后按 ID 仍得到最后的图标 | 新行为 | 5 |
-| `AC/Engine/RuntimeEngineManager+DependencyCache.swift` | 新增 | `dependencyCacheChoices(for:)`、`pair(_:with:)` | 纯逻辑归 AppCore | 5 |
+| `AC/Engine/RuntimeFileDependencyCaches.swift` | 新增 | `choices(for:runtimeEngineManager:settings:)`、`pair(_:with:runtimeEngineManager:)` | 纯逻辑归 AppCore | 5 |
 | `MAC/App/FileController.swift` | 修改 | 删 `DependencyCacheChoice` 与两段方法 | 已搬走 | 5 |
 | `MAC/Main/MainViewModel.swift` → `AC/Main/MainViewModel.swift` | 移动 | `SwitchSourceState.icon`、`TitleIcon`、`activity` 改值；删 `fileController`、`runtimeEngineIconProvider` 与每窗口的图像缓存；`public` | 可测试 | 5 |
 | `MAC/Main/NavigationHistorySnapshot.swift` → `AC/Main/` | 移动 | 历史项的 `icon` 改 `IconDescriptor`；`public` | 随 ViewModel | 5 |
@@ -471,7 +472,7 @@ public struct RuntimeSourcePickerContent: Equatable {
     public struct Source: Equatable {
         public let engineIdentifier: String
         public let title: String
-        public let icon: IconDescriptor          // was image: NSImage?
+        public let icon: IconDescriptor?         // was image: NSImage?
         public let isCurrent: Bool
         public let isEnabled: Bool
     }
@@ -519,19 +520,19 @@ public struct NavigationHistoryItem: RxMenuItemRepresentable, Hashable, Sendable
 ### 依赖缓存
 
 ```swift
-// RuntimeViewerAppCore/Engine/RuntimeEngineManager+DependencyCache.swift
+// RuntimeViewerAppCore/Engine/RuntimeFileDependencyCaches.swift
 #if os(macOS)
-extension RuntimeEngineManager {
-    @MainActor
-    public func dependencyCacheChoices(for engine: RuntimeEngine) -> [RuntimeSourcePickerContent.DependencyCacheChoice]
-    @MainActor
-    public func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeFile.DependencyCache?) async throws
+@Loggable
+@MainActor
+enum RuntimeFileDependencyCaches {
+    static func choices(for engine: RuntimeEngine, runtimeEngineManager: RuntimeEngineManager, settings: SettingsAccess) -> [RuntimeSourcePickerContent.DependencyCacheChoice]
+    static func pair(_ engine: RuntimeEngine, with dependencyCache: RuntimeFile.DependencyCache?, runtimeEngineManager: RuntimeEngineManager) async throws
 }
 #endif
 ```
 
-- 函数体照搬，设置经 `@Dependency(\.settings)` 读取。
-- 日志改用 `private extension LogCategory` 里声明的分类（根 `AGENTS.md`「Logging」）。
+- 函数体照搬，管理器与设置由 `MainViewModel` 传入。
+- 日志照旧用类型自己的日志器（`@Loggable`），与原来在 `FileController` 里一样。
 
 ### MCP
 
@@ -662,13 +663,14 @@ extension MCPServerClientKey: @retroactive DependencyKey {
    - 行为：`attachInputIsAProcessTarget`（由类型保证）
    - 行为：`remoteAttachReportsInjectedEngineBeforeDismiss`（代码核对：先发出引擎，再 `.dismiss`）
    - 行为：`attachedDeviceProcessKeepsItsRowIcon`（App 内，构建与人工核对）
-5. **主窗口的 ViewModel 进 AppCore**：步骤 5 的各行。
+5. **主窗口的 ViewModel 进 AppCore**（已完成，2026-11-18）：步骤 5 的各行。
    - 行为：`toolbarActivityMatchesFormerDisplayState`
    - 行为：`toolbarActivityThrottlesOnDisplayedValue`
    - 行为：`toolbarActivityStateCopiesEveryField`
    - 行为：`sourcePickerContentDescribesEngineIcons`
    - 行为：`disconnectedSourceKeepsEngineIconDescriptor`
    - 行为：`iconProviderReturnsLastIconForDepartedEngine`
+   - 行为：`neverDrawnEngineGetsGenericIcon`
    - 行为：`titleIconIsApplicationWithoutImage`
    - 行为：`titleIconFollowsImageKind`
    - 行为：`historyItemsDescribeObjectAndImageIcons`

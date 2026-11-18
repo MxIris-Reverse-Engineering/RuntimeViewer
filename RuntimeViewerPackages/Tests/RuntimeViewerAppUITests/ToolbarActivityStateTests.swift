@@ -6,16 +6,59 @@ import RuntimeViewerUI
 
 /// What the activity display says about a report: the segments, which of them go first when the
 /// text does not fit, the separators of each style, and the progress (proposal
-/// `0071-xcode-activity-progress`).
+/// `0071-xcode-activity-progress`). RuntimeViewerAppCore works the activity out as a
+/// `ToolbarActivity` and RuntimeViewerAppUI copies it into the state the views take, so these go
+/// through both, as the window does.
 @Suite("Toolbar activity state")
 struct ToolbarActivityStateTests {
     private static let start = Date(timeIntervalSinceReferenceDate: 1000)
+
+    @Test("The state copies every field of the activity")
+    func toolbarActivityStateCopiesEveryField() {
+        let reportIdentifier = UUID()
+        let activity = ToolbarActivity(
+            reportIdentifier: reportIdentifier,
+            isCompleted: true,
+            segments: [
+                .init("Indexing", priority: 2, separator: .space),
+                .init("Succeeded", priority: 1, isEmphasized: true, separator: .primary),
+                .init("Today at 19:33", priority: 3),
+            ],
+            progress: .determinate(percent: 42),
+            activityCount: 3
+        )
+
+        let state = ToolbarActivityState(activity)
+
+        #expect(state == ToolbarActivityState(
+            reportIdentifier: reportIdentifier,
+            isCompleted: true,
+            segments: [
+                ActivityTextSegment("Indexing", priority: 2, separator: .space),
+                ActivityTextSegment("Succeeded", priority: 1, isEmphasized: true, separator: .primary),
+                ActivityTextSegment("Today at 19:33", priority: 3),
+            ],
+            progress: .determinate(percent: 42),
+            activityCount: 3
+        ))
+        #expect(ToolbarActivityState(ToolbarActivity(reportIdentifier: nil, isCompleted: false, segments: [], progress: .indeterminate, activityCount: 0)).progress == .indeterminate)
+    }
+
+    @Test("Two activities are equal exactly when their states are")
+    func toolbarActivityMatchesFormerDisplayState() {
+        let report = ActivityReport(kind: .backgroundIndexing, startDate: Self.start, finishedCount: 1, totalCount: 2, fractionCompleted: 0.5)
+        let runningActivity = ToolbarActivity.make(for: .init(report: report, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start)
+        let idleActivity = ToolbarActivity.make(for: .init(report: nil, activityCount: 0, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start)
+
+        #expect((runningActivity == idleActivity) == (ToolbarActivityState(runningActivity) == ToolbarActivityState(idleActivity)))
+        #expect(ToolbarActivityState(runningActivity) == ToolbarActivityState(runningActivity))
+    }
 
     @Test("A running report reads as its kind and its count, the count kept longest")
     func runningReportText() {
         let report = ActivityReport(kind: .backgroundIndexing, startDate: Self.start, finishedCount: 12, totalCount: 48, fractionCompleted: 0.3)
 
-        let state = ToolbarActivityState.make(for: .init(report: report, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start)
+        let state = ToolbarActivityState(ToolbarActivity.make(for: .init(report: report, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start))
 
         #expect(state.segments.plainText(primarySeparator: " │ ") == "Indexing │ 12 of 48 images")
         #expect(state.segments.plainText(primarySeparator: " • ") == "Indexing • 12 of 48 images")
@@ -30,7 +73,7 @@ struct ToolbarActivityStateTests {
     func runningTitles(kind: ReportCategory, text: String) {
         let report = ActivityReport(kind: kind, startDate: Self.start, totalCount: 1, fractionCompleted: 0)
 
-        #expect(ActivityText.runningSegments(for: report).plainText(primarySeparator: " │ ") == text)
+        #expect(ActivityText.runningSegments(for: report).map(ActivityTextSegment.init).plainText(primarySeparator: " │ ") == text)
     }
 
     @Test("A running report shows its progress in whole percent; one without a fraction is indeterminate")
@@ -38,8 +81,8 @@ struct ToolbarActivityStateTests {
         let measuredReport = ActivityReport(kind: .searchableInterfaces, startDate: Self.start, totalCount: 3, fractionCompleted: 0.375)
         let unmeasuredReport = ActivityReport(kind: .searchableInterfaces, startDate: Self.start, totalCount: 3, fractionCompleted: nil)
 
-        let measuredState = ToolbarActivityState.make(for: .init(report: measuredReport, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start)
-        let unmeasuredState = ToolbarActivityState.make(for: .init(report: unmeasuredReport, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start)
+        let measuredState = ToolbarActivityState(ToolbarActivity.make(for: .init(report: measuredReport, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start))
+        let unmeasuredState = ToolbarActivityState(ToolbarActivity.make(for: .init(report: unmeasuredReport, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start))
 
         #expect(measuredState.progress == .determinate(percent: 37))
         #expect(unmeasuredState.progress == .indeterminate)
@@ -67,7 +110,7 @@ struct ToolbarActivityStateTests {
         (kind: .crossReferences, outcome: .cancelled, text: "Cross References Cancelled"),
     ])
     func completedReportText(kind: ReportCategory, outcome: ActivityReport.Outcome, text: String) throws {
-        let segments = ActivityText.completedSegments(for: kind, completion: .init(outcome: outcome, date: Self.start))
+        let segments = ActivityText.completedSegments(for: kind, completion: .init(outcome: outcome, date: Self.start)).map(ActivityTextSegment.init)
 
         let versions = segments.versionsDroppingSegmentsByPriority()
         #expect(versions.count == 3)
@@ -82,7 +125,7 @@ struct ToolbarActivityStateTests {
         var report = ActivityReport(kind: .backgroundIndexing, startDate: Self.start, finishedCount: 4, totalCount: 4, fractionCompleted: 1)
         report.completion = .init(outcome: .succeeded, date: Self.start + 5)
 
-        let state = ToolbarActivityState.make(for: .init(report: report, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start)
+        let state = ToolbarActivityState(ToolbarActivity.make(for: .init(report: report, activityCount: 1, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start))
 
         #expect(state.reportIdentifier == report.id)
         #expect(state.isCompleted)
@@ -92,7 +135,7 @@ struct ToolbarActivityStateTests {
 
     @Test("Before anything ran, the display reads as the source being ready, the time dropped first")
     func idleText() {
-        let state = ToolbarActivityState.make(for: .init(report: nil, activityCount: 0, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start)
+        let state = ToolbarActivityState(ToolbarActivity.make(for: .init(report: nil, activityCount: 0, nextUpdateDate: nil), sourceName: "My Mac", readyDate: Self.start))
 
         #expect(state.reportIdentifier == nil)
         #expect(state.progress == nil)

@@ -721,10 +721,14 @@ with the same signals. Specs with addresses: `/Volumes/RE/Xcode/26.6/README.md` 
   `ReportCategory` case, an `ActivityRunTracker` and its words in `ActivityText`. Manual Loading, the
   images the user loads, is a `ReportCategory` the reporter deliberately does not follow: it is not
   background work, and its progress already shows where the user started it.
-- `ToolbarActivityState` and `ActivityTextSegment` live in `RuntimeViewerUI`, below
-  `RuntimeViewerAppUI`, because the views that take them do; `ToolbarActivityPresenter`, which makes them
-  from the Reports, is in RuntimeViewerAppUI for the same reason. The views take no RxSwift; their
-  clicks are `NSControl` actions that open the Report navigator.
+- `ToolbarActivityPresenter` and `ActivityText` are RuntimeViewerAppCore's: they make a `ToolbarActivity`,
+  a value, from the Reports, and `MainViewModel` hands it on. `ToolbarActivityState` and `ActivityTextSegment`
+  live in `RuntimeViewerUI`, below the application layer, because the views that take them do;
+  RuntimeViewerAppUI's `ToolbarActivityState.init(_:)` copies an activity into one field by field, and the
+  window controller does that before it hands the views the state. Two activities are equal exactly when
+  their states are, so the presenter drops repeats and holds changes back on the activity as it would on
+  the state. The views take no RxSwift; their clicks are `NSControl` actions that open the Report
+  navigator.
 - The capsule is 40 % of the toolbar wide through UIFoundation's
   `NSToolbar.box.preferredCenteredItemWidthRatio`, set before the toolbar goes into the window: it lays
   nothing out by itself. The ratio goes back to −1, no preference, while the picker is the centered item.

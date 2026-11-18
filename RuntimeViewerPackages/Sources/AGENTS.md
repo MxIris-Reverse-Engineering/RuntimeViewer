@@ -17,7 +17,8 @@ The apps' application layer is two targets and a facade
   The one exception is the iOS route's `UIViewController`, which XCoordinator's protocols name.
 - **`RuntimeViewerAppUI/`** holds the UI glue: the adapters that set up AppKit and AppKitPlus controls
   (`NavigatorTextFilterFieldAdapter`, the Find page's and the runtime source picker's), the jump bar's
-  path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`,
+  path items, the toolbar activity views' state made from RuntimeViewerAppCore's `ToolbarActivity`
+  (`ToolbarActivityState.init(_:)`), `FindResultsPresentation.apply(to:)`,
   the coordinator that opens the app's own windows, the transitions that drive AppKitPlus's navigation
   controller (`Base/Transition+Navigation.swift`), the Find query field's content as a `FindQueryTerm` and
   back, and the live implementations of the services RuntimeViewerAppCore declares (below).
@@ -80,8 +81,11 @@ supplies, because that package depends on RuntimeViewerAppCore and so this modul
 `ColorDescriptor.color` in AppUI's `Presentation/`): a system symbol (`SystemSymbol`, names only), a kind of
 image, an object's glyph or a letter badge (`RuntimeObjectIcon.Glyph`, which AppCore picks and AppUI draws with
 UIFoundation's `IDEIcon` through `runtimeObjectIconRendering`), one of the Find navigator's row symbols, or an
-engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` finds it among the manager's
-engines). A cell's `Appearance` carries the descriptors and the cell view draws them, on the main thread:
+engine by its `engineID` (AppUI's `RuntimeEngineIconProvider.icon(forEngineID:)` and
+`sourcePickerIcon(forEngineID:)` find it among the manager's engines, and for an engine the manager no longer
+holds answer with the icon they last drew for it — what the runtime source picker shows for a window whose
+engine went away). A view that draws engines' icons draws them again on the provider's
+`recordedIconsChanged`: an injected device process's icon is recorded after its engine has been listed. A cell's `Appearance` carries the descriptors and the cell view draws them, on the main thread:
 `IDEIcon` keeps its images in a dictionary without a lock, so tests that draw icons run on the main actor.
 AppUI also keeps the drawing under the names AppCore used to have — `RuntimeImageKind.icon`, `iconColor`,
 `coloredIcon`, `RuntimeObjectIcon.icon(for:)` — for the views that draw an image directly. `CustomSymbol`

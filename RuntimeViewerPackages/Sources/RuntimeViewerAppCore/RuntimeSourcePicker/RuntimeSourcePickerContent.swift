@@ -1,6 +1,5 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+#if os(macOS)
 
-import AppKit
 import RuntimeViewerCore
 
 /// What the toolbar's runtime source picker lists when it opens: the sources a window can move to,
@@ -8,7 +7,8 @@ import RuntimeViewerCore
 /// window's file can read its dependencies from.
 ///
 /// The window's view model works it out from the engine manager's sections, as it worked out the
-/// pop-up menu this picker replaced; `RuntimeSourcePopoverAdapter` turns it into the popover's rows.
+/// pop-up menu this picker replaced; RuntimeViewerAppUI's `RuntimeSourcePopoverAdapter` and
+/// `RuntimeSourceMenuAdapter` turn it into rows and draw the icons.
 public struct RuntimeSourcePickerContent: Equatable {
     /// One source the window can move to — an engine.
     public struct Source: Equatable {
@@ -17,7 +17,10 @@ public struct RuntimeSourcePickerContent: Equatable {
 
         public let title: String
 
-        public let image: NSImage?
+        /// The engine's icon, `.runtimeEngine(engineID:)` — the source the window was on before
+        /// its engine went away included: RuntimeViewerAppUI's engine icon provider keeps the last
+        /// icon it drew for an engine. `nil` draws none.
+        public let icon: IconDescriptor?
 
         /// Whether the window is on this source: its row is checked.
         public let isCurrent: Bool
@@ -26,10 +29,10 @@ public struct RuntimeSourcePickerContent: Equatable {
         /// went away cannot.
         public let isEnabled: Bool
 
-        public init(engineIdentifier: String, title: String, image: NSImage?, isCurrent: Bool, isEnabled: Bool = true) {
+        public init(engineIdentifier: String, title: String, icon: IconDescriptor?, isCurrent: Bool, isEnabled: Bool = true) {
             self.engineIdentifier = engineIdentifier
             self.title = title
-            self.image = image
+            self.icon = icon
             self.isCurrent = isCurrent
             self.isEnabled = isEnabled
         }

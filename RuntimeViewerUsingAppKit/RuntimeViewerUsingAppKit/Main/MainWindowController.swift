@@ -51,6 +51,10 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let resetFontSizeRelay = PublishRelay<Void>()
 
+    /// Draws the engines' icons the view model describes by identifier, and says when one it could
+    /// not draw before has been recorded, so the pickers draw them again.
+    @Dependency(\.runtimeEngineIconProvider) private var runtimeEngineIconProvider
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowGenerator: .init())
@@ -140,7 +144,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         }
         .disposed(by: rx.disposeBag)
 
-        output.activity.driveOnNext { [weak self] state in
+        output.activity.map(ToolbarActivityState.init).driveOnNext { [weak self] state in
             guard let self else { return }
             // Both displays take every state, the ones off screen without animating, so a change of
             // style shows the activity where it stands. The classic toolbar shows neither.
@@ -150,9 +154,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         }
         .disposed(by: rx.disposeBag)
 
-        output.toolbarIcon.driveOnNext { [weak self] icon in
+        output.toolbarIcon.driveOnNext { [weak self] titleIcon in
             guard let self else { return }
-            toolbarController.activityTitleItem.displayImage = icon
+            toolbarController.activityTitleItem.displayImage = Self.titleImage(for: titleIcon)
         }
         .disposed(by: rx.disposeBag)
 
@@ -231,21 +235,28 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         }
         .disposed(by: rx.disposeBag)
 
-        output.switchSourceState.driveOnNext { [weak self] state in
-            guard let self else { return }
-            for picker in toolbarController.runtimeSourcePickers {
-                picker.title = state.title
-                picker.icon = state.pickerIcon
-            }
-        }
-        .disposed(by: rx.disposeBag)
+        // The icons are described by engine; an injected device process's is recorded only once
+        // its engine has reported in, after the list was drawn, so both are drawn again then.
+        let recordedIconsChanged = runtimeEngineIconProvider.recordedIconsChanged.startWith(())
 
-        output.runtimeSourcePickerContent.driveOnNext { [weak self] content in
-            guard let self else { return }
-            runtimeSourcePopoverAdapter.content = content
-            runtimeSourceMenuAdapter.content = content
-        }
-        .disposed(by: rx.disposeBag)
+        Driver.combineLatest(output.switchSourceState, recordedIconsChanged) { state, _ in state }
+            .driveOnNext { [weak self] state in
+                guard let self else { return }
+                let pickerIcon = runtimeEngineIconProvider.sourcePickerIcon(forEngineID: state.selectedEngineIdentifier)
+                for picker in toolbarController.runtimeSourcePickers {
+                    picker.title = state.title
+                    picker.icon = pickerIcon
+                }
+            }
+            .disposed(by: rx.disposeBag)
+
+        Driver.combineLatest(output.runtimeSourcePickerContent, recordedIconsChanged) { content, _ in content }
+            .driveOnNext { [weak self] content in
+                guard let self else { return }
+                runtimeSourcePopoverAdapter.content = content
+                runtimeSourceMenuAdapter.content = content
+            }
+            .disposed(by: rx.disposeBag)
 
         // The press opens the list from the picker pressed. Like a menu, the list is the view
         // layer's; what is chosen in it goes back to the view model as input.
@@ -284,13 +295,34 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
     /// spelled out here once rather than at both call sites.
     private func bindHistoryMenu(_ menu: NSMenu, to items: Driver<[NavigationHistoryItem]>) -> Disposable {
         menu.rx.items(source: items.asObservable())({ menuItem, item in
-            menuItem.image = item.icon
+            menuItem.image = Self.historyMenuImage(for: item.icon)
             #if compiler(>=6.4)
             if #available(macOS 27.0, *) {
                 menuItem.preferredImageVisibility = .visible
             }
             #endif
         })
+    }
+
+    /// A history step's icon in the menu: an image as it is, coloured as every menu of images draws
+    /// it, an object's glyph at the menus' size.
+    private static func historyMenuImage(for icon: IconDescriptor) -> NSImage {
+        if case .imageKind(let kind) = icon {
+            return kind.coloredIcon
+        }
+        return icon.image(size: NavigationHistorySnapshot.iconSize)
+    }
+
+    /// The title's icon in Xcode 27's style: one glyph in one colour, as Xcode 27 draws its project
+    /// icon — the image kind's in that kind's colour, or the app's own symbol in blue while no image
+    /// is open.
+    private static func titleImage(for titleIcon: MainViewModel.TitleIcon) -> NSImage? {
+        switch titleIcon {
+        case .application:
+            TitleDocumentIcon.image(symbol: SFSymbols(name: RuntimeViewerSymbols.runtimeViewer).nsImage, color: .systemBlue)
+        case .imageKind(let kind):
+            TitleDocumentIcon.image(symbol: kind.icon, color: kind.iconColor)
+        }
     }
 
     private func presentOpenPanel() {

@@ -199,7 +199,7 @@ public final class RuntimeSourcePopoverAdapter: NSObject {
     private func makeSourceItem(_ source: RuntimeSourcePickerContent.Source) -> NSNavigationPopoverItem {
         makeCheckedItem(
             title: source.title,
-            image: source.image,
+            image: source.icon?.image,
             isChecked: source.isCurrent,
             isEnabled: source.isEnabled,
             row: .source(engineIdentifier: source.engineIdentifier)

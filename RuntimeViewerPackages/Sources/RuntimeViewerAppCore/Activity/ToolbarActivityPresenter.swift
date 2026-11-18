@@ -1,7 +1,5 @@
 import Foundation
-import RuntimeViewerAppCore
 import RuntimeViewerArchitectures
-import RuntimeViewerUI
 
 /// What a window's activity display shows: the activity reports of the engine the document is on,
 /// picked and timed the way Xcode's activity view picks and times them.
@@ -9,26 +7,27 @@ import RuntimeViewerUI
 /// The reports are the engine's (`RuntimeEngineActivityReporter`); the choice and its timing are
 /// the window's own (`ActivityReportSelector`), as each Xcode window has an activity data source of
 /// its own over the workspace's reports. A document that moves to another engine starts over:
-/// idle, ready from the moment it moved.
+/// idle, ready from the moment it moved. RuntimeViewerAppUI turns each activity into the
+/// `ToolbarActivityState` the toolbar's views take.
 @MainActor
 public final class ToolbarActivityPresenter {
     /// How often the display takes a new state at most — Xcode's `IDEActivityViewUpdateThreshold`.
     /// The first change after a quiet second shows at once, the last one of a busy second at its end.
     static let updateThreshold: RxTimeInterval = .seconds(1)
 
-    /// The display's state.
-    public let state: Driver<ToolbarActivityState>
+    /// What the display shows.
+    public let activity: Driver<ToolbarActivity>
 
     public convenience init(documentState: DocumentState) {
         self.init(documentState: documentState, scheduler: MainScheduler.instance, now: Date.init)
     }
 
     init(documentState: DocumentState, scheduler: SchedulerType, now: @escaping () -> Date) {
-        state = documentState.$runtimeEngineSession.asObservable()
-            .flatMapLatest { session -> Observable<ToolbarActivityState> in
+        activity = documentState.$runtimeEngineSession.asObservable()
+            .flatMapLatest { session -> Observable<ToolbarActivity> in
                 MainActor.assumeIsolated {
                     let snapshots = Self.snapshots(of: session)
-                    return Self.states(
+                    return Self.activities(
                         from: snapshots,
                         sourceName: session.engine.source.description,
                         readyDate: now(),
@@ -53,16 +52,16 @@ public final class ToolbarActivityPresenter {
         }
     }
 
-    /// The display's states for one engine's snapshots, before the update threshold: one for every
-    /// snapshot, and one more whenever the selection can change on its own — a run reaching its
+    /// The display's activities for one engine's snapshots, before the update threshold: one for
+    /// every snapshot, and one more whenever the selection can change on its own — a run reaching its
     /// display delay, the report on screen reaching its minimum time.
-    static func states(
+    static func activities(
         from snapshots: Observable<ActivityReportsSnapshot>,
         sourceName: String,
         readyDate: Date,
         scheduler: SchedulerType,
         now: @escaping () -> Date
-    ) -> Observable<ToolbarActivityState> {
+    ) -> Observable<ToolbarActivity> {
         Observable.create { observer in
             var selector = ActivityReportSelector()
             var latestSnapshot = ActivityReportsSnapshot.empty

@@ -1,13 +1,14 @@
-import AppKit
+#if os(macOS)
+
+import Foundation
 import UniformTypeIdentifiers
+import MemberwiseInit
 import RuntimeViewerCore
 import RuntimeViewerInjection
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 import RuntimeViewerCommunication
 import RuntimeViewerEngineManagement
 import RuntimeViewerSettings
-import RuntimeViewerUI
 
 enum MessageError: LocalizedError {
     case message(String)
@@ -20,139 +21,136 @@ enum MessageError: LocalizedError {
     }
 }
 
-struct SharingData {
-    let provider: NSItemProvider
-    let title: String
-    let iconType: RuntimeObjectKind
+/// The object on screen, offered to the toolbar's share button as its interface file.
+public struct SharingData {
+    public let provider: NSItemProvider
+    public let title: String
+    public let iconType: RuntimeObjectKind
 }
 
-struct SwitchSourceState: Equatable {
-    let title: String
-    /// The source's icon in a list: a machine's glyph squared.
-    let image: NSImage?
-    /// The source's icon in the toolbar's runtime source picker: a machine's glyph as the symbol it
-    /// is, which Xcode 27's style draws at its own size.
-    let pickerIcon: RuntimeSourcePicker.Icon?
-    let isDisconnected: Bool
-    let selectedEngineIdentifier: String
-
-    static func == (leftState: Self, rightState: Self) -> Bool {
-        leftState.title == rightState.title
-            && leftState.isDisconnected == rightState.isDisconnected
-            && leftState.selectedEngineIdentifier == rightState.selectedEngineIdentifier
-            && leftState.image === rightState.image
-            && leftState.pickerIcon == rightState.pickerIcon
-    }
+/// What the runtime source pickers show: the source the window is on.
+public struct SwitchSourceState: Equatable {
+    public let title: String
+    /// The source's icon, `.runtimeEngine(engineID:)`. The view draws it as a list draws it, or as
+    /// the toolbar's picker does — a machine's glyph as the symbol it is, which Xcode 27's style
+    /// draws at its own size — and draws it again when an engine's icon is recorded. While the
+    /// engine is gone the icon provider answers with the icon it last drew for it.
+    public let icon: IconDescriptor
+    public let isDisconnected: Bool
+    public let selectedEngineIdentifier: String
 }
 
-final class MainViewModel: ViewModel<MainRoute> {
+public final class MainViewModel: ViewModel<MainRoute> {
     /// Bounds for the View menu's font-size commands, applied to `Settings.theme.fontSize`.
     private static let minimumFontSize: Double = 8
     private static let maximumFontSize: Double = 32
 
     private static let fontSizeThrottleMilliseconds: Int = 120
 
-    struct Input {
-        let sidebarBackClick: Signal<Void>
-        let navigationPreviousClick: Signal<Void>
-        let navigationNextClick: Signal<Void>
+    @MemberwiseInit(.public)
+    public struct Input {
+        public let sidebarBackClick: Signal<Void>
+        public let navigationPreviousClick: Signal<Void>
+        public let navigationNextClick: Signal<Void>
         /// Target index into the focused tab's history, chosen from a
         /// long-press history menu on either navigation segment.
-        let navigationHistorySelected: Signal<Int>
-        let saveClick: Signal<Void>
+        public let navigationHistorySelected: Signal<Int>
+        public let saveClick: Signal<Void>
         /// The engine identifier of a source chosen in the runtime source picker's list.
-        let switchSource: Signal<String>
-        let generationOptionsClick: Signal<Void>
-        let increaseFontSize: Signal<Void>
-        let decreaseFontSize: Signal<Void>
-        let resetFontSize: Signal<Void>
-        let loadFrameworksClick: Signal<Void>
+        public let switchSource: Signal<String>
+        public let generationOptionsClick: Signal<Void>
+        public let increaseFontSize: Signal<Void>
+        public let decreaseFontSize: Signal<Void>
+        public let resetFontSize: Signal<Void>
+        public let loadFrameworksClick: Signal<Void>
 //        let installHelperClick: Signal<Void>
-        let attachToProcessClick: Signal<Void>
-        let mcpStatusClick: Signal<Void>
+        public let attachToProcessClick: Signal<Void>
+        public let mcpStatusClick: Signal<Void>
         /// A click on the toolbar's activity display: the Report navigator lists the work in detail.
-        let activityClick: Signal<Void>
-        let frameworksSelected: Signal<[URL]>
-        let saveLocationSelected: Signal<URL>
+        public let activityClick: Signal<Void>
+        public let frameworksSelected: Signal<[URL]>
+        public let saveLocationSelected: Signal<URL>
         /// A choice from the runtime source picker's Dependency Cache level, for
         /// the file engine the window is on: `nil` reads the file alone.
-        let dependencyCacheSelected: Signal<RuntimeFile.DependencyCache?>
+        public let dependencyCacheSelected: Signal<RuntimeFile.DependencyCache?>
     }
 
-    struct Output {
+    public struct Output {
         /// Everything the `TitleToolbarItem` (and the window title) shows is
         /// derived here from `DocumentState` rather than pushed in by whichever
         /// pane happens to become visible — the panes have no business owning
         /// window-level chrome, and the push model used to leave the subtitle
         /// stale whenever a reused controller rebound.
-        let windowTitle: Driver<String>
-        let toolbarTitle: Driver<String>
-        let toolbarSubtitle: Driver<String>
-        let sharingServiceData: Observable<[SharingData]>
-        let isSavable: Driver<Bool>
-        let isSidebarBackHidden: Driver<Bool>
-        let isNavigationHidden: Driver<Bool>
-        let canGoPrevious: Driver<Bool>
-        let canGoNext: Driver<Bool>
-        let navigationHistory: Driver<NavigationHistorySnapshot>
+        public let windowTitle: Driver<String>
+        public let toolbarTitle: Driver<String>
+        public let toolbarSubtitle: Driver<String>
+        public let sharingServiceData: Observable<[SharingData]>
+        public let isSavable: Driver<Bool>
+        public let isSidebarBackHidden: Driver<Bool>
+        public let isNavigationHidden: Driver<Bool>
+        public let canGoPrevious: Driver<Bool>
+        public let canGoNext: Driver<Bool>
+        public let navigationHistory: Driver<NavigationHistorySnapshot>
         /// What the runtime source pickers show: the source the window is on.
-        let switchSourceState: Driver<SwitchSourceState>
+        public let switchSourceState: Driver<SwitchSourceState>
         /// What the runtime source picker lists when it opens.
-        let runtimeSourcePickerContent: Driver<RuntimeSourcePickerContent>
-        let attachAvailability: Driver<AttachAvailability>
+        public let runtimeSourcePickerContent: Driver<RuntimeSourcePickerContent>
+        public let attachAvailability: Driver<AttachAvailability>
         /// Load Frameworks… loads an image into the engine's process, which a
         /// file engine does not have.
-        let isLoadFrameworksEnabled: Driver<Bool>
-        let requestFrameworkSelection: Signal<Void>
-        let requestSaveLocation: Signal<(name: String, type: UTType)>
-        let requestRestartConfirmation: Signal<Void>
+        public let isLoadFrameworksEnabled: Driver<Bool>
+        public let requestFrameworkSelection: Signal<Void>
+        public let requestSaveLocation: Signal<(name: String, type: UTType)>
+        public let requestRestartConfirmation: Signal<Void>
         /// Where the toolbar shows the activity: the user's setting as it stands on this system,
         /// never `.automatic`.
-        let activityStyle: Driver<Settings.ToolbarActivityStyle>
+        public let activityStyle: Driver<Settings.ToolbarActivityStyle>
         /// What the toolbar's activity display shows, in the capsule or in the window title's
-        /// progress ring as `activityStyle` says.
-        let activity: Driver<ToolbarActivityState>
+        /// progress ring as `activityStyle` says. RuntimeViewerAppUI turns it into the
+        /// `ToolbarActivityState` the views take.
+        public let activity: Driver<ToolbarActivity>
         /// The title's icon in Xcode 27's style, which the progress ring takes the place of.
-        let toolbarIcon: Driver<NSImage?>
+        public let toolbarIcon: Driver<TitleIcon>
     }
 
     /// The title's icon: the kind of the image the title names, as one glyph in one colour, as
     /// Xcode 27 draws its project icon — in the colour Xcode gives that kind of file
     /// (`RuntimeImageKind.iconColor`) — and while no image is open the app's own symbol, in blue,
-    /// rather than a picture of the app icon among the glyphs.
-    private static func toolbarIcon(for imageNode: RuntimeImageNode?) -> NSImage? {
-        guard let imageNode else {
-            return TitleDocumentIcon.image(symbol: SFSymbols(name: RuntimeViewerSymbols.runtimeViewer).nsImage, color: .systemBlue)
-        }
-        let kind = imageNode.kind
-        return TitleDocumentIcon.image(symbol: kind.icon, color: kind.iconColor)
+    /// rather than a picture of the app icon among the glyphs. The view draws it; the app's symbol
+    /// is in the app's asset catalog.
+    public enum TitleIcon: Hashable, Sendable {
+        case application
+        case imageKind(RuntimeImageKind)
     }
 
-    /// The icon of a step in the history menu: the object's, or for an image what it is part of.
-    private static func historyIcon(for entry: NavigationEntry) -> NSImage {
-        switch entry.content {
+    static func toolbarIcon(for imageNode: RuntimeImageNode?) -> TitleIcon {
+        guard let imageNode else { return .application }
+        return .imageKind(imageNode.kind)
+    }
+
+    /// One step of the history menu. An object and its Generated Interface are two steps: the title
+    /// tells them apart. The icon is the object's, or for an image what it is part of.
+    static func historyItem(for entry: NavigationEntry, at index: Int) -> NavigationHistoryItem {
+        let icon: IconDescriptor = switch entry.content {
         case .object(let object, _):
-            RuntimeObjectIcon.icon(for: object.kind, size: NavigationHistorySnapshot.iconSize)
+            .runtimeObject(object.kind, size: NavigationHistorySnapshot.iconSize)
         case .image(let path):
-            RuntimeImageKind(ofImageAt: path).coloredIcon
+            .imageKind(RuntimeImageKind(ofImageAt: path))
         }
+        return NavigationHistoryItem(
+            index: index,
+            displayName: entry.showsGeneratedInterface ? "\(entry.displayName) (Generated Interface)" : entry.displayName,
+            icon: icon
+        )
     }
 
     private lazy var toolbarActivityPresenter = ToolbarActivityPresenter(documentState: documentState)
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
-    @Dependency(\.runtimeEngineIconProvider) private var runtimeEngineIconProvider
-
-    @Dependency(\.fileController) private var fileController
-
     @RxObserved private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
 
     private var cachedSelectedEngineName: String = RuntimeEngine.local.source.description
-
-    private var cachedSelectedEngineImage: NSImage?
-
-    private var cachedSelectedEnginePickerIcon: RuntimeSourcePicker.Icon?
 
     /// Whether this engine reached us through another Mac rather than being one this
     /// process connected to itself.
@@ -167,15 +165,13 @@ final class MainViewModel: ViewModel<MainRoute> {
     /// Moves the window to `engine`, which is ready.
     private func switchToEngine(_ engine: RuntimeEngine) {
         cachedSelectedEngineName = engine.source.description
-        cachedSelectedEngineImage = runtimeEngineIconProvider.icon(for: engine)
-        cachedSelectedEnginePickerIcon = runtimeEngineIconProvider.sourcePickerIcon(for: engine)
         router.trigger(.main(engine))
         selectedEngineIdentifier = engine.engineID
     }
 
     private let requestRestartConfirmationRelay = PublishRelay<Void>()
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         rx.disposeBag = DisposeBag()
 
         // The engine the document opened on, which is not "My Mac" for a file
@@ -366,7 +362,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    try await fileController.pair(engine, with: dependencyCache)
+                    try await RuntimeFileDependencyCaches.pair(engine, with: dependencyCache, runtimeEngineManager: runtimeEngineManager)
                 } catch {
                     errorRelay.accept(error)
                 }
@@ -436,44 +432,33 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
             .distinctUntilChanged()
 
-        // The manager's sections, re-emitted when an icon lands after them.
-        //
-        // An injected device process's icon does: the attach flow can only file
-        // it once that process's engine has reported in, by which time the list
-        // has been published and drawn. Both consumers below resolve icons, so
-        // both need the nudge — the menu rows and the toolbar button's own image.
-        let runtimeEngineSections = Driver.combineLatest(
-            runtimeEngineManager.rx.runtimeEngineSections,
-            runtimeEngineIconProvider.recordedIconsChanged.startWith(()),
-        ) { sections, _ in sections }
+        // The manager's sections. An icon that lands after them — an injected device process's,
+        // which the attach sheet files once that process's engine has reported in — is drawn
+        // again by the view, which follows the icon provider; the icons here are descriptions.
+        let runtimeEngineSections = runtimeEngineManager.rx.runtimeEngineSections
 
         let switchSourceState = Driver.combineLatest(
             runtimeEngineSections,
             $selectedEngineIdentifier.asDriver()
         ).map { [weak self] sections, selectedIdentifier -> SwitchSourceState in
+            let icon = IconDescriptor.runtimeEngine(engineID: selectedIdentifier)
             guard let self else {
-                return SwitchSourceState(title: "RuntimeViewer", image: nil, pickerIcon: nil, isDisconnected: true, selectedEngineIdentifier: selectedIdentifier)
+                return SwitchSourceState(title: "RuntimeViewer", icon: icon, isDisconnected: true, selectedEngineIdentifier: selectedIdentifier)
             }
             let allEngines = sections.flatMap(\.engines)
             if let engine = allEngines.first(where: { $0.engineID == selectedIdentifier }) {
                 let name = engine.source.description
-                let image = runtimeEngineIconProvider.icon(for: engine)
-                let pickerIcon = runtimeEngineIconProvider.sourcePickerIcon(for: engine)
                 cachedSelectedEngineName = name
-                cachedSelectedEngineImage = image
-                cachedSelectedEnginePickerIcon = pickerIcon
                 return SwitchSourceState(
                     title: name,
-                    image: image,
-                    pickerIcon: pickerIcon,
+                    icon: icon,
                     isDisconnected: false,
                     selectedEngineIdentifier: selectedIdentifier
                 )
             } else {
                 return SwitchSourceState(
                     title: cachedSelectedEngineName + " (Disconnected)",
-                    image: cachedSelectedEngineImage,
-                    pickerIcon: cachedSelectedEnginePickerIcon,
+                    icon: icon,
                     isDisconnected: true,
                     selectedEngineIdentifier: selectedIdentifier
                 )
@@ -492,7 +477,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             let disconnectedSource = state.isDisconnected ? RuntimeSourcePickerContent.Source(
                 engineIdentifier: state.selectedEngineIdentifier,
                 title: state.title,
-                image: state.image,
+                icon: state.icon,
                 isCurrent: true,
                 isEnabled: false
             ) : nil
@@ -505,19 +490,17 @@ final class MainViewModel: ViewModel<MainRoute> {
                             RuntimeSourcePickerContent.Source(
                                 engineIdentifier: engine.engineID,
                                 title: engine.source.description,
-                                image: self.runtimeEngineIconProvider.icon(for: engine),
+                                icon: .runtimeEngine(engineID: engine.engineID),
                                 isCurrent: engine.engineID == state.selectedEngineIdentifier
                             )
                         }
                     )
                 },
-                dependencyCacheChoices: fileController.dependencyCacheChoices(for: engineOfDocument).map { choice in
-                    RuntimeSourcePickerContent.DependencyCacheChoice(
-                        title: choice.title,
-                        dependencyCache: choice.dependencyCache,
-                        isCurrent: choice.isCurrent
-                    )
-                }
+                dependencyCacheChoices: RuntimeFileDependencyCaches.choices(
+                    for: engineOfDocument,
+                    runtimeEngineManager: runtimeEngineManager,
+                    settings: settings
+                )
             )
         }
 
@@ -570,12 +553,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             navigationHistory: focusedTabHistory.map { history in
                 NavigationHistorySnapshot(
                     items: history.entries.enumerated().map { entryIndex, entry in
-                        NavigationHistoryItem(
-                            index: entryIndex,
-                            // An object and its Generated Interface are two steps: the title tells them apart.
-                            displayName: entry.showsGeneratedInterface ? "\(entry.displayName) (Generated Interface)" : entry.displayName,
-                            icon: Self.historyIcon(for: entry)
-                        )
+                        Self.historyItem(for: entry, at: entryIndex)
                     },
                     currentIndex: history.currentIndex ?? -1
                 )
@@ -588,7 +566,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),
             activityStyle: activityStyle,
-            activity: toolbarActivityPresenter.state,
+            activity: toolbarActivityPresenter.activity,
             toolbarIcon: documentState.$currentImageNode.asDriver().map { Self.toolbarIcon(for: $0) }
         )
     }
@@ -614,3 +592,5 @@ extension RuntimeObject {
         }
     }
 }
+
+#endif
