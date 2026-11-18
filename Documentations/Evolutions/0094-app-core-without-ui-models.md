@@ -1,13 +1,13 @@
-# Draft - AppCore 不再使用 AppKit/UIKit 模型
+# 0094 - AppCore 不再使用 AppKit/UIKit 模型
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
 - **所属愿景**: 无
 - **关联提案**: [0091](0091-app-core-ui-split.md)（把 `RuntimeViewerApplication` 拆成 AppCore 与 AppUI；本提案推翻其中「UI 框架的模型可以留在 AppCore」一条）、[0005](0005-cellvm-appearance-single-observed.md)（cell ViewModel 的 `Appearance` 单流）、[0090](0090-image-kind-icons.md)（镜像种类图标）
-- **实现分支 / PR**: `feature/app-core-without-ui-models`（worktree `.worktrees/RuntimeViewer-AppCoreWithoutUIModels`）
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/app-core-without-ui-models`，分四步合进 `next`（分支与 worktree 已删）
+- **配套文档**: 无 —— 分工写在 `RuntimeViewerPackages/Sources/AGENTS.md`（「The application layer」一节），术语「描述值」登记在 [`Glossary.md`](../Glossary.md)
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -733,3 +733,4 @@ enum AppCoreBoundary {
 | 2026-11-18 | 第三步完成 | 照计划做完，与提案不同的几处，改动地图与详细设计已按实际做法改写：一、`RowTextStyle.findResult(_:)` 只收尺寸，不收 `allowsWrapping`：标题换不换行原本就由 `FindResultCellView` 设在标签上。二、名字与副标题之间的两个空格（`subtitleSeparator`）从 `FindResultCellStyle` 搬进 AppCore 的 `FindResultNode`：它是文字内容，不是样式。三、`FindResultNode.makeAppearance(for:)` 与 Inspector 的引用行不再只在 AppKit 下构造外观，各平台都描述同一个值；Find 行的尺寸全部留在 cell 视图（`metrics`），徽章按默认尺寸描述、由视图用 `IconDescriptor.image(size:)` 画成 16 或 14 点。四、侧栏根节点的标题原来不带颜色属性（用标签自己的 `labelColor`），现在与其他行一样显式写 `labelColor`，显示效果相同。去掉 AppKit import 后，两个侧栏 cell ViewModel 补了 `import Foundation`（`NSObject` 原来经 AppKit 间接可见）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1065 个，失败 2 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时），新加与改写的行文字测试全部通过。 |
 | 2026-11-18 | 第四步完成 | 照计划做完，与提案不同的几处，改动地图与详细设计已按实际做法改写：一、转圈的合并没有做成 `BaseViewController` 上可覆写的 `commonLoadingState`，而是新增 `additionalCommonLoadingRelay`：父类在 `setupBindings` 开头就绑转圈，那时子类的渲染环节还没建。二、`ContentInterface.ID` 包一个 `UUID`，不是逐次加一的计数：准备在后台调度器上进行，用不着跨线程的计数器，迟到报告的过滤只需要相等比较。三、`ContentTextRenderer` 多了一个 `package` 的 `isRendering`（不带延迟），只给测试看；iOS 不写链接靠上色代码里的 `#if`，macOS 上跑的测试验不到，没有加 `iOSThemedTextCarriesNoLinks`。四、过渡清单与守护它的测试在这一步删除，规则对 AppCore 全面生效，只剩 iOS 路由那几行例外。另外，SourceEditor 视图换主题时不再重新 `setSource`（原来每次换主题都会把同一段文字重新交给编辑器），只重新套主题字典。测量（Ultra，负载约 7.5，Foundation 的 `NSString`，约 2.2 万个 UTF-16 单位，各 20 次取中位数）：改动前 `renderInterface` 15.3 毫秒；改动后准备 7.3 毫秒、上色 4.5 毫秒，`NSTextView` 一路合计 11.9 毫秒，SourceEditor 一路只有准备的 7.3 毫秒，都没有变慢。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1069 个，失败 3 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、`BackgroundWorkProcessActivityTests` 整包跑时超时），新加与改写的内容页测试全部通过。 |
 | 2026-11-18 | 实现完成 | 四步都已在本地合进 `next` 的检出，待用户看过后收尾（编号、改 Implemented、重新生成网页版）。文档判断：`RuntimeViewerPackages/Sources/AGENTS.md` 已写明描述值、行文字、内容页与主题的分工，`Tests/AGENTS.md`、`RuntimeViewerUsingAppKit/AGENTS.md` 与根 `AGENTS.md` 已同步，不另写指南或实现说明；「描述值」是否进术语表留到收尾时定。 |
+| 2026-11-18 | Implemented | 用户看过后同意收尾，编号 0094，四步都已推到 `next`。文档判断：不另写使用指南或实现说明——AppCore 与 AppUI 怎么分工、描述值与渲染环节在哪，`RuntimeViewerPackages/Sources/AGENTS.md` 已写明，其余三份 `AGENTS.md` 已同步；「描述值」登记进术语表。未做的验证：没在真实窗口里目测加载转圈、链接点击与右键菜单，iOS 只编了应用层的包，没编 iOS App。 |

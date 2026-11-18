@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Draft - AppCore 不再使用 AppKit/UIKit 模型</title>
+<title>0094 - AppCore 不再使用 AppKit/UIKit 模型</title>
 <style>
 :root {
   --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --panel: #f5f5f7;
@@ -93,14 +93,14 @@ ul { padding-left: 22px; }
   <a href="#log">决策日志</a>
 </nav>
 <main>
-<h1>Draft - AppCore 不再使用 AppKit/UIKit 模型</h1>
+<h1>0094 - AppCore 不再使用 AppKit/UIKit 模型</h1>
 <div class="meta">
-  <span>状态 <span class="badge">In Progress</span></span>
+  <span>状态 <span class="badge">Implemented</span></span>
   <span>作者 JH</span>
   <span>创建 2026-11-18</span>
   <span>对应提案最后更新：2026-11-18</span>
 </div>
-<p class="small">原文：<code>draft-app-core-without-ui-models.md</code>（以原文为准）。关联提案：0091（拆 AppCore 与 AppUI，本提案推翻其中「UI 框架的模型可以留在 AppCore」一条）、0005（cell ViewModel 的 Appearance 单流）、0090（镜像种类图标）。</p>
+<p class="small">原文：<code>0094-app-core-without-ui-models.md</code>（以原文为准）。关联提案：0091（拆 AppCore 与 AppUI，本提案推翻其中「UI 框架的模型可以留在 AppCore」一条）、0005（cell ViewModel 的 Appearance 单流）、0090（镜像种类图标）。</p>
 
 <h2 id="summary">摘要</h2>
 <div class="summary">
@@ -688,6 +688,7 @@ enum AppCoreBoundary {
 <tr><td>2026-11-18</td><td>第三步完成</td><td><code>RowTextStyle.findResult(_:)</code> 只收尺寸；分隔符搬进 AppCore；Find 行的尺寸全部留在 cell 视图；侧栏根节点标题显式写 <code>labelColor</code>，显示效果相同。</td></tr>
 <tr><td>2026-11-18</td><td>第四步完成</td><td>转圈合并改用 <code>BaseViewController.additionalCommonLoadingRelay</code>；<code>ContentInterface.ID</code> 包 <code>UUID</code>；渲染环节多一个只给测试看的 <code>isRendering</code>；过渡清单删除；SourceEditor 换主题不再重新 <code>setSource</code>。测量（<code>NSString</code>，约 2.2 万 UTF-16 单位，20 次中位数）：改动前 15.3 毫秒，改动后 <code>NSTextView</code> 一路 11.9 毫秒、SourceEditor 一路 7.3 毫秒。</td></tr>
 <tr><td>2026-11-18</td><td>实现完成</td><td>四步都已在本地合进 <code>next</code> 的检出，待用户看过后收尾。</td></tr>
+<tr><td>2026-11-18</td><td>Implemented</td><td>用户看过后同意收尾，编号 0094，四步都已推到 <code>next</code>。不另写使用指南或实现说明（分工已写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>）；「描述值」登记进术语表。没在真实窗口里目测，iOS 只编了应用层的包。</td></tr>
 </table></div>
 </details>
 </main>
