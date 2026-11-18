@@ -685,6 +685,12 @@ extension MCPServerClientKey: @retroactive DependencyKey {
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：要不要配使用指南或实现说明；有没有新术语要进 `Documentations/Glossary.md`。
 
+## 后续项
+
+- **根 `AGENTS.md` 超过 64 KiB。** 在 `next` 上就已经是 67,966 字节，超过它自己写明的「远低于 64 KiB」（Codex 只读前 64 KiB）；这次多了约 700 字节。要整体挪一部分内容去子目录的 `AGENTS.md`，另起一次整理。
+- **`RemoteProcessItemSource` 里的逻辑没有测试。** 它记下设备对每个进程「能不能注入」的判断，再回答选择器的 `shouldSelect`；这次按「绑着引擎的选择器胶水留在 App」没动它。要测就得把判断那一半抽进 AppCore。
+- **附加设备进程后的图标没有自动化验证。** 记图标挪到了视图层，只能连真实设备人工核对。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -698,3 +704,5 @@ extension MCPServerClientKey: @retroactive DependencyKey {
 | 2026-11-18 | 自定的做法 | 用户认可以下做法：路由与页面状态随 ViewModel 进 AppCore；`FileController` 的两段纯逻辑进 AppCore；工具栏活动的挑选与节流在 AppCore，转显示状态在 AppUI；来源选择器内容回到 AppCore，图标改描述值，图标表记住断开引擎的图标；附加进程的图标由视图层记；只给从 UI 类型改成值的部分补测试；一条功能分支分步提交，做完一次合进 `next`。 |
 | 2026-11-18 | 调研中定下的细节 | `LoadFrameworks/` 是死代码，删除；`SIPChecker` 不是 UI，进 AppCore 而非 `RuntimeViewerUI`；嵌在 VC 里的私有小视图按 `RuntimeViewerUsingAppKit/AGENTS.md` 的规则留在原处；`RemoteProcessItemSource` 是绑着引擎的选择器胶水，留在 App；`ContentTextView` 与 `NavigationTransitionBackdropController` 不依赖 AppCore，按同一判据进 `RuntimeViewerUI`，通用视图因此是 8 个而不是先前估计的约 6 个；搬进 AppCore 的文件一律 `#if os(macOS)`，避开 iOS App 同名的 `MainViewModel` / `MainRoute`；MCP 的 key 必须是 `public`。 |
 | 2026-11-18 | Accepted | 用户批准，开始实现。 |
+| 2026-11-18 | 实现中的调整 | 与方案不同的几处，改动地图与详细设计已按实际改写：一、`MainRoute` 随第四步提前搬，附加进程的 ViewModel 以它为路由。二、`MCPService` 本身不加 `@Observable`，状态存进私有的 `@Observable` 小类 `MCPServerStateStorage`，避开它的 `@Loggable`、`@Dependency` 属性包装器与 `isolated deinit`；live 值经 `MCPServerClient.driving(_:)`，测试用自建的服务驱动，live 测试的三条行为名随之换成 `liveValueExists`、`liveClientFollowsServiceState`、`resumeWithoutDocumentProviderDoesNothing`；`MCPServerStateTests` 随类型搬进 AppCoreTests。三、依赖缓存写成 AppCore 内部的 `@Loggable enum RuntimeFileDependencyCaches`，不是 `RuntimeEngineManager` 的扩展：配对成功要记日志，`#log` 用所在类型的日志器，而管理器的日志器在另一个模块。四、`ToolbarActivityStateTests` 留在 AppUI，改成经 AppCore 构造、AppUI 转换来测文字（文字断言要用 RuntimeViewerUI 的分段辅助函数），「每个字段一一照抄」并入这个文件，不另建文件；`ToolbarActivityPresenterTests` 搬进 AppCoreTests 并加一例。五、`RuntimeSourcePickerContent.Source.icon` 是可选的 `IconDescriptor?`，测试里有不画图标的来源。六、`MainViewModel` 抽出内部静态函数 `toolbarIcon(for:)` 与 `historyItem(for:at:)` 供测试。七、导出两个完成页的测试合在 `ExportingCompletionViewModelTests` 一个文件。八、防回流测试多一例 `inheritanceClauseIsReadAsDeclared`，保证泛型参数与泛型实参里的 `ViewModel` 不算。九、附加进程的 VC 在选择器的代理方法里记住选中的行，再把 `Target` 交给 ViewModel。十、第五步的提交里 `MainViewModelTests` 用了引擎管理器不公开的初始化方法，测试 target 编不过；下一个提交改成 `@testable import` 修好，已推送的历史不改写。 |
+| 2026-11-18 | 实现完成，待用户看过后收尾 | 验证在 Ultra 上：第一到第四步的提交各自 `swift build --build-tests` 通过，第五步的提交包与 App 构建通过、测试 target 由下一个提交修好；第一到第五步各自 `./TuistScript.sh warm` 与 macOS App（Tuist workspace，Debug）构建通过。最终提交上：包级构建通过；AppCore 与 AppUI 测试共 1105 个，失败 3 条均为既有红灯（Call Hierarchy 超时、标题悬停副标题、整包跑时的 `BackgroundWorkProcessActivityTests`），新加的各组全部通过；MCP 包构建与 90 个测试通过；iOS 模拟器包构建通过；macOS App 构建通过。没做界面验证。文档判断：不另写使用指南或实现说明，规则写进三份 `AGENTS.md`；没有新术语。 |
