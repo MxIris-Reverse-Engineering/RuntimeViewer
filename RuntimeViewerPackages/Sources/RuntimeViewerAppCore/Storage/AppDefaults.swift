@@ -74,6 +74,7 @@ public final class AppDefaults: @unchecked Sendable {
         _isRuntimeObjectFilterCaseSensitive = UserDefault(key: userDefaultsNamespace.key("runtimeObjectFilterIsCaseSensitive"), defaultValue: false, suite: userDefaults)
         _bookmarkMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkMigrationCompleted"), defaultValue: false, suite: userDefaults)
         _bookmarkScopeMigrationCompleted = UserDefault(key: userDefaultsNamespace.key("bookmarkScopeMigrationCompleted"), defaultValue: false, suite: userDefaults)
+        _namingWordCloudPreferences = UserDefault(key: userDefaultsNamespace.key("namingWordCloudPreferences"), defaultValue: NamingWordCloudPreferences(), suite: userDefaults)
 
         if let storageDirectoryURL {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directoryURL: storageDirectoryURL)
@@ -129,6 +130,11 @@ public final class AppDefaults: @unchecked Sendable {
     /// is.
     @UserDefault
     public var isRuntimeObjectFilterCaseSensitive: Bool
+
+    /// The naming word cloud's measure, switches and compound words, shared by
+    /// all of its windows. See `NamingWordCloudPreferences`.
+    @UserDefault
+    public var namingWordCloudPreferences: NamingWordCloudPreferences
 
     @UserDefault
     private var bookmarkMigrationCompleted: Bool
