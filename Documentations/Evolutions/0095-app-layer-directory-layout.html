@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Draft - 整理 AppCore 与 AppUI 的目录分类</title>
+<title>0095 - 整理 AppCore 与 AppUI 的目录分类</title>
 <style>
 :root {
   --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --panel: #f5f5f7;
@@ -96,14 +96,14 @@ ul { padding-left: 22px; }
   <a href="#log">决策日志</a>
 </nav>
 <main>
-<h1>Draft - 整理 AppCore 与 AppUI 的目录分类</h1>
+<h1>0095 - 整理 AppCore 与 AppUI 的目录分类</h1>
 <div class="meta">
-  <span>状态 <span class="badge">In Progress</span></span>
+  <span>状态 <span class="badge">Implemented</span></span>
   <span>创建 2026-11-18</span>
   <span>对应提案最后更新：2026-11-18</span>
-  <span>拟用分支 <code>feature/app-layer-directory-layout</code></span>
+  <span>分支 <code>feature/app-layer-directory-layout</code>（已合进 next）</span>
 </div>
-<p class="small">原文：<code>draft-app-layer-directory-layout.md</code>（以原文为准）。关联提案：0091（拆 AppCore 与 AppUI）、0094（AppCore 不再使用 AppKit/UIKit 模型）。</p>
+<p class="small">原文：<code>0095-app-layer-directory-layout.md</code>（以原文为准）。关联提案：0091（拆 AppCore 与 AppUI）、0094（AppCore 不再使用 AppKit/UIKit 模型）。</p>
 
 <h2 id="summary">摘要</h2>
 <div class="summary">
@@ -330,6 +330,7 @@ ul { padding-left: 22px; }
 <tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
 <tr><td>2026-11-18</td><td>四步完成</td><td>与提案不同处：注释掉的旧 <code>InspectorRuntimeObjectViewModel</code> 原样随 <code>InspectorPlaceholderViewModel.swift</code> 走；写进 AGENTS.md 的规则多列了全部目录名与 <code>Find/</code> 子目录。核对：两个根目录都没有 Swift 文件，<code>Icons/</code> 已删，除 AGENTS.md 外没有文件内容被改。Ultra 上三步各自构建通过，iOS 包、Tuist warm 与 macOS App 构建通过；1069 个测试，失败 4 条均为既有红灯。</td></tr>
 <tr><td>2026-11-18</td><td>实现完成</td><td>在本地合进 <code>next</code> 的检出，待用户看过后收尾。不另写指南，没有新术语。</td></tr>
+<tr><td>2026-11-18</td><td>Implemented</td><td>用户看过后同意收尾，编号 0095，推到 <code>next</code>。不另写指南，没有新术语；测试 target 仍是平铺目录。</td></tr>
 </table></div>
 </details>
 </main>

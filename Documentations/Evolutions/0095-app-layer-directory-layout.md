@@ -1,13 +1,13 @@
-# Draft - 整理 AppCore 与 AppUI 的目录分类
+# 0095 - 整理 AppCore 与 AppUI 的目录分类
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
 - **所属愿景**: 无
 - **关联提案**: [0091](0091-app-core-ui-split.md)（把 `RuntimeViewerApplication` 拆成 AppCore 与 AppUI）、[0094](0094-app-core-without-ui-models.md)（AppCore 不再使用 AppKit/UIKit 模型，新增了 `Presentation/`、`Theme/` 等目录）
-- **实现分支 / PR**: `feature/app-layer-directory-layout`（worktree `.worktrees/RuntimeViewer-AppLayerDirectoryLayout`）
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/app-layer-directory-layout`，四步一次合进 `next`（分支与 worktree 已删）
+- **配套文档**: 无 —— 规则写在 `RuntimeViewerPackages/Sources/AGENTS.md`「Where a file goes in RuntimeViewerAppCore and RuntimeViewerAppUI」一节
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -273,3 +273,4 @@ RuntimeViewerAppUI/                                    mirrors RuntimeViewerAppC
 | 2026-11-18 | Accepted | 用户批准，开始实现。功能分支从 `next` 切出，四步各一个提交，做完在本地合进 `next` 给用户看。 |
 | 2026-11-18 | 四步完成 | 照改动地图做完，与提案不同的几处：一、`InspectorViewModel.swift` 里两个类型之间有一段注释掉的旧 `InspectorRuntimeObjectViewModel`，按「代码一字不改」原样随 `InspectorPlaceholderViewModel.swift` 走，没有顺手删。二、写进 `RuntimeViewerPackages/Sources/AGENTS.md` 的规则比拟稿多列了几项：所有现有目录名（`Activity`、`BatchExporting`、`ContextMenus` 也在内）、`Find/` 的四个子目录与根下留的三个文件、`NSColor+Xcode` 作为「跟着唯一使用者走」的例子，并注明测试 target 还是平铺的。核对：两个 target 根目录都没有 `.swift` 文件，`Icons/` 已删，`Sources` 下除 `AGENTS.md` 外没有文件内容被改，拆出的代码按原顺序与原文件逐行相同。验证在 Ultra 上：三个步骤的提交各自 `swift build --build-tests` 通过，iOS 模拟器包构建、`./TuistScript.sh warm` 与 macOS App（Tuist workspace，Debug）构建通过；两组测试共 1069 个，失败 4 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、`ReportSharedByEngineTests` 与 `BackgroundWorkProcessActivityTests` 整包跑时的两条）。 |
 | 2026-11-18 | 实现完成 | 在本地合进 `next` 的检出，待用户看过后收尾。文档判断：不另写指南或实现说明，规则在 `RuntimeViewerPackages/Sources/AGENTS.md`；没有新术语。 |
+| 2026-11-18 | Implemented | 用户看过后同意收尾，编号 0095，推到 `next`。文档判断：不另写使用指南或实现说明，归类规则在 `RuntimeViewerPackages/Sources/AGENTS.md`；没有新术语。两个测试 target 仍是平铺目录，留作以后的事。 |

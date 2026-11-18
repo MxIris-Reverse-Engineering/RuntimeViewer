@@ -123,7 +123,7 @@ Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
 
 ## Where a file goes in RuntimeViewerAppCore and RuntimeViewerAppUI
 
-(`Documentations/Evolutions/draft-app-layer-directory-layout.md`)
+(`Documentations/Evolutions/0095-app-layer-directory-layout.md`)
 
 - **Nothing at a target's root.** Every file is in a directory named after a feature: the app's own folder
   name where the app has one (`App`, `Base`, `BatchExporting`, `Content`, `EditorArea`, `Find`, `Inspector`,
