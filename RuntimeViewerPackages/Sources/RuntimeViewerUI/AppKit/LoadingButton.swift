@@ -1,6 +1,8 @@
+#if os(macOS)
+
 import AppKit
-import RuntimeViewerUI
 import SnapKit
+import UIFoundation
 
 /// `PushButton` subclass that swaps its title for a small spinner while
 /// `isLoading == true`. AppKit's `isEnabled = false` during loading also
@@ -81,3 +83,5 @@ open class LoadingButton: PushButton {
         }
     }
 }
+
+#endif

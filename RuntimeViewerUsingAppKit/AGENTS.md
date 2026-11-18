@@ -121,8 +121,8 @@ after a jump).
   a plain `NSView`, because the split view wraps the item in an `NSGlassEffectView` that no colour or
   material matches, so the page stays transparent and sits on that glass directly. **Do not give pages a
   resident background of their own**: the opaque backdrop the sidebar's push / pop needs is inserted
-  under both sliding pages for the transition's duration by `NavigationTransitionBackdropController` (the
-  sidebar navigation controller's delegate) — UIFoundation's `GlassEffectReplicaView` on macOS 27+, a glass
+  under both sliding pages for the transition's duration by `NavigationTransitionBackdropController`
+  (RuntimeViewerUI; the sidebar navigation controller's delegate) — UIFoundation's `GlassEffectReplicaView` on macOS 27+, a glass
   that copies the enclosing glass and shares its backdrop group, and `windowBackgroundColor` on macOS 26.
   See `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`.
 
@@ -278,7 +278,7 @@ centralizes everything in `updateLayer()`, so:
   `borderWidth` and a non-nil `borderColor`: a full rounded border needs `borderPositions = .all`.
 - **Gotcha — a plain `NSView` has no `backgroundColor` of ours.** AppKitPlus gives every `NSView` a
   `backgroundColor` through an Objective-C category whose header is internal, so the app reaches it by
-  key-value coding as `view._backgroundColor` (`NavigationTransitionBackdropController.swift`). Keep that
+  key-value coding as `view._backgroundColor` (RuntimeViewerUI's `AppKit/NavigationTransitionBackdropController.swift`). Keep that
   bridge under a different name: while it was an `NSView` extension called `backgroundColor`, an
   unqualified `backgroundColor` inside a `LayerBackedView` subclass resolved to it instead of to the layer
   renderer's own property, and the background never showed. Use `_backgroundColor` only on plain views

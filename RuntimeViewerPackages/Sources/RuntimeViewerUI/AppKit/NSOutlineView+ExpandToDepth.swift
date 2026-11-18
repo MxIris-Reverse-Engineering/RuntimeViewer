@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import AppKit
 
 extension NSOutlineView {
@@ -11,7 +13,7 @@ extension NSOutlineView {
     ///   - depth: The number of levels to expand, counting `item` itself as level `1`. A value
     ///     of `1` expands only `item`; `2` also expands its direct children, and so on. Values
     ///     of `0` or below perform no expansion.
-    func expandItem(_ item: Any?, toDepth depth: Int) {
+    public func expandItem(_ item: Any?, toDepth depth: Int) {
         guard depth > 0 else { return }
         expandItem(item)
         guard let dataSource else { return }
@@ -22,3 +24,5 @@ extension NSOutlineView {
         }
     }
 }
+
+#endif

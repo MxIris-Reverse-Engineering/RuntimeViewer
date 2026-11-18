@@ -1,8 +1,10 @@
+#if os(macOS)
+
 import AppKit
 import UIFoundation
 
 extension CheckboxButton {
-    convenience init(title: String, titleFont: NSFont? = nil, titleColor: NSColor? = nil, titleSpacing: CGFloat = 5.0) {
+    public convenience init(title: String, titleFont: NSFont? = nil, titleColor: NSColor? = nil, titleSpacing: CGFloat = 5.0) {
         self.init()
         self.attributedTitle = NSAttributedString {
             AText(title)
@@ -15,3 +17,5 @@ extension CheckboxButton {
         }
     }
 }
+
+#endif

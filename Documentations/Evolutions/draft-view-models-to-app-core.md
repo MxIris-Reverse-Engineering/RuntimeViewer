@@ -1,6 +1,6 @@
 # Draft - macOS App 的 ViewModel 移进 AppCore，通用视图移进 RuntimeViewerUI
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
@@ -630,7 +630,7 @@ extension MCPServerClientKey: DependencyKey {
 
 ## 落地步骤
 
-1. **通用视图进 RuntimeViewerUI，删死代码**：改动地图步骤 1 的各行。
+1. **通用视图进 RuntimeViewerUI，删死代码**（已完成，2026-11-18）：改动地图步骤 1 的各行。
    - 行为：`appBuildsWithGenericViewsFromRuntimeViewerUI`
    - 行为：`lineNumberRulerColorMatchesInBothAppearances`
    - 行为：`loadFrameworksStillOpensThePanel`

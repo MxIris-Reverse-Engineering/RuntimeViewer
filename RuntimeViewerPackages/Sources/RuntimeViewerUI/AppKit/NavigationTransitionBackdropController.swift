@@ -1,14 +1,14 @@
+#if os(macOS)
+
 import AppKit
 import AppKitPlus
-import RuntimeViewerUI
-import RuntimeViewerArchitectures
-import DependenciesMacros
+import UIFoundation
 
 /// What the sidebar's navigation transition puts behind its sliding view controllers.
 ///
 /// They need *some* opaque backdrop or the two lists show through each other. The pages themselves
 /// are transparent so that, at rest, they sit directly on the split view item's glass.
-enum NavigationTransitionBackdrop {
+public enum NavigationTransitionBackdrop {
     /// A `GlassEffectReplicaView` under each page: a glass that copies the enclosing sidebar glass
     /// and shares its backdrop group, so it renders exactly like the sidebar around it.
     case glassReplica
@@ -31,8 +31,12 @@ enum NavigationTransitionBackdrop {
 /// `headerView` / `sheet` / `windowBackground` / `contentBackground` all render rgb(36, 36, 38)).
 /// Background: `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`.
 @MainActor
-final class NavigationTransitionBackdropController: NSObject, NSNavigationControllerDelegate {
-    var selectedBackdrop: NavigationTransitionBackdrop {
+public final class NavigationTransitionBackdropController: NSObject, NSNavigationControllerDelegate {
+    public override init() {
+        super.init()
+    }
+
+    public var selectedBackdrop: NavigationTransitionBackdrop {
         if #available(macOS 27.0, *) {
             return .glassReplica
         } else {
@@ -42,7 +46,7 @@ final class NavigationTransitionBackdropController: NSObject, NSNavigationContro
 
     // MARK: - NSNavigationControllerDelegate
 
-    func navigationController(_ navigationController: NSNavigationController, willShow viewController: NSViewController) {
+    public func navigationController(_ navigationController: NSNavigationController, willShow viewController: NSViewController) {
         guard #available(macOS 26.0, *) else { return }
         guard let coordinator = navigationController.transitionCoordinator,
               let fromViewController = coordinator.viewController(forKey: .from),
@@ -77,7 +81,7 @@ final class NavigationTransitionBackdropController: NSObject, NSNavigationContro
         }
     }
 
-    func navigationController(_ navigationController: NSNavigationController, didShow viewController: NSViewController) {
+    public func navigationController(_ navigationController: NSNavigationController, didShow viewController: NSViewController) {
         guard #available(macOS 26.0, *) else { return }
         navigationController.view.needsDisplay = true
     }
@@ -104,8 +108,10 @@ final class NavigationTransitionBackdropController: NSObject, NSNavigationContro
 extension FrameworkToolbox where Base: NSView {
     /// AppKitPlus's `NSView (Appearance).backgroundColor`, reached through key-value coding because
     /// the category header is framework-internal.
-    var _backgroundColor: NSColor? {
+    public var _backgroundColor: NSColor? {
         set { base.setValue(newValue, forKey: "backgroundColor") }
         get { base.value(forKey: "backgroundColor") as? NSColor }
     }
 }
+
+#endif

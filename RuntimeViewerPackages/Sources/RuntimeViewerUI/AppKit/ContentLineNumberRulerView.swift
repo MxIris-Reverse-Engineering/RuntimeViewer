@@ -1,5 +1,6 @@
+#if os(macOS)
+
 import AppKit
-import RuntimeViewerUI
 
 /// A vertical line-number gutter rendered as an `NSRulerView` for a TextKit 2 `NSTextView`.
 ///
@@ -11,7 +12,7 @@ import RuntimeViewerUI
 /// The ruler owns everything intrinsic to its own rendering — scroll tracking and reflow tracking
 /// are handled internally through clip-view bounds and text-view frame notifications. Content and
 /// theme updates are pushed in by the owning view controller via ``reload()`` and ``gutterBackgroundColor``.
-final class ContentLineNumberRulerView: NSRulerView {
+public final class ContentLineNumberRulerView: NSRulerView {
     /// Horizontal padding between the line numbers and the gutter edges.
     private let horizontalPadding: CGFloat = 5
 
@@ -19,15 +20,17 @@ final class ContentLineNumberRulerView: NSRulerView {
     private let minimumThickness: CGFloat = 32
 
     /// Background color of the gutter, kept in sync with the editor background by the controller.
-    var gutterBackgroundColor: NSColor = .textBackgroundColor {
+    public var gutterBackgroundColor: NSColor = .textBackgroundColor {
         didSet {
             guard gutterBackgroundColor != oldValue else { return }
             needsDisplay = true
         }
     }
 
-    /// Color used to draw the line numbers.
-    var lineNumberColor: NSColor = NSColor(light: NSColor(white: 0.6, alpha: 1), dark: NSColor(white: 0.46, alpha: 1)) {
+    /// Color used to draw the line numbers: 60 % white in the light appearance, 46 % in the dark.
+    public var lineNumberColor: NSColor = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .aqua ? NSColor(white: 0.6, alpha: 1) : NSColor(white: 0.46, alpha: 1)
+    } {
         didSet {
             guard lineNumberColor != oldValue else { return }
             needsDisplay = true
@@ -43,7 +46,7 @@ final class ContentLineNumberRulerView: NSRulerView {
 
     // MARK: - Init
 
-    override init(scrollView: NSScrollView?, orientation: NSRulerView.Orientation) {
+    public override init(scrollView: NSScrollView?, orientation: NSRulerView.Orientation) {
         super.init(scrollView: scrollView, orientation: orientation)
         clipsToBounds = true
         reservedThicknessForMarkers = 0
@@ -52,7 +55,7 @@ final class ContentLineNumberRulerView: NSRulerView {
     }
 
     @available(*, unavailable)
-    required init(coder: NSCoder) {
+    public required init(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
@@ -62,7 +65,7 @@ final class ContentLineNumberRulerView: NSRulerView {
 
     // MARK: - Client View
 
-    override var clientView: NSView? {
+    public override var clientView: NSView? {
         didSet {
             guard clientView !== oldValue else { return }
             setupNotificationObservers()
@@ -76,7 +79,7 @@ final class ContentLineNumberRulerView: NSRulerView {
     ///
     /// The owning controller calls this after replacing the text view's content (which also covers
     /// font-size changes, since those flow through a freshly rendered attributed string).
-    func reload() {
+    public func reload() {
         rebuildLineStartOffsets()
         updateThickness()
         needsDisplay = true
@@ -142,7 +145,7 @@ final class ContentLineNumberRulerView: NSRulerView {
 
     // MARK: - Drawing
 
-    override func drawHashMarksAndLabels(in rect: NSRect) {
+    public override func drawHashMarksAndLabels(in rect: NSRect) {
         gutterBackgroundColor.setFill()
         bounds.fill()
 
@@ -241,3 +244,5 @@ final class ContentLineNumberRulerView: NSRulerView {
         notificationObservers.removeAll()
     }
 }
+
+#endif

@@ -57,9 +57,6 @@
     {
       "kind": "folder",
       "path": "RuntimeViewerUsingAppKit",
-      "file-types": {
-        "Content/ContentLineNumberRulerView.swift": "sourcecode.swift",
-      },
       "target-membership": [
         "RuntimeViewerUsingAppKit",
       ],

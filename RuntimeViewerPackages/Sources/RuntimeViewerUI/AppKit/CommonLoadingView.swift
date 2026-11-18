@@ -1,5 +1,8 @@
+#if os(macOS)
+
 import AppKit
-import RuntimeViewerUI
+import SnapKit
+import UIFoundation
 
 /// The loading indicator `BaseViewController` lays over its view: the system spinner, centred in
 /// the part of the view the toolbar leaves visible.
@@ -9,11 +12,11 @@ import RuntimeViewerUI
 /// panes give it the editor's background, which turns it into an opaque plate over the whole
 /// pane — minimap, gutter and the strip under the toolbar included — the way Xcode's editor looks
 /// while it opens a generated interface.
-final class CommonLoadingView: XiblessView {
+public final class CommonLoadingView: XiblessView {
     /// Whether the spinner is up. It changes only when set: `BaseViewController` drives it from
     /// `delayedLoading` alone, so a pane rebound to a new ViewModel keeps showing what it showed
     /// until that ViewModel reports.
-    var isRunning = false {
+    public var isRunning = false {
         didSet {
             isHidden = !isRunning
             if isRunning {
@@ -35,7 +38,7 @@ final class CommonLoadingView: XiblessView {
         }
     }()
 
-    override init(frame frameRect: CGRect) {
+    public override init(frame frameRect: CGRect) {
         super.init(frame: frameRect)
 
         // Hidden until the first report. A visible view here, even a transparent one, would
@@ -73,7 +76,7 @@ final class CommonLoadingView: XiblessView {
 
     /// Runs whenever the background colour changes and whenever the appearance does — everything
     /// the frosted glass and the spinner's appearance depend on.
-    override func updateLayer() {
+    public override func updateLayer() {
         super.updateLayer()
 
         // The painted background is the view's own layer, beneath its subviews, so the glass has
@@ -104,3 +107,5 @@ final class CommonLoadingView: XiblessView {
         progressIndicator.appearance = progressIndicatorAppearance
     }
 }
+
+#endif
