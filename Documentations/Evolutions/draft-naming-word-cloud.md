@@ -123,7 +123,7 @@ Export 菜单里三项，都按当前口径与筛选导出：
    - 行为：`imageWithoutCorpus`、`membersMatchAMemberSearch`、`optionsHideWhatTheyHide`；`SharedCacheRoutingDeclarationTests` 列入新命令
 2. **AppCore 的拆词与计数**（已完成）—— 拆词、前缀、复合词、四种口径、去重与跳过、定色、CSV 与 JSON
    - 行为：缩略词与数字的拆法、选择子与下划线、前缀按镜像统计并去掉、复合词合并、虚词去掉、各种跳过与去重、按「最有代表性」定色、CSV 转义、JSON 的形状与排序
-3. **RuntimeViewerUI 的排版与画布** —— `WordCloudLayout`、`WordCloudView`
+3. **RuntimeViewerUI 的排版与画布**（已完成）—— `WordCloudLayout`、`WordCloudView`
    - 行为：不重叠、不出界、确定性、画布按词的总面积定；点到词、点到空白
 4. **AppCore 的窗口 ViewModel** —— `NamingWordCloudViewModel`、状态、设置、类别色
    - 行为：类型口径一打开就能算；成员口径等语料建好再算；语料开关关着时成员口径给提示；对端太旧时成员口径给提示；换生成选项重算；点用法里的一行在主窗口打开（成员带高亮）；导出的内容
@@ -168,3 +168,4 @@ Export 菜单里三项，都按当前口径与筛选导出：
 | 2026-11-18 | 代码落点按现在的分层改写，补落地步骤 | 草案写成之后，ViewModel 全部搬进了 RuntimeViewerAppCore（0091、0096），AppCore 不再用 AppKit 的颜色与图片（0094），目录按功能划分（0095），导航的 `.push` / `.pushHighlighting` 换成了 `SelectionRoute.open(_:in:highlighting:)`。§5 与 §3 的导航一句据此改写，并把实现拆成五步写进新的 §6。 |
 | 2026-11-18 | 第一步：命令名 `corpusMembers`，成员行高亮只用成员名 | 命令关于一个镜像，所以由镜像的拥有者回答，与建语料的命令一致。成员不带声明行，点用法里的成员行时，`ContentHighlightRequest` 的 `lineText` 留空：内容区找不到同样的一行时，本来就退到按成员名整词匹配、取离行号最近的一处。对端早于这条命令时，2.1.0 以后的版本都回 `isUnknownCommand`，窗口据此提示对端太旧。 |
 | 2026-11-18 | 第二步自定的细节 | 一、复合词预设 18 个：草案点名的 14 个（`ViewController`、`GestureRecognizer`、`DataSource`、`IndexPath`、`TraitCollection`、`HitTest`、`CornerRadius`、`SafeArea`、`ToolTip`、`KeyPath`、`RunLoop`、`TimeZone`、`UserInfo`、`PopUp`），加 `FirstResponder`、`LayoutGuide`、`LineBreak`、`WhiteSpace`。没有原型可以按频率重新统计，所以只加了这几个固定说法，不加以 `Manager`、`Controller` 这类角色词结尾的组合，免得吃掉类型后缀。二、虚词表：and、as、at、by、for、from、in、into、of、on、or、the、to、with。三、类名前缀取两到三个大写字母后面还跟着大写字母的开头，三个字母的候选占到两个字母那个的八成以上才取它（Metal 得 `MTL`，AppKit 的 `NSURL…` 不会把 `NS` 变成 `NSU`）；至少要有三个、且占类型名的五分之一，否则不认前缀。四、局部类型与用户做出来的特化类型的成员也不算，与类型口径一致。五、类型名取 `displayName` 去掉外层类型与泛型参数，只用来拆词；JSON 里的类型名与所属类型写完整的 `displayName`。六、一个词的写法取它最常见的那种，用来决定是不是缩略词。 |
+| 2026-11-18 | 第三步自定的细节 | 一、螺旋线是按画布比例拉伸的阿基米德螺线，圈距约 19 点（比最小的词连同间距还矮），步长按弧长约 8 点；碰撞检查把已放下的词按 48 点见方的格子归档，只比附近的。Debug 构建下 500 个词约 1.5 秒，在后台算。二、字号与字重的规则放在 RuntimeViewerUI 的 `WordCloudTypography`，量文字尺寸在主线程，排版在后台。三、画布是自绘的 `NSView`，不继承 `LayerBackedView`：整块画布连底色都在 `draw(_:)` 里画，不用图层属性。四、点在空白处什么也不做，不清掉选中。五、导出 PNG 时先把选中与悬停的底板拿掉，画完再放回。 |
