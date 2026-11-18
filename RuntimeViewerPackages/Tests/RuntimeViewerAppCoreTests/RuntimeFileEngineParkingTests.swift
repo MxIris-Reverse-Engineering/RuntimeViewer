@@ -29,7 +29,7 @@ struct RuntimeFileEngineParkingTests {
         let (listener, endpoint) = try RuntimeXPCServiceListenerConnection.anonymous()
         let host = RuntimeFileServiceHost(connection: listener)
         host.activate()
-        manager.fileEngineCredential = { file in
+        manager.fileReading = .inFileService { file in
             .xpcService(.anonymousListener(endpoint.carryingLaunchPayload(try RuntimeFileService.launchPayload(for: file))))
         }
         return try withDependencies {

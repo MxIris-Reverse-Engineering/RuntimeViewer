@@ -18,7 +18,7 @@ struct FileEngineManagementTests {
 
     private static func makeManager(serving instances: FileServiceInstances) -> RuntimeEngineManager {
         let manager = RuntimeEngineManager(configuration: .application, startupHandler: { _ in })
-        manager.fileEngineCredential = { file in try instances.credential(for: file) }
+        manager.fileReading = .inFileService { file in try instances.credential(for: file) }
         return manager
     }
 
@@ -172,7 +172,7 @@ struct FileEngineManagementTests {
     @Test("A process without a file service cannot read files, and lists nothing")
     func withoutAServiceNothingIsListed() async throws {
         let manager = RuntimeEngineManager(configuration: .application, startupHandler: { _ in })
-        manager.fileEngineCredential = { _ in nil }
+        manager.fileReading = .inFileService { _ in nil }
 
         await #expect(throws: RuntimeFileEngineError.self) {
             _ = try await manager.runtimeEngine(reading: try Self.file())
@@ -194,6 +194,98 @@ struct FileEngineManagementTests {
         #expect(manager.fileRuntimeEngines.isEmpty)
         #expect(manager.file(of: engine) == nil)
         #expect(!manager.runtimeEngineSections.contains { $0.hostID == RuntimeHostInfo.files.hostID })
+    }
+
+    // MARK: - Read in this process
+
+    /// What every platform but the Mac does: no file service to read in, so
+    /// the file is read by an engine of this process's own.
+    private static func makeInProcessManager() -> RuntimeEngineManager {
+        let manager = RuntimeEngineManager(configuration: .application, startupHandler: { _ in })
+        manager.fileReading = .inThisProcess
+        return manager
+    }
+
+    @Test("A file read in this process is read before startReading returns, by an engine that answers here")
+    func fileReadInThisProcessIsReadBeforeStartReadingReturns() async throws {
+        let manager = Self.makeInProcessManager()
+        let file = try Self.file()
+
+        let engine = try await manager.startReading(file)
+
+        #expect(engine.state == .localOnly)
+        #expect(!(await engine.forwardsRequests))
+        #expect(await engine.imageList == [Self.filePath])
+        #expect(manager.fileRuntimeEngines.map(\.engineID) == [engine.engineID])
+        #expect(engine.hostInfo.hostID == RuntimeHostInfo.files.hostID)
+        #expect(manager.runtimeEngineSections.contains { $0.hostID == RuntimeHostInfo.files.hostID })
+        #expect(manager.file(of: engine) == file)
+        try await manager.waitUntilFileIsRead(by: engine)
+        #expect(try await manager.runtimeEngine(reading: file) === engine)
+    }
+
+    @Test("Asking for a file while it is being read in this process waits for the same read")
+    func fileBeingReadInThisProcessIsReadOnce() async throws {
+        let manager = Self.makeInProcessManager()
+        let file = try Self.file()
+
+        async let first = manager.startReading(file)
+        async let second = manager.startReading(file)
+        let (firstEngine, secondEngine) = try await (first, second)
+
+        #expect(firstEngine === secondEngine)
+        #expect(manager.fileRuntimeEngines.count == 1)
+    }
+
+    @Test("A file that cannot be read in this process throws, and nothing is listed")
+    func fileThatCannotBeReadInThisProcessIsNotListed() async throws {
+        let manager = Self.makeInProcessManager()
+        let missingFile = RuntimeFile(
+            url: URL(fileURLWithPath: "/nonexistent/FileEngineManagementTests"),
+            content: .machO(slice: nil),
+            platform: nil,
+            displayName: "FileEngineManagementTests"
+        )
+
+        await #expect(throws: (any Error).self) {
+            _ = try await manager.startReading(missingFile)
+        }
+        #expect(manager.fileRuntimeEngines.isEmpty)
+        #expect(!manager.runtimeEngineSections.contains { $0.hostID == RuntimeHostInfo.files.hostID })
+    }
+
+    /// There is no process to let go of: the parsed file lives in this one.
+    @Test("A file engine read in this process is never suspended")
+    func fileEngineReadInThisProcessIsNeverSuspended() async throws {
+        let manager = Self.makeInProcessManager()
+        let engine = try await manager.startReading(try Self.file())
+
+        await manager.suspendFileEngine(engine)
+
+        #expect(!manager.isFileEngineSuspended(engine))
+        #expect(engine.state == .localOnly)
+        try await manager.resumeFileEngine(engine)
+        #expect(engine.state == .localOnly)
+    }
+
+    /// A Mac starts the engine over in a new instance with the other cache;
+    /// here the engine was made with its images, and there is no instance to
+    /// start over in.
+    @Test("Pairing a file read in this process with another dependency cache throws, and leaves it as it was")
+    func changingTheDependencyCacheOfAFileReadInThisProcessThrows() async throws {
+        let manager = Self.makeInProcessManager()
+        let file = try Self.file()
+        let engine = try await manager.startReading(file)
+
+        var pairedFile = file
+        pairedFile.dependencyCache = .systemDyldSharedCache
+        await #expect(throws: RuntimeFileEngineError.self) {
+            _ = try await manager.startReading(pairedFile)
+        }
+
+        #expect(manager.file(of: engine) == file)
+        #expect(manager.fileRuntimeEngines.count == 1)
+        #expect(engine.state == .localOnly)
     }
 }
 

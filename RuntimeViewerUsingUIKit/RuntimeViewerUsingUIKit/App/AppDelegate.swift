@@ -1,13 +1,18 @@
 import UIKit
+import Dependencies
 import FoundationToolbox
 import RuntimeViewerCore
-import RuntimeViewerCommunication
 import RuntimeViewerCrossReferences
+import RuntimeViewerEngineManagement
 
 @Loggable
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
-    var remoteRuntimeEngine: RuntimeEngine?
+    /// The engines this device offers: `.local`, and the Bonjour server a Mac
+    /// connects to. Reading it is what brings them up, so it is read only once
+    /// the commands below are registered.
+    @Dependency(\.runtimeEngineManager)
+    private var runtimeEngineManager
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         #log(.info,"Application did finish launching")
@@ -28,27 +33,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             _ = RuntimeEngine.local
             #log(.info,"Local runtime engine initialized")
         }
-        Task {
-            // The same readable, launch-stable name the injected payload
-            // advertises. A device running both still shows up as two entries
-            // under one section: the host tells them apart by the TXT record's
-            // device ID and pid, not by this name.
-            //
-            // Resolved rather than read off `localHostName`: a host predating
-            // the TXT keys has only this string to show, and keys its sidebar
-            // autosave state on it, so the model-name fallback would outlive
-            // the session. `makeService` resolves the same value for the TXT
-            // record on this code path, so the second lookup costs nothing.
-            let serviceName = await RuntimeNetworkBonjour.resolvedServiceName()
-            #log(.info,"Creating Bonjour server runtime engine with service name: \(serviceName, privacy: .private)")
-            remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: serviceName, identifier: .init(rawValue: serviceName), role: .server))
-            do {
-                try await remoteRuntimeEngine?.connect()
-                #log(.info,"Bonjour server runtime engine connected successfully")
-            } catch {
-                #log(.error,"Failed to connect Bonjour server runtime engine: \(error, privacy: .public)")
-            }
-        }
+        // The manager is configured as a device (`.deviceApplication`): it
+        // advertises this device's runtime over Bonjour, under the name the
+        // user gave the device, for a Mac to inspect, and lists `.local`. It
+        // neither browses nor shares — a Bonjour server takes one client at a
+        // time, and a device that connected to a Mac would take that Mac's.
+        _ = runtimeEngineManager
+        #log(.info,"Runtime engine manager started")
         return true
     }
 

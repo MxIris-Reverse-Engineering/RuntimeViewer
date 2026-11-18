@@ -268,6 +268,21 @@ struct RuntimeEngineManagerMacCatalystLaunchTests {
         #expect(helperLaunchCount == 0)
         #expect(manager.systemRuntimeEngines.isEmpty)
     }
+
+    @Test("Without a Mac Catalyst launch a relaunch request does nothing")
+    func relaunchWithoutMacCatalystDoesNothing() async {
+        let manager = RuntimeEngineManager(configuration: .application, startupHandler: { _ in }, macCatalystLaunching: nil)
+        var events: [RuntimeEngineManagerEvent] = []
+        let subscription = manager.eventPublisher.sink { events.append($0) }
+        defer { subscription.cancel() }
+
+        manager.relaunchMacCatalystRuntimeEngine()
+        await manager.waitForMacCatalystLaunch()
+
+        #expect(manager.systemRuntimeEngines.isEmpty)
+        #expect(manager.currentMacCatalystRuntimeEngine == nil)
+        #expect(events.isEmpty)
+    }
 }
 
 extension RuntimeEngine.State {

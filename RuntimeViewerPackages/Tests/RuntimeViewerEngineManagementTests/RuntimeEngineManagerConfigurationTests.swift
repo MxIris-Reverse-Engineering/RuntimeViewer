@@ -31,6 +31,8 @@ struct RuntimeEngineManagerConfigurationTests {
             .injectedEngineReconnection,
             .engineSharing,
         ])
+        #expect(RuntimeEngineManagerConfiguration.application.browsesForPeers)
+        #expect(!RuntimeEngineManagerConfiguration.application.bonjourServerPushesRuntimeData)
     }
 
     @Test("The headless host neither advertises nor shares, but still browses and attaches")
@@ -40,19 +42,57 @@ struct RuntimeEngineManagerConfigurationTests {
             .systemEngines,
             .injectedEngineReconnection,
         ])
+        #expect(RuntimeEngineManagerConfiguration.headlessHost.browsesForPeers)
+        #expect(!RuntimeEngineManagerConfiguration.headlessHost.bonjourServerPushesRuntimeData)
     }
 
-    @Test("Each switch controls exactly its own step, and browsing is never optional", arguments: 0 ..< 16)
+    @Test("The device application advertises a server that serves its runtime and brings up its system engines, nothing else")
+    func deviceApplicationStartsServerAndSystemEnginesOnly() {
+        #expect(startupSteps(for: .deviceApplication) == [
+            .bonjourServer,
+            .systemEngines,
+        ])
+        #expect(RuntimeEngineManagerConfiguration.deviceApplication.bonjourServerPushesRuntimeData)
+    }
+
+    @Test("A configuration that does not browse schedules no browser")
+    func configurationWithoutBrowsingSkipsTheBrowser() {
+        var configuration = RuntimeEngineManagerConfiguration.application
+        configuration.browsesForPeers = false
+
+        #expect(startupSteps(for: configuration) == [
+            .bonjourServer,
+            .systemEngines,
+            .injectedEngineReconnection,
+            .engineSharing,
+        ])
+    }
+
+    @Test("A configuration made without the two newer switches browses and keeps its server to the engine list")
+    func newerSwitchesDefaultToWhatEveryConfigurationDidBefore() {
+        let configuration = RuntimeEngineManagerConfiguration(
+            advertisesOverBonjour: true,
+            sharesEnginesWithPeers: false,
+            launchesSystemEngines: false,
+            reconnectsInjectedEngines: false
+        )
+
+        #expect(configuration.browsesForPeers)
+        #expect(!configuration.bonjourServerPushesRuntimeData)
+    }
+
+    @Test("Each switch controls exactly its own step", arguments: 0 ..< 32)
     func eachSwitchMapsToItsStep(bitmask: Int) {
         let configuration = RuntimeEngineManagerConfiguration(
-            advertisesOverBonjour: bitmask & 0b0001 != 0,
-            sharesEnginesWithPeers: bitmask & 0b0010 != 0,
-            launchesSystemEngines: bitmask & 0b0100 != 0,
-            reconnectsInjectedEngines: bitmask & 0b1000 != 0
+            advertisesOverBonjour: bitmask & 0b00001 != 0,
+            browsesForPeers: bitmask & 0b10000 != 0,
+            sharesEnginesWithPeers: bitmask & 0b00010 != 0,
+            launchesSystemEngines: bitmask & 0b00100 != 0,
+            reconnectsInjectedEngines: bitmask & 0b01000 != 0
         )
         let steps = startupSteps(for: configuration)
 
-        #expect(steps.contains(.bonjourBrowser))
+        #expect(steps.contains(.bonjourBrowser) == configuration.browsesForPeers)
         #expect(steps.contains(.bonjourServer) == configuration.advertisesOverBonjour)
         #expect(steps.contains(.engineSharing) == configuration.sharesEnginesWithPeers)
         #expect(steps.contains(.systemEngines) == configuration.launchesSystemEngines)

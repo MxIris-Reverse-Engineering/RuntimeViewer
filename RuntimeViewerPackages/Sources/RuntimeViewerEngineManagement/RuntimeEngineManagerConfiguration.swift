@@ -1,21 +1,31 @@
-#if os(macOS)
 import Foundation
 
 /// Which responsibilities a ``RuntimeEngineManager`` takes on.
 ///
 /// Fixed at construction rather than toggled at run time: advertising and
 /// sharing acquire peers the moment they start, so switching them off later
-/// would mean a disconnect-cleanup story nothing needs yet. Peer discovery is
-/// not a switch — every configuration browses for peers.
+/// would mean a disconnect-cleanup story nothing needs yet.
 public struct RuntimeEngineManagerConfiguration: Sendable, Hashable {
     /// Start the Bonjour server so peers can discover this process.
     public var advertisesOverBonjour: Bool
+
+    /// Whether the Bonjour server engine serves this process's own runtime to
+    /// the peer that connects, pushing its image list on connect. Off on the
+    /// Mac, whose engines peers mirror through proxy servers; on for a device,
+    /// whose peers inspect it directly.
+    public var bonjourServerPushesRuntimeData: Bool
+
+    /// Browse for peers and connect to each. Off on a device: a Bonjour server
+    /// takes one client at a time, so a device that connected to a Mac would
+    /// take the connection that Mac's other peers need.
+    public var browsesForPeers: Bool
 
     /// Wrap every local engine in a `RuntimeEngineProxyServer` and publish
     /// descriptors to peers, so they can mirror what this process reaches.
     public var sharesEnginesWithPeers: Bool
 
-    /// Bring up `.local` and the Mac Catalyst client engine on start.
+    /// Bring up `.local` and, on the Mac, the Mac Catalyst client engine on
+    /// start.
     public var launchesSystemEngines: Bool
 
     /// Reconnect previously injected processes: XPC endpoints from the helper
@@ -24,11 +34,15 @@ public struct RuntimeEngineManagerConfiguration: Sendable, Hashable {
 
     public init(
         advertisesOverBonjour: Bool,
+        bonjourServerPushesRuntimeData: Bool = false,
+        browsesForPeers: Bool = true,
         sharesEnginesWithPeers: Bool,
         launchesSystemEngines: Bool,
         reconnectsInjectedEngines: Bool
     ) {
         self.advertisesOverBonjour = advertisesOverBonjour
+        self.bonjourServerPushesRuntimeData = bonjourServerPushesRuntimeData
+        self.browsesForPeers = browsesForPeers
         self.sharesEnginesWithPeers = sharesEnginesWithPeers
         self.launchesSystemEngines = launchesSystemEngines
         self.reconnectsInjectedEngines = reconnectsInjectedEngines
@@ -52,6 +66,18 @@ public struct RuntimeEngineManagerConfiguration: Sendable, Hashable {
         launchesSystemEngines: true,
         reconnectsInjectedEngines: true
     )
+
+    /// The iOS, iPadOS and visionOS app: advertises this device's runtime for
+    /// a Mac to inspect and brings up `.local`; neither browses, shares nor
+    /// reconnects injected processes.
+    public static let deviceApplication = Self(
+        advertisesOverBonjour: true,
+        bonjourServerPushesRuntimeData: true,
+        browsesForPeers: false,
+        sharesEnginesWithPeers: false,
+        launchesSystemEngines: true,
+        reconnectsInjectedEngines: false
+    )
 }
 
 extension RuntimeEngineManagerConfiguration {
@@ -73,7 +99,9 @@ extension RuntimeEngineManagerConfiguration {
         if advertisesOverBonjour {
             steps.append(.bonjourServer)
         }
-        steps.append(.bonjourBrowser)
+        if browsesForPeers {
+            steps.append(.bonjourBrowser)
+        }
         if launchesSystemEngines {
             steps.append(.systemEngines)
         }
@@ -86,4 +114,3 @@ extension RuntimeEngineManagerConfiguration {
         return steps
     }
 }
-#endif
