@@ -5,7 +5,7 @@ import Testing
 import Dependencies
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
-import RuntimeViewerEngineManagement
+@testable import RuntimeViewerEngineManagement
 @testable import RuntimeViewerAppCore
 import RuntimeViewerAppTestingSupport
 
