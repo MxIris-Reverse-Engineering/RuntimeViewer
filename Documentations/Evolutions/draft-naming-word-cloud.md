@@ -121,7 +121,7 @@ Export 菜单里三项，都按当前口径与筛选导出：
 
 1. **Core 读语料成员的命令**（已完成）—— `RuntimeObjectMembers`、`CorpusMembersCommand`、语料仓库的 `members(in:shownUnder:)`、路由声明
    - 行为：`imageWithoutCorpus`、`membersMatchAMemberSearch`、`optionsHideWhatTheyHide`；`SharedCacheRoutingDeclarationTests` 列入新命令
-2. **AppCore 的拆词与计数** —— 拆词、前缀、复合词、四种口径、去重与跳过、定色、CSV 与 JSON
+2. **AppCore 的拆词与计数**（已完成）—— 拆词、前缀、复合词、四种口径、去重与跳过、定色、CSV 与 JSON
    - 行为：缩略词与数字的拆法、选择子与下划线、前缀按镜像统计并去掉、复合词合并、虚词去掉、各种跳过与去重、按「最有代表性」定色、CSV 转义、JSON 的形状与排序
 3. **RuntimeViewerUI 的排版与画布** —— `WordCloudLayout`、`WordCloudView`
    - 行为：不重叠、不出界、确定性、画布按词的总面积定；点到词、点到空白
@@ -167,3 +167,4 @@ Export 菜单里三项，都按当前口径与筛选导出：
 | 2026-11-18 | 三件待定的事按草案原文处理 | 起草时留给用户的三件事，批准时按草案原文、范围最小的做法定下：一、ObjC 的 override 照草案「已知局限」所写，跟随文档的 Strip Overrides，不在 ⚙︎ 里另加开关（起草时的建议是加一个默认打开的开关，因为不去掉时 AppKit 的 `dealloc` 在 Method First Words 里排第六；以后要加只多一个开关）。二、双指缩放与 Zoom to Fit 保留，草案「浏览」一节本来就写着。三、仓库外的一次性原型已经不在两台机器上，不再留底，实现照草案从头写。 |
 | 2026-11-18 | 代码落点按现在的分层改写，补落地步骤 | 草案写成之后，ViewModel 全部搬进了 RuntimeViewerAppCore（0091、0096），AppCore 不再用 AppKit 的颜色与图片（0094），目录按功能划分（0095），导航的 `.push` / `.pushHighlighting` 换成了 `SelectionRoute.open(_:in:highlighting:)`。§5 与 §3 的导航一句据此改写，并把实现拆成五步写进新的 §6。 |
 | 2026-11-18 | 第一步：命令名 `corpusMembers`，成员行高亮只用成员名 | 命令关于一个镜像，所以由镜像的拥有者回答，与建语料的命令一致。成员不带声明行，点用法里的成员行时，`ContentHighlightRequest` 的 `lineText` 留空：内容区找不到同样的一行时，本来就退到按成员名整词匹配、取离行号最近的一处。对端早于这条命令时，2.1.0 以后的版本都回 `isUnknownCommand`，窗口据此提示对端太旧。 |
+| 2026-11-18 | 第二步自定的细节 | 一、复合词预设 18 个：草案点名的 14 个（`ViewController`、`GestureRecognizer`、`DataSource`、`IndexPath`、`TraitCollection`、`HitTest`、`CornerRadius`、`SafeArea`、`ToolTip`、`KeyPath`、`RunLoop`、`TimeZone`、`UserInfo`、`PopUp`），加 `FirstResponder`、`LayoutGuide`、`LineBreak`、`WhiteSpace`。没有原型可以按频率重新统计，所以只加了这几个固定说法，不加以 `Manager`、`Controller` 这类角色词结尾的组合，免得吃掉类型后缀。二、虚词表：and、as、at、by、for、from、in、into、of、on、or、the、to、with。三、类名前缀取两到三个大写字母后面还跟着大写字母的开头，三个字母的候选占到两个字母那个的八成以上才取它（Metal 得 `MTL`，AppKit 的 `NSURL…` 不会把 `NS` 变成 `NSU`）；至少要有三个、且占类型名的五分之一，否则不认前缀。四、局部类型与用户做出来的特化类型的成员也不算，与类型口径一致。五、类型名取 `displayName` 去掉外层类型与泛型参数，只用来拆词；JSON 里的类型名与所属类型写完整的 `displayName`。六、一个词的写法取它最常见的那种，用来决定是不是缩略词。 |
