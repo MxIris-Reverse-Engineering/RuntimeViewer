@@ -1,5 +1,4 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
 import RxAppKit
 #endif
 
@@ -9,7 +8,7 @@ import RuntimeViewerCrossReferences
 import RuntimeViewerArchitectures
 
 /// What a Find result row is painted from: an icon, its opacity, the
-/// attributed title, and whether the title may wrap onto a second line (a
+/// title as runs of roles, and whether the title may wrap onto a second line (a
 /// hit's line does, a type name does not). The fonts and colours come from
 /// `FindResultCellStyle`, the icons from `FindResultIcon`.
 public struct FindResultCellAppearance: Equatable {
@@ -19,7 +18,7 @@ public struct FindResultCellAppearance: Equatable {
     /// what the image is part of (`ColorDescriptor.imageKind(_:)`). `nil` leaves the usual tint
     /// (`FindResultCellStyle.iconTintColor`).
     public var iconColor: ColorDescriptor?
-    public var title: NSAttributedString = .init()
+    public var title: RowText = .empty
     public var allowsWrapping = false
     public var isSecondary = false
 
@@ -107,7 +106,7 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
     }
 
     public convenience init(content: Content, children: [FindResultNode] = [], identifier: String) {
-        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeNavigatorAppearance(for: content))
+        self.init(content: content, children: children, identifier: identifier, appearance: Self.makeAppearance(for: content))
     }
 
     /// `node` with other children — what the filter bar keeps of a row — sharing its appearance,
@@ -174,25 +173,18 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     // MARK: - Appearance
 
-    /// The row as the Find navigator draws it. Nothing draws one off AppKit.
-    private static func makeNavigatorAppearance(for content: Content) -> FindResultCellAppearance {
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        return makeAppearance(for: content, metrics: .navigator)
-        #else
-        return FindResultCellAppearance()
-        #endif
-    }
+    /// What sits between a row's name and its subtitle.
+    static let subtitleSeparator = "  "
 
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-    /// A row showing `content`, at `metrics`' sizes: the Find navigator's, or
-    /// the Inspector's References tab's, which lists cross-reference rows a
-    /// size down.
-    static func makeAppearance(for content: Content, metrics: FindResultCellStyle.Metrics) -> FindResultCellAppearance {
+    /// The row as the Find navigator and the Inspector's References tab show it. Badges are described at
+    /// the default size; the cell view draws them at its own list's icon size, and the title's roles in its
+    /// list's fonts (`FindResultCellStyle.Metrics` in RuntimeViewerAppUI).
+    static func makeAppearance(for content: Content) -> FindResultCellAppearance {
         var appearance = FindResultCellAppearance()
         switch content {
         case .object(let object):
-            appearance.icon = .runtimeObject(object.kind, size: metrics.iconSize)
-            appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
+            appearance.icon = .runtimeObject(object.kind)
+            appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
         case .textMatch(let match):
             appearance.icon = .findResultSymbol(.match)
             appearance.iconAlpha = FindResultIcon.dimmedAlpha
@@ -205,26 +197,26 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
             appearance.allowsWrapping = true
         case .relationship(let name, let object):
             if let object {
-                appearance.icon = .runtimeObject(object.kind, size: metrics.iconSize)
-                appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath), metrics: metrics)
+                appearance.icon = .runtimeObject(object.kind)
+                appearance.title = titleWithSubtitle(object.displayName, subtitle: FindScope.imageName(of: object.imagePath))
             } else {
                 appearance.icon = .findResultSymbol(.unresolved)
                 appearance.iconAlpha = FindResultIcon.dimmedAlpha
-                appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
+                appearance.title = RowText(name, role: .unresolved)
                 appearance.isSecondary = true
             }
         case .crossReferenceRoot(let root, _):
-            appearance.icon = FindResultIcon.crossReferenceIcon(for: root, size: metrics.iconSize)
-            appearance.title = titleWithSubtitle(root.title, subtitle: FindScope.imageName(of: root.imagePath), metrics: metrics)
+            appearance.icon = FindResultIcon.crossReferenceIcon(for: root, size: RuntimeObjectIcon.defaultIconSize)
+            appearance.title = titleWithSubtitle(root.title, subtitle: FindScope.imageName(of: root.imagePath))
         case .crossReference(let row):
-            appearance.icon = FindResultIcon.crossReferenceIcon(for: row, size: metrics.iconSize)
+            appearance.icon = FindResultIcon.crossReferenceIcon(for: row, size: RuntimeObjectIcon.defaultIconSize)
             switch row.item {
             case .loading, .failure:
                 appearance.iconAlpha = FindResultIcon.dimmedAlpha
-                appearance.title = plainTitle(row.title, color: FindResultCellStyle.unresolvedTitleColor, metrics: metrics)
+                appearance.title = RowText(row.title, role: .unresolved)
                 appearance.isSecondary = true
             case .function, .target, .image, .unnamedFunctions:
-                appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle, metrics: metrics)
+                appearance.title = titleWithSubtitle(row.title, subtitle: row.subtitle)
             }
             if case .image(let path) = row.item {
                 appearance.iconColor = .imageKind(RuntimeImageKind(ofImageAt: path))
@@ -233,44 +225,19 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         return appearance
     }
 
-    /// A one-line title in one colour.
-    private static func plainTitle(_ text: String, color: NSColor, metrics: FindResultCellStyle.Metrics) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [
-            .font: metrics.titleFont,
-            .foregroundColor: color,
-            .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
-        ])
-    }
-
     /// `Name  image` — the type's name, then the image it is in, the way a
     /// file row shows its group — on one line.
-    private static func titleWithSubtitle(_ title: String, subtitle: String, metrics: FindResultCellStyle.Metrics) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: title, attributes: [
-            .font: metrics.titleFont,
-            .foregroundColor: FindResultCellStyle.titleColor,
-            .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
-        ])
-        if !subtitle.isEmpty {
-            result.append(NSAttributedString(string: FindResultCellStyle.subtitleSeparator + subtitle, attributes: [
-                .font: metrics.subtitleFont,
-                .foregroundColor: FindResultCellStyle.subtitleColor,
-                .paragraphStyle: FindResultCellStyle.titleParagraphStyle,
-            ]))
-        }
-        return result
+    private static func titleWithSubtitle(_ title: String, subtitle: String) -> RowText {
+        guard !subtitle.isEmpty else { return RowText(title) }
+        return RowText(runs: [RowText.Run(title), RowText.Run(subtitleSeparator + subtitle, role: .secondary)])
     }
 
-    /// The line with the hit set apart in the emphasis font and colour. It
-    /// keeps the default paragraph style, which wraps by word: a hit's line
-    /// may take a second line (`FindResultCellAppearance.allowsWrapping`).
-    private static func emphasized(_ text: String, range: NSRange?) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: text, attributes: [.font: FindResultCellStyle.hitLineFont, .foregroundColor: FindResultCellStyle.hitLineColor])
-        if let range, range.location >= 0, NSMaxRange(range) <= result.length {
-            result.addAttributes([.font: FindResultCellStyle.emphasisFont, .foregroundColor: FindResultCellStyle.emphasisColor], range: range)
-        }
-        return result
+    /// A hit's line with the hit emphasized; the whole line when the hit's range does not lie in it.
+    private static func emphasized(_ text: String, range: NSRange?) -> RowText {
+        let line = RowText(text, role: .hitLine)
+        guard let range else { return line }
+        return line.marking([range], as: .emphasized)
     }
-    #endif
 
     // MARK: - Member Names
 
@@ -352,7 +319,7 @@ extension FindResultNode: Differentiable {
         // `content` compares a type by identity alone; the row also shows its display name,
         // which another run can spell differently.
         guard content == source.content,
-              appearance.title.isEqual(to: source.appearance.title),
+              appearance.title == source.appearance.title,
               children.count == source.children.count
         else { return false }
         return zip(children, source.children).allSatisfy { child, sourceChild in

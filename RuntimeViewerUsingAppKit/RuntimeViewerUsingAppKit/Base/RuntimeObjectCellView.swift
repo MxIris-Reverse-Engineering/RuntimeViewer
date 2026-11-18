@@ -163,9 +163,9 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
         tertiaryIconImageView.toolTip = appearance.tertiaryTooltip
         tertiaryIconImageView.isHidden = appearance.tertiaryIcon == nil
 
-        titleLabel.attributedStringValue = appearance.title
+        titleLabel.attributedStringValue = appearance.title.attributedString(in: .list)
 
-        subtitleLabel.attributedStringValue = appearance.subtitle ?? NSAttributedString()
+        subtitleLabel.attributedStringValue = appearance.subtitle?.attributedString(in: .list) ?? NSAttributedString()
         subtitleLabel.isHidden = appearance.subtitle == nil
 
         apply(appearance.tags)

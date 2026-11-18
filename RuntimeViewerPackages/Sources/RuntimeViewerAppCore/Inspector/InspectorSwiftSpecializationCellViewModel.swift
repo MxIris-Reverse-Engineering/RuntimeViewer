@@ -1,10 +1,5 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
 import RxAppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
 #endif
 
 import Foundation
@@ -25,7 +20,7 @@ public final class InspectorSwiftSpecializationCellViewModel: NSObject, @uncheck
             primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
             secondaryIcon: RuntimeObjectIcon.secondaryGlyph(for: runtimeObject, size: iconSize).map(IconDescriptor.glyph),
             secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
-            title: NSAttributedString(rowText: runtimeObject.displayName, fontSize: 13, color: .labelColor)
+            title: RowText(runtimeObject.displayName, fontSize: 13)
         )
         if runtimeObject.properties.contains(.isGeneric) {
             composedAppearance.tertiaryIcon = .glyph(RuntimeObjectIcon.genericGlyph(size: iconSize))

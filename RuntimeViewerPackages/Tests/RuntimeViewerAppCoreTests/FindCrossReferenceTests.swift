@@ -171,7 +171,7 @@ struct FindCrossReferenceTreeTests {
 
     @Test("a function's icon takes the colour of its language: Swift blue, C and C++ green, Objective-C orange, none grey")
     func functionIconsTakeTheirLanguagesColours() {
-        let size = FindResultCellStyle.Metrics.navigator.iconSize
+        let size = RuntimeObjectIcon.defaultIconSize
         func icon(of item: FindCrossReferenceRow.Item) -> IconDescriptor? {
             FindResultNode.crossReference(FindCrossReferenceRow(item: item, direction: .callers), identifier: "row", children: []).appearance.icon
         }

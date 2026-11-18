@@ -1,22 +1,14 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
-#endif
-
 import MemberwiseInit
 
 /// The complete visual state of a runtime-object cell, published as one value
 /// so a high-cardinality cell view model pays for a single Rx stream instead
 /// of one per outlet (see proposal 0005).
 ///
-/// The icons are described, not drawn (`IconDescriptor`; the cell view draws
-/// them), so copying the struct never copies image storage. `Equatable` lets
-/// publishers drop equal-value updates: icons compare as the values they are,
-/// the attributed strings compare by content, and each tooltip is a short
-/// constant from the same place as its icon.
+/// Everything is described, not drawn — the icons as `IconDescriptor`s, the
+/// title and subtitle as `RowText` — and the cell view draws them (proposal
+/// `app-core-without-ui-models`). `Equatable` lets publishers drop equal-value
+/// updates: everything compares as the value it is, and each tooltip is a
+/// short constant from the same place as its icon.
 @MemberwiseInit(.public)
 public struct RuntimeObjectCellAppearance: Equatable {
     public var primaryIcon: IconDescriptor? = nil
@@ -28,8 +20,8 @@ public struct RuntimeObjectCellAppearance: Equatable {
     public var tertiaryIcon: IconDescriptor? = nil
     public var tertiaryTooltip: String? = nil
 
-    public var title: NSAttributedString = .init()
-    public var subtitle: NSAttributedString? = nil
+    public var title: RowText = .empty
+    public var subtitle: RowText? = nil
 
     /// Tags after the title, in order; see `RuntimeObjectCellTag`.
     public var tags: [RuntimeObjectCellTag] = []

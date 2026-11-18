@@ -233,7 +233,9 @@ ContentTextViewModel (AppCore)                       AppUI / views
 | `T/FindResultNodeTests.swift` | 修改 | 图标尺寸断言搬进 `TUI/FindResultCellStyleTests.swift`（新增，第二步）；字号断言同去（第三步）；`title ===` 改 `==` | 同上 | 2、3 |
 | `TUI/IconDescriptorRenderingTests.swift` | 新增 | 每种描述值都画得出图，同一描述值取到同一个缓存图像，`.runtimeEngine` 找不到引擎时用占位图 | 解析的测试 | 2 |
 | `AC/Presentation/RowText.swift` · `RowText` | 新增 | 见详细设计 | 行文字的描述值 | 3 |
-| `AC/NSAttributedString+RowText.swift` | 移动 → `AUI/Presentation/NSAttributedString+RowText.swift` | 原有 `init(rowText:fontSize:color:)` 保留；新增 `RowText.attributedString(in:)` 与 `RowTextStyle` | 渲染 | 3 |
+| `AC/NSAttributedString+RowText.swift` | 移动 → `AUI/Presentation/NSAttributedString+RowText.swift` | 原有 `init(rowText:fontSize:color:)` 原样保留（`RowTextAttributedStringTests` 拿它对照） | 渲染 | 3 |
+| `AUI/Presentation/RowText+AttributedString.swift` · `RowTextStyle` | 新增 | `RowTextStyle.list`、`RowTextStyle.findResult(_:)` 与 `RowText.attributedString(in:)` | 渲染 | 3 |
+| `AC/Find/FindResultNode.swift` · `subtitleSeparator` | 修改 | 名字与副标题之间的两个空格从 `FindResultCellStyle` 搬到这里：它是文字内容，不是样式 | 第三步 | 3 |
 | `AC/Theme/NSColor+Xcode.swift` | 移动 → `AUI/Theme/NSColor+Xcode.swift` | 内容不变 | 只有 Find 的样式与 App 的 Find 页用 | 3 |
 | `MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectViewController.swift:346`、`MAC/Sidebar/Root/SidebarRootViewController.swift:218` | 不改（核对） | `.title.string` / `.name.string` 由 `RowText.string` 承接 | — | 3 |
 | `T/FindResultMemberEmphasisTests.swift` | 修改 | 改成断言 `RowText` 的段与角色；字体断言搬进 `TUI/FindResultCellStyleTests.swift` | 同上 | 3 |
@@ -471,12 +473,13 @@ AppUI 一侧：
 
 ```swift
 /// How a list draws `RowText`'s roles.
-public struct RowTextStyle: Sendable {
-    /// A navigator, an inspector or Open Quickly: the system font at the row's size, label colours,
-    /// `.emphasized` in semibold `labelColor`, truncating the tail.
+public struct RowTextStyle {
+    /// A navigator, an inspector or Open Quickly: the system font at the row's size (13 points when it
+    /// names none), label colours, `.emphasized` in semibold `labelColor`, truncating the tail.
     public static let list: RowTextStyle
-    /// The Find navigator's and the inspector's references: `FindResultCellStyle`'s fonts and colours.
-    public static func findResult(_ metrics: FindResultCellStyle.Metrics, allowsWrapping: Bool) -> RowTextStyle
+    /// The Find navigator's and the inspector's references (macOS): `FindResultCellStyle`'s fonts and
+    /// colours. Whether a title wraps stays the label's business (`FindResultCellView`).
+    public static func findResult(_ metrics: FindResultCellStyle.Metrics) -> RowTextStyle
 }
 
 extension RowText {
@@ -684,7 +687,7 @@ enum AppCoreBoundary {
    - 行为：`findInspectorRowsDrawIconsAtFourteenPoints`
    - 行为：`customSymbolsLoadFromAppUIsResourceBundle`
    - 行为：`runtimeEngineManagerKnowsEveryEngineTheReportShows`（验证调研里的推测；不成立就改用替代方案里的弱引用记录）
-3. **行文字** —— 步骤为 3 的各行
+3. **行文字**（已完成，2026-11-18）—— 步骤为 3 的各行
    - 行为：`listStyleDrawsEachRoleAsTheOldRowTextInitializerDid`
    - 行为：`sidebarFilterMatchesAreEmphasizedRuns`
    - 行为：`openQuicklyUnmatchedTextIsSecondary`
@@ -726,3 +729,4 @@ enum AppCoreBoundary {
 | 2026-11-18 | Accepted | 用户批准，开始实现。四步共用一条功能分支，每做完一步就先在本地合进 `next` 的检出给用户看，用户同意后再推送 `next`、开始下一步；编号与 Implemented 等第四步合入后再定。 |
 | 2026-11-18 | 第一步完成 | 照计划做完。与提案不同的三处：一、规则 4、5 的行为用参数化样例覆盖（「要报告」与「不报告」两组），没有逐条单列成提案里写的几个测试名；另加两条守护测试：过渡清单里的文件不再违规或已不存在就失败（清单只减不增），`allowedLines` 里的条目对不上任何被报告的行就失败。二、Foundation 名字清单除了 AppCore 现在用到的，还预先收了几个确定属于 Foundation 的（`NSError`、`NSURL`、`NSCharacterSet`、`NSMakeRange`、`NSRangeException`、`NSRecursiveLock`）。三、iOS 一侧这一步只为 iOS 模拟器编了 `RuntimeViewerApplication` 包（AppCore、AppUI 的 UIKit 分支），没编 iOS App 本身：这一步没有改 iOS App 的任何代码。验证在 Ultra 上：包级构建、iOS 包构建与 macOS App（Tuist workspace，Debug）构建通过；AppCoreTests 与 AppUITests 共 1055 个测试，只有三条既有红灯失败（`TitleActivityIndicatorTests` 的悬停副标题、`ContentImageViewModelTests` 的图像失败重试、`FindCrossReferenceTests` 的 Call Hierarchy 超时），新加与搬家的测试全部通过。 |
 | 2026-11-18 | 第二步完成 | 照计划做完，与提案不同的四处，改动地图已按实际做法改写：一、`RuntimeSourcePickerContent` 没改成描述值，而是原样搬进 AppUI：AppCore 里没有任何地方用它，它是 AppUI 两个 adapter 的输入、由 App 层的 `MainViewModel` 构造；断开的来源显示的是引擎消失前存下的图像，按 ID 已经找不回，改成描述值会变成通用图标。二、`FindResultCellAppearance.iconAlpha` 保留为数字：同一个未解析符号在关系树里淡化、在交叉引用行里不淡化，透明度不由符号决定。三、`IconDescriptor.image(size:)` 推到第三步：这一步 Find 的图标尺寸还在 AppCore 里算，用不到它。四、`RuntimeObjectIconRendering` 的 key 成为 AppUI 内部的 `DependencyKey`，不是 `@DependencyEntry`，以保留原来「测试画空白图」的测试值。另外 Tuist 描述里重复了资源包 target 名，随资源搬家改成 AppUI 的。引擎图标按 ID 查找：live 值经 `RuntimeEngineManager.runtimeEngines` 找回引擎；测试用的提供者不跟随管理器，一律画通用可执行文件图标（解析调研里那条推测没有专门验证，Report 与来源选择器显示的引擎都由管理器创建）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1060 个，失败 4 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、`ReportSharedByEngineTests` 与 `BackgroundWorkProcessActivityTests` 整包跑时各一条），后两条单独重跑 14 个测试全部通过。 |
+| 2026-11-18 | 第三步完成 | 照计划做完，与提案不同的几处，改动地图与详细设计已按实际做法改写：一、`RowTextStyle.findResult(_:)` 只收尺寸，不收 `allowsWrapping`：标题换不换行原本就由 `FindResultCellView` 设在标签上。二、名字与副标题之间的两个空格（`subtitleSeparator`）从 `FindResultCellStyle` 搬进 AppCore 的 `FindResultNode`：它是文字内容，不是样式。三、`FindResultNode.makeAppearance(for:)` 与 Inspector 的引用行不再只在 AppKit 下构造外观，各平台都描述同一个值；Find 行的尺寸全部留在 cell 视图（`metrics`），徽章按默认尺寸描述、由视图用 `IconDescriptor.image(size:)` 画成 16 或 14 点。四、侧栏根节点的标题原来不带颜色属性（用标签自己的 `labelColor`），现在与其他行一样显式写 `labelColor`，显示效果相同。去掉 AppKit import 后，两个侧栏 cell ViewModel 补了 `import Foundation`（`NSObject` 原来经 AppKit 间接可见）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1065 个，失败 2 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时），新加与改写的行文字测试全部通过。 |

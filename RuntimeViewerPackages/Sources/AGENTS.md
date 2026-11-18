@@ -32,8 +32,7 @@ The apps' application layer is two targets and a facade
 UIFoundation, SFSymbols or AppKitPlus, and neither does RuntimeViewerArchitectures beneath it. What it took
 from them it has of its own: the `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`PlatformTypes.swift`;
 UIFoundation's and SFSymbols' name the same types, so a file that sees several still compiles),
-`NSAttributedString(rowText:fontSize:color:)` for a row's title, `SystemSymbol` naming the system symbols
-it shows, the Xcode colours of `NSColor+Xcode.swift`, and the Find query
+`SystemSymbol` naming the system symbols it shows, and the Find query
 field's content as data: `FindQueryTerm` and `FindPattern`, with AppKitPlus's rules for the regular
 expression a term makes and for its property list rewritten in `FindQueryTerm.swift`. **A change to those
 rules in AppKitPlus is carried over by hand**: `FindPatternParityTests` runs both on the same input and fails
@@ -89,6 +88,16 @@ AppUI also keeps the drawing under the names AppCore used to have — `RuntimeIm
 and its asset catalog, `Resources/Symbols.xcassets` of RuntimeViewerAppUI (the image kinds' symbols taken from
 Xcode, kept as version 6 templates so that macOS 15 reads them), live there too; `SystemSymbolTests` and
 `CustomSymbolTests` in RuntimeViewerAppUITests load every case.
+
+**A row's text is `RowText` — runs of roles, not fonts and colours** (`Presentation/RowText.swift`): the
+name, a subtitle, what a filter did or did not match, a Find hit's line, an unresolved row; with the point
+size the row is drawn at where it has one. The view draws it in its list's style,
+`rowText.attributedString(in: .list)` or `.findResult(metrics)` (AppUI's `Presentation/RowText+AttributedString.swift`):
+the list style is attribute for attribute what `NSAttributedString(rowText:fontSize:color:)` makes
+(`RowTextAttributedStringTests`), and the Find style takes its fonts and colours from `FindResultCellStyle`,
+which lives in AppUI with the Xcode colours of `Theme/NSColor+Xcode.swift`. A Find row's sizes — the
+navigator's or the Inspector's References tab's — are its cell view's, not the row's: the view draws the
+badges at `metrics.iconSize` (`IconDescriptor.image(size:)`).
 
 **Every list of images takes a row's icon from `RuntimeImageKind`**: a node of the image tree by
 `node.kind` (its own name), a place that lists one image by `RuntimeImageKind(ofImageAt:)` (the bundle

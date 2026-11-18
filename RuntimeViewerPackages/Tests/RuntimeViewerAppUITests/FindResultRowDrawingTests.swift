@@ -5,6 +5,7 @@ import RuntimeViewerCrossReferences
 import RuntimeViewerUI
 import Testing
 @testable import RuntimeViewerAppCore
+@testable import RuntimeViewerAppUI
 
 /// A Find result row's title drawn in the label `FindResultCellView` sets it in. What the row holds
 /// is `FindResultNodeTests`'.
@@ -31,7 +32,7 @@ struct FindResultRowDrawingTests {
         let label = Label(wrappingLabelWithString: "")
         label.maximumNumberOfLines = 1
         label.lineBreakMode = .byTruncatingTail
-        label.attributedStringValue = node.appearance.title
+        label.attributedStringValue = node.appearance.title.attributedString(in: .findResult(.navigator))
         label.frame = NSRect(x: 0, y: 0, width: 240, height: 18)
 
         // The `-` alone ends a few points in.

@@ -42,7 +42,7 @@ final class SidebarRootTableCellView: TableCellView {
             iconView.image = appearance.icon?.image
             // A template tinted per kind, as Xcode's navigator draws it; a selected row turns it white.
             iconView.contentTintColor = appearance.iconColor.color
-            titleLabel.attributedStringValue = appearance.name
+            titleLabel.attributedStringValue = appearance.name.attributedString(in: .list)
         }
         .disposed(by: rx.disposeBag)
     }

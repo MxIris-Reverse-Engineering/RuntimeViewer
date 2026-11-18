@@ -2,10 +2,12 @@
 import AppKit
 import RuntimeViewerCore
 import RuntimeViewerCrossReferences
+import RuntimeViewerAppCore
 
 /// Every font and colour a Find result row is drawn with, so tuning the
-/// rows means changing a value here and nowhere else. `FindResultNode` builds
-/// each row's appearance from these; `FindResultCellView` sizes and tints its
+/// rows means changing a value here and nowhere else. `FindResultNode` (in
+/// RuntimeViewerAppCore) describes each row in roles; `RowTextStyle.findResult(_:)`
+/// draws the roles in these, and `FindResultCellView` sizes and tints its
 /// icon from them.
 public enum FindResultCellStyle {
     // MARK: - Sizes
@@ -58,8 +60,6 @@ public enum FindResultCellStyle {
     /// The image the type is in, after its name, in `Metrics.subtitleFont`.
     static let subtitleColor: NSColor = .secondaryLabelColor
 
-    /// What sits between the name and the image.
-    static let subtitleSeparator = "  "
 
     /// An unresolved relationship node's name, set in `Metrics.titleFont`.
     static let unresolvedTitleColor: NSColor = .secondaryLabelColor

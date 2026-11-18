@@ -1,11 +1,3 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
-#endif
-
 import Foundation
 import RuntimeViewerCore
 
@@ -23,7 +15,7 @@ extension RuntimeObjectCellAppearance {
             primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
             secondaryIcon: RuntimeObjectIcon.secondaryGlyph(for: runtimeObject, size: iconSize).map(IconDescriptor.glyph),
             secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
-            title: NSAttributedString(rowText: runtimeObject.displayName, fontSize: 12, color: .labelColor)
+            title: RowText(runtimeObject.displayName, fontSize: 12)
         )
         if runtimeObject.properties.contains(.isGeneric) {
             appearance.tertiaryIcon = .glyph(RuntimeObjectIcon.genericGlyph(size: iconSize))
@@ -35,7 +27,7 @@ extension RuntimeObjectCellAppearance {
         }
         let imageName = runtimeObject.imageName
         if !imageName.isEmpty {
-            appearance.subtitle = NSAttributedString(rowText: imageName, fontSize: 10, color: .secondaryLabelColor)
+            appearance.subtitle = RowText(imageName, role: .secondary, fontSize: 10)
         }
         return appearance
     }

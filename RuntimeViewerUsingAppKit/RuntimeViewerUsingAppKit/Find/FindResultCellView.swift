@@ -84,12 +84,12 @@ final class FindResultCellView: TableCellView {
     /// `configure(with:)`, not `bind(to:)`: a result row's appearance is fixed the moment the
     /// node is built, so there is nothing to observe.
     func configure(with appearance: FindResultCellAppearance) {
-        iconImageView.image = appearance.icon?.image
+        iconImageView.image = appearance.icon?.image(size: metrics.iconSize)
         iconImageView.alphaValue = appearance.iconAlpha
         iconImageView.contentTintColor = appearance.isSecondary
             ? FindResultCellStyle.unresolvedIconTintColor
             : appearance.iconColor?.color ?? FindResultCellStyle.iconTintColor
-        titleLabel.attributedStringValue = appearance.title
+        titleLabel.attributedStringValue = appearance.title.attributedString(in: .findResult(metrics))
         titleLabel.maximumNumberOfLines = appearance.allowsWrapping ? 2 : 1
         titleLabel.lineBreakMode = appearance.allowsWrapping ? .byWordWrapping : .byTruncatingTail
         titleLabel.cell?.truncatesLastVisibleLine = appearance.allowsWrapping

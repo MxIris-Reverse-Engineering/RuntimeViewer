@@ -376,16 +376,13 @@ public final class InspectorReferenceCellViewModel: NSObject, @unchecked Sendabl
         self.row = row
         self.identifier = identifier
         self.unnamedFunctionsGroup = unnamedFunctionsGroup
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        var appearance = FindResultNode.makeAppearance(for: .crossReference(row), metrics: .inspector)
+        // The Inspector draws the row a size down (its cell view's `FindResultCellStyle.Metrics.inspector`).
+        var appearance = FindResultNode.makeAppearance(for: .crossReference(row))
         // A list has no disclosure triangle to show the row expands; the icon shows it instead.
         if let unnamedFunctionsGroup {
             appearance.icon = .findResultSymbol(.disclosure(isExpanded: unnamedFunctionsGroup.isExpanded))
         }
         self.appearance = appearance
-        #else
-        self.appearance = FindResultCellAppearance()
-        #endif
         super.init()
     }
 }
