@@ -86,7 +86,7 @@ struct AppCoreBoundaryTests {
         let sourceFiles = try Self.packageScan.get().sourceFiles(inTargetNamed: "RuntimeViewerAppCore")
         #expect(sourceFiles.count > 100, "read \(sourceFiles.count) files")
         // `AppRoute.swift` is macOS only, inside `#if os(macOS)`.
-        let appRoute = try #require(sourceFiles.first { $0.relativePath == "RuntimeViewerAppCore/AppRoute.swift" })
+        let appRoute = try #require(sourceFiles.first { $0.relativePath == "RuntimeViewerAppCore/App/AppRoute.swift" })
         #expect(appRoute.lines.contains { $0.code.contains("enum AppRoute") && $0.compilingPlatforms == [.macOS] })
     }
 
@@ -173,19 +173,19 @@ struct AppCoreBoundaryTests {
     /// the line, with the reason.
     private static let allowedLines: [(relativePath: String, code: String, reason: String)] = [
         (
-            "RuntimeViewerAppCore/DocumentState.swift", "import UIKit",
+            "RuntimeViewerAppCore/Document/DocumentState.swift", "import UIKit",
             "XCoordinator's `Presentable` and `TransitionProtocol`, which the private selection router conforms to on iOS, name `UIViewController`"
         ),
         (
-            "RuntimeViewerAppCore/DocumentState.swift", "var viewController: UIViewController!",
+            "RuntimeViewerAppCore/Document/DocumentState.swift", "var viewController: UIViewController!",
             "the selection router's `Presentable` requirement; it owns no view controller and returns nil"
         ),
         (
-            "RuntimeViewerAppCore/DocumentState.swift", "typealias RootViewController = UIViewController",
+            "RuntimeViewerAppCore/Document/DocumentState.swift", "typealias RootViewController = UIViewController",
             "the empty transition's `TransitionProtocol` requirement"
         ),
         (
-            "RuntimeViewerAppCore/DocumentState.swift", "func perform(on rootViewController: UIViewController",
+            "RuntimeViewerAppCore/Document/DocumentState.swift", "func perform(on rootViewController: UIViewController",
             "the empty transition's `TransitionProtocol` requirement; it does nothing"
         ),
     ]
