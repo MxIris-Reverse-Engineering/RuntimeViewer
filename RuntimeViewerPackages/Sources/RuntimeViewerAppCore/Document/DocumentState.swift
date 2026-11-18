@@ -76,6 +76,23 @@ public final class DocumentState {
 
     private let startOverRequestedRelay = PublishRelay<RuntimeEngine>()
 
+    /// An image whose naming word cloud the user asked for, from an image
+    /// list's context menu or View ▸ Show Naming Word Cloud. The window
+    /// holding the document opens it (`MainCoordinator`): the request goes
+    /// through the document because the sidebar's coordinators do not reach
+    /// the window's.
+    public var namingWordCloudRequested: Signal<String> {
+        namingWordCloudRequestedRelay.asSignal()
+    }
+
+    private let namingWordCloudRequestedRelay = PublishRelay<String>()
+
+    /// Asks the window holding the document for the naming word cloud of the
+    /// image at `imagePath`.
+    public func requestNamingWordCloud(forImageAt imagePath: String) {
+        namingWordCloudRequestedRelay.accept(imagePath)
+    }
+
     /// The sidebar at the image list and no tab of any editor pane having
     /// shown anything: an engine coming back has nothing to walk the document
     /// back from.

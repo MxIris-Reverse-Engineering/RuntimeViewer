@@ -264,6 +264,7 @@ extension RuntimeImageAction {
         switch self {
         case .open: "Open"
         case .findInImage: "Find in This Image…"
+        case .showNamingWordCloud: "Show Naming Word Cloud"
         case .copyName: "Copy Name"
         case .copyPath: "Copy Path"
         case .showInFinder: "Show in Finder"
@@ -274,6 +275,7 @@ extension RuntimeImageAction {
         switch self {
         case .open: NSImage(systemSymbolName: "arrow.right.circle", accessibilityDescription: nil)
         case .findInImage: SFSymbols(systemName: .magnifyingglass).nsImage
+        case .showNamingWordCloud: NSImage(systemSymbolName: "cloud", accessibilityDescription: nil)
         case .copyName, .copyPath: NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
         case .showInFinder: NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
         }

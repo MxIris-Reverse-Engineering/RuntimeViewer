@@ -11,4 +11,9 @@ public enum ColorDescriptor: Hashable, Sendable {
     case tertiaryLabel
     /// The colour Xcode gives this kind of file.
     case imageKind(RuntimeImageKind)
+    /// The naming word cloud's colour for a word most representative of this category: the
+    /// first, second or third colour of its palette (`NamingWordCategory.paletteIndex`).
+    case namingWordCategory(NamingWordCategory)
+    /// The naming word cloud's canvas, the background its palette was chosen against.
+    case namingWordCloudCanvas
 }

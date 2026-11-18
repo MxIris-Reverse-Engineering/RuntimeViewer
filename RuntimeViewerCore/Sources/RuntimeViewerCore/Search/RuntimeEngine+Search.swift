@@ -92,6 +92,17 @@ extension RuntimeEngine {
         }
     }
 
+    /// The members of `imagePath`'s corpus, object by object, as `options`
+    /// show them — `nil` shows every member any options could — or `nil`
+    /// when the image has no corpus built. A member is shown under the rule a
+    /// member search applies. Each member carries its name, kind, whether it
+    /// is static and its line, not its declaration; each object comes without
+    /// its `children`. A peer older than the command answers with
+    /// `RuntimeNetworkRequestError.isUnknownCommand`.
+    public func members(in imagePath: String, shownUnder options: RuntimeObjectInterface.GenerationOptions? = nil) async throws -> [RuntimeObjectMembers]? {
+        try await dispatch(CorpusMembersCommand(imagePath: imagePath, options: options))
+    }
+
     /// Ancestor, descendant or conformer trees for every indexed type whose
     /// name matches the query, holding only the types of the query's images
     /// when it names some. Needs no corpus: the relationship tables are built
@@ -205,6 +216,10 @@ extension RuntimeEngine {
         var query = query
         query.imagePaths = query.imagePaths.map { Set($0.map(imageCatalog.canonicalImagePath)) }
         return try await interfaceCorpusStore.searchMembers(query, indexedImagePaths: await indexedImagePaths(), onProgress: reportProgress)
+    }
+
+    func _members(in imagePath: String, shownUnder options: RuntimeObjectInterface.GenerationOptions?) async -> [RuntimeObjectMembers]? {
+        await interfaceCorpusStore.members(in: imageCatalog.canonicalImagePath(imagePath), shownUnder: options)
     }
 
     func _typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
@@ -419,6 +434,19 @@ extension RuntimeEngine {
             try await engine._searchMembers(query) { matches in
                 await reportProgress(RuntimeMemberSearchBatch(matches))
             }
+        }
+    }
+
+    /// About one image: the engine that owns a borrowed shared cache image
+    /// keeps its corpus, and answers.
+    struct CorpusMembersCommand: RuntimeEngineCommand {
+        typealias Response = [RuntimeObjectMembers]?
+        let imagePath: String
+        let options: RuntimeObjectInterface.GenerationOptions?
+        static var commandName: String { CommandName.corpusMembers.commandName }
+        var subjectImagePath: String? { imagePath }
+        func perform(on engine: RuntimeEngine) async throws -> [RuntimeObjectMembers]? {
+            await engine._members(in: imagePath, shownUnder: options)
         }
     }
 

@@ -463,6 +463,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.resetEditorSizes)
     }
 
+    /// View ▸ Show Naming Word Cloud: the cloud of the image the sidebar has open.
+    @objc func showNamingWordCloud(_ sender: Any?) {
+        guard let imagePath = documentState.currentImageNode?.path else { return }
+        viewModel?.router.trigger(.namingWordCloud(imagePath: imagePath))
+    }
+
     // MARK: - Font Size Actions
 
     @objc func increaseFontSize(_ sender: Any?) {
@@ -568,6 +574,10 @@ extension MainWindowController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(toggleGeneratedInterface(_:)) {
             menuItem.state = documentState.editorArea.focusedPane.activeTab.currentEntry?.showsGeneratedInterface == true ? .on : .off
+        }
+        // A word cloud is of one image: the one the sidebar has open.
+        if menuItem.action == #selector(showNamingWordCloud(_:)) {
+            return documentState.currentImageNode != nil
         }
         return true
     }

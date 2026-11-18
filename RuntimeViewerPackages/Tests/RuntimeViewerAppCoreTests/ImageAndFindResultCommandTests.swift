@@ -13,7 +13,7 @@ struct ImageAndFindResultCommandTests {
     private let router = MockRouter<SidebarRootRoute>()
     private let imageActionRelay = PublishRelay<(action: RuntimeImageAction, node: RuntimeImageNode)>()
 
-    @Test("an image offers Open, Find in This Image, Copy Name and Copy Path, and a folder nothing")
+    @Test("an image offers Open, Find in This Image, Show Naming Word Cloud, Copy Name and Copy Path, and a folder nothing")
     func imageAndFolderCommands() async throws {
         let environment = try await Self.environment()
         let viewModel = makeViewModel(in: environment)
@@ -22,8 +22,23 @@ struct ImageAndFindResultCommandTests {
         let leaf = try #require(tree.leaf(forImagePath: TestImages.libobjc))
 
         // libobjc lives in the dyld shared cache, not on disk: no Show in Finder.
-        #expect(viewModel.imageActions(for: leaf) == [.open, .findInImage, .copyName, .copyPath])
+        #expect(viewModel.imageActions(for: leaf) == [.open, .findInImage, .showNamingWordCloud, .copyName, .copyPath])
         #expect(viewModel.imageActions(for: tree).isEmpty)
+    }
+
+    @Test("Show Naming Word Cloud asks the document's window for the image's word cloud")
+    func showNamingWordCloudRequestsTheWindow() async throws {
+        let environment = try await Self.environment()
+        let viewModel = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let leaf = try #require(Fixtures.imageTree(rootName: "Others", imagePaths: [TestImages.libobjc]).leaf(forImagePath: TestImages.libobjc))
+        var requestedImagePaths: [String] = []
+        let subscription = environment.documentState.namingWordCloudRequested.emitOnNext { requestedImagePaths.append($0) }
+        defer { subscription.dispose() }
+
+        imageActionRelay.accept((.showNamingWordCloud, leaf))
+
+        try await waitUntil { requestedImagePaths == [TestImages.libobjc] }
     }
 
     @Test("an image whose file is on this Mac's disk also offers Show in Finder, which selects the file")

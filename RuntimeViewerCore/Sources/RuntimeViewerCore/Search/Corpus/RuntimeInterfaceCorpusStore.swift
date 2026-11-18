@@ -1149,6 +1149,40 @@ actor RuntimeInterfaceCorpusStore {
         return summary(of: scan, indexedImagePaths: indexedImagePaths, within: query.imagePaths)
     }
 
+    /// Every entry of `imagePath`'s corpus with the members `options` show —
+    /// every member any options could show when `options` is `nil` — or
+    /// `nil` when the image has no corpus built, in memory or in derived
+    /// data. A member is shown under the same rule `searchMembers` applies.
+    /// A stored corpus is read back as a search reads it.
+    func members(in imagePath: String, shownUnder options: RuntimeObjectInterface.GenerationOptions?) async -> [RuntimeObjectMembers]? {
+        let readAt = Date()
+        let entries: [RuntimeInterfaceCorpusEntry]
+        if let corpus = corpora[imagePath] {
+            corpora[imagePath]?.lastSearchedAt = readAt
+            entries = corpus.entries
+        } else if let storedCorpus = storedCorpora[imagePath],
+                  let readBackEntries = await readBack(imagePath: imagePath, transformer: storedCorpus.transformer, searchedAt: readAt) {
+            entries = readBackEntries
+        } else {
+            return nil
+        }
+        let visibility = options.map(RuntimeInterfaceVisibility.init)
+        return entries.map { entry in
+            let shownMembers: [RuntimeMemberDeclaration]
+            if let visibility, let projection = entry.projection(under: visibility) {
+                let lineTable = RuntimeInterfaceLineTable(projection.text.text)
+                shownMembers = entry.members.indices.compactMap { entry.member(at: $0, in: projection, projectedLineTable: lineTable) }
+            } else {
+                // Nothing in the entry depends on the options, or none were given: every member as printed.
+                shownMembers = entry.members
+            }
+            return RuntimeObjectMembers(
+                object: entry.object,
+                members: shownMembers.map { RuntimeObjectMembers.Member(name: $0.name, kind: $0.kind, isStatic: $0.isStatic, lineNumber: $0.lineNumber) }
+            )
+        }
+    }
+
     /// The built images a search reads, in path order — all of them, or
     /// those of `scope` when the query names some — the ones in memory
     /// marked searched at `searchedAt`.

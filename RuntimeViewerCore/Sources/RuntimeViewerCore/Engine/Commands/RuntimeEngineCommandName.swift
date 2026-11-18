@@ -116,6 +116,9 @@ extension RuntimeEngine.CommandName {
     static let restoreInterfaceCorpora = Self("restoreInterfaceCorpora")
     static let searchInterfaces = Self("searchInterfaces")
     static let searchMembers = Self("searchMembers")
+    /// Every member of one image's corpus, object by object; see
+    /// `RuntimeEngine.members(in:shownUnder:)`.
+    static let corpusMembers = Self("corpusMembers")
     static let typeRelationships = Self("typeRelationships")
     static let interfaceCorpusCoverage = Self("interfaceCorpusCoverage")
     static let indexedImagePaths = Self("indexedImagePaths")

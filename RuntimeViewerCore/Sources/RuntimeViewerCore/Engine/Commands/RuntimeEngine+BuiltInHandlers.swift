@@ -41,6 +41,7 @@ extension RuntimeEngine {
         registrar.registerProgress(RestoreInterfaceCorporaCommand.self)
         registrar.registerProgress(SearchInterfacesCommand.self)
         registrar.registerProgress(SearchMembersCommand.self)
+        registrar.register(CorpusMembersCommand.self)
         registrar.registerProgress(TypeRelationshipsCommand.self)
         registrar.register(InterfaceCorpusCoverageCommand.self)
         registrar.register(IndexedImagePathsCommand.self)

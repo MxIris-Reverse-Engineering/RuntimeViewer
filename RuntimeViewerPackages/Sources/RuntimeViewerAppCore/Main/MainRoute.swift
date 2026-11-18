@@ -39,6 +39,9 @@ public enum MainRoute: Routable {
     /// extent equally among its panes. Only the views change, so it is not a
     /// `SelectionRoute`.
     case resetEditorSizes
+    /// The naming word cloud of the image at this path, in a window of its own:
+    /// one per image of the document, brought to the front when it is open.
+    case namingWordCloud(imagePath: String)
 }
 
 #endif

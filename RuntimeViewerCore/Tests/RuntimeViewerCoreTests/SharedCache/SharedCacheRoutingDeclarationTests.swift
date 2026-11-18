@@ -82,6 +82,7 @@ struct SharedCacheRoutingDeclarationTests {
         Declaration(RuntimeEngine.RestoreInterfaceCorporaCommand(imagePaths: [imagePath], transformer: .init()), .everyParticipant),
         Declaration(RuntimeEngine.SearchInterfacesCommand(query: .init(text: "NSObject")), .everyParticipant),
         Declaration(RuntimeEngine.SearchMembersCommand(query: .init(text: "init")), .everyParticipant),
+        Declaration(RuntimeEngine.CorpusMembersCommand(imagePath: imagePath, options: nil), .subjectImageOwner),
         Declaration(RuntimeEngine.TypeRelationshipsCommand(query: .init(text: "NSObject", relationship: .descendants)), .everyParticipant),
         Declaration(RuntimeEngine.IndexedImagePathsCommand(), .everyParticipant),
         // Each engine's corpus coverage and budget are its own.

@@ -92,7 +92,28 @@ extension ColorDescriptor {
             #endif
         case .imageKind(let kind):
             kind.iconColor
+        case .namingWordCategory(let category):
+            Self.namingWordCloudPalette[category.paletteIndex]
+        case .namingWordCloudCanvas:
+            NSUIColor(light: Self.color(hex: 0xFCFCFB), dark: Self.color(hex: 0x1A1A19))
         }
+    }
+
+    /// The first three colours of the reference categorical palette, which stay apart from each other
+    /// in light and dark, and for colour-blind eyes, on the cloud's canvas.
+    private static let namingWordCloudPalette: [NSUIColor] = [
+        NSUIColor(light: color(hex: 0x2A78D6), dark: color(hex: 0x3987E5)),
+        NSUIColor(light: color(hex: 0xEB6834), dark: color(hex: 0xD95926)),
+        NSUIColor(light: color(hex: 0x1BAF7A), dark: color(hex: 0x199E70)),
+    ]
+
+    private static func color(hex: UInt32) -> NSUIColor {
+        NSUIColor(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
     }
 }
 

@@ -1,10 +1,10 @@
 # Draft - 框架的命名词云：类型名、属性名与方法名的词频
 
-- **状态**: Draft
+- **状态**: In Progress
 - **创建日期**: 2026-10-31
-- **最后更新**: 2026-10-31
+- **最后更新**: 2026-11-18
 - **所属愿景**: 无
-- **实现分支 / PR**: 批准后从 `next` 切 `feature/naming-word-cloud`
+- **实现分支 / PR**: `feature/naming-word-cloud`（worktree `.worktrees/RuntimeViewer-NamingWordCloud`），做完一次合进 `next`
 
 ## 摘要
 
@@ -94,7 +94,7 @@
 - **右侧**：
   - 上半是全部词的排行表（词、次数），可排序。精确比较与无障碍阅读都走它。
   - 下半列出选中词的用法，分两列：类型口径是类型名与种类，成员口径是成员名与声明它的类型。公开的名字排在前面，下划线开头的私有名字排在后面。
-  - 在词云或排行表里点一个词都会选中它。点用法里的一行，主窗口打开那个类型，走 `documentState.selectionRouter` 的 `.push`，与侧栏点一行是同一条路；成员行用 `.pushHighlighting`，像 Find 的成员结果那样滚到那一行并闪一下。
+  - 在词云或排行表里点一个词都会选中它。点用法里的一行，主窗口打开那个类型，走 `documentState.selectionRouter` 的 `.open(_:in: .focusedTab)`，与侧栏点一行是同一条路；成员行另带 `ContentHighlightRequest`（成员名按整词匹配、取离它的行号最近的一处），像 Find 的成员结果那样滚到那一行并闪一下。
 - **状态**：一个状态枚举，取值为加载类型、建成员语料（带进度）、就绪、失败（原因加重试）、没有可数的名字。
 - 口径、成员分组、两个开关与 N 记在 `AppDefaults` 里，所有窗口共用，跨启动沿用。
 
@@ -108,11 +108,27 @@ Export 菜单里三项，都按当前口径与筛选导出：
 
 ### 5. 代码落点与测试
 
-- **Core**：`members(in:shownUnder:)` 命令与 `RuntimeObjectMembers` 类型。语料仓库判断成员在给定选项下是否可见，复用 `searchMembers` 里的那段投影逻辑。测试用测试 bundle 的 fixture：没建语料时返回 `nil`；打开 Strip Synthesized Methods 后访问器不在结果里；选项为 `nil` 时与 `searchMembers` 看到的成员一致。
-- **RuntimeViewerApplication**：拆词、前缀统计、四种口径的计数与用法列表、CSV 与 JSON 编码，都不依赖 AppKit；另有窗口的 ViewModel。测试覆盖拆词的边界情况（缩略词、数字、下划线、选择子、前缀）、去重与跳过规则，以及两种编码（含 CSV 转义）。
-- **RuntimeViewerUI**：`WordCloudLayout` 只接收量好的词尺寸，算出画布大小与每个词的位置，是纯几何计算，测试断言不重叠、不出界、同样的输入得到同样的结果；`WordCloudView` 是滚动视图的文档视图，负责画它，以及悬停、点击、选中与拖拽平移。排版放在后台做，几百个词的排版要几百毫秒。
-- **App**：`NamingWordCloud/` 下的 coordinator、窗口与 view controller；`MainMenuController` 与两处右键菜单的菜单项；导出用的存储面板放在 coordinator 里。
+（2026-11-18 按 0091、0094、0095、0096 之后的分层改写：草案写成时 ViewModel 还在 `RuntimeViewerApplication` 与 App target 里。）
+
+- **Core**（`RuntimeViewerCore/Search/`）：`RuntimeEngine.members(in:shownUnder:)`，命令 `CorpusMembersCommand`（线上名 `corpusMembers`，关于一个镜像：借用共享缓存镜像的 Engine 交给该镜像的拥有者回答），类型 `RuntimeObjectMembers`。语料仓库的 `members(in:shownUnder:)` 与 `searchMembers` 用同一条可见性规则（`RuntimeInterfaceCorpusEntry.member(at:in:projectedLineTable:)`），存盘的语料照搜索那样读回。测试用 Foundation：没建语料时返回 `nil`；不给选项时，成员搜索找到的成员都在结果里；打开 Strip Synthesized Methods 后访问器不在、属性还在。
+- **RuntimeViewerAppCore**（`NamingWordCloud/`）：拆词、前缀统计、复合词预设、四种口径的计数、按「最有代表性」定类别、用法列表、CSV 与 JSON 编码，都是不依赖 UI 的值与函数；窗口的 ViewModel、路由与状态枚举；三种类别色是 `ColorDescriptor` 的新值。设置记在 `AppDefaults`。测试在 `RuntimeViewerAppCoreTests`：拆词的边界情况（缩略词、数字、下划线、选择子、前缀、复合词）、去重与跳过规则、定色、两种编码（含 CSV 转义），以及 ViewModel 的状态与导航。
+- **RuntimeViewerAppUI**：类别色的解析（`ColorDescriptor.color`）。
+- **RuntimeViewerUI**（`AppKit/WordCloud/`）：`WordCloudLayout` 只接收量好的词尺寸，算出画布大小与每个词的位置，是纯几何计算，测试（`RuntimeViewerAppUITests`）断言不重叠、不出界、同样的输入得到同样的结果；`WordCloudView` 是滚动视图的文档视图，负责画它，以及悬停、点击、选中与拖拽平移。排版放在后台做。
+- **App**（`NamingWordCloud/`）：`NamingWordCloudWindowController`、`NamingWordCloudCoordinator`（导出的存储面板以表单挂在词云窗口上、Compound Words 表单）、`NamingWordCloudViewController`、`NamingCompoundWordsViewController`；`MainCoordinator` 处理 `MainRoute.namingWordCloud(imagePath:)`，按镜像管着这个文档的词云窗口（一个镜像一个，再开就提到前面，主窗口关闭时一起关）。入口两处：View 菜单的 Show Naming Word Cloud（`MainWindowController.showNamingWordCloud(_:)`，侧栏开着镜像时可用），以及镜像列表右键菜单的新动作 `RuntimeImageAction.showNamingWordCloud`——它经 `DocumentState.namingWordCloudRequested` 请求窗口，因为侧栏的 coordinator 够不到主窗口的。
 - 不新增 target，不改工程设置，所以 Tuist 描述不用动。落地时 README 的功能列表加一行。
+
+### 6. 落地步骤
+
+1. **Core 读语料成员的命令**（已完成）—— `RuntimeObjectMembers`、`CorpusMembersCommand`、语料仓库的 `members(in:shownUnder:)`、路由声明
+   - 行为：`imageWithoutCorpus`、`membersMatchAMemberSearch`、`optionsHideWhatTheyHide`；`SharedCacheRoutingDeclarationTests` 列入新命令
+2. **AppCore 的拆词与计数**（已完成）—— 拆词、前缀、复合词、四种口径、去重与跳过、定色、CSV 与 JSON
+   - 行为：缩略词与数字的拆法、选择子与下划线、前缀按镜像统计并去掉、复合词合并、虚词去掉、各种跳过与去重、按「最有代表性」定色、CSV 转义、JSON 的形状与排序
+3. **RuntimeViewerUI 的排版与画布**（已完成）—— `WordCloudLayout`、`WordCloudView`
+   - 行为：不重叠、不出界、确定性、画布按词的总面积定；点到词、点到空白
+4. **AppCore 的窗口 ViewModel**（已完成）—— `NamingWordCloudViewModel`、状态、设置、类别色
+   - 行为：类型口径一打开就能算；成员口径等语料建好再算；语料开关关着时成员口径给提示；对端太旧时成员口径给提示；换生成选项重算；点用法里的一行在主窗口打开（成员带高亮）；导出的内容
+5. **App 的窗口与入口**（已完成，界面待用户看）—— 窗口控制器、view controller、`MainCoordinator` 的窗口管理、View 菜单、镜像列表右键菜单、导出面板、README
+   - 行为：App 编得过；一个镜像只开一个窗口；界面效果由用户看
 
 **不做**：命令行与 MCP 输出（以后要做时，把拆词与计数挪进命令行也能链接的无 UI 模块即可）；PDF 与 SVG 导出；多个镜像合成一张词云；旋转摆放的词；单复数合并（`View` 与 `Views` 分开算）。
 
@@ -147,3 +163,12 @@ Export 菜单里三项，都按当前口径与筛选导出：
 | 2026-11-01 | 词云字体改用 SF Mono，按字号加粗 | 用户看了原型觉得不好看，要求试 SF Mono。 |
 | 2026-11-01 | 改用分类配色，取代 2026-10-31 的「只用一种颜色」 | 用户要加颜色。颜色于是承担含义：表示一个词最有代表性的那一类名字，并配图例。每种口径不超过三类，因为参考色板里只有前三色两两都能分开。 |
 | 2026-11-01 | 按「最有代表性」而不是「占多数」定色 | 原型里按多数定色时，成员口径几乎全是方法色：方法比属性与 ivar 多得多。按占比高出平均最多的那一类定色，三种颜色才都会出现，也更能说明一个词属于哪类名字。 |
+| 2026-11-18 | Accepted | 用户批准，由 Ultra 上的会话实现。功能分支从 `origin/next` 切出：本机 `next` 上有一个有意没推送的提交，还有一份等用户看过的本地合并，都不该随这条分支推上去。 |
+| 2026-11-18 | 三件待定的事按草案原文处理 | 起草时留给用户的三件事，批准时按草案原文、范围最小的做法定下：一、ObjC 的 override 照草案「已知局限」所写，跟随文档的 Strip Overrides，不在 ⚙︎ 里另加开关（起草时的建议是加一个默认打开的开关，因为不去掉时 AppKit 的 `dealloc` 在 Method First Words 里排第六；以后要加只多一个开关）。二、双指缩放与 Zoom to Fit 保留，草案「浏览」一节本来就写着。三、仓库外的一次性原型已经不在两台机器上，不再留底，实现照草案从头写。 |
+| 2026-11-18 | 代码落点按现在的分层改写，补落地步骤 | 草案写成之后，ViewModel 全部搬进了 RuntimeViewerAppCore（0091、0096），AppCore 不再用 AppKit 的颜色与图片（0094），目录按功能划分（0095），导航的 `.push` / `.pushHighlighting` 换成了 `SelectionRoute.open(_:in:highlighting:)`。§5 与 §3 的导航一句据此改写，并把实现拆成五步写进新的 §6。 |
+| 2026-11-18 | 第一步：命令名 `corpusMembers`，成员行高亮只用成员名 | 命令关于一个镜像，所以由镜像的拥有者回答，与建语料的命令一致。成员不带声明行，点用法里的成员行时，`ContentHighlightRequest` 的 `lineText` 留空：内容区找不到同样的一行时，本来就退到按成员名整词匹配、取离行号最近的一处。对端早于这条命令时，2.1.0 以后的版本都回 `isUnknownCommand`，窗口据此提示对端太旧。 |
+| 2026-11-18 | 第二步自定的细节 | 一、复合词预设 18 个：草案点名的 14 个（`ViewController`、`GestureRecognizer`、`DataSource`、`IndexPath`、`TraitCollection`、`HitTest`、`CornerRadius`、`SafeArea`、`ToolTip`、`KeyPath`、`RunLoop`、`TimeZone`、`UserInfo`、`PopUp`），加 `FirstResponder`、`LayoutGuide`、`LineBreak`、`WhiteSpace`。没有原型可以按频率重新统计，所以只加了这几个固定说法，不加以 `Manager`、`Controller` 这类角色词结尾的组合，免得吃掉类型后缀。二、虚词表：and、as、at、by、for、from、in、into、of、on、or、the、to、with。三、类名前缀取两到三个大写字母后面还跟着大写字母的开头，三个字母的候选占到两个字母那个的八成以上才取它（Metal 得 `MTL`，AppKit 的 `NSURL…` 不会把 `NS` 变成 `NSU`）；至少要有三个、且占类型名的五分之一，否则不认前缀。四、局部类型与用户做出来的特化类型的成员也不算，与类型口径一致。五、类型名取 `displayName` 去掉外层类型与泛型参数，只用来拆词；JSON 里的类型名与所属类型写完整的 `displayName`。六、一个词的写法取它最常见的那种，用来决定是不是缩略词。 |
+| 2026-11-18 | 第三步自定的细节 | 一、螺旋线是按画布比例拉伸的阿基米德螺线，圈距约 19 点（比最小的词连同间距还矮），步长按弧长约 8 点；碰撞检查把已放下的词按 48 点见方的格子归档，只比附近的。Debug 构建下 500 个词约 1.5 秒，在后台算。二、字号与字重的规则放在 RuntimeViewerUI 的 `WordCloudTypography`，量文字尺寸在主线程，排版在后台。三、画布是自绘的 `NSView`，不继承 `LayerBackedView`：整块画布连底色都在 `draw(_:)` 里画，不用图层属性。四、点在空白处什么也不做，不清掉选中。五、导出 PNG 时先把选中与悬停的底板拿掉，画完再放回。 |
+| 2026-11-18 | 第四步自定的细节 | 一、状态枚举 `NamingWordCloudState`：索引镜像、建语料（都带进度）、就绪、不可用（语料开关关着、对端太旧、文档没有后台工作可建语料、没有可数的名字）、失败；加载占位照 `withLoadingPlaceholder` 的规矩，快的读取不闪。二、设置整体存成 `AppDefaults.namingWordCloudPreferences`（一个 `Codable` 值，缺的键读成默认值），窗口经它的 `$` 投影互相同步。三、换口径只在「读不读成员」变了时重读，其余开关、分组与词数只在后台重算。四、成员读法：先问引擎要，没有语料就向文档共享的语料协调器请求优先构建，等它的状态到 built 再取；协调器没接这个请求（这个 Engine 不建语料）时提示不可用，不空等。五、Print Exported Declarations Only 按语言分别作用于类型：ObjC 类型看 ObjC 的开关，Swift 类型看 Swift 的。六、Compound Words 表单单独一个 `NamingCompoundWordsViewModel`，增删直接写回设置；输入能对上某个预设时直接恢复，不管能不能拆成两个词（全小写的 `datasource` 也行），其余单个词拒绝并说明。七、用法点开走 `.focusedTab`。 |
+| 2026-11-18 | 第五步自定的细节 | 一、右键菜单的入口经 `DocumentState.namingWordCloudRequested` 请求窗口，照 `startOverRequested` 的先例：镜像列表的 ViewModel 的路由只到侧栏的 coordinator，够不到 `MainCoordinator`。View 菜单的入口直接触发 `MainRoute.namingWordCloud(imagePath:)`，只在侧栏开着镜像时可用。二、词云窗口记住大小与位置时按镜像名分开存（`NamingWordCloud <镜像名>`）：同时开着的几个窗口不能共用一个自动保存名。三、Zoom to Fit 与 Actual Size 只动滚动视图的缩放，留在视图控制器里，不进 ViewModel。四、排行表与用法列表是单列表格、每行左右两个标签，用 `DifferentiableBox` 驱动，cell ViewModel 在 cell 构造闭包里建（行的内容完全由模型决定，用法列表可达数千行）。五、Compound Words 表单里回车是 Add、Esc 是 Done，免得在输入框里按回车就关掉表单。六、导出的存储面板以表单挂在词云窗口上，写入失败时用表单提示原因。 |
+| 2026-11-18 | 实现完成，待用户看过后收尾 | 验证在 Ultra 上：每步构建通过、相关测试全过，第一到第四步的新测试各做过变异检查（去掉对应实现会变红）；macOS App 经 Tuist workspace（Debug）编过。最终提交上 Core 包全部测试 1124 个，失败的是交叉引用的「之后加载的镜像会更新分析器」一条和后台索引的三条，单独重跑全过（整包并行时的负载问题，后台索引那几条记忆里早有记录）；Packages 包 1398 个，失败 4 条：标题悬停副标题、Call Hierarchy 超时是基线上本来就红的，`BackgroundWorkProcessActivityTests`、`ReportSharedByEngineTests` 是整包一起跑才红。没做的：界面没有实际操作过（排版、配色、悬停与点选、拖拽和缩放、导出），由用户看。文档：README 功能列表与右键菜单一行已更新；不另写使用指南或实现说明，规则都在类型的文档注释里；没有新术语。草案没有网页版，正式收尾时生成。 |

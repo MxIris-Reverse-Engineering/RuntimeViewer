@@ -174,6 +174,8 @@ final class MainMenuController {
                 changeEditorOrientationItem()
                 resetEditorSizesItem()
                 NSMenuItem.separator()
+                showNamingWordCloudItem()
+                NSMenuItem.separator()
                 increaseFontSizeItem()
                 decreaseFontSizeItem()
                 resetFontSizeItem()
@@ -198,6 +200,16 @@ final class MainMenuController {
             action: #selector(MainWindowController.resetEditorSizes(_:)),
         )
         .image(NSImage(systemSymbolName: "square.resize", accessibilityDescription: nil))
+    }
+
+    /// The naming word cloud of the image the sidebar has open, in a window of its own
+    /// (proposal `naming-word-cloud`); enabled while there is one (`MainWindowController.validateMenuItem`).
+    private func showNamingWordCloudItem() -> NSMenuItem {
+        NSMenuItem(
+            "Show Naming Word Cloud",
+            action: #selector(MainWindowController.showNamingWordCloud(_:)),
+        )
+        .image(NSImage(systemSymbolName: "cloud", accessibilityDescription: nil))
     }
 
     /// Xcode's View ▸ Navigators ▸ Show Report Navigator, shortcut included.
