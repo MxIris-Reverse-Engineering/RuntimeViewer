@@ -308,6 +308,7 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
 | `MAC/Main/MainViewModel.swift` · `AttachAvailability` → `AC/AttachToProcess/AttachAvailability.swift` | 拆出、移动 | `public` | 一个文件一个主类型 | 4 |
 | `MAC/Utils/SIPChecker.swift` → `AC/AttachToProcess/SIPChecker.swift` | 移动 | `public` | 不是 UI，`MainViewModel` 要用 | 4 |
 | `RuntimeViewerPackages/Package.swift` · `RuntimeViewerAppCore` | 修改 | 声明 `RuntimeViewerInjection`（AppKit 平台） | 附加流程直接用它 | 4 |
+| `MAC/Main/MainRoute.swift` → `AC/Main/MainRoute.swift` | 移动 | `#if os(macOS)`；去掉门面 import | 附加进程的 ViewModel 以它为路由，只能随第四步提前搬 | 4 |
 | `AC/Activity/ToolbarActivity.swift` | 新增 | `ToolbarActivity`（含 `Segment`、`Progress`）、`idle`、`make(for:sourceName:readyDate:)`、`ActivityText` | 显示状态的值 | 5 |
 | `AUI/Activity/ToolbarActivityPresenter.swift` → `AC/Activity/ToolbarActivityPresenter.swift` | 移动 | 输出 `Driver<ToolbarActivity>` | 挑选与节流归 AppCore | 5 |
 | `AUI/Activity/ToolbarActivityState+Reports.swift` | 删除 | 内容进 `ToolbarActivity.swift` | 同上 | 5 |
@@ -321,7 +322,7 @@ MCP 状态弹窗通过新的跨层服务 `mcpServerClient` 启停服务，接口
 | `AC/Engine/RuntimeEngineManager+DependencyCache.swift` | 新增 | `dependencyCacheChoices(for:)`、`pair(_:with:)` | 纯逻辑归 AppCore | 5 |
 | `MAC/App/FileController.swift` | 修改 | 删 `DependencyCacheChoice` 与两段方法 | 已搬走 | 5 |
 | `MAC/Main/MainViewModel.swift` → `AC/Main/MainViewModel.swift` | 移动 | `SwitchSourceState.icon`、`TitleIcon`、`activity` 改值；删 `fileController`、`runtimeEngineIconProvider` 与每窗口的图像缓存；`public` | 可测试 | 5 |
-| `MAC/Main/MainRoute.swift`、`NavigationHistorySnapshot.swift` → `AC/Main/` | 移动 | 历史项的 `icon` 改 `IconDescriptor`；`public` | 随 ViewModel | 5 |
+| `MAC/Main/NavigationHistorySnapshot.swift` → `AC/Main/` | 移动 | 历史项的 `icon` 改 `IconDescriptor`；`public` | 随 ViewModel | 5 |
 | `MAC/Main/MainWindowController.swift` | 修改 | 画标题图标；活动转显示状态；选择器图标按 ID 取并随 `recordedIconsChanged` 重取；历史菜单画描述值 | 画图在视图层 | 5 |
 | `ACT/AppCoreBoundaryTests.swift` | 修改 | `allowedSystemPrefixedNames` 加 `NSItemProvider` | Foundation 类型 | 5 |
 | `ACT/MainViewModelTests.swift` | 新增 | 来源状态与选择器内容的描述值、断开来源、标题图标、历史项 | 从 UI 类型改成值的部分 | 5 |
@@ -657,9 +658,9 @@ extension MCPServerClientKey: @retroactive DependencyKey {
    - 行为：`liveValueExists`
    - 行为：`liveClientFollowsServiceState`
    - 行为：`resumeWithoutDocumentProviderDoesNothing`
-4. **附加进程进 AppCore**：步骤 4 的各行。
-   - 行为：`attachInputIsAProcessTarget`
-   - 行为：`remoteAttachReportsInjectedEngineBeforeDismiss`
+4. **附加进程进 AppCore**（已完成，2026-11-18）：步骤 4 的各行。这一步没有新的包测试：`Input` 只收 `RuntimeProcessAttacher.Target` 由类型保证；附加设备上的进程要连真实设备，包测试造不出来；记图标在 App 里。三条都靠构建与人工核对。
+   - 行为：`attachInputIsAProcessTarget`（由类型保证）
+   - 行为：`remoteAttachReportsInjectedEngineBeforeDismiss`（代码核对：先发出引擎，再 `.dismiss`）
    - 行为：`attachedDeviceProcessKeepsItsRowIcon`（App 内，构建与人工核对）
 5. **主窗口的 ViewModel 进 AppCore**：步骤 5 的各行。
    - 行为：`toolbarActivityMatchesFormerDisplayState`

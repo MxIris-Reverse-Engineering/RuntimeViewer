@@ -461,6 +461,7 @@ let package = Package(
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerInjection", package: "RuntimeViewerCore", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),

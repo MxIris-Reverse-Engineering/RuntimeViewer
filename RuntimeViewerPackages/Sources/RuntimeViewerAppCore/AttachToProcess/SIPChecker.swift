@@ -1,7 +1,10 @@
+#if os(macOS)
+
 import Foundation
 
-enum SIPChecker {
-    static func isDisabled() -> Bool {
+/// Whether System Integrity Protection is off, which attaching to a process on this Mac needs.
+public enum SIPChecker {
+    public static func isDisabled() -> Bool {
         let task = Process()
         task.launchPath = "/usr/bin/csrutil"
         task.arguments = ["status"]
@@ -18,3 +21,5 @@ enum SIPChecker {
         return output.contains("disabled")
     }
 }
+
+#endif

@@ -1,10 +1,10 @@
-import AppKit
+#if os(macOS)
+
+import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerInjection
 import RuntimeViewerCommunication
-import RuntimeViewerUI
-import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
 import RuntimeViewerEngineManagement
@@ -18,18 +18,36 @@ import RuntimeViewerEngineManagement
 /// wait for the payload to advertise itself.
 ///
 /// This ViewModel owns only what the sheet needs: the loading state, the dismissal, and
-/// the error alert.
+/// the error alert. The picked row's icon is the view's: it reports the engine a device
+/// process reported in as (`Output.remoteProcessAttached`), and the view files the icon
+/// against it.
 @Loggable(.private)
-final class AttachToProcessViewModel: ViewModel<MainRoute> {
-    struct Input {
-        let attachToProcess: Signal<any RunningItem>
+public final class AttachToProcessViewModel: ViewModel<MainRoute> {
+    public struct Input {
+        /// The process the user picked: its name and pid on the machine the sheet lists.
+        public let attachToProcess: Signal<RuntimeProcessAttacher.Target>
         /// A device that could not produce its process list. Raised here rather than left
         /// as an empty picker, which says nothing about why it is empty.
-        let processListFailed: Signal<any Error>
-        let cancel: Signal<Void>
+        public let processListFailed: Signal<any Error>
+        public let cancel: Signal<Void>
+
+        public init(attachToProcess: Signal<RuntimeProcessAttacher.Target>, processListFailed: Signal<any Error>, cancel: Signal<Void>) {
+            self.attachToProcess = attachToProcess
+            self.processListFailed = processListFailed
+            self.cancel = cancel
+        }
     }
 
-    struct Output {}
+    public struct Output {
+        /// The engine a process on a device reported in as, once attached and before the sheet is
+        /// dismissed. The view files the picked row's icon against it: that icon came from a file
+        /// on the device, read to draw the row, and nothing downstream could work it out — the
+        /// engine list resolves icons through `NSRunningApplication`, which knows only this Mac's
+        /// processes, and would otherwise show a picture of the device for every injected process.
+        public let remoteProcessAttached: Signal<RuntimeEngine>
+    }
+
+    private let remoteProcessAttachedRelay = PublishRelay<RuntimeEngine>()
 
     /// Why an attach could not even be started, in words meant to be read as-is.
     private enum AttachFailure: LocalizedError {
@@ -66,12 +84,9 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     @Dependency(\.runtimeEngineManager)
     private var runtimeEngineManager
 
-    @Dependency(\.runtimeEngineIconProvider)
-    private var runtimeEngineIconProvider
-
     @RxObserved private(set) var isAttaching: Bool = false
 
-    override var delayedLoading: Driver<Bool> {
+    public override var delayedLoading: Driver<Bool> {
         $isAttaching.asDriver()
     }
 
@@ -84,12 +99,12 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     /// be selected by then, using an identifier from a different machine's process table.
     private let attachmentEngine: RuntimeEngine
 
-    init(attachmentEngine: RuntimeEngine, documentState: DocumentState, router: any Router<MainRoute>) {
+    public init(attachmentEngine: RuntimeEngine, documentState: DocumentState, router: any Router<MainRoute>) {
         self.attachmentEngine = attachmentEngine
         super.init(documentState: documentState, router: router)
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         input.cancel.emit(to: router.rx.trigger(.dismiss)).disposed(by: rx.disposeBag)
 
         input.processListFailed.emitOnNext { [weak self] error in
@@ -99,11 +114,10 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.attachToProcess.emitOnNext { [weak self] runningItem in
+        input.attachToProcess.emitOnNext { [weak self] target in
             guard let self else { return }
 
             let runtimeEngine = attachmentEngine
-            let target = RuntimeProcessAttacher.Target(name: runningItem.name, processIdentifier: runningItem.processIdentifier)
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -114,11 +128,10 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                         let attacher = RuntimeProcessAttacher(engineManager: runtimeEngineManager, injectClient: runtimeInjectClient)
                         _ = try await attacher.attach(target)
                     } else {
-                        // The row's icon travels with the target. It is the one
-                        // thing about a process on a device that this side
-                        // cannot work out later: it came from a file in a bundle
-                        // on that device, fetched to draw this very row.
-                        try await attachToRemoteProcess(target, icon: runningItem.icon, using: runtimeEngine)
+                        // Reported before the dismissal, so the view, which holds the row's
+                        // icon, can still file it against the engine.
+                        let injectedEngine = try await attachToRemoteProcess(target, using: runtimeEngine)
+                        remoteProcessAttachedRelay.accept(injectedEngine)
                     }
                     router.trigger(.dismiss)
                 } catch {
@@ -128,7 +141,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
             }
         }.disposed(by: rx.disposeBag)
 
-        return Output()
+        return Output(remoteProcessAttached: remoteProcessAttachedRelay.asSignal())
     }
 
     /// Asks the device to inject its own payload, then waits for the result to show up as
@@ -144,16 +157,10 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     /// both and drops the half nobody used. See
     /// `Documentations/Evolutions/0044-device-payload-reverse-connection.md`.
     ///
-    /// - Parameter icon: What the picker showed for this process — the application's own
-    ///   icon, or the generic executable icon for a daemon. Recorded against the engine
-    ///   that reports in, because nothing downstream could derive it: the engine list
-    ///   resolves an icon from `NSRunningApplication`, which knows only this Mac's
-    ///   processes, and would otherwise fall back to the icon of the *device* and label
-    ///   every injected process with a picture of the phone.
-    @discardableResult
+    /// - Returns: The engine the injected process reported in as, which the view files the
+    ///   picked row's icon against (`Output.remoteProcessAttached`).
     private func attachToRemoteProcess(
         _ target: RuntimeProcessAttacher.Target,
-        icon: NSImage?,
         using runtimeEngine: RuntimeEngine,
     ) async throws -> RuntimeEngine {
         // Still needed, and only for the advertising half of the race: an advertisement is
@@ -197,18 +204,14 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                 throw AttachFailure.injectionRefused(result)
             }
 
-            // Either half of the race can win, so the icon is filed against the engine
-            // that actually reported in rather than the one the listener created.
-            let injectedEngine = try await runtimeEngineManager.awaitInjectedDeviceEngine(
+            // Either half of the race can win, so what is reported is the engine that
+            // actually reported in rather than the one the listener created.
+            return try await runtimeEngineManager.awaitInjectedDeviceEngine(
                 name: target.name,
                 rendezvous: rendezvous,
                 deviceID: deviceIdentifier,
                 processIdentifier: target.processIdentifier,
             )
-            if let icon {
-                runtimeEngineIconProvider.record(icon, for: injectedEngine)
-            }
-            return injectedEngine
         } catch {
             // Every failure from here on leaves a listener nobody will ever dial. Left in
             // place it would hold its port and show up in the engine list as a process that
@@ -218,3 +221,5 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         }
     }
 }
+
+#endif

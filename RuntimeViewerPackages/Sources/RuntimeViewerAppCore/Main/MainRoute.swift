@@ -1,9 +1,11 @@
+#if os(macOS)
+
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerApplication
 
+/// The routes of the macOS document window, which `MainCoordinator` performs.
 @AssociatedValue(.public)
 @CaseCheckable(.public)
 public enum MainRoute: Routable {
@@ -38,3 +40,5 @@ public enum MainRoute: Routable {
     /// `SelectionRoute`.
     case resetEditorSizes
 }
+
+#endif
