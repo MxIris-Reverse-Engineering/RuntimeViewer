@@ -806,7 +806,7 @@ the end of the file that logs to it. The line then goes to that os_log category,
 - Coordinator/navigation: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
 - Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/Engine/RuntimeEngine.swift`
 - Engine manager: `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift`
-- Document state: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/DocumentState.swift`
+- Document state: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Document/DocumentState.swift`
 - Editor panes: the model in `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/`, the views
   and their coordinator in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/EditorArea/`
 - ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/`; the UI glue they are bound through: `RuntimeViewerPackages/Sources/RuntimeViewerAppUI/`
