@@ -4,8 +4,9 @@ description: >-
   Reading Objective-C and Swift interfaces, class hierarchies and member addresses from a live
   runtime — this Mac, Mac Catalyst, an attached process, a Bonjour peer — with
   runtime-viewer-cli, RuntimeViewer's command-line tool: images, types, search, interface,
-  members, specialize, export, sources, attach and its background host. Read before running
-  it. Triggers on runtime-viewer-cli, RuntimeViewer CLI, "export this framework's headers".
+  members, specialize, export, callers, callees, references, symbolicate, sources, attach and
+  its background host. Read before running it. Triggers on runtime-viewer-cli, RuntimeViewer
+  CLI, "export this framework's headers", "who calls this method".
 ---
 
 # runtime-viewer-cli
@@ -57,6 +58,10 @@ flag. For the `host` subcommands write `runtime-viewer-cli host <subcommand> --h
 | A generic Swift type with its parameters bound | `specialize <type> --image <image> --list`, then one `--argument <Parameter>=<Type>` per parameter |
 | Every interface of one image, on disk | `export <image> --output <directory> [--full] [--objc single\|directory] [--swift single\|directory] [--no-metadata]` |
 | Which sources the host can reach, and how to name each | `sources [--wait <seconds>]` |
+| Who calls a function or method, or sends a selector | `callers <target> [--selector] [--image <image>] [--scope image\|indexed] [--receiver <class>] [--limit <n>]` |
+| What a function or method calls, sends and uses, in order | `callees <target> [--image <image>] [--include-runtime] [--limit <n>]` |
+| Who uses a class or a Swift type | `references <type> [--image <image>] [--scope image\|indexed] [--limit <n>]` |
+| What an address is: a function and the offset into it, a stub, a slot, a string | `symbolicate <address>... [--image <image>]` |
 | A running process as a source | `attach <pid \| name>`, later `detach` (§6) |
 | The background host | `host [status]`, `host stop`, `host restart`, `host run` (§5) |
 
@@ -73,6 +78,21 @@ addresses:
 runtime-viewer-cli search TextInput --image AppKit
 runtime-viewer-cli interface NSTextInputContext --image AppKit --full
 runtime-viewer-cli members NSTextInputContext --image AppKit --member insertText
+```
+
+Cross references read the arm64 code of the images the engine has **indexed** — `load` the
+others, or name one with `--image`, which loads it. A target is `-[Class selector]` /
+`+[Class selector]`, a Swift member as `members` prints it, a symbol with or without its
+leading underscore, or an unslid `0x…` address, which needs `--image`. Addresses in and out
+are unslid, as IDA and `dyld_info` show them. `--json` rows carry hexadecimal-string
+addresses and the same fields as the MCP tools; `isComplete: false` means `--limit` cut the
+result short. A file source cannot answer (`crossReferencesUnavailable`).
+
+```bash
+runtime-viewer-cli callers '-[NSWindow makeKeyAndOrderFront:]' --image AppKit --scope image
+runtime-viewer-cli callers makeKeyAndOrderFront: --selector --limit 200 --json
+runtime-viewer-cli callees _objc_storeStrong --image libobjc --include-runtime
+runtime-viewer-cli symbolicate 0x18a403a08 --image AppKit
 ```
 
 ## 2. How names resolve

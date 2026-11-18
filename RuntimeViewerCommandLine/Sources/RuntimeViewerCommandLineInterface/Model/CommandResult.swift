@@ -1,4 +1,5 @@
 import Foundation
+import RuntimeViewerCrossReferences
 
 /// What the host answers a ``Command`` with. One case per command family.
 ///
@@ -16,6 +17,8 @@ public enum CommandResult: Codable, Sendable, Hashable {
     case specializationParameters(SpecializationParametersResult)
     case specialized(SpecializedInterfaceResult)
     case export(ExportResult)
+    case crossReferences(CrossReferencesResult)
+    case symbolications(SymbolicationsResult)
     case sources(SourcesResult)
     case attached(AttachResult)
     case detached(DetachResult)
@@ -35,6 +38,8 @@ public enum CommandResult: Codable, Sendable, Hashable {
         case .specializationParameters(let result): return result
         case .specialized(let result): return result
         case .export(let result): return result
+        case .crossReferences(let result): return result
+        case .symbolications(let result): return result
         case .sources(let result): return result
         case .attached(let result): return result
         case .detached(let result): return result
@@ -393,5 +398,31 @@ public struct DetachResult: Codable, Sendable, Hashable {
         self.engineIdentifier = engineIdentifier
         self.displayName = displayName
         self.kind = kind
+    }
+}
+
+/// `callers`, `callees` and `references`. Each reference has the fields the
+/// MCP tools' references have: both are `RuntimeCrossReferenceRow`.
+public struct CrossReferencesResult: Codable, Sendable, Hashable {
+    /// What was asked about, as resolved.
+    public let subject: String
+    /// Callers in image order, then by address; callees in instruction order.
+    public let references: [RuntimeCrossReferenceRow]
+    /// `false` when `--limit` cut the query short, or it was stopped.
+    public let isComplete: Bool
+
+    public init(subject: String, references: [RuntimeCrossReferenceRow], isComplete: Bool) {
+        self.subject = subject
+        self.references = references
+        self.isComplete = isComplete
+    }
+}
+
+public struct SymbolicationsResult: Codable, Sendable, Hashable {
+    /// In the order the addresses were given.
+    public let symbolications: [RuntimeAddressSymbolicationRow]
+
+    public init(symbolications: [RuntimeAddressSymbolicationRow]) {
+        self.symbolications = symbolications
     }
 }

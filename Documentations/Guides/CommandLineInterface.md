@@ -35,6 +35,10 @@ swift build -c release --product runtime-viewer-cli
 | `hierarchy <类型>` / `relationships <类型>` / `members <类型> [--member 文本]` | 类层级 / 子类与遵循者 / 成员地址 |
 | `specialize <泛型类型> --image i [--list] [--argument 参数=类型]...` | 先 `--list` 看泛型参数与候选，再逐个 `--argument` 绑定；输出特化后的接口 |
 | `export <镜像> --output 目录 [--objc single\|directory] [--swift single\|directory] [--no-metadata]` | 导出整个镜像的接口，进度打到 stderr |
+| `callers <目标> [--selector] [--image i] [--scope image\|indexed] [--receiver 类] [--limit n]` | 谁调用一个函数或方法、谁发送一个 selector：在引擎已索引的镜像里读 arm64 机器码。目标写法见下文「交叉引用的目标写法」；进度打到 stderr |
+| `callees <目标> [--image i] [--include-runtime] [--limit n]` | 一个函数或方法按指令顺序引用了什么：调用、发送、类型 |
+| `references <类型> [--image i] [--scope image\|indexed] [--limit n]` | 谁引用了一个类型：ObjC 类，或 Swift 的 struct、enum、class |
+| `symbolicate <地址>... [--image i]` | 每个未滑动地址是什么：在哪个函数里、偏移多少，桩与它通向哪里，指针槽与里面装的东西，字符串，或最近的符号 |
 | `sources [--wait 秒]` | 按主机分组列出 host 能服务的来源，每行给出可回填 `--source` 的 selector、种类与连接状态。`--wait` 给还在连接的 Bonjour 对端留时间；列表连续 3 s 没变就提前返回 |
 | `attach <pid \| 进程名>` | 注入运行中的进程并把它变成来源，进度打到 stderr；成功后打印该用的 selector（Mac 进程 `pid:<n>`，Simulator 进程 `engine:<id>`）。前提见「来源寻址」 |
 | `detach <pid \| selector>` | 断开 attach 进的进程或一个 Bonjour 对端；不给参数时用 `--source` |
@@ -106,6 +110,18 @@ Foundation 这类只为 macOS 构建或双平台的镜像由 `local` 回答，UI
 | `full`（或 `--full`） | 全部注释与布局细节打开，宏按二进制里的样子展开，等于 App 里 MCP 用的那套（`GenerationOptions.mcp`） |
 | `app` | RuntimeViewer App 当前配置：生成选项从 App 的 `UserDefaults` 域里 `generationOptions` 键读，transformer 配置从 `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json` 的 `transformer` 键读；哪一半读不到就用那一半的默认值 |
 
+### 交叉引用的目标写法
+
+`callers`、`callees` 的目标与 MCP 的 `Callers` / `Callees` 工具同一套写法，由 `RuntimeViewerCrossReferences` 的 `RuntimeCrossReferenceTargetResolution` 统一解析：
+
+- `-[NSWindow makeKeyAndOrderFront:]`、`+[NSColor redColor]`：ObjC 方法，类在已加载的镜像里找（或 `--image` 指定的镜像）。
+- `SwiftUI.ViewGraph.updateOutputs(at:)`：Swift 成员，写法与 `members` 的输出一致；只写名字不写参数时，同名的只有一个就取它。
+- 符号名，带不带前导下划线都行：`_objc_msgSend`、`CFRelease`、修饰过的 Swift 名。在引擎进程映射的全部镜像里按导出表与符号表找定义；几个镜像都有时报错，用 `--image` 指定。
+- `0x…`：未滑动地址，必须配 `--image`。
+- 加 `--selector` 时参数是 selector，列出它的全部发送。
+
+只读引擎已索引的镜像：`--scope indexed`（默认）是全部已索引镜像，`--scope image` 只扫 `--image` 那一个。`--image` 指定的镜像会先加载并建索引。只服务活的引擎（本机、Catalyst、attach 进的进程）；文件来源报 `crossReferencesUnavailable`。
+
 ## 必须遵守的契约
 
 这些都从命令签名上看不出来，违反了会得到莫名其妙的结果。
@@ -124,11 +140,14 @@ Foundation 这类只为 macOS 构建或双平台的镜像由 `local` 回答，UI
 4. **只服务同一用户**。socket 文件权限 `0600`，host 还会核对对端 uid；别指望跨用户共享一个 host。
 5. **`--json` 时 stdout 只有一个 JSON 文档**。成功是结果模型本身（字段名与 MCP 的
    `MCPRuntimeTypeInfo` 对齐：`name` / `displayName` / `kind` / `imagePath` / `imageName`），失败
-   是 `{"error":{"code":…,"message":…}}`。进度与警告一律走 stderr。
+   是 `{"error":{"code":…,"message":…}}`。进度与警告一律走 stderr。交叉引用与符号化的每一行与 MCP
+   工具的同名字段一致（都来自 `RuntimeCrossReferenceRow` / `RuntimeAddressSymbolicationRow`），地址一律
+   是十六进制字符串；`isComplete` 为 `false` 表示 `--limit` 截断或被中止。
 6. **退出码**：`0` 成功；`1` 命令失败（错误码见 stderr 或 JSON 的 `error.code`）；`64` 参数错误；
    `69` 没有 host 且拉不起来（或 `--no-spawn` 时没有 host）。
 7. **协议版本不匹配时**：host 是独立进程就会被自动换掉（客户端先请它退出、等它真正退出，必要时
-   `SIGTERM`，再拉起新的）；host 是 RuntimeViewer App 则报错，请更新 App 或工具。当前协议版本 2。
+   `SIGTERM`，再拉起新的）；host 是 RuntimeViewer App 则报错，请更新 App 或工具。当前协议版本 3
+   （`callers` / `callees` / `references` / `symbolicate` 是 3 新增的）。
    落到 `SIGTERM` 这一步时，只会发给**与 `host.json` 记录相符**的 pid——握手里报的那个 pid 只是
    一面之词，不足以据此对任何进程发信号。
 8. **`--timeout` 覆盖整条调用**，包括等 `host.lock`、拉起 host、等它应答（含它 accept 了却迟迟

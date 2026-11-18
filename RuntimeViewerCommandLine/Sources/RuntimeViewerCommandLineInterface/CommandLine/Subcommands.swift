@@ -169,6 +169,150 @@ extension RuntimeViewerCommandLineTool {
         }
     }
 
+    public struct Callers: AsyncParsableCommand {
+        public static let configuration = CommandConfiguration(
+            abstract: "List the code that calls a function or method, or sends a selector, across the indexed images.",
+            discussion: """
+                The target is -[Class selector] or +[Class selector], a Swift member as `members` prints it, \
+                a symbol (_objc_msgSend, CFRelease, a mangled Swift name), or 0x… with --image; with \
+                --selector, a selector. Only images the engine has indexed are scanned: `load` the others \
+                first. Addresses are unslid.
+                """
+        )
+
+        @OptionGroup public var globalOptions: GlobalOptions
+
+        @Argument(help: "The function, method, member, symbol, address or selector.")
+        public var target: String
+
+        @Flag(name: .long, help: "The target is a selector: list every send of it.")
+        public var selector = false
+
+        @Option(name: .long, help: ArgumentHelp("Image path or short name the target is in; an address needs it.", valueName: "image"))
+        public var image: String?
+
+        @Option(name: .long, help: ArgumentHelp("Scan the image --image names, or every indexed image.", valueName: "image|indexed"))
+        public var scope: CrossReferenceScopeChoice = .indexed
+
+        @Option(name: .long, help: ArgumentHelp("Keep only sends whose receiver is this class or is unknown.", valueName: "class"))
+        public var receiver: String?
+
+        @Option(name: .long, help: ArgumentHelp("Report at most this many references.", valueName: "count"))
+        public var limit: Int?
+
+        public init() {}
+
+        public func validate() throws {
+            if let limit, limit < 1 { throw ValidationError("--limit takes a positive number.") }
+            if scope == .image, image == nil { throw ValidationError("--scope image scans the image --image names; name one.") }
+        }
+
+        public func run() async throws {
+            try await CommandRunner(globalOptions: globalOptions).run(
+                .callers(CallersCommand(source: globalOptions.source, target: target, isSelector: selector, image: image.map(imageArgument), scope: scope, receiverClassName: receiver, limit: limit))
+            )
+        }
+    }
+
+    public struct Callees: AsyncParsableCommand {
+        public static let configuration = CommandConfiguration(
+            abstract: "List what a function or method references, in instruction order.",
+            discussion: "The target is spelled as for `callers`, without --selector: a selector has no code of its own."
+        )
+
+        @OptionGroup public var globalOptions: GlobalOptions
+
+        @Argument(help: "The function, method, member, symbol or address.")
+        public var target: String
+
+        @Option(name: .long, help: ArgumentHelp("Image path or short name the target is in; an address needs it.", valueName: "image"))
+        public var image: String?
+
+        @Flag(name: .long, help: "Keep retains, releases and other runtime helper calls.")
+        public var includeRuntime = false
+
+        @Option(name: .long, help: ArgumentHelp("Report at most this many references.", valueName: "count"))
+        public var limit: Int?
+
+        public init() {}
+
+        public func validate() throws {
+            if let limit, limit < 1 { throw ValidationError("--limit takes a positive number.") }
+        }
+
+        public func run() async throws {
+            try await CommandRunner(globalOptions: globalOptions).run(
+                .callees(CalleesCommand(source: globalOptions.source, target: target, image: image.map(imageArgument), includesRuntimeHelperCalls: includeRuntime, limit: limit))
+            )
+        }
+    }
+
+    public struct References: AsyncParsableCommand {
+        public static let configuration = CommandConfiguration(
+            abstract: "List the code that references a type — an Objective-C class, or a Swift struct, enum or class — across the indexed images."
+        )
+
+        @OptionGroup public var globalOptions: GlobalOptions
+
+        @Argument(help: "Type name or display name.")
+        public var typeName: String
+
+        @Option(name: .long, help: ArgumentHelp("Image path or short name that defines the type.", valueName: "image"))
+        public var image: String?
+
+        @Option(name: .long, help: ArgumentHelp("Scan the image --image names, or every indexed image.", valueName: "image|indexed"))
+        public var scope: CrossReferenceScopeChoice = .indexed
+
+        @Option(name: .long, help: ArgumentHelp("Report at most this many references.", valueName: "count"))
+        public var limit: Int?
+
+        public init() {}
+
+        public func validate() throws {
+            if let limit, limit < 1 { throw ValidationError("--limit takes a positive number.") }
+            if scope == .image, image == nil { throw ValidationError("--scope image scans the image --image names; name one.") }
+        }
+
+        public func run() async throws {
+            try await CommandRunner(globalOptions: globalOptions).run(
+                .typeReferences(TypeReferencesCommand(source: globalOptions.source, typeName: typeName, image: image.map(imageArgument), scope: scope, limit: limit))
+            )
+        }
+    }
+
+    public struct Symbolicate: AsyncParsableCommand {
+        public static let configuration = CommandConfiguration(
+            abstract: "Say what each unslid address is: inside which function, a stub and where it leads, a pointer slot and what it holds, a string, or the nearest symbol."
+        )
+
+        @OptionGroup public var globalOptions: GlobalOptions
+
+        @Argument(help: "Unslid addresses, 0x… or decimal.")
+        public var addresses: [String]
+
+        @Option(name: .long, help: ArgumentHelp("Image path or short name the addresses are in; without it each is read in the first image that maps it.", valueName: "image"))
+        public var image: String?
+
+        public init() {}
+
+        public func validate() throws {
+            guard !addresses.isEmpty else { throw ValidationError("Name at least one address.") }
+            _ = try addresses.map(Self.parseAddress)
+        }
+
+        static func parseAddress(_ text: String) throws -> UInt64 {
+            let value = text.lowercased().hasPrefix("0x") ? UInt64(text.dropFirst(2), radix: 16) : UInt64(text)
+            guard let value else { throw ValidationError("'\(text)' is no address: write it in hexadecimal with 0x, or in decimal.") }
+            return value
+        }
+
+        public func run() async throws {
+            try await CommandRunner(globalOptions: globalOptions).run(
+                .symbolicate(SymbolicateCommand(source: globalOptions.source, addresses: try addresses.map(Self.parseAddress), image: image.map(imageArgument)))
+            )
+        }
+    }
+
     public struct Specialize: AsyncParsableCommand {
         public static let configuration = CommandConfiguration(
             abstract: "Specialize a generic Swift type and print the resulting interface.",

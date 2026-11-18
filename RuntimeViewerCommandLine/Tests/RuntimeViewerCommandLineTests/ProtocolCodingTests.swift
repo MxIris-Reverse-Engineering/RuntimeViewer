@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import RuntimeViewerCrossReferences
 @testable import RuntimeViewerCommandLineInterface
 
 /// Every command and result must survive the wire, and the selector's textual
@@ -19,6 +20,11 @@ struct ProtocolCodingTests {
         .memberAddresses(MemberAddressesCommand(typeName: "NSObject", memberName: "init")),
         .specialize(SpecializeCommand(source: .attachedProcess(processIdentifier: 42), image: "Foo", typeName: "Box", arguments: ["Element": "Int"], listOnly: false, options: .application)),
         .export(ExportCommand(source: .engine(identifier: "abc"), image: "libobjc.A", outputDirectory: "/tmp/out", objcLayout: .directory, swiftLayout: .single, includeMetadata: false)),
+        .callers(CallersCommand(source: .local, target: "-[NSWindow makeKeyAndOrderFront:]", image: "AppKit", scope: .image, receiverClassName: "NSWindow", limit: 10)),
+        .callers(CallersCommand(target: "makeKeyAndOrderFront:", isSelector: true)),
+        .callees(CalleesCommand(target: "0x1880a1000", image: "AppKit", includesRuntimeHelperCalls: true, limit: 5)),
+        .typeReferences(TypeReferencesCommand(typeName: "NSWindow", image: "AppKit", scope: .indexed, limit: 200)),
+        .symbolicate(SymbolicateCommand(addresses: [0x1880a1000, 0x10], image: "AppKit")),
         .listSources(ListSourcesCommand(waitSeconds: 5)),
         .attach(AttachCommand(target: .processIdentifier(550))),
         .attach(AttachCommand(target: .processName("Finder"))),
@@ -38,6 +44,19 @@ struct ProtocolCodingTests {
         .specializationParameters(SpecializationParametersResult(typeInfo: sampleTypeInfo, parameters: [SpecializationParameter(name: "Element", displayDescription: "Element", candidates: [SpecializationCandidate(displayName: "Int", imagePath: "/usr/lib/swift/libswiftCore.dylib", imageName: "libswiftCore", kind: "struct", isGeneric: false)])])),
         .specialized(SpecializedInterfaceResult(typeInfo: sampleTypeInfo, interfaceText: "struct Box<Int> {}", warnings: ["layout"])),
         .export(ExportResult(imagePath: "/usr/lib/libobjc.A.dylib", imageName: "libobjc.A", outputDirectory: "/tmp/out", succeeded: 10, failed: 1, objcCount: 10, swiftCount: 0, totalDuration: 1.5)),
+        .crossReferences(CrossReferencesResult(subject: "-[NSObject release]", references: [
+            RuntimeCrossReferenceRow(RuntimeCrossReference(
+                referencingFunction: RuntimeFunctionReference(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x1_8000_0000, displayName: "objc_storeStrong", symbolName: "_objc_storeStrong", member: nil, foldedSymbolCount: 0),
+                instructionAddress: 0x1_8000_0010,
+                kind: .tailCall,
+                target: .importedSymbol(name: "_objc_release"),
+                precision: .exact,
+                isRuntimeHelperCall: true
+            )),
+        ], isComplete: false)),
+        .symbolications(SymbolicationsResult(symbolications: [
+            RuntimeAddressSymbolicationRow(RuntimeAddressSymbolication(address: 0x10, imagePath: nil, segmentName: nil, sectionName: nil, kind: .unmapped, summary: "unmapped")),
+        ])),
         .sources(SourcesResult(hosts: [
             SourceHost(hostIdentifier: "host.local", hostName: "This Mac", sources: [
                 SourceInfo(engineIdentifier: "engine.local", displayName: "My Mac", kind: .local, selector: .local, stableIdentity: "local", isConnected: true),
@@ -97,8 +116,7 @@ struct ProtocolCodingTests {
     func handshakeMessages() throws {
         let hello = Hello()
         #expect(hello.protocolVersion == CommandLineProtocol.version)
-        // The source commands are new in 2; a version 1 host would drop them.
-        #expect(CommandLineProtocol.version == 2)
+        // Which version this is: `CrossReferenceCommandTests`.
         let welcome = Welcome(hostKind: .application, processIdentifier: 7)
         let data = try WireCoding.makeEncoder().encode(HostMessage.welcome(welcome))
         let decoded = try WireCoding.decode(HostMessage.self, from: data)

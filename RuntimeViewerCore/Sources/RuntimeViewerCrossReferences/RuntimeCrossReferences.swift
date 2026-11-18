@@ -27,6 +27,8 @@ public enum RuntimeCrossReferences {
             registrar.registerProgress(PrepareCommand.self)
             registrar.register(SetPreparedByteLimitCommand.self)
             registrar.register(PreparedByteCountCommand.self)
+            registrar.register(SymbolicateCommand.self)
+            registrar.register(LocateSymbolCommand.self)
         }
     }
 

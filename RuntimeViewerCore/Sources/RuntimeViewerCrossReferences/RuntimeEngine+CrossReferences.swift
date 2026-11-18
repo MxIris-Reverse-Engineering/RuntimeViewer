@@ -90,6 +90,25 @@ extension RuntimeEngine {
         _ = try await dispatch(RuntimeCrossReferences.SetPreparedByteLimitCommand(byteLimit: byteLimit))
     }
 
+    /// What each unslid address is in the engine's process: inside which
+    /// function, a stub and where it leads, a pointer slot and what it holds,
+    /// a string, the nearest symbol — in the order asked. `imagePath` names
+    /// the image whose addresses they are; without it each is read in the
+    /// first image that maps it, the shared cache first.
+    public func symbolicate(_ addresses: [UInt64], inImageAt imagePath: String? = nil) async throws -> [RuntimeAddressSymbolication] {
+        try checkCrossReferencesAreServed(.crossReferenceSymbolicate)
+        return try await dispatch(RuntimeCrossReferences.SymbolicateCommand(addresses: addresses, imagePath: imagePath))
+    }
+
+    /// Where the images of the engine's process define a symbol named
+    /// `name`, with its leading underscore: what their export tries and
+    /// symbol tables say. A function's location is what a callers or callees
+    /// query takes as ``RuntimeCrossReferenceSubject/function(imagePath:address:)``.
+    public func locations(ofSymbolNamed name: String) async throws -> [RuntimeSymbolLocation] {
+        try checkCrossReferencesAreServed(.crossReferenceLocateSymbol)
+        return try await dispatch(RuntimeCrossReferences.LocateSymbolCommand(name: name))
+    }
+
     /// How many bytes of prepared cross references the engine's process keeps
     /// now — what a zero limit frees — as their preparations estimated them.
     /// Throws for a peer older than the command.

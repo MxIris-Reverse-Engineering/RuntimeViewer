@@ -133,6 +133,39 @@ extension RuntimeCrossReferences {
             CrossReferenceQuery(engine: engine).preparedByteCount
         }
     }
+
+    /// What each unslid address is.
+    struct SymbolicateCommand: RuntimeEngineCommand {
+        let addresses: [UInt64]
+        /// The image whose addresses these are; `nil` reads each in the first
+        /// image that maps it, the shared cache first.
+        let imagePath: String?
+
+        static var commandName: String { RuntimeEngine.CommandName.crossReferenceSymbolicate.commandName }
+
+        /// The image named, whose owner answers; without one, the serving
+        /// process alone, which maps the whole shared cache.
+        var subjectImagePath: String? { imagePath }
+
+        func perform(on engine: RuntimeEngine) async throws -> [RuntimeAddressSymbolication] {
+            try CrossReferenceQuery(engine: engine).symbolicate(addresses, inImageAt: imagePath)
+        }
+    }
+
+    /// Where the images of the serving process define a symbol.
+    ///
+    /// No image of its own: the serving process alone answers, from every
+    /// image it maps — the whole shared cache and the images it loaded — the
+    /// same images its callers and callees are read from.
+    struct LocateSymbolCommand: RuntimeEngineCommand {
+        let name: String
+
+        static var commandName: String { RuntimeEngine.CommandName.crossReferenceLocateSymbol.commandName }
+
+        func perform(on engine: RuntimeEngine) async throws -> [RuntimeSymbolLocation] {
+            try CrossReferenceQuery(engine: engine).locations(ofSymbolNamed: name)
+        }
+    }
 }
 
 private extension RuntimeCrossReferenceScope {

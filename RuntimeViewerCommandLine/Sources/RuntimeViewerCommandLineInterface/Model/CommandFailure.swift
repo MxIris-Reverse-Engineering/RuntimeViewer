@@ -15,6 +15,12 @@ public struct CommandFailure: Codable, Sendable, Hashable, Error {
         case invalidArgument
         case specializationFailed
         case exportFailed
+        /// No method, member, symbol or function answers to a cross-reference
+        /// query's target.
+        case targetNotFound
+        /// The source cannot answer cross references: it reads a file, its
+        /// process runs no arm64 code, or its peer predates them.
+        case crossReferencesUnavailable
         /// The helper daemon is not installed or cannot be reached; `attach`
         /// and the Catalyst runtime need it.
         case helperUnavailable

@@ -29,6 +29,7 @@ extension SourceSelector: ExpressibleByArgument {}
 extension GenerationOptionsChoice: ExpressibleByArgument {}
 extension TypeKindFilter: ExpressibleByArgument {}
 extension ExportLayout: ExpressibleByArgument {}
+extension CrossReferenceScopeChoice: ExpressibleByArgument {}
 
 extension GlobalOptions {
     /// Turns a path the user typed into the absolute path the host needs; the

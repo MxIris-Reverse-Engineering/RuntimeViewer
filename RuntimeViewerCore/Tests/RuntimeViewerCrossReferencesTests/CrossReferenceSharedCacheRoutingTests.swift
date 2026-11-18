@@ -63,4 +63,17 @@ struct CrossReferenceSharedCacheRoutingTests {
         #expect(byteCount.subjectImagePath == nil)
         #expect(!Self.spansImages(byteCount))
     }
+
+    @Test("Symbolicating an image's addresses is its owner's work; without an image, and locating a symbol, the serving process answers alone")
+    func symbolicationRouting() {
+        let inImage = RuntimeCrossReferences.SymbolicateCommand(addresses: [0x1000], imagePath: Self.imagePath)
+        let anywhere = RuntimeCrossReferences.SymbolicateCommand(addresses: [0x1000], imagePath: nil)
+        let locate = RuntimeCrossReferences.LocateSymbolCommand(name: "_objc_release")
+
+        #expect(inImage.subjectImagePath == Self.imagePath)
+        #expect(anywhere.subjectImagePath == nil)
+        #expect(!Self.spansImages(anywhere))
+        #expect(locate.subjectImagePath == nil)
+        #expect(!Self.spansImages(locate))
+    }
 }

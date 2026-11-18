@@ -118,6 +118,10 @@ struct CrossReferenceQuery {
             return [make(.indirectCall, .indirect(tableOffset: evidence.tableOffset, pointerAuthenticationConstant: evidence.pointerAuthenticationConstant), .candidate)]
         case .unrecognized(let address):
             return [make(branchKind, .unrecognizedCode(address: address), .exact)]
+        case .objectiveCInstanceVariable, .cString, .constantString:
+            // Data a function reads, not code it reaches: the wire has no
+            // target for them yet, and the app does not show them.
+            return []
         }
     }
 
@@ -740,7 +744,8 @@ private struct CallerMatcher: Sendable {
             kind = .superMessageSend
             precision = sendPrecision
             target = .selector(name: selector, receiverClassName: nil)
-        case .objectiveCClass, .swiftType, .swiftTypeName, .indirect, .unrecognized:
+        case .objectiveCClass, .swiftType, .swiftTypeName, .indirect, .unrecognized,
+             .objectiveCInstanceVariable, .cString, .constantString:
             // Never filed under a caller key.
             return nil
         }
@@ -868,5 +873,133 @@ extension RuntimeCrossReferenceSubject {
 private enum CrossReferenceQueryLog {
     static func answered(_ query: String, candidateCount: Int, cachedCount: Int, referenceCount: Int, isComplete: Bool, elapsed: TimeInterval) {
         #log(.debug, "\(query, privacy: .public) query scanned \(candidateCount, privacy: .public) candidate images (\(cachedCount, privacy: .public) from earlier scans), found \(referenceCount, privacy: .public) references\(isComplete ? "" : " before stopping at the limit", privacy: .public) in \(Int(elapsed * 1000), privacy: .public) ms")
+    }
+}
+
+// MARK: - Addresses and symbols
+
+extension CrossReferenceQuery {
+    /// What each address is, in the order asked.
+    func symbolicate(_ addresses: [UInt64], inImageAt imagePath: String?) throws -> [RuntimeAddressSymbolication] {
+        let (analyzer, _, imageIndices) = try currentAnalyzer(resolving: [imagePath].compactMap { $0 })
+        let imageIndex: Int? = try imagePath.map { path in
+            guard let imageIndex = imageIndices[path] else { throw RuntimeCrossReferenceError.imageNotFound(path: path) }
+            return imageIndex
+        }
+        var builder = FunctionReferenceBuilder(analyzer: analyzer)
+        return addresses.map { address in
+            Self.symbolication(analyzer.symbolication(of: address, inImageAt: imageIndex), analyzer: analyzer, builder: &builder)
+        }
+    }
+
+    /// Where the process's images define a symbol of that name.
+    func locations(ofSymbolNamed name: String) throws -> [RuntimeSymbolLocation] {
+        let (analyzer, _, _) = try currentAnalyzer(resolving: [])
+        return analyzer.locations(ofSymbolNamed: name, among: 0 ..< analyzer.imageCount).map { location in
+            RuntimeSymbolLocation(imagePath: analyzer.imagePaths[location.imageIndex], address: location.address)
+        }
+    }
+
+    private static func symbolication(
+        _ symbolication: AddressSymbolication,
+        analyzer: CrossReferenceAnalyzer,
+        builder: inout FunctionReferenceBuilder
+    ) -> RuntimeAddressSymbolication {
+        func make(_ kind: RuntimeAddressSymbolication.Kind, function: RuntimeFunctionReference? = nil, offset: UInt64? = nil, hops: [UInt64] = [], target: RuntimeCrossReferenceTarget? = nil, slotKind: String? = nil, summary: String) -> RuntimeAddressSymbolication {
+            RuntimeAddressSymbolication(
+                address: symbolication.address,
+                imagePath: symbolication.imagePath,
+                segmentName: symbolication.segmentName,
+                sectionName: symbolication.sectionName,
+                kind: kind,
+                function: function,
+                offset: offset,
+                hops: hops,
+                target: target,
+                slotKind: slotKind,
+                summary: summary
+            )
+        }
+        switch symbolication.meaning {
+        case .function(let start, _, let offset):
+            let function = analyzer.function(containing: start).map { builder.reference(for: $0) } ?? builder.unnamedReference(at: start)
+            return make(.function, function: function, offset: offset, summary: Self.text(of: function) + Self.offsetText(offset))
+        case .stub(let hops, let target):
+            let (wireTarget, targetText) = Self.target(target, analyzer: analyzer, builder: &builder)
+            return make(.stub, hops: hops, target: wireTarget, summary: "stub -> \(targetText)")
+        case .pointerSlot(let kind, let target):
+            let (wireTarget, targetText) = Self.target(target, analyzer: analyzer, builder: &builder)
+            let slotKind = Self.name(of: kind)
+            return make(.pointerSlot, target: wireTarget, slotKind: slotKind, summary: "\(slotKind) slot -> \(targetText)")
+        case .cString(let characters):
+            return make(.cString, summary: Self.quoted(characters))
+        case .constantString(let characters):
+            return make(.constantString, summary: "@" + Self.quoted(characters))
+        case .symbol(let name, let offset):
+            return make(.symbol, offset: offset, summary: name + Self.offsetText(offset))
+        case .data:
+            return make(.data, summary: "data")
+        case .unmapped:
+            return make(.unmapped, summary: "unmapped")
+        }
+    }
+
+    /// A target as the wire has it, when it has one, and in words.
+    private static func target(_ target: CodeReferenceTarget, analyzer: CrossReferenceAnalyzer, builder: inout FunctionReferenceBuilder) -> (RuntimeCrossReferenceTarget?, String) {
+        switch target {
+        case .function(let location):
+            let function = analyzer.function(containing: location).flatMap { $0.location == location ? builder.reference(for: $0) : nil }
+                ?? builder.unnamedReference(at: location)
+            return (.function(function), Self.text(of: function))
+        case .importedSymbol(let name):
+            return (.importedSymbol(name: name), "\(name) (imported)")
+        case .messageSend(let selector, let receiver):
+            let receiverClassName: String? = if case .classLiteral(let className) = receiver { className } else { nil }
+            return (.selector(name: selector, receiverClassName: receiverClassName), "send \(selector)" + (receiverClassName.map { " to \($0)" } ?? ""))
+        case .superMessageSend(let selector, _):
+            return (.selector(name: selector, receiverClassName: nil), "send super \(selector)")
+        case .objectiveCClass(let name, _):
+            let displayName = CrossReferenceNaming.displayName(forClassName: name)
+            return (.type(name: displayName, object: nil), "class \(displayName)")
+        case .swiftType(let descriptor):
+            guard let key = analyzer.swiftTypeIdentity(ofDescriptorAt: descriptor)?.key else { return (nil, "type at 0x\(String(descriptor.address, radix: 16))") }
+            let displayName = CrossReferenceNaming.displayName(forTypeKey: key)
+            return (.type(name: displayName, object: nil), "type \(displayName)")
+        case .swiftTypeName:
+            return (nil, "a mangled type name")
+        case .objectiveCInstanceVariable(let className, let name):
+            return (nil, "ivar \(className).\(name)")
+        case .cString(let characters):
+            return (nil, Self.quoted(characters))
+        case .constantString(let characters):
+            return (nil, "@" + Self.quoted(characters))
+        case .indirect(let evidence):
+            return (.indirect(tableOffset: evidence.tableOffset, pointerAuthenticationConstant: evidence.pointerAuthenticationConstant), "indirect")
+        case .unrecognized(let address):
+            return (.unrecognizedCode(address: address), "unrecognized 0x\(String(address, radix: 16))")
+        }
+    }
+
+    private static func text(of function: RuntimeFunctionReference) -> String {
+        function.displayName ?? function.symbolName ?? "0x\(String(function.address, radix: 16))"
+    }
+
+    private static func offsetText(_ offset: UInt64) -> String {
+        offset == 0 ? "" : "+0x\(String(offset, radix: 16))"
+    }
+
+    private static func name(of slotKind: AddressSymbolication.PointerSlotKind) -> String {
+        switch slotKind {
+        case .globalOffsetTable: "globalOffsetTable"
+        case .selectorReference: "selectorReference"
+        case .classReference: "classReference"
+        case .superclassReference: "superclassReference"
+        case .protocolReference: "protocolReference"
+        case .instanceVariableOffset: "instanceVariableOffset"
+        }
+    }
+
+    private static func quoted(_ characters: String) -> String {
+        "\"" + characters.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: "\\n") + "\""
     }
 }

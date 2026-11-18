@@ -1,4 +1,5 @@
 import Foundation
+import RuntimeViewerCrossReferences
 
 /// What a renderer produces: the document for standard output, plus notes
 /// that belong on standard error so they never mix with the result.
@@ -36,6 +37,10 @@ public enum TextRenderer {
         case .specialized(let result):
             return RenderedOutput(output: terminated(result.interfaceText), notes: result.warnings.map { "warning: \($0)" })
         case .export(let result):
+            return render(result)
+        case .crossReferences(let result):
+            return render(result)
+        case .symbolications(let result):
             return render(result)
         case .sources(let result):
             return render(result)
@@ -108,6 +113,54 @@ public enum TextRenderer {
         let table = TextTable(
             header: ["ADDRESS", "KIND", "NAME", "SYMBOL"],
             rows: result.members.map { [$0.address, $0.kind, $0.name, $0.symbolName] }
+        )
+        return RenderedOutput(output: table.render())
+    }
+
+    private static func render(_ result: CrossReferencesResult) -> RenderedOutput {
+        let count = "\(result.references.count) reference\(result.references.count == 1 ? "" : "s") for \(result.subject)"
+        let notes = [result.isComplete ? count : "\(count) — incomplete: the limit was reached or the query was stopped"]
+        guard !result.references.isEmpty else {
+            return RenderedOutput(output: "No references for \(result.subject).\n", notes: result.isComplete ? [] : notes)
+        }
+        let table = TextTable(
+            header: ["SITE", "IMAGE", "FUNCTION", "KIND", "TARGET", "PRECISION"],
+            rows: result.references.map { reference in
+                [
+                    reference.instructionAddress,
+                    reference.imageName,
+                    functionText(of: reference),
+                    reference.kind + (reference.isRuntimeHelperCall ? " (runtime)" : ""),
+                    reference.target,
+                    reference.precision,
+                ]
+            }
+        )
+        return RenderedOutput(output: table.render(), notes: notes)
+    }
+
+    /// The referencing function's name, or its address, and how far into it
+    /// the instruction lies.
+    private static func functionText(of reference: RuntimeCrossReferenceRow) -> String {
+        let base = reference.functionName ?? reference.functionSymbol ?? reference.functionAddress
+        guard let functionAddress = UInt64(reference.functionAddress.dropFirst(2), radix: 16),
+              let instructionAddress = UInt64(reference.instructionAddress.dropFirst(2), radix: 16),
+              instructionAddress > functionAddress
+        else { return base }
+        return base + "+0x" + String(instructionAddress - functionAddress, radix: 16)
+    }
+
+    private static func render(_ result: SymbolicationsResult) -> RenderedOutput {
+        let table = TextTable(
+            header: ["ADDRESS", "IMAGE", "SECTION", "WHAT"],
+            rows: result.symbolications.map { symbolication in
+                [
+                    symbolication.address,
+                    symbolication.imageName ?? "-",
+                    symbolication.segmentName.map { $0 + (symbolication.sectionName.map { "," + $0 } ?? "") } ?? "-",
+                    symbolication.summary,
+                ]
+            }
         )
         return RenderedOutput(output: table.render())
     }
