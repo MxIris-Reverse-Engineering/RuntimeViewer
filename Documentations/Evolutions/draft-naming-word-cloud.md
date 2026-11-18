@@ -1,6 +1,6 @@
 # Draft - 框架的命名词云：类型名、属性名与方法名的词频
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **创建日期**: 2026-10-31
 - **最后更新**: 2026-11-18
 - **所属愿景**: 无
@@ -94,7 +94,7 @@
 - **右侧**：
   - 上半是全部词的排行表（词、次数），可排序。精确比较与无障碍阅读都走它。
   - 下半列出选中词的用法，分两列：类型口径是类型名与种类，成员口径是成员名与声明它的类型。公开的名字排在前面，下划线开头的私有名字排在后面。
-  - 在词云或排行表里点一个词都会选中它。点用法里的一行，主窗口打开那个类型，走 `documentState.selectionRouter` 的 `.push`，与侧栏点一行是同一条路；成员行用 `.pushHighlighting`，像 Find 的成员结果那样滚到那一行并闪一下。
+  - 在词云或排行表里点一个词都会选中它。点用法里的一行，主窗口打开那个类型，走 `documentState.selectionRouter` 的 `.open(_:in: .focusedTab)`，与侧栏点一行是同一条路；成员行另带 `ContentHighlightRequest`（成员名按整词匹配、取离它的行号最近的一处），像 Find 的成员结果那样滚到那一行并闪一下。
 - **状态**：一个状态枚举，取值为加载类型、建成员语料（带进度）、就绪、失败（原因加重试）、没有可数的名字。
 - 口径、成员分组、两个开关与 N 记在 `AppDefaults` 里，所有窗口共用，跨启动沿用。
 
@@ -108,11 +108,27 @@ Export 菜单里三项，都按当前口径与筛选导出：
 
 ### 5. 代码落点与测试
 
-- **Core**：`members(in:shownUnder:)` 命令与 `RuntimeObjectMembers` 类型。语料仓库判断成员在给定选项下是否可见，复用 `searchMembers` 里的那段投影逻辑。测试用测试 bundle 的 fixture：没建语料时返回 `nil`；打开 Strip Synthesized Methods 后访问器不在结果里；选项为 `nil` 时与 `searchMembers` 看到的成员一致。
-- **RuntimeViewerApplication**：拆词、前缀统计、四种口径的计数与用法列表、CSV 与 JSON 编码，都不依赖 AppKit；另有窗口的 ViewModel。测试覆盖拆词的边界情况（缩略词、数字、下划线、选择子、前缀）、去重与跳过规则，以及两种编码（含 CSV 转义）。
-- **RuntimeViewerUI**：`WordCloudLayout` 只接收量好的词尺寸，算出画布大小与每个词的位置，是纯几何计算，测试断言不重叠、不出界、同样的输入得到同样的结果；`WordCloudView` 是滚动视图的文档视图，负责画它，以及悬停、点击、选中与拖拽平移。排版放在后台做，几百个词的排版要几百毫秒。
-- **App**：`NamingWordCloud/` 下的 coordinator、窗口与 view controller；`MainMenuController` 与两处右键菜单的菜单项；导出用的存储面板放在 coordinator 里。
+（2026-11-18 按 0091、0094、0095、0096 之后的分层改写：草案写成时 ViewModel 还在 `RuntimeViewerApplication` 与 App target 里。）
+
+- **Core**（`RuntimeViewerCore/Search/`）：`RuntimeEngine.members(in:shownUnder:)`，命令 `CorpusMembersCommand`（线上名 `corpusMembers`，关于一个镜像：借用共享缓存镜像的 Engine 交给该镜像的拥有者回答），类型 `RuntimeObjectMembers`。语料仓库的 `members(in:shownUnder:)` 与 `searchMembers` 用同一条可见性规则（`RuntimeInterfaceCorpusEntry.member(at:in:projectedLineTable:)`），存盘的语料照搜索那样读回。测试用 Foundation：没建语料时返回 `nil`；不给选项时，成员搜索找到的成员都在结果里；打开 Strip Synthesized Methods 后访问器不在、属性还在。
+- **RuntimeViewerAppCore**（`NamingWordCloud/`）：拆词、前缀统计、复合词预设、四种口径的计数、按「最有代表性」定类别、用法列表、CSV 与 JSON 编码，都是不依赖 UI 的值与函数；窗口的 ViewModel、路由与状态枚举；三种类别色是 `ColorDescriptor` 的新值。设置记在 `AppDefaults`。测试在 `RuntimeViewerAppCoreTests`：拆词的边界情况（缩略词、数字、下划线、选择子、前缀、复合词）、去重与跳过规则、定色、两种编码（含 CSV 转义），以及 ViewModel 的状态与导航。
+- **RuntimeViewerAppUI**：类别色的解析（`ColorDescriptor.color`）。
+- **RuntimeViewerUI**（`AppKit/WordCloud/`）：`WordCloudLayout` 只接收量好的词尺寸，算出画布大小与每个词的位置，是纯几何计算，测试（`RuntimeViewerAppUITests`）断言不重叠、不出界、同样的输入得到同样的结果；`WordCloudView` 是滚动视图的文档视图，负责画它，以及悬停、点击、选中与拖拽平移。排版放在后台做。
+- **App**（`NamingWordCloud/`）：窗口控制器与 view controller；`MainCoordinator` 按镜像管着这个文档的词云窗口（一个镜像一个，再开就提到前面，随文档关闭）；View 菜单与镜像列表右键菜单（`RuntimeImageAction`）的入口；导出用的存储面板。
 - 不新增 target，不改工程设置，所以 Tuist 描述不用动。落地时 README 的功能列表加一行。
+
+### 6. 落地步骤
+
+1. **Core 读语料成员的命令**（已完成）—— `RuntimeObjectMembers`、`CorpusMembersCommand`、语料仓库的 `members(in:shownUnder:)`、路由声明
+   - 行为：`imageWithoutCorpus`、`membersMatchAMemberSearch`、`optionsHideWhatTheyHide`；`SharedCacheRoutingDeclarationTests` 列入新命令
+2. **AppCore 的拆词与计数** —— 拆词、前缀、复合词、四种口径、去重与跳过、定色、CSV 与 JSON
+   - 行为：缩略词与数字的拆法、选择子与下划线、前缀按镜像统计并去掉、复合词合并、虚词去掉、各种跳过与去重、按「最有代表性」定色、CSV 转义、JSON 的形状与排序
+3. **RuntimeViewerUI 的排版与画布** —— `WordCloudLayout`、`WordCloudView`
+   - 行为：不重叠、不出界、确定性、画布按词的总面积定；点到词、点到空白
+4. **AppCore 的窗口 ViewModel** —— `NamingWordCloudViewModel`、状态、设置、类别色
+   - 行为：类型口径一打开就能算；成员口径等语料建好再算；语料开关关着时成员口径给提示；对端太旧时成员口径给提示；换生成选项重算；点用法里的一行在主窗口打开（成员带高亮）；导出的内容
+5. **App 的窗口与入口** —— 窗口控制器、view controller、`MainCoordinator` 的窗口管理、View 菜单、镜像列表右键菜单、导出面板、README
+   - 行为：App 编得过；一个镜像只开一个窗口；界面效果由用户看
 
 **不做**：命令行与 MCP 输出（以后要做时，把拆词与计数挪进命令行也能链接的无 UI 模块即可）；PDF 与 SVG 导出；多个镜像合成一张词云；旋转摆放的词；单复数合并（`View` 与 `Views` 分开算）。
 
@@ -149,3 +165,5 @@ Export 菜单里三项，都按当前口径与筛选导出：
 | 2026-11-01 | 按「最有代表性」而不是「占多数」定色 | 原型里按多数定色时，成员口径几乎全是方法色：方法比属性与 ivar 多得多。按占比高出平均最多的那一类定色，三种颜色才都会出现，也更能说明一个词属于哪类名字。 |
 | 2026-11-18 | Accepted | 用户批准，由 Ultra 上的会话实现。功能分支从 `origin/next` 切出：本机 `next` 上有一个有意没推送的提交，还有一份等用户看过的本地合并，都不该随这条分支推上去。 |
 | 2026-11-18 | 三件待定的事按草案原文处理 | 起草时留给用户的三件事，批准时按草案原文、范围最小的做法定下：一、ObjC 的 override 照草案「已知局限」所写，跟随文档的 Strip Overrides，不在 ⚙︎ 里另加开关（起草时的建议是加一个默认打开的开关，因为不去掉时 AppKit 的 `dealloc` 在 Method First Words 里排第六；以后要加只多一个开关）。二、双指缩放与 Zoom to Fit 保留，草案「浏览」一节本来就写着。三、仓库外的一次性原型已经不在两台机器上，不再留底，实现照草案从头写。 |
+| 2026-11-18 | 代码落点按现在的分层改写，补落地步骤 | 草案写成之后，ViewModel 全部搬进了 RuntimeViewerAppCore（0091、0096），AppCore 不再用 AppKit 的颜色与图片（0094），目录按功能划分（0095），导航的 `.push` / `.pushHighlighting` 换成了 `SelectionRoute.open(_:in:highlighting:)`。§5 与 §3 的导航一句据此改写，并把实现拆成五步写进新的 §6。 |
+| 2026-11-18 | 第一步：命令名 `corpusMembers`，成员行高亮只用成员名 | 命令关于一个镜像，所以由镜像的拥有者回答，与建语料的命令一致。成员不带声明行，点用法里的成员行时，`ContentHighlightRequest` 的 `lineText` 留空：内容区找不到同样的一行时，本来就退到按成员名整词匹配、取离行号最近的一处。对端早于这条命令时，2.1.0 以后的版本都回 `isUnknownCommand`，窗口据此提示对端太旧。 |
