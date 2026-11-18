@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Draft - 引擎管理在 iOS 上可用</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --card: #f5f5f7;
+  --move: #0a66d8; --add: #1a8f3c; --del: #c9302c; --mod: #b26a00; --code: #f0f0f3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e; --fg: #f2f2f7; --muted: #a1a1a6; --line: #3a3a3c; --card: #2c2c2e;
+    --move: #4c9dff; --add: #43c463; --del: #ff6961; --mod: #ffb340; --code: #2a2a2d;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+h2 { font-size: 19px; margin: 36px 0 10px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+.meta { color: var(--muted); font-size: 13px; }
+.card { background: var(--card); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+code { font: 12.5px ui-monospace, "SF Mono", Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; }
+pre { font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code); padding: 12px; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+th { background: var(--card); }
+nav { font-size: 13px; }
+nav a { color: var(--move); margin-right: 12px; text-decoration: none; }
+details { margin: 10px 0; }
+summary { cursor: pointer; font-weight: 600; }
+.tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 9px; color: #fff; margin-right: 4px; }
+.t-add { background: var(--add); } .t-del { background: var(--del); } .t-mod { background: var(--mod); } .t-same { background: var(--muted); }
+.legend span { margin-right: 14px; font-size: 13px; }
+svg { max-width: 100%; height: auto; }
+svg text { font-family: -apple-system, "Helvetica Neue", sans-serif; fill: var(--fg); font-size: 12px; }
+svg text.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
+svg text.title { font-weight: 600; font-size: 13px; }
+svg text.muted { fill: var(--muted); }
+svg .box { fill: var(--card); stroke: var(--line); stroke-width: 1.2; }
+svg .group { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 5 4; }
+svg .ad { fill: none; stroke: var(--add); stroke-width: 1.8; }
+svg .md { fill: none; stroke: var(--mod); stroke-width: 1.8; }
+svg .dl { fill: none; stroke: var(--del); stroke-width: 1.6; stroke-dasharray: 4 3; }
+svg .arrow { stroke: var(--muted); stroke-width: 1.4; fill: none; marker-end: url(#head); }
+svg .arrowAdd { stroke: var(--add); stroke-width: 1.6; fill: none; marker-end: url(#headAdd); }
+svg .headFill { fill: var(--muted); } svg .headAddFill { fill: var(--add); }
+.small { font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Draft - 引擎管理在 iOS 上可用</h1>
+<p class="meta">对应提案 <code>draft-engine-management-on-ios.md</code> · 最后更新 2026-11-18 · 状态 Draft · 所属愿景《iOS 版功能对齐》第一步</p>
+<nav><a href="#summary">摘要</a><a href="#arch">架构图</a><a href="#map">改动地图</a><a href="#steps">落地步骤</a><a href="#design">详细设计</a><a href="#research">前期调研</a><a href="#alt">替代方案</a><a href="#impact">影响</a><a href="#log">决策日志</a></nav>
+
+<h2 id="summary">摘要</h2>
+<div class="card">
+<p>让 <code>RuntimeViewerEngineManagement</code> 在 iOS（含越狱版）与 visionOS 上编译并可用，<b>Mac 上的行为一点不变</b>。只属于 macOS 的三块——内嵌 XPC service、特权 helper daemon、Mac Catalyst——收进带 <code>.live</code> 的闭包接缝，iOS 上的 <code>.live</code> 是「没有这项能力」；配置新增「浏览局域网」与「服务端推送运行时数据」两个开关和一份 iOS 用的 <code>.deviceApplication</code>；iOS 上文件引擎直接在 App 进程里读。iOS app 把今天手工建的两个引擎（本机引擎、给 Mac 连的 Bonjour 服务端）交给管理器启动，Mac 看到的设备与今天一样。</p>
+<p>不在这一篇：在设备上自己附加进程（另起一篇，和附加界面一起做）、iOS 上浏览局域网、共享系统镜像与派生数据、AppCore 链接管理器、任何界面变化。</p>
+</div>
+<p><b>要你定</b>：批准这份提案（改为 Accepted）后开工。没有其他未决问题；实现由另一台 Mac 上的协作 agent 接手。</p>
+
+<h2 id="arch">架构图</h2>
+<p class="legend"><span><span class="tag t-add">+</span>新增</span><span><span class="tag t-mod">~</span>修改</span><span><span class="tag t-del">−</span>删除</span><span><span class="tag t-same">=</span>不变</span></p>
+<svg viewBox="0 0 1040 520" role="img" aria-label="What changes in RuntimeViewerEngineManagement and the iOS app">
+  <defs>
+    <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="headFill"/></marker>
+    <marker id="headAdd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="headAddFill"/></marker>
+  </defs>
+  <!-- consumers -->
+  <rect x="20" y="20" width="200" height="60" rx="8" class="box"/>
+  <text x="120" y="45" text-anchor="middle" class="title">macOS app, CLI host</text>
+  <text x="120" y="64" text-anchor="middle" class="muted">.application / .headlessHost</text>
+  <rect x="20" y="20" width="200" height="60" rx="8" fill="none" stroke="var(--muted)" stroke-width="1.2"/>
+
+  <rect x="20" y="380" width="200" height="110" rx="8" class="box"/>
+  <rect x="20" y="380" width="200" height="110" rx="8" class="md"/>
+  <text x="120" y="402" text-anchor="middle" class="title">RuntimeViewerUsingUIKit</text>
+  <text x="120" y="420" text-anchor="middle" class="muted">iOS · jailbroken · visionOS</text>
+  <text x="32" y="444" class="mono">~ AppDelegate</text>
+  <text x="32" y="462" class="mono" fill="var(--del)" style="fill: var(--del)">− hand-built server engine</text>
+  <text x="32" y="480" class="mono" style="fill: var(--add)">+ @Dependency(\.runtimeEngineManager)</text>
+
+  <!-- module group -->
+  <rect x="270" y="10" width="750" height="500" rx="12" class="group"/>
+  <text x="290" y="34" class="title">RuntimeViewerEngineManagement</text>
+  <text x="560" y="34" class="muted">all files: − #if os(macOS) (except RuntimeProcessAttacher)</text>
+
+  <rect x="290" y="50" width="330" height="96" rx="8" class="box"/>
+  <rect x="290" y="50" width="330" height="96" rx="8" class="md"/>
+  <text x="302" y="70" class="title">RuntimeEngineManagerConfiguration</text>
+  <text x="302" y="90" class="mono" style="fill: var(--add)">+ browsesForPeers</text>
+  <text x="302" y="107" class="mono" style="fill: var(--add)">+ bonjourServerPushesRuntimeData</text>
+  <text x="302" y="124" class="mono" style="fill: var(--add)">+ static deviceApplication</text>
+  <text x="302" y="140" class="muted small">.application / .headlessHost unchanged</text>
+
+  <rect x="640" y="50" width="360" height="44" rx="8" class="box"/>
+  <rect x="640" y="50" width="360" height="44" rx="8" class="md"/>
+  <text x="652" y="70" class="title">RuntimeEngineManagerEvent</text>
+  <text x="652" y="86" class="muted small">catalystHelperUnavailable never sent off macOS</text>
+
+  <rect x="640" y="102" width="360" height="44" rx="8" class="box"/>
+  <rect x="640" y="102" width="360" height="44" rx="8" class="md"/>
+  <text x="652" y="122" class="title">RuntimeSharedCacheEligibility</text>
+  <text x="652" y="138" class="mono" style="fill: var(--add)">+ static unavailable</text>
+
+  <rect x="290" y="160" width="400" height="200" rx="8" class="box"/>
+  <rect x="290" y="160" width="400" height="200" rx="8" class="md"/>
+  <text x="302" y="180" class="title">RuntimeEngineManager</text>
+  <text x="302" y="200" class="mono" style="fill: var(--del)">− import ServiceManagement</text>
+  <text x="302" y="217" class="mono" style="fill: var(--del)">− @Dependency helper ×3 (stored)</text>
+  <text x="302" y="234" class="mono">~ macCatalystLaunching: MacCatalystLaunching?</text>
+  <text x="302" y="251" class="mono">    ~ HelperApplication + daemonBecameAvailable</text>
+  <text x="302" y="268" class="mono" style="fill: var(--del)">− fileEngineCredential</text>
+  <text x="302" y="285" class="mono" style="fill: var(--add)">+ fileReading: FileReading</text>
+  <text x="302" y="302" class="mono">    .inFileService(credential:) | .inThisProcess</text>
+  <text x="302" y="319" class="mono">~ startBonjourServer(): push per config,</text>
+  <text x="302" y="336" class="mono">    iOS awaits resolvedServiceName()</text>
+  <text x="302" y="353" class="mono">~ shared: .application / .deviceApplication</text>
+
+  <rect x="710" y="160" width="290" height="200" rx="8" class="box"/>
+  <rect x="710" y="160" width="290" height="200" rx="8" class="ad"/>
+  <text x="722" y="180" class="title">+ RuntimeEngineManager</text>
+  <text x="722" y="196" class="title">  +PlatformServices.swift</text>
+  <text x="722" y="220" class="mono">#if os(macOS)</text>
+  <text x="732" y="237" class="mono">MacCatalystLaunching.live</text>
+  <text x="732" y="254" class="mono">FileReading.live (file service)</text>
+  <text x="732" y="271" class="mono">Eligibility.live (probes)</text>
+  <text x="732" y="288" class="mono">reconnectInjectedXPCEngines()</text>
+  <text x="722" y="310" class="mono">#else</text>
+  <text x="732" y="327" class="mono">nil · .inThisProcess · .unavailable</text>
+  <text x="722" y="347" class="mono">#endif</text>
+
+  <rect x="290" y="380" width="400" height="56" rx="8" class="box"/>
+  <text x="302" y="402" class="title">= RuntimeProcessAttacher</text>
+  <text x="302" y="422" class="muted small">stays macOS-only; attaching on a device is another proposal</text>
+
+  <rect x="710" y="380" width="290" height="110" rx="8" class="box"/>
+  <text x="722" y="402" class="title">macOS-only modules</text>
+  <text x="722" y="422" class="mono">RuntimeViewerHelperClient</text>
+  <text x="722" y="440" class="mono">RuntimeViewerCatalystExtensions</text>
+  <text x="722" y="462" class="muted small">imported only under #if os(macOS),</text>
+  <text x="722" y="478" class="muted small">only by +PlatformServices.swift</text>
+
+  <!-- arrows -->
+  <path d="M220,50 L288,170" class="arrow"/>
+  <path d="M220,430 L288,300" class="arrowAdd"/>
+  <path d="M855,360 L855,378" class="arrow"/>
+  <path d="M690,260 L708,260" class="arrow"/>
+</svg>
+
+<h3>iOS 上启动时谁做什么</h3>
+<svg viewBox="0 0 1040 250" role="img" aria-label="iOS app launch sequence with the engine manager">
+  <defs>
+    <marker id="head2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="headFill"/></marker>
+  </defs>
+  <rect x="20" y="20" width="240" height="210" rx="8" class="box"/>
+  <text x="32" y="42" class="title">AppDelegate.didFinishLaunching</text>
+  <text x="32" y="68" class="mono">1 InjectionServiceRegistrar</text>
+  <text x="32" y="88" class="mono">2 RuntimeCrossReferences.install()</text>
+  <text x="32" y="108" class="mono">3 SuspensionPreventionRegistrar</text>
+  <text x="32" y="128" class="mono">4 background: _ = .local</text>
+  <text x="32" y="152" class="mono" style="fill: var(--add)">5 runtimeEngineManager</text>
+  <text x="32" y="172" class="muted small">first read resolves the dependency,</text>
+  <text x="32" y="188" class="muted small">after the registrations</text>
+
+  <rect x="320" y="20" width="300" height="210" rx="8" class="box"/>
+  <rect x="320" y="20" width="300" height="210" rx="8" class="ad"/>
+  <text x="332" y="42" class="title">RuntimeEngineManager.shared</text>
+  <text x="332" y="60" class="muted">.deviceApplication</text>
+  <text x="332" y="88" class="mono">startBonjourServer()</text>
+  <text x="342" y="106" class="mono">await resolvedServiceName()</text>
+  <text x="342" y="124" class="mono">pushesRuntimeData: true</text>
+  <text x="332" y="150" class="mono muted">(no browser, no sharing)</text>
+  <text x="332" y="176" class="mono">launchSystemRuntimeEngines()</text>
+  <text x="342" y="194" class="mono">systemRuntimeEngines = [.local]</text>
+  <text x="342" y="212" class="mono muted">macCatalystLaunching == nil</text>
+
+  <rect x="690" y="40" width="320" height="90" rx="8" class="box"/>
+  <text x="702" y="62" class="title">Mac (unchanged)</text>
+  <text x="702" y="84" class="small">browses, connects to the device's server,</text>
+  <text x="702" y="102" class="small">receives imageList, injects device processes</text>
+  <text x="702" y="120" class="muted small">server takes one client at a time</text>
+
+  <path d="M260,152 L318,152" class="arrow" marker-end="url(#head2)"/>
+  <path d="M688,95 L622,100" class="arrow" marker-end="url(#head2)"/>
+</svg>
+
+<h2 id="map">改动地图</h2>
+<p class="small"><code>EM/</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/</code>，<code>EMT/</code> = <code>RuntimeViewerPackages/Tests/RuntimeViewerEngineManagementTests/</code></p>
+<table>
+<tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr>
+<tr><td><code>EM/RuntimeEngineManagerConfiguration.swift</code></td><td><span class="tag t-mod">~</span></td><td>加 <code>browsesForPeers</code>、<code>bonjourServerPushesRuntimeData</code>（构造器带默认值）；加 <code>.deviceApplication</code>；<code>startupSteps</code> 只在浏览时含 <code>.bonjourBrowser</code></td><td>iOS 不浏览、服务端要推送</td><td>1</td></tr>
+<tr><td><code>EMT/RuntimeEngineManagerConfigurationTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>加 <code>.deviceApplication</code> 的启动步骤断言；原有断言不动</td><td>守住 Mac 不变</td><td>1</td></tr>
+<tr><td><code>EM/RuntimeEngineManager.swift</code> · <code>MacCatalystLaunching</code></td><td><span class="tag t-mod">~</span></td><td><code>HelperApplication</code> 加 <code>daemonBecameAvailable</code>；<code>.live</code> 搬走；管理器持有可选值</td><td>管理器不再直接碰 helper daemon</td><td>2</td></tr>
+<tr><td><code>EM/RuntimeEngineManager.swift</code> · <code>RuntimeEngineManager</code></td><td><span class="tag t-mod">~</span></td><td><code>init</code> 的 Catalyst 参数改可选；订阅改走 <code>daemonBecameAvailable()</code>；删三个 helper 的 <code>@Dependency</code> 存储属性；<code>fileEngineCredential</code> → <code>fileReading</code>；文件引擎四个方法加进程内分支；没有 Catalyst 时重启不做事</td><td>平台差异收进接缝</td><td>2</td></tr>
+<tr><td><code>RuntimeFileEngineError</code></td><td><span class="tag t-mod">~</span></td><td>加 <code>.dependencyCacheFixedInThisProcess</code></td><td>进程内引擎不能换配对</td><td>2</td></tr>
+<tr><td><code>EM/RuntimeEngineManager+PlatformServices.swift</code></td><td><span class="tag t-add">+</span></td><td>三个 <code>.live</code> 的两个平台分支；<code>reconnectInjectedXPCEngines()</code>（只在 macOS）</td><td>平台代码集中在一处</td><td>2</td></tr>
+<tr><td><code>EM/RuntimeEngineManager.swift</code> · 若干成员</td><td><span class="tag t-mod">~</span></td><td><code>reconnectInjectedXPCEngines()</code> 用到的成员 <code>private</code> → <code>internal</code>（以编译为准）</td><td>跨文件扩展要用</td><td>2</td></tr>
+<tr><td><code>EM/RuntimeSharedCacheEligibility.swift</code></td><td><span class="tag t-mod">~</span></td><td>加 <code>.unavailable</code>；<code>.live</code> 搬到平台文件；去掉 HelperClient 的 import</td><td>规则与平台无关</td><td>2</td></tr>
+<tr><td><code>EMT/RuntimeEngineManagerMacCatalystLaunchTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>给 <code>daemonBecameAvailable</code>；加 daemon 可用时重启、没有 Catalyst 时只起 <code>.local</code></td><td>新接缝的行为</td><td>2</td></tr>
+<tr><td><code>EMT/FileEngineManagementTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>改用 <code>fileReading = .inFileService { … }</code>；加进程内读的用例</td><td>新接缝的行为</td><td>2</td></tr>
+<tr><td><code>RuntimeViewerAppCoreTests/RuntimeFileEngineParkingTests.swift</code></td><td><span class="tag t-mod">~</span></td><td>同上的改名</td><td>跟着改名</td><td>2</td></tr>
+<tr><td><code>EMT/RuntimeSharedCacheEligibilityTests.swift</code></td><td><span class="tag t-mod">~</span></td><td><code>.unavailable</code> 不共享、不放行任何来源</td><td>新值的行为</td><td>2</td></tr>
+<tr><td>Configuration、Event、Manager、Eligibility 四个文件</td><td><span class="tag t-mod">~</span></td><td>去掉 <code>#if os(macOS)</code>；删 <code>import ServiceManagement</code>；两个 macOS 模块的 import 只在 macOS；<code>shared</code> 按平台选配置</td><td>iOS 能编</td><td>3</td></tr>
+<tr><td><code>RuntimeEngineManager.startBonjourServer()</code></td><td><span class="tag t-mod">~</span></td><td><code>pushesRuntimeData</code> 取配置；macOS 照旧同步取名，其他平台先 <code>await resolvedServiceName()</code></td><td>与 iOS app 今天的服务端一致；Mac 上共享要同步读到服务端</td><td>3</td></tr>
+<tr><td><code>EMT/RuntimeEngineManagerDeviceConfigurationTests.swift</code></td><td><span class="tag t-add">+</span></td><td>在 Mac 上用 <code>.deviceApplication</code> 与 iOS 的接缝值建管理器：只有 <code>.local</code>、不重连、进程内读文件</td><td>iOS 路径在 Mac 上测到</td><td>3</td></tr>
+<tr><td><code>AGENTS.md</code>（根）· Package Structure</td><td><span class="tag t-mod">~</span></td><td>管理器也在 iOS 与 visionOS 上编；平台代码在哪</td><td>文档同步</td><td>3</td></tr>
+<tr><td><code>RuntimeViewerUsingUIKit/.../App/AppDelegate.swift</code></td><td><span class="tag t-mod">~</span></td><td>删手工建的服务端；注册之后解析 <code>@Dependency(\.runtimeEngineManager)</code>；保留后台预热 <code>.local</code></td><td>iOS app 换用管理器</td><td>4</td></tr>
+<tr><td><code>RuntimeViewerUsingUIKit.xcodeproj/project.xcproj</code></td><td><span class="tag t-mod">~</span></td><td>三个 target 的 <code>package-product-members</code> 加 <code>RuntimeViewerEngineManagement</code></td><td>链接管理器</td><td>4</td></tr>
+<tr><td><code>Documentations/Visions/IOSFeatureParity.md</code></td><td><span class="tag t-mod">~</span></td><td>相关提案表加本篇</td><td>愿景索引</td><td>1</td></tr>
+<tr><td><code>EM/RuntimeProcessAttacher.swift</code></td><td><span class="tag t-same">=</span></td><td>仍只在 macOS 上编</td><td>附加另起一篇</td><td>—</td></tr>
+</table>
+
+<h2 id="steps">落地步骤</h2>
+<ol>
+<li><b>配置与启动步骤</b>
+  <ul class="small"><li><code>applicationConfigurationStartsEverythingInTheSameOrder</code></li><li><code>headlessHostConfigurationIsUnchanged</code></li><li><code>deviceApplicationStartsServerAndSystemEnginesOnly</code></li><li><code>configurationWithoutBrowsingSkipsTheBrowser</code></li></ul></li>
+<li><b>平台接缝与进程内读文件</b>（此时模块仍只在 macOS 上编，全部在 Mac 上测）
+  <ul class="small"><li><code>systemEnginesWithoutMacCatalystAreLocalOnly</code></li><li><code>relaunchWithoutMacCatalystDoesNothing</code></li><li><code>daemonBecomingAvailableRelaunchesTheHelperEngine</code></li><li><code>fileReadInThisProcessIsReadBeforeStartReadingReturns</code></li><li><code>fileThatCannotBeReadInThisProcessIsNotListed</code></li><li><code>fileEngineReadInThisProcessIsNeverSuspended</code></li><li><code>changingTheDependencyCacheOfAFileReadInThisProcessThrows</code></li><li><code>unavailableEligibilitySharesNothing</code></li><li><code>fileServiceReadingIsUnchanged</code></li></ul></li>
+<li><b>放开平台限定</b>
+  <ul class="small"><li><code>engineManagementBuildsForIOSAndVisionOS</code></li><li><code>bonjourServerPushesRuntimeDataOnlyWhenConfigured</code></li><li><code>deviceConfiguredManagerOnMacListsOnlyLocal</code></li><li><code>macAppAndCommandLineHostBuildUnchanged</code></li></ul></li>
+<li><b>iOS app 换用管理器</b>
+  <ul class="small"><li><code>iOSAppBuildsForAllThreeTargets</code>（Ultra 上没有 visionOS SDK 时记下，只编前两个）</li><li><code>macStillConnectsToTheDeviceAndInjects</code>（由用户在 vphone 上看）</li></ul></li>
+</ol>
+<p class="small">收尾判断：预计不需要配套文章（接缝的用法在文档注释里，平台代码的位置写进根 <code>AGENTS.md</code>）；预计没有新术语。</p>
+
+<h2 id="design">详细设计</h2>
+<details open><summary>配置</summary>
+<pre><code>public struct RuntimeEngineManagerConfiguration: Sendable, Hashable {
+    public var advertisesOverBonjour: Bool
+    public var bonjourServerPushesRuntimeData: Bool   // off on the Mac, on for a device
+    public var browsesForPeers: Bool                  // off on a device: one client per server
+    public var sharesEnginesWithPeers: Bool
+    public var launchesSystemEngines: Bool
+    public var reconnectsInjectedEngines: Bool
+
+    public init(advertisesOverBonjour: Bool,
+                bonjourServerPushesRuntimeData: Bool = false,
+                browsesForPeers: Bool = true,
+                sharesEnginesWithPeers: Bool,
+                launchesSystemEngines: Bool,
+                reconnectsInjectedEngines: Bool)
+
+    public static let application: Self   // unchanged
+    public static let headlessHost: Self  // unchanged
+    public static let deviceApplication = Self(
+        advertisesOverBonjour: true, bonjourServerPushesRuntimeData: true,
+        browsesForPeers: false, sharesEnginesWithPeers: false,
+        launchesSystemEngines: true, reconnectsInjectedEngines: false)
+}</code></pre></details>
+<details open><summary>文件读取的接缝</summary>
+<pre><code>extension RuntimeEngineManager {
+    enum FileReading {
+        case inFileService(credential: @MainActor (RuntimeFile) throws -&gt; RuntimeConnectionCredential?)
+        case inThisProcess
+    }
+}
+
+// startReading(_:), in-process branch
+case .inThisProcess:
+    let engine = try await Task.detached(priority: .userInitiated) {
+        try RuntimeEngine(reading: file, hostInfo: .files)
+    }.value
+    try await engine.connect()
+    filesByEngineID[engine.engineID] = file
+    fileRuntimeEngines.append(engine)
+    fileReadsByEngineID[engine.engineID] = Task {}   // already read
+    rebuildSections()
+    return engine</code></pre>
+<p class="small"><code>RuntimeEngine</code> 能否从 detached 任务交出来（是否 <code>Sendable</code>）实现时核对；不能就另议并记入决策日志。进程内引擎不挂起，换配对的 cache 抛 <code>.dependencyCacheFixedInThisProcess</code>。</p></details>
+<details><summary>Catalyst 启动的接缝</summary>
+<pre><code>struct MacCatalystLaunching {
+    struct HelperApplication {
+        var launch: @MainActor () async throws -&gt; Void
+        var terminate: @MainActor () async -&gt; Void
+        var handshakeTimeout: TimeInterval
+        var daemonBecameAvailable: @MainActor () -&gt; AnyPublisher&lt;Void, Never&gt; = { Empty().eraseToAnyPublisher() }
+    }
+    var makeConnectedEngine: @MainActor () async throws -&gt; RuntimeEngine
+    var helperApplication: HelperApplication?
+    // static var live: MacCatalystLaunching?  — in RuntimeEngineManager+PlatformServices.swift
+}</code></pre></details>
+<details><summary>共享缓存资格</summary>
+<pre><code>extension RuntimeSharedCacheEligibility {
+    static let unavailable = RuntimeSharedCacheEligibility(isTranslated: { _ in nil }, environment: { _ in nil })
+}</code></pre>
+<p class="small"><code>sharesThisProcessSharedCache()</code> 为假 → 没有分区 → 不共享。</p></details>
+<details><summary>服务端</summary>
+<pre><code>private func startBonjourServer() {
+    #if os(macOS)
+    makeBonjourServerEngine(named: RuntimeNetworkBonjour.localServiceName)   // synchronous: sharing reads it right after
+    #else
+    Task { @MainActor in
+        makeBonjourServerEngine(named: await RuntimeNetworkBonjour.resolvedServiceName())
+    }
+    #endif
+}</code></pre></details>
+<details><summary>iOS app</summary>
+<pre><code>@Dependency(\.runtimeEngineManager) private var runtimeEngineManager
+
+func application(_:didFinishLaunchingWithOptions:) -&gt; Bool {
+    InjectionServiceRegistrar.registerIfAvailable()
+    RuntimeCrossReferences.install()
+    SuspensionPreventionRegistrar.registerIfAvailable()
+    DispatchQueue.global().async { _ = RuntimeEngine.local }
+    _ = runtimeEngineManager   // starts the Bonjour server and `.local`
+    return true
+}</code></pre></details>
+
+<h2 id="research">前期调研</h2>
+<details><summary>管理器里只属于 macOS 的地方</summary>
+<table>
+<tr><th>位置（RuntimeEngineManager.swift）</th><th>用到什么</th><th>原因</th></tr>
+<tr><td>:6</td><td><code>import ServiceManagement</code></td><td>没有用到，iOS SDK 也没有</td></tr>
+<tr><td>:12-13</td><td>HelperClient、CatalystExtensions</td><td>只在 AppKit 平台链接</td></tr>
+<tr><td>:98-100</td><td><code>RuntimeFileService.credential(for:)</code></td><td>文件 service 的 XPC 层只在 macOS</td></tr>
+<tr><td>:209-218</td><td>三个 helper 的 <code>@Dependency</code></td><td>key 在 HelperClient</td></tr>
+<tr><td>:282-343</td><td><code>MacCatalystLaunching.live</code></td><td>Catalyst 与 helper daemon</td></tr>
+<tr><td>:372</td><td>共享缓存资格的探针</td><td>探针在 HelperClient</td></tr>
+<tr><td>:405、:421-428</td><td><code>daemonAvailabilityPublisher</code></td><td>helper daemon</td></tr>
+<tr><td>:1430-1465</td><td>注入过的 Mac 进程的 XPC 重连</td><td>daemon 注册表与 <code>.xpcServer</code> 凭据</td></tr>
+</table>
+<p class="small">其余约 85% 与平台无关：Bonjour 发现与心跳、镜像、共享、分区、<code>.injectedTCP</code> 设备引擎、socket 记录、文件引擎的簿记。</p></details>
+<details><summary>Bonjour 服务端一次只接一个客户端</summary><p class="small"><code>RuntimeNetworkServerConnection</code> 接受第一个连接后立刻停止监听，直到客户端断开（<code>RuntimeNetworkServerConnection.swift:165-176</code>、<code>:240-275</code>）。设备要是浏览，就会占掉 Mac 唯一的连接位。</p></details>
+<details><summary>管理器与 iOS app 的服务端有两处不同</summary><p class="small">名字：管理器用同步的 <code>localServiceName</code>，在 iPhone 上退回机型名；iOS app 用 <code>resolvedServiceName()</code>。旧版 Mac 拿这个名字当窗口标题与侧栏 autosave key。macOS 上两者相同。推送：管理器的服务端 <code>pushesRuntimeData: false</code>（Mac 的引擎经代理服务端镜像），iOS app 的服务端推送运行时数据（Mac 直接看设备）。另外 Mac 上 <code>startSharingEngines()</code> 紧跟着同步读服务端引擎（<code>:1771-1780</code>），所以 Mac 上必须同步创建。</p></details>
+<details><summary>文件在进程里读</summary><p class="small"><code>RuntimeEngine(reading:engineID:hostInfo:)</code> 同步建好文件目录，<code>connect()</code> 不带凭据即启动；读取代码没有平台限定。与 Mac 的 <code>.file</code> 引擎契约不同：Mac 上窗口先开、可挂起、可换配对、始终同一个对象。测试里在本进程供文件用的是 XPC 匿名监听，iOS 上没有。</p></details>
+<details><summary>现有接缝与 iOS 工程</summary><p class="small">接缝：<code>MacCatalystLaunching</code>、<code>fileEngineCredential</code>、<code>sharedCacheEligibility</code>、<code>init</code> 的 <code>startupHandler</code>。iOS 工程是 Xcode 27 的 <code>project.xcproj</code>，三个 target 编同一个源码目录，各自列链接的包产品，目前没有 <code>RuntimeViewerEngineManagement</code>；不在 Tuist 描述里。</p></details>
+
+<h2 id="alt">替代方案考量</h2>
+<details><summary>展开</summary>
+<ul class="small">
+<li><b>只用 <code>#if</code> 拆文件</b>：iOS 的路径测试覆盖不到。选定的是接缝。</li>
+<li><b>macOS 传输拆成独立模块</b>：多一个模块，App 与命令行 host 的接线都要改。</li>
+<li><b>一个汇总的「平台服务」结构体</b>：已有接缝是分开的，合并要改所有相关测试而不带来新行为。</li>
+<li><b>iOS 上进程内也起一个「服务」保留 Mac 的转发契约</b>：要在 Core 里新加进程内连接，超出本篇；留给 iOS 文件模式界面那篇。</li>
+<li><b>iOS 上浏览，同时把服务端改成多客户端</b>：本篇变大，改的是 Core 的连接层，而 iOS 上还没有切换来源的界面。</li>
+<li><b>iOS 上也用同步的 <code>localServiceName</code></b>：设备名退回机型名，旧版 Mac 的窗口标题与侧栏状态跟着变。</li>
+</ul></details>
+
+<h2 id="impact">影响</h2>
+<details open><summary>展开</summary>
+<ul class="small">
+<li><b>用户可见变化</b>：无。Mac 一切照旧；iOS 界面不变，Mac 连设备、看运行时、注入都与今天相同。</li>
+<li><b>数据与配置兼容</b>：设备广播的名字与身份不变，Mac 上按设备记的书签与侧栏状态照常对得上。</li>
+<li><b>平台</b>：管理器从只在 macOS 上编变为 macOS、iOS、visionOS 都编；最低版本不变。Mac Catalyst 与 tvOS 上没有 target 链接它，不保证编过。</li>
+<li><b>发布</b>：不需要新的权限或 entitlement；不影响公证与 Sparkle。</li>
+</ul></details>
+
+<h2 id="log">决策日志</h2>
+<table class="small">
+<tr><th>日期</th><th>变更</th><th>说明</th></tr>
+<tr><td>2026-11-18</td><td>Created as Draft</td><td>愿景《iOS 版功能对齐》的第一步</td></tr>
+<tr><td>2026-11-18</td><td>选定（协作 agent 代用户选，推荐项）：设备上自己附加进程另起一篇</td><td>与 iOS 的附加界面一起做</td></tr>
+<tr><td>2026-11-18</td><td>选定（协作 agent 代用户选，推荐项）：带 <code>.live</code> 的闭包接缝，macOS 实现留在同一模块</td><td>iOS 的路径在 Mac 上的测试里也能跑</td></tr>
+<tr><td>2026-11-18</td><td>选定（协作 agent 代用户选，推荐项）：iOS app 换用管理器，但不浏览局域网</td><td>服务端一次只接一个客户端</td></tr>
+<tr><td>2026-11-18</td><td>选定（协作 agent 代用户选，推荐项）：非交互验证，设备上由用户看</td><td>Ultra 上编译与测试；vphone 由用户确认</td></tr>
+<tr><td>2026-11-18</td><td>自定：iOS 服务端用解析后的名字、推送、不共享</td><td>Mac 看到的设备不变；协作 agent 代用户确认</td></tr>
+<tr><td>2026-11-18</td><td>自定：iOS 上不重连注入的进程、不共享系统镜像</td><td>附加另起一篇；协作 agent 代用户确认</td></tr>
+<tr><td>2026-11-18</td><td>自定：XPC 重连与服务端取名用 <code>#if</code>，不做接缝</td><td>这两处在 iOS 上没有路径可测</td></tr>
+<tr><td>2026-11-18</td><td>自定：进程内的文件引擎读完才返回、不挂起、不能换配对</td><td>不改 Core 的连接层；那篇再定</td></tr>
+<tr><td>2026-11-18</td><td>提交为 Draft，未批准</td><td>标着「代用户选」「代用户确认」的几行，是另一台 Mac 上的协作 agent 代用户作答的；提案先保持 Draft 推到 next，实现交给那台 Mac 上的 agent</td></tr>
+</table>
+</main>
+</body>
+</html>
