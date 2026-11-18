@@ -108,6 +108,9 @@
           "product-name": "RuntimeViewerCrossReferences",
           "build-phase": { "build-phase": "frameworks" },
         }, {
+          "product-name": "RuntimeViewerEngineManagement",
+          "build-phase": { "build-phase": "frameworks" },
+        }, {
           "product-name": "RuntimeViewerInjection",
           "build-phase": { "build-phase": "frameworks" },
         }, {
@@ -186,6 +189,9 @@
           "product-name": "RuntimeViewerDeviceInjection",
           "build-phase": { "build-phase": "frameworks" },
         }, {
+          "product-name": "RuntimeViewerEngineManagement",
+          "build-phase": { "build-phase": "frameworks" },
+        }, {
           "product-name": "RuntimeViewerInjection",
           "build-phase": { "build-phase": "frameworks" },
         }, {
@@ -258,6 +264,9 @@
           "build-phase": { "build-phase": "frameworks" },
         }, {
           "product-name": "RuntimeViewerCrossReferences",
+          "build-phase": { "build-phase": "frameworks" },
+        }, {
+          "product-name": "RuntimeViewerEngineManagement",
           "build-phase": { "build-phase": "frameworks" },
         }, {
           "product-name": "RuntimeViewerInjection",
