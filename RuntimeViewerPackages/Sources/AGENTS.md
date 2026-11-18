@@ -8,9 +8,14 @@ The apps' application layer is two targets and a facade
 - **`RuntimeViewerAppCore/`** holds the ViewModels, cell ViewModels, routes, `DocumentState` and the
   application logic. **Everything in it can be built and driven in a unit test, and no UI component
   appears in it**: no subclass or construction of a view, control, cell, menu, popover, window or view
-  controller, no delegate, data source or adapter of a control, no coordinator. UI framework models are
-  fine — `NSImage`, `NSColor`, `NSFont`, `NSAttributedString`, `NSEvent` and its modifier flags — and so
-  are `Driver` / `Signal`, `@RxObserved` and `Router`.
+  controller, no delegate, data source or adapter of a control, no coordinator. `Driver` / `Signal`,
+  `@RxObserved` and `Router` are fine. **AppKit's and UIKit's models are on their way out too**
+  (`Documentations/Evolutions/draft-app-core-without-ui-models.md`, landing in four steps): AppCore does
+  not import AppKit, UIKit or Cocoa and names no AppKit or UIKit type — not `NSImage`, `NSColor`,
+  `NSFont`, `NSAttributedString`, `NSEvent` — but describes images, colours, row text and the content
+  pane's text as values that RuntimeViewerAppUI resolves. Until the last step lands, the files still to be
+  cleaned up are listed in `AppCoreBoundary.filesPendingCleanup`; never add one to the list, and take a
+  file off it in the commit that cleans it up.
 - **`RuntimeViewerAppUI/`** holds the UI glue: the adapters that set up AppKit and AppKitPlus controls
   (`NavigatorTextFilterFieldAdapter`, the Find page's and the runtime source picker's), the jump bar's
   path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`,
@@ -50,19 +55,30 @@ and line:
    class, or an `NS` / `UI` class whose name ends in `View`, `ViewController`, `Window`, `WindowController`,
    `Control`, `Cell`, `Menu`, `MenuItem`, `Popover`, `Field`, `Bar` or `Button`; or that conforms to an
    `NS` / `UI` protocol ending in `Delegate` or `DataSource`, AppKitPlus's included;
-3. a call to the initializer of one of those classes.
+3. a call to the initializer of one of those classes;
+4. an import of AppKit, UIKit or Cocoa (a submodule such as `UIKit.UIGeometry` included);
+5. any name spelled as AppKit's and UIKit's are — `NS` or `UI`, then a capital — other than the Foundation
+   names in `AppCoreBoundary.allowedSystemPrefixedNames` (`NSRange`, `NSString`, `NSLock`, `NSObject`, …).
+   `NSAttributedString` is reported although Foundation declares it: it carries fonts and colours. A
+   Foundation name AppCore starts to use goes on that list without a reason.
 
-It also walks the manifest from RuntimeViewerAppCore down through the package's targets beneath it and
-fails on a UI library among their dependencies. The check reads names: it cannot follow a superclass chain
-or a type alias, so `NSObject`, the models (`NSImage(…)`, `NSMutableParagraphStyle()`), `UIViewController`
-as a type in the iOS route and system service protocols outside AppKit and UIKit
+Rules 4 and 5 skip the files in `AppCoreBoundary.filesPendingCleanup` until the proposal's step that
+cleans each one up; a second test fails when a listed file no longer breaks them, so the list only
+shrinks. It also walks the manifest from RuntimeViewerAppCore down through the package's targets beneath it
+and fails on a UI library among their dependencies. The check reads names: it cannot follow a superclass
+chain or a type alias, and system service protocols outside AppKit and UIKit
 (`UNUserNotificationCenterDelegate`) pass. A line it reports that belongs here all the same goes in the
-test's `allowedLines`, with the reason; it is empty.
+test's `allowedLines`, with the reason, and a third test fails when an allowance matches no reported line
+any more. The only allowances are the iOS route's: `DocumentState`'s private selection router and empty
+transition name `UIViewController` because XCoordinator's `Presentable` and `TransitionProtocol` do.
 
-**A service whose live implementation needs a UI library is declared in RuntimeViewerAppCore and implemented
-in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by `AppCoordinator`), the
-engines' icons (`runtimeEngineIconProviding`, implemented by `RuntimeEngineIconProvider`), and drawing an
-object's icon (`runtimeObjectIconRendering`, implemented with UIFoundation's `IDEIcon`). How such a key is
+**A service whose live implementation needs a UI library, AppKit or UIKit is declared in RuntimeViewerAppCore
+and implemented in RuntimeViewerAppUI**: opening the app's own windows (`appRouter`, implemented by
+`AppCoordinator`), the engines' icons (`runtimeEngineIconProviding`, implemented by
+`RuntimeEngineIconProvider`), drawing an object's icon (`runtimeObjectIconRendering`, implemented with
+UIFoundation's `IDEIcon`), the copy commands' pasteboard (`pasteboardClient`, `PasteboardClient.general`) and
+Show in Finder (`finderClient`, `FinderClient.workspace`). The pasteboard and the Finder give tests an inert
+client that does nothing; `ViewModelTestEnvironment` swaps in recorders. How such a key is
 written: root `AGENTS.md`, *Singletons & Dependency Injection*. `IDEIcon` keeps its images in a dictionary
 without a lock, so object icons are drawn on the main thread only, and tests that draw them run on the main
 actor.

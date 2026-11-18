@@ -1,6 +1,6 @@
 # Draft - AppCore 不再使用 AppKit/UIKit 模型
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
@@ -665,7 +665,7 @@ enum AppCoreBoundary {
 
 每一步都单独合进 `next`，合入前跑 `RuntimeViewerPackages` 的两组测试（`RuntimeViewerAppCoreTests|RuntimeViewerAppUITests`）、编 macOS App，并编 iOS App（`RuntimeViewerUsingUIKit`）确认 UIKit 分支能编译。
 
-1. **系统服务与修饰键** —— 改动地图里步骤为 1 的各行
+1. **系统服务与修饰键**（已完成，2026-11-18）—— 改动地图里步骤为 1 的各行
    - 行为：`pasteboardClientResolvesToTheGeneralPasteboardOnceAppUIIsLinked`（`CrossLayerDependencyTests`）
    - 行为：`finderClientResolvesToTheWorkspaceOnceAppUIIsLinked`
    - 行为：`copyNameStillCopiesTheDisplayName`（现有 `RuntimeObjectActionTests` 照样通过）
@@ -725,3 +725,4 @@ enum AppCoreBoundary {
 | 2026-11-18 | Codable | 用户定：新类型这次只做成 `Hashable` / `Sendable`，`Codable` 留给 `ls` / `do` 提案。 |
 | 2026-11-18 | 共识 | 用户确认以上决定和「未经询问采用的做法」作为写提案的共识。 |
 | 2026-11-18 | Accepted | 用户批准，开始实现。四步共用一条功能分支，每做完一步就先在本地合进 `next` 的检出给用户看，用户同意后再推送 `next`、开始下一步；编号与 Implemented 等第四步合入后再定。 |
+| 2026-11-18 | 第一步完成 | 照计划做完。与提案不同的三处：一、规则 4、5 的行为用参数化样例覆盖（「要报告」与「不报告」两组），没有逐条单列成提案里写的几个测试名；另加两条守护测试：过渡清单里的文件不再违规或已不存在就失败（清单只减不增），`allowedLines` 里的条目对不上任何被报告的行就失败。二、Foundation 名字清单除了 AppCore 现在用到的，还预先收了几个确定属于 Foundation 的（`NSError`、`NSURL`、`NSCharacterSet`、`NSMakeRange`、`NSRangeException`、`NSRecursiveLock`）。三、iOS 一侧这一步只为 iOS 模拟器编了 `RuntimeViewerApplication` 包（AppCore、AppUI 的 UIKit 分支），没编 iOS App 本身：这一步没有改 iOS App 的任何代码。验证在 Ultra 上：包级构建、iOS 包构建与 macOS App（Tuist workspace，Debug）构建通过；AppCoreTests 与 AppUITests 共 1055 个测试，只有三条既有红灯失败（`TitleActivityIndicatorTests` 的悬停副标题、`ContentImageViewModelTests` 的图像失败重试、`FindCrossReferenceTests` 的 Call Hierarchy 超时），新加与搬家的测试全部通过。 |

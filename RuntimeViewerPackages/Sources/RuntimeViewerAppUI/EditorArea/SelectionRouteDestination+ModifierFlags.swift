@@ -1,5 +1,6 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
+import RuntimeViewerAppCore
 
 extension SelectionRoute.Destination {
     /// Where a click in a list of objects — the sidebar's object list, the Find results, the
