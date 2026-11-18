@@ -72,7 +72,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UIKitViewContr
         output.nodes.drive(collectionView.rx.nodes(source:)) { (collectionView: UICollectionView, indexPath: IndexPath, viewModel: SidebarRootCellViewModel, cell: UICollectionViewListCell) in
             var content = cell.defaultContentConfiguration()
             content.textProperties.allowsDefaultTighteningForTruncation = false
-            content.attributedText = viewModel.appearance.name
+            content.attributedText = viewModel.appearance.name.attributedString(in: .list)
             content.image = viewModel.appearance.icon?.image
             content.imageProperties.tintColor = viewModel.appearance.iconColor.color
             cell.contentConfiguration = content

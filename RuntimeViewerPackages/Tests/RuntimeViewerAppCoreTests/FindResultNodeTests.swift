@@ -112,7 +112,7 @@ struct FindResultNodeTests {
         #expect(copy.identifier == type.identifier)
         #expect(copy.children.count == 1)
         #expect(copy.children.first === type.children.last)
-        #expect(copy.appearance.title === type.appearance.title)
+        #expect(copy.appearance.title == type.appearance.title)
     }
 
     @Test("every term of the filter applies to each row: an excluded word drops its hits, a suffix picks one")
@@ -150,10 +150,10 @@ struct FindResultNodeTests {
 
     // How a long title draws in the row's label is `FindResultRowDrawingTests`.
 
-    /// The Inspector's References tab lists the same rows beside text of its own set in the small
-    /// system font, so it draws them a size down; the Find navigator keeps Xcode's sizes.
-    @Test("the Inspector draws a cross-reference row a size down, and the Find navigator keeps its size")
-    func inspectorRowsAreASizeDown() {
+    /// The Inspector's References tab lists the same rows as the Find navigator; only its cell view draws
+    /// them a size down (`FindResultCellStyleTests` in RuntimeViewerAppUITests).
+    @Test("the Inspector's References tab describes a cross-reference row as the Find navigator does")
+    func inspectorRowsDescribeTheSameRow() {
         let function = RuntimeFunctionReference(
             imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
             address: 0x1_8B49_DB50,
@@ -168,20 +168,8 @@ struct FindResultNodeTests {
         let navigatorAppearance = FindResultNode.crossReference(row, identifier: "row", children: []).appearance
         let inspectorAppearance = InspectorReferenceCellViewModel(row: row, identifier: "row").appearance
 
-        #expect(Self.fontSizes(in: navigatorAppearance.title) == [13])
-        #expect(Self.fontSizes(in: inspectorAppearance.title) == [NSFont.smallSystemFontSize])
-        #expect(navigatorAppearance.icon == .glyph(RuntimeObjectIcon.glyph(text: "M", color: .orange, size: 16)))
-        #expect(inspectorAppearance.icon == .glyph(RuntimeObjectIcon.glyph(text: "M", color: .orange, size: 14)))
-    }
-
-    /// Every point size the title is set in.
-    private static func fontSizes(in title: NSAttributedString) -> Set<CGFloat> {
-        var pointSizes: Set<CGFloat> = []
-        title.enumerateAttribute(.font, in: NSRange(location: 0, length: title.length)) { font, _, _ in
-            if let font = font as? NSFont {
-                pointSizes.insert(font.pointSize)
-            }
-        }
-        return pointSizes
+        #expect(inspectorAppearance == navigatorAppearance)
+        #expect(navigatorAppearance.icon == .glyph(RuntimeObjectIcon.glyph(text: "M", color: .orange)))
+        #expect(navigatorAppearance.title.runs.map(\.role) == [.primary, .secondary], "the name, then the image and the count")
     }
 }

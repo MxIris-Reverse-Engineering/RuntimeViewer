@@ -1,4 +1,5 @@
 import Foundation
+import RuntimeViewerAppCore
 #if os(macOS)
 import AppKit
 #else

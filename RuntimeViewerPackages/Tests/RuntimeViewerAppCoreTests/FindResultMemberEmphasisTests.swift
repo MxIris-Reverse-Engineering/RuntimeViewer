@@ -1,4 +1,4 @@
-import AppKit
+import Foundation
 import RuntimeViewerCore
 import Testing
 @testable import RuntimeViewerAppCore
@@ -16,13 +16,7 @@ struct FindResultMemberEmphasisTests {
         let member = RuntimeMemberDeclaration(name: name, kind: .objcMethod, isStatic: false, declarationText: declarationText, lineNumber: 1)
         let match = RuntimeMemberMatch(object: object, member: member, matchRangeInName: matchRangeInName)
         let title = FindResultNode.member(match, index: 0).appearance.title
-        var emphasizedText = ""
-        title.enumerateAttribute(.font, in: NSRange(location: 0, length: title.length)) { font, range, _ in
-            if (font as? NSFont) == FindResultCellStyle.emphasisFont {
-                emphasizedText += title.attributedSubstring(from: range).string
-            }
-        }
-        return emphasizedText
+        return title.runs.filter { $0.role == .emphasized }.map(\.string).joined()
     }
 
     @Test("a match in a one-piece name is set apart where the declaration spells the name")
@@ -63,10 +57,13 @@ struct FindResultMemberEmphasisTests {
         let match = RuntimeMemberMatch(object: object, member: member, matchRangeInName: matchRangeInName)
         let title = FindResultNode.member(match, index: 0).appearance.title
         var emphasizedRanges: [NSRange] = []
-        title.enumerateAttribute(.font, in: NSRange(location: 0, length: title.length)) { font, range, _ in
-            if (font as? NSFont) == FindResultCellStyle.emphasisFont {
-                emphasizedRanges.append(range)
+        var location = 0
+        for run in title.runs {
+            let length = (run.string as NSString).length
+            if run.role == .emphasized {
+                emphasizedRanges.append(NSRange(location: location, length: length))
             }
+            location += length
         }
         return emphasizedRanges
     }

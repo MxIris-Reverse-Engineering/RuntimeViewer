@@ -91,7 +91,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             { (_: UICollectionView, _: IndexPath, viewModel: SidebarRuntimeObjectCellViewModel, cell: UICollectionViewListCell) in
                 var content = cell.defaultContentConfiguration()
                 content.textProperties.allowsDefaultTighteningForTruncation = false
-                content.attributedText = viewModel.appearance.title
+                content.attributedText = viewModel.appearance.title.attributedString(in: .list)
                 content.image = viewModel.appearance.primaryIcon?.image
                 cell.contentConfiguration = content
             }

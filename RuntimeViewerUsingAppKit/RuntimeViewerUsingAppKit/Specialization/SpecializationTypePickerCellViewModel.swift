@@ -44,20 +44,8 @@ public final class SpecializationTypePickerCellViewModel: NSObject, @unchecked S
             primaryTooltip: RuntimeObjectIcon.tooltip(for: candidate.kind.runtimeObjectKind),
             secondaryIcon: candidate.isGeneric ? .glyph(RuntimeObjectIcon.genericGlyph(size: iconSize)) : nil,
             secondaryTooltip: candidate.isGeneric ? RuntimeObjectIcon.tooltipForGeneric : nil,
-            title: NSAttributedString {
-                AText(candidate.displayName)
-                    .foregroundColor(.labelColor)
-                    .font(.systemFont(ofSize: 12))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            },
-            subtitle: NSAttributedString {
-                AText(candidate.imagePath.lastPathComponent)
-                    .foregroundColor(.secondaryLabelColor)
-                    .font(.systemFont(ofSize: 10))
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
+            title: RowText(candidate.displayName, fontSize: 12),
+            subtitle: RowText(candidate.imagePath.lastPathComponent, role: .secondary, fontSize: 10)
         )
         super.init()
     }

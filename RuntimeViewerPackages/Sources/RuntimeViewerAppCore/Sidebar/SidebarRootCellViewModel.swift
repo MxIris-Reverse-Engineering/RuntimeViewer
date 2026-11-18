@@ -1,12 +1,8 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
 import RxAppKit
 #endif
 
-#if canImport(UIKit)
-import UIKit
-#endif
-
+import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -54,9 +50,9 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
         public var icon: IconDescriptor?
         /// The colour the template `icon` is drawn in: what the node is (`ColorDescriptor.imageKind(_:)`).
         public var iconColor: ColorDescriptor
-        public var name: NSAttributedString
+        public var name: RowText
 
-        public init(icon: IconDescriptor?, iconColor: ColorDescriptor, name: NSAttributedString) {
+        public init(icon: IconDescriptor?, iconColor: ColorDescriptor, name: RowText) {
             self.icon = icon
             self.iconColor = iconColor
             self.name = name
@@ -79,7 +75,7 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
         self.appearance = Appearance(
             icon: .imageKind(kind),
             iconColor: .imageKind(kind),
-            name: NSAttributedString(rowText: node.name, fontSize: 13)
+            name: RowText(node.name, fontSize: 13)
         )
     }
 

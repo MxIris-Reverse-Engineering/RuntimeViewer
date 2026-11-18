@@ -1,12 +1,8 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
 import RxAppKit
 #endif
 
-#if canImport(UIKit)
-import UIKit
-#endif
-
+import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -238,18 +234,12 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
     /// The display title under the current `filterResult`: the fuzzy-highlight
     /// rendition when a result is active, the plain default title otherwise.
-    private func composedTitle() -> NSAttributedString {
+    private func composedTitle() -> RowText {
         guard let filterResult else {
-            return defaultAttributedTitle()
+            return defaultTitle()
         }
 
-        let title = NSMutableAttributedString(
-            attributedString: NSAttributedString(
-                rowText: runtimeObject.displayName,
-                fontSize: fontSize,
-                color: forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor
-            )
-        )
+        let title = RowText(runtimeObject.displayName, role: forOpenQuickly ? .secondary : .tertiary, fontSize: fontSize)
 
         // This row's own name is the prefix of its subtree haystack by
         // construction — `currentAndChildrenNames` builds
@@ -264,14 +254,10 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         // unchanged.
         let currentNSRange = NSRange(location: 0, length: runtimeObject.displayName.count)
 
-        for resultNSRange in filterResult.ranges {
-            guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }
-            title.addAttributes([
-                .foregroundColor: NSUIColor.labelColor,
-                .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
-            ], range: resultNSRange)
+        let matchedRanges = filterResult.ranges.filter { resultNSRange in
+            resultNSRange.location >= currentNSRange.location && NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange)
         }
-        return title
+        return title.marking(matchedRanges, as: .emphasized)
     }
 
     var filterableString: String {
@@ -300,8 +286,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         _appearance.hasMaterializedRelay
     }
 
-    private func defaultAttributedTitle() -> NSAttributedString {
-        NSAttributedString(rowText: runtimeObject.displayName, fontSize: fontSize, color: .labelColor)
+    private func defaultTitle() -> RowText {
+        RowText(runtimeObject.displayName, fontSize: fontSize)
     }
 
     public init(runtimeObject: RuntimeObject, forOpenQuickly: Bool, parent: SidebarRuntimeObjectCellViewModel? = nil) {

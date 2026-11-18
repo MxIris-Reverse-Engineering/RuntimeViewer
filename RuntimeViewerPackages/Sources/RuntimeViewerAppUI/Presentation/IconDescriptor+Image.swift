@@ -26,6 +26,16 @@ extension IconDescriptor {
         }
     }
 
+    /// The icon in a list whose icons are all `size` points — the Find navigator's 16, the Inspector's
+    /// References tab's 14: a glyph is drawn at that size, any other icon as `image` draws it, the symbols
+    /// keeping their own size inside the frame.
+    @MainActor
+    public func image(size: CGFloat) -> NSUIImage {
+        guard case .glyph(var glyph) = self else { return image }
+        glyph.size = size
+        return RuntimeObjectIcon.image(for: glyph)
+    }
+
     @MainActor
     private static func runtimeEngineImage(engineID: String) -> NSUIImage {
         #if os(macOS)

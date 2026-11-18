@@ -312,16 +312,6 @@ enum AppCoreBoundary {
     /// The files rules 4 and 5 do not apply to yet, each with the step of proposal
     /// `app-core-without-ui-models` that cleans it up. Empty once the last step lands.
     static let filesPendingCleanup: [String: Int] = [
-        "RuntimeViewerAppCore/Find/FindResultCellStyle.swift": 3,
-        "RuntimeViewerAppCore/Find/FindResultNode.swift": 3,
-        "RuntimeViewerAppCore/Inspector/InspectorHierarchyCellViewModel.swift": 3,
-        "RuntimeViewerAppCore/Inspector/InspectorSwiftSpecializationCellViewModel.swift": 3,
-        "RuntimeViewerAppCore/Inspector/RuntimeObjectCellAppearance+Inspector.swift": 3,
-        "RuntimeViewerAppCore/NSAttributedString+RowText.swift": 3,
-        "RuntimeViewerAppCore/RuntimeObject/RuntimeObjectCellAppearance.swift": 3,
-        "RuntimeViewerAppCore/Sidebar/SidebarRootCellViewModel.swift": 3,
-        "RuntimeViewerAppCore/Sidebar/SidebarRuntimeObjectCellViewModel.swift": 3,
-        "RuntimeViewerAppCore/Theme/NSColor+Xcode.swift": 3,
         "RuntimeViewerAppCore/Content/ContentTextViewModel.swift": 4,
         "RuntimeViewerAppCore/Content/NSAttributedString+ContentLinks.swift": 4,
         "RuntimeViewerAppCore/Extensions.swift": 4,

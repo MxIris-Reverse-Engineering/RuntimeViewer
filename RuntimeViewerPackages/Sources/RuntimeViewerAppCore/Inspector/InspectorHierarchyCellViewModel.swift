@@ -1,10 +1,5 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
 import RxAppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
 #endif
 
 import Foundation
@@ -55,7 +50,7 @@ public final class InspectorHierarchyCellViewModel: NSObject, @unchecked Sendabl
         self.appearance = RuntimeObjectCellAppearance(
             primaryIcon: .glyph(RuntimeObjectIcon.glyph(text: "?", color: .gray, size: RuntimeObjectCellAppearance.inspectorIconSize)),
             primaryTooltip: "Not found in the indexed images",
-            title: NSAttributedString(rowText: name, fontSize: 12, color: .secondaryLabelColor)
+            title: RowText(name, role: .secondary, fontSize: 12)
         )
         super.init()
     }

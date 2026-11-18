@@ -378,8 +378,9 @@ cell-reuse code) for data already produced by an Rx pipeline.
   - **Publish once per change.** Build the new struct and assign it once, and only when it differs
     (`Appearance` is `Equatable`). The macro generates a plain getter and setter, so `appearance.title = …`
     field by field sends one event per statement.
-  - **Icons and their colours are descriptors** (`IconDescriptor`, `ColorDescriptor`), compared as values;
-    the cell view draws them when it applies the appearance.
+  - **Icons, their colours and the row's text are values** (`IconDescriptor`, `ColorDescriptor`,
+    `RowText`), compared as values; the cell view draws them when it applies the appearance
+    (`.image`, `.color`, `attributedString(in: .list)`).
   - **The cell binds `$appearance` once** and applies it in one place. When the appearance changes many
     times a second (a row showing progress), set each part only when it differs, as `ReportCellView` does.
   - **State nothing displays stays a plain property.** A flag only the filter reads
