@@ -98,7 +98,7 @@ ul { padding-left: 22px; }
 <main>
 <h1>Draft - 整理 AppCore 与 AppUI 的目录分类</h1>
 <div class="meta">
-  <span>状态 <span class="badge">Accepted</span></span>
+  <span>状态 <span class="badge">In Progress</span></span>
   <span>创建 2026-11-18</span>
   <span>对应提案最后更新：2026-11-18</span>
   <span>拟用分支 <code>feature/app-layer-directory-layout</code></span>
@@ -262,13 +262,13 @@ ul { padding-left: 22px; }
 
 <h2 id="steps">落地步骤</h2>
 <ol>
-  <li><strong>AppCore 根目录收进目录</strong>（含拆 <code>Extensions.swift</code>、改边界测试路径）
+  <li><strong>AppCore 根目录收进目录（已完成）</strong>（含拆 <code>Extensions.swift</code>、改边界测试路径）
     <ul><li><code>packageBuildsWithNoFileAtAppCoreRoot</code></li><li><code>boundaryTestsStillFindTheiOSRouteAllowances</code></li><li><code>extensionsSplitKeepsEveryExtension</code></li></ul></li>
-  <li><strong>BackgroundWork、Find 子目录、Sidebar 子目录与 Inspector 拆分</strong>
+  <li><strong>BackgroundWork、Find 子目录、Sidebar 子目录与 Inspector 拆分（已完成）</strong>
     <ul><li><code>backgroundWorkHoldsEveryCoordinatorTheEngineWorkOwns</code></li><li><code>findDirectoryKeepsOnlyItsEntryPoints</code></li><li><code>inspectorSplitKeepsBothViewModels</code></li></ul></li>
-  <li><strong>AppUI 镜像</strong>
+  <li><strong>AppUI 镜像（已完成）</strong>
     <ul><li><code>packageBuildsWithNoFileAtAppUIRoot</code></li><li><code>iconsDirectoryIsGone</code></li></ul></li>
-  <li><strong>规则与路径写进文档</strong>
+  <li><strong>规则与路径写进文档（已完成）</strong>
     <ul><li><code>agentsFilesNameNoMovedPath</code></li></ul></li>
 </ol>
 <p>每一步后：包级 <code>swift build --build-tests</code>、<code>RuntimeViewerAppCoreTests</code> 与 <code>RuntimeViewerAppUITests</code> 通过（对照既有红灯）、iOS 模拟器包构建通过。全部做完后 <code>./TuistScript.sh warm</code> 并编 macOS App。</p>
@@ -327,6 +327,9 @@ ul { padding-left: 22px; }
 <div class="table-wrap"><table>
 <tr><th>日期</th><th>变更</th><th>说明</th></tr>
 <tr><td>2026-11-18</td><td>Created as Draft</td><td>0094 落地后 AppCore 与 AppUI 的目录不再相互对应、根目录散着二十多个文件，用户要求重新整理分类。按轻量档问了一轮：只拆名不副实的文件，测试 target 不动，先写提案再动手。</td></tr>
+<tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
+<tr><td>2026-11-18</td><td>四步完成</td><td>与提案不同处：注释掉的旧 <code>InspectorRuntimeObjectViewModel</code> 原样随 <code>InspectorPlaceholderViewModel.swift</code> 走；写进 AGENTS.md 的规则多列了全部目录名与 <code>Find/</code> 子目录。核对：两个根目录都没有 Swift 文件，<code>Icons/</code> 已删，除 AGENTS.md 外没有文件内容被改。Ultra 上三步各自构建通过，iOS 包、Tuist warm 与 macOS App 构建通过；1069 个测试，失败 4 条均为既有红灯。</td></tr>
+<tr><td>2026-11-18</td><td>实现完成</td><td>在本地合进 <code>next</code> 的检出，待用户看过后收尾。不另写指南，没有新术语。</td></tr>
 </table></div>
 </details>
 </main>

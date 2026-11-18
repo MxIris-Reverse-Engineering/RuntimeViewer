@@ -19,7 +19,7 @@ The apps' application layer is two targets and a facade
   (`NavigatorTextFilterFieldAdapter`, the Find page's and the runtime source picker's), the jump bar's
   path items, the presenter that feeds the toolbar's activity view, `FindResultsPresentation.apply(to:)`,
   the coordinator that opens the app's own windows, the transitions that drive AppKitPlus's navigation
-  controller (`Transition+Navigation.swift`), the Find query field's content as a `FindQueryTerm` and
+  controller (`Base/Transition+Navigation.swift`), the Find query field's content as a `FindQueryTerm` and
   back, and the live implementations of the services RuntimeViewerAppCore declares (below).
   Code whose job is to drive a UI component goes here even when it can be tested; it depends on
   RuntimeViewerAppCore, never the other way round.
@@ -90,7 +90,7 @@ size the row is drawn at where it has one. The view draws it in its list's style
 `rowText.attributedString(in: .list)` or `.findResult(metrics)` (AppUI's `Presentation/RowText+AttributedString.swift`):
 the list style is attribute for attribute what `NSAttributedString(rowText:fontSize:color:)` makes
 (`RowTextAttributedStringTests`), and the Find style takes its fonts and colours from `FindResultCellStyle`,
-which lives in AppUI with the Xcode colours of `Theme/NSColor+Xcode.swift`. A Find row's sizes — the
+which lives in AppUI with the Xcode colours of `Find/Results/NSColor+Xcode.swift`. A Find row's sizes — the
 navigator's or the Inspector's References tab's — are its cell view's, not the row's: the view draws the
 badges at `metrics.iconSize` (`IconDescriptor.image(size:)`).
 
@@ -98,16 +98,16 @@ badges at `metrics.iconSize` (`IconDescriptor.image(size:)`).
 `ContentTextViewModel` fetches the interface and prepares it off the main thread — the semantic string,
 the link and declared-member tables the panes look things up in by UTF-16 offset
 (`linkedRuntimeObject(at:)`, `declaredMember(at:)`), the comment decorations and the macro expansions — and
-knows no theme. The views theme it with AppUI's `ContentTextRenderer` (`ThemeProfile`, `ResolvedTheme`,
-`resolvedThemeStream` and `ContentInterface.attributedString(themedWith:)` all live in AppUI's `Theme/`),
-which re-themes on a theme change without a refetch. The renderer's `renderedText` is cold: the
+knows no theme. The views theme it with AppUI's `ContentTextRenderer` (`ThemeProfile`, `ResolvedTheme` and
+`resolvedThemeStream` live in AppUI's `Theme/`, `ContentInterface.attributedString(themedWith:)` beside the
+renderer in its `Content/`), which re-themes on a theme change without a refetch. The renderer's `renderedText` is cold: the
 SourceEditor pane colours the semantic runs itself and subscribes only `theme`, so it never builds an
 attributed string. **A view that shows an interface reports it through `Input.interfaceDisplayed`** — the
 `NSTextView` pane once the themed text is set, SourceEditor after `setSource`, iOS once the text is set —
 and the view model's loading lasts until that report: a pane that never reported would leave its loading
 plate up. A theme-only change, which the view model does not see, lights the plate through the renderer's
 `delayedRendering`, which the `NSTextView` pane feeds into `BaseViewController.additionalCommonLoadingRelay`.
-The `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`PlatformTypes.swift`; UIFoundation's and SFSymbols'
+The `NSUIImage` / `NSUIColor` / `NSUIFont` aliases (`Extensions/PlatformTypes.swift`; UIFoundation's and SFSymbols'
 name the same types, so a file that sees several still compiles) and `NSUIColor(light:dark:)` live in
 AppUI too.
 
@@ -117,9 +117,33 @@ nearest to it on its path). Its colour is the kind's too, Xcode's for that kind 
 both as `IconDescriptor.imageKind(_:)` and `ColorDescriptor.imageKind(_:)`; a list that can tint a template
 draws `icon` with `contentTintColor` set to `iconColor`, which a selected row turns white as Xcode's
 navigator does, and a place that draws an image as it is — the jump bar and its menus, the editor's tabs, the
-history menu — takes `coloredIcon` (all three in RuntimeViewerAppUI's `Icons/RuntimeImageKind+Icon.swift`).
+history menu — takes `coloredIcon` (all three in RuntimeViewerAppUI's `RuntimeImage/RuntimeImageKind+Icon.swift`).
 Never pick a colour for an image's icon anywhere else.
 Background: `Documentations/Evolutions/0090-image-kind-icons.md`.
+
+## Where a file goes in RuntimeViewerAppCore and RuntimeViewerAppUI
+
+(`Documentations/Evolutions/draft-app-layer-directory-layout.md`)
+
+- **Nothing at a target's root.** Every file is in a directory named after a feature: the app's own folder
+  name where the app has one (`App`, `Base`, `BatchExporting`, `Content`, `EditorArea`, `Find`, `Inspector`,
+  `Reports`, `Sidebar/Root`, `Sidebar/RuntimeObject`), otherwise what the directory holds (`Activity`,
+  `BackgroundWork`, `ContextMenus`, `Document`, `Engine`, `Extensions`, `Filtering`, `Presentation`,
+  `RuntimeImage`, `RuntimeObject`, `Storage`). `Find/` has `Query/`, `Scope/`, `Results/` and
+  `CrossReferences/` below it; its root keeps only `FindViewModel`, `FindSession` and `FindNavigatorRoutable`.
+- **An engine's background work is in `BackgroundWork/`**: `RuntimeEngineBackgroundWork` and what it holds —
+  `Indexing/`, `FindCorpus/`, `CrossReferencePreparation/`, `ManualLoading/` — each with its state and
+  results. A feature that reads them (Find, the Report, the toolbar's activity) does not hold their files.
+- **RuntimeViewerAppUI mirrors RuntimeViewerAppCore.** A file that extends, draws or adapts an AppCore type
+  goes in the directory of the same name as that type's: `RuntimeObject/RuntimeObjectIcon+Image.swift` beside
+  AppCore's `RuntimeObject/RuntimeObjectIcon.swift`, `Content/ContentInterface+Theme.swift` beside
+  `Content/ContentInterface.swift`. What only AppUI has gets a directory of its own (`Theme/`,
+  `RuntimeSourcePicker/`, `Resources/`) or goes with its one user (`NSColor+Xcode.swift`, the Find results'
+  text colours, in `Find/Results/`).
+- **A file is named after its main type.** Small helper types may stay beside it; a file whose name names no
+  type in it, or that holds unrelated things, is split.
+
+The test targets do not follow this yet: `RuntimeViewerAppCoreTests` and `RuntimeViewerAppUITests` are flat.
 
 ## The rest of the UI layer
 

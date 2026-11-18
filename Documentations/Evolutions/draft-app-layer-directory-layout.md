@@ -1,6 +1,6 @@
 # Draft - 整理 AppCore 与 AppUI 的目录分类
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-18
 - **最后更新**: 2026-11-18
@@ -244,18 +244,18 @@ RuntimeViewerAppUI/                                    mirrors RuntimeViewerAppC
 
 ## 落地步骤
 
-1. **AppCore 根目录收进目录** —— 改动地图里步骤为 1 的各行
+1. **AppCore 根目录收进目录**（已完成，2026-11-18）—— 改动地图里步骤为 1 的各行
    - 行为：`packageBuildsWithNoFileAtAppCoreRoot`（`RuntimeViewerAppCore/` 下没有 `.swift` 文件）
    - 行为：`boundaryTestsStillFindTheiOSRouteAllowances`（`AppCoreBoundaryTests` 全部通过，`allowedLines` 没有失配）
    - 行为：`extensionsSplitKeepsEveryExtension`（拆出的三个文件里的声明与原 `Extensions.swift` 逐行相同）
-2. **BackgroundWork、Find 子目录、Sidebar 子目录与 Inspector 拆分** —— 步骤为 2 的各行
+2. **BackgroundWork、Find 子目录、Sidebar 子目录与 Inspector 拆分**（已完成，2026-11-18）—— 步骤为 2 的各行
    - 行为：`backgroundWorkHoldsEveryCoordinatorTheEngineWorkOwns`（三个协调器与手动加载都在 `BackgroundWork/` 下）
    - 行为：`findDirectoryKeepsOnlyItsEntryPoints`（`Find/` 根下只剩三个文件）
    - 行为：`inspectorSplitKeepsBothViewModels`
-3. **AppUI 镜像** —— 步骤为 3 的各行
+3. **AppUI 镜像**（已完成，2026-11-18）—— 步骤为 3 的各行
    - 行为：`packageBuildsWithNoFileAtAppUIRoot`
    - 行为：`iconsDirectoryIsGone`
-4. **规则与路径写进文档** —— 步骤为 4 的各行
+4. **规则与路径写进文档**（已完成，2026-11-18）—— 步骤为 4 的各行
    - 行为：`agentsFilesNameNoMovedPath`（现行文档里不再有旧路径）
 
 每一步后：包级 `swift build --build-tests`、`RuntimeViewerAppCoreTests` 与 `RuntimeViewerAppUITests` 全部通过（对照既有红灯）、iOS 模拟器包构建通过。全部做完后 `./TuistScript.sh warm` 并编 macOS App（Tuist 生成的工程按文件列，目录变了要重新生成）。
@@ -271,3 +271,5 @@ RuntimeViewerAppUI/                                    mirrors RuntimeViewerAppC
 |------|------|------|
 | 2026-11-18 | Created as Draft | 0094 落地后 AppCore 与 AppUI 的目录不再相互对应、根目录散着二十多个文件，用户要求重新整理分类。按轻量档问了一轮：只拆名不副实的文件，测试 target 不动，先写提案再动手。 |
 | 2026-11-18 | Accepted | 用户批准，开始实现。功能分支从 `next` 切出，四步各一个提交，做完在本地合进 `next` 给用户看。 |
+| 2026-11-18 | 四步完成 | 照改动地图做完，与提案不同的几处：一、`InspectorViewModel.swift` 里两个类型之间有一段注释掉的旧 `InspectorRuntimeObjectViewModel`，按「代码一字不改」原样随 `InspectorPlaceholderViewModel.swift` 走，没有顺手删。二、写进 `RuntimeViewerPackages/Sources/AGENTS.md` 的规则比拟稿多列了几项：所有现有目录名（`Activity`、`BatchExporting`、`ContextMenus` 也在内）、`Find/` 的四个子目录与根下留的三个文件、`NSColor+Xcode` 作为「跟着唯一使用者走」的例子，并注明测试 target 还是平铺的。核对：两个 target 根目录都没有 `.swift` 文件，`Icons/` 已删，`Sources` 下除 `AGENTS.md` 外没有文件内容被改，拆出的代码按原顺序与原文件逐行相同。验证在 Ultra 上：三个步骤的提交各自 `swift build --build-tests` 通过，iOS 模拟器包构建、`./TuistScript.sh warm` 与 macOS App（Tuist workspace，Debug）构建通过；两组测试共 1069 个，失败 4 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、`ReportSharedByEngineTests` 与 `BackgroundWorkProcessActivityTests` 整包跑时的两条）。 |
+| 2026-11-18 | 实现完成 | 在本地合进 `next` 的检出，待用户看过后收尾。文档判断：不另写指南或实现说明，规则在 `RuntimeViewerPackages/Sources/AGENTS.md`；没有新术语。 |
