@@ -30,6 +30,19 @@ public enum WordCloudTypography {
     public static func font(ofSize fontSize: CGFloat) -> NSFont {
         NSFont.monospacedSystemFont(ofSize: fontSize, weight: fontWeight(forSize: fontSize))
     }
+
+    /// Below this size a word is drawn translucent.
+    public static let recedingFontSize: CGFloat = 18
+
+    /// The opacity of a word below `recedingFontSize`.
+    public static let recedingOpacity: CGFloat = 0.6
+
+    /// Full colour from `recedingFontSize` up, `recedingOpacity` below it:
+    /// hundreds of small words in saturated colours make the picture busy,
+    /// and the large ones should carry it.
+    public static func opacity(forSize fontSize: CGFloat) -> CGFloat {
+        fontSize < recedingFontSize ? recedingOpacity : 1
+    }
 }
 
 /// A word cloud on a canvas far larger than a window, as the document view
@@ -81,6 +94,18 @@ public final class WordCloudView: NSView {
 
     /// Called with a word's identifier when it is clicked.
     public var wordClickHandler: ((String) -> Void)?
+
+    /// While on, the view only pans: a click on a word selects nothing, no
+    /// word highlights under the pointer, and the pointer is an open hand
+    /// everywhere. A drag pans whether it is on or not.
+    public var isHandToolActive = false {
+        didSet {
+            guard oldValue != isHandToolActive else { return }
+            if isHandToolActive {
+                hoveredWordIdentifier = nil
+            }
+        }
+    }
 
     /// The tooltip of a word, by its identifier.
     public var toolTipProvider: ((String) -> String?)?
@@ -166,6 +191,14 @@ public final class WordCloudView: NSView {
         layoutCompletionHandler?()
     }
 
+    /// The smallest rectangle holding every word drawn, in this view's
+    /// coordinates; `nil` before any word is laid out. The canvas around it
+    /// is empty, so this, not the canvas, is what to fit into a window.
+    public var wordsBoundingRect: CGRect? {
+        guard let firstFrame = placedWords.first?.frame else { return nil }
+        return placedWords.dropFirst().reduce(firstFrame) { $0.union($1.frame) }
+    }
+
     /// Where a word is drawn, in this view's coordinates.
     public func frameOfWord(withIdentifier identifier: String) -> CGRect? {
         placedWords.first { $0.word.identifier == identifier }?.frame
@@ -189,7 +222,8 @@ public final class WordCloudView: NSView {
     private func draw(_ placedWord: PlacedWord) {
         let identifier = placedWord.word.identifier
         let color = placedWord.word.color
-        if identifier == selectedWordIdentifier || identifier == hoveredWordIdentifier {
+        let isEmphasized = identifier == selectedWordIdentifier || identifier == hoveredWordIdentifier
+        if isEmphasized {
             let plate = NSBezierPath(roundedRect: placedWord.frame.insetBy(dx: -3, dy: -1), xRadius: 4, yRadius: 4)
             color.withAlphaComponent(identifier == selectedWordIdentifier ? 0.18 : 0.1).setFill()
             plate.fill()
@@ -199,7 +233,8 @@ public final class WordCloudView: NSView {
                 plate.stroke()
             }
         }
-        (placedWord.word.text as NSString).draw(in: placedWord.frame, withAttributes: [.font: placedWord.font, .foregroundColor: color])
+        let textColor = isEmphasized ? color : color.withAlphaComponent(WordCloudTypography.opacity(forSize: placedWord.font.pointSize))
+        (placedWord.word.text as NSString).draw(in: placedWord.frame, withAttributes: [.font: placedWord.font, .foregroundColor: textColor])
     }
 
     /// The whole canvas as PNG, its background filled in this view's
@@ -291,7 +326,7 @@ public final class WordCloudView: NSView {
             isDragging = false
             updateCursor(at: convert(event.locationInWindow, from: nil))
         }
-        guard !isDragging else { return }
+        guard !isDragging, !isHandToolActive else { return }
         if let identifier = wordIdentifier(at: convert(event.locationInWindow, from: nil)) {
             wordClickHandler?(identifier)
         }
@@ -299,7 +334,7 @@ public final class WordCloudView: NSView {
 
     private func updateHover(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        hoveredWordIdentifier = wordIdentifier(at: point)
+        hoveredWordIdentifier = isHandToolActive ? nil : wordIdentifier(at: point)
         if !isDragging {
             updateCursor(at: point)
         }
@@ -308,7 +343,7 @@ public final class WordCloudView: NSView {
     private func updateCursor(at point: CGPoint) {
         if isDragging {
             NSCursor.closedHand.set()
-        } else if wordIdentifier(at: point) != nil {
+        } else if !isHandToolActive, wordIdentifier(at: point) != nil {
             NSCursor.pointingHand.set()
         } else {
             NSCursor.openHand.set()
