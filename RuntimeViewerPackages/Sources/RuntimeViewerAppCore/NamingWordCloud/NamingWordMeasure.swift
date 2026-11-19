@@ -47,6 +47,12 @@ public enum NamingWordMeasure: String, CaseIterable, Codable, Hashable, Sendable
         case .methodFirstWords: count == 1 ? "method" : "methods"
         }
     }
+
+    /// The title of the usage list's second column: a type's kind, or the
+    /// type declaring a member.
+    public var usageDetailTitle: String {
+        readsMembers ? "Declared In" : "Kind"
+    }
 }
 
 /// The members Member Words can be limited to. The raw values are stored.

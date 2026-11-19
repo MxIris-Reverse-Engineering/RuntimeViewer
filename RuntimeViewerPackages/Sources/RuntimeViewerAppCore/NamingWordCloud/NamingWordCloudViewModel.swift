@@ -30,6 +30,8 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
         public let retry: Signal<Void>
         public let exportRequested: Signal<NamingWordCloudExportFormat>
         public let compoundWordsRequested: Signal<Void>
+        /// A click on a column header of the ranking.
+        public let rankingColumnClicked: Signal<NamingWordRankingOrder.Column>
 
         public init(
             preferenceChanged: Signal<NamingWordCloudPreferenceChange>,
@@ -37,7 +39,8 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
             usageClicked: Signal<Int>,
             retry: Signal<Void>,
             exportRequested: Signal<NamingWordCloudExportFormat>,
-            compoundWordsRequested: Signal<Void>
+            compoundWordsRequested: Signal<Void>,
+            rankingColumnClicked: Signal<NamingWordRankingOrder.Column> = .empty()
         ) {
             self.preferenceChanged = preferenceChanged
             self.wordSelected = wordSelected
@@ -45,6 +48,7 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
             self.retry = retry
             self.exportRequested = exportRequested
             self.compoundWordsRequested = compoundWordsRequested
+            self.rankingColumnClicked = rankingColumnClicked
         }
     }
 
@@ -52,9 +56,16 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
         public let state: Driver<NamingWordCloudState>
         public let preferences: Driver<NamingWordCloudPreferences>
         public let selectedWordKey: Driver<String?>
-        /// "Manager — 128 types", or empty when no word is selected.
+        /// "Manager — 128 types", or "No Word Selected".
         public let usageTitle: Driver<String>
         public let usageRows: Driver<[NamingWordCloudUsageRow]>
+        /// Every word counted, in `rankingOrder`.
+        public let rankingRows: Driver<[NamingWordCloudWord]>
+        public let rankingOrder: Driver<NamingWordRankingOrder>
+        /// "631 words" beside the ranking's title; empty while nothing is counted.
+        public let wordCountText: Driver<String>
+        /// "Kind" or "Declared In", as the measure lists names.
+        public let usageDetailColumnTitle: Driver<String>
     }
 
     /// The image whose names the cloud counts.
@@ -65,8 +76,16 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
     }
 
     public var windowTitle: String {
-        "\(imageName) — Naming Word Cloud"
+        "Naming Word Cloud"
     }
+
+    /// The image the window is about, under its title.
+    public var windowSubtitle: String {
+        imageName
+    }
+
+    /// What the usage list's title says while no word is selected.
+    public static let noWordSelectedTitle = "No Word Selected"
 
     @RxObserved
     public private(set) var state: NamingWordCloudState = .indexingImage(fractionCompleted: nil)
@@ -78,10 +97,16 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
     public private(set) var selectedWordKey: String?
 
     @RxObserved
-    private(set) var usageTitle: String = ""
+    private(set) var usageTitle: String = NamingWordCloudViewModel.noWordSelectedTitle
 
     @RxObserved
     private(set) var usageRows: [NamingWordCloudUsageRow] = []
+
+    @RxObserved
+    private(set) var rankingOrder: NamingWordRankingOrder = .mostCommonFirst
+
+    @RxObserved
+    private(set) var rankingRows: [NamingWordCloudWord] = []
 
     /// The image's names as last read, and the prefix found in its type names.
     private struct Source {
@@ -173,12 +198,26 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        input.rankingColumnClicked.emitOnNextMainActor { [weak self] column in
+            guard let self else { return }
+            rankingOrder = rankingOrder.choosing(column)
+            rankingRows = rankingOrder.sorted(rankingRows)
+        }
+        .disposed(by: rx.disposeBag)
+
         return Output(
             state: $state.asDriver(),
             preferences: $preferences.asDriver(),
             selectedWordKey: $selectedWordKey.asDriver(),
             usageTitle: $usageTitle.asDriver(),
-            usageRows: $usageRows.asDriver()
+            usageRows: $usageRows.asDriver(),
+            rankingRows: $rankingRows.asDriver(),
+            rankingOrder: $rankingOrder.asDriver(),
+            wordCountText: $rankingRows.asDriver().map { rows in
+                rows.isEmpty ? "" : "\(rows.count.formatted()) \(rows.count == 1 ? "word" : "words")"
+            }
+            .distinctUntilChanged(),
+            usageDetailColumnTitle: $preferences.asDriver().map(\.measure.usageDetailTitle).distinctUntilChanged()
         )
     }
 
@@ -408,11 +447,12 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
             self.selectedWordKey = nil
         }
         updateUsages()
+        let rankedWords = wordCounts.map(NamingWordCloudWord.init)
+        rankingRows = rankingOrder.sorted(rankedWords)
         guard !wordCounts.isEmpty else {
             state = .unavailable(.nothingToCount)
             return
         }
-        let rankedWords = wordCounts.map(NamingWordCloudWord.init)
         let cloudWords = preferences.wordLimit.map { Array(rankedWords.prefix($0)) } ?? rankedWords
         state = .ready(NamingWordCloudContent(measure: preferences.measure, cloudWords: cloudWords, rankedWords: rankedWords, removedTypePrefix: removedTypePrefix))
     }
@@ -421,6 +461,7 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
         orderedWordCounts = []
         wordCountsByKey = [:]
         selectedWordKey = nil
+        rankingRows = []
         updateUsages()
     }
 
@@ -434,11 +475,11 @@ public final class NamingWordCloudViewModel: ViewModel<NamingWordCloudRoute> {
 
     private func updateUsages() {
         guard let selectedWordKey, let wordCount = wordCountsByKey[selectedWordKey] else {
-            usageTitle = ""
+            usageTitle = Self.noWordSelectedTitle
             usageRows = []
             return
         }
-        usageTitle = summary(ofWordWithKey: selectedWordKey) ?? ""
+        usageTitle = summary(ofWordWithKey: selectedWordKey) ?? Self.noWordSelectedTitle
         usageRows = wordCount.usages.map(NamingWordCloudUsageRow.init)
     }
 

@@ -21,7 +21,7 @@ public struct NamingWordCloudPreferences: Codable, Hashable, Sendable {
     public var mergesCompoundWords = true
 
     /// How many of the most common words the cloud draws; `nil` draws all.
-    public var wordLimit: Int? = 500
+    public var wordLimit: Int? = 150
 
     /// Compound words the user added to the presets.
     public var addedCompoundWords: [String] = []
