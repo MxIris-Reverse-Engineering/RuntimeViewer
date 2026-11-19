@@ -1,6 +1,6 @@
 # Draft - Load Frameworks 改在独立实例里加载，并诊断加载失败
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-19
 - **最后更新**: 2026-11-19
@@ -51,7 +51,7 @@ Load Frameworks 不再把框架装进 My Mac 的 service。在 My Mac 的窗口�
 - 控制台与 `dlerror()` 里的 `Library not loaded / Referenced from / Reason: tried:` 是同一段文字：`JustInTimeLoader.cpp` 拼出诊断，`DyldAPIs.cpp` 加上 `dlopen(<path>, 0x…):` 前缀。
 - `DYLD_PRINT_SEARCHING` 一类开关只在进程启动时读、要 AMFI 放行，launchd 管的进程会写进 syslog，**没有 API 取得到**。
 - `dlopen_preflight` 只检查顶层镜像的架构切片，不检查依赖，**不能**拿来预检 rpath。
-- `dlopen` 时的 rpath 栈是：主程序（service 外壳）→ 调用 `dlopen` 的镜像（service 插件，RuntimeViewerCore 静态链接在里面）→ 依赖链上的每个加载者；`@executable_path` 展开到 service 自己。
+- `dlopen` 时 dyld 在一条加载链上展开 `@rpath`：链从主程序（service 外壳）开始，接着是调用 `dlopen` 的镜像（service 插件，RuntimeViewerCore 静态链接在里面），再是依赖链上的每个加载者。**查找从最新的一环往回走**：先查发起加载的镜像自己的 rpath，再查加载它的镜像，……，然后是调用 `dlopen` 的镜像，最后才是主程序（`Loader.cpp` 的 `@rpath` 展开沿 `link->previous` 遍历）。rpath 里的 `@loader_path` 按携带它的那个镜像展开，`@executable_path` 展开到 service 自己，相对 rpath 被跳过。
 - 解析 `@rpath/…` 时，dyld 先匹配已加载镜像的 install name（`JustInTimeLoader::matchesPath` 的 `altInstallName`），所以「先按绝对路径加载依赖，再加载要它的框架」**读源码可行，未实测**。落地步骤 1 先用测试实测，不成立就停下回来重议（退路见替代方案）。
 
 ### 现成的 Mach-O 能力
@@ -113,7 +113,7 @@ My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在
 
 1. **缺了什么、谁要它**：从 dyld 原文解析出失败的种类——找不到镜像（`Library not loaded: <install name>` / `Referenced from: <image>`）、找不到符号（`Symbol not found: <symbol>` / `Expected in: <image>`）、镜像不兼容（架构或平台，`mach-o file, but is an incompatible architecture …`）、其他（只显示原文）。
 2. **依赖链**：从要加载的框架沿 `LC_LOAD_DYLIB` 走到出问题的那条边（跳过弱链接与延迟初始化的依赖，与 dyld 一致），显示成 `Foo → Bar ✗`。依赖链上的镜像从磁盘读；已经加载在进程里的、shared cache 里的算作存在。
-3. **dyld 去哪里找了**：缺的是 `@rpath/…` 时，按 dyld 的 rpath 栈逐行列出——这条 rpath 属于谁（主程序、调用 `dlopen` 的镜像、依赖链上的加载者）、rpath 原文、展开后的候选路径、结果（不存在 / 找到 / 不在 shared cache）——再加一句「为什么」：例如 Foo 的第一条 rpath `@executable_path/../Frameworks` 是写给宿主 App 的，在这里 `@executable_path` 是这个实例自己。另列 dyld 自己报的尝试列表（从原文解析，带它的理由）。
+3. **dyld 去哪里找了**：缺的是 `@rpath/…` 时，按 dyld 的查找顺序（发起加载的镜像、它的加载者、调用 `dlopen` 的镜像、主程序）逐行列出——这条 rpath 属于谁（主程序、调用 `dlopen` 的镜像、依赖链上的加载者）、rpath 原文、展开后的候选路径、结果（不存在 / 找到 / 不在 shared cache）——再加一句「为什么」：例如 Foo 的第一条 rpath `@executable_path/../Frameworks` 是写给宿主 App 的，在这里 `@executable_path` 是这个实例自己。另列 dyld 自己报的尝试列表（从原文解析，带它的理由）。
 4. **能怎么修**（只在框架实例里提供，见下一节）。
 
 诊断页还有：架构与系统版本、「Diagnosed in the instance that tried the load」这样的出处说明、可折叠的 dyld 原文、「Copy Diagnosis」（纯文本，含以上全部）与「Show Foo in Finder」。
@@ -163,13 +163,13 @@ My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `Core/Images/DylibPathResolver.swift` · `DylibPathResolver` | 修改 | 新增 `resolution(of:imagePath:rpathStack:mainExecutablePath:) -> Resolution`，逐条记下 rpath 的归属、原文、展开、候选与结果；原 `resolve(…)` 改为取它的 `resolvedPath`，日志不变 | 诊断要的正是这份尝试记录 | 1 |
+| `Core/Images/DylibPathResolver.swift` · `DylibPathResolver` | 修改 | 新增 `resolution(of:loadedBy:rpathStack:mainExecutablePath:) -> Resolution`，按给定的查找顺序逐条记下归属、原文、候选与结果；rpath 里的 `@loader_path` 按携带它的镜像展开，相对 rpath 跳过。原 `resolve(…)` 不动 | 诊断要的正是这份尝试记录 | 1 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadDiagnosis.swift` · `RuntimeImageLoadDiagnosis` | 新增 | 线上模型：失败、依赖链、rpath 查找、dyld 的尝试、说明、修复方案、出处；`init(dyldMessage:imagePath:)` 给旧版对端的简化诊断 | 诊断要过线，App 与 Core 共用 | 1 |
 | `Core/ImageLoadDiagnosis/DyldLoadFailureMessage.swift` · `DyldLoadFailureMessage` | 新增 | 解析 `dlerror()` 原文：种类、install name、Referenced from、符号、Expected in、`tried:` 列表及理由 | 两种诊断都从原文起步 | 1 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadDiagnostician.swift` · `RuntimeImageLoadDiagnostician` | 新增 | 在本进程模拟 dyld 的查找：rpath 栈、依赖遍历、修复方案；`Environment` 是测试接缝 | 诊断本身 | 1 |
 | `CoreTests/ImageLoadDiagnosis/ImageLoadFixtures.swift` | 新增 | 测试时用 `xcrun clang` 在临时目录建 `Example.app` 及其 `Foo` / `Bar` 框架（名字带随机后缀）、缺符号与 x86_64 的变体 | 诊断要真 Mach-O；随机名防止已加载镜像按 install name 串到别的用例 | 1 |
-| `CoreTests/ImageLoadDiagnosis/PreloadSatisfiesRpathDependencyTests.swift` | 新增 | 实测：Foo 先失败；按绝对路径加载 Bar 后 Foo 成功 | 修复方案的前提（读源码可行、未实测）；不成立就停下 | 1 |
-| `CoreTests/ImageLoadDiagnosis/DyldLoadFailureMessageTests.swift` | 新增 | 三种原文（缺镜像、缺符号、架构不兼容）与未知原文的解析 | 解析器的行为 | 1 |
+| `CoreTests/ImageLoadDiagnosis/RuntimeImageLoadDiagnosticianTests.swift` · `loadingTheDependencyByAbsolutePathFirstLetsTheLoadSucceed` | 新增 | 实测：Foo 先失败；按绝对路径加载 Bar 后 Foo 成功 | 修复方案的前提（读源码可行、未实测）；不成立就停下 | 1 |
+| `CoreTests/ImageLoadDiagnosis/DyldLoadFailureMessageParsingTests.swift` | 新增 | 三种原文（缺镜像、缺符号、架构不兼容）与未知原文的解析 | 解析器的行为 | 1 |
 | `CoreTests/ImageLoadDiagnosis/RuntimeImageLoadDiagnosticianTests.swift` | 新增 | 依赖链、rpath 行、`@executable_path` 的说明、宿主 App 推断、修复方案的顺序、搜索路径、找不到时没有方案 | 诊断的行为 | 1 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadError.swift` · `RuntimeImageLoadError` | 新增 | `LocalizedError`（描述 = dyld 原文），带可选的诊断；`Codable` | 调用方拿到的失败 | 2 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadResponse.swift` · `RuntimeImageLoadResponse` | 新增 | `LoadImageCommand` 的新回复：`failure: RuntimeImageLoadError?`，为空时编码成空对象 | 诊断放在回复里过线 | 2 |
@@ -377,7 +377,9 @@ public struct RuntimeImageLoadDiagnosis: Codable, Sendable, Hashable {
     public struct ChainLink: Codable, Sendable, Hashable {
         public var imagePath: String
         public var installName: String
-        public var isResolved: Bool
+        /// The path the load name resolved to; nil on the edge that failed.
+        public var resolvedPath: String?
+        public var isResolved: Bool { resolvedPath != nil }
     }
 
     /// One place dyld looked for a missing `@rpath/` image.
@@ -483,7 +485,7 @@ struct RuntimeImageLoadDiagnostician {
 算法：
 
 1. `DyldLoadFailureMessage(parsing:)` 解出失败与 `tried:` 列表。
-2. rpath 栈的底是主程序的 `LC_RPATH`，然后是调用 `dlopen` 的镜像的。从磁盘读要加载的镜像（`MachOFile`，胖文件取本进程 CPU 的切片；取不到切片即「镜像不兼容」，列出它有的架构），深度优先沿非弱链接、非延迟初始化的依赖走，每进一层把加载者自己的 rpath 压栈；一条边先按 install name 匹配已加载的镜像，再用 `DylibPathResolver.resolution(…)` 逐条展开。第一条解析不了的边（原文里有 `Referenced from` 时优先找那一条）就是依赖链的终点。`visited` 集合防环。
+2. rpath 栈按 dyld 的查找顺序排：发起加载的镜像自己的 `LC_RPATH`，再是加载它的镜像们（由近及远），然后是调用 `dlopen` 的镜像，最后是主程序，用户加的搜索路径排在最后。从磁盘读要加载的镜像（`MachOFile`，胖文件取本进程 CPU 的切片；取不到切片即「镜像不兼容」，列出它有的架构），深度优先沿非弱链接、非延迟初始化的依赖走，每进一层把加载者自己的 rpath 压栈；一条边先按 install name 匹配已加载的镜像，再用 `DylibPathResolver.resolution(…)` 逐条展开。第一条解析不了的边（原文里有 `Referenced from` 时优先找那一条）就是依赖链的终点。`visited` 集合防环。
 3. 那条边的 install name 以 `@rpath/` 开头时，`Resolution` 的每一次尝试成为 `RpathSearch` 的一行；`@executable_path` 开头的 rpath 出现在非主程序的镜像上时，加一条 `rpathExpectsHostExecutable` 说明。
 4. 修复方案：宿主 App 候选依次是 `hostApplicationPath` 与要加载的镜像路径上最近的 `.app`；以宿主 App 的 `Bundle.executablePath` 作主程序、`searchPaths` 作额外 rpath，把整棵依赖树重走一遍。原本解析不了、换了环境能解析的镜像按「依赖在前」排好就是 `imagePathsToLoadFirst`；还有解析不了的就不给方案。缺的镜像在宿主 App 的 `Contents/Frameworks` 里时，加 `dependencyInHostApplication` 说明。
 5. 缺符号时只给依赖链与 `symbolMissingFromImage` 说明（`Expected in` 那个镜像存在，版本不对），不给方案。
@@ -797,8 +799,8 @@ default:
 
 ## 落地步骤
 
-1. **诊断本身（Core，无界面）** —— 改动地图里步骤 1 的行
-   - 先跑 `PreloadSatisfiesRpathDependencyTests`：**不通过就停下回来重议修复方案**，不往下做。
+1. **诊断本身（Core，无界面）** —— 改动地图里步骤 1 的行（**已完成**）
+   - 先跑 `loadingTheDependencyByAbsolutePathFirstLetsTheLoadSucceed`：**不通过就停下回来重议修复方案**，不往下做。（已通过）
    - 行为：
      - `aMissingRpathDependencyFailsTheLoad`
      - `loadingTheDependencyByAbsolutePathFirstLetsTheLoadSucceed`
@@ -913,3 +915,4 @@ default:
 | 2026-11-19 | 诊断页原型通过 | 静态 HTML 原型回答了诊断页的内容与排布（结论、横幅与三个按钮、依赖链、rpath 查找表与解释、dyld 的尝试列表、可折叠原文、拷贝与 Show in Finder、重试成功后的状态），用户看过认可。原型在 `/tmp`、不进仓库，网页版的界面草图照它重画。 |
 | 2026-11-19 | 写提案时定下的实现方向 | 诊断随失败的加载在回复里带回（`LoadImageCommand` 加可选字段），不加发给所有引擎的新命令——经 Mach service 的旧版 payload 会因未知命令断开（PR121.73）；重新诊断的命令只发给框架实例。实例的 launch payload 不列框架，崩溃后的重连得到空实例，避免崩溃循环。没有窗口就立即结束实例，不像文件引擎那样留宽限期。其余自定的假设列在「设计中自定的假设」。 |
 | 2026-11-19 | Accepted | 用户批准，开始实现。 |
+| 2026-11-19 | 步骤 1 完成 | 实测「先按绝对路径加载依赖」成立。核对 dyld 源码时发现原文把 rpath 栈的构造顺序当成了查找顺序：dyld 从发起加载的镜像往回查到主程序，诊断表按查找顺序排，rpath 里的 `@loader_path` 按携带它的镜像展开。与原设计的出入：`ChainLink` 存 `resolvedPath`、`isResolved` 由它算出；`RpathSearch` 的结果是开放的 `Outcome` 结构；`DylibPathResolver.resolve(…)` 不改，另写一个记录尝试的方法（原方法对祖先的 `@loader_path` rpath 按当前镜像展开，与 dyld 不同，留作后续项）；修复方案列出依赖闭包里所有还没加载的镜像、依赖在前，不再筛掉「本来就找得到」的——多加载的那些本来也会随之加载。预加载的实测放在 `RuntimeImageLoadDiagnosticianTests` 里，解析测试改名 `DyldLoadFailureMessageParsingTests`（原名已被现有测试占用）。 |

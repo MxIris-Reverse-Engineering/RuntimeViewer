@@ -71,6 +71,7 @@ that several features use live in `Objects/`, `Interfaces/` and `Images/`.
 | `Bookmarks/` | Bookmarks and bookmark scopes |
 | `SharedCache/` | Borrowing shared cache images from the engines that own them: the owners, handing a request about one image to its owner, and combining the answers of a request about every image |
 | `BackgroundIndexing/`, `Export/`, `DerivedDataStorage/`, `File/` | Those features |
+| `ImageLoadDiagnosis/` | Why dyld refused an image: its message read apart, its search retraced in the process that tried, and what to load first |
 | `LocalService/` | The local XPC service's key, credential and the host its services run |
 | `Transformer/` | `Transformer.Configuration` and the transformer modules it re-exports |
 | `Extensions/` | Standard library extensions |
