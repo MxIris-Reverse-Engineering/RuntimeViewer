@@ -77,6 +77,19 @@ extension RuntimeEngineManager.FileReading {
     }
 }
 
+extension RuntimeEngineManager.FrameworkInstanceLaunching {
+    /// In an instance of the app's framework service on the Mac — `nil`, and
+    /// so unavailable, in a process that embeds none — and unavailable
+    /// everywhere else, where no XPC service can be embedded.
+    static var live: Self {
+        #if os(macOS)
+        .init { instance in try RuntimeFrameworkService.credential(for: instance) }
+        #else
+        .unavailable
+        #endif
+    }
+}
+
 extension RuntimeSharedCacheEligibility {
     /// Probes the process itself: whether it runs translated, and its
     /// environment. Off the Mac no process can be probed, and nothing is

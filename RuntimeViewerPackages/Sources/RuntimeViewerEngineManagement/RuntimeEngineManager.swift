@@ -51,6 +51,11 @@ public final class RuntimeEngineManager {
     @Published
     public private(set) var fileRuntimeEngines: [RuntimeEngine] = []
 
+    /// Engines of Load Frameworks' instances, one per instance, listed under
+    /// ``RuntimeHostInfo/frameworkInstances``; see *Framework instances* below.
+    @Published
+    public private(set) var frameworkInstanceEngines: [RuntimeEngine] = []
+
     @Published
     public private(set) var runtimeEngineSections: [RuntimeEngineSection] = []
 
@@ -102,6 +107,14 @@ public final class RuntimeEngineManager {
     /// service on the Mac, in this process everywhere else. Tests replace it
     /// to serve the file from an anonymous listener, or to read it here.
     var fileReading = FileReading.live
+
+    /// Where framework instances run: in instances of the app's framework
+    /// service on the Mac, nowhere elsewhere. Tests replace it to serve an
+    /// instance from an anonymous listener.
+    var frameworkInstanceLaunching = FrameworkInstanceLaunching.live
+
+    /// Each framework instance's first connection, by engine identifier.
+    private var frameworkInstanceConnectionsByEngineID: [String: Task<Void, any Error>] = [:]
 
     /// The reads in this process under way, by the source of the file being
     /// read: a second request for the file waits for the first instead of
@@ -620,6 +633,7 @@ public final class RuntimeEngineManager {
 
     public var runtimeEngines: [RuntimeEngine] {
         systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.elements + fileRuntimeEngines
+            + frameworkInstanceEngines
     }
 
     /// `.local` cannot fail; the Mac Catalyst engine is best effort.
@@ -930,6 +944,10 @@ public final class RuntimeEngineManager {
             lastFileEngineOperationsByEngineID.removeValue(forKey: engine.engineID)
         }
         fileRuntimeEngines.removeAll { $0.source == source }
+        for engine in frameworkInstanceEngines where engine.source == source {
+            frameworkInstanceConnectionsByEngineID.removeValue(forKey: engine.engineID)?.cancel()
+        }
+        frameworkInstanceEngines.removeAll { $0.source == source }
         rebuildSections()
 
         // Release each removed engine's underlying connection now, deterministically,
@@ -1952,7 +1970,7 @@ public final class RuntimeEngineManager {
     /// engine must hear two updates in the order they were made.
     private func updateSharedCacheOwners() {
         let owners = currentSharedCacheOwners()
-        let assignments = (systemRuntimeEngines + attachedRuntimeEngines).map { engine in
+        let assignments = (systemRuntimeEngines + attachedRuntimeEngines + frameworkInstanceEngines).map { engine in
             (engine, owners.flatMap { isBorrowingEngine(engine) ? $0 : nil })
         }
         let previousUpdate = sharedCacheOwnersUpdate
@@ -1974,6 +1992,11 @@ public final class RuntimeEngineManager {
 
     private func isBorrowingEngine(_ engine: RuntimeEngine) -> Bool {
         if engine.source == .local || engine === macCatalystRuntimeEngine {
+            return true
+        }
+        // A framework instance is a native process of this app on this Mac,
+        // mapping this Mac's shared cache.
+        if case .frameworkInstance = engine.source {
             return true
         }
         return sharedCacheEligibility.isEligible(engine.source)
@@ -2014,6 +2037,7 @@ public final class RuntimeEngineManager {
                             || attachedRuntimeEngines.contains(where: { $0 === engine })
                             || bonjourRuntimeEngines.contains(where: { $0 === engine })
                             || fileRuntimeEngines.contains(where: { $0 === engine })
+                            || frameworkInstanceEngines.contains(where: { $0 === engine })
                     }
                     .map { $0.source.description }
             )
@@ -2024,7 +2048,8 @@ public final class RuntimeEngineManager {
                 if systemRuntimeEngines.contains(where: { $0 === engine })
                     || attachedRuntimeEngines.contains(where: { $0 === engine })
                     || bonjourRuntimeEngines.contains(where: { $0 === engine })
-                    || fileRuntimeEngines.contains(where: { $0 === engine }) {
+                    || fileRuntimeEngines.contains(where: { $0 === engine })
+                    || frameworkInstanceEngines.contains(where: { $0 === engine }) {
                     return true
                 }
                 // A mirror with the same display name as a local route to this same
@@ -2328,4 +2353,99 @@ private extension LogCategory {
     static let engineMirroring = LogCategory("EngineMirroring", prefixesMessages: true)
     static let engineIcon = LogCategory("EngineIcon", prefixesMessages: true)
     static let engineHeartbeat = LogCategory("EngineHeartbeat", prefixesMessages: true)
+}
+
+// MARK: - Framework Instances
+
+/// Why the manager could not start a framework instance.
+public enum RuntimeFrameworkInstanceError: Error, LocalizedError, Sendable {
+    /// This process embeds no framework service to load frameworks in.
+    case serviceUnavailable
+
+    public var errorDescription: String? {
+        switch self {
+        case .serviceUnavailable:
+            "This process cannot load frameworks in an instance of their own: it embeds no framework service."
+        }
+    }
+}
+
+extension RuntimeEngineManager {
+    /// Where a framework instance runs.
+    struct FrameworkInstanceLaunching {
+        /// What the engine of an instance connects with — an instance of the
+        /// app's framework service of its own — or `nil` when the process
+        /// embeds none, which ``RuntimeEngineManager/startFrameworkInstance(_:)``
+        /// reports as ``RuntimeFrameworkInstanceError/serviceUnavailable``.
+        var credential: @MainActor (RuntimeFrameworkInstance) throws -> RuntimeConnectionCredential?
+
+        /// No framework service: off the Mac, where no XPC service is embedded.
+        static let unavailable = FrameworkInstanceLaunching { _ in nil }
+
+        // `live` is in RuntimeEngineManager+PlatformServices.swift.
+    }
+}
+
+/// Framework instances: one per Load Frameworks on My Mac, each an instance
+/// of the app's framework service of its own, listed together under
+/// ``RuntimeViewerCore/RuntimeHostInfo/frameworkInstances`` while it lives.
+///
+/// Like a file engine, a framework instance is never mirrored to peers and
+/// never shared through a proxy server, and it borrows the shared cache's
+/// images from My Mac. Unlike one, it is never suspended: what was loaded into
+/// it ran, and starting it again would run it again, so it ends — through
+/// ``terminateFrameworkInstance(_:)`` — once no window is left on it.
+extension RuntimeEngineManager {
+    /// Starts an instance of the framework service for `instance` and lists
+    /// its engine. Returns at once; ``waitUntilFrameworkInstanceIsReady(_:)``
+    /// waits for the instance to answer. Until it does the engine forwards
+    /// every request to it, so a request fails rather than being answered from
+    /// this process's images. An instance that never answers is taken off the
+    /// list again.
+    ///
+    /// Throws ``RuntimeFrameworkInstanceError/serviceUnavailable`` in a
+    /// process that embeds no framework service.
+    public func startFrameworkInstance(_ instance: RuntimeFrameworkInstance) throws -> RuntimeEngine {
+        guard let credential = try frameworkInstanceLaunching.credential(instance) else {
+            throw RuntimeFrameworkInstanceError.serviceUnavailable
+        }
+        let engine = RuntimeEngine(source: instance.source, hostInfo: .frameworkInstances, originChain: [RuntimeNetworkBonjour.localInstanceID])
+        frameworkInstanceEngines.append(engine)
+        rebuildSections()
+        frameworkInstanceConnectionsByEngineID[engine.engineID] = Task { @MainActor in
+            do {
+                try await engine.connect(credential: credential)
+            } catch {
+                await self.frameworkInstanceFailedToStart(engine, error: error)
+                throw error
+            }
+        }
+        #log(.info, "Starting the framework instance \(instance.name, privacy: .public)")
+        return engine
+    }
+
+    /// Waits until the instance behind `engine` answered its first connection;
+    /// throws what kept it from answering.
+    public func waitUntilFrameworkInstanceIsReady(_ engine: RuntimeEngine) async throws {
+        guard let connection = frameworkInstanceConnectionsByEngineID[engine.engineID] else { return }
+        try await connection.value
+    }
+
+    /// Takes the engine of a framework instance off the list and stops it;
+    /// the instance exits once its client has gone, unloading what was loaded
+    /// into it. Does nothing for any other engine.
+    public func terminateFrameworkInstance(_ engine: RuntimeEngine) {
+        guard frameworkInstanceEngines.contains(where: { $0 === engine }) else { return }
+        #log(.info, "Ending the framework instance \(engine.source.description, privacy: .public)")
+        terminateRuntimeEngine(for: engine.source, because: .requested)
+    }
+
+    private func frameworkInstanceFailedToStart(_ engine: RuntimeEngine, error: any Error) async {
+        #log(.error, "Could not start the framework instance \(engine.source.description, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        // Terminated while it was starting: nothing is left to undo.
+        guard frameworkInstanceEngines.contains(where: { $0 === engine }) else { return }
+        frameworkInstanceEngines.removeAll { $0 === engine }
+        rebuildSections()
+        await engine.stop()
+    }
 }
