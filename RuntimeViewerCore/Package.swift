@@ -115,6 +115,20 @@ let package = Package(
                 branch: "next"
             ),
         ),
+        // MachODependencies, which RuntimeViewerCore imports, moved here from
+        // MachOSwiftSection in 2.0.0. The package has no `next` branch, so it is
+        // taken by version; MachOSwiftSection and MachOObjCSection require
+        // 2.0.0 as well.
+        .package(
+            local: .package(
+                path: "../../MachOKitExtensions",
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
+                from: "2.0.0"
+            ),
+        ),
         .package(
             local: .package(
                 path: "../../MachOObjCSection",
@@ -266,7 +280,7 @@ let package = Package(
                 .product(name: "SwiftDeclaration", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclarationRendering", package: "MachOSwiftSection"),
                 .product(name: "SwiftIndexing", package: "MachOSwiftSection"),
-                .product(name: "MachODependencies", package: "MachOSwiftSection"),
+                .product(name: "MachODependencies", package: "MachOKitExtensions"),
                 .product(name: "SwiftPrinting", package: "MachOSwiftSection"),
                 .product(name: "SwiftSpecialization", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),

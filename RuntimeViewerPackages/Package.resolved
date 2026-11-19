@@ -1,5 +1,5 @@
 {
-  "originHash" : "2cc0aeaec425475ea659330408a26f65cc7806be16bee8843c767431a03faf0e",
+  "originHash" : "894f3f82cfd772e558eb2efc34559060bd6a6e0bb46f0cd6fe5d6cb94040e387",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "ec0b30b5e95b74698fcaad3254dd3512e44f528c",
-        "version" : "1.3.3"
+        "revision" : "6d703e6f88cf8995dea6615d5ea646816eea51da",
+        "version" : "2.0.0"
       }
     },
     {
@@ -160,7 +160,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "096a27ba4f7771ef24df4b94a5b1a755d3c939ea"
+        "revision" : "1eefa6b6c2166564be811edb9ffb356643f48e3d"
       }
     },
     {
@@ -169,7 +169,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "a98cbc15303a551fc034219f9be1e8e463200e6d"
+        "revision" : "79294283f27f1f0a3ef547c1017e9b1c01feb458"
       }
     },
     {
