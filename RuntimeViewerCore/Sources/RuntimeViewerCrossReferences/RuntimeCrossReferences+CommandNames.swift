@@ -34,4 +34,11 @@ extension RuntimeEngine.CommandName {
     /// now: what a zero limit frees. A peer older than it has no handler, and
     /// the app then shows no size.
     static let crossReferencePreparedByteCount = Self("crossReferencePreparedByteCount")
+
+    /// What each of a list of unslid addresses is: a function and the offset
+    /// into it, a stub, a pointer slot, a string, a symbol.
+    static let crossReferenceSymbolicate = Self("crossReferenceSymbolicate")
+
+    /// Where the serving process's images define a symbol, by its name.
+    static let crossReferenceLocateSymbol = Self("crossReferenceLocateSymbol")
 }

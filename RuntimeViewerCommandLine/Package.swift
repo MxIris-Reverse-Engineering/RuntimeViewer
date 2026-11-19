@@ -87,6 +87,9 @@ let package = Package(
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                // `callers`, `callees`, `references`, `symbolicate`: the engine
+                // methods and their wire types.
+                .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerEngineManagement", package: "RuntimeViewerPackages"),
                 .product(name: "RuntimeViewerHelperClient", package: "RuntimeViewerPackages"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
@@ -112,6 +115,9 @@ let package = Package(
                 "RuntimeViewerCommandLineInterface",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                // The cross-reference commands' handlers, installed by the
+                // tests that run them against the local engine.
+                .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerEngineManagement", package: "RuntimeViewerPackages"),
                 .product(name: "RuntimeViewerHelperClient", package: "RuntimeViewerPackages"),
                 .product(name: "Clocks", package: "swift-clocks"),

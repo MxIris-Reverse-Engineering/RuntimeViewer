@@ -1,5 +1,6 @@
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerCrossReferences
 import SwiftMCP
 
 // MARK: - List Windows
@@ -490,5 +491,117 @@ public struct MCPMemberAddressesResponse: Codable, Sendable {
         self.typeName = typeName
         self.members = members
         self.error = error
+    }
+}
+
+// MARK: - Cross References
+
+/// One reference: the fields of the command line's `--json` rows
+/// (`RuntimeCrossReferenceRow`), every address a hexadecimal string.
+@Schema
+public struct MCPCrossReferenceInfo: Codable, Sendable {
+    /// The image of the referencing function
+    public let imagePath: String
+    /// Its file name without extension
+    public let imageName: String
+    /// The referencing function's first instruction, unslid
+    public let functionAddress: String
+    /// The referencing function's name, when anything names it
+    public let functionName: String?
+    /// The symbol the name came from
+    public let functionSymbol: String?
+    /// The referencing instruction, unslid
+    public let instructionAddress: String
+    /// call, tailCall, messageSend, superMessageSend, typeReference or indirectCall
+    public let kind: String
+    /// function, importedSymbol, selector, type, indirect or unrecognizedCode
+    public let targetKind: String
+    /// What is referenced, in words
+    public let target: String
+    /// exact, matchedBySelector or candidate
+    public let precision: String
+    /// A retain, release or other runtime helper call
+    public let isRuntimeHelperCall: Bool
+
+    public init(_ row: RuntimeCrossReferenceRow) {
+        self.imagePath = row.imagePath
+        self.imageName = row.imageName
+        self.functionAddress = row.functionAddress
+        self.functionName = row.functionName
+        self.functionSymbol = row.functionSymbol
+        self.instructionAddress = row.instructionAddress
+        self.kind = row.kind
+        self.targetKind = row.targetKind
+        self.target = row.target
+        self.precision = row.precision
+        self.isRuntimeHelperCall = row.isRuntimeHelperCall
+    }
+}
+
+/// The references a Callers, Callees or TypeReferences call found
+@Schema
+public struct MCPCrossReferencesResponse: Codable, Sendable {
+    /// What was asked about, as resolved
+    public let subject: String?
+    /// Callers in image order, then by address; callees in instruction order
+    public let references: [MCPCrossReferenceInfo]
+    /// False when the limit was reached, or the call stopped waiting
+    public let isComplete: Bool
+    /// Why the result is incomplete, and what to do about it
+    public let note: String?
+    /// Error message if the operation failed
+    public let error: String?
+
+    public init(subject: String?, references: [MCPCrossReferenceInfo], isComplete: Bool, note: String?, error: String?) {
+        self.subject = subject
+        self.references = references
+        self.isComplete = isComplete
+        self.note = note
+        self.error = error
+    }
+}
+
+/// One symbolicated address: the fields of the command line's `--json`
+/// rows (`RuntimeAddressSymbolicationRow`)
+@Schema
+public struct MCPAddressSymbolicationInfo: Codable, Sendable {
+    /// The address asked about, unslid
+    public let address: String
+    public let imagePath: String?
+    public let imageName: String?
+    public let segmentName: String?
+    public let sectionName: String?
+    /// function, stub, pointerSlot, cString, constantString, symbol, data or unmapped
+    public let kind: String
+    /// The function the address lies in, when it lies in one
+    public let functionAddress: String?
+    public let functionName: String?
+    /// How far into the function, or past the symbol
+    public let offset: String?
+    /// What lies there, in words
+    public let summary: String
+
+    public init(_ row: RuntimeAddressSymbolicationRow) {
+        self.address = row.address
+        self.imagePath = row.imagePath
+        self.imageName = row.imageName
+        self.segmentName = row.segmentName
+        self.sectionName = row.sectionName
+        self.kind = row.kind
+        self.functionAddress = row.functionAddress
+        self.functionName = row.functionName
+        self.offset = row.offset
+        self.summary = row.summary
+    }
+}
+
+/// What each address a Symbolicate call named is
+@Schema
+public struct MCPSymbolicateResponse: Codable, Sendable {
+    /// In the order the addresses were given
+    public let symbolications: [MCPAddressSymbolicationInfo]
+
+    public init(symbolications: [MCPAddressSymbolicationInfo]) {
+        self.symbolications = symbolications
     }
 }

@@ -1,6 +1,8 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
+import RuntimeViewerCommunication
+import RuntimeViewerCrossReferences
 
 /// Runs engine-backed commands against whatever engine the resolver hands out,
 /// and passes the source commands (`sources`, `attach`, `detach`) through to it.
@@ -60,6 +62,14 @@ public actor CommandExecutor {
             return try await specialize(command)
         case .export(let command):
             return .export(try await export(command, progress: progress))
+        case .callers(let command):
+            return .crossReferences(try await crossReferenceFailures { try await callers(command, progress: progress) })
+        case .callees(let command):
+            return .crossReferences(try await crossReferenceFailures { try await callees(command) })
+        case .typeReferences(let command):
+            return .crossReferences(try await crossReferenceFailures { try await typeReferences(command, progress: progress) })
+        case .symbolicate(let command):
+            return .symbolications(try await crossReferenceFailures { try await symbolicate(command) })
         case .listSources(let command):
             return .sources(try await listSources(command))
         case .attach(let command):
@@ -186,6 +196,127 @@ public actor CommandExecutor {
             typeInfo: TypeInfo(object),
             members: members.map { MemberAddress(name: $0.name, kind: $0.kind, symbolName: $0.symbolName, address: $0.address) }
         )
+    }
+
+    // MARK: - Cross references
+
+    private func callers(_ command: CallersCommand, progress: ProgressHandler?) async throws -> CrossReferencesResult {
+        let engine = try await sourceResolver.resolve(command.source)
+        let imagePath = try await crossReferenceImagePath(command.image, engine: engine)
+        let subject = try await crossReferenceSubject(command.target, isSelector: command.isSelector, imagePath: imagePath, engine: engine)
+        let options = RuntimeCrossReferenceQueryOptions(receiverClassName: command.receiverClassName, resultLimit: command.limit)
+        let result = try await engine.callers(
+            of: subject,
+            in: try crossReferenceScope(command.scope, imagePath: imagePath),
+            options: options,
+            reportProgress: crossReferenceProgress(progress)
+        )
+        return CrossReferencesResult(subject: Self.description(of: subject), references: result.references.map(RuntimeCrossReferenceRow.init), isComplete: result.isComplete)
+    }
+
+    private func callees(_ command: CalleesCommand) async throws -> CrossReferencesResult {
+        let engine = try await sourceResolver.resolve(command.source)
+        let imagePath = try await crossReferenceImagePath(command.image, engine: engine)
+        let subject = try await crossReferenceSubject(command.target, isSelector: false, imagePath: imagePath, engine: engine)
+        let options = RuntimeCrossReferenceQueryOptions(includesRuntimeHelperCalls: command.includesRuntimeHelperCalls, resultLimit: command.limit)
+        let result = try await engine.callees(of: subject, options: options)
+        return CrossReferencesResult(subject: Self.description(of: subject), references: result.references.map(RuntimeCrossReferenceRow.init), isComplete: result.isComplete)
+    }
+
+    private func typeReferences(_ command: TypeReferencesCommand, progress: ProgressHandler?) async throws -> CrossReferencesResult {
+        let engine = try await sourceResolver.resolve(command.source)
+        let object = try await findType(command.typeName, image: command.image, engine: engine)
+        let imagePath = try await crossReferenceImagePath(command.image, engine: engine)
+        let result = try await engine.typeReferences(
+            to: object,
+            in: try crossReferenceScope(command.scope, imagePath: imagePath),
+            options: RuntimeCrossReferenceQueryOptions(resultLimit: command.limit),
+            reportProgress: crossReferenceProgress(progress)
+        )
+        return CrossReferencesResult(subject: object.displayName, references: result.references.map(RuntimeCrossReferenceRow.init), isComplete: result.isComplete)
+    }
+
+    private func symbolicate(_ command: SymbolicateCommand) async throws -> SymbolicationsResult {
+        let engine = try await sourceResolver.resolve(command.source)
+        let imagePath = try await crossReferenceImagePath(command.image, engine: engine)
+        let symbolications = try await engine.symbolicate(command.addresses, inImageAt: imagePath)
+        return SymbolicationsResult(symbolications: symbolications.map(RuntimeAddressSymbolicationRow.init))
+    }
+
+    /// The one image `--image` names, loaded and indexed — a cross-reference
+    /// query reads indexed images only.
+    private func crossReferenceImagePath(_ image: String?, engine: RuntimeEngine) async throws -> String? {
+        guard let image else { return nil }
+        return try await ImageResolver(engine: engine).resolveImagePaths(image).first
+    }
+
+    private func crossReferenceSubject(_ target: String, isSelector: Bool, imagePath: String?, engine: RuntimeEngine) async throws -> RuntimeCrossReferenceSubject {
+        try await RuntimeCrossReferenceTargetResolution.subject(forTarget: target, isSelector: isSelector, imagePath: imagePath, engine: engine) { typeName in
+            let paths = try await ImageResolver(engine: engine).resolveImagePaths(imagePath)
+            for (_, objects) in try await objects(in: paths, engine: engine) {
+                if let found = RuntimeObject.find(named: typeName, in: objects) { return found }
+            }
+            return nil
+        }
+    }
+
+    private func crossReferenceScope(_ scope: CrossReferenceScopeChoice, imagePath: String?) throws -> RuntimeCrossReferenceScope {
+        switch scope {
+        case .indexed:
+            return .indexedImages
+        case .image:
+            guard let imagePath else {
+                throw CommandFailure(code: .invalidArgument, message: "--scope image reads the image --image names; name one.")
+            }
+            return .image(path: imagePath)
+        }
+    }
+
+    private func crossReferenceProgress(_ progress: ProgressHandler?) -> (@Sendable (RuntimeCrossReferenceQueryProgress) async -> Void)? {
+        guard let progress else { return nil }
+        return { report in
+            await progress(CommandProgress(phase: "scanning", current: report.scannedImageCount, total: report.totalImageCount))
+        }
+    }
+
+    /// The query's errors, as the command line words and codes them.
+    private func crossReferenceFailures<Outcome>(_ body: () async throws -> Outcome) async throws -> Outcome {
+        do {
+            return try await body()
+        } catch let error as RuntimeCrossReferenceError {
+            switch error {
+            case .unsupportedArchitecture:
+                throw CommandFailure(code: .crossReferencesUnavailable, message: error.localizedDescription)
+            case .imageNotFound, .imageNotIndexed:
+                throw CommandFailure(code: .imageNotFound, message: error.localizedDescription)
+            case .functionNotFound, .memberNotFound, .targetNotFound:
+                throw CommandFailure(code: .targetNotFound, message: error.localizedDescription)
+            case .typeNotFound:
+                throw CommandFailure(code: .typeNotFound, message: error.localizedDescription)
+            case .selectorHasNoCallees, .addressNeedsImage, .ambiguousTarget:
+                throw CommandFailure(code: .invalidArgument, message: error.localizedDescription + Self.imageHint(for: error))
+            }
+        } catch let error as RuntimeNetworkRequestError where error.isUnknownCommand {
+            throw CommandFailure(code: .crossReferencesUnavailable, message: "This source cannot answer cross references: it reads a file, or its process predates them.")
+        }
+    }
+
+    private static func imageHint(for error: RuntimeCrossReferenceError) -> String {
+        switch error {
+        case .addressNeedsImage, .ambiguousTarget: " Pass --image."
+        default: ""
+        }
+    }
+
+    private static func description(of subject: RuntimeCrossReferenceSubject) -> String {
+        switch subject {
+        case .function(let imagePath, let address):
+            "0x\(String(address, radix: 16)) in \(ImageResolver.baseName(of: imagePath))"
+        case .member(let member):
+            member.kind.isObjC ? "\(member.isStatic ? "+" : "-")[\(member.object.displayName) \(member.name)]" : "\(member.object.displayName).\(member.name)"
+        case .selector(let selector):
+            selector
+        }
     }
 
     // MARK: - Specialization

@@ -115,11 +115,27 @@ struct CrossReferenceWireFormatTests {
             (.memberNotFound(objectName: "NSObject", memberName: "nothing"), ["NSObject", "nothing"]),
             (.selectorHasNoCallees("count"), ["count"]),
             (.typeNotFound(objectName: "NSCopying"), ["NSCopying"]),
+            (.addressNeedsImage(address: 0x1880a1000), ["0x1880a1000", "image"]),
+            (.targetNotFound("_nowhere"), ["_nowhere"]),
+            (.ambiguousTarget("_twice", imagePaths: ["/usr/lib/libA.dylib", "/usr/lib/libB.dylib"]), ["_twice", "libA", "libB"]),
         ]
         for (error, mentions) in errors {
             let description = error.errorDescription ?? ""
             #expect(mentions.allSatisfy(description.contains), "\(description)")
         }
+    }
+
+    @Test("A symbolication and a symbol's location survive the wire")
+    func symbolicationRoundTrips() throws {
+        let function = RuntimeFunctionReference(imagePath: "/usr/lib/libobjc.A.dylib", address: 0x1_8000_0000, displayName: "objc_storeStrong", symbolName: "_objc_storeStrong", member: nil, foldedSymbolCount: 1)
+        let symbolications = [
+            RuntimeAddressSymbolication(address: 0x1_8000_0010, imagePath: function.imagePath, segmentName: "__TEXT", sectionName: "__text", kind: .function, function: function, offset: 0x10, summary: "objc_storeStrong+0x10"),
+            RuntimeAddressSymbolication(address: 0x1_9000_0000, imagePath: function.imagePath, segmentName: "__TEXT", sectionName: "__auth_stubs", kind: .stub, hops: [0x1_9000_0000], target: .importedSymbol(name: "_objc_release"), summary: "stub -> _objc_release (imported)"),
+            RuntimeAddressSymbolication(address: 0x10, imagePath: nil, segmentName: nil, sectionName: nil, kind: .unmapped, summary: "unmapped"),
+        ]
+        #expect(try roundTrip(symbolications) == symbolications)
+        let location = RuntimeSymbolLocation(imagePath: function.imagePath, address: function.address)
+        #expect(try roundTrip(location) == location)
     }
 
     private func roundTrip<Value: Codable>(_ value: Value) throws -> Value {

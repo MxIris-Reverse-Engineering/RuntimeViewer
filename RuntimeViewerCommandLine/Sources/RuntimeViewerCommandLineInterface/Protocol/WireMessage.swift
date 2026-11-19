@@ -9,7 +9,10 @@ public enum CommandLineProtocol {
     /// - 2: `listSources` / `attach` / `detach` and their results; a version 1
     ///   host would silently drop those commands, so a version 2 client
     ///   replaces it.
-    public static let version = 2
+    /// - 3: `callers` / `callees` / `references` / `symbolicate` and their
+    ///   results, and the failure codes `targetNotFound` and
+    ///   `crossReferencesUnavailable`; a version 2 host cannot decode them.
+    public static let version = 3
 }
 
 /// Version of the tool and of the host it starts.

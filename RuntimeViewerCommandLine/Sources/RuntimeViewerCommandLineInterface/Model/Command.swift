@@ -17,6 +17,10 @@ public enum Command: Codable, Sendable, Hashable {
     case memberAddresses(MemberAddressesCommand)
     case specialize(SpecializeCommand)
     case export(ExportCommand)
+    case callers(CallersCommand)
+    case callees(CalleesCommand)
+    case typeReferences(TypeReferencesCommand)
+    case symbolicate(SymbolicateCommand)
     case listSources(ListSourcesCommand)
     case attach(AttachCommand)
     case detach(DetachCommand)
@@ -38,7 +42,8 @@ extension Command {
         case .export, .attach, .detach, .shutdownHost:
             return false
         case .listImages, .loadImage, .listTypes, .searchTypes, .interface, .hierarchy,
-             .relationships, .memberAddresses, .specialize, .listSources, .hostStatus:
+             .relationships, .memberAddresses, .specialize, .listSources, .hostStatus,
+             .callers, .callees, .typeReferences, .symbolicate:
             return true
         }
     }
@@ -56,6 +61,10 @@ extension Command {
         case .memberAddresses(let command): return command.source
         case .specialize(let command): return command.source
         case .export(let command): return command.source
+        case .callers(let command): return command.source
+        case .callees(let command): return command.source
+        case .typeReferences(let command): return command.source
+        case .symbolicate(let command): return command.source
         case .detach(let command): return command.source
         case .listSources, .attach, .hostStatus, .shutdownHost: return nil
         }
@@ -74,6 +83,10 @@ extension Command {
         case .memberAddresses: return "members"
         case .specialize: return "specialize"
         case .export: return "export"
+        case .callers: return "callers"
+        case .callees: return "callees"
+        case .typeReferences: return "references"
+        case .symbolicate: return "symbolicate"
         case .listSources: return "sources"
         case .attach: return "attach"
         case .detach: return "detach"
@@ -113,6 +126,14 @@ public enum TypeKindFilter: String, Codable, Sendable, Hashable, CaseIterable {
     case swiftConformance = "swift-conformance"
     case cStruct = "c-struct"
     case cUnion = "c-union"
+}
+
+/// The images a callers or references query reads, as `--scope` spells it.
+public enum CrossReferenceScopeChoice: String, Codable, Sendable, Hashable, CaseIterable {
+    /// The image `--image` names, alone.
+    case image
+    /// Every image the engine has indexed.
+    case indexed
 }
 
 /// How an export lays out one language's interfaces.
@@ -315,5 +336,81 @@ public struct DetachCommand: Codable, Sendable, Hashable {
 
     public init(source: SourceSelector) {
         self.source = source
+    }
+}
+
+public struct CallersCommand: Codable, Sendable, Hashable {
+    public var source: SourceSelector
+    /// `-[Class selector]`, a Swift member as `members` prints it, a symbol,
+    /// or `0x…` with ``image``; a selector when ``isSelector``.
+    public var target: String
+    public var isSelector: Bool
+    /// The image the target is in: an address needs it, and it picks one
+    /// of several definitions of a symbol. With the `image` scope, the image
+    /// scanned too.
+    public var image: String?
+    public var scope: CrossReferenceScopeChoice
+    /// Keep only sends whose receiver is this class or is unknown.
+    public var receiverClassName: String?
+    public var limit: Int?
+
+    public init(source: SourceSelector = .local, target: String, isSelector: Bool = false, image: String? = nil, scope: CrossReferenceScopeChoice = .indexed, receiverClassName: String? = nil, limit: Int? = nil) {
+        self.source = source
+        self.target = target
+        self.isSelector = isSelector
+        self.image = image
+        self.scope = scope
+        self.receiverClassName = receiverClassName
+        self.limit = limit
+    }
+}
+
+public struct CalleesCommand: Codable, Sendable, Hashable {
+    public var source: SourceSelector
+    /// Spelled as for ``CallersCommand/target``; a selector has no callees.
+    public var target: String
+    public var image: String?
+    /// Keep retains, releases and other runtime helper calls.
+    public var includesRuntimeHelperCalls: Bool
+    public var limit: Int?
+
+    public init(source: SourceSelector = .local, target: String, image: String? = nil, includesRuntimeHelperCalls: Bool = false, limit: Int? = nil) {
+        self.source = source
+        self.target = target
+        self.image = image
+        self.includesRuntimeHelperCalls = includesRuntimeHelperCalls
+        self.limit = limit
+    }
+}
+
+public struct TypeReferencesCommand: Codable, Sendable, Hashable {
+    public var source: SourceSelector
+    /// An Objective-C class, or a Swift struct, enum or class.
+    public var typeName: String
+    public var image: String?
+    public var scope: CrossReferenceScopeChoice
+    public var limit: Int?
+
+    public init(source: SourceSelector = .local, typeName: String, image: String? = nil, scope: CrossReferenceScopeChoice = .indexed, limit: Int? = nil) {
+        self.source = source
+        self.typeName = typeName
+        self.image = image
+        self.scope = scope
+        self.limit = limit
+    }
+}
+
+public struct SymbolicateCommand: Codable, Sendable, Hashable {
+    public var source: SourceSelector
+    /// Unslid.
+    public var addresses: [UInt64]
+    /// The image whose addresses these are; without it each is read in the
+    /// first image that maps it, the shared cache first.
+    public var image: String?
+
+    public init(source: SourceSelector = .local, addresses: [UInt64], image: String? = nil) {
+        self.source = source
+        self.addresses = addresses
+        self.image = image
     }
 }

@@ -73,6 +73,8 @@ let package = Package(
             name: "RuntimeViewerMCPBridge",
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                // The Callers, Callees, TypeReferences and Symbolicate tools.
+                .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerAppCore", package: "RuntimeViewerPackages"),
                 .product(name: "RuntimeViewerSettings", package: "RuntimeViewerPackages"),
                 .product(name: "SwiftMCP", package: "SwiftMCP"),
@@ -83,6 +85,7 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerMCPBridge",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCrossReferences", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerAppCore", package: "RuntimeViewerPackages"),
             ]
         ),
