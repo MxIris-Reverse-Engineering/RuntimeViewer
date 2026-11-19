@@ -87,7 +87,8 @@ extension SourceKind {
             self = .bonjour
         case .directTCP:
             self = .mirrored
-        case .file:
+        // A framework instance belongs to the app window that started it.
+        case .file, .frameworkInstance:
             return nil
         }
     }

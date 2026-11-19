@@ -1,6 +1,6 @@
 import Foundation
 
-/// The plugin's face to the four shells that load it. Each shell only makes
+/// The plugin's face to the five shells that load it. Each shell only makes
 /// its process what it has to be — a Mac Catalyst application, a Mac Catalyst
 /// XPC service, a macOS XPC service — then calls one of these. Compiled into
 /// the plugin and into every shell.
@@ -26,4 +26,10 @@ protocol ServicePlugin: NSObjectProtocol {
     /// the file the connection's first hello names. Never returns; the main
     /// thread ends up in `xpc_main`.
     func runFileService()
+
+    /// The framework XPC service the app embeds, one instance per Load
+    /// Frameworks on My Mac: serve an engine over this process's images, into
+    /// which the app loads the frameworks the user picked. Never returns; the
+    /// main thread ends up in `xpc_main`.
+    func runFrameworkService()
 }

@@ -195,12 +195,13 @@ let project = Project(
                 .target(name: "runtime-viewer-cli"),
                 .target(name: "com.mxiris.runtimeviewer.service"),
                 .target(name: "RuntimeViewerCatalystHelper"),
-                // Tuist embeds these four itself: the SourceEditor bridge framework in Frameworks, the
-                // three services in XPCServices.
+                // Tuist embeds these five itself: the SourceEditor bridge framework in Frameworks, the
+                // four services in XPCServices.
                 .target(name: "RuntimeViewerSourceEditorBridge"),
                 .target(name: "RuntimeViewerLocalService"),
                 .target(name: "RuntimeViewerCatalystService"),
                 .target(name: "RuntimeViewerFileService"),
+                .target(name: "RuntimeViewerFrameworkService"),
                 .external(name: "RuntimeViewerApplication"),
                 .external(name: "RuntimeViewerCatalystExtensions"),
                 .external(name: "RuntimeViewerMCPBridge"),
@@ -272,6 +273,7 @@ let project = Project(
                         .exception(target: "RuntimeViewerCatalystService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
                         .exception(target: "RuntimeViewerLocalService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
                         .exception(target: "RuntimeViewerFileService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
+                        .exception(target: "RuntimeViewerFrameworkService", included: ["ServicePlugin.swift", "ServicePluginLoader.swift"]),
                     ])
                 ),
             ],
@@ -384,6 +386,19 @@ let project = Project(
                 .folder("RuntimeViewerFileService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
             ],
             settings: targetSettings(directory: "RuntimeViewerFileService")
+        ),
+        // One instance per Load Frameworks on My Mac: its Info.plist declares _MultipleInstances.
+        .target(
+            name: "RuntimeViewerFrameworkService",
+            destinations: .macOS,
+            product: .xpc,
+            productName: "RuntimeViewerFrameworkService",
+            bundleId: "$(inherited)",
+            infoPlist: nil,
+            buildableFolders: [
+                .folder("RuntimeViewerFrameworkService", exceptions: .exceptions([.exception(excluded: ["Info.plist"])])),
+            ],
+            settings: targetSettings(directory: "RuntimeViewerFrameworkService")
         ),
         .target(
             name: "runtime-viewer-cli",

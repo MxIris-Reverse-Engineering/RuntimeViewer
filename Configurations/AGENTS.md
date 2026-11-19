@@ -74,8 +74,8 @@ offers no simulator SDK, while the build resolves `iphonesimulator` normally.
 Leave it — picking any SDK in that pop-up overwrites `SDKROOT`, and the payload
 then builds for the wrong platform without an error.
 
-`RuntimeViewerServicePlugin`, the code the four shells load — the Catalyst
-helper and the Catalyst, local and file services — is a plain macOS bundle:
+`RuntimeViewerServicePlugin`, the code the five shells load — the Catalyst
+helper and the Catalyst, local, file and framework services — is a plain macOS bundle:
 it builds into `<configuration>/`, and the app's `Embed Service Plugin` phase
 copies it into `Contents/PlugIns/`. **The app ships one copy, not one per
 shell** — the plugin is about 56 MB in Release, the shells are kilobytes — and

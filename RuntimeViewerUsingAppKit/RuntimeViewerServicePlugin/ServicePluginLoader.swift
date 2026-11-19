@@ -1,8 +1,8 @@
 import Foundation
 
 /// Loads `RuntimeViewerServicePlugin`, the macOS code that does the work in
-/// the four shells: the Mac Catalyst helper application and the Mac Catalyst,
-/// local and file XPC services. Compiled into every shell, not into the
+/// the five shells: the Mac Catalyst helper application and the Mac Catalyst,
+/// local, file and framework XPC services. Compiled into every shell, not into the
 /// plugin.
 ///
 /// The plugin instance keeps its engine and its host, so whoever calls an

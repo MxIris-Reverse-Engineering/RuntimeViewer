@@ -848,7 +848,7 @@ default:
      - `processCatalogStillDoesNotRebuildNodes`
      - `engineForAFrameworkInstanceForwardsFromTheStart`
 
-4. **内嵌 service** —— 步骤 4 的行
+4. **内嵌 service** —— 步骤 4 的行（**已完成**）
    - 构建 Debug-arm64e（`RunScript.sh --no-launch`）与 Release，核对 `Contents/XPCServices/RuntimeViewerFrameworkService.xpc` 在、签名带 `disable-library-validation`、外壳约 86 KB、不链接任何包；`./TuistScript.sh check` 通过。
    - 行为：
      - `appBundleEmbedsTheFrameworkService`（构建后检查）
@@ -918,3 +918,4 @@ default:
 | 2026-11-19 | 步骤 1 完成 | 实测「先按绝对路径加载依赖」成立。核对 dyld 源码时发现原文把 rpath 栈的构造顺序当成了查找顺序：dyld 从发起加载的镜像往回查到主程序，诊断表按查找顺序排，rpath 里的 `@loader_path` 按携带它的镜像展开。与原设计的出入：`ChainLink` 存 `resolvedPath`、`isResolved` 由它算出；`RpathSearch` 的结果是开放的 `Outcome` 结构；`DylibPathResolver.resolve(…)` 不改，另写一个记录尝试的方法（原方法对祖先的 `@loader_path` rpath 按当前镜像展开，与 dyld 不同，留作后续项）；修复方案列出依赖闭包里所有还没加载的镜像、依赖在前，不再筛掉「本来就找得到」的——多加载的那些本来也会随之加载。预加载的实测放在 `RuntimeImageLoadDiagnosticianTests` 里，解析测试改名 `DyldLoadFailureMessageParsingTests`（原名已被现有测试占用）。 |
 | 2026-11-19 | 步骤 2 完成 | `diagnosesImageLoadsOnRequest` 对 `.local` 也为真：App 里的 My Mac 转发给同一次构建内嵌的 local service，不会是旧版（原文只写了进程内与框架实例）。路径比较改用 `realpath(3)`：dyld 按真实路径登记镜像（`/private/var/…`），而 Foundation 的 `resolvingSymlinksInPath` 会去掉 `/private`，两者对不上；第 3 步的镜像目录按同一规则比较。 |
 | 2026-11-19 | 步骤 3 完成 | 编码 `RuntimeSource` 的只有镜像分享的描述（受 `isMirrorableToPeers` 约束，新 case 为假）与旧书签的迁移（只读旧数据），新 case 不进持久化、不发给对端。实现细节：服务端引擎在构造时自己记下基线镜像，`init(servingFrameworkInstance:)` 不再收这个参数；镜像目录在节点里列出 dyld 拒绝的框架，但不放进 `imagePaths()`——那份列表的每一项都要能取到镜像，`isImageLoaded` 也读它；目录里的路径一律按 dyld 登记的写法（真实路径），经符号链接加载的框架不会出现两次；框架 service 的 host 不像文件 service 那样调高描述符上限，它不成批打开文件。 |
+| 2026-11-19 | 步骤 4 完成 | 用 Tuist 工作区编了 Debug 的整个 App：`RuntimeViewerFrameworkService.xpc` 已嵌入，外壳约 70 KB、只链接系统库，App 的 `Info.plist` 带上了键；`./TuistScript.sh check` 通过。没有另跑 Debug-arm64e 与 Release 构建（各要半小时级，留到第 8 步或发版前），签名与 entitlement 留到第 8 步在签名构建里核对。App 要编过，Packages 与命令行工具里几处对来源的穷举分支提前在这一步补上（原排在第 5、6 步）：索引设置的引擎引用、侧栏的「在本机」、加载带进度、来源图标、CLI 的来源目录。 |

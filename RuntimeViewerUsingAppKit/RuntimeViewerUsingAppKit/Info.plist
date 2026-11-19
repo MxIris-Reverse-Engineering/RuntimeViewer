@@ -58,6 +58,8 @@
 	<string>$(RUNTIME_VIEWER_LOCAL_SERVICE_BUNDLE_IDENTIFIER)</string>
 	<key>RuntimeViewerFileServiceBundleIdentifier</key>
 	<string>$(RUNTIME_VIEWER_FILE_SERVICE_BUNDLE_IDENTIFIER)</string>
+	<key>RuntimeViewerFrameworkServiceBundleIdentifier</key>
+	<string>$(RUNTIME_VIEWER_FRAMEWORK_SERVICE_BUNDLE_IDENTIFIER)</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<true/>
 	<key>SUEnableAutomaticChecks</key>

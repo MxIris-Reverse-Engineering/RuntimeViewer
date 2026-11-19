@@ -11,10 +11,10 @@ extension NSObject {
     @objc func rvch_makeKeyAndOrderFront(_ sender: Any?) {}
 }
 
-/// What the four shells run: the Mac Catalyst helper application and the
-/// Mac Catalyst, local and file XPC services. Each shell only loads this
-/// plugin and calls its entry point, so the app ships one copy of
-/// RuntimeViewerCore for all four processes instead of one per executable.
+/// What the five shells run: the Mac Catalyst helper application and the
+/// Mac Catalyst, local, file and framework XPC services. Each shell only loads
+/// this plugin and calls its entry point, so the app ships one copy of
+/// RuntimeViewerCore for all five processes instead of one per executable.
 @objc(ServicePluginEntry)
 final class ServicePluginEntry: NSObject, ServicePlugin {
     private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerServicePlugin", category: "ServicePluginEntry")
@@ -32,6 +32,10 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
     /// What the file service serves its file through; kept for the life of
     /// the process.
     private var fileServiceHost: RuntimeFileServiceHost?
+
+    /// What the framework service serves its images through; kept for the
+    /// life of the process.
+    private var frameworkServiceHost: RuntimeFrameworkServiceHost?
 
     override required init() {
         super.init()
@@ -169,6 +173,44 @@ final class ServicePluginEntry: NSObject, ServicePlugin {
         // `xpc_main`; never returns. Nothing is read until the first hello
         // names the file, so there is nothing to set up first.
         fileServiceHost.activate()
+    }
+
+    func runFrameworkService() {
+        // A process that serves an engine and links both command modules
+        // installs them. The frameworks are mapped into this process, so the
+        // cross-reference scan reads them like any other loaded image.
+        RuntimeInjection.install()
+        RuntimeCrossReferences.install()
+
+        let listener: RuntimeXPCServiceListenerConnection
+        do {
+            listener = try RuntimeXPCServiceListenerConnection.embeddedService()
+        } catch {
+            // Without a listener there is no service; let launchd see a clean failure.
+            Self.logger.error("Framework service could not create its listener: \(error, privacy: .public)")
+            exit(EXIT_FAILURE)
+        }
+
+        // No derived data: the instance borrows the shared cache's images from
+        // My Mac, whose service keeps their corpora, and the frameworks loaded
+        // here are not shared cache images, which derived data never stores.
+
+        // The service declares `_MultipleInstances`, and the app starts an
+        // instance for every Load Frameworks on My Mac: the connection's first
+        // hello says which, and the host serves this process's images before
+        // answering. The frameworks are loaded afterwards, by load commands.
+        let frameworkServiceHost = RuntimeFrameworkServiceHost(connection: listener)
+        self.frameworkServiceHost = frameworkServiceHost
+
+        // Nobody else can ever reach this instance, and the frameworks loaded
+        // into it cannot be unloaded: once its client closed the connection —
+        // no window is left on it — exiting is the only way to let them go.
+        listener.setClientDepartureHandler {
+            exit(EXIT_SUCCESS)
+        }
+
+        // `xpc_main`; never returns.
+        frameworkServiceHost.activate()
     }
 
     /// Serves an in-process engine on this XPC service's listener, as the
