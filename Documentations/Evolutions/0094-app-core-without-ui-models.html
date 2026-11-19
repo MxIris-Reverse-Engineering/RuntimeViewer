@@ -3,461 +3,696 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>0094 - AppCore 不再使用 AppKit/UIKit 模型</title>
 <style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
 :root {
-  --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --panel: #f5f5f7;
-  --code-bg: #f2f2f4; --accent: #0a66d8;
-  --add: #1f8a3b; --add-bg: #e3f5e8; --del: #c4312b; --del-bg: #fbe5e4;
-  --mod: #a05a00; --mod-bg: #fdf0dc; --move: #0a66d8; --move-bg: #e3eefc;
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1c1e; --fg: #f2f2f7; --muted: #a1a1a6; --line: #3a3a3c; --panel: #2c2c2e;
-    --code-bg: #2a2a2d; --accent: #4c9bff;
-    --add: #4cd471; --add-bg: #173a22; --del: #ff6b63; --del-bg: #3d1a19;
-    --mod: #ffb347; --mod-bg: #3d2c12; --move: #6fb1ff; --move-bg: #15294a;
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg);
-  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif; }
-.layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
-nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto; padding: 24px 16px;
-  border-right: 1px solid var(--line); font-size: 13px; }
-nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; }
-nav a:hover { color: var(--accent); }
-main { padding: 24px 40px 80px; min-width: 0; }
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } nav { display: none; } main { padding: 16px; } }
-h1 { font-size: 26px; margin: 0 0 8px; }
-h2 { font-size: 21px; margin: 40px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
-h3 { font-size: 17px; margin: 24px 0 8px; }
-.meta { color: var(--muted); font-size: 13px; }
-.meta span { margin-right: 16px; }
-.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--mod-bg); color: var(--mod); font-weight: 600; font-size: 12px; }
-.summary { background: var(--panel); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
-code { font: 12.5px/1.5 "SF Mono", Menlo, monospace; background: var(--code-bg); padding: 1px 4px; border-radius: 4px; }
-pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow: auto; font: 12.5px/1.5 "SF Mono", Menlo, monospace; }
-pre code { background: none; padding: 0; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0 16px; }
-th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
-th { background: var(--panel); }
-.table-wrap { overflow-x: auto; }
-details { border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; margin: 10px 0; }
-details > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
-.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin: 8px 0 12px; }
-.chip { display: inline-block; padding: 2px 8px; margin: 2px 3px; border-radius: 6px; font: 12px/1.5 "SF Mono", Menlo, monospace; border: 1px solid transparent; }
-.chip.add { background: var(--add-bg); color: var(--add); border-color: var(--add); }
-.chip.del { background: var(--del-bg); color: var(--del); border-color: var(--del); text-decoration: line-through; }
-.chip.mod { background: var(--mod-bg); color: var(--mod); border-color: var(--mod); }
-.chip.keep { background: var(--panel); color: var(--fg); border-color: var(--line); }
-.ownership { display: grid; grid-template-columns: 120px 1fr 40px 1fr; gap: 6px; align-items: stretch; font-size: 13px; }
-.ownership .head { font-weight: 700; text-align: center; padding: 6px; background: var(--panel); border-radius: 6px; }
-.ownership .group { font-weight: 600; color: var(--muted); padding: 8px 4px; }
-.ownership .box { border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
-.ownership .arrow { display: flex; align-items: center; justify-content: center; color: var(--move); font-size: 20px; }
-@media (max-width: 700px) { .ownership { grid-template-columns: 1fr; } .ownership .arrow { transform: rotate(90deg); } }
-svg text { fill: var(--fg); font: 12px -apple-system, sans-serif; }
-svg .muted { fill: var(--muted); }
-svg .box { fill: var(--panel); stroke: var(--line); }
-svg .core { fill: var(--panel); stroke: var(--accent); }
-svg .ui { fill: var(--move-bg); stroke: var(--move); }
-svg .newbox { fill: var(--add-bg); stroke: var(--add); }
-svg .gone { fill: var(--del-bg); stroke: var(--del); }
-svg .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-svg .edge-new { stroke: var(--add); stroke-width: 1.8; fill: none; marker-end: url(#arrow-new); }
-.diagram { overflow-x: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0 18px; }
-.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
-.flow .node { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--panel); }
-.flow .node.ui { background: var(--move-bg); border-color: var(--move); }
-.flow .to { color: var(--muted); }
-ul { padding-left: 22px; }
-.small { font-size: 13px; color: var(--muted); }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
 </style>
 </head>
 <body>
-<div class="layout">
-<nav>
-  <strong>目录</strong>
-  <a href="#summary">摘要</a>
-  <a href="#approval">要你定的事</a>
-  <a href="#arch">架构图</a>
-  <a href="#map">改动地图</a>
-  <a href="#motivation">动机</a>
-  <a href="#proposal">提议方案</a>
-  <a href="#steps">落地步骤</a>
-  <a href="#impact">影响</a>
-  <a href="#design">详细设计</a>
-  <a href="#research">前期调研</a>
-  <a href="#alternatives">替代方案考量</a>
-  <a href="#log">决策日志</a>
-</nav>
-<main>
-<h1>0094 - AppCore 不再使用 AppKit/UIKit 模型</h1>
-<div class="meta">
-  <span>状态 <span class="badge">Implemented</span></span>
-  <span>作者 JH</span>
-  <span>创建 2026-11-18</span>
-  <span>对应提案最后更新：2026-11-18</span>
-</div>
-<p class="small">原文：<code>0094-app-core-without-ui-models.md</code>（以原文为准）。关联提案：0091（拆 AppCore 与 AppUI，本提案推翻其中「UI 框架的模型可以留在 AppCore」一条）、0005（cell ViewModel 的 Appearance 单流）、0090（镜像种类图标）。</p>
-
-<h2 id="summary">摘要</h2>
-<div class="summary">
-<p><code>RuntimeViewerAppCore</code> 的代码里不再出现 AppKit/UIKit 类型。图标和图标颜色改成描述值 <code>IconDescriptor</code>、<code>ColorDescriptor</code>；行标题改成带语义角色的 <code>RowText</code>；内容页的 ViewModel 输出 <code>ContentInterface</code>，即生成器给的语义串 <code>FrozenSemanticString</code> 加上链接与声明成员两张旁表。主题（<code>ThemeProfile</code>、<code>ResolvedTheme</code>、上色代码）整体搬进 <code>RuntimeViewerAppUI</code>，由 AppUI 的渲染环节 <code>ContentTextRenderer</code> 在后台把语义串变成富文本，只有显示富文本的 <code>NSTextView</code> 内容视图和 iOS 内容视图用它；正式构建用的 SourceEditor 视图本来就不显示上过色的富文本，从此每次显示少建一份。剪贴板和 Finder 改走跨层依赖，修饰键的换算搬进 AppUI。做完以后 AppCore 的 ViewModel 状态全是值类型，可以直接拿来序列化（为以后 Reflex 式的 <code>ls</code> / <code>do</code> 内省铺路，那是另一份提案）。边界测试加两条规则守住：不 import AppKit/UIKit，代码里不出现 AppKit/UIKit 的类型名。分四步合进 <code>next</code>，用户看到的行为不变。</p>
-</div>
-
-<h2 id="approval">要你定的事</h2>
-<p>方向已在两轮澄清提问中定下；剩下的是批准这份提案（状态改为 <code>Accepted</code>）后开始实现。</p>
-
-<h2 id="arch">架构图</h2>
-<h3>改了什么：类型的归属</h3>
-<div class="legend">
-  <span class="chip add">新增</span><span class="chip del">移出 / 删除</span><span class="chip mod">修改</span><span class="chip keep">不变</span>
-</div>
-<div class="diagram">
-<div class="ownership">
-  <div></div><div class="head">RuntimeViewerAppCore</div><div></div><div class="head">RuntimeViewerAppUI</div>
-
-  <div class="group">Presentation/</div>
-  <div class="box"><span class="chip add">IconDescriptor</span><span class="chip add">FindResultSymbol</span><span class="chip add">ColorDescriptor</span><span class="chip add">RowText</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">IconDescriptor.image / image(size:)</span><span class="chip add">ColorDescriptor.color</span><span class="chip add">RowText.attributedString(in:)</span><span class="chip add">RowTextStyle</span><span class="chip mod">NSAttributedString(rowText:fontSize:color:) (moved)</span></div>
-
-  <div class="group">Content/</div>
-  <div class="box"><span class="chip add">ContentInterface (+ link / declared-member tables)</span><span class="chip mod">ContentTextViewModel (no theme, no NSAttributedString)</span><span class="chip del">NSAttributedString+ContentLinks</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">ContentTextRenderer</span></div>
-
-  <div class="group">Theme/</div>
-  <div class="box"><span class="chip del">ThemeProfile</span><span class="chip del">ResolvedTheme</span><span class="chip del">ResolvedThemeStream</span><span class="chip del">FrozenSemanticString+ThemeProfile</span><span class="chip del">NSColor+Xcode</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">ThemeProfile</span><span class="chip add">ResolvedTheme</span><span class="chip add">ResolvedThemeStream</span><span class="chip add">ContentInterface+Theme</span><span class="chip add">NSColor+Xcode</span></div>
-
-  <div class="group">Icons</div>
-  <div class="box"><span class="chip mod">SystemSymbol (names only)</span><span class="chip del">CustomSymbol</span><span class="chip del">Resources/Symbols.xcassets</span><span class="chip mod">RuntimeImageKind (kind only)</span><span class="chip mod">RuntimeObjectIcon (Glyph only)</span><span class="chip del">RuntimeEngineIconProviding (+ key)</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">SystemSymbol+Image</span><span class="chip add">CustomSymbol</span><span class="chip add">Resources/Symbols.xcassets</span><span class="chip add">RuntimeImageKind+Icon</span><span class="chip add">RuntimeObjectIcon+Image (renderer, cache)</span><span class="chip mod">RuntimeEngineIconProvider.icon(forEngineID:)</span></div>
-
-  <div class="group">Find/</div>
-  <div class="box"><span class="chip add">FindResultNode+Icon</span><span class="chip del">FindResultCellStyle</span><span class="chip del">FindResultActivation</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">FindResultCellStyle (metrics, fonts, colours, symbols)</span><span class="chip add">FindResultActivation</span></div>
-
-  <div class="group">EditorArea/</div>
-  <div class="box"><span class="chip del">SelectionRouteDestination+ModifierFlags</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">SelectionRouteDestination+ModifierFlags</span></div>
-
-  <div class="group">ContextMenus/</div>
-  <div class="box"><span class="chip mod">PasteboardClient (+ TestDependencyKey)</span><span class="chip mod">FinderClient (+ TestDependencyKey)</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">PasteboardClient+Live</span><span class="chip add">FinderClient+Live</span></div>
-
-  <div class="group">Platform</div>
-  <div class="box"><span class="chip del">PlatformTypes (NSUIImage / NSUIColor / NSUIFont)</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip add">PlatformTypes</span></div>
-
-  <div class="group">Cross-layer keys</div>
-  <div class="box"><span class="chip keep">AppRouterKey</span><span class="chip add">PasteboardClientKey</span><span class="chip add">FinderClientKey</span><span class="chip del">RuntimeObjectIconRenderingKey</span><span class="chip del">RuntimeEngineIconProvidingKey</span></div>
-  <div class="arrow">→</div>
-  <div class="box"><span class="chip keep">live: AppRouter</span><span class="chip add">live: general / workspace</span><span class="chip mod">RuntimeObjectIconRendering: plain @DependencyEntry in AppUI</span></div>
-</div>
-</div>
-
-<h3>内容页的数据流</h3>
-<div class="diagram">
-<svg viewBox="0 0 980 470" width="980" height="470" role="img" aria-label="content pane data flow before and after">
-  <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8e8e93"/></marker>
-    <marker id="arrow-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2fb350"/></marker>
-  </defs>
-  <text x="10" y="20" style="font-weight:700">before</text>
-  <rect class="core" x="10" y="32" width="120" height="44" rx="8"/><text x="22" y="52">fetch</text><text x="22" y="68" class="muted">interface cache</text>
-  <rect class="gone" x="170" y="32" width="300" height="60" rx="8"/><text x="182" y="52">render on background (AppCore)</text><text x="182" y="68" class="muted">themed NSAttributedString + .link</text><text x="182" y="84" class="muted">+ copy for .runtimeViewerDeclaredMember</text>
-  <rect class="core" x="510" y="32" width="150" height="44" rx="8"/><text x="522" y="58">$renderedInterface</text>
-  <rect class="box" x="710" y="20" width="260" height="34" rx="8"/><text x="722" y="42">NSTextView pane: displays it</text>
-  <rect class="box" x="710" y="64" width="260" height="44" rx="8"/><text x="722" y="82">SourceEditor pane: .string / .link /</text><text x="722" y="98" class="muted">declared member only</text>
-  <path class="edge" d="M130,54 L168,54"/><path class="edge" d="M470,54 L508,54"/>
-  <path class="edge" d="M660,48 L708,37"/><path class="edge" d="M660,62 L708,84"/>
-  <text x="10" y="128" class="muted">_commonLoading tracks fetch + render</text>
-
-  <line x1="10" y1="150" x2="970" y2="150" stroke="#8e8e93" stroke-dasharray="4 4"/>
-
-  <text x="10" y="178" style="font-weight:700">after</text>
-  <rect class="core" x="10" y="192" width="120" height="44" rx="8"/><text x="22" y="212">fetch</text><text x="22" y="228" class="muted">interface cache</text>
-  <rect class="newbox" x="170" y="192" width="270" height="60" rx="8"/><text x="182" y="212">prepare on background (AppCore)</text><text x="182" y="228" class="muted">link table, declared-member table,</text><text x="182" y="244" class="muted">comment decorations, macro expansions</text>
-  <rect class="newbox" x="480" y="192" width="190" height="44" rx="8"/><text x="492" y="212">$interface</text><text x="492" y="228" class="muted">ContentInterface (values)</text>
-  <rect class="box" x="720" y="176" width="250" height="60" rx="8"/><text x="732" y="196">SourceEditor pane</text><text x="732" y="212" class="muted">semanticString + tables</text><text x="732" y="228" class="muted">theme ← renderer.theme</text>
-  <rect class="ui" x="720" y="262" width="250" height="60" rx="8"/><text x="732" y="282">ContentTextRenderer (AppUI)</text><text x="732" y="298" class="muted">themes on background,</text><text x="732" y="314" class="muted">.link from the table (macOS)</text>
-  <rect class="box" x="720" y="350" width="250" height="34" rx="8"/><text x="732" y="372">NSTextView pane / iOS pane</text>
-  <path class="edge" d="M130,214 L168,214"/><path class="edge" d="M440,214 L478,214"/>
-  <path class="edge" d="M670,208 L718,204"/><path class="edge" d="M670,224 L718,286"/><path class="edge" d="M845,322 L845,348"/>
-  <path class="edge-new" d="M720,236 C620,300 600,330 560,340"/>
-  <path class="edge-new" d="M720,372 C620,380 600,370 560,350"/>
-  <rect class="newbox" x="340" y="326" width="220" height="40" rx="8"/><text x="352" y="350">interfaceDisplayed(id) → ViewModel</text>
-  <text x="10" y="410" class="muted">_commonLoading tracks fetch + prepare + "awaiting display" until interfaceDisplayed(id)</text>
-  <text x="10" y="430" class="muted">a theme-only change (e.g. ⌘+) re-renders inside the renderer, whose own delayedRendering lights the plate</text>
-  <text x="10" y="450" class="muted">renderedText is cold: the SourceEditor pane never subscribes it, so it themes nothing</text>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
 </svg>
-</div>
+<div class="page">
 
-<h3>图标从描述到图像</h3>
-<div class="diagram">
-<div class="flow">
-  <div class="node">cell ViewModel (AppCore)<br><code>appearance.primaryIcon = .runtimeObject(kind)</code><br><code>appearance.iconColor = .imageKind(kind)</code></div>
-  <div class="to">→</div>
-  <div class="node">cell view (MAC / IOS)<br><code>imageView.image = icon.image</code><br><code>contentTintColor = iconColor.color</code></div>
-  <div class="to">→</div>
-  <div class="node ui">AppUI: <code>IconDescriptor.image</code><br>
-    <code>.systemSymbol</code> → <code>SystemSymbol.image</code><br>
-    <code>.imageKind</code> → <code>RuntimeImageKind.icon</code><br>
-    <code>.glyph</code> → <code>RuntimeObjectIconRendering</code> (cached)<br>
-    <code>.findResultSymbol</code> → <code>FindResultCellStyle</code><br>
-    <code>.runtimeEngine</code> → <code>RuntimeEngineIconProvider.icon(forEngineID:)</code></div>
-</div>
-</div>
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0094</span></p>
+  <h1><span class="proposal-number">0094</span> AppCore 不再使用 AppKit/UIKit 模型</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-18</dd></div>
+    <div><dt>创建日期</dt><dd>2026-11-18</dd></div>
+    <div><dt>作者</dt><dd>JH</dd></div>
+    <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
+    <div><dt>所属愿景</dt><dd>无</dd></div>
+    <div><dt>原文</dt><dd><code>0094-app-core-without-ui-models.md</code></dd></div>
+  </dl>
+</header>
 
-<h2 id="map">改动地图</h2>
-<p class="small">路径缩写：<code>AC/</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore/</code>，<code>AUI/</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppUI/</code>，<code>MAC/</code> = <code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/</code>，<code>IOS/</code> = <code>RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/</code>，<code>T/</code> = AppCoreTests，<code>TUI/</code> = AppUITests。</p>
-<div class="table-wrap">
-<table>
-<tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr>
-<tr><td><code>AC/ContextMenus/PasteboardClient.swift</code></td><td>修改</td><td>去掉 import 与 <code>general</code>；<code>@DependencyEntry</code> 换成 <code>package enum PasteboardClientKey: TestDependencyKey</code>（<code>testValue = .inert</code>）与访问器</td><td>真实实现要用 <code>NSPasteboard</code> / <code>UIPasteboard</code></td><td>1</td></tr>
-<tr><td><code>AUI/ContextMenus/PasteboardClient+Live.swift</code></td><td>新增</td><td><code>PasteboardClient.general</code> 与 <code>extension PasteboardClientKey: DependencyKey</code></td><td>同上</td><td>1</td></tr>
-<tr><td><code>AC/ContextMenus/FinderClient.swift</code></td><td>修改</td><td>同 <code>PasteboardClient</code>，key 为 <code>FinderClientKey</code></td><td>真实实现要用 <code>NSWorkspace</code></td><td>1</td></tr>
-<tr><td><code>AUI/ContextMenus/FinderClient+Live.swift</code></td><td>新增</td><td><code>FinderClient.workspace</code> 与 <code>liveValue</code></td><td>同上</td><td>1</td></tr>
-<tr><td><code>AC/EditorArea/SelectionRouteDestination+ModifierFlags.swift</code></td><td>移动 → <code>AUI/EditorArea/</code></td><td>内容不变</td><td>收 <code>NSEvent.ModifierFlags</code></td><td>1</td></tr>
-<tr><td><code>AC/Find/FindResultsOutline.swift</code> · <code>FindResultActivation</code></td><td>修改</td><td>移出 <code>FindResultActivation</code>，去掉 <code>import AppKit</code></td><td>收 <code>NSEvent</code></td><td>1</td></tr>
-<tr><td><code>AUI/Find/FindResultActivation.swift</code></td><td>新增</td><td>搬来的 <code>FindResultActivation</code></td><td>同上</td><td>1</td></tr>
-<tr><td><code>AC/Then.swift</code></td><td>修改</td><td>删掉 AppKit/UIKit 类型的 <code>Then</code> 遵循与两处 import（先确认 AppCore 里没有对这些类型调 <code>.then</code>；有就随调用点一起搬）</td><td>UI 类型</td><td>1</td></tr>
-<tr><td><code>AC/Inspector/InspectorViewModel.swift</code>、<code>AC/Inspector/InspectorRelationshipsCellViewModel.swift</code>、<code>AC/RuntimeObject/RuntimeObjectCellDisplayable.swift</code></td><td>修改</td><td>去掉没用的 import</td><td>规则 4</td><td>1</td></tr>
-<tr><td><code>T/AppCoreBoundaryTests.swift</code> · <code>AppCoreBoundary</code></td><td>修改</td><td>规则 4、5，Foundation 名字清单，过渡清单（第一步列出其余全部文件），<code>allowedLines</code> 收 iOS 路由几行；样例里删掉现在要拦的几条，挪进「要报告」的样例</td><td>守住新边界</td><td>1；2、3、4 缩短过渡清单</td></tr>
-<tr><td><code>T/FindResultActivationTests.swift</code></td><td>移动 → <code>TUI/</code></td><td>内容不变</td><td>造 <code>NSEvent</code></td><td>1</td></tr>
-<tr><td><code>TUI/CrossLayerDependencyTests.swift</code></td><td>修改</td><td>加 <code>PasteboardClientKey</code>、<code>FinderClientKey</code>；第二步删 <code>RuntimeObjectIconRenderingKey</code>、<code>RuntimeEngineIconProvidingKey</code></td><td>跨层清单</td><td>1、2</td></tr>
-<tr><td><code>AC/Presentation/IconDescriptor.swift</code> · <code>IconDescriptor</code>、<code>FindResultSymbol</code></td><td>新增</td><td>见详细设计</td><td>图标的描述值</td><td>2</td></tr>
-<tr><td><code>AC/Presentation/ColorDescriptor.swift</code> · <code>ColorDescriptor</code></td><td>新增</td><td>见详细设计</td><td>图标颜色的描述值</td><td>2</td></tr>
-<tr><td><code>AUI/Presentation/IconDescriptor+Image.swift</code></td><td>新增</td><td><code>IconDescriptor.image</code>（主线程缓存）、<code>image(size:)</code>（第三步加入）；<code>FindResultSymbol</code> 的六个符号；<code>ColorDescriptor.color</code></td><td>AppUI 解析</td><td>2、3</td></tr>
-<tr><td><code>AC/SystemSymbol.swift</code></td><td>修改</td><td>只留枚举与名字，改为 <code>public</code>；画图的成员搬走</td><td>造 <code>NSImage</code></td><td>2</td></tr>
-<tr><td><code>AUI/Icons/SystemSymbol+Image.swift</code></td><td>新增</td><td>搬来的三个成员</td><td>同上</td><td>2</td></tr>
-<tr><td><code>AC/CustomSymbol.swift</code></td><td>移动 → <code>AUI/Icons/CustomSymbol.swift</code></td><td>加 <code>import RuntimeViewerAppCore</code>，其余不变</td><td>只有搬走的 <code>RuntimeImageKind+Icon</code> 用</td><td>2</td></tr>
-<tr><td><code>AC/Resources/Symbols.xcassets</code></td><td>移动 → <code>AUI/Resources/Symbols.xcassets</code></td><td>内容不变</td><td>同上</td><td>2</td></tr>
-<tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td>修改</td><td>AppCore 去掉 <code>resources</code>，AppUI 加 <code>resources: [.process("Resources")]</code>，注释随之改</td><td>同上</td><td>2</td></tr>
-<tr><td><code>Tuist.swift</code>、<code>Tuist/ProjectDescriptionHelpers/LocalPackages.swift</code></td><td>修改</td><td>资源包 target 名改为 <code>RuntimeViewerPackages_RuntimeViewerAppUI</code></td><td>Tuist 描述重复了资源包 target</td><td>2</td></tr>
-<tr><td><code>AC/RuntimeImageKind.swift</code></td><td>修改</td><td>只留种类与判定；<code>icon</code>、<code>iconColor</code>、<code>coloredIcon</code> 和私有的图像、颜色常量搬走</td><td>UI 类型</td><td>2</td></tr>
-<tr><td><code>AUI/Icons/RuntimeImageKind+Icon.swift</code></td><td>新增</td><td>同名的 <code>icon</code>、<code>iconColor</code>、<code>coloredIcon</code></td><td>App 的调用点不用改</td><td>2</td></tr>
-<tr><td><code>AC/RuntimeObjectIcon.swift</code></td><td>修改</td><td>留 <code>Glyph</code>、<code>glyph(for:)</code>、tooltip；新增 <code>genericGlyph</code>、<code>specializedGlyph</code>、<code>objcImplementationGlyph</code>、<code>secondaryGlyph(for:)</code>；删 <code>icon(...)</code> 一族、<code>RuntimeObjectIconRendering</code>、key、<code>RuntimeObjectIconImageCache</code>、<code>BlankRuntimeObjectIconRenderer</code></td><td>造 <code>NSImage</code></td><td>2</td></tr>
-<tr><td><code>AUI/Icons/RuntimeObjectIcon+Image.swift</code></td><td>新增</td><td>同名的 <code>icon(...)</code> 一族、<code>secondaryIcon(for:)</code>、<code>image(for:)</code>；渲染协议、缓存、空白渲染器，key 成为 AppUI 内部的 <code>DependencyKey</code></td><td>App 的调用点不用改</td><td>2</td></tr>
-<tr><td><code>AUI/IDEIconRuntimeObjectIconRenderer.swift</code></td><td>修改</td><td>删掉给 AppCore 的 key 补 live 值的扩展</td><td>不再跨层</td><td>2</td></tr>
-<tr><td><code>AC/Engine/RuntimeEngineIconProviding.swift</code></td><td>删除</td><td>—</td><td>AppCore 改用 <code>.runtimeEngine(engineID:)</code></td><td>2</td></tr>
-<tr><td><code>AUI/Engine/RuntimeEngineIconProvider.swift</code></td><td>修改</td><td>去掉对 AppCore 协议的遵循与 key；新增 <code>icon(forEngineID:) -&gt; NSImage</code>，经 <code>RuntimeEngineManager.runtimeEngines</code> 找回引擎，找不到用占位图</td><td>解析 <code>.runtimeEngine</code></td><td>2</td></tr>
-<tr><td><code>AC/RuntimeObject/RuntimeObjectCellAppearance.swift</code></td><td>修改</td><td>三个图标字段改 <code>IconDescriptor</code> / <code>IconDescriptor?</code></td><td>状态是值</td><td>2</td></tr>
-<tr><td><code>AC/Sidebar/SidebarRuntimeObjectCellViewModel.swift</code></td><td>修改</td><td>图标改描述值（第二步）；标题改 <code>RowText</code>（第三步）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/Sidebar/SidebarRootCellViewModel.swift</code> · <code>Appearance</code></td><td>修改</td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor</code>（2）；<code>name: RowText</code>（3）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/Inspector/InspectorSwiftSpecializationCellViewModel.swift</code>、<code>AC/Inspector/RuntimeObjectCellAppearance+Inspector.swift</code>、<code>AC/Inspector/InspectorHierarchyCellViewModel.swift</code></td><td>修改</td><td>图标改描述值（第二步）；标题、副标题改 <code>RowText</code>、去掉 import（第三步）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/Reports/ReportCellViewModel.swift</code> · <code>Appearance</code></td><td>修改</td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor?</code></td><td>同上</td><td>2</td></tr>
-<tr><td><code>AC/Reports/ReportViewModel.swift</code> · <code>ReportOutline</code></td><td>修改</td><td>九个图标常量与 <code>icon(forImagePath:)</code>、<code>iconColor(forImagePath:)</code> 改返回描述值</td><td>同上</td><td>2</td></tr>
-<tr><td><code>AC/Reports/ReportTreeBuilder.swift</code></td><td>修改</td><td>跟随 <code>ReportOutline</code> 的类型</td><td>同上</td><td>2</td></tr>
-<tr><td><code>AC/Reports/ReportGroupWork.swift</code></td><td>修改</td><td><code>engineIcon: IconDescriptor?</code>，值为 <code>.runtimeEngine(engineID:)</code></td><td>同上</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindResultNode+Icon.swift</code> · <code>FindResultIcon</code></td><td>新增</td><td>「哪种行配哪个图标」的逻辑与淡化的透明度 <code>dimmedAlpha</code>，返回 <code>IconDescriptor</code></td><td>逻辑留在 AppCore</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindResultNode.swift</code> · <code>FindResultCellAppearance</code></td><td>修改</td><td><code>icon</code>、<code>iconColor</code> 改描述值，<code>iconAlpha</code> 保留为数字（2）；<code>title: RowText</code>，不再收尺寸，<code>isContentEqual</code> 改 <code>==</code>（3）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/Find/FindResultCellStyle.swift</code></td><td>修改（2）→ 移动 → <code>AUI/Find/</code>（3）</td><td>第二步删掉图标部分，只留两个着色常量；第三步整份搬走，新增 <code>RowTextStyle.findResult(_:)</code></td><td>渲染</td><td>2、3</td></tr>
-<tr><td><code>AC/Inspector/InspectorReferencesViewModel.swift</code></td><td>修改</td><td>展开三角改 <code>.findResultSymbol(.disclosure(isExpanded:))</code>（2）；去掉 <code>.inspector</code> 尺寸（3）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift</code></td><td>移动 → <code>AUI/RuntimeSourcePicker/</code></td><td>内容不变，仍带 <code>NSImage</code></td><td>AppCore 里没人用它；断开的来源显示的是存下的图像，按 ID 找不回</td><td>2</td></tr>
-<tr><td><code>MAC/Base/RuntimeObjectCellView.swift</code></td><td>修改</td><td>图标用 <code>.image</code>（2）；标题用 <code>attributedString(in:)</code>（3）</td><td>解析</td><td>2、3</td></tr>
-<tr><td><code>MAC/Sidebar/Root/SidebarRootTableCellView.swift</code></td><td>修改</td><td>同上</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>MAC/Find/FindResultCellView.swift</code></td><td>修改</td><td>图标用 <code>image(size: metrics.iconSize)</code>、颜色用 <code>.color</code>（2）；按自己的 <code>metrics</code> 渲染标题（3）</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>MAC/Find/FindViewController.swift</code>、<code>MAC/Inspector/InspectorReferencesViewController.swift</code></td><td>修改</td><td>把 <code>.navigator</code> / <code>.inspector</code> 尺寸交给 cell 视图</td><td>尺寸归视图</td><td>3</td></tr>
-<tr><td><code>MAC/Reports/ReportCellView.swift</code></td><td>修改</td><td>图标与颜色解析</td><td>同上</td><td>2</td></tr>
-<tr><td><code>MAC/Specialization/SpecializationTypePickerCellViewModel.swift</code></td><td>修改</td><td>图标改描述值（2）；标题、副标题改 <code>RowText</code>，不再用 UIFoundation 的 <code>AText</code>（3）</td><td>它造的是 AppCore 的 <code>RuntimeObjectCellAppearance</code></td><td>2、3</td></tr>
-<tr><td><code>IOS/Sidebar/SidebarRuntimeObjectViewController.swift</code>、<code>IOS/Sidebar/SidebarRootViewController.swift</code></td><td>修改</td><td>解析图标、颜色（2）与 <code>RowText</code>（3）</td><td>iOS 也链接这两层</td><td>2、3</td></tr>
-<tr><td><code>T/RuntimeImageKindTests.swift</code></td><td>修改</td><td>种类判定留下；模板、像素颜色、<code>===</code> 的断言搬进 <code>TUI/RuntimeImageKindIconTests.swift</code>（新增）</td><td>渲染测试归 AppUI</td><td>2</td></tr>
-<tr><td><code>T/CustomSymbolTests.swift</code>、<code>T/SystemSymbolTests.swift</code>、<code>T/RuntimeObjectIconGlyphTests.swift</code></td><td>移动 → <code>TUI/</code></td><td>按新位置调整 import</td><td>同上</td><td>2</td></tr>
-<tr><td><code>T/RuntimeObjectIconTests</code>、<code>T/FindCrossReferenceTests</code>、<code>T/InspectorReferencesViewModelTests</code>、<code>T/ReportEngineGroupsTests</code>、<code>T/ReportViewModelTests</code>、<code>T/InspectorCellViewModelTests</code>、<code>T/SidebarCellAppearanceTests</code>、<code>T/SidebarRuntimeObjectCellViewModelTests</code>、<code>T/SidebarRootCellViewModelTests</code></td><td>修改</td><td><code>===</code> / 像素断言改成描述值的 <code>==</code></td><td>状态是值</td><td>2</td></tr>
-<tr><td><code>T/FindResultNodeTests.swift</code></td><td>修改</td><td>图标尺寸断言搬进 <code>TUI/FindResultCellStyleTests.swift</code>（新增，2）；字号断言同去（3）；<code>title ===</code> 改 <code>==</code></td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>TUI/IconDescriptorRenderingTests.swift</code></td><td>新增</td><td>每种描述值都画得出图，同一描述值取到同一个缓存图像，<code>.runtimeEngine</code> 找不到引擎时用占位图</td><td>解析的测试</td><td>2</td></tr>
-<tr><td><code>AC/Presentation/RowText.swift</code> · <code>RowText</code></td><td>新增</td><td>见详细设计</td><td>行文字的描述值</td><td>3</td></tr>
-<tr><td><code>AC/NSAttributedString+RowText.swift</code></td><td>移动 → <code>AUI/Presentation/</code></td><td>原有 <code>init(rowText:fontSize:color:)</code> 原样保留</td><td>渲染</td><td>3</td></tr>
-<tr><td><code>AUI/Presentation/RowText+AttributedString.swift</code> · <code>RowTextStyle</code></td><td>新增</td><td><code>RowTextStyle.list</code>、<code>RowTextStyle.findResult(_:)</code> 与 <code>RowText.attributedString(in:)</code></td><td>渲染</td><td>3</td></tr>
-<tr><td><code>AC/Find/FindResultNode.swift</code> · <code>subtitleSeparator</code></td><td>修改</td><td>名字与副标题之间的两个空格从 <code>FindResultCellStyle</code> 搬到这里：它是文字内容</td><td>第三步</td><td>3</td></tr>
-<tr><td><code>AC/Theme/NSColor+Xcode.swift</code></td><td>移动 → <code>AUI/Theme/</code></td><td>内容不变</td><td>只有 Find 的样式与 App 的 Find 页用</td><td>3</td></tr>
-<tr><td><code>MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectViewController.swift:346</code>、<code>MAC/Sidebar/Root/SidebarRootViewController.swift:218</code></td><td>不改（核对）</td><td><code>.title.string</code> / <code>.name.string</code> 由 <code>RowText.string</code> 承接</td><td>—</td><td>3</td></tr>
-<tr><td><code>T/FindResultMemberEmphasisTests.swift</code></td><td>修改</td><td>改成断言 <code>RowText</code> 的段与角色；字体断言搬进 <code>TUI/FindResultCellStyleTests.swift</code></td><td>同上</td><td>3</td></tr>
-<tr><td><code>TUI/RowTextAttributedStringTests.swift</code>、<code>TUI/FindResultRowDrawingTests.swift</code></td><td>修改</td><td>覆盖 <code>RowText.attributedString(in:)</code> 的每种角色与两种样式</td><td>渲染测试</td><td>3</td></tr>
-<tr><td><code>AC/Content/ContentInterface.swift</code> · <code>ContentInterface</code></td><td>新增</td><td>见详细设计；包括搬来的链接解析与从 <code>markingDeclaredMembers</code> 改写的声明成员表</td><td>内容页的描述值</td><td>4</td></tr>
-<tr><td><code>AC/Content/ContentTextViewModel.swift</code></td><td>修改</td><td>去掉 <code>theme</code>、<code>attributedString</code>、<code>renderedInterface</code>、上色环节与 <code>RenderedInterface</code>；新增 <code>@RxObserved interface</code>、<code>Input.interfaceDisplayed</code>、等待显示的追踪；<code>Output.interface</code> 取代三项旧输出；高亮定位改用 <code>interface.string</code>；删 <code>NSAttributedString</code> 的 <code>@retroactive Sendable</code> 与 <code>.runtimeViewerDeclaredMember</code></td><td>状态是值</td><td>4</td></tr>
-<tr><td><code>AC/Content/NSAttributedString+ContentLinks.swift</code></td><td>删除</td><td>查找改由 <code>ContentInterface</code> 提供</td><td>同上</td><td>4</td></tr>
-<tr><td><code>AC/Theme/ThemeProfile.swift</code>、<code>ThemePreset+ThemeProfile.swift</code>、<code>ResolvedThemeStream.swift</code></td><td>移动 → <code>AUI/Theme/</code></td><td>内容不变</td><td>主题归 AppUI</td><td>4</td></tr>
-<tr><td><code>AC/Theme/FrozenSemanticString+ThemeProfile.swift</code></td><td>移动并改写 → <code>AUI/Theme/ContentInterface+Theme.swift</code></td><td>变成 <code>ContentInterface.attributedString(themedWith:)</code>：按语义类型上色，macOS 上从链接表写 <code>.link</code></td><td>同上</td><td>4</td></tr>
-<tr><td><code>AUI/Content/ContentTextRenderer.swift</code></td><td>新增</td><td>见详细设计</td><td>渲染环节</td><td>4</td></tr>
-<tr><td><code>AC/PlatformTypes.swift</code></td><td>移动 → <code>AUI/</code></td><td><code>NSUIImage</code> / <code>NSUIColor</code> / <code>NSUIFont</code> 别名</td><td>最后的使用方都已搬走</td><td>4</td></tr>
-<tr><td><code>AC/Extensions.swift</code></td><td>修改</td><td><code>NSUIColor(light:dark:)</code> 与 iOS 的 <code>labelColor</code> 一族搬进 <code>AUI/Extensions/NSUIColor+Adaptive.swift</code>（新增）；其余留下</td><td>同上</td><td>4</td></tr>
-<tr><td><code>AC/ViewModel.swift</code></td><td>修改</td><td><code>delayedLoading</code> 的「true 晚 100 毫秒、false 立即」抽成 <code>delayingTrue(by:)</code>，AppUI 复用</td><td>两处同一规则</td><td>4</td></tr>
-<tr><td><code>MAC/Content/ContentTextViewController.swift</code></td><td>修改</td><td>用 <code>ContentTextRenderer</code>；显示后发 <code>interfaceDisplayed</code>；右键菜单与光标成员改查 <code>ContentInterface</code>；背景色等取 <code>renderer.theme</code>；转圈合并 <code>renderer.delayedRendering</code></td><td>跟随</td><td>4</td></tr>
-<tr><td><code>MAC/Content/ContentSourceEditorViewController.swift</code></td><td>修改</td><td>直接绑 <code>output.interface</code>；<code>setSource</code> 后发 <code>interfaceDisplayed</code>；⌘-点击、菜单改查 <code>ContentInterface</code>；主题取 <code>renderer.theme</code>（不订阅 <code>renderedText</code>）</td><td>跟随</td><td>4</td></tr>
-<tr><td><code>MAC/Base/ViewControllers.swift</code> · <code>BaseViewController</code></td><td>修改</td><td>新增 <code>additionalCommonLoadingRelay</code>，每次绑定新 ViewModel 时置回 <code>false</code>；转圈显示它与 <code>viewModel.delayedLoading</code> 的「或」（父类先绑转圈、子类后建渲染环节，所以不做成可覆写的属性）</td><td>内容视图要合并两路</td><td>4</td></tr>
-<tr><td><code>IOS/Content/ContentTextViewController.swift</code></td><td>修改</td><td>用 <code>ContentTextRenderer</code>（主题为 <code>ResolvedTheme.fallback</code>）；显示后发 <code>interfaceDisplayed</code></td><td>跟随</td><td>4</td></tr>
-<tr><td><code>RuntimeViewerAppTestingSupport/ViewModelTestEnvironment.swift</code></td><td>修改</td><td>去掉 <code>resolvedThemeStream</code> 注入</td><td>主题不在 AppCore</td><td>4</td></tr>
-<tr><td><code>T/ContentTextPipelineTests.swift</code></td><td>修改</td><td><code>:60</code>、<code>:109</code>、<code>:261</code> 三例搬进 <code>TUI/ContentTextRendererTests.swift</code>（新增）；其余改等 <code>interface</code>；新增显示报告的用例</td><td>同上</td><td>4</td></tr>
-<tr><td><code>T/ContentTextViewModelTests</code>、<code>T/ContentCrossReferenceTests</code>、<code>T/ContentMacroExpansionTests</code>、<code>T/InterfaceCommentDecorationsTests</code>、<code>T/ContentTextHighlightTests</code>、<code>T/DerivedDataRestoreTests</code></td><td>修改</td><td>改读 <code>ContentInterface</code>；去掉调用签名里的主题参数</td><td>同上</td><td>4</td></tr>
-<tr><td><code>T/ContentLinkLookupTests.swift</code></td><td>修改</td><td>改测 <code>ContentInterface.linkedRuntimeObject(at:)</code> / <code>declaredMember(at:)</code> 与越界</td><td>同上</td><td>4</td></tr>
-<tr><td><code>TUI/ContentTextRendererTests.swift</code>、<code>TUI/ContentTextRenderingPerformanceTests.swift</code></td><td>新增</td><td>渲染环节的行为；准备与上色的耗时测量（设了环境变量 <code>RUNTIME_VIEWER_MEASURE_CONTENT_RENDERING</code> 才跑）</td><td>同上</td><td>4</td></tr>
-<tr><td><code>T/AppCoreBoundaryTests.swift</code></td><td>修改</td><td>删掉过渡清单与守护它的测试：规则对 AppCore 全面生效</td><td>同上</td><td>4</td></tr>
-<tr><td><code>RuntimeViewerPackages/Sources/AGENTS.md</code></td><td>修改</td><td>分界规则、描述值、跨层服务清单、资源位置、<code>RuntimeImageKind</code> 一段</td><td>文档同批</td><td>1–4</td></tr>
-<tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md:71-72,368-378</code></td><td>修改</td><td>「造 AppKit 对象的值在 <code>observeOnMainScheduler()</code> 之后映射」改成「在视图里解析描述值」；<code>Appearance</code> 一节写明字段是描述值</td><td>同上</td><td>2、3</td></tr>
-<tr><td><code>AGENTS.md</code>（仓库根）· Package Structure</td><td>修改</td><td>AppCore 一行补上「代码里没有 AppKit/UIKit 类型」</td><td>同上</td><td>4</td></tr>
-<tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td>修改</td><td>登记本提案；落地时改编号</td><td>索引</td><td>起草、4</td></tr>
-</table>
-</div>
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#motivation">动机</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">前期调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
 
-<h2 id="motivation">动机</h2>
-<p><strong>现状。</strong> 0091 把应用层拆成 AppCore 与 AppUI 时，定下的分界是「UI 组件不许进 AppCore，UI 框架的模型可以」，并明确否决了「ViewModel 只输出不含 UI 类型的描述，属性串和图标交给 AppUI 渲染」，理由是「改写 cell ViewModel 的输出换不来更好的可测性」。结果是 AppCore 里有 31 个文件 import AppKit 或 UIKit：</p>
-<ul>
-<li>cell ViewModel 的 <code>Appearance</code> 装着 <code>NSImage</code> 与 <code>NSAttributedString</code>（<code>RuntimeObjectCellAppearance.swift:24-34</code>、<code>SidebarRootCellViewModel.swift:53-64</code>、<code>FindResultNode.swift:15-27</code>、<code>ReportCellViewModel.swift:17-23</code>）；</li>
-<li><code>ContentTextViewModel</code> 的输出是上过主题的 <code>NSAttributedString</code>（<code>ContentTextViewModel.swift:70-87,651-669</code>），主题 <code>ThemeProfile</code> 的接口全是 <code>NSUIColor</code> / <code>NSUIFont</code>；</li>
-<li>剪贴板与 Finder 的真实实现直接写在 AppCore 里。</li>
-</ul>
-<p><strong>新的理由，三条，都能验证：</strong></p>
-<ol>
-<li><strong>状态要能序列化。</strong> Shopify Engineering 的《Reflex》（2026-11-05）描述了一种架构：每个 ViewModel 暴露一份可编码成 JSON 的状态和一组可调用的动作，agent 用 <code>ls</code> 看当前界面、用 <code>do</code> 执行动作，不渲染界面就能验证行为。RuntimeViewer 已经具备其中大半，缺的是状态本身是值：一个 <code>NSImage</code> 只能序列化成像素，一个 <code>NSAttributedString</code> 里是 <code>NSFont</code>、<code>NSColor</code> 对象。今天 agent 要验证一处界面改动，只能启动整个 App 再截图，而且会和用户正开着的 RuntimeViewer 抢 CLI host 与 MCP 端口。本提案只做「状态全是值」这一步，<code>ls</code> / <code>do</code> 本身另立提案。</li>
-<li><strong>0091 说的「换不来可测性」现在不成立了。</strong> AppCore 的测试今天按对象身份比图标、按像素取样比颜色、逐段比字体（具体文件见前期调研）。换成描述值以后，这些断言都变成值的 <code>==</code>，「画出来对不对」只在 AppUI 的测试里验一次。</li>
-<li><strong>正式构建每次显示都白建一份富文本。</strong> SourceEditor 内容视图只读 <code>.string</code>、<code>.link</code> 和 <code>.runtimeViewerDeclaredMember</code>，从不显示上过色的串；可每次显示，<code>ContentTextViewModel</code> 都要建一遍带字体颜色的富文本，再整份拷成可变串加声明成员属性。把上色挪到只有 <code>NSTextView</code> 视图和 iOS 视图订阅的环节，这两步在正式构建上就没了。</li>
-</ol>
+<main class="content">
 
-<h2 id="proposal">提议方案</h2>
-<h3>新的分界规则（替换 0091 的「边界标准」）</h3>
-<p>AppCore 可以用：Foundation 的值与工具类型（<code>NSRange</code>、<code>NSString</code>、<code>NSLock</code>、<code>NSRegularExpression</code>……）、CoreGraphics 的几何类型、RxSwift / RxCocoa 的 <code>Driver</code> / <code>Signal</code>、<code>@RxObserved</code>、<code>Router</code>。AppCore <strong>不可以</strong>：import AppKit、UIKit 或 Cocoa；在代码里写出任何 AppKit/UIKit 的类型名；用 <code>NSAttributedString</code>。唯一的例外是 iOS 路由：<code>DocumentState</code> 里私有的 <code>SelectionRouter</code> 和 <code>EmptyRouteTransitionContext</code> 要满足 XCoordinator 的协议，必须写 <code>UIViewController</code>，这几行连同 <code>import UIKit</code> 记进边界测试的 <code>allowedLines</code> 并写明理由。</p>
+<section id="summary">
+  <h2>摘要</h2>
+  <p><code>RuntimeViewerAppCore</code> 的代码里不再出现 AppKit/UIKit 类型。图标和图标颜色改成描述值 <code>IconDescriptor</code>、<code>ColorDescriptor</code>；行标题改成带语义角色的 <code>RowText</code>；内容页的 ViewModel 输出 <code>ContentInterface</code>，即生成器给的语义串 <code>FrozenSemanticString</code> 加上链接与声明成员两张旁表。主题（<code>ThemeProfile</code>、<code>ResolvedTheme</code>、上色代码）整体搬进 <code>RuntimeViewerAppUI</code>，由 AppUI 的渲染环节 <code>ContentTextRenderer</code> 在后台把语义串变成富文本，只有显示富文本的 <code>NSTextView</code> 内容视图和 iOS 内容视图用它；正式构建用的 SourceEditor 视图本来就不显示上过色的富文本，从此每次显示少建一份。剪贴板和 Finder 改走跨层依赖，修饰键的换算搬进 AppUI。做完以后 AppCore 的 ViewModel 状态全是值类型，可以直接拿来序列化（为以后 Reflex 式的 <code>ls</code> / <code>do</code> 内省铺路，那是另一份提案）。边界测试加两条规则守住：不 import AppKit/UIKit，代码里不出现 AppKit/UIKit 的类型名。分四步合进 <code>next</code>，用户看到的行为不变。</p>
+  <div class="callout callout-note">
+    <ul>
+      <li>关联提案：<code>0091-app-core-ui-split.md</code>（把 <code>RuntimeViewerApplication</code> 拆成 AppCore 与 AppUI；本提案推翻其中「UI 框架的模型可以留在 AppCore」一条）、<code>0005-cellvm-appearance-single-observed.md</code>（cell ViewModel 的 <code>Appearance</code> 单流）、<code>0090-image-kind-icons.md</code>（镜像种类图标）</li>
+      <li>实现分支 / PR：<code>feature/app-core-without-ui-models</code>，分四步合进 <code>next</code>（分支与 worktree 已删）</li>
+      <li>配套文档：无 —— 分工写在 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>（「The application layer」一节），术语「描述值」登记在 <code>Documentations/Glossary.md</code></li>
+      <li>网页版：同目录同名的 <code>.html</code>（即本页）</li>
+    </ul>
+  </div>
+</section>
 
-<h3>AppCore 产出描述值，AppUI 解析</h3>
-<div class="table-wrap"><table>
-<tr><th>AppCore 的描述值</th><th>描述什么</th><th>AppUI 怎么解析</th></tr>
-<tr><td><code>IconDescriptor</code>（封闭枚举）</td><td>系统符号、镜像种类的符号、对象图标与字母徽章（<code>Glyph</code>）、Find 的六个行符号、引擎图标</td><td><code>descriptor.image</code>（带缓存），<code>descriptor.image(size:)</code> 给固定图标尺寸的地方</td></tr>
-<tr><td><code>ColorDescriptor</code>（封闭枚举）</td><td>图标着色：<code>secondaryLabel</code>、<code>tertiaryLabel</code>、镜像种类的颜色</td><td><code>descriptor.color</code></td></tr>
-<tr><td><code>RowText</code>（结构体）</td><td>一行文字：若干段，每段一个语义角色，加可选字号</td><td><code>rowText.attributedString(in: RowTextStyle)</code></td></tr>
-<tr><td><code>ContentInterface</code>（结构体）</td><td>语义串、链接表、声明成员表、注释装饰、宏展开，以及一个 ID</td><td><code>interface.attributedString(themedWith:)</code>，由 <code>ContentTextRenderer</code> 在后台调用</td></tr>
-</table></div>
-<p><code>IconDescriptor</code> 和 <code>ColorDescriptor</code> 用封闭枚举：AppUI 必须给每一种画出图来，加了新种类而 AppUI 没跟上时编译器报错。<code>RuntimeImageKind.icon</code> / <code>iconColor</code> / <code>coloredIcon</code> 和 <code>RuntimeObjectIcon.icon(...)</code> 一族以同样的名字搬进 AppUI 的扩展，App 里直接调它们的地方一行不用改。</p>
+<section id="architecture">
+  <h2>架构图</h2>
+  <h3>改了什么：类型的归属</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-removed"></i>删除或移出</li>
+    <li><i class="swatch swatch-moved"></i>从 AppCore 移来</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 1130" role="img" aria-label="Which layer owns each type after the change">
+    <text class="group-label" x="10" y="20">RuntimeViewerAppCore</text>
+    <text class="group-label" x="520" y="20">RuntimeViewerAppUI</text>
 
-<h3>内容页</h3>
-<ul>
-<li><code>ContentTextViewModel</code> 不再知道主题：去掉 <code>theme</code>、<code>attributedString</code>；<code>RenderedInterface</code> 换成 <code>ContentInterface</code>。</li>
-<li>后台的「准备」一步只建旁表：链接表、声明成员表、注释装饰、宏展开，每个平台都建。</li>
-<li><strong>加载转圈改成「从开始取接口，到视图报告显示完」</strong>：<code>Input</code> 新增 <code>interfaceDisplayed: Signal&lt;ContentInterface.ID&gt;</code>，没有默认值；收到同一 ID 的报告才结束等待，旧 ID 的迟到报告无效。上色的时间仍在转圈里，没有空档。</li>
-<li><code>ContentTextRenderer</code>（AppUI）在后台上色，主题变了就重新上色，并有自己的 <code>delayedRendering</code> 处理只换主题的情况；<code>renderedText</code> 是冷的，SourceEditor 视图只订阅 <code>theme</code>，一份富文本都不建。</li>
-<li>上色时只在 macOS 上写 <code>.link</code>（与今天一致）；不再写 <code>.runtimeViewerDeclaredMember</code>，右键菜单与光标成员改查旁表，下标都是 UTF-16 偏移。</li>
-<li>主题整体搬进 AppUI；<code>SourceEditorThemeConversion</code> 不用改。</li>
-</ul>
+    <!-- Presentation -->
+    <rect class="group" x="10" y="34" width="470" height="158" rx="10"/><text class="group-label" x="22" y="52">Presentation/</text>
+    <rect class="group" x="520" y="34" width="470" height="158" rx="10"/><text class="group-label" x="532" y="52">Presentation/</text>
+    <rect class="box-added" x="22" y="58" width="446" height="26" rx="6"/><text x="32" y="75">IconDescriptor, FindResultSymbol</text>
+    <rect class="box-added" x="22" y="90" width="446" height="26" rx="6"/><text x="32" y="107">ColorDescriptor</text>
+    <rect class="box-added" x="22" y="122" width="446" height="26" rx="6"/><text x="32" y="139">RowText</text>
+    <rect class="box-removed" x="22" y="154" width="446" height="26" rx="6"/><text class="strike" x="32" y="171">NSAttributedString+RowText</text><text class="caption" x="460" y="171" text-anchor="end">was at the target root</text>
+    <rect class="box-added" x="532" y="58" width="446" height="26" rx="6"/><text x="542" y="75">IconDescriptor.image / image(size:)</text>
+    <rect class="box-added" x="532" y="90" width="446" height="26" rx="6"/><text x="542" y="107">ColorDescriptor.color</text>
+    <rect class="box-added" x="532" y="122" width="446" height="26" rx="6"/><text x="542" y="139">RowText.attributedString(in:), RowTextStyle</text>
+    <rect class="box-moved" x="532" y="154" width="446" height="26" rx="6"/><text x="542" y="171">NSAttributedString(rowText:fontSize:color:)</text>
+    <path class="arrow arrow-weak" d="M 468 167 L 530 167"/>
 
-<h3>跨层服务、修饰键、边界测试</h3>
-<ul>
-<li><code>PasteboardClient</code>、<code>FinderClient</code> 改成 0091 的跨层写法，真实实现搬进 AppUI；两个 key 加进 <code>CrossLayerDependencyTests</code>。<code>runtimeObjectIconRendering</code> 整体搬进 AppUI，<code>runtimeEngineIconProviding</code> 删除，两者移出跨层清单。</li>
-<li><code>SelectionRouteDestination+ModifierFlags.swift</code> 与 <code>FindResultActivation</code> 原样搬进 AppUI。</li>
-<li>边界测试加规则 4（import AppKit / UIKit / Cocoa 及子模块）和规则 5（<code>NS</code> / <code>UI</code> 开头而不在 Foundation 名字清单里的名字）。第一步就加上，带一份按文件列的过渡清单，每步删掉清完的文件，第四步结束时为空。</li>
-</ul>
+    <!-- Content -->
+    <rect class="group" x="10" y="202" width="470" height="126" rx="10"/><text class="group-label" x="22" y="220">Content/</text>
+    <rect class="group" x="520" y="202" width="470" height="126" rx="10"/><text class="group-label" x="532" y="220">Content/</text>
+    <rect class="box-added" x="22" y="226" width="446" height="26" rx="6"/><text x="32" y="243">ContentInterface</text><text class="caption" x="460" y="243" text-anchor="end">+ link / declared-member tables</text>
+    <rect class="box-changed" x="22" y="258" width="446" height="26" rx="6"/><text x="32" y="275">ContentTextViewModel</text><text class="caption" x="460" y="275" text-anchor="end">no theme, no NSAttributedString</text>
+    <rect class="box-removed" x="22" y="290" width="446" height="26" rx="6"/><text class="strike" x="32" y="307">NSAttributedString+ContentLinks</text>
+    <rect class="box-added" x="532" y="226" width="446" height="26" rx="6"/><text x="542" y="243">ContentTextRenderer</text>
 
-<h3>分四步合进 next</h3>
-<ol>
-<li><strong>系统服务与修饰键</strong></li>
-<li><strong>图标与图标颜色</strong></li>
-<li><strong>行文字</strong>（含 Find 样式与 <code>NSColor+Xcode</code>）</li>
-<li><strong>内容页与主题</strong>（含 <code>NSUI*</code> 别名、过渡清单清空、文档）</li>
-</ol>
-<p>与对话里最初说的顺序略有调整：图标颜色随图标、行的字体颜色随行文字、主题随内容页，因为每种颜色、字体都只服务于其中一类输出。</p>
+    <!-- Theme -->
+    <rect class="group" x="10" y="338" width="470" height="126" rx="10"/><text class="group-label" x="22" y="356">Theme/</text>
+    <rect class="group" x="520" y="338" width="470" height="126" rx="10"/><text class="group-label" x="532" y="356">Theme/</text>
+    <rect class="box-removed" x="22" y="362" width="446" height="26" rx="6"/><text class="strike" x="32" y="379">ThemeProfile, ResolvedTheme, ResolvedThemeStream</text>
+    <rect class="box-removed" x="22" y="394" width="446" height="26" rx="6"/><text class="strike" x="32" y="411">FrozenSemanticString+ThemeProfile</text>
+    <rect class="box-removed" x="22" y="426" width="446" height="26" rx="6"/><text class="strike" x="32" y="443">NSColor+Xcode</text>
+    <rect class="box-moved" x="532" y="362" width="446" height="26" rx="6"/><text x="542" y="379">ThemeProfile, ResolvedTheme, ResolvedThemeStream</text>
+    <rect class="box-moved" x="532" y="394" width="446" height="26" rx="6"/><text x="542" y="411">ContentInterface+Theme</text><text class="caption" x="970" y="411" text-anchor="end">attributedString(themedWith:)</text>
+    <rect class="box-moved" x="532" y="426" width="446" height="26" rx="6"/><text x="542" y="443">NSColor+Xcode</text>
+    <path class="arrow arrow-weak" d="M 468 375 L 530 375"/>
+    <path class="arrow arrow-weak" d="M 468 407 L 530 407"/>
+    <path class="arrow arrow-weak" d="M 468 439 L 530 439"/>
 
-<h3>未经询问采用的做法</h3>
-<ul>
-<li>修饰键不新造类型：没有 <code>Input</code> 收事件，换算代码搬家即可。</li>
-<li>剪贴板、Finder 照 0091 的跨层写法，<code>testValue</code> 用 <code>.inert</code>。</li>
-<li>图标在 AppUI 渲染并缓存；<code>Symbols.xcassets</code> 随 <code>CustomSymbol</code> 搬进 AppUI。</li>
-<li>AppUI 上色时写 <code>.link</code>，<code>NSTextView</code> 的链接点击原样工作；声明成员改查旁表。</li>
-<li>断言渲染结果的测试搬进 AppUITests；断言逻辑的改成断言描述值，留在 AppCoreTests。</li>
-<li>性能以「不变慢」为准，第四步加上色的基准测试，前后对比（不用 Instruments）。</li>
-<li><code>RowText</code> 带可选的 <code>fontSize</code>（同一 <code>Appearance</code> 的标题和副标题字号不同）。</li>
-<li>新类型只做 <code>Hashable</code>（<code>ContentInterface</code> 只是 <code>Sendable</code>）与 <code>Sendable</code>，不做 <code>Codable</code>。</li>
-</ul>
+    <!-- Icons -->
+    <rect class="group" x="10" y="474" width="470" height="190" rx="10"/><text class="group-label" x="22" y="492">Icons</text>
+    <rect class="group" x="520" y="474" width="470" height="190" rx="10"/><text class="group-label" x="532" y="492">Icons</text>
+    <rect class="box-changed" x="22" y="498" width="446" height="26" rx="6"/><text x="32" y="515">SystemSymbol</text><text class="caption" x="460" y="515" text-anchor="end">names only</text>
+    <rect class="box-removed" x="22" y="530" width="446" height="26" rx="6"/><text class="strike" x="32" y="547">CustomSymbol, Resources/Symbols.xcassets</text>
+    <rect class="box-changed" x="22" y="562" width="446" height="26" rx="6"/><text x="32" y="579">RuntimeImageKind</text><text class="caption" x="460" y="579" text-anchor="end">kind only</text>
+    <rect class="box-changed" x="22" y="594" width="446" height="26" rx="6"/><text x="32" y="611">RuntimeObjectIcon</text><text class="caption" x="460" y="611" text-anchor="end">Glyph only</text>
+    <rect class="box-removed" x="22" y="626" width="446" height="26" rx="6"/><text class="strike" x="32" y="643">RuntimeEngineIconProviding</text><text class="caption" x="460" y="643" text-anchor="end">+ key</text>
+    <rect class="box-added" x="532" y="498" width="446" height="26" rx="6"/><text x="542" y="515">SystemSymbol+Image</text>
+    <rect class="box-moved" x="532" y="530" width="446" height="26" rx="6"/><text x="542" y="547">CustomSymbol, Resources/Symbols.xcassets</text>
+    <rect class="box-added" x="532" y="562" width="446" height="26" rx="6"/><text x="542" y="579">RuntimeImageKind+Icon</text><text class="caption" x="970" y="579" text-anchor="end">icon, iconColor, coloredIcon</text>
+    <rect class="box-added" x="532" y="594" width="446" height="26" rx="6"/><text x="542" y="611">RuntimeObjectIcon+Image</text><text class="caption" x="970" y="611" text-anchor="end">icon(...), renderer, cache</text>
+    <rect class="box-changed" x="532" y="626" width="446" height="26" rx="6"/><text x="542" y="643">RuntimeEngineIconProvider.icon(forEngineID:)</text>
+    <path class="arrow arrow-weak" d="M 468 543 L 530 543"/>
 
-<h3>非目标</h3>
-<ul>
-<li>不碰 <code>RuntimeViewerArchitectures</code> 和 <code>RuntimeViewerSettings</code>。</li>
-<li>不做 <code>Codable</code>、<code>ls</code> / <code>do</code>，不碰 MCP 与 CLI。</li>
-<li>不改 iOS 路由对 <code>UIViewController</code> 的例外，不把导航搬出 App 层。</li>
-<li>不清理测试文件里与本次搬家无关的 <code>import AppKit</code>；不动 <code>ImageColorSampling.swift</code>。</li>
-<li>不改任何用户可见的行为、外观和持久化格式。</li>
-</ul>
+    <!-- Find -->
+    <rect class="group" x="10" y="674" width="470" height="126" rx="10"/><text class="group-label" x="22" y="692">Find/</text>
+    <rect class="group" x="520" y="674" width="470" height="126" rx="10"/><text class="group-label" x="532" y="692">Find/</text>
+    <rect class="box-added" x="22" y="698" width="446" height="26" rx="6"/><text x="32" y="715">FindResultNode+Icon</text><text class="caption" x="460" y="715" text-anchor="end">which icon for which row</text>
+    <rect class="box-removed" x="22" y="730" width="446" height="26" rx="6"/><text class="strike" x="32" y="747">FindResultCellStyle</text>
+    <rect class="box-removed" x="22" y="762" width="446" height="26" rx="6"/><text class="strike" x="32" y="779">FindResultActivation</text><text class="caption" x="460" y="779" text-anchor="end">in FindResultsOutline</text>
+    <rect class="box-moved" x="532" y="730" width="446" height="26" rx="6"/><text x="542" y="747">FindResultCellStyle</text><text class="caption" x="970" y="747" text-anchor="end">metrics, fonts, colours, symbols</text>
+    <rect class="box-moved" x="532" y="762" width="446" height="26" rx="6"/><text x="542" y="779">FindResultActivation</text>
+    <path class="arrow arrow-weak" d="M 468 743 L 530 743"/>
+    <path class="arrow arrow-weak" d="M 468 775 L 530 775"/>
 
-<h2 id="steps">落地步骤</h2>
-<p>每一步都单独合进 <code>next</code>，合入前跑两组包测试、编 macOS App，并编 iOS App 确认 UIKit 分支能编译。</p>
-<details open><summary>1. 系统服务与修饰键（已完成）</summary>
-<ul>
-<li><code>pasteboardClientResolvesToTheGeneralPasteboardOnceAppUIIsLinked</code></li>
-<li><code>finderClientResolvesToTheWorkspaceOnceAppUIIsLinked</code></li>
-<li><code>copyNameStillCopiesTheDisplayName</code></li>
-<li><code>findResultActivationMapsModifierFlagsAsBefore</code></li>
-<li><code>appCoreImportingAppKitOutsideThePendingFilesIsReported</code></li>
-<li><code>appCoreNamingAnAppKitTypeOutsideThePendingFilesIsReported</code></li>
-<li><code>foundationNamesAreNotReported</code></li>
-<li><code>theIOSRouteViewControllerIsTheOnlyAllowedLine</code></li>
-</ul></details>
-<details><summary>2. 图标与图标颜色（已完成）</summary>
-<ul>
-<li><code>everyIconDescriptorDrawsAnImage</code></li>
-<li><code>theSameIconDescriptorReturnsTheSameCachedImage</code></li>
-<li><code>anUnknownEngineIDDrawsThePlaceholder</code></li>
-<li><code>imageKindIconIsATemplateAndColoredIconIsDrawnInItsColor</code></li>
-<li><code>sidebarRowIconIsTheGlyphOfTheObjectKind</code></li>
-<li><code>reportEngineGroupRowNamesItsEngineByID</code></li>
-<li><code>findCrossReferenceRowsPickTheBadgeOfTheirLanguage</code></li>
-<li><code>findInspectorRowsDrawIconsAtFourteenPoints</code></li>
-<li><code>customSymbolsLoadFromAppUIsResourceBundle</code></li>
-<li><code>runtimeEngineManagerKnowsEveryEngineTheReportShows</code>（验证调研里的推测；不成立就改用弱引用记录）</li>
-</ul></details>
-<details><summary>3. 行文字（已完成）</summary>
-<ul>
-<li><code>listStyleDrawsEachRoleAsTheOldRowTextInitializerDid</code></li>
-<li><code>sidebarFilterMatchesAreEmphasizedRuns</code></li>
-<li><code>openQuicklyUnmatchedTextIsSecondary</code></li>
-<li><code>findHitLineMarksTheMatchAsEmphasized</code></li>
-<li><code>findStyleDrawsEmphasisInBoldMatchColour</code></li>
-<li><code>findResultContentEqualityComparesRowText</code></li>
-</ul></details>
-<details><summary>4. 内容页与主题（已完成）</summary>
-<p>先在改动前的 <code>next</code> 上加基准测试的前身，对一个大接口（本机 AppKit 的 <code>NSView</code>）连续上色 20 次取中位数并记下；改完后同一测试改调 <code>attributedString(themedWith:)</code>，中位数不得高出 10%。结果写进决策日志。</p>
-<ul>
-<li><code>contentInterfaceCarriesTheLinkTableAndDeclaredMembersWithoutATheme</code></li>
-<li><code>linkedRuntimeObjectAndDeclaredMemberLookUpByUTF16Offset</code></li>
-<li><code>lookupsOutOfBoundsReturnNil</code></li>
-<li><code>loadingStaysOnUntilTheViewReportsTheInterfaceDisplayed</code></li>
-<li><code>aLateReportOfAnOlderInterfaceDoesNotEndLoading</code></li>
-<li><code>rendererRethemesWithoutRefetchingWhenTheFontSizeChanges</code></li>
-<li><code>rendererLightsItsOwnPlateForAThemeOnlyChange</code></li>
-<li><code>themedTextHasTheSameFontsColoursAndLinksAsBefore</code></li>
-<li><code>rendererThemesNothingWhileRenderedTextHasNoSubscriber</code></li>
-<li><code>iOSThemedTextCarriesNoLinks</code></li>
-<li><code>appCoreHasNoPendingFilesLeft</code></li>
-</ul></details>
-<p>收尾时判断：配套文档预计写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code> 即可；「描述值（descriptor）」是否进术语表，落地时确认。</p>
+    <!-- EditorArea -->
+    <rect class="group" x="10" y="810" width="470" height="62" rx="10"/><text class="group-label" x="22" y="828">EditorArea/</text>
+    <rect class="group" x="520" y="810" width="470" height="62" rx="10"/><text class="group-label" x="532" y="828">EditorArea/</text>
+    <rect class="box-removed" x="22" y="834" width="446" height="26" rx="6"/><text class="strike" x="32" y="851">SelectionRouteDestination+ModifierFlags</text>
+    <rect class="box-moved" x="532" y="834" width="446" height="26" rx="6"/><text x="542" y="851">SelectionRouteDestination+ModifierFlags</text>
+    <path class="arrow arrow-weak" d="M 468 847 L 530 847"/>
 
-<h2 id="impact">影响</h2>
-<ul>
-<li><strong>用户可见变化</strong>：无。正式构建每次显示少建一份富文本，应当略快或持平。</li>
-<li><strong>可发现性</strong>：不涉及。</li>
-<li><strong>数据与配置兼容</strong>：持久化格式不变；<code>CustomSymbol</code> 的素材换到 AppUI 的资源包，由 SwiftPM 与 Xcode 自动嵌入。</li>
-<li><strong>平台与最低版本</strong>：不变；AppUI 的解析代码都有 UIKit 分支，iOS 内容视图的主题仍固定为 <code>ResolvedTheme.fallback</code>、不写链接。</li>
-<li><strong>发布</strong>：不涉及权限与公证。第二步确认 Release 归档带上了资源包，并跑 <code>./TuistScript.sh check</code>。</li>
-</ul>
+    <!-- ContextMenus -->
+    <rect class="group" x="10" y="882" width="470" height="62" rx="10"/><text class="group-label" x="22" y="900">ContextMenus/</text>
+    <rect class="group" x="520" y="882" width="470" height="62" rx="10"/><text class="group-label" x="532" y="900">ContextMenus/</text>
+    <rect class="box-changed" x="22" y="906" width="446" height="26" rx="6"/><text x="32" y="923">PasteboardClient, FinderClient</text><text class="caption" x="460" y="923" text-anchor="end">+ TestDependencyKey</text>
+    <rect class="box-added" x="532" y="906" width="446" height="26" rx="6"/><text x="542" y="923">PasteboardClient+Live, FinderClient+Live</text>
 
-<h2 id="design">详细设计</h2>
-<details><summary><code>IconDescriptor</code> 与 <code>FindResultSymbol</code>（AppCore）</summary>
-<pre><code>public enum IconDescriptor: Hashable, Sendable {
+    <!-- Target root -->
+    <rect class="group" x="10" y="954" width="470" height="62" rx="10"/><text class="group-label" x="22" y="972">(target root)</text>
+    <rect class="group" x="520" y="954" width="470" height="62" rx="10"/><text class="group-label" x="532" y="972">(target root)</text>
+    <rect class="box-removed" x="22" y="978" width="446" height="26" rx="6"/><text class="strike" x="32" y="995">PlatformTypes</text><text class="caption" x="460" y="995" text-anchor="end">NSUIImage / NSUIColor / NSUIFont</text>
+    <rect class="box-moved" x="532" y="978" width="446" height="26" rx="6"/><text x="542" y="995">PlatformTypes</text>
+    <path class="arrow arrow-weak" d="M 468 991 L 530 991"/>
+
+    <!-- Cross-layer keys -->
+    <rect class="group" x="10" y="1026" width="980" height="94" rx="10"/><text class="group-label" x="22" y="1044">Cross-layer keys (AppCore declares, AppUI goes live)</text>
+    <rect class="box-kept" x="22" y="1050" width="470" height="26" rx="6"/><text x="32" y="1067">AppRouterKey</text><text class="caption" x="484" y="1067" text-anchor="end">unchanged</text>
+    <rect class="box-added" x="508" y="1050" width="470" height="26" rx="6"/><text x="518" y="1067">PasteboardClientKey, FinderClientKey</text>
+    <rect class="box-removed" x="22" y="1082" width="470" height="26" rx="6"/><text class="strike" x="32" y="1099">RuntimeObjectIconRenderingKey</text><text class="caption" x="484" y="1099" text-anchor="end">→ DependencyKey inside AppUI</text>
+    <rect class="box-removed" x="508" y="1082" width="470" height="26" rx="6"/><text class="strike" x="518" y="1099">RuntimeEngineIconProvidingKey</text><text class="caption" x="970" y="1099" text-anchor="end">→ deleted</text>
+  </svg>
+  </div>
+  <p class="figure-caption">每一行左边是 AppCore 里的目录，右边是 AppUI 里的同名目录；虚线箭头指向从 AppCore 移到 AppUI 的类型。<code>RuntimeObjectIconRenderingKey</code> 不再跨层，成为 AppUI 内部的普通 <code>DependencyKey</code>。</p>
+
+  <h3>内容页的数据流</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-removed"></i>删除</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 510" role="img" aria-label="Content pane data flow before and after">
+    <!-- before -->
+    <rect class="group" x="10" y="10" width="980" height="200" rx="10"/><text class="group-label" x="22" y="30">before</text>
+    <rect class="group" x="20" y="40" width="620" height="120" rx="8"/><text class="group-label" x="30" y="58">ContentTextViewModel (AppCore)</text>
+    <rect class="box-kept" x="34" y="72" width="90" height="34" rx="6"/><text x="58" y="93">fetch</text>
+    <rect class="box-removed" x="150" y="62" width="300" height="54" rx="6"/><text x="160" y="80">render on background</text><text class="caption" x="160" y="96">themed NSAttributedString + .link</text><text class="caption" x="160" y="109">+ copy for .runtimeViewerDeclaredMember</text>
+    <rect class="box-removed" x="476" y="72" width="150" height="34" rx="6"/><text x="484" y="93">$renderedInterface</text>
+    <path class="arrow" d="M 124 89 L 148 89"/>
+    <path class="arrow" d="M 450 89 L 474 89"/>
+    <text class="caption" x="34" y="140">_commonLoading tracks fetch + render</text>
+    <rect class="box-kept" x="700" y="50" width="280" height="44" rx="6"/><text x="710" y="68">NSTextView pane</text><text class="caption" x="710" y="84">attributedString (displayed)</text>
+    <rect class="box-kept" x="700" y="110" width="280" height="76" rx="6"/><text x="710" y="128">SourceEditor pane</text><text class="caption" x="710" y="144">attributedString.string / .link /</text><text class="caption" x="710" y="157">declared member</text><text class="caption" x="710" y="170">+ semanticString + theme dictionary</text>
+    <path class="arrow" d="M 626 85 L 698 72"/>
+    <path class="arrow" d="M 626 95 L 698 140"/>
+
+    <!-- after -->
+    <rect class="group" x="10" y="230" width="980" height="270" rx="10"/><text class="group-label" x="22" y="250">after</text>
+    <rect class="group" x="20" y="260" width="620" height="160" rx="8"/><text class="group-label" x="30" y="278">ContentTextViewModel (AppCore)</text>
+    <rect class="box-kept" x="34" y="292" width="90" height="34" rx="6"/><text x="58" y="313">fetch</text>
+    <rect class="box-added" x="150" y="282" width="300" height="54" rx="6"/><text x="160" y="300">prepare on background</text><text class="caption" x="160" y="316">link table, declared-member table,</text><text class="caption" x="160" y="329">comment decorations, macro expansions</text>
+    <rect class="box-added" x="476" y="287" width="150" height="44" rx="6"/><text x="484" y="305">$interface</text><text class="caption" x="484" y="322">ContentInterface</text>
+    <path class="arrow" d="M 124 309 L 148 309"/>
+    <path class="arrow" d="M 450 309 L 474 309"/>
+    <text class="caption" x="34" y="362">_commonLoading tracks fetch + prepare + "awaiting display"</text>
+    <text class="caption" x="34" y="376">until interfaceDisplayed(id)</text>
+    <text class="caption" x="632" y="410" text-anchor="end">interfaceDisplayed(id) from the panes</text>
+
+    <rect class="box-changed" x="700" y="262" width="280" height="70" rx="6"/><text x="710" y="280">SourceEditor pane</text><text class="caption" x="710" y="296">semanticString + tables</text><text class="caption" x="710" y="309">theme ← ContentTextRenderer.theme</text><text class="caption" x="710" y="322">(renderedText never subscribed)</text>
+    <rect class="box-added" x="700" y="350" width="280" height="70" rx="6"/><text x="710" y="368">ContentTextRenderer (AppUI)</text><text class="caption" x="710" y="384">themes on background</text><text class="caption" x="710" y="397">theme change → re-render,</text><text class="caption" x="710" y="410">own delayedRendering lights the plate</text>
+    <rect class="box-changed" x="700" y="440" width="280" height="44" rx="6"/><text x="710" y="458">NSTextView / iOS pane</text>
+    <path class="arrow" d="M 626 300 L 698 292"/>
+    <path class="arrow" d="M 626 320 L 698 380"/>
+    <path class="arrow" d="M 840 420 L 840 438"/>
+    <path class="arrow arrow-weak" d="M 900 350 L 900 334"/><text class="caption" x="906" y="345">theme</text>
+    <path class="arrow arrow-weak" d="M 700 332 L 644 392"/><text class="caption" x="696" y="345">setSource</text>
+    <path class="arrow arrow-weak" d="M 698 466 L 644 402"/><text class="caption" x="566" y="476">setAttributedString</text>
+  </svg>
+  </div>
+  <p class="figure-caption">改动后，ViewModel 只准备 <code>ContentInterface</code>；上色挪到 AppUI 的 <code>ContentTextRenderer</code>，只有 <code>NSTextView</code> 与 iOS 内容视图订阅它的 <code>renderedText</code>。两种视图显示完都发 <code>interfaceDisplayed(id)</code>，转圈到这时才结束。</p>
+
+  <h3>图标从描述到图像</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-moved"></i>从 AppCore 移来</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 310" role="img" aria-label="How an icon descriptor becomes an image">
+    <rect class="group" x="10" y="24" width="260" height="150" rx="10"/><text class="group-label" x="22" y="44">cell ViewModel (AppCore)</text>
+    <rect class="box-changed" x="22" y="56" width="236" height="40" rx="6"/><text x="32" y="72">appearance.primaryIcon</text><text class="caption" x="32" y="88">= .runtimeObject(kind)</text>
+    <rect class="box-changed" x="22" y="116" width="236" height="40" rx="6"/><text x="32" y="132">appearance.iconColor</text><text class="caption" x="32" y="148">= .imageKind(kind)</text>
+
+    <rect class="group" x="300" y="24" width="300" height="150" rx="10"/><text class="group-label" x="312" y="44">cell view (MAC / IOS)</text>
+    <rect class="box-changed" x="312" y="62" width="276" height="28" rx="6"/><text x="322" y="80">imageView.image = icon.image</text>
+    <rect class="box-changed" x="312" y="122" width="276" height="28" rx="6"/><text x="322" y="140">contentTintColor = iconColor.color</text>
+    <path class="arrow" d="M 258 76 L 310 76"/>
+    <path class="arrow" d="M 258 136 L 310 136"/>
+
+    <rect class="group" x="630" y="24" width="360" height="276" rx="10"/><text class="group-label" x="642" y="44">AppUI</text>
+    <rect class="box-added" x="642" y="54" width="336" height="28" rx="6"/><text x="652" y="72">IconDescriptor.image</text>
+    <path class="arrow" d="M 588 76 L 640 68"/>
+    <rect class="box-added" x="672" y="96" width="306" height="34" rx="6"/><text x="682" y="110">.systemSymbol</text><text class="caption" x="682" y="123">→ SystemSymbol.image</text>
+    <rect class="box-added" x="672" y="136" width="306" height="34" rx="6"/><text x="682" y="150">.imageKind</text><text class="caption" x="682" y="163">→ RuntimeImageKind.icon</text>
+    <rect class="box-moved" x="672" y="176" width="306" height="34" rx="6"/><text x="682" y="190">.glyph</text><text class="caption" x="682" y="203">→ RuntimeObjectIconRendering (cached)</text>
+    <rect class="box-moved" x="672" y="216" width="306" height="34" rx="6"/><text x="682" y="230">.findResultSymbol</text><text class="caption" x="682" y="243">→ FindResultCellStyle</text>
+    <rect class="box-changed" x="672" y="256" width="306" height="34" rx="6"/><text x="682" y="270">.runtimeEngine</text><text class="caption" x="682" y="283">→ RuntimeEngineIconProvider.icon(forEngineID:)</text>
+    <path class="arrow" d="M 656 82 L 656 113 L 670 113"/>
+    <path class="arrow" d="M 656 113 L 656 153 L 670 153"/>
+    <path class="arrow" d="M 656 153 L 656 193 L 670 193"/>
+    <path class="arrow" d="M 656 193 L 656 233 L 670 233"/>
+    <path class="arrow" d="M 656 233 L 656 273 L 670 273"/>
+  </svg>
+  </div>
+  <p class="figure-caption">cell ViewModel 只存描述值；cell 视图在绑定处调 <code>.image</code> / <code>.color</code>，由 AppUI 按描述值的种类画出图像。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <p>路径缩写：<code>AC/</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore/</code>，<code>AUI/</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppUI/</code>，<code>MAC/</code> = <code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/</code>，<code>IOS/</code> = <code>RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/</code>，<code>T/</code> = <code>RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/</code>，<code>TUI/</code> = <code>RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/</code>。「步骤」对应落地步骤的编号。</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>AC/ContextMenus/PasteboardClient.swift</code> · <code>PasteboardClient</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 import 与 <code>general</code>；<code>@DependencyEntry</code> 换成 <code>package enum PasteboardClientKey: TestDependencyKey</code>（<code>testValue = .inert</code>）与访问器</td><td>真实实现要用 <code>NSPasteboard</code> / <code>UIPasteboard</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>AUI/ContextMenus/PasteboardClient+Live.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>PasteboardClient.general</code> 与 <code>extension PasteboardClientKey: DependencyKey</code></td><td>同上</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/ContextMenus/FinderClient.swift</code> · <code>FinderClient</code></td><td><span class="tag tag-changed">修改</span></td><td>同 <code>PasteboardClient</code>，key 为 <code>FinderClientKey</code></td><td>真实实现要用 <code>NSWorkspace</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>AUI/ContextMenus/FinderClient+Live.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>FinderClient.workspace</code> 与 <code>liveValue</code></td><td>同上</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/EditorArea/SelectionRouteDestination+ModifierFlags.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/EditorArea/</code></td><td>内容不变</td><td>收 <code>NSEvent.ModifierFlags</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/Find/FindResultsOutline.swift</code> · <code>FindResultActivation</code></td><td><span class="tag tag-changed">修改</span></td><td>移出 <code>FindResultActivation</code>，去掉 <code>import AppKit</code></td><td>收 <code>NSEvent</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>AUI/Find/FindResultActivation.swift</code></td><td><span class="tag tag-added">新增</span></td><td>搬来的 <code>FindResultActivation</code></td><td>同上</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/Then.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删掉 AppKit/UIKit 类型的 <code>Then</code> 遵循与两处 import（第一步先确认 AppCore 里没有对这些类型调 <code>.then</code>；有就随调用点一起搬）</td><td>UI 类型</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/Inspector/InspectorViewModel.swift</code>、<code>AC/Inspector/InspectorRelationshipsCellViewModel.swift</code>、<code>AC/RuntimeObject/RuntimeObjectCellDisplayable.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉没用的 import</td><td>规则 4</td><td class="numeric">1</td></tr>
+      <tr><td><code>T/AppCoreBoundaryTests.swift</code> · <code>AppCoreBoundary</code></td><td><span class="tag tag-changed">修改</span></td><td>规则 4、5，Foundation 名字清单，过渡清单（第一步列出其余全部文件），<code>allowedLines</code> 收 iOS 路由几行；<code>lineInsideTheBoundaryIsNotReported</code> 的样例里删掉现在要拦的几条，挪进「要报告」的样例</td><td>守住新边界</td><td class="numeric">1；2、3、4 缩短过渡清单</td></tr>
+      <tr><td><code>T/FindResultActivationTests.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>TUI/</code></td><td>内容不变</td><td>造 <code>NSEvent</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>TUI/CrossLayerDependencyTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>PasteboardClientKey</code>、<code>FinderClientKey</code>；第二步删 <code>RuntimeObjectIconRenderingKey</code>、<code>RuntimeEngineIconProvidingKey</code></td><td>跨层清单</td><td class="numeric">1、2</td></tr>
+      <tr><td><code>AC/Presentation/IconDescriptor.swift</code> · <code>IconDescriptor</code>、<code>FindResultSymbol</code></td><td><span class="tag tag-added">新增</span></td><td>见详细设计</td><td>图标的描述值</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Presentation/ColorDescriptor.swift</code> · <code>ColorDescriptor</code></td><td><span class="tag tag-added">新增</span></td><td>见详细设计</td><td>图标颜色的描述值</td><td class="numeric">2</td></tr>
+      <tr><td><code>AUI/Presentation/IconDescriptor+Image.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>IconDescriptor.image</code>（系统符号与 Find 符号另有一份主线程缓存，其余用各自的缓存）；<code>FindResultSymbol</code> 的六个符号按原来的字号字重画；<code>ColorDescriptor.color</code>。<code>image(size:)</code> 留到第三步，那时 Find 的尺寸才搬出 AppCore</td><td>AppUI 解析</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/SystemSymbol.swift</code> · <code>SystemSymbol</code></td><td><span class="tag tag-changed">修改</span></td><td>只留枚举与名字，改为 <code>public</code>（<code>IconDescriptor</code> 的 case 要用）；<code>image</code>、<code>image(pointSize:weight:)</code>、<code>image(named:)</code> 搬走</td><td>造 <code>NSImage</code></td><td class="numeric">2</td></tr>
+      <tr><td><code>AUI/Icons/SystemSymbol+Image.swift</code></td><td><span class="tag tag-added">新增</span></td><td>搬来的三个成员</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/CustomSymbol.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Icons/CustomSymbol.swift</code></td><td>加 <code>import RuntimeViewerAppCore</code>，其余不变（<code>bundle: .module</code> 随之指向 AppUI 的资源包）</td><td>只有搬走的 <code>RuntimeImageKind+Icon</code> 用</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Resources/Symbols.xcassets</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Resources/Symbols.xcassets</code></td><td>内容不变</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>AppCore 去掉 <code>resources</code>，AppUI 加 <code>resources: [.process("Resources")]</code>，注释随之改</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>Tuist.swift</code>、<code>Tuist/ProjectDescriptionHelpers/LocalPackages.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>资源包 target 名 <code>RuntimeViewerPackages_RuntimeViewerAppCore</code> 改为 <code>…_RuntimeViewerAppUI</code></td><td>Tuist 描述重复了本地包的资源包 target</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/RuntimeImageKind.swift</code> · <code>RuntimeImageKind</code></td><td><span class="tag tag-changed">修改</span></td><td>只留种类与判定；<code>icon</code>、<code>iconColor</code>、<code>coloredIcon</code> 和私有的图像、颜色常量搬走</td><td>UI 类型</td><td class="numeric">2</td></tr>
+      <tr><td><code>AUI/Icons/RuntimeImageKind+Icon.swift</code></td><td><span class="tag tag-added">新增</span></td><td>同名的 <code>icon</code>、<code>iconColor</code>、<code>coloredIcon</code></td><td>App 的调用点不用改</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/RuntimeObjectIcon.swift</code> · <code>RuntimeObjectIcon</code></td><td><span class="tag tag-changed">修改</span></td><td>留 <code>Glyph</code>、<code>glyph(for:)</code>、tooltip；新增 <code>glyph(text:color:size:style:)</code>、<code>genericGlyph</code>、<code>specializedGlyph</code>、<code>objcImplementationGlyph</code>、<code>secondaryGlyph(for:)</code>；删 <code>icon(...)</code> 一族、<code>RuntimeObjectIconRendering</code>、key、<code>RuntimeObjectIconImageCache</code>、<code>BlankRuntimeObjectIconRenderer</code></td><td>造 <code>NSImage</code></td><td class="numeric">2</td></tr>
+      <tr><td><code>AUI/Icons/RuntimeObjectIcon+Image.swift</code></td><td><span class="tag tag-added">新增</span></td><td>同名的 <code>icon(...)</code> 一族、<code>secondaryIcon(for:)</code>、<code>image(for: Glyph)</code>；<code>RuntimeObjectIconRendering</code> 协议、缓存、空白渲染器，key 改成 AppUI 内部的 <code>DependencyKey</code>（live 用 <code>IDEIcon</code>，测试用空白图）</td><td>App 的调用点不用改</td><td class="numeric">2</td></tr>
+      <tr><td><code>AUI/IDEIconRuntimeObjectIconRenderer.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删掉给 AppCore 的 key 补 live 值的扩展</td><td>不再跨层</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Engine/RuntimeEngineIconProviding.swift</code></td><td><span class="tag tag-removed">删除</span></td><td>—</td><td>AppCore 改用 <code>.runtimeEngine(engineID:)</code></td><td class="numeric">2</td></tr>
+      <tr><td><code>AUI/Engine/RuntimeEngineIconProvider.swift</code> · <code>RuntimeEngineIconProvider</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉对 AppCore 协议的遵循与 key；新增 <code>icon(forEngineID:) -&gt; NSImage</code>，经 <code>RuntimeEngineManager.runtimeEngines</code> 找回引擎，找不到用占位图</td><td>解析 <code>.runtimeEngine</code></td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/RuntimeObject/RuntimeObjectCellAppearance.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>三个图标字段改 <code>IconDescriptor</code> / <code>IconDescriptor?</code></td><td>状态是值</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Sidebar/SidebarRuntimeObjectCellViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>图标改描述值（第二步）；标题改 <code>RowText</code>（第三步）</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>AC/Sidebar/SidebarRootCellViewModel.swift</code> · <code>Appearance</code></td><td><span class="tag tag-changed">修改</span></td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor</code>（第二步，颜色原来就不是可选的）；<code>name: RowText</code>（第三步）</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>AC/Inspector/InspectorSwiftSpecializationCellViewModel.swift</code>、<code>AC/Inspector/RuntimeObjectCellAppearance+Inspector.swift</code>、<code>AC/Inspector/InspectorHierarchyCellViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>图标改描述值（第二步）；标题、副标题改 <code>RowText</code>、去掉 import（第三步）</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>AC/Reports/ReportCellViewModel.swift</code> · <code>Appearance</code></td><td><span class="tag tag-changed">修改</span></td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor?</code></td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Reports/ReportViewModel.swift</code> · <code>ReportOutline</code></td><td><span class="tag tag-changed">修改</span></td><td>九个图标常量与 <code>icon(forImagePath:)</code>、<code>iconColor(forImagePath:)</code> 改返回描述值</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Reports/ReportTreeBuilder.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>跟随 <code>ReportOutline</code> 的类型</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Reports/ReportGroupWork.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>engineIcon: IconDescriptor?</code>，值为 <code>.runtimeEngine(engineID:)</code></td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindResultNode+Icon.swift</code> · <code>FindResultIcon</code></td><td><span class="tag tag-added">新增</span></td><td>从 <code>FindResultCellStyle</code> 搬来「哪种行配哪个图标」的逻辑（<code>crossReferenceIcon(for:size:)</code> 两个重载、徽章选择）与淡化的透明度 <code>dimmedAlpha</code>，返回 <code>IconDescriptor</code></td><td>逻辑留在 AppCore</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindResultNode.swift</code> · <code>FindResultCellAppearance</code></td><td><span class="tag tag-changed">修改</span></td><td><code>icon: IconDescriptor?</code>、<code>iconColor: ColorDescriptor?</code>；<code>iconAlpha</code> 保留为数字（同一个未解析符号在关系树里淡化、在交叉引用行里不淡化，透明度不是符号本身决定的）（第二步）；<code>title: RowText</code>，<code>makeAppearance(for:)</code> 不再收 <code>metrics</code>，<code>isContentEqual</code> 改 <code>==</code>（第三步）</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>AC/Find/FindResultCellStyle.swift</code></td><td><span class="tag tag-changed">修改</span>（第二步）→ <span class="tag tag-moved">移动</span> → <code>AUI/Find/FindResultCellStyle.swift</code>（第三步）</td><td>第二步删掉图标部分，只留两个着色常量；第三步整份搬走，<code>Metrics</code>、字体、颜色、段落样式留在其中，新增把 <code>RowText</code> 角色映射成属性的 <code>RowTextStyle.findResult(_:)</code></td><td>渲染</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>AC/Inspector/InspectorReferencesViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>展开三角改 <code>.findResultSymbol(.disclosure(isExpanded:))</code>（第二步）；去掉 <code>.inspector</code> 尺寸（第三步）</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/RuntimeSourcePicker/</code></td><td>内容不变，仍带 <code>NSImage</code></td><td>AppCore 里没有任何地方用它：它是 AppUI 两个 adapter 的输入，由 App 层的 <code>MainViewModel</code> 构造；断开的来源显示的是引擎消失前存下的图像，按 ID 已经找不回，改成描述值会变成通用图标</td><td class="numeric">2</td></tr>
+      <tr><td><code>MAC/Base/RuntimeObjectCellView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>图标用 <code>.image</code>（第二步）；标题用 <code>attributedString(in:)</code>（第三步）</td><td>解析</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>MAC/Sidebar/Root/SidebarRootTableCellView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>同上</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>MAC/Find/FindResultCellView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>图标用 <code>image(size: metrics.iconSize)</code>、颜色用 <code>.color</code>（第二步）；按自己的 <code>metrics</code> 渲染标题（第三步）</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>MAC/Find/FindViewController.swift</code>、<code>MAC/Inspector/InspectorReferencesViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>把 <code>.navigator</code> / <code>.inspector</code> 尺寸交给 cell 视图</td><td>尺寸归视图</td><td class="numeric">3</td></tr>
+      <tr><td><code>MAC/Reports/ReportCellView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>图标与颜色解析</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>MAC/Specialization/SpecializationTypePickerCellViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>图标改描述值（第二步）；标题、副标题改 <code>RowText</code>，不再用 UIFoundation 的 <code>AText</code>（第三步）</td><td>它造的是 AppCore 的 <code>RuntimeObjectCellAppearance</code></td><td class="numeric">2、3</td></tr>
+      <tr><td><code>IOS/Sidebar/SidebarRuntimeObjectViewController.swift</code>、<code>IOS/Sidebar/SidebarRootViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>解析图标、颜色（第二步）与 <code>RowText</code>（第三步）</td><td>iOS 也链接这两层</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>T/RuntimeImageKindTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>种类判定留下；模板、像素颜色、<code>===</code> 的断言搬进 <code>TUI/RuntimeImageKindIconTests.swift</code>（新增）</td><td>渲染测试归 AppUI</td><td class="numeric">2</td></tr>
+      <tr><td><code>T/CustomSymbolTests.swift</code>、<code>T/SystemSymbolTests.swift</code>、<code>T/RuntimeObjectIconGlyphTests.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>TUI/</code></td><td>按新位置调整 import</td><td>同上</td><td class="numeric">2</td></tr>
+      <tr><td><code>T/RuntimeObjectIconTests.swift</code>、<code>T/FindCrossReferenceTests.swift</code>、<code>T/InspectorReferencesViewModelTests.swift</code>、<code>T/ReportEngineGroupsTests.swift</code>、<code>T/ReportViewModelTests.swift</code>、<code>T/InspectorCellViewModelTests.swift</code>、<code>T/SidebarCellAppearanceTests.swift</code>、<code>T/SidebarRuntimeObjectCellViewModelTests.swift</code>、<code>T/SidebarRootCellViewModelTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>===</code> / 像素断言改成描述值的 <code>==</code></td><td>状态是值</td><td class="numeric">2</td></tr>
+      <tr><td><code>T/FindResultNodeTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>图标尺寸断言搬进 <code>TUI/FindResultCellStyleTests.swift</code>（新增，第二步）；字号断言同去（第三步）；<code>title ===</code> 改 <code>==</code></td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>TUI/IconDescriptorRenderingTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>每种描述值都画得出图，同一描述值取到同一个缓存图像，<code>.runtimeEngine</code> 找不到引擎时用占位图</td><td>解析的测试</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Presentation/RowText.swift</code> · <code>RowText</code></td><td><span class="tag tag-added">新增</span></td><td>见详细设计</td><td>行文字的描述值</td><td class="numeric">3</td></tr>
+      <tr><td><code>AC/NSAttributedString+RowText.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Presentation/NSAttributedString+RowText.swift</code></td><td>原有 <code>init(rowText:fontSize:color:)</code> 原样保留（<code>RowTextAttributedStringTests</code> 拿它对照）</td><td>渲染</td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Presentation/RowText+AttributedString.swift</code> · <code>RowTextStyle</code></td><td><span class="tag tag-added">新增</span></td><td><code>RowTextStyle.list</code>、<code>RowTextStyle.findResult(_:)</code> 与 <code>RowText.attributedString(in:)</code></td><td>渲染</td><td class="numeric">3</td></tr>
+      <tr><td><code>AC/Find/FindResultNode.swift</code> · <code>subtitleSeparator</code></td><td><span class="tag tag-changed">修改</span></td><td>名字与副标题之间的两个空格从 <code>FindResultCellStyle</code> 搬到这里：它是文字内容，不是样式</td><td>第三步</td><td class="numeric">3</td></tr>
+      <tr><td><code>AC/Theme/NSColor+Xcode.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Theme/NSColor+Xcode.swift</code></td><td>内容不变</td><td>只有 Find 的样式与 App 的 Find 页用</td><td class="numeric">3</td></tr>
+      <tr><td><code>MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectViewController.swift:346</code>、<code>MAC/Sidebar/Root/SidebarRootViewController.swift:218</code></td><td><span class="tag">不改（核对）</span></td><td><code>.title.string</code> / <code>.name.string</code> 由 <code>RowText.string</code> 承接</td><td>—</td><td class="numeric">3</td></tr>
+      <tr><td><code>T/FindResultMemberEmphasisTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>改成断言 <code>RowText</code> 的段与角色；字体断言搬进 <code>TUI/FindResultCellStyleTests.swift</code></td><td>同上</td><td class="numeric">3</td></tr>
+      <tr><td><code>TUI/RowTextAttributedStringTests.swift</code>、<code>TUI/FindResultRowDrawingTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>覆盖 <code>RowText.attributedString(in:)</code> 的每种角色与两种样式</td><td>渲染测试</td><td class="numeric">3</td></tr>
+      <tr><td><code>AC/Content/ContentInterface.swift</code> · <code>ContentInterface</code></td><td><span class="tag tag-added">新增</span></td><td>见详细设计；包括从 <code>FrozenSemanticString+ThemeProfile.swift</code> 搬来的链接解析与从 <code>markingDeclaredMembers</code> 改写的声明成员表</td><td>内容页的描述值</td><td class="numeric">4</td></tr>
+      <tr><td><code>AC/Content/ContentTextViewModel.swift</code> · <code>ContentTextViewModel</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>theme</code>、<code>attributedString</code>、<code>renderedInterface</code>、上色环节与 <code>RenderedInterface</code>；新增 <code>@RxObserved interface</code>、<code>Input.interfaceDisplayed</code>、等待显示的追踪；<code>Output.interface</code> 取代 <code>renderedInterface</code> / <code>attributedString</code> / <code>theme</code>；高亮定位改用 <code>interface.string</code>；删掉对 <code>NSAttributedString</code> 的 <code>@retroactive Sendable</code> 与 <code>.runtimeViewerDeclaredMember</code></td><td>状态是值</td><td class="numeric">4</td></tr>
+      <tr><td><code>AC/Content/NSAttributedString+ContentLinks.swift</code></td><td><span class="tag tag-removed">删除</span></td><td>查找改由 <code>ContentInterface</code> 提供</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>AC/Theme/ThemeProfile.swift</code>、<code>AC/Theme/ThemePreset+ThemeProfile.swift</code>、<code>AC/Theme/ResolvedThemeStream.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Theme/</code></td><td>内容不变</td><td>主题归 AppUI</td><td class="numeric">4</td></tr>
+      <tr><td><code>AC/Theme/FrozenSemanticString+ThemeProfile.swift</code></td><td><span class="tag tag-moved">移动并改写</span> → <code>AUI/Theme/ContentInterface+Theme.swift</code></td><td>变成 <code>ContentInterface.attributedString(themedWith:)</code>：按语义类型上色，macOS 上从链接表写 <code>.link</code></td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>AUI/Content/ContentTextRenderer.swift</code> · <code>ContentTextRenderer</code></td><td><span class="tag tag-added">新增</span></td><td>见详细设计</td><td>渲染环节</td><td class="numeric">4</td></tr>
+      <tr><td><code>AC/PlatformTypes.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/PlatformTypes.swift</code></td><td><code>NSUIImage</code> / <code>NSUIColor</code> / <code>NSUIFont</code> 别名</td><td>最后的使用方都已搬走</td><td class="numeric">4</td></tr>
+      <tr><td><code>AC/Extensions.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>NSUIColor(light:dark:)</code> 与 iOS 的 <code>labelColor</code> 一族搬进 <code>AUI/Extensions/NSUIColor+Adaptive.swift</code>（新增）；其余留下</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>AC/ViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>delayedLoading</code> 的「true 晚 100 毫秒、false 立即」抽成 <code>SharedSequence&lt;DriverSharingStrategy, Bool&gt;.delayingTrue(by:)</code>，AppUI 的渲染环节复用</td><td>两处同一规则</td><td class="numeric">4</td></tr>
+      <tr><td><code>MAC/Content/ContentTextViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>用 <code>ContentTextRenderer</code>；显示后发 <code>interfaceDisplayed</code>；右键菜单与光标成员改查 <code>ContentInterface</code>；背景色等取 <code>renderer.theme</code>；转圈合并 <code>renderer.delayedRendering</code></td><td>跟随</td><td class="numeric">4</td></tr>
+      <tr><td><code>MAC/Content/ContentSourceEditorViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>直接绑 <code>output.interface</code>；<code>setSource</code> 后发 <code>interfaceDisplayed</code>；⌘-点击、菜单改查 <code>ContentInterface</code>；主题取 <code>renderer.theme</code>（不订阅 <code>renderedText</code>）</td><td>跟随</td><td class="numeric">4</td></tr>
+      <tr><td><code>MAC/Base/ViewControllers.swift</code> · <code>BaseViewController</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>additionalCommonLoadingRelay: BehaviorRelay&lt;Bool&gt;</code>，每次绑定新 ViewModel 时置回 <code>false</code>；转圈显示 <code>viewModel.delayedLoading</code> 与它的「或」。没有做成可覆写的属性：父类在 <code>setupBindings</code> 开头就绑转圈，那时子类的渲染环节还没建</td><td>内容视图要合并两路</td><td class="numeric">4</td></tr>
+      <tr><td><code>IOS/Content/ContentTextViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>用 <code>ContentTextRenderer</code>（主题为 <code>ResolvedTheme.fallback</code>，与今天一致）；显示后发 <code>interfaceDisplayed</code></td><td>跟随</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppTestingSupport/ViewModelTestEnvironment.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>resolvedThemeStream</code> 注入</td><td>主题不在 AppCore</td><td class="numeric">4</td></tr>
+      <tr><td><code>T/ContentTextPipelineTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>:60</code>、<code>:109</code>、<code>:261</code> 三例（换字号重新上色、换字号点亮转圈、上色结果相等）搬进 <code>TUI/ContentTextRendererTests.swift</code>（新增）；其余改等 <code>interface</code>；新增显示报告的用例</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>T/ContentTextViewModelTests.swift</code>、<code>T/ContentCrossReferenceTests.swift</code>、<code>T/ContentMacroExpansionTests.swift</code>、<code>T/InterfaceCommentDecorationsTests.swift</code>、<code>T/ContentTextHighlightTests.swift</code>、<code>T/DerivedDataRestoreTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>改读 <code>ContentInterface</code>（文字、旁表）；去掉调用签名里的主题参数</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>T/ContentLinkLookupTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>改测 <code>ContentInterface.linkedRuntimeObject(at:)</code> / <code>declaredMember(at:)</code> 与越界</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>TUI/ContentTextRendererTests.swift</code>、<code>TUI/ContentTextRenderingPerformanceTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>渲染环节的行为；准备与上色的耗时测量（设了环境变量 <code>RUNTIME_VIEWER_MEASURE_CONTENT_RENDERING</code> 才跑，见落地步骤 4）</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>T/AppCoreBoundaryTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删掉过渡清单 <code>filesPendingCleanup</code> 与守护它的测试：四步做完，规则对 AppCore 全面生效</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>分界规则、描述值、跨层服务清单、资源位置、<code>RuntimeImageKind</code> 一段</td><td>文档同批</td><td class="numeric">1–4</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/AGENTS.md:71-72,368-378</code></td><td><span class="tag tag-changed">修改</span></td><td>「造 AppKit 对象的值在 <code>observeOnMainScheduler()</code> 之后映射」改成「在视图里解析描述值」；<code>Appearance</code> 一节写明字段是描述值</td><td>同上</td><td class="numeric">2、3</td></tr>
+      <tr><td><code>AGENTS.md</code>（仓库根）· Package Structure</td><td><span class="tag tag-changed">修改</span></td><td>AppCore 一行补上「代码里没有 AppKit/UIKit 类型」</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记本提案；落地时改编号</td><td>索引</td><td class="numeric">起草、4</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="motivation">
+  <h2>动机</h2>
+  <p><strong>现状。</strong> 0091 把应用层拆成 AppCore 与 AppUI 时，定下的分界是「UI 组件不许进 AppCore，UI 框架的模型可以」（0091 决策日志 2026-11-13「边界标准」），并明确否决了「ViewModel 只输出不含 UI 类型的描述，属性串和图标交给 AppUI 渲染」，理由是「改写 cell ViewModel 的输出换不来更好的可测性」。结果是 AppCore 里有 31 个文件 import AppKit 或 UIKit：</p>
+  <ul>
+    <li>cell ViewModel 的 <code>Appearance</code> 装着 <code>NSImage</code> 与 <code>NSAttributedString</code>（<code>RuntimeObjectCellAppearance.swift:24-34</code>、<code>SidebarRootCellViewModel.swift:53-64</code>、<code>FindResultNode.swift:15-27</code>、<code>ReportCellViewModel.swift:17-23</code>）；</li>
+    <li><code>ContentTextViewModel</code> 的输出是上过主题的 <code>NSAttributedString</code>（<code>ContentTextViewModel.swift:70-87,651-669</code>），主题 <code>ThemeProfile</code> 的接口全是 <code>NSUIColor</code> / <code>NSUIFont</code>（<code>Theme/ThemeProfile.swift:15-25</code>）；</li>
+    <li>剪贴板与 Finder 的真实实现直接写在 AppCore 里（<code>ContextMenus/PasteboardClient.swift:26-31</code>、<code>ContextMenus/FinderClient.swift:23-25</code>）。</li>
+  </ul>
+  <p><strong>新的理由，三条，都能验证：</strong></p>
+  <ol>
+    <li><strong>状态要能序列化。</strong> Shopify Engineering 的《Reflex》（2026-11-05）描述了一种架构：每个 ViewModel 暴露一份可编码成 JSON 的状态和一组可调用的动作，agent 用 <code>ls</code> 看当前界面、用 <code>do</code> 执行动作，不渲染界面就能验证行为。RuntimeViewer 已经具备其中大半（AppCore 不含 UI 组件、ViewModel 能在单测里无界面驱动、App 里有 MCP server 和 CLI 的 socket 通道），缺的是状态本身是值：一个 <code>NSImage</code> 只能序列化成像素，一个 <code>NSAttributedString</code> 里是 <code>NSFont</code>、<code>NSColor</code> 对象。今天 agent 要验证一处界面改动，只能启动整个 App 再截图，而且会和用户正开着的 RuntimeViewer 抢 CLI host 与 MCP 端口。本提案只做「状态全是值」这一步，<code>ls</code> / <code>do</code> 本身另立提案。</li>
+    <li><strong>0091 说的「换不来可测性」现在不成立了，有具体的测试为证。</strong> AppCore 的测试今天这样断言 UI 类型：按对象身份比图标（<code>RuntimeObjectIconGlyphTests.swift:32-40</code>、<code>FindCrossReferenceTests.swift:172-214</code>、<code>ReportEngineGroupsTests.swift:61-86</code>、<code>InspectorReferencesViewModelTests.swift:184,196</code>、<code>SidebarRuntimeObjectCellViewModelTests.swift:177</code>），按像素取样比颜色（<code>RuntimeImageKindTests.swift:132-176</code>，借 <code>ImageColorSampling</code>），逐段比字体（<code>FindResultMemberEmphasisTests.swift:18-21,64-67</code>、<code>FindResultNodeTests.swift:155-181</code>）。换成描述值以后，这些断言都变成值的 <code>==</code>，「画出来对不对」只在 AppUI 的测试里验一次。</li>
+    <li><strong>正式构建每次显示都白建一份富文本。</strong> SourceEditor 内容视图（官方构建用它）从 <code>RenderedInterface.attributedString</code> 只读 <code>.string</code>、<code>.link</code> 和 <code>.runtimeViewerDeclaredMember</code>（<code>ContentSourceEditorViewController.swift:154,206,447-561</code>），颜色取自 <code>semanticString</code> 加主题字典（<code>:202,372-429</code>），从不显示这份上过色的串。可每次显示，<code>ContentTextViewModel</code> 都要建一遍带字体颜色的富文本（<code>ContentTextViewModel.swift:611-619</code>），再整份拷成可变串加声明成员属性（<code>:581-603</code>）。把上色挪到只有 <code>NSTextView</code> 视图和 iOS 视图订阅的环节，这两步在正式构建上就没了。</li>
+  </ol>
+</section>
+
+<section id="proposal">
+  <h2>提议方案</h2>
+
+  <h3>新的分界规则（替换 0091 的「边界标准」）</h3>
+  <p>AppCore 可以用：Foundation 的值与工具类型（<code>NSRange</code>、<code>NSString</code>、<code>NSLock</code>、<code>NSRegularExpression</code>……）、CoreGraphics 的几何类型（<code>CGFloat</code>、<code>CGSize</code>）、RxSwift / RxCocoa 的 <code>Driver</code> / <code>Signal</code>、<code>@RxObserved</code>、<code>Router</code>。AppCore <strong>不可以</strong>：import AppKit、UIKit 或 Cocoa；在代码里写出任何 AppKit/UIKit 的类型名；用 <code>NSAttributedString</code>（虽然 Foundation 声明了它，它装的是 <code>NSFont</code>、<code>NSColor</code>）。唯一的例外是 iOS 路由：<code>DocumentState</code> 里的私有 <code>SelectionRouter</code> 和 <code>EmptyRouteTransitionContext</code> 要满足 XCoordinator 的 <code>Presentable</code> / <code>TransitionProtocol</code>，必须写 <code>UIViewController</code>，这几行连同它们需要的 <code>import UIKit</code> 记进边界测试的 <code>allowedLines</code> 并写明理由。等以后导航也搬出 App 层，这个例外再去掉。</p>
+
+  <h3>AppCore 产出描述值，AppUI 解析</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>AppCore 的描述值</th><th>描述什么</th><th>AppUI 怎么解析</th></tr></thead>
+    <tbody>
+      <tr><td><code>IconDescriptor</code>（封闭枚举）</td><td>系统符号、镜像种类的符号、对象图标与字母徽章（<code>Glyph</code>）、Find 的六个行符号、引擎图标</td><td><code>descriptor.image</code>（带缓存），<code>descriptor.image(size:)</code> 给固定图标尺寸的地方（Find 行）</td></tr>
+      <tr><td><code>ColorDescriptor</code>（封闭枚举）</td><td>图标着色：<code>secondaryLabel</code>、<code>tertiaryLabel</code>、镜像种类的颜色</td><td><code>descriptor.color</code></td></tr>
+      <tr><td><code>RowText</code>（结构体）</td><td>一行文字：若干段，每段一个语义角色（<code>primary</code>、<code>secondary</code>、<code>tertiary</code>、<code>emphasized</code>、<code>hitLine</code>、<code>unresolved</code>），加可选字号</td><td><code>rowText.attributedString(in: RowTextStyle)</code>，按列表或 Find 的样式把角色换成字体和颜色</td></tr>
+      <tr><td><code>ContentInterface</code>（结构体）</td><td>内容页显示的一个接口：语义串、链接表、声明成员表、注释装饰、宏展开，以及一个 ID</td><td><code>interface.attributedString(themedWith:)</code>，由 <code>ContentTextRenderer</code> 在后台调用</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p><code>IconDescriptor</code> 和 <code>ColorDescriptor</code> 用封闭枚举而不是「结构体加静态成员」：它们只在这一个包里用，AppUI 必须给每一种画出图来，加了新种类而 AppUI 没跟上时，编译器在 AppUI 的 <code>switch</code> 处报错。</p>
+  <p><code>RuntimeImageKind.icon</code> / <code>iconColor</code> / <code>coloredIcon</code> 和 <code>RuntimeObjectIcon.icon(...)</code> 一族以<strong>同样的名字</strong>搬进 AppUI 的扩展。App target 与 AppUI 里今天直接调它们的地方（<code>MAC/Main/MainViewModel.swift:192,199,201</code>、<code>MAC/Content/ContentImageViewController.swift:116-117</code>、<code>MAC/BatchExporting/BatchExportingImageSelectionViewController.swift:279-280</code>、<code>MAC/EditorArea/EditorPaneViewController.swift:466,469</code>、<code>MAC/Content/SourceEditorLandmarkIcon.swift:17</code>、<code>AUI/EditorArea/JumpBar/EditorJumpBarItemStore.swift:235,264,292</code>）经门面 <code>RuntimeViewerApplication</code> 照样看得到，一行不用改。AGENTS.md 里「图标一律取自 <code>RuntimeImageKind</code>、颜色只在一处定」的规则不变，只是那一处挪到了 AppUI。</p>
+
+  <h3>内容页</h3>
+<pre><code>ContentTextViewModel (AppCore)                       AppUI / views
+  fetch ─► prepare on background ─► $interface ─────► SourceEditor pane: semanticString + tables + theme
+            (links, declared members,                   └─ after setSource: interfaceDisplayed(id)
+             comment decorations, macros)            ─► ContentTextRenderer ─► NSTextView pane / iOS pane
+  loading: fetch start … until interfaceDisplayed(id)     (themes on background, .link from the table)
+                                                           └─ after setting the text: interfaceDisplayed(id)</code></pre>
+  <ul>
+    <li><code>ContentTextViewModel</code> 不再知道主题：去掉 <code>@RxObserved theme</code>、<code>@RxObserved attributedString</code>、<code>Output.attributedString</code>、<code>Output.theme</code>；<code>RenderedInterface</code> 换成 <code>ContentInterface</code>，<code>Output.renderedInterface</code> 换成 <code>Output.interface</code>。</li>
+    <li>后台的「准备」一步只建旁表：链接表（今天 <code>resolveSwiftLinkTargets</code> 与 ObjC/C 逐 token 建链接的逻辑原样搬来，只是写进表而不是属性）、声明成员表（<code>declaredMembersByLineNumber()</code> 按行范围记下，不再整份拷富文本）、注释装饰、宏展开。旁表在每个平台都建，它们不需要 UI。</li>
+    <li><strong>加载转圈改成「从开始取接口，到视图报告显示完」</strong>。<code>Input</code> 新增 <code>interfaceDisplayed: Signal&lt;ContentInterface.ID&gt;</code>，没有默认值，每个内容视图都必须接上（漏接就编译不过，而不是转圈永远不停）。ViewModel 发出一个接口时开始追踪一段「等待显示」，收到同一 ID 的报告才结束；旧 ID 的迟到报告不结束新接口的等待。这样 AppUI 上色的时间仍在转圈里，取接口、上色、显示之间没有空档，转圈的表现与今天相同。</li>
+    <li><code>ContentTextRenderer</code>（AppUI）：输入 ViewModel 的 <code>interface</code> 与主题流，在 <code>userInitiated</code> 后台队列上调 <code>interface.attributedString(themedWith:)</code>，输出 <code>renderedText</code>（接口与它的富文本），主题变了就重新上色。它另有自己的 <code>delayedRendering</code>：只换主题（例如 ⌘+ 调字号）时 ViewModel 什么都不知道，这次重新上色由它自己点亮转圈。<code>renderedText</code> 是冷的：没人订阅就不上色，所以 SourceEditor 视图只订阅 <code>theme</code> 时一份富文本都不建。</li>
+    <li>上色时只在 macOS 上写 <code>.link</code>（与今天一致：iOS 不处理链接点击，写了反而会把链接画成蓝色）；不再写 <code>.runtimeViewerDeclaredMember</code>，两种视图的右键菜单与光标所在成员改查 <code>ContentInterface.declaredMember(at:)</code>，链接查 <code>linkedRuntimeObject(at:)</code>，下标都是 UTF-16 偏移，与今天按 <code>NSAttributedString</code> 下标查一致。</li>
+    <li>主题整体搬进 AppUI：<code>ThemeProfile</code>、<code>ResolvedTheme</code>（<code>ThemePreset+ThemeProfile.swift</code>）、<code>ResolvedThemeStream</code> 与 <code>resolvedThemeStream</code> 依赖、<code>Settings.Theme.ColorValue.nsuiColor</code>。<code>SourceEditorThemeConversion</code> 不用改（它要的 <code>ThemeProfile</code> 经门面照样看得到）。两种内容视图的背景色、选中色改从 <code>ContentTextRenderer.theme</code> 取。</li>
+  </ul>
+
+  <h3>跨层服务</h3>
+  <ul>
+    <li><code>PasteboardClient</code>、<code>FinderClient</code>：结构体与 <code>inert</code> 留在 AppCore，改成 0091 的跨层写法（<code>package enum PasteboardClientKey: TestDependencyKey</code>，<code>testValue = .inert</code>），<code>general</code> / <code>workspace</code> 两个真实实现搬进 AppUI。两个 key 加进 <code>CrossLayerDependencyTests</code>。</li>
+    <li><code>runtimeObjectIconRendering</code> 与 <code>runtimeEngineIconProviding</code> 不再跨层：AppCore 不再画对象图标、不再取引擎图标，<code>RuntimeObjectIconRendering</code> 协议、它的缓存与 key 整体搬进 AppUI，key 成为 AppUI 内部的普通 <code>DependencyKey</code>（live 值用 <code>IDEIcon</code> 画，测试值画空白图）；<code>RuntimeEngineIconProviding</code> 协议与 key 删除，AppCore 用 <code>.runtimeEngine(engineID:)</code>，AppUI 的 <code>RuntimeEngineIconProvider</code> 增加按 ID 取图标。两个 key 从 <code>CrossLayerDependencyTests</code> 移除。</li>
+  </ul>
+
+  <h3>修饰键</h3>
+  <p><code>SelectionRouteDestination+ModifierFlags.swift</code> 原样搬进 <code>AUI/EditorArea/</code>，<code>FindResultActivation</code> 搬进新文件 <code>AUI/Find/FindResultActivation.swift</code>。所有调用点都在 App target 或 AppUI，经门面照样可见。</p>
+
+  <h3>边界测试</h3>
+  <p><code>AppCoreBoundaryTests</code> 加两条规则：</p>
+  <ol start="4">
+    <li>import AppKit、UIKit、Cocoa 或它们的子模块（<code>UIKit.UIGeometry</code>）；</li>
+    <li>代码里出现 <code>NS</code> / <code>UI</code> 开头、第三个字符大写的名字，而它不在「Foundation 名字清单」里。清单只收 Foundation 声明的名字（<code>NSRange</code>、<code>NSMaxRange</code>、<code>NSNotFound</code>、<code>NSString</code>、<code>NSObject</code>、<code>NSObjectProtocol</code>、<code>NSLock</code>、<code>NSRegularExpression</code>、<code>NSNumber</code>、<code>NSURL</code>、<code>NSCharacterSet</code>、<code>NSRangeException</code> 等 AppCore 今天用到的），以及 <code>UIFoundationSettings</code> 这个模块名；<code>NSAttributedString</code>、<code>NSMutableAttributedString</code>、<code>NSParagraphStyle</code> 故意不收。用清单放行而不是列禁用名，是为了以后新冒出来的 AppKit 名字也被拦住。</li>
+  </ol>
+  <p>两条规则从第一步就加上，同时带一份<strong>过渡清单</strong>：按文件列出还没清理的文件，每一步合入时删掉清完的那些，第四步结束时清单为空、规则全面生效。这样分四次合入期间，已经清干净的文件不会再被写回 UI 类型。<code>allowedLines</code> 从此不再为空，只放 iOS 路由那几行。</p>
+
+  <h3>分四步合进 next</h3>
+  <ol>
+    <li><strong>系统服务与修饰键</strong>：剪贴板、Finder 跨层；修饰键与 <code>FindResultActivation</code> 搬进 AppUI；<code>Then.swift</code> 去掉 UI 类型；去掉三个文件里没用的 import；边界测试加规则与过渡清单。</li>
+    <li><strong>图标与图标颜色</strong>：<code>IconDescriptor</code>、<code>ColorDescriptor</code>；四种 <code>Appearance</code>、Report、Find、来源选择器改用描述值；符号、镜像种类、对象图标、引擎图标的画法与素材搬进 AppUI。</li>
+    <li><strong>行文字</strong>：<code>RowText</code>；行标题改用它；<code>FindResultCellStyle</code>（字体、颜色、段落、尺寸）与 <code>NSColor+Xcode.swift</code> 搬进 AppUI。</li>
+    <li><strong>内容页与主题</strong>：<code>ContentInterface</code>、显示报告、<code>ContentTextRenderer</code>；主题、<code>NSUI*</code> 别名与颜色扩展搬进 AppUI；过渡清单清空；文档更新。</li>
+  </ol>
+  <p>这个顺序与对话里最初说的「服务和修饰键 → 图标 → 颜色、字体和主题 → 富文本」略有调整：图标颜色随图标走（第二步），行的字体颜色随行文字走（第三步），主题随内容页走（第四步），因为每种颜色、字体都只服务于其中一类输出，拆开反而要在中间状态里同时维护两套。</p>
+
+  <h3>未经询问采用的做法</h3>
+  <ul>
+    <li>修饰键不新造类型：没有 <code>Input</code> 收事件（见调研），换算代码搬家即可。</li>
+    <li>剪贴板、Finder 照 0091 的跨层写法，<code>testValue</code> 用不碰系统的 <code>.inert</code>，测试照旧换成记录器。</li>
+    <li>图标在 AppUI 渲染并缓存；<code>Symbols.xcassets</code> 随 <code>CustomSymbol</code> 搬进 AppUI 的资源。</li>
+    <li>AppUI 上色时写 <code>.link</code>，<code>NSTextView</code> 的链接点击原样工作；声明成员改查旁表。</li>
+    <li>断言渲染结果（图像、字体、颜色、富文本属性）的测试搬进 <code>RuntimeViewerAppUITests</code>；断言逻辑的测试改成断言描述值，留在 AppCoreTests。</li>
+    <li>性能以「不变慢」为准，第四步给上色加一条基准测试，改动前后各跑一次比较（不用 Instruments）。</li>
+    <li><code>RowText</code> 带可选的 <code>fontSize</code>：今天同一个 <code>Appearance</code> 的标题和副标题字号不同（Inspector 12 与 10，Open Quickly 16），字号是纯数字，留在描述值里不违反规则。</li>
+    <li>新类型只做成 <code>Hashable</code>（<code>ContentInterface</code> 只是 <code>Sendable</code>）与 <code>Sendable</code>，不做 <code>Codable</code>；JSON 长什么样留给 <code>ls</code> / <code>do</code> 提案。</li>
+  </ul>
+
+  <h3>非目标</h3>
+  <ul>
+    <li>不碰 <code>RuntimeViewerArchitectures</code>（其中 <code>NSOutlineView+UserActivation.swift</code> 带 <code>NSEvent</code>）和 <code>RuntimeViewerSettings</code>（<code>ApplicationRelauncher.swift</code> import AppKit）。AppCore 只是不再用前者的 <code>triggeringEvent</code>。</li>
+    <li>不做 <code>Codable</code>、不做 <code>ls</code> / <code>do</code>、不碰 MCP 与 CLI。</li>
+    <li>不改 iOS 路由对 <code>UIViewController</code> 的那处例外，不把导航搬出 App 层。</li>
+    <li>不清理测试文件里与本次搬家无关的 <code>import AppKit</code>；不动 <code>RuntimeViewerAppTestingSupport/ImageColorSampling.swift</code>（AppUITests 继续用它）。</li>
+    <li>不改任何用户可见的行为、外观和持久化格式。</li>
+  </ul>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <p>每一步都单独合进 <code>next</code>，合入前跑 <code>RuntimeViewerPackages</code> 的两组测试（<code>RuntimeViewerAppCoreTests|RuntimeViewerAppUITests</code>）、编 macOS App，并编 iOS App（<code>RuntimeViewerUsingUIKit</code>）确认 UIKit 分支能编译。</p>
+  <ol>
+    <li><strong>系统服务与修饰键</strong>（已完成，2026-11-18）—— 改动地图里步骤为 1 的各行
+      <ul>
+        <li>行为：<code>pasteboardClientResolvesToTheGeneralPasteboardOnceAppUIIsLinked</code>（<code>CrossLayerDependencyTests</code>）</li>
+        <li>行为：<code>finderClientResolvesToTheWorkspaceOnceAppUIIsLinked</code></li>
+        <li>行为：<code>copyNameStillCopiesTheDisplayName</code>（现有 <code>RuntimeObjectActionTests</code> 照样通过）</li>
+        <li>行为：<code>findResultActivationMapsModifierFlagsAsBefore</code>（搬到 AppUITests 后照样通过）</li>
+        <li>行为：<code>appCoreImportingAppKitOutsideThePendingFilesIsReported</code></li>
+        <li>行为：<code>appCoreNamingAnAppKitTypeOutsideThePendingFilesIsReported</code></li>
+        <li>行为：<code>foundationNamesAreNotReported</code></li>
+        <li>行为：<code>theIOSRouteViewControllerIsTheOnlyAllowedLine</code></li>
+      </ul>
+    </li>
+    <li><strong>图标与图标颜色</strong>（已完成，2026-11-18）—— 步骤为 2 的各行
+      <ul>
+        <li>行为：<code>everyIconDescriptorDrawsAnImage</code></li>
+        <li>行为：<code>theSameIconDescriptorReturnsTheSameCachedImage</code></li>
+        <li>行为：<code>anUnknownEngineIDDrawsThePlaceholder</code></li>
+        <li>行为：<code>imageKindIconIsATemplateAndColoredIconIsDrawnInItsColor</code>（从 AppCoreTests 搬来）</li>
+        <li>行为：<code>sidebarRowIconIsTheGlyphOfTheObjectKind</code>（描述值的 <code>==</code>）</li>
+        <li>行为：<code>reportEngineGroupRowNamesItsEngineByID</code></li>
+        <li>行为：<code>findCrossReferenceRowsPickTheBadgeOfTheirLanguage</code></li>
+        <li>行为：<code>findInspectorRowsDrawIconsAtFourteenPoints</code></li>
+        <li>行为：<code>customSymbolsLoadFromAppUIsResourceBundle</code></li>
+        <li>行为：<code>runtimeEngineManagerKnowsEveryEngineTheReportShows</code>（验证调研里的推测；不成立就改用替代方案里的弱引用记录）</li>
+      </ul>
+    </li>
+    <li><strong>行文字</strong>（已完成，2026-11-18）—— 步骤为 3 的各行
+      <ul>
+        <li>行为：<code>listStyleDrawsEachRoleAsTheOldRowTextInitializerDid</code></li>
+        <li>行为：<code>sidebarFilterMatchesAreEmphasizedRuns</code></li>
+        <li>行为：<code>openQuicklyUnmatchedTextIsSecondary</code></li>
+        <li>行为：<code>findHitLineMarksTheMatchAsEmphasized</code></li>
+        <li>行为：<code>findStyleDrawsEmphasisInBoldMatchColour</code>（从 AppCoreTests 搬来的字体断言）</li>
+        <li>行为：<code>findResultContentEqualityComparesRowText</code></li>
+      </ul>
+    </li>
+    <li><strong>内容页与主题</strong>（已完成，2026-11-18）—— 步骤为 4 的各行
+      <ul>
+        <li>先在改动前的 <code>next</code> 上加 <code>TUI/ContentTextRenderingPerformanceTests.swift</code> 的前身（放在 AppCoreTests 里，调今天的 <code>renderAttributedString</code> 与 <code>markingDeclaredMembers</code>），对一个大接口（Foundation 的 <code>NSString</code>：测试支持库里能取到的镜像只有 Foundation 与 libobjc）连续上色 20 次取中位数，记下数字；改完后同一测试改调 <code>attributedString(themedWith:)</code>，中位数不得高出 10%。结果写进本提案的决策日志。</li>
+        <li>行为：<code>contentInterfaceCarriesTheLinkTableAndDeclaredMembersWithoutATheme</code></li>
+        <li>行为：<code>linkedRuntimeObjectAndDeclaredMemberLookUpByUTF16Offset</code></li>
+        <li>行为：<code>lookupsOutOfBoundsReturnNil</code></li>
+        <li>行为：<code>loadingStaysOnUntilTheViewReportsTheInterfaceDisplayed</code></li>
+        <li>行为：<code>aLateReportOfAnOlderInterfaceDoesNotEndLoading</code></li>
+        <li>行为：<code>rendererRethemesWithoutRefetchingWhenTheFontSizeChanges</code>（从 <code>ContentTextPipelineTests:60</code> 搬来）</li>
+        <li>行为：<code>rendererLightsItsOwnPlateForAThemeOnlyChange</code>（对应 <code>:109</code>）</li>
+        <li>行为：<code>themedTextHasTheSameFontsColoursAndLinksAsBefore</code>（对应 <code>:261</code>，与改动前的输出逐属性对照）</li>
+        <li>行为：<code>rendererThemesNothingWhileRenderedTextHasNoSubscriber</code></li>
+        <li>行为：<code>iOSThemedTextCarriesNoLinks</code></li>
+        <li>行为：<code>appCoreHasNoPendingFilesLeft</code>（过渡清单为空）</li>
+      </ul>
+    </li>
+  </ol>
+  <div class="callout callout-note">
+    <p class="callout-title">收尾时必须判断两件事（判断结果写进决策日志）</p>
+    <ul>
+      <li><strong>要不要配套专题文章</strong>：「AppCore 只产出描述值、AppUI 解析」是以后每个新 ViewModel 都要遵守的契约，预计写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code> 就够，不另写指南；落地时再确认。</li>
+      <li><strong>有没有引入新术语</strong>：「描述值（descriptor）」可能值得进 <code>Documentations/Glossary.md</code>，落地时确认。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <p>无。图标、颜色、字体、行文字、内容页的显示与转圈都与今天相同；右键菜单、⌘-点击、光标所在成员、高亮、链接点击照旧。正式构建（SourceEditor 内容视图）每次显示少建一份富文本，显示应当略快或持平；<code>NSTextView</code> 内容视图与 iOS 持平。</p>
+  <h3>可发现性</h3>
+  <p>不涉及。</p>
+  <h3>数据与配置兼容</h3>
+  <p>不涉及持久化格式：主题设置（<code>Settings.theme</code>）、Find 的最近查询、Filter Scope 记忆都不变。<code>CustomSymbol</code> 的素材从 AppCore 的资源包搬到 AppUI 的资源包，包名随 target 变（<code>RuntimeViewerPackages_RuntimeViewerAppUI.bundle</code>），由 SwiftPM 与 Xcode 自动嵌入，不涉及用户数据。</p>
+  <h3>平台与最低版本</h3>
+  <p>不变。iOS 版同样链接 AppCore 与 AppUI，AppUI 的解析代码都有 UIKit 分支（<code>NSUI*</code> 别名本来就是为此设的）；iOS 内容视图的主题与今天一样固定为 <code>ResolvedTheme.fallback</code>，也一样不写链接。</p>
+  <h3>发布</h3>
+  <p>不涉及权限、entitlement、隐私清单、公证与 Sparkle。第二步要确认 Release 归档里 AppUI 的资源包确实带上了 <code>Symbols.xcassets</code>（编进 App 后打开一个 framework 镜像看图标），并跑 <code>./TuistScript.sh check</code>：本地包的资源搬家可能要 Tuist 描述跟着改。</p>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details>
+    <summary><code>IconDescriptor</code> 与 <code>FindResultSymbol</code>（AppCore）</summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">/// An icon the application layer shows, described as a value; RuntimeViewerAppUI draws it
+/// (`IconDescriptor.image`).</span>
+public enum IconDescriptor: Hashable, Sendable {
+    <span class="token-comment">/// A system symbol at its default configuration.</span>
     case systemSymbol(SystemSymbol)
+    <span class="token-comment">/// The template symbol of a kind of image; tint it with `ColorDescriptor.imageKind(_:)`.</span>
     case imageKind(RuntimeImageKind)
+    <span class="token-comment">/// A runtime object's glyph, or a letter badge drawn the same way.</span>
     case glyph(RuntimeObjectIcon.Glyph)
+    <span class="token-comment">/// One of the Find navigator's row symbols, each with its own size, weight and dimming.</span>
     case findResultSymbol(FindResultSymbol)
+    <span class="token-comment">/// The icon of a runtime engine, found again by `RuntimeEngine.engineID`.</span>
     case runtimeEngine(engineID: String)
 }
 
 extension IconDescriptor {
+    <span class="token-comment">/// The glyph of a kind of runtime object at the default size and style.</span>
     public static func runtimeObject(
         _ kind: RuntimeObjectKind,
         size: CGFloat = RuntimeObjectIcon.defaultIconSize,
@@ -467,6 +702,7 @@ extension IconDescriptor {
     }
 }
 
+<span class="token-comment">/// The symbols of the Find navigator's rows that are not a runtime object's glyph.</span>
 public enum FindResultSymbol: Hashable, Sendable {
     case match
     case unresolved
@@ -474,83 +710,157 @@ public enum FindResultSymbol: Hashable, Sendable {
     case recursiveCall
     case loading
     case failure
-}
-
-// call sites
+}</code></pre>
+      <p>调用点：</p>
+<pre><code><span class="token-comment">// Sidebar cell ViewModel</span>
 appearance.primaryIcon = .runtimeObject(runtimeObject.kind)
 appearance.secondaryIcon = RuntimeObjectIcon.secondaryGlyph(for: runtimeObject).map(IconDescriptor.glyph)
+<span class="token-comment">// Report</span>
 ReportGroupWork(…, engineIcon: .runtimeEngine(engineID: engine.engineID))
+<span class="token-comment">// Find</span>
 FindResultCellAppearance(icon: .findResultSymbol(.match), iconColor: .secondaryLabel, title: …)</code></pre>
-</details>
-<details><summary><code>ColorDescriptor</code>（AppCore）</summary>
-<pre><code>public enum ColorDescriptor: Hashable, Sendable {
+    </div>
+  </details>
+
+  <details>
+    <summary><code>ColorDescriptor</code>（AppCore）</summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">/// A colour the application layer asks for, described as a value; RuntimeViewerAppUI resolves it
+/// (`ColorDescriptor.color`) for the current appearance.</span>
+public enum ColorDescriptor: Hashable, Sendable {
     case secondaryLabel
     case tertiaryLabel
+    <span class="token-comment">/// The colour Xcode gives this kind of file (`RuntimeImageKind.iconColor` in AppUI).</span>
     case imageKind(RuntimeImageKind)
 }</code></pre>
-<p>只收今天真正用到的三种。</p>
-</details>
-<details><summary><code>RowText</code>（AppCore）与 <code>RowTextStyle</code>（AppUI）</summary>
-<pre><code>public struct RowText: Hashable, Sendable {
+      <p>只收今天真正用到的三种。以后加一种，AppUI 的 <code>switch</code> 编译不过，必须同时给出颜色。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><code>RowText</code>（AppCore）与 <code>RowTextStyle</code>（AppUI）</summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">/// A row's text as runs of semantic roles; the list or the Find navigator that draws it decides
+/// the font and colour of each role (`RowText.attributedString(in:)` in RuntimeViewerAppUI).</span>
+public struct RowText: Hashable, Sendable {
     public enum Role: Hashable, Sendable {
-        case primary, secondary, tertiary, emphasized, hitLine, unresolved
+        <span class="token-comment">/// The row's name.</span>
+        case primary
+        <span class="token-comment">/// A subtitle, an image name, the part of a name a filter did not match in Open Quickly.</span>
+        case secondary
+        <span class="token-comment">/// The part of a name a filter did not match in the sidebar.</span>
+        case tertiary
+        <span class="token-comment">/// What a filter or a search matched.</span>
+        case emphasized
+        <span class="token-comment">/// A Find hit line around the match.</span>
+        case hitLine
+        <span class="token-comment">/// A Find row whose target could not be resolved.</span>
+        case unresolved
     }
+
     public struct Run: Hashable, Sendable {
         public var string: String
         public var role: Role
+
         public init(_ string: String, role: Role = .primary)
     }
+
     public var runs: [Run]
+    <span class="token-comment">/// The point size the row is drawn at; nil takes the style's own (the Find navigator's).</span>
     public var fontSize: CGFloat?
+
     public init(_ string: String, role: Role = .primary, fontSize: CGFloat? = nil)
     public init(runs: [Run], fontSize: CGFloat? = nil)
-    public var string: String { get }
-    public func marking(_ ranges: [NSRange], as role: Role) -&gt; RowText
-    public static let empty: RowText
-}
 
-// AppUI
-public struct RowTextStyle: Sendable {
+    <span class="token-comment">/// The text without its roles, for type-select and accessibility.</span>
+    public var string: String { get }
+
+    <span class="token-comment">/// A copy whose characters in `ranges` (UTF-16 offsets into `string`) take `role`, the rest
+    /// keeping theirs: how a filter's matches are marked.</span>
+    public func marking(_ ranges: [NSRange], as role: Role) -&gt; RowText
+
+    public static let empty: RowText
+}</code></pre>
+      <p>今天各处的写法与新写法对应：</p>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>今天</th><th>新写法</th></tr></thead>
+        <tbody>
+          <tr><td><code>NSAttributedString(rowText: name, fontSize: 12, color: .labelColor)</code></td><td><code>RowText(name, fontSize: 12)</code></td></tr>
+          <tr><td><code>NSAttributedString(rowText: imageName, fontSize: 10, color: .secondaryLabelColor)</code></td><td><code>RowText(imageName, role: .secondary, fontSize: 10)</code></td></tr>
+          <tr><td>侧栏过滤命中：底色 <code>.tertiaryLabelColor</code>（Open Quickly 为 <code>.secondaryLabelColor</code>），命中段 <code>.labelColor</code> + semibold</td><td><code>RowText(name, role: forOpenQuickly ? .secondary : .tertiary, fontSize: fontSize).marking(filterResult.ranges, as: .emphasized)</code></td></tr>
+          <tr><td>Find 标题 + 「 — 副标题」</td><td><code>RowText(runs: [.init(title), .init(separator + subtitle, role: .secondary)])</code></td></tr>
+          <tr><td>Find 命中行：命中段 bold + 匹配色，其余 hit line 色</td><td><code>RowText(runs: [.init(before, role: .hitLine), .init(match, role: .emphasized), .init(after, role: .hitLine)])</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>AppUI 一侧：</p>
+<pre><code><span class="token-comment">/// How a list draws `RowText`'s roles.</span>
+public struct RowTextStyle {
+    <span class="token-comment">/// A navigator, an inspector or Open Quickly: the system font at the row's size (13 points when it
+    /// names none), label colours, `.emphasized` in semibold `labelColor`, truncating the tail.</span>
     public static let list: RowTextStyle
+    <span class="token-comment">/// The Find navigator's and the inspector's references (macOS): `FindResultCellStyle`'s fonts and
+    /// colours. Whether a title wraps stays the label's business (`FindResultCellView`).</span>
     public static func findResult(_ metrics: FindResultCellStyle.Metrics) -&gt; RowTextStyle
 }
+
 extension RowText {
     public func attributedString(in style: RowTextStyle) -&gt; NSAttributedString
 }</code></pre>
-<div class="table-wrap"><table>
-<tr><th>今天</th><th>新写法</th></tr>
-<tr><td><code>NSAttributedString(rowText: name, fontSize: 12, color: .labelColor)</code></td><td><code>RowText(name, fontSize: 12)</code></td></tr>
-<tr><td><code>NSAttributedString(rowText: imageName, fontSize: 10, color: .secondaryLabelColor)</code></td><td><code>RowText(imageName, role: .secondary, fontSize: 10)</code></td></tr>
-<tr><td>侧栏过滤命中：底色 tertiary（Open Quickly 为 secondary），命中段 label + semibold</td><td><code>RowText(name, role: forOpenQuickly ? .secondary : .tertiary, fontSize: fontSize).marking(filterResult.ranges, as: .emphasized)</code></td></tr>
-<tr><td>Find 标题 + 「 — 副标题」</td><td><code>RowText(runs: [.init(title), .init(separator + subtitle, role: .secondary)])</code></td></tr>
-<tr><td>Find 命中行</td><td><code>RowText(runs: [.init(before, role: .hitLine), .init(match, role: .emphasized), .init(after, role: .hitLine)])</code></td></tr>
-</table></div>
-<p><code>RowTextStyle.list</code> 产出的属性必须与今天 <code>NSAttributedString(rowText:fontSize:color:)</code> 逐属性相同。</p>
-</details>
-<details><summary><code>ContentInterface</code> 与 <code>ContentTextViewModel</code> 的改动（AppCore）</summary>
-<pre><code>public struct ContentInterface: Sendable, Identifiable {
-    public struct ID: Hashable, Sendable { private let value = UUID() }
-    public struct Link: Sendable { public let range: NSRange; public let target: RuntimeObject }
-    public struct DeclaredMemberLine: Sendable { public let range: NSRange; public let member: RuntimeMemberReference }
+      <p><code>RowTextStyle.list</code> 产出的属性必须与今天 <code>NSAttributedString(rowText:fontSize:color:)</code> 逐属性相同（字体、颜色、左对齐、尾部截断），<code>RowTextAttributedStringTests</code> 逐角色对照。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><code>ContentInterface</code>（AppCore）与 <code>ContentTextViewModel</code> 的改动</summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">/// One interface as the content pane shows it: the generator's semantic string with what the
+/// pane looks up by character position. Every index is a UTF-16 offset into `string`.</span>
+public struct ContentInterface: Sendable, Identifiable {
+    <span class="token-comment">/// Which interface a view reports displayed; every interface a view model prepares has an
+    /// identifier of its own.</span>
+    public struct ID: Hashable, Sendable {
+        private let value = UUID()
+    }
+
+    <span class="token-comment">/// A jump target over a range of the text.</span>
+    public struct Link: Sendable {
+        public let range: NSRange
+        public let target: RuntimeObject
+    }
+
+    <span class="token-comment">/// The member a line of the text declares.</span>
+    public struct DeclaredMemberLine: Sendable {
+        public let range: NSRange
+        public let member: RuntimeMemberReference
+    }
 
     public let id: ID
     public let runtimeObject: RuntimeObject
     public let semanticString: FrozenSemanticString
+    <span class="token-comment">/// Ascending by location, never overlapping.</span>
     public let links: [Link]
+    <span class="token-comment">/// Ascending by location, never overlapping.</span>
     public let declaredMemberLines: [DeclaredMemberLine]
     public let commentDecorations: InterfaceCommentDecorations?
     public let macroExpansions: [ContentTextViewModel.MacroExpansion]
 
     public var string: String { semanticString.string }
+
+    <span class="token-comment">/// The object the text links to at `characterIndex`; nil off a link or out of bounds.</span>
     public func linkedRuntimeObject(at characterIndex: Int) -&gt; RuntimeObject?
+    <span class="token-comment">/// The member declared on the line holding `characterIndex`; nil off one or out of bounds.</span>
     public func declaredMember(at characterIndex: Int) -&gt; RuntimeMemberReference?
-}
+}</code></pre>
+      <p>两个查找都按区间二分。<code>ID</code> 包着一个 <code>UUID</code>，初始化只在 AppCore 内可见，<code>ContentTextViewModel</code> 每准备一个接口就取一个新的。</p>
+      <p><code>ContentTextViewModel</code> 改动的部分：</p>
+<pre><code>@RxObserved public private(set) var interface: ContentInterface?
 
-// ContentTextViewModel
-@RxObserved public private(set) var interface: ContentInterface?
-
+@MemberwiseInit(.public)
 public struct Input {
-    // … unchanged inputs …
+    <span class="token-comment">// … unchanged inputs …</span>
+    <span class="token-comment">/// The view has put this interface on screen; ends the loading indicator for it.</span>
     public let interfaceDisplayed: Signal&lt;ContentInterface.ID&gt;
 }
 
@@ -559,29 +869,46 @@ public struct Output {
     public let highlightRange: Signal&lt;NSRange&gt;
     public let findBarQuery: Signal&lt;String&gt;
     public let highlightsFirstRender: Bool
+    <span class="token-comment">// removed: renderedInterface, attributedString, theme</span>
 }</code></pre>
-<p>两个查找都按区间二分。等待显示：接口写进 <code>$interface</code> 时订阅一个只在收到同一 ID 时完成的序列并 <code>trackActivity(_commonLoading)</code>；新接口到来时 <code>flatMapLatest</code> 丢掉上一段等待。</p>
-</details>
-<details><summary><code>ContentTextRenderer</code> 与主题（AppUI）</summary>
+      <p>等待显示：准备好的接口在主线程写进 <code>$interface</code> 的同时，ViewModel 订阅一个只在 <code>interfaceDisplayed</code> 发来同一 ID 时完成的序列，并对它 <code>trackActivity(_commonLoading)</code>。新接口到来时 <code>flatMapLatest</code> 丢掉上一段等待，所以旧 ID 的迟到报告没有效果。ViewModel 被释放时等待随之释放。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><code>ContentTextRenderer</code> 与主题（AppUI）</summary>
+    <div class="details-body">
 <pre><code>@MainActor
 public final class ContentTextRenderer {
     public struct RenderedText {
         public let interface: ContentInterface
         public let attributedString: NSAttributedString
     }
+
+    <span class="token-comment">/// `themes` defaults to `@Dependency(\.resolvedThemeStream)` on macOS and to
+    /// `ResolvedTheme.fallback` on the other platforms, as the content pane's theme is today.</span>
     public init(interfaces: Driver&lt;ContentInterface&gt;, themes: Observable&lt;ResolvedTheme&gt;? = nil)
+
     public var theme: Driver&lt;ResolvedTheme&gt; { get }
+    <span class="token-comment">/// Themes each interface on a user-initiated background queue, again whenever the theme
+    /// changes; nothing is themed while no one subscribes.</span>
     public var renderedText: Driver&lt;RenderedText&gt; { get }
+    <span class="token-comment">/// True from 100 ms into a render until it is delivered — the plate for a theme-only change.</span>
     public var delayedRendering: Driver&lt;Bool&gt; { get }
 }
 
 extension ContentInterface {
+    <span class="token-comment">/// The text in `theme`'s fonts and colours; on macOS each link of `links` becomes a `.link`.</span>
     public func attributedString(themedWith theme: some ThemeProfile) -&gt; NSAttributedString
 }</code></pre>
-<p>保留 signpost 名 <code>content.attributedStringBuild</code>。<code>ContentTextViewController</code> 把 <code>renderer.delayedRendering</code> 接进 <code>BaseViewController.additionalCommonLoadingRelay</code>，转圈显示它与 <code>viewModel.delayedLoading</code> 的「或」。</p>
-</details>
-<details><summary>跨层服务与边界测试</summary>
-<pre><code>// AppCore
+      <p><code>attributedString(themedWith:)</code> 保留今天的 signpost 名 <code>content.attributedStringBuild</code>，以便前后对比。<code>ContentTextViewController</code> 把 <code>renderer.delayedRendering</code> 接进 <code>BaseViewController.additionalCommonLoadingRelay</code>，转圈显示它与 <code>viewModel.delayedLoading</code> 的「或」。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>跨层服务（AppCore 声明、AppUI 实现）</summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">// AppCore</span>
 package enum PasteboardClientKey: TestDependencyKey {
     package static let testValue = PasteboardClient.inert
 }
@@ -592,105 +919,189 @@ extension DependencyValues {
     }
 }
 
-// AppUI
+<span class="token-comment">// AppUI</span>
 extension PasteboardClientKey: DependencyKey {
     package static let liveValue = PasteboardClient.general
-}
+}</code></pre>
+      <p><code>FinderClient</code> 照写。</p>
+    </div>
+  </details>
 
-// AppCoreBoundaryTests
-enum AppCoreBoundary {
-    static func isPlatformUIFramework(_ moduleName: String) -&gt; Bool
+  <details>
+    <summary>边界测试的两条新规则</summary>
+    <div class="details-body">
+<pre><code>enum AppCoreBoundary {
+    <span class="token-comment">/// Rule 4: the platform UI frameworks themselves.</span>
+    static func isPlatformUIFramework(_ moduleName: String) -&gt; Bool  <span class="token-comment">// AppKit, UIKit, Cocoa, and their submodules</span>
+
+    <span class="token-comment">/// Rule 5: Foundation's names that start as AppKit's and UIKit's do, which RuntimeViewerAppCore
+    /// may use; any other such name is a violation.</span>
     static let foundationNames: Set&lt;String&gt;
+
+    <span class="token-comment">/// Files not yet cleaned up, exempt from rules 4 and 5 until the step named beside each removes
+    /// them; empty once the last step lands.</span>
     static let filesPendingCleanup: [String]
 }</code></pre>
-</details>
+    </div>
+  </details>
+</section>
 
-<h2 id="research">前期调研</h2>
-<details><summary>AppCore 里的 AppKit/UIKit 类型，按用途分</summary>
-<div class="table-wrap"><table>
-<tr><th>用途</th><th>文件</th><th>暴露 UI 类型的接口</th></tr>
-<tr><td>图标</td><td><code>PlatformTypes</code>、<code>SystemSymbol</code>、<code>CustomSymbol</code>、<code>RuntimeImageKind</code>、<code>RuntimeObjectIcon</code>、<code>RuntimeEngineIconProviding</code>、四种 <code>Appearance</code>、<code>FindResultCellStyle</code>、<code>ReportViewModel</code>、<code>ReportGroupWork</code>、<code>RuntimeSourcePickerContent</code></td><td><code>RuntimeImageKind.icon</code> / <code>iconColor</code> / <code>coloredIcon</code>、<code>RuntimeObjectIcon.icon(...)</code>、<code>RuntimeObjectIconRendering</code>、<code>RuntimeEngineIconProviding</code>、<code>Source.image</code></td></tr>
-<tr><td>颜色</td><td><code>RuntimeImageKind</code>、<code>Extensions</code>、<code>FindResultCellStyle</code>、<code>NSColor+Xcode</code>、四种 <code>Appearance</code></td><td><code>iconColor: NSUIColor</code>、<code>NSUIColor(light:dark:)</code>、<code>iconTintColor</code></td></tr>
-<tr><td>字体</td><td><code>FindResultCellStyle</code>、<code>SystemSymbol</code>、<code>NSAttributedString+RowText</code>、<code>SidebarRuntimeObjectCellViewModel</code></td><td><code>FindResultCellStyle.Metrics</code></td></tr>
-<tr><td>行文字</td><td><code>NSAttributedString+RowText</code>、<code>RuntimeObjectCellAppearance</code>、<code>SidebarRootCellViewModel</code>、<code>SidebarRuntimeObjectCellViewModel</code>、三个 Inspector 文件、<code>FindResultNode</code></td><td><code>title</code> / <code>subtitle</code> / <code>name: NSAttributedString</code></td></tr>
-<tr><td>内容页与主题</td><td><code>ContentTextViewModel</code>、<code>NSAttributedString+ContentLinks</code>、<code>Theme/</code> 四个文件</td><td><code>RenderedInterface.attributedString</code>、<code>Output.attributedString</code> / <code>theme</code>、<code>ThemeProfile</code></td></tr>
-<tr><td>事件</td><td><code>SelectionRouteDestination+ModifierFlags</code>、<code>FindResultsOutline</code></td><td><code>init(listClickModifierFlags:)</code> / <code>init(linkClickModifierFlags:)</code>、<code>FindResultActivation</code></td></tr>
-<tr><td>系统服务</td><td><code>PasteboardClient</code>、<code>FinderClient</code></td><td><code>general</code> / <code>workspace</code></td></tr>
-<tr><td>其他</td><td><code>Then.swift</code>、<code>DocumentState.swift</code>（iOS 路由）</td><td>无</td></tr>
-<tr><td>只 import、不用</td><td><code>InspectorViewModel</code>、<code>InspectorRelationshipsCellViewModel</code>、<code>RuntimeObjectCellDisplayable</code></td><td>无</td></tr>
-</table></div>
-<p><code>AppCoreBoundaryTests</code> 今天明确放行 <code>import AppKit</code>、<code>NSImage(size:)</code>、<code>NSColor(name:)</code>、<code>NSMutableParagraphStyle()</code> 与 <code>UIViewController</code>。</p>
-</details>
-<details><summary>内容页的渲染管线</summary>
-<ul>
-<li>取接口：<code>combineLatest</code> → <code>Observable.async</code> 走接口缓存 → <code>trackActivity(_commonLoading)</code>。</li>
-<li>上色：在 <code>userInitiated</code> 后台队列上建富文本与 <code>.link</code>，再整份拷成可变串加声明成员属性；注释装饰与宏展开只用语义串。</li>
-<li>加载转圈：<code>_commonLoading</code> 盖住取接口与上色；<code>delayedLoading</code> 晚 100 毫秒发 true、立即发 false。</li>
-<li>主题来自 <code>ResolvedThemeStream</code>（macOS 依赖），唯一使用方是 <code>ContentTextViewModel</code>。</li>
-<li>只有 <code>NSTextView</code> 视图、它的行号尺与 iOS 视图读上过色的富文本；其余读者只要文字、链接目标或声明成员。</li>
-<li>链接目标的解析不需要 UI；MCP、批量导出、CLI、右键拷贝都用纯文本；<code>FrozenSemanticString</code> 是 <code>Sendable</code>。</li>
-</ul>
-</details>
-<details><summary>图标、事件、系统服务、测试</summary>
-<ul>
-<li><code>RuntimeObjectIcon.Glyph</code> 已经是值；0091 把绘制交给 AppUI，但 AppCore 仍自己调渲染、存 <code>NSImage</code>。</li>
-<li>引擎图标取决于 <code>engine.source</code>、<code>hostInfo.metadata</code> 与按 <code>engineID</code>（<code>String</code>）记下的图标；<code>RuntimeEngineManager.runtimeEngines</code> 汇总了它管理的全部引擎。</li>
-<li>Find 行的图标按行的种类组合：字母徽章、对象图标、镜像种类图标，以及六个各有字号字重的固定符号。</li>
-<li>没有任何 AppCore 的 <code>Input</code> 收 <code>NSEvent</code> 或修饰键；视图控制器自己换成「在哪打开」。</li>
-<li>剪贴板与 Finder 的 live 值写在 AppCore；跨层写法与 <code>CrossLayerDependencyTests</code> 由 0091 定下。</li>
-<li>断言 UI 类型的 AppCore 测试约二十个文件；渲染没有基准测试，只有 <code>content.attributedStringBuild</code> 一个 signpost。</li>
-</ul>
-</details>
-<details><summary>前人怎么做、验证过什么</summary>
-<ul>
-<li>Apple 的 <code>ImageResource</code> / <code>ColorResource</code>：<code>Hashable, Sendable</code> 的结构体只写资源名，由 UI 层解析；SwiftUI 的 <code>Image(systemName:)</code> 也是到渲染时才解析的描述。</li>
-<li>Reflex：Core 模块不 import UIKit，状态编码成 JSON。</li>
-<li>本仓库：<code>RuntimeObjectIcon.Glyph</code> + <code>runtimeObjectIconRendering</code>。</li>
-<li>写作时没有构建或测量；「正式构建少建一份富文本」由第四步的测量确认。</li>
-<li>推测，第二步验证：<code>runtimeEngines</code> 包含 Report 与来源选择器显示的每一个引擎。</li>
-</ul>
-</details>
+<section id="research">
+  <h2>前期调研</h2>
+  <p>以下路径缩写同改动地图（<code>AC/</code>、<code>AUI/</code>、<code>MAC/</code>、<code>IOS/</code>、<code>T/</code>、<code>TUI/</code>）。</p>
 
-<h2 id="alternatives">替代方案考量</h2>
-<details><summary>展开</summary>
-<ul>
-<li><strong>维持 0091 的分界</strong>——否：状态不是值，测试仍按身份与像素断言。</li>
-<li><strong>只改对外输出，内部照用 AppKit</strong>——否：这条边界没法用测试守住。</li>
-<li><strong>只抽系统服务和修饰键</strong>——否：对目标没有帮助。</li>
-<li><strong>富文本统一用 <code>AttributedString</code></strong>——否：大接口每次多一次整串转换，内容页已有 <code>FrozenSemanticString</code>。</li>
-<li><strong>主题留在 AppCore、换成平台无关值</strong>——否：AppCore 要多维护一套只为渲染服务的值类型。</li>
-<li><strong>上色经跨层服务在 ViewModel 里调</strong>——否：状态里会多一个不透明、不能序列化的渲染结果。</li>
-<li><strong>不加显示报告，只把两路转圈「或」起来</strong>——否：取接口与渲染之间有一个 runloop 的空档，转圈会闪一下。</li>
-<li><strong><code>IconDescriptor</code> 写成结构体加静态成员</strong>——否：封闭枚举让 AppUI 漏画在编译期报错。</li>
-<li><strong>引擎图标的描述值带一份引擎快照</strong>——否：元数据是否 <code>Hashable</code> 未查证，且快照会过期；备选是弱引用记录。</li>
-<li><strong>为修饰键新造 <code>OptionSet</code></strong>——否：换算本来就在视图层做。</li>
-<li><strong>连同 Architectures 与 Settings 一起清</strong>——否，范围外。</li>
-<li><strong>这次就做成 <code>Codable</code></strong>——否：JSON 形状留给 <code>ls</code> / <code>do</code> 提案定。</li>
-</ul>
-</details>
+  <details>
+    <summary>AppCore 里的 AppKit/UIKit 类型，按用途分</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>用途</th><th>文件</th><th>暴露 UI 类型的接口</th></tr></thead>
+        <tbody>
+          <tr><td>图标</td><td><code>AC/PlatformTypes.swift</code>、<code>AC/SystemSymbol.swift:40-65</code>、<code>AC/CustomSymbol.swift:32-52</code>、<code>AC/RuntimeImageKind.swift:143-242</code>、<code>AC/RuntimeObjectIcon.swift:102-283</code>、<code>AC/Engine/RuntimeEngineIconProviding.swift</code>、<code>AC/RuntimeObject/RuntimeObjectCellAppearance.swift:24-30</code>、<code>AC/Sidebar/SidebarRootCellViewModel.swift:54</code>、<code>AC/Find/FindResultNode.swift:16-17</code>、<code>AC/Find/FindResultCellStyle.swift:48-167</code>、<code>AC/Reports/ReportCellViewModel.swift:18</code>、<code>AC/Reports/ReportViewModel.swift:591,811-829</code>、<code>AC/Reports/ReportGroupWork.swift:25,46-52</code>、<code>AC/RuntimeSourcePicker/RuntimeSourcePickerContent.swift:20,29</code></td><td><code>RuntimeImageKind.icon</code> / <code>iconColor</code> / <code>coloredIcon</code>，<code>RuntimeObjectIcon.icon(...)</code> 一族，<code>RuntimeObjectIconRendering</code>，<code>RuntimeEngineIconProviding</code>，四种 <code>Appearance</code> 的图标字段，<code>RuntimeSourcePickerContent.Source.image</code></td></tr>
+          <tr><td>颜色</td><td><code>AC/RuntimeImageKind.swift:166-242</code>、<code>AC/Extensions.swift:12-32,56-68</code>、<code>AC/Find/FindResultCellStyle.swift:60-62,172-203</code>、<code>AC/Theme/NSColor+Xcode.swift</code>，以及四种 <code>Appearance</code> 的 <code>iconColor</code></td><td><code>iconColor: NSUIColor</code>，<code>NSUIColor(light:dark:)</code>，<code>FindResultCellStyle.iconTintColor</code></td></tr>
+          <tr><td>字体</td><td><code>AC/Find/FindResultCellStyle.swift:17-43,196-201</code>、<code>AC/SystemSymbol.swift:47</code>、<code>AC/NSAttributedString+RowText.swift:20</code>、<code>AC/Sidebar/SidebarRuntimeObjectCellViewModel.swift:271</code></td><td><code>FindResultCellStyle.Metrics</code></td></tr>
+          <tr><td>行文字</td><td><code>AC/NSAttributedString+RowText.swift</code>、<code>AC/RuntimeObject/RuntimeObjectCellAppearance.swift:33-34</code>、<code>AC/Sidebar/SidebarRootCellViewModel.swift:57,82</code>、<code>AC/Sidebar/SidebarRuntimeObjectCellViewModel.swift:241-305</code>、<code>AC/Inspector/InspectorSwiftSpecializationCellViewModel.swift:28</code>、<code>AC/Inspector/InspectorHierarchyCellViewModel.swift:58</code>、<code>AC/Inspector/RuntimeObjectCellAppearance+Inspector.swift:26,38</code>、<code>AC/Find/FindResultNode.swift:22,237-272,355</code></td><td><code>title</code> / <code>subtitle</code> / <code>name: NSAttributedString</code></td></tr>
+          <tr><td>内容页与主题</td><td><code>AC/Content/ContentTextViewModel.swift</code>、<code>AC/Content/NSAttributedString+ContentLinks.swift</code>、<code>AC/Theme/ThemeProfile.swift</code>、<code>AC/Theme/ThemePreset+ThemeProfile.swift</code>、<code>AC/Theme/ResolvedThemeStream.swift</code>、<code>AC/Theme/FrozenSemanticString+ThemeProfile.swift</code></td><td><code>RenderedInterface.attributedString</code>，<code>Output.attributedString</code> / <code>theme</code>，<code>ThemeProfile</code></td></tr>
+          <tr><td>事件</td><td><code>AC/EditorArea/SelectionRouteDestination+ModifierFlags.swift</code>、<code>AC/Find/FindResultsOutline.swift:66-86</code></td><td><code>SelectionRoute.Destination.init(listClickModifierFlags:)</code> / <code>init(linkClickModifierFlags:)</code>，<code>FindResultActivation</code></td></tr>
+          <tr><td>系统服务</td><td><code>AC/ContextMenus/PasteboardClient.swift</code>、<code>AC/ContextMenus/FinderClient.swift</code></td><td><code>static let general</code> / <code>workspace</code></td></tr>
+          <tr><td>其他</td><td><code>AC/Then.swift:6-12,79-106</code>（给 <code>NSEdgeInsets</code>、<code>NSSuggestionItem</code> 等 UI 类型加的 <code>Then</code>，协议是 internal）、<code>AC/DocumentState.swift:8-10,456-462,559-577</code>（iOS 路由为满足 XCoordinator 的 <code>Presentable</code> 写的 <code>UIViewController</code>，全是 private）</td><td>无</td></tr>
+          <tr><td>只 import、不用</td><td><code>AC/Inspector/InspectorViewModel.swift</code>、<code>AC/Inspector/InspectorRelationshipsCellViewModel.swift</code>、<code>AC/RuntimeObject/RuntimeObjectCellDisplayable.swift</code></td><td>无</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p><code>AppCoreBoundaryTests</code> 今天不拦这些：它的测试样例里明确放行 <code>import AppKit</code>、<code>NSImage(size:)</code>、<code>NSColor(name:)</code>、<code>NSMutableParagraphStyle()</code> 和 <code>var viewController: UIViewController! { nil }</code>（<code>T/AppCoreBoundaryTests.swift</code> 的 <code>lineInsideTheBoundaryIsNotReported</code>）。</p>
+    </div>
+  </details>
 
-<h2 id="log">决策日志</h2>
-<details open><summary>展开</summary>
-<div class="table-wrap"><table>
-<tr><th>日期</th><th>变更</th><th>说明</th></tr>
-<tr><td>2026-11-18</td><td>Created as Draft</td><td>讨论 Shopify 的 Reflex 架构能否在 RuntimeViewer 实现时，发现缺的是「ViewModel 状态全是值」这一步，而 AppCore 里还有 31 个文件用着 AppKit/UIKit 的模型。按完整档做了两轮澄清提问。</td></tr>
-<tr><td>2026-11-18</td><td>抽离程度</td><td>用户定：AppCore 的代码里不出现 AppKit/UIKit 类型，由边界测试按类型名守住；iOS 路由的 <code>UIViewController</code> 作例外。推翻 0091「边界标准」中「UI 框架的模型可以用」与「否决 ViewModel 只输出描述」两处。</td></tr>
-<tr><td>2026-11-18</td><td>富文本的表示</td><td>用户定：内容页沿用 <code>FrozenSemanticString</code> 加旁表，行标题用小结构；写提案时具体化为带语义角色的 <code>RowText</code>。</td></tr>
-<tr><td>2026-11-18</td><td>主题的归属</td><td>用户定：主题整体搬进 AppUI，AppCore 只留 <code>ColorDescriptor</code>。</td></tr>
-<tr><td>2026-11-18</td><td>合入方式</td><td>用户定：一份提案分四步合进 <code>next</code>；写提案时调整了每步的内容。</td></tr>
-<tr><td>2026-11-18</td><td>上色在哪里跑</td><td>用户定：AppUI 的渲染环节在后台上色，耗时计入转圈；写提案时加了「视图报告显示完」的输入。</td></tr>
-<tr><td>2026-11-18</td><td>下层模块</td><td>用户定：只管 AppCore。</td></tr>
-<tr><td>2026-11-18</td><td>Codable</td><td>用户定：留给 <code>ls</code> / <code>do</code> 提案。</td></tr>
-<tr><td>2026-11-18</td><td>共识</td><td>用户确认以上决定和「未经询问采用的做法」作为写提案的共识。</td></tr>
-<tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。四步共用一条功能分支，每做完一步先在本地合进 <code>next</code> 的检出给用户看，同意后再推送、开始下一步。</td></tr>
-<tr><td>2026-11-18</td><td>第一步完成</td><td>规则 4、5 用参数化样例测；另加两条守护测试（过渡清单只减不增、允许的行要对得上）；Foundation 名字清单预收了几个确定的名字；这一步只为 iOS 模拟器编了应用层包。</td></tr>
-<tr><td>2026-11-18</td><td>第二步完成</td><td><code>RuntimeSourcePickerContent</code> 原样搬进 AppUI（断开的来源显示的是存下的图像，按 ID 找不回）；<code>iconAlpha</code> 保留为数字（透明度不由符号决定）；<code>image(size:)</code> 推到第三步；对象图标的 key 成为 AppUI 内部的 <code>DependencyKey</code>；Tuist 的资源包 target 名随之改。</td></tr>
-<tr><td>2026-11-18</td><td>第三步完成</td><td><code>RowTextStyle.findResult(_:)</code> 只收尺寸；分隔符搬进 AppCore；Find 行的尺寸全部留在 cell 视图；侧栏根节点标题显式写 <code>labelColor</code>，显示效果相同。</td></tr>
-<tr><td>2026-11-18</td><td>第四步完成</td><td>转圈合并改用 <code>BaseViewController.additionalCommonLoadingRelay</code>；<code>ContentInterface.ID</code> 包 <code>UUID</code>；渲染环节多一个只给测试看的 <code>isRendering</code>；过渡清单删除；SourceEditor 换主题不再重新 <code>setSource</code>。测量（<code>NSString</code>，约 2.2 万 UTF-16 单位，20 次中位数）：改动前 15.3 毫秒，改动后 <code>NSTextView</code> 一路 11.9 毫秒、SourceEditor 一路 7.3 毫秒。</td></tr>
-<tr><td>2026-11-18</td><td>实现完成</td><td>四步都已在本地合进 <code>next</code> 的检出，待用户看过后收尾。</td></tr>
-<tr><td>2026-11-18</td><td>Implemented</td><td>用户看过后同意收尾，编号 0094，四步都已推到 <code>next</code>。不另写使用指南或实现说明（分工已写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>）；「描述值」登记进术语表。没在真实窗口里目测，iOS 只编了应用层的包。</td></tr>
-</table></div>
-</details>
+  <details>
+    <summary>内容页的渲染管线</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>取接口</strong>（<code>ContentTextViewModel.swift:273-302</code>）：<code>combineLatest($runtimeObject, appDefaults.$options, transformer, marksCommentStructure)</code> → <code>Observable.async</code> 走接口缓存，得到 <code>FetchedInterface</code>（语义串、对象、注释结构、宏展开）→ <code>trackActivity(_commonLoading)</code>。</li>
+        <li><strong>上色</strong>（<code>:313-332</code>）：<code>combineLatest(interfaceStream, themeObservable)</code> → 在 <code>ConcurrentDispatchQueueScheduler(qos: .userInitiated)</code> 上 <code>renderInterface(for:theme:)</code> → <code>trackActivity(_commonLoading)</code> → 回主线程写 <code>$renderedInterface</code>。<code>renderInterface</code>（<code>:512-528</code>）做三件事：建上过色并带 <code>.link</code> 的富文本（<code>:611-619</code>，signpost <code>content.attributedStringBuild</code>）；从语义串建注释装饰（与主题无关）；<code>markingDeclaredMembers</code> 把富文本整份拷成可变串，逐行加 <code>.runtimeViewerDeclaredMember</code>（<code>:581-603</code>，只用到文字和 <code>declaredMembersByLineNumber()</code>）。宏展开也只用语义串（<code>:535-574</code>）。</li>
+        <li><strong>加载转圈</strong>：<code>_commonLoading</code>（<code>AC/ViewModel.swift:31-51</code>）同时盖住取接口与上色；<code>delayedLoading</code> 在变成 true 100 毫秒后才发 true，变 false 立即发。<code>MAC/Base/ViewControllers.swift:97-110</code> 把它绑到内容区的 <code>CommonLoadingView</code>。注释（<code>ContentTextViewModel.swift:317-324</code>）说明取接口与上色之间没有未计入的空档。</li>
+        <li><strong>主题从哪来</strong>：<code>ResolvedThemeStream</code>（<code>AC/Theme/ResolvedThemeStream.swift:18-57</code>，macOS 才有的依赖 <code>resolvedThemeStream</code>）把 <code>Settings.theme</code> 变成 <code>ResolvedTheme</code>；唯一使用方是 <code>ContentTextViewModel.swift:251-252</code>。测试经 <code>RuntimeViewerAppTestingSupport/ViewModelTestEnvironment.swift:27,42-46,58</code> 注入。</li>
+        <li><strong>谁读上过色的富文本</strong>：只有 <code>MAC/Content/ContentTextViewController.swift:156</code>（<code>NSTextView</code> 视图，<code>isRichText = false</code>，复制出来是纯文本）、它的行号尺读 <code>.font</code>（<code>MAC/Content/ContentLineNumberRulerView.swift:114-123</code>）、iOS 的 <code>IOS/Content/ContentTextViewController.swift:41</code>。其余读者——两种视图的右键菜单、⌘-点击、光标所在成员、高亮定位、交叉引用——只要文字、链接目标或声明成员，一张按字符位置查的旁表就够（<code>NSAttributedString+ContentLinks.swift:16-33</code> 是现在唯一的查找入口）。<code>NSTextView</code> 的链接点击靠文本里的 <code>.link</code> 属性（<code>ContentTextViewController.swift:89-93,119,130</code>），所以那份富文本里仍要写 <code>.link</code>。</li>
+        <li><strong>链接目标的解析不需要 UI</strong>：<code>resolveSwiftLinkTargets</code>（<code>AC/Theme/FrozenSemanticString+ThemeProfile.swift:127-182</code>）只用 <code>FrozenSemanticString.enumerateSpans</code>、<code>SemanticType</code>、<code>RuntimeObject</code>；外面那层 <code>#if canImport(AppKit) &amp;&amp; !targetEnvironment(macCatalyst)</code> 只是因为 iOS 不处理链接点击（<code>IOS/Content/ContentTextViewController.swift:46-83</code> 是注释掉的）。</li>
+        <li><strong>别处不消费上过色的文本</strong>：MCP（<code>MCPBridgeServer.swift:177,214</code>）、批量导出（<code>RuntimeEngine+Export.swift:50</code>）、CLI、右键拷贝（<code>ViewModel+RuntimeObjectAction.swift:25-26</code>）都用纯文本。</li>
+        <li><code>FrozenSemanticString</code> 是 <code>Sendable</code>（swift-semantic-string <code>Sources/Semantic/Frozen/FrozenSemanticString.swift:21</code>）。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>图标的几个来源</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>SystemSymbol</code> / <code>CustomSymbol</code> 是符号名的枚举，<code>image</code> 才造 <code>NSImage</code>；<code>CustomSymbol</code> 的素材在 <code>AC/Resources/Symbols.xcassets</code>（<code>Package.swift:471-473</code> 的 <code>resources: [.process("Resources")]</code>），只有 <code>CustomSymbol.imageInAssetCatalog</code> 读它，只有 <code>RuntimeImageKind</code> 用它。</li>
+        <li><code>RuntimeObjectIcon.Glyph</code>（<code>AC/RuntimeObjectIcon.swift:21-50</code>）已经是值：文字、颜色名、样式、尺寸。0091 把它的绘制交给 AppUI（<code>runtimeObjectIconRendering</code>，live 值在 <code>AUI/IDEIconRuntimeObjectIconRenderer.swift:20-22</code>），但 AppCore 仍然自己调渲染、存 <code>NSImage</code>。这正是本提案要推广的形状，只差最后一步：AppCore 存 <code>Glyph</code>，AppUI 在绑定处渲染。</li>
+        <li>引擎图标（<code>AUI/Engine/RuntimeEngineIconProvider.swift:85-142,177-241</code>）取决于 <code>engine.source</code>、<code>engine.hostInfo.metadata</code> 与按 <code>engine.engineID</code> 记下的图标；<code>engineID</code> 是 <code>String</code>（<code>RuntimeEngine.swift:73</code>）。<code>RuntimeEngineManager.runtimeEngines</code>（<code>RuntimeEngineManager.swift:621</code>）汇总了它管理的全部引擎，AppUI 可以按 ID 找回引擎再画。</li>
+        <li>Find 行的图标是按行的种类组合出来的（<code>AC/Find/FindResultCellStyle.swift:50-167</code>）：成员、函数、语言的字母徽章（都是 <code>Glyph</code>），对象图标，镜像种类图标，以及六个固定符号（匹配行、未解析、展开三角、递归调用、加载中、失败），各有自己的字号和字重。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>事件</summary>
+    <div class="details-body">
+      <p>没有任何 AppCore 的 <code>Input</code> 收 <code>NSEvent</code> 或修饰键。视图控制器从 <code>OutlineViewUserActivation.triggeringEvent</code>（<code>RuntimeViewerArchitectures/NSOutlineView+UserActivation.swift:8-35</code>）取事件，自己调 <code>SelectionRoute.Destination.init(listClickModifierFlags:)</code> 换成「在哪打开」再交给 ViewModel（调用点 <code>MAC/Sidebar/RuntimeObject/SidebarRuntimeObjectViewController.swift:147-171</code>、<code>MAC/Inspector/InspectorReferencesViewController.swift:124</code>、<code>MAC/Base/RuntimeObjectListInteractions.swift:20</code>、<code>MAC/Main/MainWindowController.swift:460</code>、<code>MAC/Content/ContentTextViewController.swift:71-74,265</code>、<code>MAC/Content/ContentSourceEditorViewController.swift:452,539</code>、<code>AUI/EditorArea/JumpBar/EditorJumpBarAdapter.swift:93-94</code>）；<code>FindResultActivation</code> 只有 <code>MAC/Find/FindViewController.swift:394-411</code> 用。所以修饰键这一块只是把换算代码换个模块，不必新造类型。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>系统服务与跨层依赖</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>PasteboardClient</code> / <code>FinderClient</code> 用 <code>@DependencyEntry(liveValue: .general)</code> / <code>(liveValue: .workspace)</code> 写在 AppCore（<code>PasteboardClient.swift:40-41</code>、<code>FinderClient.swift:34-35</code>），调用点都在 AppCore，测试经 <code>ViewModelTestEnvironment.swift:59-60</code> 换成记录器。</li>
+        <li>0091 定下的跨层写法：AppCore 声明 <code>package enum XxxKey: TestDependencyKey</code> 与访问器，AppUI 补 <code>extension XxxKey: DependencyKey</code> 与 <code>liveValue</code>；<code>TUI/CrossLayerDependencyTests.swift:14-21</code> 核对每个 key 在链接 AppUI 后有 live 值，现有 <code>AppRouterKey</code>、<code>RuntimeEngineIconProvidingKey</code>、<code>RuntimeObjectIconRenderingKey</code> 三个。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>测试现状</summary>
+    <div class="details-body">
+      <p>断言 UI 类型的 AppCore 测试：<code>RuntimeImageKindTests</code>（模板、像素颜色、<code>===</code>）、<code>CustomSymbolTests</code>、<code>SystemSymbolTests</code>、<code>RuntimeObjectIconGlyphTests</code>、<code>RuntimeObjectIconTests</code>、<code>FindCrossReferenceTests:172-214</code>、<code>FindResultNodeTests:115,155-181</code>、<code>FindResultMemberEmphasisTests</code>、<code>InspectorReferencesViewModelTests:184,196</code>、<code>ReportEngineGroupsTests:61-86</code>、<code>ReportViewModelTests:73-75</code>、<code>InspectorCellViewModelTests:28-97</code>、<code>SidebarCellAppearanceTests:52,64</code>、<code>SidebarRuntimeObjectCellViewModelTests:177</code>、<code>SidebarRootCellViewModelTests:55</code>、<code>FindResultActivationTests</code>（造 <code>NSEvent</code>）、<code>ContentTextPipelineTests:60,109,261</code>（字体、上色）、<code>ContentCrossReferenceTests:65-85</code>（从富文本读声明成员属性）、<code>ContentLinkLookupTests</code>（手造富文本）。其余只比 <code>.string</code>。性能方面没有任何渲染的基准测试，只有 <code>content.attributedStringBuild</code> 一个 signpost；可参照的写法是 <code>T/SidebarFilterPerformanceBaselineTests.swift</code>。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>前人怎么做</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>Apple 的 <code>ImageResource</code> / <code>ColorResource</code></strong>（macOS 27.2 SDK，<code>DeveloperToolsSupport.swiftmodule/arm64e-apple-macos.swiftinterface:210-220</code>）：<code>Hashable, Sendable</code> 的结构体，只写资源名和 bundle，由 <code>NSImage(resource:)</code>、<code>Color(_:)</code> 在 UI 层解析。模型里放描述，UI 层解析，正是本提案的形状。SwiftUI 的 <code>Image(systemName:)</code> 本身也是一份到渲染时才解析的描述。</li>
+        <li><strong>Reflex</strong>：Core 模块不 import UIKit / <code>android.*</code>，状态编码成 JSON；视图只读状态、只发动作。</li>
+        <li><strong>本仓库</strong>：<code>RuntimeObjectIcon.Glyph</code> + <code>runtimeObjectIconRendering</code>（0091）。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>验证过什么</summary>
+    <div class="details-body">
+      <ul>
+        <li>本提案写作时没有构建或测量，以上全部来自读代码。「正式构建少建一份富文本」是从调用关系推出的，第四步用测量确认（见落地步骤）。</li>
+        <li><strong>推测，第二步验证</strong>：<code>RuntimeEngineManager.runtimeEngines</code> 包含 Report 和来源选择器会显示的每一个引擎（含借出 shared cache 镜像的引擎）。不成立时，AppUI 的引擎图标查找改为由 <code>RuntimeEngineIconProvider</code> 在首次见到引擎时按 ID 记下引擎（见替代方案）。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>12 个替代方案，均未采用</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>维持 0091 的分界</strong>（UI 框架的模型可以留在 AppCore）——否。状态不是值，<code>ls</code> / <code>do</code> 没法做；测试仍按对象身份与像素断言。</li>
+        <li><strong>ViewModel 只改对外输出，内部计算照用 AppKit</strong>——否。这条边界没法用测试守住：内部用不用 AppKit，扫描源码时与对外暴露分不开。</li>
+        <li><strong>只抽系统服务和修饰键</strong>——否。图标、颜色、富文本才是状态里不是值的部分，只抽服务对目标没有帮助。</li>
+        <li><strong>富文本统一用 Foundation 的 <code>AttributedString</code> 加自定义属性</strong>——否。写法统一，但大接口每次都要多一次整串转换（转成 <code>NSAttributedString</code>），而内容页已经有平台无关的 <code>FrozenSemanticString</code>，再包一层没有收益。</li>
+        <li><strong>主题留在 AppCore，颜色换成 <code>Settings.Theme.ColorValue</code>、字体换成描述值</strong>——否。AppCore 要多维护一套颜色字体的值类型，而它们只为渲染服务；主题整体归 AppUI 后，AppCore 里没有颜色字体的概念。</li>
+        <li><strong>上色经跨层服务在 ViewModel 里调</strong>（和对象图标一样，AppCore 声明、AppUI 实现，管线与线程都不变）——否。ViewModel 的状态里会多一个不透明、不能序列化的渲染结果，违背本提案的目标。</li>
+        <li><strong>不加显示报告，只把 ViewModel 的转圈与渲染环节的转圈「或」起来</strong>——否。取接口在后台结束、渲染环节在主线程收到接口后才开始，两者之间有一个 runloop 的空档；<code>delayedLoading</code> 遇 false 立即发出，转圈会先消失，上色超过 100 毫秒时再出现，即闪一下。显示报告把「等待显示」算在 ViewModel 的转圈里，没有空档。</li>
+        <li><strong><code>IconDescriptor</code> 写成结构体加静态成员</strong>（API 设计规范里「会增加成员的选项集合」的做法）——否。它只在一个包里用，AppUI 必须给每一种画图，封闭枚举让漏画在编译期报错。</li>
+        <li><strong>引擎图标的描述值带一份引擎快照</strong>（来源、主机元数据）——否。<code>hostInfo.metadata</code> 是否 <code>Hashable</code> 未查证，而且快照会过期（附加进程的图标是之后才解析出来的，<code>RuntimeEngineIconProvider.swift:221-241</code>）。按 ID 找回引擎每次都是最新的。备选：若 <code>RuntimeEngineManager.runtimeEngines</code> 不含某些引擎，改由 <code>RuntimeEngineIconProvider</code> 在首次见到引擎时按 ID 记下它的弱引用。</li>
+        <li><strong>为修饰键新造一个 <code>OptionSet</code></strong>——否。没有 <code>Input</code> 收事件，换算本来就在视图层做。</li>
+        <li><strong>连同 <code>RuntimeViewerArchitectures</code> 与 <code>RuntimeViewerSettings</code> 一起清</strong>——否，范围外；AppCore 只是不再用前者带 <code>NSEvent</code> 的类型。</li>
+        <li><strong>新类型这次就做成 <code>Codable</code></strong>——否。JSON 的形状应由 <code>ls</code> / <code>do</code> 提案按实际需要定，提前定下的编码以后改起来是兼容问题。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>16 条，最近一条：Implemented（2026-11-18）</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-18</td><td>Created as Draft</td><td>起因：讨论 Shopify 的 Reflex 架构能否在 RuntimeViewer 实现时，发现缺的是「ViewModel 状态全是值」这一步，而 AppCore 里还有 31 个文件用着 AppKit/UIKit 的模型。按完整档做了两轮澄清提问。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>抽离程度</td><td>用户定：AppCore 的代码里不出现 AppKit/UIKit 类型，由边界测试按类型名守住；iOS 路由的 <code>UIViewController</code> 作例外。否决「只改对外输出」与「只抽服务和修饰键」。这推翻了 0091 决策日志「边界标准」一条中「UI 框架的模型可以用」与「否决 ViewModel 只输出不含 UI 类型的描述」两处，理由是状态要能序列化，且可测性的收益已有具体测试为证（见动机）。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>富文本的表示</td><td>用户定：内容页沿用 <code>FrozenSemanticString</code> 加旁表，行标题用「文字 + 强调区间」的小结构。否决统一用 <code>AttributedString</code>。写提案时小结构具体化为「若干段，每段一个语义角色」的 <code>RowText</code>：Find 的行除了强调还有副标题、命中行、未解析三种样式，只记强调区间表达不了。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>主题的归属</td><td>用户定：主题整体搬进 AppUI，AppCore 只留语义色 token（<code>ColorDescriptor</code>）。否决主题留在 AppCore、换成平台无关的颜色字体值。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>合入方式</td><td>用户定：一份提案分四步合进 <code>next</code>。写提案时调整了每步的内容（图标颜色随图标、行的字体颜色随行文字、主题随内容页），理由见提议方案「分四步合进 next」。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>上色在哪里跑</td><td>用户定：AppUI 的渲染环节在后台上色，耗时计入转圈。否决经跨层服务在 ViewModel 里调。写提案时为消除取接口与上色之间的转圈空档，加了「视图报告显示完」的输入（替代方案里写了不加它会怎样）。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>下层模块</td><td>用户定：只管 AppCore，<code>RuntimeViewerArchitectures</code> 与 <code>RuntimeViewerSettings</code> 不动。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>Codable</td><td>用户定：新类型这次只做成 <code>Hashable</code> / <code>Sendable</code>，<code>Codable</code> 留给 <code>ls</code> / <code>do</code> 提案。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>共识</td><td>用户确认以上决定和「未经询问采用的做法」作为写提案的共识。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。四步共用一条功能分支，每做完一步就先在本地合进 <code>next</code> 的检出给用户看，用户同意后再推送 <code>next</code>、开始下一步；编号与 Implemented 等第四步合入后再定。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第一步完成</td><td>照计划做完。与提案不同的三处：一、规则 4、5 的行为用参数化样例覆盖（「要报告」与「不报告」两组），没有逐条单列成提案里写的几个测试名；另加两条守护测试：过渡清单里的文件不再违规或已不存在就失败（清单只减不增），<code>allowedLines</code> 里的条目对不上任何被报告的行就失败。二、Foundation 名字清单除了 AppCore 现在用到的，还预先收了几个确定属于 Foundation 的（<code>NSError</code>、<code>NSURL</code>、<code>NSCharacterSet</code>、<code>NSMakeRange</code>、<code>NSRangeException</code>、<code>NSRecursiveLock</code>）。三、iOS 一侧这一步只为 iOS 模拟器编了 <code>RuntimeViewerApplication</code> 包（AppCore、AppUI 的 UIKit 分支），没编 iOS App 本身：这一步没有改 iOS App 的任何代码。验证在 Ultra 上：包级构建、iOS 包构建与 macOS App（Tuist workspace，Debug）构建通过；AppCoreTests 与 AppUITests 共 1055 个测试，只有三条既有红灯失败（<code>TitleActivityIndicatorTests</code> 的悬停副标题、<code>ContentImageViewModelTests</code> 的图像失败重试、<code>FindCrossReferenceTests</code> 的 Call Hierarchy 超时），新加与搬家的测试全部通过。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第二步完成</td><td>照计划做完，与提案不同的四处，改动地图已按实际做法改写：一、<code>RuntimeSourcePickerContent</code> 没改成描述值，而是原样搬进 AppUI：AppCore 里没有任何地方用它，它是 AppUI 两个 adapter 的输入、由 App 层的 <code>MainViewModel</code> 构造；断开的来源显示的是引擎消失前存下的图像，按 ID 已经找不回，改成描述值会变成通用图标。二、<code>FindResultCellAppearance.iconAlpha</code> 保留为数字：同一个未解析符号在关系树里淡化、在交叉引用行里不淡化，透明度不由符号决定。三、<code>IconDescriptor.image(size:)</code> 推到第三步：这一步 Find 的图标尺寸还在 AppCore 里算，用不到它。四、<code>RuntimeObjectIconRendering</code> 的 key 成为 AppUI 内部的 <code>DependencyKey</code>，不是 <code>@DependencyEntry</code>，以保留原来「测试画空白图」的测试值。另外 Tuist 描述里重复了资源包 target 名，随资源搬家改成 AppUI 的。引擎图标按 ID 查找：live 值经 <code>RuntimeEngineManager.runtimeEngines</code> 找回引擎；测试用的提供者不跟随管理器，一律画通用可执行文件图标（解析调研里那条推测没有专门验证，Report 与来源选择器显示的引擎都由管理器创建）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1060 个，失败 4 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、<code>ReportSharedByEngineTests</code> 与 <code>BackgroundWorkProcessActivityTests</code> 整包跑时各一条），后两条单独重跑 14 个测试全部通过。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第三步完成</td><td>照计划做完，与提案不同的几处，改动地图与详细设计已按实际做法改写：一、<code>RowTextStyle.findResult(_:)</code> 只收尺寸，不收 <code>allowsWrapping</code>：标题换不换行原本就由 <code>FindResultCellView</code> 设在标签上。二、名字与副标题之间的两个空格（<code>subtitleSeparator</code>）从 <code>FindResultCellStyle</code> 搬进 AppCore 的 <code>FindResultNode</code>：它是文字内容，不是样式。三、<code>FindResultNode.makeAppearance(for:)</code> 与 Inspector 的引用行不再只在 AppKit 下构造外观，各平台都描述同一个值；Find 行的尺寸全部留在 cell 视图（<code>metrics</code>），徽章按默认尺寸描述、由视图用 <code>IconDescriptor.image(size:)</code> 画成 16 或 14 点。四、侧栏根节点的标题原来不带颜色属性（用标签自己的 <code>labelColor</code>），现在与其他行一样显式写 <code>labelColor</code>，显示效果相同。去掉 AppKit import 后，两个侧栏 cell ViewModel 补了 <code>import Foundation</code>（<code>NSObject</code> 原来经 AppKit 间接可见）。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1065 个，失败 2 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时），新加与改写的行文字测试全部通过。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第四步完成</td><td>照计划做完，与提案不同的几处，改动地图与详细设计已按实际做法改写：一、转圈的合并没有做成 <code>BaseViewController</code> 上可覆写的 <code>commonLoadingState</code>，而是新增 <code>additionalCommonLoadingRelay</code>：父类在 <code>setupBindings</code> 开头就绑转圈，那时子类的渲染环节还没建。二、<code>ContentInterface.ID</code> 包一个 <code>UUID</code>，不是逐次加一的计数：准备在后台调度器上进行，用不着跨线程的计数器，迟到报告的过滤只需要相等比较。三、<code>ContentTextRenderer</code> 多了一个 <code>package</code> 的 <code>isRendering</code>（不带延迟），只给测试看；iOS 不写链接靠上色代码里的 <code>#if</code>，macOS 上跑的测试验不到，没有加 <code>iOSThemedTextCarriesNoLinks</code>。四、过渡清单与守护它的测试在这一步删除，规则对 AppCore 全面生效，只剩 iOS 路由那几行例外。另外，SourceEditor 视图换主题时不再重新 <code>setSource</code>（原来每次换主题都会把同一段文字重新交给编辑器），只重新套主题字典。测量（Ultra，负载约 7.5，Foundation 的 <code>NSString</code>，约 2.2 万个 UTF-16 单位，各 20 次取中位数）：改动前 <code>renderInterface</code> 15.3 毫秒；改动后准备 7.3 毫秒、上色 4.5 毫秒，<code>NSTextView</code> 一路合计 11.9 毫秒，SourceEditor 一路只有准备的 7.3 毫秒，都没有变慢。验证在 Ultra 上：包级构建、iOS 包构建、macOS App（Tuist workspace，Debug）构建通过；两组测试 1069 个，失败 3 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、<code>BackgroundWorkProcessActivityTests</code> 整包跑时超时），新加与改写的内容页测试全部通过。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>实现完成</td><td>四步都已在本地合进 <code>next</code> 的检出，待用户看过后收尾（编号、改 Implemented、重新生成网页版）。文档判断：<code>RuntimeViewerPackages/Sources/AGENTS.md</code> 已写明描述值、行文字、内容页与主题的分工，<code>Tests/AGENTS.md</code>、<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 与根 <code>AGENTS.md</code> 已同步，不另写指南或实现说明；「描述值」是否进术语表留到收尾时定。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>Implemented</td><td>用户看过后同意收尾，编号 0094，四步都已推到 <code>next</code>。文档判断：不另写使用指南或实现说明——AppCore 与 AppUI 怎么分工、描述值与渲染环节在哪，<code>RuntimeViewerPackages/Sources/AGENTS.md</code> 已写明，其余三份 <code>AGENTS.md</code> 已同步；「描述值」登记进术语表。未做的验证：没在真实窗口里目测加载转圈、链接点击与右键菜单，iOS 只编了应用层的包，没编 iOS App。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
 </main>
 </div>
 </body>

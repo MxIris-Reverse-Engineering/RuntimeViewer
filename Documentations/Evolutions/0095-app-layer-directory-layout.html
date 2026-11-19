@@ -3,286 +3,585 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>0095 - 整理 AppCore 与 AppUI 的目录分类</title>
 <style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
 :root {
-  --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7; --panel: #f5f5f7;
-  --code-bg: #f2f2f4; --accent: #0a66d8;
-  --add: #1f8a3b; --add-bg: #e3f5e8; --del: #c4312b; --del-bg: #fbe5e4;
-  --mod: #a05a00; --mod-bg: #fdf0dc; --move: #0a66d8; --move-bg: #e3eefc;
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1c1e; --fg: #f2f2f7; --muted: #a1a1a6; --line: #3a3a3c; --panel: #2c2c2e;
-    --code-bg: #2a2a2d; --accent: #4c9bff;
-    --add: #4cd471; --add-bg: #173a22; --del: #ff6b63; --del-bg: #3d1a19;
-    --mod: #ffb347; --mod-bg: #3d2c12; --move: #6fb1ff; --move-bg: #15294a;
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg);
-  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif; }
-.layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
-nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto; padding: 24px 16px;
-  border-right: 1px solid var(--line); font-size: 13px; }
-nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; }
-nav a:hover { color: var(--accent); }
-main { padding: 24px 40px 80px; min-width: 0; }
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } nav { display: none; } main { padding: 16px; } }
-h1 { font-size: 26px; margin: 0 0 8px; }
-h2 { font-size: 21px; margin: 40px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
-h3 { font-size: 17px; margin: 24px 0 8px; }
-.meta { color: var(--muted); font-size: 13px; }
-.meta span { margin-right: 16px; }
-.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--mod-bg); color: var(--mod); font-weight: 600; font-size: 12px; }
-.summary { background: var(--panel); border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
-code { font: 12.5px/1.5 "SF Mono", Menlo, monospace; background: var(--code-bg); padding: 1px 4px; border-radius: 4px; }
-pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow: auto; font: 12.5px/1.5 "SF Mono", Menlo, monospace; }
-pre code { background: none; padding: 0; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0 16px; }
-th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
-th { background: var(--panel); }
-.table-wrap { overflow-x: auto; }
-details { border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; margin: 10px 0; }
-details > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
-.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin: 8px 0 12px; }
-.chip { display: inline-block; padding: 2px 8px; margin: 2px 3px; border-radius: 6px; font: 12px/1.5 "SF Mono", Menlo, monospace; border: 1px solid transparent; }
-.chip.add { background: var(--add-bg); color: var(--add); border-color: var(--add); }
-.chip.del { background: var(--del-bg); color: var(--del); border-color: var(--del); text-decoration: line-through; }
-.chip.mod { background: var(--mod-bg); color: var(--mod); border-color: var(--mod); }
-.chip.keep { background: var(--panel); color: var(--fg); border-color: var(--line); }
-.diagram { overflow-x: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0 18px; }
-ul { padding-left: 22px; }
-.small { font-size: 13px; color: var(--muted); }
-<body>
-<div class="layout">
-.chip.move { background: var(--move-bg); color: var(--move); border-color: var(--move); }
-.chip small { color: var(--muted); font-size: 11px; margin-left: 4px; }
-.dirs { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin: 8px 0 18px; }
-.dir { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--bg); }
-.dir.new { border: 2px solid var(--add); }
-.dir.gone { border: 2px dashed var(--del); background: var(--del-bg); }
-.dir.keep { background: var(--panel); }
-.dir h4 { margin: 0 0 6px; font: 600 13px "SF Mono", Menlo, monospace; }
-.dir.new h4 { color: var(--add); }
-.dir.gone h4 { color: var(--del); text-decoration: line-through; }
-.dir .sub { margin: 6px 0 0 10px; padding-left: 8px; border-left: 2px solid var(--line); }
-.dir .sub h5 { margin: 4px 0; font: 600 12px "SF Mono", Menlo, monospace; color: var(--add); }
-.mirror { display: grid; grid-template-columns: 1fr 48px 1fr; gap: 6px 0; align-items: center; font: 12.5px "SF Mono", Menlo, monospace; margin: 8px 0 18px; }
-.mirror .left, .mirror .right { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
-.mirror .left { background: var(--panel); }
-.mirror .right { background: var(--move-bg); border-color: var(--move); }
-.mirror .right.only { background: var(--panel); border-style: dashed; color: var(--muted); }
-.mirror .arrow { text-align: center; color: var(--move); font-size: 18px; }
-.mirror .head { font: 700 13px -apple-system, sans-serif; text-align: center; padding: 4px; }
-@media (max-width: 700px) { .mirror { grid-template-columns: 1fr; } .mirror .arrow { transform: rotate(90deg); } }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
 </style>
 </head>
 <body>
-<div class="layout">
-<nav>
-  <strong>目录</strong>
-  <a href="#summary">摘要</a>
-  <a href="#approval">要你定的事</a>
-  <a href="#arch">架构图</a>
-  <a href="#map">改动地图</a>
-  <a href="#motivation">动机</a>
-  <a href="#proposal">提议方案</a>
-  <a href="#steps">落地步骤</a>
-  <a href="#impact">影响</a>
-  <a href="#design">详细设计</a>
-  <a href="#research">前期调研</a>
-  <a href="#alternatives">替代方案考量</a>
-  <a href="#log">决策日志</a>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0095</span></p>
+  <h1><span class="proposal-number">0095</span> 整理 AppCore 与 AppUI 的目录分类</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-18</dd></div>
+    <div><dt>创建日期</dt><dd>2026-11-18</dd></div>
+    <div><dt>作者</dt><dd>JH</dd></div>
+    <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
+    <div><dt>所属愿景</dt><dd>无</dd></div>
+    <div><dt>原文</dt><dd><code>0095-app-layer-directory-layout.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#motivation">动机</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">前期调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
 </nav>
-<main>
-<h1>0095 - 整理 AppCore 与 AppUI 的目录分类</h1>
-<div class="meta">
-  <span>状态 <span class="badge">Implemented</span></span>
-  <span>创建 2026-11-18</span>
-  <span>对应提案最后更新：2026-11-18</span>
-  <span>分支 <code>feature/app-layer-directory-layout</code>（已合进 next）</span>
-</div>
-<p class="small">原文：<code>0095-app-layer-directory-layout.md</code>（以原文为准）。关联提案：0091（拆 AppCore 与 AppUI）、0094（AppCore 不再使用 AppKit/UIKit 模型）。</p>
 
-<h2 id="summary">摘要</h2>
-<div class="summary">
-<p>把 <code>RuntimeViewerAppCore</code> 与 <code>RuntimeViewerAppUI</code> 的源文件按功能重新归目录，<strong>只移动、不改行为</strong>。</p>
-<ul>
-  <li>AppCore 根目录下散着的 17 个文件全部收进有名字的目录（<code>App/</code>、<code>Base/</code>、<code>Document/</code>、<code>Extensions/</code>、<code>Filtering/</code>、<code>RuntimeImage/</code> 等）。</li>
-  <li>每个 Engine 的后台工作——索引、Find 语料、交叉引用预建、手动加载——从四处收到 <code>BackgroundWork/</code> 一处。</li>
-  <li>22 个文件的 <code>Find/</code> 分出 <code>Query/</code>、<code>Scope/</code>、<code>Results/</code>、<code>CrossReferences/</code>；<code>Sidebar/</code> 照 App 一侧分成 <code>Root/</code> 与 <code>RuntimeObject/</code>。</li>
-  <li>AppUI 镜像 AppCore：扩展、绘制或适配某个 AppCore 类型的文件放进与该类型同名的目录，<code>Icons/</code> 因此拆散。</li>
-  <li>只拆两个名不副实的文件（<code>Extensions.swift</code>、<code>InspectorViewModel.swift</code>）；测试 target 不动，只改测试里写死的两处路径。</li>
-  <li>归类规则写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>，以后新文件照它放。</li>
-</ul>
-</div>
+<main class="content">
 
-<h2 id="approval">要你定的事</h2>
-<p>批准这份草案后，在 worktree <code>.worktrees/RuntimeViewer-AppLayerDirectoryLayout</code> 里按四步实现，做完在本地合进 <code>next</code> 给你看。澄清提问已定：只拆名不副实的文件；测试 target 不动；先写提案再动手。</p>
-
-<h2 id="arch">架构图</h2>
-<div class="legend">
-  <span class="chip add">新目录</span>
-  <span class="chip keep">原有目录</span>
-  <span class="chip del">消失的目录或文件</span>
-  <span class="chip move">移进来的文件<small>← 原位置</small></span>
-</div>
-
-<h3>RuntimeViewerAppCore</h3>
-<div class="diagram"><div class="dirs">
-  <div class="dir gone"><h4>(root: 17 loose files)</h4><span class="small">全部收进下面的目录</span></div>
-  <div class="dir new"><h4>App/</h4><span class="chip move">AppRoute<small>← root</small></span></div>
-  <div class="dir new"><h4>Base/</h4>
-    <span class="chip move">ViewModel<small>← root</small></span><span class="chip move">ViewModelProtocol<small>← root</small></span>
-    <span class="chip move">LoadingPlaceholderTiming<small>← root</small></span><span class="chip move">OwnerReportingTask<small>← root</small></span></div>
-  <div class="dir new"><h4>Document/</h4><span class="chip move">DocumentState<small>← root</small></span></div>
-  <div class="dir new"><h4>BackgroundWork/</h4>
-    <span class="chip move">RuntimeEngineBackgroundWork<small>← Engine/</small></span><span class="chip move">BackgroundWorkProcessActivity<small>← root</small></span>
-    <div class="sub"><h5>Indexing/</h5><span class="chip move">RuntimeBackgroundIndexingCoordinator<small>← BackgroundIndexing/</small></span><span class="chip move">AlwaysIndexImageResolver<small>← BackgroundIndexing/</small></span><span class="chip move">RuntimeEngine+ImageIndexing<small>← Engine/</small></span></div>
-    <div class="sub"><h5>FindCorpus/</h5><span class="chip move">FindCorpusCoordinator<small>← Find/</small></span><span class="chip move">FindCorpusCoordinators<small>← Find/</small></span><span class="chip move">FindCorpusFinishedBuild<small>← Find/</small></span></div>
-    <div class="sub"><h5>CrossReferencePreparation/</h5><span class="chip move">CrossReferencePreparationCoordinator<small>← Find/</small></span><span class="chip move">CrossReferencePreparationState<small>← Find/</small></span></div>
-    <div class="sub"><h5>ManualLoading/</h5><span class="chip move">ManualImageLoad<small>← ManualLoading/</small></span><span class="chip move">ManualImageLoadCoordinator<small>← ManualLoading/</small></span><span class="chip move">DocumentState+ManualLoading<small>← ManualLoading/</small></span></div>
+<section id="summary">
+  <h2>摘要</h2>
+  <p>把 <code>RuntimeViewerAppCore</code> 与 <code>RuntimeViewerAppUI</code> 的源文件按功能重新归目录，只移动、不改行为。AppCore 根目录下散着的 17 个文件全部收进有名字的目录（<code>App/</code>、<code>Base/</code>、<code>Document/</code>、<code>Extensions/</code>、<code>Filtering/</code>、<code>RuntimeImage/</code> 等）；每个 Engine 的后台工作——索引、Find 语料、交叉引用预建、手动加载——从 <code>Find/</code>、<code>Engine/</code>、<code>BackgroundIndexing/</code>、<code>ManualLoading/</code> 四处收到 <code>BackgroundWork/</code> 一处；22 个文件的 <code>Find/</code> 分出 <code>Query/</code>、<code>Scope/</code>、<code>Results/</code>、<code>CrossReferences/</code> 四个子目录；<code>Sidebar/</code> 照 App 一侧分成 <code>Root/</code> 与 <code>RuntimeObject/</code>。AppUI 镜像 AppCore：扩展、绘制或适配某个 AppCore 类型的文件放进与该类型同名的目录，<code>Icons/</code> 因此拆散。只拆两个名不副实的文件（<code>Extensions.swift</code>、<code>InspectorViewModel.swift</code>），其余多类型文件原样移动。测试 target 不动，只改测试里写死的两处源文件路径。归类规则写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>，以后新文件照它放。</p>
+  <div class="callout callout-note">
+    <ul>
+      <li>关联提案：<code>0091-app-core-ui-split.md</code>（把 <code>RuntimeViewerApplication</code> 拆成 AppCore 与 AppUI）、<code>0094-app-core-without-ui-models.md</code>（AppCore 不再使用 AppKit/UIKit 模型，新增了 <code>Presentation/</code>、<code>Theme/</code> 等目录）</li>
+      <li>实现分支 / PR：<code>feature/app-layer-directory-layout</code>，四步一次合进 <code>next</code>（分支与 worktree 已删）</li>
+      <li>配套文档：无 —— 规则写在 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>「Where a file goes in RuntimeViewerAppCore and RuntimeViewerAppUI」一节</li>
+      <li>网页版：同目录同名的 <code>.html</code>（即本页）</li>
+    </ul>
   </div>
-  <div class="dir gone"><h4>BackgroundIndexing/</h4></div>
-  <div class="dir gone"><h4>ManualLoading/</h4></div>
-  <div class="dir keep"><h4>EditorArea/</h4><span class="chip move">SelectionRoute<small>← root</small></span> <span class="small">其余 15 个文件与 JumpBar/ 不变</span></div>
-  <div class="dir new"><h4>Extensions/</h4><span class="chip move">Then<small>← root</small></span><span class="chip add">String+IntegerIndex<small>← Extensions.swift</small></span></div>
-  <div class="dir new"><h4>Filtering/</h4><span class="chip move">FilterEngine<small>← root</small></span><span class="chip move">NavigatorTextFilter<small>← root</small></span><span class="chip move">NavigatorTextFilter+Keystrokes<small>← root</small></span></div>
-  <div class="dir keep"><h4>Find/</h4>
-    <span class="chip keep">FindViewModel</span><span class="chip keep">FindSession</span><span class="chip keep">FindNavigatorRoutable</span>
-    <div class="sub"><h5>Query/</h5><span class="chip move">FindMode</span><span class="chip move">FindModePath</span><span class="chip move">FindPattern</span><span class="chip move">FindQueryTerm</span><span class="chip move">FindRecentQueries</span></div>
-    <div class="sub"><h5>Scope/</h5><span class="chip move">FindScopeChooserViewModel</span><span class="chip move">FindScopeImageCellViewModel</span><span class="chip move">FindScopeMenu</span></div>
-    <div class="sub"><h5>Results/</h5><span class="chip move">FindResultNode</span><span class="chip move">FindResultNode+Icon</span><span class="chip move">FindResultsOutline</span></div>
-    <div class="sub"><h5>CrossReferences/</h5><span class="chip move">FindCrossReferences</span><span class="chip move">FindCrossReferenceRootResolver</span><span class="chip move">FindCrossReferenceTree</span></div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <h3>AppCore，改动前后</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新目录，或拆分出的新文件</li>
+    <li><i class="swatch swatch-moved"></i>移进来的文件（右侧注明来处）</li>
+    <li><i class="swatch swatch-removed"></i>消失的目录或文件</li>
+    <li><i class="swatch swatch-kept"></i>原有目录，或不动的文件</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 1146" role="img" aria-label="RuntimeViewerAppCore directory layout after the change">
+    <!-- Column A -->
+    <rect class="box-removed" x="10" y="10" width="480" height="44" rx="10"/>
+    <text class="group-label strike" x="22" y="29">(root: 17 loose files)</text>
+    <text class="caption" x="22" y="46">every file moves into a named directory</text>
+
+    <rect class="box-added" x="10" y="64" width="480" height="58" rx="10"/>
+    <text class="group-label" x="22" y="83">App/</text>
+    <rect class="box-moved" x="22" y="92" width="456" height="20" rx="4"/><text x="30" y="106">AppRoute</text><text class="caption" x="470" y="106" text-anchor="end">← root</text>
+
+    <rect class="box-added" x="10" y="132" width="480" height="82" rx="10"/>
+    <text class="group-label" x="22" y="151">Base/</text>
+    <rect class="box-moved" x="22" y="160" width="456" height="20" rx="4"/><text x="30" y="174">ViewModel, ViewModelProtocol</text><text class="caption" x="470" y="174" text-anchor="end">← root</text>
+    <rect class="box-moved" x="22" y="184" width="456" height="20" rx="4"/><text x="30" y="198">LoadingPlaceholderTiming, OwnerReportingTask</text><text class="caption" x="470" y="198" text-anchor="end">← root</text>
+
+    <rect class="box-added" x="10" y="224" width="480" height="58" rx="10"/>
+    <text class="group-label" x="22" y="243">Document/</text>
+    <rect class="box-moved" x="22" y="252" width="456" height="20" rx="4"/><text x="30" y="266">DocumentState</text><text class="caption" x="470" y="266" text-anchor="end">← root</text>
+
+    <rect class="box-added" x="10" y="292" width="480" height="386" rx="10"/>
+    <text class="group-label" x="22" y="311">BackgroundWork/</text>
+    <rect class="box-moved" x="22" y="320" width="456" height="20" rx="4"/><text x="30" y="334">RuntimeEngineBackgroundWork</text><text class="caption" x="470" y="334" text-anchor="end">← Engine/</text>
+    <rect class="box-moved" x="22" y="344" width="456" height="20" rx="4"/><text x="30" y="358">BackgroundWorkProcessActivity</text><text class="caption" x="470" y="358" text-anchor="end">← root</text>
+    <text class="group-label" x="26" y="383">Indexing/</text>
+    <rect class="box-moved" x="34" y="390" width="444" height="20" rx="4"/><text x="42" y="404">RuntimeBackgroundIndexingCoordinator</text><text class="caption" x="470" y="404" text-anchor="end">← BackgroundIndexing/</text>
+    <rect class="box-moved" x="34" y="414" width="444" height="20" rx="4"/><text x="42" y="428">AlwaysIndexImageResolver</text><text class="caption" x="470" y="428" text-anchor="end">← BackgroundIndexing/</text>
+    <rect class="box-moved" x="34" y="438" width="444" height="20" rx="4"/><text x="42" y="452">RuntimeEngine+ImageIndexing</text><text class="caption" x="470" y="452" text-anchor="end">← Engine/</text>
+    <text class="group-label" x="26" y="477">FindCorpus/</text>
+    <rect class="box-moved" x="34" y="484" width="444" height="20" rx="4"/><text x="42" y="498">FindCorpusCoordinator, FindCorpusCoordinators</text><text class="caption" x="470" y="498" text-anchor="end">← Find/</text>
+    <rect class="box-moved" x="34" y="508" width="444" height="20" rx="4"/><text x="42" y="522">FindCorpusFinishedBuild</text><text class="caption" x="470" y="522" text-anchor="end">← Find/</text>
+    <text class="group-label" x="26" y="547">CrossReferencePreparation/</text>
+    <rect class="box-moved" x="34" y="554" width="444" height="20" rx="4"/><text x="42" y="568">CrossReferencePreparationCoordinator</text><text class="caption" x="470" y="568" text-anchor="end">← Find/</text>
+    <rect class="box-moved" x="34" y="578" width="444" height="20" rx="4"/><text x="42" y="592">CrossReferencePreparationState</text><text class="caption" x="470" y="592" text-anchor="end">← Find/</text>
+    <text class="group-label" x="26" y="617">ManualLoading/</text>
+    <rect class="box-moved" x="34" y="624" width="444" height="20" rx="4"/><text x="42" y="638">ManualImageLoad, ManualImageLoadCoordinator</text><text class="caption" x="470" y="638" text-anchor="end">← ManualLoading/</text>
+    <rect class="box-moved" x="34" y="648" width="444" height="20" rx="4"/><text x="42" y="662">DocumentState+ManualLoading</text><text class="caption" x="470" y="662" text-anchor="end">← ManualLoading/</text>
+
+    <rect class="box-removed" x="10" y="688" width="480" height="34" rx="10"/>
+    <text class="group-label strike" x="22" y="709">BackgroundIndexing/</text>
+    <rect class="box-removed" x="10" y="732" width="480" height="34" rx="10"/>
+    <text class="group-label strike" x="22" y="753">ManualLoading/</text>
+
+    <rect class="box-added" x="10" y="776" width="480" height="82" rx="10"/>
+    <text class="group-label" x="22" y="795">Extensions/</text>
+    <rect class="box-moved" x="22" y="804" width="456" height="20" rx="4"/><text x="30" y="818">Then</text><text class="caption" x="470" y="818" text-anchor="end">← root</text>
+    <rect class="box-added" x="22" y="828" width="456" height="20" rx="4"/><text x="30" y="842">String+IntegerIndex</text><text class="caption" x="470" y="842" text-anchor="end">← Extensions.swift</text>
+
+    <rect class="box-added" x="10" y="868" width="480" height="82" rx="10"/>
+    <text class="group-label" x="22" y="887">Filtering/</text>
+    <rect class="box-moved" x="22" y="896" width="456" height="20" rx="4"/><text x="30" y="910">FilterEngine, NavigatorTextFilter</text><text class="caption" x="470" y="910" text-anchor="end">← root</text>
+    <rect class="box-moved" x="22" y="920" width="456" height="20" rx="4"/><text x="30" y="934">NavigatorTextFilter+Keystrokes</text><text class="caption" x="470" y="934" text-anchor="end">← root</text>
+
+    <rect class="box-kept" x="10" y="960" width="480" height="58" rx="10"/>
+    <text class="group-label" x="22" y="979">Storage/</text>
+    <rect class="box-moved" x="22" y="988" width="456" height="20" rx="4"/><text x="30" y="1002">AppDefaults</text><text class="caption" x="470" y="1002" text-anchor="end">← root</text>
+
+    <rect class="box-kept" x="10" y="1028" width="480" height="50" rx="10"/>
+    <text class="group-label" x="22" y="1047">Activity/ BatchExporting/ Content/</text>
+    <text class="group-label" x="22" y="1066">ContextMenus/ Engine/ Reports/</text>
+    <text class="caption" x="478" y="1047" text-anchor="end">unchanged</text>
+
+    <!-- Column B -->
+    <rect class="box-kept" x="510" y="10" width="480" height="58" rx="10"/>
+    <text class="group-label" x="522" y="29">EditorArea/</text>
+    <rect class="box-moved" x="522" y="38" width="456" height="20" rx="4"/><text x="530" y="52">SelectionRoute</text><text class="caption" x="970" y="52" text-anchor="end">← root</text>
+
+    <rect class="box-kept" x="510" y="78" width="480" height="338" rx="10"/>
+    <text class="group-label" x="522" y="97">Find/</text>
+    <rect class="box-kept" x="522" y="106" width="456" height="20" rx="4"/><text x="530" y="120">FindViewModel, FindSession, FindNavigatorRoutable</text>
+    <text class="group-label" x="526" y="145">Query/</text>
+    <rect class="box-moved" x="534" y="152" width="444" height="20" rx="4"/><text x="542" y="166">FindMode, FindModePath, FindPattern</text>
+    <rect class="box-moved" x="534" y="176" width="444" height="20" rx="4"/><text x="542" y="190">FindQueryTerm, FindRecentQueries</text>
+    <text class="group-label" x="526" y="215">Scope/</text>
+    <rect class="box-moved" x="534" y="222" width="444" height="20" rx="4"/><text x="542" y="236">FindScopeChooserViewModel</text>
+    <rect class="box-moved" x="534" y="246" width="444" height="20" rx="4"/><text x="542" y="260">FindScopeImageCellViewModel, FindScopeMenu</text>
+    <text class="group-label" x="526" y="285">Results/</text>
+    <rect class="box-moved" x="534" y="292" width="444" height="20" rx="4"/><text x="542" y="306">FindResultNode, FindResultNode+Icon</text>
+    <rect class="box-moved" x="534" y="316" width="444" height="20" rx="4"/><text x="542" y="330">FindResultsOutline</text>
+    <text class="group-label" x="526" y="355">CrossReferences/</text>
+    <rect class="box-moved" x="534" y="362" width="444" height="20" rx="4"/><text x="542" y="376">FindCrossReferences, FindCrossReferenceTree</text>
+    <rect class="box-moved" x="534" y="386" width="444" height="20" rx="4"/><text x="542" y="400">FindCrossReferenceRootResolver</text>
+
+    <rect class="box-kept" x="510" y="426" width="480" height="106" rx="10"/>
+    <text class="group-label" x="522" y="445">Inspector/</text>
+    <rect class="box-removed" x="522" y="454" width="456" height="20" rx="4"/><text class="strike" x="530" y="468">InspectorViewModel.swift</text>
+    <rect class="box-added" x="522" y="478" width="456" height="20" rx="4"/><text x="530" y="492">InspectorPlaceholderViewModel</text><text class="caption" x="970" y="492" text-anchor="end">← InspectorViewModel.swift</text>
+    <rect class="box-added" x="522" y="502" width="456" height="20" rx="4"/><text x="530" y="516">InspectorRuntimeNodeViewModel</text><text class="caption" x="970" y="516" text-anchor="end">← InspectorViewModel.swift</text>
+
+    <rect class="box-kept" x="510" y="542" width="480" height="58" rx="10"/>
+    <text class="group-label" x="522" y="561">Presentation/</text>
+    <rect class="box-moved" x="522" y="570" width="456" height="20" rx="4"/><text x="530" y="584">SystemSymbol</text><text class="caption" x="970" y="584" text-anchor="end">← root</text>
+
+    <rect class="box-added" x="510" y="610" width="480" height="106" rx="10"/>
+    <text class="group-label" x="522" y="629">RuntimeImage/</text>
+    <rect class="box-moved" x="522" y="638" width="456" height="20" rx="4"/><text x="530" y="652">RuntimeImageKind</text><text class="caption" x="970" y="652" text-anchor="end">← root</text>
+    <rect class="box-added" x="522" y="662" width="456" height="20" rx="4"/><text x="530" y="676">RuntimeImageNode+Sequence</text><text class="caption" x="970" y="676" text-anchor="end">← Extensions.swift</text>
+    <rect class="box-added" x="522" y="686" width="456" height="20" rx="4"/><text x="530" y="700">RuntimeImageLoadState+CaseAccessible</text><text class="caption" x="970" y="700" text-anchor="end">← Extensions.swift</text>
+
+    <rect class="box-kept" x="510" y="726" width="480" height="58" rx="10"/>
+    <text class="group-label" x="522" y="745">RuntimeObject/</text>
+    <rect class="box-moved" x="522" y="754" width="456" height="20" rx="4"/><text x="530" y="768">RuntimeObjectIcon</text><text class="caption" x="970" y="768" text-anchor="end">← root</text>
+
+    <rect class="box-kept" x="510" y="794" width="480" height="342" rx="10"/>
+    <text class="group-label" x="522" y="813">Sidebar/</text>
+    <rect class="box-kept" x="522" y="822" width="456" height="20" rx="4"/><text x="530" y="836">SidebarRoutes</text>
+    <text class="group-label" x="526" y="861">Root/</text>
+    <rect class="box-moved" x="534" y="868" width="444" height="20" rx="4"/><text x="542" y="882">SidebarRootBookmarkViewModel, SidebarRootCellViewModel</text>
+    <rect class="box-moved" x="534" y="892" width="444" height="20" rx="4"/><text x="542" y="906">SidebarRootDirectoryViewModel, SidebarRootFilterPipeline</text>
+    <rect class="box-moved" x="534" y="916" width="444" height="20" rx="4"/><text x="542" y="930">SidebarRootViewModel</text>
+    <text class="group-label" x="526" y="955">RuntimeObject/</text>
+    <rect class="box-moved" x="534" y="962" width="444" height="20" rx="4"/><text x="542" y="976">SidebarRuntimeObjectBookmarkViewModel</text>
+    <rect class="box-moved" x="534" y="986" width="444" height="20" rx="4"/><text x="542" y="1000">SidebarRuntimeObjectCellViewModel</text>
+    <rect class="box-moved" x="534" y="1010" width="444" height="20" rx="4"/><text x="542" y="1024">SidebarRuntimeObjectListViewModel</text>
+    <rect class="box-moved" x="534" y="1034" width="444" height="20" rx="4"/><text x="542" y="1048">SidebarRuntimeObjectFilterPipeline</text>
+    <rect class="box-moved" x="534" y="1058" width="444" height="20" rx="4"/><text x="542" y="1072">SidebarRuntimeObjectSection, SidebarRuntimeObjectViewModel</text>
+    <rect class="box-moved" x="534" y="1082" width="444" height="20" rx="4"/><text x="542" y="1096">RuntimeObjectScope, RuntimeObjectScopeMemory</text>
+    <rect class="box-moved" x="534" y="1106" width="444" height="20" rx="4"/><text x="542" y="1120">PrivateDeclarationViewModel</text>
+  </svg>
   </div>
-  <div class="dir keep"><h4>Inspector/</h4><span class="chip del">InspectorViewModel.swift</span><span class="chip add">InspectorPlaceholderViewModel</span><span class="chip add">InspectorRuntimeNodeViewModel</span></div>
-  <div class="dir keep"><h4>Presentation/</h4><span class="chip move">SystemSymbol<small>← root</small></span></div>
-  <div class="dir new"><h4>RuntimeImage/</h4><span class="chip move">RuntimeImageKind<small>← root</small></span><span class="chip add">RuntimeImageNode+Sequence<small>← Extensions.swift</small></span><span class="chip add">RuntimeImageLoadState+CaseAccessible<small>← Extensions.swift</small></span></div>
-  <div class="dir keep"><h4>RuntimeObject/</h4><span class="chip move">RuntimeObjectIcon<small>← root</small></span></div>
-  <div class="dir keep"><h4>Sidebar/</h4><span class="chip keep">SidebarRoutes</span>
-    <div class="sub"><h5>Root/</h5><span class="chip move">SidebarRootBookmarkViewModel</span><span class="chip move">SidebarRootCellViewModel</span><span class="chip move">SidebarRootDirectoryViewModel</span><span class="chip move">SidebarRootFilterPipeline</span><span class="chip move">SidebarRootViewModel</span></div>
-    <div class="sub"><h5>RuntimeObject/</h5><span class="chip move">SidebarRuntimeObjectBookmarkViewModel</span><span class="chip move">SidebarRuntimeObjectCellViewModel</span><span class="chip move">SidebarRuntimeObjectFilterPipeline</span><span class="chip move">SidebarRuntimeObjectListViewModel</span><span class="chip move">SidebarRuntimeObjectSection</span><span class="chip move">SidebarRuntimeObjectViewModel</span><span class="chip move">RuntimeObjectScope</span><span class="chip move">RuntimeObjectScopeMemory</span><span class="chip move">PrivateDeclarationViewModel</span></div>
+  <p class="figure-caption">每个方框是 <code>RuntimeViewerAppCore</code> 下的一个目录。<code>Find/</code> 与 <code>Sidebar/</code> 子目录里的文件都来自它们的父目录，没有另注来处。</p>
+
+  <h3>AppUI 镜像 AppCore</h3>
+  <p>左列是 AppUI 的目录，右列是它镜像的 AppCore 目录。</p>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新目录</li>
+    <li><i class="swatch swatch-moved"></i>移进来的文件（右侧注明来处）</li>
+    <li><i class="swatch swatch-removed"></i>消失的目录</li>
+    <li><i class="swatch swatch-kept"></i>原有目录或文件，以及被镜像的 AppCore 目录</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 1104" role="img" aria-label="RuntimeViewerAppUI directories mirroring RuntimeViewerAppCore">
+    <text class="group-label" x="10" y="24">RuntimeViewerAppUI/</text>
+    <text class="group-label" x="700" y="24">mirrors RuntimeViewerAppCore/</text>
+
+    <rect class="box-added" x="10" y="40" width="560" height="58" rx="10"/>
+    <text class="group-label" x="22" y="59">App/</text>
+    <rect class="box-moved" x="22" y="68" width="536" height="20" rx="4"/><text x="30" y="82">AppCoordinator</text><text class="caption" x="550" y="82" text-anchor="end">← root</text>
+    <rect class="box-kept" x="700" y="40" width="290" height="34" rx="6"/><text x="712" y="61">App/AppRoute</text>
+    <path class="arrow" d="M 572 57 L 698 57"/><text class="caption" x="635" y="51" text-anchor="middle">mirrors</text>
+
+    <rect class="box-added" x="10" y="108" width="560" height="58" rx="10"/>
+    <text class="group-label" x="22" y="127">Base/</text>
+    <rect class="box-moved" x="22" y="136" width="536" height="20" rx="4"/><text x="30" y="150">Transition+Navigation</text><text class="caption" x="550" y="150" text-anchor="end">← root</text>
+    <rect class="box-kept" x="700" y="108" width="290" height="34" rx="6"/><text x="712" y="129">Base/</text>
+    <path class="arrow" d="M 572 125 L 698 125"/>
+
+    <rect class="box-kept" x="10" y="176" width="560" height="82" rx="10"/>
+    <text class="group-label" x="22" y="195">Content/</text>
+    <rect class="box-kept" x="22" y="204" width="536" height="20" rx="4"/><text x="30" y="218">ContentTextRenderer</text>
+    <rect class="box-moved" x="22" y="228" width="536" height="20" rx="4"/><text x="30" y="242">ContentInterface+Theme</text><text class="caption" x="550" y="242" text-anchor="end">← Theme/</text>
+    <rect class="box-kept" x="700" y="176" width="290" height="34" rx="6"/><text x="712" y="197">Content/ContentInterface</text>
+    <path class="arrow" d="M 572 193 L 698 193"/>
+
+    <rect class="box-added" x="10" y="268" width="560" height="82" rx="10"/>
+    <text class="group-label" x="22" y="287">Extensions/</text>
+    <rect class="box-moved" x="22" y="296" width="536" height="20" rx="4"/><text x="30" y="310">Then, PlatformTypes</text><text class="caption" x="550" y="310" text-anchor="end">← root</text>
+    <rect class="box-kept" x="22" y="320" width="536" height="20" rx="4"/><text x="30" y="334">NSUIColor+Adaptive</text>
+    <rect class="box-kept" x="700" y="268" width="290" height="34" rx="6"/><text x="712" y="289">Extensions/</text>
+    <path class="arrow" d="M 572 285 L 698 285"/>
+
+    <rect class="box-added" x="10" y="360" width="560" height="58" rx="10"/>
+    <text class="group-label" x="22" y="379">Filtering/</text>
+    <rect class="box-moved" x="22" y="388" width="536" height="20" rx="4"/><text x="30" y="402">NavigatorTextFilterFieldAdapter</text><text class="caption" x="550" y="402" text-anchor="end">← root</text>
+    <rect class="box-kept" x="700" y="360" width="290" height="34" rx="6"/><text x="712" y="381">Filtering/NavigatorTextFilter</text>
+    <path class="arrow" d="M 572 377 L 698 377"/>
+
+    <rect class="box-added" x="10" y="428" width="560" height="106" rx="10"/>
+    <text class="group-label" x="22" y="447">Find/Query/</text>
+    <rect class="box-moved" x="22" y="456" width="536" height="20" rx="4"/><text x="30" y="470">FindModePathControlAdapter, FindQueryFieldMenuAdapter</text><text class="caption" x="550" y="470" text-anchor="end">← Find/</text>
+    <rect class="box-moved" x="22" y="480" width="536" height="20" rx="4"/><text x="30" y="494">FindQueryTerm+FindPatternComponents</text><text class="caption" x="550" y="494" text-anchor="end">← Find/</text>
+    <rect class="box-moved" x="22" y="504" width="536" height="20" rx="4"/><text x="30" y="518">FindRecentQueries+AttributedTitle</text><text class="caption" x="550" y="518" text-anchor="end">← Find/</text>
+    <rect class="box-kept" x="700" y="428" width="290" height="34" rx="6"/><text x="712" y="449">Find/Query/</text>
+    <path class="arrow" d="M 572 445 L 698 445"/>
+
+    <rect class="box-added" x="10" y="544" width="560" height="106" rx="10"/>
+    <text class="group-label" x="22" y="563">Find/Results/</text>
+    <rect class="box-moved" x="22" y="572" width="536" height="20" rx="4"/><text x="30" y="586">FindResultActivation, FindResultCellStyle</text><text class="caption" x="550" y="586" text-anchor="end">← Find/</text>
+    <rect class="box-moved" x="22" y="596" width="536" height="20" rx="4"/><text x="30" y="610">FindResultsPresentation+OutlineView</text><text class="caption" x="550" y="610" text-anchor="end">← Find/</text>
+    <rect class="box-moved" x="22" y="620" width="536" height="20" rx="4"/><text x="30" y="634">NSColor+Xcode</text><text class="caption" x="550" y="634" text-anchor="end">← Theme/</text>
+    <rect class="box-kept" x="700" y="544" width="290" height="34" rx="6"/><text x="712" y="565">Find/Results/</text>
+    <path class="arrow" d="M 572 561 L 698 561"/>
+
+    <rect class="box-removed" x="10" y="660" width="560" height="34" rx="10"/>
+    <text class="group-label strike" x="22" y="681">Icons/</text>
+    <text class="caption" x="550" y="681" text-anchor="end">split up beside the AppCore types its files draw</text>
+
+    <rect class="box-kept" x="10" y="704" width="560" height="58" rx="10"/>
+    <text class="group-label" x="22" y="723">Presentation/</text>
+    <rect class="box-moved" x="22" y="732" width="536" height="20" rx="4"/><text x="30" y="746">SystemSymbol+Image</text><text class="caption" x="550" y="746" text-anchor="end">← Icons/</text>
+    <rect class="box-kept" x="700" y="704" width="290" height="34" rx="6"/><text x="712" y="725">Presentation/SystemSymbol</text>
+    <path class="arrow" d="M 572 721 L 698 721"/>
+
+    <rect class="box-added" x="10" y="772" width="560" height="58" rx="10"/>
+    <text class="group-label" x="22" y="791">RuntimeImage/</text>
+    <rect class="box-moved" x="22" y="800" width="536" height="20" rx="4"/><text x="30" y="814">RuntimeImageKind+Icon, CustomSymbol</text><text class="caption" x="550" y="814" text-anchor="end">← Icons/</text>
+    <rect class="box-kept" x="700" y="772" width="290" height="34" rx="6"/><text x="712" y="793">RuntimeImage/RuntimeImageKind</text>
+    <path class="arrow" d="M 572 789 L 698 789"/>
+
+    <rect class="box-added" x="10" y="840" width="560" height="82" rx="10"/>
+    <text class="group-label" x="22" y="859">RuntimeObject/</text>
+    <rect class="box-moved" x="22" y="868" width="536" height="20" rx="4"/><text x="30" y="882">RuntimeObjectIcon+Image</text><text class="caption" x="550" y="882" text-anchor="end">← Icons/</text>
+    <rect class="box-moved" x="22" y="892" width="536" height="20" rx="4"/><text x="30" y="906">IDEIconRuntimeObjectIconRenderer</text><text class="caption" x="550" y="906" text-anchor="end">← root</text>
+    <rect class="box-kept" x="700" y="840" width="290" height="34" rx="6"/><text x="712" y="861">RuntimeObject/RuntimeObjectIcon</text>
+    <path class="arrow" d="M 572 857 L 698 857"/>
+
+    <rect class="box-kept" x="10" y="932" width="560" height="58" rx="10"/>
+    <text class="group-label" x="22" y="951">Theme/</text>
+    <rect class="box-kept" x="22" y="960" width="536" height="20" rx="4"/><text x="30" y="974">ThemeProfile, ThemePreset+ThemeProfile, ResolvedThemeStream</text>
+    <text class="caption" x="700" y="953">(AppUI only)</text>
+
+    <rect class="box-removed" x="10" y="1000" width="560" height="34" rx="10"/>
+    <text class="group-label strike" x="22" y="1021">(root: 6 loose files)</text>
+
+    <rect class="box-kept" x="10" y="1044" width="560" height="50" rx="10"/>
+    <text class="group-label" x="22" y="1063">Activity/ ContextMenus/ EditorArea/</text>
+    <text class="group-label" x="22" y="1082">Engine/ Resources/ RuntimeSourcePicker/</text>
+    <text class="caption" x="558" y="1063" text-anchor="end">unchanged</text>
+  </svg>
   </div>
-  <div class="dir keep"><h4>Storage/</h4><span class="chip move">AppDefaults<small>← root</small></span></div>
-  <div class="dir keep"><h4>Activity/ BatchExporting/ Content/ ContextMenus/ Engine/ Reports/</h4><span class="small">不变（Engine/ 移出两个文件）</span></div>
-</div></div>
+  <p class="figure-caption">扩展、绘制或适配某个 AppCore 类型的文件，放进与该类型所在目录同名的 AppUI 目录；<code>Theme/</code> 只有 AppUI 才有。</p>
+</section>
 
-<h3>RuntimeViewerAppUI 镜像 AppCore</h3>
-<p class="small">左边是 AppCore 的目录与类型，右边是 AppUI 里与它同名的目录和放进去的文件。虚线框是只有 AppUI 才有的目录。</p>
-<div class="diagram"><div class="mirror">
-  <div class="head">RuntimeViewerAppCore</div><div></div><div class="head">RuntimeViewerAppUI</div>
-  <div class="left">App/AppRoute</div><div class="arrow">→</div><div class="right">App/AppCoordinator <span class="small">← root</span></div>
-  <div class="left">Base/</div><div class="arrow">→</div><div class="right">Base/Transition+Navigation <span class="small">← root</span></div>
-  <div class="left">Content/ContentInterface</div><div class="arrow">→</div><div class="right">Content/ContentTextRenderer, ContentInterface+Theme <span class="small">← Theme/</span></div>
-  <div class="left">Extensions/</div><div class="arrow">→</div><div class="right">Extensions/Then, PlatformTypes <span class="small">← root</span>, NSUIColor+Adaptive</div>
-  <div class="left">Filtering/NavigatorTextFilter</div><div class="arrow">→</div><div class="right">Filtering/NavigatorTextFilterFieldAdapter <span class="small">← root</span></div>
-  <div class="left">Find/Query/</div><div class="arrow">→</div><div class="right">Find/Query/FindModePathControlAdapter, FindQueryFieldMenuAdapter, FindQueryTerm+FindPatternComponents, FindRecentQueries+AttributedTitle</div>
-  <div class="left">Find/Results/</div><div class="arrow">→</div><div class="right">Find/Results/FindResultActivation, FindResultCellStyle, FindResultsPresentation+OutlineView, NSColor+Xcode <span class="small">← Theme/</span></div>
-  <div class="left">Presentation/SystemSymbol</div><div class="arrow">→</div><div class="right">Presentation/SystemSymbol+Image <span class="small">← Icons/</span></div>
-  <div class="left">RuntimeImage/RuntimeImageKind</div><div class="arrow">→</div><div class="right">RuntimeImage/RuntimeImageKind+Icon, CustomSymbol <span class="small">← Icons/</span></div>
-  <div class="left">RuntimeObject/RuntimeObjectIcon</div><div class="arrow">→</div><div class="right">RuntimeObject/RuntimeObjectIcon+Image <span class="small">← Icons/</span>, IDEIconRuntimeObjectIconRenderer <span class="small">← root</span></div>
-  <div></div><div></div><div class="right only">Theme/ThemeProfile, ThemePreset+ThemeProfile, ResolvedThemeStream</div>
-  <div></div><div></div><div class="right only">RuntimeSourcePicker/, Resources/（不变）</div>
-  <div></div><div></div><div class="right only"><span class="chip del">Icons/</span> <span class="chip del">(root: 6 loose files)</span></div>
-</div></div>
+<section id="map">
+  <h2>改动地图</h2>
+  <p><code>AC</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore</code>，<code>AUI</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppUI</code>。移动一律 <code>git mv</code>，文件内容不变。</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>AC/AppRoute.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/App/</code></td><td>—</td><td>App 级路由，对应 App 一侧的 <code>App/</code> 与 AUI 的 <code>AppCoordinator</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/ViewModel.swift</code>、<code>AC/ViewModelProtocol.swift</code>、<code>AC/LoadingPlaceholderTiming.swift</code>、<code>AC/OwnerReportingTask.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Base/</code></td><td>—</td><td>ViewModel 的基础设施，对应 App 一侧的 <code>Base/</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/DocumentState.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Document/</code></td><td>—</td><td>文档状态</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/SelectionRoute.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/EditorArea/</code></td><td>—</td><td>作用在编辑栏标签与分栏上的路由；AUI 的修饰键换算已在 <code>EditorArea/</code></td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/Then.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Extensions/</code></td><td>—</td><td>通用扩展</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/Extensions.swift</code></td><td><span class="tag tag-removed">拆分后删除</span></td><td>三段扩展各成一个文件：<code>AC/Extensions/String+IntegerIndex.swift</code>、<code>AC/RuntimeImage/RuntimeImageNode+Sequence.swift</code>、<code>AC/RuntimeImage/RuntimeImageLoadState+CaseAccessible.swift</code>；每个文件只带它要的 import</td><td>名不副实</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/FilterEngine.swift</code>、<code>AC/NavigatorTextFilter.swift</code>、<code>AC/NavigatorTextFilter+Keystrokes.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Filtering/</code></td><td>—</td><td>导航栏过滤框共用的过滤逻辑</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/SystemSymbol.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Presentation/</code></td><td>—</td><td>描述值的组成部分，与 <code>IconDescriptor</code> 同处</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/RuntimeImageKind.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/RuntimeImage/</code></td><td>—</td><td>镜像的种类</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/RuntimeObjectIcon.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/RuntimeObject/</code></td><td>—</td><td>对象图标的字形选择，与对象的 cell 外观同处</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/AppDefaults.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Storage/</code></td><td>—</td><td>书签与选项的存储，与 <code>ResilientFileStorage</code>、<code>UserDefaultsNamespace</code> 同处</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/AppCoreBoundaryTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>第 89 行改为 <code>RuntimeViewerAppCore/App/AppRoute.swift</code>；<code>allowedLines</code> 四条改为 <code>RuntimeViewerAppCore/Document/DocumentState.swift</code></td><td>写死的路径</td><td class="numeric">1</td></tr>
+      <tr><td><code>AC/Engine/RuntimeEngineBackgroundWork.swift</code>、<code>AC/BackgroundWorkProcessActivity.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/BackgroundWork/</code></td><td>—</td><td>后台工作的持有者与它的 App Nap 活动</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift</code>、<code>AlwaysIndexImageResolver.swift</code>、<code>AC/Engine/RuntimeEngine+ImageIndexing.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/BackgroundWork/Indexing/</code></td><td>—</td><td>索引协调器与它调的引擎扩展</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindCorpusCoordinator.swift</code>、<code>FindCorpusCoordinators.swift</code>、<code>FindCorpusFinishedBuild.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/BackgroundWork/FindCorpus/</code></td><td>—</td><td>Engine 的 Find 语料协调器</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/CrossReferencePreparationCoordinator.swift</code>、<code>CrossReferencePreparationState.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/BackgroundWork/CrossReferencePreparation/</code></td><td>—</td><td>Engine 的交叉引用预建协调器</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/ManualLoading/</code>（<code>ManualImageLoad</code>、<code>ManualImageLoadCoordinator</code>、<code>DocumentState+ManualLoading</code>）</td><td><span class="tag tag-moved">移动</span> → <code>AC/BackgroundWork/ManualLoading/</code></td><td>—</td><td>手动加载记录也属于 Engine 的后台工作</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindMode.swift</code>、<code>FindModePath.swift</code>、<code>FindPattern.swift</code>、<code>FindQueryTerm.swift</code>、<code>FindRecentQueries.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Find/Query/</code></td><td>—</td><td>查询的模型</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindScopeChooserViewModel.swift</code>、<code>FindScopeImageCellViewModel.swift</code>、<code>FindScopeMenu.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Find/Scope/</code></td><td>—</td><td>搜索范围选择</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindResultNode.swift</code>、<code>FindResultNode+Icon.swift</code>、<code>FindResultsOutline.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Find/Results/</code></td><td>—</td><td>结果树</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindCrossReferences.swift</code>、<code>FindCrossReferenceRootResolver.swift</code>、<code>FindCrossReferenceTree.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Find/CrossReferences/</code></td><td>—</td><td>Find 的交叉引用模式</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Find/FindViewModel.swift</code>、<code>FindSession.swift</code>、<code>FindNavigatorRoutable.swift</code></td><td><span class="tag">不动</span></td><td>—</td><td>Find 的入口留在 <code>Find/</code></td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Sidebar/SidebarRoot*.swift</code>（5 个）</td><td><span class="tag tag-moved">移动</span> → <code>AC/Sidebar/Root/</code></td><td>—</td><td>照 App 一侧 <code>Sidebar/Root/</code></td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Sidebar/SidebarRuntimeObject*.swift</code>（6 个）、<code>RuntimeObjectScope.swift</code>、<code>RuntimeObjectScopeMemory.swift</code>、<code>PrivateDeclarationViewModel.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AC/Sidebar/RuntimeObject/</code></td><td>—</td><td>照 App 一侧 <code>Sidebar/RuntimeObject/</code>（Filter Scope 与私有声明的视图都在那里）</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Sidebar/SidebarRoutes.swift</code></td><td><span class="tag">不动</span></td><td>—</td><td>两页共用的路由</td><td class="numeric">2</td></tr>
+      <tr><td><code>AC/Inspector/InspectorViewModel.swift</code></td><td><span class="tag tag-removed">拆分后删除</span></td><td><code>InspectorPlaceholderViewModel.swift</code>、<code>InspectorRuntimeNodeViewModel.swift</code> 各一个类型，内容原样</td><td>名不副实</td><td class="numeric">2</td></tr>
+      <tr><td><code>AUI/AppCoordinator.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/App/</code></td><td>—</td><td>镜像 <code>AC/App/AppRoute</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Transition+Navigation.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Base/</code></td><td>—</td><td>路由基础设施</td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Then.swift</code>、<code>AUI/PlatformTypes.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Extensions/</code></td><td>—</td><td>与 <code>NSUIColor+Adaptive</code> 同处</td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/NavigatorTextFilterFieldAdapter.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Filtering/</code></td><td>—</td><td>镜像 <code>AC/Filtering/NavigatorTextFilter</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/IDEIconRuntimeObjectIconRenderer.swift</code>、<code>AUI/Icons/RuntimeObjectIcon+Image.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/RuntimeObject/</code></td><td>—</td><td>镜像 <code>AC/RuntimeObject/RuntimeObjectIcon</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Icons/RuntimeImageKind+Icon.swift</code>、<code>AUI/Icons/CustomSymbol.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/RuntimeImage/</code></td><td>—</td><td>镜像 <code>AC/RuntimeImage/RuntimeImageKind</code>；<code>CustomSymbol</code> 的五个符号都是镜像种类的，唯一使用者是 <code>RuntimeImageKind+Icon</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Icons/SystemSymbol+Image.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Presentation/</code></td><td>—</td><td>镜像 <code>AC/Presentation/SystemSymbol</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Theme/NSColor+Xcode.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Find/Results/</code></td><td>—</td><td>里面是 Xcode 过滤结果的文字颜色，使用者只有 <code>FindResultCellStyle</code> 与 App 的 <code>FindViewController</code>，不属于内容页主题；跟着使用者走</td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Theme/ContentInterface+Theme.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Content/</code></td><td>—</td><td>镜像 <code>AC/Content/ContentInterface</code>，与 <code>ContentTextRenderer</code> 同处</td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Find/FindModePathControlAdapter.swift</code>、<code>FindQueryFieldMenuAdapter.swift</code>、<code>FindQueryTerm+FindPatternComponents.swift</code>、<code>FindRecentQueries+AttributedTitle.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Find/Query/</code></td><td>—</td><td>镜像 <code>AC/Find/Query/</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>AUI/Find/FindResultActivation.swift</code>、<code>FindResultCellStyle.swift</code>、<code>FindResultsPresentation+OutlineView.swift</code></td><td><span class="tag tag-moved">移动</span> → <code>AUI/Find/Results/</code></td><td>—</td><td>镜像 <code>AC/Find/Results/</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/AGENTS.md</code></td><td><span class="tag tag-changed">修改</span></td><td>新增「Where a file goes in RuntimeViewerAppCore and RuntimeViewerAppUI」一节（规则见详细设计）；第 22、74–120 行里的旧路径改成新路径</td><td>规则落地、路径同步</td><td class="numeric">4</td></tr>
+      <tr><td><code>AGENTS.md</code>（根）</td><td><span class="tag tag-changed">修改</span></td><td>Key Source Locations 的 Document state 改为 <code>…/RuntimeViewerAppCore/Document/DocumentState.swift</code></td><td>路径同步</td><td class="numeric">4</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
 
-<h2 id="map">改动地图</h2>
-<p class="small"><code>AC</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore</code>，<code>AUI</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerAppUI</code>。移动一律 <code>git mv</code>，文件内容不变。</p>
-<div class="table-wrap"><table>
-<tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr>
-<tr><td><code>AC/AppRoute.swift</code></td><td>移动 → <code>AC/App/</code></td><td>—</td><td>App 级路由，对应 App 一侧的 <code>App/</code> 与 AUI 的 <code>AppCoordinator</code></td><td>1</td></tr>
-<tr><td><code>AC/ViewModel.swift</code>、<code>ViewModelProtocol.swift</code>、<code>LoadingPlaceholderTiming.swift</code>、<code>OwnerReportingTask.swift</code></td><td>移动 → <code>AC/Base/</code></td><td>—</td><td>ViewModel 的基础设施，对应 App 一侧的 <code>Base/</code></td><td>1</td></tr>
-<tr><td><code>AC/DocumentState.swift</code></td><td>移动 → <code>AC/Document/</code></td><td>—</td><td>文档状态</td><td>1</td></tr>
-<tr><td><code>AC/SelectionRoute.swift</code></td><td>移动 → <code>AC/EditorArea/</code></td><td>—</td><td>作用在编辑栏标签与分栏上的路由；AUI 的修饰键换算已在 <code>EditorArea/</code></td><td>1</td></tr>
-<tr><td><code>AC/Then.swift</code></td><td>移动 → <code>AC/Extensions/</code></td><td>—</td><td>通用扩展</td><td>1</td></tr>
-<tr><td><code>AC/Extensions.swift</code></td><td>拆分后删除</td><td>三段扩展各成一个文件：<code>AC/Extensions/String+IntegerIndex.swift</code>、<code>AC/RuntimeImage/RuntimeImageNode+Sequence.swift</code>、<code>AC/RuntimeImage/RuntimeImageLoadState+CaseAccessible.swift</code>；每个文件只带它要的 import</td><td>名不副实</td><td>1</td></tr>
-<tr><td><code>AC/FilterEngine.swift</code>、<code>NavigatorTextFilter.swift</code>、<code>NavigatorTextFilter+Keystrokes.swift</code></td><td>移动 → <code>AC/Filtering/</code></td><td>—</td><td>导航栏过滤框共用的过滤逻辑</td><td>1</td></tr>
-<tr><td><code>AC/SystemSymbol.swift</code></td><td>移动 → <code>AC/Presentation/</code></td><td>—</td><td>描述值的组成部分，与 <code>IconDescriptor</code> 同处</td><td>1</td></tr>
-<tr><td><code>AC/RuntimeImageKind.swift</code></td><td>移动 → <code>AC/RuntimeImage/</code></td><td>—</td><td>镜像的种类</td><td>1</td></tr>
-<tr><td><code>AC/RuntimeObjectIcon.swift</code></td><td>移动 → <code>AC/RuntimeObject/</code></td><td>—</td><td>对象图标的字形选择，与对象的 cell 外观同处</td><td>1</td></tr>
-<tr><td><code>AC/AppDefaults.swift</code></td><td>移动 → <code>AC/Storage/</code></td><td>—</td><td>书签与选项的存储</td><td>1</td></tr>
-<tr><td><code>…/AppCoreBoundaryTests.swift</code></td><td>修改</td><td>第 89 行改为 <code>RuntimeViewerAppCore/App/AppRoute.swift</code>；<code>allowedLines</code> 四条改为 <code>RuntimeViewerAppCore/Document/DocumentState.swift</code></td><td>写死的路径</td><td>1</td></tr>
-<tr><td><code>AC/Engine/RuntimeEngineBackgroundWork.swift</code>、<code>AC/BackgroundWorkProcessActivity.swift</code></td><td>移动 → <code>AC/BackgroundWork/</code></td><td>—</td><td>后台工作的持有者与它的 App Nap 活动</td><td>2</td></tr>
-<tr><td><code>AC/BackgroundIndexing/</code> 两个文件、<code>AC/Engine/RuntimeEngine+ImageIndexing.swift</code></td><td>移动 → <code>AC/BackgroundWork/Indexing/</code></td><td>—</td><td>索引协调器与它调的引擎扩展</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindCorpusCoordinator.swift</code>、<code>FindCorpusCoordinators.swift</code>、<code>FindCorpusFinishedBuild.swift</code></td><td>移动 → <code>AC/BackgroundWork/FindCorpus/</code></td><td>—</td><td>Engine 的 Find 语料协调器</td><td>2</td></tr>
-<tr><td><code>AC/Find/CrossReferencePreparationCoordinator.swift</code>、<code>CrossReferencePreparationState.swift</code></td><td>移动 → <code>AC/BackgroundWork/CrossReferencePreparation/</code></td><td>—</td><td>Engine 的交叉引用预建协调器</td><td>2</td></tr>
-<tr><td><code>AC/ManualLoading/</code>（三个文件）</td><td>移动 → <code>AC/BackgroundWork/ManualLoading/</code></td><td>—</td><td>手动加载记录也属于 Engine 的后台工作</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindMode</code>、<code>FindModePath</code>、<code>FindPattern</code>、<code>FindQueryTerm</code>、<code>FindRecentQueries</code></td><td>移动 → <code>AC/Find/Query/</code></td><td>—</td><td>查询的模型</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindScopeChooserViewModel</code>、<code>FindScopeImageCellViewModel</code>、<code>FindScopeMenu</code></td><td>移动 → <code>AC/Find/Scope/</code></td><td>—</td><td>搜索范围选择</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindResultNode</code>、<code>FindResultNode+Icon</code>、<code>FindResultsOutline</code></td><td>移动 → <code>AC/Find/Results/</code></td><td>—</td><td>结果树</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindCrossReferences</code>、<code>FindCrossReferenceRootResolver</code>、<code>FindCrossReferenceTree</code></td><td>移动 → <code>AC/Find/CrossReferences/</code></td><td>—</td><td>Find 的交叉引用模式</td><td>2</td></tr>
-<tr><td><code>AC/Find/FindViewModel</code>、<code>FindSession</code>、<code>FindNavigatorRoutable</code></td><td>不动</td><td>—</td><td>Find 的入口留在 <code>Find/</code></td><td>2</td></tr>
-<tr><td><code>AC/Sidebar/SidebarRoot*.swift</code>（5 个）</td><td>移动 → <code>AC/Sidebar/Root/</code></td><td>—</td><td>照 App 一侧 <code>Sidebar/Root/</code></td><td>2</td></tr>
-<tr><td><code>AC/Sidebar/SidebarRuntimeObject*.swift</code>（6 个）、<code>RuntimeObjectScope</code>、<code>RuntimeObjectScopeMemory</code>、<code>PrivateDeclarationViewModel</code></td><td>移动 → <code>AC/Sidebar/RuntimeObject/</code></td><td>—</td><td>照 App 一侧 <code>Sidebar/RuntimeObject/</code></td><td>2</td></tr>
-<tr><td><code>AC/Sidebar/SidebarRoutes.swift</code></td><td>不动</td><td>—</td><td>两页共用的路由</td><td>2</td></tr>
-<tr><td><code>AC/Inspector/InspectorViewModel.swift</code></td><td>拆分后删除</td><td><code>InspectorPlaceholderViewModel.swift</code>、<code>InspectorRuntimeNodeViewModel.swift</code> 各一个类型，内容原样</td><td>名不副实</td><td>2</td></tr>
-<tr><td><code>AUI/AppCoordinator.swift</code></td><td>移动 → <code>AUI/App/</code></td><td>—</td><td>镜像 <code>AC/App/AppRoute</code></td><td>3</td></tr>
-<tr><td><code>AUI/Transition+Navigation.swift</code></td><td>移动 → <code>AUI/Base/</code></td><td>—</td><td>路由基础设施</td><td>3</td></tr>
-<tr><td><code>AUI/Then.swift</code>、<code>AUI/PlatformTypes.swift</code></td><td>移动 → <code>AUI/Extensions/</code></td><td>—</td><td>与 <code>NSUIColor+Adaptive</code> 同处</td><td>3</td></tr>
-<tr><td><code>AUI/NavigatorTextFilterFieldAdapter.swift</code></td><td>移动 → <code>AUI/Filtering/</code></td><td>—</td><td>镜像 <code>AC/Filtering/NavigatorTextFilter</code></td><td>3</td></tr>
-<tr><td><code>AUI/IDEIconRuntimeObjectIconRenderer.swift</code>、<code>AUI/Icons/RuntimeObjectIcon+Image.swift</code></td><td>移动 → <code>AUI/RuntimeObject/</code></td><td>—</td><td>镜像 <code>AC/RuntimeObject/RuntimeObjectIcon</code></td><td>3</td></tr>
-<tr><td><code>AUI/Icons/RuntimeImageKind+Icon.swift</code>、<code>AUI/Icons/CustomSymbol.swift</code></td><td>移动 → <code>AUI/RuntimeImage/</code></td><td>—</td><td>镜像 <code>AC/RuntimeImage/RuntimeImageKind</code>；<code>CustomSymbol</code> 的五个符号都是镜像种类的，唯一使用者是 <code>RuntimeImageKind+Icon</code></td><td>3</td></tr>
-<tr><td><code>AUI/Icons/SystemSymbol+Image.swift</code></td><td>移动 → <code>AUI/Presentation/</code></td><td>—</td><td>镜像 <code>AC/Presentation/SystemSymbol</code></td><td>3</td></tr>
-<tr><td><code>AUI/Theme/NSColor+Xcode.swift</code></td><td>移动 → <code>AUI/Find/Results/</code></td><td>—</td><td>里面是 Xcode 过滤结果的文字颜色，使用者只有 <code>FindResultCellStyle</code> 与 App 的 <code>FindViewController</code>，不属于内容页主题；跟着使用者走</td><td>3</td></tr>
-<tr><td><code>AUI/Theme/ContentInterface+Theme.swift</code></td><td>移动 → <code>AUI/Content/</code></td><td>—</td><td>镜像 <code>AC/Content/ContentInterface</code>，与 <code>ContentTextRenderer</code> 同处</td><td>3</td></tr>
-<tr><td><code>AUI/Find/</code> 查询相关四个文件</td><td>移动 → <code>AUI/Find/Query/</code></td><td>—</td><td>镜像 <code>AC/Find/Query/</code></td><td>3</td></tr>
-<tr><td><code>AUI/Find/</code> 结果相关三个文件</td><td>移动 → <code>AUI/Find/Results/</code></td><td>—</td><td>镜像 <code>AC/Find/Results/</code></td><td>3</td></tr>
-<tr><td><code>RuntimeViewerPackages/Sources/AGENTS.md</code></td><td>修改</td><td>新增「Where a file goes」一节；旧路径改成新路径</td><td>规则落地、路径同步</td><td>4</td></tr>
-<tr><td><code>AGENTS.md</code>（根）</td><td>修改</td><td>Key Source Locations 的 Document state 改为 <code>…/RuntimeViewerAppCore/Document/DocumentState.swift</code></td><td>路径同步</td><td>4</td></tr>
-</table></div>
+<section id="motivation">
+  <h2>动机</h2>
+  <p><strong>根目录成了杂物间。</strong> AppCore 根目录有 17 个文件，AppUI 有 6 个，彼此毫无关系：ViewModel 基类（<code>ViewModel.swift</code>）、文档状态（<code>DocumentState.swift</code>）、存储（<code>AppDefaults.swift</code>）、过滤（<code>FilterEngine.swift</code>、<code>NavigatorTextFilter.swift</code>）、图标（<code>RuntimeObjectIcon.swift</code>、<code>SystemSymbol.swift</code>）、杂项扩展（<code>Then.swift</code>、<code>Extensions.swift</code>）。找一个文件只能靠记名字。</p>
+  <p><strong>同一类东西分在几处。</strong> 每个 Engine 有三个后台协调器，由 <code>RuntimeEngineBackgroundWork</code> 统一持有（根 <code>AGENTS.md</code>「Engine work is shared by the documents on the engine」）：</p>
+  <ul>
+    <li>索引协调器在 <code>BackgroundIndexing/</code>；</li>
+    <li>Find 语料协调器和交叉引用预建协调器在 <code>Find/</code>，虽然它们是 Engine 范围的后台工作，Report 与工具栏活动也读它们；</li>
+    <li>持有它们的 <code>RuntimeEngineBackgroundWork</code> 在 <code>Engine/</code>，它要的 <code>BackgroundWorkProcessActivity</code> 在根目录；</li>
+    <li>手动加载协调器（同样属于 Engine 的后台工作）在 <code>ManualLoading/</code>。</li>
+  </ul>
+  <p><strong><code>Find/</code> 太大。</strong> 22 个文件平铺，查询模型（<code>FindMode</code>、<code>FindQueryTerm</code>）、结果树（<code>FindResultNode</code>）、范围选择（<code>FindScopeChooserViewModel</code>）、交叉引用（<code>FindCrossReferenceTree</code>）、后台协调器混在一起。</p>
+  <p><strong>AppUI 的目录和 AppCore 对不上。</strong> 0094 把绘制代码搬进 AppUI 时按「做什么」起了 <code>Icons/</code>，于是 <code>RuntimeObjectIcon</code> 在 AppCore 根目录、它的绘制在 AppUI <code>Icons/</code>，<code>RuntimeImageKind</code> 在 AppCore 根目录、绘制也在 <code>Icons/</code>；<code>ContentInterface</code> 在 AppCore <code>Content/</code>，它的上色在 AppUI <code>Theme/</code>；<code>SelectionRoute</code> 在 AppCore 根目录，修饰键换算在 AppUI <code>EditorArea/</code>。从一边的类型找另一边的配套代码没有规律可循。</p>
+  <p><strong>名不副实的文件。</strong> <code>Extensions.swift</code> 里是三段互不相干的扩展（<code>RuntimeImageLoadState</code> 的 <code>CaseAccessible</code>、<code>RuntimeImageNode</code> 的 <code>Sequence</code>、<code>String</code> 的整数下标换算）；<code>InspectorViewModel.swift</code> 里没有叫 <code>InspectorViewModel</code> 的类型，是 <code>InspectorPlaceholderViewModel</code> 和 <code>InspectorRuntimeNodeViewModel</code> 两个 ViewModel。</p>
+</section>
 
-<h2 id="motivation">动机</h2>
-<ul>
-  <li><strong>根目录成了杂物间。</strong>AppCore 根目录 17 个文件、AppUI 6 个，彼此毫无关系：ViewModel 基类、文档状态、存储、过滤、图标、杂项扩展。找一个文件只能靠记名字。</li>
-  <li><strong>同一类东西分在几处。</strong>每个 Engine 的三个后台协调器由 <code>RuntimeEngineBackgroundWork</code> 统一持有，却分散在 <code>BackgroundIndexing/</code>、<code>Find/</code>、<code>Engine/</code>；手动加载在 <code>ManualLoading/</code>；<code>BackgroundWorkProcessActivity</code> 在根目录。</li>
-  <li><strong><code>Find/</code> 太大。</strong>22 个文件平铺，查询模型、结果树、范围选择、交叉引用、后台协调器混在一起。</li>
-  <li><strong>AppUI 的目录和 AppCore 对不上。</strong><code>RuntimeObjectIcon</code> 在 AppCore 根目录、绘制在 AppUI <code>Icons/</code>；<code>ContentInterface</code> 在 <code>Content/</code>、上色在 <code>Theme/</code>；<code>SelectionRoute</code> 在根目录、修饰键换算在 <code>EditorArea/</code>。</li>
-  <li><strong>名不副实的文件。</strong><code>Extensions.swift</code> 是三段互不相干的扩展；<code>InspectorViewModel.swift</code> 里没有叫 <code>InspectorViewModel</code> 的类型。</li>
-</ul>
+<section id="proposal">
+  <h2>提议方案</h2>
+  <ol>
+    <li><strong>目标根目录不放文件。</strong> 每个文件属于一个有名字的目录。</li>
+    <li><strong>目录按功能分</strong>，名字与 App 一侧的目录相同（<code>App</code>、<code>Base</code>、<code>Content</code>、<code>EditorArea</code>、<code>Find</code>、<code>Inspector</code>、<code>Reports</code>、<code>Sidebar/Root</code>、<code>Sidebar/RuntimeObject</code>）。App 一侧没有的，按它装的东西起名：<code>BackgroundWork</code>、<code>Document</code>、<code>Engine</code>、<code>Extensions</code>、<code>Filtering</code>、<code>Presentation</code>、<code>RuntimeImage</code>、<code>RuntimeObject</code>、<code>Storage</code>。</li>
+    <li><strong>Engine 的后台工作归 <code>BackgroundWork/</code></strong>：<code>RuntimeEngineBackgroundWork</code> 持有的协调器、它们的状态与结果类型，以及手动加载，各占一个子目录。读它们结果的功能（Find、Report、工具栏活动）不收它们。</li>
+    <li><strong>AppUI 镜像 AppCore</strong>：扩展、绘制或适配某个 AppCore 类型的文件，放进 AppCore 里该类型所在目录的同名目录。只有 AppUI 才有的东西自成目录（<code>Theme/</code>、<code>RuntimeSourcePicker/</code>、<code>Resources/</code>），或者跟着它唯一的使用者走。</li>
+    <li><strong>文件以主类型命名</strong>：主类型旁边的小辅助类型可以留在同一个文件里；把两件不相干的东西放在一起、或者名字里的类型根本不存在的文件，拆开。本次只拆 <code>Extensions.swift</code> 与 <code>InspectorViewModel.swift</code>。</li>
+    <li>规则写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>，新增一节「Where a file goes」。</li>
+  </ol>
+  <h3>非目标</h3>
+  <ul>
+    <li>不改任何代码行为，不改类型名、访问级别和文件内容（两处拆分只是把原有代码原样分到新文件）。</li>
+    <li>不把其余约 35 个多类型文件拆成一类型一文件（<code>FindMode.swift</code>、<code>FilterEngine.swift</code>、<code>ReportNode.swift</code> 等）。</li>
+    <li>不整理两个测试 target 的目录，只改 <code>AppCoreBoundaryTests</code> 里写死的路径。</li>
+    <li>不动 <code>RuntimeViewerUI</code>、<code>RuntimeViewerArchitectures</code> 等别的包内 target，也不动 App 一侧的目录。</li>
+    <li>不合并 AppCore 与 AppUI 各自的一份 <code>Then.swift</code>：两份都是 <code>internal</code>，各自模块用，合并要新增一个公开模块，不属于整理文件。</li>
+    <li>不更新 <code>Documentations/FeatureMaps/EditorJumpBar.md</code>：功能地图按头部的核对基准 commit 读，下次核对时一并更新。</li>
+    <li>不改已落地提案、ResolvedIssues、TaskReports 里的旧路径：它们是当时的记录。</li>
+  </ul>
+</section>
 
-<h2 id="proposal">提议方案</h2>
-<ol>
-  <li><strong>目标根目录不放文件。</strong></li>
-  <li><strong>目录按功能分</strong>，名字与 App 一侧相同（<code>App</code>、<code>Base</code>、<code>Content</code>、<code>EditorArea</code>、<code>Find</code>、<code>Inspector</code>、<code>Reports</code>、<code>Sidebar/Root</code>、<code>Sidebar/RuntimeObject</code>）；App 没有的按装的东西起名。</li>
-  <li><strong>Engine 的后台工作归 <code>BackgroundWork/</code></strong>，每种一个子目录；读结果的功能不收它们。</li>
-  <li><strong>AppUI 镜像 AppCore</strong>；只有 AppUI 才有的自成目录或跟着唯一使用者走。</li>
-  <li><strong>文件以主类型命名</strong>；小辅助类型可留在主类型旁，名不副实的拆开。本次只拆两个。</li>
-  <li>规则写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>。</li>
-</ol>
-<h3>非目标</h3>
-<ul>
-  <li>不改代码行为、类型名、访问级别和文件内容。</li>
-  <li>不把其余约 35 个多类型文件拆成一类型一文件。</li>
-  <li>不整理测试 target 的目录。</li>
-  <li>不动别的 target 与 App 一侧的目录。</li>
-  <li>不合并两份 <code>internal</code> 的 <code>Then.swift</code>（要新增公开模块）。</li>
-  <li>不更新 <code>FeatureMaps/EditorJumpBar.md</code>（按核对基准 commit 读）和已落地提案等历史记录里的旧路径。</li>
-</ul>
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>AppCore 根目录收进目录</strong>（已完成，2026-11-18）—— 改动地图里步骤为 1 的各行
+      <ul>
+        <li>行为：<code>packageBuildsWithNoFileAtAppCoreRoot</code>（<code>RuntimeViewerAppCore/</code> 下没有 <code>.swift</code> 文件）</li>
+        <li>行为：<code>boundaryTestsStillFindTheiOSRouteAllowances</code>（<code>AppCoreBoundaryTests</code> 全部通过，<code>allowedLines</code> 没有失配）</li>
+        <li>行为：<code>extensionsSplitKeepsEveryExtension</code>（拆出的三个文件里的声明与原 <code>Extensions.swift</code> 逐行相同）</li>
+      </ul>
+    </li>
+    <li><strong>BackgroundWork、Find 子目录、Sidebar 子目录与 Inspector 拆分</strong>（已完成，2026-11-18）—— 步骤为 2 的各行
+      <ul>
+        <li>行为：<code>backgroundWorkHoldsEveryCoordinatorTheEngineWorkOwns</code>（三个协调器与手动加载都在 <code>BackgroundWork/</code> 下）</li>
+        <li>行为：<code>findDirectoryKeepsOnlyItsEntryPoints</code>（<code>Find/</code> 根下只剩三个文件）</li>
+        <li>行为：<code>inspectorSplitKeepsBothViewModels</code></li>
+      </ul>
+    </li>
+    <li><strong>AppUI 镜像</strong>（已完成，2026-11-18）—— 步骤为 3 的各行
+      <ul>
+        <li>行为：<code>packageBuildsWithNoFileAtAppUIRoot</code></li>
+        <li>行为：<code>iconsDirectoryIsGone</code></li>
+      </ul>
+    </li>
+    <li><strong>规则与路径写进文档</strong>（已完成，2026-11-18）—— 步骤为 4 的各行
+      <ul>
+        <li>行为：<code>agentsFilesNameNoMovedPath</code>（现行文档里不再有旧路径）</li>
+      </ul>
+    </li>
+  </ol>
+  <p>每一步后：包级 <code>swift build --build-tests</code>、<code>RuntimeViewerAppCoreTests</code> 与 <code>RuntimeViewerAppUITests</code> 全部通过（对照既有红灯）、iOS 模拟器包构建通过。全部做完后 <code>./TuistScript.sh warm</code> 并编 macOS App（Tuist 生成的工程按文件列，目录变了要重新生成）。</p>
+  <div class="callout callout-note">
+    <p class="callout-title">收尾时必须判断两件事（判断结果写进决策日志，不允许沉默跳过）</p>
+    <ul>
+      <li><strong>要不要配套专题文章</strong> —— 预计不要：规则写在 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>。</li>
+      <li><strong>有没有引入新术语</strong> —— 预计没有。</li>
+    </ul>
+  </div>
+</section>
 
-<h2 id="steps">落地步骤</h2>
-<ol>
-  <li><strong>AppCore 根目录收进目录（已完成）</strong>（含拆 <code>Extensions.swift</code>、改边界测试路径）
-    <ul><li><code>packageBuildsWithNoFileAtAppCoreRoot</code></li><li><code>boundaryTestsStillFindTheiOSRouteAllowances</code></li><li><code>extensionsSplitKeepsEveryExtension</code></li></ul></li>
-  <li><strong>BackgroundWork、Find 子目录、Sidebar 子目录与 Inspector 拆分（已完成）</strong>
-    <ul><li><code>backgroundWorkHoldsEveryCoordinatorTheEngineWorkOwns</code></li><li><code>findDirectoryKeepsOnlyItsEntryPoints</code></li><li><code>inspectorSplitKeepsBothViewModels</code></li></ul></li>
-  <li><strong>AppUI 镜像（已完成）</strong>
-    <ul><li><code>packageBuildsWithNoFileAtAppUIRoot</code></li><li><code>iconsDirectoryIsGone</code></li></ul></li>
-  <li><strong>规则与路径写进文档（已完成）</strong>
-    <ul><li><code>agentsFilesNameNoMovedPath</code></li></ul></li>
-</ol>
-<p>每一步后：包级 <code>swift build --build-tests</code>、<code>RuntimeViewerAppCoreTests</code> 与 <code>RuntimeViewerAppUITests</code> 通过（对照既有红灯）、iOS 模拟器包构建通过。全部做完后 <code>./TuistScript.sh warm</code> 并编 macOS App。</p>
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <p>无。只移动源文件，二进制里的代码不变。</p>
+  <h3>可发现性</h3>
+  <p>不适用。</p>
+  <h3>数据与配置兼容</h3>
+  <p>无影响：没有类型改名，没有存储格式或键名变化。</p>
+  <h3>平台与最低版本</h3>
+  <p>不变。iOS 与 macOS 共用这两个 target，按 iOS 模拟器另编一次包确认目录变化对两边都没影响。</p>
+  <h3>发布</h3>
+  <p>无影响。正在别的分支上改这两个 target 的人，合并时 git 会按改名跟踪，文件被移动不会冲突，除非同时改了被拆的两个文件。</p>
+</section>
 
-<h2 id="impact">影响</h2>
-<ul>
-  <li><strong>用户可见变化</strong>：无。</li>
-  <li><strong>数据与配置兼容</strong>：无影响，没有类型改名或存储变化。</li>
-  <li><strong>平台</strong>：不变；按 iOS 模拟器另编一次包确认。</li>
-  <li><strong>发布</strong>：无影响。别的分支合并时 git 按改名跟踪，只有同时改了被拆的两个文件才会冲突。</li>
-</ul>
-
-<details id="design"><summary>详细设计</summary>
-<p>写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code> 的新一节（拟稿）：</p>
+<section id="design">
+  <h2>详细设计</h2>
+  <details>
+    <summary>新增的规则（写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>，英文拟稿）</summary>
+    <div class="details-body">
 <pre><code>## Where a file goes in RuntimeViewerAppCore and RuntimeViewerAppUI
 
 - **Nothing at a target's root.** Every file is in a directory named after a feature: the app's own
@@ -295,44 +594,93 @@ ul { padding-left: 22px; }
   its state and results. A feature that reads them (Find, the Report, the toolbar's activity) does not
   hold their files.
 - **RuntimeViewerAppUI mirrors RuntimeViewerAppCore.** A file that extends, draws or adapts an AppCore
-  type goes in the directory of the same name as that type's. What only AppUI has gets a directory of
-  its own (`Theme/`, `RuntimeSourcePicker/`, `Resources/`) or goes with its one user.
+  type goes in the directory of the same name as that type's: `RuntimeObject/RuntimeObjectIcon+Image.swift`
+  beside AppCore's `RuntimeObject/RuntimeObjectIcon.swift`. What only AppUI has gets a directory of its
+  own (`Theme/`, `RuntimeSourcePicker/`, `Resources/`) or goes with its one user.
 - **A file is named after its main type.** Small helper types may stay beside it; a file whose name
   names no type in it, or that holds unrelated things, is split.</code></pre>
-<p>两处拆分：新文件只带它要的 import（<code>String+IntegerIndex</code> 只要 Foundation；<code>RuntimeImageNode+Sequence</code> 要 RuntimeViewerCore；<code>RuntimeImageLoadState+CaseAccessible</code> 另要 RuntimeViewerArchitectures）。拆出来的代码一字不改。</p>
-<p>git 历史：一律 <code>git mv</code>，每步一个提交、提交里只有移动加测试路径或文档，<code>git log --follow</code> 与 blame 都能跟过去。</p>
-</details>
+    </div>
+  </details>
+  <details>
+    <summary>两处拆分的写法</summary>
+    <div class="details-body">
+      <p>新文件只带它要的 import。<code>Extensions.swift</code> 现在 import <code>Foundation</code>、<code>RuntimeViewerCore</code>、<code>RuntimeViewerArchitectures</code>：<code>String+IntegerIndex</code> 只要 <code>Foundation</code>；<code>RuntimeImageNode+Sequence</code> 要 <code>RuntimeViewerCore</code>；<code>RuntimeImageLoadState+CaseAccessible</code> 要 <code>RuntimeViewerCore</code> 与 <code>RuntimeViewerArchitectures</code>（<code>CaseAccessible</code> 在那里）。<code>InspectorViewModel.swift</code> 的 import 两个新文件各带一份，用不到的删掉。拆出来的代码一字不改，文档注释跟着它的类型走。</p>
+    </div>
+  </details>
+  <details>
+    <summary>改名对 git 历史的影响</summary>
+    <div class="details-body">
+      <p>一律用 <code>git mv</code>，每个落地步骤一个提交、提交里只有移动（加上测试路径或文档），<code>git log --follow</code> 与 blame 都能跟过去。两处拆分在提交里表现为一删两增，旧文件的历史在被删文件那里查。</p>
+    </div>
+  </details>
+</section>
 
-<details id="research"><summary>前期调研</summary>
-<ul>
-  <li>现状（<code>next</code> 上 20d56e71）：AppCore 131 个文件，根目录 17、<code>Find/</code> 22、<code>Sidebar/</code> 15；AppUI 39 个，根目录 6。</li>
-  <li>App 一侧目录：<code>App</code>、<code>Base</code>、<code>BatchExporting</code>、<code>Content</code>、<code>EditorArea</code>、<code>Find</code>、<code>Inspector</code>、<code>Main</code>、<code>Reports</code>、<code>Sidebar</code>（下分 <code>Root/</code>、<code>RuntimeObject/</code>，私有声明与 Filter Scope 的视图都在 <code>RuntimeObject/</code>）。</li>
-  <li>使用者统计：<code>SelectionRoute</code> 被五个目录使用；<code>NavigatorTextFilter</code> 被 Sidebar、Find、Reports 使用，<code>FilterEngine</code> 只被 Sidebar 使用；<code>OwnerReportingTask</code> 只被 App 的批量导出使用；<code>NSColor+Xcode</code> 的颜色只被 <code>FindResultCellStyle</code> 与 App 的 <code>FindViewController</code> 使用。</li>
-  <li>依赖路径的地方：<code>Package.swift</code> 只声明 <code>Resources/Symbols.xcassets</code>；Tuist 描述只列 target；测试里只有 <code>AppCoreBoundaryTests</code> 写死了五处路径；源码没有 <code>#filePath</code>。</li>
-  <li>现行文档：根 <code>AGENTS.md</code> 第 809 行，<code>RuntimeViewerPackages/Sources/AGENTS.md</code> 第 22、74–120 行。</li>
-</ul>
-</details>
+<section id="research">
+  <h2>前期调研</h2>
+  <details>
+    <summary>现状、App 一侧的目录、使用者统计、依赖文件路径的地方、现行文档里的路径</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>现状</strong>（<code>next</code> 上 20d56e71）：AppCore 131 个 Swift 文件，根目录 17 个、<code>Find/</code> 22 个、<code>Sidebar/</code> 15 个；AppUI 39 个，根目录 6 个。逐个文件的顶层声明与行数已核对，见改动地图。</li>
+        <li><strong>App 一侧已有的目录</strong>（<code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/</code>）：<code>App</code>、<code>Base</code>、<code>BatchExporting</code>、<code>Content</code>、<code>EditorArea</code>、<code>Find</code>、<code>Inspector</code>、<code>Main</code>、<code>Reports</code>、<code>Sidebar</code>（下分 <code>Root/</code>、<code>RuntimeObject/</code>，<code>PrivateDeclarationViewController</code> 与 <code>SidebarRuntimeObjectScopeViewController</code> 都在 <code>RuntimeObject/</code>）。本提案的目录名尽量与之相同，<code>App/</code>、<code>Base/</code> 也照它起。</li>
+        <li><strong>根目录文件的使用者</strong>（<code>grep -w</code> 统计）：
+          <ul>
+            <li><code>SelectionRoute</code> 被 <code>EditorArea/</code>、<code>Content/</code>、<code>Find/</code>、<code>Inspector/</code>、<code>ContextMenus/</code> 使用，根 <code>AGENTS.md</code> 把它描述为作用在编辑栏标签上的路由；AppUI 里它的修饰键换算已在 <code>EditorArea/</code>。</li>
+            <li><code>NavigatorTextFilter</code> 被 <code>Sidebar/</code>（5 处）、<code>Find/</code>、<code>Reports/</code> 使用；<code>FilterEngine</code> 只被 <code>Sidebar/</code> 使用。</li>
+            <li><code>LoadingPlaceholderTiming</code> 被 <code>Content/</code>、<code>Inspector/</code>、<code>Sidebar/</code> 使用；<code>OwnerReportingTask</code> 只被 App 的 <code>BatchExportingProgressViewModel</code> 使用。</li>
+            <li><code>RuntimeImageKind</code>、<code>RuntimeObjectIcon</code> 被五六个目录使用；<code>SystemSymbol</code> 被 AppCore <code>Presentation/</code> 和 AppUI 使用。</li>
+          </ul>
+        </li>
+        <li><strong>依赖文件路径的地方</strong>：
+          <ul>
+            <li><code>Package.swift</code> 只声明 AppUI 的 <code>Resources/Symbols.xcassets</code>，不动它即可；Tuist 的描述（<code>Tuist.swift</code>、<code>Tuist/ProjectDescriptionHelpers/</code>）只列 target，不列文件。</li>
+            <li>测试里写死源文件路径的只有 <code>AppCoreBoundaryTests</code>：<code>RuntimeViewerAppCore/AppRoute.swift</code>（第 89 行）和 <code>allowedLines</code> 里的四条 <code>RuntimeViewerAppCore/DocumentState.swift</code>（第 176–188 行）。<code>PackageSourceScan</code> 按 target 目录递归读文件，子目录不影响它。</li>
+            <li>源码里没有 <code>#filePath</code> / <code>#file</code> 的用法，也没有注释引用这些相对路径。</li>
+          </ul>
+        </li>
+        <li><strong>现行文档里的路径</strong>：根 <code>AGENTS.md</code> 第 809 行（<code>DocumentState.swift</code>）；<code>RuntimeViewerPackages/Sources/AGENTS.md</code> 第 22、74、75、87、90、93、102、110、120 行（<code>Transition+Navigation.swift</code>、<code>Presentation/</code>、<code>Theme/</code>、<code>PlatformTypes.swift</code>、<code>Icons/RuntimeImageKind+Icon.swift</code>）。<code>Documentations/FeatureMaps/EditorJumpBar.md</code> 也列了路径，但它按头部记的核对基准 commit 读，0091 拆包之后就没跟着改。</li>
+      </ul>
+    </div>
+  </details>
+</section>
 
-<details id="alternatives"><summary>替代方案考量</summary>
-<ul>
-  <li><strong>一个文件一个顶层类型</strong>：多出约 60 个文件，很多辅助类型只有几行。用户选了只拆名不副实的。</li>
-  <li><strong>按层分目录（ViewModels / Models / Services）</strong>：同一功能分散三处，与 App 一侧按功能分对不上。</li>
-  <li><strong>AppUI 按「做什么」分（保留 Icons/、Theme/）</strong>：从 AppCore 类型找绘制代码没有规律。</li>
-  <li><strong>语料与交叉引用协调器留在 Find/</strong>：它们是 Engine 范围的工作，放在 Find/ 会让人以为随 Find 面板创建。</li>
-  <li><strong>测试 target 一起整理</strong>：用户选了先不动。</li>
-</ul>
-</details>
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>5 个替代方案，均未采用</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>一个文件一个顶层类型（照 RuntimeViewerCore 的规则）</strong>：要把约 35 个多类型文件拆开，多出约 60 个文件，其中不少辅助类型只有几行、只给主类型用（<code>FindResultCellAppearance</code>、<code>TabBarItem</code>）。用户选了只拆名不副实的。</li>
+        <li><strong>按层分目录（<code>ViewModels/</code>、<code>Models/</code>、<code>Services/</code>）</strong>：同一功能的 ViewModel、模型、路由会分散到三处，和 App 一侧按功能分的目录对不上，改一个功能要跳几个目录。</li>
+        <li><strong>AppUI 按「做什么」分（保留 <code>Icons/</code>、<code>Theme/</code>）</strong>：0094 之后的现状，从 AppCore 类型找绘制代码没有规律；镜像规则一句话就能说清新文件放哪。</li>
+        <li><strong>Find 语料与交叉引用预建协调器留在 <code>Find/</code></strong>：它们是 Engine 范围的工作，Report 与工具栏活动同样读它们，放在 <code>Find/</code> 会让人以为它们属于 Find 面板、随面板创建。</li>
+        <li><strong>测试 target 一起整理</strong>：用户选了先不动，测试目录留到以后。</li>
+      </ul>
+    </div>
+  </details>
+</section>
 
-<details id="log" open><summary>决策日志</summary>
-<div class="table-wrap"><table>
-<tr><th>日期</th><th>变更</th><th>说明</th></tr>
-<tr><td>2026-11-18</td><td>Created as Draft</td><td>0094 落地后 AppCore 与 AppUI 的目录不再相互对应、根目录散着二十多个文件，用户要求重新整理分类。按轻量档问了一轮：只拆名不副实的文件，测试 target 不动，先写提案再动手。</td></tr>
-<tr><td>2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
-<tr><td>2026-11-18</td><td>四步完成</td><td>与提案不同处：注释掉的旧 <code>InspectorRuntimeObjectViewModel</code> 原样随 <code>InspectorPlaceholderViewModel.swift</code> 走；写进 AGENTS.md 的规则多列了全部目录名与 <code>Find/</code> 子目录。核对：两个根目录都没有 Swift 文件，<code>Icons/</code> 已删，除 AGENTS.md 外没有文件内容被改。Ultra 上三步各自构建通过，iOS 包、Tuist warm 与 macOS App 构建通过；1069 个测试，失败 4 条均为既有红灯。</td></tr>
-<tr><td>2026-11-18</td><td>实现完成</td><td>在本地合进 <code>next</code> 的检出，待用户看过后收尾。不另写指南，没有新术语。</td></tr>
-<tr><td>2026-11-18</td><td>Implemented</td><td>用户看过后同意收尾，编号 0095，推到 <code>next</code>。不另写指南，没有新术语；测试 target 仍是平铺目录。</td></tr>
-</table></div>
-</details>
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>5 条，最近一条：Implemented（2026-11-18）</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-18</td><td>Created as Draft</td><td>0094 落地后 AppCore 与 AppUI 的目录不再相互对应、根目录散着二十多个文件，用户要求重新整理分类。按轻量档问了一轮：只拆名不副实的文件，测试 target 不动，先写提案再动手。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>Accepted</td><td>用户批准，开始实现。功能分支从 <code>next</code> 切出，四步各一个提交，做完在本地合进 <code>next</code> 给用户看。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>四步完成</td><td>照改动地图做完，与提案不同的几处：一、<code>InspectorViewModel.swift</code> 里两个类型之间有一段注释掉的旧 <code>InspectorRuntimeObjectViewModel</code>，按「代码一字不改」原样随 <code>InspectorPlaceholderViewModel.swift</code> 走，没有顺手删。二、写进 <code>RuntimeViewerPackages/Sources/AGENTS.md</code> 的规则比拟稿多列了几项：所有现有目录名（<code>Activity</code>、<code>BatchExporting</code>、<code>ContextMenus</code> 也在内）、<code>Find/</code> 的四个子目录与根下留的三个文件、<code>NSColor+Xcode</code> 作为「跟着唯一使用者走」的例子，并注明测试 target 还是平铺的。核对：两个 target 根目录都没有 <code>.swift</code> 文件，<code>Icons/</code> 已删，<code>Sources</code> 下除 <code>AGENTS.md</code> 外没有文件内容被改，拆出的代码按原顺序与原文件逐行相同。验证在 Ultra 上：三个步骤的提交各自 <code>swift build --build-tests</code> 通过，iOS 模拟器包构建、<code>./TuistScript.sh warm</code> 与 macOS App（Tuist workspace，Debug）构建通过；两组测试共 1069 个，失败 4 条均为既有红灯（标题悬停副标题、Call Hierarchy 超时、<code>ReportSharedByEngineTests</code> 与 <code>BackgroundWorkProcessActivityTests</code> 整包跑时的两条）。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>实现完成</td><td>在本地合进 <code>next</code> 的检出，待用户看过后收尾。文档判断：不另写指南或实现说明，规则在 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>；没有新术语。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>Implemented</td><td>用户看过后同意收尾，编号 0095，推到 <code>next</code>。文档判断：不另写使用指南或实现说明，归类规则在 <code>RuntimeViewerPackages/Sources/AGENTS.md</code>；没有新术语。两个测试 target 仍是平铺目录，留作以后的事。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
 </main>
 </div>
 </body>
