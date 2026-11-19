@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - Load Frameworks 改在独立实例里加载，并诊断加载失败</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+.mockup { border: 1px solid var(--separator); border-radius: 12px; overflow: hidden; margin: 14px 0; font-size: 13px; }
+.mockup-toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--separator); }
+.mockup-lights { color: var(--secondary); letter-spacing: 2px; }
+.mockup-title { font-weight: 600; }
+.mockup-subtitle { color: var(--secondary); font-size: 12px; }
+.mockup-body { display: grid; grid-template-columns: 210px 1fr; }
+.mockup-sidebar { background: var(--panel); border-right: 1px solid var(--separator); padding: 10px 12px; font-size: 12.5px; }
+.mockup-sidebar p { margin: 3px 0; }
+.mockup-heading { color: var(--secondary); font-size: 11px; font-weight: 600; margin-top: 10px; }
+.mockup-content { padding: 16px 20px; }
+.mockup-content h4 { margin: 0 0 4px; font-size: 17px; }
+.mockup-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.mockup-banner { border: 1px solid var(--moved); background: var(--moved-fill); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.mockup-banner p { margin: 0 0 4px; }
+.mockup-button { display: inline-block; padding: 2px 10px; border: 1px solid var(--separator); border-radius: 6px; background: var(--background); margin: 6px 6px 0 0; font-size: 12.5px; }
+.mockup-button-primary { background: var(--accent); border-color: var(--accent); color: #ffffff; }
+.mockup-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 12px; }
+.mockup-node { border: 1px solid var(--separator); border-radius: 8px; padding: 4px 10px; }
+.mockup-node-failed { border-color: var(--removed); color: var(--removed); }
+.mockup-why { font-size: 12.5px; color: var(--secondary); }
+@media (max-width: 640px) { .mockup-body { grid-template-columns: 1fr; } .mockup-sidebar { display: none; } }
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> Load Frameworks 改在独立实例里加载，并诊断加载失败</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-19</dd></div>
+    <div><dt>项目类型</dt><dd>App</dd></div>
+    <div><dt>原文</dt><dd><code>draft-isolated-framework-loading.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#proposal">方案</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>Load Frameworks 不再把框架装进 My Mac 的 service。在 My Mac 的窗口里选了框架，App 新起一个 XPC service 实例（新的内嵌 service <code>RuntimeViewerFrameworkService</code>，每次一个，带 <code>disable-library-validation</code>），开一个挂在这个实例上的新窗口，把这次选的框架都加载进去；之后在这个窗口里再加载，也进同一个实例；没有窗口留在这个实例上时（关窗，或窗口换到别的来源），实例退出，框架随之卸载。</p>
+  <p>加载失败时窗口照常打开，内容区显示诊断：在加载失败的那个进程里模拟 dyld 的查找——依赖链、rpath 栈及其展开、每条候选路径的结果——并附上 dyld 原文；缺的依赖就在宿主 App 的 Frameworks 目录里时，提议先按绝对路径加载它们再重试，找不到时让用户指定宿主 App 或搜索路径；重试成功，窗口原地变成普通窗口。</p>
+  <p>窗口挂在 Mac Catalyst、注入进程、远端 Mac 等引擎上时，框架仍加载进那个进程，失败时同一诊断以 sheet 显示，不带重试与修复。诊断随失败的那次加载一起回来（加载请求多一个可选字段，旧版对端照旧只回 dyld 原文，App 据原文给出简化诊断），不给旧版 payload 发它不认识的命令。窗口的侧栏只列这次加载的框架和它们不在系统 shared cache 里的依赖；窗口不进 Open Recent，重启后不恢复。</p>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout">
+    <p class="callout-title">完整档提案，批准（状态改为 Accepted）之前不写实现代码</p>
+    <ol>
+      <li>批准这份提案开工吗？</li>
+      <li>「设计中自定的假设」里有没有要推翻的？</li>
+    </ol>
+  </div>
+</section>
+
+<section id="proposal">
+  <h2>方案</h2>
+  <h3>加载去哪，按窗口的引擎分</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>窗口所在的引擎</th><th>框架加载到哪里</th><th>失败时怎么显示</th></tr></thead>
+    <tbody>
+      <tr><td>My Mac（<code>.local</code>）</td><td><strong>新起一个框架实例，开一个新窗口挂在它上面</strong>；原窗口不动</td><td>新窗口的内容区显示诊断，带重试与修复</td></tr>
+      <tr><td>框架实例（<code>.frameworkInstance</code>）</td><td>同一个实例，同一个窗口</td><td>窗口还什么都没打开时在内容区；已经打开了内容时用 sheet。都带重试与修复</td></tr>
+      <tr><td>Mac Catalyst、注入进程、远端与 Bonjour、直连 TCP</td><td>那个进程，与今天一样</td><td>sheet 显示诊断，不带重试与修复</td></tr>
+      <tr><td>文件（<code>.file</code>）</td><td>不可用，与今天一样</td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在 My Mac 窗口里的 tooltip 改为「在新的独立实例里加载框架」。侧栏镜像行的 Load、CLI 与 MCP 的加载不受影响。</p>
+
+  <h3>诊断页（照原型重画）</h3>
+  <div class="mockup" role="img" aria-label="Diagnosis page mockup">
+    <div class="mockup-toolbar">
+      <span class="mockup-lights">● ● ●</span>
+      <span class="mockup-title">Foo.framework</span>
+      <span class="mockup-subtitle">Couldn't Load</span>
+    </div>
+    <div class="mockup-body">
+      <div class="mockup-sidebar">
+        <p class="mockup-heading">FRAMEWORKS</p>
+        <p>▣ Foo.framework <span class="tag tag-removed">not loaded</span></p>
+        <p class="mockup-heading">DEPENDENCIES</p>
+        <p class="mockup-why">Nothing yet</p>
+      </div>
+      <div class="mockup-content">
+        <h4>Foo.framework couldn't be loaded</h4>
+        <p>dyld couldn't find <code>@rpath/Bar.framework/Versions/A/Bar</code>, which Foo links.</p>
+        <div class="mockup-chips">
+          <span class="tag tag-removed">Unresolved @rpath</span>
+          <span class="tag">arm64e · macOS 27.2</span>
+          <span class="tag">Diagnosed in the instance that tried the load</span>
+        </div>
+        <div class="mockup-banner">
+          <p>Bar.framework is next to Foo in <code>/Applications/Example.app/Contents/Frameworks</code>. Foo expects Example.app to load it: its rpaths start at <code>@executable_path</code>, which here is this instance, not Example.app.</p>
+          <span class="mockup-button mockup-button-primary">Load Example.app's Frameworks and Retry</span><span class="mockup-button">Choose Host App…</span><span class="mockup-button">Add Search Path…</span>
+        </div>
+        <p><strong>Dependency chain</strong></p>
+        <div class="mockup-chain">
+          <span class="mockup-node">Foo.framework</span><span>→</span><span class="mockup-node mockup-node-failed">@rpath/Bar.framework ✗</span>
+        </div>
+        <p><strong>Where it looked</strong> <span class="mockup-why">dyld's rpath stack, in order</span></p>
+        <div class="table-wrap">
+        <table>
+          <thead><tr><th>Whose rpath</th><th>Rpath</th><th>Candidate</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>RuntimeViewerFrameworkService<br><span class="mockup-why">main executable</span></td><td><code>@executable_path/../Frameworks</code></td><td><code>…/RuntimeViewerFrameworkService.xpc/Contents/Frameworks/Bar.framework/…</code></td><td>no such file</td></tr>
+            <tr><td>RuntimeViewerServicePlugin<br><span class="mockup-why">image that called dlopen</span></td><td><code>@loader_path/../Frameworks</code></td><td><code>…/RuntimeViewerServicePlugin.bundle/Contents/Frameworks/Bar.framework/…</code></td><td>no such file</td></tr>
+            <tr><td>Foo</td><td><code>@executable_path/../Frameworks</code></td><td><code>…/RuntimeViewerFrameworkService.xpc/Contents/Frameworks/Bar.framework/…</code></td><td>no such file</td></tr>
+            <tr><td>Foo</td><td><code>@loader_path/Frameworks</code></td><td><code>/Applications/Example.app/…/Foo.framework/Versions/A/Frameworks/Bar.framework/…</code></td><td>no such file</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p class="mockup-why">Why: Foo's first rpath, <code>@executable_path/../Frameworks</code>, is meant to reach <code>Example.app/Contents/Frameworks</code>. Loaded outside Example.app, <code>@executable_path</code> is this instance's executable.</p>
+        <p><strong>Paths dyld tried</strong> · <strong>dyld message</strong>（可折叠） · <span class="mockup-button">Copy Diagnosis</span><span class="mockup-button">Show Foo in Finder</span></p>
+      </div>
+    </div>
+  </div>
+  <p class="figure-caption">原型是用完即弃的静态 HTML，用户看过认可；这里保留它的结论。重试成功后页面消失，侧栏列出 Bar 与 Foo，焦点栏打开 Foo 的镜像页。</p>
+
+  <h3>框架实例</h3>
+  <ul>
+    <li><strong>新的内嵌 XPC service</strong> <code>RuntimeViewerFrameworkService.xpc</code>：<code>_MultipleInstances</code>，hardened runtime 加 <code>disable-library-validation</code>；0079 式外壳，活在 <code>ServicePluginEntry.runFrameworkService()</code>。</li>
+    <li><strong>一次 Load Frameworks 一个实例</strong>：以 <code>.xpcService(.dedicatedInstance(…))</code> 连接，launch payload 只有实例的标识、名字和第一个框架的 URL，<strong>不列要加载的框架</strong>——崩溃后的重连得到空实例，不会重放会崩的加载。</li>
+    <li><strong>实例里的引擎</strong>：镜像来自本进程，目录换成 <code>RuntimeFrameworkInstanceImageCatalog</code>，只列经引擎加载的镜像（成功或失败）和随之带进来、不在 shared cache 里的依赖；每次加载后重建侧栏节点。</li>
+    <li><strong>系统镜像向 My Mac 借</strong>（0081 的借用方）；<strong>不开派生数据</strong>；照规则装 <code>RuntimeInjection</code> 与 <code>RuntimeCrossReferences</code>。</li>
+    <li><strong>生命周期</strong>：没有文档留在引擎上（<code>.vacated</code>）就立即结束，没有宽限期；实例崩溃时窗口进入「实例已停止」页，给「Load Again」，<strong>不自动重试</strong>。</li>
+    <li><strong>来源列表</strong>：活着时在「Isolated Frameworks」一节列出，别的窗口可以换上来；不分享给别的 Mac，CLI 不列。不进 Open Recent，重启不恢复。</li>
+  </ul>
+
+  <h3>框架实例的窗口</h3>
+  <ul>
+    <li>来源名「Foo.framework (Isolated)」，多个时「Foo.framework + 2 (Isolated)」；工具栏副标题按状态显示「Loading…」「Couldn't Load」「Isolated」；图标是框架自己的。</li>
+    <li>侧栏两个根节点：「Frameworks」（经引擎加载的，失败的也在，修复时先加载的依赖也在这里）与「Dependencies」（dyld 带进来的非 shared cache 镜像）。</li>
+    <li>内容区：加载中显示「Loading Foo.framework…」；失败显示诊断页；全部成功后页面消失，焦点栏打开第一个框架的镜像页。窗口已经打开了内容时，之后的失败改用 sheet。</li>
+  </ul>
+
+  <h3>诊断</h3>
+  <ol>
+    <li><strong>缺了什么、谁要它</strong>：从 dyld 原文解析出失败的种类——找不到镜像、找不到符号、镜像不兼容、其他。</li>
+    <li><strong>依赖链</strong>：从要加载的框架沿 <code>LC_LOAD_DYLIB</code> 走到出问题的那条边（跳过弱链接与延迟初始化的依赖）。</li>
+    <li><strong>dyld 去哪里找了</strong>：按 rpath 栈逐行列出归属、原文、展开后的候选与结果，加一句「为什么」；另列 dyld 自己报的尝试列表。</li>
+    <li><strong>能怎么修</strong>（只在框架实例里）。</li>
+  </ol>
+
+  <h3>修复</h3>
+  <ul>
+    <li><strong>自动提议</strong>：在框架所在的 App、指定过的宿主 App、加过的搜索路径里找缺的依赖；以宿主 App 的可执行文件作主程序、搜索路径作额外 rpath 重走一遍，全都找得到就给出方案（依赖在前）。</li>
+    <li><strong>执行</strong>：按绝对路径逐个加载这些依赖，再重试；dyld 解析 <code>@rpath/…</code> 时先匹配已加载镜像的 install name。</li>
+    <li><strong>找不到时</strong>：「Choose Host App…」「Add Search Path…」交给实例重新诊断，有方案就立即执行。</li>
+    <li>用过的宿主 App 与搜索路径记到窗口关掉为止，不写进设置。</li>
+  </ul>
+
+  <h3>旧版对端</h3>
+  <p>诊断由加载请求里的可选字段请求。旧版进程解码时跳过它，失败照旧只回原文；App 据原文解析出能解析的部分，诊断页标明对端是旧版。<strong>不给任何可能是旧版的对端发新命令</strong>；重新诊断的命令只发给框架实例。</p>
+
+  <h3>设计中自定的假设</h3>
+  <div class="callout callout-note">
+    <p class="callout-title">用户没有逐条定，写提案时按已定方向补齐，可以推翻</p>
+    <ul>
+      <li>其他引擎的窗口仍加载进原进程，失败用 sheet、不带重试（澄清提问时列过，未反对）。</li>
+      <li>加载时崩溃不自动重试，给「Load Again」（同上）。</li>
+      <li>新建专用 service，不复用 My Mac 的；系统镜像向 My Mac 借（同上）。</li>
+      <li>CLI 与 MCP 不加命令（同上）。</li>
+      <li>宿主 App 与搜索路径只在窗口活着时记住（同上）。</li>
+      <li>窗口开着时其他窗口的来源选择器也列出这个实例（同上）。</li>
+      <li>已经打开了内容的框架实例窗口，之后的失败用 sheet；诊断不做成标签历史的一步。</li>
+      <li>侧栏分「Frameworks」「Dependencies」；先加载的依赖算在「Frameworks」；失败的框架显示为未加载的行，不加原型里的「failed」角标。</li>
+      <li>框架实例窗口的书签按第一个框架的路径归档。</li>
+      <li>open panel 照旧只收 <code>.framework</code>。</li>
+      <li>诊断随失败的回复带回，不另发命令；重新诊断只发给框架实例。</li>
+      <li>iOS 的引擎管理里框架实例不可用。</li>
+    </ul>
+  </div>
+
+  <h3>非目标</h3>
+  <ul>
+    <li>CLI 与 MCP 不加命令；它们的加载照旧进各自的引擎（包括 My Mac）。</li>
+    <li>侧栏的 Load 按钮、镜像页、路径栏的加载失败仍只显示文字（后续项）。</li>
+    <li>不加载 dylib 或裸 Mach-O；不为 x86_64 框架起 Rosetta 实例。</li>
+    <li>不修 My Mac 的进程目录「加载后不重建侧栏节点」那一处（未实测）。</li>
+    <li>不在实例之间、启动之间记住宿主 App 与搜索路径；不恢复窗口，不进 Open Recent；崩溃后不自动重试。</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 560" role="img" aria-label="What changes">
+    <rect class="group" x="10" y="10" width="470" height="200" rx="10"/>
+    <text class="group-label" x="22" y="32">RuntimeViewer.app/Contents/XPCServices</text>
+    <rect class="box-changed" x="25" y="44" width="215" height="44" rx="6"/><text x="35" y="62">RuntimeViewerLocalService</text><text class="caption" x="35" y="79">My Mac · no Load Frameworks</text>
+    <rect class="box-kept" x="250" y="44" width="215" height="44" rx="6"/><text x="260" y="62">RuntimeViewerFileService</text><text class="caption" x="260" y="79">one per file</text>
+    <rect class="box-kept" x="25" y="96" width="215" height="44" rx="6"/><text x="35" y="114">RuntimeViewerCatalystService</text><text class="caption" x="35" y="131">My Mac (Catalyst)</text>
+    <rect class="box-added" x="250" y="96" width="215" height="58" rx="6"/><text x="260" y="114">RuntimeViewerFrameworkService</text><text class="caption" x="260" y="131">one per Load Frameworks window</text><text class="caption" x="260" y="146">disable-library-validation</text>
+    <rect class="box-changed" x="25" y="160" width="440" height="40" rx="6"/><text x="35" y="179">PlugIns/RuntimeViewerServicePlugin</text><text class="caption" x="35" y="194">ServicePluginEntry + runFrameworkService()</text>
+
+    <rect class="group" x="500" y="10" width="490" height="300" rx="10"/>
+    <text class="group-label" x="512" y="32">RuntimeViewerCore · Communication</text>
+    <rect class="box-changed" x="515" y="44" width="225" height="44" rx="6"/><text x="525" y="62">RuntimeSource</text><text class="caption" x="525" y="79">+ case frameworkInstance</text>
+    <rect class="box-added" x="750" y="44" width="225" height="58" rx="6"/><text x="760" y="62">FrameworkInstance/</text><text class="caption" x="760" y="79">service key + credential, host,</text><text class="caption" x="760" y="94">image catalog, host info</text>
+    <rect class="box-added" x="515" y="96" width="225" height="58" rx="6"/><text x="525" y="114">ImageLoadDiagnosis/</text><text class="caption" x="525" y="131">diagnosis, error, response,</text><text class="caption" x="525" y="146">message parser, diagnostician</text>
+    <rect class="box-changed" x="750" y="110" width="225" height="44" rx="6"/><text x="760" y="128">LoadImageCommand</text><text class="caption" x="760" y="145">+ reportsFailureDiagnosis</text>
+    <rect class="box-added" x="515" y="162" width="225" height="44" rx="6"/><text x="525" y="180">DiagnoseImageLoadCommand</text><text class="caption" x="525" y="197">framework instances only</text>
+    <rect class="box-changed" x="750" y="162" width="225" height="44" rx="6"/><text x="760" y="180">DylibPathResolver</text><text class="caption" x="760" y="197">returns its attempts</text>
+    <rect class="box-changed" x="515" y="214" width="225" height="44" rx="6"/><text x="525" y="232">RuntimeImageCatalog</text><text class="caption" x="525" y="249">+ rootNodesFollowLoads</text>
+    <rect class="box-changed" x="750" y="214" width="225" height="44" rx="6"/><text x="760" y="232">RuntimeEngine._loadImage</text><text class="caption" x="760" y="249">rebuilds nodes when asked</text>
+
+    <rect class="group" x="10" y="230" width="470" height="80" rx="10"/>
+    <text class="group-label" x="22" y="252">RuntimeViewerEngineManagement</text>
+    <rect class="box-changed" x="25" y="262" width="440" height="40" rx="6"/><text x="35" y="280">RuntimeEngineManager</text><text class="caption" x="35" y="295">+ frameworkInstanceEngines, start / terminate; borrow from My Mac</text>
+
+    <rect class="group" x="10" y="330" width="470" height="220" rx="10"/>
+    <text class="group-label" x="22" y="352">RuntimeViewerAppCore</text>
+    <rect class="box-added" x="25" y="364" width="440" height="58" rx="6"/><text x="35" y="382">FrameworkLoading/</text><text class="caption" x="35" y="399">FrameworkLoader, FrameworkLoadState, FrameworkLoadViewModel,</text><text class="caption" x="35" y="414">ImageLoadDiagnosisPresentation, FrameworkInstanceName</text>
+    <rect class="box-added" x="25" y="430" width="215" height="44" rx="6"/><text x="35" y="448">Retirement</text><text class="caption" x="35" y="465">vacated -> terminate</text>
+    <rect class="box-changed" x="250" y="430" width="215" height="44" rx="6"/><text x="260" y="448">MainViewModel</text><text class="caption" x="260" y="465">route by engine</text>
+    <rect class="box-changed" x="25" y="482" width="440" height="58" rx="6"/><text x="35" y="500">MainRoute</text><text class="caption" x="35" y="517">+ openIsolatedFrameworks([URL])</text><text class="caption" x="35" y="532">+ frameworkLoadFailure</text>
+
+    <rect class="group" x="500" y="330" width="490" height="220" rx="10"/>
+    <text class="group-label" x="512" y="352">RuntimeViewerUsingAppKit (app target)</text>
+    <rect class="box-added" x="515" y="364" width="225" height="44" rx="6"/><text x="525" y="382">FrameworkInstanceController</text><text class="caption" x="525" y="399">opens the window</text>
+    <rect class="box-added" x="750" y="364" width="225" height="44" rx="6"/><text x="760" y="382">FrameworkLoadViewController</text><text class="caption" x="760" y="399">loading / diagnosis pages</text>
+    <rect class="box-changed" x="515" y="416" width="225" height="44" rx="6"/><text x="525" y="434">MainCoordinator</text><text class="caption" x="525" y="451">new routes, sheet</text>
+    <rect class="box-changed" x="750" y="416" width="225" height="44" rx="6"/><text x="760" y="434">ContentCoordinator</text><text class="caption" x="760" y="451">+ scene frameworkLoad</text>
+    <rect class="box-changed" x="515" y="468" width="225" height="44" rx="6"/><text x="525" y="486">EditorAreaCoordinator</text><text class="caption" x="525" y="503">hands down the main router</text>
+    <rect class="box-changed" x="750" y="468" width="225" height="44" rx="6"/><text x="760" y="486">AppDelegate</text><text class="caption" x="760" y="503">one start() call</text>
+
+    <path class="arrow" d="M 245 362 L 245 304"/>
+  </svg>
+  </div>
+  <p class="figure-caption">新增的 service 与两个 Core 目录承担全部 XPC 与诊断逻辑；引擎只多认一个目录属性，App 一侧的加载流程只在 <code>FrameworkLoader</code>。</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 1000 420" role="img" aria-label="Load, fail, fix">
+    <rect class="group" x="10" y="10" width="480" height="400" rx="10"/>
+    <text class="group-label" x="22" y="32">App process</text>
+    <rect class="box-kept" x="25" y="44" width="450" height="34" rx="6"/><text x="35" y="66">Toolbar Load Frameworks · window on My Mac</text>
+    <rect class="box-changed" x="25" y="88" width="450" height="34" rx="6"/><text x="35" y="110">MainViewModel → MainRoute.openIsolatedFrameworks</text>
+    <rect class="box-added" x="25" y="132" width="450" height="44" rx="6"/><text x="35" y="150">FrameworkInstanceController.openWindow</text><text class="caption" x="35" y="167">startFrameworkInstance · Document · window</text>
+    <rect class="box-added" x="25" y="186" width="450" height="44" rx="6"/><text x="35" y="204">FrameworkLoader.load(frameworksAt:)</text><text class="caption" x="35" y="221">loadImageInServingProcess · reportsFailureDiagnosis: true</text>
+    <rect class="box-added" x="25" y="240" width="450" height="44" rx="6"/><text x="35" y="258">state .failed → empty pane: diagnosis page</text><text class="caption" x="35" y="275">Load Example.app's Frameworks and Retry</text>
+    <rect class="box-added" x="25" y="294" width="450" height="44" rx="6"/><text x="35" y="312">remedy: load Bar by absolute path, retry Foo</text><text class="caption" x="35" y="329">Choose Host App / Add Search Path → diagnoseImageLoad</text>
+    <rect class="box-kept" x="25" y="348" width="450" height="44" rx="6"/><text x="35" y="366">state .idle → sidebar Frameworks [Bar, Foo]</text><text class="caption" x="35" y="383">focused pane opens Foo's image page</text>
+
+    <rect class="group" x="520" y="10" width="470" height="400" rx="10"/>
+    <text class="group-label" x="532" y="32">Framework instance process</text>
+    <rect class="box-added" x="535" y="132" width="440" height="44" rx="6"/><text x="545" y="150">RuntimeFrameworkServiceHost</text><text class="caption" x="545" y="167">first hello: baseline images, engine</text>
+    <rect class="box-added" x="535" y="186" width="440" height="44" rx="6"/><text x="545" y="204">catalog records Foo → dlopen fails</text><text class="caption" x="545" y="221">DyldOpenError</text>
+    <rect class="box-added" x="535" y="240" width="440" height="44" rx="6"/><text x="545" y="258">RuntimeImageLoadDiagnostician.diagnose</text><text class="caption" x="545" y="275">chain, rpath rows, host Example.app, remedy [Bar]</text>
+    <rect class="box-kept" x="535" y="294" width="440" height="44" rx="6"/><text x="545" y="312">dlopen(Bar) ok; dlopen(Foo) ok</text><text class="caption" x="545" y="329">dyld matches Bar's install name</text>
+    <rect class="box-kept" x="535" y="348" width="440" height="44" rx="6"/><text x="545" y="366">window gone → client departs → exit(0)</text><text class="caption" x="545" y="383">frameworks unloaded with the process</text>
+
+    <path class="arrow" d="M 475 154 L 535 154"/>
+    <path class="arrow" d="M 475 208 L 535 208"/>
+    <path class="arrow" d="M 535 262 L 475 262"/>
+    <path class="arrow" d="M 475 316 L 535 316"/>
+  </svg>
+  </div>
+  <p class="figure-caption">实例崩溃时连接以新的空实例重连，窗口进入「实例已停止」页，不重放加载。其他引擎上的失败走同一条加载，旧版对端只回原文，App 做简化诊断，以 sheet 显示。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <p>缩写：<code>Core/</code> = <code>RuntimeViewerCore/Sources/RuntimeViewerCore/</code>，<code>Comm/</code> = <code>RuntimeViewerCore/Sources/RuntimeViewerCommunication/</code>，<code>CoreTests/</code> = <code>RuntimeViewerCore/Tests/RuntimeViewerCoreTests/</code>，<code>EM/</code> = <code>RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/</code>，<code>EMT/</code> 为其测试，<code>AppCore/</code>、<code>AppUI/</code> 为 <code>RuntimeViewerPackages/Sources/</code> 下同名目标，<code>AppCoreTests/</code> 为其测试，<code>App/</code> = <code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/</code>，<code>Plugin/</code> = <code>RuntimeViewerUsingAppKit/RuntimeViewerServicePlugin/</code>。</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>Core/Images/DylibPathResolver.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>resolution(of:imagePath:rpathStack:mainExecutablePath:)</code>，逐条记下尝试；<code>resolve(…)</code> 取它的结果，日志不变</td><td>诊断要这份尝试记录</td><td class="numeric">1</td></tr>
+      <tr><td><code>Core/ImageLoadDiagnosis/RuntimeImageLoadDiagnosis.swift</code></td><td><span class="tag tag-added">新增</span></td><td>线上模型；<code>init(dyldMessage:imagePath:)</code> 给旧版对端</td><td>诊断要过线</td><td class="numeric">1</td></tr>
+      <tr><td><code>Core/ImageLoadDiagnosis/DyldLoadFailureMessage.swift</code></td><td><span class="tag tag-added">新增</span></td><td>解析 <code>dlerror()</code> 原文</td><td>两种诊断都从原文起步</td><td class="numeric">1</td></tr>
+      <tr><td><code>Core/ImageLoadDiagnosis/RuntimeImageLoadDiagnostician.swift</code></td><td><span class="tag tag-added">新增</span></td><td>模拟 dyld 的查找、修复方案；<code>Environment</code> 是测试接缝</td><td>诊断本身</td><td class="numeric">1</td></tr>
+      <tr><td><code>CoreTests/ImageLoadDiagnosis/ImageLoadFixtures.swift</code></td><td><span class="tag tag-added">新增</span></td><td>测试时用 <code>xcrun clang</code> 建带随机后缀的 <code>Example.app</code>、<code>Foo</code>、<code>Bar</code> 及变体</td><td>真 Mach-O；随机名防止 install name 串用例</td><td class="numeric">1</td></tr>
+      <tr><td><code>CoreTests/ImageLoadDiagnosis/PreloadSatisfiesRpathDependencyTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>实测先加载 Bar 后 Foo 成功</td><td>修复方案的前提；不成立就停下</td><td class="numeric">1</td></tr>
+      <tr><td><code>CoreTests/ImageLoadDiagnosis/DyldLoadFailureMessageTests.swift</code>、<code>RuntimeImageLoadDiagnosticianTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>解析与诊断的行为</td><td>步骤 1 的行为清单</td><td class="numeric">1</td></tr>
+      <tr><td><code>Core/ImageLoadDiagnosis/RuntimeImageLoadError.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>LocalizedError</code>（描述 = 原文），带可选诊断</td><td>调用方拿到的失败</td><td class="numeric">2</td></tr>
+      <tr><td><code>Core/ImageLoadDiagnosis/RuntimeImageLoadResponse.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>failure: RuntimeImageLoadError?</code>，为空时是空对象</td><td>诊断放在回复里过线</td><td class="numeric">2</td></tr>
+      <tr><td><code>Core/Engine/RuntimeEngine+Commands.swift</code> · <code>LoadImageCommand</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>reportsFailureDiagnosis: Bool?</code>；回复换成 <code>RuntimeImageLoadResponse</code></td><td>§4.4 发送方保守</td><td class="numeric">2</td></tr>
+      <tr><td><code>Core/Engine/RuntimeEngine+Commands.swift</code> · <code>DiagnoseImageLoadCommand</code></td><td><span class="tag tag-added">新增</span></td><td>线上名 <code>diagnoseImageLoad</code>；<code>subjectImagePath</code> 为 <code>nil</code></td><td>选宿主 App 或搜索路径后重新诊断</td><td class="numeric">2</td></tr>
+      <tr><td><code>Core/Engine/Commands/RuntimeEngineCommandName.swift</code>、<code>Core/Engine/RuntimeEngine.swift</code> · <code>registerBuiltInHandlers</code></td><td><span class="tag tag-changed">修改</span></td><td>命令名与注册</td><td>内置命令</td><td class="numeric">2</td></tr>
+      <tr><td><code>Core/SharedCache/RuntimeEngine+SharedCache.swift</code> · <code>loadImageInServingProcess(at:)</code></td><td><span class="tag tag-changed">修改</span></td><td>请求带字段；回复有失败就抛 <code>RuntimeImageLoadError</code></td><td>Load Frameworks 拿到诊断</td><td class="numeric">2</td></tr>
+      <tr><td><code>Core/ImageLoadDiagnosis/RuntimeEngine+ImageLoadDiagnosis.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>diagnoseImageLoad(at:…)</code>、<code>diagnosesImageLoadsOnRequest</code></td><td>新命令不发给可能是旧版的对端</td><td class="numeric">2</td></tr>
+      <tr><td><code>CoreTests/ImageLoadDiagnosis/LoadImageFailureDiagnosisWireTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>新旧组合、中转、XPC service / TCP / Mach service 三条路</td><td>§4.4 的冻结读端测试</td><td class="numeric">2</td></tr>
+      <tr><td><code>CoreTests/SharedCache/SharedCacheRoutingDeclarationTests.swift</code>、<code>CoreTests/DyldLoadFailureMessageTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>登记新命令为 Neither；失败带诊断的三种传输</td><td>路由声明与过线</td><td class="numeric">2</td></tr>
+      <tr><td><code>Comm/RuntimeSource.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 case <code>frameworkInstance(name:frameworkURL:identifier:)</code> 及其各成员</td><td>新来源</td><td class="numeric">3</td></tr>
+      <tr><td><code>Comm/RuntimeCommunicator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 case 与 <code>.file</code> 同走 <code>.xpcService</code></td><td>传输相同</td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/FrameworkInstance/RuntimeFrameworkInstance.swift</code></td><td><span class="tag tag-added">新增</span></td><td>标识、名字、第一个框架的 URL；<code>source</code></td><td>payload 与来源的唯一出处</td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/FrameworkInstance/RuntimeFrameworkService.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>Info.plist</code> 键、<code>credential(for:)</code>、payload 编解码</td><td>XPC 代码只在这几处</td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/FrameworkInstance/RuntimeFrameworkServiceHost.swift</code></td><td><span class="tag tag-added">新增</span></td><td>第一个 <code>hello</code> 时记基线镜像、建引擎、起 <code>RuntimeLocalServiceHost</code></td><td>照 <code>RuntimeFileServiceHost</code></td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/FrameworkInstance/RuntimeFrameworkInstanceImageCatalog.swift</code></td><td><span class="tag tag-added">新增</span></td><td>包着进程目录，只列经引擎加载的与新带进来的非 shared cache 镜像，两个根节点</td><td>侧栏只列这次加载的</td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/Images/RuntimeImageCatalog.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>rootNodesFollowLoads</code>，默认 <code>false</code></td><td>目录说了算</td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/Engine/RuntimeEngine.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>加载后按目录决定是否重建节点；新 case 一开始就转发</td><td>侧栏跟上加载</td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/FrameworkInstance/RuntimeEngine+FrameworkInstance.swift</code>、<code>RuntimeHostInfo+FrameworkInstance.swift</code></td><td><span class="tag tag-added">新增</span></td><td>服务端引擎的构造器；「Isolated Frameworks」</td><td>照文件模式</td><td class="numeric">3</td></tr>
+      <tr><td><code>Core/Bookmarks/RuntimeBookmarkScope.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>Identity.frameworkInstance(path:)</code></td><td>书签按第一个框架的路径归档</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerInjection/RuntimeEngine+Injection.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 case 在本机</td><td>本机进程</td><td class="numeric">3</td></tr>
+      <tr><td><code>CoreTests/FrameworkInstance/RuntimeFrameworkServiceHostTests.swift</code>，书签与来源的测试</td><td><span class="tag tag-added">新增</span></td><td>步骤 3 的行为清单</td><td>host、目录与身份</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerFrameworkService/</code>（<code>main.swift</code>、<code>Info.plist</code>、entitlements）</td><td><span class="tag tag-added">新增</span></td><td>外壳；<code>_MultipleInstances</code>；<code>disable-library-validation</code></td><td>新 service</td><td class="numeric">4</td></tr>
+      <tr><td><code>Configurations/RuntimeViewerFrameworkService/</code> 四份 xcconfig</td><td><span class="tag tag-added">新增</span></td><td>照 file service，另加 <code>RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION</code></td><td>设置只在 xcconfig</td><td class="numeric">4</td></tr>
+      <tr><td><code>Configurations/CodeSigning.xcconfig</code>、App 的三份 xcconfig、<code>App/Info.plist</code></td><td><span class="tag tag-changed">修改</span></td><td>bundle identifier 变量与 <code>RuntimeViewerFrameworkServiceBundleIdentifier</code></td><td>App 凭它找内嵌 service</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit.xcodeproj/project.xcproj</code>、<code>RuntimeViewerUsingAppKit/Project.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 target、成员例外、依赖与嵌入；Tuist 同批</td><td><code>TuistScript.sh check</code> 通过</td><td class="numeric">4</td></tr>
+      <tr><td><code>Plugin/ServicePlugin.swift</code>、<code>Plugin/ServicePluginEntry.swift</code>、<code>Plugin/ServicePluginLoader.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>runFrameworkService()</code>；注释里的外壳数</td><td>服务的入口</td><td class="numeric">4</td></tr>
+      <tr><td><code>EM/RuntimeEngineManager.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>frameworkInstanceEngines</code>、起停、去重、借用方</td><td>管理器持有实例</td><td class="numeric">5</td></tr>
+      <tr><td><code>EM/RuntimeEngineManager.swift</code> · <code>FrameworkInstanceLaunching</code>，<code>EM/RuntimeEngineManager+PlatformServices.swift</code></td><td><span class="tag tag-added">新增</span></td><td>闭包接缝，iOS 上 <code>.unavailable</code></td><td>与 iOS 移植同一写法</td><td class="numeric">5</td></tr>
+      <tr><td><code>EMT/FrameworkInstanceEngineManagementTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>步骤 5 的行为清单</td><td>管理器的行为</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerCommandLine/…/SourceCatalog.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 case 返回 <code>nil</code></td><td>CLI 不列</td><td class="numeric">5</td></tr>
+      <tr><td><code>AppCore/FrameworkLoading/FrameworkLoader.swift</code>、<code>FrameworkLoadState.swift</code>、<code>FrameworkInstanceName.swift</code></td><td><span class="tag tag-added">新增</span></td><td>加载、诊断、修复、重试、实例停止；状态值；来源名</td><td>加载流程的唯一归属</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/FrameworkLoading/ImageLoadDiagnosisPresentation.swift</code>、<code>FrameworkLoadViewModel.swift</code></td><td><span class="tag tag-added">新增</span></td><td>诊断页的值；<code>ViewModel&lt;MainRoute&gt;</code>，编辑栏与 sheet 两种呈现</td><td>视图只画值</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/Engine/RuntimeFrameworkInstanceRetirement.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>.vacated</code> 的框架实例立即结束</td><td>关窗即退出</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/Document/DocumentState.swift</code>、<code>AppCore/Main/MainRoute.swift</code>、<code>AppCore/Main/MainViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>frameworkLoader</code>；两个路由；按引擎分流、sheet、标题与 tooltip</td><td>入口分流</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/…/RuntimeEngine+ImageIndexing.swift</code>、<code>AppCore/Sidebar/Root/SidebarRootViewModel.swift</code>、<code>AppUI/Engine/RuntimeEngineIconProvider.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 case：带进度的加载、在本机、框架图标</td><td>新来源的各处表现</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCoreTests/</code> 加载器、页面、退出与分流的测试</td><td><span class="tag tag-added">新增</span></td><td>步骤 6 的行为清单</td><td>App 一侧的行为</td><td class="numeric">6</td></tr>
+      <tr><td><code>App/App/FrameworkInstanceController.swift</code>、<code>App/App/AppDelegate.swift</code></td><td><span class="tag tag-added">新增</span> / <span class="tag tag-changed">修改</span></td><td>开窗口、启动 retirement；一行 <code>start()</code></td><td>照 <code>FileController</code>；AppDelegate 只派发</td><td class="numeric">7</td></tr>
+      <tr><td><code>App/Main/MainCoordinator.swift</code>、<code>App/EditorArea/EditorAreaCoordinator.swift</code>、<code>App/Content/ContentCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新路由与 sheet；交下主路由；第四个场景 <code>frameworkLoad</code></td><td>诊断显示在内容区</td><td class="numeric">7</td></tr>
+      <tr><td><code>App/Content/FrameworkLoadViewController.swift</code></td><td><span class="tag tag-added">新增</span></td><td>三种页面、两个 open panel、私有 <code>DiagnosisView</code></td><td>页面本身</td><td class="numeric">7</td></tr>
+      <tr><td><code>AGENTS.md</code>、<code>Configurations/AGENTS.md</code>、<code>Documentations/CommunicationAndEngineArchitecture.md</code>、<code>Documentations/Glossary.md</code></td><td><span class="tag tag-changed">修改</span></td><td>新 target、外壳数、install 表、XPC 代码位置、派生数据；§4.4 第四例；术语</td><td>文档同步</td><td class="numeric">8</td></tr>
+      <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记本提案</td><td>索引</td><td class="numeric">0</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>逐行完整的改动地图（含每个测试文件）以原文为准。</p>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details>
+    <summary>落点与「改动要聚合」</summary>
+    <div class="details-body">
+      <ul>
+        <li>XPC 相关的代码只在根 <code>AGENTS.md</code> 列出的几处：<code>FrameworkInstance/RuntimeFrameworkService.swift</code> 与 <code>RuntimeFrameworkServiceHost.swift</code>，以及 <code>ServicePluginEntry.runFrameworkService()</code>；传输零改动。</li>
+        <li><code>RuntimeEngine</code> 只改两处判断与 <code>_loadImage</code> 末尾一行，引擎只认识目录的 <code>rootNodesFollowLoads</code>。</li>
+        <li>新 <code>RuntimeSource</code> case 碰到的穷举 <code>switch</code> 每处一行，集中在步骤 3；App 一侧的加载流程只在 <code>FrameworkLoader</code>。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>Core：诊断的模型与命令</summary>
+    <div class="details-body">
+<pre><code>public struct RuntimeImageLoadDiagnosis: Codable, Sendable, Hashable {
+    public struct Failure { var kind: Kind  // open struct: imageNotFound, symbolNotFound,
+                                            //   incompatibleImage, unrecognized
+        var missingInstallName, symbolName, referencingImagePath, expectedInImagePath, reason: String? }
+    public struct ChainLink { var imagePath, installName: String; var isResolved: Bool }
+    public struct RpathSearch { var ownerImagePath: String; var role: Role  // mainExecutable,
+                                                     //   dlopenCaller, loader, searchPath
+        var rpath, candidatePath, outcome: String }
+    public struct TriedPath { var path, reason: String }
+    public struct Note { var kind: Kind  // rpathExpectsHostExecutable, dependencyInHostApplication,
+                                         //   symbolMissingFromImage, architectureMismatch
+        var imagePath, rpath, hostApplicationPath: String?; var architectures: [String]? }
+    public struct Remedy { var hostApplicationPath: String?; var searchPaths: [String]
+        var imagePathsToLoadFirst: [String] }
+    public var imagePath, dyldMessage: String
+    public var failure: Failure
+    public var dependencyChain: [ChainLink]
+    public var rpathSearches: [RpathSearch]
+    public var triedPaths: [TriedPath]
+    public var notes: [Note]
+    public var remedy: Remedy?
+    public var processArchitecture, operatingSystemVersion: String?
+    public var isFromMessageOnly: Bool
+    public init(dyldMessage: String, imagePath: String)  // older peers
+}
+
+public struct RuntimeImageLoadError: Error, LocalizedError, CustomStringConvertible, Codable {
+    public var dyldMessage: String
+    public var diagnosis: RuntimeImageLoadDiagnosis?
+}
+
+/// Encodes as an empty object when the load succeeded, as RuntimeEngineEmpty did.
+public struct RuntimeImageLoadResponse: Codable, Sendable {
+    public var failure: RuntimeImageLoadError?
+}
+
+struct LoadImageCommand: RuntimeEngineCommand {
+    typealias Response = RuntimeImageLoadResponse
+    let path: String
+    var reportsFailureDiagnosis: Bool?   // skipped by older peers
+}
+
+/// Answered by the process that tried the load; sent only to framework instances.
+struct DiagnoseImageLoadCommand: RuntimeEngineCommand {
+    typealias Response = RuntimeImageLoadDiagnosis
+    let imagePath, dyldMessage: String
+    let hostApplicationPath: String?
+    let searchPaths: [String]
+}
+
+extension RuntimeEngine {
+    public nonisolated var diagnosesImageLoadsOnRequest: Bool
+    public func diagnoseImageLoad(at imagePath: String, dyldMessage: String,
+        hostApplicationPath: String? = nil, searchPaths: [String] = []) async throws
+        -&gt; RuntimeImageLoadDiagnosis
+}</code></pre>
+    </div>
+  </details>
+  <details>
+    <summary>Core：诊断算法</summary>
+    <div class="details-body">
+      <ol>
+        <li><code>DyldLoadFailureMessage(parsing:)</code> 解出失败与 <code>tried:</code> 列表。</li>
+        <li>rpath 栈的底是主程序的 <code>LC_RPATH</code>，然后是调用 <code>dlopen</code> 的镜像的。从磁盘读要加载的镜像（胖文件取本进程 CPU 的切片，取不到即「镜像不兼容」），深度优先沿非弱链接、非延迟初始化的依赖走，每进一层把加载者的 rpath 压栈；一条边先按 install name 匹配已加载的镜像，再用 <code>DylibPathResolver.resolution(…)</code> 逐条展开。第一条解析不了的边（原文里有 <code>Referenced from</code> 时优先找那一条）就是依赖链的终点。</li>
+        <li>那条边是 <code>@rpath/…</code> 时，每一次尝试成为 <code>RpathSearch</code> 的一行；<code>@executable_path</code> 开头的 rpath 出现在非主程序的镜像上时，加一条说明。</li>
+        <li>修复方案：宿主 App 候选依次是指定的与路径上最近的 <code>.app</code>；以它的可执行文件作主程序、搜索路径作额外 rpath 重走整棵依赖树。原本解析不了、换了环境能解析的镜像按「依赖在前」排好就是 <code>imagePathsToLoadFirst</code>；还有解析不了的就不给方案。</li>
+        <li>缺符号时只给依赖链与说明，不给方案。</li>
+      </ol>
+    </div>
+  </details>
+  <details>
+    <summary>Core：框架实例</summary>
+    <div class="details-body">
+<pre><code>case frameworkInstance(name: String, frameworkURL: URL, identifier: Identifier)
+
+public struct RuntimeFrameworkInstance: Codable, Sendable, Hashable {
+    public var identifier: String
+    public var name: String
+    public var frameworkURL: URL
+    public var source: RuntimeSource { get }
+}
+
+public enum RuntimeFrameworkService {
+    public static let bundleIdentifierInfoDictionaryKey = "RuntimeViewerFrameworkServiceBundleIdentifier"
+    public static var embeddedServiceBundleIdentifier: String? { get }
+    public static func credential(for instance: RuntimeFrameworkInstance) throws
+        -&gt; RuntimeConnectionCredential?
+}
+
+public final class RuntimeFrameworkServiceHost {
+    public init(connection: RuntimeXPCServiceListenerConnection)
+}
+
+extension RuntimeEngine {
+    public init(servingFrameworkInstance instance: RuntimeFrameworkInstance,
+                baselineImagePaths: Set&lt;String&gt;, engineID: String = UUID().uuidString,
+                hostInfo: RuntimeHostInfo = …)
+}
+
+final class RuntimeFrameworkInstanceImageCatalog: RuntimeImageCatalog {
+    init(baselineImagePaths: Set&lt;String&gt;)
+    var rootNodesFollowLoads: Bool { true }
+}
+
+extension RuntimeHostInfo {
+    public static let frameworkInstances = RuntimeHostInfo(hostID: "frameworkInstances",
+                                                           hostName: "Isolated Frameworks")
+}</code></pre>
+      <p>记录「经引擎加载的路径」用 <code>Mutex&lt;[String]&gt;</code>（目录要求 <code>Sendable</code>）。</p>
+    </div>
+  </details>
+  <details>
+    <summary>引擎管理</summary>
+    <div class="details-body">
+<pre><code>@Published public private(set) var frameworkInstanceEngines: [RuntimeEngine]
+public func startFrameworkInstance(_ instance: RuntimeFrameworkInstance) throws -&gt; RuntimeEngine
+public func waitUntilFrameworkInstanceIsReady(_ engine: RuntimeEngine) async throws
+public func terminateFrameworkInstance(_ engine: RuntimeEngine) async
+
+struct FrameworkInstanceLaunching: Sendable {
+    var credential: @Sendable (RuntimeFrameworkInstance) throws -&gt; RuntimeConnectionCredential?
+    static let unavailable: Self
+}</code></pre>
+      <p><code>updateSharedCacheOwners()</code> 的借用方列表加上 <code>frameworkInstanceEngines</code>；<code>isBorrowingEngine(_:)</code> 对新 case 为真，owner 是 My Mac。</p>
+    </div>
+  </details>
+  <details>
+    <summary>App 一侧</summary>
+    <div class="details-body">
+<pre><code>public enum FrameworkLoadState: Equatable, Sendable {
+    case idle
+    case loading(frameworkURL: URL, position: Int, count: Int)
+    case failed(FrameworkLoadFailure)
+    case instanceStopped(FrameworkLoadInterruption)
+}
+
+@MainActor public final class FrameworkLoader {
+    @Published public private(set) var state: FrameworkLoadState = .idle
+    public var showsPageInEmptyPanes: Bool { get }
+    public func load(frameworksAt frameworkURLs: [URL]) async
+    public func retry() async
+    public func applyRemedy() async
+    public func retry(hostedBy applicationURL: URL) async
+    public func retry(searching directoryURL: URL) async
+    public func loadAgain() async
+}
+
+// MainViewModel.frameworksSelected
+switch documentState.runtimeEngine.source {
+case .local: router.trigger(.openIsolatedFrameworks(urls))
+case .file:  break  // the button is disabled
+default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls) }
+}</code></pre>
+      <ul>
+        <li>每次加载走 <code>recordingManualLoad</code>；没有诊断的失败做简化诊断；窗口记住的宿主 App 与搜索路径先带上重新诊断。</li>
+        <li>一个失败就停在它上面，剩下的留着，修好后接着加载。</li>
+        <li>引擎 <code>.disconnected</code> 时进入 <code>.instanceStopped</code>；<code>loadAgain()</code> 等重连后从头加载。</li>
+        <li>空窗口全部成功后，经 <code>SelectionRoute.openImage</code> 打开第一个框架的镜像页。</li>
+        <li><code>ContentCoordinator</code> 在空栏且 <code>showsPageInEmptyPanes</code> 为真时进入 <code>frameworkLoad</code> 场景；页面的 view model 用 <code>EditorAreaCoordinator</code> 交下来的主路由。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>测试夹具</summary>
+    <div class="details-body">
+      <p>测试时用 <code>xcrun clang -dynamiclib</code> 建到临时目录，不提交二进制；名字带随机后缀，因为 dyld 按 install name 匹配已加载的镜像。布局：<code>Example.app/Contents/MacOS/Example</code>、<code>Example.app/Contents/Frameworks/Foo_&lt;id&gt;.framework</code>（链接 <code>@rpath/Bar_&lt;id&gt;…</code>，rpath <code>@executable_path/../Frameworks</code> 与 <code>@loader_path/Frameworks</code>）、<code>Bar_&lt;id&gt;.framework</code>，另有缺符号与只有 x86_64 的变体。</p>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>调研</h2>
+  <details>
+    <summary>现状代码与问题</summary>
+    <div class="details-body">
+      <ul>
+        <li>入口只有工具栏按钮；<code>MainViewModel.swift:189-209</code> 逐个 <code>loadImageInServingProcess</code>，失败弹 <code>NSAlert</code>；只有文件引擎不可用。</li>
+        <li><code>LoadImageCommand</code> 的回复是 <code>RuntimeEngineEmpty</code>；最终进程 <code>dlopen</code>，失败抛 <code>DyldOpenError(message: dlerror())</code>。</li>
+        <li>错误过线只剩文字（XPC 是 <code>localizedDescription</code>，socket 是 <code>String(describing:)</code>），所以诊断只能放在回复里。558b6abf 让原文过得来。</li>
+        <li>加载后 <code>reloadLocalData(isReloadImageNodes: false)</code> 不重建节点，My Mac 加载的非 shared cache 框架大概率不出现在侧栏（读代码所得，未实测，本提案不修）。</li>
+        <li>没有任何持久化：<code>Document</code> 不读不写，不恢复窗口，Open Recent 只由 <code>FileController</code> 显式登记。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>照搬文件模式的多实例 service</summary>
+    <div class="details-body">
+      <ul>
+        <li>外壳、xcconfig、bundle identifier、App 的 <code>Info.plist</code> 键、工程与 Tuist 的接线都有现成的一套。</li>
+        <li><code>.dedicatedInstance</code> 中断后以新连接、新实例、同一份 payload 重连，所以 payload 不能列框架。</li>
+        <li>local service 已经带 <code>disable-library-validation</code>；file service 有意不带。</li>
+        <li>文件引擎关窗后停 30 秒再挂起；框架实例要立即结束。</li>
+        <li>0081 只给 system 与 attached 分配 owner，文件引擎不借；框架实例借得了。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>dyld 的事实（dyld-1323）</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>dlerror()</code> 的内容就是控制台里的 <code>Library not loaded / Referenced from / Reason: tried:</code>。</li>
+        <li><code>DYLD_PRINT_SEARCHING</code> 只在启动时读、要 AMFI 放行，没有 API 取得到。</li>
+        <li><code>dlopen_preflight</code> 只查顶层架构切片。</li>
+        <li>rpath 栈：主程序 → 调用 <code>dlopen</code> 的镜像 → 依赖链；<code>@executable_path</code> 展开到 service 自己。</li>
+        <li>解析 <code>@rpath/…</code> 先匹配已加载镜像的 install name，所以先加载依赖可行——<strong>读源码可行，未实测</strong>，步骤 1 先实测。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>现成的 Mach-O 能力与兼容规则</summary>
+    <div class="details-body">
+      <ul>
+        <li><code>DylibPathResolver</code> 已按 dyld 规则展开三种 <code>@</code> 路径，尝试只写日志；<code>dependencyEntries</code> 按 dyld 顺序累积 rpath。</li>
+        <li>MachODependencies 不展开 <code>@</code> 路径，不用。</li>
+        <li>引擎之间不交换版本；经 Mach service 的旧版 payload 收到不认识的命令会断开（PR121.73）。§4.4：请求加可选字段、回复的新形状只给声明读得懂的请求方。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案</h2>
+  <details>
+    <summary>12 条，均已否</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>保留加载进 My Mac，只加诊断</strong>：用户否，问题正在 My Mac 上。</li>
+        <li><strong>所有窗口共用一个长期实例</strong>：卸不掉，崩溃牵连所有窗口。</li>
+        <li><strong>用文件模式打开框架</strong>：file service 只读不运行；Load Frameworks 要真的运行。</li>
+        <li><strong>payload 列出框架、由实例启动时加载</strong>：崩溃后同一份 payload 起新实例，陷入崩溃循环。</li>
+        <li><strong>设 <code>DYLD_FRAMEWORK_PATH</code></strong>：hardened runtime 要另一个 entitlement，XPC service 的环境变量不能按实例给；留作预加载不成立时的退路。</li>
+        <li><strong>新命令发给所有引擎</strong>：旧版 payload 会断开（PR121.73）；改为随回复带回。</li>
+        <li><strong>在 App 进程里诊断</strong>：rpath 栈取决于失败的进程，远端文件不在本机；用户定在失败的进程里。</li>
+        <li><strong>用 MachODependencies</strong>：不展开 <code>@</code> 路径。</li>
+        <li><strong>用 <code>dlopen_preflight</code></strong>：不查依赖。</li>
+        <li><strong>读 <code>DYLD_PRINT_SEARCHING</code></strong>：取不到。</li>
+        <li><strong>崩溃自动重试</strong>：用户定不重试，与 0037 一致。</li>
+        <li><strong>诊断页做成标签历史的一步</strong>：改动面大、Back 会走进失败页、关标签即丢；改用空栏页面加 sheet。另：<strong>关窗后像文件引擎一样留 30 秒</strong>也否——恢复要重跑构造函数。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <ul>
+    <li>My Mac 里点 Load Frameworks 开新窗口「Foo.framework (Isolated)」；跳到系统类型照常可用（数据来自 My Mac），也可以把新窗口换回 My Mac——那样实例会结束。</li>
+    <li>加载失败显示诊断页或带诊断的 sheet，不再只有原文。</li>
+    <li>来源选择器多一节「Isolated Frameworks」；这类窗口不进 Open Recent、重启不恢复。</li>
+  </ul>
+  <h3>可发现性</h3>
+  <p>入口不变，tooltip 说明会开新的独立实例；修复提议直接在诊断页横幅上；没有开关。</p>
+  <h3>数据与配置兼容</h3>
+  <p>不改设置、不迁移。书签多一种归档身份，旧版读到时跳过。新来源不发给对端，步骤 3 核对不进持久化。<code>LoadImageCommand</code> 加可选字段，回复在线上仍是空对象。</p>
+  <h3>平台与最低版本</h3>
+  <p>只在 macOS 上，最低版本不变。每个独立窗口多一个进程，常驻内存<strong>未测</strong>，步骤 8 实测后补进提案。</p>
+  <h3>发布</h3>
+  <p>新 service 与 local service 一样带 hardened runtime 与 <code>disable-library-validation</code>，公证照常；<code>SKIP_INSTALL = YES</code>；正式发版前在 Distribution workspace 归档并公证一次。不影响 Sparkle。</p>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>诊断本身（Core，无界面）</strong>：先跑 <code>PreloadSatisfiesRpathDependencyTests</code>，<strong>不通过就停下回来重议</strong>。行为：解析三种原文与未知原文；依赖链终点；rpath 行按 dyld 顺序；<code>@executable_path</code> 的说明；推断宿主 App；修复方案依赖在前；搜索路径；找不到时没有方案；已加载镜像按 install name 算存在；<code>resolve</code> 结果不变。</li>
+    <li><strong>诊断随失败的加载过线</strong>：三种传输都带回诊断；冻结的旧服务端只有原文；冻结的旧请求方回复逐字节不变；中转原样转发；Mach service 的 <code>XPCEncoder</code> 跳过字段；新命令不发给其他引擎；路由声明为 Neither。</li>
+    <li><strong>框架实例的 Core 与传输</strong>：来源的身份与不分享；书签原始值往返；凭证与 payload；host 的侧栏两节、失败的也列、基线与 shared cache 不列、每次加载重建节点；进程目录行为不变。核对 <code>RuntimeSource</code> 的编码处。</li>
+    <li><strong>内嵌 service</strong>：Debug-arm64e 与 Release 构建，核对嵌入、签名、外壳大小、不链接包；<code>./TuistScript.sh check</code> 通过。</li>
+    <li><strong>引擎管理</strong>：列在「Isolated Frameworks」；结束后拿掉；借 My Mac；不分享；CLI 不列；没有内嵌 service 时起不来。</li>
+    <li><strong>App 的加载流程与页面的值（AppCore）</strong>：四种引擎分流；按顺序加载并记 Manual Loading；停在第一个失败、修好后接着加载；修复先加载依赖；窗口记住宿主 App；旧版对端简化诊断；实例停止不重试、Load Again 从头加载；空窗口成功后打开镜像页；有内容时走 sheet；retirement 只管框架实例；页面文字与拷贝内容。</li>
+    <li><strong>App 的窗口、路由与页面</strong>：开窗口建在新实例上；空栏进出 <code>frameworkLoad</code> 场景；失败路由弹 sheet。</li>
+    <li><strong>文档、实测与收尾</strong>：用真实的第三方 App 框架走一遍失败 → 修复 → 成功；关窗后没有残留进程；注入进程窗口的 sheet；测一个实例的常驻内存；按改动地图更新文档；判断实现说明与术语。</li>
+  </ol>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>5 条，最近一条：写提案时定下的实现方向</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-19</td><td>Created as Draft</td><td>Load Frameworks 把第三方框架装进 My Mac 的 service，卸不掉、会牵连 My Mac，失败时只有 dyld 原文；改成每次在独立实例里加载，并在失败的进程里诊断。完整档，三轮澄清提问与诊断页原型之后创建。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>前置修复已落地</td><td>dyld 原文跨 XPC 丢失先单独修好并推上 <code>next</code>（558b6abf），回归测试 <code>DyldLoadFailureMessageTests</code>。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>澄清提问定下的方向</td><td>每次在独立实例里加载、新窗口、关窗即退出；同一窗口再加载进同一实例；My Mac 不保留直接加载；失败时窗口照常打开、诊断在内容区、重试成功原地恢复；不进 Open Recent、不恢复；诊断在失败的进程里模拟 dyld 并附原文；修复手段放进本提案；诊断所有引擎都有、修复只在独立实例；侧栏只列这次加载的框架与非 shared cache 依赖。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>诊断页原型通过</td><td>静态 HTML 原型回答了诊断页的内容与排布，用户看过认可；原型不进仓库，网页版的界面草图照它重画。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>写提案时定下的实现方向</td><td>诊断随失败的加载在回复里带回，不加发给所有引擎的新命令（PR121.73）；重新诊断只发给框架实例；payload 不列框架，避免崩溃循环；没有窗口就立即结束实例。</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
