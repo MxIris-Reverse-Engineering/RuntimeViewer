@@ -42,6 +42,13 @@ public enum MainRoute: Routable {
     /// The naming word cloud of the image at this path, in a window of its own:
     /// one per image of the document, brought to the front when it is open.
     case namingWordCloud(imagePath: String)
+    /// Load Frameworks on My Mac: the frameworks at these URLs, loaded into an
+    /// instance of the framework service of their own, in a window of their
+    /// own (proposal `isolated-framework-loading`).
+    case openIsolatedFrameworks([URL])
+    /// The document's framework loader refused a framework while the window
+    /// shows something: its diagnosis in a sheet.
+    case frameworkLoadFailure
 }
 
 #endif

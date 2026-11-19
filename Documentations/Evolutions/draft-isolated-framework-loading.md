@@ -864,7 +864,7 @@ default:
      - `commandLineSourceCatalogLeavesFrameworkInstancesOut`
      - `startFailsWhenTheServiceIsNotEmbedded`
 
-6. **App 的加载流程与页面的值（AppCore）** —— 步骤 6 的行
+6. **App 的加载流程与页面的值（AppCore）** —— 步骤 6 的行（**已完成**）
    - 行为：
      - `loadFrameworksOnMyMacOpensAnIsolatedWindow`
      - `loadFrameworksOnAFrameworkInstanceLoadsInPlace`
@@ -920,3 +920,4 @@ default:
 | 2026-11-19 | 步骤 3 完成 | 编码 `RuntimeSource` 的只有镜像分享的描述（受 `isMirrorableToPeers` 约束，新 case 为假）与旧书签的迁移（只读旧数据），新 case 不进持久化、不发给对端。实现细节：服务端引擎在构造时自己记下基线镜像，`init(servingFrameworkInstance:)` 不再收这个参数；镜像目录在节点里列出 dyld 拒绝的框架，但不放进 `imagePaths()`——那份列表的每一项都要能取到镜像，`isImageLoaded` 也读它；目录里的路径一律按 dyld 登记的写法（真实路径），经符号链接加载的框架不会出现两次；框架 service 的 host 不像文件 service 那样调高描述符上限，它不成批打开文件。 |
 | 2026-11-19 | 步骤 4 完成 | 用 Tuist 工作区编了 Debug 的整个 App：`RuntimeViewerFrameworkService.xpc` 已嵌入，外壳约 70 KB、只链接系统库，App 的 `Info.plist` 带上了键；`./TuistScript.sh check` 通过。没有另跑 Debug-arm64e 与 Release 构建（各要半小时级，留到第 8 步或发版前），签名与 entitlement 留到第 8 步在签名构建里核对。App 要编过，Packages 与命令行工具里几处对来源的穷举分支提前在这一步补上（原排在第 5、6 步）：索引设置的引擎引用、侧栏的「在本机」、加载带进度、来源图标、CLI 的来源目录。 |
 | 2026-11-19 | 步骤 5 完成 | `terminateFrameworkInstance(_:)` 是同步方法，走现有的 `terminateRuntimeEngine(for:because:)`；没有内嵌 service 时的错误单独一个 `RuntimeFrameworkInstanceError`，与文件引擎的错误并列。 |
+| 2026-11-19 | 步骤 6 完成 | 与原设计的出入：来源名改由 `RuntimeFrameworkInstance(loading:)` 算出，不另建 `FrameworkInstanceName`；诊断页的 `FrameworkLoadViewModel` 照 `MCPStatusPopoverViewModel` 对路由类型做泛型——编辑栏里用内容面板的路由、sheet 里用主路由并带关闭路由，不再让 `EditorAreaCoordinator` 把主路由交给每个编辑栏（第 7 步那一行随之取消）；加载器的测试接缝 `ImageLoading` 另含「等实例回来」，测试不必真等。`MainViewModel` 里只给旧 Load Frameworks 用的 `MessageError` 删掉了。 |
