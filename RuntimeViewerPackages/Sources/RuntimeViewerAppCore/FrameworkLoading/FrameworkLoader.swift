@@ -108,6 +108,13 @@ public final class FrameworkLoader {
             requestedFrameworkURLs.append(frameworkURL)
         }
         followInstance(engine)
+        // A window opens on a new instance at once; until the instance answers, a request fails
+        // rather than being answered here, so the first load waits for it, its page up meanwhile.
+        if Self.isFrameworkInstance(engine), !engine.state.isReady {
+            setState(.loading(.init(frameworkURL: frameworkURLs[0], position: 1, count: frameworkURLs.count)))
+            await imageLoading.waitUntilReady(engine)
+            followedEngineWasReady = engine.state.isReady
+        }
         await loadSequence(frameworkURLs, on: engine)
     }
 

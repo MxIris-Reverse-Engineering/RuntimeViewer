@@ -35,6 +35,12 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
     /// when its window closes, and all of them close with the document's window.
     private var namingWordCloudCoordinators: [String: NamingWordCloudCoordinator] = [:]
 
+    /// The Load Frameworks sheet while it is up: a refusal while it shows — a retry from it that
+    /// fails again — updates it instead of stacking another.
+    private weak var frameworkLoadSheetViewController: NSViewController?
+
+    @Dependency(\.frameworkInstanceController) private var frameworkInstanceController
+
     private var mainWindowCloseObservation: NSObjectProtocol?
 
     init(documentState: DocumentState) {
@@ -169,6 +175,17 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         case .namingWordCloud(let imagePath):
             showNamingWordCloud(forImageAt: imagePath)
             return .none()
+        case .openIsolatedFrameworks(let frameworkURLs):
+            frameworkInstanceController.openWindow(loadingFrameworksAt: frameworkURLs)
+            return .none()
+        case .frameworkLoadFailure:
+            guard frameworkLoadSheetViewController == nil else { return .none() }
+            let viewController = FrameworkLoadViewController<MainRoute>()
+            let viewModel = FrameworkLoadViewModel<MainRoute>(documentState: documentState, router: self, dismissRoute: .dismiss)
+            viewController.setupBindings(for: viewModel)
+            viewController.preferredContentSize = .init(width: 720, height: 560)
+            frameworkLoadSheetViewController = viewController
+            return .presentOnRoot(viewController, mode: .asSheet)
         }
     }
 

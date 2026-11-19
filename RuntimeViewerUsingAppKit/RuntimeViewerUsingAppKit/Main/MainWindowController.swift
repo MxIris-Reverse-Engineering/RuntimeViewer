@@ -115,6 +115,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         let output = viewModel.transform(input)
 
         output.isLoadFrameworksEnabled.drive(toolbarController.loadFrameworksItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
+        output.loadFrameworksToolTip.driveOnNext { [weak self] toolTip in
+            guard let self else { return }
+            toolbarController.loadFrameworksItem.toolTip = toolTip
+        }
+        .disposed(by: rx.disposeBag)
 
         output.windowTitle.driveOnNext { [weak self] title in
             guard let self else { return }

@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.helperServiceVersionChecker) private var helperServiceVersionChecker
     @Dependency(\.mcpService) private var mcpService
     @Dependency(\.fileController) private var fileController
+    @Dependency(\.frameworkInstanceController) private var frameworkInstanceController
     @Dependency(\.runtimeConnectionNotificationService) private var runtimeConnectionNotificationService
     @Dependency(\.runtimeDerivedDataController) private var runtimeDerivedDataController
     @Dependency(\.settingsLifecycleController) private var settingsLifecycleController
@@ -97,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updaterService.start()
         runtimeDerivedDataController.install()
         fileController.start()
+        frameworkInstanceController.start()
         helperServiceVersionChecker.checkOnLaunch()
     }
 

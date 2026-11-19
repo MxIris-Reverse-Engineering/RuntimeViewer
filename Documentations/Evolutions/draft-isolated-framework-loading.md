@@ -888,7 +888,7 @@ default:
      - `sheetPresentationHasNoRetryOrRemedy`
      - `instanceNameCountsTheOtherFrameworks`
 
-7. **App 的窗口、路由与页面（App target）** —— 步骤 7 的行
+7. **App 的窗口、路由与页面（App target）** —— 步骤 7 的行（**已完成**）
    - 行为：
      - `openWindowCreatesADocumentOnANewInstance`
      - `emptyPaneShowsTheFrameworkLoadSceneWhileTheLoaderAsks`
@@ -921,3 +921,4 @@ default:
 | 2026-11-19 | 步骤 4 完成 | 用 Tuist 工作区编了 Debug 的整个 App：`RuntimeViewerFrameworkService.xpc` 已嵌入，外壳约 70 KB、只链接系统库，App 的 `Info.plist` 带上了键；`./TuistScript.sh check` 通过。没有另跑 Debug-arm64e 与 Release 构建（各要半小时级，留到第 8 步或发版前），签名与 entitlement 留到第 8 步在签名构建里核对。App 要编过，Packages 与命令行工具里几处对来源的穷举分支提前在这一步补上（原排在第 5、6 步）：索引设置的引擎引用、侧栏的「在本机」、加载带进度、来源图标、CLI 的来源目录。 |
 | 2026-11-19 | 步骤 5 完成 | `terminateFrameworkInstance(_:)` 是同步方法，走现有的 `terminateRuntimeEngine(for:because:)`；没有内嵌 service 时的错误单独一个 `RuntimeFrameworkInstanceError`，与文件引擎的错误并列。 |
 | 2026-11-19 | 步骤 6 完成 | 与原设计的出入：来源名改由 `RuntimeFrameworkInstance(loading:)` 算出，不另建 `FrameworkInstanceName`；诊断页的 `FrameworkLoadViewModel` 照 `MCPStatusPopoverViewModel` 对路由类型做泛型——编辑栏里用内容面板的路由、sheet 里用主路由并带关闭路由，不再让 `EditorAreaCoordinator` 把主路由交给每个编辑栏（第 7 步那一行随之取消）；加载器的测试接缝 `ImageLoading` 另含「等实例回来」，测试不必真等。`MainViewModel` 里只给旧 Load Frameworks 用的 `MessageError` 删掉了。 |
+| 2026-11-19 | 步骤 7 完成 | App target 没有测试目标，这一步写成测试用例名的行为没有单独的测试：它们依赖的状态（加载器何时要求在空栏里显示页面、何时弹 sheet）都在 AppCore 里测过，界面在第 8 步的手工核对里看。新窗口打开后，加载器在实例应答之前就显示加载页并等待它（不再由开窗口的控制器先等）；实例始终不应答时，控制器照 `FileController` 的做法弹 sheet 说明后关窗。诊断页的视图控制器对路由类型做泛型，滚动页的文档视图放在文件作用域（泛型类里的嵌套类型也是泛型）。sheet 已经开着时再来的失败只更新它，不再叠一层。 |
