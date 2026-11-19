@@ -51,7 +51,12 @@ final class NamingWordCloudCoordinator: SceneCoordinator<NamingWordCloudRoute, N
         let viewController = NamingWordCloudViewController()
         viewController.setupBindings(for: viewModel)
         windowController.contentViewController = viewController
-        namingWordCloudWindowController.configure(title: viewModel.windowTitle, autosaveName: "NamingWordCloud \(viewModel.imageName)")
+        namingWordCloudWindowController.configure(
+            title: viewModel.windowTitle,
+            subtitle: viewModel.windowSubtitle,
+            autosaveName: "NamingWordCloud \(viewModel.imageName)",
+            toolbarDelegate: viewController
+        )
         self.viewModel = viewModel
         self.viewController = viewController
         windowCloseObservation = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: windowController.window, queue: .main) { [weak self] _ in

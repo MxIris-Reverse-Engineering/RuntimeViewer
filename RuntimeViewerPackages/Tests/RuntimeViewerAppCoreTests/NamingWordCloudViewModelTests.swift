@@ -24,6 +24,7 @@ struct NamingWordCloudViewModelTests {
         let wordSelections: PublishRelay<String?>
         let usageClicks: PublishRelay<Int>
         let exportRequests: PublishRelay<NamingWordCloudExportFormat>
+        let rankingColumnClicks: PublishRelay<NamingWordRankingOrder.Column>
 
         func readyContent(timeout: TimeInterval = 60) async throws -> NamingWordCloudContent {
             let state = try await nextValue(from: output.state, timeout: timeout) { state in
@@ -60,13 +61,15 @@ struct NamingWordCloudViewModelTests {
         let wordSelections = PublishRelay<String?>()
         let usageClicks = PublishRelay<Int>()
         let exportRequests = PublishRelay<NamingWordCloudExportFormat>()
+        let rankingColumnClicks = PublishRelay<NamingWordRankingOrder.Column>()
         let output = viewModel.transform(.init(
             preferenceChanged: preferenceChanges.asSignal(),
             wordSelected: wordSelections.asSignal(),
             usageClicked: usageClicks.asSignal(),
             retry: .empty(),
             exportRequested: exportRequests.asSignal(),
-            compoundWordsRequested: .empty()
+            compoundWordsRequested: .empty(),
+            rankingColumnClicked: rankingColumnClicks.asSignal()
         ))
         return Harness(
             environment: environment,
@@ -76,7 +79,8 @@ struct NamingWordCloudViewModelTests {
             preferenceChanges: preferenceChanges,
             wordSelections: wordSelections,
             usageClicks: usageClicks,
-            exportRequests: exportRequests
+            exportRequests: exportRequests,
+            rankingColumnClicks: rankingColumnClicks
         )
     }
 
@@ -92,7 +96,49 @@ struct NamingWordCloudViewModelTests {
         #expect(content.rankedWords.count >= content.cloudWords.count)
         #expect(!content.legend.isEmpty)
         #expect(content.legend.allSatisfy(NamingWordMeasure.typeSuffixes.categories.contains))
-        #expect(harness.viewModel.windowTitle == "libobjc.A — Naming Word Cloud")
+        #expect(harness.viewModel.windowTitle == "Naming Word Cloud")
+        #expect(harness.viewModel.windowSubtitle == "libobjc.A")
+    }
+
+    @Test("the ranking lists every word counted, the most common first, and says how many there are")
+    func rankingRowsAndWordCount() async throws {
+        let harness = try await Self.makeHarness(engineID: "NamingWordCloudViewModelTests.ranking")
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        let content = try await harness.readyContent()
+
+        let rows = try await nextValue(from: harness.output.rankingRows) { !$0.isEmpty }
+        #expect(rows == NamingWordRankingOrder.mostCommonFirst.sorted(content.rankedWords))
+        let wordCountText = try await nextValue(from: harness.output.wordCountText) { !$0.isEmpty }
+        #expect(wordCountText == "\(content.rankedWords.count.formatted()) \(content.rankedWords.count == 1 ? "word" : "words")")
+        #expect(try await nextValue(from: harness.output.usageDetailColumnTitle) == "Kind")
+    }
+
+    @Test("a click on the Word header orders the ranking from A, and a second one reverses it")
+    func rankingHeaderClicks() async throws {
+        let harness = try await Self.makeHarness(engineID: "NamingWordCloudViewModelTests.rankingHeader")
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        let content = try await harness.readyContent()
+        let byWord = NamingWordRankingOrder(column: .word, isAscending: true)
+
+        harness.rankingColumnClicks.accept(.word)
+
+        _ = try await nextValue(from: harness.output.rankingOrder) { $0 == byWord }
+        _ = try await nextValue(from: harness.output.rankingRows) { $0 == byWord.sorted(content.rankedWords) }
+
+        harness.rankingColumnClicks.accept(.word)
+
+        let reversed = NamingWordRankingOrder(column: .word, isAscending: false)
+        _ = try await nextValue(from: harness.output.rankingOrder) { $0 == reversed }
+        _ = try await nextValue(from: harness.output.rankingRows) { $0 == reversed.sorted(content.rankedWords) }
+    }
+
+    @Test("the usage list's title says no word is selected until one is")
+    func usageTitleSaysNoWordSelectedWithoutSelection() async throws {
+        let harness = try await Self.makeHarness(engineID: "NamingWordCloudViewModelTests.noSelection")
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        _ = try await harness.readyContent()
+
+        #expect(try await nextValue(from: harness.output.usageTitle) == NamingWordCloudViewModel.noWordSelectedTitle)
     }
 
     @Test("selecting a word lists the names holding it, and clicking one opens it in the main window")
@@ -106,8 +152,7 @@ struct NamingWordCloudViewModelTests {
 
         let rows = try await nextValue(from: harness.output.usageRows) { !$0.isEmpty }
         #expect(rows.count == word.count)
-        let title = try await nextValue(from: harness.output.usageTitle) { !$0.isEmpty }
-        #expect(title.hasPrefix("\(word.word) — "))
+        let title = try await nextValue(from: harness.output.usageTitle) { $0.hasPrefix("\(word.word) — ") }
         #expect(harness.viewModel.summary(ofWordWithKey: word.key) == title)
 
         harness.usageClicks.accept(0)

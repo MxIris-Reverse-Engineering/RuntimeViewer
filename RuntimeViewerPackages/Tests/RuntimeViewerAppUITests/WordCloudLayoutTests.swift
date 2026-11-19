@@ -110,6 +110,82 @@ struct WordCloudLayoutTests {
         let cappedImage = try #require(NSBitmapImageRep(data: cappedPNG))
         #expect(CGFloat(cappedImage.pixelsWide * cappedImage.pixelsHigh) <= 10_000)
     }
+
+    @Test("words below 18 points are drawn at 60% opacity, larger ones in full colour")
+    func wordsBelowEighteenPointsAreTranslucent() {
+        #expect(WordCloudTypography.opacity(forSize: 12) == 0.6)
+        #expect(WordCloudTypography.opacity(forSize: 17.5) == 0.6)
+        #expect(WordCloudTypography.opacity(forSize: 18) == 1)
+        #expect(WordCloudTypography.opacity(forSize: 120) == 1)
+    }
+
+    @MainActor
+    @Test("the words' bounding rectangle holds every word drawn and nothing more")
+    func boundingRectCoversEveryPlacedWord() async throws {
+        let view = WordCloudView(frame: .zero)
+        #expect(view.wordsBoundingRect == nil)
+        let words = Self.viewWords(count: 60)
+
+        await view.setWords(words)
+
+        let boundingRect = try #require(view.wordsBoundingRect)
+        let frames = words.compactMap { view.frameOfWord(withIdentifier: $0.identifier) }
+        #expect(frames.count == view.placedWordCount)
+        #expect(frames.allSatisfy { boundingRect.contains($0) })
+        #expect(frames.reduce(frames[0]) { $0.union($1) } == boundingRect)
+        #expect(CGRect(origin: .zero, size: view.bounds.size).contains(boundingRect))
+    }
+
+    @MainActor
+    @Test("with the hand tool on, a click on a word selects nothing; with it off, the click reports the word")
+    func handToolClickOnAWordSelectsNothing() async throws {
+        let view = WordCloudView(frame: .zero)
+        await view.setWords(Self.viewWords(count: 20))
+        var clickedIdentifiers: [String] = []
+        view.wordClickHandler = { clickedIdentifiers.append($0) }
+        let frame = try #require(view.frameOfWord(withIdentifier: "word0"))
+        let locationInWindow = view.convert(CGPoint(x: frame.midX, y: frame.midY), to: nil)
+
+        try Self.click(view, at: locationInWindow)
+        #expect(clickedIdentifiers == ["word0"])
+
+        view.isHandToolActive = true
+        try Self.click(view, at: locationInWindow)
+        #expect(clickedIdentifiers == ["word0"])
+
+        view.isHandToolActive = false
+        try Self.click(view, at: locationInWindow)
+        #expect(clickedIdentifiers == ["word0", "word0"])
+    }
+
+    private static func viewWords(count: Int) -> [WordCloudView.Word] {
+        (0 ..< count).map { index in
+            WordCloudView.Word(identifier: "word\(index)", text: "Word\(index)", count: 100 - index, color: .systemBlue)
+        }
+    }
+
+    /// A press and a release at the same point: a click, not a drag.
+    @MainActor
+    private static func click(_ view: NSView, at locationInWindow: CGPoint) throws {
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(
+                with: type,
+                location: locationInWindow,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                eventNumber: 0,
+                clickCount: 1,
+                pressure: type == .leftMouseDown ? 1 : 0
+            ))
+            if type == .leftMouseDown {
+                view.mouseDown(with: event)
+            } else {
+                view.mouseUp(with: event)
+            }
+        }
+    }
 }
 
 #endif
