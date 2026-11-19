@@ -45,7 +45,7 @@
 
 ## 术语表
 
-- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、rendezvous、认领令牌、反向连接、镜像引擎、合成扩展、并入、Find 语料、补搜、协议副本、书签作用域、Tuist 开发 workspace 与原生工程、派生数据、系统身份、生产者身份、读取标记。
+- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、rendezvous、认领令牌、反向连接、镜像引擎、合成扩展、并入、Find 语料、补搜、协议副本、书签作用域、Tuist 开发 workspace 与原生工程、派生数据、系统身份、生产者身份、读取标记、框架实例、加载诊断。
 
 ## 提案（Evolutions）
 

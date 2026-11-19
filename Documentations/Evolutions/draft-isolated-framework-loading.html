@@ -391,7 +391,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
     <rect class="group" x="10" y="330" width="470" height="220" rx="10"/>
     <text class="group-label" x="22" y="352">RuntimeViewerAppCore</text>
-    <rect class="box-added" x="25" y="364" width="440" height="58" rx="6"/><text x="35" y="382">FrameworkLoading/</text><text class="caption" x="35" y="399">FrameworkLoader, FrameworkLoadState, FrameworkLoadViewModel,</text><text class="caption" x="35" y="414">ImageLoadDiagnosisPresentation, FrameworkInstanceName</text>
+    <rect class="box-added" x="25" y="364" width="440" height="58" rx="6"/><text x="35" y="382">FrameworkLoading/</text><text class="caption" x="35" y="399">FrameworkLoader, FrameworkLoadState, FrameworkLoadViewModel,</text><text class="caption" x="35" y="414">ImageLoadDiagnosisPresentation, RuntimeFrameworkInstance(loading:)</text>
     <rect class="box-added" x="25" y="430" width="215" height="44" rx="6"/><text x="35" y="448">Retirement</text><text class="caption" x="35" y="465">vacated -> terminate</text>
     <rect class="box-changed" x="250" y="430" width="215" height="44" rx="6"/><text x="260" y="448">MainViewModel</text><text class="caption" x="260" y="465">route by engine</text>
     <rect class="box-changed" x="25" y="482" width="440" height="58" rx="6"/><text x="35" y="500">MainRoute</text><text class="caption" x="35" y="517">+ openIsolatedFrameworks([URL])</text><text class="caption" x="35" y="532">+ frameworkLoadFailure</text>
@@ -402,7 +402,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <rect class="box-added" x="750" y="364" width="225" height="44" rx="6"/><text x="760" y="382">FrameworkLoadViewController</text><text class="caption" x="760" y="399">loading / diagnosis pages</text>
     <rect class="box-changed" x="515" y="416" width="225" height="44" rx="6"/><text x="525" y="434">MainCoordinator</text><text class="caption" x="525" y="451">new routes, sheet</text>
     <rect class="box-changed" x="750" y="416" width="225" height="44" rx="6"/><text x="760" y="434">ContentCoordinator</text><text class="caption" x="760" y="451">+ scene frameworkLoad</text>
-    <rect class="box-changed" x="515" y="468" width="225" height="44" rx="6"/><text x="525" y="486">EditorAreaCoordinator</text><text class="caption" x="525" y="503">hands down the main router</text>
+    <rect class="box-changed" x="515" y="468" width="225" height="44" rx="6"/><text x="525" y="486">MainWindowController</text><text class="caption" x="525" y="503">Load Frameworks tooltip</text>
     <rect class="box-changed" x="750" y="468" width="225" height="44" rx="6"/><text x="760" y="486">AppDelegate</text><text class="caption" x="760" y="503">one start() call</text>
 
     <path class="arrow" d="M 245 362 L 245 304"/>
@@ -483,14 +483,14 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>EM/RuntimeEngineManager.swift</code> · <code>FrameworkInstanceLaunching</code>，<code>EM/RuntimeEngineManager+PlatformServices.swift</code></td><td><span class="tag tag-added">新增</span></td><td>闭包接缝，iOS 上 <code>.unavailable</code></td><td>与 iOS 移植同一写法</td><td class="numeric">5</td></tr>
       <tr><td><code>EMT/FrameworkInstanceEngineManagementTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>步骤 5 的行为清单</td><td>管理器的行为</td><td class="numeric">5</td></tr>
       <tr><td><code>RuntimeViewerCommandLine/…/SourceCatalog.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 case 返回 <code>nil</code></td><td>CLI 不列</td><td class="numeric">5</td></tr>
-      <tr><td><code>AppCore/FrameworkLoading/FrameworkLoader.swift</code>、<code>FrameworkLoadState.swift</code>、<code>FrameworkInstanceName.swift</code></td><td><span class="tag tag-added">新增</span></td><td>加载、诊断、修复、重试、实例停止；状态值；来源名</td><td>加载流程的唯一归属</td><td class="numeric">6</td></tr>
-      <tr><td><code>AppCore/FrameworkLoading/ImageLoadDiagnosisPresentation.swift</code>、<code>FrameworkLoadViewModel.swift</code></td><td><span class="tag tag-added">新增</span></td><td>诊断页的值；<code>ViewModel&lt;MainRoute&gt;</code>，编辑栏与 sheet 两种呈现</td><td>视图只画值</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/FrameworkLoading/FrameworkLoader.swift</code>、<code>FrameworkLoadState.swift</code>、<code>RuntimeFrameworkInstance+Loading.swift</code></td><td><span class="tag tag-added">新增</span></td><td>加载、诊断、修复、重试、实例停止；状态值；来源名</td><td>加载流程的唯一归属</td><td class="numeric">6</td></tr>
+      <tr><td><code>AppCore/FrameworkLoading/ImageLoadDiagnosisPresentation.swift</code>、<code>FrameworkLoadViewModel.swift</code></td><td><span class="tag tag-added">新增</span></td><td>诊断页的值；<code>FrameworkLoadViewModel&lt;Route&gt;</code> 对路由类型泛型，编辑栏里用内容面板的路由，sheet 里带关闭路由</td><td>视图只画值</td><td class="numeric">6</td></tr>
       <tr><td><code>AppCore/Engine/RuntimeFrameworkInstanceRetirement.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>.vacated</code> 的框架实例立即结束</td><td>关窗即退出</td><td class="numeric">6</td></tr>
       <tr><td><code>AppCore/Document/DocumentState.swift</code>、<code>AppCore/Main/MainRoute.swift</code>、<code>AppCore/Main/MainViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>frameworkLoader</code>；两个路由；按引擎分流、sheet、标题与 tooltip</td><td>入口分流</td><td class="numeric">6</td></tr>
       <tr><td><code>AppCore/…/RuntimeEngine+ImageIndexing.swift</code>、<code>AppCore/Sidebar/Root/SidebarRootViewModel.swift</code>、<code>AppUI/Engine/RuntimeEngineIconProvider.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新 case：带进度的加载、在本机、框架图标</td><td>新来源的各处表现</td><td class="numeric">6</td></tr>
       <tr><td><code>AppCoreTests/</code> 加载器、页面、退出与分流的测试</td><td><span class="tag tag-added">新增</span></td><td>步骤 6 的行为清单</td><td>App 一侧的行为</td><td class="numeric">6</td></tr>
       <tr><td><code>App/App/FrameworkInstanceController.swift</code>、<code>App/App/AppDelegate.swift</code></td><td><span class="tag tag-added">新增</span> / <span class="tag tag-changed">修改</span></td><td>开窗口、启动 retirement；一行 <code>start()</code></td><td>照 <code>FileController</code>；AppDelegate 只派发</td><td class="numeric">7</td></tr>
-      <tr><td><code>App/Main/MainCoordinator.swift</code>、<code>App/EditorArea/EditorAreaCoordinator.swift</code>、<code>App/Content/ContentCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新路由与 sheet；交下主路由；第四个场景 <code>frameworkLoad</code></td><td>诊断显示在内容区</td><td class="numeric">7</td></tr>
+      <tr><td><code>App/Main/MainCoordinator.swift</code>、<code>App/Main/MainWindowController.swift</code>、<code>App/Content/ContentCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新路由与 sheet（已开着就只更新）；按钮提示；第四个场景 <code>frameworkLoad</code></td><td>诊断显示在内容区</td><td class="numeric">7</td></tr>
       <tr><td><code>App/Content/FrameworkLoadViewController.swift</code></td><td><span class="tag tag-added">新增</span></td><td>三种页面、两个 open panel、私有 <code>DiagnosisView</code></td><td>页面本身</td><td class="numeric">7</td></tr>
       <tr><td><code>AGENTS.md</code>、<code>Configurations/AGENTS.md</code>、<code>Documentations/CommunicationAndEngineArchitecture.md</code>、<code>Documentations/Glossary.md</code></td><td><span class="tag tag-changed">修改</span></td><td>新 target、外壳数、install 表、XPC 代码位置、派生数据；§4.4 第四例；术语</td><td>文档同步</td><td class="numeric">8</td></tr>
       <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记本提案</td><td>索引</td><td class="numeric">0</td></tr>
@@ -673,7 +673,7 @@ default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls)
         <li>一个失败就停在它上面，剩下的留着，修好后接着加载。</li>
         <li>引擎 <code>.disconnected</code> 时进入 <code>.instanceStopped</code>；<code>loadAgain()</code> 等重连后从头加载。</li>
         <li>空窗口全部成功后，经 <code>SelectionRoute.openImage</code> 打开第一个框架的镜像页。</li>
-        <li><code>ContentCoordinator</code> 在空栏且 <code>showsPageInEmptyPanes</code> 为真时进入 <code>frameworkLoad</code> 场景；页面的 view model 用 <code>EditorAreaCoordinator</code> 交下来的主路由。</li>
+        <li><code>ContentCoordinator</code> 在空栏且 <code>showsPageInEmptyPanes</code> 为真时进入 <code>frameworkLoad</code> 场景，页面用内容面板自己的路由；sheet 由 <code>MainCoordinator</code> 建，带 <code>.dismiss</code>。</li>
       </ul>
     </div>
   </details>
@@ -718,7 +718,7 @@ default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls)
         <li><code>dlerror()</code> 的内容就是控制台里的 <code>Library not loaded / Referenced from / Reason: tried:</code>。</li>
         <li><code>DYLD_PRINT_SEARCHING</code> 只在启动时读、要 AMFI 放行，没有 API 取得到。</li>
         <li><code>dlopen_preflight</code> 只查顶层架构切片。</li>
-        <li>rpath 栈：主程序 → 调用 <code>dlopen</code> 的镜像 → 依赖链；<code>@executable_path</code> 展开到 service 自己。</li>
+        <li>加载链从主程序开始，接着是调用 <code>dlopen</code> 的镜像、依赖链；<strong>查找时从最新的一环往回走</strong>：发起加载的镜像自己的 rpath 先查，主程序最后。rpath 里的 <code>@loader_path</code> 按携带它的镜像展开，<code>@executable_path</code> 展开到 service 自己。</li>
         <li>解析 <code>@rpath/…</code> 先匹配已加载镜像的 install name，所以先加载依赖可行——<strong>读源码可行，未实测</strong>，步骤 1 先实测。</li>
       </ul>
     </div>
@@ -779,13 +779,13 @@ default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls)
 <section id="steps">
   <h2>落地步骤</h2>
   <ol>
-    <li><strong>诊断本身（Core，无界面）</strong>：先跑 <code>PreloadSatisfiesRpathDependencyTests</code>，<strong>不通过就停下回来重议</strong>。行为：解析三种原文与未知原文；依赖链终点；rpath 行按 dyld 顺序；<code>@executable_path</code> 的说明；推断宿主 App；修复方案依赖在前；搜索路径；找不到时没有方案；已加载镜像按 install name 算存在；<code>resolve</code> 结果不变。</li>
-    <li><strong>诊断随失败的加载过线</strong>：三种传输都带回诊断；冻结的旧服务端只有原文；冻结的旧请求方回复逐字节不变；中转原样转发；Mach service 的 <code>XPCEncoder</code> 跳过字段；新命令不发给其他引擎；路由声明为 Neither。</li>
-    <li><strong>框架实例的 Core 与传输</strong>：来源的身份与不分享；书签原始值往返；凭证与 payload；host 的侧栏两节、失败的也列、基线与 shared cache 不列、每次加载重建节点；进程目录行为不变。核对 <code>RuntimeSource</code> 的编码处。</li>
-    <li><strong>内嵌 service</strong>：Debug-arm64e 与 Release 构建，核对嵌入、签名、外壳大小、不链接包；<code>./TuistScript.sh check</code> 通过。</li>
-    <li><strong>引擎管理</strong>：列在「Isolated Frameworks」；结束后拿掉；借 My Mac；不分享；CLI 不列；没有内嵌 service 时起不来。</li>
-    <li><strong>App 的加载流程与页面的值（AppCore）</strong>：四种引擎分流；按顺序加载并记 Manual Loading；停在第一个失败、修好后接着加载；修复先加载依赖；窗口记住宿主 App；旧版对端简化诊断；实例停止不重试、Load Again 从头加载；空窗口成功后打开镜像页；有内容时走 sheet；retirement 只管框架实例；页面文字与拷贝内容。</li>
-    <li><strong>App 的窗口、路由与页面</strong>：开窗口建在新实例上；空栏进出 <code>frameworkLoad</code> 场景；失败路由弹 sheet。</li>
+    <li><strong>诊断本身（Core，无界面）</strong>（已完成）：先跑 <code>PreloadSatisfiesRpathDependencyTests</code>，<strong>不通过就停下回来重议</strong>。行为：解析三种原文与未知原文；依赖链终点；rpath 行按 dyld 顺序；<code>@executable_path</code> 的说明；推断宿主 App；修复方案依赖在前；搜索路径；找不到时没有方案；已加载镜像按 install name 算存在；<code>resolve</code> 结果不变。</li>
+    <li><strong>诊断随失败的加载过线</strong>（已完成）：三种传输都带回诊断；冻结的旧服务端只有原文；冻结的旧请求方回复逐字节不变；中转原样转发；Mach service 的 <code>XPCEncoder</code> 跳过字段；新命令不发给其他引擎；路由声明为 Neither。</li>
+    <li><strong>框架实例的 Core 与传输</strong>（已完成）：来源的身份与不分享；书签原始值往返；凭证与 payload；host 的侧栏两节、失败的也列、基线与 shared cache 不列、每次加载重建节点；进程目录行为不变。核对 <code>RuntimeSource</code> 的编码处。</li>
+    <li><strong>内嵌 service</strong>（已完成）：Debug-arm64e 与 Release 构建，核对嵌入、签名、外壳大小、不链接包；<code>./TuistScript.sh check</code> 通过。</li>
+    <li><strong>引擎管理</strong>（已完成）：列在「Isolated Frameworks」；结束后拿掉；借 My Mac；不分享；CLI 不列；没有内嵌 service 时起不来。</li>
+    <li><strong>App 的加载流程与页面的值（AppCore）</strong>（已完成）：四种引擎分流；按顺序加载并记 Manual Loading；停在第一个失败、修好后接着加载；修复先加载依赖；窗口记住宿主 App；旧版对端简化诊断；实例停止不重试、Load Again 从头加载；空窗口成功后打开镜像页；有内容时走 sheet；retirement 只管框架实例；页面文字与拷贝内容。</li>
+    <li><strong>App 的窗口、路由与页面</strong>（已完成）：开窗口建在新实例上；空栏进出 <code>frameworkLoad</code> 场景；失败路由弹 sheet。</li>
     <li><strong>文档、实测与收尾</strong>：用真实的第三方 App 框架走一遍失败 → 修复 → 成功；关窗后没有残留进程；注入进程窗口的 sheet；测一个实例的常驻内存；按改动地图更新文档；判断实现说明与术语。</li>
   </ol>
 </section>
@@ -793,7 +793,7 @@ default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls)
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>5 条，最近一条：写提案时定下的实现方向</summary>
+    <summary>13 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -804,6 +804,15 @@ default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls)
           <tr><td class="numeric">2026-11-19</td><td>澄清提问定下的方向</td><td>每次在独立实例里加载、新窗口、关窗即退出；同一窗口再加载进同一实例；My Mac 不保留直接加载；失败时窗口照常打开、诊断在内容区、重试成功原地恢复；不进 Open Recent、不恢复；诊断在失败的进程里模拟 dyld 并附原文；修复手段放进本提案；诊断所有引擎都有、修复只在独立实例；侧栏只列这次加载的框架与非 shared cache 依赖。</td></tr>
           <tr><td class="numeric">2026-11-19</td><td>诊断页原型通过</td><td>静态 HTML 原型回答了诊断页的内容与排布，用户看过认可；原型不进仓库，网页版的界面草图照它重画。</td></tr>
           <tr><td class="numeric">2026-11-19</td><td>写提案时定下的实现方向</td><td>诊断随失败的加载在回复里带回，不加发给所有引擎的新命令（PR121.73）；重新诊断只发给框架实例；payload 不列框架，避免崩溃循环；没有窗口就立即结束实例。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>Accepted</td><td>用户批准，开始实现。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>步骤 1 完成</td><td>实测「先按绝对路径加载依赖」成立。原文把 rpath 栈的构造顺序当成了查找顺序：dyld 从发起加载的镜像往回查到主程序，诊断表按查找顺序排。<code>ChainLink</code> 存 <code>resolvedPath</code>；<code>DylibPathResolver.resolve(…)</code> 不改，另写记录尝试的方法；修复方案列出闭包里所有还没加载的镜像。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>步骤 2 完成</td><td><code>diagnosesImageLoadsOnRequest</code> 对 <code>.local</code> 也为真（同一次构建内嵌的 local service）。路径比较改用 <code>realpath(3)</code>：dyld 按真实路径登记镜像，Foundation 的 <code>resolvingSymlinksInPath</code> 会去掉 <code>/private</code>。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>步骤 3 完成</td><td>编码 <code>RuntimeSource</code> 的只有镜像分享描述与旧书签迁移，新 case 不出去。服务端引擎构造时自己记基线；目录在节点里列出被拒的框架，但不放进 <code>imagePaths()</code>；路径一律按 dyld 登记的写法。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>步骤 4 完成</td><td>Tuist 工作区编了 Debug 的整个 App，service 已嵌入、外壳约 70 KB，<code>TuistScript.sh check</code> 通过；Debug-arm64e、Release 与签名留后。几处穷举分支提前在这一步补上。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>步骤 5 完成</td><td><code>terminateFrameworkInstance(_:)</code> 是同步方法；没有内嵌 service 的错误单独一个 <code>RuntimeFrameworkInstanceError</code>。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>步骤 6 完成</td><td>来源名由 <code>RuntimeFrameworkInstance(loading:)</code> 算出；诊断页的 view model 对路由类型泛型，取消「编辑区协调器交下主路由」；加载器的测试接缝含「等实例回来」；删掉不再用的 <code>MessageError</code>。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>步骤 7 完成</td><td>App target 没有测试目标，界面行为依赖的状态都在 AppCore 测过；新窗口打开后加载器先显示加载页并等实例应答；实例始终不应答时弹 sheet 后关窗；sheet 已开时只更新它。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>实现完成，待用户看过后收尾</td><td>八步都已提交推送。手工核对（真实第三方框架走一遍失败、修复、成功，关窗后无残留进程，注入进程窗口的 sheet，实例常驻内存）要在 App 里点按，没有做；签名构建核对 entitlement、Debug-arm64e 与 Release 构建也没跑。没有另写实现说明：每个决定的理由都写在对应代码的文档注释与本提案里；术语表加了「框架实例」「加载诊断」。</td></tr>
         </tbody>
       </table>
       </div>

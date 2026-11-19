@@ -210,33 +210,35 @@ My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在
 | `EM/RuntimeEngineManager.swift` · `FrameworkInstanceLaunching` | 新增 | 闭包接缝：`.live` 用 `RuntimeFrameworkService.credential(for:)`，iOS 上 `.unavailable` | 与 iOS 移植的平台接缝同一写法 | 5 |
 | `EM/RuntimeEngineManager+PlatformServices.swift` | 修改 | `FrameworkInstanceLaunching.live` 的两个平台分支 | 平台代码集中一处 | 5 |
 | `EMT/FrameworkInstanceEngineManagementTests.swift` | 新增 | 起实例后列在「Isolated Frameworks」；结束后拿掉；是借用方、owner 是 My Mac；不分享、不进 CLI 目录 | 管理器的行为 | 5 |
-| `RuntimeViewerCommandLine/Sources/RuntimeViewerCommandLineInterface/Execution/SourceCatalog.swift` | 修改 | `.frameworkInstance` 返回 `nil` | CLI 不列 | 5 |
+| `RuntimeViewerCommandLine/Sources/RuntimeViewerCommandLineInterface/Execution/SourceCatalog.swift` | 修改 | `.frameworkInstance` 返回 `nil` | CLI 不列 | 4（App 要编过，提前） |
 | `AppCore/FrameworkLoading/FrameworkLoader.swift` · `FrameworkLoader` | 新增 | 一个文档的加载器：逐个加载、记进 Manual Loading、失败时的诊断与简化诊断、修复、重试、宿主 App 与搜索路径、实例停止 | 加载流程的唯一归属 | 6 |
 | `AppCore/FrameworkLoading/FrameworkLoadState.swift` | 新增 | `FrameworkLoadState`、`FrameworkLoadFailure`、`FrameworkLoadInterruption` | 加载器的状态值 | 6 |
-| `AppCore/FrameworkLoading/FrameworkInstanceName.swift` | 新增 | 由选中的框架算出来源名 | 一处定名 | 6 |
+| `AppCore/FrameworkLoading/RuntimeFrameworkInstance+Loading.swift` · `RuntimeFrameworkInstance(loading:)` | 新增 | 由选中的框架算出实例与来源名 | 一处定名 | 6 |
 | `AppCore/FrameworkLoading/ImageLoadDiagnosisPresentation.swift` | 新增 | 诊断页的值：标题、结论、标签、横幅与按钮标题、依赖链、两张表、原文、拷贝用的纯文本 | 视图只画值 | 6 |
-| `AppCore/FrameworkLoading/FrameworkLoadViewModel.swift` · `FrameworkLoadViewModel` | 新增 | `ViewModel<MainRoute>`；`Presentation.editorArea` / `.sheet`；页面状态、各按钮的 `Input` | 加载页与诊断页 | 6 |
+| `AppCore/FrameworkLoading/FrameworkLoadViewModel.swift` · `FrameworkLoadViewModel<Route>` | 新增 | 对路由类型泛型（照 `MCPStatusPopoverViewModel`）：编辑栏里用内容面板的路由，sheet 里用主路由并带 `dismissRoute`；页面状态 `FrameworkLoadPage`、各按钮的 `Input` | 加载页与诊断页，一个 view model 两处用 | 6 |
 | `AppCore/Engine/RuntimeFrameworkInstanceRetirement.swift` | 新增 | 订阅占用变化，`.vacated` 的框架实例立即结束 | 关窗即退出 | 6 |
 | `AppCore/Document/DocumentState.swift` · `DocumentState` | 修改 | `frameworkLoader`（懒建） | 文档持有加载器 | 6 |
 | `AppCore/Main/MainRoute.swift` · `MainRoute` | 修改 | `openIsolatedFrameworks([URL])`、`frameworkLoadFailure` | 开新窗口、弹 sheet | 6 |
 | `AppCore/Main/MainViewModel.swift` · `MainViewModel` | 修改 | `frameworksSelected` 按引擎分三路；失败且窗口已有内容时发 `.frameworkLoadFailure`；工具栏标题与副标题在框架实例上按加载状态；按钮 tooltip | 入口分流 | 6 |
-| `AppCore/BackgroundWork/Indexing/RuntimeEngine+ImageIndexing.swift` | 修改 | `loadImageForUser` 对新 case 走带进度的加载 | 与 App 同版本 | 6 |
-| `AppCore/Sidebar/Root/SidebarRootViewModel.swift` · `isOnThisMac(_:)` | 修改 | 新 case 为真 | 本机磁盘上的镜像 | 6 |
-| `AppUI/Engine/RuntimeEngineIconProvider.swift` | 修改 | 新 case 用第一个框架的文件图标 | 来源图标 | 6 |
+| `AppCore/BackgroundWork/Indexing/RuntimeEngine+ImageIndexing.swift` | 修改 | `loadImageForUser` 对新 case 走带进度的加载 | 与 App 同版本 | 4（提前） |
+| `AppCore/Sidebar/Root/SidebarRootViewModel.swift` · `isOnThisMac(_:)` | 修改 | 新 case 为真 | 本机磁盘上的镜像 | 4（提前） |
+| `AppUI/Engine/RuntimeEngineIconProvider.swift` | 修改 | 新 case 用第一个框架的文件图标 | 来源图标 | 4（提前） |
+| `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+IndexingEngineReference.swift` | 修改 | 新 case 不带进程号 | 穷举分支 | 4 |
 | `AppCoreTests/FrameworkLoaderTests.swift` | 新增 | 见步骤 6 的行为清单 | 加载器的行为 | 6 |
 | `AppCoreTests/FrameworkLoadViewModelTests.swift`、`ImageLoadDiagnosisPresentationTests.swift` | 新增 | 页面状态与按钮；结论句、横幅、表格行 | 页面的行为 | 6 |
 | `AppCoreTests/RuntimeFrameworkInstanceRetirementTests.swift` | 新增 | 离开即结束；文件引擎与其他引擎不受影响 | 生命周期 | 6 |
-| `AppCoreTests/MainViewModel…Tests`（Load Frameworks 分流） | 新增 | My Mac 发 `.openIsolatedFrameworks`；框架实例与其他引擎交给加载器；文件引擎不可用 | 入口分流 | 6 |
+| `AppCoreTests/MainViewModelLoadFrameworksTests.swift` | 新增 | My Mac 发 `.openIsolatedFrameworks`；框架实例与其他引擎交给加载器；文件引擎不可用；窗口已有内容时失败走 sheet；标题、副标题与按钮提示 | 入口分流 | 6 |
 | `App/App/FrameworkInstanceController.swift` · `FrameworkInstanceController` | 新增 | `openWindow(loadingFrameworksAt:)`：起实例、`Document(runtimeEngine:)`、显示窗口、交给加载器；`start()` 启动 retirement | 照 `FileController` | 7 |
 | `App/App/AppDelegate.swift` | 修改 | `applicationDidFinishLaunching` 里一行 `frameworkInstanceController.start()` | AppDelegate 只派发 | 7 |
 | `App/Main/MainCoordinator.swift` | 修改 | `.openIsolatedFrameworks` 交给 `FrameworkInstanceController`；`.frameworkLoadFailure` 以 sheet 显示 `FrameworkLoadViewController` | 路由 | 7 |
-| `App/EditorArea/EditorAreaCoordinator.swift` | 修改 | 把主路由交给每个 `ContentCoordinator` | 编辑栏里的页面要 `Router<MainRoute>` | 7 |
 | `App/Content/ContentCoordinator.swift` | 修改 | 第四个场景 `frameworkLoad`：空栏（`.placeholder` 与没有条目的 `.back`）在加载器要显示页面时进入它；页面状态变了重新判一次 | 诊断显示在内容区 | 7 |
 | `App/Content/FrameworkLoadViewController.swift` · `FrameworkLoadViewController` | 新增 | 加载页、诊断页、实例停止页；选宿主 App 与搜索路径的 open panel；嵌套的私有视图 `DiagnosisView` | 页面本身 | 7 |
 | `AGENTS.md`（根） | 修改 | Application Targets 加 `RuntimeViewerFrameworkService`；外壳数与「one copy … for the four processes」改为五；install 表加一行；XPC 代码的位置加 `FrameworkInstance/`；Derived data 一节注明它不开 | 文档同步 | 8 |
 | `Configurations/AGENTS.md` | 修改 | 插件段落的外壳数 | 文档同步 | 8 |
 | `Documentations/CommunicationAndEngineArchitecture.md` | 修改 | §4.4 加第四例（`LoadImageCommand` 的可选字段与回复形状）；§3.6 的 service 清单 | 兼容规则的实例 | 8 |
-| `Documentations/Glossary.md` | 修改 | 落地时判断：「独立实例 / framework instance」「加载诊断」 | 新术语 | 8 |
+| `Documentations/Glossary.md` | 修改 | 新增「框架实例」「加载诊断」；服务插件一条改为五个外壳 | 新术语 | 8 |
+| `Documentations/DerivedData.md` | 修改 | 注明框架 service 不开派生数据 | 文档同步 | 8 |
+| `RuntimeViewerCore/Sources/AGENTS.md` | 修改 | 目录表加 `ImageLoadDiagnosis/` 与 `FrameworkInstance/` | 文档同步 | 1、3 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 索引 | 0 |
 | `RuntimeViewerCore/Tests/AGENTS.md` | 不动 | 框架实例不开派生数据，测试不碰真实位置 | — | — |
 | `RuntimeViewerMCP/`、CLI 的命令 | 不动 | 非目标 | — | — |
@@ -280,7 +282,7 @@ RuntimeViewerEngineManagement
 
 RuntimeViewerAppCore
 ├─ + FrameworkLoading/   FrameworkLoader, FrameworkLoadState, FrameworkLoadViewModel,
-│                        ImageLoadDiagnosisPresentation, FrameworkInstanceName
+│                        ImageLoadDiagnosisPresentation, RuntimeFrameworkInstance(loading:)
 ├─ + Engine/RuntimeFrameworkInstanceRetirement
 ├─ Main/MainViewModel    ~ frameworksSelected: My Mac -> new window; others -> loader
 └─ Main/MainRoute        + openIsolatedFrameworks([URL]), frameworkLoadFailure
@@ -719,7 +721,7 @@ public final class FrameworkLoader {
 - 实例停止：订阅引擎的 `statePublisher`，`.disconnected` 时进入 `.instanceStopped`；`loadAgain()` 等实例重连好，再从头加载 `frameworkURLs`。
 - 全部成功且窗口还什么都没打开：经 `SelectionRoute.openImage(firstExecutablePath, in: 焦点栏)` 打开第一个框架的镜像页。
 
-`FrameworkLoadViewModel`（`ViewModel<MainRoute>`）：
+`FrameworkLoadViewModel<Route>`（对路由类型泛型，sheet 里带 `dismissRoute`）：
 
 - `Input`：`retryClicked`、`remedyClicked`、`hostApplicationChosen: Signal<URL>`、`searchPathChosen: Signal<URL>`、`loadAgainClicked`、`copyDiagnosisClicked`、`showInFinderClicked`、`closeClicked`。
 - `Output`：`page: Driver<FrameworkLoadPage>`（`.loading(title:progress:)`、`.failure(ImageLoadDiagnosisPresentation, actions:)`、`.instanceStopped(…)`、`.none`），`requestHostApplication` / `requestSearchPath`（`Signal<Void>`，视图开 open panel）。
@@ -740,7 +742,7 @@ default:
 
 失败时（`frameworkLoader.$state` 进入 `.failed`），`showsPageInEmptyPanes` 为假就发 `.frameworkLoadFailure`。
 
-`ContentCoordinator` 在进入占位场景时（`.placeholder`，或 `.back` 到没有条目），`documentState.frameworkLoader.showsPageInEmptyPanes` 为真就进入 `frameworkLoad` 场景；它订阅这个值，栏空着时值一变就重新判一次。`FrameworkLoadViewController` 的 view model 由 `ContentCoordinator` 建，路由用 `EditorAreaCoordinator` 交下来的主路由（编辑栏模式下不会用到 `.dismiss`）。
+`ContentCoordinator` 在进入占位场景时（`.placeholder`，或 `.back` 到没有条目），`documentState.frameworkLoader.showsPageInEmptyPanes` 为真就进入 `frameworkLoad` 场景；它订阅这个值，栏空着时值一变就重新判一次。`FrameworkLoadViewController<ContentRoute>` 与它的 view model 由 `ContentCoordinator` 建，路由就是内容面板自己的，没有关闭；sheet 里是 `FrameworkLoadViewController<MainRoute>`，由 `MainCoordinator` 建，带 `.dismiss`，已经开着时再来的失败只更新它。
 
 ### 测试夹具
 
