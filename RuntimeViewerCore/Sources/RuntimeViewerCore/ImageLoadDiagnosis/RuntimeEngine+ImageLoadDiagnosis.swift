@@ -11,7 +11,7 @@ extension RuntimeEngine {
     /// load's own reply instead, which every engine of this build fills.
     public nonisolated var diagnosesImageLoadsOnRequest: Bool {
         switch source {
-        case .local:
+        case .local, .frameworkInstance:
             return true
         case .remote, .bonjour, .localSocket, .directTCP, .injectedTCP, .file:
             return false
