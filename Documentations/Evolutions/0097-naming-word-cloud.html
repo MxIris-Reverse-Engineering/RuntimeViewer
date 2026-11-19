@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>0097 - 框架的命名词云：类型名、属性名与方法名的词频</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0097</span></p>
+  <h1><span class="proposal-number">0097</span> 框架的命名词云：类型名、属性名与方法名的词频</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-19</dd></div>
+    <div><dt>创建日期</dt><dd>2026-10-31</dd></div>
+    <div><dt>所属愿景</dt><dd>无</dd></div>
+    <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
+    <div><dt>实现分支</dt><dd><code>feature/naming-word-cloud</code>（worktree <code>.worktrees/RuntimeViewer-NamingWordCloud</code>），做完一次合进 <code>next</code></dd></div>
+    <div><dt>原文</dt><dd><code>0097-naming-word-cloud.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#window">窗口草图</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#scope">不做与已知局限</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>给一个镜像（框架）的命名做词云：把类型名、属性名和方法名拆成单词，按出现次数定字号，一眼看出这个框架的类型多叫 <code>Manager</code>、<code>Service</code>、<code>Session</code> 还是 <code>Controller</code>，方法名多以 <code>set</code>、<code>did</code>、<code>will</code> 中的哪个开头。词云开在独立窗口里；点一个词，列出用到它的类型或成员，点一行在主窗口打开。词云能导出成 PNG，词频能导出成 CSV 与 JSON。引擎只多一条读 Find 语料成员的命令，拆词与计数都在 App 一侧。</p>
+  <div class="callout callout-note">
+    <p class="callout-title">已落地</p>
+    <p>六步都已实现并经用户验收，合进 <code>next</code>，编号 0097。第 6 步「照原生窗口重排」是 2026-11-19 验收后加的，用户批准后实现并验收通过。与方案不同之处见<a href="#log">决策日志</a>末尾几条。</p>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <p>第 6 步改了什么（三处：窗口控制器、视图控制器、ViewModel）。</p>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-removed"></i>删除</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 820" role="img" aria-label="Step 6 changes: window controller, view controller and view model">
+    <!-- Window controller -->
+    <rect class="group" x="10" y="10" width="980" height="110" rx="10"/>
+    <text class="group-label" x="22" y="30">NamingWordCloudWindowController</text>
+    <rect class="box-changed" x="25" y="42" width="460" height="64" rx="6"/>
+    <text x="35" y="62">NSWindow</text>
+    <text class="caption" x="35" y="80">~ toolbarStyle = .unified, title "Naming Word Cloud"</text>
+    <text class="caption" x="35" y="96">+ subtitle = image name</text>
+    <rect class="box-added" x="520" y="42" width="290" height="44" rx="6"/>
+    <text x="530" y="60">NSToolbar("NamingWordCloud")</text>
+    <text class="caption" x="530" y="77">delegate: the content view controller</text>
+
+    <path class="arrow" d="M 665 86 L 665 140"/>
+    <text class="caption" x="673" y="106">delegate</text>
+
+    <!-- View controller -->
+    <rect class="group" x="10" y="140" width="980" height="480" rx="10"/>
+    <text class="group-label" x="22" y="160">NamingWordCloudViewController : BaseViewController&lt;NamingWordCloudViewModel&gt;, + NSToolbarDelegate</text>
+    <rect class="box-removed" x="25" y="174" width="220" height="34" rx="6"/>
+    <text class="strike" x="35" y="196">topBar: HStackView</text>
+    <rect class="box-added" x="260" y="174" width="715" height="72" rx="6"/>
+    <text x="270" y="192">toolbar items</text>
+    <text class="caption" x="270" y="208">measure · memberGroup (Member Words only) · flexibleSpace</text>
+    <text class="caption" x="270" y="223">options (NSMenuToolbarItem) · export (NSMenuToolbarItem)</text>
+    <text class="caption" x="270" y="238">trackingSeparator (NSTrackingSeparatorToolbarItem → mainSplitView, divider 0)</text>
+
+    <rect class="group" x="25" y="256" width="950" height="354" rx="8"/>
+    <text class="group-label" x="37" y="274">mainSplitView</text>
+
+    <rect class="group" x="40" y="284" width="450" height="316" rx="8"/>
+    <text x="52" y="301">cloud pane · cloudScrollView</text>
+    <rect class="box-added" x="55" y="312" width="205" height="44" rx="6"/>
+    <text x="65" y="330">contentView =</text>
+    <text x="65" y="347">CenteringClipView</text>
+    <rect class="box-changed" x="272" y="312" width="205" height="44" rx="6"/>
+    <text x="282" y="330">documentView =</text>
+    <text x="282" y="347">WordCloudView</text>
+    <text class="caption" x="65" y="372">(RuntimeViewerUI)</text>
+    <text class="caption" x="282" y="372">+ wordsBoundingRect</text>
+    <text class="caption" x="282" y="385">+ isHandToolActive</text>
+    <rect class="box-changed" x="55" y="394" width="205" height="40" rx="6"/>
+    <text x="65" y="411">statusPlate</text>
+    <text class="caption" x="65" y="426">→ FloatingPlatterView</text>
+    <rect class="box-kept" x="272" y="394" width="205" height="40" rx="6"/>
+    <text x="282" y="411">cloudScrollView</text>
+    <text class="caption" x="282" y="426">.magnification</text>
+    <rect class="box-added" x="55" y="464" width="420" height="62" rx="6"/>
+    <text x="65" y="482">canvasControls: CanvasControlsView</text>
+    <text class="caption" x="65" y="498">(RuntimeViewerUI, bottom-right)</text>
+    <text class="caption" x="65" y="514">hand tool · zoom out · zoom level · zoom in · zoom to fit</text>
+    <path class="arrow" d="M 375 464 L 375 434"/>
+    <path class="arrow arrow-weak" d="M 265 526 L 265 550"/>
+    <text class="caption" x="273" y="542">backdrop</text>
+    <rect class="box-added" x="55" y="550" width="420" height="44" rx="6"/>
+    <text x="65" y="568">FloatingPlatterView</text>
+    <text class="caption" x="65" y="585">(RuntimeViewerUI, same as canvasControls)</text>
+
+    <rect class="group" x="505" y="284" width="455" height="316" rx="8"/>
+    <text x="517" y="301">sideSplitView (inspector column)</text>
+    <rect class="box-changed" x="520" y="312" width="425" height="44" rx="6"/>
+    <text x="530" y="330">Words</text>
+    <text class="caption" x="530" y="347">+ header row · rankingTable: Word | Count, header, sortable</text>
+    <rect class="box-changed" x="520" y="364" width="425" height="50" rx="6"/>
+    <text x="530" y="381">Used By</text>
+    <text class="caption" x="530" y="396">+ header row · usageTitle</text>
+    <text class="caption" x="530" y="409">usageTable: Name | Kind / Declared In, header</text>
+
+    <path class="arrow arrow-weak" d="M 300 620 L 300 680"/>
+    <text class="caption" x="308" y="634">view model</text>
+
+    <!-- View model -->
+    <rect class="group" x="10" y="640" width="980" height="170" rx="10"/>
+    <text class="group-label" x="22" y="660">RuntimeViewerAppCore</text>
+    <rect class="box-changed" x="25" y="680" width="565" height="118" rx="6"/>
+    <text x="35" y="698">NamingWordCloudViewModel</text>
+    <text x="35" y="718">Input</text><text x="93" y="718">+ rankingOrderChanged: Signal&lt;NamingWordRankingOrder&gt;</text>
+    <text x="35" y="736">Output</text><text x="93" y="736">+ rankingRows: Driver&lt;[NamingWordCloudWord]&gt;</text>
+    <text class="caption" x="440" y="736">sorted by rankingOrder</text>
+    <text x="93" y="753">+ rankingOrder: Driver&lt;NamingWordRankingOrder&gt;</text>
+    <text x="93" y="770">+ wordCountText: Driver&lt;String&gt;</text>
+    <text x="93" y="787">+ usageDetailColumnTitle: Driver&lt;String&gt;</text>
+    <rect class="box-added" x="610" y="680" width="365" height="44" rx="6"/>
+    <text x="620" y="698">NamingWordRankingOrder</text>
+    <text class="caption" x="620" y="715">by count or by word, ascending or descending</text>
+    <rect class="box-changed" x="610" y="736" width="365" height="44" rx="6"/>
+    <text x="620" y="754">NamingWordCloudPreferences.wordLimit</text>
+    <text class="caption" x="620" y="771">default 500 → 150</text>
+  </svg>
+  </div>
+  <p class="figure-caption">窗口外框、右栏与词云浏览三处的改动都落在 <code>NamingWordCloudViewController</code>；画布右下角的控制按钮只动 <code>cloudScrollView.magnification</code>；排序与右栏的文字归 ViewModel，表格只显示。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <p>第 6 步「照原生窗口重排」涉及的文件。</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件</th><th>动作</th><th>改什么</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerUI/AppKit/CenteringClipView.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>NSClipView</code> 子类：<code>constrainBoundsRect(_:)</code> 在文档视图比自己小的方向上居中，其余照父类夹紧</td><td>缩小后词云不再贴在左上角</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerUI/AppKit/CanvasControlsView.swift</code></td><td><span class="tag tag-added">新增</span></td><td>浮在画布上的一组按钮：抓手开关、缩小、缩放比例、放大、适合窗口；给它缩放倍数与范围，它更新比例文字、到头时把按钮变灰；macOS 26 起是 <code>NSGlassEffectView</code> 底，之前是 <code>NSVisualEffectView</code>。只放按钮，不认识滚动视图，也不用 RxSwift</td><td>用户要在画布上直接缩放与平移</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerUI/AppKit/FloatingPlatterView.swift</code></td><td><span class="tag tag-added">新增</span></td><td>浮在画布上的圆角底板：macOS 26 起是 <code>NSGlassEffectView</code>，之前是 HUD 材质的 <code>NSVisualEffectView</code>；内容视图贴满它</td><td>控制按钮与状态行用同一种底</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerUI/AppKit/WordCloudView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新增 <code>wordsBoundingRect</code>；新增 <code>isHandToolActive</code>（抓手打开时为真：点击不选词，悬停不垫底，光标处处是张开的手；拖动照常平移）；<code>WordCloudTypography</code> 加小字的字号界线与不透明度（18pt、0.6），<code>draw</code> 按它画，悬停与选中的词满色</td><td>打开时与适合窗口按词而不是按画布缩放；抓手；小字不抢眼</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore/NamingWordCloud/NamingWordRankingOrder.swift</code></td><td><span class="tag tag-added">新增</span></td><td>排行表的排序：按次数或按词，正序或倒序；默认按次数倒序</td><td>表头排序的取值</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore/NamingWordCloud/NamingWordCloudViewModel.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>Input</code> 加 <code>rankingOrderChanged</code>；<code>Output</code> 加排好序的 <code>rankingRows</code>、<code>rankingOrder</code>、<code>wordCountText</code>、<code>usageDetailColumnTitle</code>；<code>usageTitle</code> 在没选词时为 No Word Selected</td><td>排序与右栏的文字归 ViewModel，表格只显示</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore/NamingWordCloud/NamingWordCloudPreferences.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>wordLimit</code> 默认 500 → 150</td><td>整片缩进窗口时字要看得清</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/NamingWordCloud/NamingWordCloudWindowController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>toolbarStyle = .unified</code>、标题 Naming Word Cloud、副标题镜像名、装上工具栏并以内容视图控制器为 delegate</td><td>原生的窗口外框</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/NamingWordCloud/NamingWordCloudCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>configure</code> 改传镜像名</td><td>标题与副标题分开</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/NamingWordCloud/NamingWordCloudViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>删 <code>topBar</code>；遵循 <code>NSToolbarDelegate</code>，用自己的控件做工具栏项；右栏两段的标题行；两张表改成两列带表头，排行表的表头点击送进 ViewModel；滚动视图换 <code>CenteringClipView</code>；打开与重排后按 <code>wordsBoundingRect</code> 缩放居中；画布右下角放 <code>CanvasControlsView</code> 并接上缩放（每次乘除 1.25、以可见区域中心为基准、带动画）、回到 100%、适合窗口与抓手，⌘+ ⌘− ⌘0 ⌘9 四个快捷键；缩放变了就更新比例；⚙︎ 菜单去掉 Zoom to Fit 与 Actual Size；状态行换成与控制按钮同一种底</td><td>窗口外框、右栏与词云浏览三处的改动都在这里；缩放只动滚动视图，照 11-18 的决定留在视图控制器里</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/CenteringClipViewTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>小文档居中、大文档照常夹紧</td><td></td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/CanvasControlsViewTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>比例文字取整、到头时按钮变灰</td><td></td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppUITests/WordCloudLayoutTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>外接矩形盖住每个放下的词；小字的不透明度；抓手打开时点词不选</td><td></td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/NamingWordCloudViewModelTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>排序、右栏文字、默认 N</td><td></td></tr>
+      <tr><td><code>Documentations/Evolutions/0097-naming-word-cloud.md</code></td><td><span class="tag tag-changed">修改</span></td><td>本提案（落地时由 <code>draft-naming-word-cloud.md</code> 改名）</td><td></td></tr>
+
+
+
+
+
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="window">
+  <h2>窗口草图</h2>
+<pre>┌──────────────────────────────────────────────────────────────────────────────────┐
+│ ● ● ●  Naming Word Cloud  [Type Suffixes|Type Words|Member Words|Method…]        │
+│        AppKit                                              ⚙︎ ▾   ⇪ ▾  │          │
+├────────────────────────────────────────────────────────┬─────────────────────────┤
+│                                                        │ Words         631 words │
+│                                                        │ ┌ Word ──────── Count ▾┐│
+│          Delegate      View      Provider              │ │ ● View          812  ││
+│     Cell    Controller    Manager    Item              │ │ ● Controller    301  ││
+│        Button   Layer   Session   Message              │ │ ● Manager       128  ││
+│                                                        │ └──────────────────────┘│
+│                                                        │ Used By                 │
+│                                                        │ Manager — 128 types     │
+│                                                        │ ┌ Name ────────── Kind ┐│
+│ ▢ Showing 150 of 631 words  ● Classes ● Protocols      │ │ NSLayoutManager class││
+│                           ( ✋ │ −  36%  + │ ⤢ )        │ │ NSFontManager   class││
+└────────────────────────────────────────────────────────┴─────────────────────────┘</pre>
+  <p class="figure-caption">图中的词与数字只是示意。2026-11-19 起是这个样子：第一版把控件做成标题栏下面的一排，右侧两张表没有表头，验收时用户觉得不好看，改成照原生窗口的做法，见决策日志。</p>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+
+  <details>
+    <summary>1. 四种口径</summary>
+    <div class="details-body">
+      <p>窗口工具栏里的分段控件切换：</p>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>口径</th><th>数什么</th><th>一个词的次数</th></tr></thead>
+        <tbody>
+          <tr><td>Type Suffixes</td><td>类型名的最后一个词：<code>NSLayoutManager</code> → <code>Manager</code></td><td>以它结尾的类型数</td></tr>
+          <tr><td>Type Words</td><td>类型名里的每个词：<code>NSWindowController</code> → <code>Window</code>、<code>Controller</code></td><td>含这个词的类型数</td></tr>
+          <tr><td>Member Words</td><td>成员名里的每个词：<code>setNeedsDisplayInRect:</code> → <code>set</code>、<code>Needs</code>、<code>Display</code>、<code>Rect</code></td><td>含这个词的成员数；可以只看 Properties（ObjC 属性与 Swift 的存储、计算属性）、Methods、Instance Variables（ObjC ivar）或 Enum Cases</td></tr>
+          <tr><td>Method First Words</td><td>方法名的第一个词：<code>setFrame:</code> → <code>set</code></td><td>以它开头的方法数</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <ul>
+        <li><strong>算哪些类型</strong>：ObjC 的类与协议，Swift 的 enum、struct、class、protocol、typealias，C 的 struct 与 union。嵌套类型按它自己的名字算（<code>Outer.Inner</code> 取 <code>Inner</code>），泛型参数去掉。类别、extension 与 conformance 条目不是新类型，不算，但它们声明的成员照算。同一个类型的两面只算一次：Swift 类与 Swift 定义的 <code>@objc</code> 协议在 ObjC 列表里那一面（<code>isSwiftClass</code>、<code>isSwiftProtocol</code>）跳过。用户做出来的特化类型与函数体里声明的局部类型不算。</li>
+        <li><strong>成员按条目去重</strong>：同一个条目里，同组、同名（不分大小写，也不管开头的下划线）的成员只算一次。语料只记 Swift 函数的基本名，所以 <code>insert(_:at:)</code> 与 <code>insert(contentsOf:at:)</code> 都叫 <code>insert</code>，算一个；Swift 属性的存储 <code>_name</code> 与属性 <code>name</code> 也算一个。Swift 的 <code>init</code> 与 <code>subscript</code> 没有名字，不算；<code>$</code> 开头的成员是编译器生成的存储（<code>$__lazy_storage_$_name</code> 之类），也不算。</li>
+        <li><strong>不算编译器补上的四个属性</strong>：ObjC 类只要遵循了继承自 NSObject 协议的协议，属性列表里就带着 <code>hash</code>、<code>superclass</code>、<code>description</code>、<code>debugDescription</code>。它们不是这个类起的名字，在 AppKit、UIKitCore、UIFoundation、SwiftUICore 的成员名里，单是 <code>debug</code> 加 <code>description</code> 连着出现就有约两千次，不去掉的话 Member Words 会被它们占满。</li>
+        <li><strong>拆词</strong>：去掉首尾下划线，在 <code>_</code>、<code>:</code>、<code>.</code> 等符号处断开，再按大小写断开。连续的大写字母算一个缩略词，最后一个大写字母留给后面的词（<code>URLSession</code> → <code>URL</code>、<code>Session</code>）；数字跟着前面的字母（<code>UTF8String</code> → <code>UTF8</code>、<code>String</code>）。只有一个字母的词与纯数字丢掉。比较不分大小写；显示时缩略词保持全大写，其余首字母大写，Method First Words 一律小写。</li>
+        <li><strong>三个默认打开的开关</strong>（窗口的 ⚙︎ 菜单）：
+          <ul>
+            <li>Remove Prefixes：去掉镜像自己的类名前缀。前缀从这个镜像的类型名里统计出来（AppKit 得到 <code>NS</code>，UIKitCore 得到 <code>UI</code>），不写死一张表。去掉前缀后再拆词，所以 <code>NSURLSession</code> 照样拆成 <code>URL</code>、<code>Session</code>。</li>
+            <li>Ignore Common Words：去掉 with、for、in、at、by、from、to、of、and 这类虚词。</li>
+            <li>Merge Compound Words：有些词总是成对出现，拆开就变了意思，拆词时当成一个词：<code>NSTableViewDataSource</code> 的最后一个词是 <code>DataSource</code> 而不是 <code>Source</code>，<code>tableView:cellForRowAtIndexPath:</code> 里是 <code>IndexPath</code>。四种口径都按合并后的词算。</li>
+          </ul>
+        </li>
+        <li><strong>复合词预设</strong>：二十个左右，按 AppKit、UIKitCore、UIFoundation、SwiftUICore 的名字里两个词连着出现的频率挑出来。类型名里有 <code>ViewController</code>（占 <code>*Controller</code> 的 36%）、<code>GestureRecognizer</code>（占 <code>*Recognizer</code> 的 92%）、<code>DataSource</code>（占 <code>*Source</code> 的 44%）；成员名里有 <code>IndexPath</code>、<code>TraitCollection</code>、<code>HitTest</code>、<code>CornerRadius</code>、<code>SafeArea</code>、<code>ToolTip</code> 等，再加上 <code>KeyPath</code>、<code>RunLoop</code>、<code>TimeZone</code>、<code>UserInfo</code>、<code>PopUp</code> 这类 Cocoa 里的固定说法。⚙︎ 菜单的 Compound Words… 打开一个表单，可以增删；增删的结果记在 <code>AppDefaults</code> 里，预设本身随 App 更新。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>2. 数据从哪来</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>类型</strong>来自镜像的对象列表，即侧栏用的那份 <code>RuntimeEngine.objects(in:)</code>，不需要语料，窗口一打开就能看。</li>
+        <li><strong>成员</strong>来自 Find 的语料。Swift 的成员要打印过才列得全，而语料已经按种类存着每个成员，共享缓存里的镜像还有盘上缓存。窗口经文档所在 Engine 共享的语料协调器请求这个镜像：<code>FindCorpusCoordinator.requestBuild(of:isPrioritized: true)</code>，从 <code>$runtimeEngineSession</code> 送来的会话里取。这样窗口与 Find 用的是同一份语料、同一次构建，构建会出现在 Report 导航器里，App 切到后台时也不会被 App Nap 拖慢——协调器替它持有防 App Nap 的 activity。
+          <ul>
+            <li>Find 的语料开关（Settings › Search）关着时不建：两种成员口径提示去打开它，两种类型口径照常可用。</li>
+            <li>镜像还没加载时（从侧栏镜像列表的右键菜单打开），先走侧栏点开镜像的同一条路加载并索引，带进度。</li>
+            <li>设置里的 transformer 改了、语料重建之后，窗口重新读一遍成员。</li>
+          </ul>
+        </li>
+        <li><strong>新增一条 Core 命令</strong>，与 <code>searchMembers</code> 并列。它读的是 Core 自己的语料，不属于要另立模块的命令扩展：
+<pre><code><span class="token-comment">/// The members of `imagePath`'s corpus, object by object, as `options`
+/// show them — `nil` shows every member any options could — or `nil`
+/// when the image has no corpus built.</span>
+<span class="token-keyword">public func</span> members(in imagePath: <span class="token-type">String</span>, shownUnder options: <span class="token-type">RuntimeObjectInterface</span>.<span class="token-type">GenerationOptions</span>? = <span class="token-keyword">nil</span>) <span class="token-keyword">async throws</span> -&gt; [<span class="token-type">RuntimeObjectMembers</span>]?</code></pre>
+          <p>每个成员只带名字、种类、是否静态与行号，不带声明那一行的文字；对象不带 <code>children</code>，所以响应只有名字本身的量级。对端是不认识这条命令的旧版本（例如更早注入的载荷）时，成员口径提示对端版本太旧，类型口径照常可用。</p>
+        </li>
+        <li><strong>跟随文档的生成选项</strong>（<code>currentMergedGenerationOptions</code>，与 Find 一致）：内容区藏掉的成员不算；打开 Print Exported Declarations Only 时，未导出的类型（<code>isNotExported</code>）也不算。只有一处例外：统计时总是打开 Strip Synthesized Methods 与 Strip Synthesized Ivars。默认选项不藏它们，一个 ObjC 属性会再以 getter、setter 和 <code>_name</code> ivar 出现，Method First Words 里的 <code>set</code> 会被每个可写属性多算一次。</li>
+        <li>文档换了生成选项或 Engine 时重新计数。计数放在后台做，切换口径不卡界面。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>3. 窗口</summary>
+    <div class="details-body">
+      <p>草图见上文<a href="#window">窗口草图</a>。</p>
+      <ul>
+        <li><strong>全部用 AppKit</strong>：词云是自绘的 <code>NSView</code>，自己排版，用 <code>NSAttributedString</code> 画字，自己处理悬停与点击；排行表与用法列表是 <code>NSTableView</code>，左右分栏与右栏的上下两段是 <code>NSSplitView</code>，口径切换是 <code>NSSegmentedControl</code>。不用 SwiftUI，也不引入新的第三方依赖。</li>
+        <li><strong>窗口外框照原生窗口</strong>：
+          <ul>
+            <li>统一样式的工具栏（<code>toolbarStyle = .unified</code>），标题是 Naming Word Cloud，镜像名放在副标题（<code>NSWindow.subtitle</code>），不再把两者拼成一个标题。</li>
+            <li>工具栏从左到右：口径的分段控件；只在 Member Words 下出现的成员分组下拉（All Members、Properties、Methods、Instance Variables、Enum Cases）；弹性空白；⚙︎ 菜单（<code>NSMenuToolbarItem</code>，图标 <code>gearshape</code>，标签 Options）；导出菜单（<code>NSMenuToolbarItem</code>，图标 <code>square.and.arrow.up</code>，标签 Export）；最后是跟着左右分栏分隔线走的分隔项（<code>NSTrackingSeparatorToolbarItem</code>，指向窗口里的左右 <code>NSSplitView</code> 的第 0 条分隔线），所以分隔线右边那段工具栏正好在右栏上方。控件全在分隔线左边，因为它们都作用于词云。</li>
+            <li>工具栏只显示图标（<code>displayMode = .iconOnly</code>），标签用于无障碍与自定义面板。不允许用户自定义工具栏：项目固定，只有成员分组随口径显隐。</li>
+            <li>内容区从工具栏下面开始（不用 <code>fullSizeContentView</code>），不在工具栏下面垫滚动边缘效果。</li>
+            <li>原来标题栏下面那一排手搭的控件（<code>topBar</code>）删掉。</li>
+          </ul>
+        </li>
+        <li><strong>右栏照 RV 主窗口的 Inspector 排</strong>：两段，中间是可拖动的细分隔线，打开时各占一半，分隔线位置随窗口记住。
+          <ul>
+            <li>每段开头一行标题，13pt semibold，与 Inspector 各页的标题同字号；标题行右边是灰色的小字说明。上段标题 Words，右边写当前口径一共多少个词（<code>631 words</code>）；下段标题 Used By，下一行是选中词的说明（<code>Manager — 128 types</code>），没选词时写 No Word Selected。</li>
+            <li>两张表都用 <code>.inset</code> 样式，带表头，行高用系统默认：排行表两列 Word（前面是类别色圆点）与 Count（右对齐、等宽数字）；用法表两列 Name 与 Kind（类型口径，写 class、protocol、struct 这类种类）或 Declared In（成员口径，写声明它的类型）。选中用系统的选中样式，不另画圆角底。</li>
+            <li>排行表点表头排序：默认按 Count 从多到少（次数相同按词的字母序），点 Word 按字母序，再点同一个表头反向。排序在 ViewModel 里做，表格只把点了哪个表头送过去。</li>
+          </ul>
+        </li>
+        <li><strong>入口</strong>：View 菜单的 Show Naming Word Cloud（文档有当前镜像时可用），以及侧栏镜像列表两页（目录与书签）的右键菜单。一个文档里每个镜像只开一个窗口，再次打开就把它提到前面；窗口随文档关闭，记住大小与位置。</li>
+        <li><strong>词云</strong>：
+          <ul>
+            <li>显示当前口径排名前 N 的词，N 在 ⚙︎ 菜单里选 150、300、500、1,000 或全部，默认 150（2026-11-19 从 500 改回来：打开时要整片缩放进窗口，500 个词缩进去，大半的词只有三四个点高，见决策日志）。已经存过设置的用户沿用自己存的 N。</li>
+            <li>字号只看次数：最常见的词 120pt，其余按次数的平方根缩小，最小 12pt，所以一个词占的面积大致与次数成正比。</li>
+            <li><strong>画布比窗口大得多</strong>：画布大小由所有词的总面积决定，词约占四成，AppKit 的 500 个词约为 1,900 × 1,200 到 2,800 × 1,800 点。排版与窗口大小无关：同样的词总是排成同样的图，改变窗口大小只是露出的部分不同。</li>
+            <li>从画布中心沿螺旋线摆放，大词先放，全部横排。画布按总面积留足了空间，一般都放得下；万一放不下，左下角的状态行写明画了多少、一共多少。状态行垫一块半透明底，词从它下面滚过也看得清。</li>
+            <li><strong>字体是 SF Mono</strong>（<code>NSFont.monospacedSystemFont</code>），按字号加粗：56pt 以上 bold，28pt 以上 semibold，18pt 以上 medium，其余 regular。少数大词撑起画面，大量小词不抢眼。词与词之间留几个点的空隙。</li>
+            <li><strong>颜色表示这个词最有代表性的那一类名字</strong>，每种口径三类以内：
+              <ul>
+                <li>类型口径：类、协议、值类型（struct、enum、typealias 与 C 的 struct、union）；</li>
+                <li>成员口径：属性、方法、其他（ObjC ivar 与 Swift 的 enum case）；</li>
+                <li>方法首词口径：实例方法、类方法（含 Swift 的 static 与 class 方法）。</li>
+              </ul>
+              <p>「最有代表性」指：这一类名字里用到这个词的比例，比这一类在全部名字里的平均占比高出最多。这一类至少要有 3 个名字用到这个词，否则按多数算。不直接按多数定色，是因为方法比其他成员多得多，按多数的话几乎每个常见的成员词都是方法色。在 AppKit 上，<code>Delegate</code>、<code>DataSource</code> 落在协议色，<code>Accessibility</code>、<code>Size</code> 落在属性色，<code>default</code>、<code>register</code>、<code>current</code> 落在类方法色。</p>
+            </li>
+            <li>三种颜色取自 dataviz 参考色板的前三个色位（浅色 <code>#2A78D6</code> / <code>#EB6834</code> / <code>#1BAF7A</code>，深色 <code>#3987E5</code> / <code>#D95926</code> / <code>#199E70</code>），画布底色取色板配套的 <code>#FCFCFB</code> / <code>#1A1A19</code>。用色板自带的校验脚本验过：三色两两之间在浅色、深色下都能分开，色弱也能分开。浅色下青色对底色的对比度是 2.74，低于 3:1，由右侧的排行表补足。字号 18pt 以下的词用类别色的 60% 不透明度画，18pt 及以上的满色（2026-11-19 起；原先一律满色）：几百个小字都用饱和色时整片画面很花，降低小字的不透明度后，大词撑起画面，小词退到后面。小词的颜色因此更难分辨，由排行表的圆点补足。悬停与选中的词不论大小都满色。</li>
+            <li>左下角状态行里有图例，只列当前画面用到的颜色。排行表里每个词前面是对应颜色的圆点，词本身仍是文字色。</li>
+            <li>选中的词保留自己的颜色，背后垫一块同色浅底并描边；悬停的词只垫浅底。选中不再用强调色，因为颜色已经有了含义。</li>
+            <li>悬停显示「Manager — 128 types」。</li>
+          </ul>
+        </li>
+        <li><strong>浏览</strong>：画布放在 <code>NSScrollView</code> 里。
+          <ul>
+            <li><strong>打开时整片词云装进可见区域并居中</strong>：按所有词的外接矩形（四周各留 24 点）缩放，不超过 100%；换口径、开关或 N 之后重新排版时也这样做一次。Zoom to Fit 用同一个外接矩形，而不是整张画布：画布四周本来就留着空，按画布缩放，词云会比可见区域小一圈。2026-11-19 之前是打开时按 100% 显示中心那一块。</li>
+            <li><strong>画布比可见区域小时居中</strong>：滚动视图的 clip view 换成 RuntimeViewerUI 的 <code>CenteringClipView</code>，文档视图在某个方向上比它小时，在那个方向居中，而不是像 <code>NSClipView</code> 默认那样贴在左上角；画布外露出的地方用画布底色填满，看不出画布的边。验收时缩小后词云挤在左上角，就是这个原因。</li>
+            <li><strong>画布右下角一组浮在画布上的控制按钮</strong>（2026-11-19 用户要求加）。从左到右：
+              <ul>
+                <li>抓手（<code>hand.raised</code>，开关按钮，打开时换成实心的 <code>hand.raised.fill</code>）：打开后只用来平移——点在词上不选中它，悬停不垫底，光标处处是张开的手。拖动本来在哪里都能平移，在词上也一样，抓手只是让点击不再选词。窗口每次打开都是关着的，不记住。</li>
+                <li>缩小（<code>minus.magnifyingglass</code>）、当前缩放比例（如 <code>36%</code>，取整到百分之一）、放大（<code>plus.magnifyingglass</code>）：每按一次缩放倍数乘或除以 1.25，以可见区域的中心为基准，带动画。点比例回到 100%（原来 ⚙︎ 菜单里的 Actual Size）。缩放到 10% 时缩小按钮变灰，到 400% 时放大按钮变灰。捏合或其他方式改了缩放，比例随之更新。</li>
+                <li>适合窗口（<code>arrow.up.left.and.arrow.down.right</code>）：按词的外接矩形缩放并居中，与打开时一样（原来 ⚙︎ 菜单里的 Zoom to Fit）。</li>
+                <li>快捷键照「预览」：⌘+ 放大、⌘− 缩小、⌘0 回到 100%、⌘9 适合窗口，在词云窗口是 key window 时有效。</li>
+                <li>外观：一块圆角的浮层，macOS 26 起是 Liquid Glass（<code>NSGlassEffectView</code>），之前是与左下角状态行一样的半透明底（<code>NSVisualEffectView</code>）；左下角的状态行跟着用同一种底，两块看起来是一套。按钮是无边框的图标按钮，组与组之间一条细竖线。</li>
+                <li>⚙︎ 菜单里的 Zoom to Fit 与 Actual Size 随之去掉。</li>
+              </ul>
+            </li>
+            <li>按住任何地方拖拽平移（在词上也一样），触控板与滚轮滚动，双指捏合缩放（10% 到 400%）。按下后移动三个点以上才算拖拽，否则是点选。光标在空白处是张开的手、拖动时握拳、指在词上是手指。在排行表里选中一个词时，画布带动画平移到这个词。</li>
+          </ul>
+        </li>
+        <li><strong>右栏的内容</strong>（样子见上文「右栏照 RV 主窗口的 Inspector 排」）：
+          <ul>
+            <li>上段 Words 是全部词的排行表，不只词云画出来的那些。精确比较与无障碍阅读都走它。</li>
+            <li>下段 Used By 列出选中词的用法。公开的名字排在前面，下划线开头的私有名字排在后面。</li>
+            <li>在词云或排行表里点一个词都会选中它。点用法里的一行，主窗口打开那个类型，走 <code>documentState.selectionRouter</code> 的 <code>.open(_:in: .focusedTab)</code>，与侧栏点一行是同一条路；成员行另带 <code>ContentHighlightRequest</code>（成员名按整词匹配、取离它的行号最近的一处），像 Find 的成员结果那样滚到那一行并闪一下。</li>
+          </ul>
+        </li>
+        <li><strong>状态</strong>：一个状态枚举，取值为加载类型、建成员语料（带进度）、就绪、失败（原因加重试）、没有可数的名字。</li>
+        <li>口径、成员分组、两个开关与 N 记在 <code>AppDefaults</code> 里，所有窗口共用，跨启动沿用。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>4. 导出</summary>
+    <div class="details-body">
+      <p>Export 菜单里三项，都按当前口径与筛选导出：</p>
+      <ul>
+        <li><strong>Export Image…</strong>：PNG，导出整张画布而不只是看得到的那一块，按窗口当前的外观填实背景，最多 2 倍分辨率，超过四千万像素时等比缩小。默认文件名 <code>AppKit - Type Suffixes.png</code>。</li>
+        <li><strong>Export Word Counts as CSV…</strong>：一个词一行，列为 <code>word,count</code>，包含排行表里的全部词，不只词云画出来的那些。CSV 不放名字：成员口径下一个常见词就对应几千个名字，放进一格会超过 Excel 单格 32,767 字符的上限。</li>
+        <li><strong>Export Word Counts as JSON…</strong>：镜像、口径、筛选与开关，以及每个词的次数和用到它的全部名字（类型带名字与种类，成员另带所属类型），按次数降序，次数相同按字母序。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>5. 代码落点与测试</summary>
+    <div class="details-body">
+      <p>（2026-11-18 按 0091、0094、0095、0096 之后的分层改写：草案写成时 ViewModel 还在 <code>RuntimeViewerApplication</code> 与 App target 里。）</p>
+      <ul>
+        <li><strong>Core</strong>（<code>RuntimeViewerCore/Search/</code>）：<code>RuntimeEngine.members(in:shownUnder:)</code>，命令 <code>CorpusMembersCommand</code>（线上名 <code>corpusMembers</code>，关于一个镜像：借用共享缓存镜像的 Engine 交给该镜像的拥有者回答），类型 <code>RuntimeObjectMembers</code>。语料仓库的 <code>members(in:shownUnder:)</code> 与 <code>searchMembers</code> 用同一条可见性规则（<code>RuntimeInterfaceCorpusEntry.member(at:in:projectedLineTable:)</code>），存盘的语料照搜索那样读回。测试用 Foundation：没建语料时返回 <code>nil</code>；不给选项时，成员搜索找到的成员都在结果里；打开 Strip Synthesized Methods 后访问器不在、属性还在。</li>
+        <li><strong>RuntimeViewerAppCore</strong>（<code>NamingWordCloud/</code>）：拆词、前缀统计、复合词预设、四种口径的计数、按「最有代表性」定类别、用法列表、CSV 与 JSON 编码，都是不依赖 UI 的值与函数；窗口的 ViewModel、路由与状态枚举；三种类别色是 <code>ColorDescriptor</code> 的新值。设置记在 <code>AppDefaults</code>。测试在 <code>RuntimeViewerAppCoreTests</code>：拆词的边界情况（缩略词、数字、下划线、选择子、前缀、复合词）、去重与跳过规则、定色、两种编码（含 CSV 转义），以及 ViewModel 的状态与导航。</li>
+        <li><strong>RuntimeViewerAppUI</strong>：类别色的解析（<code>ColorDescriptor.color</code>）。</li>
+        <li><strong>RuntimeViewerUI</strong>（<code>AppKit/WordCloud/</code>）：<code>WordCloudLayout</code> 只接收量好的词尺寸，算出画布大小与每个词的位置，是纯几何计算，测试（<code>RuntimeViewerAppUITests</code>）断言不重叠、不出界、同样的输入得到同样的结果；<code>WordCloudView</code> 是滚动视图的文档视图，负责画它，以及悬停、点击、选中与拖拽平移，并给出所有词的外接矩形（<code>wordsBoundingRect</code>，供打开时与 Zoom to Fit 缩放）。排版放在后台做。<code>CenteringClipView</code>（2026-11-19 新增）是让比自己小的文档视图居中的 clip view，不认识词云，任何滚动视图都能用。</li>
+        <li><strong>App</strong>（<code>NamingWordCloud/</code>）：<code>NamingWordCloudWindowController</code>（统一样式的工具栏、标题与副标题；工具栏的 delegate 是窗口的内容视图控制器）、<code>NamingWordCloudCoordinator</code>（导出的存储面板以表单挂在词云窗口上、Compound Words 表单）、<code>NamingWordCloudViewController</code>、<code>NamingCompoundWordsViewController</code>；<code>MainCoordinator</code> 处理 <code>MainRoute.namingWordCloud(imagePath:)</code>，按镜像管着这个文档的词云窗口（一个镜像一个，再开就提到前面，主窗口关闭时一起关）。入口两处：View 菜单的 Show Naming Word Cloud（<code>MainWindowController.showNamingWordCloud(_:)</code>，侧栏开着镜像时可用），以及镜像列表右键菜单的新动作 <code>RuntimeImageAction.showNamingWordCloud</code>——它经 <code>DocumentState.namingWordCloudRequested</code> 请求窗口，因为侧栏的 coordinator 够不到主窗口的。</li>
+        <li>不新增 target，不改工程设置，所以 Tuist 描述不用动。落地时 README 的功能列表加一行。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>Core 读语料成员的命令</strong>（已完成）—— <code>RuntimeObjectMembers</code>、<code>CorpusMembersCommand</code>、语料仓库的 <code>members(in:shownUnder:)</code>、路由声明
+      <ul><li>行为：<code>imageWithoutCorpus</code>、<code>membersMatchAMemberSearch</code>、<code>optionsHideWhatTheyHide</code>；<code>SharedCacheRoutingDeclarationTests</code> 列入新命令</li></ul></li>
+    <li><strong>AppCore 的拆词与计数</strong>（已完成）—— 拆词、前缀、复合词、四种口径、去重与跳过、定色、CSV 与 JSON
+      <ul><li>行为：缩略词与数字的拆法、选择子与下划线、前缀按镜像统计并去掉、复合词合并、虚词去掉、各种跳过与去重、按「最有代表性」定色、CSV 转义、JSON 的形状与排序</li></ul></li>
+    <li><strong>RuntimeViewerUI 的排版与画布</strong>（已完成）—— <code>WordCloudLayout</code>、<code>WordCloudView</code>
+      <ul><li>行为：不重叠、不出界、确定性、画布按词的总面积定；点到词、点到空白</li></ul></li>
+    <li><strong>AppCore 的窗口 ViewModel</strong>（已完成）—— <code>NamingWordCloudViewModel</code>、状态、设置、类别色
+      <ul><li>行为：类型口径一打开就能算；成员口径等语料建好再算；语料开关关着时成员口径给提示；对端太旧时成员口径给提示；换生成选项重算；点用法里的一行在主窗口打开（成员带高亮）；导出的内容</li></ul></li>
+    <li><strong>App 的窗口与入口</strong>（已完成，界面待用户看）—— 窗口控制器、view controller、<code>MainCoordinator</code> 的窗口管理、View 菜单、镜像列表右键菜单、导出面板、README
+      <ul><li>行为：App 编得过；一个镜像只开一个窗口；界面效果由用户看</li></ul></li>
+    <li><strong>照原生窗口重排</strong>（2026-11-19 验收后加，用户已批准）—— 控件进工具栏、右栏照 Inspector 排、词云打开时缩放居中、画布右下角加控制按钮、小字降低不透明度、默认 N 改为 150。在 <code>feature/naming-word-cloud</code> 上做：先把 <code>next</code> 合进这条分支（它停在第五步，<code>next</code> 之后又跟上了 MachOKitExtensions 2.0.0 与 MachOSwiftSection 0.25.0），再把常驻检出里还没提交的那次布局修复与本提案的改动带过去。那次修复给顶栏加的抱紧优先级随顶栏一起删掉。改动见<a href="#map">改动地图</a>与<a href="#architecture">架构图</a>。
+      <ul>
+        <li>行为：<code>smallerDocumentIsCentered</code>、<code>documentSmallerAlongOneAxis</code>、<code>largerDocumentIsClampedAsBefore</code>；<code>boundingRectCoversEveryPlacedWord</code>；<code>wordsBelowEighteenPointsAreTranslucent</code>；<code>rankingDefaultsToCountDescending</code>、<code>rankingSortsByWordThenReverses</code>、<code>equalCountsAreOrderedByWord</code>；<code>rankingRowsAndWordCount</code>、<code>rankingHeaderClicks</code>、<code>usageTitleSaysNoWordSelectedWithoutSelection</code>、<code>usageDetailColumnFollowsMeasure</code>；<code>defaultWordLimitIs150</code>；<code>zoomLevelTextRoundsToWholePercent</code>、<code>zoomOutIsDisabledAtMinimumMagnification</code>、<code>zoomInIsDisabledAtMaximumMagnification</code>、<code>handToolToggles</code>、<code>zoomShortcuts</code>；<code>handToolClickOnAWordSelectsNothing</code></li>
+</li>
+        <li>界面（编 App 后用 LookInside 量，再由用户看）：控件都在工具栏里、窗口里没有手搭的控件行；工具栏的分隔项与左右分栏的分隔线对齐；打开时词云居中并整片在可见区域内；画布右下角的按钮能缩小、放大、回到 100%、适合窗口，抓手打开后点词不选，四个快捷键有效；以默认窗口大小打开 AppKit 的 Type Suffixes 时，记下缩放倍数与最小的词在屏幕上的字号，目标不小于 8pt，达不到就报给用户，不自行再改 N</li>
+</li>
+      </ul>
+    </li>
+  </ol>
+</section>
+
+<section id="scope">
+  <h2>不做与已知局限</h2>
+  <p><strong>不做</strong>：命令行与 MCP 输出（以后要做时，把拆词与计数挪进命令行也能链接的无 UI 模块即可）；PDF 与 SVG 导出；多个镜像合成一张词云；旋转摆放的词；单复数合并（<code>View</code> 与 <code>Views</code> 分开算）。</p>
+  <p><strong>已知局限</strong>：</p>
+  <ul>
+    <li>不在复合词表里的复合角色词，按最后一个词算：UIKit 内部常见的 <code>VisualProvider</code> 记作 <code>Provider</code>，要合并就自己加进表里。</li>
+    <li>Swift 方法只有基本名，参数标签里的词不计入。</li>
+    <li>Swift 的 override 照算，因为生成选项里没有藏它的开关；ObjC 的跟随 Strip Overrides。</li>
+    <li>ObjC 协议列表里有别的镜像的协议副本：一个镜像用到的协议都会带一份协议记录，侧栏同样列着它们，所以这些副本也会算进来。</li>
+  </ul>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>39 条，最近一条：2026-11-19 Implemented，编号 0097</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>决定</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-10-31</td><td>Created as Draft</td><td>用户想看一个框架的命名习惯——类型名里的 Manager、Service、Session，以及属性名与方法名——并能导出。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>开独立窗口</td><td>用户选定：现有界面一处不变，窗口开着也能照常在主窗口浏览、跳转。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>四种口径都做</td><td>用户选定：类型名的最后一个词、类型名的所有词、成员名的所有词、方法名的第一个词。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>点词列出用到它的名字，点一行在主窗口打开</td><td>用户选定；词云因此能用来查东西，不只是看。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>导出 PNG、CSV 与 JSON；不做 PDF、SVG 与命令行</td><td>用户选定的范围。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>成员取自 Find 语料，经 Engine 共享的语料协调器请求</td><td>Swift 成员要打印过才列得全；语料已经按种类存着每个成员，还有盘上缓存，另起一套等于把整个镜像再打印一遍。经协调器请求才能与 Find 共用一次构建、出现在 Report 导航器里，并且不被 App Nap 拖慢。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>拆词和计数放在 App 一侧，引擎只多一条读语料成员的命令</td><td>怎么拆、怎么数是展示层的决定，改口径不必动线上协议；放在引擎一侧就得另立命令扩展模块，并在每个服务 Engine 的进程里各装一次。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>统计时总是隐藏合成的访问器与 ivar</td><td>默认生成选项不隐藏它们，一个 ObjC 属性会再以 getter、setter 与 ivar 出现，Method First Words 里的 <code>set</code> 会被每个可写属性多算一次。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>前缀从镜像自己的类型名里统计，不写死前缀表</td><td>Apple 的前缀成百上千，私有框架各有各的；按镜像统计对第三方 App 也成立。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>CSV 只放词与次数，名字只进 JSON</td><td>Excel 单格上限 32,767 字符，成员口径下一个常见词的名字列表远超这个长度。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>词云只用一种颜色的深浅，加上选中词的强调色</td><td>颜色不代表任何类别，彩色会被读成有含义；精确比较交给排行表。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>加复合词预设，用户可以增删</td><td>用户提出 <code>DataSource</code> 这类词不该拆开。预设按 Apple 框架名字里两个词连着出现的频率挑；不同框架的习惯不一样（UIKit 内部满是 <code>VisualProvider</code>），所以留了增删的入口。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>不算编译器补上的 NSObject 协议四个属性</td><td>每个遵循协议的 ObjC 类都带着 <code>hash</code>、<code>superclass</code>、<code>description</code>、<code>debugDescription</code>；在四个 UI 框架的成员名里，<code>debugDescription</code> 一项就出现约两千次。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>界面全部用 AppKit</td><td>用户明确不用 SwiftUI；这也与本仓库的既有规定一致：SwiftUI 只用于设置页。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>画布做得比窗口大得多，拖拽与滚动浏览，排版与窗口大小脱钩</td><td>用户要求画布要大、能拖拽和滚动查看。字号只看次数、画布按词的总面积定，于是改变窗口大小不必重排，同一组词始终是同一张图；默认词数随之从 150 提到 500。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td>加双指缩放与 Zoom to Fit</td><td>画布比窗口大得多时要能一眼看到全貌；<code>NSScrollView</code> 自带缩放，代价很小。是 agent 加的，待用户确认是否保留。</td></tr>
+          <tr><td class="numeric">2026-10-31</td><td><code>$</code> 开头的成员不算，去重时忽略开头的下划线</td><td>原型里，<code>$__lazy_storage_$_…</code> 排在 View 一词用法列表的最前面；Swift 属性的存储 <code>_name</code> 与属性 <code>name</code> 是同一个名字。</td></tr>
+          <tr><td class="numeric">2026-11-01</td><td>词云字体改用 SF Mono，按字号加粗</td><td>用户看了原型觉得不好看，要求试 SF Mono。</td></tr>
+          <tr><td class="numeric">2026-11-01</td><td>改用分类配色，取代 2026-10-31 的「只用一种颜色」</td><td>用户要加颜色。颜色于是承担含义：表示一个词最有代表性的那一类名字，并配图例。每种口径不超过三类，因为参考色板里只有前三色两两都能分开。</td></tr>
+          <tr><td class="numeric">2026-11-01</td><td>按「最有代表性」而不是「占多数」定色</td><td>原型里按多数定色时，成员口径几乎全是方法色：方法比属性与 ivar 多得多。按占比高出平均最多的那一类定色，三种颜色才都会出现，也更能说明一个词属于哪类名字。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>Accepted</td><td>用户批准，由 Ultra 上的会话实现。功能分支从 <code>origin/next</code> 切出：本机 <code>next</code> 上有一个有意没推送的提交，还有一份等用户看过的本地合并，都不该随这条分支推上去。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>三件待定的事按草案原文处理</td><td>起草时留给用户的三件事，批准时按草案原文、范围最小的做法定下：一、ObjC 的 override 照草案「已知局限」所写，跟随文档的 Strip Overrides，不在 ⚙︎ 里另加开关（起草时的建议是加一个默认打开的开关，因为不去掉时 AppKit 的 <code>dealloc</code> 在 Method First Words 里排第六；以后要加只多一个开关）。二、双指缩放与 Zoom to Fit 保留，草案「浏览」一节本来就写着。三、仓库外的一次性原型已经不在两台机器上，不再留底，实现照草案从头写。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>代码落点按现在的分层改写，补落地步骤</td><td>草案写成之后，ViewModel 全部搬进了 RuntimeViewerAppCore（0091、0096），AppCore 不再用 AppKit 的颜色与图片（0094），目录按功能划分（0095），导航的 <code>.push</code> / <code>.pushHighlighting</code> 换成了 <code>SelectionRoute.open(_:in:highlighting:)</code>。§5 与 §3 的导航一句据此改写，并把实现拆成五步写进新的 §6。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第一步：命令名 <code>corpusMembers</code>，成员行高亮只用成员名</td><td>命令关于一个镜像，所以由镜像的拥有者回答，与建语料的命令一致。成员不带声明行，点用法里的成员行时，<code>ContentHighlightRequest</code> 的 <code>lineText</code> 留空：内容区找不到同样的一行时，本来就退到按成员名整词匹配、取离行号最近的一处。对端早于这条命令时，2.1.0 以后的版本都回 <code>isUnknownCommand</code>，窗口据此提示对端太旧。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第二步自定的细节</td><td>一、复合词预设 18 个：草案点名的 14 个（<code>ViewController</code>、<code>GestureRecognizer</code>、<code>DataSource</code>、<code>IndexPath</code>、<code>TraitCollection</code>、<code>HitTest</code>、<code>CornerRadius</code>、<code>SafeArea</code>、<code>ToolTip</code>、<code>KeyPath</code>、<code>RunLoop</code>、<code>TimeZone</code>、<code>UserInfo</code>、<code>PopUp</code>），加 <code>FirstResponder</code>、<code>LayoutGuide</code>、<code>LineBreak</code>、<code>WhiteSpace</code>。没有原型可以按频率重新统计，所以只加了这几个固定说法，不加以 <code>Manager</code>、<code>Controller</code> 这类角色词结尾的组合，免得吃掉类型后缀。二、虚词表：and、as、at、by、for、from、in、into、of、on、or、the、to、with。三、类名前缀取两到三个大写字母后面还跟着大写字母的开头，三个字母的候选占到两个字母那个的八成以上才取它（Metal 得 <code>MTL</code>，AppKit 的 <code>NSURL…</code> 不会把 <code>NS</code> 变成 <code>NSU</code>）；至少要有三个、且占类型名的五分之一，否则不认前缀。四、局部类型与用户做出来的特化类型的成员也不算，与类型口径一致。五、类型名取 <code>displayName</code> 去掉外层类型与泛型参数，只用来拆词；JSON 里的类型名与所属类型写完整的 <code>displayName</code>。六、一个词的写法取它最常见的那种，用来决定是不是缩略词。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第三步自定的细节</td><td>一、螺旋线是按画布比例拉伸的阿基米德螺线，圈距约 19 点（比最小的词连同间距还矮），步长按弧长约 8 点；碰撞检查把已放下的词按 48 点见方的格子归档，只比附近的。Debug 构建下 500 个词约 1.5 秒，在后台算。二、字号与字重的规则放在 RuntimeViewerUI 的 <code>WordCloudTypography</code>，量文字尺寸在主线程，排版在后台。三、画布是自绘的 <code>NSView</code>，不继承 <code>LayerBackedView</code>：整块画布连底色都在 <code>draw(_:)</code> 里画，不用图层属性。四、点在空白处什么也不做，不清掉选中。五、导出 PNG 时先把选中与悬停的底板拿掉，画完再放回。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第四步自定的细节</td><td>一、状态枚举 <code>NamingWordCloudState</code>：索引镜像、建语料（都带进度）、就绪、不可用（语料开关关着、对端太旧、文档没有后台工作可建语料、没有可数的名字）、失败；加载占位照 <code>withLoadingPlaceholder</code> 的规矩，快的读取不闪。二、设置整体存成 <code>AppDefaults.namingWordCloudPreferences</code>（一个 <code>Codable</code> 值，缺的键读成默认值），窗口经它的 <code>$</code> 投影互相同步。三、换口径只在「读不读成员」变了时重读，其余开关、分组与词数只在后台重算。四、成员读法：先问引擎要，没有语料就向文档共享的语料协调器请求优先构建，等它的状态到 built 再取；协调器没接这个请求（这个 Engine 不建语料）时提示不可用，不空等。五、Print Exported Declarations Only 按语言分别作用于类型：ObjC 类型看 ObjC 的开关，Swift 类型看 Swift 的。六、Compound Words 表单单独一个 <code>NamingCompoundWordsViewModel</code>，增删直接写回设置；输入能对上某个预设时直接恢复，不管能不能拆成两个词（全小写的 <code>datasource</code> 也行），其余单个词拒绝并说明。七、用法点开走 <code>.focusedTab</code>。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>第五步自定的细节</td><td>一、右键菜单的入口经 <code>DocumentState.namingWordCloudRequested</code> 请求窗口，照 <code>startOverRequested</code> 的先例：镜像列表的 ViewModel 的路由只到侧栏的 coordinator，够不到 <code>MainCoordinator</code>。View 菜单的入口直接触发 <code>MainRoute.namingWordCloud(imagePath:)</code>，只在侧栏开着镜像时可用。二、词云窗口记住大小与位置时按镜像名分开存（<code>NamingWordCloud &lt;镜像名&gt;</code>）：同时开着的几个窗口不能共用一个自动保存名。三、Zoom to Fit 与 Actual Size 只动滚动视图的缩放，留在视图控制器里，不进 ViewModel。四、排行表与用法列表是单列表格、每行左右两个标签，用 <code>DifferentiableBox</code> 驱动，cell ViewModel 在 cell 构造闭包里建（行的内容完全由模型决定，用法列表可达数千行）。五、Compound Words 表单里回车是 Add、Esc 是 Done，免得在输入框里按回车就关掉表单。六、导出的存储面板以表单挂在词云窗口上，写入失败时用表单提示原因。</td></tr>
+          <tr><td class="numeric">2026-11-18</td><td>实现完成，待用户看过后收尾</td><td>验证在 Ultra 上：每步构建通过、相关测试全过，第一到第四步的新测试各做过变异检查（去掉对应实现会变红）；macOS App 经 Tuist workspace（Debug）编过。最终提交上 Core 包全部测试 1124 个，失败的是交叉引用的「之后加载的镜像会更新分析器」一条和后台索引的三条，单独重跑全过（整包并行时的负载问题，后台索引那几条记忆里早有记录）；Packages 包 1398 个，失败 4 条：标题悬停副标题、Call Hierarchy 超时是基线上本来就红的，<code>BackgroundWorkProcessActivityTests</code>、<code>ReportSharedByEngineTests</code> 是整包一起跑才红。没做的：界面没有实际操作过（排版、配色、悬停与点选、拖拽和缩放、导出），由用户看。文档：README 功能列表与右键菜单一行已更新；不另写使用指南或实现说明，规则都在类型的文档注释里；没有新术语。草案没有网页版，正式收尾时生成。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>验收时修复窗口布局：顶栏的纵向抱紧优先级提到 750</td><td>用户第一次验收时，顶栏的控件落在窗口的垂直中间，词云被压成底部约 30 点高的一条。LookInside 实测顶栏被拉到 699 点高：栈视图纵向抱紧的默认优先级是 250，右侧分栏保持面板高度的优先级也是 250，两者打平时，多出的高度给了顶栏。修复后复测，顶栏 24 点，分栏占满其余高度。视图控制器在 App target 里，没有测试 target 能测到它，所以没有回归测试。仓库里别处的栈视图下面要么是不争高度的滚动视图，要么栈本身高度固定，没有同类写法。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>照原生窗口重排，加第 6 步</td><td>用户看了第一版，觉得词云本身、窗口外框与顶栏、右侧两张表都不好看，选择照原生 macOS 窗口的做法重排：控件进统一样式的工具栏，右栏照 RV 主窗口的 Inspector 排，词云打开时缩放居中。先改提案，用户点头后再实现。上一行加的顶栏抱紧优先级随顶栏一起删掉。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>右栏留在同一个视图控制器的 <code>NSSplitView</code> 里，不改用 <code>NSSplitViewController</code> 的 inspector 分栏项</td><td>RV 要求每个视图控制器都有自己的 ViewModel，改成分栏控制器加两个子视图控制器，就得把已经实现并测过的 ViewModel 拆成两个。换来的只有工具栏分隔项和收起右栏的按钮，而分隔项用 <code>NSTrackingSeparatorToolbarItem</code> 指向普通的 <code>NSSplitView</code> 也做得到。收起右栏不做。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>打开时整片词云缩放进可见区域，默认 N 从 500 改回 150</td><td>词云是用来一眼看全貌的。验收时用户缩放到整片可见（LookInside 读到缩放倍数 0.356），12pt 的小词只剩四点多高。10-31 定下的大画布与拖拽浏览保留，⚙︎ 菜单里仍可选 500 及以上。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>字号 18pt 以下的词用 60% 不透明度，取代 10-31 的「字一律满色」</td><td>几百个小字都用饱和色时画面很花，这是用户觉得词云不好看的原因之一。当初的顾虑（小字的颜色更难分辨）仍然成立，由排行表的圆点补足。agent 提议，用户确认。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>排行表补上两列与表头排序</td><td>第 3 节一直写着排行表可排序，第一版做成了没有表头的单列表，也没有排序。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>画布右下角加一组控制按钮：抓手、缩小、缩放比例、放大、适合窗口</td><td>用户看过第 6 步的初稿后要求在画布上加缩小、放大、自适应与移动的按钮。「移动」按抓手工具做（打开后在词上拖也平移、点击不选词），这是 agent 的理解，用户可以改。缩放与适合窗口有了按钮，⚙︎ 菜单里的 Zoom to Fit 与 Actual Size 去掉；快捷键照「预览」。macOS 26 起按钮浮层用 Liquid Glass，之前用半透明底，状态行随之用同一种底。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>第 6 步获批准并开工</td><td>用户批准。实现时发现拖动本来在词上也能平移（第五步的实现就是这样，提案原文写成了只拖空白处），所以抓手只改点击：点词不选、悬停不垫底；属性因此叫 <code>isHandToolActive</code> 而不是初稿的 <code>pansOnAnyDrag</code>。控制按钮与状态行共用的底板单独成 <code>FloatingPlatterView</code>。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>第 6 步验收通过</td><td>用户在 Ultra 上看过新界面，认可。LookInside 实测：打开时词云按词的外接矩形缩放并居中（用户存的 N 是 500，缩放倍数 0.528，最小的词在屏幕上约 6.3pt，低于 8pt 的目标；默认的 150 没有实测，因为改 N 会改用户自己的设置）。LookInside 读到两块浮层底板的高度只等于内容高度（stack view 的上下 edgeInsets 没撑起高度），用户看过实际画面认为没问题，不改。</td></tr>
+          <tr><td class="numeric">2026-11-19</td><td>Implemented，编号 0097</td><td>六步都已实现并经用户验收，合进 <code>next</code>。与方案不同之处都记在上面几行：第 6 步是验收后加的，抓手只改点击（拖动本来在哪里都能平移）。没做的只有 LookInside 实测里「默认 150 词时最小词的屏幕字号」一项，因为要改用户自己的设置，不算后续项。文档：README 的 Naming Word Cloud 一条补上画布按钮与表头排序；不另写使用指南（README 与窗口本身已经说清怎么用）也不另写实现说明（本提案的第 3、5、6 节就是）；术语表加「口径（measure）」一条。</td></tr>
+
+
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
