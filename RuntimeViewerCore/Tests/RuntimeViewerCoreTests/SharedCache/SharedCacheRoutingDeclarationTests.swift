@@ -54,6 +54,9 @@ struct SharedCacheRoutingDeclarationTests {
         Declaration(RuntimeEngine.IsImageIndexedCommand(path: imagePath), .subjectImageOwner),
         Declaration(RuntimeEngine.MainExecutablePathCommand(), .servingEngine),
         Declaration(RuntimeEngine.LoadImageCommand(path: imagePath), .subjectImageOwner),
+        // A refused load is retraced in the process that tried, with its own
+        // dependencies and rpaths.
+        Declaration(RuntimeEngine.DiagnoseImageLoadCommand(imagePath: imagePath, dyldMessage: "", hostApplicationPath: nil, searchPaths: []), .servingEngine),
         Declaration(RuntimeEngine.LoadImageWithProgressCommand(path: imagePath), .subjectImageOwner),
         Declaration(RuntimeEngine.LoadImageForBackgroundIndexingCommand(path: imagePath), .subjectImageOwner),
         Declaration(RuntimeEngine.ReloadDataCommand(isReloadImageNodes: false), .servingEngine),

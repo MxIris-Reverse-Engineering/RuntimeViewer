@@ -819,7 +819,7 @@ default:
      - `alreadyLoadedImagesCountAsResolvedByInstallName`
      - `dylibPathResolverResolveStillReturnsTheSamePaths`
 
-2. **诊断随失败的加载过线（Core）** —— 步骤 2 的行
+2. **诊断随失败的加载过线（Core）** —— 步骤 2 的行（**已完成**）
    - 行为：
      - `servingProcessLoadFailureCarriesDiagnosisInProcess` / `…OverXPCService` / `…OverTCP`
      - `olderServerFailsWithTextOnlyWhenAskedForDiagnosis`（冻结的旧服务端）
@@ -916,3 +916,4 @@ default:
 | 2026-11-19 | 写提案时定下的实现方向 | 诊断随失败的加载在回复里带回（`LoadImageCommand` 加可选字段），不加发给所有引擎的新命令——经 Mach service 的旧版 payload 会因未知命令断开（PR121.73）；重新诊断的命令只发给框架实例。实例的 launch payload 不列框架，崩溃后的重连得到空实例，避免崩溃循环。没有窗口就立即结束实例，不像文件引擎那样留宽限期。其余自定的假设列在「设计中自定的假设」。 |
 | 2026-11-19 | Accepted | 用户批准，开始实现。 |
 | 2026-11-19 | 步骤 1 完成 | 实测「先按绝对路径加载依赖」成立。核对 dyld 源码时发现原文把 rpath 栈的构造顺序当成了查找顺序：dyld 从发起加载的镜像往回查到主程序，诊断表按查找顺序排，rpath 里的 `@loader_path` 按携带它的镜像展开。与原设计的出入：`ChainLink` 存 `resolvedPath`、`isResolved` 由它算出；`RpathSearch` 的结果是开放的 `Outcome` 结构；`DylibPathResolver.resolve(…)` 不改，另写一个记录尝试的方法（原方法对祖先的 `@loader_path` rpath 按当前镜像展开，与 dyld 不同，留作后续项）；修复方案列出依赖闭包里所有还没加载的镜像、依赖在前，不再筛掉「本来就找得到」的——多加载的那些本来也会随之加载。预加载的实测放在 `RuntimeImageLoadDiagnosticianTests` 里，解析测试改名 `DyldLoadFailureMessageParsingTests`（原名已被现有测试占用）。 |
+| 2026-11-19 | 步骤 2 完成 | `diagnosesImageLoadsOnRequest` 对 `.local` 也为真：App 里的 My Mac 转发给同一次构建内嵌的 local service，不会是旧版（原文只写了进程内与框架实例）。路径比较改用 `realpath(3)`：dyld 按真实路径登记镜像（`/private/var/…`），而 Foundation 的 `resolvingSymlinksInPath` 会去掉 `/private`，两者对不上；第 3 步的镜像目录按同一规则比较。 |

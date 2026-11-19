@@ -395,8 +395,16 @@ struct RuntimeImageLoadDiagnostician: Sendable {
         return FileManager.default.fileExists(atPath: fallback) ? fallback : nil
     }
 
+    /// The path as dyld lists an image loaded from it: every symbolic link
+    /// resolved, `/private` kept. Not `URL.resolvingSymlinksInPath()`, which
+    /// strips a leading `/private` and so never matches dyld's `/private/var/…`.
+    /// A path that does not exist comes back standardized.
     static func canonicalPath(_ path: String) -> String {
-        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        guard let resolved = realpath(path, nil) else {
+            return URL(fileURLWithPath: path).standardized.path
+        }
+        defer { free(resolved) }
+        return String(cString: resolved)
     }
 
     static func isSameFile(_ firstPath: String, _ secondPath: String) -> Bool {
