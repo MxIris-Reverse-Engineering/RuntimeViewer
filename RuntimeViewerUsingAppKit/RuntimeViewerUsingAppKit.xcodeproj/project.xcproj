@@ -196,9 +196,7 @@
           ],
         },
       ],
-    },
-    { "kind": "folder", "path": "RuntimeViewerCommandLineTool" },
-    {
+    }, {
       "kind": "folder",
       "path": "runtime-viewer-cli",
       "membership-exceptions": [
