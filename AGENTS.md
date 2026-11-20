@@ -21,7 +21,7 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 | `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
 | `Configurations/AGENTS.md` | Per-target build settings: the embedded non-macOS products, the jailbroken variant's payload, service names, adding a configuration |
 | `Resources/AGENTS.md` | The app icons |
-| `RuntimeViewerUsingUIKit/AGENTS.md` | The iOS, jailbroken iOS and visionOS apps' launch order and settings lifecycle |
+| `RuntimeViewerUsingUIKit/AGENTS.md` | The iOS, jailbroken iOS and visionOS apps' launch order, settings lifecycle, settings screen and appearance |
 
 Put a new rule in the narrowest directory it governs — but **never put an `AGENTS.md` or `CLAUDE.md` in an
 Xcode synchronized folder or a SwiftPM target's directory**; use the nearest directory above. Every target
@@ -233,8 +233,9 @@ and through `queued-build`. What `check` compares, the Tuist workarounds behind 
 manifests, and the known differences from the native build: `Documentations/Guides/TuistDevelopment.md`.
 Background: `Documentations/Evolutions/0053-tuist-coexistence.md`.
 
-**Dependency floors**: UIFoundation is declared `from: "0.48.0"` with its `Settings` trait on (which
-exposes `UIFoundationSettings` and `UIFoundationSettingsUI`). `0.48.0` is the first whose settings store
+**Dependency floors**: UIFoundation is declared `from: "0.49.0"` with its `Settings` trait on (which
+exposes `UIFoundationSettings` and `UIFoundationSettingsUI`). `0.49.0` is the first whose settings pages
+and `SettingsViewController` build on iOS, for the iOS settings screen; `0.48.0` the first whose settings store
 builds off macOS and loads synchronously, as the iOS app's launch needs. `0.47.0` was the first release with
 `ScrollPocketView` and `NSView.box.titlebarBackdropGroupName` (`AppleInternal` trait), the stand-alone
 scroll edge effects over the editor area's toolbar strip and behind each editor pane's tab bar, and the
@@ -572,8 +573,8 @@ LLM Client
 - Keep the persisted location compatible with existing releases:
   `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json` on macOS, the same path inside the
   app container's `Library/Application Support` on iOS and visionOS.
-- `SettingsAccess` is one implementation over the same store on every platform. Only the settings
-  *window* (`UIFoundationSettingsUI`) is macOS-only; a settings screen elsewhere is the app's own.
+- `SettingsAccess` is one implementation over the same store on every platform, and the iOS-family
+  apps show the macOS pages that apply there: `RuntimeViewerUsingUIKit/AGENTS.md`.
 - Settings › Developer is the home for switches that exist to exercise the app while developing it. The
   page is registered under `#if DEBUG` only; its branch, `Settings.developer`, is persisted like any
   other (so it is in `accessPersistedValues()` and in `SettingsPersistenceTests`' coverage list).
