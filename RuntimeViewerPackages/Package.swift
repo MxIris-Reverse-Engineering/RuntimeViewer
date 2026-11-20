@@ -176,7 +176,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.47.0",
+                from: "0.48.0",
                 traits: uiFoundationTraits,
             ),
         ),
@@ -404,7 +404,7 @@ let package = Package(
             name: "RuntimeViewerSettings",
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
-                .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "UIFoundationSettings", package: "UIFoundation"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],
@@ -586,7 +586,7 @@ let package = Package(
                 "RuntimeViewerSettings",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
-                .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "UIFoundationSettings", package: "UIFoundation"),
             ],
         ),
 
