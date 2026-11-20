@@ -2,7 +2,7 @@
 
 - **面向**: 在本仓库做日常开发、想让第三方依赖走二进制缓存的人；改原生工程的 target、依赖、嵌入方式或构建设置的人（同步规则）
 - **对应提案**: [0053](../Evolutions/0053-tuist-coexistence.md)；本地依赖模式见 [0082](../Evolutions/0082-tuist-local-dependencies.md)
-- **最后更新**: 2026-11-16
+- **最后更新**: 2026-11-20
 
 `RuntimeViewer-Tuist.xcworkspace` 是构建 macOS App 的第二条路，只供日常开发。它由
 `./TuistScript.sh` 用 Tuist 生成，和原生工程用同样的 target、同样的源码、同一批
@@ -133,8 +133,13 @@ Xcode 可能打开的是这个工程而不是 `Package.swift`；双击 `Package.
   那个仓库的 `info/exclude`（只在本机，不提交），`git status` 里看不到；切回远程模式时删掉 `<包名>.xcodeproj/`，
   之后用 Xcode 打开那个库的目录，打开的仍是它的 `Package.swift`。`Derived/` 留着。git 跟踪着 `<包名>.xcodeproj`
   的库，脚本不会让 Tuist 覆盖它，直接报错。
-- **同一时刻只让一个检出用这组库**：生成进库目录的工程属于生成它的那个检出，脚本把这个检出记在库的 git 目录里。
-  另一个检出对同一组库打开本地模式会报错，先在原来那个检出里切回远程模式。
+- **同一时刻只让一个检出用这组库**：生成进库目录的工程属于生成它的那个检出。MachOSwiftSection 的 Tuist 开发
+  workspace（它的 `./TuistScript.sh`）也往同样的检出里生成工程——它自己的检出总是，本地模式下还有上游那几个库——
+  所以两个脚本共用一份占用记录：被占检出的 git 目录里写 `tuist-generated-project-owner`（占用者路径、在占用者那里
+  释放它的命令、生成进来的工程名），占用者在自己的 `Tuist/.claimed-checkouts`（已忽略）里列出手里的检出，列着才算
+  有效。另一个检出（本仓库的另一个 worktree，或 MachOSwiftSection 的检出）占着某个库时，打开本地模式会报错，并给出
+  在那边要跑的释放命令：本仓库的是 `./TuistScript.sh generate --remote-dependencies`，MachOSwiftSection 的是
+  `./TuistScript.sh release`。旧版脚本写的 `runtimeviewer-tuist-local-dependencies` 记录仍然认，下次占用时换成新记录。
 
 ## 必须遵守的约定
 
