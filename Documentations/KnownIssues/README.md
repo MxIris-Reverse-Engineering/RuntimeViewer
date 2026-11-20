@@ -300,3 +300,11 @@ when picking up follow-up work.
   `Then.swift` copies, `BatchExportingState`'s writable `@RxObserved`
   properties, the Catalyst helper's hand-written `Logger` (a shell links no
   package), and the ViewModels that live in the app target.
+- [2026-11-20-wrapping-label-width-findings.md](2026-11-20-wrapping-label-width-findings.md) —
+  sweep after the Load Frameworks diagnosis sheet grew wider than its window
+  (a wrapping label with `preferredMaxLayoutWidth` 0 asks for its whole text on
+  one line, above the priority a window keeps its size at). Three findings, all
+  on `next` before that feature and left unfixed by the user's decision:
+  `WL.1` the Specialization sheet's status label (same mechanism), `WL.2` the
+  image page's path label (unverified), `WL.3` five wrapping labels that may
+  show only their first line (unverified).

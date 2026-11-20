@@ -62,6 +62,41 @@ struct FrameworkLoadViewModelTests {
         #expect(presentation.remedyTitle == "Load Example.app's Frameworks and Retry")
     }
 
+    @Test("a remedy from the framework's own folder says the dependency is next to it, one from added folders says so")
+    func presentationBannerNamesTheFolderBesideTheFramework() throws {
+        let tablesPath = "/Copied/Frameworks/Tables.framework/Versions/A/Tables"
+        let textInstallName = "@rpath/Text.framework/Versions/A/Text"
+        func diagnosis(loadingFirst imagePaths: [String]) -> RuntimeImageLoadDiagnosis {
+            RuntimeImageLoadDiagnosis(
+                imagePath: tablesPath,
+                dyldMessage: "dlopen(\(tablesPath), 0x0001): Library not loaded: \(textInstallName)",
+                failure: .init(kind: .imageNotFound, missingInstallName: textInstallName, referencingImagePath: tablesPath),
+                dependencyChain: [.init(imagePath: tablesPath, installName: textInstallName, resolvedPath: nil)],
+                rpathSearches: [],
+                triedPaths: [],
+                notes: [],
+                remedy: .init(hostApplicationPath: nil, searchPaths: ["/Elsewhere", "/Copied/Frameworks"], imagePathsToLoadFirst: imagePaths),
+                processArchitecture: "arm64e",
+                operatingSystemVersion: "macOS 27.2",
+                isFromMessageOnly: false
+            )
+        }
+
+        let beside = ImageLoadDiagnosisPresentation(
+            diagnosis: diagnosis(loadingFirst: ["/Copied/Frameworks/Text.framework/Versions/A/Text"]),
+            frameworkName: "Tables.framework"
+        )
+        #expect(try #require(beside.remedyExplanation).hasPrefix("Text.framework is next to Tables.framework in /Copied/Frameworks."))
+        #expect(beside.remedyTitle == "Load 1 Image and Retry")
+
+        let added = ImageLoadDiagnosisPresentation(
+            diagnosis: diagnosis(loadingFirst: ["/Elsewhere/Text.framework/Versions/A/Text", "/Copied/Frameworks/Base.framework/Versions/A/Base"]),
+            frameworkName: "Tables.framework"
+        )
+        #expect(try #require(added.remedyExplanation).hasPrefix("Text.framework is in the folders you added."))
+        #expect(added.remedyTitle == "Load 2 Images and Retry")
+    }
+
     @Test("without a remedy there is no banner text, and a diagnosis from dyld's message says so")
     func presentationWithoutRemedy() {
         let presentation = ImageLoadDiagnosisPresentation(diagnosis: Self.diagnosis(withRemedy: false, fromMessageOnly: true), frameworkName: "Foo.framework")
