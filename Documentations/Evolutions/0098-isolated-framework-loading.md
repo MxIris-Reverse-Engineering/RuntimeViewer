@@ -1,13 +1,13 @@
-# Draft - Load Frameworks 改在独立实例里加载，并诊断加载失败
+# 0098 - Load Frameworks 改在独立实例里加载，并诊断加载失败
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-19
 - **最后更新**: 2026-11-20
 - **所属愿景**: 无
 - **关联提案**: [0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（My Mac 的引擎搬进 XPC service；service 崩溃丢掉已加载的镜像、不自动重放）、[0069-file-mode](0069-file-mode.md)（每个文件一个 service 实例，本提案照它接线）、[0079-shared-service-plugin](0079-shared-service-plugin.md)（service 是加载共享插件的外壳）、[0081-shared-cache-images-across-engines](0081-shared-cache-images-across-engines.md)（系统镜像的数据向 My Mac 借）、[draft-engine-management-on-ios](draft-engine-management-on-ios.md)（引擎管理的平台接缝，已在 `next` 上；本提案的管理器改动照它的写法加接缝）
-- **实现分支 / PR**: `feature/isolated-framework-loading`（worktree `.worktrees/RuntimeViewer-IsolatedFrameworkLoading`），从 `next` 切出
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/isolated-framework-loading`，从 `next` 切出，2026-11-20 合入 `next`
+- **配套文档**: 无单独文档——各项决定的理由在对应代码的文档注释与本提案里；术语「框架实例」「加载诊断」见 [`Glossary.md`](../Glossary.md)；文件模式里同样适用的 Copy Path / Copy Full Path 见 [`Guides/FileMode.md`](../Guides/FileMode.md)
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -930,3 +930,4 @@ default:
 | 2026-11-20 | 修复方案也搜框架所在的文件夹 | 用户验收时加载 `/Volumes/RE/iWork/macOS/14.5/Frameworks` 里的 `TSTables.framework`，缺的 `TSText.framework` 就在同一个文件夹里，却因为不在任何 `.app` 里而没有修复方案，得手动点 Add Search Path…。用户定：自动把框架所在的文件夹当作搜索路径，排在用户加的之后（`RuntimeImageLoadDiagnosis.folderHoldingImage(at:)`），因此不换宿主 App 的那一种总会试一次；横幅对这种方案说「is next to <框架> in <文件夹>」。修复方案仍只对 `@rpath/` 形式的依赖有效：直接写成 `@executable_path/…` 的依赖先加载也匹配不上，这一点没变。线上格式不变。测试：`dependencyBesideTheFrameworkMakesARemedy`（三个平铺的框架，不加搜索路径即得方案、按方案加载后成功）、`folderHoldingImageIsTheNearestFrameworksFolder`、`presentationBannerNamesTheFolderBesideTheFramework`，`searchPathActsAsAnExtraRpath` 的断言随之带上框架所在的文件夹。 |
 | 2026-11-20 | 两组从框架所在的文件夹开始 | 用户验收时指出路径栏在「TSTables.framework (Isolated) › Frameworks」之后列出了 `Volumes › RE › iWork › macOS › 14.5 › Frameworks` 一整串目录，要求像文件模式一样不显示。改为两组各自从装着组里所有框架的最深文件夹开始（`commonFolder(holding:)`，按 `folderHoldingImage(at:)` 取每个镜像的文件夹再取公共部分；空组或只共享 `/` 时照旧从 `/` 开始），用的是文件模式同一个 `RuntimeImageNode.rootNode(for:name:startingAt:)`，节点路径不变，侧栏随之一起变短。测试：`RuntimeFrameworkInstanceImageCatalogTests`。 |
 | 2026-11-20 | 右键菜单分开 Copy Path 与 Copy Full Path | 路径栏与侧栏不再显示上层目录之后，用户要能拿回完整路径。用户定：原来拷完整路径的 Copy Path 改名为 Copy Full Path；新的 Copy Path 拷界面上看到的路径——树根（「Frameworks」「Dyld Shared Cache」这类分组，或文件模式打开的文件夹）以下各级名字用 `/` 连起来（`RuntimeImageNode.displayedPath`；书签里脱离了树的镜像拷它自己的名字）。两项出现在侧栏镜像行、文件夹行（文件夹行原先只有加书签；只做分组的根两项都没有，代表一个文件夹的根只有 Copy Full Path），以及编辑栏路径栏的每一段（对象段只有 Copy Path，引擎段与分组根没有菜单）。AppKitPlus 的 `NSPopUpPathControl` 没有按段自定义右键菜单的代理方法，RV 用子类 `EditorJumpBarPathControl` 接管右键与 Control-click，按坐标找到被点的段（`NSPopUpPathCell.pathComponentCell(at:withFrame:in:)`），由 adapter 给菜单；没有菜单的段照旧交给控件，Command-click 仍是上级目录菜单。拷贝在 `EditorPaneViewModel` 里经 `pasteboardClient` 完成。文档：`Guides/FileMode.md` 同步；0086 是已落地的提案，不回改。测试：`ImageAndFindResultCommandTests`、`EditorPaneViewModelTests`、`EditorJumpBarTests` 各加用例。 |
+| 2026-11-20 | Implemented | 合入 `next`，取号 0098。验收由用户在 App 里做：真实第三方框架（`/Volumes/RE/iWork/macOS/14.5/Frameworks` 里平铺的 iWork 框架）走通了失败、诊断、自动修复、加载成功；验收中补的四处（诊断 sheet 撑宽、修复方案自动搜框架所在的文件夹、两组从框架所在的文件夹开始、Copy Path 与 Copy Full Path 分开）各有上面的一行。验证：最终代码在 Ultra 上编过 Debug 的整个 App，Core 与 Packages 全量测试的结果见收尾报告。没做的移进提案索引的「暂缓的后续项」：关窗后无残留进程、注入进程窗口里修好后的 sheet、实例常驻内存这三项手工核对；签名构建核对 entitlement、Distribution workspace 归档与公证、Debug-arm64e 与 Release 构建；依赖直接写成 `@executable_path/…` 时没有修复方案；`DylibPathResolver.resolve(…)` 对祖先 `@loader_path` 的展开与 dyld 不同（步骤 1 留下的）。文档：不另写实现说明与使用指南——各项决定的理由在代码的文档注释与本提案里，用户能见的入口只有 Load Frameworks 与诊断页本身；新术语「框架实例」「加载诊断」已在实现时登记进术语表；`Guides/FileMode.md` 随 Copy Path 的改动同步；根 `AGENTS.md` 已登记新 service（它超过 64 KiB 的问题另有 0096 的后续项）。同类的多行标签问题登记在 KnownIssues `WL.1`–`WL.3`，用户定暂不修。 |

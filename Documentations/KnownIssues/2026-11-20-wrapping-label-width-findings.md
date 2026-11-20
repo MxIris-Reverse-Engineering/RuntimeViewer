@@ -1,6 +1,6 @@
 # 2026-11-20 多行标签撑宽窗口的同类排查
 
-来由：验收 [`draft-isolated-framework-loading`](../Evolutions/draft-isolated-framework-loading.md) 时，用户在 Mac Catalyst
+来由：验收 [0098](../Evolutions/0098-isolated-framework-loading.md) 时，用户在 Mac Catalyst
 窗口里让一次 Load Frameworks 失败，诊断 sheet 比主窗口还宽，居中后左对齐的内容落在屏幕外，看上去一片空白。这次修在
 `FrameworkLoadViewController` 里（`FrameworkLoadWrappingLabel`）。本文件登记修完后对整个 App 的同类排查：都是 `next`
 上原本就有的问题，与那个功能无关，用户决定暂不修。

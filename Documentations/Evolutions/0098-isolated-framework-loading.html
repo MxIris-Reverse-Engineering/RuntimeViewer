@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - Load Frameworks 改在独立实例里加载，并诊断加载失败</title>
+<title>0098 - Load Frameworks 改在独立实例里加载，并诊断加载失败</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -181,20 +181,20 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> Load Frameworks 改在独立实例里加载，并诊断加载失败</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0098</span></p>
+  <h1><span class="proposal-number">0098</span> Load Frameworks 改在独立实例里加载，并诊断加载失败</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-19</dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-20</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-isolated-framework-loading.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0098-isolated-framework-loading.md</code></dd></div>
   </dl>
 </header>
 
 <nav class="toc" aria-label="目录">
   <ol>
     <li><a href="#summary">摘要</a></li>
-    <li><a href="#decide">要你定</a></li>
+    <li><a href="#decide">落地状态</a></li>
     <li><a href="#proposal">方案</a></li>
     <li><a href="#architecture">架构图</a></li>
     <li><a href="#map">改动地图</a></li>
@@ -212,18 +212,18 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="summary">
   <h2>摘要</h2>
   <p>Load Frameworks 不再把框架装进 My Mac 的 service。在 My Mac 的窗口里选了框架，App 新起一个 XPC service 实例（新的内嵌 service <code>RuntimeViewerFrameworkService</code>，每次一个，带 <code>disable-library-validation</code>），开一个挂在这个实例上的新窗口，把这次选的框架都加载进去；之后在这个窗口里再加载，也进同一个实例；没有窗口留在这个实例上时（关窗，或窗口换到别的来源），实例退出，框架随之卸载。</p>
-  <p>加载失败时窗口照常打开，内容区显示诊断：在加载失败的那个进程里模拟 dyld 的查找——依赖链、rpath 栈及其展开、每条候选路径的结果——并附上 dyld 原文；缺的依赖就在宿主 App 的 Frameworks 目录里时，提议先按绝对路径加载它们再重试，找不到时让用户指定宿主 App 或搜索路径；重试成功，窗口原地变成普通窗口。</p>
+  <p>加载失败时窗口照常打开，内容区显示诊断：在加载失败的那个进程里模拟 dyld 的查找——依赖链、rpath 栈及其展开、每条候选路径的结果——并附上 dyld 原文；缺的依赖就在宿主 App 的 Frameworks 目录或框架所在的文件夹里时，提议先按绝对路径加载它们再重试，找不到时让用户指定宿主 App 或搜索路径；重试成功，窗口原地变成普通窗口。</p>
   <p>窗口挂在 Mac Catalyst、注入进程、远端 Mac 等引擎上时，框架仍加载进那个进程，失败时同一诊断以 sheet 显示，不带重试与修复。诊断随失败的那次加载一起回来（加载请求多一个可选字段，旧版对端照旧只回 dyld 原文，App 据原文给出简化诊断），不给旧版 payload 发它不认识的命令。窗口的侧栏只列这次加载的框架和它们不在系统 shared cache 里的依赖；窗口不进 Open Recent，重启后不恢复。</p>
 </section>
 
 <section id="decide">
-  <h2>要你定</h2>
-  <div class="callout">
-    <p class="callout-title">完整档提案，批准（状态改为 Accepted）之前不写实现代码</p>
-    <ol>
-      <li>批准这份提案开工吗？</li>
-      <li>「设计中自定的假设」里有没有要推翻的？</li>
-    </ol>
+  <h2>落地状态</h2>
+  <div class="callout callout-note">
+    <p class="callout-title">2026-11-20 合入 <code>next</code>，取号 0098</p>
+    <ul>
+      <li>验收中补了四处：诊断 sheet 被长文字撑宽；修复方案自动搜框架所在的文件夹；侧栏与路径栏的两组从框架所在的文件夹开始；右键菜单的 Copy Path（界面路径）与 Copy Full Path（完整路径）分开。详见决策日志。</li>
+      <li>没做的（剩余手工核对、签名与公证、<code>@executable_path/…</code> 依赖的修复等）列在提案索引的「暂缓的后续项」。</li>
+    </ul>
   </div>
 </section>
 
@@ -305,7 +305,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h3>框架实例的窗口</h3>
   <ul>
     <li>来源名「Foo.framework (Isolated)」，多个时「Foo.framework + 2 (Isolated)」；工具栏副标题按状态显示「Loading…」「Couldn't Load」「Isolated」；图标是框架自己的。</li>
-    <li>侧栏两个根节点：「Frameworks」（经引擎加载的，失败的也在，修复时先加载的依赖也在这里）与「Dependencies」（dyld 带进来的非 shared cache 镜像）。</li>
+    <li>侧栏两个根节点：「Frameworks」（经引擎加载的，失败的也在，修复时先加载的依赖也在这里）与「Dependencies」（dyld 带进来的非 shared cache 镜像）。两组各自从装着组里所有框架的最深那个文件夹开始，像文件模式那样不列上面的目录；节点的 <code>path</code> 仍是完整镜像路径。</li>
     <li>内容区：加载中显示「Loading Foo.framework…」；失败显示诊断页；全部成功后页面消失，焦点栏打开第一个框架的镜像页。窗口已经打开了内容时，之后的失败改用 sheet。</li>
   </ul>
 
@@ -319,7 +319,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 
   <h3>修复</h3>
   <ul>
-    <li><strong>自动提议</strong>：在框架所在的 App、指定过的宿主 App、加过的搜索路径里找缺的依赖；以宿主 App 的可执行文件作主程序、搜索路径作额外 rpath 重走一遍，全都找得到就给出方案（依赖在前）。</li>
+    <li><strong>自动提议</strong>：在框架所在的 App、指定过的宿主 App、加过的搜索路径，以及框架所在的文件夹（排在加过的搜索路径之后）里找缺的依赖；以宿主 App 的可执行文件作主程序、搜索路径作额外 rpath 重走一遍，全都找得到就给出方案（依赖在前）。从 App 里拷出来平铺在一个文件夹里的框架靠最后这一项互相找到。</li>
     <li><strong>执行</strong>：按绝对路径逐个加载这些依赖，再重试；dyld 解析 <code>@rpath/…</code> 时先匹配已加载镜像的 install name。</li>
     <li><strong>找不到时</strong>：「Choose Host App…」「Add Search Path…」交给实例重新诊断，有方案就立即执行。</li>
     <li>用过的宿主 App 与搜索路径记到窗口关掉为止，不写进设置。</li>
@@ -793,7 +793,7 @@ default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls)
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>13 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>20 条，最近一条：Implemented</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -813,6 +813,12 @@ default:     Task { await documentState.frameworkLoader.load(frameworksAt: urls)
           <tr><td class="numeric">2026-11-19</td><td>步骤 6 完成</td><td>来源名由 <code>RuntimeFrameworkInstance(loading:)</code> 算出；诊断页的 view model 对路由类型泛型，取消「编辑区协调器交下主路由」；加载器的测试接缝含「等实例回来」；删掉不再用的 <code>MessageError</code>。</td></tr>
           <tr><td class="numeric">2026-11-19</td><td>步骤 7 完成</td><td>App target 没有测试目标，界面行为依赖的状态都在 AppCore 测过；新窗口打开后加载器先显示加载页并等实例应答；实例始终不应答时弹 sheet 后关窗；sheet 已开时只更新它。</td></tr>
           <tr><td class="numeric">2026-11-19</td><td>实现完成，待用户看过后收尾</td><td>八步都已提交推送。手工核对（真实第三方框架走一遍失败、修复、成功，关窗后无残留进程，注入进程窗口的 sheet，实例常驻内存）要在 App 里点按，没有做；签名构建核对 entitlement、Debug-arm64e 与 Release 构建也没跑。没有另写实现说明：每个决定的理由都写在对应代码的文档注释与本提案里；术语表加了「框架实例」「加载诊断」。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>验收中发现诊断 sheet 被撑宽，已修</td><td>诊断页的多行标签没设 <code>preferredMaxLayoutWidth</code>，按整段文字排成一行要宽度，抗压 750 高于窗口保持尺寸的 500，sheet 被 dyld 原文与 rpath 行撑得比主窗口还宽、内容落在屏幕外。改为页内私有的 <code>FrameworkLoadWrappingLabel</code>：横向抗压 250、按布局宽度同步 <code>preferredMaxLayoutWidth</code>，标题也限制在页面宽度内。App target 没有测试目标，用户定这次只修不加回归测试。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>同类排查，暂不修</td><td>Specialization sheet 的状态文字同一模式，镜像页的路径标签与另外五处多行标签疑似有问题、未实测；都是 <code>next</code> 上原本就有的。用户定暂不修，登记为 KnownIssues <code>WL.1</code>–<code>WL.3</code>。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>修复方案也搜框架所在的文件夹</td><td>从 App 里拷出来平铺在一个文件夹里的框架不在任何 <code>.app</code> 里，原先得手动 Add Search Path…。用户定：自动把框架所在的文件夹（<code>RuntimeImageLoadDiagnosis.folderHoldingImage(at:)</code>）当作搜索路径，排在用户加的之后；横幅说「is next to &lt;框架&gt; in &lt;文件夹&gt;」。<code>@executable_path/…</code> 形式的依赖仍没有修复方案。线上格式不变。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>两组从框架所在的文件夹开始</td><td>路径栏在「Frameworks」后列出一整串目录，用户要求像文件模式一样不显示。两组各自从装着组里所有框架的最深文件夹开始（<code>commonFolder(holding:)</code>），用文件模式同一个 <code>RuntimeImageNode.rootNode(for:name:startingAt:)</code>，节点路径不变。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>右键菜单分开 Copy Path 与 Copy Full Path</td><td>原来拷完整路径的 Copy Path 改名为 Copy Full Path；新的 Copy Path 拷界面上看到的路径（<code>RuntimeImageNode.displayedPath</code>）。两项出现在侧栏镜像行、文件夹行与路径栏每一段；<code>NSPopUpPathControl</code> 没有按段的右键菜单代理，RV 用子类 <code>EditorJumpBarPathControl</code> 接管右键与 Control-click。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>Implemented</td><td>合入 <code>next</code>，取号 0098。用户在 App 里用 iWork 的框架走通了失败、诊断、自动修复、加载成功。没做的移进提案索引的「暂缓的后续项」：三项剩余手工核对、签名与公证与另两种构建、<code>@executable_path/…</code> 依赖的修复、<code>DylibPathResolver.resolve(…)</code> 对祖先 <code>@loader_path</code> 的展开。不另写实现说明与使用指南；<code>Guides/FileMode.md</code> 随 Copy Path 同步。</td></tr>
         </tbody>
       </table>
       </div>
