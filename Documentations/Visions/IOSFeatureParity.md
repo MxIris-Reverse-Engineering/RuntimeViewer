@@ -234,6 +234,7 @@ MachInjector）、文件引擎给不给凭据，收进几道平台接缝；其�
 | [0096-view-models-to-app-core](../Evolutions/0096-view-models-to-app-core.md) | Implemented | 前置：macOS App 的 ViewModel 全部进 AppCore（仍只在 macOS 上编） |
 | [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md) | Implemented | 第一步：引擎管理在 iOS 与 visionOS 上可用，iOS app 改由管理器启动引擎 |
 | [0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md) | Implemented | 第二步：iOS 上的设置真正存盘（上游 UIFoundation 放开设置存储的平台限定）；设置页与派生数据不在这一步 |
+| [draft-settings-screen-on-ios](../Evolutions/draft-settings-screen-on-ios.md) | Accepted | 第五步里的设置页，提前做：外观、主题、转换选项三页，复用 Mac 版页面 |
 
 ---
 

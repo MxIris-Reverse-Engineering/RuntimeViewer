@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - iOS 上的设置页</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> iOS 上的设置页</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-20</dd></div>
+    <div><dt>创建日期</dt><dd>2026-11-20</dd></div>
+    <div><dt>作者</dt><dd>JH</dd></div>
+    <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
+    <div><dt>实现分支</dt><dd><code>feature/settings-screen-on-ios</code></dd></div>
+    <div><dt>原文</dt><dd><code>draft-settings-screen-on-ios.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#motivation">动机</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">前期调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>iOS、越狱版 iOS 与 visionOS 的 RuntimeViewer 有了设置页：侧栏右上角一个齿轮按钮，点开弹出设置，列着<strong>外观</strong>（跟随系统 / 浅色 / 深色）、<strong>主题</strong>（字号、配色方案与自定义颜色）、<strong>转换选项</strong>（生成接口时的类型与偏移写法）三页。页面复用 Mac 版的 SwiftUI 代码，只把 Mac 专属的几处换成两边都能用的写法（转换选项页的模板编辑器另写一份 UIKit 版）；宿主是上游 UIFoundation 新增的 iOS 设置界面。顺带两处让设置在 iOS 上真正生效：内容区改为跟随设置里的主题（现在固定用默认主题），外观设置作用到 App 的所有窗口。Mac 版不变。</p>
+  <div class="callout callout-note">
+    <p class="callout-title">关联</p>
+    <ul>
+      <li>所属愿景：<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>（第五步「iOS 前端逐项补齐」里的设置页，提前做）</li>
+      <li>关联提案：<a href="0100-settings-storage-on-ios.md">0100-settings-storage-on-ios</a>（iOS 上的设置已经存盘）；上游 UIFoundation 的 <a href="https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0043-settings-ui-on-ios.md">0043-settings-ui-on-ios</a>（写页面的组件放开到 iOS，加 iOS 宿主，已随 0.49.0 发布）</li>
+      <li>配套文档：待定 —— 预计无单独文档，规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code></li>
+      <li>网页版：同目录同名的 <code>.html</code></li>
+    </ul>
+  </div>
+</section>
+
+<section id="motivation">
+  <h2>动机</h2>
+  <p>完整动机见愿景《<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>》。这一步特有的：</p>
+  <ul>
+    <li><strong>iOS 上没有任何改设置的地方</strong>：0100 让设置能存盘了，但 iOS App 里没有入口，用户也就看不到任何变化；用户要先看到界面再验收这条线上的工作，所以把愿景第五步里的设置页提前。</li>
+    <li><strong>只放 iOS 上现在起作用的页</strong>：iOS 上会读设置的只有内容区的主题、生成接口的转换选项（<code>ViewModel.currentMergedGenerationOptions</code>，<code>RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Base/ViewModel.swift:55</code>）；外观是用户点名要的，需要在 iOS 上新接。索引、搜索、文件、MCP、更新、helper 等页在 iOS 上没有对应功能，放进来只会让人困惑。</li>
+    <li><strong>主题在 iOS 上其实还没生效</strong>：<code>ContentTextRenderer</code> 在 macOS 之外默认用 <code>ResolvedTheme.fallback</code>（<code>RuntimeViewerPackages/Sources/RuntimeViewerAppUI/Content/ContentTextRenderer.swift:41-56</code>），因为 <code>ResolvedThemeStream</code> 只在 AppKit 上编（<code>Theme/ResolvedThemeStream.swift:1</code>）——当初 iOS 没有存下来的设置，跟随也没意义。0100 之后理由不在了。</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <h3>设置页在两个平台上的宿主与共用页面</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 466" role="img" aria-label="Settings hosts on both platforms and the shared pages">
+    <rect class="box-changed" x="10" y="14" width="230" height="34" rx="6"/>
+    <text x="20" y="36">RuntimeViewerAppUI</text>
+    <rect class="box-changed" x="360" y="14" width="280" height="34" rx="6"/>
+    <text x="370" y="36">RuntimeViewerSettingsUI</text>
+    <rect class="box-changed" x="740" y="10" width="250" height="44" rx="6"/>
+    <text x="750" y="28">UIFoundationSettingsUI</text>
+    <text class="caption" x="750" y="45">0.49.0</text>
+    <path class="arrow" d="M 240 31 L 358 31"/>
+    <text class="caption" x="248" y="64">every platform now</text>
+    <path class="arrow" d="M 640 31 L 738 31"/>
+    <text class="caption" x="646" y="64">every platform now</text>
+
+    <rect class="group" x="10" y="84" width="290" height="370" rx="10"/>
+    <text class="group-label" x="22" y="104">macOS (unchanged)</text>
+    <rect class="box-kept" x="24" y="116" width="262" height="40" rx="6"/>
+    <text x="34" y="133">SettingsWindowController</text>
+    <text class="caption" x="34" y="149">12 pages</text>
+    <rect class="box-changed" x="24" y="176" width="262" height="34" rx="6"/>
+    <text x="34" y="198">General</text>
+    <rect class="box-kept" x="24" y="236" width="262" height="34" rx="6"/>
+    <text x="34" y="258">Theme</text>
+    <rect class="box-kept" x="24" y="296" width="262" height="34" rx="6"/>
+    <text x="34" y="318">Transformer</text>
+    <rect class="box-kept" x="24" y="370" width="262" height="44" rx="6"/>
+    <text x="34" y="388">TokenTemplateTextField</text>
+    <text class="caption" x="34" y="405">NSTextView</text>
+
+    <rect class="group" x="340" y="84" width="320" height="370" rx="10"/>
+    <text class="group-label" x="352" y="104">shared pages</text>
+    <rect class="box-added" x="354" y="176" width="292" height="34" rx="6"/>
+    <text x="364" y="198">AppearanceSettingsSection</text>
+    <rect class="box-changed" x="354" y="236" width="292" height="34" rx="6"/>
+    <text x="364" y="258">ThemeSettingsView</text>
+    <rect class="box-changed" x="354" y="296" width="292" height="34" rx="6"/>
+    <text x="364" y="318">TransformerSettingsView</text>
+
+    <rect class="group" x="690" y="84" width="300" height="370" rx="10"/>
+    <text class="group-label" x="702" y="104">iOS / visionOS (new)</text>
+    <rect class="box-added" x="704" y="112" width="272" height="54" rx="6"/>
+    <text x="714" y="129">SettingsViewController</text>
+    <text class="caption" x="714" y="145">: UIFoundationSettingsUI</text>
+    <text class="caption" x="726" y="158">.SettingsViewController</text>
+    <rect class="box-added" x="704" y="176" width="272" height="34" rx="6"/>
+    <text x="714" y="198">Appearance</text>
+    <rect class="box-added" x="704" y="236" width="272" height="34" rx="6"/>
+    <text x="714" y="258">Theme</text>
+    <rect class="box-added" x="704" y="296" width="272" height="34" rx="6"/>
+    <text x="714" y="318">Transformer</text>
+    <rect class="box-added" x="704" y="370" width="272" height="44" rx="6"/>
+    <text x="714" y="388">TokenTemplateTextField</text>
+    <text class="caption" x="714" y="405">UITextView</text>
+
+    <path class="arrow" d="M 286 193 L 352 193"/>
+    <path class="arrow" d="M 286 253 L 352 253"/>
+    <path class="arrow" d="M 286 313 L 352 313"/>
+    <path class="arrow" d="M 704 193 L 648 193"/>
+    <path class="arrow" d="M 704 253 L 648 253"/>
+    <path class="arrow" d="M 704 313 L 648 313"/>
+    <path class="arrow" d="M 440 330 L 440 392 L 288 392"/>
+    <path class="arrow" d="M 560 330 L 560 392 L 702 392"/>
+    <path class="arrow arrow-weak" d="M 900 112 L 900 56"/>
+    <text class="caption" x="906" y="80">subclass</text>
+  </svg>
+  </div>
+  <p class="figure-caption">两个宿主各自列页面，指向中间共用的页面代码：Mac 的 General 页只把外观一节换成共用的 <code>AppearanceSettingsSection</code>，iOS 的外观页只放这一节；转换选项页的模板编辑器分平台，Mac 用原来的 <code>NSTextView</code> 版，iOS 新写 <code>UITextView</code> 版。iOS 宿主继承上游新增的 <code>SettingsViewController</code>。</p>
+
+  <h3>iOS App：入口、外观与内容区</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 404" role="img" aria-label="iOS app: entry point, appearance and content pane">
+    <rect class="group" x="10" y="10" width="980" height="384" rx="10"/>
+    <text class="group-label" x="22" y="32">iOS app</text>
+
+    <rect class="box-changed" x="24" y="44" width="340" height="44" rx="6"/>
+    <text x="34" y="62">SidebarRootViewController.navigationItem</text>
+    <text class="caption" x="34" y="79">+ gear button</text>
+    <rect class="box-changed" x="60" y="108" width="230" height="34" rx="6"/>
+    <text x="70" y="130">SidebarCoordinator</text>
+    <rect class="box-changed" x="380" y="108" width="310" height="34" rx="6"/>
+    <text x="390" y="130">MainCoordinator.trigger(.settings)</text>
+    <rect class="box-added" x="430" y="160" width="430" height="34" rx="6"/>
+    <text x="440" y="182">present(SettingsViewController(), .pageSheet)</text>
+    <path class="arrow" d="M 40 88 L 40 125 L 58 125"/>
+    <path class="arrow" d="M 290 125 L 378 125"/>
+    <text class="caption" x="306" y="118">delegate</text>
+    <path class="arrow" d="M 400 142 L 400 177 L 428 177"/>
+
+    <rect class="box-changed" x="24" y="216" width="460" height="44" rx="6"/>
+    <text x="34" y="234">AppDelegate</text>
+    <text class="caption" x="34" y="251">loadOnLaunch() → + appearanceController.start()</text>
+    <rect class="box-added" x="60" y="276" width="640" height="44" rx="6"/>
+    <text x="70" y="294">AppearanceController</text>
+    <text class="caption" x="70" y="311">observe settings.general.appearance → window.overrideUserInterfaceStyle (every scene)</text>
+    <path class="arrow" d="M 40 260 L 40 298 L 58 298"/>
+
+    <rect class="box-changed" x="24" y="338" width="300" height="40" rx="6"/>
+    <text x="34" y="362">ContentTextViewController</text>
+    <rect class="box-changed" x="380" y="334" width="590" height="48" rx="6"/>
+    <text x="390" y="353">ContentTextRenderer(themes: resolvedThemeStream)</text>
+    <text class="caption" x="390" y="371">was .just(.fallback); → text colours, font, + background</text>
+    <path class="arrow" d="M 324 358 L 378 358"/>
+  </svg>
+  </div>
+  <p class="figure-caption">齿轮按钮经 <code>SidebarCoordinatorDelegate</code> 报给 <code>MainCoordinator</code>，后者以 sheet 弹出设置；<code>AppDelegate</code> 读完设置后启动 <code>AppearanceController</code>，跟随外观设置给每个窗口设样式；内容区的渲染器改为跟随设置里的主题，并按主题设背景。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>RuntimeViewerPackages/<wbr>Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation <code>from: "0.49.0"</code>；<code>RuntimeViewerSettingsUI</code> → <code>UIFoundationSettingsUI</code>、<code>RuntimeViewerAppUI</code> → <code>RuntimeViewerSettingsUI</code> 去掉平台条件</td><td>iOS 要链接设置页</td><td class="numeric">1</td></tr>
+      <tr><td>四份 <code>Package.resolved</code>（Debug、Distribution workspace，Packages、CommandLine 包）</td><td><span class="tag tag-changed">修改</span></td><td>只改 UIFoundation 一条 pin 到 0.49.0</td><td>跟着下限</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>AppSettings.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code></td><td>页面在 iOS 上也用</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>AppearanceSettingsSection.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>AppearanceSettingsSection</code>（外观一节）、<code>AppearancePicker</code>、选项视图，从 <code>GeneralSettingsView</code> 挪来</td><td>两边共用</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>GeneralSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>外观一节改用 <code>AppearanceSettingsSection</code>；文件仍只在 macOS</td><td>Mac 不变</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>AppearanceSettingsView.swift</code></td><td><span class="tag tag-added">新增</span></td><td>iOS 的外观页：<code>SettingsForm { AppearanceSettingsSection() }</code></td><td>iOS 只要这一节</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>ThemeSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉平台条件；<code>ColorValue.from(_:)</code> 分平台</td><td>iOS 上编</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>TransformerSettingsView.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉平台条件；AppKit 的模板编辑器与复制分支留在 <code>#if os(macOS)</code></td><td>iOS 上编</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>Components/<wbr>TokenTemplateTextField+UIKit.swift</code></td><td><span class="tag tag-added">新增</span></td><td>UIKit 版模板编辑器：<code>UITextView</code> 子类、胶囊附件、<code>UIViewRepresentable</code> 包装</td><td>iOS 上的同等功能</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerSettingsUI/<wbr>SettingsViewController.swift</code></td><td><span class="tag tag-added">新增</span></td><td>iOS 的设置宿主子类，三页</td><td>入口打开的就是它</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerAppUI/<wbr>Theme/<wbr>ResolvedThemeStream.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 AppKit 条件</td><td>iOS 内容区跟随主题</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppUI/<wbr>Content/<wbr>ContentTextRenderer.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>默认主题在各平台都取 <code>resolvedThemeStream</code></td><td>同上</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>.../<wbr>Content/<wbr>ContentTextViewController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>按 <code>renderer.theme</code> 设背景色；改掉「固定用默认主题」的注释</td><td>深色主题下背景要跟着变</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>.../<wbr>App/<wbr>AppearanceController.swift</code></td><td><span class="tag tag-added">新增</span></td><td>跟随外观设置，设所有窗口的 <code>overrideUserInterfaceStyle</code></td><td>外观页生效</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>.../<wbr>App/<wbr>AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>读完设置后启动 <code>AppearanceController</code></td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>.../<wbr>App/<wbr>SceneDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>新窗口先套当前外观</td><td>后开的窗口也对</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>.../<wbr>Sidebar/<wbr>SidebarCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>根页导航栏加齿轮按钮；<code>SidebarCoordinatorDelegate</code> 加「要打开设置」</td><td>入口</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>.../<wbr>Main/<wbr>MainCoordinator.swift</code> · <code>MainRoute</code></td><td><span class="tag tag-changed">修改</span></td><td>加 <code>.settings</code>，以 sheet 弹出设置</td><td>入口</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>AGENTS.md</code>、根 <code>AGENTS.md</code>、愿景、两份索引</td><td><span class="tag tag-changed">修改</span></td><td>见方案第 6 条</td><td>文档</td><td class="numeric">6</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="proposal">
+  <h2>提议方案</h2>
+  <ol>
+    <li><strong>上游先落地</strong>：UIFoundation 按 0043 发 0.49.0；RuntimeViewer 下限抬到 <code>from: "0.49.0"</code>，<code>RuntimeViewerSettingsUI</code> 在所有平台依赖 <code>UIFoundationSettingsUI</code>，<code>RuntimeViewerAppUI</code> 在所有平台依赖 <code>RuntimeViewerSettingsUI</code>。</li>
+    <li><strong>三页能在 iOS 上编</strong>（<code>RuntimeViewerSettingsUI</code>）：
+      <ul>
+        <li><code>AppSettings.swift</code> 去掉平台条件。</li>
+        <li>外观：<code>AppearancePicker</code> 与它的选项视图挪进新文件 <code>AppearanceSettingsSection.swift</code>（各平台），Mac 的 <code>GeneralSettingsView</code> 用它、其余三节不变且仍只在 macOS；iOS 用新的 <code>AppearanceSettingsView</code>（<code>SettingsForm</code> 里只放这一节）。</li>
+        <li>主题：<code>ThemeSettingsView</code> 放开；<code>ColorValue.from(_:)</code> 在 macOS 上原样走 <code>NSColor</code>，在 UIKit 上走 <code>UIColor(color)</code> 转到 sRGB。</li>
+        <li>转换选项：<code>TransformerSettingsView</code> 放开；模板编辑器分平台——AppKit 的原样留着，UIKit 上新写 <code>UITextView</code> 版（同样把 <code>${名字}</code> 显示成胶囊、读回时还原、随内容长高）；复制按钮按平台用 <code>NSPasteboard</code> 或 <code>UIPasteboard</code>。</li>
+        <li>新增 <code>SettingsViewController.swift</code>（iOS、visionOS）：继承上游 <code>SettingsViewController</code>，三页：外观、主题、转换选项。</li>
+      </ul>
+    </li>
+    <li><strong>内容区跟随主题</strong>：<code>ResolvedThemeStream</code> 去掉 AppKit 条件，<code>ContentTextRenderer</code> 在所有平台默认用它；iOS 的 <code>ContentTextViewController</code> 按主题设文字视图的背景色。</li>
+    <li><strong>外观作用到窗口</strong>：iOS App 新增 <code>AppearanceController</code>（与 Mac 的同名、同样在 <code>@Dependency</code> 后面），跟随 <code>settings.general.appearance</code> 给每个窗口设 <code>overrideUserInterfaceStyle</code>；<code>SceneDelegate</code> 建窗口时先套一次当前设置。</li>
+    <li><strong>入口</strong>：<code>SidebarCoordinator</code> 给侧栏根页的导航栏加齿轮按钮，按下经 <code>SidebarCoordinatorDelegate</code> 告诉 <code>MainCoordinator</code>；<code>MainRoute</code> 加 <code>.settings</code>，以 sheet 弹出 <code>SettingsViewController</code>。</li>
+    <li><strong>文档</strong>：<code>RuntimeViewerUsingUIKit/AGENTS.md</code> 加「设置页与外观」一节；根 <code>AGENTS.md</code> 的 <em>Settings Integration</em> 那句「设置界面在别的平台由 App 自己做」改成 iOS 用上游的宿主，<em>Dependency floors</em> 补 0.49.0；愿景表与两份索引登记本篇。</li>
+  </ol>
+
+  <h3>非目标</h3>
+  <ul>
+    <li><strong>其余设置页</strong>（通用里的 Mac 专属三节、编辑器、通知、索引、搜索、文件、MCP、更新、helper、开发者）：等对应功能到 iOS 时再加。</li>
+    <li><strong>iPad 的双栏设置</strong>：用上游的单栏导航栈，iPad 上以 sheet 弹出。</li>
+    <li><strong>Mac 版任何变化</strong>：页面在 macOS 上的内容与行为不变，<code>GeneralSettingsView</code> 只是把外观一节挪进共用文件。</li>
+    <li><strong>把 iOS 的 <code>MainRoute</code>、<code>MainViewModel</code> 并进 AppCore</strong>：愿景第三步做；本篇照现在 iOS App 的结构加一个路由。</li>
+    <li><strong>iOS 设置的单元测试替身与 UI 测试</strong>：iOS App 没有测试 target。</li>
+  </ul>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details open>
+    <summary>iOS 的设置宿主子类</summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">// RuntimeViewerSettingsUI/SettingsViewController.swift</span>
+<span class="token-keyword">#if</span> os(iOS) || os(visionOS)
+<span class="token-keyword">import</span> UIFoundationSettingsUI
+
+<span class="token-keyword">package final class</span> <span class="token-type">SettingsViewController</span>: <span class="token-type">UIFoundationSettingsUI</span>.<span class="token-type">SettingsViewController</span> {
+    <span class="token-keyword">package init</span>() {
+        <span class="token-keyword">super</span>.<span class="token-keyword">init</span>(title: <span class="token-string">"Settings"</span>) {
+            <span class="token-type">SettingsPage</span>(<span class="token-string">"Appearance"</span>, id: <span class="token-string">"appearance"</span>, plainSymbol: <span class="token-string">"circle.lefthalf.filled"</span>) {
+                <span class="token-type">AppearanceSettingsView</span>()
+            }
+            <span class="token-type">SettingsPage</span>(<span class="token-string">"Theme"</span>, id: <span class="token-string">"theme"</span>, plainSymbol: <span class="token-string">"paintpalette"</span>) {
+                <span class="token-type">ThemeSettingsView</span>()
+            }
+            <span class="token-type">SettingsPage</span>(<span class="token-string">"Transformer"</span>, id: <span class="token-string">"transformer"</span>, plainSymbol: <span class="token-string">"arrow.triangle.2.circlepath"</span>) {
+                <span class="token-type">TransformerSettingsView</span>()
+            }
+        }
+    }
+}
+<span class="token-keyword">#endif</span></code></pre>
+    </div>
+  </details>
+  <details open>
+    <summary>iOS 的 <code>AppearanceController</code></summary>
+    <div class="details-body">
+<pre><code><span class="token-comment">// RuntimeViewerUsingUIKit/.../App/AppearanceController.swift</span>
+<span class="token-keyword">@MainActor</span>
+<span class="token-keyword">final class</span> <span class="token-type">AppearanceController</span> {
+    <span class="token-keyword">fileprivate static let</span> shared = <span class="token-type">AppearanceController</span>()
+    <span class="token-keyword">@Dependency</span>(\.settings) <span class="token-keyword">private var</span> settings
+    <span class="token-keyword">private var</span> observeToken: <span class="token-type">ObserveToken</span>?
+
+    <span class="token-keyword">func</span> start()                         <span class="token-comment">// observe settings.general.appearance → apply to every window</span>
+    <span class="token-keyword">func</span> apply(to window: <span class="token-type">UIWindow</span>)      <span class="token-comment">// window.overrideUserInterfaceStyle = .unspecified / .light / .dark</span>
+}</code></pre>
+    </div>
+  </details>
+  <details open>
+    <summary>取色、模板编辑器与主题流</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>主题页的取色</strong>：iOS 上 <code>UIColor(color)</code> 先 <code>cgColor.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, …)</code>，转不了就返回 <code>nil</code>（与 macOS 一样，不覆盖原值）。macOS 分支一个字不改。</li>
+        <li><strong>UIKit 模板编辑器</strong>：<code>NSTextAttachment</code> 的 <code>image</code> 用 <code>UIGraphicsImageRenderer</code> 画胶囊（与 AppKit 版同样的字体、内边距、强调色 15% 底色），附件子类记住名字；<code>textViewDidChange</code> 时把新出现的 <code>${名字}</code> 换成附件、保持光标；读回时把附件换回 <code>${名字}</code>；高度取 <code>contentSize.height</code> 回报给 SwiftUI。</li>
+        <li><strong>主题流在 iOS 上</strong>：<code>ResolvedThemeStream</code> 里只读 <code>SettingsAccess</code>（主线程）与 <code>ResolvedTheme(settings:)</code>，没有 AppKit 调用；订阅都在主线程，与 macOS 相同。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>前期调研</h2>
+  <details>
+    <summary>现有的三页</summary>
+    <div class="details-body">
+      <p><code>RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/Components/</code>，整份文件包在 <code>#if os(macOS)</code> 里：</p>
+      <ul>
+        <li><code>GeneralSettingsView.swift</code>（153 行）：外观一节用 <code>AppearancePicker</code>（三张缩略图，资源在本 target 的 <code>Assets.xcassets</code>），其余三节（工具栏样式、关最后一个窗口时退出、侧栏展开深度）只属于 Mac。</li>
+        <li><code>ThemeSettingsView.swift</code>（436 行）：字号 <code>Stepper</code>、预设列表、颜色编辑（<code>ColorPicker</code>）都是 SwiftUI；唯一的 AppKit 用法是 <code>ColorValue.from(_:)</code> 用 <code>NSColor(color).usingColorSpace(.sRGB)</code> 取分量（<code>:405-428</code>）。</li>
+        <li><code>TransformerSettingsView.swift</code>（1045 行）：各模块的编辑器是 SwiftUI；AppKit 部分是模板编辑器——<code>TokenTextAttachmentCell</code> 把 <code>${名字}</code> 画成强调色胶囊、<code>TokenTemplateTextView</code>（<code>NSTextView</code> 子类）输入时把占位符换成胶囊、读回时还原（<code>:277-529</code>），以及 <code>CopyableTokenChip</code> 用 <code>NSPasteboard</code> 复制（<code>:531-568</code>）。<code>FlowLayout</code>（<code>:1005</code>）是 SwiftUI <code>Layout</code>。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>上游</summary>
+    <div class="details-body">
+      <p>这些页写在 <code>@AppSettings</code>、<code>SettingsForm</code> 上，二者与 <code>SettingsPage</code> 只在 macOS 上有；上游提案 0043 把它们放开到 iOS、Catalyst、visionOS，并新增 <code>SettingsViewController</code>（UIKit 宿主），已随 0.49.0 发布。</p>
+    </div>
+  </details>
+  <details>
+    <summary>依赖声明</summary>
+    <div class="details-body">
+      <p><code>RuntimeViewerSettingsUI</code> 只在 AppKit 平台依赖 <code>UIFoundationSettingsUI</code>（<code>RuntimeViewerPackages/Package.swift:424</code>）；<code>RuntimeViewerAppUI</code> 只在 AppKit 平台依赖 <code>RuntimeViewerSettingsUI</code>（<code>:486</code>）。iOS App 链接的是门面 <code>RuntimeViewerApplication</code>（<code>RuntimeViewerUsingUIKit.xcodeproj/project.xcproj:104-106</code>），它再导出 AppUI。</p>
+    </div>
+  </details>
+  <details>
+    <summary>iOS App 的结构</summary>
+    <div class="details-body">
+      <p><code>MainCoordinator</code>（<code>RuntimeViewerUsingUIKit/.../Main/MainCoordinator.swift</code>）管一个双栏 <code>UISplitViewController</code>，<code>MainRoute</code> 在 App target 里；侧栏是 <code>SidebarCoordinator</code> 的导航控制器，根页 <code>SidebarRootViewController</code>；<code>SidebarCoordinator</code> 通过 <code>SidebarCoordinatorDelegate</code> 把完成的路由报给 <code>MainCoordinator</code>。iOS 的内容区 <code>ContentTextViewController</code> 用 <code>ContentTextRenderer</code> 的 <code>renderedText</code>，不设背景色（Mac 的内容区按主题设背景，<code>RuntimeViewerUsingAppKit/.../Content/ContentTextViewController.swift:181-183</code>）。</p>
+    </div>
+  </details>
+  <details>
+    <summary>Mac 的外观</summary>
+    <div class="details-body">
+      <p><code>AppearanceController</code>（<code>RuntimeViewerUsingAppKit/.../App/AppearanceController.swift</code>）用 <code>SwiftNavigation.observe</code> 跟随 <code>settings.general.appearance</code>，设 <code>NSApp.appearance</code>。iOS 上对应的是每个窗口的 <code>overrideUserInterfaceStyle</code>。</p>
+    </div>
+  </details>
+  <details>
+    <summary><code>ResolvedTheme</code> 本身跨平台</summary>
+    <div class="details-body">
+      <p><code>ThemeProfile.swift</code>、<code>ThemePreset+ThemeProfile.swift</code> 只把 import 分平台，<code>ResolvedTheme(settings:)</code> 在 iOS 上就有，颜色是 <code>NSUIColor</code>，按 trait 自动取浅色或深色。</p>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案考量</h2>
+  <details>
+    <summary>4 个方案，均未采用</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>RuntimeViewer 自己写 iOS 版的三页、上游不动</strong>：用户选了复用，两套界面代码改一项要改两处。</li>
+        <li><strong>iOS 上把模板编辑器换成普通文本框</strong>：胶囊是这页的主要价值，降级会让 iOS 版难用；UIKit 版不到两百行。</li>
+        <li><strong>入口放到系统「设置」App（Settings.bundle）</strong>：只能放简单的开关，放不下主题编辑与模板编辑器。</li>
+        <li><strong>外观只作用到当前窗口</strong>：设置是全局的，多窗口时会不一致。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <ul>
+    <li>iOS、越狱版 iOS 与 visionOS：侧栏右上角多一个齿轮按钮，点开是设置（外观、主题、转换选项三页）。</li>
+    <li>内容区的字号、配色从此跟随设置里的主题，默认主题仍是 Xcode 预设、13 号字，所以没改过设置的人看到的与现在相同（背景色会按主题变——深色模式下背景跟着主题的深色背景）。</li>
+    <li>外观设成浅色或深色后，App 不再跟随系统。</li>
+    <li>Mac 版：无变化。</li>
+  </ul>
+  <h3>可发现性</h3>
+  <p>齿轮按钮是 iOS App 的惯例位置；三页的默认值都与现状一致，不改设置就没有变化。</p>
+  <h3>数据与配置兼容</h3>
+  <p>读写的是 0100 起已存盘的同一份 <code>settings.json</code>，不新增键。</p>
+  <h3>平台与最低版本</h3>
+  <p>最低版本不变（RuntimeViewerPackages：iOS 18、visionOS 2，高于上游要求的 17 / 1）。iOS 与越狱版行为相同；visionOS 同一套代码，外观在 visionOS 上的表现以系统为准。</p>
+  <h3>发布</h3>
+  <p>不需要新的权限或 entitlement；不影响公证与 Sparkle。UIFoundation 要先发 0.49.0。</p>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol start="0">
+    <li><strong>上游先落地</strong> —— UIFoundation 的 0043 合进 <code>main</code> 并打 0.49.0</li>
+    <li><strong>依赖</strong> —— <code>Package.swift</code>、四份锁文件
+      <ul>
+        <li>行为：<code>settingsUIPackageResolvesUIFoundation049</code></li>
+      </ul>
+    </li>
+    <li><strong>三页能在 iOS 上编</strong> —— <code>RuntimeViewerSettingsUI</code> 的各行
+      <ul>
+        <li>行为：<code>macSettingsPagesUnchanged</code>（<code>RuntimeViewerSettingsTests</code> 与 macOS App 构建照过）</li>
+        <li>行为：<code>settingsUIBuildsForIOSAndVisionOS</code>（三个 iOS 系 App 编过，它们都编这个模块）</li>
+        <li>行为：<code>tokenTemplateRoundTripsPlaceholders</code>（占位符换胶囊再读回不变——把转换逻辑抽成两边共用、可在 macOS 上测的函数）</li>
+        <li>行为：<code>colorValueFromColorRoundTripsSRGB</code>（macOS 上测共用的部分）</li>
+      </ul>
+    </li>
+    <li><strong>内容区跟随主题</strong> —— <code>ResolvedThemeStream</code>、<code>ContentTextRenderer</code>、iOS <code>ContentTextViewController</code>
+      <ul>
+        <li>行为：<code>rendererDefaultsToTheSettingsThemeOnEveryPlatform</code></li>
+      </ul>
+    </li>
+    <li><strong>外观</strong> —— <code>AppearanceController</code>（iOS）、<code>AppDelegate</code>、<code>SceneDelegate</code>
+      <ul>
+        <li>行为：<code>iOSAppBuildsForAllThreeTargets</code></li>
+      </ul>
+    </li>
+    <li><strong>入口</strong> —— <code>SidebarCoordinator</code>、<code>MainCoordinator</code>
+      <ul>
+        <li>行为：<code>gearButtonOpensSettings</code>（由用户在设备上看）</li>
+        <li>行为：<code>editingThemeChangesTheContentPane</code>、<code>appearanceOverridesTheSystemStyle</code>、<code>settingsSurviveRelaunch</code>（由用户在设备上看）</li>
+      </ul>
+    </li>
+    <li><strong>文档</strong> —— 见改动地图最后一行</li>
+  </ol>
+  <div class="callout callout-note">
+    <p><strong>收尾时必须判断两件事</strong>（判断结果写进决策日志，不允许沉默跳过）：</p>
+    <ul>
+      <li><strong>要不要配套专题文章</strong> —— 预计不需要：规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>。</li>
+      <li><strong>有没有引入新术语</strong> —— 预计没有。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>6 条，最近一条：自定模板编辑器写 UIKit 版</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-20</td><td>Created as Draft</td><td>用户要先看到 iOS 的界面再验收，把愿景第五步里的设置页提前</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>用户选定：外观、主题、转换选项三页</td><td>主题与转换选项是 iOS 上现在会读的设置；外观是用户点名加的，要在 iOS 上新接</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>用户选定：复用现有页面，上游一起放开</td><td>照愿景「设置页复用 SwiftUI 页面、宿主换成 UIKit」，不在下游另写一套</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>自定：入口是侧栏右上角的齿轮按钮，sheet 弹出</td><td>iOS App 的惯例位置</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>自定：内容区跟随设置里的主题、按主题设背景</td><td>主题页要生效；原来 iOS 固定用默认主题，只因当时没有存下来的设置</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>自定：模板编辑器写 UIKit 版，不降级为普通文本框</td><td>胶囊是这页的主要价值</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
