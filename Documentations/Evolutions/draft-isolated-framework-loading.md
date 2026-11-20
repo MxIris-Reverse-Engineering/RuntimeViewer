@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-19
-- **最后更新**: 2026-11-19
+- **最后更新**: 2026-11-20
 - **所属愿景**: 无
 - **关联提案**: [0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（My Mac 的引擎搬进 XPC service；service 崩溃丢掉已加载的镜像、不自动重放）、[0069-file-mode](0069-file-mode.md)（每个文件一个 service 实例，本提案照它接线）、[0079-shared-service-plugin](0079-shared-service-plugin.md)（service 是加载共享插件的外壳）、[0081-shared-cache-images-across-engines](0081-shared-cache-images-across-engines.md)（系统镜像的数据向 My Mac 借）、[draft-engine-management-on-ios](draft-engine-management-on-ios.md)（引擎管理的平台接缝，已在 `next` 上；本提案的管理器改动照它的写法加接缝）
 - **实现分支 / PR**: `feature/isolated-framework-loading`（worktree `.worktrees/RuntimeViewer-IsolatedFrameworkLoading`），从 `next` 切出
@@ -925,3 +925,4 @@ default:
 | 2026-11-19 | 步骤 6 完成 | 与原设计的出入：来源名改由 `RuntimeFrameworkInstance(loading:)` 算出，不另建 `FrameworkInstanceName`；诊断页的 `FrameworkLoadViewModel` 照 `MCPStatusPopoverViewModel` 对路由类型做泛型——编辑栏里用内容面板的路由、sheet 里用主路由并带关闭路由，不再让 `EditorAreaCoordinator` 把主路由交给每个编辑栏（第 7 步那一行随之取消）；加载器的测试接缝 `ImageLoading` 另含「等实例回来」，测试不必真等。`MainViewModel` 里只给旧 Load Frameworks 用的 `MessageError` 删掉了。 |
 | 2026-11-19 | 步骤 7 完成 | App target 没有测试目标，这一步写成测试用例名的行为没有单独的测试：它们依赖的状态（加载器何时要求在空栏里显示页面、何时弹 sheet）都在 AppCore 里测过，界面在第 8 步的手工核对里看。新窗口打开后，加载器在实例应答之前就显示加载页并等待它（不再由开窗口的控制器先等）；实例始终不应答时，控制器照 `FileController` 的做法弹 sheet 说明后关窗。诊断页的视图控制器对路由类型做泛型，滚动页的文档视图放在文件作用域（泛型类里的嵌套类型也是泛型）。sheet 已经开着时再来的失败只更新它，不再叠一层。 |
 | 2026-11-19 | 实现完成，待用户看过后收尾 | 八步都已提交推送。验证：Core 全量 802 个用例、Packages 的 AppCore、AppUI 与引擎管理 936 个用例；红的 8 条里 4 条是既有红灯（注入设备引擎两条同包干扰、Call Hierarchy 超时、标题活动指示），另 4 条（交叉引用准备一条、图标绘制一条、`OwnerReportingTask` 两条）单独重跑全过，属满载时的偶发。没做的：手工核对（真实第三方框架走一遍失败、修复、成功，关窗后无残留进程，注入进程窗口的 sheet，实例常驻内存）需要在 App 里点按；签名构建核对 entitlement、Debug-arm64e 与 Release 构建（各半小时级）。文档：根 `AGENTS.md`（服务清单、外壳数、install 表、XPC 代码位置、派生数据）、`Configurations/AGENTS.md`、`RuntimeViewerCore/Sources/AGENTS.md` 目录表、通信架构文档 §4.4 第四例、`DerivedData.md`、术语表加「框架实例」「加载诊断」。不另写实现说明：每个决定的理由都在对应代码的文档注释与本提案里。根 `AGENTS.md` 在 `next` 上已有 68,918 字节，超过它自己写的 64 KiB 上限，这次又加了约 1 KB，没有在这条分支上处理。 |
+| 2026-11-20 | 验收中发现诊断 sheet 被撑宽，已修 | 用户在 Mac Catalyst 窗口里让一次加载失败，诊断 sheet 比主窗口还宽、居中后左对齐的内容落在屏幕外，看上去一片空白。原因：诊断页的多行标签没设 `preferredMaxLayoutWidth`，按整段文字排成一行的宽度要空间，抗压优先级 750 高于窗口保持尺寸的 500，dyld 原文与 rpath 行一行就上千点，把 sheet 撑开。改为页内私有的 `FrameworkLoadWrappingLabel`：横向抗压降到 250、按布局给的宽度同步 `preferredMaxLayoutWidth`（折行后的高度也随之正确），标题也限制在页面宽度内；独立实例窗口里的同一页面随之修好。App target 没有测试目标，用户定这次只修不加回归测试，靠目视验证。同类排查见下一行。 |

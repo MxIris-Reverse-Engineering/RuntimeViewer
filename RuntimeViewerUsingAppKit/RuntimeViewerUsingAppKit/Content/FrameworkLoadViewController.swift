@@ -29,7 +29,7 @@ final class FrameworkLoadViewController<Route: Routable>: BaseViewController<Fra
 
     private let loadingTitleLabel = Label()
 
-    private let loadingDetailLabel = Label()
+    private let loadingDetailLabel = FrameworkLoadWrappingLabel()
 
     private lazy var loadingStackView = VStackView(alignment: .center, spacing: 8) {
         progressIndicator
@@ -41,7 +41,7 @@ final class FrameworkLoadViewController<Route: Routable>: BaseViewController<Fra
 
     private let stoppedTitleLabel = Label()
 
-    private let stoppedDetailLabel = Label()
+    private let stoppedDetailLabel = FrameworkLoadWrappingLabel()
 
     private let loadAgainButton = PushButton()
 
@@ -55,15 +55,15 @@ final class FrameworkLoadViewController<Route: Routable>: BaseViewController<Fra
 
     private let pageScrollView = ScrollView()
 
-    private let titleLabel = Label()
+    private let titleLabel = FrameworkLoadWrappingLabel()
 
-    private let summaryLabel = Label()
+    private let summaryLabel = FrameworkLoadWrappingLabel()
 
-    private let tagsLabel = Label()
+    private let tagsLabel = FrameworkLoadWrappingLabel()
 
     private let bannerView = LayerBackedView()
 
-    private let remedyExplanationLabel = Label()
+    private let remedyExplanationLabel = FrameworkLoadWrappingLabel()
 
     private let remedyButton = PushButton()
 
@@ -87,21 +87,21 @@ final class FrameworkLoadViewController<Route: Routable>: BaseViewController<Fra
 
     private let chainTitleLabel = Label("Dependency chain")
 
-    private let chainLabel = Label()
+    private let chainLabel = FrameworkLoadWrappingLabel()
 
     private let rpathTitleLabel = Label("Where it looked")
 
-    private let rpathLabel = Label()
+    private let rpathLabel = FrameworkLoadWrappingLabel()
 
-    private let explanationLabel = Label()
+    private let explanationLabel = FrameworkLoadWrappingLabel()
 
     private let triedTitleLabel = Label("Paths dyld tried")
 
-    private let triedLabel = Label()
+    private let triedLabel = FrameworkLoadWrappingLabel()
 
     private let messageTitleLabel = Label("dyld message")
 
-    private let messageLabel = Label()
+    private let messageLabel = FrameworkLoadWrappingLabel()
 
     private let copyDiagnosisButton = PushButton()
 
@@ -166,7 +166,7 @@ final class FrameworkLoadViewController<Route: Routable>: BaseViewController<Fra
         bannerStackView.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(12)
         }
-        for wrappingView in [summaryLabel, tagsLabel, bannerView, chainLabel, rpathLabel, explanationLabel, triedLabel, messageLabel] as [NSView] {
+        for wrappingView in [titleLabel, summaryLabel, tagsLabel, bannerView, chainLabel, rpathLabel, explanationLabel, triedLabel, messageLabel] as [NSView] {
             wrappingView.snp.makeConstraints { make in
                 make.width.equalTo(failureStackView)
             }
@@ -213,11 +213,6 @@ final class FrameworkLoadViewController<Route: Routable>: BaseViewController<Fra
         explanationLabel.do {
             $0.font = .systemFont(ofSize: 12)
             $0.textColor = .secondaryLabelColor
-        }
-        for wrappingLabel in [titleLabel, summaryLabel, tagsLabel, remedyExplanationLabel, chainLabel, rpathLabel, explanationLabel, triedLabel, messageLabel, loadingDetailLabel, stoppedDetailLabel] {
-            wrappingLabel.maximumNumberOfLines = 0
-            wrappingLabel.lineBreakMode = .byWordWrapping
-            wrappingLabel.isSelectable = true
         }
 
         loadingTitleLabel.font = .systemFont(ofSize: 15, weight: .medium)
@@ -368,4 +363,28 @@ final class FrameworkLoadViewController<Route: Routable>: BaseViewController<Fra
 /// a type nested in the generic view controller would be generic too.
 private final class FrameworkLoadDocumentView: NSView {
     override var isFlipped: Bool { true }
+}
+
+/// A selectable label that wraps at the width layout gives it and asks for none of its own.
+///
+/// With `preferredMaxLayoutWidth` at 0, a wrapping text field's intrinsic width is its whole text on
+/// one line, held at the default compression resistance (750) — above the priority a window keeps
+/// its size at (500). The dyld message and the rpath rows run to well over a thousand points on one
+/// line, so the sheet grew wider than the window it sits on and, centred on it, put the page's text
+/// off the screen. This label resists compression below that priority, so the width comes from the
+/// page, and wraps at the width it is laid out at, so its intrinsic height covers every line.
+private final class FrameworkLoadWrappingLabel: Label {
+    override func setup() {
+        super.setup()
+        maximumNumberOfLines = 0
+        lineBreakMode = .byWordWrapping
+        isSelectable = true
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard preferredMaxLayoutWidth != newSize.width else { return }
+        preferredMaxLayoutWidth = newSize.width
+    }
 }
