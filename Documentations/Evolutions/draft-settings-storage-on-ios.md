@@ -1,6 +1,6 @@
 # Draft - iOS 上的设置真正存盘
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-20
 - **最后更新**: 2026-11-20
@@ -278,7 +278,7 @@ Catalyst 上读写设置。
 ## 落地步骤
 
 0. **上游先落地**（已完成）—— UIFoundation 的 0042 合进 `main` 并打 0.48.0
-1. **一种 `SettingsAccess`** —— 改动地图里 `Package.swift`、锁文件、`Settings.swift`、`InMemorySettingsStorage.swift`、两份测试
+1. **一种 `SettingsAccess`**（已完成）—— 改动地图里 `Package.swift`、锁文件、`Settings.swift`、`InMemorySettingsStorage.swift`、两份测试
    - 行为：`settingsPackageBuildsForIOSAndVisionOS`（Ultra 上以 iOS 模拟器、iOS 真机、visionOS 模拟器编 `RuntimeViewerSettings`）
    - 行为：`existingSettingsTestsPassOnMac`（放开平台后原有用例照过）
    - 行为：`synchronousLoadAdoptsStoredSettings`
