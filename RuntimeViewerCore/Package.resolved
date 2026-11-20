@@ -1,5 +1,5 @@
 {
-  "originHash" : "3a563ced792ba8295ffede60cf453223b69ca76c402400336a6d7a4a3e7df86a",
+  "originHash" : "02c176f8d96aedd7634b22c504ba1530a2ac48537bd2412be759cb0dd3974384",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "6d703e6f88cf8995dea6615d5ea646816eea51da",
-        "version" : "2.0.0"
+        "revision" : "516288d811a793c91dc14b1d34b5bab2dd4db1d7",
+        "version" : "3.0.0"
       }
     },
     {
@@ -79,7 +79,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "1eefa6b6c2166564be811edb9ffb356643f48e3d"
+        "revision" : "fc7ae2ed32744adbb8aebd81662c99c331c4cb36"
       }
     },
     {
@@ -88,7 +88,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "79294283f27f1f0a3ef547c1017e9b1c01feb458"
+        "revision" : "8095f85137feeef497fbe7f11c0fadd227ea67b9"
       }
     },
     {

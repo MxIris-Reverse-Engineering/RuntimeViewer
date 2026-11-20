@@ -117,8 +117,9 @@ let package = Package(
         ),
         // MachODependencies, which RuntimeViewerCore imports, moved here from
         // MachOSwiftSection in 2.0.0. The package has no `next` branch, so it is
-        // taken by version; MachOSwiftSection and MachOObjCSection require
-        // 2.0.0 as well.
+        // taken by version. The floor follows the `next` of MachOSwiftSection and
+        // MachOObjCSection, which require 3.0.0 since the Swift and Objective-C
+        // symbol-name rules moved into them; MachODependencies is unchanged in it.
         .package(
             local: .package(
                 path: "../../MachOKitExtensions",
@@ -126,7 +127,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
-                from: "2.0.0"
+                from: "3.0.0"
             ),
         ),
         .package(

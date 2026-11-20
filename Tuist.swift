@@ -60,6 +60,9 @@ let sourceDependencyTargetNames = [
     "ARM64InstructionDecoding",
     "MachOAddressResolution",
     "MachOCodeReferences",
+    "CPlusPlusDemangling",
+    "CPlusPlusSymbols",
+    "CPlusPlusSymbolsFixture",
     // MachOObjCSection
     "MachOObjCSection",
     "MachOObjCSectionC",
@@ -74,6 +77,7 @@ let sourceDependencyTargetNames = [
     "Utilities",
     "SwiftOutputTransformer",
     "SwiftSymbols",
+    "SwiftSymbolsRegistration",
     "MachOSwiftSectionC",
     "MachOSwiftSection",
     "SwiftInspection",
