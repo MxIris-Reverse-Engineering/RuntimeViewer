@@ -1,8 +1,8 @@
 # 愿景：iOS 版功能对齐
 
 - **状态**: Active
-- **最后更新**: 2026-11-18
-- **相关提案**: [draft-engine-management-on-ios](../Evolutions/draft-engine-management-on-ios.md)（第一步）
+- **最后更新**: 2026-11-20
+- **相关提案**: [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md)（第一步，已落地）
 
 愿景**不做具体决定**，它划定一个方向的边界与取舍原则，让后续每个提案不必重新论证一遍。
 
@@ -232,7 +232,7 @@ MachInjector）、文件引擎给不给凭据，收进几道平台接缝；其�
 | [0091-app-core-ui-split](../Evolutions/0091-app-core-ui-split.md) | Implemented | 前置：AppCore 与 AppUI 分开 |
 | [0094-app-core-without-ui-models](../Evolutions/0094-app-core-without-ui-models.md) | Implemented | 前置：AppCore 不用 AppKit/UIKit 类型，图标、颜色与文字改成值 |
 | [0096-view-models-to-app-core](../Evolutions/0096-view-models-to-app-core.md) | Implemented | 前置：macOS App 的 ViewModel 全部进 AppCore（仍只在 macOS 上编） |
-| [draft-engine-management-on-ios](../Evolutions/draft-engine-management-on-ios.md) | In Progress | 第一步：引擎管理在 iOS 与 visionOS 上可用，iOS app 改由管理器启动引擎 |
+| [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md) | Implemented | 第一步：引擎管理在 iOS 与 visionOS 上可用，iOS app 改由管理器启动引擎 |
 
 ---
 

@@ -5,7 +5,7 @@
 - **创建日期**: 2026-11-19
 - **最后更新**: 2026-11-20
 - **所属愿景**: 无
-- **关联提案**: [0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（My Mac 的引擎搬进 XPC service；service 崩溃丢掉已加载的镜像、不自动重放）、[0069-file-mode](0069-file-mode.md)（每个文件一个 service 实例，本提案照它接线）、[0079-shared-service-plugin](0079-shared-service-plugin.md)（service 是加载共享插件的外壳）、[0081-shared-cache-images-across-engines](0081-shared-cache-images-across-engines.md)（系统镜像的数据向 My Mac 借）、[draft-engine-management-on-ios](draft-engine-management-on-ios.md)（引擎管理的平台接缝，已在 `next` 上；本提案的管理器改动照它的写法加接缝）
+- **关联提案**: [0037-local-runtime-xpc-service](0037-local-runtime-xpc-service.md)（My Mac 的引擎搬进 XPC service；service 崩溃丢掉已加载的镜像、不自动重放）、[0069-file-mode](0069-file-mode.md)（每个文件一个 service 实例，本提案照它接线）、[0079-shared-service-plugin](0079-shared-service-plugin.md)（service 是加载共享插件的外壳）、[0081-shared-cache-images-across-engines](0081-shared-cache-images-across-engines.md)（系统镜像的数据向 My Mac 借）、[0099-engine-management-on-ios](0099-engine-management-on-ios.md)（引擎管理的平台接缝，已在 `next` 上；本提案的管理器改动照它的写法加接缝）
 - **实现分支 / PR**: `feature/isolated-framework-loading`，从 `next` 切出，2026-11-20 合入 `next`
 - **配套文档**: 无单独文档——各项决定的理由在对应代码的文档注释与本提案里；术语「框架实例」「加载诊断」见 [`Glossary.md`](../Glossary.md)；文件模式里同样适用的 Copy Path / Copy Full Path 见 [`Guides/FileMode.md`](../Guides/FileMode.md)
 - **网页版**: 同目录同名的 `.html`

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - 引擎管理在 iOS 上可用</title>
+<title>0099 - 引擎管理在 iOS 上可用</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,16 +160,16 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> 引擎管理在 iOS 上可用</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0099</span></p>
+  <h1><span class="proposal-number">0099</span> 引擎管理在 iOS 上可用</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
-    <div><dt>最后更新</dt><dd>2026-11-18</dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-20</dd></div>
     <div><dt>创建日期</dt><dd>2026-11-18</dd></div>
     <div><dt>作者</dt><dd>JH</dd></div>
     <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
-    <div><dt>实现分支</dt><dd><code>feature/engine-management-on-ios</code>（worktree <code>.worktrees/RuntimeViewer-EngineManagementOnIOS</code>），做完一次合进 <code>next</code></dd></div>
-    <div><dt>原文</dt><dd><code>draft-engine-management-on-ios.md</code></dd></div>
+    <div><dt>实现分支</dt><dd><code>feature/engine-management-on-ios</code>，从 <code>origin/next</code> 切出，2026-11-18 合入 <code>next</code></dd></div>
+    <div><dt>原文</dt><dd><code>0099-engine-management-on-ios.md</code></dd></div>
   </dl>
 </header>
 
@@ -194,16 +194,12 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="summary">
   <h2>摘要</h2>
   <p>让 <code>RuntimeViewerEngineManagement</code> 在 iOS（含越狱版）与 visionOS 上编译并可用，Mac 上的行为一点不变。只属于 macOS 的三块——内嵌 XPC service、特权 helper daemon、Mac Catalyst——收进带 <code>.live</code> 的闭包接缝，iOS 上的 <code>.live</code> 是「没有这项能力」；配置新增「浏览局域网」与「服务端推送运行时数据」两个开关和一份 iOS 用的 <code>.deviceApplication</code>；iOS 上文件引擎直接在 App 进程里读。iOS app 把今天手工建的两个引擎（本机引擎、给 Mac 连的 Bonjour 服务端）交给管理器启动，Mac 看到的设备与今天一样。在设备上自己附加进程、iOS 的界面都不在这一篇。</p>
-  <div class="callout callout-warning">
-    <p class="callout-title">还差一项要你看</p>
-    <p>落地步骤第四步「iOS app 换用管理器」已完成，设备上待用户看：vphone 上 Mac 能否照常连上设备并注入（<code>macStillConnectsToTheDeviceAndInjects</code>）。</p>
-  </div>
   <div class="callout callout-note">
     <p class="callout-title">关联</p>
     <ul>
       <li>所属愿景：<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>（第一步）</li>
       <li>关联提案：<a href="0035-engine-management-module.md">0035-engine-management-module</a>（把引擎管理抽成无 UI 模块）、<a href="0069-file-mode.md">0069-file-mode</a>（文件模式）、<a href="0081-shared-cache-images-across-engines.md">0081-shared-cache-images-across-engines</a>（系统镜像跨引擎共享）</li>
-      <li>配套文档：待定 —— 落地时登记实现说明 / 使用指南的链接</li>
+      <li>配套文档：无单独文档——接缝的用法在各类型的文档注释里，「只属于 macOS 的部分都在 <code>RuntimeEngineManager+PlatformServices.swift</code>」写在根 <code>AGENTS.md</code> 的 <code>RuntimeViewerEngineManagement</code> 一条</li>
       <li>网页版：同目录同名的 <code>.html</code></li>
     </ul>
   </div>
@@ -695,10 +691,10 @@ inProcessFileReadsBySource[file.source] = read
         <li>行为：<code>macAppAndCommandLineHostBuildUnchanged</code></li>
       </ul>
     </li>
-    <li><strong>iOS app 换用管理器</strong>（已完成，设备上待用户看）—— <code>AppDelegate.swift</code>、<code>project.xcproj</code>
+    <li><strong>iOS app 换用管理器</strong>（已完成，用户已在设备上看过）—— <code>AppDelegate.swift</code>、<code>project.xcproj</code>
       <ul>
         <li>行为：<code>iOSAppBuildsForAllThreeTargets</code>（Ultra 上 visionOS 的 SDK 在，三个都编过）</li>
-        <li>行为：<code>macStillConnectsToTheDeviceAndInjects</code>（由用户在 vphone 上看）</li>
+        <li>行为：<code>macStillConnectsToTheDeviceAndInjects</code>（用户在 vphone 上看过，通过）</li>
       </ul>
     </li>
   </ol>
@@ -714,7 +710,7 @@ inProcessFileReadsBySource[file.source] = read
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>15 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>17 条，最近一条：Implemented，取号 0099</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -735,6 +731,8 @@ inProcessFileReadsBySource[file.source] = read
           <tr><td class="numeric">2026-11-18</td><td>第三步实现中的调整</td><td>一、主文件不再 import HelperClient 与 CatalystExtensions：第二步之后它已经用不到两者，只有平台文件在 <code>#if os(macOS)</code> 里引入。二、服务端引擎由新的静态方法 <code>makeBonjourServerEngine(named:configuration:)</code> 建、不连接，测试据此断言三种配置的推送开关，不必真的在网上广播。三、<code>engineManagementBuildsForIOSAndVisionOS</code> 在 Ultra 上用 <code>xcodebuild -scheme RuntimeViewerEngineManagement</code> 以 iOS 模拟器、iOS 真机与 visionOS 模拟器为目标各编一次，全部通过，第一次就没有平台相关的编译错误。</td></tr>
           <tr><td class="numeric">2026-11-18</td><td>第四步实现中的调整</td><td>一、<code>AppDelegate</code> 直接 <code>import Dependencies</code> 来写 <code>@Dependency(\.runtimeEngineManager)</code>：三个 target 不单独链接 swift-dependencies 的产品（工程里没有它的包引用），模块随 RuntimeViewerApplication 的依赖一起编出，Xcode 27 下照常找得到。二、<code>import RuntimeViewerCommunication</code> 随手工建的服务端一起删掉，<code>AppDelegate</code> 不再用到它。三、<code>iOSAppBuildsForAllThreeTargets</code> 在 Ultra 上用 <code>RuntimeViewer-Debug.xcworkspace</code> 编 <code>RuntimeViewer iOS</code>（iOS 模拟器）、<code>RuntimeViewer iOS Jailbroken</code>（iOS 真机，arm64e）、<code>RuntimeViewer visionOS</code>（visionOS 模拟器），关签名，三个都通过。</td></tr>
           <tr><td class="numeric">2026-11-18</td><td>实现完成，待用户看过后收尾</td><td>验证在 Ultra 上：每一步包级 <code>swift build --build-tests</code> 通过，相关套件全过，第一到第三步的新测试各做过变异检查（去掉对应实现会变红）；模块以 iOS 模拟器、iOS 真机、visionOS 模拟器为目标编过；macOS App（Tuist workspace，Debug）与 <code>RuntimeViewerCommandLine</code> 包编过；iOS app 三个 target 编过。最终提交上包里全部测试共 1372 个，失败 6 条：标题悬停副标题、Call Hierarchy 超时是基线上本来就红的；<code>InjectedDeviceEngineTests</code> 两条、<code>ReportSharedByEngineTests</code>、<code>BackgroundWorkProcessActivityTests</code> 是整包一起跑才红，单独重跑全过。没做的：vphone 上 Mac 能否照常连上设备并注入（<code>macStillConnectsToTheDeviceAndInjects</code>，留给用户）。文档判断：不另写使用指南或实现说明，接缝的用法在类型的文档注释里，平台代码的位置写进根 <code>AGENTS.md</code>；没有新术语。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>用户确认代选的决定</td><td>标着「协作 agent 代用户选」「代用户确认」的各行，用户看过后全部认可，不改</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>Implemented，取号 0099</td><td>用户在 vphone 的 iOS 27 虚拟机上看过：Mac 照常发现设备、连上并注入，<code>macStillConnectsToTheDeviceAndInjects</code> 通过。实测中打开某个类型后引擎断开，查明是交叉引用扫描 App 主程序时触发上游 MachOSwiftSection 的断言（<code>__mh_execute_header</code> 被当成函数起点），任何主程序都会遇到、与本篇无关，交给上游修。没有新的后续项：设备上自己附加进程、iOS 上浏览局域网在「非目标」里，归愿景后面的步骤。文档判断不变：不另写使用指南或实现说明，没有新术语。</td></tr>
         </tbody>
       </table>
       </div>

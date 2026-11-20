@@ -1,13 +1,13 @@
-# Draft - 引擎管理在 iOS 上可用
+# 0099 - 引擎管理在 iOS 上可用
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-18
-- **最后更新**: 2026-11-18
+- **最后更新**: 2026-11-20
 - **所属愿景**: [iOS 版功能对齐](../Visions/IOSFeatureParity.md)（第一步）
 - **关联提案**: [0035-engine-management-module](0035-engine-management-module.md)（把引擎管理抽成无 UI 模块）、[0069-file-mode](0069-file-mode.md)（文件模式）、[0081-shared-cache-images-across-engines](0081-shared-cache-images-across-engines.md)（系统镜像跨引擎共享）
-- **实现分支 / PR**: `feature/engine-management-on-ios`（worktree `.worktrees/RuntimeViewer-EngineManagementOnIOS`），做完一次合进 `next`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **实现分支 / PR**: `feature/engine-management-on-ios`，从 `origin/next` 切出，2026-11-18 合入 `next`
+- **配套文档**: 无单独文档——接缝的用法在各类型的文档注释里，「只属于 macOS 的部分都在 `RuntimeEngineManager+PlatformServices.swift`」写在根 `AGENTS.md` 的 `RuntimeViewerEngineManagement` 一条
 - **网页版**: 同目录同名的 `.html`
 
 ## 摘要
@@ -374,9 +374,9 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
    - 行为：`bonjourServerPushesRuntimeDataOnlyWhenConfigured`
    - 行为：`deviceConfiguredManagerOnMacListsOnlyLocal`
    - 行为：`macAppAndCommandLineHostBuildUnchanged`
-4. **iOS app 换用管理器**（已完成，设备上待用户看）—— `AppDelegate.swift`、`project.xcproj`
+4. **iOS app 换用管理器**（已完成，用户已在设备上看过）—— `AppDelegate.swift`、`project.xcproj`
    - 行为：`iOSAppBuildsForAllThreeTargets`（Ultra 上 visionOS 的 SDK 在，三个都编过）
-   - 行为：`macStillConnectsToTheDeviceAndInjects`（由用户在 vphone 上看）
+   - 行为：`macStillConnectsToTheDeviceAndInjects`（用户在 vphone 上看过，通过）
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -402,3 +402,5 @@ func application(_:didFinishLaunchingWithOptions:) -> Bool {
 | 2026-11-18 | 第三步实现中的调整 | 一、主文件不再 import HelperClient 与 CatalystExtensions：第二步之后它已经用不到两者，只有平台文件在 `#if os(macOS)` 里引入。二、服务端引擎由新的静态方法 `makeBonjourServerEngine(named:configuration:)` 建、不连接，测试据此断言三种配置的推送开关，不必真的在网上广播。三、`engineManagementBuildsForIOSAndVisionOS` 在 Ultra 上用 `xcodebuild -scheme RuntimeViewerEngineManagement` 以 iOS 模拟器、iOS 真机与 visionOS 模拟器为目标各编一次，全部通过，第一次就没有平台相关的编译错误。 |
 | 2026-11-18 | 第四步实现中的调整 | 一、`AppDelegate` 直接 `import Dependencies` 来写 `@Dependency(\.runtimeEngineManager)`：三个 target 不单独链接 swift-dependencies 的产品（工程里没有它的包引用），模块随 RuntimeViewerApplication 的依赖一起编出，Xcode 27 下照常找得到。二、`import RuntimeViewerCommunication` 随手工建的服务端一起删掉，`AppDelegate` 不再用到它。三、`iOSAppBuildsForAllThreeTargets` 在 Ultra 上用 `RuntimeViewer-Debug.xcworkspace` 编 `RuntimeViewer iOS`（iOS 模拟器）、`RuntimeViewer iOS Jailbroken`（iOS 真机，arm64e）、`RuntimeViewer visionOS`（visionOS 模拟器），关签名，三个都通过。 |
 | 2026-11-18 | 实现完成，待用户看过后收尾 | 验证在 Ultra 上：每一步包级 `swift build --build-tests` 通过，相关套件全过，第一到第三步的新测试各做过变异检查（去掉对应实现会变红）；模块以 iOS 模拟器、iOS 真机、visionOS 模拟器为目标编过；macOS App（Tuist workspace，Debug）与 `RuntimeViewerCommandLine` 包编过；iOS app 三个 target 编过。最终提交上包里全部测试共 1372 个，失败 6 条：标题悬停副标题、Call Hierarchy 超时是基线上本来就红的；`InjectedDeviceEngineTests` 两条、`ReportSharedByEngineTests`、`BackgroundWorkProcessActivityTests` 是整包一起跑才红，单独重跑全过。没做的：vphone 上 Mac 能否照常连上设备并注入（`macStillConnectsToTheDeviceAndInjects`，留给用户）。文档判断：不另写使用指南或实现说明，接缝的用法在类型的文档注释里，平台代码的位置写进根 `AGENTS.md`；没有新术语。 |
+| 2026-11-20 | 用户确认代选的决定 | 标着「协作 agent 代用户选」「代用户确认」的各行，用户看过后全部认可，不改 |
+| 2026-11-20 | Implemented，取号 0099 | 用户在 vphone 的 iOS 27 虚拟机上看过：Mac 照常发现设备、连上并注入，`macStillConnectsToTheDeviceAndInjects` 通过。实测中打开某个类型后引擎断开，查明是交叉引用扫描 App 主程序时触发上游 MachOSwiftSection 的断言（`__mh_execute_header` 被当成函数起点），任何主程序都会遇到、与本篇无关，交给上游修。没有新的后续项：设备上自己附加进程、iOS 上浏览局域网在「非目标」里，归愿景后面的步骤。文档判断不变：不另写使用指南或实现说明，没有新术语。 |
