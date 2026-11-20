@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Dependencies
 import DependenciesMacros
 import UIFoundationSettingsUI
@@ -53,3 +55,5 @@ extension DependencyValues {
     @DependencyEntry(liveValue: MainActor.assumeIsolated { SettingsWindowController.shared })
     package var settingsWindowController: SettingsWindowController
 }
+
+#endif

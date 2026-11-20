@@ -1,6 +1,8 @@
 #if os(macOS)
-
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
@@ -272,6 +274,9 @@ private struct ObjCIvarOffsetEditor: View {
     }
 }
 
+#if os(macOS)
+// The AppKit template editor. The UIKit one is in TokenTemplateTextField+UIKit.swift.
+
 // MARK: - Token Text Attachment
 
 private final class TokenTextAttachment: NSTextAttachment {}
@@ -526,6 +531,8 @@ private struct TokenTemplateTextField: NSViewRepresentable {
     }
 }
 
+#endif
+
 // MARK: - Copyable Token Chip
 
 private struct CopyableTokenChip<Token: RawRepresentable & Hashable>: View where Token.RawValue == String {
@@ -560,8 +567,12 @@ private struct CopyableTokenChip<Token: RawRepresentable & Hashable>: View where
     }
 
     private func copyToClipboard(_ string: String) {
+        #if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(string, forType: .string)
+        #else
+        UIPasteboard.general.string = string
+        #endif
     }
 }
 
@@ -1041,5 +1052,3 @@ private struct FlowLayout: Layout {
         return (CGSize(width: maxX, height: currentY + lineHeight), positions)
     }
 }
-
-#endif

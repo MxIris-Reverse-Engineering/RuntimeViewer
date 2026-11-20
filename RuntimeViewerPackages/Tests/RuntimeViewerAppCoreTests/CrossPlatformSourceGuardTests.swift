@@ -26,6 +26,7 @@ struct CrossPlatformSourceGuardTests {
         "RuntimeViewerApplication",
         "RuntimeViewerArchitectures",
         "RuntimeViewerSettings",
+        "RuntimeViewerSettingsUI",
         "RuntimeViewerUI",
     ]
 
@@ -59,7 +60,7 @@ struct CrossPlatformSourceGuardTests {
     @Test("the scan knows the modules and dependency keys it looks for, and reads every target")
     func scanKnowsWhatItLooksFor() throws {
         let packageScan = try Self.packageScan.get()
-        #expect(packageScan.macOSOnlyModuleNames.isSuperset(of: ["AppKit", "RxAppKit", "CocoaCoordinator", "UIFoundationSettingsUI"]))
+        #expect(packageScan.macOSOnlyModuleNames.isSuperset(of: ["AppKit", "RxAppKit", "CocoaCoordinator", "RuntimeViewerHelperClient"]))
         #expect(try Self.macOSOnlyDependencyKeyNames.get().contains("appRouter"))
         for targetName in Self.crossPlatformTargetNames {
             #expect(!packageScan.sourceFiles(inTargetNamed: targetName).isEmpty, "no sources read for \(targetName)")
