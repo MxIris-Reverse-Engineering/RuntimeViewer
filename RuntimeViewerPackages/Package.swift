@@ -420,7 +420,7 @@ let package = Package(
                 // The Indexing page lists the connected engines for the
                 // Always Index rows' engine menus.
                 .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "UIFoundationSettings", package: "UIFoundation"),
                 .product(name: "UIFoundationSettingsUI", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
