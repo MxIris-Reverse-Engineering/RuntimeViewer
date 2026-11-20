@@ -79,7 +79,10 @@ struct ImageAndFindResultCommandTests {
         let environment = try await Self.environment()
         let viewModel = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
-        let leaf = try #require(Fixtures.imageTree(rootName: "Others", imagePaths: [TestImages.libobjc]).leaf(forImagePath: TestImages.libobjc))
+        // A node holds its parent weakly: the tree has to outlive the walk up from the leaf.
+        let tree = Fixtures.imageTree(rootName: "Others", imagePaths: [TestImages.libobjc])
+        defer { withExtendedLifetime(tree) {} }
+        let leaf = try #require(tree.leaf(forImagePath: TestImages.libobjc))
         let folder = try #require(leaf.parent)
         let shownPath = String(TestImages.libobjc.dropFirst())
 
@@ -98,7 +101,10 @@ struct ImageAndFindResultCommandTests {
 
     @Test("the path the list shows leaves out the tree's root; a tree that starts below / gives a path from there; a bookmarked image its name")
     func displayedPathLeavesOutTheRoot() {
-        let groupedLeaf = Fixtures.imageTree(rootName: "Dyld Shared Cache", imagePaths: ["/usr/lib/libobjc.A.dylib"]).leaf(forImagePath: "/usr/lib/libobjc.A.dylib")
+        // A node holds its parent weakly: each tree has to outlive the walks up from its leaves.
+        let groupedTree = Fixtures.imageTree(rootName: "Dyld Shared Cache", imagePaths: ["/usr/lib/libobjc.A.dylib"])
+        defer { withExtendedLifetime(groupedTree) {} }
+        let groupedLeaf = groupedTree.leaf(forImagePath: "/usr/lib/libobjc.A.dylib")
         #expect(groupedLeaf?.displayedPath == "usr/lib/libobjc.A.dylib")
 
         let tablesPath = "/Copied/Frameworks/Tables.framework/Versions/A/Tables"
