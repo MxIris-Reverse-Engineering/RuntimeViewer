@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - iOS 上的设置真正存盘</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> iOS 上的设置真正存盘</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-20</dd></div>
+    <div><dt>创建日期</dt><dd>2026-11-20</dd></div>
+    <div><dt>作者</dt><dd>JH</dd></div>
+    <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
+    <div><dt>实现分支</dt><dd><code>feature/settings-storage-on-ios</code></dd></div>
+    <div><dt>原文</dt><dd><code>draft-settings-storage-on-ios.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#motivation">动机</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#research">前期调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>iOS、越狱版 iOS 与 visionOS 上的 RuntimeViewer 把设置存进文件，与 Mac 版用同一个 <code>SettingsStore</code>、同一种格式：<code>RuntimeViewerSettings</code> 在所有平台上依赖 UIFoundation 的 <code>UIFoundationSettings</code>（上游先放开平台限定），<code>SettingsAccess</code> 只剩一种实现，迁移逻辑各平台都跑；iOS app 启动时同步读完设置，App 进入后台或即将终止时立刻写盘。Mac 上行为不变。iOS 上还没有能改设置的界面，所以这一步做完用户看不到变化；派生数据（Find 语料的磁盘缓存）在 iOS 上暂不开启。</p>
+  <div class="callout callout-note">
+    <p class="callout-title">关联</p>
+    <ul>
+      <li>所属愿景：<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>（第二步）</li>
+      <li>关联提案：<a href="0099-engine-management-on-ios.md">0099-engine-management-on-ios</a>（第一步）、<a href="0011-uifoundation-settings-adoption.md">0011-uifoundation-settings-adoption</a>（设置改用 UIFoundation 的存储）；上游 UIFoundation 的 <a href="https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0042-settings-store-on-all-platforms.md">0042-settings-store-on-all-platforms</a>（放开设置存储的平台限定、加同步读取，已随 0.48.0 发布）</li>
+      <li>配套文档：待定 —— 预计无单独文档，规则写进根 <code>AGENTS.md</code> 的 <em>Settings Integration</em></li>
+      <li>网页版：同目录同名的 <code>.html</code></li>
+    </ul>
+  </div>
+</section>
+
+<section id="motivation">
+  <h2>动机</h2>
+  <p>完整动机见愿景《<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>》。这一步特有的：</p>
+  <ul>
+    <li><strong>iOS 上的设置只在内存里</strong>：<code>SettingsAccess</code> 在 macOS 之外持有一份 <code>Settings()</code>，<code>load()</code> 与 <code>flushSynchronously()</code> 是空操作（<code>RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift:116-122</code>、<code>:134-174</code>）。根 <code>AGENTS.md</code> 的 <em>Settings Integration</em> 已经写明：哪个平台要加设置界面，得先给它真正的存储，否则改动会悄悄丢掉。</li>
+    <li><strong>后面几步都要它</strong>：愿景第三步把设置生命周期收进 AppCore，第五步给 iOS 做设置页；今天 iOS 上任何写入（包括迁移逻辑想做的）在下次启动都会消失。</li>
+    <li><strong>macOS 与 iOS 两套 <code>SettingsAccess</code></strong>：两个分支各管一份状态（<code>store</code> 与 <code>value</code>），iOS 分支还跳过了两项迁移（<code>:177-241</code> 整段只在 macOS 上编）。合成一种实现，iOS 上的行为才和 Mac 上测过的是同一份代码。</li>
+  </ul>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <h3>RuntimeViewerSettings 改了什么</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-removed"></i>删除</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 462" role="img" aria-label="What changes in RuntimeViewerSettings">
+    <rect class="group" x="10" y="10" width="700" height="440" rx="10"/>
+    <text class="group-label" x="22" y="32">RuntimeViewerSettings</text>
+
+    <rect class="box-changed" x="24" y="44" width="672" height="56" rx="6"/>
+    <text x="34" y="62">depends on UIFoundationSettings</text>
+    <text class="caption" x="34" y="78">- when platforms: [macOS]</text>
+    <text class="caption" x="34" y="93">+ on every platform (UIFoundation &gt;= 0.48.0)</text>
+
+    <rect class="box-changed" x="24" y="112" width="672" height="60" rx="6"/>
+    <text x="34" y="130">Settings</text>
+    <text class="caption" x="34" y="147">static store: SettingsStore&lt;Settings&gt;     - macOS only   + every platform</text>
+    <text class="caption" x="34" y="163">: PersistentSettings                        - macOS only   + every platform</text>
+
+    <rect class="box-changed" x="24" y="186" width="672" height="252" rx="6"/>
+    <text x="34" y="204">SettingsAccess</text>
+
+    <rect class="box-removed" x="38" y="216" width="312" height="48" rx="6"/>
+    <text class="strike" x="48" y="234">#if os(macOS)  store</text>
+    <text class="caption" x="48" y="252">SettingsStore&lt;Settings&gt;</text>
+    <rect class="box-removed" x="370" y="216" width="312" height="48" rx="6"/>
+    <text class="strike" x="380" y="234">#else  value: Settings</text>
+    <text class="caption" x="380" y="252">in memory; load/flush no-ops</text>
+
+    <rect class="box-added" x="38" y="274" width="644" height="42" rx="6"/>
+    <text x="48" y="292">store: SettingsStore&lt;Settings&gt;</text>
+    <text class="caption" x="48" y="308">one implementation</text>
+
+    <rect class="box-kept" x="38" y="326" width="352" height="48" rx="6"/>
+    <text x="48" y="345">load() async</text>
+    <text class="caption" x="48" y="362">macOS launch; migrations now on every platform</text>
+    <rect class="box-added" x="406" y="326" width="276" height="48" rx="6"/>
+    <text x="416" y="345">loadSynchronously()</text>
+    <text class="caption" x="416" y="362">iOS launch; same migrations</text>
+
+    <rect class="box-kept" x="38" y="384" width="644" height="44" rx="6"/>
+    <text x="48" y="402">flushSynchronously()</text>
+    <text class="caption" x="48" y="419">macOS terminate, iOS background / terminate</text>
+
+    <rect class="group" x="730" y="10" width="260" height="124" rx="10"/>
+    <text class="group-label" x="742" y="32">UIFoundation (&gt;= 0.48.0)</text>
+    <rect class="box-changed" x="744" y="44" width="232" height="76" rx="6"/>
+    <text x="754" y="64">UIFoundationSettings</text>
+    <text class="caption" x="754" y="84">#if Settings (every platform)</text>
+    <text class="caption" x="754" y="102">+ SettingsStore.load() (sync)</text>
+
+    <path class="arrow" d="M 696 72 L 742 72"/>
+    <path class="arrow" d="M 682 295 L 860 295 L 860 122"/>
+  </svg>
+  </div>
+  <p class="figure-caption"><code>SettingsAccess</code> 的两个平台分支合成一种：只留 <code>store</code>；<code>load()</code> 与两项迁移、<code>flushSynchronously()</code>、<code>current</code>、<code>preview</code> 各平台同一份，新增 <code>loadSynchronously()</code> 给 iOS 启动用。上游 UIFoundation 先放开平台限定、加同步 <code>load()</code>。</p>
+
+  <h3>iOS app：启动到进入后台</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 540" role="img" aria-label="iOS app, launch to background">
+    <rect class="box-kept" x="10" y="10" width="340" height="36" rx="6"/>
+    <text x="20" y="33">AppDelegate.didFinishLaunchingWithOptions</text>
+
+    <rect class="box-added" x="60" y="60" width="350" height="44" rx="6"/>
+    <text x="70" y="78">settingsLifecycleController</text>
+    <text class="caption" x="70" y="95">.loadOnLaunch()</text>
+
+    <rect class="box-added" x="110" y="114" width="300" height="34" rx="6"/>
+    <text x="120" y="136">settings.loadSynchronously()</text>
+
+    <rect class="box-added" x="160" y="158" width="400" height="44" rx="6"/>
+    <text x="170" y="176">Settings.store.load()</text>
+    <text class="caption" x="170" y="193">synchronous, from Application Support</text>
+
+    <rect class="box-added" x="160" y="212" width="580" height="34" rx="6"/>
+    <text x="170" y="234">migrateLegacyThemeProfileIfNeeded / migrateResidentLimitDefaultsIfNeeded</text>
+
+    <rect class="box-kept" x="60" y="262" width="580" height="44" rx="6"/>
+    <text x="70" y="280">InjectionServiceRegistrar.registerIfAvailable() ... runtimeEngineManager</text>
+    <text class="caption" x="70" y="297">unchanged order after it</text>
+
+    <path class="arrow" d="M 30 46 L 30 82 L 58 82"/>
+    <path class="arrow" d="M 30 46 L 30 284 L 58 284"/>
+    <path class="arrow" d="M 80 104 L 80 131 L 108 131"/>
+    <path class="arrow" d="M 130 148 L 130 180 L 158 180"/>
+    <path class="arrow" d="M 130 148 L 130 229 L 158 229"/>
+
+    <rect class="box-kept" x="10" y="326" width="340" height="44" rx="6"/>
+    <text x="20" y="344">SceneDelegate.scene(_:willConnectTo:)</text>
+    <text class="caption" x="20" y="361">reads the stored settings</text>
+
+    <rect class="box-kept" x="10" y="384" width="340" height="44" rx="6"/>
+    <text x="20" y="402">edit -&gt; SettingsStore auto-save</text>
+    <text class="caption" x="20" y="419">after 1 s (unchanged)</text>
+
+    <path class="arrow arrow-weak" d="M 16 306 L 16 324"/>
+    <path class="arrow arrow-weak" d="M 16 370 L 16 382"/>
+
+    <rect class="box-added" x="10" y="446" width="400" height="34" rx="6"/>
+    <text x="20" y="468">UIApplication.didEnterBackgroundNotification</text>
+    <rect class="box-added" x="10" y="492" width="400" height="34" rx="6"/>
+    <text x="20" y="514">UIApplication.willTerminateNotification</text>
+
+    <rect class="box-added" x="560" y="466" width="320" height="40" rx="6"/>
+    <text x="570" y="491">settings.flushSynchronously()</text>
+
+    <path class="arrow" d="M 410 463 L 558 480"/>
+    <path class="arrow" d="M 410 509 L 558 492"/>
+  </svg>
+  </div>
+  <p class="figure-caption">实线：调用与收到通知后做的事；虚线：先后顺序。设置在任何东西读它之前同步读完；第一个 scene 读到的已是存储里的值；整个 App 进后台或即将终止时立刻写盘。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation 下限 <code>from: "0.48.0"</code>；<code>RuntimeViewerSettings</code>、<code>RuntimeViewerSettingsTests</code> 对 <code>UIFoundationSettings</code> 的依赖去掉平台条件</td><td>上游放开后各平台都能链接</td><td class="numeric">1</td></tr>
+      <tr><td>三个 workspace 的 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation 升到 0.48.0（<code>UpdatePackagesScript.sh</code>）</td><td>锁文件跟着下限走</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift</code> · <code>Settings</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 import、<code>applicationDirectoryName</code>、<code>applicationDirectoryURL</code>、<code>store</code>、<code>PersistentSettings</code> 遵循外的 <code>#if os(macOS)</code></td><td>各平台同一个存储</td><td class="numeric">1</td></tr>
+      <tr><td>同上 · <code>SettingsAccess</code></td><td><span class="tag tag-changed">修改</span></td><td>只留 <code>store</code>；<code>load()</code>、两项迁移、<code>flushSynchronously()</code>、<code>current</code>、<code>preview</code> 去掉分支；新增 <code>loadSynchronously()</code></td><td>一种实现；iOS 启动时要同步读完</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerSettings/InMemorySettingsStorage.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code></td><td><code>preview</code> 与测试在各平台都用它</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerSettingsTests/SettingsPersistenceTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code>；新增同步读取的用例</td><td>测的是各平台共用的代码</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerSettingsTests/SettingsResidentLimitMigrationTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code>；同一组参数也走一遍 <code>loadSynchronously()</code></td><td>迁移现在各平台都跑，两个入口都要迁</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/SettingsLifecycleController.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>@MainActor</code> 单例，<code>@DependencyEntry</code> 暴露；<code>loadOnLaunch()</code> 同步读取；订阅进入后台与即将终止两个通知写盘</td><td>iOS 的读写时机</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>didFinishLaunching</code> 第一件事调 <code>settingsLifecycleController.loadOnLaunch()</code></td><td>在任何东西读设置之前读完</td><td class="numeric">2</td></tr>
+      <tr><td><code>AGENTS.md</code>（根）· <em>Settings Integration</em>、<em>Dependency floors</em></td><td><span class="tag tag-changed">修改</span></td><td>改写「macOS 之外只在内存里」那条；补 UIFoundation 0.48.0 的理由</td><td>规则跟着代码变</td><td class="numeric">3</td></tr>
+      <tr><td><code>Documentations/Visions/IOSFeatureParity.md</code></td><td><span class="tag tag-changed">修改</span></td><td>相关提案表加本篇；「最后更新」</td><td>愿景登记</td><td class="numeric">3</td></tr>
+      <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记本篇</td><td>索引</td><td class="numeric">3</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="proposal">
+  <h2>提议方案</h2>
+  <ol>
+    <li><strong>上游先落地</strong>：UIFoundation 按它的提案放开设置存储并发 0.48.0；RuntimeViewer 把下限抬到 <code>from: "0.48.0"</code>，<code>RuntimeViewerSettings</code> 与 <code>RuntimeViewerSettingsTests</code> 在所有平台上依赖 <code>UIFoundationSettings</code>。</li>
+    <li><strong>一种 <code>SettingsAccess</code></strong>：去掉 <code>Settings.swift</code> 与 <code>InMemorySettingsStorage.swift</code> 里的 <code>#if os(macOS)</code>。<code>Settings.store</code>、<code>applicationDirectoryName</code>、<code>applicationDirectoryURL</code>、<code>PersistentSettings</code> 遵循在各平台都有；<code>SettingsAccess</code> 只保留 <code>store</code> 一种状态，<code>load()</code> 与两项迁移、<code>flushSynchronously()</code>、<code>current</code>、<code>preview</code> 各平台同一份。</li>
+    <li><strong>同步读取</strong>：<code>SettingsAccess</code> 新增 <code>loadSynchronously()</code>，与 <code>flushSynchronously()</code> 成对：用上游的同步 <code>load()</code> 读完，再跑同样的两项迁移。<code>load()</code>（异步）保留给 macOS，它的行为不变。</li>
+    <li><strong>iOS 的生命周期</strong>：iOS app 新增 <code>SettingsLifecycleController</code>（与 macOS 那个同名、同样隐藏在 <code>@Dependency</code> 后面），<code>AppDelegate</code> 在 <code>didFinishLaunching</code> 的第一件事里调它的 <code>loadOnLaunch()</code> 同步读完；它订阅 <code>UIApplication.didEnterBackgroundNotification</code> 与 <code>willTerminateNotification</code>，收到就 <code>flushSynchronously()</code>。</li>
+    <li><strong>文件位置</strong>：与 Mac 同一套命名——App 容器里 <code>Library/Application Support/RuntimeViewer[-Debug]/settings.json</code>。</li>
+    <li><strong>文档</strong>：根 <code>AGENTS.md</code> 的 <em>Settings Integration</em> 把「macOS 之外只在内存里」那条改成两个平台各自何时读、何时写；<em>Dependency floors</em> 补一句 UIFoundation 0.48.0 的理由；愿景相关提案表、两份索引登记本篇。</li>
+  </ol>
+
+  <h3>非目标</h3>
+  <ul>
+    <li><strong>iOS 的设置界面</strong>：用户定了这一步只做存储；设置页在愿景第五步。</li>
+    <li><strong>iOS 上的派生数据</strong>：iOS 上还没有 Find，派生数据没人读；系统身份与读取标记在 iOS 上怎么取（本机引擎在 App 进程里，App 自己读写），留给把 Find 搬到 iOS 的那一步一起定。</li>
+    <li><strong>macOS 的任何行为变化</strong>：macOS 仍是异步读取、<code>applicationShouldTerminate</code> 里写盘；文件位置与格式不变。</li>
+    <li><strong>把两个平台的生命周期控制器并进 AppCore</strong>：愿景第三步做。</li>
+    <li><strong>MCP 端口文件、<code>ApplicationRelauncher</code>、<code>SourceEditorFrameworks</code></strong>：都只属于 Mac，保持 <code>#if os(macOS)</code>。</li>
+    <li><strong>iCloud 同步设置、在两台设备之间共享设置</strong>。</li>
+  </ul>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details open>
+    <summary><code>SettingsAccess</code> 合并后的形状（只列变化的成员）</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">@MainActor</span>
+<span class="token-macro">@Loggable</span>
+<span class="token-keyword">@dynamicMemberLookup</span>
+<span class="token-keyword">public final class</span> <span class="token-type">SettingsAccess</span> {
+    <span class="token-keyword">fileprivate static let</span> shared = <span class="token-type">SettingsAccess</span>(store: <span class="token-type">Settings</span>.store)
+
+    <span class="token-keyword">private let</span> store: <span class="token-type">SettingsStore</span>&lt;<span class="token-type">Settings</span>&gt;
+
+    <span class="token-keyword">init</span>(store: <span class="token-type">SettingsStore</span>&lt;<span class="token-type">Settings</span>&gt;) {
+        <span class="token-keyword">self</span>.store = store
+    }
+
+    <span class="token-comment">/// Reads the stored settings into the model and runs the one-shot data</span>
+    <span class="token-comment">/// migrations behind it. The macOS app calls this at launch.</span>
+    <span class="token-keyword">public func</span> load() <span class="token-keyword">async</span> {
+        logLoadOutcome(<span class="token-keyword">await</span> store.load())
+        runMigrations()
+    }
+
+    <span class="token-comment">/// The same read and migrations as ``load()``, finished before the call</span>
+    <span class="token-comment">/// returns. The iOS app calls this first thing at launch: its first scene</span>
+    <span class="token-comment">/// connects right after `application(_:didFinishLaunchingWithOptions:)`</span>
+    <span class="token-comment">/// returns, and reads settings as it does.</span>
+    <span class="token-keyword">public func</span> loadSynchronously() {
+        logLoadOutcome(store.load())
+        runMigrations()
+    }
+
+    <span class="token-keyword">private func</span> logLoadOutcome(_ outcome: <span class="token-type">SettingsStore</span>&lt;<span class="token-type">Settings</span>&gt;.<span class="token-type">LoadOutcome</span>) { … }   <span class="token-comment">// the three #log lines of today</span>
+
+    <span class="token-keyword">private func</span> runMigrations() {
+        migrateLegacyThemeProfileIfNeeded()
+        migrateResidentLimitDefaultsIfNeeded()
+    }
+
+    <span class="token-keyword">public var</span> current: <span class="token-type">Settings</span> {
+        <span class="token-keyword">get</span> { store.value }
+        <span class="token-keyword">set</span> { store.value = newValue }
+    }
+
+    <span class="token-keyword">package static var</span> preview: <span class="token-type">SettingsAccess</span> {
+        <span class="token-type">SettingsAccess</span>(store: <span class="token-type">SettingsStore</span>(defaultValue: <span class="token-type">Settings</span>(), storage: <span class="token-type">InMemorySettingsStorage</span>()))
+    }
+}</code></pre>
+    </div>
+  </details>
+  <details open>
+    <summary>iOS 的生命周期控制器</summary>
+    <div class="details-body">
+<pre><code><span class="token-keyword">import</span> UIKit
+<span class="token-keyword">import</span> RuntimeViewerSettings
+<span class="token-keyword">import</span> DependenciesMacros
+
+<span class="token-comment">/// Reads the settings when the app launches and writes them as it leaves</span>
+<span class="token-comment">/// the foreground. iOS has no `applicationShouldTerminate(_:)`, and a</span>
+<span class="token-comment">/// suspended app can be killed without another callback, so the</span>
+<span class="token-comment">/// background notification is the last dependable moment to write.</span>
+<span class="token-keyword">@MainActor</span>
+<span class="token-keyword">final class</span> <span class="token-type">SettingsLifecycleController</span> {
+    <span class="token-keyword">fileprivate static let</span> shared = <span class="token-type">SettingsLifecycleController</span>()
+
+    <span class="token-keyword">@Dependency</span>(\.settings) <span class="token-keyword">private var</span> settings
+
+    <span class="token-keyword">private var</span> notificationObservers: [<span class="token-keyword">any</span> <span class="token-type">NSObjectProtocol</span>] = []
+
+    <span class="token-keyword">private init</span>() {}
+
+    <span class="token-keyword">func</span> loadOnLaunch() {
+        settings.loadSynchronously()
+        <span class="token-keyword">let</span> notificationCenter = <span class="token-type">NotificationCenter</span>.default
+        <span class="token-keyword">for</span> name <span class="token-keyword">in</span> [<span class="token-type">UIApplication</span>.didEnterBackgroundNotification, <span class="token-type">UIApplication</span>.willTerminateNotification] {
+            notificationObservers.append(
+                notificationCenter.addObserver(forName: name, object: <span class="token-keyword">nil</span>, queue: .main) { _ <span class="token-keyword">in</span>
+                    <span class="token-type">MainActor</span>.assumeIsolated {
+                        <span class="token-type">SettingsLifecycleController</span>.shared.settings.flushSynchronously()
+                    }
+                }
+            )
+        }
+    }
+}
+
+<span class="token-keyword">extension</span> <span class="token-type">DependencyValues</span> {
+    <span class="token-macro">@DependencyEntry</span>(liveValue: <span class="token-type">MainActor</span>.assumeIsolated { <span class="token-type">SettingsLifecycleController</span>.shared })
+    <span class="token-keyword">var</span> settingsLifecycleController: <span class="token-type">SettingsLifecycleController</span>
+}</code></pre>
+      <ul>
+        <li><strong>为什么用 App 级通知、不用 <code>sceneDidEnterBackground</code></strong>：愿景第三步要开多个 scene，单个 scene 进后台时别的 scene 可能还在前台；<code>didEnterBackgroundNotification</code> 在整个 App 进后台时发一次。</li>
+        <li><strong>为什么不包 <code>beginBackgroundTask</code></strong>：写的是几 KB 的 JSON、同步完成，进后台的通知回调本身有几秒时间。</li>
+        <li><strong>迁移在 iOS 上也跑</strong>：<code>migrateLegacyThemeProfileIfNeeded</code> 读的 <code>UserDefaults</code> 键 iOS 上从没写过，只会记下「已迁移」；<code>migrateResidentLimitDefaultsIfNeeded</code> 在第一次启动时把修订号写进设置，随自动保存落盘——这也是在设备上验证存盘的信号。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="research">
+  <h2>前期调研</h2>
+  <details>
+    <summary>上游</summary>
+    <div class="details-body">
+      <p><code>UIFoundationSettings</code> 的三个源文件只 import <code>Foundation</code> 与 <code>Observation</code>，却包在 <code>#if Settings &amp;&amp; os(macOS)</code> 里（UIFoundation <code>Sources/UIFoundationSettings/*.swift:1</code>）。上游提案 0042 把条件改成 <code>#if Settings</code>、补齐 <code>@available</code>，并给 <code>SettingsStore</code> 加同步 <code>load()</code>，已随 0.48.0 发布（2026-11-20）。</p>
+    </div>
+  </details>
+  <details>
+    <summary>依赖声明</summary>
+    <div class="details-body">
+      <p><code>RuntimeViewerSettings</code> 只在 AppKit 平台依赖 <code>UIFoundationSettings</code>（<code>RuntimeViewerPackages/Package.swift:407</code>），测试 target 同样（<code>:589</code>）；<code>RuntimeViewerSettingsUI</code> 的两条依赖（<code>:423-424</code>）与本篇无关。UIFoundation 现在的下限是 <code>from: "0.47.0"</code>（<code>:179</code>）。</p>
+    </div>
+  </details>
+  <details>
+    <summary>只在 macOS 上的部分</summary>
+    <div class="details-body">
+      <p><code>Settings.swift</code> 的 import（<code>:5-7</code>）、<code>applicationDirectoryName</code> / <code>applicationDirectoryURL</code> / <code>store</code>（<code>:48-72</code>）、<code>PersistentSettings</code> 遵循（<code>:75-95</code>）、<code>SettingsAccess</code> 的两个分支（<code>:108-122</code>）、两项迁移（<code>:177-241</code>）、<code>current</code> 与 <code>preview</code> 的分支（<code>:243-277</code>）；<code>InMemorySettingsStorage.swift</code> 整个文件（<code>:1</code>）。这些都只用 Foundation 与 <code>UIFoundationSettings</code>。</p>
+    </div>
+  </details>
+  <details>
+    <summary>留在 macOS 上的</summary>
+    <div class="details-body">
+      <p><code>Settings+Types.swift:179</code> 起 MCP 端口文件的位置（MCP 只在 Mac 上）、<code>ApplicationRelauncher.swift</code>、<code>SourceEditorFrameworks.swift</code>——都不动。</p>
+    </div>
+  </details>
+  <details>
+    <summary>macOS 的生命周期</summary>
+    <div class="details-body">
+      <p><code>RuntimeViewerUsingAppKit/.../App/SettingsLifecycleController.swift</code> 在 <code>applicationDidFinishLaunching</code> 里开 <code>Task { await settings.load() }</code>，在 <code>applicationShouldTerminate</code> 里 <code>flushSynchronously()</code> 后回 <code>.terminateNow</code>；<code>AppDelegate.swift:90</code>、<code>:106</code> 调用它。</p>
+    </div>
+  </details>
+  <details>
+    <summary>iOS 的生命周期</summary>
+    <div class="details-body">
+      <p><code>RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/AppDelegate.swift</code> 在 <code>application(_:didFinishLaunchingWithOptions:)</code> 里依次注册注入与交叉引用命令、防挂起、建 <code>.local</code>、启动引擎管理器；没有任何设置相关的调用。<code>SceneDelegate</code> 只实现了 <code>scene(_:willConnectTo:options:)</code>。iOS 没有 <code>applicationShouldTerminate</code>；App 可能在后台被直接杀掉，不会收到任何回调。</p>
+    </div>
+  </details>
+  <details>
+    <summary>工程</summary>
+    <div class="details-body">
+      <p><code>RuntimeViewerUsingUIKit</code> 文件夹是 <code>RuntimeViewerUsingUIKit</code>、<code>-JB</code>、<code>RuntimeViewerUsingVision</code> 三个 target 共用的同步文件夹（<code>RuntimeViewerUsingUIKit.xcodeproj/project.xcproj:35-68</code>），在 <code>App/</code> 里新增文件三个 target 都会编，不用改工程文件。</p>
+    </div>
+  </details>
+  <details>
+    <summary>测试</summary>
+    <div class="details-body">
+      <p><code>SettingsPersistenceTests.swift</code> 与 <code>SettingsResidentLimitMigrationTests.swift</code> 只因整份文件包在 <code>#if os(macOS)</code> 里而限于 macOS，内容只用 <code>InMemorySettingsStorage</code>、<code>SettingsStore</code> 与 <code>SettingsAccess(store:)</code>。测试只在 Mac 上跑，放开后覆盖的就是各平台共用的那份代码。</p>
+    </div>
+  </details>
+  <details>
+    <summary>派生数据</summary>
+    <div class="details-body">
+      <p>系统身份 <code>RuntimeDerivedDataSystemIdentity</code> 与读取标记 <code>RuntimeDerivedDataReadingMarker</code> 都有 <code>#if os(macOS)</code> 分支（<code>RuntimeViewerCore/Sources/RuntimeViewerCore/DerivedDataStorage/</code>）；派生数据只给 Find 语料用，而 iOS 上还没有 Find。</p>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案考量</h2>
+  <details>
+    <summary>4 个方案，均未采用</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>RuntimeViewer 自己在 iOS 上写一套持久化、不改上游</strong>：愿景第七条取舍已经否掉——同一份设置走两套持久化，<code>accessPersistedValues()</code> 那条规则要守两遍。</li>
+        <li><strong>iOS 上也像 macOS 那样开 <code>Task</code> 异步读</strong>：第一个 scene 可能在读完之前就读了默认值；读完之前的改动会把默认值写回去。</li>
+        <li><strong>在 <code>SceneDelegate.sceneDidEnterBackground</code> 里写盘</strong>：多 scene 时语义不对，见详细设计。</li>
+        <li><strong>把 macOS 也改成同步读取</strong>：macOS 的读取时机没出过问题，本篇不改 Mac 的行为；第三步合并两个控制器时再统一。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <p>无。iOS 上还没有能改设置的界面；设置照旧取默认值，只是现在会落盘。Mac 版一切照旧。</p>
+  <h3>可发现性</h3>
+  <p>无新功能。</p>
+  <h3>数据与配置兼容</h3>
+  <ul>
+    <li>iOS 上第一次启动时没有存储，取默认值，与今天一样；迁移把修订号写进设置后，App 容器里出现 <code>Library/Application Support/RuntimeViewer[-Debug]/settings.json</code>。</li>
+    <li>Mac 上的文件、格式、位置都不变。</li>
+    <li>越狱版若装成不带沙盒的系统 App，Application Support 是 <code>/var/mobile/Library/Application Support</code>，Debug 与 Release 因目录名不同仍互不干扰（<strong>待在 vphone 上核实</strong>它实际装在哪种容器里）。</li>
+  </ul>
+  <h3>平台与最低版本</h3>
+  <p>最低版本不变：RuntimeViewerPackages 是 iOS 18、visionOS 2，高于 Observation 要求的 iOS 17、visionOS 1。iOS、越狱版 iOS 与 visionOS 三个 target 行为相同。<code>os(macOS)</code> 在 Mac Catalyst 上为假，所以 Catalyst 编译时也走放开后的代码；但依赖 <code>RuntimeViewerSettings</code> 的只有 AppCore 与设置界面这一层，Catalyst 的 helper 与 service 是不链接包的外壳，没有进程在 Catalyst 上读写设置。</p>
+  <h3>发布</h3>
+  <p>不需要新的权限或 entitlement；不影响公证与 Sparkle。UIFoundation 要先发 0.48.0，RuntimeViewer 的发布 workspace 要跟着解析到它。</p>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol start="0">
+    <li><strong>上游先落地</strong>（已完成）—— UIFoundation 的 0042 合进 <code>main</code> 并打 0.48.0</li>
+    <li><strong>一种 <code>SettingsAccess</code></strong> —— 改动地图里 <code>Package.swift</code>、锁文件、<code>Settings.swift</code>、<code>InMemorySettingsStorage.swift</code>、两份测试
+      <ul>
+        <li>行为：<code>settingsPackageBuildsForIOSAndVisionOS</code>（Ultra 上以 iOS 模拟器、iOS 真机、visionOS 模拟器编 <code>RuntimeViewerSettings</code>）</li>
+        <li>行为：<code>existingSettingsTestsPassOnMac</code>（放开平台后原有用例照过）</li>
+        <li>行为：<code>synchronousLoadAdoptsStoredSettings</code></li>
+        <li>行为：<code>synchronousLoadRunsTheResidentLimitMigration</code></li>
+        <li>行为：<code>synchronousLoadKeepsDefaultsWhenNothingIsStored</code></li>
+        <li>行为：<code>macAppBuildUnchanged</code>（Tuist workspace，Debug）</li>
+      </ul>
+    </li>
+    <li><strong>iOS 的生命周期</strong> —— <code>SettingsLifecycleController.swift</code>（iOS）、<code>AppDelegate.swift</code>（iOS）
+      <ul>
+        <li>行为：<code>iOSAppBuildsForAllThreeTargets</code></li>
+        <li>行为：<code>settingsFileAppearsAfterFirstLaunchOnDevice</code>（在 vphone 上看 App 容器里出现 <code>settings.json</code>；由用户看，或经用户同意由 agent 经 <code>vphone.sock</code> 读）</li>
+      </ul>
+    </li>
+    <li><strong>文档</strong> —— 根 <code>AGENTS.md</code>、愿景、两份索引</li>
+  </ol>
+  <div class="callout callout-note">
+    <p><strong>收尾时必须判断两件事</strong>（判断结果写进决策日志，不允许沉默跳过）：</p>
+    <ul>
+      <li><strong>要不要配套专题文章</strong> —— 预计不需要：读写时机写进根 <code>AGENTS.md</code> 的 <em>Settings Integration</em>。</li>
+      <li><strong>有没有引入新术语</strong> —— 预计没有。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>5 条，最近一条：自定 App 级的进后台与终止通知写盘</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-20</td><td>Created as Draft</td><td>愿景《iOS 版功能对齐》第二步：iOS 上的设置只在内存里，后面几步都要它真正存盘</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>用户选定：只做存储</td><td>设置页搬到 iOS 的工作量大好几倍（上游设置窗口大半绑着 AppKit），照愿景留到第五步</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>自定：派生数据不在本篇开</td><td>iOS 上还没有 Find，派生数据没人读；系统身份与读取标记怎么取留给搬 Find 的那一步</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>自定：iOS 启动时同步读取，靠上游新增的同步 <code>load()</code></td><td>第一个 scene 在启动回调返回后就连接，异步读取赶不上</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>自定：App 级的进后台与终止通知写盘</td><td>iOS 没有 <code>applicationShouldTerminate</code>；多 scene 时单个 scene 进后台不代表 App 进后台</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
