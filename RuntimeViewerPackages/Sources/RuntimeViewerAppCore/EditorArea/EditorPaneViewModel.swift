@@ -37,6 +37,10 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
         /// An image or an object chosen in the pane's jump bar (proposal `editor-jump-bar`).
         @Init(default: Signal<EditorJumpBarChoice>.empty())
         public let jumpBarChoiceSelected: Signal<EditorJumpBarChoice>
+        /// A path chosen in the context menu of a component of the jump bar —
+        /// the one it shows, or the whole one — to put on the pasteboard.
+        @Init(default: Signal<String>.empty())
+        public let jumpBarPathCopied: Signal<String>
     }
 
     /// The commands the context menu of `tabID` offers, in menu order: Close
@@ -162,6 +166,12 @@ public final class EditorPaneViewModel: ViewModel<EditorAreaRoute> {
             guard let self else { return }
             documentState.selectionRouter.trigger(.focusEditorPane(paneID))
             documentState.selectionRouter.trigger(choice.route)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.jumpBarPathCopied.emitOnNext { [weak self] path in
+            guard let self else { return }
+            pasteboardClient.copyString(path)
         }
         .disposed(by: rx.disposeBag)
 

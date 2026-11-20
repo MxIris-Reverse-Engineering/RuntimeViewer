@@ -240,7 +240,8 @@ final class EditorPaneViewController: BaseViewController<EditorPaneViewModel> {
             backgroundClicked: backgroundClickedRelay.asSignal(),
             tabCommandChosen: tabBarView.tabCommandChosenRelay.asSignal(),
             tabsReordered: tabBarView.tabsReorderedRelay.asSignal(),
-            jumpBarChoiceSelected: jumpBarAdapter?.choiceSelected ?? .empty()
+            jumpBarChoiceSelected: jumpBarAdapter?.choiceSelected ?? .empty(),
+            jumpBarPathCopied: jumpBarAdapter?.pathCopied ?? .empty()
         )
         let output = viewModel.transform(input)
 
@@ -568,8 +569,9 @@ private final class EditorPaneJumpBarView: LayerBackedView {
         $0.setAccessibilityLabel("Close Editor Pane")
     }
 
-    /// Small, as Xcode's: its font is the small system font, which the control sets itself.
-    let pathControl = NSPopUpPathControl().then {
+    /// Small, as Xcode's: its font is the small system font, which the control sets itself. A
+    /// component's context menu copies its path (`EditorJumpBarPathControl`).
+    let pathControl = EditorJumpBarPathControl().then {
         $0.controlSize = .small
         $0.setContentHuggingPriority(.required, for: .horizontal)
     }

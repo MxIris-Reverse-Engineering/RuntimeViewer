@@ -18,6 +18,7 @@ struct EditorPaneViewModelTests {
     private let closeButtonClickedRelay = PublishRelay<Void>()
     private let backgroundClickedRelay = PublishRelay<Void>()
     private let jumpBarChoiceRelay = PublishRelay<EditorJumpBarChoice>()
+    private let jumpBarPathCopiedRelay = PublishRelay<String>()
 
     private func makeViewModel(
         for paneID: EditorPane.ID,
@@ -31,7 +32,8 @@ struct EditorPaneViewModelTests {
             tabClosed: tabClosedRelay.asSignal(),
             closeButtonClicked: closeButtonClickedRelay.asSignal(),
             backgroundClicked: backgroundClickedRelay.asSignal(),
-            jumpBarChoiceSelected: jumpBarChoiceRelay.asSignal()
+            jumpBarChoiceSelected: jumpBarChoiceRelay.asSignal(),
+            jumpBarPathCopied: jumpBarPathCopiedRelay.asSignal()
         ))
         return (viewModel, output)
     }
@@ -199,5 +201,17 @@ struct EditorPaneViewModelTests {
         jumpBarChoiceRelay.accept(EditorJumpBarChoice(target: .object(object), destination: .newTab))
         #expect(environment.documentState.editorArea[firstPaneID]?.tabs.count == 2)
         #expect(environment.documentState.selectedRuntimeObject == object)
+    }
+
+    @Test("a path copied from the jump bar's context menu goes on the pasteboard")
+    func jumpBarPathCopiedGoesOnThePasteboard() {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, _) = makeViewModel(for: environment.documentState.editorArea.focusedPaneID, in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        jumpBarPathCopiedRelay.accept("usr/lib/libobjc.A.dylib")
+        jumpBarPathCopiedRelay.accept("/usr/lib/libobjc.A.dylib")
+
+        #expect(environment.pasteboard.copiedStrings == ["usr/lib/libobjc.A.dylib", "/usr/lib/libobjc.A.dylib"])
     }
 }

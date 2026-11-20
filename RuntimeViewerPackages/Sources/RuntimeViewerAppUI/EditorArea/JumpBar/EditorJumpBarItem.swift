@@ -134,6 +134,42 @@ public final class EditorJumpBarItem: NSObject, NSPopUpPathItem {
         }
     }
 
+    /// The path the jump bar shows down to the item, which Copy Path copies: the names of the items
+    /// below the image tree's root, joined by `/`. The engine and the root — a group such as "Dyld
+    /// Shared Cache" or "Frameworks" — are left out, as the image list leaves its roots out
+    /// (`RuntimeImageNode.displayedPath`); an object's names follow its image's. Empty for the
+    /// engine and a root.
+    var displayedPath: String {
+        var names: [String] = []
+        var currentItem: EditorJumpBarItem? = self
+        walkUp: while let item = currentItem {
+            switch item.content {
+            case .source:
+                break walkUp
+            case .folder(let node) where node.parent == nil:
+                break walkUp
+            case .folder, .image, .object:
+                names.append(item.pathComponentName)
+            }
+            currentItem = item.parentItem as? EditorJumpBarItem
+        }
+        return names.reversed().joined(separator: "/")
+    }
+
+    /// The whole path Copy Full Path copies: an image's, or a folder's (`RuntimeImageNode.fullPath`,
+    /// which a root that only groups its children does not have); `nil` for the engine and an
+    /// object.
+    var fullPath: String? {
+        switch content {
+        case .image(let path, _):
+            path
+        case .folder(let node):
+            node.fullPath
+        case .source, .object:
+            nil
+        }
+    }
+
     /// The choice the item stands for in a menu: an image or an object; `nil` for the engine and a
     /// folder, which lead elsewhere and are never chosen themselves.
     var choiceTarget: EditorJumpBarChoice.Target? {

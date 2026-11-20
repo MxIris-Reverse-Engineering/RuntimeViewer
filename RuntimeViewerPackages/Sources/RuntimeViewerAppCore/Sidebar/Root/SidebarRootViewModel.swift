@@ -203,14 +203,25 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     }
 
     /// The commands an image's context menu offers, in menu order. A folder
-    /// row — a path segment, not an image — offers none. Show in Finder only
-    /// where the image is a file on this Mac's disk: the engine runs on this
-    /// Mac, and the path is there — never true of an image read from the dyld
-    /// shared cache, nor of a device's or another Mac's path that happens to
-    /// exist here.
+    /// row — a path segment, not an image — offers only Copy Path and Copy
+    /// Full Path, each where it has something to copy: a root has no path the
+    /// list shows, and a root that only groups its children has no full path.
+    /// Show in Finder only where the image is a file on this Mac's disk: the
+    /// engine runs on this Mac, and the path is there — never true of an image
+    /// read from the dyld shared cache, nor of a device's or another Mac's path
+    /// that happens to exist here.
     public func imageActions(for node: RuntimeImageNode) -> [RuntimeImageAction] {
-        guard node.isLeaf else { return [] }
-        var actions: [RuntimeImageAction] = [.open, .findInImage, .showNamingWordCloud, .copyName, .copyPath]
+        guard node.isLeaf else {
+            var actions: [RuntimeImageAction] = []
+            if !node.displayedPath.isEmpty {
+                actions.append(.copyPath)
+            }
+            if node.fullPath != nil {
+                actions.append(.copyFullPath)
+            }
+            return actions
+        }
+        var actions: [RuntimeImageAction] = [.open, .findInImage, .showNamingWordCloud, .copyName, .copyPath, .copyFullPath]
         if Self.isOnThisMac(documentState.runtimeEngine.source), FileManager.default.fileExists(atPath: node.path) {
             actions.append(.showInFinder)
         }
@@ -233,6 +244,8 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         case .copyName:
             pasteboardClient.copyString(node.name)
         case .copyPath:
+            pasteboardClient.copyString(node.displayedPath)
+        case .copyFullPath:
             pasteboardClient.copyString(node.path)
         case .showInFinder:
             finderClient.revealFile(URL(fileURLWithPath: node.path))
