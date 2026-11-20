@@ -34,4 +34,4 @@ the macOS app's:
 - The file is `Library/Application Support/RuntimeViewer[-Debug]/settings.json` in the app's container.
   The derived data of the Find corpora is not enabled here: the apps have no Find yet.
 
-Background: `Documentations/Evolutions/draft-settings-storage-on-ios.md`.
+Background: `Documentations/Evolutions/0100-settings-storage-on-ios.md`.

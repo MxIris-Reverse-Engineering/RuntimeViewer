@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - iOS 上的设置真正存盘</title>
+<title>0100 - iOS 上的设置真正存盘</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,16 +160,16 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> iOS 上的设置真正存盘</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0100</span></p>
+  <h1><span class="proposal-number">0100</span> iOS 上的设置真正存盘</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-20</dd></div>
     <div><dt>创建日期</dt><dd>2026-11-20</dd></div>
     <div><dt>作者</dt><dd>JH</dd></div>
     <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
-    <div><dt>实现分支</dt><dd><code>feature/settings-storage-on-ios</code></dd></div>
-    <div><dt>原文</dt><dd><code>draft-settings-storage-on-ios.md</code></dd></div>
+    <div><dt>实现分支</dt><dd><code>feature/settings-storage-on-ios</code>，从 <code>next</code> 切出，2026-11-20 合入 <code>next</code></dd></div>
+    <div><dt>原文</dt><dd><code>0100-settings-storage-on-ios.md</code></dd></div>
   </dl>
 </header>
 
@@ -199,7 +199,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
     <ul>
       <li>所属愿景：<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>（第二步）</li>
       <li>关联提案：<a href="0099-engine-management-on-ios.md">0099-engine-management-on-ios</a>（第一步）、<a href="0011-uifoundation-settings-adoption.md">0011-uifoundation-settings-adoption</a>（设置改用 UIFoundation 的存储）；上游 UIFoundation 的 <a href="https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0042-settings-store-on-all-platforms.md">0042-settings-store-on-all-platforms</a>（放开设置存储的平台限定、加同步读取，已随 0.48.0 发布）</li>
-      <li>配套文档：待定 —— 预计无单独文档，规则写进根 <code>AGENTS.md</code> 的 <em>Settings Integration</em></li>
+      <li>配套文档：无单独文档——规则在 <a href="../../RuntimeViewerUsingUIKit/AGENTS.md"><code>RuntimeViewerUsingUIKit/AGENTS.md</code></a> 与根 <code>AGENTS.md</code> 的 <em>Settings Integration</em></li>
       <li>网页版：同目录同名的 <code>.html</code></li>
     </ul>
   </div>
@@ -609,7 +609,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>9 条，最近一条：实现完成，待用户看过后收尾</summary>
+    <summary>10 条，最近一条：Implemented，取号 0100</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -624,6 +624,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-20</td><td>实现中的调整</td><td>一、第一步的四份锁文件（Debug、Distribution workspace 与 Packages、CommandLine 两个包）只手改 UIFoundation 一条 pin 到 0.48.0；全新构建目录下 <code>swift build</code> 解析到远端的 0.48.0，锁文件不被改写。二、同步读取的测试：迁移测试多一个同组参数、走 <code>loadSynchronously()</code> 的版本，持久化测试加三条（读到存储的值、没有存储时保持默认、读完后的修改会写盘）；变异检查（让 <code>loadSynchronously()</code> 直接返回）使 17 处断言变红。三、iOS 上能否编过不单独编 <code>RuntimeViewerSettings</code>，由第二步编三个 iOS 系 App 一起覆盖（它们都编这个包）。四、iOS 那条规则没写进根 <code>AGENTS.md</code>：根文件改前已有 69.9 KB，超过 Codex 读取的 64 KiB 上限，于是新建 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>（项目文件夹不是同步文件夹，可以放），根文件只加规则表一行与一句指引。</td></tr>
           <tr><td class="numeric">2026-11-20</td><td>第二步实现中的调整</td><td>一、<code>SettingsLifecycleController</code>（iOS）要自己 <code>import Dependencies</code>：macOS 那个经 <code>RuntimeViewerArchitectures</code> 间接拿到，iOS 这个没有。二、跨平台守卫测试 <code>CrossPlatformSourceGuardTests</code> 把「清单里只在 AppKit 平台加进来的模块」都当成 macOS 专属，<code>RuntimeViewerSettingsUI</code> 对 <code>UIFoundationSettings</code> 那条依赖还带着条件，于是放开后它报 <code>Settings.swift</code> 与 <code>InMemorySettingsStorage.swift</code> 在 iOS 上导入了 macOS 专属模块；条件的理由已经不在，一并去掉，测试自检名单里的 <code>UIFoundationSettings</code> 换成仍是 macOS 专属的 <code>UIFoundationSettingsUI</code>。</td></tr>
           <tr><td class="numeric">2026-11-20</td><td>实现完成，待用户看过后收尾</td><td>验证都在 Ultra 上：<code>RuntimeViewerSettingsTests</code> 71 个全过；<code>RuntimeViewerAppCoreTests</code> 948 个整包跑有 5 个测试红（Call Hierarchy、<code>BackgroundWorkProcessActivityTests</code>、<code>ReportSharedByEngineTests</code>、<code>OwnerReportingTaskTests</code>、跨平台守卫），守卫测试修好后单独重跑全过，其余四个单独重跑也全过，是整包高负载下的偶发失败；<code>RuntimeViewer iOS</code>（iOS 模拟器）、<code>RuntimeViewer iOS Jailbroken</code>（iOS 真机）、<code>RuntimeViewer visionOS</code>（visionOS 模拟器）用 Debug workspace 编过，它们也编了 iOS 与 visionOS 版的 <code>RuntimeViewerSettings</code>；macOS App 用 Tuist workspace（Debug）编过。会开窗口的 <code>RuntimeViewerAppUITests</code> 没在用户正在用的这台 Mac 上跑。没做的：<code>settingsFileAppearsAfterFirstLaunchOnDevice</code>（设备上第一次启动后出现 <code>settings.json</code>），没有模拟器与设备操作的授权，留给用户。文档判断：iOS 的规则写进新的 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>，根 <code>AGENTS.md</code> 改了 <em>Settings Integration</em> 与 <em>Dependency floors</em>；不另写使用指南或实现说明，没有新术语。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>Implemented，取号 0100</td><td>这一步没有界面可看，用户决定不等验收、先落地，接着提前做 iOS 设置页。设备上的验证（第一次启动后出现 <code>settings.json</code>）没做，留到设置页做好、能在设备上改设置时一起看。文档判断不变：不另写使用指南或实现说明，没有新术语。</td></tr>
         </tbody>
       </table>
       </div>

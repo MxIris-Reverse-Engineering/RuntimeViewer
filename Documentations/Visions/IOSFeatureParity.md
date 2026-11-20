@@ -2,7 +2,7 @@
 
 - **状态**: Active
 - **最后更新**: 2026-11-20
-- **相关提案**: [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md)（第一步，已落地）、[draft-settings-storage-on-ios](../Evolutions/draft-settings-storage-on-ios.md)（第二步）
+- **相关提案**: [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md)（第一步，已落地）、[0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md)（第二步，已落地）
 
 愿景**不做具体决定**，它划定一个方向的边界与取舍原则，让后续每个提案不必重新论证一遍。
 
@@ -233,7 +233,7 @@ MachInjector）、文件引擎给不给凭据，收进几道平台接缝；其�
 | [0094-app-core-without-ui-models](../Evolutions/0094-app-core-without-ui-models.md) | Implemented | 前置：AppCore 不用 AppKit/UIKit 类型，图标、颜色与文字改成值 |
 | [0096-view-models-to-app-core](../Evolutions/0096-view-models-to-app-core.md) | Implemented | 前置：macOS App 的 ViewModel 全部进 AppCore（仍只在 macOS 上编） |
 | [0099-engine-management-on-ios](../Evolutions/0099-engine-management-on-ios.md) | Implemented | 第一步：引擎管理在 iOS 与 visionOS 上可用，iOS app 改由管理器启动引擎 |
-| [draft-settings-storage-on-ios](../Evolutions/draft-settings-storage-on-ios.md) | Accepted | 第二步：iOS 上的设置真正存盘（上游 UIFoundation 放开设置存储的平台限定）；设置页与派生数据不在这一步 |
+| [0100-settings-storage-on-ios](../Evolutions/0100-settings-storage-on-ios.md) | Implemented | 第二步：iOS 上的设置真正存盘（上游 UIFoundation 放开设置存储的平台限定）；设置页与派生数据不在这一步 |
 
 ---
 
