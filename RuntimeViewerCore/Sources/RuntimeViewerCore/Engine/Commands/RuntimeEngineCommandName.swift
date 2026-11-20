@@ -62,6 +62,9 @@ extension RuntimeEngine.CommandName {
     /// A separate command rather than a widening of `loadImage`, because
     /// a progress request ships a different wire envelope.
     static let loadImageWithProgress = Self("loadImageWithProgress")
+    /// Retraces a refused load in the serving process; sent only to engines
+    /// of this build (`RuntimeEngine.diagnosesImageLoadsOnRequest`).
+    static let diagnoseImageLoad = Self("diagnoseImageLoad")
     static let isImageLoaded = Self("isImageLoaded")
     static let isImageIndexed = Self("isImageIndexed")
     static let mainExecutablePath = Self("mainExecutablePath")

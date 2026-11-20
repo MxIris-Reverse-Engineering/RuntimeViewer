@@ -378,7 +378,9 @@ The project uses three Swift Package Manager packages:
   credential, and the service-side host all three services run);
   `RuntimeViewerCore/File/RuntimeFileService.swift` and `RuntimeFileServiceHost.swift` (the
   file service's key, credential and launch payload, and the host that opens the file the payload
-  names); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift` (the Catalyst service's key and
+  names); `RuntimeViewerCore/FrameworkInstance/RuntimeFrameworkService.swift` and
+  `RuntimeFrameworkServiceHost.swift` (the framework service's key, credential and launch payload, and
+  the host that serves the instance's images); `RuntimeViewerCatalystExtensions/MacCatalystRuntimeService.swift` (the Catalyst service's key and
   credential); and the service entry points, `ServicePluginEntry` in `RuntimeViewerServicePlugin`. `RuntimeEngine` and
   `RuntimeEngineManager` know nothing about XPC — they hand an opaque credential on — keep it that
   way. **The service runs at the priority of the requests waiting on it**, and an app in App Nap
@@ -418,14 +420,20 @@ The project uses three Swift Package Manager packages:
   nothing there may open every image at once — a lookup across all of them, like the Objective-C class
   table, opens each only for as long as it reads it. Background:
   `Documentations/Evolutions/0069-file-mode.md`, `Documentations/Evolutions/0077-file-folders.md`
+- `RuntimeViewerFrameworkService` — the XPC service Load Frameworks on My Mac loads and runs frameworks
+  in: `_MultipleInstances`, `disable-library-validation`, one instance and window per Load Frameworks,
+  ended as soon as no window is on it. **Its launch payload never names the frameworks** — a dedicated
+  instance that dies is replaced with the same payload, which would load the crashing framework again.
+  Background: `Documentations/Evolutions/draft-isolated-framework-loading.md`
 - `RuntimeViewerCatalystHelper` — the Mac Catalyst helper app the standalone CLI host opens through
   the helper daemon and that connects back through it
-- `RuntimeViewerServicePlugin` — the code four executables run. **The Catalyst helper and the
-  Catalyst, local and file services are shells**: each only makes its process what it has to be (a
+- `RuntimeViewerServicePlugin` — the code five executables run. **The Catalyst helper and the
+  Catalyst, local, file and framework services are shells**: each only makes its process what it has to be (a
   Catalyst app, a Catalyst XPC service, a macOS XPC service) and loads this macOS bundle from the
   app's `Contents/PlugIns` (`ServicePluginLoader`, compiled into every shell); the plugin does the
-  work — `ServicePluginEntry`'s `launchCatalystHelper()`, `runCatalystService()`, `runLocalService()`
-  and `runFileService()`. So the app ships one copy of RuntimeViewerCore for the four processes:
+  work — `ServicePluginEntry`'s `launchCatalystHelper()`, `runCatalystService()`, `runLocalService()`,
+  `runFileService()` and `runFrameworkService()`. So the app ships one copy of RuntimeViewerCore for the
+  five processes:
   dead stripping works inside one binary only, and a shell that linked a package would carry a copy of
   its own. **Changes to what a service does go into the plugin, and a shell links no package.** A
   shared dynamic RuntimeViewerCore was tried and does not work: Xcode turns every package target that
@@ -627,13 +635,14 @@ The five injection commands (`injectionCapability`, `processList`, `applicationI
 **Every process that serves a `RuntimeEngine` and links `RuntimeViewerInjection` must call
 `RuntimeInjection.install()` exactly once at its entry point, before any engine connects** —
 including the processes that cannot inject anything. The rule has no exceptions to reason about:
-*linked it ⇒ call it*. The eleven places that do, today:
+*linked it ⇒ call it*. The twelve places that do, today:
 
 | Process | Where |
 |---------|-------|
 | macOS app | `AppDelegate.main()` |
 | Local XPC service | `ServicePluginEntry.runLocalService()` |
 | File XPC service | `ServicePluginEntry.runFileService()` |
+| Framework XPC service | `ServicePluginEntry.runFrameworkService()` |
 | Mac Catalyst service | `ServicePluginEntry.runCatalystService()` |
 | Mac Catalyst helper | `ServicePluginEntry.launchCatalystHelper()` |
 | `runtime-viewer-cli` (both entry points) | `RuntimeViewerCommandLineMain.main()` |
@@ -684,7 +693,8 @@ code or the corpus store's read phase** — it says why each part has the shape 
 - **Only the two service processes read, write and clean it up.** `ServicePluginEntry.runLocalService()`
   and `ServicePluginEntry.runCatalystService()` call `RuntimeDerivedData.enableInThisProcess()` before any engine exists.
   Every other process leaves it off — the app itself (its Bonjour server engine answers commands in process), the
-  command-line host, the Catalyst helper application, an injected payload, a test — and the app only measures
+  command-line host, the Catalyst helper application, the framework service (its shared cache images are
+  borrowed from My Mac, and the frameworks loaded into it are no cache images), an injected payload, a test — and the app only measures
   and deletes it (`RuntimeDerivedDataMaintenance`). Leaving the call out fails quietly: that process just goes
   without derived data. **The file service is the third**, with a switch of its own,
   `RuntimeDerivedData.enableForFileEngineInThisProcess()`: its engine reads a cache from disk, so its store

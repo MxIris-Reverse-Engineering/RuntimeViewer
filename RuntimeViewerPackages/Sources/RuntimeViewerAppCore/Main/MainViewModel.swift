@@ -10,17 +10,6 @@ import RuntimeViewerCommunication
 import RuntimeViewerEngineManagement
 import RuntimeViewerSettings
 
-enum MessageError: LocalizedError {
-    case message(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .message(let message):
-            return message
-        }
-    }
-}
-
 /// The object on screen, offered to the toolbar's share button as its interface file.
 public struct SharingData {
     public let provider: NSItemProvider
@@ -99,6 +88,8 @@ public final class MainViewModel: ViewModel<MainRoute> {
         /// Load Frameworks… loads an image into the engine's process, which a
         /// file engine does not have.
         public let isLoadFrameworksEnabled: Driver<Bool>
+        /// Where Load Frameworks loads, for its tooltip.
+        public let loadFrameworksToolTip: Driver<String>
         public let requestFrameworkSelection: Signal<Void>
         public let requestSaveLocation: Signal<(name: String, type: UTType)>
         public let requestRestartConfirmation: Signal<Void>
@@ -181,33 +172,41 @@ public final class MainViewModel: ViewModel<MainRoute> {
 
         let requestFrameworkSelection = input.loadFrameworksClick.asSignal()
 
-        // The picked framework is loaded by the document's engine, in whatever
-        // process that engine runs in. It used to be `Bundle.load` — a dlopen
-        // into this process — which is exactly what moving the local engine
-        // into the XPC service exists to stop. A framework of the shared cache
-        // an attached process borrows still goes into that process: loading it
-        // there is what was asked for, and its data still comes from its owner.
+        // Load Frameworks on My Mac opens a window of its own on a new instance
+        // of the framework service, so that nothing the frameworks do lands in
+        // My Mac's process and closing the window unloads them; a window
+        // already on such an instance loads into it. On any other engine the
+        // frameworks go into that engine's process, as they always did: a
+        // framework of the shared cache an attached process borrows still goes
+        // into that process, its data still coming from its owner (proposal
+        // `isolated-framework-loading`).
         input.frameworksSelected.emitOnNext { [weak self] urls in
-            guard let self else { return }
-            Task { @MainActor in
-                for url in urls {
-                    do {
-                        guard let executableURL = Bundle(url: url)?.executableURL else {
-                            throw MessageError.message("\(url.lastPathComponent) has no executable to load.")
-                        }
-                        // The user's own load, which the Report's Manual Loading records
-                        // (proposal `editor-jump-bar`).
-                        let runtimeEngine = self.documentState.runtimeEngine
-                        let executablePath = executableURL.path
-                        try await self.documentState.recordingManualLoad(ofImageAt: executablePath) { _ in
-                            try await runtimeEngine.loadImageInServingProcess(at: executablePath)
-                        }
-                    } catch {
-                        self.errorRelay.accept(error)
-                    }
-                }
+            guard let self, !urls.isEmpty else { return }
+            switch documentState.runtimeEngine.source {
+            case .local:
+                router.trigger(.openIsolatedFrameworks(urls))
+            case .file:
+                break
+            default:
+                let frameworkLoader = documentState.frameworkLoader
+                Task { await frameworkLoader.load(frameworksAt: urls) }
             }
         }.disposed(by: rx.disposeBag)
+
+        // A refusal in a window that shows something is diagnosed in a sheet;
+        // an empty framework instance window shows it in its panes instead.
+        documentState.frameworkLoader.$state.asObservable()
+            .distinctUntilChanged()
+            .filter { state in
+                if case .failed = state { return true }
+                return false
+            }
+            .observeOnMainScheduler()
+            .subscribeOnNext { [weak self] _ in
+                guard let self, !documentState.frameworkLoader.showsPageInEmptyPanes else { return }
+                router.trigger(.frameworkLoadFailure)
+            }
+            .disposed(by: rx.disposeBag)
 
 
 
@@ -374,6 +373,13 @@ public final class MainViewModel: ViewModel<MainRoute> {
             if case .file = engine.source { return false }
             return true
         }
+        let loadFrameworksToolTip = runtimeEngineOfDocument.map { engine -> String in
+            switch engine.source {
+            case .local: "Load Frameworks in a New Isolated Instance"
+            case .frameworkInstance: "Load Frameworks into This Instance"
+            default: "Load Frameworks"
+            }
+        }
 
         let sharingServiceData = Observable.combineLatest(selectedRuntimeObjectObservable, focusedInterfaceLanguageObservable)
             .map { [weak self] selected, interfaceLanguage -> [SharingData] in
@@ -537,10 +543,34 @@ public final class MainViewModel: ViewModel<MainRoute> {
                 guard let imageName else { return runtimeEngine.source.description }
                 return "\(runtimeEngine.source.description) - \(imageName)"
             },
-            toolbarTitle: currentImageName.map { $0 ?? "RuntimeViewer" },
-            toolbarSubtitle: selectedRuntimeObjectObservable
-                .map { $0?.displayName ?? "" }
-                .asDriver(onErrorJustReturn: ""),
+            // A framework instance's window is named after its first framework
+            // until an image is open, and says how its load stands.
+            toolbarTitle: Driver.combineLatest(
+                documentState.$runtimeEngineSession.asDriver().map(\.engine),
+                currentImageName
+            ).map { runtimeEngine, imageName in
+                if let imageName { return imageName }
+                if case .frameworkInstance(_, let frameworkURL, _) = runtimeEngine.source {
+                    return frameworkURL.lastPathComponent
+                }
+                return "RuntimeViewer"
+            },
+            toolbarSubtitle: Observable.combineLatest(
+                selectedRuntimeObjectObservable,
+                documentState.$runtimeEngineSession.asObservable().map(\.engine),
+                documentState.frameworkLoader.$state.asObservable()
+            )
+            .map { selectedObject, runtimeEngine, frameworkLoadState -> String in
+                if let selectedObject { return selectedObject.displayName }
+                guard case .frameworkInstance = runtimeEngine.source else { return "" }
+                switch frameworkLoadState {
+                case .idle: return "Isolated"
+                case .loading: return "Loading…"
+                case .failed: return "Couldn't Load"
+                case .instanceStopped: return "Stopped"
+                }
+            }
+            .asDriver(onErrorJustReturn: ""),
             sharingServiceData: sharingServiceData,
             isSavable: documentState.$selectedRuntimeObject.asDriver().map { $0 != nil },
             isSidebarBackHidden: documentState.$currentImageNode.asDriver().map { $0 == nil },
@@ -562,6 +592,7 @@ public final class MainViewModel: ViewModel<MainRoute> {
             runtimeSourcePickerContent: runtimeSourcePickerContent,
             attachAvailability: attachAvailability,
             isLoadFrameworksEnabled: isLoadFrameworksEnabled,
+            loadFrameworksToolTip: loadFrameworksToolTip,
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),

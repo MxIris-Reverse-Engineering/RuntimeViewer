@@ -1,6 +1,6 @@
 # Draft - Load Frameworks 改在独立实例里加载，并诊断加载失败
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-19
 - **最后更新**: 2026-11-19
@@ -51,7 +51,7 @@ Load Frameworks 不再把框架装进 My Mac 的 service。在 My Mac 的窗口�
 - 控制台与 `dlerror()` 里的 `Library not loaded / Referenced from / Reason: tried:` 是同一段文字：`JustInTimeLoader.cpp` 拼出诊断，`DyldAPIs.cpp` 加上 `dlopen(<path>, 0x…):` 前缀。
 - `DYLD_PRINT_SEARCHING` 一类开关只在进程启动时读、要 AMFI 放行，launchd 管的进程会写进 syslog，**没有 API 取得到**。
 - `dlopen_preflight` 只检查顶层镜像的架构切片，不检查依赖，**不能**拿来预检 rpath。
-- `dlopen` 时的 rpath 栈是：主程序（service 外壳）→ 调用 `dlopen` 的镜像（service 插件，RuntimeViewerCore 静态链接在里面）→ 依赖链上的每个加载者；`@executable_path` 展开到 service 自己。
+- `dlopen` 时 dyld 在一条加载链上展开 `@rpath`：链从主程序（service 外壳）开始，接着是调用 `dlopen` 的镜像（service 插件，RuntimeViewerCore 静态链接在里面），再是依赖链上的每个加载者。**查找从最新的一环往回走**：先查发起加载的镜像自己的 rpath，再查加载它的镜像，……，然后是调用 `dlopen` 的镜像，最后才是主程序（`Loader.cpp` 的 `@rpath` 展开沿 `link->previous` 遍历）。rpath 里的 `@loader_path` 按携带它的那个镜像展开，`@executable_path` 展开到 service 自己，相对 rpath 被跳过。
 - 解析 `@rpath/…` 时，dyld 先匹配已加载镜像的 install name（`JustInTimeLoader::matchesPath` 的 `altInstallName`），所以「先按绝对路径加载依赖，再加载要它的框架」**读源码可行，未实测**。落地步骤 1 先用测试实测，不成立就停下回来重议（退路见替代方案）。
 
 ### 现成的 Mach-O 能力
@@ -113,7 +113,7 @@ My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在
 
 1. **缺了什么、谁要它**：从 dyld 原文解析出失败的种类——找不到镜像（`Library not loaded: <install name>` / `Referenced from: <image>`）、找不到符号（`Symbol not found: <symbol>` / `Expected in: <image>`）、镜像不兼容（架构或平台，`mach-o file, but is an incompatible architecture …`）、其他（只显示原文）。
 2. **依赖链**：从要加载的框架沿 `LC_LOAD_DYLIB` 走到出问题的那条边（跳过弱链接与延迟初始化的依赖，与 dyld 一致），显示成 `Foo → Bar ✗`。依赖链上的镜像从磁盘读；已经加载在进程里的、shared cache 里的算作存在。
-3. **dyld 去哪里找了**：缺的是 `@rpath/…` 时，按 dyld 的 rpath 栈逐行列出——这条 rpath 属于谁（主程序、调用 `dlopen` 的镜像、依赖链上的加载者）、rpath 原文、展开后的候选路径、结果（不存在 / 找到 / 不在 shared cache）——再加一句「为什么」：例如 Foo 的第一条 rpath `@executable_path/../Frameworks` 是写给宿主 App 的，在这里 `@executable_path` 是这个实例自己。另列 dyld 自己报的尝试列表（从原文解析，带它的理由）。
+3. **dyld 去哪里找了**：缺的是 `@rpath/…` 时，按 dyld 的查找顺序（发起加载的镜像、它的加载者、调用 `dlopen` 的镜像、主程序）逐行列出——这条 rpath 属于谁（主程序、调用 `dlopen` 的镜像、依赖链上的加载者）、rpath 原文、展开后的候选路径、结果（不存在 / 找到 / 不在 shared cache）——再加一句「为什么」：例如 Foo 的第一条 rpath `@executable_path/../Frameworks` 是写给宿主 App 的，在这里 `@executable_path` 是这个实例自己。另列 dyld 自己报的尝试列表（从原文解析，带它的理由）。
 4. **能怎么修**（只在框架实例里提供，见下一节）。
 
 诊断页还有：架构与系统版本、「Diagnosed in the instance that tried the load」这样的出处说明、可折叠的 dyld 原文、「Copy Diagnosis」（纯文本，含以上全部）与「Show Foo in Finder」。
@@ -163,13 +163,13 @@ My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `Core/Images/DylibPathResolver.swift` · `DylibPathResolver` | 修改 | 新增 `resolution(of:imagePath:rpathStack:mainExecutablePath:) -> Resolution`，逐条记下 rpath 的归属、原文、展开、候选与结果；原 `resolve(…)` 改为取它的 `resolvedPath`，日志不变 | 诊断要的正是这份尝试记录 | 1 |
+| `Core/Images/DylibPathResolver.swift` · `DylibPathResolver` | 修改 | 新增 `resolution(of:loadedBy:rpathStack:mainExecutablePath:) -> Resolution`，按给定的查找顺序逐条记下归属、原文、候选与结果；rpath 里的 `@loader_path` 按携带它的镜像展开，相对 rpath 跳过。原 `resolve(…)` 不动 | 诊断要的正是这份尝试记录 | 1 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadDiagnosis.swift` · `RuntimeImageLoadDiagnosis` | 新增 | 线上模型：失败、依赖链、rpath 查找、dyld 的尝试、说明、修复方案、出处；`init(dyldMessage:imagePath:)` 给旧版对端的简化诊断 | 诊断要过线，App 与 Core 共用 | 1 |
 | `Core/ImageLoadDiagnosis/DyldLoadFailureMessage.swift` · `DyldLoadFailureMessage` | 新增 | 解析 `dlerror()` 原文：种类、install name、Referenced from、符号、Expected in、`tried:` 列表及理由 | 两种诊断都从原文起步 | 1 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadDiagnostician.swift` · `RuntimeImageLoadDiagnostician` | 新增 | 在本进程模拟 dyld 的查找：rpath 栈、依赖遍历、修复方案；`Environment` 是测试接缝 | 诊断本身 | 1 |
 | `CoreTests/ImageLoadDiagnosis/ImageLoadFixtures.swift` | 新增 | 测试时用 `xcrun clang` 在临时目录建 `Example.app` 及其 `Foo` / `Bar` 框架（名字带随机后缀）、缺符号与 x86_64 的变体 | 诊断要真 Mach-O；随机名防止已加载镜像按 install name 串到别的用例 | 1 |
-| `CoreTests/ImageLoadDiagnosis/PreloadSatisfiesRpathDependencyTests.swift` | 新增 | 实测：Foo 先失败；按绝对路径加载 Bar 后 Foo 成功 | 修复方案的前提（读源码可行、未实测）；不成立就停下 | 1 |
-| `CoreTests/ImageLoadDiagnosis/DyldLoadFailureMessageTests.swift` | 新增 | 三种原文（缺镜像、缺符号、架构不兼容）与未知原文的解析 | 解析器的行为 | 1 |
+| `CoreTests/ImageLoadDiagnosis/RuntimeImageLoadDiagnosticianTests.swift` · `loadingTheDependencyByAbsolutePathFirstLetsTheLoadSucceed` | 新增 | 实测：Foo 先失败；按绝对路径加载 Bar 后 Foo 成功 | 修复方案的前提（读源码可行、未实测）；不成立就停下 | 1 |
+| `CoreTests/ImageLoadDiagnosis/DyldLoadFailureMessageParsingTests.swift` | 新增 | 三种原文（缺镜像、缺符号、架构不兼容）与未知原文的解析 | 解析器的行为 | 1 |
 | `CoreTests/ImageLoadDiagnosis/RuntimeImageLoadDiagnosticianTests.swift` | 新增 | 依赖链、rpath 行、`@executable_path` 的说明、宿主 App 推断、修复方案的顺序、搜索路径、找不到时没有方案 | 诊断的行为 | 1 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadError.swift` · `RuntimeImageLoadError` | 新增 | `LocalizedError`（描述 = dyld 原文），带可选的诊断；`Codable` | 调用方拿到的失败 | 2 |
 | `Core/ImageLoadDiagnosis/RuntimeImageLoadResponse.swift` · `RuntimeImageLoadResponse` | 新增 | `LoadImageCommand` 的新回复：`failure: RuntimeImageLoadError?`，为空时编码成空对象 | 诊断放在回复里过线 | 2 |
@@ -210,33 +210,35 @@ My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在
 | `EM/RuntimeEngineManager.swift` · `FrameworkInstanceLaunching` | 新增 | 闭包接缝：`.live` 用 `RuntimeFrameworkService.credential(for:)`，iOS 上 `.unavailable` | 与 iOS 移植的平台接缝同一写法 | 5 |
 | `EM/RuntimeEngineManager+PlatformServices.swift` | 修改 | `FrameworkInstanceLaunching.live` 的两个平台分支 | 平台代码集中一处 | 5 |
 | `EMT/FrameworkInstanceEngineManagementTests.swift` | 新增 | 起实例后列在「Isolated Frameworks」；结束后拿掉；是借用方、owner 是 My Mac；不分享、不进 CLI 目录 | 管理器的行为 | 5 |
-| `RuntimeViewerCommandLine/Sources/RuntimeViewerCommandLineInterface/Execution/SourceCatalog.swift` | 修改 | `.frameworkInstance` 返回 `nil` | CLI 不列 | 5 |
+| `RuntimeViewerCommandLine/Sources/RuntimeViewerCommandLineInterface/Execution/SourceCatalog.swift` | 修改 | `.frameworkInstance` 返回 `nil` | CLI 不列 | 4（App 要编过，提前） |
 | `AppCore/FrameworkLoading/FrameworkLoader.swift` · `FrameworkLoader` | 新增 | 一个文档的加载器：逐个加载、记进 Manual Loading、失败时的诊断与简化诊断、修复、重试、宿主 App 与搜索路径、实例停止 | 加载流程的唯一归属 | 6 |
 | `AppCore/FrameworkLoading/FrameworkLoadState.swift` | 新增 | `FrameworkLoadState`、`FrameworkLoadFailure`、`FrameworkLoadInterruption` | 加载器的状态值 | 6 |
-| `AppCore/FrameworkLoading/FrameworkInstanceName.swift` | 新增 | 由选中的框架算出来源名 | 一处定名 | 6 |
+| `AppCore/FrameworkLoading/RuntimeFrameworkInstance+Loading.swift` · `RuntimeFrameworkInstance(loading:)` | 新增 | 由选中的框架算出实例与来源名 | 一处定名 | 6 |
 | `AppCore/FrameworkLoading/ImageLoadDiagnosisPresentation.swift` | 新增 | 诊断页的值：标题、结论、标签、横幅与按钮标题、依赖链、两张表、原文、拷贝用的纯文本 | 视图只画值 | 6 |
-| `AppCore/FrameworkLoading/FrameworkLoadViewModel.swift` · `FrameworkLoadViewModel` | 新增 | `ViewModel<MainRoute>`；`Presentation.editorArea` / `.sheet`；页面状态、各按钮的 `Input` | 加载页与诊断页 | 6 |
+| `AppCore/FrameworkLoading/FrameworkLoadViewModel.swift` · `FrameworkLoadViewModel<Route>` | 新增 | 对路由类型泛型（照 `MCPStatusPopoverViewModel`）：编辑栏里用内容面板的路由，sheet 里用主路由并带 `dismissRoute`；页面状态 `FrameworkLoadPage`、各按钮的 `Input` | 加载页与诊断页，一个 view model 两处用 | 6 |
 | `AppCore/Engine/RuntimeFrameworkInstanceRetirement.swift` | 新增 | 订阅占用变化，`.vacated` 的框架实例立即结束 | 关窗即退出 | 6 |
 | `AppCore/Document/DocumentState.swift` · `DocumentState` | 修改 | `frameworkLoader`（懒建） | 文档持有加载器 | 6 |
 | `AppCore/Main/MainRoute.swift` · `MainRoute` | 修改 | `openIsolatedFrameworks([URL])`、`frameworkLoadFailure` | 开新窗口、弹 sheet | 6 |
 | `AppCore/Main/MainViewModel.swift` · `MainViewModel` | 修改 | `frameworksSelected` 按引擎分三路；失败且窗口已有内容时发 `.frameworkLoadFailure`；工具栏标题与副标题在框架实例上按加载状态；按钮 tooltip | 入口分流 | 6 |
-| `AppCore/BackgroundWork/Indexing/RuntimeEngine+ImageIndexing.swift` | 修改 | `loadImageForUser` 对新 case 走带进度的加载 | 与 App 同版本 | 6 |
-| `AppCore/Sidebar/Root/SidebarRootViewModel.swift` · `isOnThisMac(_:)` | 修改 | 新 case 为真 | 本机磁盘上的镜像 | 6 |
-| `AppUI/Engine/RuntimeEngineIconProvider.swift` | 修改 | 新 case 用第一个框架的文件图标 | 来源图标 | 6 |
+| `AppCore/BackgroundWork/Indexing/RuntimeEngine+ImageIndexing.swift` | 修改 | `loadImageForUser` 对新 case 走带进度的加载 | 与 App 同版本 | 4（提前） |
+| `AppCore/Sidebar/Root/SidebarRootViewModel.swift` · `isOnThisMac(_:)` | 修改 | 新 case 为真 | 本机磁盘上的镜像 | 4（提前） |
+| `AppUI/Engine/RuntimeEngineIconProvider.swift` | 修改 | 新 case 用第一个框架的文件图标 | 来源图标 | 4（提前） |
+| `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+IndexingEngineReference.swift` | 修改 | 新 case 不带进程号 | 穷举分支 | 4 |
 | `AppCoreTests/FrameworkLoaderTests.swift` | 新增 | 见步骤 6 的行为清单 | 加载器的行为 | 6 |
 | `AppCoreTests/FrameworkLoadViewModelTests.swift`、`ImageLoadDiagnosisPresentationTests.swift` | 新增 | 页面状态与按钮；结论句、横幅、表格行 | 页面的行为 | 6 |
 | `AppCoreTests/RuntimeFrameworkInstanceRetirementTests.swift` | 新增 | 离开即结束；文件引擎与其他引擎不受影响 | 生命周期 | 6 |
-| `AppCoreTests/MainViewModel…Tests`（Load Frameworks 分流） | 新增 | My Mac 发 `.openIsolatedFrameworks`；框架实例与其他引擎交给加载器；文件引擎不可用 | 入口分流 | 6 |
+| `AppCoreTests/MainViewModelLoadFrameworksTests.swift` | 新增 | My Mac 发 `.openIsolatedFrameworks`；框架实例与其他引擎交给加载器；文件引擎不可用；窗口已有内容时失败走 sheet；标题、副标题与按钮提示 | 入口分流 | 6 |
 | `App/App/FrameworkInstanceController.swift` · `FrameworkInstanceController` | 新增 | `openWindow(loadingFrameworksAt:)`：起实例、`Document(runtimeEngine:)`、显示窗口、交给加载器；`start()` 启动 retirement | 照 `FileController` | 7 |
 | `App/App/AppDelegate.swift` | 修改 | `applicationDidFinishLaunching` 里一行 `frameworkInstanceController.start()` | AppDelegate 只派发 | 7 |
 | `App/Main/MainCoordinator.swift` | 修改 | `.openIsolatedFrameworks` 交给 `FrameworkInstanceController`；`.frameworkLoadFailure` 以 sheet 显示 `FrameworkLoadViewController` | 路由 | 7 |
-| `App/EditorArea/EditorAreaCoordinator.swift` | 修改 | 把主路由交给每个 `ContentCoordinator` | 编辑栏里的页面要 `Router<MainRoute>` | 7 |
 | `App/Content/ContentCoordinator.swift` | 修改 | 第四个场景 `frameworkLoad`：空栏（`.placeholder` 与没有条目的 `.back`）在加载器要显示页面时进入它；页面状态变了重新判一次 | 诊断显示在内容区 | 7 |
 | `App/Content/FrameworkLoadViewController.swift` · `FrameworkLoadViewController` | 新增 | 加载页、诊断页、实例停止页；选宿主 App 与搜索路径的 open panel；嵌套的私有视图 `DiagnosisView` | 页面本身 | 7 |
 | `AGENTS.md`（根） | 修改 | Application Targets 加 `RuntimeViewerFrameworkService`；外壳数与「one copy … for the four processes」改为五；install 表加一行；XPC 代码的位置加 `FrameworkInstance/`；Derived data 一节注明它不开 | 文档同步 | 8 |
 | `Configurations/AGENTS.md` | 修改 | 插件段落的外壳数 | 文档同步 | 8 |
 | `Documentations/CommunicationAndEngineArchitecture.md` | 修改 | §4.4 加第四例（`LoadImageCommand` 的可选字段与回复形状）；§3.6 的 service 清单 | 兼容规则的实例 | 8 |
-| `Documentations/Glossary.md` | 修改 | 落地时判断：「独立实例 / framework instance」「加载诊断」 | 新术语 | 8 |
+| `Documentations/Glossary.md` | 修改 | 新增「框架实例」「加载诊断」；服务插件一条改为五个外壳 | 新术语 | 8 |
+| `Documentations/DerivedData.md` | 修改 | 注明框架 service 不开派生数据 | 文档同步 | 8 |
+| `RuntimeViewerCore/Sources/AGENTS.md` | 修改 | 目录表加 `ImageLoadDiagnosis/` 与 `FrameworkInstance/` | 文档同步 | 1、3 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本提案 | 索引 | 0 |
 | `RuntimeViewerCore/Tests/AGENTS.md` | 不动 | 框架实例不开派生数据，测试不碰真实位置 | — | — |
 | `RuntimeViewerMCP/`、CLI 的命令 | 不动 | 非目标 | — | — |
@@ -280,7 +282,7 @@ RuntimeViewerEngineManagement
 
 RuntimeViewerAppCore
 ├─ + FrameworkLoading/   FrameworkLoader, FrameworkLoadState, FrameworkLoadViewModel,
-│                        ImageLoadDiagnosisPresentation, FrameworkInstanceName
+│                        ImageLoadDiagnosisPresentation, RuntimeFrameworkInstance(loading:)
 ├─ + Engine/RuntimeFrameworkInstanceRetirement
 ├─ Main/MainViewModel    ~ frameworksSelected: My Mac -> new window; others -> loader
 └─ Main/MainRoute        + openIsolatedFrameworks([URL]), frameworkLoadFailure
@@ -377,7 +379,9 @@ public struct RuntimeImageLoadDiagnosis: Codable, Sendable, Hashable {
     public struct ChainLink: Codable, Sendable, Hashable {
         public var imagePath: String
         public var installName: String
-        public var isResolved: Bool
+        /// The path the load name resolved to; nil on the edge that failed.
+        public var resolvedPath: String?
+        public var isResolved: Bool { resolvedPath != nil }
     }
 
     /// One place dyld looked for a missing `@rpath/` image.
@@ -483,7 +487,7 @@ struct RuntimeImageLoadDiagnostician {
 算法：
 
 1. `DyldLoadFailureMessage(parsing:)` 解出失败与 `tried:` 列表。
-2. rpath 栈的底是主程序的 `LC_RPATH`，然后是调用 `dlopen` 的镜像的。从磁盘读要加载的镜像（`MachOFile`，胖文件取本进程 CPU 的切片；取不到切片即「镜像不兼容」，列出它有的架构），深度优先沿非弱链接、非延迟初始化的依赖走，每进一层把加载者自己的 rpath 压栈；一条边先按 install name 匹配已加载的镜像，再用 `DylibPathResolver.resolution(…)` 逐条展开。第一条解析不了的边（原文里有 `Referenced from` 时优先找那一条）就是依赖链的终点。`visited` 集合防环。
+2. rpath 栈按 dyld 的查找顺序排：发起加载的镜像自己的 `LC_RPATH`，再是加载它的镜像们（由近及远），然后是调用 `dlopen` 的镜像，最后是主程序，用户加的搜索路径排在最后。从磁盘读要加载的镜像（`MachOFile`，胖文件取本进程 CPU 的切片；取不到切片即「镜像不兼容」，列出它有的架构），深度优先沿非弱链接、非延迟初始化的依赖走，每进一层把加载者自己的 rpath 压栈；一条边先按 install name 匹配已加载的镜像，再用 `DylibPathResolver.resolution(…)` 逐条展开。第一条解析不了的边（原文里有 `Referenced from` 时优先找那一条）就是依赖链的终点。`visited` 集合防环。
 3. 那条边的 install name 以 `@rpath/` 开头时，`Resolution` 的每一次尝试成为 `RpathSearch` 的一行；`@executable_path` 开头的 rpath 出现在非主程序的镜像上时，加一条 `rpathExpectsHostExecutable` 说明。
 4. 修复方案：宿主 App 候选依次是 `hostApplicationPath` 与要加载的镜像路径上最近的 `.app`；以宿主 App 的 `Bundle.executablePath` 作主程序、`searchPaths` 作额外 rpath，把整棵依赖树重走一遍。原本解析不了、换了环境能解析的镜像按「依赖在前」排好就是 `imagePathsToLoadFirst`；还有解析不了的就不给方案。缺的镜像在宿主 App 的 `Contents/Frameworks` 里时，加 `dependencyInHostApplication` 说明。
 5. 缺符号时只给依赖链与 `symbolMissingFromImage` 说明（`Expected in` 那个镜像存在，版本不对），不给方案。
@@ -717,7 +721,7 @@ public final class FrameworkLoader {
 - 实例停止：订阅引擎的 `statePublisher`，`.disconnected` 时进入 `.instanceStopped`；`loadAgain()` 等实例重连好，再从头加载 `frameworkURLs`。
 - 全部成功且窗口还什么都没打开：经 `SelectionRoute.openImage(firstExecutablePath, in: 焦点栏)` 打开第一个框架的镜像页。
 
-`FrameworkLoadViewModel`（`ViewModel<MainRoute>`）：
+`FrameworkLoadViewModel<Route>`（对路由类型泛型，sheet 里带 `dismissRoute`）：
 
 - `Input`：`retryClicked`、`remedyClicked`、`hostApplicationChosen: Signal<URL>`、`searchPathChosen: Signal<URL>`、`loadAgainClicked`、`copyDiagnosisClicked`、`showInFinderClicked`、`closeClicked`。
 - `Output`：`page: Driver<FrameworkLoadPage>`（`.loading(title:progress:)`、`.failure(ImageLoadDiagnosisPresentation, actions:)`、`.instanceStopped(…)`、`.none`），`requestHostApplication` / `requestSearchPath`（`Signal<Void>`，视图开 open panel）。
@@ -738,7 +742,7 @@ default:
 
 失败时（`frameworkLoader.$state` 进入 `.failed`），`showsPageInEmptyPanes` 为假就发 `.frameworkLoadFailure`。
 
-`ContentCoordinator` 在进入占位场景时（`.placeholder`，或 `.back` 到没有条目），`documentState.frameworkLoader.showsPageInEmptyPanes` 为真就进入 `frameworkLoad` 场景；它订阅这个值，栏空着时值一变就重新判一次。`FrameworkLoadViewController` 的 view model 由 `ContentCoordinator` 建，路由用 `EditorAreaCoordinator` 交下来的主路由（编辑栏模式下不会用到 `.dismiss`）。
+`ContentCoordinator` 在进入占位场景时（`.placeholder`，或 `.back` 到没有条目），`documentState.frameworkLoader.showsPageInEmptyPanes` 为真就进入 `frameworkLoad` 场景；它订阅这个值，栏空着时值一变就重新判一次。`FrameworkLoadViewController<ContentRoute>` 与它的 view model 由 `ContentCoordinator` 建，路由就是内容面板自己的，没有关闭；sheet 里是 `FrameworkLoadViewController<MainRoute>`，由 `MainCoordinator` 建，带 `.dismiss`，已经开着时再来的失败只更新它。
 
 ### 测试夹具
 
@@ -797,8 +801,8 @@ default:
 
 ## 落地步骤
 
-1. **诊断本身（Core，无界面）** —— 改动地图里步骤 1 的行
-   - 先跑 `PreloadSatisfiesRpathDependencyTests`：**不通过就停下回来重议修复方案**，不往下做。
+1. **诊断本身（Core，无界面）** —— 改动地图里步骤 1 的行（**已完成**）
+   - 先跑 `loadingTheDependencyByAbsolutePathFirstLetsTheLoadSucceed`：**不通过就停下回来重议修复方案**，不往下做。（已通过）
    - 行为：
      - `aMissingRpathDependencyFailsTheLoad`
      - `loadingTheDependencyByAbsolutePathFirstLetsTheLoadSucceed`
@@ -817,7 +821,7 @@ default:
      - `alreadyLoadedImagesCountAsResolvedByInstallName`
      - `dylibPathResolverResolveStillReturnsTheSamePaths`
 
-2. **诊断随失败的加载过线（Core）** —— 步骤 2 的行
+2. **诊断随失败的加载过线（Core）** —— 步骤 2 的行（**已完成**）
    - 行为：
      - `servingProcessLoadFailureCarriesDiagnosisInProcess` / `…OverXPCService` / `…OverTCP`
      - `olderServerFailsWithTextOnlyWhenAskedForDiagnosis`（冻结的旧服务端）
@@ -829,7 +833,7 @@ default:
      - `diagnoseImageLoadIsAnsweredByTheServingProcess`
      - `routingDeclarationListsDiagnoseImageLoadAsNeither`
 
-3. **框架实例的 Core 与传输** —— 步骤 3 的行
+3. **框架实例的 Core 与传输** —— 步骤 3 的行（**已完成**）
    - 核对所有编码 `RuntimeSource` 的地方，确认新 case 不进持久化、不发给对端，结论写进决策日志。
    - 行为：
      - `frameworkInstanceSourcesAreEqualByIdentifierAlone`
@@ -846,14 +850,14 @@ default:
      - `processCatalogStillDoesNotRebuildNodes`
      - `engineForAFrameworkInstanceForwardsFromTheStart`
 
-4. **内嵌 service** —— 步骤 4 的行
+4. **内嵌 service** —— 步骤 4 的行（**已完成**）
    - 构建 Debug-arm64e（`RunScript.sh --no-launch`）与 Release，核对 `Contents/XPCServices/RuntimeViewerFrameworkService.xpc` 在、签名带 `disable-library-validation`、外壳约 86 KB、不链接任何包；`./TuistScript.sh check` 通过。
    - 行为：
      - `appBundleEmbedsTheFrameworkService`（构建后检查）
      - `frameworkServiceShellLinksNoPackage`
      - `pluginAnswersRunFrameworkService`
 
-5. **引擎管理** —— 步骤 5 的行
+5. **引擎管理** —— 步骤 5 的行（**已完成**）
    - 行为：
      - `startedInstanceIsListedUnderIsolatedFrameworks`
      - `terminatedInstanceIsUnlisted`
@@ -862,7 +866,7 @@ default:
      - `commandLineSourceCatalogLeavesFrameworkInstancesOut`
      - `startFailsWhenTheServiceIsNotEmbedded`
 
-6. **App 的加载流程与页面的值（AppCore）** —— 步骤 6 的行
+6. **App 的加载流程与页面的值（AppCore）** —— 步骤 6 的行（**已完成**）
    - 行为：
      - `loadFrameworksOnMyMacOpensAnIsolatedWindow`
      - `loadFrameworksOnAFrameworkInstanceLoadsInPlace`
@@ -886,7 +890,7 @@ default:
      - `sheetPresentationHasNoRetryOrRemedy`
      - `instanceNameCountsTheOtherFrameworks`
 
-7. **App 的窗口、路由与页面（App target）** —— 步骤 7 的行
+7. **App 的窗口、路由与页面（App target）** —— 步骤 7 的行（**已完成**）
    - 行为：
      - `openWindowCreatesADocumentOnANewInstance`
      - `emptyPaneShowsTheFrameworkLoadSceneWhileTheLoaderAsks`
@@ -894,7 +898,7 @@ default:
      - `frameworkLoadFailureRoutePresentsASheet`
      - `closingTheWindowEndsTheInstance`（App 内手工核对，见步骤 8）
 
-8. **文档、实测与收尾** —— 步骤 8 的行
+8. **文档、实测与收尾** —— 步骤 8 的行（**文档已完成；手工核对未做**）
    - 手工核对：用一个真实的、带 `@executable_path` rpath 的第三方 App 框架走一遍失败 → 修复 → 成功；关窗后 `pgrep RuntimeViewerFrameworkService` 没有残留；在注入进程的窗口里制造一次失败，看 sheet；测一个实例的常驻内存，记进本提案的「平台与最低版本」。
    - 文档按改动地图步骤 8 的行更新。
 
@@ -913,3 +917,11 @@ default:
 | 2026-11-19 | 诊断页原型通过 | 静态 HTML 原型回答了诊断页的内容与排布（结论、横幅与三个按钮、依赖链、rpath 查找表与解释、dyld 的尝试列表、可折叠原文、拷贝与 Show in Finder、重试成功后的状态），用户看过认可。原型在 `/tmp`、不进仓库，网页版的界面草图照它重画。 |
 | 2026-11-19 | 写提案时定下的实现方向 | 诊断随失败的加载在回复里带回（`LoadImageCommand` 加可选字段），不加发给所有引擎的新命令——经 Mach service 的旧版 payload 会因未知命令断开（PR121.73）；重新诊断的命令只发给框架实例。实例的 launch payload 不列框架，崩溃后的重连得到空实例，避免崩溃循环。没有窗口就立即结束实例，不像文件引擎那样留宽限期。其余自定的假设列在「设计中自定的假设」。 |
 | 2026-11-19 | Accepted | 用户批准，开始实现。 |
+| 2026-11-19 | 步骤 1 完成 | 实测「先按绝对路径加载依赖」成立。核对 dyld 源码时发现原文把 rpath 栈的构造顺序当成了查找顺序：dyld 从发起加载的镜像往回查到主程序，诊断表按查找顺序排，rpath 里的 `@loader_path` 按携带它的镜像展开。与原设计的出入：`ChainLink` 存 `resolvedPath`、`isResolved` 由它算出；`RpathSearch` 的结果是开放的 `Outcome` 结构；`DylibPathResolver.resolve(…)` 不改，另写一个记录尝试的方法（原方法对祖先的 `@loader_path` rpath 按当前镜像展开，与 dyld 不同，留作后续项）；修复方案列出依赖闭包里所有还没加载的镜像、依赖在前，不再筛掉「本来就找得到」的——多加载的那些本来也会随之加载。预加载的实测放在 `RuntimeImageLoadDiagnosticianTests` 里，解析测试改名 `DyldLoadFailureMessageParsingTests`（原名已被现有测试占用）。 |
+| 2026-11-19 | 步骤 2 完成 | `diagnosesImageLoadsOnRequest` 对 `.local` 也为真：App 里的 My Mac 转发给同一次构建内嵌的 local service，不会是旧版（原文只写了进程内与框架实例）。路径比较改用 `realpath(3)`：dyld 按真实路径登记镜像（`/private/var/…`），而 Foundation 的 `resolvingSymlinksInPath` 会去掉 `/private`，两者对不上；第 3 步的镜像目录按同一规则比较。 |
+| 2026-11-19 | 步骤 3 完成 | 编码 `RuntimeSource` 的只有镜像分享的描述（受 `isMirrorableToPeers` 约束，新 case 为假）与旧书签的迁移（只读旧数据），新 case 不进持久化、不发给对端。实现细节：服务端引擎在构造时自己记下基线镜像，`init(servingFrameworkInstance:)` 不再收这个参数；镜像目录在节点里列出 dyld 拒绝的框架，但不放进 `imagePaths()`——那份列表的每一项都要能取到镜像，`isImageLoaded` 也读它；目录里的路径一律按 dyld 登记的写法（真实路径），经符号链接加载的框架不会出现两次；框架 service 的 host 不像文件 service 那样调高描述符上限，它不成批打开文件。 |
+| 2026-11-19 | 步骤 4 完成 | 用 Tuist 工作区编了 Debug 的整个 App：`RuntimeViewerFrameworkService.xpc` 已嵌入，外壳约 70 KB、只链接系统库，App 的 `Info.plist` 带上了键；`./TuistScript.sh check` 通过。没有另跑 Debug-arm64e 与 Release 构建（各要半小时级，留到第 8 步或发版前），签名与 entitlement 留到第 8 步在签名构建里核对。App 要编过，Packages 与命令行工具里几处对来源的穷举分支提前在这一步补上（原排在第 5、6 步）：索引设置的引擎引用、侧栏的「在本机」、加载带进度、来源图标、CLI 的来源目录。 |
+| 2026-11-19 | 步骤 5 完成 | `terminateFrameworkInstance(_:)` 是同步方法，走现有的 `terminateRuntimeEngine(for:because:)`；没有内嵌 service 时的错误单独一个 `RuntimeFrameworkInstanceError`，与文件引擎的错误并列。 |
+| 2026-11-19 | 步骤 6 完成 | 与原设计的出入：来源名改由 `RuntimeFrameworkInstance(loading:)` 算出，不另建 `FrameworkInstanceName`；诊断页的 `FrameworkLoadViewModel` 照 `MCPStatusPopoverViewModel` 对路由类型做泛型——编辑栏里用内容面板的路由、sheet 里用主路由并带关闭路由，不再让 `EditorAreaCoordinator` 把主路由交给每个编辑栏（第 7 步那一行随之取消）；加载器的测试接缝 `ImageLoading` 另含「等实例回来」，测试不必真等。`MainViewModel` 里只给旧 Load Frameworks 用的 `MessageError` 删掉了。 |
+| 2026-11-19 | 步骤 7 完成 | App target 没有测试目标，这一步写成测试用例名的行为没有单独的测试：它们依赖的状态（加载器何时要求在空栏里显示页面、何时弹 sheet）都在 AppCore 里测过，界面在第 8 步的手工核对里看。新窗口打开后，加载器在实例应答之前就显示加载页并等待它（不再由开窗口的控制器先等）；实例始终不应答时，控制器照 `FileController` 的做法弹 sheet 说明后关窗。诊断页的视图控制器对路由类型做泛型，滚动页的文档视图放在文件作用域（泛型类里的嵌套类型也是泛型）。sheet 已经开着时再来的失败只更新它，不再叠一层。 |
+| 2026-11-19 | 实现完成，待用户看过后收尾 | 八步都已提交推送。验证：Core 全量 802 个用例、Packages 的 AppCore、AppUI 与引擎管理 936 个用例；红的 8 条里 4 条是既有红灯（注入设备引擎两条同包干扰、Call Hierarchy 超时、标题活动指示），另 4 条（交叉引用准备一条、图标绘制一条、`OwnerReportingTask` 两条）单独重跑全过，属满载时的偶发。没做的：手工核对（真实第三方框架走一遍失败、修复、成功，关窗后无残留进程，注入进程窗口的 sheet，实例常驻内存）需要在 App 里点按；签名构建核对 entitlement、Debug-arm64e 与 Release 构建（各半小时级）。文档：根 `AGENTS.md`（服务清单、外壳数、install 表、XPC 代码位置、派生数据）、`Configurations/AGENTS.md`、`RuntimeViewerCore/Sources/AGENTS.md` 目录表、通信架构文档 §4.4 第四例、`DerivedData.md`、术语表加「框架实例」「加载诊断」。不另写实现说明：每个决定的理由都在对应代码的文档注释与本提案里。根 `AGENTS.md` 在 `next` 上已有 68,918 字节，超过它自己写的 64 KiB 上限，这次又加了约 1 KB，没有在这条分支上处理。 |

@@ -24,6 +24,13 @@ protocol RuntimeImageCatalog<Reading>: Sendable {
     /// The sidebar's root nodes over those images.
     func rootNodes() -> [RuntimeImageNode]
 
+    /// Whether the root nodes change with every image loaded — and a load
+    /// refused — so the engine rebuilds them after each. The process
+    /// catalog's do not: its shared cache root lists every image of the cache,
+    /// loaded or not, and rebuilding it costs. A framework instance lists only
+    /// what was loaded into it.
+    var rootNodesFollowLoads: Bool { get }
+
     /// The spelling the section caches key an image by.
     func canonicalImagePath(_ imagePath: String) -> String
 
@@ -71,6 +78,8 @@ protocol RuntimeImageCatalog<Reading>: Sendable {
 // MARK: - Dependencies
 
 extension RuntimeImageCatalog {
+    var rootNodesFollowLoads: Bool { false }
+
     /// Whether the catalog can produce the image at `path`.
     func canOpenImage(at path: String) -> Bool {
         machO(forImagePath: path) != nil

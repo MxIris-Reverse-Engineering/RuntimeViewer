@@ -161,6 +161,17 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
     /// a credential names.
     case file(name: String, url: URL)
 
+    /// Frameworks the user loaded into an instance of the framework service of
+    /// their own — Load Frameworks. Unlike a file's, these are loaded and run:
+    /// the instance `dlopen`s them, constructors and all.
+    ///
+    /// The identity is `identifier` alone — every Load Frameworks starts an
+    /// instance of its own, the same frameworks included; `name` is what menus
+    /// show, and `frameworkURL`, the first framework chosen, is what bookmarks
+    /// are filed under. No transport and no role: in the app an engine on this
+    /// source forwards to the instance, which a credential names.
+    case frameworkInstance(name: String, frameworkURL: URL, identifier: Identifier)
+
     public var description: String {
         switch self {
         case .local: return "My Mac"
@@ -170,6 +181,7 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
         case .directTCP(let name, _, _, _): return name
         case .injectedTCP(let name, _, _, _, _): return name
         case .file(let name, _): return name
+        case .frameworkInstance(let name, _, _): return name
         }
     }
 
@@ -182,7 +194,7 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
 
     public var remoteRole: Role? {
         switch self {
-        case .local, .file: return nil
+        case .local, .file, .frameworkInstance: return nil
         case .remote(_, _, let role),
              .bonjour(_, _, let role),
              .localSocket(_, _, let role),
@@ -220,6 +232,8 @@ extension RuntimeSource: Equatable {
             return leftHost == rightHost && leftPort == rightPort && leftIdentifier == rightIdentifier && leftRole == rightRole
         case (.file(_, let leftURL), .file(_, let rightURL)):
             return leftURL == rightURL
+        case (.frameworkInstance(_, _, let leftIdentifier), .frameworkInstance(_, _, let rightIdentifier)):
+            return leftIdentifier == rightIdentifier
         default:
             return false
         }
@@ -257,6 +271,9 @@ extension RuntimeSource: Hashable {
         case .file(_, let url):
             hasher.combine(6)
             hasher.combine(url)
+        case .frameworkInstance(_, _, let identifier):
+            hasher.combine(7)
+            hasher.combine(identifier)
         }
     }
 }
@@ -286,7 +303,9 @@ extension RuntimeSource {
         // `file` for the same reason, and because a file is opened by the app
         // that shows it: another Mac has no use for the engine, and reading the
         // file there would need the file.
-        case .injectedTCP, .file:
+        // `frameworkInstance` too: the frameworks run in an instance this app
+        // started for one of its windows, and end with it.
+        case .injectedTCP, .file, .frameworkInstance:
             return false
         }
     }
@@ -314,6 +333,8 @@ extension RuntimeSource {
             return role.isClient ? "injectedTCP.\(claimToken.rawValue)" : "injectedTCPServer.\(claimToken.rawValue)"
         case .file(_, let url):
             return "file.\(url.path)"
+        case .frameworkInstance(_, _, let identifier):
+            return "frameworkInstance.\(identifier.rawValue)"
         }
     }
 }

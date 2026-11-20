@@ -77,6 +77,11 @@ extension RuntimeBookmarkScope {
         /// again — on another launch, paired with another cache — is the same
         /// scope, and the same file at another path is another one.
         case file(path: String)
+
+        /// Frameworks loaded into an instance of their own, by the path of the
+        /// first framework chosen: loading that framework again, in another
+        /// instance or on another launch, brings its bookmarks back.
+        case frameworkInstance(path: String)
     }
 }
 
@@ -91,6 +96,7 @@ extension RuntimeBookmarkScope.Identity {
         case directTCP
         case bonjour
         case file
+        case frameworkInstance
     }
 
     public var kind: Kind {
@@ -102,12 +108,13 @@ extension RuntimeBookmarkScope.Identity {
         case .directTCP: .directTCP
         case .bonjour: .bonjour
         case .file: .file
+        case .frameworkInstance: .frameworkInstance
         }
     }
 
     public var role: RuntimeSource.Role? {
         switch self {
-        case .local, .file: nil
+        case .local, .file, .frameworkInstance: nil
         case .remote(_, let role), .localSocket(_, let role), .injectedTCP(_, let role): role
         case .directTCP(_, _, let role), .bonjour(_, _, let role): role
         }
@@ -169,7 +176,7 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
             return "\(port)\(Self.segmentSeparator)\(host ?? "")"
         case .bonjour(let deviceID, let processName, _):
             return "\(deviceID)\(Self.segmentSeparator)\(processName)"
-        case .file(let path):
+        case .file(let path), .frameworkInstance(let path):
             return path
         }
     }
@@ -228,6 +235,10 @@ extension RuntimeBookmarkScope.Identity: RawRepresentable, CustomStringConvertib
         case .file:
             guard roleToken.isEmpty, !remainder.isEmpty else { return nil }
             self = .file(path: remainder)
+
+        case .frameworkInstance:
+            guard roleToken.isEmpty, !remainder.isEmpty else { return nil }
+            self = .frameworkInstance(path: remainder)
         }
     }
 
@@ -377,6 +388,9 @@ extension RuntimeBookmarkScope {
 
         case .file(_, let url):
             return .identified(.file(path: url.path))
+
+        case .frameworkInstance(_, let frameworkURL, _):
+            return .identified(.frameworkInstance(path: frameworkURL.standardizedFileURL.path))
         }
     }
 

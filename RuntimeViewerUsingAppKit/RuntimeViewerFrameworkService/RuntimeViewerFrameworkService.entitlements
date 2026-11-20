@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- This process is where Load Frameworks dlopens the frameworks the user picks,
+	     usually frameworks of other apps. Under the hardened runtime, library validation
+	     would refuse any image not signed by Apple or by this team, so the service
+	     carries the same exception as the local service, which did this before.
+
+	     No App Sandbox: the frameworks are at arbitrary paths, and loading one maps it
+	     executable, both of which the sandbox denies. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

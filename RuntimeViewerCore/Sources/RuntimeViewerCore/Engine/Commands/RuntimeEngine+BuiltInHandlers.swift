@@ -15,6 +15,7 @@ extension RuntimeEngine {
         registrar.register(IsImageIndexedCommand.self)
         registrar.register(MainExecutablePathCommand.self)
         registrar.register(LoadImageCommand.self)
+        registrar.register(DiagnoseImageLoadCommand.self)
         registrar.registerProgress(LoadImageWithProgressCommand.self)
         registrar.register(LoadImageForBackgroundIndexingCommand.self)
         registrar.register(ReloadDataCommand.self)

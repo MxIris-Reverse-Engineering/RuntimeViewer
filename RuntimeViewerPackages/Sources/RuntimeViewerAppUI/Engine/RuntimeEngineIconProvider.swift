@@ -158,8 +158,9 @@ public final class RuntimeEngineIconProvider {
 
     private func iconKind(for engine: RuntimeEngine) -> IconKind {
         switch engine.source {
-        case .file(_, let url):
-            // The file's own: an app's icon for an app, a framework's for a framework.
+        case .file(_, let url), .frameworkInstance(_, let url, _):
+            // The file's own: an app's icon for an app, a framework's for a framework —
+            // for a framework instance, its first framework's.
             return .picture(NSWorkspace.shared.icon(forFile: url.path))
         case .local:
             return .machine

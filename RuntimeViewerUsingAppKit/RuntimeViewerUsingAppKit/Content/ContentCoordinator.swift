@@ -22,6 +22,9 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         case text
         /// An image chosen in the jump bar, before any of its objects (proposal `editor-jump-bar`).
         case image
+        /// An empty pane of a framework instance's window while its Load Frameworks loads, failed or
+        /// lost its instance (proposal `isolated-framework-loading`).
+        case frameworkLoad
     }
 
     let documentState: DocumentState
@@ -42,6 +45,17 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
     /// The image scene's view controller, kept like the text scene's and bound to a new
     /// `ContentImageViewModel` for each image.
     private lazy var imageViewController = ContentImageViewController()
+
+    /// The Load Frameworks page, which follows the document's framework loader.
+    private lazy var frameworkLoadViewController: FrameworkLoadViewController<ContentRoute> = {
+        let viewController = FrameworkLoadViewController<ContentRoute>()
+        let viewModel = FrameworkLoadViewModel<ContentRoute>(documentState: documentState, router: self, dismissRoute: nil)
+        viewController.setupBindings(for: viewModel)
+        viewController.loadViewIfNeeded()
+        return viewController
+    }()
+
+    private let frameworkLoadDisposeBag = DisposeBag()
 
     /// The image the image scene is bound to. A `.back` re-entry of the same image — a tab switch,
     /// a pane that did not change — keeps the binding, so its indexing is not asked about again.
@@ -91,6 +105,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         self.documentState = documentState
         self.editorPaneID = editorPaneID
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
+        followFrameworkLoadPage()
     }
 
     override func prepareTransition(for route: ContentRoute) -> ContentTransition {
@@ -136,11 +151,36 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     private var isCurrentTextScene: Bool { currentScene == .text }
     
+    /// What a pane with nothing open shows: the placeholder, or — while the document's framework
+    /// loader asks for it — the Load Frameworks page.
     private func enterPlaceholderScene() -> ContentTransition {
+        if documentState.frameworkLoader.showsPageInEmptyPanes {
+            guard currentScene != .frameworkLoad else { return .none() }
+            currentScene = .frameworkLoad
+            boundEntry = nil
+            return .set([frameworkLoadViewController], animated: false)
+        }
         guard currentScene != .placeholder else { return .none() }
         currentScene = .placeholder
         boundEntry = nil
         return .set([placeholderViewController], animated: false)
+    }
+
+    /// Switches an empty pane between the placeholder and the Load Frameworks page as the
+    /// document's framework loader asks; a pane showing something is left alone.
+    private func followFrameworkLoadPage() {
+        documentState.frameworkLoader.$showsPageInEmptyPanes.asObservable()
+            .distinctUntilChanged()
+            .skip(1)
+            .observeOnMainScheduler()
+            .subscribeOnNext { [weak self] _ in
+                guard let self else { return }
+                guard currentScene == .placeholder || currentScene == .frameworkLoad,
+                      documentState.editorArea[editorPaneID]?.activeTab.currentEntry == nil
+                else { return }
+                trigger(.placeholder)
+            }
+            .disposed(by: frameworkLoadDisposeBag)
     }
 
     private func enterTextScene(for runtimeObject: RuntimeObject, highlightRequest: ContentHighlightRequest? = nil, forceRebind: Bool) -> ContentTransition {

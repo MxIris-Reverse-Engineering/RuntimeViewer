@@ -278,6 +278,19 @@ package enum DyldUtilities {
         return set
     }
 
+    /// `path` as dyld lists an image loaded from it: every symbolic link
+    /// resolved, `/private` kept — dyld registers a `dlopen`ed image under its
+    /// real path. Not `URL.resolvingSymlinksInPath()`, which strips a leading
+    /// `/private` and so never matches dyld's `/private/var/…`. A path that
+    /// does not exist comes back standardized.
+    package static func pathAsDyldListsIt(_ path: String) -> String {
+        guard let resolved = realpath(path, nil) else {
+            return URL(fileURLWithPath: path).standardized.path
+        }
+        defer { free(resolved) }
+        return String(cString: resolved)
+    }
+
     package static func invalidDyldSharedCacheImagePathsCache() {
         #log(.debug, "Invalidating dyld shared cache image paths cache")
         dyldSharedCacheImagePathsCache = nil

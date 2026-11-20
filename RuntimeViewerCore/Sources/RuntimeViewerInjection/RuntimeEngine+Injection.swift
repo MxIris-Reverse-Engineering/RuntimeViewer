@@ -71,7 +71,8 @@ extension RuntimeEngine {
     /// path it is on would reintroduce exactly the latency this property exists to avoid.
     public nonisolated var injectionTargetsRunOnThisMachine: Bool {
         switch source {
-        case .local, .remote, .localSocket:
+        // A framework instance is a process this Mac's app started.
+        case .local, .remote, .localSocket, .frameworkInstance:
             return true
         case .bonjour:
             return hostInfo.metadata.isSimulator

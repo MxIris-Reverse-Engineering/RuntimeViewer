@@ -22,6 +22,7 @@
   经 `RuntimeDerivedDataController`）。
 - **CLI host 与它拉起的 Catalyst helper App**：命令行与 MCP 都不建语料，第一期不管。
 - **注入的载荷、模拟器、远程设备**：读的是别的进程、别的机器上的镜像，非目标。
+- **框架 service（Load Frameworks 的独立实例）**：系统镜像向 My Mac 借，语料由本地 service 存；加载进来的框架不是 shared cache 的镜像，派生数据本来也不存。打开反而会让它跑本机目录的清理，与本地 service 抢。
 - **测试**：绝不调它，而是用 `RuntimeEngine.useDerivedDataStore(_:)` 给引擎一个临时目录里的存储
   （`RuntimeViewerCore/Tests/AGENTS.md`、`RuntimeViewerPackages/Tests/AGENTS.md`）。
 

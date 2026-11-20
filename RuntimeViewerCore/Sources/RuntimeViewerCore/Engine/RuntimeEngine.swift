@@ -304,7 +304,7 @@ public actor RuntimeEngine {
     /// other source names its transport through `remoteRole`.
     private static func credentialMovesWorkOutOfProcess(for source: RuntimeSource) -> Bool {
         switch source {
-        case .local, .file:
+        case .local, .file, .frameworkInstance:
             return true
         case .remote, .bonjour, .localSocket, .directTCP, .injectedTCP:
             return false
@@ -346,7 +346,12 @@ public actor RuntimeEngine {
         pushesRuntimeData: Bool = true,
         bookmarkScope: RuntimeBookmarkScope? = nil,
     ) {
-        let readsAFileElsewhere = if case .file = source { true } else { false }
+        // A file, or frameworks loaded into an instance: the work happens in
+        // a process of its own from the moment the engine exists.
+        let worksInAnotherProcess = switch source {
+        case .file, .frameworkInstance: true
+        default: false
+        }
         self.init(
             source: source,
             engineID: engineID,
@@ -355,7 +360,7 @@ public actor RuntimeEngine {
             pushesRuntimeData: pushesRuntimeData,
             bookmarkScope: bookmarkScope,
             imageIndex: .process(),
-            forwardsToServiceProcess: readsAFileElsewhere,
+            forwardsToServiceProcess: worksInAnotherProcess,
         )
     }
 
@@ -1296,10 +1301,18 @@ extension RuntimeEngine {
     /// that is not cached yet.
     func _loadImage(at path: String, progressContinuation: LoadingEventContinuation? = nil) async throws {
         let canonical = imageCatalog.canonicalImagePath(path)
-        try imageCatalog.prepareImage(at: canonical)
+        do {
+            try imageCatalog.prepareImage(at: canonical)
+        } catch {
+            // A catalog that lists a refused load shows it at once.
+            if imageCatalog.rootNodesFollowLoads {
+                reloadLocalData(isReloadImageNodes: true)
+            }
+            throw error
+        }
         _ = try await objcSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
         _ = try await swiftSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
-        reloadLocalData(isReloadImageNodes: false)
+        reloadLocalData(isReloadImageNodes: imageCatalog.rootNodesFollowLoads)
         loadedImagePaths.insert(canonical)
         imageDidLoadSubject.send(canonical)
         sendRemoteImageDidLoadIfNeeded(path: canonical)

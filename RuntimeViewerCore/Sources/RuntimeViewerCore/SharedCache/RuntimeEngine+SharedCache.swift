@@ -245,9 +245,16 @@ extension RuntimeEngine {
     /// image an owner keeps included: what Load Frameworks… asks for — the
     /// framework loaded into this engine's process. The owner still answers
     /// for a borrowed image's data.
+    ///
+    /// Throws `RuntimeImageLoadError` when dyld refused the image, with the
+    /// serving process's diagnosis of why; a serving process of an earlier
+    /// version fails with dyld's message alone, as an error of its own.
     public func loadImageInServingProcess(at path: String) async throws {
-        try await performingForegroundLoad {
-            _ = try await dispatchToServingProcess(LoadImageCommand(path: path))
+        let response = try await performingForegroundLoad {
+            try await dispatchToServingProcess(LoadImageCommand(path: path, reportsFailureDiagnosis: true))
+        }
+        if let failure = response.failure {
+            throw failure
         }
         imageDidIndexSubject.send(path)
     }

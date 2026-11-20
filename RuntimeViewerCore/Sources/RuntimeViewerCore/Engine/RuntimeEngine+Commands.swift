@@ -30,13 +30,53 @@ extension RuntimeEngine {
 
     struct LoadImageCommand: RuntimeEngineCommand {
         let path: String
+        /// Set by a requester that reads a refused load from the reply: the
+        /// serving process then answers a `DyldOpenError` with a
+        /// `RuntimeImageLoadResponse` whose `failure` carries its diagnosis,
+        /// instead of failing the request. A peer of an earlier version skips
+        /// the key and fails with dyld's message, which is all such a
+        /// requester then gets. Never set, the reply is the empty object it
+        /// always was (`CommunicationAndEngineArchitecture.md` §4.4).
+        var reportsFailureDiagnosis: Bool?
+
+        init(path: String, reportsFailureDiagnosis: Bool? = nil) {
+            self.path = path
+            self.reportsFailureDiagnosis = reportsFailureDiagnosis
+        }
+
         static var commandName: String { CommandName.loadImage.commandName }
         var subjectImagePath: String? { path }
         static var isForegroundLoad: Bool { true }
         static var indexesSubjectImage: Bool { true }
-        func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
-            try await engine._loadImage(at: path)
-            return RuntimeEngineEmpty()
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeImageLoadResponse {
+            do {
+                try await engine._loadImage(at: path)
+                return RuntimeImageLoadResponse()
+            } catch let error as DyldOpenError where reportsFailureDiagnosis == true {
+                let imagePath = engine.imageCatalog.canonicalImagePath(path)
+                return RuntimeImageLoadResponse(failure: engine.diagnosedLoadFailure(error, forImageAt: imagePath))
+            }
+        }
+    }
+
+    /// Retraces a refused load with a host app or more search paths, to find
+    /// what to load first. Answered by the process that tried the load — its
+    /// dependencies and rpaths are its own, which no shared cache owner can
+    /// answer for, so `subjectImagePath` stays `nil`. Sent only where
+    /// `RuntimeEngine.diagnosesImageLoadsOnRequest` holds.
+    struct DiagnoseImageLoadCommand: RuntimeEngineCommand {
+        let imagePath: String
+        let dyldMessage: String
+        let hostApplicationPath: String?
+        let searchPaths: [String]
+        static var commandName: String { CommandName.diagnoseImageLoad.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeImageLoadDiagnosis {
+            RuntimeImageLoadDiagnostician(environment: .currentProcess()).diagnose(
+                imageAt: engine.imageCatalog.canonicalImagePath(imagePath),
+                dyldMessage: dyldMessage,
+                hostApplicationPath: hostApplicationPath,
+                searchPaths: searchPaths
+            )
         }
     }
 

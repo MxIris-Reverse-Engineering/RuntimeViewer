@@ -395,6 +395,10 @@ public final class DocumentState {
     /// put in place and every `dataChangePublisher` event flush it).
     public private(set) lazy var interfaceCache = RuntimeInterfaceCache(documentState: self)
 
+    /// The window's Load Frameworks: the frameworks it loads into the engine,
+    /// one after another, and where that stands. See `FrameworkLoader`.
+    public private(set) lazy var frameworkLoader = FrameworkLoader(documentState: self)
+
     /// The Find navigator's query and results, shared by the page in each
     /// sidebar level. See `FindSession`.
     public var findSession: FindSession {

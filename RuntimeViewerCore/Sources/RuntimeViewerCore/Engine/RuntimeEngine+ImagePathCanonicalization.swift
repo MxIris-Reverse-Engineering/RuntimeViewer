@@ -74,7 +74,8 @@ extension RuntimeEngine {
         case .local,
              .remote,
              .injectedTCP,
-             .file:
+             .file,
+             .frameworkInstance:
             false
         }
     }

@@ -42,7 +42,8 @@ extension RuntimeEngine {
     /// know; the plain load is as old as the engine.
     nonisolated func loadImageForUser(at imagePath: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws {
         switch source {
-        case .local, .file:
+        // Served by a process this build embeds, so it knows the load that reports progress.
+        case .local, .file, .frameworkInstance:
             try await loadImage(at: imagePath, onProgress: reportProgress)
         case .remote, .bonjour, .localSocket, .directTCP, .injectedTCP:
             try await loadImage(at: imagePath)
