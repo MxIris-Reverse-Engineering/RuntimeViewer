@@ -61,6 +61,8 @@ RuntimeViewer-iOS-Simulator.zip
 # file recording that mode for this checkout (`./TuistScript.sh <command> --local-dependencies`).
 /Tuist/.build-LocalDependencies/
 /Tuist/.local-dependencies
+# The checkouts this one claimed for its Tuist workspace (TuistScript.sh, shared claim record).
+/Tuist/.claimed-checkouts
 # `./TuistScript.sh install` starts it from RuntimeViewer-Debug.xcworkspace's lock file every time;
 # the native lock files are the ones to commit.
 /Tuist/Package.resolved
