@@ -1,6 +1,8 @@
 #if os(macOS)
-
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
@@ -414,6 +416,7 @@ extension RuntimeViewerSettings.Settings.Theme.ColorValue {
     /// `genericRGB` fallback would silently mis-tag the components as sRGB
     /// and shift the persisted color.
     fileprivate static func from(_ color: Color) -> Self? {
+        #if os(macOS)
         let nsColor = NSColor(color)
         guard let resolved = nsColor.usingColorSpace(.sRGB) else {
             return nil
@@ -424,6 +427,21 @@ extension RuntimeViewerSettings.Settings.Theme.ColorValue {
             blue: Double(resolved.blueComponent),
             alpha: Double(resolved.alphaComponent)
         )
+        #else
+        // The same contract through Core Graphics: convert to sRGB or give up.
+        guard let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let resolved = UIColor(color).cgColor.converted(to: sRGBColorSpace, intent: .defaultIntent, options: nil),
+              let components = resolved.components, components.count == 4
+        else {
+            return nil
+        }
+        return .init(
+            red: Double(components[0]),
+            green: Double(components[1]),
+            blue: Double(components[2]),
+            alpha: Double(components[3])
+        )
+        #endif
     }
 }
 
@@ -432,5 +450,3 @@ extension RuntimeViewerSettings.Settings.Theme.Style {
         (colorScheme == .dark ? dark : light).color
     }
 }
-
-#endif

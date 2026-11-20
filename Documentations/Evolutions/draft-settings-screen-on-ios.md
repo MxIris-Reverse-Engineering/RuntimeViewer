@@ -1,9 +1,9 @@
 # Draft - iOS 上的设置页
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-20
-- **最后更新**: 2026-11-20
+- **最后更新**: 2026-11-21
 - **所属愿景**: [iOS 版功能对齐](../Visions/IOSFeatureParity.md)（第五步「iOS 前端逐项补齐」里的设置页，提前做）
 - **关联提案**: [0100-settings-storage-on-ios](0100-settings-storage-on-ios.md)（iOS 上的设置已经存盘）；上游 UIFoundation 的 [0043-settings-ui-on-ios](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0043-settings-ui-on-ios.md)（写页面的组件放开到 iOS，加 iOS 宿主，已随 0.49.0 发布）
 - **实现分支 / PR**: `feature/settings-screen-on-ios`
@@ -99,7 +99,11 @@ App 的所有窗口。Mac 版不变。
 | `RuntimeViewerSettingsUI/Components/ThemeSettingsView.swift` | 修改 | 去掉平台条件；`ColorValue.from(_:)` 分平台 | iOS 上编 | 2 |
 | `RuntimeViewerSettingsUI/Components/TransformerSettingsView.swift` | 修改 | 去掉平台条件；AppKit 的模板编辑器与复制分支留在 `#if os(macOS)` | iOS 上编 | 2 |
 | `RuntimeViewerSettingsUI/Components/TokenTemplateTextField+UIKit.swift` | 新增 | UIKit 版模板编辑器：`UITextView` 子类、胶囊附件、`UIViewRepresentable` 包装 | iOS 上的同等功能 | 2 |
-| `RuntimeViewerSettingsUI/SettingsViewController.swift` | 新增 | iOS 的设置宿主子类，三页 | 入口打开的就是它 | 2 |
+| `RuntimeViewerSettingsUI/SettingsViewController.swift` | 新增 | iOS 的设置宿主子类，三页；`public` | 入口打开的就是它；iOS App 在包外 | 2 |
+| `RuntimeViewerSettingsUI/SettingsWindowController.swift` | 修改 | 整个文件包进 `#if os(macOS)` | 以前 iOS 不编这个模块，它从没需要过条件 | 2 |
+| `RuntimeViewerSettingsUI/Components/TokenTemplatePlaceholder.swift` | 新增 | 找 `${名字}`、名字与占位符互转、算光标位置 | UIKit 编辑器用；规则与 AppKit 编辑器一致，在 macOS 上可测 | 2 |
+| `Tests/RuntimeViewerAppUITests/TokenTemplatePlaceholderTests.swift`（及 `Package.swift` 里 AppUI 测试对 `RuntimeViewerSettingsUI` 的依赖） | 新增 | 占位符规则的测试 | 两个平台的编辑器要读出同样的模板 | 2 |
+| `Tests/RuntimeViewerAppCoreTests/CrossPlatformSourceGuardTests.swift` | 修改 | 扫描范围加 `RuntimeViewerSettingsUI`；自检名单的 `UIFoundationSettingsUI` 换成 `RuntimeViewerHelperClient` | 前者现在 iOS 也编；后者不再是 macOS 专属 | 2 |
 | `RuntimeViewerAppUI/Theme/ResolvedThemeStream.swift` | 修改 | 去掉 AppKit 条件 | iOS 内容区跟随主题 | 3 |
 | `RuntimeViewerAppUI/Content/ContentTextRenderer.swift` | 修改 | 默认主题在各平台都取 `resolvedThemeStream` | 同上 | 3 |
 | `RuntimeViewerUsingUIKit/.../Content/ContentTextViewController.swift` | 修改 | 按 `renderer.theme` 设背景色；改掉「固定用默认主题」的注释 | 深色主题下背景要跟着变 | 3 |
@@ -218,21 +222,21 @@ final class AppearanceController {
 ## 落地步骤
 
 0. **上游先落地**（已完成）—— UIFoundation 的 0043 合进 `main` 并打 0.49.0
-1. **依赖** —— `Package.swift`、四份锁文件
+1. **依赖**（已完成）—— `Package.swift`、四份锁文件
    - 行为：`settingsUIPackageResolvesUIFoundation049`
-2. **三页能在 iOS 上编** —— `RuntimeViewerSettingsUI` 的各行
+2. **三页能在 iOS 上编**（已完成）—— `RuntimeViewerSettingsUI` 的各行
    - 行为：`macSettingsPagesUnchanged`（`RuntimeViewerSettingsTests` 与 macOS App 构建照过）
    - 行为：`settingsUIBuildsForIOSAndVisionOS`（三个 iOS 系 App 编过，它们都编这个模块）
    - 行为：`tokenTemplateRoundTripsPlaceholders`（占位符换胶囊再读回不变——把转换逻辑抽成两边共用、可在 macOS 上测的函数）
    - 行为：`colorValueFromColorRoundTripsSRGB`（macOS 上测共用的部分）
-3. **内容区跟随主题** —— `ResolvedThemeStream`、`ContentTextRenderer`、iOS `ContentTextViewController`
+3. **内容区跟随主题**（已完成）—— `ResolvedThemeStream`、`ContentTextRenderer`、iOS `ContentTextViewController`
    - 行为：`rendererDefaultsToTheSettingsThemeOnEveryPlatform`
-4. **外观** —— `AppearanceController`（iOS）、`AppDelegate`、`SceneDelegate`
+4. **外观**（已完成）—— `AppearanceController`（iOS）、`AppDelegate`、`SceneDelegate`
    - 行为：`iOSAppBuildsForAllThreeTargets`
-5. **入口** —— `SidebarCoordinator`、`MainCoordinator`
+5. **入口**（已完成，设备上待用户看）—— `SidebarCoordinator`、`MainCoordinator`
    - 行为：`gearButtonOpensSettings`（由用户在设备上看）
    - 行为：`editingThemeChangesTheContentPane`、`appearanceOverridesTheSystemStyle`、`settingsSurviveRelaunch`（由用户在设备上看）
-6. **文档** —— 见改动地图最后一行
+6. **文档**（已完成）—— 见改动地图最后一行
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -250,3 +254,5 @@ final class AppearanceController {
 | 2026-11-20 | 自定：内容区跟随设置里的主题、按主题设背景 | 主题页要生效；原来 iOS 固定用默认主题，只因当时没有存下来的设置 |
 | 2026-11-20 | 自定：模板编辑器写 UIKit 版，不降级为普通文本框 | 胶囊是这页的主要价值 |
 | 2026-11-20 | 用户批准，开始实现 | 与上游 UIFoundation 的提案一起批准；上游已落地为 0043 并发布 0.49.0，本篇接着做 |
+| 2026-11-21 | 实现中的调整 | 一、`SettingsWindowController.swift` 原来没有平台条件——以前 iOS 根本不编 `RuntimeViewerSettingsUI`；现在 AppUI 在各平台都依赖它，这个文件包进 `#if os(macOS)`。二、RV 的 iOS `SettingsViewController` 是 `public`：iOS App 在包外，`package` 看不到（macOS 的设置窗口经 AppUI 的 `appRouter` 打开，所以那边是 `package`）。三、占位符规则抽成 `TokenTemplatePlaceholder` 给 UIKit 编辑器用，AppKit 编辑器原样留着自己那份（Mac 行为一字不动），两边按同样的规则取名字；测试放在 `RuntimeViewerAppUITests`（为此给它加了对 `RuntimeViewerSettingsUI` 的依赖），变异检查（让 `caretLocation` 原样返回）使 2 处断言变红。四、`CrossPlatformSourceGuardTests` 的扫描范围加上 `RuntimeViewerSettingsUI`，自检名单换掉不再是 macOS 专属的 `UIFoundationSettingsUI`。五、外观一节在 iOS 上把「Appearance」放到节标题、三张缩略图占满一行：iPhone 一行放不下标签加三张图。六、`rendererDefaultsToTheSettingsThemeOnEveryPlatform` 与 `colorValueFromColorRoundTripsSRGB` 没写成测试：前者现在是不分平台的同一行代码；后者的 UIKit 分支只在 iOS 上编，macOS 的测试跑不到——两者由三个 iOS 系 App 的构建与用户在设备上看来验证。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | 验证都在 Ultra 上：`RuntimeViewerSettingsTests` 71 个、`TokenTemplatePlaceholderTests` 5 个、`CrossPlatformSourceGuardTests` 与 `AppCoreBoundaryTests` 全过；`RuntimeViewer iOS`（iOS 模拟器）、`RuntimeViewer iOS Jailbroken`（iOS 真机）、`RuntimeViewer visionOS`（visionOS 模拟器）用 Debug workspace 编过；macOS App 用 Tuist workspace（Debug）编过。打了越狱版安装包给用户在 vphone 上看。没做的：设备上的四条行为（齿轮打开设置、改主题内容区跟着变、外观盖过系统、重启后设置还在）由用户看；会开窗口的 AppUI 测试没在这台 Mac 上跑。文档判断：规则写进 `RuntimeViewerUsingUIKit/AGENTS.md` 的「Settings screen and appearance」，根 `AGENTS.md` 改了 *Settings Integration*、*Dependency floors* 与规则表一行；不另写使用指南或实现说明，没有新术语。 |

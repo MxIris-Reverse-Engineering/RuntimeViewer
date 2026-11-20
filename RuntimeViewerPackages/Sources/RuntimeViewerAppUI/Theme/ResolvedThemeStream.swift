@@ -1,4 +1,3 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import Foundation
 import RxSwift
 import Dependencies
@@ -54,4 +53,3 @@ extension DependencyValues {
     @DependencyEntry(liveValue: MainActor.assumeIsolated { ResolvedThemeStream.shared })
     public var resolvedThemeStream: ResolvedThemeStream
 }
-#endif

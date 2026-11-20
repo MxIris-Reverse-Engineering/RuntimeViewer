@@ -176,7 +176,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.48.0",
+                from: "0.49.0",
                 traits: uiFoundationTraits,
             ),
         ),
@@ -421,7 +421,7 @@ let package = Package(
                 // Always Index rows' engine menus.
                 .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationSettings", package: "UIFoundation"),
-                .product(name: "UIFoundationSettingsUI", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "UIFoundationSettingsUI", package: "UIFoundation"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],
@@ -483,7 +483,7 @@ let package = Package(
                 "RuntimeViewerAppCore",
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
-                .target(name: "RuntimeViewerSettingsUI", condition: .when(platforms: appkitPlatforms)),
+                "RuntimeViewerSettingsUI",
                 .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
@@ -655,6 +655,7 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerAppUI",
                 "RuntimeViewerAppCore",
+                "RuntimeViewerSettingsUI",
                 "RuntimeViewerAppTestingSupport",
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",

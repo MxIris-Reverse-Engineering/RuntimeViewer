@@ -41,13 +41,20 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
         let input = ContentTextViewModel.Input(runtimeObjectClicked: runtimeObjectClicked.asSignal(), runtimeObjectOpenedInNewTab: .empty(), interfaceDisplayed: interfaceDisplayedRelay.asSignal())
         let output = viewModel.transform(input)
 
-        // Themed here in the fallback theme, as this pane always was; reported displayed once set,
-        // which ends the view model's loading for it.
+        // Themed here in the settings' theme, which the Theme settings page edits; reported displayed
+        // once set, which ends the view model's loading for it.
         let renderer = ContentTextRenderer(interfaces: output.interface)
         renderer.renderedText.driveOnNext { [weak self] renderedText in
             guard let self else { return }
             textView.attributedText = renderedText.attributedString
             interfaceDisplayedRelay.accept(renderedText.interface.id)
+        }
+        .disposed(by: rx.disposeBag)
+        // The theme's background too, as the macOS pane does: a dark preset on a light background
+        // would be unreadable.
+        renderer.theme.driveOnNext { [weak self] theme in
+            guard let self else { return }
+            textView.backgroundColor = theme.backgroundColor
         }
         .disposed(by: rx.disposeBag)
         output.selectedRuntimeObjectName.drive(navigationItem.rx.title).disposed(by: rx.disposeBag)

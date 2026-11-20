@@ -1,0 +1,35 @@
+#if os(iOS) || os(visionOS)
+
+import UIKit
+import UIFoundationSettingsUI
+
+/// RuntimeViewer's settings on iOS and visionOS: the pages whose settings act
+/// on something there, presented as UIFoundation's settings list.
+///
+/// The macOS window (`SettingsWindowController`) has more pages; the others
+/// join this list when what they configure comes to these platforms. A fresh
+/// instance is presented each time — unlike the macOS window there is nothing
+/// to keep between presentations. Public because the iOS app, outside this
+/// package, presents it.
+public final class SettingsViewController: UIFoundationSettingsUI.SettingsViewController {
+    public init() {
+        super.init(title: "Settings") {
+            SettingsPage("Appearance", id: "appearance", plainSymbol: "circle.lefthalf.filled") {
+                AppearanceSettingsView()
+            }
+            SettingsPage("Theme", id: "theme", plainSymbol: "paintpalette") {
+                ThemeSettingsView()
+            }
+            SettingsPage("Transformer", id: "transformer", plainSymbol: "arrow.triangle.2.circlepath") {
+                TransformerSettingsView()
+            }
+        }
+    }
+
+    @available(*, unavailable)
+    public required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+#endif
