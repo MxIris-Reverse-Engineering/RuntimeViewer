@@ -90,8 +90,9 @@ iOS 上还没有能改设置的界面，所以这一步做完用户看不到变�
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `RuntimeViewerPackages/Package.swift` | 修改 | UIFoundation 下限 `from: "0.48.0"`；`RuntimeViewerSettings`、`RuntimeViewerSettingsTests` 对 `UIFoundationSettings` 的依赖去掉平台条件 | 上游放开后各平台都能链接 | 1 |
-| 三个 workspace 的 `Package.resolved` | 修改 | UIFoundation 升到 0.48.0（`UpdatePackagesScript.sh`） | 锁文件跟着下限走 | 1 |
+| `RuntimeViewerPackages/Package.swift` | 修改 | UIFoundation 下限 `from: "0.48.0"`；`RuntimeViewerSettings`、`RuntimeViewerSettingsUI`、`RuntimeViewerSettingsTests` 对 `UIFoundationSettings` 的依赖去掉平台条件 | 上游放开后各平台都能链接；`SettingsUI` 那条留着条件会让跨平台守卫测试仍把它当成 macOS 专属 | 1、2 |
+| Debug / Distribution workspace 与 Packages、CommandLine 两个包的 `Package.resolved` | 修改 | 只手改 UIFoundation 一条 pin 到 0.48.0 | 锁文件跟着下限走，别的 pin 不动 | 1 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/CrossPlatformSourceGuardTests.swift` | 修改 | 自检的「已知 macOS 专属模块」从 `UIFoundationSettings` 换成 `UIFoundationSettingsUI` | 前者不再是 macOS 专属 | 2 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift` · `Settings` | 修改 | 去掉 import、`applicationDirectoryName`、`applicationDirectoryURL`、`store`、`PersistentSettings` 遵循外的 `#if os(macOS)` | 各平台同一个存储 | 1 |
 | 同上 · `SettingsAccess` | 修改 | 只留 `store`；`load()`、两项迁移、`flushSynchronously()`、`current`、`preview` 去掉分支；新增 `loadSynchronously()` | 一种实现；iOS 启动时要同步读完 | 1 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerSettings/InMemorySettingsStorage.swift` | 修改 | 去掉 `#if os(macOS)` | `preview` 与测试在各平台都用它 | 1 |
@@ -99,7 +100,8 @@ iOS 上还没有能改设置的界面，所以这一步做完用户看不到变�
 | `RuntimeViewerPackages/Tests/RuntimeViewerSettingsTests/SettingsResidentLimitMigrationTests.swift` | 修改 | 去掉 `#if os(macOS)`；同一组参数也走一遍 `loadSynchronously()` | 迁移现在各平台都跑，两个入口都要迁 | 1 |
 | `RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/SettingsLifecycleController.swift` | 新增 | `@MainActor` 单例，`@DependencyEntry` 暴露；`loadOnLaunch()` 同步读取；订阅进入后台与即将终止两个通知写盘 | iOS 的读写时机 | 2 |
 | `RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/AppDelegate.swift` | 修改 | `didFinishLaunching` 第一件事调 `settingsLifecycleController.loadOnLaunch()` | 在任何东西读设置之前读完 | 2 |
-| `AGENTS.md`（根）· *Settings Integration*、*Dependency floors* | 修改 | 改写「macOS 之外只在内存里」那条；补 UIFoundation 0.48.0 的理由 | 规则跟着代码变 | 3 |
+| `AGENTS.md`（根）· *Settings Integration*、*Dependency floors*、规则文件表 | 修改 | 改写「macOS 之外只在内存里」那条；补 UIFoundation 0.48.0 的理由；表里加 iOS 那份规则文件 | 规则跟着代码变 | 3 |
+| `RuntimeViewerUsingUIKit/AGENTS.md`（及 `CLAUDE.md` 链接） | 新增 | iOS 系三个 App 的启动顺序与设置的读写时机 | 根文件改前已有 69.9 KB，超过 Codex 读取的 64 KiB 上限，iOS 的规则放进它管的目录 | 3 |
 | `Documentations/Visions/IOSFeatureParity.md` | 修改 | 相关提案表加本篇；「最后更新」 | 愿景登记 | 3 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记本篇 | 索引 | 3 |
 
@@ -285,10 +287,10 @@ Catalyst 上读写设置。
    - 行为：`synchronousLoadRunsTheResidentLimitMigration`
    - 行为：`synchronousLoadKeepsDefaultsWhenNothingIsStored`
    - 行为：`macAppBuildUnchanged`（Tuist workspace，Debug）
-2. **iOS 的生命周期** —— `SettingsLifecycleController.swift`（iOS）、`AppDelegate.swift`（iOS）
+2. **iOS 的生命周期**（已完成）—— `SettingsLifecycleController.swift`（iOS）、`AppDelegate.swift`（iOS）
    - 行为：`iOSAppBuildsForAllThreeTargets`
    - 行为：`settingsFileAppearsAfterFirstLaunchOnDevice`（在 vphone 上看 App 容器里出现 `settings.json`；由用户看，或经用户同意由 agent 经 `vphone.sock` 读）
-3. **文档** —— 根 `AGENTS.md`、愿景、两份索引
+3. **文档**（已完成）—— 根 `AGENTS.md`、愿景、两份索引
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -305,3 +307,6 @@ Catalyst 上读写设置。
 | 2026-11-20 | 自定：iOS 启动时同步读取，靠上游新增的同步 `load()` | 第一个 scene 在启动回调返回后就连接，异步读取赶不上 |
 | 2026-11-20 | 自定：App 级的进后台与终止通知写盘 | iOS 没有 `applicationShouldTerminate`；多 scene 时单个 scene 进后台不代表 App 进后台 |
 | 2026-11-20 | 用户批准，开始实现 | 与上游 UIFoundation 的提案一起批准；上游已落地为 0042 并发布 0.48.0，本篇接着做 |
+| 2026-11-20 | 实现中的调整 | 一、第一步的四份锁文件（Debug、Distribution workspace 与 Packages、CommandLine 两个包）只手改 UIFoundation 一条 pin 到 0.48.0；全新构建目录下 `swift build` 解析到远端的 0.48.0，锁文件不被改写。二、同步读取的测试：迁移测试多一个同组参数、走 `loadSynchronously()` 的版本，持久化测试加三条（读到存储的值、没有存储时保持默认、读完后的修改会写盘）；变异检查（让 `loadSynchronously()` 直接返回）使 17 处断言变红。三、iOS 上能否编过不单独编 `RuntimeViewerSettings`，由第二步编三个 iOS 系 App 一起覆盖（它们都编这个包）。四、iOS 那条规则没写进根 `AGENTS.md`：根文件改前已有 69.9 KB，超过 Codex 读取的 64 KiB 上限，于是新建 `RuntimeViewerUsingUIKit/AGENTS.md`（项目文件夹不是同步文件夹，可以放），根文件只加规则表一行与一句指引。 |
+| 2026-11-20 | 第二步实现中的调整 | 一、`SettingsLifecycleController`（iOS）要自己 `import Dependencies`：macOS 那个经 `RuntimeViewerArchitectures` 间接拿到，iOS 这个没有。二、跨平台守卫测试 `CrossPlatformSourceGuardTests` 把「清单里只在 AppKit 平台加进来的模块」都当成 macOS 专属，`RuntimeViewerSettingsUI` 对 `UIFoundationSettings` 那条依赖还带着条件，于是放开后它报 `Settings.swift` 与 `InMemorySettingsStorage.swift` 在 iOS 上导入了 macOS 专属模块；条件的理由已经不在，一并去掉，测试自检名单里的 `UIFoundationSettings` 换成仍是 macOS 专属的 `UIFoundationSettingsUI`。 |
+| 2026-11-20 | 实现完成，待用户看过后收尾 | 验证都在 Ultra 上：`RuntimeViewerSettingsTests` 71 个全过；`RuntimeViewerAppCoreTests` 948 个整包跑有 5 个测试红（Call Hierarchy、`BackgroundWorkProcessActivityTests`、`ReportSharedByEngineTests`、`OwnerReportingTaskTests`、跨平台守卫），守卫测试修好后单独重跑全过，其余四个单独重跑也全过，是整包高负载下的偶发失败；`RuntimeViewer iOS`（iOS 模拟器）、`RuntimeViewer iOS Jailbroken`（iOS 真机）、`RuntimeViewer visionOS`（visionOS 模拟器）用 Debug workspace 编过，它们也编了 iOS 与 visionOS 版的 `RuntimeViewerSettings`；macOS App 用 Tuist workspace（Debug）编过。会开窗口的 `RuntimeViewerAppUITests` 没在用户正在用的这台 Mac 上跑。没做的：`settingsFileAppearsAfterFirstLaunchOnDevice`（设备上第一次启动后出现 `settings.json`），没有模拟器与设备操作的授权，留给用户。文档判断：iOS 的规则写进新的 `RuntimeViewerUsingUIKit/AGENTS.md`，根 `AGENTS.md` 改了 *Settings Integration* 与 *Dependency floors*；不另写使用指南或实现说明，没有新术语。 |
