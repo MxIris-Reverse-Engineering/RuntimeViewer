@@ -1,4 +1,5 @@
 import ProjectDescription
+import ProjectDescriptionHelpers
 
 // RuntimeViewer-Tuist.xcodeproj: the macOS app and everything it embeds, for the development-only
 // Tuist workspace (Documentations/Guides/TuistDevelopment.md). It is generated beside
@@ -53,11 +54,15 @@ let manuallyOrderedTargetSettings: SettingsDictionary = [
 
 /// A target's settings, configuration by configuration, from the files in
 /// `Configurations/<directory>`: each configuration's own file where the native target has one,
-/// `Shared.xcconfig` otherwise, plus `packageLinkingSettings`. `additionalSettings` apply to every
-/// configuration, `debugAdditionalSettings` to Debug and Debug-arm64e only.
+/// `Shared.xcconfig` otherwise, plus `packageLinkingSettings`. A target whose dependencies reach
+/// MachOSwiftSection sets `linksMachOSwiftSection`, which also loads the two symbol language
+/// registrations whole (`SymbolLanguageRegistration` in Tuist/ProjectDescriptionHelpers).
+/// `additionalSettings` apply to every configuration, `debugAdditionalSettings` to Debug and
+/// Debug-arm64e only.
 func targetSettings(
     directory: String,
     configurationsWithOwnFile: Set<String> = ["Debug", "Debug-arm64e", "Release"],
+    linksMachOSwiftSection: Bool = false,
     additionalSettings: SettingsDictionary = [:],
     debugAdditionalSettings: SettingsDictionary = [:]
 ) -> Settings {
@@ -65,9 +70,12 @@ func targetSettings(
         let fileName = configurationsWithOwnFile.contains(configuration) ? configuration : "Shared"
         return .relativeToManifest("../Configurations/\(directory)/\(fileName).xcconfig")
     }
+    let linkingSettings: SettingsDictionary = linksMachOSwiftSection
+        ? ["OTHER_LDFLAGS": .array(["$(inherited)", "-ObjC"] + SymbolLanguageRegistration.linkerFlags)]
+        : packageLinkingSettings
     return .settings(
         base: valuesFromConfigurationFiles
-            .merging(packageLinkingSettings) { $1 }
+            .merging(linkingSettings) { $1 }
             .merging(additionalSettings) { $1 },
         configurations: [
             .debug(name: "Debug", settings: debugAdditionalSettings, xcconfig: file("Debug")),
@@ -216,6 +224,7 @@ let project = Project(
             ],
             settings: targetSettings(
                 directory: "RuntimeViewerUsingAppKit",
+                linksMachOSwiftSection: true,
                 additionalSettings: manuallyOrderedTargetSettings.merging(productNameFromConfigurationFiles) { $1 }
             )
         ),
@@ -287,6 +296,7 @@ let project = Project(
             settings: targetSettings(
                 directory: "RuntimeViewerServicePlugin",
                 configurationsWithOwnFile: [],
+                linksMachOSwiftSection: true,
                 additionalSettings: manuallyOrderedTargetSettings.merging([
                     // Nothing imports the plugin; as a framework it would otherwise carry a module
                     // and a generated header the native bundle does not have.
@@ -322,6 +332,7 @@ let project = Project(
             settings: targetSettings(
                 directory: "RuntimeViewerSimulatorServer",
                 configurationsWithOwnFile: [],
+                linksMachOSwiftSection: true,
                 additionalSettings: manuallyOrderedTargetSettings
             )
         ),
@@ -342,7 +353,7 @@ let project = Project(
                 .external(name: "RuntimeViewerCrossReferences"),
                 .external(name: "RuntimeViewerUtilities"),
             ],
-            settings: targetSettings(directory: "RuntimeViewerServer")
+            settings: targetSettings(directory: "RuntimeViewerServer", linksMachOSwiftSection: true)
         ),
         // The privileged helper daemon, named after the configuration's RUNTIME_VIEWER_SERVICE_NAME
         // (PRODUCT_NAME comes from the xcconfig). `productName` names only the product reference,
@@ -415,7 +426,7 @@ let project = Project(
                 .external(name: "RuntimeViewerInjection"),
                 .external(name: "RuntimeViewerCrossReferences"),
             ],
-            settings: targetSettings(directory: "RuntimeViewerCommandLineTool", configurationsWithOwnFile: [])
+            settings: targetSettings(directory: "RuntimeViewerCommandLineTool", configurationsWithOwnFile: [], linksMachOSwiftSection: true)
         ),
         .target(
             name: "RuntimeViewerSourceEditorBridge",
