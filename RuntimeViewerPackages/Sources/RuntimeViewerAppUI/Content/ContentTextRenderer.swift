@@ -38,22 +38,17 @@ public final class ContentTextRenderer {
     /// test watches.
     package let isRendering: Driver<Bool>
 
-    /// - Parameter themes: the themes to draw in; by default the settings' theme on macOS
-    ///   (`resolvedThemeStream`) and `ResolvedTheme.fallback` elsewhere, as the content pane always
-    ///   drew.
+    /// - Parameter themes: the themes to draw in; by default the settings' theme
+    ///   (`resolvedThemeStream`), on every platform since the settings persist there too.
     public init(interfaces: Driver<ContentInterface>, themes: Observable<ResolvedTheme>? = nil) {
         let themeObservable: Observable<ResolvedTheme>
         if let themes {
             themeObservable = themes
         } else {
-            #if canImport(AppKit) && !targetEnvironment(macCatalyst)
             // The shared stream multicasts a single `Observable.tracking` chain across every document,
             // so editing a custom preset rebuilds `ResolvedTheme` once, not once per open document.
             @Dependency(\.resolvedThemeStream) var resolvedThemeStream
             themeObservable = resolvedThemeStream.observable
-            #else
-            themeObservable = .just(.fallback)
-            #endif
         }
         let sharedThemes = themeObservable.share(replay: 1, scope: .whileConnected)
         theme = sharedThemes.asDriver(onErrorDriveWith: .empty())

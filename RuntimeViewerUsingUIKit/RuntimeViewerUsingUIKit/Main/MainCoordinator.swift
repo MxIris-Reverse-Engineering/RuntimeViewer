@@ -5,11 +5,14 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import RuntimeViewerSettingsUI
 
 public enum MainRoute: Routable {
     case initial
     case select(RuntimeObject)
     case inspect(InspectableObject)
+    /// Opens the settings, over the whole split view.
+    case settings
 }
 
 typealias MainTransition = Transition<MainSplitViewController>
@@ -43,6 +46,11 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
             return .multiple(.route(.root(runtimeObject), on: contentCoordinator), .show(column: .secondary))
         case .inspect(let inspectableType):
             return .route(.root(inspectableType), on: inspectorCoordinator)
+        case .settings:
+            // A form sheet: a centred card on iPad, a sheet from the bottom on iPhone.
+            let settingsViewController = SettingsViewController()
+            settingsViewController.modalPresentationStyle = .formSheet
+            return .present(settingsViewController)
         }
     }
 
@@ -72,6 +80,10 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
             break
         }
         completeTransition.accept(route)
+    }
+
+    func sidebarCoordinatorDidRequestSettings(_ sidebarCoordinator: SidebarCoordinator) {
+        trigger(.settings)
     }
 }
 

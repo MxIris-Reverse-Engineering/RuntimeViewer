@@ -17,12 +17,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     @Dependency(\.settingsLifecycleController)
     private var settingsLifecycleController
 
+    @Dependency(\.appearanceController)
+    private var appearanceController
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         #log(.info,"Application did finish launching")
         // First of all: the settings are read before anything below or the
         // first scene reads one, and written whenever the app leaves the
         // foreground from here on.
         settingsLifecycleController.loadOnLaunch()
+        // Then the Appearance setting, followed for every window from here on;
+        // each scene applies it to its own window as it creates one.
+        appearanceController.start()
         // Before any engine exists: a host can query either of the engines
         // below for injection capability as soon as it can reach them, and the
         // answer comes from this registration.
