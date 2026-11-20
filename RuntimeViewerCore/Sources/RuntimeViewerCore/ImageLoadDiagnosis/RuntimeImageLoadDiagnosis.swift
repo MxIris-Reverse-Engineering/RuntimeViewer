@@ -269,3 +269,23 @@ public struct RuntimeImageLoadDiagnosis: Codable, Sendable, Hashable {
         )
     }
 }
+
+extension RuntimeImageLoadDiagnosis {
+    /// The folder the image at `imagePath` sits in with the frameworks it came
+    /// with: the one holding the nearest `.framework` bundle on its path, or the
+    /// image's own folder when it is in no framework.
+    ///
+    /// Frameworks copied out of an app keep their siblings there, while their
+    /// rpaths still point into the app (`@executable_path/../Frameworks`), so
+    /// the remedy searches this folder after the folders the user added.
+    public static func folderHoldingImage(at imagePath: String) -> String {
+        var components = (imagePath as NSString).pathComponents
+        while let last = components.last {
+            components.removeLast()
+            if last.hasSuffix(".framework"), !components.isEmpty {
+                return NSString.path(withComponents: components)
+            }
+        }
+        return (imagePath as NSString).deletingLastPathComponent
+    }
+}

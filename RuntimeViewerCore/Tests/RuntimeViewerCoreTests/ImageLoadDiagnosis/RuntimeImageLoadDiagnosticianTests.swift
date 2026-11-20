@@ -189,6 +189,7 @@ struct RuntimeImageLoadDiagnosticianTests {
         let foo = application.framework("Foo")
         let bar = application.framework("Bar")
         let searchPath = try #require(application.outsideDirectories["Elsewhere"])
+        let fooFolder = try #require(application.outsideDirectories["Loose"])
 
         let message = dyldMessage(loading: foo.binaryPath)
         #expect(diagnostician.diagnose(imageAt: foo.binaryPath, dyldMessage: message).remedy == nil)
@@ -197,8 +198,41 @@ struct RuntimeImageLoadDiagnosticianTests {
 
         let remedy = try #require(diagnosis.remedy)
         #expect(remedy.hostApplicationPath == nil)
-        #expect(remedy.searchPaths == [searchPath])
+        #expect(remedy.searchPaths == [searchPath, fooFolder])
         #expect(remedy.imagePathsToLoadFirst.map(Self.canonical) == [Self.canonical(bar.binaryPath)])
+    }
+
+    @Test("Frameworks copied out of their app into one folder find each other there, with no search path added")
+    func dependencyBesideTheFrameworkMakesARemedy() throws {
+        let application = try ImageLoadFixtures.makeHostApplication(frameworks: [
+            .init(baseName: "Base", placement: .outside("Copied")),
+            .init(baseName: "Layer", dependencies: ["Base"], rpaths: Self.appRpaths, placement: .outside("Copied")),
+            .init(baseName: "Foo", dependencies: ["Layer"], rpaths: Self.appRpaths, placement: .outside("Copied")),
+        ])
+        let foo = application.framework("Foo")
+        let layer = application.framework("Layer")
+        let base = application.framework("Base")
+        let folder = try #require(application.outsideDirectories["Copied"])
+
+        let diagnosis = diagnostician.diagnose(imageAt: foo.binaryPath, dyldMessage: dyldMessage(loading: foo.binaryPath))
+
+        let remedy = try #require(diagnosis.remedy)
+        #expect(remedy.hostApplicationPath == nil)
+        #expect(remedy.searchPaths == [folder])
+        #expect(remedy.imagePathsToLoadFirst.map(Self.canonical) == [base.binaryPath, layer.binaryPath].map(Self.canonical))
+
+        for imagePath in remedy.imagePathsToLoadFirst {
+            try DyldUtilities.loadImage(at: imagePath)
+        }
+        try DyldUtilities.loadImage(at: foo.binaryPath)
+    }
+
+    @Test("The folder holding an image is the one its nearest framework bundle is in, or the image's own")
+    func folderHoldingImageIsTheNearestFrameworksFolder() {
+        #expect(RuntimeImageLoadDiagnosis.folderHoldingImage(at: "/Copied/Frameworks/Foo.framework/Versions/A/Foo") == "/Copied/Frameworks")
+        #expect(RuntimeImageLoadDiagnosis.folderHoldingImage(at: "/Copied/Foo.framework/Versions/A/Frameworks/Bar.framework/Versions/A/Bar") == "/Copied/Foo.framework/Versions/A/Frameworks")
+        #expect(RuntimeImageLoadDiagnosis.folderHoldingImage(at: "/Copied/Foo.framework/Foo") == "/Copied")
+        #expect(RuntimeImageLoadDiagnosis.folderHoldingImage(at: "/Copied/lib/libfoo.dylib") == "/Copied/lib")
     }
 
     @Test("A chosen host app stands in for the main executable")

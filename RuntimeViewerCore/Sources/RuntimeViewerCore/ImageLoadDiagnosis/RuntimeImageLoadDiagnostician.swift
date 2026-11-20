@@ -70,7 +70,8 @@ struct RuntimeImageLoadDiagnostician: Sendable {
     /// Diagnoses the failed load of the image at `imagePath`, which dyld
     /// refused with `dyldMessage`. A `hostApplicationPath` stands in for the
     /// main executable, and `searchPaths` are searched after the rpath stack,
-    /// when the diagnosis works out what to load first.
+    /// followed by the folder the image sits in, when the diagnosis works out
+    /// what to load first.
     func diagnose(
         imageAt imagePath: String,
         dyldMessage: String,
@@ -160,23 +161,28 @@ struct RuntimeImageLoadDiagnostician: Sendable {
     /// What to load first so that the image at `imagePath` loads: every image
     /// of its dependency closure that is not loaded yet, dependencies first,
     /// found by searching as if `hostApplicationPath` — given, or else the app
-    /// the image is in — were the main executable and `searchPaths` were more
-    /// rpaths. `nil` when that still leaves a dependency unresolved, or when a
-    /// dependency's load name starts at `@executable_path`: dyld matches only
-    /// `@rpath/` load names against loaded images, so loading it first would
-    /// not help.
+    /// the image is in — were the main executable and `searchPaths`, then the
+    /// folder the image sits in (`RuntimeImageLoadDiagnosis.folderHoldingImage(at:)`),
+    /// were more rpaths. `nil` when that still leaves a dependency unresolved,
+    /// or when a dependency's load name starts at `@executable_path`: dyld
+    /// matches only `@rpath/` load names against loaded images, so loading it
+    /// first would not help.
     private func remedy(
         forImageAt imagePath: String,
         hostApplicationPath: String?,
-        searchPaths: [String],
+        searchPaths userSearchPaths: [String],
         loadedImagePathsByInstallName: [String: String]
     ) -> RuntimeImageLoadDiagnosis.Remedy? {
+        let imageFolder = RuntimeImageLoadDiagnosis.folderHoldingImage(at: imagePath)
+        let searchPaths = userSearchPaths.contains(imageFolder) ? userSearchPaths : userSearchPaths + [imageFolder]
         var hostCandidates: [String?] = []
         if let hostApplicationPath { hostCandidates.append(hostApplicationPath) }
         if let enclosingApplication = Self.enclosingApplicationPath(of: imagePath), enclosingApplication != hostApplicationPath {
             hostCandidates.append(enclosingApplication)
         }
-        if !searchPaths.isEmpty || hostCandidates.isEmpty { hostCandidates.append(nil) }
+        // The search paths are never empty — the image's own folder is one —
+        // so this process's own executable is always worth a try.
+        hostCandidates.append(nil)
 
         for hostCandidate in hostCandidates {
             let mainExecutablePath = hostCandidate.flatMap(Self.executablePath(ofApplicationAt:)) ?? environment.mainExecutablePath

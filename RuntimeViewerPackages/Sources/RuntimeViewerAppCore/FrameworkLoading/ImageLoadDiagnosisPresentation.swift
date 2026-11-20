@@ -67,7 +67,11 @@ public struct ImageLoadDiagnosisPresentation: Equatable, Sendable {
                 remedyExplanation = explanation
                 remedyTitle = "Load \(hostName)'s Frameworks and Retry"
             } else {
-                remedyExplanation = "\(missingName) is in the folders you added. Loading what \(rootName) needs from there first lets it load."
+                let imageFolder = RuntimeImageLoadDiagnosis.folderHoldingImage(at: diagnosis.imagePath)
+                let isBesideTheImage = !remedy.imagePathsToLoadFirst.isEmpty
+                    && remedy.imagePathsToLoadFirst.allSatisfy { $0.hasPrefix(imageFolder + "/") }
+                let place = isBesideTheImage ? "is next to \(rootName) in \(imageFolder)" : "is in the folders you added"
+                remedyExplanation = "\(missingName) \(place). Loading what \(rootName) needs from there first lets it load."
                 let count = remedy.imagePathsToLoadFirst.count
                 remedyTitle = count == 1 ? "Load 1 Image and Retry" : "Load \(count) Images and Retry"
             }
