@@ -44,12 +44,43 @@ final class RuntimeFrameworkInstanceImageCatalog: RuntimeImageCatalog {
     }
 
     /// "Frameworks", with a load dyld refused listed as an image not loaded,
-    /// and "Dependencies".
+    /// and "Dependencies", each starting at the folder that holds all of its
+    /// frameworks (`commonFolder(holding:)`).
     func rootNodes() -> [RuntimeImageNode] {
-        [
-            RuntimeImageNode.rootNode(for: frameworkImagePaths(), name: Self.frameworksRootNodeName),
-            RuntimeImageNode.rootNode(for: dependencyImagePaths(), name: Self.dependenciesRootNodeName),
+        let frameworkImagePaths = frameworkImagePaths()
+        let dependencyImagePaths = dependencyImagePaths()
+        return [
+            RuntimeImageNode.rootNode(
+                for: frameworkImagePaths,
+                name: Self.frameworksRootNodeName,
+                startingAt: Self.commonFolder(holding: frameworkImagePaths)
+            ),
+            RuntimeImageNode.rootNode(
+                for: dependencyImagePaths,
+                name: Self.dependenciesRootNodeName,
+                startingAt: Self.commonFolder(holding: dependencyImagePaths)
+            ),
         ]
+    }
+
+    /// Where a group's tree starts: the deepest folder holding the framework
+    /// of every image in it (`RuntimeImageLoadDiagnosis.folderHoldingImage(at:)`),
+    /// so the framework bundles stay in the tree and the directories above them
+    /// do not. Those lead to nothing else and would only lengthen every path in
+    /// the sidebar and the jump bars, as they would for what a file engine
+    /// opened. `nil` — start at `/` — for an empty group or one whose images
+    /// share no folder but `/`.
+    static func commonFolder(holding imagePaths: [String]) -> String? {
+        let folders = imagePaths.map { RuntimeImageLoadDiagnosis.folderHoldingImage(at: $0) }
+        guard let firstFolder = folders.first else { return nil }
+        var commonComponents = (firstFolder as NSString).pathComponents
+        for folder in folders.dropFirst() {
+            let components = (folder as NSString).pathComponents
+            let sharedCount = zip(commonComponents, components).prefix { componentPair in componentPair.0 == componentPair.1 }.count
+            commonComponents.removeLast(commonComponents.count - sharedCount)
+        }
+        let commonFolder = NSString.path(withComponents: commonComponents)
+        return commonFolder.isEmpty || commonFolder == "/" ? nil : commonFolder
     }
 
     func canonicalImagePath(_ imagePath: String) -> String {

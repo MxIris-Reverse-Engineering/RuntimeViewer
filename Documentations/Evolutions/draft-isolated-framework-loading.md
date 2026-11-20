@@ -100,7 +100,7 @@ My Mac 上不再保留「直接加载进 My Mac」的入口。工具栏按钮在
 ### 框架实例的窗口
 
 - **标题**：来源名是「Foo.framework (Isolated)」，一次选了多个时是「Foo.framework + 2 (Isolated)」。工具栏标题在没选中对象时显示第一个框架的名字，副标题按状态显示「Loading…」「Couldn't Load」「Isolated」。图标是框架自己的图标（与文件引擎一样取 `NSWorkspace` 的文件图标）。
-- **侧栏**：两个根节点。「Frameworks」——经引擎加载的镜像，按加载顺序，加载失败的也在（显示为未加载的行，选中后是侧栏现有的 Load 按钮与错误文字）；修复时先加载的依赖也算在这里。「Dependencies」——dyld 随之带进来、不在 shared cache 里的镜像。没有 shared cache 的根节点。
+- **侧栏**：两个根节点。「Frameworks」——经引擎加载的镜像，按加载顺序，加载失败的也在（显示为未加载的行，选中后是侧栏现有的 Load 按钮与错误文字）；修复时先加载的依赖也算在这里。「Dependencies」——dyld 随之带进来、不在 shared cache 里的镜像。没有 shared cache 的根节点。两组各自从「装着组里所有框架的最深那个文件夹」开始建树（`RuntimeFrameworkInstanceImageCatalog.commonFolder(holding:)`），像文件模式从打开的位置开始那样：侧栏与路径栏里不再列出框架上面那串目录，框架包本身仍在树里；节点的 `path` 仍是完整的镜像路径。
 - **内容区**：
   - 加载中，空的编辑栏显示「Loading Foo.framework…」页（一次多个时附「1 of 3」）。
   - 失败，空的编辑栏显示诊断页（下一节）。
@@ -928,3 +928,4 @@ default:
 | 2026-11-20 | 验收中发现诊断 sheet 被撑宽，已修 | 用户在 Mac Catalyst 窗口里让一次加载失败，诊断 sheet 比主窗口还宽、居中后左对齐的内容落在屏幕外，看上去一片空白。原因：诊断页的多行标签没设 `preferredMaxLayoutWidth`，按整段文字排成一行的宽度要空间，抗压优先级 750 高于窗口保持尺寸的 500，dyld 原文与 rpath 行一行就上千点，把 sheet 撑开。改为页内私有的 `FrameworkLoadWrappingLabel`：横向抗压降到 250、按布局给的宽度同步 `preferredMaxLayoutWidth`（折行后的高度也随之正确），标题也限制在页面宽度内；独立实例窗口里的同一页面随之修好。App target 没有测试目标，用户定这次只修不加回归测试，靠目视验证。同类排查见下一行。 |
 | 2026-11-20 | 同类排查，暂不修 | 修完后排查整个 App 的多行标签：Specialization sheet 的状态文字是同一模式（会撑宽 sheet），镜像页的路径标签与另外五处多行标签疑似有问题、没有实测；都是 `next` 上原本就有的，与本功能无关。用户决定暂不修，登记在 [KnownIssues](../KnownIssues/2026-11-20-wrapping-label-width-findings.md)（`WL.1`–`WL.3`）。 |
 | 2026-11-20 | 修复方案也搜框架所在的文件夹 | 用户验收时加载 `/Volumes/RE/iWork/macOS/14.5/Frameworks` 里的 `TSTables.framework`，缺的 `TSText.framework` 就在同一个文件夹里，却因为不在任何 `.app` 里而没有修复方案，得手动点 Add Search Path…。用户定：自动把框架所在的文件夹当作搜索路径，排在用户加的之后（`RuntimeImageLoadDiagnosis.folderHoldingImage(at:)`），因此不换宿主 App 的那一种总会试一次；横幅对这种方案说「is next to <框架> in <文件夹>」。修复方案仍只对 `@rpath/` 形式的依赖有效：直接写成 `@executable_path/…` 的依赖先加载也匹配不上，这一点没变。线上格式不变。测试：`dependencyBesideTheFrameworkMakesARemedy`（三个平铺的框架，不加搜索路径即得方案、按方案加载后成功）、`folderHoldingImageIsTheNearestFrameworksFolder`、`presentationBannerNamesTheFolderBesideTheFramework`，`searchPathActsAsAnExtraRpath` 的断言随之带上框架所在的文件夹。 |
+| 2026-11-20 | 两组从框架所在的文件夹开始 | 用户验收时指出路径栏在「TSTables.framework (Isolated) › Frameworks」之后列出了 `Volumes › RE › iWork › macOS › 14.5 › Frameworks` 一整串目录，要求像文件模式一样不显示。改为两组各自从装着组里所有框架的最深文件夹开始（`commonFolder(holding:)`，按 `folderHoldingImage(at:)` 取每个镜像的文件夹再取公共部分；空组或只共享 `/` 时照旧从 `/` 开始），用的是文件模式同一个 `RuntimeImageNode.rootNode(for:name:startingAt:)`，节点路径不变，侧栏随之一起变短。测试：`RuntimeFrameworkInstanceImageCatalogTests`。 |

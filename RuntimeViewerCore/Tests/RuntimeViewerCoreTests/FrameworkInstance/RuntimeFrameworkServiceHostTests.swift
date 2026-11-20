@@ -97,6 +97,24 @@ struct RuntimeFrameworkServiceHostTests {
         #expect(received, "the app's engine did not receive the rebuilt nodes")
     }
 
+    @Test("The Frameworks group starts at the folder its frameworks are in, not at /")
+    func frameworksGroupStartsAtTheFolderOfItsFrameworks() async throws {
+        let application = try ImageLoadFixtures.makeHostApplication(frameworks: [
+            .init(baseName: "Foo"),
+        ])
+        let foo = application.framework("Foo")
+        let (host, endpoint) = try Self.makeHost()
+        let client = try await Self.connectedClient(for: Self.instance(named: "Foo"), at: endpoint)
+        defer { Task { await client.stop(); await host.stop() } }
+        let serviceEngine = try #require(host.engine)
+
+        try await client.loadImageInServingProcess(at: foo.binaryPath)
+
+        let frameworksRoot = try #require(serviceEngine.imageNodes.first { $0.name == RuntimeFrameworkInstanceImageCatalog.frameworksRootNodeName })
+        #expect(frameworksRoot.children.map(\.name) == ["\(foo.name).framework"])
+        #expect(Self.leafPaths(under: "Frameworks", in: serviceEngine.imageNodes) == [Self.listed(foo.binaryPath)])
+    }
+
     @Test("A framework dyld refused is listed under Frameworks as not loaded, and fails with its diagnosis")
     func failedFrameworkIsListedUnderFrameworks() async throws {
         let application = try ImageLoadFixtures.makeHostApplication(frameworks: [
