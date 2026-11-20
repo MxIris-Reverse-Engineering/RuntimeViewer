@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-20
-- **最后更新**: 2026-11-20
+- **最后更新**: 2026-11-21
 - **所属愿景**: [iOS 版功能对齐](../Visions/IOSFeatureParity.md)（第五步「iOS 前端逐项补齐」里的设置页，提前做）
 - **关联提案**: [0100-settings-storage-on-ios](0100-settings-storage-on-ios.md)（iOS 上的设置已经存盘）；上游 UIFoundation 的 [0043-settings-ui-on-ios](https://github.com/Mx-Iris/UIFoundation/blob/main/Documentations/Evolutions/0043-settings-ui-on-ios.md)（写页面的组件放开到 iOS，加 iOS 宿主，已随 0.49.0 发布）
 - **实现分支 / PR**: `feature/settings-screen-on-ios`
