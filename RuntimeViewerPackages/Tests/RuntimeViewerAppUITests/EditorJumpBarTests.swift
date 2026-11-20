@@ -274,4 +274,69 @@ struct EditorJumpBarTests {
         #expect(!adapter.popUpPathControl(pathControl, shouldSeparateDisplayOfChildItemsFor: objectItem))
         #expect(adapter.popUpPathControl(pathControl, shouldSeparateDisplayOfChildItemsFor: folderItem))
     }
+
+    // MARK: - Copying paths
+
+    /// An object's item and the items above it: its image, the image's folder, the tree's root
+    /// folder and the engine.
+    private func itemsAbove(_ object: RuntimeObject, in store: EditorJumpBarItemStore) throws -> (object: EditorJumpBarItem, image: EditorJumpBarItem, folder: EditorJumpBarItem, root: EditorJumpBarItem, source: EditorJumpBarItem) {
+        let objectItem = try #require(store.item(for: .object(object)))
+        let imageItem = try #require(objectItem.parentItem as? EditorJumpBarItem)
+        let folderItem = try #require(imageItem.parentItem as? EditorJumpBarItem)
+        let sourceItem = try #require(store.rootItems.first)
+        var rootItem = folderItem
+        while let parentItem = rootItem.parentItem as? EditorJumpBarItem, parentItem !== sourceItem {
+            rootItem = parentItem
+        }
+        return (objectItem, imageItem, folderItem, rootItem, sourceItem)
+    }
+
+    @Test("the path an item shows leaves out the engine and the tree's root; the full path is an image's or a folder's own")
+    func itemPaths() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let (environment, store) = try await makeStore(on: engine)
+        defer { withExtendedLifetime(environment) {} }
+        let nsObject = try await Self.object(named: "NSObject", in: TestImages.libobjc, of: engine)
+        let items = try itemsAbove(nsObject, in: store)
+        let folderPath = (TestImages.libobjc as NSString).deletingLastPathComponent
+
+        #expect(items.image.displayedPath == String(TestImages.libobjc.dropFirst()))
+        #expect(items.image.fullPath == TestImages.libobjc)
+        #expect(items.folder.displayedPath == String(folderPath.dropFirst()))
+        #expect(items.folder.fullPath == folderPath)
+        #expect(items.object.displayedPath == String(TestImages.libobjc.dropFirst()) + "/NSObject")
+        #expect(items.object.fullPath == nil)
+        #expect(items.root.displayedPath.isEmpty)
+        #expect(items.root.fullPath == nil, "the shared cache's root only groups its children")
+        #expect(items.source.displayedPath.isEmpty)
+        #expect(items.source.fullPath == nil)
+    }
+
+    @Test("a component's context menu offers Copy Path and Copy Full Path where the item has them, and choosing one reports the text")
+    func contextMenuCopiesPaths() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let (environment, store) = try await makeStore(on: engine)
+        defer { withExtendedLifetime(environment) {} }
+        let nsObject = try await Self.object(named: "NSObject", in: TestImages.libobjc, of: engine)
+        let items = try itemsAbove(nsObject, in: store)
+        let pathControl = EditorJumpBarPathControl(frame: NSRect(x: 0, y: 0, width: 900, height: 22))
+        let adapter = EditorJumpBarAdapter(pathControl: pathControl, itemStore: store)
+        defer { withExtendedLifetime(adapter) {} }
+
+        #expect(adapter.contextMenu(for: items.image)?.items.map(\.title) == ["Copy Path", "Copy Full Path"])
+        #expect(adapter.contextMenu(for: items.folder)?.items.map(\.title) == ["Copy Path", "Copy Full Path"])
+        #expect(adapter.contextMenu(for: items.object)?.items.map(\.title) == ["Copy Path"])
+        #expect(adapter.contextMenu(for: items.root) == nil)
+        #expect(adapter.contextMenu(for: items.source) == nil)
+        #expect(pathControl.contextMenuProvider?(items.image)?.items.map(\.title) == ["Copy Path", "Copy Full Path"], "the control asks the adapter")
+
+        var copiedPaths: [String] = []
+        let subscription = adapter.pathCopied.emitOnNext { copiedPaths.append($0) }
+        defer { subscription.dispose() }
+        for menuItem in try #require(adapter.contextMenu(for: items.image)).items {
+            _ = (menuItem.target as? NSObject)?.perform(menuItem.action, with: menuItem)
+        }
+
+        #expect(copiedPaths == [String(TestImages.libobjc.dropFirst()), TestImages.libobjc])
+    }
 }

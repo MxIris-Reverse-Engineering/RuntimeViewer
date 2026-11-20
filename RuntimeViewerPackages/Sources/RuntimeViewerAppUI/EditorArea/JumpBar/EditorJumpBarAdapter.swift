@@ -31,12 +31,20 @@ public final class EditorJumpBarAdapter: NSObject {
 
     private let choiceSelectedRelay = PublishRelay<EditorJumpBarChoice>()
 
+    private let pathCopiedRelay = PublishRelay<String>()
+
     private let disposeBag = DisposeBag()
 
     /// The images and objects chosen in the jump bar's menus, with where the modifier keys held
     /// while choosing say to show them.
     public var choiceSelected: Signal<EditorJumpBarChoice> {
         choiceSelectedRelay.asSignal()
+    }
+
+    /// The text chosen to copy in a component's context menu (`contextMenu(for:)`), for the pane's
+    /// view model to put on the pasteboard.
+    public var pathCopied: Signal<String> {
+        pathCopiedRelay.asSignal()
     }
 
     /// Whether the pane has the focus. An unfocused pane's path is drawn in the secondary label
@@ -54,6 +62,10 @@ public final class EditorJumpBarAdapter: NSObject {
         self.itemStore = itemStore
         super.init()
         pathControl.delegate = self
+        (pathControl as? EditorJumpBarPathControl)?.contextMenuProvider = { [weak self] item in
+            guard let self, let item = item as? EditorJumpBarItem else { return nil }
+            return contextMenu(for: item)
+        }
         applyTree()
 
         itemStore.treeRebuilt
@@ -80,6 +92,40 @@ public final class EditorJumpBarAdapter: NSObject {
     private func applyTree() {
         pathControl.rootItems = itemStore.rootItems
         pathControl.selectedItem = itemStore.item(for: displayedLocation)
+    }
+
+    // MARK: - Context Menu
+
+    /// A component's context menu, as the image list's: Copy Path — the path the jump bar shows
+    /// (`EditorJumpBarItem.displayedPath`) — and Copy Full Path, each where the item has one.
+    /// `nil` for the engine and a root that only groups its children, which have neither; the
+    /// control then handles the click itself.
+    func contextMenu(for item: EditorJumpBarItem) -> NSMenu? {
+        var menuItems: [NSMenuItem] = []
+        let displayedPath = item.displayedPath
+        if !displayedPath.isEmpty {
+            menuItems.append(copyMenuItem(titled: "Copy Path", copying: displayedPath))
+        }
+        if let fullPath = item.fullPath {
+            menuItems.append(copyMenuItem(titled: "Copy Full Path", copying: fullPath))
+        }
+        guard !menuItems.isEmpty else { return nil }
+        let menu = NSMenu()
+        menu.items = menuItems
+        return menu
+    }
+
+    private func copyMenuItem(titled title: String, copying text: String) -> NSMenuItem {
+        let menuItem = NSMenuItem(title: title, action: #selector(copyMenuItemChosen(_:)), keyEquivalent: "")
+        menuItem.target = self
+        menuItem.representedObject = text
+        menuItem.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
+        return menuItem
+    }
+
+    @objc private func copyMenuItemChosen(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        pathCopiedRelay.accept(text)
     }
 }
 

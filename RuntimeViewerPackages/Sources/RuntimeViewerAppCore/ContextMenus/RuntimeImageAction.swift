@@ -17,8 +17,13 @@ public enum RuntimeImageAction: Hashable, Sendable {
     /// Puts the image's name on the pasteboard.
     case copyName
 
-    /// Puts the image's path on the pasteboard.
+    /// Puts the path the list shows on the pasteboard: the names below the
+    /// tree's root, joined by `/` (`RuntimeImageNode.displayedPath`). A folder
+    /// offers it too.
     case copyPath
+
+    /// Puts the whole path of the image, or of the folder, on the pasteboard.
+    case copyFullPath
 
     /// Selects the image's file in the Finder.
     case showInFinder
