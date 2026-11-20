@@ -227,7 +227,7 @@ extension RuntimeEngine.TypeRelationshipsCommand: RuntimeEngineSpanningProgressC
         }
 
         if query.relationship == .ancestors {
-            let resolvedTrees = await participants.ownersAncestorTrees(named: ownTrees.flatMap(\.nodes).unresolvedNames)
+            let resolvedTrees = await participants.ownersAncestorTrees(for: ownTrees.flatMap(\.nodes).unresolvedTypes())
             ownTrees = ownTrees.map { RuntimeRelationshipTree(root: $0.root, nodes: $0.nodes.resolving(resolvedTrees)) }
         }
 

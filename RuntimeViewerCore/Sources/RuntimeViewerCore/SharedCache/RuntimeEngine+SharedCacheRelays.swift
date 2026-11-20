@@ -65,34 +65,74 @@ extension RuntimeEngine {
     /// `superclassChain(for:)` for an engine that borrows shared cache
     /// images, about a class of its own images. The serving process walks the
     /// chain as far as its own images define it and names the levels above by
-    /// their runtime names alone; the first such level an owner has indexed is
-    /// resolved there, with its chain above it.
+    /// their runtime names alone; the first such level is resolved by an
+    /// owner — as a class, never as the protocol a class may share its name
+    /// with, as `NSObject` does — with its chain above it.
+    ///
+    /// When no owner has indexed the image that defines that class, the
+    /// serving process's runtime says which image it is, and the image's
+    /// owner indexes it first, as `interfaceAcrossOwners` does for a
+    /// reference: a Mac Catalyst class's chain ends at libobjc's `NSObject`
+    /// even when nothing on "My Mac" has opened libobjc.
     func superclassChainAcrossOwners(
         for object: RuntimeObject,
         participants: [RuntimeSharedCacheParticipant]
     ) async throws -> [RuntimeRelationshipNode] {
         let chain = try await dispatchToServingProcess(SuperclassChainCommand(object: object))
         guard let unresolvedIndex = chain.firstIndex(where: { !$0.isResolved }) else { return chain }
-        let unresolvedName = chain[unresolvedIndex].name
-        guard let resolvedTree = await participants.ownersAncestorTrees(named: [unresolvedName])[unresolvedName],
-              let owner = participants.owners.first(where: { $0.includesImage(resolvedTree.root.imagePath) }),
-              let chainAbove = try? await owner.dispatch(SuperclassChainCommand(object: resolvedTree.root))
+        // Every level of a superclass chain is a class, whether or not a
+        // serving process of an earlier release said so.
+        let unresolvedSuperclass = RuntimeRelationshipNode.UnresolvedType(name: chain[unresolvedIndex].name, kind: .class)
+        guard let superclass = await ownersClass(unresolvedSuperclass, participants: participants),
+              let owner = participants.owners.first(where: { $0.includesImage(superclass.imagePath) }),
+              let chainAbove = try? await owner.dispatch(SuperclassChainCommand(object: superclass))
         else { return chain }
-        return Array(chain[..<unresolvedIndex]) + [RuntimeRelationshipNode(object: resolvedTree.root)] + chainAbove
+        return Array(chain[..<unresolvedIndex]) + [RuntimeRelationshipNode(object: superclass)] + chainAbove
+    }
+
+    /// The class `unresolvedClass` names, from the owner that keeps the image
+    /// defining it — indexed first when it is not yet — or `nil` when no
+    /// owner can say.
+    private func ownersClass(
+        _ unresolvedClass: RuntimeRelationshipNode.UnresolvedType,
+        participants: [RuntimeSharedCacheParticipant]
+    ) async -> RuntimeObject? {
+        if let tree = await participants.ownersAncestorTrees(for: [unresolvedClass])[unresolvedClass] {
+            return tree.root
+        }
+        let referencedClass = RuntimeObject(
+            name: unresolvedClass.name,
+            displayName: unresolvedClass.name,
+            kind: .objc(.type(.class)),
+            imagePath: "",
+            children: []
+        )
+        guard let definingImagePath = try? await dispatchToServingProcess(ImageNameOfObjectCommand(object: referencedClass)),
+              let owner = sharedCacheOwner(forImageAt: definingImagePath)
+        else { return nil }
+        do {
+            try await owner.indexBorrowedImageIfNeeded(at: definingImagePath)
+        } catch {
+            return nil
+        }
+        return await participants.ownersAncestorTrees(for: [unresolvedClass])[unresolvedClass]?.root
     }
 
     /// `refinedProtocolTree(for:)` for an engine that borrows shared cache
     /// images, about a protocol of its own images: every refined protocol the
-    /// serving process could not resolve is resolved by an owner, with the
-    /// protocols it refines in turn underneath.
+    /// serving process could not resolve is resolved by an owner — as a
+    /// protocol, never as a class of the same name — with the protocols it
+    /// refines in turn underneath.
     func refinedProtocolTreeAcrossOwners(
         for object: RuntimeObject,
         participants: [RuntimeSharedCacheParticipant]
     ) async throws -> [RuntimeRelationshipNode] {
         let tree = try await dispatchToServingProcess(RefinedProtocolTreeCommand(object: object))
-        let unresolvedNames = tree.unresolvedNames
-        guard !unresolvedNames.isEmpty else { return tree }
-        return tree.resolving(await participants.ownersAncestorTrees(named: unresolvedNames))
+        // Every node of the tree is a protocol, whether or not a serving
+        // process of an earlier release said so.
+        let unresolvedTypes = tree.unresolvedTypes(assumingKind: .protocol)
+        guard !unresolvedTypes.isEmpty else { return tree }
+        return tree.resolving(await participants.ownersAncestorTrees(for: unresolvedTypes), assumingKind: .protocol)
     }
 
     /// Makes sure this engine — an owner — has the image at `imagePath`

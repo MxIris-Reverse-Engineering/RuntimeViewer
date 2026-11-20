@@ -86,36 +86,50 @@ extension Array where Element == RuntimeSharedCacheParticipant {
 }
 
 extension Array where Element == RuntimeSharedCacheParticipant {
-    /// For each of `names`, the ancestors tree of the type of that name some
-    /// owner among these participants has indexed — at most `limit` names,
-    /// one query per owner for all of them. A name no owner knows has no
-    /// tree, and an owner that cannot answer is passed over.
-    func ownersAncestorTrees(named names: some Collection<String>, limit: Int = 64) async -> [String: RuntimeRelationshipTree] {
-        let requestedNames: [String] = names.prefix(limit).map { $0 }
-        guard !requestedNames.isEmpty else { return [:] }
+    /// For each of `types`, the ancestors tree of that type some owner among
+    /// these participants has indexed — at most `limit` types, one query per
+    /// owner for all of them. A type is matched by name and, when its kind
+    /// is known, by kind: a class is never answered with the protocol of the
+    /// same name, nor a protocol with the class (`NSObject` is both). A type
+    /// no owner knows has no tree, and an owner that cannot answer is passed
+    /// over.
+    func ownersAncestorTrees(
+        for types: some Collection<RuntimeRelationshipNode.UnresolvedType>,
+        limit: Int = 64
+    ) async -> [RuntimeRelationshipNode.UnresolvedType: RuntimeRelationshipTree] {
+        let requestedTypes: [RuntimeRelationshipNode.UnresolvedType] = types.prefix(limit).map { $0 }
+        guard !requestedTypes.isEmpty else { return [:] }
         // A pattern with a dot in it is matched against qualified names, one
         // without against a type's own name; the two kinds go separately.
-        let nameGroups: [[String]] = [requestedNames.filter { !$0.contains(".") }, requestedNames.filter { $0.contains(".") }].filter { !$0.isEmpty }
-        var treesByName: [String: RuntimeRelationshipTree] = [:]
+        let typeGroups: [[RuntimeRelationshipNode.UnresolvedType]] = [
+            requestedTypes.filter { !$0.name.contains(".") },
+            requestedTypes.filter { $0.name.contains(".") },
+        ].filter { !$0.isEmpty }
+        var treesByType: [RuntimeRelationshipNode.UnresolvedType: RuntimeRelationshipTree] = [:]
         for owner in owners {
-            let remainingGroups = nameGroups.map { group in group.filter { treesByName[$0] == nil } }.filter { !$0.isEmpty }
+            let remainingGroups = typeGroups.map { group in group.filter { treesByType[$0] == nil } }.filter { !$0.isEmpty }
             for group in remainingGroups {
-                let pattern = "^(?:" + group.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|") + ")$"
+                // A class and a protocol of one name are one name to search.
+                var names: [String] = []
+                for name in group.map(\.name) where !names.contains(name) {
+                    names.append(name)
+                }
+                let pattern = "^(?:" + names.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|") + ")$"
                 let query = RuntimeTypeRelationshipsQuery(
                     text: pattern,
                     matchMode: .regularExpression,
                     relationship: .ancestors,
                     isCaseSensitive: true,
-                    candidateLimit: group.count * 4
+                    candidateLimit: names.count * 4
                 )
                 guard let trees = try? await owner.dispatch(RuntimeEngine.TypeRelationshipsCommand(query: query), onProgress: nil) else { continue }
-                for name in group where treesByName[name] == nil {
-                    if let tree = trees.first(where: { owner.includesImage($0.root.imagePath) && $0.root.isNamed(name) }) {
-                        treesByName[name] = tree
+                for type in group where treesByType[type] == nil {
+                    if let tree = trees.first(where: { owner.includesImage($0.root.imagePath) && $0.root.isType(type) }) {
+                        treesByType[type] = tree
                     }
                 }
             }
         }
-        return treesByName
+        return treesByType
     }
 }

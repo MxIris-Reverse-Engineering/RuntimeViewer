@@ -1494,7 +1494,10 @@ extension RuntimeEngine {
     /// found the way the Find navigator's Ancestor Types finds its superclass
     /// levels, across every indexed image and across the language boundary; a
     /// level no indexed image defines carries its name only and ends the chain.
-    /// Indexes nothing to answer.
+    /// Indexes nothing to answer — except on an engine that borrows shared
+    /// cache images, whose owner indexes the image defining the first
+    /// superclass the engine's own images do not define, when it has not yet
+    /// (`superclassChainAcrossOwners(for:participants:)`).
     ///
     /// A peer older than this command has no handler for it — over a socket it
     /// answers with `RuntimeNetworkRequestError.isUnknownCommand` — and only

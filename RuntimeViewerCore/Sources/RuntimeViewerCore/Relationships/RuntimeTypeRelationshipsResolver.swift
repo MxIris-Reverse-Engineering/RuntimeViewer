@@ -141,7 +141,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
             let children = Self.nodes(node.children, leadingInto: imagePaths)
             let isInImages = node.object.map { imagePaths.contains($0.imagePath) } ?? false
             guard isInImages || !children.isEmpty else { return nil }
-            return RuntimeRelationshipNode(name: node.name, object: node.object, children: children)
+            return node.replacingChildren(children)
         }
     }
 
@@ -334,7 +334,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
            let superclassPath = path.descending(into: .objcClass(name: superclassName)) {
             let superclass = await materializeObjCClass(named: superclassName)
             let children = await objcClassAncestorNodes(named: superclassName, path: superclassPath)
-            nodes.append(RuntimeRelationshipNode(name: superclass?.displayName ?? superclassName, object: superclass, children: children))
+            nodes.append(RuntimeRelationshipNode(name: superclass?.displayName ?? superclassName, typeKind: .class, object: superclass, children: children))
         }
         return nodes
     }
@@ -355,7 +355,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
             guard let protocolPath = path.descending(into: .objcProtocol(name: protocolName)) else { continue }
             let object = await materializeObjCProtocol(named: protocolName, referencedFrom: referencingImagePath)
             let children = await objcProtocolAncestorNodes(named: protocolName, referencedFrom: object?.imagePath ?? referencingImagePath, path: protocolPath)
-            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? protocolName, object: object, children: children))
+            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? protocolName, typeKind: .protocol, object: object, children: children))
         }
         return nodes
     }
@@ -409,7 +409,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
             let children = await ancestorNodes(of: objcSuperclass, path: superclassPath)
             nodes.append(RuntimeRelationshipNode(object: objcSuperclass, children: children))
         } else {
-            nodes.append(RuntimeRelationshipNode(name: displayName, object: nil, children: []))
+            nodes.append(RuntimeRelationshipNode(name: displayName, typeKind: .class, object: nil, children: []))
         }
         return nodes
     }
@@ -435,7 +435,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
             guard let protocolPath = path.descending(into: .swiftProtocol(qualifiedName: qualifiedName)) else { continue }
             let object = await materializeSwiftProtocol(qualifiedName: qualifiedName)
             let children = await swiftProtocolAncestorNodes(qualifiedName: qualifiedName, path: protocolPath)
-            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? qualifiedName, object: object, children: children))
+            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? qualifiedName, typeKind: .protocol, object: object, children: children))
         }
         return nodes
     }
@@ -488,7 +488,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
                 path = superclassPath
                 currentClass = superclassObject
             case .unresolved(let name):
-                chain.append(RuntimeRelationshipNode(name: name, object: nil, children: []))
+                chain.append(RuntimeRelationshipNode(name: name, typeKind: .class, object: nil, children: []))
                 chain += await levels(aboveUnresolvedSuperclassOf: currentClass, path: path)
                 break walk
             }
@@ -521,7 +521,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
                 path = levelPath
             } else {
                 guard let levelPath = path.descending(into: .objcClass(name: className)) else { break }
-                levels.append(RuntimeRelationshipNode(name: Self.displayName(ofObjCClassNamed: className), object: nil, children: []))
+                levels.append(RuntimeRelationshipNode(name: Self.displayName(ofObjCClassNamed: className), typeKind: .class, object: nil, children: []))
                 path = levelPath
             }
         }
@@ -650,7 +650,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
             else { continue }
             let object = await objcSectionFactory.existingSection(for: carrierImagePath)?.makeRuntimeObject(forProtocolName: refiningProtocolName)
             let children = await refiningProtocolNodes(ofObjCProtocolNamed: refiningProtocolName, referencedFrom: carrierImagePath, path: protocolPath)
-            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? refiningProtocolName, object: object, children: children))
+            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? refiningProtocolName, typeKind: .protocol, object: object, children: children))
         }
         nodes += await swiftRefiningProtocolNodes(of: protocolName, path: path)
         return Self.sortedByName(nodes)
@@ -666,7 +666,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
             guard let protocolPath = path.descending(into: .swiftProtocol(qualifiedName: reference.qualifiedName)) else { continue }
             let object = await swiftSectionFactory.existingSection(for: reference.imagePath)?.makeRuntimeObject(forMangledProtocolName: reference.mangledName)
             let children = await swiftRefiningProtocolNodes(of: reference.qualifiedName, path: protocolPath)
-            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? reference.qualifiedName, object: object, children: children))
+            nodes.append(RuntimeRelationshipNode(name: object?.displayName ?? reference.qualifiedName, typeKind: .protocol, object: object, children: children))
         }
         return Self.sortedByName(nodes)
     }
@@ -836,7 +836,7 @@ actor RuntimeTypeRelationshipsResolver<Reading: RuntimeImageReading>: RuntimeTyp
                let movedObject = await objcSectionFactory.existingSection(for: carrierImagePath)?.makeRuntimeObject(forProtocolName: protocolObject.name) {
                 object = movedObject
             }
-            movedNodes.append(RuntimeRelationshipNode(name: node.name, object: object, children: children))
+            movedNodes.append(RuntimeRelationshipNode(name: node.name, typeKind: node.typeKind, object: object, children: children))
         }
         return movedNodes
     }

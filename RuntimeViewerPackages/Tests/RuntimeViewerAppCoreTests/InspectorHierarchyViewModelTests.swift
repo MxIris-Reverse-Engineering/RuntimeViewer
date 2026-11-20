@@ -74,7 +74,7 @@ struct InspectorHierarchyViewModelTests {
 
     @Test("a superclass no indexed image defines is a level known by its name alone")
     func unresolvedSuperclassIsListedByName() {
-        let unresolvedLevel = RuntimeRelationshipNode(name: "NSObject", object: nil, children: [])
+        let unresolvedLevel = RuntimeRelationshipNode(name: "NSObject", typeKind: .class, object: nil, children: [])
         let level = InspectorHierarchyCellViewModel(level: unresolvedLevel, identifier: InspectorHierarchyCellViewModel.identifier(of: unresolvedLevel, at: 1))
 
         #expect(level.runtimeObject == nil)

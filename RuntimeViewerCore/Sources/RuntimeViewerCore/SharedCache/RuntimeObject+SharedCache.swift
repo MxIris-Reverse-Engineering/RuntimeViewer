@@ -21,4 +21,13 @@ extension RuntimeObject {
     func isNamed(_ name: String) -> Bool {
         displayName == name || self.name == name || RuntimeInterfaceTextMatcher.ownTypeName(of: displayName) == name
     }
+
+    /// Whether this object is the type `unresolvedType` stands for: named by
+    /// its name, and of its kind when it has one — the `NSObject` protocol is
+    /// not the `NSObject` class.
+    func isType(_ unresolvedType: RuntimeRelationshipNode.UnresolvedType) -> Bool {
+        guard isNamed(unresolvedType.name) else { return false }
+        guard let kind = unresolvedType.kind else { return true }
+        return RuntimeRelationshipNode.TypeKind(of: self) == kind
+    }
 }

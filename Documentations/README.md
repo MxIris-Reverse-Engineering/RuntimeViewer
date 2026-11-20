@@ -112,6 +112,7 @@
 
 按时间倒序。
 
+- [Mac Catalyst 类的 Hierarchy 把父类 `NSObject` 显示成 AppKit 里的 `NSObject` 协议](ResolvedIssues/2026-11-20-borrowed-superclass-resolved-as-protocol.md)（2026-11-20）—— 0081 之后借用方不索引借来的系统镜像，父类只剩名字，交给归属 engine 按名字解析；归属 engine 取第一棵名字对得上的树，不分类和协议，没索引 libobjc 时只对得上别的镜像带的协议副本。关系节点加了可选的 `typeKind`，跨 engine 按名字和种类解析；父类链在归属 engine 没索引定义镜像时按需索引。Find 的 Ancestor Types 同样修好。
 - [不带版本号运行 UpdateSourceEditorScript.sh，把 pin 从 27.2.0-alpha.1 退回 26.6.6](ResolvedIssues/2026-11-12-update-source-editor-moved-the-pin-back.md)（2026-11-12）—— 脚本不带版本号时取 GitHub 的 Latest 发布，Latest 不含预发布版，于是从 27 线的预发布版退回 26.6 线；比钉的版本旧也照退。改为在钉的版本所在的线（主版本号相同）里取最新的发布、含预发布版，不带版本号时绝不往回退；`version_is_after` 改按语义化版本比较，正式版排在它的预发布版之后。
 
 - [行内宏展开左上角的关闭按钮点了没反应：行号栏盖在它上面，SDK 27 下的普通按钮不接转来的点击](ResolvedIssues/2026-11-11-inline-expansion-dismiss-button-ignores-clicks.md)（2026-11-11）—— 主编辑器的行号栏浮在 gap 之上，hit-test 落在行号栏，点击只能靠 AppKit 转给按钮，而 macOS 27 SDK 下的普通 `NSButton` 由手势识别器跟踪、不接转来的点击；重建版复刻 26.6，按钮是普通 `NSButton`。Xcode 27.2 用覆写 `mouseDown(with:)` 的私有子类 `GapDismissButton` 修好，SourceEditor 在 `xcode-27` 线照搬并发 `27.2.0-alpha.1`，RuntimeViewer 抬 pin。回归测试断言按钮的类有自己的 `mouseDown:`：测试进程里投递的点击区分不了修复前后。

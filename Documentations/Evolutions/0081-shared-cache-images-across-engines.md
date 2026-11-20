@@ -211,9 +211,11 @@ public protocol RuntimeEngineSpanningCommand: RuntimeEngineCommand {
   3. 各归属 engine，它们的查找覆盖整个 shared cache；
   4. 本 engine 的服务进程，这次带跨镜像查找，处理指向自己其他镜像的引用。
   按类名在 shared cache 里直接定位镜像的路子查过：MachOKit 只解析了 ObjC 优化数据里的 header 表，没有类哈希表的查找，所以改用目标进程的运行时。
-- **父类链与协议树**（`superclassChain`、`refinedProtocolTree`）：本 engine 走到 unresolved 节点时，按名字请归属 engine 找到这个类型（一次查询带上所有名字，用正则一次扫完），父类链把它和它上面的链接上，协议树把每个 unresolved 节点换成归属 engine 的祖先树。
+- **父类链与协议树**（`superclassChain`、`refinedProtocolTree`）：本 engine 走到 unresolved 节点时，按名字和种类请归属 engine 找到这个类型（一次查询带上所有名字，用正则一次扫完），父类链把它和它上面的链接上，协议树把每个 unresolved 节点换成归属 engine 的祖先树。
+  - **种类必须一起比**：同一个名字可以既是类又是协议（`NSObject`），只按名字找会把父类换成同名协议——ObjC 协议每个用到它的镜像都带一份副本，归属 engine 没索引 libobjc 时能对上的只有协议。为此 `RuntimeRelationshipNode` 加了可选字段 `typeKind`（`class` / `protocol`），解析器建节点时写明；旧 payload 不带，父类链一律按类找、协议树一律按协议找（2026-11-20 补上，见 `ResolvedIssues/2026-11-20-borrowed-superclass-resolved-as-protocol.md`）。
+  - **父类链在归属 engine 没索引定义镜像时按需索引**：先问服务进程的运行时这个类在哪个镜像，再由该镜像的归属 engine 建索引后找类，与 `interface(for:)` 第 2 步的做法相同。所以 Mac Catalyst 类的父类链总能停在 libobjc 的 `NSObject` 上。协议树和 `typeRelationships` 不按需索引，找不到就保留 unresolved 节点。
 - **`counterpart`** 不需要接力：本 engine 自己镜像里的类或协议，另一面也在同一个镜像里。
-- **`typeRelationships`**：先问各归属 engine，查询去掉镜像范围（自己镜像里的类型可能继承范围之外的系统类型，这正是要合并的情形）；再把归属方树里的所有类型作为查询新增的可选字段 `externalRoots` 交给本 engine 的服务进程，它按名字找出自己镜像里的后代或遵循者，接到归属方树的对应节点下；祖先树里的 unresolved 节点照父类链的办法换成归属方的树。最后按查询的镜像范围裁剪，按「名字与查询相同的在前、其余按名字排序」重排，套用 `candidateLimit`。旧 payload 忽略 `externalRoots`，此时少了它自己镜像里的那部分。
+- **`typeRelationships`**：先问各归属 engine，查询去掉镜像范围（自己镜像里的类型可能继承范围之外的系统类型，这正是要合并的情形）；再把归属方树里的所有类型作为查询新增的可选字段 `externalRoots` 交给本 engine 的服务进程，它按名字找出自己镜像里的后代或遵循者，接到归属方树的对应节点下；祖先树里的 unresolved 节点照父类链的办法、按名字和节点写明的种类换成归属方的树（旧 payload 的节点不带种类，只按名字）。最后按查询的镜像范围裁剪，按「名字与查询相同的在前、其余按名字排序」重排，套用 `candidateLimit`。旧 payload 忽略 `externalRoots`，此时少了它自己镜像里的那部分。
 - 这些接力做在 `RuntimeEngine` 的公开方法里，不在 `dispatch` 里；本机把 engine 共享给别的 Mac 时，对方经 proxy 发来的这几类请求只由本 engine 的服务进程回答，跨镜像的合并（§4）照常生效。
 
 ### 7. 资格判定与接线（`RuntimeViewerEngineManagement`）

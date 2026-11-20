@@ -186,7 +186,7 @@ public final class InspectorHierarchyViewModel: ViewModel<InspectorRuntimeObject
                 #log(.default, "No superclass chain for runtime object: \("\(runtimeObject)", privacy: .public), falling back to the names: \(error, privacy: .public)")
                 let names = try await runtimeEngine.hierarchy(for: runtimeObject)
                 // The names start with the class itself.
-                return names.dropFirst().map { RuntimeRelationshipNode(name: $0, object: nil, children: []) }
+                return names.dropFirst().map { RuntimeRelationshipNode(name: $0, typeKind: .class, object: nil, children: []) }
             }
         }
     }

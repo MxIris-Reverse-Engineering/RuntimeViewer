@@ -13,7 +13,7 @@ struct RuntimeTypeRelationshipsImageScopeTests {
     /// defines when `imagePath` is `nil`.
     private static func node(_ name: String, in imagePath: String?, children: [RuntimeRelationshipNode] = []) -> RuntimeRelationshipNode {
         let object = imagePath.map { RuntimeObject(name: name, displayName: name, kind: .objc(.type(.class)), imagePath: $0, children: []) }
-        return RuntimeRelationshipNode(name: name, object: object, children: children)
+        return RuntimeRelationshipNode(name: name, typeKind: .class, object: object, children: children)
     }
 
     @Test("a node outside the images stays only for the types inside them it leads to")

@@ -20,7 +20,7 @@ extension Array where Element == RuntimeRelationshipNode {
                     graftedNode.object.map { !presentObjects.contains($0) } ?? true
                 }
             }
-            return RuntimeRelationshipNode(name: node.name, object: node.object, children: children)
+            return node.replacingChildren(children)
         }
     }
 
@@ -32,7 +32,7 @@ extension Array where Element == RuntimeRelationshipNode {
             let children = node.children.leading(intoImagesWhere: isIncluded)
             let isInImages = node.object.map { isIncluded($0.imagePath) } ?? false
             guard isInImages || !children.isEmpty else { return nil }
-            return RuntimeRelationshipNode(name: node.name, object: node.object, children: children)
+            return node.replacingChildren(children)
         }
     }
 
@@ -43,28 +43,55 @@ extension Array where Element == RuntimeRelationshipNode {
         }
     }
 
-    /// The names of the nodes for types no image of the engine that built
-    /// them defines, in the order they appear.
-    var unresolvedNames: OrderedSet<String> {
-        var names: OrderedSet<String> = []
+    /// The types of the nodes no image of the engine that built them
+    /// defines, in the order they appear. `assumedKind` stands in for the
+    /// kind of a node that does not say — one a peer of an earlier release
+    /// built — when every node is known to be of one kind: each level of a
+    /// superclass chain is a class, each node of a refined protocol tree a
+    /// protocol.
+    func unresolvedTypes(assumingKind assumedKind: RuntimeRelationshipNode.TypeKind? = nil) -> OrderedSet<RuntimeRelationshipNode.UnresolvedType> {
+        var types: OrderedSet<RuntimeRelationshipNode.UnresolvedType> = []
         for node in self {
-            if node.object == nil {
-                names.append(node.name)
+            if let unresolvedType = node.unresolvedType(assumingKind: assumedKind) {
+                types.append(unresolvedType)
             }
-            names.append(contentsOf: node.children.unresolvedNames)
+            types.append(contentsOf: node.children.unresolvedTypes(assumingKind: assumedKind))
         }
-        return names
+        return types
     }
 
     /// These nodes with each unresolved one that `resolvedTrees` has a tree
-    /// for — by the node's name — replaced by that tree: the type itself, its
-    /// own ancestors underneath.
-    func resolving(_ resolvedTrees: [String: RuntimeRelationshipTree]) -> [RuntimeRelationshipNode] {
+    /// for — by the node's name and kind — replaced by that tree: the type
+    /// itself, its own ancestors underneath. `assumedKind` is as in
+    /// `unresolvedTypes(assumingKind:)`, and the two calls must agree on it.
+    func resolving(
+        _ resolvedTrees: [RuntimeRelationshipNode.UnresolvedType: RuntimeRelationshipTree],
+        assumingKind assumedKind: RuntimeRelationshipNode.TypeKind? = nil
+    ) -> [RuntimeRelationshipNode] {
         map { node in
-            if node.object == nil, let resolvedTree = resolvedTrees[node.name] {
-                return RuntimeRelationshipNode(name: resolvedTree.root.displayName, object: resolvedTree.root, children: resolvedTree.nodes)
+            if let unresolvedType = node.unresolvedType(assumingKind: assumedKind),
+               let resolvedTree = resolvedTrees[unresolvedType] {
+                return RuntimeRelationshipNode(object: resolvedTree.root, children: resolvedTree.nodes)
             }
-            return RuntimeRelationshipNode(name: node.name, object: node.object, children: node.children.resolving(resolvedTrees))
+            return node.replacingChildren(node.children.resolving(resolvedTrees, assumingKind: assumedKind))
         }
+    }
+}
+
+extension RuntimeRelationshipNode {
+    /// A type no image of the engine that built a node defines, as another
+    /// engine looks it up: by name, and by kind when the kind is known — a
+    /// class and a protocol may share a name, as `NSObject` does.
+    struct UnresolvedType: Hashable, Sendable {
+        let name: String
+        let kind: TypeKind?
+    }
+
+    /// The type this node stands for when no image of the engine that built
+    /// it defines one; `nil` for a resolved node. `assumedKind` is as in
+    /// `unresolvedTypes(assumingKind:)`.
+    func unresolvedType(assumingKind assumedKind: TypeKind? = nil) -> UnresolvedType? {
+        guard object == nil else { return nil }
+        return UnresolvedType(name: name, kind: typeKind ?? assumedKind)
     }
 }
