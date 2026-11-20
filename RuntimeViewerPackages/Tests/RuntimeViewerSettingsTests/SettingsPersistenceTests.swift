@@ -1,5 +1,3 @@
-#if os(macOS)
-
 import Foundation
 import Observation
 import Testing
@@ -34,6 +32,19 @@ private func waitUntilSettingsAreSaved(
         try? await Task.sleep(for: .milliseconds(10))
     }
     return (try? storage.decodedSettings()) != nil
+}
+
+@MainActor
+private func waitUntilFontSizeIsSaved(
+    _ fontSize: Double,
+    storage: InMemorySettingsStorage,
+    maximumAttempts: Int = 300
+) async -> Bool {
+    for _ in 0 ..< maximumAttempts {
+        if (try? storage.decodedSettings())?.theme.fontSize == fontSize { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return (try? storage.decodedSettings())?.theme.fontSize == fontSize
 }
 
 /// One top-level persisted property, with a change to make to it and a way to
@@ -264,6 +275,54 @@ struct SettingsPersistenceTests {
         #expect(persistedSettings?.theme.fontSize == 17)
     }
 
+    @Test("a synchronous load adopts the stored settings before returning")
+    func synchronousLoadAdoptsStoredSettings() throws {
+        let storage = InMemorySettingsStorage()
+        let storedSettings = Settings()
+        storedSettings.theme.fontSize = 21
+        storedSettings.mcp.fixedPort = 23_456
+        try storage.save(JSONEncoder().encode(storedSettings))
+        let store = SettingsStore(defaultValue: Settings(), storage: storage, autoSaveDelay: .seconds(60))
+        let settingsAccess = SettingsAccess(store: store)
+
+        settingsAccess.loadSynchronously()
+
+        // Asserted synchronously on purpose: the iOS app's first scene reads
+        // settings as soon as the launch callback that loaded them returns.
+        #expect(settingsAccess.theme.fontSize == 21)
+        #expect(settingsAccess.mcp.fixedPort == 23_456)
+    }
+
+    @Test("a synchronous load keeps the defaults when nothing is stored")
+    func synchronousLoadKeepsDefaultsWhenNothingIsStored() {
+        let storage = InMemorySettingsStorage()
+        let store = SettingsStore(defaultValue: Settings(), storage: storage, autoSaveDelay: .seconds(60))
+        let settingsAccess = SettingsAccess(store: store)
+
+        settingsAccess.loadSynchronously()
+
+        #expect(settingsAccess.theme.fontSize == Settings.Theme.default.fontSize)
+        #expect(settingsAccess.mcp.fixedPort == Settings.MCP.default.fixedPort)
+    }
+
+    @Test("an edit after a synchronous load is saved")
+    func editAfterSynchronousLoadIsSaved() async throws {
+        let storage = InMemorySettingsStorage()
+        try storage.save(JSONEncoder().encode(Settings()))
+        let store = SettingsStore(defaultValue: Settings(), storage: storage, autoSaveDelay: .milliseconds(40))
+        let settingsAccess = SettingsAccess(store: store)
+
+        settingsAccess.loadSynchronously()
+        // The migrations may already have scheduled a save; the edit lands in
+        // the same debounce window or the next one either way.
+        settingsAccess.theme.fontSize = 19
+
+        #expect(
+            await waitUntilFontSizeIsSaved(19, storage: storage),
+            "The edit made after the synchronous load never reached storage."
+        )
+    }
+
     @Test("changing one property on its own is enough to persist it")
     func eachPersistedPropertyPersistsOnItsOwn() async throws {
         for property in persistedProperties {
@@ -315,5 +374,3 @@ struct SettingsPersistenceTests {
         )
     }
 }
-
-#endif

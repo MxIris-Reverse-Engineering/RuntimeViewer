@@ -2,9 +2,7 @@ import Foundation
 import FoundationToolbox
 import MetaCodable
 import Observation
-#if os(macOS)
 import UIFoundationSettings
-#endif
 
 @Observable
 @Codable
@@ -45,10 +43,11 @@ public final class Settings {
 
     internal init() {}
 
-    #if os(macOS)
     /// The directory under Application Support the application keeps its
     /// files in: `RuntimeViewer-Debug` for a Debug build, so a Debug app
-    /// running beside the released one never shares a file with it.
+    /// running beside the released one never shares a file with it. On iOS
+    /// Application Support is inside the app's container, but the jailbroken
+    /// variant may be installed without one, so the split matters there too.
     #if DEBUG
     public static let applicationDirectoryName = "RuntimeViewer-Debug"
     #else
@@ -68,11 +67,8 @@ public final class Settings {
             fileName: "settings.json"
         )
     )
-
-    #endif
 }
 
-#if os(macOS)
 extension Settings: PersistentSettings {
     /// Reads every encoded top-level property so `SettingsStore` can register
     /// one persistence observer without collapsing business observation onto a
@@ -92,7 +88,6 @@ extension Settings: PersistentSettings {
         _ = file
     }
 }
-#endif
 
 /// RuntimeViewer's dependency-injection boundary over the single settings
 /// store owned by ``Settings``.
@@ -105,7 +100,6 @@ extension Settings: PersistentSettings {
 @Loggable
 @dynamicMemberLookup
 public final class SettingsAccess {
-    #if os(macOS)
     fileprivate static let shared = SettingsAccess(store: Settings.store)
 
     private let store: SettingsStore<Settings>
@@ -113,27 +107,37 @@ public final class SettingsAccess {
     init(store: SettingsStore<Settings>) {
         self.store = store
     }
-    #else
-    fileprivate static let shared = SettingsAccess()
-
-    private var value = Settings()
-
-    init() {}
-    #endif
 
     /// Reads the stored settings into the model and runs the one-shot data
-    /// migration behind it. Call once at launch, before anything reads a value.
+    /// migrations behind it. The macOS app calls this once at launch, before
+    /// anything reads a value.
     ///
     /// Nothing else starts this. Loading used to be a side effect of building
     /// the shared instance, which made "have the user's settings been read?"
     /// depend on whichever service happened to touch `\.settings` first — so
     /// reordering launch could have left every page showing defaults, and the
     /// first edit would then have written those defaults over the stored file.
-    ///
-    /// A no-op off macOS, where there is no file to read from.
     public func load() async {
-        #if os(macOS)
-        switch await store.load() {
+        logLoadOutcome(await store.load())
+        runMigrations()
+    }
+
+    /// The same read and migrations as ``load()``, finished before the call
+    /// returns.
+    ///
+    /// The iOS app calls this first thing at launch: its first scene
+    /// connects right after `application(_:didFinishLaunchingWithOptions:)`
+    /// returns and reads settings as it does, which can be before a task
+    /// started there to call ``load()`` has run.
+    public func loadSynchronously() {
+        // Resolves to the store's synchronous load() overload — this method
+        // is not async, so the compiler cannot pick the async one.
+        logLoadOutcome(store.load())
+        runMigrations()
+    }
+
+    private func logLoadOutcome(_ outcome: SettingsStore<Settings>.LoadOutcome) {
+        switch outcome {
         case .loaded:
             #log(.debug, "Settings loaded successfully.")
         case .noStoredData:
@@ -141,18 +145,21 @@ public final class SettingsAccess {
         case .failed(let error):
             #log(.debug, "Failed to load settings, using defaults. (\(error, privacy: .public))")
         }
+    }
+
+    private func runMigrations() {
         migrateLegacyThemeProfileIfNeeded()
         migrateResidentLimitDefaultsIfNeeded()
-        #endif
     }
 
     /// Writes pending changes immediately instead of waiting out the store's
     /// auto-save delay, and cancels the pending write — without suspending.
     ///
-    /// Call from `applicationShouldTerminate(_:)`, before replying
-    /// `.terminateNow`. Auto-save debounces by a second and every edit
-    /// restarts that timer, so changing a value and quitting straight away
-    /// otherwise loses the change.
+    /// The macOS app calls this from `applicationShouldTerminate(_:)`, before
+    /// replying `.terminateNow`; the iOS app as it enters the background and
+    /// when it is about to terminate. Auto-save debounces by a second and
+    /// every edit restarts that timer, so changing a value and quitting
+    /// straight away otherwise loses the change.
     ///
     /// Synchronous on purpose — the write must not be deferred behind
     /// `.terminateLater`: the replying task is a main-queue job, and when
@@ -160,10 +167,7 @@ public final class SettingsAccess {
     /// helper-reinstall relaunch does exactly that — AppKit's nested
     /// wait-for-reply run loop cannot drain the main queue, so the reply
     /// never arrives and the app can only be force-quit.
-    ///
-    /// A no-op off macOS, where there is nothing to write to.
     public func flushSynchronously() {
-        #if os(macOS)
         do {
             // Resolves to the store's synchronous save() overload — this
             // method is not async, so the compiler cannot pick the async one.
@@ -171,10 +175,8 @@ public final class SettingsAccess {
         } catch {
             #log(.debug, "Failed to flush settings: \(error, privacy: .public)")
         }
-        #endif
     }
 
-    #if os(macOS)
     /// Brings the two resident limits to the defaults of
     /// `Settings.Search.currentResidentLimitDefaultsRevision`, once: a limit
     /// still at the old default of 256 MB is taken for one the user never
@@ -238,23 +240,10 @@ public final class SettingsAccess {
         }
         defaults.removeObject(forKey: legacyKey)
     }
-    #endif
 
     public var current: Settings {
-        get {
-            #if os(macOS)
-            store.value
-            #else
-            value
-            #endif
-        }
-        set {
-            #if os(macOS)
-            store.value = newValue
-            #else
-            value = newValue
-            #endif
-        }
+        get { store.value }
+        set { store.value = newValue }
     }
 
     public subscript<Value>(dynamicMember keyPath: ReferenceWritableKeyPath<Settings, Value>) -> Value {
@@ -269,11 +258,7 @@ public final class SettingsAccess {
     /// control in a rendered settings page would write to the developer's own
     /// stored settings once the auto-save delay elapsed.
     package static var preview: SettingsAccess {
-        #if os(macOS)
         SettingsAccess(store: SettingsStore(defaultValue: Settings(), storage: InMemorySettingsStorage()))
-        #else
-        SettingsAccess()
-        #endif
     }
 }
 

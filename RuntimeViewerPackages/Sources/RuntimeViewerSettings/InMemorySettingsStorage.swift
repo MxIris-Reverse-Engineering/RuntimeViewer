@@ -1,5 +1,3 @@
-#if os(macOS)
-
 import Foundation
 import UIFoundationSettings
 
@@ -46,5 +44,3 @@ final class InMemorySettingsStorage: SettingsStorage, @unchecked Sendable {
         return try JSONDecoder().decode(Settings.self, from: storedData)
     }
 }
-
-#endif

@@ -163,7 +163,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> iOS 上的设置真正存盘</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-20</dd></div>
     <div><dt>创建日期</dt><dd>2026-11-20</dd></div>
     <div><dt>作者</dt><dd>JH</dd></div>
@@ -343,8 +343,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <table>
     <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
     <tbody>
-      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation 下限 <code>from: "0.48.0"</code>；<code>RuntimeViewerSettings</code>、<code>RuntimeViewerSettingsTests</code> 对 <code>UIFoundationSettings</code> 的依赖去掉平台条件</td><td>上游放开后各平台都能链接</td><td class="numeric">1</td></tr>
-      <tr><td>三个 workspace 的 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation 升到 0.48.0（<code>UpdatePackagesScript.sh</code>）</td><td>锁文件跟着下限走</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>UIFoundation 下限 <code>from: "0.48.0"</code>；<code>RuntimeViewerSettings</code>、<code>RuntimeViewerSettingsUI</code>、<code>RuntimeViewerSettingsTests</code> 对 <code>UIFoundationSettings</code> 的依赖去掉平台条件</td><td>上游放开后各平台都能链接；<code>SettingsUI</code> 那条留着条件会让跨平台守卫测试仍把它当成 macOS 专属</td><td class="numeric">1、2</td></tr>
+      <tr><td>Debug / Distribution workspace 与 Packages、CommandLine 两个包的 <code>Package.resolved</code></td><td><span class="tag tag-changed">修改</span></td><td>只手改 UIFoundation 一条 pin 到 0.48.0</td><td>锁文件跟着下限走，别的 pin 不动</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/CrossPlatformSourceGuardTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>自检的「已知 macOS 专属模块」从 <code>UIFoundationSettings</code> 换成 <code>UIFoundationSettingsUI</code></td><td>前者不再是 macOS 专属</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift</code> · <code>Settings</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 import、<code>applicationDirectoryName</code>、<code>applicationDirectoryURL</code>、<code>store</code>、<code>PersistentSettings</code> 遵循外的 <code>#if os(macOS)</code></td><td>各平台同一个存储</td><td class="numeric">1</td></tr>
       <tr><td>同上 · <code>SettingsAccess</code></td><td><span class="tag tag-changed">修改</span></td><td>只留 <code>store</code>；<code>load()</code>、两项迁移、<code>flushSynchronously()</code>、<code>current</code>、<code>preview</code> 去掉分支；新增 <code>loadSynchronously()</code></td><td>一种实现；iOS 启动时要同步读完</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerPackages/Sources/RuntimeViewerSettings/InMemorySettingsStorage.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code></td><td><code>preview</code> 与测试在各平台都用它</td><td class="numeric">1</td></tr>
@@ -352,7 +353,8 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
       <tr><td><code>RuntimeViewerPackages/Tests/RuntimeViewerSettingsTests/SettingsResidentLimitMigrationTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code>；同一组参数也走一遍 <code>loadSynchronously()</code></td><td>迁移现在各平台都跑，两个入口都要迁</td><td class="numeric">1</td></tr>
       <tr><td><code>RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/SettingsLifecycleController.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>@MainActor</code> 单例，<code>@DependencyEntry</code> 暴露；<code>loadOnLaunch()</code> 同步读取；订阅进入后台与即将终止两个通知写盘</td><td>iOS 的读写时机</td><td class="numeric">2</td></tr>
       <tr><td><code>RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit/App/AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>didFinishLaunching</code> 第一件事调 <code>settingsLifecycleController.loadOnLaunch()</code></td><td>在任何东西读设置之前读完</td><td class="numeric">2</td></tr>
-      <tr><td><code>AGENTS.md</code>（根）· <em>Settings Integration</em>、<em>Dependency floors</em></td><td><span class="tag tag-changed">修改</span></td><td>改写「macOS 之外只在内存里」那条；补 UIFoundation 0.48.0 的理由</td><td>规则跟着代码变</td><td class="numeric">3</td></tr>
+      <tr><td><code>AGENTS.md</code>（根）· <em>Settings Integration</em>、<em>Dependency floors</em>、规则文件表</td><td><span class="tag tag-changed">修改</span></td><td>改写「macOS 之外只在内存里」那条；补 UIFoundation 0.48.0 的理由；表里加 iOS 那份规则文件</td><td>规则跟着代码变</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/AGENTS.md</code>（及 <code>CLAUDE.md</code> 链接）</td><td><span class="tag tag-added">新增</span></td><td>iOS 系三个 App 的启动顺序与设置的读写时机</td><td>根文件改前已有 69.9 KB，超过 Codex 读取的 64 KiB 上限，iOS 的规则放进它管的目录</td><td class="numeric">3</td></tr>
       <tr><td><code>Documentations/Visions/IOSFeatureParity.md</code></td><td><span class="tag tag-changed">修改</span></td><td>相关提案表加本篇；「最后更新」</td><td>愿景登记</td><td class="numeric">3</td></tr>
       <tr><td><code>Documentations/Evolutions/README.md</code>、<code>Documentations/README.md</code></td><td><span class="tag tag-changed">修改</span></td><td>登记本篇</td><td>索引</td><td class="numeric">3</td></tr>
     </tbody>
@@ -577,7 +579,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h2>落地步骤</h2>
   <ol start="0">
     <li><strong>上游先落地</strong>（已完成）—— UIFoundation 的 0042 合进 <code>main</code> 并打 0.48.0</li>
-    <li><strong>一种 <code>SettingsAccess</code></strong> —— 改动地图里 <code>Package.swift</code>、锁文件、<code>Settings.swift</code>、<code>InMemorySettingsStorage.swift</code>、两份测试
+    <li><strong>一种 <code>SettingsAccess</code></strong>（已完成）—— 改动地图里 <code>Package.swift</code>、锁文件、<code>Settings.swift</code>、<code>InMemorySettingsStorage.swift</code>、两份测试
       <ul>
         <li>行为：<code>settingsPackageBuildsForIOSAndVisionOS</code>（Ultra 上以 iOS 模拟器、iOS 真机、visionOS 模拟器编 <code>RuntimeViewerSettings</code>）</li>
         <li>行为：<code>existingSettingsTestsPassOnMac</code>（放开平台后原有用例照过）</li>
@@ -587,13 +589,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <li>行为：<code>macAppBuildUnchanged</code>（Tuist workspace，Debug）</li>
       </ul>
     </li>
-    <li><strong>iOS 的生命周期</strong> —— <code>SettingsLifecycleController.swift</code>（iOS）、<code>AppDelegate.swift</code>（iOS）
+    <li><strong>iOS 的生命周期</strong>（已完成）—— <code>SettingsLifecycleController.swift</code>（iOS）、<code>AppDelegate.swift</code>（iOS）
       <ul>
         <li>行为：<code>iOSAppBuildsForAllThreeTargets</code></li>
         <li>行为：<code>settingsFileAppearsAfterFirstLaunchOnDevice</code>（在 vphone 上看 App 容器里出现 <code>settings.json</code>；由用户看，或经用户同意由 agent 经 <code>vphone.sock</code> 读）</li>
       </ul>
     </li>
-    <li><strong>文档</strong> —— 根 <code>AGENTS.md</code>、愿景、两份索引</li>
+    <li><strong>文档</strong>（已完成）—— 根 <code>AGENTS.md</code>、愿景、两份索引</li>
   </ol>
   <div class="callout callout-note">
     <p><strong>收尾时必须判断两件事</strong>（判断结果写进决策日志，不允许沉默跳过）：</p>
@@ -607,7 +609,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>5 条，最近一条：自定 App 级的进后台与终止通知写盘</summary>
+    <summary>9 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -618,6 +620,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-20</td><td>自定：派生数据不在本篇开</td><td>iOS 上还没有 Find，派生数据没人读；系统身份与读取标记怎么取留给搬 Find 的那一步</td></tr>
           <tr><td class="numeric">2026-11-20</td><td>自定：iOS 启动时同步读取，靠上游新增的同步 <code>load()</code></td><td>第一个 scene 在启动回调返回后就连接，异步读取赶不上</td></tr>
           <tr><td class="numeric">2026-11-20</td><td>自定：App 级的进后台与终止通知写盘</td><td>iOS 没有 <code>applicationShouldTerminate</code>；多 scene 时单个 scene 进后台不代表 App 进后台</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>用户批准，开始实现</td><td>与上游 UIFoundation 的提案一起批准；上游已落地为 0042 并发布 0.48.0，本篇接着做</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>实现中的调整</td><td>一、第一步的四份锁文件（Debug、Distribution workspace 与 Packages、CommandLine 两个包）只手改 UIFoundation 一条 pin 到 0.48.0；全新构建目录下 <code>swift build</code> 解析到远端的 0.48.0，锁文件不被改写。二、同步读取的测试：迁移测试多一个同组参数、走 <code>loadSynchronously()</code> 的版本，持久化测试加三条（读到存储的值、没有存储时保持默认、读完后的修改会写盘）；变异检查（让 <code>loadSynchronously()</code> 直接返回）使 17 处断言变红。三、iOS 上能否编过不单独编 <code>RuntimeViewerSettings</code>，由第二步编三个 iOS 系 App 一起覆盖（它们都编这个包）。四、iOS 那条规则没写进根 <code>AGENTS.md</code>：根文件改前已有 69.9 KB，超过 Codex 读取的 64 KiB 上限，于是新建 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>（项目文件夹不是同步文件夹，可以放），根文件只加规则表一行与一句指引。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>第二步实现中的调整</td><td>一、<code>SettingsLifecycleController</code>（iOS）要自己 <code>import Dependencies</code>：macOS 那个经 <code>RuntimeViewerArchitectures</code> 间接拿到，iOS 这个没有。二、跨平台守卫测试 <code>CrossPlatformSourceGuardTests</code> 把「清单里只在 AppKit 平台加进来的模块」都当成 macOS 专属，<code>RuntimeViewerSettingsUI</code> 对 <code>UIFoundationSettings</code> 那条依赖还带着条件，于是放开后它报 <code>Settings.swift</code> 与 <code>InMemorySettingsStorage.swift</code> 在 iOS 上导入了 macOS 专属模块；条件的理由已经不在，一并去掉，测试自检名单里的 <code>UIFoundationSettings</code> 换成仍是 macOS 专属的 <code>UIFoundationSettingsUI</code>。</td></tr>
+          <tr><td class="numeric">2026-11-20</td><td>实现完成，待用户看过后收尾</td><td>验证都在 Ultra 上：<code>RuntimeViewerSettingsTests</code> 71 个全过；<code>RuntimeViewerAppCoreTests</code> 948 个整包跑有 5 个测试红（Call Hierarchy、<code>BackgroundWorkProcessActivityTests</code>、<code>ReportSharedByEngineTests</code>、<code>OwnerReportingTaskTests</code>、跨平台守卫），守卫测试修好后单独重跑全过，其余四个单独重跑也全过，是整包高负载下的偶发失败；<code>RuntimeViewer iOS</code>（iOS 模拟器）、<code>RuntimeViewer iOS Jailbroken</code>（iOS 真机）、<code>RuntimeViewer visionOS</code>（visionOS 模拟器）用 Debug workspace 编过，它们也编了 iOS 与 visionOS 版的 <code>RuntimeViewerSettings</code>；macOS App 用 Tuist workspace（Debug）编过。会开窗口的 <code>RuntimeViewerAppUITests</code> 没在用户正在用的这台 Mac 上跑。没做的：<code>settingsFileAppearsAfterFirstLaunchOnDevice</code>（设备上第一次启动后出现 <code>settings.json</code>），没有模拟器与设备操作的授权，留给用户。文档判断：iOS 的规则写进新的 <code>RuntimeViewerUsingUIKit/AGENTS.md</code>，根 <code>AGENTS.md</code> 改了 <em>Settings Integration</em> 与 <em>Dependency floors</em>；不另写使用指南或实现说明，没有新术语。</td></tr>
         </tbody>
       </table>
       </div>

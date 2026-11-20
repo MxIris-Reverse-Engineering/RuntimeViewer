@@ -1,5 +1,3 @@
-#if os(macOS)
-
 import Foundation
 import Testing
 import UIFoundationSettings
@@ -32,17 +30,43 @@ struct SettingsResidentLimitMigrationTests {
 
     @Test("Loading brings limits still at the old default to the new one, once", arguments: cases)
     func loadingMigratesTheOldDefaults(_ testCase: Case) async throws {
-        let storage = InMemorySettingsStorage()
-        if let stored = testCase.stored {
-            try storage.save(Self.payload(interfaces: stored.interfaces, crossReferences: stored.crossReferences, revision: stored.revision))
-        }
-        let store = SettingsStore(defaultValue: Settings(), storage: storage, autoSaveDelay: .seconds(60))
-        let settingsAccess = SettingsAccess(store: store)
+        let (settingsAccess, storage) = try Self.settingsAccess(storing: testCase.stored)
 
         await settingsAccess.load()
 
-        #expect(settingsAccess.search.residentByteLimitMegabytes == testCase.loaded.interfaces)
-        #expect(settingsAccess.search.crossReferenceResidentByteLimitMegabytes == testCase.loaded.crossReferences)
+        try Self.expectMigrated(settingsAccess, storage: storage, to: testCase.loaded)
+    }
+
+    /// The iOS app loads synchronously at launch; it has to migrate the same way.
+    @Test("Loading synchronously brings limits still at the old default to the new one, once", arguments: cases)
+    func synchronousLoadingMigratesTheOldDefaults(_ testCase: Case) throws {
+        let (settingsAccess, storage) = try Self.settingsAccess(storing: testCase.stored)
+
+        settingsAccess.loadSynchronously()
+
+        try Self.expectMigrated(settingsAccess, storage: storage, to: testCase.loaded)
+    }
+
+    /// A settings access over in-memory storage holding the given file, or nothing when it is `nil`;
+    /// a debounce far longer than the test, so nothing is written but the explicit flush.
+    private static func settingsAccess(
+        storing stored: (interfaces: Int, crossReferences: Int, revision: Int?)?
+    ) throws -> (SettingsAccess, InMemorySettingsStorage) {
+        let storage = InMemorySettingsStorage()
+        if let stored {
+            try storage.save(payload(interfaces: stored.interfaces, crossReferences: stored.crossReferences, revision: stored.revision))
+        }
+        let store = SettingsStore(defaultValue: Settings(), storage: storage, autoSaveDelay: .seconds(60))
+        return (SettingsAccess(store: store), storage)
+    }
+
+    private static func expectMigrated(
+        _ settingsAccess: SettingsAccess,
+        storage: InMemorySettingsStorage,
+        to loaded: (interfaces: Int, crossReferences: Int)
+    ) throws {
+        #expect(settingsAccess.search.residentByteLimitMegabytes == loaded.interfaces)
+        #expect(settingsAccess.search.crossReferenceResidentByteLimitMegabytes == loaded.crossReferences)
         #expect(settingsAccess.search.residentLimitDefaultsRevision == Settings.Search.currentResidentLimitDefaultsRevision)
 
         settingsAccess.flushSynchronously()
@@ -63,5 +87,3 @@ struct SettingsResidentLimitMigrationTests {
         return try JSONSerialization.data(withJSONObject: root)
     }
 }
-
-#endif
