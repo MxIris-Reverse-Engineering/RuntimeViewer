@@ -242,7 +242,8 @@ Agent 运行时用 `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent
 - 第三方包的 `.strings` 复制时不做校验，与 Xcode 自带的 SwiftPM 集成一致。
 - 包的 target 是 Tuist 生成的普通 Xcode target（UIFoundation 的 Swift target 是静态库，其余默认静态
   framework），原生构建里是 SwiftPM 的产物、每个 target 整块链接。这里靠 `-ObjC` 把定义了类型、extension 或
-  ObjC 类的成员都拉进来（见「已知的坑」），只剩没人引用、也不定义类型的成员不进 App；构建目录的布局也不同。
+  ObjC 类的成员都拉进来（见「已知的坑」），只剩没人引用、也不定义类型的成员不进 App（两个符号语言注册例外，
+  整块链进去）；构建目录的布局也不同。
 - `Tuist/Package.swift` 把三个只给 macOS App 用的本地包的 product 声明成 macOS，原生 workspace 里它们
   按包声明支持全部平台。
 - **第三方包的产物形态不同**（2026-10-10 用 Xcode 27 两边各编一次 Debug、Debug-arm64e、Release 对比，自家产物全部一致，
@@ -288,6 +289,14 @@ Agent 运行时用 `TUIST_SCRIPT_ROOT=/Volumes/DerivedData/Agents.noindex/<agent
   ObjC 类或分类、Swift 类型或 extension 的成员。没用 `-all_load`：它会把部署到 macOS 10.15 的注入载荷自动链接的
   Swift 兼容静态库也整个拉进来，那是原生不做的。`check` 两层都查：静态核对查每个 target 都带这个参数，
   `check --build` 比对两边每个可执行文件定义的 ObjC 类。
+- **两个符号语言注册整块链接**（`Tuist/ProjectDescriptionHelpers/SymbolLanguageRegistration.swift`，`Project.swift`
+  的 `linksMachOSwiftSection`，`Tuist/Package.swift` 的 `localTestTargetSettings`）：MachOSwiftSection 的
+  `SwiftSymbolsRegistration` 与 MachOObjCSection 的 `MachOObjCSectionC` 各在一个只有加载期 constructor、不定义任何
+  被引用符号的 C 文件里，向 MachOKitExtensions 登记 Swift 与 ObjC 两种符号语言。`-ObjC` 不拉这种成员（2026-11-20
+  用 Xcode 27.2 的链接器实测），不加 `-force_load` 时这些二进制里的符号语言注册表是空的。链到 MachOSwiftSection
+  的 target（App、插件、两个注入载荷、`runtime-viewer-cli` 与十个包测试，名单取自生成工程的链接阶段）整块链接这
+  两个 framework；没链到的不能加，`-force_load` 找不到文件会让链接失败。新 target 链到 MachOSwiftSection 时，工程
+  target 传 `linksMachOSwiftSection: true`，包测试加进 `SymbolLanguageRegistration.testTargetNames`。
 - **包在 Debug-arm64e 与 Release 下都多编一个 arm64e 切片**（`Tuist/Package.swift` 的 `baseSettings`）：这两套配置里
   helper daemon 与 macOS 注入载荷是 arm64e。原生 workspace 按链接方各编一份包，Tuist 里一个包只有一个 target，
   只能让所有包都带上 arm64e，这两套配置下包的编译量因此翻倍。少了它，daemon 那一步报

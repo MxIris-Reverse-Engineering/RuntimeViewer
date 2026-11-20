@@ -62,7 +62,9 @@ let localUpstreamDependencies: [PackageDescription.Package.Dependency] = localUp
     //   name then goes missing: RxCocoa's DelegateProxy finds its Objective-C superclass,
     //   _RXDelegateProxy, that way, and realizing any of its subclasses aborts. -ObjC also loads every
     //   member that defines an Objective-C class or category or a Swift type or extension. The app's
-    //   targets get the same flag in RuntimeViewerUsingAppKit/Project.swift.
+    //   targets get the same flag in RuntimeViewerUsingAppKit/Project.swift. A test bundle that links
+    //   MachOSwiftSection also loads the two symbol language registrations whole
+    //   (SymbolLanguageRegistration in ProjectDescriptionHelpers), which -ObjC leaves out.
     // - It builds a test target for at least the macOS version XCTest and Swift Testing require
     //   (14.0 with Xcode 26 and 27), whatever its package declares; Tuist uses the package's own
     //   minimum, which for RuntimeViewerCore (10.15) leaves its tests without APIs such as Duration.
@@ -70,7 +72,10 @@ let localUpstreamDependencies: [PackageDescription.Package.Dependency] = localUp
     let localTestTargetSettings: [String: Settings] = Dictionary(
         uniqueKeysWithValues: LocalPackages.testTargetNames.flatMap { entry in
             entry.targets.map { targetName in
-                var settings: SettingsDictionary = ["OTHER_LDFLAGS": ["$(inherited)", "-ObjC"]]
+                let registrationFlags = SymbolLanguageRegistration.testTargetNames.contains(targetName)
+                    ? SymbolLanguageRegistration.linkerFlags
+                    : []
+                var settings: SettingsDictionary = ["OTHER_LDFLAGS": .array(["$(inherited)", "-ObjC"] + registrationFlags)]
                 if entry.package == "RuntimeViewerCore" {
                     settings["MACOSX_DEPLOYMENT_TARGET"] = "14.0"
                 }
