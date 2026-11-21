@@ -137,8 +137,8 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
      `close()` 会话，独立窗口就请系统销毁这个 scene。
    - 读不了：文件在进程里读，`startReading(fileAt:)` 返回前就知道，所以不开任何窗口，在当前窗口弹一个说明原因的提示。
 8. **平台无关的小块逻辑进 AppCore**：`ApplicationLogs.formattedEntries(since:)`（导出日志的取条目与格式化，Mac 的 Debug ›
-   Export Logs 改用它，iOS 不加入口）；`RuntimeEngineManagerSettingsFollower`（引擎管理器跟随共享缓存开关，Mac 与 iOS 的
-   设置生命周期控制器在读完设置后都启动它）。
+   Export Logs 改用它，iOS 不加入口）；`RuntimeEngineManagerSettingsFollower`（引擎管理器跟随共享缓存开关；Mac 的设置
+   生命周期控制器在读完设置后启动它，iOS 的 `AppDelegate` 在引擎管理器起来之后启动它）。
 9. **边界测试扩到 iOS target**：`AppTargetBoundaryTests` 对两个 App target 各跑一遍（各自的最少文件数），iOS 的
    `MainViewModel` 列为唯一例外，第四步合并后删掉这条例外。
 10. **文档**：`RuntimeViewerUsingUIKit/AGENTS.md` 加「窗口与文档会话」「打开文件」两节；`RuntimeViewerUsingAppKit/AGENTS.md`
@@ -190,7 +190,7 @@ target。`MainViewModel` / `MainRoute` 的合并留到第四步。Mac 的行为�
 | `RuntimeViewerUsingAppKit/.../App/DebugMenuController.swift` | 修改 | 改用 `ApplicationLogs`；菜单、保存面板、Finder 不变 | Mac 改用共用部分 | 5 |
 | `RuntimeViewerAppCore/Engine/RuntimeEngineManagerSettingsFollower.swift` · `RuntimeEngineManagerSettingsFollower` | 新增 | `startFollowing()`：共享缓存开关的生效值写进管理器，之后每次变化都写 | 两端共用 | 5 |
 | `RuntimeViewerUsingAppKit/.../App/SettingsLifecycleController.swift` | 修改 | `followSharedCacheSharing()` 换成启动 follower | 同上 | 5 |
-| `RuntimeViewerUsingUIKit/.../App/SettingsLifecycleController.swift` | 修改 | 读完设置后启动 follower | iOS 跟 Mac 一样 | 5 |
+| `RuntimeViewerUsingUIKit/.../App/AppDelegate.swift` | 修改 | 引擎管理器起来之后启动 follower（iOS 的设置生命周期控制器不动） | iOS 跟 Mac 一样跟随；在读设置时碰管理器会让引擎早于命令扩展起来 | 5 |
 | `Tests/RuntimeViewerAppCoreTests/ApplicationLogsTests.swift`、`RuntimeEngineManagerSettingsFollowerTests.swift` | 新增 | 见步骤 5 的行为清单 | 契约 | 5 |
 | `Tests/RuntimeViewerAppCoreTests/AppTargetBoundaryTests.swift` | 修改 | 两个 App target 参数化（路径、最少文件数）；iOS 的 `MainViewModel` 列为例外并注明第四步删 | 分层扩到 iOS | 6 |
 | `RuntimeViewerUsingUIKit/AGENTS.md`、`RuntimeViewerUsingAppKit/AGENTS.md`、根 `AGENTS.md`、愿景、两份索引 | 修改 | 见方案第 10 条 | 文档 | 7 |
@@ -482,20 +482,20 @@ iPhone 一个窗口、文件窗口叠在上面；iPad 与 visionOS 多窗口。�
    - 行为：`parkingStillSuspendsAFileServiceEngine`
    - 行为：`macFilesStillPairWithThisMacsCache`
    - 行为：`macFileModeBehavesAsBefore`（macOS App 构建、文件模式的已有测试照过）
-4. **iOS 的打开入口** —— 步骤 4 的行
+4. **iOS 的打开入口**（已完成，设备上待用户看）—— 步骤 4 的行
    - 行为：`openButtonChoosesAFileAndOpensItInAFileWindow`（由用户在设备上看）
    - 行为：`openPathOpensAnAbsolutePathOnTheJailbrokenApp`（由用户在 vphone 上看）
    - 行为：`fileWindowStacksOverTheWindowOnIPhoneAndClosesBackToThisDevice`（由用户在 vphone 上看）
    - 行为：`unreadableFileShowsWhyAndOpensNoWindow`（由用户在设备上看）
    - 行为：`openInFromFilesOpensTheFile`（由用户在设备上看）
-5. **导出日志与跟随设置进 AppCore** —— 步骤 5 的行
+5. **导出日志与跟随设置进 AppCore**（已完成）—— 步骤 5 的行
    - 行为：`applicationLogsListsThisProcessesEntriesSinceADate`
    - 行为：`followerWritesTheSharedCacheSwitchIntoTheManager`
    - 行为：`macExportLogsBehavesAsBefore`
-6. **边界测试扩到 iOS target** —— 步骤 6 的行
+6. **边界测试扩到 iOS target**（已完成）—— 步骤 6 的行
    - 行为：`iOSAppTargetHoldsNoViewModelButTheOneWaitingForStep4`
    - 行为：`macAppTargetStillHoldsNoViewModel`
-7. **文档** —— 步骤 7 的行
+7. **文档**（已完成）—— 步骤 7 的行
 
 **收尾时必须判断两件事**（判断结果写进决策日志，不允许沉默跳过）：
 
@@ -522,3 +522,5 @@ iPhone 一个窗口、文件窗口叠在上面；iPad 与 visionOS 多窗口。�
 | 2026-11-21 | 自定：这一步 AppCore 里新代码都不弹窗，暂不需要新的跨层客户端 | 打开文件、导出日志的共用部分都只返回结果或抛错，提示留在各端的控制器；用户认可的「经客户端提示」留给真需要 AppCore 发起提示的地方 |
 | 2026-11-21 | 用户批准，开始实现 | 看过简报后批准；从 `next` 切 `feature/window-model-on-ios` |
 | 2026-11-21 | 实现中的调整（步骤 1–3） | 一、`RuntimeViewerEngineManagement` 在清单里的四处平台条件一起去掉：`CrossPlatformSourceGuardTests` 把清单里任何一行带 `appkitPlatforms` 条件的模块都算作 macOS 专属，只去掉 AppCore 那一处，它仍会拦住 AppCore 里用到引擎管理的跨平台文件；模块本身从 0099 起各平台都编。二、`DocumentSession.close()` 不要求先 `open()`：`DocumentState.documentWillClose()` 本来就不要求，Mac 的文档没显示过就关时也要收尾，照旧。三、`RuntimeFileOpener` 放在 AppCore 的 `Engine/`（没有 `File/` 目录），`ApplicationLogs` 放 `App/`，跟随设置的类型放 `Engine/`。四、本机缓存打不开时退回单独读，做在 `RuntimeFileOpener` 里（捕获 `dependencyCacheUnavailable` 后去掉配对再读一次），设置只按平台给默认配对：判断缓存能否打开要用到 Core 里的 `FullDyldCache`，设置模块不该依赖它。五、`canPairWithThisMacsCache(_:)` 跟着改名为 `canPairWithThisDevicesCache(_:)`。六、行为 `openerEndsSecurityScopedAccessWhenReadingFails` 换成 `openerThrowsAndListsNothingForAnUnreadableFile`：测试里的文件 URL 不带安全作用域，看不到访问计数；安全作用域在设备上验。 |
+| 2026-11-21 | 实现中的调整（步骤 4–6） | 一、iOS 上的 `RuntimeEngineManagerSettingsFollower` 由 `AppDelegate` 在引擎管理器起来之后启动，不在设置生命周期控制器里：那个控制器在启动顺序的第一步，那时读管理器就会把引擎拉起来，早于注入与交叉引用两个命令扩展的注册（`RuntimeViewerUsingUIKit/AGENTS.md`「Launch order」）。二、一个窗口是不是文件窗口，看它的引擎是不是引擎管理器列出的文件引擎，而不是看连接时有没有请求号：系统断开再连回来的文件窗口没有请求号，照样要有关闭按钮。三、叠在 iPhone 窗口上的文件窗口由 `FileController` 同时持有它的 `MainCoordinator` 与会话：协调器没有别人持有，不留就会被释放。四、「越狱版」判断写成 `FileController.opensAbsolutePaths`，打开按钮在越狱版上是 Choose File… 与 Open Path… 的菜单，别处直接是文档选择器。五、`ApplicationLogs.formattedEntries(since:)` 是非隔离的 `async` 函数，读日志库这一慢操作自然不在调用方的 actor 上。六、边界测试按 App target 参数化，例外清单里的 view model 一旦搬走，测试就报「把例外删掉」。 |
+| 2026-11-21 | 实现完成，待用户看过后收尾 | 验证都在 Ultra 上：AppCore 的 32 个测试（新加的文档会话、窗口注册表、打开文件、parking 的进程内一例、导出日志、跟随设置，加上跨平台守卫、AppCore 边界与两个 App target 的边界检查）与设置的 7 个测试全过；macOS App 用 Tuist workspace（Debug）编过；`RuntimeViewer iOS Jailbroken` 用 Debug workspace 编过并打成越狱包，`RuntimeViewer visionOS`（visionOS 模拟器）编过，`activateSceneSession(for:)` 在 visionOS 上可用。没做的：普通 iOS（模拟器）没单独编（与越狱版同一份源码）；设备上的行为（打开按钮、Open Path…、iPhone 上叠放与关闭、读不了的提示、「用其他 App 打开」、安全作用域的访问）由用户在 vphone 上看；iPad 多窗口手头没有设备，没验。文档判断：规则写进 `RuntimeViewerUsingUIKit/AGENTS.md`（启动顺序第 5、6 步，新增「Windows and their documents」「Opening files」两节），`RuntimeViewerUsingAppKit/AGENTS.md` 改了三个控制器的说明，根 `AGENTS.md` 改了文档的说法与规则表一行；不另写使用指南或实现说明；「文档会话」就是类型名 `DocumentSession`，不另立术语。 |

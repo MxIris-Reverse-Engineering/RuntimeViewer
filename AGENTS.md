@@ -21,7 +21,7 @@ an `AGENTS.md` of its own, with a `CLAUDE.md` symlink beside it as here, in the 
 | `RuntimeViewerPrecompiledLibraries/SourceEditor/AGENTS.md` | The SourceEditor module, wherever its files are (see *SourceEditor Module* below) |
 | `Configurations/AGENTS.md` | Per-target build settings: the embedded non-macOS products, the jailbroken variant's payload, service names, adding a configuration |
 | `Resources/AGENTS.md` | The app icons |
-| `RuntimeViewerUsingUIKit/AGENTS.md` | The iOS, jailbroken iOS and visionOS apps' launch order, settings lifecycle, settings screen and appearance |
+| `RuntimeViewerUsingUIKit/AGENTS.md` | The iOS, jailbroken iOS and visionOS apps' launch order, windows and their documents, opening files, settings lifecycle, settings screen and appearance |
 
 Put a new rule in the narrowest directory it governs — but **never put an `AGENTS.md` or `CLAUDE.md` in an
 Xcode synchronized folder or a SwiftPM target's directory**; use the nearest directory above. Every target
@@ -455,7 +455,8 @@ The project uses three Swift Package Manager packages:
 
 ### Key Architectural Patterns
 
-- **Document-Based App**: NSDocument architecture; each document creates its own `DocumentState` instance
+- **Document-Based App**: NSDocument architecture; each document — an `NSDocument` on the Mac, a scene
+  in the iOS-family apps — holds a `DocumentSession` (RuntimeViewerAppCore) with its own `DocumentState`
 - **Engine work is shared by the documents on the engine**: each engine has one background indexing
   coordinator, one Find corpus coordinator and one cross-reference preparation coordinator, held by
   every document on it (`RuntimeEngineBackgroundWork`, handed out per engine by
@@ -466,7 +467,8 @@ The project uses three Swift Package Manager packages:
   **follow `$runtimeEngineSession` and take the work from the session it delivers** — never pair the
   engine with work read some other way, the ordering trap the session exists to remove.
   `runtimeEngine` only forwards `runtimeEngineSession.engine`. A document joins only through
-  `startBackgroundWork()`, which `Document.makeWindowControllers` calls first; a new session is put in
+  `startBackgroundWork()`, which `DocumentSession.open()` calls and `Document.makeWindowControllers` and
+  each iOS scene call first; a new session is put in
   place then and when `.switchEngine` moves the document to another engine, the same one again when its
   engine starts over with something open, and a session without work (`backgroundWork == nil`) means
   show nothing and command nothing. A session also holds, as a borrower, the work of the engines its
