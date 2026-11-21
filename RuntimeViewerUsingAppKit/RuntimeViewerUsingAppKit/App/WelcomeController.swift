@@ -138,10 +138,10 @@ final class WelcomeController: NSObject {
         // files, not projects.
         configuration.projectListPlaceholderText = "No Recent Files"
         // The style's own glow is Xcode's, tinted the blue of Xcode's icon; behind this app's dark
-        // icon it reads as a stray blue haze. Same size and offset, in black. The panel draws it in a
-        // dark appearance only.
+        // icon it reads as a stray blue haze. Same size and offset in white, about as bright as Xcode's:
+        // the panel draws it in a dark appearance only, where a black shadow does not show at all.
         let appIconShadow = NSShadow()
-        appIconShadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
+        appIconShadow.shadowColor = NSColor.white.withAlphaComponent(0.2)
         appIconShadow.shadowBlurRadius = 50
         appIconShadow.shadowOffset = NSSize(width: 0, height: 2)
         configuration.appIconImageShadow = appIconShadow
