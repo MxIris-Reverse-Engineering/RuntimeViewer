@@ -162,7 +162,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
   <h1><span class="proposal-number">Draft</span> 长类型拆行：生成选项里加「Break Long Types」</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
     <div><dt>原文</dt><dd><code>draft-multiline-type-formatting.md</code></dd></div>
@@ -195,9 +195,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="decide">
   <h2>要你定</h2>
   <div class="callout">
-    <p class="callout-title">批准后开工</p>
+    <p class="callout-title">实现完成，待收尾</p>
     <ol>
-      <li>批准这份提案、按落地步骤开始实现？</li>
+      <li>MachOSwiftSection 推上 <code>next</code> 后抬 pin、合进 <code>next</code>（第 5、6 步）。</li>
     </ol>
   </div>
   <div class="callout callout-note">
@@ -218,9 +218,9 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
   <h2>方案</h2>
   <ol>
     <li><strong>选项。</strong><code>SwiftGenerationOptions</code> 加 <code>breaksLongTypes</code>（默认关）与 <code>maximumLineWidth</code>（默认 100），再加计算属性 <code>multilineTypeFormatting</code>。<code>.mcp</code> 预设明确保持关闭。</li>
-    <li><strong>引擎。</strong><code>RuntimeSwiftSection</code> 存下当前的格式化设置，与打印配置一起比较，变了就清两份 interface 缓存；<code>interface(for:)</code> 对每个定义的打印各格式化一次再拼接，宏展开的每一块同样格式化；<code>importedInterface(for:)</code> 在拆 region 之前格式化。</li>
+    <li><strong>引擎。</strong><code>RuntimeSwiftSection</code> 存下当前的格式化设置，与打印配置一起比较，变了就清两份 interface 缓存；<code>interface(for:)</code> 对每个定义的打印各格式化一次再拼接；宏展开的各块不格式化（它们带着嵌套属性的 UTF-8 范围）；<code>importedInterface(for:)</code> 在拆 region 之前格式化。</li>
     <li><strong>界面。</strong>生成选项面板加勾选框；导出元数据写明这个选项。</li>
-    <li><strong>查找。</strong>整行对不上时，把语料行与正文里连续几行都去掉空白后比较，相同就把这几行当作那条语料行，按去空白后的字符序号把命中映射回正文。</li>
+    <li><strong>查找。</strong>整行（或长行截出的窗口）对不上时，在去掉全部空白的正文里找：整行要恰好覆盖从某行第一个到某行最后一个可见字符的一段，窗口可以落在行中间；命中按去空白后的第几个 UTF-16 单元映射回正文。</li>
   </ol>
   <h3>非目标</h3>
   <ul>
@@ -374,10 +374,10 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="steps">
   <h2>落地步骤</h2>
   <ol>
-    <li><strong>选项字段与预设</strong> —— 默认关闭、旧数据解码为关闭、派生格式化、MCP 关闭</li>
-    <li><strong>引擎格式化与缓存失效</strong> —— 拆开、关闭不变、切换后重生成、宏展开归属、打印器不重建</li>
-    <li><strong>面板与导出元数据</strong> —— 勾选框（人工核对）、元数据一行</li>
-    <li><strong>查找跨行定位</strong> —— 拆开的语料行、命中映射、取最近、整行优先</li>
+    <li><strong>选项字段与预设</strong>（已完成） —— 默认关闭、旧数据解码为关闭、派生格式化、MCP 关闭</li>
+    <li><strong>引擎格式化与缓存失效</strong>（已完成） —— 拆开、关闭不变、切换后重生成、宏展开归属、打印器不重建</li>
+    <li><strong>面板与导出元数据</strong>（已完成；面板未经 App 构建与人工核对） —— 勾选框、元数据一行</li>
+    <li><strong>查找跨行定位</strong>（已完成） —— 拆开的语料行、跨插入换行的命中、取最近、拆开的长行窗口；整行优先、行中间的一段不算整行</li>
     <li><strong>抬依赖 pin</strong>（MachOSwiftSection 推送之后）</li>
     <li><strong>文档</strong> —— 索引与状态一致</li>
   </ol>
@@ -386,7 +386,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>2 条，最近一条：只加勾选框，查找跨行定位</summary>
+    <summary>7 条，最近一条：实现完成，待用户看过后收尾</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -394,6 +394,11 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
         <tbody>
           <tr><td class="numeric">2026-11-21</td><td>Created as Draft</td><td>MachOSwiftSection 新增了按括号拆长类型的格式化，RuntimeViewer 要把它接到界面上。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>只加勾选框，查找跨行定位</td><td>面板里只加一个勾选框，行宽固定 100 列、数值存进选项；查找改为能跨被拆开的行定位。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>Accepted</td><td>用户批准，开始实现；先用本地依赖开发，MachOSwiftSection 推送 <code>next</code> 后再抬 pin。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>宏展开块不格式化</td><td>每一块带着嵌套宏属性相对自身文字的 UTF-8 范围，插入换行会让它们指错位置；展开出来的又都是很短的成员声明。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>查找的跨行定位也覆盖「窗口」</td><td>超过 320 个 UTF-16 单元的语料行以带 <code>…</code> 的窗口交给查找，走另一条分支；两条分支统一改用去掉空白的正文。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>查找测试先在旧代码上变红</td><td>新测试不带查询词；换回改动前的代码时四条新测试失败、两条旧行为保护通过，换回新代码后全部通过。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>实现完成，待用户看过后收尾</td><td>Core 定向 42 个、Packages 定向 20 个测试全过（本地依赖、低优先级）；面板一行未经 App 构建与人工核对；抬 pin 与索引留到收尾。</td></tr>
         </tbody>
       </table>
       </div>
