@@ -150,16 +150,31 @@ extension RuntimeEngine {
 extension RuntimeEngine {
     struct ObjectsInImageCommand: RuntimeEngineProgressCommand {
         let image: String
+        /// Whether the reply may carry the image's C++ objects. Left out of
+        /// the encoding unless it is true, so the request of a caller that
+        /// does not want them — and of a build before C++ objects — is byte
+        /// for byte what it was, and the reply has no kind such a build cannot
+        /// decode. A peer of such a build skips the key and answers
+        /// Objective-C and Swift objects only. A field rather than a command
+        /// of its own: an injected payload of an earlier release drops the
+        /// connection on a command it does not know (PR121.73).
+        let includesCPlusPlusObjects: Bool?
         static var commandName: String { CommandName.runtimeObjectsInImage.commandName }
         var subjectImagePath: String? { image }
         static var isForegroundLoad: Bool { true }
         static var indexesSubjectImage: Bool { true }
+
+        init(image: String, includesCPlusPlusObjects: Bool = false) {
+            self.image = image
+            self.includesCPlusPlusObjects = includesCPlusPlusObjects ? true : nil
+        }
+
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeObject] {
-            try await engine._objects(in: image)
+            try await engine._objects(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects == true)
         }
 
         func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
-            try await engine._objects(in: image, reportProgress: reportProgress)
+            try await engine._objects(in: image, includesCPlusPlusObjects: includesCPlusPlusObjects == true, reportProgress: reportProgress)
         }
     }
 

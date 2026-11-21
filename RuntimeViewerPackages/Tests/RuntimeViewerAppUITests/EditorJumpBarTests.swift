@@ -93,7 +93,9 @@ struct EditorJumpBarTests {
         #expect(didRead)
 
         let childItems = try #require(Self.childItems(of: imageItem))
-        let expectedObjects = EditorJumpBarItemStore.menuOrder(of: try await engine.objects(in: TestImages.libobjc))
+        // The jump bar lists an image's C++ objects too, and libobjc is written in C++.
+        let expectedObjects = EditorJumpBarItemStore.menuOrder(of: try await engine.objects(in: TestImages.libobjc, includesCPlusPlusObjects: true))
+        #expect(expectedObjects.contains { $0.kind.isCPlusPlus })
         #expect(childItems.map(\.pathComponentName) == expectedObjects.map(\.displayName))
         let startsNewGroup = zip(childItems.dropFirst(), childItems).map { $0.groupIdentifier != $1.groupIdentifier }
         let startsNewKind = zip(expectedObjects.dropFirst(), expectedObjects).map { $0.kind != $1.kind }

@@ -9,6 +9,7 @@ struct RuntimeInterfaceExportItem: Sendable {
         switch object.kind {
         case .swift: return "swiftinterface"
         case .objc, .c: return "h"
+        case .cPlusPlus: return "hpp"
         }
     }
 

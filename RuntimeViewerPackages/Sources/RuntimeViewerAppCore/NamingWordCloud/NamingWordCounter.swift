@@ -145,11 +145,14 @@ public enum NamingWordCounter {
         return String(name)
     }
 
-    /// `class`, `protocol`, `enum`, `struct`, `typealias` or `union`.
+    /// `class`, `protocol`, `enum`, `struct`, `typealias`, `union` or
+    /// `namespace`.
     public static func kindName(of kind: RuntimeObjectKind) -> String {
         switch kind {
         case .c(.struct): "struct"
         case .c(.union): "union"
+        case .cPlusPlus(.class): "class"
+        case .cPlusPlus(.namespace): "namespace"
         case .objc(.type(.class)), .objc(.category(.class)): "class"
         case .objc(.type(.protocol)), .objc(.category(.protocol)): "protocol"
         case .swift(.type(let swiftKind)), .swift(.extension(let swiftKind)), .swift(.conformance(let swiftKind)):
@@ -167,7 +170,8 @@ public enum NamingWordCounter {
         switch object.kind {
         case .c, .objc(.type), .swift(.type):
             break
-        case .objc(.category), .swift(.extension), .swift(.conformance):
+        // The word cloud asks for no C++ objects (`objects(in:)`'s default).
+        case .objc(.category), .swift(.extension), .swift(.conformance), .cPlusPlus:
             return false
         }
         if isLeftOut(object) {

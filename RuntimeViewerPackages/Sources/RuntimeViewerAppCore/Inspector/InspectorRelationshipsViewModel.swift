@@ -150,13 +150,17 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
     private func applySectionTexts(for kind: RuntimeObjectKind) {
         let sectionTitle = Self.sectionTitle(for: kind)
         self.sectionTitle = sectionTitle
-        self.emptyMessage = "No \(sectionTitle.lowercased()) found in indexed images."
+        // A C++ class's derived classes are looked for in its own image only.
+        self.emptyMessage = kind.isCPlusPlus
+            ? "No \(sectionTitle.lowercased()) found in its image."
+            : "No \(sectionTitle.lowercased()) found in indexed images."
     }
 
     private static func payload(of relationships: RuntimeRelationships, for kind: RuntimeObjectKind) -> [RuntimeObject] {
         switch kind {
         case .objc(.type(.class)),
-             .swift(.type(.class)):
+             .swift(.type(.class)),
+             .cPlusPlus(.class):
             return relationships.subclasses
         case .objc(.type(.protocol)),
              .swift(.type(.protocol)):
@@ -171,6 +175,9 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
         case .objc(.type(.class)),
              .swift(.type(.class)):
             return "Subclasses"
+        case .cPlusPlus(.class):
+            // The classes of its own image deriving from it directly.
+            return "Derived Classes"
         case .objc(.type(.protocol)),
              .swift(.type(.protocol)):
             return "Conforming Types"

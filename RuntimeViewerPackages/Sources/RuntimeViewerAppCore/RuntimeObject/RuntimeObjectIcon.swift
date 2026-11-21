@@ -81,6 +81,12 @@ public enum RuntimeObjectIcon {
         case .swift(.extension(_)),
              .swift(.conformance(_)):
             return ("Ex", .blue)
+        // Green, as the C structs and unions are and as Find badges a C or
+        // C++ function: the C family.
+        case .cPlusPlus(.class):
+            return ("C", .green)
+        case .cPlusPlus(.namespace):
+            return ("N", .green)
 
         default:
             return ("?", .gray)

@@ -117,9 +117,12 @@ let package = Package(
         ),
         // MachODependencies, which RuntimeViewerCore imports, moved here from
         // MachOSwiftSection in 2.0.0. The package has no `next` branch, so it is
-        // taken by version. The floor follows the `next` of MachOSwiftSection and
-        // MachOObjCSection, which require 3.0.0 since the Swift and Objective-C
-        // symbol-name rules moved into them; MachODependencies is unchanged in it.
+        // taken by version. 3.1.0 is the first release with
+        // `CPlusPlusClassIndexStore`, the C++ classes, vtables and virtual
+        // function names recovered from run-time type information, which the
+        // C++ section reads; `CPlusPlusSymbolIndexStore`, the scope tree, came
+        // in 3.0.0, the floor the `next` of MachOSwiftSection and
+        // MachOObjCSection require.
         .package(
             local: .package(
                 path: "../../MachOKitExtensions",
@@ -127,7 +130,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
-                from: "3.0.0"
+                from: "3.1.0"
             ),
         ),
         .package(
@@ -282,6 +285,7 @@ let package = Package(
                 .product(name: "SwiftDeclarationRendering", package: "MachOSwiftSection"),
                 .product(name: "SwiftIndexing", package: "MachOSwiftSection"),
                 .product(name: "MachODependencies", package: "MachOKitExtensions"),
+                .product(name: "CPlusPlusSymbols", package: "MachOKitExtensions"),
                 .product(name: "SwiftPrinting", package: "MachOSwiftSection"),
                 .product(name: "SwiftSpecialization", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),

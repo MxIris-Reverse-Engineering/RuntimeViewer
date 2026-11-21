@@ -435,10 +435,10 @@ struct RuntimeObjectKindTests {
 
     // MARK: - CaseIterable
 
-    @Test("allCases contains all 21 cases")
+    @Test("allCases contains all 23 cases")
     func allCasesCount() {
-        // 2 C + 4 ObjC + 15 Swift = 21
-        #expect(RuntimeObjectKind.allCases.count == 21)
+        // 2 C + 4 ObjC + 15 Swift + 2 C++ = 23
+        #expect(RuntimeObjectKind.allCases.count == 23)
     }
 
     @Test("allCases are in order")

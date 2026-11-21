@@ -324,6 +324,8 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
         /// A Swift family goes to its section whole, which takes the nested
         /// types' definitions out of their parent's print. Nothing nests in
         /// Objective-C, so each object of such a family is printed on its own.
+        /// C++ objects are not in the corpus (`objects()` never lists them),
+        /// so a C++ family prints nothing.
         func prints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
             guard let root = family.first else { return [] }
             switch root.kind {
@@ -340,6 +342,8 @@ extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
                     return family.map { _ in .empty }
                 }
                 return try await swiftSection.corpusPrints(of: family, transformer: transformer)
+            case .cPlusPlus:
+                return family.map { _ in .empty }
             case .objc, .c:
                 var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
                 outcomes.reserveCapacity(family.count)

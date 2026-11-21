@@ -246,8 +246,11 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         return .revealed(revealedCell)
     }
 
+    /// The image's Objective-C and Swift objects, then its C++ classes and namespaces: the list is
+    /// one of the three places that ask for C++ objects, with the jump bar and the image page
+    /// (proposal `cplusplus-objects`).
     override func buildRuntimeObjects() async throws -> [RuntimeObject] {
-        try await runtimeEngine.objects(in: imagePath)
+        try await runtimeEngine.objects(in: imagePath, includesCPlusPlusObjects: true)
     }
 
     /// The image's objects with the progress of building them. Building an image the engine has not
@@ -264,7 +267,7 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
                 let runtimeEngine = runtimeEngine
                 let imagePath = imagePath
                 let streamObjects: @Sendable (_ reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> Void = { reportProgress in
-                    for try await event in await runtimeEngine.objectsWithProgress(in: imagePath) {
+                    for try await event in await runtimeEngine.objectsWithProgress(in: imagePath, includesCPlusPlusObjects: true) {
                         if case .progress(let progress) = event {
                             await reportProgress(progress)
                         }

@@ -105,7 +105,7 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
         // Manual Loading records along with this page.
         let resolvedIndexer: Indexer = indexer ?? { [weak documentState] imagePath, reportProgress in
             if try await engine.isImageIndexed(path: imagePath) {
-                return try await engine.objects(in: imagePath)
+                return try await engine.objects(in: imagePath, includesCPlusPlusObjects: true)
             }
             guard let documentState else {
                 return try await Self.index(imageAt: imagePath, on: engine, reportProgress: reportProgress)
@@ -183,11 +183,11 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
         reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void
     ) async throws -> [RuntimeObject] {
         if try await engine.isImageIndexed(path: imagePath) {
-            return try await engine.objects(in: imagePath)
+            return try await engine.objects(in: imagePath, includesCPlusPlusObjects: true)
         }
         if try await engine.isImageLoaded(path: imagePath) {
             var objects: [RuntimeObject] = []
-            for try await event in await engine.objectsWithProgress(in: imagePath) {
+            for try await event in await engine.objectsWithProgress(in: imagePath, includesCPlusPlusObjects: true) {
                 switch event {
                 case .progress(let progress):
                     await reportProgress(progress)
@@ -198,7 +198,7 @@ public final class ContentImageViewModel: ViewModel<ContentRoute> {
             return objects
         }
         try await engine.loadImageForUser(at: imagePath, reportProgress: reportProgress)
-        return try await engine.objects(in: imagePath)
+        return try await engine.objects(in: imagePath, includesCPlusPlusObjects: true)
     }
 
     /// What the page says when the image could not be shown: dyld's own message when it refused

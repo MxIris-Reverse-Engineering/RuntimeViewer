@@ -609,7 +609,8 @@ extension UTType {
 
 extension RuntimeObject {
     /// The file type of the object's interface in `interfaceLanguage`: a Swift interface for a Swift
-    /// object and for an Objective-C one shown as Swift imports it, a C header otherwise.
+    /// object and for an Objective-C one shown as Swift imports it, a C++ header for a C++ object, a
+    /// C header otherwise.
     fileprivate func contentType(in interfaceLanguage: RuntimeInterfaceLanguage?) -> UTType {
         if interfaceLanguage == .swift {
             return .swiftInterface
@@ -620,6 +621,8 @@ extension RuntimeObject {
             return .cHeader
         case .swift:
             return .swiftInterface
+        case .cPlusPlus:
+            return .cPlusPlusHeader
         }
     }
 }
