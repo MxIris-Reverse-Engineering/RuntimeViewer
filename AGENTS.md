@@ -330,7 +330,7 @@ The project uses three Swift Package Manager packages:
   only the sidebar's list, the jump bar and the image page pass `true` to), and Find, export, the word
   cloud, MCP, the CLI and background indexing never see a C++ object. The flag is an optional field of
   `objectsInImage`, never a command of its own, so a peer of an earlier build answers it with Objective-C
-  and Swift objects. Background: `Documentations/Evolutions/draft-cplusplus-objects.md`
+  and Swift objects. Background: `Documentations/Evolutions/0103-cplusplus-objects.md`
 - `RuntimeViewerCommunication` — XPC/TCP-based IPC layer for cross-process inspection
 - `RuntimeViewerInjection` — process injection as a RuntimeEngine command extension: the
   `RuntimeInjectionService` protocol, the wire types (`RuntimeProcess`,

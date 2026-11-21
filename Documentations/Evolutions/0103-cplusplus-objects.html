@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Draft - C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间</title>
+<title>0103 - C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间</title>
 <style>
 /* Evolution proposal page, shared style (style A, "Apple documentation").
    Copy this whole <style> block verbatim. Page-specific rules, if any, go only
@@ -160,13 +160,13 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <div class="page">
 
 <header class="doc-header">
-  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
-  <h1><span class="proposal-number">Draft</span> C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间</h1>
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">0103</span></p>
+  <h1><span class="proposal-number">0103</span> C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间</h1>
   <dl class="meta">
-    <div><dt>状态</dt><dd><span class="status status-in-progress">In Progress</span></dd></div>
+    <div><dt>状态</dt><dd><span class="status status-implemented">Implemented</span></dd></div>
     <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
     <div><dt>项目类型</dt><dd>App</dd></div>
-    <div><dt>原文</dt><dd><code>draft-cplusplus-objects.md</code></dd></div>
+    <div><dt>原文</dt><dd><code>0103-cplusplus-objects.md</code></dd></div>
   </dl>
 </header>
 
@@ -568,7 +568,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
 <section id="log">
   <h2>决策日志</h2>
   <details>
-    <summary>24 条，最近一条：参数类型着色，经上游 3.3.0</summary>
+    <summary>25 条，最近一条：Implemented</summary>
     <div class="details-body">
       <div class="table-wrap">
       <table>
@@ -599,6 +599,7 @@ details[open] > summary { border-bottom: 1px solid var(--separator); }
           <tr><td class="numeric">2026-11-21</td><td>C++ 排到 C 与 Objective-C 之间</td><td>用户看过 App 后要求。<code>level</code> 改为 C++ 紧接 C、其后顺延，<code>allCases</code> 同序；Filter Scope 的组顺序改为 C、C++、Objective-C、Swift。侧栏分节、路径栏、镜像页都按 <code>level</code> 排。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>内容区用重建版的 C++ 语言着色</td><td>用户发现 C++ 界面没有颜色。读重建版源码查明：没有语言就没有语言服务，语义区间的调整器也装不上，「只按语义区间上色」不成立。桥接把 <code>"cpp"</code> 对应到 <code>SourceModelEditorLanguage.cpp</code>，非目标里去掉这一条；桥接测试修复前红、修复后绿。</td></tr>
           <tr><td class="numeric">2026-11-21</td><td>参数类型着色，经上游 3.3.0</td><td>用户指出参数里的类型没有颜色、ObjC 方法被列成命名空间；用户选择到上游加接口发 3.3.0（提案 0008），不在 RV 里解析参数文本。打印器把上游给的类型位置输出成类名记号，参数类型因此着色、可跳转；「参数里的类型跳转」不再是非目标。</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>Implemented</td><td>用户在 App 里看过两轮修正后收尾，编号 0103。验证沿用功能分支最终代码上的结果，之后只改了文档。Find、导出、MCP、CLI 与 Tuist 检查的既有红记进「暂缓的后续项」；不另写使用指南或实现说明，没有新术语。</td></tr>
         </tbody>
       </table>
       </div>

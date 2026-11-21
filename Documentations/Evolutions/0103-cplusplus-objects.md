@@ -1,12 +1,12 @@
-# Draft - C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间
+# 0103 - C++ 对象：列出并打印从 RTTI、vtable 与符号恢复的 C++ 类与命名空间
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-11-21
 - **最后更新**: 2026-11-21
 - **所属愿景**: 无
 - **关联提案**: MachOKitExtensions [0005 C++ 符号的结构化归类](https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions/blob/main/Documentations/Evolutions/0005-cplusplus-symbol-classification.md)（作用域树，3.0.0）与 [0006 从 RTTI 与 vtable 恢复 C++ 类](https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions/blob/main/Documentations/Evolutions/0006-cplusplus-class-hierarchy.md)（类、vtable 与沿基类补名，3.1.0）；后者的非目标一节写明「RuntimeViewer 等下游采用：各自另写提案」，本提案就是 RuntimeViewer 这一份
-- **实现分支 / PR**: `feature/cplusplus-objects`，从 `next` 切出，worktree 在 `.worktrees/RuntimeViewer-CPlusPlusObjects`
+- **实现分支 / PR**: `feature/cplusplus-objects`，从 `next` 切出
 - **配套文档**: 不另写实现说明（理由见决策日志）；规则写在 `AGENTS.md`「Package Structure」、`CommunicationAndEngineArchitecture.md` §4.4 第五例与术语表
 - **网页版**: 同目录同名的 `.html`
 
@@ -545,3 +545,4 @@ case .cPlusPlus:
 | 2026-11-21 | C++ 排到 C 与 Objective-C 之间 | 用户在 App 里看过后要求 C++ 放在 C 下面、Objective-C 上面。`RuntimeObjectKind` 的 `level` 改为 C++ 紧接 C（类 2、命名空间 3，其后顺延），`allCases` 同序；`KindGroup` 与 Filter Scope 弹窗的组顺序改为 C、C++、Objective-C、Swift。侧栏分节、路径栏、镜像页计数都按 `level` 排，一处改动全部跟上；引擎回复里对象的先后不变（各处都会排序）。 |
 | 2026-11-21 | 内容区用重建版的 C++ 语言着色 | 用户发现 C++ 界面整页没有颜色。读重建版 27.2.0-alpha.2 的源码查明：桥接对不认识的标识不给语言，数据源就没有语言服务，语义区间的调整器也装不上，所以前期调研里「只按语义区间上色」的说法不成立。重建版自带 `SourceModelEditorLanguage.cpp` 与 `C++.xclangspec`，桥接把 `"cpp"` 对应到它；原先列在「不做」里的「SourceEditor 的 C++ 语言」随之去掉。桥接测试 `aCPlusPlusInterfaceIsParsedAndRetyped` 修复前红、修复后绿。 |
 | 2026-11-21 | 参数类型着色，经上游 3.3.0 | 用户看过后指出参数里的类型（`CA::Render::Surface*`）没有颜色，侧栏还把 `-[CAMetalDrawable texture]` 这类 ObjC 方法列成了命名空间；两处根子都在 MachOKitExtensions。用户选择到上游加接口、发 3.3.0，而不是在 RuntimeViewer 里解析参数文本（名字成分从节点取，不解析打印文本）。上游提案 0008：`CPlusPlusSymbolName.parameterTypeReferences`、`returnTypeReferences` 在打印时从 AST 记下每个命名类型的位置；外层不带参数的局部名也是函数作用域。本提案的下限抬到 3.3.0，打印器把这些范围输出成 `type(.class, .name)`，于是参数类型与基类一样着色、可跳转——原先列在「不做」里的「参数里的类型跳转」随之去掉。`signatureTypesAreClassNames` 在不传范围时红、接上后绿；`objectiveCMethodLocalsMakeNoNamespace` 的修复前红灯由上游的 store 测试演示（RuntimeViewer 这边没有回到 3.2.1 重跑）。 |
+| 2026-11-21 | Implemented | 用户在 App 里看过两轮修正后收尾，编号 0103。验证沿用功能分支最终代码上的结果（Core 的 C++ 相关 97 条、桥接测试、整个 App 都过），之后只改了文档。没做的：Find、导出、MCP、CLI 本来是非目标，与 `./TuistScript.sh check` 的既有红一起记进提案索引的「暂缓的后续项」；界面由用户目视。文档判断：不另写使用指南或实现说明（理由见「不另写实现说明」一行）；术语表的两条已在实现时登记，收尾没有新术语。 |
