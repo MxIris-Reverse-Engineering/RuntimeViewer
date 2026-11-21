@@ -51,9 +51,12 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
         }
         .disposed(by: rx.disposeBag)
         // The theme's background too, as the macOS pane does: a dark preset on a light background
-        // would be unreadable.
+        // would be unreadable. The view's own as well as the text view's: the text view stays inside
+        // the safe area, and what lies outside it — behind the navigation bar, beside the home
+        // indicator — would otherwise show the split view's background.
         renderer.theme.driveOnNext { [weak self] theme in
             guard let self else { return }
+            view.backgroundColor = theme.backgroundColor
             textView.backgroundColor = theme.backgroundColor
         }
         .disposed(by: rx.disposeBag)
