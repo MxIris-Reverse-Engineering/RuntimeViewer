@@ -70,6 +70,16 @@ extension Settings {
         @Default(false)
         public var terminatesAfterLastWindowClosed: Bool
 
+        /// Whether launching the app, and clicking its Dock icon with no
+        /// window open, shows the Welcome window — the recently opened files
+        /// and the actions that open a window — instead of opening a new
+        /// window on My Mac.
+        ///
+        /// On by default, as Xcode shows its welcome window. macOS only: the
+        /// other apps have no such window.
+        @Default(true)
+        public var showsWelcomeWindowAtLaunch: Bool
+
         /// Where the toolbar shows the progress of the engine's background work. Open windows
         /// change over as soon as it changes.
         @Default(Settings.ToolbarActivityStyle.automatic)
