@@ -60,7 +60,7 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
             textView.backgroundColor = theme.backgroundColor
         }
         .disposed(by: rx.disposeBag)
-        output.selectedRuntimeObjectName.drive(navigationItem.rx.title).disposed(by: rx.disposeBag)
+        output.runtimeObjectName.drive(navigationItem.rx.title).disposed(by: rx.disposeBag)
     }
 }
 

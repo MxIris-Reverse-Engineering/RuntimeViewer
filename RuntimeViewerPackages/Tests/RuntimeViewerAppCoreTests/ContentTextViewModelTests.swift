@@ -28,18 +28,22 @@ struct ContentTextViewModelTests {
         #expect(try await nextValue(from: output.imageNameOfRuntimeObject) == "Foundation")
     }
 
-    @Test("selectedRuntimeObjectName follows the document's selection")
-    func selectedNameFollowsDocument() async throws {
+    @Test("runtimeObjectName is the pane's own object, whatever the document selects")
+    func runtimeObjectNameIsThePanesOwn() async throws {
         let engine = try await TestRuntimeEngine.shared()
         let nsObject = try await engine.runtimeObject(named: "NSObject", kind: .objc(.type(.class)), in: TestImages.libobjc)
+        let nsString = try await engine.runtimeObject(named: "NSString", kind: .objc(.type(.class)), in: TestImages.foundation)
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
         let (viewModel, output) = makeViewModel(for: nsObject, in: environment)
         defer { withExtendedLifetime(viewModel) {} }
-        #expect(try await nextValue(from: output.selectedRuntimeObjectName) == "")
+        // Nothing is selected, as in the iOS apps, whose sidebar opens objects through routes of
+        // their own: the title is still the object's.
+        #expect(try await nextValue(from: output.runtimeObjectName) == "NSObject")
 
-        environment.documentState.selectionRouter.trigger(.open(nsObject, in: .focusedTab))
+        environment.documentState.selectionRouter.trigger(.open(nsString, in: .focusedTab))
+        _ = try await nextValue(from: environment.documentState.$selectedRuntimeObject, timeout: 60) { $0?.name == "NSString" }
 
-        #expect(try await nextValue(from: output.selectedRuntimeObjectName) { !$0.isEmpty } == "NSObject")
+        #expect(try await nextValue(from: output.runtimeObjectName) == "NSObject")
     }
 
     @Test("clicking a type link resolves it through the engine and pushes it")

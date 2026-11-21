@@ -546,7 +546,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         /// The interface to show, each a new one; the view themes it and reports it displayed.
         public let interface: Driver<ContentInterface>
         public let imageNameOfRuntimeObject: Driver<String?>
-        public let selectedRuntimeObjectName: Driver<String>
+        /// The name of the object this pane shows — its own, not the document's selection: on iOS
+        /// each page of the navigation stack is titled with it, and the back button shows the
+        /// page below's.
+        public let runtimeObjectName: Driver<String>
         public let runtimeObjectNotFound: Signal<Void>
         /// Scroll to and flash this range: a Find navigator hit located in the
         /// text on screen. Emits at most once per pending highlight.
@@ -643,7 +646,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         return Output(
             interface: $interface.asDriver().compactMap { $0 },
             imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver(),
-            selectedRuntimeObjectName: documentState.$selectedRuntimeObject.asDriver().map { $0?.displayName ?? "" },
+            runtimeObjectName: $runtimeObject.asDriver().map(\.displayName),
             runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal(),
             highlightRange: highlightRangeRelay.asSignal(),
             findBarQuery: findBarQueryRelay.asSignal(),
