@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Draft - iOS 的窗口模型与打开文件</title>
+<style>
+/* Evolution proposal page, shared style (style A, "Apple documentation").
+   Copy this whole <style> block verbatim. Page-specific rules, if any, go only
+   in the marked block at the end. Must render in WebKit (Safari, Xcode preview,
+   Quick Look): no JavaScript, no external resources. */
+:root {
+  --background: #ffffff; --foreground: #1d1d1f; --secondary: #6e6e73; --separator: #d2d2d7;
+  --panel: #f5f5f7; --code-background: #f2f2f4; --accent: #0071e3;
+  --added: #1f8a4c; --added-fill: #e3f5ea;
+  --changed: #b26a00; --changed-fill: #fdf0db;
+  --removed: #c62828; --removed-fill: #fbe4e4;
+  --moved: #0066cc; --moved-fill: #e5f0fc;
+  --kept: #6e6e73; --kept-fill: #ececef;
+  --token-keyword: #ad3da4; --token-type: #3900a0; --token-string: #c41a16; --token-number: #1c00cf;
+  --token-comment: #707f8c; --token-macro: #643820;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1e; --foreground: #f2f2f7; --secondary: #a1a1a6; --separator: #3a3a3c;
+    --panel: #2c2c2e; --code-background: #2a2a2d; --accent: #4ea1ff;
+    --added: #4cd281; --added-fill: #183826;
+    --changed: #ffb340; --changed-fill: #3d2c10;
+    --removed: #ff6b6b; --removed-fill: #3d1a1a;
+    --moved: #5aa9ff; --moved-fill: #142b45;
+    --kept: #b0b0b5; --kept-fill: #333336;
+    --token-keyword: #fc5fa3; --token-type: #d0a8ff; --token-string: #fc6a5d; --token-number: #d0bf69;
+    --token-comment: #7f8c98; --token-macro: #fd8f3f;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground);
+  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+.page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 72px; }
+.svg-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Header */
+.eyebrow { margin: 0 0 6px; font-size: 13px; color: var(--secondary); }
+.crumb + .crumb::before { content: " / "; }
+h1 { font-size: 28px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+h1 code { font-size: 0.8em; }
+.proposal-number { color: var(--secondary); margin-right: 4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; font-size: 13px; color: var(--secondary); }
+.meta div { display: flex; gap: 6px; align-items: baseline; }
+.meta dd { margin: 0; color: var(--foreground); }
+.meta dd code { font-size: 12px; }
+.status { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.status-accepted { color: var(--moved); background: var(--moved-fill); }
+.status-in-progress { color: var(--changed); background: var(--changed-fill); }
+.status-implemented { color: var(--added); background: var(--added-fill); }
+.status-rejected, .status-withdrawn { color: var(--removed); background: var(--removed-fill); }
+
+/* Table of contents */
+.toc { margin: 22px 0 8px; padding: 8px 10px; background: var(--panel); border-radius: 12px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.toc li { margin: 0; }
+.toc a { display: inline-block; padding: 3px 11px; border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; }
+.toc a:hover { background: var(--background); }
+
+/* Text */
+section { scroll-margin-top: 16px; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+h4 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 10px 0; }
+a { color: var(--accent); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+blockquote { margin: 12px 0; padding: 2px 14px; border-left: 3px solid var(--separator); color: var(--secondary); }
+hr { border: none; border-top: 1px solid var(--separator); margin: 24px 0; }
+
+/* Code */
+code { font: 0.86em/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-background); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code-background); border-radius: 10px; padding: 14px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+pre code { font: inherit; background: none; padding: 0; border-radius: 0; }
+.token-keyword { color: var(--token-keyword); font-weight: 600; }
+.token-type { color: var(--token-type); }
+.token-string { color: var(--token-string); }
+.token-number { color: var(--token-number); }
+.token-comment { color: var(--token-comment); }
+.token-macro { color: var(--token-macro); }
+
+/* Callouts */
+.callout { background: var(--panel); border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+.callout-note { border-left-color: var(--secondary); }
+.callout-warning { border-left-color: var(--changed); }
+.callout-title { margin: 0 0 6px; font-weight: 600; }
+.callout > :last-child { margin-bottom: 0; }
+.callout ol, .callout ul { margin: 6px 0 0; }
+
+/* Diagrams */
+.legend { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--secondary); }
+.legend li { margin: 0; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid; vertical-align: -2px; margin-right: 6px; }
+.swatch-added { background: var(--added-fill); border-color: var(--added); }
+.swatch-changed { background: var(--changed-fill); border-color: var(--changed); }
+.swatch-removed { background: var(--removed-fill); border-color: var(--removed); border-style: dashed; }
+.swatch-moved { background: var(--moved-fill); border-color: var(--moved); }
+.swatch-kept { background: var(--kept-fill); border-color: var(--kept); }
+.figure { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--separator); border-radius: 12px; padding: 12px; margin: 12px 0; }
+.figure svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.figure-narrow svg { min-width: 0; max-width: 640px; margin: 0 auto; }
+.figure-caption { font-size: 13px; color: var(--secondary); margin-top: 8px; }
+svg text { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: var(--foreground); }
+svg .group-label { font-size: 13px; font-weight: 700; }
+svg .caption { font-size: 10.5px; fill: var(--secondary); }
+svg .strike { text-decoration: line-through; }
+svg .group { fill: none; stroke: var(--separator); stroke-width: 1.5; stroke-dasharray: 5 4; }
+svg .box-added { fill: var(--added-fill); stroke: var(--added); stroke-width: 1.5; }
+svg .box-changed { fill: var(--changed-fill); stroke: var(--changed); stroke-width: 1.5; }
+svg .box-removed { fill: var(--removed-fill); stroke: var(--removed); stroke-width: 1.5; stroke-dasharray: 4 3; }
+svg .box-moved { fill: var(--moved-fill); stroke: var(--moved); stroke-width: 1.5; }
+svg .box-kept { fill: var(--kept-fill); stroke: var(--kept); stroke-width: 1.2; }
+svg .arrow { fill: none; stroke: var(--secondary); stroke-width: 1.4; marker-end: url(#arrowhead); }
+svg .arrow-weak { stroke-dasharray: 4 3; }
+svg .arrow-removed { stroke: var(--removed); stroke-dasharray: 4 3; }
+svg .arrowhead { fill: var(--secondary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 10px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { border: 1px solid var(--separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+.numeric { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; white-space: nowrap; padding: 0 7px; border-radius: 5px; font-size: 12px; font-weight: 600; color: var(--kept); background: var(--kept-fill); }
+.tag-added { color: var(--added); background: var(--added-fill); }
+.tag-changed { color: var(--changed); background: var(--changed-fill); }
+.tag-removed { color: var(--removed); background: var(--removed-fill); }
+.tag-moved { color: var(--moved); background: var(--moved-fill); }
+
+/* Collapsible sections */
+details { border: 1px solid var(--separator); border-radius: 12px; margin: 12px 0; overflow: hidden; }
+summary { cursor: pointer; list-style: none; padding: 11px 16px; font-weight: 600; background: var(--panel); }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "›"; display: inline-block; width: 1em; color: var(--secondary); -webkit-transition: -webkit-transform 0.15s; transition: transform 0.15s; }
+details[open] > summary::before { -webkit-transform: rotate(90deg); transform: rotate(90deg); }
+details[open] > summary { border-bottom: 1px solid var(--separator); }
+.details-body { padding: 4px 16px 12px; }
+
+@media (max-width: 640px) {
+  .page { padding: 20px 16px 56px; }
+  h1 { font-size: 23px; }
+}
+
+/* ===== Page-specific styles (only for elements the shared style lacks, e.g. UI mockups) ===== */
+</style>
+</head>
+<body>
+<svg class="svg-definitions" aria-hidden="true" focusable="false">
+  <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>
+</svg>
+<div class="page">
+
+<header class="doc-header">
+  <p class="eyebrow"><span class="crumb">RuntimeViewer</span><span class="crumb">Evolutions</span><span class="crumb">Draft</span></p>
+  <h1><span class="proposal-number">Draft</span> iOS 的窗口模型与打开文件</h1>
+  <dl class="meta">
+    <div><dt>状态</dt><dd><span class="status status-accepted">Accepted</span></dd></div>
+    <div><dt>最后更新</dt><dd>2026-11-21</dd></div>
+    <div><dt>创建日期</dt><dd>2026-11-21</dd></div>
+    <div><dt>作者</dt><dd>JH</dd></div>
+    <div><dt>项目类型</dt><dd>App（macOS，AppKit）</dd></div>
+    <div><dt>实现分支</dt><dd><code>feature/window-model-on-ios</code></dd></div>
+    <div><dt>原文</dt><dd><code>draft-window-model-on-ios.md</code></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <ol>
+    <li><a href="#summary">摘要</a></li>
+    <li><a href="#decide">要你定</a></li>
+    <li><a href="#architecture">架构图</a></li>
+    <li><a href="#map">改动地图</a></li>
+    <li><a href="#proposal">提议方案</a></li>
+    <li><a href="#design">详细设计</a></li>
+    <li><a href="#motivation">动机</a></li>
+    <li><a href="#research">前期调研</a></li>
+    <li><a href="#alternatives">替代方案</a></li>
+    <li><a href="#impact">影响</a></li>
+    <li><a href="#steps">落地步骤</a></li>
+    <li><a href="#log">决策日志</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<section id="summary">
+  <h2>摘要</h2>
+  <p>iOS、越狱版 iOS 与 visionOS 的 RuntimeViewer 改成「每个窗口一份文档会话」：Mac 的 <code>Document</code> 里与平台无关的那部分（编号、先启动引擎的后台工作再建界面、关闭时只关自己带来的成员）收成 AppCore 里两端共用的 <code>DocumentSession</code>，iOS 每个 scene 持有一个，iPad 与 visionOS 能开多个窗口。在此之上，iOS 能打开磁盘上的文件：侧栏根页齿轮旁多一个打开按钮，经文档选择器选文件（越狱版另有「Open Path…」按绝对路径打开），也接收「文件」App 里的「用其他 App 打开」；文件在 App 进程里读，能开多窗口的设备上开一个新窗口，iPhone 上叠在当前窗口上面、关掉就回到本机。打开文件、导出日志的格式化、引擎管理器跟随设置这几段平台无关的逻辑进 AppCore，为此 AppCore 在所有平台上链接 <code>RuntimeViewerEngineManagement</code>。边界测试扩到 iOS target。<code>MainViewModel</code> / <code>MainRoute</code> 的合并留到第四步。Mac 的行为不变。</p>
+  <div class="callout callout-note">
+    <p class="callout-title">关联</p>
+    <ul>
+      <li>所属愿景：<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>（第三步「App 层逻辑下沉与 iOS 窗口模型」；<code>MainViewModel</code> / <code>MainRoute</code> 的合并按用户决定挪到第四步）</li>
+      <li>关联提案：<a href="0099-engine-management-on-ios.md">0099</a>（引擎管理在 iOS 上可用、文件在进程里读）、<a href="0100-settings-storage-on-ios.md">0100</a>、<a href="0101-settings-screen-on-ios.md">0101</a>、<a href="0055-engine-scoped-background-work.md">0055</a>、<a href="0058-runtime-engine-session.md">0058</a>、<a href="0069-file-mode.md">0069</a>、<a href="0077-file-folders.md">0077</a></li>
+      <li>配套文档：待定 —— 预计无单独文档，规则写进 <code>RuntimeViewerUsingUIKit/AGENTS.md</code></li>
+    </ul>
+  </div>
+</section>
+
+<section id="decide">
+  <h2>要你定</h2>
+  <div class="callout callout-note">
+    <p class="callout-title">没有待定的事</p>
+    <p>方向在两轮提问里定完，用户已批准；实现在 <code>feature/window-model-on-ios</code> 上进行。</p>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2>架构图</h2>
+  <h3>改了什么</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-changed"></i>修改</li>
+    <li><i class="swatch swatch-kept"></i>不变</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 540" role="img" aria-label="What changes in AppCore and the two apps">
+    <rect class="group" x="10" y="10" width="470" height="440" rx="10"/>
+    <text class="group-label" x="22" y="30">RuntimeViewerAppCore (every platform)</text>
+    <rect class="box-added" x="25" y="42" width="440" height="44" rx="6"/><text x="35" y="60">DocumentSession</text><text class="caption" x="35" y="77">open() → startBackgroundWork(), close() → documentWillClose()</text>
+    <rect class="box-added" x="25" y="94" width="440" height="44" rx="6"/><text x="35" y="112">DocumentSessionRegistry</text><text class="caption" x="35" y="129">window ID → session; reserved engine by request ID</text>
+    <rect class="box-added" x="25" y="146" width="440" height="44" rx="6"/><text x="35" y="164">RuntimeFileOpener</text><text class="caption" x="35" y="181">URL → engine; security-scoped access until let go</text>
+    <rect class="box-changed" x="25" y="198" width="440" height="44" rx="6"/><text x="35" y="216">RuntimeFileEngineParking</text><text class="caption" x="35" y="233">#if os(macOS) removed; lets go through the opener</text>
+    <rect class="box-added" x="25" y="250" width="440" height="34" rx="6"/><text x="35" y="272">ApplicationLogs</text>
+    <rect class="box-added" x="25" y="292" width="440" height="34" rx="6"/><text x="35" y="314">RuntimeEngineManagerSettingsFollower</text>
+    <rect class="box-kept" x="25" y="334" width="440" height="44" rx="6"/><text x="35" y="352">MainViewModel · MainRoute · AppRoute …</text><text class="caption" x="35" y="369">still macOS only (step 4)</text>
+    <text class="caption" x="25" y="400">depends on RuntimeViewerEngineManagement on every platform</text>
+    <text class="caption" x="25" y="418">(was macOS only)</text>
+
+    <rect class="group" x="510" y="10" width="480" height="210" rx="10"/>
+    <text class="group-label" x="522" y="30">macOS app (behaviour unchanged)</text>
+    <rect class="box-changed" x="525" y="42" width="450" height="34" rx="6"/><text x="535" y="64">Document</text>
+    <rect class="box-changed" x="525" y="84" width="450" height="34" rx="6"/><text x="535" y="106">FileController</text>
+    <rect class="box-changed" x="525" y="126" width="450" height="34" rx="6"/><text x="535" y="148">DebugMenuController</text>
+    <rect class="box-changed" x="525" y="168" width="450" height="34" rx="6"/><text x="535" y="190">SettingsLifecycleController</text>
+
+    <rect class="group" x="510" y="235" width="480" height="225" rx="10"/>
+    <text class="group-label" x="522" y="255">iOS · jailbroken · visionOS app</text>
+    <rect class="box-changed" x="525" y="267" width="450" height="34" rx="6"/><text x="535" y="289">SceneDelegate · AppDelegate</text>
+    <rect class="box-added" x="525" y="309" width="450" height="44" rx="6"/><text x="535" y="327">FileController</text><text class="caption" x="535" y="344">picker · Open Path… · new or stacked window</text>
+    <rect class="box-changed" x="525" y="361" width="450" height="34" rx="6"/><text x="535" y="383">SidebarCoordinator · MainCoordinator</text>
+    <rect class="box-changed" x="525" y="403" width="450" height="44" rx="6"/><text x="535" y="421">Info.plist</text><text class="caption" x="535" y="438">multiple scenes · document types · open in place</text>
+
+    <rect class="box-changed" x="10" y="478" width="470" height="44" rx="6"/><text x="20" y="496">RuntimeViewerEngineManagement</text><text class="caption" x="20" y="513">+ RuntimeEngineManager.readsFilesInThisProcess</text>
+    <rect class="box-changed" x="510" y="478" width="480" height="44" rx="6"/><text x="520" y="496">RuntimeViewerSettings</text><text class="caption" x="520" y="513">Settings.File.platformNamesPairedWithThisDevice</text>
+
+    <path class="arrow" d="M 525 59 L 467 64"/>
+    <path class="arrow" d="M 525 101 L 467 166"/>
+    <path class="arrow" d="M 525 284 L 467 118"/>
+    <path class="arrow" d="M 525 331 L 467 172"/>
+  </svg>
+  </div>
+  <p class="figure-caption">AppCore 多出两端共用的文档会话、窗口注册表、打开文件与两小块逻辑，并在所有平台上链接引擎管理；<code>MainViewModel</code> 那批文件仍只在 macOS，第四步再放开。Mac 的四个控制器改用这些类型，行为不变；iOS 的 scene 从注册表取会话，新的 <code>FileController</code> 负责打开入口。</p>
+
+  <h3>iOS 上打开一个文件</h3>
+  <ul class="legend">
+    <li><i class="swatch swatch-added"></i>新增</li>
+    <li><i class="swatch swatch-kept"></i>已有</li>
+  </ul>
+  <div class="figure">
+  <svg viewBox="0 0 1000 380" role="img" aria-label="Opening a file on iOS">
+    <rect class="box-added" x="10" y="20" width="290" height="44" rx="6"/><text x="20" y="38">open button · Open Path…</text><text class="caption" x="20" y="55">Open In from Files (scene URLs)</text>
+    <rect class="box-added" x="350" y="20" width="330" height="44" rx="6"/><text x="360" y="38">RuntimeFileOpener</text><text class="caption" x="360" y="55">startReading(fileAt:) · read in this process</text>
+    <rect class="box-added" x="730" y="20" width="260" height="44" rx="6"/><text x="740" y="38">fails</text><text class="caption" x="740" y="55">alert in the current window</text>
+    <path class="arrow" d="M 300 42 L 348 42"/>
+    <path class="arrow" d="M 680 42 L 728 42"/>
+
+    <rect class="box-kept" x="350" y="110" width="330" height="34" rx="6"/><text x="360" y="132">UIApplication.supportsMultipleScenes?</text>
+    <path class="arrow" d="M 515 64 L 515 108"/>
+
+    <rect class="box-added" x="40" y="190" width="420" height="44" rx="6"/><text x="50" y="208">yes: new window (iPad, visionOS)</text><text class="caption" x="50" y="225">registry.reserveWindow → activateSceneSession(for:)</text>
+    <rect class="box-added" x="540" y="190" width="420" height="44" rx="6"/><text x="550" y="208">no: stacked over the window (iPhone)</text><text class="caption" x="550" y="225">DocumentSession.open() · full screen · close button</text>
+    <path class="arrow" d="M 450 144 L 300 188"/>
+    <path class="arrow" d="M 580 144 L 730 188"/>
+
+    <rect class="box-added" x="40" y="270" width="420" height="34" rx="6"/><text x="50" y="292">SceneDelegate → registry.session(forWindow:…)</text>
+    <path class="arrow" d="M 250 234 L 250 268"/>
+
+    <rect class="box-added" x="250" y="330" width="500" height="44" rx="6"/><text x="260" y="348">last document leaves → parking (30 s)</text><text class="caption" x="260" y="365">RuntimeFileOpener.letGoOfFile(readBy:) → off the list, access ends</text>
+    <path class="arrow arrow-weak" d="M 250 304 L 400 328"/>
+    <path class="arrow arrow-weak" d="M 750 234 L 600 328"/>
+  </svg>
+  </div>
+  <p class="figure-caption">文件在进程里读，读不了在开窗之前就知道。iPad 与 visionOS 开新窗口，新窗口凭请求号从注册表取走预留的引擎；iPhone 上文件窗口叠在当前窗口上面，关掉即回到本机。最后一个文档离开 30 秒后，引擎从管理器拿掉，安全作用域访问随之结束。</p>
+</section>
+
+<section id="map">
+  <h2>改动地图</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>文件 / 类型</th><th>动作</th><th>改什么</th><th>为什么</th><th>步骤</th></tr></thead>
+    <tbody>
+      <tr><td><code>RuntimeViewerPackages/<wbr>Package.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>AppCore 对 <code>RuntimeViewerEngineManagement</code> 的依赖去掉 <code>condition</code></td><td>打开文件、跟随设置的共用逻辑要用管理器</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Document/<wbr>DocumentSession.swift</code></td><td><span class="tag tag-added">新增</span></td><td>编号、<code>documentState</code>、<code>open()</code>、<code>close()</code>，各只生效一次</td><td>两端共用的文档会话</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/<wbr>…/App/<wbr>Document.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>持有 <code>DocumentSession</code>；<code>makeWindowControllers</code> 调 <code>open()</code>，<code>close()</code> 调会话的 <code>close()</code>；<code>mcpIdentifier</code> 由编号拼出</td><td>Mac 改用共用会话，行为不变</td><td class="numeric">1</td></tr>
+      <tr><td><code>…/App/<wbr>AppMCPBridgeDocumentProvider.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>只要 <code>Document</code> 的两个属性形状不变就不动</td><td>同上</td><td class="numeric">1</td></tr>
+      <tr><td><code>Tests/<wbr>RuntimeViewerAppCoreTests/<wbr>DocumentSessionTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>只开一次、只关一次、没开就关、编号递增</td><td>会话的契约</td><td class="numeric">1</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Document/<wbr>DocumentSessionRegistry.swift</code></td><td><span class="tag tag-added">新增</span></td><td>按窗口标识给会话、预留引擎与请求号、窗口关掉时关会话</td><td>iOS 每个窗口一份会话；可在 macOS 上测</td><td class="numeric">2</td></tr>
+      <tr><td><code>Tests/<wbr>RuntimeViewerAppCoreTests/<wbr>DocumentSessionRegistryTests.swift</code></td><td><span class="tag tag-added">新增</span></td><td>见步骤 2 的行为清单</td><td>注册表的契约</td><td class="numeric">2</td></tr>
+      <tr><td>iOS、越狱版的 <code>Info.plist</code></td><td><span class="tag tag-changed">修改</span></td><td><code>UIApplicationSupportsMultipleScenes</code> 改 <code>true</code>；<code>NSUserActivityTypes</code> 加文件窗口的活动类型</td><td>多窗口；新窗口凭活动带请求号</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerUsingVision/<wbr>Info.plist</code></td><td><span class="tag tag-changed">修改</span></td><td><code>NSUserActivityTypes</code> 同上</td><td>visionOS 也开文件窗口</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>…/App/<wbr>SceneDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>从注册表取会话，先 <code>open()</code> 再建界面；去掉直接 <code>DocumentState()</code></td><td>iOS 的窗口模型</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>…/App/<wbr>AppDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>didDiscardSceneSessions</code> 交给注册表关会话</td><td>窗口关掉时收尾</td><td class="numeric">2</td></tr>
+      <tr><td><code>RuntimeViewerEngineManagement/<wbr>RuntimeEngineManager.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>公开只读的 <code>readsFilesInThisProcess</code></td><td>放走文件引擎时分两种做法</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>File/<wbr>RuntimeFileOpener.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>startReading(fileAt:)</code>、<code>letGoOfFile(readBy:)</code>、安全作用域访问；<code>runtimeFileOpener</code> 依赖</td><td>打开文件的共用部分</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Engine/<wbr>RuntimeFileEngineParking.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>去掉 <code>#if os(macOS)</code>；放走引擎改调 <code>letGoOfFile(readBy:)</code></td><td>iOS 上关掉的文件也释放</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerSettings/<wbr>Settings+File.swift</code></td><td><span class="tag tag-changed">修改</span></td><td><code>platformNamesPairedWithThisMac</code> 改名 <code>platformNamesPairedWithThisDevice</code>、按平台取值；iOS 与 visionOS 上本机缓存打不开时不配对</td><td>iOS 的二进制配上设备自己的缓存</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingAppKit/<wbr>…/App/<wbr>FileController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>读文件头、选缓存、<code>startReading</code> 改调 <code>runtimeFileOpener</code>；其余不变</td><td>Mac 改用共用部分</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeFileOpenerTests</code>、<code>RuntimeFileEngineParking</code> 的已有测试</td><td><span class="tag tag-added">新增</span> / <span class="tag tag-changed">修改</span></td><td>见步骤 3 的行为清单</td><td>打开与放走的契约</td><td class="numeric">3</td></tr>
+      <tr><td><code>Settings.File</code> 的已有测试</td><td><span class="tag tag-changed">修改</span></td><td>跟着改名；macOS 上配对不变</td><td>防回归</td><td class="numeric">3</td></tr>
+      <tr><td><code>RuntimeViewerUsingUIKit/<wbr>…/App/<wbr>FileController.swift</code></td><td><span class="tag tag-added">新增</span></td><td>文档选择器、「Open Path…」、读成功后开新窗口或叠在上面、读失败的提示、接收 URL</td><td>iOS 的打开入口</td><td class="numeric">4</td></tr>
+      <tr><td><code>…/Sidebar/<wbr>SidebarCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>齿轮旁加打开按钮（越狱版是菜单）；文件窗口加关闭按钮；delegate 加两个请求</td><td>入口与出口</td><td class="numeric">4</td></tr>
+      <tr><td><code>…/Main/<wbr>MainCoordinator.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>把两个新请求转给 <code>FileController</code> / 文件窗口的持有者</td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td>iOS、越狱版的 <code>Info.plist</code></td><td><span class="tag tag-changed">修改</span></td><td><code>CFBundleDocumentTypes</code>（<code>public.data</code>、<code>public.directory</code>，<code>Alternate</code>）、<code>LSSupportsOpeningDocumentsInPlace</code></td><td>「用其他 App 打开」</td><td class="numeric">4</td></tr>
+      <tr><td><code>…/App/<wbr>SceneDelegate.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>连接时的 <code>urlContexts</code> 与 <code>scene(_:openURLContexts:)</code> 交给 <code>FileController</code></td><td>同上</td><td class="numeric">4</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Diagnostics/<wbr>ApplicationLogs.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>formattedEntries(since:)</code></td><td>导出日志的共用部分</td><td class="numeric">5</td></tr>
+      <tr><td><code>…/App/<wbr>DebugMenuController.swift</code>（macOS）</td><td><span class="tag tag-changed">修改</span></td><td>改用 <code>ApplicationLogs</code></td><td>Mac 改用共用部分</td><td class="numeric">5</td></tr>
+      <tr><td><code>RuntimeViewerAppCore/<wbr>Settings/<wbr>RuntimeEngineManagerSettingsFollower.swift</code></td><td><span class="tag tag-added">新增</span></td><td><code>startFollowing()</code></td><td>两端共用</td><td class="numeric">5</td></tr>
+      <tr><td>两端的 <code>SettingsLifecycleController.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>读完设置后启动 follower</td><td>iOS 跟 Mac 一样</td><td class="numeric">5</td></tr>
+      <tr><td><code>ApplicationLogsTests</code>、<code>RuntimeEngineManagerSettingsFollowerTests</code></td><td><span class="tag tag-added">新增</span></td><td>见步骤 5 的行为清单</td><td>契约</td><td class="numeric">5</td></tr>
+      <tr><td><code>Tests/<wbr>RuntimeViewerAppCoreTests/<wbr>AppTargetBoundaryTests.swift</code></td><td><span class="tag tag-changed">修改</span></td><td>两个 App target 参数化；iOS 的 <code>MainViewModel</code> 列为例外，第四步删</td><td>分层扩到 iOS</td><td class="numeric">6</td></tr>
+      <tr><td>三份 <code>AGENTS.md</code>、愿景、两份索引</td><td><span class="tag tag-changed">修改</span></td><td>见方案第 10 条</td><td>文档</td><td class="numeric">7</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="proposal">
+  <h2>提议方案</h2>
+  <ol>
+    <li><strong>AppCore 在所有平台上链接引擎管理</strong>：<code>HelperClient</code>、<code>CatalystExtensions</code>、<code>Injection</code> 照旧只在 macOS；<code>MainViewModel</code>、<code>MainRoute</code> 及其依赖的那批文件仍是 <code>#if os(macOS)</code>，第四步再放开。</li>
+    <li><strong>共用的文档会话 <code>DocumentSession</code></strong>：持有 <code>DocumentState</code> 与进程内从 1 起的编号；<code>open()</code> 在界面绑定之前启动引擎的后台工作，<code>close()</code> 离开并关掉这个文档带来的成员，各只生效一次。Mac 的 <code>Document</code> 持有一个，MCP 编号写成 <code>"document\(session.number)"</code>。</li>
+    <li><strong>iOS 的窗口模型</strong>：iOS 与越狱版打开多窗口（visionOS 本来就开着）；AppCore 的 <code>DocumentSessionRegistry</code> 按 <code>UISceneSession.persistentIdentifier</code> 给每个窗口一个会话，进程活着时一直保留，用户关掉窗口时 <code>close()</code>；为文件开的新窗口先预留引擎、拿请求号，scene 连接时取走，取不到（重启后恢复的窗口）就用本机。<code>SceneDelegate</code> 先 <code>open()</code> 再建界面。</li>
+    <li><strong>打开文件的共用部分 <code>RuntimeFileOpener</code></strong>：<code>startReading(fileAt:)</code> 在主线程外读文件头，已列出的文件优先，否则配默认依赖缓存，交给管理器；带安全作用域的 URL 一直保持访问，直到引擎被放走。<code>letGoOfFile(readBy:)</code>：file service 里读的挂起，进程里读的从管理器拿掉并结束访问。Mac 的 <code>FileController</code> 改用它。</li>
+    <li><strong><code>RuntimeFileEngineParking</code> 放开平台限定</strong>，经 <code>letGoOfFile(readBy:)</code> 放走；管理器公开 <code>readsFilesInThisProcess</code>。</li>
+    <li><strong>依赖缓存按本机配对</strong>：<code>platformNamesPairedWithThisDevice</code> 按平台取值；iOS 与 visionOS 上本机缓存打不开时文件单独读。</li>
+    <li><strong>iOS 的打开入口</strong>（iOS target 的 <code>FileController</code>）：齿轮旁的打开按钮（越狱版是 Choose File… 与 Open Path… 的菜单，越狱版在运行时按「没有容器」判断）；「用其他 App 打开」；读成功后多窗口设备开新窗口、iPhone 叠在上面；文件窗口有关闭按钮；读不了就不开窗口，在当前窗口提示原因。</li>
+    <li><strong>平台无关的小块逻辑进 AppCore</strong>：<code>ApplicationLogs.formattedEntries(since:)</code>、<code>RuntimeEngineManagerSettingsFollower</code>。</li>
+    <li><strong>边界测试扩到 iOS target</strong>，iOS 的 <code>MainViewModel</code> 列为唯一例外，第四步删。</li>
+    <li><strong>文档</strong>：<code>RuntimeViewerUsingUIKit/AGENTS.md</code> 加「窗口与文档会话」「打开文件」两节；<code>RuntimeViewerUsingAppKit/AGENTS.md</code> 与根 <code>AGENTS.md</code> 跟上；愿景表与两份索引登记本篇。</li>
+  </ol>
+  <h3>非目标</h3>
+  <ul>
+    <li><strong>合并 <code>MainViewModel</code> / <code>MainRoute</code></strong>：第四步做，届时 iOS 照 Mac 走 <code>SelectionRoute</code>。这一步 iOS 的路由不动。</li>
+    <li><strong>iOS 上的切换来源、最近打开、依赖缓存的选择与 Settings › Files 页</strong>：第五步。</li>
+    <li><strong>iOS 上导出日志的入口、派生数据</strong>：前者用户定了不加，后者照 0100 不开。</li>
+    <li><strong>派生数据的度量与删除、启动顺序写成共用代码</strong>：前者平台无关的部分已在 Core，后者只有两行且调用不同。</li>
+    <li><strong>把 iOS target 的通用 UIKit 小工具搬进 <code>RuntimeViewerUI</code></strong>：第四步补 AppUI 的 UIKit 一侧时整理。</li>
+    <li><strong>在单独的进程里读文件、Load Frameworks、附加进程</strong>：iOS 上没有。</li>
+  </ul>
+</section>
+
+<section id="design">
+  <h2>详细设计</h2>
+  <details open>
+    <summary><code>DocumentSession</code> 与 Mac 的调用点</summary>
+    <div class="details-body">
+<pre><code>@MainActor
+public final class DocumentSession {
+    /// The order this session was made in within this process, from 1.
+    public let number: Int
+    public let documentState: DocumentState
+    public init(runtimeEngine: RuntimeEngine)
+    /// Joins the engine's background work. Only the first call does anything.
+    public func open()
+    /// Leaves it and closes what this document brought into being.
+    /// Only the first call does anything, and only after open().
+    public func close()
+}
+
+final class Document: NSDocument {
+    let session: DocumentSession
+    var documentState: DocumentState { session.documentState }
+    var mcpIdentifier: String { "document\(session.number)" }
+    override func makeWindowControllers() {
+        session.open()
+        addWindowController(mainCoordinator.windowController)
+    }
+    override func close() {
+        session.close()
+        super.close()
+    }
+}</code></pre>
+    </div>
+  </details>
+  <details open>
+    <summary><code>DocumentSessionRegistry</code></summary>
+    <div class="details-body">
+<pre><code>@MainActor
+public final class DocumentSessionRegistry {
+    /// Holds runtimeEngine for a window about to be requested, and names the request.
+    public func reserveWindow(on runtimeEngine: RuntimeEngine) -&gt; UUID
+    /// The window's session: the one it has, or a new one on the engine reserved under
+    /// requestIdentifier, or on .local when nothing is reserved. Not yet opened.
+    public func session(forWindow windowIdentifier: String, requestIdentifier: UUID?) -&gt; DocumentSession
+    /// Closes and forgets the sessions of windows the user closed.
+    public func discardSessions(forWindows windowIdentifiers: some Sequence&lt;String&gt;)
+}</code></pre>
+    </div>
+  </details>
+  <details open>
+    <summary><code>RuntimeFileOpener</code> 与两处小改动</summary>
+    <div class="details-body">
+<pre><code>@MainActor
+public final class RuntimeFileOpener {
+    /// Starts reading the file at url and returns the engine reading it. A security-scoped
+    /// url stays accessible until the engine is let go. Throws, opening nothing, when url is
+    /// nothing file mode reads — and, where files are read in this process, when it cannot be read.
+    public func startReading(fileAt url: URL) async throws -&gt; RuntimeEngine
+    /// Suspends an engine a file service reads; takes one that read its file in this
+    /// process off the manager's list and ends its access to the file.
+    public func letGoOfFile(readBy engine: RuntimeEngine) async
+}
+
+extension RuntimeEngineManager {
+    public var readsFilesInThisProcess: Bool { get }
+}
+
+extension Settings.File {
+    /// macOS and Mac Catalyst on a Mac, iOS on an iPhone or iPad, visionOS on a Vision Pro.
+    public static let platformNamesPairedWithThisDevice: Set&lt;String&gt;
+}
+
+public enum ApplicationLogs {
+    /// "[HH:mm:ss.SSS] [subsystem/category] message", one line per entry since date.
+    public static func formattedEntries(since date: Date) async throws -&gt; String
+}
+
+@MainActor
+public final class RuntimeEngineManagerSettingsFollower {
+    public func startFollowing()
+}</code></pre>
+    </div>
+  </details>
+  <details open>
+    <summary>iOS 的文件窗口、关闭、越狱版判断与安全作用域</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>文件窗口</strong>：<code>supportsMultipleScenes</code> 为真就 <code>registry.reserveWindow(on:)</code>，把请求号放进类型为 <code>dev.JH.RuntimeViewer.fileWindow</code> 的 <code>NSUserActivity</code>，调 <code>activateSceneSession(for:)</code>（iOS 17 起）；为假就建会话与一套新的 <code>MainCoordinator</code>，<code>open()</code> 之后以 <code>.fullScreen</code> 从当前窗口呈现，<code>FileController</code> 持有它直到关闭。</li>
+        <li><strong>关闭按钮</strong>：文件窗口根页的 <code>xmark</code>（<code>leftBarButtonItem</code>）经 delegate 到 <code>MainCoordinator</code>：叠着的收起并 <code>close()</code>；独立窗口请系统销毁 scene，会话在 <code>didDiscardSceneSessions</code> 里关。</li>
+        <li><strong>越狱版判断</strong>：<code>NSHomeDirectory()</code> 不在 <code>/Containers/Data/Application/</code> 之下即视为没有容器，菜单里才出现「Open Path…」；不新增编译开关。</li>
+        <li><strong>安全作用域</strong>：按引擎的来源记下已开始访问的 URL，放走引擎后结束访问；读失败当场结束。Mac 的 URL 不带安全作用域，什么也不记。</li>
+        <li><strong>后台工作在 iOS 上开始跑</strong>：交叉引用预建（默认开）、Always Index（默认关）、Find 语料按设置运行，与 Mac 相同；iOS 没有 Report 页，暂由日志观察。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="motivation">
+  <h2>动机</h2>
+  <p>完整动机见愿景《<a href="../Visions/IOSFeatureParity.md">iOS 版功能对齐</a>》。这一步特有的：</p>
+  <ul>
+    <li><strong>iOS 的窗口从不启动、也不结束引擎的后台工作</strong>：<code>SceneDelegate.swift:15</code> 直接 <code>DocumentState()</code>，Find 语料、交叉引用预建、后台索引在 iOS 上都不会跑，多开一个窗口也没人收尾。Mac 把这两步写死在 <code>Document.swift:40-54</code>，第二个前端只能照抄。</li>
+    <li><strong>iOS 上打不开磁盘上的文件</strong>：0099 让管理器能在进程里读文件，但没有入口；打开流程全在 Mac 的 <code>FileController</code> 里，夹着 <code>NSDocumentController</code> 与 <code>NSAlert</code>。</li>
+    <li><strong>iOS 只有一个窗口</strong>：iOS 与越狱版的 <code>Info.plist</code> 关着多窗口。</li>
+    <li><strong>分层在 iOS target 上没人看着</strong>：边界测试只扫 macOS target。</li>
+  </ul>
+</section>
+
+<section id="research">
+  <h2>前期调研</h2>
+  <details>
+    <summary>文档、打开文件与放走文件引擎</summary>
+    <div class="details-body">
+      <ul>
+        <li>Mac 的 <code>Document</code>（85 行）：MCP 编号（:6-12）、<code>init(runtimeEngine:)</code>（:20-23）、<code>makeWindowControllers</code> 先 <code>startBackgroundWork()</code>（:40-48）、<code>close()</code> 先 <code>documentWillClose()</code>（:50-54）。编号只有 MCP 读。</li>
+        <li><code>DocumentState</code> 在 iOS 上本来就编；<code>startBackgroundWork()</code>（:343-346）与 <code>documentWillClose()</code>（:435-440）只能各调一次。</li>
+        <li>Mac 的 <code>FileController</code>：平台无关的是读文件头、选缓存、<code>startReading</code>、<code>waitUntilFileIsRead</code>、parking；AppKit 的是 <code>NSDocumentController</code>、开窗、<code>NSAlert</code>。</li>
+        <li>在进程里读的文件引擎返回前就读完、读不了就抛错；它「从不挂起」，能把它拿掉的只有 <code>terminateRuntimeEngine(for:because:)</code>。<code>FileReading</code> 是 internal。</li>
+        <li><code>RuntimeFileEngineParking</code> 整个 <code>#if os(macOS)</code>，对在进程里读的引擎什么也做不了。</li>
+        <li><code>platformNamesPairedWithThisMac</code> 写死 macOS 与 Mac Catalyst；<code>.systemDyldSharedCache</code> 读 <code>FullDyldCache.cachedHost</code>，打不开就报错。<strong>待实测</strong>：普通 iOS 的沙盒能否打开本机缓存。</li>
+      </ul>
+    </div>
+  </details>
+  <details>
+    <summary>AppCore、路由、日志、设置与 scene</summary>
+    <div class="details-body">
+      <ul>
+        <li>AppCore 对引擎管理的依赖只在 macOS（<code>Package.swift:460</code>）；191 个文件里 48 个整个只在 macOS，<code>MainViewModel</code>（627 行）与 <code>MainRoute</code> 在其中。</li>
+        <li>两份 <code>MainRoute</code> 没有一个 case 相同：Mac 17 个，iOS 4 个；iOS 的 <code>MainViewModel</code> 是 9 行的空壳。</li>
+        <li>导出日志用 <code>OSLogStore(scope: .currentProcessIdentifier)</code>，iOS 15 起可用。</li>
+        <li>派生数据平台无关的部分早已在 Core 的 <code>RuntimeDerivedDataMaintenance</code>。</li>
+        <li>设置生命周期两端读写方式不同，能共用的只有跟随共享缓存开关；iOS 上它的生效值恒为 <code>true</code>，与管理器默认相同。</li>
+        <li>三份 <code>Info.plist</code> 只有一个 scene 配置；没有文档类型；<code>SceneDelegate</code> 不看 <code>connectionOptions</code>。iPhone 上 <code>supportsMultipleScenes</code> 恒为 <code>false</code>。</li>
+        <li>边界测试三条检查，扩到 iOS target 今天会报 <code>MainViewModel.swift:7</code> 两次；iOS target 只有 23 个文件。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="alternatives">
+  <h2>替代方案考量</h2>
+  <details>
+    <summary>8 个方案，均未采用</summary>
+    <div class="details-body">
+      <ul>
+        <li><strong>iOS 用 <code>UIDocument</code></strong>：愿景已否。</li>
+        <li><strong>这一步就合并 <code>MainViewModel</code> / <code>MainRoute</code></strong>：用户定了留到第四步。</li>
+        <li><strong>共用逻辑放进 <code>RuntimeEngineManager</code></strong>：用户选了让 AppCore 链接引擎管理；读文件头、选缓存要读设置，管理器不依赖设置。</li>
+        <li><strong>iPhone 上把当前窗口换成文件</strong>：切换来源要等第五步，换过去回不到本机。</li>
+        <li><strong>越狱版只用文档选择器</strong>：看不到系统路径与别的 App 的二进制。</li>
+        <li><strong>在进程里读的文件引擎改成可挂起</strong>：要等第五步的来源列表才看得见，且要动管理器对引擎身份的假设。</li>
+        <li><strong>scene 断开就关会话</strong>：系统会断开后台的 scene，连回来时文件窗口会变成本机。</li>
+        <li><strong>重启后恢复文件窗口</strong>：要存文件书签，Mac 也关掉了窗口恢复。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="impact">
+  <h2>影响</h2>
+  <h3>用户可见变化</h3>
+  <ul>
+    <li>iOS、越狱版 iOS 与 visionOS：侧栏根页齿轮旁多一个打开按钮；越狱版上是菜单（Choose File…、Open Path…）。</li>
+    <li>文件在文件窗口里打开：iPad 与 visionOS 上是新窗口，iPhone 上叠在当前窗口上面；关闭按钮关掉它，iPhone 上随即回到本机。读不了的文件不开窗口，提示原因。</li>
+    <li>「文件」App 的「用其他 App 打开」能选 RuntimeViewer（iOS 与越狱版）。</li>
+    <li>iPad 上能开多个窗口，新窗口看本机。</li>
+    <li>引擎的后台工作在 iOS 上开始按设置运行（交叉引用预建默认开）。</li>
+    <li>Mac：无变化。</li>
+  </ul>
+  <h3>可发现性</h3>
+  <p>打开按钮在齿轮旁；「用其他 App 打开」由系统列出。默认都开，没有开关。</p>
+  <h3>数据与配置兼容</h3>
+  <p>不新增设置键，不改存盘格式。</p>
+  <h3>平台与最低版本</h3>
+  <p>最低版本不变（iOS 18、visionOS 2；<code>activateSceneSession(for:)</code> 要 iOS 17 / visionOS 1）。「Open Path…」只在没有容器的越狱版上出现。</p>
+  <h3>发布</h3>
+  <p>不需要新的 entitlement；iOS 与越狱版的 <code>Info.plist</code> 多了文档类型与就地打开的声明。不影响公证与 Sparkle。</p>
+</section>
+
+<section id="steps">
+  <h2>落地步骤</h2>
+  <ol>
+    <li><strong>AppCore 链接引擎管理，共用的文档会话</strong>
+      <ul><li>行为：<code>documentSessionOpensOnlyOnce</code>、<code>documentSessionClosesOnlyOnceAndOnlyAfterOpening</code>、<code>documentSessionNumbersCountUpFromOne</code>、<code>macDocumentBehavesAsBefore</code>、<code>appCoreBuildsWithEngineManagementOnIOSAndVisionOS</code></li></ul>
+    </li>
+    <li><strong>iOS 的窗口模型</strong>
+      <ul><li>行为：<code>registryGivesAWindowOneSessionAndKeepsIt</code>、<code>registryHandsAReservedEngineToTheWindowThatAsksForIt</code>、<code>registryFallsBackToLocalForAnUnknownRequest</code>、<code>registryClosesTheSessionsOfDiscardedWindows</code>、<code>iOSWindowJoinsTheEngineBackgroundWork</code>（设备上看日志）、<code>iPadOpensASecondWindowOnThisDevice</code>（由用户看）</li></ul>
+    </li>
+    <li><strong>打开文件的共用部分与放走</strong>
+      <ul><li>行为：<code>openerReadsTheListedFileAsTheUserPairedIt</code>、<code>openerPairsANewFileWithTheDefaultCache</code>、<code>openerEndsSecurityScopedAccessWhenReadingFails</code>、<code>parkingLetsGoOfAnInProcessFileEngineAfterTheGracePeriod</code>、<code>parkingStillSuspendsAFileServiceEngine</code>、<code>macFilesStillPairWithThisMacsCache</code>、<code>macFileModeBehavesAsBefore</code></li></ul>
+    </li>
+    <li><strong>iOS 的打开入口</strong>（以下都由用户在设备上看）
+      <ul><li>行为：<code>openButtonChoosesAFileAndOpensItInAFileWindow</code>、<code>openPathOpensAnAbsolutePathOnTheJailbrokenApp</code>、<code>fileWindowStacksOverTheWindowOnIPhoneAndClosesBackToThisDevice</code>、<code>unreadableFileShowsWhyAndOpensNoWindow</code>、<code>openInFromFilesOpensTheFile</code></li></ul>
+    </li>
+    <li><strong>导出日志与跟随设置进 AppCore</strong>
+      <ul><li>行为：<code>applicationLogsListsThisProcessesEntriesSinceADate</code>、<code>followerWritesTheSharedCacheSwitchIntoTheManager</code>、<code>macExportLogsBehavesAsBefore</code></li></ul>
+    </li>
+    <li><strong>边界测试扩到 iOS target</strong>
+      <ul><li>行为：<code>iOSAppTargetHoldsNoViewModelButTheOneWaitingForStep4</code>、<code>macAppTargetStillHoldsNoViewModel</code></li></ul>
+    </li>
+    <li><strong>文档</strong></li>
+  </ol>
+  <div class="callout callout-note">
+    <p><strong>收尾时必须判断两件事</strong>：要不要配套专题文章（预计不需要）；有没有新术语（「文档会话」可能要登记进术语表）。</p>
+  </div>
+</section>
+
+<section id="log">
+  <h2>决策日志</h2>
+  <details>
+    <summary>15 条，最近一条：用户批准，开始实现</summary>
+    <div class="details-body">
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>日期</th><th>变更</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="numeric">2026-11-21</td><td>Created as Draft</td><td>愿景第三步，按完整档问了两轮再写</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：<code>MainViewModel</code> / <code>MainRoute</code> 留到第四步合并</td><td>合并要先放开 AppCore 里依赖引擎管理、注入的那批文件，正是第四步的内容；这一步改动小</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：合并后 iOS 照 Mac 走 <code>SelectionRoute</code></td><td>两端一套模型。第四步执行</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：打开文件做到能在 vphone 上打开</td><td>文档选择器与「用其他 App 打开」，在设备上就能看到效果</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：导出日志只把逻辑移进 AppCore</td><td>iOS 暂不加入口；在 vphone 上看日志可经 vphoned 的日志接口</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：AppCore 只放开对引擎管理的这一条依赖</td><td>打开文件的共用逻辑要用管理器；<code>MainViewModel</code> 那批照旧留到第四步</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：iPhone 上文件窗口叠在当前窗口上，关掉回本机</td><td>不必等第五步的切换来源就能回去</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户选定：越狱版加「Open Path…」</td><td>文档选择器看不到系统路径与别的 App 的二进制</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户认可其余假设</td><td>共用的文档会话（MCP 编号只有 Mac 用）；多窗口、新窗口看本机、重启后从本机开始；打开按钮在齿轮旁；读取期间保持访问权限；「用其他 App 打开」收 Mach-O、bundle、文件夹与 dyld 缓存；AppCore 不弹窗；边界测试先留一条例外</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>自定：派生数据与启动顺序不另立共用类型</td><td>派生数据平台无关的部分已在 Core，iOS 又不开；启动顺序能共用的只有两行且调用不同。偏离愿景第三步的清单</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>自定：iOS 上关掉的文件 30 秒后从管理器拿掉</td><td>在进程里读的引擎挂不起来，不拿掉就一直占着内存与文件描述符</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>自定：会话在进程活着时保留，用户关掉窗口才关</td><td>系统会断开后台的 scene</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>自定：依赖缓存按本机配对，打不开就单独读</td><td>沙盒里能否打开本机缓存没验证</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>自定：这一步 AppCore 里新代码都不弹窗，暂不需要新的跨层客户端</td><td>共用部分只返回结果或抛错，提示留在各端的控制器</td></tr>
+          <tr><td class="numeric">2026-11-21</td><td>用户批准，开始实现</td><td>看过简报后批准；从 <code>next</code> 切 <code>feature/window-model-on-ios</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+</div>
+</body>
+</html>
