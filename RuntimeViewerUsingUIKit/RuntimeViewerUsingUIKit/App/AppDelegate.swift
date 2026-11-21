@@ -24,6 +24,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     @Dependency(\.documentSessionRegistry)
     private var documentSessionRegistry
 
+    @Dependency(\.fileController)
+    private var fileController
+
+    @Dependency(\.runtimeEngineManagerSettingsFollower)
+    private var runtimeEngineManagerSettingsFollower
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         #log(.info,"Application did finish launching")
         // First of all: the settings are read before anything below or the
@@ -57,6 +63,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // time, and a device that connected to a Mac would take that Mac's.
         _ = runtimeEngineManager
         #log(.info,"Runtime engine manager started")
+        // The settings the manager takes, as on the Mac: here rather than in
+        // the settings lifecycle controller, which runs first, because
+        // reading the manager there would bring the engines up before the
+        // command extensions above are registered.
+        runtimeEngineManagerSettingsFollower.startFollowing()
+        // Files opened from disk are read in this process: one nobody has
+        // shown for thirty seconds is let go.
+        fileController.start()
         return true
     }
 
