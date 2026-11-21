@@ -690,9 +690,17 @@ Background, with the reverse-engineered addresses: `Documentations/Evolutions/00
 - **An empty tab shows the start page** (proposal `editor-start-page`): Xcode 27.2's initial editor,
   `ContentPlaceholderViewController` over `ContentPlaceholderViewModel` — an Open Quickly field that searches
   the engine's images by name and the objects of the images it has indexed (`OpenQuicklyCatalog`, which
-  indexes nothing), and the engine's recent objects, which `RecentRuntimeObjectsRecorder` files from
-  `DocumentState.selectedRuntimeObject` into `AppDefaults.recentRuntimeObjectsByEngine` under the engine's
-  key, without children, ten at most. A pane keeps one page for all its empty tabs, so the page starts over
+  indexes nothing), and a recent list that follows the sidebar: the engine's recent images while the
+  sidebar is at its image list, the recent objects of the image it is in once it is in one.
+  `RecentRuntimeImagesRecorder` files an image when the sidebar goes into it or the focused pane shows
+  its image page or one of its objects, and an object under its image, into
+  `AppDefaults.recentRuntimeImagesByEngine` under the engine's key: ten images, ten objects each without
+  children. Every image path is filed and compared in the engine's canonical form
+  (`canonicalImagePath(_:)`), since the sidebar's spelling and an object's `imagePath` can differ. An
+  engine learns that form only after it connects, so a record folds into its image the entries filed
+  under the image's other spelling before then (`foldingOtherSpellings(of:in:canonicalImagePath:)`)
+  and never respells any other entry: engines sharing a key spell each other's paths differently.
+  A pane keeps one page for all its empty tabs, so the page starts over
   whenever another tab comes forward in its pane or it comes back into the pane (`startOver()`): state a
   new page would not have — Show All, a selection, a search — is reset there. Its measurements are
   Xcode's (`/Volumes/RE/Xcode/27.2-27B52/README.md`, "Initial editor"); change them against that, not by

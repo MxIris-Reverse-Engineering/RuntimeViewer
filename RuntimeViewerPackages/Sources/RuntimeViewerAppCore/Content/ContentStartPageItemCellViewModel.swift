@@ -6,8 +6,8 @@ import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-/// One row of an empty editor pane's start page: a recent object, or a match of the page's Open
-/// Quickly field — an object, or an image by name (proposal `editor-start-page`). Xcode's initial
+/// One row of an empty editor pane's start page: a recent image or object, or a match of the page's
+/// Open Quickly field — an object, or an image by name (proposal `editor-start-page`). Xcode's initial
 /// editor draws the same row for a recent file: the item's icon and name, and under them its path,
 /// the first component's icon and every component's name.
 ///

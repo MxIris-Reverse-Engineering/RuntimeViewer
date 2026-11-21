@@ -329,4 +329,13 @@ when picking up follow-up work.
   `SP.14` (keystrokes before the image tree each started a read; fixed),
   `SP.15` (two of the new tests passed without the checks they named; one
   covered, the engine check left untested) and `SP.16` (the `.notLoaded`
-  outcome's clearing lost its test; covered again).
+  outcome's clearing lost its test; covered again). The review of the step that
+  made the recent list follow the sidebar added `SP.17` (an image filed before
+  a simulator engine learned its root path listed twice; fixed), `SP.18` (the
+  focus stays on an emptied, hidden list; left), `SP.19` (an intermediate list
+  during an engine switch, never drawn; left), `SP.20` (an object without an
+  image path; guarded) and `SP.21` (test gaps; covered); the re-review added
+  `SP.22` (the first fix for `SP.17` respelled every entry, stacking roots on
+  engines that share a key; replaced by folding only the image's other
+  spelling) and `SP.23` (paths outside the simulator root; Core's canonical
+  form, left).

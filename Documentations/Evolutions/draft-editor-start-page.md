@@ -3,7 +3,7 @@
 - **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-11-21
-- **最后更新**: 2026-11-21
+- **最后更新**: 2026-11-22
 - **所属愿景**: 无
 - **关联提案**: [0076 编辑器分栏](0076-editor-panes.md)（空标签与「唯一一栏的关闭按钮清空编辑区」）、[0092 编辑栏的路径栏](0092-editor-jump-bar.md)（镜像页与 `.openImage`）、[0069 文件模式](0069-file-mode.md)（读文件时的占位）、[0085 Filter Scope 按 Engine 与 Image 记住](0085-filter-scope-memory.md)（按 Engine 记忆的键）
 - **实现分支 / PR**: `feature/editor-start-page`
@@ -12,7 +12,7 @@
 
 ## 摘要
 
-编辑栏里一个空标签（新窗口、⌘T 新开的标签、用关闭按钮清空的唯一一栏）现在只显示一行灰字「Select a runtime object」。本提案照 Xcode 27.2 空编辑器显示的初始页（IDEKit 的 `IDEInitialEditor`）把它换成一张起始页：顶部一个大号的 **Open Quickly** 搜索框，输入满 3 个字符即在框下浮出匹配的镜像与对象，回车或点击打开；下面是 **Recent Objects**，列出这个 Engine 上最近在编辑栏里看过的对象（图标、名字，下面一行是「Engine 〉 镜像」的路径），最多记 10 个、默认显示 8 行、可 Show All 展开，双击或回车打开。最近列表按 Engine 存盘、跨启动保留。读文件时的「Reading …」占位不变。File › Open Quickly…（⇧⌘O）的浮动条改成与起始页同一个搜索（第 6 步，用户看过初版后要求），从 1 个字符起就搜，有文档窗口时总可用；侧栏原来只搜当前镜像的那一份 Open Quickly 删掉（第 7 步）。另一个会话在做的 App 级欢迎窗口（启动时、没有文档时出现的窗口）不在本提案范围内。
+编辑栏里一个空标签（新窗口、⌘T 新开的标签、用关闭按钮清空的唯一一栏）现在只显示一行灰字「Select a runtime object」。本提案照 Xcode 27.2 空编辑器显示的初始页（IDEKit 的 `IDEInitialEditor`）把它换成一张起始页：顶部一个大号的 **Open Quickly** 搜索框，输入满 3 个字符即在框下浮出匹配的镜像与对象，回车或点击打开；下面是最近列表，跟着侧栏走（第 8 步，用户看过后要求）：侧栏停在镜像列表时是 **Recent Images**，列这个 Engine 最近用过的镜像；侧栏进到某个镜像后是 **Recent Objects**，只列这个镜像里最近在编辑栏看过的对象（图标、名字，下面一行是「Engine 〉 镜像」的路径）。每个 Engine 记 10 个镜像、每个镜像记 10 个对象，默认显示 8 行、可 Show All 展开，双击或回车打开。最近列表按 Engine 存盘、跨启动保留。读文件时的「Reading …」占位不变。File › Open Quickly…（⇧⌘O）的浮动条改成与起始页同一个搜索（第 6 步，用户看过初版后要求），从 1 个字符起就搜，有文档窗口时总可用；侧栏原来只搜当前镜像的那一份 Open Quickly 删掉（第 7 步）。另一个会话在做的 App 级欢迎窗口（启动时、没有文档时出现的窗口）不在本提案范围内。
 
 ## 动机
 
@@ -85,20 +85,21 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
    - **何时读**：第一次满 3 个字符时读一次（`imageNodes` 与 `indexedImagePathList()`，再对已索引的镜像并发 `objects(in:)`，同时最多 8 个），读完之前显示进度、读完后匹配；同一次输入期间复用，框清空或打开了结果就丢掉，不常驻内存。少于 3 个字符时照 Xcode 不更新查询、留着上一次的结果；框被清空时结果一并清掉。
    - **怎么排**：与现有 Open Quickly 相同的模糊匹配与排序（排序抽成共用的函数，侧栏的 Open Quickly 改用它、行为不变），截到前若干条。
    - **键盘**：↑ / ↓ 在结果里移动选中，回车打开选中的一项（默认第一项），Esc 清空输入；点击一项打开。修饰键同列表点击：⌥ 下一栏、⇧⌥ 新标签。打开对象走 `.open`，打开镜像走 `.openImage`（镜像页，会先索引）。打开之后清空输入：Xcode 用新页面替换这一页，RV 的这一页留在栏里给下一个空标签用。
-2. **Recent Objects**：标题行左边「Recent Objects」（Xcode 的 `.title` 字体）、右边 11pt 强调色的「Show All」，展开后变「Show Less」，多于 8 行时才有。每行：对象的图标、`displayName`，下面一行小字是 Engine 的图标加「Engine 名 〉 镜像名」，照 Xcode 的「SDK 〉 框架」。默认显示前 8 行（Xcode 的 `defaultRowCount`）。照 Xcode 单击只选中，双击或回车打开；修饰键同上。列表取得焦点而没有选中时选中第一行。
+2. **最近列表**（第 8 步起跟着侧栏分层）：侧栏停在镜像列表时标题是「Recent Images」，列这个 Engine 最近用过的镜像（行同搜索结果里的镜像行，打开是镜像页）；侧栏进到某个镜像后标题是「Recent Objects」，只列这个镜像的最近对象。标题行左边是标题（Xcode 的 `.title` 字体）、右边 11pt 强调色的「Show All」，展开后变「Show Less」，多于 8 行时才有；侧栏换层级或换镜像时 Show All 关掉。对象行：对象的图标、`displayName`，下面一行小字是 Engine 的图标加「Engine 名 〉 镜像名」，照 Xcode 的「SDK 〉 框架」。默认显示前 8 行（Xcode 的 `defaultRowCount`）。照 Xcode 单击只选中，双击或回车打开；修饰键同上。列表取得焦点而没有选中时选中第一行。
 3. **读文件时**：仍是转圈加「Reading “…”…」，与现在相同；读完回到起始页。
 
-**最近列表怎么记**：每个文档在 `DocumentSession.open()` 里起一个记录器，跟着 `DocumentState.$selectedRuntimeObject`（焦点栏当前标签的对象）：每出现一个非空对象，就把它移到这个 Engine 的列表最前面（按身份去重），最多留 10 个（Xcode 的默认），写进 `AppDefaults.recentRuntimeObjectsByEngine`（键为 `Settings.Indexing.EngineReference.key(for:)`）。同一 Engine 上的几个窗口共用一份，起始页跟着这份存储实时刷新。只在 macOS 记，iOS 不变。
+**最近列表怎么记**（第 8 步改为按镜像分组）：每个文档在 `DocumentSession.open()` 里起一个记录器。用到一个镜像——侧栏进到它（`DocumentState.$currentImageNode`）、焦点栏显示它的镜像页、或焦点栏显示它的一个对象——就把它移到这个 Engine 的镜像列表最前；焦点栏每出现一个非空对象（`$selectedRuntimeObject`），还把这个对象移到它所在镜像的对象列表最前（按身份去重）。镜像最多 10 个、每个镜像的对象最多 10 个（都照 Xcode 的默认），镜像被挤出时连同它的对象一起丢；镜像路径一律按 `canonicalImagePath(_:)` 的形式记，与对象的 `imagePath` 一致；Engine 连上后才知道这个形式，之前按另一种写法记下的同一镜像，在下一次记录它时合并进来，别的项不改写。写进 `AppDefaults.recentRuntimeImagesByEngine`（键为 `Settings.Indexing.EngineReference.key(for:)`）。同一 Engine 上的几个窗口共用一份，起始页跟着这份存储与侧栏所在层级实时刷新。只在 macOS 记，iOS 不变。
 
 **没有询问就采用的假设**（用户看效果时可以推翻）：
 
-- **只记对象，不记镜像页**；标题因此叫「Recent Objects」而不是 Xcode 的「Recent Files」。重开时按对象自己的语言显示（看过的 Generated Interface 不单独记）。
-- **最近列表按 Engine 记**，相当于 Xcode 按工作区记；切到别的 Engine 的窗口看到的是那个 Engine 的列表。上限 10 个，没有清空按钮。Xcode 的页面只在出现时读一次，RV 的跟着存储实时刷新（另一窗口刚看的对象立刻出现）。
+- **列表跟着侧栏分层**（第 8 步，用户定的）：侧栏的镜像列表相当于 Xcode 欢迎窗口那一层（最近的项目），进到一个镜像相当于打开一个项目（它的最近文件）。标题因此是「Recent Images」与「Recent Objects」，而不是 Xcode 的「Recent Files」。重开对象时按对象自己的语言显示（看过的 Generated Interface 不单独记）。
+- **什么算「用过一个镜像」**（第 8 步，agent 定的）：侧栏进到它、在镜像页看它、看它的一个对象，三种都算。打开最近镜像显示镜像页（与搜索结果里的镜像行一致），不移动侧栏。
+- **最近列表按 Engine 记**；切到别的 Engine 的窗口看到的是那个 Engine 的列表。镜像与每个镜像的对象各以 10 个为上限，没有清空按钮。Xcode 的页面只在出现时读一次，RV 的跟着存储实时刷新（另一窗口刚看的对象立刻出现）。
 - **路径行写「Engine 名 〉 镜像名」**，图标是 Engine 的图标，照 Xcode 路径行「第一段的图标 + 各段名字」的形状。
 - **存下来的对象不带 `children`**：列表只按身份列出与打开对象，子树可能有成千上万个节点，而存储每次变化都整文件重写。打开时内容区按身份重新取接口，不受影响；Inspector 的 Specialization 页对这样打开的泛型类型不列出本次会话里做过的特化，直到从侧栏重新选中它。
 - **Open Quickly 框的范围是整个 Engine（镜像 + 已索引镜像的对象）**，不跟着侧栏当前镜像走，所以新窗口里也能用。⇧⌘O 的浮动 Open Quickly 也改成同一个范围（第 6 步，用户看过初版后要求）：Xcode 里两者是同一套搜索。
 - **结果列表盖在最近列表的位置上**，而不是做成浮出的窗口；Xcode 也是在页面里浮在框下。结果行用起始页同一种行，56 高，与 Xcode Open Quickly 的行同高。
-- **已知、不在本提案处理**：`AppDefaults` 的文件存储放在不分版本的 `Application Support/AppStorage`，Debug 版与发布版同时开着时会互相覆盖最近列表（书签与 Filter Scope 记忆同样如此）；每个用过的 Engine 键都会留下一份最多 10 个对象的列表，不清理。两者列入后续项。
+- **已知、不在本提案处理**：`AppDefaults` 的文件存储放在不分版本的 `Application Support/AppStorage`，Debug 版与发布版同时开着时会互相覆盖最近列表（书签与 Filter Scope 记忆同样如此）；每个用过的 Engine 键都会留下一份最多 10 个镜像、100 个对象的列表，不清理。两者列入后续项。
 - **页面背景沿用内容区现在的背景**，起始页不另画背景。
 
 ### 非目标
@@ -114,16 +115,17 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 
 | 文件 / 类型 | 动作 | 改什么 | 为什么 | 步骤 |
 |---|---|---|---|---|
-| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentPlaceholderViewController.swift` · `ContentPlaceholderViewController` | 修改 | `.noSelection` 时显示起始页：搜索框、标题行、列表；`.readingFile` 时照旧转圈，并让出起始页里的键盘焦点 | 空标签的页面就是它 | 1、3、4 |
+| `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentPlaceholderViewController.swift` · `ContentPlaceholderViewController` | 修改 | `.noSelection` 时显示起始页：搜索框、标题行、列表；`.readingFile` 时照旧转圈，并让出起始页里的键盘焦点；第 8 步标题跟着 `recentItemsTitle` | 空标签的页面就是它 | 1、3、4、8 |
 | 同上 · 私有嵌套的 `OpenQuicklyField`、`FocusReportingTextField`、`ItemCellView` | 新增 | 起始页的大号圆角搜索框（放大镜 + 无边框文本框，光环只在 key 窗口里输入时亮）与列表行 | 只有这一个控制器用，按 `RuntimeViewerUsingAppKit/AGENTS.md` 作它的私有嵌套类型 | 1 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Content/ContentPlaceholderViewModel.swift` · `ContentPlaceholderViewModel` | 修改 | 加 `editorPaneID`（第 1 步起由协调器传入）与 `recentItems` 输出（第 1 步为空）；之后加最近列表、Show All、搜索文本、结果、选中、打开；`.readingFile` 逻辑不变 | 空标签那一页的 VM | 1–4 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Content/ContentPlaceholderViewModel.swift` · `ContentPlaceholderViewModel` | 修改 | 加 `editorPaneID`（第 1 步起由协调器传入）与 `recentItems` 输出（第 1 步为空）；之后加最近列表、Show All、搜索文本、结果、选中、打开；第 8 步列表跟着 `$currentImageNode` 取镜像或这个镜像的对象，加 `recentItemsTitle`；`.readingFile` 逻辑不变 | 空标签那一页的 VM | 1–4、8 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Content/ContentStartPageItemCellViewModel.swift` · `ContentStartPageItemCellViewModel` | 新增 | 一行（对象或镜像）的 `Appearance`：图标、名字、路径图标与路径各段；镜像行的路径段是装着它最近那个 bundle 的文件夹 | 最近列表与搜索结果共用的行 | 1 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/RuntimeImage/RuntimeImageKind.swift` · `RuntimeImageKind` | 修改 | 加内部的 `isBundleDirectoryName(_:)`，复用按扩展名认 bundle 的规则 | 镜像行的路径段要跳过 bundle 内部的目录 | 1 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/RecentRuntimeObjects.swift` · `RecentRuntimeObjects` | 新增 | 纯逻辑：把一个对象记到列表最前、按身份去重、截到上限 | 可单测的记录规则 | 2 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/RecentRuntimeObjectsRecorder.swift` · `RecentRuntimeObjectsRecorder` | 新增 | 跟着文档的 `$selectedRuntimeObject` 与 Engine，写 `AppDefaults` | 一个文档一个记录器 | 2 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/RecentRuntimeImages.swift`（第 8 步由 `RecentRuntimeObjects.swift` 改名） · `RecentRuntimeImages` | 新增 | 纯逻辑：把一个镜像记到列表最前、把一个对象记到它镜像的列表最前、按身份去重、截到上限、镜像被挤出时连同对象、合并同一镜像的另一种写法、空路径不记 | 可单测的记录规则 | 2、8 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/RecentRuntimeImage.swift` · `RecentRuntimeImage` | 新增 | 存储里的一项：镜像的规范路径与它的最近对象 | 按镜像分组存 | 8 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/EditorArea/RecentRuntimeImagesRecorder.swift`（第 8 步由 `RecentRuntimeObjectsRecorder.swift` 改名） · `RecentRuntimeImagesRecorder` | 新增 | 跟着文档的 `$selectedRuntimeObject`、`$currentImageNode`、焦点栏的镜像页与 Engine，写 `AppDefaults` | 一个文档一个记录器 | 2、8 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Document/DocumentSession.swift` · `DocumentSession` | 修改 | `open()` 里启动记录器（macOS） | 每个窗口都记 | 2 |
 | `RuntimeViewerCore/Sources/RuntimeViewerCore/Objects/RuntimeObject.swift` · `RuntimeObject.withChildren(_:)` | 新增 | 换掉 `children` 的拷贝，与 `withImagePath(_:)` 并列 | 存最近对象时去掉子树，不在 App 一侧逐字段复制（以后加字段不会悄悄丢） | 2 |
-| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Storage/AppDefaults.swift` · `AppDefaults` | 修改 | 新增 `recentRuntimeObjectsByEngine: [String: [RuntimeObject]]`（`@ResilientFileStorage`） | 按 Engine 存盘 | 2 |
+| `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/Storage/AppDefaults.swift` · `AppDefaults` | 修改 | 新增 `recentRuntimeImagesByEngine: [String: [RecentRuntimeImage]]`（`@ResilientFileStorage`；第 2 步时是 `recentRuntimeObjectsByEngine`，第 8 步换掉） | 按 Engine 存盘 | 2、8 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/OpenQuickly/OpenQuicklyCatalog.swift`（第 6 步从 `Content/` 挪来） · `OpenQuicklyCatalog`、`RuntimeImageNode.leafImagePaths` | 新增 | 一次搜索的条目（镜像 + 已索引镜像的对象，连同嵌套的）、从 Engine 读（同时最多 8 个镜像）、匹配与截断 | 起始页搜索框的范围与匹配 | 4 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentPlaceholderViewController.swift` · `OpenQuicklyField`、`SearchResultsTableView`、`EmphasizedTableRowView`、`StartPageView`，`NSTextFieldDelegate`、`NSTableViewDelegate`、`EditorPaneContent` 的一致性 | 新增 / 修改 | 搜索框照 Xcode 重画（胶囊加外扩的光环）；结果板是 `FloatingPlatterView` 里不取焦点、选中照常着色的表；框的按键经文本框委托；编辑栏取得焦点时进搜索框；点页面空白处取焦点 | 第 4 步的界面 | 4 |
 | `RuntimeViewerPackages/Sources/RuntimeViewerAppCore/OpenQuickly/OpenQuicklySearch.swift` · `OpenQuicklySearch` | 新增 | 一次搜索：第一次匹配时读目录、`end()` 丢掉，匹配在主线程之外 | 起始页与 ⇧⌘O 共用一套搜索 | 6 |
@@ -142,8 +144,8 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/OpenQuicklyMaterializationBoundsTests.swift`、`OpenQuicklyLazyConstructionTests.swift` | 删除 | 只测侧栏 Open Quickly 的物化 | 被测的代码已删 | 7 |
 | `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/SidebarRuntimeObjectListViewModelTests.swift`、`SidebarReloadInvalidationTests.swift`、`SidebarPrivateDeclarationTagTests.swift`、`SidebarFilterPerformanceBaselineTests.swift`、`SidebarCellAppearanceTests.swift` | 修改 | 去掉 Open Quickly 的用例与实参；重载失败的那条改为直接断言 `nodes` 被清空；单元格「模糊模式」的性能基线删掉（侧栏没有模糊匹配） | 同上 | 7 |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Content/ContentCoordinator.swift` · `ContentCoordinator` | 修改 | 建占位 VM 时传 `editorPaneID` | 打开前聚焦这一栏 | 1 |
-| `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/…` | 新增 | `ContentStartPageItemCellViewModelTests.swift`（第 1 步）、`RecentRuntimeObjectsTests.swift`（含 `RecentRuntimeObjectsRecorderTests` 一组）、`ContentStartPageViewModelTests.swift`、`OpenQuicklyCatalogTests.swift`（含加载一组） | 每步的行为清单 | 1–4 |
-| `RuntimeViewerUsingAppKit/AGENTS.md` | 修改 | 编辑区一节加一句：空标签显示起始页、最近列表按 Engine 记（第 5 步）；「大数据集的惰性 cell ViewModel」一节去掉侧栏 Open Quickly 的物化写法，改述「先搜值索引、只为列出的行建 cell ViewModel」，cell 复用的示例换成现行代码（第 7 步） | 规则随代码 | 5、7 |
+| `RuntimeViewerPackages/Tests/RuntimeViewerAppCoreTests/…` | 新增 | `ContentStartPageItemCellViewModelTests.swift`（第 1 步）、`RecentRuntimeImagesTests.swift`（第 8 步由 `RecentRuntimeObjectsTests.swift` 改名，含记录器一组）、`ContentStartPageViewModelTests.swift`（第 8 步加分层一组，列对象的用例先让侧栏进到镜像）、`OpenQuicklyCatalogTests.swift`（含加载一组） | 每步的行为清单 | 1–4、8 |
+| `RuntimeViewerUsingAppKit/AGENTS.md` | 修改 | 编辑区一节加一句：空标签显示起始页、最近列表按 Engine 记（第 5 步；第 8 步改述为跟着侧栏分层、按镜像分组）；「大数据集的惰性 cell ViewModel」一节去掉侧栏 Open Quickly 的物化写法，改述「先搜值索引、只为列出的行建 cell ViewModel」，cell 复用的示例换成现行代码（第 7 步） | 规则随代码 | 5、7 |
 | `Documentations/Evolutions/README.md`、`Documentations/README.md` | 修改 | 登记草案 | 索引 | 0 |
 
 ## 架构图
@@ -153,7 +155,7 @@ IDEKit（`/Applications/Xcode.app`，27.2 27B52，Swift 接口导出在 `/Volume
 ```text
 RuntimeViewerAppCore
 ├── Content/
-│   ├── ContentPlaceholderViewModel        ~ + editorPaneID, recents, search, open
+│   ├── ContentPlaceholderViewModel        ~ + editorPaneID, recents by sidebar level, search, open
 │   └── ContentStartPageItemCellViewModel  + row appearance (object | image), ContentStartPageItemOpening
 ├── OpenQuickly/
 │   ├── OpenQuicklyCatalog                 + images + objects of indexed images, match
@@ -162,15 +164,16 @@ RuntimeViewerAppCore
 │   └── OpenQuicklyViewModel               + ⇧⌘O bar: matches per term, open, dismiss (macOS)
 ├── EditorArea/
 │   ├── EditorArea                         ~ + shownForm(of:)
-│   ├── RecentRuntimeObjects               + record / dedupe / cap
-│   └── RecentRuntimeObjectsRecorder       + follows $selectedRuntimeObject
+│   ├── RecentRuntimeImage                 + an image's canonical path and its recent objects
+│   ├── RecentRuntimeImages                + record images and objects / dedupe / cap 10 × 10
+│   └── RecentRuntimeImagesRecorder        + follows $selectedRuntimeObject, $currentImageNode, image pages
 ├── Sidebar/RuntimeObject/
 │   ├── SidebarRuntimeObjectListViewModel  − its own Open Quickly (inputs, outputs, materialization)
 │   ├── SidebarRuntimeObjectViewModel      − invalidateNodeDerivedState()
 │   └── SidebarRuntimeObjectCellViewModel  − forOpenQuickly, haystack(for:)
 ├── RuntimeObject/RuntimeObjectCellTag     ~ privateDeclaration(isClickable:) → privateDeclaration
 ├── Document/DocumentSession               ~ open() starts the recorder (macOS)
-└── Storage/AppDefaults                    ~ + recentRuntimeObjectsByEngine
+└── Storage/AppDefaults                    ~ + recentRuntimeImagesByEngine
 RuntimeViewerUsingAppKit (app)
 ├── Content/ContentPlaceholderViewController  ~ start page layout and bindings
 │   └── OpenQuicklyField                      + Xcode-sized rounded query field (private)
@@ -185,11 +188,12 @@ RuntimeViewerUsingAppKit (app)
 数据流：
 
 ```text
-any pane shows an object
-  → DocumentState.$selectedRuntimeObject
-  → RecentRuntimeObjectsRecorder → RecentRuntimeObjects.recording(_:in:)
-  → AppDefaults.recentRuntimeObjectsByEngine[engineKey]
+the focused pane shows an object or an image page, the sidebar goes into an image
+  → DocumentState.$selectedRuntimeObject / $editorArea / $currentImageNode
+  → RecentRuntimeImagesRecorder → RecentRuntimeImages.recording(_:in:) / recordingImage(at:in:)
+  → AppDefaults.recentRuntimeImagesByEngine[engineKey]     [canonical image paths]
   → ContentPlaceholderViewModel (every empty pane of every window on the engine)
+       + DocumentState.$currentImageNode: nil → Recent Images; an image → that image's Recent Objects
   → rows → ContentPlaceholderViewController
 
 typing in the start page's field (3 characters or more)      typing in the ⇧⌘O bar (1 character or more)
@@ -208,20 +212,37 @@ search ends (field emptied, page starts over / bar closed, item opened, engine s
 
 ### 最近列表
 
+第 8 步起按镜像分组（第 2 步时是每个 Engine 一列对象，`RecentRuntimeObjects` / `recentRuntimeObjectsByEngine`）：
+
 ```swift
-/// One engine's recent objects, kept in `AppDefaults.recentRuntimeObjectsByEngine` under the
-/// engine's key; the same shape as the Filter Scope memory (`RuntimeObjectScopeMemory`).
-struct RecentRuntimeObjects: Hashable, Sendable {
-    static let maximumCount = 10
+/// An image an engine's windows worked in, and the objects of it their editor panes showed.
+public struct RecentRuntimeImage: Codable, Hashable, Sendable {
+    public let imagePath: String                      // RuntimeEngine.canonicalImagePath(_:) form
+    public let objects: [RuntimeObject]               // most recent first, without children
+}
+
+/// One engine's recent images, each with its recent objects, kept in
+/// `AppDefaults.recentRuntimeImagesByEngine` under the engine's key; the same keying as the
+/// Filter Scope memory (`RuntimeObjectScopeMemory`).
+struct RecentRuntimeImages: Hashable, Sendable {
+    static let maximumImageCount = 10                 // NSDocumentController's default
+    static let maximumObjectCountPerImage = 10        // Xcode's recent files of a workspace
     let engineKey: String
     init(engineKey: String)
     init(engine: RuntimeEngine)                       // Settings.Indexing.EngineReference.key(for:)
 
-    func objects(in objectsByEngine: [String: [RuntimeObject]]) -> [RuntimeObject]
+    func images(in imagesByEngine: [String: [RecentRuntimeImage]]) -> [RecentRuntimeImage]
+    func objects(ofImageAt imagePath: String, in imagesByEngine: [String: [RecentRuntimeImage]]) -> [RuntimeObject]
 
-    /// `objectsByEngine` with `object` first in its listed form, or `nil` when it is first already
-    /// in that form: `==` on objects is identity only, so the caller cannot compare dictionaries.
-    func recording(_ object: RuntimeObject, in objectsByEngine: [String: [RuntimeObject]]) -> [String: [RuntimeObject]]?
+    /// `object` first in its image and its image first, or `nil` when both are first already, the
+    /// object in that form: `==` on objects is identity only, so the caller cannot compare dictionaries.
+    func recording(_ object: RuntimeObject, in imagesByEngine: [String: [RecentRuntimeImage]]) -> [String: [RecentRuntimeImage]]?
+    /// The image first, keeping its objects, or `nil` when it is first already.
+    func recordingImage(at imagePath: String, in imagesByEngine: [String: [RecentRuntimeImage]]) -> [String: [RecentRuntimeImage]]?
+    /// The entries a path `canonicalImagePath` turns into `imagePath` folded into the image's
+    /// entry, or `nil` when none is filed; no other entry is touched.
+    func foldingOtherSpellings(of imagePath: String, in imagesByEngine: [String: [RecentRuntimeImage]],
+                               canonicalImagePath: (String) -> String) -> [String: [RecentRuntimeImage]]?
 
     /// Everything but `children`.
     static func listedForm(of object: RuntimeObject) -> RuntimeObject
@@ -229,9 +250,9 @@ struct RecentRuntimeObjects: Hashable, Sendable {
     static func listsAreAlike(_ firstObjects: [RuntimeObject], _ secondObjects: [RuntimeObject]) -> Bool
 }
 
-/// Records every object the document's focused pane shows into its engine's recent objects.
+/// Records every image the document uses and every object its focused pane shows.
 @MainActor
-final class RecentRuntimeObjectsRecorder {
+final class RecentRuntimeImagesRecorder {
     init(documentState: DocumentState)
 }
 ```
@@ -239,13 +260,15 @@ final class RecentRuntimeObjectsRecorder {
 `AppDefaults`：
 
 ```swift
-/// The objects each engine's editor panes showed, most recent first, keyed by
-/// `Settings.Indexing.EngineReference.key(for:)`. Written by `RecentRuntimeObjectsRecorder`.
+/// The images each engine's windows used, most recent first, each with the objects of it their
+/// editor panes showed, keyed by `Settings.Indexing.EngineReference.key(for:)`.
 @ResilientFileStorage
-public var recentRuntimeObjectsByEngine: [String: [RuntimeObject]]
+public var recentRuntimeImagesByEngine: [String: [RecentRuntimeImage]]
 ```
 
-记录器只订阅 `$selectedRuntimeObject`，先按身份 `distinctUntilChanged()`（同一对象换了形态——比如加了特化——不算再看一次，不移到最前），再去掉 `nil`；每来一个对象，**当时**读 `documentState.runtimeEngine` 取键，读存储、`recording` 之后有变化才写回。不预先把 Engine 与对象配对：`.switchEngine` 先换 session、再清空编辑区，配对的写法会把旧对象记到新 Engine 下。存储的写是排在队列上的异步 barrier，读会等前面的写完成，所以路由一触发、紧接着读就能看到结果（测试的否定断言靠这一点，不用固定等待）。起始页的 VM 按 Engine `flatMapLatest` 订阅存储的 `$` 投影，只取本 Engine 那一段并按 `listsAreAlike` 去重，别的 Engine 的写入不会让它重建。
+记录器订阅三处：`$selectedRuntimeObject`，先按身份 `distinctUntilChanged()`（同一对象换了形态——比如加了特化——不算再看一次，不移到最前），再去掉 `nil`，交给 `recording`；`$currentImageNode` 的路径与焦点栏当前标签的镜像页路径（`$editorArea` 的 `focusedPane.activeTab.imagePath`），各自去重、去掉 `nil`，转成规范路径交给 `recordingImage`。每来一个，**当时**读 `documentState.runtimeEngine` 取键，读存储，先用 `foldingOtherSpellings` 把这个镜像的另一种写法合并进来，再交给 `recording` / `recordingImage`，两者有一处变了才写回。不预先把 Engine 与对象配对：`.switchEngine` 先换 session、再清空编辑区并把侧栏退回镜像列表，配对的写法会把旧对象记到新 Engine 下。存储的写是排在队列上的异步 barrier，读会等前面的写完成，所以路由一触发、紧接着读就能看到结果（测试的否定断言靠这一点，不用固定等待）。
+
+起始页的 VM 把 Engine 与 `$currentImageNode` 的路径 `combineLatest`，再 `flatMapLatest` 订阅存储的 `$` 投影：侧栏在镜像列表时取本 Engine 的镜像路径，在一个镜像里时按它的规范路径取这个镜像的对象，按内容去重（对象按 `listsAreAlike`），别的 Engine 的写入不会让它重建。侧栏的路径与对象的 `imagePath` 写法可能不同（模拟器进程的路径要加 `DYLD_ROOT_PATH`），所以两边都按规范路径比；侧栏路径的规范形式在存储每次变化时重算（Engine 连上后才知道这个形式，又没有「问到了」的通知，所以要到下一次记录才赶上），读的时候不改写存储。路径栏也是这样把规范路径对回镜像树的节点，所以用规范路径打开镜像页没有问题。列表的来源（Engine、镜像）一变就关掉 Show All；标题跟着来源变（`recentItemsTitle`）。
 
 ### 行
 
@@ -268,7 +291,7 @@ public final class ContentStartPageItemCellViewModel: NSObject, @unchecked Senda
 }
 ```
 
-对象行：图标 `IconDescriptor.runtimeObject(kind, size:)`，标题 `displayName`，路径图标 `.runtimeEngine(engineID:)`，路径 `[engine.source.description, 镜像文件名]`。镜像行（只出现在搜索结果里）：图标 `.imageKind(RuntimeImageKind(ofImageAt:))`，标题镜像文件名，路径 `[engine 名, 上级目录名]`。行在创建后不变，没有 `@RxObserved`，按 `item` 判断是否同一行（`Differentiable`）。
+对象行：图标 `IconDescriptor.runtimeObject(kind, size:)`，标题 `displayName`，路径图标 `.runtimeEngine(engineID:)`，路径 `[engine.source.description, 镜像文件名]`。镜像行（搜索结果里，以及第 8 步起侧栏停在镜像列表时的 Recent Images）：图标 `.imageKind(RuntimeImageKind(ofImageAt:))`，标题镜像文件名，路径 `[engine 名, 上级目录名]`。行在创建后不变，没有 `@RxObserved`，按 `item` 判断是否同一行（`Differentiable`）。
 
 ### ViewModel
 
@@ -336,8 +359,8 @@ public struct OpenQuicklyCatalog: Sendable {
 
 ### 用户可见变化
 
-- 空标签不再显示「Select a runtime object」，改为起始页：Open Quickly 搜索框、Recent Objects 列表（有记录时）。
-- 新增：在起始页的搜索框里可以按名字找镜像与已索引镜像里的对象，回车或点击打开；最近看过的对象出现在列表里，点击回到它。
+- 空标签不再显示「Select a runtime object」，改为起始页：Open Quickly 搜索框、最近列表（有记录时）。侧栏停在镜像列表时列 Recent Images，进到某个镜像后列这个镜像的 Recent Objects。
+- 新增：在起始页的搜索框里可以按名字找镜像与已索引镜像里的对象，回车或点击打开；最近用过的镜像、这个镜像里最近看过的对象出现在列表里，打开回到它。
 - 改变：⇧⌘O 的浮动 Open Quickly 搜整个 Engine（镜像 + 已索引镜像的对象）、从 1 个字符起，有文档窗口时总可用，不再只搜侧栏当前镜像；它的行与起始页的相同（图标、名字、路径行）。
 - 不变：侧栏（除了不再有自己的 Open Quickly）、读文件时的占位、Load Frameworks 页。
 
@@ -347,7 +370,7 @@ public struct OpenQuicklyCatalog: Sendable {
 
 ### 数据与配置兼容
 
-新增一个存储文件 `AppStorage/recentRuntimeObjectsByEngine.json`（`@ResilientFileStorage`，读不出就当空）；不碰已有文件。降级到旧版本时这个文件被忽略。
+新增一个存储文件 `AppStorage/recentRuntimeImagesByEngine.json`（`@ResilientFileStorage`，读不出就当空）；不碰已有文件。降级到旧版本时这个文件被忽略。第 2–7 步写的 `recentRuntimeObjectsByEngine.json` 只在本功能分支的构建里出现过、从未发布，第 8 步不迁移它：用过那些构建的机器上会留一个没人读的旧文件，起始页的最近列表从空开始。
 
 ### 平台与最低版本
 
@@ -429,13 +452,36 @@ public struct OpenQuicklyCatalog: Sendable {
    - 行为：起始页的搜索照旧（既有测试照旧通过）
 7. **删掉侧栏自己的 Open Quickly**（已完成） —— `SidebarRuntimeObjectListViewController` 的 `QuickActionBar` 与命令、`SidebarRuntimeObjectListViewModel` 的 Open Quickly 输入输出与按需物化机制、只为它存在的测试与文档段落
    - 行为：侧栏对象列表的其余行为不变（既有测试照旧通过）
+8. **最近列表跟着侧栏分层**（已完成） —— 用户看过第 1–7 步后要求：侧栏停在镜像列表时只列镜像，进到镜像里才列对象，且只列这个镜像的；搜索框不分层。存储改为按 Engine 记最近镜像、每个镜像带最近对象（`RecentRuntimeImage`、`RecentRuntimeImages`、`AppDefaults.recentRuntimeImagesByEngine`，记录器改名 `RecentRuntimeImagesRecorder`、多跟两处）；VM 跟着 `$currentImageNode` 取列表、出标题；视图的标题绑定 `recentItemsTitle`
+   - 行为：焦点栏显示一个对象时，它的镜像移到最前、它在这个镜像的列表里移到最前
+   - 行为：侧栏进到一个镜像时，这个镜像移到最前，原有的对象留着
+   - 行为：焦点栏显示一个镜像页时，这个镜像移到最前
+   - 行为：已在最前的镜像再记一次不重写；对象与镜像都在最前、对象形态相同时不重写
+   - 行为：最前的对象所在镜像不在最前时，再看它会把镜像移到最前
+   - 行为：不同镜像的对象分开记
+   - 行为：每个 Engine 最多 10 个镜像，每个镜像最多 10 个对象；镜像被挤出时连同它的对象一起丢
+   - 行为：侧栏停在镜像列表时，起始页列这个 Engine 的最近镜像，标题「Recent Images」
+   - 行为：侧栏进到一个镜像时，起始页只列这个镜像的最近对象，标题「Recent Objects」
+   - 行为：侧栏换到另一个镜像或回到镜像列表时，列表与标题随之换掉，Show All 关掉（从镜像 A 换到镜像 B 也关）
+   - 行为：窗口在一个镜像里换到别的 Engine 后，列那个 Engine 的最近镜像、标题回到 Recent Images（换 Engine 时侧栏回到镜像列表）
+   - 行为：打开一个最近镜像显示它的镜像页，侧栏不动
+   - 行为：镜像路径按规范形式记与比较：模拟器进程的侧栏路径与对象的 `imagePath` 写法不同时也记成同一个镜像、列出它的对象
+   - 行为：Engine 连上后才知道路径写法，之前按另一种写法记下的同一镜像，在下一次记录它时合并进来；别的项一概不改写（共用一个键、根路径不同的两个 Engine 互不改坏对方的记录）
+   - 行为：侧栏在问到写法之前进的镜像，起始页在下一次记录之后列出它的对象（没有「问到了」的通知，赶不上更早）
+   - 行为：路径为空的对象或镜像不记（会列成一个没有名字的镜像）
+   - 行为：在镜像里换 Engine 时，旧 Engine 的镜像与对象不会记到新 Engine 下
+   - 行为：搜索框不分层，两层都搜镜像与已索引镜像里的对象（既有搜索测试照旧通过）
+   - 行为：第 2 步的其余记录规则照旧（去掉子树、换形态不移到最前、空标签不记、两个窗口同一份、会话开着才记）
 
 只能在界面上看到的行为（布局、尺寸、颜色、焦点环、结果浮层的位置）在 ViewModel 层测不到，列为目视验证。
 
 ### 后续项
 
 - `AppDefaults` 的文件存储按版本分目录（Debug 版与发布版现在共用 `Application Support/AppStorage`，同时开着会互相覆盖最近列表、书签与 Filter Scope 记忆）。
-- 不再用的 Engine 键的最近列表清理（每个用过的文件、设备、进程名各留一份，最多 10 个对象）。
+- 不再用的 Engine 键的最近列表清理（每个用过的文件、设备、进程名各留一份，最多 10 个镜像、100 个对象）。
+- 最近列表变空而焦点在列表上时，焦点留在被隐藏的列表上（SP.18）。
+- 路径栏的镜像节点表在 Engine 问到 `DYLD_ROOT_PATH` 之前建好时不会重算，模拟器进程的对象找不到镜像节点（基线上就有，见已裁决清单「同类排查」）。
+- Engine 问到 `DYLD_ROOT_PATH` 时发一个通知（Core 一侧），起始页与路径栏据此立即重算，不必等下一次记录（SP.17）。
 - 搜索没索引的镜像里的对象：需要 Engine 端按名字找对象的命令，或用户同意的索引。
 - 最近列表的右键菜单、移除单条、清空、拖出；Xcode 的错误横幅与 `.empty(message:)` 样式。
 
@@ -475,3 +521,9 @@ public struct OpenQuicklyCatalog: Sendable {
 | 2026-11-21 | 第 7 步的两处取舍 | 删掉侧栏的 Open Quickly 之后，`RuntimeObjectCellTag.privateDeclaration(isClickable:)` 只剩传 `true` 的调用，收成无参数的 `privateDeclaration`；单元格在「模糊模式」下的性能基线测的是侧栏 Open Quickly 的配置（侧栏自己的过滤不用模糊匹配，生产代码里只剩 `OpenQuicklyCatalog` 用），一并删掉。`SidebarReloadInvalidationTests` 原来经 Open Quickly 的索引验证「重载失败要丢掉上次的列表」，改为直接断言 `nodes` 被清空，去掉清空那一行它会变红；「镜像未加载时也要调钩子」那条随钩子删掉。 |
 | 2026-11-21 | 第 6 步修复与第 7 步审查后调整 | 审查者指出：镜像树为空时不缓存目录，于是每敲一个键都新起一次读取、`end()` 也取消不到，改为此时什么也不读；为 SP.9、SP.10 写的测试有一部分覆盖不到它们点名的检查，取消检查补了测试，结果上的 Engine 核对没有接缝可测、登记为不补；删掉钩子后「镜像未加载也清空列表」没人测了，给重载加了可覆写的 `isImageLoaded()` 补上。另外，全量测试里起始页一条挂起回车的测试在负载下偶尔失败，是测试先于「搜索结束」那一拍断言，改为等到搜索结束。裁决见 `Documentations/KnownIssues/2026-11-21-editor-start-page-review-findings.md` 的 SP.14–SP.16；旧清单里 PR100.8（侧栏 Open Quickly 物化表无上限）随第 7 步不再适用，已在原处注明。 |
 | 2026-11-21 | 实现完成（第 6、7 步），待用户看过后收尾 | 七步都已完成并推送功能分支，第 6、7 步各过了审查关（第 6 步两轮、第 7 步连同第 6 步的修复一轮、修复再复审一轮）。文档判断：⇧⌘O 的变化写进本提案「影响」与 `RuntimeViewerUsingAppKit/AGENTS.md`（惰性 cell ViewModel 一节改述），不另写指南；已裁决清单补 SP.9–SP.16、旧清单 PR100.8 注明不再适用。没做的验证：浮动条与起始页的界面目视、⇧⌘O 的按键与修饰键都没在 App 里实测。 |
+| 2026-11-21 | 用户要求最近列表跟着侧栏分层 | 用户看过第 6、7 步后指出：侧栏停在镜像列表（外面那层）时起始页应只列镜像，进到镜像里（里面那层）才列对象。确认了三点：分层依据是侧栏所在的层级，而不是把列表本身做成可展开的两层；进到一个镜像后只列这个镜像的最近对象；搜索框不分层，两层都与 ⇧⌘O 一样搜镜像与对象。加第 8 步。 |
+| 2026-11-21 | 第 8 步的取舍（agent 定的，用户可推翻） | 「用过一个镜像」算三种：侧栏进到它、在镜像页看它、看它的一个对象。存储改为每个 Engine 一列最近镜像、每个镜像带自己的最近对象，各以 10 为上限（镜像照 `NSDocumentController` 的默认，对象照 Xcode 一个工作区的最近文件）；镜像被挤出时连同对象一起丢，所以一个 Engine 最多存 100 个对象。只按一列 10 个对象再按镜像过滤，进到镜像里常常只剩一两个，所以不这样做。路径一律按规范形式存，侧栏的路径与对象的 `imagePath` 才对得上。打开最近镜像显示镜像页，不移动侧栏，与搜索结果里的镜像行一致。旧的 `recentRuntimeObjectsByEngine` 从未发布，不迁移。 |
+| 2026-11-22 | 第 8 步审查后调整 | 两位审查者没发现违反项目规则的地方。指出：模拟器进程的 Engine 要连上后才问到 `DYLD_ROOT_PATH`，之前按侧栏路径记下的镜像与之后按对象路径记下的成了两项，起始页也只在侧栏移动时算一次规范路径（SP.17）；路径为空的对象会记成没有名字的镜像（SP.20）；标题断言等于初始值、永远不会失败，A→B 关掉 Show All、在镜像里换 Engine、规范路径都没测（SP.21）。三条都修了、各带回归测试。焦点留在变空、被隐藏的列表上（SP.18）与换 Engine 时多出一次不会画出来的中间结果（SP.19）不修，理由在已裁决清单。同一种「问到写法之前算好规范路径、之后不重算」在路径栏的镜像节点表里也有，是基线问题，记进后续项。文字上补了术语表、行的注释、提案里两处旧说法。 |
+| 2026-11-22 | 修复再审后调整 | SP.17 的第一版修法在每次记录前把整列路径都按当前 Engine 的写法改写一遍，再审指出这会改坏别的 Engine 的记录：两个同名、根路径不同的模拟器进程共用一个键，每记一次就给对方的路径再叠一层根路径（SP.22）。改为只把「按当前写法改过来正好是这次记录的镜像」的几项合并进来（`foldingOtherSpellings(of:in:canonicalImagePath:)`），其余各项一概不动；起始页读的时候不再改写，只按当前写法算侧栏的路径，随存储每次变化重算。Engine 问到根路径并不通知任何人，所以起始页要到下一次记录才赶上，这一点写进 SP.17、列入后续项。另一条「模拟器 App 自己的二进制不在根路径下，加前缀后成了不存在的路径」是 Core 规范形式的定义问题，全 App 同一口径，登记为 SP.23、不在本功能处理。 |
+| 2026-11-22 | 第三轮审查 | 两位审查者确认改后的合并写法与记录器正确、不会给别的 Engine 的路径叠根路径。指出合并时的去重没有测试，补了；一个 Mac 进程与同名模拟器进程共用键时模拟器一侧会反复把 Mac 那一项并过去（有上限），照原判断不修，把 SP.22 的说法改准；旧版 payload 永远不回答根路径时同一镜像的两行会一直留着，写进 SP.17，是全 App 的同一限制。文字上补了「最近列表」一节的接口与两段说明、改了一条测试名。审查关到三轮为止。 |
+| 2026-11-22 | 实现完成（第 8 步），待用户看过后收尾 | 第 8 步完成并推送功能分支，审查关三轮。文档判断：起始页的变化写进本提案、`RuntimeViewerUsingAppKit/AGENTS.md` 与术语表，裁决补 SP.17–SP.23，不另写指南。没做的验证：两种标题、换层级时列表的切换、最近镜像行的样子都没在 App 里目视。 |

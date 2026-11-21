@@ -5,8 +5,9 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 /// An editor pane with nothing open: the start page — Xcode 27.2's initial editor, an Open Quickly
-/// field over the engine's recent objects (proposal `editor-start-page`) — or, while the window's
-/// file is still being read, a spinner that says so.
+/// field over the engine's recent images, or the recent objects of the image the sidebar is in
+/// (proposal `editor-start-page`) — or, while the window's file is still being read, a spinner that
+/// says so.
 final class ContentPlaceholderViewController: BaseViewController<ContentPlaceholderViewModel> {
     // MARK: - Relays
 
@@ -32,7 +33,7 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
         $0.placeholderString = "Open Quickly"
     }
 
-    private let recentItemsTitleLabel = Label("Recent Objects").then {
+    private let recentItemsTitleLabel = Label().then {
         $0.font = .preferredFont(forTextStyle: .title1)
         $0.textColor = .labelColor
     }
@@ -47,7 +48,7 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
 
     // MARK: - Search Results
 
-    /// The results of the Open Quickly field, floating over the recent objects just under the
+    /// The results of the Open Quickly field, floating over the recent items just under the
     /// field, on glass as Xcode's are.
     private let searchResultsPlatterView = FloatingPlatterView(cornerRadius: OpenQuicklyFieldMetrics.cornerRadius)
 
@@ -59,7 +60,7 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
     /// window, as Xcode's do.
     private var search: ContentPlaceholderViewModel.Search = .inactive
 
-    /// The recent objects the list shows, as last applied: what each row stands for, which the
+    /// The recent items the list shows, as last applied: what each row stands for, which the
     /// table itself forgets — it keeps a selection by row, and a list reordered by another window
     /// would otherwise leave it on whatever object moved into that row.
     private var shownRecentItems: [ContentStartPageItemCellViewModel] = []
@@ -284,6 +285,8 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
             }
             .disposed(by: rx.disposeBag)
 
+        output.recentItemsTitle.drive(recentItemsTitleLabel.rx.stringValue).disposed(by: rx.disposeBag)
+
         output.recentItems.driveOnNext { [weak self] recentItems in
             guard let self else { return }
             shownRecentItems = recentItems
@@ -363,7 +366,7 @@ final class ContentPlaceholderViewController: BaseViewController<ContentPlacehol
 
     // MARK: - Actions
 
-    /// Opens the recent object in `row` where the modifier keys say: a list's double-click or
+    /// Opens the recent item in `row` where the modifier keys say: a list's double-click or
     /// Return opens in the pane's tab, with ⌥ in the next pane, with ⇧⌥ in a new tab.
     private func openRecentItem(atRow row: Int, modifierFlags: NSEvent.ModifierFlags) {
         guard (0 ..< recentItemsTableView.numberOfRows).contains(row),
@@ -446,7 +449,7 @@ extension ContentPlaceholderViewController {
 // MARK: - Recent Items Table
 
 extension ContentPlaceholderViewController {
-    /// The recent objects' list. As in Xcode's, a click only selects; Return opens the selected row,
+    /// The recent items' list. As in Xcode's, a click only selects; Return opens the selected row,
     /// as a double-click does, and taking the focus from the keyboard with nothing selected selects
     /// the first row.
     fileprivate final class RecentItemsTableView: SingleColumnTableView {

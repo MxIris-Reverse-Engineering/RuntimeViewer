@@ -82,14 +82,14 @@ public final class AppDefaults: @unchecked Sendable {
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directoryURL: storageDirectoryURL)
             _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directoryURL: storageDirectoryURL)
             _runtimeObjectScopesByEngineAndImagePath = ResilientFileStorage(wrappedValue: [:], "runtimeObjectScopesByEngineAndImagePath", directoryURL: storageDirectoryURL)
-            _recentRuntimeObjectsByEngine = ResilientFileStorage(wrappedValue: [:], "recentRuntimeObjectsByEngine", directoryURL: storageDirectoryURL)
+            _recentRuntimeImagesByEngine = ResilientFileStorage(wrappedValue: [:], "recentRuntimeImagesByEngine", directoryURL: storageDirectoryURL)
         } else {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directory: .applicationSupportDirectory)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directory: .applicationSupportDirectory)
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directory: .applicationSupportDirectory)
             _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directory: .applicationSupportDirectory)
             _runtimeObjectScopesByEngineAndImagePath = ResilientFileStorage(wrappedValue: [:], "runtimeObjectScopesByEngineAndImagePath", directory: .applicationSupportDirectory)
-            _recentRuntimeObjectsByEngine = ResilientFileStorage(wrappedValue: [:], "recentRuntimeObjectsByEngine", directory: .applicationSupportDirectory)
+            _recentRuntimeImagesByEngine = ResilientFileStorage(wrappedValue: [:], "recentRuntimeImagesByEngine", directory: .applicationSupportDirectory)
         }
 
         // Not a bookmark concern, but it belongs to the same one-time rekeying
@@ -182,12 +182,12 @@ public final class AppDefaults: @unchecked Sendable {
     @ResilientFileStorage
     public var runtimeObjectScopesByEngineAndImagePath: [String: [String: RuntimeObjectScope]]
 
-    /// The objects each engine's editor panes showed, most recent first, keyed by
-    /// `Settings.Indexing.EngineReference.key(for:)`: what an empty editor pane's start page lists
-    /// (proposal `editor-start-page`). Written by `RecentRuntimeObjectsRecorder`, read and written
-    /// through `RecentRuntimeObjects`.
+    /// The images each engine's windows used, most recent first, each with the objects of it their
+    /// editor panes showed, keyed by `Settings.Indexing.EngineReference.key(for:)`: what an empty
+    /// editor pane's start page lists (proposal `editor-start-page`). Written by
+    /// `RecentRuntimeImagesRecorder`, read and written through `RecentRuntimeImages`.
     @ResilientFileStorage
-    public var recentRuntimeObjectsByEngine: [String: [RuntimeObject]]
+    public var recentRuntimeImagesByEngine: [String: [RecentRuntimeImage]]
 }
 
 // MARK: - Bookmark migrations

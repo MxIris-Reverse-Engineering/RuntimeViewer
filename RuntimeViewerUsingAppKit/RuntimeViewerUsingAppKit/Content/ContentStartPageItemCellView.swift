@@ -31,7 +31,7 @@ final class ContentStartPageItemCellView: TableCellView {
 
     private let separatorView = HorizontalSeparatorView()
 
-    /// Whether a hairline runs under the row's text: the recent objects have one, the search
+    /// Whether a hairline runs under the row's text: the recent list's rows have one, the search
     /// results none.
     var showsSeparator = true {
         didSet { separatorView.isHidden = !showsSeparator }
