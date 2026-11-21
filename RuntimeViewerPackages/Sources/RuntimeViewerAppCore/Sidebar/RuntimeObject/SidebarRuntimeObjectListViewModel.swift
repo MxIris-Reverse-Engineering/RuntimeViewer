@@ -476,84 +476,18 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         return rankByRelevance(verdicts, runtimeObjects: runtimeObjects, limit: limit)
     }
 
-    /// Orders fuzzy verdicts for the cap and returns the best `limit`.
-    ///
-    /// `FuzzySearchable.fuzzyMatch` stops accumulating once the pattern is
-    /// consumed — `hasPrefix(_:atIndex:)` compares against the empty suffix
-    /// from then on and always fails — so every haystack containing the
-    /// query as one contiguous run scores the *same* constant, whichever
-    /// name it is, however long, wherever the run sits. A four-character
-    /// query ties every such name at 1+3+7+15 = 26. Weight alone therefore
-    /// leaves the whole tie in object order and the cap keeps whichever
-    /// names sort first: on AppKit, `vi` ties 875 names and drops `NSView`
-    /// at position 502.
-    ///
-    /// The tie-breakers restore what a jump-to-type palette needs. The
-    /// haystack is the object's `displayName` followed by every
-    /// descendant's (`SidebarRuntimeObjectCellViewModel.haystack(for:)`),
-    /// so a match ending within the name's own length is a hit on the type
-    /// itself rather than on one of its members. The trailing `displayName`
-    /// compare only makes the order deterministic.
-    ///
-    /// Two things to fix before `appDefaults.filterMode` is ever wired
-    /// through here, both unreachable while the mode is pinned to
-    /// `.fuzzySearch`: `ranges.last` assumes ascending ranges, which holds
-    /// for `FuzzySearchResult.parts` but not for the Ifrit wrapper's
-    /// `results.flatMap` (use `map(end).max()` instead), and
-    /// `relevanceWeight` drops the secondary `resultsScore` key that
-    /// Ifrit's own `comparableDefinition` carries.
-    ///
-    /// Indexes `runtimeObjects` for *every* verdict, not only the ones that
-    /// survive the cap, so a `HaystackBuilder` returning more haystacks
-    /// than objects traps here rather than only when such a row is
-    /// displayed. The production builder is 1:1 by construction; only the
-    /// test seam can vary it.
+    /// Orders fuzzy verdicts for the cap and returns the best `limit`, as every Open Quickly ranks
+    /// (`OpenQuicklyRanking`, whose doc comment says why weight alone is not enough). The haystack
+    /// is the object's `displayName` followed by every descendant's
+    /// (`SidebarRuntimeObjectCellViewModel.haystack(for:)`), so its own name is the display name.
     private nonisolated static func rankByRelevance(
         _ verdicts: [FilterMatchVerdict],
         runtimeObjects: [RuntimeObject],
         limit: Int
     ) -> [FilterMatchVerdict] {
-        struct RankingKey {
-            let weight: Double
-            let matchesOwnName: Bool
-            let firstMatchLocation: Int
-            let displayNameLength: Int
-            let displayName: String
+        OpenQuicklyRanking.rank(verdicts, limit: limit) { haystackIndex in
+            runtimeObjects[haystackIndex].displayName
         }
-
-        let rankedVerdicts = verdicts.map { verdict -> (verdict: FilterMatchVerdict, key: RankingKey) in
-            let displayName = runtimeObjects[verdict.haystackIndex].displayName
-            let displayNameLength = displayName.count
-            let ranges = verdict.result?.ranges ?? []
-            let lastMatchEnd = ranges.last.map { $0.location + $0.length } ?? 0
-            let key = RankingKey(
-                weight: verdict.result?.relevanceWeight ?? 0,
-                matchesOwnName: lastMatchEnd <= displayNameLength,
-                firstMatchLocation: ranges.first?.location ?? displayNameLength,
-                displayNameLength: displayNameLength,
-                displayName: displayName
-            )
-            return (verdict, key)
-        }
-
-        return rankedVerdicts
-            .sorted { left, right in
-                if left.key.weight != right.key.weight {
-                    return left.key.weight > right.key.weight
-                }
-                if left.key.matchesOwnName != right.key.matchesOwnName {
-                    return left.key.matchesOwnName
-                }
-                if left.key.firstMatchLocation != right.key.firstMatchLocation {
-                    return left.key.firstMatchLocation < right.key.firstMatchLocation
-                }
-                if left.key.displayNameLength != right.key.displayNameLength {
-                    return left.key.displayNameLength < right.key.displayNameLength
-                }
-                return left.key.displayName < right.key.displayName
-            }
-            .prefix(limit)
-            .map(\.verdict)
     }
 
 

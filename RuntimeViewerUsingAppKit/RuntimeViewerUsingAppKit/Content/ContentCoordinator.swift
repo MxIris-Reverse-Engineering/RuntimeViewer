@@ -36,7 +36,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     private lazy var placeholderViewController: ContentPlaceholderViewController = {
         let viewController = ContentPlaceholderViewController()
-        let viewModel = ContentPlaceholderViewModel(documentState: documentState, router: self)
+        let viewModel = ContentPlaceholderViewModel(documentState: documentState, router: self, editorPaneID: editorPaneID)
         viewController.setupBindings(for: viewModel)
         viewController.loadViewIfNeeded()
         return viewController

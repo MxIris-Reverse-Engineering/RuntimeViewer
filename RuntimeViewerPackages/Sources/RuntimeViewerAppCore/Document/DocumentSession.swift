@@ -20,6 +20,13 @@ public final class DocumentSession {
 
     public let documentState: DocumentState
 
+    /// Files every object the window shows into its engine's recent objects, which an empty editor
+    /// pane's start page lists (proposal `editor-start-page`). From `open()` to `close()`; macOS
+    /// only, the one platform with the start page.
+    private var recentRuntimeObjectsRecorder: RecentRuntimeObjectsRecorder?
+
+    private var isClosed = false
+
     /// A session on `runtimeEngine`, not opened yet.
     public init(runtimeEngine: RuntimeEngine) {
         number = Self.nextNumber
@@ -34,11 +41,18 @@ public final class DocumentSession {
     /// anything, and none after ``close()``.
     public func open() {
         documentState.startBackgroundWork()
+        #if os(macOS)
+        if !isClosed, recentRuntimeObjectsRecorder == nil {
+            recentRuntimeObjectsRecorder = RecentRuntimeObjectsRecorder(documentState: documentState)
+        }
+        #endif
     }
 
     /// Leaves the engine's background work and closes what this document
     /// brought into being, opened or not. Only the first call does anything.
     public func close() {
+        isClosed = true
+        recentRuntimeObjectsRecorder = nil
         documentState.documentWillClose()
     }
 }

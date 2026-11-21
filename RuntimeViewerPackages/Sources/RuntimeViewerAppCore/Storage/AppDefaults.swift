@@ -82,12 +82,14 @@ public final class AppDefaults: @unchecked Sendable {
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directoryURL: storageDirectoryURL)
             _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directoryURL: storageDirectoryURL)
             _runtimeObjectScopesByEngineAndImagePath = ResilientFileStorage(wrappedValue: [:], "runtimeObjectScopesByEngineAndImagePath", directoryURL: storageDirectoryURL)
+            _recentRuntimeObjectsByEngine = ResilientFileStorage(wrappedValue: [:], "recentRuntimeObjectsByEngine", directoryURL: storageDirectoryURL)
         } else {
             _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directory: .applicationSupportDirectory)
             _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directory: .applicationSupportDirectory)
             _findRecentQueriesByScope = ResilientFileStorage(wrappedValue: [:], "findRecentQueriesByScope", directory: .applicationSupportDirectory)
             _navigatorFilterFieldStates = ResilientFileStorage(wrappedValue: [:], "navigatorFilterFieldStates", directory: .applicationSupportDirectory)
             _runtimeObjectScopesByEngineAndImagePath = ResilientFileStorage(wrappedValue: [:], "runtimeObjectScopesByEngineAndImagePath", directory: .applicationSupportDirectory)
+            _recentRuntimeObjectsByEngine = ResilientFileStorage(wrappedValue: [:], "recentRuntimeObjectsByEngine", directory: .applicationSupportDirectory)
         }
 
         // Not a bookmark concern, but it belongs to the same one-time rekeying
@@ -179,6 +181,13 @@ public final class AppDefaults: @unchecked Sendable {
     /// `RuntimeObjectScopeMemory`.
     @ResilientFileStorage
     public var runtimeObjectScopesByEngineAndImagePath: [String: [String: RuntimeObjectScope]]
+
+    /// The objects each engine's editor panes showed, most recent first, keyed by
+    /// `Settings.Indexing.EngineReference.key(for:)`: what an empty editor pane's start page lists
+    /// (proposal `editor-start-page`). Written by `RecentRuntimeObjectsRecorder`, read and written
+    /// through `RecentRuntimeObjects`.
+    @ResilientFileStorage
+    public var recentRuntimeObjectsByEngine: [String: [RuntimeObject]]
 }
 
 // MARK: - Bookmark migrations

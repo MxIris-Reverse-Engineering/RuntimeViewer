@@ -127,6 +127,12 @@ public enum RuntimeImageKind: Hashable, Sendable, CaseIterable {
             .first
         self = nearestBundleKind ?? Self(imageFileAt: imagePath)
     }
+
+    /// Whether a directory named `directoryName` is a bundle of a kind this type knows by its
+    /// extension (`AppKit.framework`, `Safari.app`), as `init(ofImageAt:)` reads a path.
+    static func isBundleDirectoryName(_ directoryName: String) -> Bool {
+        Self(bundleExtension: (directoryName as NSString).pathExtension) != nil
+    }
 }
 
 extension RuntimeImageNode {
