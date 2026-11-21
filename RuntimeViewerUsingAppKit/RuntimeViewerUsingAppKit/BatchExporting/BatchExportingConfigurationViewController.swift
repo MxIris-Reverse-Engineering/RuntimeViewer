@@ -66,6 +66,10 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
         $0.textColor = .tertiaryLabelColor
     }
 
+    /// The page scrolls once its groups are taller than the sheet: the Objective-C, Swift and C++ groups
+    /// together do not fit.
+    private let pageScrollView = ScrollView()
+
     private lazy var contentStack = VStackView(alignment: .leading, spacing: 16) {
         summaryLabel
         objcStack
@@ -159,12 +163,33 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
             $0.font = .systemFont(ofSize: 13)
         }
 
-        containerView.hierarchy {
+        pageScrollView.do {
+            $0.hasVerticalScroller = true
+            $0.hasHorizontalScroller = false
+            $0.autohidesScrollers = true
+            $0.borderType = .noBorder
+        }
+
+        let documentView = DocumentView()
+        documentView.hierarchy {
             contentStack
+        }
+        pageScrollView.documentView = documentView
+        containerView.hierarchy {
+            pageScrollView
+        }
+
+        pageScrollView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        documentView.snp.makeConstraints { make in
+            make.top.leading.trailing.equalToSuperview()
+            make.width.equalTo(pageScrollView.contentView)
         }
 
         contentStack.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview().inset(20)
+            make.edges.equalToSuperview().inset(20)
         }
     }
 
@@ -198,5 +223,12 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
         output.includeMetadata.drive(includeMetadataCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
 
         output.summary.drive(summaryLabel.rx.stringValue).disposed(by: rx.disposeBag)
+    }
+}
+
+extension BatchExportingConfigurationViewController {
+    /// The page's document view: laid out from the top down.
+    private final class DocumentView: NSView {
+        override var isFlipped: Bool { true }
     }
 }
