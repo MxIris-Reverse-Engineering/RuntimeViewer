@@ -121,12 +121,9 @@ final class WelcomeController: NSObject {
         }
     }
 
+    /// The same new window on My Mac as File › New.
     private func openUntitledDocument() {
-        do {
-            try NSDocumentController.shared.openUntitledDocumentAndDisplay(true)
-        } catch {
-            NSApplication.shared.presentError(error)
-        }
+        NSDocumentController.shared.newDocumentWithoutPointerAnimation(nil)
     }
 
     private func makeWelcomePanel() -> WelcomePanelController {
@@ -150,7 +147,7 @@ final class WelcomeController: NSObject {
             title: "New Window on My Mac",
             action: { _ in
                 MainActor.assumeIsolated {
-                    NSDocumentController.shared.newDocument(nil)
+                    NSDocumentController.shared.newDocumentWithoutPointerAnimation(nil)
                 }
             }
         )

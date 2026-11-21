@@ -49,4 +49,43 @@ final class DocumentController: NSDocumentController {
             }
         }
     }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        // File › New. What AppKit's validation answers for an action it does
+        // not define is not documented; a new window on My Mac can always be
+        // opened.
+        if item.action == #selector(newDocumentWithoutPointerAnimation(_:)) {
+            return true
+        }
+        return super.validateUserInterfaceItem(item)
+    }
+}
+
+extension NSDocumentController {
+    /// File › New and the Welcome window's New Window on My Mac:
+    /// `newDocument(_:)`, except that the new window appears where it is
+    /// placed instead of flying out of the pointer — as Xcode's new windows do.
+    ///
+    /// `openUntitledDocumentAndDisplay(true)` shows the new document's windows
+    /// inside a bracket in which AppKit, when the event being handled is a
+    /// mouse-up, records where the pointer is. The window's opening animation
+    /// then starts with its top-left corner at the pointer and swings it into
+    /// place, so a click in the middle of the screen sends a large window in
+    /// from the bottom right (`_NSWindowTransformAnimation`, macOS 27.2).
+    /// Xcode never takes that path — it makes the document without displaying
+    /// it and shows the windows itself — and neither does this. The window
+    /// still scales up where it is, as any new document window does.
+    ///
+    /// The tab bar's + button is left on AppKit's path: what makes its new
+    /// window a tab is cleared inside `openUntitledDocumentAndDisplay(_:)`,
+    /// before windows shown here would see it.
+    @objc func newDocumentWithoutPointerAnimation(_ sender: Any?) {
+        do {
+            let document = try openUntitledDocumentAndDisplay(false)
+            document.makeWindowControllers()
+            document.showWindows()
+        } catch {
+            presentError(error)
+        }
+    }
 }
